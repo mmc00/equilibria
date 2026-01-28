@@ -53,8 +53,6 @@ pyomo = ["pyomo>=6.7"]
 poi = ["pyoptinterface>=0.1"]
 
 # Data format support
-gdx = ["gdxpds>=1.4"]
-har = ["harpy>=0.1"]
 excel = ["openpyxl>=3.1", "xlrd>=2.0"]
 
 # Visualization
@@ -77,7 +75,7 @@ docs = [
 
 # All optional dependencies
 all = [
-    "equilibria[pyomo,gdx,excel,viz]",
+    "equilibria[pyomo]",
 ]
 
 [project.urls]
@@ -111,6 +109,7 @@ dev-dependencies = [
     "pytest-cov>=4.0",
     "ruff>=0.4",
     "mypy>=1.10",
+    "ty>=0.0.14",
 ]
 
 [tool.ruff]
