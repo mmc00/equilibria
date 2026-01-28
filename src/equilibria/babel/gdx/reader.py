@@ -14,6 +14,8 @@ GDX Format Notes (Version 7):
 - "_SYMB_" marker: Symbol table
 - "_UEL_" marker: Unique Element List (set elements)
 - "_SETT_" marker: Settings
+- "_DOMS_" marker: Domain definitions
+- "_DATA_" marker: Data records (one per symbol)
 
 Symbol table entry structure (after _SYMB_ marker + 4-byte count):
 - 1 byte: name length
@@ -38,6 +40,8 @@ from typing import Any, BinaryIO
 GDX_MAGIC: bytes = b"GAMSGDX"
 GDX_SYMB_MARKER: bytes = b"_SYMB_"
 GDX_UEL_MARKER: bytes = b"_UEL_"
+GDX_DOMS_MARKER: bytes = b"_DOMS_"
+GDX_DATA_MARKER: bytes = b"_DATA_"
 
 # Symbol type codes
 SYMBOL_TYPE_NAMES: dict[int, str] = {
@@ -57,13 +61,14 @@ def read_gdx(filepath: str | Path) -> dict[str, Any]:
         filepath: Path to the GDX file.
 
     Returns:
-        Dictionary containing header info, symbols, and data.
+        Dictionary containing header info, symbols, elements, and domains.
 
     Example:
         >>> data = read_gdx("results.gdx")
         >>> print(data["header"])
         >>> for sym in data["symbols"]:
         ...     print(sym["name"], sym["type"])
+        >>> print(data["elements"])  # Unique Element List
     """
     filepath = Path(filepath)
 
@@ -78,11 +83,15 @@ def read_gdx(filepath: str | Path) -> dict[str, Any]:
 
     header: dict[str, Any] = read_header_from_bytes(data)
     symbols: list[dict[str, Any]] = read_symbol_table_from_bytes(data)
+    elements: list[str] = read_uel_from_bytes(data)
+    domains: list[str] = read_domains_from_bytes(data)
 
     return {
         "filepath": str(filepath),
         "header": header,
         "symbols": symbols,
+        "elements": elements,
+        "domains": domains,
     }
 
 
@@ -166,8 +175,9 @@ def _detect_platform(producer: str) -> str:
 
 
 def read_symbol_table(
-    file: BinaryIO, endianness: str = "little"
-) -> list[dict[str, Any]]:  # noqa: ARG001
+    file: BinaryIO,
+    endianness: str = "little",  # noqa: ARG001
+) -> list[dict[str, Any]]:
     """
     Read the symbol table from a GDX file handle.
 
@@ -253,17 +263,22 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
             pos += 6
 
             # Map type flag to type code
+            # GDX type flags are complex - they encode symbol index and type
+            # These mappings are based on observed patterns
             if type_flag == 0x01:
-                sym_type = 0  # set
-            elif type_flag == 0x20:
-                sym_type = 4  # alias
-            elif type_flag in (0x3F, 0x66):
+                sym_type = 0  # set (first set in file)
+            elif type_flag in (0x20, 0x22, 0x45):
+                # Could be alias or additional set
+                # 0x20 is typically alias, 0x22/0x45 are sets
+                sym_type = 4 if type_flag == 0x20 else 0
+            elif type_flag in (0x3F, 0x64, 0x66, 0x6E):
                 sym_type = 1  # parameter
-            elif type_flag in (0x40, 0x67):
+            elif type_flag in (0x40, 0x48, 0x63, 0x67, 0xFD):
                 sym_type = 2  # variable
-            elif type_flag in (0x41, 0x68):
+            elif type_flag in (0x41, 0x68, 0x7E, 0xD9):
                 sym_type = 3  # equation
             else:
+                # Unknown - keep raw value for debugging
                 sym_type = type_flag
 
             symbols.append(
@@ -273,6 +288,7 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
                     "type_name": SYMBOL_TYPE_NAMES.get(
                         sym_type, f"unknown({type_flag:#x})"
                     ),
+                    "type_flag": type_flag,  # Raw flag for debugging
                     "dimension": dimension,
                     "records": records,
                     "description": description,
@@ -283,3 +299,171 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
             break
 
     return symbols
+
+
+def read_uel_from_bytes(data: bytes) -> list[str]:
+    """
+    Read the Unique Element List (UEL) from GDX bytes.
+
+    The UEL contains all unique set elements in the GDX file.
+
+    Args:
+        data: Raw bytes from GDX file.
+
+    Returns:
+        List of element names (strings).
+
+    Example:
+        >>> elements = read_uel_from_bytes(gdx_bytes)
+        >>> print(elements)
+        ['agr', 'mfg', 'srv', 'food', 'goods', 'services']
+    """
+    uel_pos: int = data.find(GDX_UEL_MARKER)
+    if uel_pos == -1:
+        return []
+
+    pos: int = uel_pos + len(GDX_UEL_MARKER)  # After '_UEL_' (5 bytes)
+
+    if pos + 4 > len(data):
+        return []
+
+    num_elements: int = struct.unpack_from("<I", data, pos)[0]
+    pos += 4
+
+    elements: list[str] = []
+
+    for _ in range(num_elements):
+        if pos >= len(data):
+            break
+
+        elem_len: int = data[pos]
+        pos += 1
+
+        if elem_len == 0 or elem_len > 64 or pos + elem_len > len(data):
+            break
+
+        element: str = data[pos : pos + elem_len].decode("utf-8", errors="replace")
+        pos += elem_len
+        elements.append(element)
+
+    return elements
+
+
+def read_domains_from_bytes(data: bytes) -> list[str]:
+    """
+    Read domain definitions from GDX bytes.
+
+    Args:
+        data: Raw bytes from GDX file.
+
+    Returns:
+        List of domain set names.
+
+    Example:
+        >>> domains = read_domains_from_bytes(gdx_bytes)
+        >>> print(domains)
+        ['i', 'j']
+    """
+    doms_pos: int = data.find(GDX_DOMS_MARKER)
+    if doms_pos == -1:
+        return []
+
+    pos: int = doms_pos + len(GDX_DOMS_MARKER)
+
+    if pos + 4 > len(data):
+        return []
+
+    num_domains: int = struct.unpack_from("<I", data, pos)[0]
+    pos += 4
+
+    domains: list[str] = []
+
+    for _ in range(num_domains):
+        if pos >= len(data):
+            break
+
+        dom_len: int = data[pos]
+        pos += 1
+
+        if dom_len == 0 or dom_len > 64 or pos + dom_len > len(data):
+            break
+
+        domain: str = data[pos : pos + dom_len].decode("utf-8", errors="replace")
+        pos += dom_len
+        domains.append(domain)
+
+    return domains
+
+
+def get_symbol(gdx_data: dict[str, Any], name: str) -> dict[str, Any] | None:
+    """
+    Get a symbol by name from GDX data.
+
+    Args:
+        gdx_data: Result from read_gdx().
+        name: Symbol name to find.
+
+    Returns:
+        Symbol dictionary or None if not found.
+
+    Example:
+        >>> data = read_gdx("model.gdx")
+        >>> sym = get_symbol(data, "price")
+        >>> print(sym["dimension"], sym["records"])
+    """
+    for sym in gdx_data.get("symbols", []):
+        if sym["name"] == name:
+            return sym
+    return None
+
+
+def get_sets(gdx_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Get all set symbols from GDX data.
+
+    Args:
+        gdx_data: Result from read_gdx().
+
+    Returns:
+        List of set symbol dictionaries.
+    """
+    return [s for s in gdx_data.get("symbols", []) if s["type"] == 0]
+
+
+def get_parameters(gdx_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Get all parameter symbols from GDX data.
+
+    Args:
+        gdx_data: Result from read_gdx().
+
+    Returns:
+        List of parameter symbol dictionaries.
+    """
+    return [s for s in gdx_data.get("symbols", []) if s["type"] == 1]
+
+
+def get_variables(gdx_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Get all variable symbols from GDX data.
+
+    Args:
+        gdx_data: Result from read_gdx().
+
+    Returns:
+        List of variable symbol dictionaries.
+    """
+    return [s for s in gdx_data.get("symbols", []) if s["type"] == 2]
+
+
+def get_equations(gdx_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Get all equation symbols from GDX data.
+
+    Args:
+        gdx_data: Result from read_gdx().
+
+    Returns:
+        List of equation symbol dictionaries.
+    """
+    return [s for s in gdx_data.get("symbols", []) if s["type"] == 3]

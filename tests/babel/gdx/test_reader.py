@@ -22,9 +22,16 @@ import pytest
 
 # Local imports
 from equilibria.babel.gdx.reader import (
+    get_equations,
+    get_parameters,
+    get_sets,
+    get_symbol,
+    get_variables,
+    read_domains_from_bytes,
     read_gdx,
     read_header_from_bytes,
     read_symbol_table_from_bytes,
+    read_uel_from_bytes,
 )
 
 # Path to test fixtures
@@ -70,8 +77,9 @@ class TestReadGdx:
         result: dict = read_gdx(str(gdx_file))
 
         assert result["filepath"] == str(object=gdx_file)
+
     def test_returns_correct_structure(self, tmp_path: Path) -> None:
-        """Should return dict with filepath, header, and symbols keys."""
+        """Should return dict with filepath, header, symbols, elements, domains."""
         gdx_file: Path = tmp_path / "test.gdx"
         content: bytes = b"\x00" * 19 + b"GAMSGDX" + b"\x07\x00\x00\x00"
         content += b"\x00" * 100
@@ -79,9 +87,17 @@ class TestReadGdx:
 
         result: dict = read_gdx(gdx_file)
 
-        assert set(result.keys()) == {"filepath", "header", "symbols"}
+        assert set(result.keys()) == {
+            "filepath",
+            "header",
+            "symbols",
+            "elements",
+            "domains",
+        }
         assert isinstance(result["header"], dict)
         assert isinstance(result["symbols"], list)
+        assert isinstance(result["elements"], list)
+        assert isinstance(result["domains"], list)
 
 
 class TestReadHeader:
@@ -303,3 +319,307 @@ class TestIntegrationWithRealGdx:
         assert symbols_by_name["sam"]["type_name"] == "parameter"
         assert symbols_by_name["sam"]["dimension"] == 2
         assert symbols_by_name["sam"]["records"] == 9
+
+    def test_read_uel_elements(self) -> None:
+        """Should read unique element list from real GDX file."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "simple_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        # Check elements
+        assert "elements" in result
+        elements: list = result["elements"]
+        assert len(elements) == 6
+        assert "agr" in elements
+        assert "mfg" in elements
+        assert "srv" in elements
+        assert "food" in elements
+        assert "goods" in elements
+        assert "services" in elements
+
+    def test_read_domains(self) -> None:
+        """Should read domain definitions from real GDX file."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "simple_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        # Check domains
+        assert "domains" in result
+        domains: list = result["domains"]
+        assert "i" in domains
+        assert "j" in domains
+
+    def test_get_symbol_helper(self) -> None:
+        """Should get symbol by name."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "simple_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        sym = get_symbol(result, "price")
+        assert sym is not None
+        assert sym["name"] == "price"
+        assert sym["type_name"] == "parameter"
+
+        # Non-existent symbol
+        assert get_symbol(result, "nonexistent") is None
+
+    def test_get_sets_helper(self) -> None:
+        """Should get all sets."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "simple_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        sets: list = get_sets(result)
+        assert len(sets) == 1
+        assert sets[0]["name"] == "i"
+
+    def test_get_parameters_helper(self) -> None:
+        """Should get all parameters."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "simple_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        params: list = get_parameters(result)
+        assert len(params) == 2
+        param_names: list = [p["name"] for p in params]
+        assert "price" in param_names
+        assert "sam" in param_names
+
+
+class TestReadUel:
+    """Tests for read_uel_from_bytes() function."""
+
+    def _create_uel(self, elements: list[str]) -> bytes:
+        """Create UEL structure."""
+        data: bytes = b"_UEL_"
+        data += struct.pack("<I", len(elements))
+        for elem in elements:
+            elem_bytes: bytes = elem.encode("utf-8")
+            data += bytes([len(elem_bytes)])
+            data += elem_bytes
+        return data
+
+    def test_empty_uel(self) -> None:
+        """Should return empty list for zero elements."""
+        data: bytes = b"_UEL_" + struct.pack("<I", 0)
+        result: list = read_uel_from_bytes(data)
+        assert result == []
+
+    def test_no_uel_marker(self) -> None:
+        """Should return empty list if _UEL_ not found."""
+        data: bytes = b"\x00" * 100
+        result: list = read_uel_from_bytes(data)
+        assert result == []
+
+    def test_single_element(self) -> None:
+        """Should read single element."""
+        data: bytes = self._create_uel(["agr"])
+        result: list = read_uel_from_bytes(data)
+
+        assert len(result) == 1
+        assert result[0] == "agr"
+
+    def test_multiple_elements(self) -> None:
+        """Should read multiple elements."""
+        data: bytes = self._create_uel(["agr", "mfg", "srv"])
+        result: list = read_uel_from_bytes(data)
+
+        assert len(result) == 3
+        assert result == ["agr", "mfg", "srv"]
+
+
+class TestReadDomains:
+    """Tests for read_domains_from_bytes() function."""
+
+    def _create_domains(self, domains: list[str]) -> bytes:
+        """Create DOMS structure."""
+        data: bytes = b"_DOMS_"
+        data += struct.pack("<I", len(domains))
+        for dom in domains:
+            dom_bytes: bytes = dom.encode("utf-8")
+            data += bytes([len(dom_bytes)])
+            data += dom_bytes
+        return data
+
+    def test_empty_domains(self) -> None:
+        """Should return empty list for zero domains."""
+        data: bytes = b"_DOMS_" + struct.pack("<I", 0)
+        result: list = read_domains_from_bytes(data)
+        assert result == []
+
+    def test_no_doms_marker(self) -> None:
+        """Should return empty list if _DOMS_ not found."""
+        data: bytes = b"\x00" * 100
+        result: list = read_domains_from_bytes(data)
+        assert result == []
+
+    def test_single_domain(self) -> None:
+        """Should read single domain."""
+        data: bytes = self._create_domains(["i"])
+        result: list = read_domains_from_bytes(data)
+
+        assert len(result) == 1
+        assert result[0] == "i"
+
+    def test_multiple_domains(self) -> None:
+        """Should read multiple domains."""
+        data: bytes = self._create_domains(["i", "j", "k"])
+        result: list = read_domains_from_bytes(data)
+
+        assert len(result) == 3
+        assert result == ["i", "j", "k"]
+
+
+@pytest.mark.skipif(
+    not (
+        Path(__file__).parent.parent.parent
+        / "fixtures"
+        / "variables_equations_test.gdx"
+    ).exists(),
+    reason="Test fixture variables_equations_test.gdx not found",
+)
+class TestVariablesEquationsFixture:
+    """Tests using variables_equations_test.gdx fixture."""
+
+    def test_read_variables(self) -> None:
+        """Should correctly identify variable symbols."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "variables_equations_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        variables: list = get_variables(result)
+        var_names: list = [v["name"] for v in variables]
+
+        assert "X" in var_names
+        assert "Y" in var_names
+        assert "obj" in var_names
+
+    def test_read_equations(self) -> None:
+        """Should correctly identify equation symbols."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "variables_equations_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        equations: list = get_equations(result)
+        eq_names: list = [e["name"] for e in equations]
+
+        assert "eq_output" in eq_names
+        assert "eq_total" in eq_names
+
+    def test_variable_has_type_flag(self) -> None:
+        """Symbols should include raw type_flag for debugging."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "variables_equations_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        sym = get_symbol(result, "X")
+        assert sym is not None
+        assert "type_flag" in sym
+        assert isinstance(sym["type_flag"], int)
+
+
+@pytest.mark.skipif(
+    not (
+        Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+    ).exists(),
+    reason="Test fixture multidim_test.gdx not found",
+)
+class TestMultidimFixture:
+    """Tests using multidim_test.gdx fixture."""
+
+    def test_read_3d_parameter(self) -> None:
+        """Should read 3-dimensional parameter."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        sym = get_symbol(result, "data3d")
+        assert sym is not None
+        assert sym["type_name"] == "parameter"
+        assert sym["dimension"] == 3
+        assert sym["records"] == 60  # 4 regions * 5 periods * 3 sectors
+
+    def test_read_multiple_sets(self) -> None:
+        """Should read multiple sets with different type flags."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        sets: list = get_sets(result)
+        set_names: list = [s["name"] for s in sets]
+
+        assert "r" in set_names
+        assert "t" in set_names
+        assert "s" in set_names
+        assert len(sets) == 3
+
+    def test_elements_from_multiple_sets(self) -> None:
+        """Should contain elements from all sets in UEL."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        elements: list = result["elements"]
+
+        # Regions
+        assert "north" in elements
+        assert "south" in elements
+
+        # Time periods
+        assert "t1" in elements
+        assert "t5" in elements
+
+        # Sectors
+        assert "s1" in elements
+        assert "s3" in elements
+
+
+@pytest.mark.skipif(
+    not (Path(__file__).parent.parent.parent / "fixtures" / "sparse_test.gdx").exists(),
+    reason="Test fixture sparse_test.gdx not found",
+)
+class TestSparseFixture:
+    """Tests using sparse_test.gdx fixture."""
+
+    def test_sparse_parameter_records(self) -> None:
+        """Should correctly count sparse parameter records."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "sparse_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        sym = get_symbol(result, "sparse_param")
+        assert sym is not None
+        # Only 2 values defined: sparse_param("a")=1 and sparse_param("e")=5
+        assert sym["records"] == 2
+
+    def test_sparse_set_elements(self) -> None:
+        """Should read all set elements even if parameter is sparse."""
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "sparse_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        elements: list = result["elements"]
+        # Set has 4 elements: a, c, e, g
+        assert "a" in elements
+        assert "c" in elements
+        assert "e" in elements
+        assert "g" in elements
