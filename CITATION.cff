@@ -1,0 +1,39 @@
+# CITATION.cff - Citation metadata for equilibria
+# GitHub automatically detects this file and displays a "Cite this repository" button
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it as below."
+type: software
+title: "equilibria: A Modern Python Framework for CGE Modeling"
+abstract: >-
+  A modern Python framework for Computable General Equilibrium (CGE) modeling
+  with modular equation blocks, universal data I/O (GDX, HAR, Excel), 
+  auto-calibration, and ready-to-use templates (PEP, GTAP, ORANI).
+authors:
+  - family-names: "Molina"
+    given-names: "Marlon"
+    email: "dracomarmol@gmail.com"
+    orcid: "https://orcid.org/0000-0002-9452-9356"
+version: "0.1.0"
+date-released: "2026-01-28"
+license: MIT
+repository-code: "https://github.com/mmc00/equilibria"
+url: "https://github.com/mmc00/equilibria"
+keywords:
+  - cge
+  - computable general equilibrium
+  - economic modeling
+  - social accounting matrix
+  - sam
+  - gtap
+  - trade policy
+  - python
+
+preferred-citation:
+  type: software
+  authors:
+    - family-names: "Molina"
+      given-names: "Marlon"
+      orcid: "https://orcid.org/0000-0002-9452-9356"
+  title: "equilibria: A Modern Python Framework for CGE Modeling"
+  year: 2026
+  url: "https://github.com/mmc00/equilibria"
