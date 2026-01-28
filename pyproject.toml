@@ -4,10 +4,10 @@ name = "equilibria"
 version = "0.1.0"
 description = "A modern Python framework for Computable General Equilibrium (CGE) modeling with modular equation blocks, universal data I/O, and auto-calibration."
 authors = [
-    { name = "Marlon Molina", email = "marlon@equilibria.dev" }
+    { name = "Marlon Molina", email = "dracomarmol@gmail.com" }
 ]
 maintainers = [
-    { name = "Marlon Molina", email = "marlon@equilibria.dev" }
+    { name = "Marlon Molina", email = "dracomarmol@gmail.com" }
 ]
 readme = "README.md"
 license = { text = "MIT" }
@@ -65,7 +65,6 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
     "ruff>=0.4",
-    "mypy>=1.10",
     "pre-commit>=3.0",
 ]
 
