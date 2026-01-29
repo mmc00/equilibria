@@ -13,7 +13,7 @@
 
 *Build, calibrate, and solve CGE models with modular blocks — like LEGO for economists.*
 
-**Created by [Marlon Molina](https://github.com/marmol-dev)**
+**Created by [Marlon Molina](https://github.com/mmc00)**
 
 [Installation](#installation) •
 [Quick Start](#quick-start) •
