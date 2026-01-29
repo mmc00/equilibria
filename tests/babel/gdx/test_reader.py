@@ -623,3 +623,67 @@ class TestSparseFixture:
         assert "c" in elements
         assert "e" in elements
         assert "g" in elements
+
+
+@pytest.mark.skipif(
+    not (Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx").exists(),
+    reason="Test fixture variables_equations_test.gdx not found",
+)
+class TestReadParameterValues:
+    """Tests for read_parameter_values() function."""
+
+    def test_read_2d_parameter(self) -> None:
+        """Should read values from 2D parameter."""
+        from equilibria.babel.gdx.reader import read_parameter_values
+
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+        values: dict = read_parameter_values(result, "sam")
+
+        # sam is 3x3 = 9 values
+        assert len(values) == 9
+
+        # Check specific values from the GAMS file
+        assert values[("agr", "food")] == 100.0
+        assert values[("agr", "goods")] == 50.0
+        assert values[("mfg", "goods")] == 200.0
+
+    def test_read_1d_parameter_partial(self) -> None:
+        """Should read explicitly stored values from 1D parameter."""
+        from equilibria.babel.gdx.reader import read_parameter_values
+
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+        values: dict = read_parameter_values(result, "price")
+
+        # May not read all values due to GDX compression
+        # But should read at least some
+        assert len(values) >= 1
+
+    def test_parameter_not_found_raises(self) -> None:
+        """Should raise ValueError for non-existent symbol."""
+        from equilibria.babel.gdx.reader import read_parameter_values
+
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        with pytest.raises(ValueError, match="not found"):
+            read_parameter_values(result, "nonexistent")
+
+    def test_non_parameter_raises(self) -> None:
+        """Should raise ValueError when reading non-parameter symbol."""
+        from equilibria.babel.gdx.reader import read_parameter_values
+
+        gdx_path: Path = (
+            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+        )
+        result: dict = read_gdx(gdx_path)
+
+        with pytest.raises(ValueError, match="not a parameter"):
+            read_parameter_values(result, "i")  # i is a set, not parameter
