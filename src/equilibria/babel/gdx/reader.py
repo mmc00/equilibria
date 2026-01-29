@@ -259,17 +259,21 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
                 )
                 pos += desc_len
 
-            # Padding (6 bytes)
-            pos += 6
+            # Variable padding: skip zeros until we find next symbol or end
+            # Minimum padding is 6 bytes, but can be more for parameters with domains
+            min_padding: int = 6
+            pos += min_padding
+
+            # Skip any additional zero bytes (domain info padding)
+            while pos < len(data) and data[pos] == 0:
+                pos += 1
 
             # Map type flag to type code
-            # GDX type flags are complex - they encode symbol index and type
-            # These mappings are based on observed patterns
-            if type_flag == 0x01:
-                sym_type = 0  # set (first set in file)
-            elif type_flag in (0x20, 0x22, 0x45):
-                # Could be alias or additional set
-                # 0x20 is typically alias, 0x22/0x45 are sets
+            # For sets: type_flag is usually 0x01 or 0x20 (alias)
+            # For parameters: type_flag varies
+            if type_flag == 0x01 and dimension > 0:
+                sym_type = 0  # set
+            elif type_flag in (0x01, 0x20, 0x22, 0x45):
                 sym_type = 4 if type_flag == 0x20 else 0
             elif type_flag in (0x3F, 0x64, 0x66, 0x6E):
                 sym_type = 1  # parameter
@@ -278,8 +282,11 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
             elif type_flag in (0x41, 0x68, 0x7E, 0xD9):
                 sym_type = 3  # equation
             else:
-                # Unknown - keep raw value for debugging
-                sym_type = type_flag
+                # Heuristic: if dimension > 0 and not a known set flag, likely parameter
+                if dimension > 0 and type_flag not in (0x01, 0x20):
+                    sym_type = 1
+                else:
+                    sym_type = type_flag
 
             symbols.append(
                 {
@@ -288,7 +295,7 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
                     "type_name": SYMBOL_TYPE_NAMES.get(
                         sym_type, f"unknown({type_flag:#x})"
                     ),
-                    "type_flag": type_flag,  # Raw flag for debugging
+                    "type_flag": type_flag,
                     "dimension": dimension,
                     "records": records,
                     "description": description,
@@ -467,3 +474,501 @@ def get_equations(gdx_data: dict[str, Any]) -> list[dict[str, Any]]:
         List of equation symbol dictionaries.
     """
     return [s for s in gdx_data.get("symbols", []) if s["type"] == 3]
+
+
+# =============================================================================
+# Data Reading Functions
+# =============================================================================
+
+# Record type markers in _DATA_ sections
+RECORD_DOUBLE: int = 0x0A  # Double value follows (8 bytes)
+RECORD_ROW_START: int = 0x01  # New row/dimension block
+RECORD_CONTINUE: int = 0x03  # Continue in same row
+
+
+def read_data_sections(data: bytes) -> list[tuple[int, bytes]]:
+    """
+    Find all _DATA_ sections in GDX bytes.
+
+    Args:
+        data: Raw bytes from GDX file.
+
+    Returns:
+        List of (symbol_index, section_bytes) tuples.
+    """
+    sections: list[tuple[int, bytes]] = []
+    positions: list[int] = []
+
+    # Find all _DATA_ markers
+    pos: int = 0
+    while True:
+        pos = data.find(GDX_DATA_MARKER, pos)
+        if pos == -1:
+            break
+        positions.append(pos)
+        pos += 6
+
+    # Extract each section
+    for i, start in enumerate(positions):
+        end: int = positions[i + 1] if i + 1 < len(positions) else len(data)
+
+        # Find end by looking for next marker
+        for marker in [GDX_SYMB_MARKER, GDX_UEL_MARKER, GDX_DOMS_MARKER]:
+            marker_pos: int = data.find(marker, start + 6)
+            if marker_pos != -1 and marker_pos < end:
+                end = marker_pos
+
+        section: bytes = data[start:end]
+
+        # Symbol index is typically indicated after header
+        # Using position in file as proxy for now
+        sections.append((i, section))
+
+    return sections
+
+
+def read_parameter_values(
+    gdx_data: dict[str, Any],
+    symbol_name: str,
+) -> dict[tuple[str, ...], float]:
+    """
+    Read parameter values from GDX data.
+
+    Extracts the actual numeric values for a parameter symbol.
+    Uses the UEL (Unique Element List) to map indices to element names.
+
+    Note: GDX files may use data compression. This function reads
+    explicitly stored values; compressed/delta-encoded values may
+    not be fully decoded.
+
+    Args:
+        gdx_data: Result from read_gdx().
+        symbol_name: Name of the parameter to read.
+
+    Returns:
+        Dictionary mapping index tuples to values.
+        For 1D parameter: {("agr",): 1.5, ("mfg",): 2.0, ...}
+        For 2D parameter: {("agr", "food"): 100.0, ...}
+
+    Example:
+        >>> data = read_gdx("model.gdx")
+        >>> prices = read_parameter_values(data, "price")
+        >>> print(prices)
+        {('agr',): 1.5, ('mfg',): 2.0, ('srv',): 2.5}
+    """
+    symbol = get_symbol(gdx_data, symbol_name)
+    if symbol is None:
+        raise ValueError(f"Symbol '{symbol_name}' not found in GDX data")
+
+    if symbol["type"] != 1:  # Not a parameter
+        raise ValueError(
+            f"Symbol '{symbol_name}' is not a parameter (type={symbol['type_name']})"
+        )
+
+    filepath: str = gdx_data.get("filepath", "")
+    if not filepath:
+        raise ValueError("GDX data missing filepath - cannot read raw bytes")
+
+    # Read raw bytes
+    raw_data: bytes = Path(filepath).read_bytes()
+
+    # Find the _DATA_ section for this symbol
+    symbols: list[dict[str, Any]] = gdx_data["symbols"]
+    symbol_index: int = -1
+    for i, sym in enumerate(symbols):
+        if sym["name"] == symbol_name:
+            symbol_index = i
+            break
+
+    if symbol_index == -1:
+        return {}
+
+    # Get data sections
+    data_sections = read_data_sections(raw_data)
+    if symbol_index >= len(data_sections):
+        return {}
+
+    _, section = data_sections[symbol_index]
+    elements: list[str] = gdx_data.get("elements", [])
+    dimension: int = symbol["dimension"]
+    expected_records: int = symbol.get("records", 0)
+
+    # Calculate domain offsets based on set definitions
+    # Each set in the GDX occupies a contiguous range in the UEL
+    domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
+
+    return _decode_parameter_section(
+        section, elements, dimension, domain_offsets, expected_records
+    )
+
+
+def _calculate_domain_offsets(
+    gdx_data: dict[str, Any],
+    dimension: int,
+) -> list[int]:
+    """
+    Calculate UEL offsets for each dimension based on set order.
+
+    In GDX files, sets are stored sequentially in the UEL.
+    For a parameter over (i, j), we need to know:
+    - i's offset (usually 0)
+    - j's offset (usually len(i))
+
+    Args:
+        gdx_data: Result from read_gdx().
+        dimension: Number of dimensions.
+
+    Returns:
+        List of offsets for each dimension.
+    """
+    if dimension == 0:
+        return []
+
+    # Get all sets in order
+    sets: list[dict[str, Any]] = get_sets(gdx_data)
+
+    # Build offsets based on set sizes
+    offsets: list[int] = []
+    current_offset: int = 0
+
+    for i in range(dimension):
+        if i < len(sets):
+            offsets.append(current_offset)
+            current_offset += sets[i].get("records", 0)
+        else:
+            offsets.append(current_offset)
+
+    return offsets
+
+
+def _decode_parameter_section(
+    section: bytes,
+    elements: list[str],
+    dimension: int,
+    domain_offsets: list[int] | None = None,
+    expected_records: int = 0,
+) -> dict[tuple[str, ...], float]:
+    """
+    Decode a _DATA_ section for a parameter.
+
+    Handles GDX compression where arithmetic sequences have values
+    compressed using interpolation/extrapolation patterns.
+
+    Args:
+        section: Raw bytes of the _DATA_ section.
+        elements: UEL elements list.
+        dimension: Parameter dimension.
+        domain_offsets: Offset in UEL for each dimension.
+        expected_records: Expected number of records (from symbol table).
+
+    Returns:
+        Dictionary mapping index tuples to values.
+    """
+    values: dict[tuple[str, ...], float] = {}
+
+    if len(section) < 20:
+        return values
+
+    if domain_offsets is None:
+        domain_offsets = [0] * dimension
+
+    if dimension == 1:
+        return _decode_1d_parameter(section, elements, domain_offsets, expected_records)
+    elif dimension == 2:
+        return _decode_2d_parameter(section, elements, domain_offsets, expected_records)
+    else:
+        # Fallback for higher dimensions
+        return _decode_simple_parameter(section, elements, dimension, domain_offsets)
+
+
+def _decode_1d_parameter(
+    section: bytes,
+    elements: list[str],
+    domain_offsets: list[int],
+    expected_records: int,
+) -> dict[tuple[str, ...], float]:
+    """Decode a 1D parameter with compression support."""
+    values: dict[tuple[str, ...], float] = {}
+
+    if len(section) < 20:
+        return values
+
+    # Parse the byte stream to extract values and skip markers in order
+    stream: list[tuple[str, float | None]] = []
+
+    pos: int = 19  # Skip header
+
+    while pos < len(section) - 2:
+        byte: int = section[pos]
+
+        # Row start marker: 01 XX 00 00 00 (skip for 1D)
+        if (
+            byte == RECORD_ROW_START
+            and pos + 5 <= len(section)
+            and section[pos + 2] == 0x00
+            and section[pos + 3] == 0x00
+            and section[pos + 4] == 0x00
+        ):
+            pos += 5
+            continue
+
+        # Block size marker
+        if byte == 0x06 and pos + 1 < len(section):
+            pos += 1
+            continue
+
+        # Compression marker: 02 09 = ONE interpolated value
+        if byte == 0x02 and pos + 1 < len(section) and section[pos + 1] == 0x09:
+            stream.append(("skip", None))
+            pos += 2
+            continue
+
+        # Record type 02 followed by double marker 0a
+        if (
+            byte == 0x02
+            and pos + 10 <= len(section)
+            and section[pos + 1] == RECORD_DOUBLE
+        ):
+            try:
+                value: float = struct.unpack_from("<d", section, pos + 2)[0]
+                if -1e15 < value < 1e15 and value == value:
+                    stream.append(("value", value))
+            except struct.error:
+                pass
+            pos += 10
+            continue
+
+        # Standalone double marker 0a
+        if byte == RECORD_DOUBLE and pos + 9 <= len(section):
+            try:
+                value = struct.unpack_from("<d", section, pos + 1)[0]
+                if -1e15 < value < 1e15 and value == value:
+                    stream.append(("value", value))
+            except struct.error:
+                pass
+            pos += 9
+            continue
+
+        # Skip marker 03 (sparse)
+        if byte == RECORD_CONTINUE:
+            stream.append(("skip", None))
+            pos += 1
+            continue
+
+        pos += 1
+
+    # Count values and skips
+    stored_values: list[float] = [
+        v for t, v in stream if t == "value" and v is not None
+    ]
+    num_stored: int = len(stored_values)
+    num_skips_in_stream: int = sum(1 for t, _ in stream if t == "skip")
+
+    if expected_records == 0:
+        expected_records = num_stored + num_skips_in_stream
+
+    # Build logical-to-value mapping
+    all_values: dict[int, float] = {}
+
+    if num_skips_in_stream == 0 and num_stored == expected_records:
+        # No compression - direct mapping
+        for i, val in enumerate(stored_values):
+            all_values[i] = val
+    elif num_stored >= 2:
+        # Compression detected
+        stream_represents: int = num_stored + num_skips_in_stream
+        leading_missing: int = expected_records - stream_represents
+
+        logical_idx: int = leading_missing
+
+        for t, v in stream:
+            if t == "value" and v is not None:
+                all_values[logical_idx] = v
+            logical_idx += 1
+
+        # Calculate delta
+        stored_logical_indices: list[int] = sorted(all_values.keys())
+        if len(stored_logical_indices) >= 2:
+            idx1: int = stored_logical_indices[0]
+            idx2: int = stored_logical_indices[1]
+            val1: float = all_values[idx1]
+            val2: float = all_values[idx2]
+            logical_gap: int = idx2 - idx1
+            delta: float = (val2 - val1) / logical_gap if logical_gap > 0 else 0.0
+        else:
+            delta = 0.0
+
+        # Fill missing values
+        for i in range(expected_records):
+            if i not in all_values:
+                prev_idx: int | None = None
+                next_idx: int | None = None
+                for k in stored_logical_indices:
+                    if k < i:
+                        prev_idx = k
+                    elif k > i and next_idx is None:
+                        next_idx = k
+                        break
+
+                if prev_idx is not None and next_idx is not None:
+                    prev_val: float = all_values[prev_idx]
+                    next_val: float = all_values[next_idx]
+                    gap: int = next_idx - prev_idx
+                    interp_delta: float = (next_val - prev_val) / gap
+                    all_values[i] = prev_val + (i - prev_idx) * interp_delta
+                elif prev_idx is not None:
+                    all_values[i] = all_values[prev_idx] + (i - prev_idx) * delta
+                elif next_idx is not None:
+                    all_values[i] = all_values[next_idx] - (next_idx - i) * delta
+    else:
+        for i, val in enumerate(stored_values):
+            all_values[i] = val
+
+    # Convert indices to element tuples
+    for idx, val in all_values.items():
+        if idx < 0 or idx >= expected_records:
+            continue
+
+        index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
+            [idx], elements, 1, domain_offsets
+        )
+        if index_tuple:
+            values[index_tuple] = val
+
+    return values
+
+
+def _decode_2d_parameter(
+    section: bytes,
+    elements: list[str],
+    domain_offsets: list[int],
+    expected_records: int,  # noqa: ARG001
+) -> dict[tuple[str, ...], float]:
+    """Decode a 2D parameter (row-major storage)."""
+    values: dict[tuple[str, ...], float] = {}
+
+    if len(section) < 20:
+        return values
+
+    pos: int = 19  # Skip header
+    current_row: int = 0
+    col_idx: int = 0
+
+    while pos < len(section) - 2:
+        byte: int = section[pos]
+
+        # Row start marker: 01 XX 00 00 00
+        if (
+            byte == RECORD_ROW_START
+            and pos + 5 <= len(section)
+            and section[pos + 2] == 0x00
+            and section[pos + 3] == 0x00
+            and section[pos + 4] == 0x00
+        ):
+            current_row = section[pos + 1] - 1  # 1-indexed
+            col_idx = 0
+            pos += 5
+            continue
+
+        # Skip 4-byte blocks
+        if (
+            byte in (0x04, 0x06, 0x08)
+            and pos + 4 <= len(section)
+            and section[pos + 1 : pos + 4] == b"\x00\x00\x00"
+        ):
+            pos += 4
+            continue
+
+        # Double value: 0a + 8 bytes
+        if byte == RECORD_DOUBLE and pos + 9 <= len(section):
+            try:
+                value: float = struct.unpack_from("<d", section, pos + 1)[0]
+                if -1e15 < value < 1e15 and value == value:
+                    index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
+                        [current_row, col_idx], elements, 2, domain_offsets
+                    )
+                    if index_tuple:
+                        values[index_tuple] = value
+                    col_idx += 1
+            except struct.error:
+                pass
+            pos += 9
+            continue
+
+        pos += 1
+
+    return values
+
+
+def _decode_simple_parameter(
+    section: bytes,
+    elements: list[str],
+    dimension: int,  # noqa: ARG001
+    domain_offsets: list[int],
+) -> dict[tuple[str, ...], float]:
+    """Fallback decoder for higher-dimensional parameters."""
+    values: dict[tuple[str, ...], float] = {}
+
+    if len(section) < 20:
+        return values
+
+    # Simple extraction of all double values
+    pos: int = 19
+    idx: int = 0
+
+    while pos < len(section) - 8:
+        if section[pos] == RECORD_DOUBLE:
+            try:
+                value: float = struct.unpack_from("<d", section, pos + 1)[0]
+                if -1e15 < value < 1e15 and value == value:
+                    # Simple linear index mapping
+                    rel_indices: list[int] = [idx]
+                    index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
+                        rel_indices, elements, 1, domain_offsets
+                    )
+                    if index_tuple:
+                        values[index_tuple] = value
+                    idx += 1
+            except struct.error:
+                pass
+            pos += 9
+        else:
+            pos += 1
+
+    return values
+
+
+def _build_index_tuple_with_offsets(
+    rel_indices: list[int],
+    elements: list[str],
+    dimension: int,
+    domain_offsets: list[int],
+) -> tuple[str, ...]:
+    """
+    Build an index tuple from relative indices using domain offsets.
+
+    Args:
+        rel_indices: List of relative indices within each domain.
+        elements: UEL elements list.
+        dimension: Expected dimension.
+        domain_offsets: Offset in UEL for each dimension.
+
+    Returns:
+        Tuple of element names, or empty tuple if invalid.
+    """
+    if dimension == 0:
+        return ()
+
+    result: list[str] = []
+    for i in range(min(dimension, len(rel_indices))):
+        # Apply domain offset to get absolute UEL index
+        offset: int = domain_offsets[i] if i < len(domain_offsets) else 0
+        abs_idx: int = rel_indices[i] + offset
+
+        if 0 <= abs_idx < len(elements):
+            result.append(elements[abs_idx])
+        else:
+            # Invalid index
+            return ()
+
+    return tuple(result)
