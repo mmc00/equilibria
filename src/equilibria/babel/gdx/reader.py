@@ -483,6 +483,7 @@ def get_equations(gdx_data: dict[str, Any]) -> list[dict[str, Any]]:
 # Record type markers in _DATA_ sections
 RECORD_DOUBLE: int = 0x0A  # Double value follows (8 bytes)
 RECORD_ROW_START: int = 0x01  # New row/dimension block
+RECORD_RECORD: int = 0x02  # Data record marker
 RECORD_CONTINUE: int = 0x03  # Continue in same row
 
 
@@ -1407,19 +1408,162 @@ def read_set_elements(
             f"Symbol '{set_name}' is not a set (type={symbol['type_name']})"
         )
 
+    filepath: str = gdx_data.get("filepath", "")
+    if not filepath:
+        raise ValueError("GDX data missing filepath - cannot read raw bytes")
+
     dimension: int = symbol["dimension"]
     records: int = symbol.get("records", 0)
 
     if dimension == 0 or records == 0:
         return []
 
-    # For now, use the UEL to build the set elements
-    # In a complete implementation, we would parse the _DATA_ section
+    # Read raw bytes
+    raw_data: bytes = Path(filepath).read_bytes()
+
+    # Find the _DATA_ section for this symbol
+    symbols: list[dict[str, Any]] = gdx_data["symbols"]
+    symbol_index: int = -1
+    for i, sym in enumerate(symbols):
+        if sym["name"] == set_name:
+            symbol_index = i
+            break
+
+    if symbol_index == -1:
+        return []
+
+    # Get data sections
+    data_sections = read_data_sections(raw_data)
+    if symbol_index >= len(data_sections):
+        return []
+
+    _, section = data_sections[symbol_index]
     elements: list[str] = gdx_data.get("elements", [])
 
-    # Simple approach: take the first N elements based on records count
+    # Calculate domain offsets
+    domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
+
+    return _decode_set_section(section, elements, dimension, domain_offsets, records)
+
+
+def _decode_set_section(
+    section: bytes,
+    elements: list[str],
+    dimension: int,
+    domain_offsets: list[int],
+    expected_records: int,
+) -> list[tuple[str, ...]]:
+    """
+    Decode a _DATA_ section for a set.
+
+    Sets store index tuples. The format can be complex, so we use a pragmatic
+    approach: for 1D sets, we take the first N elements from the UEL that
+    correspond to the set's domain. For multi-dimensional sets, we parse the
+    binary structure.
+
+    Args:
+        section: Raw bytes of the _DATA_ section.
+        elements: UEL elements list.
+        dimension: Set dimension (1, 2, 3, etc.).
+        domain_offsets: Offset in UEL for each dimension.
+        expected_records: Number of records expected in the set.
+
+    Returns:
+        List of index tuples representing set elements.
+    """
     result: list[tuple[str, ...]] = []
-    for i in range(min(records, len(elements))):
-        result.append((elements[i],))
+
+    if len(section) < 20 or expected_records == 0:
+        return result
+
+    # For 1D sets, use a simple approach: take elements from the UEL
+    # starting at the domain offset
+    if dimension == 1 and len(domain_offsets) > 0:
+        start_idx = domain_offsets[0]
+        end_idx = start_idx + expected_records
+        for i in range(start_idx, min(end_idx, len(elements))):
+            result.append((elements[i],))
+        return result
+
+    # For multi-dimensional sets, parse the binary structure
+    pos: int = 19  # Skip header
+    current_row_indices: list[int] = []
+
+    while pos < len(section) - 4 and len(result) < expected_records:
+        byte: int = section[pos]
+
+        # Row start marker (0x01) - indicates start of a new row in multi-dim sets
+        if (
+            byte == RECORD_ROW_START
+            and pos + 5 <= len(section)
+            and section[pos + 2] == 0x00
+            and section[pos + 3] == 0x00
+            and section[pos + 4] == 0x00
+        ):
+            # For multi-dimensional sets, this gives us the first dimension index
+            if dimension > 1:
+                current_row_indices = [section[pos + 1] - 1]
+            pos += 5
+            continue
+
+        # Record marker (0x02) - actual set element
+        if byte == RECORD_RECORD:
+            if dimension == 2:
+                # 2D set: combine row index with column index
+                if pos + 2 <= len(section) and current_row_indices:
+                    col_idx: int = section[pos + 1]
+                    if col_idx > 0 and col_idx <= len(elements):
+                        row_elem: str = elements[current_row_indices[0]]
+                        col_elem: str = elements[col_idx - 1]
+                        result.append((row_elem, col_elem))
+                    pos += 2
+                    # Skip any text
+                    while pos < len(section) and section[pos] not in (
+                        RECORD_ROW_START,
+                        RECORD_RECORD,
+                        RECORD_CONTINUE,
+                        RECORD_DOUBLE,
+                    ):
+                        pos += 1
+                    continue
+            else:
+                # Multi-dimensional sets (3D+)
+                # Read indices for all dimensions
+                indices: list[int] = []
+                temp_pos: int = pos + 1
+                for _ in range(dimension):
+                    if temp_pos < len(section):
+                        indices.append(section[temp_pos] - 1)
+                        temp_pos += 1
+
+                if len(indices) == dimension:
+                    index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
+                        indices, elements, dimension, domain_offsets
+                    )
+                    if index_tuple is not None:
+                        result.append(index_tuple)
+
+                pos = temp_pos
+                # Skip any text
+                while pos < len(section) and section[pos] not in (
+                    RECORD_ROW_START,
+                    RECORD_RECORD,
+                    RECORD_CONTINUE,
+                    RECORD_DOUBLE,
+                ):
+                    pos += 1
+                continue
+
+        # Skip control blocks
+        if (
+            byte in (0x04, 0x06, 0x08)
+            and pos + 4 <= len(section)
+            and section[pos + 1 : pos + 4] == b"\x00\x00\x00"
+        ):
+            pos += 4
+            continue
+
+        # Default: advance by 1 byte
+        pos += 1
 
     return result
