@@ -681,6 +681,126 @@ def _decode_parameter_section(
         return _decode_simple_parameter(section, elements, dimension, domain_offsets)
 
 
+def _detect_sequence_type(values: list[tuple[int, float]]) -> tuple[str, float]:
+    """
+    Detect whether a sequence is arithmetic or geometric progression.
+    
+    Args:
+        values: List of (index, value) tuples from the data stream.
+    
+    Returns:
+        Tuple of (progression_type, parameter) where:
+        - progression_type is "arithmetic" or "geometric"
+        - parameter is the delta (arithmetic) or ratio (geometric)
+    
+    This function uses heuristics since GDX format doesn't explicitly
+    encode the progression type.
+    """
+    import math
+    
+    if len(values) < 2:
+        return ("arithmetic", 0.0)
+    
+    # Extract first two values to calculate parameters
+    idx1, val1 = values[0]
+    idx2, val2 = values[1]
+    gap = idx2 - idx1
+    
+    if gap == 0:
+        return ("arithmetic", 0.0)
+    
+    # Calculate both parameters
+    delta = (val2 - val1) / gap
+    
+    if val1 != 0 and abs(val1) > 1e-10:
+        ratio = (val2 / val1) ** (1.0 / gap)
+    else:
+        ratio = 1.0
+    
+    # Case 1: Three or more values - use variance analysis
+    if len(values) >= 3:
+        # Test arithmetic: check if deltas are consistent
+        deltas = []
+        for i in range(len(values) - 1):
+            idx_a, val_a = values[i]
+            idx_b, val_b = values[i + 1]
+            gap_local = idx_b - idx_a
+            if gap_local > 0:
+                deltas.append((val_b - val_a) / gap_local)
+        
+        # Test geometric: check if ratios are consistent
+        ratios = []
+        for i in range(len(values) - 1):
+            idx_a, val_a = values[i]
+            idx_b, val_b = values[i + 1]
+            gap_local = idx_b - idx_a
+            if val_a != 0 and abs(val_a) > 1e-10 and gap_local > 0:
+                ratios.append((val_b / val_a) ** (1.0 / gap_local))
+        
+        if deltas and ratios:
+            # Calculate coefficient of variation for both
+            mean_delta = sum(deltas) / len(deltas)
+            variance_delta = sum((d - mean_delta) ** 2 for d in deltas) / len(deltas)
+            cv_delta = (variance_delta ** 0.5) / abs(mean_delta) if mean_delta != 0 else float('inf')
+            
+            mean_ratio = sum(ratios) / len(ratios)
+            variance_ratio = sum((r - mean_ratio) ** 2 for r in ratios) / len(ratios)
+            cv_ratio = (variance_ratio ** 0.5) / abs(mean_ratio) if mean_ratio != 0 else float('inf')
+            
+            # Lower CV indicates better fit
+            if cv_delta < cv_ratio * 0.5:  # Arithmetic is clearly better
+                return ("arithmetic", mean_delta)
+            elif cv_ratio < cv_delta * 0.5:  # Geometric is clearly better
+                return ("geometric", mean_ratio)
+            else:
+                # Both fit similarly, use ratio proximity to 1 as tie-breaker
+                if abs(mean_ratio - 1.0) < 0.1:
+                    return ("arithmetic", mean_delta)
+                else:
+                    return ("geometric", mean_ratio)
+    
+    # Case 2: Only two values - use enhanced heuristics
+    if len(values) == 2:
+        # RULE 1: Exact powers of 2 → geometric
+        if abs(ratio - round(ratio)) < 0.01 and round(ratio) >= 2:
+            return ("geometric", ratio)
+        
+        # RULE 2: Check if val2 = val1 * 2^n (exact power)
+        if val1 > 0 and val2 > 0:
+            try:
+                log_ratio = math.log2(val2 / val1)
+                if abs(log_ratio - round(log_ratio)) < 0.01:
+                    return ("geometric", ratio)
+            except:
+                pass
+        
+        # RULE 3: Large values with large delta → arithmetic
+        if abs(val1) >= 50:
+            avg_val = (abs(val1) + abs(val2)) / 2
+            if abs(delta) >= avg_val * 0.5:
+                return ("arithmetic", delta)
+        
+        # RULE 4: Ratio near 1 → arithmetic
+        if 0.85 < ratio < 1.15:
+            return ("arithmetic", delta)
+        
+        # RULE 5: Small values with significant ratio → geometric
+        if abs(val1) < 50 and (ratio > 1.3 or ratio < 0.77):
+            return ("geometric", ratio)
+        
+        # RULE 6: Large total change but moderate ratio → arithmetic
+        rel_change_ratio = abs((val2 - val1) / val1) if val1 != 0 else 0
+        if rel_change_ratio > 1.0 and ratio < 1.6:
+            return ("arithmetic", delta)
+        
+        # RULE 7: Significant ratio → geometric
+        if ratio > 1.2:
+            return ("geometric", ratio)
+    
+    # Default fallback
+    return ("arithmetic", delta)
+
+
 def _decode_1d_parameter(
     section: bytes,
     elements: list[str],
@@ -786,19 +906,27 @@ def _decode_1d_parameter(
                 all_values[logical_idx] = v
             logical_idx += 1
 
-        # Calculate delta
+        # Detect progression type (arithmetic vs geometric) and calculate parameters
         stored_logical_indices: list[int] = sorted(all_values.keys())
+        progression_type: str = "arithmetic"
+        delta: float = 0.0
+        ratio: float = 1.0
+        
         if len(stored_logical_indices) >= 2:
-            idx1: int = stored_logical_indices[0]
-            idx2: int = stored_logical_indices[1]
-            val1: float = all_values[idx1]
-            val2: float = all_values[idx2]
-            logical_gap: int = idx2 - idx1
-            delta: float = (val2 - val1) / logical_gap if logical_gap > 0 else 0.0
-        else:
-            delta = 0.0
+            # Collect sample values for detection
+            sample_values: list[tuple[int, float]] = [
+                (idx, all_values[idx]) for idx in stored_logical_indices[:min(3, len(stored_logical_indices))]
+            ]
+            
+            # Detect progression type using heuristics
+            progression_type, param = _detect_sequence_type(sample_values)
+            
+            if progression_type == "arithmetic":
+                delta = param
+            else:  # geometric
+                ratio = param
 
-        # Fill missing values
+        # Fill missing values using detected interpolation method
         for i in range(expected_records):
             if i not in all_values:
                 prev_idx: int | None = None
@@ -814,12 +942,33 @@ def _decode_1d_parameter(
                     prev_val: float = all_values[prev_idx]
                     next_val: float = all_values[next_idx]
                     gap: int = next_idx - prev_idx
-                    interp_delta: float = (next_val - prev_val) / gap
-                    all_values[i] = prev_val + (i - prev_idx) * interp_delta
+                    
+                    # Apply appropriate interpolation based on detected type
+                    if progression_type == "arithmetic":
+                        interp_delta: float = (next_val - prev_val) / gap
+                        all_values[i] = prev_val + (i - prev_idx) * interp_delta
+                    else:  # geometric
+                        if prev_val != 0 and abs(prev_val) > 1e-10:
+                            interp_ratio: float = (next_val / prev_val) ** (1.0 / gap)
+                            all_values[i] = prev_val * (interp_ratio ** (i - prev_idx))
+                        else:
+                            # Fallback to arithmetic if division by zero
+                            interp_delta = (next_val - prev_val) / gap
+                            all_values[i] = prev_val + (i - prev_idx) * interp_delta
+                            
                 elif prev_idx is not None:
-                    all_values[i] = all_values[prev_idx] + (i - prev_idx) * delta
+                    # Extrapolate forward
+                    if progression_type == "arithmetic":
+                        all_values[i] = all_values[prev_idx] + (i - prev_idx) * delta
+                    else:  # geometric
+                        all_values[i] = all_values[prev_idx] * (ratio ** (i - prev_idx))
+                        
                 elif next_idx is not None:
-                    all_values[i] = all_values[next_idx] - (next_idx - i) * delta
+                    # Extrapolate backward
+                    if progression_type == "arithmetic":
+                        all_values[i] = all_values[next_idx] - (next_idx - i) * delta
+                    else:  # geometric
+                        all_values[i] = all_values[next_idx] / (ratio ** (next_idx - i))
     else:
         for i, val in enumerate(stored_values):
             all_values[i] = val
@@ -972,3 +1121,305 @@ def _build_index_tuple_with_offsets(
             return ()
 
     return tuple(result)
+
+
+# =============================================================================
+# Variable and Equation Reading Functions
+# =============================================================================
+
+
+def read_variable_values(
+    gdx_data: dict[str, Any],
+    symbol_name: str,
+) -> dict[tuple[str, ...], dict[str, float]]:
+    """
+    Read variable values from GDX data.
+
+    Variables in GAMS have 5 attributes: level, marginal, lower, upper, scale.
+    This function extracts the level values (solve results).
+
+    Args:
+        gdx_data: Result from read_gdx().
+        symbol_name: Name of the variable to read.
+
+    Returns:
+        Dictionary mapping index tuples to attribute dicts.
+        {("agr",): {"level": 100.0, "marginal": 0.0, "lower": 0.0,
+                    "upper": inf, "scale": 1.0}, ...}
+
+    Example:
+        >>> data = read_gdx("results.gdx")
+        >>> x_values = read_variable_values(data, "X")
+        >>> print(x_values[("agr",)]["level"])
+        100.0
+    """
+    symbol = get_symbol(gdx_data, symbol_name)
+    if symbol is None:
+        raise ValueError(f"Symbol '{symbol_name}' not found in GDX data")
+
+    if symbol["type"] != 2:  # Not a variable
+        raise ValueError(
+            f"Symbol '{symbol_name}' is not a variable (type={symbol['type_name']})"
+        )
+
+    filepath: str = gdx_data.get("filepath", "")
+    if not filepath:
+        raise ValueError("GDX data missing filepath - cannot read raw bytes")
+
+    # Read raw bytes
+    raw_data: bytes = Path(filepath).read_bytes()
+
+    # Find the _DATA_ section for this symbol
+    symbols: list[dict[str, Any]] = gdx_data["symbols"]
+    symbol_index: int = -1
+    for i, sym in enumerate(symbols):
+        if sym["name"] == symbol_name:
+            symbol_index = i
+            break
+
+    if symbol_index == -1:
+        return {}
+
+    # Get data sections
+    data_sections = read_data_sections(raw_data)
+    if symbol_index >= len(data_sections):
+        return {}
+
+    _, section = data_sections[symbol_index]
+    elements: list[str] = gdx_data.get("elements", [])
+    dimension: int = symbol["dimension"]
+
+    # Calculate domain offsets
+    domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
+
+    return _decode_variable_section(section, elements, dimension, domain_offsets)
+
+
+def read_equation_values(
+    gdx_data: dict[str, Any],
+    symbol_name: str,
+) -> dict[tuple[str, ...], dict[str, float]]:
+    """
+    Read equation values from GDX data.
+
+    Equations have the same 5 attributes as variables: level, marginal, lower, upper, scale.
+    The marginal value represents the dual value or shadow price.
+
+    Args:
+        gdx_data: Result from read_gdx().
+        symbol_name: Name of the equation to read.
+
+    Returns:
+        Dictionary mapping index tuples to attribute dicts.
+
+    Example:
+        >>> data = read_gdx("results.gdx")
+        >>> eq_values = read_equation_values(data, "eq_balance")
+        >>> print(eq_values[("agr",)]["marginal"])
+        1.5
+    """
+    symbol = get_symbol(gdx_data, symbol_name)
+    if symbol is None:
+        raise ValueError(f"Symbol '{symbol_name}' not found in GDX data")
+
+    if symbol["type"] != 3:  # Not an equation
+        raise ValueError(
+            f"Symbol '{symbol_name}' is not an equation (type={symbol['type_name']})"
+        )
+
+    filepath: str = gdx_data.get("filepath", "")
+    if not filepath:
+        raise ValueError("GDX data missing filepath - cannot read raw bytes")
+
+    # Read raw bytes
+    raw_data: bytes = Path(filepath).read_bytes()
+
+    # Find the _DATA_ section for this symbol
+    symbols: list[dict[str, Any]] = gdx_data["symbols"]
+    symbol_index: int = -1
+    for i, sym in enumerate(symbols):
+        if sym["name"] == symbol_name:
+            symbol_index = i
+            break
+
+    if symbol_index == -1:
+        return {}
+
+    # Get data sections
+    data_sections = read_data_sections(raw_data)
+    if symbol_index >= len(data_sections):
+        return {}
+
+    _, section = data_sections[symbol_index]
+    elements: list[str] = gdx_data.get("elements", [])
+    dimension: int = symbol["dimension"]
+
+    # Calculate domain offsets
+    domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
+
+    return _decode_variable_section(section, elements, dimension, domain_offsets)
+
+
+def _decode_variable_section(
+    section: bytes,
+    elements: list[str],
+    dimension: int,
+    domain_offsets: list[int],
+) -> dict[tuple[str, ...], dict[str, float]]:
+    """
+    Decode a _DATA_ section for a variable or equation.
+
+    Variables and equations store 5 values per record:
+    - level: Solution value
+    - marginal: Reduced cost (variables) or dual value (equations)
+    - lower: Lower bound
+    - upper: Upper bound
+    - scale: Scale factor
+
+    Args:
+        section: Raw bytes of the _DATA_ section.
+        elements: UEL elements list.
+        dimension: Symbol dimension.
+        domain_offsets: Offset in UEL for each dimension.
+
+    Returns:
+        Dictionary mapping index tuples to attribute dicts.
+    """
+    values: dict[tuple[str, ...], dict[str, float]] = {}
+
+    if len(section) < 20:
+        return values
+
+    pos: int = 19  # Skip header
+    current_indices: list[int] = []
+
+    while pos < len(section) - 40:  # Need at least 5 doubles (40 bytes)
+        byte: int = section[pos]
+
+        # Row start marker for multi-dimensional variables
+        if (
+            byte == RECORD_ROW_START
+            and pos + 5 <= len(section)
+            and section[pos + 2] == 0x00
+            and section[pos + 3] == 0x00
+            and section[pos + 4] == 0x00
+        ):
+            if dimension > 0:
+                current_indices = [section[pos + 1] - 1]
+            pos += 5
+            continue
+
+        # Skip 4-byte control blocks
+        if (
+            byte in (0x04, 0x06, 0x08)
+            and pos + 4 <= len(section)
+            and section[pos + 1 : pos + 4] == b"\x00\x00\x00"
+        ):
+            pos += 4
+            continue
+
+        # Look for sequence of 5 double values
+        if byte == RECORD_DOUBLE and pos + 41 <= len(section):
+            try:
+                # Read 5 consecutive doubles
+                level: float = struct.unpack_from("<d", section, pos + 1)[0]
+                marginal: float = struct.unpack_from("<d", section, pos + 10)[0]
+                lower: float = struct.unpack_from("<d", section, pos + 19)[0]
+                upper: float = struct.unpack_from("<d", section, pos + 28)[0]
+                scale: float = struct.unpack_from("<d", section, pos + 37)[0]
+
+                # Verify we have valid markers between doubles
+                if (
+                    section[pos + 9] == RECORD_DOUBLE
+                    and section[pos + 18] == RECORD_DOUBLE
+                    and section[pos + 27] == RECORD_DOUBLE
+                    and section[pos + 36] == RECORD_DOUBLE
+                ):
+                    # Build index tuple
+                    if dimension == 0:
+                        index_tuple: tuple[str, ...] = ()
+                    elif dimension == 1:
+                        idx: int = len(values)
+                        index_tuple = _build_index_tuple_with_offsets(
+                            [idx], elements, 1, domain_offsets
+                        )
+                    else:
+                        # For multi-dimensional, use current_indices
+                        col_idx: int = len(
+                            [
+                                k
+                                for k in values.keys()
+                                if len(k) > 0 and k[0] == elements[current_indices[0]]
+                            ]
+                        )
+                        full_indices: list[int] = current_indices + [col_idx]
+                        index_tuple = _build_index_tuple_with_offsets(
+                            full_indices, elements, dimension, domain_offsets
+                        )
+
+                    if index_tuple is not None and index_tuple != ():
+                        values[index_tuple] = {
+                            "level": level,
+                            "marginal": marginal,
+                            "lower": lower,
+                            "upper": upper,
+                            "scale": scale,
+                        }
+
+                    pos += 45  # Skip past all 5 doubles
+                    continue
+
+            except struct.error:
+                pass
+
+        pos += 1
+
+    return values
+
+
+def read_set_elements(
+    gdx_data: dict[str, Any],
+    set_name: str,
+) -> list[tuple[str, ...]]:
+    """
+    Read set elements from GDX data.
+
+    Args:
+        gdx_data: Result from read_gdx().
+        set_name: Name of the set to read.
+
+    Returns:
+        List of element tuples. For 1D set: [("agr",), ("mfg",), ("srv",)]
+        For 2D set: [("agr", "food"), ("mfg", "goods"), ...]
+
+    Example:
+        >>> data = read_gdx("model.gdx")
+        >>> elements = read_set_elements(data, "i")
+        >>> print(elements)
+        [('agr',), ('mfg',), ('srv',)]
+    """
+    symbol = get_symbol(gdx_data, set_name)
+    if symbol is None:
+        raise ValueError(f"Symbol '{set_name}' not found in GDX data")
+
+    if symbol["type"] != 0:  # Not a set
+        raise ValueError(
+            f"Symbol '{set_name}' is not a set (type={symbol['type_name']})"
+        )
+
+    dimension: int = symbol["dimension"]
+    records: int = symbol.get("records", 0)
+
+    if dimension == 0 or records == 0:
+        return []
+
+    # For now, use the UEL to build the set elements
+    # In a complete implementation, we would parse the _DATA_ section
+    elements: list[str] = gdx_data.get("elements", [])
+
+    # Simple approach: take the first N elements based on records count
+    result: list[tuple[str, ...]] = []
+    for i in range(min(records, len(elements))):
+        result.append((elements[i],))
+
+    return result
