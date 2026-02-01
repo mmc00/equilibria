@@ -86,6 +86,9 @@ def read_gdx(filepath: str | Path) -> dict[str, Any]:
     elements: list[str] = read_uel_from_bytes(data)
     domains: list[str] = read_domains_from_bytes(data)
 
+    # Refine unknown symbol types (-1) by inspecting data sections
+    _refine_symbol_types(symbols, data)
+
     return {
         "filepath": str(filepath),
         "header": header,
@@ -160,6 +163,74 @@ def read_header_from_bytes(data: bytes) -> dict[str, Any]:
         "platform": _detect_platform(producer),
         "producer": producer,
     }
+
+
+def _detect_platform(producer: str) -> str:
+    """Detect platform from producer string."""
+    producer_lower: str = producer.lower()
+    if "macos" in producer_lower or "darwin" in producer_lower:
+        return "macOS"
+
+
+def _refine_symbol_types(symbols: list[dict[str, Any]], data: bytes) -> None:
+    """
+    Refine unknown symbol types by inspecting data sections.
+    
+    Some type_flags (like 0x3F) are ambiguous and can represent either
+    sets or parameters. Sets have only index tuples, while parameters
+    have numeric values. This function examines the data section to
+    distinguish between them.
+    
+    Args:
+        symbols: List of symbol dicts (modified in-place).
+        data: Raw GDX file bytes.
+    """
+    data_sections = read_data_sections(data)
+    
+    for idx, symbol in enumerate(symbols):
+        if symbol["type"] != -1:  # Only process unknown types
+            continue
+            
+        # Get this symbol's data section
+        if idx >= len(data_sections):
+            # No data section - default to parameter
+            symbol["type"] = 1
+            symbol["type_name"] = "parameter"
+            continue
+            
+        _, section = data_sections[idx]
+        
+        # Check if data section contains float values
+        # Sets only have index tuples (small integers)
+        # Parameters have doubles (8-byte floats)
+        has_floats = _data_section_has_floats(section)
+        
+        if has_floats:
+            symbol["type"] = 1  # parameter
+            symbol["type_name"] = "parameter"
+        else:
+            symbol["type"] = 0  # set
+            symbol["type_name"] = "set"
+
+
+def _data_section_has_floats(section: bytes) -> bool:
+    """
+    Check if a data section contains float values.
+    
+    Returns True if floats detected (parameter), False otherwise (set).
+    """
+    if len(section) < 20:
+        return False
+        
+    # Look for RECORD_DOUBLE marker (0x03) which indicates float data
+    # Parameters have this, sets don't
+    pos = 0
+    while pos < len(section) - 8:
+        if section[pos] == RECORD_DOUBLE:  # 0x03
+            return True
+        pos += 1
+    
+    return False
 
 
 def _detect_platform(producer: str) -> str:
@@ -271,12 +342,16 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
             # Map type flag to type code
             # For sets: type_flag is usually 0x01 or 0x20 (alias)
             # For parameters: type_flag varies
+            # NOTE: 0x3F is ambiguous - can be either set or parameter
+            # Sets don't have numeric values, parameters do
             if type_flag == 0x01 and dimension > 0:
                 sym_type = 0  # set
             elif type_flag in (0x01, 0x20, 0x22, 0x45):
                 sym_type = 4 if type_flag == 0x20 else 0
             elif type_flag in (0x3F, 0x64, 0x66, 0x6E):
-                sym_type = 1  # parameter
+                # 0x3F can be either set or parameter - mark as unknown for now
+                # Will be refined in post-processing based on data section
+                sym_type = -1  # unknown - will be determined later
             elif type_flag in (0x40, 0x48, 0x63, 0x67, 0xFD):
                 sym_type = 2  # variable
             elif type_flag in (0x41, 0x68, 0x7E, 0xD9):
@@ -284,7 +359,7 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
             else:
                 # Heuristic: if dimension > 0 and not a known set flag, likely parameter
                 if dimension > 0 and type_flag not in (0x01, 0x20):
-                    sym_type = 1
+                    sym_type = -1  # unknown
                 else:
                     sym_type = type_flag
 
@@ -1487,83 +1562,48 @@ def _decode_set_section(
 
     # For multi-dimensional sets, parse the binary structure
     pos: int = 19  # Skip header
-    current_row_indices: list[int] = []
+    current_row_idx: int = -1
 
-    while pos < len(section) - 4 and len(result) < expected_records:
+    while pos < len(section) - 1 and len(result) < expected_records:
         byte: int = section[pos]
 
-        # Row start marker (0x01) - indicates start of a new row in multi-dim sets
-        if (
-            byte == RECORD_ROW_START
-            and pos + 5 <= len(section)
-            and section[pos + 2] == 0x00
-            and section[pos + 3] == 0x00
-            and section[pos + 4] == 0x00
-        ):
-            # For multi-dimensional sets, this gives us the first dimension index
-            if dimension > 1:
-                current_row_indices = [section[pos + 1] - 1]
-            pos += 5
+        # Row start marker (0x01) - indicates start of a new row in 2D+ sets
+        # Format: 01 <row_idx> 00 00 00 <count> 00 00 00 <col_idx> <col_idx> ...
+        if byte == RECORD_ROW_START and pos + 4 < len(section):
+            current_row_idx = section[pos + 1] - 1  # Convert from 1-based to 0-based
+            pos += 2
+            
+            # Skip padding zeros
+            while pos < len(section) and section[pos] == 0x00:
+                pos += 1
             continue
 
-        # Record marker (0x02) - actual set element
-        if byte == RECORD_RECORD:
-            if dimension == 2:
-                # 2D set: combine row index with column index
-                if pos + 2 <= len(section) and current_row_indices:
-                    col_idx: int = section[pos + 1]
-                    if col_idx > 0 and col_idx <= len(elements):
-                        row_elem: str = elements[current_row_indices[0]]
-                        col_elem: str = elements[col_idx - 1]
-                        result.append((row_elem, col_elem))
-                    pos += 2
-                    # Skip any text
-                    while pos < len(section) and section[pos] not in (
-                        RECORD_ROW_START,
-                        RECORD_RECORD,
-                        RECORD_CONTINUE,
-                        RECORD_DOUBLE,
-                    ):
-                        pos += 1
-                    continue
-            else:
-                # Multi-dimensional sets (3D+)
-                # Read indices for all dimensions
-                indices: list[int] = []
-                temp_pos: int = pos + 1
-                for _ in range(dimension):
-                    if temp_pos < len(section):
-                        indices.append(section[temp_pos] - 1)
-                        temp_pos += 1
-
-                if len(indices) == dimension:
-                    index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
-                        indices, elements, dimension, domain_offsets
-                    )
-                    if index_tuple is not None:
-                        result.append(index_tuple)
-
-                pos = temp_pos
-                # Skip any text
-                while pos < len(section) and section[pos] not in (
-                    RECORD_ROW_START,
-                    RECORD_RECORD,
-                    RECORD_CONTINUE,
-                    RECORD_DOUBLE,
-                ):
-                    pos += 1
-                continue
-
-        # Skip control blocks
-        if (
-            byte in (0x04, 0x06, 0x08)
-            and pos + 4 <= len(section)
-            and section[pos + 1 : pos + 4] == b"\x00\x00\x00"
-        ):
-            pos += 4
+        # Check for column indices (non-zero byte after row start)
+        if current_row_idx >= 0 and byte > 0 and byte < 128:
+            # This is likely a column index (1-based)
+            col_idx = byte - 1  # Convert to 0-based
+            
+            # Validate indices
+            if current_row_idx < len(elements) and col_idx < len(elements):
+                row_elem = elements[current_row_idx]
+                col_elem = elements[col_idx]
+                
+                # Check if this is a valid combination for 2D set
+                if dimension == 2:
+                    result.append((row_elem, col_elem))
+            
+            pos += 1
             continue
 
-        # Default: advance by 1 byte
         pos += 1
 
-    return result
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_result = []
+    for elem in result:
+        if elem not in seen:
+            seen.add(elem)
+            unique_result.append(elem)
+    
+    return unique_result
+
