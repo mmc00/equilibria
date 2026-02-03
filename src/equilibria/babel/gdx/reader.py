@@ -222,11 +222,11 @@ def _data_section_has_floats(section: bytes) -> bool:
     if len(section) < 20:
         return False
         
-    # Look for RECORD_DOUBLE marker (0x03) which indicates float data
+    # Look for RECORD_DOUBLE marker (0x0A) which indicates float data
     # Parameters have this, sets don't
     pos = 0
     while pos < len(section) - 8:
-        if section[pos] == RECORD_DOUBLE:  # 0x03
+        if section[pos] == 0x0A:  # RECORD_DOUBLE
             return True
         pos += 1
     
@@ -342,9 +342,14 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
             # Map type flag to type code
             # For sets: type_flag is usually 0x01 or 0x20 (alias)
             # For parameters: type_flag varies
+            # NOTE: 0x01 with high dimension (>4) can be ambiguous
             # NOTE: 0x3F is ambiguous - can be either set or parameter
             # Sets don't have numeric values, parameters do
-            if type_flag == 0x01 and dimension > 0:
+            if type_flag == 0x01 and dimension > 4:
+                # High-dimensional sparse parameters often use 0x01
+                # Mark as unknown and refine later based on data section
+                sym_type = -1  # unknown
+            elif type_flag == 0x01 and dimension > 0:
                 sym_type = 0  # set
             elif type_flag in (0x01, 0x20, 0x22, 0x45):
                 sym_type = 4 if type_flag == 0x20 else 0
@@ -1128,10 +1133,354 @@ def _decode_2d_parameter(
 def _decode_simple_parameter(
     section: bytes,
     elements: list[str],
-    dimension: int,  # noqa: ARG001
+    dimension: int,
     domain_offsets: list[int],
 ) -> dict[tuple[str, ...], float]:
-    """Fallback decoder for higher-dimensional parameters."""
+    """
+    Decoder for higher-dimensional parameters (3D, 4D, etc.).
+    
+    Format for 3D+ parameters follows similar pattern to sets:
+    - First row marker: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> ... 0a <double>
+    - Continuation values in same "slice": 0a <double>
+    - New slice: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> ... 0a <double>
+    
+    The structure is essentially row-major where the last dimension varies fastest.
+    """
+    values: dict[tuple[str, ...], float] = {}
+
+    if len(section) < 20 or dimension < 3:
+        # Fallback to simple extraction for edge cases
+        return _decode_simple_parameter_fallback(section, elements, domain_offsets)
+
+    pos: int = 19  # Skip header
+    current_indices: list[int] = []  # Current tuple indices (0-based UEL indices)
+
+    while pos < len(section) - 1:
+        byte: int = section[pos]
+        
+        # Pattern 1: Full tuple specification: 01 <dim1> 00 00 00 <int32>*N 0a <double>
+        if (byte == RECORD_ROW_START and 
+            pos + 4 < len(section) and
+            section[pos + 2] == 0x00 and
+            section[pos + 3] == 0x00 and
+            section[pos + 4] == 0x00):
+            
+            dim1_idx = section[pos + 1]
+            
+            if dim1_idx < 1 or dim1_idx > len(elements):
+                pos += 1
+                continue
+            
+            # For 3D: read 2 int32s (dim2, dim3)
+            # For 4D: read 3 int32s (dim2, dim3, dim4)
+            # For ND: read (N-1) int32s
+            num_int32s = dimension - 1
+            header_size = 5 + (num_int32s * 4)  # 01 XX 00 00 00 + int32s
+            
+            # Check if we have space for header + marker + double
+            if pos + header_size + 9 > len(section):
+                pos += 1
+                continue
+            
+            try:
+                # Build UEL indices - ALL are 1-based and need conversion to 0-based
+                uel_indices = [dim1_idx - 1]
+                
+                # Read int32 values for remaining dimensions
+                # These are also 1-based UEL indices (need to subtract 1)
+                for i in range(num_int32s):
+                    offset = pos + 5 + (i * 4)
+                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
+                    
+                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
+                        raise ValueError("Invalid UEL index")
+                    
+                    uel_indices.append(uel_idx_1based - 1)
+                
+                # Check for double marker after indices
+                double_marker_pos = pos + header_size
+                if double_marker_pos >= len(section) or section[double_marker_pos] != RECORD_DOUBLE:
+                    pos += 1
+                    continue
+                
+                # Read the double value
+                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
+                
+                # Build tuple directly from UEL indices
+                if all(0 <= idx < len(elements) for idx in uel_indices):
+                    index_tuple = tuple(elements[idx] for idx in uel_indices)
+                    values[index_tuple] = value
+                    current_indices = uel_indices
+                    pos += header_size + 9  # Skip header + 0a + double
+                    continue
+                    
+            except (struct.error, ValueError):
+                pass
+        
+        # Pattern 2: Partial tuple update: 02 <new_dim2_byte> 00 00 00 <int32>*(N-2) 0a <double>
+        # This pattern updates dimension 2 (and possibly later dims) while keeping dim1 same
+        elif (byte == 0x02 and 
+              len(current_indices) == dimension and
+              pos + 5 <= len(section)):
+            
+            try:
+                # Read new value for dimension 2 (1-based byte)
+                new_dim2_1based = section[pos + 1]
+                
+                if new_dim2_1based < 1 or new_dim2_1based > len(elements):
+                    pos += 1
+                    continue
+                
+                # For 3D: need 1 more int32 (dim3)
+                # For 4D: need 2 more int32s (dim3, dim4)
+                num_additional_int32s = dimension - 2
+                partial_header_size = 5 + (num_additional_int32s * 4)  # 02 XX 00 00 00 + int32s
+                
+                if pos + partial_header_size + 9 > len(section):
+                    pos += 1
+                    continue
+                
+                # Build new indices: keep dim1, update dim2 and remaining
+                new_indices = [current_indices[0], new_dim2_1based - 1]
+                
+                # Read int32s for remaining dimensions
+                for i in range(num_additional_int32s):
+                    offset = pos + 5 + (i * 4)
+                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
+                    
+                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
+                        raise ValueError("Invalid UEL index")
+                    
+                    new_indices.append(uel_idx_1based - 1)
+                
+                # Check for double marker
+                double_marker_pos = pos + partial_header_size
+                if double_marker_pos >= len(section) or section[double_marker_pos] != RECORD_DOUBLE:
+                    pos += 1
+                    continue
+                
+                # Read value
+                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
+                
+                # Store value
+                if all(0 <= idx < len(elements) for idx in new_indices):
+                    index_tuple = tuple(elements[idx] for idx in new_indices)
+                    values[index_tuple] = value
+                    current_indices = new_indices
+                    pos += partial_header_size + 9
+                    continue
+                    
+            except (struct.error, ValueError):
+                pass
+        
+        # Pattern 3: Update last N-2 dimensions: 03 <int32> <int32> ... 0a <double>
+        # Keep dim1 and dim2, update remaining dimensions
+        # For 4D: 03 <dim3_int32> <dim4_int32> 0a <double>
+        elif (byte == 0x03 and 
+              len(current_indices) == dimension and
+              dimension >= 3 and
+              pos + 1 <= len(section)):
+            
+            try:
+                # For 4D: need 2 int32s (dim3, dim4)
+                # For 5D: need 3 int32s (dim3, dim4, dim5)
+                num_update_int32s = dimension - 2
+                pattern3_size = 1 + (num_update_int32s * 4)  # 03 + int32s
+                
+                if pos + pattern3_size + 9 > len(section):
+                    pos += 1
+                    continue
+                
+                # Build new indices: keep dim1 and dim2, update remaining
+                new_indices = current_indices[:2].copy()
+                
+                # Read int32s for dimensions 3+
+                for i in range(num_update_int32s):
+                    offset = pos + 1 + (i * 4)
+                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
+                    
+                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
+                        raise ValueError("Invalid UEL index")
+                    
+                    new_indices.append(uel_idx_1based - 1)
+                
+                # Check for double marker
+                double_marker_pos = pos + pattern3_size
+                if double_marker_pos >= len(section) or section[double_marker_pos] != RECORD_DOUBLE:
+                    pos += 1
+                    continue
+                
+                # Read value
+                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
+                
+                # Store value
+                if all(0 <= idx < len(elements) for idx in new_indices):
+                    index_tuple = tuple(elements[idx] for idx in new_indices)
+                    values[index_tuple] = value
+                    current_indices = new_indices
+                    pos += pattern3_size + 9
+                    continue
+                    
+            except (struct.error, ValueError):
+                pass
+        
+        # Pattern 4: Update last N-3 dimensions: 04 <int32> <int32> ... 0a <double>
+        # Keep dim1, dim2, and dim3, update remaining dimensions
+        # For 5D: 04 <dim4_int32> <dim5_int32> 0a <double>
+        # For 6D: 04 <dim4_int32> <dim5_int32> <dim6_int32> 0a <double>
+        elif (byte == 0x04 and 
+              len(current_indices) == dimension and
+              dimension >= 4 and
+              pos + 1 <= len(section)):
+            
+            try:
+                # For 5D: need 2 int32s (dim4, dim5)
+                # For 6D: need 3 int32s (dim4, dim5, dim6)
+                num_update_int32s = dimension - 3
+                pattern4_size = 1 + (num_update_int32s * 4)  # 04 + int32s
+                
+                if pos + pattern4_size + 9 > len(section):
+                    pos += 1
+                    continue
+                
+                # Build new indices: keep dim1, dim2, dim3, update remaining
+                new_indices = current_indices[:3].copy()
+                
+                # Read int32s for dimensions 4+
+                for i in range(num_update_int32s):
+                    offset = pos + 1 + (i * 4)
+                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
+                    
+                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
+                        raise ValueError("Invalid UEL index")
+                    
+                    new_indices.append(uel_idx_1based - 1)
+                
+                # Check for double marker
+                double_marker_pos = pos + pattern4_size
+                if double_marker_pos >= len(section) or section[double_marker_pos] != RECORD_DOUBLE:
+                    pos += 1
+                    continue
+                
+                # Read value
+                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
+                
+                # Store value
+                if all(0 <= idx < len(elements) for idx in new_indices):
+                    index_tuple = tuple(elements[idx] for idx in new_indices)
+                    values[index_tuple] = value
+                    current_indices = new_indices
+                    pos += pattern4_size + 9
+                    continue
+                    
+            except (struct.error, ValueError):
+                pass
+        
+        # Pattern 5: Update last N-4 dimensions: 05 <int32> <int32> ... 0a <double>
+        # Keep dim1, dim2, dim3, and dim4, update remaining dimensions
+        # For 6D: 05 <dim5_int32> <dim6_int32> 0a <double>
+        # For 7D: 05 <dim5_int32> <dim6_int32> <dim7_int32> 0a <double>
+        elif (byte == 0x05 and 
+              len(current_indices) == dimension and
+              dimension >= 5 and
+              pos + 1 <= len(section)):
+            
+            try:
+                # For 6D: need 2 int32s (dim5, dim6)
+                # For 7D: need 3 int32s (dim5, dim6, dim7)
+                num_update_int32s = dimension - 4
+                pattern5_size = 1 + (num_update_int32s * 4)  # 05 + int32s
+                
+                if pos + pattern5_size + 9 > len(section):
+                    pos += 1
+                    continue
+                
+                # Build new indices: keep dim1-4, update remaining
+                new_indices = current_indices[:4].copy()
+                
+                # Read int32s for dimensions 5+
+                for i in range(num_update_int32s):
+                    offset = pos + 1 + (i * 4)
+                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
+                    
+                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
+                        raise ValueError("Invalid UEL index")
+                    
+                    new_indices.append(uel_idx_1based - 1)
+                
+                # Check for double marker
+                double_marker_pos = pos + pattern5_size
+                if double_marker_pos >= len(section) or section[double_marker_pos] != RECORD_DOUBLE:
+                    pos += 1
+                    continue
+                
+                # Read value
+                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
+                
+                # Store value
+                if all(0 <= idx < len(elements) for idx in new_indices):
+                    index_tuple = tuple(elements[idx] for idx in new_indices)
+                    values[index_tuple] = value
+                    current_indices = new_indices
+                    pos += pattern5_size + 9
+                    continue
+                    
+            except (struct.error, ValueError):
+                pass
+                
+                # Check for double marker after indices
+                double_marker_pos = pos + header_size
+                if double_marker_pos >= len(section) or section[double_marker_pos] != RECORD_DOUBLE:
+                    pos += 1
+                    continue
+                
+                # Read the double value
+                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
+                
+                # Build tuple directly from UEL indices
+                if all(0 <= idx < len(elements) for idx in uel_indices):
+                    index_tuple = tuple(elements[idx] for idx in uel_indices)
+                    values[index_tuple] = value
+                    current_indices = uel_indices
+                    pos += header_size + 9  # Skip header + 0a + double
+                    continue
+                    
+            except (struct.error, ValueError):
+                pass
+        
+        # Look for continuation values: 0a <double> (increments last dimension)
+        elif (len(current_indices) == dimension and
+              byte == RECORD_DOUBLE and
+              pos + 9 <= len(section)):
+            
+            try:
+                value = struct.unpack_from("<d", section, pos + 1)[0]
+                
+                # Create new tuple with incremented last dimension
+                new_uel_indices = current_indices.copy()
+                new_uel_indices[-1] += 1
+                
+                if all(idx < len(elements) for idx in new_uel_indices):
+                    index_tuple = tuple(elements[idx] for idx in new_uel_indices)
+                    values[index_tuple] = value
+                    current_indices = new_uel_indices
+                    pos += 9
+                    continue
+                    
+            except struct.error:
+                pass
+        
+        pos += 1
+
+    return values
+
+
+def _decode_simple_parameter_fallback(
+    section: bytes,
+    elements: list[str],
+    domain_offsets: list[int],
+) -> dict[tuple[str, ...], float]:
+    """Simple fallback decoder - extracts all doubles sequentially."""
     values: dict[tuple[str, ...], float] = {}
 
     if len(section) < 20:
@@ -1560,41 +1909,96 @@ def _decode_set_section(
             result.append((elements[i],))
         return result
 
-    # For multi-dimensional sets, parse the binary structure
+    # For multi-dimensional sets, parse the binary structure  
+    # Format patterns discovered through reverse engineering:
+    # 2D: 01 <dim1> 00 00 00 <dim2_int32> 05 [<delta+2> 05]...
+    # 3D: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> 05 [<delta+2> 05]...
+    # 4D: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> <dim4_int32> 05 [<delta+2> 05]...
+    # First tuple has full int32s, subsequent tuples in same row use delta encoding
     pos: int = 19  # Skip header
-    current_row_idx: int = -1
+    current_indices: list[int] = []  # Current tuple being built (0-based indices)
 
-    while pos < len(section) - 1 and len(result) < expected_records:
-        byte: int = section[pos]
-
-        # Row start marker (0x01) - indicates start of a new row in 2D+ sets
-        # Format: 01 <row_idx> 00 00 00 <count> 00 00 00 <col_idx> <col_idx> ...
-        if byte == RECORD_ROW_START and pos + 4 < len(section):
-            current_row_idx = section[pos + 1] - 1  # Convert from 1-based to 0-based
-            pos += 2
+    while pos < len(section) - 1:
+        # Look for tuple start: 01 <dim1> 00 00 00
+        if (section[pos] == RECORD_ROW_START and 
+            pos + 4 < len(section) and
+            section[pos + 2] == 0x00 and
+            section[pos + 3] == 0x00 and
+            section[pos + 4] == 0x00):
             
-            # Skip padding zeros
-            while pos < len(section) and section[pos] == 0x00:
+            dim1_idx = section[pos + 1] - 1  # Convert from 1-based to 0-based
+            
+            if dim1_idx >= len(elements):
                 pos += 1
-            continue
-
-        # Check for column indices (non-zero byte after row start)
-        if current_row_idx >= 0 and byte > 0 and byte < 128:
-            # This is likely a column index (1-based)
-            col_idx = byte - 1  # Convert to 0-based
+                continue
             
-            # Validate indices
-            if current_row_idx < len(elements) and col_idx < len(elements):
-                row_elem = elements[current_row_idx]
-                col_elem = elements[col_idx]
+            # For 2D: read 1 int32 (dim2)
+            # For 3D: read 2 int32s (dim2, dim3)
+            # For 4D: read 3 int32s (dim2, dim3, dim4)
+            num_int32s = dimension - 1
+            bytes_needed = 5 + (num_int32s * 4) + 1  # header(5) + int32s + marker(1)
+            
+            if pos + bytes_needed > len(section):
+                pos += 1
+                continue
+            
+            try:
+                indices = [dim1_idx]
                 
-                # Check if this is a valid combination for 2D set
-                if dimension == 2:
-                    result.append((row_elem, col_elem))
+                # Read int32 values for remaining dimensions
+                for i in range(num_int32s):
+                    offset = pos + 5 + (i * 4)
+                    dim_idx_1based = struct.unpack_from("<I", section, offset)[0]
+                    
+                    if dim_idx_1based < 1 or dim_idx_1based > len(elements):
+                        raise ValueError("Invalid index")
+                    
+                    indices.append(dim_idx_1based - 1)
+                
+                # Check for marker after all int32s
+                marker_pos = pos + 5 + (num_int32s * 4)
+                marker = section[marker_pos]
+                
+                if marker not in (0x05, 0x06):
+                    pos += 1
+                    continue
+                
+                # Validate all indices and create tuple
+                if all(idx < len(elements) for idx in indices):
+                    tuple_elem = tuple(elements[idx] for idx in indices)
+                    result.append(tuple_elem)
+                    current_indices = indices
+                    pos += bytes_needed
+                    continue
+                    
+            except (struct.error, ValueError):
+                pass
+        
+        # Look for additional tuples using delta encoding on last dimension
+        # Pattern: <delta+2> 05 means increment last dimension by (byte - 2)
+        elif (len(current_indices) == dimension and
+              pos + 1 < len(section) and
+              section[pos + 1] in (0x05, 0x06) and
+              section[pos] >= 1):
             
-            pos += 1
-            continue
-
+            delta_encoded = section[pos]
+            delta = delta_encoded - 2
+            
+            if delta >= 1:
+                # Create new tuple with incremented last dimension
+                new_indices = current_indices.copy()
+                new_last_dim_1based = (new_indices[-1] + 1) + delta
+                
+                if 1 <= new_last_dim_1based <= len(elements):
+                    new_indices[-1] = new_last_dim_1based - 1
+                    
+                    if all(idx < len(elements) for idx in new_indices):
+                        tuple_elem = tuple(elements[idx] for idx in new_indices)
+                        result.append(tuple_elem)
+                        current_indices = new_indices
+                        pos += 2
+                        continue
+        
         pos += 1
 
     # Remove duplicates while preserving order
