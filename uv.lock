@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -463,6 +462,7 @@ dependencies = [
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pydantic" },
+    { name = "pyomo" },
 ]
 
 [package.optional-dependencies]
@@ -517,6 +517,7 @@ requires-dist = [
     { name = "plotly", marker = "extra == 'viz'", specifier = ">=5.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pydantic", specifier = ">=2.0" },
+    { name = "pyomo", specifier = ">=6.9.5" },
     { name = "pyomo", marker = "extra == 'pyomo'", specifier = ">=6.7" },
     { name = "pyoptinterface", marker = "extra == 'poi'", specifier = ">=0.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -524,7 +525,6 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "xlrd", marker = "extra == 'excel'", specifier = ">=2.0" },
 ]
-provides-extras = ["pyomo", "poi", "excel", "viz", "dev", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [
