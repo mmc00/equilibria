@@ -112,6 +112,9 @@ class PEPBaseTemplate(ModelTemplate):
         if sam is None:
             sam = self.load_sam()
 
+        if sam is None:
+            raise ValueError("No SAM provided")
+
         from equilibria.templates.pep_sets import PEPSetManager
 
         manager = PEPSetManager(sam)
@@ -122,6 +125,18 @@ class PEPBaseTemplate(ModelTemplate):
         self.labor_types = list(sets["L"].elements)
         self.capital_types = list(sets["K"].elements)
         self.households = list(sets["H"].elements)
+
+    def use_default_pep_sets(self) -> None:
+        """Use default PEP sets (hardcoded for standard PEP model).
+
+        This is a temporary solution until full SAM parsing is implemented.
+        Uses the standard PEP V2.0 structure.
+        """
+        self.sectors = ["agr", "othind", "food", "ser", "adm"]
+        self.commodities = ["agr", "othind", "food", "ser", "adm"]
+        self.labor_types = ["usk", "sk"]
+        self.capital_types = ["cap", "land"]
+        self.households = ["hrp", "hup", "hrr", "hur"]
 
     def sync_sets_to_gams(self, output_path: Path | None = None) -> Path:
         """Generate GAMS include file from current sets.
