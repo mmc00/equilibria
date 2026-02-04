@@ -10,5 +10,6 @@ Supports reading and writing:
 """
 
 from equilibria.babel.gdx import read_gdx
+from equilibria.babel.sam import SAM
 
-__all__ = ["read_gdx"]
+__all__ = ["read_gdx", "SAM"]
