@@ -14,6 +14,13 @@ from equilibria.blocks.base import (
     get_registry,
     register_block,
 )
+from equilibria.blocks.demand import CobbDouglasConsumer, LESConsumer
+from equilibria.blocks.equilibrium import (
+    FactorMarketClearing,
+    MarketClearing,
+    PriceNormalization,
+)
+from equilibria.blocks.institutions import Government, Household, RestOfWorld
 from equilibria.blocks.production import (
     CESValueAdded,
     CETTransformation,
@@ -36,4 +43,15 @@ __all__ = [
     # Trade blocks
     "ArmingtonCES",
     "CETExports",
+    # Demand blocks
+    "LESConsumer",
+    "CobbDouglasConsumer",
+    # Institution blocks
+    "Household",
+    "Government",
+    "RestOfWorld",
+    # Equilibrium blocks
+    "MarketClearing",
+    "PriceNormalization",
+    "FactorMarketClearing",
 ]
