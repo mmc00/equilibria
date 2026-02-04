@@ -369,5 +369,105 @@ src/equilibria/
 ## Current Status
 
 **Completed:** Phases 1, 2, 3, 4, 5, 7 (Core Framework)
-**In Progress:** Phase 6 (Analysis Tools - partial)
-**TODO:** Phase 3.2 (Calibration)
+**In Progress:** Phase 6 (Analysis Tools - partial), Phase 5 (PEP Template)
+**TODO:** Phase 3.2 (Calibration - partial)
+
+---
+
+## Phase 8: PEP Template Implementation 🚧 IN PROGRESS
+
+### 8.1 Overview
+Create a comprehensive PEP (Poverty and Equity Program) CGE model template that exactly replicates the GAMS version `PEP-1-1_v2_1_modular.gms`, with automated comparison testing and dynamic set generation.
+
+### 8.2 File Structure
+```
+equilibria/
+├── src/equilibria/templates/
+│   ├── pep.py                          # Main PEP template classes
+│   ├── pep_base.py                     # Base PEP functionality
+│   ├── pep_1r.py                       # Single region variant
+│   ├── pep_mr.py                       # Multi-region variant (future)
+│   ├── pep_dynamic.py                  # Dynamic variant (future)
+│   └── data/
+│       ├── pep/                        # PEP data (included in package)
+│       │   ├── SAM-V2_0.xls           # Default SAM
+│       │   ├── VAL_PAR.xlsx           # Default parameters
+│       │   └── __init__.py            # Data loaders
+│       └── reference/                  # Dev/testing only (not in pip package)
+│           └── pep/
+│               ├── PEP-1-1_v2_1_modular.gms
+│               ├── modules/
+│               └── generate_gams_config.py
+│
+├── tests/templates/
+│   ├── test_pep.py                     # Main PEP tests
+│   ├── test_pep_calibration.py         # Calibration tests
+│   └── test_pep_comparison.py          # GAMS comparison tests
+│
+└── examples/
+    ├── example_09_pep_model.py         # Basic PEP usage
+    ├── example_10_pep_comparison.py    # GAMS comparison demo
+    └── example_11_pep_dynamic_sets.py  # Dynamic set generation
+```
+
+### 8.3 Implementation Phases
+
+#### Phase 8.1: Foundation (Week 1)
+- [ ] Copy SAM and parameter files to `templates/data/pep/`
+- [ ] Copy GAMS files to `templates/reference/pep/` (dev only)
+- [ ] Create `PEPSetManager` for dynamic set generation
+- [ ] Create data loaders for PEP Excel format
+- [ ] Create GAMS include file generator
+
+#### Phase 8.2: Core Template (Week 2)
+- [ ] Implement `PEPBaseTemplate` class
+- [ ] Implement `PEP1R` single region template
+- [ ] Add all production blocks (CES, Leontief, CET with margins)
+- [ ] Add trade blocks (Armington with tariffs, CET with taxes)
+- [ ] Add 4 household LES blocks
+
+#### Phase 8.3: Institutions & Equilibrium (Week 3)
+- [ ] Add Government block (all 4 taxes: ti, tm, tx, td)
+- [ ] Add RestOfWorld block (trade margins)
+- [ ] Add market clearing blocks
+- [ ] Add price normalization
+- [ ] Add transfer and margin blocks
+
+#### Phase 8.4: Calibration (Week 4)
+- [ ] Implement `PEPCalibrator`
+- [ ] LES calibration (4 household types)
+- [ ] Tax rate calibration from SAM
+- [ ] Margin rate calibration
+- [ ] Production parameter calibration
+- [ ] Support for user elasticities override
+
+#### Phase 8.5: Testing & Comparison (Week 5)
+- [ ] GAMS execution wrapper
+- [ ] GDX result loader
+- [ ] Solution comparison framework
+- [ ] Automated tests with 1e-4 tolerance
+- [ ] Economic consistency checks
+
+#### Phase 8.6: Documentation (Week 6)
+- [ ] PEP template usage guide
+- [ ] Dynamic set generation examples
+- [ ] GAMS comparison tutorial
+- [ ] API documentation
+
+### 8.4 Key Features
+✅ **Full PEP Model** - All 4 households, all taxes, all margins
+✅ **Dynamic Sets** - Auto-detect from SAM, sync to GAMS
+✅ **Flexible Calibration** - VAL_PAR defaults + user overrides
+✅ **Automated Testing** - Run GAMS, compare within 1e-4
+✅ **Multi-Variant** - Base class supports 1R, MR, Dynamic
+✅ **Data Management** - Excel files included, GAMS reference separate
+
+### 8.5 Success Criteria
+- [ ] Template creates model identical to GAMS structure
+- [ ] Calibration reproduces SAM benchmark exactly
+- [ ] Solution matches GAMS within 1e-4 tolerance
+- [ ] All 4 household types work correctly
+- [ ] All 4 tax instruments function properly
+- [ ] Margins and transfers calculated correctly
+- [ ] Dynamic set generation works for any SAM structure
+- [ ] Comprehensive test suite passes

@@ -1,0 +1,1 @@
+* Export trade variables/prices for parity with Python comparers
