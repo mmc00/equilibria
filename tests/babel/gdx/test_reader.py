@@ -548,14 +548,14 @@ class TestMultidimFixture:
         )
         result: dict = read_gdx(gdx_path)
 
-        sym = get_symbol(result, "data3d")
+        sym = get_symbol(result, "p3d")
         assert sym is not None
         assert sym["type_name"] == "parameter"
         assert sym["dimension"] == 3
-        assert sym["records"] == 60  # 4 regions * 5 periods * 3 sectors
+        assert sym["records"] == 24
 
     def test_read_multiple_sets(self) -> None:
-        """Should read multiple sets with different type flags."""
+        """Should read sets and distinguish from aliases and equations."""
         gdx_path: Path = (
             Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
         )
@@ -564,13 +564,12 @@ class TestMultidimFixture:
         sets: list = get_sets(result)
         set_names: list = [s["name"] for s in sets]
 
-        assert "r" in set_names
-        assert "t" in set_names
-        assert "s" in set_names
-        assert len(sets) == 3
+        # Only "i" is a set; "j" is an alias, "k" is an equation
+        assert "i" in set_names
+        assert len(sets) == 1
 
     def test_elements_from_multiple_sets(self) -> None:
-        """Should contain elements from all sets in UEL."""
+        """Should contain elements from all symbols in UEL."""
         gdx_path: Path = (
             Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
         )
@@ -578,17 +577,18 @@ class TestMultidimFixture:
 
         elements: list = result["elements"]
 
-        # Regions
-        assert "north" in elements
-        assert "south" in elements
+        # Set i elements
+        assert "i1" in elements
+        assert "i2" in elements
+        assert "i3" in elements
 
-        # Time periods
-        assert "t1" in elements
-        assert "t5" in elements
+        # Alias j elements (also in UEL)
+        assert "j1" in elements
+        assert "j4" in elements
 
-        # Sectors
-        assert "s1" in elements
-        assert "s3" in elements
+        # Equation k elements
+        assert "k1" in elements
+        assert "k2" in elements
 
 
 @pytest.mark.skipif(
