@@ -459,6 +459,7 @@ source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "openpyxl" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pydantic" },
@@ -513,6 +514,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
     { name = "numpy", specifier = ">=1.24" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "openpyxl", marker = "extra == 'excel'", specifier = ">=3.1" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "plotly", marker = "extra == 'viz'", specifier = ">=5.0" },
