@@ -4,7 +4,8 @@ Let's look for ALL occurrences of valid UEL indices in the data blocks.
 """
 
 from pathlib import Path
-from equilibria.babel.gdx.reader import read_gdx, read_data_sections
+
+from equilibria.babel.gdx.reader import read_data_sections, read_gdx
 
 gdx = read_gdx('tests/fixtures/set_2d_sparse.gdx')
 data = Path('tests/fixtures/set_2d_sparse.gdx').read_bytes()
@@ -35,14 +36,14 @@ current_row = None
 while pos < len(section):
     b = section[pos]
     context = ''
-    
+
     if b == 0x01:
         if pos + 1 < len(section):
             next_b = section[pos + 1]
             if 1 <= next_b <= 3:  # Row indices
                 current_row = next_b
                 context = f'ROW_START row={next_b}'
-    
+
     elif b in (4, 5, 6) and current_row:  # Potential column indices
         context = f'COL_CANDIDATE row={current_row} col={b} => ({current_row},{b})'
         # Check if this matches expected
@@ -50,10 +51,10 @@ while pos < len(section):
             context += ' ✓ EXPECTED'
         else:
             context += ' ✗ NOT EXPECTED'
-    
+
     if context:
         print(f'{pos:3d}  0x{b:02x}  {context}')
-    
+
     pos += 1
 
 print()

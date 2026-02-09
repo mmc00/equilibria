@@ -8,10 +8,8 @@ This example demonstrates how to:
 
 from equilibria import Model
 from equilibria.blocks import (
-    ArmingtonCES,
-    CETExports,
-    CETTransformation,
     CESValueAdded,
+    CETTransformation,
     LeontiefIntermediate,
 )
 from equilibria.core import Set

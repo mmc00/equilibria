@@ -9,7 +9,7 @@ gms_file = FIXTURES_DIR / "generate_gdx_fixtures.gms"
 print("GAMS file content (first 60 lines):")
 print("=" * 70)
 
-with open(gms_file, 'r') as f:
+with open(gms_file) as f:
     for i, line in enumerate(f, 1):
         print(f"{i:3d}: {line}", end='')
         if i >= 60:

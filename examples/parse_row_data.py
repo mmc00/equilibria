@@ -37,21 +37,21 @@ while i < len(chunk):
         row = chunk[i+1]
         print(f"\nROW_START at offset 0x{start+i:04X} (byte {i})")
         print(f"  Row number (1-based): {row}")
-        
+
         # Extract next 20 bytes
         data_bytes = chunk[i+5:min(i+25, len(chunk))]
         print(f"  Following bytes: {' '.join(f'{b:02X}' for b in data_bytes)}")
-        
+
         # Look for all 0x05 markers (these seem to indicate columns)
         col_markers = []
         for j, b in enumerate(data_bytes):
             if b == 0x05:
                 col_markers.append(j)
-        
+
         print(f"  Found {len(col_markers)} markers (0x05) at positions: {col_markers}")
-        
+
         # Try to extract column values
-        print(f"  Column parsing:")
+        print("  Column parsing:")
         j = 0
         col_num = 0
         while j < len(data_bytes) - 1:
@@ -59,22 +59,22 @@ while i < len(chunk):
                 # Try int32
                 int_val = int.from_bytes(data_bytes[j:j+4], 'little')
                 next_byte = data_bytes[j+4] if j+4 < len(data_bytes) else None
-                
+
                 if 1 <= int_val <= 10 and next_byte == 0x05:
                     print(f"    Col {col_num+1}: int32={int_val} (offset {j}, marker at {j+4})")
                     col_num += 1
                     j += 5
                     continue
-            
+
             # Try single byte + marker
             if j + 1 < len(data_bytes) and data_bytes[j+1] == 0x05:
                 print(f"    Col {col_num+1}: byte={data_bytes[j]:02X} (offset {j}, marker at {j+1})")
                 col_num += 1
                 j += 2
                 continue
-            
+
             j += 1
-        
+
         # Skip past this row
         i += 5
     else:

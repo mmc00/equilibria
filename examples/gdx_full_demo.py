@@ -14,7 +14,6 @@ from equilibria.babel.gdx.reader import (
     get_sets,
     get_symbol,
     get_variables,
-    read_equation_values,
     read_gdx,
     read_parameter_values,
     read_set_elements,

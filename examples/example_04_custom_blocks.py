@@ -137,7 +137,7 @@ def main():
     from equilibria.blocks import get_registry
 
     registry = get_registry()
-    print(f"\nRegistered blocks:")
+    print("\nRegistered blocks:")
     for block_name in registry.list_blocks():
         print(f"  - {block_name}")
 
@@ -157,18 +157,18 @@ def main():
     print("-" * 70)
 
     info = demand_block.get_info()
-    print(f"\nBlock Information:")
+    print("\nBlock Information:")
     print(f"  Name: {info['name']}")
     print(f"  Description: {info['description']}")
     print(f"  Required sets: {info['required_sets']}")
 
-    print(f"\nParameters:")
+    print("\nParameters:")
     for param_name, param_spec in info["parameters"].items():
         print(f"  {param_name}:")
         print(f"    Domains: {param_spec['domains']}")
         print(f"    Description: {param_spec['description']}")
 
-    print(f"\nVariables:")
+    print("\nVariables:")
     for var_name, var_spec in info["variables"].items():
         print(f"  {var_name}:")
         print(f"    Domains: {var_spec['domains']}")
@@ -194,9 +194,9 @@ def main():
     print(f"\nAdded set: {commodities}")
 
     # Add custom block
-    print(f"\nAdding custom block to model...")
+    print("\nAdding custom block to model...")
     model.add_block(demand_block)
-    print(f"  ✓ Block added successfully")
+    print("  ✓ Block added successfully")
 
     # Show model statistics
     print("\n" + "-" * 70)
@@ -204,17 +204,17 @@ def main():
     print("-" * 70)
 
     stats = model.statistics
-    print(f"\nModel Statistics:")
+    print("\nModel Statistics:")
     print(f"  Variables: {stats.variables}")
     print(f"  Parameters: {len(model.parameter_manager.list_params())}")
     print(f"  Blocks: {stats.blocks}")
 
-    print(f"\nParameters in model:")
+    print("\nParameters in model:")
     for param_name in model.parameter_manager.list_params():
         param = model.get_parameter(param_name)
         print(f"  {param_name}: shape {param.shape()}")
 
-    print(f"\nVariables in model:")
+    print("\nVariables in model:")
     for var_name in model.variable_manager.list_vars():
         var = model.get_variable(var_name)
         print(f"  {var_name}: shape {var.shape()}")

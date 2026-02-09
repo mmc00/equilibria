@@ -7,7 +7,6 @@ from pathlib import Path
 from equilibria.babel.gdx.reader import (
     get_equations,
     get_variables,
-    read_equation_values,
     read_gdx,
     read_variable_values,
 )

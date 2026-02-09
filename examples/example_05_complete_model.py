@@ -6,12 +6,11 @@ This example demonstrates how to:
 3. Access and modify parameters and variables
 """
 
-import numpy as np
 
 from equilibria import Model
 from equilibria.blocks import (
-    CETTransformation,
     CESValueAdded,
+    CETTransformation,
     LeontiefIntermediate,
 )
 from equilibria.core import Set
@@ -54,7 +53,7 @@ def main():
 
     model.add_sets([sectors, factors, commodities])
 
-    print(f"\nSets defined:")
+    print("\nSets defined:")
     for set_name in model.set_manager.list_sets():
         s = model.set_manager.get(set_name)
         print(f"  {set_name}: {len(s)} elements - {s.description}")
@@ -76,7 +75,7 @@ def main():
         print(f"  Params: {len(block.parameters)}")
         print(f"  Vars: {len(block.variables)}")
         model.add_block(block)
-        print(f"  ✓ Added")
+        print("  ✓ Added")
 
     # Model statistics
     print("\n" + "-" * 70)
@@ -85,7 +84,7 @@ def main():
 
     stats = model.statistics
     print(f"\n{model}")
-    print(f"\nDetailed Statistics:")
+    print("\nDetailed Statistics:")
     print(f"  Total scalar variables: {stats.variables}")
     print(f"  Total scalar equations: {stats.equations}")
     print(f"  Degrees of freedom: {stats.degrees_of_freedom}")
@@ -96,34 +95,34 @@ def main():
     print("Step 4: Access and Modify Parameters")
     print("-" * 70)
 
-    print(f"\nAll parameters in model:")
+    print("\nAll parameters in model:")
     for param_name in sorted(model.parameter_manager.list_params()):
         param = model.get_parameter(param_name)
         print(f"  {param_name:15s} shape={param.shape()}")
 
     # Modify a parameter
-    print(f"\nModifying CES elasticity parameter:")
+    print("\nModifying CES elasticity parameter:")
     sigma_va = model.get_parameter("sigma_VA")
     print(f"  Original values: {sigma_va.value}")
 
     # Change elasticity for manufacturing
     sigma_va.value[1] = 1.0  # MFG sector
     print(f"  Modified values: {sigma_va.value}")
-    print(f"  ✓ sigma_VA[MFG] changed from 0.8 to 1.0")
+    print("  ✓ sigma_VA[MFG] changed from 0.8 to 1.0")
 
     # Access variables
     print("\n" + "-" * 70)
     print("Step 5: Access and Modify Variables")
     print("-" * 70)
 
-    print(f"\nAll variables in model:")
+    print("\nAll variables in model:")
     for var_name in sorted(model.variable_manager.list_vars()):
         var = model.get_variable(var_name)
         fixed_str = " [FIXED]" if var.is_fixed() else ""
         print(f"  {var_name:10s} shape={var.shape()}{fixed_str}")
 
     # Fix a variable
-    print(f"\nFixing variable 'WF' (factor prices):")
+    print("\nFixing variable 'WF' (factor prices):")
     wf_var = model.get_variable("WF")
     print(f"  Before: is_fixed={wf_var.is_fixed()}")
     wf_var.fix(1.0)
@@ -167,7 +166,7 @@ def main():
         print(f"  Required sets: {block.required_sets}")
 
         if block.parameters:
-            print(f"  Parameters:")
+            print("  Parameters:")
             for param_name, param_spec in block.parameters.items():
                 domains_str = (
                     f"[{', '.join(param_spec.domains)}]"
@@ -177,7 +176,7 @@ def main():
                 print(f"    - {param_name} {domains_str}")
 
         if block.variables:
-            print(f"  Variables:")
+            print("  Variables:")
             for var_name, var_spec in block.variables.items():
                 domains_str = (
                     f"[{', '.join(var_spec.domains)}]" if var_spec.domains else "scalar"

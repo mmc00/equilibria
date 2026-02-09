@@ -26,10 +26,10 @@ def main():
 
     # Show template info
     info = template.get_info()
-    print(f"\nTemplate Configuration:")
+    print("\nTemplate Configuration:")
     print(f"  Sectors: {info['num_sectors']} - {info['sector_names']}")
     print(f"  Factors: {info['num_factors']} - {info['factor_names']}")
-    print(f"  Elasticities:")
+    print("  Elasticities:")
     print(f"    CES (VA): {info['sigma_va']}")
     print(f"    Armington: {info['sigma_m']}")
     print(f"    CET: {info['sigma_e']}")
@@ -44,13 +44,13 @@ def main():
     print(f"\nCreated model: {model.name}")
 
     stats = model.statistics
-    print(f"\nModel Statistics:")
+    print("\nModel Statistics:")
     print(f"  Variables: {stats.variables}")
     print(f"  Equations: {stats.equations}")
     print(f"  Degrees of freedom: {stats.degrees_of_freedom}")
     print(f"  Blocks: {stats.blocks}")
 
-    print(f"\nSets in model:")
+    print("\nSets in model:")
     for set_name in model.set_manager.list_sets():
         s = model.set_manager.get(set_name)
         print(f"  {set_name}: {len(s)} elements")
@@ -71,10 +71,10 @@ def main():
     print(f"\nCreated custom template: {custom_template}")
 
     custom_info = custom_template.get_info()
-    print(f"\nCustom Configuration:")
+    print("\nCustom Configuration:")
     print(f"  Sectors: {custom_info['num_sectors']} - {custom_info['sector_names']}")
     print(f"  Factors: {custom_info['num_factors']} - {custom_info['factor_names']}")
-    print(f"  Elasticities:")
+    print("  Elasticities:")
     print(f"    CES (VA): {custom_info['sigma_va']}")
     print(f"    Armington: {custom_info['sigma_m']}")
     print(f"    CET: {custom_info['sigma_e']}")
@@ -84,7 +84,7 @@ def main():
     print(f"\nCreated custom model: {custom_model.name}")
 
     custom_stats = custom_model.statistics
-    print(f"\nCustom Model Statistics:")
+    print("\nCustom Model Statistics:")
     print(f"  Variables: {custom_stats.variables}")
     print(f"  Blocks: {custom_stats.blocks}")
 
@@ -93,7 +93,7 @@ def main():
     print("Step 4: Compare Models")
     print("-" * 70)
 
-    print(f"\nComparison:")
+    print("\nComparison:")
     print(f"  Default model: {stats.variables} variables")
     print(f"  Custom model:  {custom_stats.variables} variables")
     print(f"  Difference:    {custom_stats.variables - stats.variables} more variables")

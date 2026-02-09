@@ -3,7 +3,8 @@ Manual parsing attempt for 2D set format.
 """
 
 from pathlib import Path
-from equilibria.babel.gdx.reader import read_gdx, read_data_sections
+
+from equilibria.babel.gdx.reader import read_data_sections, read_gdx
 
 # Analyze set_2d_sparse specifically
 gdx = read_gdx('tests/fixtures/set_2d_sparse.gdx')
@@ -30,12 +31,12 @@ print('\nHex dump with interpretation:')
 pos = 27
 while pos < len(section):
     print(f'{pos:3d}: 0x{section[pos]:02x}  ', end='')
-    
+
     # Print next 10 bytes for context
     for i in range(pos, min(pos + 10, len(section))):
         print(f'{section[i]:02x} ', end='')
     print()
-    
+
     if pos >= 62:
         break
     pos += 1
@@ -58,18 +59,18 @@ while pos < len(section) - 5:
     if section[pos] == 0x01:
         row_idx = section[pos + 1]
         print(f'Row {row_idx} ({gdx["elements"][row_idx-1]}) at pos {pos}:')
-        
+
         # Skip to after "01 <row> 00 00 00"
         pos += 5
-        
+
         # Collect bytes until next 0x01 or end
         block_bytes = []
         while pos < len(section) and section[pos] != 0x01:
             block_bytes.append(section[pos])
             pos += 1
-        
+
         print(f'  Block bytes: {" ".join(f"{b:02x}" for b in block_bytes)}')
-        
+
         # Try to extract column indices
         # Hypothesis: pattern is <col> 00 00 00 XX or <col> XX
         cols = []
@@ -90,7 +91,7 @@ while pos < len(section) - 5:
                     i += 1
             else:
                 i += 1
-        
+
         row_blocks.append((row_idx, cols))
         print()
     else:

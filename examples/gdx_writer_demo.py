@@ -8,9 +8,9 @@ Usage:
 
 from pathlib import Path
 
-from equilibria.babel.gdx.symbols import Set, Parameter, Variable
-from equilibria.babel.gdx.writer import write_gdx
 from equilibria.babel.gdx.reader import read_gdx
+from equilibria.babel.gdx.symbols import Parameter, Set, Variable
+from equilibria.babel.gdx.writer import write_gdx
 
 
 def demo_write_simple_parameter():
@@ -18,7 +18,7 @@ def demo_write_simple_parameter():
     print("=" * 70)
     print("DEMO 1: Writing Simple Parameter")
     print("=" * 70)
-    
+
     # Create a parameter
     price = Parameter(
         name="price",
@@ -32,23 +32,23 @@ def demo_write_simple_parameter():
             (["srv"], 2.5),
         ]
     )
-    
+
     # Write to GDX
     output_file = Path("test_output.gdx")
     write_gdx(output_file, [price])
-    
+
     print(f"\n✅ Wrote parameter to: {output_file}")
     print(f"   File size: {output_file.stat().st_size} bytes")
-    
+
     # Read back and verify
     gdx_data = read_gdx(output_file)
-    print(f"\n📖 Read back from file:")
+    print("\n📖 Read back from file:")
     print(f"   Symbols: {len(gdx_data['symbols'])}")
     print(f"   Elements: {gdx_data['elements']}")
-    
+
     # Clean up
     output_file.unlink()
-    print(f"\n🗑️  Cleaned up test file")
+    print("\n🗑️  Cleaned up test file")
 
 
 def demo_write_set_and_parameter():
@@ -56,7 +56,7 @@ def demo_write_set_and_parameter():
     print("\n" + "=" * 70)
     print("DEMO 2: Writing Set and Parameter")
     print("=" * 70)
-    
+
     # Create a set
     industries = Set(
         name="i",
@@ -66,7 +66,7 @@ def demo_write_set_and_parameter():
         domain=["*"],
         elements=[["agr"], ["mfg"], ["srv"]]
     )
-    
+
     # Create a parameter using the set
     output = Parameter(
         name="Q",
@@ -80,23 +80,23 @@ def demo_write_set_and_parameter():
             (["srv"], 300.0),
         ]
     )
-    
+
     # Write both to GDX
     output_file = Path("test_set_param.gdx")
     write_gdx(output_file, [industries, output])
-    
+
     print(f"\n✅ Wrote set and parameter to: {output_file}")
     print(f"   File size: {output_file.stat().st_size} bytes")
-    
+
     # Read back
     gdx_data = read_gdx(output_file)
-    print(f"\n📖 Read back from file:")
+    print("\n📖 Read back from file:")
     print(f"   Symbols: {[s['name'] for s in gdx_data['symbols']]}")
     print(f"   UEL: {gdx_data['elements']}")
-    
+
     # Clean up
     output_file.unlink()
-    print(f"\n🗑️  Cleaned up test file")
+    print("\n🗑️  Cleaned up test file")
 
 
 def demo_write_2d_parameter():
@@ -104,7 +104,7 @@ def demo_write_2d_parameter():
     print("\n" + "=" * 70)
     print("DEMO 3: Writing 2D Parameter (Matrix)")
     print("=" * 70)
-    
+
     # Create sets
     industries = Set(
         name="i",
@@ -113,7 +113,7 @@ def demo_write_2d_parameter():
         description="Industries",
         elements=[["agr"], ["mfg"], ["srv"]]
     )
-    
+
     commodities = Set(
         name="j",
         sym_type="set",
@@ -121,7 +121,7 @@ def demo_write_2d_parameter():
         description="Commodities",
         elements=[["food"], ["goods"], ["services"]]
     )
-    
+
     # Create 2D parameter (SAM)
     sam = Parameter(
         name="SAM",
@@ -137,23 +137,23 @@ def demo_write_2d_parameter():
             (["srv", "services"], 150.0),
         ]
     )
-    
+
     # Write to GDX
     output_file = Path("test_2d_param.gdx")
     write_gdx(output_file, [industries, commodities, sam])
-    
+
     print(f"\n✅ Wrote 2D parameter to: {output_file}")
     print(f"   File size: {output_file.stat().st_size} bytes")
-    
+
     # Read back
     gdx_data = read_gdx(output_file)
-    print(f"\n📖 Read back from file:")
+    print("\n📖 Read back from file:")
     print(f"   Symbols: {[s['name'] for s in gdx_data['symbols']]}")
     print(f"   UEL elements: {len(gdx_data['elements'])}")
-    
+
     # Clean up
     output_file.unlink()
-    print(f"\n🗑️  Cleaned up test file")
+    print("\n🗑️  Cleaned up test file")
 
 
 def demo_write_variable():
@@ -161,7 +161,7 @@ def demo_write_variable():
     print("\n" + "=" * 70)
     print("DEMO 4: Writing Variable")
     print("=" * 70)
-    
+
     # Create a variable
     X = Variable(
         name="X",
@@ -175,22 +175,22 @@ def demo_write_variable():
             (["srv"], (300.0, 1.2, 50.0, 500.0, 1.0)),
         ]
     )
-    
+
     # Write to GDX
     output_file = Path("test_variable.gdx")
     write_gdx(output_file, [X])
-    
+
     print(f"\n✅ Wrote variable to: {output_file}")
     print(f"   File size: {output_file.stat().st_size} bytes")
-    
+
     # Read back
     gdx_data = read_gdx(output_file)
-    print(f"\n📖 Read back from file:")
+    print("\n📖 Read back from file:")
     print(f"   Variables: {[s['name'] for s in gdx_data['symbols'] if s['type'] == 2]}")
-    
+
     # Clean up
     output_file.unlink()
-    print(f"\n🗑️  Cleaned up test file")
+    print("\n🗑️  Cleaned up test file")
 
 
 def main():
@@ -199,13 +199,13 @@ def main():
     print("GDX WRITER - COMPREHENSIVE DEMO")
     print("=" * 70)
     print("\nDemonstrating GDX file writing capabilities.")
-    
+
     try:
         demo_write_simple_parameter()
         demo_write_set_and_parameter()
         demo_write_2d_parameter()
         demo_write_variable()
-        
+
         print("\n" + "=" * 70)
         print("✅ All demos completed successfully!")
         print("=" * 70)

@@ -1,18 +1,20 @@
 """Simple debugging script for 6D parameter reading."""
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from equilibria.babel.gdx.reader import read_gdx
 
+
 def debug_6d():
     """Debug 6D parameter detection."""
     gdx_path = '/Users/marmol/proyectos/equilibria/tests/fixtures/test_6d.gdx'
-    
+
     print("Reading GDX file...")
     data = read_gdx(gdx_path)
-    
+
     print("\nSymbols found:")
     for sym in data['symbols']:
         print(f"  Name: {sym['name']}")

@@ -3,7 +3,8 @@ Detailed block-by-block analysis with ALL bytes shown.
 """
 
 from pathlib import Path
-from equilibria.babel.gdx.reader import read_gdx, read_data_sections
+
+from equilibria.babel.gdx.reader import read_data_sections, read_gdx
 
 gdx = read_gdx('tests/fixtures/set_2d_sparse.gdx')
 data = Path('tests/fixtures/set_2d_sparse.gdx').read_bytes()
@@ -29,14 +30,14 @@ blocks = []
 while pos < len(section):
     if section[pos] == 0x01 and pos + 1 < len(section):
         row_idx = section[pos + 1]
-        
+
         # Find next ROW_START or end
         start = pos
         pos += 2
         while pos < len(section) and section[pos] != 0x01:
             pos += 1
         end = pos
-        
+
         block_bytes = list(section[start:end])
         blocks.append((row_idx, block_bytes))
     else:
@@ -49,12 +50,12 @@ for row_idx, block_bytes in blocks:
     print(f'{"="*70}')
     print('Raw bytes:', ' '.join(f'{b:02x}' for b in block_bytes))
     print()
-    
+
     # Skip first 5 bytes (01 <row> 00 00 00)
     data_bytes = block_bytes[5:]
     print(f'Data part (after header): {" ".join(f"{b:02x}" for b in data_bytes)}')
     print()
-    
+
     # Try to identify pattern
     print('Attempting to parse:')
     i = 0
@@ -65,14 +66,14 @@ for row_idx, block_bytes in blocks:
             col_candidate = data_bytes[i]
             zeros = data_bytes[i+1:i+3]
             marker = data_bytes[i+3] if i+3 < len(data_bytes) else None
-            
+
             if zeros == [0, 0] and 4 <= col_candidate <= 6:
                 entry_num += 1
                 col_name = gdx['elements'][col_candidate - 1]
                 marker_str = f'0x{marker:02x}' if marker is not None else 'None'
                 print(f'  Entry {entry_num}: col={col_candidate} ({col_name}), marker={marker_str}')
                 i += 4
-                
+
                 # Skip marker byte
                 if i < len(data_bytes) and data_bytes[i] in (0x04, 0x05, 0x06):
                     # This might be another column!

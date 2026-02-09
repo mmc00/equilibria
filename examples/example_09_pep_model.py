@@ -32,7 +32,7 @@ def main():
     # Use default PEP sets (hardcoded for standard PEP model)
     template.use_default_pep_sets()
 
-    print(f"\nExtracted sets:")
+    print("\nExtracted sets:")
     print(f"  Sectors: {template.sectors}")
     print(f"  Commodities: {template.commodities}")
     print(f"  Labor types: {template.labor_types}")
@@ -49,19 +49,19 @@ def main():
 
     # Show model statistics
     stats = model.statistics
-    print(f"\nModel Statistics:")
+    print("\nModel Statistics:")
     print(f"  Variables: {stats.variables}")
     print(f"  Equations: {stats.equations}")
     print(f"  Blocks: {stats.blocks}")
 
     # Show sets
-    print(f"\nSets in model:")
+    print("\nSets in model:")
     for set_name in model.set_manager.list_sets():
         s = model.set_manager.get(set_name)
         print(f"  {set_name}: {len(s)} elements")
 
     # Show blocks
-    print(f"\nBlocks in model:")
+    print("\nBlocks in model:")
     for block in model.blocks:
         print(f"  {block.name}: {block.description}")
 
@@ -71,9 +71,9 @@ def main():
     print("-" * 70)
 
     info = template.get_info()
-    print(f"\nTemplate configuration:")
+    print("\nTemplate configuration:")
     print(f"  Variant: {info.get('variant')}")
-    print(f"  Features:")
+    print("  Features:")
     for feature, enabled in info.get("features", {}).items():
         print(f"    {feature}: {enabled}")
 
