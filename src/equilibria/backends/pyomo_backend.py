@@ -84,8 +84,8 @@ class PyomoBackend(Backend):
         # Build variables
         self._build_variables(model)
 
-        # Build constraints (placeholder - would need actual equations)
-        # self._build_constraints(model)
+        # Build constraints from equations
+        self._build_constraints(model)
 
         # Build objective (placeholder - CGE models often don't have objectives)
         # self._build_objective(model)
@@ -109,12 +109,21 @@ class PyomoBackend(Backend):
             param = model.parameter_manager.get(param_name)
 
             if not param.domains:
-                # Scalar parameter
-                setattr(
-                    self.pyomo_model,
-                    param_name,
-                    Param(initialize=float(param.value)),
-                )
+                # Check if it's actually a scalar or an array without domain info
+                if param.value.ndim == 0 or param.value.size == 1:
+                    # Scalar parameter
+                    setattr(
+                        self.pyomo_model,
+                        param_name,
+                        Param(initialize=float(param.value.flatten()[0])),
+                    )
+                else:
+                    # Multi-dimensional parameter without domain info (e.g., FD0)
+                    # Skip these for now as they're only used for initialization, not constraints
+                    print(
+                        f"Warning: Skipping parameter {param_name} - no domains defined"
+                    )
+                    continue
             else:
                 # Indexed parameter
                 # Get Pyomo sets for indexing
@@ -149,13 +158,17 @@ class PyomoBackend(Backend):
             upper = var.upper
 
             if not var.domains:
-                # Scalar variable
+                # Scalar variable - extract scalar value from array if needed
+                if hasattr(var.value, "__len__") and len(var.value) == 1:
+                    init_val = float(var.value[0])
+                else:
+                    init_val = float(var.value)
                 setattr(
                     self.pyomo_model,
                     var_name,
                     Var(
                         bounds=(lower, upper),
-                        initialize=float(var.value),
+                        initialize=init_val,
                     ),
                 )
             else:
@@ -185,6 +198,94 @@ class PyomoBackend(Backend):
                         initialize=init_dict,
                     ),
                 )
+
+    def _build_constraints(self, model: EquilibriaModel) -> None:
+        """Build Pyomo constraints from equilibria equations.
+
+        Args:
+            model: equilibria Model instance
+        """
+        from pyomo.environ import Constraint
+        from equilibria.backends.pyomo_equations import PyomoEquation
+
+        for eq_name in model.equation_manager.list_equations():
+            eq = model.equation_manager.get(eq_name)
+
+            # Try to use build_expression method (new API)
+            if hasattr(eq, "build_expression"):
+                indices_list = eq.get_indices(model.set_manager)
+
+                if not indices_list:
+                    continue
+
+                # Create constraint dictionary
+                constraint_dict = {}
+                for indices in indices_list:
+                    try:
+                        expr = eq.build_expression(self.pyomo_model, indices)
+                        if expr is not None:
+                            constraint_dict[indices] = expr
+                    except Exception as e:
+                        # Skip constraints that fail to build
+                        print(
+                            f"Warning: Could not build constraint {eq_name}{indices}: {e}"
+                        )
+                        continue
+
+                if constraint_dict:
+                    if eq.domains:
+                        # Build index sets from constraint_dict keys
+                        # Extract unique index values for each dimension
+                        domain_sets = []
+                        for dim_idx, domain in enumerate(eq.domains):
+                            unique_vals = sorted(
+                                set(idx[dim_idx] for idx in constraint_dict.keys())
+                            )
+                            domain_sets.append((domain, unique_vals))
+
+                        # Create Pyomo sets for indexing if they don't exist
+                        for domain, vals in domain_sets:
+                            attr_name = f"_{eq_name}_{domain}_idx"
+                            if not hasattr(self.pyomo_model, attr_name):
+                                setattr(
+                                    self.pyomo_model, attr_name, Set(initialize=vals)
+                                )
+
+                        index_sets = [
+                            getattr(self.pyomo_model, f"_{eq_name}_{domain}_idx")
+                            for domain, _ in domain_sets
+                        ]
+
+                        # Create a proper constraint rule that captures the dict
+                        def make_constraint_rule(constraints):
+                            def constraint_rule(m, *idx):
+                                if idx in constraints:
+                                    return constraints[idx]
+                                return Constraint.Skip
+
+                            return constraint_rule
+
+                        setattr(
+                            self.pyomo_model,
+                            f"{eq_name}_con",
+                            Constraint(
+                                *index_sets,
+                                rule=make_constraint_rule(constraint_dict),
+                            ),
+                        )
+                    else:
+                        # Scalar constraint
+                        setattr(
+                            self.pyomo_model,
+                            f"{eq_name}_con",
+                            Constraint(
+                                rule=lambda m: list(constraint_dict.values())[0]
+                            ),
+                        )
+            else:
+                # Legacy equation handling - skip for now
+                # These equations use closures and won't work with Pyomo
+                pass
 
     def solve(self, options: dict[str, Any] | None = None) -> Solution:
         """Solve the Pyomo model.
@@ -234,14 +335,31 @@ class PyomoBackend(Backend):
             if not var.domains:
                 # Scalar
                 var_values[var_name] = np.array([value(pyomo_var)])
-            else:
-                # Indexed - extract values
+            elif len(var.domains) == 1:
+                # 1D variable
                 set_obj = self._model.set_manager.get(var.domains[0])
                 values_list = []
                 for elem in set_obj:
                     val = value(pyomo_var[elem])
                     values_list.append(val)
                 var_values[var_name] = np.array(values_list)
+            elif len(var.domains) == 2:
+                # 2D variable (e.g., FD[F, J])
+                set_obj_0 = self._model.set_manager.get(var.domains[0])
+                set_obj_1 = self._model.set_manager.get(var.domains[1])
+                values_matrix = []
+                for elem0 in set_obj_0:
+                    row = []
+                    for elem1 in set_obj_1:
+                        val = value(pyomo_var[elem0, elem1])
+                        row.append(val)
+                    values_matrix.append(row)
+                var_values[var_name] = np.array(values_matrix)
+            else:
+                # 3D+ variables not yet supported
+                raise NotImplementedError(
+                    f"Solution extraction for {len(var.domains)}D variable '{var_name}' not yet implemented"
+                )
 
         # Create solution object
         solution = Solution(

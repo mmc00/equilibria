@@ -1,0 +1,5 @@
+Input=PEP-1-1_v2_1_modular.gms
+ScrDir=225a
+SysDir=/Library/Frameworks/GAMS.framework/Versions/48/Resources
+ScriptNext=225a/gamsnext.sh
+GDX=pep_results.gdx

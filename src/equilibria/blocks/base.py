@@ -8,14 +8,20 @@ using Pydantic for validation and introspection.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from equilibria.core.calibration_mixin import CalibrationMixin
 from equilibria.core.equations import Equation
 from equilibria.core.parameters import Parameter
 from equilibria.core.sets import SetManager
+from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
+
+if TYPE_CHECKING:
+    from equilibria.core.calibration_data import CalibrationData
+    from equilibria.core.calibration_phase import CalibrationPhase
 
 
 class ParameterSpec(BaseModel):
@@ -86,12 +92,14 @@ class EquationSpec(BaseModel):
     model_config = {"frozen": True}
 
 
-class Block(BaseModel, ABC):
+class Block(BaseModel, CalibrationMixin, ABC):
     """Base class for CGE model blocks.
 
     Blocks are modular components that define economic behavior through
     equations. Each block declares its required sets, parameters, variables,
     and equations using Pydantic fields for validation.
+
+    Blocks also support calibration from SAM data via the CalibrationMixin.
 
     Attributes:
         name: Block identifier
@@ -100,6 +108,7 @@ class Block(BaseModel, ABC):
         parameters: Dictionary of parameter specifications
         variables: Dictionary of variable specifications
         equations: List of equation specifications
+        dummy_defaults: User-specified dummy values for calibration
 
     Example:
         >>> class CESValueAdded(Block):
@@ -108,9 +117,15 @@ class Block(BaseModel, ABC):
         ...     required_sets: list[str] = ["J", "I"]
         ...     sigma: float = Field(default=0.8, description="Elasticity")
         ...
-        ...     def setup(self, model):
-        ...         # Add parameters, variables, equations to model
-        ...         pass
+        ...     def get_calibration_phases(self):
+        ...         return [CalibrationPhase.PRODUCTION]
+        ...
+        ...     def _extract_calibration(self, phase, data, mode, set_manager):
+        ...         # Extract from SAM
+        ...         FD0 = data.get_matrix("F", "J")
+        ...         VA0 = FD0.sum(axis=0)
+        ...         beta_VA = self._compute_shares(FD0, axis=0)
+        ...         return {"FD0": FD0, "VA0": VA0, "beta_VA": beta_VA}
     """
 
     name: str = Field(..., description="Block identifier")
@@ -145,7 +160,7 @@ class Block(BaseModel, ABC):
         set_manager: SetManager,
         parameters: dict[str, Parameter],
         variables: dict[str, Variable],
-    ) -> list[Equation]:
+    ) -> list[SymbolicEquation]:
         """Set up the block in the model.
 
         This method is called when the block is added to a model.
@@ -157,7 +172,7 @@ class Block(BaseModel, ABC):
             variables: Dictionary to add variables to
 
         Returns:
-            List of Equation objects contributed by this block
+            List of SymbolicEquation objects contributed by this block
         """
         ...
 

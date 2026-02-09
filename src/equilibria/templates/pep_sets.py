@@ -7,8 +7,6 @@ between Python and GAMS representations.
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 from equilibria.babel import SAM
 from equilibria.core import Set
 
@@ -155,13 +153,7 @@ class PEPSetManager:
 
         for acc in accounts:
             # Tax accounts
-            if acc.lower() in ["ti", "tm", "tx", "td"]:
-                agents.append(acc)
-            # Households (typically start with 'h')
-            elif acc.lower().startswith("h") and len(acc) <= 4:
-                agents.append(acc)
-            # Other agents
-            elif acc.lower() in ["firm", "gvt", "row"]:
+            if acc.lower() in ["ti", "tm", "tx", "td"] or acc.lower().startswith("h") and len(acc) <= 4 or acc.lower() in ["firm", "gvt", "row"]:
                 agents.append(acc)
 
         return agents if agents else ["hh", "firm", "gvt", "row"]

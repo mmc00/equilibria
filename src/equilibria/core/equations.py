@@ -67,6 +67,26 @@ class Equation(BaseModel, ABC):
         """
         ...
 
+    def build_expression(
+        self,
+        pyomo_model: Any,
+        indices: tuple[str, ...],
+    ) -> Any:
+        """Build a Pyomo expression for this constraint.
+
+        This method should be overridden by subclasses to provide
+        Pyomo-compatible symbolic expressions.
+
+        Args:
+            pyomo_model: The Pyomo model with variables and parameters
+            indices: Index tuple for this constraint instance
+
+        Returns:
+            Pyomo expression (e.g., pyomo_model.var1 - pyomo_model.var2)
+            or None if not implemented
+        """
+        return None
+
     def get_indices(self, set_manager: SetManager) -> list[tuple[str, ...]]:
         """Generate all index combinations for this equation.
 
