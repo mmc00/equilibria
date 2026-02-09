@@ -125,6 +125,41 @@ class PEPBaseTemplate(ModelTemplate):
         self.capital_types = list(sets["K"].elements)
         self.households = list(sets["H"].elements)
 
+    def extract_sets_from_gdx_data(self, gdx_data: dict) -> None:
+        """Extract PEP sets from GDX data structure.
+
+        Populates sectors, commodities, labor_types, capital_types,
+        and households from GDX UEL (Unique Element List).
+
+        Args:
+            gdx_data: Dictionary from read_gdx() containing GDX data
+        """
+        elements = gdx_data.get("elements", [])
+        
+        # Categorize elements based on PEP naming conventions
+        # This uses heuristics based on standard PEP element names
+        
+        # Sectors/Commodities: typically agr, food, othind, ser, adm
+        sector_keywords = ["agr", "food", "othind", "ser", "adm", "ind", "manuf"]
+        self.sectors = [e for e in elements if any(kw in e.lower() for kw in sector_keywords)]
+        self.commodities = self.sectors.copy()  # In PEP, I = J
+        
+        # Labor types: usk (unskilled), sk (skilled), and variants
+        labor_keywords = ["usk", "sk", "lab", "labor", "worker"]
+        self.labor_types = [e for e in elements if any(kw in e.lower() for kw in labor_keywords)]
+        
+        # Capital types: cap, land, and variants
+        capital_keywords = ["cap", "land", "capital"]
+        self.capital_types = [e for e in elements if any(kw in e.lower() for kw in capital_keywords)]
+        
+        # Households: hrp, hrr, hup, hur (PEP standard household types)
+        household_keywords = ["hrp", "hrr", "hup", "hur", "household", "hh"]
+        self.households = [e for e in elements if any(kw in e.lower() for kw in household_keywords)]
+        
+        # If no matches found, use default PEP sets
+        if not self.sectors:
+            self.use_default_pep_sets()
+
     def use_default_pep_sets(self) -> None:
         """Use default PEP sets (hardcoded for standard PEP model).
 

@@ -248,10 +248,20 @@ def get_sam_indices_mapping(filepath: Path | str | None = None) -> dict[str, lis
     }
 
 
+def get_default_pep_data_dir() -> Path:
+    """Get default PEP data directory.
+    
+    Returns:
+        Path to default PEP data directory
+    """
+    return Path(__file__).parent
+
+
 # Backward compatibility - but now returns SAM4D instead of SAM
 __all__ = [
     "load_pep_sam",
     "load_default_pep_sam",
     "load_pep_parameters",
     "get_sam_indices_mapping",
+    "get_default_pep_data_dir",
 ]
