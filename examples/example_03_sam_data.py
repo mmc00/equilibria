@@ -68,7 +68,7 @@ def main():
     print("-" * 70)
 
     validation = sam.check_balance(tolerance=1e-6)
-    print(f"\nValidation Results:")
+    print("\nValidation Results:")
     print(f"  Is balanced: {validation['is_balanced']}")
     print(f"  Max difference: {validation['max_difference']:.2e}")
     print(f"  Tolerance: {validation['tolerance']:.2e}")
@@ -76,11 +76,11 @@ def main():
     print(f"  Total col sum: {validation['total_col_sum']:.2f}")
 
     if validation["unbalanced_accounts"]:
-        print(f"\n  Unbalanced accounts:")
+        print("\n  Unbalanced accounts:")
         for acc, diff in validation["unbalanced_accounts"].items():
             print(f"    {acc}: {diff:.2e}")
     else:
-        print(f"\n  ✓ All accounts are balanced!")
+        print("\n  ✓ All accounts are balanced!")
 
     # SAM Summary
     print("\n" + "-" * 70)
@@ -88,7 +88,7 @@ def main():
     print("-" * 70)
 
     summary = sam.summary()
-    print(f"\nSAM Summary:")
+    print("\nSAM Summary:")
     print(f"  Name: {summary['name']}")
     print(f"  Shape: {summary['shape']}")
     print(f"  Total accounts: {summary['accounts']}")
@@ -103,19 +103,19 @@ def main():
     # Extract intermediate demand matrix (sectors × sectors)
     sectors = ["agr", "mfg", "svc"]
     intermediate = sam.get_submatrix(sectors, sectors)
-    print(f"\nIntermediate Demand Matrix (sectors × sectors):")
+    print("\nIntermediate Demand Matrix (sectors × sectors):")
     print(intermediate.to_string())
 
     # Extract value added (factors × sectors)
     factors = ["labor", "capital"]
     value_added = sam.get_submatrix(factors, sectors)
-    print(f"\nValue Added (factors × sectors):")
+    print("\nValue Added (factors × sectors):")
     print(value_added.to_string())
 
     # Extract final demand (sectors × institutions)
     institutions = ["hh", "gov", "row"]
     final_demand = sam.get_submatrix(sectors, institutions)
-    print(f"\nFinal Demand (sectors × institutions):")
+    print("\nFinal Demand (sectors × institutions):")
     print(final_demand.to_string())
 
     # Extract sets
@@ -134,7 +134,7 @@ def main():
 
     sam.extract_sets(set_mapping)
 
-    print(f"\nExtracted sets from SAM:")
+    print("\nExtracted sets from SAM:")
     for set_name, elements in sam.sets.items():
         print(f"  {set_name}: {elements}")
 
@@ -149,17 +149,17 @@ def main():
     unbalanced_df = pd.DataFrame(unbalanced_data, index=accounts, columns=accounts)
     unbalanced_sam = SAM.from_dataframe(unbalanced_df, name="UnbalancedSAM")
 
-    print(f"\nCreated unbalanced SAM")
+    print("\nCreated unbalanced SAM")
     validation_unbal = unbalanced_sam.check_balance(tolerance=1e-6)
     print(f"  Is balanced: {validation_unbal['is_balanced']}")
     print(f"  Max difference: {validation_unbal['max_difference']:.2f}")
 
     # Balance using RAS
-    print(f"\nBalancing using RAS method...")
+    print("\nBalancing using RAS method...")
     balanced_sam = unbalanced_sam.balance(method="ras")
 
     validation_bal = balanced_sam.check_balance(tolerance=1e-6)
-    print(f"  ✓ Balanced SAM created")
+    print("  ✓ Balanced SAM created")
     print(f"  Is balanced: {validation_bal['is_balanced']}")
     print(f"  Max difference: {validation_bal['max_difference']:.2e}")
 
@@ -168,10 +168,10 @@ def main():
     print("Step 7: Export Options")
     print("-" * 70)
 
-    print(f"\nSAM can be exported to:")
-    print(f"  - Excel: sam.to_excel('sam.xlsx')")
-    print(f"  - Dictionary: sam.to_dict()")
-    print(f"  - DataFrame: sam.data")
+    print("\nSAM can be exported to:")
+    print("  - Excel: sam.to_excel('sam.xlsx')")
+    print("  - Dictionary: sam.to_dict()")
+    print("  - DataFrame: sam.data")
 
     # Show dictionary export
     sam_dict = sam.to_dict()

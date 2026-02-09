@@ -1,7 +1,6 @@
 """Analyze the binary format of sets in GDX files."""
 
 from pathlib import Path
-import struct
 
 gdx_path = Path("tests/fixtures/simple_test.gdx")
 data = gdx_path.read_bytes()
@@ -24,7 +23,7 @@ if data_sections:
     start = data_sections[0]
     end = data_sections[1] if len(data_sections) > 1 else start + 200
     section = data[start:end]
-    
+
     print(f"\nFirst _DATA_ section (length: {len(section)} bytes)")
     print("\nFirst 100 bytes:")
     for i in range(0, min(100, len(section)), 16):

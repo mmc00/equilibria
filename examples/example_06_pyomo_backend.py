@@ -132,7 +132,7 @@ def main():
     )
 
     print(f"\nMock solution: {mock_solution}")
-    print(f"\nVariable values:")
+    print("\nVariable values:")
     for var_name, values in mock_solution.variables.items():
         print(f"  {var_name}: {values}")
 
@@ -152,12 +152,12 @@ def main():
     )
 
     comparison = mock_solution.compare(solution2, tolerance=1e-6)
-    print(f"\nComparison results:")
+    print("\nComparison results:")
     print(f"  Solutions are equal: {comparison['is_equal']}")
     print(f"  Tolerance: {comparison['tolerance']}")
 
     if comparison["differences"]:
-        print(f"\n  Differences found:")
+        print("\n  Differences found:")
         for var_name, diff_info in comparison["differences"].items():
             print(f"    {var_name}: {diff_info}")
 

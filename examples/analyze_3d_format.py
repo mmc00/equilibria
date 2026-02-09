@@ -1,6 +1,6 @@
 """Analyze 3D set binary format."""
-from pathlib import Path
 import struct
+from pathlib import Path
 
 gdx_path = Path(__file__).parent.parent / "tests" / "fixtures" / "set_3d.gdx"
 
@@ -25,26 +25,26 @@ print()
 pos = 0
 found_count = 0
 while pos < len(content) - 20 and found_count < 10:
-    if (content[pos] == 0x01 and 
+    if (content[pos] == 0x01 and
         content[pos+2:pos+5] == b'\x00\x00\x00'):
-        
+
         row = content[pos+1]
         print(f"\nFound ROW_START at offset {pos} (0x{pos:04X})")
         print(f"  Row index: {row}")
-        
+
         # Show next 30 bytes
         chunk = content[pos:pos+30]
         hex_str = ' '.join(f'{b:02X}' for b in chunk)
         print(f"  Bytes: {hex_str}")
-        
+
         # Try to decode as int32 values
-        print(f"  Decoded as int32s:")
+        print("  Decoded as int32s:")
         for i in range(5, min(25, len(chunk)), 5):
             if i + 4 <= len(chunk):
                 val = struct.unpack_from("<I", chunk, i)[0]
                 marker = chunk[i+4] if i+4 < len(chunk) else 0
                 print(f"    Offset {i}: int32={val}, marker=0x{marker:02X}")
-        
+
         found_count += 1
         pos += 30
     else:

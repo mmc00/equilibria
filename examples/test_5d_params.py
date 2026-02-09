@@ -1,5 +1,6 @@
 """Test reading 5D parameters from GDX."""
 from pathlib import Path
+
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
 gdx_file = Path('tests/fixtures/test_5d.gdx')
@@ -38,8 +39,8 @@ print("\n" + "="*60)
 print("Analyzing binary structure of p5d_sparse")
 print("="*60)
 
+
 from equilibria.babel.gdx.reader import read_data_sections
-import struct
 
 raw_data = gdx_file.read_bytes()
 sections = read_data_sections(raw_data)
@@ -60,7 +61,7 @@ if idx is not None:
         hex_str = ' '.join(f'{b:02x}' for b in chunk)
         ascii_str = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
         print(f"  {i:04x}: {hex_str:<96} {ascii_str}")
-    
+
     print("\n\nUEL for reference:")
     for i, elem in enumerate(data['elements']):
         print(f"  {i}: {elem}")

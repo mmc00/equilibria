@@ -114,12 +114,12 @@ def main():
     print("Step 5: Accessing Parameter Values")
     print("-" * 70)
 
-    print(f"\nAccessing sigma_VA values:")
+    print("\nAccessing sigma_VA values:")
     for i, sector in enumerate(sectors):
         val = sigma.get_value(i)
         print(f"  sigma_VA[{sector}] = {val}")
 
-    print(f"\nAccessing IO coefficients:")
+    print("\nAccessing IO coefficients:")
     print(f"  a_io[agr, mfg] = {io_coeffs.get_value(0, 1):.2f}")
     print(f"  a_io[mfg, mfg] = {io_coeffs.get_value(1, 1):.2f}")
     print(f"  a_io[svc, ene] = {io_coeffs.get_value(2, 3):.2f}")

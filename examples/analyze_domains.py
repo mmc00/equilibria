@@ -1,7 +1,8 @@
 """Analyze domain information for sets."""
 
 from pathlib import Path
-from equilibria.babel.gdx.reader import read_gdx, get_sets
+
+from equilibria.babel.gdx.reader import read_gdx
 
 FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
 

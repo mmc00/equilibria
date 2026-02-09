@@ -1,6 +1,7 @@
 """Analyze binary structure using equilibria functions."""
 from pathlib import Path
-from equilibria.babel.gdx.reader import read_gdx, read_data_sections
+
+from equilibria.babel.gdx.reader import read_data_sections, read_gdx
 
 gdx_file = Path('tests/fixtures/multidim_test.gdx')
 data = read_gdx(gdx_file)
@@ -31,7 +32,7 @@ for i, sym in enumerate(data['symbols']):
 if p3d_idx is not None:
     _, section = sections[p3d_idx]
     print(f"Section size: {len(section)} bytes")
-    print(f"First 300 bytes (hex):")
+    print("First 300 bytes (hex):")
     for i in range(0, min(300, len(section)), 32):
         chunk = section[i:i+32]
         hex_str = ' '.join(f'{b:02x}' for b in chunk)
@@ -52,7 +53,7 @@ for i, sym in enumerate(data['symbols']):
 if p4d_idx is not None:
     _, section = sections[p4d_idx]
     print(f"Section size: {len(section)} bytes")
-    print(f"First 300 bytes (hex):")
+    print("First 300 bytes (hex):")
     for i in range(0, min(300, len(section)), 32):
         chunk = section[i:i+32]
         hex_str = ' '.join(f'{b:02x}' for b in chunk)

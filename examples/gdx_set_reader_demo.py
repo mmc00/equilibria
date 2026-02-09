@@ -12,7 +12,7 @@ Usage:
 
 from pathlib import Path
 
-from equilibria.babel.gdx.reader import read_gdx, read_set_elements, get_sets
+from equilibria.babel.gdx.reader import get_sets, read_gdx, read_set_elements
 
 # Path to test fixtures
 FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
@@ -23,21 +23,21 @@ def demo_1d_sets():
     print("=" * 70)
     print("1D SETS DEMO")
     print("=" * 70)
-    
+
     # Read GDX file with 1D sets
     gdx_path = FIXTURES_DIR / "variables_equations_test.gdx"
     if not gdx_path.exists():
         print(f"⚠️  File not found: {gdx_path}")
         return
-    
+
     gdx_data = read_gdx(gdx_path)
-    
+
     # Get all sets in the file
     sets = get_sets(gdx_data)
     print(f"\n📋 Found {len(sets)} sets in the file:")
     for s in sets:
         print(f"  - {s['name']}: {s['description']}")
-    
+
     # Read elements of each set
     print("\n📊 Set Elements:")
     for s in sets:
@@ -53,18 +53,18 @@ def demo_multidim_sets():
     print("\n" + "=" * 70)
     print("MULTI-DIMENSIONAL SETS DEMO")
     print("=" * 70)
-    
+
     gdx_path = FIXTURES_DIR / "multidim_test.gdx"
     if not gdx_path.exists():
         print(f"⚠️  File not found: {gdx_path}")
         return
-    
+
     gdx_data = read_gdx(gdx_path)
-    
+
     # Get all sets
     sets = get_sets(gdx_data)
     print(f"\n📋 Found {len(sets)} sets:")
-    
+
     for s in sets:
         elements = read_set_elements(gdx_data, s['name'])
         print(f"\n  Set '{s['name']}' (dimension: {s['dimension']}):")
@@ -77,18 +77,18 @@ def demo_sparse_sets():
     print("\n" + "=" * 70)
     print("SPARSE SETS DEMO")
     print("=" * 70)
-    
+
     gdx_path = FIXTURES_DIR / "sparse_test.gdx"
     if not gdx_path.exists():
         print(f"⚠️  File not found: {gdx_path}")
         return
-    
+
     gdx_data = read_gdx(gdx_path)
-    
+
     # Get sets
     sets = get_sets(gdx_data)
     print(f"\n📋 Found {len(sets)} set(s)")
-    
+
     for s in sets:
         elements = read_set_elements(gdx_data, s['name'])
         print(f"\n  Set '{s['name']}':")
@@ -102,26 +102,26 @@ def demo_set_statistics():
     print("\n" + "=" * 70)
     print("SET STATISTICS")
     print("=" * 70)
-    
+
     test_files = [
         "variables_equations_test.gdx",
         "multidim_test.gdx",
         "sparse_test.gdx",
     ]
-    
+
     for filename in test_files:
         gdx_path = FIXTURES_DIR / filename
         if not gdx_path.exists():
             continue
-        
+
         print(f"\n📁 {filename}:")
         gdx_data = read_gdx(gdx_path)
         sets = get_sets(gdx_data)
-        
+
         if not sets:
             print("  No sets found")
             continue
-        
+
         for s in sets:
             elements = read_set_elements(gdx_data, s['name'])
             print(f"  - {s['name']:12s} dim={s['dimension']} records={len(elements):3d}")
@@ -134,12 +134,12 @@ def main():
     print("=" * 70)
     print("\nThis demo shows the full functionality of reading sets from GDX files.")
     print("Sets can be 1D, 2D, or multi-dimensional.")
-    
+
     demo_1d_sets()
     demo_multidim_sets()
     demo_sparse_sets()
     demo_set_statistics()
-    
+
     print("\n" + "=" * 70)
     print("✅ Demo completed successfully!")
     print("=" * 70)
