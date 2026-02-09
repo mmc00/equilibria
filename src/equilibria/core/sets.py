@@ -52,6 +52,10 @@ class Set(BaseModel):
         """Return number of elements in the set."""
         return len(self.elements)
 
+    def __iter__(self) -> Iterator[str]:
+        """Iterate over set elements."""
+        return iter(self.elements)
+
     def iter_elements(self) -> Iterator[str]:
         """Iterate over set elements."""
         return iter(self.elements)

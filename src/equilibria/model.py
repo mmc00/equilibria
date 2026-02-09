@@ -157,13 +157,16 @@ class Model(BaseModel):
 
         # Add block's parameters, variables, and equations to model
         for param in block_params.values():
-            self.add_parameter(param)
+            if param.name not in self.parameter_manager:
+                self.add_parameter(param)
 
         for var in block_vars.values():
-            self.add_variable(var)
+            if var.name not in self.variable_manager:
+                self.add_variable(var)
 
         for eq in equations:
-            self.add_equation(eq)
+            if eq.name not in self.equation_manager:
+                self.add_equation(eq)
 
         # Store the block
         self.blocks.append(block)

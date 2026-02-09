@@ -10,10 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from equilibria.babel import SAM
-from equilibria.model import Model
 from equilibria.templates.base import ModelTemplate
 
 

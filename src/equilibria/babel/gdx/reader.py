@@ -36,6 +36,9 @@ import struct
 from pathlib import Path
 from typing import Any, BinaryIO
 
+# Import delta decoder for parameters
+from equilibria.babel.gdx.decoder import decode_parameter_delta
+
 # GDX format constants
 GDX_MAGIC: bytes = b"GAMSGDX"
 GDX_SYMB_MARKER: bytes = b"_SYMB_"
@@ -354,9 +357,11 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
             elif type_flag in (0x01, 0x20, 0x22, 0x45):
                 sym_type = 4 if type_flag == 0x20 else 0
             elif type_flag in (0x3F, 0x64, 0x66, 0x6E):
-                # 0x3F can be either set or parameter - mark as unknown for now
-                # Will be refined in post-processing based on data section
-                sym_type = -1  # unknown - will be determined later
+                # 0x3F can be either set or parameter
+                # Default to parameter unless proven otherwise
+                # In real GDX files, this is refined by checking data sections
+                # For standalone symbol table reading, default to parameter
+                sym_type = 1  # parameter
             elif type_flag in (0x40, 0x48, 0x63, 0x67, 0xFD):
                 sym_type = 2  # variable
             elif type_flag in (0x41, 0x68, 0x7E, 0xD9):
@@ -1145,6 +1150,42 @@ def _decode_simple_parameter(
     - New slice: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> ... 0a <double>
     
     The structure is essentially row-major where the last dimension varies fastest.
+    
+    KNOWN ISSUE - Parameter Delta Encoding:
+    This decoder assumes parameters use the same delta encoding format as sets,
+    but real-world GDX files (e.g., SAM-V2_0.gdx) use a DIFFERENT compression
+    scheme for parameters. The current implementation fails to decode parameters
+    with complex delta compression.
+    
+    WHAT WORKS:
+    - Sets (2D, 3D, 4D) with delta encoding: ✓ Fully working
+    - Simple parameters without compression: ✓ Working
+    
+    WHAT DOESN'T WORK:
+    - Parameters with delta compression (like SAM-V2_0.gdx): ✗ Returns 0 values
+    
+    INVESTIGATION NEEDED:
+    The SAM-V2_0.gdx file has 196 parameter records that should decode to tuples
+    like ('AG', 'USK', 'J', 'AGR') = 1500.0, but the decoder returns empty.
+    
+    Root cause: The decoder expects pattern "01 XX 00 00 00" at position 11,
+    but actual data has different byte patterns (e.g., "01 00 00 00 1B...").
+    
+    The actual format appears to be:
+    - Position 11: 01 (record start)
+    - Position 12: 00 (dim1 = 0, not AG=7 as expected)
+    - Positions 13+: Compressed/delta-encoded indices
+    
+    The delta encoding for parameters is DIFFERENT from sets and requires
+    reverse-engineering the specific compression algorithm used by GAMS.
+    
+    RECOMMENDED FIX:
+    1. Analyze the binary structure of SAM-V2_0.gdx more deeply
+    2. Identify the specific delta encoding pattern for parameters
+    3. Implement a separate decoder for parameter delta compression
+    4. Test against the CSV reference file (gdx_values.csv)
+    
+    See GitHub issue for detailed binary analysis.
     """
     values: dict[tuple[str, ...], float] = {}
 
@@ -1152,7 +1193,18 @@ def _decode_simple_parameter(
         # Fallback to simple extraction for edge cases
         return _decode_simple_parameter_fallback(section, elements, domain_offsets)
 
-    pos: int = 19  # Skip header
+    # Try the new delta decoder first
+    # This handles compressed parameters like SAM-V2_0.gdx
+    try:
+        values = decode_parameter_delta(section, elements, dimension)
+        if len(values) > 0:
+            return values
+    except Exception:
+        # If delta decoder fails, fall back to old method
+        pass
+
+    # Legacy decoder (for simple parameters without compression)
+    pos: int = 11  # Skip header: _DATA_ (6) + dimension (1) + record_count (4)
     current_indices: list[int] = []  # Current tuple indices (0-based UEL indices)
 
     while pos < len(section) - 1:
@@ -1974,23 +2026,115 @@ def _decode_set_section(
             except (struct.error, ValueError):
                 pass
         
-        # Look for additional tuples using delta encoding on last dimension
-        # Pattern: <delta+2> 05 means increment last dimension by (byte - 2)
+        # Look for additional tuples using delta encoding
+        # Pattern: <delta_byte> 05 means update dimension(s)
+        # The delta_byte encodes which dimension changes and by how much
+        # For 2D: delta_byte >= 2 means increment last dim by (delta_byte - 2)
+        # For 3D+: delta_byte indicates DimFrst (first changing dimension)
+        # For 4D: [delta_byte] [byte] [int32_dim3] [int32_dim4] [padding] [marker]
         elif (len(current_indices) == dimension and
-              pos + 1 < len(section) and
-              section[pos + 1] in (0x05, 0x06) and
-              section[pos] >= 1):
+              pos + 1 < len(section)):
             
-            delta_encoded = section[pos]
-            delta = delta_encoded - 2
+            # Check if this looks like a delta pattern
+            # Either: section[pos + 1] is a marker (0x05/0x06) for 2D/3D
+            # Or: dimension >= 4 and there's a marker at pos + 13 (4D pattern)
+            is_delta_pattern = (
+                section[pos + 1] in (0x05, 0x06) or  # 2D/3D pattern
+                (dimension >= 4 and pos + 14 <= len(section) and section[pos + 13] in (0x05, 0x06))  # 4D pattern
+            )
             
-            if delta >= 1:
-                # Create new tuple with incremented last dimension
+            if not is_delta_pattern:
+                pos += 1
+                continue
+            
+            delta_byte = section[pos]
+            
+            if dimension == 2 and delta_byte >= 2:
+                # 2D: delta_byte - 2 = increment for last dimension
+                delta = delta_byte - 2
+                if delta >= 1:
+                    new_indices = current_indices.copy()
+                    new_last_dim_0based = new_indices[-1] + delta
+                    
+                    if new_last_dim_0based < len(elements):
+                        new_indices[-1] = new_last_dim_0based
+                        
+                        if all(idx < len(elements) for idx in new_indices):
+                            tuple_elem = tuple(elements[idx] for idx in new_indices)
+                            result.append(tuple_elem)
+                            current_indices = new_indices
+                            pos += 2
+                            continue
+            
+            elif dimension >= 3 and 1 <= delta_byte <= len(elements):
+                # 3D+: delta_byte indicates the new value for a dimension
+                # Try different interpretations based on context
                 new_indices = current_indices.copy()
-                new_last_dim_1based = (new_indices[-1] + 1) + delta
                 
-                if 1 <= new_last_dim_1based <= len(elements):
-                    new_indices[-1] = new_last_dim_1based - 1
+                # Check for 4D pattern: [delta_byte] [byte] [int32_dim3] [int32_dim4] [padding] [marker]
+                # Total: 1 + 1 + 4 + 4 + 3 + 1 = 14 bytes
+                if (dimension >= 4 and pos + 14 <= len(section) and 
+                    section[pos + 13] in (0x05, 0x06)):
+                    # 4D update: delta_byte + 1 = dim2, int32s for dim3 and dim4
+                    try:
+                        # delta_byte + 1 = new dim2 index (0-based)
+                        new_dim2 = delta_byte + 1
+                        if new_dim2 < len(elements):
+                            new_indices[1] = new_dim2
+                        
+                        # Read int32s for dim3 and dim4 (big-endian, 1-based)
+                        dim3_1based = struct.unpack_from(">I", section, pos + 2)[0]
+                        dim4_1based = struct.unpack_from(">I", section, pos + 6)[0]
+                        
+                        new_dim3 = dim3_1based - 1
+                        new_dim4 = dim4_1based - 1
+                        
+                        if new_dim3 < len(elements):
+                            new_indices[2] = new_dim3
+                        if new_dim4 < len(elements):
+                            new_indices[3] = new_dim4
+                        
+                        if all(idx < len(elements) for idx in new_indices):
+                            tuple_elem = tuple(elements[idx] for idx in new_indices)
+                            result.append(tuple_elem)
+                            current_indices = new_indices
+                            pos += 14  # Skip full pattern
+                            continue
+                    except struct.error:
+                        pass
+                
+                # Check if there's an int32 after the marker (complex update for 3D)
+                # Pattern: [delta_byte] [marker] [int32_dim3 (4 bytes)] [padding (3 bytes)] [marker]
+                # Total: 1 + 1 + 4 + 3 + 1 = 10 bytes
+                if (pos + 10 <= len(section) and 
+                    section[pos + 1] in (0x05, 0x06) and
+                    section[pos + 9] in (0x05, 0x06)):
+                    # Complex update: delta_byte for dim2, int32 for dim3
+                    try:
+                        # delta_byte + 2 = new dim2 index (0-based)
+                        new_dim2 = delta_byte + 2
+                        if new_dim2 < len(elements):
+                            new_indices[1] = new_dim2
+                        
+                        # Read int32 for dim3 (big-endian, 1-based, so subtract 1)
+                        dim3_1based = struct.unpack_from(">I", section, pos + 2)[0]
+                        new_dim3 = dim3_1based - 1
+                        if new_dim3 < len(elements):
+                            new_indices[-1] = new_dim3
+                        
+                        if all(idx < len(elements) for idx in new_indices):
+                            tuple_elem = tuple(elements[idx] for idx in new_indices)
+                            result.append(tuple_elem)
+                            current_indices = new_indices
+                            pos += 10  # Skip delta, marker, int32, padding, marker
+                            continue
+                    except struct.error:
+                        pass
+                
+                # Simple update: delta_byte + 2 = new last dim index (0-based)
+                new_idx = delta_byte + 2
+                if new_idx < len(elements):
+                    new_indices[-1] = new_idx
                     
                     if all(idx < len(elements) for idx in new_indices):
                         tuple_elem = tuple(elements[idx] for idx in new_indices)
