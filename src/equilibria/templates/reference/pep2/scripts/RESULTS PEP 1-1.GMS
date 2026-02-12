@@ -498,7 +498,9 @@ execute_unload "Results",
  valttix, valVA, valVSTK, valW, valWC, valWTI, valXS, valXST, valYDF, valYDH,
  valYF, valYFK, valYFTR, valYG, valYGK, valYGTR, valYH, valYHK, valYHL, valYHTR,
  valYROW;
+$ontext
 execute '=gdx2xls results.gdx';
+$offtext
 
 execute_unload "Parameters",
  aij, B_KD, B_LD, B_M, B_VA, B_X, B_XT, beta_KD, beta_LD, beta_M, beta_VA,
@@ -506,4 +508,6 @@ execute_unload "Parameters",
  lambda_RK, lambda_TR, lambda_WL, rho_KD, rho_LD, rho_M, rho_VA, rho_X, rho_XT,
  sigma_KD, sigma_LD, sigma_M, sigma_VA, sigma_X, sigma_XT, sigma_XD, sigma_Y,
  tmrg, tmrg_X, v;
+$ontext
 execute '=gdx2xls parameters.gdx';
+$offtext
