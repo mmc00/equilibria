@@ -312,8 +312,10 @@ PARAMETERS
 PARAMETER
 SAM(*,*,*,*);
 
+$ontext
 $CALL GDXXRW.EXE SAM-V2_0.xls par=SAM rng=SAM!A4:AJ39 Rdim=2 Cdim=2
-$GDXIN SAM-V2_0.gdx
+$offtext
+$GDXIN ../data/SAM-V2_0.gdx
 $LOAD SAM
 $GDXIN
 
@@ -355,8 +357,10 @@ $GDXIN
 PARAMETER
 PARJ(j,*), PARI(i,*), PARJI(j,i), PARAG(*,*);
 
+$ontext
 $CALL GDXXRW.EXE VAL_PAR.xlsx squeeze = 'no' par=PARJ rng=PAR!A5:E9 par=PARI rng=PAR!A12:C17 par=PARJI rng=PAR!A20:F24 par=PARAG rng=PAR!A27:F37
-$GDXIN VAL_PAR.gdx
+$offtext
+$GDXIN ../data/VAL_PAR.gdx
 $LOAD PARJ, PARI, PARJI, PARAG
 $GDXIN
 
