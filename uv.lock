@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -444,6 +445,16 @@ wheels = [
 ]
 
 [[package]]
+name = "cyipopt"
+version = "1.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/41/56b471f90635ca2fb8baad5a8933d88a6f7346a8ddb7038000fcf787ebfc/cyipopt-1.6.1.tar.gz", hash = "sha256:ae7e2d0a430687d8e89cd4e61cab9920c8941a167ed8bb442dde902570035c3f", size = 67956 }
+
+[[package]]
 name = "distlib"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -457,6 +468,7 @@ name = "equilibria"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cyipopt" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "openpyxl" },
@@ -508,6 +520,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cyipopt", specifier = ">=1.6.1" },
     { name = "equilibria", extras = ["pyomo"], marker = "extra == 'all'" },
     { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.7" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5" },
@@ -529,6 +542,7 @@ requires-dist = [
     { name = "xlrd", specifier = ">=2.0.2" },
     { name = "xlrd", marker = "extra == 'excel'", specifier = ">=2.0" },
 ]
+provides-extras = ["pyomo", "poi", "excel", "viz", "dev", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [
