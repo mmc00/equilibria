@@ -30,6 +30,7 @@ from equilibria.templates.pep_calibration_income import IncomeCalibrator
 from equilibria.templates.pep_calibration_production import ProductionCalibrator
 from equilibria.templates.pep_calibration_trade import TradeCalibrator
 from equilibria.templates.pep_calibration_final import FinalCalibrator
+from equilibria.templates.pep_dynamic_sets import derive_dynamic_sets_from_sam
 from equilibria.templates.pep_val_par_loader import load_val_par
 
 logger = logging.getLogger(__name__)
@@ -184,6 +185,8 @@ class PEPModelCalibrator:
         self,
         sam_file: Path | str,
         val_par_file: Path | str | None = None,
+        sets: dict[str, list[str]] | None = None,
+        dynamic_sets: bool = False,
     ):
         """Initialize the unified calibrator.
         
@@ -201,6 +204,12 @@ class PEPModelCalibrator:
         logger.info(f"Loading SAM from {self.sam_file}")
         self.sam_data = read_gdx(self.sam_file)
         logger.info(f"✓ Loaded SAM with {len(self.sam_data.get('symbols', []))} symbols")
+        self._input_sets = sets
+        self._use_dynamic_sets = dynamic_sets
+        self._resolved_sets = (
+            sets if sets is not None
+            else (derive_dynamic_sets_from_sam(self.sam_data) if dynamic_sets else None)
+        )
     
     def calibrate(self) -> PEPModelState:
         """Run complete calibration of all phases.
@@ -244,7 +253,11 @@ class PEPModelCalibrator:
         logger.info("PHASE 1-2: Income and Shares Calibration")
         logger.info("=" * 70)
         
-        calibrator = IncomeCalibrator(self.sam_data, val_par_data=self.val_par_data)
+        calibrator = IncomeCalibrator(
+            self.sam_data,
+            val_par_data=self.val_par_data,
+            sets=self._resolved_sets,
+        )
         result = calibrator.calibrate()
         
         # Store in state
@@ -303,7 +316,10 @@ class PEPModelCalibrator:
         income_result = IncomeCalibrationResult(**self.state.income)
         
         calibrator = ProductionCalibrator(
-            self.sam_data, income_result, val_par_data=self.val_par_data
+            self.sam_data,
+            income_result,
+            val_par_data=self.val_par_data,
+            sets=self.state.sets,
         )
         result = calibrator.calibrate()
         
@@ -363,7 +379,10 @@ class PEPModelCalibrator:
         production_result = ProductionCalibrationResult(**self.state.production)
         
         calibrator = TradeCalibrator(
-            self.sam_data, production_result, val_par_data=self.val_par_data
+            self.sam_data,
+            production_result,
+            val_par_data=self.val_par_data,
+            sets=self.state.sets,
         )
         result = calibrator.calibrate()
         
@@ -430,6 +449,7 @@ class PEPModelCalibrator:
             production_result,
             trade_result,
             val_par_data=self.val_par_data,
+            sets=self.state.sets,
         )
         result = calibrator.calibrate()
         

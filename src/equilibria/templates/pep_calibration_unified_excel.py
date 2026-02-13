@@ -16,6 +16,7 @@ from equilibria.templates.pep_calibration_unified import (
     PEPModelCalibrator,
     PEPModelState,
 )
+from equilibria.templates.pep_dynamic_sets import derive_dynamic_sets_from_sam
 from equilibria.templates.pep_val_par_loader import load_val_par
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,13 @@ def _build_sam_data_from_excel(filepath: Path | str) -> dict[str, Any]:
 class PEPModelCalibratorExcel(PEPModelCalibrator):
     """Unified calibrator that loads SAM from Excel instead of GDX."""
 
-    def __init__(self, sam_file: Path | str, val_par_file: Path | str | None = None):
+    def __init__(
+        self,
+        sam_file: Path | str,
+        val_par_file: Path | str | None = None,
+        sets: dict[str, list[str]] | None = None,
+        dynamic_sets: bool = False,
+    ):
         self.sam_file = Path(sam_file)
         self.val_par_file = Path(val_par_file) if val_par_file else None
         self.val_par_data = load_val_par(self.val_par_file)
@@ -60,4 +67,9 @@ class PEPModelCalibratorExcel(PEPModelCalibrator):
         self.sam_data = _build_sam_data_from_excel(self.sam_file)
         sam_records = len(self.sam_data.get("sam_matrix", {}))
         logger.info(f"✓ Loaded SAM from Excel with {sam_records} records")
-
+        self._input_sets = sets
+        self._use_dynamic_sets = dynamic_sets
+        self._resolved_sets = (
+            sets if sets is not None
+            else (derive_dynamic_sets_from_sam(self.sam_data) if dynamic_sets else None)
+        )

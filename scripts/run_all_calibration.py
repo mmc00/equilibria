@@ -83,6 +83,11 @@ Examples:
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--dynamic-sets",
+        action="store_true",
+        help="Derive model sets dynamically from SAM instead of using template defaults",
+    )
     
     args = parser.parse_args()
     
@@ -110,6 +115,7 @@ Examples:
         calibrator = PEPModelCalibrator(
             sam_file=args.sam_file,
             val_par_file=args.val_par_file,
+            dynamic_sets=args.dynamic_sets,
         )
         
         state = calibrator.calibrate()
