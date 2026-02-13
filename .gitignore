@@ -210,3 +210,16 @@ tests/fixtures/*.txt
 .opencode/
 225a/
 225b/
+
+# Local outputs / reports
+output/
+results/*.pkl
+DifFile.gdx
+
+# PEP2 generated artifacts (keep sources like .gms/.sh/.py tracked)
+src/equilibria/templates/reference/pep2/data/SAM-V2_0_connect.xlsx
+src/equilibria/templates/reference/pep2/data/SAM-V2_0_from_excel.gdx
+src/equilibria/templates/reference/pep2/scripts/*.gdx
+src/equilibria/templates/reference/pep2/scripts/dif_*.csv
+src/equilibria/templates/reference/pep2/scripts/gdxdiff_*.txt
+src/equilibria/templates/reference/pep2/scripts/dynamic_sets.inc
