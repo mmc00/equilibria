@@ -54,6 +54,11 @@ def main() -> int:
         default="strict_gams",
         choices=["strict_gams", "equation_consistent"],
     )
+    parser.add_argument(
+        "--dynamic-sets",
+        action="store_true",
+        help="Derive model sets dynamically from SAM instead of using template defaults",
+    )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
@@ -79,6 +84,7 @@ def main() -> int:
         calibrator = PEPModelCalibratorExcel(
             sam_file=args.sam_file,
             val_par_file=args.val_par_file if args.val_par_file else None,
+            dynamic_sets=args.dynamic_sets,
         )
         state = calibrator.calibrate()
         calibrator.print_report()
@@ -124,4 +130,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

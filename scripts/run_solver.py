@@ -97,6 +97,11 @@ Examples:
         help="Initialization mode for solver state",
     )
     parser.add_argument(
+        "--dynamic-sets",
+        action="store_true",
+        help="Derive model sets dynamically from SAM instead of using template defaults",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -132,7 +137,10 @@ Examples:
             print(f"Error: SAM file not found: {args.sam_file}")
             return 1
         
-        calibrator = PEPModelCalibrator(sam_file=args.sam_file)
+        calibrator = PEPModelCalibrator(
+            sam_file=args.sam_file,
+            dynamic_sets=args.dynamic_sets,
+        )
         state = calibrator.calibrate()
         calibrator.print_report()
         print()
