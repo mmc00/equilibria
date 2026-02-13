@@ -295,8 +295,9 @@ class SAM4DLoader:
         # Data starts after header rows (cdim rows for column headers)
         data_start_row = max(data_start_row, self.cdim)
 
-        # Data columns start after index columns (rdim columns)
-        data_start_col = self.rdim + 1  # +1 for category column
+        # Data columns start immediately after row index dimensions.
+        # For PEP (rdim=2), row headers are in columns 0..1 and data starts at 2.
+        data_start_col = self.rdim
 
         return data_start_row, data_start_col
 
