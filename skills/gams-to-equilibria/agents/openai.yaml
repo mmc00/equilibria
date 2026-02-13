@@ -1,0 +1,3 @@
+display_name: GAMS to Equilibria
+short_description: Migrate GAMS CGE models to Equilibria with parity checks
+default_prompt: Convert the selected GAMS model into the Equilibria template structure and validate equation-level parity against the GAMS baseline.
