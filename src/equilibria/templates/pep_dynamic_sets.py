@@ -57,7 +57,7 @@ def derive_dynamic_sets_from_sam(sam_data: dict[str, Any]) -> dict[str, list[str
     k_upper = _unique_preserve(row_by_cat.get("K", []))
 
     ag_raw_upper = _unique_preserve(row_by_cat.get("AG", []))
-    non_agents_upper = {"TD", "TI", "TM"} | set(l_upper) | set(k_upper)
+    non_agents_upper = {"TD", "TI", "TM", "TX"} | set(l_upper) | set(k_upper)
     ag_upper = [x for x in ag_raw_upper if x not in non_agents_upper]
 
     def lower(seq: list[str]) -> list[str]:

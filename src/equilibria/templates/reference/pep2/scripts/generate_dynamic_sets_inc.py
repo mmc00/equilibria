@@ -31,13 +31,18 @@ def _unique(seq: list[str]) -> list[str]:
 def _read_sets_from_sam(sam_xlsx: Path) -> dict[str, list[str]]:
     df = pd.read_excel(sam_xlsx, sheet_name="SAM", header=None)
 
-    # Detect PEP SAM start (same logic as loader): first row with row category "L".
-    data_start_row = 0
+    # Detect first actual data row: first row that looks like a SAM account key
+    # in col A (category) + non-empty account code in col B.
+    valid_cats = {"ag", "i", "j", "k", "l", "x", "oth", "marg", "agents"}
+    data_start_row = None
     for idx in range(len(df)):
-        if _norm(df.iloc[idx, 0]) == "l":
+        c0 = _norm(df.iloc[idx, 0])
+        c1 = _norm(df.iloc[idx, 1])
+        if c0 in valid_cats and c1:
             data_start_row = idx
             break
-    data_start_row = max(data_start_row, 2)
+    if data_start_row is None:
+        raise ValueError(f"Could not detect SAM data start row in {sam_xlsx}")
 
     col_cat_row = data_start_row - 2
     col_elem_row = data_start_row - 1
@@ -53,9 +58,20 @@ def _read_sets_from_sam(sam_xlsx: Path) -> dict[str, list[str]]:
     i = _unique([e for c, e in zip(row_cats, row_elems, strict=False) if c == "i"])
     l = _unique([e for c, e in zip(row_cats, row_elems, strict=False) if c == "l"])
     k = _unique([e for c, e in zip(row_cats, row_elems, strict=False) if c == "k"])
+    # Fallbacks from columns if rows are sparse in some SAM variants.
+    if not j:
+        j = _unique([e for c, e in zip(col_cats, col_elems, strict=False) if c == "j"])
+    if not i:
+        i = _unique([e for c, e in zip(col_cats, col_elems, strict=False) if c == "i"])
+    if not l:
+        l = _unique([e for c, e in zip(col_cats, col_elems, strict=False) if c == "l"])
+    if not k:
+        k = _unique([e for c, e in zip(col_cats, col_elems, strict=False) if c == "k"])
 
-    ag_raw = _unique([e for c, e in zip(row_cats, row_elems, strict=False) if c == "ag"])
-    non_agent_accounts = {"td", "ti", "tm", "usk", "sk", "cap", "land"}
+    ag_raw = _unique([e for c, e in zip(row_cats, row_elems, strict=False) if c in {"ag", "agents"}])
+    if not ag_raw:
+        ag_raw = _unique([e for c, e in zip(col_cats, col_elems, strict=False) if c in {"ag", "agents"}])
+    non_agent_accounts = {"td", "ti", "tm", "tx", "usk", "sk", "cap", "land"}
     ag = [a for a in ag_raw if a not in non_agent_accounts]
 
     h = [a for a in ag if a not in {"firm", "gvt", "row"}]
