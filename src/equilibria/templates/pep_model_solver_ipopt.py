@@ -56,6 +56,7 @@ class CGEProblem:
         variable_info: dict[str, Any],
         residual_weights: dict[str, float] | None = None,
         hard_constraints: list[str] | None = None,
+        reference_x: np.ndarray | None = None,
     ):
         """Initialize the CGE optimization problem.
         
@@ -72,8 +73,15 @@ class CGEProblem:
         self.n_evaluations = 0
         self._residual_scale: np.ndarray | None = None
         self._residual_names: list[str] | None = None
+        self._constraint_scale: np.ndarray | None = None
         self.residual_weights = residual_weights or {}
         self.hard_constraints = hard_constraints or []
+        self.reference_x = np.array(reference_x, dtype=float) if reference_x is not None else None
+        self.reference_scale = (
+            np.maximum(np.abs(self.reference_x), 1.0)
+            if self.reference_x is not None
+            else None
+        )
         
     def objective(self, x: np.ndarray) -> float:
         """Compute objective function (0.5 * sum of squared residuals).
@@ -84,6 +92,12 @@ class CGEProblem:
         Returns:
             Objective value
         """
+        # CNS-style feasibility: all equations are hard constraints, and the
+        # objective only regularizes toward the benchmark point.
+        if self.reference_x is not None:
+            dx = (x - self.reference_x) / self.reference_scale
+            return 0.5 * float(np.dot(dx, dx))
+
         residuals = self._compute_residuals(x)
         return 0.5 * np.sum(residuals ** 2)
     
@@ -98,16 +112,19 @@ class CGEProblem:
         Returns:
             Gradient vector
         """
+        if self.reference_x is not None:
+            return (x - self.reference_x) / (self.reference_scale**2)
+
         eps = 1e-8
         grad = np.zeros_like(x)
         f_x = self.objective(x)
-        
+
         for i in range(len(x)):
             x_plus = x.copy()
             x_plus[i] += eps
             f_plus = self.objective(x_plus)
             grad[i] = (f_plus - f_x) / eps
-            
+
         return grad
     
     def _compute_residuals(self, x: np.ndarray) -> np.ndarray:
@@ -160,7 +177,15 @@ class CGEProblem:
         """Compute hard-constraint residuals in declared order."""
         vars = self._array_to_variables(x)
         residual_dict = self.equations.calculate_all_residuals(vars)
-        return np.array([residual_dict.get(eq, 0.0) for eq in self.hard_constraints], dtype=float)
+        residuals = np.array(
+            [residual_dict.get(eq, 0.0) for eq in self.hard_constraints],
+            dtype=float,
+        )
+        # Fixed per-equation scaling improves conditioning for mixed-magnitude
+        # constraints without changing the feasible set.
+        if self._constraint_scale is None:
+            self._constraint_scale = np.maximum(np.abs(residuals), 1.0)
+        return residuals / self._constraint_scale
 
     def constraints(self, x: np.ndarray) -> np.ndarray:
         """Equality constraints c(x)=0 for selected equation residuals."""
@@ -1480,7 +1505,9 @@ class IPOPTSolver:
 
     def _build_hard_constraints(self) -> list[str]:
         """Equation residuals enforced as hard equalities c(x)=0."""
-        return ["EQ90", "EQ93"]
+        vars0 = self._create_initial_guess()
+        residuals0 = self.equations.calculate_all_residuals(vars0)
+        return list(residuals0.keys())
     
     def solve_ipopt(self) -> SolverResult:
         """Solve model using IPOPT nonlinear optimization.
@@ -1523,13 +1550,15 @@ class IPOPTSolver:
             )
         
         # Create problem
+        hard_constraints = self._build_hard_constraints()
         problem = CGEProblem(
             equations=self.equations,
             sets=self.sets,
             n_variables=n_vars,
             variable_info={},
             residual_weights=self._build_residual_weights(),
-            hard_constraints=self._build_hard_constraints(),
+            hard_constraints=hard_constraints,
+            reference_x=x0,
         )
         
         # Set variable bounds by variable class (aligned with packing order)
@@ -1563,58 +1592,108 @@ class IPOPTSolver:
         n_constraints = len(problem.hard_constraints)
         cl = np.zeros(n_constraints)
         cu = np.zeros(n_constraints)
+        def _build_nlp(max_iter: int, warm_start: bool) -> cyipopt.Problem:
+            nlp = cyipopt.Problem(
+                n=n_vars,
+                m=n_constraints,
+                problem_obj=ipopt_problem,
+                lb=lb,
+                ub=ub,
+                cl=cl,
+                cu=cu,
+            )
+            nlp.add_option("tol", self.tolerance)
+            nlp.add_option("acceptable_tol", max(self.tolerance * 10, 1e-6))
+            nlp.add_option("acceptable_iter", 12)
+            nlp.add_option("max_iter", max_iter)
+            nlp.add_option("print_level", 5 if logger.isEnabledFor(logging.DEBUG) else 3)
+            nlp.add_option("mu_strategy", "adaptive")
+            nlp.add_option("mu_init", 1e-2 if not warm_start else 1e-4)
+            nlp.add_option("hessian_approximation", "limited-memory")
+            nlp.add_option("limited_memory_max_history", 25)
+            nlp.add_option("nlp_scaling_method", "gradient-based")
+            nlp.add_option("bound_frac", 1e-2)
+            nlp.add_option("bound_push", 1e-2)
+            nlp.add_option("watchdog_shortened_iter_trigger", 5)
+            if warm_start:
+                nlp.add_option("warm_start_init_point", "yes")
+                nlp.add_option("warm_start_bound_push", 1e-8)
+                nlp.add_option("warm_start_mult_bound_push", 1e-8)
+                nlp.add_option("warm_start_slack_bound_push", 1e-8)
+            return nlp
 
-        nlp = cyipopt.Problem(
-            n=n_vars,
-            m=n_constraints,
-            problem_obj=ipopt_problem,
-            lb=lb,
-            ub=ub,
-            cl=cl,
-            cu=cu,
-        )
-        
-        # Set IPOPT options
-        nlp.add_option('tol', self.tolerance)
-        nlp.add_option('acceptable_tol', max(self.tolerance * 10, 1e-6))
-        nlp.add_option('acceptable_iter', 10)
-        nlp.add_option('max_iter', self.max_iterations)
-        nlp.add_option('print_level', 5 if logger.isEnabledFor(logging.DEBUG) else 3)
-        nlp.add_option('mu_strategy', 'adaptive')
-        nlp.add_option('mu_init', 1e-2)
-        nlp.add_option('hessian_approximation', 'limited-memory')
-        nlp.add_option('limited_memory_max_history', 20)
-        nlp.add_option('nlp_scaling_method', 'gradient-based')
-        nlp.add_option('bound_frac', 1e-2)
-        nlp.add_option('bound_push', 1e-2)
-        nlp.add_option('watchdog_shortened_iter_trigger', 5)
-        
+        def _info_iterations(info: dict[str, Any], fallback: int) -> int:
+            for key in ("iter_count", "iter", "iterations"):
+                val = info.get(key)
+                if val is not None:
+                    try:
+                        return int(val)
+                    except Exception:
+                        pass
+            return fallback
+
         logger.info("IPOPT options configured")
         logger.info(f"  Tolerance: {self.tolerance}")
         logger.info(f"  Max iterations: {self.max_iterations}")
-        
-        # Solve
-        logger.info("Starting IPOPT optimization...")
+        logger.info("Starting IPOPT optimization (pass 1)...")
         try:
-            x, info = nlp.solve(x0)
-            
+            pass1_iter = max(80, min(self.max_iterations, 220))
+            nlp = _build_nlp(max_iter=pass1_iter, warm_start=False)
+            x1, info1 = nlp.solve(x0)
+            msg1 = info1.get("status_msg", "Unknown")
+            if isinstance(msg1, bytes):
+                msg1 = msg1.decode("utf-8", errors="replace")
+            logger.info("IPOPT pass 1 status=%s msg=%s", info1.get("status"), msg1)
+
+            # Optional second pass with warm start if first pass did not converge.
+            x_best, info_best = x1, info1
+            if info1.get("status") != 0:
+                logger.info("Starting IPOPT optimization (pass 2, warm start)...")
+                nlp2 = _build_nlp(max_iter=self.max_iterations, warm_start=True)
+                x2, info2 = nlp2.solve(x1)
+                msg2 = info2.get("status_msg", "Unknown")
+                if isinstance(msg2, bytes):
+                    msg2 = msg2.decode("utf-8", errors="replace")
+                logger.info("IPOPT pass 2 status=%s msg=%s", info2.get("status"), msg2)
+
+                # Select best pass by convergence first, then lower residual RMS.
+                v1 = problem._array_to_variables(x1)
+                r1 = self.equations.calculate_all_residuals(v1)
+                vals1 = np.array(list(r1.values()), dtype=float)
+                rms1 = float(np.sqrt(np.mean(vals1**2))) if vals1.size else float("inf")
+
+                v2 = problem._array_to_variables(x2)
+                r2 = self.equations.calculate_all_residuals(v2)
+                vals2 = np.array(list(r2.values()), dtype=float)
+                rms2 = float(np.sqrt(np.mean(vals2**2))) if vals2.size else float("inf")
+
+                if info2.get("status") == 0 and info1.get("status") != 0:
+                    x_best, info_best = x2, info2
+                elif info2.get("status") == info1.get("status") and rms2 < rms1:
+                    x_best, info_best = x2, info2
+
             # Create result
             result = SolverResult()
-            result.converged = info['status'] == 0
-            result.iterations = info.get('iter', 0)
-            result.final_residual = np.sqrt(2 * info.get('obj_val', 0))
-            result.variables = problem._array_to_variables(x)
+            result.converged = info_best.get("status") == 0
+            result.iterations = _info_iterations(info_best, self.max_iterations)
+            result.variables = problem._array_to_variables(x_best)
             result.residuals = self.equations.calculate_all_residuals(result.variables)
-            result.message = info.get('status_msg', 'Unknown')
-            
+            msg = info_best.get("status_msg", "Unknown")
+            if isinstance(msg, bytes):
+                msg = msg.decode("utf-8", errors="replace")
+            result.message = str(msg)
+            vals = np.array(list(result.residuals.values()), dtype=float)
+            result.final_residual = float(np.sqrt(np.mean(vals**2))) if vals.size else 0.0
+
+            logger.info("IPOPT info keys: %s", sorted(info_best.keys()))
             logger.info(f"IPOPT finished: {result.message}")
-            logger.info(f"  Status: {info['status']}")
+            logger.info(f"  Status: {info_best.get('status')}")
             logger.info(f"  Iterations: {result.iterations}")
-            logger.info(f"  Final objective: {info.get('obj_val', 0):.2e}")
+            logger.info(f"  Final objective: {info_best.get('obj_val', 0):.2e}")
             logger.info(f"  Function evaluations: {problem.n_evaluations}")
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"IPOPT failed: {e}")
             result = SolverResult()

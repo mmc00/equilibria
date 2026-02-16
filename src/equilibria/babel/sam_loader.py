@@ -128,6 +128,15 @@ class SAM4D(BaseModel):
         return result
 
     @property
+    def data(self) -> pd.DataFrame:
+        """Backward-compatible alias for matrix.
+
+        Several existing templates/tests still use ``sam.data``.
+        Keep this alias to avoid breaking legacy calibration code.
+        """
+        return self.matrix
+
+    @property
     def shape(self) -> tuple[int, int]:
         """Get matrix shape."""
         return self.matrix.shape
@@ -284,11 +293,14 @@ class SAM4DLoader:
         Returns:
             (data_start_row, data_start_col)
         """
-        # Find first row with 'L' (Labor category marker)
+        # Find first row that looks like a SAM record key:
+        # col A = account category and col B = account element.
+        valid_cats = {"ag", "agents", "i", "j", "k", "l", "x", "oth", "marg"}
         data_start_row = 0
         for i in range(len(df)):
-            first_val = str(df.iloc[i, 0]).strip() if pd.notna(df.iloc[i, 0]) else ""
-            if first_val == "L":
+            c0 = str(df.iloc[i, 0]).strip().lower() if pd.notna(df.iloc[i, 0]) else ""
+            c1 = str(df.iloc[i, 1]).strip() if pd.notna(df.iloc[i, 1]) else ""
+            if c0 in valid_cats and c1:
                 data_start_row = i
                 break
 

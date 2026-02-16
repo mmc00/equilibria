@@ -10,9 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from pydantic import Field
 
-from equilibria.babel import SAM
+from equilibria.babel import SAM, SAM4D
 from equilibria.templates.base import ModelTemplate
 
 
@@ -63,6 +64,39 @@ class PEPBaseTemplate(ModelTemplate):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    @staticmethod
+    def _sam4d_to_legacy_sam(sam4d: SAM4D) -> SAM:
+        """Convert SAM4D records into a legacy SAM matrix by element names.
+
+        Legacy PEP templates expect account labels like ``USK``/``AGR`` (not
+        flattened ``L_USK``/``J_AGR`` labels). Aggregate duplicate flows by
+        summing over (row_elem, col_elem).
+        """
+        rows: list[str] = []
+        cols: list[str] = []
+        for keys, _value in sam4d.records:
+            if len(keys) >= 4:
+                r = str(keys[1]).upper()
+                c = str(keys[3]).upper()
+                if r not in rows:
+                    rows.append(r)
+                if c not in cols:
+                    cols.append(c)
+
+        accounts: list[str] = []
+        for acc in rows + cols:
+            if acc not in accounts:
+                accounts.append(acc)
+
+        matrix = pd.DataFrame(0.0, index=accounts, columns=accounts)
+        for keys, value in sam4d.records:
+            if len(keys) >= 4:
+                r = str(keys[1]).upper()
+                c = str(keys[3]).upper()
+                matrix.loc[r, c] += float(value)
+
+        return SAM.from_dataframe(matrix, name=sam4d.name or "SAM")
+
     def load_sam(self) -> SAM:
         """Load SAM from file.
 
@@ -75,11 +109,17 @@ class PEPBaseTemplate(ModelTemplate):
         if self.sam_file is None:
             from equilibria.templates.data.pep import load_default_pep_sam
 
-            return load_default_pep_sam()
+            sam = load_default_pep_sam()
+            if isinstance(sam, SAM4D):
+                return self._sam4d_to_legacy_sam(sam)
+            return sam
 
         from equilibria.templates.data.pep import load_pep_sam
 
-        return load_pep_sam(self.sam_file)
+        sam = load_pep_sam(self.sam_file)
+        if isinstance(sam, SAM4D):
+            return self._sam4d_to_legacy_sam(sam)
+        return sam
 
     def load_parameters(self) -> dict[str, Any]:
         """Load parameters from VAL_PAR file.
