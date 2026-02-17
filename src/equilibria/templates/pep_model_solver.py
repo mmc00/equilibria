@@ -352,6 +352,24 @@ class PEPModelSolver:
     
     def _create_initial_guess(self) -> PEPModelVariables:
         """Create initial guess for variables from calibrated values."""
+        # Keep initialization logic centralized in IPOPTSolver to avoid drift
+        # between solver frontends.
+        try:
+            ipopt_solver = IPOPTSolver(
+                calibrated_state=self.state,
+                tolerance=self.tolerance,
+                max_iterations=self.max_iterations,
+                init_mode=self.init_mode,
+                gams_results_gdx=self.gams_results_gdx,
+                gams_results_slice=self.gams_results_slice,
+            )
+            vars_ipopt = ipopt_solver._create_initial_guess()
+            self.params = ipopt_solver.params
+            self.equations = ipopt_solver.equations
+            return vars_ipopt
+        except Exception as e:
+            logger.warning("Falling back to local initial-guess path: %s", e)
+
         vars = PEPModelVariables()
         state = self.state
         
