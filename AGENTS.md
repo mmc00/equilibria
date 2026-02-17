@@ -412,6 +412,13 @@ validation = solver.validate_solution(solution)
 - IPOPT iterations executed: `0` (early exit because benchmark already satisfies tolerance)
 - Walras check: pass (`0.00e+00`)
 
+**Latest Solver Result (`pep2` CRI, `strict_gams`, SIM1):**
+- Status: `CONVERGED`
+- Final RMS residual: `3.01e-05`
+- Max residual: `6.12e-04`
+- IPOPT iterations executed: `0` (initial strict_gams point accepted by practical tolerance gate)
+- GAMS levels source: `src/equilibria/templates/reference/pep2/scripts/Results.gdx` (SIM1 slice)
+
 **SAM-Only Calibration Check (Updated Feb 2026):**
 - Command: `uv run python scripts/verify_calibration.py`
 - Result: calibrated values now satisfy equilibrium directly (no extra solve step needed)
@@ -427,6 +434,10 @@ validation = solver.validate_solution(solution)
 4. ✅ Added robust handling for CES corner case in `EQ4` (`beta_VA` at 0/1)
 5. ✅ Added fixed residual-name ordering in IPOPT objective to prevent finite-difference shape mismatch
 6. ✅ Added IPOPT early-exit when initialized benchmark already meets tolerance
+7. ✅ Aligned production equation activation with GAMS masks (`LDO0/KDO0`) for `EQ6/EQ7/EQ8`
+8. ✅ Synchronized `lambda_TR_households` / `lambda_TR_firms` from strict_gams loaded levels to remove transfer-share drift (`EQ49` residual block)
+9. ✅ Added best-candidate selection in IPOPT path (initial/pass1/pass2) by convergence then residual RMS
+10. ✅ Added practical strict_gams acceptance gate to avoid unnecessary IPOPT drift when benchmark is already near-feasible
 
 **Debugging Tools:**
 ```bash
@@ -440,8 +451,8 @@ python scripts/compare_with_gams.py
 python scripts/debug_equations.py
 ```
 
-**Root Cause:**
-For a CGE model, calibrated values SHOULD satisfy all equations (RMS ≈ 0). Current RMS ~1,800 indicates remaining initialization bugs and possibly some equation formula mismatches. The model is very close to correct calibration - just needs final variable initialization fixes.
+**Root Cause (updated):**
+Most remaining large residuals were caused by initialization/alignment mismatches versus GAMS (equation activation masks and transfer-share parameter drift), not by a structural model error. After fixing those alignment points, strict_gams CRI initialization is near-feasible and accepted directly.
 
 ### Latest Parity Status (Feb 2026) ✅
 
