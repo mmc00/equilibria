@@ -20,7 +20,7 @@ from equilibria.templates.pep_val_par_loader import load_val_par
 ROOT = Path(__file__).resolve().parents[2]
 PEP2 = ROOT / "src/equilibria/templates/reference/pep2"
 PEP2_DATA = PEP2 / "data"
-PEP2_RESULTS = PEP2 / "scripts" / "Results.gdx"
+PEP2_RESULTS = PEP2 / "scripts" / "Results_ipopt.gdx"
 
 
 def _build_base_gdx() -> object:

@@ -46,6 +46,8 @@ class PEPModelSolver:
         tolerance: float = 1e-6,
         max_iterations: int = 100,
         init_mode: Literal["strict_gams", "equation_consistent"] = "strict_gams",
+        gams_results_gdx: Path | str | None = None,
+        gams_results_slice: Literal["base", "sim1"] = "sim1",
     ):
         """Initialize the solver with calibrated model state.
         
@@ -61,6 +63,8 @@ class PEPModelSolver:
         self.tolerance = tolerance
         self.max_iterations = max_iterations
         self.init_mode = init_mode
+        self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx is not None else None
+        self.gams_results_slice = gams_results_slice.lower()
         
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
@@ -74,6 +78,9 @@ class PEPModelSolver:
         logger.info(f"  Tolerance: {tolerance}")
         logger.info(f"  Max iterations: {max_iterations}")
         logger.info(f"  Init mode: {init_mode}")
+        if self.gams_results_gdx is not None:
+            logger.info(f"  GAMS levels: {self.gams_results_gdx}")
+            logger.info(f"  GAMS slice: {self.gams_results_slice.upper()}")
     
     def _extract_parameters(self, state: Any) -> dict[str, Any]:
         """Extract all calibrated parameters from model state."""
@@ -105,6 +112,8 @@ class PEPModelSolver:
             "ttip": state.production.get("ttipO", {}),
             "LS": state.production.get("LSO", {}),
             "KS": state.production.get("KSO", {}),
+            "KDO0": state.production.get("KDO", {}),
+            "LDO0": state.production.get("LDO", {}),
             # Value added CES parameters
             "rho_VA": state.production.get("rho_VA", {}),
             "beta_VA": state.production.get("beta_VA", {}),
@@ -156,6 +165,7 @@ class PEPModelSolver:
         # In PEP benchmark data, transfer intercept is typically zero and TR is driven
         # by tr1*YH at benchmark prices.
         inferred_tr0 = {h: 0.0 for h in state.sets.get("H", [])}
+        tr0_base = state.income.get("tr0O", {})
         tr1_base = state.income.get("tr1O", {})
         yh_base = state.income.get("YHO", {})
 
@@ -185,7 +195,11 @@ class PEPModelSolver:
                 if isinstance(state.income.get("sh0O", {}), dict) and state.income.get("sh0O", {})
                 else inferred_sh0
             ),
-            "tr0": inferred_tr0,
+            "tr0": (
+                tr0_base
+                if isinstance(tr0_base, dict) and tr0_base
+                else inferred_tr0
+            ),
             "ttdh0": ttdh0_base,
             "ttdh1": inferred_ttdh1,
             "ttdf0": {},
@@ -249,7 +263,29 @@ class PEPModelSolver:
             params["gamma_LES"] = gamma_base
 
         params["EXDO"] = state.trade.get("EXDO", {})
+        params["EXDO0"] = state.trade.get("EXDO", {})
+        params["IMO0"] = state.trade.get("IMO", {})
+        params["DDO0"] = state.trade.get("DDO", {})
+        params["DSO0"] = state.trade.get("DSO", {})
+        params["EXO0"] = state.trade.get("EXO", {})
+        params["XSO0"] = state.trade.get("XSO", {})
+        params["XSTO0"] = state.production.get("XSTO", {})
         params["PWX"] = state.trade.get("PWXO", {})
+        params["CMIN0"] = state.les_parameters.get("CMINO", {})
+        params["VSTK0"] = state.consumption.get("VSTKO", {})
+        params["G0"] = state.consumption.get("GO", 0.0)
+        params["PWM0"] = state.trade.get("PWMO", {})
+        params["CAB0"] = state.income.get("CABO", 0.0)
+        params["e0"] = 1.0
+        params["PCO0"] = state.trade.get("PCO", {})
+        params["PVAO0"] = state.production.get("PVAO", {})
+        params["VAO0"] = state.production.get("VAO", {})
+        params["TIPO0"] = {
+            j: state.production.get("ttipO", {}).get(j, 0.0)
+            * state.production.get("PPO", {}).get(j, 0.0)
+            * state.production.get("XSTO", {}).get(j, 0.0)
+            for j in state.sets.get("J", [])
+        }
         params["kmob"] = 1.0
         params["PT"] = state.production.get("PTO", {})
 
@@ -330,6 +366,7 @@ class PEPModelSolver:
             vars.XST[j] = state.production.get("XSTO", {}).get(j, 0)
             vars.PVA[j] = state.production.get("PVAO", {}).get(j, 1.0)
             vars.PP[j] = state.production.get("PPO", {}).get(j, 1.0)
+            vars.PT[j] = state.production.get("PTO", {}).get(j, 1.0)
             vars.PCI[j] = state.production.get("PCIO", {}).get(j, 1.0)
             vars.WC[j] = state.production.get("WCO", {}).get(j, 1.0)
             vars.RC[j] = state.production.get("RCO", {}).get(j, 1.0)
@@ -353,6 +390,8 @@ class PEPModelSolver:
         # Initialize wages
         for l in self.sets.get("L", []):
             vars.W[l] = 1.0  # Numeraire
+        for k in self.sets.get("K", []):
+            vars.RK[k] = 1.0
         
         # Initialize tax-payment matrices from rate equations (TIWO/TIKO may be absent
         # in calibration output depending on phase configuration).
@@ -452,35 +491,30 @@ class PEPModelSolver:
                 vars.C[(i, h)] = state.consumption.get("CO", {}).get((i, h), 0)
                 vars.CMIN[(i, h)] = state.les_parameters.get("CMINO", {}).get((i, h), 0)
 
-        # Convert intermediate demand to quantities using benchmark PC(i).
-        for i in self.sets.get("I", []):
-            pc_i = vars.PC.get(i, 1.0)
-            if abs(pc_i) < 1e-12:
-                continue
+        # Keep calibrated *O values as benchmark levels. Any identity-based
+        # recomputation is applied only in equation_consistent mode.
+        if self.init_mode == "equation_consistent":
             for j in self.sets.get("J", []):
-                vars.DI[(i, j)] = vars.DI.get((i, j), 0.0) / pc_i
-
-        # Recompute aggregate demand blocks from calibrated quantities.
-        for j in self.sets.get("J", []):
-            vars.CI[j] = sum(vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
-            ci_j = vars.CI.get(j, 0.0)
-            if abs(ci_j) > 1e-12:
-                vars.PCI[j] = (
-                    sum(vars.PC.get(i, 1.0) * vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
-                    / ci_j
-                )
-        for i in self.sets.get("I", []):
-            vars.DIT[i] = sum(vars.DI.get((i, j), 0.0) for j in self.sets.get("J", []))
-        for j in self.sets.get("J", []):
-            vars.XST[j] = sum(vars.XS.get((j, i), 0.0) for i in self.sets.get("I", []))
-            xst_j = vars.XST.get(j, 0.0)
-            if abs(xst_j) > 1e-12:
-                vars.PP[j] = (
-                    vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0) + vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
-                ) / xst_j
-            ttip = self.params.get("ttip", {}).get(j, 0.0)
-            vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
-        vars.G = sum(vars.PC.get(i, 1.0) * vars.CG.get(i, 0.0) for i in self.sets.get("I", []))
+                vars.CI[j] = sum(vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
+                ci_j = vars.CI.get(j, 0.0)
+                if abs(ci_j) > 1e-12:
+                    vars.PCI[j] = (
+                        sum(vars.PC.get(i, 1.0) * vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
+                        / ci_j
+                    )
+            for i in self.sets.get("I", []):
+                vars.DIT[i] = sum(vars.DI.get((i, j), 0.0) for j in self.sets.get("J", []))
+            for j in self.sets.get("J", []):
+                vars.XST[j] = sum(vars.XS.get((j, i), 0.0) for i in self.sets.get("I", []))
+                xst_j = vars.XST.get(j, 0.0)
+                if abs(xst_j) > 1e-12:
+                    vars.PP[j] = (
+                        vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0) + vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
+                    ) / xst_j
+                vars.PT[j] = (1.0 + self.params.get("ttip", {}).get(j, 0.0)) * vars.PP.get(j, 0.0)
+                ttip = self.params.get("ttip", {}).get(j, 0.0)
+                vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
+            vars.G = sum(vars.PC.get(i, 1.0) * vars.CG.get(i, 0.0) for i in self.sets.get("I", []))
 
         # Initialize trade margin demand from calibrated flows (EQ57 identity)
         for i in self.sets.get("I", []):
@@ -490,7 +524,7 @@ class PEPModelSolver:
                 tm_x = self.params.get("tmrg_X", {}).get((i, ij), 0.0)
                 mrgn_i += tm * vars.DD.get(ij, 0.0)
                 mrgn_i += tm * vars.IM.get(ij, 0.0)
-                mrgn_i += sum(tm_x * vars.EX.get((j, ij), 0.0) for j in self.sets.get("J", []))
+                mrgn_i += tm_x * vars.EXD.get(ij, 0.0)
             vars.MRGN[i] = mrgn_i
 
         # Recompute savings variables from accounting identities using calibrated TR.
@@ -737,6 +771,8 @@ class PEPModelSolver:
                         self.tolerance,
                         self.max_iterations,
                         init_mode=self.init_mode,
+                        gams_results_gdx=self.gams_results_gdx,
+                        gams_results_slice=self.gams_results_slice,
                     )
                     return ipopt_solver.solve_ipopt()
                 except Exception as e:

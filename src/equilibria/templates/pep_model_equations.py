@@ -99,6 +99,7 @@ class PEPModelVariables:
     
     # Price variables
     P: dict[tuple[str, str], float] = field(default_factory=dict)
+    PT: dict[str, float] = field(default_factory=dict)
     PC: dict[str, float] = field(default_factory=dict)
     PD: dict[str, float] = field(default_factory=dict)
     PE: dict[str, float] = field(default_factory=dict)
@@ -111,6 +112,7 @@ class PEPModelVariables:
     WC: dict[str, float] = field(default_factory=dict)
     RC: dict[str, float] = field(default_factory=dict)
     W: dict[str, float] = field(default_factory=dict)
+    RK: dict[str, float] = field(default_factory=dict)
     R: dict[tuple[str, str], float] = field(default_factory=dict)
     WTI: dict[tuple[str, str], float] = field(default_factory=dict)
     RTI: dict[tuple[str, str], float] = field(default_factory=dict)
@@ -126,6 +128,7 @@ class PEPModelVariables:
     G_REAL: float = 0.0
     GDP_BP_REAL: float = 0.0
     GDP_MP_REAL: float = 0.0
+    GFCF_REAL: float = 0.0
     
     # GDP variables
     GDP_BP: float = 0.0
@@ -136,6 +139,23 @@ class PEPModelVariables:
     # Investment
     IT: float = 0.0
     VSTK: dict[str, float] = field(default_factory=dict)
+    LEON: float = 0.0
+
+    # Exogenous policy/rate variables (fixed in GAMS via .fx)
+    sh0: dict[str, float] = field(default_factory=dict)
+    sh1: dict[str, float] = field(default_factory=dict)
+    tr0: dict[str, float] = field(default_factory=dict)
+    tr1: dict[str, float] = field(default_factory=dict)
+    ttdh0: dict[str, float] = field(default_factory=dict)
+    ttdh1: dict[str, float] = field(default_factory=dict)
+    ttdf0: dict[str, float] = field(default_factory=dict)
+    ttdf1: dict[str, float] = field(default_factory=dict)
+    ttic: dict[str, float] = field(default_factory=dict)
+    ttim: dict[str, float] = field(default_factory=dict)
+    ttix: dict[str, float] = field(default_factory=dict)
+    ttip: dict[str, float] = field(default_factory=dict)
+    ttiw: dict[tuple[str, str], float] = field(default_factory=dict)
+    ttik: dict[tuple[str, str], float] = field(default_factory=dict)
 
 
 @dataclass
@@ -193,6 +213,7 @@ class PEPModelEquations:
         self.F = sets.get("F", [])
         self.J = sets.get("J", [])
         self.I = sets.get("I", [])
+        self.I1 = sets.get("I1", [i for i in self.I if i != "agr"])
         self.K = sets.get("K", [])
         self.L = sets.get("L", [])
         self.AG = sets.get("AG", [])
@@ -245,6 +266,8 @@ class PEPModelEquations:
     def production_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate production block residuals (EQ1-EQ9)."""
         residuals = {}
+        ldo0 = self.params.get("LDO0", {})
+        kdo0 = self.params.get("KDO0", {})
         
         for j in self.J:
             # EQ1: VA(j) = v(j) * XST(j)
@@ -305,7 +328,7 @@ class PEPModelEquations:
             # EQ6: Labor demand by category
             for l in self.L:
                 key = (l, j)
-                if vars.LD.get(key, 0) > 0:
+                if ldo0.get(key, 0.0) != 0:
                     sigma_ld = self.params.get("sigma_LD", {}).get(j, 1)
                     beta_ld = self.params.get("beta_LD", {}).get(key, 0)
                     B_ld = self.params.get("B_LD", {}).get(j, 1)
@@ -316,14 +339,14 @@ class PEPModelEquations:
                         residuals[f"EQ6_{l}_{j}"] = vars.LD[key] - demand
             
             # EQ7: KDC composite capital CES
-            if vars.KDC.get(j, 0) > 0:
+            if vars.KDC.get(j, 0) > 0 and any(kdo0.get((k, j), 0.0) != 0 for k in self.K):
                 rho_kd = self.params.get("rho_KD", {}).get(j, 0)
                 B_kd = self.params.get("B_KD", {}).get(j, 1)
                 
                 kd_sum = 0
                 for k in self.K:
                     beta_kd = self.params.get("beta_KD", {}).get((k, j), 0)
-                    if vars.KD.get((k, j), 0) > 0:
+                    if kdo0.get((k, j), 0.0) != 0:
                         kd_sum += beta_kd * (vars.KD[(k, j)] ** (-rho_kd))
                 
                 if kd_sum > 0 and rho_kd != 0:
@@ -333,7 +356,7 @@ class PEPModelEquations:
             # EQ8: Capital demand by category
             for k in self.K:
                 key = (k, j)
-                if vars.KD.get(key, 0) > 0:
+                if kdo0.get(key, 0.0) != 0:
                     sigma_kd = self.params.get("sigma_KD", {}).get(j, 1)
                     beta_kd = self.params.get("beta_KD", {}).get(key, 0)
                     B_kd = self.params.get("B_KD", {}).get(j, 1)
@@ -355,6 +378,8 @@ class PEPModelEquations:
     def income_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate income block residuals (EQ10-EQ21)."""
         residuals = {}
+        ldo0 = self.params.get("LDO0", {})
+        kdo0 = self.params.get("KDO0", {})
         
         # Household income (EQ10-EQ16)
         for h in self.H:
@@ -367,7 +392,11 @@ class PEPModelEquations:
             for l in self.L:
                 lambda_wl = self.params.get("lambda_WL", {}).get((h, l), 0)
                 w_l = vars.W.get(l, 1.0)
-                ld_sum = sum(vars.LD.get((l, j), 0) for j in self.J)
+                ld_sum = sum(
+                    vars.LD.get((l, j), 0)
+                    for j in self.J
+                    if abs(ldo0.get((l, j), 0.0)) > 1e-12
+                )
                 yhl += lambda_wl * w_l * ld_sum
             residuals[f"EQ11_{h}"] = vars.YHL.get(h, 0) - yhl
             
@@ -376,6 +405,8 @@ class PEPModelEquations:
             for k in self.K:
                 lambda_rk = self.params.get("lambda_RK", {}).get((h, k), 0)
                 for j in self.J:
+                    if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                        continue
                     r_kj = vars.R.get((k, j), 1.0)
                     kd_kj = vars.KD.get((k, j), 0)
                     yhk += lambda_rk * r_kj * kd_kj
@@ -412,6 +443,8 @@ class PEPModelEquations:
             for k in self.K:
                 lambda_rk = self.params.get("lambda_RK", {}).get((f, k), 0)
                 for j in self.J:
+                    if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                        continue
                     r_kj = vars.R.get((k, j), 1.0)
                     kd_kj = vars.KD.get((k, j), 0)
                     yfk += lambda_rk * r_kj * kd_kj
@@ -435,6 +468,10 @@ class PEPModelEquations:
     def government_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate government block residuals (EQ22-EQ43)."""
         residuals = {}
+        kdo0 = self.params.get("KDO0", {})
+        ldo0 = self.params.get("LDO0", {})
+        imo0 = self.params.get("IMO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         
         # EQ22: YG = YGK + TDHT + TDFT + TPRODN + TPRCTS + YGTR
         expected_yg = (
@@ -448,6 +485,8 @@ class PEPModelEquations:
         for k in self.K:
             lambda_rk = self.params.get("lambda_RK", {}).get(("gvt", k), 0)
             for j in self.J:
+                if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                    continue
                 r_kj = vars.R.get((k, j), 1.0)
                 kd_kj = vars.KD.get((k, j), 0)
                 ygk += lambda_rk * r_kj * kd_kj
@@ -466,11 +505,21 @@ class PEPModelEquations:
         residuals["EQ26"] = vars.TPRODN - expected_tprodn
         
         # EQ27: TIWT = sum of labor taxes
-        expected_tiwt = sum(vars.TIW.values())
+        expected_tiwt = sum(
+            vars.TIW.get((l, j), 0.0)
+            for l in self.L
+            for j in self.J
+            if abs(ldo0.get((l, j), 0.0)) > 1e-12
+        )
         residuals["EQ27"] = vars.TIWT - expected_tiwt
         
         # EQ28: TIKT = sum of capital taxes
-        expected_tikt = sum(vars.TIK.values())
+        expected_tikt = sum(
+            vars.TIK.get((k, j), 0.0)
+            for k in self.K
+            for j in self.J
+            if abs(kdo0.get((k, j), 0.0)) > 1e-12
+        )
         residuals["EQ28"] = vars.TIKT - expected_tikt
         
         # EQ29: TIPT = sum of production taxes
@@ -486,11 +535,11 @@ class PEPModelEquations:
         residuals["EQ31"] = vars.TICT - expected_tict
         
         # EQ32: TIMT = sum of import taxes
-        expected_timt = sum(vars.TIM.values())
+        expected_timt = sum(vars.TIM.get(i, 0.0) for i in self.I if abs(imo0.get(i, 0.0)) > 1e-12)
         residuals["EQ32"] = vars.TIMT - expected_timt
         
         # EQ33: TIXT = sum of export taxes
-        expected_tixt = sum(vars.TIX.values())
+        expected_tixt = sum(vars.TIX.get(i, 0.0) for i in self.I if abs(exdo0.get(i, 0.0)) > 1e-12)
         residuals["EQ33"] = vars.TIXT - expected_tixt
         
         # EQ34: YGTR = sum of transfers from government to non-government agents
@@ -525,6 +574,8 @@ class PEPModelEquations:
         # EQ38: TIK(k,j) = capital tax
         for k in self.K:
             for j in self.J:
+                if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                    continue
                 key = (k, j)
                 ttik = self.params.get("ttik", {}).get(key, 0)
                 r_kj = vars.R.get(key, 1.0)
@@ -574,16 +625,23 @@ class PEPModelEquations:
     def row_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate rest of world residuals (EQ44-EQ46)."""
         residuals = {}
+        kdo0 = self.params.get("KDO0", {})
+        imo0 = self.params.get("IMO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         
         # EQ44: YROW = e * sum(PWM * IM) + capital income + transfers to ROW
         yrow = 0
         for i in self.I:
+            if abs(imo0.get(i, 0.0)) <= 1e-12:
+                continue
             pwm_i = vars.PWM.get(i, 1.0)
             yrow += vars.e * pwm_i * vars.IM.get(i, 0)
         
         for k in self.K:
             lambda_rk = self.params.get("lambda_RK", {}).get(("row", k), 0)
             for j in self.J:
+                if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                    continue
                 r_kj = vars.R.get((k, j), 1.0)
                 kd_kj = vars.KD.get((k, j), 0)
                 yrow += lambda_rk * r_kj * kd_kj
@@ -596,6 +654,8 @@ class PEPModelEquations:
         # EQ45: SROW = YROW - exports + net transfers from ROW
         srow = vars.YROW
         for i in self.I:
+            if abs(exdo0.get(i, 0.0)) <= 1e-12:
+                continue
             srow -= vars.PE_FOB.get(i, 0) * vars.EXD.get(i, 0)
         for agd in self.AGD:
             srow -= vars.TR.get((agd, "row"), 0)
@@ -652,6 +712,9 @@ class PEPModelEquations:
     def demand_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate demand block residuals (EQ52-EQ57)."""
         residuals = {}
+        imo0 = self.params.get("IMO0", {})
+        ddo0 = self.params.get("DDO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         
         # EQ52: PC(i)*C(i,h) = LES demand function
         for i in self.I:
@@ -669,11 +732,15 @@ class PEPModelEquations:
         expected_gfcf = vars.IT - sum(vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0) for i in self.I)
         residuals["EQ53"] = vars.GFCF - expected_gfcf
         
-        # EQ54: INV(i) = investment allocation (not fully specified in GAMS)
-        # Skip for now
-        
-        # EQ55: CG(i) = government consumption (exogenous)
-        # Skip as it's exogenous
+        # EQ54: PC(i)*INV(i) = gamma_INV(i)*GFCF
+        for i in self.I:
+            gamma_inv = self.params.get("gamma_INV", {}).get(i, 0.0)
+            residuals[f"EQ54_{i}"] = vars.PC.get(i, 0.0) * vars.INV.get(i, 0.0) - gamma_inv * vars.GFCF
+
+        # EQ55: PC(i)*CG(i) = gamma_GVT(i)*G
+        for i in self.I:
+            gamma_gvt = self.params.get("gamma_GVT", {}).get(i, 0.0)
+            residuals[f"EQ55_{i}"] = vars.PC.get(i, 0.0) * vars.CG.get(i, 0.0) - gamma_gvt * vars.G
         
         # EQ56: DIT(i) = sum of intermediate demand
         for i in self.I:
@@ -685,11 +752,13 @@ class PEPModelEquations:
             mrgn = 0
             for ij in self.I:
                 tmrg = self.params.get("tmrg", {}).get((i, ij), 0)
-                mrgn += tmrg * vars.DD.get(ij, 0)
-                mrgn += tmrg * vars.IM.get(ij, 0)
-                for j in self.J:
+                if abs(ddo0.get(ij, 0.0)) > 1e-12:
+                    mrgn += tmrg * vars.DD.get(ij, 0)
+                if abs(imo0.get(ij, 0.0)) > 1e-12:
+                    mrgn += tmrg * vars.IM.get(ij, 0)
+                if abs(exdo0.get(ij, 0.0)) > 1e-12:
                     tmrg_x = self.params.get("tmrg_X", {}).get((i, ij), 0)
-                    mrgn += tmrg_x * vars.EX.get((j, ij), 0)
+                    mrgn += tmrg_x * vars.EXD.get(ij, 0)
             residuals[f"EQ57_{i}"] = vars.MRGN.get(i, 0) - mrgn
         
         return residuals
@@ -697,6 +766,13 @@ class PEPModelEquations:
     def trade_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate trade block residuals (EQ58-EQ64)."""
         residuals = {}
+        xso0 = self.params.get("XSO0", {})
+        xsto0 = self.params.get("XSTO0", {})
+        exo0 = self.params.get("EXO0", {})
+        dso0 = self.params.get("DSO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
+        imo0 = self.params.get("IMO0", {})
+        ddo0 = self.params.get("DDO0", {})
         
         # EQ58: XST(j) = CET between commodities
         for j in self.J:
@@ -707,15 +783,28 @@ class PEPModelEquations:
                 xs_sum = 0
                 for i in self.I:
                     beta_xt = self.params.get("beta_XT", {}).get((j, i), 0)
-                    if vars.XS.get((j, i), 0) > 0:
+                    if abs(xso0.get((j, i), 0.0)) > 1e-12:
                         xs_sum += beta_xt * (vars.XS[(j, i)] ** rho_xt)
-                
-                if xs_sum > 0:
-                    expected_xst = B_xt * (xs_sum ** (1 / rho_xt))
-                    residuals[f"EQ58_{j}"] = vars.XST.get(j, 0) - expected_xst
+                expected_xst = B_xt * (xs_sum ** (1 / rho_xt)) if xs_sum > 0 else 0.0
+                residuals[f"EQ58_{j}"] = vars.XST.get(j, 0) - expected_xst
         
-        # EQ59: XS(j,i) = production by sector
-        # This is defined implicitly by EQ58
+        # EQ59: XS(j,i) = allocation across commodities
+        for j in self.J:
+            sigma_xt = self.params.get("sigma_XT", {}).get(j, 2.0)
+            b_xt = self.params.get("B_XT", {}).get(j, 1.0)
+            pt_j = vars.PT.get(j, 0.0)
+            xst_j = vars.XST.get(j, 0.0)
+            for i in self.I:
+                if abs(xso0.get((j, i), 0.0)) <= 1e-12:
+                    continue
+                if abs(xso0.get((j, i), 0.0) - xsto0.get(j, 0.0)) <= 1e-12:
+                    continue
+                beta_xt = self.params.get("beta_XT", {}).get((j, i), 0.0)
+                p_ji = vars.P.get((j, i), 0.0)
+                if b_xt <= 0 or beta_xt <= 0 or pt_j <= 0 or p_ji <= 0:
+                    continue
+                expected_xs = xst_j / (b_xt ** (1 + sigma_xt)) * (p_ji / (beta_xt * pt_j)) ** sigma_xt
+                residuals[f"EQ59_{j}_{i}"] = vars.XS.get((j, i), 0.0) - expected_xs
         
         # EQ60: XS(j,i) = CET between exports and local
         for j in self.J:
@@ -729,12 +818,28 @@ class PEPModelEquations:
                 if rho_x != 0:
                     ex = vars.EX.get((j, i), 0)
                     ds = vars.DS.get((j, i), 0)
-                    if ex > 0 or ds > 0:
-                        expected_xs = B_x * (beta_x * (ex ** rho_x) + (1 - beta_x) * (ds ** rho_x)) ** (1 / rho_x)
-                        residuals[f"EQ60_{j}_{i}"] = vars.XS.get((j, i), 0) - expected_xs
-        
-        # EQ61: EX/DS ratio (CET condition)
-        # Skip for now as it's complex
+                    term = 0.0
+                    if abs(exo0.get((j, i), 0.0)) > 1e-12:
+                        term += beta_x * (ex ** rho_x)
+                    if abs(dso0.get((j, i), 0.0)) > 1e-12:
+                        term += (1 - beta_x) * (ds ** rho_x)
+                    expected_xs = B_x * (term ** (1 / rho_x)) if term > 0 else 0.0
+                    residuals[f"EQ60_{j}_{i}"] = vars.XS.get((j, i), 0) - expected_xs
+
+        # EQ61: EX/DS ratio condition
+        for j in self.J:
+            for i in self.I:
+                if abs(exo0.get((j, i), 0.0)) <= 1e-12 or abs(dso0.get((j, i), 0.0)) <= 1e-12:
+                    continue
+                beta_x = self.params.get("beta_X", {}).get((j, i), 0.0)
+                sigma_x = self.params.get("sigma_X", {}).get((j, i), 2.0)
+                pe_i = vars.PE.get(i, 0.0)
+                pl_i = vars.PL.get(i, 0.0)
+                ds_ji = vars.DS.get((j, i), 0.0)
+                if beta_x <= 0 or beta_x >= 1 or pe_i <= 0 or pl_i <= 0:
+                    continue
+                expected_ex = (((1 - beta_x) / beta_x) * (pe_i / pl_i)) ** sigma_x * ds_ji
+                residuals[f"EQ61_{j}_{i}"] = vars.EX.get((j, i), 0.0) - expected_ex
         
         # EQ62: EXD(i) = world demand for exports
         for i in self.I:
@@ -743,7 +848,7 @@ class PEPModelEquations:
             pe_fob_i = vars.PE_FOB.get(i, 0)
             
             exdo = self.params.get("EXDO", {}).get(i, 0)
-            if pe_fob_i > 0:
+            if abs(exdo0.get(i, 0.0)) > 1e-12 and pe_fob_i > 0:
                 expected_exd = exdo * ((vars.e * pwx_i) / pe_fob_i) ** sigma_xd
                 residuals[f"EQ62_{i}"] = vars.EXD.get(i, 0) - expected_exd
         
@@ -756,34 +861,72 @@ class PEPModelEquations:
             if rho_m != 0:
                 im = vars.IM.get(i, 0)
                 dd = vars.DD.get(i, 0)
-                if im > 0 or dd > 0:
-                    expected_q = B_m * (beta_m * (im ** (-rho_m)) + (1 - beta_m) * (dd ** (-rho_m))) ** (-1 / rho_m)
-                    residuals[f"EQ63_{i}"] = vars.Q.get(i, 0) - expected_q
-        
+                term = 0.0
+                if abs(imo0.get(i, 0.0)) > 1e-12:
+                    term += beta_m * (im ** (-rho_m))
+                if abs(ddo0.get(i, 0.0)) > 1e-12:
+                    term += (1 - beta_m) * (dd ** (-rho_m))
+                expected_q = B_m * (term ** (-1 / rho_m)) if term > 0 else 0.0
+                residuals[f"EQ63_{i}"] = vars.Q.get(i, 0) - expected_q
+
         # EQ64: IM(i) = import demand
-        # Skip as it's implicit in EQ63
+        for i in self.I:
+            if abs(imo0.get(i, 0.0)) <= 1e-12 or abs(ddo0.get(i, 0.0)) <= 1e-12:
+                continue
+            beta_m = self.params.get("beta_M", {}).get(i, 0.0)
+            sigma_m = self.params.get("sigma_M", {}).get(i, 2.0)
+            pd_i = vars.PD.get(i, 0.0)
+            pm_i = vars.PM.get(i, 0.0)
+            dd_i = vars.DD.get(i, 0.0)
+            if beta_m <= 0 or beta_m >= 1 or pd_i <= 0 or pm_i <= 0:
+                continue
+            expected_im = ((beta_m / (1 - beta_m)) * (pd_i / pm_i)) ** sigma_m * dd_i
+            residuals[f"EQ64_{i}"] = vars.IM.get(i, 0.0) - expected_im
         
         return residuals
     
     def price_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate price block residuals (EQ65-EQ84)."""
         residuals = {}
+        xso0 = self.params.get("XSO0", {})
+        xsto0 = self.params.get("XSTO0", {})
+        exo0 = self.params.get("EXO0", {})
+        dso0 = self.params.get("DSO0", {})
+        imo0 = self.params.get("IMO0", {})
+        ddo0 = self.params.get("DDO0", {})
+        kdo0 = self.params.get("KDO0", {})
+        ldo0 = self.params.get("LDO0", {})
+        pco0 = self.params.get("PCO0", {})
+        pvao0 = self.params.get("PVAO0", {})
+        vao0 = self.params.get("VAO0", {})
+        tipo0 = self.params.get("TIPO0", {})
         
-        # EQ65: PP(j) = unit cost
+        # EQ65: PP(j)*XST(j) = PVA(j)*VA(j) + PCI(j)*CI(j)
         for j in self.J:
-            expected_pp = vars.PVA.get(j, 0) * vars.VA.get(j, 0) + vars.PCI.get(j, 0) * vars.CI.get(j, 0)
-            if vars.XST.get(j, 0) > 0:
-                expected_pp /= vars.XST[j]
-            residuals[f"EQ65_{j}"] = vars.PP.get(j, 0) - expected_pp
-        
-        # EQ66-EQ67: Price definitions
-        # Skip as they're definitional
-        
-        # EQ68: PVA(j) = price of value added
+            lhs = vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
+            rhs = vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0) + vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
+            residuals[f"EQ65_{j}"] = lhs - rhs
+
+        # EQ66: PT(j) = (1+ttip(j))*PP(j)
         for j in self.J:
-            if vars.VA.get(j, 0) > 0:
-                expected_pva = (vars.WC.get(j, 0) * vars.LDC.get(j, 0) + vars.RC.get(j, 0) * vars.KDC.get(j, 0)) / vars.VA[j]
-                residuals[f"EQ68_{j}"] = vars.PVA.get(j, 0) - expected_pva
+            expected_pt = (1 + self.params.get("ttip", {}).get(j, 0.0)) * vars.PP.get(j, 0.0)
+            residuals[f"EQ66_{j}"] = vars.PT.get(j, 0.0) - expected_pt
+
+        # EQ67: PCI(j)*CI(j) = SUM[i,PC(i)*DI(i,j)]
+        for j in self.J:
+            expected_lhs = vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
+            expected_rhs = sum(vars.PC.get(i, 0.0) * vars.DI.get((i, j), 0.0) for i in self.I)
+            residuals[f"EQ67_{j}"] = expected_lhs - expected_rhs
+        
+        # EQ68: PVA(j)*VA(j) = [WC(j)*LDC(j)]$LDCO(j) + [RC(j)*KDC(j)]$KDCO(j)
+        for j in self.J:
+            lhs = vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0)
+            rhs = 0.0
+            if any(abs(ldo0.get((l, j), 0.0)) > 1e-12 for l in self.L):
+                rhs += vars.WC.get(j, 0.0) * vars.LDC.get(j, 0.0)
+            if any(abs(kdo0.get((k, j), 0.0)) > 1e-12 for k in self.K):
+                rhs += vars.RC.get(j, 0.0) * vars.KDC.get(j, 0.0)
+            residuals[f"EQ68_{j}"] = lhs - rhs
         
         # EQ70: WTI(l,j) = wage with taxes
         for l in self.L:
@@ -796,10 +939,41 @@ class PEPModelEquations:
         # EQ72: RTI(k,j) = rental rate with taxes
         for k in self.K:
             for j in self.J:
+                if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                    continue
                 ttik = self.params.get("ttik", {}).get((k, j), 0)
                 r_kj = vars.R.get((k, j), 1.0)
                 expected_rti = r_kj * (1 + ttik)
                 residuals[f"EQ72_{k}_{j}"] = vars.RTI.get((k, j), 0) - expected_rti
+
+        # EQ73: R(k,j) = RK(k) for mobile capital
+        if self.params.get("kmob", 1.0):
+            for k in self.K:
+                for j in self.J:
+                    if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                        continue
+                    residuals[f"EQ73_{k}_{j}"] = vars.R.get((k, j), 0.0) - vars.RK.get(k, 0.0)
+
+        # EQ74: P(j,i) = PT(j) when sector j produces only commodity i
+        for j in self.J:
+            for i in self.I:
+                if abs(xso0.get((j, i), 0.0)) <= 1e-12:
+                    continue
+                if abs(xso0.get((j, i), 0.0) - xsto0.get(j, 0.0)) <= 1e-12:
+                    residuals[f"EQ74_{j}_{i}"] = vars.P.get((j, i), 0.0) - vars.PT.get(j, 0.0)
+
+        # EQ75: P(j,i)*XS(j,i) = [PE(i)*EX(j,i)]$EXO(j,i) + [PL(i)*DS(j,i)]$DSO(j,i)
+        for j in self.J:
+            for i in self.I:
+                if abs(xso0.get((j, i), 0.0)) <= 1e-12:
+                    continue
+                lhs = vars.P.get((j, i), 0.0) * vars.XS.get((j, i), 0.0)
+                rhs = 0.0
+                if abs(exo0.get((j, i), 0.0)) > 1e-12:
+                    rhs += vars.PE.get(i, 0.0) * vars.EX.get((j, i), 0.0)
+                if abs(dso0.get((j, i), 0.0)) > 1e-12:
+                    rhs += vars.PL.get(i, 0.0) * vars.DS.get((j, i), 0.0)
+                residuals[f"EQ75_{j}_{i}"] = lhs - rhs
         
         # EQ76: PE(i) = export price
         for i in self.I:
@@ -825,17 +999,78 @@ class PEPModelEquations:
             expected_pm = ((1 + ttim) * vars.e * pwm_i + margin_sum) * (1 + ttic)
             residuals[f"EQ78_{i}"] = vars.PM.get(i, 0) - expected_pm
         
-        # EQ79: PC(i) = composite price
+        # EQ79: PC(i)*Q(i) = [PM(i)*IM(i)]$IMO(i) + [PD(i)*DD(i)]$DDO(i)
         for i in self.I:
-            if vars.Q.get(i, 0) > 0:
-                expected_pc = (vars.PM.get(i, 0) * vars.IM.get(i, 0) + vars.PD.get(i, 0) * vars.DD.get(i, 0)) / vars.Q[i]
-                residuals[f"EQ79_{i}"] = vars.PC.get(i, 0) - expected_pc
+            lhs = vars.PC.get(i, 0.0) * vars.Q.get(i, 0.0)
+            rhs = 0.0
+            if abs(imo0.get(i, 0.0)) > 1e-12:
+                rhs += vars.PM.get(i, 0.0) * vars.IM.get(i, 0.0)
+            if abs(ddo0.get(i, 0.0)) > 1e-12:
+                rhs += vars.PD.get(i, 0.0) * vars.DD.get(i, 0.0)
+            residuals[f"EQ79_{i}"] = lhs - rhs
+
+        # EQ80: GDP deflator
+        num1 = den1 = num2 = den2 = 0.0
+        for j in self.J:
+            va = vars.VA.get(j, 0.0)
+            va0 = vao0.get(j, 0.0)
+            if va <= 1e-12 or va0 <= 1e-12:
+                continue
+            pva = vars.PVA.get(j, 0.0)
+            pva0 = pvao0.get(j, 1.0)
+            tip = vars.TIP.get(j, 0.0)
+            tip0 = tipo0.get(j, 0.0)
+            unit_cur = (pva * va + tip) / va
+            unit_base = (pva0 * va0 + tip0) / va0
+            num1 += unit_cur * va0
+            den1 += unit_base * va0
+            num2 += unit_cur * va
+            den2 += unit_base * va
+        if den1 > 1e-12 and den2 > 1e-12:
+            residuals["EQ80"] = vars.PIXGDP - ((num1 / den1) * (num2 / den2)) ** 0.5
+
+        # EQ81: Consumer price index
+        num = den = 0.0
+        for i in self.I:
+            c_i = sum(vars.C.get((i, h), 0.0) for h in self.H)
+            num += vars.PC.get(i, 0.0) * c_i
+            den += pco0.get(i, 1.0) * c_i
+        if den > 1e-12:
+            residuals["EQ81"] = vars.PIXCON - (num / den)
+
+        # EQ82: Investment price index
+        log_pixinv = 0.0
+        for i in self.I:
+            g = self.params.get("gamma_INV", {}).get(i, 0.0)
+            if g <= 0:
+                continue
+            pc_i = vars.PC.get(i, 1.0)
+            pco_i = pco0.get(i, 1.0)
+            if pc_i > 0 and pco_i > 0:
+                log_pixinv += g * np.log(pc_i / pco_i)
+        residuals["EQ82"] = vars.PIXINV - float(np.exp(log_pixinv))
+
+        # EQ83: Government price index
+        log_pixgvt = 0.0
+        for i in self.I:
+            g = self.params.get("gamma_GVT", {}).get(i, 0.0)
+            if g <= 0:
+                continue
+            pc_i = vars.PC.get(i, 1.0)
+            pco_i = pco0.get(i, 1.0)
+            if pc_i > 0 and pco_i > 0:
+                log_pixgvt += g * np.log(pc_i / pco_i)
+        residuals["EQ83"] = vars.PIXGVT - float(np.exp(log_pixgvt))
         
         return residuals
     
     def equilibrium_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate equilibrium conditions (EQ85-EQ89)."""
         residuals = {}
+        dso0 = self.params.get("DSO0", {})
+        exo0 = self.params.get("EXO0", {})
+        ddo0 = self.params.get("DDO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         
         # EQ85: Labor market equilibrium
         for l in self.L:
@@ -857,24 +1092,51 @@ class PEPModelEquations:
             vars.SROW
         )
         residuals["EQ87"] = vars.IT - total_savings
-        
+
+        # EQ84: Composite-good market clearing (GAMS: EQ84(i1))
+        for i in self.I1:
+            cons = sum(vars.C.get((i, h), 0.0) for h in self.H)
+            expected_q = cons + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0) + vars.DIT.get(i, 0.0) + vars.MRGN.get(i, 0.0)
+            residuals[f"EQ84_{i}"] = vars.Q.get(i, 0.0) - expected_q
+
         # EQ88: Domestic product market equilibrium
         for i in self.I:
-            supply = sum(vars.DS.get((j, i), 0) for j in self.J)
+            if abs(ddo0.get(i, 0.0)) <= 1e-12:
+                continue
+            supply = sum(vars.DS.get((j, i), 0) for j in self.J if abs(dso0.get((j, i), 0.0)) > 1e-12)
             demand = vars.DD.get(i, 0)
             residuals[f"EQ88_{i}"] = supply - demand
         
         # EQ89: Export market equilibrium
         for i in self.I:
-            supply = sum(vars.EX.get((j, i), 0) for j in self.J)
+            if abs(exdo0.get(i, 0.0)) <= 1e-12:
+                continue
+            supply = sum(vars.EX.get((j, i), 0) for j in self.J if abs(exo0.get((j, i), 0.0)) > 1e-12)
             demand = vars.EXD.get(i, 0)
             residuals[f"EQ89_{i}"] = supply - demand
+
+        walras_i = "agr" if "agr" in self.I else (self.I[0] if self.I else None)
+        if walras_i is not None:
+            rhs = (
+                vars.Q.get(walras_i, 0.0)
+                - sum(vars.C.get((walras_i, h), 0.0) for h in self.H)
+                - vars.CG.get(walras_i, 0.0)
+                - vars.INV.get(walras_i, 0.0)
+                - vars.VSTK.get(walras_i, 0.0)
+                - vars.DIT.get(walras_i, 0.0)
+                - vars.MRGN.get(walras_i, 0.0)
+            )
+            residuals["WALRAS"] = vars.LEON - rhs
         
         return residuals
     
     def gdp_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
-        """Calculate GDP definitions (EQ90-EQ97)."""
+        """Calculate GDP definitions (EQ90-EQ98)."""
         residuals = {}
+        ldo0 = self.params.get("LDO0", {})
+        kdo0 = self.params.get("KDO0", {})
+        imo0 = self.params.get("IMO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         
         # EQ90: GDP_BP = GDP at basic prices
         expected_gdp_bp = sum(vars.PVA.get(j, 0) * vars.VA.get(j, 0) for j in self.J) + vars.TIPT
@@ -888,9 +1150,13 @@ class PEPModelEquations:
         gdp_ib = 0
         for l in self.L:
             for j in self.J:
+                if abs(ldo0.get((l, j), 0.0)) <= 1e-12:
+                    continue
                 gdp_ib += vars.W.get(l, 1.0) * vars.LD.get((l, j), 0)
         for k in self.K:
             for j in self.J:
+                if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                    continue
                 gdp_ib += vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0)
         gdp_ib += vars.TPRODN + vars.TPRCTS
         residuals["EQ92"] = vars.GDP_IB - gdp_ib
@@ -901,8 +1167,10 @@ class PEPModelEquations:
             cons = sum(vars.C.get((i, h), 0) for h in self.H)
             gdp_fd += vars.PC.get(i, 0) * (cons + vars.CG.get(i, 0) + vars.INV.get(i, 0) + vars.VSTK.get(i, 0))
         for i in self.I:
-            gdp_fd += vars.PE_FOB.get(i, 0) * vars.EXD.get(i, 0)
-            gdp_fd -= vars.PWM.get(i, 0) * vars.e * vars.IM.get(i, 0)
+            if abs(exdo0.get(i, 0.0)) > 1e-12:
+                gdp_fd += vars.PE_FOB.get(i, 0) * vars.EXD.get(i, 0)
+            if abs(imo0.get(i, 0.0)) > 1e-12:
+                gdp_fd -= vars.PWM.get(i, 0) * vars.e * vars.IM.get(i, 0)
         residuals["EQ93"] = vars.GDP_FD - gdp_fd
         
         # EQ94-EQ97: Real variables
@@ -913,5 +1181,6 @@ class PEPModelEquations:
         residuals["EQ95"] = vars.G_REAL - vars.G / vars.PIXGVT
         residuals["EQ96"] = vars.GDP_BP_REAL - vars.GDP_BP / vars.PIXGDP
         residuals["EQ97"] = vars.GDP_MP_REAL - vars.GDP_MP / vars.PIXCON
+        residuals["EQ98"] = vars.GFCF_REAL - (vars.GFCF / vars.PIXINV if abs(vars.PIXINV) > 1e-12 else 0.0)
         
         return residuals
