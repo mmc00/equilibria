@@ -31,7 +31,7 @@ def main() -> int:
     parser.add_argument(
         "--sam-file",
         type=Path,
-        default=Path("src/equilibria/templates/reference/pep2/data/SAM-CRI-gams.xlsx"),
+        default=Path("src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx"),
     )
     parser.add_argument(
         "--val-par-file",
@@ -47,7 +47,19 @@ def main() -> int:
     parser.add_argument("--acc-inv", type=str, default="inv")
     parser.add_argument("--acc-vstk", type=str, default="vstk")
     parser.add_argument("--method", choices=["auto", "ipopt", "simple_iteration"], default="auto")
-    parser.add_argument("--init-mode", choices=["strict_gams", "equation_consistent"], default="equation_consistent")
+    parser.add_argument("--init-mode", choices=["strict_gams", "equation_consistent"], default="strict_gams")
+    parser.add_argument(
+        "--gams-results-gdx",
+        type=Path,
+        default=Path("src/equilibria/templates/reference/pep2/scripts/Results.gdx"),
+        help="GAMS Results.gdx used for strict_gams initial levels",
+    )
+    parser.add_argument(
+        "--gams-results-slice",
+        choices=["base", "sim1"],
+        default="sim1",
+        help="Scenario slice in Results.gdx to use for strict_gams levels",
+    )
     parser.add_argument("--tolerance", type=float, default=1e-8)
     parser.add_argument("--max-iterations", type=int, default=200)
     parser.add_argument("--save-solution", type=Path, default=None)
@@ -92,6 +104,8 @@ def main() -> int:
         tolerance=args.tolerance,
         max_iterations=args.max_iterations,
         init_mode=args.init_mode,
+        gams_results_gdx=args.gams_results_gdx,
+        gams_results_slice=args.gams_results_slice,
     )
     solution = solver.solve(method=args.method)
 
