@@ -319,6 +319,14 @@ model.params["tms", "CHN", "USA", "mfg"] = 0.25  # Retaliation
 trade_war = model.solve()
 ```
 
+### PEP GDP Comparison (Original SAM vs CRI SAM)
+
+```bash
+uv run python examples/example_11_pep_gdp_sam_comparison.py
+```
+
+More details: `docs/pep_gdp_example.md`
+
 ---
 
 ## Solver Backends
