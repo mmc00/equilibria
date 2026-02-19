@@ -477,7 +477,7 @@ python scripts/verify_pep2_full_parity.py \
 5. `EQ39` and TIP initialization corrected to GAMS form: `TIP(j)=ttip(j)*PP(j)*XST(j)`.
 6. `ttdh1`, `gamma_INV`, `gamma_GVT`, `B_XT` alignment fixed (formula/timing consistency).
 
-### Current Operational Status (Updated Feb 19, 2026)
+### Current Operational Status - February 19, 2026
 
 **Verified state now:**
 - ✅ `pep2` with `init_mode=equation_consistent` is numerically consistent at initialization (RMS residual around `1e-7`, max residual around `1e-6`).
