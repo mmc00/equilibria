@@ -477,6 +477,36 @@ python scripts/verify_pep2_full_parity.py \
 5. `EQ39` and TIP initialization corrected to GAMS form: `TIP(j)=ttip(j)*PP(j)*XST(j)`.
 6. `ttdh1`, `gamma_INV`, `gamma_GVT`, `B_XT` alignment fixed (formula/timing consistency).
 
+### Current Operational Status (Updated Feb 19, 2026)
+
+**Verified state now:**
+- ✅ `pep2` with `init_mode=equation_consistent` is numerically consistent at initialization (RMS residual around `1e-7`, max residual around `1e-6`).
+- ✅ Systemic parity pipeline now fails correctly when solve fails: `scripts/run_pep_systemic_parity.py` returns non-zero if `--method != none` and solve is not converged or solve gates fail.
+- ✅ Exit-code behavior validated with two runs:
+  - pass case: `output/exit_check_pass.json` -> exit `0`
+  - forced solve-fail case: `output/exit_check_fail_solve.json` -> exit `2`
+
+**Current problem to solve:**
+- ⚠️ Remaining instability is concentrated in **CRI data runs** and baseline alignment modes, not in the base `pep2` mirror equations.
+- ⚠️ `strict_gams` depends on the selected `Results.gdx` slice and can be near-feasible or inconsistent depending on whether that baseline is compatible with the calibrated SAM in the run.
+- ⚠️ Some CRI scenarios still show macro/GDP closure tension (`GDP_MP/GDP_IB` vs `GDP_FD`) driven by SAM consistency issues (not only solver settings).
+
+**Paths to solution (ordered):**
+1. **Data-consistency path (recommended first):**
+   - Add mandatory SAM QA gates before solve (exports/domestic supply, margins, tax-base consistency, macro closure checks).
+   - Reject or auto-fix inconsistent SAM mappings before calibration.
+2. **Initialization-parity path:**
+   - Complete full blockwise reconstruction of GAMS `.L` logic in Python for all endogenous levels.
+   - Keep `strict_gams` for direct GDX overlays and `equation_consistent`/`gams_blockwise` for identity-consistent starts.
+3. **Solver-robustness path:**
+   - Preserve safe CES/CET handling and tax-detail reconstruction during array<->variable transforms.
+   - Keep parity gates (`EQ29/EQ39/EQ40`, `EQ79/EQ84`, levels parity) as hard CI checks.
+
+**Execution guidance right now:**
+- Use `equation_consistent` as default for deterministic parity on `pep2`.
+- Use `strict_gams` only when the exact `Results.gdx` baseline is verified compatible with the run SAM.
+- For CRI, run SAM QA first and treat solver non-convergence as a data-structure warning, not immediately as equation mismatch.
+
 ### Implementation Summary
 
 All five phases of the PEP-1-1_v2_1 model calibration are now complete:
