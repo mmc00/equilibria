@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import copy
 import re
 import shutil
 import subprocess
@@ -29,7 +30,23 @@ from typing import Any, Callable, Literal, Optional, Tuple
 
 import numpy as np
 
+from equilibria.baseline.compatibility import (
+    BaselineCompatibilityReport,
+    evaluate_strict_gams_baseline_compatibility,
+)
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+from equilibria.blocks.equilibrium import PEPMacroClosureInit
+from equilibria.blocks.production import PEPProductionAccountingInit
+from equilibria.blocks.trade import (
+    PEPCommodityBalanceInit,
+    PEPTradeFlowInit,
+    PEPTradeMarketClearingInit,
+    PEPTradeTransformationInit,
+)
+from equilibria.core.sets import Set, SetManager
+from equilibria.solver.guards import rebuild_tax_detail_from_rates
+from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
+from equilibria.templates.init_strategies import build_init_strategy, normalize_init_mode
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
 
 logger = logging.getLogger(__name__)
@@ -234,481 +251,18 @@ class CGEProblem:
         Returns:
             PEPModelVariables instance
         """
-        vars = PEPModelVariables()
-        info = self.variable_info
-        
-        # Unpack variables based on variable_info mapping
-        idx = 0
-        
-        # Production variables
-        for j in self.sets.get("J", []):
-            if idx < len(x):
-                vars.WC[j] = max(0.1, x[idx])  # Keep positive
-                idx += 1
-            if idx < len(x):
-                vars.RC[j] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PP[j] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PT[j] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PVA[j] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PCI[j] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.XST[j] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.VA[j] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.CI[j] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.LDC[j] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.KDC[j] = max(0.0, x[idx])
-                idx += 1
-                
-            for l in self.sets.get("L", []):
-                if idx < len(x):
-                    vars.LD[(l, j)] = max(0.0, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.WTI[(l, j)] = max(0.1, x[idx])
-                    idx += 1
-                    
-            for k in self.sets.get("K", []):
-                if idx < len(x):
-                    vars.KD[(k, j)] = max(0.0, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.RTI[(k, j)] = max(0.1, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.R[(k, j)] = max(0.1, x[idx])
-                    idx += 1
-                    
-            for i in self.sets.get("I", []):
-                if idx < len(x):
-                    vars.DI[(i, j)] = max(0.0, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.XS[(j, i)] = max(0.0, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.DS[(j, i)] = max(0.0, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.EX[(j, i)] = max(0.0, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.P[(j, i)] = max(0.1, x[idx])
-                    idx += 1
-        
-        # Wages
-        for l in self.sets.get("L", []):
-            if idx < len(x):
-                vars.W[l] = max(0.1, x[idx])
-                idx += 1
-        for k in self.sets.get("K", []):
-            if idx < len(x):
-                vars.RK[k] = max(0.1, x[idx])
-                idx += 1
-        
-        # Price and trade variables
-        for i in self.sets.get("I", []):
-            if idx < len(x):
-                vars.PC[i] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PD[i] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PM[i] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PE[i] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PE_FOB[i] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PL[i] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.PWM[i] = max(0.1, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.IM[i] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.DD[i] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.Q[i] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.EXD[i] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.TIC[i] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.TIM[i] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.TIX[i] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.MRGN[i] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.DIT[i] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.INV[i] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.CG[i] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.VSTK[i] = x[idx]
-                idx += 1
-        
-        # Income variables
-        for h in self.sets.get("H", []):
-            if idx < len(x):
-                vars.YH[h] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.YHL[h] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.YHK[h] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.YHTR[h] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.YDH[h] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.CTH[h] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.SH[h] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.TDH[h] = x[idx]
-                idx += 1
-                
-            for i in self.sets.get("I", []):
-                if idx < len(x):
-                    vars.C[(i, h)] = max(0.0, x[idx])
-                    idx += 1
-                if idx < len(x):
-                    vars.CMIN[(i, h)] = max(0.0, x[idx])
-                    idx += 1
-                    
-        
-        for f in self.sets.get("F", []):
-            if idx < len(x):
-                vars.YF[f] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.YFK[f] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.YFTR[f] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.YDF[f] = max(0.0, x[idx])
-                idx += 1
-            if idx < len(x):
-                vars.SF[f] = x[idx]
-                idx += 1
-            if idx < len(x):
-                vars.TDF[f] = x[idx]
-                idx += 1
-                
-        # Full transfer matrix TR(ag,agj)
-        for ag in self.sets.get("AG", []):
-            for agj in self.sets.get("AG", []):
-                if idx < len(x):
-                    vars.TR[(ag, agj)] = x[idx]
-                    idx += 1
-        
-        # Government
-        if idx < len(x):
-            vars.YG = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.YGK = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TDHT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TDFT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TPRCTS = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TPRODN = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TIWT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TIKT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TIPT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TICT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TIMT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.TIXT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.YGTR = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.G = max(0.0, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.SG = x[idx]
-            idx += 1
-        
-        # ROW
-        if idx < len(x):
-            vars.YROW = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.SROW = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.CAB = x[idx]  # Can be negative
-            idx += 1
-        
-        # Investment
-        if idx < len(x):
-            vars.IT = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.GFCF = x[idx]
-            idx += 1
-        
-        # GDP
-        if idx < len(x):
-            vars.GDP_BP = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.GDP_MP = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.GDP_IB = x[idx]
-            idx += 1
-        if idx < len(x):
-            vars.GDP_FD = x[idx]
-            idx += 1
-        
-        # Price indices
-        if idx < len(x):
-            vars.PIXCON = max(0.1, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.PIXGDP = max(0.1, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.PIXGVT = max(0.1, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.PIXINV = max(0.1, x[idx])
-            idx += 1
-        
-        # Real variables
-        for h in self.sets.get("H", []):
-            if idx < len(x):
-                vars.CTH_REAL[h] = max(0.0, x[idx])
-                idx += 1
-        if idx < len(x):
-            vars.G_REAL = max(0.0, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.GDP_BP_REAL = max(0.0, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.GDP_MP_REAL = max(0.0, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.GFCF_REAL = max(0.0, x[idx])
-            idx += 1
-        if idx < len(x):
-            vars.LEON = x[idx]
-            idx += 1
-        
-        # Exchange rate
-        if idx < len(x):
-            vars.e = max(0.1, x[idx])
-            idx += 1
-        
+        vars = pep_array_to_variables(x, self.sets)
+        rebuild_tax_detail_from_rates(
+            vars=vars,
+            sets=self.sets,
+            params=self.equations.params,
+            include_tip=True,
+        )
         return vars
     
     def _variables_to_array(self, vars: PEPModelVariables) -> np.ndarray:
         """Convert PEPModelVariables to array."""
-        values = []
-        
-        # Production variables
-        for j in self.sets.get("J", []):
-            values.append(vars.WC.get(j, 1.0))
-            values.append(vars.RC.get(j, 1.0))
-            values.append(vars.PP.get(j, 1.0))
-            values.append(vars.PT.get(j, 1.0))
-            values.append(vars.PVA.get(j, 1.0))
-            values.append(vars.PCI.get(j, 1.0))
-            values.append(vars.XST.get(j, 0))
-            values.append(vars.VA.get(j, 0))
-            values.append(vars.CI.get(j, 0))
-            values.append(vars.LDC.get(j, 0))
-            values.append(vars.KDC.get(j, 0))
-            
-            for l in self.sets.get("L", []):
-                values.append(vars.LD.get((l, j), 0))
-                values.append(vars.WTI.get((l, j), 1.0))
-                
-            for k in self.sets.get("K", []):
-                values.append(vars.KD.get((k, j), 0))
-                values.append(vars.RTI.get((k, j), 1.0))
-                values.append(vars.R.get((k, j), 1.0))
-                
-            for i in self.sets.get("I", []):
-                values.append(vars.DI.get((i, j), 0))
-                values.append(vars.XS.get((j, i), 0))
-                values.append(vars.DS.get((j, i), 0))
-                values.append(vars.EX.get((j, i), 0))
-                values.append(vars.P.get((j, i), 1.0))
-        
-        # Wages
-        for l in self.sets.get("L", []):
-            values.append(vars.W.get(l, 1.0))
-        for k in self.sets.get("K", []):
-            values.append(vars.RK.get(k, 1.0))
-        
-        # Price and trade variables
-        for i in self.sets.get("I", []):
-            values.append(vars.PC.get(i, 1.0))
-            values.append(vars.PD.get(i, 1.0))
-            values.append(vars.PM.get(i, 1.0))
-            values.append(vars.PE.get(i, 1.0))
-            values.append(vars.PE_FOB.get(i, 1.0))
-            values.append(vars.PL.get(i, 1.0))
-            values.append(vars.PWM.get(i, 1.0))
-            values.append(vars.IM.get(i, 0))
-            values.append(vars.DD.get(i, 0))
-            values.append(vars.Q.get(i, 0))
-            values.append(vars.EXD.get(i, 0))
-            values.append(vars.TIC.get(i, 0))
-            values.append(vars.TIM.get(i, 0))
-            values.append(vars.TIX.get(i, 0))
-            values.append(vars.MRGN.get(i, 0))
-            values.append(vars.DIT.get(i, 0))
-            values.append(vars.INV.get(i, 0))
-            values.append(vars.CG.get(i, 0))
-            values.append(vars.VSTK.get(i, 0))
-        
-        # Income variables
-        for h in self.sets.get("H", []):
-            values.append(vars.YH.get(h, 0))
-            values.append(vars.YHL.get(h, 0))
-            values.append(vars.YHK.get(h, 0))
-            values.append(vars.YHTR.get(h, 0))
-            values.append(vars.YDH.get(h, 0))
-            values.append(vars.CTH.get(h, 0))
-            values.append(vars.SH.get(h, 0))
-            values.append(vars.TDH.get(h, 0))
-            
-            for i in self.sets.get("I", []):
-                values.append(vars.C.get((i, h), 0))
-                values.append(vars.CMIN.get((i, h), 0))
-                
-        
-        for f in self.sets.get("F", []):
-            values.append(vars.YF.get(f, 0))
-            values.append(vars.YFK.get(f, 0))
-            values.append(vars.YFTR.get(f, 0))
-            values.append(vars.YDF.get(f, 0))
-            values.append(vars.SF.get(f, 0))
-            values.append(vars.TDF.get(f, 0))
-            
-        # Full transfer matrix TR(ag,agj)
-        for ag in self.sets.get("AG", []):
-            for agj in self.sets.get("AG", []):
-                values.append(vars.TR.get((ag, agj), 0))
-        
-        # Government
-        values.append(vars.YG)
-        values.append(vars.YGK)
-        values.append(vars.TDHT)
-        values.append(vars.TDFT)
-        values.append(vars.TPRCTS)
-        values.append(vars.TPRODN)
-        values.append(vars.TIWT)
-        values.append(vars.TIKT)
-        values.append(vars.TIPT)
-        values.append(vars.TICT)
-        values.append(vars.TIMT)
-        values.append(vars.TIXT)
-        values.append(vars.YGTR)
-        values.append(vars.G)
-        values.append(vars.SG)
-        
-        # ROW
-        values.append(vars.YROW)
-        values.append(vars.SROW)
-        values.append(vars.CAB)
-        
-        # Investment
-        values.append(vars.IT)
-        values.append(vars.GFCF)
-        
-        # GDP
-        values.append(vars.GDP_BP)
-        values.append(vars.GDP_MP)
-        values.append(vars.GDP_IB)
-        values.append(vars.GDP_FD)
-        
-        # Price indices
-        values.append(vars.PIXCON)
-        values.append(vars.PIXGDP)
-        values.append(vars.PIXGVT)
-        values.append(vars.PIXINV)
-        
-        # Real variables
-        for h in self.sets.get("H", []):
-            values.append(vars.CTH_REAL.get(h, 0))
-        values.append(vars.G_REAL)
-        values.append(vars.GDP_BP_REAL)
-        values.append(vars.GDP_MP_REAL)
-        values.append(vars.GFCF_REAL)
-        values.append(vars.LEON)
-        
-        # Exchange rate
-        values.append(vars.e)
-        
-        return np.array(values)
+        return pep_variables_to_array(vars, self.sets)
 
 
 class IPOPTSolver:
@@ -719,9 +273,19 @@ class IPOPTSolver:
         calibrated_state: Any,
         tolerance: float = 1e-6,
         max_iterations: int = 100,
-        init_mode: Literal["strict_gams", "equation_consistent"] = "strict_gams",
+        init_mode: Literal["gams", "excel"] | str = "excel",
+        blockwise_commodity_alpha: float = 0.75,
+        blockwise_trade_market_alpha: float = 0.5,
+        blockwise_macro_alpha: float = 1.0,
         gams_results_gdx: Path | str | None = None,
         gams_results_slice: Literal["base", "sim1"] = "sim1",
+        baseline_manifest: Path | str | None = None,
+        require_baseline_manifest: bool = False,
+        baseline_compatibility_rel_tol: float = 1e-4,
+        enforce_strict_gams_baseline: bool = True,
+        sam_file: Path | str | None = None,
+        val_par_file: Path | str | None = None,
+        gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
     ):
         """Initialize the solver with calibrated model state.
         
@@ -733,9 +297,22 @@ class IPOPTSolver:
         self.state = calibrated_state
         self.tolerance = tolerance
         self.max_iterations = max_iterations
-        self.init_mode = init_mode
+        requested_init_mode = str(init_mode).strip().lower()
+        self.init_mode = normalize_init_mode(init_mode)
+        self.blockwise_commodity_alpha = blockwise_commodity_alpha
+        self.blockwise_trade_market_alpha = blockwise_trade_market_alpha
+        self.blockwise_macro_alpha = blockwise_macro_alpha
         self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx is not None else None
         self.gams_results_slice = gams_results_slice.lower()
+        self.baseline_manifest = Path(baseline_manifest) if baseline_manifest is not None else None
+        self.require_baseline_manifest = require_baseline_manifest
+        self.baseline_compatibility_rel_tol = baseline_compatibility_rel_tol
+        self.enforce_strict_gams_baseline = enforce_strict_gams_baseline
+        self.sam_file = Path(sam_file) if sam_file is not None else None
+        self.val_par_file = Path(val_par_file) if val_par_file is not None else None
+        self.gdxdump_bin = gdxdump_bin
+        self.strict_baseline_report: BaselineCompatibilityReport | None = None
+        self._strict_baseline_checked = False
         
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
@@ -748,11 +325,722 @@ class IPOPTSolver:
         logger.info(f"  Sets: {len(self.sets)} categories")
         logger.info(f"  Tolerance: {tolerance}")
         logger.info(f"  Max iterations: {max_iterations}")
-        logger.info(f"  Init mode: {init_mode}")
+        logger.info(f"  Init mode: {self.init_mode}")
+        if requested_init_mode != self.init_mode:
+            logger.info(
+                "  Init mode alias normalized: %s -> %s",
+                requested_init_mode,
+                self.init_mode,
+            )
         if self.gams_results_gdx is not None:
             logger.info(f"  GAMS levels: {self.gams_results_gdx}")
             logger.info(f"  GAMS slice: {self.gams_results_slice.upper()}")
-    
+        if self.baseline_manifest is not None:
+            logger.info(f"  Baseline manifest: {self.baseline_manifest}")
+
+    def _uses_excel_init(self) -> bool:
+        """Return True when running the calibrated SAM/Excel initialization path."""
+        return self.init_mode == "excel"
+
+    def _build_block_set_manager(self) -> SetManager:
+        """Build SetManager from calibrated set lists for block hooks."""
+        sm = SetManager()
+        for set_name, elems in self.sets.items():
+            try:
+                sm.add(Set(name=set_name, elements=tuple(str(e) for e in elems)))
+            except Exception:
+                continue
+        return sm
+
+    def _apply_trade_blockwise_flow(self, vars: PEPModelVariables) -> None:
+        """Apply trade blockwise init/validation (EQ57-EQ64)."""
+        block = PEPTradeFlowInit()
+        sm = self._build_block_set_manager()
+
+        params_block: dict[str, Any] = dict(self.params)
+        params_block.update(
+            {
+                "QO0": self.state.trade.get("QO", {}),
+                "DDO0": self.state.trade.get("DDO", {}),
+                "IMO0": self.state.trade.get("IMO", {}),
+                "EXDO0": self.state.trade.get("EXDO", {}),
+                "PCO0": self.state.trade.get("PCO", {}),
+                "PDO0": self.state.trade.get("PDO", {}),
+                "PMO0": self.state.trade.get("PMO", {}),
+                "MRGNO0": self.state.trade.get("MRGNO", {}),
+                "DITO0": self.state.production.get("DITO", {}),
+                "e": vars.e,
+            }
+        )
+
+        vars_block: dict[str, Any] = {
+            "Q": dict(vars.Q),
+            "DD": dict(vars.DD),
+            "IM": dict(vars.IM),
+            "EXD": dict(vars.EXD),
+            "PC": dict(vars.PC),
+            "PD": dict(vars.PD),
+            "PM": dict(vars.PM),
+            "MRGN": dict(vars.MRGN),
+            "DIT": dict(vars.DIT),
+            "DI": dict(vars.DI),
+            "XS": dict(vars.XS),
+            "XST": dict(vars.XST),
+            "DS": dict(vars.DS),
+            "EX": dict(vars.EX),
+            "P": dict(vars.P),
+            "PT": dict(vars.PT),
+            "PE": dict(vars.PE),
+            "PL": dict(vars.PL),
+            "PWM": dict(vars.PWM),
+            "PE_FOB": dict(vars.PE_FOB),
+        }
+
+        block.initialize_levels(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+            mode="gams_blockwise",
+        )
+
+        vars.Q.update(vars_block.get("Q", {}))
+        vars.DD.update(vars_block.get("DD", {}))
+        vars.IM.update(vars_block.get("IM", {}))
+        vars.EXD.update(vars_block.get("EXD", {}))
+        vars.PC.update(vars_block.get("PC", {}))
+        vars.PD.update(vars_block.get("PD", {}))
+        vars.PM.update(vars_block.get("PM", {}))
+        vars.MRGN.update(vars_block.get("MRGN", {}))
+        vars.DIT.update(vars_block.get("DIT", {}))
+
+        diagnostics = block.validate_initialization(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+        )
+        if diagnostics:
+            max_abs = max(abs(v) for v in diagnostics.values())
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            logger.info(
+                "gams_blockwise trade residuals: max=%0.6e | %s",
+                max_abs,
+                ", ".join(f"{k}={v:.3e}" for k, v in top),
+            )
+
+    def _apply_trade_blockwise_transformation(self, vars: PEPModelVariables) -> None:
+        """Apply trade transformation blockwise init/validation (EQ58-EQ59)."""
+        block = PEPTradeTransformationInit()
+        sm = self._build_block_set_manager()
+
+        params_block: dict[str, Any] = dict(self.params)
+        vars_block: dict[str, Any] = {
+            "XS": dict(vars.XS),
+            "XST": dict(vars.XST),
+            "P": dict(vars.P),
+            "PT": dict(vars.PT),
+        }
+
+        block.initialize_levels(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+            mode="gams_blockwise",
+        )
+        vars.XST.update(vars_block.get("XST", {}))
+
+        diagnostics = block.validate_initialization(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+        )
+        if diagnostics:
+            max_abs = max(abs(v) for v in diagnostics.values())
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            logger.info(
+                "gams_blockwise transformation residuals: max=%0.6e | %s",
+                max_abs,
+                ", ".join(f"{k}={v:.3e}" for k, v in top),
+            )
+
+    def _apply_production_blockwise_accounting(self, vars: PEPModelVariables) -> None:
+        """Apply production accounting blockwise init/validation (EQ2/EQ65-EQ67)."""
+        block = PEPProductionAccountingInit()
+        sm = self._build_block_set_manager()
+
+        params_block: dict[str, Any] = dict(self.params)
+        vars_block: dict[str, Any] = {
+            "XST": dict(vars.XST),
+            "CI": dict(vars.CI),
+            "PP": dict(vars.PP),
+            "PT": dict(vars.PT),
+            "PCI": dict(vars.PCI),
+            "PVA": dict(vars.PVA),
+            "VA": dict(vars.VA),
+            "DI": dict(vars.DI),
+            "DIT": dict(vars.DIT),
+            "PC": dict(vars.PC),
+        }
+
+        block.initialize_levels(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+            mode="gams_blockwise",
+        )
+
+        vars.XST.update(vars_block.get("XST", {}))
+        vars.CI.update(vars_block.get("CI", {}))
+        vars.PP.update(vars_block.get("PP", {}))
+        vars.PT.update(vars_block.get("PT", {}))
+        vars.PCI.update(vars_block.get("PCI", {}))
+        vars.DI.update(vars_block.get("DI", {}))
+        vars.DIT.update(vars_block.get("DIT", {}))
+
+        # Keep production-tax aggregates aligned with updated unit costs.
+        for j in self.sets.get("J", []):
+            ttip = self.params.get("ttip", {}).get(j, 0.0)
+            vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
+        vars.TIPT = sum(vars.TIP.values())
+        vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
+        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        vars.SG = vars.YG - tr_to_govt - vars.G
+
+        diagnostics = block.validate_initialization(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+        )
+        if diagnostics:
+            max_abs = max(abs(v) for v in diagnostics.values())
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            logger.info(
+                "gams_blockwise production residuals: max=%0.6e | %s",
+                max_abs,
+                ", ".join(f"{k}={v:.3e}" for k, v in top),
+            )
+
+    def _apply_commodity_balance_blockwise(self, vars: PEPModelVariables) -> None:
+        """Apply commodity balance blockwise init/validation (EQ57/EQ63/EQ79/EQ84)."""
+        block = PEPCommodityBalanceInit()
+        sm = self._build_block_set_manager()
+
+        params_block: dict[str, Any] = dict(self.params)
+        vars_block: dict[str, Any] = {
+            "Q": dict(vars.Q),
+            "DD": dict(vars.DD),
+            "IM": dict(vars.IM),
+            "EXD": dict(vars.EXD),
+            "PC": dict(vars.PC),
+            "PD": dict(vars.PD),
+            "PM": dict(vars.PM),
+            "MRGN": dict(vars.MRGN),
+            "C": dict(vars.C),
+            "CG": dict(vars.CG),
+            "INV": dict(vars.INV),
+            "VSTK": dict(vars.VSTK),
+            "DIT": dict(vars.DIT),
+        }
+
+        block.initialize_levels(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+            mode="gams_blockwise",
+        )
+
+        alpha = max(0.0, min(1.0, float(self.blockwise_commodity_alpha)))
+        for name, target in (
+            ("Q", vars.Q),
+            ("DD", vars.DD),
+            ("IM", vars.IM),
+            ("EXD", vars.EXD),
+            ("MRGN", vars.MRGN),
+        ):
+            updated = vars_block.get(name, {})
+            for k, v_new in updated.items():
+                v_old = target.get(k, 0.0)
+                target[k] = (1.0 - alpha) * v_old + alpha * float(v_new)
+
+        diagnostics = block.validate_initialization(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+        )
+        if diagnostics:
+            max_abs = max(abs(v) for v in diagnostics.values())
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:8]
+            logger.info(
+                "gams_blockwise commodity residuals (alpha=%0.2f): max=%0.6e | %s",
+                alpha,
+                max_abs,
+                ", ".join(f"{k}={v:.3e}" for k, v in top),
+            )
+
+    def _apply_trade_market_clearing_blockwise(self, vars: PEPModelVariables) -> None:
+        """Apply trade market-clearing blockwise init/validation (EQ64/EQ88)."""
+        block = PEPTradeMarketClearingInit()
+        sm = self._build_block_set_manager()
+
+        params_block: dict[str, Any] = dict(self.params)
+        params_block["trade_market_alpha"] = float(self.blockwise_trade_market_alpha)
+        vars_block: dict[str, Any] = {
+            "DS": dict(vars.DS),
+            "DD": dict(vars.DD),
+            "IM": dict(vars.IM),
+            "PD": dict(vars.PD),
+            "PM": dict(vars.PM),
+        }
+
+        block.initialize_levels(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+            mode="gams_blockwise",
+        )
+
+        vars.DD.update(vars_block.get("DD", {}))
+        vars.IM.update(vars_block.get("IM", {}))
+
+        diagnostics = block.validate_initialization(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+        )
+        if diagnostics:
+            max_abs = max(abs(v) for v in diagnostics.values())
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:8]
+            logger.info(
+                "gams_blockwise market residuals (alpha=%0.2f): max=%0.6e | %s",
+                float(self.blockwise_trade_market_alpha),
+                max_abs,
+                ", ".join(f"{k}={v:.3e}" for k, v in top),
+            )
+
+    def _apply_macro_closure_blockwise(self, vars: PEPModelVariables) -> None:
+        """Apply macro closure blockwise init/validation (EQ44/EQ45/EQ46/EQ87/EQ93)."""
+        block = PEPMacroClosureInit()
+        sm = self._build_block_set_manager()
+
+        params_block: dict[str, Any] = dict(self.params)
+        params_block["macro_alpha"] = float(self.blockwise_macro_alpha)
+        vars_block: dict[str, Any] = {
+            "PWM": dict(vars.PWM),
+            "IM": dict(vars.IM),
+            "R": dict(vars.R),
+            "KD": dict(vars.KD),
+            "TR": dict(vars.TR),
+            "PE_FOB": dict(vars.PE_FOB),
+            "EXD": dict(vars.EXD),
+            "SH": dict(vars.SH),
+            "SF": dict(vars.SF),
+            "PC": dict(vars.PC),
+            "C": dict(vars.C),
+            "CG": dict(vars.CG),
+            "INV": dict(vars.INV),
+            "VSTK": dict(vars.VSTK),
+            "e": vars.e,
+            "YROW": vars.YROW,
+            "SROW": vars.SROW,
+            "CAB": vars.CAB,
+            "IT": vars.IT,
+            "GFCF": vars.GFCF,
+            "GDP_FD": vars.GDP_FD,
+            "SG": vars.SG,
+        }
+
+        block.initialize_levels(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+            mode="gams_blockwise",
+        )
+
+        vars.YROW = float(vars_block.get("YROW", vars.YROW))
+        vars.SROW = float(vars_block.get("SROW", vars.SROW))
+        vars.CAB = float(vars_block.get("CAB", vars.CAB))
+        vars.IT = float(vars_block.get("IT", vars.IT))
+        vars.GFCF = float(vars_block.get("GFCF", vars.GFCF))
+        vars.GDP_FD = float(vars_block.get("GDP_FD", vars.GDP_FD))
+
+        diagnostics = block.validate_initialization(
+            set_manager=sm,
+            parameters=params_block,
+            variables=vars_block,
+        )
+        if diagnostics:
+            max_abs = max(abs(v) for v in diagnostics.values())
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            logger.info(
+                "gams_blockwise macro residuals (alpha=%0.2f): max=%0.6e | %s",
+                float(self.blockwise_macro_alpha),
+                max_abs,
+                ", ".join(f"{k}={v:.3e}" for k, v in top),
+            )
+
+    def _reconcile_tax_identities(self, vars: PEPModelVariables) -> None:
+        """Recompute tax-payment variables from current prices/quantities."""
+        for j in self.sets.get("J", []):
+            ttip = self.params.get("ttip", {}).get(j, 0.0)
+            vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
+        vars.TIPT = sum(vars.TIP.values())
+
+        for i in self.sets.get("I", []):
+            ttic = self.params.get("ttic", {}).get(i, 0.0)
+            denom = 1.0 + ttic
+            if abs(denom) < 1e-12:
+                vars.TIC[i] = 0.0
+            else:
+                vars.TIC[i] = (ttic / denom) * (
+                    vars.PD.get(i, 0.0) * vars.DD.get(i, 0.0)
+                    + vars.PM.get(i, 0.0) * vars.IM.get(i, 0.0)
+                )
+
+            ttim = self.params.get("ttim", {}).get(i, 0.0)
+            vars.TIM[i] = ttim * vars.e * vars.PWM.get(i, 1.0) * vars.IM.get(i, 0.0)
+
+            ttix = self.params.get("ttix", {}).get(i, 0.0)
+            margin_sum = sum(
+                vars.PC.get(ij, 1.0) * self.params.get("tmrg_X", {}).get((ij, i), 0.0)
+                for ij in self.sets.get("I", [])
+            )
+            vars.TIX[i] = ttix * (vars.PE.get(i, 0.0) + margin_sum) * vars.EXD.get(i, 0.0)
+
+        vars.TICT = sum(vars.TIC.values())
+        vars.TIMT = sum(vars.TIM.values())
+        vars.TIXT = sum(vars.TIX.values())
+        vars.TPRCTS = vars.TICT + vars.TIMT + vars.TIXT
+        vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
+        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        vars.SG = vars.YG - tr_to_govt - vars.G
+
+    def _recompute_gdp_aggregates(self, vars: PEPModelVariables) -> None:
+        """Recompute GDP aggregate identities from current levels."""
+        vars.GDP_BP = sum(
+            vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0) for j in self.sets.get("J", [])
+        ) + vars.TIPT
+        vars.GDP_MP = vars.GDP_BP + vars.TPRCTS
+
+        gdp_ib = 0.0
+        for l in self.sets.get("L", []):
+            for j in self.sets.get("J", []):
+                gdp_ib += vars.W.get(l, 1.0) * vars.LD.get((l, j), 0.0)
+        for k in self.sets.get("K", []):
+            for j in self.sets.get("J", []):
+                gdp_ib += vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0.0)
+        gdp_ib += vars.TPRODN + vars.TPRCTS
+        vars.GDP_IB = gdp_ib
+
+        gdp_fd = 0.0
+        for i in self.sets.get("I", []):
+            cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
+            gdp_fd += vars.PC.get(i, 0.0) * (
+                cons_i + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0)
+            )
+            gdp_fd += vars.PE_FOB.get(i, 0.0) * vars.EXD.get(i, 0.0)
+            gdp_fd -= vars.PWM.get(i, 0.0) * vars.e * vars.IM.get(i, 0.0)
+        vars.GDP_FD = gdp_fd
+
+    def _reconcile_composite_prices(self, vars: PEPModelVariables) -> None:
+        """Recompute PC(i) from EQ79 after DD/IM updates."""
+        imo0 = self.params.get("IMO0", {})
+        ddo0 = self.params.get("DDO0", {})
+        for i in self.sets.get("I", []):
+            q_i = float(vars.Q.get(i, 0.0))
+            if abs(q_i) <= 1e-12:
+                continue
+            rhs = 0.0
+            if abs(float(imo0.get(i, 0.0))) > 1e-12:
+                rhs += float(vars.PM.get(i, 0.0)) * float(vars.IM.get(i, 0.0))
+            if abs(float(ddo0.get(i, 0.0))) > 1e-12:
+                rhs += float(vars.PD.get(i, 0.0)) * float(vars.DD.get(i, 0.0))
+            vars.PC[i] = rhs / q_i
+
+    @staticmethod
+    def _coupled_trade_score(residuals: dict[str, float]) -> float:
+        """Weighted score for coupled trade block (lower is better)."""
+        keys = [
+            k for k in residuals
+            if k.startswith("EQ63_") or k.startswith("EQ64_") or k.startswith("EQ84_") or k.startswith("EQ88_")
+        ]
+        if not keys:
+            return 0.0
+        return float(sum(residuals[k] ** 2 for k in keys))
+
+    @staticmethod
+    def _residual_rms_max(residuals: dict[str, float]) -> tuple[float, float]:
+        vals = np.array(list(residuals.values()), dtype=float)
+        if vals.size == 0:
+            return 0.0, 0.0
+        rms = float(np.sqrt(np.mean(vals ** 2)))
+        mx = float(np.max(np.abs(vals)))
+        return rms, mx
+
+    @staticmethod
+    def _focus_blockwise_residuals(residuals: dict[str, float]) -> dict[str, float]:
+        """Subset of residuals that drive blockwise pre-solve stabilization."""
+        selected: dict[str, float] = {}
+        scalar_keys = {"EQ44", "EQ45", "EQ46", "EQ87", "EQ93"}
+        prefixes = ("EQ57_", "EQ63_", "EQ64_", "EQ79_", "EQ84_", "EQ88_")
+        for key, value in residuals.items():
+            if key in scalar_keys or key.startswith(prefixes):
+                selected[key] = value
+        return selected
+
+    def _apply_gams_blockwise_presolve(self, vars: PEPModelVariables) -> None:
+        """
+        Run iterative GAMS-style blockwise reconciliation before IPOPT.
+
+        This mirrors the block sequence used in GAMS-oriented initialization and
+        avoids jumping straight from raw calibrated levels to nonlinear solve.
+        """
+        max_passes = 8
+        target_focus_max = 1e-3
+        target_overall_max = 1e-3
+        improve_ratio = 0.995  # require at least 0.5% score improvement
+        stale_limit = 2
+
+        prev_score = float("inf")
+        stale = 0
+
+        for step in range(1, max_passes + 1):
+            self._apply_trade_blockwise_flow(vars)
+            self._apply_trade_blockwise_transformation(vars)
+            self._apply_production_blockwise_accounting(vars)
+            self._apply_commodity_balance_blockwise(vars)
+            self._apply_trade_market_clearing_blockwise(vars)
+            self._attempt_coupled_trade_reconciliation(vars)
+            self._reconcile_composite_prices(vars)
+            self._reconcile_tax_identities(vars)
+            self._apply_macro_closure_blockwise(vars)
+            self._recompute_gdp_aggregates(vars)
+
+            residuals = self.equations.calculate_all_residuals(vars)
+            overall_rms, overall_max = self._residual_rms_max(residuals)
+            focus = self._focus_blockwise_residuals(residuals)
+            focus_rms, focus_max = self._residual_rms_max(focus)
+            score = self._coupled_trade_score(residuals)
+
+            logger.info(
+                "gams_blockwise presolve pass %d/%d: focus_rms=%0.6e focus_max=%0.6e | overall_rms=%0.6e overall_max=%0.6e",
+                step,
+                max_passes,
+                focus_rms,
+                focus_max,
+                overall_rms,
+                overall_max,
+            )
+
+            if focus_max <= target_focus_max and overall_max <= target_overall_max:
+                logger.info("gams_blockwise presolve reached practical residual target")
+                break
+
+            if score < prev_score * improve_ratio:
+                prev_score = score
+                stale = 0
+            else:
+                stale += 1
+                if stale >= stale_limit:
+                    logger.info(
+                        "gams_blockwise presolve stopped after %d stale passes (no meaningful improvement)",
+                        stale,
+                    )
+                    break
+
+    def _attempt_coupled_trade_reconciliation(self, vars: PEPModelVariables) -> bool:
+        """
+        Try to reduce EQ63/EQ64/EQ84/EQ88 jointly; keep only if score improves.
+        """
+        baseline = copy.deepcopy(vars)
+        res0 = self.equations.calculate_all_residuals(vars)
+        score0 = self._coupled_trade_score(res0)
+        rms0, max0 = self._residual_rms_max(res0)
+
+        I = list(self.sets.get("I", []))
+        J = list(self.sets.get("J", []))
+        H = list(self.sets.get("H", []))
+        ddo0 = self.params.get("DDO0", {})
+        imo0 = self.params.get("IMO0", {})
+        dso0 = self.params.get("DSO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
+        beta_m = self.params.get("beta_M", {})
+        sigma_m = self.params.get("sigma_M", {})
+        rho_m = self.params.get("rho_M", {})
+        b_m = self.params.get("B_M", {})
+        tmrg = self.params.get("tmrg", {})
+        tmrg_x = self.params.get("tmrg_X", {})
+
+        def _im_from64(i: str, dd: float) -> float:
+            if abs(float(imo0.get(i, 0.0))) <= 1e-12 or abs(float(ddo0.get(i, 0.0))) <= 1e-12:
+                return max(0.0, float(vars.IM.get(i, 0.0)))
+            beta = float(beta_m.get(i, 0.0))
+            sig = float(sigma_m.get(i, 2.0))
+            pd = float(vars.PD.get(i, 0.0))
+            pm = float(vars.PM.get(i, 0.0))
+            if beta <= 0.0 or beta >= 1.0 or pd <= 0.0 or pm <= 0.0:
+                return max(0.0, float(vars.IM.get(i, 0.0)))
+            ratio = (beta / (1.0 - beta)) * (pd / pm)
+            if ratio <= 0.0:
+                return max(0.0, float(vars.IM.get(i, 0.0)))
+            return max(0.0, float((ratio ** sig) * dd))
+
+        def _q_from63(i: str, dd: float, im: float) -> float:
+            rho = float(rho_m.get(i, -0.5))
+            b = float(b_m.get(i, 1.0))
+            beta = float(beta_m.get(i, 0.5))
+            if abs(rho) <= 1e-12 or b <= 0.0:
+                return max(0.0, float(vars.Q.get(i, 0.0)))
+            term = 0.0
+            if abs(float(imo0.get(i, 0.0))) > 1e-12 and im > 0.0:
+                term += beta * (im ** (-rho))
+            if abs(float(ddo0.get(i, 0.0))) > 1e-12 and dd > 0.0:
+                term += (1.0 - beta) * (dd ** (-rho))
+            if term <= 0.0:
+                return 0.0
+            try:
+                q = b * (term ** (-1.0 / rho))
+            except Exception:
+                q = float(vars.Q.get(i, 0.0))
+            return max(0.0, float(q))
+
+        def _recompute_mrgn() -> None:
+            for i in I:
+                m = 0.0
+                for ij in I:
+                    t = float(tmrg.get((i, ij), 0.0))
+                    if abs(float(ddo0.get(ij, 0.0))) > 1e-12:
+                        m += t * float(vars.DD.get(ij, 0.0))
+                    if abs(float(imo0.get(ij, 0.0))) > 1e-12:
+                        m += t * float(vars.IM.get(ij, 0.0))
+                    if abs(float(exdo0.get(ij, 0.0))) > 1e-12:
+                        m += float(tmrg_x.get((i, ij), 0.0)) * float(vars.EXD.get(ij, 0.0))
+                vars.MRGN[i] = m
+
+        # Freeze DD from EQ88 supply as requested.
+        dd_fixed: dict[str, float] = {}
+        for i in I:
+            if abs(float(ddo0.get(i, 0.0))) > 1e-12:
+                dd_fixed[i] = sum(
+                    float(vars.DS.get((j, i), 0.0))
+                    for j in J
+                    if abs(float(dso0.get((j, i), 0.0))) > 1e-12
+                )
+                vars.DD[i] = max(0.0, dd_fixed[i])
+
+        # Weights for local coupled objective.
+        w63 = 1.0
+        w84 = 1.0
+        w64 = 0.05
+
+        for _ in range(3):
+            _recompute_mrgn()
+            for i in I:
+                has_dd = abs(float(ddo0.get(i, 0.0))) > 1e-12
+                has_im = abs(float(imo0.get(i, 0.0))) > 1e-12
+                dd_i = max(0.0, float(vars.DD.get(i, 0.0))) if has_dd else 0.0
+
+                q84 = max(
+                    0.0,
+                    sum(float(vars.C.get((i, h), 0.0)) for h in H)
+                    + float(vars.CG.get(i, 0.0))
+                    + float(vars.INV.get(i, 0.0))
+                    + float(vars.VSTK.get(i, 0.0))
+                    + float(vars.DIT.get(i, 0.0))
+                    + float(vars.MRGN.get(i, 0.0)),
+                )
+
+                # If only domestic source, just balance Q between EQ63 and EQ84.
+                if has_dd and not has_im:
+                    q63 = _q_from63(i, dd_i, 0.0)
+                    vars.IM[i] = 0.0
+                    vars.Q[i] = (w63 * q63 + w84 * q84) / (w63 + w84)
+                    continue
+
+                # If only imports source, optimize IM around current value.
+                if has_im and not has_dd:
+                    im_cur = max(0.0, float(vars.IM.get(i, 0.0)))
+                    lo = max(1e-8, 0.25 * max(1.0, im_cur))
+                    hi = 1.75 * max(1.0, im_cur)
+                    best_im = im_cur
+                    best_obj = float("inf")
+                    for k in range(41):
+                        im_try = lo + (hi - lo) * (k / 40.0)
+                        q63 = _q_from63(i, 0.0, im_try)
+                        q_try = (w63 * q63 + w84 * q84) / (w63 + w84)
+                        obj = w63 * (q_try - q63) ** 2 + w84 * (q_try - q84) ** 2
+                        if obj < best_obj:
+                            best_obj = obj
+                            best_im = im_try
+                    q63 = _q_from63(i, 0.0, best_im)
+                    vars.IM[i] = best_im
+                    vars.Q[i] = (w63 * q63 + w84 * q84) / (w63 + w84)
+                    continue
+
+                # No domestic/import market for this commodity.
+                if not has_dd and not has_im:
+                    vars.IM[i] = 0.0
+                    vars.Q[i] = q84
+                    continue
+
+                # Main case: DD fixed from EQ88, optimize IM to balance EQ63+EQ84,
+                # with soft anchor to EQ64 reference.
+                im64_ref = _im_from64(i, dd_i)
+                im_cur = max(0.0, float(vars.IM.get(i, im64_ref)))
+                lo = max(1e-8, 0.25 * max(1.0, im64_ref, im_cur))
+                hi = 1.75 * max(1.0, im64_ref, im_cur)
+                best_im = im_cur
+                best_obj = float("inf")
+                for k in range(61):
+                    im_try = lo + (hi - lo) * (k / 60.0)
+                    q63 = _q_from63(i, dd_i, im_try)
+                    q_try = (w63 * q63 + w84 * q84) / (w63 + w84)
+                    eq64_pen = (im_try - im64_ref) / (abs(im64_ref) + 1.0)
+                    obj = (
+                        w63 * (q_try - q63) ** 2
+                        + w84 * (q_try - q84) ** 2
+                        + w64 * (eq64_pen ** 2)
+                    )
+                    if obj < best_obj:
+                        best_obj = obj
+                        best_im = im_try
+                q63 = _q_from63(i, dd_i, best_im)
+                vars.IM[i] = best_im
+                vars.Q[i] = (w63 * q63 + w84 * q84) / (w63 + w84)
+
+        # Keep EQ79 aligned after DD/IM/Q changes.
+        self._reconcile_composite_prices(vars)
+        _recompute_mrgn()
+
+        res1 = self.equations.calculate_all_residuals(vars)
+        score1 = self._coupled_trade_score(res1)
+        rms1, max1 = self._residual_rms_max(res1)
+        if score1 <= 0.99 * score0 and rms1 <= rms0 and max1 <= max0:
+            logger.info(
+                "coupled-trade AB accepted: score %.6e -> %.6e | rms %.6e -> %.6e | max %.6e -> %.6e",
+                score0,
+                score1,
+                rms0,
+                rms1,
+                max0,
+                max1,
+            )
+            return True
+
+        # Revert if no meaningful improvement.
+        vars.__dict__.clear()
+        vars.__dict__.update(copy.deepcopy(baseline.__dict__))
+        logger.info(
+            "coupled-trade AB rejected: score %.6e -> %.6e | rms %.6e -> %.6e | max %.6e -> %.6e (reverted)",
+            score0,
+            score1,
+            rms0,
+            rms1,
+            max0,
+            max1,
+        )
+        return False
+
     def _extract_parameters(self, state: Any) -> dict[str, Any]:
         """Extract all calibrated parameters from model state."""
         params = {}
@@ -935,20 +1223,15 @@ class IPOPTSolver:
             params.setdefault("beta_VA", {}).setdefault(j, 1.0)
             params.setdefault("B_VA", {}).setdefault(j, 1.0)
 
-        # Recompute intermediate-use coefficients with benchmark PCO and trade XSO.
+        # Recompute intermediate-use coefficients with trade-consistent XSO.
+        # DIO in calibrated state is already in quantity units (deflated by PCO).
         dio_raw = state.production.get("DIO", {})
-        pco = state.trade.get("PCO", {})
         vao = state.production.get("VAO", {})
         xso = state.trade.get("XSO", {})
         I = state.sets.get("I", [])
         J = state.sets.get("J", [])
 
-        dio_q: dict[tuple[str, str], float] = {}
-        for i in I:
-            p_i = pco.get(i, 1.0)
-            for j in J:
-                val = dio_raw.get((i, j), 0.0)
-                dio_q[(i, j)] = (val / p_i) if abs(p_i) > 1e-12 else 0.0
+        dio_q: dict[tuple[str, str], float] = dict(dio_raw)
 
         ci_q = {j: sum(dio_q.get((i, j), 0.0) for i in I) for j in J}
         xst_q = {j: sum(xso.get((j, i), 0.0) for i in I) for j in J}
@@ -1019,19 +1302,13 @@ class IPOPTSolver:
         for k in self.sets.get("K", []):
             vars.RK[k] = 1.0
 
-        # Initialize tax-payment matrices from rate equations (TIWO/TIKO may be absent
-        # in calibration output depending on phase configuration).
-        for l in self.sets.get("L", []):
-            for j in self.sets.get("J", []):
-                key = (l, j)
-                ttiw = self.params.get("ttiw", {}).get(key, 0.0)
-                vars.TIW[key] = ttiw * vars.W.get(l, 1.0) * vars.LD.get(key, 0.0)
-
-        for k in self.sets.get("K", []):
-            for j in self.sets.get("J", []):
-                key = (k, j)
-                ttik = self.params.get("ttik", {}).get(key, 0.0)
-                vars.TIK[key] = ttik * vars.R.get(key, 1.0) * vars.KD.get(key, 0.0)
+        # Initialize detailed factor-tax payments from policy rates.
+        rebuild_tax_detail_from_rates(
+            vars=vars,
+            sets=self.sets,
+            params=self.params,
+            include_tip=False,
+        )
         
         # Income variables
         for h in self.sets.get("H", []):
@@ -1103,30 +1380,7 @@ class IPOPTSolver:
                 vars.C[(i, h)] = state.consumption.get("CO", {}).get((i, h), 0)
                 vars.CMIN[(i, h)] = state.les_parameters.get("CMINO", {}).get((i, h), 0)
 
-        # Keep calibrated *O values as benchmark levels. Any identity-based
-        # recomputation is applied only in equation_consistent mode.
-        if self.init_mode == "equation_consistent":
-            for j in self.sets.get("J", []):
-                vars.CI[j] = sum(vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
-                ci_j = vars.CI.get(j, 0.0)
-                if abs(ci_j) > 1e-12:
-                    vars.PCI[j] = (
-                        sum(vars.PC.get(i, 1.0) * vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
-                        / ci_j
-                    )
-            for i in self.sets.get("I", []):
-                vars.DIT[i] = sum(vars.DI.get((i, j), 0.0) for j in self.sets.get("J", []))
-            for j in self.sets.get("J", []):
-                vars.XST[j] = sum(vars.XS.get((j, i), 0.0) for i in self.sets.get("I", []))
-                xst_j = vars.XST.get(j, 0.0)
-                if abs(xst_j) > 1e-12:
-                    vars.PP[j] = (
-                        vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0) + vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
-                    ) / xst_j
-                vars.PT[j] = (1.0 + self.params.get("ttip", {}).get(j, 0.0)) * vars.PP.get(j, 0.0)
-                ttip = self.params.get("ttip", {}).get(j, 0.0)
-                vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
-            vars.G = sum(vars.PC.get(i, 1.0) * vars.CG.get(i, 0.0) for i in self.sets.get("I", []))
+        # Keep calibrated *O values as benchmark levels.
 
         # Initialize trade margin demand from calibrated flows (EQ57 identity)
         for i in self.sets.get("I", []):
@@ -1224,29 +1478,12 @@ class IPOPTSolver:
         vars.ttiw = dict(self.params.get("ttiw", {}))
         vars.ttik = dict(self.params.get("ttik", {}))
 
-        if self.init_mode == "strict_gams":
-            self._overlay_with_gams_levels(vars)
-            self._sync_lambda_tr_from_levels(vars)
-            self._sync_policy_params_from_vars(vars)
-            walras_i = "agr" if "agr" in self.sets.get("I", []) else (self.sets.get("I", [None])[0])
-            if walras_i is not None:
-                vars.LEON = (
-                    vars.Q.get(walras_i, 0.0)
-                    - sum(vars.C.get((walras_i, h), 0.0) for h in self.sets.get("H", []))
-                    - vars.CG.get(walras_i, 0.0)
-                    - vars.INV.get(walras_i, 0.0)
-                    - vars.VSTK.get(walras_i, 0.0)
-                    - vars.DIT.get(walras_i, 0.0)
-                    - vars.MRGN.get(walras_i, 0.0)
-                )
-
-        if self.init_mode == "equation_consistent":
-            self._apply_equation_consistent_adjustments(vars)
+        build_init_strategy(self.init_mode).apply(self, vars)
         
         return vars
 
     def _sync_policy_params_from_vars(self, vars: PEPModelVariables) -> None:
-        """Keep parameter maps aligned with strict_gams loaded policy levels."""
+        """Keep parameter maps aligned with loaded policy levels."""
         for name in (
             "sh0",
             "sh1",
@@ -1268,7 +1505,7 @@ class IPOPTSolver:
                 self.params[name] = dict(v)
 
     def _sync_lambda_tr_from_levels(self, vars: PEPModelVariables) -> None:
-        """Align lambda_TR with loaded strict_gams levels (avoids rounding drift)."""
+        """Align lambda_TR with loaded levels (avoids rounding drift)."""
         lam_h = dict(self.params.get("lambda_TR_households", {}))
         lam_f = dict(self.params.get("lambda_TR_firms", {}))
         for h in self.sets.get("H", []):
@@ -1294,7 +1531,7 @@ class IPOPTSolver:
             self.params["lambda_TR"] = lam
 
     def _resolve_gams_levels_path(self) -> Path | None:
-        """Resolve GAMS Results.gdx used to initialize strict_gams levels."""
+        """Resolve GAMS Results.gdx used to initialize gams levels."""
         candidates: list[Path] = []
         if self.gams_results_gdx is not None:
             candidates.append(self.gams_results_gdx)
@@ -1309,11 +1546,47 @@ class IPOPTSolver:
                 return c
         return None
 
+    def _ensure_strict_gams_baseline_compatibility(self) -> None:
+        """Validate gams baseline compatibility once per solver instance."""
+        if self._strict_baseline_checked:
+            if self.enforce_strict_gams_baseline and self.strict_baseline_report is not None:
+                if not self.strict_baseline_report.passed:
+                    raise RuntimeError(self.strict_baseline_report.summary())
+            return
+
+        self._strict_baseline_checked = True
+        if self.init_mode != "gams" or not self.enforce_strict_gams_baseline:
+            return
+
+        gdx_path = self._resolve_gams_levels_path()
+        if gdx_path is None:
+            raise RuntimeError("gams baseline check failed: no Results.gdx found")
+
+        report = evaluate_strict_gams_baseline_compatibility(
+            state=self.state,
+            results_gdx=gdx_path,
+            gams_slice=self.gams_results_slice,
+            manifest_path=self.baseline_manifest,
+            sam_file=self.sam_file,
+            val_par_file=self.val_par_file,
+            rel_tol=self.baseline_compatibility_rel_tol,
+            gdxdump_bin=self.gdxdump_bin,
+            require_manifest=self.require_baseline_manifest,
+        )
+        self.strict_baseline_report = report
+        if report.passed:
+            logger.info("gams baseline compatibility passed")
+            return
+
+        failures = [c for c in report.checks if not c.passed][:8]
+        detail = "; ".join(f"{c.code}: {c.message}" for c in failures)
+        raise RuntimeError(f"{report.summary()} | {detail}")
+
     def _overlay_with_gams_levels(self, vars: PEPModelVariables) -> None:
         """Overlay initial guess with BASE levels from GAMS Results.gdx."""
         gdx_path = self._resolve_gams_levels_path()
         if gdx_path is None:
-            logger.warning("strict_gams requested but no Results.gdx found; using calibrated initial guess")
+            logger.warning("gams init requested but no Results.gdx found; using calibrated initial guess")
             return
 
         try:
@@ -1385,21 +1658,231 @@ class IPOPTSolver:
                             setattr(vars, field, v)
                             n_updates += 1
 
-            logger.info("Applied %d strict_gams level updates from %s", n_updates, gdx_path)
+            logger.info("Applied %d gams level updates from %s", n_updates, gdx_path)
         except Exception as e:
-            logger.warning("Failed loading strict_gams levels from Results.gdx: %s", e)
+            logger.warning("Failed loading gams levels from Results.gdx: %s", e)
 
-    def _apply_equation_consistent_adjustments(self, vars: PEPModelVariables) -> None:
-        """Apply adjustments so initialized values satisfy benchmark equations."""
+    def _overlay_with_calibrated_levels(self, vars: PEPModelVariables) -> None:
+        """
+        Overlay initial guess with calibrated benchmark levels (*O maps).
+
+        This mirrors GAMS initialization semantics:
+          variable.l = variable0
+        where `variable0` comes from the SAM/VAL_PAR calibration pipeline.
+        """
+        state = self.state
+        production = state.production
+        trade = state.trade
+        income = state.income
+        consumption = state.consumption
+        les = state.les_parameters
+        gdp = state.gdp
+        real = state.real_variables
+
+        tro = income.get("TRO", {})
+        for ag in self.sets.get("AG", []):
+            for agj in self.sets.get("AG", []):
+                vars.TR[(ag, agj)] = float(tro.get((ag, agj), vars.TR.get((ag, agj), 0.0)))
+
+        for j in self.sets.get("J", []):
+            vars.VA[j] = float(production.get("VAO", {}).get(j, vars.VA.get(j, 0.0)))
+            vars.CI[j] = float(production.get("CIO", {}).get(j, vars.CI.get(j, 0.0)))
+            vars.LDC[j] = float(production.get("LDCO", {}).get(j, vars.LDC.get(j, 0.0)))
+            vars.KDC[j] = float(production.get("KDCO", {}).get(j, vars.KDC.get(j, 0.0)))
+            vars.XST[j] = float(production.get("XSTO", {}).get(j, vars.XST.get(j, 0.0)))
+            vars.PVA[j] = float(production.get("PVAO", {}).get(j, vars.PVA.get(j, 1.0)))
+            vars.PP[j] = float(production.get("PPO", {}).get(j, vars.PP.get(j, 1.0)))
+            vars.PT[j] = float(production.get("PTO", {}).get(j, vars.PT.get(j, 1.0)))
+            vars.PCI[j] = float(production.get("PCIO", {}).get(j, vars.PCI.get(j, 1.0)))
+            vars.WC[j] = float(production.get("WCO", {}).get(j, vars.WC.get(j, 1.0)))
+            vars.RC[j] = float(production.get("RCO", {}).get(j, vars.RC.get(j, 1.0)))
+
+            for l in self.sets.get("L", []):
+                key = (l, j)
+                vars.LD[key] = float(production.get("LDO", {}).get(key, vars.LD.get(key, 0.0)))
+                vars.WTI[key] = float(production.get("WTIO", {}).get(key, vars.WTI.get(key, 1.0)))
+
+            for k in self.sets.get("K", []):
+                key = (k, j)
+                vars.KD[key] = float(production.get("KDO", {}).get(key, vars.KD.get(key, 0.0)))
+                vars.RTI[key] = float(production.get("RTIO", {}).get(key, vars.RTI.get(key, 1.0)))
+
+            for i in self.sets.get("I", []):
+                key_ij = (i, j)
+                key_ji = (j, i)
+                vars.DI[key_ij] = float(production.get("DIO", {}).get(key_ij, vars.DI.get(key_ij, 0.0)))
+                vars.XS[key_ji] = float(trade.get("XSO", {}).get(key_ji, vars.XS.get(key_ji, 0.0)))
+                vars.DS[key_ji] = float(trade.get("DSO", {}).get(key_ji, vars.DS.get(key_ji, 0.0)))
+                vars.EX[key_ji] = float(trade.get("EXO", {}).get(key_ji, vars.EX.get(key_ji, 0.0)))
+                vars.P[key_ji] = float(trade.get("PO", {}).get(key_ji, vars.P.get(key_ji, 1.0)))
+
+        # No explicit WO/RO/RKO in calibrated state; keep initialized numeraire defaults.
+        for l in self.sets.get("L", []):
+            vars.W[l] = float(vars.W.get(l, 1.0))
+        for k in self.sets.get("K", []):
+            vars.RK[k] = float(vars.RK.get(k, 1.0))
+            for j in self.sets.get("J", []):
+                key = (k, j)
+                vars.R[key] = float(vars.R.get(key, 1.0))
+
+        for i in self.sets.get("I", []):
+            vars.IM[i] = float(trade.get("IMO", {}).get(i, vars.IM.get(i, 0.0)))
+            vars.DD[i] = float(trade.get("DDO", {}).get(i, vars.DD.get(i, 0.0)))
+            vars.Q[i] = float(trade.get("QO", {}).get(i, vars.Q.get(i, 0.0)))
+            vars.EXD[i] = float(trade.get("EXDO", {}).get(i, vars.EXD.get(i, 0.0)))
+            vars.PC[i] = float(trade.get("PCO", {}).get(i, vars.PC.get(i, 1.0)))
+            vars.PD[i] = float(trade.get("PDO", {}).get(i, vars.PD.get(i, 1.0)))
+            vars.PM[i] = float(trade.get("PMO", {}).get(i, vars.PM.get(i, 1.0)))
+            vars.PE[i] = float(trade.get("PEO", {}).get(i, vars.PE.get(i, 1.0)))
+            vars.PE_FOB[i] = float(trade.get("PE_FOBO", {}).get(i, vars.PE_FOB.get(i, 1.0)))
+            vars.PWM[i] = float(trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0)))
+            vars.PL[i] = float(trade.get("PLO", {}).get(i, vars.PL.get(i, 1.0)))
+            vars.TIC[i] = float(trade.get("TICO", {}).get(i, vars.TIC.get(i, 0.0)))
+            vars.TIM[i] = float(trade.get("TIMO", {}).get(i, vars.TIM.get(i, 0.0)))
+            vars.TIX[i] = float(trade.get("TIXO", {}).get(i, vars.TIX.get(i, 0.0)))
+            vars.MRGN[i] = float(trade.get("MRGNO", {}).get(i, vars.MRGN.get(i, 0.0)))
+            vars.DIT[i] = float(production.get("DITO", {}).get(i, vars.DIT.get(i, 0.0)))
+            vars.INV[i] = float(consumption.get("INVO", {}).get(i, vars.INV.get(i, 0.0)))
+            vars.CG[i] = float(consumption.get("CGO", {}).get(i, vars.CG.get(i, 0.0)))
+            vars.VSTK[i] = float(consumption.get("VSTKO", {}).get(i, vars.VSTK.get(i, 0.0)))
+
+        for h in self.sets.get("H", []):
+            vars.YH[h] = float(income.get("YHO", {}).get(h, vars.YH.get(h, 0.0)))
+            vars.YHL[h] = float(income.get("YHLO", {}).get(h, vars.YHL.get(h, 0.0)))
+            vars.YHK[h] = float(income.get("YHKO", {}).get(h, vars.YHK.get(h, 0.0)))
+            vars.YHTR[h] = float(income.get("YHTRO", {}).get(h, vars.YHTR.get(h, 0.0)))
+            vars.YDH[h] = float(income.get("YDHO", {}).get(h, vars.YDH.get(h, 0.0)))
+            vars.CTH[h] = float(income.get("CTHO", {}).get(h, vars.CTH.get(h, 0.0)))
+            vars.SH[h] = float(
+                income.get("SHO", {}).get(
+                    h,
+                    vars.sh0.get(h, 0.0) + vars.sh1.get(h, 0.0) * vars.YDH.get(h, 0.0),
+                )
+            )
+            vars.TDH[h] = float(income.get("TDHO", {}).get(h, vars.YH.get(h, 0.0) - vars.YDH.get(h, 0.0) - vars.TR.get(("gvt", h), 0.0)))
+            for i in self.sets.get("I", []):
+                key = (i, h)
+                vars.C[key] = float(consumption.get("CO", {}).get(key, vars.C.get(key, 0.0)))
+                vars.CMIN[key] = float(les.get("CMINO", {}).get(key, vars.CMIN.get(key, 0.0)))
+
+        for f in self.sets.get("F", []):
+            vars.YF[f] = float(income.get("YFO", {}).get(f, vars.YF.get(f, 0.0)))
+            vars.YFK[f] = float(income.get("YFKO", {}).get(f, vars.YFK.get(f, 0.0)))
+            vars.YFTR[f] = float(income.get("YFTRO", {}).get(f, vars.YFTR.get(f, 0.0)))
+            vars.YDF[f] = float(income.get("YDFO", {}).get(f, vars.YDF.get(f, 0.0)))
+            vars.SF[f] = float(income.get("SFO", {}).get(f, vars.SF.get(f, vars.YDF.get(f, 0.0))))
+            vars.TDF[f] = float(income.get("TDFO", {}).get(f, vars.YF.get(f, 0.0) - vars.YDF.get(f, 0.0)))
+
+        vars.YG = float(income.get("YGO", vars.YG))
+        vars.YGK = float(income.get("YGKO", vars.YGK))
+        vars.TDHT = float(income.get("TDHTO", vars.TDHT))
+        vars.TDFT = float(income.get("TDFTO", vars.TDFT))
+        vars.TIWT = float(income.get("TIWTO", vars.TIWT))
+        vars.TIKT = float(income.get("TIKTO", vars.TIKT))
+        vars.TIPT = float(income.get("TIPTO", vars.TIPT))
+        vars.TICT = float(income.get("TICTO", vars.TICT))
+        vars.TIMT = float(income.get("TIMTO", vars.TIMT))
+        vars.TIXT = float(income.get("TIXTO", vars.TIXT))
+        vars.TPRODN = float(income.get("TPRODNO", vars.TPRODN))
+        vars.TPRCTS = float(income.get("TPRCTSO", vars.TPRCTS))
+        vars.YGTR = float(income.get("YGTRO", vars.YGTR))
+        vars.G = float(consumption.get("GO", vars.G))
+        vars.SG = float(income.get("SGO", vars.SG))
+
+        vars.YROW = float(income.get("YROWO", vars.YROW))
+        vars.CAB = float(income.get("CABO", vars.CAB))
+        vars.SROW = float(income.get("SROWO", -vars.CAB))
+
+        vars.IT = float(income.get("ITO", vars.IT))
+        vars.GFCF = float(consumption.get("GFCFO", vars.GFCF))
+
+        vars.GDP_BP = float(gdp.get("GDP_BPO", vars.GDP_BP))
+        vars.GDP_MP = float(gdp.get("GDP_MPO", vars.GDP_MP))
+        vars.GDP_IB = float(gdp.get("GDP_IBO", vars.GDP_IB))
+        vars.GDP_FD = float(gdp.get("GDP_FDO", vars.GDP_FD))
+
+        vars.PIXCON = float(real.get("PIXCONO", vars.PIXCON))
+        vars.PIXGDP = float(real.get("PIXGDPO", vars.PIXGDP))
+        vars.PIXGVT = float(real.get("PIXGVTO", vars.PIXGVT))
+        vars.PIXINV = float(real.get("PIXINVO", vars.PIXINV))
+        for h in self.sets.get("H", []):
+            vars.CTH_REAL[h] = float(real.get("CTH_REALO", {}).get(h, vars.CTH_REAL.get(h, 0.0)))
+        vars.G_REAL = float(real.get("G_REALO", vars.G_REAL))
+        vars.GDP_BP_REAL = float(real.get("GDP_BP_REALO", vars.GDP_BP_REAL))
+        vars.GDP_MP_REAL = float(real.get("GDP_MP_REALO", vars.GDP_MP_REAL))
+        vars.GFCF_REAL = float(real.get("GFCF_REALO", vars.GFCF_REAL))
+
+        vars.e = float(trade.get("eO", vars.e))
+        vars.LEON = 0.0
+
+        # Recover detailed factor/production tax payments where no explicit *O
+        # detail is stored in state.
         for l in self.sets.get("L", []):
             for j in self.sets.get("J", []):
                 ttiw = self.params.get("ttiw", {}).get((l, j), 0.0)
                 vars.TIW[(l, j)] = ttiw * vars.W.get(l, 1.0) * vars.LD.get((l, j), 0.0)
-
         for k in self.sets.get("K", []):
             for j in self.sets.get("J", []):
                 ttik = self.params.get("ttik", {}).get((k, j), 0.0)
                 vars.TIK[(k, j)] = ttik * vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0.0)
+        for j in self.sets.get("J", []):
+            ttip = self.params.get("ttip", {}).get(j, 0.0)
+            vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
+
+    def _apply_equation_consistent_adjustments(self, vars: PEPModelVariables) -> None:
+        """Apply adjustments so initialized values satisfy benchmark equations."""
+        # Align XST with trade transformation baseline (SUM_i XS(j,i)).
+        # This removes the production-vs-trade benchmark mismatch present in
+        # some calibrated states (notably ind/agr).
+        for j in self.sets.get("J", []):
+            vars.XST[j] = sum(vars.XS.get((j, i), 0.0) for i in self.sets.get("I", []))
+
+        # Production identities: keep XST benchmark, enforce EQ1/EQ2/EQ9/EQ65/EQ67.
+        for j in self.sets.get("J", []):
+            xst_j = vars.XST.get(j, 0.0)
+            io_j = self.params.get("io", {}).get(j, 0.0)
+            v_j = self.params.get("v", {}).get(j, 0.0)
+            vars.CI[j] = io_j * xst_j
+            vars.VA[j] = v_j * xst_j
+
+            for i in self.sets.get("I", []):
+                aij_ij = self.params.get("aij", {}).get((i, j), 0.0)
+                vars.DI[(i, j)] = aij_ij * vars.CI.get(j, 0.0)
+
+            ci_j = vars.CI.get(j, 0.0)
+            if abs(ci_j) > 1e-12:
+                vars.PCI[j] = (
+                    sum(vars.PC.get(i, 1.0) * vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
+                    / ci_j
+                )
+            if abs(xst_j) > 1e-12:
+                vars.PP[j] = (
+                    vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0)
+                    + vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
+                ) / xst_j
+            vars.PT[j] = (1.0 + self.params.get("ttip", {}).get(j, 0.0)) * vars.PP.get(j, 0.0)
+
+        for i in self.sets.get("I", []):
+            vars.DIT[i] = sum(vars.DI.get((i, j), 0.0) for j in self.sets.get("J", []))
+
+        # Demand-side absorption identity EQ84(i1).
+        for i in self.sets.get("I1", []):
+            cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
+            vars.Q[i] = (
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
+                + vars.DIT.get(i, 0.0)
+                + vars.MRGN.get(i, 0.0)
+            )
+
+        rebuild_tax_detail_from_rates(
+            vars=vars,
+            sets=self.sets,
+            params=self.params,
+            include_tip=False,
+        )
 
         vars.TIWT = sum(vars.TIW.values())
         vars.TIKT = sum(vars.TIK.values())
@@ -1459,146 +1942,7 @@ class IPOPTSolver:
     
     def _variables_to_array(self, vars: PEPModelVariables) -> np.ndarray:
         """Convert variables to flat array for solver."""
-        values = []
-        
-        # Production variables
-        for j in self.sets.get("J", []):
-            values.append(vars.WC.get(j, 1.0))
-            values.append(vars.RC.get(j, 1.0))
-            values.append(vars.PP.get(j, 1.0))
-            values.append(vars.PT.get(j, 1.0))
-            values.append(vars.PVA.get(j, 1.0))
-            values.append(vars.PCI.get(j, 1.0))
-            values.append(vars.XST.get(j, 0))
-            values.append(vars.VA.get(j, 0))
-            values.append(vars.CI.get(j, 0))
-            values.append(vars.LDC.get(j, 0))
-            values.append(vars.KDC.get(j, 0))
-            
-            for l in self.sets.get("L", []):
-                values.append(vars.LD.get((l, j), 0))
-                values.append(vars.WTI.get((l, j), 1.0))
-                
-            for k in self.sets.get("K", []):
-                values.append(vars.KD.get((k, j), 0))
-                values.append(vars.RTI.get((k, j), 1.0))
-                values.append(vars.R.get((k, j), 1.0))
-                
-            for i in self.sets.get("I", []):
-                values.append(vars.DI.get((i, j), 0))
-                values.append(vars.XS.get((j, i), 0))
-                values.append(vars.DS.get((j, i), 0))
-                values.append(vars.EX.get((j, i), 0))
-                values.append(vars.P.get((j, i), 1.0))
-        
-        # Wages
-        for l in self.sets.get("L", []):
-            values.append(vars.W.get(l, 1.0))
-        for k in self.sets.get("K", []):
-            values.append(vars.RK.get(k, 1.0))
-        
-        # Price and trade variables
-        for i in self.sets.get("I", []):
-            values.append(vars.PC.get(i, 1.0))
-            values.append(vars.PD.get(i, 1.0))
-            values.append(vars.PM.get(i, 1.0))
-            values.append(vars.PE.get(i, 1.0))
-            values.append(vars.PE_FOB.get(i, 1.0))
-            values.append(vars.PL.get(i, 1.0))
-            values.append(vars.PWM.get(i, 1.0))
-            values.append(vars.IM.get(i, 0))
-            values.append(vars.DD.get(i, 0))
-            values.append(vars.Q.get(i, 0))
-            values.append(vars.EXD.get(i, 0))
-            values.append(vars.TIC.get(i, 0))
-            values.append(vars.TIM.get(i, 0))
-            values.append(vars.TIX.get(i, 0))
-            values.append(vars.MRGN.get(i, 0))
-            values.append(vars.DIT.get(i, 0))
-            values.append(vars.INV.get(i, 0))
-            values.append(vars.CG.get(i, 0))
-            values.append(vars.VSTK.get(i, 0))
-        
-        # Income variables
-        for h in self.sets.get("H", []):
-            values.append(vars.YH.get(h, 0))
-            values.append(vars.YHL.get(h, 0))
-            values.append(vars.YHK.get(h, 0))
-            values.append(vars.YHTR.get(h, 0))
-            values.append(vars.YDH.get(h, 0))
-            values.append(vars.CTH.get(h, 0))
-            values.append(vars.SH.get(h, 0))
-            values.append(vars.TDH.get(h, 0))
-            
-            for i in self.sets.get("I", []):
-                values.append(vars.C.get((i, h), 0))
-                values.append(vars.CMIN.get((i, h), 0))
-                
-        
-        for f in self.sets.get("F", []):
-            values.append(vars.YF.get(f, 0))
-            values.append(vars.YFK.get(f, 0))
-            values.append(vars.YFTR.get(f, 0))
-            values.append(vars.YDF.get(f, 0))
-            values.append(vars.SF.get(f, 0))
-            values.append(vars.TDF.get(f, 0))
-            
-        # Full transfer matrix TR(ag,agj)
-        for ag in self.sets.get("AG", []):
-            for agj in self.sets.get("AG", []):
-                values.append(vars.TR.get((ag, agj), 0))
-        
-        # Government
-        values.append(vars.YG)
-        values.append(vars.YGK)
-        values.append(vars.TDHT)
-        values.append(vars.TDFT)
-        values.append(vars.TPRCTS)
-        values.append(vars.TPRODN)
-        values.append(vars.TIWT)
-        values.append(vars.TIKT)
-        values.append(vars.TIPT)
-        values.append(vars.TICT)
-        values.append(vars.TIMT)
-        values.append(vars.TIXT)
-        values.append(vars.YGTR)
-        values.append(vars.G)
-        values.append(vars.SG)
-        
-        # ROW
-        values.append(vars.YROW)
-        values.append(vars.SROW)
-        values.append(vars.CAB)
-        
-        # Investment
-        values.append(vars.IT)
-        values.append(vars.GFCF)
-        
-        # GDP
-        values.append(vars.GDP_BP)
-        values.append(vars.GDP_MP)
-        values.append(vars.GDP_IB)
-        values.append(vars.GDP_FD)
-        
-        # Price indices
-        values.append(vars.PIXCON)
-        values.append(vars.PIXGDP)
-        values.append(vars.PIXGVT)
-        values.append(vars.PIXINV)
-        
-        # Real variables
-        for h in self.sets.get("H", []):
-            values.append(vars.CTH_REAL.get(h, 0))
-        values.append(vars.G_REAL)
-        values.append(vars.GDP_BP_REAL)
-        values.append(vars.GDP_MP_REAL)
-        values.append(vars.GFCF_REAL)
-        values.append(vars.LEON)
-        
-        # Exchange rate
-        values.append(vars.e)
-        
-        return np.array(values)
+        return pep_variables_to_array(vars, self.sets)
 
     def _build_variable_bounds(self) -> Tuple[np.ndarray, np.ndarray]:
         """Build lower/upper bounds matching _variables_to_array ordering."""
@@ -1799,14 +2143,16 @@ class IPOPTSolver:
         
         logger.info(f"Number of variables: {n_vars}")
 
-        # If benchmark initialization already satisfies the system, skip IPOPT.
+        # For non-excel init modes, allow early return when initialization is
+        # already feasible enough. In excel mode, we always execute solve.
         init_residuals = self.equations.calculate_all_residuals(vars)
         init_vals = np.array(list(init_residuals.values()), dtype=float)
         init_rms = float(np.sqrt(np.mean(init_vals ** 2))) if init_vals.size else 0.0
         init_max = float(np.max(np.abs(init_vals))) if init_vals.size else 0.0
         practical_tol = max(self.tolerance * 1e4, 1e-4)
         practical_max_tol = max(self.tolerance * 1e5, 1e-3)
-        if init_rms <= self.tolerance:
+        allow_init_shortcut = not self._uses_excel_init()
+        if allow_init_shortcut and init_rms <= self.tolerance:
             logger.info(
                 "Initial guess satisfies tolerance (RMS=%.3e <= %.3e); skipping IPOPT.",
                 init_rms,
@@ -1818,9 +2164,9 @@ class IPOPTSolver:
                 final_residual=init_rms,
                 variables=vars,
                 residuals=init_residuals,
-                message="Initial equation-consistent benchmark satisfies tolerance",
+                message=f"Initial {self.init_mode} benchmark satisfies tolerance",
             )
-        if init_rms <= practical_tol and init_max <= practical_max_tol:
+        if allow_init_shortcut and init_rms <= practical_tol and init_max <= practical_max_tol:
             logger.info(
                 "Initial guess accepted by practical tolerance (RMS=%.3e, Max=%.3e); skipping IPOPT.",
                 init_rms,
@@ -1832,7 +2178,7 @@ class IPOPTSolver:
                 final_residual=init_rms,
                 variables=vars,
                 residuals=init_residuals,
-                message="Initial strict_gams benchmark accepted by practical tolerance",
+                message=f"Initial {self.init_mode} benchmark accepted by practical tolerance",
             )
         
         # Create problem
@@ -1931,19 +2277,22 @@ class IPOPTSolver:
                 msg1 = msg1.decode("utf-8", errors="replace")
             logger.info("IPOPT pass 1 status=%s msg=%s", info1.get("status"), msg1)
 
-            # Track best candidate by convergence first, then RMS residual.
-            x_best, info_best, rms_best = x0, {
-                "status": -99,
-                "status_msg": "Using initial strict_gams levels (lower RMS than IPOPT passes)",
-                "iter_count": 0,
-                "obj_val": problem.objective(x0),
-            }, init_rms
             v1 = problem._array_to_variables(x1)
             r1 = self.equations.calculate_all_residuals(v1)
             vals1 = np.array(list(r1.values()), dtype=float)
             rms1 = float(np.sqrt(np.mean(vals1**2))) if vals1.size else float("inf")
-            if info1.get("status") == 0 or rms1 < rms_best:
+            # Track best candidate by convergence first, then RMS residual.
+            if self._uses_excel_init():
                 x_best, info_best, rms_best = x1, info1, rms1
+            else:
+                x_best, info_best, rms_best = x0, {
+                    "status": -99,
+                    "status_msg": f"Using initial {self.init_mode} levels (lower RMS than IPOPT passes)",
+                    "iter_count": 0,
+                    "obj_val": problem.objective(x0),
+                }, init_rms
+                if info1.get("status") == 0 or rms1 < rms_best:
+                    x_best, info_best, rms_best = x1, info1, rms1
 
             # Optional second pass with warm start if first pass did not converge.
             if info1.get("status") != 0:
@@ -1964,6 +2313,8 @@ class IPOPTSolver:
                 if info2.get("status") == 0 and info_best.get("status") != 0:
                     x_best, info_best, rms_best = x2, info2, rms2
                 elif info_best.get("status") != 0 and rms2 < rms_best:
+                    x_best, info_best, rms_best = x2, info2, rms2
+                elif info2.get("status") == 0 and info_best.get("status") == 0 and rms2 < rms_best:
                     x_best, info_best, rms_best = x2, info2, rms2
 
             # Create result
