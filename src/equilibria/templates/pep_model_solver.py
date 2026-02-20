@@ -23,6 +23,9 @@ from typing import Any, Callable, Literal
 
 import numpy as np
 
+from equilibria.solver.guards import rebuild_tax_detail_from_rates
+from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
+from equilibria.templates.init_strategies import normalize_init_mode
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
 
 logger = logging.getLogger(__name__)
@@ -45,9 +48,19 @@ class PEPModelSolver:
         calibrated_state: Any,
         tolerance: float = 1e-6,
         max_iterations: int = 100,
-        init_mode: Literal["strict_gams", "equation_consistent"] = "strict_gams",
+        init_mode: Literal["gams", "excel"] | str = "excel",
+        blockwise_commodity_alpha: float = 0.75,
+        blockwise_trade_market_alpha: float = 0.5,
+        blockwise_macro_alpha: float = 1.0,
         gams_results_gdx: Path | str | None = None,
         gams_results_slice: Literal["base", "sim1"] = "sim1",
+        baseline_manifest: Path | str | None = None,
+        require_baseline_manifest: bool = False,
+        baseline_compatibility_rel_tol: float = 1e-4,
+        enforce_strict_gams_baseline: bool = True,
+        sam_file: Path | str | None = None,
+        val_par_file: Path | str | None = None,
+        gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
     ):
         """Initialize the solver with calibrated model state.
         
@@ -56,15 +69,26 @@ class PEPModelSolver:
             tolerance: Convergence tolerance for residuals
             max_iterations: Maximum number of iterations
             init_mode: Initialization mode:
-                - strict_gams: mirror benchmark *O/.l levels
-                - equation_consistent: enforce benchmark equation identities
+                - gams: initialize from GAMS levels
+                - excel: initialize from SAM/Excel calibrated *O values
         """
         self.state = calibrated_state
         self.tolerance = tolerance
         self.max_iterations = max_iterations
-        self.init_mode = init_mode
+        requested_init_mode = str(init_mode).strip().lower()
+        self.init_mode = normalize_init_mode(init_mode)
+        self.blockwise_commodity_alpha = blockwise_commodity_alpha
+        self.blockwise_trade_market_alpha = blockwise_trade_market_alpha
+        self.blockwise_macro_alpha = blockwise_macro_alpha
         self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx is not None else None
         self.gams_results_slice = gams_results_slice.lower()
+        self.baseline_manifest = Path(baseline_manifest) if baseline_manifest is not None else None
+        self.require_baseline_manifest = require_baseline_manifest
+        self.baseline_compatibility_rel_tol = baseline_compatibility_rel_tol
+        self.enforce_strict_gams_baseline = enforce_strict_gams_baseline
+        self.sam_file = Path(sam_file) if sam_file is not None else None
+        self.val_par_file = Path(val_par_file) if val_par_file is not None else None
+        self.gdxdump_bin = gdxdump_bin
         
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
@@ -77,10 +101,18 @@ class PEPModelSolver:
         logger.info(f"  Sets: {len(self.sets)} categories")
         logger.info(f"  Tolerance: {tolerance}")
         logger.info(f"  Max iterations: {max_iterations}")
-        logger.info(f"  Init mode: {init_mode}")
+        logger.info(f"  Init mode: {self.init_mode}")
+        if requested_init_mode != self.init_mode:
+            logger.info(
+                "  Init mode alias normalized: %s -> %s",
+                requested_init_mode,
+                self.init_mode,
+            )
         if self.gams_results_gdx is not None:
             logger.info(f"  GAMS levels: {self.gams_results_gdx}")
             logger.info(f"  GAMS slice: {self.gams_results_slice.upper()}")
+        if self.baseline_manifest is not None:
+            logger.info(f"  Baseline manifest: {self.baseline_manifest}")
     
     def _extract_parameters(self, state: Any) -> dict[str, Any]:
         """Extract all calibrated parameters from model state."""
@@ -315,21 +347,15 @@ class PEPModelSolver:
             params.setdefault("beta_VA", {}).setdefault(j, 1.0)
             params.setdefault("B_VA", {}).setdefault(j, 1.0)
 
-        # Recompute intermediate-use coefficients with benchmark PCO and trade XSTO,
-        # matching GAMS ordering where DIO is volume-calibrated after PCO is known.
+        # Recompute intermediate-use coefficients with trade-consistent XSO.
+        # DIO in calibrated state is already in quantity units (deflated by PCO).
         dio_raw = state.production.get("DIO", {})
-        pco = state.trade.get("PCO", {})
         vao = state.production.get("VAO", {})
         xso = state.trade.get("XSO", {})
         I = state.sets.get("I", [])
         J = state.sets.get("J", [])
 
-        dio_q: dict[tuple[str, str], float] = {}
-        for i in I:
-            p_i = pco.get(i, 1.0)
-            for j in J:
-                val = dio_raw.get((i, j), 0.0)
-                dio_q[(i, j)] = (val / p_i) if abs(p_i) > 1e-12 else 0.0
+        dio_q: dict[tuple[str, str], float] = dict(dio_raw)
 
         ci_q = {j: sum(dio_q.get((i, j), 0.0) for i in I) for j in J}
         xst_q = {j: sum(xso.get((j, i), 0.0) for i in I) for j in J}
@@ -360,14 +386,26 @@ class PEPModelSolver:
                 tolerance=self.tolerance,
                 max_iterations=self.max_iterations,
                 init_mode=self.init_mode,
+                blockwise_commodity_alpha=self.blockwise_commodity_alpha,
+                blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
+                blockwise_macro_alpha=self.blockwise_macro_alpha,
                 gams_results_gdx=self.gams_results_gdx,
                 gams_results_slice=self.gams_results_slice,
+                baseline_manifest=self.baseline_manifest,
+                require_baseline_manifest=self.require_baseline_manifest,
+                baseline_compatibility_rel_tol=self.baseline_compatibility_rel_tol,
+                enforce_strict_gams_baseline=self.enforce_strict_gams_baseline,
+                sam_file=self.sam_file,
+                val_par_file=self.val_par_file,
+                gdxdump_bin=self.gdxdump_bin,
             )
             vars_ipopt = ipopt_solver._create_initial_guess()
             self.params = ipopt_solver.params
             self.equations = ipopt_solver.equations
             return vars_ipopt
         except Exception as e:
+            if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
+                raise RuntimeError(f"gams initial-guess creation failed: {e}") from e
             logger.warning("Falling back to local initial-guess path: %s", e)
 
         vars = PEPModelVariables()
@@ -509,31 +547,6 @@ class PEPModelSolver:
                 vars.C[(i, h)] = state.consumption.get("CO", {}).get((i, h), 0)
                 vars.CMIN[(i, h)] = state.les_parameters.get("CMINO", {}).get((i, h), 0)
 
-        # Keep calibrated *O values as benchmark levels. Any identity-based
-        # recomputation is applied only in equation_consistent mode.
-        if self.init_mode == "equation_consistent":
-            for j in self.sets.get("J", []):
-                vars.CI[j] = sum(vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
-                ci_j = vars.CI.get(j, 0.0)
-                if abs(ci_j) > 1e-12:
-                    vars.PCI[j] = (
-                        sum(vars.PC.get(i, 1.0) * vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
-                        / ci_j
-                    )
-            for i in self.sets.get("I", []):
-                vars.DIT[i] = sum(vars.DI.get((i, j), 0.0) for j in self.sets.get("J", []))
-            for j in self.sets.get("J", []):
-                vars.XST[j] = sum(vars.XS.get((j, i), 0.0) for i in self.sets.get("I", []))
-                xst_j = vars.XST.get(j, 0.0)
-                if abs(xst_j) > 1e-12:
-                    vars.PP[j] = (
-                        vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0) + vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
-                    ) / xst_j
-                vars.PT[j] = (1.0 + self.params.get("ttip", {}).get(j, 0.0)) * vars.PP.get(j, 0.0)
-                ttip = self.params.get("ttip", {}).get(j, 0.0)
-                vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
-            vars.G = sum(vars.PC.get(i, 1.0) * vars.CG.get(i, 0.0) for i in self.sets.get("I", []))
-
         # Initialize trade margin demand from calibrated flows (EQ57 identity)
         for i in self.sets.get("I", []):
             mrgn_i = 0.0
@@ -635,9 +648,6 @@ class PEPModelSolver:
         vars.GDP_FD = gdp_fd
         vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
         
-        if self.init_mode == "equation_consistent":
-            self._apply_equation_consistent_adjustments(vars)
-
         return vars
 
     def _apply_equation_consistent_adjustments(self, vars: PEPModelVariables) -> None:
@@ -707,48 +717,18 @@ class PEPModelSolver:
     
     def _variables_to_array(self, vars: PEPModelVariables) -> np.ndarray:
         """Convert variables to flat array for solver."""
-        values = []
-        
-        # This is a simplified version - in practice, we'd need to handle
-        # all variables systematically
-        # For now, just pack key price variables
-        for j in self.sets.get("J", []):
-            values.append(vars.WC.get(j, 1.0))
-            values.append(vars.RC.get(j, 1.0))
-            values.append(vars.PP.get(j, 1.0))
-            values.append(vars.PVA.get(j, 1.0))
-        
-        for i in self.sets.get("I", []):
-            values.append(vars.PC.get(i, 1.0))
-            values.append(vars.PD.get(i, 1.0))
-            values.append(vars.PM.get(i, 1.0))
-        
-        values.append(vars.PIXCON)
-        values.append(vars.e)
-        
-        return np.array(values)
+        return pep_variables_to_array(vars, self.sets)
     
     def _array_to_variables(self, array: np.ndarray, template: PEPModelVariables) -> PEPModelVariables:
         """Convert array back to variables."""
-        vars = PEPModelVariables()
-        
-        # Copy all values from template
-        for key, value in template.__dict__.items():
-            if isinstance(value, dict):
-                setattr(vars, key, value.copy())
-            else:
-                setattr(vars, key, value)
-        
-        # Update from array (simplified)
-        idx = 0
-        for j in self.sets.get("J", []):
-            if idx < len(array):
-                vars.WC[j] = array[idx]
-                idx += 1
-            if idx < len(array):
-                vars.RC[j] = array[idx]
-                idx += 1
-        
+        _ = template  # retained for backward-compatible signature
+        vars = pep_array_to_variables(np.asarray(array, dtype=float), self.sets)
+        rebuild_tax_detail_from_rates(
+            vars=vars,
+            sets=self.sets,
+            params=self.params,
+            include_tip=True,
+        )
         return vars
     
     def solve(self, method: str = "auto") -> SolverResult:
@@ -789,12 +769,24 @@ class PEPModelSolver:
                         self.tolerance,
                         self.max_iterations,
                         init_mode=self.init_mode,
+                        blockwise_commodity_alpha=self.blockwise_commodity_alpha,
+                        blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
+                        blockwise_macro_alpha=self.blockwise_macro_alpha,
                         gams_results_gdx=self.gams_results_gdx,
                         gams_results_slice=self.gams_results_slice,
+                        baseline_manifest=self.baseline_manifest,
+                        require_baseline_manifest=self.require_baseline_manifest,
+                        baseline_compatibility_rel_tol=self.baseline_compatibility_rel_tol,
+                        enforce_strict_gams_baseline=self.enforce_strict_gams_baseline,
+                        sam_file=self.sam_file,
+                        val_par_file=self.val_par_file,
+                        gdxdump_bin=self.gdxdump_bin,
                     )
                     return ipopt_solver.solve_ipopt()
                 except Exception as e:
                     logger.error(f"IPOPT failed: {e}")
+                    if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
+                        raise RuntimeError(f"gams solve failed due to baseline incompatibility: {e}") from e
                     logger.error("Falling back to simple iteration")
                     method = "simple_iteration"
         
