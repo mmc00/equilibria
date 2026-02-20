@@ -44,14 +44,20 @@ def main() -> int:
     )
     parser.add_argument(
         "--init-mode",
-        choices=["strict_gams", "equation_consistent"],
-        default="equation_consistent",
+        choices=["gams", "excel"],
+        default="excel",
         help="Python initialization mode for comparison.",
     )
     parser.add_argument(
         "--gdxdump",
         default="/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
         help="Path to gdxdump binary.",
+    )
+    parser.add_argument(
+        "--gams-results-slice",
+        choices=["base", "sim1"],
+        default="base",
+        help="Slice from Results.gdx for gams levels.",
     )
     args = parser.parse_args()
 
@@ -71,7 +77,15 @@ def main() -> int:
         return 1
 
     state = PEPModelCalibrator(sam_file=sam_file, val_par_file=val_file).calibrate()
-    solver = PEPModelSolver(calibrated_state=state, init_mode=args.init_mode)
+    solver = PEPModelSolver(
+        calibrated_state=state,
+        init_mode=args.init_mode,
+        gams_results_gdx=results_gdx,
+        gams_results_slice=args.gams_results_slice,
+        sam_file=sam_file,
+        val_par_file=val_file,
+        gdxdump_bin=args.gdxdump,
+    )
     vars_ = solver._create_initial_guess()
 
     rows = [
@@ -107,4 +121,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

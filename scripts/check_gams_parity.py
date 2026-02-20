@@ -26,8 +26,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check GAMS parity for initialized solver variables.")
     parser.add_argument(
         "--init-mode",
-        choices=["strict_gams", "equation_consistent"],
-        default="strict_gams",
+        choices=["gams", "excel"],
+        default="excel",
         help="Initialization mode for solver state.",
     )
     parser.add_argument(
@@ -35,11 +35,28 @@ def main() -> None:
         default="/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx",
         help="Path to SAM GDX file.",
     )
+    parser.add_argument(
+        "--gams-results-gdx",
+        default="src/equilibria/templates/reference/pep2/scripts/Results.gdx",
+        help="Path to Results.gdx for gams levels.",
+    )
+    parser.add_argument(
+        "--gams-results-slice",
+        choices=["base", "sim1"],
+        default="base",
+        help="Slice from Results.gdx for gams levels.",
+    )
     args = parser.parse_args()
 
     sam_file = Path(args.sam_file)
     state = PEPModelCalibrator(sam_file=sam_file).calibrate()
-    solver = PEPModelSolver(calibrated_state=state, init_mode=args.init_mode)
+    solver = PEPModelSolver(
+        calibrated_state=state,
+        init_mode=args.init_mode,
+        gams_results_gdx=args.gams_results_gdx,
+        gams_results_slice=args.gams_results_slice,
+        sam_file=sam_file,
+    )
     vars_ = solver._create_initial_guess()
     residuals = solver.equations.calculate_all_residuals(vars_)
 
