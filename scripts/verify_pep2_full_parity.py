@@ -5,7 +5,7 @@ Full parity audit between pep2 GAMS outputs and Python equilibria state.
 Compares:
 - Variables: BASE slice from pep2/scripts/Results.gdx (val* symbols)
 - Parameters: pep2/scripts/Parameters.gdx
-against Python calibration + solver initialization (equation_consistent).
+against Python calibration + solver initialization (excel mode).
 """
 
 from __future__ import annotations
@@ -184,7 +184,7 @@ def main() -> int:
     val_xlsx = root / "data" / "VAL_PAR.xlsx"
 
     state = PEPModelCalibrator(sam_file=sam_gdx, val_par_file=val_xlsx).calibrate()
-    solver = PEPModelSolver(calibrated_state=state, init_mode="equation_consistent")
+    solver = PEPModelSolver(calibrated_state=state, init_mode="excel")
     vars_ = solver._create_initial_guess()
     py_params = solver.params
 

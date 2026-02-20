@@ -33,6 +33,365 @@ jobs:
       - name: Run tests (excluding GAMS-marked)
         run: uv run pytest -m "not gams"
 
+  structural-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Generate GAMS Baseline Manifest
+        run: |
+          uv run python scripts/generate_baseline_manifest.py \
+            --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx \
+            --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
+            --results-gdx src/equilibria/templates/reference/pep2/scripts/Results.gdx \
+            --gams-slice base \
+            --output output/ci_gams_manifest.json
+
+      - name: Run Structural Parity Gates
+        run: |
+          uv run python scripts/run_pep_systemic_parity.py \
+            --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx \
+            --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
+            --init-mode gams \
+            --method none \
+            --gams-results-gdx src/equilibria/templates/reference/pep2/scripts/Results.gdx \
+            --gams-results-slice base \
+            --baseline-manifest output/ci_gams_manifest.json \
+            --require-baseline-manifest \
+            --check-baseline-compatibility \
+            --eq29-eq39-parity \
+            --eq79-eq84-parity \
+            --levels-parity \
+            --eq29-eq39-tol 1e-5 \
+            --eq79-eq84-tol 1e-5 \
+            --levels-parity-tol 1e-6 \
+            --save-report output/ci_structural_parity_report.json
+
+      - name: Upload Structural Gate Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-gates-report
+          path: output/ci_structural_parity_report.json
+          if-no-files-found: ignore
+
+      - name: Print Structural Gate Summary
+        if: always()
+        run: |
+          uv run python scripts/print_structural_report_summary.py \
+            output/ci_structural_parity_report.json
+
+  structural-cri-contract-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run CRI Contract Gate (expect fail-fast as data_contract)
+        run: |
+          set +e
+          uv run python scripts/run_pep_systemic_parity.py \
+            --sam-file src/equilibria/templates/reference/pep2/data/SAM-CRI-gams.xlsx \
+            --dynamic-sam \
+            --cri-fix-mode off \
+            --method none \
+            --save-report output/ci_cri_contract_report.json
+          status=$?
+          set -e
+
+          if [ "$status" -ne 2 ]; then
+            echo "Expected exit code 2 for CRI contract gate, got $status"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          import sys
+
+          report = json.load(open("output/ci_cri_contract_report.json"))
+          kind = report.get("classification", {}).get("kind")
+          reason = report.get("classification", {}).get("reason")
+          sam_qa_passed = report.get("sam_qa", {}).get("passed")
+
+          if kind != "data_contract":
+              print(f"Expected classification.kind=data_contract, got {kind!r}")
+              sys.exit(1)
+          if reason != "sam_qa_failed":
+              print(f"Expected classification.reason=sam_qa_failed, got {reason!r}")
+              sys.exit(1)
+          if sam_qa_passed is not False:
+              print(f"Expected sam_qa.passed=False, got {sam_qa_passed!r}")
+              sys.exit(1)
+
+          print("CRI contract gate classified correctly as data_contract/sam_qa_failed")
+          PY
+
+      - name: Upload CRI Contract Gate Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-cri-contract-report
+          path: output/ci_cri_contract_report.json
+          if-no-files-found: ignore
+
+      - name: Print CRI Contract Gate Summary
+        if: always()
+        run: |
+          uv run python scripts/print_structural_report_summary.py \
+            output/ci_cri_contract_report.json
+
+  structural-cri-fixed-pass-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run CRI Fixed Pass Gate (QA + macro closure)
+        run: |
+          uv run python scripts/run_pep_systemic_parity.py \
+            --sam-file src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx \
+            --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx \
+            --dynamic-sam \
+            --init-mode gams \
+            --gams-results-slice sim1 \
+            --disable-strict-gams-baseline-check \
+            --init-gates-mode gams_anchor \
+            --method none \
+            --save-report output/ci_cri_fixed_pass_report.json
+
+          python - <<'PY'
+          import json
+          import sys
+
+          report = json.load(open("output/ci_cri_fixed_pass_report.json"))
+          kind = report.get("classification", {}).get("kind")
+          sam_qa = report.get("sam_qa", {}).get("passed")
+          blocks = {
+              b.get("block"): b
+              for b in report.get("init", {}).get("gates", {}).get("blocks", [])
+          }
+          macro = blocks.get("macro_closure", {})
+          macro_pass = macro.get("passed")
+
+          if kind != "pass":
+              print(f"Expected classification.kind=pass, got {kind!r}")
+              sys.exit(1)
+          if sam_qa is not True:
+              print(f"Expected sam_qa.passed=True, got {sam_qa!r}")
+              sys.exit(1)
+          if macro_pass is not True:
+              print(f"Expected macro_closure gate to pass, got {macro_pass!r}")
+              sys.exit(1)
+
+          print("CRI fixed gate passed: QA and macro closure are consistent")
+          PY
+
+      - name: Upload CRI Fixed Pass Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-cri-fixed-pass-report
+          path: output/ci_cri_fixed_pass_report.json
+          if-no-files-found: ignore
+
+      - name: Print CRI Fixed Pass Summary
+        if: always()
+        run: |
+          uv run python scripts/print_structural_report_summary.py \
+            output/ci_cri_fixed_pass_report.json
+
+  structural-cri-solver-dynamics-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run CRI Solver-Dynamics Classification Gate
+        run: |
+          set +e
+          uv run python scripts/run_pep_systemic_parity.py \
+            --sam-file src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx \
+            --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx \
+            --dynamic-sam \
+            --init-mode gams \
+            --gams-results-slice sim1 \
+            --disable-strict-gams-baseline-check \
+            --init-gates-mode gams_anchor \
+            --method simple_iteration \
+            --max-iterations 0 \
+            --save-report output/ci_cri_solver_dynamics_report.json
+          status=$?
+          set -e
+
+          if [ "$status" -ne 2 ]; then
+            echo "Expected exit code 2 for CRI solver-dynamics case, got $status"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          import sys
+
+          report = json.load(open("output/ci_cri_solver_dynamics_report.json"))
+          kind = report.get("classification", {}).get("kind")
+          reason = report.get("classification", {}).get("reason")
+          sam_qa = report.get("sam_qa", {}).get("passed")
+          init_ok = report.get("init", {}).get("gates", {}).get("overall_passed")
+          converged = report.get("solve", {}).get("converged")
+
+          if kind != "solver_dynamics":
+              print(f"Expected classification.kind=solver_dynamics, got {kind!r}")
+              sys.exit(1)
+          if reason != "solve_not_converged":
+              print(f"Expected classification.reason=solve_not_converged, got {reason!r}")
+              sys.exit(1)
+          if sam_qa is not True:
+              print(f"Expected sam_qa.passed=True, got {sam_qa!r}")
+              sys.exit(1)
+          if init_ok is not True:
+              print(f"Expected init gates to pass before solver failure, got {init_ok!r}")
+              sys.exit(1)
+          if converged is not False:
+              print(f"Expected solve.converged=False, got {converged!r}")
+              sys.exit(1)
+
+          print("CRI solver-dynamics gate classified correctly after QA and init pass")
+          PY
+
+      - name: Upload CRI Solver-Dynamics Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-cri-solver-dynamics-report
+          path: output/ci_cri_solver_dynamics_report.json
+          if-no-files-found: ignore
+
+      - name: Print CRI Solver-Dynamics Summary
+        if: always()
+        run: |
+          uv run python scripts/print_structural_report_summary.py \
+            output/ci_cri_solver_dynamics_report.json
+
+  structural-solver-dynamics-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run Solver-Dynamics Classification Gate
+        run: |
+          set +e
+          uv run python scripts/run_pep_systemic_parity.py \
+            --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx \
+            --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
+            --init-mode excel \
+            --method simple_iteration \
+            --max-iterations 0 \
+            --save-report output/ci_solver_dynamics_report.json
+          status=$?
+          set -e
+
+          if [ "$status" -ne 2 ]; then
+            echo "Expected exit code 2 for forced solver-dynamics case, got $status"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          import sys
+
+          report = json.load(open("output/ci_solver_dynamics_report.json"))
+          kind = report.get("classification", {}).get("kind")
+          reason = report.get("classification", {}).get("reason")
+          init_ok = report.get("init", {}).get("gates", {}).get("overall_passed")
+          converged = report.get("solve", {}).get("converged")
+
+          if kind != "solver_dynamics":
+              print(f"Expected classification.kind=solver_dynamics, got {kind!r}")
+              sys.exit(1)
+          if reason != "solve_not_converged":
+              print(f"Expected classification.reason=solve_not_converged, got {reason!r}")
+              sys.exit(1)
+          if init_ok is not True:
+              print(f"Expected init gates to pass before solver failure, got {init_ok!r}")
+              sys.exit(1)
+          if converged is not False:
+              print(f"Expected solve.converged=False, got {converged!r}")
+              sys.exit(1)
+
+          print("Solver-dynamics gate classified correctly after passing init gates")
+          PY
+
+      - name: Upload Solver-Dynamics Gate Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-solver-dynamics-report
+          path: output/ci_solver_dynamics_report.json
+          if-no-files-found: ignore
+
+      - name: Print Solver-Dynamics Summary
+        if: always()
+        run: |
+          uv run python scripts/print_structural_report_summary.py \
+            output/ci_solver_dynamics_report.json
+
   gams-tests:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_gams }}
     runs-on: self-hosted
