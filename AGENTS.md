@@ -485,6 +485,21 @@ python scripts/verify_pep2_full_parity.py \
 - ✅ Exit-code behavior validated with two runs:
   - pass case: `output/exit_check_pass.json` -> exit `0`
   - forced solve-fail case: `output/exit_check_fail_solve.json` -> exit `2`
+- ✅ CRI architecture diagnosis documented:
+  - Finding note: `docs/finding_sam_ieem_vs_sam_pep.md`
+  - Main structural cause: export flows misrouted in PEP conversion (`I.i -> AG.ROW`/`X.i -> AG.ROW` without `J.j -> X.i` counterpart).
+  - Secondary cause: production-tax routing drift (`AG.ti -> J` vs expected `AG.gvt -> J` in PEP calibration path).
+  - Why IEEM can still close: different trade/tax architecture + pre-solve diagnostics and SAM balancing in IEEM pipeline.
+- ✅ CRI fixed SAM provenance validated:
+  - Source generator: `/Users/marmol/proyectos/cge_babel/sam/cri/2016/export_gams_format.py`
+  - Input in generator: `output/SAM-V2_0.xlsx` (`export_gams_format.py:243`)
+  - Generated file: `output/SAM-CRI.xlsx` (`export_gams_format.py:285`, export call `:289-292`)
+  - Equilibria reference file: `src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx`
+  - Binary identity check: same size (`9094` bytes), same SHA1 (`e4192240b11e8faadc5d6e3c3c7367f45dfe05a1`), `cmp` exit code `0`.
+- ✅ Deterministic CRI `solver_dynamics` attribution gate now available:
+  - Scenario: `SAM-CRI-gams-fixed.xlsx` + `equation_consistent` + `simple_iteration --max-iterations 0`
+  - Expected classification: `solver_dynamics/solve_not_converged` with `sam_qa.passed=true` and `init.gates.overall_passed=true`
+  - Enforced in CI as `structural-cri-solver-dynamics-gate`
 
 **Current problem to solve:**
 - ⚠️ Remaining instability is concentrated in **CRI data runs** and baseline alignment modes, not in the base `pep2` mirror equations.
@@ -506,6 +521,7 @@ python scripts/verify_pep2_full_parity.py \
 - Use `equation_consistent` as default for deterministic parity on `pep2`.
 - Use `strict_gams` only when the exact `Results.gdx` baseline is verified compatible with the run SAM.
 - For CRI, run SAM QA first and treat solver non-convergence as a data-structure warning, not immediately as equation mismatch.
+- For CRI conversion/mapping changes, keep `docs/finding_sam_ieem_vs_sam_pep.md` as the structural contract reference.
 
 ### Implementation Summary
 

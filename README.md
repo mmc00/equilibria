@@ -327,6 +327,12 @@ uv run python examples/example_11_pep_gdp_sam_comparison.py
 
 More details: `docs/pep_gdp_example.md`
 
+### CRI Structural Finding (IEEM vs PEP SAM Architecture)
+
+For the documented root cause of CRI instability during IEEM -> PEP conversion (trade-account architecture mismatch and production-tax routing drift), see:
+
+- `docs/finding_sam_ieem_vs_sam_pep.md`
+
 ---
 
 ## Solver Backends
