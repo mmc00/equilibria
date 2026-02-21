@@ -607,3 +607,128 @@ class CETTransformation(Block):
         if "XE0" in calibrated:
             if "XE" in var_manager:
                 var_manager.get("XE").value = calibrated["XE0"].copy()
+
+
+class PEPProductionAccountingInit(Block):
+    """PEP production-accounting blockwise initializer/validator.
+
+    Targets accounting consistency for production/intermediate-use identities,
+    especially EQ2, EQ9, EQ65, and EQ67.
+    """
+
+    name: str = Field(default="PEP_ProductionAccounting_Init", description="Block name")
+    description: str = Field(
+        default="PEP blockwise production accounting initialization and validation",
+        description="Block description",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J"]
+
+    def setup(
+        self,
+        set_manager: SetManager,
+        parameters: dict[str, Parameter],
+        variables: dict[str, Variable],
+    ) -> list[SymbolicEquation]:
+        _ = (set_manager, parameters, variables)
+        return []
+
+    @staticmethod
+    def _get_map(container: dict[str, Any], name: str) -> dict[Any, float]:
+        obj = container.get(name)
+        if isinstance(obj, dict):
+            return obj
+        out: dict[Any, float] = {}
+        container[name] = out
+        return out
+
+    @staticmethod
+    def _first_map(container: dict[str, Any], *names: str) -> dict[Any, float]:
+        for name in names:
+            obj = container.get(name)
+            if isinstance(obj, dict):
+                return obj
+        return {}
+
+    def initialize_levels(
+        self,
+        *,
+        set_manager: SetManager,
+        parameters: dict[str, Any],
+        variables: dict[str, Any],
+        mode: str = "gams_blockwise",
+    ) -> None:
+        _ = mode
+        I = tuple(set_manager.get("I"))
+        J = tuple(set_manager.get("J"))
+
+        io = self._first_map(parameters, "io")
+        aij = self._first_map(parameters, "aij")
+        xst = self._get_map(variables, "XST")
+        ci = self._get_map(variables, "CI")
+        pp = self._get_map(variables, "PP")
+        pci = self._get_map(variables, "PCI")
+        pva = self._get_map(variables, "PVA")
+        va = self._get_map(variables, "VA")
+        di = self._get_map(variables, "DI")
+        dit = self._get_map(variables, "DIT")
+        pc = self._first_map(variables, "PC")
+
+        for j in J:
+            ci[j] = float(io.get(j, 0.0)) * float(xst.get(j, 0.0))
+            for i in I:
+                di[(i, j)] = float(aij.get((i, j), 0.0)) * float(ci.get(j, 0.0))
+            ci_j = float(ci.get(j, 0.0))
+            if abs(ci_j) > 1e-12:
+                rhs = sum(float(pc.get(i, 0.0)) * float(di.get((i, j), 0.0)) for i in I)
+                pci[j] = rhs / ci_j
+            xst_j = float(xst.get(j, 0.0))
+            if abs(xst_j) > 1e-12:
+                pp[j] = (
+                    float(pva.get(j, 0.0)) * float(va.get(j, 0.0))
+                    + float(pci.get(j, 0.0)) * float(ci.get(j, 0.0))
+                ) / xst_j
+        for i in I:
+            dit[i] = sum(float(di.get((i, j), 0.0)) for j in J)
+
+    def validate_initialization(
+        self,
+        *,
+        set_manager: SetManager,
+        parameters: dict[str, Any],
+        variables: dict[str, Any],
+    ) -> dict[str, float]:
+        I = tuple(set_manager.get("I"))
+        J = tuple(set_manager.get("J"))
+
+        io = self._first_map(parameters, "io")
+        aij = self._first_map(parameters, "aij")
+        ci = self._first_map(variables, "CI")
+        xst = self._first_map(variables, "XST")
+        pci = self._first_map(variables, "PCI")
+        pc = self._first_map(variables, "PC")
+        di = self._first_map(variables, "DI")
+        dit = self._first_map(variables, "DIT")
+        pp = self._first_map(variables, "PP")
+        pva = self._first_map(variables, "PVA")
+        va = self._first_map(variables, "VA")
+
+        residuals: dict[str, float] = {}
+        for j in J:
+            residuals[f"EQ2_{j}"] = float(ci.get(j, 0.0)) - float(io.get(j, 0.0)) * float(xst.get(j, 0.0))
+            for i in I:
+                residuals[f"EQ9_{i}_{j}"] = float(di.get((i, j), 0.0)) - float(aij.get((i, j), 0.0)) * float(ci.get(j, 0.0))
+            lhs67 = float(pci.get(j, 0.0)) * float(ci.get(j, 0.0))
+            rhs67 = sum(float(pc.get(i, 0.0)) * float(di.get((i, j), 0.0)) for i in I)
+            residuals[f"EQ67_{j}"] = lhs67 - rhs67
+            residuals[f"EQ65_{j}"] = (
+                float(pp.get(j, 0.0)) * float(xst.get(j, 0.0))
+                - (
+                    float(pva.get(j, 0.0)) * float(va.get(j, 0.0))
+                    + float(pci.get(j, 0.0)) * float(ci.get(j, 0.0))
+                )
+            )
+        for i in I:
+            residuals[f"EQ56_{i}"] = float(dit.get(i, 0.0)) - sum(float(di.get((i, j), 0.0)) for j in J)
+        return residuals

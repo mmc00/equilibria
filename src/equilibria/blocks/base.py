@@ -209,6 +209,51 @@ class Block(BaseModel, CalibrationMixin, ABC):
             "equations": [eq.model_dump() for eq in self.equations],
         }
 
+    def initialize_levels(
+        self,
+        *,
+        set_manager: SetManager,
+        parameters: dict[str, Any],
+        variables: dict[str, Any],
+        mode: str = "gams_blockwise",
+    ) -> None:
+        """Initialize or update variable levels for this block.
+
+        This hook is intentionally optional. Concrete blocks can override it to
+        implement GAMS-style blockwise initialization logic without embedding the
+        logic directly in a solver.
+
+        Args:
+            set_manager: Set manager with resolved model sets.
+            parameters: Calibrated parameter values/symbols.
+            variables: Mutable variable-level container to update in-place.
+            mode: Initialization mode label (e.g. ``gams_blockwise``).
+        """
+        _ = (set_manager, parameters, variables, mode)
+
+    def validate_initialization(
+        self,
+        *,
+        set_manager: SetManager,
+        parameters: dict[str, Any],
+        variables: dict[str, Any],
+    ) -> dict[str, float]:
+        """Return block residual diagnostics after initialization.
+
+        Blocks can override this to report equation-level residuals immediately
+        after ``initialize_levels``. Default implementation returns an empty map.
+
+        Args:
+            set_manager: Set manager with resolved model sets.
+            parameters: Calibrated parameter values/symbols.
+            variables: Current initialized variable levels.
+
+        Returns:
+            Mapping ``equation_name -> residual``.
+        """
+        _ = (set_manager, parameters, variables)
+        return {}
+
     def __repr__(self) -> str:
         """String representation."""
         sets_str = f"[{', '.join(self.required_sets)}]" if self.required_sets else "[]"

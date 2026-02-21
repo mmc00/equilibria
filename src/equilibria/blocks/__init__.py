@@ -18,6 +18,7 @@ from equilibria.blocks.demand import CobbDouglasConsumer, LESConsumer
 from equilibria.blocks.equilibrium import (
     FactorMarketClearing,
     MarketClearing,
+    PEPMacroClosureInit,
     PriceNormalization,
 )
 from equilibria.blocks.institutions import Government, Household, RestOfWorld
@@ -25,8 +26,16 @@ from equilibria.blocks.production import (
     CESValueAdded,
     CETTransformation,
     LeontiefIntermediate,
+    PEPProductionAccountingInit,
 )
-from equilibria.blocks.trade import ArmingtonCES, CETExports
+from equilibria.blocks.trade import (
+    ArmingtonCES,
+    CETExports,
+    PEPCommodityBalanceInit,
+    PEPTradeFlowInit,
+    PEPTradeMarketClearingInit,
+    PEPTradeTransformationInit,
+)
 
 __all__ = [
     "Block",
@@ -40,9 +49,14 @@ __all__ = [
     "CESValueAdded",
     "LeontiefIntermediate",
     "CETTransformation",
+    "PEPProductionAccountingInit",
     # Trade blocks
     "ArmingtonCES",
     "CETExports",
+    "PEPCommodityBalanceInit",
+    "PEPTradeFlowInit",
+    "PEPTradeMarketClearingInit",
+    "PEPTradeTransformationInit",
     # Demand blocks
     "LESConsumer",
     "CobbDouglasConsumer",
@@ -54,4 +68,5 @@ __all__ = [
     "MarketClearing",
     "PriceNormalization",
     "FactorMarketClearing",
+    "PEPMacroClosureInit",
 ]
