@@ -434,3 +434,220 @@ class FactorMarketClearing(Block):
         if "WF0" in calibrated:
             if "WF" in var_manager:
                 var_manager.get("WF").value = calibrated["WF0"].copy()
+
+
+class PEPMacroClosureInit(Block):
+    """PEP macro closure blockwise initializer/validator.
+
+    Reconciles:
+    - EQ44 (YROW),
+    - EQ45 / EQ46 (SROW, CAB),
+    - EQ87 (IT = savings closure),
+    - EQ93 (GDP_FD identity).
+    """
+
+    name: str = Field(default="PEP_MacroClosure_Init", description="Block name")
+    description: str = Field(
+        default="PEP blockwise macro closure initialization and validation",
+        description="Block description",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I"]
+
+    def setup(
+        self,
+        set_manager: SetManager,
+        parameters: dict[str, Parameter],
+        variables: dict[str, Variable],
+    ) -> list[SymbolicEquation]:
+        _ = (set_manager, parameters, variables)
+        return []
+
+    @staticmethod
+    def _first_map(source: dict[str, Any], *names: str) -> dict[Any, float]:
+        for name in names:
+            obj = source.get(name)
+            if isinstance(obj, dict):
+                return obj
+        return {}
+
+    @staticmethod
+    def _scalar(source: dict[str, Any], name: str, default: float = 0.0) -> float:
+        obj = source.get(name, default)
+        try:
+            return float(obj)
+        except Exception:
+            return float(default)
+
+    @staticmethod
+    def _set_or_blend(current: float, new: float, alpha: float) -> float:
+        return (1.0 - alpha) * float(current) + alpha * float(new)
+
+    def initialize_levels(
+        self,
+        *,
+        set_manager: SetManager,
+        parameters: dict[str, Any],
+        variables: dict[str, Any],
+        mode: str = "gams_blockwise",
+    ) -> None:
+        _ = mode
+        I = tuple(set_manager.get("I"))
+        K = tuple(set_manager.get("K")) if "K" in set_manager else tuple()
+        J = tuple(set_manager.get("J")) if "J" in set_manager else tuple()
+        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else tuple()
+
+        alpha = max(0.0, min(1.0, self._scalar(parameters, "macro_alpha", 1.0)))
+
+        imo0 = self._first_map(parameters, "IMO0")
+        exdo0 = self._first_map(parameters, "EXDO0", "EXDO")
+        kdo0 = self._first_map(parameters, "KDO0")
+        lambda_rk = self._first_map(parameters, "lambda_RK")
+
+        pwm = self._first_map(variables, "PWM")
+        im = self._first_map(variables, "IM")
+        r = self._first_map(variables, "R")
+        kd = self._first_map(variables, "KD")
+        tr = self._first_map(variables, "TR")
+        pe_fob = self._first_map(variables, "PE_FOB")
+        exd = self._first_map(variables, "EXD")
+        sh = self._first_map(variables, "SH")
+        sf = self._first_map(variables, "SF")
+        pc = self._first_map(variables, "PC")
+        c = self._first_map(variables, "C")
+        cg = self._first_map(variables, "CG")
+        inv = self._first_map(variables, "INV")
+        vstk = self._first_map(variables, "VSTK")
+        h_set = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+
+        e = self._scalar(variables, "e", 1.0)
+        yrow_cur = self._scalar(variables, "YROW", 0.0)
+        srow_cur = self._scalar(variables, "SROW", 0.0)
+        it_cur = self._scalar(variables, "IT", 0.0)
+        gfcf_cur = self._scalar(variables, "GFCF", 0.0)
+        gdp_fd_cur = self._scalar(variables, "GDP_FD", 0.0)
+        sg = self._scalar(variables, "SG", 0.0)
+
+        yrow_new = 0.0
+        for i in I:
+            if abs(imo0.get(i, 0.0)) > 1e-12:
+                yrow_new += e * float(pwm.get(i, 1.0)) * float(im.get(i, 0.0))
+        for k in K:
+            lam = float(lambda_rk.get(("row", k), 0.0))
+            for j in J:
+                if abs(kdo0.get((k, j), 0.0)) > 1e-12:
+                    yrow_new += lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+        for agd in AGD:
+            yrow_new += float(tr.get(("row", agd), 0.0))
+
+        yrow = self._set_or_blend(yrow_cur, yrow_new, alpha)
+        variables["YROW"] = yrow
+
+        srow_new = yrow
+        for i in I:
+            if abs(exdo0.get(i, 0.0)) > 1e-12:
+                srow_new -= float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
+        for agd in AGD:
+            srow_new -= float(tr.get((agd, "row"), 0.0))
+
+        srow = self._set_or_blend(srow_cur, srow_new, alpha)
+        variables["SROW"] = srow
+        variables["CAB"] = -srow
+
+        it_new = sum(float(v) for v in sh.values()) + sum(float(v) for v in sf.values()) + float(sg) + srow
+        it = self._set_or_blend(it_cur, it_new, alpha)
+        variables["IT"] = it
+
+        stock_val = sum(float(pc.get(i, 1.0)) * float(vstk.get(i, 0.0)) for i in I)
+        gfcf_new = it - stock_val
+        variables["GFCF"] = self._set_or_blend(gfcf_cur, gfcf_new, alpha)
+
+        gdp_fd_new = 0.0
+        for i in I:
+            cons_i = sum(float(c.get((i, h), 0.0)) for h in h_set)
+            gdp_fd_new += float(pc.get(i, 0.0)) * (
+                cons_i + float(cg.get(i, 0.0)) + float(inv.get(i, 0.0)) + float(vstk.get(i, 0.0))
+            )
+            gdp_fd_new += float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
+            gdp_fd_new -= float(pwm.get(i, 0.0)) * e * float(im.get(i, 0.0))
+        variables["GDP_FD"] = self._set_or_blend(gdp_fd_cur, gdp_fd_new, alpha)
+
+    def validate_initialization(
+        self,
+        *,
+        set_manager: SetManager,
+        parameters: dict[str, Any],
+        variables: dict[str, Any],
+    ) -> dict[str, float]:
+        I = tuple(set_manager.get("I"))
+        K = tuple(set_manager.get("K")) if "K" in set_manager else tuple()
+        J = tuple(set_manager.get("J")) if "J" in set_manager else tuple()
+        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else tuple()
+        h_set = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+
+        imo0 = self._first_map(parameters, "IMO0")
+        exdo0 = self._first_map(parameters, "EXDO0", "EXDO")
+        kdo0 = self._first_map(parameters, "KDO0")
+        lambda_rk = self._first_map(parameters, "lambda_RK")
+
+        pwm = self._first_map(variables, "PWM")
+        im = self._first_map(variables, "IM")
+        r = self._first_map(variables, "R")
+        kd = self._first_map(variables, "KD")
+        tr = self._first_map(variables, "TR")
+        pe_fob = self._first_map(variables, "PE_FOB")
+        exd = self._first_map(variables, "EXD")
+        sh = self._first_map(variables, "SH")
+        sf = self._first_map(variables, "SF")
+        pc = self._first_map(variables, "PC")
+        c = self._first_map(variables, "C")
+        cg = self._first_map(variables, "CG")
+        inv = self._first_map(variables, "INV")
+        vstk = self._first_map(variables, "VSTK")
+
+        e = self._scalar(variables, "e", 1.0)
+        yrow = self._scalar(variables, "YROW", 0.0)
+        srow = self._scalar(variables, "SROW", 0.0)
+        cab = self._scalar(variables, "CAB", 0.0)
+        it = self._scalar(variables, "IT", 0.0)
+        sg = self._scalar(variables, "SG", 0.0)
+        gdp_fd = self._scalar(variables, "GDP_FD", 0.0)
+
+        yrow_rhs = 0.0
+        for i in I:
+            if abs(imo0.get(i, 0.0)) > 1e-12:
+                yrow_rhs += e * float(pwm.get(i, 1.0)) * float(im.get(i, 0.0))
+        for k in K:
+            lam = float(lambda_rk.get(("row", k), 0.0))
+            for j in J:
+                if abs(kdo0.get((k, j), 0.0)) > 1e-12:
+                    yrow_rhs += lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+        for agd in AGD:
+            yrow_rhs += float(tr.get(("row", agd), 0.0))
+
+        srow_rhs = yrow
+        for i in I:
+            if abs(exdo0.get(i, 0.0)) > 1e-12:
+                srow_rhs -= float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
+        for agd in AGD:
+            srow_rhs -= float(tr.get((agd, "row"), 0.0))
+
+        it_rhs = sum(float(v) for v in sh.values()) + sum(float(v) for v in sf.values()) + float(sg) + srow
+
+        gdp_fd_rhs = 0.0
+        for i in I:
+            cons_i = sum(float(c.get((i, h), 0.0)) for h in h_set)
+            gdp_fd_rhs += float(pc.get(i, 0.0)) * (
+                cons_i + float(cg.get(i, 0.0)) + float(inv.get(i, 0.0)) + float(vstk.get(i, 0.0))
+            )
+            gdp_fd_rhs += float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
+            gdp_fd_rhs -= float(pwm.get(i, 0.0)) * e * float(im.get(i, 0.0))
+
+        return {
+            "EQ44": yrow - yrow_rhs,
+            "EQ45": srow - srow_rhs,
+            "EQ46": srow - (-cab),
+            "EQ87": it - it_rhs,
+            "EQ93": gdp_fd - gdp_fd_rhs,
+        }
