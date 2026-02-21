@@ -1829,6 +1829,46 @@ class IPOPTSolver:
             ttip = self.params.get("ttip", {}).get(j, 0.0)
             vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
 
+        # Some calibration paths do not populate TIWT/TIKT/TIPT robustly even
+        # though detailed TIW/TIK/TIP flows are available from rates. In that
+        # case, refresh aggregates so pre-solve identities (EQ27/EQ28/EQ43)
+        # stay aligned with GAMS BASE initialization.
+        tiwt_detail = sum(vars.TIW.values())
+        tikt_detail = sum(vars.TIK.values())
+        tipt_detail = sum(vars.TIP.values())
+        refresh_agg = False
+        if abs(vars.TIWT) <= 1e-12 and abs(tiwt_detail) > 1e-12:
+            vars.TIWT = tiwt_detail
+            refresh_agg = True
+        if abs(vars.TIKT) <= 1e-12 and abs(tikt_detail) > 1e-12:
+            vars.TIKT = tikt_detail
+            refresh_agg = True
+        if abs(vars.TIPT) <= 1e-12 and abs(tipt_detail) > 1e-12:
+            vars.TIPT = tipt_detail
+            refresh_agg = True
+        if refresh_agg:
+            vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
+            vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+            tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+            vars.SG = vars.YG - tr_to_govt - vars.G
+
+            # Keep GDP_IB pre-solve aligned with EQ92 after tax-aggregate refresh.
+            ldo0 = self.params.get("LDO0", {})
+            kdo0 = self.params.get("KDO0", {})
+            gdp_ib = 0.0
+            for l in self.sets.get("L", []):
+                for j in self.sets.get("J", []):
+                    if abs(ldo0.get((l, j), 0.0)) <= 1e-12:
+                        continue
+                    gdp_ib += vars.W.get(l, 1.0) * vars.LD.get((l, j), 0.0)
+            for k in self.sets.get("K", []):
+                for j in self.sets.get("J", []):
+                    if abs(kdo0.get((k, j), 0.0)) <= 1e-12:
+                        continue
+                    gdp_ib += vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0.0)
+            gdp_ib += vars.TPRODN + vars.TPRCTS
+            vars.GDP_IB = gdp_ib
+
     def _apply_equation_consistent_adjustments(self, vars: PEPModelVariables) -> None:
         """Apply adjustments so initialized values satisfy benchmark equations."""
         # Align XST with trade transformation baseline (SUM_i XS(j,i)).
@@ -2143,16 +2183,15 @@ class IPOPTSolver:
         
         logger.info(f"Number of variables: {n_vars}")
 
-        # For non-excel init modes, allow early return when initialization is
-        # already feasible enough. In excel mode, we always execute solve.
+        # Allow early return for any init mode when initialization is already
+        # feasible enough. This keeps excel/gams behavior consistent in BASE.
         init_residuals = self.equations.calculate_all_residuals(vars)
         init_vals = np.array(list(init_residuals.values()), dtype=float)
         init_rms = float(np.sqrt(np.mean(init_vals ** 2))) if init_vals.size else 0.0
         init_max = float(np.max(np.abs(init_vals))) if init_vals.size else 0.0
         practical_tol = max(self.tolerance * 1e4, 1e-4)
         practical_max_tol = max(self.tolerance * 1e5, 1e-3)
-        allow_init_shortcut = not self._uses_excel_init()
-        if allow_init_shortcut and init_rms <= self.tolerance:
+        if init_rms <= self.tolerance:
             logger.info(
                 "Initial guess satisfies tolerance (RMS=%.3e <= %.3e); skipping IPOPT.",
                 init_rms,
@@ -2166,7 +2205,7 @@ class IPOPTSolver:
                 residuals=init_residuals,
                 message=f"Initial {self.init_mode} benchmark satisfies tolerance",
             )
-        if allow_init_shortcut and init_rms <= practical_tol and init_max <= practical_max_tol:
+        if init_rms <= practical_tol and init_max <= practical_max_tol:
             logger.info(
                 "Initial guess accepted by practical tolerance (RMS=%.3e, Max=%.3e); skipping IPOPT.",
                 init_rms,
