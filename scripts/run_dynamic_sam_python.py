@@ -16,6 +16,10 @@ from equilibria.templates.pep_calibration_unified_dynamic import (  # noqa: E402
     PEPModelCalibratorDynamicSAM,
     PEPModelCalibratorExcelDynamicSAM,
 )
+from equilibria.templates.pep_sam_compat import (  # noqa: E402
+    should_apply_cri_pep_fix,
+    transform_sam_to_pep_compatible,
+)
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -39,6 +43,20 @@ def main() -> int:
     parser.add_argument("--acc-tx", type=str, default="tx")
     parser.add_argument("--acc-inv", type=str, default="inv")
     parser.add_argument("--acc-vstk", type=str, default="vstk")
+    parser.add_argument(
+        "--cri-fix-mode",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="Apply CRI->PEP SAM compatibility transform before calibration",
+    )
+    parser.add_argument("--cri-fix-output", type=Path, default=None)
+    parser.add_argument("--cri-fix-report", type=Path, default=None)
+    parser.add_argument(
+        "--cri-fix-target-mode",
+        choices=["geomean", "average", "original"],
+        default="geomean",
+    )
+    parser.add_argument("--cri-fix-margin-commodity", type=str, default="ser")
     parser.add_argument("--save-state", type=Path, default=None)
     parser.add_argument("--save-report", type=Path, default=None)
     parser.add_argument("--verbose", action="store_true")
@@ -61,16 +79,46 @@ def main() -> int:
         print(f"SAM file not found: {args.sam_file}")
         return 1
 
-    ext = args.sam_file.suffix.lower()
+    sam_file_for_run = args.sam_file
+    if should_apply_cri_pep_fix(args.sam_file, mode=args.cri_fix_mode):
+        output_sam = (
+            args.cri_fix_output
+            if args.cri_fix_output
+            else Path("output") / f"{args.sam_file.stem}-pep-compatible{args.sam_file.suffix}"
+        )
+        report_json = (
+            args.cri_fix_report
+            if args.cri_fix_report
+            else Path("output") / f"{args.sam_file.stem}-pep-compatible-report.json"
+        )
+        cri_fix_report = transform_sam_to_pep_compatible(
+            input_sam=args.sam_file,
+            output_sam=output_sam,
+            report_json=report_json,
+            target_mode=args.cri_fix_target_mode,
+            margin_commodity=args.cri_fix_margin_commodity,
+        )
+        sam_file_for_run = output_sam
+        print("Applied CRI->PEP SAM compatibility transform")
+        print(f"  input : {args.sam_file}")
+        print(f"  output: {sam_file_for_run}")
+        print(
+            "  ignored inflows: "
+            f"{cri_fix_report['before']['pep_compatibility']['totals']['ignored_inflows']:.6f}"
+            " -> "
+            f"{cri_fix_report['after']['pep_compatibility']['totals']['ignored_inflows']:.6f}"
+        )
+
+    ext = sam_file_for_run.suffix.lower()
     if ext == ".xlsx":
         calibrator = PEPModelCalibratorExcelDynamicSAM(
-            sam_file=args.sam_file,
+            sam_file=sam_file_for_run,
             val_par_file=args.val_par_file,
             accounts=accounts,
         )
     else:
         calibrator = PEPModelCalibratorDynamicSAM(
-            sam_file=args.sam_file,
+            sam_file=sam_file_for_run,
             val_par_file=args.val_par_file,
             accounts=accounts,
         )
@@ -93,4 +141,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
