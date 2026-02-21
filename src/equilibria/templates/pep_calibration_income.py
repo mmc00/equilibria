@@ -28,12 +28,16 @@ class IncomeCalibrationResult(BaseModel):
     YHO: dict[str, float] = Field(default_factory=dict, description="Total income by household")
     YDHO: dict[str, float] = Field(default_factory=dict, description="Disposable income by household")
     CTHO: dict[str, float] = Field(default_factory=dict, description="Total consumption by household")
+    TDHO: dict[str, float] = Field(default_factory=dict, description="Direct taxes by household")
+    SHO: dict[str, float] = Field(default_factory=dict, description="Savings by household")
     
     # Firm incomes (lines 436-439)
     YFKO: dict[str, float] = Field(default_factory=dict, description="Capital income by firm")
     YFTRO: dict[str, float] = Field(default_factory=dict, description="Transfer income by firm")
     YFO: dict[str, float] = Field(default_factory=dict, description="Total income by firm")
     YDFO: dict[str, float] = Field(default_factory=dict, description="Disposable income by firm")
+    TDFO: dict[str, float] = Field(default_factory=dict, description="Direct taxes by firm")
+    SFO: dict[str, float] = Field(default_factory=dict, description="Savings by firm")
     
     # Government income (lines 441-453)
     YGKO: float = Field(default=0.0, description="Government capital income")
@@ -55,9 +59,11 @@ class IncomeCalibrationResult(BaseModel):
     # Rest of world (lines 455-457)
     YROWO: float = Field(default=0.0, description="Rest of world income")
     CABO: float = Field(default=0.0, description="Current account balance")
-    
+    SROWO: float = Field(default=0.0, description="Rest of world savings")
+
     # Investment (line 459)
     ITO: float = Field(default=0.0, description="Total investment")
+    SGO: float = Field(default=0.0, description="Government savings")
 
     # Transfer matrix from SAM
     TRO: dict[tuple[str, str], float] = Field(
@@ -295,7 +301,6 @@ class IncomeCalibrator:
             yhtro = sum(
                 self._get_sam_value('SAM', 'AG', h, 'AG', ag)
                 for ag in AG 
-                if ag != h  # Exclude self-transfers
             )
             self.result.YHTRO[h] = yhtro
             
@@ -307,6 +312,7 @@ class IncomeCalibrator:
             # TDHO(h) = direct taxes paid by h = SAM('Agents','TAX','Agents',h)
             # In our GDX: SAM('AG', 'TD', 'AG', h)
             tdho = self._get_sam_value('SAM', 'AG', 'TD', 'AG', h)
+            self.result.TDHO[h] = tdho
             # TRO('gvt',h): transfer from household h to government
             tr_h_to_gvt = self._get_sam_value('SAM', 'AG', 'GVT', 'AG', h)
             ydho = yho - tdho - tr_h_to_gvt
@@ -316,6 +322,7 @@ class IncomeCalibrator:
             # SHO(h) = savings of h = SAM('OTH','INV','Agents',h)
             # In our GDX: SAM('OTH', 'INV', 'AG', h)
             sho = self._get_sam_value('SAM', 'OTH', 'INV', 'AG', h)
+            self.result.SHO[h] = sho
             # Transfers from h to other agents (outflows)
             tro_h_out = sum(
                 self._get_sam_value('SAM', 'AG', ag, 'AG', h)
@@ -357,7 +364,6 @@ class IncomeCalibrator:
             yftro = sum(
                 self._get_sam_value('SAM', 'AG', f_upper, 'AG', ag.upper())
                 for ag in AG
-                if ag.upper() != f_upper
             )
             self.result.YFTRO[f] = yftro
             
@@ -368,6 +374,7 @@ class IncomeCalibrator:
             # YDFO(f) = disposable income = total income - taxes
             # TDFO(f) = direct taxes paid by f = SAM('AG', 'TD', 'AG', f)
             tdfo = self._get_sam_value('SAM', 'AG', 'TD', 'AG', f_upper)
+            self.result.TDFO[f] = tdfo
             ydfo = yfo - tdfo
             self.result.YDFO[f] = ydfo
     
@@ -386,7 +393,7 @@ class IncomeCalibrator:
             TIPTO = SUM[j, TIPO(j)]
             TPRODNO = TIKTO + TIWTO + TIPTO
             TPRCTSO = TICTO + TIMTO + TIXTO
-            YGTRO = SUM[agng, TRO('gvt',agng)]
+            YGTRO = SUM[ag, TRO('gvt',ag)]
             YGO = YGKO + TDHTO + TDFTO + TPRODNO + TPRCTSO + YGTRO
             
         Note: lambda_RK('gvt', k) = SAM('AG', 'GVT', 'K', k)
@@ -398,7 +405,7 @@ class IncomeCalibrator:
               TIWO(l,j) = SAM('L', l, 'J', j) * tax_rate  # Labor tax
               TIKO(k,j) = SAM('K', k, 'J', j) * tax_rate  # Capital tax
               TIPO(j) = SAM('J', j, 'J', j) - sum of inputs  # Production tax
-              TRO('gvt', agng) = SAM('AG', 'GVT', 'AG', agng)  # Transfers from gvt
+              TRO('gvt', ag) = SAM('AG', 'GVT', 'AG', ag)  # Transfers from gvt
         """
         K = self.sets['K']
         H = self.sets['H']
@@ -406,7 +413,7 @@ class IncomeCalibrator:
         I = self.sets['I']
         J = self.sets['J']
         L = self.sets['L']
-        AGNG = self.sets['AGNG']
+        AG = self.sets['AG']
         
         # YGKO = government capital income
         # lambda_RK('gvt', k) = SAM('AG', 'GVT', 'K', k)
@@ -497,10 +504,11 @@ class IncomeCalibrator:
         self.result.TPRCTSO = tprctso
         
         # YGTRO = government transfer income
-        # TRO('gvt', agng) = transfers from gvt to agng = SAM('AG', 'GVT', 'AG', agng)
+        # GAMS pep2 dynamic scripts calibrate this over AG:
+        # YGTRO = SUM[ag, TRO('gvt', ag)].
         ygtro = sum(
-            self._get_sam_value('SAM', 'AG', 'GVT', 'AG', agng.upper())
-            for agng in AGNG
+            self._get_sam_value('SAM', 'AG', 'GVT', 'AG', ag.upper())
+            for ag in AG
         )
         self.result.YGTRO = ygtro
         
@@ -541,6 +549,7 @@ class IncomeCalibrator:
         # CABO = current account balance = -SROWO
         # SROWO = SAM('OTH','INV','Agents','row') = SAM('OTH', 'INV', 'AG', 'ROW')
         srowo = self._get_sam_value('SAM', 'OTH', 'INV', 'AG', 'ROW')
+        self.result.SROWO = srowo
         cabo = -srowo
         self.result.CABO = cabo
     
@@ -559,22 +568,26 @@ class IncomeCalibrator:
         F = self.sets['F']
         
         # SHO(h) = household savings
-        sho_sum = sum(
-            self._get_sam_value('SAM', 'OTH', 'INV', 'AG', h.upper())
-            for h in H
-        )
-        
+        sho_sum = 0.0
+        for h in H:
+            sho_h = self._get_sam_value('SAM', 'OTH', 'INV', 'AG', h.upper())
+            self.result.SHO[h] = sho_h
+            sho_sum += sho_h
+
         # SFO(f) = firm savings
-        sfo_sum = sum(
-            self._get_sam_value('SAM', 'OTH', 'INV', 'AG', f.upper())
-            for f in F
-        )
-        
+        sfo_sum = 0.0
+        for f in F:
+            sfo_f = self._get_sam_value('SAM', 'OTH', 'INV', 'AG', f.upper())
+            self.result.SFO[f] = sfo_f
+            sfo_sum += sfo_f
+
         # SGO = government savings
         sgo = self._get_sam_value('SAM', 'OTH', 'INV', 'AG', 'GVT')
-        
+        self.result.SGO = sgo
+
         # SROWO = rest of world savings
         srowo = self._get_sam_value('SAM', 'OTH', 'INV', 'AG', 'ROW')
+        self.result.SROWO = srowo
         
         ito = sho_sum + sfo_sum + sgo + srowo
         self.result.ITO = ito
