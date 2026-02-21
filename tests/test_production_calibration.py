@@ -91,13 +91,14 @@ def test_production_calibration():
     print("Validation Checks")
     print("=" * 70)
     
-    # Check 1: XSTO = CIO + VAO
-    print("\n1. Checking XSTO = CIO + VAO:")
+    # Check 1: XSTO = SUM[i, XSO(j,i)] with XSO=DSO+EXO from SAM
+    print("\n1. Checking XSTO = SUM[i, DSO(j,i)+EXO(j,i)]:")
     for j in production_calibrator.sets['J']:
         xsto = production_result.XSTO.get(j, 0)
-        cio = production_result.CIO.get(j, 0)
-        vao = production_result.VAO.get(j, 0)
-        expected = cio + vao
+        expected = 0.0
+        for i in production_calibrator.sets['I']:
+            expected += production_calibrator._get_sam_value("J", j.upper(), "I", i.upper())
+            expected += production_calibrator._get_sam_value("J", j.upper(), "X", i.upper())
         diff = abs(xsto - expected)
         status = "✓" if diff < 0.01 else "✗"
         print(f"  {status} {j}: {xsto:12,.2f} = {expected:12,.2f} (diff: {diff:.2f})")

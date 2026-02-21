@@ -262,6 +262,17 @@ class PEPModelEquations:
         residuals.update(self.gdp_residuals(vars))
         
         return residuals
+
+    @staticmethod
+    def _safe_power(base: float, exponent: float, eps: float = 1e-12) -> float:
+        """Numerically safe power for non-negative economic quantities."""
+        b = float(base)
+        e = float(exponent)
+        if b <= 0.0:
+            if e < 0.0:
+                return float(eps ** e)
+            return 0.0
+        return float(b ** e)
     
     def production_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
         """Calculate production block residuals (EQ1-EQ9)."""
@@ -314,12 +325,14 @@ class PEPModelEquations:
             if vars.LDC.get(j, 0) > 0:
                 rho_ld = self.params.get("rho_LD", {}).get(j, 0)
                 B_ld = self.params.get("B_LD", {}).get(j, 1)
+                if B_ld <= 0:
+                    continue
                 
                 ld_sum = 0
                 for l in self.L:
                     beta_ld = self.params.get("beta_LD", {}).get((l, j), 0)
                     if vars.LD.get((l, j), 0) > 0:
-                        ld_sum += beta_ld * (vars.LD[(l, j)] ** (-rho_ld))
+                        ld_sum += beta_ld * self._safe_power(vars.LD.get((l, j), 0.0), -rho_ld)
                 
                 if ld_sum > 0 and rho_ld != 0:
                     expected_ldc = B_ld * (ld_sum ** (-1 / rho_ld))
@@ -332,6 +345,8 @@ class PEPModelEquations:
                     sigma_ld = self.params.get("sigma_LD", {}).get(j, 1)
                     beta_ld = self.params.get("beta_LD", {}).get(key, 0)
                     B_ld = self.params.get("B_LD", {}).get(j, 1)
+                    if B_ld <= 0:
+                        continue
                     
                     if vars.WTI.get(key, 0) > 0 and vars.WC.get(j, 0) > 0:
                         demand = (beta_ld * vars.WC[j] / vars.WTI[key]) ** sigma_ld
@@ -342,12 +357,14 @@ class PEPModelEquations:
             if vars.KDC.get(j, 0) > 0 and any(kdo0.get((k, j), 0.0) != 0 for k in self.K):
                 rho_kd = self.params.get("rho_KD", {}).get(j, 0)
                 B_kd = self.params.get("B_KD", {}).get(j, 1)
+                if B_kd <= 0:
+                    continue
                 
                 kd_sum = 0
                 for k in self.K:
                     beta_kd = self.params.get("beta_KD", {}).get((k, j), 0)
                     if kdo0.get((k, j), 0.0) != 0:
-                        kd_sum += beta_kd * (vars.KD[(k, j)] ** (-rho_kd))
+                        kd_sum += beta_kd * self._safe_power(vars.KD.get((k, j), 0.0), -rho_kd)
                 
                 if kd_sum > 0 and rho_kd != 0:
                     expected_kdc = B_kd * (kd_sum ** (-1 / rho_kd))
@@ -360,6 +377,8 @@ class PEPModelEquations:
                     sigma_kd = self.params.get("sigma_KD", {}).get(j, 1)
                     beta_kd = self.params.get("beta_KD", {}).get(key, 0)
                     B_kd = self.params.get("B_KD", {}).get(j, 1)
+                    if B_kd <= 0:
+                        continue
                     
                     if vars.RTI.get(key, 0) > 0 and vars.RC.get(j, 0) > 0:
                         demand = (beta_kd * vars.RC[j] / vars.RTI[key]) ** sigma_kd
@@ -784,7 +803,7 @@ class PEPModelEquations:
                 for i in self.I:
                     beta_xt = self.params.get("beta_XT", {}).get((j, i), 0)
                     if abs(xso0.get((j, i), 0.0)) > 1e-12:
-                        xs_sum += beta_xt * (vars.XS[(j, i)] ** rho_xt)
+                        xs_sum += beta_xt * (vars.XS.get((j, i), 0.0) ** rho_xt)
                 expected_xst = B_xt * (xs_sum ** (1 / rho_xt)) if xs_sum > 0 else 0.0
                 residuals[f"EQ58_{j}"] = vars.XST.get(j, 0) - expected_xst
         
@@ -863,9 +882,9 @@ class PEPModelEquations:
                 dd = vars.DD.get(i, 0)
                 term = 0.0
                 if abs(imo0.get(i, 0.0)) > 1e-12:
-                    term += beta_m * (im ** (-rho_m))
+                        term += beta_m * self._safe_power(im, -rho_m)
                 if abs(ddo0.get(i, 0.0)) > 1e-12:
-                    term += (1 - beta_m) * (dd ** (-rho_m))
+                        term += (1 - beta_m) * self._safe_power(dd, -rho_m)
                 expected_q = B_m * (term ** (-1 / rho_m)) if term > 0 else 0.0
                 residuals[f"EQ63_{i}"] = vars.Q.get(i, 0) - expected_q
 

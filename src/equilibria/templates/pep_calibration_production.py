@@ -336,6 +336,60 @@ class ProductionCalibrator:
             logger.warning(f"Error reading SAM: {e}")
             return 0.0
 
+    def _compute_pco_from_sam(self) -> dict[str, float]:
+        """
+        Reconstruct benchmark PCO(i) from SAM, matching GAMS calibration order.
+
+        PCO(i) = [DDO(i) + IMO(i) + SUM[ij, tmrg(ij,i)] + TICO(i) + TIMO(i)]
+                 / [DDO(i) + IMO(i)]
+        """
+        I = self.sets["I"]
+        J = self.sets["J"]
+        pco: dict[str, float] = {}
+
+        for i in I:
+            i_upper = i.upper()
+            ddo = sum(
+                self._get_sam_value("J", j.upper(), "I", i_upper)
+                for j in J
+            )
+            imo = self._get_sam_value("AG", "ROW", "I", i_upper)
+            tico = self._get_sam_value("AG", "TI", "I", i_upper)
+            timo = self._get_sam_value("AG", "TM", "I", i_upper)
+            margin_sum = sum(
+                self._get_sam_value("I", ij.upper(), "I", i_upper)
+                for ij in I
+            )
+
+            denominator = ddo + imo
+            if abs(denominator) > 1e-12:
+                pco[i] = (ddo + imo + margin_sum + tico + timo) / denominator
+            else:
+                pco[i] = 1.0
+
+        return pco
+
+    def _compute_xsto_from_sam(self) -> dict[str, float]:
+        """
+        Reconstruct benchmark XSTO(j) from SAM trade flows:
+        XSTO(j) = SUM[i, XSO(j,i)] with XSO(j,i)=DSO(j,i)+EXO(j,i).
+        """
+        I = self.sets["I"]
+        J = self.sets["J"]
+        xsto: dict[str, float] = {}
+
+        for j in J:
+            j_upper = j.upper()
+            total = 0.0
+            for i in I:
+                i_upper = i.upper()
+                dso = self._get_sam_value("J", j_upper, "I", i_upper)
+                exo = self._get_sam_value("J", j_upper, "X", i_upper)
+                total += dso + exo
+            xsto[j] = total
+
+        return xsto
+
     def calibrate(self) -> ProductionCalibrationResult:
         """Run full production calibration."""
         logger.info("Starting production block calibration (Phase 3)")
@@ -506,8 +560,8 @@ class ProductionCalibrator:
         J = self.sets["J"]
         I = self.sets["I"]
 
-        # Base commodity prices (numeraire = 1.0)
-        PCO = {i: 1.0 for i in I}
+        # Match GAMS denominator with benchmark PCO calibrated from SAM.
+        PCO = self._compute_pco_from_sam()
 
         for j in J:
             j_upper = j.upper()
@@ -547,8 +601,8 @@ class ProductionCalibrator:
         I = self.sets["I"]
         J = self.sets["J"]
 
-        # Base commodity prices (numeraire = 1.0)
-        PCO = {i: 1.0 for i in I}
+        # DIO is calibrated in quantity units using benchmark PCO(i).
+        PCO = self._compute_pco_from_sam()
 
         # Read intermediate consumption from SAM
         for i in I:
@@ -580,7 +634,7 @@ class ProductionCalibrator:
         """Calibrate output and technical coefficients (lines 600-601).
 
         GAMS formulas:
-            XSTO(j) = CIO(j) + VAO(j)
+            XSTO(j) = SUM[i, XSO(j,i)]
             io(j) = CIO(j) / XSTO(j)
             v(j) = VAO(j) / XSTO(j)
             aij(i,j) = DIO(i,j) / CIO(j)
@@ -588,11 +642,11 @@ class ProductionCalibrator:
         """
         I = self.sets["I"]
         J = self.sets["J"]
+        xsto_from_sam = self._compute_xsto_from_sam()
 
         # XSTO(j) = total output
         for j in J:
-            # Sum intermediate consumption + value added
-            xsto = self.result.CIO.get(j, 0) + self.result.VAO.get(j, 0)
+            xsto = xsto_from_sam.get(j, 0.0)
             self.result.XSTO[j] = xsto
 
             # Technical coefficients
