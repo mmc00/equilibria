@@ -241,7 +241,7 @@ All calibration modules read from SAM-V2_0.gdx using the delta decoder:
 ### Unified Calibration Runner ✅ COMPLETE
 
 **File:** `src/equilibria/templates/pep_calibration_unified.py`
-**Script:** `scripts/run_all_calibration.py`
+**Script:** `scripts/cli/run_all_calibration.py`
 
 A unified calibration runner that orchestrates all five phases and produces a complete calibrated model state.
 
@@ -256,16 +256,16 @@ A unified calibration runner that orchestrates all five phases and produces a co
 
 ```bash
 # Run complete calibration with summary report
-python scripts/run_all_calibration.py
+python scripts/cli/run_all_calibration.py
 
 # Save calibrated state to JSON
-python scripts/run_all_calibration.py --save-state output/state.json
+python scripts/cli/run_all_calibration.py --save-state output/state.json
 
 # Save detailed report
-python scripts/run_all_calibration.py --save-report output/report.json
+python scripts/cli/run_all_calibration.py --save-report output/report.json
 
 # Enable verbose logging
-python scripts/run_all_calibration.py --verbose
+python scripts/cli/run_all_calibration.py --verbose
 ```
 
 **Python API:**
@@ -321,7 +321,7 @@ Solver infrastructure has been implemented to solve the calibrated PEP model.
 **Files:**
 - `src/equilibria/templates/pep_model_equations.py` - All GAMS equations (EQ1-EQ97)
 - `src/equilibria/templates/pep_model_solver.py` - Solver implementation
-- `scripts/run_solver.py` - Solver runner script
+- `scripts/cli/run_solver.py` - Solver runner script
 
 **Implemented Equations:**
 - **Production Block (EQ1-EQ9):** Value added, intermediate consumption, CES labor/capital demands
@@ -355,22 +355,22 @@ pip install cyipopt
 
 ```bash
 # Calibrate and solve (auto-selects best solver)
-python scripts/run_solver.py
+python scripts/cli/run_solver.py
 
 # Force IPOPT solver
-python scripts/run_solver.py --method ipopt
+python scripts/cli/run_solver.py --method ipopt
 
 # Use simple iteration (no dependencies)
-python scripts/run_solver.py --method simple_iteration
+python scripts/cli/run_solver.py --method simple_iteration
 
 # Use pre-calibrated state
-python scripts/run_solver.py --calibrated-state output/state.json
+python scripts/cli/run_solver.py --calibrated-state output/state.json
 
 # Save solution
-python scripts/run_solver.py --save-solution output/solution.json
+python scripts/cli/run_solver.py --save-solution output/solution.json
 
 # Custom tolerance and iterations
-python scripts/run_solver.py --tolerance 1e-8 --max-iterations 500
+python scripts/cli/run_solver.py --tolerance 1e-8 --max-iterations 500
 ```
 
 **Python API:**
@@ -404,7 +404,7 @@ validation = solver.validate_solution(solution)
 - ✅ Full `pep2` parity against GAMS pre-solve baseline (351 vars, 251 params, zero mismatches)
 - ✅ Equation-consistent initialization now satisfies the full system at numerical precision
 - ✅ IPOPT path stabilized (no divide-by-zero, fixed residual-vector dimensions)
-- ✅ `run_solver.py --method ipopt --init-mode equation_consistent` now returns `CONVERGED`
+- ✅ `scripts/cli/run_solver.py --method ipopt --init-mode equation_consistent` now returns `CONVERGED`
 
 **Latest Solver Result (`pep2`, equation-consistent init):**
 - Final RMS residual: `4.01e-13`
@@ -420,7 +420,7 @@ validation = solver.validate_solution(solution)
 - GAMS levels source: `src/equilibria/templates/reference/pep2/scripts/Results.gdx` (SIM1 slice)
 
 **SAM-Only Calibration Check (Updated Feb 2026):**
-- Command: `uv run python scripts/verify_calibration.py`
+- Command: `uv run python scripts/qa/verify_calibration.py`
 - Result: calibrated values now satisfy equilibrium directly (no extra solve step needed)
 - Number of equations: `315`
 - RMS residual: `3.99e-13`
@@ -442,13 +442,13 @@ validation = solver.validate_solution(solution)
 **Debugging Tools:**
 ```bash
 # Verify calibration satisfies equations
-python scripts/verify_calibration.py
+python scripts/qa/verify_calibration.py
 
 # Compare solver vs GAMS baseline  
-python scripts/compare_with_gams.py
+python scripts/parity/compare_with_gams.py
 
 # Debug specific equations
-python scripts/debug_equations.py
+python scripts/dev/debug_equations.py
 ```
 
 **Root Cause (updated):**
@@ -464,7 +464,7 @@ Most remaining large residuals were caused by initialization/alignment mismatche
 
 **Verification command:**
 ```bash
-python scripts/verify_pep2_full_parity.py \
+python scripts/parity/verify_pep2_full_parity.py \
   --tol 1e-9 \
   --presolve-gdx src/equilibria/templates/reference/pep2/scripts/PreSolveLevels.gdx
 ```
@@ -481,7 +481,7 @@ python scripts/verify_pep2_full_parity.py \
 
 **Verified state now:**
 - ✅ `pep2` with `init_mode=equation_consistent` is numerically consistent at initialization (RMS residual around `1e-7`, max residual around `1e-6`).
-- ✅ Systemic parity pipeline now fails correctly when solve fails: `scripts/run_pep_systemic_parity.py` returns non-zero if `--method != none` and solve is not converged or solve gates fail.
+- ✅ Systemic parity pipeline now fails correctly when solve fails: `scripts/parity/run_pep_systemic_parity.py` returns non-zero if `--method != none` and solve is not converged or solve gates fail.
 - ✅ Exit-code behavior validated with two runs:
   - pass case: `output/exit_check_pass.json` -> exit `0`
   - forced solve-fail case: `output/exit_check_fail_solve.json` -> exit `2`
@@ -546,7 +546,7 @@ All five phases of the PEP-1-1_v2_1 model calibration are now complete:
 A standalone comparison tool has been implemented to validate data consistency between original GAMS GDX files and equilibria's data handling.
 
 ### Location
-- **Script:** `scripts/compare_gdx.py`
+- **Script:** `scripts/dev/compare_gdx.py`
 - **Report Output:** `reports/gdx_comparison_report.md`
 
 ### Features
@@ -561,7 +561,7 @@ A standalone comparison tool has been implemented to validate data consistency b
 
 ### Usage
 ```bash
-python scripts/compare_gdx.py
+python scripts/dev/compare_gdx.py
 ```
 
 ### Output Format
