@@ -42,7 +42,7 @@ El lector GDX ahora reconoce y decodifica 4 patrones de codificación binaria:
 - `examples/multidim_examples.py` - Ejemplos prácticos 3D/4D
 - `examples/example_5d_usage.py` - Ejemplos avanzados 5D - **NUEVO**
 - `examples/test_5d_params.py` - Script de análisis 5D - **NUEVO**
-- `docs/multidim_parameters.md` - Documentación técnica completa
+- `docs/reference/gdx/multidim_parameters.md` - Documentación técnica completa
 
 ## Resultados de Tests
 
@@ -132,7 +132,7 @@ Para datasets grandes (>10,000 valores), el rendimiento sigue siendo aceptable g
 
 ## Referencias Técnicas
 
-- **Formato GDX**: Documentación en `docs/multidim_parameters.md`
+- **Formato GDX**: Documentación en `docs/reference/gdx/multidim_parameters.md`
 - **Ejemplos**: `examples/example_5d_usage.py`
 - **Tests**: `tests/babel/gdx/test_5d_parameters.py`
 

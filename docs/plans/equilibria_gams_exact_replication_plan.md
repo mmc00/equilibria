@@ -22,7 +22,7 @@ Achieve exact replication of the GAMS benchmark behavior in Equilibria templates
 - Create a complete mapping table:
   - `GAMS symbol -> Python variable -> source state key -> equation block`
 - Include transfer direction conventions (`TR(a,b)` orientation).
-- Document mapping in `docs/gams_parity_matrix.md`.
+- Document mapping in `docs/architecture/gams_parity_matrix.md`.
 
 ### 3. Lock Equations to Exact GAMS Forms
 - Compare each implemented equation with the GAMS reference line-by-line.
@@ -82,7 +82,7 @@ Achieve exact replication of the GAMS benchmark behavior in Equilibria templates
 5. Solver parity and scenario validation
 
 ## Deliverables
-- `docs/gams_parity_matrix.md`
+- `docs/architecture/gams_parity_matrix.md`
 - `scripts/check_gams_parity.py`
 - Parity mode implementation in solver/equation stack
 - CI parity tests and regression reports
