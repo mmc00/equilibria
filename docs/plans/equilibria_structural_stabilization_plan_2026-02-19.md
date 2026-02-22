@@ -14,7 +14,7 @@ Confirmed status on February 19, 2026:
   - Identity check (source vs equilibria): same size (`9094` bytes), same SHA1 (`e4192240b11e8faadc5d6e3c3c7367f45dfe05a1`), `cmp` exit code `0`.
 
 Complementary finding document:
-- `docs/finding_sam_ieem_vs_sam_pep.md`
+- `docs/findings/finding_sam_ieem_vs_sam_pep.md`
 - Root cause summary:
   - export-account architecture mismatch in IEEM -> PEP conversion (`I/X/ROW` vs `J->X` split),
   - production-tax routing drift (`AG.ti -> J` vs `AG.gvt -> J` in PEP calibration expectations),

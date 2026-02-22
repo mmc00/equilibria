@@ -486,7 +486,7 @@ python scripts/verify_pep2_full_parity.py \
   - pass case: `output/exit_check_pass.json` -> exit `0`
   - forced solve-fail case: `output/exit_check_fail_solve.json` -> exit `2`
 - ✅ CRI architecture diagnosis documented:
-  - Finding note: `docs/finding_sam_ieem_vs_sam_pep.md`
+  - Finding note: `docs/findings/finding_sam_ieem_vs_sam_pep.md`
   - Main structural cause: export flows misrouted in PEP conversion (`I.i -> AG.ROW`/`X.i -> AG.ROW` without `J.j -> X.i` counterpart).
   - Secondary cause: production-tax routing drift (`AG.ti -> J` vs expected `AG.gvt -> J` in PEP calibration path).
   - Why IEEM can still close: different trade/tax architecture + pre-solve diagnostics and SAM balancing in IEEM pipeline.
@@ -521,7 +521,7 @@ python scripts/verify_pep2_full_parity.py \
 - Use `equation_consistent` as default for deterministic parity on `pep2`.
 - Use `strict_gams` only when the exact `Results.gdx` baseline is verified compatible with the run SAM.
 - For CRI, run SAM QA first and treat solver non-convergence as a data-structure warning, not immediately as equation mismatch.
-- For CRI conversion/mapping changes, keep `docs/finding_sam_ieem_vs_sam_pep.md` as the structural contract reference.
+- For CRI conversion/mapping changes, keep `docs/findings/finding_sam_ieem_vs_sam_pep.md` as the structural contract reference.
 
 ### Implementation Summary
 
