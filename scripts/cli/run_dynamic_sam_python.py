@@ -10,7 +10,7 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from equilibria.templates.pep_calibration_unified_dynamic import (  # noqa: E402
     PEPModelCalibratorDynamicSAM,

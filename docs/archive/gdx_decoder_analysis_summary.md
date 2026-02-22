@@ -125,7 +125,7 @@ If higher accuracy is required:
 
 - `src/equilibria/babel/gdx/reader.py` - Delta decoder implementation
 - `AGENTS.md` - Documentation of findings and limitations
-- `scripts/compare_gdx.py` - Comparison tool
+- `scripts/dev/compare_gdx.py` - Comparison tool
 - Various debug scripts in project root
 
 ## Conclusion

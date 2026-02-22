@@ -16,7 +16,7 @@ This workflow enforces parity with block-level fail-fast gates instead of ad-hoc
 ## Command
 
 ```bash
-uv run python scripts/run_pep_systemic_parity.py \
+uv run python scripts/parity/run_pep_systemic_parity.py \
   --sam-file src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx \
   --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx \
   --dynamic-sam \

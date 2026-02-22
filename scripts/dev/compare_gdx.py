@@ -6,7 +6,7 @@ Compares original GAMS GDX files with data from Excel files.
 Generates a Markdown report in reports/gdx_comparison_report.md
 
 Usage:
-    python scripts/compare_gdx.py
+    python scripts/dev/compare_gdx.py
 
 Output:
     reports/gdx_comparison_report.md
@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.templates.data.pep import (

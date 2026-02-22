@@ -9,7 +9,7 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from equilibria.baseline.compatibility import (
     evaluate_strict_gams_baseline_compatibility,
