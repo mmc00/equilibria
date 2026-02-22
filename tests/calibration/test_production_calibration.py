@@ -107,13 +107,10 @@ def test_production_calibration():
     print("Phase 3 Calibration Complete")
     print("=" * 70)
     
-    return production_result
-
-
 def main():
     """Main execution."""
     try:
-        result = test_production_calibration()
+        test_production_calibration()
         print("\n✓ All tests passed successfully!")
         return 0
     except Exception as e:
