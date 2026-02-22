@@ -85,10 +85,10 @@ Prioritize these common fault zones:
 Use these commands in this project:
 
 ```bash
-uv run python scripts/verify_calibration.py
-uv run python scripts/verify_pep2_full_parity.py --tol 1e-9
-uv run python scripts/verify_pep2_full_parity.py --tol 1e-9 --presolve-gdx src/equilibria/templates/reference/pep2/scripts/PreSolveLevels.gdx
-uv run python scripts/run_solver.py --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx --method ipopt --init-mode equation_consistent --tolerance 1e-8
+uv run python scripts/qa/verify_calibration.py
+uv run python scripts/parity/verify_pep2_full_parity.py --tol 1e-9
+uv run python scripts/parity/verify_pep2_full_parity.py --tol 1e-9 --presolve-gdx src/equilibria/templates/reference/pep2/scripts/PreSolveLevels.gdx
+uv run python scripts/cli/run_solver.py --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx --method ipopt --init-mode equation_consistent --tolerance 1e-8
 ```
 
 ## Definition of done

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from equilibria.babel.gdx.reader import read_gdx
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator

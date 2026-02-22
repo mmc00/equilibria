@@ -18,7 +18,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from equilibria.qa.reporting import format_report_summary
 from equilibria.qa.sam_checks import run_sam_qa_from_file
