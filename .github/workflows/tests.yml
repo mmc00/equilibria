@@ -13,6 +13,15 @@ on:
         type: boolean
 
 jobs:
+  filename-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enforce lowercase filename policy
+        run: python scripts/check_lowercase_filenames.py
+
   python-tests:
     runs-on: ubuntu-latest
     steps:
