@@ -22,6 +22,7 @@ class TestModel:
         model = Model(name="TestModel")
         model.add_set(Set(name="J", elements=("sec1", "sec2")))
         model.add_set(Set(name="I", elements=("labor", "capital")))
+        model.add_set(Set(name="F", elements=("labor", "capital")))
         return model
 
     def test_model_creation(self):
@@ -34,6 +35,7 @@ class TestModel:
         """Test adding sets."""
         assert "J" in basic_model.set_manager
         assert "I" in basic_model.set_manager
+        assert "F" in basic_model.set_manager
 
     def test_add_sets(self, basic_model):
         """Test adding multiple sets."""
@@ -120,10 +122,10 @@ class TestModel:
 
     def test_missing_set_raises(self):
         """Test that missing set raises error."""
-        # Create a model without the required "I" set
+        # Create a model without the required "F" set
         model = Model(name="IncompleteModel")
         model.add_set(Set(name="J", elements=("sec1", "sec2")))
-        # Try to add CES block which requires both "J" and "I"
+        # Try to add CES block which requires both "J" and "F"
         with pytest.raises(ValueError):
             model.add_block(CESValueAdded(sigma=0.8))
 
@@ -141,7 +143,7 @@ class TestBlockBase:
         """Test required sets."""
         block = CESValueAdded()
         assert "J" in block.required_sets
-        assert "I" in block.required_sets
+        assert "F" in block.required_sets
 
     def test_block_parameters(self):
         """Test block parameter specs."""
@@ -160,7 +162,7 @@ class TestBlockBase:
         block = CESValueAdded()
         set_manager = SetManager()
         set_manager.add(Set(name="J", elements=("a", "b")))
-        set_manager.add(Set(name="I", elements=("x", "y")))
+        set_manager.add(Set(name="F", elements=("x", "y")))
 
         # Should not raise
         assert block.validate_sets(set_manager) is True
@@ -170,7 +172,7 @@ class TestBlockBase:
         block = CESValueAdded()
         set_manager = SetManager()
         set_manager.add(Set(name="J", elements=("a", "b")))
-        # Missing "I"
+        # Missing "F"
 
         with pytest.raises(ValueError):
             block.validate_sets(set_manager)
@@ -192,7 +194,7 @@ class TestProductionBlocks:
         """Test CES VA block setup."""
         set_manager = SetManager()
         set_manager.add(Set(name="J", elements=("sec1", "sec2")))
-        set_manager.add(Set(name="I", elements=("labor", "capital")))
+        set_manager.add(Set(name="F", elements=("labor", "capital")))
 
         block = CESValueAdded(sigma=0.8)
         params = {}
