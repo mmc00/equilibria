@@ -4,14 +4,14 @@ import sys
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
 
 def verify_6d_support():
     """Verify complete 6D parameter support."""
-    gdx_file = Path(__file__).parent.parent / "tests" / "fixtures" / "test_6d.gdx"
+    gdx_file = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_6d.gdx"
 
     if not gdx_file.exists():
         print("❌ Test file not found. Run generate_6d_test.gms first.")

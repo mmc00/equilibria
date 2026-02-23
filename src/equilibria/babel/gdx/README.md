@@ -57,7 +57,7 @@ for key, value in prices.items():
 ## 📖 Documentación
 
 - [Guía completa del Reader](../../../../docs/reference/gdx/gdx_reader_guide.md)
-- [Ejemplos de uso](../../examples/)
+- [Ejemplos de uso](../../../../examples/readme.md)
 
 ## 🧪 Tests
 

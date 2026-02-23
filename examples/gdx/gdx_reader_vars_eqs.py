@@ -13,7 +13,7 @@ from equilibria.babel.gdx.reader import (
 
 
 def main():
-    fixtures_dir = Path(__file__).parent.parent / "tests" / "fixtures"
+    fixtures_dir = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
     gdx_file = fixtures_dir / "variables_equations_test.gdx"
 
     if not gdx_file.exists():

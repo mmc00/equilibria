@@ -13,7 +13,7 @@ def test_multidim_parameter_reading():
     """Test reading multi-dimensional parameters."""
 
     # Look for test GDX files in fixtures
-    fixtures_dir = Path(__file__).parent.parent / "tests" / "fixtures"
+    fixtures_dir = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
     # Try to find a suitable test file
     gdx_files = list(fixtures_dir.glob("*.gdx"))

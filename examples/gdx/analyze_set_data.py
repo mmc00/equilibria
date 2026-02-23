@@ -9,7 +9,7 @@ from equilibria.babel.gdx.reader import (
     read_gdx,
 )
 
-FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
 
 def analyze_set_data_section():

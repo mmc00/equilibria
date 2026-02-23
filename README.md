@@ -322,7 +322,7 @@ trade_war = model.solve()
 ### PEP GDP Comparison (Original SAM vs CRI SAM)
 
 ```bash
-uv run python examples/example_11_pep_gdp_sam_comparison.py
+uv run python examples/pep/example_11_pep_gdp_sam_comparison.py
 ```
 
 More details: `docs/guides/pep_gdp_example.md`

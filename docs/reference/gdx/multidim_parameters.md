@@ -155,8 +155,8 @@ for (s, p, orig, dest, year), v in trade_5d.items():
 ```
 
 Ver ejemplos completos en:
-- `examples/multidim_examples.py` - Ejemplos 3D y 4D
-- `examples/example_5d_usage.py` - Ejemplos avanzados 5D
+- `examples/gdx/multidim_examples.py` - Ejemplos 3D y 4D
+- `examples/gdx/example_5d_usage.py` - Ejemplos avanzados 5D
 
 ## Desarrollo Futuro
 

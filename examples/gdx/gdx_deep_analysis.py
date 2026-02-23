@@ -114,7 +114,7 @@ def detailed_section_analysis(filepath: Path, name: str) -> None:
 
 def compare_compression_markers():
     """Compara los marcadores de compresión entre diferentes tipos."""
-    fixtures = Path(__file__).parent.parent / "tests" / "fixtures"
+    fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
     print("\n" + "=" * 80)
     print("INVESTIGACIÓN: Marcador 0x09 y su significado")
@@ -144,7 +144,7 @@ def compare_compression_markers():
 
 def extract_compression_context():
     """Extrae el contexto alrededor del marcador 0x09."""
-    fixtures = Path(__file__).parent.parent / "tests" / "fixtures"
+    fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
     print("\n" + "=" * 80)
     print("CONTEXTO ALREDEDOR DEL MARCADOR 0x09")

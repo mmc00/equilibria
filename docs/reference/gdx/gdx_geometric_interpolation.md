@@ -26,14 +26,14 @@ Performed deep analysis of GDX binary format to understand compression:
 - Both progression types use same binary structure
 
 **Files Created:**
-- [gdx_binary_analyzer.py](../examples/gdx_binary_analyzer.py) - Compare binary structures
-- [gdx_deep_analysis.py](../examples/gdx_deep_analysis.py) - Byte-by-byte analysis
+- [gdx_binary_analyzer.py](../../../examples/gdx/gdx_binary_analyzer.py) - Compare binary structures
+- [gdx_deep_analysis.py](../../../examples/gdx/gdx_deep_analysis.py) - Byte-by-byte analysis
 
 ### 2. Heuristic Detection Algorithm
 
 Since the format lacks explicit markers, implemented a smart detection algorithm that analyzes stored values to infer progression type.
 
-**Algorithm Location:** `_detect_sequence_type()` in [reader.py](../src/equilibria/babel/gdx/reader.py#L684-L811)
+**Algorithm Location:** `_detect_sequence_type()` in [reader.py](../../../src/equilibria/babel/gdx/reader.py#L684-L811)
 
 #### Detection Rules
 
@@ -81,10 +81,10 @@ Modified `_decode_1d_parameter()` function to:
 
 Created comprehensive test suite:
 
-**File:** [test_geometric_interpolation.py](../examples/test_geometric_interpolation.py)
+**File:** [test_geometric_interpolation.py](../../../examples/gdx/test_geometric_interpolation.py)
 
 ```bash
-$ python examples/test_geometric_interpolation.py
+$ python examples/gdx/test_geometric_interpolation.py
 
 TEST: Reading geometric sequence from GDX
 ✓ t1   : expected=1.00, actual=1.00, error=0.0000%
@@ -116,7 +116,7 @@ $ python -m pytest tests/ -v
 
 Generated GAMS test files with known sequences:
 
-**File:** [generate_compression_tests.gms](../../tests/fixtures/generate_compression_tests.gms)
+**File:** [generate_compression_tests.gms](../../../tests/fixtures/generate_compression_tests.gms)
 
 **Generated GDX files:**
 - `test_arithmetic.gdx` - Linear sequence (10, 20, 30, ..., 100)
@@ -161,12 +161,12 @@ Generated GAMS test files with known sequences:
   - Modified `_decode_1d_parameter()` (lines 908-963)
 
 ### Analysis Tools  
-- `examples/gdx_binary_analyzer.py` - Binary format analysis
-- `examples/gdx_deep_analysis.py` - Detailed byte inspection
-- `examples/gdx_sequence_detector.py` - Standalone detector prototype
+- `examples/gdx/gdx_binary_analyzer.py` - Binary format analysis
+- `examples/gdx/gdx_deep_analysis.py` - Detailed byte inspection
+- `examples/gdx/gdx_sequence_detector.py` - Standalone detector prototype
 
 ### Tests
-- `examples/test_geometric_interpolation.py` - Validation suite
+- `examples/gdx/test_geometric_interpolation.py` - Validation suite
 - `tests/fixtures/generate_compression_tests.gms` - Test data generator
 
 ## Conclusion

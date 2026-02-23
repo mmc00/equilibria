@@ -212,7 +212,7 @@ def compare_files(file1: Path, file2: Path, name1: str, name2: str) -> None:
 
 def main():
     """Análisis principal."""
-    fixtures_dir = Path(__file__).parent.parent / "tests" / "fixtures"
+    fixtures_dir = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
     print("\n" + "=" * 80)
     print("ANÁLISIS PROFUNDO DEL FORMATO BINARIO GDX")
