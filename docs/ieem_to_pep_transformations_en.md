@@ -1,6 +1,10 @@
 # ieem to pep transformations (en)
 
-English version. This explains the structural transformations in `src/equilibria/sam_tools/ieem_to_pep_transformations.py` and the closure/scaling operations used in the workflow executor (`src/equilibria/sam_tools/executor.py`), with minimal before/after examples.
+English version. This explains the IEEM->PEP transformations in `src/equilibria/sam_tools/ieem_to_pep_transformations.py` with minimal before/after examples.
+
+Note:
+- `aggregate_mapping` stays generic (format-agnostic) in `src/equilibria/sam_tools/ieem_raw_excel.py`.
+- `scale_all`, `scale_slice`, `rebalance_ipfp`, and `enforce_export_balance` remain in the workflow executor (`src/equilibria/sam_tools/executor.py`).
 
 ## context
 
@@ -120,7 +124,79 @@ When to use:
 - Mainly for backward compatibility.
 - For full traceability, prefer explicit YAML steps with the four disaggregated operations.
 
-## 6) scale_all and scale_slice (rescaling)
+## 6) balance_ras
+
+What it does:
+- Runs a RAS balancing pass over a RAW SAM to reduce row-vs-column gaps before account normalization.
+
+Economic intuition:
+- After aggregation, a RAW matrix can keep small inconsistencies.
+- `balance_ras` distributes correction factors row/column-wise to recover accounting balance.
+
+Key parameters:
+- `ras_type`: `arithmetic` (default), `geometric`, `row`, `column`.
+- `tol`, `max_iter`: numerical tolerance and maximum iterations.
+- Implementation class: `src/equilibria/sam_tools/balancing.py` (`RASBalancer`).
+
+Example:
+
+Before:
+- max row-column difference = `120`
+
+After:
+- max row-column difference = `0.000001` (approx, depending on tolerance)
+
+## 7) normalize_pep_accounts
+
+What it does:
+- Converts aggregated RAW labels (`A-*`, `C-*`, `USK`, `GVT`, etc.) into the canonical PEP account structure (`J/I/L/K/AG/MARG/OTH`).
+
+Economic intuition:
+- PEP equations expect specific account doors.
+- This step remaps the same value flows into those expected doors.
+
+Example:
+
+Before:
+- `RAW.A-AGR -> RAW.C-AGR = 170`
+
+After:
+- `J.agr -> I.agr = 170`
+
+## 8) create_x_block
+
+What it does:
+- Adds one `X.i` row/column for each commodity `I.i`.
+
+Economic intuition:
+- PEP trade logic separates domestic commodity flow (`I`) from the export channel (`X`).
+
+Example:
+
+Before:
+- no `X.agr` account
+
+After:
+- `X.agr` row/column exists and can receive export flows
+
+## 9) convert_exports_to_x
+
+What it does:
+- Moves export flows from `I.i -> AG.row` into `X.i -> AG.row`.
+- Reallocates supply from `J -> I` to `J -> X` proportionally so output-use links stay consistent.
+
+Economic intuition:
+- This restores the expected PEP trade door: exports should leave through `X`, not directly from `I`.
+
+## 10) align_ti_to_gvt_j
+
+What it does:
+- Moves fiscal entries `AG.ti -> J.*` into `AG.gvt -> J.*`.
+
+Economic intuition:
+- Keeps tax/government routing consistent with how the PEP calibration/identities read those flows.
+
+## 11) scale_all and scale_slice (rescaling)
 
 Where they live:
 - `src/equilibria/sam_tools/executor.py`
@@ -148,7 +224,7 @@ Before:
 After with `row=AG.tm`, `col=I.*`, `factor=1.1`:
 - `AG.tm -> I.agr = 44`
 
-## 7) rebalance_ipfp
+## 12) rebalance_ipfp
 
 Where it lives:
 - `src/equilibria/sam_tools/executor.py` (calling helpers in `pep_sam_compat.py`)
@@ -173,7 +249,7 @@ Before:
 After:
 - max row-column difference: `0.000001` (approx)
 
-## 8) enforce_export_balance
+## 13) enforce_export_balance
 
 Where it lives:
 - `src/equilibria/sam_tools/executor.py` (calling `enforce_export_value_balance`)
