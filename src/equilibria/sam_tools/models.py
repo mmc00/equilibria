@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from equilibria.sam_tools.aggregation import aggregate_dataframe, load_mapping
+from equilibria.sam_tools.balancing import RASBalanceResult, RASBalancer
 from equilibria.sam_tools.enums import SAMFormat
 
 
@@ -91,6 +93,32 @@ class SAM(BaseModel):
         normalized = self._ensure_dataframe(frame)
         object.__setattr__(self, "dataframe", normalized)
 
+    def aggregate(self, mapping_path: Path) -> SAM:
+        mapping, ordered = load_mapping(mapping_path)
+        df = self.to_dataframe()
+        aggregated = aggregate_dataframe(df, mapping, ordered)
+        category = self.row_keys[0][0] if self.row_keys else "RAW"
+        multi_index = pd.MultiIndex.from_tuples([(category, label) for label in aggregated.index])
+        new_df = pd.DataFrame(aggregated.to_numpy(dtype=float), index=multi_index, columns=multi_index)
+        self.replace_dataframe(new_df)
+        return self
+
+    def balance_ras(
+        self,
+        *,
+        ras_type: str = "arithmetic",
+        tolerance: float = 1e-9,
+        max_iterations: int = 200,
+    ) -> RASBalanceResult:
+        result = RASBalancer().balance_dataframe(
+            self.to_dataframe(),
+            ras_type=ras_type,
+            tolerance=tolerance,
+            max_iterations=max_iterations,
+        )
+        self.replace_dataframe(result.matrix)
+        return result
+
 
 class SAMTransformState(BaseModel):
     """In-memory SAM representation used during transformations."""
@@ -130,6 +158,10 @@ class SAMTransformState(BaseModel):
     @matrix.setter
     def matrix(self, value: np.ndarray) -> None:
         self.sam.update_matrix(value)
+
+    def refresh_keys(self) -> None:
+        self.row_keys = [tuple(key) for key in self.sam.row_keys]
+        self.col_keys = [tuple(key) for key in self.sam.col_keys]
 
 
 class SAMWorkflowConfig(BaseModel):

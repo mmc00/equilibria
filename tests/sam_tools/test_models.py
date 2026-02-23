@@ -38,6 +38,34 @@ def test_sam_update_matrix_enforces_shape() -> None:
         sam.update_matrix(np.ones((3, 3), dtype=float))
 
 
+def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
+    keys = [("RAW", "a"), ("RAW", "b")]
+    matrix = np.array([[10.0, 5.0], [2.0, 8.0]], dtype=float)
+    df = pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
+    sam = SAM(dataframe=df)
+
+    mapping_path = tmp_path / "mapping.xlsx"
+    mapping_df = pd.DataFrame(
+        [
+            {"original": "a", "aggregated": "TOTAL"},
+            {"original": "b", "aggregated": "TOTAL"},
+        ]
+    )
+    with pd.ExcelWriter(mapping_path, engine="openpyxl") as writer:
+        mapping_df.to_excel(writer, sheet_name="mapping", index=False)
+
+    sam.aggregate(mapping_path)
+    assert {(cat, elem) for cat, elem in sam.row_keys} == {(cat, elem) for cat, elem in sam.col_keys}
+    assert (sam.matrix.shape[0], sam.matrix.shape[1]) == (1, 1)
+
+    # Unbalanced matrix -> run RAS and expect closure
+    sam = SAM(dataframe=df)
+    result = sam.balance_ras(ras_type="arithmetic", tolerance=1e-8, max_iterations=50)
+    assert result.converged
+    diff = np.abs(sam.matrix.sum(axis=0) - sam.matrix.sum(axis=1))
+    assert np.all(diff <= 1e-6)
+
+
 def test_sam_transform_state_holds_sam_instance() -> None:
     df = _sample_dataframe()
     sam = SAM(dataframe=df)
