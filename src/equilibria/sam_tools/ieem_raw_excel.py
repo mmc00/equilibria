@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from equilibria.sam_tools.balancing import RASBalancer
+from equilibria.sam_tools.aggregation import build_multiindex_labels
 from equilibria.sam_tools.models import SAM, SAMTransformState
 
 IEEM_GROUP_LABELS: dict[str, str] = {
@@ -131,30 +131,6 @@ def _parse_ieem_raw_matrix(input_path: Path, sheet_name: str) -> tuple[pd.DataFr
     return raw_df, matrix_df, labels
 
 
-def _load_mapping(mapping_path: Path) -> tuple[dict[str, str], list[str]]:
-    mapping_df = pd.read_excel(mapping_path, sheet_name="mapping")
-    required = {"original", "aggregated"}
-    if not required.issubset(set(mapping_df.columns)):
-        raise ValueError(f"Mapping file missing required columns: {sorted(required)}")
-
-    mapping: dict[str, str] = {}
-    ordered_aggregated: list[str] = []
-    seen: set[str] = set()
-    for _, row in mapping_df.iterrows():
-        original = _norm_text(row["original"])
-        aggregated = _norm_text(row["aggregated"])
-        if not original or not aggregated:
-            continue
-        mapping[_norm_text_lower(original)] = aggregated
-        if aggregated not in seen:
-            seen.add(aggregated)
-            ordered_aggregated.append(aggregated)
-
-    if not mapping:
-        raise ValueError(f"Mapping file has no usable rows: {mapping_path}")
-    return mapping, ordered_aggregated
-
-
 def _state_to_dataframe(state: SAMTransformState, expected_category: str) -> pd.DataFrame:
     if not state.row_keys or not state.col_keys:
         raise ValueError("State has no support keys")
@@ -174,34 +150,6 @@ def _replace_state_from_dataframe(state: SAMTransformState, df: pd.DataFrame) ->
     state.col_keys = [("RAW", label) for label in labels]
 
 
-def _aggregate_with_mapping(
-    matrix_df: pd.DataFrame,
-    mapping: dict[str, str],
-    ordered_aggregated: list[str],
-) -> pd.DataFrame:
-    def mapped(label: Any) -> str:
-        label_txt = _norm_text(label)
-        return mapping.get(_norm_text_lower(label_txt), label_txt)
-
-    renamed = matrix_df.copy()
-    renamed.index = [mapped(idx) for idx in matrix_df.index]
-    renamed.columns = [mapped(col) for col in matrix_df.columns]
-
-    aggregated = renamed.groupby(level=0).sum()
-    aggregated = aggregated.T.groupby(level=0).sum().T
-
-    ordered = [lab for lab in ordered_aggregated if lab in aggregated.index]
-    for lab in aggregated.index:
-        if lab not in ordered:
-            ordered.append(lab)
-    return aggregated.reindex(index=ordered, columns=ordered, fill_value=0.0)
-
-
-def _build_multiindex_labels(labels: Iterable[str], category: str = "RAW") -> tuple[pd.MultiIndex, list[tuple[str, str]]]:
-    normalized = [(_norm_text(category), _norm_text(label)) for label in labels]
-    return pd.MultiIndex.from_tuples(normalized), normalized
-
-
 def load_ieem_raw_excel_state(
     input_path: Path,
     *,
@@ -209,7 +157,7 @@ def load_ieem_raw_excel_state(
 ) -> SAMTransformState:
     """Read an IEEM raw Excel SAM and return a RAW state."""
     raw_df, matrix_df, labels = _parse_ieem_raw_matrix(input_path, sheet_name)
-    multi_index, keys = _build_multiindex_labels(labels, category="RAW")
+    multi_index, keys = build_multiindex_labels(labels, category="RAW")
     matrix_clean = matrix_df.to_numpy(dtype=float)
     sam = SAM(dataframe=pd.DataFrame(matrix_clean, index=multi_index, columns=multi_index))
 
@@ -231,23 +179,11 @@ class IEEMRawSAM(SAM):
     @classmethod
     def from_ieem_excel(cls, path: Path, sheet_name: str = "MCS2016") -> IEEMRawSAM:
         raw_df, matrix_df, labels = _parse_ieem_raw_matrix(path, sheet_name)
-        multi_index, _ = _build_multiindex_labels(labels, category="RAW")
+        multi_index, _ = build_multiindex_labels(labels, category="RAW")
         return cls(dataframe=pd.DataFrame(matrix_df.to_numpy(dtype=float), index=multi_index, columns=multi_index))
 
     def aggregate(self, mapping_path: Path) -> IEEMRawSAM:
-        mapping, ordered = _load_mapping(mapping_path)
-        element_names = [elem for _, elem in self.row_keys]
-        plain_df = pd.DataFrame(
-            self.to_dataframe().to_numpy(dtype=float),
-            index=element_names,
-            columns=element_names,
-        )
-        aggregated = _aggregate_with_mapping(plain_df, mapping, ordered)
-        category = self.row_keys[0][0] if self.row_keys else "RAW"
-        multi_index, _ = _build_multiindex_labels(list(aggregated.index), category)
-        self.replace_dataframe(
-            pd.DataFrame(aggregated.to_numpy(dtype=float), index=multi_index, columns=multi_index)
-        )
+        super().aggregate(mapping_path)
         return self
 
     def balance_ras(
@@ -257,13 +193,11 @@ class IEEMRawSAM(SAM):
         tolerance: float = 1e-9,
         max_iterations: int = 200,
     ) -> IEEMRawSAM:
-        result = RASBalancer().balance_dataframe(
-            self.to_dataframe(),
+        super().balance_ras(
             ras_type=ras_type,
             tolerance=tolerance,
             max_iterations=max_iterations,
         )
-        self.replace_dataframe(result.matrix)
         return self
 
     def to_raw_state(
@@ -286,11 +220,9 @@ def aggregate_state_with_mapping(state: SAMTransformState, op: dict[str, Any]) -
     mapping_path = op.get("mapping_path")
     if not mapping_path:
         raise ValueError("aggregate_mapping requires mapping_path")
-    mapping, ordered = _load_mapping(Path(mapping_path))
     before_shape = list(state.matrix.shape)
-    df = _state_to_dataframe(state, expected_category="RAW")
-    aggregated = _aggregate_with_mapping(df, mapping, ordered)
-    _replace_state_from_dataframe(state, aggregated)
+    state.sam.aggregate(Path(mapping_path))
+    state.refresh_keys()
     return {
         "mapping_path": str(mapping_path),
         "shape_before": before_shape,
