@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from equilibria.sam_tools.balancing import RASBalancer
 from equilibria.sam_tools.models import SAMTransformState
@@ -212,20 +213,24 @@ def load_ieem_raw_excel_state(
     )
 
 
-class SAM:
+class SAM(BaseModel):
     """Minimal SAM container for raw-IEEM preprocessing before PEP transforms."""
 
-    def __init__(self, matrix: pd.DataFrame):
-        if matrix.shape[0] != matrix.shape[1]:
+    matrix: pd.DataFrame
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_square(self) -> SAM:
+        if self.matrix.shape[0] != self.matrix.shape[1]:
             raise ValueError("SAM must be square")
-        self.matrix = matrix.copy()
-        self._balancer = RASBalancer()
+        return self
 
     @classmethod
     def from_ieem_excel(cls, path: Path, sheet_name: str = "MCS2016") -> SAM:
         state = load_ieem_raw_excel_state(path, sheet_name=sheet_name)
         matrix_df = _state_to_dataframe(state, expected_category="RAW")
-        return cls(matrix_df)
+        return cls(matrix=matrix_df)
 
     def aggregate(self, mapping_path: Path) -> SAM:
         mapping, ordered = _load_mapping(mapping_path)
@@ -239,7 +244,7 @@ class SAM:
         tolerance: float = 1e-9,
         max_iterations: int = 200,
     ) -> SAM:
-        result = self._balancer.balance_dataframe(
+        result = RASBalancer().balance_dataframe(
             self.matrix,
             ras_type=ras_type,
             tolerance=tolerance,
@@ -248,14 +253,19 @@ class SAM:
         self.matrix = result.matrix
         return self
 
-    def to_raw_state(self) -> SAMTransformState:
+    def to_raw_state(
+        self,
+        *,
+        source_path: Path | None = None,
+        source_format: str = "raw",
+    ) -> SAMTransformState:
         labels = [_norm_text(label) for label in self.matrix.index]
         return SAMTransformState(
             matrix=self.matrix.to_numpy(dtype=float),
             row_keys=[("RAW", label) for label in labels],
             col_keys=[("RAW", label) for label in labels],
-            source_path=Path("<memory>"),
-            source_format="raw",
+            source_path=source_path or Path("<memory>"),
+            source_format=source_format,
         )
 
 
