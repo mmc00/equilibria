@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, ConfigDict
 
 RASType = Literal["arithmetic", "geometric", "row", "column"]
 
 
-@dataclass(frozen=True)
-class RASBalanceResult:
+class RASBalanceResult(BaseModel):
     """Result payload for one RAS balancing run."""
 
     matrix: pd.DataFrame
@@ -23,11 +22,13 @@ class RASBalanceResult:
     converged: bool
     ras_type: str
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-class RASBalancer:
+
+class RASBalancer(BaseModel):
     """RAS balancer with interchangeable target modes."""
 
-    _ALIASES: dict[str, RASType] = {
+    _ALIASES: ClassVar[dict[str, RASType]] = {
         "arithmetic": "arithmetic",
         "mean": "arithmetic",
         "avg": "arithmetic",
@@ -43,6 +44,8 @@ class RASBalancer:
         "cols": "column",
         "columns": "column",
     }
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def resolve_ras_type(self, ras_type: str | None) -> RASType:
         key = str(ras_type or "arithmetic").strip().lower()

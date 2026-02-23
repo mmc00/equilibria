@@ -11,7 +11,7 @@ import pandas as pd
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.babel.gdx.symbols import Parameter
 from equilibria.babel.gdx.writer import write_gdx
-from equilibria.sam_tools.ieem_raw_excel import load_ieem_raw_excel_state
+from equilibria.sam_tools.ieem_raw_excel import SAM
 from equilibria.sam_tools.models import SAMTransformState
 from equilibria.sam_tools.selectors import norm_text
 from equilibria.templates.pep_sam_compat import load_sam_grid
@@ -87,10 +87,10 @@ def load_state(
     if fmt == "gdx":
         return _load_from_gdx(path)
     if fmt == "ieem_raw_excel":
-        return load_ieem_raw_excel_state(
-            input_path=path,
+        return SAM.from_ieem_excel(
+            path=path,
             sheet_name=str(opts.get("sheet_name", "MCS2016")),
-        )
+        ).to_raw_state(source_path=path, source_format="ieem_raw_excel")
     raise ValueError(f"Unsupported input format: {fmt}")
 
 

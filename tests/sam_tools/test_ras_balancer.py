@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 
 from equilibria.sam_tools.balancing import RASBalancer
 from equilibria.sam_tools.ieem_to_pep_transformations import balance_state_ras
@@ -24,6 +25,7 @@ def _sample_matrix() -> pd.DataFrame:
 
 
 def test_ras_balancer_modes_converge() -> None:
+    assert issubclass(RASBalancer, BaseModel)
     balancer = RASBalancer()
     matrix = _sample_matrix()
 
