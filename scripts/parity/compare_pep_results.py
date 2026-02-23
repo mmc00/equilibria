@@ -19,7 +19,8 @@ def load_python_results():
     
     if not results_file.exists():
         print(f"❌ Python results not found: {results_file}")
-        print("   Run: python3 scripts/cli/run_pep_model.py")
+        print("   This script expects a pre-generated GDX in results/python_pep_results.gdx")
+        print("   Current parity flow uses scripts/parity/verify_pep2_full_parity.py")
         return None
     
     print("Loading Python results...")
