@@ -93,6 +93,9 @@ def test_val_par_loader_reads_original_les_layout() -> None:
     ],
 )
 def test_les_parity_cmin_and_frisch(state_builder) -> None:
+    if not PEP2_RESULTS.exists():
+        pytest.skip("Results_ipopt.gdx baseline not available")
+
     state = state_builder()
     les = state.les_parameters
 
