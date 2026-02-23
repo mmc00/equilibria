@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import equilibria.sam_tools.state_store as io_module
-from equilibria.sam_tools.models import SAM, SAMState
+from equilibria.sam_tools.models import Sam, SamTransform
 from equilibria.sam_tools.state_store import load_state, write_state
 
 
@@ -72,9 +72,9 @@ def _build_state(
     keys: list[tuple[str, str]],
     source_path: Path,
     source_format: str,
-) -> SAMState:
-    sam = SAM.from_matrix(matrix, keys, keys)
-    return SAMState(
+) -> SamTransform:
+    sam = Sam.from_matrix(matrix, keys, keys)
+    return SamTransform(
         sam=sam,
         row_keys=keys,
         col_keys=keys,
@@ -83,7 +83,7 @@ def _build_state(
     )
 
 
-def _to_cell_map(state: SAMState) -> dict[tuple[tuple[str, str], tuple[str, str]], float]:
+def _to_cell_map(state: SamTransform) -> dict[tuple[tuple[str, str], tuple[str, str]], float]:
     out: dict[tuple[tuple[str, str], tuple[str, str]], float] = {}
     for i, r_key in enumerate(state.row_keys):
         for j, c_key in enumerate(state.col_keys):
@@ -169,7 +169,7 @@ def test_io_load_ieem_raw_excel_uses_sam_class(
             *,
             source_path: Path | None = None,
             source_format: str = "raw",
-        ) -> SAMState:
+        ) -> SamTransform:
             _ = (source_path, source_format)
             return expected
 

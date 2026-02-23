@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
-
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
 
-RASType = Literal["arithmetic", "geometric", "row", "column"]
+from equilibria.sam_tools.enums import RASMode
 
 
 class RASBalanceResult(BaseModel):
@@ -28,43 +26,24 @@ class RASBalanceResult(BaseModel):
 class RASBalancer(BaseModel):
     """RAS balancer with interchangeable target modes."""
 
-    _ALIASES: ClassVar[dict[str, RASType]] = {
-        "arithmetic": "arithmetic",
-        "mean": "arithmetic",
-        "avg": "arithmetic",
-        "arithmetic_mean": "arithmetic",
-        "symmetric": "arithmetic",
-        "geometric": "geometric",
-        "geomean": "geometric",
-        "geometric_mean": "geometric",
-        "row": "row",
-        "rows": "row",
-        "column": "column",
-        "col": "column",
-        "cols": "column",
-        "columns": "column",
-    }
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def resolve_ras_type(self, ras_type: str | None) -> RASType:
-        key = str(ras_type or "arithmetic").strip().lower()
-        if key not in self._ALIASES:
-            allowed = sorted(set(self._ALIASES.values()))
-            raise ValueError(f"Unsupported ras_type '{ras_type}'. Allowed: {allowed}")
-        return self._ALIASES[key]
+    def resolve_ras_type(self, ras_type: str | None) -> RASMode:
+        """Return the normalized ``RASMode`` for a user-provided mode string."""
+        return RASMode.from_alias(ras_type)
 
     def _build_targets(
         self,
         row_totals: np.ndarray,
         col_totals: np.ndarray,
-        ras_type: RASType,
+        ras_type: RASMode,
     ) -> np.ndarray:
-        if ras_type == "arithmetic":
+        """Build per-account target totals according to the selected RAS mode."""
+        if ras_type == RASMode.ARITHMETIC:
             return 0.5 * (row_totals + col_totals)
-        if ras_type == "row":
+        if ras_type == RASMode.ROW:
             return row_totals.copy()
-        if ras_type == "column":
+        if ras_type == RASMode.COLUMN:
             return col_totals.copy()
 
         raw = np.sqrt(np.maximum(row_totals, 0.0) * np.maximum(col_totals, 0.0))
@@ -78,10 +57,11 @@ class RASBalancer(BaseModel):
         self,
         matrix_df: pd.DataFrame,
         *,
-        ras_type: str = "arithmetic",
+        ras_type: str = RASMode.ARITHMETIC.value,
         max_iterations: int = 200,
         tolerance: float = 1e-9,
     ) -> RASBalanceResult:
+        """Run iterative RAS scaling and return the balanced matrix plus diagnostics."""
         sam = matrix_df.to_numpy(copy=True, dtype=float)
         if sam.ndim != 2 or sam.shape[0] != sam.shape[1]:
             raise ValueError("RAS balancing requires a square matrix")
@@ -125,5 +105,5 @@ class RASBalancer(BaseModel):
             max_diff_after=max_diff_after,
             iterations=iterations,
             converged=converged,
-            ras_type=mode,
+            ras_type=mode.value,
         )

@@ -11,7 +11,7 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from equilibria.sam_tools.aggregation import build_multiindex_labels
-from equilibria.sam_tools.models import SAM, SAMState
+from equilibria.sam_tools.models import Sam, SamTransform
 
 IEEM_GROUP_LABELS: dict[str, str] = {
     "actividades productivas": "activities",
@@ -131,7 +131,7 @@ def _parse_ieem_raw_matrix(input_path: Path, sheet_name: str) -> tuple[pd.DataFr
     return raw_df, matrix_df, labels
 
 
-def _state_to_dataframe(state: SAMState, expected_category: str) -> pd.DataFrame:
+def _state_to_dataframe(state: SamTransform, expected_category: str) -> pd.DataFrame:
     if not state.row_keys or not state.col_keys:
         raise ValueError("State has no support keys")
     if any(cat != expected_category for cat, _ in state.row_keys):
@@ -143,7 +143,7 @@ def _state_to_dataframe(state: SAMState, expected_category: str) -> pd.DataFrame
     return pd.DataFrame(state.matrix.copy(), index=labels_r, columns=labels_c, dtype=float)
 
 
-def _replace_state_from_dataframe(state: SAMState, df: pd.DataFrame) -> None:
+def _replace_state_from_dataframe(state: SamTransform, df: pd.DataFrame) -> None:
     labels = [_norm_text(label) for label in df.index]
     state.matrix = df.to_numpy(dtype=float)
     state.row_keys = [("RAW", label) for label in labels]
@@ -154,14 +154,14 @@ def load_ieem_raw_excel_state(
     input_path: Path,
     *,
     sheet_name: str = "MCS2016",
-) -> SAMState:
+) -> SamTransform:
     """Read an IEEM raw Excel SAM and return a RAW state."""
     raw_df, matrix_df, labels = _parse_ieem_raw_matrix(input_path, sheet_name)
     multi_index, keys = build_multiindex_labels(labels, category="RAW")
     matrix_clean = matrix_df.to_numpy(dtype=float)
-    sam = SAM(dataframe=pd.DataFrame(matrix_clean, index=multi_index, columns=multi_index))
+    sam = Sam(dataframe=pd.DataFrame(matrix_clean, index=multi_index, columns=multi_index))
 
-    return SAMState(
+    return SamTransform(
         sam=sam,
         row_keys=keys,
         col_keys=keys,
@@ -173,7 +173,7 @@ def load_ieem_raw_excel_state(
     )
 
 
-class IEEMRawSAM(SAM):
+class IEEMRawSAM(Sam):
     """SAM helper especializado para cargar y transformar tablas IEEM sin procesar."""
 
     @classmethod
@@ -205,9 +205,9 @@ class IEEMRawSAM(SAM):
         *,
         source_path: Path | None = None,
         source_format: str = "raw",
-    ) -> SAMState:
+    ) -> SamTransform:
         keys = [(cat, elem) for cat, elem in self.row_keys]
-        return SAMState(
+        return SamTransform(
             sam=self,
             row_keys=keys,
             col_keys=keys,
@@ -216,7 +216,7 @@ class IEEMRawSAM(SAM):
         )
 
 
-def aggregate_state_with_mapping(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+def aggregate_state_with_mapping(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     mapping_path = op.get("mapping_path")
     if not mapping_path:
         raise ValueError("aggregate_mapping requires mapping_path")

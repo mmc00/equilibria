@@ -8,13 +8,13 @@ from equilibria.sam_tools.enums import (
     SAMFormat,
     WorkflowOperation,
 )
-from equilibria.sam_tools.models import SAM
+from equilibria.sam_tools.models import Sam
 from equilibria.sam_tools.pipeline import run_sam_transform_workflow
 from equilibria.sam_tools.state_store import load_state, write_state
 
 __all__ = [
     "run_sam_transform_workflow",
-    "SAM",
+    "Sam",
     "RASBalancer",
     "SAMFormat",
     "WorkflowOperation",

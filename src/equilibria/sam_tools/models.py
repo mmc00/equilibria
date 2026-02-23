@@ -14,7 +14,7 @@ from equilibria.sam_tools.balancing import RASBalanceResult, RASBalancer
 from equilibria.sam_tools.enums import SAMFormat
 
 
-class SAM(BaseModel):
+class Sam(BaseModel):
     """Contenedor base para una SAM, asegura matriz cuadrada con cuentas consistentes."""
 
     dataframe: pd.DataFrame
@@ -34,20 +34,20 @@ class SAM(BaseModel):
 
     @staticmethod
     def _ensure_dataframe(frame: pd.DataFrame) -> pd.DataFrame:
-        df = frame.copy(deep=False)
+        df = frame.copy()
         if df.ndim != 2:
             raise ValueError("El SAM debe ser una matriz bidimensional")
         rows, cols = df.shape
         if rows != cols:
             raise ValueError("El SAM debe ser cuadrado: filas y columnas iguales")
-        df.index = pd.MultiIndex.from_tuples(SAM._normalize_accounts(df.index))
-        df.columns = pd.MultiIndex.from_tuples(SAM._normalize_accounts(df.columns))
+        df.index = pd.MultiIndex.from_tuples(Sam._normalize_accounts(df.index))
+        df.columns = pd.MultiIndex.from_tuples(Sam._normalize_accounts(df.columns))
         if set(df.index.tolist()) != set(df.columns.tolist()):
             raise ValueError("Las mismas cuentas deben aparecer en filas y columnas")
-        return df.astype(float, copy=False)
+        return df.astype(float)
 
     @model_validator(mode="after")
-    def _validate(self) -> SAM:
+    def _validate(self) -> Sam:
         normalized = self._ensure_dataframe(self.dataframe)
         object.__setattr__(self, "dataframe", normalized)
         return self
@@ -58,7 +58,7 @@ class SAM(BaseModel):
         matrix: np.ndarray,
         row_keys: Sequence[tuple[str, str]],
         col_keys: Sequence[tuple[str, str]],
-    ) -> SAM:
+        ) -> Sam:
         if matrix.shape != (len(row_keys), len(col_keys)):
             raise ValueError("La matriz no coincide con los índices provistos")
         df = pd.DataFrame(
@@ -93,7 +93,7 @@ class SAM(BaseModel):
         normalized = self._ensure_dataframe(frame)
         object.__setattr__(self, "dataframe", normalized)
 
-    def aggregate(self, mapping_path: Path) -> SAM:
+    def aggregate(self, mapping_path: Path) -> Sam:
         mapping, ordered = load_mapping(mapping_path)
         df = self.to_dataframe()
         aggregated = aggregate_dataframe(df, mapping, ordered)
@@ -120,10 +120,10 @@ class SAM(BaseModel):
         return result
 
 
-class SAMState(BaseModel):
+class SamTransform(BaseModel):
     """In-memory SAM representation used during transformations."""
 
-    sam: SAM
+    sam: Sam
     row_keys: list[tuple[str, str]]
     col_keys: list[tuple[str, str]]
     source_path: Path
@@ -135,7 +135,7 @@ class SAMState(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
-    def _validate_matrix_shape(self) -> SAMState:
+    def _validate_matrix_shape(self) -> SamTransform:
         rows, cols = self.sam.matrix.shape
         if rows != len(self.row_keys):
             raise ValueError(

@@ -7,31 +7,30 @@ from typing import Any
 
 import yaml
 
+from equilibria.sam_tools.enums import SAMFormat
 from equilibria.sam_tools.models import SAMWorkflowConfig
-from equilibria.sam_tools.selectors import norm_text, norm_text_lower
+from equilibria.sam_tools.selectors import norm_text
 
 
-def _norm_format(fmt: str) -> str:
-    value = norm_text_lower(fmt)
-    if value in {"xlsx", "xls", "excel", "pep_excel"}:
-        return "excel"
-    if value in {"ieem_raw_excel", "ieem_raw", "ieem_excel_raw"}:
-        return "ieem_raw_excel"
-    if value == "gdx":
-        return "gdx"
-    raise ValueError(f"Unsupported SAM format: {fmt}")
+def _norm_format(fmt: str | SAMFormat) -> SAMFormat:
+    """Normalize a format token or alias into ``SAMFormat``."""
+    if isinstance(fmt, SAMFormat):
+        return fmt
+    return SAMFormat.from_alias(fmt)
 
 
-def _infer_format_from_path(path: Path) -> str:
+def _infer_format_from_path(path: Path) -> SAMFormat:
+    """Infer format type from file extension."""
     suffix = path.suffix.lower()
     if suffix in {".xlsx", ".xls"}:
-        return "excel"
+        return SAMFormat.EXCEL
     if suffix == ".gdx":
-        return "gdx"
+        return SAMFormat.GDX
     raise ValueError(f"Could not infer SAM format from path: {path}")
 
 
 def _resolve_path(path_value: Any, base_dir: Path, field_name: str) -> Path:
+    """Resolve a possibly-relative path against the workflow file directory."""
     if not path_value:
         raise ValueError(f"Missing required config field: {field_name}")
     path = Path(str(path_value))
@@ -41,6 +40,7 @@ def _resolve_path(path_value: Any, base_dir: Path, field_name: str) -> Path:
 
 
 def load_workflow_config(config_path: Path) -> SAMWorkflowConfig:
+    """Load YAML workflow file and return a validated ``SAMWorkflowConfig``."""
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("Workflow YAML must define a top-level mapping")

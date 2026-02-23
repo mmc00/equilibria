@@ -7,7 +7,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
-from equilibria.sam_tools.models import SAM
+from equilibria.sam_tools.models import Sam
 
 
 def _write_ieem_raw_excel(path: Path, matrix: np.ndarray, sheet_name: str = "MCS2016") -> None:
@@ -66,7 +66,7 @@ def _write_ieem_mapping(path: Path) -> None:
 
 
 def test_ieem_raw_sam_init_requires_square_matrix() -> None:
-    assert issubclass(IEEMRawSAM, SAM)
+    assert issubclass(IEEMRawSAM, Sam)
     with np.testing.assert_raises(ValueError):
         IEEMRawSAM(dataframe=pd.DataFrame(np.ones((2, 3), dtype=float)))
 
