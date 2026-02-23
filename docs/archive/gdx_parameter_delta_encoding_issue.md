@@ -13,7 +13,7 @@ The GDX reader fails to decode parameters with delta compression (e.g., SAM-V2_0
 
 ### What Doesn't Work
 - **Parameters with delta compression**: Returns empty dictionary
-- **Example file**: `/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx`
+- **Example file**: `cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx`
 - **Expected**: 196 records with tuples like `('AG', 'USK', 'J', 'AGR') = 1500.0`
 - **Actual**: 0 records decoded
 
@@ -126,9 +126,9 @@ The indices appear to use a **delta encoding scheme** where:
 
 ## Files for Investigation
 
-- **GDX file**: `/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx`
-- **Reference CSV**: `/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/gdx_values.csv`
-- **Decoder**: `/Users/marmol/proyectos/equilibria/src/equilibria/babel/gdx/reader.py`
+- **GDX file**: `cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx`
+- **Reference CSV**: `cge_babel/pep_static_clean/data/original/gdx_values.csv`
+- **Decoder**: `src/equilibria/babel/gdx/reader.py`
   - Function: `_decode_simple_parameter()` (line ~1135)
   - Related: `_decode_set_section()` for comparison
 

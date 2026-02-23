@@ -15,6 +15,9 @@ import numpy as np
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
 from equilibria.templates.pep_model_solver import PEPModelSolver
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SAM_FILE = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+
 def debug_equation(solver, vars, eq_name, expected_calc, actual_value):
     """Debug a single equation."""
     residual = actual_value - expected_calc
@@ -32,7 +35,7 @@ def main():
     
     # Calibrate
     print("Step 1: Calibrating model...")
-    sam_file = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx")
+    sam_file = DEFAULT_SAM_FILE
     calibrator = PEPModelCalibrator(sam_file=sam_file)
     state = calibrator.calibrate()
     

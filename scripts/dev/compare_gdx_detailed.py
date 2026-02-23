@@ -463,16 +463,12 @@ def main():
     print("=" * 70)
     print()
 
+    repo_root = Path(__file__).resolve().parents[2]
+
     # Define paths
-    original_dir = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original"
-    )
-    equilibria_dir = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep"
-    )
-    report_path = Path(
-        "/Users/marmol/proyectos/equilibria/reports/gdx_comparison_report.md"
-    )
+    original_dir = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data"
+    equilibria_dir = repo_root / "src" / "equilibria" / "templates" / "data" / "pep"
+    report_path = repo_root / "reports" / "gdx_comparison_report.md"
 
     # Create comparator
     comparator = GDXComparator(original_dir, equilibria_dir)

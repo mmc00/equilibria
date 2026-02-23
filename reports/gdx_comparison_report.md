@@ -2,7 +2,7 @@
 
 **Generated:** 2026-02-06T19:58:07.207294
 **Tolerance:** 0.01%
-**Source:** /Users/marmol/proyectos/cge_babel/pep_static_clean/data/original
+**Source:** src/equilibria/templates/reference/pep2/data
 
 ## Summary
 

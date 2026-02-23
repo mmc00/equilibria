@@ -11,6 +11,8 @@ import numpy as np
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.templates.data.pep import load_pep_sam
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def validate_sam_values():
     """Validate SAM transaction values match original Excel."""
@@ -23,9 +25,7 @@ def validate_sam_values():
     sam = load_pep_sam(rdim=2, cdim=2, sparse=True)
 
     # Load original Excel for comparison
-    excel_path = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.xls"
-    )
+    excel_path = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.xls"
     df_excel = pd.read_excel(excel_path, header=None)
 
     # Read Excel with same logic as cge_babel
@@ -131,9 +131,7 @@ def validate_gdx_structure():
     print()
 
     # Read our GDX
-    gdx_path = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/SAM-V2_0_4D_new.gdx"
-    )
+    gdx_path = REPO_ROOT / "src" / "equilibria" / "templates" / "data" / "pep" / "SAM-V2_0_4D_new.gdx"
     gdx_data = read_gdx(gdx_path)
 
     print(f"Archivo: {gdx_path.name}")
@@ -173,9 +171,7 @@ def validate_val_par():
     print()
 
     # Read our VAL_PAR GDX
-    gdx_path = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/VAL_PAR.gdx"
-    )
+    gdx_path = REPO_ROOT / "src" / "equilibria" / "templates" / "data" / "pep" / "VAL_PAR.gdx"
     gdx_data = read_gdx(gdx_path)
 
     print(f"Archivo: {gdx_path.name}")

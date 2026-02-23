@@ -9,7 +9,10 @@ import sys
 import json
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SAM_FILE = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
 from equilibria.templates.pep_model_solver import PEPModelSolver
@@ -22,7 +25,7 @@ def main():
     
     # Calibrate model
     print("Step 1: Calibrating model...")
-    sam_file = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx")
+    sam_file = DEFAULT_SAM_FILE
     calibrator = PEPModelCalibrator(sam_file=sam_file)
     state = calibrator.calibrate()
     

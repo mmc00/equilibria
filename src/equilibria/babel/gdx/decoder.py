@@ -2,7 +2,7 @@
 GDX Parameter Delta Decoder
 
 This module implements the delta decoding algorithm for GDX parameters.
-Based on the official GDX source code from /Users/marmol/proyectos/gdx/src/gxfile.cpp
+Based on the official GDX source code from gdx/src/gxfile.cpp
 
 Delta Encoding Scheme for Parameters (OFFICIAL IMPLEMENTATION):
 

@@ -314,9 +314,9 @@ SAM(*,*,*,*);
 
 * Dynamic SAM load from Excel (paths can be overridden at runtime)
 * Example:
-*   gams PEP-1-1_v2_1_ipopt_excel_cri.gms --SAM_XLS=/Users/marmol/proyectos/cge_babel/sam/cri/2016/data/SAM-V2_0.xlsx --SAM_GDX=SAM-V2_0_cri_from_excel.gdx
+*   gams PEP-1-1_v2_1_ipopt_excel_cri.gms --SAM_XLS=../data/SAM-V2_0.xlsx --SAM_GDX=SAM-V2_0_cri_from_excel.gdx
 * Note: GAMS Connect ExcelReader expects .xlsx
-$if not set SAM_XLS $setglobal SAM_XLS /Users/marmol/proyectos/cge_babel/sam/cri/2016/data/SAM-V2_0.xlsx
+$if not set SAM_XLS $setglobal SAM_XLS ../data/SAM-V2_0.xlsx
 $if not set SAM_GDX $setglobal SAM_GDX SAM-V2_0_cri_from_excel.gdx
 $onEmbeddedCode Connect:
 - ExcelReader:
@@ -371,7 +371,7 @@ PARJ(j,*), PARI(i,*), PARJI(j,i), PARAG(*,*);
 
 $ontext
 $offtext
-$if not set VAL_PAR_XLS $setglobal VAL_PAR_XLS /Users/marmol/proyectos/cge_babel/sam/cri/2016/data/VAL_PAR.xlsx
+$if not set VAL_PAR_XLS $setglobal VAL_PAR_XLS ../data/VAL_PAR.xlsx
 $if not set VAL_PAR_GDX $setglobal VAL_PAR_GDX VAL_PAR_cri.gdx
 $if exist %VAL_PAR_GDX% $goto LOAD_VALPAR_GDX
 $onEmbeddedCode Connect:

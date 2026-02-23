@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import unicodedata
 from dataclasses import dataclass
@@ -285,21 +286,32 @@ def write_markdown_report(
 
 
 def parse_args() -> argparse.Namespace:
+    cge_babel_root = os.environ.get("CGE_BABEL_ROOT")
+    if cge_babel_root:
+        root = Path(cge_babel_root) / "sam" / "cri" / "2016"
+        default_raw_sam = root / "data" / "Matriz_Contabilidad_Social_2016.xlsx"
+        default_mapping = root / "output" / "mapping_template.xlsx"
+        default_reader_module = root / "src"
+    else:
+        default_raw_sam = Path("output/Matriz_Contabilidad_Social_2016.xlsx")
+        default_mapping = Path("output/mapping_template.xlsx")
+        default_reader_module = Path(".")
+
     parser = argparse.ArgumentParser(description="Audit CRI raw SAM -> PEP mapping coverage")
     parser.add_argument(
         "--raw-sam",
         type=Path,
-        default=Path("/Users/marmol/proyectos/cge_babel/sam/cri/2016/data/Matriz_Contabilidad_Social_2016.xlsx"),
+        default=default_raw_sam,
     )
     parser.add_argument(
         "--mapping",
         type=Path,
-        default=Path("/Users/marmol/proyectos/cge_babel/sam/cri/2016/output/mapping_template.xlsx"),
+        default=default_mapping,
     )
     parser.add_argument(
         "--reader-module-path",
         type=Path,
-        default=Path("/Users/marmol/proyectos/cge_babel/sam/cri/2016/src"),
+        default=default_reader_module,
         help="Directory containing sam_reader.py",
     )
     parser.add_argument(
@@ -358,4 +370,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

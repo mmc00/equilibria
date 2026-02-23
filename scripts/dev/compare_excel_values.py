@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def read_original_sam(filepath: Path) -> pd.DataFrame:
     """Read original SAM Excel file."""
@@ -62,9 +64,7 @@ def compare_sam_values():
     print()
 
     # Read original SAM
-    original_path = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.xls"
-    )
+    original_path = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.xls"
     original_sam = read_original_sam(original_path)
 
     print(f"Original SAM shape: {original_sam.shape}")
@@ -165,9 +165,7 @@ def compare_val_par_values():
     print()
 
     # Read original VAL_PAR
-    original_path = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/VAL_PAR.xlsx"
-    )
+    original_path = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "VAL_PAR.xlsx"
     df = pd.read_excel(original_path, sheet_name="PAR", header=None)
 
     # Extract parameters
@@ -230,9 +228,7 @@ def compare_val_par_values():
     # For equilibria, read our generated VAL_PAR
     from equilibria.babel.gdx.reader import read_gdx, get_symbol, read_parameter_values
 
-    eq_path = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/VAL_PAR.gdx"
-    )
+    eq_path = REPO_ROOT / "src" / "equilibria" / "templates" / "data" / "pep" / "VAL_PAR.gdx"
     eq_gdx = read_gdx(eq_path)
 
     print(f"Equilibria VAL_PAR symbols: {[s['name'] for s in eq_gdx['symbols']]}")

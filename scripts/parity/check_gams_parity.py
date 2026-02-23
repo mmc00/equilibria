@@ -10,7 +10,11 @@ import math
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SAM_FILE = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+DEFAULT_RESULTS_GDX = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "scripts" / "Results.gdx"
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
 from equilibria.templates.pep_model_solver import PEPModelSolver
@@ -32,12 +36,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--sam-file",
-        default="/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx",
+        default=str(DEFAULT_SAM_FILE),
         help="Path to SAM GDX file.",
     )
     parser.add_argument(
         "--gams-results-gdx",
-        default="src/equilibria/templates/reference/pep2/scripts/Results.gdx",
+        default=str(DEFAULT_RESULTS_GDX),
         help="Path to Results.gdx for gams levels.",
     )
     parser.add_argument(

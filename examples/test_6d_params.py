@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
@@ -10,7 +11,7 @@ from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
 def test_6d_reading():
     """Test reading 6D parameters."""
-    gdx_path = '/Users/marmol/proyectos/equilibria/tests/fixtures/test_6d.gdx'
+    gdx_path = str(Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "test_6d.gdx")
 
     print("=" * 80)
     print("TESTING 6D PARAMETER READING")

@@ -8,7 +8,10 @@ import sys
 import logging
 from pathlib import Path
 
-sys.path.insert(0, '/Users/marmol/proyectos/equilibria/src')
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SAM_FILE = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 # Configure logging
 logging.basicConfig(
@@ -30,7 +33,7 @@ def test_final_calibration():
     print("=" * 70)
     
     # Load SAM data
-    sam_file = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx")
+    sam_file = DEFAULT_SAM_FILE
     print(f"\nLoading SAM: {sam_file}")
     sam_data = read_gdx(sam_file)
     print(f"✓ Loaded SAM with {len(sam_data['symbols'])} symbols")

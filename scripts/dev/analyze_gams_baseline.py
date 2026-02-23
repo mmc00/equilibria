@@ -5,10 +5,12 @@ This script loads the calibrated baseline from GAMS results and uses it
 as starting point for the Python model.
 """
 
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, '/Users/marmol/proyectos/equilibria/src')
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import pandas as pd
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
@@ -16,7 +18,11 @@ from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
 def load_gams_baseline():
     """Load GAMS baseline results."""
-    gams_results = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/gams/results/all_data_baseline.gdx")
+    cge_babel_root = os.environ.get("CGE_BABEL_ROOT")
+    if cge_babel_root:
+        gams_results = Path(cge_babel_root) / "pep_static_clean" / "gams" / "results" / "all_data_baseline.gdx"
+    else:
+        gams_results = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "scripts" / "Results.gdx"
     
     if not gams_results.exists():
         print(f"❌ GAMS baseline not found: {gams_results}")
@@ -112,7 +118,7 @@ def main():
     key_vars = extract_key_variables(gams_data)
     
     # Load SAM for comparison
-    sam_file = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx")
+    sam_file = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
     sam_data = read_gdx(sam_file)
     
     compare_with_sam(gams_data, sam_data)

@@ -102,7 +102,7 @@ Los archivos GDX generados por equilibria han sido validados exitosamente:
 
 ### Ubicación
 ```
-/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/
+src/equilibria/templates/data/pep/
 ├── SAM-V2_0_4D_new.gdx    (2.6 KB, 191 registros 4D)
 ├── VAL_PAR.gdx            (1.7 KB, 12 símbolos)
 └── pep_sets.gdx           (733 B, sets auxiliares)

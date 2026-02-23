@@ -5,17 +5,20 @@ This script compares the results from the Python equilibria implementation
 with the GAMS reference results.
 """
 
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, '/Users/marmol/proyectos/equilibria/src')
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
 
 def load_python_results():
     """Load Python model results."""
-    results_file = Path("/Users/marmol/proyectos/equilibria/results/python_pep_results.gdx")
+    results_file = REPO_ROOT / "results" / "python_pep_results.gdx"
     
     if not results_file.exists():
         print(f"❌ Python results not found: {results_file}")
@@ -35,11 +38,21 @@ def load_python_results():
 
 def load_gams_results():
     """Load GAMS reference results."""
+    cge_babel_root = os.environ.get("CGE_BABEL_ROOT")
+    cge_babel_paths = []
+    if cge_babel_root:
+        cge_root = Path(cge_babel_root)
+        cge_babel_paths = [
+            cge_root / "pep_static_clean" / "gams" / "results" / "Results.gdx",
+            cge_root / "pep_static_clean" / "gams" / "results" / "all_data_baseline.gdx",
+            cge_root / "pep_static_clean" / "gams" / "pep_results.gdx",
+        ]
+
     # Try multiple possible locations
     possible_paths = [
-        Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/gams/results/Results.gdx"),
-        Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/gams/results/all_data_baseline.gdx"),
-        Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/gams/pep_results.gdx"),
+        REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "scripts" / "Results.gdx",
+        REPO_ROOT / "output" / "gams_base_compare" / "Results.gdx",
+        *cge_babel_paths,
     ]
     
     for results_file in possible_paths:
