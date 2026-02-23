@@ -50,7 +50,12 @@ jobs:
         run: uv sync --dev
 
       - name: Run tests (excluding GAMS-marked)
-        run: uv run pytest -m "not gams"
+        run: |
+          uv run pytest -m "not gams" \
+            tests/qa \
+            tests/templates/test_pep_parity_pipeline.py \
+            tests/templates/test_pep_les_parity.py \
+            tests/templates/test_pep_sets.py
 
   structural-gates:
     runs-on: ubuntu-latest
@@ -74,7 +79,7 @@ jobs:
           uv run python scripts/parity/generate_baseline_manifest.py \
             --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx \
             --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
-            --results-gdx src/equilibria/templates/reference/pep2/scripts/Results.gdx \
+            --results-gdx src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx \
             --gams-slice base \
             --output output/ci_gams_manifest.json
 
@@ -85,7 +90,7 @@ jobs:
             --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
             --init-mode gams \
             --method none \
-            --gams-results-gdx src/equilibria/templates/reference/pep2/scripts/Results.gdx \
+            --gams-results-gdx src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx \
             --gams-results-slice base \
             --baseline-manifest output/ci_gams_manifest.json \
             --require-baseline-manifest \
