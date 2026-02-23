@@ -4,6 +4,7 @@ Manages dynamic set generation from SAM data and synchronization
 between Python and GAMS representations.
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -193,8 +194,98 @@ class PEPSetManager:
         Returns:
             True if consistent
         """
-        # TODO: Implement comparison logic
+        if not gams_include_path.exists():
+            return False
+
+        gams_sets = self._parse_gams_sets_include(gams_include_path)
+
+        for set_name, set_obj in self.sets.items():
+            expected = {str(elem).strip().lower() for elem in set_obj.elements}
+            actual = gams_sets.get(set_name.upper())
+            if actual is None:
+                return False
+            if expected != actual:
+                return False
+
         return True
+
+    def _parse_gams_sets_include(self, include_path: Path) -> dict[str, set[str]]:
+        """Parse a GAMS include file and extract set memberships.
+
+        Supports both common formats used in this repo:
+        1) ``J Description / ... /``
+        2) ``SET`` blocks where the opening slash is on the next line.
+        """
+        text = include_path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+
+        parsed: dict[str, set[str]] = {}
+        current_set: str | None = None
+        in_elements = False
+
+        def add_elements(set_name: str, fragment: str) -> None:
+            tokens = re.split(r"\s+", fragment.strip())
+            for token in tokens:
+                cleaned = token.strip().strip(",;").strip("'\"")
+                if cleaned and cleaned not in {"/", ";"}:
+                    parsed.setdefault(set_name, set()).add(cleaned.lower())
+
+        for raw_line in lines:
+            line = raw_line.strip()
+
+            if not line or line.startswith("*"):
+                continue
+
+            if line.upper() == "SET" or line == ";":
+                continue
+
+            if in_elements and current_set is not None:
+                if "/" in line:
+                    before, _, _ = line.partition("/")
+                    add_elements(current_set, before)
+                    in_elements = False
+                    current_set = None
+                else:
+                    add_elements(current_set, line)
+                continue
+
+            if current_set is not None:
+                if "/" not in line:
+                    continue
+                _, _, after_open = line.partition("/")
+                if "/" in after_open:
+                    inside, _, _ = after_open.partition("/")
+                    add_elements(current_set, inside)
+                    current_set = None
+                    in_elements = False
+                else:
+                    add_elements(current_set, after_open)
+                    in_elements = True
+                continue
+
+            decl_match = re.match(
+                r"^([A-Za-z][A-Za-z0-9_]*)(?:\([^)]*\))?",
+                line,
+            )
+            if decl_match is None:
+                continue
+
+            set_name = decl_match.group(1).upper()
+            parsed.setdefault(set_name, set())
+            current_set = set_name
+
+            if "/" in line:
+                _, _, after_open = line.partition("/")
+                if "/" in after_open:
+                    inside, _, _ = after_open.partition("/")
+                    add_elements(current_set, inside)
+                    current_set = None
+                    in_elements = False
+                else:
+                    add_elements(current_set, after_open)
+                    in_elements = True
+
+        return parsed
 
     def get_set(self, name: str) -> Set:
         """Get a set by name."""

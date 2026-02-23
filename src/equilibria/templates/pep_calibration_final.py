@@ -21,6 +21,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from equilibria.templates.pep_val_par_loader import load_val_par
+
 logger = logging.getLogger(__name__)
 
 
@@ -171,46 +173,24 @@ class FinalCalibrator:
 
     def _read_val_par_excel(self, filepath: Path) -> dict[str, Any]:
         """Read VAL_PAR.xlsx for LES parameters."""
-        import pandas as pd
-
         logger.info(f"Reading VAL_PAR for LES parameters from: {filepath}")
 
         try:
-            df = pd.read_excel(filepath, sheet_name="PAR", header=None)
+            loaded = load_val_par(filepath)
         except Exception as e:
             logger.warning(f"Could not read VAL_PAR Excel: {e}. Using defaults.")
             return self._get_default_val_par()
 
-        params = {"sigma_Y": {}, "frisch": {}}
-
-        # Frisch parameters - typically in PARAG sheet or specific cells
-        households = ["HRP", "HUP", "HRR", "HUR"]
-
-        # Try to read frisch from PARAG sheet
-        try:
-            df_ag = pd.read_excel(filepath, sheet_name="PARAG", header=None)
-            # Frisch is typically in a specific location - use defaults for now
-            # TODO: Properly parse PARAG sheet structure
-            for h in households:
-                params["frisch"][h.lower()] = -2.0
-        except Exception:
-            for h in households:
-                params["frisch"][h.lower()] = -2.0
-
-        # Income elasticities (sigma_Y) from PAR sheet
-        # Typically in rows 20-24 (0-indexed: 19-23) for each household
-        commodities = ["AGR", "FOOD", "OTHIND", "SER"]
-        for i, h in enumerate(households):
-            for j, comm in enumerate(commodities):
-                row_idx = 20 + j
-                try:
-                    val = df.iloc[row_idx, 6 + i]  # Columns 6-9 for households
-                    if pd.notna(val):
-                        params["sigma_Y"][(comm.lower(), h.lower())] = float(val)
-                    else:
-                        params["sigma_Y"][(comm.lower(), h.lower())] = 1.0
-                except (IndexError, ValueError):
-                    params["sigma_Y"][(comm.lower(), h.lower())] = 1.0
+        # Keep only LES-relevant keys and apply household defaults when missing.
+        params = {
+            "sigma_Y": dict(loaded.get("sigma_Y", {})),
+            "frisch": {},
+        }
+        households = self.sets.get("H", ["hrp", "hup", "hrr", "hur"])
+        frisch_loaded = loaded.get("frisch", {})
+        for h in households:
+            hh = str(h).lower()
+            params["frisch"][hh] = float(frisch_loaded.get(hh, -2.0))
 
         logger.info("Successfully read VAL_PAR LES parameters")
         return params
