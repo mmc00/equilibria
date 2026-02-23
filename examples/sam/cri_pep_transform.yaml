@@ -1,0 +1,50 @@
+metadata:
+  name: cri_2016_to_pep_compatible
+  country: cri
+  current_format: pep_excel
+  target_format: pep_excel
+
+input:
+  path: ../../src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx
+  format: excel
+
+output:
+  path: ../../output/sam_cri_pep_compatible.xlsx
+  format: excel
+  symbol: SAM
+
+report_path: ../../output/sam_cri_pep_compatible_report.json
+
+transforms:
+  - op: move_k_to_ji
+    commodity_to_sector:
+      agr: agr
+      othind: ind
+      ser: ser
+      food: ind
+      adm: adm
+
+  - op: move_l_to_ji
+    commodity_to_sector:
+      agr: agr
+      othind: ind
+      ser: ser
+      food: ind
+      adm: adm
+
+  - op: move_margin_to_i_margin
+    margin_commodity: ser
+    col: I.*
+
+  - op: move_tx_to_ti_on_i
+    col: I.*
+
+  - op: rebalance_ipfp
+    target_mode: geomean
+    support: pep_compat
+    epsilon: 1.0e-9
+    tol: 1.0e-8
+    max_iter: 20000
+
+  - op: enforce_export_balance
+    tol: 1.0e-12
