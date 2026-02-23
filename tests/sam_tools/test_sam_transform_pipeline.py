@@ -46,6 +46,61 @@ def _cell(
     return float(matrix[ri, ci])
 
 
+def _write_ieem_raw_excel(path: Path, matrix: np.ndarray) -> None:
+    groups = [
+        ("actividades productivas", "act_agr"),
+        ("Bienes y servicios", "com_agr"),
+        ("Margenes", "marg"),
+        ("Factores", "usk"),
+        ("Hogares", "hh"),
+        ("Empresas", "firm"),
+        ("Gobierno", "gvt"),
+        ("Resto del mundo", "row"),
+        ("Ahorro", "s_hh"),
+        ("Inversión", "inv"),
+    ]
+    if matrix.shape != (len(groups), len(groups)):
+        raise ValueError("IEEM raw test matrix has invalid shape")
+
+    n_rows = 4 + len(groups) + 5
+    n_cols = 3 + len(groups) + 5
+    raw = np.full((n_rows, n_cols), np.nan, dtype=object)
+    start_row = 4
+
+    for i, (group_name, label) in enumerate(groups):
+        row = start_row + i
+        raw[row, 1] = group_name
+        raw[row, 2] = label
+
+    for i in range(len(groups)):
+        for j in range(len(groups)):
+            raw[start_row + i, 3 + j] = float(matrix[i, j])
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        pd.DataFrame(raw).to_excel(writer, sheet_name="MCS2016", index=False, header=False)
+
+
+def _write_ieem_mapping(path: Path) -> None:
+    mapping = pd.DataFrame(
+        [
+            {"original": "act_agr", "aggregated": "A-AGR", "group": "activities"},
+            {"original": "com_agr", "aggregated": "C-AGR", "group": "commodities"},
+            {"original": "marg", "aggregated": "MARG", "group": "other"},
+            {"original": "usk", "aggregated": "USK", "group": "factors"},
+            {"original": "hh", "aggregated": "HRP", "group": "households"},
+            {"original": "firm", "aggregated": "FIRM", "group": "other"},
+            {"original": "gvt", "aggregated": "GVT", "group": "other"},
+            {"original": "row", "aggregated": "ROW", "group": "other"},
+            {"original": "s_hh", "aggregated": "S-HH", "group": "other"},
+            {"original": "inv", "aggregated": "INV", "group": "other"},
+        ]
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        mapping.to_excel(writer, sheet_name="mapping", index=False)
+
+
 def test_yaml_pipeline_scale_and_shift(tmp_path: Path) -> None:
     input_sam = tmp_path / "input.xlsx"
     output_sam = tmp_path / "output.xlsx"
@@ -252,3 +307,56 @@ def test_yaml_pipeline_composite_matches_disaggregated(tmp_path: Path) -> None:
     composite_out = load_sam_grid(output_composite)
     disaggregated_out = load_sam_grid(output_disaggregated)
     assert np.allclose(composite_out.matrix, disaggregated_out.matrix)
+
+
+def test_yaml_pipeline_ieem_raw_excel_input(tmp_path: Path) -> None:
+    input_raw = tmp_path / "raw_ieem.xlsx"
+    mapping_file = tmp_path / "mapping.xlsx"
+    output_sam = tmp_path / "output.xlsx"
+    config_file = tmp_path / "workflow.yaml"
+
+    # label order in _write_ieem_raw_excel:
+    # act_agr, com_agr, marg, usk, hh, firm, gvt, row, s_hh, inv
+    matrix = np.zeros((10, 10), dtype=float)
+    matrix[0, 1] = 100.0  # act_agr -> com_agr
+    matrix[1, 7] = 30.0   # com_agr -> row (exports)
+    matrix[1, 9] = 15.0   # com_agr -> inv (investment demand)
+    matrix[8, 4] = 20.0   # s_hh -> hh (savings to household)
+
+    _write_ieem_raw_excel(input_raw, matrix)
+    _write_ieem_mapping(mapping_file)
+
+    config = {
+        "metadata": {"name": "ieem_raw_to_pep"},
+        "input": {
+            "path": str(input_raw),
+            "format": "ieem_raw_excel",
+            "options": {
+                "sheet_name": "MCS2016",
+            },
+        },
+        "output": {"path": str(output_sam), "format": "excel"},
+        "transforms": [
+            {"op": "aggregate_mapping", "mapping_path": str(mapping_file)},
+            {"op": "normalize_pep_accounts"},
+            {"op": "create_x_block"},
+            {"op": "convert_exports_to_x"},
+        ],
+    }
+    config_file.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    run_sam_transform_workflow(config_file)
+    out_grid = load_sam_grid(output_sam)
+
+    assert ("J", "agr") in out_grid.row_keys
+    assert ("I", "agr") in out_grid.row_keys
+    assert ("AG", "hrp") in out_grid.row_keys
+    assert ("OTH", "INV") in out_grid.row_keys
+    assert ("X", "agr") in out_grid.row_keys
+
+    assert _cell(out_grid.matrix, out_grid.row_keys, out_grid.col_keys, ("I", "agr"), ("AG", "row")) == 0.0
+    assert _cell(out_grid.matrix, out_grid.row_keys, out_grid.col_keys, ("X", "agr"), ("AG", "row")) == 30.0
+    assert _cell(out_grid.matrix, out_grid.row_keys, out_grid.col_keys, ("J", "agr"), ("I", "agr")) == 70.0
+    assert _cell(out_grid.matrix, out_grid.row_keys, out_grid.col_keys, ("J", "agr"), ("X", "agr")) == 30.0
+    assert _cell(out_grid.matrix, out_grid.row_keys, out_grid.col_keys, ("OTH", "INV"), ("AG", "hrp")) == 20.0
+    assert _cell(out_grid.matrix, out_grid.row_keys, out_grid.col_keys, ("I", "agr"), ("OTH", "INV")) == 15.0

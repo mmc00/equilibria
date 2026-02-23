@@ -9,6 +9,14 @@ from typing import Any
 import numpy as np
 
 from equilibria.sam_tools.config_loader import load_workflow_config
+from equilibria.sam_tools.ieem_raw_excel import (
+    aggregate_state_with_mapping,
+    align_ti_to_gvt_j,
+    balance_state_ras,
+    convert_exports_to_x,
+    create_x_block,
+    normalize_state_to_pep_accounts,
+)
 from equilibria.sam_tools.ieem_to_pep_transformations import (
     apply_move_k_to_ji,
     apply_move_l_to_ji,
@@ -171,6 +179,18 @@ def _apply_operation(state: SAMTransformState, op: dict[str, Any]) -> dict[str, 
         return _apply_scale_all(state, op)
     if op_name == "scale_slice":
         return _apply_scale_slice(state, op)
+    if op_name == "aggregate_mapping":
+        return aggregate_state_with_mapping(state, op)
+    if op_name == "balance_ras":
+        return balance_state_ras(state, op)
+    if op_name == "normalize_pep_accounts":
+        return normalize_state_to_pep_accounts(state, op)
+    if op_name == "create_x_block":
+        return create_x_block(state, op)
+    if op_name == "convert_exports_to_x":
+        return convert_exports_to_x(state, op)
+    if op_name == "align_ti_to_gvt_j":
+        return align_ti_to_gvt_j(state, op)
     if op_name == "shift_row_slice":
         return _apply_shift_row_slice(state, op)
     if op_name == "move_cell":
@@ -193,6 +213,20 @@ def _apply_operation(state: SAMTransformState, op: dict[str, Any]) -> dict[str, 
     raise ValueError(f"Unsupported transform op: {op_name}")
 
 
+def _resolve_operation_paths(op: dict[str, Any], base_dir: Path) -> dict[str, Any]:
+    """Resolve any *_path string fields against workflow file location."""
+    resolved: dict[str, Any] = {}
+    for key, value in op.items():
+        if key.endswith("_path") and isinstance(value, (str, Path)):
+            path = Path(value)
+            if not path.is_absolute():
+                path = (base_dir / path).resolve()
+            resolved[key] = str(path)
+        else:
+            resolved[key] = value
+    return resolved
+
+
 def run_sam_transform_workflow(
     config_file: Path | str,
     *,
@@ -211,16 +245,17 @@ def run_sam_transform_workflow(
     if report_override is not None:
         cfg.report_path = Path(report_override).resolve()
 
-    state = load_state(cfg.input_path, cfg.input_format)
+    state = load_state(cfg.input_path, cfg.input_format, options=cfg.input_options)
 
     steps: list[dict[str, Any]] = []
     for idx, op in enumerate(cfg.transforms, start=1):
         if not isinstance(op, dict):
             raise ValueError(f"Transform at position {idx} must be a mapping")
 
-        op_name = norm_text_lower(op.get("op"))
+        op_resolved = _resolve_operation_paths(op, config_path.parent)
+        op_name = norm_text_lower(op_resolved.get("op"))
         before = balance_stats(state.matrix)
-        details = _apply_operation(state, op)
+        details = _apply_operation(state, op_resolved)
         after = balance_stats(state.matrix)
         steps.append(
             {
