@@ -42,6 +42,7 @@ _RAS_BALANCER = RASBalancer()
 
 
 def _raw_state_to_dataframe(state: SAMLikeState) -> pd.DataFrame:
+    """Convert a RAW-key workflow state into a pandas dataframe."""
     if not state.row_keys or not state.col_keys:
         raise ValueError("State has no support keys")
     if any(norm_text_lower(cat) != "raw" for cat, _ in state.row_keys):
@@ -55,6 +56,7 @@ def _raw_state_to_dataframe(state: SAMLikeState) -> pd.DataFrame:
 
 
 def _replace_state_from_raw_dataframe(state: SAMLikeState, df: pd.DataFrame) -> None:
+    """Overwrite a state object from one RAW dataframe."""
     labels = [norm_text(label) for label in df.index]
     state.matrix = df.to_numpy(dtype=float)
     state.row_keys = [("RAW", label) for label in labels]
@@ -62,6 +64,7 @@ def _replace_state_from_raw_dataframe(state: SAMLikeState, df: pd.DataFrame) -> 
 
 
 def _label_to_key(label: str) -> tuple[str, str] | None:
+    """Map one aggregated RAW label into a canonical PEP account key."""
     label_up = norm_text(label).upper()
     if label_up in SPECIAL_LABELS:
         return None
@@ -81,6 +84,7 @@ def _label_to_key(label: str) -> tuple[str, str] | None:
 
 
 def _build_pep_key_order(labels: list[str]) -> list[tuple[str, str]]:
+    """Build deterministic PEP key ordering from observed RAW labels."""
     j_keys: list[tuple[str, str]] = []
     i_keys: list[tuple[str, str]] = []
     l_keys: list[tuple[str, str]] = []
@@ -122,6 +126,7 @@ def _build_pep_key_order(labels: list[str]) -> list[tuple[str, str]]:
 
 
 def _ensure_key(state: SAMLikeState, key: tuple[str, str]) -> bool:
+    """Ensure one row/column key exists in a square state matrix."""
     if key in state.row_keys:
         return False
     old_n = state.matrix.shape[0]
@@ -140,6 +145,7 @@ def _add_value(
     col_key: tuple[str, str],
     value: float,
 ) -> None:
+    """Add one value into a keyed matrix if source/target keys exist."""
     if abs(value) <= 1e-14:
         return
     if row_key not in key_index or col_key not in key_index:
@@ -330,6 +336,7 @@ def align_ti_to_gvt_j(state: SAMLikeState, _op: dict[str, Any]) -> dict[str, Any
 
 
 def _commodity_columns(state: SAMLikeState) -> list[tuple[int, str]]:
+    """Return all commodity columns as ``(index, commodity)`` pairs."""
     columns: list[tuple[int, str]] = []
     for idx, (cat, elem) in enumerate(state.col_keys):
         if norm_text_lower(cat) == "i":
@@ -338,6 +345,7 @@ def _commodity_columns(state: SAMLikeState) -> list[tuple[int, str]]:
 
 
 def _row_indices_by_category(state: SAMLikeState, category: str) -> list[int]:
+    """Return row indices that belong to one account category."""
     cat_norm = norm_text_lower(category)
     return [
         idx

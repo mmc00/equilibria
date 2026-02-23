@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from equilibria.sam_tools.models import SAM, SAMState, SAMWorkflowConfig
+from equilibria.sam_tools.models import Sam, SamTransform, SAMWorkflowConfig
 
 
 def _sample_dataframe() -> pd.DataFrame:
@@ -17,20 +17,20 @@ def _sample_dataframe() -> pd.DataFrame:
 
 def test_sam_requires_square_and_matching_accounts() -> None:
     df = _sample_dataframe()
-    sam = SAM(dataframe=df)
+    sam = Sam(dataframe=df)
     assert sam.row_keys == sam.col_keys
     assert np.allclose(sam.matrix, df.to_numpy(dtype=float))
     with np.testing.assert_raises(ValueError):
-        SAM(dataframe=pd.DataFrame(np.ones((2, 3), dtype=float)))
+        Sam(dataframe=pd.DataFrame(np.ones((2, 3), dtype=float)))
     wrong_cols = df.copy()
     wrong_cols.columns = pd.MultiIndex.from_tuples([("A", "one"), ("B", "two")])
     with np.testing.assert_raises(ValueError):
-        SAM(dataframe=wrong_cols)
+        Sam(dataframe=wrong_cols)
 
 
 def test_sam_update_matrix_enforces_shape() -> None:
     df = _sample_dataframe()
-    sam = SAM(dataframe=df)
+    sam = Sam(dataframe=df)
     new_matrix = np.array([[5.0, 6.0], [7.0, 8.0]])
     sam.update_matrix(new_matrix)
     assert np.allclose(sam.matrix, new_matrix)
@@ -42,7 +42,7 @@ def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
     keys = [("RAW", "a"), ("RAW", "b")]
     matrix = np.array([[10.0, 5.0], [2.0, 8.0]], dtype=float)
     df = pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
-    sam = SAM(dataframe=df)
+    sam = Sam(dataframe=df)
 
     mapping_path = tmp_path / "mapping.xlsx"
     mapping_df = pd.DataFrame(
@@ -59,7 +59,7 @@ def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
     assert (sam.matrix.shape[0], sam.matrix.shape[1]) == (1, 1)
 
     # Unbalanced matrix -> run RAS and expect closure
-    sam = SAM(dataframe=df)
+    sam = Sam(dataframe=df)
     result = sam.balance_ras(ras_type="arithmetic", tolerance=1e-8, max_iterations=50)
     assert result.converged
     diff = np.abs(sam.matrix.sum(axis=0) - sam.matrix.sum(axis=1))
@@ -68,8 +68,8 @@ def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
 
 def test_sam_transform_state_holds_sam_instance() -> None:
     df = _sample_dataframe()
-    sam = SAM(dataframe=df)
-    state = SAMState(
+    sam = Sam(dataframe=df)
+    state = SamTransform(
         sam=sam,
         row_keys=sam.row_keys,
         col_keys=sam.col_keys,

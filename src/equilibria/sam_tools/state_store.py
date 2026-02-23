@@ -13,7 +13,7 @@ from equilibria.babel.gdx.symbols import Parameter
 from equilibria.babel.gdx.writer import write_gdx
 from equilibria.sam_tools.enums import SAMFormat
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
-from equilibria.sam_tools.models import SAM, SAMState
+from equilibria.sam_tools.models import Sam, SamTransform
 from equilibria.sam_tools.selectors import norm_text
 from equilibria.templates.pep_sam_compat import load_sam_grid
 
@@ -25,11 +25,11 @@ def _normalize_format(fmt: str | SAMFormat) -> SAMFormat:
     return SAMFormat.from_alias(fmt)
 
 
-def _load_from_excel(path: Path) -> SAMState:
+def _load_from_excel(path: Path) -> SamTransform:
     """Load a canonical Excel SAM grid into workflow state."""
     grid = load_sam_grid(path)
-    sam = SAM.from_matrix(grid.matrix.copy().astype(float), grid.row_keys, grid.col_keys)
-    return SAMState(
+    sam = Sam.from_matrix(grid.matrix.copy().astype(float), grid.row_keys, grid.col_keys)
+    return SamTransform(
         sam=sam,
         row_keys=grid.row_keys,
         col_keys=grid.col_keys,
@@ -41,7 +41,7 @@ def _load_from_excel(path: Path) -> SAMState:
     )
 
 
-def _load_from_gdx(path: Path) -> SAMState:
+def _load_from_gdx(path: Path) -> SamTransform:
     """Load SAM values from GDX and rebuild the 2D matrix support."""
     gdx = read_gdx(path)
     values = read_parameter_values(gdx, "SAM")
@@ -76,8 +76,8 @@ def _load_from_gdx(path: Path) -> SAMState:
         col_key = (norm_text(keys[2]), norm_text(keys[3]))
         matrix[row_idx[row_key], col_idx[col_key]] += float(value)
 
-    sam = SAM.from_matrix(matrix, row_order, col_order)
-    return SAMState(
+    sam = Sam.from_matrix(matrix, row_order, col_order)
+    return SamTransform(
         sam=sam,
         row_keys=row_order,
         col_keys=col_order,
@@ -90,7 +90,7 @@ def load_state(
     path: Path,
     fmt: str | SAMFormat,
     options: dict[str, Any] | None = None,
-) -> SAMState:
+) -> SamTransform:
     """Load one SAM state from file according to the selected format."""
     if not path.exists():
         raise FileNotFoundError(f"Input SAM not found: {path}")
@@ -115,7 +115,7 @@ def load_state(
     raise ValueError(f"Unsupported input format: {fmt}")
 
 
-def _write_excel_preserving_layout(state: SAMState, output_path: Path) -> None:
+def _write_excel_preserving_layout(state: SamTransform, output_path: Path) -> None:
     """Write state values into the original Excel layout when available."""
     if state.raw_df is None or state.data_start_row is None or state.data_start_col is None:
         raise ValueError("No original Excel layout available")
@@ -133,7 +133,7 @@ def _write_excel_preserving_layout(state: SAMState, output_path: Path) -> None:
         out_df.to_excel(writer, sheet_name="SAM", index=False, header=False)
 
 
-def _write_excel_canonical(state: SAMState, output_path: Path) -> None:
+def _write_excel_canonical(state: SamTransform, output_path: Path) -> None:
     """Write state in canonical two-header SAM layout."""
     n_rows, n_cols = state.matrix.shape
     grid = np.full((n_rows + 2, n_cols + 2), "", dtype=object)
@@ -153,7 +153,7 @@ def _write_excel_canonical(state: SAMState, output_path: Path) -> None:
         pd.DataFrame(grid).to_excel(writer, sheet_name="SAM", index=False, header=False)
 
 
-def _write_state_to_excel(state: SAMState, output_path: Path) -> None:
+def _write_state_to_excel(state: SamTransform, output_path: Path) -> None:
     """Dispatch Excel writer based on whether original layout metadata exists."""
     if (
         state.raw_df is not None
@@ -168,7 +168,7 @@ def _write_state_to_excel(state: SAMState, output_path: Path) -> None:
 
 
 def _write_state_to_gdx(
-    state: SAMState,
+    state: SamTransform,
     output_path: Path,
     symbol_name: str,
     zero_threshold: float = 1e-14,
@@ -195,7 +195,7 @@ def _write_state_to_gdx(
 
 
 def write_state(
-    state: SAMState,
+    state: SamTransform,
     output_path: Path,
     output_format: str | SAMFormat,
     output_symbol: str,

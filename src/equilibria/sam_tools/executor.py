@@ -27,7 +27,7 @@ from equilibria.sam_tools.ieem_to_pep_transformations import (
     create_x_block,
     normalize_state_to_pep_accounts,
 )
-from equilibria.sam_tools.models import SAMState
+from equilibria.sam_tools.models import SamTransform
 from equilibria.sam_tools.selectors import (
     index_for_key,
     indices_for_selector,
@@ -42,14 +42,14 @@ from equilibria.templates.pep_sam_compat import (
 )
 
 
-def _apply_scale_all(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_scale_all(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """Scale all SAM cells by one multiplicative factor."""
     factor = float(op.get("factor", 1.0))
     state.matrix *= factor
     return {"factor": factor, "cells": int(state.matrix.size)}
 
 
-def _apply_scale_slice(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_scale_slice(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """Scale one selected matrix slice by a factor."""
     factor = float(op.get("factor", 1.0))
     rows = indices_for_selector(state.row_keys, op.get("row"), "row")
@@ -69,7 +69,7 @@ def _apply_scale_slice(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _apply_shift_row_slice(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_shift_row_slice(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """Move a share of values from one row to another over selected columns."""
     source_row = index_for_key(state.row_keys, op.get("source_row"), "source_row")
     target_row = index_for_key(state.row_keys, op.get("target_row"), "target_row")
@@ -86,7 +86,7 @@ def _apply_shift_row_slice(state: SAMState, op: dict[str, Any]) -> dict[str, Any
     return {"share": share, "cols": len(cols), "moved_total": moved_total}
 
 
-def _apply_move_cell(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_move_cell(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """Transfer value from one specific cell to another cell."""
     source = op.get("source") or {}
     target = op.get("target") or {}
@@ -114,7 +114,7 @@ def _apply_move_cell(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _apply_rebalance_ipfp(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_rebalance_ipfp(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """Run IPFP rebalancing over a masked support with configurable targets."""
     target_mode = IPFPTargetMode.from_alias(str(op.get("target_mode", "geomean")))
     support_mode = IPFPSupportMode.from_alias(str(op.get("support", "pep_compat")))
@@ -160,7 +160,7 @@ def _apply_rebalance_ipfp(state: SAMState, op: dict[str, Any]) -> dict[str, Any]
 
 
 def _apply_enforce_export_balance(
-    state: SAMState,
+    state: SamTransform,
     op: dict[str, Any],
 ) -> dict[str, Any]:
     """Enforce export value identity after structural and balancing steps."""
@@ -189,7 +189,7 @@ def _resolve_operation_name(op: dict[str, Any]) -> WorkflowOperation:
         raise ValueError(f"Unsupported transform op: {raw_name}") from exc
 
 
-def _apply_operation(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_operation(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """Dispatch one operation mapping to its concrete transformation handler."""
     op_name = _resolve_operation_name(op)
 
