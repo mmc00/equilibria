@@ -3,28 +3,55 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from pydantic import BaseModel
 
-from equilibria.sam_tools.models import SAMTransformState, SAMWorkflowConfig
+from equilibria.sam_tools.models import SAM, SAMTransformState, SAMWorkflowConfig
 
 
-def test_sam_transform_state_dataclass_small_fixture() -> None:
-    assert issubclass(SAMTransformState, BaseModel)
+def _sample_dataframe() -> pd.DataFrame:
+    keys = [("I", "agr"), ("I", "ser")]
+    matrix = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float)
+    return pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
+
+
+def test_sam_requires_square_and_matching_accounts() -> None:
+    df = _sample_dataframe()
+    sam = SAM(dataframe=df)
+    assert sam.row_keys == sam.col_keys
+    assert np.allclose(sam.matrix, df.to_numpy(dtype=float))
+    with np.testing.assert_raises(ValueError):
+        SAM(dataframe=pd.DataFrame(np.ones((2, 3), dtype=float)))
+    wrong_cols = df.copy()
+    wrong_cols.columns = pd.MultiIndex.from_tuples([("A", "one"), ("B", "two")])
+    with np.testing.assert_raises(ValueError):
+        SAM(dataframe=wrong_cols)
+
+
+def test_sam_update_matrix_enforces_shape() -> None:
+    df = _sample_dataframe()
+    sam = SAM(dataframe=df)
+    new_matrix = np.array([[5.0, 6.0], [7.0, 8.0]])
+    sam.update_matrix(new_matrix)
+    assert np.allclose(sam.matrix, new_matrix)
+    with np.testing.assert_raises(ValueError):
+        sam.update_matrix(np.ones((3, 3), dtype=float))
+
+
+def test_sam_transform_state_holds_sam_instance() -> None:
+    df = _sample_dataframe()
+    sam = SAM(dataframe=df)
     state = SAMTransformState(
-        matrix=np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float),
-        row_keys=[("I", "agr"), ("I", "ser")],
-        col_keys=[("AG", "gvt"), ("AG", "row")],
+        sam=sam,
+        row_keys=sam.row_keys,
+        col_keys=sam.col_keys,
         source_path=Path("/tmp/source.xlsx"),
         source_format="excel",
-        raw_df=None,
-        data_start_row=None,
-        data_start_col=None,
     )
 
     assert state.matrix.shape == (2, 2)
-    assert state.row_keys[0] == ("I", "agr")
-    assert state.col_keys[1] == ("AG", "row")
-    assert state.source_format == "excel"
+    assert state.row_keys == sam.row_keys
+    assert state.col_keys == sam.col_keys
 
 
 def test_sam_workflow_config_dataclass_small_fixture() -> None:

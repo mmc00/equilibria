@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from equilibria.sam_tools.balancing import RASBalancer
-from equilibria.sam_tools.models import SAMTransformState
+from equilibria.sam_tools.models import SAM, SAMTransformState
 
 IEEM_GROUP_LABELS: dict[str, str] = {
     "actividades productivas": "activities",
@@ -123,6 +123,14 @@ def _extract_raw_sam_matrix(raw_df: pd.DataFrame, groups: list[_IEEMGroup]) -> p
     return pd.DataFrame(matrix, index=labels, columns=labels, dtype=float)
 
 
+def _parse_ieem_raw_matrix(input_path: Path, sheet_name: str) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    raw_df = pd.read_excel(input_path, sheet_name=sheet_name, header=None)
+    groups = _detect_groups(raw_df)
+    matrix_df = _extract_raw_sam_matrix(raw_df, groups)
+    labels = [_norm_text(label) for label in matrix_df.index]
+    return raw_df, matrix_df, labels
+
+
 def _load_mapping(mapping_path: Path) -> tuple[dict[str, str], list[str]]:
     mapping_df = pd.read_excel(mapping_path, sheet_name="mapping")
     required = {"original", "aggregated"}
@@ -189,22 +197,26 @@ def _aggregate_with_mapping(
     return aggregated.reindex(index=ordered, columns=ordered, fill_value=0.0)
 
 
+def _build_multiindex_labels(labels: Iterable[str], category: str = "RAW") -> tuple[pd.MultiIndex, list[tuple[str, str]]]:
+    normalized = [(_norm_text(category), _norm_text(label)) for label in labels]
+    return pd.MultiIndex.from_tuples(normalized), normalized
+
+
 def load_ieem_raw_excel_state(
     input_path: Path,
     *,
     sheet_name: str = "MCS2016",
 ) -> SAMTransformState:
     """Read an IEEM raw Excel SAM and return a RAW state."""
-    raw_df = pd.read_excel(input_path, sheet_name=sheet_name, header=None)
-    groups = _detect_groups(raw_df)
-    matrix_df = _extract_raw_sam_matrix(raw_df, groups)
+    raw_df, matrix_df, labels = _parse_ieem_raw_matrix(input_path, sheet_name)
+    multi_index, keys = _build_multiindex_labels(labels, category="RAW")
+    matrix_clean = matrix_df.to_numpy(dtype=float)
+    sam = SAM(dataframe=pd.DataFrame(matrix_clean, index=multi_index, columns=multi_index))
 
-    labels = [_norm_text(label) for label in matrix_df.index]
-    matrix = matrix_df.to_numpy(dtype=float)
     return SAMTransformState(
-        matrix=matrix,
-        row_keys=[("RAW", label) for label in labels],
-        col_keys=[("RAW", label) for label in labels],
+        sam=sam,
+        row_keys=keys,
+        col_keys=keys,
         source_path=input_path,
         source_format="ieem_raw_excel",
         raw_df=None,
@@ -213,28 +225,29 @@ def load_ieem_raw_excel_state(
     )
 
 
-class SAM(BaseModel):
-    """Minimal SAM container for raw-IEEM preprocessing before PEP transforms."""
-
-    matrix: pd.DataFrame
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @model_validator(mode="after")
-    def _validate_square(self) -> SAM:
-        if self.matrix.shape[0] != self.matrix.shape[1]:
-            raise ValueError("SAM must be square")
-        return self
+class IEEMRawSAM(SAM):
+    """SAM helper especializado para cargar y transformar tablas IEEM sin procesar."""
 
     @classmethod
-    def from_ieem_excel(cls, path: Path, sheet_name: str = "MCS2016") -> SAM:
-        state = load_ieem_raw_excel_state(path, sheet_name=sheet_name)
-        matrix_df = _state_to_dataframe(state, expected_category="RAW")
-        return cls(matrix=matrix_df)
+    def from_ieem_excel(cls, path: Path, sheet_name: str = "MCS2016") -> IEEMRawSAM:
+        raw_df, matrix_df, labels = _parse_ieem_raw_matrix(path, sheet_name)
+        multi_index, _ = _build_multiindex_labels(labels, category="RAW")
+        return cls(dataframe=pd.DataFrame(matrix_df.to_numpy(dtype=float), index=multi_index, columns=multi_index))
 
-    def aggregate(self, mapping_path: Path) -> SAM:
+    def aggregate(self, mapping_path: Path) -> IEEMRawSAM:
         mapping, ordered = _load_mapping(mapping_path)
-        self.matrix = _aggregate_with_mapping(self.matrix, mapping, ordered)
+        element_names = [elem for _, elem in self.row_keys]
+        plain_df = pd.DataFrame(
+            self.to_dataframe().to_numpy(dtype=float),
+            index=element_names,
+            columns=element_names,
+        )
+        aggregated = _aggregate_with_mapping(plain_df, mapping, ordered)
+        category = self.row_keys[0][0] if self.row_keys else "RAW"
+        multi_index, _ = _build_multiindex_labels(list(aggregated.index), category)
+        self.replace_dataframe(
+            pd.DataFrame(aggregated.to_numpy(dtype=float), index=multi_index, columns=multi_index)
+        )
         return self
 
     def balance_ras(
@@ -243,14 +256,14 @@ class SAM(BaseModel):
         ras_type: str = "arithmetic",
         tolerance: float = 1e-9,
         max_iterations: int = 200,
-    ) -> SAM:
+    ) -> IEEMRawSAM:
         result = RASBalancer().balance_dataframe(
-            self.matrix,
+            self.to_dataframe(),
             ras_type=ras_type,
             tolerance=tolerance,
             max_iterations=max_iterations,
         )
-        self.matrix = result.matrix
+        self.replace_dataframe(result.matrix)
         return self
 
     def to_raw_state(
@@ -259,11 +272,11 @@ class SAM(BaseModel):
         source_path: Path | None = None,
         source_format: str = "raw",
     ) -> SAMTransformState:
-        labels = [_norm_text(label) for label in self.matrix.index]
+        keys = [(cat, elem) for cat, elem in self.row_keys]
         return SAMTransformState(
-            matrix=self.matrix.to_numpy(dtype=float),
-            row_keys=[("RAW", label) for label in labels],
-            col_keys=[("RAW", label) for label in labels],
+            sam=self,
+            row_keys=keys,
+            col_keys=keys,
             source_path=source_path or Path("<memory>"),
             source_format=source_format,
         )

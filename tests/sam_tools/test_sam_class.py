@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from equilibria.sam_tools.ieem_raw_excel import SAM
+from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
+from equilibria.sam_tools.models import SAM
 
 
 def _write_ieem_raw_excel(path: Path, matrix: np.ndarray, sheet_name: str = "MCS2016") -> None:
@@ -64,10 +65,10 @@ def _write_ieem_mapping(path: Path) -> None:
         mapping.to_excel(writer, sheet_name="mapping", index=False)
 
 
-def test_sam_init_requires_square_matrix() -> None:
-    assert issubclass(SAM, BaseModel)
+def test_ieem_raw_sam_init_requires_square_matrix() -> None:
+    assert issubclass(IEEMRawSAM, SAM)
     with np.testing.assert_raises(ValueError):
-        SAM(matrix=pd.DataFrame(np.ones((2, 3), dtype=float)))
+        IEEMRawSAM(dataframe=pd.DataFrame(np.ones((2, 3), dtype=float)))
 
 
 def test_sam_raw_pipeline_methods_with_small_fixture(tmp_path: Path) -> None:
@@ -82,12 +83,15 @@ def test_sam_raw_pipeline_methods_with_small_fixture(tmp_path: Path) -> None:
     _write_ieem_raw_excel(raw_file, matrix)
     _write_ieem_mapping(mapping_file)
 
-    sam = SAM.from_ieem_excel(raw_file, sheet_name="MCS2016")
+    sam = IEEMRawSAM.from_ieem_excel(raw_file, sheet_name="MCS2016")
     assert sam.matrix.shape == (10, 10)
 
     sam.aggregate(mapping_file)
-    assert "A-AGR" in sam.matrix.index
-    assert "C-AGR" in sam.matrix.columns
+    aggregated_df = sam.to_dataframe()
+    row_labels = {elem.lower() for _, elem in aggregated_df.index}
+    col_labels = {elem.lower() for _, elem in aggregated_df.columns}
+    assert "a-agr" in row_labels
+    assert "c-agr" in col_labels
 
     before = float(np.max(np.abs(sam.matrix.sum(axis=1) - sam.matrix.sum(axis=0))))
     sam.balance_ras(ras_type="geometric", tolerance=1e-10, max_iterations=1000)
