@@ -145,8 +145,12 @@ class FinalCalibrator:
 
         # Load VAL_PAR parameters for LES
         if val_par_data is None:
-            val_par_path = Path(
-                "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/VAL_PAR.xlsx"
+            val_par_path = (
+                Path(__file__).resolve().parent
+                / "reference"
+                / "pep2"
+                / "data"
+                / "VAL_PAR.xlsx"
             )
             self.val_par = self._read_val_par_excel(val_par_path)
         else:

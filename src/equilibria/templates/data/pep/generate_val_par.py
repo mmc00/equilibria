@@ -186,12 +186,9 @@ def generate_val_par_gdx(excel_path: Path, output_path: Path) -> None:
 
 def main():
     """Generate VAL_PAR.gdx for equilibria."""
-    excel_path = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/VAL_PAR.xlsx"
-    )
-    output_path = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/VAL_PAR.gdx"
-    )
+    repo_root = Path(__file__).resolve().parents[5]
+    excel_path = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "VAL_PAR.xlsx"
+    output_path = repo_root / "src" / "equilibria" / "templates" / "data" / "pep" / "VAL_PAR.gdx"
 
     generate_val_par_gdx(excel_path, output_path)
 

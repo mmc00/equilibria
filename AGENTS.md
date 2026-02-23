@@ -117,7 +117,7 @@ All calibration modules read from SAM-V2_0.gdx using the delta decoder:
 - 196/196 records decoded with 100% accuracy
 
 **VAL_PAR Integration:**
-- Automatic reading from `/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/VAL_PAR.xlsx`
+- Automatic reading from `src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx`
 - Extracts elasticity parameters: sigma_KD, sigma_LD, sigma_VA, sigma_XT, sigma_M, sigma_XD
 - Default values used if file unavailable:
   - sigma_KD = sigma_LD = 0.8
@@ -491,7 +491,7 @@ python scripts/parity/verify_pep2_full_parity.py \
   - Secondary cause: production-tax routing drift (`AG.ti -> J` vs expected `AG.gvt -> J` in PEP calibration path).
   - Why IEEM can still close: different trade/tax architecture + pre-solve diagnostics and SAM balancing in IEEM pipeline.
 - ✅ CRI fixed SAM provenance validated:
-  - Source generator: `/Users/marmol/proyectos/cge_babel/sam/cri/2016/export_gams_format.py`
+  - Source generator: `cge_babel/sam/cri/2016/export_gams_format.py`
   - Input in generator: `output/SAM-V2_0.xlsx` (`export_gams_format.py:243`)
   - Generated file: `output/SAM-CRI.xlsx` (`export_gams_format.py:285`, export call `:289-292`)
   - Equilibria reference file: `src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx`
@@ -576,7 +576,7 @@ The tool generates a comprehensive Markdown report including:
 
 ### Current Status
 - **SAM-V2_0.gdx**: ✅ **FULLY WORKING** - 196/196 records decoded correctly (100% accuracy)
-  - Implementation based on official GDX source code from `/Users/marmol/proyectos/gdx/src/gxfile.cpp`
+  - Implementation based on official GDX source code from `gdx/src/gxfile.cpp`
   - Correctly reads MinElem/MaxElem from data header for each dimension
   - Implements proper DeltaForRead logic (DeltaForRead = dimension for version > 6)
   - Handles all delta codes: 0x01, 0x02, 0x03, 0x05, 0x06, 0xFF (EOF)
@@ -600,7 +600,7 @@ The tool generates a comprehensive Markdown report including:
 - Incorrect value structure (assumed type byte before double)
 
 **Solution Implemented**:
-Based on official GDX source code analysis from `/Users/marmol/proyectos/gdx/src/gxfile.cpp`:
+Based on official GDX source code analysis from `gdx/src/gxfile.cpp`:
 
 1. **Correct Header Parsing**:
    - Read dimension at position 6

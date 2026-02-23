@@ -355,10 +355,10 @@ class GDXComparator:
 
 def main():
     """Main entry point."""
+    repo_root = Path(__file__).resolve().parents[2]
+
     # Determine original data directory
-    original_dir = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original"
-    )
+    original_dir = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data"
 
     if not original_dir.exists():
         print(f"Error: Directory not found: {original_dir}")

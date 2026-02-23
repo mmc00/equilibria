@@ -7,7 +7,11 @@ This script tests the income calibration module and compares results with GAMS.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, '/Users/marmol/proyectos/equilibria/src')
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SAM_FILE = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+DEFAULT_GAMS_RESULTS = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "scripts" / "Results.gdx"
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from equilibria.babel.gdx.reader import read_gdx
 from equilibria.templates.pep_calibration_income import IncomeCalibrator
@@ -20,7 +24,7 @@ def test_income_calibration():
     print("=" * 70)
     
     # Load SAM data
-    sam_file = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx")
+    sam_file = DEFAULT_SAM_FILE
     print(f"\nLoading SAM: {sam_file}")
     sam_data = read_gdx(sam_file)
     print(f"✓ Loaded SAM with {len(sam_data['symbols'])} symbols")
@@ -166,7 +170,7 @@ def compare_with_gams(our_result):
     print("=" * 70)
     
     # Load GAMS baseline
-    gams_file = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/gams/results/all_data_baseline.gdx")
+    gams_file = DEFAULT_GAMS_RESULTS
     if not gams_file.exists():
         print(f"⚠ GAMS baseline not found: {gams_file}")
         print("  Run GAMS first to generate baseline")

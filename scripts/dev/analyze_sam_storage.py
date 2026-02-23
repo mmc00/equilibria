@@ -217,16 +217,12 @@ def main():
     print("SAM GDX STORAGE DIFFERENCE ANALYSIS")
     print("=" * 70)
 
+    repo_root = Path(__file__).resolve().parents[2]
+
     # Paths
-    original_gdx = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx"
-    )
-    equilibria_gdx = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/SAM-V2_0.gdx"
-    )
-    excel_sam = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/SAM-V2_0.xls"
-    )
+    original_gdx = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+    equilibria_gdx = repo_root / "src" / "equilibria" / "templates" / "data" / "pep" / "SAM-V2_0.gdx"
+    excel_sam = repo_root / "src" / "equilibria" / "templates" / "data" / "pep" / "SAM-V2_0.xls"
 
     # Check files exist
     if not original_gdx.exists():

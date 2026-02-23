@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -17,19 +18,28 @@ CONTRIBUTION_LABELS = [
 
 
 def parse_args() -> argparse.Namespace:
+    cge_babel_root = os.environ.get("CGE_BABEL_ROOT")
+    if cge_babel_root:
+        root = Path(cge_babel_root) / "sam" / "cri" / "2016" / "output"
+        default_input = root / "mapping_template.xlsx"
+        default_output = root / "mapping_template_contrib_to_ti.xlsx"
+    else:
+        default_input = Path("output/mapping_template.xlsx")
+        default_output = Path("output/mapping_template_contrib_to_ti.xlsx")
+
     parser = argparse.ArgumentParser(
         description="Build mapping variant moving social contributions to a tax account",
     )
     parser.add_argument(
         "--input-mapping",
         type=Path,
-        default=Path("/Users/marmol/proyectos/cge_babel/sam/cri/2016/output/mapping_template.xlsx"),
+        default=default_input,
         help="Source mapping_template.xlsx path",
     )
     parser.add_argument(
         "--output-mapping",
         type=Path,
-        default=Path("/Users/marmol/proyectos/cge_babel/sam/cri/2016/output/mapping_template_contrib_to_ti.xlsx"),
+        default=default_output,
         help="Output mapping path",
     )
     parser.add_argument(
@@ -81,4 +91,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

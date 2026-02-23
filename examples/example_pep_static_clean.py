@@ -9,10 +9,13 @@ The pep_static_clean dataset contains:
 - VAL_PAR.gdx: Model parameters
 """
 
+import os
 from pathlib import Path
 
 from equilibria.templates import PEP1R
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_pep_static_clean_data(data_path: Path | None = None):
@@ -26,13 +29,15 @@ def load_pep_static_clean_data(data_path: Path | None = None):
         Tuple of (sam_data, param_data)
     """
     if data_path is None:
+        cge_babel_root = os.environ.get("CGE_BABEL_ROOT")
         # Try to find pep_static_clean in common locations
         possible_paths = [
-            Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original"),
-            Path.home() / "proyectos" / "cge_babel" / "pep_static_clean" / "data" / "original",
+            REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data",
             Path("../cge_babel/pep_static_clean/data/original"),
             Path("../../cge_babel/pep_static_clean/data/original"),
         ]
+        if cge_babel_root:
+            possible_paths.insert(0, Path(cge_babel_root) / "pep_static_clean" / "data" / "original")
         
         for path in possible_paths:
             if path.exists():
@@ -108,8 +113,7 @@ def main():
         sam_data, param_data = load_pep_static_clean_data()
     except FileNotFoundError as e:
         print(f"\n❌ Error: {e}")
-        print("\nPlease ensure pep_static_clean is available at:")
-        print("  /Users/marmol/proyectos/cge_babel/pep_static_clean/")
+        print("\nPlease provide --data_path or set CGE_BABEL_ROOT to your cge_babel root.")
         return
     
     # Create model
@@ -138,7 +142,11 @@ def main():
     print("Validation")
     print("-" * 60)
     
-    gams_results = Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/gams/pep_results.gdx")
+    cge_babel_root = os.environ.get("CGE_BABEL_ROOT")
+    if cge_babel_root:
+        gams_results = Path(cge_babel_root) / "pep_static_clean" / "gams" / "pep_results.gdx"
+    else:
+        gams_results = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "scripts" / "Results.gdx"
     if gams_results.exists():
         print(f"✓ GAMS results found: {gams_results}")
         print("  Run model.validate(gams_results) to compare")

@@ -15,8 +15,11 @@ import logging
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SAM_FILE = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+
 # Add src to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from equilibria.qa.reporting import format_report_summary
 from equilibria.qa.sam_checks import run_sam_qa_from_file
@@ -58,7 +61,7 @@ Examples:
     parser.add_argument(
         "--sam-file",
         type=Path,
-        default=Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx"),
+        default=DEFAULT_SAM_FILE,
         help="Path to SAM GDX file",
     )
     parser.add_argument(

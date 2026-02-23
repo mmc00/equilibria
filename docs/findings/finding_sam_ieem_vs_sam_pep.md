@@ -1,7 +1,7 @@
 # Finding: SAM IEEM vs SAM PEP (CRI)
 
 Fecha: 2026-02-19  
-Repositorio: `/Users/marmol/proyectos/equilibria`
+Repositorio: `equilibria`
 
 ## Resumen ejecutivo
 
@@ -85,11 +85,11 @@ IEEM usa otra arquitectura de modelado:
 
 Referencias:
 
-- `/Users/marmol/proyectos/cge_babel/ieem/gams/mod.gms:226`
-- `/Users/marmol/proyectos/cge_babel/ieem/gams/mod.gms:243`
-- `/Users/marmol/proyectos/cge_babel/ieem/gams/diagnostics-data.inc:114`
-- `/Users/marmol/proyectos/cge_babel/ieem/gams/diagnostics-data.inc:371`
-- `/Users/marmol/proyectos/cge_babel/ieem/gams/sambal.inc:191`
+- `cge_babel/ieem/gams/mod.gms:226`
+- `cge_babel/ieem/gams/mod.gms:243`
+- `cge_babel/ieem/gams/diagnostics-data.inc:114`
+- `cge_babel/ieem/gams/diagnostics-data.inc:371`
+- `cge_babel/ieem/gams/sambal.inc:191`
 
 ## Respuesta a la pregunta clave ("si la SAM balancea, por que falla el modelo")
 

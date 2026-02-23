@@ -15,8 +15,12 @@ import logging
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SAM_FILE = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.gdx"
+DEFAULT_GAMS_RESULTS = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2" / "scripts" / "Results.gdx"
+
 # Add src to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from equilibria.qa.reporting import format_report_summary
 from equilibria.qa.sam_checks import run_sam_qa_from_file
@@ -57,7 +61,7 @@ Examples:
     parser.add_argument(
         "--sam-file",
         type=Path,
-        default=Path("/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.gdx"),
+        default=DEFAULT_SAM_FILE,
         help="Path to SAM GDX file",
     )
     parser.add_argument(
@@ -100,7 +104,7 @@ Examples:
     parser.add_argument(
         "--gams-results-gdx",
         type=Path,
-        default=Path("src/equilibria/templates/reference/pep2/scripts/Results.gdx"),
+        default=DEFAULT_GAMS_RESULTS,
         help="GAMS Results.gdx used for gams initialization",
     )
     parser.add_argument(
@@ -176,7 +180,7 @@ Examples:
     parser.add_argument(
         "--gdxdump-bin",
         type=str,
-        default="/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+        default="gdxdump",
         help="Path to gdxdump binary for gams baseline checks",
     )
     parser.add_argument(

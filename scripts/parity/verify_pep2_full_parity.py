@@ -20,7 +20,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PEP2_ROOT = REPO_ROOT / "src" / "equilibria" / "templates" / "reference" / "pep2"
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from equilibria.babel.gdx.reader import read_gdx
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
@@ -160,11 +163,11 @@ def main() -> int:
     parser.add_argument(
         "--pep2-root",
         type=Path,
-        default=Path("/Users/marmol/proyectos/equilibria/src/equilibria/templates/reference/pep2"),
+        default=DEFAULT_PEP2_ROOT,
     )
     parser.add_argument(
         "--gdxdump",
-        default="/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+        default="gdxdump",
     )
     parser.add_argument(
         "--presolve-gdx",

@@ -110,12 +110,9 @@ def generate_sam_4d_gdx(excel_path: Path, output_path: Path) -> None:
 
 def main():
     """Generate 4D SAM GDX."""
-    excel_path = Path(
-        "/Users/marmol/proyectos/cge_babel/pep_static_clean/data/original/SAM-V2_0.xls"
-    )
-    output_path = Path(
-        "/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/SAM-V2_0_4D.gdx"
-    )
+    repo_root = Path(__file__).resolve().parents[5]
+    excel_path = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.xls"
+    output_path = repo_root / "src" / "equilibria" / "templates" / "data" / "pep" / "SAM-V2_0_4D.gdx"
 
     generate_sam_4d_gdx(excel_path, output_path)
 

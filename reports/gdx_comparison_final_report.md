@@ -159,8 +159,8 @@ gams PEP-1-1_v2_1_modular.gms \
 ```
 
 **Files to use:**
-- ✅ `/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/SAM-V2_0.gdx`
-- ✅ `/Users/marmol/proyectos/equilibria/src/equilibria/templates/data/pep/VAL_PAR.gdx`
+- ✅ `src/equilibria/templates/data/pep/SAM-V2_0.gdx`
+- ✅ `src/equilibria/templates/data/pep/VAL_PAR.gdx`
 
 ## Conclusion
 
