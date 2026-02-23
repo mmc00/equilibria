@@ -1,0 +1,67 @@
+metadata:
+  name: cri_2016_ieem_raw_to_pep
+  country: cri
+  current_format: ieem_raw_excel
+  target_format: pep_excel
+
+input:
+  path: ../../data/raw/matriz_contabilidad_social_2016.xlsx
+  format: ieem_raw_excel
+  options:
+    sheet_name: MCS2016
+
+output:
+  path: ../../output/sam_cri_pep_compatible.xlsx
+  format: excel
+  symbol: SAM
+
+report_path: ../../output/sam_cri_pep_compatible_report.json
+
+transforms:
+  - op: aggregate_mapping
+    mapping_path: ../../data/raw/mapping_template.xlsx
+
+  - op: balance_ras
+    tol: 1.0e-9
+    max_iter: 200
+
+  - op: normalize_pep_accounts
+
+  - op: create_x_block
+
+  - op: convert_exports_to_x
+
+  - op: align_ti_to_gvt_j
+
+  - op: move_k_to_ji
+    commodity_to_sector:
+      agr: agr
+      othind: othind
+      ser: ser
+      food: food
+      adm: adm
+
+  - op: move_l_to_ji
+    commodity_to_sector:
+      agr: agr
+      othind: othind
+      ser: ser
+      food: food
+      adm: adm
+
+  - op: move_margin_to_i_margin
+    margin_commodity: ser
+    col: I.*
+
+  - op: move_tx_to_ti_on_i
+    col: I.*
+
+  - op: rebalance_ipfp
+    target_mode: geomean
+    support: pep_compat
+    epsilon: 1.0e-9
+    tol: 1.0e-8
+    max_iter: 20000
+
+  - op: enforce_export_balance
+    tol: 1.0e-12

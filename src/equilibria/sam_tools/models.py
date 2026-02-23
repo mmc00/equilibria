@@ -34,6 +34,7 @@ class SAMWorkflowConfig:
     input_format: str
     output_path: Path
     output_format: str
+    input_options: dict[str, Any]
     transforms: list[dict[str, Any]]
     report_path: Path | None
     output_symbol: str

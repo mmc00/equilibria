@@ -2,6 +2,16 @@
 
 Pipeline YAML para transformar SAM entre formatos y aplicar ajustes secuenciales.
 
+Tambien puedes usar la API Python con la clase `SAM`:
+
+```python
+from equilibria.sam_tools import SAM
+
+sam = SAM.from_ieem_excel("data/matriz_contabilidad_social_2016.xlsx", sheet_name="MCS2016")
+sam.aggregate("data/mapping_template.xlsx").balance_ras()
+state = sam.to_raw_state()
+```
+
 ## Ejemplo CRI -> PEP compatible
 
 ```bash
@@ -9,10 +19,30 @@ uv run python scripts/sam_tools/run_sam_transform_pipeline.py \
   --config examples/sam/cri_pep_transform.yaml
 ```
 
+## Ejemplo RAW IEEM -> PEP compatible (una sola corrida)
+
+`input.format: ieem_raw_excel` permite arrancar desde una SAM tipo IEEM (por ejemplo `MCS2016`) y aplicar:
+- lectura raw,
+- agregación con mapping,
+- normalización a cuentas PEP,
+- y luego transformaciones del pipeline.
+
+En `input.options`:
+- `sheet_name`: nombre de hoja raw (default `MCS2016`).
+
+Ejemplo de config:
+- `examples/sam/cri_ieem_raw_to_pep.yaml`
+
 ## Operaciones disponibles
 
 - `scale_all`: reescala toda la matriz.
 - `scale_slice`: reescala un bloque (`row`/`col`) con selector.
+- `aggregate_mapping`: agrega una SAM RAW usando `mapping_path`.
+- `balance_ras`: rebalancea matriz RAW con RAS.
+- `normalize_pep_accounts`: convierte etiquetas agregadas a cuentas PEP (`J/I/L/K/AG/MARG/OTH`).
+- `create_x_block`: agrega cuentas `X.*` para cada commodity `I.*`.
+- `convert_exports_to_x`: mueve exportaciones `I.* -> AG.row` a `X.* -> AG.row` y ajusta `J->I/J->X`.
+- `align_ti_to_gvt_j`: mueve `AG.ti -> J.*` a `AG.gvt -> J.*`.
 - `shift_row_slice`: mueve una fracción de una fila origen a otra fila destino para columnas seleccionadas.
 - `move_cell`: mueve monto entre dos celdas específicas.
 - `move_k_to_ji`: mueve flujos `K.* -> I.*` hacia `J.map(i) -> I.*`.

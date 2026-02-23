@@ -15,6 +15,8 @@ def _norm_format(fmt: str) -> str:
     value = norm_text_lower(fmt)
     if value in {"xlsx", "xls", "excel", "pep_excel"}:
         return "excel"
+    if value in {"ieem_raw_excel", "ieem_raw", "ieem_excel_raw"}:
+        return "ieem_raw_excel"
     if value == "gdx":
         return "gdx"
     raise ValueError(f"Unsupported SAM format: {fmt}")
@@ -59,6 +61,21 @@ def load_workflow_config(config_path: Path) -> SAMWorkflowConfig:
     input_format = _norm_format(input_cfg.get("format") or _infer_format_from_path(input_path))
     output_format = _norm_format(output_cfg.get("format") or _infer_format_from_path(output_path))
 
+    input_options = input_cfg.get("options") or {}
+    if not isinstance(input_options, dict):
+        raise ValueError("input.options must be a mapping when provided")
+    if "mapping_path" in input_cfg and "mapping_path" not in input_options:
+        input_options["mapping_path"] = input_cfg.get("mapping_path")
+
+    resolved_input_options: dict[str, Any] = {}
+    for key, value in input_options.items():
+        if value is None:
+            continue
+        if key.endswith("_path") and isinstance(value, (str, Path)):
+            resolved_input_options[key] = _resolve_path(value, base_dir, f"input.options.{key}")
+        else:
+            resolved_input_options[key] = value
+
     transforms = payload.get("transforms") or []
     if not isinstance(transforms, list):
         raise ValueError("transforms must be a list")
@@ -73,6 +90,7 @@ def load_workflow_config(config_path: Path) -> SAMWorkflowConfig:
         country=metadata.get("country"),
         input_path=input_path,
         input_format=input_format,
+        input_options=resolved_input_options,
         output_path=output_path,
         output_format=output_format,
         transforms=transforms,
