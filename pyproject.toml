@@ -42,7 +42,6 @@ classifiers = [
 
 # Core dependencies
 dependencies = [
-    "cyipopt>=1.6.1",
     "numpy>=1.24",
     "openpyxl>=3.1.5",
     "pandas>=2.0",
@@ -55,6 +54,7 @@ dependencies = [
 # Optimization backends
 pyomo = ["pyomo>=6.7"]
 poi = ["pyoptinterface>=0.1"]
+ipopt = ["cyipopt>=1.6.1"]
 
 # Data format support
 excel = ["openpyxl>=3.1", "xlrd>=2.0"]

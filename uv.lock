@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -468,7 +467,6 @@ name = "equilibria"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "cyipopt" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "openpyxl" },
@@ -498,6 +496,9 @@ excel = [
     { name = "openpyxl" },
     { name = "xlrd" },
 ]
+ipopt = [
+    { name = "cyipopt" },
+]
 poi = [
     { name = "pyoptinterface" },
 ]
@@ -520,7 +521,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cyipopt", specifier = ">=1.6.1" },
+    { name = "cyipopt", marker = "extra == 'ipopt'", specifier = ">=1.6.1" },
     { name = "equilibria", extras = ["pyomo"], marker = "extra == 'all'" },
     { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.7" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5" },
@@ -542,7 +543,6 @@ requires-dist = [
     { name = "xlrd", specifier = ">=2.0.2" },
     { name = "xlrd", marker = "extra == 'excel'", specifier = ">=2.0" },
 ]
-provides-extras = ["pyomo", "poi", "excel", "viz", "dev", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [
