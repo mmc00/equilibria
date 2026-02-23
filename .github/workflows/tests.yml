@@ -46,6 +46,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install IPOPT system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gfortran \
+            pkg-config \
+            coinor-libipopt-dev
+
       - name: Install dependencies
         run: uv sync --dev
 
@@ -65,6 +74,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install IPOPT system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gfortran \
+            pkg-config \
+            coinor-libipopt-dev
 
       - name: Install dependencies
         run: uv sync --dev
@@ -125,6 +143,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install IPOPT system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gfortran \
+            pkg-config \
+            coinor-libipopt-dev
 
       - name: Install dependencies
         run: uv sync --dev
@@ -196,6 +223,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install IPOPT system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gfortran \
+            pkg-config \
+            coinor-libipopt-dev
+
       - name: Install dependencies
         run: uv sync --dev
 
@@ -266,6 +302,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install IPOPT system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gfortran \
+            pkg-config \
+            coinor-libipopt-dev
 
       - name: Install dependencies
         run: uv sync --dev
@@ -349,6 +394,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install IPOPT system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gfortran \
+            pkg-config \
+            coinor-libipopt-dev
 
       - name: Install dependencies
         run: uv sync --dev
