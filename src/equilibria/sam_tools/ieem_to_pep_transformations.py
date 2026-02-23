@@ -58,9 +58,10 @@ def _raw_state_to_dataframe(state: SAMLikeState) -> pd.DataFrame:
 def _replace_state_from_raw_dataframe(state: SAMLikeState, df: pd.DataFrame) -> None:
     """Overwrite a state object from one RAW dataframe."""
     labels = [norm_text(label) for label in df.index]
+    keys = [("RAW", label) for label in labels]
+    state.row_keys = keys
+    state.col_keys = keys.copy()
     state.matrix = df.to_numpy(dtype=float)
-    state.row_keys = [("RAW", label) for label in labels]
-    state.col_keys = [("RAW", label) for label in labels]
 
 
 def _label_to_key(label: str) -> tuple[str, str] | None:
@@ -132,9 +133,10 @@ def _ensure_key(state: SAMLikeState, key: tuple[str, str]) -> bool:
     old_n = state.matrix.shape[0]
     new_matrix = np.zeros((old_n + 1, old_n + 1), dtype=float)
     new_matrix[:old_n, :old_n] = state.matrix
+    keys = state.row_keys + [key]
+    state.row_keys = keys
+    state.col_keys = keys.copy()
     state.matrix = new_matrix
-    state.row_keys = state.row_keys + [key]
-    state.col_keys = state.col_keys + [key]
     return True
 
 
@@ -241,9 +243,9 @@ def normalize_state_to_pep_accounts(
                 float(df.loc[c_label, "VSTK"]),
             )
 
-    state.matrix = pep_matrix
     state.row_keys = pep_keys
     state.col_keys = pep_keys.copy()
+    state.matrix = pep_matrix
     return {
         "raw_labels": len(labels),
         "pep_accounts": len(pep_keys),
