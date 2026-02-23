@@ -5,7 +5,7 @@ organizacion actual:
 - `scripts/cli/`: comandos operativos principales (calibrar, resolver, ejecutar flujos).
 - `scripts/parity/`: comparaciones y auditorias de paridad (gams vs python).
 - `scripts/qa/`: chequeos de calidad/diagnostico y reportes.
-- `scripts/sam_tools/`: utilidades de transformacion y auditoria SAM (incluye CRI).
+- `scripts/sam_tools/`: utilidades de transformacion y auditoria SAM (incluye CRI y pipeline YAML configurable).
 - `scripts/dev/`: scripts de exploracion/depuracion tecnica.
 
 compatibilidad:
@@ -26,6 +26,8 @@ flujo actual recomendado:
   - `uv run python scripts/parity/verify_pep2_full_parity.py --tol 1e-9 --presolve-gdx src/equilibria/templates/reference/pep2/scripts/PreSolveLevels.gdx`
 - pipeline sistemico (gates y clasificacion):
   - `uv run python scripts/parity/run_pep_systemic_parity.py --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx --init-mode gams --method none --save-report output/pep_systemic_parity_report.json`
+- transformar SAM con YAML:
+  - `uv run python scripts/sam_tools/run_sam_transform_pipeline.py --config examples/sam/cri_pep_transform.yaml`
 
 policy:
 
