@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from equilibria.sam_tools.balancing import RASBalancer
 from equilibria.sam_tools.ieem_to_pep_transformations import balance_state_ras
-from equilibria.sam_tools.models import SAM, SAMTransformState
+from equilibria.sam_tools.models import SAM, SAMState
 
 
 def _sample_matrix() -> pd.DataFrame:
@@ -84,7 +84,7 @@ def test_balance_state_ras_uses_ras_type() -> None:
     )
     keys = [("RAW", "a"), ("RAW", "b"), ("RAW", "c")]
     sam = SAM.from_matrix(matrix, keys, keys)
-    state = SAMTransformState(
+    state = SAMState(
         sam=sam,
         row_keys=keys.copy(),
         col_keys=keys.copy(),

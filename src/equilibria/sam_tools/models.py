@@ -120,7 +120,7 @@ class SAM(BaseModel):
         return result
 
 
-class SAMTransformState(BaseModel):
+class SAMState(BaseModel):
     """In-memory SAM representation used during transformations."""
 
     sam: SAM
@@ -135,7 +135,7 @@ class SAMTransformState(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
-    def _validate_matrix_shape(self) -> SAMTransformState:
+    def _validate_matrix_shape(self) -> SAMState:
         rows, cols = self.sam.matrix.shape
         if rows != len(self.row_keys):
             raise ValueError(

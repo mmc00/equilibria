@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from equilibria.sam_tools.models import SAM, SAMTransformState, SAMWorkflowConfig
+from equilibria.sam_tools.models import SAM, SAMState, SAMWorkflowConfig
 
 
 def _sample_dataframe() -> pd.DataFrame:
@@ -69,7 +69,7 @@ def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
 def test_sam_transform_state_holds_sam_instance() -> None:
     df = _sample_dataframe()
     sam = SAM(dataframe=df)
-    state = SAMTransformState(
+    state = SAMState(
         sam=sam,
         row_keys=sam.row_keys,
         col_keys=sam.col_keys,
