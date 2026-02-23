@@ -35,10 +35,15 @@ Ejemplo de config:
 
 ## Operaciones disponibles
 
+Nota de arquitectura:
+- `aggregate_mapping` es generica para cualquier SAM agregada por mapping.
+- Las operaciones IEEM->PEP (`balance_ras`, `normalize_pep_accounts`, `create_x_block`, `convert_exports_to_x`, `align_ti_to_gvt_j`) viven en `ieem_to_pep_transformations.py`.
+
 - `scale_all`: reescala toda la matriz.
 - `scale_slice`: reescala un bloque (`row`/`col`) con selector.
 - `aggregate_mapping`: agrega una SAM RAW usando `mapping_path`.
 - `balance_ras`: rebalancea matriz RAW con RAS.
+  - `ras_type`: `arithmetic` (default), `geometric`, `row`, `column`.
 - `normalize_pep_accounts`: convierte etiquetas agregadas a cuentas PEP (`J/I/L/K/AG/MARG/OTH`).
 - `create_x_block`: agrega cuentas `X.*` para cada commodity `I.*`.
 - `convert_exports_to_x`: mueve exportaciones `I.* -> AG.row` a `X.* -> AG.row` y ajusta `J->I/J->X`.
