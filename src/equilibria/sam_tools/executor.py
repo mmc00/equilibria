@@ -9,6 +9,11 @@ from typing import Any
 import numpy as np
 
 from equilibria.sam_tools.config_loader import load_workflow_config
+from equilibria.sam_tools.enums import (
+    IPFPSupportMode,
+    IPFPTargetMode,
+    WorkflowOperation,
+)
 from equilibria.sam_tools.ieem_raw_excel import aggregate_state_with_mapping
 from equilibria.sam_tools.ieem_to_pep_transformations import (
     align_ti_to_gvt_j,
@@ -22,13 +27,12 @@ from equilibria.sam_tools.ieem_to_pep_transformations import (
     create_x_block,
     normalize_state_to_pep_accounts,
 )
-from equilibria.sam_tools.io import load_state, write_state
-from equilibria.sam_tools.models import SAMTransformState
+from equilibria.sam_tools.models import SAMState
 from equilibria.sam_tools.selectors import (
     index_for_key,
     indices_for_selector,
-    norm_text_lower,
 )
+from equilibria.sam_tools.state_store import load_state, write_state
 from equilibria.templates.pep_sam_compat import (
     balance_stats,
     build_support_mask,
@@ -38,13 +42,15 @@ from equilibria.templates.pep_sam_compat import (
 )
 
 
-def _apply_scale_all(state: SAMTransformState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_scale_all(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+    """Scale all SAM cells by one multiplicative factor."""
     factor = float(op.get("factor", 1.0))
     state.matrix *= factor
     return {"factor": factor, "cells": int(state.matrix.size)}
 
 
-def _apply_scale_slice(state: SAMTransformState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_scale_slice(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+    """Scale one selected matrix slice by a factor."""
     factor = float(op.get("factor", 1.0))
     rows = indices_for_selector(state.row_keys, op.get("row"), "row")
     cols = indices_for_selector(state.col_keys, op.get("col"), "col")
@@ -63,7 +69,8 @@ def _apply_scale_slice(state: SAMTransformState, op: dict[str, Any]) -> dict[str
     }
 
 
-def _apply_shift_row_slice(state: SAMTransformState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_shift_row_slice(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+    """Move a share of values from one row to another over selected columns."""
     source_row = index_for_key(state.row_keys, op.get("source_row"), "source_row")
     target_row = index_for_key(state.row_keys, op.get("target_row"), "target_row")
     cols = indices_for_selector(state.col_keys, op.get("col"), "col")
@@ -79,7 +86,8 @@ def _apply_shift_row_slice(state: SAMTransformState, op: dict[str, Any]) -> dict
     return {"share": share, "cols": len(cols), "moved_total": moved_total}
 
 
-def _apply_move_cell(state: SAMTransformState, op: dict[str, Any]) -> dict[str, Any]:
+def _apply_move_cell(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+    """Transfer value from one specific cell to another cell."""
     source = op.get("source") or {}
     target = op.get("target") or {}
     if not isinstance(source, dict) or not isinstance(target, dict):
@@ -106,13 +114,14 @@ def _apply_move_cell(state: SAMTransformState, op: dict[str, Any]) -> dict[str, 
     }
 
 
-def _apply_rebalance_ipfp(state: SAMTransformState, op: dict[str, Any]) -> dict[str, Any]:
-    target_mode = norm_text_lower(op.get("target_mode", "geomean"))
-    support_mode = norm_text_lower(op.get("support", "pep_compat"))
+def _apply_rebalance_ipfp(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+    """Run IPFP rebalancing over a masked support with configurable targets."""
+    target_mode = IPFPTargetMode.from_alias(str(op.get("target_mode", "geomean")))
+    support_mode = IPFPSupportMode.from_alias(str(op.get("support", "pep_compat")))
 
-    if support_mode == "pep_compat":
+    if support_mode == IPFPSupportMode.PEP_COMPAT:
         support = build_support_mask(state.row_keys, state.col_keys)
-    elif support_mode == "full":
+    elif support_mode == IPFPSupportMode.FULL:
         support = np.ones_like(state.matrix, dtype=bool)
     else:
         raise ValueError(f"Unsupported support mode: {support_mode}")
@@ -124,7 +133,7 @@ def _apply_rebalance_ipfp(state: SAMTransformState, op: dict[str, Any]) -> dict[
     seeded = np.where(support, np.maximum(state.matrix, epsilon), 0.0)
     row_targets, col_targets = compute_targets(
         seeded,
-        mode=target_mode,
+        mode=target_mode.value,
         original=state.matrix,
     )
 
@@ -140,8 +149,8 @@ def _apply_rebalance_ipfp(state: SAMTransformState, op: dict[str, Any]) -> dict[
     state.matrix = balanced
 
     return {
-        "target_mode": target_mode,
-        "support_mode": support_mode,
+        "target_mode": target_mode.value,
+        "support_mode": support_mode.value,
         "epsilon": epsilon,
         "tol": tol,
         "max_iter": max_iter,
@@ -151,9 +160,10 @@ def _apply_rebalance_ipfp(state: SAMTransformState, op: dict[str, Any]) -> dict[
 
 
 def _apply_enforce_export_balance(
-    state: SAMTransformState,
+    state: SAMState,
     op: dict[str, Any],
 ) -> dict[str, Any]:
+    """Enforce export value identity after structural and balancing steps."""
     tol = float(op.get("tol", 1e-12))
     adjustments = enforce_export_value_balance(
         state.matrix,
@@ -168,47 +178,57 @@ def _apply_enforce_export_balance(
     }
 
 
-def _apply_operation(state: SAMTransformState, op: dict[str, Any]) -> dict[str, Any]:
-    op_name = norm_text_lower(op.get("op"))
-    if not op_name:
+def _resolve_operation_name(op: dict[str, Any]) -> WorkflowOperation:
+    """Parse and validate the operation enum from a transform mapping."""
+    raw_name = op.get("op")
+    if raw_name is None:
         raise ValueError("Each transform entry must include 'op'")
+    try:
+        return WorkflowOperation(str(raw_name).strip().lower())
+    except ValueError as exc:
+        raise ValueError(f"Unsupported transform op: {raw_name}") from exc
 
-    if op_name == "scale_all":
+
+def _apply_operation(state: SAMState, op: dict[str, Any]) -> dict[str, Any]:
+    """Dispatch one operation mapping to its concrete transformation handler."""
+    op_name = _resolve_operation_name(op)
+
+    if op_name == WorkflowOperation.SCALE_ALL:
         return _apply_scale_all(state, op)
-    if op_name == "scale_slice":
+    if op_name == WorkflowOperation.SCALE_SLICE:
         return _apply_scale_slice(state, op)
-    if op_name == "aggregate_mapping":
+    if op_name == WorkflowOperation.AGGREGATE_MAPPING:
         return aggregate_state_with_mapping(state, op)
-    if op_name == "balance_ras":
+    if op_name == WorkflowOperation.BALANCE_RAS:
         return balance_state_ras(state, op)
-    if op_name == "normalize_pep_accounts":
+    if op_name == WorkflowOperation.NORMALIZE_PEP_ACCOUNTS:
         return normalize_state_to_pep_accounts(state, op)
-    if op_name == "create_x_block":
+    if op_name == WorkflowOperation.CREATE_X_BLOCK:
         return create_x_block(state, op)
-    if op_name == "convert_exports_to_x":
+    if op_name == WorkflowOperation.CONVERT_EXPORTS_TO_X:
         return convert_exports_to_x(state, op)
-    if op_name == "align_ti_to_gvt_j":
+    if op_name == WorkflowOperation.ALIGN_TI_TO_GVT_J:
         return align_ti_to_gvt_j(state, op)
-    if op_name == "shift_row_slice":
+    if op_name == WorkflowOperation.SHIFT_ROW_SLICE:
         return _apply_shift_row_slice(state, op)
-    if op_name == "move_cell":
+    if op_name == WorkflowOperation.MOVE_CELL:
         return _apply_move_cell(state, op)
-    if op_name == "move_k_to_ji":
+    if op_name == WorkflowOperation.MOVE_K_TO_JI:
         return apply_move_k_to_ji(state, op)
-    if op_name == "move_l_to_ji":
+    if op_name == WorkflowOperation.MOVE_L_TO_JI:
         return apply_move_l_to_ji(state, op)
-    if op_name == "move_margin_to_i_margin":
+    if op_name == WorkflowOperation.MOVE_MARGIN_TO_I_MARGIN:
         return apply_move_margin_to_i_margin(state, op)
-    if op_name == "move_tx_to_ti_on_i":
+    if op_name == WorkflowOperation.MOVE_TX_TO_TI_ON_I:
         return apply_move_tx_to_ti_on_i(state, op)
-    if op_name == "pep_structural_moves":
+    if op_name == WorkflowOperation.PEP_STRUCTURAL_MOVES:
         return apply_pep_structural_moves(state, op)
-    if op_name == "rebalance_ipfp":
+    if op_name == WorkflowOperation.REBALANCE_IPFP:
         return _apply_rebalance_ipfp(state, op)
-    if op_name == "enforce_export_balance":
+    if op_name == WorkflowOperation.ENFORCE_EXPORT_BALANCE:
         return _apply_enforce_export_balance(state, op)
 
-    raise ValueError(f"Unsupported transform op: {op_name}")
+    raise ValueError(f"Unsupported transform op: {op_name.value}")
 
 
 def _resolve_operation_paths(op: dict[str, Any], base_dir: Path) -> dict[str, Any]:
@@ -251,7 +271,7 @@ def run_sam_transform_workflow(
             raise ValueError(f"Transform at position {idx} must be a mapping")
 
         op_resolved = _resolve_operation_paths(op, config_path.parent)
-        op_name = norm_text_lower(op_resolved.get("op"))
+        op_name = _resolve_operation_name(op_resolved).value
         before = balance_stats(state.matrix)
         details = _apply_operation(state, op_resolved)
         after = balance_stats(state.matrix)
