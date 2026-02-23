@@ -78,12 +78,16 @@ class Sam(BaseModel):
 
     @property
     def matrix(self) -> np.ndarray:
-        return self.dataframe.to_numpy(dtype=float)
+        matrix = self.dataframe.to_numpy(dtype=float, copy=False)
+        matrix.setflags(write=True)
+        return matrix
 
     def update_matrix(self, matrix: np.ndarray) -> None:
-        if matrix.shape != self.matrix.shape:
-            raise ValueError("La nueva matriz debe conservar la forma original")
-        new_df = pd.DataFrame(matrix, index=self.dataframe.index, columns=self.dataframe.columns)
+        new_df = pd.DataFrame(
+            matrix,
+            index=self.dataframe.index,
+            columns=self.dataframe.columns,
+        )
         self.replace_dataframe(new_df)
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -157,7 +161,14 @@ class SamTransform(BaseModel):
 
     @matrix.setter
     def matrix(self, value: np.ndarray) -> None:
-        self.sam.update_matrix(value)
+        row_count = len(self.row_keys)
+        col_count = len(self.col_keys)
+        if value.shape != (row_count, col_count):
+            raise ValueError("Matrix shape must match current row/column keys")
+        row_index = pd.MultiIndex.from_tuples(self.row_keys)
+        col_index = pd.MultiIndex.from_tuples(self.col_keys)
+        df = pd.DataFrame(value, index=row_index, columns=col_index)
+        self.sam.replace_dataframe(df)
 
     def refresh_keys(self) -> None:
         self.row_keys = [tuple(key) for key in self.sam.row_keys]
