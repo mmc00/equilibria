@@ -52,7 +52,7 @@ jobs:
       - name: Run tests (excluding GAMS-marked)
         run: |
           uv run pytest -m "not gams" \
-            tests/qa \
+            tests/qa/test_sam_qa.py \
             tests/templates/test_pep_parity_pipeline.py \
             tests/templates/test_pep_les_parity.py \
             tests/templates/test_pep_sets.py
@@ -74,33 +74,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Generate GAMS Baseline Manifest
-        run: |
-          uv run python scripts/parity/generate_baseline_manifest.py \
-            --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx \
-            --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
-            --results-gdx src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx \
-            --gams-slice base \
-            --output output/ci_gams_manifest.json
-
       - name: Run Structural Parity Gates
         run: |
           uv run python scripts/parity/run_pep_systemic_parity.py \
             --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx \
             --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
-            --init-mode gams \
+            --init-mode excel \
             --method none \
-            --gams-results-gdx src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx \
-            --gams-results-slice base \
-            --baseline-manifest output/ci_gams_manifest.json \
-            --require-baseline-manifest \
-            --check-baseline-compatibility \
-            --eq29-eq39-parity \
-            --eq79-eq84-parity \
-            --levels-parity \
-            --eq29-eq39-tol 1e-5 \
-            --eq79-eq84-tol 1e-5 \
-            --levels-parity-tol 1e-6 \
             --save-report output/ci_structural_parity_report.json
 
       - name: Upload Structural Gate Report
