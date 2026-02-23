@@ -1,6 +1,6 @@
 # ieem to pep transformations (en)
 
-English version. This explains what each transformation in `src/equilibria/sam_tools/ieem_to_pep_transformations.py` does, why it is needed, and a minimal before/after example.
+English version. This explains the structural transformations in `src/equilibria/sam_tools/ieem_to_pep_transformations.py` and the closure/scaling operations used in the workflow executor (`src/equilibria/sam_tools/executor.py`), with minimal before/after examples.
 
 ## context
 
@@ -120,6 +120,79 @@ When to use:
 - Mainly for backward compatibility.
 - For full traceability, prefer explicit YAML steps with the four disaggregated operations.
 
+## 6) scale_all and scale_slice (rescaling)
+
+Where they live:
+- `src/equilibria/sam_tools/executor.py`
+
+What they do:
+- `scale_all`: multiplies the full SAM by a factor.
+- `scale_slice`: multiplies only one selected block (`row` x `col`) by a factor.
+
+Economic intuition:
+- Useful for unit conversion (e.g., millions to thousands) or controlled partial adjustments before rebalancing.
+
+`scale_all` example:
+
+Before:
+- `J.agr -> I.agr = 100`
+
+After with `factor=0.001`:
+- `J.agr -> I.agr = 0.1`
+
+`scale_slice` example:
+
+Before:
+- `AG.tm -> I.agr = 40`
+
+After with `row=AG.tm`, `col=I.*`, `factor=1.1`:
+- `AG.tm -> I.agr = 44`
+
+## 7) rebalance_ipfp
+
+Where it lives:
+- `src/equilibria/sam_tools/executor.py` (calling helpers in `pep_sam_compat.py`)
+
+What it does:
+- Rebalances the matrix to reduce row/column closure gaps under a support mask (`support`) using IPFP.
+
+Economic intuition:
+- After flow moves, small row-vs-column gaps can remain.
+- IPFP spreads that adjustment over allowed cells while preserving the intended structure.
+
+Key parameters:
+- `target_mode`: how row/column targets are defined (`geomean`, `average`, `original`).
+- `support`: where adjustments are allowed (`pep_compat` or `full`).
+- `epsilon`, `tol`, `max_iter`: numerical stability/tolerance controls.
+
+Example:
+
+Before:
+- max row-column difference: `120`
+
+After:
+- max row-column difference: `0.000001` (approx)
+
+## 8) enforce_export_balance
+
+Where it lives:
+- `src/equilibria/sam_tools/executor.py` (calling `enforce_export_value_balance`)
+
+What it does:
+- Enforces export value identity so the trade block remains accounting-consistent for PEP.
+
+Economic intuition:
+- If a small export-value gap remains after transformations/rebalancing, this step applies a final focused adjustment to close that identity.
+
+Example:
+
+Before:
+- export value from supply side = `1000`
+- export value from demand/price side = `997`
+
+After:
+- both sides = `1000` (within `tol`)
+
 ## conservation note
 
-Each transformation only reallocates values across cells. It does not create or destroy value. The SAM total is preserved; then `rebalance_ipfp` handles row/column closure adjustments if needed.
+Structural transformations only reallocate values across cells; they do not create or destroy value. The SAM total is preserved; then `rebalance_ipfp` and `enforce_export_balance` are used to complete accounting and trade closure.
