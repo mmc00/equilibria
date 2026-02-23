@@ -10,9 +10,9 @@ organizacion actual:
 
 compatibilidad:
 
-- los nombres historicos en `scripts/*.py` se mantienen como wrappers para no romper
-  workflows, docs o comandos previos.
-- para uso nuevo, preferir rutas por categoria (por ejemplo `scripts/cli/run_solver.py`).
+- los wrappers legacy en `scripts/*.py` (raiz) fueron retirados.
+- usar rutas por categoria (por ejemplo `scripts/cli/run_solver.py`).
+- la raiz `scripts/` se reserva para `scripts/check_lowercase_filenames.py`.
 
 policy:
 
