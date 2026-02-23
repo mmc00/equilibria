@@ -24,7 +24,7 @@ from equilibria.babel.gdx.reader import (
 def main():
     """Ejemplo de lectura completa de un archivo GDX."""
     # Ruta al archivo GDX de prueba
-    fixtures_dir = Path(__file__).parent.parent / "tests" / "fixtures"
+    fixtures_dir = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
     gdx_file = fixtures_dir / "simple_test.gdx"
 
     if not gdx_file.exists():

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
@@ -19,7 +19,7 @@ def test_geometric_sequence():
     print("TEST: Reading geometric sequence from GDX")
     print("=" * 80)
 
-    gdx_file = Path(__file__).parent.parent / "tests" / "fixtures" / "test_geometric.gdx"
+    gdx_file = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_geometric.gdx"
 
     if not gdx_file.exists():
         print(f"❌ Test file not found: {gdx_file}")
@@ -98,7 +98,7 @@ def test_arithmetic_sequence():
     print("TEST: Reading arithmetic sequence from GDX")
     print("=" * 80)
 
-    gdx_file = Path(__file__).parent.parent / "tests" / "fixtures" / "test_arithmetic.gdx"
+    gdx_file = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_arithmetic.gdx"
 
     if not gdx_file.exists():
         print(f"❌ Test file not found: {gdx_file}")

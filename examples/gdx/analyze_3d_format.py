@@ -2,7 +2,7 @@
 import struct
 from pathlib import Path
 
-gdx_path = Path(__file__).parent.parent / "tests" / "fixtures" / "set_3d.gdx"
+gdx_path = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "set_3d.gdx"
 
 with open(gdx_path, 'rb') as f:
     content = f.read()

@@ -15,7 +15,7 @@ from pathlib import Path
 from equilibria.templates import PEP1R
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def load_pep_static_clean_data(data_path: Path | None = None):

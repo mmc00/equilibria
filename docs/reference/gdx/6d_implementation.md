@@ -88,12 +88,12 @@ tests/babel/gdx/test_6d_parameters.py ....            [100%]  # 6D
 
 ### Example Files
 
-1. **`examples/test_6d_params.py`**
+1. **`examples/gdx/test_6d_params.py`**
    - Quick validation script
    - Tests both sparse and dense 6D parameters
    - Verifies value correctness
 
-2. **`examples/example_6d_usage.py`**
+2. **`examples/gdx/example_6d_usage.py`**
    - Real-world CGE model use cases:
      - 6D trade flow matrices
      - 6D input-output coefficients
@@ -101,12 +101,12 @@ tests/babel/gdx/test_6d_parameters.py ....            [100%]  # 6D
      - Advanced tensor operations
    - Demonstrates slicing, aggregation, filtering
 
-3. **`examples/verify_6d.py`**
+3. **`examples/gdx/verify_6d.py`**
    - Comprehensive verification script
    - Validates all aspects of 6D support
    - Exit code 0 on success
 
-4. **`examples/analyze_6d_binary.py`**
+4. **`examples/gdx/analyze_6d_binary.py`**
    - Binary format analysis tool
    - Discovers pattern usage
    - Useful for debugging
@@ -189,10 +189,10 @@ The implementation supports **7D and beyond** through the existing pattern syste
 3. `tests/fixtures/generate_6d_test.gms` (new)
    - GAMS test data generator
 
-4. `examples/example_6d_usage.py` (new)
+4. `examples/gdx/example_6d_usage.py` (new)
    - Real-world usage examples
 
-5. `examples/verify_6d.py` (new)
+5. `examples/gdx/verify_6d.py` (new)
    - Verification script
 
 ## Verification
@@ -214,10 +214,10 @@ uv run pytest tests/babel/gdx/test_multidim_parameters.py \
              tests/babel/gdx/test_6d_parameters.py -v
 
 # Verify implementation
-uv run python examples/verify_6d.py
+uv run python examples/gdx/verify_6d.py
 
 # Run examples
-uv run python examples/example_6d_usage.py
+uv run python examples/gdx/example_6d_usage.py
 ```
 
 ## Conclusion

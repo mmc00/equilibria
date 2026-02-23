@@ -15,7 +15,7 @@ from pathlib import Path
 from equilibria.babel.gdx.reader import get_sets, read_gdx, read_set_elements
 
 # Path to test fixtures
-FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
 
 def demo_1d_sets():

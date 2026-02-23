@@ -21,7 +21,7 @@ from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibrato
 from equilibria.templates.pep_model_solver import PEPModelSolver
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PEP2_ROOT = ROOT / "src/equilibria/templates/reference/pep2"
 PEP2_DATA = PEP2_ROOT / "data"
 PEP2_SCRIPTS = PEP2_ROOT / "scripts"

@@ -24,7 +24,7 @@ def example_trade_flow_6d():
     - transport mode
     - trade type (import/export/transit)
     """
-    gdx_file = Path(__file__).parent.parent / "tests" / "fixtures" / "test_6d.gdx"
+    gdx_file = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_6d.gdx"
 
     if not gdx_file.exists():
         print("GDX file not found. Run generate_6d_test.gms first.")
@@ -88,7 +88,7 @@ def example_io_coefficients_6d():
     - time period
     - scenario
     """
-    gdx_file = Path(__file__).parent.parent / "tests" / "fixtures" / "test_6d.gdx"
+    gdx_file = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_6d.gdx"
 
     if not gdx_file.exists():
         return
@@ -144,7 +144,7 @@ def example_production_data_6d():
     - input factor
     - output product
     """
-    gdx_file = Path(__file__).parent.parent / "tests" / "fixtures" / "test_6d.gdx"
+    gdx_file = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_6d.gdx"
 
     if not gdx_file.exists():
         return
@@ -195,7 +195,7 @@ def example_production_data_6d():
 
 def example_advanced_6d_operations():
     """Advanced operations on 6D parameters."""
-    gdx_file = Path(__file__).parent.parent / "tests" / "fixtures" / "test_6d.gdx"
+    gdx_file = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_6d.gdx"
 
     if not gdx_file.exists():
         return

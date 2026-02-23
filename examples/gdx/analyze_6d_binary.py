@@ -6,7 +6,7 @@ from pathlib import Path
 
 def analyze_6d_dense():
     """Analyze the binary encoding of 6D dense parameter."""
-    gdx_path = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "test_6d.gdx"
+    gdx_path = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "test_6d.gdx"
     data = gdx_path.read_bytes()
 
     # Find _DATA_ section for p6d_dense

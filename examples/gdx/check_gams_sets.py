@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
 gms_file = FIXTURES_DIR / "generate_gdx_fixtures.gms"
 

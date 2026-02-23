@@ -125,7 +125,7 @@ def analyze_set_format(gdx_file: Path, set_name: str):
 
 def compare_multiple_sets():
     """Compare multiple 2D sets to find patterns."""
-    fixtures_dir = Path(__file__).parent.parent / "tests" / "fixtures"
+    fixtures_dir = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
     test_cases = [
         ("set_2d_sparse.gdx", "map"),

@@ -20,18 +20,18 @@ En ambos casos usa inicialización `strict_gams` y extrae:
 
 ## Script
 
-`examples/example_11_pep_gdp_sam_comparison.py`
+`examples/pep/example_11_pep_gdp_sam_comparison.py`
 
 ## Ejecutar
 
 ```bash
-uv run python examples/example_11_pep_gdp_sam_comparison.py
+uv run python examples/pep/example_11_pep_gdp_sam_comparison.py
 ```
 
 Guardar además un JSON:
 
 ```bash
-uv run python examples/example_11_pep_gdp_sam_comparison.py --save-json output/pep_gdp_comparison.json
+uv run python examples/pep/example_11_pep_gdp_sam_comparison.py --save-json output/pep_gdp_comparison.json
 ```
 
 ## Notas
