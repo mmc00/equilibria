@@ -21,6 +21,16 @@ ROOT = Path(__file__).resolve().parents[2]
 PEP2 = ROOT / "src/equilibria/templates/reference/pep2"
 PEP2_DATA = PEP2 / "data"
 PEP2_RESULTS = PEP2 / "scripts" / "Results_ipopt.gdx"
+PEP2_SAM_CONNECT = PEP2_DATA / "SAM-V2_0_connect.xlsx"
+PEP2_SAM_XLSX = PEP2_DATA / "SAM-V2_0.xlsx"
+
+
+def _resolve_excel_sam_file() -> Path:
+    if PEP2_SAM_CONNECT.exists():
+        return PEP2_SAM_CONNECT
+    if PEP2_SAM_XLSX.exists():
+        return PEP2_SAM_XLSX
+    pytest.skip("Excel SAM baseline not available")
 
 
 def _build_base_gdx() -> object:
@@ -34,7 +44,7 @@ def _build_base_gdx() -> object:
 
 def _build_base_excel() -> object:
     c = PEPModelCalibratorExcel(
-        sam_file=PEP2_DATA / "SAM-V2_0_connect.xlsx",
+        sam_file=_resolve_excel_sam_file(),
         val_par_file=PEP2_DATA / "VAL_PAR.xlsx",
         dynamic_sets=False,
     )
@@ -51,7 +61,7 @@ def _build_dynamic_gdx() -> object:
 
 def _build_dynamic_excel() -> object:
     c = PEPModelCalibratorExcelDynamic(
-        sam_file=PEP2_DATA / "SAM-V2_0_connect.xlsx",
+        sam_file=_resolve_excel_sam_file(),
         val_par_file=PEP2_DATA / "VAL_PAR.xlsx",
     )
     return c.calibrate()
@@ -66,6 +76,8 @@ def _build_dynamic_sam_gdx() -> object:
 
 
 def _expected_cmin_base() -> dict[tuple[str, str], float]:
+    if not PEP2_RESULTS.exists():
+        pytest.skip("Results_ipopt.gdx baseline not available")
     gdx = read_gdx(PEP2_RESULTS)
     vals = read_parameter_values(gdx, "valCMIN")
     out: dict[tuple[str, str], float] = {}
@@ -92,10 +104,8 @@ def test_val_par_loader_reads_original_les_layout() -> None:
         _build_dynamic_sam_gdx,
     ],
 )
+@pytest.mark.skipif(not PEP2_RESULTS.exists(), reason="Results_ipopt.gdx baseline not available")
 def test_les_parity_cmin_and_frisch(state_builder) -> None:
-    if not PEP2_RESULTS.exists():
-        pytest.skip("Results_ipopt.gdx baseline not available")
-
     state = state_builder()
     les = state.les_parameters
 
