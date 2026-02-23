@@ -4,7 +4,7 @@ Compares original cge_babel GDX files with equilibria-generated GDX files.
 Performs 100% value matching on SAM transactions and VAL_PAR parameters.
 
 Usage:
-    python scripts/compare_gdx_detailed.py
+    python scripts/dev/compare_gdx_detailed.py
 
 Output:
     reports/gdx_comparison_report.md - Detailed Markdown report

@@ -19,7 +19,7 @@ def load_python_results():
     
     if not results_file.exists():
         print(f"❌ Python results not found: {results_file}")
-        print("   Run: python3 scripts/run_pep_model.py")
+        print("   Run: python3 scripts/cli/run_pep_model.py")
         return None
     
     print("Loading Python results...")

@@ -45,7 +45,7 @@ Achieve exact replication of the GAMS benchmark behavior in Equilibria templates
 - Patch calibration modules to persist missing values with GAMS-consistent naming.
 
 ### 6. Add a Residual Parity Harness
-- Add `scripts/check_gams_parity.py` to:
+- Add `scripts/parity/check_gams_parity.py` to:
   - Run parity-mode initialization
   - Compute and report full residual vector
   - Compare key initialized variables to `*O` levels with strict tolerance
@@ -83,6 +83,6 @@ Achieve exact replication of the GAMS benchmark behavior in Equilibria templates
 
 ## Deliverables
 - `docs/architecture/gams_parity_matrix.md`
-- `scripts/check_gams_parity.py`
+- `scripts/parity/check_gams_parity.py`
 - Parity mode implementation in solver/equation stack
 - CI parity tests and regression reports

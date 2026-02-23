@@ -39,7 +39,7 @@ Planned components:
 - `src/equilibria/qa/sam_contracts.py`
 - `src/equilibria/qa/sam_checks.py`
 - `src/equilibria/qa/reporting.py`
-- `scripts/run_sam_qa.py`
+- `scripts/qa/run_sam_qa.py`
 
 Mandatory checks:
 - Export/domestic supply consistency by commodity/sector.
@@ -193,7 +193,7 @@ Implemented in this cycle:
   - runs systemic parity on `SAM-CRI-gams-fixed.xlsx` with `equation_consistent` + `simple_iteration --max-iterations 0`
   - requires exit code `2`
   - asserts `sam_qa.passed=true`, `init.gates.overall_passed=true`, and classification `solver_dynamics/solve_not_converged`
-- `scripts/print_structural_report_summary.py` prints compact CI summaries:
+- `scripts/qa/print_structural_report_summary.py` prints compact CI summaries:
   - `classification.kind`, `classification.reason`, `first_failed_block`
   - `sam_qa.passed`, `init.gates.overall_passed`, `solve.converged`
 - CI now uploads parity/contract JSON reports as artifacts for all structural gate jobs.
