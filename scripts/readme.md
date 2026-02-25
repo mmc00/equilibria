@@ -26,7 +26,7 @@ flujo actual recomendado:
   - `uv run python scripts/parity/verify_pep2_full_parity.py --tol 1e-9 --presolve-gdx src/equilibria/templates/reference/pep2/scripts/PreSolveLevels.gdx`
 - pipeline sistemico (gates y clasificacion):
   - `uv run python scripts/parity/run_pep_systemic_parity.py --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx --init-mode gams --method none --save-report output/pep_systemic_parity_report.json`
-*transformar SAM ahora usa el pipeline manual registrado en `scripts/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
+*transformar SAM ahora usa el pipeline manual registrado en `scripts/sam_tools/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
 
 policy:
 

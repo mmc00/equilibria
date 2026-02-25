@@ -8,7 +8,7 @@ Todos los pasos trabajan sobre instancias de `Sam` manejadas por `SamTransform`.
 
 Nota:
 - `aggregate_mapping` queda como operacion generica (agnostica de formato) en `src/equilibria/sam_tools/ieem_raw_excel.py`.
-- Las operaciones de reescalado y balanceo (por ejemplo `scale_all`, `scale_slice`, `rebalance_ipfp`, `enforce_export_balance`) se coordinan hoy mediante `src/equilibria/sam_tools/manual_pipeline.py` y `scripts/run_manual_sam_pipeline.py`.
+- Las operaciones de reescalado y balanceo (por ejemplo `scale_all`, `scale_slice`, `rebalance_ipfp`, `enforce_export_balance`) se coordinan hoy mediante `src/equilibria/sam_tools/manual_pipeline.py` y `scripts/sam_tools/run_manual_sam_pipeline.py`.
 
 ## contexto
 
@@ -293,7 +293,7 @@ Resumen de pasos (cada uno documentado anteriormente):
 
 Herramientas asociadas:
 - `src/equilibria/sam_tools/manual_pipeline.py` expone `run_manual_pipeline`, que ejecuta los pasos anteriores sobre una instancia de `Sam` y retorna un resumen policico.
-- `scripts/run_manual_sam_pipeline.py` imprime el flujo utilizando `SAM-V2_0_connect.xlsx` como ejemplo.
+- `scripts/sam_tools/run_manual_sam_pipeline.py` imprime el flujo utilizando `SAM-V2_0_connect.xlsx` como ejemplo.
 
 Símbolos que aparecen en el flujo manual:
 - `RAW.*`: cuentas sin normalizar que se reaprovechan en `J/I/AG`.
