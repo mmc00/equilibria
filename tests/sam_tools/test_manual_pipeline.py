@@ -8,10 +8,15 @@ import pandas as pd
 from equilibria.sam_tools.manual_pipeline import run_from_excel
 from equilibria.sam_tools.models import Sam
 from equilibria.sam_tools.sam_transforms import create_x_block_on_sam, convert_exports_to_x_on_sam
+from tests.sam_tools.fixtures import IEEM_RAW_GROUPS, write_sample_ieem_raw_excel
 
 
 def test_manual_pipeline_runs_on_fixture() -> None:
     raw_path = Path("tmp_ieem_test/raw.xlsx")
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    matrix = np.zeros((len(IEEM_RAW_GROUPS), len(IEEM_RAW_GROUPS)), dtype=float)
+    write_sample_ieem_raw_excel(raw_path, matrix)
+
     summary = run_from_excel(raw_path, sheet_name="MCS2016")
 
     step_names = [step["step"] for step in summary.steps]
