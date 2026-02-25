@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from equilibria.backends import PyomoBackend
+from pyomo.environ import Constraint
 from equilibria.templates import PEP1R
 
 
@@ -197,12 +198,7 @@ def test_pyomo_constraints_added():
     pyomo_model = backend._pyomo_model
 
     # Count constraints
-    n_constraints = sum(
-        1
-        for _ in pyomo_model.component_objects(
-            ctype=type(pyomo_model.component("Constraint"))
-        )
-    )
+    n_constraints = sum(1 for _ in pyomo_model.component_objects(Constraint, active=True))
 
     # Should have roughly the same number of constraints as equations
     assert n_constraints > 0, "Should have constraints"
