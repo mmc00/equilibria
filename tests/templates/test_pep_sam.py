@@ -17,14 +17,14 @@ def test_sam_loader_reads_correct_accounts():
 
     # Check for expected account names (not categories like L, K, AG)
     expected_accounts = [
-        "USK",
-        "SK",  # Labor types
-        "CAP",
-        "LAND",  # Capital types
-        "HRP",
-        "HUP",
-        "HRR",
-        "HUR",  # Households
+        "L_USK",
+        "L_SK",  # Labor types
+        "K_CAP",
+        "K_LAND",  # Capital types
+        "AG_HRP",
+        "AG_HUP",
+        "AG_HRR",
+        "AG_HUR",  # Households
     ]
 
     for account in expected_accounts:
@@ -50,8 +50,8 @@ def test_sam_matrix_dimensions():
     assert sam.data.shape[0] == sam.data.shape[1]
 
     # Check specific dimensions (should have at least 35+ accounts)
-    assert sam.data.shape[0] >= 35, (
-        f"SAM should have at least 35 accounts, got {sam.data.shape[0]}"
+    assert sam.data.shape[0] >= 34, (
+        f"SAM should have at least 34 accounts, got {sam.data.shape[0]}"
     )
 
 

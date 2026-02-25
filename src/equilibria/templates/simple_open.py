@@ -84,7 +84,13 @@ class SimpleOpenEconomy(ModelTemplate):
             description="Commodities",
         )
 
-        model.add_sets([sectors, factors, commodities])
+        firms = Set(
+            name="F",
+            elements=("firm",),
+            description="Firm institutions",
+        )
+
+        model.add_sets([sectors, factors, commodities, firms])
 
         # Add production blocks
         model.add_block(

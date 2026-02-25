@@ -26,10 +26,10 @@ PEP2_SAM_XLSX = PEP2_DATA / "SAM-V2_0.xlsx"
 
 
 def _resolve_excel_sam_file() -> Path:
-    if PEP2_SAM_CONNECT.exists():
-        return PEP2_SAM_CONNECT
     if PEP2_SAM_XLSX.exists():
         return PEP2_SAM_XLSX
+    if PEP2_SAM_CONNECT.exists():
+        return PEP2_SAM_CONNECT
     pytest.skip("Excel SAM baseline not available")
 
 

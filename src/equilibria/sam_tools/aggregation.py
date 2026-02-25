@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
+if TYPE_CHECKING:
+    from equilibria.sam_tools.models import Sam
 
 def _norm_text(value: str | Iterable[str]) -> str:
     if isinstance(value, tuple):

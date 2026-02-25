@@ -71,18 +71,18 @@ def test_model_has_all_blocks():
 
     # Check for required blocks
     required_blocks = [
-        "CES_VA",
-        "Leontief_Interm",
-        "CET_Transform",  # Production
-        "Armington",
-        "CET_Exports",  # Trade
-        "Household",
-        "Government",
-        "ROW",  # Institutions
-        "MarketClearing",
-        "FactorMarket",
-        "PriceNorm",  # Equilibrium
-    ]
+            "CES_VA",
+            "Leontief_INT",
+            "CET_Transform",
+            "Armington",
+            "CET_Exports",  # Trade
+            "Household",
+            "Government",
+            "ROW",  # Institutions
+            "MarketClearing",
+            "FactorMarket",
+            "PriceNorm",  # Equilibrium
+        ]
 
     for block_name in required_blocks:
         assert block_name in block_names, f"Required block {block_name} not found"

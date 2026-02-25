@@ -92,6 +92,7 @@ class TestPyomoBackend:
         model = Model(name="TestModel")
         model.add_set(Set(name="J", elements=("sec1", "sec2")))
         model.add_set(Set(name="I", elements=("labor", "capital")))
+        model.add_set(Set(name="F", elements=("firm",)))
         model.add_block(CESValueAdded(sigma=0.8))
         return model
 

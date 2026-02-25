@@ -278,7 +278,7 @@ class PEP1R(PEPBaseTemplate):
         model.add_block(
             CETTransformation(
                 omega=sigma_xt,
-                name="CET",
+                name="CET_Transform",
                 description="CET output transformation",
             )
         )

@@ -361,10 +361,16 @@ class ArmingtonCES(Block):
                 var_manager.get("QD").value = calibrated["QD0"].copy()
         if "QM0" in calibrated:
             if "QM" in var_manager:
-                var_manager.get("QM").value = calibrated["QM0"].copy()
+                var_manager.get("QM").value = self._ensure_positive(calibrated["QM0"].copy())
         if "QA0" in calibrated:
             if "QA" in var_manager:
                 var_manager.get("QA").value = calibrated["QA0"].copy()
+
+    @staticmethod
+    def _ensure_positive(values: np.ndarray) -> np.ndarray:
+        """Ensure all values are at least a small positive number."""
+
+        return np.where(values <= 0.0, 1e-3, values)
 
 
 class CETExports(Block):

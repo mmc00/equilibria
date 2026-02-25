@@ -56,6 +56,7 @@ class CalibrationMixin:
         """Initialize calibration attributes after Pydantic validation."""
         # Initialize instance attributes that must not be shared between blocks
         object.__setattr__(self, "_calibrated_params", {})
+        object.__setattr__(self, "_calibrated_data", {})
         return self
 
     def get_calibration_phases(self):
@@ -110,6 +111,7 @@ class CalibrationMixin:
 
         # Store the calibrated data internally
         self._calibrated_params.update(calibrated)
+        object.__setattr__(self, "_calibrated_data", dict(self._calibrated_params))
 
         # Store "0" parameters permanently in ParameterManager
         for name, value in calibrated.items():
