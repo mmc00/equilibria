@@ -8,7 +8,7 @@ Todos los pasos trabajan sobre instancias de `Sam` manejadas por `SamTransform`.
 
 Nota:
 - `aggregate_mapping` queda como operacion generica (agnostica de formato) en `src/equilibria/sam_tools/ieem_raw_excel.py`.
-- `scale_all`, `scale_slice`, `rebalance_ipfp` y `enforce_export_balance` siguen en el ejecutor (`src/equilibria/sam_tools/executor.py`).
+- Las operaciones de reescalado y balanceo (por ejemplo `scale_all`, `scale_slice`, `rebalance_ipfp`, `enforce_export_balance`) se coordinan hoy mediante `src/equilibria/sam_tools/manual_pipeline.py` y `scripts/run_manual_sam_pipeline.py`.
 
 ## contexto
 
@@ -276,3 +276,27 @@ Despues:
 ## nota de conservacion
 
 Las transformaciones estructurales reubican montos entre celdas, no crean ni destruyen valor. El total de la SAM se conserva; luego `rebalance_ipfp` y `enforce_export_balance` se usan para asegurar cierres contables y de comercio.
+
+## 14) pipeline manual paso a paso
+
+Que hace:
+- Carga la matriz RAW desde Excel (sin un workflow YAML).
+- Normaliza las cuentas, agrega los bloques `X.*`, convierte exportaciones y reubica margenes/factores/impuestos siguiendo los pasos explicados arriba.
+- Ejecuta un balance RAS final para alinear filas y columnas mientras conserva el total agregado.
+
+Resumen de pasos (cada uno documentado anteriormente):
+1. `normalize_pep_accounts` (RAW -> `J/I/AG`).
+2. `create_x_block` y `convert_exports_to_x` (depura la puerta de exportaciones `X.*`).
+3. `move_margin_to_i_margin`, `move_k_to_ji`, `move_l_to_ji` y `move_tx_to_ti_on_i` (reubican margenes, factores e impuestos hacia las cuentas Canon de PEP).
+4. `align_ti_to_gvt_j` (los impuestos indirectos terminan en `AG.gvt`).
+5. `RASBalancer` para cerrar contabilidad y registrar la diferencia fila-columna.
+
+Herramientas asociadas:
+- `src/equilibria/sam_tools/manual_pipeline.py` expone `run_manual_pipeline`, que ejecuta los pasos anteriores sobre una instancia de `Sam` y retorna un resumen policico.
+- `scripts/run_manual_sam_pipeline.py` imprime el flujo utilizando `SAM-V2_0_connect.xlsx` como ejemplo.
+
+Símbolos que aparecen en el flujo manual:
+- `RAW.*`: cuentas sin normalizar que se reaprovechan en `J/I/AG`.
+- `X.i`: nueva cuenta de exportaciones.
+- `AG.ti`, `AG.tx`, `AG.gvt`: impuestos indirectos redirigidos hacia el gobierno.
+- `K.*` y `L.*`: factores que migran hacia actividades productivas (`J`).

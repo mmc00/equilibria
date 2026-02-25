@@ -1,22 +1,16 @@
 # ejemplos sam
 
-Pipeline YAML para transformar SAM entre formatos y aplicar ajustes secuenciales.
+Pipeline manual para transformar SAM entre formatos y aplicar ajustes secuenciales.
 
-Tambien puedes usar la API Python con la clase `SAM`:
+Tambien puedes usar la API Python con la clase `Sam` (directamente o a traves del pipeline manual):
 
 ```python
-from equilibria.sam_tools import SAM
+from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
+from equilibria.sam_tools.manual_pipeline import run_manual_pipeline
 
-sam = SAM.from_ieem_excel("data/matriz_contabilidad_social_2016.xlsx", sheet_name="MCS2016")
-sam.aggregate("data/mapping_template.xlsx").balance_ras()
-state = sam.to_raw_state()
-```
-
-## Ejemplo CRI -> PEP compatible
-
-```bash
-uv run python scripts/sam_tools/run_sam_transform_pipeline.py \
-  --config examples/sam/cri_pep_transform.yaml
+sam = IEEMRawSAM.from_ieem_excel("data/matriz_contabilidad_social_2016.xlsx", sheet_name="MCS2016")
+summary = run_manual_pipeline(sam)
+print(summary.total_flow)
 ```
 
 ## Ejemplo RAW IEEM -> PEP compatible (una sola corrida)
