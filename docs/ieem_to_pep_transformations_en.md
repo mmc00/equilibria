@@ -8,7 +8,7 @@ All workflow steps operate over `Sam` instances backed by the `SamTransform` sta
 
 Note:
 - `aggregate_mapping` stays generic (format-agnostic) in `src/equilibria/sam_tools/ieem_raw_excel.py`.
-- `scale_all`, `scale_slice`, `rebalance_ipfp`, and `enforce_export_balance` remain in the workflow executor (`src/equilibria/sam_tools/executor.py`).
+- Rescaling and balancing helpers (e.g., `scale_all`, `scale_slice`, `rebalance_ipfp`, `enforce_export_balance`) are now coordinated through `src/equilibria/sam_tools/manual_pipeline.py` and `scripts/run_manual_sam_pipeline.py`.
 
 ## context
 
@@ -276,3 +276,27 @@ After:
 ## conservation note
 
 Structural transformations only reallocate values across cells; they do not create or destroy value. The SAM total is preserved; then `rebalance_ipfp` and `enforce_export_balance` are used to complete accounting and trade closure.
+
+## 14) manual step-by-step pipeline
+
+What it does:
+- Reads the RAW IEEM matrix from Excel (no YAML workflow involved).
+- Normalizes the accounts, adds the `X.*` block, converts exports, and repositions margins/factors/indirect taxes through the steps described above.
+- Finishes with a RAS balancing pass to ensure row/column closure while preserving the aggregate total.
+
+Step summary:
+1. `normalize_pep_accounts` (maps RAW labels into canonical `J/I/AG` structure).
+2. `create_x_block` + `convert_exports_to_x` (rebuilds the export channel `X.*`).
+3. `move_margin_to_i_margin`, `move_k_to_ji`, `move_l_to_ji`, `move_tx_to_ti_on_i` (push margins, factors, and taxes into PEP doors).
+4. `align_ti_to_gvt_j` (moves indirect taxes to `AG.gvt`).
+5. `RASBalancer` balances rows and columns, reporting the max difference as part of the summary.
+
+Related utilities:
+- `src/equilibria/sam_tools/manual_pipeline.py` exposes `run_manual_pipeline` that returns a `Sam` plus step diagnostics.
+- `scripts/run_manual_sam_pipeline.py` demonstrates the flow using `SAM-V2_0_connect.xlsx` as a worked example.
+
+Symbols highlighted in this manual flow:
+- `RAW.*`: original labels remapped into `J/I/AG`.
+- `X.i`: export account created mid-pipeline.
+- `AG.ti`, `AG.tx`, `AG.gvt`: indirect tax accounts that get reassigned.
+- `K.*` and `L.*`: factor rows eventually relocated to `J` activities.
