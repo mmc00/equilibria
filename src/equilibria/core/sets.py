@@ -174,6 +174,10 @@ class SetManager:
         """Check if set exists."""
         return name in self._sets
 
+    def has(self, name: str) -> bool:
+        """Return True if the set exists."""
+        return name in self._sets
+
     def __iter__(self) -> Iterator[str]:
         """Iterate over set names."""
         return iter(self._sets.keys())

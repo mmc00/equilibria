@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+import re
 
 if TYPE_CHECKING:
     from equilibria.babel import SAM
@@ -203,6 +204,14 @@ class CalibrationData:
         for candidate in candidates:
             if str(candidate).upper() == value_upper:
                 return candidate
+
+        # Try matching suffix (e.g., J_AGR -> AGR)
+        for candidate in candidates:
+            candidate_str = str(candidate)
+            parts = re.split(r"[._]", candidate_str)
+            if parts and parts[-1].upper() == value_upper:
+                return candidate
+
         return None
 
     def _create_dummy(

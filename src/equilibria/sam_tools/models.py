@@ -52,20 +52,39 @@ class Sam(BaseModel):
         object.__setattr__(self, "dataframe", normalized)
         return self
 
+    @staticmethod
+    def _build_square_dataframe(
+        matrix: np.ndarray,
+        row_keys: Sequence[tuple[str, str]],
+        col_keys: Sequence[tuple[str, str]],
+    ) -> pd.DataFrame:
+        normalized_rows = [tuple(str(part).strip() for part in key) for key in row_keys]
+        normalized_cols = [tuple(str(part).strip() for part in key) for key in col_keys]
+        combined: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for key in normalized_rows + normalized_cols:
+            if key not in seen:
+                combined.append(key)
+                seen.add(key)
+        size = len(combined)
+        square = np.zeros((size, size), dtype=float)
+        index_map = {key: idx for idx, key in enumerate(combined)}
+        for i, row_key in enumerate(normalized_rows):
+            for j, col_key in enumerate(normalized_cols):
+                square[index_map[row_key], index_map[col_key]] = matrix[i, j]
+        multi_index = pd.MultiIndex.from_tuples(combined)
+        return pd.DataFrame(square, index=multi_index, columns=multi_index)
+
     @classmethod
     def from_matrix(
         cls,
         matrix: np.ndarray,
         row_keys: Sequence[tuple[str, str]],
         col_keys: Sequence[tuple[str, str]],
-        ) -> Sam:
+    ) -> Sam:
         if matrix.shape != (len(row_keys), len(col_keys)):
             raise ValueError("La matriz no coincide con los índices provistos")
-        df = pd.DataFrame(
-            matrix,
-            index=pd.MultiIndex.from_tuples(row_keys),
-            columns=pd.MultiIndex.from_tuples(col_keys),
-        )
+        df = cls._build_square_dataframe(matrix, row_keys, col_keys)
         return cls(dataframe=df)
 
     @property
@@ -125,11 +144,9 @@ class Sam(BaseModel):
 
 
 class SamTransform(BaseModel):
-    """In-memory SAM representation used during transformations."""
+    """Metadata holder that embedds a square ``Sam`` and tracks source info."""
 
     sam: Sam
-    row_keys: list[tuple[str, str]]
-    col_keys: list[tuple[str, str]]
     source_path: Path
     source_format: str
     raw_df: pd.DataFrame | None = None
@@ -138,22 +155,13 @@ class SamTransform(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    @model_validator(mode="after")
-    def _validate_matrix_shape(self) -> SamTransform:
-        rows, cols = self.sam.matrix.shape
-        if rows != len(self.row_keys):
-            raise ValueError(
-                f"matrix rows ({rows}) do not match row_keys ({len(self.row_keys)})"
-            )
-        if cols != len(self.col_keys):
-            raise ValueError(
-                f"matrix cols ({cols}) do not match col_keys ({len(self.col_keys)})"
-            )
-        if tuple(self.row_keys) != tuple(self.sam.row_keys):
-            raise ValueError("Los row_keys deben coincidir con la SAM base")
-        if tuple(self.col_keys) != tuple(self.sam.col_keys):
-            raise ValueError("Los col_keys deben coincidir con la SAM base")
-        return self
+    @property
+    def row_keys(self) -> list[tuple[str, ...]]:
+        return [tuple(key) for key in self.sam.row_keys]
+
+    @property
+    def col_keys(self) -> list[tuple[str, ...]]:
+        return [tuple(key) for key in self.sam.col_keys]
 
     @property
     def matrix(self) -> np.ndarray:
@@ -161,18 +169,12 @@ class SamTransform(BaseModel):
 
     @matrix.setter
     def matrix(self, value: np.ndarray) -> None:
-        row_count = len(self.row_keys)
-        col_count = len(self.col_keys)
-        if value.shape != (row_count, col_count):
-            raise ValueError("Matrix shape must match current row/column keys")
-        row_index = pd.MultiIndex.from_tuples(self.row_keys)
-        col_index = pd.MultiIndex.from_tuples(self.col_keys)
-        df = pd.DataFrame(value, index=row_index, columns=col_index)
-        self.sam.replace_dataframe(df)
+        self.sam.update_matrix(value)
 
-    def refresh_keys(self) -> None:
-        self.row_keys = [tuple(key) for key in self.sam.row_keys]
-        self.col_keys = [tuple(key) for key in self.sam.col_keys]
+    def replace_sam(self, new_sam: Sam) -> None:
+        object.__setattr__(self, "sam", new_sam)
+
+
 
 
 class SAMWorkflowConfig(BaseModel):

@@ -469,8 +469,15 @@ class SAM4DLoader:
         col_names: list[str],
     ) -> pd.DataFrame:
         """Build 2D DataFrame from data matrix."""
+        # Coerce numeric values to floats for downstream calculations.
+        try:
+            numeric_data = data.astype(float, copy=False)
+        except (ValueError, TypeError):
+            temp = pd.DataFrame(data)
+            numeric_data = temp.apply(pd.to_numeric, errors="coerce").fillna(0.0).values
+
         return pd.DataFrame(
-            data,
+            numeric_data,
             index=row_names[: data.shape[0]],
             columns=col_names[: data.shape[1]],
         )

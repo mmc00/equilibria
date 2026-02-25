@@ -6,18 +6,24 @@ channels before rebalancing.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from equilibria.sam_tools.balancing import RASBalancer
-from equilibria.sam_tools.selectors import (
-    index_for_key,
-    indices_for_selector,
-    norm_text,
-    norm_text_lower,
+from equilibria.sam_tools.models import SamTransform
+from equilibria.sam_tools.sam_transforms import (
+    align_ti_to_gvt_j_on_sam,
+    convert_exports_to_x_on_sam,
+    create_x_block_on_sam,
+    move_k_to_ji_on_sam,
+    move_l_to_ji_on_sam,
+    move_margin_to_i_margin_on_sam,
+    move_tx_to_ti_on_i_on_sam,
+    normalize_pep_accounts_on_sam,
 )
+from equilibria.sam_tools.selectors import index_for_key, norm_text, norm_text_lower
 
 DEFAULT_COMMODITY_TO_SECTOR: dict[str, str] = {
     "agr": "agr",
@@ -30,18 +36,10 @@ DEFAULT_COMMODITY_TO_SECTOR: dict[str, str] = {
 SPECIAL_LABELS = {"S-HH", "S-FIRM", "S-GVT", "S-ROW", "INV", "VSTK"}
 
 
-class SAMLikeState(Protocol):
-    """Protocol expected by IEEM->PEP transforms."""
-
-    matrix: np.ndarray
-    row_keys: list[tuple[str, str]]
-    col_keys: list[tuple[str, str]]
-
-
 _RAS_BALANCER = RASBalancer()
 
 
-def _raw_state_to_dataframe(state: SAMLikeState) -> pd.DataFrame:
+def _raw_state_to_dataframe(state: SamTransform) -> pd.DataFrame:
     """Convert a RAW-key workflow state into a pandas dataframe."""
     if not state.row_keys or not state.col_keys:
         raise ValueError("State has no support keys")
@@ -55,13 +53,15 @@ def _raw_state_to_dataframe(state: SAMLikeState) -> pd.DataFrame:
     return pd.DataFrame(state.matrix.copy(), index=labels_r, columns=labels_c, dtype=float)
 
 
-def _replace_state_from_raw_dataframe(state: SAMLikeState, df: pd.DataFrame) -> None:
+def _replace_state_from_raw_dataframe(state: SamTransform, df: pd.DataFrame) -> None:
     """Overwrite a state object from one RAW dataframe."""
     labels = [norm_text(label) for label in df.index]
     keys = [("RAW", label) for label in labels]
-    state.row_keys = keys
-    state.col_keys = keys.copy()
-    state.matrix = df.to_numpy(dtype=float)
+    multi_index = pd.MultiIndex.from_tuples(keys)
+    df = df.copy()
+    df.index = multi_index
+    df.columns = multi_index
+    state.sam.replace_dataframe(df)
 
 
 def _label_to_key(label: str) -> tuple[str, str] | None:
@@ -126,20 +126,6 @@ def _build_pep_key_order(labels: list[str]) -> list[tuple[str, str]]:
     return keys
 
 
-def _ensure_key(state: SAMLikeState, key: tuple[str, str]) -> bool:
-    """Ensure one row/column key exists in a square state matrix."""
-    if key in state.row_keys:
-        return False
-    old_n = state.matrix.shape[0]
-    new_matrix = np.zeros((old_n + 1, old_n + 1), dtype=float)
-    new_matrix[:old_n, :old_n] = state.matrix
-    keys = state.row_keys + [key]
-    state.row_keys = keys
-    state.col_keys = keys.copy()
-    state.matrix = new_matrix
-    return True
-
-
 def _add_value(
     matrix: np.ndarray,
     key_index: dict[tuple[str, str], int],
@@ -155,7 +141,7 @@ def _add_value(
     matrix[key_index[row_key], key_index[col_key]] += float(value)
 
 
-def balance_state_ras(state: SAMLikeState, op: dict[str, Any]) -> dict[str, Any]:
+def balance_state_ras(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """RAS rebalance on RAW matrices before IEEM->PEP normalization."""
 
     tol = float(op.get("tol", op.get("tolerance", 1e-9)))
@@ -184,160 +170,30 @@ def normalize_state_to_pep_accounts(
     state: SAMLikeState,
     _op: dict[str, Any],
 ) -> dict[str, Any]:
-    """Map aggregated RAW labels into canonical PEP accounts."""
+    from equilibria.sam_tools.sam_transforms import normalize_pep_accounts_on_sam
 
-    df = _raw_state_to_dataframe(state)
-    labels = [norm_text(label) for label in df.index]
-    pep_keys = _build_pep_key_order(labels)
-    key_index = {k: i for i, k in enumerate(pep_keys)}
-    pep_matrix = np.zeros((len(pep_keys), len(pep_keys)), dtype=float)
-
-    for r_label in df.index:
-        r_key = _label_to_key(norm_text(r_label))
-        if r_key is None:
-            continue
-        for c_label in df.columns:
-            c_key = _label_to_key(norm_text(c_label))
-            if c_key is None:
-                continue
-            _add_value(pep_matrix, key_index, r_key, c_key, float(df.loc[r_label, c_label]))
-
-    savings_to_agent: dict[str, list[str]] = {
-        "S-HH": ["HRP", "HRR", "HUP", "HUR"],
-        "S-FIRM": ["FIRM"],
-        "S-GVT": ["GVT"],
-        "S-ROW": ["ROW"],
-    }
-    for savings_row, agents in savings_to_agent.items():
-        if savings_row not in df.index:
-            continue
-        for agent in agents:
-            if agent not in df.columns:
-                continue
-            value = float(df.loc[savings_row, agent])
-            _add_value(pep_matrix, key_index, ("OTH", "INV"), ("AG", agent.lower()), value)
-
-    if "VSTK" in df.index:
-        vstk_total = float(df.loc["VSTK", :].sum())
-        _add_value(pep_matrix, key_index, ("OTH", "VSTK"), ("OTH", "INV"), vstk_total)
-
-    for key in pep_keys:
-        if key[0] != "I":
-            continue
-        commodity = key[1]
-        c_label = f"C-{commodity.upper()}"
-        if c_label in df.index and "INV" in df.columns:
-            _add_value(
-                pep_matrix,
-                key_index,
-                ("I", commodity),
-                ("OTH", "INV"),
-                float(df.loc[c_label, "INV"]),
-            )
-        if c_label in df.index and "VSTK" in df.columns:
-            _add_value(
-                pep_matrix,
-                key_index,
-                ("I", commodity),
-                ("OTH", "VSTK"),
-                float(df.loc[c_label, "VSTK"]),
-            )
-
-    state.row_keys = pep_keys
-    state.col_keys = pep_keys.copy()
-    state.matrix = pep_matrix
-    return {
-        "raw_labels": len(labels),
-        "pep_accounts": len(pep_keys),
-        "commodities": len([k for k in pep_keys if k[0] == "I"]),
-    }
+    return normalize_pep_accounts_on_sam(state.sam)
 
 
-def create_x_block(state: SAMLikeState, _op: dict[str, Any]) -> dict[str, Any]:
-    """Create one X.* export row/column per commodity I.*."""
+def create_x_block(state: SamTransform, _op: dict[str, Any]) -> dict[str, Any]:
+    from equilibria.sam_tools.sam_transforms import create_x_block_on_sam
 
-    commodities = [elem for cat, elem in state.row_keys if norm_text_lower(cat) == "i"]
-    added = 0
-    for commodity in commodities:
-        if _ensure_key(state, ("X", commodity)):
-            added += 1
-    return {"commodities": len(commodities), "added_x_accounts": added}
+    return create_x_block_on_sam(state.sam)
 
 
-def convert_exports_to_x(state: SAMLikeState, _op: dict[str, Any]) -> dict[str, Any]:
-    """Route exports through X.* and split activity supply into J->I/J->X."""
+def convert_exports_to_x(state: SamTransform, _op: dict[str, Any]) -> dict[str, Any]:
+    from equilibria.sam_tools.sam_transforms import convert_exports_to_x_on_sam
 
-    key_index = {k: i for i, k in enumerate(state.row_keys)}
-    if ("AG", "row") not in key_index:
-        return {"converted_commodities": 0, "total_export_value": 0.0}
-
-    ag_row_col = key_index[("AG", "row")]
-    commodities = [elem for cat, elem in state.row_keys if norm_text_lower(cat) == "i"]
-    j_rows = [k for k in state.row_keys if norm_text_lower(k[0]) == "j"]
-
-    converted = 0
-    total_export = 0.0
-    for commodity in commodities:
-        i_key = ("I", commodity)
-        x_key = ("X", commodity)
-        if i_key not in key_index or x_key not in key_index:
-            continue
-        i_row = key_index[i_key]
-        x_row = key_index[x_key]
-        export_value = float(state.matrix[i_row, ag_row_col])
-        if abs(export_value) <= 1e-14:
-            continue
-
-        state.matrix[i_row, ag_row_col] = 0.0
-        state.matrix[x_row, ag_row_col] += export_value
-
-        i_col = key_index[i_key]
-        x_col = key_index[x_key]
-        j_supply: list[tuple[int, float]] = []
-        for j_key in j_rows:
-            j_idx = key_index[j_key]
-            value = float(state.matrix[j_idx, i_col])
-            if value > 0:
-                j_supply.append((j_idx, value))
-        total_supply = float(sum(v for _, v in j_supply))
-        if total_supply > 1e-14:
-            for j_idx, value in j_supply:
-                moved = export_value * (value / total_supply)
-                state.matrix[j_idx, i_col] -= moved
-                state.matrix[j_idx, x_col] += moved
-
-        converted += 1
-        total_export += export_value
-
-    return {"converted_commodities": converted, "total_export_value": total_export}
+    return convert_exports_to_x_on_sam(state.sam)
 
 
-def align_ti_to_gvt_j(state: SAMLikeState, _op: dict[str, Any]) -> dict[str, Any]:
-    """Move AG.ti -> J.* entries into AG.gvt -> J.*."""
+def align_ti_to_gvt_j(state: SamTransform, _op: dict[str, Any]) -> dict[str, Any]:
+    from equilibria.sam_tools.sam_transforms import align_ti_to_gvt_j_on_sam
 
-    key_index = {k: i for i, k in enumerate(state.row_keys)}
-    if ("AG", "ti") not in key_index or ("AG", "gvt") not in key_index:
-        return {"moved_total": 0.0, "columns": 0}
-
-    ti_row = key_index[("AG", "ti")]
-    gvt_row = key_index[("AG", "gvt")]
-    moved = 0.0
-    cols = 0
-    for key in state.col_keys:
-        if norm_text_lower(key[0]) != "j":
-            continue
-        col = key_index[key]
-        value = float(state.matrix[ti_row, col])
-        if abs(value) <= 1e-14:
-            continue
-        state.matrix[ti_row, col] = 0.0
-        state.matrix[gvt_row, col] += value
-        moved += value
-        cols += 1
-    return {"moved_total": moved, "columns": cols}
+    return align_ti_to_gvt_j_on_sam(state.sam)
 
 
-def _commodity_columns(state: SAMLikeState) -> list[tuple[int, str]]:
+def _commodity_columns(state: SamTransform) -> list[tuple[int, str]]:
     """Return all commodity columns as ``(index, commodity)`` pairs."""
     columns: list[tuple[int, str]] = []
     for idx, (cat, elem) in enumerate(state.col_keys):
@@ -346,7 +202,7 @@ def _commodity_columns(state: SAMLikeState) -> list[tuple[int, str]]:
     return columns
 
 
-def _row_indices_by_category(state: SAMLikeState, category: str) -> list[int]:
+def _row_indices_by_category(state: SamTransform, category: str) -> list[int]:
     """Return row indices that belong to one account category."""
     cat_norm = norm_text_lower(category)
     return [
@@ -356,200 +212,27 @@ def _row_indices_by_category(state: SAMLikeState, category: str) -> list[int]:
     ]
 
 
-def apply_move_k_to_ji(state: SAMLikeState, op: dict[str, Any]) -> dict[str, Any]:
-    """Move capital-factor inflows on commodity columns to sector supply rows.
-
-    Economic intuition:
-    - PEP expects commodity supply to come from activities (`J`), not directly
-      from primary factors (`K`).
-    - This operation takes any `K.* -> I.i` flow and reallocates it to
-      `J.map(i) -> I.i`.
-    """
-
-    raw_mapping = op.get("commodity_to_sector") or DEFAULT_COMMODITY_TO_SECTOR
-    if not isinstance(raw_mapping, dict):
-        raise ValueError("commodity_to_sector must be a mapping")
-    commodity_to_sector = {
-        norm_text_lower(k): norm_text(v) for k, v in raw_mapping.items()
-    }
-    default_sector = norm_text(op.get("default_sector", "ind"))
-    strict_targets = bool(op.get("strict_targets", True))
-
-    k_rows = _row_indices_by_category(state, "K")
-    commodity_cols = _commodity_columns(state)
-    moved_by_commodity: dict[str, float] = {}
-    missing_targets: list[str] = []
-    target_cache: dict[tuple[str, str], int] = {}
-
-    for c_idx, commodity in commodity_cols:
-        sector = commodity_to_sector.get(norm_text_lower(commodity), default_sector)
-        target_key = ("J", sector)
-        if target_key not in target_cache:
-            try:
-                target_cache[target_key] = index_for_key(
-                    state.row_keys, target_key, f"target_row[{commodity}]"
-                )
-            except ValueError:
-                if strict_targets:
-                    raise
-                missing_targets.append(f"J.{sector}")
-                continue
-        target_row = target_cache[target_key]
-
-        moved_col = 0.0
-        for r_idx in k_rows:
-            value = float(state.matrix[r_idx, c_idx])
-            if abs(value) <= 1e-14:
-                continue
-            state.matrix[r_idx, c_idx] = 0.0
-            state.matrix[target_row, c_idx] += value
-            moved_col += value
-        if abs(moved_col) > 1e-14:
-            moved_by_commodity[commodity] = moved_col
-
-    moved_total = float(sum(moved_by_commodity.values()))
-    return {
-        "source_category": "K",
-        "sources": len(k_rows),
-        "commodities": len(commodity_cols),
-        "default_sector": default_sector,
-        "moved_total": moved_total,
-        "moved_by_commodity": moved_by_commodity,
-        "missing_targets": missing_targets,
-    }
+def apply_move_k_to_ji(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
+    return move_k_to_ji_on_sam(state.sam, op)
 
 
-def apply_move_l_to_ji(state: SAMLikeState, op: dict[str, Any]) -> dict[str, Any]:
-    """Move labor-factor inflows on commodity columns to sector supply rows.
-
-    Economic intuition:
-    - Igual que con capital, PEP no interpreta `L.* -> I.i` como oferta válida
-      de commodities.
-    - Se reasignan a `J.map(i) -> I.i` para que la oferta venga de actividades.
-    """
-
-    raw_mapping = op.get("commodity_to_sector") or DEFAULT_COMMODITY_TO_SECTOR
-    if not isinstance(raw_mapping, dict):
-        raise ValueError("commodity_to_sector must be a mapping")
-    commodity_to_sector = {
-        norm_text_lower(k): norm_text(v) for k, v in raw_mapping.items()
-    }
-    default_sector = norm_text(op.get("default_sector", "ind"))
-    strict_targets = bool(op.get("strict_targets", True))
-
-    l_rows = _row_indices_by_category(state, "L")
-    commodity_cols = _commodity_columns(state)
-    moved_by_commodity: dict[str, float] = {}
-    missing_targets: list[str] = []
-    target_cache: dict[tuple[str, str], int] = {}
-
-    for c_idx, commodity in commodity_cols:
-        sector = commodity_to_sector.get(norm_text_lower(commodity), default_sector)
-        target_key = ("J", sector)
-        if target_key not in target_cache:
-            try:
-                target_cache[target_key] = index_for_key(
-                    state.row_keys, target_key, f"target_row[{commodity}]"
-                )
-            except ValueError:
-                if strict_targets:
-                    raise
-                missing_targets.append(f"J.{sector}")
-                continue
-        target_row = target_cache[target_key]
-
-        moved_col = 0.0
-        for r_idx in l_rows:
-            value = float(state.matrix[r_idx, c_idx])
-            if abs(value) <= 1e-14:
-                continue
-            state.matrix[r_idx, c_idx] = 0.0
-            state.matrix[target_row, c_idx] += value
-            moved_col += value
-        if abs(moved_col) > 1e-14:
-            moved_by_commodity[commodity] = moved_col
-
-    moved_total = float(sum(moved_by_commodity.values()))
-    return {
-        "source_category": "L",
-        "sources": len(l_rows),
-        "commodities": len(commodity_cols),
-        "default_sector": default_sector,
-        "moved_total": moved_total,
-        "moved_by_commodity": moved_by_commodity,
-        "missing_targets": missing_targets,
-    }
+def apply_move_l_to_ji(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
+    return move_l_to_ji_on_sam(state.sam, op)
 
 
-def apply_move_margin_to_i_margin(
-    state: SAMLikeState, op: dict[str, Any]
-) -> dict[str, Any]:
-    """Move margin-row inflows into a chosen margin commodity row.
+def apply_move_margin_to_i_margin(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
+    from equilibria.sam_tools.sam_transforms import move_margin_to_i_margin_on_sam
 
-    Economic intuition:
-    - `MARG.MARG -> I.i` is not directly consumed by PEP commodity supply logic.
-    - Reallocate to `I.margin_commodity -> I.i` so margins become commodity flows.
-    """
-
-    source_row = index_for_key(state.row_keys, ("MARG", "MARG"), "source_row")
-    margin_commodity = norm_text(op.get("margin_commodity", "ser"))
-    target_row = index_for_key(state.row_keys, ("I", margin_commodity), "target_row")
-    cols = indices_for_selector(state.col_keys, op.get("col", "I.*"), "col")
-
-    moved_total = 0.0
-    moved_by_column: dict[str, float] = {}
-    for c_idx in cols:
-        value = float(state.matrix[source_row, c_idx])
-        if abs(value) <= 1e-14:
-            continue
-        state.matrix[source_row, c_idx] = 0.0
-        state.matrix[target_row, c_idx] += value
-        moved_total += value
-        moved_by_column[norm_text(state.col_keys[c_idx][1])] = value
-
-    return {
-        "source_row": "MARG.MARG",
-        "target_row": f"I.{margin_commodity}",
-        "columns": len(cols),
-        "moved_total": moved_total,
-        "moved_by_column": moved_by_column,
-    }
+    return move_margin_to_i_margin_on_sam(state.sam, op)
 
 
-def apply_move_tx_to_ti_on_i(state: SAMLikeState, op: dict[str, Any]) -> dict[str, Any]:
-    """Move `AG.tx` commodity-column flows into `AG.ti`.
+def apply_move_tx_to_ti_on_i(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
+    from equilibria.sam_tools.sam_transforms import move_tx_to_ti_on_i_on_sam
 
-    Economic intuition:
-    - For commodity columns, PEP tax intake is expected in the indirect-tax
-      account (`AG.ti`) rather than in the export-tax bucket (`AG.tx`).
-    - This makes tax routing consistent before calibration.
-    """
-
-    source_row = index_for_key(state.row_keys, ("AG", "tx"), "source_row")
-    target_row = index_for_key(state.row_keys, ("AG", "ti"), "target_row")
-    cols = indices_for_selector(state.col_keys, op.get("col", "I.*"), "col")
-
-    moved_total = 0.0
-    moved_by_column: dict[str, float] = {}
-    for c_idx in cols:
-        value = float(state.matrix[source_row, c_idx])
-        if abs(value) <= 1e-14:
-            continue
-        state.matrix[source_row, c_idx] = 0.0
-        state.matrix[target_row, c_idx] += value
-        moved_total += value
-        moved_by_column[norm_text(state.col_keys[c_idx][1])] = value
-
-    return {
-        "source_row": "AG.tx",
-        "target_row": "AG.ti",
-        "columns": len(cols),
-        "moved_total": moved_total,
-        "moved_by_column": moved_by_column,
-    }
+    return move_tx_to_ti_on_i_on_sam(state.sam, op)
 
 
-def apply_pep_structural_moves(state: SAMLikeState, op: dict[str, Any]) -> dict[str, Any]:
+def apply_pep_structural_moves(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
     """Backward-compatible composite operation over the 4 disaggregated moves."""
 
     common_mapping = op.get("commodity_to_sector") or DEFAULT_COMMODITY_TO_SECTOR

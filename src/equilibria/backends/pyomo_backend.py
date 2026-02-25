@@ -64,6 +64,7 @@ class PyomoBackend(Backend):
 
         super().__init__(solver)
         self.pyomo_model: ConcreteModel | None = None
+        self._pyomo_model: ConcreteModel | None = None
         self._solver_results: Any = None
 
     def build(self, model: EquilibriaModel) -> None:
@@ -74,6 +75,7 @@ class PyomoBackend(Backend):
         """
         self._model = model
         self.pyomo_model = ConcreteModel(name=model.name)
+        self._pyomo_model = self.pyomo_model
 
         # Build sets
         self._build_sets(model)
@@ -208,6 +210,7 @@ class PyomoBackend(Backend):
         from pyomo.environ import Constraint
         from equilibria.backends.pyomo_equations import PyomoEquation
 
+        constraint_count = 0
         for eq_name in model.equation_manager.list_equations():
             eq = model.equation_manager.get(eq_name)
 
@@ -273,6 +276,7 @@ class PyomoBackend(Backend):
                                 rule=make_constraint_rule(constraint_dict),
                             ),
                         )
+                        constraint_count += 1
                     else:
                         # Scalar constraint
                         setattr(
@@ -282,10 +286,17 @@ class PyomoBackend(Backend):
                                 rule=lambda m: list(constraint_dict.values())[0]
                             ),
                         )
+                        constraint_count += 1
             else:
                 # Legacy equation handling - skip for now
                 # These equations use closures and won't work with Pyomo
                 pass
+        if constraint_count == 0:
+            setattr(
+                self.pyomo_model,
+                "dummy_constraint",
+                Constraint(expr=1 == 1),
+            )
 
     def solve(self, options: dict[str, Any] | None = None) -> Solution:
         """Solve the Pyomo model.

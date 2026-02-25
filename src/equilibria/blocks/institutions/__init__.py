@@ -27,6 +27,12 @@ if TYPE_CHECKING:
     from equilibria.core.calibration_data import CalibrationData
 
 
+def _ensure_positive_array(values: np.ndarray) -> np.ndarray:
+    """Ensure values are strictly positive for log-safe initializations."""
+
+    return np.where(values <= 0.0, 1e-3, values)
+
+
 class Household(Block):
     """Household income and expenditure block.
 
@@ -373,20 +379,13 @@ class Government(Block):
                     sam_data = data.sam.data
 
                 if sam_data is not None:
-                    if "GVT" in sam_data.index:
-                        gov_accounts = [
-                            "AGR",
-                            "IND",
-                            "AGR_2",
-                            "OTHIND",
-                            "FOOD",
-                            "SER",
-                            "ADM",
-                        ]
+                    gvt_row = self._find_gvt_row(sam_data)
+                    if gvt_row is not None:
                         XG0_list = []
-                        for acc in gov_accounts[:n_comm]:
-                            if acc in sam_data.columns:
-                                val = sam_data.loc["GVT", acc]
+                        for commodity in commodities.elements:
+                            col = self._match_column_for_commodity(sam_data, commodity)
+                            if col is not None:
+                                val = sam_data.loc[gvt_row, col]
                                 XG0_list.append(abs(float(val)) if val != 0 else 0.0)
                             else:
                                 XG0_list.append(0.0)
@@ -419,11 +418,28 @@ class Government(Block):
             "tau_p": tau_p,
         }
 
+    def _match_column_for_commodity(self, sam_data, commodity: str) -> str | None:
+        """Match SAM column names that contain the commodity suffix."""
+
+        commodity_upper = commodity.upper()
+        for col in sam_data.columns:
+            if str(col).upper().endswith(commodity_upper):
+                return col
+        return None
+
+    def _find_gvt_row(self, sam_data):
+        """Find the government row name in the SAM."""
+
+        for row in sam_data.index:
+            if str(row).upper().startswith("AG_GVT") or str(row).upper() == "GVT":
+                return row
+        return None
+
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
         if "XG0" in calibrated:
             if "XG" in var_manager:
-                var_manager.get("XG").value = calibrated["XG0"].copy()
+                var_manager.get("XG").value = _ensure_positive_array(calibrated["XG0"])
         if "YG0" in calibrated:
             if "YG" in var_manager:
                 var_manager.get("YG").value = np.array([calibrated["YG0"]])
@@ -591,7 +607,6 @@ class RestOfWorld(Block):
 
             # Trade balance
             FSAV0 = (pwe * QE0 - pwm * QM0).sum()
-
         else:  # dummy mode
             QM0 = self._get_dummy_value("QM0", (n_comm,), 0.3)
             QE0 = self._get_dummy_value("QE0", (n_comm,), 0.2)
@@ -611,10 +626,10 @@ class RestOfWorld(Block):
         """Initialize variables from calibrated parameters."""
         if "QM0" in calibrated:
             if "QM" in var_manager:
-                var_manager.get("QM").value = calibrated["QM0"].copy()
+                var_manager.get("QM").value = _ensure_positive_array(calibrated["QM0"].copy())
         if "QE0" in calibrated:
             if "QE" in var_manager:
-                var_manager.get("QE").value = calibrated["QE0"].copy()
+                var_manager.get("QE").value = _ensure_positive_array(calibrated["QE0"].copy())
         if "FSAV0" in calibrated:
             if "FSAV" in var_manager:
                 var_manager.get("FSAV").value = np.array([calibrated["FSAV0"]])

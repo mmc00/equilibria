@@ -169,19 +169,19 @@ class SAM(BaseModel):
         col_sums = self.data.sum(axis=0)
         differences = row_sums - col_sums
 
-        max_diff = differences.abs().max()
+        max_diff = float(differences.abs().max())
         is_balanced = max_diff <= tolerance
 
         # Find unbalanced accounts
         unbalanced = differences[differences.abs() > tolerance].to_dict()
 
         return {
-            "is_balanced": is_balanced,
+            "is_balanced": bool(is_balanced),
             "max_difference": max_diff,
             "tolerance": tolerance,
             "unbalanced_accounts": unbalanced,
-            "total_row_sum": row_sums.sum(),
-            "total_col_sum": col_sums.sum(),
+            "total_row_sum": float(row_sums.sum()),
+            "total_col_sum": float(col_sums.sum()),
         }
 
     def balance(self, method: str = "ras") -> SAM:
@@ -197,35 +197,12 @@ class SAM(BaseModel):
             msg = f"Unknown balancing method: {method}"
             raise ValueError(msg)
 
-        # Simple RAS implementation
-        target_rows = self.data.sum(axis=1)
-        target_cols = self.data.sum(axis=0)
+        from equilibria.sam_tools.balancing import RASBalancer
 
-        # Initialize with current values
-        balanced = self.data.copy().values
-
-        # Iterate RAS
-        for _ in range(100):  # Max iterations
-            # Row scaling
-            row_sums = balanced.sum(axis=1)
-            row_factors = np.where(row_sums > 0, target_rows / row_sums, 1)
-            balanced = balanced * row_factors[:, np.newaxis]
-
-            # Column scaling
-            col_sums = balanced.sum(axis=0)
-            col_factors = np.where(col_sums > 0, target_cols / col_sums, 1)
-            balanced = balanced * col_factors
-
-            # Check convergence
-            max_error = max(
-                np.abs(balanced.sum(axis=1) - target_rows).max(),
-                np.abs(balanced.sum(axis=0) - target_cols).max(),
-            )
-            if max_error < 1e-10:
-                break
-
-        df = pd.DataFrame(balanced, index=self.data.index, columns=self.data.columns)
-        return SAM(data=df, sets=self.sets.copy(), name=f"{self.name}_balanced")
+        balancer = RASBalancer()
+        result = balancer.balance_dataframe(self.data)
+        balanced_df = result.matrix
+        return SAM(data=balanced_df, sets=self.sets.copy(), name=f"{self.name}_balanced")
 
     def get_submatrix(self, rows: list[str], cols: list[str]) -> pd.DataFrame:
         """Extract submatrix for specific accounts.

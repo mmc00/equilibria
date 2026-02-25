@@ -99,41 +99,23 @@ def load_default_pep_sam(
     cdim: int = 2,
     sparse: bool = True,
     separator: str = "_",
-    unique_elements: bool = True,
 ) -> SAM4D:
-    """Load default PEP SAM (SAM-V2_0.xls) from package.
+    """Load the canonical PEP SAM (SAM-V2_0.xlsx) included in the reference data."""
 
-    Convenience function to load the standard PEP SAM file included
-    with the package.
-
-    Args:
-        rdim: Number of row dimensions (default: 2)
-        cdim: Number of column dimensions (default: 2)
-        sparse: Store only non-zero values (default: True)
-        separator: Separator for dimension names (default: "_")
-        unique_elements: If True (default), keep only unique elements (191 records).
-                        If False, include duplicates like cge_babel (191-196 records).
-
-    Returns:
-        SAM4D object
-
-    Example:
-        >>> # Load with unique elements (default, 191 records)
-        >>> sam = load_default_pep_sam()
-        >>> print(f"SAM shape: {sam.shape}")
-        >>> print(f"Non-zero values: {sam.non_zero_count}")
-        >>>
-        >>> # Load with duplicates included (like cge_babel)
-        >>> sam = load_default_pep_sam(unique_elements=False)
-    """
-    filepath = Path(__file__).parent / "SAM-V2_0.xls"
+    filepath = (
+        Path(__file__).resolve().parents[2]
+        / "reference"
+        / "pep2"
+        / "data"
+        / "SAM-V2_0.xlsx"
+    )
     return load_pep_sam(
         filepath=filepath,
         rdim=rdim,
         cdim=cdim,
         sparse=sparse,
         separator=separator,
-        unique_elements=unique_elements,
+        unique_elements=False,
     )
 
 
