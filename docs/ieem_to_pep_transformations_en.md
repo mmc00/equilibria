@@ -8,7 +8,7 @@ All workflow steps operate over `Sam` instances backed by the `SamTransform` sta
 
 Note:
 - `aggregate_mapping` stays generic (format-agnostic) in `src/equilibria/sam_tools/ieem_raw_excel.py`.
-- Rescaling and balancing helpers (e.g., `scale_all`, `scale_slice`, `rebalance_ipfp`, `enforce_export_balance`) are now coordinated through `src/equilibria/sam_tools/manual_pipeline.py` and `scripts/run_manual_sam_pipeline.py`.
+- Rescaling and balancing helpers (e.g., `scale_all`, `scale_slice`, `rebalance_ipfp`, `enforce_export_balance`) are now coordinated through `src/equilibria/sam_tools/manual_pipeline.py` and `scripts/sam_tools/run_manual_sam_pipeline.py`.
 
 ## context
 
@@ -293,7 +293,7 @@ Step summary:
 
 Related utilities:
 - `src/equilibria/sam_tools/manual_pipeline.py` exposes `run_manual_pipeline` that returns a `Sam` plus step diagnostics.
-- `scripts/run_manual_sam_pipeline.py` demonstrates the flow using `SAM-V2_0_connect.xlsx` as a worked example.
+- `scripts/sam_tools/run_manual_sam_pipeline.py` demonstrates the flow using `SAM-V2_0_connect.xlsx` as a worked example.
 
 Symbols highlighted in this manual flow:
 - `RAW.*`: original labels remapped into `J/I/AG`.
