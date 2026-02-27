@@ -4,7 +4,7 @@ Version en espanol. Explica las transformaciones IEEM->PEP de `src/equilibria/sa
 
 ## abstracciones centrales
 
-Todos los pasos trabajan sobre instancias de `Sam` manejadas por `SamTransform`. La clase `Sam` garantiza que la matriz sea cuadrada, filas y columnas compartan las mismas cuentas, y normaliza las claves a tuplas (p.ej. `("AG","gvt")`). `SamTransform` registra metadatos del origen (ruta/formato) y expone la matriz editable usada en las transformaciones YAML. Esta base es la que soporta agregacion, balanceo y conversion de exportaciones.
+Todos los pasos trabajan sobre instancias de `Sam` encapsuladas en `SamTable`. La clase `Sam` garantiza que la matriz sea cuadrada, filas y columnas compartan las mismas cuentas, y normaliza las claves a tuplas (p.ej. `("AG","gvt")`). `SamTable` guarda metadatos del origen (ruta/formato) sin duplicar `row_keys/col_keys`; las transformaciones mutan directamente el `sam` subyacente.
 
 Nota:
 - `aggregate_mapping` queda como operacion generica (agnostica de formato) en `src/equilibria/sam_tools/ieem_raw_excel.py`.

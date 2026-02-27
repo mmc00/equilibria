@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 
 import equilibria.sam_tools.state_store as io_module
-from equilibria.sam_tools.models import Sam, SamTransform
-from equilibria.sam_tools.state_store import load_state, write_state
+from equilibria.sam_tools.models import Sam, SamTable
+from equilibria.sam_tools.state_store import load_table, write_table
 
 
 def _write_canonical_excel(
@@ -67,27 +67,25 @@ def _write_ieem_raw_excel(path: Path, matrix: np.ndarray, sheet_name: str = "RAW
         pd.DataFrame(raw).to_excel(writer, sheet_name=sheet_name, index=False, header=False)
 
 
-def _build_state(
+def _build_table(
     matrix: np.ndarray,
     keys: list[tuple[str, str]],
     source_path: Path,
     source_format: str,
-) -> SamTransform:
+) -> SamTable:
     sam = Sam.from_matrix(matrix, keys, keys)
-    return SamTransform(
+    return SamTable(
         sam=sam,
-        row_keys=keys,
-        col_keys=keys,
         source_path=source_path,
         source_format=source_format,
     )
 
 
-def _to_cell_map(state: SamTransform) -> dict[tuple[tuple[str, str], tuple[str, str]], float]:
+def _to_cell_map(table: SamTable) -> dict[tuple[tuple[str, str], tuple[str, str]], float]:
     out: dict[tuple[tuple[str, str], tuple[str, str]], float] = {}
-    for i, r_key in enumerate(state.row_keys):
-        for j, c_key in enumerate(state.col_keys):
-            value = float(state.matrix[i, j])
+    for i, r_key in enumerate(table.row_keys):
+        for j, c_key in enumerate(table.col_keys):
+            value = float(table.matrix[i, j])
             if abs(value) <= 1e-14:
                 continue
             out[(r_key, c_key)] = value
@@ -97,23 +95,23 @@ def _to_cell_map(state: SamTransform) -> dict[tuple[tuple[str, str], tuple[str, 
 def test_io_excel_roundtrip_small_fixture(tmp_path: Path) -> None:
     output_excel = tmp_path / "sam.xlsx"
     keys = [("A", "a"), ("A", "b")]
-    state = _build_state(np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
+    table = _build_table(np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
 
-    info = write_state(state, output_excel, output_format="excel", output_symbol="SAM")
+    info = write_table(table, output_excel, output_format="excel", output_symbol="SAM")
     assert info["format"] == "excel"
-    loaded = load_state(output_excel, "excel")
+    loaded = load_table(output_excel, "excel")
     assert loaded.matrix.shape == (2, 2)
     assert loaded.row_keys == [("A", "a"), ("A", "b")]
     assert loaded.col_keys == [("A", "a"), ("A", "b")]
-    assert np.allclose(loaded.matrix, state.matrix)
+    assert np.allclose(loaded.matrix, table.matrix)
 
 
 def test_io_write_gdx_returns_metadata(tmp_path: Path) -> None:
     output_gdx = tmp_path / "sam.gdx"
     keys = [("AG", "gvt"), ("I", "agr")]
-    state = _build_state(np.array([[1.5, 0.0], [0.0, 2.5]], dtype=float), keys, tmp_path / "in.gdx", "gdx")
+    table = _build_table(np.array([[1.5, 0.0], [0.0, 2.5]], dtype=float), keys, tmp_path / "in.gdx", "gdx")
 
-    info = write_state(state, output_gdx, output_format="gdx", output_symbol="SAM")
+    info = write_table(table, output_gdx, output_format="gdx", output_symbol="SAM")
     assert info["format"] == "gdx"
     assert info["records"] == 2
     assert info["symbol"] == "SAM"
@@ -132,7 +130,7 @@ def test_io_load_gdx_with_mocked_reader(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.setattr(io_module, "read_gdx", lambda _path: {"filepath": str(fake_path), "symbols": []})
     monkeypatch.setattr(io_module, "read_parameter_values", lambda _gdx, _name: values)
 
-    loaded = load_state(fake_path, "gdx")
+    loaded = load_table(fake_path, "gdx")
     assert loaded.source_format == "gdx"
     assert _to_cell_map(loaded) == {
         (("AG", "gvt"), ("I", "agr")): 1.5,
@@ -146,11 +144,11 @@ def test_io_load_ieem_raw_excel_with_sheet_option(tmp_path: Path) -> None:
     matrix[0, 1] = 12.0
     _write_ieem_raw_excel(raw_file, matrix, sheet_name="CUSTOM_SHEET")
 
-    state = load_state(raw_file, "ieem_raw_excel", options={"sheet_name": "CUSTOM_SHEET"})
-    assert state.source_format == "ieem_raw_excel"
-    assert state.matrix.shape == (10, 10)
-    assert all(cat == "RAW" for cat, _ in state.row_keys)
-    assert all(cat == "RAW" for cat, _ in state.col_keys)
+    table = load_table(raw_file, "ieem_raw_excel", options={"sheet_name": "CUSTOM_SHEET"})
+    assert table.source_format == "ieem_raw_excel"
+    assert table.matrix.shape == (10, 10)
+    assert all(cat == "RAW" for cat, _ in table.row_keys)
+    assert all(cat == "RAW" for cat, _ in table.col_keys)
 
 
 def test_io_load_ieem_raw_excel_uses_sam_class(
@@ -161,15 +159,15 @@ def test_io_load_ieem_raw_excel_uses_sam_class(
     input_file.write_bytes(b"dummy")
 
     keys = [("RAW", "a")]
-    expected = _build_state(np.array([[1.0]], dtype=float), keys, input_file, "ieem_raw_excel")
+    expected = _build_table(np.array([[1.0]], dtype=float), keys, input_file, "ieem_raw_excel")
 
     class _DummySAM:
-        def to_raw_state(
+        def to_table(
             self,
             *,
             source_path: Path | None = None,
             source_format: str = "raw",
-        ) -> SamTransform:
+        ) -> SamTable:
             _ = (source_path, source_format)
             return expected
 
@@ -182,7 +180,7 @@ def test_io_load_ieem_raw_excel_uses_sam_class(
 
     monkeypatch.setattr(io_module.IEEMRawSAM, "from_ieem_excel", staticmethod(_fake_from_ieem_excel))
 
-    loaded = load_state(input_file, "ieem_raw_excel", options={"sheet_name": "CUSTOM"})
+    loaded = load_table(input_file, "ieem_raw_excel", options={"sheet_name": "CUSTOM"})
     assert loaded == expected
     assert called["path"] == input_file
     assert called["sheet_name"] == "CUSTOM"
@@ -190,6 +188,6 @@ def test_io_load_ieem_raw_excel_uses_sam_class(
 
 def test_write_state_rejects_unsupported_format(tmp_path: Path) -> None:
     keys = [("AG", "gvt")]
-    state = _build_state(np.array([[1.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
+    table = _build_table(np.array([[1.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
     with pytest.raises(ValueError, match="Unsupported output format"):
-        write_state(state, tmp_path / "out.unknown", output_format="unknown", output_symbol="SAM")
+        write_table(table, tmp_path / "out.unknown", output_format="unknown", output_symbol="SAM")

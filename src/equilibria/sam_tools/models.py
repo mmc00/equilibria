@@ -143,8 +143,8 @@ class Sam(BaseModel):
         return result
 
 
-class SamTransform(BaseModel):
-    """Metadata holder that embedds a square ``Sam`` and tracks source info."""
+class SamTable(BaseModel):
+    """Table-level SAM object with source metadata and editable matrix access."""
 
     sam: Sam
     source_path: Path
@@ -157,11 +157,11 @@ class SamTransform(BaseModel):
 
     @property
     def row_keys(self) -> list[tuple[str, ...]]:
-        return [tuple(key) for key in self.sam.row_keys]
+        return self.sam.row_keys
 
     @property
     def col_keys(self) -> list[tuple[str, ...]]:
-        return [tuple(key) for key in self.sam.col_keys]
+        return self.sam.col_keys
 
     @property
     def matrix(self) -> np.ndarray:
@@ -171,10 +171,8 @@ class SamTransform(BaseModel):
     def matrix(self, value: np.ndarray) -> None:
         self.sam.update_matrix(value)
 
-    def replace_sam(self, new_sam: Sam) -> None:
-        object.__setattr__(self, "sam", new_sam)
-
-
+    def to_dataframe(self) -> pd.DataFrame:
+        return self.sam.to_dataframe()
 
 
 class SAMWorkflowConfig(BaseModel):

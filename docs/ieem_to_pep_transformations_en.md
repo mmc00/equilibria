@@ -4,7 +4,7 @@ English version. This explains the IEEM->PEP transformations in `src/equilibria/
 
 ## core data abstractions
 
-All workflow steps operate over `Sam` instances backed by the `SamTransform` state holder. `Sam` enforces that the matrix is square, uses identical accounts for rows and columns, and normalizes the keys so each transformation can rely on canonical tuples (e.g., `("J", "agr")`). `SamTransform` keeps the original source metadata (path/format) and exposes a writable `matrix` view so YAML-driven workflows mutate the same object throughout. This is the base for aggregation, balancing and export conversions.
+All workflow steps operate over `Sam` instances wrapped by `SamTable`. `Sam` enforces that the matrix is square, uses identical accounts for rows and columns, and normalizes the keys so each transformation can rely on canonical tuples (e.g., `("J", "agr")`). `SamTable` keeps source metadata (path/format) without duplicating `row_keys/col_keys`; transformations mutate the underlying `sam` directly.
 
 Note:
 - `aggregate_mapping` stays generic (format-agnostic) in `src/equilibria/sam_tools/ieem_raw_excel.py`.

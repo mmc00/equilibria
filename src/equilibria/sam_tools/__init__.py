@@ -8,17 +8,18 @@ from equilibria.sam_tools.enums import (
     SAMFormat,
     WorkflowOperation,
 )
-from equilibria.sam_tools.models import Sam
-from equilibria.sam_tools.state_store import load_state, write_state
+from equilibria.sam_tools.models import Sam, SamTable
+from equilibria.sam_tools.state_store import load_table, write_table
 
 __all__ = [
     "Sam",
+    "SamTable",
     "RASBalancer",
     "SAMFormat",
     "WorkflowOperation",
     "RASMode",
     "IPFPTargetMode",
     "IPFPSupportMode",
-    "load_state",
-    "write_state",
+    "load_table",
+    "write_table",
 ]

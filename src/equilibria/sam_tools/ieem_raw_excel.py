@@ -4,27 +4,38 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, model_validator
 
 from equilibria.sam_tools.aggregation import build_multiindex_labels
-from equilibria.sam_tools.models import Sam, SamTransform
+from equilibria.sam_tools.models import Sam, SamTable
 
-IEEM_GROUP_LABELS: dict[str, str] = {
-    "actividades productivas": "activities",
-    "bienes y servicios": "commodities",
-    "margenes": "margins",
-    "factores": "factors",
-    "hogares": "households",
-    "empresas": "enterprises",
-    "gobierno": "government",
-    "resto del mundo": "row",
-    "ahorro": "savings",
-    "inversion": "investment",
-    "inversión": "investment",
+DEFAULT_IEEM_GROUP_ORDER: tuple[str, ...] = (
+    "activities",
+    "commodities",
+    "margins",
+    "factors",
+    "households",
+    "enterprises",
+    "government",
+    "row",
+    "savings",
+    "investment",
+)
+
+DEFAULT_IEEM_GROUP_ALIASES: dict[str, tuple[str, ...]] = {
+    "activities": ("actividades productivas",),
+    "commodities": ("bienes y servicios",),
+    "margins": ("margenes",),
+    "factors": ("factores",),
+    "households": ("hogares",),
+    "enterprises": ("empresas",),
+    "government": ("gobierno",),
+    "row": ("resto del mundo",),
+    "savings": ("ahorro",),
+    "investment": ("inversion", "inversión"),
 }
 
 
@@ -47,53 +58,79 @@ def _is_numeric(value: Any) -> bool:
     return isinstance(value, (int, float, np.integer, np.floating))
 
 
-def _detect_groups(raw_df: pd.DataFrame) -> list[_IEEMGroup]:
-    if raw_df.shape[1] < 3:
-        raise ValueError("IEEM raw SAM must have at least 3 columns")
+def _build_alias_lookup(group_aliases: Mapping[str, Sequence[str]]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for canonical_group, aliases in group_aliases.items():
+        for alias in aliases:
+            key = _norm_text_lower(alias)
+            if key in lookup and lookup[key] != canonical_group:
+                raise ValueError(f"Alias '{alias}' maps to multiple groups")
+            lookup[key] = canonical_group
+    return lookup
 
+
+def _groups_from_spec(
+    raw_df: pd.DataFrame,
+    *,
+    group_order: Sequence[str],
+    group_aliases: Mapping[str, Sequence[str]],
+    group_col: int,
+    label_col: int,
+) -> list[_IEEMGroup]:
+    if raw_df.shape[1] <= max(group_col, label_col):
+        raise ValueError("IEEM raw SAM does not contain required group/label columns")
+
+    alias_lookup = _build_alias_lookup(group_aliases)
     group_positions: dict[str, int] = {}
-    for i, val in enumerate(raw_df.iloc[:, 1]):
+    for i, val in enumerate(raw_df.iloc[:, group_col]):
         if pd.isna(val):
             continue
-        text = _norm_text_lower(val)
-        for label, name in IEEM_GROUP_LABELS.items():
-            if label in text and name not in group_positions:
-                group_positions[name] = i
-                break
+        key = _norm_text_lower(val)
+        canonical = alias_lookup.get(key)
+        if canonical is None:
+            continue
+        if canonical not in group_positions:
+            group_positions[canonical] = i
 
-    if not group_positions:
+    missing = [group for group in group_order if group not in group_positions]
+    if missing:
         raise ValueError(
-            "Could not detect IEEM account groups in column 2. "
-            "Verify sheet/options for raw IEEM input."
+            "Missing required IEEM groups in input sheet: "
+            + ", ".join(missing)
         )
 
-    sorted_groups = sorted(group_positions.items(), key=lambda item: item[1])
-    groups: list[_IEEMGroup] = []
-    for idx, (group_name, start_row) in enumerate(sorted_groups):
-        end_row = (
-            sorted_groups[idx + 1][1]
-            if idx + 1 < len(sorted_groups)
-            else len(raw_df)
+    positions = [group_positions[group] for group in group_order]
+    if positions != sorted(positions):
+        raise ValueError(
+            "IEEM groups found but out of expected order. "
+            f"Expected order: {list(group_order)}"
         )
+
+    groups: list[_IEEMGroup] = []
+    for idx, group in enumerate(group_order):
+        start_row = group_positions[group]
+        end_row = group_positions[group_order[idx + 1]] if idx + 1 < len(group_order) else len(raw_df)
         labels: list[str] = []
         for row in range(start_row, end_row):
-            val = raw_df.iat[row, 2]
+            val = raw_df.iat[row, label_col]
             if pd.isna(val):
                 continue
             label = _norm_text(val)
             if not label or _norm_text_lower(label) == "total":
                 continue
             labels.append(label)
-        if labels:
-            groups.append(_IEEMGroup(name=group_name, start_row=start_row, labels=labels))
-
-    if not groups:
-        raise ValueError("Detected IEEM groups but no account labels were extracted")
+        if not labels:
+            raise ValueError(f"Group '{group}' has no account labels in IEEM input")
+        groups.append(_IEEMGroup(name=group, start_row=start_row, labels=labels))
     return groups
 
 
-def _extract_raw_sam_matrix(raw_df: pd.DataFrame, groups: list[_IEEMGroup]) -> pd.DataFrame:
-    data_start_col = 3
+def _extract_raw_sam_matrix(
+    raw_df: pd.DataFrame,
+    groups: list[_IEEMGroup],
+    *,
+    data_start_col: int,
+) -> pd.DataFrame:
     group_sizes = [len(g.labels) for g in groups]
     n_accounts = int(sum(group_sizes))
     matrix = np.zeros((n_accounts, n_accounts), dtype=float)
@@ -123,62 +160,92 @@ def _extract_raw_sam_matrix(raw_df: pd.DataFrame, groups: list[_IEEMGroup]) -> p
     return pd.DataFrame(matrix, index=labels, columns=labels, dtype=float)
 
 
-def _parse_ieem_raw_matrix(input_path: Path, sheet_name: str) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+def _parse_ieem_raw_matrix(
+    input_path: Path,
+    sheet_name: str,
+    *,
+    group_order: Sequence[str] = DEFAULT_IEEM_GROUP_ORDER,
+    group_aliases: Mapping[str, Sequence[str]] = DEFAULT_IEEM_GROUP_ALIASES,
+    group_col: int = 1,
+    label_col: int = 2,
+    data_start_col: int = 3,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     raw_df = pd.read_excel(input_path, sheet_name=sheet_name, header=None)
-    groups = _detect_groups(raw_df)
-    matrix_df = _extract_raw_sam_matrix(raw_df, groups)
+    groups = _groups_from_spec(
+        raw_df,
+        group_order=group_order,
+        group_aliases=group_aliases,
+        group_col=group_col,
+        label_col=label_col,
+    )
+    matrix_df = _extract_raw_sam_matrix(raw_df, groups, data_start_col=data_start_col)
     labels = [_norm_text(label) for label in matrix_df.index]
     return raw_df, matrix_df, labels
 
 
-def _state_to_dataframe(state: SamTransform, expected_category: str) -> pd.DataFrame:
-    if not state.row_keys or not state.col_keys:
-        raise ValueError("State has no support keys")
-    if any(cat != expected_category for cat, _ in state.row_keys):
-        raise ValueError(f"State rows must be category '{expected_category}' for this operation")
-    if any(cat != expected_category for cat, _ in state.col_keys):
-        raise ValueError(f"State cols must be category '{expected_category}' for this operation")
-    labels_r = [elem for _, elem in state.row_keys]
-    labels_c = [elem for _, elem in state.col_keys]
-    return pd.DataFrame(state.matrix.copy(), index=labels_r, columns=labels_c, dtype=float)
-
-
-def _replace_state_from_dataframe(state: SamTransform, df: pd.DataFrame) -> None:
-    labels = [_norm_text(label) for label in df.index]
-    state.matrix = df.to_numpy(dtype=float)
-    state.row_keys = [("RAW", label) for label in labels]
-    state.col_keys = [("RAW", label) for label in labels]
-
-
-def load_ieem_raw_excel_state(
+def load_ieem_raw_excel_table(
     input_path: Path,
     *,
     sheet_name: str = "MCS2016",
-) -> SamTransform:
-    """Read an IEEM raw Excel SAM and return a RAW state."""
-    raw_df, matrix_df, labels = _parse_ieem_raw_matrix(input_path, sheet_name)
-    multi_index, keys = build_multiindex_labels(labels, category="RAW")
-    matrix_clean = matrix_df.to_numpy(dtype=float)
-    sam = Sam(dataframe=pd.DataFrame(matrix_clean, index=multi_index, columns=multi_index))
+    group_order: Sequence[str] | None = None,
+    group_aliases: Mapping[str, Sequence[str]] | None = None,
+    group_col: int | None = None,
+    label_col: int | None = None,
+    data_start_col: int | None = None,
+) -> SamTable:
+    """Load an IEEM raw workbook as ``SamTable`` using explicit parse spec."""
+    parse_kwargs: dict[str, Any] = {}
+    if group_order is not None:
+        parse_kwargs["group_order"] = group_order
+    if group_aliases is not None:
+        parse_kwargs["group_aliases"] = group_aliases
+    if group_col is not None:
+        parse_kwargs["group_col"] = group_col
+    if label_col is not None:
+        parse_kwargs["label_col"] = label_col
+    if data_start_col is not None:
+        parse_kwargs["data_start_col"] = data_start_col
 
-    return SamTransform(
-        sam=sam,
-        row_keys=keys,
-        col_keys=keys,
-        source_path=input_path,
-        source_format="ieem_raw_excel",
-        raw_df=None,
-        data_start_row=None,
-        data_start_col=None,
+    sam = IEEMRawSAM.from_ieem_excel(
+        path=input_path,
+        sheet_name=sheet_name,
+        **parse_kwargs,
     )
+    return sam.to_table(source_path=input_path, source_format="ieem_raw_excel")
 
 
 class IEEMRawSAM(Sam):
     """SAM helper especializado para cargar y transformar tablas IEEM sin procesar."""
 
     @classmethod
-    def from_ieem_excel(cls, path: Path, sheet_name: str = "MCS2016") -> IEEMRawSAM:
-        raw_df, matrix_df, labels = _parse_ieem_raw_matrix(path, sheet_name)
+    def from_ieem_excel(
+        cls,
+        path: Path,
+        sheet_name: str = "MCS2016",
+        *,
+        group_order: Sequence[str] | None = None,
+        group_aliases: Mapping[str, Sequence[str]] | None = None,
+        group_col: int | None = None,
+        label_col: int | None = None,
+        data_start_col: int | None = None,
+    ) -> IEEMRawSAM:
+        parse_kwargs: dict[str, Any] = {}
+        if group_order is not None:
+            parse_kwargs["group_order"] = group_order
+        if group_aliases is not None:
+            parse_kwargs["group_aliases"] = group_aliases
+        if group_col is not None:
+            parse_kwargs["group_col"] = group_col
+        if label_col is not None:
+            parse_kwargs["label_col"] = label_col
+        if data_start_col is not None:
+            parse_kwargs["data_start_col"] = data_start_col
+
+        _raw_df, matrix_df, labels = _parse_ieem_raw_matrix(
+            path,
+            sheet_name,
+            **parse_kwargs,
+        )
         multi_index, _ = build_multiindex_labels(labels, category="RAW")
         return cls(dataframe=pd.DataFrame(matrix_df.to_numpy(dtype=float), index=multi_index, columns=multi_index))
 
@@ -200,31 +267,27 @@ class IEEMRawSAM(Sam):
         )
         return self
 
-    def to_raw_state(
+    def to_table(
         self,
         *,
         source_path: Path | None = None,
         source_format: str = "raw",
-    ) -> SamTransform:
-        keys = [(cat, elem) for cat, elem in self.row_keys]
-        return SamTransform(
+    ) -> SamTable:
+        return SamTable(
             sam=self,
-            row_keys=keys,
-            col_keys=keys,
             source_path=source_path or Path("<memory>"),
             source_format=source_format,
         )
 
 
-def aggregate_state_with_mapping(state: SamTransform, op: dict[str, Any]) -> dict[str, Any]:
+def aggregate_table_with_mapping(table: SamTable, op: dict[str, Any]) -> dict[str, Any]:
     mapping_path = op.get("mapping_path")
     if not mapping_path:
         raise ValueError("aggregate_mapping requires mapping_path")
-    before_shape = list(state.matrix.shape)
-    state.sam.aggregate(Path(mapping_path))
-    state.refresh_keys()
+    before_shape = list(table.matrix.shape)
+    table.sam.aggregate(Path(mapping_path))
     return {
         "mapping_path": str(mapping_path),
         "shape_before": before_shape,
-        "shape_after": list(state.matrix.shape),
+        "shape_after": list(table.matrix.shape),
     }
