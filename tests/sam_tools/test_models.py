@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from equilibria.sam_tools.models import Sam, SamTransform, SAMWorkflowConfig
+from equilibria.sam_tools.models import Sam, SamTable, SAMWorkflowConfig
 
 
 def _sample_dataframe() -> pd.DataFrame:
@@ -66,20 +66,18 @@ def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
     assert np.all(diff <= 1e-6)
 
 
-def test_sam_transform_state_holds_sam_instance() -> None:
+def test_sam_table_holds_sam_instance() -> None:
     df = _sample_dataframe()
     sam = Sam(dataframe=df)
-    state = SamTransform(
+    table = SamTable(
         sam=sam,
-        row_keys=sam.row_keys,
-        col_keys=sam.col_keys,
         source_path=Path("/tmp/source.xlsx"),
         source_format="excel",
     )
 
-    assert state.matrix.shape == (2, 2)
-    assert state.row_keys == sam.row_keys
-    assert state.col_keys == sam.col_keys
+    assert table.matrix.shape == (2, 2)
+    assert table.row_keys == sam.row_keys
+    assert table.col_keys == sam.col_keys
 
 
 def test_sam_workflow_config_dataclass_small_fixture() -> None:

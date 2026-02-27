@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
 from equilibria.sam_tools.balancing import RASBalancer
-from equilibria.sam_tools.ieem_to_pep_transformations import balance_state_ras
-from equilibria.sam_tools.models import Sam, SamTransform
+from equilibria.sam_tools.ieem_to_pep_transformations import balance_sam_ras
+from equilibria.sam_tools.models import Sam
 
 
 def _sample_matrix() -> pd.DataFrame:
@@ -73,7 +71,7 @@ def test_ras_balancer_row_and_column_targets() -> None:
     assert np.allclose(col_cols, col_totals, atol=1e-6)
 
 
-def test_balance_state_ras_uses_ras_type() -> None:
+def test_balance_sam_ras_uses_ras_type() -> None:
     matrix = np.array(
         [
             [2.0, 3.0, 1.0],
@@ -84,16 +82,9 @@ def test_balance_state_ras_uses_ras_type() -> None:
     )
     keys = [("RAW", "a"), ("RAW", "b"), ("RAW", "c")]
     sam = Sam.from_matrix(matrix, keys, keys)
-    state = SamTransform(
-        sam=sam,
-        row_keys=keys.copy(),
-        col_keys=keys.copy(),
-        source_path=Path("<test>"),
-        source_format="raw",
-    )
 
-    details = balance_state_ras(
-        state,
+    details = balance_sam_ras(
+        sam,
         {"ras_type": "column", "tol": 1e-10, "max_iter": 1000},
     )
     assert details["ras_type"] == "column"
