@@ -8,7 +8,7 @@ import pytest
 
 import equilibria.sam_tools.state_store as io_module
 from equilibria.sam_tools.models import Sam, SamTable
-from equilibria.sam_tools.state_store import load_table, write_table
+from equilibria.sam_tools.state_store import load_table, read_sam, write_sam, write_table
 
 
 def _write_canonical_excel(
@@ -106,6 +106,33 @@ def test_io_excel_roundtrip_small_fixture(tmp_path: Path) -> None:
     assert np.allclose(loaded.matrix, table.matrix)
 
 
+def test_read_sam_returns_core_sam(tmp_path: Path) -> None:
+    output_excel = tmp_path / "sam.xlsx"
+    keys = [("A", "a"), ("A", "b")]
+    table = _build_table(np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
+    write_table(table, output_excel, output_format="excel", output_symbol="SAM")
+
+    sam = read_sam(output_excel, "excel")
+    assert isinstance(sam, Sam)
+    assert sam.row_keys == keys
+    assert sam.col_keys == keys
+    assert np.allclose(sam.matrix, table.matrix)
+
+
+def test_write_sam_writes_without_table_wrapper(tmp_path: Path) -> None:
+    output_excel = tmp_path / "sam.xlsx"
+    keys = [("AG", "gvt"), ("I", "agr")]
+    sam = Sam.from_matrix(np.array([[1.5, 0.0], [0.0, 2.5]], dtype=float), keys, keys)
+
+    info = write_sam(sam, output_excel, output_format="excel", output_symbol="SAM")
+    assert info["format"] == "excel"
+
+    loaded = read_sam(output_excel, "excel")
+    assert loaded.row_keys == keys
+    assert loaded.col_keys == keys
+    assert np.allclose(loaded.matrix, sam.matrix)
+
+
 def test_io_write_gdx_returns_metadata(tmp_path: Path) -> None:
     output_gdx = tmp_path / "sam.gdx"
     keys = [("AG", "gvt"), ("I", "agr")]
@@ -149,41 +176,6 @@ def test_io_load_ieem_raw_excel_with_sheet_option(tmp_path: Path) -> None:
     assert table.matrix.shape == (10, 10)
     assert all(cat == "RAW" for cat, _ in table.row_keys)
     assert all(cat == "RAW" for cat, _ in table.col_keys)
-
-
-def test_io_load_ieem_raw_excel_uses_sam_class(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    input_file = tmp_path / "raw.xlsx"
-    input_file.write_bytes(b"dummy")
-
-    keys = [("RAW", "a")]
-    expected = _build_table(np.array([[1.0]], dtype=float), keys, input_file, "ieem_raw_excel")
-
-    class _DummySAM:
-        def to_table(
-            self,
-            *,
-            source_path: Path | None = None,
-            source_format: str = "raw",
-        ) -> SamTable:
-            _ = (source_path, source_format)
-            return expected
-
-    called: dict[str, object] = {}
-
-    def _fake_from_ieem_excel(path: Path, sheet_name: str = "MCS2016") -> _DummySAM:
-        called["path"] = path
-        called["sheet_name"] = sheet_name
-        return _DummySAM()
-
-    monkeypatch.setattr(io_module.IEEMRawSAM, "from_ieem_excel", staticmethod(_fake_from_ieem_excel))
-
-    loaded = load_table(input_file, "ieem_raw_excel", options={"sheet_name": "CUSTOM"})
-    assert loaded == expected
-    assert called["path"] == input_file
-    assert called["sheet_name"] == "CUSTOM"
 
 
 def test_write_state_rejects_unsupported_format(tmp_path: Path) -> None:

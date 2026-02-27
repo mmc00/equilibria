@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
@@ -11,9 +9,8 @@ from equilibria.sam_tools.sam_transforms import create_x_block_on_sam, convert_e
 from tests.sam_tools.fixtures import IEEM_RAW_GROUPS, write_sample_ieem_raw_excel
 
 
-def test_manual_pipeline_runs_on_fixture() -> None:
-    raw_path = Path("tmp_ieem_test/raw.xlsx")
-    raw_path.parent.mkdir(parents=True, exist_ok=True)
+def test_manual_pipeline_runs_on_fixture(tmp_path) -> None:
+    raw_path = tmp_path / "raw.xlsx"
     matrix = np.zeros((len(IEEM_RAW_GROUPS), len(IEEM_RAW_GROUPS)), dtype=float)
     write_sample_ieem_raw_excel(raw_path, matrix)
 
