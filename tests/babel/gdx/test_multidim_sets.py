@@ -26,9 +26,8 @@ from equilibria.babel.gdx.reader import (
 class Test2DSets:
     """Tests for 2D sets."""
 
-    @pytest.mark.skip(reason="Fixture has 'map' as parameter, not set")
-    def test_2d_sparse_set(self) -> None:
-        """Should read sparse 2D set correctly."""
+    def test_2d_sparse_parameter_metadata(self) -> None:
+        """Should read sparse 2D parameter metadata correctly."""
         fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_sparse.gdx"
         gdx_data = read_gdx(fixture)
 
@@ -46,34 +45,12 @@ class Test2DSets:
         assert j_sym["dimension"] == 1
         assert j_sym["records"] == 3
 
-        # Check 2D set
+        # Check 2D parameter
         map_sym = get_symbol(gdx_data, "map")
         assert map_sym is not None
-        assert map_sym["type_name"] == "set"
+        assert map_sym["type_name"] == "parameter"
         assert map_sym["dimension"] == 2
         assert map_sym["records"] == 5  # 5 mappings
-
-        # Read set elements
-        elements = read_set_elements(gdx_data, "map")
-
-        # Should have exactly 5 tuples
-        assert len(elements) == 5
-
-        # Each element should be a 2-tuple
-        for elem in elements:
-            assert len(elem) == 2
-            assert isinstance(elem, tuple)
-
-        # Check specific mappings exist
-        elements_set = set(elements)
-        expected = {
-            ("agr", "food"),
-            ("agr", "services"),
-            ("mfg", "goods"),
-            ("mfg", "services"),
-            ("srv", "services"),
-        }
-        assert elements_set == expected
 
     def test_2d_full_set(self) -> None:
         """Should read 2D set with explicit pairs."""
@@ -158,18 +135,16 @@ class Test2DSets:
         }
         assert elements_set == expected
 
-    @pytest.mark.skip(reason="Fixture has 'map' as parameter, not set")
     def test_2d_set_preserves_order(self) -> None:
         """Should preserve insertion order of set elements."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_sparse.gdx"
+        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
         gdx_data = read_gdx(fixture)
 
-        elements = read_set_elements(gdx_data, "map")
+        elements = read_set_elements(gdx_data, "route")
 
         # Elements should be in consistent order
-        assert len(elements) == 5
-        # First element should involve first industry
-        assert elements[0][0] in ("agr", "mfg", "srv")
+        assert len(elements) == 4
+        assert elements[0] == ("s1", "d1")
 
 
 class Test3DSets:
@@ -261,10 +236,9 @@ class Test4DSets:
 class TestSetEdgeCases:
     """Tests for edge cases in multidimensional sets."""
 
-    @pytest.mark.skip(reason="Fixture has 'map' as parameter, not set")
     def test_read_nonexistent_set_raises(self) -> None:
         """Should raise error for non-existent set."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_sparse.gdx"
+        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
         gdx_data = read_gdx(fixture)
 
         with pytest.raises(ValueError, match="Symbol 'nonexistent' not found"):
@@ -339,15 +313,14 @@ class TestSetEdgeCases:
 class TestSetPerformance:
     """Performance and stress tests for set reading."""
 
-    @pytest.mark.skip(reason="Fixture has 'map' as parameter, not set")
     def test_multiple_set_reads_consistent(self) -> None:
         """Should return same results when reading set multiple times."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_sparse.gdx"
+        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
         gdx_data = read_gdx(fixture)
 
-        elements1 = read_set_elements(gdx_data, "map")
-        elements2 = read_set_elements(gdx_data, "map")
-        elements3 = read_set_elements(gdx_data, "map")
+        elements1 = read_set_elements(gdx_data, "route")
+        elements2 = read_set_elements(gdx_data, "route")
+        elements3 = read_set_elements(gdx_data, "route")
 
         assert elements1 == elements2
         assert elements2 == elements3

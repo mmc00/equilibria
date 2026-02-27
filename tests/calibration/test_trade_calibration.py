@@ -199,7 +199,7 @@ def test_trade_calibration():
     print("Phase 4 Calibration Complete")
     print("=" * 70)
     
-    return trade_result
+    return None
 
 
 def main():

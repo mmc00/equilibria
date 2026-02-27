@@ -196,7 +196,7 @@ def test_final_calibration():
     print("Phase 5 Calibration Complete")
     print("=" * 70)
     
-    return final_result
+    return None
 
 
 def main():

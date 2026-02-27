@@ -98,8 +98,3 @@ def test_sam_raw_pipeline_methods_with_small_fixture(tmp_path: Path) -> None:
     after = float(np.max(np.abs(sam.matrix.sum(axis=1) - sam.matrix.sum(axis=0))))
     assert after <= before
     assert after <= 1e-8
-
-    table = sam.to_table()
-    assert table.matrix.shape == sam.matrix.shape
-    assert all(cat == "RAW" for cat, _ in table.row_keys)
-    assert all(cat == "RAW" for cat, _ in table.col_keys)

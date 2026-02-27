@@ -160,7 +160,7 @@ def test_income_calibration():
     print("Phase 1 Calibration Complete")
     print("=" * 70)
     
-    return result
+    return None
 
 
 def compare_with_gams(our_result):
