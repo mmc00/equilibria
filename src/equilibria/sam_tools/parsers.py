@@ -85,7 +85,7 @@ def _load_from_gdx(path: Path) -> SamTable:
     )
 
 
-def load_table(
+def parse_table(
     path: Path,
     fmt: str | SAMFormat,
     options: dict[str, Any] | None = None,
@@ -197,7 +197,7 @@ def _write_table_to_gdx(
     return len(records)
 
 
-def write_table(
+def export_table(
     table: SamTable,
     output_path: Path,
     output_format: str | SAMFormat,
@@ -225,7 +225,7 @@ def parse_sam(
     options: dict[str, Any] | None = None,
 ) -> Sam:
     """Parse one SAM and return only the core ``Sam`` object."""
-    table = load_table(Path(path), fmt, options=options)
+    table = parse_table(Path(path), fmt, options=options)
     return table.sam
 
 
@@ -242,14 +242,9 @@ def export_sam(
         source_path=Path("<memory>"),
         source_format=str(_normalize_format(output_format).value),
     )
-    return write_table(
+    return export_table(
         table=table,
         output_path=Path(output_path),
         output_format=output_format,
         output_symbol=output_symbol,
     )
-
-
-# Backward aliases (to be removed in a later major cleanup)
-read_sam = parse_sam
-write_sam = export_sam
