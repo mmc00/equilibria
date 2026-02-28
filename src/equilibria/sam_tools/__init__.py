@@ -1,5 +1,6 @@
 """SAM transformation pipeline utilities."""
 
+from equilibria.sam_tools.api import IEEMToPEPResult, run_ieem_to_pep
 from equilibria.sam_tools.balancing import RASBalancer
 from equilibria.sam_tools.enums import (
     IPFPSupportMode,
@@ -8,18 +9,19 @@ from equilibria.sam_tools.enums import (
     SAMFormat,
     WorkflowOperation,
 )
-from equilibria.sam_tools.models import Sam, SamTable
-from equilibria.sam_tools.state_store import load_table, write_table
+from equilibria.sam_tools.models import Sam
+from equilibria.sam_tools.parsers import export_sam, parse_sam
 
 __all__ = [
     "Sam",
-    "SamTable",
+    "parse_sam",
+    "export_sam",
+    "run_ieem_to_pep",
+    "IEEMToPEPResult",
     "RASBalancer",
     "SAMFormat",
     "WorkflowOperation",
     "RASMode",
     "IPFPTargetMode",
     "IPFPSupportMode",
-    "load_table",
-    "write_table",
 ]

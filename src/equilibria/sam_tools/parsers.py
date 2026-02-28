@@ -1,4 +1,4 @@
-"""Input/output primitives for SAM table objects."""
+"""SAM parsers and exporters."""
 
 from __future__ import annotations
 
@@ -217,3 +217,39 @@ def write_table(
         return {"format": SAMFormat.GDX.value, "records": records, "symbol": output_symbol}
 
     raise ValueError(f"Unsupported output format: {output_format}")
+
+
+def parse_sam(
+    path: Path | str,
+    fmt: str | SAMFormat,
+    options: dict[str, Any] | None = None,
+) -> Sam:
+    """Parse one SAM and return only the core ``Sam`` object."""
+    table = load_table(Path(path), fmt, options=options)
+    return table.sam
+
+
+def export_sam(
+    sam: Sam,
+    output_path: Path | str,
+    *,
+    output_format: str | SAMFormat = SAMFormat.EXCEL,
+    output_symbol: str = "SAM",
+) -> dict[str, Any]:
+    """Export one ``Sam`` to disk in Excel or GDX format."""
+    table = SamTable(
+        sam=sam,
+        source_path=Path("<memory>"),
+        source_format=str(_normalize_format(output_format).value),
+    )
+    return write_table(
+        table=table,
+        output_path=Path(output_path),
+        output_format=output_format,
+        output_symbol=output_symbol,
+    )
+
+
+# Backward aliases (to be removed in a later major cleanup)
+read_sam = parse_sam
+write_sam = export_sam
