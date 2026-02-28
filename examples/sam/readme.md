@@ -2,6 +2,25 @@
 
 Pipeline manual para transformar SAM entre formatos y aplicar ajustes secuenciales.
 
+API simple recomendada (centrada en `Sam`):
+
+```python
+from equilibria.sam_tools import export_sam, parse_sam, run_ieem_to_pep
+
+# leer/escribir sin exponer metadatos internos
+sam = parse_sam("data/sam.xlsx", "excel")
+export_sam(sam, "output/sam.gdx", output_format="gdx")
+
+# IEEM raw -> PEP en una llamada
+result = run_ieem_to_pep(
+    "data/matriz_contabilidad_social_2016.xlsx",
+    "data/mapping_template.xlsx",
+    output_path="output/sam_cri_pep_compatible.xlsx",
+    report_path="output/sam_cri_pep_compatible_report.json",
+)
+sam_pep = result.sam
+```
+
 Tambien puedes usar la API Python con la clase `Sam` (directamente o a traves del pipeline manual):
 
 ```python
