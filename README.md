@@ -35,7 +35,7 @@ Building Computable General Equilibrium (CGE) models traditionally requires deep
 | 🌐 **Universal Data I/O** | Native support for GDX (GAMS), HAR (GEMPACK), Excel, and GTAP databases |
 | ⚡ **Multiple Backends** | Solve with Pyomo, PyOptInterface, or export to GAMS code |
 | 📐 **Auto-Calibration** | Automatically calibrate CES/CET parameters from SAM data |
-| 📋 **Ready Templates** | Pre-built models: PEP, GTAP-like, ORANI-like, and more |
+| 📋 **Ready Workflows** | Pre-built workflows for PEP pep2 calibration/solve plus reusable model templates |
 | 📊 **Built-in Analysis** | Model statistics, result comparison, sensitivity analysis |
 
 ---
@@ -66,25 +66,25 @@ pip install equilibria[all]
 
 ## Quick Start
 
-### Option 1: Use a Pre-built Template
+### Option 1: Run the PEP pep2 Calibration + Solver API
 
 ```python
-from equilibria.templates import PEPStatic
+from pathlib import Path
 
-# Load model from SAM data
-model = PEPStatic.from_excel("data/SAM.xlsx")
+from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
+from equilibria.templates.pep_model_solver import PEPModelSolver
 
-# Calibrate and solve baseline
-model.calibrate()
-baseline = model.solve()
+sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx")
+val_par_file = Path("src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx")
 
-# Simulate a policy shock
-model.params["ttim", "agr"] = 0.15  # 15% import tariff on agriculture
-counterfactual = model.solve()
+# Calibrate
+calibrator = PEPModelCalibrator(sam_file=sam_file, val_par_file=val_par_file)
+state = calibrator.calibrate()
 
-# Compare results
-comparison = baseline.compare(counterfactual)
-comparison.to_excel("tariff_impact.xlsx")
+# Solve
+solver = PEPModelSolver(calibrated_state=state, init_mode="excel")
+solution = solver.solve(method="auto")
+print(solution.summary())
 ```
 
 ### Option 2: Build a Custom Model with Blocks
@@ -202,15 +202,16 @@ Pre-configured models ready to use:
 ```python
 from equilibria.templates import (
     SimpleOpenEconomy,  # Didactic 3-sector model
-    PEPStatic,          # PEP standard CGE (static)
-    GTAPLike,           # GTAP-style multi-region
-    ORANILike,          # ORANI-G style
-    IEEMLike,           # Environment-energy extension
 )
 
 # Templates come with sensible defaults
-model = PEPStatic.from_excel("sam.xlsx")
+model = SimpleOpenEconomy().create_model()
 ```
+
+For PEP pep2 production workflows, use:
+- `equilibria.templates.pep_calibration_unified.PEPModelCalibrator`
+- `equilibria.templates.pep_model_solver.PEPModelSolver`
+- CLI scripts in `scripts/cli/` (for example `run_all_calibration.py`, `run_solver.py`)
 
 ---
 
@@ -276,48 +277,25 @@ results.plot()
 ### Tax Policy Analysis
 
 ```python
-from equilibria.templates import PEPStatic
+from pathlib import Path
 
-model = PEPStatic.from_excel("costa_rica_sam.xlsx")
-model.calibrate()
+from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
+from equilibria.templates.pep_model_solver import PEPModelSolver
 
-# Baseline
-baseline = model.solve()
+sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-V2_0.xls")
+val_par_file = Path("src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx")
 
-# Scenario: Carbon tax on industry
-model.params["ttip", "ind"] += 0.05  # 5% production tax increase
-carbon_tax = model.solve()
+calibrator = PEPModelCalibratorExcel(sam_file=sam_file, val_par_file=val_par_file)
+state = calibrator.calibrate()
 
-# Results
-print(f"GDP change: {carbon_tax.GDP / baseline.GDP - 1:.2%}")
-print(f"Industry output: {carbon_tax.XST['ind'] / baseline.XST['ind'] - 1:.2%}")
-print(f"CO2 proxy (industry): {carbon_tax.VA['ind'] / baseline.VA['ind'] - 1:.2%}")
+solver = PEPModelSolver(calibrated_state=state, init_mode="excel")
+baseline = solver.solve(method="auto")
+print(baseline.summary())
 ```
 
-### Multi-Region Analysis (GTAP-style)
+### Multi-Region Analysis
 
-```python
-from equilibria.templates import GTAPLike
-from equilibria.babel import read_gtap
-
-# Load GTAP database
-data = read_gtap("path/to/gtap11/")
-
-model = GTAPLike.from_gtap(
-    data,
-    regions=["USA", "EUR", "CHN", "ROW"],
-    sectors=["agr", "mfg", "svc"]
-)
-
-model.calibrate()
-baseline = model.solve()
-
-# Simulate tariff war
-model.params["tms", "USA", "CHN", "mfg"] = 0.25  # 25% US tariff on China mfg
-model.params["tms", "CHN", "USA", "mfg"] = 0.25  # Retaliation
-
-trade_war = model.solve()
-```
+Use the block-based `Model` API and `equilibria.babel` data loaders to assemble custom multi-region specifications.
 
 ### PEP GDP Comparison (Original SAM vs CRI SAM)
 
