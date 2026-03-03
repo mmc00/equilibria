@@ -66,6 +66,28 @@ def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
     assert np.all(diff <= 1e-6)
 
 
+def test_sam_balance_status_reports_pass_and_fail() -> None:
+    keys = [("RAW", "a"), ("RAW", "b")]
+
+    unbalanced = Sam.from_matrix(
+        np.array([[10.0, 0.0], [3.0, 0.0]], dtype=float),
+        keys,
+        keys,
+    )
+    status_fail = unbalanced.balance_status(tolerance=1e-9)
+    assert status_fail["is_balanced"] is False
+    assert status_fail["max_row_col_abs_diff"] > 0.0
+
+    balanced = Sam.from_matrix(
+        np.array([[1.0, 2.0], [2.0, 1.0]], dtype=float),
+        keys,
+        keys,
+    )
+    status_ok = balanced.balance_status(tolerance=1e-9)
+    assert status_ok["is_balanced"] is True
+    assert status_ok["max_row_col_abs_diff"] <= 1e-9
+
+
 def test_sam_workflow_config_dataclass_small_fixture() -> None:
     assert issubclass(SAMWorkflowConfig, BaseModel)
     cfg = SAMWorkflowConfig(
