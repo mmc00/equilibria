@@ -95,7 +95,7 @@ def generate_sam_gdx(sam, output_path: Path) -> None:
 def generate_sets_gdx(sam, output_path: Path) -> None:
     """Generate GDX file with PEP sets."""
     # Define PEP sets based on standard structure
-    # These match the hardcoded sets in PEP1R template
+    # These match the canonical pep2 benchmark set layout.
 
     sets_data = {
         "J": ["agr", "othind", "food", "ser", "adm"],  # Sectors/Industries
