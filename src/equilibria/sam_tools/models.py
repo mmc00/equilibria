@@ -142,6 +142,32 @@ class Sam(BaseModel):
         self.replace_dataframe(result.matrix)
         return result
 
+    def balance_status(self, *, tolerance: float = 1e-9) -> dict[str, Any]:
+        """Return balance diagnostics for row vs column totals."""
+        matrix = self.matrix
+        row_sums = matrix.sum(axis=1)
+        col_sums = matrix.sum(axis=0)
+        diff = row_sums - col_sums
+
+        if diff.size == 0:
+            max_abs = 0.0
+            worst_index = 0
+        else:
+            max_abs = float(np.max(np.abs(diff)))
+            worst_index = int(np.argmax(np.abs(diff)))
+
+        worst_key = self.row_keys[worst_index] if self.row_keys else ("", "")
+        worst_diff = float(diff[worst_index]) if diff.size else 0.0
+
+        return {
+            "is_balanced": bool(max_abs <= float(tolerance)),
+            "tolerance": float(tolerance),
+            "max_row_col_abs_diff": max_abs,
+            "worst_account": worst_key,
+            "worst_account_diff": worst_diff,
+            "total": float(matrix.sum()),
+        }
+
 
 class SamTable(BaseModel):
     """Table-level SAM object with source metadata and editable matrix access."""
