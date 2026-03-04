@@ -55,7 +55,7 @@ jobs:
             tests/qa/test_sam_qa.py \
             tests/templates/test_pep_parity_pipeline.py \
             tests/templates/test_pep_les_parity.py \
-            tests/templates/test_pep_sets.py
+            tests/templates/test_pep_dynamic_sets.py
 
   structural-gates:
     runs-on: ubuntu-latest
@@ -266,7 +266,7 @@ jobs:
             --gams-results-slice sim1 \
             --disable-strict-gams-baseline-check \
             --init-gates-mode gams_anchor \
-            --method simple_iteration \
+            --method __debug_simple_iteration \
             --max-iterations 0 \
             --save-report output/ci_cri_solver_dynamics_report.json
           status=$?
@@ -345,7 +345,7 @@ jobs:
             --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx \
             --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx \
             --init-mode excel \
-            --method simple_iteration \
+            --method __debug_simple_iteration \
             --max-iterations 0 \
             --save-report output/ci_solver_dynamics_report.json
           status=$?

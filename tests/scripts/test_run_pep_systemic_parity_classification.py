@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "run_pep_systemic_parity.py"
+SCRIPT = ROOT / "scripts" / "parity" / "run_pep_systemic_parity.py"
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
