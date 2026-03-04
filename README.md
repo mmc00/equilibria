@@ -305,6 +305,13 @@ uv run python examples/pep/example_11_pep_gdp_sam_comparison.py
 
 More details: `docs/guides/pep_gdp_example.md`
 
+### PEP BASE vs EXPORT_TAX Parity (Python vs GAMS)
+
+```bash
+uv run python scripts/cli/run_pep_base_export_tax_parity.py \
+  --save-report output/pep_base_export_tax_parity.json
+```
+
 ### CRI Structural Finding (IEEM vs PEP SAM Architecture)
 
 For the documented root cause of CRI instability during IEEM -> PEP conversion (trade-account architecture mismatch and production-tax routing drift), see:
