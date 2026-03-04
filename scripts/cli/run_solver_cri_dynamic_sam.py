@@ -52,7 +52,7 @@ def main() -> int:
     parser.add_argument("--acc-tx", type=str, default="tx")
     parser.add_argument("--acc-inv", type=str, default="inv")
     parser.add_argument("--acc-vstk", type=str, default="vstk")
-    parser.add_argument("--method", choices=["auto", "ipopt", "simple_iteration"], default="auto")
+    parser.add_argument("--method", choices=["auto", "ipopt"], default="auto")
     parser.add_argument(
         "--init-mode",
         choices=["gams", "excel"],

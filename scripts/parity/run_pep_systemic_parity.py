@@ -27,7 +27,10 @@ from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorDynamicSAM,
     PEPModelCalibratorExcelDynamicSAM,
 )
-from equilibria.templates.pep_model_solver import PEPModelSolver
+from equilibria.templates.pep_model_solver import (
+    DEBUG_SIMPLE_ITERATION_METHOD,
+    PEPModelSolver,
+)
 from equilibria.templates.pep_sam_compat import (
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
@@ -136,9 +139,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--method",
-        choices=["none", "auto", "ipopt", "simple_iteration"],
+        choices=["none", "auto", "ipopt", DEBUG_SIMPLE_ITERATION_METHOD],
         default="none",
-        help="Use 'none' to check initialization only.",
+        help=(
+            "Use 'none' to check initialization only. "
+            f"'{DEBUG_SIMPLE_ITERATION_METHOD}' is internal debug-only."
+        ),
     )
     parser.add_argument("--tolerance", type=float, default=1e-8)
     parser.add_argument("--max-iterations", type=int, default=120)

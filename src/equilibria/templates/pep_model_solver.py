@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import copy
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,8 @@ from equilibria.templates.init_strategies import normalize_init_mode
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
 
 logger = logging.getLogger(__name__)
+
+DEBUG_SIMPLE_ITERATION_METHOD = "__debug_simple_iteration"
 
 # Import IPOPT solver if available
 try:
@@ -61,6 +64,7 @@ class PEPModelSolver:
         sam_file: Path | str | None = None,
         val_par_file: Path | str | None = None,
         gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+        initial_vars: PEPModelVariables | None = None,
     ):
         """Initialize the solver with calibrated model state.
         
@@ -89,6 +93,7 @@ class PEPModelSolver:
         self.sam_file = Path(sam_file) if sam_file is not None else None
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
         self.gdxdump_bin = gdxdump_bin
+        self.initial_vars = copy.deepcopy(initial_vars) if initial_vars is not None else None
         
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
@@ -378,6 +383,9 @@ class PEPModelSolver:
     
     def _create_initial_guess(self) -> PEPModelVariables:
         """Create initial guess for variables from calibrated values."""
+        if self.initial_vars is not None:
+            return copy.deepcopy(self.initial_vars)
+
         # Keep initialization logic centralized in IPOPTSolver to avoid drift
         # between solver frontends.
         try:
@@ -398,6 +406,7 @@ class PEPModelSolver:
                 sam_file=self.sam_file,
                 val_par_file=self.val_par_file,
                 gdxdump_bin=self.gdxdump_bin,
+                initial_vars=self.initial_vars,
             )
             vars_ipopt = ipopt_solver._create_initial_guess()
             self.params = ipopt_solver.params
@@ -735,8 +744,8 @@ class PEPModelSolver:
         """Solve the PEP model.
         
         Args:
-            method: Solution method ("auto", "ipopt", or "simple_iteration")
-                   "auto" will try IPOPT first, then fall back to simple iteration
+            method: Solution method ("auto", "ipopt", or internal debug)
+                   Use method="ipopt" for production runs.
             
         Returns:
             SolverResult with solution status and variables
@@ -744,55 +753,65 @@ class PEPModelSolver:
         logger.info("=" * 70)
         logger.info("STARTING MODEL SOLUTION")
         logger.info("=" * 70)
-        
-        # Handle method selection
+
+        if method == "simple_iteration":
+            raise ValueError(
+                "method='simple_iteration' is no longer part of the public API. "
+                f"For internal debugging only, use method='{DEBUG_SIMPLE_ITERATION_METHOD}'."
+            )
+
         if method == "auto":
-            if IPOPT_AVAILABLE:
-                logger.info("Auto-selecting IPOPT solver")
-                method = "ipopt"
-            else:
-                logger.info("Auto-selecting simple iteration (IPOPT not available)")
-                method = "simple_iteration"
-        
-        # Route to appropriate solver
+            if not IPOPT_AVAILABLE:
+                raise RuntimeError(
+                    "method='auto' requires IPOPT (cyipopt). "
+                    "Install with `uv sync --extra ipopt`."
+                )
+            logger.info("Auto-selecting IPOPT solver")
+            method = "ipopt"
+
         if method == "ipopt":
             if not IPOPT_AVAILABLE:
-                logger.error("IPOPT requested but not available. Install with: pip install cyipopt")
-                logger.error("Falling back to simple iteration")
-                method = "simple_iteration"
-            else:
-                # Use IPOPT solver - import here to avoid issues if not available
-                try:
-                    from equilibria.templates.pep_model_solver_ipopt import IPOPTSolver
-                    ipopt_solver = IPOPTSolver(
-                        self.state,
-                        self.tolerance,
-                        self.max_iterations,
-                        init_mode=self.init_mode,
-                        blockwise_commodity_alpha=self.blockwise_commodity_alpha,
-                        blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
-                        blockwise_macro_alpha=self.blockwise_macro_alpha,
-                        gams_results_gdx=self.gams_results_gdx,
-                        gams_results_slice=self.gams_results_slice,
-                        baseline_manifest=self.baseline_manifest,
-                        require_baseline_manifest=self.require_baseline_manifest,
-                        baseline_compatibility_rel_tol=self.baseline_compatibility_rel_tol,
-                        enforce_strict_gams_baseline=self.enforce_strict_gams_baseline,
-                        sam_file=self.sam_file,
-                        val_par_file=self.val_par_file,
-                        gdxdump_bin=self.gdxdump_bin,
-                    )
-                    return ipopt_solver.solve_ipopt()
-                except Exception as e:
-                    logger.error(f"IPOPT failed: {e}")
-                    if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
-                        raise RuntimeError(f"gams solve failed due to baseline incompatibility: {e}") from e
-                    logger.error("Falling back to simple iteration")
-                    method = "simple_iteration"
-        
-        # Use simple iteration
-        vars = self._create_initial_guess()
-        return self._solve_simple_iteration(vars)
+                raise RuntimeError(
+                    "method='ipopt' requested but cyipopt is not available. "
+                    "Install with `uv sync --extra ipopt`."
+                )
+            try:
+                from equilibria.templates.pep_model_solver_ipopt import IPOPTSolver
+                ipopt_solver = IPOPTSolver(
+                    self.state,
+                    self.tolerance,
+                    self.max_iterations,
+                    init_mode=self.init_mode,
+                    blockwise_commodity_alpha=self.blockwise_commodity_alpha,
+                    blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
+                    blockwise_macro_alpha=self.blockwise_macro_alpha,
+                    gams_results_gdx=self.gams_results_gdx,
+                    gams_results_slice=self.gams_results_slice,
+                    baseline_manifest=self.baseline_manifest,
+                    require_baseline_manifest=self.require_baseline_manifest,
+                    baseline_compatibility_rel_tol=self.baseline_compatibility_rel_tol,
+                    enforce_strict_gams_baseline=self.enforce_strict_gams_baseline,
+                    sam_file=self.sam_file,
+                    val_par_file=self.val_par_file,
+                    gdxdump_bin=self.gdxdump_bin,
+                    initial_vars=self.initial_vars,
+                )
+                return ipopt_solver.solve_ipopt()
+            except Exception as e:
+                if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
+                    raise RuntimeError(
+                        f"gams solve failed due to baseline incompatibility: {e}"
+                    ) from e
+                raise RuntimeError(f"ipopt solve failed: {e}") from e
+
+        if method == DEBUG_SIMPLE_ITERATION_METHOD:
+            vars = self._create_initial_guess()
+            return self._solve_simple_iteration(vars)
+
+        raise ValueError(
+            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, "
+            f"{DEBUG_SIMPLE_ITERATION_METHOD} (internal debug only)."
+        )
     
     def _solve_simple_iteration(self, vars: PEPModelVariables) -> SolverResult:
         """Solve using simple iteration (Gauss-Seidel style)."""
