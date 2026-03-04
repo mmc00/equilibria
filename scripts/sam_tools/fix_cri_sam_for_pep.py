@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
-from equilibria.templates.pep_model_solver import PEPModelSolver
+from equilibria.templates.pep_model_solver import (
+    DEBUG_SIMPLE_ITERATION_METHOD,
+    PEPModelSolver,
+)
 from equilibria.templates.pep_sam_compat import transform_sam_to_pep_compatible
 
 
@@ -28,7 +31,7 @@ def run_optional_pep_check(
             init_mode="excel",
             sam_file=sam_file,
         )
-        solution = solver.solve(method="simple_iteration")
+        solution = solver.solve(method=DEBUG_SIMPLE_ITERATION_METHOD)
         vars_ = solution.variables
         return {
             "ok": True,

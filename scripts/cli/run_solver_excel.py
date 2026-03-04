@@ -52,7 +52,7 @@ def main() -> int:
         "--method",
         type=str,
         default="auto",
-        choices=["auto", "ipopt", "simple_iteration"],
+        choices=["auto", "ipopt"],
     )
     parser.add_argument(
         "--gams-results-gdx",

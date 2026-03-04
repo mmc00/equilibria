@@ -51,6 +51,8 @@ from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModel
 
 logger = logging.getLogger(__name__)
 
+DEBUG_SIMPLE_ITERATION_METHOD = "__debug_simple_iteration"
+
 # Try to import IPOPT
 try:
     import cyipopt
@@ -286,6 +288,7 @@ class IPOPTSolver:
         sam_file: Path | str | None = None,
         val_par_file: Path | str | None = None,
         gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+        initial_vars: PEPModelVariables | None = None,
     ):
         """Initialize the solver with calibrated model state.
         
@@ -311,6 +314,7 @@ class IPOPTSolver:
         self.sam_file = Path(sam_file) if sam_file is not None else None
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
         self.gdxdump_bin = gdxdump_bin
+        self.initial_vars = copy.deepcopy(initial_vars) if initial_vars is not None else None
         self.strict_baseline_report: BaselineCompatibilityReport | None = None
         self._strict_baseline_checked = False
         
@@ -2177,7 +2181,10 @@ class IPOPTSolver:
         logger.info("=" * 70)
         
         # Create initial guess
-        vars = self._create_initial_guess()
+        if self.initial_vars is not None:
+            vars = copy.deepcopy(self.initial_vars)
+        else:
+            vars = self._create_initial_guess()
         x0 = self._variables_to_array(vars)
         n_vars = len(x0)
         
@@ -2388,7 +2395,7 @@ class IPOPTSolver:
         """Solve using best available method.
         
         Args:
-            method: "auto", "ipopt", or "simple_iteration"
+            method: "auto", "ipopt", or internal debug method
             
         Returns:
             SolverResult
@@ -2397,10 +2404,20 @@ class IPOPTSolver:
             if IPOPT_AVAILABLE:
                 logger.info("Auto-selecting IPOPT solver")
                 return self.solve_ipopt()
-            else:
-                logger.info("Auto-selecting simple iteration (IPOPT not available)")
-                return super().solve(method="simple_iteration")
-        elif method == "ipopt":
+            raise RuntimeError(
+                "method='auto' requires IPOPT (cyipopt). "
+                "Install with `uv sync --extra ipopt`."
+            )
+        if method == "ipopt":
             return self.solve_ipopt()
-        else:
-            return super().solve(method="simple_iteration")
+        if method == DEBUG_SIMPLE_ITERATION_METHOD:
+            return super().solve(method=DEBUG_SIMPLE_ITERATION_METHOD)
+        if method == "simple_iteration":
+            raise ValueError(
+                "method='simple_iteration' is no longer part of the public API. "
+                f"Use method='{DEBUG_SIMPLE_ITERATION_METHOD}' only for internal debugging."
+            )
+        raise ValueError(
+            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, "
+            f"{DEBUG_SIMPLE_ITERATION_METHOD} (internal debug only)."
+        )
