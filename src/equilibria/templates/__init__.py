@@ -12,11 +12,21 @@ from equilibria.templates.gams_comparison import (
     SolutionComparator,
     run_gams_comparison,
 )
+from equilibria.templates.pep_levels import (
+    EquilibriaLevelsExtractor,
+    GAMSLevelsExtractor,
+    LevelsComparator,
+)
+from equilibria.templates.pep_scenario_parity import PEPScenarioParityRunner
 from equilibria.templates.simple_open import SimpleOpenEconomy
 
 __all__ = [
     "ModelTemplate",
     "SimpleOpenEconomy",
+    "PEPScenarioParityRunner",
+    "EquilibriaLevelsExtractor",
+    "GAMSLevelsExtractor",
+    "LevelsComparator",
     # GAMS Comparison
     "GAMSComparisonResult",
     "GAMSComparisonReport",
