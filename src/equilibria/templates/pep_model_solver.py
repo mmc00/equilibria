@@ -731,14 +731,7 @@ class PEPModelSolver:
     def _array_to_variables(self, array: np.ndarray, template: PEPModelVariables) -> PEPModelVariables:
         """Convert array back to variables."""
         _ = template  # retained for backward-compatible signature
-        vars = pep_array_to_variables(np.asarray(array, dtype=float), self.sets)
-        rebuild_tax_detail_from_rates(
-            vars=vars,
-            sets=self.sets,
-            params=self.params,
-            include_tip=True,
-        )
-        return vars
+        return pep_array_to_variables(np.asarray(array, dtype=float), self.sets)
     
     def solve(self, method: str = "auto") -> SolverResult:
         """Solve the PEP model.
@@ -855,7 +848,7 @@ class PEPModelSolver:
                 eq4_resid = residuals.get(f"EQ4_{j}", 0)
                 if abs(eq4_resid) > 1e-6:
                     vars.WC[j] *= (1 + damping * eq4_resid / max(abs(vars.WC[j]), 1))
-                    vars.WC[j] = max(0.1, min(10.0, vars.WC[j]))  # Keep bounded
+                    vars.WC[j] = max(1e-6, min(10.0, vars.WC[j]))  # Keep bounded
         
         # Did not converge
         result.iterations = self.max_iterations

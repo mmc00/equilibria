@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import TYPE_CHECKING
 
-from equilibria.templates.pep_model_equations import PEPModelVariables
+if TYPE_CHECKING:
+    from equilibria.templates.pep_model_equations import PEPModelVariables
 
 
 def rebuild_tax_detail_from_rates(
@@ -35,4 +37,3 @@ def rebuild_tax_detail_from_rates(
         for sector in sets.get("J", []):
             ttip = params.get("ttip", {}).get(sector, 0.0)
             vars.TIP[sector] = ttip * vars.PP.get(sector, 0.0) * vars.XST.get(sector, 0.0)
-

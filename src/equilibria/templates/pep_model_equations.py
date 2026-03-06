@@ -205,6 +205,8 @@ class PEPModelEquations:
             sets: Dictionary of model sets (H, F, J, I, K, L, etc.)
             parameters: Dictionary of calibrated parameters from Phase 1-5
         """
+        self.gams_strict = True
+
         self.sets = sets
         self.params = parameters
         
@@ -490,6 +492,7 @@ class PEPModelEquations:
         kdo0 = self.params.get("KDO0", {})
         ldo0 = self.params.get("LDO0", {})
         imo0 = self.params.get("IMO0", {})
+        ddo0 = self.params.get("DDO0", self.params.get("DDO", {}))
         exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         
         # EQ22: YG = YGK + TDHT + TDFT + TPRODN + TPRCTS + YGTR
@@ -584,6 +587,8 @@ class PEPModelEquations:
         # EQ37: TIW(l,j) = labor tax
         for l in self.L:
             for j in self.J:
+                if self.gams_strict and abs(ldo0.get((l, j), 0.0)) <= 1e-12:
+                    continue
                 key = (l, j)
                 ttiw = self.params.get("ttiw", {}).get(key, 0)
                 w_l = vars.W.get(l, 1.0)
@@ -614,14 +619,19 @@ class PEPModelEquations:
             if abs(denom) < 1e-12:
                 expected_tic = 0.0
             else:
-                expected_tic = (ttic / denom) * (
-                    vars.PD.get(i, 0) * vars.DD.get(i, 0) +
-                    vars.PM.get(i, 0) * vars.IM.get(i, 0)
-                )
+                pd_term = 0.0
+                if (not self.gams_strict) or abs(ddo0.get(i, 0.0)) > 1e-12:
+                    pd_term = vars.PD.get(i, 0) * vars.DD.get(i, 0)
+                pm_term = 0.0
+                if (not self.gams_strict) or abs(imo0.get(i, 0.0)) > 1e-12:
+                    pm_term = vars.PM.get(i, 0) * vars.IM.get(i, 0)
+                expected_tic = (ttic / denom) * (pd_term + pm_term)
             residuals[f"EQ40_{i}"] = vars.TIC.get(i, 0) - expected_tic
         
         # EQ41: TIM(i) = import duty
         for i in self.I:
+            if self.gams_strict and abs(imo0.get(i, 0.0)) <= 1e-12:
+                continue
             ttim = self.params.get("ttim", {}).get(i, 0)
             pwm_i = vars.PWM.get(i, 1.0)
             expected_tim = ttim * vars.e * pwm_i * vars.IM.get(i, 0)
@@ -629,6 +639,8 @@ class PEPModelEquations:
         
         # EQ42: TIX(i) = export tax
         for i in self.I:
+            if self.gams_strict and abs(exdo0.get(i, 0.0)) <= 1e-12:
+                continue
             ttix = self.params.get("ttix", {}).get(i, 0)
             margin_sum = sum(vars.PC.get(ij, 1.0) * self.params.get("tmrg_X", {}).get((ij, i), 0) for ij in self.I)
             expected_tix = ttix * (vars.PE.get(i, 0) + margin_sum) * vars.EXD.get(i, 0)
@@ -913,6 +925,7 @@ class PEPModelEquations:
         dso0 = self.params.get("DSO0", {})
         imo0 = self.params.get("IMO0", {})
         ddo0 = self.params.get("DDO0", {})
+        exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         kdo0 = self.params.get("KDO0", {})
         ldo0 = self.params.get("LDO0", {})
         pco0 = self.params.get("PCO0", {})
@@ -996,6 +1009,8 @@ class PEPModelEquations:
         
         # EQ76: PE(i) = export price
         for i in self.I:
+            if self.gams_strict and abs(exdo0.get(i, 0.0)) <= 1e-12:
+                continue
             ttix = self.params.get("ttix", {}).get(i, 0)
             margin_sum = sum(vars.PC.get(ij, 1.0) * self.params.get("tmrg_X", {}).get((ij, i), 0) for ij in self.I)
             expected_pe = vars.PE_FOB.get(i, 0) / (1 + ttix) - margin_sum
@@ -1003,6 +1018,8 @@ class PEPModelEquations:
         
         # EQ77: PD(i) = domestic price
         for i in self.I:
+            if self.gams_strict and abs(ddo0.get(i, 0.0)) <= 1e-12:
+                continue
             pl_i = vars.PL.get(i, 1.0)
             margin_sum = sum(vars.PC.get(ij, 1.0) * self.params.get("tmrg", {}).get((ij, i), 0) for ij in self.I)
             ttic = self.params.get("ttic", {}).get(i, 0)
@@ -1011,6 +1028,8 @@ class PEPModelEquations:
         
         # EQ78: PM(i) = import price
         for i in self.I:
+            if self.gams_strict and abs(imo0.get(i, 0.0)) <= 1e-12:
+                continue
             ttim = self.params.get("ttim", {}).get(i, 0)
             pwm_i = vars.PWM.get(i, 1.0)
             margin_sum = sum(vars.PC.get(ij, 1.0) * self.params.get("tmrg", {}).get((ij, i), 0) for ij in self.I)
@@ -1048,12 +1067,14 @@ class PEPModelEquations:
         if den1 > 1e-12 and den2 > 1e-12:
             residuals["EQ80"] = vars.PIXGDP - ((num1 / den1) * (num2 / den2)) ** 0.5
 
-        # EQ81: Consumer price index
+        # EQ81: Consumer price index (Laspeyres)
+        # Mirrors GAMS:
+        # PIXCON = SUM[i,PC(i)*SUM[h,CO(i,h)]] / SUM[i,PCO(i)*SUM[h,CO(i,h)]]
         num = den = 0.0
         for i in self.I:
-            c_i = sum(vars.C.get((i, h), 0.0) for h in self.H)
-            num += vars.PC.get(i, 0.0) * c_i
-            den += pco0.get(i, 1.0) * c_i
+            c_weight_i = sum(vars.C.get((i, h), 0.0) for h in self.H)
+            num += vars.PC.get(i, 0.0) * c_weight_i
+            den += pco0.get(i, 1.0) * c_weight_i
         if den > 1e-12:
             residuals["EQ81"] = vars.PIXCON - (num / den)
 
