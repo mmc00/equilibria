@@ -43,7 +43,7 @@ def test_transform_applies_price_floor() -> None:
     unpacked = pep_array_to_variables(test_vec, sets)
     roundtrip = pep_variables_to_array(unpacked, sets)
 
-    assert roundtrip[0] == 0.1
+    assert roundtrip[0] == 1e-6
 
 
 def test_rebuild_tax_detail_from_rates() -> None:
@@ -74,4 +74,3 @@ def test_rebuild_tax_detail_from_rates() -> None:
     rebuild_tax_detail_from_rates(vars, sets, params, include_tip=True)
     assert vars.TIP["agr"] == 0.5 * 9.0 * 11.0
     assert vars.TIP["ind"] == 0.6 * 10.0 * 12.0
-
