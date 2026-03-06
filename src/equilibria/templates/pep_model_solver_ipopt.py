@@ -253,14 +253,7 @@ class CGEProblem:
         Returns:
             PEPModelVariables instance
         """
-        vars = pep_array_to_variables(x, self.sets)
-        rebuild_tax_detail_from_rates(
-            vars=vars,
-            sets=self.sets,
-            params=self.equations.params,
-            include_tip=True,
-        )
-        return vars
+        return pep_array_to_variables(x, self.sets)
     
     def _variables_to_array(self, vars: PEPModelVariables) -> np.ndarray:
         """Convert PEPModelVariables to array."""
@@ -317,6 +310,7 @@ class IPOPTSolver:
         self.initial_vars = copy.deepcopy(initial_vars) if initial_vars is not None else None
         self.strict_baseline_report: BaselineCompatibilityReport | None = None
         self._strict_baseline_checked = False
+        self._last_bound_names: list[str] = []
         
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
@@ -330,6 +324,7 @@ class IPOPTSolver:
         logger.info(f"  Tolerance: {tolerance}")
         logger.info(f"  Max iterations: {max_iterations}")
         logger.info(f"  Init mode: {self.init_mode}")
+        logger.info("  Equation mode: gams_strict")
         if requested_init_mode != self.init_mode:
             logger.info(
                 "  Init mode alias normalized: %s -> %s",
@@ -341,10 +336,6 @@ class IPOPTSolver:
             logger.info(f"  GAMS slice: {self.gams_results_slice.upper()}")
         if self.baseline_manifest is not None:
             logger.info(f"  Baseline manifest: {self.baseline_manifest}")
-
-    def _uses_excel_init(self) -> bool:
-        """Return True when running the calibrated SAM/Excel initialization path."""
-        return self.init_mode == "excel"
 
     def _build_block_set_manager(self) -> SetManager:
         """Build SetManager from calibrated set lists for block hooks."""
@@ -1988,14 +1979,96 @@ class IPOPTSolver:
         """Convert variables to flat array for solver."""
         return pep_variables_to_array(vars, self.sets)
 
-    def _build_variable_bounds(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _parse_packed_name(self, packed_name: str) -> tuple[str, tuple[str, ...]]:
+        """Split packed variable name like `KD[cap,agr]` into root and indices."""
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?:\[(.*)\])?", packed_name.strip())
+        if not match:
+            return packed_name.strip().upper(), tuple()
+        root = match.group(1).upper()
+        raw_indices = match.group(2)
+        if raw_indices is None or raw_indices == "":
+            return root, tuple()
+        indices = tuple(part.strip().lower() for part in raw_indices.split(",") if part.strip())
+        return root, indices
+
+    def _is_gams_strict_active_name(self, packed_name: str, tol: float = 1e-12) -> bool:
+        """Return whether variable should remain free under GAMS strict activation masks."""
+        root, indices = self._parse_packed_name(packed_name)
+
+        if root == "TR" and indices in {("gvt", "gvt"), ("row", "row")}:
+            return False
+
+        ldo0 = self.params.get("LDO0", {})
+        kdo0 = self.params.get("KDO0", {})
+        ddo0 = self.params.get("DDO0", {})
+        imo0 = self.params.get("IMO0", {})
+        exdo0 = self.params.get("EXDO0", {})
+        xso0 = self.params.get("XSO0", {})
+        dso0 = self.params.get("DSO0", {})
+        exo0 = self.params.get("EXO0", {})
+
+        if root in {"XS", "P"} and len(indices) == 2:
+            j, i = indices
+            return abs(float(xso0.get((j, i), 0.0))) > tol
+
+        if root == "DS" and len(indices) == 2:
+            j, i = indices
+            return abs(float(dso0.get((j, i), 0.0))) > tol
+
+        if root == "EX" and len(indices) == 2:
+            j, i = indices
+            return abs(float(exo0.get((j, i), 0.0))) > tol
+
+        if root in {"LD", "TIW"} and len(indices) == 2:
+            l, j = indices
+            return abs(float(ldo0.get((l, j), 0.0))) > tol
+
+        if root in {"KD", "R", "RTI", "TIK"} and len(indices) == 2:
+            k, j = indices
+            return abs(float(kdo0.get((k, j), 0.0))) > tol
+
+        if root in {"RC", "KDC"} and len(indices) == 1:
+            j = indices[0]
+            return any(abs(float(kdo0.get((k, j), 0.0))) > tol for k in self.sets.get("K", []))
+
+        if root in {"DD", "PD", "PL"} and len(indices) == 1:
+            i = indices[0]
+            return abs(float(ddo0.get(i, 0.0))) > tol
+
+        if root in {"IM", "PM", "TIM"} and len(indices) == 1:
+            i = indices[0]
+            return abs(float(imo0.get(i, 0.0))) > tol
+
+        if root in {"EXD", "PE", "PE_FOB", "TIX"} and len(indices) == 1:
+            i = indices[0]
+            return abs(float(exdo0.get(i, 0.0))) > tol
+
+        return True
+
+    def _build_variable_bounds(self, x_ref: np.ndarray | None = None) -> Tuple[np.ndarray, np.ndarray]:
         """Build lower/upper bounds matching _variables_to_array ordering."""
         lb: list[float] = []
         ub: list[float] = []
+        names: list[str] = []
 
-        def add(lower: float, upper: float) -> None:
-            lb.append(lower)
-            ub.append(upper)
+        strict_masks = True
+
+        def add(name: str, lower: float, upper: float) -> None:
+            idx = len(lb)
+            lo = float(lower)
+            hi = float(upper)
+            if strict_masks and not self._is_gams_strict_active_name(name):
+                if x_ref is not None and idx < len(x_ref):
+                    fixed = float(x_ref[idx])
+                elif abs(hi - lo) <= 1e-12:
+                    fixed = lo
+                else:
+                    fixed = 0.0
+                lo = fixed
+                hi = fixed
+            lb.append(lo)
+            ub.append(hi)
+            names.append(name)
 
         POS = (1e-6, 1e10)   # strictly positive (prices, exchange rate)
         NONNEG = (0.0, 1e12) # non-negative quantities/flows
@@ -2003,88 +2076,88 @@ class IPOPTSolver:
 
         # Production variables
         for _j in self.sets.get("J", []):
-            add(*POS)     # WC
-            add(*POS)     # RC
-            add(*POS)     # PP
-            add(*POS)     # PT
-            add(*POS)     # PVA
-            add(*POS)     # PCI
-            add(*NONNEG)  # XST
-            add(*NONNEG)  # VA
-            add(*NONNEG)  # CI
-            add(*NONNEG)  # LDC
-            add(*NONNEG)  # KDC
+            add(f"WC[{_j}]", *POS)
+            add(f"RC[{_j}]", *POS)
+            add(f"PP[{_j}]", *POS)
+            add(f"PT[{_j}]", *POS)
+            add(f"PVA[{_j}]", *POS)
+            add(f"PCI[{_j}]", *POS)
+            add(f"XST[{_j}]", *NONNEG)
+            add(f"VA[{_j}]", *NONNEG)
+            add(f"CI[{_j}]", *NONNEG)
+            add(f"LDC[{_j}]", *NONNEG)
+            add(f"KDC[{_j}]", *NONNEG)
 
             for _l in self.sets.get("L", []):
-                add(*NONNEG)  # LD
-                add(*POS)     # WTI
+                add(f"LD[{_l},{_j}]", *NONNEG)
+                add(f"WTI[{_l},{_j}]", *POS)
 
             for _k in self.sets.get("K", []):
-                add(*NONNEG)  # KD
-                add(*POS)     # RTI
-                add(*POS)     # R
+                add(f"KD[{_k},{_j}]", *NONNEG)
+                add(f"RTI[{_k},{_j}]", *POS)
+                add(f"R[{_k},{_j}]", *POS)
 
             for _i in self.sets.get("I", []):
-                add(*NONNEG)  # DI
-                add(*NONNEG)  # XS
-                add(*NONNEG)  # DS
-                add(*NONNEG)  # EX
-                add(*POS)     # P
+                add(f"DI[{_i},{_j}]", *NONNEG)
+                add(f"XS[{_j},{_i}]", *NONNEG)
+                add(f"DS[{_j},{_i}]", *NONNEG)
+                add(f"EX[{_j},{_i}]", *NONNEG)
+                add(f"P[{_j},{_i}]", *POS)
 
         # Wages
         for _l in self.sets.get("L", []):
-            add(*POS)  # W
+            add(f"W[{_l}]", *POS)
         for _k in self.sets.get("K", []):
-            add(*POS)  # RK
+            add(f"RK[{_k}]", *POS)
 
         # Price and trade variables
         for _i in self.sets.get("I", []):
-            add(*POS)     # PC
-            add(*POS)     # PD
-            add(*POS)     # PM
-            add(*POS)     # PE
-            add(*POS)     # PE_FOB
-            add(*POS)     # PL
+            add(f"PC[{_i}]", *POS)
+            add(f"PD[{_i}]", *POS)
+            add(f"PM[{_i}]", *POS)
+            add(f"PE[{_i}]", *POS)
+            add(f"PE_FOB[{_i}]", *POS)
+            add(f"PL[{_i}]", *POS)
             pwm_fix = float(self.state.trade.get("PWMO", {}).get(_i, 1.0))
-            add(pwm_fix, pwm_fix)  # PWM fixed as in GAMS (.fx)
-            add(*NONNEG)  # IM
-            add(*NONNEG)  # DD
-            add(*NONNEG)  # Q
-            add(*NONNEG)  # EXD
-            add(*FREE)    # TIC
-            add(*FREE)    # TIM
-            add(*FREE)    # TIX
-            add(*FREE)    # MRGN
-            add(*FREE)    # DIT
-            add(*FREE)    # INV
-            add(*FREE)    # CG
+            add(f"PWM[{_i}]", pwm_fix, pwm_fix)  # PWM fixed as in GAMS (.fx)
+            add(f"IM[{_i}]", *NONNEG)
+            add(f"DD[{_i}]", *NONNEG)
+            add(f"Q[{_i}]", *NONNEG)
+            add(f"EXD[{_i}]", *NONNEG)
+            add(f"TIC[{_i}]", *FREE)
+            add(f"TIM[{_i}]", *FREE)
+            add(f"TIX[{_i}]", *FREE)
+            add(f"MRGN[{_i}]", *FREE)
+            add(f"DIT[{_i}]", *FREE)
+            add(f"INV[{_i}]", *FREE)
+            add(f"CG[{_i}]", *FREE)
             vstk_fix = float(self.state.consumption.get("VSTKO", {}).get(_i, 0.0))
-            add(vstk_fix, vstk_fix)  # VSTK fixed as in GAMS (.fx)
+            add(f"VSTK[{_i}]", vstk_fix, vstk_fix)  # VSTK fixed as in GAMS (.fx)
 
         # Income variables
         for _h in self.sets.get("H", []):
-            add(*NONNEG)  # YH
-            add(*NONNEG)  # YHL
-            add(*NONNEG)  # YHK
-            add(*FREE)    # YHTR
-            add(*NONNEG)  # YDH
-            add(*NONNEG)  # CTH
-            add(*FREE)    # SH
-            add(*FREE)    # TDH
+            add(f"YH[{_h}]", *NONNEG)
+            add(f"YHL[{_h}]", *NONNEG)
+            add(f"YHK[{_h}]", *NONNEG)
+            add(f"YHTR[{_h}]", *FREE)
+            add(f"YDH[{_h}]", *NONNEG)
+            add(f"CTH[{_h}]", *NONNEG)
+            add(f"SH[{_h}]", *FREE)
+            add(f"TDH[{_h}]", *FREE)
 
             for _i in self.sets.get("I", []):
-                add(*NONNEG)  # C
+                add(f"C[{_i},{_h}]", *NONNEG)
                 cmin_fix = float(self.state.les_parameters.get("CMINO", {}).get((_i, _h), 0.0))
-                add(cmin_fix, cmin_fix)  # CMIN fixed as in GAMS (.fx)
+                add(f"CMIN[{_i},{_h}]", cmin_fix, cmin_fix)  # CMIN fixed as in GAMS (.fx)
 
 
         for _f in self.sets.get("F", []):
-            add(*NONNEG)  # YF
-            add(*NONNEG)  # YFK
-            add(*FREE)    # YFTR
-            add(*NONNEG)  # YDF
-            add(*FREE)    # SF
-            add(*FREE)    # TDF
+            add(f"YF[{_f}]", *NONNEG)
+            add(f"YFK[{_f}]", *NONNEG)
+            add(f"YFTR[{_f}]", *FREE)
+            add(f"YDF[{_f}]", *NONNEG)
+            add(f"SF[{_f}]", *FREE)
+            add(f"TDF[{_f}]", *FREE)
 
         # Full transfer matrix TR(ag,agj)
         tro_bench = self.params.get("TRO", {})
@@ -2094,64 +2167,88 @@ class IPOPTSolver:
                 # effectively dropped from CNS; fix them at benchmark levels.
                 if (_ag, _agj) in {("gvt", "gvt"), ("row", "row")}:
                     tr_fix = float(tro_bench.get((_ag, _agj), 0.0))
-                    add(tr_fix, tr_fix)
+                    add(f"TR[{_ag},{_agj}]", tr_fix, tr_fix)
                 else:
-                    add(*FREE)    # TR(ag,agj)
+                    add(f"TR[{_ag},{_agj}]", *FREE)
+
+        # Detailed tax-payment variables (EQ37-EQ39)
+        for _l in self.sets.get("L", []):
+            for _j in self.sets.get("J", []):
+                add(f"TIW[{_l},{_j}]", *FREE)
+
+        for _k in self.sets.get("K", []):
+            for _j in self.sets.get("J", []):
+                add(f"TIK[{_k},{_j}]", *FREE)
+
+        for _j in self.sets.get("J", []):
+            add(f"TIP[{_j}]", *FREE)
 
         # Government
-        add(*FREE)  # YG
-        add(*FREE)  # YGK
-        add(*FREE)  # TDHT
-        add(*FREE)  # TDFT
-        add(*FREE)  # TPRCTS
-        add(*FREE)  # TPRODN
-        add(*FREE)  # TIWT
-        add(*FREE)  # TIKT
-        add(*FREE)  # TIPT
-        add(*FREE)  # TICT
-        add(*FREE)  # TIMT
-        add(*FREE)  # TIXT
-        add(*FREE)  # YGTR
+        add("YG", *FREE)
+        add("YGK", *FREE)
+        add("TDHT", *FREE)
+        add("TDFT", *FREE)
+        add("TPRCTS", *FREE)
+        add("TPRODN", *FREE)
+        add("TIWT", *FREE)
+        add("TIKT", *FREE)
+        add("TIPT", *FREE)
+        add("TICT", *FREE)
+        add("TIMT", *FREE)
+        add("TIXT", *FREE)
+        add("YGTR", *FREE)
         g_fix = float(self.state.consumption.get("GO", 0.0))
-        add(g_fix, g_fix)  # G fixed as in GAMS (.fx)
-        add(*FREE)  # SG
+        add("G", g_fix, g_fix)  # G fixed as in GAMS (.fx)
+        add("SG", *FREE)
 
         # ROW
-        add(*FREE)  # YROW
-        add(*FREE)  # SROW
+        add("YROW", *FREE)
+        add("SROW", *FREE)
         cab_fix = float(self.state.income.get("CABO", 0.0))
-        add(cab_fix, cab_fix)  # CAB fixed as in GAMS (.fx)
+        add("CAB", cab_fix, cab_fix)  # CAB fixed as in GAMS (.fx)
 
         # Investment
-        add(*FREE)  # IT
-        add(*FREE)  # GFCF
+        add("IT", *FREE)
+        add("GFCF", *FREE)
 
         # GDP
-        add(*FREE)  # GDP_BP
-        add(*FREE)  # GDP_MP
-        add(*FREE)  # GDP_IB
-        add(*FREE)  # GDP_FD
+        add("GDP_BP", *FREE)
+        add("GDP_MP", *FREE)
+        add("GDP_IB", *FREE)
+        add("GDP_FD", *FREE)
 
         # Price indices
-        add(*POS)  # PIXCON
-        add(*POS)  # PIXGDP
-        add(*POS)  # PIXGVT
-        add(*POS)  # PIXINV
+        add("PIXCON", *POS)
+        add("PIXGDP", *POS)
+        add("PIXGVT", *POS)
+        add("PIXINV", *POS)
 
         # Real variables
         for _h in self.sets.get("H", []):
-            add(*NONNEG)  # CTH_REAL
-        add(*NONNEG)  # G_REAL
-        add(*NONNEG)  # GDP_BP_REAL
-        add(*NONNEG)  # GDP_MP_REAL
-        add(*NONNEG)  # GFCF_REAL
-        add(*FREE)    # LEON
+            add(f"CTH_REAL[{_h}]", *NONNEG)
+        add("G_REAL", *NONNEG)
+        add("GDP_BP_REAL", *NONNEG)
+        add("GDP_MP_REAL", *NONNEG)
+        add("GFCF_REAL", *NONNEG)
+        add("LEON", *FREE)
 
         # Exchange rate
         e_fix = float(self.state.trade.get("eO", 1.0))
-        add(e_fix, e_fix)  # e fixed as in GAMS (.fx)
+        add("e", e_fix, e_fix)  # e fixed as in GAMS (.fx)
 
-        return np.array(lb), np.array(ub)
+        lb_arr = np.array(lb)
+        ub_arr = np.array(ub)
+        self._last_bound_names = names
+
+        if strict_masks:
+            free_count = int(np.count_nonzero(np.abs(ub_arr - lb_arr) > 1e-12))
+            logger.info(
+                "gams_strict activation masks: free_vars=%d total_vars=%d",
+                free_count,
+                len(names),
+            )
+
+        return lb_arr, ub_arr
 
     def _build_residual_weights(self) -> dict[str, float]:
         """Weights for equation blocks in IPOPT least-squares objective."""
@@ -2159,6 +2256,25 @@ class IPOPTSolver:
             "EQ52": 3.0,  # LES demand block
             "EQ45": 2.0,  # CAB/ROW balance
         }
+
+    def _enforce_fixed_closure_levels(self, vars: PEPModelVariables) -> None:
+        """Overwrite fixed-closure variable levels from current calibrated state."""
+        for i in self.sets.get("I", []):
+            vars.PWM[i] = float(self.state.trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0)))
+            vars.VSTK[i] = float(self.state.consumption.get("VSTKO", {}).get(i, vars.VSTK.get(i, 0.0)))
+        for h in self.sets.get("H", []):
+            for i in self.sets.get("I", []):
+                vars.CMIN[(i, h)] = float(
+                    self.state.les_parameters.get("CMINO", {}).get((i, h), vars.CMIN.get((i, h), 0.0))
+                )
+
+        vars.G = float(self.state.consumption.get("GO", vars.G))
+        vars.CAB = float(self.state.income.get("CABO", vars.CAB))
+        vars.e = float(self.state.trade.get("eO", vars.e if abs(vars.e) > 0 else 1.0))
+
+        tro = self.params.get("TRO", {})
+        vars.TR[("gvt", "gvt")] = float(tro.get(("gvt", "gvt"), vars.TR.get(("gvt", "gvt"), 0.0)))
+        vars.TR[("row", "row")] = float(tro.get(("row", "row"), vars.TR.get(("row", "row"), 0.0)))
 
     def _build_hard_constraints(self) -> list[str]:
         """Equation residuals enforced as hard equalities c(x)=0."""
@@ -2185,6 +2301,9 @@ class IPOPTSolver:
             vars = copy.deepcopy(self.initial_vars)
         else:
             vars = self._create_initial_guess()
+        # Keep provided warm-start levels consistent with current state closures
+        # (e.g., shocked PWM/G/CAB fixed values).
+        self._enforce_fixed_closure_levels(vars)
         x0 = self._variables_to_array(vars)
         n_vars = len(x0)
         
@@ -2195,9 +2314,6 @@ class IPOPTSolver:
         init_residuals = self.equations.calculate_all_residuals(vars)
         init_vals = np.array(list(init_residuals.values()), dtype=float)
         init_rms = float(np.sqrt(np.mean(init_vals ** 2))) if init_vals.size else 0.0
-        init_max = float(np.max(np.abs(init_vals))) if init_vals.size else 0.0
-        practical_tol = max(self.tolerance * 1e4, 1e-4)
-        practical_max_tol = max(self.tolerance * 1e5, 1e-3)
         if init_rms <= self.tolerance:
             logger.info(
                 "Initial guess satisfies tolerance (RMS=%.3e <= %.3e); skipping IPOPT.",
@@ -2211,20 +2327,6 @@ class IPOPTSolver:
                 variables=vars,
                 residuals=init_residuals,
                 message=f"Initial {self.init_mode} benchmark satisfies tolerance",
-            )
-        if init_rms <= practical_tol and init_max <= practical_max_tol:
-            logger.info(
-                "Initial guess accepted by practical tolerance (RMS=%.3e, Max=%.3e); skipping IPOPT.",
-                init_rms,
-                init_max,
-            )
-            return SolverResult(
-                converged=True,
-                iterations=0,
-                final_residual=init_rms,
-                variables=vars,
-                residuals=init_residuals,
-                message=f"Initial {self.init_mode} benchmark accepted by practical tolerance",
             )
         
         # Create problem
@@ -2240,7 +2342,7 @@ class IPOPTSolver:
         )
         
         # Set variable bounds by variable class (aligned with packing order)
-        lb, ub = self._build_variable_bounds()
+        lb, ub = self._build_variable_bounds(x_ref=x0)
         if len(lb) != n_vars:
             raise ValueError(f"Bounds length {len(lb)} does not match variable count {n_vars}")
         
@@ -2316,29 +2418,15 @@ class IPOPTSolver:
         logger.info("Starting IPOPT optimization (pass 1)...")
         try:
             pass1_iter = max(80, min(self.max_iterations, 220))
-            nlp = _build_nlp(max_iter=pass1_iter, warm_start=False)
+            pass1_warm_start = self.initial_vars is not None
+            nlp = _build_nlp(max_iter=pass1_iter, warm_start=pass1_warm_start)
             x1, info1 = nlp.solve(x0)
             msg1 = info1.get("status_msg", "Unknown")
             if isinstance(msg1, bytes):
                 msg1 = msg1.decode("utf-8", errors="replace")
             logger.info("IPOPT pass 1 status=%s msg=%s", info1.get("status"), msg1)
 
-            v1 = problem._array_to_variables(x1)
-            r1 = self.equations.calculate_all_residuals(v1)
-            vals1 = np.array(list(r1.values()), dtype=float)
-            rms1 = float(np.sqrt(np.mean(vals1**2))) if vals1.size else float("inf")
-            # Track best candidate by convergence first, then RMS residual.
-            if self._uses_excel_init():
-                x_best, info_best, rms_best = x1, info1, rms1
-            else:
-                x_best, info_best, rms_best = x0, {
-                    "status": -99,
-                    "status_msg": f"Using initial {self.init_mode} levels (lower RMS than IPOPT passes)",
-                    "iter_count": 0,
-                    "obj_val": problem.objective(x0),
-                }, init_rms
-                if info1.get("status") == 0 or rms1 < rms_best:
-                    x_best, info_best, rms_best = x1, info1, rms1
+            x_best, info_best = x1, info1
 
             # Optional second pass with warm start if first pass did not converge.
             if info1.get("status") != 0:
@@ -2349,19 +2437,7 @@ class IPOPTSolver:
                 if isinstance(msg2, bytes):
                     msg2 = msg2.decode("utf-8", errors="replace")
                 logger.info("IPOPT pass 2 status=%s msg=%s", info2.get("status"), msg2)
-
-                # Select candidate by convergence first, then lower residual RMS.
-                v2 = problem._array_to_variables(x2)
-                r2 = self.equations.calculate_all_residuals(v2)
-                vals2 = np.array(list(r2.values()), dtype=float)
-                rms2 = float(np.sqrt(np.mean(vals2**2))) if vals2.size else float("inf")
-
-                if info2.get("status") == 0 and info_best.get("status") != 0:
-                    x_best, info_best, rms_best = x2, info2, rms2
-                elif info_best.get("status") != 0 and rms2 < rms_best:
-                    x_best, info_best, rms_best = x2, info2, rms2
-                elif info2.get("status") == 0 and info_best.get("status") == 0 and rms2 < rms_best:
-                    x_best, info_best, rms_best = x2, info2, rms2
+                x_best, info_best = x2, info2
 
             # Create result
             result = SolverResult()

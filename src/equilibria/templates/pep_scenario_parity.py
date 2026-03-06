@@ -221,6 +221,7 @@ class PEPScenarioParityRunner:
                 "dynamic_sets": self.dynamic_sets,
                 "init_mode": self.init_mode,
                 "method": self.method,
+                "equation_mode": "gams_strict",
                 "solve_tolerance": self.solve_tolerance,
                 "max_iterations": self.max_iterations,
                 "export_tax_multiplier": self.export_tax_multiplier,

@@ -11,7 +11,7 @@ def pep_array_to_variables(
     x: np.ndarray,
     sets: dict[str, list[str]],
     *,
-    min_price: float = 0.1,
+    min_price: float = 1e-6,
 ) -> PEPModelVariables:
     """Convert flat solver vector to `PEPModelVariables`.
 
@@ -223,6 +223,24 @@ def pep_array_to_variables(
             if idx < len(x):
                 vars.TR[(agent, source)] = float(x[idx])
                 idx += 1
+
+    # Detailed tax-payment variables (explicitly endogenous in GAMS CNS)
+    for labor in sets.get("L", []):
+        for sector in sets.get("J", []):
+            if idx < len(x):
+                vars.TIW[(labor, sector)] = float(x[idx])
+                idx += 1
+
+    for capital in sets.get("K", []):
+        for sector in sets.get("J", []):
+            if idx < len(x):
+                vars.TIK[(capital, sector)] = float(x[idx])
+                idx += 1
+
+    for sector in sets.get("J", []):
+        if idx < len(x):
+            vars.TIP[sector] = float(x[idx])
+            idx += 1
 
     # Government
     if idx < len(x):
@@ -440,6 +458,18 @@ def pep_variables_to_array(
         for source in sets.get("AG", []):
             values.append(vars.TR.get((agent, source), 0.0))
 
+    # Detailed tax-payment variables (explicitly endogenous in GAMS CNS)
+    for labor in sets.get("L", []):
+        for sector in sets.get("J", []):
+            values.append(vars.TIW.get((labor, sector), 0.0))
+
+    for capital in sets.get("K", []):
+        for sector in sets.get("J", []):
+            values.append(vars.TIK.get((capital, sector), 0.0))
+
+    for sector in sets.get("J", []):
+        values.append(vars.TIP.get(sector, 0.0))
+
     # Government
     values.append(vars.YG)
     values.append(vars.YGK)
@@ -491,4 +521,3 @@ def pep_variables_to_array(
     values.append(vars.e)
 
     return np.array(values)
-
