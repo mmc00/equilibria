@@ -141,9 +141,11 @@ class PEPModelSolver:
             "rho_KD": state.production.get("rho_KD", {}),
             "beta_KD": state.production.get("beta_KD", {}),
             "B_KD": state.production.get("B_KD", {}),
+            "sigma_KD": state.production.get("sigma_KD", {}),
             "rho_LD": state.production.get("rho_LD", {}),
             "beta_LD": state.production.get("beta_LD", {}),
             "B_LD": state.production.get("B_LD", {}),
+            "sigma_LD": state.production.get("sigma_LD", {}),
             "ttiw": state.production.get("ttiwO", {}),
             "ttik": state.production.get("ttikO", {}),
             "ttip": state.production.get("ttipO", {}),
@@ -155,6 +157,7 @@ class PEPModelSolver:
             "rho_VA": state.production.get("rho_VA", {}),
             "beta_VA": state.production.get("beta_VA", {}),
             "B_VA": state.production.get("B_VA", {}),
+            "sigma_VA": state.production.get("sigma_VA", {}),
         })
         
         # Trade parameters
@@ -252,13 +255,18 @@ class PEPModelSolver:
             return 1 / denom
 
         rho_kd = params.get("rho_KD", {})
-        params["sigma_KD"] = {j: _safe_sigma_plus_one(rho_kd.get(j, 0), 1.0) for j in rho_kd}
+        sigma_kd_from_val_par = dict(params.get("sigma_KD", {}))
+        sigma_kd_from_rho = {j: _safe_sigma_plus_one(rho_kd.get(j, 0), 1.0) for j in rho_kd}
+        params["sigma_KD"] = {**sigma_kd_from_rho, **sigma_kd_from_val_par}
 
         rho_ld = params.get("rho_LD", {})
-        params["sigma_LD"] = {j: _safe_sigma_plus_one(rho_ld.get(j, 0), 1.0) for j in rho_ld}
+        sigma_ld_from_val_par = dict(params.get("sigma_LD", {}))
+        sigma_ld_from_rho = {j: _safe_sigma_plus_one(rho_ld.get(j, 0), 1.0) for j in rho_ld}
+        params["sigma_LD"] = {**sigma_ld_from_rho, **sigma_ld_from_val_par}
 
         rho_va = params.get("rho_VA", {})
-        params["sigma_VA"] = {
+        sigma_va_from_val_par = dict(params.get("sigma_VA", {}))
+        sigma_va_from_rho = {
             j: (
                 _safe_sigma_plus_one(rho_va.get(j, -0.5), 1.5)
                 if rho_va.get(j, -0.5) != -0.5
@@ -266,6 +274,7 @@ class PEPModelSolver:
             )
             for j in rho_va
         }
+        params["sigma_VA"] = {**sigma_va_from_rho, **sigma_va_from_val_par}
 
         rho_xt = params.get("rho_XT", {})
         params["sigma_XT"] = {

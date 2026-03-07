@@ -31,6 +31,7 @@ from equilibria.templates.pep_model_solver import (
     DEBUG_SIMPLE_ITERATION_METHOD,
     PEPModelSolver,
 )
+from equilibria.templates.pep_val_par_loader import load_val_par
 from equilibria.templates.pep_sam_compat import (
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
@@ -47,6 +48,17 @@ from equilibria.templates.pep_parity_pipeline import (
     summarize_residuals,
 )
 
+DEFAULT_VAL_PAR_FILE = (
+    Path(__file__).resolve().parents[2]
+    / "src"
+    / "equilibria"
+    / "templates"
+    / "reference"
+    / "pep2"
+    / "data"
+    / "VAL_PAR.xlsx"
+)
+
 
 def _setup_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.INFO
@@ -57,9 +69,27 @@ def _setup_logging(verbose: bool) -> None:
     )
 
 
+def _require_parity_val_par(path: Path) -> Path:
+    """Validate VAL_PAR contract for parity runs (must exist and be populated)."""
+    resolved = Path(path).resolve()
+    if not resolved.exists():
+        raise FileNotFoundError(f"VAL_PAR file not found: {resolved}")
+
+    data = load_val_par(resolved)
+    required_non_empty = ("sigma_VA", "sigma_Y", "frisch")
+    missing = [key for key in required_non_empty if not data.get(key)]
+    if missing:
+        raise ValueError(
+            "VAL_PAR is missing required parity blocks: "
+            + ", ".join(missing)
+            + f" | file={resolved}"
+        )
+    return resolved
+
+
 def _build_state(args: argparse.Namespace):
     sam_path = Path(args.sam_file)
-    val_path = Path(args.val_par_file) if args.val_par_file else None
+    val_path = Path(args.val_par_file)
 
     if args.dynamic_sam:
         accounts = {
@@ -121,7 +151,12 @@ def _json_safe(obj):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Systemic parity pipeline for PEP model")
     parser.add_argument("--sam-file", type=Path, required=True)
-    parser.add_argument("--val-par-file", type=Path, default=None)
+    parser.add_argument(
+        "--val-par-file",
+        type=Path,
+        default=DEFAULT_VAL_PAR_FILE,
+        help="VAL_PAR required for parity consistency (defaults to pep2 reference).",
+    )
     parser.add_argument("--dynamic-sam", action="store_true")
     parser.add_argument("--acc-gvt", type=str, default="gvt")
     parser.add_argument("--acc-row", type=str, default="row")
@@ -274,6 +309,12 @@ def main() -> int:
     args = parser.parse_args()
 
     _setup_logging(args.verbose)
+    try:
+        args.val_par_file = _require_parity_val_par(Path(args.val_par_file))
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Invalid parity VAL_PAR: {exc}")
+        return 2
+
     sam_file_original = Path(args.sam_file)
     cri_fix_report = None
     cri_fix_report_path: Path | None = None
@@ -343,7 +384,7 @@ def main() -> int:
                         "cri_fix_mode": args.cri_fix_mode,
                         "cri_fix_applied": cri_fix_report is not None,
                         "cri_fix_report": str(cri_fix_report_path) if cri_fix_report_path else None,
-                        "val_par_file": str(args.val_par_file) if args.val_par_file else None,
+                        "val_par_file": str(args.val_par_file),
                         "dynamic_sam": args.dynamic_sam,
                         "init_mode": args.init_mode,
                         "method": args.method,
@@ -414,7 +455,7 @@ def main() -> int:
                 "cri_fix_mode": args.cri_fix_mode,
                 "cri_fix_applied": cri_fix_report is not None,
                 "cri_fix_report": str(cri_fix_report_path) if cri_fix_report_path else None,
-                "val_par_file": str(args.val_par_file) if args.val_par_file else None,
+                "val_par_file": str(args.val_par_file),
                 "dynamic_sam": args.dynamic_sam,
                 "init_mode": args.init_mode,
                 "method": args.method,
@@ -591,7 +632,7 @@ def main() -> int:
             "cri_fix_mode": args.cri_fix_mode,
             "cri_fix_applied": cri_fix_report is not None,
             "cri_fix_report": str(cri_fix_report_path) if cri_fix_report_path else None,
-            "val_par_file": str(args.val_par_file) if args.val_par_file else None,
+            "val_par_file": str(args.val_par_file),
             "dynamic_sam": args.dynamic_sam,
             "init_mode": args.init_mode,
             "method": args.method,

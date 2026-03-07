@@ -84,6 +84,22 @@ def test_pep2_python_gdx_vs_excel_gams_base() -> None:
     assert abs(vars_xls.CAB - vars_gdx.CAB) <= 1e-9
 
 
+@pytest.mark.integration
+def test_sigma_va_from_val_par_is_preserved_after_init_guess() -> None:
+    sam_gdx = PEP2_ROOT / "data" / "SAM-V2_0.gdx"
+    val_par = PEP2_ROOT / "data" / "VAL_PAR.xlsx"
+
+    state = PEPModelCalibrator(sam_file=sam_gdx, val_par_file=val_par).calibrate()
+    assert state.production.get("sigma_VA", {}).get("adm") == pytest.approx(1.5)
+    assert state.production.get("rho_VA", {}).get("adm") == pytest.approx(-1.0)
+
+    solver = PEPModelSolver(calibrated_state=state, init_mode="excel")
+    _ = solver._create_initial_guess()
+
+    # Parity contract: solver params must keep calibrated VAL_PAR sigma values.
+    assert solver.params.get("sigma_VA", {}).get("adm") == pytest.approx(1.5)
+
+
 @pytest.mark.slow
 @pytest.mark.gams
 def test_pep2_gams_excel_vs_python_excel_key_scalars() -> None:
