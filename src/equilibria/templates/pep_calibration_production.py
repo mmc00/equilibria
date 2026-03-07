@@ -149,10 +149,23 @@ class ProductionCalibrationResult(BaseModel):
         default_factory=dict, description="CES scale parameter for labor (B_LD(j))"
     )
 
+    sigma_KD: dict[str, float] = Field(
+        default_factory=dict,
+        description="CES elasticity for capital loaded from VAL_PAR (sigma_KD(j))",
+    )
+    sigma_LD: dict[str, float] = Field(
+        default_factory=dict,
+        description="CES elasticity for labor loaded from VAL_PAR (sigma_LD(j))",
+    )
+
     # Value added CES parameters (lines 656-666)
     rho_VA: dict[str, float] = Field(
         default_factory=dict,
         description="CES elasticity parameter for value added (rho_VA(j))",
+    )
+    sigma_VA: dict[str, float] = Field(
+        default_factory=dict,
+        description="CES elasticity for value added loaded from VAL_PAR (sigma_VA(j))",
     )
     beta_VA: dict[str, float] = Field(
         default_factory=dict,
@@ -697,11 +710,13 @@ class ProductionCalibrator:
 
             # rho_KD(j) = (1-sigma_KD(j))/sigma_KD(j)
             sigma_kd = sigma_KD.get(j_upper, 0.8)
+            self.result.sigma_KD[j] = sigma_kd
             if sigma_kd != 0:
                 self.result.rho_KD[j] = (1 - sigma_kd) / sigma_kd
 
             # rho_LD(j) = (1-sigma_LD(j))/sigma_LD(j)
             sigma_ld = sigma_LD.get(j_upper, 0.8)
+            self.result.sigma_LD[j] = sigma_ld
             if sigma_ld != 0:
                 self.result.rho_LD[j] = (1 - sigma_ld) / sigma_ld
 
@@ -779,11 +794,12 @@ class ProductionCalibrator:
             ldc = self.result.LDCO.get(j, 0)
             kdc = self.result.KDCO.get(j, 0)
             va = self.result.VAO.get(j, 0)
+            sigma_va = sigma_VA.get(j.upper(), 1.5)
+            self.result.sigma_VA[j] = sigma_va
 
             # rho_VA(j) depends on whether both LDC and KDC exist
             if ldc != 0 and kdc != 0:
                 # Both labor and capital exist
-                sigma_va = sigma_VA.get(j.upper(), 1.5)
                 if sigma_va != 0:
                     self.result.rho_VA[j] = (1 - sigma_va) / sigma_va
             else:

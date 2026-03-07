@@ -360,10 +360,13 @@ class PEPModelCalibrator:
             "rho_KD": result.rho_KD,
             "beta_KD": result.beta_KD,
             "B_KD": result.B_KD,
+            "sigma_KD": result.sigma_KD,
             "rho_LD": result.rho_LD,
             "beta_LD": result.beta_LD,
             "B_LD": result.B_LD,
+            "sigma_LD": result.sigma_LD,
             "rho_VA": result.rho_VA,
+            "sigma_VA": result.sigma_VA,
             "beta_VA": result.beta_VA,
             "B_VA": result.B_VA,
         }

@@ -18,6 +18,32 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def test_systemic_parity_fails_fast_on_invalid_val_par(tmp_path: Path) -> None:
+    report = tmp_path / "invalid_val_par_report.json"
+    sam_file = ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
+    invalid_val_par = tmp_path / "missing_val_par.xlsx"
+    assert sam_file.exists()
+    assert not invalid_val_par.exists()
+
+    proc = _run(
+        [
+            "--sam-file",
+            str(sam_file),
+            "--val-par-file",
+            str(invalid_val_par),
+            "--method",
+            "none",
+            "--save-report",
+            str(report),
+        ]
+    )
+
+    assert proc.returncode == 2
+    combined_output = proc.stdout + "\n" + proc.stderr
+    assert "Invalid parity VAL_PAR" in combined_output
+    assert report.exists() is False
+
+
 def test_systemic_parity_report_classifies_cri_data_contract_failure(tmp_path: Path) -> None:
     report = tmp_path / "cri_contract_report.json"
     sam_file = ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams.xlsx"
