@@ -305,6 +305,39 @@ uv run python examples/pep/example_11_pep_gdp_sam_comparison.py
 
 More details: `docs/guides/pep_gdp_example.md`
 
+### Scenario Simulation API (Recommended)
+
+```python
+from equilibria.simulations import Scenario, Shock, Simulator
+
+sim = Simulator(
+    model="pep",
+    sam_file="src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx",
+    val_par_file="src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx",
+    method="ipopt",
+).fit()
+
+report = sim.run_scenarios(
+    scenarios=[
+        Scenario(
+            name="export_tax",
+            shocks=[Shock(var="ttix", op="scale", values={"*": 0.75})],
+        ),
+        Scenario(
+            name="import_shock",
+            shocks=[Shock(var="PWM", op="scale", values={"*": 1.25})],
+        ),
+        Scenario(
+            name="government_spending",
+            shocks=[Shock(var="G", op="scale", values=1.2)],
+        ),
+    ],
+    reference_results_gdx="src/equilibria/templates/reference/pep2/scripts/Results.gdx",
+)
+```
+
+More details: `docs/guides/simulations_api.md`
+
 ### PEP BASE vs EXPORT_TAX Parity (Python vs GAMS)
 
 ```bash
