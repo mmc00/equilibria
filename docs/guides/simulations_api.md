@@ -152,6 +152,15 @@ icio = ICIOSimulator(base_state={"x": 1.0}).fit()
 - `solve_state` corre en modo `no_solver` por defecto,
 - comparación de referencia externa no está implementada por defecto.
 
+## estado actual por modelo
+
+- `pep`: runtime nativo completo (calibración + solve + comparación).
+- `ieem`: sin runtime nativo pre-registrado.
+- `gtap`: sin runtime nativo pre-registrado.
+- `icio`: sin runtime nativo pre-registrado.
+
+Nota: para `ieem/gtap/icio` no se registra runtime automático por diseño, hasta que exista implementación nativa real del modelo.
+
 Tambien puedes inyectar hooks nativos sin cambiar la API:
 
 ```python
@@ -189,6 +198,20 @@ register_mapping_runtime(
 sim = IEEMSimulator(base_state={"x": 1.0}).fit()
 report = sim.run_scenarios(...)
 ```
+
+Mismo patrón para `gtap` e `icio`:
+
+```python
+from equilibria.simulations import GTAPSimulator, ICIOSimulator, register_mapping_runtime
+
+register_mapping_runtime("gtap", solve_fn=my_gtap_solve_fn)
+register_mapping_runtime("icio", solve_fn=my_icio_solve_fn)
+
+gtap = GTAPSimulator(base_state={"x": 1.0}).fit()
+icio = ICIOSimulator(base_state={"x": 1.0}).fit()
+```
+
+Si pasas hooks explícitos al construir `Simulator(...)`, esos hooks tienen prioridad sobre el runtime registrado.
 
 Utilidades disponibles:
 - `register_mapping_runtime(model, ...)`

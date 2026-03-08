@@ -6,6 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from equilibria.simulations import (
+    GTAPSimulator,
+    ICIOSimulator,
     IEEMSimulator,
     Scenario,
     Shock,
@@ -72,6 +74,27 @@ def test_register_mapping_runtime_autoloads_hooks_for_ieem() -> None:
     assert report["scenarios"][0]["solve"]["key_indicators"]["x"] == 7.0
 
 
+def test_no_mapping_runtime_registered_by_default_for_non_pep_models() -> None:
+    assert available_mapping_runtimes() == ()
+    assert get_mapping_runtime("ieem") is None
+    assert get_mapping_runtime("gtap") is None
+    assert get_mapping_runtime("icio") is None
+
+    ieem = IEEMSimulator(base_state={"x": 1.0}).fit()
+    gtap = GTAPSimulator(base_state={"x": 1.0}).fit()
+    icio = ICIOSimulator(base_state={"x": 1.0}).fit()
+
+    for sim in (ieem, gtap, icio):
+        report = sim.run_scenarios(
+            scenarios=[Scenario(name="s", shocks=[Shock(var="x", op="add", values=1.0)])],
+            include_base=True,
+        )
+        assert report["capabilities"]["has_solver"] is False
+        assert report["capabilities"]["has_reference_compare"] is False
+        assert report["capabilities"]["mode"] == "state_only_no_solver"
+        assert report["base"]["validation"]["mode"] == "no_solver"
+
+
 def test_explicit_hooks_override_registered_runtime() -> None:
     def registry_solve(
         state: dict[str, float],
@@ -131,7 +154,59 @@ def test_explicit_hooks_override_registered_runtime() -> None:
     assert report["scenarios"][0]["solve"]["key_indicators"]["x"] == 4.0
 
 
+def test_explicit_hooks_override_registered_runtime_with_wrapper() -> None:
+    def registry_solve(
+        state: dict[str, float],
+        *,
+        initial_vars: object | None,
+        reference_results_gdx: Path | None,
+        reference_slice: str,
+    ) -> tuple[object, object, dict[str, object]]:
+        _ = state, initial_vars, reference_results_gdx, reference_slice
+        return (
+            SimpleNamespace(params={"source": "registry"}),
+            SimpleNamespace(
+                converged=True,
+                iterations=1,
+                final_residual=0.0,
+                message="registry",
+                variables={"x": 0.0},
+            ),
+            {"passed": True, "mode": "registry"},
+        )
+
+    def explicit_solve(
+        state: dict[str, float],
+        *,
+        initial_vars: object | None,
+        reference_results_gdx: Path | None,
+        reference_slice: str,
+    ) -> tuple[object, object, dict[str, object]]:
+        _ = initial_vars, reference_results_gdx, reference_slice
+        return (
+            SimpleNamespace(params={"source": "explicit"}),
+            SimpleNamespace(
+                converged=True,
+                iterations=1,
+                final_residual=0.0,
+                message="explicit-wrapper",
+                variables={"x": float(state["x"])},
+            ),
+            {"passed": True, "mode": "explicit"},
+        )
+
+    register_mapping_runtime("ieem", solve_fn=registry_solve)
+    sim = IEEMSimulator(base_state={"x": 3.0}, solve_fn=explicit_solve).fit()
+    report = sim.run_scenarios(
+        scenarios=[Scenario(name="s", shocks=[Shock(var="x", op="add", values=2.0)])],
+        include_base=True,
+    )
+
+    assert report["base"]["solve"]["message"] == "explicit-wrapper"
+    assert report["base"]["solve"]["key_indicators"]["x"] == 3.0
+    assert report["scenarios"][0]["solve"]["key_indicators"]["x"] == 5.0
+
+
 def test_register_mapping_runtime_requires_at_least_one_hook() -> None:
     with pytest.raises(ValueError, match="at least one hook"):
         register_mapping_runtime("icio")
-
