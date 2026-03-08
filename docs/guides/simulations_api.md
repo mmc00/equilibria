@@ -23,6 +23,25 @@ sim = Simulator(
 print(sim.available_shocks())
 ```
 
+## uso ultra simple (pep)
+
+Si no quieres armar `Scenario(...)` manualmente:
+
+```python
+from equilibria.simulations import PepSimulator
+
+sim = PepSimulator(
+    sam_file="src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx",
+    val_par_file="src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx",
+    method="ipopt",
+).fit()
+
+report_export = sim.run_export_tax(multiplier=0.75)
+report_import_all = sim.run_import_shock(multiplier=1.25)
+report_import_agr = sim.run_import_price(commodity="agr", multiplier=1.25)
+report_gov = sim.run_government_spending(multiplier=1.2)
+```
+
 ## escenario export tax (ttix)
 
 ```python
@@ -66,6 +85,24 @@ Scenario(
     name="government_spending",
     shocks=[Shock(var="G", op="scale", values=1.2)],
 )
+```
+
+Tambien puedes usar presets:
+
+```python
+from equilibria.simulations import (
+    export_tax,
+    government_spending,
+    import_price,
+    import_shock,
+)
+
+scenarios = [
+    export_tax(multiplier=0.75),
+    import_shock(multiplier=1.25),
+    import_price(commodity="agr", multiplier=1.25),
+    government_spending(multiplier=1.2),
+]
 ```
 
 ## notas de diseño
