@@ -41,6 +41,7 @@ class ScenarioSolveReport:
     validation: dict[str, Any]
     import_price_commodity: str | None = None
     import_price_multiplier: float | None = None
+    government_spending_multiplier: float | None = None
 
 
 def get_solution_value(
@@ -417,6 +418,33 @@ class PEPScenarioParityRunner:
         shocked.trade["PWMO"] = shocked_pwmo
         return shocked
 
+    @staticmethod
+    def _clone_with_import_price_all_shock(
+        state: PEPModelState,
+        *,
+        multiplier: float,
+    ) -> PEPModelState:
+        """Clone state and apply `PWMO(i) := PWMO(i) * multiplier` for all i."""
+        shocked = copy.deepcopy(state)
+        pwmo = shocked.trade.get("PWMO", {})
+        if not isinstance(pwmo, dict):
+            pwmo = {}
+        shocked_pwmo = {i: float(v) * float(multiplier) for i, v in pwmo.items()}
+        shocked.trade["PWMO"] = shocked_pwmo
+        return shocked
+
+    @staticmethod
+    def _clone_with_government_spending_shock(
+        state: PEPModelState,
+        *,
+        multiplier: float,
+    ) -> PEPModelState:
+        """Clone state and apply `GO := GO * multiplier`."""
+        shocked = copy.deepcopy(state)
+        go = float(shocked.consumption.get("GO", 0.0))
+        shocked.consumption["GO"] = go * float(multiplier)
+        return shocked
+
     def _resolve_gdxdump_binary(self) -> Path:
         """Resolve gdxdump path with robust fallbacks."""
         raw = str(self.gdxdump_bin).strip()
@@ -700,6 +728,272 @@ class PEPImportPriceParityRunner(PEPScenarioParityRunner):
                 "solve_tolerance": self.solve_tolerance,
                 "max_iterations": self.max_iterations,
                 "import_price_commodity": self.import_price_commodity,
+                "import_price_multiplier": self.import_price_multiplier,
+                "compare_abs_tol": self.compare_abs_tol,
+                "compare_rel_tol": self.compare_rel_tol,
+            },
+            "scenarios": {
+                "base": {
+                    "solve": base_run.__dict__,
+                    "gams_comparison": base_cmp,
+                },
+                scenario_name: {
+                    "solve": import_run.__dict__,
+                    "gams_comparison": import_cmp,
+                },
+            },
+        }
+
+
+class PEPGovernmentSpendingParityRunner(PEPScenarioParityRunner):
+    """API runner for BASE + GOVERNMENT_SPENDING parity."""
+
+    def __init__(
+        self,
+        sam_file: Path | str = DEFAULT_SAM_FILE,
+        val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
+        gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
+        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        *,
+        dynamic_sets: bool = True,
+        init_mode: str = "excel",
+        method: str = "ipopt",
+        solve_tolerance: float = 1e-8,
+        max_iterations: int = 300,
+        government_spending_multiplier: float = 1.2,
+        compare_abs_tol: float = 1e-6,
+        compare_rel_tol: float = 1e-6,
+    ) -> None:
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            gams_results_gdx=gams_results_gdx,
+            gdxdump_bin=gdxdump_bin,
+            dynamic_sets=dynamic_sets,
+            init_mode=init_mode,
+            method=method,
+            solve_tolerance=solve_tolerance,
+            max_iterations=max_iterations,
+            export_tax_multiplier=1.0,
+            export_tax_homotopy=False,
+            export_tax_homotopy_steps=0,
+            compare_abs_tol=compare_abs_tol,
+            compare_rel_tol=compare_rel_tol,
+        )
+        self.government_spending_multiplier = float(government_spending_multiplier)
+
+    def run(self) -> dict[str, Any]:
+        """Execute BASE and GOVERNMENT_SPENDING scenarios and compare to GAMS."""
+        base_state = self._calibrate_base_state()
+
+        base_solver, base_solution, base_validation = self._solve_state(base_state)
+        base_run = ScenarioSolveReport(
+            scenario="base",
+            export_tax_multiplier=1.0,
+            converged=bool(base_solution.converged),
+            iterations=int(base_solution.iterations),
+            final_residual=float(base_solution.final_residual),
+            message=str(base_solution.message),
+            key_indicators=self._key_indicators(base_solution.variables),
+            validation=base_validation,
+        )
+
+        gov_state = self._clone_with_government_spending_shock(
+            base_state,
+            multiplier=self.government_spending_multiplier,
+        )
+        gov_solver, gov_solution, gov_validation = self._solve_state(
+            gov_state,
+            initial_vars=base_solution.variables,
+            gams_slice="sim1",
+        )
+
+        if (
+            not bool(gov_solution.converged)
+            and float(gov_solution.final_residual) <= float(self.solve_tolerance)
+            and self.method == "ipopt"
+        ):
+            gov_solver, gov_solution, gov_validation = self._solve_state(
+                gov_state,
+                initial_vars=gov_solution.variables,
+                gams_slice="sim1",
+            )
+            gov_validation = dict(gov_validation)
+            gov_validation["restart"] = {
+                "enabled": True,
+                "reason": "residual_below_tolerance_but_status_nonzero",
+                "attempts": 1,
+            }
+
+        scenario_name = "government_spending"
+        gov_run = ScenarioSolveReport(
+            scenario=scenario_name,
+            export_tax_multiplier=1.0,
+            government_spending_multiplier=self.government_spending_multiplier,
+            converged=bool(gov_solution.converged),
+            iterations=int(gov_solution.iterations),
+            final_residual=float(gov_solution.final_residual),
+            message=str(gov_solution.message),
+            key_indicators=self._key_indicators(gov_solution.variables),
+            validation=gov_validation,
+        )
+
+        base_cmp = self._compare_solution_with_gams(
+            solution_vars=base_solution.variables,
+            solution_params=base_solver.params,
+            gams_slice="base",
+        )
+        gov_cmp = self._compare_solution_with_gams(
+            solution_vars=gov_solution.variables,
+            solution_params=gov_solver.params,
+            gams_slice="sim1",
+        )
+
+        return {
+            "config": {
+                "sam_file": str(self.sam_file),
+                "val_par_file": str(self.val_par_file) if self.val_par_file else None,
+                "gams_results_gdx": str(self.gams_results_gdx),
+                "gdxdump_bin": str(self._resolve_gdxdump_binary()),
+                "dynamic_sets": self.dynamic_sets,
+                "init_mode": self.init_mode,
+                "method": self.method,
+                "equation_mode": "gams_strict",
+                "solve_tolerance": self.solve_tolerance,
+                "max_iterations": self.max_iterations,
+                "government_spending_multiplier": self.government_spending_multiplier,
+                "compare_abs_tol": self.compare_abs_tol,
+                "compare_rel_tol": self.compare_rel_tol,
+            },
+            "scenarios": {
+                "base": {
+                    "solve": base_run.__dict__,
+                    "gams_comparison": base_cmp,
+                },
+                scenario_name: {
+                    "solve": gov_run.__dict__,
+                    "gams_comparison": gov_cmp,
+                },
+            },
+        }
+
+
+class PEPImportShockParityRunner(PEPScenarioParityRunner):
+    """API runner for BASE + IMPORT_SHOCK parity (all import prices)."""
+
+    def __init__(
+        self,
+        sam_file: Path | str = DEFAULT_SAM_FILE,
+        val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
+        gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
+        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        *,
+        dynamic_sets: bool = True,
+        init_mode: str = "excel",
+        method: str = "ipopt",
+        solve_tolerance: float = 1e-8,
+        max_iterations: int = 300,
+        import_price_multiplier: float = 1.25,
+        compare_abs_tol: float = 1e-6,
+        compare_rel_tol: float = 1e-6,
+    ) -> None:
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            gams_results_gdx=gams_results_gdx,
+            gdxdump_bin=gdxdump_bin,
+            dynamic_sets=dynamic_sets,
+            init_mode=init_mode,
+            method=method,
+            solve_tolerance=solve_tolerance,
+            max_iterations=max_iterations,
+            export_tax_multiplier=1.0,
+            export_tax_homotopy=False,
+            export_tax_homotopy_steps=0,
+            compare_abs_tol=compare_abs_tol,
+            compare_rel_tol=compare_rel_tol,
+        )
+        self.import_price_multiplier = float(import_price_multiplier)
+
+    def run(self) -> dict[str, Any]:
+        """Execute BASE and IMPORT_SHOCK scenarios and compare to GAMS."""
+        base_state = self._calibrate_base_state()
+
+        base_solver, base_solution, base_validation = self._solve_state(base_state)
+        base_run = ScenarioSolveReport(
+            scenario="base",
+            export_tax_multiplier=1.0,
+            converged=bool(base_solution.converged),
+            iterations=int(base_solution.iterations),
+            final_residual=float(base_solution.final_residual),
+            message=str(base_solution.message),
+            key_indicators=self._key_indicators(base_solution.variables),
+            validation=base_validation,
+        )
+
+        import_state = self._clone_with_import_price_all_shock(
+            base_state,
+            multiplier=self.import_price_multiplier,
+        )
+        import_solver, import_solution, import_validation = self._solve_state(
+            import_state,
+            initial_vars=base_solution.variables,
+            gams_slice="sim1",
+        )
+
+        if (
+            not bool(import_solution.converged)
+            and float(import_solution.final_residual) <= float(self.solve_tolerance)
+            and self.method == "ipopt"
+        ):
+            import_solver, import_solution, import_validation = self._solve_state(
+                import_state,
+                initial_vars=import_solution.variables,
+                gams_slice="sim1",
+            )
+            import_validation = dict(import_validation)
+            import_validation["restart"] = {
+                "enabled": True,
+                "reason": "residual_below_tolerance_but_status_nonzero",
+                "attempts": 1,
+            }
+
+        scenario_name = "import_shock"
+        import_run = ScenarioSolveReport(
+            scenario=scenario_name,
+            export_tax_multiplier=1.0,
+            import_price_multiplier=self.import_price_multiplier,
+            converged=bool(import_solution.converged),
+            iterations=int(import_solution.iterations),
+            final_residual=float(import_solution.final_residual),
+            message=str(import_solution.message),
+            key_indicators=self._key_indicators(import_solution.variables),
+            validation=import_validation,
+        )
+
+        base_cmp = self._compare_solution_with_gams(
+            solution_vars=base_solution.variables,
+            solution_params=base_solver.params,
+            gams_slice="base",
+        )
+        import_cmp = self._compare_solution_with_gams(
+            solution_vars=import_solution.variables,
+            solution_params=import_solver.params,
+            gams_slice="sim1",
+        )
+
+        return {
+            "config": {
+                "sam_file": str(self.sam_file),
+                "val_par_file": str(self.val_par_file) if self.val_par_file else None,
+                "gams_results_gdx": str(self.gams_results_gdx),
+                "gdxdump_bin": str(self._resolve_gdxdump_binary()),
+                "dynamic_sets": self.dynamic_sets,
+                "init_mode": self.init_mode,
+                "method": self.method,
+                "equation_mode": "gams_strict",
+                "solve_tolerance": self.solve_tolerance,
+                "max_iterations": self.max_iterations,
                 "import_price_multiplier": self.import_price_multiplier,
                 "compare_abs_tol": self.compare_abs_tol,
                 "compare_rel_tol": self.compare_rel_tol,
