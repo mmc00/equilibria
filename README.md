@@ -348,6 +348,10 @@ sim = PepSimulator(
 ).fit()
 
 report = sim.run_export_tax(multiplier=0.75)
+
+# Discover built-in presets
+print(sim.available_presets())
+# ('export_tax', 'import_price', 'import_shock', 'government_spending')
 ```
 
 More details: `docs/guides/simulations_api.md`

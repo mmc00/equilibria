@@ -61,5 +61,6 @@ class ShockDefinition(BaseModel):
     var: str
     kind: Literal["scalar", "indexed"]
     domain: str | None
+    members: tuple[str, ...] | None = None
     ops: tuple[ShockOp, ...]
     description: str

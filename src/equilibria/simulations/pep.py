@@ -7,6 +7,7 @@ from typing import Any
 
 from equilibria.simulations import presets
 from equilibria.simulations.simulator import Simulator
+from equilibria.simulations.types import Scenario
 
 
 class PepSimulator(Simulator):
@@ -14,6 +15,38 @@ class PepSimulator(Simulator):
 
     def __init__(self, **model_options: Any) -> None:
         super().__init__(model="pep", **model_options)
+
+    @staticmethod
+    def available_presets() -> tuple[str, ...]:
+        """Return built-in PEP preset names."""
+        return presets.available_presets()
+
+    @staticmethod
+    def make_preset(name: str, **kwargs: float | str) -> Scenario:
+        """Build one preset scenario by name."""
+        return presets.make_preset(name, **kwargs)
+
+    def run_preset(
+        self,
+        name: str,
+        *,
+        reference_results_gdx: Path | str | None = None,
+        compare_abs_tol: float = 1e-6,
+        compare_rel_tol: float = 1e-6,
+        warm_start: bool = True,
+        include_base: bool = True,
+        **preset_kwargs: float | str,
+    ) -> dict[str, Any]:
+        """Run one preset scenario selected by name."""
+        scenario = presets.make_preset(name, **preset_kwargs)
+        return self.run_scenarios(
+            scenarios=[scenario],
+            reference_results_gdx=reference_results_gdx,
+            compare_abs_tol=compare_abs_tol,
+            compare_rel_tol=compare_rel_tol,
+            warm_start=warm_start,
+            include_base=include_base,
+        )
 
     def run_export_tax(
         self,
@@ -26,8 +59,9 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run one standard export-tax scenario."""
-        return self.run_scenarios(
-            scenarios=[presets.export_tax(multiplier=multiplier)],
+        return self.run_preset(
+            "export_tax",
+            multiplier=multiplier,
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
@@ -47,8 +81,10 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run one-commodity import-price scenario."""
-        return self.run_scenarios(
-            scenarios=[presets.import_price(commodity=commodity, multiplier=multiplier)],
+        return self.run_preset(
+            "import_price",
+            commodity=commodity,
+            multiplier=multiplier,
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
@@ -67,8 +103,9 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run all-commodities import-price scenario."""
-        return self.run_scenarios(
-            scenarios=[presets.import_shock(multiplier=multiplier)],
+        return self.run_preset(
+            "import_shock",
+            multiplier=multiplier,
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
@@ -87,8 +124,9 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run one government-spending scenario."""
-        return self.run_scenarios(
-            scenarios=[presets.government_spending(multiplier=multiplier)],
+        return self.run_preset(
+            "government_spending",
+            multiplier=multiplier,
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
