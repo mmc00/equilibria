@@ -10,6 +10,13 @@ from equilibria.simulations.presets import (
     import_shock,
     make_preset,
 )
+from equilibria.simulations.runtimes import (
+    MappingRuntime,
+    available_mapping_runtimes,
+    clear_mapping_runtime,
+    get_mapping_runtime,
+    register_mapping_runtime,
+)
 from equilibria.simulations.simulator import (
     Simulator,
     available_models,
@@ -36,4 +43,9 @@ __all__ = [
     "government_spending",
     "register_adapter",
     "run_scenarios",
+    "MappingRuntime",
+    "register_mapping_runtime",
+    "get_mapping_runtime",
+    "clear_mapping_runtime",
+    "available_mapping_runtimes",
 ]

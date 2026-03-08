@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from equilibria.simulations.adapters.base import BaseModelAdapter
+from equilibria.simulations.runtimes import get_mapping_runtime
 from equilibria.simulations.types import Shock, ShockDefinition
 
 StateSolveFn = Callable[..., tuple[Any, Any, dict[str, Any]]]
@@ -49,6 +50,15 @@ class MappingAdapter(BaseModelAdapter):
         compare_fn: StateCompareFn | None = None,
         key_indicators_fn: StateIndicatorsFn | None = None,
     ) -> None:
+        runtime = get_mapping_runtime(model_label)
+        if runtime is not None:
+            if solve_fn is None:
+                solve_fn = runtime.solve_fn
+            if compare_fn is None:
+                compare_fn = runtime.compare_fn
+            if key_indicators_fn is None:
+                key_indicators_fn = runtime.key_indicators_fn
+
         self.model_label = str(model_label)
         self._base_state = copy.deepcopy(base_state) if base_state is not None else None
         self._state_loader = state_loader

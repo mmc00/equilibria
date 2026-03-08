@@ -171,6 +171,31 @@ Cuando se pasan hooks, `capabilities.mode` cambia automaticamente:
 - `state_with_solver_hook` (solo `solve_fn`),
 - `state_with_solver_and_compare_hooks` (`solve_fn` + `compare_fn`).
 
+Si no quieres pasar hooks en cada instancia, puedes registrarlos una vez por modelo:
+
+```python
+from equilibria.simulations import (
+    IEEMSimulator,
+    register_mapping_runtime,
+)
+
+register_mapping_runtime(
+    "ieem",
+    solve_fn=my_ieem_solve_fn,
+    compare_fn=my_ieem_compare_fn,
+    key_indicators_fn=my_ieem_indicators_fn,
+)
+
+sim = IEEMSimulator(base_state={"x": 1.0}).fit()
+report = sim.run_scenarios(...)
+```
+
+Utilidades disponibles:
+- `register_mapping_runtime(model, ...)`
+- `get_mapping_runtime(model)`
+- `available_mapping_runtimes()`
+- `clear_mapping_runtime(model=None)`
+
 ## compatibilidad legacy
 
 `equilibria.templates.pep_scenario_parity` se mantiene por compatibilidad.
