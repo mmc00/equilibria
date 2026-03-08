@@ -336,6 +336,20 @@ report = sim.run_scenarios(
 )
 ```
 
+Simpler PEP wrapper (no manual `Scenario(...)`):
+
+```python
+from equilibria.simulations import PepSimulator
+
+sim = PepSimulator(
+    sam_file="src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx",
+    val_par_file="src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx",
+    method="ipopt",
+).fit()
+
+report = sim.run_export_tax(multiplier=0.75)
+```
+
 More details: `docs/guides/simulations_api.md`
 
 ### PEP BASE vs EXPORT_TAX Parity (Python vs GAMS)
