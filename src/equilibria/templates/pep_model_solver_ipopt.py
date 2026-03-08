@@ -1143,6 +1143,7 @@ class IPOPTSolver:
             "TRO": state.income.get("TRO", {}),
             "PWX": state.trade.get("PWXO", {}),
             "CMIN0": state.les_parameters.get("CMINO", {}),
+            "CO0": state.consumption.get("CO", {}),
             "VSTK0": state.consumption.get("VSTKO", {}),
             "G0": state.consumption.get("GO", 0.0),
             "PWM0": state.trade.get("PWMO", {}),

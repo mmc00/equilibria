@@ -1068,11 +1068,19 @@ class PEPModelEquations:
             residuals["EQ80"] = vars.PIXGDP - ((num1 / den1) * (num2 / den2)) ** 0.5
 
         # EQ81: Consumer price index (Laspeyres)
-        # Mirrors GAMS:
+        # Mirrors GAMS exactly:
         # PIXCON = SUM[i,PC(i)*SUM[h,CO(i,h)]] / SUM[i,PCO(i)*SUM[h,CO(i,h)]]
+        # Use benchmark consumption CO(i,h) as fixed weights.
+        co0 = self.params.get("CO0", {})
+        use_co0_weights = isinstance(co0, dict) and bool(co0)
+
         num = den = 0.0
         for i in self.I:
-            c_weight_i = sum(vars.C.get((i, h), 0.0) for h in self.H)
+            if use_co0_weights:
+                c_weight_i = sum(co0.get((i, h), 0.0) for h in self.H)
+            else:
+                # Backward-compatible fallback for contexts that do not provide CO0.
+                c_weight_i = sum(vars.C.get((i, h), 0.0) for h in self.H)
             num += vars.PC.get(i, 0.0) * c_weight_i
             den += pco0.get(i, 1.0) * c_weight_i
         if den > 1e-12:

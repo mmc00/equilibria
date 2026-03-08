@@ -4,7 +4,11 @@ import pytest
 
 from equilibria.templates.pep_calibration_unified import PEPModelState
 from equilibria.templates.pep_model_equations import PEPModelVariables
-from equilibria.templates.pep_scenario_parity import PEPScenarioParityRunner, get_solution_value
+from equilibria.templates.pep_scenario_parity import (
+    PEPImportPriceParityRunner,
+    PEPScenarioParityRunner,
+    get_solution_value,
+)
 
 
 def test_export_tax_shock_scales_ttix_and_aggregates() -> None:
@@ -86,3 +90,27 @@ def test_export_tax_homotopy_disabled_on_non_excel_or_non_ipopt() -> None:
     )
     assert runner_ipopt_gams._should_use_export_tax_homotopy() is False
     assert runner_simple_excel._should_use_export_tax_homotopy() is False
+
+
+def test_import_price_shock_scales_pwmo_target_only() -> None:
+    state = PEPModelState(
+        trade={
+            "PWMO": {"agr": 1.0, "food": 2.0},
+        }
+    )
+
+    shocked = PEPImportPriceParityRunner._clone_with_import_price_shock(
+        state,
+        commodity="agr",
+        multiplier=1.25,
+    )
+
+    assert shocked.trade["PWMO"]["agr"] == pytest.approx(1.25)
+    assert shocked.trade["PWMO"]["food"] == pytest.approx(2.0)
+    assert state.trade["PWMO"]["agr"] == pytest.approx(1.0)
+
+
+def test_import_price_runner_defaults() -> None:
+    runner = PEPImportPriceParityRunner()
+    assert runner.import_price_commodity == "agr"
+    assert runner.import_price_multiplier == pytest.approx(1.25)
