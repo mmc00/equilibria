@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import shutil
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,12 @@ class PEPScenarioParityRunner:
         compare_abs_tol: float = 1e-6,
         compare_rel_tol: float = 1e-6,
     ) -> None:
+        warnings.warn(
+            "PEPScenarioParityRunner is deprecated. "
+            "Use equilibria.simulations.PepSimulator instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.sam_file = Path(sam_file)
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
         self.gams_results_gdx = Path(gams_results_gdx)

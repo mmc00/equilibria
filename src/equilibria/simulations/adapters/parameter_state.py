@@ -68,6 +68,13 @@ class ParameterStateAdapter(BaseModelAdapter):
             self._resolved_shock_defs = list(self._shock_definitions)
         return state
 
+    def capabilities(self) -> dict[str, Any]:
+        return {
+            "has_solver": False,
+            "has_reference_compare": False,
+            "mode": "state_only_no_solver",
+        }
+
     def available_shocks(self) -> list[ShockDefinition]:
         if self._resolved_shock_defs:
             return list(self._resolved_shock_defs)

@@ -5,6 +5,7 @@ Provides pre-configured model templates for common CGE model types.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 __all__ = [
@@ -41,6 +42,12 @@ def __getattr__(name: str) -> Any:
         return SimpleOpenEconomy
 
     if name == "PEPScenarioParityRunner":
+        warnings.warn(
+            "equilibria.templates.PEPScenarioParityRunner is deprecated. "
+            "Use equilibria.simulations.PepSimulator instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from equilibria.templates.pep_scenario_parity import PEPScenarioParityRunner
 
         return PEPScenarioParityRunner
@@ -51,11 +58,17 @@ def __getattr__(name: str) -> Any:
         "PEPImportPriceParityRunner",
         "PEPImportShockParityRunner",
     }:
+        warnings.warn(
+            f"equilibria.templates.{name} is deprecated. "
+            "Use equilibria.simulations.PepSimulator presets/methods instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         from equilibria.templates.pep_scenario_parity import (
             PEPExportTaxParityRunner,
             PEPGovernmentSpendingParityRunner,
-            PEPImportShockParityRunner,
             PEPImportPriceParityRunner,
+            PEPImportShockParityRunner,
         )
 
         return {
