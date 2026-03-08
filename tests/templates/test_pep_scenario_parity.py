@@ -5,6 +5,8 @@ import pytest
 from equilibria.templates.pep_calibration_unified import PEPModelState
 from equilibria.templates.pep_model_equations import PEPModelVariables
 from equilibria.templates.pep_scenario_parity import (
+    PEPGovernmentSpendingParityRunner,
+    PEPImportShockParityRunner,
     PEPImportPriceParityRunner,
     PEPScenarioParityRunner,
     get_solution_value,
@@ -114,3 +116,41 @@ def test_import_price_runner_defaults() -> None:
     runner = PEPImportPriceParityRunner()
     assert runner.import_price_commodity == "agr"
     assert runner.import_price_multiplier == pytest.approx(1.25)
+
+
+def test_government_spending_shock_scales_go_only() -> None:
+    state = PEPModelState(consumption={"GO": 100.0})
+
+    shocked = PEPGovernmentSpendingParityRunner._clone_with_government_spending_shock(
+        state,
+        multiplier=1.2,
+    )
+
+    assert shocked.consumption["GO"] == pytest.approx(120.0)
+    assert state.consumption["GO"] == pytest.approx(100.0)
+
+
+def test_import_price_all_shock_scales_all_pwmo() -> None:
+    state = PEPModelState(
+        trade={
+            "PWMO": {"agr": 1.0, "food": 2.0, "ser": 3.0},
+        }
+    )
+
+    shocked = PEPImportShockParityRunner._clone_with_import_price_all_shock(
+        state,
+        multiplier=1.25,
+    )
+
+    assert shocked.trade["PWMO"]["agr"] == pytest.approx(1.25)
+    assert shocked.trade["PWMO"]["food"] == pytest.approx(2.5)
+    assert shocked.trade["PWMO"]["ser"] == pytest.approx(3.75)
+    assert state.trade["PWMO"]["agr"] == pytest.approx(1.0)
+
+
+def test_new_runners_defaults() -> None:
+    gov = PEPGovernmentSpendingParityRunner()
+    imp_all = PEPImportShockParityRunner()
+
+    assert gov.government_spending_multiplier == pytest.approx(1.2)
+    assert imp_all.import_price_multiplier == pytest.approx(1.25)
