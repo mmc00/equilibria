@@ -1,4 +1,4 @@
-"""Generic state-based adapter for models without a native solver integration yet."""
+"""Generic mapping-based adapter for models with dict-style dynamics."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class _NoSolveSolution:
     variables: dict[str, Any] = field(default_factory=dict)
 
 
-class ParameterStateAdapter(BaseModelAdapter):
+class MappingAdapter(BaseModelAdapter):
     """Adapter that runs scenario shocks over a generic state mapping.
 
     This adapter is intentionally solver-free:
@@ -263,12 +263,12 @@ class ParameterStateAdapter(BaseModelAdapter):
         if "*" in updates:
             wildcard = float(updates["*"])
             for key in list(src):
-                src[key] = ParameterStateAdapter._merge(src[key], op, wildcard)
+                src[key] = MappingAdapter._merge(src[key], op, wildcard)
 
         for key, value in updates.items():
             if key == "*":
                 continue
-            src[key] = ParameterStateAdapter._merge(src[key], op, float(value))
+            src[key] = MappingAdapter._merge(src[key], op, float(value))
 
         return src
 
