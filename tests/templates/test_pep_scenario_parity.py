@@ -6,8 +6,8 @@ from equilibria.templates.pep_calibration_unified import PEPModelState
 from equilibria.templates.pep_model_equations import PEPModelVariables
 from equilibria.templates.pep_scenario_parity import (
     PEPGovernmentSpendingParityRunner,
-    PEPImportShockParityRunner,
     PEPImportPriceParityRunner,
+    PEPImportShockParityRunner,
     PEPScenarioParityRunner,
     get_solution_value,
 )
