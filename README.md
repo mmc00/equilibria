@@ -339,6 +339,16 @@ from equilibria.simulations import available_models
 print(available_models())  # ('gtap', 'icio', 'ieem', 'pep')
 ```
 
+Convenience wrappers for other models:
+
+```python
+from equilibria.simulations import GTAPSimulator, ICIOSimulator, IEEMSimulator
+
+ieem = IEEMSimulator(base_state={"x": 1.0}).fit()
+gtap = GTAPSimulator(base_state={"x": 1.0}).fit()
+icio = ICIOSimulator(base_state={"x": 1.0}).fit()
+```
+
 Simpler PEP wrapper (no manual `Scenario(...)`):
 
 ```python

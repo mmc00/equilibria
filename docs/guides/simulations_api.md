@@ -131,9 +131,25 @@ print(available_models())
 # ('gtap', 'icio', 'ieem', 'pep')
 ```
 
+Wrappers convenientes:
+
+```python
+from equilibria.simulations import GTAPSimulator, ICIOSimulator, IEEMSimulator
+
+ieem = IEEMSimulator(base_state={"x": 1.0}).fit()
+gtap = GTAPSimulator(base_state={"x": 1.0}).fit()
+icio = ICIOSimulator(base_state={"x": 1.0}).fit()
+```
+
 `pep` tiene integración completa calibración + solver.
 
 `ieem`, `gtap` e `icio` están habilitados como adapters state-based (sin solver nativo aún):
 - permiten `fit`, catálogo de choques y ejecución de escenarios,
 - `solve_state` corre en modo `no_solver`,
 - comparación de referencia externa aún no implementada para esos tres.
+
+## compatibilidad legacy
+
+`equilibria.templates.pep_scenario_parity` se mantiene por compatibilidad.
+
+La ruta recomendada para desarrollo nuevo es `equilibria.simulations` (`Simulator` / `PepSimulator`).
