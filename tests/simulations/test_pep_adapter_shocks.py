@@ -90,3 +90,14 @@ def test_pep_adapter_syncs_export_tax_aggregates_after_ttix_shock() -> None:
     assert state.income["TIXTO"] == pytest.approx(11.4)
     assert state.income["TPRCTSO"] == pytest.approx(41.4)
     assert state.income["YGO"] == pytest.approx(170.4)
+
+
+def test_pep_adapter_available_shocks_include_domain_members_when_sets_known() -> None:
+    adapter = PepAdapter(sam_file="dummy.gdx", val_par_file=None)
+    adapter._sets = {"I": ["agr", "ser"]}  # internal cache filled by fit_base_state
+    catalog = adapter.available_shocks()
+    by_var = {item.var: item for item in catalog}
+    assert by_var["G"].members is None
+    assert by_var["PWM"].members == ("agr", "ser")
+    assert by_var["PWX"].members == ("agr", "ser")
+    assert by_var["ttix"].members == ("agr", "ser")

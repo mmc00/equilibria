@@ -46,6 +46,7 @@ class PepAdapter(BaseModelAdapter):
         self.solve_tolerance = float(solve_tolerance)
         self.max_iterations = int(max_iterations)
         self.gdxdump_bin = str(gdxdump_bin)
+        self._sets: dict[str, list[str]] = {}
 
     def fit_base_state(self) -> PEPModelState:
         if self.dynamic_sets:
@@ -59,9 +60,12 @@ class PepAdapter(BaseModelAdapter):
                 val_par_file=self.val_par_file,
                 dynamic_sets=False,
             )
-        return calibrator.calibrate()
+        state = calibrator.calibrate()
+        self._sets = dict(state.sets)
+        return state
 
     def available_shocks(self) -> list[ShockDefinition]:
+        i_members = tuple(self._sets.get("I", [])) or None
         return [
             ShockDefinition(
                 var="G",
@@ -74,6 +78,7 @@ class PepAdapter(BaseModelAdapter):
                 var="PWM",
                 kind="indexed",
                 domain="I",
+                members=i_members,
                 ops=("set", "scale", "add"),
                 description="World import prices PWMO(i).",
             ),
@@ -81,6 +86,7 @@ class PepAdapter(BaseModelAdapter):
                 var="PWX",
                 kind="indexed",
                 domain="I",
+                members=i_members,
                 ops=("set", "scale", "add"),
                 description="World export prices PWXO(i).",
             ),
@@ -88,6 +94,7 @@ class PepAdapter(BaseModelAdapter):
                 var="ttix",
                 kind="indexed",
                 domain="I",
+                members=i_members,
                 ops=("set", "scale", "add"),
                 description="Export tax rates ttixO(i).",
             ),

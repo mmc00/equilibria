@@ -42,6 +42,15 @@ report_import_agr = sim.run_import_price(commodity="agr", multiplier=1.25)
 report_gov = sim.run_government_spending(multiplier=1.2)
 ```
 
+Tambien puedes correr presets por nombre:
+
+```python
+sim.available_presets()
+# ('export_tax', 'import_price', 'import_shock', 'government_spending')
+
+report = sim.run_preset("export_tax", multiplier=0.75)
+```
+
 ## escenario export tax (ttix)
 
 ```python

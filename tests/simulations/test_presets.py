@@ -4,10 +4,12 @@ from typing import Any
 
 from equilibria.simulations import (
     PepSimulator,
+    available_presets,
     export_tax,
     government_spending,
     import_price,
     import_shock,
+    make_preset,
 )
 
 
@@ -35,6 +37,13 @@ def test_import_shock_and_government_spending_presets() -> None:
     assert s2.shocks[0].values == 1.15
 
 
+def test_preset_registry_and_make_preset() -> None:
+    names = available_presets()
+    assert "export_tax" in names
+    assert "import_shock" in names
+    assert make_preset("EXPORT_TAX", multiplier=0.7).name == "export_tax"
+
+
 def test_pep_simulator_wrapper_delegates_to_run_scenarios(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 
@@ -58,3 +67,13 @@ def test_pep_simulator_wrapper_delegates_to_run_scenarios(monkeypatch: Any) -> N
     assert len(scenarios) == 1
     assert scenarios[0].name == "export_tax"
     assert scenarios[0].shocks[0].values == {"*": 0.72}
+
+
+def test_pep_simulator_run_preset_validates_name() -> None:
+    sim = PepSimulator()
+    try:
+        sim.run_preset("does_not_exist")
+    except ValueError as exc:
+        assert "Unknown preset" in str(exc)
+        return
+    raise AssertionError("Expected ValueError for unknown preset.")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from equilibria.simulations.types import Scenario, Shock
 
 
@@ -62,3 +64,25 @@ def government_spending(
         reference_slice=reference_slice,
         shocks=[Shock(var="G", op="scale", values=float(multiplier))],
     )
+
+
+PRESET_BUILDERS: dict[str, Callable[..., Scenario]] = {
+    "export_tax": export_tax,
+    "import_price": import_price,
+    "import_shock": import_shock,
+    "government_spending": government_spending,
+}
+
+
+def available_presets() -> tuple[str, ...]:
+    """Return available built-in scenario preset names."""
+    return tuple(PRESET_BUILDERS.keys())
+
+
+def make_preset(name: str, **kwargs: float | str) -> Scenario:
+    """Build one scenario preset by name."""
+    key = name.strip().lower()
+    if key not in PRESET_BUILDERS:
+        names = ", ".join(sorted(PRESET_BUILDERS))
+        raise ValueError(f"Unknown preset '{name}'. Available: {names}")
+    return PRESET_BUILDERS[key](**kwargs)
