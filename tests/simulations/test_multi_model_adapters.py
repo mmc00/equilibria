@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from equilibria.simulations import Scenario, Shock, Simulator, available_models
+from equilibria.simulations import (
+    GTAPSimulator,
+    ICIOSimulator,
+    IEEMSimulator,
+    Scenario,
+    Shock,
+    Simulator,
+    available_models,
+)
 
 
 def test_ieem_adapter_state_scenarios_without_solver() -> None:
@@ -70,3 +78,13 @@ def test_available_models_includes_pep_ieem_gtap_icio() -> None:
     assert "ieem" in models
     assert "gtap" in models
     assert "icio" in models
+
+
+def test_convenience_simulator_wrappers_for_multi_models() -> None:
+    ieem = IEEMSimulator(base_state={"x": 1.0}).fit()
+    gtap = GTAPSimulator(base_state={"x": 2.0}).fit()
+    icio = ICIOSimulator(base_state={"x": 3.0}).fit()
+
+    assert ieem.model == "ieem"
+    assert gtap.model == "gtap"
+    assert icio.model == "icio"
