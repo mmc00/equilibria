@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from equilibria.simulations.adapters.parameter_state import (
-    ParameterStateAdapter,
+from equilibria.simulations.adapters.mapping import (
+    MappingAdapter,
     StateCompareFn,
     StateIndicatorsFn,
     StateSolveFn,
@@ -14,7 +14,7 @@ from equilibria.simulations.adapters.parameter_state import (
 from equilibria.simulations.types import ShockDefinition
 
 
-class IEEMAdapter(ParameterStateAdapter):
+class IEEMAdapter(MappingAdapter):
     """IEEM adapter using generic state-scenario mechanics."""
 
     def __init__(
