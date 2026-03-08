@@ -12,6 +12,7 @@ este directorio se organiza por tipo de contenido:
 documentos de entrada recomendados:
 
 - guia de pipeline de paridad: `docs/guides/pep_systemic_parity_pipeline.md`
+- guia de api de simulaciones: `docs/guides/simulations_api.md`
 - hallazgo estructural cri: `docs/findings/finding_sam_ieem_vs_sam_pep.md`
 - plan de estabilizacion: `docs/plans/equilibria_structural_stabilization_plan_2026-02-19.md`
 
