@@ -11,6 +11,10 @@ from typing import Any
 from equilibria.simulations.adapters.base import BaseModelAdapter
 from equilibria.simulations.types import Shock, ShockDefinition
 
+StateSolveFn = Callable[..., tuple[Any, Any, dict[str, Any]]]
+StateCompareFn = Callable[..., dict[str, Any]]
+StateIndicatorsFn = Callable[[Any], dict[str, float]]
+
 
 @dataclass
 class _NoSolveSolver:
@@ -41,11 +45,17 @@ class ParameterStateAdapter(BaseModelAdapter):
         base_state: dict[str, Any] | None = None,
         state_loader: Callable[[], dict[str, Any]] | None = None,
         shock_definitions: list[ShockDefinition] | None = None,
+        solve_fn: StateSolveFn | None = None,
+        compare_fn: StateCompareFn | None = None,
+        key_indicators_fn: StateIndicatorsFn | None = None,
     ) -> None:
         self.model_label = str(model_label)
         self._base_state = copy.deepcopy(base_state) if base_state is not None else None
         self._state_loader = state_loader
         self._shock_definitions = list(shock_definitions) if shock_definitions is not None else None
+        self._solve_fn = solve_fn
+        self._compare_fn = compare_fn
+        self._key_indicators_fn = key_indicators_fn
         self._resolved_shock_defs: list[ShockDefinition] = []
 
     def fit_base_state(self) -> dict[str, Any]:
@@ -69,10 +79,22 @@ class ParameterStateAdapter(BaseModelAdapter):
         return state
 
     def capabilities(self) -> dict[str, Any]:
+        if self._solve_fn is None:
+            return {
+                "has_solver": False,
+                "has_reference_compare": False,
+                "mode": "state_only_no_solver",
+            }
+
+        has_compare = self._compare_fn is not None
         return {
-            "has_solver": False,
-            "has_reference_compare": False,
-            "mode": "state_only_no_solver",
+            "has_solver": True,
+            "has_reference_compare": has_compare,
+            "mode": (
+                "state_with_solver_and_compare_hooks"
+                if has_compare
+                else "state_with_solver_hook"
+            ),
         }
 
     def available_shocks(self) -> list[ShockDefinition]:
@@ -109,6 +131,14 @@ class ParameterStateAdapter(BaseModelAdapter):
         reference_results_gdx: Path | None,
         reference_slice: str,
     ) -> tuple[Any, Any, dict[str, Any]]:
+        if self._solve_fn is not None:
+            return self._solve_fn(
+                state,
+                initial_vars=initial_vars,
+                reference_results_gdx=reference_results_gdx,
+                reference_slice=reference_slice,
+            )
+
         _ = initial_vars, reference_results_gdx, reference_slice
         solver = _NoSolveSolver(params={})
         solution = _NoSolveSolution(variables=copy.deepcopy(state))
@@ -125,6 +155,16 @@ class ParameterStateAdapter(BaseModelAdapter):
         abs_tol: float,
         rel_tol: float,
     ) -> dict[str, Any]:
+        if self._compare_fn is not None:
+            return self._compare_fn(
+                solution_vars=solution_vars,
+                solution_params=solution_params,
+                reference_results_gdx=reference_results_gdx,
+                reference_slice=reference_slice,
+                abs_tol=abs_tol,
+                rel_tol=rel_tol,
+            )
+
         _ = solution_vars, solution_params, reference_results_gdx, abs_tol, rel_tol
         return {
             "passed": False,
@@ -133,6 +173,29 @@ class ParameterStateAdapter(BaseModelAdapter):
         }
 
     def key_indicators(self, vars_obj: Any) -> dict[str, float]:
+        if self._key_indicators_fn is not None:
+            hooked = self._key_indicators_fn(vars_obj)
+            if not isinstance(hooked, dict):
+                raise TypeError(
+                    f"{self.model_label}: key_indicators_fn must return a dict."
+                )
+
+            out: dict[str, float] = {}
+            invalid_keys: list[str] = []
+            for key, value in hooked.items():
+                if not isinstance(value, (int, float)):
+                    invalid_keys.append(str(key))
+                    continue
+                out[str(key)] = float(value)
+
+            if invalid_keys:
+                bad = ", ".join(sorted(invalid_keys))
+                raise TypeError(
+                    f"{self.model_label}: key_indicators_fn must return numeric values. "
+                    f"Invalid keys: {bad}"
+                )
+            return out
+
         if not isinstance(vars_obj, dict):
             return {}
         out: dict[str, float] = {}

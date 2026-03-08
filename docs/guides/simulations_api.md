@@ -149,8 +149,27 @@ icio = ICIOSimulator(base_state={"x": 1.0}).fit()
 
 `ieem`, `gtap` e `icio` están habilitados como adapters state-based (sin solver nativo aún):
 - permiten `fit`, catálogo de choques y ejecución de escenarios,
-- `solve_state` corre en modo `no_solver`,
-- comparación de referencia externa aún no implementada para esos tres.
+- `solve_state` corre en modo `no_solver` por defecto,
+- comparación de referencia externa no está implementada por defecto.
+
+Tambien puedes inyectar hooks nativos sin cambiar la API:
+
+```python
+from equilibria.simulations import Simulator
+
+sim = Simulator(
+    model="ieem",
+    base_state={"x": 1.0},
+    solve_fn=my_ieem_solve_fn,              # opcional
+    compare_fn=my_ieem_compare_fn,          # opcional
+    key_indicators_fn=my_ieem_indicators_fn # opcional
+).fit()
+```
+
+Cuando se pasan hooks, `capabilities.mode` cambia automaticamente:
+- `state_only_no_solver` (sin hooks),
+- `state_with_solver_hook` (solo `solve_fn`),
+- `state_with_solver_and_compare_hooks` (`solve_fn` + `compare_fn`).
 
 ## compatibilidad legacy
 
