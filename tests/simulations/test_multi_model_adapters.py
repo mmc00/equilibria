@@ -41,6 +41,9 @@ def test_ieem_adapter_state_scenarios_without_solver() -> None:
         warm_start=False,
     )
 
+    assert report["capabilities"]["has_solver"] is False
+    assert report["capabilities"]["has_reference_compare"] is False
+    assert report["capabilities"]["mode"] == "state_only_no_solver"
     assert report["base"]["solve"]["converged"] is True
     assert report["base"]["validation"]["mode"] == "no_solver"
     assert report["base"]["solve"]["key_indicators"]["G"] == 100.0
@@ -67,6 +70,7 @@ def test_no_solver_adapters_report_compare_not_implemented() -> None:
         scenarios=[Scenario(name="s", shocks=[Shock(var="x", op="set", values=2.0)])],
         reference_results_gdx="dummy.gdx",
     )
+    assert report["capabilities"]["has_solver"] is False
     comparison = report["scenarios"][0]["comparison"]
     assert comparison["passed"] is False
     assert "not implemented" in comparison["reason"]

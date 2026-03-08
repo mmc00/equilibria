@@ -12,6 +12,10 @@ from equilibria.templates.pep_scenario_parity import (
     get_solution_value,
 )
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:PEPScenarioParityRunner is deprecated.*:DeprecationWarning"
+)
+
 
 def test_export_tax_shock_scales_ttix_and_aggregates() -> None:
     state = PEPModelState(

@@ -121,6 +121,10 @@ scenarios = [
 - `warm_start=True` reutiliza niveles de la corrida anterior.
 - `reference_results_gdx` es opcional; si se incluye, se agrega comparación por escenario.
 - La API es genérica y se extiende por adapters (`model="pep"` hoy, otros modelos después).
+- El reporte incluye `capabilities` del adapter:
+  - `has_solver`
+  - `has_reference_compare`
+  - `mode`
 
 ## modelos registrados actualmente
 
@@ -153,3 +157,23 @@ icio = ICIOSimulator(base_state={"x": 1.0}).fit()
 `equilibria.templates.pep_scenario_parity` se mantiene por compatibilidad.
 
 La ruta recomendada para desarrollo nuevo es `equilibria.simulations` (`Simulator` / `PepSimulator`).
+
+### migracion recomendada
+
+Antes (legacy):
+
+```python
+from equilibria.templates.pep_scenario_parity import PEPScenarioParityRunner
+
+runner = PEPScenarioParityRunner(...)
+report = runner.run()
+```
+
+Ahora (recomendado):
+
+```python
+from equilibria.simulations import PepSimulator
+
+sim = PepSimulator(...).fit()
+report = sim.run_export_tax(multiplier=0.75)
+```
