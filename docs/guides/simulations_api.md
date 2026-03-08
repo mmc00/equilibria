@@ -121,3 +121,19 @@ scenarios = [
 - `warm_start=True` reutiliza niveles de la corrida anterior.
 - `reference_results_gdx` es opcional; si se incluye, se agrega comparación por escenario.
 - La API es genérica y se extiende por adapters (`model="pep"` hoy, otros modelos después).
+
+## modelos registrados actualmente
+
+```python
+from equilibria.simulations import available_models
+
+print(available_models())
+# ('gtap', 'icio', 'ieem', 'pep')
+```
+
+`pep` tiene integración completa calibración + solver.
+
+`ieem`, `gtap` e `icio` están habilitados como adapters state-based (sin solver nativo aún):
+- permiten `fit`, catálogo de choques y ejecución de escenarios,
+- `solve_state` corre en modo `no_solver`,
+- comparación de referencia externa aún no implementada para esos tres.

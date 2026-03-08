@@ -334,6 +334,9 @@ report = sim.run_scenarios(
     ],
     reference_results_gdx="src/equilibria/templates/reference/pep2/scripts/Results.gdx",
 )
+
+from equilibria.simulations import available_models
+print(available_models())  # ('gtap', 'icio', 'ieem', 'pep')
 ```
 
 Simpler PEP wrapper (no manual `Scenario(...)`):
