@@ -3,20 +3,21 @@
 from __future__ import annotations
 
 import copy
-import math
-import re
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from equilibria.babel.gdx.reader import read_gdx
-from equilibria.templates.pep_calibration_unified import PEPModelCalibrator, PEPModelState
-from equilibria.templates.pep_calibration_unified_dynamic import PEPModelCalibratorDynamic
+from equilibria.simulations import pep_compare as _pep_compare
+from equilibria.templates.pep_calibration_unified import (
+    PEPModelCalibrator,
+    PEPModelState,
+)
+from equilibria.templates.pep_calibration_unified_dynamic import (
+    PEPModelCalibratorDynamic,
+)
 from equilibria.templates.pep_model_equations import PEPModelVariables
 from equilibria.templates.pep_model_solver import IPOPT_AVAILABLE, PEPModelSolver
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
@@ -24,9 +25,15 @@ DEFAULT_VAL_PAR_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data
 DEFAULT_RESULTS_GDX = REPO_ROOT / "src/equilibria/templates/reference/pep2/scripts/Results.gdx"
 DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
 
-_NUM_RE = re.compile(r"([-+]?\d+(?:\.\d+)?(?:[Ee][-+]?\d+)?)")
-_LAB_RE = re.compile(r"'([^']*)'")
-_SCENARIOS = {"base", "sim1", "var"}
+
+def get_solution_value(
+    vars_obj: PEPModelVariables,
+    symbol: str,
+    idx: tuple[str, ...],
+    params: dict[str, Any],
+) -> float | None:
+    """Compatibility wrapper re-exporting the new compare helper."""
+    return _pep_compare.get_solution_value(vars_obj, symbol, idx, params)
 
 
 @dataclass
@@ -42,68 +49,6 @@ class ScenarioSolveReport:
     import_price_commodity: str | None = None
     import_price_multiplier: float | None = None
     government_spending_multiplier: float | None = None
-
-
-def get_solution_value(
-    vars_obj: PEPModelVariables,
-    symbol: str,
-    idx: tuple[str, ...],
-    params: dict[str, Any],
-) -> float | None:
-    """Map one `val*` symbol from Results.gdx to Python solution values."""
-    if symbol == "valPWX" and len(idx) == 1:
-        return params.get("PWX", {}).get(idx[0], 1.0)
-    if symbol == "valPT" and len(idx) == 1:
-        return vars_obj.PT.get(idx[0], params.get("PT", {}).get(idx[0], 1.0))
-    if symbol == "valttdh1" and len(idx) == 1:
-        return params.get("ttdh1", {}).get(idx[0])
-    if symbol == "valttic" and len(idx) == 1:
-        return params.get("ttic", {}).get(idx[0])
-    if symbol == "valtr1" and len(idx) == 1:
-        return params.get("tr1", {}).get(idx[0])
-    if symbol == "valttim" and len(idx) == 1:
-        return params.get("ttim", {}).get(idx[0])
-    if symbol == "valttiw" and len(idx) == 2:
-        return params.get("ttiw", {}).get((idx[0], idx[1]))
-    if symbol == "valKS" and len(idx) == 1:
-        return params.get("KS", {}).get(idx[0])
-    if symbol == "valLS" and len(idx) == 1:
-        return params.get("LS", {}).get(idx[0])
-    if symbol == "valRK" and len(idx) == 1:
-        return vars_obj.RK.get(idx[0], 1.0)
-    if symbol == "valsh1" and len(idx) == 1:
-        return params.get("sh1", {}).get(idx[0])
-    if symbol == "valttip" and len(idx) == 1:
-        return params.get("ttip", {}).get(idx[0])
-    if symbol == "valttdf1" and len(idx) == 1:
-        return params.get("ttdf1", {}).get(idx[0])
-    if symbol == "valttik" and len(idx) == 2:
-        return params.get("ttik", {}).get((idx[0], idx[1]))
-    if symbol == "valttix" and len(idx) == 1:
-        return params.get("ttix", {}).get(idx[0])
-    if symbol == "valGFCF_REAL" and len(idx) == 0:
-        pixinv = vars_obj.PIXINV if abs(vars_obj.PIXINV) > 1e-12 else 1.0
-        return vars_obj.GFCF / pixinv
-
-    field = "e" if symbol == "vale" else symbol[3:]
-    if not hasattr(vars_obj, field):
-        return None
-    obj = getattr(vars_obj, field)
-
-    if isinstance(obj, dict):
-        if len(idx) == 0:
-            return None
-        if len(idx) == 1:
-            return obj.get(idx[0])
-        return obj.get(tuple(idx))
-
-    if len(idx) != 0:
-        return None
-    try:
-        return float(obj)
-    except Exception:
-        return None
-
 
 class PEPScenarioParityRunner:
     """Run BASE and EXPORT_TAX scenarios and compare both with GAMS results."""
@@ -348,24 +293,7 @@ class PEPScenarioParityRunner:
 
     @staticmethod
     def _key_indicators(vars_obj: PEPModelVariables) -> dict[str, float]:
-        total_exports = float(sum(vars_obj.EXD.values()))
-        total_imports = float(sum(vars_obj.IM.values()))
-        return {
-            "GDP_BP": float(vars_obj.GDP_BP),
-            "GDP_MP": float(vars_obj.GDP_MP),
-            "GDP_IB": float(vars_obj.GDP_IB),
-            "GDP_FD": float(vars_obj.GDP_FD),
-            "IT": float(vars_obj.IT),
-            "CAB": float(vars_obj.CAB),
-            "TIXT": float(vars_obj.TIXT),
-            "TPRODN": float(vars_obj.TPRODN),
-            "TPRCTS": float(vars_obj.TPRCTS),
-            "total_exports": total_exports,
-            "total_imports": total_imports,
-            "trade_balance": total_exports - total_imports,
-            "PIXCON": float(vars_obj.PIXCON),
-            "e": float(vars_obj.e),
-        }
+        return _pep_compare.key_indicators(vars_obj)
 
     @staticmethod
     def _clone_with_export_tax_shock(state: PEPModelState, *, multiplier: float) -> PEPModelState:
@@ -468,44 +396,6 @@ class PEPScenarioParityRunner:
             "gdxdump binary not found. Set --gdxdump-bin to your GAMS gdxdump path."
         )
 
-    @staticmethod
-    def _gdxdump_records(gdxdump_bin: Path, gdx_file: Path, symbol: str) -> list[tuple[tuple[str, ...], float]]:
-        out = subprocess.check_output(
-            [str(gdxdump_bin), str(gdx_file), f"symb={symbol}"],
-            text=True,
-            stderr=subprocess.STDOUT,
-        )
-        rows: list[tuple[tuple[str, ...], float]] = []
-        for raw in out.splitlines():
-            line = raw.strip()
-            if not line or line.startswith(("/", "Parameter ", "Set ", "*")):
-                continue
-            nums = _NUM_RE.findall(line)
-            if not nums:
-                continue
-            labels = tuple(x.lower() for x in _LAB_RE.findall(line))
-            value = float(nums[-1])
-            rows.append((labels, value))
-        return rows
-
-    def _iter_slice_records(
-        self,
-        gdxdump_bin: Path,
-        symbol: str,
-        gams_slice: str,
-    ) -> list[tuple[tuple[str, ...], float]]:
-        wanted = gams_slice.lower()
-        out: list[tuple[tuple[str, ...], float]] = []
-        for labels, value in self._gdxdump_records(gdxdump_bin, self.gams_results_gdx, symbol):
-            if labels and labels[-1] in _SCENARIOS:
-                if labels[-1] != wanted:
-                    continue
-                out.append((labels[:-1], value))
-                continue
-            if wanted == "base":
-                out.append((labels, value))
-        return out
-
     def _compare_solution_with_gams(
         self,
         *,
@@ -513,56 +403,15 @@ class PEPScenarioParityRunner:
         solution_params: dict[str, Any],
         gams_slice: str,
     ) -> dict[str, Any]:
-        gdxdump_bin = self._resolve_gdxdump_binary()
-        symbols = [s["name"] for s in read_gdx(self.gams_results_gdx).get("symbols", []) if s["name"].startswith("val")]
-
-        compared = 0
-        missing = 0
-        mismatches: list[dict[str, Any]] = []
-
-        for symbol in symbols:
-            for idx, gams_val in self._iter_slice_records(gdxdump_bin, symbol, gams_slice):
-                py_val = get_solution_value(solution_vars, symbol, idx, solution_params)
-                if py_val is None:
-                    missing += 1
-                    continue
-                compared += 1
-                abs_diff = abs(float(py_val) - float(gams_val))
-                rel_diff = abs_diff / max(abs(float(gams_val)), abs(float(py_val)), 1.0)
-                if abs_diff > self.compare_abs_tol and rel_diff > self.compare_rel_tol:
-                    mismatches.append(
-                        {
-                            "symbol": symbol,
-                            "key": list(idx),
-                            "gams": float(gams_val),
-                            "python": float(py_val),
-                            "abs_diff": abs_diff,
-                            "rel_diff": rel_diff,
-                        }
-                    )
-
-        mismatches.sort(key=lambda x: x["abs_diff"], reverse=True)
-        max_abs = max((m["abs_diff"] for m in mismatches), default=0.0)
-        max_rel = max((m["rel_diff"] for m in mismatches), default=0.0)
-        rms = (
-            math.sqrt(sum(m["abs_diff"] ** 2 for m in mismatches) / len(mismatches))
-            if mismatches
-            else 0.0
+        return _pep_compare.compare_with_gams(
+            solution_vars=solution_vars,
+            solution_params=solution_params,
+            gams_results_gdx=self.gams_results_gdx,
+            gams_slice=gams_slice.lower(),
+            abs_tol=self.compare_abs_tol,
+            rel_tol=self.compare_rel_tol,
+            gdxdump_bin=str(self._resolve_gdxdump_binary()),
         )
-
-        return {
-            "gams_slice": gams_slice.lower(),
-            "compared": compared,
-            "missing": missing,
-            "mismatches": len(mismatches),
-            "passed": len(mismatches) == 0,
-            "compare_abs_tol": self.compare_abs_tol,
-            "compare_rel_tol": self.compare_rel_tol,
-            "max_abs_diff": max_abs,
-            "max_rel_diff": max_rel,
-            "rms_abs_diff": rms,
-            "top_mismatches": mismatches[:30],
-        }
 
 
 class PEPExportTaxParityRunner(PEPScenarioParityRunner):

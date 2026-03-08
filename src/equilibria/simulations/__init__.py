@@ -1,5 +1,6 @@
 """Public scenario simulation API."""
 
+from equilibria.simulations.multi import GTAPSimulator, ICIOSimulator, IEEMSimulator
 from equilibria.simulations.pep import PepSimulator
 from equilibria.simulations.presets import (
     available_presets,
@@ -23,6 +24,9 @@ __all__ = [
     "ShockDefinition",
     "Simulator",
     "PepSimulator",
+    "IEEMSimulator",
+    "GTAPSimulator",
+    "ICIOSimulator",
     "available_models",
     "available_presets",
     "make_preset",
