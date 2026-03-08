@@ -11,6 +11,8 @@ __all__ = [
     "ModelTemplate",
     "SimpleOpenEconomy",
     "PEPScenarioParityRunner",
+    "PEPExportTaxParityRunner",
+    "PEPImportPriceParityRunner",
     "EquilibriaLevelsExtractor",
     "GAMSLevelsExtractor",
     "LevelsComparator",
@@ -40,6 +42,17 @@ def __getattr__(name: str) -> Any:
         from equilibria.templates.pep_scenario_parity import PEPScenarioParityRunner
 
         return PEPScenarioParityRunner
+
+    if name in {"PEPExportTaxParityRunner", "PEPImportPriceParityRunner"}:
+        from equilibria.templates.pep_scenario_parity import (
+            PEPExportTaxParityRunner,
+            PEPImportPriceParityRunner,
+        )
+
+        return {
+            "PEPExportTaxParityRunner": PEPExportTaxParityRunner,
+            "PEPImportPriceParityRunner": PEPImportPriceParityRunner,
+        }[name]
 
     if name in {"EquilibriaLevelsExtractor", "GAMSLevelsExtractor", "LevelsComparator"}:
         from equilibria.templates.pep_levels import (

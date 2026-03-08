@@ -318,6 +318,7 @@ class PEPModelSolver:
         params["XSTO0"] = state.production.get("XSTO", {})
         params["PWX"] = state.trade.get("PWXO", {})
         params["CMIN0"] = state.les_parameters.get("CMINO", {})
+        params["CO0"] = state.consumption.get("CO", {})
         params["VSTK0"] = state.consumption.get("VSTKO", {})
         params["G0"] = state.consumption.get("GO", 0.0)
         params["PWM0"] = state.trade.get("PWMO", {})

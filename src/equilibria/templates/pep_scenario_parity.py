@@ -1,4 +1,4 @@
-"""PEP pep2 scenario runner with GAMS comparison for BASE and EXPORT_TAX."""
+"""PEP pep2 scenario runners with GAMS comparison."""
 
 from __future__ import annotations
 
@@ -39,6 +39,8 @@ class ScenarioSolveReport:
     message: str
     key_indicators: dict[str, float]
     validation: dict[str, Any]
+    import_price_commodity: str | None = None
+    import_price_multiplier: float | None = None
 
 
 def get_solution_value(
@@ -397,6 +399,24 @@ class PEPScenarioParityRunner:
 
         return shocked
 
+    @staticmethod
+    def _clone_with_import_price_shock(
+        state: PEPModelState,
+        *,
+        commodity: str,
+        multiplier: float,
+    ) -> PEPModelState:
+        """Clone state and apply `PWMO(commodity) := PWMO(commodity) * multiplier`."""
+        shocked = copy.deepcopy(state)
+        pwmo = shocked.trade.get("PWMO", {})
+        if not isinstance(pwmo, dict):
+            pwmo = {}
+        shocked_pwmo = dict(pwmo)
+        base_val = float(shocked_pwmo.get(commodity, 1.0))
+        shocked_pwmo[commodity] = base_val * float(multiplier)
+        shocked.trade["PWMO"] = shocked_pwmo
+        return shocked
+
     def _resolve_gdxdump_binary(self) -> Path:
         """Resolve gdxdump path with robust fallbacks."""
         raw = str(self.gdxdump_bin).strip()
@@ -514,4 +534,184 @@ class PEPScenarioParityRunner:
             "max_rel_diff": max_rel,
             "rms_abs_diff": rms,
             "top_mismatches": mismatches[:30],
+        }
+
+
+class PEPExportTaxParityRunner(PEPScenarioParityRunner):
+    """Explicit API runner for BASE + EXPORT_TAX parity."""
+
+    def __init__(
+        self,
+        sam_file: Path | str = DEFAULT_SAM_FILE,
+        val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
+        gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
+        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        *,
+        dynamic_sets: bool = True,
+        init_mode: str = "excel",
+        method: str = "ipopt",
+        solve_tolerance: float = 1e-8,
+        max_iterations: int = 300,
+        export_tax_multiplier: float = 0.75,
+        export_tax_homotopy: bool = True,
+        export_tax_homotopy_steps: int = 5,
+        compare_abs_tol: float = 1e-6,
+        compare_rel_tol: float = 1e-6,
+    ) -> None:
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            gams_results_gdx=gams_results_gdx,
+            gdxdump_bin=gdxdump_bin,
+            dynamic_sets=dynamic_sets,
+            init_mode=init_mode,
+            method=method,
+            solve_tolerance=solve_tolerance,
+            max_iterations=max_iterations,
+            export_tax_multiplier=export_tax_multiplier,
+            export_tax_homotopy=export_tax_homotopy,
+            export_tax_homotopy_steps=export_tax_homotopy_steps,
+            compare_abs_tol=compare_abs_tol,
+            compare_rel_tol=compare_rel_tol,
+        )
+
+    def run(self) -> dict[str, Any]:
+        return super().run()
+
+
+class PEPImportPriceParityRunner(PEPScenarioParityRunner):
+    """API runner for BASE + IMPORT_PRICE parity."""
+
+    def __init__(
+        self,
+        sam_file: Path | str = DEFAULT_SAM_FILE,
+        val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
+        gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
+        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        *,
+        dynamic_sets: bool = True,
+        init_mode: str = "excel",
+        method: str = "ipopt",
+        solve_tolerance: float = 1e-8,
+        max_iterations: int = 300,
+        import_price_commodity: str = "agr",
+        import_price_multiplier: float = 1.25,
+        compare_abs_tol: float = 1e-6,
+        compare_rel_tol: float = 1e-6,
+    ) -> None:
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            gams_results_gdx=gams_results_gdx,
+            gdxdump_bin=gdxdump_bin,
+            dynamic_sets=dynamic_sets,
+            init_mode=init_mode,
+            method=method,
+            solve_tolerance=solve_tolerance,
+            max_iterations=max_iterations,
+            export_tax_multiplier=1.0,
+            export_tax_homotopy=False,
+            export_tax_homotopy_steps=0,
+            compare_abs_tol=compare_abs_tol,
+            compare_rel_tol=compare_rel_tol,
+        )
+        self.import_price_commodity = str(import_price_commodity).strip().lower()
+        self.import_price_multiplier = float(import_price_multiplier)
+
+    def run(self) -> dict[str, Any]:
+        """Execute BASE and IMPORT_PRICE scenarios and compare to GAMS."""
+        base_state = self._calibrate_base_state()
+
+        base_solver, base_solution, base_validation = self._solve_state(base_state)
+        base_run = ScenarioSolveReport(
+            scenario="base",
+            export_tax_multiplier=1.0,
+            converged=bool(base_solution.converged),
+            iterations=int(base_solution.iterations),
+            final_residual=float(base_solution.final_residual),
+            message=str(base_solution.message),
+            key_indicators=self._key_indicators(base_solution.variables),
+            validation=base_validation,
+        )
+
+        import_state = self._clone_with_import_price_shock(
+            base_state,
+            commodity=self.import_price_commodity,
+            multiplier=self.import_price_multiplier,
+        )
+        import_solver, import_solution, import_validation = self._solve_state(
+            import_state,
+            initial_vars=base_solution.variables,
+            gams_slice="sim1",
+        )
+
+        if (
+            not bool(import_solution.converged)
+            and float(import_solution.final_residual) <= float(self.solve_tolerance)
+            and self.method == "ipopt"
+        ):
+            import_solver, import_solution, import_validation = self._solve_state(
+                import_state,
+                initial_vars=import_solution.variables,
+                gams_slice="sim1",
+            )
+            import_validation = dict(import_validation)
+            import_validation["restart"] = {
+                "enabled": True,
+                "reason": "residual_below_tolerance_but_status_nonzero",
+                "attempts": 1,
+            }
+
+        scenario_name = f"import_price_{self.import_price_commodity}"
+        import_run = ScenarioSolveReport(
+            scenario=scenario_name,
+            export_tax_multiplier=1.0,
+            import_price_commodity=self.import_price_commodity,
+            import_price_multiplier=self.import_price_multiplier,
+            converged=bool(import_solution.converged),
+            iterations=int(import_solution.iterations),
+            final_residual=float(import_solution.final_residual),
+            message=str(import_solution.message),
+            key_indicators=self._key_indicators(import_solution.variables),
+            validation=import_validation,
+        )
+
+        base_cmp = self._compare_solution_with_gams(
+            solution_vars=base_solution.variables,
+            solution_params=base_solver.params,
+            gams_slice="base",
+        )
+        import_cmp = self._compare_solution_with_gams(
+            solution_vars=import_solution.variables,
+            solution_params=import_solver.params,
+            gams_slice="sim1",
+        )
+
+        return {
+            "config": {
+                "sam_file": str(self.sam_file),
+                "val_par_file": str(self.val_par_file) if self.val_par_file else None,
+                "gams_results_gdx": str(self.gams_results_gdx),
+                "gdxdump_bin": str(self._resolve_gdxdump_binary()),
+                "dynamic_sets": self.dynamic_sets,
+                "init_mode": self.init_mode,
+                "method": self.method,
+                "equation_mode": "gams_strict",
+                "solve_tolerance": self.solve_tolerance,
+                "max_iterations": self.max_iterations,
+                "import_price_commodity": self.import_price_commodity,
+                "import_price_multiplier": self.import_price_multiplier,
+                "compare_abs_tol": self.compare_abs_tol,
+                "compare_rel_tol": self.compare_rel_tol,
+            },
+            "scenarios": {
+                "base": {
+                    "solve": base_run.__dict__,
+                    "gams_comparison": base_cmp,
+                },
+                scenario_name: {
+                    "solve": import_run.__dict__,
+                    "gams_comparison": import_cmp,
+                },
+            },
         }
