@@ -5,7 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from equilibria.simulations.adapters.parameter_state import ParameterStateAdapter
+from equilibria.simulations.adapters.parameter_state import (
+    ParameterStateAdapter,
+    StateCompareFn,
+    StateIndicatorsFn,
+    StateSolveFn,
+)
 from equilibria.simulations.types import ShockDefinition
 
 
@@ -18,10 +23,16 @@ class ICIOAdapter(ParameterStateAdapter):
         base_state: dict[str, Any] | None = None,
         state_loader: Callable[[], dict[str, Any]] | None = None,
         shock_definitions: list[ShockDefinition] | None = None,
+        solve_fn: StateSolveFn | None = None,
+        compare_fn: StateCompareFn | None = None,
+        key_indicators_fn: StateIndicatorsFn | None = None,
     ) -> None:
         super().__init__(
             model_label="icio",
             base_state=base_state,
             state_loader=state_loader,
             shock_definitions=shock_definitions,
+            solve_fn=solve_fn,
+            compare_fn=compare_fn,
+            key_indicators_fn=key_indicators_fn,
         )

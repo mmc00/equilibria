@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 from equilibria.simulations import (
     GTAPSimulator,
     ICIOSimulator,
@@ -74,6 +77,116 @@ def test_no_solver_adapters_report_compare_not_implemented() -> None:
     comparison = report["scenarios"][0]["comparison"]
     assert comparison["passed"] is False
     assert "not implemented" in comparison["reason"]
+
+
+def test_ieem_adapter_supports_native_hook_solver_and_compare() -> None:
+    solve_initials: list[object | None] = []
+    compare_slices: list[str] = []
+
+    def solve_fn(
+        state: dict[str, float],
+        *,
+        initial_vars: object | None,
+        reference_results_gdx: Path | None,
+        reference_slice: str,
+    ) -> tuple[object, object, dict[str, object]]:
+        _ = reference_results_gdx
+        solve_initials.append(initial_vars)
+        return (
+            SimpleNamespace(params={"mode": "hook"}),
+            SimpleNamespace(
+                converged=True,
+                iterations=len(solve_initials),
+                final_residual=0.0,
+                message=f"hooked:{reference_slice}",
+                variables={"x": float(state["x"])},
+            ),
+            {"passed": True, "mode": "hooked"},
+        )
+
+    def compare_fn(
+        *,
+        solution_vars: object,
+        solution_params: dict[str, object],
+        reference_results_gdx: Path,
+        reference_slice: str,
+        abs_tol: float,
+        rel_tol: float,
+    ) -> dict[str, object]:
+        _ = reference_results_gdx, abs_tol, rel_tol
+        compare_slices.append(reference_slice)
+        return {
+            "passed": True,
+            "slice": reference_slice,
+            "mode": solution_params["mode"],
+            "x": float(solution_vars["x"]),
+        }
+
+    def key_indicators_fn(vars_obj: object) -> dict[str, float]:
+        x = float(vars_obj["x"])
+        return {"x": x, "x2": 2.0 * x}
+
+    sim = Simulator(
+        model="ieem",
+        base_state={"x": 10.0},
+        solve_fn=solve_fn,
+        compare_fn=compare_fn,
+        key_indicators_fn=key_indicators_fn,
+    ).fit()
+
+    report = sim.run_scenarios(
+        scenarios=[Scenario(name="plus_three", shocks=[Shock(var="x", op="add", values=3.0)])],
+        reference_results_gdx="dummy.gdx",
+        warm_start=True,
+    )
+
+    assert report["capabilities"]["has_solver"] is True
+    assert report["capabilities"]["has_reference_compare"] is True
+    assert report["capabilities"]["mode"] == "state_with_solver_and_compare_hooks"
+    assert report["base"]["validation"]["mode"] == "hooked"
+    assert report["base"]["solve"]["message"] == "hooked:base"
+    assert report["base"]["solve"]["key_indicators"]["x"] == 10.0
+    assert report["base"]["comparison"]["passed"] is True
+    assert report["base"]["comparison"]["slice"] == "base"
+    assert report["scenarios"][0]["solve"]["key_indicators"]["x"] == 13.0
+    assert report["scenarios"][0]["solve"]["key_indicators"]["x2"] == 26.0
+    assert report["scenarios"][0]["comparison"]["slice"] == "sim1"
+    assert compare_slices == ["base", "sim1"]
+    assert solve_initials[0] is None
+    assert solve_initials[1] == {"x": 10.0}
+
+
+def test_gtap_adapter_solver_hook_without_compare_reports_capability() -> None:
+    def solve_fn(
+        state: dict[str, float],
+        *,
+        initial_vars: object | None,
+        reference_results_gdx: Path | None,
+        reference_slice: str,
+    ) -> tuple[object, object, dict[str, object]]:
+        _ = initial_vars, reference_results_gdx, reference_slice
+        return (
+            SimpleNamespace(params={}),
+            SimpleNamespace(
+                converged=True,
+                iterations=1,
+                final_residual=0.0,
+                message="hooked",
+                variables={"x": float(state["x"])},
+            ),
+            {"passed": True, "mode": "hooked"},
+        )
+
+    sim = Simulator(model="gtap", base_state={"x": 1.0}, solve_fn=solve_fn).fit()
+    report = sim.run_scenarios(
+        scenarios=[Scenario(name="s", shocks=[Shock(var="x", op="set", values=2.0)])],
+        reference_results_gdx="dummy.gdx",
+    )
+    assert report["capabilities"]["has_solver"] is True
+    assert report["capabilities"]["has_reference_compare"] is False
+    assert report["capabilities"]["mode"] == "state_with_solver_hook"
+    assert report["scenarios"][0]["comparison"]["passed"] is False
+    assert "not implemented" in report["scenarios"][0]["comparison"]["reason"]
 
 
 def test_available_models_includes_pep_ieem_gtap_icio() -> None:
