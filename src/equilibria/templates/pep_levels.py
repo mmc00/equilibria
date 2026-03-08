@@ -12,13 +12,14 @@ import math
 import re
 import shutil
 import subprocess
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+from equilibria.simulations.pep_compare import get_solution_value
 from equilibria.templates.pep_model_equations import PEPModelVariables
-from equilibria.templates.pep_scenario_parity import get_solution_value
 
 DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
 _SCENARIOS = {"base", "sim1", "var"}

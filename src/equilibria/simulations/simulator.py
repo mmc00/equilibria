@@ -6,11 +6,17 @@ from pathlib import Path
 from typing import Any
 
 from equilibria.simulations.adapters.base import BaseModelAdapter
+from equilibria.simulations.adapters.gtap import GTAPAdapter
+from equilibria.simulations.adapters.icio import ICIOAdapter
+from equilibria.simulations.adapters.ieem import IEEMAdapter
 from equilibria.simulations.adapters.pep import PepAdapter
 from equilibria.simulations.types import Scenario, Shock, ShockDefinition
 
 _ADAPTER_REGISTRY: dict[str, type[BaseModelAdapter]] = {
     "pep": PepAdapter,
+    "ieem": IEEMAdapter,
+    "gtap": GTAPAdapter,
+    "icio": ICIOAdapter,
 }
 
 
@@ -20,6 +26,11 @@ def register_adapter(model: str, adapter_cls: type[BaseModelAdapter]) -> None:
     if not key:
         raise ValueError("Model key must be non-empty.")
     _ADAPTER_REGISTRY[key] = adapter_cls
+
+
+def available_models() -> tuple[str, ...]:
+    """Return currently registered model keys."""
+    return tuple(sorted(_ADAPTER_REGISTRY))
 
 
 class Simulator:
