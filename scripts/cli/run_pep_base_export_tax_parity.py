@@ -11,12 +11,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from equilibria.templates.pep_scenario_parity import (  # noqa: E402
-    DEFAULT_RESULTS_GDX,
-    DEFAULT_SAM_FILE,
-    DEFAULT_VAL_PAR_FILE,
-    PEPScenarioParityRunner,
-)
+from equilibria.simulations import PepSimulator  # noqa: E402
+
+DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
+DEFAULT_VAL_PAR_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
+DEFAULT_RESULTS_GDX = REPO_ROOT / "src/equilibria/templates/reference/pep2/scripts/Results.gdx"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -83,24 +82,68 @@ def _print_scenario_report(name: str, payload: dict[str, object]) -> None:
 def main() -> int:
     args = _build_parser().parse_args()
 
-    runner = PEPScenarioParityRunner(
+    simulator = PepSimulator(
         sam_file=args.sam_file,
         val_par_file=args.val_par_file,
-        gams_results_gdx=args.results_gdx,
         gdxdump_bin=args.gdxdump_bin,
-        dynamic_sets=(not args.no_dynamic_sets),
         init_mode=args.init_mode,
         method=args.method,
         solve_tolerance=args.solve_tolerance,
         max_iterations=args.max_iterations,
-        export_tax_multiplier=args.export_tax_multiplier,
-        export_tax_homotopy=(not args.disable_export_tax_homotopy),
-        export_tax_homotopy_steps=args.export_tax_homotopy_steps,
+        dynamic_sets=(not args.no_dynamic_sets),
+    ).fit()
+
+    if args.disable_export_tax_homotopy or args.export_tax_homotopy_steps != 5:
+        print(
+            "note: homotopy flags are ignored in the new simulations API path "
+            "(kept for backward-compatible CLI args)."
+        )
+
+    report_raw = simulator.run_export_tax(
+        multiplier=args.export_tax_multiplier,
+        reference_results_gdx=args.results_gdx,
         compare_abs_tol=args.compare_abs_tol,
         compare_rel_tol=args.compare_rel_tol,
+        warm_start=True,
+        include_base=True,
     )
 
-    report = runner.run()
+    base_entry = report_raw["base"]
+    export_entry = next(
+        (entry for entry in report_raw["scenarios"] if entry["name"] == "export_tax"),
+        None,
+    )
+    if export_entry is None:
+        raise RuntimeError("export_tax scenario not found in simulation report.")
+
+    report = {
+        "config": {
+            "sam_file": str(args.sam_file),
+            "val_par_file": str(args.val_par_file) if args.val_par_file else None,
+            "gams_results_gdx": str(args.results_gdx),
+            "gdxdump_bin": str(args.gdxdump_bin),
+            "dynamic_sets": (not args.no_dynamic_sets),
+            "init_mode": args.init_mode,
+            "method": args.method,
+            "equation_mode": "gams_strict",
+            "solve_tolerance": args.solve_tolerance,
+            "max_iterations": args.max_iterations,
+            "export_tax_multiplier": args.export_tax_multiplier,
+            "compare_abs_tol": args.compare_abs_tol,
+            "compare_rel_tol": args.compare_rel_tol,
+        },
+        "scenarios": {
+            "base": {
+                "solve": base_entry["solve"],
+                "gams_comparison": base_entry["comparison"],
+            },
+            "export_tax": {
+                "solve": export_entry["solve"],
+                "gams_comparison": export_entry["comparison"],
+            },
+        },
+    }
+
     print("=" * 84)
     print("PEP BASE + EXPORT_TAX PARITY")
     print("=" * 84)

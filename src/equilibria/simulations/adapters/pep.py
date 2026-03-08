@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from equilibria.simulations.adapters.base import BaseModelAdapter
+from equilibria.simulations.pep_compare import compare_with_gams
+from equilibria.simulations.pep_compare import key_indicators as pep_key_indicators
 from equilibria.simulations.types import Shock, ShockDefinition
 from equilibria.templates.pep_calibration_unified import (
     PEPModelCalibrator,
@@ -15,12 +17,11 @@ from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorDynamic,
 )
 from equilibria.templates.pep_model_solver import PEPModelSolver
-from equilibria.templates.pep_scenario_parity import (
-    DEFAULT_GDXDUMP_BIN,
-    DEFAULT_SAM_FILE,
-    DEFAULT_VAL_PAR_FILE,
-    PEPScenarioParityRunner,
-)
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
+DEFAULT_VAL_PAR_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
+DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
 
 
 class PepAdapter(BaseModelAdapter):
@@ -182,27 +183,18 @@ class PepAdapter(BaseModelAdapter):
         abs_tol: float,
         rel_tol: float,
     ) -> dict[str, Any]:
-        runner = PEPScenarioParityRunner(
-            sam_file=self.sam_file,
-            val_par_file=self.val_par_file,
-            gams_results_gdx=reference_results_gdx,
-            gdxdump_bin=self.gdxdump_bin,
-            dynamic_sets=self.dynamic_sets,
-            init_mode=self.init_mode,
-            method=self.method,
-            solve_tolerance=self.solve_tolerance,
-            max_iterations=self.max_iterations,
-            compare_abs_tol=abs_tol,
-            compare_rel_tol=rel_tol,
-        )
-        return runner._compare_solution_with_gams(
+        return compare_with_gams(
             solution_vars=solution_vars,
             solution_params=solution_params,
+            gams_results_gdx=reference_results_gdx,
             gams_slice=reference_slice.lower(),
+            gdxdump_bin=self.gdxdump_bin,
+            abs_tol=abs_tol,
+            rel_tol=rel_tol,
         )
 
     def key_indicators(self, vars_obj: Any) -> dict[str, float]:
-        return PEPScenarioParityRunner._key_indicators(vars_obj)
+        return pep_key_indicators(vars_obj)
 
     @staticmethod
     def _apply_scalar_op(current: float, op: str, values: float | dict[str, float]) -> float:

@@ -9,7 +9,12 @@ from equilibria.simulations.presets import (
     import_shock,
     make_preset,
 )
-from equilibria.simulations.simulator import Simulator, register_adapter, run_scenarios
+from equilibria.simulations.simulator import (
+    Simulator,
+    available_models,
+    register_adapter,
+    run_scenarios,
+)
 from equilibria.simulations.types import Scenario, Shock, ShockDefinition
 
 __all__ = [
@@ -18,6 +23,7 @@ __all__ = [
     "ShockDefinition",
     "Simulator",
     "PepSimulator",
+    "available_models",
     "available_presets",
     "make_preset",
     "export_tax",
