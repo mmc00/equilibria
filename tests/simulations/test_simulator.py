@@ -124,6 +124,8 @@ def test_simulator_run_scenarios_warm_start_and_reference() -> None:
     )
 
     assert report["model"] == "fake"
+    assert report["capabilities"]["has_solver"] is True
+    assert report["capabilities"]["has_reference_compare"] is True
     assert report["base"]["solve"]["key_indicators"]["x"] == pytest.approx(12.5)
     assert report["base"]["comparison"]["passed"] is True
 
