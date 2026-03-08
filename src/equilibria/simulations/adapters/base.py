@@ -21,6 +21,14 @@ class BaseModelAdapter(ABC):
         """Deep-copy a calibrated state before applying scenario shocks."""
         return copy.deepcopy(state)
 
+    def capabilities(self) -> dict[str, Any]:
+        """Return adapter capability flags used in simulation reports."""
+        return {
+            "has_solver": True,
+            "has_reference_compare": True,
+            "mode": "native_solver",
+        }
+
     @abstractmethod
     def available_shocks(self) -> list[ShockDefinition]:
         """Return model-specific shock catalog."""

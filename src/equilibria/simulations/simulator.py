@@ -81,6 +81,7 @@ class Simulator:
         report: dict[str, Any] = {
             "model": self.model,
             "model_options": self.model_options,
+            "capabilities": self.adapter.capabilities(),
             "reference_results_gdx": str(reference_gdx) if reference_gdx else None,
             "compare_abs_tol": float(compare_abs_tol),
             "compare_rel_tol": float(compare_rel_tol),
