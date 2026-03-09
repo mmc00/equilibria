@@ -1,7 +1,7 @@
 # pyproject.toml - equilibria: CGE modeling framework
 [project]
 name = "equilibria"
-version = "0.1.0"
+version = "0.2.0"
 description = "A modern Python framework for Computable General Equilibrium (CGE) modeling with modular equation blocks, universal data I/O, and auto-calibration."
 authors = [
     { name = "Marlon Molina", email = "dracomarmol@gmail.com" }
