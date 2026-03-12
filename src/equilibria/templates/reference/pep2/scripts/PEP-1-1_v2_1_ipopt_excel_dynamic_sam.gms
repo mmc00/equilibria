@@ -380,7 +380,7 @@ $GDXIN
  TIPTO           = SUM[j,TIPO(j)];
  TPRODNO         = TIKTO+TIWTO+TIPTO;
  TPRCTSO         = TICTO+TIMTO+TIXTO;
- YGTRO           = SUM[ag,TRO('%ACC_GVT%',ag)];
+ YGTRO           = SUM[agng,TRO('%ACC_GVT%',agng)];
  YGO             = YGKO+TDHTO+TDFTO+TPRODNO+TPRCTSO+YGTRO;
 
  YROWO           = SUM[i,IMO(i)]+SUM[k,lambda_RK('%ACC_ROW%',k)]

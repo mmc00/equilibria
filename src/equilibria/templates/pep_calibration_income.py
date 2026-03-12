@@ -277,7 +277,7 @@ class IncomeCalibrator:
         K = self.sets['K']
         L = self.sets['L']
         AG = self.sets['AG']
-        AGNG = self.sets['AGNG']
+        AGNG = self.sets.get('AGNG', [ag for ag in AG if str(ag).lower() != 'gvt'])
         
         for h in H:
             # YHKO(h) = sum of capital income to household h
@@ -393,7 +393,7 @@ class IncomeCalibrator:
             TIPTO = SUM[j, TIPO(j)]
             TPRODNO = TIKTO + TIWTO + TIPTO
             TPRCTSO = TICTO + TIMTO + TIXTO
-            YGTRO = SUM[ag, TRO('gvt',ag)]
+            YGTRO = SUM[agng, TRO('gvt',agng)]
             YGO = YGKO + TDHTO + TDFTO + TPRODNO + TPRCTSO + YGTRO
             
         Note: lambda_RK('gvt', k) = SAM('AG', 'GVT', 'K', k)
@@ -414,6 +414,7 @@ class IncomeCalibrator:
         J = self.sets['J']
         L = self.sets['L']
         AG = self.sets['AG']
+        AGNG = self.sets.get('AGNG', [ag for ag in AG if str(ag).lower() != 'gvt'])
         
         # YGKO = government capital income
         # lambda_RK('gvt', k) = SAM('AG', 'GVT', 'K', k)
@@ -504,11 +505,11 @@ class IncomeCalibrator:
         self.result.TPRCTSO = tprctso
         
         # YGTRO = government transfer income
-        # GAMS pep2 dynamic scripts calibrate this over AG:
-        # YGTRO = SUM[ag, TRO('gvt', ag)].
+        # The model equations exclude government self-transfers:
+        # YGTRO = SUM[agng, TRO('gvt', agng)].
         ygtro = sum(
             self._get_sam_value('SAM', 'AG', 'GVT', 'AG', ag.upper())
-            for ag in AG
+            for ag in AGNG
         )
         self.result.YGTRO = ygtro
         
