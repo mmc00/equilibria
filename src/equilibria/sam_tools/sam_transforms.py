@@ -198,6 +198,99 @@ def move_tx_to_ti_on_i_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dic
     }
 
 
+def collapse_margin_account_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+    cfg = op or {}
+    margin_key = ("MARG", "MARG")
+    margin_commodity = norm_text(cfg.get("margin_commodity", "ser"))
+    margin_target = ("I", margin_commodity)
+    strict = bool(cfg.get("strict", False))
+
+    df = sam.to_dataframe()
+    if margin_key not in df.index or margin_target not in df.index:
+        return {
+            "margin_commodity": margin_target[1],
+            "moved_total": 0.0,
+            "cleared_column_total": 0.0,
+            "active_columns": 0,
+            "unexpected_inflows": [],
+        }
+
+    moved_total = 0.0
+    active_columns = 0
+    for col_key in list(df.columns):
+        if col_key == margin_key:
+            continue
+        value = float(df.loc[margin_key, col_key])
+        if abs(value) <= 1e-14:
+            continue
+        df.loc[margin_target, col_key] += value
+        df.loc[margin_key, col_key] = 0.0
+        moved_total += value
+        active_columns += 1
+
+    cleared_column_total = 0.0
+    unexpected_inflows: list[dict[str, Any]] = []
+    if margin_key in df.columns:
+        for row_key in list(df.index):
+            value = float(df.loc[row_key, margin_key])
+            if abs(value) <= 1e-14:
+                continue
+            if row_key == margin_target:
+                df.loc[row_key, margin_key] = 0.0
+                cleared_column_total += value
+                continue
+            unexpected_inflows.append(
+                {
+                    "row": f"{row_key[0]}.{row_key[1]}",
+                    "value": value,
+                }
+            )
+        if strict and unexpected_inflows:
+            rows = ", ".join(item["row"] for item in unexpected_inflows)
+            raise ValueError(f"unexpected inflows on MARG column: {rows}")
+
+    sam.replace_dataframe(df)
+    return {
+        "margin_commodity": margin_target[1],
+        "moved_total": moved_total,
+        "cleared_column_total": cleared_column_total,
+        "active_columns": active_columns,
+        "unexpected_inflows": unexpected_inflows,
+    }
+
+
+def collapse_tx_account_into_ti_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+    _ = op or {}
+    tx_key = ("AG", "tx")
+    ti_key = ("AG", "ti")
+
+    df = sam.to_dataframe()
+    if tx_key not in df.index or ti_key not in df.index or tx_key not in df.columns or ti_key not in df.columns:
+        return {
+            "row_moved_total": 0.0,
+            "column_moved_total": 0.0,
+            "self_overlap": 0.0,
+        }
+
+    row_values = df.loc[tx_key, :].copy()
+    col_values = df.loc[:, tx_key].copy()
+    self_overlap = float(df.loc[tx_key, tx_key])
+
+    df.loc[ti_key, :] = df.loc[ti_key, :] + row_values
+    df.loc[:, ti_key] = df.loc[:, ti_key] + col_values
+    if abs(self_overlap) > 1e-14:
+        df.loc[ti_key, ti_key] = float(df.loc[ti_key, ti_key]) - self_overlap
+
+    df.loc[tx_key, :] = 0.0
+    df.loc[:, tx_key] = 0.0
+    sam.replace_dataframe(df)
+    return {
+        "row_moved_total": float(row_values.sum()),
+        "column_moved_total": float(col_values.sum()),
+        "self_overlap": self_overlap,
+    }
+
+
 def _move_factor_to_ji_on_sam(
     sam: Sam,
     *,
@@ -264,6 +357,160 @@ def move_l_to_ji_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str,
     return _move_factor_to_ji_on_sam(sam, factor_category="L", op=op)
 
 
+def move_nonmargin_i_to_ji_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+    cfg = op or {}
+    raw_mapping = cfg.get("commodity_to_sector") or DEFAULT_COMMODITY_TO_SECTOR
+    commodity_to_sector = {
+        norm_text_lower(k): norm_text(v)
+        for k, v in raw_mapping.items()
+    }
+    default_sector = norm_text(cfg.get("default_sector", "ind"))
+    margin_commodities = cfg.get("margin_commodities")
+    if margin_commodities is None:
+        margin_commodities = [cfg.get("margin_commodity", "ser")]
+    margin_rows = {norm_text_lower(item) for item in margin_commodities}
+    strict_targets = bool(cfg.get("strict_targets", True))
+
+    df = sam.to_dataframe()
+    moved_total = 0.0
+    moved_by_source: dict[str, float] = {}
+    cells_moved = 0
+    missing_targets: list[str] = []
+
+    commodity_rows = [key for key in sam.row_keys if norm_text_lower(key[0]) == "i"]
+    commodity_cols = [key for key in sam.col_keys if norm_text_lower(key[0]) == "i"]
+    for row_key in commodity_rows:
+        commodity = norm_text(row_key[1])
+        if norm_text_lower(commodity) in margin_rows:
+            continue
+        sector = commodity_to_sector.get(norm_text_lower(commodity), default_sector)
+        target_key = ("J", sector)
+        if target_key not in df.index:
+            if strict_targets:
+                raise ValueError(f"target_row[{commodity}] missing for {target_key}")
+            missing_targets.append(f"J.{sector}")
+            continue
+        moved_source_total = 0.0
+        for col_key in commodity_cols:
+            value = float(df.loc[row_key, col_key])
+            if abs(value) <= 1e-14:
+                continue
+            df.loc[target_key, col_key] += value
+            df.loc[row_key, col_key] = 0.0
+            moved_total += value
+            moved_source_total += value
+            cells_moved += 1
+        if abs(moved_source_total) > 1e-14:
+            moved_by_source[commodity] = moved_source_total
+
+    sam.replace_dataframe(df)
+    return {
+        "margin_commodities": sorted(margin_rows),
+        "moved_total": moved_total,
+        "cells_moved": cells_moved,
+        "moved_by_source": moved_by_source,
+        "missing_targets": missing_targets,
+    }
+
+
+def move_row_factor_inflows_to_owning_agents_on_sam(
+    sam: Sam,
+    op: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    cfg = op or {}
+    factor_categories = {
+        norm_text_lower(item)
+        for item in cfg.get("factor_categories", ["K", "L"])
+    }
+    source_agent = norm_text(cfg.get("source_agent", "row"))
+    source_col = ("AG", source_agent)
+    excluded_agent_elems = {
+        norm_text_lower(item)
+        for item in cfg.get("excluded_agent_elems", ["row", "td", "ti", "tm", "tx"])
+    }
+
+    df = sam.to_dataframe()
+    if source_col not in df.columns:
+        return {
+            "source_agent": source_agent,
+            "moved_total": 0.0,
+            "moved_by_factor": {},
+            "unresolved_factors": [],
+        }
+
+    moved_total = 0.0
+    moved_by_factor: dict[str, float] = {}
+    unresolved_factors: list[str] = []
+    factor_rows = [key for key in sam.row_keys if norm_text_lower(key[0]) in factor_categories]
+    for factor_key in factor_rows:
+        value = float(df.loc[factor_key, source_col])
+        if abs(value) <= 1e-14:
+            continue
+        if factor_key not in df.columns:
+            unresolved_factors.append(f"{factor_key[0]}.{factor_key[1]}")
+            continue
+        weights: dict[tuple[str, str], float] = {}
+        for row_key in sam.row_keys:
+            if norm_text_lower(row_key[0]) != "ag":
+                continue
+            if norm_text_lower(row_key[1]) in excluded_agent_elems:
+                continue
+            weight = float(df.loc[row_key, factor_key])
+            if weight > 1e-14:
+                weights[row_key] = weight
+        if not weights:
+            unresolved_factors.append(f"{factor_key[0]}.{factor_key[1]}")
+            continue
+        denom = float(sum(weights.values()))
+        df.loc[factor_key, source_col] = 0.0
+        for row_key, weight in weights.items():
+            df.loc[row_key, source_col] += value * (weight / denom)
+        moved_total += value
+        moved_by_factor[f"{factor_key[0]}.{factor_key[1]}"] = value
+
+    sam.replace_dataframe(df)
+    return {
+        "source_agent": source_agent,
+        "moved_total": moved_total,
+        "moved_by_factor": moved_by_factor,
+        "unresolved_factors": unresolved_factors,
+    }
+
+
+def clear_agent_self_transfers_on_sam(
+    sam: Sam,
+    op: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    cfg = op or {}
+    category = norm_text(cfg.get("category", "AG")).upper()
+    raw_agents = cfg.get("agents")
+    if raw_agents is None:
+        raw_agents = [cfg.get("agent", "gvt")]
+
+    df = sam.to_dataframe()
+    removed_total = 0.0
+    removed_by_agent: dict[str, float] = {}
+
+    for agent in raw_agents:
+        key = (category, norm_text(agent).lower())
+        if key not in df.index or key not in df.columns:
+            continue
+        value = float(df.loc[key, key])
+        if abs(value) <= 1e-14:
+            continue
+        df.loc[key, key] = 0.0
+        removed_total += value
+        removed_by_agent[f"{key[0]}.{key[1]}"] = value
+
+    sam.replace_dataframe(df)
+    return {
+        "category": category,
+        "agents": [norm_text(agent).lower() for agent in raw_agents],
+        "removed_total": removed_total,
+        "removed_by_agent": removed_by_agent,
+    }
+
+
 def align_ti_to_gvt_j_on_sam(sam: Sam) -> dict[str, float]:
     df = sam.to_dataframe()
     ti_row = ("AG", "ti")
@@ -288,6 +535,8 @@ def align_ti_to_gvt_j_on_sam(sam: Sam) -> dict[str, float]:
 
 def normalize_pep_accounts_on_sam(sam: Sam) -> dict[str, int]:
     df = sam.to_dataframe()
+    raw_index = list(df.index)
+    raw_columns = list(df.columns)
     labels = [norm_text(label[1]) for label in df.index]
     pep_keys = _build_pep_key_order(labels)
     key_index = {key: idx for idx, key in enumerate(pep_keys)}
@@ -308,15 +557,15 @@ def normalize_pep_accounts_on_sam(sam: Sam) -> dict[str, int]:
         "S-ROW": ["ROW"],
     }
     for savings_row, agents in savings_to_agent.items():
-        row_key = ("RAW", savings_row)
-        if row_key not in df.index:
+        row_key = _locate_key(raw_index, ("RAW", savings_row))
+        if row_key is None:
             continue
         for agent in agents:
-            col_key = ("AG", agent.lower())
-            if col_key not in df.columns:
+            raw_col_key = _locate_key(raw_columns, ("RAW", agent))
+            if raw_col_key is None:
                 continue
-            value = float(df.loc[row_key, col_key])
-            _add_value(pep_matrix, key_index, ("OTH", "INV"), col_key, value)
+            value = float(df.loc[row_key, raw_col_key])
+            _add_value(pep_matrix, key_index, ("OTH", "INV"), ("AG", agent.lower()), value)
     if ("OTH", "VSTK") in df.index:
         vstk_total = float(df.loc[("OTH", "VSTK"), :].sum())
         _add_value(pep_matrix, key_index, ("OTH", "VSTK"), ("OTH", "INV"), vstk_total)
@@ -325,11 +574,22 @@ def normalize_pep_accounts_on_sam(sam: Sam) -> dict[str, int]:
             continue
         commodity = key[1]
         c_label = f"C-{commodity.upper()}"
-        raw_key = ("RAW", c_label)
-        if raw_key in df.index:
-            for target in [("OTH", "INV"), ("OTH", "VSTK")]:
-                if target in df.columns:
-                    _add_value(pep_matrix, key_index, ("I", commodity), target, float(df.loc[raw_key, target]))
+        raw_key = _locate_key(raw_index, ("RAW", c_label))
+        if raw_key is not None:
+            for raw_target, pep_target in [
+                (("RAW", "INV"), ("OTH", "INV")),
+                (("RAW", "VSTK"), ("OTH", "VSTK")),
+            ]:
+                raw_target_key = _locate_key(raw_columns, raw_target)
+                if raw_target_key is None:
+                    continue
+                _add_value(
+                    pep_matrix,
+                    key_index,
+                    ("I", commodity),
+                    pep_target,
+                    float(df.loc[raw_key, raw_target_key]),
+                )
     multi_index = pd.MultiIndex.from_tuples(pep_keys)
     sam.replace_dataframe(pd.DataFrame(pep_matrix, index=multi_index, columns=multi_index))
     return {

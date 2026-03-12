@@ -144,6 +144,158 @@ def _build_check_result(
     )
 
 
+def _structural_failure(
+    key: SAMKey,
+    value: float,
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    row = f"{key[0]}.{key[1]}"
+    col = f"{key[2]}.{key[3]}"
+    return {
+        "row": row,
+        "col": col,
+        "value": float(value),
+        "reason": reason,
+        "abs_delta": abs(float(value)),
+        "rel_delta": 1.0,
+    }
+
+
+def _check_no_active_entries(
+    matrix: dict[SAMKey, float],
+    spec: SAMContractSpec,
+    max_samples: int,
+    *,
+    predicate,
+    reason: str,
+) -> SAMQACheckResult:
+    failures: list[dict[str, Any]] = []
+    evaluated = 0
+    for key, raw_value in matrix.items():
+        value = float(raw_value)
+        if abs(value) <= spec.abs_tol:
+            continue
+        if not predicate(key):
+            continue
+        evaluated += 1
+        failures.append(_structural_failure(key, value, reason=reason))
+    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+
+
+def _check_unsupported_commodity_inflows(
+    matrix: dict[SAMKey, float],
+    spec: SAMContractSpec,
+    max_samples: int,
+) -> SAMQACheckResult:
+    failures: list[dict[str, Any]] = []
+    evaluated = 0
+    for key, raw_value in matrix.items():
+        value = float(raw_value)
+        if abs(value) <= spec.abs_tol:
+            continue
+        row_cat, row_elem, col_cat, _col_elem = key
+        if col_cat != "I":
+            continue
+        if row_cat in {"K", "L", "MARG"} or (row_cat == "AG" and row_elem == "TX"):
+            evaluated += 1
+            failures.append(
+                _structural_failure(
+                    key,
+                    value,
+                    reason="unsupported_inflow_on_commodity_column",
+                )
+            )
+    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+
+
+def _check_unsupported_factor_inflows(
+    matrix: dict[SAMKey, float],
+    spec: SAMContractSpec,
+    max_samples: int,
+    *,
+    allowed_factor_source_columns: set[tuple[str, str]],
+) -> SAMQACheckResult:
+    failures: list[dict[str, Any]] = []
+    evaluated = 0
+    for key, raw_value in matrix.items():
+        value = float(raw_value)
+        if abs(value) <= spec.abs_tol:
+            continue
+        row_cat, _row_elem, col_cat, col_elem = key
+        if row_cat not in {"K", "L"}:
+            continue
+        if col_cat == "J" or (col_cat, col_elem) in allowed_factor_source_columns:
+            continue
+        evaluated += 1
+        failures.append(
+            _structural_failure(
+                key,
+                value,
+                reason="factor_row_receives_from_non_activity_column",
+            )
+        )
+    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+
+
+def _check_residual_i_to_i_support(
+    matrix: dict[SAMKey, float],
+    spec: SAMContractSpec,
+    max_samples: int,
+    *,
+    allowed_margin_commodities: set[str],
+) -> SAMQACheckResult:
+    failures: list[dict[str, Any]] = []
+    evaluated = 0
+    for key, raw_value in matrix.items():
+        value = float(raw_value)
+        if abs(value) <= spec.abs_tol:
+            continue
+        row_cat, row_elem, col_cat, _col_elem = key
+        if row_cat != "I" or col_cat != "I":
+            continue
+        evaluated += 1
+        if row_elem in allowed_margin_commodities:
+            continue
+        failures.append(
+            _structural_failure(
+                key,
+                value,
+                reason="non_margin_commodity_found_on_i_to_i_support",
+            )
+        )
+    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+
+
+def _check_residual_i_to_x_support(
+    matrix: dict[SAMKey, float],
+    spec: SAMContractSpec,
+    max_samples: int,
+    *,
+    allowed_margin_commodities: set[str],
+) -> SAMQACheckResult:
+    failures: list[dict[str, Any]] = []
+    evaluated = 0
+    for key, raw_value in matrix.items():
+        value = float(raw_value)
+        if abs(value) <= spec.abs_tol:
+            continue
+        row_cat, row_elem, col_cat, _col_elem = key
+        if row_cat != "I" or col_cat != "X":
+            continue
+        evaluated += 1
+        if row_elem in allowed_margin_commodities:
+            continue
+        failures.append(
+            _structural_failure(
+                key,
+                value,
+                reason="non_margin_commodity_found_on_i_to_x_support",
+            )
+        )
+    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+
+
 def _check_export_value_balance(
     matrix: dict[SAMKey, float],
     sets: dict[str, list[str]],
@@ -522,6 +674,9 @@ def run_sam_data_contracts(
     balance_rel_tol: float = 1e-6,
     gdp_rel_tol: float = 0.08,
     max_samples: int = 8,
+    strict_structural: bool = False,
+    allowed_margin_commodities: list[str] | None = None,
+    allowed_factor_source_columns: list[tuple[str, str]] | None = None,
     source: str | None = None,
 ) -> SAMQAReport:
     """Run Phase 1 SAM QA contracts on loaded SAM data."""
@@ -533,19 +688,75 @@ def run_sam_data_contracts(
         balance_rel_tol=balance_rel_tol,
         gdp_rel_tol=gdp_rel_tol,
     )
+    resolved_margin_commodities = {
+        _to_upper(item)
+        for item in (allowed_margin_commodities or ["ser"])
+    }
+    resolved_allowed_factor_source_columns = {
+        (_to_upper(cat), _to_upper(elem))
+        for cat, elem in (allowed_factor_source_columns or [("OTH", "TOT")])
+    }
 
-    checks = [
-        _check_export_value_balance(matrix, resolved_sets, specs["EXP001"], max_samples),
-        _check_commodity_account_balance(matrix, resolved_sets, specs["DSP001"], max_samples),
-        _check_margin_domestic_denominator(matrix, resolved_sets, specs["MRG001"], max_samples),
-        _check_margin_export_denominator(matrix, resolved_sets, specs["MRG002"], max_samples),
-        _check_tax_import_base(matrix, resolved_sets, specs["TAX001"], max_samples),
-        _check_tax_export_base(matrix, resolved_sets, specs["TAX002"], max_samples),
-        _check_tax_commodity_base(matrix, resolved_sets, specs["TAX003"], max_samples),
-        _check_tax_production_base(matrix, resolved_sets, specs["TAX004"], max_samples),
-        _check_macro_savings_investment_balance(matrix, resolved_sets, specs["MAC001"], max_samples),
-        _check_macro_gdp_proxy_closure(matrix, resolved_sets, specs["MAC002"], max_samples),
-    ]
+    checks: list[SAMQACheckResult] = []
+    if strict_structural:
+        checks.extend(
+            [
+                _check_no_active_entries(
+                    matrix,
+                    specs["STR001"],
+                    max_samples,
+                    predicate=lambda key: ("MARG", "MARG") in {
+                        (key[0], key[1]),
+                        (key[2], key[3]),
+                    },
+                    reason="explicit_marg_account_is_active",
+                ),
+                _check_no_active_entries(
+                    matrix,
+                    specs["STR002"],
+                    max_samples,
+                    predicate=lambda key: ("AG", "TX") in {
+                        (key[0], key[1]),
+                        (key[2], key[3]),
+                    },
+                    reason="explicit_ag_tx_account_is_active",
+                ),
+                _check_unsupported_commodity_inflows(matrix, specs["STR003"], max_samples),
+                _check_unsupported_factor_inflows(
+                    matrix,
+                    specs["STR004"],
+                    max_samples,
+                    allowed_factor_source_columns=resolved_allowed_factor_source_columns,
+                ),
+                _check_residual_i_to_i_support(
+                    matrix,
+                    specs["STR005"],
+                    max_samples,
+                    allowed_margin_commodities=resolved_margin_commodities,
+                ),
+                _check_residual_i_to_x_support(
+                    matrix,
+                    specs["STR006"],
+                    max_samples,
+                    allowed_margin_commodities=resolved_margin_commodities,
+                ),
+            ]
+        )
+
+    checks.extend(
+        [
+            _check_export_value_balance(matrix, resolved_sets, specs["EXP001"], max_samples),
+            _check_commodity_account_balance(matrix, resolved_sets, specs["DSP001"], max_samples),
+            _check_margin_domestic_denominator(matrix, resolved_sets, specs["MRG001"], max_samples),
+            _check_margin_export_denominator(matrix, resolved_sets, specs["MRG002"], max_samples),
+            _check_tax_import_base(matrix, resolved_sets, specs["TAX001"], max_samples),
+            _check_tax_export_base(matrix, resolved_sets, specs["TAX002"], max_samples),
+            _check_tax_commodity_base(matrix, resolved_sets, specs["TAX003"], max_samples),
+            _check_tax_production_base(matrix, resolved_sets, specs["TAX004"], max_samples),
+            _check_macro_savings_investment_balance(matrix, resolved_sets, specs["MAC001"], max_samples),
+            _check_macro_gdp_proxy_closure(matrix, resolved_sets, specs["MAC002"], max_samples),
+        ]
+    )
 
     failed_checks = [check for check in checks if not check.passed]
     failed_error_checks = [check for check in failed_checks if check.severity == "error"]
@@ -555,6 +766,11 @@ def run_sam_data_contracts(
         "set_sizes": {name: len(values) for name, values in resolved_sets.items()},
         "balance_rel_tol": balance_rel_tol,
         "gdp_rel_tol": gdp_rel_tol,
+        "strict_structural": strict_structural,
+        "allowed_margin_commodities": sorted(resolved_margin_commodities),
+        "allowed_factor_source_columns": sorted(
+            f"{cat}.{elem}" for cat, elem in resolved_allowed_factor_source_columns
+        ),
     }
 
     return SAMQAReport(
@@ -578,6 +794,9 @@ def run_sam_qa_from_file(
     balance_rel_tol: float = 1e-6,
     gdp_rel_tol: float = 0.08,
     max_samples: int = 8,
+    strict_structural: bool = False,
+    allowed_margin_commodities: list[str] | None = None,
+    allowed_factor_source_columns: list[tuple[str, str]] | None = None,
 ) -> SAMQAReport:
     """Load SAM from file and execute all Phase 1 QA contracts."""
     sam_path = Path(sam_file)
@@ -589,5 +808,8 @@ def run_sam_qa_from_file(
         balance_rel_tol=balance_rel_tol,
         gdp_rel_tol=gdp_rel_tol,
         max_samples=max_samples,
+        strict_structural=strict_structural,
+        allowed_margin_commodities=allowed_margin_commodities,
+        allowed_factor_source_columns=allowed_factor_source_columns,
         source=str(sam_path),
     )

@@ -28,6 +28,76 @@ def default_sam_contracts(
 ) -> dict[str, SAMContractSpec]:
     """Default structural QA contracts used by Phase 1."""
     return {
+        "STR001": SAMContractSpec(
+            code="STR001",
+            title="Explicit MARG Account Removed",
+            category="structural_layout",
+            description=(
+                "The final PEP SAM must not contain active flows on the explicit "
+                "MARG.MARG account."
+            ),
+            severity="error",
+            abs_tol=1e-9,
+            rel_tol=0.0,
+        ),
+        "STR002": SAMContractSpec(
+            code="STR002",
+            title="Explicit AG.TX Account Removed",
+            category="structural_layout",
+            description=(
+                "The final PEP SAM must not contain active flows on the explicit "
+                "AG.TX account."
+            ),
+            severity="error",
+            abs_tol=1e-9,
+            rel_tol=0.0,
+        ),
+        "STR003": SAMContractSpec(
+            code="STR003",
+            title="Unsupported Commodity Inflows Removed",
+            category="structural_layout",
+            description=(
+                "Commodity columns I.i must not receive inflows from K.*, L.*, "
+                "MARG.MARG, or AG.TX."
+            ),
+            severity="error",
+            abs_tol=1e-9,
+            rel_tol=0.0,
+        ),
+        "STR004": SAMContractSpec(
+            code="STR004",
+            title="Factor Inflows Restricted To Activities",
+            category="structural_layout",
+            description=(
+                "Factor rows K.* and L.* must only receive inflows from J.* "
+                "except for explicitly allowed bookkeeping columns."
+            ),
+            severity="error",
+            abs_tol=1e-9,
+            rel_tol=0.0,
+        ),
+        "STR005": SAMContractSpec(
+            code="STR005",
+            title="Residual I-To-I Limited To Margin Commodities",
+            category="structural_layout",
+            description=(
+                "Only configured margin commodities may remain on I.i -> I.j support."
+            ),
+            severity="error",
+            abs_tol=1e-9,
+            rel_tol=0.0,
+        ),
+        "STR006": SAMContractSpec(
+            code="STR006",
+            title="Residual I-To-X Limited To Margin Commodities",
+            category="structural_layout",
+            description=(
+                "Only configured margin commodities may remain on I.i -> X.j support."
+            ),
+            severity="error",
+            abs_tol=1e-9,
+            rel_tol=0.0,
+        ),
         "EXP001": SAMContractSpec(
             code="EXP001",
             title="Export Value Balance",

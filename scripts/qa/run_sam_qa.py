@@ -38,6 +38,16 @@ def main() -> int:
     parser.add_argument("--balance-rel-tol", type=float, default=1e-6)
     parser.add_argument("--gdp-rel-tol", type=float, default=0.08)
     parser.add_argument("--max-samples", type=int, default=8)
+    parser.add_argument("--strict-structural", action="store_true")
+    parser.add_argument(
+        "--margin-commodity",
+        action="append",
+        default=None,
+        help=(
+            "Allowed margin commodity for residual I->I and I->X support. "
+            "May be provided multiple times. Defaults to 'ser'."
+        ),
+    )
     parser.add_argument(
         "--save-report",
         type=Path,
@@ -70,6 +80,8 @@ def main() -> int:
         balance_rel_tol=args.balance_rel_tol,
         gdp_rel_tol=args.gdp_rel_tol,
         max_samples=args.max_samples,
+        strict_structural=args.strict_structural,
+        allowed_margin_commodities=args.margin_commodity,
     )
 
     print(format_report_summary(report))
