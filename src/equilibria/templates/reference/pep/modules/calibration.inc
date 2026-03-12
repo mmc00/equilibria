@@ -38,7 +38,7 @@
  TIPTO           = SUM[j,TIPO(j)];
  TPRODNO         = TIKTO+TIWTO+TIPTO;
  TPRCTSO         = TICTO+TIMTO+TIXTO;
- YGTRO           = SUM[ag,TRO('gvt',ag)];
+ YGTRO           = SUM[agng,TRO('gvt',agng)];
  YGO             = YGKO+TDHTO+TDFTO+TPRODNO+TPRCTSO+YGTRO;
 
 *** 4.1.4 Rest-of-world and investment accounts
