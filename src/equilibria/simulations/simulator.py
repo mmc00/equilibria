@@ -91,6 +91,7 @@ class Simulator:
         }
 
         base_vars: Any | None = None
+        last_converged_vars: Any | None = None
         if include_base:
             base_entry = self._solve_one(
                 name="base",
@@ -103,8 +104,10 @@ class Simulator:
             )
             report["base"] = base_entry
             base_vars = base_entry["solution_vars"]
+            if bool(base_entry.get("solve", {}).get("converged")):
+                last_converged_vars = base_vars
 
-        initial_vars = base_vars if warm_start else None
+        initial_vars = last_converged_vars if warm_start else None
         for scenario in scenarios:
             scenario_state = self.adapter.clone_state(self._base_state)
             for shock in scenario.shocks:
@@ -121,7 +124,10 @@ class Simulator:
                 shocks=scenario.shocks,
             )
             report["scenarios"].append(scenario_entry)
-            initial_vars = scenario_entry["solution_vars"] if warm_start else None
+            if warm_start:
+                if bool(scenario_entry.get("solve", {}).get("converged")):
+                    last_converged_vars = scenario_entry["solution_vars"]
+                initial_vars = last_converged_vars
 
         self._strip_internal_solution_refs(report)
         return report

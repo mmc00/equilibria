@@ -101,6 +101,32 @@ class _FakeAdapter(BaseModelAdapter):
         return {"x": float(vars_obj["x"])}
 
 
+class _FailingScenarioAdapter(_FakeAdapter):
+    def solve_state(
+        self,
+        state: dict[str, float],
+        *,
+        initial_vars: Any | None,
+        reference_results_gdx: Path | None,
+        reference_slice: str,
+    ) -> tuple[Any, Any, dict[str, Any]]:
+        _ = reference_results_gdx, reference_slice
+        self.solve_initials.append(initial_vars)
+        call_no = len(self.solve_initials)
+        converged = call_no != 2
+        x = float(state.get("x", 0.0)) + self.offset
+        if not converged:
+            x = 999.0
+        solution = _FakeSolution(
+            converged=converged,
+            iterations=call_no,
+            final_residual=0.0 if converged else 1.0,
+            message="ok" if converged else "failed",
+            variables={"x": x},
+        )
+        return _FakeSolver(), solution, {"passed": converged}
+
+
 def test_simulator_fit_and_available_shocks() -> None:
     register_adapter("fake", _FakeAdapter)
     sim = Simulator(model="fake", offset=2.5).fit()
@@ -142,6 +168,29 @@ def test_simulator_run_scenarios_warm_start_and_reference() -> None:
     assert adapter.solve_initials[0] is None
     assert adapter.solve_initials[1] == {"x": 12.5}
     assert adapter.solve_initials[2] == {"x": 14.5}
+
+
+def test_simulator_warm_start_uses_last_converged_solution_only() -> None:
+    register_adapter("fake_failing", _FailingScenarioAdapter)
+    sim = Simulator(model="fake_failing").fit()
+
+    report = sim.run_scenarios(
+        scenarios=[
+            Scenario(name="fails", shocks=[Shock(var="X", op="add", values=2.0)]),
+            Scenario(name="after_fail", shocks=[Shock(var="X", op="scale", values=0.5)]),
+        ],
+        warm_start=True,
+    )
+
+    assert report["base"]["solve"]["converged"] is True
+    assert report["scenarios"][0]["solve"]["converged"] is False
+    assert report["scenarios"][1]["solve"]["converged"] is True
+
+    adapter = sim.adapter
+    assert isinstance(adapter, _FailingScenarioAdapter)
+    assert adapter.solve_initials[0] is None
+    assert adapter.solve_initials[1] == {"x": 10.0}
+    assert adapter.solve_initials[2] == {"x": 10.0}
 
 
 def test_simulator_rejects_duplicate_scenario_names() -> None:
