@@ -51,6 +51,7 @@ class BaselineCompatibilityReport:
     passed: bool
     gams_slice: str
     results_gdx: str
+    parameters_gdx: str | None
     rel_tol: float
     manifest_path: str | None
     checks: list[BaselineCheckResult]
@@ -62,6 +63,7 @@ class BaselineCompatibilityReport:
             "passed": self.passed,
             "gams_slice": self.gams_slice,
             "results_gdx": self.results_gdx,
+            "parameters_gdx": self.parameters_gdx,
             "rel_tol": self.rel_tol,
             "manifest_path": self.manifest_path,
             "checks": [c.to_dict() for c in self.checks],
@@ -79,6 +81,26 @@ class BaselineCompatibilityReport:
 
 _NUM_RE = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[Ee][-+]?\d+)?")
 _LAB_RE = re.compile(r"'([^']*)'")
+_STRICT_PARAMETER_SYMBOLS: tuple[str, ...] = (
+    "aij",
+    "io",
+    "lambda_WL",
+    "lambda_RK",
+    "tmrg",
+    "tmrg_X",
+    "beta_X",
+    "B_X",
+    "beta_M",
+    "B_M",
+)
+
+
+def _normalize_key(raw_key: Any) -> tuple[str, ...]:
+    if isinstance(raw_key, tuple):
+        return tuple(str(part).lower() for part in raw_key)
+    if raw_key == ():
+        return ()
+    return (str(raw_key).lower(),)
 
 
 def _gdxdump_records(
@@ -194,6 +216,117 @@ def _extract_results_symbol_presence(
     }
 
 
+def _resolve_parameters_gdx(
+    *,
+    results_gdx: Path,
+    parameters_gdx: Path | str | None,
+) -> Path | None:
+    if parameters_gdx is not None:
+        candidate = Path(parameters_gdx)
+        return candidate if candidate.exists() else candidate
+
+    if results_gdx.name == "Results.gdx":
+        candidate = results_gdx.with_name("Parameters.gdx")
+        if candidate.exists():
+            return candidate
+
+    if results_gdx.name.startswith("Results_"):
+        suffix = results_gdx.name[len("Results_") :]
+        candidate = results_gdx.with_name(f"Parameters_{suffix}")
+        if candidate.exists():
+            return candidate
+
+    return None
+
+
+def _extract_state_parameter_map(
+    *,
+    state: Any,
+    symbol: str,
+) -> dict[tuple[str, ...], float]:
+    mapping: dict[Any, Any]
+    if symbol == "aij":
+        mapping = state.production.get("aij", {})
+    elif symbol == "io":
+        mapping = state.production.get("io", {})
+    elif symbol == "lambda_WL":
+        mapping = state.income.get("lambda_WL", {})
+    elif symbol == "lambda_RK":
+        mapping = state.income.get("lambda_RK", {})
+    elif symbol == "tmrg":
+        mapping = state.trade.get("tmrg", {})
+    elif symbol == "tmrg_X":
+        mapping = state.trade.get("tmrg_X", {})
+    elif symbol == "beta_X":
+        mapping = state.trade.get("beta_X", {})
+    elif symbol == "B_X":
+        mapping = state.trade.get("B_X", {})
+    elif symbol == "beta_M":
+        mapping = state.trade.get("beta_M", {})
+    elif symbol == "B_M":
+        mapping = state.trade.get("B_M", {})
+    else:
+        mapping = {}
+
+    return {
+        _normalize_key(key): float(value)
+        for key, value in dict(mapping).items()
+        if abs(float(value)) > 1e-15
+    }
+
+
+def _extract_parameters_gdx_map(
+    *,
+    parameters_gdx: Path,
+    symbol: str,
+    gdxdump_bin: str,
+) -> dict[tuple[str, ...], float]:
+    gdxdump_path = shutil.which(gdxdump_bin) if Path(gdxdump_bin).name == gdxdump_bin else gdxdump_bin
+    records: list[tuple[tuple[str, ...], float]] = []
+    if gdxdump_path and Path(gdxdump_path).exists():
+        try:
+            records = _gdxdump_records(str(gdxdump_path), parameters_gdx, symbol)
+        except Exception:
+            records = []
+
+    if not records:
+        gdx = read_gdx(parameters_gdx)
+        try:
+            values = read_parameter_values(gdx, symbol)
+        except Exception:
+            return {}
+        for raw_key, raw_val in values.items():
+            records.append((_normalize_key(raw_key), float(raw_val)))
+
+    return {
+        _normalize_key(labels): float(value)
+        for labels, value in records
+        if abs(float(value)) > 1e-15
+    }
+
+
+def _compare_sparse_maps(
+    *,
+    expected: dict[tuple[str, ...], float],
+    actual: dict[tuple[str, ...], float],
+    rel_tol: float,
+) -> tuple[bool, int, float, float]:
+    mismatch_count = 0
+    max_abs = 0.0
+    max_rel = 0.0
+    for key in set(expected) | set(actual):
+        exp_val = float(expected.get(key, 0.0))
+        act_val = float(actual.get(key, 0.0))
+        abs_delta = abs(act_val - exp_val)
+        rel_delta = abs_delta / max(abs(exp_val), abs(act_val), 1.0)
+        if abs_delta <= 1e-9 or rel_delta <= rel_tol:
+            continue
+        mismatch_count += 1
+        max_abs = max(max_abs, abs_delta)
+        max_rel = max(max_rel, rel_delta)
+    return mismatch_count == 0, mismatch_count, max_abs, max_rel
+
+
 def _compare_float(expected: float, actual: float, rel_tol: float) -> tuple[bool, float, float]:
     abs_delta = abs(actual - expected)
     rel_delta = abs_delta / max(abs(expected), abs(actual), 1.0)
@@ -205,6 +338,7 @@ def evaluate_strict_gams_baseline_compatibility(
     *,
     state: Any,
     results_gdx: Path | str,
+    parameters_gdx: Path | str | None = None,
     gams_slice: str = "sim1",
     manifest_path: Path | str | None = None,
     sam_file: Path | str | None = None,
@@ -232,6 +366,7 @@ def evaluate_strict_gams_baseline_compatibility(
             passed=False,
             gams_slice=slice_name,
             results_gdx=str(results_path),
+            parameters_gdx=str(parameters_gdx) if parameters_gdx is not None else None,
             rel_tol=rel_tol,
             manifest_path=str(manifest_path) if manifest_path else None,
             checks=checks,
@@ -239,6 +374,10 @@ def evaluate_strict_gams_baseline_compatibility(
             results_anchors={},
         )
 
+    parameters_path = _resolve_parameters_gdx(
+        results_gdx=results_path,
+        parameters_gdx=parameters_gdx,
+    )
     state_anchors = compute_state_anchors(state)
     results_anchors = _extract_results_anchors(
         results_gdx=results_path,
@@ -300,6 +439,41 @@ def evaluate_strict_gams_baseline_compatibility(
                     actual=count,
                 )
             )
+
+    if parameters_path is not None:
+        checks.append(
+            BaselineCheckResult(
+                code="BSL_PARAMETERS_GDX_FOUND",
+                passed=parameters_path.exists(),
+                message="Parameters.gdx file found for strict baseline check",
+                expected="existing file",
+                actual=str(parameters_path),
+            )
+        )
+        if parameters_path.exists():
+            for symbol in _STRICT_PARAMETER_SYMBOLS:
+                state_map = _extract_state_parameter_map(state=state, symbol=symbol)
+                gdx_map = _extract_parameters_gdx_map(
+                    parameters_gdx=parameters_path,
+                    symbol=symbol,
+                    gdxdump_bin=gdxdump_bin,
+                )
+                passed, mismatch_count, max_abs, max_rel = _compare_sparse_maps(
+                    expected=state_map,
+                    actual=gdx_map,
+                    rel_tol=rel_tol,
+                )
+                checks.append(
+                    BaselineCheckResult(
+                        code=f"BSL_PARAM_{symbol}",
+                        passed=passed,
+                        message=f"Parameters.gdx symbol {symbol} matches calibrated state",
+                        expected="0 mismatches",
+                        actual=mismatch_count,
+                        abs_delta=max_abs,
+                        rel_delta=max_rel,
+                    )
+                )
 
     manifest_obj = None
     if manifest_path:
@@ -365,6 +539,29 @@ def evaluate_strict_gams_baseline_compatibility(
                 actual=current_results_hash,
             )
         )
+
+        if manifest_obj.parameters_gdx_sha256 is not None:
+            if parameters_path is None:
+                checks.append(
+                    BaselineCheckResult(
+                        code="BSL_PARAMETERS_HASH_MISSING_INPUT",
+                        passed=False,
+                        message="Manifest contains Parameters.gdx hash but no current parameters_gdx was resolved",
+                        expected=manifest_obj.parameters_gdx_sha256,
+                        actual=None,
+                    )
+                )
+            else:
+                current_parameters_hash = file_sha256(parameters_path) if parameters_path.exists() else ""
+                checks.append(
+                    BaselineCheckResult(
+                        code="BSL_PARAMETERS_HASH",
+                        passed=current_parameters_hash == manifest_obj.parameters_gdx_sha256,
+                        message="Parameters.gdx hash matches manifest",
+                        expected=manifest_obj.parameters_gdx_sha256,
+                        actual=current_parameters_hash,
+                    )
+                )
 
         if manifest_obj.sam_sha256 is not None:
             if sam_file is None:
@@ -446,6 +643,7 @@ def evaluate_strict_gams_baseline_compatibility(
         passed=passed,
         gams_slice=slice_name,
         results_gdx=str(results_path),
+        parameters_gdx=str(parameters_path) if parameters_path is not None else None,
         rel_tol=rel_tol,
         manifest_path=str(manifest_path) if manifest_path else None,
         checks=checks,

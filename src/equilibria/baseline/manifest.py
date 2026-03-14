@@ -51,6 +51,8 @@ class BaselineManifest:
     gams_slice: str
     results_gdx: str
     results_gdx_sha256: str
+    parameters_gdx: str | None
+    parameters_gdx_sha256: str | None
     sam_file: str | None
     sam_sha256: str | None
     val_par_file: str | None
@@ -77,6 +79,8 @@ def load_baseline_manifest(path: Path | str) -> BaselineManifest:
         gams_slice=str(data.get("gams_slice", "")).lower(),
         results_gdx=str(data.get("results_gdx", "")),
         results_gdx_sha256=str(data.get("results_gdx_sha256", "")),
+        parameters_gdx=data.get("parameters_gdx"),
+        parameters_gdx_sha256=data.get("parameters_gdx_sha256"),
         sam_file=data.get("sam_file"),
         sam_sha256=data.get("sam_sha256"),
         val_par_file=data.get("val_par_file"),
@@ -92,12 +96,14 @@ def build_baseline_manifest(
     state: Any,
     results_gdx: Path | str,
     gams_slice: str,
+    parameters_gdx: Path | str | None = None,
     sam_file: Path | str | None = None,
     val_par_file: Path | str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> BaselineManifest:
     """Build manifest from calibrated state and source files."""
     results_path = Path(results_gdx)
+    params_path = Path(parameters_gdx) if parameters_gdx else None
     sam_path = Path(sam_file) if sam_file else None
     val_path = Path(val_par_file) if val_par_file else None
 
@@ -107,6 +113,8 @@ def build_baseline_manifest(
         gams_slice=str(gams_slice).lower(),
         results_gdx=str(results_path),
         results_gdx_sha256=file_sha256(results_path) if results_path.exists() else "",
+        parameters_gdx=str(params_path) if params_path else None,
+        parameters_gdx_sha256=file_sha256(params_path) if params_path and params_path.exists() else None,
         sam_file=str(sam_path) if sam_path else None,
         sam_sha256=file_sha256(sam_path) if sam_path and sam_path.exists() else None,
         val_par_file=str(val_path) if val_path else None,

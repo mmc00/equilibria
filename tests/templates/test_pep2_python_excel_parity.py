@@ -39,6 +39,32 @@ def _gdxdump_value(gdxdump_bin: Path, gdx_file: Path, symbol: str, label: str = 
     return values.get(label)
 
 
+def test_pep_gdx_loader_normalizes_mixed_case_sam_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GDX-backed calibration should uppercase SAM account labels once at load time."""
+    fake_sam_data = {
+        "symbols": [
+            {
+                "name": "SAM",
+                "records": [
+                    {"indices": ["AG", "gvt", "AG", "hrp"], "value": 1.5},
+                    {"indices": ["OTH", "inv", "AG", "gvt"], "value": 2.0},
+                    {"indices": ["ag", "gvt", "ag", "hrp"], "value": 0.5},
+                ],
+            }
+        ]
+    }
+
+    monkeypatch.setattr(
+        "equilibria.templates.pep_calibration_unified.read_gdx",
+        lambda _path: fake_sam_data,
+    )
+
+    calibrator = PEPModelCalibrator(sam_file=Path("dummy.gdx"))
+
+    assert calibrator.sam_data["sam_matrix"][("AG", "GVT", "AG", "HRP")] == pytest.approx(2.0)
+    assert calibrator.sam_data["sam_matrix"][("OTH", "INV", "AG", "GVT")] == pytest.approx(2.0)
+
+
 @pytest.mark.integration
 def test_pep2_python_gdx_vs_excel_gams_base() -> None:
     """Python gams BASE initialization should match for GDX and Excel SAM loaders."""
