@@ -215,6 +215,7 @@ tests/fixtures/*.txt
 output/
 results/*.pkl
 DifFile.gdx
+notes/
 
 # PEP2 generated artifacts (keep sources like .gms/.sh/.py tracked)
 src/equilibria/templates/reference/pep2/data/SAM-V2_0_connect.xlsx
