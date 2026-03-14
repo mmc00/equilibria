@@ -6,6 +6,7 @@ import pytest
 
 from equilibria.templates.init_strategies import (
     CANONICAL_INIT_MODES,
+    GAMSBlockwiseInitializationStrategy,
     GAMSFlowInitializationStrategy,
     StrictGAMSInitializationStrategy,
     build_init_strategy,
@@ -15,9 +16,10 @@ from equilibria.templates.pep_model_equations import PEPModelVariables
 
 
 def test_build_init_strategy_modes() -> None:
-    assert CANONICAL_INIT_MODES == ("gams", "excel")
+    assert CANONICAL_INIT_MODES == ("gams", "excel", "gams_blockwise")
     assert isinstance(build_init_strategy("gams"), StrictGAMSInitializationStrategy)
     assert isinstance(build_init_strategy("excel"), GAMSFlowInitializationStrategy)
+    assert isinstance(build_init_strategy("gams_blockwise"), GAMSBlockwiseInitializationStrategy)
 
 
 @pytest.mark.parametrize(
@@ -27,7 +29,7 @@ def test_build_init_strategy_modes() -> None:
         ("gams_flow", "excel"),
         ("gams_levels", "excel"),
         ("equation_consistent", "excel"),
-        ("gams_blockwise", "excel"),
+        ("gams_blockwise", "gams_blockwise"),
     ],
 )
 def test_legacy_mode_aliases(alias: str, expected: str) -> None:
@@ -127,7 +129,6 @@ def test_strict_strategy_calls_gate_then_overlay() -> None:
         "gams_flow",
         "gams_levels",
         "equation_consistent",
-        "gams_blockwise",
     ],
 )
 def test_excel_strategy_alias_sequence(mode: str) -> None:
@@ -137,6 +138,23 @@ def test_excel_strategy_alias_sequence(mode: str) -> None:
     build_init_strategy(mode).apply(solver, vars)
     assert solver.calls == [
         "overlay_calibrated",
+        "sync_lambda",
+        "sync_policy",
+    ]
+    assert pytest.approx(2.0) == vars.LEON
+
+
+def test_gams_blockwise_strategy_runs_presolve() -> None:
+    solver = _DummySolver()
+    vars = PEPModelVariables()
+
+    build_init_strategy("gams_blockwise").apply(solver, vars)
+
+    assert solver.calls == [
+        "overlay_calibrated",
+        "sync_lambda",
+        "sync_policy",
+        "blockwise_presolve",
         "sync_lambda",
         "sync_policy",
     ]

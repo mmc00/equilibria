@@ -56,6 +56,7 @@ class PEPModelSolver:
         blockwise_trade_market_alpha: float = 0.5,
         blockwise_macro_alpha: float = 1.0,
         gams_results_gdx: Path | str | None = None,
+        gams_parameters_gdx: Path | str | None = None,
         gams_results_slice: Literal["base", "sim1"] = "sim1",
         baseline_manifest: Path | str | None = None,
         require_baseline_manifest: bool = False,
@@ -85,6 +86,7 @@ class PEPModelSolver:
         self.blockwise_trade_market_alpha = blockwise_trade_market_alpha
         self.blockwise_macro_alpha = blockwise_macro_alpha
         self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx is not None else None
+        self.gams_parameters_gdx = Path(gams_parameters_gdx) if gams_parameters_gdx is not None else None
         self.gams_results_slice = gams_results_slice.lower()
         self.baseline_manifest = Path(baseline_manifest) if baseline_manifest is not None else None
         self.require_baseline_manifest = require_baseline_manifest
@@ -116,6 +118,8 @@ class PEPModelSolver:
         if self.gams_results_gdx is not None:
             logger.info(f"  GAMS levels: {self.gams_results_gdx}")
             logger.info(f"  GAMS slice: {self.gams_results_slice.upper()}")
+        if self.gams_parameters_gdx is not None:
+            logger.info(f"  GAMS parameters: {self.gams_parameters_gdx}")
         if self.baseline_manifest is not None:
             logger.info(f"  Baseline manifest: {self.baseline_manifest}")
     
@@ -408,6 +412,7 @@ class PEPModelSolver:
                 blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
                 blockwise_macro_alpha=self.blockwise_macro_alpha,
                 gams_results_gdx=self.gams_results_gdx,
+                gams_parameters_gdx=self.gams_parameters_gdx,
                 gams_results_slice=self.gams_results_slice,
                 baseline_manifest=self.baseline_manifest,
                 require_baseline_manifest=self.require_baseline_manifest,

@@ -273,6 +273,7 @@ class IPOPTSolver:
         blockwise_trade_market_alpha: float = 0.5,
         blockwise_macro_alpha: float = 1.0,
         gams_results_gdx: Path | str | None = None,
+        gams_parameters_gdx: Path | str | None = None,
         gams_results_slice: Literal["base", "sim1"] = "sim1",
         baseline_manifest: Path | str | None = None,
         require_baseline_manifest: bool = False,
@@ -299,6 +300,7 @@ class IPOPTSolver:
         self.blockwise_trade_market_alpha = blockwise_trade_market_alpha
         self.blockwise_macro_alpha = blockwise_macro_alpha
         self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx is not None else None
+        self.gams_parameters_gdx = Path(gams_parameters_gdx) if gams_parameters_gdx is not None else None
         self.gams_results_slice = gams_results_slice.lower()
         self.baseline_manifest = Path(baseline_manifest) if baseline_manifest is not None else None
         self.require_baseline_manifest = require_baseline_manifest
@@ -334,6 +336,8 @@ class IPOPTSolver:
         if self.gams_results_gdx is not None:
             logger.info(f"  GAMS levels: {self.gams_results_gdx}")
             logger.info(f"  GAMS slice: {self.gams_results_slice.upper()}")
+        if self.gams_parameters_gdx is not None:
+            logger.info(f"  GAMS parameters: {self.gams_parameters_gdx}")
         if self.baseline_manifest is not None:
             logger.info(f"  Baseline manifest: {self.baseline_manifest}")
 
@@ -1570,6 +1574,7 @@ class IPOPTSolver:
         report = evaluate_strict_gams_baseline_compatibility(
             state=self.state,
             results_gdx=gdx_path,
+            parameters_gdx=self.gams_parameters_gdx,
             gams_slice=self.gams_results_slice,
             manifest_path=self.baseline_manifest,
             sam_file=self.sam_file,
@@ -2080,9 +2085,13 @@ class IPOPTSolver:
             ub.append(hi)
             names.append(name)
 
-        POS = (1e-6, 1e10)   # strictly positive (prices, exchange rate)
-        NONNEG = (0.0, 1e12) # non-negative quantities/flows
-        FREE = (-1e12, 1e12) # potentially signed closure/tax terms
+        # Match GAMS variable domains more closely:
+        # positive variables are lower-bounded only, nonnegative variables have
+        # no artificial upper cap, and free variables remain unbounded unless
+        # fixed by closure or activation masks.
+        POS = (1e-6, np.inf)   # strictly positive (prices, exchange rate)
+        NONNEG = (0.0, np.inf) # non-negative quantities/flows
+        FREE = (-np.inf, np.inf) # potentially signed closure/tax terms
 
         # Production variables
         for _j in self.sets.get("J", []):
@@ -2291,6 +2300,15 @@ class IPOPTSolver:
         vars0 = self._create_initial_guess()
         residuals0 = self.equations.calculate_all_residuals(vars0)
         return list(residuals0.keys())
+
+    @staticmethod
+    def _ipopt_reports_square_feasible(msg: str) -> bool:
+        """Treat IPOPT square-system feasibility exits as successful solves."""
+        normalized = msg.strip().lower()
+        return (
+            "feasible point for square problem found" in normalized
+            or "solved to acceptable level" in normalized
+        )
     
     def solve_ipopt(self) -> SolverResult:
         """Solve model using IPOPT nonlinear optimization.
@@ -2339,56 +2357,62 @@ class IPOPTSolver:
                 message=f"Initial {self.init_mode} benchmark satisfies tolerance",
             )
         
-        # Create problem
         hard_constraints = self._build_hard_constraints()
-        problem = CGEProblem(
-            equations=self.equations,
-            sets=self.sets,
-            n_variables=n_vars,
-            variable_info={},
-            residual_weights=self._build_residual_weights(),
-            hard_constraints=hard_constraints,
-            reference_x=x0,
-        )
-        
-        # Set variable bounds by variable class (aligned with packing order)
-        lb, ub = self._build_variable_bounds(x_ref=x0)
-        if len(lb) != n_vars:
-            raise ValueError(f"Bounds length {len(lb)} does not match variable count {n_vars}")
-        
-        # Create IPOPT problem
-        class IPOPTProblem:
-            def __init__(self, cge_problem):
-                self.cge = cge_problem
-                
-            def objective(self, x):
-                return self.cge.objective(x)
-            
-            def gradient(self, x):
-                return self.cge.gradient(x)
+        def _build_problem_context(reference_x: np.ndarray) -> tuple[CGEProblem, Any, np.ndarray, np.ndarray]:
+            problem_ctx = CGEProblem(
+                equations=self.equations,
+                sets=self.sets,
+                n_variables=n_vars,
+                variable_info={},
+                residual_weights=self._build_residual_weights(),
+                hard_constraints=hard_constraints,
+                reference_x=reference_x,
+            )
+            lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=reference_x)
+            if len(lb_ctx) != n_vars:
+                raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
 
-            def constraints(self, x):
-                return self.cge.constraints(x)
+            class IPOPTProblem:
+                def __init__(self, cge_problem):
+                    self.cge = cge_problem
 
-            def jacobian(self, x):
-                return self.cge.jacobian(x)
+                def objective(self, x):
+                    return self.cge.objective(x)
 
-            def jacobianstructure(self):
-                return self.cge.jacobianstructure()
-        
-        ipopt_problem = IPOPTProblem(problem)
-        
+                def gradient(self, x):
+                    return self.cge.gradient(x)
+
+                def constraints(self, x):
+                    return self.cge.constraints(x)
+
+                def jacobian(self, x):
+                    return self.cge.jacobian(x)
+
+                def jacobianstructure(self):
+                    return self.cge.jacobianstructure()
+
+            return problem_ctx, IPOPTProblem(problem_ctx), lb_ctx, ub_ctx
+
+        problem, ipopt_problem, lb, ub = _build_problem_context(x0)
+
         # Configure IPOPT options using cyipopt API
         n_constraints = len(problem.hard_constraints)
         cl = np.zeros(n_constraints)
         cu = np.zeros(n_constraints)
-        def _build_nlp(max_iter: int, warm_start: bool) -> cyipopt.Problem:
+
+        def _build_nlp(
+            problem_obj: Any,
+            lb_arr: np.ndarray,
+            ub_arr: np.ndarray,
+            max_iter: int,
+            warm_start: bool,
+        ) -> cyipopt.Problem:
             nlp = cyipopt.Problem(
                 n=n_vars,
                 m=n_constraints,
-                problem_obj=ipopt_problem,
-                lb=lb,
-                ub=ub,
+                problem_obj=problem_obj,
+                lb=lb_arr,
+                ub=ub_arr,
                 cl=cl,
                 cu=cu,
             )
@@ -2422,45 +2446,137 @@ class IPOPTSolver:
                         pass
             return fallback
 
-        logger.info("IPOPT options configured")
-        logger.info(f"  Tolerance: {self.tolerance}")
-        logger.info(f"  Max iterations: {self.max_iterations}")
-        logger.info("Starting IPOPT optimization (pass 1)...")
-        try:
+        acceptable_square_max_abs = max(self.tolerance * 100.0, 1e-4)
+        near_feasible_restart_max_abs = max(self.tolerance * 1000.0, 1e-3)
+
+        def _candidate_summary(problem_ctx: CGEProblem, x: np.ndarray, info: dict[str, Any]) -> dict[str, Any]:
+            vars_candidate = problem_ctx._array_to_variables(x)
+            residuals_candidate = self.equations.calculate_all_residuals(vars_candidate)
+            vals_candidate = np.array(list(residuals_candidate.values()), dtype=float)
+            rms_candidate = (
+                float(np.sqrt(np.mean(vals_candidate ** 2))) if vals_candidate.size else 0.0
+            )
+            max_abs_candidate = (
+                float(np.max(np.abs(vals_candidate))) if vals_candidate.size else 0.0
+            )
+            msg_candidate = info.get("status_msg", "Unknown")
+            if isinstance(msg_candidate, bytes):
+                msg_candidate = msg_candidate.decode("utf-8", errors="replace")
+            converged_candidate = bool(info.get("status") == 0)
+            if (
+                not converged_candidate
+                and self._ipopt_reports_square_feasible(str(msg_candidate))
+                and max_abs_candidate <= acceptable_square_max_abs
+            ):
+                converged_candidate = True
+            return {
+                "x": x,
+                "info": info,
+                "vars": vars_candidate,
+                "residuals": residuals_candidate,
+                "rms": rms_candidate,
+                "max_abs": max_abs_candidate,
+                "message": str(msg_candidate),
+                "converged": converged_candidate,
+            }
+
+        def _candidate_better(candidate: dict[str, Any], incumbent: dict[str, Any] | None) -> bool:
+            if incumbent is None:
+                return True
+            cand_key = (
+                0 if candidate["converged"] else 1,
+                candidate["max_abs"],
+                candidate["rms"],
+            )
+            inc_key = (
+                0 if incumbent["converged"] else 1,
+                incumbent["max_abs"],
+                incumbent["rms"],
+            )
+            return cand_key < inc_key
+
+        def _run_ipopt_cycle(
+            *,
+            reference_x: np.ndarray,
+            start_x: np.ndarray,
+            pass1_warm_start: bool,
+            cycle_label: str,
+        ) -> dict[str, Any]:
+            problem_ctx, ipopt_problem_ctx, lb_ctx, ub_ctx = _build_problem_context(reference_x)
+
+            logger.info("Starting IPOPT optimization (%s pass 1)...", cycle_label)
             pass1_iter = max(80, min(self.max_iterations, 220))
-            pass1_warm_start = self.initial_vars is not None
-            nlp = _build_nlp(max_iter=pass1_iter, warm_start=pass1_warm_start)
-            x1, info1 = nlp.solve(x0)
+            nlp1 = _build_nlp(
+                ipopt_problem_ctx,
+                lb_ctx,
+                ub_ctx,
+                max_iter=pass1_iter,
+                warm_start=pass1_warm_start,
+            )
+            x1, info1 = nlp1.solve(start_x)
             msg1 = info1.get("status_msg", "Unknown")
             if isinstance(msg1, bytes):
                 msg1 = msg1.decode("utf-8", errors="replace")
-            logger.info("IPOPT pass 1 status=%s msg=%s", info1.get("status"), msg1)
+            logger.info("IPOPT %s pass 1 status=%s msg=%s", cycle_label, info1.get("status"), msg1)
 
-            x_best, info_best = x1, info1
+            best = _candidate_summary(problem_ctx, x1, info1)
 
-            # Optional second pass with warm start if first pass did not converge.
             if info1.get("status") != 0:
-                logger.info("Starting IPOPT optimization (pass 2, warm start)...")
-                nlp2 = _build_nlp(max_iter=self.max_iterations, warm_start=True)
+                logger.info("Starting IPOPT optimization (%s pass 2, warm start)...", cycle_label)
+                nlp2 = _build_nlp(
+                    ipopt_problem_ctx,
+                    lb_ctx,
+                    ub_ctx,
+                    max_iter=self.max_iterations,
+                    warm_start=True,
+                )
                 x2, info2 = nlp2.solve(x1)
                 msg2 = info2.get("status_msg", "Unknown")
                 if isinstance(msg2, bytes):
                     msg2 = msg2.decode("utf-8", errors="replace")
-                logger.info("IPOPT pass 2 status=%s msg=%s", info2.get("status"), msg2)
-                x_best, info_best = x2, info2
+                logger.info("IPOPT %s pass 2 status=%s msg=%s", cycle_label, info2.get("status"), msg2)
+                candidate2 = _candidate_summary(problem_ctx, x2, info2)
+                if _candidate_better(candidate2, best):
+                    best = candidate2
+
+            return best
+
+        logger.info("IPOPT options configured")
+        logger.info(f"  Tolerance: {self.tolerance}")
+        logger.info(f"  Max iterations: {self.max_iterations}")
+        try:
+            best_candidate = _run_ipopt_cycle(
+                reference_x=x0,
+                start_x=x0,
+                pass1_warm_start=self.initial_vars is not None,
+                cycle_label="cycle 1",
+            )
+
+            # Some trade shocks land extremely close to feasibility but need a
+            # fresh local benchmark around that point to complete the solve.
+            if (
+                not best_candidate["converged"]
+                and best_candidate["max_abs"] <= near_feasible_restart_max_abs
+            ):
+                logger.info("Starting IPOPT near-feasible restart cycle...")
+                restarted_candidate = _run_ipopt_cycle(
+                    reference_x=best_candidate["x"],
+                    start_x=best_candidate["x"],
+                    pass1_warm_start=True,
+                    cycle_label="cycle 2",
+                )
+                if _candidate_better(restarted_candidate, best_candidate):
+                    best_candidate = restarted_candidate
 
             # Create result
             result = SolverResult()
-            result.converged = info_best.get("status") == 0
+            info_best = best_candidate["info"]
             result.iterations = _info_iterations(info_best, self.max_iterations)
-            result.variables = problem._array_to_variables(x_best)
-            result.residuals = self.equations.calculate_all_residuals(result.variables)
-            msg = info_best.get("status_msg", "Unknown")
-            if isinstance(msg, bytes):
-                msg = msg.decode("utf-8", errors="replace")
-            result.message = str(msg)
-            vals = np.array(list(result.residuals.values()), dtype=float)
-            result.final_residual = float(np.sqrt(np.mean(vals**2))) if vals.size else 0.0
+            result.variables = best_candidate["vars"]
+            result.residuals = best_candidate["residuals"]
+            result.message = best_candidate["message"]
+            result.final_residual = best_candidate["rms"]
+            result.converged = bool(best_candidate["converged"])
 
             logger.info("IPOPT info keys: %s", sorted(info_best.keys()))
             logger.info(f"IPOPT finished: {result.message}")

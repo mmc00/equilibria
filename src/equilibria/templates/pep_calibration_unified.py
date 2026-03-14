@@ -25,7 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from equilibria.babel.gdx.reader import read_gdx
+from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.templates.pep_calibration_income import IncomeCalibrator
 from equilibria.templates.pep_calibration_production import ProductionCalibrator
 from equilibria.templates.pep_calibration_trade import TradeCalibrator
@@ -34,6 +34,53 @@ from equilibria.templates.pep_dynamic_sets import derive_dynamic_sets_from_sam
 from equilibria.templates.pep_val_par_loader import load_val_par
 
 logger = logging.getLogger(__name__)
+
+
+def _build_uppercase_sam_matrix(sam_data: dict[str, Any]) -> dict[tuple[str, str, str, str], float]:
+    """Materialize SAM into an uppercase-keyed 4D matrix.
+
+    GDX files produced from Excel can preserve mixed/lower-case element labels
+    (for example ``gvt``/``row``/``hrp``), while the calibration code queries
+    SAM entries using uppercase labels to match the original GAMS notation.
+    Normalizing once at load time keeps the calibration path case-insensitive
+    and avoids repeated raw GDX decoding inside each calibration module.
+    """
+    existing = sam_data.get("sam_matrix")
+    if isinstance(existing, dict) and existing:
+        out: dict[tuple[str, str, str, str], float] = {}
+        for key, value in existing.items():
+            norm_key = tuple(str(part).upper() for part in key)
+            out[norm_key] = out.get(norm_key, 0.0) + float(value)
+        return out
+
+    records: list[tuple[tuple[str, ...], float]] = []
+
+    for symbol in sam_data.get("symbols", []):
+        if symbol.get("name") != "SAM":
+            continue
+        raw_records = symbol.get("records", [])
+        if not isinstance(raw_records, list):
+            continue
+        for record in raw_records:
+            indices = tuple(record.get("indices", []))
+            if len(indices) != 4:
+                continue
+            records.append((indices, float(record.get("value", 0.0))))
+
+    if not records:
+        try:
+            raw_values = read_parameter_values(sam_data, "SAM")
+        except Exception:
+            raw_values = {}
+        records = [(tuple(key), float(value)) for key, value in raw_values.items()]
+
+    out: dict[tuple[str, str, str, str], float] = {}
+    for key, value in records:
+        if len(key) != 4:
+            continue
+        norm_key = tuple(str(part).upper() for part in key)
+        out[norm_key] = out.get(norm_key, 0.0) + float(value)
+    return out
 
 
 @dataclass
@@ -203,6 +250,7 @@ class PEPModelCalibrator:
         # Load SAM data
         logger.info(f"Loading SAM from {self.sam_file}")
         self.sam_data = read_gdx(self.sam_file)
+        self.sam_data["sam_matrix"] = _build_uppercase_sam_matrix(self.sam_data)
         logger.info(f"✓ Loaded SAM with {len(self.sam_data.get('symbols', []))} symbols")
         self._input_sets = sets
         self._use_dynamic_sets = dynamic_sets

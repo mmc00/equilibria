@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from equilibria.templates.init_strategies.base import InitializationStrategy
 from equilibria.templates.init_strategies.gams_flow import (
+    GAMSBlockwiseInitializationStrategy,
     GAMSFlowInitializationStrategy,
 )
 from equilibria.templates.init_strategies.strict_gams import (
     StrictGAMSInitializationStrategy,
 )
 
-CANONICAL_INIT_MODES: tuple[str, ...] = ("gams", "excel")
+CANONICAL_INIT_MODES: tuple[str, ...] = ("gams", "excel", "gams_blockwise")
 
 LEGACY_INIT_MODE_ALIASES: dict[str, str] = {
     "gams": "gams",
@@ -19,12 +20,13 @@ LEGACY_INIT_MODE_ALIASES: dict[str, str] = {
     "gams_flow": "excel",
     "gams_levels": "excel",
     "equation_consistent": "excel",
-    "gams_blockwise": "excel",
+    "gams_blockwise": "gams_blockwise",
 }
 
 _CANONICAL_STRATEGIES: dict[str, type[InitializationStrategy]] = {
     StrictGAMSInitializationStrategy.mode: StrictGAMSInitializationStrategy,
     GAMSFlowInitializationStrategy.mode: GAMSFlowInitializationStrategy,
+    GAMSBlockwiseInitializationStrategy.mode: GAMSBlockwiseInitializationStrategy,
 }
 
 
@@ -52,6 +54,7 @@ __all__ = [
     "InitializationStrategy",
     "StrictGAMSInitializationStrategy",
     "GAMSFlowInitializationStrategy",
+    "GAMSBlockwiseInitializationStrategy",
     "CANONICAL_INIT_MODES",
     "LEGACY_INIT_MODE_ALIASES",
     "normalize_init_mode",
