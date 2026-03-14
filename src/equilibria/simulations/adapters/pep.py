@@ -14,7 +14,11 @@ from equilibria.templates.pep_calibration_unified import (
     PEPModelState,
 )
 from equilibria.templates.pep_calibration_unified_dynamic import (
-    PEPModelCalibratorDynamic,
+    PEPModelCalibratorDynamicSAM,
+    PEPModelCalibratorExcelDynamicSAM,
+)
+from equilibria.templates.pep_calibration_unified_excel import (
+    PEPModelCalibratorExcel,
 )
 from equilibria.templates.pep_model_solver import PEPModelSolver
 
@@ -38,6 +42,7 @@ class PepAdapter(BaseModelAdapter):
         solve_tolerance: float = 1e-8,
         max_iterations: int = 300,
         gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        accounts: dict[str, str] | None = None,
     ) -> None:
         self.sam_file = Path(sam_file)
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
@@ -47,20 +52,37 @@ class PepAdapter(BaseModelAdapter):
         self.solve_tolerance = float(solve_tolerance)
         self.max_iterations = int(max_iterations)
         self.gdxdump_bin = str(gdxdump_bin)
+        self.accounts = dict(accounts) if accounts is not None else None
         self._sets: dict[str, list[str]] = {}
 
     def fit_base_state(self) -> PEPModelState:
+        is_excel = self.sam_file.suffix.lower() in {".xlsx", ".xls"}
         if self.dynamic_sets:
-            calibrator = PEPModelCalibratorDynamic(
-                sam_file=self.sam_file,
-                val_par_file=self.val_par_file,
-            )
+            if is_excel:
+                calibrator = PEPModelCalibratorExcelDynamicSAM(
+                    sam_file=self.sam_file,
+                    val_par_file=self.val_par_file,
+                    accounts=self.accounts,
+                )
+            else:
+                calibrator = PEPModelCalibratorDynamicSAM(
+                    sam_file=self.sam_file,
+                    val_par_file=self.val_par_file,
+                    accounts=self.accounts,
+                )
         else:
-            calibrator = PEPModelCalibrator(
-                sam_file=self.sam_file,
-                val_par_file=self.val_par_file,
-                dynamic_sets=False,
-            )
+            if is_excel:
+                calibrator = PEPModelCalibratorExcel(
+                    sam_file=self.sam_file,
+                    val_par_file=self.val_par_file,
+                    dynamic_sets=False,
+                )
+            else:
+                calibrator = PEPModelCalibrator(
+                    sam_file=self.sam_file,
+                    val_par_file=self.val_par_file,
+                    dynamic_sets=False,
+                )
         state = calibrator.calibrate()
         self._sets = dict(state.sets)
         return state

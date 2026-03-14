@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from equilibria.simulations.adapters.pep import PepAdapter
@@ -101,3 +103,73 @@ def test_pep_adapter_available_shocks_include_domain_members_when_sets_known() -
     assert by_var["PWM"].members == ("agr", "ser")
     assert by_var["PWX"].members == ("agr", "ser")
     assert by_var["ttix"].members == ("agr", "ser")
+
+
+def test_pep_adapter_fit_base_state_uses_excel_dynamic_sam_for_excel_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeExcelDynamicSAM:
+        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+            captured["sam_file"] = sam_file
+            captured["val_par_file"] = val_par_file
+            captured["accounts"] = accounts
+
+        def calibrate(self) -> PEPModelState:
+            return PEPModelState(sets={"I": ["agr"], "J": ["agr"]})
+
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.PEPModelCalibratorExcelDynamicSAM",
+        _FakeExcelDynamicSAM,
+    )
+
+    adapter = PepAdapter(
+        sam_file="sam-cri.xlsx",
+        val_par_file="val.xlsx",
+        dynamic_sets=True,
+        accounts={"gvt": "gvt", "row": "row"},
+    )
+
+    state = adapter.fit_base_state()
+
+    assert captured["sam_file"] == Path("sam-cri.xlsx")
+    assert captured["val_par_file"] == Path("val.xlsx")
+    assert captured["accounts"] == {"gvt": "gvt", "row": "row"}
+    assert state.sets["I"] == ["agr"]
+    assert adapter._sets["I"] == ["agr"]
+
+
+def test_pep_adapter_fit_base_state_uses_dynamic_sam_for_gdx_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeDynamicSAM:
+        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+            captured["sam_file"] = sam_file
+            captured["val_par_file"] = val_par_file
+            captured["accounts"] = accounts
+
+        def calibrate(self) -> PEPModelState:
+            return PEPModelState(sets={"I": ["agr", "ser"]})
+
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.PEPModelCalibratorDynamicSAM",
+        _FakeDynamicSAM,
+    )
+
+    adapter = PepAdapter(
+        sam_file="sam-cri.gdx",
+        val_par_file="val.gdx",
+        dynamic_sets=True,
+        accounts={"gvt": "gvt"},
+    )
+
+    state = adapter.fit_base_state()
+
+    assert captured["sam_file"] == Path("sam-cri.gdx")
+    assert captured["val_par_file"] == Path("val.gdx")
+    assert captured["accounts"] == {"gvt": "gvt"}
+    assert state.sets["I"] == ["agr", "ser"]
+    assert adapter._sets["I"] == ["agr", "ser"]
