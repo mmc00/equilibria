@@ -233,7 +233,9 @@ def ipfp_rebalance(
 
 
 def write_grid_to_excel(grid: SAMGrid, matrix: np.ndarray, output: Path) -> None:
-    out_df = grid.raw_df.copy()
+    # Keep headers/labels intact, but allow numeric replacement inside the SAM
+    # body even when pandas inferred a string extension dtype for those columns.
+    out_df = grid.raw_df.copy().astype(object)
     n_rows, n_cols = matrix.shape
     for i in range(n_rows):
         for j in range(n_cols):

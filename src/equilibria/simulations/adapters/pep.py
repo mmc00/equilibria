@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
+from equilibria.qa.reporting import format_report_summary
+from equilibria.qa.sam_checks import run_sam_qa_from_file
 from equilibria.simulations.adapters.base import BaseModelAdapter
 from equilibria.simulations.pep_compare import compare_with_gams
 from equilibria.simulations.pep_compare import key_indicators as pep_key_indicators
@@ -21,11 +24,27 @@ from equilibria.templates.pep_calibration_unified_excel import (
     PEPModelCalibratorExcel,
 )
 from equilibria.templates.pep_model_solver import PEPModelSolver
+from equilibria.templates.pep_sam_compat import (
+    should_apply_cri_pep_fix,
+    transform_sam_to_pep_compatible,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
 DEFAULT_VAL_PAR_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
 DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+DEFAULT_CRI_ACCOUNTS = {
+    "gvt": "gvt",
+    "row": "row",
+    "td": "td",
+    "ti": "ti",
+    "tm": "tm",
+    "tx": "tx",
+    "inv": "inv",
+    "vstk": "vstk",
+}
+
+logger = logging.getLogger(__name__)
 
 
 class PepAdapter(BaseModelAdapter):
@@ -43,6 +62,17 @@ class PepAdapter(BaseModelAdapter):
         max_iterations: int = 300,
         gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
         accounts: dict[str, str] | None = None,
+        sam_qa_mode: str = "off",
+        sam_qa_report: Path | str | None = None,
+        sam_qa_balance_rel_tol: float = 1e-6,
+        sam_qa_gdp_rel_tol: float = 0.08,
+        sam_qa_max_samples: int = 8,
+        sam_qa_strict_structural: bool = False,
+        cri_fix_mode: str = "auto",
+        cri_fix_output: Path | str | None = None,
+        cri_fix_report: Path | str | None = None,
+        cri_fix_target_mode: str = "geomean",
+        cri_fix_margin_commodity: str = "ser",
     ) -> None:
         self.sam_file = Path(sam_file)
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
@@ -52,34 +82,100 @@ class PepAdapter(BaseModelAdapter):
         self.solve_tolerance = float(solve_tolerance)
         self.max_iterations = int(max_iterations)
         self.gdxdump_bin = str(gdxdump_bin)
-        self.accounts = dict(accounts) if accounts is not None else None
+        self.accounts = dict(accounts) if accounts is not None else dict(DEFAULT_CRI_ACCOUNTS)
+        self.sam_qa_mode = str(sam_qa_mode).strip().lower()
+        self.sam_qa_report = Path(sam_qa_report) if sam_qa_report is not None else None
+        self.sam_qa_balance_rel_tol = float(sam_qa_balance_rel_tol)
+        self.sam_qa_gdp_rel_tol = float(sam_qa_gdp_rel_tol)
+        self.sam_qa_max_samples = int(sam_qa_max_samples)
+        self.sam_qa_strict_structural = bool(sam_qa_strict_structural)
+        self.cri_fix_mode = str(cri_fix_mode).strip().lower()
+        self.cri_fix_output = Path(cri_fix_output) if cri_fix_output is not None else None
+        self.cri_fix_report = Path(cri_fix_report) if cri_fix_report is not None else None
+        self.cri_fix_target_mode = str(cri_fix_target_mode)
+        self.cri_fix_margin_commodity = str(cri_fix_margin_commodity)
         self._sets: dict[str, list[str]] = {}
+        self._runtime_sam_file = self.sam_file
+        self.last_sam_qa_report: Any | None = None
+        self.last_cri_fix_report: dict[str, Any] | None = None
+
+    def _prepare_runtime_sam_file(self) -> Path:
+        sam_file_for_run = self.sam_file
+        if should_apply_cri_pep_fix(sam_file_for_run, mode=self.cri_fix_mode):
+            output_sam = (
+                self.cri_fix_output
+                if self.cri_fix_output is not None
+                else Path("output") / f"{sam_file_for_run.stem}-pep-compatible{sam_file_for_run.suffix}"
+            )
+            report_json = (
+                self.cri_fix_report
+                if self.cri_fix_report is not None
+                else Path("output") / f"{sam_file_for_run.stem}-pep-compatible-report.json"
+            )
+            self.last_cri_fix_report = transform_sam_to_pep_compatible(
+                input_sam=sam_file_for_run,
+                output_sam=output_sam,
+                report_json=report_json,
+                target_mode=self.cri_fix_target_mode,
+                margin_commodity=self.cri_fix_margin_commodity,
+            )
+            sam_file_for_run = output_sam
+        return sam_file_for_run
+
+    def _run_runtime_sam_qa(self, sam_file_for_run: Path, *, dynamic_sam: bool) -> None:
+        if self.sam_qa_mode == "off":
+            self.last_sam_qa_report = None
+            return
+
+        report = run_sam_qa_from_file(
+            sam_file=sam_file_for_run,
+            dynamic_sam=dynamic_sam,
+            accounts=self.accounts,
+            balance_rel_tol=self.sam_qa_balance_rel_tol,
+            gdp_rel_tol=self.sam_qa_gdp_rel_tol,
+            max_samples=self.sam_qa_max_samples,
+            strict_structural=self.sam_qa_strict_structural,
+        )
+        self.last_sam_qa_report = report
+        if self.sam_qa_report is not None:
+            report.save_json(self.sam_qa_report)
+
+        summary = format_report_summary(report)
+        if report.passed:
+            logger.info(summary)
+            return
+        if self.sam_qa_mode == "hard_fail":
+            raise RuntimeError(f"SAM QA failed: {summary}")
+        logger.warning("%s; continuing because sam_qa_mode=%s", summary, self.sam_qa_mode)
 
     def fit_base_state(self) -> PEPModelState:
-        is_excel = self.sam_file.suffix.lower() in {".xlsx", ".xls"}
+        sam_file_for_run = self._prepare_runtime_sam_file()
+        self._runtime_sam_file = sam_file_for_run
+        is_excel = sam_file_for_run.suffix.lower() in {".xlsx", ".xls"}
+        self._run_runtime_sam_qa(sam_file_for_run, dynamic_sam=self.dynamic_sets)
         if self.dynamic_sets:
             if is_excel:
                 calibrator = PEPModelCalibratorExcelDynamicSAM(
-                    sam_file=self.sam_file,
+                    sam_file=sam_file_for_run,
                     val_par_file=self.val_par_file,
                     accounts=self.accounts,
                 )
             else:
                 calibrator = PEPModelCalibratorDynamicSAM(
-                    sam_file=self.sam_file,
+                    sam_file=sam_file_for_run,
                     val_par_file=self.val_par_file,
                     accounts=self.accounts,
                 )
         else:
             if is_excel:
                 calibrator = PEPModelCalibratorExcel(
-                    sam_file=self.sam_file,
+                    sam_file=sam_file_for_run,
                     val_par_file=self.val_par_file,
                     dynamic_sets=False,
                 )
             else:
                 calibrator = PEPModelCalibrator(
-                    sam_file=self.sam_file,
+                    sam_file=sam_file_for_run,
                     val_par_file=self.val_par_file,
                     dynamic_sets=False,
                 )
@@ -186,7 +282,7 @@ class PepAdapter(BaseModelAdapter):
             init_mode=self.init_mode,
             gams_results_gdx=reference_results_gdx,
             gams_results_slice=reference_slice.lower(),
-            sam_file=self.sam_file,
+            sam_file=self._runtime_sam_file,
             val_par_file=self.val_par_file,
             gdxdump_bin=self.gdxdump_bin,
             initial_vars=initial_vars,
