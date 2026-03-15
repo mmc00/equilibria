@@ -64,12 +64,12 @@ except ImportError:
 
 
 class CGEProblem:
-    """Defines the CGE model as an optimization problem for IPOPT.
-    
-    We formulate the CGE as a least-squares problem:
-    minimize: 0.5 * sum(residuals^2)
-    
-    Where residuals are the equation errors from the CGE system.
+    """Defines the CGE model as a pure-feasibility NLP for IPOPT.
+
+    The PEP model is a square equilibrium system. To stay close to the GAMS
+    formulation, we keep all equations as hard equality constraints and use a
+    constant objective. IPOPT then searches for a feasible point of the
+    nonlinear system instead of minimizing distance to a benchmark.
     """
     
     def __init__(
@@ -80,7 +80,6 @@ class CGEProblem:
         variable_info: dict[str, Any],
         residual_weights: dict[str, float] | None = None,
         hard_constraints: list[str] | None = None,
-        reference_x: np.ndarray | None = None,
     ):
         """Initialize the CGE optimization problem.
         
@@ -100,56 +99,15 @@ class CGEProblem:
         self._constraint_scale: np.ndarray | None = None
         self.residual_weights = residual_weights or {}
         self.hard_constraints = hard_constraints or []
-        self.reference_x = np.array(reference_x, dtype=float) if reference_x is not None else None
-        self.reference_scale = (
-            np.maximum(np.abs(self.reference_x), 1.0)
-            if self.reference_x is not None
-            else None
-        )
         
     def objective(self, x: np.ndarray) -> float:
-        """Compute objective function (0.5 * sum of squared residuals).
-        
-        Args:
-            x: Decision variables
-            
-        Returns:
-            Objective value
-        """
-        # CNS-style feasibility: all equations are hard constraints, and the
-        # objective only regularizes toward the benchmark point.
-        if self.reference_x is not None:
-            dx = (x - self.reference_x) / self.reference_scale
-            return 0.5 * float(np.dot(dx, dx))
-
-        residuals = self._compute_residuals(x)
-        return 0.5 * np.sum(residuals ** 2)
+        """Return a constant objective for pure-feasibility solve."""
+        _ = x
+        return 0.0
     
     def gradient(self, x: np.ndarray) -> np.ndarray:
-        """Compute gradient of objective using finite differences.
-        
-        For production use, analytical gradients should be implemented.
-        
-        Args:
-            x: Decision variables
-            
-        Returns:
-            Gradient vector
-        """
-        if self.reference_x is not None:
-            return (x - self.reference_x) / (self.reference_scale**2)
-
-        eps = 1e-8
-        grad = np.zeros_like(x)
-        f_x = self.objective(x)
-
-        for i in range(len(x)):
-            x_plus = x.copy()
-            x_plus[i] += eps
-            f_plus = self.objective(x_plus)
-            grad[i] = (f_plus - f_x) / eps
-
-        return grad
+        """Return the zero gradient for the constant feasibility objective."""
+        return np.zeros_like(x)
     
     def _compute_residuals(self, x: np.ndarray) -> np.ndarray:
         """Compute all equation residuals.
@@ -224,14 +182,15 @@ class CGEProblem:
         if m == 0:
             return np.array([], dtype=float)
 
-        eps = 1e-8
         base = self._compute_constraint_residuals(x)
         jac = np.zeros((m, n), dtype=float)
+        fd_eps = np.sqrt(np.finfo(float).eps)
         for i in range(n):
+            step = max(1e-8, fd_eps * max(abs(float(x[i])), 1.0))
             x_plus = x.copy()
-            x_plus[i] += eps
+            x_plus[i] += step
             c_plus = self._compute_constraint_residuals(x_plus)
-            jac[:, i] = (c_plus - base) / eps
+            jac[:, i] = (c_plus - base) / step
         return jac.ravel()
 
     def jacobianstructure(self) -> tuple[np.ndarray, np.ndarray]:
@@ -2358,7 +2317,8 @@ class IPOPTSolver:
             )
         
         hard_constraints = self._build_hard_constraints()
-        def _build_problem_context(reference_x: np.ndarray) -> tuple[CGEProblem, Any, np.ndarray, np.ndarray]:
+
+        def _build_problem_context(x_ref: np.ndarray) -> tuple[CGEProblem, Any, np.ndarray, np.ndarray]:
             problem_ctx = CGEProblem(
                 equations=self.equations,
                 sets=self.sets,
@@ -2366,9 +2326,8 @@ class IPOPTSolver:
                 variable_info={},
                 residual_weights=self._build_residual_weights(),
                 hard_constraints=hard_constraints,
-                reference_x=reference_x,
             )
-            lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=reference_x)
+            lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=x_ref)
             if len(lb_ctx) != n_vars:
                 raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
 
@@ -2447,7 +2406,6 @@ class IPOPTSolver:
             return fallback
 
         acceptable_square_max_abs = max(self.tolerance * 100.0, 1e-4)
-        near_feasible_restart_max_abs = max(self.tolerance * 1000.0, 1e-3)
 
         def _candidate_summary(problem_ctx: CGEProblem, x: np.ndarray, info: dict[str, Any]) -> dict[str, Any]:
             vars_candidate = problem_ctx._array_to_variables(x)
@@ -2497,14 +2455,12 @@ class IPOPTSolver:
 
         def _run_ipopt_cycle(
             *,
-            reference_x: np.ndarray,
             start_x: np.ndarray,
             pass1_warm_start: bool,
-            cycle_label: str,
         ) -> dict[str, Any]:
-            problem_ctx, ipopt_problem_ctx, lb_ctx, ub_ctx = _build_problem_context(reference_x)
+            problem_ctx, ipopt_problem_ctx, lb_ctx, ub_ctx = _build_problem_context(x0)
 
-            logger.info("Starting IPOPT optimization (%s pass 1)...", cycle_label)
+            logger.info("Starting IPOPT optimization (pass 1)...")
             pass1_iter = max(80, min(self.max_iterations, 220))
             nlp1 = _build_nlp(
                 ipopt_problem_ctx,
@@ -2517,12 +2473,12 @@ class IPOPTSolver:
             msg1 = info1.get("status_msg", "Unknown")
             if isinstance(msg1, bytes):
                 msg1 = msg1.decode("utf-8", errors="replace")
-            logger.info("IPOPT %s pass 1 status=%s msg=%s", cycle_label, info1.get("status"), msg1)
+            logger.info("IPOPT pass 1 status=%s msg=%s", info1.get("status"), msg1)
 
             best = _candidate_summary(problem_ctx, x1, info1)
 
             if info1.get("status") != 0:
-                logger.info("Starting IPOPT optimization (%s pass 2, warm start)...", cycle_label)
+                logger.info("Starting IPOPT optimization (pass 2, warm start)...")
                 nlp2 = _build_nlp(
                     ipopt_problem_ctx,
                     lb_ctx,
@@ -2534,7 +2490,7 @@ class IPOPTSolver:
                 msg2 = info2.get("status_msg", "Unknown")
                 if isinstance(msg2, bytes):
                     msg2 = msg2.decode("utf-8", errors="replace")
-                logger.info("IPOPT %s pass 2 status=%s msg=%s", cycle_label, info2.get("status"), msg2)
+                logger.info("IPOPT pass 2 status=%s msg=%s", info2.get("status"), msg2)
                 candidate2 = _candidate_summary(problem_ctx, x2, info2)
                 if _candidate_better(candidate2, best):
                     best = candidate2
@@ -2546,27 +2502,9 @@ class IPOPTSolver:
         logger.info(f"  Max iterations: {self.max_iterations}")
         try:
             best_candidate = _run_ipopt_cycle(
-                reference_x=x0,
                 start_x=x0,
                 pass1_warm_start=self.initial_vars is not None,
-                cycle_label="cycle 1",
             )
-
-            # Some trade shocks land extremely close to feasibility but need a
-            # fresh local benchmark around that point to complete the solve.
-            if (
-                not best_candidate["converged"]
-                and best_candidate["max_abs"] <= near_feasible_restart_max_abs
-            ):
-                logger.info("Starting IPOPT near-feasible restart cycle...")
-                restarted_candidate = _run_ipopt_cycle(
-                    reference_x=best_candidate["x"],
-                    start_x=best_candidate["x"],
-                    pass1_warm_start=True,
-                    cycle_label="cycle 2",
-                )
-                if _candidate_better(restarted_candidate, best_candidate):
-                    best_candidate = restarted_candidate
 
             # Create result
             result = SolverResult()
