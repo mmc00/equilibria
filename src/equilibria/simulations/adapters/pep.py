@@ -24,7 +24,7 @@ from equilibria.templates.pep_calibration_unified_excel import (
     PEPModelCalibratorExcel,
 )
 from equilibria.templates.pep_model_solver import PEPModelSolver
-from equilibria.templates.pep_sam_compat import (
+from equilibria.templates.pep_cri_transform import (
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
 )
