@@ -32,7 +32,7 @@ from equilibria.templates.pep_model_solver import (
     PEPModelSolver,
 )
 from equilibria.templates.pep_val_par_loader import load_val_par
-from equilibria.templates.pep_sam_compat import (
+from equilibria.templates.pep_cri_transform import (
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
 )

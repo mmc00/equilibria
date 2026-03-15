@@ -16,7 +16,7 @@ from equilibria.templates.pep_calibration_unified_dynamic import (  # noqa: E402
     PEPModelCalibratorDynamicSAM,
     PEPModelCalibratorExcelDynamicSAM,
 )
-from equilibria.templates.pep_sam_compat import (  # noqa: E402
+from equilibria.templates.pep_cri_transform import (  # noqa: E402
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
 )
