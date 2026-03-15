@@ -15,7 +15,7 @@ from equilibria.templates.pep_model_solver import (
     DEBUG_SIMPLE_ITERATION_METHOD,
     PEPModelSolver,
 )
-from equilibria.templates.pep_sam_compat import transform_sam_to_pep_compatible
+from equilibria.templates.pep_cri_transform import transform_sam_to_pep_compatible
 
 
 def run_optional_pep_check(
