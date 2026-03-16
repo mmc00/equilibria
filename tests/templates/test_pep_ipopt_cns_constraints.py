@@ -15,7 +15,7 @@ from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorExcelDynamicSAM,
 )
 from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
-from equilibria.templates.pep_model_solver_ipopt import IPOPTSolver
+from equilibria.templates.pep_model_solver_ipopt import CGEProblem, IPOPTSolver
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -118,3 +118,24 @@ def test_ipopt_square_feasible_messages_are_accepted() -> None:
     assert not IPOPTSolver._ipopt_reports_square_feasible(
         "Maximum number of iterations exceeded"
     )
+
+
+def test_ipopt_problem_uses_constant_feasibility_objective() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+
+    problem = CGEProblem(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        variable_info={},
+        residual_weights=solver._build_residual_weights(),
+        hard_constraints=solver._build_hard_constraints(),
+    )
+
+    assert problem.objective(x0) == 0.0
+    np.testing.assert_allclose(problem.gradient(x0), np.zeros_like(x0))
+    assert np.isfinite(problem.jacobian(x0)).all()

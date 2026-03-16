@@ -16,7 +16,7 @@ from equilibria.templates.pep_calibration_unified_dynamic import (  # noqa: E402
     PEPModelCalibratorDynamicSAM,
     PEPModelCalibratorExcelDynamicSAM,
 )
-from equilibria.templates.pep_sam_compat import (  # noqa: E402
+from equilibria.templates.pep_cri_transform import (  # noqa: E402
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
 )
@@ -102,12 +102,15 @@ def main() -> int:
         print("Applied CRI->PEP SAM compatibility transform")
         print(f"  input : {args.sam_file}")
         print(f"  output: {sam_file_for_run}")
-        print(
-            "  ignored inflows: "
-            f"{cri_fix_report['before']['pep_compatibility']['totals']['ignored_inflows']:.6f}"
-            " -> "
-            f"{cri_fix_report['after']['pep_compatibility']['totals']['ignored_inflows']:.6f}"
-        )
+        first_balance = (cri_fix_report.get("steps") or [{}])[0].get("balance", {})
+        after_balance = cri_fix_report.get("after", {}).get("balance", {})
+        if first_balance and after_balance:
+            print(
+                "  max row/col diff: "
+                f"{float(first_balance.get('max_row_col_abs_diff', 0.0)):.6f}"
+                " -> "
+                f"{float(after_balance.get('max_row_col_abs_diff', 0.0)):.6f}"
+            )
 
     ext = sam_file_for_run.suffix.lower()
     if ext == ".xlsx":
