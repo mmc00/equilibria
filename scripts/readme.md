@@ -30,6 +30,11 @@ flujo actual recomendado:
   - `uv run python scripts/cli/run_pep_base_export_tax_parity.py --save-report output/pep_base_export_tax_parity.json`
   - nota: este script ahora usa internamente `equilibria.simulations.PepSimulator`.
   - para uso programatico, preferir API python directa (`equilibria.simulations`) sobre CLI.
+- gate del paquete principal de escenarios pep:
+  - `uv run python scripts/cli/run_pep_core_scenarios_gate.py --save-report output/pep_core_scenarios.json`
+  - opcional: `--reference-manifest /abs/path/pep_core_scenarios_manifest.json --require-reference-manifest`
+  - corre `base + export_tax + import_price_agr + import_shock + government_spending`
+  - cada escenario corre desde la misma base calibrada para mantener la paridad determinista
 *transformar SAM ahora usa el pipeline manual registrado en `scripts/sam_tools/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
 
 policy:
