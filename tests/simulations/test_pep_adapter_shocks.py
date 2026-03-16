@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 from equilibria.simulations.adapters.pep import PepAdapter
@@ -101,3 +104,189 @@ def test_pep_adapter_available_shocks_include_domain_members_when_sets_known() -
     assert by_var["PWM"].members == ("agr", "ser")
     assert by_var["PWX"].members == ("agr", "ser")
     assert by_var["ttix"].members == ("agr", "ser")
+
+
+def test_pep_adapter_fit_base_state_uses_excel_dynamic_sam_for_excel_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeExcelDynamicSAM:
+        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+            captured["sam_file"] = sam_file
+            captured["val_par_file"] = val_par_file
+            captured["accounts"] = accounts
+
+        def calibrate(self) -> PEPModelState:
+            return PEPModelState(sets={"I": ["agr"], "J": ["agr"]})
+
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.PEPModelCalibratorExcelDynamicSAM",
+        _FakeExcelDynamicSAM,
+    )
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.should_apply_cri_pep_fix",
+        lambda *_args, **_kwargs: False,
+    )
+
+    adapter = PepAdapter(
+        sam_file="sam-cri.xlsx",
+        val_par_file="val.xlsx",
+        dynamic_sets=True,
+        accounts={"gvt": "gvt", "row": "row"},
+    )
+
+    state = adapter.fit_base_state()
+
+    assert captured["sam_file"] == Path("sam-cri.xlsx")
+    assert captured["val_par_file"] == Path("val.xlsx")
+    assert captured["accounts"] == {"gvt": "gvt", "row": "row"}
+    assert state.sets["I"] == ["agr"]
+    assert adapter._sets["I"] == ["agr"]
+
+
+def test_pep_adapter_fit_base_state_uses_dynamic_sam_for_gdx_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeDynamicSAM:
+        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+            captured["sam_file"] = sam_file
+            captured["val_par_file"] = val_par_file
+            captured["accounts"] = accounts
+
+        def calibrate(self) -> PEPModelState:
+            return PEPModelState(sets={"I": ["agr", "ser"]})
+
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.PEPModelCalibratorDynamicSAM",
+        _FakeDynamicSAM,
+    )
+
+    adapter = PepAdapter(
+        sam_file="sam-cri.gdx",
+        val_par_file="val.gdx",
+        dynamic_sets=True,
+        accounts={"gvt": "gvt"},
+    )
+
+    state = adapter.fit_base_state()
+
+    assert captured["sam_file"] == Path("sam-cri.gdx")
+    assert captured["val_par_file"] == Path("val.gdx")
+    assert captured["accounts"] == {"gvt": "gvt"}
+    assert state.sets["I"] == ["agr", "ser"]
+    assert adapter._sets["I"] == ["agr", "ser"]
+
+
+def test_pep_adapter_prepares_runtime_cri_excel_with_transform_and_qa(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeExcelDynamicSAM:
+        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+            captured["cal_sam_file"] = sam_file
+            captured["cal_val_par_file"] = val_par_file
+            captured["cal_accounts"] = accounts
+
+        def calibrate(self) -> PEPModelState:
+            return PEPModelState(sets={"I": ["agr"]})
+
+    def _fake_transform(**kwargs: object) -> dict[str, object]:
+        captured["transform"] = kwargs
+        return {"after": {"balance": {"max_row_col_abs_diff": 0.0}}}
+
+    class _FakeQAReport:
+        passed = True
+
+        def save_json(self, path: Path | str) -> None:
+            captured["qa_save"] = Path(path)
+
+    def _fake_run_sam_qa_from_file(**kwargs: object) -> _FakeQAReport:
+        captured["qa"] = kwargs
+        return _FakeQAReport()
+
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.PEPModelCalibratorExcelDynamicSAM",
+        _FakeExcelDynamicSAM,
+    )
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.should_apply_cri_pep_fix",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.transform_sam_to_pep_compatible",
+        _fake_transform,
+    )
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.run_sam_qa_from_file",
+        _fake_run_sam_qa_from_file,
+    )
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.format_report_summary",
+        lambda report: f"summary(passed={report.passed})",
+    )
+
+    adapter = PepAdapter(
+        sam_file="SAM-CRI-gams.xlsx",
+        val_par_file="VAL_PAR-CRI-gams.xlsx",
+        dynamic_sets=True,
+        sam_qa_mode="warn",
+        sam_qa_report="output/qa.json",
+    )
+
+    state = adapter.fit_base_state()
+
+    assert state.sets["I"] == ["agr"]
+    assert adapter._runtime_sam_file == Path("output/SAM-CRI-gams-pep-compatible.xlsx")
+    assert captured["transform"] == {
+        "input_sam": Path("SAM-CRI-gams.xlsx"),
+        "output_sam": Path("output/SAM-CRI-gams-pep-compatible.xlsx"),
+        "report_json": Path("output/SAM-CRI-gams-pep-compatible-report.json"),
+        "target_mode": "geomean",
+        "margin_commodity": "ser",
+    }
+    assert captured["qa"] == {
+        "sam_file": Path("output/SAM-CRI-gams-pep-compatible.xlsx"),
+        "dynamic_sam": True,
+        "accounts": adapter.accounts,
+        "balance_rel_tol": 1e-06,
+        "gdp_rel_tol": 0.08,
+        "max_samples": 8,
+        "strict_structural": False,
+    }
+    assert captured["cal_sam_file"] == Path("output/SAM-CRI-gams-pep-compatible.xlsx")
+    assert captured["qa_save"] == Path("output/qa.json")
+
+
+def test_pep_adapter_hard_fail_raises_on_failed_sam_qa(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeQAReport(SimpleNamespace):
+        def save_json(self, path: Path | str) -> None:
+            _ = path
+
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.should_apply_cri_pep_fix",
+        lambda *_args, **_kwargs: False,
+    )
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.run_sam_qa_from_file",
+        lambda **_kwargs: _FakeQAReport(passed=False),
+    )
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.format_report_summary",
+        lambda _report: "SAM QA FAIL",
+    )
+
+    adapter = PepAdapter(
+        sam_file="SAM-CRI-gams.xlsx",
+        val_par_file="VAL_PAR-CRI-gams.xlsx",
+        dynamic_sets=True,
+        sam_qa_mode="hard_fail",
+    )
+
+    with pytest.raises(RuntimeError, match="SAM QA failed: SAM QA FAIL"):
+        adapter.fit_base_state()
