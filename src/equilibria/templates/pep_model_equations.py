@@ -106,13 +106,16 @@ class PEPModelVariables:
     PE_FOB: dict[str, float] = field(default_factory=dict)
     PM: dict[str, float] = field(default_factory=dict)
     PWM: dict[str, float] = field(default_factory=dict)
+    PWX: dict[str, float] = field(default_factory=dict)
     PP: dict[str, float] = field(default_factory=dict)
     PCI: dict[str, float] = field(default_factory=dict)
     PVA: dict[str, float] = field(default_factory=dict)
     WC: dict[str, float] = field(default_factory=dict)
     RC: dict[str, float] = field(default_factory=dict)
     W: dict[str, float] = field(default_factory=dict)
+    LS: dict[str, float] = field(default_factory=dict)
     RK: dict[str, float] = field(default_factory=dict)
+    KS: dict[str, float] = field(default_factory=dict)
     R: dict[tuple[str, str], float] = field(default_factory=dict)
     WTI: dict[tuple[str, str], float] = field(default_factory=dict)
     RTI: dict[tuple[str, str], float] = field(default_factory=dict)
@@ -168,6 +171,9 @@ class SolverResult:
     variables: PEPModelVariables = field(default_factory=PEPModelVariables)
     residuals: dict[str, float] = field(default_factory=dict)
     message: str = ""
+    effective_contract: dict[str, Any] | None = None
+    effective_config: dict[str, Any] | None = None
+    closure_validation: dict[str, Any] | None = None
     
     def summary(self) -> str:
         """Return a text summary of the solution."""
@@ -198,6 +204,8 @@ class PEPModelEquations:
         self,
         sets: dict[str, list[str]],
         parameters: dict[str, Any],
+        *,
+        activation_masks: str = "gams_parity",
     ):
         """Initialize equations with model sets and parameters.
         
@@ -205,7 +213,10 @@ class PEPModelEquations:
             sets: Dictionary of model sets (H, F, J, I, K, L, etc.)
             parameters: Dictionary of calibrated parameters from Phase 1-5
         """
-        self.gams_strict = True
+        self.activation_masks = str(activation_masks).strip().lower()
+        if self.activation_masks not in {"gams_parity", "all_active"}:
+            raise ValueError(f"Unsupported PEP activation mask mode: {activation_masks!r}")
+        self.gams_strict = self.activation_masks == "gams_parity"
 
         self.sets = sets
         self.params = parameters
@@ -875,7 +886,7 @@ class PEPModelEquations:
         # EQ62: EXD(i) = world demand for exports
         for i in self.I:
             sigma_xd = self.params.get("sigma_XD", {}).get(i, 1)
-            pwx_i = self.params.get("PWX", {}).get(i, vars.PWM.get(i, 1.0))
+            pwx_i = vars.PWX.get(i, self.params.get("PWX", {}).get(i, vars.PWM.get(i, 1.0)))
             pe_fob_i = vars.PE_FOB.get(i, 0)
             
             exdo = self.params.get("EXDO", {}).get(i, 0)
@@ -1122,13 +1133,13 @@ class PEPModelEquations:
         
         # EQ85: Labor market equilibrium
         for l in self.L:
-            labor_supply = sum(self.params.get("LS", {}).get(l, 0) for _ in [0])  # LSO
+            labor_supply = vars.LS.get(l, self.params.get("LS", {}).get(l, 0.0))
             labor_demand = sum(vars.LD.get((l, j), 0) for j in self.J)
             residuals[f"EQ85_{l}"] = labor_supply - labor_demand
         
         # EQ86: Capital market equilibrium
         for k in self.K:
-            capital_supply = sum(self.params.get("KS", {}).get(k, 0) for _ in [0])  # KSO
+            capital_supply = vars.KS.get(k, self.params.get("KS", {}).get(k, 0.0))
             capital_demand = sum(vars.KD.get((k, j), 0) for j in self.J)
             residuals[f"EQ86_{k}"] = capital_supply - capital_demand
         

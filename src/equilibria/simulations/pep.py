@@ -11,7 +11,13 @@ from equilibria.simulations.types import Scenario
 
 
 class PepSimulator(Simulator):
-    """Convenience simulator with model fixed to ``pep``."""
+    """Convenience simulator with model fixed to ``pep``.
+
+    Standard wrapper methods such as :meth:`run_export_tax` use the simulator's
+    base contract/config. If one scenario needs a custom closure, use
+    :class:`equilibria.simulations.types.Scenario` directly and pass a
+    ``closure={...}`` block through :meth:`run_scenarios`.
+    """
 
     def __init__(self, **model_options: Any) -> None:
         super().__init__(model="pep", **model_options)

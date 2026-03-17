@@ -11,6 +11,17 @@ from typing import Any
 __all__ = [
     "ModelTemplate",
     "SimpleOpenEconomy",
+    "PEPContract",
+    "PEPClosureConfig",
+    "PEPEquationConfig",
+    "PEPBoundsConfig",
+    "build_pep_closure_config",
+    "build_pep_contract",
+    "PEPRuntimeConfig",
+    "PEPReferenceConfig",
+    "build_pep_runtime_config",
+    "PEPClosureValidationReport",
+    "validate_pep_closure_structure",
     "PEPScenarioParityRunner",
     "PEPExportTaxParityRunner",
     "PEPGovernmentSpendingParityRunner",
@@ -40,6 +51,60 @@ def __getattr__(name: str) -> Any:
         from equilibria.templates.simple_open import SimpleOpenEconomy
 
         return SimpleOpenEconomy
+
+    if name in {
+        "PEPContract",
+        "PEPClosureConfig",
+        "PEPEquationConfig",
+        "PEPBoundsConfig",
+        "build_pep_closure_config",
+        "build_pep_contract",
+    }:
+        from equilibria.templates.pep_contract import (
+            PEPBoundsConfig,
+            PEPClosureConfig,
+            PEPContract,
+            PEPEquationConfig,
+            build_pep_closure_config,
+            build_pep_contract,
+        )
+
+        return {
+            "PEPContract": PEPContract,
+            "PEPClosureConfig": PEPClosureConfig,
+            "PEPEquationConfig": PEPEquationConfig,
+            "PEPBoundsConfig": PEPBoundsConfig,
+            "build_pep_closure_config": build_pep_closure_config,
+            "build_pep_contract": build_pep_contract,
+        }[name]
+
+    if name in {
+        "PEPRuntimeConfig",
+        "PEPReferenceConfig",
+        "build_pep_runtime_config",
+    }:
+        from equilibria.templates.pep_runtime_config import (
+            PEPReferenceConfig,
+            PEPRuntimeConfig,
+            build_pep_runtime_config,
+        )
+
+        return {
+            "PEPRuntimeConfig": PEPRuntimeConfig,
+            "PEPReferenceConfig": PEPReferenceConfig,
+            "build_pep_runtime_config": build_pep_runtime_config,
+        }[name]
+
+    if name in {"PEPClosureValidationReport", "validate_pep_closure_structure"}:
+        from equilibria.templates.pep_closure_validator import (
+            PEPClosureValidationReport,
+            validate_pep_closure_structure,
+        )
+
+        return {
+            "PEPClosureValidationReport": PEPClosureValidationReport,
+            "validate_pep_closure_structure": validate_pep_closure_structure,
+        }[name]
 
     if name == "PEPScenarioParityRunner":
         warnings.warn(

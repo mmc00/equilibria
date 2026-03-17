@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -27,6 +28,8 @@ import numpy as np
 from equilibria.solver.guards import rebuild_tax_detail_from_rates
 from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
 from equilibria.templates.init_strategies import normalize_init_mode
+from equilibria.templates.pep_contract import PEPContract, build_pep_contract
+from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
 
 logger = logging.getLogger(__name__)
@@ -49,12 +52,14 @@ class PEPModelSolver:
     def __init__(
         self,
         calibrated_state: Any,
-        tolerance: float = 1e-6,
-        max_iterations: int = 100,
+        tolerance: float | None = None,
+        max_iterations: int | None = None,
         init_mode: Literal["gams", "excel"] | str = "excel",
         blockwise_commodity_alpha: float = 0.75,
         blockwise_trade_market_alpha: float = 0.5,
         blockwise_macro_alpha: float = 1.0,
+        contract: str | Mapping[str, Any] | PEPContract | None = None,
+        config: str | Mapping[str, Any] | PEPRuntimeConfig | None = None,
         gams_results_gdx: Path | str | None = None,
         gams_parameters_gdx: Path | str | None = None,
         gams_results_slice: Literal["base", "sim1"] = "sim1",
@@ -78,8 +83,10 @@ class PEPModelSolver:
                 - excel: initialize from SAM/Excel calibrated *O values
         """
         self.state = calibrated_state
-        self.tolerance = tolerance
-        self.max_iterations = max_iterations
+        self.contract = build_pep_contract(contract)
+        self.runtime_config = build_pep_runtime_config(config)
+        self.tolerance = float(self.runtime_config.tolerance if tolerance is None else tolerance)
+        self.max_iterations = int(self.runtime_config.max_iterations if max_iterations is None else max_iterations)
         requested_init_mode = str(init_mode).strip().lower()
         self.init_mode = normalize_init_mode(init_mode)
         self.blockwise_commodity_alpha = blockwise_commodity_alpha
@@ -96,19 +103,26 @@ class PEPModelSolver:
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
         self.gdxdump_bin = gdxdump_bin
         self.initial_vars = copy.deepcopy(initial_vars) if initial_vars is not None else None
+        self.last_closure_validation_report: dict[str, Any] | None = None
         
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
         self.params = self._extract_parameters(calibrated_state)
         
         # Initialize equations
-        self.equations = PEPModelEquations(self.sets, self.params)
+        self.equations = PEPModelEquations(
+            self.sets,
+            self.params,
+            activation_masks=self.contract.equations.activation_masks,
+        )
         
         logger.info(f"Initialized PEP Model Solver")
         logger.info(f"  Sets: {len(self.sets)} categories")
-        logger.info(f"  Tolerance: {tolerance}")
-        logger.info(f"  Max iterations: {max_iterations}")
+        logger.info(f"  Tolerance: {self.tolerance}")
+        logger.info(f"  Max iterations: {self.max_iterations}")
         logger.info(f"  Init mode: {self.init_mode}")
+        logger.info("  Contract: %s", self.contract.name)
+        logger.info("  Runtime config: %s", self.runtime_config.name)
         if requested_init_mode != self.init_mode:
             logger.info(
                 "  Init mode alias normalized: %s -> %s",
@@ -394,6 +408,38 @@ class PEPModelSolver:
         }
         
         return params
+
+    def _build_ipopt_shadow_solver(self) -> IPOPTSolver:
+        return IPOPTSolver(
+            calibrated_state=self.state,
+            tolerance=self.tolerance,
+            max_iterations=self.max_iterations,
+            init_mode=self.init_mode,
+            blockwise_commodity_alpha=self.blockwise_commodity_alpha,
+            blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
+            blockwise_macro_alpha=self.blockwise_macro_alpha,
+            contract=self.contract,
+            config=self.runtime_config,
+            gams_results_gdx=self.gams_results_gdx,
+            gams_parameters_gdx=self.gams_parameters_gdx,
+            gams_results_slice=self.gams_results_slice,
+            baseline_manifest=self.baseline_manifest,
+            require_baseline_manifest=self.require_baseline_manifest,
+            baseline_compatibility_rel_tol=self.baseline_compatibility_rel_tol,
+            enforce_strict_gams_baseline=self.enforce_strict_gams_baseline,
+            sam_file=self.sam_file,
+            val_par_file=self.val_par_file,
+            gdxdump_bin=self.gdxdump_bin,
+            initial_vars=self.initial_vars,
+        )
+
+    def build_closure_validation_report(self) -> dict[str, Any]:
+        """Validate whether the current closure leaves a structurally valid system."""
+        ipopt_solver = self._build_ipopt_shadow_solver()
+        report = ipopt_solver.build_closure_validation_report()
+        report_dict = report.model_dump(mode="python")
+        self.last_closure_validation_report = report_dict
+        return report_dict
     
     def _create_initial_guess(self) -> PEPModelVariables:
         """Create initial guess for variables from calibrated values."""
@@ -411,6 +457,8 @@ class PEPModelSolver:
                 blockwise_commodity_alpha=self.blockwise_commodity_alpha,
                 blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
                 blockwise_macro_alpha=self.blockwise_macro_alpha,
+                contract=self.contract,
+                config=self.runtime_config,
                 gams_results_gdx=self.gams_results_gdx,
                 gams_parameters_gdx=self.gams_parameters_gdx,
                 gams_results_slice=self.gams_results_slice,
@@ -426,6 +474,7 @@ class PEPModelSolver:
             vars_ipopt = ipopt_solver._create_initial_guess()
             self.params = ipopt_solver.params
             self.equations = ipopt_solver.equations
+            self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
             return vars_ipopt
         except Exception as e:
             if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
@@ -470,8 +519,10 @@ class PEPModelSolver:
         # Initialize wages
         for l in self.sets.get("L", []):
             vars.W[l] = 1.0  # Numeraire
+            vars.LS[l] = state.production.get("LSO", {}).get(l, 0.0)
         for k in self.sets.get("K", []):
             vars.RK[k] = 1.0
+            vars.KS[k] = state.production.get("KSO", {}).get(k, 0.0)
         
         # Initialize tax-payment matrices from rate equations (TIWO/TIKO may be absent
         # in calibration output depending on phase configuration).
@@ -550,6 +601,7 @@ class PEPModelSolver:
             vars.PE[i] = state.trade.get("PEO", {}).get(i, 1.0)
             vars.PE_FOB[i] = state.trade.get("PE_FOBO", {}).get(i, 1.0)
             vars.PWM[i] = state.trade.get("PWMO", {}).get(i, 1.0)
+            vars.PWX[i] = state.trade.get("PWXO", {}).get(i, 1.0)
             vars.PL[i] = state.trade.get("PLO", {}).get(i, 1.0)
             vars.TIC[i] = state.trade.get("TICO", {}).get(i, 0)
             vars.TIM[i] = state.trade.get("TIMO", {}).get(i, 0)
@@ -793,7 +845,10 @@ class PEPModelSolver:
                     blockwise_commodity_alpha=self.blockwise_commodity_alpha,
                     blockwise_trade_market_alpha=self.blockwise_trade_market_alpha,
                     blockwise_macro_alpha=self.blockwise_macro_alpha,
+                    contract=self.contract,
+                    config=self.runtime_config,
                     gams_results_gdx=self.gams_results_gdx,
+                    gams_parameters_gdx=self.gams_parameters_gdx,
                     gams_results_slice=self.gams_results_slice,
                     baseline_manifest=self.baseline_manifest,
                     require_baseline_manifest=self.require_baseline_manifest,
@@ -804,7 +859,9 @@ class PEPModelSolver:
                     gdxdump_bin=self.gdxdump_bin,
                     initial_vars=self.initial_vars,
                 )
-                return ipopt_solver.solve_ipopt()
+                result = ipopt_solver.solve_ipopt()
+                self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
+                return result
             except Exception as e:
                 if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
                     raise RuntimeError(
@@ -825,6 +882,9 @@ class PEPModelSolver:
         """Solve using simple iteration (Gauss-Seidel style)."""
         result = SolverResult()
         result.variables = vars
+        result.effective_contract = self.contract.model_dump(mode="python")
+        result.effective_config = self.runtime_config.model_dump(mode="python")
+        result.closure_validation = self.build_closure_validation_report()
         
         logger.info("Using simple iteration method")
         
@@ -881,6 +941,9 @@ class PEPModelSolver:
             "rms_residual": result.final_residual,
             "max_residual": max(abs(r) for r in result.residuals.values()) if result.residuals else float('inf'),
             "checks": {},
+            "effective_contract": result.effective_contract or self.contract.model_dump(mode="python"),
+            "effective_config": result.effective_config or self.runtime_config.model_dump(mode="python"),
+            "closure_validation": result.closure_validation or self.build_closure_validation_report(),
         }
         
         vars = result.variables
