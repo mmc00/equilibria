@@ -96,6 +96,68 @@ def test_ipopt_hard_constraints_cover_all_equations(state_builder) -> None:
     assert set(hard) == set(residuals.keys())
 
 
+def test_ipopt_contract_equation_include_filters_hard_constraints() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "equations": {
+                "include": ["EQ85", "EQ86"],
+            }
+        },
+        tolerance=1e-6,
+        max_iterations=1,
+    )
+
+    hard = solver._build_hard_constraints()
+    expected = set(f"EQ85_{l}" for l in state.sets["L"]) | set(
+        f"EQ86_{k}" for k in state.sets["K"]
+    )
+
+    assert set(hard) == expected
+
+
+def test_ipopt_activation_masks_all_active_affect_equations_and_bounds() -> None:
+    state = _build_base_gdx()
+    default_solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+    all_active_solver = IPOPTSolver(
+        state,
+        contract={
+            "equations": {
+                "activation_masks": "all_active",
+            }
+        },
+        tolerance=1e-6,
+        max_iterations=1,
+    )
+
+    inactive_import = next(
+        i for i in state.sets["I"] if abs(default_solver.params.get("IMO0", {}).get(i, 0.0)) <= 1e-12
+    )
+
+    default_hard = default_solver._build_hard_constraints()
+    all_active_hard = all_active_solver._build_hard_constraints()
+    assert f"EQ41_{inactive_import}" not in default_hard
+    assert f"EQ41_{inactive_import}" in all_active_hard
+
+    vars0_default = default_solver._create_initial_guess()
+    x0_default = default_solver._variables_to_array(vars0_default)
+    lb_default, ub_default = default_solver._build_variable_bounds(x_ref=x0_default)
+    names_default = default_solver._last_bound_names
+
+    vars0_all = all_active_solver._create_initial_guess()
+    x0_all = all_active_solver._variables_to_array(vars0_all)
+    lb_all, ub_all = all_active_solver._build_variable_bounds(x_ref=x0_all)
+    names_all = all_active_solver._last_bound_names
+
+    pm_name = f"PM[{inactive_import}]"
+    pm_idx_default = names_default.index(pm_name)
+    pm_idx_all = names_all.index(pm_name)
+
+    assert np.isclose(lb_default[pm_idx_default], ub_default[pm_idx_default])
+    assert not np.isclose(lb_all[pm_idx_all], ub_all[pm_idx_all])
+
+
 def test_ipopt_bounds_follow_gams_domains_for_nonfixed_variables() -> None:
     state = _build_dynamic_sam_excel()
     solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
@@ -139,3 +201,182 @@ def test_ipopt_problem_uses_constant_feasibility_objective() -> None:
     assert problem.objective(x0) == 0.0
     np.testing.assert_allclose(problem.gradient(x0), np.zeros_like(x0))
     assert np.isfinite(problem.jacobian(x0)).all()
+
+
+def test_ipopt_builds_structural_closure_validation_report() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, config="default_ipopt")
+
+    report = solver.build_closure_validation_report()
+
+    assert report.system_shape == "square"
+    assert report.is_valid is True
+    assert report.numeraire == "e"
+    assert report.numeraire_is_fixed is True
+    assert report.active_equation_count > 200
+    assert report.free_endogenous_variable_count > 200
+
+
+def test_ipopt_contract_override_changes_explicit_fixed_closure_bounds() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "closure": {
+                "fixed": ["PWM", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["G", "CAB", "IT", "SH", "SF", "SG", "SROW"],
+            }
+        },
+        config="default_ipopt",
+    )
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    lb, ub = solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    g_idx = names.index("G")
+    cab_idx = names.index("CAB")
+
+    assert not np.isclose(lb[g_idx], ub[g_idx])
+    assert not np.isclose(lb[cab_idx], ub[cab_idx])
+
+
+def test_ipopt_bounds_config_can_release_closure_fixed_symbol() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "closure": {
+                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
+            },
+            "bounds": {
+                "fixed_from_closure": False,
+                "free": ["PWM"],
+            },
+        },
+        config="default_ipopt",
+    )
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    lb, ub = solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    pwm_idx = names.index(f"PWM[{state.sets['I'][0]}]")
+    assert np.isneginf(lb[pwm_idx])
+    assert np.isposinf(ub[pwm_idx])
+
+
+def test_ipopt_closure_report_flags_unsupported_contract_symbols() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "closure": {
+                "fixed": ["G", "LEON"],
+                "endogenous": ["SG"],
+            }
+        },
+        config="default_ipopt",
+    )
+
+    report = solver.build_closure_validation_report()
+
+    assert report.is_valid is False
+    assert report.unsupported_fixed_symbols == ("LEON",)
+    assert report.unsupported_endogenous_symbols == ()
+
+
+def test_ipopt_contract_supports_pwx_fixed_closure_bounds() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "closure": {
+                "fixed": ["G", "CAB", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
+            }
+        },
+        config="default_ipopt",
+    )
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    lb, ub = solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    pwx_idx = names.index(f"PWX[{state.sets['I'][0]}]")
+    assert np.isclose(lb[pwx_idx], ub[pwx_idx])
+
+
+def test_ipopt_contract_supports_ls_fixed_closure_bounds() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "closure": {
+                "fixed": ["G", "CAB", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
+            }
+        },
+        config="default_ipopt",
+    )
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    lb, ub = solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    ls_idx = names.index(f"LS[{state.sets['L'][0]}]")
+    assert np.isclose(lb[ls_idx], ub[ls_idx])
+
+
+def test_ipopt_contract_supports_ks_fixed_closure_bounds_mobile_capital() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "closure": {
+                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
+                "capital_mobility": "mobile",
+            }
+        },
+        config="default_ipopt",
+    )
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    lb, ub = solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    ks_idx = names.index(f"KS[{state.sets['K'][0]}]")
+    assert np.isclose(lb[ks_idx], ub[ks_idx])
+
+
+def test_ipopt_contract_maps_ks_to_kd_when_capital_is_sector_specific() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(
+        state,
+        contract={
+            "closure": {
+                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
+                "capital_mobility": "sector_specific",
+            }
+        },
+        config="default_ipopt",
+    )
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    lb, ub = solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    kd_idx = names.index(f"KD[{state.sets['K'][0]},{state.sets['J'][0]}]")
+    ks_idx = names.index(f"KS[{state.sets['K'][0]}]")
+
+    assert np.isclose(lb[kd_idx], ub[kd_idx])
+    assert not np.isclose(lb[ks_idx], ub[ks_idx])

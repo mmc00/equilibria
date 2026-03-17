@@ -101,6 +101,7 @@ class Simulator:
                 reference_slice="base",
                 compare_abs_tol=compare_abs_tol,
                 compare_rel_tol=compare_rel_tol,
+                scenario=None,
             )
             report["base"] = base_entry
             base_vars = base_entry["solution_vars"]
@@ -121,6 +122,7 @@ class Simulator:
                 reference_slice=scenario.reference_slice,
                 compare_abs_tol=compare_abs_tol,
                 compare_rel_tol=compare_rel_tol,
+                scenario=scenario,
                 shocks=scenario.shocks,
             )
             report["scenarios"].append(scenario_entry)
@@ -142,6 +144,7 @@ class Simulator:
         reference_slice: str,
         compare_abs_tol: float,
         compare_rel_tol: float,
+        scenario: Scenario | None = None,
         shocks: list[Shock] | None = None,
     ) -> dict[str, Any]:
         solver, solution, validation = self.adapter.solve_state(
@@ -149,6 +152,7 @@ class Simulator:
             initial_vars=initial_vars,
             reference_results_gdx=reference_results_gdx,
             reference_slice=reference_slice,
+            scenario=scenario,
         )
         comparison = None
         if reference_results_gdx is not None:
@@ -165,6 +169,11 @@ class Simulator:
             "name": name,
             "reference_slice": reference_slice,
             "shocks": [self._shock_to_dict(s) for s in (shocks or [])],
+            "closure": (
+                dict(scenario.closure)
+                if scenario is not None and scenario.closure is not None
+                else None
+            ),
             "solve": {
                 "converged": bool(solution.converged),
                 "iterations": int(solution.iterations),

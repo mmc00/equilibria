@@ -96,23 +96,86 @@ Scenario(
 )
 ```
 
-Tambien puedes usar presets:
+## closure por escenario (pep)
+
+Si un escenario PEP necesita una closure distinta a la del simulador base,
+puedes pasarla como un bloque directo `closure={...}` en `Scenario(...)`.
 
 ```python
-from equilibria.simulations import (
-    export_tax,
-    government_spending,
-    import_price,
-    import_shock,
-)
+from equilibria.simulations import PepSimulator, Scenario, Shock
 
-scenarios = [
-    export_tax(multiplier=0.75),
-    import_shock(multiplier=1.25),
-    import_price(commodity="agr", multiplier=1.25),
-    government_spending(multiplier=1.2),
-]
+sim = PepSimulator(
+    sam_file="src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx",
+    val_par_file="src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx",
+    method="ipopt",
+    init_mode="excel",
+    contract="pep_nlp_v1",
+    config="default_ipopt",
+).fit()
+
+report = sim.run_scenarios(
+    scenarios=[
+        Scenario(
+            name="government_spending",
+            shocks=[Shock(var="G", op="scale", values=1.2)],
+            closure={
+                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
+                "numeraire": "e",
+                "capital_mobility": "mobile",
+            },
+        ),
+    ],
+)
 ```
+
+Notas:
+
+- `closure` es opcional.
+- Si no lo pasas, el escenario usa el contrato base del simulador.
+- `closure` se mergea sobre el contrato base, no reemplaza todo el contrato.
+- El reporte devuelve la `closure` pedida y la `effective_contract` realmente usada por el solver.
+
+Importante:
+
+- `closure` si forma parte de la API publica por escenario.
+- `equations` y `bounds` no forman parte de la API publica por escenario.
+- Si necesitas cambiar `equations`, `bounds` o la `config` del solver, eso se hace al nivel de `PepSimulator(...)`, no dentro de `Scenario(...)`.
+- La guia detallada de esta separacion esta en `docs/guides/pep_contract_api.md`.
+
+### simbolos de closure soportados hoy en pep
+
+Los nombres que hoy entiende el solver son estos:
+
+- `G`
+- `CAB`
+- `SG`
+- `SROW`
+- `IT`
+- `SH`
+- `SF`
+- `EXD`
+- `LS`
+- `PWM`
+- `PWX`
+- `CMIN`
+- `VSTK`
+- `TR_SELF`
+- `TR_AGD_ROW`
+- `TR_ROW_AGNG`
+- `KS`
+- el `numeraire` que declares, por ejemplo `e`
+
+Interpretacion rapida:
+
+- `SH`, `SF`, `EXD`, `PWM`, `VSTK` y `CMIN` son familias indexadas; en la closure se escriben por nombre agregado.
+- `TR_SELF` corresponde a `TR(gvt,gvt)` y `TR(row,row)`.
+- `TR_AGD_ROW` corresponde a transferencias `row -> AGD`.
+- `TR_ROW_AGNG` corresponde a transferencias `AGNG -> row`.
+- `LS` controla la oferta laboral cuando la quieras fijar o liberar explicitamente.
+- `KS` controla la oferta de capital. Si `capital_mobility='mobile'`, fija/libera `KS[k]`; si `capital_mobility='sector_specific'`, aplica ese cierre sobre `KD[k,j]`.
+
+Si pasas un simbolo no soportado, el solver no lo acepta en silencio: la corrida queda marcada como invalida en `validation.closure_validation`, con mensajes como `Unsupported fixed closure symbols` o `Unsupported endogenous closure symbols`.
 
 ## notas de diseño
 

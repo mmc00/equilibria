@@ -97,9 +97,15 @@ def pep_array_to_variables(
         if idx < len(x):
             vars.W[labor] = max(min_price, float(x[idx]))
             idx += 1
+        if idx < len(x):
+            vars.LS[labor] = max(0.0, float(x[idx]))
+            idx += 1
     for capital in sets.get("K", []):
         if idx < len(x):
             vars.RK[capital] = max(min_price, float(x[idx]))
+            idx += 1
+        if idx < len(x):
+            vars.KS[capital] = max(0.0, float(x[idx]))
             idx += 1
 
     # Price and trade variables
@@ -124,6 +130,9 @@ def pep_array_to_variables(
             idx += 1
         if idx < len(x):
             vars.PWM[commodity] = max(min_price, float(x[idx]))
+            idx += 1
+        if idx < len(x):
+            vars.PWX[commodity] = max(min_price, float(x[idx]))
             idx += 1
         if idx < len(x):
             vars.IM[commodity] = max(0.0, float(x[idx]))
@@ -405,8 +414,10 @@ def pep_variables_to_array(
     # Wages
     for labor in sets.get("L", []):
         values.append(vars.W.get(labor, 1.0))
+        values.append(vars.LS.get(labor, 0.0))
     for capital in sets.get("K", []):
         values.append(vars.RK.get(capital, 1.0))
+        values.append(vars.KS.get(capital, 0.0))
 
     # Price and trade variables
     for commodity in sets.get("I", []):
@@ -417,6 +428,7 @@ def pep_variables_to_array(
         values.append(vars.PE_FOB.get(commodity, 1.0))
         values.append(vars.PL.get(commodity, 1.0))
         values.append(vars.PWM.get(commodity, 1.0))
+        values.append(vars.PWX.get(commodity, 1.0))
         values.append(vars.IM.get(commodity, 0.0))
         values.append(vars.DD.get(commodity, 0.0))
         values.append(vars.Q.get(commodity, 0.0))

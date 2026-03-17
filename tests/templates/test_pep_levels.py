@@ -12,8 +12,13 @@ def test_equilibria_levels_extractor_reads_aliases() -> None:
     vars_obj = PEPModelVariables()
     vars_obj.PT = {"agr": 1.0007}
     vars_obj.RK = {"cap": 1.0012}
+    vars_obj.KS = {"cap": 7.5}
+    vars_obj.LS = {"usk": 12.5}
+    vars_obj.PWX = {"agr": 1.3}
     vars_obj.e = 1.25
     params = {
+        "KS": {"cap": 6.0},
+        "LS": {"usk": 9.0},
         "PWX": {"agr": 1.1},
         "ttix": {"agr": 0.075},
     }
@@ -22,7 +27,9 @@ def test_equilibria_levels_extractor_reads_aliases() -> None:
 
     assert extractor.get("valPT", ("agr",)) == 1.0007
     assert extractor.get("valRK", ("cap",)) == 1.0012
-    assert extractor.get("valPWX", ("agr",)) == 1.1
+    assert extractor.get("valKS", ("cap",)) == 7.5
+    assert extractor.get("valLS", ("usk",)) == 12.5
+    assert extractor.get("valPWX", ("agr",)) == 1.3
     assert extractor.get("valttix", ("agr",)) == 0.075
     assert extractor.get("vale", ()) == 1.25
 
