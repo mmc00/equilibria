@@ -11,8 +11,10 @@ def test_scenario_normalizes_reference_slice() -> None:
         name="import",
         shocks=[Shock(var="PWM", op="scale", values={"*": 1.25})],
         reference_slice="SIM1",
+        closure={"fixed": ["PWM"]},
     )
     assert scenario.reference_slice == "sim1"
+    assert scenario.closure == {"fixed": ["PWM"]}
 
 
 def test_scenario_requires_non_empty_name() -> None:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +13,7 @@ from equilibria.qa.sam_checks import run_sam_qa_from_file
 from equilibria.simulations.adapters.base import BaseModelAdapter
 from equilibria.simulations.pep_compare import compare_with_gams
 from equilibria.simulations.pep_compare import key_indicators as pep_key_indicators
-from equilibria.simulations.types import Shock, ShockDefinition
+from equilibria.simulations.types import Scenario, Shock, ShockDefinition
 from equilibria.templates.pep_calibration_unified import (
     PEPModelCalibrator,
     PEPModelState,
@@ -23,11 +25,13 @@ from equilibria.templates.pep_calibration_unified_dynamic import (
 from equilibria.templates.pep_calibration_unified_excel import (
     PEPModelCalibratorExcel,
 )
+from equilibria.templates.pep_contract import PEPContract, build_pep_contract
 from equilibria.templates.pep_model_solver import PEPModelSolver
 from equilibria.templates.pep_cri_transform import (
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
 )
+from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
@@ -47,6 +51,16 @@ DEFAULT_CRI_ACCOUNTS = {
 logger = logging.getLogger(__name__)
 
 
+def _deep_merge_dict(base: dict[str, Any], updates: Mapping[str, Any]) -> dict[str, Any]:
+    merged = deepcopy(base)
+    for key, value in updates.items():
+        if isinstance(value, Mapping) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 class PepAdapter(BaseModelAdapter):
     """PEP-specific implementation of the simulation adapter contract."""
 
@@ -58,8 +72,10 @@ class PepAdapter(BaseModelAdapter):
         method: str = "ipopt",
         init_mode: str = "excel",
         dynamic_sets: bool = True,
-        solve_tolerance: float = 1e-8,
-        max_iterations: int = 300,
+        solve_tolerance: float | None = None,
+        max_iterations: int | None = None,
+        contract: str | dict[str, Any] | PEPContract | None = None,
+        config: str | dict[str, Any] | PEPRuntimeConfig | None = None,
         gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
         accounts: dict[str, str] | None = None,
         sam_qa_mode: str = "off",
@@ -79,8 +95,14 @@ class PepAdapter(BaseModelAdapter):
         self.method = str(method)
         self.init_mode = str(init_mode)
         self.dynamic_sets = bool(dynamic_sets)
-        self.solve_tolerance = float(solve_tolerance)
-        self.max_iterations = int(max_iterations)
+        self.contract = build_pep_contract(contract)
+        self.runtime_config = build_pep_runtime_config(config)
+        self.solve_tolerance = (
+            float(self.runtime_config.tolerance) if solve_tolerance is None else float(solve_tolerance)
+        )
+        self.max_iterations = (
+            int(self.runtime_config.max_iterations) if max_iterations is None else int(max_iterations)
+        )
         self.gdxdump_bin = str(gdxdump_bin)
         self.accounts = dict(accounts) if accounts is not None else dict(DEFAULT_CRI_ACCOUNTS)
         self.sam_qa_mode = str(sam_qa_mode).strip().lower()
@@ -98,6 +120,26 @@ class PepAdapter(BaseModelAdapter):
         self._runtime_sam_file = self.sam_file
         self.last_sam_qa_report: Any | None = None
         self.last_cri_fix_report: dict[str, Any] | None = None
+
+    def capabilities(self) -> dict[str, Any]:
+        capabilities = super().capabilities()
+        capabilities.update(
+            {
+                "contract": self.contract.name,
+                "runtime_config": self.runtime_config.name,
+            }
+        )
+        return capabilities
+
+    def _resolve_contract_for_scenario(self, scenario: Scenario | None) -> PEPContract:
+        if scenario is None:
+            return self.contract
+        if scenario.closure is None:
+            return self.contract
+
+        contract_data = self.contract.model_dump(mode="python")
+        merged = _deep_merge_dict(contract_data, {"closure": scenario.closure})
+        return build_pep_contract(merged)
 
     def _prepare_runtime_sam_file(self) -> Path:
         sam_file_for_run = self.sam_file
@@ -274,12 +316,16 @@ class PepAdapter(BaseModelAdapter):
         initial_vars: Any | None,
         reference_results_gdx: Path | None,
         reference_slice: str,
+        scenario: Scenario | None = None,
     ) -> tuple[PEPModelSolver, Any, dict[str, Any]]:
+        effective_contract = self._resolve_contract_for_scenario(scenario)
         solver = PEPModelSolver(
             calibrated_state=state,
             tolerance=self.solve_tolerance,
             max_iterations=self.max_iterations,
             init_mode=self.init_mode,
+            contract=effective_contract,
+            config=self.runtime_config,
             gams_results_gdx=reference_results_gdx,
             gams_results_slice=reference_slice.lower(),
             sam_file=self._runtime_sam_file,

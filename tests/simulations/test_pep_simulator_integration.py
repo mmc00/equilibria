@@ -64,6 +64,7 @@ def test_pep_simulator_end_to_end_scenarios_with_optional_reference(monkeypatch:
         initial_vars: Any | None,
         reference_results_gdx: Any | None,
         reference_slice: str,
+        scenario: Any | None = None,
     ) -> tuple[Any, Any, dict[str, Any]]:
         captured.append(
             {
@@ -71,6 +72,8 @@ def test_pep_simulator_end_to_end_scenarios_with_optional_reference(monkeypatch:
                 "initial_vars": copy.deepcopy(initial_vars),
                 "reference_results_gdx": reference_results_gdx,
                 "reference_slice": reference_slice,
+                "scenario_name": None if scenario is None else scenario.name,
+                "closure": None if scenario is None else scenario.closure,
             }
         )
         vars_obj = {
@@ -138,6 +141,9 @@ def test_pep_simulator_end_to_end_scenarios_with_optional_reference(monkeypatch:
     assert s_export["name"] == "export_tax"
     assert s_import["name"] == "import_shock"
     assert s_gov["name"] == "government_spending"
+    assert s_export["closure"] is None
+    assert s_import["closure"] is None
+    assert s_gov["closure"] is None
     assert s_export["solve"]["key_indicators"]["ttix_sum"] == pytest.approx(0.225)
     assert s_import["solve"]["key_indicators"]["PWM_sum"] == pytest.approx(3.75)
     assert s_gov["solve"]["key_indicators"]["GO"] == pytest.approx(120.0)
@@ -147,7 +153,10 @@ def test_pep_simulator_end_to_end_scenarios_with_optional_reference(monkeypatch:
 
     assert len(captured) == 4
     assert captured[0]["initial_vars"] is None
+    assert captured[0]["scenario_name"] is None
     assert isinstance(captured[1]["initial_vars"], dict)
+    assert captured[1]["scenario_name"] == "export_tax"
+    assert captured[1]["closure"] is None
     assert captured[1]["initial_vars"]["GO"] == 100.0
     assert captured[2]["initial_vars"]["GO"] == 100.0
     assert captured[3]["initial_vars"]["GO"] == 100.0
