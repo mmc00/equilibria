@@ -58,14 +58,21 @@ def test_get_solution_value_alias_mapping() -> None:
     vars_obj.e = 1.25
     vars_obj.PT = {"agr": 1.0007}
     vars_obj.RK = {"cap": 1.0012}
+    vars_obj.KS = {"cap": 7.5}
+    vars_obj.LS = {"usk": 12.5}
+    vars_obj.PWX = {"agr": 1.3}
     params = {
+        "KS": {"cap": 6.0},
+        "LS": {"usk": 9.0},
         "ttix": {"agr": 0.075},
         "PWX": {"agr": 1.1},
         "PT": {"agr": 1.0},
     }
 
     assert get_solution_value(vars_obj, "valttix", ("agr",), params) == 0.075
-    assert get_solution_value(vars_obj, "valPWX", ("agr",), params) == 1.1
+    assert get_solution_value(vars_obj, "valKS", ("cap",), params) == 7.5
+    assert get_solution_value(vars_obj, "valLS", ("usk",), params) == 12.5
+    assert get_solution_value(vars_obj, "valPWX", ("agr",), params) == 1.3
     assert get_solution_value(vars_obj, "valPT", ("agr",), params) == 1.0007
     assert get_solution_value(vars_obj, "valRK", ("cap",), params) == 1.0012
     assert get_solution_value(vars_obj, "vale", (), params) == 1.25

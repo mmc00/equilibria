@@ -25,6 +25,7 @@ import copy
 import re
 import shutil
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Tuple
 
@@ -47,7 +48,13 @@ from equilibria.core.sets import Set, SetManager
 from equilibria.solver.guards import rebuild_tax_detail_from_rates
 from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
 from equilibria.templates.init_strategies import build_init_strategy, normalize_init_mode
+from equilibria.templates.pep_closure_validator import (
+    PEPClosureValidationReport,
+    validate_pep_closure_structure,
+)
+from equilibria.templates.pep_contract import PEPContract, build_pep_contract
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
+from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -225,12 +232,14 @@ class IPOPTSolver:
     def __init__(
         self,
         calibrated_state: Any,
-        tolerance: float = 1e-6,
-        max_iterations: int = 100,
+        tolerance: float | None = None,
+        max_iterations: int | None = None,
         init_mode: Literal["gams", "excel"] | str = "excel",
         blockwise_commodity_alpha: float = 0.75,
         blockwise_trade_market_alpha: float = 0.5,
         blockwise_macro_alpha: float = 1.0,
+        contract: str | Mapping[str, Any] | PEPContract | None = None,
+        config: str | Mapping[str, Any] | PEPRuntimeConfig | None = None,
         gams_results_gdx: Path | str | None = None,
         gams_parameters_gdx: Path | str | None = None,
         gams_results_slice: Literal["base", "sim1"] = "sim1",
@@ -251,8 +260,10 @@ class IPOPTSolver:
             max_iterations: Maximum number of iterations
         """
         self.state = calibrated_state
-        self.tolerance = tolerance
-        self.max_iterations = max_iterations
+        self.contract = build_pep_contract(contract)
+        self.runtime_config = build_pep_runtime_config(config)
+        self.tolerance = float(self.runtime_config.tolerance if tolerance is None else tolerance)
+        self.max_iterations = int(self.runtime_config.max_iterations if max_iterations is None else max_iterations)
         requested_init_mode = str(init_mode).strip().lower()
         self.init_mode = normalize_init_mode(init_mode)
         self.blockwise_commodity_alpha = blockwise_commodity_alpha
@@ -272,20 +283,27 @@ class IPOPTSolver:
         self.strict_baseline_report: BaselineCompatibilityReport | None = None
         self._strict_baseline_checked = False
         self._last_bound_names: list[str] = []
+        self.last_closure_validation_report: dict[str, Any] | None = None
         
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
         self.params = self._extract_parameters(calibrated_state)
         
         # Initialize equations
-        self.equations = PEPModelEquations(self.sets, self.params)
+        self.equations = PEPModelEquations(
+            self.sets,
+            self.params,
+            activation_masks=self.contract.equations.activation_masks,
+        )
         
         logger.info(f"Initialized IPOPT Solver")
         logger.info(f"  Sets: {len(self.sets)} categories")
-        logger.info(f"  Tolerance: {tolerance}")
-        logger.info(f"  Max iterations: {max_iterations}")
+        logger.info(f"  Tolerance: {self.tolerance}")
+        logger.info(f"  Max iterations: {self.max_iterations}")
         logger.info(f"  Init mode: {self.init_mode}")
-        logger.info("  Equation mode: gams_strict")
+        logger.info("  Equation mode: %s", self.contract.equations.activation_masks)
+        logger.info("  Contract: %s", self.contract.name)
+        logger.info("  Runtime config: %s", self.runtime_config.name)
         if requested_init_mode != self.init_mode:
             logger.info(
                 "  Init mode alias normalized: %s -> %s",
@@ -1267,8 +1285,10 @@ class IPOPTSolver:
         # Initialize wages
         for l in self.sets.get("L", []):
             vars.W[l] = 1.0  # Numeraire
+            vars.LS[l] = state.production.get("LSO", {}).get(l, 0.0)
         for k in self.sets.get("K", []):
             vars.RK[k] = 1.0
+            vars.KS[k] = state.production.get("KSO", {}).get(k, 0.0)
 
         # Initialize detailed factor-tax payments from policy rates.
         rebuild_tax_detail_from_rates(
@@ -1332,6 +1352,7 @@ class IPOPTSolver:
             vars.PE[i] = state.trade.get("PEO", {}).get(i, 1.0)
             vars.PE_FOB[i] = state.trade.get("PE_FOBO", {}).get(i, 1.0)
             vars.PWM[i] = state.trade.get("PWMO", {}).get(i, 1.0)
+            vars.PWX[i] = state.trade.get("PWXO", {}).get(i, 1.0)
             vars.PL[i] = state.trade.get("PLO", {}).get(i, 1.0)
             vars.TIC[i] = state.trade.get("TICO", {}).get(i, 0)
             vars.TIM[i] = state.trade.get("TIMO", {}).get(i, 0)
@@ -1688,8 +1709,10 @@ class IPOPTSolver:
         # No explicit WO/RO/RKO in calibrated state; keep initialized numeraire defaults.
         for l in self.sets.get("L", []):
             vars.W[l] = float(vars.W.get(l, 1.0))
+            vars.LS[l] = float(production.get("LSO", {}).get(l, vars.LS.get(l, 0.0)))
         for k in self.sets.get("K", []):
             vars.RK[k] = float(vars.RK.get(k, 1.0))
+            vars.KS[k] = float(production.get("KSO", {}).get(k, vars.KS.get(k, 0.0)))
             for j in self.sets.get("J", []):
                 key = (k, j)
                 vars.R[key] = float(vars.R.get(key, 1.0))
@@ -1705,6 +1728,7 @@ class IPOPTSolver:
             vars.PE[i] = float(trade.get("PEO", {}).get(i, vars.PE.get(i, 1.0)))
             vars.PE_FOB[i] = float(trade.get("PE_FOBO", {}).get(i, vars.PE_FOB.get(i, 1.0)))
             vars.PWM[i] = float(trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0)))
+            vars.PWX[i] = float(trade.get("PWXO", {}).get(i, vars.PWX.get(i, 1.0)))
             vars.PL[i] = float(trade.get("PLO", {}).get(i, vars.PL.get(i, 1.0)))
             vars.TIC[i] = float(trade.get("TICO", {}).get(i, vars.TIC.get(i, 0.0)))
             vars.TIM[i] = float(trade.get("TIMO", {}).get(i, vars.TIM.get(i, 0.0)))
@@ -2001,6 +2025,10 @@ class IPOPTSolver:
             k, j = indices
             return abs(float(kdo0.get((k, j), 0.0))) > tol
 
+        if root == "KS" and len(indices) == 1:
+            k = indices[0]
+            return any(abs(float(kdo0.get((k, j), 0.0))) > tol for j in self.sets.get("J", []))
+
         if root in {"RC", "KDC"} and len(indices) == 1:
             j = indices[0]
             return any(abs(float(kdo0.get((k, j), 0.0))) > tol for k in self.sets.get("K", []))
@@ -2013,7 +2041,7 @@ class IPOPTSolver:
             i = indices[0]
             return abs(float(imo0.get(i, 0.0))) > tol
 
-        if root in {"EXD", "PE", "PE_FOB", "TIX"} and len(indices) == 1:
+        if root in {"EXD", "PE", "PE_FOB", "PWX", "TIX"} and len(indices) == 1:
             i = indices[0]
             return abs(float(exdo0.get(i, 0.0))) > tol
 
@@ -2025,7 +2053,7 @@ class IPOPTSolver:
         ub: list[float] = []
         names: list[str] = []
 
-        strict_masks = True
+        strict_masks = self.contract.equations.activation_masks == "gams_parity"
 
         def add(name: str, lower: float, upper: float) -> None:
             idx = len(lb)
@@ -2071,7 +2099,14 @@ class IPOPTSolver:
                 add(f"WTI[{_l},{_j}]", *POS)
 
             for _k in self.sets.get("K", []):
-                add(f"KD[{_k},{_j}]", *NONNEG)
+                kd_fix = float(self.state.production.get("KDO", {}).get((_k, _j), 0.0))
+                kd_lo, kd_hi = self._apply_contract_bounds(
+                    name=f"KD[{_k},{_j}]",
+                    default_lower=NONNEG[0],
+                    default_upper=NONNEG[1],
+                    benchmark_value=kd_fix,
+                )
+                add(f"KD[{_k},{_j}]", kd_lo, kd_hi)
                 add(f"RTI[{_k},{_j}]", *POS)
                 add(f"R[{_k},{_j}]", *POS)
 
@@ -2085,8 +2120,24 @@ class IPOPTSolver:
         # Wages
         for _l in self.sets.get("L", []):
             add(f"W[{_l}]", *POS)
+            ls_fix = float(self.state.production.get("LSO", {}).get(_l, 0.0))
+            ls_lo, ls_hi = self._apply_contract_bounds(
+                name=f"LS[{_l}]",
+                default_lower=NONNEG[0],
+                default_upper=NONNEG[1],
+                benchmark_value=ls_fix,
+            )
+            add(f"LS[{_l}]", ls_lo, ls_hi)
         for _k in self.sets.get("K", []):
             add(f"RK[{_k}]", *POS)
+            ks_fix = float(self.state.production.get("KSO", {}).get(_k, 0.0))
+            ks_lo, ks_hi = self._apply_contract_bounds(
+                name=f"KS[{_k}]",
+                default_lower=NONNEG[0],
+                default_upper=NONNEG[1],
+                benchmark_value=ks_fix,
+            )
+            add(f"KS[{_k}]", ks_lo, ks_hi)
 
         # Price and trade variables
         for _i in self.sets.get("I", []):
@@ -2097,11 +2148,32 @@ class IPOPTSolver:
             add(f"PE_FOB[{_i}]", *POS)
             add(f"PL[{_i}]", *POS)
             pwm_fix = float(self.state.trade.get("PWMO", {}).get(_i, 1.0))
-            add(f"PWM[{_i}]", pwm_fix, pwm_fix)  # PWM fixed as in GAMS (.fx)
+            pwm_lo, pwm_hi = self._apply_contract_bounds(
+                name=f"PWM[{_i}]",
+                default_lower=POS[0],
+                default_upper=POS[1],
+                benchmark_value=pwm_fix,
+            )
+            add(f"PWM[{_i}]", pwm_lo, pwm_hi)
+            pwx_fix = float(self.state.trade.get("PWXO", {}).get(_i, 1.0))
+            pwx_lo, pwx_hi = self._apply_contract_bounds(
+                name=f"PWX[{_i}]",
+                default_lower=POS[0],
+                default_upper=POS[1],
+                benchmark_value=pwx_fix,
+            )
+            add(f"PWX[{_i}]", pwx_lo, pwx_hi)
             add(f"IM[{_i}]", *NONNEG)
             add(f"DD[{_i}]", *NONNEG)
             add(f"Q[{_i}]", *NONNEG)
-            add(f"EXD[{_i}]", *NONNEG)
+            exd_fix = float(self.state.trade.get("EXDO", {}).get(_i, 0.0))
+            exd_lo, exd_hi = self._apply_contract_bounds(
+                name=f"EXD[{_i}]",
+                default_lower=NONNEG[0],
+                default_upper=NONNEG[1],
+                benchmark_value=exd_fix,
+            )
+            add(f"EXD[{_i}]", exd_lo, exd_hi)
             add(f"TIC[{_i}]", *FREE)
             add(f"TIM[{_i}]", *FREE)
             add(f"TIX[{_i}]", *FREE)
@@ -2110,7 +2182,13 @@ class IPOPTSolver:
             add(f"INV[{_i}]", *FREE)
             add(f"CG[{_i}]", *FREE)
             vstk_fix = float(self.state.consumption.get("VSTKO", {}).get(_i, 0.0))
-            add(f"VSTK[{_i}]", vstk_fix, vstk_fix)  # VSTK fixed as in GAMS (.fx)
+            vstk_lo, vstk_hi = self._apply_contract_bounds(
+                name=f"VSTK[{_i}]",
+                default_lower=FREE[0],
+                default_upper=FREE[1],
+                benchmark_value=vstk_fix,
+            )
+            add(f"VSTK[{_i}]", vstk_lo, vstk_hi)
 
         # Income variables
         for _h in self.sets.get("H", []):
@@ -2120,13 +2198,26 @@ class IPOPTSolver:
             add(f"YHTR[{_h}]", *FREE)
             add(f"YDH[{_h}]", *NONNEG)
             add(f"CTH[{_h}]", *NONNEG)
-            add(f"SH[{_h}]", *FREE)
+            sh_fix = float(self.state.income.get("SHO", {}).get(_h, 0.0))
+            sh_lo, sh_hi = self._apply_contract_bounds(
+                name=f"SH[{_h}]",
+                default_lower=FREE[0],
+                default_upper=FREE[1],
+                benchmark_value=sh_fix,
+            )
+            add(f"SH[{_h}]", sh_lo, sh_hi)
             add(f"TDH[{_h}]", *FREE)
 
             for _i in self.sets.get("I", []):
                 add(f"C[{_i},{_h}]", *NONNEG)
                 cmin_fix = float(self.state.les_parameters.get("CMINO", {}).get((_i, _h), 0.0))
-                add(f"CMIN[{_i},{_h}]", cmin_fix, cmin_fix)  # CMIN fixed as in GAMS (.fx)
+                cmin_lo, cmin_hi = self._apply_contract_bounds(
+                    name=f"CMIN[{_i},{_h}]",
+                    default_lower=NONNEG[0],
+                    default_upper=NONNEG[1],
+                    benchmark_value=cmin_fix,
+                )
+                add(f"CMIN[{_i},{_h}]", cmin_lo, cmin_hi)
 
 
         for _f in self.sets.get("F", []):
@@ -2134,20 +2225,28 @@ class IPOPTSolver:
             add(f"YFK[{_f}]", *NONNEG)
             add(f"YFTR[{_f}]", *FREE)
             add(f"YDF[{_f}]", *NONNEG)
-            add(f"SF[{_f}]", *FREE)
+            sf_fix = float(self.state.income.get("SFO", {}).get(_f, 0.0))
+            sf_lo, sf_hi = self._apply_contract_bounds(
+                name=f"SF[{_f}]",
+                default_lower=FREE[0],
+                default_upper=FREE[1],
+                benchmark_value=sf_fix,
+            )
+            add(f"SF[{_f}]", sf_lo, sf_hi)
             add(f"TDF[{_f}]", *FREE)
 
         # Full transfer matrix TR(ag,agj)
         tro_bench = self.params.get("TRO", {})
         for _ag in self.sets.get("AG", []):
             for _agj in self.sets.get("AG", []):
-                # These two entries are not pinned by equations in GAMS and are
-                # effectively dropped from CNS; fix them at benchmark levels.
-                if (_ag, _agj) in {("gvt", "gvt"), ("row", "row")}:
-                    tr_fix = float(tro_bench.get((_ag, _agj), 0.0))
-                    add(f"TR[{_ag},{_agj}]", tr_fix, tr_fix)
-                else:
-                    add(f"TR[{_ag},{_agj}]", *FREE)
+                tr_fix = float(tro_bench.get((_ag, _agj), 0.0))
+                tr_lo, tr_hi = self._apply_contract_bounds(
+                    name=f"TR[{_ag},{_agj}]",
+                    default_lower=FREE[0],
+                    default_upper=FREE[1],
+                    benchmark_value=tr_fix,
+                )
+                add(f"TR[{_ag},{_agj}]", tr_lo, tr_hi)
 
         # Detailed tax-payment variables (EQ37-EQ39)
         for _l in self.sets.get("L", []):
@@ -2176,17 +2275,50 @@ class IPOPTSolver:
         add("TIXT", *FREE)
         add("YGTR", *FREE)
         g_fix = float(self.state.consumption.get("GO", 0.0))
-        add("G", g_fix, g_fix)  # G fixed as in GAMS (.fx)
-        add("SG", *FREE)
+        g_lo, g_hi = self._apply_contract_bounds(
+            name="G",
+            default_lower=NONNEG[0],
+            default_upper=NONNEG[1],
+            benchmark_value=g_fix,
+        )
+        add("G", g_lo, g_hi)
+        sg_fix = float(self.state.income.get("SGO", 0.0))
+        sg_lo, sg_hi = self._apply_contract_bounds(
+            name="SG",
+            default_lower=FREE[0],
+            default_upper=FREE[1],
+            benchmark_value=sg_fix,
+        )
+        add("SG", sg_lo, sg_hi)
 
         # ROW
         add("YROW", *FREE)
-        add("SROW", *FREE)
+        srow_fix = float(self.state.income.get("SROWO", 0.0))
+        srow_lo, srow_hi = self._apply_contract_bounds(
+            name="SROW",
+            default_lower=FREE[0],
+            default_upper=FREE[1],
+            benchmark_value=srow_fix,
+        )
+        add("SROW", srow_lo, srow_hi)
         cab_fix = float(self.state.income.get("CABO", 0.0))
-        add("CAB", cab_fix, cab_fix)  # CAB fixed as in GAMS (.fx)
+        cab_lo, cab_hi = self._apply_contract_bounds(
+            name="CAB",
+            default_lower=FREE[0],
+            default_upper=FREE[1],
+            benchmark_value=cab_fix,
+        )
+        add("CAB", cab_lo, cab_hi)
 
         # Investment
-        add("IT", *FREE)
+        it_fix = float(self.state.income.get("ITO", 0.0))
+        it_lo, it_hi = self._apply_contract_bounds(
+            name="IT",
+            default_lower=FREE[0],
+            default_upper=FREE[1],
+            benchmark_value=it_fix,
+        )
+        add("IT", it_lo, it_hi)
         add("GFCF", *FREE)
 
         # GDP
@@ -2212,7 +2344,13 @@ class IPOPTSolver:
 
         # Exchange rate
         e_fix = float(self.state.trade.get("eO", 1.0))
-        add("e", e_fix, e_fix)  # e fixed as in GAMS (.fx)
+        e_lo, e_hi = self._apply_contract_bounds(
+            name="e",
+            default_lower=POS[0],
+            default_upper=POS[1],
+            benchmark_value=e_fix,
+        )
+        add("e", e_lo, e_hi)
 
         lb_arr = np.array(lb)
         ub_arr = np.array(ub)
@@ -2237,28 +2375,199 @@ class IPOPTSolver:
 
     def _enforce_fixed_closure_levels(self, vars: PEPModelVariables) -> None:
         """Overwrite fixed-closure variable levels from current calibrated state."""
+        for l in self.sets.get("L", []):
+            if self._is_contract_closure_fixed_name(f"LS[{l}]"):
+                vars.LS[l] = float(self.state.production.get("LSO", {}).get(l, vars.LS.get(l, 0.0)))
+        for k in self.sets.get("K", []):
+            if self._is_contract_closure_fixed_name(f"KS[{k}]"):
+                vars.KS[k] = float(self.state.production.get("KSO", {}).get(k, vars.KS.get(k, 0.0)))
+            for j in self.sets.get("J", []):
+                if self._is_contract_closure_fixed_name(f"KD[{k},{j}]"):
+                    vars.KD[(k, j)] = float(self.state.production.get("KDO", {}).get((k, j), vars.KD.get((k, j), 0.0)))
         for i in self.sets.get("I", []):
-            vars.PWM[i] = float(self.state.trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0)))
-            vars.VSTK[i] = float(self.state.consumption.get("VSTKO", {}).get(i, vars.VSTK.get(i, 0.0)))
+            if self._is_contract_closure_fixed_name(f"PWM[{i}]"):
+                vars.PWM[i] = float(self.state.trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0)))
+            if self._is_contract_closure_fixed_name(f"PWX[{i}]"):
+                vars.PWX[i] = float(self.state.trade.get("PWXO", {}).get(i, vars.PWX.get(i, 1.0)))
+            if self._is_contract_closure_fixed_name(f"VSTK[{i}]"):
+                vars.VSTK[i] = float(self.state.consumption.get("VSTKO", {}).get(i, vars.VSTK.get(i, 0.0)))
         for h in self.sets.get("H", []):
             for i in self.sets.get("I", []):
-                vars.CMIN[(i, h)] = float(
-                    self.state.les_parameters.get("CMINO", {}).get((i, h), vars.CMIN.get((i, h), 0.0))
-                )
+                if self._is_contract_closure_fixed_name(f"CMIN[{i},{h}]"):
+                    vars.CMIN[(i, h)] = float(
+                        self.state.les_parameters.get("CMINO", {}).get((i, h), vars.CMIN.get((i, h), 0.0))
+                    )
 
-        vars.G = float(self.state.consumption.get("GO", vars.G))
-        vars.CAB = float(self.state.income.get("CABO", vars.CAB))
-        vars.e = float(self.state.trade.get("eO", vars.e if abs(vars.e) > 0 else 1.0))
+        if self._is_contract_closure_fixed_name("G"):
+            vars.G = float(self.state.consumption.get("GO", vars.G))
+        if self._is_contract_closure_fixed_name("CAB"):
+            vars.CAB = float(self.state.income.get("CABO", vars.CAB))
+        if self._is_contract_closure_fixed_name("e"):
+            vars.e = float(self.state.trade.get("eO", vars.e if abs(vars.e) > 0 else 1.0))
 
         tro = self.params.get("TRO", {})
-        vars.TR[("gvt", "gvt")] = float(tro.get(("gvt", "gvt"), vars.TR.get(("gvt", "gvt"), 0.0)))
-        vars.TR[("row", "row")] = float(tro.get(("row", "row"), vars.TR.get(("row", "row"), 0.0)))
+        if self._is_contract_closure_fixed_name("TR[gvt,gvt]"):
+            vars.TR[("gvt", "gvt")] = float(tro.get(("gvt", "gvt"), vars.TR.get(("gvt", "gvt"), 0.0)))
+        if self._is_contract_closure_fixed_name("TR[row,row]"):
+            vars.TR[("row", "row")] = float(tro.get(("row", "row"), vars.TR.get(("row", "row"), 0.0)))
 
     def _build_hard_constraints(self) -> list[str]:
         """Equation residuals enforced as hard equalities c(x)=0."""
         vars0 = self._create_initial_guess()
         residuals0 = self.equations.calculate_all_residuals(vars0)
-        return list(residuals0.keys())
+        include = tuple(self.contract.equations.include)
+        selected: list[str] = []
+        for name in residuals0:
+            if any(name == eq or name.startswith(f"{eq}_") for eq in include):
+                selected.append(name)
+        return selected
+
+    def _is_contract_closure_fixed_name(self, name: str) -> bool:
+        closure = self.contract.closure
+        if name == closure.numeraire:
+            return True
+        symbols = set(self._contract_symbols_for_name(name))
+        symbols.add(name)
+        return bool(symbols & set(closure.fixed))
+
+    def _is_contract_closure_endogenous_name(self, name: str) -> bool:
+        symbols = set(self._contract_symbols_for_name(name))
+        symbols.add(name)
+        return bool(symbols & set(self.contract.closure.endogenous))
+
+    def _is_contract_bounds_free_name(self, name: str) -> bool:
+        symbols = set(self._contract_symbols_for_name(name))
+        symbols.add(name)
+        return bool(symbols & set(self.contract.bounds.free))
+
+    def _supported_contract_closure_symbols(self) -> set[str]:
+        supported = {
+            "G",
+            "CAB",
+            "SG",
+            "SROW",
+            "IT",
+            "SH",
+            "SF",
+            "EXD",
+            "LS",
+            "PWM",
+            "PWX",
+            "CMIN",
+            "VSTK",
+            "TR_SELF",
+            "TR_AGD_ROW",
+            "TR_ROW_AGNG",
+            "KS",
+        }
+        supported.add(self.contract.closure.numeraire)
+        return supported
+
+    def _contract_symbols_for_name(self, name: str) -> tuple[str, ...]:
+        root, indices = self._parse_packed_name(name)
+        symbols: list[str] = []
+
+        if root == "G":
+            symbols.append("G")
+        elif root == "CAB":
+            symbols.append("CAB")
+        elif root == "SG":
+            symbols.append("SG")
+        elif root == "SROW":
+            symbols.append("SROW")
+        elif root == "IT":
+            symbols.append("IT")
+        elif root == "SH" and len(indices) == 1:
+            symbols.append("SH")
+        elif root == "SF" and len(indices) == 1:
+            symbols.append("SF")
+        elif root == "EXD" and len(indices) == 1:
+            symbols.append("EXD")
+        elif root == "LS" and len(indices) == 1:
+            symbols.append("LS")
+        elif root == "KS" and len(indices) == 1 and self.contract.closure.capital_mobility == "mobile":
+            symbols.append("KS")
+        elif root == "PWM" and len(indices) == 1:
+            symbols.append("PWM")
+        elif root == "PWX" and len(indices) == 1:
+            symbols.append("PWX")
+        elif root == "CMIN" and len(indices) == 2:
+            symbols.append("CMIN")
+        elif root == "VSTK" and len(indices) == 1:
+            symbols.append("VSTK")
+        elif root == "TR" and len(indices) == 2:
+            if indices in {("gvt", "gvt"), ("row", "row")}:
+                symbols.append("TR_SELF")
+            recipient, source = indices
+            if source == "row" and recipient in self.sets.get("AGD", []):
+                symbols.append("TR_AGD_ROW")
+            if recipient == "row" and source in self.sets.get("AGNG", []):
+                symbols.append("TR_ROW_AGNG")
+        elif root == "KD" and len(indices) == 2 and self.contract.closure.capital_mobility == "sector_specific":
+            symbols.append("KS")
+
+        return tuple(symbols)
+
+    def _apply_contract_bounds(
+        self,
+        *,
+        name: str,
+        default_lower: float,
+        default_upper: float,
+        benchmark_value: float | None = None,
+    ) -> tuple[float, float]:
+        if self._is_contract_bounds_free_name(name):
+            return -np.inf, np.inf
+        if self.contract.bounds.fixed_from_closure and self._is_contract_closure_fixed_name(name):
+            if benchmark_value is None:
+                raise ValueError(f"Missing benchmark value for fixed closure symbol {name!r}.")
+            return float(benchmark_value), float(benchmark_value)
+        return float(default_lower), float(default_upper)
+
+    def build_closure_validation_report(self) -> PEPClosureValidationReport:
+        """Build structural closure report from the effective equation/bounds system."""
+        if self.initial_vars is not None:
+            vars0 = copy.deepcopy(self.initial_vars)
+        else:
+            vars0 = self._create_initial_guess()
+        self._enforce_fixed_closure_levels(vars0)
+        x0 = self._variables_to_array(vars0)
+        hard_constraints = self._build_hard_constraints()
+        lb, ub = self._build_variable_bounds(x_ref=x0)
+        bound_names = list(self._last_bound_names)
+
+        free_names: list[str] = []
+        fixed_by_closure: list[str] = []
+        fixed_by_bounds_only: list[str] = []
+        for name, lower, upper in zip(bound_names, lb, ub, strict=False):
+            is_fixed = bool(np.isfinite(lower) and np.isfinite(upper) and np.isclose(lower, upper))
+            if is_fixed:
+                if self._is_contract_closure_fixed_name(name):
+                    fixed_by_closure.append(name)
+                else:
+                    fixed_by_bounds_only.append(name)
+            else:
+                free_names.append(name)
+
+        supported_symbols = self._supported_contract_closure_symbols()
+        unsupported_fixed = tuple(
+            sorted(symbol for symbol in self.contract.closure.fixed if symbol not in supported_symbols)
+        )
+        unsupported_endogenous = tuple(
+            sorted(symbol for symbol in self.contract.closure.endogenous if symbol not in supported_symbols)
+        )
+
+        report = validate_pep_closure_structure(
+            active_equations=hard_constraints,
+            free_endogenous_variables=free_names,
+            fixed_by_closure=fixed_by_closure,
+            fixed_by_bounds_only=fixed_by_bounds_only,
+            numeraire=self.contract.closure.numeraire,
+            unsupported_fixed_symbols=unsupported_fixed,
+            unsupported_endogenous_symbols=unsupported_endogenous,
+        )
+        self.last_closure_validation_report = report.model_dump(mode="python")
+        return report
 
     @staticmethod
     def _ipopt_reports_square_feasible(msg: str) -> bool:
@@ -2295,6 +2604,10 @@ class IPOPTSolver:
         n_vars = len(x0)
         
         logger.info(f"Number of variables: {n_vars}")
+        closure_report = self.build_closure_validation_report()
+        if not closure_report.is_valid:
+            messages = "; ".join(closure_report.messages) or "invalid closure structure"
+            raise RuntimeError(f"Invalid PEP closure/configuration: {messages}")
 
         # Allow early return for any init mode when initialization is already
         # feasible enough. This keeps excel/gams behavior consistent in BASE.
@@ -2314,6 +2627,9 @@ class IPOPTSolver:
                 variables=vars,
                 residuals=init_residuals,
                 message=f"Initial {self.init_mode} benchmark satisfies tolerance",
+                effective_contract=self.contract.model_dump(mode="python"),
+                effective_config=self.runtime_config.model_dump(mode="python"),
+                closure_validation=closure_report.model_dump(mode="python"),
             )
         
         hard_constraints = self._build_hard_constraints()
@@ -2515,6 +2831,9 @@ class IPOPTSolver:
             result.message = best_candidate["message"]
             result.final_residual = best_candidate["rms"]
             result.converged = bool(best_candidate["converged"])
+            result.effective_contract = self.contract.model_dump(mode="python")
+            result.effective_config = self.runtime_config.model_dump(mode="python")
+            result.closure_validation = closure_report.model_dump(mode="python")
 
             logger.info("IPOPT info keys: %s", sorted(info_best.keys()))
             logger.info(f"IPOPT finished: {result.message}")
@@ -2529,6 +2848,9 @@ class IPOPTSolver:
             logger.error(f"IPOPT failed: {e}")
             result = SolverResult()
             result.message = f"IPOPT error: {str(e)}"
+            result.effective_contract = self.contract.model_dump(mode="python")
+            result.effective_config = self.runtime_config.model_dump(mode="python")
+            result.closure_validation = self.last_closure_validation_report
             return result
     
     def solve(self, method: str = "auto") -> SolverResult:

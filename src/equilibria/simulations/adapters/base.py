@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from equilibria.simulations.types import Shock, ShockDefinition
+from equilibria.simulations.types import Scenario, Shock, ShockDefinition
 
 
 class BaseModelAdapter(ABC):
@@ -45,6 +45,7 @@ class BaseModelAdapter(ABC):
         initial_vars: Any | None,
         reference_results_gdx: Path | None,
         reference_slice: str,
+        scenario: Scenario | None = None,
     ) -> tuple[Any, Any, dict[str, Any]]:
         """Solve one state and return ``(solver, solution, validation)``."""
 

@@ -26,7 +26,7 @@ def get_solution_value(
 ) -> float | None:
     """Map one `val*` symbol from Results.gdx to Python solution values."""
     if symbol == "valPWX" and len(idx) == 1:
-        return params.get("PWX", {}).get(idx[0], 1.0)
+        return vars_obj.PWX.get(idx[0], params.get("PWX", {}).get(idx[0], 1.0))
     if symbol == "valPT" and len(idx) == 1:
         return vars_obj.PT.get(idx[0], params.get("PT", {}).get(idx[0], 1.0))
     if symbol == "valttdh1" and len(idx) == 1:
@@ -40,9 +40,9 @@ def get_solution_value(
     if symbol == "valttiw" and len(idx) == 2:
         return params.get("ttiw", {}).get((idx[0], idx[1]))
     if symbol == "valKS" and len(idx) == 1:
-        return params.get("KS", {}).get(idx[0])
+        return vars_obj.KS.get(idx[0], params.get("KS", {}).get(idx[0]))
     if symbol == "valLS" and len(idx) == 1:
-        return params.get("LS", {}).get(idx[0])
+        return vars_obj.LS.get(idx[0], params.get("LS", {}).get(idx[0]))
     if symbol == "valRK" and len(idx) == 1:
         return vars_obj.RK.get(idx[0], 1.0)
     if symbol == "valsh1" and len(idx) == 1:

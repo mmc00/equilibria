@@ -10,7 +10,7 @@ from typing import Any
 
 from equilibria.simulations.adapters.base import BaseModelAdapter
 from equilibria.simulations.runtimes import get_mapping_runtime
-from equilibria.simulations.types import Shock, ShockDefinition
+from equilibria.simulations.types import Scenario, Shock, ShockDefinition
 
 StateSolveFn = Callable[..., tuple[Any, Any, dict[str, Any]]]
 StateCompareFn = Callable[..., dict[str, Any]]
@@ -140,6 +140,7 @@ class MappingAdapter(BaseModelAdapter):
         initial_vars: Any | None,
         reference_results_gdx: Path | None,
         reference_slice: str,
+        scenario: Scenario | None = None,
     ) -> tuple[Any, Any, dict[str, Any]]:
         if self._solve_fn is not None:
             return self._solve_fn(
@@ -149,7 +150,7 @@ class MappingAdapter(BaseModelAdapter):
                 reference_slice=reference_slice,
             )
 
-        _ = initial_vars, reference_results_gdx, reference_slice
+        _ = initial_vars, reference_results_gdx, reference_slice, scenario
         solver = _NoSolveSolver(params={})
         solution = _NoSolveSolution(variables=copy.deepcopy(state))
         validation = {"passed": True, "mode": "no_solver"}

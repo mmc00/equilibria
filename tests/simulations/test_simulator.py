@@ -67,8 +67,9 @@ class _FakeAdapter(BaseModelAdapter):
         initial_vars: Any | None,
         reference_results_gdx: Path | None,
         reference_slice: str,
+        scenario: Scenario | None = None,
     ) -> tuple[Any, Any, dict[str, Any]]:
-        _ = reference_results_gdx, reference_slice
+        _ = reference_results_gdx, reference_slice, scenario
         self.solve_initials.append(initial_vars)
         x = float(state.get("x", 0.0)) + self.offset
         solution = _FakeSolution(
@@ -109,8 +110,9 @@ class _FailingScenarioAdapter(_FakeAdapter):
         initial_vars: Any | None,
         reference_results_gdx: Path | None,
         reference_slice: str,
+        scenario: Scenario | None = None,
     ) -> tuple[Any, Any, dict[str, Any]]:
-        _ = reference_results_gdx, reference_slice
+        _ = reference_results_gdx, reference_slice, scenario
         self.solve_initials.append(initial_vars)
         call_no = len(self.solve_initials)
         converged = call_no != 2
@@ -142,7 +144,11 @@ def test_simulator_run_scenarios_warm_start_and_reference() -> None:
 
     report = sim.run_scenarios(
         scenarios=[
-            Scenario(name="plus_two", shocks=[Shock(var="X", op="add", values=2.0)]),
+            Scenario(
+                name="plus_two",
+                shocks=[Shock(var="X", op="add", values=2.0)],
+                closure={"fixed": ["X"]},
+            ),
             Scenario(name="half", shocks=[Shock(var="X", op="scale", values=0.5)]),
         ],
         reference_results_gdx="output/Results.gdx",
@@ -158,6 +164,7 @@ def test_simulator_run_scenarios_warm_start_and_reference() -> None:
     scenarios = report["scenarios"]
     assert len(scenarios) == 2
     assert scenarios[0]["name"] == "plus_two"
+    assert scenarios[0]["closure"] == {"fixed": ["X"]}
     assert scenarios[0]["solve"]["key_indicators"]["x"] == pytest.approx(14.5)
     assert scenarios[0]["comparison"]["slice"] == "sim1"
     assert scenarios[1]["name"] == "half"

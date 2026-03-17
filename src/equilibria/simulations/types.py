@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -28,13 +29,28 @@ class Shock(BaseModel):
 
 
 class Scenario(BaseModel):
-    """A named scenario containing one or more shocks."""
+    """A named scenario containing one or more shocks.
+
+    For PEP, ``closure`` may be provided as a plain mapping, for example::
+
+        Scenario(
+            name="government_spending",
+            shocks=[Shock(var="G", op="scale", values=1.2)],
+            closure={
+                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
+                "numeraire": "e",
+                "capital_mobility": "mobile",
+            },
+        )
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     shocks: list[Shock]
     reference_slice: str = "sim1"
+    closure: dict[str, object] | None = None
 
     @field_validator("name")
     @classmethod
@@ -51,6 +67,16 @@ class Scenario(BaseModel):
         if not v:
             raise ValueError("Scenario.reference_slice must be non-empty.")
         return v
+
+    @field_validator("closure", mode="before")
+    @classmethod
+    def _normalize_optional_closure(cls, value: object) -> dict[str, object] | None:
+        if value is None:
+            return None
+        if not isinstance(value, Mapping):
+            raise TypeError("Scenario.closure must be a mapping when provided.")
+        normalized = dict(value)
+        return normalized or None
 
 
 class ShockDefinition(BaseModel):

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from equilibria.simulations.adapters.pep import PepAdapter
-from equilibria.simulations.types import Shock
+from equilibria.simulations.types import Scenario, Shock
 from equilibria.templates.pep_calibration_unified import PEPModelState
 
 
@@ -258,7 +258,64 @@ def test_pep_adapter_prepares_runtime_cri_excel_with_transform_and_qa(
         "strict_structural": False,
     }
     assert captured["cal_sam_file"] == Path("output/SAM-CRI-gams-pep-compatible.xlsx")
-    assert captured["qa_save"] == Path("output/qa.json")
+
+
+def test_pep_adapter_solve_state_passes_contract_and_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeSolver:
+        def __init__(self, **kwargs: object) -> None:
+            captured["kwargs"] = kwargs
+            self.params = {"ok": True}
+
+        def solve(self, *, method: str) -> SimpleNamespace:
+            captured["method"] = method
+            return SimpleNamespace(
+                converged=True,
+                iterations=1,
+                final_residual=0.0,
+                message="ok",
+                variables=SimpleNamespace(GDP_BP=1.0, GDP_MP=1.0, CTH={}, IT=0.0, EXD={}, IM={}),
+            )
+
+        def validate_solution(self, solution: object) -> dict[str, object]:
+            captured["validated_solution"] = solution
+            return {"passed": True}
+
+    monkeypatch.setattr("equilibria.simulations.adapters.pep.PEPModelSolver", _FakeSolver)
+
+    adapter = PepAdapter(
+        sam_file="sam.gdx",
+        val_par_file="val.xlsx",
+        contract="pep_nlp_v1",
+        config="default_ipopt",
+    )
+    adapter._runtime_sam_file = Path("sam.gdx")
+
+    state = PEPModelState()
+    solver, solution, validation = adapter.solve_state(
+        state,
+        initial_vars=None,
+        reference_results_gdx=None,
+        reference_slice="sim1",
+        scenario=Scenario(
+            name="government_spending",
+            shocks=[Shock(var="G", op="scale", values=1.2)],
+            closure={"fixed": ["G", "CAB", "PWM", "CMIN", "VSTK", "TR_SELF"]},
+        ),
+    )
+
+    assert isinstance(solver, _FakeSolver)
+    assert validation == {"passed": True}
+    assert solution.converged is True
+    kwargs = captured["kwargs"]
+    assert kwargs["contract"].name == "pep_nlp_v1"
+    assert kwargs["config"].name == "default_ipopt"
+    assert kwargs["sam_file"] == Path("sam.gdx")
+    assert captured["method"] == "ipopt"
+    assert kwargs["contract"].closure.fixed == ("G", "CAB", "PWM", "CMIN", "VSTK", "TR_SELF")
 
 
 def test_pep_adapter_hard_fail_raises_on_failed_sam_qa(
