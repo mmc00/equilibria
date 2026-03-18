@@ -74,7 +74,7 @@ def test_cli_main_skip_gams_generates_manifest(tmp_path: Path, monkeypatch: Any)
     payload = json.loads(manifest_path.read_text())
     assert payload["problem_type"] == "nlp"
     assert payload["solver"] == "ipopt"
-    assert payload["scenario_slices"]["base"] == "base"
+    assert payload["scenario_slices"]["base"] == "sim1"
     assert payload["scenario_slices"]["government_spending"] == "sim1"
     assert payload["scenario_references"]["base"]["results_gdx"]["sha256"]
     assert payload["scenario_references"]["government_spending"]["results_gdx"]["sha256"]
