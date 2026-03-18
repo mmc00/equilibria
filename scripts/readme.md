@@ -24,6 +24,9 @@ flujo actual recomendado:
   - `uv run python scripts/qa/verify_calibration.py`
 - paridad completa con gams:
   - `uv run python scripts/parity/verify_pep2_full_parity.py --tol 1e-9 --presolve-gdx src/equilibria/templates/reference/pep2/scripts/PreSolveLevels.gdx`
+- generar referencia oficial `GAMS + IPOPT + NLP`:
+  - `uv run python scripts/parity/generate_pep_gams_nlp_reference.py --skip-gams --results-gdx /abs/path/Results.gdx --scenario-slice base=base`
+  - modo completo: correr sin `--skip-gams` usando un `.gms` que soporte `--PEP_SOLVE_MODE=NLP`
 - pipeline sistemico (gates y clasificacion):
   - `uv run python scripts/parity/run_pep_systemic_parity.py --sam-file src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx --val-par-file src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx --init-mode gams --method none --save-report output/pep_systemic_parity_report.json`
 - escenarios pep2 base + export_tax con comparacion a gams:
