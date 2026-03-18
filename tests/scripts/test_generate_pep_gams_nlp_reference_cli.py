@@ -38,13 +38,13 @@ def test_cli_main_skip_gams_generates_manifest(tmp_path: Path, monkeypatch: Any)
     sam_file.write_bytes(b"sam")
     val_par_file = tmp_path / "VAL_PAR.xlsx"
     val_par_file.write_bytes(b"val")
-    results_gdx = tmp_path / "Results.gdx"
-    results_gdx.write_bytes(b"results")
-    parameters_gdx = tmp_path / "Parameters.gdx"
-    parameters_gdx.write_bytes(b"parameters")
-    presolve_gdx = tmp_path / "PreSolveLevels.gdx"
-    presolve_gdx.write_bytes(b"presolve")
     out_dir = tmp_path / "out"
+    for scenario_name in ("base", "government_spending"):
+        scenario_dir = out_dir / "scenarios" / scenario_name / "scripts"
+        scenario_dir.mkdir(parents=True, exist_ok=True)
+        (scenario_dir / "Results.gdx").write_bytes(f"{scenario_name}-results".encode())
+        (scenario_dir / "Parameters.gdx").write_bytes(f"{scenario_name}-parameters".encode())
+        (scenario_dir / "PreSolveLevels.gdx").write_bytes(f"{scenario_name}-presolve".encode())
 
     monkeypatch.setattr(
         sys,
@@ -60,16 +60,10 @@ def test_cli_main_skip_gams_generates_manifest(tmp_path: Path, monkeypatch: Any)
             "--output-dir",
             str(out_dir),
             "--skip-gams",
-            "--results-gdx",
-            str(results_gdx),
-            "--parameters-gdx",
-            str(parameters_gdx),
-            "--presolve-levels-gdx",
-            str(presolve_gdx),
-            "--scenario-slice",
-            "base=base",
-            "--scenario-slice",
-            "government_spending=sim1",
+            "--scenario",
+            "base",
+            "--scenario",
+            "government_spending",
         ],
     )
 
@@ -82,4 +76,5 @@ def test_cli_main_skip_gams_generates_manifest(tmp_path: Path, monkeypatch: Any)
     assert payload["solver"] == "ipopt"
     assert payload["scenario_slices"]["base"] == "base"
     assert payload["scenario_slices"]["government_spending"] == "sim1"
-    assert payload["results_gdx"]["sha256"]
+    assert payload["scenario_references"]["base"]["results_gdx"]["sha256"]
+    assert payload["scenario_references"]["government_spending"]["results_gdx"]["sha256"]

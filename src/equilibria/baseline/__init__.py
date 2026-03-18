@@ -6,6 +6,7 @@ from equilibria.baseline.compatibility import (
 )
 from equilibria.baseline.gams_nlp_reference import (
     GAMSReferenceArtifact,
+    GAMSScenarioReference,
     GAMSNLPReferenceManifest,
     build_gams_nlp_reference_manifest,
     ensure_gams_script_uses_nlp,
@@ -24,6 +25,7 @@ __all__ = [
     "BaselineCompatibilityReport",
     "BaselineManifest",
     "GAMSReferenceArtifact",
+    "GAMSScenarioReference",
     "GAMSNLPReferenceManifest",
     "build_baseline_manifest",
     "build_gams_nlp_reference_manifest",
