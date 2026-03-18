@@ -1340,15 +1340,27 @@ EQ51(agd)..     TR(agd,'%ACC_ROW%') =e= PIXCON**eta*TRO(agd,'%ACC_ROW%');
  ttiw.fx(l,j)    = ttiwO(l,j);
  ttix.fx(i)      = ttixO(i);
 
+$if not set PEP_SCENARIO $set PEP_SCENARIO BASE
+$if not set PEP_EXPORT_TAX_MULTIPLIER $set PEP_EXPORT_TAX_MULTIPLIER 0.75
+$if not set PEP_IMPORT_PRICE_COMMODITY $set PEP_IMPORT_PRICE_COMMODITY agr
+$if not set PEP_IMPORT_PRICE_MULTIPLIER $set PEP_IMPORT_PRICE_MULTIPLIER 1.25
+$if not set PEP_IMPORT_SHOCK_MULTIPLIER $set PEP_IMPORT_SHOCK_MULTIPLIER 1.25
+$if not set PEP_GOV_MULTIPLIER $set PEP_GOV_MULTIPLIER 1.2
+
 ** 6.4 Simulations
-*  25% increase of international import price of AGR
-* PWM.fx('agr')   = PWMO('agr')*1.25;
-
-*  25% decrease of the indirect tax rates on all commodities
- ttix.fx(i)         = ttixO(i)*0.75;
-
-*  20% increase of public expenditures
-* G.fx            = GO*1.2;
+$ifthenI "%PEP_SCENARIO%" == "BASE"
+* No additional simulation shock.
+$elseifI "%PEP_SCENARIO%" == "EXPORT_TAX"
+ ttix.fx(i)      = ttixO(i)*%PEP_EXPORT_TAX_MULTIPLIER%;
+$elseifI "%PEP_SCENARIO%" == "IMPORT_PRICE_AGR"
+ PWM.fx('%PEP_IMPORT_PRICE_COMMODITY%') = PWMO('%PEP_IMPORT_PRICE_COMMODITY%')*%PEP_IMPORT_PRICE_MULTIPLIER%;
+$elseifI "%PEP_SCENARIO%" == "IMPORT_SHOCK"
+ PWM.fx(i)       = PWMO(i)*%PEP_IMPORT_SHOCK_MULTIPLIER%;
+$elseifI "%PEP_SCENARIO%" == "GOVERNMENT_SPENDING"
+ G.fx            = GO*%PEP_GOV_MULTIPLIER%;
+$else
+ abort "Unsupported PEP_SCENARIO macro value";
+$endif
 
 ** 6.5 Resolution
 option limrow = 10000;
