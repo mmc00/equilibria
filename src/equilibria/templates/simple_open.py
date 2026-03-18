@@ -4,9 +4,10 @@ A basic open economy CGE model suitable for teaching and
 simple policy analysis.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from equilibria.blocks import (
     CESValueAdded,
@@ -16,6 +17,14 @@ from equilibria.blocks import (
 from equilibria.core import Set
 from equilibria.model import Model
 from equilibria.templates.base import ModelTemplate
+from equilibria.templates.simple_open_contract import (
+    SimpleOpenContract,
+    build_simple_open_contract,
+)
+from equilibria.templates.simple_open_runtime_config import (
+    SimpleOpenRuntimeConfig,
+    build_simple_open_runtime_config,
+)
 
 
 class SimpleOpenEconomy(ModelTemplate):
@@ -48,6 +57,28 @@ class SimpleOpenEconomy(ModelTemplate):
     )
     sigma_m: float = Field(default=1.5, gt=0, description="Armington elasticity")
     sigma_e: float = Field(default=2.0, gt=0, description="CET elasticity")
+    contract: SimpleOpenContract = Field(
+        default_factory=build_simple_open_contract,
+        description="Contract describing the simple-open problem structure",
+    )
+    runtime_config: SimpleOpenRuntimeConfig = Field(
+        default_factory=build_simple_open_runtime_config,
+        description="Runtime configuration for the simple-open template",
+    )
+
+    @field_validator("contract", mode="before")
+    @classmethod
+    def _resolve_contract(
+        cls, value: str | Mapping[str, Any] | SimpleOpenContract | None
+    ) -> SimpleOpenContract:
+        return build_simple_open_contract(value)
+
+    @field_validator("runtime_config", mode="before")
+    @classmethod
+    def _resolve_runtime_config(
+        cls, value: str | Mapping[str, Any] | SimpleOpenRuntimeConfig | None
+    ) -> SimpleOpenRuntimeConfig:
+        return build_simple_open_runtime_config(value)
 
     def create_model(self) -> Model:
         """Create the simple open economy model.
@@ -130,6 +161,8 @@ class SimpleOpenEconomy(ModelTemplate):
                 "sigma_va": self.sigma_va,
                 "sigma_m": self.sigma_m,
                 "sigma_e": self.sigma_e,
+                "contract": self.contract.model_dump(mode="python"),
+                "runtime_config": self.runtime_config.model_dump(mode="python"),
                 "blocks": [
                     "CES_VA",
                     "Leontief_INT",
