@@ -187,6 +187,21 @@ def _artifact_payload(path: Path | None) -> dict[str, str] | None:
     return {"path": str(path), "sha256": file_sha256(path)}
 
 
+def _resolve_val_par_runtime_inputs(val_par_file: Path | None) -> tuple[Path | None, Path | None, bool]:
+    if val_par_file is None:
+        return None, None, False
+
+    resolved = val_par_file.resolve()
+    if resolved.suffix.lower() == ".gdx":
+        return None, resolved, True
+
+    companion_gdx = resolved.with_suffix(".gdx")
+    if companion_gdx.exists():
+        return None, companion_gdx, True
+
+    return resolved, None, False
+
+
 def _run_gams_reference(
     *,
     gams_bin: str,
@@ -199,7 +214,14 @@ def _run_gams_reference(
     scenario_macros: dict[str, str],
 ) -> None:
     sam_gdx = runtime_dir / f"{sam_file.stem}-from-excel.gdx"
-    val_par_gdx = runtime_dir / f"{(val_par_file.stem if val_par_file else 'VAL_PAR')}-from-excel.gdx"
+    val_par_xls, val_par_gdx_source, use_existing_val_par_gdx = _resolve_val_par_runtime_inputs(
+        val_par_file
+    )
+    val_par_gdx = (
+        val_par_gdx_source
+        if val_par_gdx_source is not None
+        else runtime_dir / f"{(val_par_file.stem if val_par_file else 'VAL_PAR')}-from-excel.gdx"
+    )
 
     cmd = [
         gams_bin,
@@ -211,11 +233,14 @@ def _run_gams_reference(
     ]
     for key, value in scenario_macros.items():
         cmd.append(f"--{key}={value}")
-    if val_par_file is not None:
+    if val_par_gdx is not None:
+        cmd.append(f"--VAL_PAR_GDX={val_par_gdx}")
+    if use_existing_val_par_gdx:
+        cmd.append("--PEP_USE_EXISTING_VAL_PAR_GDX=1")
+    if val_par_xls is not None:
         cmd.extend(
             [
-                f"--VAL_PAR_XLS={val_par_file}",
-                f"--VAL_PAR_GDX={val_par_gdx}",
+                f"--VAL_PAR_XLS={val_par_xls}",
             ]
         )
 
