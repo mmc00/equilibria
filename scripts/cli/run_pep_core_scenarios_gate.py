@@ -12,6 +12,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from equilibria.baseline import GAMSNLPReferenceManifest  # noqa: E402
 from equilibria.simulations import PepSimulator  # noqa: E402
 from equilibria.simulations import export_tax, government_spending, import_price, import_shock  # noqa: E402
 
@@ -72,6 +73,18 @@ def _load_reference_manifest(path: Path | None, *, required: bool) -> dict[str, 
     raw = json.loads(path.read_text())
     if not isinstance(raw, dict):
         raise ValueError("reference manifest must be a JSON object")
+
+    if raw.get("schema_version") == "pep_gams_nlp_reference/v1":
+        manifest = GAMSNLPReferenceManifest.model_validate(raw)
+        if manifest.scenario_references is None:
+            raise ValueError("official GAMS NLP reference manifest is missing scenario_references")
+        out: dict[str, dict[str, str]] = {}
+        for name, reference in manifest.scenario_references.items():
+            out[str(name).strip().lower()] = {
+                "results_gdx": reference.results_gdx.path,
+                "slice": reference.slice,
+            }
+        return out
 
     out: dict[str, dict[str, str]] = {}
     for name, payload in raw.items():
