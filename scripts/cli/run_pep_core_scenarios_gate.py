@@ -120,6 +120,7 @@ def _run_one(
             include_base=True,
             warm_start=False,
             reference_results_gdx=(ref["results_gdx"] if ref else None),
+            base_reference_slice=(ref["slice"] if ref else "base"),
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
         )

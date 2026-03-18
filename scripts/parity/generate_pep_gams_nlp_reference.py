@@ -100,7 +100,9 @@ def _normalize_scenarios(*, selected: list[str] | None, core: bool) -> tuple[str
 
 
 def _default_scenario_slice(name: str) -> str:
-    return "base" if name == "base" else "sim1"
+    # In RESULTS PEP 1-1.GMS, BASE stores pre-solve benchmark levels and SIM1 stores
+    # post-solve levels. For parity gates we want solved levels, even in the no-shock run.
+    return "sim1"
 
 
 def _scenario_macros(name: str) -> dict[str, str]:

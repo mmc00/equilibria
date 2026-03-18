@@ -29,6 +29,7 @@ class _FakePepSimulator:
     def run_scenarios(self, **kwargs: Any) -> dict[str, Any]:
         scenarios = kwargs["scenarios"]
         ref = kwargs.get("reference_results_gdx")
+        base_reference_slice = kwargs.get("base_reference_slice", "base")
         if not scenarios:
             return {
                 "base": {
@@ -40,7 +41,7 @@ class _FakePepSimulator:
                     },
                     "comparison": (
                         {
-                            "gams_slice": "base",
+                            "gams_slice": base_reference_slice,
                             "passed": bool(ref),
                             "compared": 10,
                             "mismatches": 0 if ref else 0,
@@ -51,7 +52,7 @@ class _FakePepSimulator:
                         if ref
                         else None
                     ),
-                    "reference_slice": "base",
+                    "reference_slice": base_reference_slice,
                 },
                 "scenarios": [],
             }
@@ -168,16 +169,16 @@ def test_cli_accepts_official_gams_nlp_reference_manifest(monkeypatch: Any, tmp_
                 "script_model_types": ["nlp"],
                 "gms_script": {"path": "reference.gms", "sha256": "gms-sha"},
                 "sam_file": {"path": "sam.xlsx", "sha256": "sam-sha"},
-                "scenario_slices": {
-                    "base": "base",
-                    "export_tax": "sim1",
-                    "import_price_agr": "sim1",
-                    "import_shock": "sim1",
+                    "scenario_slices": {
+                        "base": "sim1",
+                        "export_tax": "sim1",
+                        "import_price_agr": "sim1",
+                        "import_shock": "sim1",
                     "government_spending": "sim1",
                 },
                 "scenario_references": {
                     "base": {
-                        "slice": "base",
+                        "slice": "sim1",
                         "results_gdx": {"path": "base.gdx", "sha256": "base-sha"},
                     },
                     "export_tax": {
@@ -218,4 +219,5 @@ def test_cli_accepts_official_gams_nlp_reference_manifest(monkeypatch: Any, tmp_
     assert code == 0
     payload = json.loads(out_file.read_text())
     assert payload["scenarios"]["base"]["comparison"]["passed"] is True
+    assert payload["scenarios"]["base"]["comparison"]["gams_slice"] == "sim1"
     assert payload["scenarios"]["export_tax"]["comparison"]["passed"] is True
