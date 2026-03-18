@@ -374,8 +374,13 @@ $CALL GDXXRW.EXE VAL_PAR.xlsx squeeze = 'no' par=PARJ rng=PAR!A5:E9 par=PARI rng
 $offtext
 $if not set VAL_PAR_XLS $setglobal VAL_PAR_XLS ../data/VAL_PAR.xlsx
 $if not set VAL_PAR_GDX $setglobal VAL_PAR_GDX ../data/VAL_PAR.gdx
+$if not set PEP_USE_EXISTING_VAL_PAR_GDX $set PEP_USE_EXISTING_VAL_PAR_GDX 0
 
+$ifthenI "%PEP_USE_EXISTING_VAL_PAR_GDX%" == "1"
+* Reuse prebuilt GDX when GDXXRW is not available on the host.
+$else
 $CALL GDXXRW.EXE "%VAL_PAR_XLS%" squeeze = 'no' par=PARJ rng=PAR!A5:E9 par=PARI rng=PAR!A12:C17 par=PARJI rng=PAR!A20:F24 par=PARAG rng=PAR!A27:F37 output="%VAL_PAR_GDX%"
+$endif
 $GDXIN %VAL_PAR_GDX%
 $LOAD PARJ, PARI, PARJI, PARAG
 $GDXIN

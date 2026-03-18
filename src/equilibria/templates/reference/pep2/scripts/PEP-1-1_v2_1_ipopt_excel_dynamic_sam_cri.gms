@@ -295,6 +295,10 @@ $CALL GDXXRW.EXE VAL_PAR.xlsx squeeze = 'no' par=PARJ rng=PAR!A5:E9 par=PARI rng
 $offtext
 $if not set VAL_PAR_XLS $setglobal VAL_PAR_XLS ../data/VAL_PAR-CRI-gams.xlsx
 $if not set VAL_PAR_GDX $setglobal VAL_PAR_GDX VAL_PAR-CRI-gams-from-excel.gdx
+$if not set PEP_USE_EXISTING_VAL_PAR_GDX $set PEP_USE_EXISTING_VAL_PAR_GDX 0
+$ifthenI "%PEP_USE_EXISTING_VAL_PAR_GDX%" == "1"
+* Reuse prebuilt GDX when host-side Excel readers are not available.
+$else
 $onEmbeddedCode Connect:
 - ExcelReader:
     file: %VAL_PAR_XLS%
@@ -307,6 +311,7 @@ $onEmbeddedCode Connect:
     file: %VAL_PAR_GDX%
     symbols: [ {name: PARJ}, {name: PARI}, {name: PARJI}, {name: PARAG} ]
 $offEmbeddedCode
+$endif
 $GDXIN %VAL_PAR_GDX%
 $LOAD PARJ, PARI, PARJI, PARAG
 $GDXIN
