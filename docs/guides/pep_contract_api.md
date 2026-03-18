@@ -9,6 +9,25 @@ La idea es simple:
 - `bounds` cambia el dominio numerico del problema.
 - `config` cambia como se resuelve o compara el problema.
 
+## donde se importan los tipos base
+
+La capa generica de contratos/runtime ya esta visible en dos niveles:
+
+- `equilibria`
+- `equilibria.contracts`
+
+Ejemplo:
+
+```python
+from equilibria import ModelContract, ModelRuntimeConfig
+from equilibria.contracts import ModelClosureConfig, ModelEquationConfig
+```
+
+La recomendacion practica es:
+
+- si estas consumiendo la API desde afuera del paquete, usar `equilibria`
+- si estas implementando un template nuevo dentro del repo, usar `equilibria.contracts`
+
 ## decision actual de api
 
 Hoy la decision recomendada es esta:

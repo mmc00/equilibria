@@ -1,7 +1,6 @@
-"""equilibria - A Modern Python Framework for CGE Modeling."""
+"""Generic contract/runtime primitives shared across model templates."""
 
-from equilibria.blocks import Block, register_block
-from equilibria.contracts import (
+from equilibria.contracts.base import (
     ModelBoundsConfig,
     ModelClosureConfig,
     ModelClosureValidationReport,
@@ -13,26 +12,8 @@ from equilibria.contracts import (
     normalize_string_tuple,
     validate_closure_structure,
 )
-from equilibria.core import (
-    Equation,
-    Parameter,
-    Set,
-    SetManager,
-    Variable,
-)
-from equilibria.model import Model
-from equilibria.version import __version__
 
 __all__ = [
-    "__version__",
-    "Model",
-    "Block",
-    "register_block",
-    "Set",
-    "SetManager",
-    "Parameter",
-    "Variable",
-    "Equation",
     "ModelBoundsConfig",
     "ModelClosureConfig",
     "ModelClosureValidationReport",

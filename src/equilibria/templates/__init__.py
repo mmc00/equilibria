@@ -11,6 +11,15 @@ from typing import Any
 __all__ = [
     "ModelTemplate",
     "SimpleOpenEconomy",
+    "SimpleOpenContract",
+    "SimpleOpenClosureConfig",
+    "SimpleOpenEquationConfig",
+    "SimpleOpenBoundsConfig",
+    "build_simple_open_closure_config",
+    "build_simple_open_contract",
+    "SimpleOpenRuntimeConfig",
+    "SimpleOpenReferenceConfig",
+    "build_simple_open_runtime_config",
     "PEPContract",
     "PEPClosureConfig",
     "PEPEquationConfig",
@@ -51,6 +60,49 @@ def __getattr__(name: str) -> Any:
         from equilibria.templates.simple_open import SimpleOpenEconomy
 
         return SimpleOpenEconomy
+
+    if name in {
+        "SimpleOpenContract",
+        "SimpleOpenClosureConfig",
+        "SimpleOpenEquationConfig",
+        "SimpleOpenBoundsConfig",
+        "build_simple_open_closure_config",
+        "build_simple_open_contract",
+    }:
+        from equilibria.templates.simple_open_contract import (
+            SimpleOpenBoundsConfig,
+            SimpleOpenClosureConfig,
+            SimpleOpenContract,
+            SimpleOpenEquationConfig,
+            build_simple_open_closure_config,
+            build_simple_open_contract,
+        )
+
+        return {
+            "SimpleOpenContract": SimpleOpenContract,
+            "SimpleOpenClosureConfig": SimpleOpenClosureConfig,
+            "SimpleOpenEquationConfig": SimpleOpenEquationConfig,
+            "SimpleOpenBoundsConfig": SimpleOpenBoundsConfig,
+            "build_simple_open_closure_config": build_simple_open_closure_config,
+            "build_simple_open_contract": build_simple_open_contract,
+        }[name]
+
+    if name in {
+        "SimpleOpenRuntimeConfig",
+        "SimpleOpenReferenceConfig",
+        "build_simple_open_runtime_config",
+    }:
+        from equilibria.templates.simple_open_runtime_config import (
+            SimpleOpenReferenceConfig,
+            SimpleOpenRuntimeConfig,
+            build_simple_open_runtime_config,
+        )
+
+        return {
+            "SimpleOpenRuntimeConfig": SimpleOpenRuntimeConfig,
+            "SimpleOpenReferenceConfig": SimpleOpenReferenceConfig,
+            "build_simple_open_runtime_config": build_simple_open_runtime_config,
+        }[name]
 
     if name in {
         "PEPContract",
