@@ -372,7 +372,11 @@ PARJ(j,*), PARI(i,*), PARJI(j,i), PARAG(*,*);
 $ontext
 $CALL GDXXRW.EXE VAL_PAR.xlsx squeeze = 'no' par=PARJ rng=PAR!A5:E9 par=PARI rng=PAR!A12:C17 par=PARJI rng=PAR!A20:F24 par=PARAG rng=PAR!A27:F37
 $offtext
-$GDXIN ../data/VAL_PAR.gdx
+$if not set VAL_PAR_XLS $setglobal VAL_PAR_XLS ../data/VAL_PAR.xlsx
+$if not set VAL_PAR_GDX $setglobal VAL_PAR_GDX ../data/VAL_PAR.gdx
+
+$CALL GDXXRW.EXE "%VAL_PAR_XLS%" squeeze = 'no' par=PARJ rng=PAR!A5:E9 par=PARI rng=PAR!A12:C17 par=PARJI rng=PAR!A20:F24 par=PARAG rng=PAR!A27:F37 output="%VAL_PAR_GDX%"
+$GDXIN %VAL_PAR_GDX%
 $LOAD PARJ, PARI, PARJI, PARAG
 $GDXIN
 
@@ -816,6 +820,7 @@ VARIABLES
 
 **  5.1.5 Other variables
  LEON            Excess supply on the last market
+ OBJ             Dummy objective for NLP feasibility solve
 ;
 
 
@@ -923,6 +928,7 @@ EQUATIONS
  EQ98            Real gross fixed capital formation
 
  WALRAS          Walras law verification
+ OBJDEF          Dummy objective equation for NLP feasibility solve
 ;
 
 ** 5.3 Equations
@@ -1227,6 +1233,8 @@ EQUATIONS
  WALRAS..        LEON =e= Q('agr')-SUM[h,C('agr',h)]-CG('agr')-INV('agr')
                           -VSTK('agr')-DIT('agr')-MRGN('agr');
 
+ OBJDEF..        OBJ =e= 0;
+
 
 * 6 Numerical resolution
 
@@ -1356,6 +1364,7 @@ EQUATIONS
 
 **  6.1.6  Other
  LEON.l          = 0;
+ OBJ.l           = 0;
 
 ** 6.2 Choice of mobile or sector-specific capital
 
@@ -1403,9 +1412,15 @@ EQUATIONS
 
 ** 6.5 Resolution
 option limrow = 10000;
-OPTION NLP = ipopt;
-OPTION CNS = ipopt;
+$if not set PEP_SOLVER $set PEP_SOLVER ipopt
+$if not set PEP_SOLVE_MODE $set PEP_SOLVE_MODE CNS
+OPTION NLP = %PEP_SOLVER%;
+OPTION CNS = %PEP_SOLVER%;
 MODEL PEP11 Standard PEP static model version 2_1 /ALL/;
 PEP11.HOLDFIXED=1;
+$ifthenI "%PEP_SOLVE_MODE%" == "NLP"
+SOLVE PEP11 USING NLP MINIMIZING OBJ;
+$else
 SOLVE PEP11 USING CNS;
+$endif
 $include RESULTS PEP 1-1.GMS

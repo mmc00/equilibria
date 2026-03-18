@@ -760,6 +760,7 @@ VARIABLES
 
 **  5.1.5 Other variables
  LEON            Excess supply on the last market
+ OBJ             Dummy objective for NLP feasibility solve
 ;
 
 
@@ -867,6 +868,7 @@ EQUATIONS
  EQ98            Real gross fixed capital formation
 
  WALRAS          Walras law verification
+ OBJDEF          Dummy objective equation for NLP feasibility solve
 ;
 
 ** 5.3 Equations
@@ -1171,6 +1173,8 @@ EQ51(agd)..     TR(agd,'%ACC_ROW%') =e= PIXCON**eta*TRO(agd,'%ACC_ROW%');
  WALRAS..        LEON =e= Q('agr')-SUM[h,C('agr',h)]-CG('agr')-INV('agr')
                           -VSTK('agr')-DIT('agr')-MRGN('agr');
 
+ OBJDEF..        OBJ =e= 0;
+
 
 * 6 Numerical resolution
 
@@ -1300,6 +1304,7 @@ EQ51(agd)..     TR(agd,'%ACC_ROW%') =e= PIXCON**eta*TRO(agd,'%ACC_ROW%');
 
 **  6.1.6  Other
  LEON.l          = 0;
+ OBJ.l           = 0;
 
 ** 6.2 Choice of mobile or sector-specific capital
 
@@ -1347,9 +1352,15 @@ EQ51(agd)..     TR(agd,'%ACC_ROW%') =e= PIXCON**eta*TRO(agd,'%ACC_ROW%');
 
 ** 6.5 Resolution
 option limrow = 10000;
-OPTION NLP = ipopt;
-OPTION CNS = ipopt;
+$if not set PEP_SOLVER $set PEP_SOLVER ipopt
+$if not set PEP_SOLVE_MODE $set PEP_SOLVE_MODE CNS
+OPTION NLP = %PEP_SOLVER%;
+OPTION CNS = %PEP_SOLVER%;
 MODEL PEP11 Standard PEP static model version 2_1 /ALL/;
 PEP11.HOLDFIXED=1;
+$ifthenI "%PEP_SOLVE_MODE%" == "NLP"
+SOLVE PEP11 USING NLP MINIMIZING OBJ;
+$else
 SOLVE PEP11 USING CNS;
+$endif
 $include RESULTS PEP 1-1.GMS
