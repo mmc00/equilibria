@@ -209,6 +209,31 @@ class PEPConstraintJacobianHarness:
                     add(f"EXD[{ij}]", -tmrg_x)
             return result
 
+        if constraint_name.startswith("EQ58_"):
+            j = constraint_name.split("_", 1)[1]
+            rho_xt = self.equations.params.get("rho_XT", {}).get(j, 1.0)
+            b_xt = self.equations.params.get("B_XT", {}).get(j, 1.0)
+            if rho_xt == 0:
+                return None
+            term = 0.0
+            active: list[tuple[str, float, float]] = []
+            for i in self.sets.get("I", []):
+                if abs(self.equations.params.get("XSO0", {}).get((j, i), 0.0)) <= 1e-12:
+                    continue
+                beta_xt = self.equations.params.get("beta_XT", {}).get((j, i), 0.0)
+                xs_ji = vars.XS.get((j, i), 0.0)
+                if beta_xt <= 0 or xs_ji <= 0:
+                    return None
+                active.append((i, beta_xt, xs_ji))
+                term += beta_xt * (xs_ji ** rho_xt)
+            if term <= 0 or b_xt <= 0:
+                return None
+            coeff = b_xt * (term ** ((1.0 / rho_xt) - 1.0))
+            add(f"XST[{j}]", 1.0)
+            for i, beta_xt, xs_ji in active:
+                add(f"XS[{j},{i}]", -(coeff * beta_xt * (xs_ji ** (rho_xt - 1.0))))
+            return result
+
         if constraint_name.startswith("EQ59_"):
             _, j, i = constraint_name.split("_", 2)
             sigma_xt = self.equations.params.get("sigma_XT", {}).get(j, 2.0)
@@ -248,6 +273,36 @@ class PEPConstraintJacobianHarness:
             add(f"PL[{i}]", expected_ex * sigma_x / pl_i)
             return result
 
+        if constraint_name.startswith("EQ60_"):
+            _, j, i = constraint_name.split("_", 2)
+            rho_x = self.equations.params.get("rho_X", {}).get((j, i), 1.0)
+            b_x = self.equations.params.get("B_X", {}).get((j, i), 1.0)
+            beta_x = self.equations.params.get("beta_X", {}).get((j, i), 0.5)
+            if rho_x == 0 or b_x <= 0 or (j, i) not in self.equations.params.get("beta_X", {}):
+                return None
+            term = 0.0
+            ex_ji = vars.EX.get((j, i), 0.0)
+            ds_ji = vars.DS.get((j, i), 0.0)
+            active_ex = abs(self.equations.params.get("EXO0", {}).get((j, i), 0.0)) > 1e-12
+            active_ds = abs(self.equations.params.get("DSO0", {}).get((j, i), 0.0)) > 1e-12
+            if active_ex:
+                if beta_x <= 0 or ex_ji <= 0:
+                    return None
+                term += beta_x * (ex_ji ** rho_x)
+            if active_ds:
+                if beta_x >= 1 or ds_ji <= 0:
+                    return None
+                term += (1.0 - beta_x) * (ds_ji ** rho_x)
+            if term <= 0:
+                return None
+            coeff = b_x * (term ** ((1.0 / rho_x) - 1.0))
+            add(f"XS[{j},{i}]", 1.0)
+            if active_ex:
+                add(f"EX[{j},{i}]", -(coeff * beta_x * (ex_ji ** (rho_x - 1.0))))
+            if active_ds:
+                add(f"DS[{j},{i}]", -(coeff * (1.0 - beta_x) * (ds_ji ** (rho_x - 1.0))))
+            return result
+
         if constraint_name.startswith("EQ62_"):
             i = constraint_name.split("_", 1)[1]
             sigma_xd = self.equations.params.get("sigma_XD", {}).get(i, 1.0)
@@ -261,6 +316,36 @@ class PEPConstraintJacobianHarness:
             add("e", -(expected_exd * sigma_xd / vars.e))
             add(f"PWX[{i}]", -(expected_exd * sigma_xd / pwx_i))
             add(f"PE_FOB[{i}]", expected_exd * sigma_xd / pe_fob_i)
+            return result
+
+        if constraint_name.startswith("EQ63_"):
+            i = constraint_name.split("_", 1)[1]
+            rho_m = self.equations.params.get("rho_M", {}).get(i, -0.5)
+            b_m = self.equations.params.get("B_M", {}).get(i, 1.0)
+            beta_m = self.equations.params.get("beta_M", {}).get(i, 0.5)
+            if rho_m == 0 or b_m <= 0:
+                return None
+            term = 0.0
+            im_i = vars.IM.get(i, 0.0)
+            dd_i = vars.DD.get(i, 0.0)
+            active_im = abs(self.equations.params.get("IMO0", {}).get(i, 0.0)) > 1e-12
+            active_dd = abs(self.equations.params.get("DDO0", {}).get(i, 0.0)) > 1e-12
+            if active_im:
+                if beta_m <= 0 or im_i <= 0:
+                    return None
+                term += beta_m * (im_i ** (-rho_m))
+            if active_dd:
+                if beta_m >= 1 or dd_i <= 0:
+                    return None
+                term += (1.0 - beta_m) * (dd_i ** (-rho_m))
+            if term <= 0:
+                return None
+            coeff = b_m * (term ** ((-1.0 / rho_m) - 1.0))
+            add(f"Q[{i}]", 1.0)
+            if active_im:
+                add(f"IM[{i}]", -(coeff * beta_m * (im_i ** (-rho_m - 1.0))))
+            if active_dd:
+                add(f"DD[{i}]", -(coeff * (1.0 - beta_m) * (dd_i ** (-rho_m - 1.0))))
             return result
 
         if constraint_name.startswith("EQ64_"):
