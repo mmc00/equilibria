@@ -496,6 +496,59 @@ def test_constraint_harness_uses_analytic_eq41_derivatives() -> None:
     assert observed["IM[agr]"] == pytest.approx(-(ttim * vars0.e * vars0.PWM["agr"]) / scale)
 
 
+def test_constraint_harness_uses_analytic_eq52_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ52_agr_hrp"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    gamma = solver.equations.params.get("gamma_LES", {}).get(("agr", "hrp"), 0.0)
+
+    assert observed["C[agr,hrp]"] == pytest.approx(vars0.PC["agr"] / scale)
+    assert observed["CTH[hrp]"] == pytest.approx(-gamma / scale)
+    assert observed["PC[agr]"] == pytest.approx((vars0.C[("agr", "hrp")] + (gamma - 1.0) * vars0.CMIN[("agr", "hrp")]) / scale)
+    assert observed["CMIN[agr,hrp]"] == pytest.approx(((gamma - 1.0) * vars0.PC["agr"]) / scale)
+
+
+def test_constraint_harness_covers_all_hard_constraints_for_default_benchmark() -> None:
+    state = _build_base_gdx()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    hard = solver._build_hard_constraints()
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=hard,
+        variable_names=solver._last_bound_names,
+        sparsity_reference_x=x0,
+    )
+
+    vars_bench = pep_array_to_variables(x0, solver.sets)
+    missing = [name for name in hard if harness._analytic_constraint_derivatives(name, vars_bench) is None]
+
+    assert missing == []
+
+
 def test_ipopt_builds_structural_closure_validation_report() -> None:
     state = _build_dynamic_sam_excel()
     solver = IPOPTSolver(state, config="default_ipopt")

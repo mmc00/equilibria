@@ -185,15 +185,22 @@ class PEPConstraintJacobianHarness:
             b_va = self.equations.params.get("B_VA", {}).get(j, 1.0)
             ldc_j = vars.LDC.get(j, 0.0)
             kdc_j = vars.KDC.get(j, 0.0)
-            if rho_va == 0 or b_va <= 0 or ldc_j <= 0 or kdc_j <= 0:
+            if rho_va == 0 or b_va <= 0:
                 return None
-            term = beta_va * (ldc_j ** (-rho_va)) + (1.0 - beta_va) * (kdc_j ** (-rho_va))
+            term = 0.0
+            active: list[tuple[str, float, float]] = []
+            if beta_va > 0 and ldc_j > 0:
+                active.append(("LDC", beta_va, ldc_j))
+                term += beta_va * (ldc_j ** (-rho_va))
+            if (1.0 - beta_va) > 0 and kdc_j > 0:
+                active.append(("KDC", 1.0 - beta_va, kdc_j))
+                term += (1.0 - beta_va) * (kdc_j ** (-rho_va))
             if term <= 0:
                 return None
             coeff = b_va * (term ** ((-1.0 / rho_va) - 1.0))
             add(f"VA[{j}]", 1.0)
-            add(f"LDC[{j}]", -(coeff * beta_va * (ldc_j ** (-rho_va - 1.0))))
-            add(f"KDC[{j}]", -(coeff * (1.0 - beta_va) * (kdc_j ** (-rho_va - 1.0))))
+            for name, weight, level in active:
+                add(f"{name}[{j}]", -(coeff * weight * (level ** (-rho_va - 1.0))))
             return result
 
         if constraint_name.startswith("EQ4_"):
@@ -693,6 +700,24 @@ class PEPConstraintJacobianHarness:
             add(f"TR[{agd},row]", 1.0)
             if eta != 0 and vars.PIXCON > 0 and tro != 0:
                 add("PIXCON", -(eta * tro * (vars.PIXCON ** (eta - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ52_"):
+            _, i, h = constraint_name.split("_", 2)
+            gamma_les = self.equations.params.get("gamma_LES", {}).get((i, h), 0.0)
+            c_ih = vars.C.get((i, h), 0.0)
+            cmin_ih = vars.CMIN.get((i, h), 0.0)
+            add(f"C[{i},{h}]", vars.PC.get(i, 0.0))
+            add(f"CTH[{h}]", -gamma_les)
+            for ij in self.sets.get("I", []):
+                pc_ij = vars.PC.get(ij, 0.0)
+                cmin_ijh = vars.CMIN.get((ij, h), 0.0)
+                if ij == i:
+                    add(f"PC[{ij}]", c_ih + (gamma_les - 1.0) * cmin_ih)
+                    add(f"CMIN[{ij},{h}]", (gamma_les - 1.0) * pc_ij)
+                else:
+                    add(f"PC[{ij}]", gamma_les * cmin_ijh)
+                    add(f"CMIN[{ij},{h}]", gamma_les * pc_ij)
             return result
 
         if constraint_name == "EQ53":
@@ -1224,6 +1249,64 @@ class PEPConstraintJacobianHarness:
             if abs(vars.PIXINV) > 1e-12:
                 add("GFCF", -(1.0 / vars.PIXINV))
                 add("PIXINV", vars.GFCF / (vars.PIXINV ** 2))
+            return result
+
+        if constraint_name == "EQ80":
+            pvao0 = self.equations.params.get("PVAO0", {})
+            vao0 = self.equations.params.get("VAO0", {})
+            tipo0 = self.equations.params.get("TIPO0", {})
+            num1 = den1 = num2 = den2 = 0.0
+            unit_base_by_j: dict[str, float] = {}
+            active_js: list[str] = []
+            for j in self.sets.get("J", []):
+                va = vars.VA.get(j, 0.0)
+                va0 = vao0.get(j, 0.0)
+                if va <= 1e-12 or va0 <= 1e-12:
+                    continue
+                pva = vars.PVA.get(j, 0.0)
+                tip = vars.TIP.get(j, 0.0)
+                pva0 = pvao0.get(j, 1.0)
+                tip0 = tipo0.get(j, 0.0)
+                unit_cur = pva + tip / va
+                unit_base = (pva0 * va0 + tip0) / va0
+                unit_base_by_j[j] = unit_base
+                active_js.append(j)
+                num1 += unit_cur * va0
+                den1 += unit_base * va0
+                num2 += pva * va + tip
+                den2 += unit_base * va
+            if den1 <= 1e-12 or den2 <= 1e-12:
+                return None
+            a_term = num1 / den1
+            b_term = num2 / den2
+            if a_term <= 1e-12 or b_term <= 1e-12:
+                return None
+            f_term = float(np.sqrt(a_term * b_term))
+            if f_term <= 1e-12:
+                return None
+            add("PIXGDP", 1.0)
+            for j in active_js:
+                va = vars.VA.get(j, 0.0)
+                va0 = vao0.get(j, 0.0)
+                pva = vars.PVA.get(j, 0.0)
+                tip = vars.TIP.get(j, 0.0)
+                unit_base = unit_base_by_j[j]
+                dnum1_dpva = va0
+                dnum1_dva = -(va0 * tip) / (va ** 2)
+                dnum1_dtip = va0 / va
+                dnum2_dpva = va
+                dnum2_dva = pva
+                dnum2_dtip = 1.0
+                dden2_dva = unit_base
+                d_a_dpva = dnum1_dpva / den1
+                d_a_dva = dnum1_dva / den1
+                d_a_dtip = dnum1_dtip / den1
+                d_b_dpva = dnum2_dpva / den2
+                d_b_dva = (dnum2_dva * den2 - num2 * dden2_dva) / (den2 ** 2)
+                d_b_dtip = dnum2_dtip / den2
+                add(f"PVA[{j}]", -((b_term * d_a_dpva + a_term * d_b_dpva) / (2.0 * f_term)))
+                add(f"VA[{j}]", -((b_term * d_a_dva + a_term * d_b_dva) / (2.0 * f_term)))
+                add(f"TIP[{j}]", -((b_term * d_a_dtip + a_term * d_b_dtip) / (2.0 * f_term)))
             return result
 
         if constraint_name == "WALRAS":
