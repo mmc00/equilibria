@@ -295,6 +295,10 @@ $CALL GDXXRW.EXE VAL_PAR.xlsx squeeze = 'no' par=PARJ rng=PAR!A5:E9 par=PARI rng
 $offtext
 $if not set VAL_PAR_XLS $setglobal VAL_PAR_XLS ../data/VAL_PAR-CRI-gams.xlsx
 $if not set VAL_PAR_GDX $setglobal VAL_PAR_GDX VAL_PAR-CRI-gams-from-excel.gdx
+$if not set PEP_USE_EXISTING_VAL_PAR_GDX $set PEP_USE_EXISTING_VAL_PAR_GDX 0
+$ifthenI "%PEP_USE_EXISTING_VAL_PAR_GDX%" == "1"
+* Reuse prebuilt GDX when host-side Excel readers are not available.
+$else
 $onEmbeddedCode Connect:
 - ExcelReader:
     file: %VAL_PAR_XLS%
@@ -307,6 +311,7 @@ $onEmbeddedCode Connect:
     file: %VAL_PAR_GDX%
     symbols: [ {name: PARJ}, {name: PARI}, {name: PARJI}, {name: PARAG} ]
 $offEmbeddedCode
+$endif
 $GDXIN %VAL_PAR_GDX%
 $LOAD PARJ, PARI, PARJI, PARAG
 $GDXIN
@@ -760,6 +765,7 @@ VARIABLES
 
 **  5.1.5 Other variables
  LEON            Excess supply on the last market
+ OBJ             Dummy objective for NLP feasibility solve
 ;
 
 
@@ -867,6 +873,7 @@ EQUATIONS
  EQ98            Real gross fixed capital formation
 
  WALRAS          Walras law verification
+ OBJDEF          Dummy objective equation for NLP feasibility solve
 ;
 
 ** 5.3 Equations
@@ -1171,6 +1178,8 @@ EQ51(agd)..     TR(agd,'%ACC_ROW%') =e= PIXCON**eta*TRO(agd,'%ACC_ROW%');
  WALRAS..        LEON =e= Q('agr')-SUM[h,C('agr',h)]-CG('agr')-INV('agr')
                           -VSTK('agr')-DIT('agr')-MRGN('agr');
 
+ OBJDEF..        OBJ =e= 0;
+
 
 * 6 Numerical resolution
 
@@ -1300,6 +1309,7 @@ EQ51(agd)..     TR(agd,'%ACC_ROW%') =e= PIXCON**eta*TRO(agd,'%ACC_ROW%');
 
 **  6.1.6  Other
  LEON.l          = 0;
+ OBJ.l           = 0;
 
 ** 6.2 Choice of mobile or sector-specific capital
 
@@ -1335,21 +1345,39 @@ EQ51(agd)..     TR(agd,'%ACC_ROW%') =e= PIXCON**eta*TRO(agd,'%ACC_ROW%');
  ttiw.fx(l,j)    = ttiwO(l,j);
  ttix.fx(i)      = ttixO(i);
 
+$if not set PEP_SCENARIO $set PEP_SCENARIO BASE
+$if not set PEP_EXPORT_TAX_MULTIPLIER $set PEP_EXPORT_TAX_MULTIPLIER 0.75
+$if not set PEP_IMPORT_PRICE_COMMODITY $set PEP_IMPORT_PRICE_COMMODITY agr
+$if not set PEP_IMPORT_PRICE_MULTIPLIER $set PEP_IMPORT_PRICE_MULTIPLIER 1.25
+$if not set PEP_IMPORT_SHOCK_MULTIPLIER $set PEP_IMPORT_SHOCK_MULTIPLIER 1.25
+$if not set PEP_GOV_MULTIPLIER $set PEP_GOV_MULTIPLIER 1.2
+
 ** 6.4 Simulations
-*  25% increase of international import price of AGR
-* PWM.fx('agr')   = PWMO('agr')*1.25;
-
-*  25% decrease of the indirect tax rates on all commodities
- ttix.fx(i)         = ttixO(i)*0.75;
-
-*  20% increase of public expenditures
-* G.fx            = GO*1.2;
+$ifthenI "%PEP_SCENARIO%" == "BASE"
+* No additional simulation shock.
+$elseifI "%PEP_SCENARIO%" == "EXPORT_TAX"
+ ttix.fx(i)      = ttixO(i)*%PEP_EXPORT_TAX_MULTIPLIER%;
+$elseifI "%PEP_SCENARIO%" == "IMPORT_PRICE_AGR"
+ PWM.fx('%PEP_IMPORT_PRICE_COMMODITY%') = PWMO('%PEP_IMPORT_PRICE_COMMODITY%')*%PEP_IMPORT_PRICE_MULTIPLIER%;
+$elseifI "%PEP_SCENARIO%" == "IMPORT_SHOCK"
+ PWM.fx(i)       = PWMO(i)*%PEP_IMPORT_SHOCK_MULTIPLIER%;
+$elseifI "%PEP_SCENARIO%" == "GOVERNMENT_SPENDING"
+ G.fx            = GO*%PEP_GOV_MULTIPLIER%;
+$else
+ abort "Unsupported PEP_SCENARIO macro value";
+$endif
 
 ** 6.5 Resolution
 option limrow = 10000;
-OPTION NLP = ipopt;
-OPTION CNS = ipopt;
+$if not set PEP_SOLVER $set PEP_SOLVER ipopt
+$if not set PEP_SOLVE_MODE $set PEP_SOLVE_MODE CNS
+OPTION NLP = %PEP_SOLVER%;
+OPTION CNS = %PEP_SOLVER%;
 MODEL PEP11 Standard PEP static model version 2_1 /ALL/;
 PEP11.HOLDFIXED=1;
+$ifthenI "%PEP_SOLVE_MODE%" == "NLP"
+SOLVE PEP11 USING NLP MINIMIZING OBJ;
+$else
 SOLVE PEP11 USING CNS;
+$endif
 $include RESULTS PEP 1-1.GMS
