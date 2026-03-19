@@ -15,6 +15,11 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from equilibria.baseline import GAMSNLPReferenceManifest  # noqa: E402
 from equilibria.simulations import PepSimulator  # noqa: E402
 from equilibria.simulations import export_tax, government_spending, import_price, import_shock  # noqa: E402
+from equilibria.solver import (  # noqa: E402
+    compare_jacobian_modes,
+    evaluate_jacobian_mode_gate,
+    summarize_jacobian_mode_entry,
+)
 
 DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
 DEFAULT_VAL_PAR_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
@@ -134,104 +139,7 @@ def _run_one(
 
 
 def _mode_summary(entry: dict[str, Any]) -> dict[str, Any]:
-    solve = dict(entry["solve"])
-    stats = dict(solve.get("solver_stats") or {})
-    comparison = entry.get("comparison")
-    return {
-        "converged": bool(solve["converged"]),
-        "iterations": int(solve["iterations"]),
-        "final_residual": float(solve["final_residual"]),
-        "message": str(solve["message"]),
-        "solver_stats": stats,
-        "comparison": comparison,
-    }
-
-
-def _safe_ratio(numerator: float | int, denominator: float | int) -> float | None:
-    denom = float(denominator)
-    if denom == 0.0:
-        return None
-    return float(numerator) / denom
-
-
-def _compare_modes(
-    analytic: dict[str, dict[str, Any]],
-    numeric: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    out: dict[str, dict[str, Any]] = {}
-    for scenario_name in analytic:
-        analytic_entry = analytic[scenario_name]
-        numeric_entry = numeric[scenario_name]
-        analytic_stats = dict(analytic_entry.get("solver_stats") or {})
-        numeric_stats = dict(numeric_entry.get("solver_stats") or {})
-        out[scenario_name] = {
-            "analytic": analytic_entry,
-            "numeric": numeric_entry,
-            "deltas": {
-                "iteration_delta": int(analytic_entry["iterations"]) - int(numeric_entry["iterations"]),
-                "final_residual_delta": float(analytic_entry["final_residual"])
-                - float(numeric_entry["final_residual"]),
-                "wall_time_delta_seconds": float(analytic_stats.get("wall_time_seconds", 0.0))
-                - float(numeric_stats.get("wall_time_seconds", 0.0)),
-                "analytic_speedup_vs_numeric": _safe_ratio(
-                    float(numeric_stats.get("wall_time_seconds", 0.0)),
-                    float(analytic_stats.get("wall_time_seconds", 0.0)),
-                ),
-                "constraint_eval_delta": int(analytic_stats.get("constraint_eval_count", 0))
-                - int(numeric_stats.get("constraint_eval_count", 0)),
-                "jacobian_eval_delta": int(analytic_stats.get("jacobian_eval_count", 0))
-                - int(numeric_stats.get("jacobian_eval_count", 0)),
-                "finite_difference_eval_delta": int(analytic_stats.get("finite_difference_eval_count", 0))
-                - int(numeric_stats.get("finite_difference_eval_count", 0)),
-            },
-        }
-    return out
-
-
-def _evaluate_gate(
-    report: dict[str, Any],
-    *,
-    max_analytic_fd_evals: int,
-) -> dict[str, Any]:
-    failures: list[str] = []
-    for scenario_name, payload in report["mode_comparison"].items():
-        analytic = payload["analytic"]
-        numeric = payload["numeric"]
-        analytic_stats = dict(analytic.get("solver_stats") or {})
-        numeric_stats = dict(numeric.get("solver_stats") or {})
-
-        if not bool(analytic["converged"]):
-            failures.append(f"{scenario_name}: analytic solve did not converge")
-        if not bool(numeric["converged"]):
-            failures.append(f"{scenario_name}: numeric solve did not converge")
-
-        analytic_fd = int(analytic_stats.get("finite_difference_eval_count", 0))
-        if analytic_fd > int(max_analytic_fd_evals):
-            failures.append(
-                f"{scenario_name}: analytic finite_difference_eval_count={analytic_fd} exceeds {max_analytic_fd_evals}"
-            )
-
-        analytic_cmp = analytic.get("comparison")
-        numeric_cmp = numeric.get("comparison")
-        if isinstance(analytic_cmp, dict) and isinstance(numeric_cmp, dict):
-            if bool(analytic_cmp["passed"]) is False and bool(numeric_cmp["passed"]) is True:
-                failures.append(
-                    f"{scenario_name}: analytic parity failed while numeric parity passed"
-                )
-            if int(analytic_cmp["mismatches"]) > int(numeric_cmp["mismatches"]):
-                failures.append(
-                    f"{scenario_name}: analytic mismatches={analytic_cmp['mismatches']} worse than numeric={numeric_cmp['mismatches']}"
-                )
-            if int(analytic_cmp["missing"]) > int(numeric_cmp["missing"]):
-                failures.append(
-                    f"{scenario_name}: analytic missing={analytic_cmp['missing']} worse than numeric={numeric_cmp['missing']}"
-                )
-
-    return {
-        "passed": not failures,
-        "max_analytic_fd_evals": int(max_analytic_fd_evals),
-        "failures": failures,
-    }
+    return summarize_jacobian_mode_entry(entry).to_dict()
 
 
 def _print_summary(report: dict[str, Any]) -> None:
@@ -341,10 +249,10 @@ def main() -> int:
         },
         "analytic": per_mode["analytic"],
         "numeric": per_mode["numeric"],
-        "mode_comparison": _compare_modes(per_mode["analytic"], per_mode["numeric"]),
+        "mode_comparison": compare_jacobian_modes(per_mode["analytic"], per_mode["numeric"]),
     }
-    report["gate"] = _evaluate_gate(
-        report,
+    report["gate"] = evaluate_jacobian_mode_gate(
+        report["mode_comparison"],
         max_analytic_fd_evals=args.max_analytic_fd_evals,
     )
 

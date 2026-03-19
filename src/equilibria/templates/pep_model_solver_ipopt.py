@@ -47,6 +47,7 @@ from equilibria.blocks.trade import (
 )
 from equilibria.core.sets import Set, SetManager
 from equilibria.solver.guards import rebuild_tax_detail_from_rates
+from equilibria.solver.jacobians import solver_stats_payload
 from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
 from equilibria.templates.init_strategies import build_init_strategy, normalize_init_mode
 from equilibria.templates.pep_closure_validator import (
@@ -2613,18 +2614,11 @@ class IPOPTSolver:
                 effective_contract=self.contract.model_dump(mode="python"),
                 effective_config=self.runtime_config.model_dump(mode="python"),
                 closure_validation=closure_report.model_dump(mode="python"),
-                solver_stats={
-                    "jacobian_mode": self.runtime_config.jacobian_mode,
-                    "constraint_eval_count": 0,
-                    "jacobian_eval_count": 0,
-                    "structure_eval_count": 0,
-                    "finite_difference_eval_count": 0,
-                    "jacobian_nonzero_count": 0,
-                    "hard_constraint_count": 0,
-                    "variable_count": 0,
-                    "wall_time_seconds": 0.0,
-                    "objective_eval_count": 0,
-                },
+                solver_stats=solver_stats_payload(
+                    jacobian_stats={"jacobian_mode": self.runtime_config.jacobian_mode},
+                    wall_time_seconds=0.0,
+                    objective_eval_count=0,
+                ),
             )
         
         hard_constraints = self._build_hard_constraints()
@@ -2810,9 +2804,11 @@ class IPOPTSolver:
                     best = candidate2
 
             best["solver_stats"] = {
-                **problem_ctx.constraint_harness.stats(),
-                "wall_time_seconds": float(time.perf_counter() - cycle_started_at),
-                "objective_eval_count": int(problem_ctx.n_evaluations),
+                **solver_stats_payload(
+                    jacobian_stats=problem_ctx.constraint_harness.stats(),
+                    wall_time_seconds=float(time.perf_counter() - cycle_started_at),
+                    objective_eval_count=int(problem_ctx.n_evaluations),
+                )
             }
             return best
 
@@ -2864,7 +2860,11 @@ class IPOPTSolver:
             result.effective_contract = self.contract.model_dump(mode="python")
             result.effective_config = self.runtime_config.model_dump(mode="python")
             result.closure_validation = self.last_closure_validation_report
-            result.solver_stats = {"jacobian_mode": self.runtime_config.jacobian_mode}
+            result.solver_stats = solver_stats_payload(
+                jacobian_stats={"jacobian_mode": self.runtime_config.jacobian_mode},
+                wall_time_seconds=0.0,
+                objective_eval_count=0,
+            )
             return result
     
     def solve(self, method: str = "auto") -> SolverResult:
