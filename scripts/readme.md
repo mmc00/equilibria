@@ -41,6 +41,13 @@ flujo actual recomendado:
   - opcional: `--reference-manifest /abs/path/pep_core_scenarios_manifest.json --require-reference-manifest`
   - corre `base + export_tax + import_price_agr + import_shock + government_spending`
   - cada escenario corre desde la misma base calibrada para mantener la paridad determinista
+- benchmark analytic vs numeric para el Jacobiano PEP:
+  - `uv run python scripts/parity/measure_pep_jacobian_modes.py --reference-manifest output/gams_nlp_reference/core_default_real_v2/manifest.json --save-report output/pep_jacobian_modes_default.json`
+  - variante gate estructural: agregar `--gate`
+  - el gate exige:
+    - convergencia en ambos modos
+    - que `analytic` no use diferencias finitas por encima del maximo permitido
+    - que la paridad de `analytic` no sea peor que la de `numeric`
 *transformar SAM ahora usa el pipeline manual registrado en `scripts/sam_tools/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
 
 policy:

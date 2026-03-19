@@ -25,6 +25,7 @@ import copy
 import re
 import shutil
 import subprocess
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Tuple
@@ -52,6 +53,7 @@ from equilibria.templates.pep_closure_validator import (
     PEPClosureValidationReport,
     validate_pep_closure_structure,
 )
+from equilibria.templates.pep_constraint_jacobian import PEPConstraintJacobianHarness
 from equilibria.templates.pep_contract import PEPContract, build_pep_contract
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
 from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
@@ -85,8 +87,10 @@ class CGEProblem:
         sets: dict[str, list[str]],
         n_variables: int,
         variable_info: dict[str, Any],
+        variable_names: list[str] | None = None,
         residual_weights: dict[str, float] | None = None,
         hard_constraints: list[str] | None = None,
+        jacobian_mode: str = "analytic",
     ):
         """Initialize the CGE optimization problem.
         
@@ -106,6 +110,15 @@ class CGEProblem:
         self._constraint_scale: np.ndarray | None = None
         self.residual_weights = residual_weights or {}
         self.hard_constraints = hard_constraints or []
+        self.constraint_harness = PEPConstraintJacobianHarness(
+            equations=self.equations,
+            sets=self.sets,
+            n_variables=self.n_variables,
+            hard_constraints=self.hard_constraints,
+            variable_names=variable_names,
+            sparsity_reference_x=None,
+            jacobian_mode=jacobian_mode,
+        )
         
     def objective(self, x: np.ndarray) -> float:
         """Return a constant objective for pure-feasibility solve."""
@@ -164,17 +177,7 @@ class CGEProblem:
 
     def _compute_constraint_residuals(self, x: np.ndarray) -> np.ndarray:
         """Compute hard-constraint residuals in declared order."""
-        vars = self._array_to_variables(x)
-        residual_dict = self.equations.calculate_all_residuals(vars)
-        residuals = np.array(
-            [residual_dict.get(eq, 0.0) for eq in self.hard_constraints],
-            dtype=float,
-        )
-        # Fixed per-equation scaling improves conditioning for mixed-magnitude
-        # constraints without changing the feasible set.
-        if self._constraint_scale is None:
-            self._constraint_scale = np.maximum(np.abs(residuals), 1.0)
-        return residuals / self._constraint_scale
+        return self.constraint_harness.evaluate_constraints(x)
 
     def constraints(self, x: np.ndarray) -> np.ndarray:
         """Equality constraints c(x)=0 for selected equation residuals."""
@@ -183,32 +186,12 @@ class CGEProblem:
         return self._compute_constraint_residuals(x)
 
     def jacobian(self, x: np.ndarray) -> np.ndarray:
-        """Dense Jacobian (row-major flattened) for hard constraints via finite differences."""
-        m = len(self.hard_constraints)
-        n = len(x)
-        if m == 0:
-            return np.array([], dtype=float)
-
-        base = self._compute_constraint_residuals(x)
-        jac = np.zeros((m, n), dtype=float)
-        fd_eps = np.sqrt(np.finfo(float).eps)
-        for i in range(n):
-            step = max(1e-8, fd_eps * max(abs(float(x[i])), 1.0))
-            x_plus = x.copy()
-            x_plus[i] += step
-            c_plus = self._compute_constraint_residuals(x_plus)
-            jac[:, i] = (c_plus - base) / step
-        return jac.ravel()
+        """Dense Jacobian (row-major flattened) for hard constraints."""
+        return self.constraint_harness.evaluate_jacobian_values(x)
 
     def jacobianstructure(self) -> tuple[np.ndarray, np.ndarray]:
         """Dense Jacobian structure indices."""
-        m = len(self.hard_constraints)
-        n = self.n_variables
-        if m == 0:
-            return np.array([], dtype=int), np.array([], dtype=int)
-        rows = np.repeat(np.arange(m, dtype=int), n)
-        cols = np.tile(np.arange(n, dtype=int), m)
-        return rows, cols
+        return self.constraint_harness.jacobian_structure()
     
     def _array_to_variables(self, x: np.ndarray) -> PEPModelVariables:
         """Convert optimization variables to PEPModelVariables.
@@ -2630,22 +2613,38 @@ class IPOPTSolver:
                 effective_contract=self.contract.model_dump(mode="python"),
                 effective_config=self.runtime_config.model_dump(mode="python"),
                 closure_validation=closure_report.model_dump(mode="python"),
+                solver_stats={
+                    "jacobian_mode": self.runtime_config.jacobian_mode,
+                    "constraint_eval_count": 0,
+                    "jacobian_eval_count": 0,
+                    "structure_eval_count": 0,
+                    "finite_difference_eval_count": 0,
+                    "jacobian_nonzero_count": 0,
+                    "hard_constraint_count": 0,
+                    "variable_count": 0,
+                    "wall_time_seconds": 0.0,
+                    "objective_eval_count": 0,
+                },
             )
         
         hard_constraints = self._build_hard_constraints()
 
         def _build_problem_context(x_ref: np.ndarray) -> tuple[CGEProblem, Any, np.ndarray, np.ndarray]:
+            lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=x_ref)
+            variable_names = list(self._last_bound_names)
+            if len(lb_ctx) != n_vars:
+                raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
             problem_ctx = CGEProblem(
                 equations=self.equations,
                 sets=self.sets,
                 n_variables=n_vars,
                 variable_info={},
+                variable_names=variable_names,
                 residual_weights=self._build_residual_weights(),
                 hard_constraints=hard_constraints,
+                jacobian_mode=self.runtime_config.jacobian_mode,
             )
-            lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=x_ref)
-            if len(lb_ctx) != n_vars:
-                raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
+            problem_ctx.constraint_harness.sparsity_reference_x = np.array(x_ref, dtype=float)
 
             class IPOPTProblem:
                 def __init__(self, cge_problem):
@@ -2668,10 +2667,8 @@ class IPOPTSolver:
 
             return problem_ctx, IPOPTProblem(problem_ctx), lb_ctx, ub_ctx
 
-        problem, ipopt_problem, lb, ub = _build_problem_context(x0)
-
         # Configure IPOPT options using cyipopt API
-        n_constraints = len(problem.hard_constraints)
+        n_constraints = len(hard_constraints)
         cl = np.zeros(n_constraints)
         cu = np.zeros(n_constraints)
 
@@ -2774,6 +2771,7 @@ class IPOPTSolver:
             start_x: np.ndarray,
             pass1_warm_start: bool,
         ) -> dict[str, Any]:
+            cycle_started_at = time.perf_counter()
             problem_ctx, ipopt_problem_ctx, lb_ctx, ub_ctx = _build_problem_context(x0)
 
             logger.info("Starting IPOPT optimization (pass 1)...")
@@ -2811,6 +2809,11 @@ class IPOPTSolver:
                 if _candidate_better(candidate2, best):
                     best = candidate2
 
+            best["solver_stats"] = {
+                **problem_ctx.constraint_harness.stats(),
+                "wall_time_seconds": float(time.perf_counter() - cycle_started_at),
+                "objective_eval_count": int(problem_ctx.n_evaluations),
+            }
             return best
 
         logger.info("IPOPT options configured")
@@ -2834,13 +2837,23 @@ class IPOPTSolver:
             result.effective_contract = self.contract.model_dump(mode="python")
             result.effective_config = self.runtime_config.model_dump(mode="python")
             result.closure_validation = closure_report.model_dump(mode="python")
+            result.solver_stats = dict(best_candidate.get("solver_stats", {}))
 
             logger.info("IPOPT info keys: %s", sorted(info_best.keys()))
             logger.info(f"IPOPT finished: {result.message}")
             logger.info(f"  Status: {info_best.get('status')}")
             logger.info(f"  Iterations: {result.iterations}")
             logger.info(f"  Final objective: {info_best.get('obj_val', 0):.2e}")
-            logger.info(f"  Function evaluations: {problem.n_evaluations}")
+            logger.info(
+                "  Jacobian mode: %s",
+                result.solver_stats.get("jacobian_mode") if result.solver_stats else self.runtime_config.jacobian_mode,
+            )
+            logger.info(
+                "  Constraint evals: %s, Jacobian evals: %s, FD evals: %s",
+                result.solver_stats.get("constraint_eval_count") if result.solver_stats else 0,
+                result.solver_stats.get("jacobian_eval_count") if result.solver_stats else 0,
+                result.solver_stats.get("finite_difference_eval_count") if result.solver_stats else 0,
+            )
 
             return result
 
@@ -2851,6 +2864,7 @@ class IPOPTSolver:
             result.effective_contract = self.contract.model_dump(mode="python")
             result.effective_config = self.runtime_config.model_dump(mode="python")
             result.closure_validation = self.last_closure_validation_report
+            result.solver_stats = {"jacobian_mode": self.runtime_config.jacobian_mode}
             return result
     
     def solve(self, method: str = "auto") -> SolverResult:
