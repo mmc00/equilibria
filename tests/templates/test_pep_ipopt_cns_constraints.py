@@ -253,6 +253,69 @@ def test_constraint_harness_reports_dense_row_major_structure() -> None:
     assert np.all(rows[:-1] <= rows[1:])
 
 
+def test_constraint_harness_uses_analytic_eq66_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ66_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    assert rows.tolist() == [0, 0]
+
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    ttip = solver.equations.params.get("ttip", {}).get("agr", 0.0)
+
+    assert set(observed) == {"PT[agr]", "PP[agr]"}
+    assert observed["PT[agr]"] == pytest.approx(1.0 / scale)
+    assert observed["PP[agr]"] == pytest.approx(-(1.0 + ttip) / scale)
+
+
+def test_constraint_harness_uses_analytic_eq95_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ95"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    assert rows.tolist() == [0, 0, 0]
+
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    pixgvt = vars0.PIXGVT
+
+    assert set(observed) == {"G_REAL", "G", "PIXGVT"}
+    assert observed["G_REAL"] == pytest.approx(1.0 / scale)
+    assert observed["G"] == pytest.approx(-(1.0 / pixgvt) / scale)
+    assert observed["PIXGVT"] == pytest.approx((vars0.G / (pixgvt ** 2)) / scale)
+
+
 def test_ipopt_builds_structural_closure_validation_report() -> None:
     state = _build_dynamic_sam_excel()
     solver = IPOPTSolver(state, config="default_ipopt")

@@ -86,6 +86,7 @@ class CGEProblem:
         sets: dict[str, list[str]],
         n_variables: int,
         variable_info: dict[str, Any],
+        variable_names: list[str] | None = None,
         residual_weights: dict[str, float] | None = None,
         hard_constraints: list[str] | None = None,
     ):
@@ -112,6 +113,7 @@ class CGEProblem:
             sets=self.sets,
             n_variables=self.n_variables,
             hard_constraints=self.hard_constraints,
+            variable_names=variable_names,
             sparsity_reference_x=None,
         )
         
@@ -2613,18 +2615,20 @@ class IPOPTSolver:
         hard_constraints = self._build_hard_constraints()
 
         def _build_problem_context(x_ref: np.ndarray) -> tuple[CGEProblem, Any, np.ndarray, np.ndarray]:
+            lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=x_ref)
+            variable_names = list(self._last_bound_names)
+            if len(lb_ctx) != n_vars:
+                raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
             problem_ctx = CGEProblem(
                 equations=self.equations,
                 sets=self.sets,
                 n_variables=n_vars,
                 variable_info={},
+                variable_names=variable_names,
                 residual_weights=self._build_residual_weights(),
                 hard_constraints=hard_constraints,
             )
             problem_ctx.constraint_harness.sparsity_reference_x = np.array(x_ref, dtype=float)
-            lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=x_ref)
-            if len(lb_ctx) != n_vars:
-                raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
 
             class IPOPTProblem:
                 def __init__(self, cge_problem):
