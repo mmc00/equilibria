@@ -52,6 +52,7 @@ from equilibria.templates.pep_closure_validator import (
     PEPClosureValidationReport,
     validate_pep_closure_structure,
 )
+from equilibria.templates.pep_constraint_jacobian import PEPConstraintJacobianHarness
 from equilibria.templates.pep_contract import PEPContract, build_pep_contract
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
 from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
@@ -106,6 +107,12 @@ class CGEProblem:
         self._constraint_scale: np.ndarray | None = None
         self.residual_weights = residual_weights or {}
         self.hard_constraints = hard_constraints or []
+        self.constraint_harness = PEPConstraintJacobianHarness(
+            equations=self.equations,
+            sets=self.sets,
+            n_variables=self.n_variables,
+            hard_constraints=self.hard_constraints,
+        )
         
     def objective(self, x: np.ndarray) -> float:
         """Return a constant objective for pure-feasibility solve."""
@@ -164,17 +171,7 @@ class CGEProblem:
 
     def _compute_constraint_residuals(self, x: np.ndarray) -> np.ndarray:
         """Compute hard-constraint residuals in declared order."""
-        vars = self._array_to_variables(x)
-        residual_dict = self.equations.calculate_all_residuals(vars)
-        residuals = np.array(
-            [residual_dict.get(eq, 0.0) for eq in self.hard_constraints],
-            dtype=float,
-        )
-        # Fixed per-equation scaling improves conditioning for mixed-magnitude
-        # constraints without changing the feasible set.
-        if self._constraint_scale is None:
-            self._constraint_scale = np.maximum(np.abs(residuals), 1.0)
-        return residuals / self._constraint_scale
+        return self.constraint_harness.evaluate_constraints(x)
 
     def constraints(self, x: np.ndarray) -> np.ndarray:
         """Equality constraints c(x)=0 for selected equation residuals."""
@@ -183,32 +180,12 @@ class CGEProblem:
         return self._compute_constraint_residuals(x)
 
     def jacobian(self, x: np.ndarray) -> np.ndarray:
-        """Dense Jacobian (row-major flattened) for hard constraints via finite differences."""
-        m = len(self.hard_constraints)
-        n = len(x)
-        if m == 0:
-            return np.array([], dtype=float)
-
-        base = self._compute_constraint_residuals(x)
-        jac = np.zeros((m, n), dtype=float)
-        fd_eps = np.sqrt(np.finfo(float).eps)
-        for i in range(n):
-            step = max(1e-8, fd_eps * max(abs(float(x[i])), 1.0))
-            x_plus = x.copy()
-            x_plus[i] += step
-            c_plus = self._compute_constraint_residuals(x_plus)
-            jac[:, i] = (c_plus - base) / step
-        return jac.ravel()
+        """Dense Jacobian (row-major flattened) for hard constraints."""
+        return self.constraint_harness.evaluate_jacobian_values(x)
 
     def jacobianstructure(self) -> tuple[np.ndarray, np.ndarray]:
         """Dense Jacobian structure indices."""
-        m = len(self.hard_constraints)
-        n = self.n_variables
-        if m == 0:
-            return np.array([], dtype=int), np.array([], dtype=int)
-        rows = np.repeat(np.arange(m, dtype=int), n)
-        cols = np.tile(np.arange(n, dtype=int), m)
-        return rows, cols
+        return self.constraint_harness.jacobian_structure()
     
     def _array_to_variables(self, x: np.ndarray) -> PEPModelVariables:
         """Convert optimization variables to PEPModelVariables.
