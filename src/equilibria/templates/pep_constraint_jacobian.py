@@ -306,6 +306,395 @@ class PEPConstraintJacobianHarness:
             add(f"CI[{j}]", -aij)
             return result
 
+        if constraint_name.startswith("EQ10_"):
+            h = constraint_name.split("_", 1)[1]
+            add(f"YH[{h}]", 1.0)
+            add(f"YHL[{h}]", -1.0)
+            add(f"YHK[{h}]", -1.0)
+            add(f"YHTR[{h}]", -1.0)
+            return result
+
+        if constraint_name.startswith("EQ11_"):
+            h = constraint_name.split("_", 1)[1]
+            add(f"YHL[{h}]", 1.0)
+            for l in self.sets.get("L", []):
+                lam = self.equations.params.get("lambda_WL", {}).get((h, l), 0.0)
+                if lam == 0:
+                    continue
+                ld_sum = 0.0
+                for j in self.sets.get("J", []):
+                    if abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0)) <= 1e-12:
+                        continue
+                    ld_sum += vars.LD.get((l, j), 0.0)
+                    add(f"LD[{l},{j}]", -(lam * vars.W.get(l, 0.0)))
+                add(f"W[{l}]", -(lam * ld_sum))
+            return result
+
+        if constraint_name.startswith("EQ12_"):
+            h = constraint_name.split("_", 1)[1]
+            add(f"YHK[{h}]", 1.0)
+            for k in self.sets.get("K", []):
+                lam = self.equations.params.get("lambda_RK", {}).get((h, k), 0.0)
+                if lam == 0:
+                    continue
+                for j in self.sets.get("J", []):
+                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                        continue
+                    add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
+                    add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
+            return result
+
+        if constraint_name.startswith("EQ13_"):
+            h = constraint_name.split("_", 1)[1]
+            add(f"YHTR[{h}]", 1.0)
+            for ag in self.sets.get("AG", []):
+                add(f"TR[{h},{ag}]", -1.0)
+            return result
+
+        if constraint_name.startswith("EQ14_"):
+            h = constraint_name.split("_", 1)[1]
+            add(f"YDH[{h}]", 1.0)
+            add(f"YH[{h}]", -1.0)
+            add(f"TDH[{h}]", 1.0)
+            add(f"TR[gvt,{h}]", 1.0)
+            return result
+
+        if constraint_name.startswith("EQ15_"):
+            h = constraint_name.split("_", 1)[1]
+            add(f"CTH[{h}]", 1.0)
+            add(f"YDH[{h}]", -1.0)
+            add(f"SH[{h}]", 1.0)
+            for agng in self.sets.get("AGNG", []):
+                add(f"TR[{agng},{h}]", 1.0)
+            return result
+
+        if constraint_name.startswith("EQ16_"):
+            h = constraint_name.split("_", 1)[1]
+            eta = self.equations.params.get("eta", 0.0)
+            sh0 = self.equations.params.get("sh0", {}).get(h, 0.0)
+            sh1 = self.equations.params.get("sh1", {}).get(h, 0.0)
+            add(f"SH[{h}]", 1.0)
+            add(f"YDH[{h}]", -sh1)
+            if eta != 0 and vars.PIXCON > 0 and sh0 != 0:
+                add("PIXCON", -(eta * sh0 * (vars.PIXCON ** (eta - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ17_"):
+            f = constraint_name.split("_", 1)[1]
+            add(f"YF[{f}]", 1.0)
+            add(f"YFK[{f}]", -1.0)
+            add(f"YFTR[{f}]", -1.0)
+            return result
+
+        if constraint_name.startswith("EQ18_"):
+            f = constraint_name.split("_", 1)[1]
+            add(f"YFK[{f}]", 1.0)
+            for k in self.sets.get("K", []):
+                lam = self.equations.params.get("lambda_RK", {}).get((f, k), 0.0)
+                if lam == 0:
+                    continue
+                for j in self.sets.get("J", []):
+                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                        continue
+                    add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
+                    add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
+            return result
+
+        if constraint_name.startswith("EQ19_"):
+            f = constraint_name.split("_", 1)[1]
+            add(f"YFTR[{f}]", 1.0)
+            for ag in self.sets.get("AG", []):
+                add(f"TR[{f},{ag}]", -1.0)
+            return result
+
+        if constraint_name.startswith("EQ20_"):
+            f = constraint_name.split("_", 1)[1]
+            add(f"YDF[{f}]", 1.0)
+            add(f"YF[{f}]", -1.0)
+            add(f"TDF[{f}]", 1.0)
+            return result
+
+        if constraint_name.startswith("EQ21_"):
+            f = constraint_name.split("_", 1)[1]
+            add(f"SF[{f}]", 1.0)
+            add(f"YDF[{f}]", -1.0)
+            for ag in self.sets.get("AG", []):
+                add(f"TR[{ag},{f}]", 1.0)
+            return result
+
+        if constraint_name == "EQ22":
+            add("YG", 1.0)
+            add("YGK", -1.0)
+            add("TDHT", -1.0)
+            add("TDFT", -1.0)
+            add("TPRODN", -1.0)
+            add("TPRCTS", -1.0)
+            add("YGTR", -1.0)
+            return result
+
+        if constraint_name == "EQ23":
+            add("YGK", 1.0)
+            for k in self.sets.get("K", []):
+                lam = self.equations.params.get("lambda_RK", {}).get(("gvt", k), 0.0)
+                if lam == 0:
+                    continue
+                for j in self.sets.get("J", []):
+                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                        continue
+                    add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
+                    add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
+            return result
+
+        if constraint_name == "EQ24":
+            add("TDHT", 1.0)
+            for h in self.sets.get("H", []):
+                add(f"TDH[{h}]", -1.0)
+            return result
+
+        if constraint_name == "EQ25":
+            add("TDFT", 1.0)
+            for f in self.sets.get("F", []):
+                add(f"TDF[{f}]", -1.0)
+            return result
+
+        if constraint_name == "EQ26":
+            add("TPRODN", 1.0)
+            add("TIWT", -1.0)
+            add("TIKT", -1.0)
+            add("TIPT", -1.0)
+            return result
+
+        if constraint_name == "EQ27":
+            add("TIWT", 1.0)
+            for l in self.sets.get("L", []):
+                for j in self.sets.get("J", []):
+                    if abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0)) > 1e-12:
+                        add(f"TIW[{l},{j}]", -1.0)
+            return result
+
+        if constraint_name == "EQ28":
+            add("TIKT", 1.0)
+            for k in self.sets.get("K", []):
+                for j in self.sets.get("J", []):
+                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) > 1e-12:
+                        add(f"TIK[{k},{j}]", -1.0)
+            return result
+
+        if constraint_name == "EQ29":
+            add("TIPT", 1.0)
+            for j in self.sets.get("J", []):
+                add(f"TIP[{j}]", -1.0)
+            return result
+
+        if constraint_name == "EQ30":
+            add("TPRCTS", 1.0)
+            add("TICT", -1.0)
+            add("TIMT", -1.0)
+            add("TIXT", -1.0)
+            return result
+
+        if constraint_name == "EQ31":
+            add("TICT", 1.0)
+            for i in self.sets.get("I", []):
+                add(f"TIC[{i}]", -1.0)
+            return result
+
+        if constraint_name == "EQ32":
+            add("TIMT", 1.0)
+            for i in self.sets.get("I", []):
+                if abs(self.equations.params.get("IMO0", {}).get(i, 0.0)) > 1e-12:
+                    add(f"TIM[{i}]", -1.0)
+            return result
+
+        if constraint_name == "EQ33":
+            add("TIXT", 1.0)
+            for i in self.sets.get("I", []):
+                if abs(self.equations.params.get("EXDO0", {}).get(i, 0.0)) > 1e-12:
+                    add(f"TIX[{i}]", -1.0)
+            return result
+
+        if constraint_name == "EQ34":
+            add("YGTR", 1.0)
+            for agng in self.sets.get("AGNG", []):
+                add(f"TR[gvt,{agng}]", -1.0)
+            return result
+
+        if constraint_name.startswith("EQ35_"):
+            h = constraint_name.split("_", 1)[1]
+            eta = self.equations.params.get("eta", 0.0)
+            ttdh0 = self.equations.params.get("ttdh0", {}).get(h, 0.0)
+            ttdh1 = self.equations.params.get("ttdh1", {}).get(h, 0.0)
+            add(f"TDH[{h}]", 1.0)
+            add(f"YH[{h}]", -ttdh1)
+            if eta != 0 and vars.PIXCON > 0 and ttdh0 != 0:
+                add("PIXCON", -(eta * ttdh0 * (vars.PIXCON ** (eta - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ36_"):
+            f = constraint_name.split("_", 1)[1]
+            eta = self.equations.params.get("eta", 0.0)
+            ttdf0 = self.equations.params.get("ttdf0", {}).get(f, 0.0)
+            ttdf1 = self.equations.params.get("ttdf1", {}).get(f, 0.0)
+            add(f"TDF[{f}]", 1.0)
+            add(f"YFK[{f}]", -ttdf1)
+            if eta != 0 and vars.PIXCON > 0 and ttdf0 != 0:
+                add("PIXCON", -(eta * ttdf0 * (vars.PIXCON ** (eta - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ37_"):
+            _, l, j = constraint_name.split("_", 2)
+            ttiw = self.equations.params.get("ttiw", {}).get((l, j), 0.0)
+            add(f"TIW[{l},{j}]", 1.0)
+            add(f"W[{l}]", -(ttiw * vars.LD.get((l, j), 0.0)))
+            add(f"LD[{l},{j}]", -(ttiw * vars.W.get(l, 0.0)))
+            return result
+
+        if constraint_name.startswith("EQ38_"):
+            _, k, j = constraint_name.split("_", 2)
+            ttik = self.equations.params.get("ttik", {}).get((k, j), 0.0)
+            add(f"TIK[{k},{j}]", 1.0)
+            add(f"R[{k},{j}]", -(ttik * vars.KD.get((k, j), 0.0)))
+            add(f"KD[{k},{j}]", -(ttik * vars.R.get((k, j), 0.0)))
+            return result
+
+        if constraint_name.startswith("EQ39_"):
+            j = constraint_name.split("_", 1)[1]
+            ttip = self.equations.params.get("ttip", {}).get(j, 0.0)
+            add(f"TIP[{j}]", 1.0)
+            add(f"PP[{j}]", -(ttip * vars.XST.get(j, 0.0)))
+            add(f"XST[{j}]", -(ttip * vars.PP.get(j, 0.0)))
+            return result
+
+        if constraint_name.startswith("EQ40_"):
+            i = constraint_name.split("_", 1)[1]
+            ttic = self.equations.params.get("ttic", {}).get(i, 0.0)
+            denom = 1.0 + ttic
+            add(f"TIC[{i}]", 1.0)
+            if abs(denom) <= 1e-12:
+                return result
+            coeff = ttic / denom
+            if abs(self.equations.params.get("DDO0", {}).get(i, 0.0)) > 1e-12:
+                add(f"PD[{i}]", -(coeff * vars.DD.get(i, 0.0)))
+                add(f"DD[{i}]", -(coeff * vars.PD.get(i, 0.0)))
+            if abs(self.equations.params.get("IMO0", {}).get(i, 0.0)) > 1e-12:
+                add(f"PM[{i}]", -(coeff * vars.IM.get(i, 0.0)))
+                add(f"IM[{i}]", -(coeff * vars.PM.get(i, 0.0)))
+            return result
+
+        if constraint_name.startswith("EQ41_"):
+            i = constraint_name.split("_", 1)[1]
+            ttim = self.equations.params.get("ttim", {}).get(i, 0.0)
+            add(f"TIM[{i}]", 1.0)
+            add("e", -(ttim * vars.PWM.get(i, 0.0) * vars.IM.get(i, 0.0)))
+            add(f"PWM[{i}]", -(ttim * vars.e * vars.IM.get(i, 0.0)))
+            add(f"IM[{i}]", -(ttim * vars.e * vars.PWM.get(i, 0.0)))
+            return result
+
+        if constraint_name.startswith("EQ42_"):
+            i = constraint_name.split("_", 1)[1]
+            ttix = self.equations.params.get("ttix", {}).get(i, 0.0)
+            margin_sum = sum(
+                vars.PC.get(ij, 1.0) * self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0)
+                for ij in self.sets.get("I", [])
+            )
+            add(f"TIX[{i}]", 1.0)
+            add(f"PE[{i}]", -(ttix * vars.EXD.get(i, 0.0)))
+            add(f"EXD[{i}]", -(ttix * (vars.PE.get(i, 0.0) + margin_sum)))
+            for ij in self.sets.get("I", []):
+                add(f"PC[{ij}]", -(ttix * self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0) * vars.EXD.get(i, 0.0)))
+            return result
+
+        if constraint_name == "EQ43":
+            add("SG", 1.0)
+            add("YG", -1.0)
+            add("G", 1.0)
+            for agng in self.sets.get("AGNG", []):
+                add(f"TR[{agng},gvt]", 1.0)
+            return result
+
+        if constraint_name == "EQ44":
+            add("YROW", 1.0)
+            import_term = 0.0
+            for i in self.sets.get("I", []):
+                if abs(self.equations.params.get("IMO0", {}).get(i, 0.0)) <= 1e-12:
+                    continue
+                import_term += vars.PWM.get(i, 0.0) * vars.IM.get(i, 0.0)
+                add(f"PWM[{i}]", -(vars.e * vars.IM.get(i, 0.0)))
+                add(f"IM[{i}]", -(vars.e * vars.PWM.get(i, 0.0)))
+            add("e", -import_term)
+            for k in self.sets.get("K", []):
+                lam = self.equations.params.get("lambda_RK", {}).get(("row", k), 0.0)
+                if lam == 0:
+                    continue
+                for j in self.sets.get("J", []):
+                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                        continue
+                    add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
+                    add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
+            for agd in self.sets.get("AGD", []):
+                add(f"TR[row,{agd}]", -1.0)
+            return result
+
+        if constraint_name == "EQ45":
+            add("SROW", 1.0)
+            add("YROW", -1.0)
+            for i in self.sets.get("I", []):
+                if abs(self.equations.params.get("EXDO0", {}).get(i, 0.0)) <= 1e-12:
+                    continue
+                add(f"PE_FOB[{i}]", vars.EXD.get(i, 0.0))
+                add(f"EXD[{i}]", vars.PE_FOB.get(i, 0.0))
+            for agd in self.sets.get("AGD", []):
+                add(f"TR[{agd},row]", 1.0)
+            return result
+
+        if constraint_name == "EQ46":
+            add("SROW", 1.0)
+            add("CAB", 1.0)
+            return result
+
+        if constraint_name.startswith("EQ47_"):
+            _, agng, h = constraint_name.split("_", 2)
+            lam = self.equations.params.get("lambda_TR_households", {}).get((agng, h), 0.0)
+            add(f"TR[{agng},{h}]", 1.0)
+            add(f"YDH[{h}]", -lam)
+            return result
+
+        if constraint_name.startswith("EQ48_"):
+            h = constraint_name.split("_", 1)[1]
+            eta = self.equations.params.get("eta", 0.0)
+            tr0 = self.equations.params.get("tr0", {}).get(h, 0.0)
+            tr1 = self.equations.params.get("tr1", {}).get(h, 0.0)
+            add(f"TR[gvt,{h}]", 1.0)
+            add(f"YH[{h}]", -tr1)
+            if eta != 0 and vars.PIXCON > 0 and tr0 != 0:
+                add("PIXCON", -(eta * tr0 * (vars.PIXCON ** (eta - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ49_"):
+            _, ag, f = constraint_name.split("_", 2)
+            lam = self.equations.params.get("lambda_TR_firms", {}).get((ag, f), 0.0)
+            add(f"TR[{ag},{f}]", 1.0)
+            add(f"YDF[{f}]", -lam)
+            return result
+
+        if constraint_name.startswith("EQ50_"):
+            agng = constraint_name.split("_", 1)[1]
+            eta = self.equations.params.get("eta", 0.0)
+            tro = self.equations.params.get("TRO", {}).get((agng, "gvt"), 0.0)
+            add(f"TR[{agng},gvt]", 1.0)
+            if eta != 0 and vars.PIXCON > 0 and tro != 0:
+                add("PIXCON", -(eta * tro * (vars.PIXCON ** (eta - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ51_"):
+            agd = constraint_name.split("_", 1)[1]
+            eta = self.equations.params.get("eta", 0.0)
+            tro = self.equations.params.get("TRO", {}).get((agd, "row"), 0.0)
+            add(f"TR[{agd},row]", 1.0)
+            if eta != 0 and vars.PIXCON > 0 and tro != 0:
+                add("PIXCON", -(eta * tro * (vars.PIXCON ** (eta - 1.0))))
+            return result
+
         if constraint_name == "EQ53":
             add("GFCF", 1.0)
             add("IT", -1.0)
