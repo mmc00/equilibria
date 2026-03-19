@@ -16,6 +16,7 @@ documentos de entrada recomendados:
 - guia del gate de escenarios PEP: `docs/guides/pep_core_scenarios_gate.md`
 - guia de api de simulaciones: `docs/guides/simulations_api.md`
 - guia de contrato/config de PEP: `docs/guides/pep_contract_api.md`
+- guia de modos de Jacobiano en PEP: `docs/guides/pep_jacobian_modes.md`
 - capa generica de contratos/runtime: importar desde `equilibria` o `equilibria.contracts`
 - segundo ejemplo sobre la capa base: `equilibria.templates.SimpleOpenEconomy`
 - hallazgo estructural cri: `docs/findings/finding_sam_ieem_vs_sam_pep.md`
