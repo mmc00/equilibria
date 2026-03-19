@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from equilibria.solver.transforms import pep_array_to_variables
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
 from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorDynamic,
@@ -314,6 +315,45 @@ def test_constraint_harness_uses_analytic_eq95_derivatives() -> None:
     assert observed["G_REAL"] == pytest.approx(1.0 / scale)
     assert observed["G"] == pytest.approx(-(1.0 / pixgvt) / scale)
     assert observed["PIXGVT"] == pytest.approx((vars0.G / (pixgvt ** 2)) / scale)
+
+
+def test_constraint_harness_scales_analytic_eq79_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    q_idx = names.index("Q[agr]")
+    x_scaled = x0.copy()
+    x_scaled[q_idx] = x_scaled[q_idx] * 5.0 + 10.0
+
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x_scaled),
+        hard_constraints=["EQ79_agr"],
+        variable_names=names,
+        sparsity_reference_x=x_scaled,
+    )
+
+    harness.evaluate_constraints(x_scaled)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x_scaled)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    vars_scaled = pep_array_to_variables(x_scaled, solver.sets)
+
+    assert rows.tolist() == [0, 0, 0, 0, 0, 0]
+    assert set(observed) == {"PC[agr]", "Q[agr]", "PM[agr]", "IM[agr]", "PD[agr]", "DD[agr]"}
+    assert observed["PC[agr]"] == pytest.approx(vars_scaled.Q["agr"] / scale)
+    assert observed["Q[agr]"] == pytest.approx(vars_scaled.PC["agr"] / scale)
+    assert observed["PM[agr]"] == pytest.approx(-vars_scaled.IM["agr"] / scale)
+    assert observed["IM[agr]"] == pytest.approx(-vars_scaled.PM["agr"] / scale)
+    assert observed["PD[agr]"] == pytest.approx(-vars_scaled.DD["agr"] / scale)
+    assert observed["DD[agr]"] == pytest.approx(-vars_scaled.PD["agr"] / scale)
 
 
 def test_ipopt_builds_structural_closure_validation_report() -> None:
