@@ -27,6 +27,14 @@ class ConstraintJacobianStats:
 
 
 @dataclass
+class ConstraintJacobianSolverStats(ConstraintJacobianStats):
+    """Jacobian stats extended with solve-level timing counters."""
+
+    wall_time_seconds: float = 0.0
+    objective_eval_count: int = 0
+
+
+@dataclass
 class ConstraintJacobianStructure:
     """Cached sparse row/column structure for one harness instance."""
 
