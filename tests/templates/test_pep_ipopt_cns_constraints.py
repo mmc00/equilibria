@@ -429,6 +429,42 @@ def test_constraint_harness_uses_analytic_eq63_derivatives() -> None:
     assert observed["DD[agr]"] == pytest.approx(-(coeff * (1.0 - beta_m) * (dd_i ** (-rho_m - 1.0))) / scale)
 
 
+def test_constraint_harness_uses_analytic_eq3_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ3_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    rho_va = solver.equations.params.get("rho_VA", {}).get("agr", -1.0)
+    beta_va = solver.equations.params.get("beta_VA", {}).get("agr", 0.5)
+    b_va = solver.equations.params.get("B_VA", {}).get("agr", 1.0)
+    ldc_j = vars0.LDC["agr"]
+    kdc_j = vars0.KDC["agr"]
+    term = beta_va * (ldc_j ** (-rho_va)) + (1.0 - beta_va) * (kdc_j ** (-rho_va))
+    coeff = b_va * (term ** ((-1.0 / rho_va) - 1.0))
+
+    assert set(observed) == {"VA[agr]", "LDC[agr]", "KDC[agr]"}
+    assert observed["VA[agr]"] == pytest.approx(1.0 / scale)
+    assert observed["LDC[agr]"] == pytest.approx(-(coeff * beta_va * (ldc_j ** (-rho_va - 1.0))) / scale)
+    assert observed["KDC[agr]"] == pytest.approx(-(coeff * (1.0 - beta_va) * (kdc_j ** (-rho_va - 1.0))) / scale)
+
+
 def test_ipopt_builds_structural_closure_validation_report() -> None:
     state = _build_dynamic_sam_excel()
     solver = IPOPTSolver(state, config="default_ipopt")

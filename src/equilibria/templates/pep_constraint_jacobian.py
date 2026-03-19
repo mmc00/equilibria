@@ -164,6 +164,148 @@ class PEPConstraintJacobianHarness:
                 return
             result[idx] = result.get(idx, 0.0) + float(value)
 
+        if constraint_name.startswith("EQ1_"):
+            j = constraint_name.split("_", 1)[1]
+            v_j = self.equations.params.get("v", {}).get(j, 0.0)
+            add(f"VA[{j}]", 1.0)
+            add(f"XST[{j}]", -v_j)
+            return result
+
+        if constraint_name.startswith("EQ2_"):
+            j = constraint_name.split("_", 1)[1]
+            io_j = self.equations.params.get("io", {}).get(j, 0.0)
+            add(f"CI[{j}]", 1.0)
+            add(f"XST[{j}]", -io_j)
+            return result
+
+        if constraint_name.startswith("EQ3_"):
+            j = constraint_name.split("_", 1)[1]
+            rho_va = self.equations.params.get("rho_VA", {}).get(j, -1.0)
+            beta_va = self.equations.params.get("beta_VA", {}).get(j, 0.5)
+            b_va = self.equations.params.get("B_VA", {}).get(j, 1.0)
+            ldc_j = vars.LDC.get(j, 0.0)
+            kdc_j = vars.KDC.get(j, 0.0)
+            if rho_va == 0 or b_va <= 0 or ldc_j <= 0 or kdc_j <= 0:
+                return None
+            term = beta_va * (ldc_j ** (-rho_va)) + (1.0 - beta_va) * (kdc_j ** (-rho_va))
+            if term <= 0:
+                return None
+            coeff = b_va * (term ** ((-1.0 / rho_va) - 1.0))
+            add(f"VA[{j}]", 1.0)
+            add(f"LDC[{j}]", -(coeff * beta_va * (ldc_j ** (-rho_va - 1.0))))
+            add(f"KDC[{j}]", -(coeff * (1.0 - beta_va) * (kdc_j ** (-rho_va - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ4_"):
+            j = constraint_name.split("_", 1)[1]
+            sigma_va = self.equations.params.get("sigma_VA", {}).get(j, 1.0)
+            beta_va = self.equations.params.get("beta_VA", {}).get(j, 0.5)
+            rc_j = vars.RC.get(j, 0.0)
+            wc_j = vars.WC.get(j, 0.0)
+            kdc_j = vars.KDC.get(j, 0.0)
+            if not (0.0 < beta_va < 1.0):
+                return result
+            if rc_j <= 0 or wc_j <= 0:
+                return None
+            ratio = ((beta_va / (1.0 - beta_va)) * (rc_j / wc_j)) ** sigma_va
+            expected_ldc = ratio * kdc_j
+            add(f"LDC[{j}]", 1.0)
+            add(f"KDC[{j}]", -ratio)
+            add(f"RC[{j}]", -(expected_ldc * sigma_va / rc_j))
+            add(f"WC[{j}]", expected_ldc * sigma_va / wc_j)
+            return result
+
+        if constraint_name.startswith("EQ5_"):
+            j = constraint_name.split("_", 1)[1]
+            rho_ld = self.equations.params.get("rho_LD", {}).get(j, 0.0)
+            b_ld = self.equations.params.get("B_LD", {}).get(j, 1.0)
+            if rho_ld == 0 or b_ld <= 0:
+                return None
+            term = 0.0
+            active: list[tuple[str, float, float]] = []
+            for l in self.sets.get("L", []):
+                beta_ld = self.equations.params.get("beta_LD", {}).get((l, j), 0.0)
+                ld_lj = vars.LD.get((l, j), 0.0)
+                if ld_lj <= 0 or beta_ld <= 0:
+                    continue
+                active.append((l, beta_ld, ld_lj))
+                term += beta_ld * (ld_lj ** (-rho_ld))
+            if term <= 0:
+                return None
+            coeff = b_ld * (term ** ((-1.0 / rho_ld) - 1.0))
+            add(f"LDC[{j}]", 1.0)
+            for l, beta_ld, ld_lj in active:
+                add(f"LD[{l},{j}]", -(coeff * beta_ld * (ld_lj ** (-rho_ld - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ6_"):
+            _, l, j = constraint_name.split("_", 2)
+            sigma_ld = self.equations.params.get("sigma_LD", {}).get(j, 1.0)
+            beta_ld = self.equations.params.get("beta_LD", {}).get((l, j), 0.0)
+            b_ld = self.equations.params.get("B_LD", {}).get(j, 1.0)
+            wti_lj = vars.WTI.get((l, j), 0.0)
+            wc_j = vars.WC.get(j, 0.0)
+            ldc_j = vars.LDC.get(j, 0.0)
+            if b_ld <= 0 or wti_lj <= 0 or wc_j <= 0 or beta_ld <= 0:
+                return None
+            alloc = (beta_ld * wc_j / wti_lj) ** sigma_ld * (b_ld ** (sigma_ld - 1.0))
+            expected_ld = alloc * ldc_j
+            add(f"LD[{l},{j}]", 1.0)
+            add(f"LDC[{j}]", -alloc)
+            add(f"WC[{j}]", -(expected_ld * sigma_ld / wc_j))
+            add(f"WTI[{l},{j}]", expected_ld * sigma_ld / wti_lj)
+            return result
+
+        if constraint_name.startswith("EQ7_"):
+            j = constraint_name.split("_", 1)[1]
+            rho_kd = self.equations.params.get("rho_KD", {}).get(j, 0.0)
+            b_kd = self.equations.params.get("B_KD", {}).get(j, 1.0)
+            if rho_kd == 0 or b_kd <= 0:
+                return None
+            term = 0.0
+            active: list[tuple[str, float, float]] = []
+            for k in self.sets.get("K", []):
+                if self.equations.params.get("KDO0", {}).get((k, j), 0.0) == 0:
+                    continue
+                beta_kd = self.equations.params.get("beta_KD", {}).get((k, j), 0.0)
+                kd_kj = vars.KD.get((k, j), 0.0)
+                if kd_kj <= 0 or beta_kd <= 0:
+                    continue
+                active.append((k, beta_kd, kd_kj))
+                term += beta_kd * (kd_kj ** (-rho_kd))
+            if term <= 0:
+                return None
+            coeff = b_kd * (term ** ((-1.0 / rho_kd) - 1.0))
+            add(f"KDC[{j}]", 1.0)
+            for k, beta_kd, kd_kj in active:
+                add(f"KD[{k},{j}]", -(coeff * beta_kd * (kd_kj ** (-rho_kd - 1.0))))
+            return result
+
+        if constraint_name.startswith("EQ8_"):
+            _, k, j = constraint_name.split("_", 2)
+            sigma_kd = self.equations.params.get("sigma_KD", {}).get(j, 1.0)
+            beta_kd = self.equations.params.get("beta_KD", {}).get((k, j), 0.0)
+            b_kd = self.equations.params.get("B_KD", {}).get(j, 1.0)
+            rti_kj = vars.RTI.get((k, j), 0.0)
+            rc_j = vars.RC.get(j, 0.0)
+            kdc_j = vars.KDC.get(j, 0.0)
+            if b_kd <= 0 or rti_kj <= 0 or rc_j <= 0 or beta_kd <= 0:
+                return None
+            alloc = (beta_kd * rc_j / rti_kj) ** sigma_kd * (b_kd ** (sigma_kd - 1.0))
+            expected_kd = alloc * kdc_j
+            add(f"KD[{k},{j}]", 1.0)
+            add(f"KDC[{j}]", -alloc)
+            add(f"RC[{j}]", -(expected_kd * sigma_kd / rc_j))
+            add(f"RTI[{k},{j}]", expected_kd * sigma_kd / rti_kj)
+            return result
+
+        if constraint_name.startswith("EQ9_"):
+            _, i, j = constraint_name.split("_", 2)
+            aij = self.equations.params.get("aij", {}).get((i, j), 0.0)
+            add(f"DI[{i},{j}]", 1.0)
+            add(f"CI[{j}]", -aij)
+            return result
+
         if constraint_name == "EQ53":
             add("GFCF", 1.0)
             add("IT", -1.0)
