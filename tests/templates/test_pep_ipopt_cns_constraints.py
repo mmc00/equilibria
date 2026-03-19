@@ -15,6 +15,7 @@ from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorExcelDynamicSAM,
 )
 from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
+from equilibria.templates.pep_constraint_jacobian import PEPConstraintJacobianHarness
 from equilibria.templates.pep_model_solver_ipopt import CGEProblem, IPOPTSolver
 
 
@@ -201,6 +202,54 @@ def test_ipopt_problem_uses_constant_feasibility_objective() -> None:
     assert problem.objective(x0) == 0.0
     np.testing.assert_allclose(problem.gradient(x0), np.zeros_like(x0))
     assert np.isfinite(problem.jacobian(x0)).all()
+
+
+def test_constraint_harness_preserves_declared_order_and_scaling() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    hard = solver._build_hard_constraints()[:4]
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=hard,
+    )
+
+    residual_dict = solver.equations.calculate_all_residuals(vars0)
+    raw = np.array([residual_dict[name] for name in hard], dtype=float)
+    expected = raw / np.maximum(np.abs(raw), 1.0)
+
+    np.testing.assert_allclose(harness.evaluate_constraints(x0), expected)
+    assert harness.constraint_names == tuple(hard)
+
+
+def test_constraint_harness_reports_dense_row_major_structure() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    hard = solver._build_hard_constraints()[:3]
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=hard,
+    )
+
+    rows, cols = harness.jacobian_structure()
+
+    assert rows.shape == cols.shape
+    assert len(rows) == len(hard) * len(x0)
+    np.testing.assert_array_equal(rows[: len(x0)], np.zeros(len(x0), dtype=int))
+    np.testing.assert_array_equal(cols[: len(x0)], np.arange(len(x0), dtype=int))
+    np.testing.assert_array_equal(
+        rows[-len(x0) :],
+        np.full(len(x0), len(hard) - 1, dtype=int),
+    )
 
 
 def test_ipopt_builds_structural_closure_validation_report() -> None:
