@@ -92,6 +92,7 @@ def test_build_pep_runtime_config_default_and_parity_presets() -> None:
 
     assert isinstance(default_cfg, PEPRuntimeConfig)
     assert default_cfg.problem_type == "nlp"
+    assert default_cfg.jacobian_mode == "analytic"
     assert default_cfg.reference.enabled is False
 
     assert parity_cfg.reference.enabled is True
@@ -99,6 +100,13 @@ def test_build_pep_runtime_config_default_and_parity_presets() -> None:
     assert parity_cfg.reference.model_type == "nlp"
     assert parity_cfg.reference.solver == "ipopt"
     assert parity_cfg.reference.slice == "sim1"
+
+
+def test_build_pep_runtime_config_accepts_numeric_jacobian_override() -> None:
+    cfg = build_pep_runtime_config({"jacobian_mode": "numeric"})
+
+    assert isinstance(cfg, PEPRuntimeConfig)
+    assert cfg.jacobian_mode == "numeric"
 
 
 def test_build_pep_contract_accepts_all_active_masks() -> None:

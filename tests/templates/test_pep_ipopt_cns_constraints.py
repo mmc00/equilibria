@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from equilibria.solver.transforms import pep_array_to_variables
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
 from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorDynamic,
@@ -15,6 +16,7 @@ from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorExcelDynamicSAM,
 )
 from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
+from equilibria.templates.pep_constraint_jacobian import PEPConstraintJacobianHarness
 from equilibria.templates.pep_model_solver_ipopt import CGEProblem, IPOPTSolver
 
 
@@ -201,6 +203,389 @@ def test_ipopt_problem_uses_constant_feasibility_objective() -> None:
     assert problem.objective(x0) == 0.0
     np.testing.assert_allclose(problem.gradient(x0), np.zeros_like(x0))
     assert np.isfinite(problem.jacobian(x0)).all()
+
+
+def test_constraint_harness_preserves_declared_order_and_scaling() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    hard = solver._build_hard_constraints()[:4]
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=hard,
+    )
+
+    residual_dict = solver.equations.calculate_all_residuals(vars0)
+    raw = np.array([residual_dict[name] for name in hard], dtype=float)
+    expected = raw / np.maximum(np.abs(raw), 1.0)
+
+    np.testing.assert_allclose(harness.evaluate_constraints(x0), expected)
+    assert harness.constraint_names == tuple(hard)
+
+
+def test_constraint_harness_reports_dense_row_major_structure() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    hard = solver._build_hard_constraints()
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=hard,
+        sparsity_reference_x=x0,
+    )
+
+    rows, cols = harness.jacobian_structure()
+    rows2, cols2 = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+
+    assert rows.shape == cols.shape
+    assert values.shape == rows.shape
+    assert len(rows) < len(hard) * len(x0)
+    np.testing.assert_array_equal(rows, rows2)
+    np.testing.assert_array_equal(cols, cols2)
+    assert np.all(rows[:-1] <= rows[1:])
+
+
+def test_constraint_harness_uses_analytic_eq66_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ66_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    assert rows.tolist() == [0, 0]
+
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    ttip = solver.equations.params.get("ttip", {}).get("agr", 0.0)
+
+    assert set(observed) == {"PT[agr]", "PP[agr]"}
+    assert observed["PT[agr]"] == pytest.approx(1.0 / scale)
+    assert observed["PP[agr]"] == pytest.approx(-(1.0 + ttip) / scale)
+    assert harness.finite_difference_eval_count == 0
+
+
+def test_constraint_harness_numeric_mode_uses_finite_differences_for_eq66() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1, config={"jacobian_mode": "numeric"})
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ66_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+        jacobian_mode="numeric",
+    )
+
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+
+    assert rows.tolist() == [0, 0]
+    assert values.shape == rows.shape
+    assert harness.finite_difference_eval_count > 0
+
+
+def test_ipopt_solver_reports_jacobian_stats() -> None:
+    state = _build_base_gdx()
+    solver = IPOPTSolver(state, tolerance=1e-8, max_iterations=300, config={"jacobian_mode": "analytic"})
+
+    result = solver.solve_ipopt()
+
+    assert result.converged is True
+    assert isinstance(result.solver_stats, dict)
+    assert result.solver_stats["jacobian_mode"] == "analytic"
+    assert result.solver_stats["wall_time_seconds"] >= 0.0
+
+
+def test_constraint_harness_uses_analytic_eq95_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ95"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    assert rows.tolist() == [0, 0, 0]
+
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    pixgvt = vars0.PIXGVT
+
+    assert set(observed) == {"G_REAL", "G", "PIXGVT"}
+    assert observed["G_REAL"] == pytest.approx(1.0 / scale)
+    assert observed["G"] == pytest.approx(-(1.0 / pixgvt) / scale)
+    assert observed["PIXGVT"] == pytest.approx((vars0.G / (pixgvt ** 2)) / scale)
+
+
+def test_constraint_harness_scales_analytic_eq79_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+
+    q_idx = names.index("Q[agr]")
+    x_scaled = x0.copy()
+    x_scaled[q_idx] = x_scaled[q_idx] * 5.0 + 10.0
+
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x_scaled),
+        hard_constraints=["EQ79_agr"],
+        variable_names=names,
+        sparsity_reference_x=x_scaled,
+    )
+
+    harness.evaluate_constraints(x_scaled)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x_scaled)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    vars_scaled = pep_array_to_variables(x_scaled, solver.sets)
+
+    assert rows.tolist() == [0, 0, 0, 0, 0, 0]
+    assert set(observed) == {"PC[agr]", "Q[agr]", "PM[agr]", "IM[agr]", "PD[agr]", "DD[agr]"}
+    assert observed["PC[agr]"] == pytest.approx(vars_scaled.Q["agr"] / scale)
+    assert observed["Q[agr]"] == pytest.approx(vars_scaled.PC["agr"] / scale)
+    assert observed["PM[agr]"] == pytest.approx(-vars_scaled.IM["agr"] / scale)
+    assert observed["IM[agr]"] == pytest.approx(-vars_scaled.PM["agr"] / scale)
+    assert observed["PD[agr]"] == pytest.approx(-vars_scaled.DD["agr"] / scale)
+    assert observed["DD[agr]"] == pytest.approx(-vars_scaled.PD["agr"] / scale)
+
+
+def test_constraint_harness_uses_analytic_eq64_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ64_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    beta_m = solver.equations.params.get("beta_M", {}).get("agr", 0.0)
+    sigma_m = solver.equations.params.get("sigma_M", {}).get("agr", 2.0)
+    pd_i = vars0.PD["agr"]
+    pm_i = vars0.PM["agr"]
+    dd_i = vars0.DD["agr"]
+    alloc = ((beta_m / (1.0 - beta_m)) * (pd_i / pm_i)) ** sigma_m
+    expected_im = alloc * dd_i
+
+    assert set(observed) == {"IM[agr]", "DD[agr]", "PD[agr]", "PM[agr]"}
+    assert observed["IM[agr]"] == pytest.approx(1.0 / scale)
+    assert observed["DD[agr]"] == pytest.approx(-alloc / scale)
+    assert observed["PD[agr]"] == pytest.approx(-(expected_im * sigma_m / pd_i) / scale)
+    assert observed["PM[agr]"] == pytest.approx((expected_im * sigma_m / pm_i) / scale)
+
+
+def test_constraint_harness_uses_analytic_eq63_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ63_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    rho_m = solver.equations.params.get("rho_M", {}).get("agr", -0.5)
+    b_m = solver.equations.params.get("B_M", {}).get("agr", 1.0)
+    beta_m = solver.equations.params.get("beta_M", {}).get("agr", 0.5)
+    im_i = vars0.IM["agr"]
+    dd_i = vars0.DD["agr"]
+    term = beta_m * (im_i ** (-rho_m)) + (1.0 - beta_m) * (dd_i ** (-rho_m))
+    coeff = b_m * (term ** ((-1.0 / rho_m) - 1.0))
+
+    assert set(observed) == {"Q[agr]", "IM[agr]", "DD[agr]"}
+    assert observed["Q[agr]"] == pytest.approx(1.0 / scale)
+    assert observed["IM[agr]"] == pytest.approx(-(coeff * beta_m * (im_i ** (-rho_m - 1.0))) / scale)
+    assert observed["DD[agr]"] == pytest.approx(-(coeff * (1.0 - beta_m) * (dd_i ** (-rho_m - 1.0))) / scale)
+
+
+def test_constraint_harness_uses_analytic_eq3_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ3_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    rho_va = solver.equations.params.get("rho_VA", {}).get("agr", -1.0)
+    beta_va = solver.equations.params.get("beta_VA", {}).get("agr", 0.5)
+    b_va = solver.equations.params.get("B_VA", {}).get("agr", 1.0)
+    ldc_j = vars0.LDC["agr"]
+    kdc_j = vars0.KDC["agr"]
+    term = beta_va * (ldc_j ** (-rho_va)) + (1.0 - beta_va) * (kdc_j ** (-rho_va))
+    coeff = b_va * (term ** ((-1.0 / rho_va) - 1.0))
+
+    assert set(observed) == {"VA[agr]", "LDC[agr]", "KDC[agr]"}
+    assert observed["VA[agr]"] == pytest.approx(1.0 / scale)
+    assert observed["LDC[agr]"] == pytest.approx(-(coeff * beta_va * (ldc_j ** (-rho_va - 1.0))) / scale)
+    assert observed["KDC[agr]"] == pytest.approx(-(coeff * (1.0 - beta_va) * (kdc_j ** (-rho_va - 1.0))) / scale)
+
+
+def test_constraint_harness_uses_analytic_eq41_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ41_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    ttim = solver.equations.params.get("ttim", {}).get("agr", 0.0)
+
+    assert set(observed) == {"TIM[agr]", "e", "PWM[agr]", "IM[agr]"}
+    assert observed["TIM[agr]"] == pytest.approx(1.0 / scale)
+    assert observed["e"] == pytest.approx(-(ttim * vars0.PWM["agr"] * vars0.IM["agr"]) / scale)
+    assert observed["PWM[agr]"] == pytest.approx(-(ttim * vars0.e * vars0.IM["agr"]) / scale)
+    assert observed["IM[agr]"] == pytest.approx(-(ttim * vars0.e * vars0.PWM["agr"]) / scale)
+
+
+def test_constraint_harness_uses_analytic_eq52_derivatives() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ52_agr_hrp"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+    )
+
+    harness.evaluate_constraints(x0)
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    scale = float(harness._constraint_scale[0])
+    gamma = solver.equations.params.get("gamma_LES", {}).get(("agr", "hrp"), 0.0)
+
+    assert observed["C[agr,hrp]"] == pytest.approx(vars0.PC["agr"] / scale)
+    assert observed["CTH[hrp]"] == pytest.approx(-gamma / scale)
+    assert observed["PC[agr]"] == pytest.approx((vars0.C[("agr", "hrp")] + (gamma - 1.0) * vars0.CMIN[("agr", "hrp")]) / scale)
+    assert observed["CMIN[agr,hrp]"] == pytest.approx(((gamma - 1.0) * vars0.PC["agr"]) / scale)
+
+
+def test_constraint_harness_covers_all_hard_constraints_for_default_benchmark() -> None:
+    state = _build_base_gdx()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1)
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    hard = solver._build_hard_constraints()
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=hard,
+        variable_names=solver._last_bound_names,
+        sparsity_reference_x=x0,
+    )
+
+    vars_bench = pep_array_to_variables(x0, solver.sets)
+    missing = [name for name in hard if harness._analytic_constraint_derivatives(name, vars_bench) is None]
+
+    assert missing == []
 
 
 def test_ipopt_builds_structural_closure_validation_report() -> None:

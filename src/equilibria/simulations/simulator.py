@@ -180,6 +180,7 @@ class Simulator:
                 "iterations": int(solution.iterations),
                 "final_residual": float(solution.final_residual),
                 "message": str(solution.message),
+                "solver_stats": getattr(solution, "solver_stats", None),
                 "key_indicators": self.adapter.key_indicators(solution.variables),
             },
             "validation": validation,

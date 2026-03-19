@@ -27,6 +27,7 @@ class PEPRuntimeConfig(ModelRuntimeConfig):
     name: str = "default_ipopt"
     problem_type: Literal["nlp", "cns"] = "nlp"
     solver: str = "ipopt"
+    jacobian_mode: Literal["analytic", "numeric"] = "analytic"
     tolerance: float = 1e-8
     max_iterations: int = 300
     require_solver_success: bool = True

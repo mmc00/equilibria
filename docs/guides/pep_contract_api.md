@@ -139,6 +139,7 @@ No cambia el modelo economico; cambia la ejecucion:
 
 - `solver`
 - `problem_type`
+- `jacobian_mode`
 - `tolerance`
 - `max_iterations`
 - `reference`
@@ -153,6 +154,7 @@ sim = PepSimulator(
     config={
         "solver": "ipopt",
         "problem_type": "nlp",
+        "jacobian_mode": "analytic",
         "tolerance": 1e-8,
         "max_iterations": 300,
         "reference": {
