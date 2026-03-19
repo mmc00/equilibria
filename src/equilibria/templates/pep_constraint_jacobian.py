@@ -164,6 +164,125 @@ class PEPConstraintJacobianHarness:
                 return
             result[idx] = result.get(idx, 0.0) + float(value)
 
+        if constraint_name == "EQ53":
+            add("GFCF", 1.0)
+            add("IT", -1.0)
+            for i in self.sets.get("I", []):
+                add(f"PC[{i}]", vars.VSTK.get(i, 0.0))
+                add(f"VSTK[{i}]", vars.PC.get(i, 0.0))
+            return result
+
+        if constraint_name.startswith("EQ54_"):
+            i = constraint_name.split("_", 1)[1]
+            gamma_inv = self.equations.params.get("gamma_INV", {}).get(i, 0.0)
+            add(f"PC[{i}]", vars.INV.get(i, 0.0))
+            add(f"INV[{i}]", vars.PC.get(i, 0.0))
+            add("GFCF", -gamma_inv)
+            return result
+
+        if constraint_name.startswith("EQ55_"):
+            i = constraint_name.split("_", 1)[1]
+            gamma_gvt = self.equations.params.get("gamma_GVT", {}).get(i, 0.0)
+            add(f"PC[{i}]", vars.CG.get(i, 0.0))
+            add(f"CG[{i}]", vars.PC.get(i, 0.0))
+            add("G", -gamma_gvt)
+            return result
+
+        if constraint_name.startswith("EQ56_"):
+            i = constraint_name.split("_", 1)[1]
+            add(f"DIT[{i}]", 1.0)
+            for j in self.sets.get("J", []):
+                add(f"DI[{i},{j}]", -1.0)
+            return result
+
+        if constraint_name.startswith("EQ57_"):
+            i = constraint_name.split("_", 1)[1]
+            add(f"MRGN[{i}]", 1.0)
+            for ij in self.sets.get("I", []):
+                tmrg = self.equations.params.get("tmrg", {}).get((i, ij), 0.0)
+                if abs(self.equations.params.get("DDO0", {}).get(ij, 0.0)) > 1e-12:
+                    add(f"DD[{ij}]", -tmrg)
+                if abs(self.equations.params.get("IMO0", {}).get(ij, 0.0)) > 1e-12:
+                    add(f"IM[{ij}]", -tmrg)
+                if abs(self.equations.params.get("EXDO0", {}).get(ij, 0.0)) > 1e-12:
+                    tmrg_x = self.equations.params.get("tmrg_X", {}).get((i, ij), 0.0)
+                    add(f"EXD[{ij}]", -tmrg_x)
+            return result
+
+        if constraint_name.startswith("EQ59_"):
+            _, j, i = constraint_name.split("_", 2)
+            sigma_xt = self.equations.params.get("sigma_XT", {}).get(j, 2.0)
+            b_xt = self.equations.params.get("B_XT", {}).get(j, 1.0)
+            beta_xt = self.equations.params.get("beta_XT", {}).get((j, i), 0.0)
+            pt_j = vars.PT.get(j, 0.0)
+            p_ji = vars.P.get((j, i), 0.0)
+            xst_j = vars.XST.get(j, 0.0)
+            if b_xt <= 0 or beta_xt <= 0 or pt_j <= 0 or p_ji <= 0:
+                return None
+            ratio = p_ji / (beta_xt * pt_j)
+            scale_factor = (ratio ** sigma_xt) / (b_xt ** (1.0 + sigma_xt))
+            expected_xs = xst_j * scale_factor
+            add(f"XS[{j},{i}]", 1.0)
+            add(f"XST[{j}]", -scale_factor)
+            add(f"P[{j},{i}]", -(expected_xs * sigma_xt / p_ji))
+            add(f"PT[{j}]", expected_xs * sigma_xt / pt_j)
+            return result
+
+        if constraint_name.startswith("EQ61_"):
+            _, j, i = constraint_name.split("_", 2)
+            beta_x = self.equations.params.get("beta_X", {}).get((j, i), 0.0)
+            sigma_x = self.equations.params.get("sigma_X", {}).get((j, i), 2.0)
+            pe_i = vars.PE.get(i, 0.0)
+            pl_i = vars.PL.get(i, 0.0)
+            ds_ji = vars.DS.get((j, i), 0.0)
+            if beta_x <= 0 or beta_x >= 1 or pe_i <= 0 or pl_i <= 0:
+                return None
+            ratio_factor = ((1.0 - beta_x) / beta_x) * (pe_i / pl_i)
+            if ratio_factor <= 0:
+                return None
+            alloc = ratio_factor ** sigma_x
+            expected_ex = alloc * ds_ji
+            add(f"EX[{j},{i}]", 1.0)
+            add(f"DS[{j},{i}]", -alloc)
+            add(f"PE[{i}]", -(expected_ex * sigma_x / pe_i))
+            add(f"PL[{i}]", expected_ex * sigma_x / pl_i)
+            return result
+
+        if constraint_name.startswith("EQ62_"):
+            i = constraint_name.split("_", 1)[1]
+            sigma_xd = self.equations.params.get("sigma_XD", {}).get(i, 1.0)
+            exdo = self.equations.params.get("EXDO", {}).get(i, 0.0)
+            pwx_i = vars.PWX.get(i, self.equations.params.get("PWX", {}).get(i, vars.PWM.get(i, 1.0)))
+            pe_fob_i = vars.PE_FOB.get(i, 0.0)
+            if abs(exdo) <= 1e-12 or pwx_i <= 0 or pe_fob_i <= 0 or vars.e <= 0:
+                return None
+            expected_exd = exdo * ((vars.e * pwx_i) / pe_fob_i) ** sigma_xd
+            add(f"EXD[{i}]", 1.0)
+            add("e", -(expected_exd * sigma_xd / vars.e))
+            add(f"PWX[{i}]", -(expected_exd * sigma_xd / pwx_i))
+            add(f"PE_FOB[{i}]", expected_exd * sigma_xd / pe_fob_i)
+            return result
+
+        if constraint_name.startswith("EQ64_"):
+            i = constraint_name.split("_", 1)[1]
+            beta_m = self.equations.params.get("beta_M", {}).get(i, 0.0)
+            sigma_m = self.equations.params.get("sigma_M", {}).get(i, 2.0)
+            pd_i = vars.PD.get(i, 0.0)
+            pm_i = vars.PM.get(i, 0.0)
+            dd_i = vars.DD.get(i, 0.0)
+            if beta_m <= 0 or beta_m >= 1 or pd_i <= 0 or pm_i <= 0:
+                return None
+            ratio_factor = (beta_m / (1.0 - beta_m)) * (pd_i / pm_i)
+            if ratio_factor <= 0:
+                return None
+            alloc = ratio_factor ** sigma_m
+            expected_im = alloc * dd_i
+            add(f"IM[{i}]", 1.0)
+            add(f"DD[{i}]", -alloc)
+            add(f"PD[{i}]", -(expected_im * sigma_m / pd_i))
+            add(f"PM[{i}]", expected_im * sigma_m / pm_i)
+            return result
+
         if constraint_name.startswith("EQ66_"):
             j = constraint_name.split("_", 1)[1]
             ttip = self.equations.params.get("ttip", {}).get(j, 0.0)
