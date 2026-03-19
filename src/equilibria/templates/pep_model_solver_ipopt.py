@@ -25,6 +25,7 @@ import copy
 import re
 import shutil
 import subprocess
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Tuple
@@ -89,6 +90,7 @@ class CGEProblem:
         variable_names: list[str] | None = None,
         residual_weights: dict[str, float] | None = None,
         hard_constraints: list[str] | None = None,
+        jacobian_mode: str = "analytic",
     ):
         """Initialize the CGE optimization problem.
         
@@ -115,6 +117,7 @@ class CGEProblem:
             hard_constraints=self.hard_constraints,
             variable_names=variable_names,
             sparsity_reference_x=None,
+            jacobian_mode=jacobian_mode,
         )
         
     def objective(self, x: np.ndarray) -> float:
@@ -2610,6 +2613,18 @@ class IPOPTSolver:
                 effective_contract=self.contract.model_dump(mode="python"),
                 effective_config=self.runtime_config.model_dump(mode="python"),
                 closure_validation=closure_report.model_dump(mode="python"),
+                solver_stats={
+                    "jacobian_mode": self.runtime_config.jacobian_mode,
+                    "constraint_eval_count": 0,
+                    "jacobian_eval_count": 0,
+                    "structure_eval_count": 0,
+                    "finite_difference_eval_count": 0,
+                    "jacobian_nonzero_count": 0,
+                    "hard_constraint_count": 0,
+                    "variable_count": 0,
+                    "wall_time_seconds": 0.0,
+                    "objective_eval_count": 0,
+                },
             )
         
         hard_constraints = self._build_hard_constraints()
@@ -2627,6 +2642,7 @@ class IPOPTSolver:
                 variable_names=variable_names,
                 residual_weights=self._build_residual_weights(),
                 hard_constraints=hard_constraints,
+                jacobian_mode=self.runtime_config.jacobian_mode,
             )
             problem_ctx.constraint_harness.sparsity_reference_x = np.array(x_ref, dtype=float)
 
@@ -2651,10 +2667,8 @@ class IPOPTSolver:
 
             return problem_ctx, IPOPTProblem(problem_ctx), lb_ctx, ub_ctx
 
-        problem, ipopt_problem, lb, ub = _build_problem_context(x0)
-
         # Configure IPOPT options using cyipopt API
-        n_constraints = len(problem.hard_constraints)
+        n_constraints = len(hard_constraints)
         cl = np.zeros(n_constraints)
         cu = np.zeros(n_constraints)
 
@@ -2757,6 +2771,7 @@ class IPOPTSolver:
             start_x: np.ndarray,
             pass1_warm_start: bool,
         ) -> dict[str, Any]:
+            cycle_started_at = time.perf_counter()
             problem_ctx, ipopt_problem_ctx, lb_ctx, ub_ctx = _build_problem_context(x0)
 
             logger.info("Starting IPOPT optimization (pass 1)...")
@@ -2794,6 +2809,11 @@ class IPOPTSolver:
                 if _candidate_better(candidate2, best):
                     best = candidate2
 
+            best["solver_stats"] = {
+                **problem_ctx.constraint_harness.stats(),
+                "wall_time_seconds": float(time.perf_counter() - cycle_started_at),
+                "objective_eval_count": int(problem_ctx.n_evaluations),
+            }
             return best
 
         logger.info("IPOPT options configured")
@@ -2817,13 +2837,23 @@ class IPOPTSolver:
             result.effective_contract = self.contract.model_dump(mode="python")
             result.effective_config = self.runtime_config.model_dump(mode="python")
             result.closure_validation = closure_report.model_dump(mode="python")
+            result.solver_stats = dict(best_candidate.get("solver_stats", {}))
 
             logger.info("IPOPT info keys: %s", sorted(info_best.keys()))
             logger.info(f"IPOPT finished: {result.message}")
             logger.info(f"  Status: {info_best.get('status')}")
             logger.info(f"  Iterations: {result.iterations}")
             logger.info(f"  Final objective: {info_best.get('obj_val', 0):.2e}")
-            logger.info(f"  Function evaluations: {problem.n_evaluations}")
+            logger.info(
+                "  Jacobian mode: %s",
+                result.solver_stats.get("jacobian_mode") if result.solver_stats else self.runtime_config.jacobian_mode,
+            )
+            logger.info(
+                "  Constraint evals: %s, Jacobian evals: %s, FD evals: %s",
+                result.solver_stats.get("constraint_eval_count") if result.solver_stats else 0,
+                result.solver_stats.get("jacobian_eval_count") if result.solver_stats else 0,
+                result.solver_stats.get("finite_difference_eval_count") if result.solver_stats else 0,
+            )
 
             return result
 
@@ -2834,6 +2864,7 @@ class IPOPTSolver:
             result.effective_contract = self.contract.model_dump(mode="python")
             result.effective_config = self.runtime_config.model_dump(mode="python")
             result.closure_validation = self.last_closure_validation_report
+            result.solver_stats = {"jacobian_mode": self.runtime_config.jacobian_mode}
             return result
     
     def solve(self, method: str = "auto") -> SolverResult:

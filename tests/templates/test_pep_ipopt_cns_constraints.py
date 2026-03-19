@@ -283,6 +283,45 @@ def test_constraint_harness_uses_analytic_eq66_derivatives() -> None:
     assert set(observed) == {"PT[agr]", "PP[agr]"}
     assert observed["PT[agr]"] == pytest.approx(1.0 / scale)
     assert observed["PP[agr]"] == pytest.approx(-(1.0 + ttip) / scale)
+    assert harness.finite_difference_eval_count == 0
+
+
+def test_constraint_harness_numeric_mode_uses_finite_differences_for_eq66() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1, config={"jacobian_mode": "numeric"})
+
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    harness = PEPConstraintJacobianHarness(
+        equations=solver.equations,
+        sets=solver.sets,
+        n_variables=len(x0),
+        hard_constraints=["EQ66_agr"],
+        variable_names=names,
+        sparsity_reference_x=x0,
+        jacobian_mode="numeric",
+    )
+
+    rows, cols = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
+
+    assert rows.tolist() == [0, 0]
+    assert values.shape == rows.shape
+    assert harness.finite_difference_eval_count > 0
+
+
+def test_ipopt_solver_reports_jacobian_stats() -> None:
+    state = _build_base_gdx()
+    solver = IPOPTSolver(state, tolerance=1e-8, max_iterations=300, config={"jacobian_mode": "analytic"})
+
+    result = solver.solve_ipopt()
+
+    assert result.converged is True
+    assert isinstance(result.solver_stats, dict)
+    assert result.solver_stats["jacobian_mode"] == "analytic"
+    assert result.solver_stats["wall_time_seconds"] >= 0.0
 
 
 def test_constraint_harness_uses_analytic_eq95_derivatives() -> None:
