@@ -45,6 +45,20 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--import-shock-multiplier", type=float, default=1.25)
     parser.add_argument("--export-tax-multiplier", type=float, default=0.75)
     parser.add_argument("--government-spending-multiplier", type=float, default=1.2)
+    parser.add_argument(
+        "--gate",
+        action="store_true",
+        help=(
+            "Fail if analytic mode uses finite differences, if either mode stops converging, "
+            "or if analytic parity is worse than numeric parity."
+        ),
+    )
+    parser.add_argument(
+        "--max-analytic-fd-evals",
+        type=int,
+        default=0,
+        help="Maximum allowed finite-difference evaluations in analytic mode when --gate is enabled.",
+    )
     parser.add_argument("--save-report", type=Path, default=None)
     return parser
 
@@ -174,6 +188,52 @@ def _compare_modes(
     return out
 
 
+def _evaluate_gate(
+    report: dict[str, Any],
+    *,
+    max_analytic_fd_evals: int,
+) -> dict[str, Any]:
+    failures: list[str] = []
+    for scenario_name, payload in report["mode_comparison"].items():
+        analytic = payload["analytic"]
+        numeric = payload["numeric"]
+        analytic_stats = dict(analytic.get("solver_stats") or {})
+        numeric_stats = dict(numeric.get("solver_stats") or {})
+
+        if not bool(analytic["converged"]):
+            failures.append(f"{scenario_name}: analytic solve did not converge")
+        if not bool(numeric["converged"]):
+            failures.append(f"{scenario_name}: numeric solve did not converge")
+
+        analytic_fd = int(analytic_stats.get("finite_difference_eval_count", 0))
+        if analytic_fd > int(max_analytic_fd_evals):
+            failures.append(
+                f"{scenario_name}: analytic finite_difference_eval_count={analytic_fd} exceeds {max_analytic_fd_evals}"
+            )
+
+        analytic_cmp = analytic.get("comparison")
+        numeric_cmp = numeric.get("comparison")
+        if isinstance(analytic_cmp, dict) and isinstance(numeric_cmp, dict):
+            if bool(analytic_cmp["passed"]) is False and bool(numeric_cmp["passed"]) is True:
+                failures.append(
+                    f"{scenario_name}: analytic parity failed while numeric parity passed"
+                )
+            if int(analytic_cmp["mismatches"]) > int(numeric_cmp["mismatches"]):
+                failures.append(
+                    f"{scenario_name}: analytic mismatches={analytic_cmp['mismatches']} worse than numeric={numeric_cmp['mismatches']}"
+                )
+            if int(analytic_cmp["missing"]) > int(numeric_cmp["missing"]):
+                failures.append(
+                    f"{scenario_name}: analytic missing={analytic_cmp['missing']} worse than numeric={numeric_cmp['missing']}"
+                )
+
+    return {
+        "passed": not failures,
+        "max_analytic_fd_evals": int(max_analytic_fd_evals),
+        "failures": failures,
+    }
+
+
 def _print_summary(report: dict[str, Any]) -> None:
     print("=" * 92)
     print("PEP JACOBIAN MODE BENCHMARK")
@@ -276,16 +336,28 @@ def main() -> int:
             "dynamic_sets": bool(not args.no_dynamic_sets),
             "sam_qa_mode": args.sam_qa_mode,
             "cri_fix_mode": args.cri_fix_mode,
+            "gate": bool(args.gate),
+            "max_analytic_fd_evals": int(args.max_analytic_fd_evals),
         },
         "analytic": per_mode["analytic"],
         "numeric": per_mode["numeric"],
         "mode_comparison": _compare_modes(per_mode["analytic"], per_mode["numeric"]),
     }
+    report["gate"] = _evaluate_gate(
+        report,
+        max_analytic_fd_evals=args.max_analytic_fd_evals,
+    )
 
     _print_summary(report)
+    if args.gate and not bool(report["gate"]["passed"]):
+        print("GATE FAILURES:")
+        for failure in report["gate"]["failures"]:
+            print(f"  - {failure}")
     if args.save_report is not None:
         args.save_report.parent.mkdir(parents=True, exist_ok=True)
         args.save_report.write_text(json.dumps(report, indent=2, sort_keys=True))
+    if args.gate and not bool(report["gate"]["passed"]):
+        return 2
     return 0
 
 
