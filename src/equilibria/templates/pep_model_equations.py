@@ -174,6 +174,7 @@ class SolverResult:
     effective_contract: dict[str, Any] | None = None
     effective_config: dict[str, Any] | None = None
     closure_validation: dict[str, Any] | None = None
+    solver_stats: dict[str, Any] | None = None
     
     def summary(self) -> str:
         """Return a text summary of the solution."""
