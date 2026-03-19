@@ -36,6 +36,7 @@ def test_simple_open_contract_builders_default() -> None:
     assert isinstance(runtime_config, SimpleOpenRuntimeConfig)
     assert runtime_config.problem_type == "template"
     assert runtime_config.solver == "none"
+    assert runtime_config.jacobian_mode == "analytic"
     assert runtime_config.reference.enabled is False
 
 

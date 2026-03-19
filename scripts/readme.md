@@ -48,6 +48,10 @@ flujo actual recomendado:
     - convergencia en ambos modos
     - que `analytic` no use diferencias finitas por encima del maximo permitido
     - que la paridad de `analytic` no sea peor que la de `numeric`
+- benchmark/gate no-PEP sobre la misma capa comun de Jacobiano:
+  - `uv run python scripts/parity/measure_simple_open_jacobian_modes.py --gate --save-report output/simple_open_jacobian_modes.json`
+  - corre dos closures (`simple_open_default`, `flexible_external_balance`)
+  - valida que `analytic` use `0` diferencias finitas y que no sea peor que `numeric` contra la referencia analitica
 *transformar SAM ahora usa el pipeline manual registrado en `scripts/sam_tools/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
 
 policy:

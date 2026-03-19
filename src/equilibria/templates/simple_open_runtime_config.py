@@ -27,6 +27,7 @@ class SimpleOpenRuntimeConfig(ModelRuntimeConfig):
     name: str = "default_template"
     problem_type: Literal["template"] = "template"
     solver: Literal["none"] = "none"
+    jacobian_mode: Literal["analytic", "numeric"] = "analytic"
     tolerance: float = 1e-8
     max_iterations: int = 1
     require_solver_success: bool = False

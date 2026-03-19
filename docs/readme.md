@@ -19,6 +19,7 @@ documentos de entrada recomendados:
 - guia de modos de Jacobiano en PEP: `docs/guides/pep_jacobian_modes.md`
 - capa generica de contratos/runtime: importar desde `equilibria` o `equilibria.contracts`
 - segundo ejemplo sobre la capa base: `equilibria.templates.SimpleOpenEconomy`
+- segundo benchmark/gate sobre la capa comun de Jacobiano: `scripts/parity/measure_simple_open_jacobian_modes.py`
 - hallazgo estructural cri: `docs/findings/finding_sam_ieem_vs_sam_pep.md`
 - plan de estabilizacion: `docs/plans/equilibria_structural_stabilization_plan_2026-02-19.md`
 
