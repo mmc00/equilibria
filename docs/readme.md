@@ -12,6 +12,7 @@ este directorio se organiza por tipo de contenido:
 documentos de entrada recomendados:
 
 - guia de pipeline de paridad: `docs/guides/pep_systemic_parity_pipeline.md`
+- guia de referencia oficial `GAMS + IPOPT + NLP`: `docs/guides/pep_gams_nlp_reference.md`
 - guia del gate de escenarios PEP: `docs/guides/pep_core_scenarios_gate.md`
 - guia de api de simulaciones: `docs/guides/simulations_api.md`
 - guia de contrato/config de PEP: `docs/guides/pep_contract_api.md`
