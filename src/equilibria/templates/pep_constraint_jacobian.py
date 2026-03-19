@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 
+from equilibria.solver.jacobians import ConstraintJacobianHarness
 from equilibria.solver.transforms import pep_array_to_variables
 from equilibria.templates.pep_model_equations import PEPModelEquations
 
 
-class PEPConstraintJacobianHarness:
+class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
     """Encapsulate hard-constraint values, Jacobian values, and structure.
 
     This keeps IPOPT-facing constraint logic separate from the feasibility NLP
@@ -32,149 +33,23 @@ class PEPConstraintJacobianHarness:
     ) -> None:
         self.equations = equations
         self.sets = sets
-        self.n_variables = int(n_variables)
-        self.constraint_names = tuple(hard_constraints or ())
-        self.variable_names = tuple(variable_names or ())
-        self.variable_index = {name: idx for idx, name in enumerate(self.variable_names)}
-        self.sparsity_reference_x = None if sparsity_reference_x is None else np.array(sparsity_reference_x, dtype=float)
-        self.sparsity_tol = float(sparsity_tol)
-        self.jacobian_mode = str(jacobian_mode).strip().lower()
-        if self.jacobian_mode not in {"analytic", "numeric"}:
-            raise ValueError(f"Unsupported PEP Jacobian mode: {jacobian_mode!r}")
-        self._constraint_scale: np.ndarray | None = None
-        self._rows: np.ndarray | None = None
-        self._cols: np.ndarray | None = None
-        self.constraint_eval_count = 0
-        self.jacobian_eval_count = 0
-        self.structure_eval_count = 0
-        self.finite_difference_eval_count = 0
-
-    def evaluate_constraints(self, x: np.ndarray) -> np.ndarray:
-        """Return scaled hard-constraint residuals in declared order."""
-        self.constraint_eval_count += 1
-        if not self.constraint_names:
-            return np.array([], dtype=float)
-
-        residual_dict = self.equations.calculate_all_residuals(pep_array_to_variables(x, self.sets))
-        residuals = np.array(
-            [residual_dict.get(eq, 0.0) for eq in self.constraint_names],
-            dtype=float,
+        super().__init__(
+            n_variables=n_variables,
+            constraint_names=hard_constraints,
+            variable_names=variable_names,
+            sparsity_reference_x=sparsity_reference_x,
+            sparsity_tol=sparsity_tol,
+            jacobian_mode=jacobian_mode,
         )
-        if self._constraint_scale is None:
-            self._constraint_scale = np.maximum(np.abs(residuals), 1.0)
-        return residuals / self._constraint_scale
 
-    def evaluate_jacobian_values(self, x: np.ndarray) -> np.ndarray:
-        """Return Jacobian values aligned with the cached sparse structure."""
-        self.jacobian_eval_count += 1
-        rows, cols = self.jacobian_structure()
-        m = len(self.constraint_names)
-        n = len(x)
-        if m == 0 or len(rows) == 0:
-            return np.array([], dtype=float)
+    def _build_context(self, x: np.ndarray):
+        return pep_array_to_variables(x, self.sets)
 
-        base = self.evaluate_constraints(x)
-        vars = pep_array_to_variables(x, self.sets)
-        jac = np.zeros((m, n), dtype=float)
-        analytic_rows: set[int] = set()
-        if self.jacobian_mode == "analytic":
-            for row, name in enumerate(self.constraint_names):
-                analytic = self._analytic_constraint_derivatives(name, vars)
-                if analytic is None:
-                    continue
-                analytic_rows.add(row)
-                scale = float(self._constraint_scale[row]) if self._constraint_scale is not None else 1.0
-                for col, value in analytic.items():
-                    jac[row, col] = value / scale
-
-        numeric_rows = tuple(row for row in range(m) if row not in analytic_rows)
-        if numeric_rows:
-            fd_eps = np.sqrt(np.finfo(float).eps)
-            for i in range(n):
-                step = max(1e-8, fd_eps * max(abs(float(x[i])), 1.0))
-                x_plus = x.copy()
-                x_plus[i] += step
-                self.finite_difference_eval_count += 1
-                c_plus = self.evaluate_constraints(x_plus)
-                delta = (c_plus - base) / step
-                for row in numeric_rows:
-                    jac[row, i] = delta[row]
-        return jac[rows, cols]
-
-    def jacobian_structure(self) -> tuple[np.ndarray, np.ndarray]:
-        """Return sparse row/column indices for the current constraint set."""
-        if self._rows is not None and self._cols is not None:
-            return self._rows, self._cols
-        self.structure_eval_count += 1
-
-        m = len(self.constraint_names)
-        n = self.n_variables
-        if m == 0:
-            return np.array([], dtype=int), np.array([], dtype=int)
-
-        if self.sparsity_reference_x is None:
-            rows = np.repeat(np.arange(m, dtype=int), n)
-            cols = np.tile(np.arange(n, dtype=int), m)
-            self._rows, self._cols = rows, cols
-            return rows, cols
-
-        base = self.evaluate_constraints(self.sparsity_reference_x)
-        vars = pep_array_to_variables(self.sparsity_reference_x, self.sets)
-        fd_eps = np.sqrt(np.finfo(float).eps)
-        pairs: set[tuple[int, int]] = set()
-        analytic_rows: set[int] = set()
-        if self.jacobian_mode == "analytic":
-            for row, name in enumerate(self.constraint_names):
-                analytic = self._analytic_constraint_derivatives(name, vars)
-                if analytic is None:
-                    continue
-                analytic_rows.add(row)
-                for col in analytic:
-                    pairs.add((int(row), int(col)))
-
-        numeric_rows = tuple(row for row in range(m) if row not in analytic_rows)
-        if numeric_rows:
-            for col in range(n):
-                step = max(1e-8, fd_eps * max(abs(float(self.sparsity_reference_x[col])), 1.0))
-                x_plus = self.sparsity_reference_x.copy()
-                x_plus[col] += step
-                self.finite_difference_eval_count += 1
-                c_plus = self.evaluate_constraints(x_plus)
-                delta = (c_plus - base) / step
-                hit_rows = np.flatnonzero(np.abs(delta) > self.sparsity_tol)
-                for row in hit_rows.tolist():
-                    if row not in numeric_rows:
-                        continue
-                    pairs.add((int(row), int(col)))
-
-        if not pairs:
-            rows = np.repeat(np.arange(m, dtype=int), n)
-            cols = np.tile(np.arange(n, dtype=int), m)
-            self._rows, self._cols = rows, cols
-            return rows, cols
-
-        ordered_pairs = sorted(pairs)
-        rows = np.array([row for row, _ in ordered_pairs], dtype=int)
-        cols = np.array([col for _, col in ordered_pairs], dtype=int)
-        self._rows, self._cols = rows, cols
-        return rows, cols
-
-    def stats(self) -> dict[str, int | str]:
-        """Return lightweight Jacobian/constraint evaluation counters."""
-        rows, _ = self.jacobian_structure()
-        return {
-            "jacobian_mode": self.jacobian_mode,
-            "constraint_eval_count": int(self.constraint_eval_count),
-            "jacobian_eval_count": int(self.jacobian_eval_count),
-            "structure_eval_count": int(self.structure_eval_count),
-            "finite_difference_eval_count": int(self.finite_difference_eval_count),
-            "jacobian_nonzero_count": int(len(rows)),
-            "hard_constraint_count": int(len(self.constraint_names)),
-            "variable_count": int(self.n_variables),
-        }
-
-    def _var_idx(self, name: str) -> int | None:
-        return self.variable_index.get(name)
+    def _calculate_constraint_residual_dict(
+        self,
+        context,
+    ) -> Mapping[str, float]:
+        return self.equations.calculate_all_residuals(context)
 
     def _analytic_constraint_derivatives(
         self,
