@@ -232,24 +232,25 @@ def test_constraint_harness_reports_dense_row_major_structure() -> None:
 
     vars0 = solver._create_initial_guess()
     x0 = solver._variables_to_array(vars0)
-    hard = solver._build_hard_constraints()[:3]
+    hard = solver._build_hard_constraints()
     harness = PEPConstraintJacobianHarness(
         equations=solver.equations,
         sets=solver.sets,
         n_variables=len(x0),
         hard_constraints=hard,
+        sparsity_reference_x=x0,
     )
 
     rows, cols = harness.jacobian_structure()
+    rows2, cols2 = harness.jacobian_structure()
+    values = harness.evaluate_jacobian_values(x0)
 
     assert rows.shape == cols.shape
-    assert len(rows) == len(hard) * len(x0)
-    np.testing.assert_array_equal(rows[: len(x0)], np.zeros(len(x0), dtype=int))
-    np.testing.assert_array_equal(cols[: len(x0)], np.arange(len(x0), dtype=int))
-    np.testing.assert_array_equal(
-        rows[-len(x0) :],
-        np.full(len(x0), len(hard) - 1, dtype=int),
-    )
+    assert values.shape == rows.shape
+    assert len(rows) < len(hard) * len(x0)
+    np.testing.assert_array_equal(rows, rows2)
+    np.testing.assert_array_equal(cols, cols2)
+    assert np.all(rows[:-1] <= rows[1:])
 
 
 def test_ipopt_builds_structural_closure_validation_report() -> None:

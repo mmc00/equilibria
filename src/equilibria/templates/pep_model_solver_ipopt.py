@@ -112,6 +112,7 @@ class CGEProblem:
             sets=self.sets,
             n_variables=self.n_variables,
             hard_constraints=self.hard_constraints,
+            sparsity_reference_x=None,
         )
         
     def objective(self, x: np.ndarray) -> float:
@@ -2620,6 +2621,7 @@ class IPOPTSolver:
                 residual_weights=self._build_residual_weights(),
                 hard_constraints=hard_constraints,
             )
+            problem_ctx.constraint_harness.sparsity_reference_x = np.array(x_ref, dtype=float)
             lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=x_ref)
             if len(lb_ctx) != n_vars:
                 raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
