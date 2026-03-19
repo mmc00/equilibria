@@ -20,6 +20,7 @@ __all__ = [
     "SimpleOpenRuntimeConfig",
     "SimpleOpenReferenceConfig",
     "build_simple_open_runtime_config",
+    "SimpleOpenConstraintJacobianHarness",
     "PEPContract",
     "PEPClosureConfig",
     "PEPEquationConfig",
@@ -103,6 +104,13 @@ def __getattr__(name: str) -> Any:
             "SimpleOpenReferenceConfig": SimpleOpenReferenceConfig,
             "build_simple_open_runtime_config": build_simple_open_runtime_config,
         }[name]
+
+    if name == "SimpleOpenConstraintJacobianHarness":
+        from equilibria.templates.simple_open_constraint_jacobian import (
+            SimpleOpenConstraintJacobianHarness,
+        )
+
+        return SimpleOpenConstraintJacobianHarness
 
     if name in {
         "PEPContract",
