@@ -65,6 +65,7 @@ class Simulator:
         compare_rel_tol: float = 1e-6,
         warm_start: bool = True,
         include_base: bool = True,
+        base_reference_slice: str = "base",
     ) -> dict[str, Any]:
         """Solve base + scenarios and optionally compare each run with a GDX reference."""
         if self._base_state is None:
@@ -98,7 +99,7 @@ class Simulator:
                 state=self.adapter.clone_state(self._base_state),
                 initial_vars=None,
                 reference_results_gdx=reference_gdx,
-                reference_slice="base",
+                reference_slice=str(base_reference_slice).strip().lower(),
                 compare_abs_tol=compare_abs_tol,
                 compare_rel_tol=compare_rel_tol,
                 scenario=None,
@@ -225,6 +226,7 @@ def run_scenarios(
     compare_rel_tol: float = 1e-6,
     warm_start: bool = True,
     include_base: bool = True,
+    base_reference_slice: str = "base",
     **model_options: Any,
 ) -> dict[str, Any]:
     """Functional sugar over :class:`Simulator`."""
@@ -236,4 +238,5 @@ def run_scenarios(
         compare_rel_tol=compare_rel_tol,
         warm_start=warm_start,
         include_base=include_base,
+        base_reference_slice=base_reference_slice,
     )
