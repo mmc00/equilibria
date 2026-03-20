@@ -2,6 +2,10 @@
 
 Esta guia resume como controlar y auditar el Jacobiano del solver PEP.
 
+Si lo que quieres es entender la capa comun reutilizable del harness, ver tambien:
+
+- `docs/guides/model_jacobian_harness.md`
+
 ## idea simple
 
 Hoy PEP soporta dos modos:
@@ -126,3 +130,19 @@ uv run python scripts/parity/measure_pep_jacobian_modes.py \
   - diagnostico
   - regresion
   - comparacion contra cambios del harness
+
+## relacion con la capa comun
+
+PEP ya no carga solo con una implementacion ad hoc.
+
+Hoy PEP consume:
+
+- el harness base comun
+- la capa comun de `solver_stats`
+- la capa comun de reporting/gate
+
+Por eso, cuando el cambio toca la infraestructura comun, conviene correr tambien:
+
+```bash
+uv run python scripts/parity/measure_simple_open_jacobian_modes.py --gate
+```
