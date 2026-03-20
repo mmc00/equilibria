@@ -80,9 +80,9 @@ equations
 
 eq_va..
     VA =e=
-        power(
-            alpha_va * power(ER, rho_va)
-          + (1 - alpha_va) * power(PFX, rho_va),
+        rPower(
+            alpha_va * rPower(ER, rho_va)
+          + (1 - alpha_va) * rPower(PFX, rho_va),
             1 / rho_va
         );
 
@@ -91,9 +91,9 @@ eq_int..
 
 eq_cet..
     X =e=
-        power(
-            theta_cet * power(D, phi_cet)
-          + (1 - theta_cet) * power(E * ER / PFX, phi_cet),
+        rPower(
+            theta_cet * rPower(D, phi_cet)
+          + (1 - theta_cet) * rPower(E * ER / PFX, phi_cet),
             1 / phi_cet
         );
 
@@ -116,8 +116,8 @@ PFX.fx  = PFX0;
 CAB.fx  = CAB0;
 FSAV.fx = FSAV0;
 
-VA.l   = power(alpha_va * power(ER0, rho_va) + (1 - alpha_va) * power(PFX0, rho_va), 1 / rho_va);
-X.l    = power(theta_cet * power(D0, phi_cet) + (1 - theta_cet) * power(E0 * ER0 / PFX0, phi_cet), 1 / phi_cet);
+VA.l   = rPower(alpha_va * rPower(ER0, rho_va) + (1 - alpha_va) * rPower(PFX0, rho_va), 1 / rho_va);
+X.l    = rPower(theta_cet * rPower(D0, phi_cet) + (1 - theta_cet) * rPower(E0 * ER0 / PFX0, phi_cet), 1 / phi_cet);
 INT.l  = a_int * X.l + b_ext * (CAB0 - FSAV0);
 D.l    = D0;
 E.l    = E0;
@@ -137,8 +137,8 @@ parameter
     residual(eqn)    post-solve residuals
     calib(*)         benchmark parameters and metadata;
 
-benchmark("VA")   = power(alpha_va * power(ER0, rho_va) + (1 - alpha_va) * power(PFX0, rho_va), 1 / rho_va);
-benchmark("X")    = power(theta_cet * power(D0, phi_cet) + (1 - theta_cet) * power(E0 * ER0 / PFX0, phi_cet), 1 / phi_cet);
+benchmark("VA")   = rPower(alpha_va * rPower(ER0, rho_va) + (1 - alpha_va) * rPower(PFX0, rho_va), 1 / rho_va);
+benchmark("X")    = rPower(theta_cet * rPower(D0, phi_cet) + (1 - theta_cet) * rPower(E0 * ER0 / PFX0, phi_cet), 1 / phi_cet);
 benchmark("INT")  = a_int * benchmark("X") + b_ext * (CAB0 - FSAV0);
 benchmark("D")    = D0;
 benchmark("E")    = E0;
@@ -159,9 +159,9 @@ level("FSAV") = FSAV.l;
 
 residual("EQ_VA") =
     VA.l
-  - power(
-        alpha_va * power(ER.l, rho_va)
-      + (1 - alpha_va) * power(PFX.l, rho_va),
+  - rPower(
+        alpha_va * rPower(ER.l, rho_va)
+      + (1 - alpha_va) * rPower(PFX.l, rho_va),
         1 / rho_va
     );
 
@@ -169,9 +169,9 @@ residual("EQ_INT") = INT.l - (a_int * X.l + b_ext * (CAB.l - FSAV.l));
 
 residual("EQ_CET") =
     X.l
-  - power(
-        theta_cet * power(D.l, phi_cet)
-      + (1 - theta_cet) * power(E.l * ER.l / PFX.l, phi_cet),
+  - rPower(
+        theta_cet * rPower(D.l, phi_cet)
+      + (1 - theta_cet) * rPower(E.l * ER.l / PFX.l, phi_cet),
         1 / phi_cet
     );
 
