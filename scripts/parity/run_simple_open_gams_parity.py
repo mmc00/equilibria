@@ -15,6 +15,9 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from equilibria.templates import (  # noqa: E402
     compare_simple_open_gams_parity,
 )
+from equilibria.baseline import (  # noqa: E402
+    SimpleOpenGAMSReferenceManifest,
+)
 
 DEFAULT_GDX_BY_CLOSURE: dict[str, Path] = {
     "simple_open_default": REPO_ROOT / "output" / "simple_open_v1_benchmark_default.gdx",
@@ -36,6 +39,17 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="CLOSURE=PATH",
         help="Override the GDX path for one closure.",
+    )
+    parser.add_argument(
+        "--reference-manifest",
+        type=Path,
+        default=None,
+        help="Optional official SimpleOpen GAMS reference manifest.",
+    )
+    parser.add_argument(
+        "--require-reference-manifest",
+        action="store_true",
+        help="Fail if the official reference manifest is missing.",
     )
     parser.add_argument(
         "--abs-tol",
@@ -68,6 +82,32 @@ def _resolve_gdx_map(entries: list[str]) -> dict[str, Path]:
             raise ValueError(f"invalid --gdx closure name: {raw!r}")
         gdx_map[name] = Path(raw_path).expanduser().resolve()
     return gdx_map
+
+
+def _load_reference_manifest(
+    path: Path | None,
+    *,
+    required: bool,
+) -> dict[str, Path]:
+    if path is None:
+        if required:
+            raise FileNotFoundError("reference manifest is required")
+        return {}
+    if not path.exists():
+        raise FileNotFoundError(f"reference manifest not found: {path}")
+
+    raw = json.loads(path.read_text())
+    if not isinstance(raw, dict):
+        raise ValueError("reference manifest must be a JSON object")
+
+    if raw.get("schema_version") != "simple_open_gams_reference/v1":
+        raise ValueError("unsupported SimpleOpen reference manifest schema")
+
+    manifest = SimpleOpenGAMSReferenceManifest.model_validate(raw)
+    return {
+        closure: Path(reference.results_gdx.path).resolve()
+        for closure, reference in manifest.closure_references.items()
+    }
 
 
 def _print_entry(name: str, entry: dict[str, Any]) -> None:
@@ -116,8 +156,13 @@ def main() -> int:
     args = _build_parser().parse_args()
     try:
         gdx_map = _resolve_gdx_map(args.gdx)
+        manifest_gdx_map = _load_reference_manifest(
+            args.reference_manifest,
+            required=bool(args.require_reference_manifest),
+        )
+        gdx_map.update(manifest_gdx_map)
     except Exception as exc:
-        print(f"Invalid --gdx override: {exc}")
+        print(f"Invalid reference input: {exc}")
         return 2
 
     closures = tuple(dict.fromkeys(str(item).strip().lower() for item in args.closures if str(item).strip()))
@@ -127,6 +172,9 @@ def main() -> int:
             "abs_tol": float(args.abs_tol),
             "gate": bool(args.gate),
             "closures": list(closures),
+            "reference_manifest": (
+                str(args.reference_manifest.resolve()) if args.reference_manifest else None
+            ),
         },
         "closures": {},
     }
