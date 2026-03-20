@@ -52,6 +52,7 @@ flujo actual recomendado:
   - `uv run python scripts/parity/measure_simple_open_jacobian_modes.py --gate --save-report output/simple_open_jacobian_modes.json`
   - corre dos closures (`simple_open_default`, `flexible_external_balance`)
   - valida que `analytic` use `0` diferencias finitas y que no sea peor que `numeric` contra la referencia analitica
+  - complemento documental: `docs/guides/model_jacobian_harness.md`
 *transformar SAM ahora usa el pipeline manual registrado en `scripts/sam_tools/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
 
 policy:
