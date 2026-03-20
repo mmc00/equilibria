@@ -18,6 +18,7 @@ documentos de entrada recomendados:
 - guia de contrato/config de PEP: `docs/guides/pep_contract_api.md`
 - guia de modos de Jacobiano en PEP: `docs/guides/pep_jacobian_modes.md`
 - guia de la capa comun del Jacobiano: `docs/guides/model_jacobian_harness.md`
+- guia del contrato canonico de SimpleOpen para paridad: `docs/guides/simple_open_parity_contract.md`
 - capa generica de contratos/runtime: importar desde `equilibria` o `equilibria.contracts`
 - segundo ejemplo sobre la capa base: `equilibria.templates.SimpleOpenEconomy`
 - segundo benchmark/gate sobre la capa comun de Jacobiano: `scripts/parity/measure_simple_open_jacobian_modes.py`
