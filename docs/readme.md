@@ -20,6 +20,7 @@ documentos de entrada recomendados:
 - guia de la capa comun del Jacobiano: `docs/guides/model_jacobian_harness.md`
 - guia del contrato canonico de SimpleOpen para paridad: `docs/guides/simple_open_parity_contract.md`
 - guia de mapeo `stdcge -> SimpleOpen`: `docs/guides/simple_open_stdcge_mapping.md`
+- guia de paridad GAMS de SimpleOpen: `docs/guides/simple_open_gams_parity.md`
 - capa generica de contratos/runtime: importar desde `equilibria` o `equilibria.contracts`
 - segundo ejemplo sobre la capa base: `equilibria.templates.SimpleOpenEconomy`
 - segundo benchmark/gate sobre la capa comun de Jacobiano: `scripts/parity/measure_simple_open_jacobian_modes.py`
