@@ -8,6 +8,10 @@ import numpy as np
 
 from equilibria.solver import ConstraintJacobianHarness
 from equilibria.templates.simple_open_contract import SimpleOpenContract
+from equilibria.templates.simple_open_parity_spec import (
+    SimpleOpenParitySpec,
+    build_simple_open_parity_spec,
+)
 
 
 @dataclass(frozen=True)
@@ -43,12 +47,16 @@ class SimpleOpenConstraintJacobianHarness(ConstraintJacobianHarness):
         jacobian_mode: str = "analytic",
     ) -> None:
         self.contract = contract
-        self._params = self._parameter_block(contract.closure.name)
-        self._benchmark_x = self._build_benchmark_point()
+        self.spec: SimpleOpenParitySpec = build_simple_open_parity_spec(contract)
+        self._params = self.spec.benchmark_parameters.model_dump(mode="python")
+        self._benchmark_x = np.array(
+            [self.spec.benchmark_levels[name] for name in self.spec.variable_names],
+            dtype=float,
+        )
         super().__init__(
-            n_variables=len(self.variable_names_default),
-            constraint_names=contract.equations.include,
-            variable_names=self.variable_names_default,
+            n_variables=len(self.spec.variable_names),
+            constraint_names=self.spec.equation_names,
+            variable_names=self.spec.variable_names,
             sparsity_reference_x=self._benchmark_x,
             jacobian_mode=jacobian_mode,
         )
@@ -58,59 +66,6 @@ class SimpleOpenConstraintJacobianHarness(ConstraintJacobianHarness):
         """Return the benchmark point used for the harness reference."""
 
         return np.array(self._benchmark_x, dtype=float)
-
-    @staticmethod
-    def _parameter_block(closure_name: str) -> dict[str, float]:
-        name = str(closure_name).strip().lower()
-        if name == "flexible_external_balance":
-            return {
-                "alpha_va": 0.45,
-                "rho_va": 0.70,
-                "a_int": 0.55,
-                "b_ext": 0.08,
-                "theta_cet": 0.58,
-                "phi_cet": 1.25,
-                "ER": 1.08,
-                "PFX": 1.00,
-                "D": 1.04,
-                "E": 0.93,
-                "CAB": 0.82,
-                "FSAV": 0.82,
-            }
-        return {
-            "alpha_va": 0.40,
-            "rho_va": 0.75,
-            "a_int": 0.50,
-            "b_ext": 0.10,
-            "theta_cet": 0.60,
-            "phi_cet": 1.20,
-            "ER": 1.00,
-            "PFX": 1.00,
-            "D": 1.00,
-            "E": 1.00,
-            "CAB": 1.00,
-            "FSAV": 1.00,
-        }
-
-    def _build_benchmark_point(self) -> np.ndarray:
-        params = self._params
-        er = float(params["ER"])
-        pfx = float(params["PFX"])
-        d = float(params["D"])
-        e = float(params["E"])
-        cab = float(params["CAB"])
-        fsav = float(params["FSAV"])
-        alpha = float(params["alpha_va"])
-        rho = float(params["rho_va"])
-        a_int = float(params["a_int"])
-        b_ext = float(params["b_ext"])
-        theta = float(params["theta_cet"])
-        phi = float(params["phi_cet"])
-
-        va = self._va_target(alpha=alpha, rho=rho, er=er, pfx=pfx)
-        x = self._cet_target(theta=theta, phi=phi, d=d, e=e, er=er, pfx=pfx)
-        int_val = (a_int * x) + (b_ext * (cab - fsav))
-        return np.array([va, int_val, x, d, e, er, pfx, cab, fsav], dtype=float)
 
     @staticmethod
     def _va_target(*, alpha: float, rho: float, er: float, pfx: float) -> float:

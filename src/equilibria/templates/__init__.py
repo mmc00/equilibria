@@ -21,6 +21,9 @@ __all__ = [
     "SimpleOpenReferenceConfig",
     "build_simple_open_runtime_config",
     "SimpleOpenConstraintJacobianHarness",
+    "SimpleOpenBenchmarkParameters",
+    "SimpleOpenParitySpec",
+    "build_simple_open_parity_spec",
     "PEPContract",
     "PEPClosureConfig",
     "PEPEquationConfig",
@@ -111,6 +114,23 @@ def __getattr__(name: str) -> Any:
         )
 
         return SimpleOpenConstraintJacobianHarness
+
+    if name in {
+        "SimpleOpenBenchmarkParameters",
+        "SimpleOpenParitySpec",
+        "build_simple_open_parity_spec",
+    }:
+        from equilibria.templates.simple_open_parity_spec import (
+            SimpleOpenBenchmarkParameters,
+            SimpleOpenParitySpec,
+            build_simple_open_parity_spec,
+        )
+
+        return {
+            "SimpleOpenBenchmarkParameters": SimpleOpenBenchmarkParameters,
+            "SimpleOpenParitySpec": SimpleOpenParitySpec,
+            "build_simple_open_parity_spec": build_simple_open_parity_spec,
+        }[name]
 
     if name in {
         "PEPContract",
