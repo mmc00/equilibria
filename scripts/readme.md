@@ -53,6 +53,11 @@ flujo actual recomendado:
   - corre dos closures (`simple_open_default`, `flexible_external_balance`)
   - valida que `analytic` use `0` diferencias finitas y que no sea peor que `numeric` contra la referencia analitica
   - complemento documental: `docs/guides/model_jacobian_harness.md`
+- paridad GAMS del benchmark canonico de SimpleOpen:
+  - `uv run python scripts/parity/run_simple_open_gams_parity.py --gate --save-report output/simple_open_gams_parity.json`
+  - compara las dos closures canonicas contra sus `.gdx` de GAMS en `output/`
+  - la lectura del `.gdx` usa `equilibria.babel`
+  - complemento documental: `docs/guides/simple_open_gams_parity.md`
 *transformar SAM ahora usa el pipeline manual registrado en `scripts/sam_tools/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
 
 policy:

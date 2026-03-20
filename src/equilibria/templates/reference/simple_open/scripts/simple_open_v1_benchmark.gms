@@ -16,6 +16,7 @@ active_closure("%CLOSURE%") = yes;
 abort$(card(active_closure) <> 1) "Unknown CLOSURE value", "%CLOSURE%";
 
 scalar
+    closure_code
     alpha_va
     rho_va
     a_int
@@ -30,6 +31,7 @@ scalar
     FSAV0;
 
 $ifthen "%CLOSURE%" == "simple_open_default"
+    closure_code = 101;
     alpha_va  = 0.40;
     rho_va    = 0.75;
     a_int     = 0.50;
@@ -43,6 +45,7 @@ $ifthen "%CLOSURE%" == "simple_open_default"
     CAB0      = 1.00;
     FSAV0     = 1.00;
 $elseif "%CLOSURE%" == "flexible_external_balance"
+    closure_code = 202;
     alpha_va  = 0.45;
     rho_va    = 0.70;
     a_int     = 0.55;
@@ -181,6 +184,7 @@ calib("a_int")     = a_int;
 calib("b_ext")     = b_ext;
 calib("theta_cet") = theta_cet;
 calib("phi_cet")   = phi_cet;
+calib("closure_code") = closure_code;
 calib("modelstat") = simple_open_v1_benchmark.modelstat;
 calib("solvestat") = simple_open_v1_benchmark.solvestat;
 calib("obj")       = OBJ.l;

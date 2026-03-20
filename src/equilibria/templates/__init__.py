@@ -24,6 +24,10 @@ __all__ = [
     "SimpleOpenBenchmarkParameters",
     "SimpleOpenParitySpec",
     "build_simple_open_parity_spec",
+    "SimpleOpenGAMSReference",
+    "SimpleOpenParityComparison",
+    "load_simple_open_gams_reference",
+    "compare_simple_open_gams_parity",
     "PEPContract",
     "PEPClosureConfig",
     "PEPEquationConfig",
@@ -130,6 +134,26 @@ def __getattr__(name: str) -> Any:
             "SimpleOpenBenchmarkParameters": SimpleOpenBenchmarkParameters,
             "SimpleOpenParitySpec": SimpleOpenParitySpec,
             "build_simple_open_parity_spec": build_simple_open_parity_spec,
+        }[name]
+
+    if name in {
+        "SimpleOpenGAMSReference",
+        "SimpleOpenParityComparison",
+        "load_simple_open_gams_reference",
+        "compare_simple_open_gams_parity",
+    }:
+        from equilibria.templates.simple_open_parity_pipeline import (
+            SimpleOpenGAMSReference,
+            SimpleOpenParityComparison,
+            compare_simple_open_gams_parity,
+            load_simple_open_gams_reference,
+        )
+
+        return {
+            "SimpleOpenGAMSReference": SimpleOpenGAMSReference,
+            "SimpleOpenParityComparison": SimpleOpenParityComparison,
+            "load_simple_open_gams_reference": load_simple_open_gams_reference,
+            "compare_simple_open_gams_parity": compare_simple_open_gams_parity,
         }[name]
 
     if name in {
