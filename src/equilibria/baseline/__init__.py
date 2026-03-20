@@ -20,6 +20,12 @@ from equilibria.baseline.manifest import (
     file_sha256,
     load_baseline_manifest,
 )
+from equilibria.baseline.simple_open_gams_reference import (
+    SimpleOpenClosureReference,
+    SimpleOpenGAMSReferenceManifest,
+    build_simple_open_gams_reference_manifest,
+    load_simple_open_gams_reference_manifest,
+)
 
 __all__ = [
     "BaselineCompatibilityReport",
@@ -27,8 +33,11 @@ __all__ = [
     "GAMSReferenceArtifact",
     "GAMSScenarioReference",
     "GAMSNLPReferenceManifest",
+    "SimpleOpenClosureReference",
+    "SimpleOpenGAMSReferenceManifest",
     "build_baseline_manifest",
     "build_gams_nlp_reference_manifest",
+    "build_simple_open_gams_reference_manifest",
     "compute_state_anchors",
     "ensure_gams_script_uses_nlp",
     "evaluate_strict_gams_baseline_compatibility",
@@ -36,4 +45,5 @@ __all__ = [
     "file_sha256",
     "load_baseline_manifest",
     "load_gams_nlp_reference_manifest",
+    "load_simple_open_gams_reference_manifest",
 ]

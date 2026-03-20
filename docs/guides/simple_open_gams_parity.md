@@ -18,7 +18,22 @@ La lectura del `.gdx` usa `equilibria.babel`, no `gdxdump`.
 - `simple_open_default`
 - `flexible_external_balance`
 
-## prerequisito
+## referencia oficial
+
+Para generar la referencia oficial:
+
+```bash
+uv run python scripts/parity/generate_simple_open_gams_reference.py \
+  --gams-bin /Library/Frameworks/GAMS.framework/Versions/48/Resources/gams \
+  --output-dir output/simple_open_gams_reference/latest
+```
+
+Eso deja:
+
+- `output/simple_open_gams_reference/latest/manifest.json`
+- un `Results.gdx` por closure bajo `output/simple_open_gams_reference/latest/closures/<closure>/`
+
+## prerequisito minimo
 
 Primero generar los `.gdx` de referencia con GAMS:
 
@@ -34,6 +49,16 @@ Con los artefactos en `output/`:
 
 ```bash
 uv run python scripts/parity/run_simple_open_gams_parity.py --gate --save-report output/simple_open_gams_parity.json
+```
+
+Con el manifest oficial:
+
+```bash
+uv run python scripts/parity/run_simple_open_gams_parity.py \
+  --gate \
+  --reference-manifest output/simple_open_gams_reference/latest/manifest.json \
+  --require-reference-manifest \
+  --save-report output/simple_open_gams_parity_from_manifest.json
 ```
 
 Con rutas explicitas:
@@ -57,5 +82,6 @@ Cada closure debe cumplir:
 ## archivos clave
 
 - [run_simple_open_gams_parity.py](/Users/marmol/proyectos/equilibria/scripts/parity/run_simple_open_gams_parity.py)
+- [generate_simple_open_gams_reference.py](/Users/marmol/proyectos/equilibria/scripts/parity/generate_simple_open_gams_reference.py)
 - [simple_open_parity_pipeline.py](/Users/marmol/proyectos/equilibria/src/equilibria/templates/simple_open_parity_pipeline.py)
 - [simple_open_v1_benchmark.gms](/Users/marmol/proyectos/equilibria/src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms)

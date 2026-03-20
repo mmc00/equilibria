@@ -132,7 +132,7 @@ OBJ.l  = 0;
 
 model simple_open_v1_benchmark / eq_va, eq_int, eq_cet, objdef /;
 
-solve simple_open_v1_benchmark minimizing OBJ using nlp;
+solve simple_open_v1_benchmark using nlp minimizing OBJ;
 
 parameter
     benchmark(var)   canonical benchmark levels

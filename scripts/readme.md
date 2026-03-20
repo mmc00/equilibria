@@ -58,6 +58,10 @@ flujo actual recomendado:
   - compara las dos closures canonicas contra sus `.gdx` de GAMS en `output/`
   - la lectura del `.gdx` usa `equilibria.babel`
   - complemento documental: `docs/guides/simple_open_gams_parity.md`
+- generacion de la referencia oficial GAMS de SimpleOpen:
+  - `uv run python scripts/parity/generate_simple_open_gams_reference.py --gams-bin /Library/Frameworks/GAMS.framework/Versions/48/Resources/gams --output-dir output/simple_open_gams_reference/latest`
+  - deja un `manifest.json` oficial con las dos closures canonicas
+  - el gate puede consumirlo con `--reference-manifest`
 *transformar SAM ahora usa el pipeline manual registrado en `scripts/sam_tools/run_manual_sam_pipeline.py` (ver documentos y ejemplos actualizados).* 
 
 policy:
