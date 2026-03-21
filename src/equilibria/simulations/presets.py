@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 
 from equilibria.simulations.types import Scenario, Shock
@@ -74,15 +75,30 @@ PRESET_BUILDERS: dict[str, Callable[..., Scenario]] = {
 }
 
 
-def available_presets() -> tuple[str, ...]:
-    """Return available built-in scenario preset names."""
-    return tuple(PRESET_BUILDERS.keys())
-
-
-def make_preset(name: str, **kwargs: float | str) -> Scenario:
-    """Build one scenario preset by name."""
+def _build_preset(name: str, **kwargs: float | str) -> Scenario:
     key = name.strip().lower()
     if key not in PRESET_BUILDERS:
         names = ", ".join(sorted(PRESET_BUILDERS))
         raise ValueError(f"Unknown preset '{name}'. Available: {names}")
     return PRESET_BUILDERS[key](**kwargs)
+
+
+def _warn_deprecated_preset_api() -> None:
+    warnings.warn(
+        "`available_presets()` and `make_preset()` are deprecated. "
+        "Use `Simulator.shock()` or construct `Scenario`/`Shock` directly.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+
+def available_presets() -> tuple[str, ...]:
+    """Return available built-in scenario preset names."""
+    _warn_deprecated_preset_api()
+    return tuple(PRESET_BUILDERS.keys())
+
+
+def make_preset(name: str, **kwargs: float | str) -> Scenario:
+    """Build one scenario preset by name."""
+    _warn_deprecated_preset_api()
+    return _build_preset(name, **kwargs)

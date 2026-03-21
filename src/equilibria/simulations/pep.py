@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -25,12 +26,24 @@ class PepSimulator(Simulator):
     @staticmethod
     def available_presets() -> tuple[str, ...]:
         """Return built-in PEP preset names."""
-        return presets.available_presets()
+        warnings.warn(
+            "`PepSimulator.available_presets()` is deprecated. "
+            "Use `available_shocks()` to inspect shockable variables.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return tuple(presets.PRESET_BUILDERS.keys())
 
     @staticmethod
     def make_preset(name: str, **kwargs: float | str) -> Scenario:
         """Build one preset scenario by name."""
-        return presets.make_preset(name, **kwargs)
+        warnings.warn(
+            "`PepSimulator.make_preset()` is deprecated. "
+            "Use `PepSimulator.shock()` or construct `Scenario`/`Shock` directly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return presets._build_preset(name, **kwargs)
 
     def run_preset(
         self,
@@ -44,7 +57,13 @@ class PepSimulator(Simulator):
         **preset_kwargs: float | str,
     ) -> dict[str, Any]:
         """Run one preset scenario selected by name."""
-        scenario = presets.make_preset(name, **preset_kwargs)
+        warnings.warn(
+            "`PepSimulator.run_preset()` is deprecated. "
+            "Use `PepSimulator.run_shock()` or `run_scenarios()` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        scenario = presets._build_preset(name, **preset_kwargs)
         return self.run_scenarios(
             scenarios=[scenario],
             reference_results_gdx=reference_results_gdx,
@@ -65,9 +84,11 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run one standard export-tax scenario."""
-        return self.run_preset(
-            "export_tax",
+        return self.run_shock(
+            var="ttix",
+            index="*",
             multiplier=multiplier,
+            name="export_tax",
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
@@ -87,10 +108,12 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run one-commodity import-price scenario."""
-        return self.run_preset(
-            "import_price",
-            commodity=commodity,
+        commodity_key = commodity.strip().lower()
+        return self.run_shock(
+            var="PWM",
+            index=commodity_key,
             multiplier=multiplier,
+            name=f"import_price_{commodity_key}",
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
@@ -109,9 +132,11 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run all-commodities import-price scenario."""
-        return self.run_preset(
-            "import_shock",
+        return self.run_shock(
+            var="PWM",
+            index="*",
             multiplier=multiplier,
+            name="import_shock",
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,
@@ -130,9 +155,10 @@ class PepSimulator(Simulator):
         include_base: bool = True,
     ) -> dict[str, Any]:
         """Run one government-spending scenario."""
-        return self.run_preset(
-            "government_spending",
+        return self.run_shock(
+            var="G",
             multiplier=multiplier,
+            name="government_spending",
             reference_results_gdx=reference_results_gdx,
             compare_abs_tol=compare_abs_tol,
             compare_rel_tol=compare_rel_tol,

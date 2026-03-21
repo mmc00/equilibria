@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from equilibria.simulations import (
     PepSimulator,
     available_presets,
@@ -38,10 +40,12 @@ def test_import_shock_and_government_spending_presets() -> None:
 
 
 def test_preset_registry_and_make_preset() -> None:
-    names = available_presets()
+    with pytest.warns(DeprecationWarning):
+        names = available_presets()
     assert "export_tax" in names
     assert "import_shock" in names
-    assert make_preset("EXPORT_TAX", multiplier=0.7).name == "export_tax"
+    with pytest.warns(DeprecationWarning):
+        assert make_preset("EXPORT_TAX", multiplier=0.7).name == "export_tax"
 
 
 def test_pep_simulator_wrapper_delegates_to_run_scenarios(monkeypatch: Any) -> None:
@@ -69,11 +73,18 @@ def test_pep_simulator_wrapper_delegates_to_run_scenarios(monkeypatch: Any) -> N
     assert scenarios[0].shocks[0].values == {"*": 0.72}
 
 
+def test_pep_simulator_shock_builds_named_scenario() -> None:
+    sim = PepSimulator()
+
+    scenario = sim.shock(var="PWM", index="agr", multiplier=1.25)
+
+    assert scenario.name == "pwm_agr_x1_25"
+    assert scenario.shocks[0].var == "PWM"
+    assert scenario.shocks[0].values == {"agr": 1.25}
+
+
 def test_pep_simulator_run_preset_validates_name() -> None:
     sim = PepSimulator()
-    try:
-        sim.run_preset("does_not_exist")
-    except ValueError as exc:
-        assert "Unknown preset" in str(exc)
-        return
-    raise AssertionError("Expected ValueError for unknown preset.")
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(ValueError, match="Unknown preset"):
+            sim.run_preset("does_not_exist")
