@@ -42,14 +42,16 @@ report_import_agr = sim.run_import_price(commodity="agr", multiplier=1.25)
 report_gov = sim.run_government_spending(multiplier=1.2)
 ```
 
-Tambien puedes correr presets por nombre:
+Tambien puedes construir shocks directos sin escribir `Scenario(...)` a mano:
 
 ```python
-sim.available_presets()
-# ('export_tax', 'import_price', 'import_shock', 'government_spending')
+sim.available_shocks()
 
-report = sim.run_preset("export_tax", multiplier=0.75)
+scenario = sim.shock(var="ttix", index="*", multiplier=0.75, name="export_tax")
+report = sim.run_shock(var="PWM", index="agr", multiplier=1.25)
 ```
+
+`available_presets()`, `make_preset()` y `run_preset()` siguen existiendo por compatibilidad, pero estan deprecados.
 
 ## escenario export tax (ttix)
 

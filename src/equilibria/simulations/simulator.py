@@ -56,6 +56,107 @@ class Simulator:
         """Return shock catalog exposed by the selected model adapter."""
         return self.adapter.available_shocks()
 
+    def shock(
+        self,
+        *,
+        var: str,
+        index: str | None = None,
+        multiplier: float | None = None,
+        value: float | None = None,
+        op: str = "scale",
+        name: str | None = None,
+        reference_slice: str = "sim1",
+        closure: dict[str, object] | None = None,
+    ) -> Scenario:
+        """Build one scenario from a single low-level shock instruction.
+
+        Use ``index="*"`` to target all members of an indexed variable.
+        When the adapter exposes a shock catalog, this method validates
+        ``var``, ``op`` and the selected ``index`` before constructing the
+        scenario.
+        """
+        normalized_var = var.strip()
+        if not normalized_var:
+            raise ValueError("Shock variable must be non-empty.")
+
+        normalized_op = op.strip().lower()
+        if normalized_op not in {"set", "scale", "add"}:
+            raise ValueError(f"Unsupported shock op '{op}'.")
+
+        shock_value = self._resolve_shock_value(
+            op=normalized_op,
+            multiplier=multiplier,
+            value=value,
+        )
+        definition = self._resolve_shock_definition(normalized_var)
+        if definition is not None:
+            allowed_ops = {item.strip().lower() for item in definition.ops}
+            if normalized_op not in allowed_ops:
+                choices = ", ".join(sorted(definition.ops))
+                raise ValueError(
+                    f"Variable '{definition.var}' does not support op '{op}'. Available: {choices}"
+                )
+        target_index = self._normalize_shock_index(index=index, definition=definition)
+        scenario_name = name if name is not None else self._default_shock_name(
+            var=normalized_var,
+            index=target_index,
+            op=normalized_op,
+            value=shock_value,
+        )
+
+        values: float | dict[str, float]
+        if definition is not None:
+            normalized_var = definition.var
+
+        if target_index is None:
+            values = shock_value
+        else:
+            values = {target_index: shock_value}
+
+        return Scenario(
+            name=scenario_name,
+            shocks=[Shock(var=normalized_var, op=normalized_op, values=values)],
+            reference_slice=reference_slice,
+            closure=closure,
+        )
+
+    def run_shock(
+        self,
+        *,
+        var: str,
+        index: str | None = None,
+        multiplier: float | None = None,
+        value: float | None = None,
+        op: str = "scale",
+        name: str | None = None,
+        reference_slice: str = "sim1",
+        closure: dict[str, object] | None = None,
+        reference_results_gdx: Path | str | None = None,
+        compare_abs_tol: float = 1e-6,
+        compare_rel_tol: float = 1e-6,
+        warm_start: bool = True,
+        include_base: bool = True,
+    ) -> dict[str, Any]:
+        """Build and run a single-shock scenario."""
+        scenario = self.shock(
+            var=var,
+            index=index,
+            multiplier=multiplier,
+            value=value,
+            op=op,
+            name=name,
+            reference_slice=reference_slice,
+            closure=closure,
+        )
+        return self.run_scenarios(
+            scenarios=[scenario],
+            reference_results_gdx=reference_results_gdx,
+            compare_abs_tol=compare_abs_tol,
+            compare_rel_tol=compare_rel_tol,
+            warm_start=warm_start,
+            include_base=include_base,
+        )
+
     def run_scenarios(
         self,
         *,
@@ -204,6 +305,121 @@ class Simulator:
         for scenario in report.get("scenarios", []):
             if isinstance(scenario, dict):
                 scenario.pop("solution_vars", None)
+
+    def _resolve_shock_definition(self, var: str) -> ShockDefinition | None:
+        catalog = self.available_shocks()
+        if not catalog:
+            return None
+
+        key = var.strip().lower()
+        for definition in catalog:
+            if definition.var.strip().lower() == key:
+                return definition
+
+        names = ", ".join(sorted(defn.var for defn in catalog))
+        raise ValueError(
+            f"Variable '{var}' is not shockable for model '{self.model}'. Available: {names}"
+        )
+
+    @staticmethod
+    def _resolve_shock_value(
+        *,
+        op: str,
+        multiplier: float | None,
+        value: float | None,
+    ) -> float:
+        if multiplier is not None and value is not None:
+            raise ValueError("Provide only one of `multiplier` or `value`.")
+
+        if multiplier is not None:
+            if op != "scale":
+                raise ValueError("`multiplier` is only valid when `op='scale'`.")
+            return float(multiplier)
+
+        if value is not None:
+            return float(value)
+
+        if op == "scale":
+            raise ValueError("Scale shocks require `multiplier=` or `value=`.")
+        raise ValueError("Non-scale shocks require `value=`.")
+
+    @staticmethod
+    def _normalize_shock_index(
+        *,
+        index: str | None,
+        definition: ShockDefinition | None,
+    ) -> str | None:
+        if definition is None:
+            if index is None:
+                return None
+            target = index.strip()
+            if not target:
+                raise ValueError("Shock index must be non-empty when provided.")
+            return target
+
+        if definition.kind == "scalar":
+            if index is not None:
+                raise ValueError(
+                    f"Variable '{definition.var}' is scalar and does not accept `index=`."
+                )
+            return None
+
+        if definition.kind != "indexed":
+            raise ValueError(f"Unsupported shock definition kind '{definition.kind}'.")
+
+        if index is None:
+            raise ValueError(
+                f"Variable '{definition.var}' is indexed; provide `index=` or `index='*'`."
+            )
+
+        target = index.strip()
+        if not target:
+            raise ValueError("Shock index must be non-empty.")
+        if target == "*":
+            return target
+
+        members = definition.members
+        if not members:
+            return target
+
+        member_lookup = {member.strip().lower(): member for member in members}
+        member_key = target.lower()
+        if member_key not in member_lookup:
+            choices = ", ".join(sorted(members))
+            raise ValueError(
+                f"Unknown index '{index}' for variable '{definition.var}'. Available: {choices}"
+            )
+        return member_lookup[member_key]
+
+    @staticmethod
+    def _default_shock_name(
+        *,
+        var: str,
+        index: str | None,
+        op: str,
+        value: float,
+    ) -> str:
+        parts = [var.strip().lower()]
+        if index is not None:
+            parts.append("all" if index == "*" else index.strip().lower())
+        parts.append(Simulator._format_shock_suffix(op=op, value=value))
+        return "_".join(part for part in parts if part)
+
+    @staticmethod
+    def _format_shock_suffix(*, op: str, value: float) -> str:
+        formatted = Simulator._format_shock_value(value)
+        if op == "scale":
+            return f"x{formatted}"
+        if op == "set":
+            return f"set_{formatted}"
+        if value >= 0:
+            return f"plus_{formatted}"
+        return f"minus_{Simulator._format_shock_value(abs(value))}"
+
+    @staticmethod
+    def _format_shock_value(value: float) -> str:
+        text = f"{float(value):g}"
+        return text.replace("-", "m").replace(".", "_")
 
     @staticmethod
     def _validate_scenarios(scenarios: list[Scenario]) -> None:

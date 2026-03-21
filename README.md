@@ -362,9 +362,12 @@ sim = PepSimulator(
 
 report = sim.run_export_tax(multiplier=0.75)
 
-# Discover built-in presets
-print(sim.available_presets())
-# ('export_tax', 'import_price', 'import_shock', 'government_spending')
+# Discover shockable variables
+print(sim.available_shocks())
+
+# Build a single-shock scenario without writing Scenario(...) manually
+scenario = sim.shock(var="PWM", index="agr", multiplier=1.25)
+report = sim.run_shock(var="G", multiplier=1.2, name="government_spending")
 ```
 
 More details: `docs/guides/simulations_api.md`

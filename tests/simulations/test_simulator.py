@@ -138,6 +138,39 @@ def test_simulator_fit_and_available_shocks() -> None:
     assert shocks[0].ops == ("set", "scale", "add")
 
 
+def test_simulator_shock_builds_valid_scalar_scenario() -> None:
+    register_adapter("fake", _FakeAdapter)
+    sim = Simulator(model="fake")
+
+    scenario = sim.shock(var="x", multiplier=1.25)
+
+    assert scenario.name == "x_x1_25"
+    assert scenario.shocks[0].var == "X"
+    assert scenario.shocks[0].op == "scale"
+    assert scenario.shocks[0].values == 1.25
+
+
+def test_simulator_shock_validates_scalar_vs_indexed_inputs() -> None:
+    register_adapter("fake", _FakeAdapter)
+    sim = Simulator(model="fake")
+
+    with pytest.raises(ValueError, match="does not accept `index=`"):
+        sim.shock(var="x", index="agr", multiplier=1.1)
+
+    with pytest.raises(ValueError, match="not shockable"):
+        sim.shock(var="does_not_exist", multiplier=1.1)
+
+
+def test_simulator_run_shock_delegates_to_run_scenarios() -> None:
+    register_adapter("fake", _FakeAdapter)
+    sim = Simulator(model="fake")
+
+    report = sim.run_shock(var="x", value=2.0, op="add", include_base=False)
+
+    assert report["scenarios"][0]["name"] == "x_plus_2"
+    assert report["scenarios"][0]["shocks"][0]["values"] == 2.0
+
+
 def test_simulator_run_scenarios_warm_start_and_reference() -> None:
     register_adapter("fake", _FakeAdapter)
     sim = Simulator(model="fake", offset=2.5).fit()
