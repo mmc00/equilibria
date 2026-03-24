@@ -370,7 +370,9 @@ scenario = sim.shock(var="PWM", index="agr", multiplier=1.25)
 report = sim.run_shock(var="G", multiplier=1.2, name="government_spending")
 ```
 
-More details: `docs/guides/simulations_api.md`
+More details:
+- `docs/guides/simulations_api.md`
+- `docs/guides/pep_user_flow_examples.md`
 
 ### PEP BASE vs EXPORT_TAX Parity (Python vs GAMS)
 
