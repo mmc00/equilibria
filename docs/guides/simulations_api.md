@@ -53,6 +53,11 @@ report = sim.run_shock(var="PWM", index="agr", multiplier=1.25)
 
 `available_presets()`, `make_preset()` y `run_preset()` siguen existiendo por compatibilidad, pero estan deprecados.
 
+Si quieres ver como estructurar un flujo de proyecto mas humano
+(`preprocesar SAM` -> `fit()` -> `shocks` -> `report`), revisa tambien:
+
+- `docs/guides/pep_user_flow_examples.md`
+
 ## escenario export tax (ttix)
 
 ```python

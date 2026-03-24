@@ -15,6 +15,7 @@ documentos de entrada recomendados:
 - guia de referencia oficial `GAMS + IPOPT + NLP`: `docs/guides/pep_gams_nlp_reference.md`
 - guia del gate de escenarios PEP: `docs/guides/pep_core_scenarios_gate.md`
 - guia de api de simulaciones: `docs/guides/simulations_api.md`
+- guia de flujos de usuario PEP: `docs/guides/pep_user_flow_examples.md`
 - guia de contrato/config de PEP: `docs/guides/pep_contract_api.md`
 - guia de modos de Jacobiano en PEP: `docs/guides/pep_jacobian_modes.md`
 - guia de la capa comun del Jacobiano: `docs/guides/model_jacobian_harness.md`
