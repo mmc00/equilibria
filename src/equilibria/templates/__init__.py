@@ -72,6 +72,14 @@ __all__ = [
     "GTAPSolver",
     "SolverResult",
     "SolverStatus",
+    # GTAP Parity
+    "GTAPParityComparison",
+    "GTAPParityRunner",
+    "GTAPGAMSReference",
+    "GTAPVariableSnapshot",
+    "compare_gtap_gams_parity",
+    "load_gtap_gams_reference",
+    "run_gtap_parity_test",
 ]
 
 
@@ -379,6 +387,35 @@ def __getattr__(name: str) -> Any:
             "GTAPSolver": GTAPSolver,
             "SolverResult": SolverResult,
             "SolverStatus": SolverStatus,
+        }[name]
+
+    if name in {
+        "GTAPParityComparison",
+        "GTAPParityRunner",
+        "GTAPGAMSReference",
+        "GTAPVariableSnapshot",
+        "compare_gtap_gams_parity",
+        "load_gtap_gams_reference",
+        "run_gtap_parity_test",
+    }:
+        from equilibria.templates.gtap.gtap_parity_pipeline import (
+            GTAPParityComparison,
+            GTAPParityRunner,
+            GTAPGAMSReference,
+            GTAPVariableSnapshot,
+            compare_gtap_gams_parity,
+            load_gtap_gams_reference,
+            run_gtap_parity_test,
+        )
+
+        return {
+            "GTAPParityComparison": GTAPParityComparison,
+            "GTAPParityRunner": GTAPParityRunner,
+            "GTAPGAMSReference": GTAPGAMSReference,
+            "GTAPVariableSnapshot": GTAPVariableSnapshot,
+            "compare_gtap_gams_parity": compare_gtap_gams_parity,
+            "load_gtap_gams_reference": load_gtap_gams_reference,
+            "run_gtap_parity_test": run_gtap_parity_test,
         }[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

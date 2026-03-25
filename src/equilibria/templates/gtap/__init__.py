@@ -52,6 +52,15 @@ from equilibria.templates.gtap.gtap_parameters import (
 )
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult, SolverStatus
+from equilibria.templates.gtap.gtap_parity_pipeline import (
+    GTAPParityComparison,
+    GTAPParityRunner,
+    GTAPGAMSReference,
+    GTAPVariableSnapshot,
+    compare_gtap_gams_parity,
+    load_gtap_gams_reference,
+    run_gtap_parity_test,
+)
 
 __all__ = [
     # Sets
@@ -80,4 +89,13 @@ __all__ = [
     "GTAPSolver",
     "SolverResult",
     "SolverStatus",
+    
+    # Parity
+    "GTAPParityComparison",
+    "GTAPParityRunner",
+    "GTAPGAMSReference",
+    "GTAPVariableSnapshot",
+    "compare_gtap_gams_parity",
+    "load_gtap_gams_reference",
+    "run_gtap_parity_test",
 ]
