@@ -72,7 +72,7 @@ class TestCompareVariableGroups:
         
         assert n_comp == 2
         assert n_mism == 1
-        assert max_diff == 0.001
+        assert max_diff == pytest.approx(0.001, abs=1e-10)
         assert len(mismatches) == 1
         assert mismatches[0]["group"] == "test"
     
