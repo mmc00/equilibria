@@ -263,7 +263,12 @@ class GTAPModelEquations:
         def prf_y_rule(model, r, a):
             """Zero-profit condition for production."""
             # Unit cost = producer price
-            return model.px[r, a] == model.pp[r, a] * (1 + model.rto.get((r, a), 0))
+            # Handle missing tax rates gracefully
+            try:
+                tax_rate = model.rto[r, a]
+            except:
+                tax_rate = 0.0
+            return model.px[r, a] == model.pp[r, a] * (1 + tax_rate)
         
         model.prf_y = Constraint(model.r, model.a, rule=prf_y_rule, doc="Production zero-profit")
         
