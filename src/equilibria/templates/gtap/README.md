@@ -210,6 +210,111 @@ python -m pytest tests/templates/gtap/ --cov=equilibria.templates.gtap
 4. **Scaling**: Automatic scaling of variables and equations
 5. **Bounds**: Economic bounds applied (positive variables, etc.)
 
+## Parity Testing (Python vs GAMS)
+
+The template includes a complete parity testing system to validate Python results against CGEBox GAMS baseline.
+
+### Quick Parity Check
+
+```bash
+# Run parity check comparing Python vs GAMS
+python scripts/gtap/run_gtap_parity.py \
+    --gdx-file data/asa7x5.gdx \
+    --gams-results results/gams_baseline.gdx \
+    --tolerance 1e-6
+```
+
+### Python API
+
+```python
+from equilibria.templates.gtap import run_gtap_parity_test
+
+# Simple parity check
+result = run_gtap_parity_test(
+    gdx_file="data/asa7x5.gdx",
+    gams_results_gdx="results/gams_baseline.gdx",
+    tolerance=1e-6,
+)
+
+if result.passed:
+    print("✓ Parity check passed!")
+else:
+    print(f"✗ {result.n_mismatches} mismatches found")
+    for m in result.mismatches[:5]:
+        print(f"  {m['group']}{m['key']}: diff={m['abs_diff']:.2e}")
+```
+
+### Advanced Parity Testing
+
+```python
+from equilibria.templates.gtap.gtap_parity_pipeline import (
+    GTAPParityRunner,
+    GTAPGAMSReference,
+    compare_gtap_gams_parity,
+)
+
+# Create runner
+runner = GTAPParityRunner(
+    gdx_file="data/asa7x5.gdx",
+    gams_results_gdx="results/gams_baseline.gdx",
+    closure="gtap_standard",
+    tolerance=1e-6,
+)
+
+# Run Python model
+py_result = runner.run_python()
+print(f"Python: {py_result.status}, Walras={py_result.walras_value:.2e}")
+
+# Run parity check
+comparison = runner.run_parity_check()
+print(f"Comparison: {comparison.n_mismatches} mismatches")
+
+# Generate detailed report
+report = runner.generate_report(comparison)
+print(report)
+```
+
+### Parity Results
+
+The parity system compares:
+- **Activity levels**: xp (production), x (output)
+- **Prices**: px, pp, ps, pd, pa, pmt, pet
+- **Trade flows**: xe, xw, xmt, xet
+- **Factor markets**: xf, xft, pf, pft
+- **Demand**: xc, xg, xi
+- **Income**: regy, yc, yg, yi
+- **Indices**: pnum, pabs, walras
+
+### Exit Codes
+
+```bash
+0  # Parity check passed
+1  # Parity check failed (mismatches found)
+2  # Error (missing files, solve failure, etc.)
+```
+
+### Examples
+
+```bash
+# Save report to file
+python scripts/gtap/run_gtap_parity.py \
+    --gdx-file data/asa7x5.gdx \
+    --gams-results results/gams_baseline.gdx \
+    --output parity_report.txt
+
+# Export JSON results
+python scripts/gtap/run_gtap_parity.py \
+    --gdx-file data/asa7x5.gdx \
+    --gams-results results/gams_baseline.gdx \
+    --json-output results.json
+
+# Use different tolerance
+python scripts/gtap/run_gtap_parity.py \
+    --gdx-file data/asa7x5.gdx \
+    --gams-results results/gams_baseline.gdx \
+    --tolerance 1e-8
+```
+
 ## Future Enhancements
 
 - [ ] Melitz module (heterogeneous firms)
@@ -219,6 +324,7 @@ python -m pytest tests/templates/gtap/ --cov=equilibria.templates.gtap
 - [ ] Sub-regional modeling (NUTS2)
 - [ ] Welfare decomposition
 - [ ] Sensitivity analysis
+- [x] GAMS parity testing system
 
 ## License
 
