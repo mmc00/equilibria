@@ -61,16 +61,29 @@ class GTAPVariableSnapshot:
     xp: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a)
     x: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, a, i)
     
-    # Prices
+    # Supply
+    xs: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
+    xds: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
+    
+    # Prices - Production
     px: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a)
     pp: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a)
+    
+    # Prices - Supply
     ps: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
     pd: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
     pa: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
-    pmt: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
-    pet: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
     
-    # Trade
+    # Prices - Trade Import
+    pmt: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
+    pmcif: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp)
+    
+    # Prices - Trade Export
+    pet: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
+    pe: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp)
+    pefob: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp)
+    
+    # Trade Flows
     xe: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp)
     xw: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp)
     xmt: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
@@ -114,30 +127,46 @@ class GTAPVariableSnapshot:
             return result
         
         return cls(
+            # Activity levels
             xp=extract_var(model.xp) if hasattr(model, 'xp') else {},
             x=extract_var(model.x) if hasattr(model, 'x') else {},
+            # Supply
+            xs=extract_var(model.xs) if hasattr(model, 'xs') else {},
+            xds=extract_var(model.xds) if hasattr(model, 'xds') else {},
+            # Production prices
             px=extract_var(model.px) if hasattr(model, 'px') else {},
             pp=extract_var(model.pp) if hasattr(model, 'pp') else {},
+            # Supply prices
             ps=extract_var(model.ps) if hasattr(model, 'ps') else {},
             pd=extract_var(model.pd) if hasattr(model, 'pd') else {},
             pa=extract_var(model.pa) if hasattr(model, 'pa') else {},
+            # Import prices
             pmt=extract_var(model.pmt) if hasattr(model, 'pmt') else {},
+            pmcif=extract_var(model.pmcif) if hasattr(model, 'pmcif') else {},
+            # Export prices
             pet=extract_var(model.pet) if hasattr(model, 'pet') else {},
+            pe=extract_var(model.pe) if hasattr(model, 'pe') else {},
+            pefob=extract_var(model.pefob) if hasattr(model, 'pefob') else {},
+            # Trade flows
             xe=extract_var(model.xe) if hasattr(model, 'xe') else {},
             xw=extract_var(model.xw) if hasattr(model, 'xw') else {},
             xmt=extract_var(model.xmt) if hasattr(model, 'xmt') else {},
             xet=extract_var(model.xet) if hasattr(model, 'xet') else {},
+            # Factors
             xf=extract_var(model.xf) if hasattr(model, 'xf') else {},
             xft=extract_var(model.xft) if hasattr(model, 'xft') else {},
             pf=extract_var(model.pf) if hasattr(model, 'pf') else {},
             pft=extract_var(model.pft) if hasattr(model, 'pft') else {},
+            # Final demand
             xc=extract_var(model.xc) if hasattr(model, 'xc') else {},
             xg=extract_var(model.xg) if hasattr(model, 'xg') else {},
             xi=extract_var(model.xi) if hasattr(model, 'xi') else {},
+            # Income
             regy=extract_var(model.regy) if hasattr(model, 'regy') else {},
             yc=extract_var(model.yc) if hasattr(model, 'yc') else {},
             yg=extract_var(model.yg) if hasattr(model, 'yg') else {},
             yi=extract_var(model.yi) if hasattr(model, 'yi') else {},
+            # Indices
             pnum=float(value(model.pnum)) if hasattr(model, 'pnum') else 1.0,
             pabs=extract_var(model.pabs) if hasattr(model, 'pabs') else {},
             walras=float(value(model.walras)) if hasattr(model, 'walras') else 0.0,
@@ -380,26 +409,46 @@ def compare_gtap_gams_parity(
     max_rel_diff = 0.0
     
     variable_groups = [
+        # Production
         ("xp", py_snapshot.xp, gams_snapshot.xp),
+        ("x", py_snapshot.x, gams_snapshot.x),
         ("px", py_snapshot.px, gams_snapshot.px),
         ("pp", py_snapshot.pp, gams_snapshot.pp),
+        # Supply
+        ("xs", py_snapshot.xs, gams_snapshot.xs),
+        ("xds", py_snapshot.xds, gams_snapshot.xds),
+        # Supply prices
         ("ps", py_snapshot.ps, gams_snapshot.ps),
         ("pd", py_snapshot.pd, gams_snapshot.pd),
         ("pa", py_snapshot.pa, gams_snapshot.pa),
+        # Trade - Import prices
         ("pmt", py_snapshot.pmt, gams_snapshot.pmt),
+        ("pmcif", py_snapshot.pmcif, gams_snapshot.pmcif),
+        # Trade - Export prices
         ("pet", py_snapshot.pet, gams_snapshot.pet),
+        ("pe", py_snapshot.pe, gams_snapshot.pe),
+        ("pefob", py_snapshot.pefob, gams_snapshot.pefob),
+        # Trade flows - Exports
         ("xe", py_snapshot.xe, gams_snapshot.xe),
+        ("xet", py_snapshot.xet, gams_snapshot.xet),
+        # Trade flows - Imports
         ("xw", py_snapshot.xw, gams_snapshot.xw),
         ("xmt", py_snapshot.xmt, gams_snapshot.xmt),
-        ("xet", py_snapshot.xet, gams_snapshot.xet),
+        # Factors
         ("xf", py_snapshot.xf, gams_snapshot.xf),
         ("xft", py_snapshot.xft, gams_snapshot.xft),
         ("pf", py_snapshot.pf, gams_snapshot.pf),
         ("pft", py_snapshot.pft, gams_snapshot.pft),
+        # Final demand
         ("xc", py_snapshot.xc, gams_snapshot.xc),
         ("xg", py_snapshot.xg, gams_snapshot.xg),
         ("xi", py_snapshot.xi, gams_snapshot.xi),
+        # Income
         ("regy", py_snapshot.regy, gams_snapshot.regy),
+        ("yc", py_snapshot.yc, gams_snapshot.yc),
+        ("yg", py_snapshot.yg, gams_snapshot.yg),
+        ("yi", py_snapshot.yi, gams_snapshot.yi),
+        # Price indices
         ("pabs", py_snapshot.pabs, gams_snapshot.pabs),
     ]
     

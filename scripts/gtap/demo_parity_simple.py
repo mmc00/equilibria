@@ -39,8 +39,11 @@ def create_python_results(sets):
     print("Creating Python model results...")
     
     # Initialize all dictionaries
-    xp, px, pp = {}, {}, {}
+    xp, x, px, pp = {}, {}, {}, {}
+    xs, xds = {}, {}
     ps, pd, pa, pmt, pet = {}, {}, {}, {}, {}
+    pmcif, pe, pefob = {}, {}, {}
+    xe, xw, xmt, xet = {}, {}, {}, {}
     xft, pft, xf, pf = {}, {}, {}, {}
     xc, xg, xi = {}, {}, {}
     regy, yc, yg, yi, pabs = {}, {}, {}, {}, {}
@@ -51,15 +54,42 @@ def create_python_results(sets):
             xp[(r, a)] = 1.0
             px[(r, a)] = 1.0
             pp[(r, a)] = 1.0
+            for i in sets.i:
+                x[(r, a, i)] = 1.0
     
-    # Prices
+    # Supply
+    for r in sets.r:
+        for i in sets.i:
+            xs[(r, i)] = 1.0
+            xds[(r, i)] = 1.0
+    
+    # Prices - Supply
     for r in sets.r:
         for i in sets.i:
             ps[(r, i)] = 1.0
             pd[(r, i)] = 1.0
             pa[(r, i)] = 1.0
+            # Import prices
             pmt[(r, i)] = 1.0
+            for rp in sets.r:
+                if r != rp:
+                    pmcif[(r, i, rp)] = 1.0
+            # Export prices
             pet[(r, i)] = 1.0
+            for rp in sets.r:
+                if r != rp:
+                    pe[(r, i, rp)] = 1.0
+                    pefob[(r, i, rp)] = 1.0
+    
+    # Trade flows
+    for r in sets.r:
+        for i in sets.i:
+            xmt[(r, i)] = 1.0
+            xet[(r, i)] = 1.0
+            for rp in sets.r:
+                if r != rp:
+                    xe[(r, i, rp)] = 1.0
+                    xw[(r, i, rp)] = 1.0
     
     # Factors
     for r in sets.r:
@@ -87,17 +117,37 @@ def create_python_results(sets):
     
     # Create snapshot with all values
     py_snap = GTAPVariableSnapshot(
-        xp=xp, px=px, pp=pp,
-        ps=ps, pd=pd, pa=pa, pmt=pmt, pet=pet,
+        # Production
+        xp=xp, x=x, px=px, pp=pp,
+        # Supply
+        xs=xs, xds=xds,
+        # Prices
+        ps=ps, pd=pd, pa=pa, 
+        pmt=pmt, pmcif=pmcif,
+        pet=pet, pe=pe, pefob=pefob,
+        # Trade
+        xe=xe, xet=xet, xw=xw, xmt=xmt,
+        # Factors
         xft=xft, pft=pft, xf=xf, pf=pf,
+        # Demand
         xc=xc, xg=xg, xi=xi,
+        # Income
         regy=regy, yc=yc, yg=yg, yi=yi, pabs=pabs,
+        # Indices
         pnum=1.0,
         walras=1e-12,
     )
     
+    # Count total variables
+    total_vars = (len(xp) + len(x) + len(xs) + len(xds) + 
+                  len(ps) + len(pmt) + len(pmcif) + len(pet) + len(pe) + len(pefob) +
+                  len(xe) + len(xet) + len(xw) + len(xmt) +
+                  len(xf) + len(xft) + len(pf) + len(pft) +
+                  len(xc) + len(xg) + len(xi) +
+                  len(regy) + len(yc) + len(yg) + len(yi) + len(pabs) + 2)  # +2 for pnum, walras
+    
     print("  ✓ Python snapshot created")
-    print(f"  ✓ Variables: {len(xp) + len(ps) + len(xf)}+ indices")
+    print(f"  ✓ Total variables: ~{total_vars}")
     
     return py_snap
 
@@ -122,8 +172,11 @@ def create_gams_results(sets, match_perfectly=True):
         return val * (1 + random.uniform(-noise_factor, noise_factor))
     
     # Initialize all dictionaries
-    xp, px, pp = {}, {}, {}
+    xp, x, px, pp = {}, {}, {}, {}
+    xs, xds = {}, {}
     ps, pd, pa, pmt, pet = {}, {}, {}, {}, {}
+    pmcif, pe, pefob = {}, {}, {}
+    xe, xw, xmt, xet = {}, {}, {}, {}
     xft, pft, xf, pf = {}, {}, {}, {}
     xc, xg, xi = {}, {}, {}
     regy, yc, yg, yi, pabs = {}, {}, {}, {}, {}
@@ -134,15 +187,42 @@ def create_gams_results(sets, match_perfectly=True):
             xp[(r, a)] = add_noise(1.0)
             px[(r, a)] = add_noise(1.0)
             pp[(r, a)] = add_noise(1.0)
+            for i in sets.i:
+                x[(r, a, i)] = add_noise(1.0)
     
-    # Prices
+    # Supply
+    for r in sets.r:
+        for i in sets.i:
+            xs[(r, i)] = add_noise(1.0)
+            xds[(r, i)] = add_noise(1.0)
+    
+    # Prices - Supply
     for r in sets.r:
         for i in sets.i:
             ps[(r, i)] = add_noise(1.0)
             pd[(r, i)] = add_noise(1.0)
             pa[(r, i)] = add_noise(1.0)
+            # Import prices
             pmt[(r, i)] = add_noise(1.0)
+            for rp in sets.r:
+                if r != rp:
+                    pmcif[(r, i, rp)] = add_noise(1.0)
+            # Export prices
             pet[(r, i)] = add_noise(1.0)
+            for rp in sets.r:
+                if r != rp:
+                    pe[(r, i, rp)] = add_noise(1.0)
+                    pefob[(r, i, rp)] = add_noise(1.0)
+    
+    # Trade flows
+    for r in sets.r:
+        for i in sets.i:
+            xmt[(r, i)] = add_noise(1.0)
+            xet[(r, i)] = add_noise(1.0)
+            for rp in sets.r:
+                if r != rp:
+                    xe[(r, i, rp)] = add_noise(1.0)
+                    xw[(r, i, rp)] = add_noise(1.0)
     
     # Factors
     for r in sets.r:
@@ -170,11 +250,23 @@ def create_gams_results(sets, match_perfectly=True):
     
     # Create snapshot
     gams_snap = GTAPVariableSnapshot(
-        xp=xp, px=px, pp=pp,
-        ps=ps, pd=pd, pa=pa, pmt=pmt, pet=pet,
+        # Production
+        xp=xp, x=x, px=px, pp=pp,
+        # Supply
+        xs=xs, xds=xds,
+        # Prices
+        ps=ps, pd=pd, pa=pa,
+        pmt=pmt, pmcif=pmcif,
+        pet=pet, pe=pe, pefob=pefob,
+        # Trade
+        xe=xe, xet=xet, xw=xw, xmt=xmt,
+        # Factors
         xft=xft, pft=pft, xf=xf, pf=pf,
+        # Demand
         xc=xc, xg=xg, xi=xi,
+        # Income
         regy=regy, yc=yc, yg=yg, yi=yi, pabs=pabs,
+        # Indices
         pnum=1.0,
         walras=add_noise(1e-12),
     )
