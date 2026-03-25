@@ -29,6 +29,7 @@ from equilibria.solver.guards import rebuild_tax_detail_from_rates
 from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
 from equilibria.templates.init_strategies import normalize_init_mode
 from equilibria.templates.pep_contract import PEPContract, build_pep_contract
+from equilibria.templates.pep_dynamic_sets import apply_i1_set_membership_overrides
 from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
 from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
 
@@ -106,7 +107,10 @@ class PEPModelSolver:
         self.last_closure_validation_report: dict[str, Any] | None = None
         
         # Extract sets and parameters from calibrated state
-        self.sets = calibrated_state.sets
+        self.sets = apply_i1_set_membership_overrides(
+            calibrated_state.sets,
+            i1_excluded_members=self.runtime_config.i1_excluded_members,
+        )
         self.params = self._extract_parameters(calibrated_state)
         
         # Initialize equations

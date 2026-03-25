@@ -7,6 +7,7 @@ This variant mirrors GAMS-style Excel ingestion and avoids GDX reads for SAM.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,7 @@ class PEPModelCalibratorExcel(PEPModelCalibrator):
         val_par_file: Path | str | None = None,
         sets: dict[str, list[str]] | None = None,
         dynamic_sets: bool = False,
+        i1_excluded_members: Iterable[str] | None = None,
     ):
         self.sam_file = Path(sam_file)
         self.val_par_file = Path(val_par_file) if val_par_file else None
@@ -71,5 +73,12 @@ class PEPModelCalibratorExcel(PEPModelCalibrator):
         self._use_dynamic_sets = dynamic_sets
         self._resolved_sets = (
             sets if sets is not None
-            else (derive_dynamic_sets_from_sam(self.sam_data) if dynamic_sets else None)
+            else (
+                derive_dynamic_sets_from_sam(
+                    self.sam_data,
+                    i1_excluded_members=i1_excluded_members,
+                )
+                if dynamic_sets
+                else None
+            )
         )

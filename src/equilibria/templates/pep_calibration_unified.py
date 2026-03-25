@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -234,6 +235,7 @@ class PEPModelCalibrator:
         val_par_file: Path | str | None = None,
         sets: dict[str, list[str]] | None = None,
         dynamic_sets: bool = False,
+        i1_excluded_members: Iterable[str] | None = None,
     ):
         """Initialize the unified calibrator.
         
@@ -256,7 +258,14 @@ class PEPModelCalibrator:
         self._use_dynamic_sets = dynamic_sets
         self._resolved_sets = (
             sets if sets is not None
-            else (derive_dynamic_sets_from_sam(self.sam_data) if dynamic_sets else None)
+            else (
+                derive_dynamic_sets_from_sam(
+                    self.sam_data,
+                    i1_excluded_members=i1_excluded_members,
+                )
+                if dynamic_sets
+                else None
+            )
         )
     
     def calibrate(self) -> PEPModelState:

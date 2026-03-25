@@ -112,10 +112,18 @@ def test_pep_adapter_fit_base_state_uses_excel_dynamic_sam_for_excel_inputs(
     captured: dict[str, object] = {}
 
     class _FakeExcelDynamicSAM:
-        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+        def __init__(
+            self,
+            *,
+            sam_file: Path,
+            val_par_file: Path | None,
+            accounts: dict[str, str] | None,
+            i1_excluded_members: tuple[str, ...] | None,
+        ):
             captured["sam_file"] = sam_file
             captured["val_par_file"] = val_par_file
             captured["accounts"] = accounts
+            captured["i1_excluded_members"] = i1_excluded_members
 
         def calibrate(self) -> PEPModelState:
             return PEPModelState(sets={"I": ["agr"], "J": ["agr"]})
@@ -141,6 +149,7 @@ def test_pep_adapter_fit_base_state_uses_excel_dynamic_sam_for_excel_inputs(
     assert captured["sam_file"] == Path("sam-cri.xlsx")
     assert captured["val_par_file"] == Path("val.xlsx")
     assert captured["accounts"] == {"gvt": "gvt", "row": "row"}
+    assert captured["i1_excluded_members"] == ("agr",)
     assert state.sets["I"] == ["agr"]
     assert adapter._sets["I"] == ["agr"]
 
@@ -151,10 +160,18 @@ def test_pep_adapter_fit_base_state_uses_dynamic_sam_for_gdx_inputs(
     captured: dict[str, object] = {}
 
     class _FakeDynamicSAM:
-        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+        def __init__(
+            self,
+            *,
+            sam_file: Path,
+            val_par_file: Path | None,
+            accounts: dict[str, str] | None,
+            i1_excluded_members: tuple[str, ...] | None,
+        ):
             captured["sam_file"] = sam_file
             captured["val_par_file"] = val_par_file
             captured["accounts"] = accounts
+            captured["i1_excluded_members"] = i1_excluded_members
 
         def calibrate(self) -> PEPModelState:
             return PEPModelState(sets={"I": ["agr", "ser"]})
@@ -169,6 +186,7 @@ def test_pep_adapter_fit_base_state_uses_dynamic_sam_for_gdx_inputs(
         val_par_file="val.gdx",
         dynamic_sets=True,
         accounts={"gvt": "gvt"},
+        config={"i1_excluded_members": ["agr", "01T03"]},
     )
 
     state = adapter.fit_base_state()
@@ -176,6 +194,7 @@ def test_pep_adapter_fit_base_state_uses_dynamic_sam_for_gdx_inputs(
     assert captured["sam_file"] == Path("sam-cri.gdx")
     assert captured["val_par_file"] == Path("val.gdx")
     assert captured["accounts"] == {"gvt": "gvt"}
+    assert captured["i1_excluded_members"] == ("agr", "01t03")
     assert state.sets["I"] == ["agr", "ser"]
     assert adapter._sets["I"] == ["agr", "ser"]
 
@@ -186,10 +205,18 @@ def test_pep_adapter_prepares_runtime_cri_excel_with_transform_and_qa(
     captured: dict[str, object] = {}
 
     class _FakeExcelDynamicSAM:
-        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+        def __init__(
+            self,
+            *,
+            sam_file: Path,
+            val_par_file: Path | None,
+            accounts: dict[str, str] | None,
+            i1_excluded_members: tuple[str, ...] | None,
+        ):
             captured["cal_sam_file"] = sam_file
             captured["cal_val_par_file"] = val_par_file
             captured["cal_accounts"] = accounts
+            captured["cal_i1_excluded_members"] = i1_excluded_members
 
         def calibrate(self) -> PEPModelState:
             return PEPModelState(sets={"I": ["agr"]})

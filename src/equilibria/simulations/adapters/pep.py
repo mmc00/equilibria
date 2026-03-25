@@ -201,12 +201,14 @@ class PepAdapter(BaseModelAdapter):
                     sam_file=sam_file_for_run,
                     val_par_file=self.val_par_file,
                     accounts=self.accounts,
+                    i1_excluded_members=self.runtime_config.i1_excluded_members,
                 )
             else:
                 calibrator = PEPModelCalibratorDynamicSAM(
                     sam_file=sam_file_for_run,
                     val_par_file=self.val_par_file,
                     accounts=self.accounts,
+                    i1_excluded_members=self.runtime_config.i1_excluded_members,
                 )
         else:
             if is_excel:

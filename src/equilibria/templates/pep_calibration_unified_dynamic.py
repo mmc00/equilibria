@@ -4,6 +4,7 @@ PEP unified calibration with dynamic set derivation from SAM.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -90,15 +91,35 @@ def remap_dynamic_sam_accounts(
 class PEPModelCalibratorDynamic(PEPModelCalibrator):
     """GDX-based unified calibrator with dynamic sets enabled by default."""
 
-    def __init__(self, sam_file: Path | str, val_par_file: Path | str | None = None):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+    def __init__(
+        self,
+        sam_file: Path | str,
+        val_par_file: Path | str | None = None,
+        i1_excluded_members: Iterable[str] | None = None,
+    ):
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            dynamic_sets=True,
+            i1_excluded_members=i1_excluded_members,
+        )
 
 
 class PEPModelCalibratorExcelDynamic(PEPModelCalibratorExcel):
     """Excel-based unified calibrator with dynamic sets enabled by default."""
 
-    def __init__(self, sam_file: Path | str, val_par_file: Path | str | None = None):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+    def __init__(
+        self,
+        sam_file: Path | str,
+        val_par_file: Path | str | None = None,
+        i1_excluded_members: Iterable[str] | None = None,
+    ):
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            dynamic_sets=True,
+            i1_excluded_members=i1_excluded_members,
+        )
 
 
 class PEPModelCalibratorDynamicSAM(PEPModelCalibrator):
@@ -114,10 +135,19 @@ class PEPModelCalibratorDynamicSAM(PEPModelCalibrator):
         sam_file: Path | str,
         val_par_file: Path | str | None = None,
         accounts: dict[str, str] | None = None,
+        i1_excluded_members: Iterable[str] | None = None,
     ):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            dynamic_sets=True,
+            i1_excluded_members=i1_excluded_members,
+        )
         self.sam_data = remap_dynamic_sam_accounts(self.sam_data, accounts=accounts)
-        self._resolved_sets = derive_dynamic_sets_from_sam(self.sam_data)
+        self._resolved_sets = derive_dynamic_sets_from_sam(
+            self.sam_data,
+            i1_excluded_members=i1_excluded_members,
+        )
 
 
 class PEPModelCalibratorExcelDynamicSAM(PEPModelCalibratorExcel):
@@ -128,7 +158,16 @@ class PEPModelCalibratorExcelDynamicSAM(PEPModelCalibratorExcel):
         sam_file: Path | str,
         val_par_file: Path | str | None = None,
         accounts: dict[str, str] | None = None,
+        i1_excluded_members: Iterable[str] | None = None,
     ):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+        super().__init__(
+            sam_file=sam_file,
+            val_par_file=val_par_file,
+            dynamic_sets=True,
+            i1_excluded_members=i1_excluded_members,
+        )
         self.sam_data = remap_dynamic_sam_accounts(self.sam_data, accounts=accounts)
-        self._resolved_sets = derive_dynamic_sets_from_sam(self.sam_data)
+        self._resolved_sets = derive_dynamic_sets_from_sam(
+            self.sam_data,
+            i1_excluded_members=i1_excluded_members,
+        )

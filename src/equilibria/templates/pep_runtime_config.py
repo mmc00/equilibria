@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from equilibria.contracts import (
     ModelReferenceConfig,
     ModelRuntimeConfig,
     deep_merge_model_dicts,
 )
+from equilibria.templates.pep_dynamic_sets import normalize_i1_excluded_members
 
 
 class PEPReferenceConfig(ModelReferenceConfig):
@@ -32,7 +33,13 @@ class PEPRuntimeConfig(ModelRuntimeConfig):
     max_iterations: int = 300
     require_solver_success: bool = True
     accept_square_feasible: bool = True
+    i1_excluded_members: tuple[str, ...] = Field(default_factory=lambda: ("agr",))
     reference: PEPReferenceConfig = Field(default_factory=PEPReferenceConfig)
+
+    @field_validator("i1_excluded_members", mode="before")
+    @classmethod
+    def _normalize_i1_excluded_members(cls, value: Any) -> tuple[str, ...]:
+        return normalize_i1_excluded_members(value)
 
 
 def default_pep_runtime_config() -> PEPRuntimeConfig:

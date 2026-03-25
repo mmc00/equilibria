@@ -4,9 +4,13 @@ Dynamic set derivation for PEP templates from SAM data.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from equilibria.babel.gdx.reader import read_parameter_values
+
+
+DEFAULT_PEP_I1_EXCLUDED_MEMBERS = ("agr",)
 
 
 def _unique_preserve(items: list[str]) -> list[str]:
@@ -39,7 +43,39 @@ def _extract_sam_keys(sam_data: dict[str, Any]) -> list[tuple[str, str, str, str
         return []
 
 
-def derive_dynamic_sets_from_sam(sam_data: dict[str, Any]) -> dict[str, list[str]]:
+def normalize_i1_excluded_members(
+    members: Iterable[str] | None = None,
+) -> tuple[str, ...]:
+    """Normalize runtime I1 exclusions to a stable lower-case tuple."""
+    source = DEFAULT_PEP_I1_EXCLUDED_MEMBERS if members is None else members
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for member in source:
+        label = str(member).strip().lower()
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        normalized.append(label)
+    return tuple(normalized)
+
+
+def apply_i1_set_membership_overrides(
+    sets: dict[str, list[str]],
+    *,
+    i1_excluded_members: Iterable[str] | None = None,
+) -> dict[str, list[str]]:
+    """Rebuild I1 from I using runtime-configured exclusions."""
+    resolved = {key: list(value) for key, value in sets.items()}
+    excluded = set(normalize_i1_excluded_members(i1_excluded_members))
+    resolved["I1"] = [member for member in resolved.get("I", []) if member not in excluded]
+    return resolved
+
+
+def derive_dynamic_sets_from_sam(
+    sam_data: dict[str, Any],
+    *,
+    i1_excluded_members: Iterable[str] | None = None,
+) -> dict[str, list[str]]:
     """
     Build model sets dynamically from SAM support.
 
@@ -84,15 +120,18 @@ def derive_dynamic_sets_from_sam(sam_data: dict[str, Any]) -> dict[str, list[str
     agng = [x for x in ag if x != "gvt"]
     agd = [x for x in ag if x != "row"]
 
-    return {
+    sets = {
         "H": h,
         "F": f,
         "K": k,
         "L": l,
         "J": j,
         "I": i,
-        "I1": [x for x in i if x != "agr"],
         "AG": ag,
         "AGNG": agng,
         "AGD": agd,
     }
+    return apply_i1_set_membership_overrides(
+        sets,
+        i1_excluded_members=i1_excluded_members,
+    )

@@ -93,6 +93,7 @@ def test_build_pep_runtime_config_default_and_parity_presets() -> None:
     assert isinstance(default_cfg, PEPRuntimeConfig)
     assert default_cfg.problem_type == "nlp"
     assert default_cfg.jacobian_mode == "analytic"
+    assert default_cfg.i1_excluded_members == ("agr",)
     assert default_cfg.reference.enabled is False
 
     assert parity_cfg.reference.enabled is True
@@ -107,6 +108,12 @@ def test_build_pep_runtime_config_accepts_numeric_jacobian_override() -> None:
 
     assert isinstance(cfg, PEPRuntimeConfig)
     assert cfg.jacobian_mode == "numeric"
+
+
+def test_build_pep_runtime_config_normalizes_i1_exclusions() -> None:
+    cfg = build_pep_runtime_config({"i1_excluded_members": [" agr ", "01T03", "agr", ""]})
+
+    assert cfg.i1_excluded_members == ("agr", "01t03")
 
 
 def test_build_pep_contract_accepts_all_active_masks() -> None:
