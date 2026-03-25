@@ -10,10 +10,12 @@ from equilibria.simulations.adapters.gtap import GTAPAdapter
 from equilibria.simulations.adapters.icio import ICIOAdapter
 from equilibria.simulations.adapters.ieem import IEEMAdapter
 from equilibria.simulations.adapters.pep import PepAdapter
+from equilibria.simulations.adapters.pep_co2 import PepCO2Adapter
 from equilibria.simulations.types import Scenario, Shock, ShockDefinition
 
 _ADAPTER_REGISTRY: dict[str, type[BaseModelAdapter]] = {
     "pep": PepAdapter,
+    "pep_co2": PepCO2Adapter,
     "ieem": IEEMAdapter,
     "gtap": GTAPAdapter,
     "icio": ICIOAdapter,

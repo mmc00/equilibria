@@ -2,6 +2,7 @@
 
 from equilibria.simulations.multi import GTAPSimulator, ICIOSimulator, IEEMSimulator
 from equilibria.simulations.pep import PepSimulator
+from equilibria.simulations.pep_co2 import PepCO2Simulator
 from equilibria.simulations.presets import (
     available_presets,
     export_tax,
@@ -31,6 +32,7 @@ __all__ = [
     "ShockDefinition",
     "Simulator",
     "PepSimulator",
+    "PepCO2Simulator",
     "IEEMSimulator",
     "GTAPSimulator",
     "ICIOSimulator",

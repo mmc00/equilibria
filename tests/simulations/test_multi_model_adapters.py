@@ -7,6 +7,7 @@ from equilibria.simulations import (
     GTAPSimulator,
     ICIOSimulator,
     IEEMSimulator,
+    PepCO2Simulator,
     Scenario,
     Shock,
     Simulator,
@@ -189,19 +190,22 @@ def test_gtap_adapter_solver_hook_without_compare_reports_capability() -> None:
     assert "not implemented" in report["scenarios"][0]["comparison"]["reason"]
 
 
-def test_available_models_includes_pep_ieem_gtap_icio() -> None:
+def test_available_models_includes_pep_pep_co2_ieem_gtap_icio() -> None:
     models = available_models()
     assert "pep" in models
+    assert "pep_co2" in models
     assert "ieem" in models
     assert "gtap" in models
     assert "icio" in models
 
 
 def test_convenience_simulator_wrappers_for_multi_models() -> None:
+    pep_co2 = PepCO2Simulator(co2_intensity={"agr": 1.0})
     ieem = IEEMSimulator(base_state={"x": 1.0}).fit()
     gtap = GTAPSimulator(base_state={"x": 2.0}).fit()
     icio = ICIOSimulator(base_state={"x": 3.0}).fit()
 
+    assert pep_co2.model == "pep_co2"
     assert ieem.model == "ieem"
     assert gtap.model == "gtap"
     assert icio.model == "icio"
