@@ -1380,19 +1380,40 @@ EQUATIONS
  ttix.fx(i)      = ttixO(i);
 
 ** 6.4 Simulations
-*  25% increase of international import price of AGR
-* PWM.fx('agr')   = PWMO('agr')*1.25;
+$if not set SHOCK $setglobal SHOCK export_tax
 
-*  25% decrease of the indirect tax rates on all commodities
- ttix.fx(i)         = ttixO(i)*0.75;
-
-*  20% increase of public expenditures
-* G.fx            = GO*1.2;
+$ifthenI "%SHOCK%" == "baseline"
+* No additional shock.
+$elseifI "%SHOCK%" == "import_price_agr"
+* 25% increase of international import price of AGR
+ PWM.fx('agr') = PWMO('agr')*1.25;
+$elseifI "%SHOCK%" == "export_tax"
+* 25% decrease of the indirect tax rates on all commodities
+ ttix.fx(i) = ttixO(i)*0.75;
+$elseifI "%SHOCK%" == "gov_spending"
+* 20% increase of public expenditures
+ G.fx = GO*1.2;
+$else
+$abort Unknown SHOCK value. Use baseline, import_price_agr, export_tax, or gov_spending.
+$endif
 
 ** 6.5 Resolution
 option limrow = 10000;
 OPTION NLP = conopt3
 MODEL PEP11 Standard PEP static model version 2_1 /ALL/;
+$if not set SOLVE_TYPE $setglobal SOLVE_TYPE CNS
+
+$if set SKIP_INITIAL_SOLVE $goto after_solve
+
 PEP11.HOLDFIXED=1;
+$ifthenI "%SOLVE_TYPE%" == "CNS"
+OPTION CNS = CONOPT4;
 SOLVE PEP11 USING CNS;
-$include RESULTS PEP 1-1.GMS
+$elseifI "%SOLVE_TYPE%" == "MCP"
+OPTION MCP = PATH;
+SOLVE PEP11 USING MCP;
+$else
+$abort Unknown SOLVE_TYPE value. Use CNS or MCP.
+$endif
+$label after_solve
+$if not set SKIP_RESULTS $include RESULTS PEP 1-1.GMS
