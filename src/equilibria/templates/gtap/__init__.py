@@ -1,13 +1,13 @@
-"""GTAP CGE Template (CGEBox version)
+"""GTAP CGE Template (Standard GTAP 7)
 
 This package provides a complete GTAP CGE model implementation
-following the CGEBox specification.
+following the GTAP Standard 7 specification with 9x10 base.
 
 Modules:
     gtap_sets: GTAP set definitions
     gtap_parameters: GTAP parameters (elasticities, taxes, shares)
     gtap_contract: Contract and closure configurations
-    gtap_model_equations: All CGEBox model equations
+    gtap_model_equations: All GTAP Standard 7 model equations
     gtap_solver: Solver interface (IPOPT, PATH)
 
 Example:
@@ -45,6 +45,7 @@ from equilibria.templates.gtap.gtap_contract import (
 from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_parameters import (
     GTAPBenchmarkValues,
+    GTAPCalibratedShares,
     GTAPElasticities,
     GTAPParameters,
     GTAPShareParameters,
@@ -70,6 +71,7 @@ __all__ = [
     "GTAPParameters",
     "GTAPElasticities",
     "GTAPBenchmarkValues",
+    "GTAPCalibratedShares",
     "GTAPTaxRates",
     "GTAPShareParameters",
     

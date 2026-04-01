@@ -1,11 +1,11 @@
-"""GTAP Solver (CGEBox version)
+"""GTAP Solver (Standard GTAP 7)
 
 This module implements the solver for GTAP CGE models.
 Supports multiple solvers:
 - IPOPT: Interior Point OPTimizer (default, for NLP/CNS)
 - PATH: Mixed Complementarity Problem solver (for MCP)
 
-Reference: /Users/marmol/proyectos2/cge_babel/cgebox/gams/model/closures.gms
+Reference: /Users/marmol/proyectos2/cge_babel/standard_gtap_7/comp.gms
 """
 
 from __future__ import annotations
@@ -108,21 +108,126 @@ class GTAPSolver:
         self.model = model
         self.closure = closure or GTAPClosureConfig()
         self.solver_name = solver_name.lower()
-        self.solver_options = solver_options or {}
         
-        # Initialize variables at benchmark (1.0)
+        # Default IPOPT options for handling large-scale SAM values (like GAMS)
+        default_options = {
+            # Scaling and numerical robustness
+            'nlp_scaling_method': 'gradient-based',  # Automatic variable/constraint scaling 
+            'nlp_scaling_max_gradient': 1e8,         # Handle large SAM values
+            'obj_scaling_factor': 1.0,
+            
+            # Convergence criteria
+            'tol': 1e-6,                             # Optimality tolerance
+            'acceptable_tol': 1e-4,                  # Acceptable tolerance
+            'acceptable_iter': 15,                   # Accept after 15 iterations
+            
+            # Iteration limits
+            'max_iter': 3000,                        # GAMS often needs many iterations
+            
+            # Linear solver  
+            'linear_solver': 'mumps',                # Robust for ill-conditioned systems
+            
+            # Output control
+            'sb': 'yes',                              # Skip banner
+            'print_level': 3,                         # Moderate verbosity
+            
+            # Initialization
+            'warm_start_init_point': 'yes',          # Use provided initialization
+            
+            # Numerical tolerance (like GAMS - tolerate small errors)
+            'acceptable_obj_change_tol': 1.0e-6,
+        }
+        default_options.update(solver_options or {})
+        self.solver_options = default_options
+        
+        # Initialize variables (preserves SAM levels if already set)
         self._initialize_benchmark()
         
     def _initialize_benchmark(self) -> None:
-        """Initialize all variables at benchmark values (1.0).
+        """Initialize variables that don't have values yet.
         
-        This provides a consistent starting point for the solver.
+        Respects SAM-based initialization (millions) from gtap_model_equations.
+        This mirrors GAMS behavior: variables initialized at SAM levels.
         """
         from pyomo.environ import Var
         
+        # Don't overwrite SAM-based initialization - only set uninitialized vars
         for var in self.model.component_objects(Var, active=True):
             for idx in var:
-                var[idx].value = 1.0
+                if var[idx].value is None:
+                    var[idx].value = 1.0
+
+    def apply_solution_hint(self, hint: Any) -> int:
+        """Warm-start variables from a snapshot-like object.
+
+        The hint is typically a `GTAPVariableSnapshot` from the parity pipeline.
+        Missing variables or indices are ignored.
+        """
+        hint_to_model = {
+            "xp": "xp",
+            "x": "x",
+            "xs": "xs",
+            "xds": "xds",
+            "xd": "xda",
+            "px": "px",
+            "pp": "pp",
+            "ps": "ps",
+            "pd": "pd",
+            "pa": "pa",
+            "paa": "paa",
+            "pdp": "pdp",
+            "pmt": "pmt",
+            "pmcif": "pmcif",
+            "pet": "pet",
+            "pe": "pe",
+            "pefob": "pefob",
+            "xe": "xe",
+            "xw": "xw",
+            "xmt": "xmt",
+            "xet": "xet",
+            "xaa": "xaa",
+            "xwmg": "xwmg",
+            "xmgm": "xmgm",
+            "pwmg": "pwmg",
+            "xtmg": "xtmg",
+            "ptmg": "ptmg",
+            "xf": "xf",
+            "xft": "xft",
+            "pf": "pf",
+            "pft": "pft",
+            "xc": "xc",
+            "xg": "xg",
+            "xi": "xi",
+            "regy": "regy",
+            "yc": "yc",
+            "yg": "yg",
+            "yi": "yi",
+            "pabs": "pabs",
+            "pnum": "pnum",
+        }
+
+        applied = 0
+        for hint_name, model_name in hint_to_model.items():
+            if not hasattr(hint, hint_name) or not hasattr(self.model, model_name):
+                continue
+            values = getattr(hint, hint_name)
+            target = getattr(self.model, model_name)
+
+            if values is None:
+                continue
+            if isinstance(values, dict):
+                for idx, value in values.items():
+                    if value is None or idx not in target:
+                        continue
+                    target[idx].value = float(value)
+                    applied += 1
+                continue
+            if hasattr(target, "value"):
+                target.value = float(values)
+                applied += 1
+
+        logger.info("Applied %s warm-start values", applied)
+        return applied
                 
     def apply_closure(self, closure: Optional[GTAPClosureConfig] = None) -> None:
         """Apply closure rules to fix exogenous variables.
@@ -163,6 +268,8 @@ class GTAPSolver:
                 if hasattr(self.model, name):
                     var = getattr(self.model, name)
                     for idx in var:
+                        if not hasattr(var[idx], "fix"):
+                            continue
                         if var[idx].value is not None:
                             var[idx].fix()
                             fixed_count += 1
@@ -209,19 +316,17 @@ class GTAPSolver:
         if solver is None:
             raise RuntimeError(f"Solver '{self.solver_name}' not available")
         
-        # Set solver options
-        for key, value in self.solver_options.items():
-            solver.options[key] = value
-        
-        # Set default options based on solver
+        # Set defaults first, then override with user options
         if self.solver_name == "ipopt":
-            solver.options.setdefault("tol", 1e-6)
-            solver.options.setdefault("max_iter", 300)
             solver.options.setdefault("mu_strategy", "adaptive")
             solver.options.setdefault("output_file", "ipopt.out")
         elif self.solver_name == "path":
             solver.options.setdefault("convergence_tolerance", 1e-6)
             solver.options.setdefault("major_iterations_limit", 500)
+        
+        # Apply solver options (overrides defaults)
+        for key, value in self.solver_options.items():
+            solver.options[key] = value
         
         logger.info(f"Solving with {self.solver_name}...")
         

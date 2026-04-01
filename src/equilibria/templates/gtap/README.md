@@ -1,10 +1,10 @@
-# GTAP CGE Template (CGEBox Version)
+# GTAP CGE Template (Standard GTAP 7)
 
-Complete GTAP CGE model implementation following the CGEBox specification.
+Complete GTAP CGE model implementation following the GTAP Standard 7 specification with 9×10 database.
 
 ## Overview
 
-This template provides a full multi-regional CGE model based on the GTAP (Global Trade Analysis Project) database and CGEBox framework. It includes:
+This template provides a full multi-regional CGE model based on the GTAP (Global Trade Analysis Project) Standard 7 model. It includes:
 
 - **Multi-regional trade**: CET exports + CES Armington imports with bilateral flows
 - **Production**: Nested CES technology with value-added and intermediates
@@ -19,12 +19,12 @@ This template provides a full multi-regional CGE model based on the GTAP (Global
 from equilibria.templates.gtap import GTAPSets, GTAPParameters, GTAPModelEquations, GTAPSolver
 from equilibria.templates.gtap import build_gtap_contract
 
-# Load data
+# Load data from Standard GTAP 7 9x10 database
 sets = GTAPSets()
-sets.load_from_gdx("asa7x5.gdx")
+sets.load_from_gdx("basedata-9x10.gdx")
 
 params = GTAPParameters()
-params.load_from_gdx("asa7x5.gdx")
+params.load_from_gdx("basedata-9x10.gdx")
 
 # Build model
 contract = build_gtap_contract("gtap_standard")
@@ -43,21 +43,21 @@ print(f"Walras check: {result.walras_value:.2e}")
 
 ### Display Data Information
 ```bash
-python scripts/gtap/run_gtap.py info --gdx-file data/asa7x5.gdx
+python scripts/gtap/run_gtap.py info --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx
 ```
 
 ### Solve Baseline
 ```bash
-python scripts/gtap/run_gtap.py solve --gdx-file data/asa7x5.gdx --solver ipopt
+python scripts/gtap/run_gtap.py solve --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx --solver ipopt
 ```
 
 ### Apply Shock
 ```bash
-# 10% tariff on agricultural imports from EUR to USA
+# 10% tariff on agricultural imports from EastAsia to Oceania
 python scripts/gtap/run_gtap.py shock \
-    --gdx-file data/asa7x5.gdx \
+    --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx \
     --variable rtms \
-    --index '(USA,agr,EUR)' \
+    --index '(Oceania,c_Crops,EastAsia)' \
     --value 0.10 \
     --solver ipopt
 ```
@@ -118,7 +118,7 @@ python scripts/gtap/run_gtap.py shock \
 - Allows import/export tax changes
 - Useful for tariff/subsidy simulations
 
-### CGEBox Full (`cgebox_full`)
+### Full Model (`gtap_full`)
 - All equations active
 - Full closure flexibility
 
@@ -196,11 +196,31 @@ python -m pytest tests/templates/gtap/ -v
 python -m pytest tests/templates/gtap/ --cov=equilibria.templates.gtap
 ```
 
-## References
+## Data Sources and References
 
-- CGEBox: /Users/marmol/proyectos2/cge_babel/cgebox/gams/model/model.gms
-- GTAP Database: https://www.gtap.agecon.purdue.edu/
-- GTAP-E: Energy and environmental extension
+### GTAP Standard 7 (9×10 Database)
+- **Location**: `/Users/marmol/proyectos2/cge_babel/standard_gtap_7/`
+- **Base Data**: `basedata-9x10.gdx` (167KB) - SAM and benchmark values
+- **Parameters**: `default-9x10.gdx` (9.2KB) - Elasticities (CES, CET, Armington)
+- **Sets**: `sets-9x10.gdx` - Regions, commodities, activities, factors
+- **Results**: `COMP.gdx` / `COMP.csv` - Simulation results
+
+### Model Files
+- **Main**: `comp.gms` - Simulation driver
+- **Model**: `model.gms` - Equation definitions  
+- **Data**: `getData.gms` - Data loading
+- **Calibration**: `cal.gms` - Parameter calibration
+
+### Database Dimensions (9×10)
+- **9 Regions**: Oceania, EastAsia, China, SEAsia, SAsiaRofW, LatinAmer, MENAfrica, SSAfrica, RestofWorld
+- **9 Commodities**: c_Crops, c_MeatLstk, c_Extraction, c_ProcFood, c_TextWapp, c_LightMnfc, c_HeavyMnfc, c_Util_Cons, c_TransComm
+- **9 Activities**: a_Crops, a_MeatLstk, a_Extraction, a_ProcFood, a_TextWapp, a_LightMnfc, a_HeavyMnfc, a_Util_Cons, a_TransComm
+- **5 Factors**: Land, UnSkLab, SkLab, Capital, NatRes
+
+### External References
+- GTAP Database: [https://www.gtap.agecon.purdue.edu/](https://www.gtap.agecon.purdue.edu/)
+- GTAP 7 Documentation: Released 2008, base year 2004
+- GAMS Documentation: [https://www.gams.com/](https://www.gams.com/)
 
 ## Implementation Notes
 
@@ -212,15 +232,15 @@ python -m pytest tests/templates/gtap/ --cov=equilibria.templates.gtap
 
 ## Parity Testing (Python vs GAMS)
 
-The template includes a complete parity testing system to validate Python results against CGEBox GAMS baseline.
+The template includes a complete parity testing system to validate Python results against GTAP Standard 7 GAMS baseline.
 
 ### Quick Parity Check
 
 ```bash
-# Run parity check comparing Python vs GAMS
+# Run parity check comparing Python vs GAMS using standard_gtap_7 results
 python scripts/gtap/run_gtap_parity.py \
-    --gdx-file data/asa7x5.gdx \
-    --gams-results results/gams_baseline.gdx \
+    --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx \
+    --gams-results /Users/marmol/proyectos2/cge_babel/standard_gtap_7/COMP.gdx \
     --tolerance 1e-6
 ```
 

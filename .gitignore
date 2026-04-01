@@ -224,3 +224,12 @@ src/equilibria/templates/reference/pep2/scripts/*.gdx
 src/equilibria/templates/reference/pep2/scripts/dif_*.csv
 src/equilibria/templates/reference/pep2/scripts/gdxdiff_*.txt
 src/equilibria/templates/reference/pep2/scripts/dynamic_sets.inc
+
+# GTAP one-off scripts, generated docs, solver logs, editor config
+.vscode/
+ipopt.out
+scripts/gtap/
+examples/gtap/
+docs/GTAP_*.md
+docs/GTAP_*.md
+docs/findings/gams_formulation_analysis.md

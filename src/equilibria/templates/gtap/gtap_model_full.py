@@ -1,4 +1,4 @@
-"""Complete GTAP CGE Model (CGEBox-Realistic Implementation)
+"""Complete GTAP CGE Model (Standard GTAP 7 Implementation)
 
 Full multi-regional CGE model with:
 - CES production functions (value-added + intermediates)
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class GTAPFullModel:
     """Complete GTAP CGE model with realistic structure.
     
-    This implements the full CGEBox-style GTAP model with all
+    This implements the full GTAP Standard 7 model with all
     CES/CET nests, bilateral trade, and proper closure.
     
     Typical size:
