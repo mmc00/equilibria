@@ -1,14 +1,14 @@
-"""GTAP Contract Models (CGEBox version)
+"""GTAP Contract Models (Standard GTAP 7)
 
-This module defines canonical contract models for GTAP following CGEBox implementation.
-Reference: /Users/marmol/proyectos2/cge_babel/cgebox/gams/model/closures.gms
+This module defines canonical contract models for GTAP following Standard GTAP 7 implementation.
+Reference: /Users/marmol/proyectos2/cge_babel/standard_gtap_7/comp.gms
 
 Closures determine which variables are fixed (exogenous) and which are endogenous.
-CGEBox supports multiple closure types:
+GTAP Standard 7 supports multiple closure types:
 - Standard GTAP closure (default)
 - Trade policy closure
 - Single region closure
-- CGEBox full closure
+- Full model closure
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from equilibria.contracts import (
 def _full_gtap_equation_ids() -> Tuple[str, ...]:
     """Return all GTAP equation IDs.
     
-    Based on CGEBox model.gms equation definitions.
+    Based on GTAP Standard 7 model.gms equation definitions.
     """
     # Production block
     production = (
@@ -150,8 +150,8 @@ def _closure_template_data(name: str) -> Dict[str, Any]:
         base["label"] = "Standard GTAP closure"
         return base
     
-    elif closure_name == "cgebox_full":
-        base["label"] = "CGEBox full closure with all equations"
+    elif closure_name == "gtap_full":
+        base["label"] = "GTAP Standard 7 full closure with all equations"
         base["closure_type"] = "CNS"
         return base
     
@@ -270,7 +270,7 @@ class GTAPEquationConfig(ModelEquationConfig):
     
     name: str = "full_gtap"
     include: Tuple[str, ...] = Field(default_factory=_full_gtap_equation_ids)
-    activation_masks: Literal["cgebox_standard", "all_active"] = "cgebox_standard"
+    activation_masks: Literal["gtap_standard", "all_active"] = "gtap_standard"
     
     @field_validator("activation_masks", mode="before")
     @classmethod
@@ -328,7 +328,7 @@ class GTAPContract(ModelContract):
         'gtap_standard'
     """
     
-    name: str = "gtap_cgebox_v1"
+    name: str = "gtap_standard7_9x10"
     closure: GTAPClosureConfig = Field(default_factory=GTAPClosureConfig)
     equations: GTAPEquationConfig = Field(default_factory=GTAPEquationConfig)
     bounds: GTAPBoundsConfig = Field(default_factory=GTAPBoundsConfig)
@@ -390,7 +390,7 @@ def build_gtap_contract(
     Args:
         value: Can be:
             - None: Use default contract
-            - str: Contract name (currently only "gtap_cgebox_v1")
+            - str: Contract name (currently only "gtap_standard7_9x10")
             - Mapping: Dict with contract overrides
             - GTAPContract: Use as-is
             
@@ -405,7 +405,7 @@ def build_gtap_contract(
     
     if isinstance(value, str):
         contract_name = value.strip()
-        if contract_name == "gtap_cgebox_v1":
+        if contract_name == "gtap_standard7_9x10":
             return default_gtap_contract()
         raise ValueError(f"Unsupported GTAP contract name: {value!r}")
     

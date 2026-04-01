@@ -1,7 +1,7 @@
-"""GTAP Parameters (CGEBox version)
+"""GTAP Parameters (Standard GTAP 7)
 
-This module defines all GTAP model parameters following the CGEBox implementation.
-Reference: /Users/marmol/proyectos2/cge_babel/cgebox/gams/model/model.gms
+This module defines all GTAP model parameters following the GTAP Standard 7 implementation.
+Reference: /Users/marmol/proyectos2/cge_babel/standard_gtap_7/model.gms
 
 Parameters include:
 - Elasticities (substitution, transformation)
@@ -13,14 +13,34 @@ Parameters include:
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+import math
+from statistics import median
+
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+from equilibria.babel.gdx.gdxdump import(
+    read_parameter_with_gdxdump,
+    read_variable_levels_with_gdxdump,
+)
+from equilibria.templates.gtap.gtap_equilibrium import GTAPEquilibriumSnapshot
 from equilibria.templates.gtap.gtap_sets import GTAPSets
+from equilibria.templates.gtap.gtap_std7_mapping import (
+    get_benchmark_parameter_name,
+    get_tax_parameter_name,
+    get_elasticity_parameter_name,
+    reorder_parameter_keys,
+)
+
+GTAP_HOUSEHOLD_AGENT = "hhd"
+GTAP_GOVERNMENT_AGENT = "gov"
+GTAP_INVESTMENT_AGENT = "inv"
+GTAP_MARGIN_AGENT = "tmg"
 
 
 @dataclass
@@ -46,48 +66,472 @@ class GTAPElasticities:
     # Trade elasticities - CET
     omegax: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
     omegaw: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
-    
+
     # Factor mobility elasticities
     etrae: Dict[str, float] = field(default_factory=dict)  # f
-    
+
     # Demand elasticities
     esubg: Dict[str, float] = field(default_factory=dict)  # r (government)
     esubi: Dict[str, float] = field(default_factory=dict)  # r (investment)
     esubc: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, h) consumption
-    
+
     # Transport margins
     sigmam: Dict[str, float] = field(default_factory=dict)  # m
+
+    # Nested CES elasticities for the ND/VA blocks
+    sigmap: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    sigmand: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    sigmav: Dict[Tuple[str, str], float] = field(default_factory=dict)
     
     def load_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
-        """Load elasticities from GDX file."""
+        """Load elasticities from GDX file using GTAP Standard 7 native parameter names."""
         gdx_data = read_gdx(gdx_path)
-        
-        # Load production elasticities
-        self._load_parameter(gdx_data, "esubva", self.esubva, (sets.r, sets.a))
-        self._load_parameter(gdx_data, "esubd", self.esubd, (sets.r, sets.i))
-        
+
+        # Load production elasticities (GTAP Std 7 already uses ESUBVA, ESUBD uppercase)
+        self._load_parameter(gdx_data, gdx_path, "esubva", self.esubva, (sets.r, sets.a))
+        self._load_parameter(gdx_data, gdx_path, "esubd", self.esubd, (sets.r, sets.i))
+
         # Load trade elasticities
-        self._load_parameter(gdx_data, "esubm", self.esubm, (sets.r, sets.i))
-        self._load_parameter(gdx_data, "omegax", self.omegax, (sets.r, sets.i))
-        self._load_parameter(gdx_data, "omegaw", self.omegaw, (sets.r, sets.i))
-        
+        self._load_parameter(gdx_data, gdx_path, "esubm", self.esubm, (sets.r, sets.i))
+        self._load_parameter(gdx_data, gdx_path, "omegax", self.omegax, (sets.r, sets.i))
+        self._load_parameter(gdx_data, gdx_path, "omegaw", self.omegaw, (sets.r, sets.i))
+
         # Load factor mobility
-        self._load_parameter(gdx_data, "etrae", self.etrae, (sets.f,))
-        
+        self._load_parameter(gdx_data, gdx_path, "etrae", self.etrae, (sets.f,))
+
         # Load demand elasticities
-        self._load_parameter(gdx_data, "esubg", self.esubg, (sets.r,))
-        self._load_parameter(gdx_data, "esubi", self.esubi, (sets.r,))
+        self._load_parameter(gdx_data, gdx_path, "esubg", self.esubg, (sets.r,))
+        self._load_parameter(gdx_data, gdx_path, "esubi", self.esubi, (sets.r,))
+
+        # Nested CES elasticities
+        self._load_parameter(gdx_data, gdx_path, "sigmap", self.sigmap, (sets.r, sets.a))
+        self._load_parameter(gdx_data, gdx_path, "sigmand", self.sigmand, (sets.r, sets.a))
+        self._load_parameter(gdx_data, gdx_path, "sigmav", self.sigmav, (sets.r, sets.a))
+
+        # Populate nested CES elasticities from the production elasticities
+        self.initialize_nested_elasticities(sets)
+
+    def _load_parameter(
+        self,
+        gdx_data: Dict,
+        gdx_path: Path,
+        name: str,
+        target: Dict,
+        index_sets: Tuple[Sequence[str], ...] = (),
+    ) -> None:
+        """Load a single elasticity parameter using GTAP Standard 7 native names.
         
-    def _load_parameter(self, gdx_data: Dict, name: str, target: Dict, 
-                       index_sets: Tuple[List[str], ...]) -> None:
-        """Load a single parameter from GDX data."""
+        Args:
+            gdx_data: GDX data dictionary
+            gdx_path: Path to GDX file for gdxdump fallback
+            name: Internal parameter name (lowercase like 'esubva', 'esubd')
+            target: Target dictionary to populate
+            index_sets: Tuple of index sets for key validation
+        """
+        # Convert internal name to GTAP Std 7 name
+        gtap_name = get_elasticity_parameter_name(name)
+        
+        values: Dict[Tuple[str, ...], float] = {}
         try:
-            values = read_parameter_values(gdx_data, name)
-            if values:
-                target.update(values)
+            values = read_parameter_values(gdx_data, gtap_name)
         except (KeyError, ValueError):
-            # Parameter not found, will use defaults
             pass
+
+        if not values:
+            values = read_parameter_with_gdxdump(gdx_path, gtap_name)
+        
+        # Reorder keys if needed
+        if values:
+            values = reorder_parameter_keys(gtap_name, values)
+
+        if values:
+            normalized_sets = tuple(set(index) for index in index_sets)
+            for raw_key, raw_value in values.items():
+                if raw_value is None:
+                    continue
+                try:
+                    numeric = float(raw_value)
+                except (TypeError, ValueError):
+                    continue
+                key_tuple = (
+                    tuple(raw_key) if isinstance(raw_key, tuple) else (raw_key,)
+                    if raw_key else ()
+                )
+                normalized_key = self._align_key(key_tuple, index_sets, normalized_sets)
+                target[normalized_key] = numeric
+
+    def _align_key(
+        self,
+        key_tuple: Tuple[str, ...],
+        index_sets: Tuple[Sequence[str], ...],
+        normalized_sets: Tuple[set, ...],
+    ) -> Tuple[str, ...]:
+        if not index_sets or len(key_tuple) != len(index_sets):
+            return key_tuple
+        aligned: list[str] = []
+        used_indices: set[int] = set()
+        for set_idx, desired in enumerate(normalized_sets):
+            found = None
+            for element_idx, element in enumerate(key_tuple):
+                if element_idx in used_indices:
+                    continue
+                if element in desired:
+                    found = element
+                    used_indices.add(element_idx)
+                    break
+            if found is None:
+                return key_tuple
+            aligned.append(found)
+        return tuple(aligned)
+
+    def _broadcast_index_tuples(self, labels: Tuple[str, ...], expected_dim: int, membership_sets: List[set], index_sets: Tuple[List[str], ...]) -> List[Tuple[str, ...]]:
+        if expected_dim == 2 and len(labels) == 1:
+            label = labels[0]
+            if label in membership_sets[1]:
+                return [(region, label) for region in index_sets[0]]
+            if label in membership_sets[0]:
+                return [(label, other) for other in index_sets[1]]
+        return []
+
+    def calibrate_from_comp_gdx(self, comp_gdx: Path, sets: GTAPSets) -> None:
+        """Estimate sigm* elasticities using the COMP GDX time series."""
+        va_series = self._series_from_gdx(comp_gdx, "va", (0, 1))
+        nd_series = self._series_from_gdx(comp_gdx, "nd", (0, 1))
+        pva_series = self._series_from_gdx(comp_gdx, "pva", (0, 1))
+        pnd_series = self._series_from_gdx(comp_gdx, "pnd", (0, 1))
+
+        self._calibrate_sigmap(va_series, nd_series, pnd_series, pva_series)
+
+        xa_raw = read_variable_levels_with_gdxdump(comp_gdx, "xa")
+        pa_raw = read_variable_levels_with_gdxdump(comp_gdx, "pa")
+        xa_series = self._aggregate_series(xa_raw, (0, 2))
+        price_pa = self._weighted_average(pa_raw, xa_raw, (0, 2))
+        self._calibrate_sigmand(nd_series, xa_series, pnd_series, price_pa)
+
+        xf_raw = read_variable_levels_with_gdxdump(comp_gdx, "xf")
+        pf_raw = read_variable_levels_with_gdxdump(comp_gdx, "pf")
+        total_xf = self._aggregate_series(xf_raw, (0, 2))
+        share_xf = self._factor_share_series(xf_raw, total_xf)
+        price_ratio_pf = self._pf_over_pva(pf_raw, pva_series)
+        self._calibrate_sigmav(share_xf, price_ratio_pf)
+
+    def _calibrate_sigmap(self, va_series, nd_series, pnd_series, pva_series) -> None:
+        for key, va_data in va_series.items():
+            nd_data = nd_series.get(key)
+            if not nd_data:
+                continue
+            price_data = self._price_ratio(pnd_series.get(key, {}), pva_series.get(key, {}))
+            share_series = self._ratios(va_data, nd_data)
+            sigma = self._estimate_sigma_from_series(share_series, price_data)
+            if sigma is not None:
+                self.sigmap[key] = sigma
+
+    def _calibrate_sigmand(self, nd_series, xa_series, pnd_series, pa_series) -> None:
+        for key, nd_data in nd_series.items():
+            xa_data = xa_series.get(key)
+            if not xa_data:
+                continue
+            share_series = self._ratios(nd_data, xa_data)
+            price_data = self._price_ratio(pnd_series.get(key, {}), pa_series.get(key, {}))
+            sigma = self._estimate_sigma_from_series(share_series, price_data)
+            if sigma is not None:
+                self.sigmand[key] = sigma
+
+    def _calibrate_sigmav(self, share_xf, price_ratio_pf) -> None:
+        factor_sigmas: Dict[Tuple[str, str], list[float]] = defaultdict(list)
+        for (r, f, a), share_series in share_xf.items():
+            price_series = price_ratio_pf.get((r, f, a))
+            if not price_series:
+                continue
+            sigma = self._estimate_sigma_from_series(share_series, price_series)
+            if sigma is not None:
+                factor_sigmas[(r, a)].append(sigma)
+
+        for key, values in factor_sigmas.items():
+            if values:
+                self.sigmav[key] = median(values)
+
+    def _series_from_gdx(self, gdx_path: Path, var_name: str, prefix_indices: Tuple[int, ...]) -> Dict[Tuple[str, ...], Dict[str, float]]:
+        raw = read_variable_levels_with_gdxdump(gdx_path, var_name)
+        series: Dict[Tuple[str, ...], Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        for key, value in raw.items():
+            prefix = tuple(key[idx] for idx in prefix_indices)
+            time_label = key[-1]
+            series[prefix][time_label] += value
+        return series
+
+    def _aggregate_series(self, raw_data: dict, prefix_indices: Tuple[int, ...]) -> Dict[Tuple[str, ...], Dict[str, float]]:
+        result: Dict[Tuple[str, ...], Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        for key, value in raw_data.items():
+            prefix = tuple(key[idx] for idx in prefix_indices)
+            time_label = key[-1]
+            result[prefix][time_label] += value
+        return result
+
+    def _weighted_average(self, price_data: dict, weight_data: dict, prefix_indices: Tuple[int, ...]) -> Dict[Tuple[str, ...], Dict[str, float]]:
+        numerators: Dict[Tuple[str, ...], Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        denominators: Dict[Tuple[str, ...], Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        for key, price in price_data.items():
+            prefix = tuple(key[idx] for idx in prefix_indices)
+            time_label = key[-1]
+            weight = weight_data.get(key)
+            if weight is None:
+                continue
+            numerators[prefix][time_label] += price * weight
+            denominators[prefix][time_label] += weight
+        averages: Dict[Tuple[str, ...], Dict[str, float]] = defaultdict(dict)
+        for prefix, times in numerators.items():
+            for time_label, num in times.items():
+                denom = denominators[prefix].get(time_label, 0.0)
+                if denom > 0:
+                    averages[prefix][time_label] = num / denom
+        return averages
+
+    def _factor_share_series(self, xf_raw: dict, totals: Dict[Tuple[str, ...], Dict[str, float]]) -> Dict[Tuple[str, str, str], Dict[str, float]]:
+        shares: Dict[Tuple[str, str, str], Dict[str, float]] = defaultdict(dict)
+        for key, value in xf_raw.items():
+            r, f, a, time_label = key
+            total = totals.get((r, a), {}).get(time_label, 0.0)
+            if total > 0:
+                shares[(r, f, a)][time_label] = value / total
+        return shares
+
+    def _pf_over_pva(self, pf_raw: dict, pva_series: Dict[Tuple[str, ...], Dict[str, float]]) -> Dict[Tuple[str, str, str], Dict[str, float]]:
+        ratios: Dict[Tuple[str, str, str], Dict[str, float]] = defaultdict(dict)
+        for key, pf_value in pf_raw.items():
+            r, f, a, time_label = key
+            pva_value = pva_series.get((r, a), {}).get(time_label)
+            if pva_value and pva_value > 0:
+                ratios[(r, f, a)][time_label] = pf_value / pva_value
+        return ratios
+
+    def _ratios(self, num_series: Dict[str, float], denom_series: Dict[str, float]) -> Dict[str, float]:
+        ratios: Dict[str, float] = {}
+        for time_label, num in num_series.items():
+            denom = denom_series.get(time_label)
+            if denom and denom > 0:
+                ratios[time_label] = num / denom
+        return ratios
+
+    def _price_ratio(self, numerator: Dict[str, float], denominator: Dict[str, float]) -> Dict[str, float]:
+        ratio: Dict[str, float] = {}
+        for time_label, num in numerator.items():
+            denom = denominator.get(time_label)
+            if denom and denom > 0:
+                ratio[time_label] = num / denom
+        return ratio
+
+    def _estimate_sigma_from_series(self, share_series: Dict[str, float], price_series: Dict[str, float]) -> float | None:
+        time_order = {'base': 1, 't0': 1, 'check': 2, 'shock': 3}
+        common_times = sorted(
+            set(share_series.keys()) & set(price_series.keys()),
+            key=lambda label: time_order.get(label, float('inf')),
+        )
+        sigmas: list[float] = []
+        for i in range(len(common_times) - 1):
+            t1 = common_times[i]
+            t2 = common_times[i + 1]
+            share1 = share_series[t1]
+            share2 = share_series[t2]
+            price1 = price_series[t1]
+            price2 = price_series[t2]
+            if share1 <= 0 or share2 <= 0 or price1 <= 0 or price2 <= 0 or price1 == price2:
+                continue
+            try:
+                sigmas.append(math.log(share2 / share1) / math.log(price2 / price1))
+            except (ValueError, ZeroDivisionError):
+                continue
+        if not sigmas:
+            return None
+        return median(sigmas)
+
+    def initialize_nested_elasticities(self, sets: GTAPSets) -> None:
+        """Ensure sigmap, sigmand and sigmav cover every (region, activity)."""
+        default_value = 1.0
+        for r in sets.r:
+            for a in sets.a:
+                base = self.esubva.get((r, a), default_value)
+                self.sigmap[(r, a)] = self.sigmap.get((r, a), base)
+                self.sigmand[(r, a)] = self.sigmand.get((r, a), base)
+                self.sigmav[(r, a)] = self.sigmav.get((r, a), base)
+
+
+@dataclass
+class GTAPCalibratedShares:
+    """GAMS-style calibrated share parameters.
+    
+    These parameters are calibrated from benchmark SAM data to ensure
+    the benchmark is an exact solution of the CES/CET equations.
+    
+    Following GAMS cal.gms lines 724-730:
+    - and: ND bundle share parameter (calibrated with sigmap)
+    - ava: VA bundle share parameter (calibrated with sigmap)
+    - io: Input-output coefficients wrt ND (calibrated with sigmand)
+    - af: Factor shares wrt VA (calibrated with sigmav)
+    - gx: CET share parameter for commodity supply (calibrated with omegas)
+    """
+    
+    # Production shares (GAMS: and, ava)
+    and_param: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a) - ND bundle share
+    ava_param: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a) - VA bundle share
+    
+    # IO coefficients (GAMS: io)
+    io_param: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - IO coefficient
+    
+    # Factor shares (GAMS: af)
+    af_param: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Factor share
+    
+    # Make shares (GAMS: gx)
+    gx_param: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, a, i) - CET output share
+    
+    def calibrate_from_benchmark(
+        self,
+        benchmark: "GTAPBenchmarkValues",
+        elasticities: GTAPElasticities,
+        sets: GTAPSets,
+    ) -> None:
+        """Calibrate all share parameters from benchmark data.
+        
+        This follows GAMS cal.gms calibration logic (lines 724-730).
+        All prices are assumed = 1.0 in benchmark (GAMS convention).
+        """
+        # All prices = 1.0 in benchmark (GAMS convention from cal.gms lines 15-50)
+        px = pnd = pva = pa = pfa = p = 1.0
+        
+        # Calculate intermediate values needed for calibration
+        nd_values = {}  # ND bundle values
+        va_values = {}  # VA bundle values
+        xp_values = {}  # Production values
+        xa_values = {}  # Armington demand values
+        xf_values = {}  # Factor demand values
+        
+        # Calculate ND, VA, XP from benchmark
+        for r in sets.r:
+            for a in sets.a:
+                # Production value (vom or sum of MAKB)
+                xp_val = benchmark.vom.get((r, a), 0.0)
+                if xp_val <= 0:
+                    outputs = sets.activity_commodities.get(a, [sets.a_to_i.get(a, a)])
+                    xp_val = sum(benchmark.makb.get((r, a, i), 0.0) for i in outputs)
+                
+                if xp_val > 0:
+                    xp_values[(r, a)] = xp_val
+                
+                # Value added (sum of factor payments)
+                va_val = sum(benchmark.vfm.get((r, f, a), 0.0) for f in sets.f)
+                if va_val > 0:
+                    va_values[(r, a)] = va_val
+                
+                # Intermediate demand bundle from observed domestic + imported inputs.
+                nd_val = sum(
+                    benchmark.vdfm.get((r, i, a), 0.0) + benchmark.vifm.get((r, i, a), 0.0)
+                    for i in sets.i
+                )
+                if nd_val <= 0.0:
+                    nd_val = xp_val - va_val
+                if nd_val > 0:
+                    nd_values[(r, a)] = nd_val
+        
+        # Calibrate AND and AVA (GAMS cal.gms lines 724-725)
+        for r in sets.r:
+            for a in sets.a:
+                xp_val = xp_values.get((r, a), 0.0)
+                if xp_val <= 0:
+                    continue
+                
+                sigmap = elasticities.sigmap.get((r, a), 1.0)
+                
+                # and(r,a,t) = (nd.l/xp.l)*(pnd/px)**sigmap
+                nd_val = nd_values.get((r, a), 0.0)
+                if nd_val > 0:
+                    price_ratio = pnd / px  # = 1.0
+                    self.and_param[(r, a)] = (nd_val / xp_val) * (price_ratio ** sigmap)
+                
+                # ava(r,a,t) = (va.l/xp.l)*(pva/px)**sigmap
+                va_val = va_values.get((r, a), 0.0)
+                if va_val > 0:
+                    price_ratio = pva / px  # = 1.0
+                    self.ava_param[(r, a)] = (va_val / xp_val) * (price_ratio ** sigmap)
+        
+        # Calculate XA (Armington demand) for IO calibration
+        for r in sets.r:
+            for a in sets.a:
+                for i in sets.i:
+                    # Domestic intermediate + imported intermediate
+                    domestic = benchmark.vdfb.get((r, i, a), 0.0)
+                    imported = benchmark.vmfb.get((r, i, a), 0.0)
+                    xa_val = domestic + imported
+                    if xa_val > 0:
+                        xa_values[(r, i, a)] = xa_val
+        
+        # Calibrate IO coefficients (GAMS cal.gms line 726)
+        for r in sets.r:
+            for a in sets.a:
+                nd_val = nd_values.get((r, a), 0.0)
+                if nd_val <= 0:
+                    continue
+                
+                sigmand = elasticities.sigmand.get((r, a), 1.0)
+                
+                for i in sets.i:
+                    xa_val = xa_values.get((r, i, a), 0.0)
+                    if xa_val <= 0:
+                        continue
+                    
+                    # io(r,i,a,t) = (xa.l/nd.l)*(pa/pnd)**sigmand
+                    price_ratio = pa / pnd  # = 1.0
+                    self.io_param[(r, i, a)] = (xa_val / nd_val) * (price_ratio ** sigmand)
+        
+        # Calculate XF (factor demand) values
+        for r in sets.r:
+            for f in sets.f:
+                for a in sets.a:
+                    xf_val = benchmark.vfm.get((r, f, a), 0.0)
+                    if xf_val > 0:
+                        xf_values[(r, f, a)] = xf_val
+        
+        # Calibrate AF (factor shares) (GAMS cal.gms line 727)
+        for r in sets.r:
+            for a in sets.a:
+                va_val = va_values.get((r, a), 0.0)
+                if va_val <= 0:
+                    continue
+                
+                sigmav = elasticities.sigmav.get((r, a), 1.0)
+                
+                for f in sets.f:
+                    xf_val = xf_values.get((r, f, a), 0.0)
+                    if xf_val <= 0:
+                        continue
+                    
+                    # af(r,f,a,t) = (xf.l/va.l)*(pfa/pva)**sigmav
+                    # Note: pfa includes taxes, but in benchmark pfa = pva = 1.0
+                    price_ratio = pfa / pva  # = 1.0
+                    self.af_param[(r, f, a)] = (xf_val / va_val) * (price_ratio ** sigmav)
+        
+        # Calibrate GX (make shares) (GAMS cal.gms lines 729-731)
+        for r in sets.r:
+            for a in sets.a:
+                xp_val = xp_values.get((r, a), 0.0)
+                if xp_val <= 0:
+                    continue
+                
+                # Get omegas elasticity (can be inf for perfect transformation)
+                omegas = elasticities.sigmap.get((r, a), 1.0)  # Placeholder - need actual omegas
+                
+                outputs = sets.activity_commodities.get(a, [sets.a_to_i.get(a, a)])
+                for i in outputs:
+                    x_val = benchmark.makb.get((r, a, i), 0.0)
+                    if x_val <= 0:
+                        continue
+                    
+                    if omegas != float('inf'):
+                        # gx(r,a,i,t) = (x.l/xp.l)*(px/p)**omegas
+                        price_ratio = px / p  # = 1.0
+                        self.gx_param[(r, a, i)] = (x_val / xp_val) * (price_ratio ** omegas)
+                    else:
+                        # Perfect transformation: gx = value share
+                        self.gx_param[(r, a, i)] = (p * x_val) / (px * xp_val)
 
 
 @dataclass
@@ -100,14 +544,37 @@ class GTAPBenchmarkValues:
     # Production and supply
     vom: Dict[Tuple[str, str], float] = field(default_factory=dict)     # (r, a) - Output at market prices
     vom_i: Dict[Tuple[str, str], float] = field(default_factory=dict)   # (r, i) - Output by commodity
+    makb: Dict[Tuple[str, str, str], float] = field(
+        default_factory=dict
+    )  # (r, a, i) - Make/output pairs (value)
+    maks: Dict[Tuple[str, str, str], float] = field(
+        default_factory=dict
+    )  # (r, a, i) - Make/output pairs (value) (alternative)
     
     # Factor payments
     vfm: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Factor payments
     vfb: Dict[Tuple[str, str], float] = field(default_factory=dict)     # (r, f) - Factor income
+    evfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, a, f) - Factor payments (aux)
+    vmfp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Imported factors at purchaser prices?
+    vmfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Factor payments imported
     
     # Intermediate demand
     vdfm: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Domestic intermediate
     vifm: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Imported intermediate
+    vdfp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Domestic intermediate at purchaser
+    vdfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Domestic intermediate at basic
+    vmpp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - ?
+    vmpb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    vdpp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    vdpb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    vdgp: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    vdgb: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    vmgp: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    vmgb: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    vdip: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    vdib: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    vmip: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    vmib: Dict[Tuple[str, str], float] = field(default_factory=dict)
     
     # Final demand - Private consumption
     vpm: Dict[Tuple[str, str], float] = field(default_factory=dict)     # (r, i) - Private consumption
@@ -122,6 +589,11 @@ class GTAPBenchmarkValues:
     vxmd: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Exports (fob)
     vswd: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Exports (fob, by source)
     vtwr: Dict[Tuple[str, str, str, str], float] = field(default_factory=dict)  # (r, i, rp, m) - Transport margins
+    vxsb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Exports at basic prices
+    vfob: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    vcif: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    vmsb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    vst: Dict[Tuple[str, str], float] = field(default_factory=dict)
     
     # Trade at market prices
     viws: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Imports (cif)
@@ -130,41 +602,220 @@ class GTAPBenchmarkValues:
     # Income and savings
     yp: Dict[str, float] = field(default_factory=dict)      # r - Private income
     yg: Dict[str, float] = field(default_factory=dict)      # r - Government income
+
+    def _resolve_final_demand_split(
+        self,
+        total_flow: float,
+        domestic_flow: float,
+        import_flow: float,
+    ) -> tuple[float, float, float]:
+        """Return consistent total, domestic and import benchmark final-demand flows.
+
+        Some GTAP extracts expose Armington totals directly in `vpm`/`vgm`/`vim`
+        while others appear to store only the domestic component there and leave
+        imports in `vmpp`/`vmgp`/`vmip`. When explicit domestic+import flows imply
+        a materially larger total than `vpm`/`vgm`/`vim`, trust the explicit split
+        and reconstruct the Armington total from its parts.
+        """
+        total = max(total_flow, 0.0)
+        domestic = max(domestic_flow, 0.0)
+        imported = max(import_flow, 0.0)
+
+        explicit_total = domestic + imported
+
+        # Some benchmark extracts store domestic purchases in the "total" field
+        # and leave the explicit domestic split empty while still reporting imports.
+        if domestic <= 0.0 and total > 0.0 and imported > 0.0:
+            domestic = total
+            explicit_total = domestic + imported
+
+        if explicit_total > 0.0:
+            # Some benchmark extracts label the domestic component as the total.
+            # If the explicit domestic/import split materially exceeds that value,
+            # treat the split as authoritative.
+            if total <= 0.0 or total < explicit_total * 0.99:
+                total = explicit_total
+
+        if domestic <= 0.0 and total > 0.0:
+            domestic = max(total - imported, 0.0)
+
+        if imported <= 0.0 and total > 0.0 and domestic > 0.0:
+            imported = max(total - domestic, 0.0)
+
+        if total <= 0.0:
+            total = domestic + imported
+
+        return total, domestic, imported
+
+    def get_private_demand(self, region: str, commodity: str) -> tuple[float, float, float]:
+        return self._resolve_final_demand_split(
+            self.vpm.get((region, commodity), 0.0),
+            self.vdpp.get((region, commodity), 0.0),
+            self.vmpp.get((region, commodity), 0.0),
+        )
+
+    def get_government_demand(self, region: str, commodity: str) -> tuple[float, float, float]:
+        return self._resolve_final_demand_split(
+            self.vgm.get((region, commodity), 0.0),
+            self.vdgp.get((region, commodity), 0.0),
+            self.vmgp.get((region, commodity), 0.0),
+        )
+
+    def get_investment_demand(self, region: str, commodity: str) -> tuple[float, float, float]:
+        return self._resolve_final_demand_split(
+            self.vim.get((region, commodity), 0.0),
+            self.vdip.get((region, commodity), 0.0),
+            self.vmip.get((region, commodity), 0.0),
+        )
     
     def load_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
-        """Load benchmark values from GDX file."""
+        """Load benchmark values from GDX file using GTAP Standard 7 native parameter names."""
         gdx_data = read_gdx(gdx_path)
         
-        # Production
-        self._load_param(gdx_data, "vom", self.vom, 2)
+        # Production - using GTAP Std 7 names
+        self._load_param(gdx_data, "vom", self.vom, 2, gdx_path)        # → VOSB
+        self._load_param(gdx_data, "makb", self.makb, 3, gdx_path)      # → MAKB
+        self._load_param(gdx_data, "maks", self.maks, 3, gdx_path)      # → MAKS (if exists)
         
-        # Factors
-        self._load_param(gdx_data, "vfm", self.vfm, 3)
-        self._load_param(gdx_data, "vfb", self.vfb, 2)
+        # Factors - using GTAP Std 7 names  
+        self._load_param(gdx_data, "vfm", self.vfm, 3, gdx_path)        # → EVFP
+        self._load_param(gdx_data, "vfb", self.vfb, 2, gdx_path)        # → EVFB
         
-        # Intermediate demand
-        self._load_param(gdx_data, "vdfm", self.vdfm, 3)
-        self._load_param(gdx_data, "vifm", self.vifm, 3)
+        # Intermediate demand - using GTAP Std 7 names
+        self._load_param(gdx_data, "vdfm", self.vdfm, 3, gdx_path)      # → VDFP
+        self._load_param(gdx_data, "vifm", self.vifm, 3, gdx_path)      # → VIFP
         
-        # Final demand
-        self._load_param(gdx_data, "vpm", self.vpm, 2)
-        self._load_param(gdx_data, "vgm", self.vgm, 2)
-        self._load_param(gdx_data, "vim", self.vim, 2)
+        # Final demand - using GTAP Std 7 names
+        self._load_param(gdx_data, "vpm", self.vpm, 2, gdx_path)        # → VDPP
+        self._load_param(gdx_data, "vgm", self.vgm, 2, gdx_path)        # → VDGP
+        self._load_param(gdx_data, "vim", self.vim, 2, gdx_path)        # → VDIP
         
-        # Trade flows
-        self._load_param(gdx_data, "vxmd", self.vxmd, 3)
-        self._load_param(gdx_data, "viws", self.viws, 3)
-        self._load_param(gdx_data, "vims", self.vims, 3)
-        self._load_param(gdx_data, "vtwr", self.vtwr, 4)
+        # Trade flows - using GTAP Std 7 names
+        self._load_param(gdx_data, "vxmd", self.vxmd, 3, gdx_path)      # → VXMD
+        self._load_param(gdx_data, "viws", self.viws, 3, gdx_path)      # → VIWS
+        self._load_param(gdx_data, "vims", self.vims, 3, gdx_path)      # → VIMS
+        self._load_param(gdx_data, "vtwr", self.vtwr, 4, gdx_path)      # → VTWR
+
+        # Additional SAM tables - GTAP Std 7 already uses uppercase
+        additional = [
+            ("MAKB", self.makb, 3),
+            ("VDFB", self.vdfb, 3),
+            ("VDFP", self.vdfp, 3),
+            ("VMFB", self.vmfb, 3),
+            ("VMFP", self.vmfp, 3),
+            ("VDGB", self.vdgb, 2),
+            ("VDGP", self.vdgp, 2),
+            ("VMGB", self.vmgb, 2),
+            ("VMGP", self.vmgp, 2),
+            ("VDIB", self.vdib, 2),
+            ("VDIP", self.vdip, 2),
+            ("VMIB", self.vmib, 2),
+            ("VMIP", self.vmip, 2),
+            ("VMPB", self.vmpb, 2),
+            ("VMPP", self.vmpp, 2),
+            ("VFOB", self.vfob, 3),
+            ("VCIF", self.vcif, 3),
+            ("VMSB", self.vmsb, 3),
+            ("VST", self.vst, 2),
+            ("VXSB", self.vxsb, 3),
+        ]
+        for name, target, ndim in additional:
+            self._load_param(gdx_data, name, target, ndim, gdx_path)
+
+        self._derive_output_totals(sets)
+        self._derive_intermediate_totals(sets)
+        self._derive_final_demand_totals(sets)
+        self._derive_trade_aggregates(sets)
+
+    def _load_param(self, gdx_data: Dict, name: str, target: Dict, ndim: int, gdx_path: Path) -> None:
+        """Helper to load a parameter using GTAP Standard 7 native names.
         
-    def _load_param(self, gdx_data: Dict, name: str, target: Dict, ndim: int) -> None:
-        """Helper to load a parameter."""
+        Args:
+            gdx_data: GDX data dictionary
+            name: Internal parameter name (e.g., 'vom', 'vfm') or GTAP Std 7 name (e.g., 'VOSB')
+            target: Target dictionary to populate
+            ndim: Expected number of dimensions
+            gdx_path: Path to GDX file for gdxdump fallback
+        """
+        # Convert internal name to GTAP Std 7 name (if not already uppercase)
+        gtap_name = get_benchmark_parameter_name(name) if name.islower() else name
+        
+        # Special handling for 'vom' - calculate from MAKB
+        if name == 'vom' and gtap_name == 'MAKB':
+            makb_values = read_parameter_values(gdx_data, 'MAKB')
+            if makb_values:
+                # MAKB has structure (commodity, activity, region)
+                # vom(region, activity) = SUM_commodity MAKB(commodity, activity, region)
+                makb_reordered = reorder_parameter_keys('MAKB', makb_values)  # → (r, a, i)
+                for (r, a, i), val in makb_reordered.items():
+                    key = (r, a)
+                    target[key] = target.get(key, 0.0) + val
+            return
+        
         try:
-            values = read_parameter_values(gdx_data, name)
+            values = read_parameter_values(gdx_data, gtap_name)
+            if not values:
+                # Fallback to gdxdump if pure Python reader fails
+                values = read_parameter_with_gdxdump(gdx_path, gtap_name)
             if values:
+                # Reorder keys if needed
+                values = reorder_parameter_keys(gtap_name, values)
                 target.update(values)
         except (KeyError, ValueError):
-            pass
+            values = read_parameter_with_gdxdump(gdx_path, gtap_name)
+            if values:
+                # Reorder keys if needed
+                values = reorder_parameter_keys(gtap_name, values)
+                target.update(values)
+
+    def _derive_output_totals(self, sets: GTAPSets) -> None:
+        """Derived output totals (e.g., vom_i) from make/output pairs."""
+        for (region, activity, commodity), value in self.makb.items():
+            if value <= 0:
+                continue
+            key = (region, commodity)
+            self.vom_i[key] = self.vom_i.get(key, 0.0) + value
+
+    def _derive_intermediate_totals(self, sets: GTAPSets) -> None:
+        """Placeholder for intermediate demand aggregators (no-op for now)."""
+        return
+
+    def _derive_final_demand_totals(self, sets: GTAPSets) -> None:
+        """Placeholder for final demand aggregates (no-op for now)."""
+        return
+
+    def _derive_trade_aggregates(self, sets: GTAPSets) -> None:
+        """Placeholder for trade aggregates (no-op for now)."""
+        return
+
+    def get_trade_totals(self, sets: GTAPSets, region: str, commodity: str) -> tuple[float, float, float, float, float]:
+        """Return benchmark trade totals for standard aggregates.
+
+        The simplified Python CET block only represents a top-level split between
+        domestic sales and aggregate exports. To keep that block benchmark-feasible,
+        domestic sales are anchored to absorbed domestic use and aggregate exports
+        are taken as the residual of domestic output.
+        """
+        xs = self.vom_i.get((region, commodity), 0.0)
+        _, private_domestic, private_import = self.get_private_demand(region, commodity)
+        _, government_domestic, government_import = self.get_government_demand(region, commodity)
+        _, investment_domestic, investment_import = self.get_investment_demand(region, commodity)
+
+        domestic_use = (
+            sum(self.vdfm.get((region, commodity, a), 0.0) for a in sets.a)
+            + private_domestic
+            + government_domestic
+            + investment_domestic
+        )
+        xmt = sum(
+            self.vifm.get((region, commodity, a), 0.0)
+            for a in sets.a
+        )
+        xmt += private_import + government_import + investment_import
+        xd = min(max(domestic_use, 0.0), max(xs, 0.0))
+        xet = max(xs - xd, 0.0)
+        xa = xd + xmt
+        return xs, xd, xet, xmt, xa
 
 
 @dataclass
@@ -194,30 +845,90 @@ class GTAPTaxRates:
     
     # Direct taxes
     kappaf: Dict[Tuple[str, str], float] = field(default_factory=dict)   # (r, f) - Income tax rate
+    kappaf_activity: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Activity-level wedges
     
     def load_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
         """Load tax rates from GDX file."""
         gdx_data = read_gdx(gdx_path)
         
-        self._load_param(gdx_data, "rto", self.rto, 2)
-        self._load_param(gdx_data, "rtf", self.rtf, 3)
-        self._load_param(gdx_data, "rtfd", self.rtfd, 3)
-        self._load_param(gdx_data, "rtfi", self.rtfi, 3)
-        self._load_param(gdx_data, "rtpd", self.rtpd, 3)
-        self._load_param(gdx_data, "rtpi", self.rtpi, 3)
-        self._load_param(gdx_data, "rtgd", self.rtgd, 2)
-        self._load_param(gdx_data, "rtgi", self.rtgi, 2)
-        self._load_param(gdx_data, "rtxs", self.rtxs, 3)
-        self._load_param(gdx_data, "rtms", self.rtms, 3)
+        self._load_param(gdx_data, "rto", self.rto, 2, gdx_path)
+        self._load_param(gdx_data, "rtf", self.rtf, 3, gdx_path)
+        self._load_param(gdx_data, "rtfd", self.rtfd, 3, gdx_path)
+        self._load_param(gdx_data, "rtfi", self.rtfi, 3, gdx_path)
+        self._load_param(gdx_data, "rtpd", self.rtpd, 3, gdx_path)
+        self._load_param(gdx_data, "rtpi", self.rtpi, 3, gdx_path)
+        self._load_param(gdx_data, "rtgd", self.rtgd, 2, gdx_path)
+        self._load_param(gdx_data, "rtgi", self.rtgi, 2, gdx_path)
+        self._load_param(gdx_data, "rtxs", self.rtxs, 3, gdx_path)
+        self._load_param(gdx_data, "rtms", self.rtms, 3, gdx_path)
         
-    def _load_param(self, gdx_data: Dict, name: str, target: Dict, ndim: int) -> None:
-        """Helper to load a parameter."""
+    def _load_param(self, gdx_data: Dict, name: str, target: Dict, ndim: int, gdx_path: Path) -> None:
+        """Helper to load a tax parameter using GTAP Standard 7 native names.
+        
+        Args:
+            gdx_data: GDX data dictionary
+            name: Internal tax parameter name (e.g., 'rto', 'rtf')
+            target: Target dictionary to populate
+            ndim: Expected number of dimensions
+            gdx_path: Path to GDX file for gdxdump fallback
+        """
+        # Convert internal name to GTAP Std 7 name
+        gtap_name = get_tax_parameter_name(name)
+        
         try:
-            values = read_parameter_values(gdx_data, name)
+            values = read_parameter_values(gdx_data, gtap_name)
             if values:
+                # Reorder keys if needed
+                values = reorder_parameter_keys(gtap_name, values)
                 target.update(values)
         except (KeyError, ValueError):
-            pass
+            values = read_parameter_with_gdxdump(gdx_path, gtap_name)
+            if values:
+                # Reorder keys if needed
+                values = reorder_parameter_keys(gtap_name, values)
+                target.update(values)
+
+    def derive_agent_consumption_taxes(self, benchmark: "GTAPBenchmarkValues", sets: GTAPSets) -> None:
+        """Derive agent-level consumption tax buckets (stub)."""
+        return
+
+    def derive_trade_route_wedges(self, benchmark: "GTAPBenchmarkValues", sets: GTAPSets) -> None:
+        """Derive trade route wedges (stub)."""
+        return
+
+
+@dataclass
+class GTAPNormalizedParameters:
+    """Snapshot of normalized shares derived from the benchmark."""
+
+    value_added_share: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    intermediate_share: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    output_share: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    commodity_share: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    factor_supply_share: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    factor_value_share: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    armington_domestic: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    armington_import: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    armington_national: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    import_source_share: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    export_destination_share: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    domestic_supply_share: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    export_supply_share: Dict[Tuple[str, str], float] = field(default_factory=dict)
+
+    def update_from_shares(self, share_params: "GTAPShareParameters") -> None:
+        self.value_added_share = share_params.p_va.copy()
+        self.intermediate_share = share_params.p_nd.copy()
+        self.output_share = share_params.p_gx.copy()
+        self.commodity_share = share_params.p_ax.copy()
+        self.factor_supply_share = share_params.p_gf.copy()
+        self.factor_value_share = share_params.p_af.copy()
+        self.armington_domestic = share_params.p_alphad.copy()
+        self.armington_import = share_params.p_alpham.copy()
+        self.armington_national = share_params.p_alphan.copy()
+        self.import_source_share = share_params.p_amw.copy()
+        self.export_destination_share = share_params.p_gw.copy()
+        self.domestic_supply_share = share_params.p_gd.copy()
+        self.export_supply_share = share_params.p_ge.copy()
 
 
 @dataclass
@@ -227,9 +938,14 @@ class GTAPShareParameters:
     These are derived from the benchmark SAM and elasticities.
     """
     
+    normalized: GTAPNormalizedParameters = field(default_factory=GTAPNormalizedParameters, init=False)
+
     # Production shares
     p_gx: Dict[Tuple[str, str, str], float] = field(default_factory=dict)     # (r, a, i) - CET share for output allocation
     p_ax: Dict[Tuple[str, str, str], float] = field(default_factory=dict)     # (r, a, i) - CES share for commodity production
+    p_va: Dict[Tuple[str, str], float] = field(default_factory=dict)          # (r, a) - Value-added share
+    p_nd: Dict[Tuple[str, str], float] = field(default_factory=dict)          # (r, a) - Intermediate-share complement
+    p_io: Dict[Tuple[str, str, str], float] = field(default_factory=dict)     # (r, i, a) - Intermediate demand share inside nd
     
     # Armington shares
     p_alphad: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, aa) - Domestic share
@@ -239,9 +955,12 @@ class GTAPShareParameters:
     # Bilateral trade shares
     p_amw: Dict[Tuple[str, str, str], float] = field(default_factory=dict)    # (r, i, rp) - Import share by source
     p_gw: Dict[Tuple[str, str, str], float] = field(default_factory=dict)     # (r, i, rp) - Export share by destination
+    p_gd: Dict[Tuple[str, str], float] = field(default_factory=dict)          # (r, i) - Domestic CET share
+    p_ge: Dict[Tuple[str, str], float] = field(default_factory=dict)          # (r, i) - Export CET share
     
     # Factor shares
     p_gf: Dict[Tuple[str, str, str], float] = field(default_factory=dict)     # (r, f, a) - Factor supply share
+    p_af: Dict[Tuple[str, str, str], float] = field(default_factory=dict)     # (r, f, a) - Factor share inside value added
     
     # Demand shares
     p_axg: Dict[str, float] = field(default_factory=dict)     # r - Government CES shifter
@@ -254,40 +973,108 @@ class GTAPShareParameters:
         self._calibrate_armington_shares(benchmark, sets)
         self._calibrate_trade_shares(benchmark, sets)
         self._calibrate_factor_shares(benchmark, sets)
-        
+        self.normalized.update_from_shares(self)
+
     def _calibrate_production_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
-        """Calibrate production share parameters."""
-        # p_gx: CET shares for output allocation
+        """Calibrate production share parameters and VA/ND ratios."""
         for r in sets.r:
             for a in sets.a:
-                total_output = sum(benchmark.vom.get((r, a), 0.0) for a in sets.a)
-                if total_output > 0:
+                outputs = sets.activity_commodities.get(a, [])
+                if not outputs:
+                    if a in sets.a_to_i:
+                        outputs = [sets.a_to_i[a]]
+                if not outputs:
+                    continue
+
+                total_output = sum(benchmark.makb.get((r, a, i), 0.0) for i in outputs)
+                if total_output <= 0:
+                    total_output = benchmark.vom.get((r, a), 0.0)
+                if total_output <= 0:
+                    continue
+
+                for i in outputs:
+                    value = benchmark.makb.get((r, a, i), 0.0)
+                    share = value / total_output if value > 0 else 1.0 / len(outputs)
+                    self.p_gx[(r, a, i)] = share
+                    self.p_ax[(r, a, i)] = share
+
+                total_va = sum(benchmark.vfm.get((r, f, a), 0.0) for f in sets.f)
+                if total_va > 0:
+                    self.p_va[(r, a)] = min(total_va / total_output, 1.0)
+                    for f in sets.f:
+                        value = benchmark.vfm.get((r, f, a), 0.0)
+                        self.p_af[(r, f, a)] = value / total_va if value > 0 else 0.0
+                else:
+                    self.p_va[(r, a)] = 0.0
+                    for f in sets.f:
+                        self.p_af[(r, f, a)] = 0.0
+
+                self.p_nd[(r, a)] = max(0.0, 1.0 - self.p_va.get((r, a), 0.0))
+
+                total_intermediate = 0.0
+                intermediate_by_commodity: Dict[str, float] = {}
+                for i in sets.i:
+                    value = benchmark.vdfm.get((r, i, a), 0.0) + benchmark.vifm.get((r, i, a), 0.0)
+                    if value <= 0.0:
+                        continue
+                    intermediate_by_commodity[i] = value
+                    total_intermediate += value
+
+                if total_intermediate > 0.0:
+                    for i, value in intermediate_by_commodity.items():
+                        self.p_io[(r, i, a)] = value / total_intermediate
+                else:
                     for i in sets.i:
-                        value = benchmark.vom.get((r, a), 0.0)
-                        self.p_gx[(r, a, i)] = value / total_output
-                        
+                        self.p_io[(r, i, a)] = 0.0
+                
     def _calibrate_armington_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
         """Calibrate Armington share parameters."""
-        # p_alphad: Domestic share
-        # p_alpham: Import share
-        # This requires aggregating across agents
-        pass
-        
+        for r in sets.r:
+            for i in sets.i:
+                _, xd, _, xmt, xa = benchmark.get_trade_totals(sets, r, i)
+                if xa <= 0:
+                    self.p_alphad[(r, i)] = 1.0
+                    self.p_alpham[(r, i)] = 0.0
+                    continue
+                self.p_alphad[(r, i)] = xd / xa
+                self.p_alpham[(r, i)] = xmt / xa
+
     def _calibrate_trade_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
         """Calibrate bilateral trade share parameters."""
-        # p_amw: Import share by source
+        for r in sets.r:
+            for i in sets.i:
+                xs, xd, xet, _, _ = benchmark.get_trade_totals(sets, r, i)
+                if xs > 0:
+                    self.p_gd[(r, i)] = xd / xs
+                    self.p_ge[(r, i)] = xet / xs
+                else:
+                    self.p_gd[(r, i)] = 1.0
+                    self.p_ge[(r, i)] = 0.0
+
         for r in sets.r:
             for i in sets.i:
                 total_imports = sum(benchmark.viws.get((rp, i, r), 0.0) for rp in sets.r if rp != r)
                 if total_imports > 0:
                     for rp in sets.r:
-                        if rp != r:
-                            value = benchmark.viws.get((rp, i, r), 0.0)
+                        if rp == r:
+                            continue
+                        value = benchmark.viws.get((rp, i, r), 0.0)
+                        if value > 0:
                             self.p_amw[(r, i, rp)] = value / total_imports
+
+        for r in sets.r:
+            for i in sets.i:
+                total_exports = sum(benchmark.vxmd.get((r, i, rp), 0.0) for rp in sets.r if rp != r)
+                if total_exports > 0:
+                    for rp in sets.r:
+                        if rp == r:
+                            continue
+                        value = benchmark.vxmd.get((r, i, rp), 0.0)
+                        if value > 0:
+                            self.p_gw[(r, i, rp)] = value / total_exports
                             
     def _calibrate_factor_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
         """Calibrate factor share parameters."""
-        # p_gf: Factor supply shares
         for r in sets.r:
             for f in sets.f:
                 total_payment = sum(benchmark.vfm.get((r, f, a), 0.0) for a in sets.a)
@@ -295,6 +1082,136 @@ class GTAPShareParameters:
                     for a in sets.a:
                         value = benchmark.vfm.get((r, f, a), 0.0)
                         self.p_gf[(r, f, a)] = value / total_payment
+
+    def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot, sets: GTAPSets) -> None:
+        """Update share parameters using an equilibrium CSV snapshot."""
+        xp = snapshot.get("xp")
+        va = snapshot.get("va")
+        x = snapshot.get("x")
+        xf = snapshot.get("xf")
+        pf = snapshot.get("pf")
+
+        def iter_ra(data):
+            for key, value in data.items():
+                if len(key) < 2:
+                    continue
+                yield key[0], key[1], value
+
+        def iter_rai(data):
+            for key, value in data.items():
+                if len(key) < 3:
+                    continue
+                yield key[0], key[1], key[2], value
+
+        def iter_raf(data):
+            for key, value in data.items():
+                if len(key) < 3:
+                    continue
+                yield key[0], key[1], key[2], value
+
+        for r, a, xp_val in iter_ra(xp):
+            if r not in sets.r or a not in sets.a or xp_val <= 0:
+                continue
+            va_val = va.get((r, a), 0.0)
+            share = max(0.0, min(1.0, va_val / xp_val))
+            self.p_va[(r, a)] = share
+            self.p_nd[(r, a)] = max(0.0, 1.0 - share)
+
+        for r, a, i, value in iter_rai(x):
+            if r not in sets.r or a not in sets.a or i not in sets.activity_commodities.get(a, [i]) + [i]:
+                continue
+            xp_val = xp.get((r, a), 0.0)
+            share = value / xp_val if xp_val > 0 else 0.0
+            self.p_gx[(r, a, i)] = share
+            self.p_ax[(r, a, i)] = share
+
+        factor_totals: Dict[Tuple[str, str], float] = defaultdict(float)
+        for r, a, f, xf_val in iter_raf(xf):
+            if r not in sets.r or a not in sets.a or f not in sets.f:
+                continue
+            factor_totals[(r, f)] += xf_val
+
+        for r, a, f, xf_val in iter_raf(xf):
+            if r not in sets.r or a not in sets.a or f not in sets.f:
+                continue
+            total = factor_totals.get((r, f), 0.0)
+            share_supply = xf_val / total if total > 0 else 0.0
+            self.p_gf[(r, f, a)] = share_supply
+
+        activity_payments: Dict[Tuple[str, str], float] = defaultdict(float)
+        factor_payments: Dict[Tuple[str, str, str], float] = {}
+        for r, a, f, xf_val in iter_raf(xf):
+            if r not in sets.r or a not in sets.a or f not in sets.f:
+                continue
+            key = (r, a, f)
+            price = pf.get(key, None)
+            if price is None:
+                continue
+            payment = xf_val * price
+            factor_payments[key] = payment
+            activity_payments[(r, a)] += payment
+
+        for (r, a, f), payment in factor_payments.items():
+            total = activity_payments.get((r, a), 0.0)
+            share_value = payment / total if total > 0 else 0.0
+            self.p_af[(r, f, a)] = share_value
+
+        self.normalized.update_from_shares(self)
+
+
+@dataclass
+class GTAPShiftParameters:
+    """Variables that act as multipliers/technology shifters."""
+
+    axp: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    lambdand: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    lambdava: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    lambdaf: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+
+    def load_from_gdx(self, gdx_path: Path) -> None:
+        """Load technology shifters from the GDX."""
+        self.axp = self._collapse(read_variable_levels_with_gdxdump(gdx_path, "axp"))
+        self.lambdand = self._collapse(read_variable_levels_with_gdxdump(gdx_path, "lambdand"))
+        self.lambdava = self._collapse(read_variable_levels_with_gdxdump(gdx_path, "lambdava"))
+        self.lambdaf = self._collapse_factor(read_variable_levels_with_gdxdump(gdx_path, "lambdaf"))
+
+    def _collapse(self, raw: Dict[Tuple[str, ...], float]) -> Dict[Tuple[str, str], float]:
+        grouped: Dict[Tuple[str, str], Dict[str, float]] = defaultdict(dict)
+        for key, value in raw.items():
+            if len(key) < 2:
+                continue
+            region, activity = key[0], key[1]
+            time = key[2] if len(key) > 2 else ""
+            grouped[(region, activity)][time] = value
+
+        result: Dict[Tuple[str, str], float] = {}
+        for node, time_map in grouped.items():
+            for preferred in ("base", "t0"):
+                if preferred in time_map:
+                    result[node] = time_map[preferred]
+                    break
+            else:
+                result[node] = next(iter(time_map.values()))
+        return result
+
+    def _collapse_factor(self, raw: Dict[Tuple[str, ...], float]) -> Dict[Tuple[str, str, str], float]:
+        grouped: Dict[Tuple[str, str, str], Dict[str, float]] = defaultdict(dict)
+        for key, value in raw.items():
+            if len(key) < 3:
+                continue
+            region, factor, activity = key[0], key[1], key[2]
+            time = key[3] if len(key) > 3 else ""
+            grouped[(region, factor, activity)][time] = value
+
+        result: Dict[Tuple[str, str, str], float] = {}
+        for node, time_map in grouped.items():
+            for preferred in ("base", "t0"):
+                if preferred in time_map:
+                    result[node] = time_map[preferred]
+                    break
+            else:
+                result[node] = next(iter(time_map.values()))
+        return result
 
 
 @dataclass
@@ -309,23 +1226,38 @@ class GTAPParameters:
     benchmark: GTAPBenchmarkValues = field(default_factory=GTAPBenchmarkValues)
     taxes: GTAPTaxRates = field(default_factory=GTAPTaxRates)
     shares: GTAPShareParameters = field(default_factory=GTAPShareParameters)
+    calibrated: GTAPCalibratedShares = field(default_factory=GTAPCalibratedShares)  # GAMS-style calibrated shares
+    shifts: GTAPShiftParameters = field(default_factory=GTAPShiftParameters)
     
-    def load_from_gdx(self, gdx_path: Path) -> None:
-        """Load all parameters from GDX file.
+    def load_from_gdx(self, gdx_path: Path, elasticity_gdx: Optional[Path] = None) -> None:
+        """Load all parameters from GDX file(s).
         
         Args:
-            gdx_path: Path to GTAP GDX file
+            gdx_path: Path to GTAP GDX file with benchmark data (e.g., basedata-9x10.gdx)
+            elasticity_gdx: Optional separate GDX file with elasticities (e.g., default-9x10.gdx)
         """
         # First load sets
         self.sets.load_from_gdx(gdx_path)
         
-        # Then load parameters that depend on sets
-        self.elasticities.load_from_gdx(gdx_path, self.sets)
+        # Load elasticities from separate file if provided, otherwise from main file
+        elast_file = elasticity_gdx if elasticity_gdx else gdx_path
+        self.elasticities.load_from_gdx(elast_file, self.sets)
+        self.elasticities.initialize_nested_elasticities(self.sets)  # Ensure coverage
+        
+        # Load benchmark and taxes from main file
         self.benchmark.load_from_gdx(gdx_path, self.sets)
         self.taxes.load_from_gdx(gdx_path, self.sets)
-        
-        # Calibrate share parameters
+        self.shifts.load_from_gdx(gdx_path)
+
+        # Calibrate share parameters (simple shares)
         self.shares.calibrate(self.benchmark, self.elasticities, self.sets)
+        
+        # Calibrate GAMS-style shares (and, ava, io, af, gx) from benchmark
+        self.calibrated.calibrate_from_benchmark(self.benchmark, self.elasticities, self.sets)
+
+    def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot) -> None:
+        """Override share parameters using an equilibrium CSV snapshot."""
+        self.shares.apply_equilibrium_snapshot(snapshot, self.sets)
         
     def validate(self) -> Tuple[bool, List[str]]:
         """Validate all parameters."""
