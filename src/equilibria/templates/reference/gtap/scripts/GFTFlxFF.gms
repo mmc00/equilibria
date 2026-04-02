@@ -9,9 +9,9 @@
 
 $setGlobal simType   CompStat
 $setGlobal simName   GFTFlxFF
-$setGlobal baseName  10x10
-$setGlobal inDir     .
-$setGlobal outDir    .
+$if not setGlobal baseName $setGlobal baseName  9x10
+$if not setGlobal inDir $setGlobal inDir     ../data
+$if not setGlobal outDir $setGlobal outDir    ../output
 $setGlobal utility   cde
 $setGlobal savfFlag  capFlex
 $setGlobal ifCal       0
