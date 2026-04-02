@@ -8,9 +8,9 @@
 
 $setGlobal simType   CompStat
 $setGlobal simName   COMP
-$setGlobal baseName  9x10
-$setGlobal inDir     .
-$setGlobal outDir    .
+$if not setGlobal baseName $setGlobal baseName  9x10
+$if not setGlobal inDir $setGlobal inDir     ../data
+$if not setGlobal outDir $setGlobal outDir    ../output
 $setGlobal utility   cde
 $setGlobal savfFlag  capFix
 $setGlobal ifCal       0
