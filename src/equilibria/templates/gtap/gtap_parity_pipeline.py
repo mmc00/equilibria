@@ -20,6 +20,7 @@ import csv
 import json
 import logging
 import math
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -776,6 +777,9 @@ class GTAPVariableSnapshot:
     yc: Dict[str, float] = field(default_factory=dict)
     yg: Dict[str, float] = field(default_factory=dict)
     yi: Dict[str, float] = field(default_factory=dict)
+    ug: Dict[str, float] = field(default_factory=dict)
+    arent: Dict[str, float] = field(default_factory=dict)
+    facty: Dict[str, float] = field(default_factory=dict)
 
     pnum: Optional[float] = None
     pabs: Dict[str, float] = field(default_factory=dict)
@@ -922,6 +926,7 @@ class GTAPVariableSnapshot:
 
         snapshot = cls()
         data = snapshot.__dict__.copy()
+        ytax_by_region: Dict[str, float] = defaultdict(float)
         if len(sets.m) == 1:
             margin_commodity = sets.m[0]
         else:
@@ -1004,8 +1009,17 @@ class GTAPVariableSnapshot:
                 data["yg"][region] = value
             elif variable == "yi" and region:
                 data["yi"][region] = value
+            elif variable == "ug" and region:
+                data["ug"][region] = value
+            elif variable == "arent" and region:
+                data["arent"][region] = value
             elif variable == "pabs" and region:
                 data["pabs"][region] = value
+            elif variable == "ytax" and region:
+                ytax_by_region[region] += value
+
+        for region in set(data["regy"]) | set(ytax_by_region):
+            data["facty"][region] = float(data["regy"].get(region, 0.0)) - float(ytax_by_region.get(region, 0.0))
 
         return cls(**data)
 
@@ -1594,6 +1608,12 @@ def _build_standard_gtap_params(
             solution_year=resolved_solution_year,
         )
     params.shares.calibrate(params.benchmark, params.elasticities, sets)
+    params.calibrated.calibrate_from_benchmark(params.benchmark, params.elasticities, sets)
+    if resolved_benchmark_csv:
+        from equilibria.templates.gtap.gtap_equilibrium import GTAPEquilibriumSnapshot
+
+        snapshot = GTAPEquilibriumSnapshot.from_csv(resolved_benchmark_csv, year=int(resolved_solution_year))
+        params.apply_equilibrium_snapshot(snapshot)
     return sets, params
 
 

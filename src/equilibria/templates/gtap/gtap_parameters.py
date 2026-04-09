@@ -66,6 +66,8 @@ class GTAPElasticities:
     # Trade elasticities - CET
     omegax: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
     omegaw: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
+    omegas: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a) - activity transformation
+    sigmas: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i) - commodity aggregation
 
     # Factor mobility elasticities
     etrae: Dict[str, float] = field(default_factory=dict)  # f
@@ -74,6 +76,8 @@ class GTAPElasticities:
     esubg: Dict[str, float] = field(default_factory=dict)  # r (government)
     esubi: Dict[str, float] = field(default_factory=dict)  # r (investment)
     esubc: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, h) consumption
+    incpar: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i) CDE expansion parameter
+    subpar: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i) CDE substitution parameter
 
     # Transport margins
     sigmam: Dict[str, float] = field(default_factory=dict)  # m
@@ -95,6 +99,8 @@ class GTAPElasticities:
         self._load_parameter(gdx_data, gdx_path, "esubm", self.esubm, (sets.r, sets.i))
         self._load_parameter(gdx_data, gdx_path, "omegax", self.omegax, (sets.r, sets.i))
         self._load_parameter(gdx_data, gdx_path, "omegaw", self.omegaw, (sets.r, sets.i))
+        self._load_parameter(gdx_data, gdx_path, "omegas", self.omegas, (sets.r, sets.a))
+        self._load_parameter(gdx_data, gdx_path, "sigmas", self.sigmas, (sets.r, sets.i))
 
         # Load factor mobility
         self._load_parameter(gdx_data, gdx_path, "etrae", self.etrae, (sets.f,))
@@ -102,6 +108,8 @@ class GTAPElasticities:
         # Load demand elasticities
         self._load_parameter(gdx_data, gdx_path, "esubg", self.esubg, (sets.r,))
         self._load_parameter(gdx_data, gdx_path, "esubi", self.esubi, (sets.r,))
+        self._load_parameter(gdx_data, gdx_path, "incpar", self.incpar, (sets.r, sets.i))
+        self._load_parameter(gdx_data, gdx_path, "subpar", self.subpar, (sets.r, sets.i))
 
         # Nested CES elasticities
         self._load_parameter(gdx_data, gdx_path, "sigmap", self.sigmap, (sets.r, sets.a))
@@ -355,6 +363,15 @@ class GTAPElasticities:
                 self.sigmand[(r, a)] = self.sigmand.get((r, a), base)
                 self.sigmav[(r, a)] = self.sigmav.get((r, a), base)
 
+        # Populate GTAP equation-level elasticities used in model.gms blocks.
+        # If not explicitly present in GDX, map from available calibrated elasticities.
+        for r in sets.r:
+            for a in sets.a:
+                self.omegas[(r, a)] = self.omegas.get((r, a), self.sigmap.get((r, a), default_value))
+        for r in sets.r:
+            for i in sets.i:
+                self.sigmas[(r, i)] = self.sigmas.get((r, i), self.esubd.get((r, i), 2.0))
+
 
 @dataclass
 class GTAPCalibratedShares:
@@ -389,14 +406,17 @@ class GTAPCalibratedShares:
         benchmark: "GTAPBenchmarkValues",
         elasticities: GTAPElasticities,
         sets: GTAPSets,
+        taxes: "GTAPTaxRates | None" = None,
     ) -> None:
         """Calibrate all share parameters from benchmark data.
         
         This follows GAMS cal.gms calibration logic (lines 724-730).
         All prices are assumed = 1.0 in benchmark (GAMS convention).
         """
-        # All prices = 1.0 in benchmark (GAMS convention from cal.gms lines 15-50)
-        px = pnd = pva = pa = pfa = p = 1.0
+        # All benchmark prices are normalized to 1.0 except the pre-tax make
+        # price, which uses the output tax wedge when available so the GTAP
+        # make equations start from the same tax-adjusted normalization as GAMS.
+        px = pnd = pva = pa = pfa = 1.0
         
         # Calculate intermediate values needed for calibration
         nd_values = {}  # ND bundle values
@@ -516,8 +536,12 @@ class GTAPCalibratedShares:
                 if xp_val <= 0:
                     continue
                 
-                # Get omegas elasticity (can be inf for perfect transformation)
-                omegas = elasticities.sigmap.get((r, a), 1.0)  # Placeholder - need actual omegas
+                # Get GAMS activity transformation elasticity omegas(r,a)
+                omegas = elasticities.omegas.get((r, a), 1.0)
+                output_tax = 0.0
+                if taxes is not None:
+                    output_tax = float(taxes.rto.get((r, a), 0.0) or 0.0)
+                p = 1.0 / max(1.0 + output_tax, 1e-12)
                 
                 outputs = sets.activity_commodities.get(a, [sets.a_to_i.get(a, a)])
                 for i in outputs:
@@ -598,6 +622,12 @@ class GTAPBenchmarkValues:
     # Trade at market prices
     viws: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Imports (cif)
     vims: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Imports ( tariff)
+
+    # Savings, depreciation, and population
+    save: Dict[str, float] = field(default_factory=dict)  # r - Net saving
+    vdep: Dict[str, float] = field(default_factory=dict)  # r - Capital depreciation
+    vkb: Dict[str, float] = field(default_factory=dict)   # r - Capital stock
+    pop: Dict[str, float] = field(default_factory=dict)   # r - Population
     
     # Income and savings
     yp: Dict[str, float] = field(default_factory=dict)      # r - Private income
@@ -623,10 +653,10 @@ class GTAPBenchmarkValues:
 
         explicit_total = domestic + imported
 
-        # Some benchmark extracts store domestic purchases in the "total" field
-        # and leave the explicit domestic split empty while still reporting imports.
+        # Some benchmark extracts store total Armington demand while the explicit
+        # domestic split is missing. Reconstruct domestic as total minus imports.
         if domestic <= 0.0 and total > 0.0 and imported > 0.0:
-            domestic = total
+            domestic = max(total - imported, 0.0)
             explicit_total = domestic + imported
 
         if explicit_total > 0.0:
@@ -718,9 +748,84 @@ class GTAPBenchmarkValues:
             ("VMSB", self.vmsb, 3),
             ("VST", self.vst, 2),
             ("VXSB", self.vxsb, 3),
+            ("SAVE", self.save, 1),
+            ("VDEP", self.vdep, 1),
+            ("VKB", self.vkb, 1),
+            ("POP", self.pop, 1),
         ]
         for name, target, ndim in additional:
             self._load_param(gdx_data, name, target, ndim, gdx_path)
+
+        # Align benchmark values with GAMS inScale usage (cal.gms).
+        in_scale = 1e-6
+
+        def _scale_dict(values: Dict) -> None:
+            for key, val in list(values.items()):
+                values[key] = float(val) * in_scale
+
+        monetary_attrs = [
+            "vom",
+            "makb",
+            "maks",
+            "vfm",
+            "vfb",
+            "evfb",
+            "evos",
+            "vmfp",
+            "vmfb",
+            "vdfm",
+            "vifm",
+            "vdfp",
+            "vdfb",
+            "vmpp",
+            "vmpb",
+            "vdpp",
+            "vdpb",
+            "vdgp",
+            "vdgb",
+            "vmgp",
+            "vmgb",
+            "vdip",
+            "vdib",
+            "vmip",
+            "vmib",
+            "vpm",
+            "vgm",
+            "vim",
+            "vxmd",
+            "vswd",
+            "vtwr",
+            "vxsb",
+            "vfob",
+            "vcif",
+            "vmsb",
+            "vst",
+            "viws",
+            "vims",
+            "save",
+            "vdep",
+            "vkb",
+            "yp",
+            "yg",
+        ]
+
+        for attr in monetary_attrs:
+            values = getattr(self, attr, None)
+            if isinstance(values, dict) and values:
+                _scale_dict(values)
+
+        # If household domestic purchases are missing, reconstruct from totals.
+        for key, total in self.vpm.items():
+            if total <= 0.0:
+                continue
+            imported = self.vmpp.get(key, 0.0)
+            domestic = self.vdpp.get(key, 0.0)
+            if domestic <= 0.0 and imported > 0.0:
+                self.vdpp[key] = max(total - imported, 0.0)
+            if self.vdpp.get(key, 0.0) > 0.0 and self.vdpb.get(key, 0.0) <= 0.0:
+                self.vdpb[key] = self.vdpp[key]
+            if imported > 0.0 and self.vmpb.get(key, 0.0) <= 0.0:
+                self.vmpb[key] = imported
 
         self._derive_output_totals(sets)
         self._derive_intermediate_totals(sets)
@@ -793,10 +898,11 @@ class GTAPBenchmarkValues:
 
         The simplified Python CET block only represents a top-level split between
         domestic sales and aggregate exports. To keep that block benchmark-feasible,
-        domestic sales are anchored to absorbed domestic use and aggregate exports
-        are taken as the residual of domestic output.
+        we anchor domestic sales to absorbed domestic use and aggregate exports to
+        the observed bilateral export flows. The top-level supply quantity then
+        follows from that same split so the CET nest starts from an internally
+        consistent benchmark.
         """
-        xs = self.vom_i.get((region, commodity), 0.0)
         _, private_domestic, private_import = self.get_private_demand(region, commodity)
         _, government_domestic, government_import = self.get_government_demand(region, commodity)
         _, investment_domestic, investment_import = self.get_investment_demand(region, commodity)
@@ -812,7 +918,19 @@ class GTAPBenchmarkValues:
             for a in sets.a
         )
         xmt += private_import + government_import + investment_import
-        xd = min(max(domestic_use, 0.0), max(xs, 0.0))
+        # GAMS calibrates the export CET on VXSB (exports at basic prices),
+        # not on VXMD (exports at market/fob prices). VXSB is the quantity
+        # that appears in xet.l after the cal.gms benchmark normalization.
+        xd = max(domestic_use, 0.0)
+        xs = max(sum(self.makb.get((region, activity, commodity), 0.0) for activity in sets.a), 0.0)
+        if xs <= 0.0:
+            xs = max(self.vom_i.get((region, commodity), 0.0), 0.0)
+        if xs <= 0.0:
+            xs = max(xd, 0.0)
+        # GAMS overwrites the first xet seed with the residual CET identity:
+        # xet = (ps * xs - pd * xds) / pet
+        # At benchmark prices this collapses to xs - xd, which is the
+        # quantity that must be used to calibrate the top-level CET shares.
         xet = max(xs - xd, 0.0)
         xa = xd + xmt
         return xs, xd, xet, xmt, xa
@@ -842,10 +960,16 @@ class GTAPTaxRates:
     # Trade taxes
     rtxs: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Export subsidy (negative = tax)
     rtms: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Import tariff
+    imptx: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, rp) - Import tax rate (ad-valorem)
     
     # Direct taxes
     kappaf: Dict[Tuple[str, str], float] = field(default_factory=dict)   # (r, f) - Income tax rate
     kappaf_activity: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Activity-level wedges
+    
+    # Agent-specific consumption taxes (GAMS dintx0, mintx0)
+    # These are calculated from benchmark data as (purchaser_price - basic_price) / (basic_price * quantity)
+    dintx0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)   # (r, i, aa) - Domestic consumption tax by agent
+    mintx0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)   # (r, i, aa) - Import consumption tax by agent
     
     def load_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
         """Load tax rates from GDX file."""
@@ -861,6 +985,21 @@ class GTAPTaxRates:
         self._load_param(gdx_data, "rtgi", self.rtgi, 2, gdx_path)
         self._load_param(gdx_data, "rtxs", self.rtxs, 3, gdx_path)
         self._load_param(gdx_data, "rtms", self.rtms, 3, gdx_path)
+
+        # Align tax revenue flows with GAMS inScale usage before rate derivation.
+        in_scale = 1e-6
+
+        def _scale_dict(values: Dict) -> None:
+            for key, val in list(values.items()):
+                values[key] = float(val) * in_scale
+
+        for attr in ("rto", "rtf", "rtfd", "rtpd", "rtpi", "rtgd", "rtgi", "rtxs", "rtms"):
+            values = getattr(self, attr, None)
+            if isinstance(values, dict) and values:
+                _scale_dict(values)
+        # Normalize import tax rates to ad-valorem form used in equations.
+        if self.rtms:
+            self.imptx = {k: float(v) / 1000.0 for k, v in self.rtms.items()}
         
     def _load_param(self, gdx_data: Dict, name: str, target: Dict, ndim: int, gdx_path: Path) -> None:
         """Helper to load a tax parameter using GTAP Standard 7 native names.
@@ -889,12 +1028,190 @@ class GTAPTaxRates:
                 target.update(values)
 
     def derive_agent_consumption_taxes(self, benchmark: "GTAPBenchmarkValues", sets: GTAPSets) -> None:
-        """Derive agent-level consumption tax buckets (stub)."""
-        return
+        """Derive agent-level consumption tax rates (GAMS dintx0, mintx0).
+        
+        These taxes are calculated from benchmark data as:
+            dintx = (purchaser_price - basic_price) / basic_price = (vdfp - vdfb) / vdfb
+            mintx = (purchaser_price - basic_price) / basic_price = (vmfp - vmfb) / vmfb
+            
+        For activities (firms):
+            dintx(r,i,a) = (vdfp - vdfb) / (pd * xd) where pd=1, xd=vdfb
+            mintx(r,i,a) = (vmfp - vmfb) / (pmt * xm) where pmt=1, xm=vmfb
+            
+        For final demand agents (gov, priv, inv):
+            Similar logic using vdgp/vdgb, vdpp/vdpb, vdip/vdib
+        """
+        # Activity-level taxes (firms)
+        for r in sets.r:
+            for i in sets.i:
+                for a in sets.a:
+                    # Domestic tax on intermediate demand
+                    vdfp_val = benchmark.vdfp.get((r, i, a), 0.0)
+                    vdfb_val = benchmark.vdfb.get((r, i, a), 0.0)
+                    if vdfb_val > 0.0:
+                        dintx_rate = (vdfp_val - vdfb_val) / vdfb_val
+                        if abs(dintx_rate) > 1e-10:
+                            self.dintx0[(r, i, a)] = dintx_rate
+                    
+                    # Import tax on intermediate demand  
+                    vmfp_val = benchmark.vmfp.get((r, i, a), 0.0)
+                    vmfb_val = benchmark.vmfb.get((r, i, a), 0.0)
+                    if vmfb_val > 0.0:
+                        mintx_rate = (vmfp_val - vmfb_val) / vmfb_val
+                        if abs(mintx_rate) > 1e-10:
+                            self.mintx0[(r, i, a)] = mintx_rate
+                            
+        # Private household consumption taxes
+        for r in sets.r:
+            for i in sets.i:
+                vdpp_val = benchmark.vdpp.get((r, i), 0.0) if hasattr(benchmark, 'vdpp') else 0.0
+                vdpb_val = benchmark.vdpb.get((r, i), 0.0) if hasattr(benchmark, 'vdpb') else 0.0
+                vmpp_val = benchmark.vmpp.get((r, i), 0.0) if hasattr(benchmark, 'vmpp') else 0.0
+                vmpb_val = benchmark.vmpb.get((r, i), 0.0) if hasattr(benchmark, 'vmpb') else 0.0
+                
+                if vdpb_val > 0.0:
+                    dintx_rate = (vdpp_val - vdpb_val) / vdpb_val
+                    if abs(dintx_rate) > 1e-10:
+                        self.dintx0[(r, i, "priv")] = dintx_rate
+                        
+                if vmpb_val > 0.0:
+                    mintx_rate = (vmpp_val - vmpb_val) / vmpb_val
+                    if abs(mintx_rate) > 1e-10:
+                        self.mintx0[(r, i, "priv")] = mintx_rate
+                        
+        # Government consumption taxes
+        for r in sets.r:
+            for i in sets.i:
+                vdgp_val = benchmark.vdgp.get((r, i), 0.0) if hasattr(benchmark, 'vdgp') else 0.0
+                vdgb_val = benchmark.vdgb.get((r, i), 0.0) if hasattr(benchmark, 'vdgb') else 0.0
+                vmgp_val = benchmark.vmgp.get((r, i), 0.0) if hasattr(benchmark, 'vmgp') else 0.0
+                vmgb_val = benchmark.vmgb.get((r, i), 0.0) if hasattr(benchmark, 'vmgb') else 0.0
+                
+                if vdgb_val > 0.0:
+                    dintx_rate = (vdgp_val - vdgb_val) / vdgb_val
+                    if abs(dintx_rate) > 1e-10:
+                        self.dintx0[(r, i, "gov")] = dintx_rate
+                        
+                if vmgb_val > 0.0:
+                    mintx_rate = (vmgp_val - vmgb_val) / vmgb_val
+                    if abs(mintx_rate) > 1e-10:
+                        self.mintx0[(r, i, "gov")] = mintx_rate
+                        
+        # Investment consumption taxes
+        for r in sets.r:
+            for i in sets.i:
+                vdip_val = benchmark.vdip.get((r, i), 0.0) if hasattr(benchmark, 'vdip') else 0.0
+                vdib_val = benchmark.vdib.get((r, i), 0.0) if hasattr(benchmark, 'vdib') else 0.0
+                vmip_val = benchmark.vmip.get((r, i), 0.0) if hasattr(benchmark, 'vmip') else 0.0
+                vmib_val = benchmark.vmib.get((r, i), 0.0) if hasattr(benchmark, 'vmib') else 0.0
+                
+                if vdib_val > 0.0:
+                    dintx_rate = (vdip_val - vdib_val) / vdib_val
+                    if abs(dintx_rate) > 1e-10:
+                        self.dintx0[(r, i, "inv")] = dintx_rate
+                        
+                if vmib_val > 0.0:
+                    mintx_rate = (vmip_val - vmib_val) / vmib_val
+                    if abs(mintx_rate) > 1e-10:
+                        self.mintx0[(r, i, "inv")] = mintx_rate
 
     def derive_trade_route_wedges(self, benchmark: "GTAPBenchmarkValues", sets: GTAPSets) -> None:
         """Derive trade route wedges (stub)."""
         return
+
+    def derive_from_benchmark(self, benchmark: "GTAPBenchmarkValues", sets: GTAPSets) -> None:
+        """Derive ad-valorem tax rates from benchmark SAM flows (GAMS-style)."""
+        raw_fbep = dict(self.rtf)
+        raw_ftrv = dict(self.rtfd)
+
+        rto_rates: Dict[Tuple[str, str], float] = {}
+        for r in sets.r:
+            for a in sets.a:
+                outputs = sets.activity_commodities.get(a, [])
+                if not outputs:
+                    outputs = list(sets.i)
+                weighted = 0.0
+                denom = 0.0
+                for i in outputs:
+                    makb = float(benchmark.makb.get((r, a, i), 0.0))
+                    maks = float(benchmark.maks.get((r, a, i), 0.0))
+                    if makb <= 0.0 or maks <= 0.0:
+                        continue
+                    rate = (makb / maks) - 1.0
+                    weighted += rate * makb
+                    denom += makb
+                if denom > 0.0:
+                    rto_rates[(r, a)] = weighted / denom
+        if rto_rates:
+            self.rto = rto_rates
+
+        rtf_rates: Dict[Tuple[str, str, str], float] = {}
+        for (r, f, a), vfm in benchmark.vfm.items():
+            if vfm <= 0.0:
+                continue
+            fbep = float(raw_fbep.get((r, f, a), 0.0))
+            ftrv = float(raw_ftrv.get((r, f, a), 0.0))
+            rate = (ftrv - fbep) / float(vfm)
+            if rate != 0.0 or fbep != 0.0 or ftrv != 0.0:
+                rtf_rates[(r, f, a)] = rate
+        if rtf_rates:
+            self.rtf = rtf_rates
+
+        rtpd_rates: Dict[Tuple[str, str, str], float] = {}
+        rtpi_rates: Dict[Tuple[str, str, str], float] = {}
+        for r in sets.r:
+            for i in sets.i:
+                for a in sets.a:
+                    vdfb = float(benchmark.vdfb.get((r, i, a), 0.0))
+                    if vdfb > 0.0:
+                        vdfp = float(benchmark.vdfp.get((r, i, a), 0.0))
+                        rtpd_rates[(r, i, a)] = (vdfp - vdfb) / vdfb
+                    vmfb = float(benchmark.vmfb.get((r, i, a), 0.0))
+                    if vmfb > 0.0:
+                        vmfp = float(benchmark.vmfp.get((r, i, a), 0.0))
+                        rtpi_rates[(r, i, a)] = (vmfp - vmfb) / vmfb
+        if rtpd_rates:
+            self.rtpd = rtpd_rates
+        if rtpi_rates:
+            self.rtpi = rtpi_rates
+
+        rtgd_rates: Dict[Tuple[str, str], float] = {}
+        rtgi_rates: Dict[Tuple[str, str], float] = {}
+        for r in sets.r:
+            for i in sets.i:
+                vdgb = float(benchmark.vdgb.get((r, i), 0.0))
+                if vdgb > 0.0:
+                    vdgp = float(benchmark.vdgp.get((r, i), 0.0))
+                    rtgd_rates[(r, i)] = (vdgp - vdgb) / vdgb
+                vmgb = float(benchmark.vmgb.get((r, i), 0.0))
+                if vmgb > 0.0:
+                    vmgp = float(benchmark.vmgp.get((r, i), 0.0))
+                    rtgi_rates[(r, i)] = (vmgp - vmgb) / vmgb
+        if rtgd_rates:
+            self.rtgd = rtgd_rates
+        if rtgi_rates:
+            self.rtgi = rtgi_rates
+
+        rtxs_rates: Dict[Tuple[str, str, str], float] = {}
+        for (r, i, rp), vxsb in benchmark.vxsb.items():
+            if vxsb <= 0.0:
+                continue
+            vfob = float(benchmark.vfob.get((r, i, rp), 0.0))
+            rtxs_rates[(r, i, rp)] = (vfob - vxsb) / float(vxsb)
+        if rtxs_rates:
+            self.rtxs = rtxs_rates
+
+        imptx_rates: Dict[Tuple[str, str, str], float] = {}
+        for (r, i, rp), vcif in benchmark.vcif.items():
+            if vcif <= 0.0:
+                continue
+            vmsb = float(benchmark.vmsb.get((r, i, rp), 0.0))
+            imptx_rates[(r, i, rp)] = (vmsb - vcif) / float(vcif)
+        if imptx_rates:
+            self.imptx = imptx_rates
+
+        # Derive agent-specific consumption taxes (GAMS dintx0, mintx0)
+        self.derive_agent_consumption_taxes(benchmark, sets)
 
 
 @dataclass
@@ -971,7 +1288,7 @@ class GTAPShareParameters:
         """Calibrate all share parameters from benchmark data."""
         self._calibrate_production_shares(benchmark, sets)
         self._calibrate_armington_shares(benchmark, sets)
-        self._calibrate_trade_shares(benchmark, sets)
+        self._calibrate_trade_shares(benchmark, elasticities, sets)
         self._calibrate_factor_shares(benchmark, sets)
         self.normalized.update_from_shares(self)
 
@@ -996,7 +1313,6 @@ class GTAPShareParameters:
                     value = benchmark.makb.get((r, a, i), 0.0)
                     share = value / total_output if value > 0 else 1.0 / len(outputs)
                     self.p_gx[(r, a, i)] = share
-                    self.p_ax[(r, a, i)] = share
 
                 total_va = sum(benchmark.vfm.get((r, f, a), 0.0) for f in sets.f)
                 if total_va > 0:
@@ -1026,6 +1342,25 @@ class GTAPShareParameters:
                 else:
                     for i in sets.i:
                         self.p_io[(r, i, a)] = 0.0
+
+        for r in sets.r:
+            for i in sets.i:
+                activities = sets.commodity_activities.get(i, [])
+                if not activities and i in sets.i_to_a:
+                    activities = [sets.i_to_a[i]]
+                if not activities:
+                    continue
+
+                total_output = sum(benchmark.makb.get((r, a, i), 0.0) for a in activities)
+                if total_output <= 0.0:
+                    positive = [a for a in activities if benchmark.vom.get((r, a), 0.0) > 0.0]
+                    if len(positive) == 1:
+                        self.p_ax[(r, positive[0], i)] = 1.0
+                    continue
+
+                for a in activities:
+                    value = benchmark.makb.get((r, a, i), 0.0)
+                    self.p_ax[(r, a, i)] = value / total_output if value > 0.0 else 0.0
                 
     def _calibrate_armington_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
         """Calibrate Armington share parameters."""
@@ -1039,11 +1374,21 @@ class GTAPShareParameters:
                 self.p_alphad[(r, i)] = xd / xa
                 self.p_alpham[(r, i)] = xmt / xa
 
-    def _calibrate_trade_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
+    def _calibrate_trade_shares(
+        self,
+        benchmark: GTAPBenchmarkValues,
+        elasticities: GTAPElasticities,
+        sets: GTAPSets,
+    ) -> None:
         """Calibrate bilateral trade share parameters."""
         for r in sets.r:
             for i in sets.i:
-                xs, xd, xet, _, _ = benchmark.get_trade_totals(sets, r, i)
+                xs = sum(benchmark.makb.get((r, a, i), 0.0) for a in sets.a)
+                if xs <= 0.0:
+                    xs = benchmark.vom_i.get((r, i), 0.0)
+                _, xd, xet, _, _ = benchmark.get_trade_totals(sets, r, i)
+                if xet <= 0.0:
+                    xet = max(xs - xd, 0.0)
                 if xs > 0:
                     self.p_gd[(r, i)] = xd / xs
                     self.p_ge[(r, i)] = xet / xs
@@ -1053,25 +1398,35 @@ class GTAPShareParameters:
 
         for r in sets.r:
             for i in sets.i:
-                total_imports = sum(benchmark.viws.get((rp, i, r), 0.0) for rp in sets.r if rp != r)
-                if total_imports > 0:
-                    for rp in sets.r:
-                        if rp == r:
-                            continue
-                        value = benchmark.viws.get((rp, i, r), 0.0)
-                        if value > 0:
-                            self.p_amw[(r, i, rp)] = value / total_imports
+                xmt = sum(float(benchmark.vmsb.get((rp, i, r), 0.0) or 0.0) for rp in sets.r if rp != r)
+                if xmt <= 0:
+                    continue
+                sigmaw = elasticities.esubm.get((r, i), 5.0)
+                for rp in sets.r:
+                    if rp == r:
+                        continue
+                    benchmark_xw = float(benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
+                    if benchmark_xw <= 0.0:
+                        continue
+                    xw = benchmark_xw
+                    vcif = float(benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
+                    pmcif = (vcif / xw) if (vcif > 0.0 and xw > 0.0) else 1.0
+                    vmsb = float(benchmark.vmsb.get((rp, i, r), 0.0) or 0.0)
+                    imptx = ((vmsb - vcif) / max(pmcif * xw, 1e-12)) if vmsb > 0.0 else 0.0
+                    pm = max((1.0 + imptx) * pmcif, 1e-8)
+                    self.p_amw[(r, i, rp)] = (xw / xmt) * (pm ** sigmaw)
 
         for r in sets.r:
             for i in sets.i:
-                total_exports = sum(benchmark.vxmd.get((r, i, rp), 0.0) for rp in sets.r if rp != r)
-                if total_exports > 0:
-                    for rp in sets.r:
-                        if rp == r:
-                            continue
-                        value = benchmark.vxmd.get((r, i, rp), 0.0)
-                        if value > 0:
-                            self.p_gw[(r, i, rp)] = value / total_exports
+                _, _, xet, _, _ = benchmark.get_trade_totals(sets, r, i)
+                if xet <= 0.0:
+                    continue
+                for rp in sets.r:
+                    if rp == r:
+                        continue
+                    xw = float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
+                    if xw > 0.0:
+                        self.p_gw[(r, i, rp)] = xw / xet
                             
     def _calibrate_factor_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
         """Calibrate factor share parameters."""
@@ -1088,6 +1443,7 @@ class GTAPShareParameters:
         xp = snapshot.get("xp")
         va = snapshot.get("va")
         x = snapshot.get("x")
+        xw = snapshot.get("xw")
         xf = snapshot.get("xf")
         pf = snapshot.get("pf")
 
@@ -1123,7 +1479,25 @@ class GTAPShareParameters:
             xp_val = xp.get((r, a), 0.0)
             share = value / xp_val if xp_val > 0 else 0.0
             self.p_gx[(r, a, i)] = share
-            self.p_ax[(r, a, i)] = share
+
+        for r in sets.r:
+            for i in sets.i:
+                activities = sets.commodity_activities.get(i, [])
+                if not activities and i in sets.i_to_a:
+                    activities = [sets.i_to_a[i]]
+                if not activities:
+                    continue
+
+                total = sum(x.get((r, a, i), 0.0) for a in activities)
+                if total <= 0.0:
+                    positive = [a for a in activities if xp.get((r, a), 0.0) > 0.0]
+                    if len(positive) == 1:
+                        self.p_ax[(r, positive[0], i)] = 1.0
+                    continue
+
+                for a in activities:
+                    value = x.get((r, a, i), 0.0)
+                    self.p_ax[(r, a, i)] = value / total if value > 0.0 else 0.0
 
         factor_totals: Dict[Tuple[str, str], float] = defaultdict(float)
         for r, a, f, xf_val in iter_raf(xf):
@@ -1156,6 +1530,19 @@ class GTAPShareParameters:
             share_value = payment / total if total > 0 else 0.0
             self.p_af[(r, f, a)] = share_value
 
+        import_totals: Dict[Tuple[str, str], float] = defaultdict(float)
+        for exporter, commodity, importer, flow in iter_rai(xw):
+            if exporter not in sets.r or importer not in sets.r or commodity not in sets.i:
+                continue
+            import_totals[(importer, commodity)] += flow
+
+        for exporter, commodity, importer, flow in iter_rai(xw):
+            if exporter not in sets.r or importer not in sets.r or commodity not in sets.i:
+                continue
+            total = import_totals.get((importer, commodity), 0.0)
+            share = flow / total if total > 0 else 0.0
+            self.p_amw[(importer, commodity, exporter)] = share
+
         self.normalized.update_from_shares(self)
 
 
@@ -1166,6 +1553,7 @@ class GTAPShiftParameters:
     axp: Dict[Tuple[str, str], float] = field(default_factory=dict)
     lambdand: Dict[Tuple[str, str], float] = field(default_factory=dict)
     lambdava: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    lambdaio: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     lambdaf: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
 
     def load_from_gdx(self, gdx_path: Path) -> None:
@@ -1173,6 +1561,7 @@ class GTAPShiftParameters:
         self.axp = self._collapse(read_variable_levels_with_gdxdump(gdx_path, "axp"))
         self.lambdand = self._collapse(read_variable_levels_with_gdxdump(gdx_path, "lambdand"))
         self.lambdava = self._collapse(read_variable_levels_with_gdxdump(gdx_path, "lambdava"))
+        self.lambdaio = self._collapse_io(read_variable_levels_with_gdxdump(gdx_path, "lambdaio"))
         self.lambdaf = self._collapse_factor(read_variable_levels_with_gdxdump(gdx_path, "lambdaf"))
 
     def _collapse(self, raw: Dict[Tuple[str, ...], float]) -> Dict[Tuple[str, str], float]:
@@ -1213,6 +1602,25 @@ class GTAPShiftParameters:
                 result[node] = next(iter(time_map.values()))
         return result
 
+    def _collapse_io(self, raw: Dict[Tuple[str, ...], float]) -> Dict[Tuple[str, str, str], float]:
+        grouped: Dict[Tuple[str, str, str], Dict[str, float]] = defaultdict(dict)
+        for key, value in raw.items():
+            if len(key) < 3:
+                continue
+            region, commodity, activity = key[0], key[1], key[2]
+            time = key[3] if len(key) > 3 else ""
+            grouped[(region, commodity, activity)][time] = value
+
+        result: Dict[Tuple[str, str, str], float] = {}
+        for node, time_map in grouped.items():
+            for preferred in ("base", "t0"):
+                if preferred in time_map:
+                    result[node] = time_map[preferred]
+                    break
+            else:
+                result[node] = next(iter(time_map.values()))
+        return result
+
 
 @dataclass
 class GTAPParameters:
@@ -1240,20 +1648,25 @@ class GTAPParameters:
         self.sets.load_from_gdx(gdx_path)
         
         # Load elasticities from separate file if provided, otherwise from main file
-        elast_file = elasticity_gdx if elasticity_gdx else gdx_path
+        if elasticity_gdx is None:
+            candidate = gdx_path.with_name("default-9x10.gdx")
+            elast_file = candidate if candidate.exists() else gdx_path
+        else:
+            elast_file = elasticity_gdx
         self.elasticities.load_from_gdx(elast_file, self.sets)
         self.elasticities.initialize_nested_elasticities(self.sets)  # Ensure coverage
         
         # Load benchmark and taxes from main file
         self.benchmark.load_from_gdx(gdx_path, self.sets)
         self.taxes.load_from_gdx(gdx_path, self.sets)
+        self.taxes.derive_from_benchmark(self.benchmark, self.sets)
         self.shifts.load_from_gdx(gdx_path)
 
         # Calibrate share parameters (simple shares)
         self.shares.calibrate(self.benchmark, self.elasticities, self.sets)
         
         # Calibrate GAMS-style shares (and, ava, io, af, gx) from benchmark
-        self.calibrated.calibrate_from_benchmark(self.benchmark, self.elasticities, self.sets)
+        self.calibrated.calibrate_from_benchmark(self.benchmark, self.elasticities, self.sets, self.taxes)
 
     def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot) -> None:
         """Override share parameters using an equilibrium CSV snapshot."""
