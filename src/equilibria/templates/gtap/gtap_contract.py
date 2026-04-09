@@ -121,6 +121,9 @@ def _closure_template_data(name: str) -> Dict[str, Any]:
         "numeraire_mode": "fixed_benchmark",
         "closure_type": "CNS",  # CNS = Constrained Nonlinear System
         "capital_mobility": "mobile",
+        "savf_flag": "capFix",
+        "apply_flag_fixing": True,
+        "close_mcp_gap": True,
         "fix_taxes": True,
         "fix_technology": True,
         "fix_endowments": True,
@@ -206,6 +209,9 @@ class GTAPClosureConfig(ModelClosureConfig):
     numeraire_mode: Literal["fixed_benchmark"] = "fixed_benchmark"
     closure_type: Literal["CNS", "MCP"] = "CNS"
     capital_mobility: Literal["mobile", "sluggish"] = "mobile"
+    savf_flag: Literal["capFix", "capSFix", "capShrFix", "capFlex"] = "capFix"
+    apply_flag_fixing: bool = True
+    close_mcp_gap: bool = False
     
     # Closure flags
     fix_taxes: bool = True

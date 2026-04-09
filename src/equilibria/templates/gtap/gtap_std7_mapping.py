@@ -234,9 +234,11 @@ GTAP_STD7_INDEX_REORDER = {
     'VMFP': (2, 0, 1),   # (i, a, r) → (r, i, a)
     'VMFB': (2, 0, 1),   # (i, a, r) → (r, i, a)
     'MAKB': (2, 1, 0),   # (i, a, r) → (r, a, i)
+    'MAKS': (2, 1, 0),   # (i, a, r) → (r, a, i)
     'VXSB': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
     'VFOB': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
     'VCIF': (2, 0, 1),   # (i, rp, r) → (r, i, rp)
+    'VMSB': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
     'VTWR': (3, 1, 2, 0),  # (m, i, r, rp) → (r, i, rp, m) (4D reorder)
     # 2D parameters typically are (var, r) → (r, var) or already correct
     'VOSB': (1, 0),      # (i, r) → (r, i)
