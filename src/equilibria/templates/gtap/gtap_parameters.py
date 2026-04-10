@@ -416,7 +416,7 @@ class GTAPCalibratedShares:
         # All benchmark prices are normalized to 1.0 except the pre-tax make
         # price, which uses the output tax wedge when available so the GTAP
         # make equations start from the same tax-adjusted normalization as GAMS.
-        px = pnd = pva = pa = pfa = 1.0
+        px = pnd = pva = pa = 1.0
         
         # Calculate intermediate values needed for calibration
         nd_values = {}  # ND bundle values
@@ -524,9 +524,12 @@ class GTAPCalibratedShares:
                     if xf_val <= 0:
                         continue
                     
-                    # af(r,f,a,t) = (xf.l/va.l)*(pfa/pva)**sigmav
-                    # Note: pfa includes taxes, but in benchmark pfa = pva = 1.0
-                    price_ratio = pfa / pva  # = 1.0
+                    # GAMS calibration uses the tax-inclusive factor price term
+                    # in xfeq: af = (xf/va) * (M_PFA/pva)**sigmav.
+                    # Here M_PFA maps to pfa = pf*(1+rtf), with pf benchmarked at 1.
+                    factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0)
+                    pfa_term = max(1.0 + factor_tax, 1e-12)
+                    price_ratio = pfa_term / max(pva, 1e-12)
                     self.af_param[(r, f, a)] = (xf_val / va_val) * (price_ratio ** sigmav)
         
         # Calibrate GX (make shares) (GAMS cal.gms lines 729-731)
@@ -908,7 +911,7 @@ class GTAPBenchmarkValues:
         _, investment_domestic, investment_import = self.get_investment_demand(region, commodity)
 
         domestic_use = (
-            sum(self.vdfm.get((region, commodity, a), 0.0) for a in sets.a)
+            sum(self.vdfb.get((region, commodity, a), 0.0) for a in sets.a)
             + private_domestic
             + government_domestic
             + investment_domestic
@@ -1386,11 +1389,10 @@ class GTAPShareParameters:
                 xs = sum(benchmark.makb.get((r, a, i), 0.0) for a in sets.a)
                 if xs <= 0.0:
                     xs = benchmark.vom_i.get((r, i), 0.0)
-                _, xd, xet, _, _ = benchmark.get_trade_totals(sets, r, i)
-                if xet <= 0.0:
-                    xet = max(xs - xd, 0.0)
+                xet = sum(float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0) for rp in sets.r if rp != r)
+                xds = max(xs - xet, 0.0)
                 if xs > 0:
-                    self.p_gd[(r, i)] = xd / xs
+                    self.p_gd[(r, i)] = xds / xs
                     self.p_ge[(r, i)] = xet / xs
                 else:
                     self.p_gd[(r, i)] = 1.0
@@ -1418,7 +1420,7 @@ class GTAPShareParameters:
 
         for r in sets.r:
             for i in sets.i:
-                _, _, xet, _, _ = benchmark.get_trade_totals(sets, r, i)
+                xet = sum(float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0) for rp in sets.r if rp != r)
                 if xet <= 0.0:
                     continue
                 for rp in sets.r:

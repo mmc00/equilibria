@@ -731,6 +731,7 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
     from pyomo.environ import value
 
     xa_residuals: list[float] = []
+    xa_case_residuals: list[dict[str, Any]] = []
     xd_residuals: list[float] = []
     xmt_residuals: list[float] = []
 
@@ -744,32 +745,87 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
             # single inventory-adjusted quantity aggregate. For the diagnostic
             # check, we therefore measure the worst residual among the agent
             # demand identities that feed the Armington market.
-            commodity_residuals: list[float] = []
+            commodity_residuals: list[dict[str, Any]] = []
 
             for a in model.a:
-                p_io = float(value(model.p_io[r, i, a]))
                 nd = float(value(model.nd[r, a]))
+                pnd = float(value(model.pnd[r, a]))
+                pa = float(value(model.pa[r, i, a]))
                 xaa = float(value(model.xaa[r, i, a]))
-                commodity_residuals.append(xaa - p_io * nd)
+                io_val = (
+                    float(value(model.io_param[r, i, a]))
+                    if hasattr(model, "io_param")
+                    else float(value(model.p_io[r, i, a]))
+                )
+                if not params.shifts.lambdaio:
+                    io_val = float(value(model.p_io[r, i, a]))
+                sigmand = float(params.elasticities.sigmand.get((str(r), str(a)), params.elasticities.esubd.get((str(r), str(i)), 2.0)))
+                lambdaio = float(value(model.lambdaio[r, i, a])) if hasattr(model, "lambdaio") else 1.0
+                pa_safe = pa if pa > 1e-12 else 1e-12
+                lambdaio_safe = lambdaio if lambdaio > 1e-12 else 1e-12
+                if io_val <= 0.0:
+                    rhs = 0.0
+                else:
+                    rhs = io_val * nd * (pnd / pa_safe) ** sigmand * (lambdaio_safe ** (sigmand - 1.0))
+                commodity_residuals.append(
+                    {
+                        "source": "activity",
+                        "activity": str(a),
+                        "lhs": xaa,
+                        "rhs": rhs,
+                        "residual": xaa - rhs,
+                    }
+                )
 
             if hasattr(model, "xc") and hasattr(model, "xcshr") and hasattr(model, "yc"):
                 xaa_hhd = float(value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT]))
+                pa_hhd = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT]))
                 xcshr = float(value(model.xcshr[r, i]))
                 yc = float(value(model.yc[r]))
-                commodity_residuals.append(xaa_hhd - xcshr * yc)
+                rhs = xcshr * yc
+                commodity_residuals.append(
+                    {
+                        "source": "hhd",
+                        "lhs": pa_hhd * xaa_hhd,
+                        "rhs": rhs,
+                        "residual": (pa_hhd * xaa_hhd) - rhs,
+                    }
+                )
 
             if hasattr(model, "xg"):
                 xaa_gov = float(value(model.xaa[r, i, GTAP_GOVERNMENT_AGENT]))
                 xg = float(value(model.xg[r, i]))
-                commodity_residuals.append(xaa_gov - xg)
+                commodity_residuals.append(
+                    {
+                        "source": "gov",
+                        "lhs": xaa_gov,
+                        "rhs": xg,
+                        "residual": xaa_gov - xg,
+                    }
+                )
 
             if hasattr(model, "xi"):
                 xaa_inv = float(value(model.xaa[r, i, GTAP_INVESTMENT_AGENT]))
                 xi = float(value(model.xi[r, i]))
-                commodity_residuals.append(xaa_inv - xi)
+                commodity_residuals.append(
+                    {
+                        "source": "inv",
+                        "lhs": xaa_inv,
+                        "rhs": xi,
+                        "residual": xaa_inv - xi,
+                    }
+                )
 
             if commodity_residuals:
-                xa_residuals.append(max(commodity_residuals, key=lambda v: abs(v)))
+                worst = max(commodity_residuals, key=lambda row: abs(float(row["residual"])))
+                xa_residuals.append(float(worst["residual"]))
+                xa_case_residuals.append(
+                    {
+                        "region": str(r),
+                        "commodity": str(i),
+                        **worst,
+                    }
+                )
             else:
                 xa_residuals.append(0.0)
 
@@ -802,6 +858,22 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
         }
 
     xa_stats = _stats(xa_residuals)
+    if xa_case_residuals:
+        top_n = 10
+        sorted_cases = sorted(
+            xa_case_residuals,
+            key=lambda row: abs(float(row["residual"])),
+            reverse=True,
+        )
+        by_source: dict[str, dict[str, Any]] = {}
+        for row in sorted_cases:
+            src = str(row["source"])
+            if src not in by_source:
+                by_source[src] = row
+        xa_stats["worst_case"] = sorted_cases[0]
+        xa_stats["top_cases"] = sorted_cases[:top_n]
+        xa_stats["worst_by_source"] = by_source
+
     xd_stats = _stats(xd_residuals)
     xmt_stats = _stats(xmt_residuals)
     overall_pass = (
