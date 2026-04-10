@@ -1407,7 +1407,8 @@ class GTAPShareParameters:
                 for rp in sets.r:
                     if rp == r:
                         continue
-                    benchmark_xw = float(benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
+                    # GAMS calibration uses xw.l initialized from VXSB/pe.
+                    benchmark_xw = float(benchmark.vxsb.get((rp, i, r), 0.0) or 0.0)
                     if benchmark_xw <= 0.0:
                         continue
                     xw = benchmark_xw
