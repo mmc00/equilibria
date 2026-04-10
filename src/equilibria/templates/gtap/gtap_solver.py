@@ -359,13 +359,12 @@ class GTAPSolver:
         
         # ===================================================================
         # 1. Create xwFlag: bilateral trade exists if VXSB(r,i,rp) > 0
-        #    AND it's inter-regional (r != rp) - intra-regional flows are 
-        #    handled separately in GTAP
+        #    (including diagonal routes when present, matching GAMS).
         # ===================================================================
         xw_flag = set()
         benchmark_vxsb = getattr(benchmark, 'vxsb', {})
         for (r, i, rp), val in benchmark_vxsb.items():
-            if val is not None and float(val) > 0 and r != rp:
+            if val is not None and float(val) > 0:
                 xw_flag.add((r, i, rp))
 
         # Some GTAP bundles only provide the equilibrium snapshot through
@@ -376,10 +375,10 @@ class GTAPSolver:
         if not xw_flag and hasattr(self.params, "shares"):
             snapshot_import_share = getattr(self.params.shares, "p_amw", {})
             for (r, i, rp), share in snapshot_import_share.items():
-                if share is not None and float(share) > 0.0 and r != rp:
+                if share is not None and float(share) > 0.0:
                     xw_flag.add((r, i, rp))
         
-        logger.debug(f"Trade flows (xwFlag): {len(xw_flag)} active inter-regional pairs")
+        logger.debug(f"Trade flows (xwFlag): {len(xw_flag)} active route pairs")
         
         def _fix_to_zero_with_lb(var, idx) -> None:
             lb = var[idx].lb
@@ -387,7 +386,7 @@ class GTAPSolver:
                 var[idx].setlb(0.0)
             var[idx].fix(0.0)
 
-        # Fix trade variables where NO bilateral trade exists OR intra-regional
+        # Fix trade variables where NO bilateral trade exists
         # Quantities -> 0, prices -> 1.0 (GAMS-style defaults for inactive routes)
         trade_qty_vars = ["xw"]
         trade_price_vars = ["pe", "pm", "pmcif", "pefob"]
@@ -401,8 +400,7 @@ class GTAPSolver:
                 if len(idx) >= 3:
                     r, i, rp = idx[0], idx[1], idx[2]
                     key = (r, i, rp)
-                    # Fix if: no trade OR same region (intra-regional)
-                    if key not in xw_flag or r == rp:
+                    if key not in xw_flag:
                         _fix_to_zero_with_lb(var, idx)
                         fixed_count += 1
 
@@ -414,11 +412,11 @@ class GTAPSolver:
                 if len(idx) >= 3:
                     r, i, rp = idx[0], idx[1], idx[2]
                     key = (r, i, rp)
-                    if key not in xw_flag or r == rp:
+                    if key not in xw_flag:
                         var[idx].fix(1.0)
                         fixed_count += 1
         
-        # Fix bilateral taxes where no trade (or intra-regional)
+        # Fix bilateral taxes where no trade
         tax_trade_vars = ["imptx", "exptx"]
         for var_name in tax_trade_vars:
             if not hasattr(self.model, var_name):
@@ -428,7 +426,7 @@ class GTAPSolver:
                 if len(idx) >= 3:
                     r, i, rp = idx[0], idx[1], idx[2]
                     key = (r, i, rp)
-                    if key not in xw_flag or r == rp:
+                    if key not in xw_flag:
                         # Fix tax rates at current level
                         val = var[idx].value if var[idx].value is not None else 0.0
                         var[idx].fix(float(val))
@@ -625,8 +623,18 @@ class GTAPSolver:
             """Check if object is a Pyomo Var."""
             return isinstance(obj, Var) or (hasattr(obj, 'ctype') and obj.ctype == Var)
         
-        def fix_var_list(var_names: list, default_val: float = 1.0, max_to_fix: int = None) -> int:
-            """Fix free variables in the given list, up to max_to_fix."""
+        def fix_var_list(
+            var_names: list,
+            default_val: float = 1.0,
+            max_to_fix: int = None,
+            sort_by_abs_value: bool = False,
+        ) -> int:
+            """Fix free variables in the given list, up to max_to_fix.
+
+            When `sort_by_abs_value` is True, variables are fixed from the
+            smallest absolute current level first. This minimizes distortion by
+            preferring near-zero variables when closing a residual MCP gap.
+            """
             count = 0
             for var_name in var_names:
                 if max_to_fix is not None and count >= max_to_fix:
@@ -636,13 +644,25 @@ class GTAPSolver:
                 var = getattr(self.model, var_name)
                 if not is_pyomo_var(var):
                     continue
-                for idx in var:
+
+                free_indices: list = [idx for idx in var if not var[idx].fixed]
+                if sort_by_abs_value:
+                    def _abs_level(i):
+                        val = var[i].value
+                        if val is None:
+                            return abs(default_val)
+                        try:
+                            return abs(float(val))
+                        except Exception:
+                            return abs(default_val)
+                    free_indices.sort(key=_abs_level)
+
+                for idx in free_indices:
                     if max_to_fix is not None and count >= max_to_fix:
                         break
-                    if not var[idx].fixed:
-                        val = var[idx].value if var[idx].value is not None else default_val
-                        var[idx].fix(float(val))
-                        count += 1
+                    val = var[idx].value if var[idx].value is not None else default_val
+                    var[idx].fix(float(val))
+                    count += 1
             return count
         
         def get_current_gap():
@@ -650,20 +670,18 @@ class GTAPSolver:
             free = sum(1 for var in self.model.component_objects(Var, active=True)
                       for idx in var if not var[idx].fixed)
             return free - constraints
-        
-        # Strategy: preserve the earlier fixing order that gave the best
-        # nonlinear PATH trajectory on GTAP. Fixing route-level trade objects
-        # too early destabilizes xmt/xaa reconciliation.
-        
-        # Phase 1: prefer small Pyomo-only price auxiliaries before touching
-        # economically meaningful Armington quantities. At the current parity
-        # frontier, this closes the residual gap without fixing xda.
-        phase1_vars = ["pp", "px", "xp", "xda", "xma", "paa", "pdp", "pmp", "xaa", "p_rai", "pp_rai"]
+
+        # Strategy: close the residual gap with the least-impact fixings first.
+        # Prefer near-zero Armington detail variables before touching
+        # aggregate production/value variables.
+
+        # Phase 1: near-zero Armington detail quantities
+        phase1_vars = ["xda", "xma", "xaa"]
         current_gap = gap
         for vname in phase1_vars:
             if current_gap <= 0:
                 break
-            fixed = fix_var_list([vname], max_to_fix=current_gap)
+            fixed = fix_var_list([vname], max_to_fix=current_gap, sort_by_abs_value=True)
             fixed_count += fixed
             current_gap = get_current_gap()
             if fixed > 0:
@@ -673,12 +691,12 @@ class GTAPSolver:
             logger.info(f"MCP square after phase 1: {fixed_count} variables fixed")
             return fixed_count
         
-        # Phase 2: fix absorption if still needed
-        phase2_vars = ["xa", "pabs"]
+        # Phase 2: make-route detail quantities/prices
+        phase2_vars = ["x", "p_rai", "pp_rai", "xa", "pabs"]
         for vname in phase2_vars:
             if current_gap <= 0:
                 break
-            fixed = fix_var_list([vname], max_to_fix=current_gap)
+            fixed = fix_var_list([vname], max_to_fix=current_gap, sort_by_abs_value=True)
             fixed_count += fixed
             current_gap = get_current_gap()
         
@@ -686,13 +704,18 @@ class GTAPSolver:
             logger.info(f"MCP square after phase 2: {fixed_count} variables fixed")
             return fixed_count
         
-        # Phase 3: bilateral trade objects only as a last resort
-        phase3_vars = ["pe", "xw"]
+        # Phase 3: aggregate blocks and bilateral trade only as a last resort
+        phase3_vars = ["xp", "px", "pe", "xw"]
         for vname in phase3_vars:
             if current_gap <= 0:
                 break
             default = 0.0 if vname == "xw" else 1.0
-            fixed = fix_var_list([vname], default_val=default, max_to_fix=current_gap)
+            fixed = fix_var_list(
+                [vname],
+                default_val=default,
+                max_to_fix=current_gap,
+                sort_by_abs_value=True,
+            )
             fixed_count += fixed
             current_gap = get_current_gap()
         
