@@ -246,10 +246,10 @@ class GTAPModelEquations:
                     inventory = float(self.params.benchmark.vst.get((r, i), 0.0) or 0.0)
                     model.xa[r, i].set_value(max(total_xa + inventory, 1e-8))
 
-        if hasattr(model, "xds") and hasattr(model, "xd"):
+        if hasattr(model, "xds") and hasattr(model, "xet") and hasattr(model, "xs"):
             for r in model.r:
                 for i in model.i:
-                    model.xds[r, i].set_value(max(value(model.xd[r, i]), 1e-8))
+                    model.xds[r, i].set_value(max(value(model.xs[r, i]) - value(model.xet[r, i]), 1e-8))
 
         if hasattr(model, "xet") and hasattr(model, "xs") and hasattr(model, "xds"):
             for r in model.r:
@@ -276,7 +276,7 @@ class GTAPModelEquations:
             for r in model.r:
                 for i in model.i:
                     xet_val = max(value(model.xet[r, i]), 1e-12)
-                    omegaw = self.params.elasticities.omegaw.get((r, i), 2.0)
+                    omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
                     for rp in model.rp:
                         if rp == r:
                             continue
@@ -555,7 +555,7 @@ class GTAPModelEquations:
                 pd_val = max(value(model.pd[r, i]), 1e-12)
                 ps_val = max(value(model.ps[r, i]), 1e-12)
                 pet_val = max(value(model.pet[r, i]), 1e-12)
-                omega = self.params.elasticities.omegax.get((r, i), 2.0)
+                omega = self.params.elasticities.omegax.get((r, i), float("inf"))
 
                 if omega == float("inf"):
                     gd_val = (pd_val * xds_val) / max(ps_val * xs_val, 1e-12)
@@ -682,7 +682,7 @@ class GTAPModelEquations:
         create_indexed_param("esubva", ["r", "a"], self.params.elasticities.esubva, 1.0)
         create_indexed_param("esubd", ["r", "i"], self.params.elasticities.esubd, 2.0)
         create_indexed_param("esubm", ["r", "i"], self.params.elasticities.esubm, 4.0)
-        create_indexed_param("omegax", ["r", "i"], self.params.elasticities.omegax, 2.0)
+        create_indexed_param("omegax", ["r", "i"], self.params.elasticities.omegax, float("inf"))
         
         # Benchmark values
         create_indexed_param("vom", ["r", "a"], self.params.benchmark.vom, 0.0)
@@ -792,7 +792,34 @@ class GTAPModelEquations:
         # Simple shares (kept for compatibility)
         create_indexed_param("va_share", ["r", "a"], self.params.shares.p_va, 0.0)
         create_indexed_param("nd_share", ["r", "a"], adjusted_nd_share, 0.0)
-        create_indexed_param("gf_share", ["r", "f", "a"], self.params.shares.p_gf, 0.0)
+        # GAMS-consistent calibration for mobile-factor allocation shares:
+        # gf(r,fm,a) = xf(r,fm,a) / sum(a, xf(r,fm,a)) in the if(1) branch,
+        # with xf initialized from benchmark value payments and net factor price
+        # (xf ~ vfm / pf). This differs from raw vfm shares when kappaf != 0.
+        gf_share_data: Dict[tuple[str, str, str], float] = dict(self.params.shares.p_gf)
+        for r in self.sets.r:
+            for f in self.sets.mf:
+                xf_by_activity: Dict[str, float] = {}
+                total_xf = 0.0
+                for a in self.sets.a:
+                    vfm_val = float(self.params.benchmark.vfm.get((r, f, a), 0.0) or 0.0)
+                    if vfm_val <= 0.0:
+                        continue
+                    kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+                    if kappa == 0.0:
+                        kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
+                    pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                    xf_val = max(vfm_val / pf_val, 0.0)
+                    if xf_val <= 0.0:
+                        continue
+                    xf_by_activity[a] = xf_val
+                    total_xf += xf_val
+                if total_xf <= 0.0:
+                    continue
+                for a in self.sets.a:
+                    gf_share_data[(r, f, a)] = xf_by_activity.get(a, 0.0) / total_xf
+
+        create_indexed_param("gf_share", ["r", "f", "a"], gf_share_data, 0.0)
         create_indexed_param("af_share", ["r", "f", "a"], self.params.shares.p_af, 0.0)
         create_indexed_param("p_gx", ["r", "a", "i"], self.params.shares.p_gx, 0.0)
         
@@ -1368,7 +1395,13 @@ class GTAPModelEquations:
                 ref_xds = self.reference_snapshot.xds.get((r, i))
                 if ref_xds is not None and ref_xds > 0.0:
                     return float(ref_xds)
-            return max(get_xd_init(m, r, i), 1e-8)
+            xs_bench, _, _, _, _ = self.params.benchmark.get_trade_totals(self.sets, r, i)
+            export_flow = sum(
+                float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
+                for rp in self.sets.r
+                if rp != r
+            )
+            return max(xs_bench - export_flow, 1e-8)
 
         build_agent_trade_cache()
 
@@ -1427,13 +1460,6 @@ class GTAPModelEquations:
                 ref_xet = self.reference_snapshot.xet.get((r, i))
                 if ref_xet is not None and ref_xet > 0.0:
                     return max(float(ref_xet), 1e-8)
-            # GAMS ultimately overwrites the first export seed with the
-            # residual identity:
-            #   xet = (ps * xs - pd * xds) / pet
-            # At benchmark prices this is xs - xds.
-            xs_bench, xd_bench, xet_bench, _, _ = self.params.benchmark.get_trade_totals(self.sets, r, i)
-            if xet_bench > 0.0:
-                return max(float(xet_bench), 1e-8)
             total_vxsb = sum(
                 float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
                 for rp in self.sets.r
@@ -1441,6 +1467,7 @@ class GTAPModelEquations:
             )
             if total_vxsb > 0.0:
                 return max(total_vxsb, 1e-8)
+            xs_bench, xd_bench, _, _, _ = self.params.benchmark.get_trade_totals(self.sets, r, i)
             numerator = value(model.ps[r, i]) * xs_bench - value(model.pd[r, i]) * xd_bench
             pet_val = 1.0
             if self.reference_snapshot:
@@ -2648,7 +2675,7 @@ class GTAPModelEquations:
         # ========================================================================
         
         def eq_xds_rule(model, r, i):
-            omega = self.params.elasticities.omegax.get((r, i), 2.0)
+            omega = self.params.elasticities.omegax.get((r, i), float("inf"))
             gd_share = value(model.gd_share[r, i])
             if gd_share <= 0.0:
                 return model.xds[r, i] == 0.0
@@ -2658,23 +2685,24 @@ class GTAPModelEquations:
         model.eq_xds = Constraint(model.r, model.i, rule=eq_xds_rule)
 
         def eq_xet_rule(model, r, i):
-            omega = self.params.elasticities.omegax.get((r, i), 2.0)
+            omega = self.params.elasticities.omegax.get((r, i), float("inf"))
+            if value(model.xet_flag[r, i]) <= 0.0:
+                return Constraint.Skip
             ge_share = value(model.ge_share[r, i])
             if ge_share <= 0.0:
                 return model.xet[r, i] == 0.0
             if omega == float("inf"):
-                return model.xet[r, i] == 0.0
+                return model.pet[r, i] == model.ps[r, i]
             return (
                 model.xet[r, i]
-                == model.xet_flag[r, i]
-                * model.ge_share[r, i]
+                == model.ge_share[r, i]
                 * model.xs[r, i]
                 * (model.pet[r, i] / model.ps[r, i]) ** omega
             )
         model.eq_xet = Constraint(model.r, model.i, rule=eq_xet_rule)
 
         def eq_xseq_rule(model, r, i):
-            omega = self.params.elasticities.omegax.get((r, i), 2.0)
+            omega = self.params.elasticities.omegax.get((r, i), float("inf"))
             gd_share = value(model.gd_share[r, i])
             ge_share = value(model.ge_share[r, i])
             if omega == float("inf"):
@@ -2742,10 +2770,25 @@ class GTAPModelEquations:
 
         # Agent/activity demand for intermediate inputs by activity.
         def eq_xaa_activity_rule(model, r, i, a):
-            share = value(model.p_io[r, i, a])
-            if share <= 0.0:
+            io_val = (
+                value(model.io_param[r, i, a])
+                if hasattr(model, "io_param")
+                else value(model.p_io[r, i, a])
+            )
+            if not self.params.shifts.lambdaio:
+                io_val = value(model.p_io[r, i, a])
+
+            if io_val <= 0.0:
                 return model.xaa[r, i, a] == 0.0
-            return model.xaa[r, i, a] == share * model.nd[r, a]
+
+            sigmand = self._get_sigmand(r, a)
+            lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
+            return model.xaa[r, i, a] == (
+                io_val
+                * model.nd[r, a]
+                * (model.pnd[r, a] / model.pa[r, i, a]) ** sigmand
+                * (lambdaio ** (sigmand - 1.0))
+            )
         model.eq_xaa_activity = Constraint(model.r, model.i, model.a, rule=eq_xaa_activity_rule)
 
         def eq_xaa_hhd_rule(model, r, i):
@@ -2914,7 +2957,7 @@ class GTAPModelEquations:
             alpham = imp_share
             # Skip if no demand from this agent
             if alphad <= 0.0 and alpham <= 0.0:
-                return model.pa[r, i, aa] == 1.0  # Default price
+                return Constraint.Skip
             sigma_m = _top_armington_sigma(r, i, aa)
             expo = 1.0 - sigma_m
             if abs(expo) < 1e-8:  # Cobb-Douglas case
@@ -3078,7 +3121,7 @@ class GTAPModelEquations:
             )
             if gw <= 0.0:
                 return Constraint.Skip
-            omegaw = self.params.elasticities.omegaw.get((r, i), 2.0)
+            omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
             if omegaw == float("inf"):
                 return model.pe[r, i, rp] == model.pet[r, i]
             return (
@@ -3090,46 +3133,37 @@ class GTAPModelEquations:
         # Aggregate export price CET (GAMS peteq)
         # pet(r,i)**(1+omegaw) = sum(rp, gw(r,i,rp)*pe(r,i,rp)**(1+omegaw))
         def eq_peteq_rule(model, r, i):
-            active_shares = [
-                (
-                    value(model.gw_share[r, i, rp])
-                    if hasattr(model, "gw_share")
-                    else float(self.params.shares.p_gw.get((r, i, rp), 0.0))
-                )
-                for rp in model.rp
-                if rp != r
-            ]
-            if not any(share > 0.0 for share in active_shares):
-                return model.pet[r, i] == model.ps[r, i]
-            omegaw = self.params.elasticities.omegaw.get((r, i), 2.0)
-            if omegaw == float("inf"):
-                return model.xet[r, i] == sum(
-                    model.xw[r, i, rp] 
-                    for rp in model.rp 
-                    if (
-                        value(model.gw_share[r, i, rp])
-                        if hasattr(model, "gw_share")
-                        else float(self.params.shares.p_gw.get((r, i, rp), 0.0))
-                    ) > 0.0
-                )
-            exponent = 1.0 + omegaw
-            terms = []
+            active_routes: list[str] = []
             for rp in model.rp:
+                if rp == r:
+                    continue
                 gw = (
                     value(model.gw_share[r, i, rp])
                     if hasattr(model, "gw_share")
                     else float(self.params.shares.p_gw.get((r, i, rp), 0.0))
                 )
-                if gw <= 0.0:
-                    continue
-                terms.append((model.gw_share[r, i, rp] if hasattr(model, "gw_share") else float(self.params.shares.p_gw.get((r, i, rp), 0.0))) * model.pe[r, i, rp] ** exponent)
+                if gw > 0.0:
+                    active_routes.append(rp)
+            if not active_routes:
+                return Constraint.Skip
+            omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
+            if omegaw == float("inf"):
+                return model.xet[r, i] == sum(
+                    model.xw[r, i, rp] 
+                    for rp in active_routes
+                )
+            exponent = 1.0 + omegaw
+            terms = []
+            for rp in active_routes:
+                gw = (
+                    model.gw_share[r, i, rp]
+                    if hasattr(model, "gw_share")
+                    else float(self.params.shares.p_gw.get((r, i, rp), 0.0))
+                )
+                terms.append(gw * model.pe[r, i, rp] ** exponent)
             if not terms:
-                return model.pet[r, i] == model.ps[r, i]
-            return (
-                model.pet[r, i] ** exponent
-                == model.xet_flag[r, i] * sum(terms)
-                + (1.0 - model.xet_flag[r, i]) * (model.ps[r, i] ** exponent)
-            )
+                return Constraint.Skip
+            return model.pet[r, i] ** exponent == sum(terms)
         model.eq_peteq = Constraint(model.r, model.i, rule=eq_peteq_rule)
         
         # ========================================================================
@@ -3142,7 +3176,7 @@ class GTAPModelEquations:
             return model.xds[r, i] == sum(
                 model.xda[r, i, aa] / model.xscale[r, aa] 
                 for aa in model.aa 
-                if value(model.xda[r, i, aa]) is not None
+                if get_benchmark_agent_armington_shares(r, i, aa)[0] > 0.0
             )
         model.eq_pdeq = Constraint(model.r, model.i, rule=eq_pdeq_rule)
 
@@ -3203,7 +3237,7 @@ class GTAPModelEquations:
             total_share = sum(value(model.gf_share[r, f, a]) for a in model.a)
             if total_share <= 0:
                 return Constraint.Skip
-            weighted = sum(value(model.gf_share[r, f, a]) * model.pf[r, f, a] for a in model.a)
+            weighted = sum(value(model.gf_share[r, f, a]) * model.pfy[r, f, a] for a in model.a)
             return model.pft[r, f] * total_share == weighted
         model.eq_pfeq = Constraint(model.r, model.f, rule=eq_pfeq_rule)
 
