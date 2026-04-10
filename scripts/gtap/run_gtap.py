@@ -514,7 +514,7 @@ def _collect_key_quantities(
             if hasattr(model, "xaa") and hasattr(model, "pa"):
                 for i in model.i:
                     for aa in (GTAP_HOUSEHOLD_AGENT, GTAP_GOVERNMENT_AGENT, GTAP_INVESTMENT_AGENT):
-                        gdp_val += float(value(model.pa[r, i])) * float(value(model.xaa[r, i, aa]))
+                        gdp_val += float(value(model.pa[r, i, aa])) * float(value(model.xaa[r, i, aa]))
             if hasattr(model, "xw") and hasattr(model, "pe"):
                 for i in model.i:
                     for rp in model.rp:
@@ -1120,16 +1120,17 @@ def _run_path_capi_linear_block(
             yg_val = float(value(model.yg[r]))
             yi_val = float(value(model.yi[r]))
             for i in model.i:
-                pa_val = float(value(model.pa[r, i]))
-                denom = pa_val + 1e-12
                 c_share = float(value(model.c_share[r, i]))
                 g_share = float(value(model.g_share[r, i]))
                 i_share = float(value(model.i_share[r, i]))
-                expressions.append(model.xc[r, i] - (c_share * yc_val / denom))
+                c_denom = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT])) + 1e-12
+                g_denom = float(value(model.pa[r, i, GTAP_GOVERNMENT_AGENT])) + 1e-12
+                i_denom = float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT])) + 1e-12
+                expressions.append(model.xc[r, i] - (c_share * yc_val / c_denom))
                 variables.append(model.xc[r, i])
-                expressions.append(model.xg[r, i] - (g_share * yg_val / denom))
+                expressions.append(model.xg[r, i] - (g_share * yg_val / g_denom))
                 variables.append(model.xg[r, i])
-                expressions.append(model.xi[r, i] - (i_share * yi_val / denom))
+                expressions.append(model.xi[r, i] - (i_share * yi_val / i_denom))
                 variables.append(model.xi[r, i])
         return expressions, variables
 
@@ -1152,7 +1153,7 @@ def _run_path_capi_linear_block(
             # from observed Armington prices and benchmark investment shares.
             pi0 = 0.0
             for i in model.i:
-                pi0 += float(value(model.i_share[r, i])) * float(value(model.pa[r, i]))
+                pi0 += float(value(model.i_share[r, i])) * float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT]))
             if pi0 <= 0.0:
                 pi0 = 1.0
 

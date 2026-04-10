@@ -64,6 +64,17 @@ class GTAPModelEquations:
         self.closure = closure
         self.reference_snapshot = reference_snapshot or self._load_reference_snapshot_from_env()
 
+    def _vst_value(self, region: str, commodity: str) -> float:
+        """Return benchmark inventory change VST(region, commodity).
+
+        GTAP GDX ordering for VST can arrive as either (commodity, region) or
+        (region, commodity) depending on loader path. Accept both.
+        """
+        val = self.params.benchmark.vst.get((region, commodity))
+        if val is None:
+            val = self.params.benchmark.vst.get((commodity, region), 0.0)
+        return float(val or 0.0)
+
     def _load_reference_snapshot_from_env(self) -> Optional[_InlineReferenceSnapshot]:
         """Optionally load a GAMS/COMP snapshot for benchmark-aligned initialization.
 
@@ -243,7 +254,7 @@ class GTAPModelEquations:
                         value(model.xaa[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
                         for aa in model.aa
                     )
-                    inventory = float(self.params.benchmark.vst.get((r, i), 0.0) or 0.0)
+                    inventory = self._vst_value(str(r), str(i))
                     model.xa[r, i].set_value(max(total_xa + inventory, 1e-8))
 
         if hasattr(model, "xds") and hasattr(model, "xet") and hasattr(model, "xs"):
@@ -255,10 +266,8 @@ class GTAPModelEquations:
             for r in model.r:
                 for i in model.i:
                     has_export_route = any(
-                        float(self.params.benchmark.vxmd.get((r, i, rp), 0.0) or 0.0) > 0.0
-                        or float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0) > 0.0
+                        value(model.xw_flag[r, i, rp]) > 0.0
                         for rp in model.rp
-                        if rp != r
                     )
                     if not has_export_route:
                         model.xet[r, i].set_value(0.0)
@@ -278,11 +287,7 @@ class GTAPModelEquations:
                     xet_val = max(value(model.xet[r, i]), 1e-12)
                     omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
                     for rp in model.rp:
-                        if rp == r:
-                            continue
-                        route_flow = float(self.params.benchmark.vxmd.get((r, i, rp), 0.0) or 0.0)
-                        route_basic = float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
-                        if route_flow <= 0.0 and route_basic <= 0.0:
+                        if value(model.xw_flag[r, i, rp]) <= 0.0:
                             model.gw_share[r, i, rp].set_value(0.0)
                             continue
                         xw_val = max(value(model.xw[r, i, rp]), 0.0)
@@ -787,6 +792,13 @@ class GTAPModelEquations:
         create_indexed_param("gd_share", ["r", "i"], self.params.shares.p_gd, 0.0, mutable=True)
         create_indexed_param("ge_share", ["r", "i"], self.params.shares.p_ge, 0.0, mutable=True)
         create_indexed_param("gw_share", ["r", "i", "rp"], self.params.shares.p_gw, 0.0, mutable=True)
+        xw_flag_data: Dict[tuple[str, str, str], float] = {}
+        for r in self.sets.r:
+            for i in self.sets.i:
+                for rp in self.sets.r:
+                    vxsb = float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
+                    xw_flag_data[(r, i, rp)] = 1.0 if vxsb > 0.0 else 0.0
+        create_indexed_param("xw_flag", ["r", "i", "rp"], xw_flag_data, 0.0, mutable=True)
         create_indexed_param("xet_flag", ["r", "i"], {(r, i): 1.0 for r in self.sets.r for i in self.sets.i}, 0.0, mutable=True)
         
         # Simple shares (kept for compatibility)
@@ -1204,7 +1216,7 @@ class GTAPModelEquations:
             elif aa == GTAP_INVESTMENT_AGENT:
                 val = get_vim_init(m, r, i)
             elif aa == GTAP_MARGIN_AGENT:
-                val = self.params.benchmark.vst.get((r, i), 0.0)
+                val = self._vst_value(str(r), str(i))
             else:
                 val = 0.0
             return max(val, 0.0)
@@ -1234,7 +1246,7 @@ class GTAPModelEquations:
                 if raw_domestic + raw_import <= 0.0:
                     _, raw_domestic, raw_import = self.params.benchmark.get_investment_demand(r, i)
             elif aa == GTAP_MARGIN_AGENT:
-                raw_domestic = self.params.benchmark.vst.get((r, i), 0.0)
+                raw_domestic = self._vst_value(str(r), str(i))
                 raw_import = 0.0
             else:
                 raw_domestic = 0.0
@@ -1374,7 +1386,7 @@ class GTAPModelEquations:
             return (
                 get_intermediate_use(r, i)
                 + get_final_use(r, i)
-                + self.params.benchmark.vst.get((r, i), 0.0)
+                + self._vst_value(str(r), str(i))
             )
 
         def get_xs_init(m, r, i):
@@ -1399,7 +1411,6 @@ class GTAPModelEquations:
             export_flow = sum(
                 float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
                 for rp in self.sets.r
-                if rp != r
             )
             return max(xs_bench - export_flow, 1e-8)
 
@@ -1463,7 +1474,6 @@ class GTAPModelEquations:
             total_vxsb = sum(
                 float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
                 for rp in self.sets.r
-                if rp != r
             )
             if total_vxsb > 0.0:
                 return max(total_vxsb, 1e-8)
@@ -1478,7 +1488,7 @@ class GTAPModelEquations:
 
         def get_xa_init(m, r, i):
             total = sum(get_xaa_init(m, r, i, aa) / get_xscale(m, r, aa) for aa in model.aa)
-            inventory = self.params.benchmark.vst.get((r, i), 0.0)
+            inventory = self._vst_value(str(r), str(i))
             return max(total + inventory, 1e-8)
 
         def get_va_init(m, r, a):
@@ -1610,6 +1620,14 @@ class GTAPModelEquations:
             return get_pa_benchmark_init(m, r, i, aa)
 
         model.pa = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_pa_init, doc="Armington price by agent")
+        # Keep no-demand agent/commodity prices at their benchmark normalization.
+        # In GAMS these combinations are filtered out by equation-domain flags.
+        for r in self.sets.r:
+            for i in self.sets.i:
+                for aa in model.aa:
+                    domestic_value, imported_value = get_agent_trade_levels(model, r, i, aa)
+                    if domestic_value <= 0.0 and imported_value <= 0.0:
+                        model.pa[r, i, aa].fix(1.0)
         model.dintx = Var(
             model.r,
             model.i,
@@ -1719,8 +1737,6 @@ class GTAPModelEquations:
 
         def get_xw_init(m, r, i, rp):
             # xw follows the export-flow direction xw(r,i,rp), matching GAMS peeq.
-            if r == rp:
-                return 0.0
             if self.reference_snapshot:
                 ref_xw = self.reference_snapshot.xw.get((r, i, rp))
                 if ref_xw is not None and ref_xw > 0.0:
@@ -1729,7 +1745,7 @@ class GTAPModelEquations:
             if vxsb > 0.0:
                 pe_val = max(get_pe_init(m, r, i, rp), 1e-12)
                 return vxsb / pe_val
-            return max(float(self.params.benchmark.vxmd.get((r, i, rp), 0.0) or 0.0), 0.0)
+            return 0.0
 
         model.xe = Var(model.r, model.i, model.rp, within=NonNegativeReals, initialize=get_xe_init, doc="Bilateral exports")
         model.xw = Var(model.r, model.i, model.rp, within=NonNegativeReals, initialize=get_xw_init, doc="Bilateral imports")
@@ -1871,11 +1887,14 @@ class GTAPModelEquations:
         def get_pm_init(m, rp, i, r):
             """Initialize bilateral import price (tariff-inclusive)."""
             if rp == r:
-                return 1.0
-            bilateral_imports = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
-            bilateral_exports = float(self.params.benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
-            if bilateral_imports <= 0.0 and bilateral_exports <= 0.0:
-                return 1.0
+                xw_bench = float(self.params.benchmark.vxsb.get((rp, i, r), 0.0) or 0.0)
+                if xw_bench <= 0.0:
+                    return 1.0
+            else:
+                bilateral_imports = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
+                bilateral_exports = float(self.params.benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
+                if bilateral_imports <= 0.0 and bilateral_exports <= 0.0:
+                    return 1.0
             pmcif = get_pmcif_init(m, rp, i, r)
             imptx = float(self.params.taxes.imptx.get((rp, i, r), 0.0) or 0.0)
             mtax = _trade_mtax_value(r, i, rp)
@@ -1885,7 +1904,17 @@ class GTAPModelEquations:
         def get_pmcif_init(m, rp, i, r):
             """Initialize CIF import price."""
             if rp == r:
-                return 1.0
+                xw_bench = float(self.params.benchmark.vxsb.get((rp, i, r), 0.0) or 0.0)
+                if xw_bench <= 0.0:
+                    return 1.0
+                bilateral_imports = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
+                if bilateral_imports > 0.0:
+                    return max(bilateral_imports / max(xw_bench, 1e-12), 1e-8)
+                export_tax = float(self.params.taxes.rtxs.get((rp, i, r), 0.0) or 0.0)
+                etax = _trade_etax_value(rp, i, r)
+                tmarg = float(m.tmarg[rp, i, r]) if hasattr(m, "tmarg") else 0.0
+                return max(1.0 + export_tax + etax + tmarg, 1e-8)
+
             bilateral_exports = float(self.params.benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
             bilateral_imports = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
             if bilateral_exports > 0.0 and bilateral_imports > 0.0:
@@ -1902,10 +1931,13 @@ class GTAPModelEquations:
         def get_pefob_init(m, r, i, rp):
             """Initialize FOB export price."""
             if r == rp:
-                return 1.0
-            bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
-            if bilateral_exports <= 0.0:
-                return 1.0
+                xw_bench = float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
+                if xw_bench <= 0.0:
+                    return 1.0
+            else:
+                bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
+                if bilateral_exports <= 0.0:
+                    return 1.0
             export_tax = float(self.params.taxes.rtxs.get((r, i, rp), 0.0) or 0.0)
             etax = _trade_etax_value(r, i, rp)
             return max(1.0 + export_tax + etax, 1e-8)
@@ -2163,6 +2195,8 @@ class GTAPModelEquations:
                 total = 0.0
                 for (rr, i, rp), rtxs in self.params.taxes.rtxs.items():
                     if rr == r:
+                        # Benchmark initialization follows cal.gms where
+                        # etax is fixed to zero at the benchmark.
                         total += float(rtxs) * self.params.benchmark.vxsb.get((r, i, rp), 0.0)
                 return total
 
@@ -2170,6 +2204,8 @@ class GTAPModelEquations:
                 total = 0.0
                 for (exporter, i, importer), rate in self.params.taxes.imptx.items():
                     if importer == r:
+                        # Benchmark initialization follows cal.gms where
+                        # mtax is fixed to zero at the benchmark.
                         total += float(rate) * float(self.params.benchmark.vcif.get((exporter, i, r), 0.0) or 0.0)
                 return total
 
@@ -2180,7 +2216,11 @@ class GTAPModelEquations:
                         kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0))
                         if kappa == 0.0:
                             kappa = float(self.params.taxes.kappaf.get((r, f), 0.0))
-                        total += kappa * self.params.benchmark.vfm.get((r, f, a), 0.0)
+                        total += (
+                            kappa
+                            * self.params.benchmark.vfm.get((r, f, a), 0.0)
+                            / max(value(model.xscale[r, a]), 1e-12)
+                        )
                 return total
 
             return 0.0
@@ -2764,7 +2804,7 @@ class GTAPModelEquations:
         
         # Armington aggregation (Leontief for simplicity)
         def eq_xa_rule(model, r, i):
-            inventory = self.params.benchmark.vst.get((r, i), 0.0)
+            inventory = self._vst_value(str(r), str(i))
             return model.xa[r, i] == sum(model.xaa[r, i, aa] / model.xscale[r, aa] for aa in model.aa) + inventory
         model.eq_xa = Constraint(model.r, model.i, rule=eq_xa_rule)
 
@@ -2804,7 +2844,7 @@ class GTAPModelEquations:
         model.eq_xaa_inv = Constraint(model.r, model.i, rule=eq_xaa_inv_rule)
 
         def eq_xaa_tmg_rule(model, r, i):
-            benchmark_margin = self.params.benchmark.vst.get((r, i), 0.0)
+            benchmark_margin = self._vst_value(str(r), str(i))
             return model.xaa[r, i, GTAP_MARGIN_AGENT] == model.xscale[r, GTAP_MARGIN_AGENT] * benchmark_margin
         model.eq_xaa_tmg = Constraint(model.r, model.i, rule=eq_xaa_tmg_rule)
 
@@ -2831,7 +2871,7 @@ class GTAPModelEquations:
                 if raw_domestic + raw_import <= 0.0:
                     _, raw_domestic, raw_import = self.params.benchmark.get_investment_demand(r, i)
             elif aa == GTAP_MARGIN_AGENT:
-                raw_domestic = self.params.benchmark.vst.get((r, i), 0.0)
+                raw_domestic = self._vst_value(str(r), str(i))
                 raw_import = 0.0
             else:
                 raw_domestic = 0.0
@@ -3027,8 +3067,6 @@ class GTAPModelEquations:
         # Bilateral import demand (GAMS xweq)
         # xw(rp,i,r) = amw(rp,i,r)*xmt(r,i)*(pmt(r,i)/pm(rp,i,r))**sigmaw(r,i)
         def eq_xweq_rule(model, rp, i, r):
-            if rp == r:
-                return Constraint.Skip
             amw = _get_import_source_share(model, r, i, rp)
             if amw <= 0.0:
                 return Constraint.Skip
@@ -3052,14 +3090,11 @@ class GTAPModelEquations:
             active_shares = [
                 _get_import_source_share(model, r, i, rp)
                 for rp in model.rp
-                if rp != r
             ]
             if not any(share > 0.0 for share in active_shares):
                 return model.pmt[r, i] == 1.0  # Default price if no imports
             terms = []
             for rp in model.rp:
-                if rp == r:
-                    continue
                 amw = _get_import_source_share(model, r, i, rp)
                 if amw <= 0.0:
                     continue
@@ -3073,10 +3108,7 @@ class GTAPModelEquations:
         # Bilateral import price tariff-inclusive (GAMS pmeq)
         # pm(rp,i,r) = (1 + imptx(rp,i,r) + mtax(r,i))*pmcif(rp,i,r)
         def eq_pmeq_rule(model, rp, i, r):
-            if rp == r:
-                return Constraint.Skip
-            vmsb = _vmsb_value(r, i, rp)
-            if vmsb <= 0.0:
+            if value(model.xw_flag[rp, i, r]) <= 0.0:
                 return Constraint.Skip
             imptx = _imptx_rate_importer(r, i, rp)
             mtax = _mtax_value(r, i, rp)
@@ -3087,10 +3119,7 @@ class GTAPModelEquations:
         # CIF import price (GAMS pmcifeq)
         # pmcif(rp,i,r) = pefob(rp,i,r) + pwmg(rp,i,r)*tmarg(rp,i,r)
         def eq_pmcifeq_rule(model, rp, i, r):
-            if rp == r:
-                return Constraint.Skip
-            vmsb = _vmsb_value(r, i, rp)
-            if vmsb <= 0.0:
+            if value(model.xw_flag[rp, i, r]) <= 0.0:
                 return Constraint.Skip
             tmarg = value(model.tmarg[rp, i, r])
             return model.pmcif[rp, i, r] == model.pefob[rp, i, r] + model.pwmg[rp, i, r] * tmarg
@@ -3099,10 +3128,7 @@ class GTAPModelEquations:
         # FOB export price (GAMS pefobeq)
         # pefob(r,i,rp) = (1 + exptx(r,i,rp) + etax(r,i))*pe(r,i,rp)
         def eq_pefobeq_rule(model, r, i, rp):
-            if r == rp:
-                return Constraint.Skip
-            bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
-            if bilateral_exports <= 0.0:
+            if value(model.xw_flag[r, i, rp]) <= 0.0:
                 return Constraint.Skip
             export_tax = float(self.params.taxes.rtxs.get((r, i, rp), 0.0))
             etax = _etax_value(r, i, rp)
@@ -3112,14 +3138,7 @@ class GTAPModelEquations:
         # Bilateral export supply CET (GAMS peeq)
         # xw(r,i,rp) = gw(r,i,rp)*xet(r,i)*(pe(r,i,rp)/pet(r,i))**omegaw(r,i)
         def eq_peeq_rule(model, r, i, rp):
-            if r == rp:
-                return Constraint.Skip
-            gw = (
-                value(model.gw_share[r, i, rp])
-                if hasattr(model, "gw_share")
-                else float(self.params.shares.p_gw.get((r, i, rp), 0.0))
-            )
-            if gw <= 0.0:
+            if value(model.xw_flag[r, i, rp]) <= 0.0:
                 return Constraint.Skip
             omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
             if omegaw == float("inf"):
@@ -3133,16 +3152,11 @@ class GTAPModelEquations:
         # Aggregate export price CET (GAMS peteq)
         # pet(r,i)**(1+omegaw) = sum(rp, gw(r,i,rp)*pe(r,i,rp)**(1+omegaw))
         def eq_peteq_rule(model, r, i):
+            if value(model.xet_flag[r, i]) <= 0.0:
+                return Constraint.Skip
             active_routes: list[str] = []
             for rp in model.rp:
-                if rp == r:
-                    continue
-                gw = (
-                    value(model.gw_share[r, i, rp])
-                    if hasattr(model, "gw_share")
-                    else float(self.params.shares.p_gw.get((r, i, rp), 0.0))
-                )
-                if gw > 0.0:
+                if value(model.xw_flag[r, i, rp]) > 0.0:
                     active_routes.append(rp)
             if not active_routes:
                 return Constraint.Skip
@@ -3548,7 +3562,8 @@ class GTAPModelEquations:
                 for (rr, i, rp), rtxs in self.params.taxes.rtxs.items():
                     if rr != r:
                         continue
-                    total += float(rtxs) * model.pe[r, i, rp] * model.xw[r, i, rp]
+                    etax = _etax_value(r, i, rp)
+                    total += (float(rtxs) + etax) * model.pe[r, i, rp] * model.xw[r, i, rp]
                 return model.ytax[r, gy] == total
 
             if gy == "mt":
@@ -3556,7 +3571,8 @@ class GTAPModelEquations:
                 for (exporter, i, importer), imptx in self.params.taxes.imptx.items():
                     if importer != r:
                         continue
-                    total += float(imptx) * model.pmcif[exporter, i, r] * model.xw[exporter, i, r]
+                    mtax = _mtax_value(r, i, exporter)
+                    total += (float(imptx) + mtax) * model.pmcif[exporter, i, r] * model.xw[exporter, i, r]
                 return model.ytax[r, gy] == total
 
             if gy == "dt":
@@ -3568,7 +3584,7 @@ class GTAPModelEquations:
                             kappa = float(self.params.taxes.kappaf.get((r, f), 0.0))
                         if kappa == 0.0:
                             continue
-                        total += kappa * model.pf[r, f, a] * model.xf[r, f, a]
+                        total += kappa * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
                 return model.ytax[r, gy] == total
 
             return model.ytax[r, gy] == 0.0
@@ -3777,7 +3793,7 @@ class GTAPModelEquations:
         # Goods market clearing: Supply = Demand
         def mkt_goods_rule(model, r, i):
             absorption = sum(model.xaa[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
-            inventory = self.params.benchmark.vst.get((r, i), 0.0)
+            inventory = self._vst_value(str(r), str(i))
             return model.xa[r, i] == absorption + inventory
         model.mkt_goods = Constraint(model.r, model.i, rule=mkt_goods_rule)
         
