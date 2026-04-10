@@ -1,6 +1,11 @@
 """SAM transformation pipeline utilities."""
 
-from equilibria.sam_tools.api import IEEMToPEPResult, run_ieem_to_pep
+from equilibria.sam_tools.api import (
+    IEEMToPEPResult,
+    MIPToSAMResult,
+    run_ieem_to_pep,
+    run_mip_to_sam,
+)
 from equilibria.sam_tools.balancing import RASBalancer
 from equilibria.sam_tools.enums import (
     IPFPSupportMode,
@@ -18,6 +23,8 @@ __all__ = [
     "export_sam",
     "run_ieem_to_pep",
     "IEEMToPEPResult",
+    "run_mip_to_sam",
+    "MIPToSAMResult",
     "RASBalancer",
     "SAMFormat",
     "WorkflowOperation",

@@ -10,6 +10,16 @@ import numpy as np
 
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
 from equilibria.sam_tools.ieem_to_pep_transformations import balance_sam_ras
+from equilibria.sam_tools.mip_raw_excel import MIPRawSAM
+from equilibria.sam_tools.mip_to_sam_transforms import (
+    create_factor_income_distribution,
+    create_government_flows,
+    create_household_expenditure,
+    create_investment_account,
+    create_row_account,
+    disaggregate_va_to_factors,
+    normalize_mip_accounts,
+)
 from equilibria.sam_tools.models import Sam
 from equilibria.sam_tools.sam_transforms import (
     align_ti_to_gvt_j_on_sam,
@@ -160,7 +170,170 @@ def run_ieem_to_pep(
     )
 
 
+class MIPToSAMResult(NamedTuple):
+    """Result object returned by :func:`run_mip_to_sam`."""
+
+    sam: Sam
+    steps: list[dict[str, Any]]
+    output_path: Path | None
+    report_path: Path | None
+
+
+def run_mip_to_sam(
+    input_path: Path | str,
+    *,
+    # Disaggregation parameters
+    va_factor_shares: dict[str, float] | None = None,
+    factor_to_household_shares: dict[str, dict[str, float]] | None = None,
+    tax_rates: dict[str, float] | None = None,
+    # Format options
+    sheet_name: str = "MIP",
+    va_row_label: str = "Valor Agregado",
+    import_row_label: str = "Importaciones",
+    # Balancing
+    ras_type: str = "arithmetic",
+    ras_tol: float = 1e-9,
+    ras_max_iter: int = 200,
+    # Output
+    output_path: Path | str | None = None,
+    report_path: Path | str | None = None,
+) -> MIPToSAMResult:
+    """
+    Convert MIP (Input-Output Matrix) to SAM compatible with PEP CGE models.
+
+    This function transforms a standard national accounts MIP with aggregated
+    Value Added into a complete SAM with explicit factors (L, K) and institutions
+    (households, government, firms, ROW).
+
+    Args:
+        input_path: Path to MIP Excel file
+        va_factor_shares: Factor shares of VA. Default: {"L": 0.65, "K": 0.35}
+        factor_to_household_shares: Income distribution from factors to institutions.
+            Default: simple 1-household distribution
+        tax_rates: Tax rates for production_tax, import_tariff, direct_tax.
+            Default: {"production_tax": 0.10, "import_tariff": 0.05, "direct_tax": 0.15}
+        sheet_name: Name of Excel sheet containing MIP
+        va_row_label: Label to identify Value Added row in MIP
+        import_row_label: Label to identify imports row in MIP
+        ras_type: RAS balancing algorithm type ("arithmetic" or "multiplicative")
+        ras_tol: Tolerance for RAS convergence
+        ras_max_iter: Maximum iterations for RAS balancing
+        output_path: Optional path to save resulting SAM as Excel
+        report_path: Optional path to save transformation report as JSON
+
+    Returns:
+        MIPToSAMResult with transformed SAM and transformation history
+
+    Example:
+        >>> result = run_mip_to_sam(
+        ...     "data/mip_ecuador_2020.xlsx",
+        ...     va_factor_shares={"L": 0.68, "K": 0.32},
+        ...     output_path="output/sam_ecuador_2020.xlsx"
+        ... )
+        >>> assert result.sam.is_balanced(tol=1e-9)
+    """
+    input_file = Path(input_path).resolve()
+
+    # Load MIP
+    sam = MIPRawSAM.from_mip_excel(
+        input_file,
+        sheet_name=sheet_name,
+        va_row_label=va_row_label,
+        import_row_label=import_row_label,
+    )
+    steps: list[dict[str, Any]] = []
+
+    def record(step: str, details: dict[str, Any] | None = None) -> None:
+        steps.append(
+            {
+                "step": step,
+                "details": details or {},
+                "balance": _sam_balance_stats(sam),
+            }
+        )
+
+    # Initial balancing (while still in RAW format)
+    record(
+        "balance_ras_initial",
+        balance_sam_ras(
+            sam,
+            {
+                "ras_type": ras_type,
+                "tol": ras_tol,
+                "max_iter": ras_max_iter,
+            },
+        ),
+    )
+
+    # Transformation sequence
+    record("normalize_mip", normalize_mip_accounts(sam, {}))
+
+    record(
+        "disaggregate_va",
+        disaggregate_va_to_factors(
+            sam,
+            {"va_factor_shares": va_factor_shares} if va_factor_shares else {},
+        ),
+    )
+
+    record(
+        "factor_income",
+        create_factor_income_distribution(
+            sam,
+            {"factor_to_household_shares": factor_to_household_shares}
+            if factor_to_household_shares
+            else {},
+        ),
+    )
+
+    record("household_expenditure", create_household_expenditure(sam, {}))
+
+    record(
+        "government",
+        create_government_flows(
+            sam,
+            {"tax_rates": tax_rates} if tax_rates else {},
+        ),
+    )
+
+    record("row_account", create_row_account(sam, {}))
+
+    record("investment", create_investment_account(sam, {}))
+
+    # Reuse existing PEP transformations
+    record("create_x_block", create_x_block_on_sam(sam))
+    record("convert_exports", convert_exports_to_x_on_sam(sam))
+
+    # Export
+    resolved_output: Path | None = Path(output_path).resolve() if output_path is not None else None
+    if resolved_output is not None:
+        export_sam(sam, resolved_output, output_format="excel", output_symbol="SAM")
+
+    resolved_report: Path | None = Path(report_path).resolve() if report_path is not None else None
+    if resolved_report is not None:
+        resolved_report.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "input_path": str(input_file),
+            "sheet_name": sheet_name,
+            "va_factor_shares": va_factor_shares,
+            "factor_to_household_shares": factor_to_household_shares,
+            "tax_rates": tax_rates,
+            "output_path": str(resolved_output) if resolved_output is not None else None,
+            "steps": _to_jsonable(steps),
+        }
+        resolved_report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    return MIPToSAMResult(
+        sam=sam,
+        steps=steps,
+        output_path=resolved_output,
+        report_path=resolved_report,
+    )
+
+
 __all__ = [
     "IEEMToPEPResult",
+    "MIPToSAMResult",
     "run_ieem_to_pep",
+    "run_mip_to_sam",
 ]
