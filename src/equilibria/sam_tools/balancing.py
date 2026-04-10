@@ -107,3 +107,175 @@ class RASBalancer(BaseModel):
             converged=converged,
             ras_type=mode.value,
         )
+
+
+class MIPBalanceResult(BaseModel):
+    """Result payload for complete MIP balancing."""
+
+    matrix: pd.DataFrame
+    row_balance_max_diff: float
+    col_balance_max_diff: float
+    pib_production: float
+    pib_expenditure: float
+    pib_diff: float
+    iterations: int
+    converged: bool
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+def balance_complete_mip(
+    mip_df: pd.DataFrame,
+    *,
+    n_products: int,
+    n_sectors: int,
+    va_row_indices: list[int],
+    import_row_indices: list[int],
+    fd_col_indices: list[int],
+    fix_va: bool = True,
+    max_iterations: int = 1000,
+    tolerance: float = 1e-4,
+) -> MIPBalanceResult:
+    """
+    Balance a complete MIP using GRAS method.
+
+    This function balances the entire MIP system to satisfy all three identities:
+    1. Row balance (supply = demand for each product)
+    2. Column balance (inputs = production for each sector)
+    3. PIB identity (production = expenditure)
+
+    Args:
+        mip_df: Full MIP DataFrame with products, imports, VA in rows and sectors, FD in columns
+        n_products: Number of product rows (first n rows)
+        n_sectors: Number of sector columns (first n columns)
+        va_row_indices: Indices of VA rows (e.g., [140, 141, 142] for Remuneraciones, Excedente, Impuestos)
+        import_row_indices: Indices of import rows (e.g., [70:140])
+        fd_col_indices: Indices of final demand columns (e.g., [70:75] for HH, GOV, INV, Stock, EXP)
+        fix_va: If True, preserve VA values (most reliable data)
+        max_iterations: Maximum GRAS iterations
+        tolerance: Convergence tolerance
+
+    Returns:
+        MIPBalanceResult with balanced matrix and diagnostics
+
+    References:
+        - Junius & Oosterhaven (2003): "The Solution of Updating or Regionalizing a Matrix"
+        - Robinson, Cattaneo & El-Said (2001): "Updating and Estimating a SAM Using Cross Entropy"
+    """
+    # Work with numpy for efficiency
+    M = mip_df.to_numpy(copy=True, dtype=float)
+
+    # Get VA values (fix these if requested)
+    va_original = M[va_row_indices, :n_sectors].copy() if fix_va else None
+
+    # Identify matrix blocks
+    Z = M[:n_products, :n_sectors]  # Intermediate flows
+    F = M[:n_products, fd_col_indices]  # Final demand
+    IMP_Z = M[import_row_indices, :n_sectors]  # Imports to sectors
+    IMP_F = M[import_row_indices, fd_col_indices]  # Imports to final demand
+    VA = M[va_row_indices, :n_sectors]  # Value added by sector
+
+    for iteration in range(max_iterations):
+        # Step 1: Calculate production totals from expenditure side
+        # X = Σ(intermediate use) + Σ(final demand)
+        X_expenditure = Z.sum(axis=0) + F.sum(axis=1)
+
+        # Step 2: Calculate production totals from cost side
+        # X = Σ(intermediate inputs) + VA
+        X_cost = Z.sum(axis=1) + VA.sum(axis=0)
+
+        # Step 3: Target production = average of both sides
+        X_target = 0.5 * (X_expenditure + X_cost)
+
+        # Step 4: Calculate total supply by product
+        # Q = domestic production + imports
+        Q = X_target.copy()  # This is domestic production
+        total_imports_by_product = IMP_Z.sum(axis=1) + IMP_F.sum(axis=1)
+
+        # Step 5: Balance intermediate flows (columns first)
+        # Adjust Z columns to match (X_target - VA)
+        col_target = X_target - VA.sum(axis=0)
+        col_sums = Z.sum(axis=0)
+        col_factors = np.where(col_sums > 0, col_target / col_sums, 1.0)
+        Z = Z * col_factors[np.newaxis, :]
+
+        # Step 6: Balance rows (products)
+        # Total demand = intermediate use + final demand + exports
+        row_target = Q + total_imports_by_product  # Total supply
+        row_sums_z = Z.sum(axis=1)
+        row_sums_f = F.sum(axis=1)
+        row_sums_total = row_sums_z + row_sums_f
+
+        row_factors = np.where(row_sums_total > 0, row_target / row_sums_total, 1.0)
+
+        # Apply row factors to both Z and F
+        Z = Z * row_factors[:, np.newaxis]
+        F = F * row_factors[:, np.newaxis]
+
+        # Also adjust imports proportionally to maintain import shares
+        imp_row_sums_z = IMP_Z.sum(axis=1)
+        imp_row_sums_f = IMP_F.sum(axis=1)
+        imp_row_sums_total = imp_row_sums_z + imp_row_sums_f
+
+        IMP_Z = IMP_Z * row_factors[:, np.newaxis]
+        IMP_F = IMP_F * row_factors[:, np.newaxis]
+
+        # Step 7: Restore VA if fixed
+        if fix_va and va_original is not None:
+            VA = va_original.copy()
+
+        # Check convergence
+        X_new_expenditure = Z.sum(axis=0) + F.sum(axis=1)
+        X_new_cost = Z.sum(axis=1) + VA.sum(axis=0)
+
+        max_col_diff = float(np.abs(X_new_cost - X_new_expenditure).max())
+        max_row_diff = float(np.abs(row_sums_total - row_target).max())
+
+        if max(max_col_diff, max_row_diff) < tolerance:
+            # Write back to matrix
+            M[:n_products, :n_sectors] = Z
+            M[:n_products, fd_col_indices] = F
+            M[import_row_indices, :n_sectors] = IMP_Z
+            M[import_row_indices, fd_col_indices] = IMP_F
+            M[va_row_indices, :n_sectors] = VA
+
+            # Calculate PIB
+            pib_production = float(VA.sum())
+            total_final_demand = F.sum()
+            total_exports = F[:, -1].sum() if F.shape[1] >= 1 else 0.0  # Last FD column is exports
+            total_imports = total_imports_by_product.sum()
+            pib_expenditure = float(total_final_demand - total_imports)
+
+            return MIPBalanceResult(
+                matrix=pd.DataFrame(M, index=mip_df.index, columns=mip_df.columns),
+                row_balance_max_diff=max_row_diff,
+                col_balance_max_diff=max_col_diff,
+                pib_production=pib_production,
+                pib_expenditure=pib_expenditure,
+                pib_diff=abs(pib_production - pib_expenditure),
+                iterations=iteration + 1,
+                converged=True,
+            )
+
+    # Did not converge
+    M[:n_products, :n_sectors] = Z
+    M[:n_products, fd_col_indices] = F
+    M[import_row_indices, :n_sectors] = IMP_Z
+    M[import_row_indices, fd_col_indices] = IMP_F
+    M[va_row_indices, :n_sectors] = VA
+
+    pib_production = float(VA.sum())
+    total_final_demand = F.sum()
+    total_imports = (IMP_Z.sum() + IMP_F.sum())
+    pib_expenditure = float(total_final_demand - total_imports)
+
+    return MIPBalanceResult(
+        matrix=pd.DataFrame(M, index=mip_df.index, columns=mip_df.columns),
+        row_balance_max_diff=max_row_diff,
+        col_balance_max_diff=max_col_diff,
+        pib_production=pib_production,
+        pib_expenditure=pib_expenditure,
+        pib_diff=abs(pib_production - pib_expenditure),
+        iterations=max_iterations,
+        converged=False,
+    )
