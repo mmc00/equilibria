@@ -16,8 +16,9 @@ from equilibria.contracts import (
 )
 
 
-def _full_pep_equation_ids() -> tuple[str, ...]:
-    return tuple(f"EQ{i}" for i in range(1, 99)) + ("WALRAS",)
+def _full_pep_equation_ids(*, exclude: tuple[str, ...] = ()) -> tuple[str, ...]:
+    excluded = {str(name).strip().upper() for name in exclude}
+    return tuple(f"EQ{i}" for i in range(1, 99) if f"EQ{i}" not in excluded) + ("WALRAS",)
 
 
 def _closure_template_data(name: str) -> dict[str, Any]:
@@ -146,6 +147,16 @@ def default_pep_contract() -> PEPContract:
     return PEPContract(closure=PEPClosureConfig.model_validate(_closure_template_data("pep_default")))
 
 
+def derived_reporting_pep_contract() -> PEPContract:
+    """Return a stable contract that derives GDP reporting metrics post-solve."""
+
+    base = default_pep_contract().model_dump(mode="python")
+    base["name"] = "pep_nlp_v1_derived_reporting"
+    base["closure"]["fixed"] = tuple(base["closure"]["fixed"]) + ("PIXGDP", "GDP_BP_REAL")
+    base["equations"]["include"] = _full_pep_equation_ids(exclude=("EQ80", "EQ96"))
+    return PEPContract.model_validate(base)
+
+
 def build_pep_closure_config(
     value: str | Mapping[str, Any] | PEPClosureConfig | None = None,
 ) -> PEPClosureConfig:
@@ -180,6 +191,8 @@ def build_pep_contract(value: str | Mapping[str, Any] | PEPContract | None = Non
         contract_name = value.strip()
         if contract_name == "pep_nlp_v1":
             return default_pep_contract()
+        if contract_name == "pep_nlp_v1_derived_reporting":
+            return derived_reporting_pep_contract()
         raise ValueError(f"Unsupported PEP contract name: {value!r}")
     if isinstance(value, Mapping):
         base = default_pep_contract().model_dump(mode="python")

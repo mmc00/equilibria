@@ -18,6 +18,62 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def compute_pep_gdp_deflator(
+    vars: "PEPModelVariables",
+    params: dict[str, Any],
+    sectors: list[str],
+) -> float | None:
+    """Return the EQ80 Fischer GDP deflator when it is numerically well-defined."""
+
+    pvao0 = params.get("PVAO0", {})
+    vao0 = params.get("VAO0", {})
+    tipo0 = params.get("TIPO0", {})
+
+    num1 = den1 = num2 = den2 = 0.0
+    for j in sectors:
+        va = float(vars.VA.get(j, 0.0))
+        va0 = float(vao0.get(j, 0.0))
+        if va <= 1e-12 or va0 <= 1e-12:
+            continue
+
+        pva = float(vars.PVA.get(j, 0.0))
+        pva0 = float(pvao0.get(j, 1.0))
+        tip = float(vars.TIP.get(j, 0.0))
+        tip0 = float(tipo0.get(j, 0.0))
+
+        unit_cur = (pva * va + tip) / va
+        unit_base = (pva0 * va0 + tip0) / va0
+        num1 += unit_cur * va0
+        den1 += unit_base * va0
+        num2 += unit_cur * va
+        den2 += unit_base * va
+
+    if den1 <= 1e-12 or den2 <= 1e-12:
+        return None
+
+    fisher_product = (num1 / den1) * (num2 / den2)
+    if not np.isfinite(fisher_product) or fisher_product <= 1e-12:
+        return None
+    return float(np.sqrt(fisher_product))
+
+
+def refresh_pep_reporting_levels(
+    vars: "PEPModelVariables",
+    params: dict[str, Any],
+    sets: dict[str, list[str]],
+) -> "PEPModelVariables":
+    """Refresh reporting-only GDP metrics from the solved economic state."""
+
+    pixgdp = compute_pep_gdp_deflator(vars=vars, params=params, sectors=sets.get("J", []))
+    if pixgdp is not None:
+        vars.PIXGDP = pixgdp
+
+    if abs(vars.PIXGDP) > 1e-12:
+        vars.GDP_BP_REAL = float(vars.GDP_BP / vars.PIXGDP)
+
+    return vars
+
+
 @dataclass
 class PEPModelVariables:
     """Container for all PEP model variables."""

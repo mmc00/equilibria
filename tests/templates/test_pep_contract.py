@@ -28,6 +28,18 @@ def test_build_pep_contract_default_name() -> None:
     assert "SG" in contract.closure.endogenous
 
 
+def test_build_pep_contract_derived_reporting_name() -> None:
+    contract = build_pep_contract("pep_nlp_v1_derived_reporting")
+
+    assert isinstance(contract, PEPContract)
+    assert contract.name == "pep_nlp_v1_derived_reporting"
+    assert "PIXGDP" in contract.closure.fixed
+    assert "GDP_BP_REAL" in contract.closure.fixed
+    assert "EQ80" not in contract.equations.include
+    assert "EQ96" not in contract.equations.include
+    assert contract.equations.include[-1] == "WALRAS"
+
+
 def test_build_pep_contract_mapping_overrides_default() -> None:
     contract = build_pep_contract(
         {
@@ -108,6 +120,26 @@ def test_build_pep_runtime_config_accepts_numeric_jacobian_override() -> None:
 
     assert isinstance(cfg, PEPRuntimeConfig)
     assert cfg.jacobian_mode == "numeric"
+
+
+def test_build_pep_runtime_config_accepts_ipopt_options() -> None:
+    cfg = build_pep_runtime_config(
+        {
+            "ipopt_options": {
+                "bound_push": 1e-6,
+                "max_soc": 20,
+                "nlp_scaling_method": "none",
+                "honor_original_bounds": True,
+            }
+        }
+    )
+
+    assert cfg.ipopt_options == {
+        "bound_push": 1e-6,
+        "max_soc": 20,
+        "nlp_scaling_method": "none",
+        "honor_original_bounds": True,
+    }
 
 
 def test_build_pep_runtime_config_normalizes_i1_exclusions() -> None:

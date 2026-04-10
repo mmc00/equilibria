@@ -1,0 +1,7 @@
+- GDXReader:
+    file: VAL_PAR.gdx
+    symbols: all
+- GDXWriter:
+    file: VAL_PAR.gdx
+    symbols: all
+    duplicateRecords: first

@@ -34,12 +34,33 @@ class PEPRuntimeConfig(ModelRuntimeConfig):
     require_solver_success: bool = True
     accept_square_feasible: bool = True
     i1_excluded_members: tuple[str, ...] = Field(default_factory=lambda: ("agr",))
+    ipopt_options: dict[str, bool | int | float | str] = Field(default_factory=dict)
     reference: PEPReferenceConfig = Field(default_factory=PEPReferenceConfig)
 
     @field_validator("i1_excluded_members", mode="before")
     @classmethod
     def _normalize_i1_excluded_members(cls, value: Any) -> tuple[str, ...]:
         return normalize_i1_excluded_members(value)
+
+    @field_validator("ipopt_options", mode="before")
+    @classmethod
+    def _normalize_ipopt_options(cls, value: Any) -> dict[str, bool | int | float | str]:
+        if value is None:
+            return {}
+        if not isinstance(value, Mapping):
+            raise TypeError("ipopt_options must be a mapping of option names to scalar values.")
+        normalized: dict[str, bool | int | float | str] = {}
+        for key, raw in value.items():
+            name = str(key).strip()
+            if not name:
+                raise ValueError("ipopt_options keys must be non-empty.")
+            if isinstance(raw, (bool, int, float, str)):
+                normalized[name] = raw
+                continue
+            raise TypeError(
+                f"Unsupported IPOPT option value for {name!r}: expected bool/int/float/str, got {type(raw).__name__}."
+            )
+        return normalized
 
 
 def default_pep_runtime_config() -> PEPRuntimeConfig:

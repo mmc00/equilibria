@@ -1,0 +1,7 @@
+- GDXReader:
+    file: SAM-V2_0.gdx
+    symbols: all
+- GDXWriter:
+    file: SAM-V2_0.gdx
+    symbols: all
+    duplicateRecords: first

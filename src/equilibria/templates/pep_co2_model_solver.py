@@ -90,6 +90,18 @@ class PEPCO2IPOPTSolver(IPOPTSolver):
         self._sync_co2_block(vars_obj, include_pt=True)
         return vars_obj
 
+    def _prepare_initial_guess_for_solve(self, vars: PEPModelVariables) -> None:
+        pt_before = {
+            j: float(vars.PT.get(j, 0.0))
+            for j in self._active_carbon_tax_sectors()
+        }
+        super()._prepare_initial_guess_for_solve(vars)
+        self._sync_co2_block(vars, include_pt=True)
+        self._propagate_pt_delta_to_transformation_prices(vars, pt_before)
+        self._apply_macro_closure_blockwise(vars)
+        self._sync_investment_block_from_gfcf(vars)
+        self._recompute_gdp_aggregates(vars)
+
     def _reconcile_tax_identities(self, vars: PEPModelVariables) -> None:
         super()._reconcile_tax_identities(vars)
         self._sync_co2_block(vars, include_pt=False)
@@ -113,13 +125,76 @@ class PEPCO2IPOPTSolver(IPOPTSolver):
         vars.TIPT = sum(vars.TIP.values())
         vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
         vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
-        vars.SG = vars.YG - tr_to_govt - vars.G
+        self._reconcile_government_balance(vars)
         self._recompute_gdp_aggregates(vars)
         vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
         attach_co2_metrics(vars, self.params, self.sets.get("J", []))
 
-    def _has_active_carbon_tax(self) -> bool:
+    def _propagate_pt_delta_to_transformation_prices(
+        self,
+        vars: PEPModelVariables,
+        pt_before: Mapping[str, float],
+    ) -> None:
+        """Nudge sector-commodity prices with the new taxed unit-cost wedge."""
+        for j in self._active_carbon_tax_sectors():
+            old_pt = float(pt_before.get(j, 0.0))
+            new_pt = float(vars.PT.get(j, 0.0))
+            if old_pt <= 1e-12 or new_pt <= 1e-12:
+                continue
+            ratio = new_pt / old_pt
+            if abs(ratio - 1.0) <= 1e-12:
+                continue
+            for i in self.sets.get("I", []):
+                key = (j, i)
+                if key not in vars.P:
+                    continue
+                vars.P[key] = float(vars.P[key]) * ratio
+
+    def _sync_investment_block_from_gfcf(self, vars: PEPModelVariables) -> None:
+        """Refresh investment demand after SG/IT/GFCF move under the tax shock."""
+        for i in self.sets.get("I", []):
+            pc_i = float(vars.PC.get(i, 0.0))
+            if abs(pc_i) <= 1e-12:
+                continue
+            gamma_inv = float(self.params.get("gamma_INV", {}).get(i, 0.0))
+            vars.INV[i] = gamma_inv * vars.GFCF / pc_i
+
+        if abs(vars.PIXINV) > 1e-12:
+            vars.GFCF_REAL = vars.GFCF / vars.PIXINV
+
+        for i in self.sets.get("I1", []):
+            cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
+            vars.Q[i] = (
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
+                + vars.DIT.get(i, 0.0)
+                + vars.MRGN.get(i, 0.0)
+            )
+
+    def _closure_is_fixed(self, name: str) -> bool:
+        contract = getattr(self, "contract", None)
+        if contract is None:
+            return False
+        return self._is_contract_closure_fixed_name(name)
+
+    def _closure_is_endogenous(self, name: str) -> bool:
+        contract = getattr(self, "contract", None)
+        if contract is None:
+            return False
+        return self._is_contract_closure_endogenous_name(name)
+
+    def _reconcile_government_balance(self, vars: PEPModelVariables) -> None:
+        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        implied_sg = vars.YG - tr_to_govt - vars.G
+        if self._closure_is_fixed("SG") and self._closure_is_endogenous("G"):
+            vars.G = vars.YG - tr_to_govt - vars.SG
+            return
+        vars.SG = implied_sg
+
+    def _active_carbon_tax_sectors(self) -> list[str]:
+        active: list[str] = []
         for j in self.sets.get("J", []):
             if abs(float(self.params.get("co2_intensity", {}).get(j, 0.0))) <= 1e-12:
                 continue
@@ -127,8 +202,11 @@ class PEPCO2IPOPTSolver(IPOPTSolver):
                 continue
             if abs(float(self.params.get("tco2scal", 1.0))) <= 1e-12:
                 continue
-            return True
-        return False
+            active.append(j)
+        return active
+
+    def _has_active_carbon_tax(self) -> bool:
+        return bool(self._active_carbon_tax_sectors())
 
 
 class PEPCO2ModelSolver(PEPModelSolver):

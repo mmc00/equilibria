@@ -597,7 +597,10 @@ $GDXIN
 
 **  4.6.2 Calibration of CET parameters
 **   4.6.2.1 CET between commodities
- rho_XT(j)       = (1+sigma_XT(j))/sigma_XT(j);
+ rho_XT(j)$sigma_XT(j)
+                 = (1+sigma_XT(j))/sigma_XT(j);
+ rho_XT(j)$[not sigma_XT(j)]
+                 = 1;
  beta_XT(j,i)$XSO(j,i)
                  = PO(j,i)*XSO(j,i)**(1-rho_XT(j))/
                    SUM[ij$XSO(j,ij),PO(j,ij)*XSO(j,ij)**(1-rho_XT(j))];
@@ -606,9 +609,9 @@ $GDXIN
                   ]**(1/rho_XT(j));
 
 **   4.6.2.2 CET between exports and local production
- rho_X(j,i)$[EXO(j,i) and DSO(j,i)]
+ rho_X(j,i)$[EXO(j,i) and DSO(j,i) and sigma_X(j,i)]
                  = (1+sigma_X(j,i))/sigma_X(j,i);
- rho_X(j,i)$[(not EXO(j,i)) or (not DSO(j,i))]
+ rho_X(j,i)$[(not EXO(j,i)) or (not DSO(j,i)) or (not sigma_X(j,i))]
                  = 1;
  beta_X(j,i)$XSO(j,i)
                  = PEO(i)*EXO(j,i)**(1-rho_X(j,i))/
@@ -635,8 +638,10 @@ $GDXIN
                    ]**(-1/rho_M(i));
 
 **   4.6.3.2 Composite capital
- rho_KD(j)$KDCO(j)
+ rho_KD(j)$[KDCO(j) and sigma_KD(j)]
                  = (1-sigma_KD(j))/sigma_KD(j);
+ rho_KD(j)$[(not KDCO(j)) or (not sigma_KD(j))]
+                 = -1;
  beta_KD(k,j)$KDO(k,j)
                  = RTIO(k,j)*KDO(k,j)**(rho_KD(j)+1)/
                    SUM[kj,RTIO(kj,j)*KDO(kj,j)**(rho_KD(j)+1)];
@@ -645,7 +650,10 @@ $GDXIN
                   ]**(-1/rho_KD(j));
 
 **   4.6.3.3 Composite labor
- rho_LD(j)       = (1-sigma_LD(j))/sigma_LD(j);
+ rho_LD(j)$sigma_LD(j)
+                 = (1-sigma_LD(j))/sigma_LD(j);
+ rho_LD(j)$[not sigma_LD(j)]
+                 = -1;
  beta_LD(l,j)$LDO(l,j)
                  = WTIO(l,j)*LDO(l,j)**(rho_LD(j)+1)/
                    SUM[lj,WTIO(lj,j)*LDO(lj,j)**(rho_LD(j)+1)];
@@ -653,9 +661,9 @@ $GDXIN
                             **(-1/rho_LD(j));
 
 **   4.6.3.4 Value added
- rho_VA(j)$[KDCO(j) and LDCO(j)]
+ rho_VA(j)$[KDCO(j) and LDCO(j) and sigma_VA(j)]
                  = (1-sigma_VA(j))/sigma_VA(j);
- rho_VA(j)$[(not KDCO(j)) or (not LDCO(j))]
+ rho_VA(j)$[(not KDCO(j)) or (not LDCO(j)) or (not sigma_VA(j))]
                  = -1;
  beta_VA(j)      = WCO(j)*LDCO(j)**(rho_VA(j)+1)/
                   [WCO(j)*LDCO(j)**(rho_VA(j)+1)+
@@ -1411,12 +1419,12 @@ option limrow = 10000;
 OPTION NLP = ipopt;
 OPTION CNS = ipopt;
 MODEL PEP11 Standard PEP static model version 2_1 /ALL/;
-PEP11.HOLDFIXED=1;
-SOLVE PEP11 USING CNS;
-$include "RESULTS PEP 1-1.GMS"
+$if not set SKIP_INITIAL_SOLVE PEP11.HOLDFIXED=1;
+$if not set SKIP_INITIAL_SOLVE SOLVE PEP11 USING CNS;
+$if not set SKIP_RESULTS $include "RESULTS PEP 1-1.GMS"
 
 * Export trade variables/prices for parity with Python comparers
-$include "modules/export_trade_results.inc"
+$if not set SKIP_RESULTS $include "modules/export_trade_results.inc"
 
 * Export government aggregates and per-commodity items for Python parity
-$include "modules/export_government_results.inc"
+$if not set SKIP_RESULTS $include "modules/export_government_results.inc"

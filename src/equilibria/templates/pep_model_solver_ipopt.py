@@ -57,7 +57,12 @@ from equilibria.templates.pep_closure_validator import (
 from equilibria.templates.pep_constraint_jacobian import PEPConstraintJacobianHarness
 from equilibria.templates.pep_contract import PEPContract, build_pep_contract
 from equilibria.templates.pep_dynamic_sets import apply_i1_set_membership_overrides
-from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
+from equilibria.templates.pep_model_equations import (
+    PEPModelEquations,
+    PEPModelVariables,
+    SolverResult,
+    refresh_pep_reporting_levels,
+)
 from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
 
 logger = logging.getLogger(__name__)
@@ -305,6 +310,27 @@ class IPOPTSolver:
             logger.info(f"  GAMS parameters: {self.gams_parameters_gdx}")
         if self.baseline_manifest is not None:
             logger.info(f"  Baseline manifest: {self.baseline_manifest}")
+
+    def _equation_is_included(self, name: str) -> bool:
+        """Return whether one residual name belongs to the active contract."""
+
+        include = tuple(self.contract.equations.include)
+        return any(name == eq or name.startswith(f"{eq}_") for eq in include)
+
+    def _filter_contract_residuals(self, residuals: dict[str, Any]) -> dict[str, float]:
+        """Keep only residuals that belong to the active contract equation set."""
+
+        filtered: dict[str, float] = {}
+        for name, value in residuals.items():
+            if not self._equation_is_included(name):
+                continue
+            filtered[name] = float(value)
+        return filtered
+
+    def _refresh_reporting_levels(self, vars: PEPModelVariables) -> PEPModelVariables:
+        """Refresh reporting-only GDP metrics from the solved economic state."""
+
+        return refresh_pep_reporting_levels(vars=vars, params=self.equations.params, sets=self.sets)
 
     def _build_block_set_manager(self) -> SetManager:
         """Build SetManager from calibrated set lists for block hooks."""
@@ -2317,7 +2343,14 @@ class IPOPTSolver:
 
         # Price indices
         add("PIXCON", *POS)
-        add("PIXGDP", *POS)
+        pixgdp_fix = float(self.state.real_variables.get("PIXGDPO", 1.0))
+        pixgdp_lo, pixgdp_hi = self._apply_contract_bounds(
+            name="PIXGDP",
+            default_lower=POS[0],
+            default_upper=POS[1],
+            benchmark_value=pixgdp_fix,
+        )
+        add("PIXGDP", pixgdp_lo, pixgdp_hi)
         add("PIXGVT", *POS)
         add("PIXINV", *POS)
 
@@ -2325,7 +2358,14 @@ class IPOPTSolver:
         for _h in self.sets.get("H", []):
             add(f"CTH_REAL[{_h}]", *NONNEG)
         add("G_REAL", *NONNEG)
-        add("GDP_BP_REAL", *NONNEG)
+        gdp_bp_real_fix = float(self.state.real_variables.get("GDP_BP_REALO", 0.0))
+        gdp_bp_real_lo, gdp_bp_real_hi = self._apply_contract_bounds(
+            name="GDP_BP_REAL",
+            default_lower=NONNEG[0],
+            default_upper=NONNEG[1],
+            benchmark_value=gdp_bp_real_fix,
+        )
+        add("GDP_BP_REAL", gdp_bp_real_lo, gdp_bp_real_hi)
         add("GDP_MP_REAL", *NONNEG)
         add("GFCF_REAL", *NONNEG)
         add("LEON", *FREE)
@@ -2447,9 +2487,16 @@ class IPOPTSolver:
             "TR_AGD_ROW",
             "TR_ROW_AGNG",
             "KS",
+            "PIXGDP",
+            "GDP_BP_REAL",
         }
         supported.add(self.contract.closure.numeraire)
         return supported
+
+    def _prepare_initial_guess_for_solve(self, vars: PEPModelVariables) -> None:
+        """Apply lightweight warm-start repairs before IPOPT sees one guess."""
+
+        self._enforce_fixed_closure_levels(vars)
 
     def _contract_symbols_for_name(self, name: str) -> tuple[str, ...]:
         root, indices = self._parse_packed_name(name)
@@ -2463,6 +2510,10 @@ class IPOPTSolver:
             symbols.append("SG")
         elif root == "SROW":
             symbols.append("SROW")
+        elif root == "PIXGDP":
+            symbols.append("PIXGDP")
+        elif root == "GDP_BP_REAL":
+            symbols.append("GDP_BP_REAL")
         elif root == "IT":
             symbols.append("IT")
         elif root == "SH" and len(indices) == 1:
@@ -2518,7 +2569,7 @@ class IPOPTSolver:
             vars0 = copy.deepcopy(self.initial_vars)
         else:
             vars0 = self._create_initial_guess()
-        self._enforce_fixed_closure_levels(vars0)
+        self._prepare_initial_guess_for_solve(vars0)
         x0 = self._variables_to_array(vars0)
         hard_constraints = self._build_hard_constraints()
         lb, ub = self._build_variable_bounds(x_ref=x0)
@@ -2586,8 +2637,8 @@ class IPOPTSolver:
         else:
             vars = self._create_initial_guess()
         # Keep provided warm-start levels consistent with current state closures
-        # (e.g., shocked PWM/G/CAB fixed values).
-        self._enforce_fixed_closure_levels(vars)
+        # and apply any model-specific lightweight sync needed after a shock.
+        self._prepare_initial_guess_for_solve(vars)
         x0 = self._variables_to_array(vars)
         n_vars = len(x0)
         
@@ -2599,7 +2650,8 @@ class IPOPTSolver:
 
         # Allow early return for any init mode when initialization is already
         # feasible enough. This keeps excel/gams behavior consistent in BASE.
-        init_residuals = self.equations.calculate_all_residuals(vars)
+        self._refresh_reporting_levels(vars)
+        init_residuals = self._filter_contract_residuals(self.equations.calculate_all_residuals(vars))
         init_vals = np.array(list(init_residuals.values()), dtype=float)
         init_rms = float(np.sqrt(np.mean(init_vals ** 2))) if init_vals.size else 0.0
         if init_rms <= self.tolerance:
@@ -2677,6 +2729,16 @@ class IPOPTSolver:
             max_iter: int,
             warm_start: bool,
         ) -> cyipopt.Problem:
+            def _add_ipopt_option(problem: cyipopt.Problem, name: str, value: Any) -> None:
+                if isinstance(value, bool):
+                    problem.add_option(name, "yes" if value else "no")
+                elif isinstance(value, int):
+                    problem.add_option(name, int(value))
+                elif isinstance(value, float):
+                    problem.add_option(name, float(value))
+                else:
+                    problem.add_option(name, str(value))
+
             nlp = cyipopt.Problem(
                 n=n_vars,
                 m=n_constraints,
@@ -2704,6 +2766,8 @@ class IPOPTSolver:
                 nlp.add_option("warm_start_bound_push", 1e-8)
                 nlp.add_option("warm_start_mult_bound_push", 1e-8)
                 nlp.add_option("warm_start_slack_bound_push", 1e-8)
+            for option_name, option_value in self.runtime_config.ipopt_options.items():
+                _add_ipopt_option(nlp, option_name, option_value)
             return nlp
 
         def _info_iterations(info: dict[str, Any], fallback: int) -> int:
@@ -2720,7 +2784,10 @@ class IPOPTSolver:
 
         def _candidate_summary(problem_ctx: CGEProblem, x: np.ndarray, info: dict[str, Any]) -> dict[str, Any]:
             vars_candidate = problem_ctx._array_to_variables(x)
-            residuals_candidate = self.equations.calculate_all_residuals(vars_candidate)
+            self._refresh_reporting_levels(vars_candidate)
+            residuals_candidate = self._filter_contract_residuals(
+                self.equations.calculate_all_residuals(vars_candidate)
+            )
             vals_candidate = np.array(list(residuals_candidate.values()), dtype=float)
             rms_candidate = (
                 float(np.sqrt(np.mean(vals_candidate ** 2))) if vals_candidate.size else 0.0

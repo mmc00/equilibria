@@ -602,6 +602,27 @@ def test_ipopt_builds_structural_closure_validation_report() -> None:
     assert report.free_endogenous_variable_count > 200
 
 
+def test_ipopt_derived_reporting_contract_excludes_eq80_eq96_and_fixes_reporting_vars() -> None:
+    state = _build_dynamic_sam_excel()
+    solver = IPOPTSolver(state, contract="pep_nlp_v1_derived_reporting", config="default_ipopt")
+
+    report = solver.build_closure_validation_report()
+    vars0 = solver._create_initial_guess()
+    x0 = solver._variables_to_array(vars0)
+    lb, ub = solver._build_variable_bounds(x_ref=x0)
+    names = solver._last_bound_names
+    hard = solver._build_hard_constraints()
+
+    assert report.is_valid is True
+    assert all(not name.startswith("EQ80") for name in hard)
+    assert all(not name.startswith("EQ96") for name in hard)
+
+    pixgdp_idx = names.index("PIXGDP")
+    gdp_bp_real_idx = names.index("GDP_BP_REAL")
+    assert np.isclose(lb[pixgdp_idx], ub[pixgdp_idx])
+    assert np.isclose(lb[gdp_bp_real_idx], ub[gdp_bp_real_idx])
+
+
 def test_ipopt_contract_override_changes_explicit_fixed_closure_bounds() -> None:
     state = _build_dynamic_sam_excel()
     solver = IPOPTSolver(
