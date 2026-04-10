@@ -98,8 +98,8 @@ Examples:
         "--method",
         type=str,
         default="auto",
-        choices=["auto", "ipopt"],
-        help="Solver method (auto/ipopt require IPOPT installed)",
+        choices=["auto", "ipopt", "path"],
+        help="Solver method (auto, ipopt, or path)",
     )
     parser.add_argument(
         "--gams-results-gdx",

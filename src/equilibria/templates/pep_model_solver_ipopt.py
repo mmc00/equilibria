@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import copy
+import os
 import re
 import shutil
 import subprocess
@@ -77,6 +78,18 @@ try:
 except ImportError:
     IPOPT_AVAILABLE = False
     logger.warning("IPOPT (cyipopt) not available. Install with: pip install cyipopt")
+
+# Optional PATH-CAPI bridge (local package or installed dependency)
+try:
+    from path_capi_python import JacobianStructure as PATHJacobianStructure
+    from path_capi_python import PATHLoader as PATHCAPILoader
+    from path_capi_python import solve_nonlinear_mcp as solve_path_nonlinear_mcp
+
+    PATH_CAPI_AVAILABLE = True
+    _PATH_CAPI_IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # pragma: no cover - optional dependency
+    PATH_CAPI_AVAILABLE = False
+    _PATH_CAPI_IMPORT_ERROR = exc
 
 
 class CGEProblem:
@@ -2616,6 +2629,274 @@ class IPOPTSolver:
             "feasible point for square problem found" in normalized
             or "solved to acceptable level" in normalized
         )
+
+    @staticmethod
+    def _path_bounds_from_numpy(
+        lb: np.ndarray,
+        ub: np.ndarray,
+        *,
+        inf_cap: float = 1.0e20,
+    ) -> tuple[list[float], list[float]]:
+        """Convert numpy bounds to finite PATH bounds expected by C-API bridge."""
+        path_lb: list[float] = []
+        path_ub: list[float] = []
+        for lo, hi in zip(lb, ub, strict=False):
+            lo_f = float(lo)
+            hi_f = float(hi)
+            path_lb.append(lo_f if np.isfinite(lo_f) else -float(inf_cap))
+            path_ub.append(hi_f if np.isfinite(hi_f) else float(inf_cap))
+        return path_lb, path_ub
+
+    @staticmethod
+    def _path_jacobian_layout(
+        *,
+        rows: np.ndarray,
+        cols: np.ndarray,
+        n_variables: int,
+    ) -> tuple[PATHJacobianStructure, list[int]]:
+        """
+        Build PATH column-compressed structure and values permutation.
+
+        `PEPConstraintJacobianHarness` returns values in `(rows, cols)` order.
+        PATH expects values grouped by column with 1-based row indices.
+        """
+        by_col: list[list[tuple[int, int]]] = [[] for _ in range(n_variables)]
+        for idx, (row, col) in enumerate(zip(rows.tolist(), cols.tolist(), strict=False)):
+            c = int(col)
+            r = int(row)
+            if c < 0 or c >= n_variables:
+                raise ValueError(f"Jacobian column out of range for PATH layout: col={c}, n={n_variables}")
+            by_col[c].append((r, idx))
+
+        col_starts: list[int] = []
+        col_lengths: list[int] = []
+        row_indices: list[int] = []
+        value_order: list[int] = []
+        cursor = 1
+        for col_entries in by_col:
+            col_entries.sort(key=lambda item: item[0])
+            col_starts.append(cursor)
+            col_lengths.append(len(col_entries))
+            for row, original_idx in col_entries:
+                row_indices.append(int(row) + 1)
+                value_order.append(original_idx)
+                cursor += 1
+
+        return (
+            PATHJacobianStructure(
+                col_starts=col_starts,
+                col_lengths=col_lengths,
+                row_indices=row_indices,
+            ),
+            value_order,
+        )
+
+    def solve_path(self) -> SolverResult:
+        """Solve the square PEP system with PATH C-API callbacks."""
+        if not PATH_CAPI_AVAILABLE:
+            detail = f": {_PATH_CAPI_IMPORT_ERROR}" if _PATH_CAPI_IMPORT_ERROR is not None else ""
+            raise RuntimeError(
+                "method='path' requested but path-capi-python is not available"
+                f"{detail}. Ensure it is installed/importable."
+            )
+
+        logger.info("=" * 70)
+        logger.info("STARTING PATH SOLUTION")
+        logger.info("=" * 70)
+
+        started_at = time.perf_counter()
+
+        try:
+            if self.initial_vars is not None:
+                vars_obj = copy.deepcopy(self.initial_vars)
+            else:
+                vars_obj = self._create_initial_guess()
+            self._prepare_initial_guess_for_solve(vars_obj)
+            x0 = self._variables_to_array(vars_obj)
+            n_vars = len(x0)
+
+            logger.info("Number of variables: %d", n_vars)
+            closure_report = self.build_closure_validation_report()
+            if not closure_report.is_valid:
+                messages = "; ".join(closure_report.messages) or "invalid closure structure"
+                raise RuntimeError(f"Invalid PEP closure/configuration: {messages}")
+
+            self._refresh_reporting_levels(vars_obj)
+            init_residuals = self._filter_contract_residuals(self.equations.calculate_all_residuals(vars_obj))
+            init_vals = np.array(list(init_residuals.values()), dtype=float)
+            init_rms = float(np.sqrt(np.mean(init_vals ** 2))) if init_vals.size else 0.0
+            if init_rms <= self.tolerance:
+                logger.info(
+                    "Initial guess satisfies tolerance (RMS=%.3e <= %.3e); skipping PATH.",
+                    init_rms,
+                    self.tolerance,
+                )
+                return SolverResult(
+                    converged=True,
+                    iterations=0,
+                    final_residual=init_rms,
+                    variables=vars_obj,
+                    residuals=init_residuals,
+                    message=f"Initial {self.init_mode} benchmark satisfies tolerance",
+                    effective_contract=self.contract.model_dump(mode="python"),
+                    effective_config=self.runtime_config.model_dump(mode="python"),
+                    closure_validation=closure_report.model_dump(mode="python"),
+                    solver_stats=solver_stats_payload(
+                        jacobian_stats={"jacobian_mode": self.runtime_config.jacobian_mode},
+                        wall_time_seconds=0.0,
+                        objective_eval_count=0,
+                    ),
+                )
+
+            hard_constraints = self._build_hard_constraints()
+            lb_arr, ub_arr = self._build_variable_bounds(x_ref=x0)
+            variable_names = list(self._last_bound_names)
+            if len(lb_arr) != n_vars:
+                raise ValueError(
+                    f"Bounds length {len(lb_arr)} does not match variable count {n_vars}"
+                )
+            fixed_mask = np.isfinite(lb_arr) & np.isfinite(ub_arr) & np.isclose(lb_arr, ub_arr)
+            free_idx = np.flatnonzero(~fixed_mask)
+            fixed_idx = np.flatnonzero(fixed_mask)
+            n_free = int(len(free_idx))
+            if n_free != len(hard_constraints):
+                raise RuntimeError(
+                    "PATH requires a square free-variable system. "
+                    f"Got free_vars={n_free}, hard_constraints={len(hard_constraints)}."
+                )
+
+            problem = CGEProblem(
+                equations=self.equations,
+                sets=self.sets,
+                n_variables=n_vars,
+                variable_info={},
+                variable_names=variable_names,
+                residual_weights=self._build_residual_weights(),
+                hard_constraints=hard_constraints,
+                jacobian_mode=self.runtime_config.jacobian_mode,
+            )
+            problem.constraint_harness.sparsity_reference_x = np.array(x0, dtype=float)
+            rows_full, cols_full = problem.constraint_harness.jacobian_structure()
+
+            free_col_pos = {int(full): pos for pos, full in enumerate(free_idx.tolist())}
+            selected_jac_positions: list[int] = []
+            rows_free: list[int] = []
+            cols_free: list[int] = []
+            for pos, (row, col) in enumerate(
+                zip(rows_full.tolist(), cols_full.tolist(), strict=False)
+            ):
+                free_col = free_col_pos.get(int(col))
+                if free_col is None:
+                    continue
+                rows_free.append(int(row))
+                cols_free.append(int(free_col))
+                selected_jac_positions.append(int(pos))
+
+            path_structure, value_order = self._path_jacobian_layout(
+                rows=np.asarray(rows_free, dtype=int),
+                cols=np.asarray(cols_free, dtype=int),
+                n_variables=n_free,
+            )
+
+            # PATH solves MCPs; for CNS-like parity with IPOPT feasibility NLP,
+            # use free bounds on all non-fixed unknowns by default.
+            path_bound_mode = os.environ.get("PATH_CAPI_BOUND_MODE", "free").strip().lower()
+            if path_bound_mode == "economic":
+                path_lb, path_ub = self._path_bounds_from_numpy(lb_arr[free_idx], ub_arr[free_idx])
+            elif path_bound_mode == "free":
+                inf_cap = 1.0e20
+                path_lb = [-inf_cap] * n_free
+                path_ub = [inf_cap] * n_free
+            else:
+                raise ValueError(
+                    f"Unsupported PATH_CAPI_BOUND_MODE={path_bound_mode!r}. "
+                    "Use 'free' or 'economic'."
+                )
+            x_fixed = np.array(x0, dtype=float)
+            if fixed_idx.size:
+                x_fixed[fixed_idx] = lb_arr[fixed_idx]
+
+            def _callback_f(x_values: list[float]) -> list[float]:
+                x_free = np.asarray(x_values, dtype=float)
+                x_full = x_fixed.copy()
+                x_full[free_idx] = x_free
+                return problem.constraints(x_full).tolist()
+
+            def _callback_jac(x_values: list[float]) -> list[float]:
+                x_free = np.asarray(x_values, dtype=float)
+                x_full = x_fixed.copy()
+                x_full[free_idx] = x_free
+                jac_full = problem.jacobian(x_full)
+                jac_free = [float(jac_full[idx]) for idx in selected_jac_positions]
+                return [float(jac_free[idx]) for idx in value_order]
+
+            runtime = PATHCAPILoader.from_environment().load()
+            path_result = solve_path_nonlinear_mcp(
+                runtime,
+                n=n_free,
+                lb=path_lb,
+                ub=path_ub,
+                x0=[float(v) for v in x0[free_idx]],
+                callback_f=_callback_f,
+                callback_jac=_callback_jac,
+                jacobian_structure=path_structure,
+                output=logger.isEnabledFor(logging.DEBUG),
+            )
+
+            x_sol_full = x_fixed.copy()
+            x_sol_full[free_idx] = np.asarray(path_result.x, dtype=float)
+            solved_vars = problem._array_to_variables(x_sol_full)
+            self._refresh_reporting_levels(solved_vars)
+            residuals = self._filter_contract_residuals(self.equations.calculate_all_residuals(solved_vars))
+            vals = np.array(list(residuals.values()), dtype=float)
+            rms = float(np.sqrt(np.mean(vals ** 2))) if vals.size else 0.0
+            max_abs = float(np.max(np.abs(vals))) if vals.size else 0.0
+            acceptable_square_max_abs = max(self.tolerance * 100.0, 1e-4)
+            converged = bool(path_result.termination_code == 1 or max_abs <= acceptable_square_max_abs)
+
+            result = SolverResult()
+            result.converged = converged
+            result.iterations = int(path_result.major_iterations)
+            result.final_residual = rms
+            result.variables = solved_vars
+            result.residuals = residuals
+            result.message = (
+                f"PATH termination code {path_result.termination_code}; "
+                f"residual={path_result.residual:.3e}; max_abs={max_abs:.3e}"
+            )
+            result.effective_contract = self.contract.model_dump(mode="python")
+            result.effective_config = self.runtime_config.model_dump(mode="python")
+            result.closure_validation = closure_report.model_dump(mode="python")
+            result.solver_stats = solver_stats_payload(
+                jacobian_stats=problem.constraint_harness.stats(),
+                wall_time_seconds=float(time.perf_counter() - started_at),
+                objective_eval_count=int(path_result.function_evaluations),
+            )
+
+            logger.info("PATH finished: %s", result.message)
+            logger.info("  Iterations (major/minor): %d/%d", path_result.major_iterations, path_result.minor_iterations)
+            logger.info("  Final RMS residual: %.3e", result.final_residual)
+            logger.info(
+                "  Constraint evals: %s, Jacobian evals: %s, FD evals: %s",
+                result.solver_stats.get("constraint_eval_count") if result.solver_stats else 0,
+                result.solver_stats.get("jacobian_eval_count") if result.solver_stats else 0,
+                result.solver_stats.get("finite_difference_eval_count") if result.solver_stats else 0,
+            )
+            return result
+
+        except Exception as exc:
+            logger.error("PATH failed: %s", exc)
+            result = SolverResult()
+            result.message = f"PATH error: {exc}"
+            result.effective_contract = self.contract.model_dump(mode="python")
+            result.effective_config = self.runtime_config.model_dump(mode="python")
+            result.closure_validation = self.last_closure_validation_report
+            result.solver_stats = solver_stats_payload(
+                jacobian_stats={"jacobian_mode": self.runtime_config.jacobian_mode},
+                wall_time_seconds=float(time.perf_counter() - started_at),
+                objective_eval_count=0,
+            )
+            return result
     
     def solve_ipopt(self) -> SolverResult:
         """Solve model using IPOPT nonlinear optimization.
@@ -2951,12 +3232,17 @@ class IPOPTSolver:
             if IPOPT_AVAILABLE:
                 logger.info("Auto-selecting IPOPT solver")
                 return self.solve_ipopt()
+            if PATH_CAPI_AVAILABLE:
+                logger.info("Auto-selecting PATH solver")
+                return self.solve_path()
             raise RuntimeError(
-                "method='auto' requires IPOPT (cyipopt). "
-                "Install with `uv sync --extra ipopt`."
+                "method='auto' requires IPOPT (cyipopt) or path-capi-python. "
+                "Install one solver backend and configure PATH_CAPI_* env vars for PATH."
             )
         if method == "ipopt":
             return self.solve_ipopt()
+        if method == "path":
+            return self.solve_path()
         if method == DEBUG_SIMPLE_ITERATION_METHOD:
             return super().solve(method=DEBUG_SIMPLE_ITERATION_METHOD)
         if method == "simple_iteration":
@@ -2965,6 +3251,6 @@ class IPOPTSolver:
                 f"Use method='{DEBUG_SIMPLE_ITERATION_METHOD}' only for internal debugging."
             )
         raise ValueError(
-            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, "
+            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, path, "
             f"{DEBUG_SIMPLE_ITERATION_METHOD} (internal debug only)."
         )

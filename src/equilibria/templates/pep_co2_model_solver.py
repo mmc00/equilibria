@@ -317,22 +317,14 @@ class PEPCO2ModelSolver(PEPModelSolver):
                 f"For internal debugging only, use method='{DEBUG_SIMPLE_ITERATION_METHOD}'."
             )
 
-        if method == "auto":
-            if not IPOPT_AVAILABLE:
-                raise RuntimeError(
-                    "method='auto' requires IPOPT (cyipopt). "
-                    "Install with `uv sync --extra ipopt`."
-                )
-            method = "ipopt"
-
-        if method == "ipopt":
-            if not IPOPT_AVAILABLE:
+        if method in {"auto", "ipopt", "path"}:
+            if method == "ipopt" and not IPOPT_AVAILABLE:
                 raise RuntimeError(
                     "method='ipopt' requested but cyipopt is not available. "
                     "Install with `uv sync --extra ipopt`."
                 )
             ipopt_solver = self._build_ipopt_shadow_solver()
-            result = ipopt_solver.solve_ipopt()
+            result = ipopt_solver.solve(method=method)
             self.params = ipopt_solver.params
             self.equations = ipopt_solver.equations
             self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
@@ -346,6 +338,6 @@ class PEPCO2ModelSolver(PEPModelSolver):
             return result
 
         raise ValueError(
-            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, "
+            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, path, "
             f"{DEBUG_SIMPLE_ITERATION_METHOD} (internal debug only)."
         )

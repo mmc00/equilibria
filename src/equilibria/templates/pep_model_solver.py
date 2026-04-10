@@ -824,17 +824,8 @@ class PEPModelSolver:
                 f"For internal debugging only, use method='{DEBUG_SIMPLE_ITERATION_METHOD}'."
             )
 
-        if method == "auto":
-            if not IPOPT_AVAILABLE:
-                raise RuntimeError(
-                    "method='auto' requires IPOPT (cyipopt). "
-                    "Install with `uv sync --extra ipopt`."
-                )
-            logger.info("Auto-selecting IPOPT solver")
-            method = "ipopt"
-
-        if method == "ipopt":
-            if not IPOPT_AVAILABLE:
+        if method in {"auto", "ipopt", "path"}:
+            if method == "ipopt" and not IPOPT_AVAILABLE:
                 raise RuntimeError(
                     "method='ipopt' requested but cyipopt is not available. "
                     "Install with `uv sync --extra ipopt`."
@@ -863,22 +854,22 @@ class PEPModelSolver:
                     gdxdump_bin=self.gdxdump_bin,
                     initial_vars=self.initial_vars,
                 )
-                result = ipopt_solver.solve_ipopt()
+                result = ipopt_solver.solve(method=method)
                 self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
                 return result
             except Exception as e:
                 if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
                     raise RuntimeError(
-                        f"gams solve failed due to baseline incompatibility: {e}"
+                        f"gams solve failed due to baseline incompatibility using method='{method}': {e}"
                     ) from e
-                raise RuntimeError(f"ipopt solve failed: {e}") from e
+                raise RuntimeError(f"{method} solve failed: {e}") from e
 
         if method == DEBUG_SIMPLE_ITERATION_METHOD:
             vars = self._create_initial_guess()
             return self._solve_simple_iteration(vars)
 
         raise ValueError(
-            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, "
+            f"Unknown solve method '{method}'. Supported methods: auto, ipopt, path, "
             f"{DEBUG_SIMPLE_ITERATION_METHOD} (internal debug only)."
         )
     

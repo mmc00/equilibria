@@ -30,7 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sam-file", type=Path, default=DEFAULT_SAM_FILE)
     parser.add_argument("--val-par-file", type=Path, default=DEFAULT_VAL_PAR_FILE)
     parser.add_argument("--gdxdump-bin", type=str, default="gdxdump")
-    parser.add_argument("--method", choices=["auto", "ipopt"], default="ipopt")
+    parser.add_argument("--method", choices=["auto", "ipopt", "path"], default="ipopt")
     parser.add_argument("--init-mode", choices=["excel", "gams"], default="excel")
     parser.add_argument("--solve-tolerance", type=float, default=1e-8)
     parser.add_argument("--max-iterations", type=int, default=300)
