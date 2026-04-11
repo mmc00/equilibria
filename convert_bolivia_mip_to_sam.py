@@ -201,7 +201,9 @@ def convert_bolivia_mip_to_sam(
     print("\n9. SAM accounting verification...")
 
     PIB_from_VA = total_VA
-    PIB_from_expenditure = C_hh.sum() + C_gov.sum() + INV.sum() + EXP.sum() - total_imports
+    # Only subtract imports to final demand (IMP_F), not imports to sectors (IMP_Z)
+    # VA is already net of intermediate imports
+    PIB_from_expenditure = C_hh.sum() + C_gov.sum() + INV.sum() + EXP.sum() - IMP_F.sum()
 
     print(f"   PIB (from VA):        {PIB_from_VA:12,.2f}")
     print(f"   PIB (from expenditure):{PIB_from_expenditure:12,.2f}")
