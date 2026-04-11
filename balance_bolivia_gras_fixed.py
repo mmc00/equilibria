@@ -160,6 +160,15 @@ def balance_mip_gras_fixed(mip_df, max_iter_outer=50):
             f_scale = required_f_total / current_f_total
             F = F * f_scale
 
+        # Enforce non-negativity for components that cannot be negative
+        # Columns: [C_hh, C_gov, FBKF, Var.Stock, Exports]
+        # Only Var.Stock (col 3) can be negative
+        F[:, 0] = np.maximum(0, F[:, 0])  # C_hh >= 0
+        F[:, 1] = np.maximum(0, F[:, 1])  # C_gov >= 0
+        F[:, 2] = np.maximum(0, F[:, 2])  # FBKF >= 0
+        # F[:, 3] can be negative (Variación de Stock)
+        F[:, 4] = np.maximum(0, F[:, 4])  # Exports >= 0
+
         M[:N, N:N+5] = F
 
         # === STEP 3: Adjust imports proportionally ===
@@ -175,6 +184,10 @@ def balance_mip_gras_fixed(mip_df, max_iter_outer=50):
                     imp_scale = np.clip(imp_scale, 0.5, 2.0)
                     IMP_Z[i, :] *= imp_scale
                     IMP_F[i, :] *= imp_scale
+
+                    # Enforce non-negativity (imports cannot be negative)
+                    IMP_Z[i, :] = np.maximum(0, IMP_Z[i, :])
+                    IMP_F[i, :] = np.maximum(0, IMP_F[i, :])
 
         M[N:2*N, :N] = IMP_Z
         M[N:2*N, N:N+5] = IMP_F
