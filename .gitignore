@@ -224,3 +224,5 @@ src/equilibria/templates/reference/pep2/scripts/*.gdx
 src/equilibria/templates/reference/pep2/scripts/dif_*.csv
 src/equilibria/templates/reference/pep2/scripts/gdxdiff_*.txt
 src/equilibria/templates/reference/pep2/scripts/dynamic_sets.inc
+
+bk/*
