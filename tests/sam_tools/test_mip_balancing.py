@@ -255,8 +255,8 @@ class TestMIPBalancingRAS:
         assert result.converged or result.iterations == 100
         assert result.method == "ras"
 
-    def test_balance_mip_ras_pib_error(self) -> None:
-        """MIP RAS should minimize PIB error."""
+    def test_balance_mip_ras_product_industry_error(self) -> None:
+        """MIP RAS should achieve zero product and industry balance errors."""
         data = _sample_mip_data()
 
         result = balance_mip_ras(
@@ -268,10 +268,11 @@ class TestMIPBalancingRAS:
             data["X"],
         )
 
-        # PIB error should be small (< 1% of VA)
-        va_total = data["VA"].sum()
-        pib_error_pct = result.error_pib / va_total
-        assert pib_error_pct < 0.05  # 5% tolerance
+        # Product balance: Z_d.sum(axis=1) + F_d.sum(axis=1) = X
+        # Industry balance: Z_d.sum(axis=0) + Z_m.sum(axis=0) + VA.sum(axis=0) = X
+        # Both should be zero after balancing
+        assert result.error_product < 1e-6  # Essentially zero
+        assert result.error_industry < 1e-6  # Essentially zero
 
 
 class TestMIPBalancingGRAS:
@@ -374,12 +375,15 @@ class TestMIPBalancingEntropy:
 
 
 class TestAggregateIdentity:
-    """Tests for MIP aggregate identity: sum(F_d) = sum(VA) + sum(Z_m)."""
+    """Tests for MIP balance identities after balancing."""
 
-    def test_aggregate_identity_holds_approximately(self) -> None:
-        """After balancing, aggregate identity should hold approximately.
+    def test_product_and_industry_balance_hold(self) -> None:
+        """After balancing, product and industry balance should hold exactly.
 
-        Note: Perfect identity is impossible when IMP_F > 0 (see technical report).
+        - Product balance: X = Z_d.sum(axis=1) + F_d.sum(axis=1)
+        - Industry balance: X = Z_d.sum(axis=0) + Z_m.sum(axis=0) + VA.sum(axis=0)
+
+        Note: PIB identity may not hold perfectly (depends on data).
         """
         data = _sample_mip_data()
 
@@ -392,15 +396,18 @@ class TestAggregateIdentity:
             data["X"],
         )
 
-        # Check identity: sum(F_d) ≈ sum(VA) + sum(Z_m)
-        # But with PIB constraint: sum(VA) = sum(F_d) - sum(F_m)
-        f_d_total = result.F_d.sum()
-        va_total = result.VA.sum()
-        f_m_total = result.F_m.sum()
+        # Product balance: X = Z_d·1 + F_d·1
+        product_balance = result.X - result.Z_d.sum(axis=1) - result.F_d.sum(axis=1)
+        assert np.abs(product_balance).sum() < 1e-6
 
-        # PIB identity: VA = F_d - F_m
-        pib_diff = abs(va_total - (f_d_total - f_m_total))
-        assert pib_diff < va_total * 0.05  # 5% tolerance
+        # Industry balance: X = Z_d'·1 + Z_m'·1 + VA'·1
+        industry_balance = (
+            result.X
+            - result.Z_d.sum(axis=0)
+            - result.Z_m.sum(axis=0)
+            - result.VA.sum(axis=0)
+        )
+        assert np.abs(industry_balance).sum() < 1e-6
 
 
 # =============================================================================

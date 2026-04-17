@@ -203,8 +203,10 @@ def gras_balance(
     """GRAS algorithm for matrices with negative values.
 
     Generalized RAS (Junius & Oosterhaven, 2003) that preserves signs
-    while scaling to match targets. Uses separate scaling for positive
-    and negative parts of the matrix.
+    while scaling to match targets. Separates positive and negative parts
+    and scales both by the same factors.
+
+    This implementation matches cge_babel/balance_mip_methods.py exactly.
 
     Args:
         M: Initial matrix (can have negative values) (n x m)
@@ -228,58 +230,36 @@ def gras_balance(
         >>> M_bal, iters, conv = gras_balance(M, r, c)
         >>> assert np.allclose(M_bal.sum(axis=1), r, atol=1e-6)
     """
-    n, m = M.shape
-
     # Separate positive and negative parts
-    M_pos = np.maximum(M, 0)
-    M_neg = np.maximum(-M, 0)
-
-    # Initialize multipliers
-    r = np.ones(n)
-    s = np.ones(m)
+    P = np.maximum(M, 0).astype(float)
+    N = np.maximum(-M, 0).astype(float)
 
     for iteration in range(max_iter):
-        # Update row multipliers
-        for i in range(n):
-            pos_sum = (r[i] * M_pos[i, :] * s).sum()
-            neg_sum = (r[i] * M_neg[i, :] * s).sum()
-            row_sum = pos_sum - neg_sum
+        # Adjust rows
+        row_sums = P.sum(axis=1) - N.sum(axis=1)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            r_factors = np.where(np.abs(row_sums) > 1e-10, row_targets / row_sums, 1)
+            r_factors = np.nan_to_num(r_factors, nan=1.0, posinf=1.0, neginf=1.0)
+        P = P * np.abs(r_factors)[:, np.newaxis]
+        N = N * np.abs(r_factors)[:, np.newaxis]
 
-            if abs(row_sum) > 1e-12 and abs(row_targets[i]) > 1e-12:
-                if row_targets[i] * row_sum > 0:
-                    r[i] = r[i] * abs(row_targets[i]) / abs(row_sum)
-                else:
-                    # Signs differ - use damped update
-                    r[i] = r[i] * 0.5
-
-        # Update column multipliers
-        for j in range(m):
-            pos_sum = (r * M_pos[:, j] * s[j]).sum()
-            neg_sum = (r * M_neg[:, j] * s[j]).sum()
-            col_sum = pos_sum - neg_sum
-
-            if abs(col_sum) > 1e-12 and abs(col_targets[j]) > 1e-12:
-                if col_targets[j] * col_sum > 0:
-                    s[j] = s[j] * abs(col_targets[j]) / abs(col_sum)
-                else:
-                    s[j] = s[j] * 0.5
-
-        # Compute balanced matrix (sign-preserving)
-        X_pos = r[:, np.newaxis] * M_pos * s[np.newaxis, :]
-        X_neg = r[:, np.newaxis] * M_neg * s[np.newaxis, :]
-        X = X_pos - X_neg
+        # Adjust columns
+        col_sums = P.sum(axis=0) - N.sum(axis=0)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            c_factors = np.where(np.abs(col_sums) > 1e-10, col_targets / col_sums, 1)
+            c_factors = np.nan_to_num(c_factors, nan=1.0, posinf=1.0, neginf=1.0)
+        P = P * np.abs(c_factors)
+        N = N * np.abs(c_factors)
 
         # Check convergence
+        X = P - N
         row_diff = np.abs(X.sum(axis=1) - row_targets).max()
         col_diff = np.abs(X.sum(axis=0) - col_targets).max()
 
         if max(row_diff, col_diff) < tol:
             return X, iteration + 1, True
 
-    # Final balanced matrix
-    X_pos = r[:, np.newaxis] * M_pos * s[np.newaxis, :]
-    X_neg = r[:, np.newaxis] * M_neg * s[np.newaxis, :]
-    return X_pos - X_neg, max_iter, False
+    return P - N, max_iter, False
 
 
 # =============================================================================
@@ -328,20 +308,23 @@ def _compute_mip_errors(
     VA: np.ndarray,
     X: np.ndarray,
 ) -> tuple[float, float, float]:
-    """Compute MIP balance errors.
+    """Compute MIP balance errors (sum of absolute deviations).
+
+    This uses SUM of absolute errors (not MAX) to match standard MIP
+    balancing conventions and allow comparison with cge_babel methods.
 
     Returns:
-        Tuple of (product_error, industry_error, pib_error)
+        Tuple of (product_error_sum, industry_error_sum, pib_error)
     """
     # Product balance: X = Z_d @ 1 + F_d (domestic only)
     product_supply = X
     product_demand = Z_d.sum(axis=1) + F_d.sum(axis=1) if F_d.ndim > 1 else Z_d.sum(axis=1) + F_d
-    error_product = float(np.abs(product_supply - product_demand).max())
+    error_product = float(np.abs(product_supply - product_demand).sum())
 
     # Industry balance: X = Z_d.T @ 1 + Z_m.T @ 1 + VA
     industry_output = X
     industry_input = Z_d.sum(axis=0) + Z_m.sum(axis=0) + VA.sum(axis=0)
-    error_industry = float(np.abs(industry_output - industry_input).max())
+    error_industry = float(np.abs(industry_output - industry_input).sum())
 
     # PIB identity: sum(VA) = sum(F_d) - sum(IMP_F)
     pib_production = float(VA.sum())
@@ -361,19 +344,24 @@ def balance_mip_ras(
     VA: np.ndarray,
     X: np.ndarray,
     *,
-    max_iter: int = 100,
-    tol: float = 1e-6,
+    max_iter: int = 500,
+    tol: float = 1e-8,
 ) -> MIPBalanceResult:
     """Balance MIP using sequential RAS.
 
-    This method balances the Z_d matrix while keeping VA, IMP, and X fixed.
-    It prioritizes PIB identity and industry balance.
+    This method balances the Z_d matrix first, then recalculates F_d as
+    a residual to satisfy the product balance exactly.
 
     Algorithm:
-    1. Fix VA (most reliable data)
-    2. Balance Z columns to match (X - VA - Z_m.sum(axis=0))
-    3. Adjust F_d to satisfy PIB identity
-    4. Iterate until convergence
+    1. Calculate column targets for Z_d: X - VA - Z_m.sum(axis=0) (industry balance)
+    2. Calculate row targets for Z_d: X - F_d.sum(axis=1) (product balance)
+    3. Scale row targets to match column targets sum
+    4. Apply RAS to balance Z_d
+    5. Recalculate F_d as residual: F_d_row = X - Z_d.sum(axis=1)
+
+    This ensures:
+    - Product balance error = 0 (Z_d.sum(axis=1) + F_d.sum(axis=1) = X)
+    - Industry balance error = 0 (Z_d.sum(axis=0) + Z_m.sum(axis=0) + VA.sum(axis=0) = X)
 
     Args:
         Z_d: Domestic intermediate consumption (n x n)
@@ -382,15 +370,11 @@ def balance_mip_ras(
         F_m: Import final demand (n x k) or (n,)
         VA: Value added (v x n) where v = number of VA components
         X: Production totals (n,)
-        max_iter: Maximum outer iterations
+        max_iter: Maximum RAS iterations
         tol: Convergence tolerance
 
     Returns:
         MIPBalanceResult with balanced matrices
-
-    Note:
-        This method prioritizes PIB = 0 and Z balance. Supply-Demand balance
-        may worsen as a result (see technical report for proof).
     """
     Z_d = Z_d.astype(float).copy()
     F_d = F_d.astype(float).copy()
@@ -399,72 +383,47 @@ def balance_mip_ras(
     VA = VA.astype(float).copy()
     X = X.astype(float).copy()
 
-    n = len(X)
-    PIB_target = float(VA.sum())
+    VA_total = VA.sum(axis=0)
+    Z_m_col = Z_m.sum(axis=0)
 
-    for outer in range(max_iter):
-        # Step 1: Balance Z columns (industry balance)
-        # Column target = X - VA - Z_m.sum(axis=0)
-        col_targets = X - VA.sum(axis=0) - Z_m.sum(axis=0)
-        col_targets = np.maximum(col_targets, 0)
+    # Column targets for Z_d: industry balance (X = Z_d + Z_m + VA)
+    c_Zd = np.maximum(X - VA_total - Z_m_col, 0)
 
-        z_col_sums = Z_d.sum(axis=0)
-        col_factors = np.where(z_col_sums > 1e-12, col_targets / z_col_sums, 1.0)
-        Z_d = Z_d * col_factors[np.newaxis, :]
+    # Row targets for Z_d: product balance (X = Z_d + F_d)
+    r_Zd = np.maximum(X - F_d.sum(axis=1), 0)
 
-        # Step 2: Balance Z rows (to match column sums for square balance)
-        # Use geometric mean for targets
-        z_row_sums = Z_d.sum(axis=1)
-        z_col_sums = Z_d.sum(axis=0)
-        z_targets = np.sqrt(np.maximum(z_row_sums, 0) * np.maximum(z_col_sums, 0))
+    # Scale row targets to match column targets sum
+    total_c = c_Zd.sum()
+    total_r = r_Zd.sum()
+    if total_r > 0:
+        r_Zd = r_Zd * (total_c / total_r)
 
-        if z_targets.sum() > 0:
-            Z_d, _, _ = ras_balance(Z_d, z_targets, z_targets, max_iter=200, tol=1e-8)
+    # Balance Z_d with RAS
+    Z_d_bal, iters, converged = ras_balance(Z_d, r_Zd, c_Zd, max_iter=max_iter, tol=tol)
 
-        # Step 3: Adjust F_d to satisfy PIB identity
-        # PIB = F_d.sum() - F_m.sum() => F_d.sum() = PIB + F_m.sum()
-        required_f_total = PIB_target + F_m.sum()
-        current_f_total = F_d.sum()
-        if current_f_total > 1e-12:
-            f_scale = required_f_total / current_f_total
-            F_d = F_d * f_scale
+    # Recalculate F_d as residual to satisfy product balance exactly
+    # (same formula as cge_babel/balance_mip_methods.py)
+    F_d_target = X - Z_d_bal.sum(axis=1)
+    F_d_props = F_d / (F_d.sum(axis=1, keepdims=True) + 1e-10)
+    F_d_bal = F_d_props * F_d_target[:, np.newaxis]
 
-        # Check convergence
-        error_product, error_industry, error_pib = _compute_mip_errors(
-            Z_d, Z_m, F_d, F_m, VA, X
-        )
-
-        if error_industry < tol and error_pib < tol:
-            return MIPBalanceResult(
-                Z_d=Z_d,
-                Z_m=Z_m,
-                F_d=F_d,
-                F_m=F_m,
-                VA=VA,
-                X=X,
-                error_product=error_product,
-                error_industry=error_industry,
-                error_pib=error_pib,
-                iterations=outer + 1,
-                converged=True,
-                method="ras",
-            )
-
+    # Compute errors
     error_product, error_industry, error_pib = _compute_mip_errors(
-        Z_d, Z_m, F_d, F_m, VA, X
+        Z_d_bal, Z_m, F_d_bal, F_m, VA, X
     )
+
     return MIPBalanceResult(
-        Z_d=Z_d,
+        Z_d=Z_d_bal,
         Z_m=Z_m,
-        F_d=F_d,
+        F_d=F_d_bal,
         F_m=F_m,
         VA=VA,
         X=X,
         error_product=error_product,
         error_industry=error_industry,
         error_pib=error_pib,
-        iterations=max_iter,
-        converged=False,
+        iterations=iters,
+        converged=converged,
         method="ras",
     )
 
@@ -477,13 +436,20 @@ def balance_mip_gras(
     VA: np.ndarray,
     X: np.ndarray,
     *,
-    max_iter: int = 100,
-    tol: float = 1e-6,
+    max_iter: int = 500,
+    tol: float = 1e-8,
 ) -> MIPBalanceResult:
     """Balance MIP using sequential GRAS.
 
     Similar to balance_mip_ras but uses GRAS for matrices that may
     contain negative values (e.g., inventory changes in final demand).
+
+    Algorithm:
+    1. Calculate column targets for Z_d: X - VA - Z_m.sum(axis=0) (industry balance)
+    2. Calculate row targets for Z_d: X - F_d.sum(axis=1) (product balance)
+    3. Scale row targets to match column targets sum
+    4. Apply GRAS to balance Z_d
+    5. Recalculate F_d as residual: F_d_row = X - Z_d.sum(axis=1)
 
     Args:
         Z_d: Domestic intermediate consumption (n x n)
@@ -492,7 +458,7 @@ def balance_mip_gras(
         F_m: Import final demand (n x k) or (n,)
         VA: Value added (v x n) where v = number of VA components
         X: Production totals (n,)
-        max_iter: Maximum outer iterations
+        max_iter: Maximum GRAS iterations
         tol: Convergence tolerance
 
     Returns:
@@ -505,69 +471,47 @@ def balance_mip_gras(
     VA = VA.astype(float).copy()
     X = X.astype(float).copy()
 
-    n = len(X)
-    PIB_target = float(VA.sum())
+    VA_total = VA.sum(axis=0)
+    Z_m_col = Z_m.sum(axis=0)
 
-    for outer in range(max_iter):
-        # Step 1: Balance Z columns (industry balance)
-        col_targets = X - VA.sum(axis=0) - Z_m.sum(axis=0)
-        col_targets = np.maximum(col_targets, 0)
+    # Column targets for Z_d: industry balance (X = Z_d + Z_m + VA)
+    c_Zd = np.maximum(X - VA_total - Z_m_col, 0)
 
-        z_col_sums = Z_d.sum(axis=0)
-        col_factors = np.where(z_col_sums > 1e-12, col_targets / z_col_sums, 1.0)
-        Z_d = Z_d * col_factors[np.newaxis, :]
+    # Row targets for Z_d: product balance (X = Z_d + F_d)
+    r_Zd = np.maximum(X - F_d.sum(axis=1), 0)
 
-        # Step 2: Balance Z using GRAS (handles potential negatives)
-        z_row_sums = Z_d.sum(axis=1)
-        z_col_sums = Z_d.sum(axis=0)
-        z_targets = np.sqrt(np.maximum(z_row_sums, 0) * np.maximum(z_col_sums, 0))
+    # Scale row targets to match column targets sum
+    total_c = c_Zd.sum()
+    total_r = r_Zd.sum()
+    if total_r > 0:
+        r_Zd = r_Zd * (total_c / total_r)
 
-        if z_targets.sum() > 0:
-            Z_d, _, _ = gras_balance(Z_d, z_targets, z_targets, max_iter=200, tol=1e-8)
+    # Balance Z_d with GRAS
+    Z_d_bal, iters, converged = gras_balance(Z_d, r_Zd, c_Zd, max_iter=max_iter, tol=tol)
 
-        # Step 3: Adjust F_d to satisfy PIB identity
-        required_f_total = PIB_target + F_m.sum()
-        current_f_total = F_d.sum()
-        if current_f_total > 1e-12:
-            f_scale = required_f_total / current_f_total
-            F_d = F_d * f_scale
+    # Recalculate F_d as residual to satisfy product balance exactly
+    # (same formula as cge_babel/balance_mip_methods.py)
+    F_d_target = X - Z_d_bal.sum(axis=1)
+    F_d_props = F_d / (F_d.sum(axis=1, keepdims=True) + 1e-10)
+    F_d_bal = F_d_props * F_d_target[:, np.newaxis]
 
-        # Check convergence
-        error_product, error_industry, error_pib = _compute_mip_errors(
-            Z_d, Z_m, F_d, F_m, VA, X
-        )
-
-        if error_industry < tol and error_pib < tol:
-            return MIPBalanceResult(
-                Z_d=Z_d,
-                Z_m=Z_m,
-                F_d=F_d,
-                F_m=F_m,
-                VA=VA,
-                X=X,
-                error_product=error_product,
-                error_industry=error_industry,
-                error_pib=error_pib,
-                iterations=outer + 1,
-                converged=True,
-                method="gras",
-            )
-
+    # Compute errors
     error_product, error_industry, error_pib = _compute_mip_errors(
-        Z_d, Z_m, F_d, F_m, VA, X
+        Z_d_bal, Z_m, F_d_bal, F_m, VA, X
     )
+
     return MIPBalanceResult(
-        Z_d=Z_d,
+        Z_d=Z_d_bal,
         Z_m=Z_m,
-        F_d=F_d,
+        F_d=F_d_bal,
         F_m=F_m,
         VA=VA,
         X=X,
         error_product=error_product,
         error_industry=error_industry,
         error_pib=error_pib,
-        iterations=max_iter,
-        converged=False,
+        iterations=iters,
+        converged=converged,
         method="gras",
     )
 
@@ -580,19 +524,21 @@ def balance_mip_sut_ras(
     VA: np.ndarray,
     X: np.ndarray,
     *,
-    max_iter: int = 100,
-    tol: float = 1e-6,
+    max_iter: int = 500,
+    tol: float = 1e-8,
 ) -> MIPBalanceResult:
     """Balance MIP using SUT-RAS simultaneous approach.
 
     This method treats the MIP as an extended Supply-Use Table and
-    balances all constraints simultaneously using block-wise RAS.
+    balances [Z_d | F_d] simultaneously using GRAS.
 
     Algorithm:
-    1. Stack Z and F into extended matrix
-    2. Define row/column constraints from production/demand identities
-    3. Apply GRAS to extended system
-    4. Extract balanced blocks
+    1. Create extended matrix [Z_d | F_d]
+    2. Row targets: X (production per product)
+    3. Column targets: [X - VA - Z_m (industry), F_d column sums (scaled)]
+    4. Scale column targets to match row targets sum
+    5. Apply GRAS to extended matrix
+    6. Extract balanced Z_d and F_d
 
     Args:
         Z_d: Domestic intermediate consumption (n x n)
@@ -601,7 +547,7 @@ def balance_mip_sut_ras(
         F_m: Import final demand (n x k) or (n,)
         VA: Value added (v x n) where v = number of VA components
         X: Production totals (n,)
-        max_iter: Maximum iterations
+        max_iter: Maximum GRAS iterations
         tol: Convergence tolerance
 
     Returns:
@@ -615,7 +561,8 @@ def balance_mip_sut_ras(
     X = X.astype(float).copy()
 
     n = len(X)
-    PIB_target = float(VA.sum())
+    VA_total = VA.sum(axis=0)
+    Z_m_col = Z_m.sum(axis=0)
 
     # Ensure F_d is 2D
     if F_d.ndim == 1:
@@ -623,75 +570,103 @@ def balance_mip_sut_ras(
     if F_m.ndim == 1:
         F_m = F_m.reshape(-1, 1)
 
-    k = F_d.shape[1]
+    # Create extended matrix [Z_d | F_d]
+    M_ext = np.hstack([Z_d, F_d])
 
-    for outer in range(max_iter):
-        # Create extended matrix [Z_d | F_d]
-        extended = np.hstack([Z_d, F_d])
+    # Row targets: X (production per product)
+    r_ext = X.copy()
 
-        # Row targets: Production X (for product balance)
-        row_targets = X.copy()
+    # Column targets for Z: industry balance
+    c_Zd = np.maximum(X - VA_total - Z_m_col, 0)
 
-        # Column targets for Z: X - VA - Z_m (for industry balance)
-        col_targets_z = X - VA.sum(axis=0) - Z_m.sum(axis=0)
-        col_targets_z = np.maximum(col_targets_z, 0)
+    # Column targets for F: keep current column sums
+    c_Fd = F_d.sum(axis=0)
 
-        # Column targets for F: proportional to current, scaled to PIB
-        f_col_sums = F_d.sum(axis=0)
-        f_total = f_col_sums.sum()
-        required_f_total = PIB_target + F_m.sum()
-        if f_total > 1e-12:
-            col_targets_f = f_col_sums * (required_f_total / f_total)
-        else:
-            col_targets_f = np.ones(k) * (required_f_total / k)
+    c_ext = np.concatenate([c_Zd, c_Fd])
 
-        col_targets = np.concatenate([col_targets_z, col_targets_f])
+    # Scale column targets to match row targets sum (for consistency)
+    total_r = r_ext.sum()
+    total_c = c_ext.sum()
+    if total_c > 0:
+        c_ext = c_ext * (total_r / total_c)
 
-        # Balance extended matrix
-        extended_bal, _, _ = gras_balance(extended, row_targets, col_targets, max_iter=200, tol=1e-8)
+    # Apply GRAS to extended matrix
+    M_ext_bal, iters, converged = gras_balance(M_ext, r_ext, c_ext, max_iter=max_iter, tol=tol)
 
-        # Extract balanced blocks
-        Z_d = extended_bal[:, :n]
-        F_d = extended_bal[:, n:]
+    # Extract balanced blocks
+    Z_d_bal = M_ext_bal[:, :n]
+    F_d_bal = M_ext_bal[:, n:]
 
-        # Check convergence
-        error_product, error_industry, error_pib = _compute_mip_errors(
-            Z_d, Z_m, F_d, F_m, VA, X
-        )
-
-        if error_industry < tol and error_pib < tol:
-            return MIPBalanceResult(
-                Z_d=Z_d,
-                Z_m=Z_m,
-                F_d=F_d,
-                F_m=F_m,
-                VA=VA,
-                X=X,
-                error_product=error_product,
-                error_industry=error_industry,
-                error_pib=error_pib,
-                iterations=outer + 1,
-                converged=True,
-                method="sut_ras",
-            )
-
+    # Compute errors
     error_product, error_industry, error_pib = _compute_mip_errors(
-        Z_d, Z_m, F_d, F_m, VA, X
+        Z_d_bal, Z_m, F_d_bal, F_m, VA, X
     )
+
     return MIPBalanceResult(
-        Z_d=Z_d,
+        Z_d=Z_d_bal,
         Z_m=Z_m,
-        F_d=F_d,
+        F_d=F_d_bal,
         F_m=F_m,
         VA=VA,
         X=X,
         error_product=error_product,
         error_industry=error_industry,
         error_pib=error_pib,
-        iterations=max_iter,
-        converged=False,
+        iterations=iters,
+        converged=converged,
         method="sut_ras",
     )
+
+
+def _cross_entropy_balance(
+    M: np.ndarray,
+    row_targets: np.ndarray,
+    col_targets: np.ndarray,
+    *,
+    max_iter: int = 1000,
+    tol: float = 1e-8,
+) -> tuple[np.ndarray, int, bool]:
+    """Cross-entropy balancing (equivalent to RAS for positive matrices).
+
+    Minimizes Kullback-Leibler divergence:
+        min sum_ij x_ij * log(x_ij / m_ij)
+    subject to row/column constraints.
+
+    Args:
+        M: Initial matrix (non-negative)
+        row_targets: Target row sums
+        col_targets: Target column sums
+        max_iter: Maximum iterations
+        tol: Convergence tolerance
+
+    Returns:
+        Tuple of (balanced_matrix, iterations, converged)
+    """
+    # Normalize to avoid log(0)
+    M_pos = np.maximum(M, 1e-10)
+    M_bal = M_pos.copy()
+
+    for it in range(max_iter):
+        # Row scaling
+        row_sums = M_bal.sum(axis=1)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            lambda_r = np.where(row_sums > 1e-10, row_targets / row_sums, 1)
+        M_bal = M_bal * lambda_r[:, np.newaxis]
+
+        # Column scaling
+        col_sums = M_bal.sum(axis=0)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            mu_c = np.where(col_sums > 1e-10, col_targets / col_sums, 1)
+        M_bal = M_bal * mu_c
+
+        # Check convergence
+        error_r = np.abs(M_bal.sum(axis=1) - row_targets).max()
+        error_c = np.abs(M_bal.sum(axis=0) - col_targets).max()
+
+        if max(error_r, error_c) < tol:
+            return M_bal, it + 1, True
+
+    return M_bal, max_iter, False
 
 
 def balance_mip_entropy(
@@ -702,19 +677,20 @@ def balance_mip_entropy(
     VA: np.ndarray,
     X: np.ndarray,
     *,
-    max_iter: int = 100,
-    tol: float = 1e-6,
+    max_iter: int = 1000,
+    tol: float = 1e-8,
 ) -> MIPBalanceResult:
     """Balance MIP using Cross-Entropy minimization.
 
     This method minimizes the cross-entropy distance from the original
-    matrix while satisfying the MIP constraints. Implemented via
-    iterative scaling (equivalent to GRAS for linear constraints).
+    matrix. Similar to SUT-RAS but using cross-entropy formulation.
 
-    The cross-entropy objective is:
-        min sum_{ij} x_ij * (log(x_ij / a_ij) - 1) + a_ij
-
-    subject to row/column constraints.
+    Algorithm:
+    1. Create extended matrix [Z_d | F_d]
+    2. Row targets: X (production per product)
+    3. Column targets: [X - VA - Z_m (industry), F_d column sums (scaled)]
+    4. Apply cross-entropy balancing
+    5. Extract balanced Z_d and F_d
 
     Args:
         Z_d: Domestic intermediate consumption (n x n)
@@ -734,26 +710,69 @@ def balance_mip_entropy(
         Estimating a Social Accounting Matrix Using Cross Entropy Methods."
         Economic Systems Research, 13(1), 47-64.
     """
-    # For linear constraints, cross-entropy is equivalent to GRAS
-    # This implementation uses GRAS with slightly different convergence criteria
-    result = balance_mip_gras(
-        Z_d, Z_m, F_d, F_m, VA, X,
-        max_iter=max_iter,
-        tol=tol,
+    Z_d = Z_d.astype(float).copy()
+    F_d = F_d.astype(float).copy()
+    Z_m = Z_m.astype(float).copy()
+    F_m = F_m.astype(float).copy()
+    VA = VA.astype(float).copy()
+    X = X.astype(float).copy()
+
+    n = len(X)
+    VA_total = VA.sum(axis=0)
+    Z_m_col = Z_m.sum(axis=0)
+
+    # Ensure F_d is 2D
+    if F_d.ndim == 1:
+        F_d = F_d.reshape(-1, 1)
+    if F_m.ndim == 1:
+        F_m = F_m.reshape(-1, 1)
+
+    # Create extended matrix [Z_d | F_d]
+    M_ext = np.hstack([Z_d, F_d])
+
+    # Row targets: X (production per product)
+    r_ext = X.copy()
+
+    # Column targets for Z: industry balance
+    c_Zd = np.maximum(X - VA_total - Z_m_col, 0)
+
+    # Column targets for F: keep current column sums
+    c_Fd = F_d.sum(axis=0)
+
+    c_ext = np.concatenate([c_Zd, c_Fd])
+
+    # Scale column targets to match row targets sum
+    total_r = r_ext.sum()
+    total_c = c_ext.sum()
+    if total_c > 0:
+        c_ext = c_ext * (total_r / total_c)
+
+    # Apply cross-entropy balancing
+    M_ext_bal, iters, converged = _cross_entropy_balance(
+        M_ext, r_ext, c_ext, max_iter=max_iter, tol=tol
     )
-    # Create new result with entropy method name
+
+    # Extract balanced blocks
+    Z_d_bal = M_ext_bal[:, :n]
+    F_d_bal = M_ext_bal[:, n:]
+
+    # Compute errors
+    error_product, error_industry, error_pib = _compute_mip_errors(
+        Z_d_bal, Z_m, F_d_bal, F_m, VA, X
+    )
+
     return MIPBalanceResult(
-        Z_d=result.Z_d,
-        Z_m=result.Z_m,
-        F_d=result.F_d,
-        F_m=result.F_m,
-        VA=result.VA,
-        X=result.X,
-        error_product=result.error_product,
-        error_industry=result.error_industry,
-        error_pib=result.error_pib,
-        iterations=result.iterations,
-        converged=result.converged,
+        Z_d=Z_d_bal,
+        Z_m=Z_m,
+        F_d=F_d_bal,
+        F_m=F_m,
+        VA=VA,
+        X=X,
+        error_product=error_product,
+        error_industry=error_industry,
+        error_pib=error_pib,
+        iterations=iters,
+        converged=converged,
         method="entropy",
     )
 
