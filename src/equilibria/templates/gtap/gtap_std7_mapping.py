@@ -235,11 +235,11 @@ GTAP_STD7_INDEX_REORDER = {
     'VMFB': (2, 0, 1),   # (i, a, r) → (r, i, a)
     'MAKB': (2, 1, 0),   # (i, a, r) → (r, a, i)
     'MAKS': (2, 1, 0),   # (i, a, r) → (r, a, i)
-    'VXSB': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
-    'VFOB': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
-    'VCIF': (2, 0, 1),   # (i, rp, r) → (r, i, rp)
-    'VMSB': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
-    'VTWR': (3, 1, 2, 0),  # (m, i, r, rp) → (r, i, rp, m) (4D reorder)
+    'VXSB': (1, 0, 2),   # (i, r, rp) → (r, i, rp)
+    'VFOB': (1, 0, 2),   # (i, r, rp) → (r, i, rp)
+    'VCIF': (1, 0, 2),   # (i, r, rp) → (r, i, rp)
+    'VMSB': (1, 0, 2),   # (i, r, rp) → (r, i, rp)
+    'VTWR': (2, 1, 3, 0),  # (m, i, r, rp) → (r, i, rp, m) (4D reorder)
     # 2D parameters typically are (var, r) → (r, var) or already correct
     'VOSB': (1, 0),      # (i, r) → (r, i)
     'VDGP': (1, 0),      # (i, r) → (r, i)
@@ -260,8 +260,8 @@ GTAP_STD7_INDEX_REORDER = {
     'OSEP': (1, 0),      # (i, r) → (r, i)
     'CSEP': (3, 1, 2, 0),  # (i, a, r, DIR) → (r, i, a, DIR) - need to handle DIR
     'ISEP': (2, 1, 0),   # (i, r, DIR) → (r, i, DIR)
-    'TFRV': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
-    'XTRV': (2, 0, 1),   # (i, r, rp) → (r, i, rp)
+    'TFRV': (1, 0, 2),   # (i, r, rp) → (r, i, rp)
+    'XTRV': (1, 0, 2),   # (i, r, rp) → (r, i, rp)
     # Elasticity parameters
     'ESUBVA': (1, 0),    # (a, r) → (r, a)
     'ESUBD': (1, 0),     # (i, r) → (r, i)

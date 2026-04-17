@@ -49,6 +49,7 @@ class GTAPElasticities:
     
     Key elasticities:
     - esubva: CES elasticity between value-added and intermediate demand
+    - esubt: CES elasticity between primary factors and intermediates (top production nest)
     - esubd: CES elasticity between domestic and imported goods (top Armington)
     - esubm: CES elasticity across import sources (bottom Armington)
     - etrae: CET elasticity for factor mobility across sectors
@@ -58,6 +59,7 @@ class GTAPElasticities:
     
     # Production elasticities
     esubva: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a)
+    esubt: Dict[Tuple[str, str], float] = field(default_factory=dict)   # (r, a)
     esubd: Dict[Tuple[str, str], float] = field(default_factory=dict)   # (r, i)
     
     # Trade elasticities - Armington
@@ -68,6 +70,8 @@ class GTAPElasticities:
     omegaw: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i)
     omegas: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a) - activity transformation
     sigmas: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i) - commodity aggregation
+    etraq: Dict[Tuple[str, str], float] = field(default_factory=dict)   # (r, a) - source for omegas
+    esubq: Dict[Tuple[str, str], float] = field(default_factory=dict)   # (r, i) - source for sigmas
 
     # Factor mobility elasticities
     etrae: Dict[str, float] = field(default_factory=dict)  # f
@@ -93,6 +97,7 @@ class GTAPElasticities:
 
         # Load production elasticities (GTAP Std 7 already uses ESUBVA, ESUBD uppercase)
         self._load_parameter(gdx_data, gdx_path, "esubva", self.esubva, (sets.r, sets.a))
+        self._load_parameter(gdx_data, gdx_path, "esubt", self.esubt, (sets.r, sets.a))
         self._load_parameter(gdx_data, gdx_path, "esubd", self.esubd, (sets.r, sets.i))
 
         # Load trade elasticities
@@ -101,6 +106,8 @@ class GTAPElasticities:
         self._load_parameter(gdx_data, gdx_path, "omegaw", self.omegaw, (sets.r, sets.i))
         self._load_parameter(gdx_data, gdx_path, "omegas", self.omegas, (sets.r, sets.a))
         self._load_parameter(gdx_data, gdx_path, "sigmas", self.sigmas, (sets.r, sets.i))
+        self._load_parameter(gdx_data, gdx_path, "etraq", self.etraq, (sets.r, sets.a))
+        self._load_parameter(gdx_data, gdx_path, "esubq", self.esubq, (sets.r, sets.i))
 
         # Load factor mobility
         self._load_parameter(gdx_data, gdx_path, "etrae", self.etrae, (sets.f,))
@@ -118,6 +125,25 @@ class GTAPElasticities:
 
         # Populate nested CES elasticities from the production elasticities
         self.initialize_nested_elasticities(sets)
+
+    def override_omegas_sigmas_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
+        """Override only make-aggregation elasticities from a calibration GDX.
+
+        This is used to mirror GAMS COMP-calibrated values for:
+        - omegas(r,a): activity transformation elasticity
+        - sigmas(r,i): commodity aggregation elasticity
+        """
+        gdx_data = read_gdx(gdx_path)
+
+        override_omegas: Dict[Tuple[str, str], float] = {}
+        override_sigmas: Dict[Tuple[str, str], float] = {}
+        self._load_parameter(gdx_data, gdx_path, "omegas", override_omegas, (sets.r, sets.a))
+        self._load_parameter(gdx_data, gdx_path, "sigmas", override_sigmas, (sets.r, sets.i))
+
+        if override_omegas:
+            self.omegas.update(override_omegas)
+        if override_sigmas:
+            self.sigmas.update(override_sigmas)
 
     def _load_parameter(
         self,
@@ -358,19 +384,43 @@ class GTAPElasticities:
         default_value = 1.0
         for r in sets.r:
             for a in sets.a:
-                base = self.esubva.get((r, a), default_value)
-                self.sigmap[(r, a)] = self.sigmap.get((r, a), base)
-                self.sigmand[(r, a)] = self.sigmand.get((r, a), base)
-                self.sigmav[(r, a)] = self.sigmav.get((r, a), base)
+                # GAMS cal.gms:
+                #   sigmap  <- esubt(a,r) by default
+                #   sigmand <- sigmap by default
+                #   sigmav  <- esubva(a,r) by default
+                sigmap_default = float(self.esubt.get((r, a), 0.0))
+                sigmap_value = self.sigmap.get((r, a), sigmap_default)
+                self.sigmap[(r, a)] = sigmap_value
+                self.sigmand[(r, a)] = self.sigmand.get((r, a), sigmap_value)
+                self.sigmav[(r, a)] = self.sigmav.get((r, a), self.esubva.get((r, a), default_value))
 
         # Populate GTAP equation-level elasticities used in model.gms blocks.
         # If not explicitly present in GDX, map from available calibrated elasticities.
         for r in sets.r:
             for a in sets.a:
-                self.omegas[(r, a)] = self.omegas.get((r, a), self.sigmap.get((r, a), default_value))
+                if (r, a) in self.omegas:
+                    continue
+                # GAMS getData.gms: omegas(r,a) = -etraq(a,r)
+                etraq_val = self.etraq.get((r, a))
+                if etraq_val is not None:
+                    self.omegas[(r, a)] = -float(etraq_val)
+                    continue
+                self.omegas[(r, a)] = self.sigmap.get((r, a), default_value)
         for r in sets.r:
             for i in sets.i:
-                self.sigmas[(r, i)] = self.sigmas.get((r, i), self.esubd.get((r, i), 2.0))
+                if (r, i) not in self.sigmas:
+                    # GAMS getData.gms:
+                    # sigmas(r,i) = inf$(esubq(i,r)=0) + (1/esubq(i,r))$(esubq(i,r)<>0)
+                    esubq_val = float(self.esubq.get((r, i), 0.0) or 0.0)
+                    if abs(esubq_val) <= 1e-12:
+                        self.sigmas[(r, i)] = float("inf")
+                    else:
+                        self.sigmas[(r, i)] = 1.0 / esubq_val
+                    # Fallback to legacy mapping only if derivative mapping produced NaN.
+                    if math.isnan(self.sigmas[(r, i)]):
+                        self.sigmas[(r, i)] = self.esubd.get((r, i), 2.0)
+                self.omegax[(r, i)] = self.omegax.get((r, i), float("inf"))
+                self.omegaw[(r, i)] = self.omegaw.get((r, i), float("inf"))
 
 
 @dataclass
@@ -417,6 +467,21 @@ class GTAPCalibratedShares:
         # price, which uses the output tax wedge when available so the GTAP
         # make equations start from the same tax-adjusted normalization as GAMS.
         px = pnd = pva = pa = 1.0
+
+        def _kappa(r: str, f: str, a: str) -> float:
+            if taxes is None:
+                return 0.0
+            kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+            if kappa == 0.0:
+                kappa = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
+            return kappa
+
+        def _pf_bench(r: str, f: str, a: str) -> float:
+            return max(1.0 / max(1.0 - _kappa(r, f, a), 1e-12), 1e-12)
+
+        def _pfa_bench(r: str, f: str, a: str) -> float:
+            factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+            return _pf_bench(r, f, a) * max(1.0 + factor_tax, 1e-12)
         
         # Calculate intermediate values needed for calibration
         nd_values = {}  # ND bundle values
@@ -438,7 +503,16 @@ class GTAPCalibratedShares:
                     xp_values[(r, a)] = xp_val
                 
                 # Value added (sum of factor payments)
-                va_val = sum(benchmark.vfm.get((r, f, a), 0.0) for f in sets.f)
+                # Match GAMS initialization:
+                # xf = EVFB/pf, pfa = pf*(1+rtf), va = sum(pfa*xf)/pva
+                # => va contribution = EVFB*(1+rtf) when pva=1.
+                va_val = 0.0
+                for f in sets.f:
+                    vfm_val = float(benchmark.vfm.get((r, f, a), 0.0) or 0.0)
+                    if vfm_val <= 0.0:
+                        continue
+                    factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+                    va_val += vfm_val * (1.0 + factor_tax)
                 if va_val > 0:
                     va_values[(r, a)] = va_val
                 
@@ -506,7 +580,9 @@ class GTAPCalibratedShares:
         for r in sets.r:
             for f in sets.f:
                 for a in sets.a:
-                    xf_val = benchmark.vfm.get((r, f, a), 0.0)
+                    vfm_val = float(benchmark.vfm.get((r, f, a), 0.0) or 0.0)
+                    pf_val = _pf_bench(r, f, a)
+                    xf_val = vfm_val / pf_val
                     if xf_val > 0:
                         xf_values[(r, f, a)] = xf_val
         
@@ -526,9 +602,8 @@ class GTAPCalibratedShares:
                     
                     # GAMS calibration uses the tax-inclusive factor price term
                     # in xfeq: af = (xf/va) * (M_PFA/pva)**sigmav.
-                    # Here M_PFA maps to pfa = pf*(1+rtf), with pf benchmarked at 1.
-                    factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0)
-                    pfa_term = max(1.0 + factor_tax, 1e-12)
+                    # Here M_PFA maps to pfa = pf*(1+rtf), with pf from kappaf.
+                    pfa_term = _pfa_bench(r, f, a)
                     price_ratio = pfa_term / max(pva, 1e-12)
                     self.af_param[(r, f, a)] = (xf_val / va_val) * (price_ratio ** sigmav)
         
@@ -1389,7 +1464,9 @@ class GTAPShareParameters:
                 xs = sum(benchmark.makb.get((r, a, i), 0.0) for a in sets.a)
                 if xs <= 0.0:
                     xs = benchmark.vom_i.get((r, i), 0.0)
-                xet = sum(float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0) for rp in sets.r if rp != r)
+                # GAMS calibrates export-side nests over xwFlag support and
+                # does not enforce rp != r at equation-domain level.
+                xet = sum(float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0) for rp in sets.r)
                 xds = max(xs - xet, 0.0)
                 if xs > 0:
                     self.p_gd[(r, i)] = xds / xs
@@ -1400,13 +1477,12 @@ class GTAPShareParameters:
 
         for r in sets.r:
             for i in sets.i:
-                xmt = sum(float(benchmark.vmsb.get((rp, i, r), 0.0) or 0.0) for rp in sets.r if rp != r)
+                # Keep bilateral source support consistent with GAMS xwFlag.
+                xmt = sum(float(benchmark.vmsb.get((rp, i, r), 0.0) or 0.0) for rp in sets.r)
                 if xmt <= 0:
                     continue
                 sigmaw = elasticities.esubm.get((r, i), 5.0)
                 for rp in sets.r:
-                    if rp == r:
-                        continue
                     # GAMS calibration uses xw.l initialized from VXSB/pe.
                     benchmark_xw = float(benchmark.vxsb.get((rp, i, r), 0.0) or 0.0)
                     if benchmark_xw <= 0.0:
@@ -1421,12 +1497,10 @@ class GTAPShareParameters:
 
         for r in sets.r:
             for i in sets.i:
-                xet = sum(float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0) for rp in sets.r if rp != r)
+                xet = sum(float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0) for rp in sets.r)
                 if xet <= 0.0:
                     continue
                 for rp in sets.r:
-                    if rp == r:
-                        continue
                     xw = float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
                     if xw > 0.0:
                         self.p_gw[(r, i, rp)] = xw / xet
@@ -1640,12 +1714,19 @@ class GTAPParameters:
     calibrated: GTAPCalibratedShares = field(default_factory=GTAPCalibratedShares)  # GAMS-style calibrated shares
     shifts: GTAPShiftParameters = field(default_factory=GTAPShiftParameters)
     
-    def load_from_gdx(self, gdx_path: Path, elasticity_gdx: Optional[Path] = None) -> None:
+    def load_from_gdx(
+        self,
+        gdx_path: Path,
+        elasticity_gdx: Optional[Path] = None,
+        elasticity_override_gdx: Optional[Path] = None,
+    ) -> None:
         """Load all parameters from GDX file(s).
         
         Args:
             gdx_path: Path to GTAP GDX file with benchmark data (e.g., basedata-9x10.gdx)
             elasticity_gdx: Optional separate GDX file with elasticities (e.g., default-9x10.gdx)
+            elasticity_override_gdx: Optional GDX used to override only omegas/sigmas
+                after loading the base elasticity set (typically COMP.gdx).
         """
         # First load sets
         self.sets.load_from_gdx(gdx_path)
@@ -1657,6 +1738,8 @@ class GTAPParameters:
         else:
             elast_file = elasticity_gdx
         self.elasticities.load_from_gdx(elast_file, self.sets)
+        if elasticity_override_gdx is not None:
+            self.elasticities.override_omegas_sigmas_from_gdx(elasticity_override_gdx, self.sets)
         self.elasticities.initialize_nested_elasticities(self.sets)  # Ensure coverage
         
         # Load benchmark and taxes from main file
