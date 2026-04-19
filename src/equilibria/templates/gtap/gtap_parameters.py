@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -75,6 +75,8 @@ class GTAPElasticities:
 
     # Factor mobility elasticities
     etrae: Dict[str, float] = field(default_factory=dict)  # f
+    omegaf: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, f) CET factor mobility
+    etaff: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) sector-specific supply
 
     # Demand elasticities
     esubg: Dict[str, float] = field(default_factory=dict)  # r (government)
@@ -111,6 +113,8 @@ class GTAPElasticities:
 
         # Load factor mobility
         self._load_parameter(gdx_data, gdx_path, "etrae", self.etrae, (sets.f,))
+        self._load_parameter(gdx_data, gdx_path, "omegaf", self.omegaf, (sets.r, sets.f))
+        self._load_parameter(gdx_data, gdx_path, "etaff", self.etaff, (sets.r, sets.f, sets.a))
 
         # Load demand elasticities
         self._load_parameter(gdx_data, gdx_path, "esubg", self.esubg, (sets.r,))
@@ -493,38 +497,50 @@ class GTAPCalibratedShares:
         # Calculate ND, VA, XP from benchmark
         for r in sets.r:
             for a in sets.a:
-                # Production value (vom or sum of MAKB)
-                xp_val = benchmark.vom.get((r, a), 0.0)
-                if xp_val <= 0:
-                    outputs = sets.activity_commodities.get(a, [sets.a_to_i.get(a, a)])
-                    xp_val = sum(benchmark.makb.get((r, a, i), 0.0) for i in outputs)
-                
-                if xp_val > 0:
-                    xp_values[(r, a)] = xp_val
-                
                 # Value added (sum of factor payments)
                 # Match GAMS initialization:
                 # xf = EVFB/pf, pfa = pf*(1+rtf), va = sum(pfa*xf)/pva
                 # => va contribution = EVFB*(1+rtf) when pva=1.
                 va_val = 0.0
                 for f in sets.f:
-                    vfm_val = float(benchmark.vfm.get((r, f, a), 0.0) or 0.0)
-                    if vfm_val <= 0.0:
+                    evfb_val = float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
+                    if evfb_val <= 0.0:
                         continue
                     factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
-                    va_val += vfm_val * (1.0 + factor_tax)
+                    va_val += evfb_val * (1.0 + factor_tax)
                 if va_val > 0:
                     va_values[(r, a)] = va_val
-                
-                # Intermediate demand bundle from observed domestic + imported inputs.
+
+                # Intermediate demand bundle at purchaser prices (GAMS-consistent):
+                # nd = sum_i pa*xa, where pa*xa corresponds to vdfp + vmfp in benchmark values.
                 nd_val = sum(
-                    benchmark.vdfm.get((r, i, a), 0.0) + benchmark.vifm.get((r, i, a), 0.0)
+                    benchmark.vdfp.get((r, i, a), 0.0) + benchmark.vmfp.get((r, i, a), 0.0)
                     for i in sets.i
                 )
                 if nd_val <= 0.0:
-                    nd_val = xp_val - va_val
+                    nd_val = sum(
+                        benchmark.vdfm.get((r, i, a), 0.0) + benchmark.vifm.get((r, i, a), 0.0)
+                        for i in sets.i
+                    )
+                if nd_val <= 0.0:
+                    nd_val = 0.0
                 if nd_val > 0:
                     nd_values[(r, a)] = nd_val
+
+                # Production value at purchaser prices (GAMS xp identity):
+                # xp = sum_i(pdp*xd + pmp*xm) + sum_f(pfa*xf) = nd + va when prices are 1 at benchmark.
+                xp_cost_val = nd_val + va_val
+
+                # Fallbacks for sparse/missing cost blocks.
+                xp_val = xp_cost_val
+                if xp_val <= 0.0:
+                    xp_val = benchmark.vom.get((r, a), 0.0)
+                if xp_val <= 0.0:
+                    outputs = sets.activity_commodities.get(a, [sets.a_to_i.get(a, a)])
+                    xp_val = sum(benchmark.makb.get((r, a, i), 0.0) for i in outputs)
+
+                if xp_val > 0:
+                    xp_values[(r, a)] = xp_val
         
         # Calibrate AND and AVA (GAMS cal.gms lines 724-725)
         for r in sets.r:
@@ -551,9 +567,11 @@ class GTAPCalibratedShares:
         for r in sets.r:
             for a in sets.a:
                 for i in sets.i:
-                    # Domestic intermediate + imported intermediate
-                    domestic = benchmark.vdfb.get((r, i, a), 0.0)
-                    imported = benchmark.vmfb.get((r, i, a), 0.0)
+                    # Use purchaser-value intermediate demand for io calibration.
+                    # This keeps xa and nd on the same valuation basis in the
+                    # GAMS-style io identity.
+                    domestic = benchmark.vdfp.get((r, i, a), 0.0)
+                    imported = benchmark.vmfp.get((r, i, a), 0.0)
                     xa_val = domestic + imported
                     if xa_val > 0:
                         xa_values[(r, i, a)] = xa_val
@@ -571,16 +589,18 @@ class GTAPCalibratedShares:
                     xa_val = xa_values.get((r, i, a), 0.0)
                     if xa_val <= 0:
                         continue
-                    
+
                     # io(r,i,a,t) = (xa.l/nd.l)*(pa/pnd)**sigmand
-                    price_ratio = pa / pnd  # = 1.0
+                    # With purchaser-valued xa and nd and benchmark-normalized
+                    # price indices, the price term is 1 at calibration point.
+                    price_ratio = pa / pnd
                     self.io_param[(r, i, a)] = (xa_val / nd_val) * (price_ratio ** sigmand)
         
         # Calculate XF (factor demand) values
         for r in sets.r:
             for f in sets.f:
                 for a in sets.a:
-                    vfm_val = float(benchmark.vfm.get((r, f, a), 0.0) or 0.0)
+                    vfm_val = float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
                     pf_val = _pf_bench(r, f, a)
                     xf_val = vfm_val / pf_val
                     if xf_val > 0:
@@ -626,10 +646,18 @@ class GTAPCalibratedShares:
                     x_val = benchmark.makb.get((r, a, i), 0.0)
                     if x_val <= 0:
                         continue
+
+                    # Use commodity-specific make-price ratio when available.
+                    # This matches GAMS multi-output activity calibration where
+                    # MAKB/MAKS wedges can differ by commodity within activity.
+                    maks_val = float(benchmark.maks.get((r, a, i), 0.0) or 0.0)
+                    p_rai = p
+                    if maks_val > 0.0:
+                        p_rai = maks_val / max(float(x_val), 1e-12)
                     
                     if omegas != float('inf'):
                         # gx(r,a,i,t) = (x.l/xp.l)*(px/p)**omegas
-                        price_ratio = px / p  # = 1.0
+                        price_ratio = px / max(p_rai, 1e-12)
                         self.gx_param[(r, a, i)] = (x_val / xp_val) * (price_ratio ** omegas)
                     else:
                         # Perfect transformation: gx = value share
@@ -656,7 +684,8 @@ class GTAPBenchmarkValues:
     # Factor payments
     vfm: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Factor payments
     vfb: Dict[Tuple[str, str], float] = field(default_factory=dict)     # (r, f) - Factor income
-    evfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, a, f) - Factor payments (aux)
+    evfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Factor payments at basic prices
+    evos: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Factor remuneration net of direct tax
     vmfp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Imported factors at purchaser prices?
     vmfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Factor payments imported
     
@@ -741,7 +770,7 @@ class GTAPBenchmarkValues:
             # Some benchmark extracts label the domestic component as the total.
             # If the explicit domestic/import split materially exceeds that value,
             # treat the split as authoritative.
-            if total <= 0.0 or total < explicit_total * 0.99:
+            if total <= 0.0 or total < explicit_total * (1.0 - 1e-6):
                 total = explicit_total
 
         if domestic <= 0.0 and total > 0.0:
@@ -787,7 +816,8 @@ class GTAPBenchmarkValues:
         
         # Factors - using GTAP Std 7 names  
         self._load_param(gdx_data, "vfm", self.vfm, 3, gdx_path)        # → EVFP
-        self._load_param(gdx_data, "vfb", self.vfb, 2, gdx_path)        # → EVFB
+        self._load_param(gdx_data, "evfb", self.evfb, 3, gdx_path)      # → EVFB
+        self._load_param(gdx_data, "evos", self.evos, 3, gdx_path)      # → EVOS
         
         # Intermediate demand - using GTAP Std 7 names
         self._load_param(gdx_data, "vdfm", self.vdfm, 3, gdx_path)      # → VDFP
@@ -811,6 +841,8 @@ class GTAPBenchmarkValues:
             ("VDFP", self.vdfp, 3),
             ("VMFB", self.vmfb, 3),
             ("VMFP", self.vmfp, 3),
+            ("VDPB", self.vdpb, 2),
+            ("VDPP", self.vdpp, 2),
             ("VDGB", self.vdgb, 2),
             ("VDGP", self.vdgp, 2),
             ("VMGB", self.vmgb, 2),
@@ -891,6 +923,13 @@ class GTAPBenchmarkValues:
             values = getattr(self, attr, None)
             if isinstance(values, dict) and values:
                 _scale_dict(values)
+
+        # Aggregate factor benchmark values by (region, factor) for xft scaling.
+        if self.evfb:
+            self.vfb.clear()
+            for (region, factor, _activity), value in self.evfb.items():
+                key = (region, factor)
+                self.vfb[key] = self.vfb.get(key, 0.0) + float(value)
 
         # If household domestic purchases are missing, reconstruct from totals.
         for key, total in self.vpm.items():
@@ -1225,15 +1264,46 @@ class GTAPTaxRates:
 
         rtf_rates: Dict[Tuple[str, str, str], float] = {}
         for (r, f, a), vfm in benchmark.vfm.items():
-            if vfm <= 0.0:
+            evfb = float(benchmark.evfb.get((r, f, a), 0.0) or 0.0)
+            denom = evfb if evfb > 0.0 else float(vfm)
+            if denom <= 0.0:
                 continue
             fbep = float(raw_fbep.get((r, f, a), 0.0))
             ftrv = float(raw_ftrv.get((r, f, a), 0.0))
-            rate = (ftrv - fbep) / float(vfm)
+            # GTAP benchmark-consistent wedge (matches GAMS pfa benchmark levels):
+            # rtf = (FBEP + FTRV) / EVFB
+            rate = (ftrv + fbep) / denom
             if rate != 0.0 or fbep != 0.0 or ftrv != 0.0:
                 rtf_rates[(r, f, a)] = rate
         if rtf_rates:
             self.rtf = rtf_rates
+
+        # GAMS cal.gms:
+        #   kappaf = (EVFB - EVOS) / EVFB   when EVFB > 0
+        kappaf_activity_rates: Dict[Tuple[str, str, str], float] = {}
+        kappaf_aggregate_num: Dict[Tuple[str, str], float] = defaultdict(float)
+        kappaf_aggregate_den: Dict[Tuple[str, str], float] = defaultdict(float)
+        for (r, f, a), evfb in benchmark.evfb.items():
+            evfb_val = float(evfb)
+            if evfb_val <= 0.0:
+                continue
+            evos_val = float(benchmark.evos.get((r, f, a), 0.0))
+            rate = (evfb_val - evos_val) / evfb_val
+            if abs(rate) > 1e-12:
+                kappaf_activity_rates[(r, f, a)] = rate
+            kappaf_aggregate_num[(r, f)] += (evfb_val - evos_val)
+            kappaf_aggregate_den[(r, f)] += evfb_val
+        if kappaf_activity_rates:
+            self.kappaf_activity = kappaf_activity_rates
+        kappaf_rates: Dict[Tuple[str, str], float] = {}
+        for key, den in kappaf_aggregate_den.items():
+            if den <= 0.0:
+                continue
+            rate = kappaf_aggregate_num[key] / den
+            if abs(rate) > 1e-12:
+                kappaf_rates[key] = rate
+        if kappaf_rates:
+            self.kappaf = kappaf_rates
 
         rtpd_rates: Dict[Tuple[str, str, str], float] = {}
         rtpi_rates: Dict[Tuple[str, str, str], float] = {}
@@ -1392,11 +1462,14 @@ class GTAPShareParameters:
                     share = value / total_output if value > 0 else 1.0 / len(outputs)
                     self.p_gx[(r, a, i)] = share
 
-                total_va = sum(benchmark.vfm.get((r, f, a), 0.0) for f in sets.f)
+                total_va = sum(
+                    benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0))
+                    for f in sets.f
+                )
                 if total_va > 0:
                     self.p_va[(r, a)] = min(total_va / total_output, 1.0)
                     for f in sets.f:
-                        value = benchmark.vfm.get((r, f, a), 0.0)
+                        value = benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0))
                         self.p_af[(r, f, a)] = value / total_va if value > 0 else 0.0
                 else:
                     self.p_va[(r, a)] = 0.0
@@ -1509,10 +1582,13 @@ class GTAPShareParameters:
         """Calibrate factor share parameters."""
         for r in sets.r:
             for f in sets.f:
-                total_payment = sum(benchmark.vfm.get((r, f, a), 0.0) for a in sets.a)
+                total_payment = sum(
+                    benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0))
+                    for a in sets.a
+                )
                 if total_payment > 0:
                     for a in sets.a:
-                        value = benchmark.vfm.get((r, f, a), 0.0)
+                        value = benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0))
                         self.p_gf[(r, f, a)] = value / total_payment
 
     def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot, sets: GTAPSets) -> None:
@@ -1697,6 +1773,215 @@ class GTAPShiftParameters:
             else:
                 result[node] = next(iter(time_map.values()))
         return result
+
+
+@dataclass
+class GAMSCalibrationDump:
+    """Container for calibration/benchmark symbols exported from a GAMS dump GDX.
+
+    The dump is used as a parity reference and optional override source. Symbol keys
+    are normalized to lowercase and any trailing time dimension
+    (`base`, `t0`, `check`, `shock`) is collapsed to a single benchmark slice.
+    """
+
+    source_gdx: Path
+    derived_params: Dict[str, Dict[Tuple[str, ...], float]] = field(default_factory=dict)
+    benchmark_levels: Dict[str, Dict[Tuple[str, ...], float]] = field(default_factory=dict)
+
+    DEFAULT_DERIVED_SYMBOLS: ClassVar[Tuple[str, ...]] = (
+        "and",
+        "ava",
+        "io",
+        "af",
+        "gx",
+        "gf",
+        "gw",
+        "ge",
+        "gd",
+        "amw",
+        "alphaa",
+        "alphad",
+        "alpham",
+        "alphan",
+        "tmarg",
+        "chipm",
+        "chipd",
+        "kappaf",
+        "omegaf",
+        "etaff",
+        "esubt",
+        "esubc",
+        "esubm",
+        "esubva",
+        "sigmas",
+        "omegaw",
+        "axp",
+        "aft",
+        "aa",
+        "lambdam",
+        "lambdamg",
+        "mtax",
+        "etax",
+    )
+
+    DEFAULT_LEVEL_SYMBOLS: ClassVar[Tuple[str, ...]] = (
+        "xf",
+        "xft",
+        "xc",
+        "xa",
+        "xaa",
+        "xda",
+        "xma",
+        "xm",
+        "xd",
+        "xmt",
+        "xw",
+        "xe",
+        "xet",
+        "xp",
+        "va",
+        "nd",
+        "pf",
+        "pfa",
+        "pfy",
+        "pft",
+        "pa",
+        "pd",
+        "pm",
+        "pe",
+        "pet",
+        "px",
+        "pva",
+        "pnd",
+        "ps",
+        "pmcif",
+        "pefob",
+        "pwmg",
+        "ptmg",
+        "yi",
+        "yc",
+        "yg",
+        "kstock",
+        "arent",
+        "ytax",
+        "etax",
+        "mtax",
+        "dintx",
+        "mintx",
+    )
+
+    _TIME_LABELS: ClassVar[Tuple[str, ...]] = ("base", "t0", "check", "shock")
+
+    @classmethod
+    def from_gdx(
+        cls,
+        path: Path,
+        *,
+        derived_symbols: Optional[Sequence[str]] = None,
+        level_symbols: Optional[Sequence[str]] = None,
+    ) -> "GAMSCalibrationDump":
+        gdx_path = Path(path).expanduser().resolve()
+        if not gdx_path.exists():
+            raise FileNotFoundError(f"GAMS calibration dump not found: {gdx_path}")
+
+        gdx_data = read_gdx(gdx_path)
+        derived: Dict[str, Dict[Tuple[str, ...], float]] = {}
+        levels: Dict[str, Dict[Tuple[str, ...], float]] = {}
+
+        for symbol in tuple(derived_symbols or cls.DEFAULT_DERIVED_SYMBOLS):
+            values = cls._read_parameter_symbol(gdx_data, gdx_path, symbol)
+            if values:
+                derived[symbol.lower()] = cls._collapse_time_dimension(values)
+
+        for symbol in tuple(level_symbols or cls.DEFAULT_LEVEL_SYMBOLS):
+            values = read_variable_levels_with_gdxdump(gdx_path, symbol)
+            if values:
+                levels[symbol.lower()] = cls._collapse_time_dimension(values)
+
+        return cls(source_gdx=gdx_path, derived_params=derived, benchmark_levels=levels)
+
+    def get_derived(self, name: str) -> Dict[Tuple[str, ...], float]:
+        return self.derived_params.get(str(name).lower(), {})
+
+    def get_levels(self, name: str) -> Dict[Tuple[str, ...], float]:
+        return self.benchmark_levels.get(str(name).lower(), {})
+
+    @classmethod
+    def _read_parameter_symbol(
+        cls,
+        gdx_data: Dict[str, Any],
+        gdx_path: Path,
+        symbol: str,
+    ) -> Dict[Tuple[str, ...], float]:
+        candidates = [symbol, symbol.upper()]
+        parsed: Dict[Tuple[str, ...], float] = {}
+        matched_name = symbol
+
+        for candidate in candidates:
+            try:
+                parsed = read_parameter_values(gdx_data, candidate)
+            except (KeyError, ValueError):
+                parsed = {}
+            if parsed:
+                matched_name = candidate
+                break
+
+        if not parsed:
+            parsed = read_parameter_with_gdxdump(gdx_path, symbol)
+            matched_name = symbol.upper()
+
+        if not parsed:
+            return {}
+
+        try:
+            parsed = reorder_parameter_keys(matched_name.upper(), parsed)
+        except Exception:
+            # Some dump symbols are not in the GTAP reorder map.
+            pass
+
+        normalized: Dict[Tuple[str, ...], float] = {}
+        for key, value in parsed.items():
+            key_tuple = tuple(key) if isinstance(key, tuple) else (str(key),)
+            try:
+                normalized[key_tuple] = float(value)
+            except (TypeError, ValueError):
+                continue
+        return normalized
+
+    @classmethod
+    def _collapse_time_dimension(
+        cls,
+        values: Dict[Tuple[str, ...], float],
+    ) -> Dict[Tuple[str, ...], float]:
+        """Collapse trailing time dimension when present.
+
+        If a key ends with a known time label, values are grouped by the prefix and
+        a preferred label is selected in order: base, t0, check, shock.
+        """
+        grouped: Dict[Tuple[str, ...], Dict[str, float]] = defaultdict(dict)
+
+        for raw_key, raw_value in values.items():
+            key = tuple(raw_key) if isinstance(raw_key, tuple) else (str(raw_key),)
+            if key and str(key[-1]).lower() in cls._TIME_LABELS:
+                core = tuple(str(part) for part in key[:-1])
+                time_label = str(key[-1]).lower()
+            else:
+                core = tuple(str(part) for part in key)
+                time_label = ""
+
+            grouped[core][time_label] = float(raw_value)
+
+        collapsed: Dict[Tuple[str, ...], float] = {}
+        for core_key, by_time in grouped.items():
+            selected: Optional[float] = None
+            for preferred in cls._TIME_LABELS:
+                if preferred in by_time:
+                    selected = by_time[preferred]
+                    break
+            if selected is None:
+                selected = next(iter(by_time.values()))
+            collapsed[core_key] = float(selected)
+        return collapsed
 
 
 @dataclass

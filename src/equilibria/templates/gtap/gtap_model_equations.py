@@ -6,6 +6,7 @@ All equations are implemented to create a solvable square system.
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from equilibria.templates.gtap.gtap_parameters import (
+    GAMSCalibrationDump,
     GTAP_GOVERNMENT_AGENT,
     GTAP_HOUSEHOLD_AGENT,
     GTAP_INVESTMENT_AGENT,
@@ -22,6 +24,8 @@ from equilibria.templates.gtap.gtap_parameters import (
 
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -63,6 +67,8 @@ class GTAPModelEquations:
         self.params = params
         self.closure = closure
         self.reference_snapshot = reference_snapshot or self._load_reference_snapshot_from_env()
+        self.gams_calibration_dump: Optional[GAMSCalibrationDump] = None
+        self._configure_calibration_source()
 
     def _vst_value(self, region: str, commodity: str) -> float:
         """Return benchmark inventory change VST(region, commodity).
@@ -155,6 +161,218 @@ class GTAPModelEquations:
             )
         except Exception:
             return None
+
+    def _parse_calibration_source(self) -> tuple[str, set[str]]:
+        raw = str(getattr(self.closure, "calibration_source", "python") or "python").strip().lower()
+        if raw.startswith("mixed:"):
+            targets = {
+                token.strip().lower()
+                for token in raw.split(":", 1)[1].split(",")
+                if token.strip()
+            }
+            return "mixed", targets
+        if raw in {"python", "gams"}:
+            return raw, set()
+        return "python", set()
+
+    def _resolve_calibration_dump_path(self) -> Optional[Path]:
+        explicit = str(getattr(self.closure, "calibration_dump", "") or "").strip()
+        if explicit:
+            candidate = Path(explicit).expanduser().resolve()
+            return candidate if candidate.exists() else None
+
+        env_hint = os.environ.get("EQUILIBRIA_GTAP_CAL_DUMP", "").strip()
+        if env_hint:
+            candidate = Path(env_hint).expanduser().resolve()
+            return candidate if candidate.exists() else None
+
+        default_path = (
+            Path(__file__).resolve().parents[1]
+            / "reference"
+            / "gtap"
+            / "data"
+            / "gams_cal_dump_9x10.gdx"
+        )
+        if default_path.exists():
+            return default_path
+        return None
+
+    @staticmethod
+    def _symbol_enabled(symbol: str, mode: str, targets: set[str], *, level: bool = False) -> bool:
+        if mode == "gams":
+            return True
+        if mode != "mixed":
+            return False
+        if "all" in targets:
+            return True
+        if level and "levels" in targets:
+            return True
+        aliases = {
+            "xa": "xaa",
+            "xd": "xda",
+        }
+        symbol_lc = symbol.lower()
+        if symbol_lc in targets:
+            return True
+        alias = aliases.get(symbol_lc)
+        if alias is not None and alias in targets:
+            return True
+        return False
+
+    @staticmethod
+    def _normalize_override_map(
+        data: Dict[Tuple[str, ...], float],
+        expected_dim: int,
+    ) -> Dict[Tuple[str, ...], float]:
+        normalized: Dict[Tuple[str, ...], float] = {}
+        for key, value in data.items():
+            if len(key) != expected_dim:
+                continue
+            normalized[tuple(str(part) for part in key)] = float(value)
+        return normalized
+
+    def _build_snapshot_from_dump(self, mode: str, targets: set[str]) -> Optional[_InlineReferenceSnapshot]:
+        if self.gams_calibration_dump is None:
+            return None
+
+        base = self.reference_snapshot or _InlineReferenceSnapshot()
+        snapshot = _InlineReferenceSnapshot(
+            xp=dict(getattr(base, "xp", {}) or {}),
+            xf=dict(getattr(base, "xf", {}) or {}),
+            pf=dict(getattr(base, "pf", {}) or {}),
+            xd=dict(getattr(base, "xd", {}) or {}),
+            xaa=dict(getattr(base, "xaa", {}) or {}),
+            xds=dict(getattr(base, "xds", {}) or {}),
+            xet=dict(getattr(base, "xet", {}) or {}),
+            xw=dict(getattr(base, "xw", {}) or {}),
+            pe=dict(getattr(base, "pe", {}) or {}),
+            pet=dict(getattr(base, "pet", {}) or {}),
+            pwmg=dict(getattr(base, "pwmg", {}) or {}),
+            yi=dict(getattr(base, "yi", {}) or {}),
+            yc=dict(getattr(base, "yc", {}) or {}),
+            yg=dict(getattr(base, "yg", {}) or {}),
+        )
+
+        applied = 0
+
+        def _apply_level(symbol: str, attr: str, expected_dim: int) -> None:
+            nonlocal applied
+            if not self._symbol_enabled(symbol, mode, targets, level=True):
+                return
+            raw = self.gams_calibration_dump.get_levels(symbol)
+            if not raw:
+                return
+            cleaned = self._normalize_override_map(raw, expected_dim)
+            if not cleaned:
+                return
+            target_map = getattr(snapshot, attr)
+            target_map.update(cleaned)
+            applied += len(cleaned)
+
+        _apply_level("xp", "xp", 2)
+        _apply_level("xf", "xf", 3)
+        _apply_level("pf", "pf", 3)
+        _apply_level("xd", "xd", 3)
+        _apply_level("xa", "xaa", 3)
+        _apply_level("xds", "xds", 2)
+        _apply_level("xet", "xet", 2)
+        _apply_level("xw", "xw", 3)
+        _apply_level("pe", "pe", 3)
+        _apply_level("pet", "pet", 2)
+        _apply_level("pwmg", "pwmg", 3)
+
+        if self._symbol_enabled("yi", mode, targets, level=True):
+            yi = self._normalize_override_map(self.gams_calibration_dump.get_levels("yi"), 1)
+            if yi:
+                snapshot.yi.update({k[0]: v for k, v in yi.items()})
+                applied += len(yi)
+        if self._symbol_enabled("yc", mode, targets, level=True):
+            yc = self._normalize_override_map(self.gams_calibration_dump.get_levels("yc"), 1)
+            if yc:
+                snapshot.yc.update({k[0]: v for k, v in yc.items()})
+                applied += len(yc)
+        if self._symbol_enabled("yg", mode, targets, level=True):
+            yg = self._normalize_override_map(self.gams_calibration_dump.get_levels("yg"), 1)
+            if yg:
+                snapshot.yg.update({k[0]: v for k, v in yg.items()})
+                applied += len(yg)
+
+        if applied <= 0:
+            return None
+        logger.info("Applied %s benchmark level overrides from GAMS calibration dump", applied)
+        return snapshot
+
+    def _apply_parameter_overrides_from_dump(self, mode: str, targets: set[str]) -> None:
+        if self.gams_calibration_dump is None:
+            return
+
+        applied_counts: Dict[str, int] = {}
+
+        def _apply(symbol: str, target: Dict[Tuple[str, ...], float], expected_dim: int) -> None:
+            if not self._symbol_enabled(symbol, mode, targets, level=False):
+                return
+            raw = self.gams_calibration_dump.get_derived(symbol)
+            if not raw:
+                return
+            cleaned = self._normalize_override_map(raw, expected_dim)
+            if not cleaned:
+                return
+            target.clear()
+            target.update(cleaned)
+            applied_counts[symbol] = len(cleaned)
+
+        # Core calibrated shares and trade parameters.
+        _apply("and", self.params.calibrated.and_param, 2)
+        _apply("ava", self.params.calibrated.ava_param, 2)
+        _apply("io", self.params.calibrated.io_param, 3)
+        _apply("af", self.params.calibrated.af_param, 3)
+        _apply("gx", self.params.calibrated.gx_param, 3)
+        _apply("amw", self.params.shares.p_amw, 3)
+        _apply("gw", self.params.shares.p_gw, 3)
+        _apply("gd", self.params.shares.p_gd, 2)
+        _apply("ge", self.params.shares.p_ge, 2)
+        _apply("gf", self.params.shares.p_gf, 3)
+
+        # Optional elasticity overrides from dump.
+        _apply("esubt", self.params.elasticities.esubt, 2)
+        _apply("esubc", self.params.elasticities.esubc, 2)
+        _apply("esubm", self.params.elasticities.esubm, 2)
+        _apply("esubva", self.params.elasticities.esubva, 2)
+        _apply("sigmas", self.params.elasticities.sigmas, 2)
+        _apply("omegaw", self.params.elasticities.omegaw, 2)
+        _apply("omegaf", self.params.elasticities.omegaf, 2)
+        _apply("etaff", self.params.elasticities.etaff, 3)
+
+        if applied_counts:
+            logger.info(
+                "Applied GAMS calibration parameter overrides for symbols: %s",
+                ", ".join(f"{name}({count})" for name, count in sorted(applied_counts.items())),
+            )
+
+    def _configure_calibration_source(self) -> None:
+        mode, targets = self._parse_calibration_source()
+        if mode == "python":
+            return
+
+        dump_path = self._resolve_calibration_dump_path()
+        if dump_path is None:
+            logger.warning(
+                "calibration_source=%s requested but no calibration dump GDX was found "
+                "(checked closure.calibration_dump, EQUILIBRIA_GTAP_CAL_DUMP, default path).",
+                mode,
+            )
+            return
+
+        try:
+            self.gams_calibration_dump = GAMSCalibrationDump.from_gdx(dump_path)
+        except Exception as exc:
+            logger.warning("Failed to load GAMS calibration dump '%s': %s", dump_path, exc)
+            return
+
+        self._apply_parameter_overrides_from_dump(mode, targets)
+        dumped_snapshot = self._build_snapshot_from_dump(mode, targets)
+        if dumped_snapshot is not None:
+            self.reference_snapshot = dumped_snapshot
         
     def build_model(self) -> "ConcreteModel":
         """Build complete functional GTAP model."""
@@ -165,6 +383,9 @@ class GTAPModelEquations:
         self._add_sets(model)
         self._add_parameters(model)
         self._add_variables(model)
+        # Keep benchmark seeds aligned with GAMS cal.gms scaling before
+        # equation construction and residual evaluation.
+        self.apply_production_scaling(model)
         self._add_equations(model)
         self._add_objective(model)
         
@@ -184,6 +405,46 @@ class GTAPModelEquations:
         So we only scale variables indexed by activity: xf, xp, va, nd
         """
         from pyomo.environ import value
+
+        final_demand_agents = (
+            GTAP_HOUSEHOLD_AGENT,
+            GTAP_GOVERNMENT_AGENT,
+            GTAP_INVESTMENT_AGENT,
+        )
+        # Capture the base-year levels used by the compStat Fisher indices.
+        # GAMS formulas mix current prices/quantities with the original t0 levels.
+        base_pa = {
+            (r, i, agent): float(value(model.pa[r, i, agent]))
+            for r in model.r
+            for i in model.i
+            for agent in final_demand_agents
+        }
+        base_xaa = {
+            (r, i, agent): float(value(model.xaa[r, i, agent]))
+            for r in model.r
+            for i in model.i
+            for agent in final_demand_agents
+        }
+        base_pefob = {
+            (r, i, rp): float(value(model.pefob[r, i, rp]))
+            for r in model.r
+            for i in model.i
+            for rp in model.rp
+        }
+        base_pmcif = {
+            (rp, i, r): float(value(model.pmcif[rp, i, r]))
+            for rp in model.rp
+            for i in model.i
+            for r in model.r
+        }
+        base_xw = {
+            (r, i, rp): float(value(model.xw[r, i, rp]))
+            for r in model.r
+            for i in model.i
+            for rp in model.rp
+        }
+        base_pabs = {r: max(float(value(model.pabs[r])), 1e-8) for r in model.r}
+        base_rgdpmp = {r: max(float(value(model.rgdpmp[r])), 1e-8) for r in model.r}
         
         # Scale factor demands (xf) - indexed by (r, f, a)
         for key in model.xf:
@@ -193,7 +454,7 @@ class GTAPModelEquations:
                 xf_val = value(model.xf[key])
                 if xf_val is not None:
                     model.xf[key].set_value(xf_val * xscale_val)
-        
+
         # Scale production aggregates - indexed by (r, a)
         for key in model.xp:
             r, a = key
@@ -257,10 +518,14 @@ class GTAPModelEquations:
                     inventory = self._vst_value(str(r), str(i))
                     model.xa[r, i].set_value(max(total_xa + inventory, 1e-8))
 
-        if hasattr(model, "xds") and hasattr(model, "xet") and hasattr(model, "xs"):
+        if hasattr(model, "xds") and hasattr(model, "xda"):
             for r in model.r:
                 for i in model.i:
-                    model.xds[r, i].set_value(max(value(model.xs[r, i]) - value(model.xet[r, i]), 1e-8))
+                    total_xds = sum(
+                        value(model.xda[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
+                        for aa in model.aa
+                    )
+                    model.xds[r, i].set_value(max(total_xds, 1e-8))
 
         if hasattr(model, "xet") and hasattr(model, "xs") and hasattr(model, "xds"):
             for r in model.r:
@@ -270,13 +535,26 @@ class GTAPModelEquations:
                         for rp in model.rp
                     )
                     if not has_export_route:
+                        lb = model.xet[r, i].lb
+                        if lb is not None and float(lb) > 0.0:
+                            model.xet[r, i].setlb(0.0)
                         model.xet[r, i].set_value(0.0)
                         if hasattr(model, "xet_flag"):
                             model.xet_flag[r, i].set_value(0.0)
                         continue
-                    numerator = value(model.ps[r, i]) * value(model.xs[r, i]) - value(model.pd[r, i]) * value(model.xds[r, i])
+
+                    # Match GAMS cal.gms initialization:
+                    # xet.l = (ps.l*xs.l - pd.l*xds.l) / pet.l
+                    numerator = (
+                        value(model.ps[r, i]) * value(model.xs[r, i])
+                        - value(model.pd[r, i]) * value(model.xds[r, i])
+                    )
                     pet_val = max(value(model.pet[r, i]), 1e-12)
                     xet_val = max(numerator / pet_val, 0.0)
+                    if xet_val <= 0.0:
+                        lb = model.xet[r, i].lb
+                        if lb is not None and float(lb) > 0.0:
+                            model.xet[r, i].setlb(0.0)
                     model.xet[r, i].set_value(xet_val)
                     if hasattr(model, "xet_flag"):
                         model.xet_flag[r, i].set_value(1.0 if xet_val > 1e-7 else 0.0)
@@ -314,6 +592,21 @@ class GTAPModelEquations:
 
         self._refresh_cet_share_state(model)
 
+        # Enforce benchmark household demand coherence before macro refresh:
+        # yc = sum_i pa*hhd * xc and xc = c_share * yc / pa.
+        if hasattr(model, "xc") and hasattr(model, "c_share") and hasattr(model, "yc"):
+            for r in model.r:
+                yc_target = sum(
+                    float(self.params.benchmark.get_private_demand(str(r), str(i))[0] or 0.0)
+                    for i in model.i
+                )
+                yc_target = max(yc_target, 1e-8)
+                model.yc[r].set_value(yc_target)
+                for i in model.i:
+                    share = max(float(value(model.c_share[r, i]) or 0.0), 0.0)
+                    pa_hhd = max(float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT]) or 1.0), 1e-12)
+                    model.xc[r, i].set_value(max((share * yc_target) / pa_hhd, 0.0))
+
         if hasattr(model, "xaa") and hasattr(model, "xc"):
             for r in model.r:
                 for i in model.i:
@@ -333,7 +626,46 @@ class GTAPModelEquations:
         """Refresh macro variables after any xScale-sensitive initialization changes."""
         from pyomo.environ import value
 
+        final_demand_agents = (
+            GTAP_HOUSEHOLD_AGENT,
+            GTAP_GOVERNMENT_AGENT,
+            GTAP_INVESTMENT_AGENT,
+        )
+        base_pa = {
+            (r, i, agent): float(value(model.pa[r, i, agent]))
+            for r in model.r
+            for i in model.i
+            for agent in final_demand_agents
+        }
+        base_xaa = {
+            (r, i, agent): float(value(model.xaa[r, i, agent]))
+            for r in model.r
+            for i in model.i
+            for agent in final_demand_agents
+        }
+        base_pefob = {
+            (r, i, rp): float(value(model.pefob[r, i, rp]))
+            for r in model.r
+            for i in model.i
+            for rp in model.rp
+        }
+        base_pmcif = {
+            (rp, i, r): float(value(model.pmcif[rp, i, r]))
+            for rp in model.rp
+            for i in model.i
+            for r in model.r
+        }
+        base_xw = {
+            (r, i, rp): float(value(model.xw[r, i, rp]))
+            for r in model.r
+            for i in model.i
+            for rp in model.rp
+        }
+        base_pabs = {r: max(float(value(model.pabs[r])), 1e-8) for r in model.r}
+        base_rgdpmp = {r: max(float(value(model.rgdpmp[r])), 1e-8) for r in model.r}
+
         for r in model.r:
+            capital_factors = [f for f in model.f if str(f).lower() in ("capital", "cap", "k", "kap")]
             for f in model.f:
                 if hasattr(model, "xft") and (r, f) in model.xft and f in self.sets.mf:
                     model.xft[r, f].set_value(
@@ -343,14 +675,14 @@ class GTAPModelEquations:
                         )
                     )
 
-            capital_factors = [f for f in model.f if str(f).lower() in ("capital", "cap", "k", "kap")]
-            if hasattr(model, "kstock") and r in model.kstock and capital_factors:
-                capital_stock = sum(
-                    value(model.xf[r, f, a]) / max(value(model.xscale[r, a]), 1e-12)
-                    for f in capital_factors
-                    for a in model.a
-                )
-                model.kstock[r].set_value(max(capital_stock, 1e-8))
+            if hasattr(model, "kstock") and r in model.kstock:
+                raw_vkb = self.params.benchmark.vkb
+                benchmark_kstock_val = raw_vkb.get(r)
+                if benchmark_kstock_val is None:
+                    benchmark_kstock_val = raw_vkb.get((r,), 0.0)
+                benchmark_kstock = float(benchmark_kstock_val or 0.0)
+                if benchmark_kstock > 0.0:
+                    model.kstock[r].set_value(max(benchmark_kstock, 1e-8))
 
             if hasattr(model, "ytax") and (r, "ft") in model.ytax:
                 ft_total = 0.0
@@ -364,6 +696,23 @@ class GTAPModelEquations:
                         / max(value(model.xscale[r, a]), 1e-12)
                     )
                 model.ytax[r, "ft"].set_value(ft_total)
+
+            if hasattr(model, "ytax") and (r, "dt") in model.ytax:
+                dt_total = 0.0
+                for f in model.f:
+                    for a in model.a:
+                        kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+                        if kappa == 0.0:
+                            kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
+                        if kappa == 0.0:
+                            continue
+                        dt_total += (
+                            kappa
+                            * value(model.pf[r, f, a])
+                            * value(model.xf[r, f, a])
+                            / max(value(model.xscale[r, a]), 1e-12)
+                        )
+                model.ytax[r, "dt"].set_value(dt_total)
 
             if hasattr(model, "facty") and r in model.facty:
                 gross_factor_income = sum(
@@ -381,24 +730,54 @@ class GTAPModelEquations:
                 model.ytax_ind[r].set_value(value(model.ytaxTot[r]) - value(model.ytax[r, "dt"]))
             if hasattr(model, "regy") and r in model.regy:
                 model.regy[r].set_value(value(model.facty[r]) + value(model.ytax_ind[r]))
-            regy_val = max(value(model.regy[r]), 1e-8)
+            regy_raw = value(model.regy[r])
+            regy_val = max(abs(regy_raw), 1e-8)
             if hasattr(model, "ytaxshr"):
                 for gy in model.gy:
                     model.ytaxshr[r, gy].set_value(value(model.ytax[r, gy]) / regy_val)
             if hasattr(model, "yc") and r in model.yc:
-                model.yc[r].set_value(value(model.betap[r]) * (value(model.phi[r]) / max(value(model.phip[r]), 1e-8)) * regy_val)
+                # GAMS benchmark identity (cal.gms): yc = sum_i pa(r,i,hhd) * xa(r,i,hhd)
+                yc_demand = sum(
+                    value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT]) * value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT])
+                    for i in model.i
+                    if (r, i, GTAP_HOUSEHOLD_AGENT) in model.pa and (r, i, GTAP_HOUSEHOLD_AGENT) in model.xaa
+                )
+                if yc_demand > 0.0:
+                    model.yc[r].set_value(yc_demand)
+                else:
+                    model.yc[r].set_value(
+                        value(model.betap[r]) * (value(model.phi[r]) / max(value(model.phip[r]), 1e-8)) * regy_raw
+                    )
             if hasattr(model, "yg") and r in model.yg:
-                model.yg[r].set_value(value(model.betag[r]) * value(model.phi[r]) * regy_val)
+                # GAMS benchmark identity (cal.gms): yg = sum_i pa(r,i,gov) * xa(r,i,gov)
+                yg_demand = sum(
+                    value(model.pa[r, i, GTAP_GOVERNMENT_AGENT]) * value(model.xaa[r, i, GTAP_GOVERNMENT_AGENT])
+                    for i in model.i
+                    if (r, i, GTAP_GOVERNMENT_AGENT) in model.pa and (r, i, GTAP_GOVERNMENT_AGENT) in model.xaa
+                )
+                if yg_demand > 0.0:
+                    model.yg[r].set_value(yg_demand)
+                else:
+                    model.yg[r].set_value(value(model.betag[r]) * value(model.phi[r]) * regy_raw)
             if hasattr(model, "rsav") and r in model.rsav:
-                model.rsav[r].set_value(value(model.betas[r]) * value(model.phi[r]) * regy_val)
+                model.rsav[r].set_value(value(model.betas[r]) * value(model.phi[r]) * regy_raw)
             if hasattr(model, "chif") and r in model.chif:
                 model.chif[r].set_value(value(model.savf[r]) / regy_val)
             if hasattr(model, "yi") and r in model.yi and str(r) != "RestofWorld":
-                model.yi[r].set_value(
-                    value(model.pi[r]) * value(model.depr[r]) * value(model.kstock[r])
-                    + value(model.rsav[r])
-                    + value(model.savf[r])
+                # GAMS benchmark identity (cal.gms): yi = sum_i pa(r,i,inv) * xa(r,i,inv)
+                yi_demand = sum(
+                    value(model.pa[r, i, GTAP_INVESTMENT_AGENT]) * value(model.xaa[r, i, GTAP_INVESTMENT_AGENT])
+                    for i in model.i
+                    if (r, i, GTAP_INVESTMENT_AGENT) in model.pa and (r, i, GTAP_INVESTMENT_AGENT) in model.xaa
                 )
+                if yi_demand > 0.0:
+                    model.yi[r].set_value(yi_demand)
+                else:
+                    model.yi[r].set_value(
+                        value(model.pi[r]) * value(model.depr[r]) * value(model.kstock[r])
+                        + value(model.rsav[r])
+                        + value(model.savf[r])
+                    )
             if hasattr(model, "us") and r in model.us:
                 model.us[r].set_value(
                     value(model.aus[r]) * value(model.rsav[r])
@@ -411,8 +790,6 @@ class GTAPModelEquations:
                     expo = 1.0 - esubm
                     terms = []
                     for rp in model.r:
-                        if rp == r:
-                            continue
                         amw = float(self.params.shares.normalized.import_source_share.get((r, i, rp), 0.0) or 0.0)
                         if amw <= 0.0:
                             continue
@@ -437,62 +814,53 @@ class GTAPModelEquations:
                         if rhs > 0.0:
                             model.pmt[r, i].set_value(max(rhs ** (1.0 / expo), 1e-8))
 
-            current_fd = sum(
-                value(model.pa[r, i, aa]) * value(model.xaa[r, i, aa])
-                for i in model.i
-                for aa in (GTAP_HOUSEHOLD_AGENT, GTAP_GOVERNMENT_AGENT, GTAP_INVESTMENT_AGENT)
-            )
-            current_trade = 0.0
+            mqabs_tt = 0.0
+            mqabs_t0 = 0.0
+            mqabs_0t = 0.0
+            mqabs_00 = 0.0
+            for i in model.i:
+                for agent in final_demand_agents:
+                    pa_t = float(value(model.pa[r, i, agent]))
+                    xa_t = float(value(model.xaa[r, i, agent]))
+                    pa_0 = base_pa[(r, i, agent)]
+                    xa_0 = base_xaa[(r, i, agent)]
+                    mqabs_tt += pa_t * xa_t
+                    mqabs_t0 += pa_t * xa_0
+                    mqabs_0t += pa_0 * xa_t
+                    mqabs_00 += pa_0 * xa_0
+
+            mqtrade_tt = 0.0
+            mqtrade_t0 = 0.0
+            mqtrade_0t = 0.0
+            mqtrade_00 = 0.0
             for i in model.i:
                 for rp in model.rp:
-                    if rp == r:
-                        continue
-                    current_trade += value(model.pefob[r, i, rp]) * value(model.xw[r, i, rp])
-                    current_trade -= value(model.pmcif[rp, i, r]) * value(model.xw[rp, i, r])
-            gdp_current = max(current_fd + current_trade, 1e-8)
-            model.gdpmp[r].set_value(gdp_current)
-            base_fd_value = 0.0
-            current_fd_base_prices = 0.0
-            base_fd_current_prices = 0.0
-            for i in model.i:
-                for agent in (GTAP_HOUSEHOLD_AGENT, GTAP_GOVERNMENT_AGENT, GTAP_INVESTMENT_AGENT):
-                    if agent == GTAP_HOUSEHOLD_AGENT:
-                        base_qty = float(self.params.benchmark.vpm.get((r, i), 0.0) or 0.0)
-                    elif agent == GTAP_GOVERNMENT_AGENT:
-                        base_qty = float(self.params.benchmark.vgm.get((r, i), 0.0) or 0.0)
-                    else:
-                        base_qty = float(self.params.benchmark.vim.get((r, i), 0.0) or 0.0)
-                    base_fd_value += base_qty
-                    current_fd_base_prices += value(model.xaa[r, i, agent])
-                    base_fd_current_prices += value(model.pa[r, i, agent]) * base_qty
+                    pexp_t = float(value(model.pefob[r, i, rp]))
+                    pexp_0 = base_pefob[(r, i, rp)]
+                    xexp_t = float(value(model.xw[r, i, rp]))
+                    xexp_0 = base_xw[(r, i, rp)]
+                    pimp_t = float(value(model.pmcif[rp, i, r]))
+                    pimp_0 = base_pmcif[(rp, i, r)]
+                    ximp_t = float(value(model.xw[rp, i, r]))
+                    ximp_0 = base_xw[(rp, i, r)]
 
-            if base_fd_value > 0.0 and current_fd_base_prices > 0.0:
-                pabs_fisher = math.sqrt(
-                    (base_fd_current_prices / base_fd_value)
-                    * (current_fd / current_fd_base_prices)
-                )
+                    mqtrade_tt += pexp_t * xexp_t - pimp_t * ximp_t
+                    mqtrade_t0 += pexp_t * xexp_0 - pimp_t * ximp_0
+                    mqtrade_0t += pexp_0 * xexp_t - pimp_0 * ximp_t
+                    mqtrade_00 += pexp_0 * xexp_0 - pimp_0 * ximp_0
+
+            gdp_current = max(mqabs_tt + mqtrade_tt, 1e-8)
+            model.gdpmp[r].set_value(gdp_current)
+
+            if mqabs_00 > 1e-12 and mqabs_0t > 1e-12:
+                pabs_fisher = base_pabs[r] * math.sqrt((mqabs_t0 / mqabs_00) * (mqabs_tt / mqabs_0t))
                 model.pabs[r].set_value(max(pabs_fisher, 1e-8))
 
-            gdp_base = base_fd_value
-            trade_base_prices_current_quantities = 0.0
-            trade_current_prices_base_quantities = 0.0
-            for i in model.i:
-                for rp in model.rp:
-                    if rp == r:
-                        continue
-                    base_export = float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
-                    base_import = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
-                    gdp_base += base_export - base_import
-                    trade_base_prices_current_quantities += value(model.xw[r, i, rp]) - value(model.xw[rp, i, r])
-                    trade_current_prices_base_quantities += (
-                        value(model.pefob[r, i, rp]) * base_export
-                        - value(model.pmcif[rp, i, r]) * base_import
-                    )
-
-            mqgdp_base_current = current_fd_base_prices + trade_base_prices_current_quantities
-            mqgdp_current_base = base_fd_current_prices + trade_current_prices_base_quantities
-            if gdp_base > 0.0 and mqgdp_current_base > 0.0:
-                rgdp_fisher = math.sqrt(gdp_base * gdp_current * (mqgdp_base_current / mqgdp_current_base))
+            mqgdp_00 = mqabs_00 + mqtrade_00
+            mqgdp_t0 = mqabs_t0 + mqtrade_t0
+            mqgdp_0t = mqabs_0t + mqtrade_0t
+            if mqgdp_00 > 1e-12 and mqgdp_t0 > 1e-12 and mqgdp_0t > 1e-12:
+                rgdp_fisher = base_rgdpmp[r] * math.sqrt((gdp_current / mqgdp_00) * (mqgdp_0t / mqgdp_t0))
                 model.rgdpmp[r].set_value(max(rgdp_fisher, 1e-8))
             model.pgdpmp[r].set_value(max(gdp_current / max(value(model.rgdpmp[r]), 1e-8), 1e-8))
             pi_val = max(value(model.pi[r]), 1e-8)
@@ -601,19 +969,72 @@ class GTAPModelEquations:
         """Add all parameters."""
         from pyomo.environ import Param
 
-        # GAMS cal.gms keeps xScale equal to 1 for all activity/agent blocks.
-        # The adaptive rescaling we used earlier made the Python model numerically
-        # convenient, but it also changed the benchmark manifold. Since the goal
-        # here is parity with GAMS, keep the scale neutral.
+        # Match GAMS cal.gms scaling:
+        #   xScale(r,aa) = 1
+        #   xScale(r,a)$xpFlag(r,a) = xpScale*10**(-round(log10(xp.l(r,a,t0))))
+        # where xpScale=1 and only activity columns are rescaled.
         xscale_data: Dict[tuple[str, str], float] = {}
         for r in self.sets.r:
-            for aa in list(self.sets.a) + [
+            for aa in [
                 GTAP_HOUSEHOLD_AGENT,
                 GTAP_GOVERNMENT_AGENT,
                 GTAP_INVESTMENT_AGENT,
                 GTAP_MARGIN_AGENT,
             ]:
                 xscale_data[(r, aa)] = 1.0
+
+        def _gams_round(value: float) -> int:
+            if value >= 0.0:
+                return int(math.floor(value + 0.5))
+            return int(math.ceil(value - 0.5))
+
+        for r in self.sets.r:
+            for a in self.sets.a:
+                # Keep xscale calibration on the same benchmark identity used by
+                # production calibration (xp = nd + va at purchaser value).
+                nd_level = sum(
+                    float(self.params.benchmark.vdfp.get((r, i, a), 0.0) or 0.0)
+                    + float(self.params.benchmark.vmfp.get((r, i, a), 0.0) or 0.0)
+                    for i in self.sets.i
+                )
+                if nd_level <= 0.0:
+                    nd_level = sum(
+                        float(self.params.benchmark.vdfm.get((r, i, a), 0.0) or 0.0)
+                        + float(self.params.benchmark.vifm.get((r, i, a), 0.0) or 0.0)
+                        for i in self.sets.i
+                    )
+
+                va_level = 0.0
+                for f in self.sets.f:
+                    evfb_val = float(
+                        self.params.benchmark.evfb.get(
+                            (r, f, a),
+                            self.params.benchmark.vfm.get((r, f, a), 0.0),
+                        )
+                        or 0.0
+                    )
+                    if evfb_val <= 0.0:
+                        continue
+                    factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
+                    va_level += evfb_val * (1.0 + factor_tax)
+
+                xp_level = nd_level + va_level
+                if xp_level <= 0.0:
+                    xp_level = float(self.params.benchmark.vom.get((r, a), 0.0) or 0.0)
+                if xp_level <= 0.0:
+                    xp_level = sum(
+                        float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0)
+                        for i in self.sets.i
+                    )
+                if self.reference_snapshot is not None:
+                    ref_xp = self.reference_snapshot.xp.get((r, a))
+                    if ref_xp is not None and float(ref_xp) > 0.0:
+                        xp_level = float(ref_xp)
+                if xp_level > 0.0:
+                    exponent = _gams_round(math.log10(xp_level))
+                    xscale_data[(r, a)] = float(10.0 ** (-exponent))
+                else:
+                    xscale_data[(r, a)] = 1.0
         
         # Helper to create indexed parameters
         def create_indexed_param(
@@ -705,7 +1126,7 @@ class GTAPModelEquations:
             for f in self.sets.f:
                 any_flow = False
                 for a in self.sets.a:
-                    val = self.params.benchmark.vfm.get((r, f, a), 0.0)
+                    val = self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0))
                     if abs(val) > 1e-12:
                         xfflag_data[(r, f, a)] = 1.0
                         any_flow = True
@@ -735,7 +1156,6 @@ class GTAPModelEquations:
                 target_import_total = sum(
                     float(self.params.benchmark.vmsb.get((rp, i, r), 0.0) or 0.0)
                     for rp in self.sets.r
-                    if rp != r
                 )
                 import_scale_by_commodity[(r, i)] = (
                     target_import_total / total_raw_import if total_raw_import > 0.0 else 1.0
@@ -804,24 +1224,28 @@ class GTAPModelEquations:
         # Simple shares (kept for compatibility)
         create_indexed_param("va_share", ["r", "a"], self.params.shares.p_va, 0.0)
         create_indexed_param("nd_share", ["r", "a"], adjusted_nd_share, 0.0)
-        # GAMS-consistent calibration for mobile-factor allocation shares:
-        # gf(r,fm,a) = xf(r,fm,a) / sum(a, xf(r,fm,a)) in the if(1) branch,
-        # with xf initialized from benchmark value payments and net factor price
-        # (xf ~ vfm / pf). This differs from raw vfm shares when kappaf != 0.
+        # GAMS-consistent calibration for factor allocation shares (cal.gms:874-888):
+        #   - Mobile factors (omegaf=inf): gf(r,fm,a) = xf.l / xft.l  (share)
+        #   - Sector-specific factors   : gf(r,fnm,a) = xf.l * (pabs.l/pfy.l)^etaff
+        #                                  (absolute level at benchmark prices)
+        # Both are stored in model.gf_share but have different semantics by factor
+        # type; eq_pfeq consumes them accordingly.
         gf_share_data: Dict[tuple[str, str, str], float] = dict(self.params.shares.p_gf)
         for r in self.sets.r:
             for f in self.sets.mf:
                 xf_by_activity: Dict[str, float] = {}
                 total_xf = 0.0
                 for a in self.sets.a:
-                    vfm_val = float(self.params.benchmark.vfm.get((r, f, a), 0.0) or 0.0)
-                    if vfm_val <= 0.0:
+                    factor_flow = float(
+                        self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0
+                    )
+                    if factor_flow <= 0.0:
                         continue
                     kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
                     if kappa == 0.0:
                         kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
                     pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
-                    xf_val = max(vfm_val / pf_val, 0.0)
+                    xf_val = max(factor_flow / pf_val, 0.0)
                     if xf_val <= 0.0:
                         continue
                     xf_by_activity[a] = xf_val
@@ -830,6 +1254,21 @@ class GTAPModelEquations:
                     continue
                 for a in self.sets.a:
                     gf_share_data[(r, f, a)] = xf_by_activity.get(a, 0.0) / total_xf
+            for f in self.sets.sf:
+                for a in self.sets.a:
+                    factor_flow = float(
+                        self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0
+                    )
+                    if factor_flow <= 0.0:
+                        gf_share_data[(r, f, a)] = 0.0
+                        continue
+                    kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+                    if kappa == 0.0:
+                        kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
+                    pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                    xf_val = max(factor_flow / pf_val, 0.0)
+                    # At benchmark pabs=pfy=1, so gf = xf.l * (1/1)^etaff = xf.l.
+                    gf_share_data[(r, f, a)] = xf_val
 
         create_indexed_param("gf_share", ["r", "f", "a"], gf_share_data, 0.0)
         create_indexed_param("af_share", ["r", "f", "a"], self.params.shares.p_af, 0.0)
@@ -859,16 +1298,14 @@ class GTAPModelEquations:
         for r in self.sets.r:
             for i in self.sets.i:
                 for rp in self.sets.r:
-                    if rp == r:
-                        continue
                     margin_flow = sum(
                         self.params.benchmark.vtwr.get((r, i, rp, m), 0.0)
                         for m in self.sets.m
                     )
-                    denom = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
-                    if denom <= 0.0:
-                        denom = self.params.benchmark.viws.get((rp, i, r), 0.0)
-                    tmarg = margin_flow / max(denom, 1e-12) if margin_flow > 0.0 else 0.0
+                    xw_bench = float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
+                    vcif = float(self.params.benchmark.vcif.get((r, i, rp), 0.0) or 0.0)
+                    vfob = float(self.params.benchmark.vfob.get((r, i, rp), 0.0) or 0.0)
+                    tmarg = max(vcif - vfob, 0.0) / max(xw_bench, 1e-12) if xw_bench > 0.0 else 0.0
                     tmarg_data[(r, i, rp)] = tmarg
 
                     for m in self.sets.m:
@@ -894,11 +1331,10 @@ class GTAPModelEquations:
         for exporter in self.sets.r:
             for commodity in self.sets.i:
                 for importer in self.sets.r:
-                    if exporter == importer:
-                        continue
                     vxmd = float(self.params.benchmark.vxmd.get((exporter, commodity, importer), 0.0) or 0.0)
+                    vxsb = float(self.params.benchmark.vxsb.get((exporter, commodity, importer), 0.0) or 0.0)
                     vcif = float(self.params.benchmark.vcif.get((exporter, commodity, importer), 0.0) or 0.0)
-                    if vxmd <= 0.0 and vcif <= 0.0:
+                    if vxmd <= 0.0 and vxsb <= 0.0 and vcif <= 0.0:
                         continue
                     chipm_data[(exporter, commodity, importer)] = 1.0
         create_indexed_param("chipm", ["r", "i", "rp"], chipm_data, 1.0)
@@ -937,15 +1373,50 @@ class GTAPModelEquations:
         pop_data: Dict[tuple[str], float] = {}
         aft_data: Dict[tuple[str, str], float] = {}
         etaf_data: Dict[tuple[str, str], float] = {}
+
+        def _lookup_etrae(region: str, factor: str) -> float:
+            # GTAP ETRAE may come keyed as (fp,r) or (r,fp), depending on source.
+            raw = self.params.elasticities.etrae
+            for key in ((factor, region), (region, factor), factor):
+                try:
+                    val = raw.get(key)  # type: ignore[arg-type]
+                except Exception:
+                    val = None
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        continue
+            return 0.0
+
+        def _private_total(region: str, commodity: str) -> float:
+            total, _, _ = self.params.benchmark.get_private_demand(region, commodity)
+            return float(total or 0.0)
+
+        def _government_total(region: str, commodity: str) -> float:
+            total, _, _ = self.params.benchmark.get_government_demand(region, commodity)
+            return float(total or 0.0)
+
+        def _investment_total(region: str, commodity: str) -> float:
+            total, _, _ = self.params.benchmark.get_investment_demand(region, commodity)
+            return float(total or 0.0)
+
+        def _pop_value(region: str) -> float:
+            raw = self.params.benchmark.pop
+            val = raw.get(region)
+            if val is None:
+                val = raw.get((region,), 1.0)
+            return float(val or 1.0)
+
         for region in self.sets.r:
             factor_income = sum(
                 self.params.benchmark.vfm.get((region, factor, activity), 0.0)
                 for factor in self.sets.f
                 for activity in self.sets.a
             )
-            private_total = sum(self.params.benchmark.vpm.get((region, commodity), 0.0) for commodity in self.sets.i)
-            government_total = sum(self.params.benchmark.vgm.get((region, commodity), 0.0) for commodity in self.sets.i)
-            investment_total = sum(self.params.benchmark.vim.get((region, commodity), 0.0) for commodity in self.sets.i)
+            private_total = sum(_private_total(region, commodity) for commodity in self.sets.i)
+            government_total = sum(_government_total(region, commodity) for commodity in self.sets.i)
+            investment_total = sum(_investment_total(region, commodity) for commodity in self.sets.i)
             raw_savings_total = float(self.params.benchmark.save.get(region, 0.0))
 
             vkb = float(self.params.benchmark.vkb.get(region, 0.0))
@@ -954,15 +1425,29 @@ class GTAPModelEquations:
             fdepr_data[(region,)] = fdepr
             depr_data[(region,)] = fdepr
             rorflex_data[(region,)] = 1.0
-            pop_data[(region,)] = float(self.params.benchmark.pop.get(region, 1.0))
+            pop_data[(region,)] = _pop_value(region)
             for factor in self.sets.f:
                 if factor in self.sets.mf:
-                    benchmark_xft = sum(
-                        self.params.benchmark.vfm.get((region, factor, activity), 0.0)
-                        for activity in self.sets.a
-                    )
+                    benchmark_xft = 0.0
+                    for activity in self.sets.a:
+                        factor_flow = float(
+                            self.params.benchmark.evfb.get(
+                                (region, factor, activity),
+                                self.params.benchmark.vfm.get((region, factor, activity), 0.0),
+                            )
+                            or 0.0
+                        )
+                        if factor_flow <= 0.0:
+                            continue
+                        kappa = float(self.params.taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
+                        if kappa == 0.0:
+                            kappa = float(self.params.taxes.kappaf.get((region, factor), 0.0) or 0.0)
+                        pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                        benchmark_xft += factor_flow / pf_val
                     aft_data[(region, factor)] = benchmark_xft
-                    etaf_data[(region, factor)] = float(self.params.elasticities.etrae.get(factor, 0.0) or 0.0)
+                    # In standard GTAP, etaf defaults to 0 unless explicitly overridden.
+                    # Keep that default, but honor region/factor ETRAE when present.
+                    etaf_data[(region, factor)] = _lookup_etrae(region, factor)
 
             # GAMS-style benchmark income: regy = facty + ytax_ind.
             facty_bench = max(factor_income - vdep, 0.0)
@@ -1039,14 +1524,16 @@ class GTAPModelEquations:
             betas_data[(region,)] = betas
             phip_data[(region,)] = phip
             phi_data[(region,)] = phi
+            yc_bench = betap * (phi / max(phip, 1e-12)) * regy_bench
 
             private_den = max(private_total, 1e-12)
             government_den = max(government_total, 1e-12)
             investment_den = max(investment_total, 1e-12)
+            cde_alpha_den = 0.0
             for commodity in self.sets.i:
-                private_val = self.params.benchmark.vpm.get((region, commodity), 0.0)
-                government_val = self.params.benchmark.vgm.get((region, commodity), 0.0)
-                investment_val = self.params.benchmark.vim.get((region, commodity), 0.0)
+                private_val = _private_total(region, commodity)
+                government_val = _government_total(region, commodity)
+                investment_val = _investment_total(region, commodity)
                 private_share_data[(region, commodity)] = private_val / private_den if private_total > 0.0 else 0.0
                 government_share_data[(region, commodity)] = government_val / government_den if government_total > 0.0 else 0.0
                 investment_share_data[(region, commodity)] = investment_val / investment_den if investment_total > 0.0 else 0.0
@@ -1056,11 +1543,21 @@ class GTAPModelEquations:
                     bh_val = 1.0
                 eh_data[(region, commodity)] = eh_val
                 bh_data[(region, commodity)] = bh_val
-                if private_total > 0.0 and private_share_data[(region, commodity)] > 0.0:
-                    yc_pc = private_total / max(pop_data[(region,)], 1e-12)
-                    alphaa_hhd_data[(region, commodity)] = (
-                        private_share_data[(region, commodity)] / bh_val
-                    ) * (max(yc_pc, 1e-12) ** bh_val)
+                xcshr_val = private_val / max(yc_bench, 1e-12) if private_val > 0.0 else 0.0
+                if xcshr_val > 0.0:
+                    cde_alpha_den += xcshr_val / bh_val
+
+            yc_pc = yc_bench / max(pop_data[(region,)], 1e-12) if yc_bench > 0.0 else 0.0
+            yc_pc = max(yc_pc, 1e-12)
+            for commodity in self.sets.i:
+                private_val = _private_total(region, commodity)
+                xcshr_val = private_val / max(yc_bench, 1e-12) if private_val > 0.0 else 0.0
+                bh_val = bh_data[(region, commodity)]
+                eh_val = eh_data[(region, commodity)]
+                pa_val = 1.0  # GAMS numerario initialization
+                uh_val = 1.0  # GAMS benchmark utility initialization
+                if yc_bench > 0.0 and xcshr_val > 0.0 and cde_alpha_den > 0.0:
+                    alphaa_hhd_data[(region, commodity)] = ((xcshr_val / bh_val) * (((yc_pc / pa_val) ** bh_val)) * (uh_val ** (-eh_val * bh_val))) / cde_alpha_den
                 else:
                     alphaa_hhd_data[(region, commodity)] = 0.0
 
@@ -1156,6 +1653,29 @@ class GTAPModelEquations:
                 ref_xp = self.reference_snapshot.xp.get((r, a))
                 if ref_xp is not None and ref_xp > 0.0:
                     return float(ref_xp)
+
+            # GAMS benchmark-consistent production quantity identity:
+            # xp = nd + va at purchaser values.
+            nd_val = sum(
+                float(self.params.benchmark.vdfp.get((r, i, a), 0.0) or 0.0)
+                + float(self.params.benchmark.vmfp.get((r, i, a), 0.0) or 0.0)
+                for i in self.sets.i
+            )
+            va_val = 0.0
+            for f in self.sets.f:
+                evfb_val = float(
+                    self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0))
+                    or 0.0
+                )
+                if evfb_val <= 0.0:
+                    continue
+                factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
+                va_val += evfb_val * (1.0 + factor_tax)
+
+            xp_val = nd_val + va_val
+            if xp_val > 0.0:
+                return max(xp_val, 1e-8)
+
             val = self.params.benchmark.vom.get((r, a), 0.0)
             return max(val, 1e-8)
         
@@ -1165,7 +1685,15 @@ class GTAPModelEquations:
                 ref_xf = self.reference_snapshot.xf.get((r, f, a))
                 if ref_xf is not None and ref_xf > 0.0:
                     return float(ref_xf)
-            return max(float(self.params.benchmark.vfm.get((r, f, a), 0.0) or 0.0), 0.0)
+            # GAMS cal.gms: xf.l = EVFB / pf.l
+            vfm_val = max(
+                float(
+                    self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0
+                ),
+                0.0,
+            )
+            pf_val = max(get_pf_init(m, r, f, a), 1e-12)
+            return max(vfm_val / pf_val, 0.0)
 
         def get_pf_init(m, r, f, a):
             # First, try to use baseline from reference snapshot (if available)
@@ -1192,6 +1720,12 @@ class GTAPModelEquations:
             """Get total private Armington demand from SAM."""
             val, _, _ = self.params.benchmark.get_private_demand(r, i)
             return max(val, 1e-8)
+
+        def get_xc_init(m, r, i):
+            """Household Armington quantity consistent with pa*xc = purchaser-value demand."""
+            vpm_val = get_vpm_init(m, r, i)
+            pa_hhd = get_pa_benchmark_init(m, r, i, GTAP_HOUSEHOLD_AGENT)
+            return max(vpm_val / max(pa_hhd, 1e-12), 0.0)
         
         def get_vgm_init(m, r, i):
             """Get total government Armington demand from SAM."""
@@ -1208,13 +1742,16 @@ class GTAPModelEquations:
 
         def get_xaa_raw_init(m, r, i, aa):
             if aa in self.sets.a:
-                val = self.params.benchmark.vdfm.get((r, i, aa), 0.0) + self.params.benchmark.vifm.get((r, i, aa), 0.0)
+                # GAMS benchmark quantity identity: xa = xd + xm with xd=vdfb/pd,
+                # xm=vmfb/pmt and pd=pmt=1 at benchmark.
+                val = self.params.benchmark.vdfb.get((r, i, aa), 0.0) + self.params.benchmark.vmfb.get((r, i, aa), 0.0)
             elif aa == GTAP_HOUSEHOLD_AGENT:
-                val = get_vpm_init(m, r, i)
+                # Keep xaa(hhd) coherent with xc(hhd) quantity before macro refresh.
+                val = get_xc_init(m, r, i)
             elif aa == GTAP_GOVERNMENT_AGENT:
-                val = get_vgm_init(m, r, i)
+                val = self.params.benchmark.vdgb.get((r, i), 0.0) + self.params.benchmark.vmgb.get((r, i), 0.0)
             elif aa == GTAP_INVESTMENT_AGENT:
-                val = get_vim_init(m, r, i)
+                val = self.params.benchmark.vdib.get((r, i), 0.0) + self.params.benchmark.vmib.get((r, i), 0.0)
             elif aa == GTAP_MARGIN_AGENT:
                 val = self._vst_value(str(r), str(i))
             else:
@@ -1273,7 +1810,6 @@ class GTAPModelEquations:
                     target_import_total = sum(
                         float(self.params.benchmark.vmsb.get((rp, i, r), 0.0) or 0.0)
                         for rp in self.sets.r
-                        if rp != r
                     )
                     import_scale = (target_import_total / total_raw_import) if total_raw_import > 0.0 else 1.0
 
@@ -1306,26 +1842,96 @@ class GTAPModelEquations:
             return max(xma, 0.0)
 
         def get_pdp_init(m, r, i, aa):
-            wedge_map = getattr(self.params.taxes, "pdp_agent_wedge", {})
-            wedge = wedge_map.get((r, i, aa), 1.0)
-            return max(wedge, 1e-8)
+            return max(1.0 + get_dintx_init(m, r, i, aa), 1e-8)
+
+        def get_dintx_init(m, r, i, aa):
+            def _two_key(raw_map, region, commodity):
+                val = raw_map.get((region, commodity), None)
+                if val is None:
+                    val = raw_map.get((commodity, region), 0.0)
+                return float(val or 0.0)
+
+            if aa in self.sets.a:
+                numerator = float(self.params.benchmark.vdfp.get((r, i, aa), 0.0) or 0.0) - float(
+                    self.params.benchmark.vdfb.get((r, i, aa), 0.0) or 0.0
+                )
+                denom = max(float(self.params.benchmark.vdfb.get((r, i, aa), 0.0) or 0.0), 0.0)
+            elif aa == GTAP_HOUSEHOLD_AGENT:
+                numerator = _two_key(self.params.benchmark.vdpp, r, i) - _two_key(self.params.benchmark.vdpb, r, i)
+                denom = max(_two_key(self.params.benchmark.vdpb, r, i), 0.0)
+            elif aa == GTAP_GOVERNMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vdgp, r, i) - _two_key(self.params.benchmark.vdgb, r, i)
+                denom = max(_two_key(self.params.benchmark.vdgb, r, i), 0.0)
+            elif aa == GTAP_INVESTMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vdip, r, i) - _two_key(self.params.benchmark.vdib, r, i)
+                denom = max(_two_key(self.params.benchmark.vdib, r, i), 0.0)
+            elif aa == GTAP_MARGIN_AGENT:
+                return 0.0
+            else:
+                numerator = 0.0
+                denom = 0.0
+
+            if denom > 0.0:
+                return numerator / denom
+            return float(self.params.taxes.dintx0.get((r, i, aa), 0.0) or 0.0)
+
+        def get_mintx_init(m, r, i, aa):
+            def _two_key(raw_map, region, commodity):
+                val = raw_map.get((region, commodity), None)
+                if val is None:
+                    val = raw_map.get((commodity, region), 0.0)
+                return float(val or 0.0)
+
+            if aa in self.sets.a:
+                numerator = float(self.params.benchmark.vmfp.get((r, i, aa), 0.0) or 0.0) - float(
+                    self.params.benchmark.vmfb.get((r, i, aa), 0.0) or 0.0
+                )
+                denom = max(float(self.params.benchmark.vmfb.get((r, i, aa), 0.0) or 0.0), 0.0)
+            elif aa == GTAP_HOUSEHOLD_AGENT:
+                numerator = _two_key(self.params.benchmark.vmpp, r, i) - _two_key(self.params.benchmark.vmpb, r, i)
+                denom = max(_two_key(self.params.benchmark.vmpb, r, i), 0.0)
+            elif aa == GTAP_GOVERNMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vmgp, r, i) - _two_key(self.params.benchmark.vmgb, r, i)
+                denom = max(_two_key(self.params.benchmark.vmgb, r, i), 0.0)
+            elif aa == GTAP_INVESTMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vmip, r, i) - _two_key(self.params.benchmark.vmib, r, i)
+                denom = max(_two_key(self.params.benchmark.vmib, r, i), 0.0)
+            elif aa == GTAP_MARGIN_AGENT:
+                return 0.0
+            else:
+                numerator = 0.0
+                denom = 0.0
+
+            if denom > 0.0:
+                return numerator / denom
+            return float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0)
 
         def get_pa_benchmark_init(m, r, i, aa):
-            domestic, imported = get_agent_trade_levels(m, r, i, aa)
+            # GAMS cal.gms benchmark seed keeps pa.l normalized at 1.0.
+            return 1.0
 
-            total = max(domestic, 0.0) + max(imported, 0.0)
-            dom_share = max(domestic, 0.0) / total if total > 0.0 else 0.0
-            imp_share = max(imported, 0.0) / total if total > 0.0 else 0.0
-            pdp = 1.0 + float(self.params.taxes.dintx0.get((r, i, aa), 0.0) or 0.0)
-            pmp = get_pmt_init(m, r, i) * (1.0 + float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0))
-            if dom_share <= 0.0 and imp_share <= 0.0:
-                return 1.0
-            sigma_m = self.params.elasticities.esubm.get((r, i), 4.0)
-            expo = 1.0 - sigma_m
-            if abs(expo) < 1e-8:
-                return max((pdp ** dom_share) * (pmp ** imp_share), 1e-8)
-            agg = dom_share * (pdp ** expo) + imp_share * (pmp ** expo)
-            return max(agg ** (1.0 / expo), 1e-8) if agg > 0.0 else 1.0
+        def get_xaa_purchaser_value_init(m, r, i, aa):
+            def _two_key(raw_map, region, commodity):
+                val = raw_map.get((region, commodity), None)
+                if val is None:
+                    val = raw_map.get((commodity, region), 0.0)
+                return float(val or 0.0)
+
+            if aa in self.sets.a:
+                return max(
+                    float(self.params.benchmark.vdfp.get((r, i, aa), 0.0) or 0.0)
+                    + float(self.params.benchmark.vmfp.get((r, i, aa), 0.0) or 0.0),
+                    0.0,
+                )
+            if aa == GTAP_HOUSEHOLD_AGENT:
+                return max(_two_key(self.params.benchmark.vdpp, r, i) + _two_key(self.params.benchmark.vmpp, r, i), 0.0)
+            if aa == GTAP_GOVERNMENT_AGENT:
+                return max(_two_key(self.params.benchmark.vdgp, r, i) + _two_key(self.params.benchmark.vmgp, r, i), 0.0)
+            if aa == GTAP_INVESTMENT_AGENT:
+                return max(_two_key(self.params.benchmark.vdip, r, i) + _two_key(self.params.benchmark.vmip, r, i), 0.0)
+            if aa == GTAP_MARGIN_AGENT:
+                return max(float(self._vst_value(str(r), str(i)) or 0.0), 0.0)
+            return 0.0
 
         def get_xaa_init(m, r, i, aa):
             if self.reference_snapshot:
@@ -1333,16 +1939,8 @@ class GTAPModelEquations:
                 if ref_xaa is not None and ref_xaa > 0.0:
                     return float(ref_xaa)
 
-            xda = get_xda_init(m, r, i, aa)
-            xma = get_xma_init(m, r, i, aa)
-            if xda <= 0.0 and xma <= 0.0:
-                return 0.0
-
-            pdp = get_pdp_init(m, r, i, aa)
-            pmp = get_pmt_init(m, r, i) * (1.0 + float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0))
-            pa = get_pa_benchmark_init(m, r, i, aa)
-            xaa = (pdp * xda + pmp * xma) / max(pa, 1e-12)
-            return max(xaa, 0.0)
+            # Benchmark purchaser-value demand level (GAMS xa.l seed).
+            return get_xaa_purchaser_value_init(m, r, i, aa)
 
         def get_make_init(m, r, a, i):
             """Get benchmark output by activity-commodity pair from SAM."""
@@ -1403,6 +2001,16 @@ class GTAPModelEquations:
             return max(total, 1e-8)
 
         def get_xds_init(m, r, i):
+            # Keep domestic market clearing benchmark-consistent:
+            # pdeq requires xds(r,i) = sum_aa xd(r,i,aa)/xScale(r,aa).
+            # Seed xds from the same agent-level domestic demands used by xda.
+            xds_from_agents = sum(
+                get_xda_init(m, r, i, aa) / get_xscale(m, r, aa)
+                for aa in m.aa
+            )
+            if xds_from_agents > 0.0:
+                return max(xds_from_agents, 1e-8)
+
             if self.reference_snapshot:
                 ref_xds = self.reference_snapshot.xds.get((r, i))
                 if ref_xds is not None and ref_xds > 0.0:
@@ -1425,11 +2033,10 @@ class GTAPModelEquations:
                 ref_total = sum(
                     float(self.reference_snapshot.xw.get((rp, i, r), 0.0) or 0.0)
                     for rp in self.sets.r
-                    if rp != r
                 )
                 if ref_total > 0.0:
                     return max(ref_total, 1e-8)
-            total = sum(float(self.params.benchmark.vmsb.get((rp, i, r), 0.0) or 0.0) for rp in self.sets.r if rp != r)
+            total = sum(float(self.params.benchmark.vmsb.get((rp, i, r), 0.0) or 0.0) for rp in self.sets.r)
             return max(total, 1e-8)
 
         def get_pmt_init(m, r, i):
@@ -1437,8 +2044,6 @@ class GTAPModelEquations:
             expo = 1.0 - esubm
             terms = []
             for rp in self.sets.r:
-                if rp == r:
-                    continue
                 amw = float(self.params.shares.normalized.import_source_share.get((r, i, rp), 0.0) or 0.0)
                 if amw <= 0.0:
                     continue
@@ -1463,7 +2068,7 @@ class GTAPModelEquations:
                 rhs = sum(terms)
                 if rhs > 0.0:
                     return max(rhs ** (1.0 / expo), 1e-8)
-            total_imports = sum(float(self.params.benchmark.viws.get((rp, i, r), 0.0) or 0.0) for rp in self.sets.r if rp != r)
+            total_imports = sum(float(self.params.benchmark.viws.get((rp, i, r), 0.0) or 0.0) for rp in self.sets.r)
             return 1.0 if total_imports > 0.0 else 1.0
 
         def get_xet_init(m, r, i):
@@ -1488,34 +2093,17 @@ class GTAPModelEquations:
 
         def get_xa_init(m, r, i):
             total = sum(get_xaa_init(m, r, i, aa) / get_xscale(m, r, aa) for aa in model.aa)
-            inventory = self._vst_value(str(r), str(i))
-            return max(total + inventory, 1e-8)
+            return max(total, 1e-8)
 
         def get_va_init(m, r, a):
-            total = sum(self.params.benchmark.vfm.get((r, f, a), 0.0) for f in self.sets.f)
+            # GAMS cal.gms: va.l = sum(fp, pfa.l*xf.l) / pva.l, with pva.l≈1 at benchmark.
+            total = sum(get_pfa_init(m, r, f, a) * get_vfm_init(m, r, f, a) for f in self.sets.f)
             return max(total, 1e-8)
 
         def get_nd_init(m, r, a):
             total_intermediate = sum(
-                float(self.params.benchmark.vdfm.get((r, i, a), 0.0) or 0.0)
-                + float(self.params.benchmark.vifm.get((r, i, a), 0.0) or 0.0)
-                * (
-                    sum(
-                        float(self.params.benchmark.vmsb.get((rp, i, r), 0.0) or 0.0)
-                        for rp in self.sets.r
-                        if rp != r
-                    )
-                    / max(
-                        sum(
-                            max(float(self.params.benchmark.vifm.get((r, i, aa), 0.0) or 0.0), 0.0)
-                            for aa in self.sets.a
-                        )
-                        + max(float(self.params.benchmark.vmpb.get((r, i), 0.0) or 0.0), 0.0)
-                        + max(float(self.params.benchmark.vmgb.get((r, i), 0.0) or 0.0), 0.0)
-                        + max(float(self.params.benchmark.vmib.get((r, i), 0.0) or 0.0), 0.0),
-                        1e-12,
-                    )
-                )
+                float(self.params.benchmark.vdfp.get((r, i, a), 0.0) or 0.0)
+                + float(self.params.benchmark.vmfp.get((r, i, a), 0.0) or 0.0)
                 for i in self.sets.i
             )
             if total_intermediate > 0.0:
@@ -1525,7 +2113,8 @@ class GTAPModelEquations:
         def get_factor_supply_init(m, r, f):
             if str(f) == "NatRes":
                 return 0.0
-            total = sum(get_vfm_init(m, r, f, a) for a in self.sets.a)
+            # GAMS if(1) branch: xft.l = sum_a pfy.l*xf.l / pft.l, with pft.l≈1.
+            total = sum(get_pfy_init(m, r, f, a) * get_vfm_init(m, r, f, a) for a in self.sets.a)
             return max(total, 0.0)
 
         def get_pft_init(m, r, f):
@@ -1537,6 +2126,13 @@ class GTAPModelEquations:
             return 1.0
 
         def get_kstock_init(m, r):
+            raw_vkb = self.params.benchmark.vkb
+            vkb_val = raw_vkb.get(r)
+            if vkb_val is None:
+                vkb_val = raw_vkb.get((r,), 0.0)
+            vkb = float(vkb_val or 0.0)
+            if vkb > 0.0:
+                return max(vkb, 1e-8)
             total = sum(self.params.benchmark.vfm.get((r, "Capital", a), 0.0) for a in self.sets.a)
             return max(total, 1e-8)
 
@@ -1556,13 +2152,11 @@ class GTAPModelEquations:
                 self.params.benchmark.vxsb.get((r, i, rp), 0.0)
                 for i in self.sets.i
                 for rp in self.sets.r
-                if rp != r
             )
             imports = sum(
                 float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
                 for i in self.sets.i
                 for rp in self.sets.r
-                if rp != r
             )
             return max(absorption + exports - imports, 1e-8)
 
@@ -1633,7 +2227,7 @@ class GTAPModelEquations:
             model.i,
             model.aa,
             within=Reals,
-            initialize=lambda m, r, i, aa: float(self.params.taxes.dintx0.get((r, i, aa), 0.0) or 0.0),
+            initialize=get_dintx_init,
             doc="Indirect tax on domestic consumption",
         )
         model.mintx = Var(
@@ -1641,7 +2235,7 @@ class GTAPModelEquations:
             model.i,
             model.aa,
             within=Reals,
-            initialize=lambda m, r, i, aa: float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0),
+            initialize=get_mintx_init,
             doc="Indirect tax on import consumption",
         )
         
@@ -1722,25 +2316,19 @@ class GTAPModelEquations:
         def get_pe_init(m, r, i, rp):
             if r == rp:
                 return 1.0
-            if self.reference_snapshot:
-                ref_pe = self.reference_snapshot.pe.get((r, i, rp))
-                if ref_pe is not None and ref_pe > 0.0:
-                    return float(ref_pe)
+            # Keep bilateral trade-price seeds aligned with GAMS cal.gms:
+            # baseline pe.l starts at 1.0 on active routes.
             bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
             mirror_imports = self.params.benchmark.viws.get((rp, i, r), 0.0)
             return 1.0 if (bilateral_exports > 0.0 or mirror_imports > 0.0) else 0.0
 
         def get_xe_init(m, r, i, rp):
-            if r == rp:
-                return 0.0
-            return max(self.params.benchmark.vxmd.get((r, i, rp), 0.0), 0.0)
+            return max(float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0), 0.0)
 
         def get_xw_init(m, r, i, rp):
             # xw follows the export-flow direction xw(r,i,rp), matching GAMS peeq.
-            if self.reference_snapshot:
-                ref_xw = self.reference_snapshot.xw.get((r, i, rp))
-                if ref_xw is not None and ref_xw > 0.0:
-                    return float(ref_xw)
+            # Use benchmark bilateral export values, not COMP snapshot levels, so
+            # xweq/pmteq start from the same calibration basis as GAMS.
             vxsb = float(self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
             if vxsb > 0.0:
                 pe_val = max(get_pe_init(m, r, i, rp), 1e-12)
@@ -1759,26 +2347,19 @@ class GTAPModelEquations:
         )
 
         def get_pwmg_init(m, r, i, rp):
-            if r == rp:
-                return 0.0
             if self.reference_snapshot:
                 ref_pwmg = self.reference_snapshot.pwmg.get((r, i, rp))
                 if ref_pwmg is not None and ref_pwmg > 0.0:
                     return float(ref_pwmg)
-            margin_flow = sum(self.params.benchmark.vtwr.get((r, i, rp, margin), 0.0) for margin in self.sets.m)
-            return 1.0 if margin_flow > 0.0 else 0.0
+            return 1.0
 
         def get_xwmg_init(m, r, i, rp):
-            if r == rp:
-                return 0.0
             return max(
                 sum(self.params.benchmark.vtwr.get((r, i, rp, margin), 0.0) for margin in self.sets.m),
                 0.0,
             )
 
         def get_xmgm_init(m, margin, r, i, rp):
-            if r == rp:
-                return 0.0
             return max(self.params.benchmark.vtwr.get((r, i, rp, margin), 0.0), 0.0)
 
         def get_xtmg_init(m, margin):
@@ -1786,8 +2367,6 @@ class GTAPModelEquations:
             for r in self.sets.r:
                 for i in self.sets.i:
                     for rp in self.sets.r:
-                        if rp == r:
-                            continue
                         total += self.params.benchmark.vtwr.get((r, i, rp, margin), 0.0)
             return max(total, 0.0)
 
@@ -1850,6 +2429,20 @@ class GTAPModelEquations:
             initialize=1.0,
             doc="Second-level Armington preference shifter",
         )
+
+        # GAMS baseline calibration (cal.gms):
+        #   etax.fx(r,i,t) = 0 ;
+        #   mtax.fx(r,i,t) = 0 ;
+        #   lambdam.fx(rp,i,r,t) = 1 ;
+        # Keep these exogenous unless a scenario explicitly unfixes them.
+        for r in self.sets.r:
+            for i in self.sets.i:
+                model.etax[r, i].fix(0.0)
+                model.mtax[r, i].fix(0.0)
+        for rp in self.sets.r:
+            for i in self.sets.i:
+                for r in self.sets.r:
+                    model.lambdam[rp, i, r].fix(1.0)
 
         def _safe_trade_component_value(component_name, key, default: float) -> float:
             component = getattr(model, component_name, None)
@@ -1974,25 +2567,17 @@ class GTAPModelEquations:
         model.pf = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pf_init, doc="Factor price by activity")
         model.pfa = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pfa_init, doc="Factor price tax inclusive")
         model.pfy = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pfy_init, doc="After-tax factor price")
-
-        if self.sets.mf:
-            for r in self.sets.r:
-                for f in self.sets.f:
-                    if f in self.sets.mf:
-                        continue
-                    model.xft[r, f].fix(0.0)
-                    model.pft[r, f].fix(1.0)
         model.pwfact = Var(within=NonNegativeReals, initialize=1.0, doc="World factor price")
         
         # Income (3 vars per r) - GAMS-style benchmark calibration
         def get_benchmark_yc(r):
-            return sum(self.params.benchmark.vpm.get((r, i), 0.0) for i in self.sets.i)
+            return sum(get_vpm_init(None, r, i) for i in self.sets.i)
 
         def get_benchmark_yg(r):
-            return sum(self.params.benchmark.vgm.get((r, i), 0.0) for i in self.sets.i)
+            return sum(get_vgm_init(None, r, i) for i in self.sets.i)
 
         def get_benchmark_yi(r):
-            return sum(self.params.benchmark.vim.get((r, i), 0.0) for i in self.sets.i)
+            return sum(get_vim_init(None, r, i) for i in self.sets.i)
 
         def get_xiagg_init(m, r):
             return max(get_benchmark_yi(r), 1e-8)
@@ -2026,7 +2611,7 @@ class GTAPModelEquations:
             return max(share * xiagg * (pi_bench / max(pa_inv, 1e-12)) ** sigmai, 0.0)
 
         # Final demand (3 vars per r,i)
-        model.xc = Var(model.r, model.i, within=NonNegativeReals, initialize=get_vpm_init, doc="Private consumption")
+        model.xc = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xc_init, doc="Private consumption")
         model.xg = Var(model.r, model.i, within=NonNegativeReals, initialize=get_vgm_init, doc="Government consumption")
         model.xi = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xi_init, doc="Investment")
         model.xaa = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_xaa_init, doc="Agent/activity Armington demand")
@@ -2042,7 +2627,7 @@ class GTAPModelEquations:
             vdep = float(self.params.benchmark.vdep.get(r, 0.0))
             facty = max(facty - vdep, 0.0)
             ytax = get_ytax_ind_init(None, r)
-            return max(facty + ytax, 1e-8)
+            return facty + ytax
 
         def get_regy_init(m, r):
             """Regional income initialized from benchmark regy."""
@@ -2060,7 +2645,7 @@ class GTAPModelEquations:
             regy_val = get_regy_init(m, r)
             yc_val = get_benchmark_yc(r)
             yg_val = get_benchmark_yg(r)
-            return max(regy_val - yc_val - yg_val, 0.0)
+            return regy_val - yc_val - yg_val
 
         def get_savf_init(m, r):
             savf_flag = getattr(self.closure, "savf_flag", "capFix") if self.closure else "capFix"
@@ -2075,9 +2660,9 @@ class GTAPModelEquations:
             if self.reference_snapshot and self.reference_snapshot.yi.get(r) is not None:
                 return float(self.reference_snapshot.yi.get(r))
             if str(r) == "RestofWorld":
-                return max(get_benchmark_yi(r), 1e-8)
+                return get_benchmark_yi(r)
             dep_val = float(self.params.benchmark.vdep.get(r, 0.0))
-            return max(dep_val + get_rsav_init(m, r) + get_savf_init(m, r), 1e-8)
+            return dep_val + get_rsav_init(m, r) + get_savf_init(m, r)
 
         def get_facty_init(m, r):
             factor_income = sum(
@@ -2097,10 +2682,12 @@ class GTAPModelEquations:
         def get_ytax_ind_init(m, r):
             tax_total = 0.0
             for a in self.sets.a:
-                rto = float(self.params.taxes.rto.get((r, a), 0.0))
                 outputs = self.sets.activity_commodities.get(a, list(self.sets.i))
                 for i in outputs:
-                    tax_total += rto * self.params.benchmark.makb.get((r, a, i), 0.0)
+                    tax_total += (
+                        float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0)
+                        - float(self.params.benchmark.maks.get((r, a, i), 0.0) or 0.0)
+                    )
 
             for (rr, f, a), rtf in self.params.taxes.rtf.items():
                 if rr != r:
@@ -2125,6 +2712,26 @@ class GTAPModelEquations:
                     continue
                 tax_total += float(rtgi) * self.params.benchmark.vmgb.get((r, i), 0.0)
 
+            # Private and investment commodity taxes (GAMS pc/ic streams)
+            # are purchaser-minus-basic wedges by destination commodity.
+            for i in self.sets.i:
+                tax_total += (
+                    float(self.params.benchmark.vdpp.get((r, i), 0.0) or 0.0)
+                    - float(self.params.benchmark.vdpb.get((r, i), 0.0) or 0.0)
+                )
+                tax_total += (
+                    float(self.params.benchmark.vmpp.get((r, i), 0.0) or 0.0)
+                    - float(self.params.benchmark.vmpb.get((r, i), 0.0) or 0.0)
+                )
+                tax_total += (
+                    float(self.params.benchmark.vdip.get((r, i), 0.0) or 0.0)
+                    - float(self.params.benchmark.vdib.get((r, i), 0.0) or 0.0)
+                )
+                tax_total += (
+                    float(self.params.benchmark.vmip.get((r, i), 0.0) or 0.0)
+                    - float(self.params.benchmark.vmib.get((r, i), 0.0) or 0.0)
+                )
+
             for (rr, i, rp), rtxs in self.params.taxes.rtxs.items():
                 if rr != r:
                     continue
@@ -2144,10 +2751,12 @@ class GTAPModelEquations:
             if gy == "pt":
                 total = 0.0
                 for a in self.sets.a:
-                    rto = float(self.params.taxes.rto.get((r, a), 0.0))
                     outputs = self.sets.activity_commodities.get(a, list(self.sets.i))
                     for i in outputs:
-                        total += rto * self.params.benchmark.makb.get((r, a, i), 0.0)
+                        total += (
+                            float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0)
+                            - float(self.params.benchmark.maks.get((r, a, i), 0.0) or 0.0)
+                        )
                 return total
 
             if gy == "ft":
@@ -2170,6 +2779,18 @@ class GTAPModelEquations:
                         if rr == r:
                             total += float(rtpi) * self.params.benchmark.vmfb.get((r, i, a), 0.0)
                     return total
+                if gy == "pc":
+                    total = 0.0
+                    for i in self.sets.i:
+                        total += (
+                            float(self.params.benchmark.vdpp.get((r, i), 0.0) or 0.0)
+                            - float(self.params.benchmark.vdpb.get((r, i), 0.0) or 0.0)
+                        )
+                        total += (
+                            float(self.params.benchmark.vmpp.get((r, i), 0.0) or 0.0)
+                            - float(self.params.benchmark.vmpb.get((r, i), 0.0) or 0.0)
+                        )
+                    return total
                 if gy == "gc":
                     total = 0.0
                     for (rr, i), rate in self.params.taxes.rtgd.items():
@@ -2178,6 +2799,18 @@ class GTAPModelEquations:
                     for (rr, i), rate in self.params.taxes.rtgi.items():
                         if rr == r:
                             total += float(rate) * self.params.benchmark.vmgb.get((r, i), 0.0)
+                    return total
+                if gy == "ic":
+                    total = 0.0
+                    for i in self.sets.i:
+                        total += (
+                            float(self.params.benchmark.vdip.get((r, i), 0.0) or 0.0)
+                            - float(self.params.benchmark.vdib.get((r, i), 0.0) or 0.0)
+                        )
+                        total += (
+                            float(self.params.benchmark.vmip.get((r, i), 0.0) or 0.0)
+                            - float(self.params.benchmark.vmib.get((r, i), 0.0) or 0.0)
+                        )
                     return total
                 return 0.0
 
@@ -2234,23 +2867,23 @@ class GTAPModelEquations:
         model.regy = Var(model.r, within=Reals, initialize=get_regy_init, doc="Regional income")
         model.yc = Var(
             model.r,
-            within=NonNegativeReals,
+            within=Reals,
             initialize=lambda m, r: float(self.reference_snapshot.yc.get(r)) if self.reference_snapshot and self.reference_snapshot.yc.get(r) is not None else get_benchmark_yc(r),
             doc="Private income",
         )
         model.yg = Var(
             model.r,
-            within=NonNegativeReals,
+            within=Reals,
             initialize=lambda m, r: float(self.reference_snapshot.yg.get(r)) if self.reference_snapshot and self.reference_snapshot.yg.get(r) is not None else get_benchmark_yg(r),
             doc="Government income",
         )
         model.yi = Var(
             model.r,
-            within=NonNegativeReals,
+            within=Reals,
             initialize=get_yi_init,
             doc="Investment income",
         )
-        model.rsav = Var(model.r, within=NonNegativeReals, initialize=get_rsav_init, doc="Regional savings")
+        model.rsav = Var(model.r, within=Reals, initialize=get_rsav_init, doc="Regional savings")
         model.facty = Var(model.r, within=NonNegativeReals, initialize=get_facty_init, doc="Factor income net of depreciation")
         model.ytax = Var(model.r, model.gy, within=Reals, initialize=get_ytax_stream_init, doc="Government tax revenue by stream")
         model.ytaxTot = Var(model.r, within=Reals, initialize=get_ytax_tot_init, doc="Total government revenue")
@@ -2335,7 +2968,7 @@ class GTAPModelEquations:
         # GAMS lower-bounds prices aggressively, but not Armington/trade quantities.
         # Keeping positive floors on quantities like xmt/xd/xa can create artificial
         # states where volumes are stuck at 1e-8 while CES prices explode.
-        strictly_positive_level_vars = ['yc', 'yg', 'yi', 'xiagg', 'rsav', 'facty', 'kstock', 'kapEnd', 'xigbl', 'chiSave', 'rorg', 'ev', 'cv']
+        strictly_positive_level_vars = ['xiagg', 'kstock', 'kapEnd', 'xigbl', 'chiSave', 'rorg', 'ev', 'cv']
 
         for var_name in price_vars + strictly_positive_level_vars:
             if hasattr(model, var_name):
@@ -2419,6 +3052,77 @@ class GTAPModelEquations:
         def _etax_value(exporter, commodity, importer) -> float:
             # GAMS etax(r,i) is indexed by exporter and commodity only.
             return _safe_component_value("etax", (exporter, commodity), 0.0)
+
+        if_sub = bool(getattr(self.closure, "if_sub", True)) if self.closure is not None else True
+
+        def _factor_tax_value(region, factor, activity) -> float:
+            return float(self.params.taxes.rtf.get((region, factor, activity), 0.0) or 0.0)
+
+        def _kappaf_value(region, factor, activity) -> float:
+            kappa = float(self.params.taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
+            if kappa == 0.0:
+                kappa = float(self.params.taxes.kappaf.get((region, factor), 0.0) or 0.0)
+            return kappa
+
+        # --------------------------------------------------------------------
+        # GAMS-style substitution macros (ifSUB)
+        # --------------------------------------------------------------------
+        def _m_pp(region, activity, commodity):
+            if if_sub:
+                return (1.0 + value(model.prdtx_rai[region, activity, commodity])) * model.p_rai[region, activity, commodity]
+            return model.pp_rai[region, activity, commodity]
+
+        def _m_xwmg(exporter, commodity, importer):
+            if if_sub:
+                return model.tmarg[exporter, commodity, importer] * model.xw[exporter, commodity, importer]
+            return model.xwmg[exporter, commodity, importer]
+
+        def _m_xmgm(mode, exporter, commodity, importer):
+            if if_sub:
+                share = model.amgm[mode, exporter, commodity, importer]
+                lambdamg = model.lambdamg[mode, exporter, commodity, importer] + 1e-12
+                return share * _m_xwmg(exporter, commodity, importer) / lambdamg
+            return model.xmgm[mode, exporter, commodity, importer]
+
+        def _m_pwmg(exporter, commodity, importer):
+            if if_sub:
+                return sum(
+                    model.amgm[m, exporter, commodity, importer] * model.ptmg[m]
+                    / (model.lambdamg[m, exporter, commodity, importer] + 1e-12)
+                    for m in model.m
+                )
+            return model.pwmg[exporter, commodity, importer]
+
+        def _m_pefob(exporter, commodity, importer):
+            if if_sub:
+                export_tax = float(self.params.taxes.rtxs.get((exporter, commodity, importer), 0.0) or 0.0)
+                etax = _etax_value(exporter, commodity, importer)
+                return (1.0 + export_tax + etax) * model.pe[exporter, commodity, importer]
+            return model.pefob[exporter, commodity, importer]
+
+        def _m_pmcif(exporter, commodity, importer):
+            if if_sub:
+                tmarg = model.tmarg[exporter, commodity, importer]
+                return _m_pefob(exporter, commodity, importer) + _m_pwmg(exporter, commodity, importer) * tmarg
+            return model.pmcif[exporter, commodity, importer]
+
+        def _m_pm(exporter, commodity, importer):
+            if if_sub:
+                imptx = _imptx_rate_importer(importer, commodity, exporter)
+                mtax = _mtax_value(importer, commodity, exporter)
+                chipm = _chipm_value(exporter, commodity, importer)
+                return ((1.0 + imptx + mtax) * _m_pmcif(exporter, commodity, importer)) / chipm
+            return model.pm[exporter, commodity, importer]
+
+        def _m_pfa(region, factor, activity):
+            if if_sub:
+                return model.pf[region, factor, activity] * (1.0 + _factor_tax_value(region, factor, activity))
+            return model.pfa[region, factor, activity]
+
+        def _m_pfy(region, factor, activity):
+            if if_sub:
+                return model.pf[region, factor, activity] * (1.0 - _kappaf_value(region, factor, activity))
+            return model.pfy[region, factor, activity]
         
         # ========================================================================
         # PRODUCTION BLOCK
@@ -2566,11 +3270,8 @@ class GTAPModelEquations:
                     )
                     if af_val <= 0.0:
                         continue
-                    factor_price = self._factor_price_term(model, r, f, a)
-                    if factor_price is None:
-                        continue
                     lambdaf = max(self._lambdaf(r, f, a), 1e-8)
-                    terms.append((factor_price / lambdaf) ** af_val)
+                    terms.append((_m_pfa(r, f, a) / lambdaf) ** af_val)
                 if not terms:
                     return Constraint.Skip
                 prod = 1.0
@@ -2587,11 +3288,8 @@ class GTAPModelEquations:
                 )
                 if af_val <= 0.0:
                     continue
-                factor_price = self._factor_price_term(model, r, f, a)
-                if factor_price is None:
-                    continue
                 lambdaf = max(self._lambdaf(r, f, a), 1e-8)
-                terms.append(af_val * (factor_price / lambdaf) ** expo)
+                terms.append(af_val * (_m_pfa(r, f, a) / lambdaf) ** expo)
 
             if not terms:
                 return Constraint.Skip
@@ -2631,7 +3329,8 @@ class GTAPModelEquations:
 
             omega = self._get_omegas(r, a)
             if omega == float("inf"):
-                return model.xp[r, a] == sum(model.x[r, a, i] for i in active_outputs)
+                # GAMS xpeq with omegas=inf uses xp/xscale on the quantity side.
+                return (model.xp[r, a] / model.xscale[r, a]) == sum(model.x[r, a, i] for i in active_outputs)
 
             exponent = 1.0 + omega
             return model.px[r, a] ** exponent == sum(
@@ -2671,9 +3370,9 @@ class GTAPModelEquations:
 
             sigma = self._get_sigmas(r, i)
             if sigma == float("inf"):
-                return model.pp_rai[r, a, i] == model.ps[r, i]
+                return _m_pp(r, a, i) == model.ps[r, i]
 
-            return model.x[r, a, i] == ax_val * model.xs[r, i] * (model.ps[r, i] / model.pp_rai[r, a, i]) ** sigma
+            return model.x[r, a, i] == ax_val * model.xs[r, i] * (model.ps[r, i] / _m_pp(r, a, i)) ** sigma
         model.eq_peq = Constraint(model.r, model.a, model.i, rule=eq_peq_rule)
         
         # ========================================================================
@@ -2698,7 +3397,7 @@ class GTAPModelEquations:
             if abs(exponent) < 1e-8:
                 return Constraint.Skip
             return model.ps[r, i] ** exponent == sum(
-                value(model.p_ax[r, a, i]) * model.pp_rai[r, a, i] ** exponent
+                value(model.p_ax[r, a, i]) * _m_pp(r, a, i) ** exponent
                 for a in active_activities
             )
         model.eq_xs = Constraint(model.r, model.i, rule=eq_xs_rule)
@@ -2804,9 +3503,11 @@ class GTAPModelEquations:
         
         # Armington aggregation (Leontief for simplicity)
         def eq_xa_rule(model, r, i):
-            inventory = self._vst_value(str(r), str(i))
-            return model.xa[r, i] == sum(model.xaa[r, i, aa] / model.xscale[r, aa] for aa in model.aa) + inventory
+            return model.xa[r, i] == sum(model.xaa[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
         model.eq_xa = Constraint(model.r, model.i, rule=eq_xa_rule)
+        # Aggregate xa(r,i) is a Pyomo helper not present as a standalone
+        # equation in GTAP. Keep it for reporting but exclude from MCP.
+        model.eq_xa.deactivate()
 
         # Agent/activity demand for intermediate inputs by activity.
         def eq_xaa_activity_rule(model, r, i, a):
@@ -2850,7 +3551,7 @@ class GTAPModelEquations:
 
         def _raw_agent_domestic_import_eq(r, i, aa):
             if aa in self.sets.a:
-                raw_domestic = self.params.benchmark.vdfm.get((r, i, aa), 0.0)
+                raw_domestic = self.params.benchmark.vdfb.get((r, i, aa), 0.0)
                 raw_import = self.params.benchmark.vmfb.get((r, i, aa), 0.0)
                 if raw_domestic + raw_import <= 0.0:
                     raw_domestic = self.params.benchmark.vdfm.get((r, i, aa), 0.0)
@@ -2896,7 +3597,6 @@ class GTAPModelEquations:
                 target_import_total = sum(
                     float(self.params.benchmark.vmsb.get((rp, i, r), 0.0) or 0.0)
                     for rp in self.sets.r
-                    if rp != r
                 )
                 import_scale = (target_import_total / total_raw_import) if total_raw_import > 0.0 else 1.0
 
@@ -2924,8 +3624,10 @@ class GTAPModelEquations:
                     GTAP_INVESTMENT_AGENT,
                     GTAP_MARGIN_AGENT,
                 ]:
-                    domestic_share, import_share = benchmark_agent_trade_share_cache.get((r, i, aa), (0.0, 0.0))
-                    if domestic_share <= 0.0 and import_share <= 0.0:
+                    xaa_bench = max(float(value(model.xaa[r, i, aa])), 0.0)
+                    xda_bench = max(float(value(model.xda[r, i, aa])), 0.0)
+                    xma_bench = max(float(value(model.xma[r, i, aa])), 0.0)
+                    if xaa_bench <= 0.0 or (xda_bench <= 0.0 and xma_bench <= 0.0):
                         benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
                         continue
 
@@ -2934,16 +3636,12 @@ class GTAPModelEquations:
                     pmp_bench = float(value(model.pmp[r, i, aa]))
                     pa_bench = float(value(model.pa[r, i, aa]))
                     if pa_bench <= 0.0:
-                        benchmark_agent_armington_param_cache[(r, i, aa)] = (domestic_share, import_share)
+                        benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
                         continue
 
-                    alphad = domestic_share * (pdp_bench / pa_bench) ** sigma_m if domestic_share > 0.0 else 0.0
-                    alpham = import_share * (pmp_bench / pa_bench) ** sigma_m if import_share > 0.0 else 0.0
-                    total = alphad + alpham
-                    if total > 0.0:
-                        benchmark_agent_armington_param_cache[(r, i, aa)] = (alphad / total, alpham / total)
-                    else:
-                        benchmark_agent_armington_param_cache[(r, i, aa)] = (domestic_share, import_share)
+                    alphad = (xda_bench / xaa_bench) * (pdp_bench / pa_bench) ** sigma_m if xda_bench > 0.0 else 0.0
+                    alpham = (xma_bench / xaa_bench) * (pmp_bench / pa_bench) ** sigma_m if xma_bench > 0.0 else 0.0
+                    benchmark_agent_armington_param_cache[(r, i, aa)] = (alphad, alpham)
 
         def get_benchmark_agent_armington_shares(r, i, aa):
             return benchmark_agent_armington_param_cache.get((r, i, aa), (0.0, 0.0))
@@ -2952,11 +3650,61 @@ class GTAPModelEquations:
         # The price pass-through relationships are encoded directly in the Expression definitions
 
         def eq_dintxeq_rule(model, r, i, aa):
-            return model.dintx[r, i, aa] == float(self.params.taxes.dintx0.get((r, i, aa), 0.0) or 0.0)
+            def _two_key(raw_map, region, commodity):
+                val = raw_map.get((region, commodity), None)
+                if val is None:
+                    val = raw_map.get((commodity, region), 0.0)
+                return float(val or 0.0)
+
+            if aa in self.sets.a:
+                numerator = float(self.params.benchmark.vdfp.get((r, i, aa), 0.0) or 0.0) - float(
+                    self.params.benchmark.vdfb.get((r, i, aa), 0.0) or 0.0
+                )
+                denom = max(float(self.params.benchmark.vdfb.get((r, i, aa), 0.0) or 0.0), 0.0)
+            elif aa == GTAP_HOUSEHOLD_AGENT:
+                numerator = _two_key(self.params.benchmark.vdpp, r, i) - _two_key(self.params.benchmark.vdpb, r, i)
+                denom = max(_two_key(self.params.benchmark.vdpb, r, i), 0.0)
+            elif aa == GTAP_GOVERNMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vdgp, r, i) - _two_key(self.params.benchmark.vdgb, r, i)
+                denom = max(_two_key(self.params.benchmark.vdgb, r, i), 0.0)
+            elif aa == GTAP_INVESTMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vdip, r, i) - _two_key(self.params.benchmark.vdib, r, i)
+                denom = max(_two_key(self.params.benchmark.vdib, r, i), 0.0)
+            else:
+                numerator = 0.0
+                denom = 0.0
+
+            target = (numerator / denom) if denom > 0.0 else float(self.params.taxes.dintx0.get((r, i, aa), 0.0) or 0.0)
+            return model.dintx[r, i, aa] == target
         model.eq_dintxeq = Constraint(model.r, model.i, model.aa, rule=eq_dintxeq_rule)
 
         def eq_mintxeq_rule(model, r, i, aa):
-            return model.mintx[r, i, aa] == float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0)
+            def _two_key(raw_map, region, commodity):
+                val = raw_map.get((region, commodity), None)
+                if val is None:
+                    val = raw_map.get((commodity, region), 0.0)
+                return float(val or 0.0)
+
+            if aa in self.sets.a:
+                numerator = float(self.params.benchmark.vmfp.get((r, i, aa), 0.0) or 0.0) - float(
+                    self.params.benchmark.vmfb.get((r, i, aa), 0.0) or 0.0
+                )
+                denom = max(float(self.params.benchmark.vmfb.get((r, i, aa), 0.0) or 0.0), 0.0)
+            elif aa == GTAP_HOUSEHOLD_AGENT:
+                numerator = _two_key(self.params.benchmark.vmpp, r, i) - _two_key(self.params.benchmark.vmpb, r, i)
+                denom = max(_two_key(self.params.benchmark.vmpb, r, i), 0.0)
+            elif aa == GTAP_GOVERNMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vmgp, r, i) - _two_key(self.params.benchmark.vmgb, r, i)
+                denom = max(_two_key(self.params.benchmark.vmgb, r, i), 0.0)
+            elif aa == GTAP_INVESTMENT_AGENT:
+                numerator = _two_key(self.params.benchmark.vmip, r, i) - _two_key(self.params.benchmark.vmib, r, i)
+                denom = max(_two_key(self.params.benchmark.vmib, r, i), 0.0)
+            else:
+                numerator = 0.0
+                denom = 0.0
+
+            target = (numerator / denom) if denom > 0.0 else float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0)
+            return model.mintx[r, i, aa] == target
         model.eq_mintxeq = Constraint(model.r, model.i, model.aa, rule=eq_mintxeq_rule)
 
         def eq_xda_rule(model, r, i, aa):
@@ -3011,25 +3759,19 @@ class GTAPModelEquations:
 
         # Trade margins (GAMS xwmgeq/xmgmeq/pwmgeq/xtmgeq/ptmgeq - simplified static)
         def eq_xwmg_rule(model, r, i, rp):
-            if rp == r:
-                return Constraint.Skip
             if value(model.tmarg[r, i, rp]) <= 0.0:
                 return Constraint.Skip
             return model.xwmg[r, i, rp] == model.tmarg[r, i, rp] * model.xw[r, i, rp]
         model.eq_xwmg = Constraint(model.r, model.i, model.rp, rule=eq_xwmg_rule)
 
         def eq_xmgm_rule(model, m, r, i, rp):
-            if rp == r:
-                return Constraint.Skip
             share = value(model.amgm[m, r, i, rp])
             if share <= 0.0:
                 return Constraint.Skip
-            return model.xmgm[m, r, i, rp] == share * model.xwmg[r, i, rp] / (model.lambdamg[m, r, i, rp] + 1e-12)
+            return model.xmgm[m, r, i, rp] == share * _m_xwmg(r, i, rp) / (model.lambdamg[m, r, i, rp] + 1e-12)
         model.eq_xmgm = Constraint(model.m, model.r, model.i, model.rp, rule=eq_xmgm_rule)
 
         def eq_pwmg_rule(model, r, i, rp):
-            if rp == r:
-                return Constraint.Skip
             if value(model.tmarg[r, i, rp]) <= 0.0:
                 return Constraint.Skip
             total = sum(
@@ -3040,7 +3782,7 @@ class GTAPModelEquations:
         model.eq_pwmg = Constraint(model.r, model.i, model.rp, rule=eq_pwmg_rule)
 
         def eq_xtmg_rule(model, m):
-            return model.xtmg[m] == sum(model.xmgm[m, r, i, rp] for r in model.r for i in model.i for rp in model.rp)
+            return model.xtmg[m] == sum(_m_xmgm(m, r, i, rp) for r in model.r for i in model.i for rp in model.rp)
         model.eq_xtmg = Constraint(model.m, rule=eq_xtmg_rule)
 
         def eq_ptmg_rule(model, m):
@@ -3075,7 +3817,7 @@ class GTAPModelEquations:
             return model.xw[rp, i, r] == (
                 amw
                 * model.xmt[r, i]
-                * (model.pmt[r, i] / model.pm[rp, i, r]) ** esubm
+                * (model.pmt[r, i] / _m_pm(rp, i, r)) ** esubm
                 * (lambdam ** (esubm - 1.0))
             )
         model.eq_xweq = Constraint(model.rp, model.i, model.r, rule=eq_xweq_rule)
@@ -3099,7 +3841,7 @@ class GTAPModelEquations:
                 if amw <= 0.0:
                     continue
                 lambdam = _lambdam_value(rp, i, r)
-                terms.append(amw * (model.pm[rp, i, r] / lambdam) ** expo)
+                terms.append(amw * (_m_pm(rp, i, r) / lambdam) ** expo)
             if not terms:
                 return model.pmt[r, i] == 1.0
             return model.pmt[r, i] ** expo == sum(terms)
@@ -3220,10 +3962,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            factor_price = self._factor_price_term(model, r, f, a)
-            if factor_price is None:
-                return Constraint.Skip
-            ratio = model.pva[r, a] / factor_price
+            ratio = model.pva[r, a] / _m_pfa(r, f, a)
             sigmav = self._get_sigmav(r, a)
             lambdaf = self._lambdaf(r, f, a)
             return model.xf[r, f, a] == af_val * model.va[r, a] * ratio**sigmav * lambdaf ** (sigmav - 1)
@@ -3242,18 +3981,55 @@ class GTAPModelEquations:
             return model.xft[r, f] == model.aft[r, f] * (model.pft[r, f] / (model.pabs[r] + 1e-12)) ** elasticity
         model.eq_xfteq = Constraint(model.r, model.f, rule=eq_xfteq_rule)
 
-        # Aggregate factor price equals the demand-weighted activity prices.
-        def eq_pfeq_rule(model, r, f):
-            if f not in self.sets.mf:
+        # Factor supply / law-of-one-price (GAMS pfeq(r,fp,a)).
+        #
+        # Three branches matching model.gms:1079 exactly:
+        #   (1) fm + omegaf = inf  (perfect mobility): M_PFY(r,f,a) = pft(r,f)
+        #   (2) fm + omegaf finite (partial CET):       xf = xscale*gf*xft*(M_PFY/pft)^omegaf
+        #   (3) fnm (sector-specific supply curve):     xf = xscale*gf*(M_PFY/pabs)^etaff
+        # One equation per active (r,f,a) so that pf(r,f,a) is pinned 1:1
+        # against its MCP pair, without resorting to aggressive fixing.
+        def _omegaf(region, factor):
+            omega = self.params.elasticities.omegaf.get((region, factor))
+            if omega is not None:
+                return float(omega)
+            # GAMS: mobile factors default to inf; sluggish come from -etrae.
+            if factor in self.sets.mf:
+                return float("inf")
+            etrae = self.params.elasticities.etrae.get(factor, float("inf"))
+            if etrae == float("inf"):
+                return float("inf")
+            return -float(etrae)
+
+        def _etaff(region, factor, activity):
+            return float(
+                self.params.elasticities.etaff.get((region, factor, activity), 0.0)
+            )
+
+        def eq_pfeq_rule(model, r, f, a):
+            if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            if value(model.xftflag[r, f]) <= 0.0:
+            gf = float(value(model.gf_share[r, f, a]))
+            if gf <= 0.0:
                 return Constraint.Skip
-            total_share = sum(value(model.gf_share[r, f, a]) for a in model.a)
-            if total_share <= 0:
-                return Constraint.Skip
-            weighted = sum(value(model.gf_share[r, f, a]) * model.pfy[r, f, a] for a in model.a)
-            return model.pft[r, f] * total_share == weighted
-        model.eq_pfeq = Constraint(model.r, model.f, rule=eq_pfeq_rule)
+            pfy = _m_pfy(r, f, a)
+            if f in self.sets.mf:
+                omegaf = _omegaf(r, f)
+                if omegaf == float("inf"):
+                    # Perfect mobility: law of one price.
+                    return pfy == model.pft[r, f]
+                # Partial CET across activities.
+                return model.xf[r, f, a] == (
+                    model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
+                    * (pfy / model.pft[r, f]) ** omegaf
+                )
+            # Sector-specific factor supply curve (fnm).
+            etaff = _etaff(r, f, a)
+            return model.xf[r, f, a] == (
+                model.xscale[r, a] * model.gf_share[r, f, a]
+                * (pfy / model.pabs[r]) ** etaff
+            )
+        model.eq_pfeq = Constraint(model.r, model.f, model.a, rule=eq_pfeq_rule)
 
         # Factor prices tax inclusive (GAMS pfaeq)
         def eq_pfaeq_rule(model, r, f, a):
@@ -3572,7 +4348,7 @@ class GTAPModelEquations:
                     if importer != r:
                         continue
                     mtax = _mtax_value(r, i, exporter)
-                    total += (float(imptx) + mtax) * model.pmcif[exporter, i, r] * model.xw[exporter, i, r]
+                    total += (float(imptx) + mtax) * _m_pmcif(exporter, i, r) * model.xw[exporter, i, r]
                 return model.ytax[r, gy] == total
 
             if gy == "dt":
@@ -3639,108 +4415,102 @@ class GTAPModelEquations:
             GTAP_INVESTMENT_AGENT,
         )
 
-        def _benchmark_fd_quantity(region, commodity, agent) -> float:
-            if agent == GTAP_HOUSEHOLD_AGENT:
-                return float(self.params.benchmark.vpm.get((region, commodity), 0.0))
-            if agent == GTAP_GOVERNMENT_AGENT:
-                return float(self.params.benchmark.vgm.get((region, commodity), 0.0))
-            if agent == GTAP_INVESTMENT_AGENT:
-                return float(self.params.benchmark.vim.get((region, commodity), 0.0))
-            return 0.0
+        # Base-year levels for compStat Fisher indices.
+        base_pa = {
+            (r, i, agent): float(value(model.pa[r, i, agent]))
+            for r in model.r
+            for i in model.i
+            for agent in final_demand_agents
+        }
+        base_xaa = {
+            (r, i, agent): float(value(model.xaa[r, i, agent]))
+            for r in model.r
+            for i in model.i
+            for agent in final_demand_agents
+        }
+        base_pefob = {
+            (r, i, rp): float(value(model.pefob[r, i, rp]))
+            for r in model.r
+            for i in model.i
+            for rp in model.rp
+        }
+        base_pmcif = {
+            (rp, i, r): float(value(model.pmcif[rp, i, r]))
+            for rp in model.rp
+            for i in model.i
+            for r in model.r
+        }
+        base_xw = {
+            (r, i, rp): float(value(model.xw[r, i, rp]))
+            for r in model.r
+            for i in model.i
+            for rp in model.rp
+        }
+        base_pabs = {r: max(float(value(model.pabs[r])), 1e-8) for r in model.r}
+        base_rgdpmp = {r: max(float(value(model.rgdpmp[r])), 1e-8) for r in model.r}
 
-        def _current_fd_value(model, region):
+        def _mqabs(model, region, *, price_base: bool, quantity_base: bool):
             total = 0.0
             for i in model.i:
                 for agent in final_demand_agents:
-                    total += model.pa[region, i, agent] * model.xaa[region, i, agent]
+                    pa = base_pa[(region, i, agent)] if price_base else model.pa[region, i, agent]
+                    xa = base_xaa[(region, i, agent)] if quantity_base else model.xaa[region, i, agent]
+                    total += pa * xa
             return total
 
-        def _benchmark_fd_value(region):
-            total = 0.0
-            for i in self.sets.i:
-                for agent in final_demand_agents:
-                    total += _benchmark_fd_quantity(region, i, agent)
-            return max(total, 1e-12)
-
-        def _cross_fd_value_current_prices_base_quantities(model, region):
+        def _mqtrade(model, region, *, price_base: bool, quantity_base: bool):
             total = 0.0
             for i in model.i:
-                for agent in final_demand_agents:
-                    total += model.pa[region, i, agent] * _benchmark_fd_quantity(region, i, agent)
+                for rp in model.rp:
+                    pexp = base_pefob[(region, i, rp)] if price_base else _m_pefob(region, i, rp)
+                    pimp = base_pmcif[(rp, i, region)] if price_base else _m_pmcif(rp, i, region)
+                    xexp = base_xw[(region, i, rp)] if quantity_base else model.xw[region, i, rp]
+                    ximp = base_xw[(rp, i, region)] if quantity_base else model.xw[rp, i, region]
+                    total += pexp * xexp - pimp * ximp
             return total
 
-        def _cross_fd_value_base_prices_current_quantities(model, region):
-            total = 0.0
-            for i in model.i:
-                for agent in final_demand_agents:
-                    total += model.xaa[region, i, agent]
-            return total
+        def _mqgdp(model, region, *, price_base: bool, quantity_base: bool):
+            return _mqabs(model, region, price_base=price_base, quantity_base=quantity_base) + _mqtrade(
+                model,
+                region,
+                price_base=price_base,
+                quantity_base=quantity_base,
+            )
 
-        def _trade_balance_current(model, region):
-            total = 0.0
-            for i in model.i:
-                for rp in model.r:
-                    if rp == region:
-                        continue
-                    total += model.pefob[region, i, rp] * model.xw[region, i, rp]
-                    total -= model.pmcif[rp, i, region] * model.xw[rp, i, region]
-            return total
-
-        def _benchmark_trade_balance(region):
-            total = 0.0
-            for i in self.sets.i:
-                for rp in self.sets.r:
-                    if rp == region:
-                        continue
-                    total += float(self.params.benchmark.vxsb.get((region, i, rp), 0.0) or 0.0)
-                    total -= float(self.params.benchmark.vcif.get((rp, i, region), 0.0) or 0.0)
-            return total
-
-        def _cross_trade_base_prices_current_quantities(model, region):
-            total = 0.0
-            for i in model.i:
-                for rp in model.r:
-                    if rp == region:
-                        continue
-                    total += model.xw[region, i, rp]
-                    total -= model.xw[rp, i, region]
-            return total
-
-        def _cross_trade_current_prices_base_quantities(model, region):
-            total = 0.0
-            for i in model.i:
-                for rp in model.r:
-                    if rp == region:
-                        continue
-                    base_export = float(self.params.benchmark.vxsb.get((region, i, rp), 0.0) or 0.0)
-                    base_import = float(self.params.benchmark.vcif.get((rp, i, region), 0.0) or 0.0)
-                    total += model.pefob[region, i, rp] * base_export
-                    total -= model.pmcif[rp, i, region] * base_import
-            return total
+        base_mqabs_00 = {
+            r: float(_mqabs(model, r, price_base=True, quantity_base=True))
+            for r in model.r
+        }
+        base_mqgdp_00 = {
+            r: float(_mqgdp(model, r, price_base=True, quantity_base=True))
+            for r in model.r
+        }
 
         def eq_pabs_rule(model, r):
-            base_val = _benchmark_fd_value(r)
-            current_base_price = _cross_fd_value_base_prices_current_quantities(model, r)
-            current_current_price = _current_fd_value(model, r)
-            base_current_price = _cross_fd_value_current_prices_base_quantities(model, r)
-            if base_val <= 0.0 or value(current_base_price) <= 0.0:
+            mqabs_00 = base_mqabs_00[r]
+            if mqabs_00 <= 1e-12:
                 return Constraint.Skip
-            return model.pabs[r] ** 2 == (base_current_price / base_val) * (current_current_price / current_base_price)
+            mqabs_t0 = _mqabs(model, r, price_base=False, quantity_base=True)
+            mqabs_tt = _mqabs(model, r, price_base=False, quantity_base=False)
+            mqabs_0t = _mqabs(model, r, price_base=True, quantity_base=False)
+            scale = max((base_pabs[r] ** 2) * (mqabs_00 ** 2), 1e-12)
+            return (model.pabs[r] ** 2) * mqabs_00 * mqabs_0t / scale == (base_pabs[r] ** 2) * mqabs_t0 * mqabs_tt / scale
         model.eq_pabs = Constraint(model.r, rule=eq_pabs_rule)
 
         # Nominal GDP at market prices (GAMS gdpmpeq)
         def eq_gdpmp_rule(model, r):
-            return model.gdpmp[r] == _current_fd_value(model, r) + _trade_balance_current(model, r)
+            return model.gdpmp[r] == _mqgdp(model, r, price_base=False, quantity_base=False)
         model.eq_gdpmp = Constraint(model.r, rule=eq_gdpmp_rule)
 
         # Real GDP at market prices (GAMS rgdpmpeq, compStat/static Fisher form)
         def eq_rgdpmp_rule(model, r):
-            gdp_base = _benchmark_fd_value(r) + _benchmark_trade_balance(r)
-            mqgdp_base_current = _cross_fd_value_base_prices_current_quantities(model, r) + _cross_trade_base_prices_current_quantities(model, r)
-            mqgdp_current_base = _cross_fd_value_current_prices_base_quantities(model, r) + _cross_trade_current_prices_base_quantities(model, r)
-            if gdp_base <= 0.0 or value(mqgdp_current_base) <= 0.0:
+            gdp_00 = base_mqgdp_00[r]
+            if gdp_00 <= 1e-12:
                 return Constraint.Skip
-            return model.rgdpmp[r] ** 2 == gdp_base * model.gdpmp[r] * (mqgdp_base_current / mqgdp_current_base)
+            mqgdp_0t = _mqgdp(model, r, price_base=True, quantity_base=False)
+            mqgdp_t0 = _mqgdp(model, r, price_base=False, quantity_base=True)
+            scale = max((base_rgdpmp[r] ** 2) * (gdp_00 ** 2), 1e-12)
+            return (model.rgdpmp[r] ** 2) * gdp_00 * mqgdp_t0 / scale == (base_rgdpmp[r] ** 2) * model.gdpmp[r] * mqgdp_0t / scale
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
 
         def eq_pgdpmp_rule(model, r):
@@ -3796,6 +4566,8 @@ class GTAPModelEquations:
             inventory = self._vst_value(str(r), str(i))
             return model.xa[r, i] == absorption + inventory
         model.mkt_goods = Constraint(model.r, model.i, rule=mkt_goods_rule)
+        # Duplicate of eq_xa; keep for reporting compatibility but exclude from MCP.
+        model.mkt_goods.deactivate()
         
         # ========================================================================
         # NUMERAIRE
@@ -3819,6 +4591,65 @@ class GTAPModelEquations:
                 for r in target_regions
             )
         model.eq_walras = Constraint(rule=eq_walras_rule)
+
+        # Mirror GAMS ifSUB=1 behavior: substitute macro identities directly
+        # into the active system and remove the standalone defining equations.
+        if if_sub:
+            for con_name in (
+                "eq_pp_rai",
+                "eq_xwmg",
+                "eq_xmgm",
+                "eq_pwmg",
+                "eq_pefobeq",
+                "eq_pmcifeq",
+                "eq_pmeq",
+                "eq_pfaeq",
+                "eq_pfyeq",
+            ):
+                if hasattr(model, con_name):
+                    getattr(model, con_name).deactivate()
+
+            def _fix_component(vardata, raw_value: float) -> None:
+                target = float(raw_value)
+                lb = vardata.lb
+                ub = vardata.ub
+                if lb is not None and target < float(lb):
+                    target = float(lb)
+                if ub is not None and target > float(ub):
+                    target = float(ub)
+                vardata.fix(target)
+
+            for r in model.r:
+                for a in model.a:
+                    for i in model.i:
+                        if (r, a, i) not in model.pp_rai:
+                            continue
+                        _fix_component(model.pp_rai[r, a, i], value(_m_pp(r, a, i)))
+
+            for r in model.r:
+                for i in model.i:
+                    for rp in model.rp:
+                        if (r, i, rp) in model.xwmg:
+                            _fix_component(model.xwmg[r, i, rp], value(_m_xwmg(r, i, rp)))
+                        if (r, i, rp) in model.pwmg:
+                            _fix_component(model.pwmg[r, i, rp], value(_m_pwmg(r, i, rp)))
+                        if (r, i, rp) in model.pefob:
+                            _fix_component(model.pefob[r, i, rp], value(_m_pefob(r, i, rp)))
+                        if (r, i, rp) in model.pmcif:
+                            _fix_component(model.pmcif[r, i, rp], value(_m_pmcif(r, i, rp)))
+                        if (r, i, rp) in model.pm:
+                            _fix_component(model.pm[r, i, rp], value(_m_pm(r, i, rp)))
+                        for m in model.m:
+                            if (m, r, i, rp) in model.xmgm:
+                                _fix_component(model.xmgm[m, r, i, rp], value(_m_xmgm(m, r, i, rp)))
+
+            for r in model.r:
+                for f in model.f:
+                    for a in model.a:
+                        if (r, f, a) in model.pfa:
+                            _fix_component(model.pfa[r, f, a], value(_m_pfa(r, f, a)))
+                        if (r, f, a) in model.pfy:
+                            _fix_component(model.pfy[r, f, a], value(_m_pfy(r, f, a)))
     
     def _add_objective(self, model: "ConcreteModel") -> None:
         """Add dummy objective for NLP."""
