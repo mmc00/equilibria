@@ -1,0 +1,77 @@
+Executed on prod-exec-5.neos-server.org
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:08:56 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+17536  ;
+****   $2
+**** LINE  17540 INPUT       /var/lib/condor/execute/dir_2097484/gamsexec/MODEL
+                             .gms
+****   2  Identifier expected
+17574     rorFlex(r,t)      "Flexibility of foreign capital"
+****                $120
+**** LINE  17578 INPUT       /var/lib/condor/execute/dir_2097484/gamsexec/MODEL
+                             .gms
+**** 120  Unknown identifier entered as set
+18072     RoRflex(r,t)         "Flexibility of expected net ROR"
+****               $318,318
+**** LINE  18078 INPUT       /var/lib/condor/execute/dir_2097484/gamsexec/MODEL
+                             .gms
+**** 318  Domain list redefined - no previous domain list - * assumed
+****         when data was associated with this symbol
+19856     solve betaCal using mcp ;
+****                              $257
+**** LINE  19881 INPUT       /var/lib/condor/execute/dir_2097484/gamsexec/MODEL
+                             .gms
+**** 257  Solve statement not checked because of previous errors
+20166     $$batinclude "mvar.gms" initvar tsim
+****                             $282
+**** LINE  20191 INPUT       /var/lib/condor/execute/dir_2097484/gamsexec/MODEL
+                             .gms
+**** 282  Unable to open include file
+****         Hint: Does the filename need to be quoted?
+20350     solve  using mcp ;
+****                 $140,241,812
+**** LINE  20375 INPUT       /var/lib/condor/execute/dir_2097484/gamsexec/MODEL
+                             .gms
+**** 140  Unknown symbol
+**** 241  Model has not been defined
+**** 812  Solve keys expected - USING MAX/MIN SCENARIO
+20352     solve  using nlp maximizing walras ;
+****                 $241
+**** LINE  20377 INPUT       /var/lib/condor/execute/dir_2097484/gamsexec/MODEL
+                             .gms
+**** 241  Model has not been defined
+**** Incomplete $ifThen at nest level 1 from lst line 20343 (line 20368 in sour
+                              ce file MODEL.gms) include level 0 with tag solve
+
+**** 10 ERROR(S)   0 WARNING(S)
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:08:56 Page 2
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Include File Summary
+
+
+   SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
+
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_2
+                                                  097484/gamsexec/MODEL.gms
+     2    17499 IF EXIST       1   17499       0  /var/lib/condor/execute/dir_2
+                                                  097484/gamsexec/%inDir%/%Base
+                                                  Name%Emiss.gdx
+
+
+COMPILATION TIME     =        0.050 SECONDS      4 MB  52.5.0 9bc771bf LEX-LEG
+
+
+USER: NEOS Server License - Production               G250831+0003Ac-GEN
+      University of Wisconsin-Madison                           DCE4604
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /var/lib/condor/execute/dir_2097484/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_2097484/gamsexec/solve.lst
+
+**** USER ERROR(S) ENCOUNTERED

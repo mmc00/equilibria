@@ -1,0 +1,44 @@
+Executed on prod-exec-5.neos-server.org
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:05:36 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+17270     marg(comm)     "Margin commodities"
+****               $184
+**** 184  Domain list redefined
+17273     endwf(endw)    "Fixed factors"
+****                $184
+**** 184  Domain list redefined
+17274     endwm(endw)    "Mobile factors"
+****                $184
+**** 184  Domain list redefined
+17275     endws(endw)    "Sluggish factors"
+****                $184
+**** 184  Domain list redefined
+17426     VDFB(i0, a0, r)      "Firm purchases of domestic goods at basic price
+****             $184$184,184
+       s"
+**** 184  Domain list redefined
+17427     VDFP(i0, a0, r)      "Firm purchases of domestic goods at purchaser p
+****             $184$184,184
+       rices"
+**** 184  Domain list redefined
+
+**** 10 ERROR(S)   0 WARNING(S)
+
+
+COMPILATION TIME     =        0.041 SECONDS      4 MB  52.5.0 9bc771bf LEX-LEG
+
+
+USER: NEOS Server License - Production               G250831+0003Ac-GEN
+      University of Wisconsin-Madison                           DCE4604
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /var/lib/condor/execute/dir_2097386/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_2097386/gamsexec/solve.lst
+
+**** USER ERROR(S) ENCOUNTERED

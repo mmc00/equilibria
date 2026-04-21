@@ -1,0 +1,54 @@
+Executed on prod-exec-5.neos-server.org
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:01:43 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+  91     set.acts
+****            $644
+**** 644  set.ident or #.ident has undefined data
+  95     set.comm
+****            $644
+**** 644  set.ident or #.ident has undefined data
+  99     set.endw
+****            $644
+**** 644  set.ident or #.ident has undefined data
+ 107     set.reg
+****           $644
+**** 644  set.ident or #.ident has undefined data
+ 115     set.acts
+****            $644
+**** 644  set.ident or #.ident has undefined data
+ 123     set.acts
+****            $644
+**** 644  set.ident or #.ident has undefined data
+ 129     set.comm
+****            $644
+**** 644  set.ident or #.ident has undefined data
+ 136     set.reg
+****           $644
+**** 644  set.ident or #.ident has undefined data
+ 144     set.endw
+****            $644
+**** 644  set.ident or #.ident has undefined data
+ 149  loop((fp,endwf)$sameas(fp,endwf),
+****               $352
+**** 352  Set has not been initialized
+
+**** 10 ERROR(S)   0 WARNING(S)
+
+
+COMPILATION TIME     =        0.003 SECONDS      3 MB  52.5.0 9bc771bf LEX-LEG
+
+
+USER: NEOS Server License - Production               G250831+0003Ac-GEN
+      University of Wisconsin-Madison                           DCE4604
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /var/lib/condor/execute/dir_2097254/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_2097254/gamsexec/solve.lst
+
+**** USER ERROR(S) ENCOUNTERED

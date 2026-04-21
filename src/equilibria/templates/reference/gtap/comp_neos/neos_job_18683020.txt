@@ -1,0 +1,60 @@
+Executed on prod-exec-6.neos-server.org
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:14:32 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+20146     $macro initVar0(x, pFlag)              x.l(r, tsim) = x.l(r, tsim-1)*
+****      $8,767,409
+       (1$pFlag + rwork(r)$(not pFlag))
+**** LINE  20171 INPUT       /var/lib/condor/execute/dir_4174902/gamsexec/MODEL
+                             .gms
+****   8  ')' expected
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+**** 767  Unexpected symbol will terminate the loop - symbol replaced by )
+20155     initvar1(va,a,0) ;
+****             $140,121,145,36
+**** LINE  20180 INPUT       /var/lib/condor/execute/dir_4174902/gamsexec/MODEL
+                             .gms
+****  36  '=' or '..' or ':=' or '$=' operator expected
+****      rest of statement ignored
+**** 121  Set expected
+**** 140  Unknown symbol
+**** 145  Set identifier or quoted element expected
+20156     initvar1(px,a,1) ;
+****                $121$145,36
+**** LINE  20181 INPUT       /var/lib/condor/execute/dir_4174902/gamsexec/MODEL
+                             .gms
+****  36  '=' or '..' or ':=' or '$=' operator expected
+****      rest of statement ignored
+**** 121  Set expected
+**** 145  Set identifier or quoted element expected
+
+**** 10 ERROR(S)   0 WARNING(S)
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:14:32 Page 2
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Include File Summary
+
+
+   SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
+
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_4
+                                                  174902/gamsexec/MODEL.gms
+     2    17594 IF EXIST       1   17596       0  ../data/9x10Emiss.gdx
+
+
+COMPILATION TIME     =        0.032 SECONDS      4 MB  52.5.0 9bc771bf LEX-LEG
+
+
+USER: NEOS Server License - Production               G250831+0003Ac-GEN
+      University of Wisconsin-Madison                           DCE4604
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /var/lib/condor/execute/dir_4174902/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_4174902/gamsexec/solve.lst
+
+**** USER ERROR(S) ENCOUNTERED
