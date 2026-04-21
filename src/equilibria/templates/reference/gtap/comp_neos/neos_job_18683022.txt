@@ -1,0 +1,56 @@
+Executed on prod-exec-6.neos-server.org
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:16:02 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+20460     solve  using mcp ;
+****                 $140,241,812
+**** LINE  20485 INPUT       /var/lib/condor/execute/dir_4174989/gamsexec/MODEL
+                             .gms
+**** 140  Unknown symbol
+**** 241  Model has not been defined
+**** 812  Solve keys expected - USING MAX/MIN SCENARIO
+20462     solve  using nlp maximizing walras ;
+****                 $241$812
+**** LINE  20487 INPUT       /var/lib/condor/execute/dir_4174989/gamsexec/MODEL
+                             .gms
+**** 241  Model has not been defined
+**** 812  Solve keys expected - USING MAX/MIN SCENARIO
+20485     display walras.l ;
+****                     $141
+**** LINE  20572 INPUT       /var/lib/condor/execute/dir_4174989/gamsexec/MODEL
+                             .gms
+**** 141  Symbol declared but no values have been assigned. Check for missing
+****         data definition, assignment, data loading or implicit assignment
+****         via a solve statement. Suppress with $onImplicitAssign.
+****         A wild shot: You may have spurious commas in the explanatory
+****         text of a declaration. Check symbol reference list.
+
+**** 6 ERROR(S)   0 WARNING(S)
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:16:02 Page 2
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Include File Summary
+
+
+   SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
+
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_4
+                                                  174989/gamsexec/MODEL.gms
+     2    17594 IF EXIST       1   17596       0  ../data/9x10Emiss.gdx
+
+
+COMPILATION TIME     =        0.032 SECONDS      4 MB  52.5.0 9bc771bf LEX-LEG
+
+
+USER: NEOS Server License - Production               G250831+0003Ac-GEN
+      University of Wisconsin-Madison                           DCE4604
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /var/lib/condor/execute/dir_4174989/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_4174989/gamsexec/solve.lst
+
+**** USER ERROR(S) ENCOUNTERED

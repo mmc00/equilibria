@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -467,6 +468,8 @@ name = "equilibria"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "certifi" },
+    { name = "gamsapi" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "openpyxl" },
@@ -522,8 +525,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "certifi", specifier = ">=2026.1.4" },
     { name = "cyipopt", marker = "extra == 'ipopt'", specifier = ">=1.6.1" },
     { name = "equilibria", extras = ["pyomo"], marker = "extra == 'all'" },
+    { name = "gamsapi", specifier = ">=53.3.0" },
     { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.7" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.0" },
@@ -545,6 +550,7 @@ requires-dist = [
     { name = "xlrd", specifier = ">=2.0.2" },
     { name = "xlrd", marker = "extra == 'excel'", specifier = ">=2.0" },
 ]
+provides-extras = ["pyomo", "poi", "ipopt", "excel", "viz", "dev", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -640,6 +646,39 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b4/40/cc11f378b561a67bea850ab50063366a0d1dd3f6d0a30ce0f874b0ad5664/fonttools-4.61.1-cp314-cp314t-win32.whl", hash = "sha256:aed04cabe26f30c1647ef0e8fbb207516fd40fe9472e9439695f5c6998e60ac5", size = 2335377 },
     { url = "https://files.pythonhosted.org/packages/e4/ff/c9a2b66b39f8628531ea58b320d66d951267c98c6a38684daa8f50fb02f8/fonttools-4.61.1-cp314-cp314t-win_amd64.whl", hash = "sha256:2180f14c141d2f0f3da43f3a81bc8aa4684860f6b0e6f9e165a4831f24e6a23b", size = 2400613 },
     { url = "https://files.pythonhosted.org/packages/c7/4e/ce75a57ff3aebf6fc1f4e9d508b8e5810618a33d900ad6c19eb30b290b97/fonttools-4.61.1-py3-none-any.whl", hash = "sha256:17d2bf5d541add43822bcf0c43d7d847b160c9bb01d15d5007d84e2217aaa371", size = 1148996 },
+]
+
+[[package]]
+name = "gamsapi"
+version = "53.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/c5/8c90b09cc0a800090a297c1669f16733ddc2b5701bb8a81d3ae428882887/gamsapi-53.3.0.tar.gz", hash = "sha256:e177fb0992de1cca707d0cf26f3aa45b8d610ee3da22317b14b44ba9ba1e0aa9", size = 937918 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/d5/d7d65b18c861312f194c198cf2d0effae8c8a5c7bed7e43cd3b880661e05/gamsapi-53.3.0-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:58214610fa8c04b87305d6cb0ae308e1d4b301ba81cc6922764fed370480ef95", size = 1205766 },
+    { url = "https://files.pythonhosted.org/packages/bb/63/865b2b4aef5fcf10c6672608123e19c3178e30f6d283805f62bff86e7042/gamsapi-53.3.0-cp310-cp310-macosx_13_0_x86_64.whl", hash = "sha256:8f286dcf31dda4f80c64df453bd30488c13e00db210d6a00f19a08dc1b476f06", size = 1218403 },
+    { url = "https://files.pythonhosted.org/packages/03/53/4c48381c9ee27a85f99dc8165d67c8f2dca0a4cde0ae687698e6c6613c5f/gamsapi-53.3.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:b74f1d7667fb04e856d9bc0df4be2bfaafc02531c6956b2be45d1aef4c6f8394", size = 1232869 },
+    { url = "https://files.pythonhosted.org/packages/90/65/725ab5b6128cfbe37ecbb59ea2a5ae3d9b7f7d6a6cc9676fe8666944009e/gamsapi-53.3.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:39350e08496f0c2e393172f5a31e8b91d5a4f715bc06c3452f8c83b306ce9577", size = 1233641 },
+    { url = "https://files.pythonhosted.org/packages/0b/15/51a84364bf47fd3faa86d3b109b83e883ec3460524ca0be2e6ac47dce389/gamsapi-53.3.0-cp310-cp310-win_amd64.whl", hash = "sha256:c9a3e0b30d0965daa3a53dd7287b6c60e297020dd6637bdb353139d52447121f", size = 1657408 },
+    { url = "https://files.pythonhosted.org/packages/85/3b/a21c073cc46b8e2e878d50f7c87327aafdbda454cd7db5ecf8c4b1808225/gamsapi-53.3.0-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:6a8e4bdc232f933077c96764b85f103a44f2f652a68a71b632a3a0e570253bde", size = 1205769 },
+    { url = "https://files.pythonhosted.org/packages/56/d0/fc6b3e2b5987dad0ae1bed783b18ac70cca60376f80ab0bcd7c2a160d09d/gamsapi-53.3.0-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:8444c0f20ac43b57612ec579291ca8416de81bc570e22c46c2532f14aceb2ded", size = 1218404 },
+    { url = "https://files.pythonhosted.org/packages/8a/69/4100c5f42437d6ae43a7b8cbae9780aa0677f72a34ddd66f826fff413216/gamsapi-53.3.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:f26a7d7f9092495b4b095e3e1ddfa6d4837b47e4ec6bbf9996f7bc94f20c3740", size = 1232864 },
+    { url = "https://files.pythonhosted.org/packages/86/d5/e89d08456fc10bb23ead6e86844e1bd69527e4dd9e8b6a15a41c91831d70/gamsapi-53.3.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:289f0729685e7fa7471d9b38ca75de0611c159278c849acd879e2c61ae44b99a", size = 1233657 },
+    { url = "https://files.pythonhosted.org/packages/e1/0a/81a38acad4241c24ae495b8f48aaa369421bd158dd93e2b66ac59a767b9b/gamsapi-53.3.0-cp311-cp311-win_amd64.whl", hash = "sha256:fca3d9ca08930cd7bd465f8c1205193b7d0bc95734bc040a2a83daa5845222df", size = 1656056 },
+    { url = "https://files.pythonhosted.org/packages/56/34/ebca9a787766901774e686c4eac7ffb010e68c473aac71961526f1bf97c3/gamsapi-53.3.0-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:e18e9a368e0b7676f8614c5ee78213957d0cdfcd6246a5a2839b14e6b216e607", size = 1195531 },
+    { url = "https://files.pythonhosted.org/packages/60/91/006d0fab09cdaf4e8d8e64e5bc77d1e275d99ce4e8aeb073492add3ad660/gamsapi-53.3.0-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:c91ea3bb9b742ebba963d213a3ab49d12d0a8e81fbc6b21480f1aa5989669df9", size = 1225983 },
+    { url = "https://files.pythonhosted.org/packages/93/e4/00fd898bbdd84f6126164aaa7ceb92d31daa2c6032e7b812baa310db1042/gamsapi-53.3.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:0847f600fa1fe2560fbbaf643c34e8e0581ba975cec0ffdd322c717aee5dfeed", size = 1237652 },
+    { url = "https://files.pythonhosted.org/packages/d9/40/49666bb161bd917813ccda7e597466c2c811804c920856e8a92d4b405fb3/gamsapi-53.3.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:4fc7c0782159c6a0f0dc46885b5a2f609da3ef3a02886b6604082db446e3588c", size = 1240430 },
+    { url = "https://files.pythonhosted.org/packages/85/54/25de3e2bc115634d19f5b8af38edbf23d7a416497bbf2546ab57d7e44c0d/gamsapi-53.3.0-cp312-cp312-win_amd64.whl", hash = "sha256:09815929a318402242403f83c267583d44f6a77ea4e7a576c16b92a0d099395a", size = 1677989 },
+    { url = "https://files.pythonhosted.org/packages/be/6b/3c1c7cc67358f5f284ec29b045feba4ddf6199d34de0a7e759056bd3cb72/gamsapi-53.3.0-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:88efb7832ec3150dd158a9fbd39288a2dbc09e8cc99dbcfb866a5969be551771", size = 1196298 },
+    { url = "https://files.pythonhosted.org/packages/a5/be/32b78fda121e239ae4b431f928f49aec333d2e71d0e7110ea208ab7fef57/gamsapi-53.3.0-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:f5a76f69beeffdba406b5d2770a0778e30129cf3f4d144f31d8fd3ae2897f2a7", size = 1224121 },
+    { url = "https://files.pythonhosted.org/packages/43/f8/41c5a25244cc31c3091fab41d9afa36cbd80479596d10d3a7495522f38d6/gamsapi-53.3.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:3afddec7ed2108fda9027b5a77fe2184a02024e947767ddbbb44411960fcbe12", size = 1235715 },
+    { url = "https://files.pythonhosted.org/packages/bc/86/214fedd1e3685a848bb62d45f12a82e9dc02c680168890fcce95706b04fb/gamsapi-53.3.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:42a76e0a95876885e703832fd2e2adccfbd55965b36b7c30eaf9115374abf086", size = 1238950 },
+    { url = "https://files.pythonhosted.org/packages/16/69/803e51bb7709704adf413063127ef9a14adaed82718c31a7c83301de4e77/gamsapi-53.3.0-cp313-cp313-win_amd64.whl", hash = "sha256:adccba9ccb52b1e0e4feccae2bfdd18a243cf350a9452176ca18a78f34407779", size = 1679535 },
+    { url = "https://files.pythonhosted.org/packages/6d/d0/a6b9d578e84d30f0c84fe7041e9a627de3743c709262ed81a57ed6fa2583/gamsapi-53.3.0-cp314-cp314-macosx_13_0_arm64.whl", hash = "sha256:b9f6419896244522356a833a26b73e59bda34a108b63286bbaa7fab8b5d13f78", size = 1196734 },
+    { url = "https://files.pythonhosted.org/packages/88/65/7632dda1bc46cf841f4be7990ed32879cacc114b9ede90f91fdbca27d13f/gamsapi-53.3.0-cp314-cp314-macosx_13_0_x86_64.whl", hash = "sha256:ad74722bb32b81d065bdc015a9981a86eecb935b6cabada9b5a1e9fa33a1e1c8", size = 1224098 },
+    { url = "https://files.pythonhosted.org/packages/6e/7d/70cc74a26433fbdc339141441c76e980359b16729dfa1f4bf9cf8a2ba06d/gamsapi-53.3.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:e498531f22f236fb20367ca1275f5984b2185ea9ce31b9742fc2696f16f359e9", size = 1236419 },
+    { url = "https://files.pythonhosted.org/packages/b7/b4/47faf6c9a392c0c3aacfde1e01e7b7ed9a5e4d418a97152d0ea1275f8ca0/gamsapi-53.3.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:68935116bc0c8ec3ec2973cda2a2aeefa3f2fc27c63f16796d34610012d5d343", size = 1238955 },
+    { url = "https://files.pythonhosted.org/packages/a3/4a/513f7be30e320ccc3ff6367cd10430ff9fdade3468b18d89e1848358e0bc/gamsapi-53.3.0-cp314-cp314-win_amd64.whl", hash = "sha256:370cab3e826c2810a9f41874ff4571513722af8b20e3f8eb29e7a284a7046d3c", size = 1709650 },
 ]
 
 [[package]]
