@@ -1,0 +1,1 @@
+Illegal file requested. Only the following files can be returned by name: results.txt, ampl.sol, solver-output.zip, job.in, job.out, job.results

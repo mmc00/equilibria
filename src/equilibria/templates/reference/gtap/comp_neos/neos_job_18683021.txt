@@ -1,0 +1,81 @@
+Executed on prod-exec-6.neos-server.org
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:15:20 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+20184     *  xa.l(r, i, h, tsim) = xa.l(r, i, h, tsim-1)*(1$0 + rwork(r)$(not 0
+****      $8,767$409
+       )) ;
+**** LINE  20209 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+****   8  ')' expected
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+**** 767  Unexpected symbol will terminate the loop - symbol replaced by )
+20189     *  initvar2(xa,i,gov,0) ;
+****      $409
+**** LINE  20214 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20194     *  initvar2(xa,i,inv,0) ;
+****      $409
+**** LINE  20219 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20218     *  initvar2(xa,i,tmg,0) ;
+****      $409
+**** LINE  20243 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20278  ) ;
+****   $408
+**** LINE  20303 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+**** 408  Too many ),] or }
+20409  if(years(tsim) ne firstYear,
+****                $149
+**** LINE  20434 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+**** 149  Uncontrolled set entered as constant
+20445     if(sameas(tsim,'shock'),
+****                    $149
+**** LINE  20470 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+**** 149  Uncontrolled set entered as constant
+20451     if(years(tsim) gt firstYear,
+****                   $149
+**** LINE  20476 INPUT       /var/lib/condor/execute/dir_4174959/gamsexec/MODEL
+                             .gms
+**** 149  Uncontrolled set entered as constant
+
+**** 10 ERROR(S)   0 WARNING(S)
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:15:20 Page 2
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Include File Summary
+
+
+   SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
+
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_4
+                                                  174959/gamsexec/MODEL.gms
+     2    17594 IF EXIST       1   17596       0  ../data/9x10Emiss.gdx
+
+
+COMPILATION TIME     =        0.034 SECONDS      4 MB  52.5.0 9bc771bf LEX-LEG
+
+
+USER: NEOS Server License - Production               G250831+0003Ac-GEN
+      University of Wisconsin-Madison                           DCE4604
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /var/lib/condor/execute/dir_4174959/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_4174959/gamsexec/solve.lst
+
+**** USER ERROR(S) ENCOUNTERED

@@ -1,0 +1,84 @@
+Executed on prod-exec-5.neos-server.org
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:11:56 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+20145     $setglobal theMacro initvar
+****      $8,767   $409
+**** LINE  20170 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+****   8  ')' expected
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+**** 767  Unexpected symbol will terminate the loop - symbol replaced by )
+20157     %theMacro(va,a,0) ;
+****      $409
+**** LINE  20182 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20158     %theMacro(px,a,1) ;
+****      $409
+**** LINE  20183 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20160     %theMacro(xa,i,aa,0) ;
+****      $409
+**** LINE  20185 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20161     %theMacro(pnd,a,1) ;
+****      $409
+**** LINE  20186 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20162     %theMacro(xf,fp,a,0) ;
+****      $409
+**** LINE  20187 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20163     %theMacro(pva,a,1) ;
+****      $409
+**** LINE  20188 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+20165     %theMacro(x,a,i,0) ;
+****      $409
+**** LINE  20190 INPUT       /var/lib/condor/execute/dir_2097593/gamsexec/MODEL
+                             .gms
+**** 409  Unrecognizable item - skip to find a new statement
+****        looking for a ';' or a key word to get started again
+
+**** 10 ERROR(S)   0 WARNING(S)
+GAMS 52.5.0  9bc771bf Jan 28, 2026          LEX-LEG x86 64bit/Linux - 04/11/26 22:11:56 Page 2
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+Include File Summary
+
+
+   SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
+
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_2
+                                                  097593/gamsexec/MODEL.gms
+     2    17594 IF EXIST       1   17596       0  ../data/9x10Emiss.gdx
+
+
+COMPILATION TIME     =        0.046 SECONDS      4 MB  52.5.0 9bc771bf LEX-LEG
+
+
+USER: NEOS Server License - Production               G250831+0003Ac-GEN
+      University of Wisconsin-Madison                           DCE4604
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /var/lib/condor/execute/dir_2097593/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_2097593/gamsexec/solve.lst
+
+**** USER ERROR(S) ENCOUNTERED
