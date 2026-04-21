@@ -54,6 +54,32 @@ __all__ = [
     "SolutionComparator",
     "PEPGAMSComparator",
     "run_gams_comparison",
+    # GTAP CGEBox Template
+    "GTAPContract",
+    "GTAPClosureConfig",
+    "GTAPEquationConfig",
+    "GTAPBoundsConfig",
+    "build_gtap_closure_config",
+    "build_gtap_contract",
+    "default_gtap_contract",
+    "GTAPSets",
+    "GTAPParameters",
+    "GTAPElasticities",
+    "GTAPBenchmarkValues",
+    "GTAPTaxRates",
+    "GTAPShareParameters",
+    "GTAPModelEquations",
+    "GTAPSolver",
+    "SolverResult",
+    "SolverStatus",
+    # GTAP Parity
+    "GTAPParityComparison",
+    "GTAPParityRunner",
+    "GTAPGAMSReference",
+    "GTAPVariableSnapshot",
+    "compare_gtap_gams_parity",
+    "load_gtap_gams_reference",
+    "run_gtap_parity_test",
 ]
 
 
@@ -284,6 +310,112 @@ def __getattr__(name: str) -> Any:
             "SolutionComparator": SolutionComparator,
             "PEPGAMSComparator": PEPGAMSComparator,
             "run_gams_comparison": run_gams_comparison,
+        }[name]
+
+    if name in {
+        "GTAPContract",
+        "GTAPClosureConfig",
+        "GTAPEquationConfig",
+        "GTAPBoundsConfig",
+        "build_gtap_closure_config",
+        "build_gtap_contract",
+        "default_gtap_contract",
+    }:
+        from equilibria.templates.gtap.gtap_contract import (
+            GTAPBoundsConfig,
+            GTAPClosureConfig,
+            GTAPContract,
+            GTAPEquationConfig,
+            build_gtap_closure_config,
+            build_gtap_contract,
+            default_gtap_contract,
+        )
+
+        return {
+            "GTAPContract": GTAPContract,
+            "GTAPClosureConfig": GTAPClosureConfig,
+            "GTAPEquationConfig": GTAPEquationConfig,
+            "GTAPBoundsConfig": GTAPBoundsConfig,
+            "build_gtap_closure_config": build_gtap_closure_config,
+            "build_gtap_contract": build_gtap_contract,
+            "default_gtap_contract": default_gtap_contract,
+        }[name]
+
+    if name in {
+        "GTAPSets",
+    }:
+        from equilibria.templates.gtap.gtap_sets import GTAPSets
+
+        return GTAPSets
+
+    if name in {
+        "GTAPParameters",
+        "GTAPElasticities",
+        "GTAPBenchmarkValues",
+        "GTAPTaxRates",
+        "GTAPShareParameters",
+    }:
+        from equilibria.templates.gtap.gtap_parameters import (
+            GTAPBenchmarkValues,
+            GTAPElasticities,
+            GTAPParameters,
+            GTAPShareParameters,
+            GTAPTaxRates,
+        )
+
+        return {
+            "GTAPParameters": GTAPParameters,
+            "GTAPElasticities": GTAPElasticities,
+            "GTAPBenchmarkValues": GTAPBenchmarkValues,
+            "GTAPTaxRates": GTAPTaxRates,
+            "GTAPShareParameters": GTAPShareParameters,
+        }[name]
+
+    if name == "GTAPModelEquations":
+        from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+        return GTAPModelEquations
+
+    if name in {
+        "GTAPSolver",
+        "SolverResult",
+        "SolverStatus",
+    }:
+        from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult, SolverStatus
+
+        return {
+            "GTAPSolver": GTAPSolver,
+            "SolverResult": SolverResult,
+            "SolverStatus": SolverStatus,
+        }[name]
+
+    if name in {
+        "GTAPParityComparison",
+        "GTAPParityRunner",
+        "GTAPGAMSReference",
+        "GTAPVariableSnapshot",
+        "compare_gtap_gams_parity",
+        "load_gtap_gams_reference",
+        "run_gtap_parity_test",
+    }:
+        from equilibria.templates.gtap.gtap_parity_pipeline import (
+            GTAPParityComparison,
+            GTAPParityRunner,
+            GTAPGAMSReference,
+            GTAPVariableSnapshot,
+            compare_gtap_gams_parity,
+            load_gtap_gams_reference,
+            run_gtap_parity_test,
+        )
+
+        return {
+            "GTAPParityComparison": GTAPParityComparison,
+            "GTAPParityRunner": GTAPParityRunner,
+            "GTAPGAMSReference": GTAPGAMSReference,
+            "GTAPVariableSnapshot": GTAPVariableSnapshot,
+            "compare_gtap_gams_parity": compare_gtap_gams_parity,
+            "load_gtap_gams_reference": load_gtap_gams_reference,
+            "run_gtap_parity_test": run_gtap_parity_test,
         }[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

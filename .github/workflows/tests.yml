@@ -53,6 +53,7 @@ jobs:
         run: |
           uv run pytest -m "not gams" \
             tests/qa/test_sam_qa.py \
+            tests/scripts/test_compare_path_solver_parity_cli.py \
             tests/templates/test_pep_parity_pipeline.py \
             tests/templates/test_pep_les_parity.py \
             tests/templates/test_pep_dynamic_sets.py
