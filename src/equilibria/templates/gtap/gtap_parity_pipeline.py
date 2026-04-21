@@ -97,7 +97,16 @@ def _extract_var_levels(var) -> Dict[Any, float]:
 
 
 def _extract_xda_unscaled(model) -> Dict[Any, float]:
-    """Extract xda levels and remove xscale so values align with GTAP `xd` semantics."""
+    """Extract xda levels divided by xscale, approximating GTAP ``xd`` semantics.
+
+    Returns ``xda[r,i,aa] / xscale[r,aa]`` for each index.  When ``xda`` was
+    initialized from SAM flows (vdfb) without pre-dividing by xscale (i.e., no
+    active reference snapshot), the result is ``vdfb`` — which is ``xscale`` times
+    the GAMS ``xd.l`` value (GAMS initializes ``xd.l = vdfb / xscale``).  This
+    known factor-of-xscale discrepancy means ``xd`` should be excluded from any
+    automated parity comparison against COMP_generated.csv when no reference
+    snapshot was used for initialization.
+    """
     from pyomo.environ import value
 
     if not hasattr(model, "xda"):
@@ -481,15 +490,20 @@ def _standard_gtap_csv_scale_factor(
 ) -> float:
     """Return the scale factor needed for standard_gtap comparator CSV rows.
 
-    Some generated comparator CSVs serialize quantity and income variables in the
-    model's internal `inScale=1e-6` units. Those rows must be rescaled back to
-    benchmark magnitudes before parity comparison. Prices and tax rates remain in
-    level form and should not be adjusted.
+    COMP_generated.csv stores values in the Python model's normalized units
+    (the same units the solver uses). No rescaling is needed — always return 1.0.
+
+    The legacy NEOS-ratio logic only applies to other comparator files (e.g.,
+    COMP_equilibria.csv produced with an older inScale=1e-6 convention).
     """
     candidate = Path(csv_path)
     if candidate.name not in {"COMP_generated.csv", "COMP_equilibria.csv"}:
         return 1.0
     if candidate.parent.name != "comp":
+        return 1.0
+
+    # COMP_generated.csv: already in normalized model units — no scaling.
+    if candidate.name == "COMP_generated.csv":
         return 1.0
 
     inferred_scale = _standard_gtap_generated_scale_map(candidate).get(
@@ -655,8 +669,11 @@ def _load_standard_gtap_benchmark_from_csv(
             continue
 
         if variable == "evfb" and region and sector and qualifier:
+            benchmark.evfb[(region, qualifier, sector)] = value
             benchmark.vfm[(region, qualifier, sector)] = value
             benchmark.vfb[(region, sector)] = benchmark.vfb.get((region, sector), 0.0) + value
+        elif variable == "evos" and region and sector and qualifier:
+            benchmark.evos[(region, qualifier, sector)] = value
         elif variable == "vdfp" and region and sector and qualifier:
             benchmark.vdfp[(region, sector, qualifier)] = value
         elif variable == "vdfb" and region and sector and qualifier:
