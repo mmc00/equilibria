@@ -122,6 +122,9 @@ def _closure_template_data(name: str) -> Dict[str, Any]:
         "closure_type": "CNS",  # CNS = Constrained Nonlinear System
         "capital_mobility": "mobile",
         "savf_flag": "capFix",
+        "if_sub": True,
+        "calibration_source": "python",
+        "calibration_dump": None,
         "apply_flag_fixing": True,
         "close_mcp_gap": True,
         "fix_taxes": True,
@@ -210,6 +213,9 @@ class GTAPClosureConfig(ModelClosureConfig):
     closure_type: Literal["CNS", "MCP"] = "CNS"
     capital_mobility: Literal["mobile", "sluggish"] = "mobile"
     savf_flag: Literal["capFix", "capSFix", "capShrFix", "capFlex"] = "capFix"
+    if_sub: bool = True
+    calibration_source: str = "python"
+    calibration_dump: Optional[str] = None
     apply_flag_fixing: bool = True
     close_mcp_gap: bool = False
     
@@ -261,6 +267,25 @@ class GTAPClosureConfig(ModelClosureConfig):
         if text not in ("CNS", "MCP"):
             raise ValueError(f"Closure type must be 'CNS' or 'MCP', got {value!r}")
         return text
+
+    @field_validator("calibration_source", mode="before")
+    @classmethod
+    def _normalize_calibration_source(cls, value: Any) -> str:
+        text = str(value or "python").strip().lower()
+        if text in {"python", "gams"}:
+            return text
+        if text.startswith("mixed:"):
+            targets = [token.strip() for token in text.split(":", 1)[1].split(",") if token.strip()]
+            if not targets:
+                raise ValueError(
+                    "calibration_source='mixed:...' requires at least one symbol "
+                    "(example: mixed:and,amw,gw)."
+                )
+            return "mixed:" + ",".join(targets)
+        raise ValueError(
+            "calibration_source must be one of: 'python', 'gams', or "
+            "'mixed:<param1>,<param2>,...'"
+        )
 
 
 class GTAPEquationConfig(ModelEquationConfig):

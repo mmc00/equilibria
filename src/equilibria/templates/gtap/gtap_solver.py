@@ -447,7 +447,7 @@ class GTAPSolver:
             for idx in self.model.xwmg:
                 r, i, rp = idx
                 tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
-                if r == rp or tmarg <= 0.0:
+                if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.xwmg, idx)
                     fixed_count += 1
 
@@ -455,7 +455,7 @@ class GTAPSolver:
             for idx in self.model.pwmg:
                 r, i, rp = idx
                 tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
-                if r == rp or tmarg <= 0.0:
+                if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.pwmg, idx)
                     fixed_count += 1
 
@@ -463,7 +463,7 @@ class GTAPSolver:
             for idx in self.model.xmgm:
                 m, r, i, rp = idx
                 share = float(value(self.model.amgm[m, r, i, rp])) if hasattr(self.model, "amgm") else 0.0
-                if r == rp or share <= 0.0:
+                if share <= 0.0:
                     _fix_to_zero_with_lb(self.model.xmgm, idx)
                     fixed_count += 1
         
@@ -602,7 +602,10 @@ class GTAPSolver:
         Returns:
             Number of additional variables fixed
         """
+        from collections import deque
+
         from pyomo.environ import Constraint as Con, Var, value
+        from pyomo.core.expr.visitor import identify_variables
         
         fixed_count = 0
         
@@ -671,13 +674,118 @@ class GTAPSolver:
                       for idx in var if not var[idx].fixed)
             return free - constraints
 
-        # Strategy: close the residual gap with the least-impact fixings first.
+        current_gap = gap
+
+        # Strategy 0 (preferred): structural bipartite matching between active
+        # equations and free variables. Fix unmatched variables first, because
+        # they are the precise DOF excess reported by the Jacobian incidence.
+        # This is deterministic and lower impact than heuristic component lists.
+        constraints_data = [
+            con_data
+            for con_data in self.model.component_data_objects(Con, active=True, descend_into=True)
+            if con_data.active
+        ]
+        free_var_data = [
+            var_data
+            for var_data in self.model.component_data_objects(Var, active=True, descend_into=True)
+            if not var_data.fixed
+        ]
+
+        if constraints_data and free_var_data and current_gap > 0:
+            var_id_to_col = {id(var_data): col for col, var_data in enumerate(free_var_data)}
+            adjacency: list[list[int]] = []
+            for con_data in constraints_data:
+                neighbors: list[int] = []
+                seen_cols: set[int] = set()
+                for var_data in identify_variables(con_data.body, include_fixed=False):
+                    if var_data.fixed:
+                        continue
+                    col = var_id_to_col.get(id(var_data))
+                    if col is None or col in seen_cols:
+                        continue
+                    seen_cols.add(col)
+                    neighbors.append(col)
+                adjacency.append(neighbors)
+
+            n_left = len(constraints_data)
+            n_right = len(free_var_data)
+            pair_left = [-1] * n_left   # equation row -> variable column
+            pair_right = [-1] * n_right  # variable column -> equation row
+            distance = [0] * n_left
+            inf = 10 ** 9
+
+            def _bfs() -> bool:
+                queue: deque[int] = deque()
+                found_augmenting = False
+                for u in range(n_left):
+                    if pair_left[u] == -1:
+                        distance[u] = 0
+                        queue.append(u)
+                    else:
+                        distance[u] = inf
+                while queue:
+                    u = queue.popleft()
+                    for v in adjacency[u]:
+                        matched_u = pair_right[v]
+                        if matched_u == -1:
+                            found_augmenting = True
+                        elif distance[matched_u] == inf:
+                            distance[matched_u] = distance[u] + 1
+                            queue.append(matched_u)
+                return found_augmenting
+
+            def _dfs(u: int) -> bool:
+                for v in adjacency[u]:
+                    matched_u = pair_right[v]
+                    if matched_u == -1 or (
+                        distance[matched_u] == distance[u] + 1 and _dfs(matched_u)
+                    ):
+                        pair_left[u] = v
+                        pair_right[v] = u
+                        return True
+                distance[u] = inf
+                return False
+
+            while _bfs():
+                for u in range(n_left):
+                    if pair_left[u] == -1:
+                        _dfs(u)
+
+            unmatched_vars = [
+                free_var_data[col]
+                for col, matched_row in enumerate(pair_right)
+                if matched_row == -1
+            ]
+
+            # Fix unmatched first by smallest absolute level.
+            unmatched_vars.sort(
+                key=lambda var_data: abs(float(var_data.value or 0.0))
+            )
+            to_fix = min(current_gap, len(unmatched_vars))
+            for var_data in unmatched_vars[:to_fix]:
+                val = var_data.value if var_data.value is not None else 0.0
+                var_data.fix(float(val))
+                fixed_count += 1
+
+            current_gap = get_current_gap()
+            if to_fix > 0:
+                logger.info(
+                    "MCP structural matching fixed %s unmatched vars; gap now %s",
+                    to_fix,
+                    current_gap,
+                )
+
+            if current_gap <= 0:
+                logger.info("MCP square after structural fixing: %s variables fixed", fixed_count)
+                return fixed_count
+
+        # Strategy 1+: fallback heuristic close-out when structural unmatched
+        # is insufficient (e.g., numerical dependence beyond structural graph).
         # Prefer near-zero Armington detail variables before touching
         # aggregate production/value variables.
 
         # Phase 1: near-zero Armington detail quantities
         phase1_vars = ["xda", "xma", "xaa"]
-        current_gap = gap
         for vname in phase1_vars:
             if current_gap <= 0:
                 break

@@ -10,7 +10,8 @@ Key Sets:
 - f: Factors of production
 - mf: Mobile factors (subset of f)
 - sf: Sector-specific factors (subset of f)
-- m: Margin commodities used by the GTAP trade-margin block
+- m: Alias of i used by the GTAP trade-margin mode block
+- marg: Active margin commodities from data (subset of i)
 """
 
 from __future__ import annotations
@@ -34,7 +35,8 @@ class GTAPSets:
         f: Factors of production (e.g., ["lnd", "skl", "unsk", "cap", "nrs"])
         mf: Mobile factors (subset of f that can move across sectors)
         sf: Sector-specific factors (subset of f that are fixed to sectors)
-        m: Margin commodities used in trade and transport services
+        m: Alias of i for trade/transport modes in model.gms (`alias(m,i)`)
+        marg: Active margin commodities from data (subset from MARG set)
         h: Households (for myGTAP extension, optional)
     
     Example:
@@ -55,7 +57,8 @@ class GTAPSets:
     sf: List[str] = field(default_factory=list)  # Sector-specific factors
     
     # Trade and transport
-    m: List[str] = field(default_factory=list)   # Margin commodities
+    m: List[str] = field(default_factory=list)      # Alias of i (GAMS: alias(m,i))
+    marg: List[str] = field(default_factory=list)   # Active margin commodities from data
     
     # Optional extensions
     h: Optional[List[str]] = None  # Households (for myGTAP)
@@ -103,8 +106,10 @@ class GTAPSets:
         self.mf = self._load_first_available_set(gdx_data, symbols, ("mf", "fm", "endwm"), gdx_path, required=False) or []
         self.sf = self._load_first_available_set(gdx_data, symbols, ("sf", "fnm", "endws"), gdx_path, required=False) or []
         
-        # Load margin commodities (raw GTAP uses `marg(comm)`)
-        self.m = self._load_first_available_set(gdx_data, symbols, ("m", "marg"), gdx_path, required=False) or []
+        # Raw GTAP data provides active margin commodities via marg(comm),
+        # but the standard model declares alias(m,i), i.e. full commodity set.
+        self.marg = self._load_first_available_set(gdx_data, symbols, ("marg",), gdx_path, required=False) or []
+        self.m = self.i.copy()
         
         # If mf/sf not defined, determine from etrae parameter
         if not self.mf and not self.sf:
@@ -198,13 +203,36 @@ class GTAPSets:
             etrae_data = {}
 
         if etrae_data:
+            factor_is_mobile: Dict[str, bool] = {}
             for factor_key, value in etrae_data.items():
-                factor_name = str(factor_key[0] if isinstance(factor_key, tuple) else factor_key)
+                if isinstance(factor_key, tuple):
+                    # ETRAE is often indexed by (factor,region) in GTAP.
+                    # Some exports can swap order, so select the first token
+                    # that is an actual factor label.
+                    factor_name = ""
+                    for token in factor_key:
+                        token_str = str(token)
+                        if token_str in self.f:
+                            factor_name = token_str
+                            break
+                    if not factor_name:
+                        factor_name = str(factor_key[0])
+                else:
+                    factor_name = str(factor_key)
                 if factor_name not in self.f:
                     continue
-                if value == float('inf') or value > 1e10:
-                    self.mf.append(factor_name)
+                is_mobile = bool(value == float('inf') or value > 1e10)
+                if factor_name not in factor_is_mobile:
+                    factor_is_mobile[factor_name] = is_mobile
                 else:
+                    # If any region marks a factor as mobile, keep it mobile.
+                    factor_is_mobile[factor_name] = factor_is_mobile[factor_name] or is_mobile
+
+            for factor_name in self.f:
+                is_mobile = factor_is_mobile.get(factor_name)
+                if is_mobile is True:
+                    self.mf.append(factor_name)
+                elif is_mobile is False:
                     self.sf.append(factor_name)
         else:
             # Default: all factors mobile except land and natural resources
@@ -452,6 +480,8 @@ class GTAPSets:
             "factors": self.f,
             "mobile_factors": self.mf,
             "specific_factors": self.sf,
+            "trade_modes_m": self.m,
+            "active_margin_commodities": self.marg,
             "structure": self.structure,
             "output_pairs": self.output_pairs,
             "is_bijective_output_structure": self.is_bijective_output_structure,

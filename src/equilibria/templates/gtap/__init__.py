@@ -44,12 +44,19 @@ from equilibria.templates.gtap.gtap_contract import (
 )
 from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_parameters import (
+    GAMSCalibrationDump,
     GTAPBenchmarkValues,
     GTAPCalibratedShares,
     GTAPElasticities,
     GTAPParameters,
     GTAPShareParameters,
     GTAPTaxRates,
+)
+from equilibria.templates.gtap.calibration_compare import (
+    CalibrationDiff,
+    compare_calibration,
+    collect_python_benchmark_levels,
+    collect_python_calibration_maps,
 )
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult, SolverStatus
@@ -69,11 +76,16 @@ __all__ = [
     
     # Parameters
     "GTAPParameters",
+    "GAMSCalibrationDump",
     "GTAPElasticities",
     "GTAPBenchmarkValues",
     "GTAPCalibratedShares",
     "GTAPTaxRates",
     "GTAPShareParameters",
+    "CalibrationDiff",
+    "compare_calibration",
+    "collect_python_benchmark_levels",
+    "collect_python_calibration_maps",
     
     # Contract
     "GTAPContract",

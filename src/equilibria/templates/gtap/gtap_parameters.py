@@ -647,21 +647,24 @@ class GTAPCalibratedShares:
                     if x_val <= 0:
                         continue
 
-                    # Use commodity-specific make-price ratio when available.
-                    # This matches GAMS multi-output activity calibration where
-                    # MAKB/MAKS wedges can differ by commodity within activity.
-                    maks_val = float(benchmark.maks.get((r, a, i), 0.0) or 0.0)
-                    p_rai = p
-                    if maks_val > 0.0:
-                        p_rai = maks_val / max(float(x_val), 1e-12)
-                    
+                    # GAMS cal.gms (lines 19391-19392): prdtx.l = makb/maks - 1 per
+                    # commodity; p.l = ps/(1+prdtx) = 1/(1+prdtx).  Use this
+                    # commodity-specific price so gx matches the GAMS calibration exactly.
+                    # Fallback to activity-level rto when maks is unavailable.
+                    maks_val = benchmark.maks.get((r, a, i), 0.0)
+                    if maks_val > 0:
+                        prdtx_i = x_val / maks_val - 1.0
+                        p_rai_i = 1.0 / max(1.0 + prdtx_i, 1e-12)
+                    else:
+                        p_rai_i = p  # fallback: activity-level rto
+
                     if omegas != float('inf'):
-                        # gx(r,a,i,t) = (x.l/xp.l)*(px/p)**omegas
-                        price_ratio = px / max(p_rai, 1e-12)
+                        # gx(r,a,i,t) = (x.l/xp.l)*(px/p.l)**omegas
+                        price_ratio = px / max(p_rai_i, 1e-12)
                         self.gx_param[(r, a, i)] = (x_val / xp_val) * (price_ratio ** omegas)
                     else:
                         # Perfect transformation: gx = value share
-                        self.gx_param[(r, a, i)] = (p * x_val) / (px * xp_val)
+                        self.gx_param[(r, a, i)] = (p_rai_i * x_val) / (px * xp_val)
 
 
 @dataclass
@@ -974,6 +977,16 @@ class GTAPBenchmarkValues:
                     target[key] = target.get(key, 0.0) + val
             return
         
+        def _normalize_keys(vals: Dict, dim: int) -> Dict:
+            """Flatten 1D singleton-tuple keys to plain strings."""
+            if dim != 1:
+                return vals
+            result = {}
+            for k, v in vals.items():
+                key = k[0] if isinstance(k, tuple) and len(k) == 1 else k
+                result[key] = v
+            return result
+
         try:
             values = read_parameter_values(gdx_data, gtap_name)
             if not values:
@@ -982,13 +995,13 @@ class GTAPBenchmarkValues:
             if values:
                 # Reorder keys if needed
                 values = reorder_parameter_keys(gtap_name, values)
-                target.update(values)
+                target.update(_normalize_keys(values, ndim))
         except (KeyError, ValueError):
             values = read_parameter_with_gdxdump(gdx_path, gtap_name)
             if values:
                 # Reorder keys if needed
                 values = reorder_parameter_keys(gtap_name, values)
-                target.update(values)
+                target.update(_normalize_keys(values, ndim))
 
     def _derive_output_totals(self, sets: GTAPSets) -> None:
         """Derived output totals (e.g., vom_i) from make/output pairs."""
@@ -1189,12 +1202,12 @@ class GTAPTaxRates:
                 if vdpb_val > 0.0:
                     dintx_rate = (vdpp_val - vdpb_val) / vdpb_val
                     if abs(dintx_rate) > 1e-10:
-                        self.dintx0[(r, i, "priv")] = dintx_rate
-                        
+                        self.dintx0[(r, i, "hhd")] = dintx_rate
+
                 if vmpb_val > 0.0:
                     mintx_rate = (vmpp_val - vmpb_val) / vmpb_val
                     if abs(mintx_rate) > 1e-10:
-                        self.mintx0[(r, i, "priv")] = mintx_rate
+                        self.mintx0[(r, i, "hhd")] = mintx_rate
                         
         # Government consumption taxes
         for r in sets.r:
