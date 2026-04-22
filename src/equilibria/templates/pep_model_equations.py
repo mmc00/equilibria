@@ -666,13 +666,19 @@ class PEPModelEquations:
         return residuals
     
     def row_residuals(self, vars: PEPModelVariables) -> dict[str, float]:
-        """Calculate rest of world residuals (EQ44-EQ46)."""
+        """Calculate rest of world residuals (EQ44-EQ46).
+        
+        Standard GAMS PEP-1-1: ROW income includes imports, capital income, transfers.
+        Use PEPCRIModelEquations to include cross-border labor (L→ROW).
+        """
         residuals = {}
         kdo0 = self.params.get("KDO0", {})
+        ldo0 = self.params.get("LDO0", self.params.get("LDO", {}))
         imo0 = self.params.get("IMO0", {})
         exdo0 = self.params.get("EXDO0", self.params.get("EXDO", {}))
         
-        # EQ44: YROW = e * sum(PWM * IM) + capital income + transfers to ROW
+        # EQ44: YROW = e * sum(PWM * IM) + capital income + transfers to ROW  [GAMS standard]
+        # When xborder_labor=True, also adds: + labor income paid to ROW  [ICIO/IEEM extension]
         yrow = 0
         for i in self.I:
             if abs(imo0.get(i, 0.0)) <= 1e-12:
@@ -688,7 +694,7 @@ class PEPModelEquations:
                 r_kj = vars.R.get((k, j), 1.0)
                 kd_kj = vars.KD.get((k, j), 0)
                 yrow += lambda_rk * r_kj * kd_kj
-        
+
         for agd in self.AGD:
             yrow += vars.TR.get(("row", agd), 0)
         

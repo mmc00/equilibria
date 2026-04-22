@@ -281,7 +281,15 @@ class PEPModelCalibrator:
             
             # Phase 5: Final Integration
             self._run_final_calibration()
-            
+
+            # Post-calibration savings closure: enforce equation-consistency for
+            # SGO and SROWO so that EQ43 (government budget identity) and EQ45
+            # (rest-of-world balance identity) hold exactly at the calibrated
+            # point. This is the standard CGE practice when the input SAM is
+            # not perfectly balanced (e.g. converted CRI SAM): savings absorb
+            # the residual imbalance while the rest of the SAM is preserved.
+            self._apply_savings_residual_closure()
+
             # Generate report
             self._generate_report()
             
@@ -294,7 +302,122 @@ class PEPModelCalibrator:
             raise
         
         return self.state
-    
+
+    # Relative threshold above which the savings closure is skipped.
+    # When |Δ / old| exceeds this, the delta is structural (not a rounding
+    # artifact) and overriding SROWO/SGO would break EQ53.  Leave the
+    # solver to close EQ43/EQ45 endogenously instead.
+    _SAVINGS_CLOSURE_REL_TOL: float = 1e-4  # 0.01 %
+
+    def _apply_savings_residual_closure(self) -> None:
+        """Recalibrate SGO and SROWO as residuals of EQ43 / EQ45.
+
+        The PEP CGE model treats government savings (SG) and rest-of-world
+        savings (SROW) as endogenous residuals defined by:
+
+            EQ43:  SG   = YG   - SUM(agng, TR(agng,'gvt'))   - G
+            EQ45:  SROW = YROW - SUM(i,    PE_FOB(i)*EXD(i)) - SUM(agd, TR(agd,'row'))
+
+        When the underlying SAM is perfectly balanced, reading SGO and SROWO
+        directly from the SAM is equivalent to evaluating these formulas.
+        However, converted SAMs (e.g. CRI from IEEM/ICIO) can carry small
+        accounting inconsistencies that leave EQ43 and EQ45 non-zero at the
+        calibrated point. We restore identity-consistency by overriding SGO
+        and SROWO with the equation-implied values.
+
+        This is the standard "savings closure" practice in CGE: the residual
+        imbalance is absorbed in government / external savings rather than
+        being silently distributed across the model.
+
+        Guard: if the implied correction is larger than _SAVINGS_CLOSURE_REL_TOL
+        (relative to the SAM-direct value), the discrepancy is structural rather
+        than a rounding artifact.  In that case the SAM-direct values already
+        satisfy EQ53 (GFCF identity) perfectly, and forcing the EQ45-implied
+        SROWO would introduce a large EQ53 residual that prevents convergence.
+        The function is skipped so the solver can close EQ43/EQ45 endogenously.
+        """
+        income = self.state.income
+        consumption = self.state.consumption
+        trade = self.state.trade
+        sets = self.state.sets
+
+        AGNG = sets.get("AGNG", [])
+        AGD = sets.get("AGD", [])
+        I = sets.get("I", [])
+
+        TRO = income.get("TRO", {})
+
+        # EQ43: SG = YG - sum(TR(agng,'gvt')) - G
+        ygo = float(income.get("YGO", 0.0))
+        go = float(consumption.get("GO", 0.0))
+        tr_to_gvt = sum(float(TRO.get((agng, "gvt"), 0.0)) for agng in AGNG)
+        sgo_new = ygo - tr_to_gvt - go
+
+        # EQ45: SROW = YROW - sum(PE_FOB*EXD) - sum(TR(agd,'row'))
+        yrowo = float(income.get("YROWO", 0.0))
+        pe_fobo = trade.get("PE_FOBO", {})
+        exdo = trade.get("EXDO", {})
+        exports = sum(
+            float(pe_fobo.get(i, 0.0)) * float(exdo.get(i, 0.0)) for i in I
+        )
+        tr_from_row = sum(float(TRO.get((agd, "row"), 0.0)) for agd in AGD)
+        srowo_new = yrowo - exports - tr_from_row
+
+        sgo_old = float(income.get("SGO", 0.0))
+        srowo_old = float(income.get("SROWO", 0.0))
+
+        sg_delta = sgo_new - sgo_old
+        srow_delta = srowo_new - srowo_old
+
+        # Guard: large corrections indicate a structural SAM mapping difference,
+        # not a rounding error.  Applying the override would break EQ53, which
+        # is harder for PATH to close than leaving EQ43/EQ45 as solver residuals.
+        sg_rel = abs(sg_delta) / max(abs(sgo_old), 1.0)
+        srow_rel = abs(srow_delta) / max(abs(srowo_old), 1.0)
+        tol = self._SAVINGS_CLOSURE_REL_TOL
+        if sg_rel > tol or srow_rel > tol:
+            logger.info(
+                "Savings closure SKIPPED (structural delta too large): "
+                "ΔSGO=%+.2f (%.4f%%), ΔSROWO=%+.2f (%.4f%%). "
+                "SAM-direct values preserved; EQ43/EQ45 resolved by solver.",
+                sg_delta, sg_rel * 100,
+                srow_delta, srow_rel * 100,
+            )
+            return
+
+        # Update savings (only for small / rounding-level corrections)
+        income["SGO"] = sgo_new
+        income["SROWO"] = srowo_new
+        # CABO = -SROWO (current account balance identity, EQ46)
+        income["CABO"] = -srowo_new
+        # Keep ITO = SH + SF + SG + SROW consistent so the macro identity holds
+        sho_sum = sum(float(v) for v in income.get("SHO", {}).values())
+        sfo_sum = sum(float(v) for v in income.get("SFO", {}).values())
+        ito_new = sho_sum + sfo_sum + sgo_new + srowo_new
+        ito_old = float(income.get("ITO", 0.0))
+        income["ITO"] = ito_new
+
+        # Keep GFCFO consistent with EQ53 (GFCF = IT - sum(PC*VSTK))
+        # so the calibrated point satisfies the investment identity exactly.
+        # PCO = 1.0 at base; VSTKO comes from consumption.
+        pco = trade.get("PCO", {})
+        vstko = consumption.get("VSTKO", {})
+        vstk_value = sum(
+            float(pco.get(i, 1.0)) * float(vstko.get(i, 0.0)) for i in I
+        )
+        gfcfo_old = float(consumption.get("GFCFO", 0.0))
+        gfcfo_new = ito_new - vstk_value
+        consumption["GFCFO"] = gfcfo_new
+
+        logger.info(
+            "Savings closure applied: ΔSGO=%+.2f (%.2f→%.2f), "
+            "ΔSROWO=%+.2f (%.2f→%.2f), ΔITO=%+.2f, ΔGFCFO=%+.2f",
+            sg_delta, sgo_old, sgo_new,
+            srow_delta, srowo_old, srowo_new,
+            ito_new - ito_old,
+            gfcfo_new - gfcfo_old,
+        )
+
     def _run_income_calibration(self) -> None:
         """Run Phase 1-2: Income and Shares calibration."""
         logger.info("\n" + "=" * 70)
