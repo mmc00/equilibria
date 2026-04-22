@@ -495,20 +495,23 @@ class FinalCalibrator:
         """Run validation checks on calibration."""
         errors = []
 
-        # Check 1: GDP consistency (all three measures should be close)
-        gdp_diff_ib = abs(self.result.GDP_BPO - self.result.GDP_IBO)
-        gdp_diff_fd = abs(self.result.GDP_BPO - self.result.GDP_FDO)
-        tolerance = 0.01 * self.result.GDP_BPO  # 1% tolerance
+        # Check 1: GDP consistency at market prices.
+        # SNA identity: GDP_MPO == GDP_IBO == GDP_FDO (all at market prices).
+        # GDP_BPO is at basic prices and differs from the others by TPRCTSO,
+        # so it must NOT be compared directly against GDP_IBO/GDP_FDO.
+        gdp_diff_ib = abs(self.result.GDP_MPO - self.result.GDP_IBO)
+        gdp_diff_fd = abs(self.result.GDP_MPO - self.result.GDP_FDO)
+        tolerance = 0.01 * self.result.GDP_MPO  # 1% tolerance
 
         if gdp_diff_ib > tolerance:
             errors.append(
-                f"GDP_BPO ({self.result.GDP_BPO:,.2f}) differs from "
+                f"GDP_MPO ({self.result.GDP_MPO:,.2f}) differs from "
                 f"GDP_IBO ({self.result.GDP_IBO:,.2f}) by {gdp_diff_ib:,.2f}"
             )
 
         if gdp_diff_fd > tolerance:
             errors.append(
-                f"GDP_BPO ({self.result.GDP_BPO:,.2f}) differs from "
+                f"GDP_MPO ({self.result.GDP_MPO:,.2f}) differs from "
                 f"GDP_FDO ({self.result.GDP_FDO:,.2f}) by {gdp_diff_fd:,.2f}"
             )
 

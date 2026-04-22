@@ -520,16 +520,18 @@ class IncomeCalibrator:
     def _calibrate_rest_of_world(self) -> None:
         """Calibrate rest of world variables (lines 455-457).
         
-        GAMS formulas:
-            YROWO = SUM[i, IMO(i)] + SUM[k, lambda_RK('row',k)] + SUM[ag, TRO('row',ag)]
+        GAMS formulas (PEP-1-1 standard):
+            YROWO = SUM[i, IMO(i)] + SUM[k, lambda_RK('row',k)]
+                  + SUM[ag, TRO('row',ag)]
             CABO = -SROWO
-            
-        Note: IMO(i) = SAM('Agents','row','I',i) = SAM('AG', 'ROW', 'I', i)
+
+        Note: IMO(i) = SAM('AG', 'ROW', 'I', i)
               lambda_RK('row', k) = SAM('AG', 'ROW', 'K', k)
-              SROWO = SAM('OTH','INV','Agents','row') = SAM('OTH', 'INV', 'AG', 'ROW')
+              SROWO = SAM('OTH', 'INV', 'AG', 'ROW')
         """
         I = self.sets['I']
         K = self.sets['K']
+        L = self.sets['L']
         AG = self.sets['AG']
         
         # IMO(i) = imports of product i
@@ -537,9 +539,8 @@ class IncomeCalibrator:
             i: self._get_sam_value('SAM', 'AG', 'ROW', 'I', i.upper())
             for i in I
         }
-        
-        # YROWO = rest of world income
-        # = sum of imports + capital income from row + transfers from row
+
+        # YROWO = rest of world income (GAMS PEP-1-1 standard)
         yrowo = (
             sum(imo_values.values())
             + sum(self._get_sam_value('SAM', 'AG', 'ROW', 'K', k.upper()) for k in K)
@@ -639,7 +640,9 @@ class IncomeCalibrator:
         # lambda_WL(h,l) - labor income shares
         # Raw value from SAM: SAM('AG', h, 'L', l)
         # Normalized by: SUM[j, LDO(l,j)] where LDO(l,j) = SAM('L', l, 'J', j)
-        for h in H:
+        # Standard GAMS: H only.
+        labor_recipients = list(H)
+        for h in labor_recipients:
             h_upper = h.upper()
             for l in L:
                 l_upper = l.upper()
