@@ -238,6 +238,10 @@ class GTAPSolver:
                     if value is None or idx not in target:
                         continue
                     component = target[idx]
+                    # Skip already-fixed variables so we don't override values
+                    # set by apply_aggressive_fixing_for_mcp at shocked init levels.
+                    if getattr(component, "fixed", False):
+                        continue
                     if hasattr(component, "set_value"):
                         component.set_value(float(value))
                         applied += 1
