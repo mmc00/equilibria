@@ -13,6 +13,8 @@ La calidad de convergencia (residual) NO es criterio — sólo importa la parida
 ## Reglas de trabajo (no negociables)
 
 - **Solver:** siempre usar PATH C API en modo **nonlinear full** (10,296 ecuaciones). Nunca el bloque linear (1,370). IPOPT no aplica (degrees-of-freedom).
+- **ifMCP (GAMS) = 1:** el run de referencia NEOS (job 18737509) usa `ifMCP=1` → `solve using mcp` → PATH. Python también usa PATH. Ambos están alineados — NO cambiar a `ifMCP=0` (NLP/walras) porque cambiaría los valores de referencia y Python no soporta NLP en modo nonlinear full.
+- **equation_scaling=True:** siempre pasar `equation_scaling=True` a `_run_path_capi_nonlinear_full` (baseline Y shocked). Sin esto el baseline queda en code=2/res~1e-6 en vez de code=1/res~1e-9. Tanto `validate-shock` como `_run_homotopy_shocked` lo usan — `validate_gams_parity.py` también debe usarlo.
 - **Modo de shock:** usar siempre `--shock-mode tm_pct` para shocks tipo GAMS (multiplica la *power* del arancel: `imptx_new = (1+imptx_old)*(1+v) − 1`). El modo `pct` viejo escala sólo la tasa y produce shocks ~10× menores en bienes con arancel bajo.
 - **Región residual:** `NAmerica` (coincide con `rres` de GAMS). NO usar `RestofWorld` aunque exista como 10ª región real en el dataset 9x10.
 - **GAMS license expirada (Oct 2024):** sólo `gdxdump` CLI funciona para leer GDX (no `gdxpds`, no correr modelos GAMS).
