@@ -64,3 +64,9 @@ def test_missing_file_raises():
     from equilibria.babel.har.reader import read_har
     with pytest.raises(FileNotFoundError):
         read_har(Path("/does/not/exist.har"))
+
+
+def test_public_api_import():
+    from equilibria.babel.har import read_har, get_header_names, HeaderArray
+    assert callable(read_har)
+    assert callable(get_header_names)
