@@ -61,6 +61,8 @@ ipopt = ["cyipopt>=1.6.1"]
 
 # Data format support
 excel = ["openpyxl>=3.1", "xlrd>=2.0"]
+# GEMPACK HAR format support
+har = ["harpy3>=0.3"]
 
 # Visualization
 viz = ["matplotlib>=3.7", "plotly>=5.0"]
