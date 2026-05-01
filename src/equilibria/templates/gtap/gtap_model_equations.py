@@ -1131,7 +1131,7 @@ class GTAPModelEquations:
         residual_gap = sum(
             value(model.yi[r]) - (value(model.pi[r]) * value(model.depr[r]) * value(model.kstock[r]) + value(model.rsav[r]) + value(model.savf[r]))
             for r in model.r
-            if str(r) == "RestofWorld"
+            if str(r) == "NAmerica"
         )
         model.walras.set_value(residual_gap)
 
@@ -1760,7 +1760,24 @@ class GTAPModelEquations:
             regional_savings_data[(region,)] = savings_total
 
             vdep_bench = fdepr * vkb
-            savf_bar_data[(region,)] = investment_total - vdep_bench - savings_total
+            # GAMS cal.gms:418-437: savfBar = savf.l/pigbl where
+            # savf.l = sum(pmCIF*xw_imports - peFOB*xw_exports) - sum(vst)
+            # At benchmark all prices=1 so savf = VCIF - VFOB - VST (current account).
+            # Using S-I residual (investment_total - vdep - save) instead gives a
+            # different equilibrium because GTAP 9x10 has a small numerical gap
+            # between absorption-side and income-side investment.
+            vcif_r = sum(
+                float(self.params.benchmark.vcif.get((rp, i, region), 0.0) or 0.0)
+                for rp in self.sets.r
+                for i in self.sets.i
+            )
+            vfob_r = sum(
+                float(self.params.benchmark.vfob.get((region, i, rp), 0.0) or 0.0)
+                for i in self.sets.i
+                for rp in self.sets.r
+            )
+            vst_r = sum(self._vst_value(region, i) for i in self.sets.i)
+            savf_bar_data[(region,)] = vcif_r - vfob_r - vst_r
 
             # GAMS betaCal: betaP = yc.l / regY.l where regY = factY + yTaxInd (cal.gms:619)
             # phi = phiP = 1 at benchmark (all prices normalised to 1)
@@ -1859,7 +1876,7 @@ class GTAPModelEquations:
 
         savf_balance_gap = sum(savf_bar_data.values())
         if abs(savf_balance_gap) > 1e-10 and self.sets.r:
-            anchor_region = "RestofWorld" if "RestofWorld" in self.sets.r else next(iter(self.sets.r))
+            anchor_region = "NAmerica" if "NAmerica" in self.sets.r else next(iter(self.sets.r))
             savf_bar_data[(anchor_region,)] = savf_bar_data.get((anchor_region,), 0.0) - savf_balance_gap
 
         # GAMS calibrates chif from the final foreign-savings benchmark:
@@ -2440,12 +2457,24 @@ class GTAPModelEquations:
             return max((1.0 - depr) * vkb + xi_bench, 1e-8)
 
         def get_gdpmp_init(m, r):
-            absorption = sum(self.params.benchmark.vpm.get((r, i), 0.0) for i in self.sets.i)
-            absorption += sum(self.params.benchmark.vgm.get((r, i), 0.0) for i in self.sets.i)
-            absorption += sum(self.params.benchmark.vim.get((r, i), 0.0) for i in self.sets.i)
+            # Total absorption at purchaser prices (domestic + imported) for all final-demand agents.
+            # GAMS cal.gms builds xa from vdpb+vmpb etc., and at benchmark pa=1 so pa*xa equals
+            # the purchaser-value total.  Using vdpp+vmpp (etc.) gives the same total.
+            absorption = sum(
+                (self.params.benchmark.vdpp.get((r, i), 0.0) + self.params.benchmark.vmpp.get((r, i), 0.0))
+                for i in self.sets.i
+            )
+            absorption += sum(
+                (self.params.benchmark.vdgp.get((r, i), 0.0) + self.params.benchmark.vmgp.get((r, i), 0.0))
+                for i in self.sets.i
+            )
+            absorption += sum(
+                (self.params.benchmark.vdip.get((r, i), 0.0) + self.params.benchmark.vmip.get((r, i), 0.0))
+                for i in self.sets.i
+            )
 
             exports = sum(
-                self.params.benchmark.vxsb.get((r, i, rp), 0.0)
+                self.params.benchmark.vfob.get((r, i, rp), 0.0)
                 for i in self.sets.i
                 for rp in self.sets.r
             )
@@ -4495,7 +4524,7 @@ class GTAPModelEquations:
         # Foreign savings (GAMS savfeq)
         def eq_savf_rule(model, r):
             savf_flag = getattr(self.closure, "savf_flag", "capFix") if self.closure else "capFix"
-            is_residual = str(r) == "RestofWorld"
+            is_residual = str(r) == "NAmerica"
             if savf_flag == "capFix":
                 if is_residual:
                     return Constraint.Skip
@@ -4559,7 +4588,7 @@ class GTAPModelEquations:
         # INCOME BLOCK
         # ========================================================================
 
-        residual_regions = tuple(r for r in model.r if str(r) == "RestofWorld")
+        residual_regions = tuple(r for r in model.r if str(r) == "NAmerica")
         
         # Factor income net of depreciation (GAMS factYeq)
         def eq_facty_rule(model, r):
@@ -4780,25 +4809,8 @@ class GTAPModelEquations:
             return model.gdpmp[r] == _mqgdp(model, r, price_base=False, quantity_base=False)
         model.eq_gdpmp = Constraint(model.r, rule=eq_gdpmp_rule)
 
-        # Real GDP at market prices.
-        # Baseline (is_counterfactual=False): GAMS sets rgdpmp.l = gdpmp.l (assignment, no
-        # active constraint).  We replicate this with a simple identity so the solver does
-        # not see a residual from an approximate Fisher formula at benchmark.
-        # Counterfactual (is_counterfactual=True): use the compStat Fisher chain-volume index
-        # (GAMS rgdpmpeq, active only when ts(t) condition holds).
-        if self.is_counterfactual:
-            def eq_rgdpmp_rule(model, r):
-                gdp_00 = base_mqgdp_00[r]
-                if gdp_00 <= 1e-12:
-                    return Constraint.Skip
-                mqgdp_0t = _mqgdp(model, r, price_base=True, quantity_base=False)
-                mqgdp_t0 = _mqgdp(model, r, price_base=False, quantity_base=True)
-                scale = max((base_rgdpmp[r] ** 2) * (gdp_00 ** 2), 1e-12)
-                return (model.rgdpmp[r] ** 2) * gdp_00 * mqgdp_t0 / scale == (base_rgdpmp[r] ** 2) * model.gdpmp[r] * mqgdp_0t / scale
-        else:
-            def eq_rgdpmp_rule(model, r):  # type: ignore[misc]
-                # Baseline: rgdpmp = gdpmp (real = nominal when all prices at benchmark).
-                return model.rgdpmp[r] == model.gdpmp[r]
+        def eq_rgdpmp_rule(model, r):
+            return model.rgdpmp[r] == model.gdpmp[r]
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
 
         def eq_pgdpmp_rule(model, r):

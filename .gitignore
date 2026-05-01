@@ -231,6 +231,7 @@ bk/*
 .vscode/
 ipopt.out
 scripts/gtap/
+!scripts/gtap/run_gtap.py
 examples/gtap/
 docs/GTAP_*.md
 docs/findings/gams_formulation_analysis.md
