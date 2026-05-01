@@ -151,6 +151,7 @@ def main():
         enforce_post_checks=False,
         strict_path_capi=False,
         closure_config=contract.closure,
+        equation_scaling=True,
     )
     bl_res = bl_result.get("residual", float("nan"))
     bl_code = bl_result.get("termination_code", -1)
@@ -225,6 +226,7 @@ def main():
             enforce_post_checks=False,
             strict_path_capi=False,
             closure_config=contract.closure,
+            equation_scaling=True,
         )
         step_res = step_result.get("residual", float("nan"))
         step_code = step_result.get("termination_code", -1)
