@@ -296,6 +296,10 @@ def _apply_shock_to_params(
             return float(current) * (1.0 + float(incoming))
         if shock_mode == "mult":
             return float(current) * float(incoming)
+        if shock_mode == "tm_pct":
+            # GAMS-equivalent: multiply tariff POWER (1+rate) by (1+incoming).
+            # Matches GAMS tm.fx = tm.l * (1+shock): imptx_new = (1+imptx_old)*(1+value) - 1
+            return (1.0 + float(current)) * (1.0 + float(incoming)) - 1.0
         return float(incoming)
 
     if isinstance(target_container, dict):
@@ -312,6 +316,11 @@ def _apply_shock_to_params(
 
         # If no index is provided, apply to every existing key in the container.
         for key in list(target_container.keys()):
+            # imptx(rp,i,r): skip diagonal (rp==r). Domestic sales carry no
+            # import tariff; tiny non-zero data values are calibration noise and
+            # must not be amplified to full tariff rates by tm_pct mode.
+            if target_var == "imptx" and len(key) == 3 and key[0] == key[2]:
+                continue
             current = float(target_container.get(key, 0.0))
             updated = _apply_mode(current, float(new_value))
             target_container[key] = updated
@@ -591,7 +600,7 @@ def _collect_key_quantities(
                     for i in outputs:
                         rev += tax_rate * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
                 ytax[f"{r}|{a}"] = rev
-        buckets["ytax"] = ytax
+        buckets["ytax_prod"] = ytax
 
     # Compatibility aliases and derived aggregates for COMP-style comparisons.
     if "pf" in buckets:
@@ -1623,7 +1632,7 @@ def _run_path_capi_linear_block(
                 numer = 0.0
                 denom = 0.0
                 for rp in model.rp:
-                    w = params.benchmark.vmsb.get((str(i), str(rp), str(r)), 0.0)
+                    w = params.benchmark.vmsb.get((str(rp), str(i), str(r)), 0.0)
                     w = float(w or 0.0)
                     if w <= 0.0:
                         continue
@@ -1818,6 +1827,8 @@ def _run_path_capi_nonlinear_full(
     xi_diag_enabled: bool = False,
     xi_diag_region: str = "EastAsia",
     xi_diag_commodity: str = "c_Util_Cons",
+    equation_scaling: bool = False,
+    solution_hint=None,
 ) -> dict[str, Any]:
     """Solve the full GTAP system through PATH C API nonlinear callbacks."""
     if PATH_CAPI_SRC_DEFAULT.exists() and str(PATH_CAPI_SRC_DEFAULT) not in sys.path:
@@ -1842,8 +1853,20 @@ def _run_path_capi_nonlinear_full(
         solver_helper.apply_closure(closure_config)
     solver_helper.apply_conditional_fixing()
     
-    # Make MCP square by fixing additional variables
+    # Make MCP square by fixing structural variables at their initialization values.
+    # This must happen BEFORE the warm-start hint so that the 90 unmatched structural
+    # vars are fixed at the shocked model's cold-init values (e.g. pmt initialized
+    # near the shocked equilibrium price) rather than at baseline values.
     solver_helper.apply_aggressive_fixing_for_mcp()
+
+    # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
+    # already-fixed variables, so only the remaining FREE variables get warm-started
+    # from the baseline (or previous-step) solution.
+    if solution_hint is not None:
+        try:
+            solver_helper.apply_solution_hint(solution_hint)
+        except Exception as _hint_exc:
+            logger.warning("Unable to apply solution_hint warm-start: %s", _hint_exc)
 
     # Diagnostic: report whether key investment variables are fixed or free.
     # Helps diagnose why eq_xi may have persistent positive residuals.
@@ -1892,6 +1915,24 @@ def _run_path_capi_nonlinear_full(
             solver_helper.apply_solution_hint(warm_start_snapshot)
         except Exception as exc:
             logger.warning("Unable to apply GTAP warm-start snapshot: %s", exc)
+
+    # Mirror GAMS iterloop.gms: pmt.lo = 0.001*pmt.l, px.lo = 0.001*px.l.
+    # CES equations use price^(1-esubm) with esubm~5, so expo=-4.  Without a
+    # positive lower bound PATH's Newton steps can drive pmcif/pmt to ~0,
+    # causing pmcif^(-4) -> inf and catastrophic residual explosion.
+    _PRICE_LB_FACTOR = 1e-3
+    for _pvname in ("pmt", "pmcif", "pefob", "px", "pd", "pf", "pft", "pwmg"):
+        _pv = getattr(model, _pvname, None)
+        if _pv is None:
+            continue
+        for _pv_data in _pv.values():
+            if _pv_data.fixed:
+                continue
+            _cur = _pv_data.value
+            if _cur is not None and _cur > 0:
+                _lb = _PRICE_LB_FACTOR * _cur
+                if _pv_data.lb is None or _pv_data.lb < _lb:
+                    _pv_data.setlb(_lb)
 
     adapter = PyomoMCPAdapter()
     model_summary = adapter.summarize_model(model)
@@ -1989,6 +2030,69 @@ def _run_path_capi_nonlinear_full(
                 x0_adj = max(x0_adj, lb)
             data.x0[i] = float(x0_adj)
 
+    # Full model scaling (mirrors GAMS scaleopt=1): scale rows by max Jacobian row norm
+    # AND columns by max Jacobian column norm.  Row-only scaling is insufficient when
+    # variable magnitudes differ by orders of magnitude (e.g. kstock ~55 vs ev ~1e-3).
+    # Column scaling normalises the step sizes in Newton's method, preventing explosion.
+    _active_callback_f = data.callback_f
+    _active_callback_jac = data.callback_jac
+    _path_x0 = list(data.x0)
+    _path_lb = list(data.lb)
+    _path_ub = list(data.ub)
+    _scale_c: list[float] | None = None  # column scale factors, used to unscale after solve
+    if equation_scaling:
+        _jac_at_x0 = data.callback_jac(list(data.x0))
+        _row_indices = data.jacobian_structure.row_indices
+        # JacobianStructure uses CCS (col_starts/col_lengths).  Build a flat
+        # per-nonzero column index array so we can compute column norms easily.
+        _col_for_nnz: list[int] = []
+        for _j, (_start, _len) in enumerate(
+            zip(data.jacobian_structure.col_starts, data.jacobian_structure.col_lengths)
+        ):
+            _col_for_nnz.extend([_j] * _len)
+        n_eq = len(data.variable_names)
+        row_max = [0.0] * n_eq
+        col_max = [0.0] * n_eq
+        for k, row_idx in enumerate(_row_indices):
+            v = abs(_jac_at_x0[k])
+            if v > row_max[row_idx - 1]:
+                row_max[row_idx - 1] = v
+            col_j = _col_for_nnz[k]
+            if v > col_max[col_j]:
+                col_max[col_j] = v
+        _SCALE_CAP = 1.0e6  # prevent astronomical scale factors for near-zero rows/cols
+        scale_r = [min(1.0 / max(v, 1e-12), _SCALE_CAP) for v in row_max]
+        _scale_c = [min(1.0 / max(v, 1e-12), _SCALE_CAP) for v in col_max]
+        logger.info(
+            "Full model scaling: row [%.3e, %.3e], col [%.3e, %.3e]",
+            min(scale_r), max(scale_r), min(_scale_c), max(_scale_c),
+        )
+
+        # Scale x0, lb, ub: y[j] = scale_c[j] * x[j]
+        _path_x0 = [_scale_c[j] * v for j, v in enumerate(data.x0)]
+        _path_lb = [_scale_c[j] * v if v > -1.0e19 else v for j, v in enumerate(data.lb)]
+        _path_ub = [_scale_c[j] * v if v < 1.0e19 else v for j, v in enumerate(data.ub)]
+
+        _base_f = data.callback_f
+        _base_jac = data.callback_jac
+        _sr = scale_r
+        _sc = _scale_c
+        _ri = _row_indices
+        _ci = _col_for_nnz  # 0-based column index per non-zero
+
+        def _scaled_f(y_vec):
+            x_vec = [y_vec[j] / _sc[j] for j in range(len(y_vec))]
+            f = _base_f(x_vec)
+            return [_sr[i] * f[i] for i in range(len(f))]
+
+        def _scaled_jac(y_vec):
+            x_vec = [y_vec[j] / _sc[j] for j in range(len(y_vec))]
+            j_raw = _base_jac(x_vec)
+            return [_sr[_ri[k] - 1] * j_raw[k] / _sc[_ci[k]] for k in range(len(j_raw))]
+
+        _active_callback_f = _scaled_f
+        _active_callback_jac = _scaled_jac
+
     nnz = data.jacobian_structure.nnz
     license_ok = loader.check_license(runtime, len(data.variable_names), nnz)
 
@@ -2005,6 +2109,8 @@ def _run_path_capi_nonlinear_full(
     option_names = {line.split()[0].lower() for line in option_lines if line.split()}
     if "major_iteration_limit" not in option_names:
         option_lines.append("major_iteration_limit 1000")
+    if "cumulative_iteration_limit" not in option_names:
+        option_lines.append("cumulative_iteration_limit 1000000")
     # Sync PATH's internal convergence threshold with the caller's success threshold.
     # Without this, PATH uses its built-in default (1e-6) which can cause code=2
     # (no_progress) when the residual is just above PATH's default but below the
@@ -2031,7 +2137,7 @@ def _run_path_capi_nonlinear_full(
     trace_rows: list[dict[str, Any]] = []
 
     def _callback_f_with_trace(x_vec: list[float]) -> list[float]:
-        residuals = data.callback_f(x_vec)
+        residuals = _active_callback_f(x_vec)
         if not residual_trace_enabled:
             return residuals
 
@@ -2083,11 +2189,11 @@ def _run_path_capi_nonlinear_full(
         result = solve_nonlinear_mcp(
             runtime,
             n=len(data.variable_names),
-            lb=data.lb,
-            ub=data.ub,
-            x0=data.x0,
+            lb=_path_lb,
+            ub=_path_ub,
+            x0=_path_x0,
             callback_f=_callback_f_with_trace,
-            callback_jac=data.callback_jac,
+            callback_jac=_active_callback_jac,
             jacobian_structure=data.jacobian_structure,
             output=solver_output,
         )
@@ -2100,7 +2206,12 @@ def _run_path_capi_nonlinear_full(
     residual_tol = float(path_capi_convergence_tol)
     success = bool(license_ok) and result.residual <= residual_tol and result.termination_code in {1, 2}
 
-    for name, value in zip(data.variable_names, result.x):
+    # Unscale solution if column scaling was applied: x_orig[j] = y_sol[j] / scale_c[j]
+    _solution_x = list(result.x)
+    if _scale_c is not None:
+        _solution_x = [_solution_x[j] / _scale_c[j] for j in range(len(_solution_x))]
+
+    for name, value in zip(data.variable_names, _solution_x):
         var = model.find_component(name)
         if var is None:
             continue
@@ -2217,6 +2328,104 @@ def _run_path_capi_nonlinear_full(
         ],
         "post_checks": post_checks,
     }
+
+
+def _run_homotopy_shocked(
+    base_model,
+    gdx_path,
+    shock_variable: str,
+    shock_index: tuple,
+    shock_value: float,
+    shock_mode: str,
+    homotopy_steps: int,
+    contract,
+    *,
+    solver_output: bool = False,
+    path_license_string: Optional[str] = None,
+    strict_residual_tol: float = 1e-6,
+    calibrated_start: bool = False,
+) -> dict[str, Any]:
+    """Solve the shocked model via homotopy continuation.
+
+    Applies shock_value in homotopy_steps equal increments, warm-starting
+    each step from the previous solution. Returns dict with keys:
+    shocked_model, params, residual, homotopy_steps, step_residuals.
+
+    When calibrated_start=True, the first homotopy step starts from the
+    model's own calibrated initial values (pmt=1, pm=VMSB/VXSB, etc.)
+    rather than from the solved baseline solution. This mirrors the GAMS
+    approach: GAMS never solves the baseline explicitly; it starts the
+    shocked solve directly from calibrated initial values which ARE the
+    baseline equilibrium by construction.
+    """
+    if homotopy_steps < 1:
+        raise ValueError("homotopy_steps must be >= 1")
+
+    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
+    from equilibria.templates.gtap.gtap_solver import GTAPSolver
+
+    prev_model = base_model
+    final_result: dict[str, Any] = {"residual": float("inf"), "status": "not_run"}
+    step_residuals: list[float] = []
+
+    for step in range(1, homotopy_steps + 1):
+        fraction = step / homotopy_steps
+        partial_value = shock_value * fraction
+
+        step_params = GTAPParameters()
+        step_params.load_from_gdx(gdx_path)
+        _apply_shock_to_params(
+            step_params, shock_variable, shock_index, partial_value,
+            shock_mode=shock_mode,
+        )
+
+        step_eq = GTAPModelEquations(
+            step_params.sets, step_params, contract.closure,
+            is_counterfactual=True,
+        )
+        step_model = step_eq.build_model()
+
+        # When calibrated_start=True and this is the first step, skip the
+        # warm-start so PATH begins from the model's calibrated initial values
+        # (pmt=1, pm=VMSB/VXSB). This mirrors GAMS's approach exactly.
+        if calibrated_start and step == 1:
+            prev_snapshot = None
+            click.echo("  Using calibrated initial values (no baseline warm-start) for step 1")
+        else:
+            prev_snapshot = GTAPVariableSnapshot.from_python_model(prev_model)
+
+        click.echo(
+            f"  Homotopy step {step}/{homotopy_steps} "
+            f"(fraction={fraction:.0%}, partial={partial_value:.4f})..."
+        )
+
+        result = _run_path_capi_nonlinear_full(
+            step_model, step_params,
+            solver_output=solver_output,
+            path_license_string=path_license_string,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            strict_residual_tol=strict_residual_tol,
+            closure_config=contract.closure,
+            solution_hint=prev_snapshot,
+            equation_scaling=True,  # mirrors GAMS scaleopt=1
+        )
+        step_residuals.append(result["residual"])
+        click.echo(f"    residual={result['residual']:.3e}  status={result['status']}")
+        # Continue even if this step failed — the next step may still benefit from
+        # the partial warm-start. The caller should check step_residuals for quality.
+        if result["residual"] > 10.0:
+            click.echo(
+                f"    WARNING: step {step}/{homotopy_steps} residual "
+                f"{result['residual']:.3e} is high — warm-start for next step may be unreliable"
+            )
+        prev_model = step_model
+        final_result = result
+
+    final_result["homotopy_steps"] = homotopy_steps
+    final_result["step_residuals"] = step_residuals
+    final_result["shocked_model"] = prev_model
+    return final_result
 
 
 @click.group()
@@ -2908,7 +3117,7 @@ def solve(
 )
 @click.option(
     '--shock-mode',
-    type=click.Choice(['set', 'pct', 'mult']),
+    type=click.Choice(['set', 'pct', 'mult', 'tm_pct']),
     default='set',
     show_default=True,
     help='Shock semantics: set=value, pct=old*(1+value), mult=old*value'
@@ -3303,7 +3512,7 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
 )
 @click.option(
     '--shock-mode',
-    type=click.Choice(['set', 'pct', 'mult']),
+    type=click.Choice(['set', 'pct', 'mult', 'tm_pct']),
     default='pct',
     show_default=True,
     help='Shock semantics: set=value, pct=old*(1+value), mult=old*value'
@@ -3339,6 +3548,32 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
     show_default=True,
     help='Global residual tolerance for strict validation gate'
 )
+@click.option(
+    '--homotopy-steps',
+    default=1,
+    show_default=True,
+    type=int,
+    help='Apply shock in N equal increments for PATH continuation. Use 5-10 for large shocks.',
+)
+@click.option(
+    '--calibrated-start',
+    is_flag=True,
+    default=False,
+    help=(
+        'Start shocked solve from calibrated initial values (pmt=1, pm=VMSB/VXSB) '
+        'instead of the solved baseline. Mirrors GAMS approach where the shocked '
+        'solve starts directly from the calibration equilibrium.'
+    ),
+)
+@click.option(
+    '--if-sub/--no-if-sub',
+    default=False,
+    show_default=True,
+    help=(
+        'Use GAMS ifSUB=1 mode (substitutes macro identities, fixes pm/pmcif/pefob). '
+        'Default False matches GAMS ifSUB=0 (full equation system active).'
+    ),
+)
 @click.pass_context
 def validate_shock(
     ctx,
@@ -3353,6 +3588,9 @@ def validate_shock(
     path_license_string,
     path_capi_mode,
     strict_residual_tol,
+    homotopy_steps,
+    calibrated_start,
+    if_sub,
 ):
     """Run strict baseline + strict shocked path-capi validation for CI pipelines."""
     logger = ctx.obj['logger']
@@ -3371,11 +3609,16 @@ def validate_shock(
             bar.update(1)
 
             contract = _build_gtap_contract_with_calibration(closure)
+            # Override if_sub to match target GAMS ifSUB setting
+            if contract.closure.if_sub != if_sub:
+                payload = contract.model_dump(mode="python")
+                payload["closure"]["if_sub"] = if_sub
+                contract = build_gtap_contract(payload)
             bar.update(1)
 
             base_equations = GTAPModelEquations(base_params.sets, base_params, contract.closure)
             base_model = base_equations.build_model()
-            base_equations.apply_production_scaling(base_model)
+            # apply_production_scaling already called inside build_model()
             bar.update(1)
 
         click.echo("\nRunning strict baseline validation...")
@@ -3389,6 +3632,7 @@ def validate_shock(
                 strict_path_capi=True,
                 strict_residual_tol=strict_residual_tol,
                 closure_config=contract.closure,
+                equation_scaling=True,
             )
         else:
             baseline_result = _run_path_capi_linear_block(
@@ -3424,21 +3668,45 @@ def validate_shock(
 
             shock_equations = GTAPModelEquations(shock_params.sets, shock_params, contract.closure, is_counterfactual=True)
             shock_model = shock_equations.build_model()
-            shock_equations.apply_production_scaling(shock_model)
+            # apply_production_scaling already called inside build_model()
             bar.update(1)
 
         click.echo("Running strict shocked validation...")
         if path_capi_mode == 'nonlinear':
-            shocked_result = _run_path_capi_nonlinear_full(
-                shock_model,
-                shock_params,
-                solver_output=tee,
-                path_license_string=path_license_string,
-                enforce_post_checks=True,
-                strict_path_capi=True,
-                strict_residual_tol=strict_residual_tol,
-                closure_config=contract.closure,
-            )
+            if homotopy_steps > 1 or calibrated_start:
+                label = f"Running homotopy shocked validation ({homotopy_steps} steps"
+                if calibrated_start:
+                    label += ", calibrated-start"
+                label += ")..."
+                click.echo(label)
+                homotopy_result = _run_homotopy_shocked(
+                    base_model=base_model,
+                    gdx_path=gdx_file,
+                    shock_variable=variable,
+                    shock_index=shock_index,
+                    shock_value=value,
+                    shock_mode=shock_mode,
+                    homotopy_steps=max(homotopy_steps, 1),
+                    contract=contract,
+                    solver_output=tee,
+                    path_license_string=path_license_string,
+                    strict_residual_tol=strict_residual_tol,
+                    calibrated_start=calibrated_start,
+                )
+                shock_model = homotopy_result["shocked_model"]
+                shocked_result = homotopy_result
+            else:
+                shocked_result = _run_path_capi_nonlinear_full(
+                    shock_model,
+                    shock_params,
+                    solver_output=tee,
+                    path_license_string=path_license_string,
+                    enforce_post_checks=True,
+                    strict_path_capi=True,
+                    strict_residual_tol=strict_residual_tol,
+                    closure_config=contract.closure,
+                    equation_scaling=True,
+                )
         else:
             shocked_result = _run_path_capi_linear_block(
                 shock_model,
