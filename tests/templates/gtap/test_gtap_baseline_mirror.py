@@ -88,11 +88,11 @@ def _run_baseline_solve():
     from equilibria.templates.gtap import GTAPParameters, GTAPSets
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
     from equilibria.templates.gtap.gtap_solver import GTAPSolver
-    from equilibria.templates.gtap.contracts import build_gtap_contract
+    from equilibria.templates.gtap import build_gtap_contract
 
     params = GTAPParameters()
     params.load_from_gdx(_GDX_FILE)
-    contract = build_gtap_contract({"closure": None})
+    contract = build_gtap_contract("gtap_standard7_9x10")
     equations = GTAPModelEquations(params.sets, params, contract.closure)
     model = equations.build_model()
     equations.apply_production_scaling(model)
