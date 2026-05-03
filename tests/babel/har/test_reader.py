@@ -138,3 +138,21 @@ def test_gtap_taxes_load_from_har():
     assert len(taxes.imptx) > 0
     # rtxs should have some entries
     assert len(taxes.rtxs) > 0
+
+
+# ── Task 9: GTAPParameters.load_from_har ─────────────────────────────────────
+
+def test_gtap_parameters_load_from_har_roundtrip():
+    from equilibria.templates.gtap.gtap_parameters import GTAPParameters
+    params = GTAPParameters()
+    params.load_from_har(
+        basedata_path=NUS333_BASE,
+        sets_path=NUS333_SETS,
+        default_path=Path("/Users/marmol/Downloads/10284/default.prm"),
+        baserate_path=Path("/Users/marmol/Downloads/10284/baserate.har"),
+    )
+    assert params.sets.r == ["USA", "ROW"]
+    assert params.sets.i == ["AGR", "MFG", "SER"]
+    assert params.benchmark.vdpp.get(("USA", "AGR"), 0.0) > 0
+    assert params.elasticities.esubd.get(("USA", "AGR"), 0.0) > 0
+    assert len(params.taxes.imptx) > 0

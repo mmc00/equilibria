@@ -2229,6 +2229,30 @@ class GTAPParameters:
         # Calibrate GAMS-style shares (and, ava, io, af, gx) from benchmark
         self.calibrated.calibrate_from_benchmark(self.benchmark, self.elasticities, self.sets, self.taxes)
 
+    def load_from_har(
+        self,
+        basedata_path: "Path",
+        sets_path: "Path",
+        default_path: "Path",
+        baserate_path: "Path",
+    ) -> None:
+        """Load all parameters from GEMPACK HAR/PRM files.
+
+        Args:
+            basedata_path: Path to basedata.har (benchmark monetary flows).
+            sets_path: Path to sets.har (REG, COMM, ACTS, ENDW, MARG).
+            default_path: Path to default.prm (elasticities).
+            baserate_path: Path to baserate.har (tax rates).
+        """
+        self.sets.load_from_har(sets_path)
+        self.elasticities.load_from_har(default_path, self.sets)
+        self.benchmark.load_from_har(basedata_path, self.sets)
+        self.taxes.load_from_har(baserate_path, self.sets, self.benchmark)
+        self.shares.calibrate(self.benchmark, self.elasticities, self.sets)
+        self.calibrated.calibrate_from_benchmark(
+            self.benchmark, self.elasticities, self.sets, self.taxes
+        )
+
     def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot) -> None:
         """Override share parameters using an equilibrium CSV snapshot."""
         self.shares.apply_equilibrium_snapshot(snapshot, self.sets)
