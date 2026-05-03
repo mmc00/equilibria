@@ -383,6 +383,40 @@ class GTAPElasticities:
             return None
         return median(sigmas)
 
+    def load_from_har(self, default_path: "Path", sets: GTAPSets) -> None:
+        """Load elasticities from a GEMPACK default.prm file."""
+        from equilibria.babel.har import read_har
+        from equilibria.templates.gtap.gtap_parameters import GTAPBenchmarkValues
+
+        har = read_har(default_path)
+
+        def _h(header: str, set_order: list, reorder: tuple | None) -> dict:
+            return GTAPBenchmarkValues._har_to_dict(har, header, sets, set_order, reorder, scale=1.0)
+
+        r10 = (1, 0)
+
+        self.esubd.update(_h("ESBD", ["COMM", "REG"], r10))
+        self.esubm.update(_h("ESBM", ["COMM", "REG"], r10))
+        self.esubva.update(_h("ESBV", ["ACTS", "REG"], r10))
+        self.esubt.update(_h("ESBT", ["ACTS", "REG"], r10))
+        self.etraq.update(_h("ETRQ", ["ACTS", "REG"], r10))
+        self.esubq.update(_h("ESBQ", ["COMM", "REG"], r10))
+        self.incpar.update(_h("INCP", ["COMM", "REG"], r10))
+        self.subpar.update(_h("SUBP", ["COMM", "REG"], r10))
+        self.esubg.update(_h("ESBG", ["REG"], None))
+        self.esubi.update(_h("ESBI", ["REG"], None))
+
+        # ETRE: (ENDW, REG) in HAR, but etrae is keyed only by factor (f).
+        # Values may be 0.0 (mobile factor) — load including zeros.
+        if "ETRE" in har:
+            import numpy as np
+            etre_arr = har["ETRE"].array  # (ENDW, REG)
+            for if_, f in enumerate(sets.f):
+                vals = [float(etre_arr[if_, ir]) for ir in range(len(sets.r))]
+                self.etrae[f] = sum(vals) / len(vals) if vals else 0.0
+
+        self.initialize_nested_elasticities(sets)
+
     def initialize_nested_elasticities(self, sets: GTAPSets) -> None:
         """Ensure sigmap, sigmand and sigmav cover every (region, activity)."""
         default_value = 1.0
