@@ -121,3 +121,20 @@ def test_gtap_elasticities_load_from_har():
     assert ("USA", "AGR") in elast.esubm
     assert ("USA", "AGR") in elast.esubva
     assert "LAND" in elast.etrae   # factor-keyed plain string
+
+
+# ── Task 8: GTAPTaxRates.load_from_har ───────────────────────────────────────
+
+def test_gtap_taxes_load_from_har():
+    from equilibria.templates.gtap.gtap_sets import GTAPSets
+    from equilibria.templates.gtap.gtap_parameters import GTAPBenchmarkValues, GTAPTaxRates
+    sets = GTAPSets()
+    sets.load_from_har(NUS333_SETS)
+    bench = GTAPBenchmarkValues()
+    bench.load_from_har(NUS333_BASE, sets)
+    taxes = GTAPTaxRates()
+    taxes.load_from_har(Path("/Users/marmol/Downloads/10284/baserate.har"), sets, bench)
+    # imptx should be derived from vcif/vmsb
+    assert len(taxes.imptx) > 0
+    # rtxs should have some entries
+    assert len(taxes.rtxs) > 0
