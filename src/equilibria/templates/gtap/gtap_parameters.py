@@ -1395,6 +1395,37 @@ class GTAPTaxRates:
         """Derive trade route wedges (stub)."""
         return
 
+    def load_from_har(
+        self,
+        baserate_path: "Path",
+        sets: GTAPSets,
+        benchmark: "GTAPBenchmarkValues",
+    ) -> None:
+        """Load tax rates from a GEMPACK baserate.har file and derive benchmark rates."""
+        from equilibria.babel.har import read_har
+        from equilibria.templates.gtap.gtap_parameters import GTAPBenchmarkValues
+
+        har = read_har(baserate_path)
+
+        def _h(header: str, set_order: list, reorder: tuple | None, scale: float = 1.0) -> dict:
+            return GTAPBenchmarkValues._har_to_dict(har, header, sets, set_order, reorder, scale)
+
+        r201 = (2, 0, 1)   # (X, Y, REG) → (r, X, Y)
+        r102 = (1, 0, 2)   # (COMM, REG, REG) → (r, i, rp)
+
+        # Load raw factor tax revenues — used by derive_from_benchmark to compute rtf.
+        # HAR values are in percent; set scale=0.01 to convert to fractions.
+        self.rtfd.update(_h("RTFD", ["COMM", "ACTS", "REG"], r201, scale=0.01))
+        self.rtfi.update(_h("RTFM", ["COMM", "ACTS", "REG"], r201, scale=0.01))
+        self.rtf.update(_h("RTIN",  ["ENDW", "ACTS", "REG"], r201, scale=0.01))
+
+        # Load bilateral trade tax rates (percent → fraction).
+        self.rtms.update(_h("RTMS", ["COMM", "REG", "REG"], r102, scale=0.01))
+        self.rtxs.update(_h("RTXS", ["COMM", "REG", "REG"], r102, scale=0.01))
+
+        # Derive all remaining rates from benchmark SAM flows.
+        self.derive_from_benchmark(benchmark, sets)
+
     def derive_from_benchmark(self, benchmark: "GTAPBenchmarkValues", sets: GTAPSets) -> None:
         """Derive ad-valorem tax rates from benchmark SAM flows (GAMS-style)."""
         raw_fbep = dict(self.rtf)
