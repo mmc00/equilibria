@@ -490,6 +490,30 @@ class GTAPSets:
             "errors": errors,
         }
     
+    def load_from_har(self, sets_path: Path) -> None:
+        """Load set definitions from a GEMPACK sets.har file.
+
+        Args:
+            sets_path: Path to sets.har (contains REG, COMM, ACTS, ENDW, MARG arrays).
+        """
+        from equilibria.babel.har import read_har
+
+        data = read_har(sets_path, select_headers=["REG", "COMM", "ACTS", "ENDW", "MARG"])
+
+        def _elems(name: str) -> list[str]:
+            if name not in data:
+                return []
+            return [str(e).strip() for e in data[name].array]
+
+        self.r = _elems("REG")
+        self.i = _elems("COMM")
+        self.a = _elems("ACTS") or self.i.copy()
+        self.f = _elems("ENDW")
+        self.marg = _elems("MARG")
+        self.m = list(self.i)
+        self.s = list(self.r)
+        self.aggregation_name = sets_path.stem
+
     def __repr__(self) -> str:
         """String representation."""
         return (
