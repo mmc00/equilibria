@@ -70,3 +70,18 @@ def test_public_api_import():
     from equilibria.babel.har import read_har, get_header_names, HeaderArray
     assert callable(read_har)
     assert callable(get_header_names)
+
+
+# ── Task 5: GTAPSets.load_from_har ──────────────────────────────────────────
+
+def test_gtap_sets_load_from_har():
+    from equilibria.templates.gtap.gtap_sets import GTAPSets
+    sets = GTAPSets()
+    sets.load_from_har(NUS333_SETS)
+    assert sets.r == ["USA", "ROW"]
+    assert sets.i == ["AGR", "MFG", "SER"]
+    assert sets.a == ["AGR", "MFG", "SER"]
+    assert "LAND" in sets.f
+    assert "LABOR" in sets.f
+    assert "CAPITAL" in sets.f
+    assert sets.marg == ["SER"]
