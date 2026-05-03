@@ -105,3 +105,19 @@ def test_gtap_benchmark_load_from_har():
     assert 0.0 < val < 1.0
     # save is plain-string keyed
     assert isinstance(next(iter(bench.save.keys())), str)
+
+
+# ── Task 7: GTAPElasticities.load_from_har ───────────────────────────────────
+
+def test_gtap_elasticities_load_from_har():
+    from equilibria.templates.gtap.gtap_sets import GTAPSets
+    from equilibria.templates.gtap.gtap_parameters import GTAPElasticities
+    sets = GTAPSets()
+    sets.load_from_har(NUS333_SETS)
+    elast = GTAPElasticities()
+    elast.load_from_har(Path("/Users/marmol/Downloads/10284/default.prm"), sets)
+    assert ("USA", "AGR") in elast.esubd
+    assert elast.esubd[("USA", "AGR")] > 0
+    assert ("USA", "AGR") in elast.esubm
+    assert ("USA", "AGR") in elast.esubva
+    assert "LAND" in elast.etrae   # factor-keyed plain string
