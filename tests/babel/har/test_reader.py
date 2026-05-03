@@ -85,3 +85,23 @@ def test_gtap_sets_load_from_har():
     assert "LABOR" in sets.f
     assert "CAPITAL" in sets.f
     assert sets.marg == ["SER"]
+
+
+# ── Task 6: GTAPBenchmarkValues.load_from_har ────────────────────────────────
+
+def test_gtap_benchmark_load_from_har():
+    from equilibria.templates.gtap.gtap_sets import GTAPSets
+    from equilibria.templates.gtap.gtap_parameters import GTAPBenchmarkValues
+    sets = GTAPSets()
+    sets.load_from_har(NUS333_SETS)
+    bench = GTAPBenchmarkValues()
+    bench.load_from_har(NUS333_BASE, sets)
+    # VDPP[USA, AGR] should be non-zero; key order is (r, i)
+    assert bench.vdpp.get(("USA", "AGR"), 0.0) > 0
+    # VMSB has (r, i, rp) keys
+    assert len(bench.vmsb) > 0
+    # values scaled by 1e-6 (trillions), ~0.05 for USA AGR
+    val = bench.vdpp.get(("USA", "AGR"), 0.0)
+    assert 0.0 < val < 1.0
+    # save is plain-string keyed
+    assert isinstance(next(iter(bench.save.keys())), str)

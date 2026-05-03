@@ -1023,6 +1023,118 @@ class GTAPBenchmarkValues:
         """Placeholder for trade aggregates (no-op for now)."""
         return
 
+    @staticmethod
+    def _har_to_dict(
+        har_data: dict,
+        header: str,
+        sets: "GTAPSets",
+        set_order: list[str],
+        reorder: tuple[int, ...] | None,
+        scale: float = 1.0,
+    ) -> dict:
+        """Convert a HAR header array to a Python dict with internal key order.
+
+        Args:
+            har_data: Output of read_har().
+            header: Header name (e.g. 'VDPP').
+            sets: GTAPSets (for element lists).
+            set_order: GEMPACK dimension names in HAR order, e.g. ['COMM','REG'].
+            reorder: Index permutation from HAR order to internal key order, or None.
+            scale: Scalar multiplier (use 1e-6 for monetary values).
+        """
+        import itertools
+
+        if header not in har_data:
+            return {}
+        arr = har_data[header].array
+        _SET_MAP: dict = {
+            "REG": sets.r, "COMM": sets.i, "ACTS": sets.a,
+            "ENDW": sets.f, "MARG": sets.marg,
+        }
+        dim_elements = [_SET_MAP.get(sn, []) for sn in set_order]
+        result: dict = {}
+        for indices in itertools.product(*[range(len(e)) for e in dim_elements]):
+            val = float(arr[indices]) * scale
+            if val == 0.0:
+                continue
+            raw_key = tuple(dim_elements[d][i] for d, i in enumerate(indices))
+            if reorder is not None:
+                key: object = tuple(raw_key[i] for i in reorder)
+            else:
+                key = raw_key[0] if len(raw_key) == 1 else raw_key
+            result[key] = val
+        return result
+
+    def load_from_har(self, basedata_path: "Path", sets: "GTAPSets") -> None:
+        """Load benchmark values from a GEMPACK basedata.har file."""
+        from equilibria.babel.har import read_har
+        har = read_har(basedata_path)
+        S = 1e-6  # inScale (same as load_from_gdx)
+
+        def _h(header: str, set_order: list, reorder: tuple | None, scale: float = S) -> dict:
+            return self._har_to_dict(har, header, sets, set_order, reorder, scale)
+
+        r10 = (1, 0)   # (COMM/ACTS, REG) → (r, i/a)
+        r201 = (2, 0, 1)  # (X, Y, REG) → (r, X, Y)
+        r210 = (2, 1, 0)  # (COMM, ACTS, REG) → (r, a, i)
+        r102 = (1, 0, 2)  # (COMM, REG, REG) → (r, i, rp)
+
+        # 2D (COMM, REG) → (r, i)
+        self.vdpp.update(_h("VDPP", ["COMM", "REG"], r10))
+        self.vmpp.update(_h("VMPP", ["COMM", "REG"], r10))
+        self.vdpb.update(_h("VDPB", ["COMM", "REG"], r10))
+        self.vmpb.update(_h("VMPB", ["COMM", "REG"], r10))
+        self.vdgp.update(_h("VDGP", ["COMM", "REG"], r10))
+        self.vmgp.update(_h("VMGP", ["COMM", "REG"], r10))
+        self.vdgb.update(_h("VDGB", ["COMM", "REG"], r10))
+        self.vmgb.update(_h("VMGB", ["COMM", "REG"], r10))
+        self.vdip.update(_h("VDIP", ["COMM", "REG"], r10))
+        self.vmip.update(_h("VMIP", ["COMM", "REG"], r10))
+        self.vdib.update(_h("VDIB", ["COMM", "REG"], r10))
+        self.vmib.update(_h("VMIB", ["COMM", "REG"], r10))
+        self.vst.update(_h("VST",   ["MARG", "REG"], r10))   # MARG×REG in HAR
+
+        # 2D (ACTS, REG) → (r, a)
+        self.vom.update(_h("VOSB", ["COMM", "REG"], r10))
+
+        # 3D intermediate (COMM, ACTS, REG) → (r, i, a)
+        self.vdfp.update(_h("VDFP", ["COMM", "ACTS", "REG"], r201))
+        self.vmfp.update(_h("VMFP", ["COMM", "ACTS", "REG"], r201))
+        self.vdfb.update(_h("VDFB", ["COMM", "ACTS", "REG"], r201))
+        self.vmfb.update(_h("VMFB", ["COMM", "ACTS", "REG"], r201))
+
+        # 3D make matrix (COMM, ACTS, REG) → (r, a, i)
+        self.makb.update(_h("MAKB", ["COMM", "ACTS", "REG"], r210))
+        self.maks.update(_h("MAKS", ["COMM", "ACTS", "REG"], r210))
+
+        # 3D factors (ENDW, ACTS, REG) → (r, f, a)
+        self.vfm.update(_h("EVFP",  ["ENDW", "ACTS", "REG"], r201))
+        self.evfb.update(_h("EVFB", ["ENDW", "ACTS", "REG"], r201))
+        self.evos.update(_h("EVOS", ["ENDW", "ACTS", "REG"], r201))
+
+        # 3D trade (COMM, REG, REG) → (r, i, rp)
+        self.vxsb.update(_h("VXSB", ["COMM", "REG", "REG"], r102))
+        self.vfob.update(_h("VFOB", ["COMM", "REG", "REG"], r102))
+        self.vcif.update(_h("VCIF", ["COMM", "REG", "REG"], r102))
+        self.vmsb.update(_h("VMSB", ["COMM", "REG", "REG"], r102))
+
+        # 4D transport (MARG, COMM, REG, REG) → (r, i, rp, m)
+        self.vtwr.update(_h("VTWR", ["MARG", "COMM", "REG", "REG"], (2, 1, 3, 0)))
+
+        # 1D (REG) → plain string key
+        self.save.update(_h("SAVE", ["REG"], None))
+        self.vdep.update(_h("VDEP", ["REG"], None))
+        self.vkb.update(_h("VKB",   ["REG"], None))
+
+        # Aggregate vfb from evfb: (r, f) = sum_a evfb(r, f, a)
+        if self.evfb:
+            self.vfb.clear()
+            for (region, factor, _activity), value in self.evfb.items():
+                key2 = (region, factor)
+                self.vfb[key2] = self.vfb.get(key2, 0.0) + float(value)
+
+        self._derive_output_totals(sets)
+
     def get_trade_totals(self, sets: GTAPSets, region: str, commodity: str) -> tuple[float, float, float, float, float]:
         """Return benchmark trade totals for standard aggregates.
 
