@@ -507,16 +507,6 @@ class GTAPModelEquations:
                 if hasattr(model, "xds"):
                     model.xds[r, i].set_value(max(float(pyo_value(model.xd[r, i])), 1e-8))
 
-                # eq_xa: xa = sum_aa(xaa/xscale) + vst
-                if hasattr(model, "xa"):
-                    total_xa = sum(
-                        float(pyo_value(model.xaa[r, i, aa]))
-                        / max(float(pyo_value(model.xscale[r, aa])), 1e-12)
-                        for aa in model.aa
-                    )
-                    inventory = self._vst_value(str(r), str(i))
-                    model.xa[r, i].set_value(max(total_xa + inventory, 1e-8))
-
                 # eq_xseq (omega=inf case): xs = xds + xet  →  xet = xs - xds
                 # For finite omega, eq_xseq is a price eq: skip xet update.
                 omega = self.params.elasticities.omegax.get((r, i), float("inf"))
@@ -674,16 +664,6 @@ class GTAPModelEquations:
                         for aa in model.aa
                     )
                     model.xd[r, i].set_value(max(total_xd, 1e-8))
-
-        if hasattr(model, "xa"):
-            for r in model.r:
-                for i in model.i:
-                    total_xa = sum(
-                        value(model.xaa[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
-                        for aa in model.aa
-                    )
-                    inventory = self._vst_value(str(r), str(i))
-                    model.xa[r, i].set_value(max(total_xa + inventory, 1e-8))
 
         if hasattr(model, "xds") and hasattr(model, "xda"):
             for r in model.r:
@@ -2418,10 +2398,6 @@ class GTAPModelEquations:
                     pet_val = float(ref_pet)
             return max(numerator / pet_val, 1e-8)
 
-        def get_xa_init(m, r, i):
-            total = sum(get_xaa_init(m, r, i, aa) / get_xscale(m, r, aa) for aa in model.aa)
-            return max(total, 1e-8)
-
         def get_va_init(m, r, a):
             # GAMS cal.gms: va.l = sum(fp, pfa.l*xf.l) / pva.l, with pva.l≈1 at benchmark.
             total = sum(get_pfa_init(m, r, f, a) * get_vfm_init(m, r, f, a) for f in self.sets.f)
@@ -2561,8 +2537,13 @@ class GTAPModelEquations:
         model.ps = Var(model.r, model.i, within=NonNegativeReals, initialize=1.0, doc="Supply price")
         model.pd = Var(model.r, model.i, within=NonNegativeReals, initialize=1.0, doc="Domestic price")
         
-        # Armington (xa per r,i, pa per r,i,aa)
-        model.xa = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xa_init, doc="Armington demand")
+        # Armington (xa per r,i is an Expression alias of sum_aa(xaa/xscale) + vst,
+        # mirroring GAMS which has no aggregate xa(r,i) variable. pa per r,i,aa.)
+        def _xa_expr_rule(m, r, i):
+            absorption = sum(m.xaa[r, i, aa] / m.xscale[r, aa] for aa in m.aa)
+            inventory = self._vst_value(str(r), str(i))
+            return absorption + inventory
+        model.xa = Expression(model.r, model.i, rule=_xa_expr_rule, doc="Armington demand (aggregate, derived)")
         # GAMS: pa(r,i,aa,t) - Agent-specific Armington price
         def get_pa_init(m, r, i, aa):
             return get_pa_benchmark_init(m, r, i, aa)
@@ -3325,7 +3306,7 @@ class GTAPModelEquations:
     
     def _add_equations(self, model: "ConcreteModel") -> None:
         """Add all equations for square system."""
-        from pyomo.environ import Constraint, exp, log, value
+        from pyomo.environ import Constraint, Param, exp, log, value
 
         def _vmsb_value(region, commodity, partner) -> float:
             val = self.params.benchmark.vmsb.get((partner, commodity, region))
@@ -3815,14 +3796,6 @@ class GTAPModelEquations:
         # TRADE - CES ARMINGTON DOMESTIC/IMPORT
         # ========================================================================
         
-        # Armington aggregation (Leontief for simplicity)
-        def eq_xa_rule(model, r, i):
-            return model.xa[r, i] == sum(model.xaa[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
-        model.eq_xa = Constraint(model.r, model.i, rule=eq_xa_rule)
-        # Aggregate xa(r,i) is a Pyomo helper not present as a standalone
-        # equation in GTAP. Keep it for reporting but exclude from MCP.
-        model.eq_xa.deactivate()
-
         # Agent/activity demand for intermediate inputs by activity.
         def eq_xaa_activity_rule(model, r, i, a):
             io_val = (
@@ -4831,8 +4804,18 @@ class GTAPModelEquations:
             return model.gdpmp[r] == _mqgdp(model, r, price_base=False, quantity_base=False)
         model.eq_gdpmp = Constraint(model.r, rule=eq_gdpmp_rule)
 
+        # GAMS rgdpmpeq (model.gms): Fisher quantity index of real GDP.
+        #   rgdpmp(t) = rgdpmp(t0) * sqrt[ (gdpmp(t)/gdpmp(t0)) * (mqgdp(t0,t)/mqgdp(t,t0)) ]
+        # At benchmark rgdpmp(t0) = gdpmp(t0) = mqgdp(t0,t0). Square to drop sqrt:
+        #   rgdpmp(t)^2 * mqgdp(t,t0) == base_mqgdp_00 * gdpmp(t) * mqgdp(t0,t)
         def eq_rgdpmp_rule(model, r):
-            return model.rgdpmp[r] == model.gdpmp[r]
+            mqgdp_00 = base_mqgdp_00[r]
+            if mqgdp_00 <= 1e-12:
+                return model.rgdpmp[r] == model.gdpmp[r]
+            mqgdp_0t = _mqgdp(model, r, price_base=True, quantity_base=False)
+            mqgdp_t0 = _mqgdp(model, r, price_base=False, quantity_base=True)
+            scale = max(mqgdp_00 ** 2, 1e-12)
+            return (model.rgdpmp[r] ** 2) * mqgdp_t0 / scale == mqgdp_00 * model.gdpmp[r] * mqgdp_0t / scale
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
 
         def eq_pgdpmp_rule(model, r):
@@ -4882,29 +4865,69 @@ class GTAPModelEquations:
         # MARKET CLEARING
         # ========================================================================
         
-        # Goods market clearing: Supply = Demand
-        def mkt_goods_rule(model, r, i):
-            absorption = sum(model.xaa[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
-            inventory = self._vst_value(str(r), str(i))
-            return model.xa[r, i] == absorption + inventory
-        model.mkt_goods = Constraint(model.r, model.i, rule=mkt_goods_rule)
-        # Duplicate of eq_xa; keep for reporting compatibility but exclude from MCP.
-        model.mkt_goods.deactivate()
-        
         # ========================================================================
         # NUMERAIRE
         # ========================================================================
         
+        # GAMS pwfacteq (model.gms): Fisher ideal index of world factor mass.
+        #   mqfactw(tp, tq) = sum((r,fp,a), pf(r,fp,a,tp) * xf(r,fp,a,tq) / xscale(r,a))
+        #   pwfact = pwfact(t0) * sqrt[(M_sb / M_bb) * (M_ss / M_bs)]
+        # With benchmark pf=1 and pwfact(t0)=1:
+        #   pwfact**2 * M_bb * M_bs = M_sb * M_ss
+        # where M_bb = sum xf0/xscale (constant), M_bs = sum xf/xscale,
+        # M_sb = sum pf*xf0/xscale, M_ss = sum pf*xf/xscale.
+        # Snapshot xf0 from the benchmark initialization before solve.
+        xf0_data: Dict[tuple[str, str, str], float] = {}
+        for r in self.sets.r:
+            for f in self.sets.f:
+                for a in self.sets.a:
+                    try:
+                        xf0_data[(r, f, a)] = float(value(model.xf[r, f, a]))
+                    except (KeyError, ValueError):
+                        xf0_data[(r, f, a)] = 0.0
+        model.xf0 = Param(model.r, model.f, model.a, initialize=xf0_data, default=0.0, mutable=False)
+        # M_bb is a calibration constant; precompute once for the constraint.
+        m_bb_data = 0.0
+        for r in self.sets.r:
+            xs_a: Dict[str, float] = {}
+            for a in self.sets.a:
+                try:
+                    xs_a[a] = float(value(model.xscale[r, a]))
+                except (KeyError, ValueError):
+                    xs_a[a] = 1.0
+            for f in self.sets.f:
+                for a in self.sets.a:
+                    xs = xs_a.get(a, 1.0)
+                    if xs <= 1e-12:
+                        continue
+                    m_bb_data += xf0_data.get((r, f, a), 0.0) / xs
+        model.mqfactw_bb = Param(initialize=m_bb_data if m_bb_data > 0.0 else 1.0, mutable=False)
+
         def eq_pwfact_rule(model):
-            n_regions = len(list(model.r))
-            if n_regions == 0:
-                return Constraint.Skip
-            return model.pwfact == sum(model.pfact[r] for r in model.r) / n_regions
+            m_bs = sum(
+                model.xf[r, f, a] / model.xscale[r, a]
+                for r in model.r for f in model.f for a in model.a
+                if value(model.xscale[r, a]) > 1e-12
+            )
+            m_sb = sum(
+                model.pf[r, f, a] * model.xf0[r, f, a] / model.xscale[r, a]
+                for r in model.r for f in model.f for a in model.a
+                if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
+            )
+            m_ss = sum(
+                model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                for r in model.r for f in model.f for a in model.a
+                if value(model.xscale[r, a]) > 1e-12
+            )
+            return model.pwfact * model.pwfact * model.mqfactw_bb * m_bs == m_sb * m_ss
         model.eq_pwfact = Constraint(rule=eq_pwfact_rule)
 
         def eq_pnum_rule(model):
             return model.pnum == model.pwfact
         model.eq_pnum = Constraint(rule=eq_pnum_rule)
+        # GAMS comp: pnum.fx anchors the numeraire and pnumeq drops out of MCP.
+        # Replicate by deactivating eq_pnum so eq_pwfact (Fisher) determines pwfact.
+        model.eq_pnum.deactivate()
 
         def eq_walras_rule(model):
             target_regions = residual_regions if residual_regions else tuple(model.r)
