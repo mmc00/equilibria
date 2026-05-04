@@ -118,7 +118,7 @@ set rmuv(r) "RMUV regions" /
 / ;
 
 set imuv(i) "IMUV commodities" /
-   MFG
+   c_MFG
 / ;
 
 * -------------------------------------------------------------------------
@@ -142,7 +142,11 @@ loop(tsim,
    $$include "iterloop.gms"
 
    if(sameas(tsim,'shock'),
-      pnum.fx(tsim) = 1.5 ;
+*     10% shock to import-tariff *power*: imptx_new = (1+imptx_old)*1.10 - 1
+*     iterloop.gms has already fixed imptx.fx(r,i,rp,tsim) = imptx.l(...) ;
+*     overwriting that fix here applies the shock for the 'shock' period only.
+      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =
+         (1 + imptx.l(r,i,rp,tsim)) * 1.10 - 1 ;
    ) ;
 
    options limrow = 3, limcol = 3, solprint = off, iterlim = 1000 ;
