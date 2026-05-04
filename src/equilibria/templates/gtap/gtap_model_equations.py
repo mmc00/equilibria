@@ -567,6 +567,7 @@ class GTAPModelEquations:
             GTAP_HOUSEHOLD_AGENT,
             GTAP_GOVERNMENT_AGENT,
             GTAP_INVESTMENT_AGENT,
+            GTAP_MARGIN_AGENT,
         )
         # Capture the base-year levels used by the compStat Fisher indices.
         # GAMS formulas mix current prices/quantities with the original t0 levels.
@@ -777,6 +778,7 @@ class GTAPModelEquations:
             GTAP_HOUSEHOLD_AGENT,
             GTAP_GOVERNMENT_AGENT,
             GTAP_INVESTMENT_AGENT,
+            GTAP_MARGIN_AGENT,
         )
         base_pa = {
             (r, i, agent): float(value(model.pa[r, i, agent]))
@@ -4699,11 +4701,10 @@ class GTAPModelEquations:
             return model.yg[r] == model.betag[r] * model.phi[r] * model.regy[r]
         model.eq_yg = Constraint(model.r, rule=eq_yg_rule)
 
-        # Investment income share (region-specific benchmark calibration)
+        # Investment income share (GAMS yieq, active for ALL regions).
+        # Residual region absorbs Walrasian redundancy via eq_walras + walras
+        # scalar variable, mirroring GAMS model.gms walraseq + walras.
         def eq_yi_rule(model, r):
-            if r in residual_regions:
-                return Constraint.Skip
-            # GAMS yieq: yi = pi*depr*kstock + rsav + savf
             return model.yi[r] == model.pi[r] * model.depr[r] * model.kstock[r] + model.rsav[r] + model.savf[r]
         model.eq_yi = Constraint(model.r, rule=eq_yi_rule)
 
@@ -4716,6 +4717,7 @@ class GTAPModelEquations:
             GTAP_HOUSEHOLD_AGENT,
             GTAP_GOVERNMENT_AGENT,
             GTAP_INVESTMENT_AGENT,
+            GTAP_MARGIN_AGENT,
         )
 
         # Base-year levels for compStat Fisher indices.
@@ -4877,8 +4879,12 @@ class GTAPModelEquations:
         #   pwfact**2 * M_bb * M_bs = M_sb * M_ss
         # where M_bb = sum xf0/xscale (constant), M_bs = sum xf/xscale,
         # M_sb = sum pf*xf0/xscale, M_ss = sum pf*xf/xscale.
-        # Snapshot xf0 from the benchmark initialization before solve.
+        # Snapshot xf0 AND pf0 from benchmark initialization. GAMS Fisher uses
+        # mqfactw(tp,tq) = sum_{r,f,a} pf(tp) * xf(tq) / xscale  (model.gms:1264).
+        # Python previously omitted pf0 from M_bb and M_bs, biasing pwfact at
+        # baseline (e.g., 1.15 instead of 1.0 in NUS333).
         xf0_data: Dict[tuple[str, str, str], float] = {}
+        pf0_data: Dict[tuple[str, str, str], float] = {}
         for r in self.sets.r:
             for f in self.sets.f:
                 for a in self.sets.a:
@@ -4886,8 +4892,13 @@ class GTAPModelEquations:
                         xf0_data[(r, f, a)] = float(value(model.xf[r, f, a]))
                     except (KeyError, ValueError):
                         xf0_data[(r, f, a)] = 0.0
+                    try:
+                        pf0_data[(r, f, a)] = float(value(model.pf[r, f, a]))
+                    except (KeyError, ValueError):
+                        pf0_data[(r, f, a)] = 1.0
         model.xf0 = Param(model.r, model.f, model.a, initialize=xf0_data, default=0.0, mutable=False)
-        # M_bb is a calibration constant; precompute once for the constraint.
+        model.pf0 = Param(model.r, model.f, model.a, initialize=pf0_data, default=1.0, mutable=False)
+        # M_bb = sum pf0*xf0/xscale (calibration constant).
         m_bb_data = 0.0
         for r in self.sets.r:
             xs_a: Dict[str, float] = {}
@@ -4901,12 +4912,16 @@ class GTAPModelEquations:
                     xs = xs_a.get(a, 1.0)
                     if xs <= 1e-12:
                         continue
-                    m_bb_data += xf0_data.get((r, f, a), 0.0) / xs
+                    m_bb_data += pf0_data.get((r, f, a), 1.0) * xf0_data.get((r, f, a), 0.0) / xs
         model.mqfactw_bb = Param(initialize=m_bb_data if m_bb_data > 0.0 else 1.0, mutable=False)
 
         def eq_pwfact_rule(model):
+            # mqfactw(tp,tq) = sum pf(tp) * xf(tq) / xscale
+            # M_bs = mqfactw(t0,t)  → pf0 * xf
+            # M_sb = mqfactw(t,t0)  → pf  * xf0
+            # M_ss = mqfactw(t,t)   → pf  * xf
             m_bs = sum(
-                model.xf[r, f, a] / model.xscale[r, a]
+                model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
@@ -4926,9 +4941,11 @@ class GTAPModelEquations:
         def eq_pnum_rule(model):
             return model.pnum == model.pwfact
         model.eq_pnum = Constraint(rule=eq_pnum_rule)
-        # GAMS comp: pnum.fx anchors the numeraire and pnumeq drops out of MCP.
-        # Replicate by deactivating eq_pnum so eq_pwfact (Fisher) determines pwfact.
-        model.eq_pnum.deactivate()
+        # GAMS comp_nus333.gms keeps pnumeq active under ifMCP=1: pnum.fx=1 AND
+        # pnum==pwfact ⇒ pwfact=1, and the Fisher index becomes a binding
+        # constraint on (pf, xf) — anchoring the entire price system. Without
+        # this, pwfact floats and prices have no anchor beyond pnum, which is
+        # decoupled from pf via Fisher.
 
         def eq_walras_rule(model):
             target_regions = residual_regions if residual_regions else tuple(model.r)

@@ -36,13 +36,16 @@ NEOS_REF = {
 }
 
 
-def _structural_matching(constraints, free_vars):
+def _structural_matching(constraints, free_vars, forced_pairs=None):
     """Hopcroft-Karp maximum bipartite matching: eq row → var col.
 
     Adapter pairs F[i] with var[i] positionally. Without a structural matching,
     alphabetical sort can pair an equation with an unrelated spectator var that
     sits at its lower bound, allowing PATH to terminate "feasible" with a large
     F[i] residual. Returns var permutation so var[i] is structurally tied to eq i.
+
+    forced_pairs: optional list of (eq_name, var_name) tuples to pin upfront
+    (mirrors GAMS `model gtap / eq.var, ... /` declared matching).
     """
     from collections import deque
     from pyomo.core.expr.visitor import identify_variables
@@ -79,6 +82,23 @@ def _structural_matching(constraints, free_vars):
     pair_right = [-1] * n  # var col → eq row
     distance = [0] * n
     INF = 10 ** 9
+
+    # Apply forced pairings BEFORE Hopcroft-Karp (mirrors GAMS declared matching).
+    eq_name_to_row = {c.name: i for i, c in enumerate(constraints)}
+    var_name_to_col = {v.name: j for j, v in enumerate(free_vars)}
+    if forced_pairs:
+        for eq_name, var_name in forced_pairs:
+            r = eq_name_to_row.get(eq_name)
+            c = var_name_to_col.get(var_name)
+            if r is None or c is None:
+                print(f"[matching] WARN: forced pair {eq_name}↔{var_name} not found")
+                continue
+            if c not in adjacency[r]:
+                print(f"[matching] WARN: forced pair {eq_name}↔{var_name} not in adjacency")
+                continue
+            pair_left[r] = c
+            pair_right[c] = r
+            print(f"[matching] forced: {eq_name} ↔ {var_name}")
 
     def bfs():
         q = deque()
@@ -145,6 +165,39 @@ def _solve(model, params, *, label: str):
                     pft_fixed += 1
     if pft_fixed:
         print(f"[{label}] fixed {pft_fixed} sluggish pft(r,f) (no eq references them)")
+
+    # Closure fixes xft for all factors. eq_xfteq (supply curve) is then
+    # over-determining: with xft fixed, eq_xfteq matches pft via Hopcroft-Karp,
+    # forcing pft = pabs (frozen). GAMS doesn't have this issue because there
+    # xft is free along the supply curve.  Equivalent GAMS-faithful patch: keep
+    # xft fixed but deactivate eq_xfteq for fixed mobile xft so pft can pair
+    # with eq_xft (factor market clearing) — letting pft move with demand.
+    mf_set = set(getattr(params.sets, "mf", []) or [])
+    xfteq_deact = 0
+    if hasattr(model, "eq_xfteq") and mf_set:
+        for r in model.r:
+            for f in model.f:
+                if str(f) not in mf_set:
+                    continue
+                if value(model.xftflag[r, f]) <= 0.0:
+                    continue
+                if not model.xft[r, f].fixed:
+                    continue
+                try:
+                    con = model.eq_xfteq[r, f]
+                except KeyError:
+                    continue
+                if con.active:
+                    con.deactivate()
+                    xfteq_deact += 1
+    if xfteq_deact:
+        print(f"[{label}] deactivated {xfteq_deact} eq_xfteq (xft fixed → over-determining)")
+
+    # GAMS-faithful Walras handling:
+    # - eq_yi active for ALL r (no residual skip — fixed in gtap_model_equations.py)
+    # - eq_savf skips residual; eq_capAcct enforces sum(savf)=0; eq_walras
+    #   absorbs slack into the free `walras` scalar var. Mirrors GAMS exactly.
+    # No yi.fix() needed.
 
     # Under omegax=inf, eq_xseq becomes the supply identity xs = xds + xet
     # while pd = pet = ps (degenerate CET). Some of these (r,i) eq_xseq are
@@ -231,6 +284,19 @@ def _solve(model, params, *, label: str):
                     deact_count += 1
         if deact_count:
             print(f"[{label}] deactivated {deact_count} unmatched eq_xseq under omegax=inf")
+        # Diagnostic: list all unmatched eqs and unmatched vars after deactivation pass.
+        unmatched_eqs = [
+            _cons_snap[u].name for u in range(_n)
+            if _pl[u] == -1 and _cons_snap[u].active
+        ]
+        unmatched_vars = [
+            _vars_snap[v].name for v in range(_nv)
+            if _pr[v] == -1 and not _vars_snap[v].fixed
+        ]
+        if unmatched_eqs:
+            print(f"[{label}] unmatched active eqs ({len(unmatched_eqs)}): {unmatched_eqs[:8]}")
+        if unmatched_vars:
+            print(f"[{label}] unmatched free vars ({len(unmatched_vars)}): {unmatched_vars[:8]}")
 
     constraints = sorted(
         model.component_data_objects(Constraint, active=True), key=lambda c: c.name
@@ -246,7 +312,9 @@ def _solve(model, params, *, label: str):
 
     # Reorder free_vars so position i is structurally matched to constraints[i].
     # See _structural_matching docstring for why this matters for MCP semantics.
-    free_vars = _structural_matching(constraints, free_vars)
+    # GAMS-declared MCP pairings (model.gms:1419): force these to mirror GAMS.
+    forced_pairs = [("eq_pwfact", "pwfact")]
+    free_vars = _structural_matching(constraints, free_vars, forced_pairs=forced_pairs)
     n_matched_natural = sum(
         1 for i, v in enumerate(free_vars) if v.name.startswith(("eq_", ""))
     )
@@ -594,13 +662,15 @@ def _extract_key(model, params):
 
 
 def _apply_tariff_shock(params, factor: float = 1.10):
-    """imptx_new = (1+imptx)*factor - 1; skip diagonal (rp==r)."""
+    """imptx_new = (1+imptx)*factor - 1 for ALL xwFlag pairs.
+
+    GAMS comp_nus333.gms:148 applies the shock to imptx(r,i,rp) for every
+    pair with xwFlag(r,i,rp), INCLUDING the diagonal (intra-region trade
+    e.g. ROW->ROW which represents aggregated within-ROW trade).
+    """
     imptx = params.taxes.imptx
     n = 0
     for key in list(imptx.keys()):
-        # imptx key in GTAP convention: (rp, i, r) — exporter (rp) into importer (r).
-        if len(key) == 3 and key[0] == key[2]:
-            continue
         cur = float(imptx[key])
         imptx[key] = (1.0 + cur) * factor - 1.0
         # Mirror to rtms if it shadows imptx.
