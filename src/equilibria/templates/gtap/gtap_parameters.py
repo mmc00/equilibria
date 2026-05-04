@@ -1126,6 +1126,11 @@ class GTAPBenchmarkValues:
         self.vmip.update(_h("VMIP", ["COMM", "REG"], r10))
         self.vdib.update(_h("VDIB", ["COMM", "REG"], r10))
         self.vmib.update(_h("VMIB", ["COMM", "REG"], r10))
+
+        # Derive vim = vdip + vmip (total investment demand, used for invwgt calibration)
+        self.vim.clear()
+        for k in set(self.vdip) | set(self.vmip):
+            self.vim[k] = self.vdip.get(k, 0.0) + self.vmip.get(k, 0.0)
         self.vst.update(_h("VST",   ["MARG", "REG"], r10))   # MARG×REG in HAR
 
         # 2D (ACTS, REG) → (r, a)
@@ -1455,15 +1460,18 @@ class GTAPTaxRates:
         rtf_rates: Dict[Tuple[str, str, str], float] = {}
         for (r, f, a), vfm in benchmark.vfm.items():
             evfb = float(benchmark.evfb.get((r, f, a), 0.0) or 0.0)
-            denom = evfb if evfb > 0.0 else float(vfm)
-            if denom <= 0.0:
+            if evfb <= 0.0:
                 continue
-            fbep = float(raw_fbep.get((r, f, a), 0.0))
-            ftrv = float(raw_ftrv.get((r, f, a), 0.0))
-            # GTAP benchmark-consistent wedge (matches GAMS pfa benchmark levels):
-            # rtf = (FBEP + FTRV) / EVFB
-            rate = (ftrv + fbep) / denom
-            if rate != 0.0 or fbep != 0.0 or ftrv != 0.0:
+            vfm_val = float(vfm)
+            if vfm_val <= 0.0:
+                # Fall back to FBEP/FTRV revenue formula (GDX-style revenue values)
+                fbep = float(raw_fbep.get((r, f, a), 0.0))
+                ftrv = float(raw_ftrv.get((r, f, a), 0.0))
+                rate = (ftrv + fbep) / evfb
+            else:
+                # GAMS-consistent: rtf = EVFP/EVFB - 1 (scale-independent ratio)
+                rate = vfm_val / evfb - 1.0
+            if abs(rate) > 1e-10:
                 rtf_rates[(r, f, a)] = rate
         if rtf_rates:
             self.rtf = rtf_rates
