@@ -513,6 +513,8 @@ class GTAPSets:
         self.m = list(self.i)
         self.s = list(self.r)
         self.aggregation_name = sets_path.stem
+        # Build activity↔commodity bijection from diagonal structure
+        self._set_activity_mappings({})
 
     def __repr__(self) -> str:
         """String representation."""

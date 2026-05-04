@@ -1018,12 +1018,14 @@ class GTAPModelEquations:
                             continue
                         bilateral_exports = float(self.params.benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
                         bilateral_imports = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
-                        if bilateral_exports <= 0.0 and bilateral_imports <= 0.0:
+                        vxsb_qty = float(self.params.benchmark.vxsb.get((rp, i, r), 0.0) or 0.0)
+                        if bilateral_exports <= 0.0 and bilateral_imports <= 0.0 and vxsb_qty <= 0.0:
                             continue
-                        if bilateral_exports > 0.0 and bilateral_imports > 0.0:
-                            pmcif = max(bilateral_imports / bilateral_exports, 1e-8)
+                        qty = bilateral_exports if bilateral_exports > 0.0 else vxsb_qty
+                        if qty > 0.0 and bilateral_imports > 0.0:
+                            pmcif = max(bilateral_imports / qty, 1e-8)
                         elif bilateral_imports > 0.0:
-                            pmcif = max(bilateral_imports, 1e-8)
+                            pmcif = 1.0
                         else:
                             export_tax = float(self.params.taxes.rtxs.get((rp, i, r), 0.0) or 0.0)
                             tmarg = sum(self.params.benchmark.vtwr.get((rp, i, r, margin), 0.0) for margin in self.sets.m)
@@ -2363,12 +2365,15 @@ class GTAPModelEquations:
                 xw_ref = float(self.reference_snapshot.xw.get((rp, i, r), 0.0) or 0.0) if self.reference_snapshot else 0.0
                 bilateral_exports = float(self.params.benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
                 bilateral_imports = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
-                if bilateral_exports <= 0.0 and bilateral_imports <= 0.0:
+                vxsb_qty = float(self.params.benchmark.vxsb.get((rp, i, r), 0.0) or 0.0)
+                if bilateral_exports <= 0.0 and bilateral_imports <= 0.0 and vxsb_qty <= 0.0:
                     continue
-                if bilateral_exports > 0.0 and bilateral_imports > 0.0:
-                    pmcif = max(bilateral_imports / bilateral_exports, 1e-8)
+                # Use VXMD as quantity; fall back to VXSB when VXMD absent (HAR datasets).
+                qty = bilateral_exports if bilateral_exports > 0.0 else vxsb_qty
+                if qty > 0.0 and bilateral_imports > 0.0:
+                    pmcif = max(bilateral_imports / qty, 1e-8)
                 elif bilateral_imports > 0.0:
-                    pmcif = max(bilateral_imports, 1e-8)
+                    pmcif = 1.0
                 else:
                     export_tax = float(self.params.taxes.rtxs.get((rp, i, r), 0.0) or 0.0)
                     tmarg = sum(self.params.benchmark.vtwr.get((rp, i, r, margin), 0.0) for margin in self.sets.m)
@@ -2567,6 +2572,7 @@ class GTAPModelEquations:
             model.i,
             model.aa,
             within=Reals,
+            bounds=(-0.999, None),
             initialize=get_dintx_init,
             doc="Indirect tax on domestic consumption",
         )
@@ -2575,6 +2581,7 @@ class GTAPModelEquations:
             model.i,
             model.aa,
             within=Reals,
+            bounds=(-0.999, None),
             initialize=get_mintx_init,
             doc="Indirect tax on import consumption",
         )
@@ -2660,7 +2667,8 @@ class GTAPModelEquations:
             # baseline pe.l starts at 1.0 on active routes.
             bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
             mirror_imports = self.params.benchmark.viws.get((rp, i, r), 0.0)
-            return 1.0 if (bilateral_exports > 0.0 or mirror_imports > 0.0) else 0.0
+            vxsb = self.params.benchmark.vxsb.get((r, i, rp), 0.0)
+            return 1.0 if (bilateral_exports > 0.0 or mirror_imports > 0.0 or vxsb > 0.0) else 0.0
 
         def get_xe_init(m, r, i, rp):
             # eq_xe_xw: xe = xw, so seed xe from same source as xw.
@@ -2860,11 +2868,14 @@ class GTAPModelEquations:
 
             bilateral_exports = float(self.params.benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
             bilateral_imports = float(self.params.benchmark.vcif.get((rp, i, r), 0.0) or 0.0)
-            if bilateral_exports > 0.0 and bilateral_imports > 0.0:
-                return max(bilateral_imports / bilateral_exports, 1e-8)
+            vxsb_qty = float(self.params.benchmark.vxsb.get((rp, i, r), 0.0) or 0.0)
+            # Use VXMD as quantity for CIF price; fall back to VXSB when VXMD absent (HAR datasets).
+            qty = bilateral_exports if bilateral_exports > 0.0 else vxsb_qty
+            if qty > 0.0 and bilateral_imports > 0.0:
+                return max(bilateral_imports / qty, 1e-8)
             if bilateral_imports > 0.0:
-                return max(bilateral_imports, 1e-8)
-            if bilateral_exports > 0.0:
+                return 1.0
+            if bilateral_exports > 0.0 or vxsb_qty > 0.0:
                 export_tax = float(self.params.taxes.rtxs.get((rp, i, r), 0.0) or 0.0)
                 etax = _trade_etax_value(rp, i, r)
                 tmarg = float(m.tmarg[rp, i, r]) if hasattr(m, "tmarg") else 0.0
@@ -4317,10 +4328,10 @@ class GTAPModelEquations:
                     model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
                     * (pfy / model.pft[r, f]) ** omegaf
                 )
-            # Sector-specific factor supply curve (fnm).
+            # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq.
             etaff = _etaff(r, f, a)
             return model.xf[r, f, a] == (
-                model.xscale[r, a] * model.gf_share[r, f, a]
+                model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
                 * (pfy / model.pabs[r]) ** etaff
             )
         model.eq_pfeq = Constraint(model.r, model.f, model.a, rule=eq_pfeq_rule)
