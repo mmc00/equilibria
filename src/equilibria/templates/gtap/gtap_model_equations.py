@@ -3838,6 +3838,9 @@ class GTAPModelEquations:
 
             sigmand = self._get_sigmand(r, a)
             lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
+            # Leontief shortcut: avoid (pnd/pa)**0 ill-conditioning.
+            if abs(sigmand) < 1e-12:
+                return model.xaa[r, i, a] == io_val * model.nd[r, a] / lambdaio
             return model.xaa[r, i, a] == (
                 io_val
                 * model.nd[r, a]
