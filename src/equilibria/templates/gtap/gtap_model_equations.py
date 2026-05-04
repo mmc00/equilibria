@@ -4337,10 +4337,11 @@ class GTAPModelEquations:
                     model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
                     * (pfy / model.pft[r, f]) ** omegaf
                 )
-            # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq.
+            # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq
+            # (model.gms:1096). No xft term — sluggish supply scales by gf only.
             etaff = _etaff(r, f, a)
             return model.xf[r, f, a] == (
-                model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
+                model.xscale[r, a] * model.gf_share[r, f, a]
                 * (pfy / model.pabs[r]) ** etaff
             )
         model.eq_pfeq = Constraint(model.r, model.f, model.a, rule=eq_pfeq_rule)
