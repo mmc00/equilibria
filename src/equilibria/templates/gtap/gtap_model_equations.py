@@ -2537,13 +2537,6 @@ class GTAPModelEquations:
         model.ps = Var(model.r, model.i, within=NonNegativeReals, initialize=1.0, doc="Supply price")
         model.pd = Var(model.r, model.i, within=NonNegativeReals, initialize=1.0, doc="Domestic price")
         
-        # Armington (xa per r,i is an Expression alias of sum_aa(xaa/xscale) + vst,
-        # mirroring GAMS which has no aggregate xa(r,i) variable. pa per r,i,aa.)
-        def _xa_expr_rule(m, r, i):
-            absorption = sum(m.xaa[r, i, aa] / m.xscale[r, aa] for aa in m.aa)
-            inventory = self._vst_value(str(r), str(i))
-            return absorption + inventory
-        model.xa = Expression(model.r, model.i, rule=_xa_expr_rule, doc="Armington demand (aggregate, derived)")
         # GAMS: pa(r,i,aa,t) - Agent-specific Armington price
         def get_pa_init(m, r, i, aa):
             return get_pa_benchmark_init(m, r, i, aa)
@@ -2969,7 +2962,15 @@ class GTAPModelEquations:
         model.xg = Var(model.r, model.i, within=NonNegativeReals, initialize=get_vgm_init, doc="Government consumption")
         model.xi = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xi_init, doc="Investment")
         model.xaa = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_xaa_init, doc="Agent/activity Armington demand")
-        
+
+        # xa(r,i) is an Expression alias of sum_aa(xaa/xscale) + vst,
+        # mirroring GAMS which has no aggregate xa(r,i) variable.
+        def _xa_expr_rule(m, r, i):
+            absorption = sum(m.xaa[r, i, aa] / m.xscale[r, aa] for aa in m.aa)
+            inventory = self._vst_value(str(r), str(i))
+            return absorption + inventory
+        model.xa = Expression(model.r, model.i, rule=_xa_expr_rule, doc="Armington demand (aggregate, derived)")
+
         # Income (3 vars per r) - GAMS-style benchmark calibration
 
         def get_benchmark_regy(r):
