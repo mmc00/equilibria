@@ -515,6 +515,15 @@ class GTAPSets:
         self.aggregation_name = sets_path.stem
         # Build activity↔commodity bijection from diagonal structure
         self._set_activity_mappings({})
+        # Populate mobile/sluggish factor subsets via the standard GTAP heuristic
+        # (mirrors comp_nus333.gms: labor + capital mobile, land sluggish).
+        if not self.mf and not self.sf:
+            mobile_keys = ("skl", "unsk", "cap", "lab")
+            for f in self.f:
+                if any(k in f.lower() for k in mobile_keys):
+                    self.mf.append(f)
+                else:
+                    self.sf.append(f)
 
     def __repr__(self) -> str:
         """String representation."""
