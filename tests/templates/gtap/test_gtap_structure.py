@@ -571,7 +571,10 @@ def test_model_equations_build_with_agent_armington_demands() -> None:
     xda_hhd_eq = model.eq_xda["NAmerica", "c_Crops", "hhd"]
     xma_inv_eq = model.eq_xma["NAmerica", "c_Crops", "inv"]
     xmt_eq = model.eq_xmt["NAmerica", "c_Crops"]
-    mkt_eq = model.mkt_goods["NAmerica", "c_Crops"]
+    # xa(r,i) is now an Expression alias of sum_aa(xaa/xscale) + vst, mirroring
+    # GAMS which has no aggregate xa variable. Verify the expression contains
+    # all per-agent xaa terms.
+    xa_expr = model.xa["NAmerica", "c_Crops"]
 
     assert "0.8*xp[NAmerica,a_agricultur]" in str(xaa_prod_eq.body)
     assert "px[NAmerica,a_agricultur] - pp[NAmerica,a_agricultur]" == str(prf_y_eq.body)
@@ -585,10 +588,11 @@ def test_model_equations_build_with_agent_armington_demands() -> None:
     assert "xma[NAmerica,c_Crops,inv]" in str(xma_inv_eq.body)
     assert "(paa[NAmerica,c_Crops,inv]/pmp[NAmerica,c_Crops,inv])**2.0" in str(xma_inv_eq.body)
     assert "xmt[NAmerica,c_Crops] - (xma[NAmerica,c_Crops,a_agricultur] + xma[NAmerica,c_Crops,hhd] + xma[NAmerica,c_Crops,gov] + xma[NAmerica,c_Crops,inv])" == str(xmt_eq.body)
-    assert "xaa[NAmerica,c_Crops,a_agricultur]" in str(mkt_eq.body)
-    assert "xaa[NAmerica,c_Crops,hhd]" in str(mkt_eq.body)
-    assert "xaa[NAmerica,c_Crops,gov]" in str(mkt_eq.body)
-    assert "xaa[NAmerica,c_Crops,inv]" in str(mkt_eq.body)
+    xa_body = str(xa_expr.expr)
+    assert "xaa[NAmerica,c_Crops,a_agricultur]" in xa_body
+    assert "xaa[NAmerica,c_Crops,hhd]" in xa_body
+    assert "xaa[NAmerica,c_Crops,gov]" in xa_body
+    assert "xaa[NAmerica,c_Crops,inv]" in xa_body
 
 
 def test_model_equations_build_trade_block_from_benchmark_shares() -> None:
