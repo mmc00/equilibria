@@ -681,6 +681,37 @@ def _apply_tariff_shock(params, factor: float = 1.10):
     print(f"Applied 10% tariff power shock to {n} imptx entries")
 
 
+def _copy_var_levels(src_model, dst_model) -> int:
+    """Mirror GAMS iterloop.gms: copy .l of each Var from src to dst.
+
+    Skips fixed vars (their value is preserved by .fix() on dst). Returns
+    number of (var, index) pairs copied.
+    """
+    from pyomo.environ import Var
+    src_vars = {v.local_name: v for v in src_model.component_objects(Var, active=True)}
+    n = 0
+    for dv in dst_model.component_objects(Var, active=True):
+        sv = src_vars.get(dv.local_name)
+        if sv is None:
+            continue
+        for idx in dv:
+            try:
+                src_val = value(sv[idx])
+            except (KeyError, ValueError):
+                continue
+            if src_val is None:
+                continue
+            try:
+                dvi = dv[idx]
+            except KeyError:
+                continue
+            if dvi.fixed:
+                continue
+            dvi.set_value(float(src_val))
+            n += 1
+    return n
+
+
 def main():
     params = GTAPParameters()
     params.load_from_har(
@@ -691,23 +722,37 @@ def main():
     )
     print(f"Sets: r={params.sets.r}, i={params.sets.i}, f={params.sets.f}")
 
-    # ---- BASELINE ----
     # NUS333: residual region must be ROW (matches comp_nus333.gms `set rres /ROW/`).
     # comp_nus333.gms uses ifSUB=0 → use explicit price equations, not macros.
     closure = GTAPClosureConfig(if_sub=False)
+
+    # ---- BASE (t=base) ----
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     model_b = builder_b.build_model()
-    _solve(model_b, params, label="baseline")
-    _dump_diagnostics(model_b, "baseline")
-    _dump_gdpmp_decomp(model_b, "baseline")
-    _dump_facty_decomp(model_b, "baseline")
-    _dump_tax_streams(model_b, "baseline")
+    _solve(model_b, params, label="base")
+    _dump_diagnostics(model_b, "base")
+    _dump_gdpmp_decomp(model_b, "base")
+    _dump_facty_decomp(model_b, "base")
+    _dump_tax_streams(model_b, "base")
     base = _extract_key(model_b, params)
 
-    # ---- SHOCK ----
+    # ---- CHECK (t=check) — same params, warm-start from base ----
+    # GAMS iterloop.gms copies .l from previous tsim into current tsim before
+    # the solve. The check iteration recalibrates and stabilizes the state
+    # before the shock; it should yield ≈ base.
+    builder_c = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
+    model_c = builder_c.build_model()
+    n_copied = _copy_var_levels(model_b, model_c)
+    print(f"[check] warm-start: copied {n_copied} (var,index) levels from base")
+    _solve(model_c, params, label="check")
+    check = _extract_key(model_c, params)
+
+    # ---- SHOCK (t=shock) — apply shock, warm-start from check ----
     _apply_tariff_shock(params, factor=1.10)
     builder_s = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     model_s = builder_s.build_model()
+    n_copied = _copy_var_levels(model_c, model_s)
+    print(f"[shock] warm-start: copied {n_copied} (var,index) levels from check")
     _solve(model_s, params, label="shock")
     _dump_diagnostics(model_s, "shock")
     _dump_price_chain(model_s, "shock")
@@ -715,6 +760,15 @@ def main():
     _dump_facty_decomp(model_s, "shock")
     _dump_tax_streams(model_s, "shock")
     shock = _extract_key(model_s, params)
+
+    # ---- CHECK SANITY: check should ≈ base ----
+    print("\n--- CHECK vs BASE (sanity: should be ≈ identical) ---")
+    for var in ("gdpmp", "regy", "u"):
+        for r in params.sets.r:
+            b = base[var].get(r, float("nan"))
+            c = check[var].get(r, float("nan"))
+            d = (c / b - 1.0) * 100 if b else float("nan")
+            print(f"  {var:<6} {r:<6} base={b:>10.4f}  check={c:>10.4f}  Δ%={d:+.4f}")
 
     # ---- REPORT ----
     print("\n" + "=" * 78)
