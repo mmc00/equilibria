@@ -4388,20 +4388,18 @@ class GTAPModelEquations:
         def eq_kstock_rule(model, r):
             # GAMS kstockeq: krat(r)*kstock(r) = sum(cap, xft(r,cap))
             # krat = xft.l / kstock.l at benchmark (cal.gms:413)
-            capital = "Capital"
-            if capital not in model.f:
+            capital_factors = [f for f in model.f if str(f).lower() in ("capital", "cap", "k", "kap")]
+            if not capital_factors:
                 return Constraint.Skip
-            if value(model.xftflag[r, capital]) <= 0.0:
-                return Constraint.Skip
-            xft_bench = float(value(model.aft[r, capital]))
+            xft_bench_total = sum(float(value(model.aft[r, f])) for f in capital_factors)
             vkb_val = self.params.benchmark.vkb.get(r)
             if vkb_val is None:
                 vkb_val = self.params.benchmark.vkb.get((r,), 0.0)
             kstock_bench = float(vkb_val or 0.0)
-            if kstock_bench <= 0.0 or xft_bench <= 0.0:
+            if kstock_bench <= 0.0 or xft_bench_total <= 0.0:
                 return Constraint.Skip
-            krat = xft_bench / kstock_bench
-            return krat * model.kstock[r] == model.xft[r, capital]
+            krat = xft_bench_total / kstock_bench
+            return krat * model.kstock[r] == sum(model.xft[r, f] for f in capital_factors)
         model.eq_kstock = Constraint(model.r, rule=eq_kstock_rule)
         
         # ========================================================================
