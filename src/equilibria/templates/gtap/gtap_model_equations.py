@@ -63,6 +63,7 @@ class GTAPModelEquations:
         closure: Optional["GTAPClosureConfig"] = None,
         reference_snapshot: Optional[Any] = None,
         is_counterfactual: bool = False,
+        residual_region: Optional[str] = None,
     ):
         self.sets = sets
         self.params = params
@@ -72,6 +73,14 @@ class GTAPModelEquations:
         # When False (baseline), rgdpmp == gdpmp (GAMS assignment `rgdpmp.l = gdpmp.l`).
         # When True (counterfactual/shock), the Fisher chain-volume index is active.
         self.is_counterfactual: bool = is_counterfactual
+        # Residual region for closure (mirrors GAMS rres set). Default NAmerica
+        # for 9x10 dataset; override via env EQUILIBRIA_GTAP_RRES or arg for
+        # other datasets (e.g. NUS333 → ROW).
+        self.residual_region: str = (
+            residual_region
+            or os.environ.get("EQUILIBRIA_GTAP_RRES")
+            or "NAmerica"
+        )
         self._configure_calibration_source()
 
     def _vst_value(self, region: str, commodity: str) -> float:
@@ -1133,7 +1142,7 @@ class GTAPModelEquations:
         residual_gap = sum(
             value(model.yi[r]) - (value(model.pi[r]) * value(model.depr[r]) * value(model.kstock[r]) + value(model.rsav[r]) + value(model.savf[r]))
             for r in model.r
-            if str(r) == "NAmerica"
+            if str(r) == self.residual_region
         )
         model.walras.set_value(residual_gap)
 
@@ -1878,7 +1887,7 @@ class GTAPModelEquations:
 
         savf_balance_gap = sum(savf_bar_data.values())
         if abs(savf_balance_gap) > 1e-10 and self.sets.r:
-            anchor_region = "NAmerica" if "NAmerica" in self.sets.r else next(iter(self.sets.r))
+            anchor_region = self.residual_region if self.residual_region in self.sets.r else next(iter(self.sets.r))
             savf_bar_data[(anchor_region,)] = savf_bar_data.get((anchor_region,), 0.0) - savf_balance_gap
 
         # GAMS calibrates chif from the final foreign-savings benchmark:
@@ -4535,7 +4544,7 @@ class GTAPModelEquations:
         # Foreign savings (GAMS savfeq)
         def eq_savf_rule(model, r):
             savf_flag = getattr(self.closure, "savf_flag", "capFix") if self.closure else "capFix"
-            is_residual = str(r) == "NAmerica"
+            is_residual = str(r) == self.residual_region
             if savf_flag == "capFix":
                 if is_residual:
                     return Constraint.Skip
@@ -4599,7 +4608,7 @@ class GTAPModelEquations:
         # INCOME BLOCK
         # ========================================================================
 
-        residual_regions = tuple(r for r in model.r if str(r) == "NAmerica")
+        residual_regions = tuple(r for r in model.r if str(r) == self.residual_region)
         
         # Factor income net of depreciation (GAMS factYeq)
         def eq_facty_rule(model, r):
