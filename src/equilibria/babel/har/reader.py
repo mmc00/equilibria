@@ -36,7 +36,7 @@ def read_har(
     if not filepath.exists():
         raise FileNotFoundError(f"HAR file not found: {filepath}")
 
-    hf = harpy.HarFileObj._loadFromDisk(str(filepath))
+    hf = harpy.HarFileObj.loadFromDisk(str(filepath))
 
     all_names = hf.getHeaderArrayNames()
     names_to_load = (
@@ -47,23 +47,29 @@ def read_har(
 
     result: dict[str, HeaderArray] = {}
     for name in names_to_load:
-        obj = hf[name]
-        if obj.array is None:
+        obj = hf.getHeaderArrayObj(name)
+        if obj is None:
             continue
-        arr = np.array(obj.array)
-        # setElements is a list of lists of strings; some metadata headers have None
+        raw_arr = obj["array"] if hasattr(obj, "__getitem__") else obj.array
+        if raw_arr is None:
+            continue
+        arr = np.array(raw_arr)
+        sets_meta = obj.get("sets") if hasattr(obj, "get") else None
+        sets_meta = sets_meta or []
+        set_names: list[str] = []
         set_elements: list[list[str]] = []
-        for elems in obj.setElements:
-            if elems is None:
-                set_elements.append([])
-            else:
-                set_elements.append([str(e).strip() for e in elems])
+        for d in sets_meta:
+            set_names.append(str(d.get("name", "")))
+            descs = d.get("dim_desc") or []
+            set_elements.append([str(e).strip() for e in descs])
+        long_name = (obj.get("long_name") if hasattr(obj, "get") else "") or ""
+        coeff_name = (obj.get("coeff_name") if hasattr(obj, "get") else None) or name
         result[name] = HeaderArray(
             name=name,
-            coeff_name=obj.coeff_name.strip() if obj.coeff_name else name,
-            long_name=obj.long_name.strip() if obj.long_name else "",
+            coeff_name=str(coeff_name).strip() if coeff_name else name,
+            long_name=str(long_name).strip(),
             array=arr,
-            set_names=list(obj.setNames),
+            set_names=set_names,
             set_elements=set_elements,
         )
     return result
@@ -78,7 +84,7 @@ def get_header_names(filepath: str | Path) -> list[str]:
     filepath = Path(filepath)
     if not filepath.exists():
         raise FileNotFoundError(f"HAR file not found: {filepath}")
-    hf = harpy.HarFileObj._loadFromDisk(str(filepath))
+    hf = harpy.HarFileObj.loadFromDisk(str(filepath))
     return hf.getHeaderArrayNames()
 
 
