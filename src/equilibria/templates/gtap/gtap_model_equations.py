@@ -1971,7 +1971,10 @@ class GTAPModelEquations:
         # phip is a Var under CDE utility (responds to xcshr*eh). Calibrated value
         # stored as phip0 for initialization. See eq_phip below.
         create_indexed_param("phip0", ["r"], phip_data, 1.0)
-        create_indexed_param("phi", ["r"], phi_data, 1.0)
+        # phi is endogenous (GAMS phieq, model.gms:737):
+        #   phi*(betaP/phiP + betaG + betaS) = 1
+        # Stored init in phi0 Param; phi itself becomes a Var added with the other Vars.
+        create_indexed_param("phi0", ["r"], phi_data, 1.0)
         create_indexed_param("chif0", ["r"], chif_data, 0.0)
         create_indexed_param("eh", ["r", "i"], eh_data, 1.0)
         create_indexed_param("bh", ["r", "i"], bh_data, 1.0)
@@ -3273,6 +3276,8 @@ class GTAPModelEquations:
         model.zcons = Var(model.r, model.i, within=NonNegativeReals, initialize=get_zcons_init, doc="CDE auxiliary share factor")
         # phip becomes a variable under CDE; initialized from calibration.
         model.phip = Var(model.r, within=NonNegativeReals, initialize=lambda m, r: float(m.phip0[r]), doc="Elasticity of expenditure wrt private utility")
+        # phi: GAMS phieq closes betaP/phiP + betaG + betaS to sum to 1/phi.
+        model.phi = Var(model.r, within=NonNegativeReals, initialize=lambda m, r: float(m.phi0[r]), doc="Elasticity of total expenditure wrt utility")
         model.uh = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Private utility per capita")
         model.ug = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Government utility per capita")
         model.us = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Savings utility per capita")
@@ -4165,8 +4170,24 @@ class GTAPModelEquations:
             return model.xtmg[m] == sum(_m_xmgm(m, r, i, rp) for r in model.r for i in model.i for rp in model.rp)
         model.eq_xtmg = Constraint(model.m, rule=eq_xtmg_rule)
 
+        # GAMS ptmgeq (model.gms:1021): ptmg^(1-sigmamg) = sum_r alphaa(r,m,tmg)*pa(r,m,tmg)^(1-sigmamg)
+        # For margin commodities with no supply (vst sums to 0), pin ptmg to numeraire to keep
+        # equation count balanced — those ptmg values are inert (xtmg=0 there).
         def eq_ptmg_rule(model, m):
-            return model.ptmg[m] == model.pnum
+            i_str = str(m)
+            has_supply = any(alphaa_tmg.get((str(r), i_str), 0.0) > 0.0 for r in self.sets.r)
+            if not has_supply:
+                return model.ptmg[m] == model.pnum
+            sigmamg = float(self.params.elasticities.sigmam.get(i_str, 1.0))
+            if abs(sigmamg - 1.0) < 1e-8:
+                sigmamg = 1.01
+            expo = 1.0 - sigmamg
+            terms = sum(
+                alphaa_tmg.get((str(r), i_str), 0.0) * model.pa[r, m, GTAP_MARGIN_AGENT] ** expo
+                for r in model.r
+                if alphaa_tmg.get((str(r), i_str), 0.0) > 0.0
+            )
+            return model.ptmg[m] ** expo == terms
         model.eq_ptmg = Constraint(model.m, rule=eq_ptmg_rule)
 
         # ========================================================================
@@ -4549,6 +4570,11 @@ class GTAPModelEquations:
         def eq_phip_rule(model, r):
             return model.phip[r] == sum(model.xcshr[r, i] * model.eh[r, i] for i in model.i if value(model.c_share[r, i]) > 0.0)
         model.eq_phip = Constraint(model.r, rule=eq_phip_rule)
+
+        # GAMS phieq (model.gms:737): phi*(betaP/phiP + betaG + betaS) = 1
+        def eq_phi_rule(model, r):
+            return model.phi[r] * (model.betap[r] / (model.phip[r] + 1e-12) + model.betag[r] + model.betas[r]) == 1.0
+        model.eq_phi = Constraint(model.r, rule=eq_phi_rule)
 
         # Consumer expenditure deflator (pcons) using shares
         def eq_pcons_rule(model, r):
