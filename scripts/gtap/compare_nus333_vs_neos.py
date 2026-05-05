@@ -749,10 +749,64 @@ def main():
 
     # ---- SHOCK (t=shock) — apply shock, warm-start from check ----
     _apply_tariff_shock(params, factor=1.10)
-    builder_s = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
+    builder_s = GTAPModelEquations(
+        params.sets, params, residual_region="ROW", closure=closure,
+        t0_snapshot=model_b,
+    )
     model_s = builder_s.build_model()
     n_copied = _copy_var_levels(model_c, model_s)
     print(f"[shock] warm-start: copied {n_copied} (var,index) levels from check")
+
+    # Branch-flip experiment: optionally pin pe[USA, MFG, ROW] to its GAMS
+    # shock value to break the price-level symmetry.
+    import os
+    pin_pe = os.environ.get("NUS333_PIN_PE_USA_MFG", "")
+    if pin_pe:
+        val = float(pin_pe)
+        if hasattr(model_s, "pe"):
+            try:
+                model_s.pe["USA", "MFG", "ROW"].fix(val)
+                print(f"[shock] pinned pe[USA,MFG,ROW] = {val} (GAMS anchor)")
+            except KeyError:
+                pass
+    # Anti-deflation: lower-bound pgdpmp[USA] ≥ 1.0 to exclude the deflation
+    # branch (PATH otherwise returns there from any initialization tested).
+    pgdpmp_lo = os.environ.get("NUS333_PGDPMP_USA_LO", "")
+    if pgdpmp_lo and hasattr(model_s, "pgdpmp"):
+        v = float(pgdpmp_lo)
+        try:
+            model_s.pgdpmp["USA"].setlb(v)
+            print(f"[shock] set pgdpmp[USA].lb = {v}")
+        except KeyError:
+            pass
+    bump = float(os.environ.get("NUS333_PRICE_BUMP", "0.0"))
+    if bump != 0.0:
+        from pyomo.environ import Var
+        price_prefixes = ("pa", "pd", "pm", "pmt", "pmcif", "pe", "pefob", "ps",
+                          "pf", "pft", "pfa", "pfy", "pi", "pdp", "pmp",
+                          "pgdpmp", "pabs", "pfact", "pmuv", "psave", "pigbl",
+                          "pva", "pc", "pg")
+        n_bumped = 0
+        for v in model_s.component_objects(Var, active=True):
+            name = v.local_name
+            if name in ("pwfact", "pnum"):
+                continue
+            if not any(name == p or name.startswith(p + "[") or name == p
+                       for p in price_prefixes):
+                # exact-name match path
+                if name not in price_prefixes:
+                    continue
+            for idx in v:
+                vi = v[idx]
+                if vi.fixed:
+                    continue
+                cur = value(vi)
+                if cur is None or cur <= 0:
+                    continue
+                vi.set_value(cur * (1.0 + bump))
+                n_bumped += 1
+        print(f"[shock] price-bump +{bump*100:.1f}%: nudged {n_bumped} price vars")
+
     _solve(model_s, params, label="shock")
     _dump_diagnostics(model_s, "shock")
     _dump_price_chain(model_s, "shock")

@@ -81,6 +81,7 @@ class GTAPElasticities:
     # Demand elasticities
     esubg: Dict[str, float] = field(default_factory=dict)  # r (government)
     esubi: Dict[str, float] = field(default_factory=dict)  # r (investment)
+    rorflex: Dict[str, float] = field(default_factory=dict)  # r (foreign capital flexibility, GAMS rorFlex)
     esubc: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, h) consumption
     incpar: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i) CDE expansion parameter
     subpar: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, i) CDE substitution parameter
@@ -405,6 +406,8 @@ class GTAPElasticities:
         self.subpar.update(_h("SUBP", ["COMM", "REG"], r10))
         self.esubg.update(_h("ESBG", ["REG"], None))
         self.esubi.update(_h("ESBI", ["REG"], None))
+        self.rorflex.update(_h("RFLX", ["REG"], None))
+        self.sigmam.update(_h("ESBS", ["MARG"], None))
 
         # ETRE: (ENDW, REG) in HAR, but etrae is keyed only by factor (f).
         # Values may be 0.0 (mobile factor) — load including zeros.
@@ -2252,7 +2255,7 @@ class GTAPParameters:
             default_path: Path to default.prm (elasticities).
             baserate_path: Path to baserate.har (tax rates).
         """
-        self.sets.load_from_har(sets_path)
+        self.sets.load_from_har(sets_path, default_path=default_path)
         self.elasticities.load_from_har(default_path, self.sets)
         self.benchmark.load_from_har(basedata_path, self.sets)
         self.taxes.load_from_har(baserate_path, self.sets, self.benchmark)
