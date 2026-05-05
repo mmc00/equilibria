@@ -36,7 +36,8 @@ def read_har(
     if not filepath.exists():
         raise FileNotFoundError(f"HAR file not found: {filepath}")
 
-    hf = harpy.HarFileObj.loadFromDisk(str(filepath))
+    _load = getattr(harpy.HarFileObj, "loadFromDisk", None) or getattr(harpy.HarFileObj, "_loadFromDisk")
+    hf = _load(str(filepath))
 
     all_names = hf.getHeaderArrayNames()
     names_to_load = (
@@ -45,25 +46,51 @@ def read_har(
         else all_names
     )
 
+    def _get(obj, key, default=None):
+        # harpy3 newer API: dict-like via Mapping; older API: attribute access.
+        # Older HeaderArrayObj uses __getitem__ for SET-ELEMENT indexing, not keys —
+        # so only treat as dict if it's an actual Mapping/dict.
+        if isinstance(obj, dict):
+            v = obj.get(key, default)
+            return v if v is not None else default
+        return getattr(obj, key, default)
+
     result: dict[str, HeaderArray] = {}
     for name in names_to_load:
-        obj = hf.getHeaderArrayObj(name)
+        _geth = getattr(hf, "getHeaderArrayObj", None) or getattr(hf, "_getHeaderArrayObj")
+        obj = _geth(name)
         if obj is None:
             continue
-        raw_arr = obj["array"] if hasattr(obj, "__getitem__") else obj.array
+        raw_arr = _get(obj, "array", None)
         if raw_arr is None:
             continue
         arr = np.array(raw_arr)
-        sets_meta = obj.get("sets") if hasattr(obj, "get") else None
-        sets_meta = sets_meta or []
-        set_names: list[str] = []
-        set_elements: list[list[str]] = []
-        for d in sets_meta:
-            set_names.append(str(d.get("name", "")))
-            descs = d.get("dim_desc") or []
-            set_elements.append([str(e).strip() for e in descs])
-        long_name = (obj.get("long_name") if hasattr(obj, "get") else "") or ""
-        coeff_name = (obj.get("coeff_name") if hasattr(obj, "get") else None) or name
+
+        # New harpy3 API: 'sets' is a list[{'name', 'dim_desc'}]
+        sets_list = _get(obj, "sets", None)
+        is_list_of_dicts = (
+            isinstance(sets_list, list) and sets_list and isinstance(sets_list[0], dict)
+        )
+        if is_list_of_dicts:
+            set_names = [str(s.get("name", "")).strip() for s in sets_list]
+            set_elements = [
+                [str(e).strip() for e in (s.get("dim_desc") or [])]
+                for s in sets_list
+            ]
+        else:
+            # Older harpy API
+            raw_set_names = list(_get(obj, "setNames", []) or [])
+            raw_set_elements = list(_get(obj, "setElements", []) or [])
+            set_names = [
+                str(n).strip() if n is not None else "" for n in raw_set_names
+            ]
+            set_elements = [
+                [str(e).strip() for e in (elems or [])]
+                for elems in raw_set_elements
+            ]
+
+        long_name = _get(obj, "long_name", "") or ""
+        coeff_name = _get(obj, "coeff_name", "") or name
         result[name] = HeaderArray(
             name=name,
             coeff_name=str(coeff_name).strip() if coeff_name else name,
@@ -84,7 +111,8 @@ def get_header_names(filepath: str | Path) -> list[str]:
     filepath = Path(filepath)
     if not filepath.exists():
         raise FileNotFoundError(f"HAR file not found: {filepath}")
-    hf = harpy.HarFileObj.loadFromDisk(str(filepath))
+    _load = getattr(harpy.HarFileObj, "loadFromDisk", None) or getattr(harpy.HarFileObj, "_loadFromDisk")
+    hf = _load(str(filepath))
     return hf.getHeaderArrayNames()
 
 

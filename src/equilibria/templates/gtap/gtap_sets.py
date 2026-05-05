@@ -490,11 +490,13 @@ class GTAPSets:
             "errors": errors,
         }
     
-    def load_from_har(self, sets_path: Path) -> None:
+    def load_from_har(self, sets_path: Path, default_path: Path | None = None) -> None:
         """Load set definitions from a GEMPACK sets.har file.
 
         Args:
             sets_path: Path to sets.har (contains REG, COMM, ACTS, ENDW, MARG arrays).
+            default_path: Optional path to default.prm. If provided, EFLG header is
+                used to classify factors into mobile/sluggish (matches GAMS getData.gms).
         """
         from equilibria.babel.har import read_har
 
@@ -513,10 +515,30 @@ class GTAPSets:
         self.m = list(self.i)
         self.s = list(self.r)
         self.aggregation_name = sets_path.stem
-        # Build activity↔commodity bijection from diagonal structure
         self._set_activity_mappings({})
-        # Populate mobile/sluggish factor subsets via the standard GTAP heuristic
-        # (mirrors comp_nus333.gms: labor + capital mobile, land sluggish).
+
+        if not self.mf and not self.sf and default_path is not None:
+            try:
+                eflg_data = read_har(default_path, select_headers=["EFLG"])
+            except Exception:
+                eflg_data = {}
+            if "EFLG" in eflg_data:
+                eflg = eflg_data["EFLG"]
+                endw_labels = [str(e).strip() for e in eflg.set_elements[0]]
+                endwt_labels = [str(e).strip().lower() for e in eflg.set_elements[1]]
+                try:
+                    mobile_col = endwt_labels.index("mobile")
+                except ValueError:
+                    mobile_col = 0
+                arr = eflg.array
+                for if_, fname in enumerate(endw_labels):
+                    if fname not in self.f:
+                        continue
+                    if arr[if_, mobile_col] > 0.5:
+                        self.mf.append(fname)
+                    else:
+                        self.sf.append(fname)
+
         if not self.mf and not self.sf:
             mobile_keys = ("skl", "unsk", "cap", "lab")
             for f in self.f:
