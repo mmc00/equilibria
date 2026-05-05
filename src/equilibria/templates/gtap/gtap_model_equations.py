@@ -4974,9 +4974,13 @@ class GTAPModelEquations:
         #   rgdpmp(t) = rgdpmp(t0) * sqrt[ (gdpmp(t)/gdpmp(t0)) * (mqgdp(t0,t)/mqgdp(t,t0)) ]
         # At benchmark rgdpmp(t0) = gdpmp(t0) = mqgdp(t0,t0). Square to drop sqrt:
         #   rgdpmp(t)^2 * mqgdp(t,t0) == base_mqgdp_00 * gdpmp(t) * mqgdp(t0,t)
+        # In baseline (no t0_snapshot, not counterfactual) GAMS calibrates
+        # `rgdpmp.l = gdpmp.l` (cal.gms:699), giving pgdpmp(base)=1 exactly.
+        # The Fisher chain-volume only kicks in once a base reference exists.
+        is_counterfactual = self.is_counterfactual or (self.t0_snapshot is not None)
         def eq_rgdpmp_rule(model, r):
             mqgdp_00 = base_mqgdp_00[r]
-            if mqgdp_00 <= 1e-12:
+            if not is_counterfactual or mqgdp_00 <= 1e-12:
                 return model.rgdpmp[r] == model.gdpmp[r]
             mqgdp_0t = _mqgdp(model, r, price_base=True, quantity_base=False)
             mqgdp_t0 = _mqgdp(model, r, price_base=False, quantity_base=True)
