@@ -1745,13 +1745,19 @@ class GTAPModelEquations:
 
             facty_bench = max(factor_income - vdep, 0.0)
             ytax_ind_bench = self._compute_ytax_ind_bench(region)
-            regy_bench = max(facty_bench + ytax_ind_bench, 1e-8)
-            regy_bench_data[(region,)] = regy_bench
+            # Income-side total (kept for downstream factY/ytax-stream init).
+            regy_income = max(facty_bench + ytax_ind_bench, 1e-8)
             savings_total = raw_savings_total if raw_savings_total > 0.0 else max(
-                regy_bench - private_total - government_total,
+                regy_income - private_total - government_total,
                 0.0,
             )
             regional_savings_data[(region,)] = savings_total
+            # GAMS cal.gms:629 fixes regY = yc + yg + rsav at calibration so
+            # phi=1 falls out exactly (see betaCal block below). The income/
+            # expenditure imbalance (~2e-4 in NUS333) is reconciled at solve
+            # time by eq_regy via the residual region.
+            regy_bench = max(private_total + government_total + savings_total, 1e-8)
+            regy_bench_data[(region,)] = regy_bench
 
             vdep_bench = fdepr * vkb
             # GAMS cal.gms:418-437: savfBar = savf.l/pigbl where
@@ -1773,13 +1779,21 @@ class GTAPModelEquations:
             vst_r = sum(self._vst_value(region, i) for i in self.sets.i)
             savf_bar_data[(region,)] = vcif_r - vfob_r - vst_r
 
-            # GAMS betaCal: betaP = yc.l / regY.l where regY = factY + yTaxInd (cal.gms:619)
-            # phi = phiP = 1 at benchmark (all prices normalised to 1)
+            # GAMS betaCal (cal.gms:626-635) overwrites regY = yc + yg + rsav
+            # before computing betaP/betaG/betaS, then solves a 4-eq MCP
+            # {phieq, yceq, ygeq, rsaveq} that pins phi = phiP = 1. Because
+            # the MCP is degenerate once regY = expenditure-sum (any phi
+            # works), the analytical solution is just to use the expenditure
+            # side: betaP+betaG+betaS = 1 exactly, regardless of SAM income/
+            # expenditure imbalance. The (factY+ytaxInd) version is kept for
+            # downstream factY/ytax initialization and is reconciled by
+            # eq_regy at solve.
+            regy_expenditure = max(private_total + government_total + savings_total, 1e-8)
             phip = 1.0
             phi = 1.0
-            betap = private_total / regy_bench if regy_bench > 0.0 else 0.0
-            betag = government_total / regy_bench if regy_bench > 0.0 else 0.0
-            betas = savings_total / regy_bench if regy_bench > 0.0 else 0.0
+            betap = private_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
+            betag = government_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
+            betas = savings_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
             regy_base = regy_bench  # kept for downstream references below
             regional_income_share_data[(region,)] = private_total / regy_base if regy_base > 0.0 else 0.0
             regional_government_share_data[(region,)] = government_total / regy_base if regy_base > 0.0 else 0.0
