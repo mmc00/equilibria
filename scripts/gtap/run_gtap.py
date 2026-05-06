@@ -1947,6 +1947,26 @@ def _run_path_capi_nonlinear_full(
                 if _pv_data.lb is None or _pv_data.lb < _lb:
                     _pv_data.setlb(_lb)
 
+    # Same protection for income/elasticity vars that appear in negative-power
+    # CDE terms (yc^(-bh)) or in divisions (phi/phip in eq_yc).  GAMS sets these
+    # to (-inf, +inf) after calibration but its PATH never overshoots into
+    # negative/zero territory thanks to warm-starting from a near-equilibrium
+    # baseline. Python's PATH on 9x10 takes wider Newton steps and crashes
+    # trying to evaluate (negative_yc)^(-0.9) or (0/0) in eq_yc.
+    _NLB_FACTOR = 1e-3
+    for _vname in ("yc", "phi", "phip", "regy", "uh"):
+        _vv = getattr(model, _vname, None)
+        if _vv is None:
+            continue
+        for _vd in _vv.values():
+            if _vd.fixed:
+                continue
+            _cur = _vd.value
+            if _cur is not None and _cur > 0:
+                _lb = _NLB_FACTOR * _cur
+                if _vd.lb is None or _vd.lb < _lb:
+                    _vd.setlb(_lb)
+
     adapter = PyomoMCPAdapter()
     model_summary = adapter.summarize_model(model)
 
