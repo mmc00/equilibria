@@ -1859,6 +1859,19 @@ def _run_path_capi_nonlinear_full(
     # near the shocked equilibrium price) rather than at baseline values.
     solver_helper.apply_aggressive_fixing_for_mcp()
 
+    # When the closure leaves the system over-determined (gap <= 0), the helper
+    # above does nothing. The same patches NUS333 needs apply here:
+    #  1. fix sluggish pft (dangling — no eq references them)
+    #  2. deactivate eq_xfteq for mobile factors with xft fixed
+    #  3. Hopcroft-Karp → deactivate unmatched eq_xseq under omegax=inf
+    try:
+        from _closure_patches import apply_squareness_patches  # type: ignore
+    except ImportError:
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _closure_patches import apply_squareness_patches  # type: ignore
+    apply_squareness_patches(model, params, label="nonlinear-full")
+
     # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
     # already-fixed variables, so only the remaining FREE variables get warm-started
     # from the baseline (or previous-step) solution.
