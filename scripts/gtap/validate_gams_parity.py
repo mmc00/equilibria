@@ -135,6 +135,11 @@ def main():
         print(f"Shock strategy: single shot (factor={factor:.0%})")
 
     contract = _build_gtap_contract_with_calibration("gtap_standard7_9x10")
+    # GAMS NEOS reference (job 18737509, tariff_comp.gms) uses ifSUB=0.
+    # Default Python closure has if_sub=True; override to match GAMS reference.
+    new_closure = contract.closure.model_copy(update={"if_sub": False})
+    contract = contract.model_copy(update={"closure": new_closure})
+    print(f"Closure: if_sub={contract.closure.if_sub}  numeraire={contract.closure.numeraire}")
 
     # ── BASELINE ─────────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
