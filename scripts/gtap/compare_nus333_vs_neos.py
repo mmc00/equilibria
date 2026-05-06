@@ -169,14 +169,13 @@ def _solve(model, params, *, label: str):
         f"degrees-of-freedom mismatch: {len(free_vars)} vars, {len(constraints)} eqs"
 
     # Reorder free_vars so position i is structurally matched to constraints[i].
-    # See _structural_matching docstring for why this matters for MCP semantics.
     # GAMS-declared MCP pairings (model.gms:1419): force these to mirror GAMS.
-    forced_pairs = [("eq_pwfact", "pwfact")]
-    free_vars = _structural_matching(constraints, free_vars, forced_pairs=forced_pairs)
-    n_matched_natural = sum(
-        1 for i, v in enumerate(free_vars) if v.name.startswith(("eq_", ""))
+    from _closure_patches import structural_matching as _sm
+    free_vars = _sm(
+        constraints, free_vars,
+        forced_pairs=[("eq_pwfact", "pwfact")],
+        label=label,
     )
-    print(f"[{label}] structural matching: {len(free_vars)} pairs assigned")
 
     loader = PATHLoader(path_lib=PATH_LIB)
     runtime = loader.load()

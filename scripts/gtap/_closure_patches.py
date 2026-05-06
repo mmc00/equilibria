@@ -175,3 +175,104 @@ def apply_squareness_patches(model, params, *, label: str = "") -> dict[str, int
         "xfteq_deact": deactivate_xfteq_for_fixed_mobile(model, params, label=label),
         "xseq_deact": deactivate_unmatched_xseq(model, params, label=label),
     }
+
+
+def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str = ""):
+    """Hopcroft-Karp maximum bipartite matching: eq row -> var col.
+
+    The PATH adapter pairs F[i] with var[i] positionally. Without a structural
+    matching, alphabetical sort can pair an equation with an unrelated spectator
+    var that sits at its lower bound, allowing PATH to terminate "feasible" with
+    a large F[i] residual (see user memory gtap_mcp_pairing_pitfall).
+
+    Returns var permutation so var[i] is structurally tied to constraints[i].
+
+    forced_pairs: optional list of (eq_name, var_name) tuples to pin upfront
+    (mirrors GAMS `model gtap / eq.var, ... /` declared matching).
+    """
+    n = len(constraints)
+    var_id_to_col = {id(v): j for j, v in enumerate(free_vars)}
+    adjacency: list[list[int]] = []
+    for con in constraints:
+        cols: list[int] = []
+        seen: set[int] = set()
+        for var_data in identify_variables(con.body, include_fixed=False):
+            if var_data.fixed:
+                continue
+            col = var_id_to_col.get(id(var_data))
+            if col is None or col in seen:
+                continue
+            seen.add(col)
+            cols.append(col)
+        adjacency.append(cols)
+
+    pair_left = [-1] * n
+    pair_right = [-1] * n
+    distance = [0] * n
+    INF = 10**9
+
+    eq_name_to_row = {c.name: i for i, c in enumerate(constraints)}
+    var_name_to_col = {v.name: j for j, v in enumerate(free_vars)}
+    if forced_pairs:
+        for eq_name, var_name in forced_pairs:
+            r = eq_name_to_row.get(eq_name)
+            c = var_name_to_col.get(var_name)
+            if r is None or c is None:
+                if label:
+                    print(f"[{label}] matching WARN: forced pair {eq_name}<->{var_name} not found")
+                continue
+            if c not in adjacency[r]:
+                if label:
+                    print(f"[{label}] matching WARN: forced pair {eq_name}<->{var_name} not in adjacency")
+                continue
+            pair_left[r] = c
+            pair_right[c] = r
+
+    def bfs() -> bool:
+        q: deque[int] = deque()
+        found = False
+        for u in range(n):
+            if pair_left[u] == -1:
+                distance[u] = 0
+                q.append(u)
+            else:
+                distance[u] = INF
+        while q:
+            u = q.popleft()
+            for v in adjacency[u]:
+                m = pair_right[v]
+                if m == -1:
+                    found = True
+                elif distance[m] == INF:
+                    distance[m] = distance[u] + 1
+                    q.append(m)
+        return found
+
+    def dfs(u: int) -> bool:
+        for v in adjacency[u]:
+            m = pair_right[v]
+            if m == -1 or (distance[m] == distance[u] + 1 and dfs(m)):
+                pair_left[u] = v
+                pair_right[v] = u
+                return True
+        distance[u] = INF
+        return False
+
+    while bfs():
+        for u in range(n):
+            if pair_left[u] == -1:
+                dfs(u)
+
+    leftover = [j for j, m in enumerate(pair_right) if m == -1]
+    li = 0
+    for u in range(n):
+        if pair_left[u] == -1:
+            if li < len(leftover):
+                pair_left[u] = leftover[li]
+                li += 1
+
+    if label:
+        n_natural = sum(1 for u in range(n) if pair_left[u] != -1)
+        print(f"[{label}] structural matching: {n_natural}/{n} pairs assigned")
+
+    return [free_vars[c] for c in pair_left]

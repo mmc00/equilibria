@@ -1989,6 +1989,21 @@ def _run_path_capi_nonlinear_full(
         key=lambda v: v.name,
     )
 
+    # Hopcroft-Karp structural matching (avoid alphabetical-sort pairing pitfall).
+    # GAMS-declared MCP pairings (model.gms:1419): force these to mirror GAMS.
+    if len(constraints) == len(free_variables):
+        try:
+            from _closure_patches import structural_matching  # type: ignore
+        except ImportError:
+            import sys as _sys
+            _sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from _closure_patches import structural_matching  # type: ignore
+        free_variables = structural_matching(
+            constraints, free_variables,
+            forced_pairs=[("eq_pwfact", "pwfact")],
+            label="nonlinear-full",
+        )
+
     if len(constraints) != len(free_variables):
         return {
             "status": "failed",
