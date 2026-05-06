@@ -176,7 +176,7 @@ def main():
         print(f"STEP 2: Applying shock in {n_steps} continuation steps")
     else:
         print(f"STEP 2: Applying GAMS-equivalent shock (factor={factor:.0%})")
-    print(f"  formula: imptx_new = (1 + imptx_old) * {1+factor} - 1")
+    print(f"  formula: imptx_new = imptx_old * {1+factor}  (rate scaling, matches tariff_sim.gms)")
     print("=" * 60)
 
     # Track the "current" solution model across continuation steps
@@ -185,8 +185,9 @@ def main():
     sh_res = float("nan")
     sh_code = -1
 
-    # Per-step incremental multiplier for tariff power
-    # After k steps: imptx = (1+imptx_original) * (1+factor)^(k/n_steps) - 1
+    # Per-step incremental multiplier for tariff RATE (matches GAMS tariff_sim.gms:77
+    # `tm(i,r,s) = tm_base(i,r,s) * (1 + tm_shock)` — rate scaling, NOT power scaling).
+    # After k steps: imptx = imptx_original * (1+factor)^(k/n_steps)
     step_multiplier = (1.0 + factor) ** (1.0 / n_steps)
 
     # Load original GDX params once; we'll track current imptx values per step
@@ -208,8 +209,8 @@ def main():
         n_shocked = 0
         for key in list(step_params.taxes.imptx.keys()):
             old_val = float(step_params.taxes.imptx[key])
-            # Cumulative: (1+original) * (1+factor)^(step/n_steps) - 1
-            step_params.taxes.imptx[key] = (1.0 + old_val) * (step_multiplier ** step) - 1.0
+            # Rate scaling: imptx = imptx_original * (1+factor)^(step/n_steps)
+            step_params.taxes.imptx[key] = old_val * (step_multiplier ** step)
             n_shocked += 1
 
         if step == 1:
