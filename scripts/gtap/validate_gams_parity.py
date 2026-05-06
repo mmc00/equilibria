@@ -211,7 +211,9 @@ def main():
             print(f"  Shocked {n_shocked} bilateral imptx pairs")
 
         step_eq = GTAPModelEquations(
-            step_params.sets, step_params, contract.closure, is_counterfactual=True
+            step_params.sets, step_params, contract.closure,
+            is_counterfactual=True,
+            t0_snapshot=base_model,
         )
         step_model = step_eq.build_model()
 
