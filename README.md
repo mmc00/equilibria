@@ -276,26 +276,24 @@ results.plot()
 
 ### GTAP Standard 7 — GAMS reference parity (2026-05-06)
 
-The Python implementation of the **GTAP Standard 7** model template (`equilibria.templates.gtap`) is validated against the canonical GAMS reference (`COMP.gdx` from `tariff_sim.gms`, 9 sectors × 10 regions, 10% uniform import-tariff shock). Solver: PATH C API in nonlinear-full mode (16,166 vars × 16,166 eqs), residuals ~1e-11 (baseline) / ~1e-9 (shock).
+The Python implementation of the **GTAP Standard 7** model template (`equilibria.templates.gtap`) is validated against the canonical GAMS reference (`COMP.gdx` from `tariff_sim.gms`, 9 sectors × 10 regions, 10% uniform import-tariff shock). Solver: PATH C API in nonlinear-full mode (16,166 vars × 16,166 eqs), residuals 2.2e-11 (baseline) / 6.0e-13 (shock).
 
-**Cell-by-cell coverage** of all 139 populated GAMS Variables (≈60k cells per phase):
+**Cell-by-cell coverage** — full variable-by-variable parity reached:
 
-| Phase | Vars exact ✅ | Vars partial ⚠️ | Cells matching | Vars not modeled in Python |
-|-------|--------------:|---------------:|---------------:|---------------------------:|
-| baseline | 84 / 139 | 12 (mostly fixed/unused) | 41,446 / 41,457 (>99.97%) | 42 |
-| shock    | 76 / 139 | 20 | 38,336 / 41,477 (92.4%) | 42 |
+| Phase | Vars exact ✅ | Cells diverging | Cells matching | Vars not modeled in Python |
+|-------|--------------:|----------------:|---------------:|---------------------------:|
+| baseline | 98 / 139 | **0** | 41,477 / 41,477 (100%) | 40 |
+| shock    | 98 / 139 | **0** | 41,477 / 41,477 (100%) | 40 |
 
-**Macro aggregates (1-D / 2-D)** — full mirror parity across 21 macros × 10 regions in **both** phases (≤0.01% rel error): `regy`, `yc`, `yg`, `yi`, `rsav`, `gdpmp`, `rgdpmp`, `pgdpmp`, `pabs`, `pcons`, `pi`, `pfact`, `kstock`, `u`, `uh`, `ug`, `us`, `facty`, `ytaxTot`, `phi`, `savf`, plus `arent`, `betap/g/s`, `chif`, `kapEnd`, `mintx`, `psave`, `ptmg`, `pwfact`, `xtmg`, `xigbl`, `xft`, `dintx`, `pa`, `pmp`, `pmt`, `pdp`, `pe`, `pet`, `pf`, `pfa` (baseline), `pnd`, `pva`, `nd`, `va`, `xp/xs/xds/xf/xet/xmt/xw`, `mtax/etax`, `lambda*`, `ytax/ytaxshr`, `tmarg`, `eh/bh/ev/cv`.
+`validate_gams_parity.py` reports **0.0% error** on EastAsia `regy_delta` vs the GAMS reference.
 
-**Known divergences (shock only — under investigation):**
+**Three fixes that closed the residual ~2,000-cell gap** (on top of the earlier rate-scaling shock formula):
 
-| Variable | Cells diverging | Max abs / rel | Hypothesis |
-|----------|----------------:|---------------|------------|
-| `pm` (bilateral import price) | 810 / 1000 | 0.14 / 5.6% | Likely a bilateral wedge in pm = (1+imptx+mtax)·pmcif/chipm not exactly mirrored |
-| `pmcif`, `pefob` | ~570 / 1000 | ~5e-3 / 0.5% | Border price closure; small but systematic |
-| `pfa`, `pfy`, `pft` | 162 / 450 | 2.4% | Land/NatRes (sluggish) factor pricing in Oceania — `eq_pfeq` branch for sluggish uses `pabs` not `pft` |
-| `xmgm`, `xwmg` | 425 / 10000 (4.3%) | 5.8% | Trade-margin demand for `c_TransComm`-`c_Crops` route specifically |
-| `rore`, `rorg` | 100% | 48–117% | Pre-existing in baseline — alternative rate-of-return formula; affects only diagnostics |
+1. `diff_9x10_full.py` overrides `closure.if_sub=False` to match the GAMS NEOS reference. With `if_sub=True` the bilateral price/margin equations (`eq_pmeq`, `eq_pmcifeq`, `eq_pefobeq`, `eq_xwmg`, `eq_xmgm`, `eq_pwmg`, `eq_pp_rai`, `eq_pfaeq`, `eq_pfyeq`) are deactivated and their Vars fixed at baseline → shock can't propagate through bilateral trade prices.
+2. `rorflex` default raised from 1.0 → **10.0** (matches GAMS `rorFlex0(r)=10`). The 9x10 GDX does not ship `RFLX`, so Python falls back to the default; the wrong value caused `rore` ~115% / `rorg` ~49% relative error.
+3. **Land** is now classified as **mobile** (`mf`), not sluggish (`sf`). GAMS `getData.gms:111-117` builds `fnm` only from `endwf={NatRes}`; `endws={Land}` is NOT unioned into `fnm`. `gtap_sets.py` previously routed any factor name containing `lnd` to sluggish — fixed by removing it from `sluggish_defaults`.
+
+**Welfare equations activated:** `eq_cv` and `eq_ev` (CDE-style identities) are now live in the MCP. They were previously deactivated with `cv`/`ev` fixed at 1.0; activating them adds 1 var ↔ 1 eq per region without disturbing anything else and lands `cv`/`ev` exactly on GAMS.
 
 **Reproduce:**
 
@@ -316,7 +314,7 @@ The Python implementation of the **GTAP Standard 7** model template (`equilibria
 Notes:
 - 9x10 uses **rate scaling** (`tm = tm_base * (1 + tm_shock)`); NUS333 uses **power scaling** (`(1+imptx) * 1.10 - 1`). The two datasets follow different upstream conventions.
 - Counterfactual builds must pass `t0_snapshot=base_model` so CES weights (alphad/alpham/betap/betag/betas) calibrate against the converged baseline rather than the perturbed state.
-- The 42 "not in Python" Vars are technical shifters (`afe*`, `aio*`, `ava*`, `axp*`, `lambda*` regional aggregates), elasticity diagnostics (`ape`, `ced`, `incelas`), tax shifters (`mtxshft`, `dtxshft`, `prdtx`), and bilateral tax instruments treated as parameters in Python (`imptx`, `exptx`, `kappaf`, `fctts`, `fcttx`).
+- The 40 "not in Python" Vars are exogenous shock parameters and pure diagnostics in GAMS — none are endogenous. Categories: technical shifters (`afe*`, `aio*`, `ava*`, `axp*`, `lambda*`), tax instruments treated as parameters in Python (`imptx`, `exptx`, `kappaf`, `fctts`, `fcttx`, `prdtx`, `mtxshft`, `dtxshft`, `rtxshft`), elasticity diagnostics (`ape`, `ced`, `incelas`, `ued`), and summary identities (`chiInv`, `pmuv`, `p`, `ytaxInd`). To shock them in Python, mutate `params.taxes` / `params.elasticities` (Pydantic dicts) before `build_gtap_model`, or use `_apply_shock_to_params(...)` in `scripts/gtap/run_gtap.py` (modes `set` / `pct` / `mult` / `tm_pct`).
 - See `CLAUDE.md` and `GTAP_VALIDATION_STATUS.md` for the full audit trail.
 
 ---
