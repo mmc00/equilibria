@@ -274,7 +274,7 @@ results.plot()
 
 ## Implementation Status
 
-### GTAP Standard 7 — GAMS reference parity (2026-05-06)
+### GTAP Standard 7 — GAMS reference parity (2026-05-07)
 
 The Python implementation of the **GTAP Standard 7** model template (`equilibria.templates.gtap`) is validated against the canonical GAMS reference (`COMP.gdx` from `tariff_sim.gms`, 9 sectors × 10 regions, 10% uniform import-tariff shock). Solver: PATH C API in nonlinear-full mode (16,166 vars × 16,166 eqs), residuals 2.2e-11 (baseline) / 6.0e-13 (shock).
 
@@ -294,6 +294,8 @@ The Python implementation of the **GTAP Standard 7** model template (`equilibria
 3. **Land** is now classified as **mobile** (`mf`), not sluggish (`sf`). GAMS `getData.gms:111-117` builds `fnm` only from `endwf={NatRes}`; `endws={Land}` is NOT unioned into `fnm`. `gtap_sets.py` previously routed any factor name containing `lnd` to sluggish — fixed by removing it from `sluggish_defaults`.
 
 **Welfare equations activated:** `eq_cv` and `eq_ev` (CDE-style identities) are now live in the MCP. They were previously deactivated with `cv`/`ev` fixed at 1.0; activating them adds 1 var ↔ 1 eq per region without disturbing anything else and lands `cv`/`ev` exactly on GAMS.
+
+**Model construction hardening (2026-05-07):** `create_indexed_param` now always registers a Pyomo `Param` even when the source dict is empty, so downstream `hasattr(model, "X")` fallbacks (`af_param`/`af_share`, `io_param`/`p_io`, `gx_param`) behave consistently for sparse/test scenarios. `eq_ug_rule` guards against `pg_terms == 0` to avoid a `0**(-x)` build error when `g_share` is empty. The 17 structural tests in `tests/templates/gtap/test_gtap_structure.py` were rewritten against the current GAMS-parity API (`p_gx`/`p_va`/`p_af`/`p_alphad`/`p_gd`/`p_ge`/`p_io`, `dintx0`/`mintx0`/`rtxs`/`imptx`, `eq_xweq`/`eq_pmcifeq`/`eq_pefobeq`/`eq_pdeq`/`eq_pmeq`).
 
 **Reproduce:**
 
