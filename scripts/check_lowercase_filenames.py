@@ -19,17 +19,23 @@ ALLOWED_EXACT: set[str] = {
     "README.md",
     "LICENSE",
     "CITATION.cff",
+    "CLAUDE.md",
+    "GTAP_VALIDATION_STATUS.md",
     "skills/gams-to-equilibria/SKILL.md",
     "src/equilibria/babel/gdx/README.md",
+    "src/equilibria/templates/gtap/README.md",
     "tests/babel/gdx/fixtures/SAM-V2_0.gdx",
 }
 
 # Directories where source/reference artifacts must keep upstream naming.
+# GTAP reference artifacts (datasets *.gdx, GAMS .gms scripts, COMP.csv outputs)
+# come from upstream model distributions whose naming we don't control.
 ALLOWED_PREFIXES: tuple[str, ...] = (
     "src/equilibria/templates/data/pep/",
     "src/equilibria/templates/reference/pep/",
     "src/equilibria/templates/reference/pep2/data/",
     "src/equilibria/templates/reference/pep2/scripts/",
+    "src/equilibria/templates/reference/gtap/",
 )
 
 
