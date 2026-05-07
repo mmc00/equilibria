@@ -53,8 +53,9 @@ class GTAPSets:
     f: List[str] = field(default_factory=list)   # Factors
     
     # Factor subsets
-    mf: List[str] = field(default_factory=list)  # Mobile factors
-    sf: List[str] = field(default_factory=list)  # Sector-specific factors
+    mf: List[str] = field(default_factory=list)  # Mobile factors (GAMS: ENDWM)
+    sf: List[str] = field(default_factory=list)  # Sluggish factors (GAMS: ENDWS)
+    ff: List[str] = field(default_factory=list)  # Fixed factors    (GAMS: ENDWF)
     
     # Trade and transport
     m: List[str] = field(default_factory=list)      # Alias of i (GAMS: alias(m,i))
@@ -105,6 +106,7 @@ class GTAPSets:
         # Load factor subsets
         self.mf = self._load_first_available_set(gdx_data, symbols, ("mf", "fm", "endwm"), gdx_path, required=False) or []
         self.sf = self._load_first_available_set(gdx_data, symbols, ("sf", "fnm", "endws"), gdx_path, required=False) or []
+        self.ff = self._load_first_available_set(gdx_data, symbols, ("ff", "endwf"), gdx_path, required=False) or []
         
         # Raw GTAP data provides active margin commodities via marg(comm),
         # but the standard model declares alias(m,i), i.e. full commodity set.
@@ -291,7 +293,12 @@ class GTAPSets:
 
         return []
 
-    def _set_activity_mappings(self, gdx_data: Dict[str, Any]) -> None:
+    def _set_activity_mappings(
+        self,
+        gdx_data: Dict[str, Any],
+        *,
+        pairs: Optional[List[Tuple[str, str]]] = None,
+    ) -> None:
         """Populate activity/commodity mappings from make structure."""
         self.i_to_a = {}
         self.a_to_i = {}
@@ -299,7 +306,8 @@ class GTAPSets:
         self.activity_commodities = {activity: [] for activity in self.a}
         self.commodity_activities = {commodity: [] for commodity in self.i}
 
-        pairs = self._extract_output_pairs(gdx_data)
+        if pairs is None:
+            pairs = self._extract_output_pairs(gdx_data)
         if not pairs and self.is_diagonal:
             pairs = list(zip(self.a, self.i))
 
@@ -541,13 +549,43 @@ class GTAPSets:
                     else:
                         self.sf.append(fname)
 
-        if not self.mf and not self.sf:
+        if not self.mf and not self.sf and not self.ff:
+            # Standard GTAP convention (getData.gms): Land→sluggish (CET),
+            # NatRes→fixed, all labor/capital → mobile.
             mobile_keys = ("skl", "unsk", "cap", "lab")
+            sluggish_keys = ("land",)
+            fixed_keys = ("natres", "nat_res", "natural")
             for f in self.f:
-                if any(k in f.lower() for k in mobile_keys):
+                fl = f.lower()
+                if any(k in fl for k in fixed_keys):
+                    self.ff.append(f)
+                elif any(k in fl for k in sluggish_keys):
+                    self.sf.append(f)
+                elif any(k in fl for k in mobile_keys):
                     self.mf.append(f)
                 else:
                     self.sf.append(f)
+
+    def rebuild_output_structure_from_makb(
+        self,
+        makb: Dict[Tuple[str, ...], float],
+    ) -> None:
+        """Rebuild output mappings from a makb-style ``{(r, a, i): value}`` dict.
+
+        Use after sets are loaded but make-structure data arrives separately
+        (e.g. HAR flow where basedata.har is read after sets.har).
+        """
+        pairs: List[Tuple[str, str]] = []
+        seen: set[Tuple[str, str]] = set()
+        for key, value in makb.items():
+            if abs(value) <= 1e-10:
+                continue
+            pair = self._infer_activity_commodity_pair(key)
+            if pair is None or pair in seen:
+                continue
+            seen.add(pair)
+            pairs.append(pair)
+        self._set_activity_mappings({}, pairs=pairs)
 
     def __repr__(self) -> str:
         """String representation."""

@@ -1136,18 +1136,23 @@ class GTAPBenchmarkValues:
             self.vim[k] = self.vdip.get(k, 0.0) + self.vmip.get(k, 0.0)
         self.vst.update(_h("VST",   ["MARG", "REG"], r10))   # MARG×REG in HAR
 
-        # 2D (ACTS, REG) → (r, a)
-        self.vom.update(_h("VOSB", ["COMM", "REG"], r10))
+        # 3D make matrix (COMM, ACTS, REG) → (r, a, i) — load before vom derivation
+        self.makb.update(_h("MAKB", ["COMM", "ACTS", "REG"], r210))
+        self.maks.update(_h("MAKS", ["COMM", "ACTS", "REG"], r210))
+
+        # vom(r, a) = sum_i MAKB(i, a, r) — mirrors GDX `_load_param('vom')` path,
+        # which derives activity-level output from the make matrix rather than VOSB
+        # (VOSB is commodity-indexed in HAR, but the model uses vom indexed by activity).
+        self.vom.clear()
+        for (region, activity, _commodity), value in self.makb.items():
+            key = (region, activity)
+            self.vom[key] = self.vom.get(key, 0.0) + float(value)
 
         # 3D intermediate (COMM, ACTS, REG) → (r, i, a)
         self.vdfp.update(_h("VDFP", ["COMM", "ACTS", "REG"], r201))
         self.vmfp.update(_h("VMFP", ["COMM", "ACTS", "REG"], r201))
         self.vdfb.update(_h("VDFB", ["COMM", "ACTS", "REG"], r201))
         self.vmfb.update(_h("VMFB", ["COMM", "ACTS", "REG"], r201))
-
-        # 3D make matrix (COMM, ACTS, REG) → (r, a, i)
-        self.makb.update(_h("MAKB", ["COMM", "ACTS", "REG"], r210))
-        self.maks.update(_h("MAKS", ["COMM", "ACTS", "REG"], r210))
 
         # 3D factors (ENDW, ACTS, REG) → (r, f, a)
         self.vfm.update(_h("EVFP",  ["ENDW", "ACTS", "REG"], r201))
@@ -1167,6 +1172,8 @@ class GTAPBenchmarkValues:
         self.save.update(_h("SAVE", ["REG"], None))
         self.vdep.update(_h("VDEP", ["REG"], None))
         self.vkb.update(_h("VKB",   ["REG"], None))
+        # POP is in millions of persons, not monetary — no inScale.
+        self.pop.update(_h("POP",   ["REG"], None, scale=1.0))
 
         # Aggregate vfb from evfb: (r, f) = sum_a evfb(r, f, a)
         if self.evfb:
