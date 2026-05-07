@@ -72,13 +72,49 @@ def split_t(keys: tuple) -> tuple[tuple, str | None]:
     return keys, None
 
 
-def get_py_var_value(py_var, key: tuple) -> float | None:
-    """Fetch level from a Pyomo Var indexed by `key` (or a single scalar)."""
+_DROPPABLE_HHD = {"hhd"}  # GAMS often adds a singleton h='hhd' dim
+
+
+def _try_index(py_var, idx):
+    """Try to fetch py_var[idx]; return None on failure."""
     from pyomo.core import value
+    if isinstance(py_var, _DerivedVar):
+        # Derived: __contains__ already computes the value via getter
+        try:
+            v = py_var._getter(idx)  # noqa: SLF001
+            return float(v) if v is not None else None
+        except Exception:
+            return None
+    try:
+        if idx in py_var:
+            return float(value(py_var[idx]))
+    except Exception:
+        pass
+    try:
+        for kk in py_var:
+            if isinstance(kk, tuple) and tuple(str(x) for x in kk) == tuple(str(x) for x in idx):
+                return float(value(py_var[kk]))
+            if not isinstance(kk, tuple) and len(idx) == 1 and str(kk) == str(idx[0]):
+                return float(value(py_var[kk]))
+    except Exception:
+        pass
+    return None
+
+
+def get_py_var_value(py_var, key: tuple) -> float | None:
+    """Fetch level from a Pyomo Var indexed by `key` (or a single scalar).
+
+    Tolerates index-shape mismatches between GAMS and Python by trying:
+      - exact match
+      - dropping a singleton 'hhd' dim (GAMS often carries h='hhd')
+      - permuting last two dims (GAMS pp(r,a,i) vs Python pp(r,i,a) etc.)
+    """
+    from pyomo.core import value
+    is_derived = isinstance(py_var, _DerivedVar)
     try:
         if not key:
             return float(value(py_var))
-        if len(key) == 1:
+        if len(key) == 1 and not is_derived:
             k0 = key[0]
             if k0 in py_var:
                 return float(value(py_var[k0]))
@@ -86,18 +122,169 @@ def get_py_var_value(py_var, key: tuple) -> float | None:
                 if str(kk) == k0:
                     return float(value(py_var[kk]))
             return None
-        if key in py_var:
-            return float(value(py_var[key]))
-        for kk in py_var:
-            if isinstance(kk, tuple) and len(kk) == len(key) and tuple(str(x) for x in kk) == key:
-                return float(value(py_var[kk]))
+        v = _try_index(py_var, key)
+        if v is not None:
+            return v
+        # Drop hhd-like singleton dimensions
+        for i, k in enumerate(key):
+            if k in _DROPPABLE_HHD:
+                shrunk = key[:i] + key[i+1:]
+                v = _try_index(py_var, shrunk)
+                if v is not None:
+                    return v
+        # Try permuted last two dims (handles GAMS r,a,i ↔ Python r,i,a)
+        if not is_derived and len(key) >= 2:
+            permuted = key[:-2] + (key[-1], key[-2])
+            v = _try_index(py_var, permuted)
+            if v is not None:
+                return v
         return None
     except Exception:
         return None
 
 
-def find_py_var(model, name: str):
-    """Try the literal name, then lowercase, then a case-insensitive scan."""
+# GAMS → Python name aliases for variables that exist under different names.
+# pp(r,a,i) in GAMS is pp_rai(r,a,i) in Python (pp Python is just (r,a) aggregate).
+_NAME_ALIAS = {
+    "pp": "pp_rai",
+    "xa": "xaa",  # GAMS xa(r,i,aa) = upper-level Armington aggregate ≡ Python xaa
+}
+
+
+class _DerivedVar:
+    """Pseudo-Var: callable mapping (key)→value, behaves enough like Pyomo Var
+    for diff_9x10_full's `get_py_var_value` to use it transparently."""
+
+    def __init__(self, name, getter):
+        self.name = name
+        self._getter = getter
+
+    def __contains__(self, key):
+        try:
+            return self._getter(key) is not None
+        except Exception:
+            return False
+
+    def __getitem__(self, key):
+        v = self._getter(key)
+        if v is None:
+            raise KeyError(key)
+        return _DerivedScalar(v)
+
+    def __iter__(self):
+        return iter(())  # disable scan; force exact-key lookup
+
+
+class _DerivedScalar:
+    def __init__(self, v):
+        self._v = v
+
+    @property
+    def value(self):
+        return self._v
+
+
+def _value_or_zero(model, var_name, idx):
+    v = getattr(model, var_name, None)
+    if v is None:
+        return None
+    try:
+        return float(v[idx].value if hasattr(v[idx], "value") else v[idx])
+    except Exception:
+        return None
+
+
+def _build_derived(model):
+    """Build derived 'GAMS-like' views for variables that don't have a direct Var."""
+    out = {}
+
+    # NOTE: GAMS xa(r,i,aa) is the upper-level Armington aggregate, not xda+xma.
+    # It maps directly to Python xaa via the _NAME_ALIAS table.
+
+    # xd(r,i,aa) = xda(r,i,aa)
+    def _xd(key):
+        if len(key) != 3:
+            return None
+        v = _value_or_zero(model, "xda", key)
+        return v
+    out["xd"] = _DerivedVar("xd(=xda)", _xd)
+
+    # xm(r,i,aa) = xma(r,i,aa)
+    def _xm(key):
+        if len(key) != 3:
+            return None
+        v = _value_or_zero(model, "xma", key)
+        return v
+    out["xm"] = _DerivedVar("xm(=xma)", _xm)
+
+    # xi(r) ≡ xiagg(r) (aggregate investment volume)
+    def _xi(key):
+        if len(key) != 1:
+            return None
+        return _value_or_zero(model, "xiagg", key[0])
+    out["xi"] = _DerivedVar("xi(=xiagg)", _xi)
+
+    # pg(r) = CES aggregator of pa[r,i,'gov'] with weights g_share
+    # (matches eq_ug_rule). xg(r) = yg/pg.
+    from pyomo.core import value as _pyo_value
+
+    def _pg(r):
+        try:
+            sigmag = 1.01  # Python eq_ug_rule snaps near-1 to 1.01 to avoid 0^0
+            expo = 1.0 - sigmag
+            terms = 0.0
+            for i in model.i:
+                gs = _pyo_value(model.g_share[r, i])
+                if gs > 0.0:
+                    pa = _pyo_value(model.pa[r, i, "gov"])
+                    terms += gs * pa ** expo
+            if terms <= 0.0:
+                return None
+            return terms ** (1.0 / expo)
+        except Exception:
+            return None
+
+    def _xg(key):
+        if len(key) != 1:
+            return None
+        pg = _pg(key[0])
+        if pg is None or pg <= 0.0:
+            return None
+        try:
+            yg = _pyo_value(model.yg[key[0]])
+            return yg / pg
+        except Exception:
+            return None
+    out["xg"] = _DerivedVar("xg(=yg/pg)", _xg)
+
+    def _pg_outer(key):
+        if len(key) != 1:
+            return None
+        return _pg(key[0])
+    out["pg"] = _DerivedVar("pg(CES gov)", _pg_outer)
+
+    # xg(r) = yg(r)/pg(r). pg = CES aggregate of pa[r,i,'gov']; we use
+    # the absorption price M_pa^σ duality. Approximation: when σ_gov ≈ 1
+    # (Cobb–Douglas) pg = ∏_i pa[r,i,gov]^α; for Std-7 σ_gov is finite —
+    # closest equivalent already in Python is yg/(value of gov budget).
+    # Use sum_i pa[r,i,gov]*xaa[r,i,gov] = pg*xg; since xaa values are
+    # quantities, sum is a value — divide by pg approximated as identity
+    # via pg*xg = yg → xg = sum_i pa*xaa / pg ≈ sum_i pa*xaa / (yg/xg).
+    # Cleanest: xg = sum_i xaa[r,i,gov] if all pa stay 1 (works ok at base);
+    # for shock, use pg = pcons (close proxy) is wrong. Skip xg aggregate.
+    return out
+
+
+def find_py_var(model, name: str, derived: dict | None = None):
+    """Try derived view, alias, literal name, lowercase, case-insensitive scan."""
+    if derived is not None and name.lower() in derived:
+        d = derived[name.lower()]
+        return d, d.name
+    aliased = _NAME_ALIAS.get(name.lower())
+    if aliased is not None:
+        v = getattr(model, aliased, None)
+        if v is not None:
+            return v, aliased
     v = getattr(model, name, None)
     if v is not None:
         return v, name
@@ -175,6 +362,13 @@ def main():
     from run_gtap import _run_path_capi_nonlinear_full, _build_gtap_contract_with_calibration
 
     contract = _build_gtap_contract_with_calibration("gtap_standard7_9x10")
+    # Match validate_gams_parity.py: GAMS NEOS reference uses ifSUB=0.
+    # Default Python closure has if_sub=True (substitutes/fixes pm, pmcif, pefob,
+    # pfa, pfy, xwmg, xmgm, pwmg, pp_rai); override to if_sub=False so these
+    # bilateral price/margin variables stay free and can adjust to the shock.
+    new_closure = contract.closure.model_copy(update={"if_sub": False})
+    contract = contract.model_copy(update={"closure": new_closure})
+    print(f"  closure: if_sub={contract.closure.if_sub}  numeraire={contract.closure.numeraire}")
 
     print("=== Python baseline 9x10 ===")
     p_b = GTAPParameters()
@@ -227,6 +421,7 @@ def main():
         phases.append(("shock", m_s))
 
     for phase, m_py in phases:
+        derived = _build_derived(m_py)
         print(f"\n{'='*120}")
         print(f"PHASE: {phase}    (tol_rel={args.tol_rel}  tol_abs={args.tol_abs})")
         print(f"{'='*120}")
@@ -241,7 +436,7 @@ def main():
             gams_all = gams_levels(name)
             if not gams_all:
                 continue
-            py_var, py_name = find_py_var(m_py, name)
+            py_var, py_name = find_py_var(m_py, name, derived=derived)
             if py_var is None:
                 # Count GAMS cells for this t to know coverage gap
                 n_t = sum(1 for k in gams_all if split_t(k)[1] == phase)

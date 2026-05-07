@@ -235,15 +235,17 @@ class GTAPSets:
                 elif is_mobile is False:
                     self.sf.append(factor_name)
         else:
-            # Default: all factors mobile except land and natural resources
-            mobile_defaults = ["skl", "unsk", "cap", "lab"]
-            sluggish_defaults = ["lnd", "nrs"]
-            
+            # Default: only natural resources are sector-specific (fnm in GAMS),
+            # everything else (incl. Land) is mobile with finite omegaf for CET.
+            # Matches GTAP standard: getData.gms builds fnm only from endwf={NatRes};
+            # endws={Land} is treated as mobile with omegaf=1 (partial CET).
+            sluggish_defaults = ["nrs", "natres", "natural"]
+
             for f in self.f:
-                if any(m in f.lower() for m in mobile_defaults):
-                    self.mf.append(f)
-                else:
+                if any(s in f.lower() for s in sluggish_defaults):
                     self.sf.append(f)
+                else:
+                    self.mf.append(f)
 
     def _infer_activity_commodity_pair(self, key: Tuple[str, ...] | str) -> Optional[Tuple[str, str]]:
         """Infer an (activity, commodity) pair from a parameter key."""

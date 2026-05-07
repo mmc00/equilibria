@@ -1718,7 +1718,7 @@ class GTAPModelEquations:
             fdepr = (vdep / vkb) if vkb > 0.0 else 0.0
             fdepr_data[(region,)] = fdepr
             depr_data[(region,)] = fdepr
-            rorflex_data[(region,)] = float(self.params.elasticities.rorflex.get(region, 1.0))
+            rorflex_data[(region,)] = float(self.params.elasticities.rorflex.get(region, 10.0))
             pop_data[(region,)] = _pop_value(region)
             for factor in self.sets.f:
                 if factor in self.sets.mf:
@@ -1995,7 +1995,7 @@ class GTAPModelEquations:
         create_indexed_param("alphaa_hhd", ["r", "i"], alphaa_hhd_data, 0.0)
         create_indexed_param("fdepr", ["r"], fdepr_data, 0.0)
         create_indexed_param("depr", ["r"], depr_data, 0.0)
-        create_indexed_param("rorflex", ["r"], rorflex_data, 1.0)
+        create_indexed_param("rorflex", ["r"], rorflex_data, 10.0)
         create_indexed_param("pop", ["r"], pop_data, 1.0)
         create_indexed_param("savf_bar", ["r"], savf_bar_data, 0.0)
         create_indexed_param("aft", ["r", "f"], aft_data, 0.0)
@@ -5025,7 +5025,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             return sum(terms) == 1.0
         model.eq_ev = Constraint(model.r, rule=eq_ev_rule)
-        model.eq_ev.deactivate()
+        # GAMS keeps eveq active so welfare ev tracks shock state. Activate to match.
 
         def eq_cv_rule(model, r):
             terms = []
@@ -5043,7 +5043,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             return sum(terms) == 1.0
         model.eq_cv = Constraint(model.r, rule=eq_cv_rule)
-        model.eq_cv.deactivate()
+        # GAMS keeps cveq active so welfare cv tracks shock state. Activate to match.
 
         # ========================================================================
         # MARKET CLEARING
