@@ -272,6 +272,40 @@ results.plot()
 
 ---
 
+## Implementation Status
+
+### GTAP Standard 7 — GAMS/NEOS mirror parity (2026-05-06)
+
+The Python implementation of the **GTAP Standard 7** model template (`equilibria.templates.gtap`) reproduces the canonical GAMS reference solution to numerical noise on two datasets:
+
+| Dataset | Phase | Coverage | Max relative error |
+|---------|-------|----------|--------------------|
+| **9x10** (9 sectors × 10 regions) | baseline | 21 macros × 10 regions | ≤1e-7 |
+| **9x10** | 10% imptx shock | 21 macros × 10 regions | ≤0.01% |
+| **NUS333** (3 sectors × 2 regions) | baseline + 10% imptx shock | full macro set | exact (0.0pp) |
+
+The 9x10 shock comparison includes `regy`, `yc`, `yg`, `yi`, `rsav`, `gdpmp`, `rgdpmp`, `pgdpmp`, `pabs`, `pcons`, `pi`, `pfact`, `kstock`, `u`, `uh`, `ug`, `us`, `facty`, `ytaxTot`, `phi`, `savf` — all match GAMS COMP.gdx within 0.01%. Solver: PATH C API in nonlinear-full mode (16,166 vars × 16,166 eqs), residuals ~1e-12 / ~1e-11.
+
+**Reproduce:**
+
+```bash
+# 9x10 — uniform 10% rate-scaled tariff shock (matches tariff_sim.gms:77)
+.venv/bin/python scripts/gtap/validate_gams_parity.py --shock-factor 0.10
+
+# 9x10 — full per-variable diff vs COMP.gdx
+.venv/bin/python scripts/gtap/diff_9x10_vs_gams.py --phase both
+
+# NUS333 — power-scaled shock (matches comp_nus333.gms:149)
+.venv/bin/python scripts/gtap/compare_nus333_vs_neos.py
+```
+
+Notes:
+- 9x10 uses **rate scaling** (`tm = tm_base * (1 + tm_shock)`); NUS333 uses **power scaling** (`(1+imptx) * 1.10 - 1`). The two datasets follow different upstream conventions.
+- Counterfactual builds must pass `t0_snapshot=base_model` so CES weights (alphad/alpham/betap/betag/betas) calibrate against the converged baseline rather than the perturbed state.
+- See `CLAUDE.md` and `GTAP_VALIDATION_STATUS.md` for the full audit trail.
+
+---
+
 ## Examples
 
 ### Tax Policy Analysis
