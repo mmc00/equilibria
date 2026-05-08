@@ -292,13 +292,6 @@ class TestFullPipeline:
         assert "L" in categories
         assert "K" in categories
 
-    @pytest.mark.xfail(
-        reason=(
-            "Pipeline transformations leave structural imbalances (sectors short, "
-            "households long) that final RAS cannot recover; needs proper closure."
-        ),
-        strict=False,
-    )
     def test_sam_balance(self):
         """Test that final SAM is reasonably balanced."""
         result = run_mip_to_sam(SIMPLE_MIP, ras_max_iter=100)

@@ -15,12 +15,14 @@ from pathlib import Path
 from typing import Any, Literal, Mapping, NamedTuple
 
 import numpy as np
+import pandas as pd
 
 from equilibria.sam_tools.balancing import (
     balance_mip_entropy,
     balance_mip_gras,
     balance_mip_ras,
     balance_mip_sut_ras,
+    gras_balance,
 )
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
 from equilibria.sam_tools.ieem_to_pep_transformations import balance_sam_ras
@@ -30,6 +32,7 @@ from equilibria.sam_tools.mip_to_sam_transforms import (
     create_government_flows,
     create_household_expenditure,
     create_investment_account,
+    create_make_matrix,
     create_row_account,
     disaggregate_va_to_factors,
     normalize_mip_accounts,
@@ -74,6 +77,41 @@ def _to_jsonable(value: Any) -> Any:
     if isinstance(value, (np.floating,)):
         return float(value)
     return value
+
+
+def _final_balance_normalized_sam(
+    sam: Sam, max_iter: int, tol: float
+) -> dict[str, Any]:
+    """Balance the fully-structured SAM via repeated GRAS passes.
+
+    Targets are ``(row_sum + col_sum) / 2`` per account. After each GRAS run we
+    re-evaluate row/column sums and re-target until the max abs imbalance falls
+    below ``tol`` or we hit ``max_iter`` outer passes. Re-targeting is required
+    because GRAS for an arbitrary square SAM converges to a fixed point that
+    may not exactly satisfy row==col; iterating the targets drives the residual
+    to zero (mass is conserved at every pass).
+    """
+    df = sam.to_dataframe()
+    M = df.to_numpy(dtype=float)
+    iters_total = 0
+    converged = False
+    for _ in range(max_iter):
+        row_sums = M.sum(axis=1)
+        col_sums = M.sum(axis=0)
+        diff = np.abs(row_sums - col_sums).max()
+        if diff < tol:
+            converged = True
+            break
+        targets = (row_sums + col_sums) / 2.0
+        M, iters, _ = gras_balance(M, targets, targets, max_iter=200, tol=tol)
+        iters_total += iters
+    new_df = pd.DataFrame(M, index=df.index, columns=df.columns)
+    sam.replace_dataframe(new_df)
+    return {
+        "iterations": iters_total,
+        "converged": converged,
+        "method": "gras_normalized_iterated",
+    }
 
 
 def _sam_balance_stats(sam: Sam) -> dict[str, float]:
@@ -414,19 +452,6 @@ def run_mip_to_sam(
             },
         )
 
-    # SAM balancing (final row/col balance)
-    record(
-        "balance_ras",
-        balance_sam_ras(
-            sam,
-            {
-                "ras_type": ras_type,
-                "tol": ras_tol,
-                "max_iter": ras_max_iter,
-            },
-        ),
-    )
-
     # Transformation sequence
     record("normalize_mip", normalize_mip_accounts(sam, {}))
 
@@ -460,11 +485,24 @@ def run_mip_to_sam(
 
     record("row_account", create_row_account(sam, {}))
 
+    # Make matrix closes sector production: J row income = J col cost. Run
+    # after government and row_account so all taxes/imports are included in
+    # the column total.
+    record("make_matrix", create_make_matrix(sam, {}))
+
     record("investment", create_investment_account(sam, {}))
 
     # Reuse existing PEP transformations
     record("create_x_block", create_x_block_on_sam(sam))
     record("convert_exports", convert_exports_to_x_on_sam(sam))
+
+    # Final SAM balancing on the fully-structured SAM. Uses GRAS to handle
+    # any negative cells (e.g. dissaving entries). Targets are the average of
+    # row and column sums for each account, preserving total mass.
+    record(
+        "balance_ras",
+        _final_balance_normalized_sam(sam, ras_max_iter, ras_tol),
+    )
 
     # Export
     resolved_output: Path | None = Path(output_path).resolve() if output_path is not None else None
