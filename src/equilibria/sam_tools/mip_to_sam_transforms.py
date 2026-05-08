@@ -27,9 +27,12 @@ DEFAULT_TAX_RATES = {
 
 
 def _get_va_aggregate_row(sam: Sam) -> tuple[str, str] | None:
-    """Find the VA aggregate row in the SAM."""
+    """Find the VA aggregate row in the SAM (raw or normalized form)."""
     for cat, elem in sam.row_keys:
+        cat_lower = norm_text_lower(cat)
         elem_lower = norm_text_lower(elem)
+        if cat_lower == "va" and "aggregate" in elem_lower:
+            return (cat, elem)
         if "va" in elem_lower and "aggregate" in elem_lower:
             return (cat, elem)
     return None
@@ -56,34 +59,55 @@ def _get_commodity_keys(sam: Sam) -> list[tuple[str, str]]:
     return [(cat, elem) for cat, elem in sam.row_keys if norm_text_lower(cat) == "i"]
 
 
+_FD_TOKENS = ("hh", "hogar", "gov", "gob", "inv", "inversion", "exp", "export")
+
+
+def _is_fd_label(elem_lower: str) -> bool:
+    return any(tok in elem_lower for tok in _FD_TOKENS)
+
+
+def _is_special_row_label(elem_lower: str) -> bool:
+    return ("va" in elem_lower and "aggregate" in elem_lower) or (
+        "imp" in elem_lower and "total" in elem_lower
+    )
+
+
 def normalize_mip_accounts(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
     """
     Convert RAW MIP labels to initial PEP structure (J, I, VA, FD).
 
-    Strategy: Keep it simple - just rename categories, don't restructure yet.
-    The MIP already has the right structure (rows are commodities/VA/IMP,
-    columns are sectors/final demand).
+    The MIP raw matrix is square-padded so FD labels (HH/GOV/INV/EXP) appear
+    on the row axis with zero data. We classify columns first using the FD
+    closed vocabulary; everything else in the columns is a sector (J), and
+    rows that match an FD label are dropped as spurious zero-rows.
     """
     df = sam.to_dataframe()
     raw_keys = list(df.index)
 
-    # Identify sector labels (those that appear in both rows and columns as commodities)
-    sector_labels = set()
-    for cat, elem in raw_keys:
-        elem_lower = norm_text_lower(elem)
-        # Skip special rows
-        if any(x in elem_lower for x in ["va", "imp", "aggregate", "total"]):
-            continue
-        # Check if appears as column too
-        if ("RAW", elem) in df.columns or any(norm_text_lower(e) == elem_lower for c, e in df.columns):
-            sector_labels.add(norm_text_lower(elem))
-
     # Build new keys with proper categories
     new_keys: list[tuple[str, str]] = []
-    old_to_new_row: dict[tuple[str, str], tuple[str, str]] = {}
-    old_to_new_col: dict[tuple[str, str], tuple[str, str]] = {}
+    old_to_new_row: dict[tuple[str, str], tuple[str, str] | None] = {}
+    old_to_new_col: dict[tuple[str, str], tuple[str, str] | None] = {}
 
-    # Process rows
+    # Process columns first to get the canonical sector vocabulary.
+    # VA/IMP columns are square-padding artifacts and get dropped.
+    sector_labels: set[str] = set()
+    for cat, elem in df.columns:
+        elem_lower = norm_text_lower(elem)
+        if _is_special_row_label(elem_lower):
+            old_to_new_col[(cat, elem)] = None
+            continue
+        if _is_fd_label(elem_lower):
+            new_key = ("FD", norm_text(elem))
+        else:
+            new_key = ("J", norm_text(elem))
+            sector_labels.add(elem_lower)
+        old_to_new_col[(cat, elem)] = new_key
+        if new_key not in new_keys:
+            new_keys.append(new_key)
+
+    # Process rows: VA / IMP go to their own categories, sector labels become
+    # commodities, FD labels are dropped (square-padding artifact).
     for cat, elem in raw_keys:
         elem_lower = norm_text_lower(elem)
 
@@ -91,28 +115,13 @@ def normalize_mip_accounts(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
             new_key = ("VA", "aggregate")
         elif "imp" in elem_lower and "total" in elem_lower:
             new_key = ("IMP", "total")
-        elif elem_lower in sector_labels:
-            new_key = ("I", norm_text(elem))  # Commodities
+        elif _is_fd_label(elem_lower) and elem_lower not in sector_labels:
+            old_to_new_row[(cat, elem)] = None
+            continue
         else:
-            new_key = ("I", norm_text(elem))  # Treat unknown as commodity
+            new_key = ("I", norm_text(elem))  # Commodities
 
         old_to_new_row[(cat, elem)] = new_key
-        if new_key not in new_keys:
-            new_keys.append(new_key)
-
-    # Process columns
-    for cat, elem in df.columns:
-        elem_lower = norm_text_lower(elem)
-
-        if elem_lower in sector_labels:
-            new_key = ("J", norm_text(elem))  # Sectors
-        elif any(fd in elem_lower for fd in ["hh", "hogar", "gov", "gob", "inv", "inversion", "exp", "export"]):
-            new_key = ("FD", norm_text(elem))  # Final demand
-        else:
-            # Could be a sector we haven't seen
-            new_key = ("J", norm_text(elem))
-
-        old_to_new_col[(cat, elem)] = new_key
         if new_key not in new_keys:
             new_keys.append(new_key)
 
@@ -257,11 +266,10 @@ def create_factor_income_distribution(sam: Sam, op: dict[str, Any]) -> dict[str,
 
             # Add income from factor to institution
             df.loc[inst_key, factor_key] += income
+            sam.replace_dataframe(df)
             total_distributed += income
 
         distribution_by_factor[factor_cat] = factor_total
-
-    sam.replace_dataframe(df)
 
     return {
         "total_distributed": total_distributed,
