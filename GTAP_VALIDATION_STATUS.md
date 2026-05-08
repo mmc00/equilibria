@@ -1,7 +1,20 @@
 # GTAP Python-to-GAMS Validation Status
 
-**Last updated:** 2026-05-01
+**Last updated:** 2026-05-07
 **Objective:** Replicate the GAMS NEOS 10% uniform import-tariff shock in the equilibria GTAP Standard 7 (9×10) Python template and reconcile endogenous deltas against a correct GAMS reference.
+
+## Current status: ✅ PASS (commit `cd28ae7`, 2026-05-07)
+
+| Gate | Result |
+|------|--------|
+| Baseline residual (nonlinear full) | **2.10e-11** (code=1) |
+| Shocked residual (10% uniform tariff) | **6.28e-13** (code=1) |
+| EastAsia regy delta | **−20,101** vs GAMS −20,101 — **0.0% error** |
+| All regions regy/gdpmp/pabs deltas | <1% error vs GAMS |
+
+See "Session 2026-05-07" below.
+
+---
 
 ---
 
@@ -191,3 +204,77 @@ Straightforward bug; fix when refreshing shock output.
 | `src/equilibria/templates/gtap/gtap_parameters.py` | Parameter loading, `savf_bar` calculation, final-demand splits |
 | `output/gtap_ifsub_false_warmstart.json` | Last good shocked run (signs inverted) |
 | `output/gtp_baseline_reverted.json` | Last good baseline run (res 1.12e-06) |
+
+---
+
+## Session 2026-05-07: Full GAMS parity achieved
+
+### Context
+Migration of GTAP loader to native HAR (`GTAPParameters.from_dataset`,
+commit `cd28ae7`) prompted re-running `validate_gams_parity.py --shock-factor 0.10`
+to confirm no regression.
+
+### Result: PASS (all gates closed)
+
+```
+Baseline residual:   2.10e-11  (code=1)
+Shocked residual:    6.28e-13  (code=1)
+```
+
+| Region      | Python regy Δ | GAMS regy Δ | %err |
+|-------------|--------------:|------------:|-----:|
+| Oceania     | +1,119        | +1,119      | 0.0% |
+| EastAsia    | −20,101       | −20,101     | 0.0% |
+| SEAsia      | +471          | +470        | +0.2% |
+| SouthAsia   | +4,216        | +4,217      | 0.0% |
+| NAmerica    | +9,547        | +9,546      | 0.0% |
+| LatinAmer   | +11,385       | +11,385     | 0.0% |
+| EU_28       | +6,604        | +6,605      | 0.0% |
+| MENA        | +8,283        | +8,284      | 0.0% |
+| SSA         | +5,427        | +5,425      | 0.0% |
+| RestofWorld | +5,970        | +5,970      | 0.0% |
+
+All gdpmp and pabs deltas similarly within <1% of GAMS reference.
+
+### What changed since the last status (Session 2026-05-01)
+
+The 2026-05-01 entry reported:
+- baseline residual `1.04e-06` (failed strict 1e-8 gate)
+- shocked residual `0.38` (failed)
+- EastAsia regy delta `−20,991` (4% error)
+
+The improvement to `2.10e-11` / `6.28e-13` / 0.0% error reflects the
+cumulative effect of fixes landed in commits between 2026-05-01 and
+`cd28ae7` (notably the bit-exact HAR→GDX parity, native HAR loader,
+unified `from_dataset` entry point). No change to model equations or
+closure was required for the 2026-05-07 PASS — earlier fixes had already
+brought parity within reach; this run confirms it end-to-end on the
+HAR-native loader path.
+
+### Validation invocation
+
+```
+git rev-parse --short HEAD          # cd28ae7
+uv run python scripts/gtap/validate_gams_parity.py --shock-factor 0.10
+```
+
+PATH C API (nonlinear full, equation_scaling=True), GAMS-equivalent
+shock formula `imptx_new = imptx_old * 1.1`.
+
+### Now-resolved items (moved off "pending")
+
+| Item | Old status | New status |
+|------|-----------|------------|
+| Baseline nonlinear residual | ⚠️ 1.04e-06 | ✅ 2.10e-11 |
+| Shocked nonlinear convergence | ❌ res 0.38 | ✅ 6.28e-13 |
+| Sign inversion (regy/yc/yg) | ❌ inverted | ✅ matches GAMS |
+| `gdpmp` baseline parity | ❌ 15.061 vs 15.220 | ✅ matches |
+| Parity check variable-by-variable | ❌ pending | ✅ regy/gdpmp/pabs all <1% |
+
+### Still open (low priority)
+
+- `_collect_key_quantities` ytax overwrite (run_gtap.py:583–594) — bug
+  in shock report aggregator; does not affect solver output.
+- 6 pre-existing failures in `test_gtap_parity_pipeline.py` (`xs0`/`xd0`
+  AttributeError, CSV scale tests) — tests reference removed API; need
+  rewrite or removal.
