@@ -16,15 +16,15 @@ This template provides a full multi-regional CGE model based on the GTAP (Global
 ## Quick Start
 
 ```python
-from equilibria.templates.gtap import GTAPSets, GTAPParameters, GTAPModelEquations, GTAPSolver
+from equilibria.templates.gtap import GTAPParameters, GTAPModelEquations, GTAPSolver
 from equilibria.templates.gtap import build_gtap_contract
 
-# Load data from Standard GTAP 7 9x10 database
-sets = GTAPSets()
-sets.load_from_gdx("basedata-9x10.gdx")
-
-params = GTAPParameters()
-params.load_from_gdx("basedata-9x10.gdx")
+# Load data — auto-detects HAR directory or .gdx file.
+# Preferred: a directory with basedata*.har / sets*.har / default*.prm.
+params = GTAPParameters.from_dataset(
+    "/Users/marmol/proyectos2/cge_babel/standard_gtap_7", suffix="-9x10"
+)
+sets = params.sets
 
 # Build model
 contract = build_gtap_contract("gtap_standard")
@@ -38,6 +38,11 @@ result = solver.solve()
 print(f"Status: {result.status}")
 print(f"Walras check: {result.walras_value:.2e}")
 ```
+
+`from_dataset` accepts either a HAR directory (preferred — native, no
+GDX intermediate) or a legacy ``.gdx`` file. Both paths produce
+identical sets, benchmark, taxes, elasticities and calibrated shares
+(verified bit-for-bit against the reference 9×10 dataset).
 
 ## CLI Usage
 
@@ -176,8 +181,9 @@ Run parity checks against GAMS baseline:
 ```python
 from equilibria.templates.gtap import GTAPParameters
 
-params = GTAPParameters()
-params.load_from_gdx("asa7x5.gdx")
+params = GTAPParameters.from_dataset(
+    "/Users/marmol/proyectos2/cge_babel/standard_gtap_7", suffix="-9x10"
+)
 
 is_valid, errors = params.validate()
 if is_valid:

@@ -2221,7 +2221,48 @@ class GTAPParameters:
     shares: GTAPShareParameters = field(default_factory=GTAPShareParameters)
     calibrated: GTAPCalibratedShares = field(default_factory=GTAPCalibratedShares)  # GAMS-style calibrated shares
     shifts: GTAPShiftParameters = field(default_factory=GTAPShiftParameters)
-    
+
+    @classmethod
+    def from_dataset(
+        cls,
+        path: "str | Path",
+        *,
+        suffix: Optional[str] = None,
+    ) -> "GTAPParameters":
+        """Build a fully-loaded GTAPParameters from a dataset path.
+
+        Auto-detects the input format:
+
+        * **HAR directory** (preferred): a directory containing
+          ``basedata*.har`` / ``sets*.har`` / ``default*.prm`` and
+          optionally ``baserate*.har``. Loaded via the native HAR pipeline
+          (``equilibria.babel.har.load_gtap_from_har``).
+        * **GDX file** (legacy): a path ending in ``.gdx`` — uses the GDX
+          loader. Kept for backward compatibility while remaining call
+          sites are migrated.
+
+        Args:
+            path: Either a directory of HAR/PRM files or a ``.gdx`` file.
+            suffix: Aggregation tag (e.g. ``"-9x10"``). Only used in HAR
+                mode when the directory contains multiple aggregations.
+
+        Returns:
+            A fully-loaded ``GTAPParameters`` instance.
+        """
+        from equilibria.babel.har import load_gtap_from_har
+
+        p = Path(path)
+        if p.is_dir():
+            return load_gtap_from_har(p, suffix=suffix)
+        if p.suffix.lower() == ".gdx":
+            params = cls()
+            params.load_from_gdx(p)
+            return params
+        raise ValueError(
+            f"Unrecognized GTAP dataset path: {p!s}. Expected a HAR directory "
+            "or a .gdx file."
+        )
+
     def load_from_gdx(
         self,
         gdx_path: Path,

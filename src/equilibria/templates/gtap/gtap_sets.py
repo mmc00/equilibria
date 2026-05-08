@@ -40,8 +40,11 @@ class GTAPSets:
         h: Households (for myGTAP extension, optional)
     
     Example:
-        >>> sets = GTAPSets()
-        >>> sets.load_from_gdx(Path("asa7x5.gdx"))
+        >>> from equilibria.templates.gtap import GTAPParameters
+        >>> params = GTAPParameters.from_dataset(
+        ...     "/path/to/standard_gtap_7", suffix="-9x10"
+        ... )
+        >>> sets = params.sets
         >>> print(f"Regions: {sets.r}")
         >>> print(f"Commodities: {sets.i}")
     """
