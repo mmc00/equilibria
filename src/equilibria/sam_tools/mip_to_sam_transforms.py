@@ -156,6 +156,45 @@ def normalize_mip_accounts(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def create_make_matrix(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
+    """
+    Add diagonal make-matrix entries so each sector J has income matching its cost.
+
+    A standard MIP records sector costs in J columns (intermediate + VA + IMP) and
+    commodity supply in I rows, but it does not record sector *output* per
+    commodity. SAM closure requires J row income to equal J column cost. We close
+    the loop with a diagonal make matrix: each sector j sells exactly its column
+    total to commodity j, i.e. df.loc[("J", j), ("I", j)] = sum of ("J", j) column.
+
+    This assumes one-to-one sector-commodity correspondence, which holds for MIPs
+    where sectors and commodities share the same labels.
+    """
+    df = sam.to_dataframe()
+    total_make = 0.0
+    pairs: list[tuple[str, str]] = []
+
+    for col_key in sam.col_keys:
+        if norm_text_lower(col_key[0]) != "j":
+            continue
+        sector_label = col_key[1]
+        commodity_key = ("I", sector_label)
+        if commodity_key not in sam.row_keys:
+            continue
+        cost = float(df.loc[:, col_key].sum())
+        if cost <= 1e-14:
+            continue
+        sector_row_key = ("J", sector_label)
+        if sector_row_key not in sam.row_keys:
+            ensure_key(sam, sector_row_key)
+            df = sam.to_dataframe()
+        df.loc[sector_row_key, commodity_key] += cost
+        total_make += cost
+        pairs.append((sector_label, sector_label))
+
+    sam.replace_dataframe(df)
+    return {"sectors_made": len(pairs), "total_make": total_make}
+
+
 def disaggregate_va_to_factors(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
     """
     Split VA aggregate row into L (labor) and K (capital) using shares.
@@ -308,7 +347,8 @@ def create_household_expenditure(sam: Sam, op: dict[str, Any]) -> dict[str, Any]
     df = sam.to_dataframe()
     total_expenditure = 0.0
 
-    # Transfer I → FD.HH flows to AG.hh → I
+    # Transfer I → FD.HH flows to I → AG.hh: households pay for the commodity,
+    # i.e. df.loc[I_row, hh_col] (hh column = hh expenditure on commodity I).
     for row_key in sam.row_keys:
         if norm_text_lower(row_key[0]) != "i":
             continue
@@ -317,9 +357,8 @@ def create_household_expenditure(sam: Sam, op: dict[str, Any]) -> dict[str, Any]
         if abs(value) <= 1e-14:
             continue
 
-        # Move from (I, FD.HH) to (AG.hh, I)
         df.loc[row_key, hh_fd_key] = 0.0
-        df.loc[hh_key, row_key] += value
+        df.loc[row_key, hh_key] += value
         total_expenditure += value
 
     sam.replace_dataframe(df)
@@ -389,12 +428,13 @@ def create_government_flows(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
                     df.loc[tm_key, col_key] += tariff
                     total_tm += tariff
 
-    # Route tax revenues to government
+    # Route tax revenues to government (gvt receives from ti/tm).
+    # SAM convention: df.loc[receiver_row, payer_col].
     if total_ti > 1e-14:
-        df.loc[ti_key, gvt_key] += total_ti
+        df.loc[gvt_key, ti_key] += total_ti
 
     if total_tm > 1e-14:
-        df.loc[tm_key, gvt_key] += total_tm
+        df.loc[gvt_key, tm_key] += total_tm
 
     # Transfer government consumption from FD
     gov_fd_key = None
@@ -404,6 +444,8 @@ def create_government_flows(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
             gov_fd_key = (cat, elem)
             break
 
+    # Move I → FD.GOV flows to I → AG.gvt: government pays for the commodity.
+    # SAM convention: df.loc[I_row, gvt_col] (gvt column = gvt expenditure on I).
     total_gov_consumption = 0.0
     if gov_fd_key is not None:
         for row_key in sam.row_keys:
@@ -415,7 +457,7 @@ def create_government_flows(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
                 continue
 
             df.loc[row_key, gov_fd_key] = 0.0
-            df.loc[gvt_key, row_key] += value
+            df.loc[row_key, gvt_key] += value
             total_gov_consumption += value
 
     sam.replace_dataframe(df)
@@ -443,8 +485,8 @@ def create_row_account(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
     df = sam.to_dataframe()
 
     # Ensure ROW account exists
-    row_key = ("AG", "row")
-    ensure_key(sam, row_key)
+    row_acct_key = ("AG", "row")
+    ensure_key(sam, row_acct_key)
 
     df = sam.to_dataframe()
     total_imports = 0.0
@@ -458,15 +500,19 @@ def create_row_account(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
             break
 
     if imp_key is not None and imp_key in df.index:
+        # In the normalized SAM, imports sit in IMP row × J (sector) columns:
+        # they are intermediate import use by sectors. We route them to the
+        # ROW account (AG.row) so the import flow becomes AG.row → J.
         for col_key in sam.col_keys:
-            if norm_text_lower(col_key[0]) == "i":
-                value = float(df.loc[imp_key, col_key])
-                if abs(value) <= 1e-14:
-                    continue
+            if norm_text_lower(col_key[0]) != "j":
+                continue
+            value = float(df.loc[imp_key, col_key])
+            if abs(value) <= 1e-14:
+                continue
 
-                df.loc[imp_key, col_key] = 0.0
-                df.loc[row_key, col_key] += value
-                total_imports += value
+            df.loc[imp_key, col_key] = 0.0
+            df.loc[row_acct_key, col_key] += value
+            total_imports += value
 
     # Handle exports: I → FD.EXP becomes I → AG.row
     exp_fd_key = None
@@ -486,7 +532,7 @@ def create_row_account(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
                 continue
 
             df.loc[row_key, exp_fd_key] = 0.0
-            df.loc[row_key, row_key] += value  # Will be moved to X.* later
+            df.loc[row_key, row_acct_key] += value  # Picked up by convert_exports_to_x_on_sam
             total_exports += value
 
     sam.replace_dataframe(df)
@@ -535,31 +581,37 @@ def create_investment_account(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
             df.loc[row_key, inv_key] += value
             total_investment += value
 
-    # Calculate institutional savings (residual balancing)
-    # For each institution (AG.*), savings = income - expenditure
+    # Calculate institutional savings (residual balancing).
+    # SAM convention: df.loc[row, col] means row receives from col, i.e. col pays row.
+    # If income > expenditure the institution has a surplus and pays into investment:
+    # OTH.inv (row, receiver) ← AG.x (col, payer). So df.loc[inv_key, ag_key] += savings.
+    # If income < expenditure the institution dissaves: investment pays into the
+    # institution, df.loc[ag_key, inv_key] += -savings.
     total_savings = 0.0
-    for row_key in sam.row_keys:
-        if norm_text_lower(row_key[0]) != "ag":
+    for ag_key in sam.row_keys:
+        if norm_text_lower(ag_key[0]) != "ag":
             continue
 
         # Skip tax accounts
-        elem_lower = norm_text_lower(row_key[1])
+        elem_lower = norm_text_lower(ag_key[1])
         if elem_lower in {"ti", "tm", "tx", "td"}:
             continue
 
         # Income = sum of row
-        income = float(df.loc[row_key, :].sum())
+        income = float(df.loc[ag_key, :].sum())
 
         # Expenditure = sum of column
-        col_idx = sam.col_keys.index(row_key) if row_key in sam.col_keys else -1
-        if col_idx >= 0:
-            expenditure = float(df.iloc[:, col_idx].sum())
+        if ag_key in df.columns:
+            expenditure = float(df.loc[:, ag_key].sum())
         else:
             expenditure = 0.0
 
         savings = income - expenditure
-        if abs(savings) > 1e-14:
-            df.loc[row_key, inv_key] += savings
+        if savings > 1e-14:
+            df.loc[inv_key, ag_key] += savings
+            total_savings += savings
+        elif savings < -1e-14:
+            df.loc[ag_key, inv_key] += -savings
             total_savings += savings
 
     sam.replace_dataframe(df)
