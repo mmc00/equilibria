@@ -45,10 +45,10 @@ class Test2DSets:
         assert j_sym["dimension"] == 1
         assert j_sym["records"] == 3
 
-        # Check 2D parameter
+        # Check 2D set (mapping)
         map_sym = get_symbol(gdx_data, "map")
         assert map_sym is not None
-        assert map_sym["type_name"] == "parameter"
+        assert map_sym["type_name"] == "set"
         assert map_sym["dimension"] == 2
         assert map_sym["records"] == 5  # 5 mappings
 
@@ -259,11 +259,11 @@ class TestSetEdgeCases:
 
         sets = get_sets(gdx_data)
 
-        # Should have 2 sets: src, route (dst is an alias, cost is parameter)
-        assert len(sets) == 2
+        # Should have 3 sets: src, dst, route (cost is parameter)
+        assert len(sets) == 3
 
         set_names = {s["name"] for s in sets}
-        assert set_names == {"src", "route"}
+        assert set_names == {"src", "dst", "route"}
 
         # All should be sets
         for s in sets:
@@ -296,13 +296,10 @@ class TestSetEdgeCases:
         assert len(k3_elem) == 2
         assert all(len(e) == 1 for e in k3_elem)
 
-        # j3 is an alias, not a set - should raise error
-        with pytest.raises(ValueError, match="not a set"):
-            read_set_elements(gdx_data, "j3")
-
-        k3_elem = read_set_elements(gdx_data, "k3")
-        assert len(k3_elem) == 2
-        assert all(len(e) == 1 for e in k3_elem)
+        # j3 is also a 1D set
+        j3_elem = read_set_elements(gdx_data, "j3")
+        assert len(j3_elem) == 2
+        assert all(len(e) == 1 for e in j3_elem)
 
         # 3D set
         cube_elem = read_set_elements(gdx_data, "cube")

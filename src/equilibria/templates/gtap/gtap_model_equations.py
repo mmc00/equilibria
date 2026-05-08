@@ -1312,8 +1312,6 @@ class GTAPModelEquations:
             *,
             mutable: bool = False,
         ):
-            if not data:
-                return
             # Build index values
             values = {}
             for key, value in data.items():
@@ -1718,7 +1716,7 @@ class GTAPModelEquations:
             fdepr = (vdep / vkb) if vkb > 0.0 else 0.0
             fdepr_data[(region,)] = fdepr
             depr_data[(region,)] = fdepr
-            rorflex_data[(region,)] = float(self.params.elasticities.rorflex.get(region, 1.0))
+            rorflex_data[(region,)] = float(self.params.elasticities.rorflex.get(region, 10.0))
             pop_data[(region,)] = _pop_value(region)
             for factor in self.sets.f:
                 if factor in self.sets.mf:
@@ -1995,7 +1993,7 @@ class GTAPModelEquations:
         create_indexed_param("alphaa_hhd", ["r", "i"], alphaa_hhd_data, 0.0)
         create_indexed_param("fdepr", ["r"], fdepr_data, 0.0)
         create_indexed_param("depr", ["r"], depr_data, 0.0)
-        create_indexed_param("rorflex", ["r"], rorflex_data, 1.0)
+        create_indexed_param("rorflex", ["r"], rorflex_data, 10.0)
         create_indexed_param("pop", ["r"], pop_data, 1.0)
         create_indexed_param("savf_bar", ["r"], savf_bar_data, 0.0)
         create_indexed_param("aft", ["r", "f"], aft_data, 0.0)
@@ -3587,19 +3585,22 @@ class GTAPModelEquations:
 
         # Price of ND bundle (GAMS pndeq)
         # pnd**(1-sigmand) = sum(i, io(r,i,a)*[pa(r,i)/lambdaio(r,i,a)]**(1-sigmand))
+        def _io_value(r, i, a):
+            if not self.params.shifts.lambdaio and hasattr(model, "p_io"):
+                return value(model.p_io[r, i, a])
+            if hasattr(model, "io_param"):
+                return value(model.io_param[r, i, a])
+            if hasattr(model, "p_io"):
+                return value(model.p_io[r, i, a])
+            return 0.0
+
         def eq_pndeq_rule(model, r, a):
             sigmand = self._get_sigmand(r, a)
             expo = 1.0 - sigmand
             if abs(expo) < 1e-8:
                 terms = []
                 for i in model.i:
-                    io_val = (
-                        value(model.io_param[r, i, a])
-                        if hasattr(model, "io_param")
-                        else value(model.p_io[r, i, a])
-                    )
-                    if not self.params.shifts.lambdaio:
-                        io_val = value(model.p_io[r, i, a])
+                    io_val = _io_value(r, i, a)
                     if io_val <= 0.0:
                         continue
                     lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
@@ -3613,21 +3614,10 @@ class GTAPModelEquations:
 
             terms = []
             for i in model.i:
-                io_val = (
-                    value(model.io_param[r, i, a])
-                    if hasattr(model, "io_param")
-                    else value(model.p_io[r, i, a])
-                )
-
-                # If lambdaio is unavailable in the benchmark input, use
-                # normalized intermediate shares to keep pndeq benchmark-consistent.
-                if not self.params.shifts.lambdaio:
-                    io_val = value(model.p_io[r, i, a])
-
+                io_val = _io_value(r, i, a)
                 if io_val <= 0.0:
                     continue
                 lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
-                # Use agent-specific Armington price for activity a
                 terms.append(io_val * (model.pa[r, i, a] / lambdaio) ** expo)
 
             if not terms:
@@ -3637,17 +3627,20 @@ class GTAPModelEquations:
 
         # Price of VA bundle (GAMS pvaeq)
         # pva**(1-sigmav) = sum(f, af(r,f,a)*[pfa(r,f,a)/lambdaf(r,f,a)]**(1-sigmav))
+        def _af_value(r, f, a):
+            if hasattr(model, "af_param"):
+                return value(model.af_param[r, f, a])
+            if hasattr(model, "af_share"):
+                return value(model.af_share[r, f, a])
+            return 0.0
+
         def eq_pvaeq_rule(model, r, a):
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
             if abs(expo) < 1e-8:
                 terms = []
                 for f in model.f:
-                    af_val = (
-                        value(model.af_param[r, f, a])
-                        if hasattr(model, "af_param")
-                        else value(model.af_share[r, f, a])
-                    )
+                    af_val = _af_value(r, f, a)
                     if af_val <= 0.0:
                         continue
                     lambdaf = max(self._lambdaf(r, f, a), 1e-8)
@@ -3661,11 +3654,7 @@ class GTAPModelEquations:
 
             terms = []
             for f in model.f:
-                af_val = (
-                    value(model.af_param[r, f, a])
-                    if hasattr(model, "af_param")
-                    else value(model.af_share[r, f, a])
-                )
+                af_val = _af_value(r, f, a)
                 if af_val <= 0.0:
                     continue
                 lambdaf = max(self._lambdaf(r, f, a), 1e-8)
@@ -3883,13 +3872,7 @@ class GTAPModelEquations:
         
         # Agent/activity demand for intermediate inputs by activity.
         def eq_xaa_activity_rule(model, r, i, a):
-            io_val = (
-                value(model.io_param[r, i, a])
-                if hasattr(model, "io_param")
-                else value(model.p_io[r, i, a])
-            )
-            if not self.params.shifts.lambdaio:
-                io_val = value(model.p_io[r, i, a])
+            io_val = _io_value(r, i, a)
 
             if io_val <= 0.0:
                 return model.xaa[r, i, a] == 0.0
@@ -4368,11 +4351,7 @@ class GTAPModelEquations:
         # GAMS: xf(r,f,a,t) =e= af(r,f,a,t)*va(r,a,t)*(pva(r,a,t)/pfa(r,f,a,t))**sigmav(r,a)
         #                       * (lambdaf(r,f,a,t))**(sigmav(r,a)-1)
         def eq_xfeq_rule(model, r, f, a):
-            af_val = (
-                value(model.af_param[r, f, a])
-                if hasattr(model, "af_param")
-                else value(model.af_share[r, f, a])
-            )
+            af_val = _af_value(r, f, a)
             if af_val <= 0.0:
                 return Constraint.Skip
             if value(model.xfflag[r, f, a]) <= 0.0:
@@ -4642,6 +4621,8 @@ class GTAPModelEquations:
                 for i in model.i
                 if value(model.g_share[r, i]) > 0.0
             )
+            if pg_terms is None or (isinstance(pg_terms, (int, float)) and pg_terms == 0):
+                return model.ug[r] * model.pop[r] == model.aug[r] * model.yg[r]
             pg_index = pg_terms ** (1.0 / expo)
             return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
         model.eq_ug = Constraint(model.r, rule=eq_ug_rule)
@@ -5025,7 +5006,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             return sum(terms) == 1.0
         model.eq_ev = Constraint(model.r, rule=eq_ev_rule)
-        model.eq_ev.deactivate()
+        # GAMS keeps eveq active so welfare ev tracks shock state. Activate to match.
 
         def eq_cv_rule(model, r):
             terms = []
@@ -5043,7 +5024,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             return sum(terms) == 1.0
         model.eq_cv = Constraint(model.r, rule=eq_cv_rule)
-        model.eq_cv.deactivate()
+        # GAMS keeps cveq active so welfare cv tracks shock state. Activate to match.
 
         # ========================================================================
         # MARKET CLEARING

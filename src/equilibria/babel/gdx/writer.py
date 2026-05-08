@@ -1,38 +1,74 @@
-"""
-GDX file writer - Pure Python implementation.
+"""GDX V7 file writer — pure Python implementation.
 
-This module provides native GDX file writing capabilities.
+Produces GDX files binary-compatible with the official GAMS reader (`gdxdump`,
+`gams`, `gdxcc`). Implements the format reverse-engineered from the public
+``GAMS-dev/gdx`` C++ source (``gxfile.cpp``, ``gmsstrm.cpp``):
+
+* 16-byte byte-order preamble written by ``TMiBufferedStream``
+  (size markers + ``PAT_WORD`` / ``PAT_INTEGER`` / ``PAT_DOUBLE`` constants).
+* Magic header ``123 + "GAMSGDX"`` (Delphi short string).
+* Version (int32 = 7), compression flag (int32 = 0), audit string,
+  producer string, and 10 reserved Int64 slots (the *major-index* table).
+* Data sections (one per symbol), each starting with ``"_DATA_"`` and a
+  simple record encoding terminated by ``0xFF``.
+* ``"_SYMB_"`` symbol table, ``"_UEL_"`` UEL list, plus empty
+  ``"_SETT_"`` / ``"_ACRO_"`` / ``"_DOMS_"`` lists.
+* Major-index block written back at the reserved offset with ``MARK_BOI =
+  19510624`` followed by the six section offsets.
 """
 
 from __future__ import annotations
 
+import io
 import platform
 import struct
-from datetime import datetime
 from pathlib import Path
 
 from equilibria.babel.gdx.symbols import Equation, Parameter, Set, SymbolBase, Variable
 
-# GDX format constants
-GDX_MAGIC: bytes = b"GAMSGDX"
-GDX_VERSION: int = 7
+# -- byte-order preamble ---------------------------------------------------
+_PAT_WORD = 0x1234
+_PAT_INTEGER = 0x12345678
+_PAT_DOUBLE = 3.1415926535897932385
 
-# Markers
-MARKER_SYMB: bytes = b"_SYMB_"
-MARKER_UEL: bytes = b"_UEL_"
-MARKER_SETT: bytes = b"_SETT_"
-MARKER_DOMS: bytes = b"_DOMS_"
-MARKER_DATA: bytes = b"_DATA_"
-MARKER_ACRO: bytes = b"_ACRO_"
+# -- file-format constants -------------------------------------------------
+_GDX_HEADER_NR = 123
+_GDX_HEADER_ID = "GAMSGDX"
+_GDX_VERSION = 7
+_MARK_BOI = 19510624
 
-# Symbol type flags (for writing)
-TYPE_FLAGS: dict[str, int] = {
-    "set": 0x01,
-    "parameter": 0x3F,
-    "variable": 0x40,
-    "equation": 0x41,
-    "alias": 0x20,
+_MARK_SYMB = "_SYMB_"
+_MARK_DATA = "_DATA_"
+_MARK_SETT = "_SETT_"
+_MARK_UEL = "_UEL_"
+_MARK_ACRO = "_ACRO_"
+_MARK_DOMS = "_DOMS_"
+
+_DATA_TYPE: dict[str, int] = {
+    "set": 0,
+    "parameter": 1,
+    "variable": 2,
+    "equation": 3,
+    "alias": 4,
 }
+
+_DEFAULT_USER_INFO: dict[str, int] = {
+    "set": 0,
+    "parameter": 0,
+    "variable": 0,
+    "equation": 53,
+    "alias": 0,
+}
+
+_SZ_BYTE = 0
+_SZ_WORD = 1
+_SZ_INTEGER = 2
+
+# vm_normal index in TgdxIntlValTyp (gxfile.hpp).
+# Order: vm_valund, vm_valna, vm_valpin, vm_valmin, vm_valeps, vm_zero,
+#        vm_one, vm_mone, vm_half, vm_two, vm_normal=10
+_VM_NORMAL = 10
+_END_OF_DATA = 0xFF
 
 
 def write_gdx(
@@ -41,330 +77,304 @@ def write_gdx(
     *,
     version: int = 7,
     compress: bool = False,
+    producer: str = "equilibria",
 ) -> None:
-    """
-    Write symbols to a GDX file.
-
-    Args:
-        filepath: Output path for the GDX file.
-        symbols: List of symbols to write.
-        version: GDX format version (default: 7).
-        compress: Whether to compress data (default: False).
-
-    Example:
-        >>> from equilibria.babel.gdx.symbols import Parameter
-        >>> from equilibria.babel.gdx.writer import write_gdx
-        >>> param = Parameter(
-        ...     name="price",
-        ...     sym_type="parameter",
-        ...     dimensions=1,
-        ...     description="Market prices",
-        ...     domain=["i"],
-        ...     records=[(["agr"], 1.0), (["mfg"], 1.2)]
-        ... )
-        >>> write_gdx("output.gdx", [param])
-    """
-    filepath = Path(filepath)
-
+    """Write a list of symbols to a GAMS-compatible GDX V7 file."""
     if version != 7:
         raise ValueError(f"Only GDX version 7 is supported, got {version}")
+    if compress:
+        raise ValueError("Compressed GDX output is not supported")
 
-    # Build GDX binary data
-    gdx_bytes = _build_gdx_binary(symbols, compress)
-
-    # Write to file
-    with open(filepath, 'wb') as f:
-        f.write(gdx_bytes)
-
-
-def _build_gdx_binary(symbols: list[SymbolBase], compress: bool) -> bytes:
-    """Build complete GDX binary data."""
-    parts: list[bytes] = []
-
-    # 1. Header
-    parts.append(_write_header())
-
-    # 2. Build UEL (Unique Element List) from all symbols
     uel = _build_uel(symbols)
+    uel_index: dict[str, int] = {name: idx + 1 for idx, name in enumerate(uel)}
 
-    # 3. Build domains list
-    domains = _build_domains(symbols)
+    buf = io.BytesIO()
+    _write_preamble(buf)
+    _write_byte(buf, _GDX_HEADER_NR)
+    _write_short_string(buf, _GDX_HEADER_ID)
+    _write_int32(buf, _GDX_VERSION)
+    _write_int32(buf, 0)
+    _write_short_string(buf, _audit_line())
+    _write_short_string(buf, producer)
 
-    # 4. Symbol table
-    parts.append(_write_symbol_table(symbols, uel))
+    major_index_pos = buf.tell()
+    for _ in range(10):
+        _write_int64(buf, 0)
 
-    # 5. Settings (empty for now)
-    parts.append(_write_settings())
-
-    # 6. UEL
-    parts.append(_write_uel(uel))
-
-    # 7. ACRO (empty for now)
-    parts.append(_write_acro())
-
-    # 8. Domains
-    parts.append(_write_domains(domains))
-
-    # 9. Data sections (one per symbol)
+    sym_positions: list[int] = []
     for symbol in symbols:
-        parts.append(_write_data_section(symbol, uel, compress))
+        sym_positions.append(buf.tell())
+        _write_data_section(buf, symbol, uel_index)
+    next_write_position = buf.tell()
 
-    return b"".join(parts)
+    symb_pos = buf.tell()
+    _write_short_string(buf, _MARK_SYMB)
+    _write_int32(buf, len(symbols))
+    for symbol, sym_pos in zip(symbols, sym_positions):
+        _write_symbol_entry(buf, symbol, sym_pos)
+    _write_short_string(buf, _MARK_SYMB)
 
+    set_text_pos = buf.tell()
+    _write_short_string(buf, _MARK_SETT)
+    # SetTextList is initialized OneBased=false with one empty entry "" at slot 0
+    # (gxfile.cpp:451-453). Match that or sets won't read back.
+    _write_int32(buf, 1)
+    _write_short_string(buf, "")
+    _write_short_string(buf, _MARK_SETT)
 
-def _write_header() -> bytes:
-    """Write GDX file header."""
-    parts: list[bytes] = []
+    uel_pos = buf.tell()
+    _write_short_string(buf, _MARK_UEL)
+    _write_int32(buf, len(uel))
+    for name in uel:
+        _write_short_string(buf, name)
+    _write_short_string(buf, _MARK_UEL)
 
-    # Magic checksum/metadata (19 bytes)
-    # This is a simplified version - real GDX has complex checksums
-    parts.append(b"4xV4-DT\xe9!\t@{")
+    acronym_pos = buf.tell()
+    _write_short_string(buf, _MARK_ACRO)
+    _write_int32(buf, 0)
+    _write_short_string(buf, _MARK_ACRO)
 
-    # Magic string "GAMSGDX"
-    parts.append(GDX_MAGIC)
+    domain_str_pos = buf.tell()
+    # _DOMS_ section (gxfile.cpp:602-620):
+    #   MARK_DOMS + DomainStrList(empty=count 0) + MARK_DOMS
+    #   + per-symbol-with-SDomStrings entries (none) + WriteInteger(-1)
+    #   + MARK_DOMS
+    _write_short_string(buf, _MARK_DOMS)
+    _write_int32(buf, 0)
+    _write_short_string(buf, _MARK_DOMS)
+    _write_int32(buf, -1)
+    _write_short_string(buf, _MARK_DOMS)
 
-    # Padding
-    parts.append(b"\x00" * 7)
+    buf.seek(major_index_pos)
+    _write_int32(buf, _MARK_BOI)
+    for offset in (
+        symb_pos,
+        uel_pos,
+        set_text_pos,
+        acronym_pos,
+        next_write_position,
+        domain_str_pos,
+    ):
+        _write_int64(buf, offset)
 
-    # Version number (little-endian uint32)
-    parts.append(struct.pack("<I", GDX_VERSION))
-
-    # Producer string
-    producer = f"equilibria Python GDX Writer {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}"
-    producer_bytes = producer.encode('ascii')
-    parts.append(struct.pack("B", len(producer_bytes)))
-    parts.append(producer_bytes)
-
-    # GAMS info string
-    gams_info = f"Python {platform.python_version()} {platform.system()}"
-    gams_bytes = gams_info.encode('ascii')
-    parts.append(struct.pack("B", len(gams_bytes)))
-    parts.append(gams_bytes)
-
-    return b"".join(parts)
-
-
-def _build_uel(symbols: list[SymbolBase]) -> list[str]:
-    """Build Unique Element List from all symbols."""
-    uel_set: set[str] = set()
-
-    for symbol in symbols:
-        if isinstance(symbol, Set):
-            # Add set elements
-            for element_list in symbol.elements:
-                uel_set.update(element_list)
-        elif isinstance(symbol, Parameter):
-            # Add parameter indices
-            for keys, _ in symbol.records:
-                uel_set.update(keys)
-        elif isinstance(symbol, (Variable, Equation)):
-            # Add variable/equation indices
-            for keys, _ in symbol.records:
-                uel_set.update(keys)
-
-    # Sort for consistent output
-    return sorted(uel_set)
+    Path(filepath).write_bytes(buf.getvalue())
 
 
-def _build_domains(symbols: list[SymbolBase]) -> list[str]:
-    """Build domains list from symbols."""
-    domains_set: set[str] = set()
-
-    for symbol in symbols:
-        if symbol.domain:
-            domains_set.update(symbol.domain)
-
-    return sorted(domains_set)
+# --------------------------------------------------------------------------
+# Stream-level primitives
+# --------------------------------------------------------------------------
 
 
-def _write_symbol_table(symbols: list[SymbolBase], uel: list[str]) -> bytes:
-    """Write symbol table section."""
-    parts: list[bytes] = []
-
-    # Marker
-    parts.append(MARKER_SYMB)
-
-    # Number of symbols (4 bytes, little-endian)
-    parts.append(struct.pack("<I", len(symbols)))
-
-    # Write each symbol entry
-    for symbol in symbols:
-        parts.append(_write_symbol_entry(symbol, uel))
-
-    parts.append(MARKER_SYMB)
-
-    return b"".join(parts)
+def _write_byte(buf: io.BytesIO, value: int) -> None:
+    buf.write(struct.pack("<B", value))
 
 
-def _write_symbol_entry(symbol: SymbolBase, uel: list[str]) -> bytes:
-    """Write a single symbol table entry."""
-    parts: list[bytes] = []
-
-    # Name length + name
-    name_bytes = symbol.name.encode('ascii')
-    parts.append(struct.pack("B", len(name_bytes)))
-    parts.append(name_bytes)
-
-    # Type flag
-    type_flag = TYPE_FLAGS.get(symbol.sym_type, 0x3F)
-    parts.append(struct.pack("B", type_flag))
-
-    # Metadata (25 bytes)
-    metadata = bytearray(25)
-    # Byte 7: dimension
-    metadata[7] = symbol.dimensions
-    # Bytes 16-19: record count (little-endian)
-    record_count = _get_record_count(symbol)
-    struct.pack_into("<I", metadata, 16, record_count)
-    parts.append(bytes(metadata))
-
-    # Description length + description
-    desc_bytes = symbol.description.encode('ascii') if symbol.description else b""
-    parts.append(struct.pack("B", len(desc_bytes)))
-    parts.append(desc_bytes)
-
-    # Padding (6 bytes)
-    parts.append(b"\x00" * 6)
-
-    return b"".join(parts)
+def _write_int32(buf: io.BytesIO, value: int) -> None:
+    buf.write(struct.pack("<i", value))
 
 
-def _get_record_count(symbol: SymbolBase) -> int:
-    """Get number of records in a symbol."""
+def _write_int64(buf: io.BytesIO, value: int) -> None:
+    buf.write(struct.pack("<q", value))
+
+
+def _write_uint16(buf: io.BytesIO, value: int) -> None:
+    buf.write(struct.pack("<H", value))
+
+
+def _write_uint32(buf: io.BytesIO, value: int) -> None:
+    buf.write(struct.pack("<I", value))
+
+
+def _write_double(buf: io.BytesIO, value: float) -> None:
+    buf.write(struct.pack("<d", value))
+
+
+def _write_short_string(buf: io.BytesIO, s: str) -> None:
+    """Delphi ShortString: 1 byte length + N ASCII chars (max 255)."""
+    data = s.encode("ascii")
+    if len(data) > 255:
+        raise ValueError(f"Short string too long ({len(data)} > 255): {s!r}")
+    buf.write(struct.pack("<B", len(data)))
+    buf.write(data)
+
+
+def _write_preamble(buf: io.BytesIO) -> None:
+    """16-byte byte-order preamble produced by TMiBufferedStream."""
+    _write_byte(buf, 2)
+    _write_uint16(buf, _PAT_WORD)
+    _write_byte(buf, 4)
+    _write_uint32(buf, _PAT_INTEGER)
+    _write_byte(buf, 8)
+    _write_double(buf, _PAT_DOUBLE)
+
+
+def _audit_line() -> str:
+    arch = platform.machine() or "x86_64"
+    osname = platform.system() or "unknown"
+    return f"GDX Library (equilibria) V7 (AUDIT) {arch} {osname}"
+
+
+# --------------------------------------------------------------------------
+# Per-symbol data section
+# --------------------------------------------------------------------------
+
+
+def _records(symbol: SymbolBase) -> list[tuple[list[str], tuple[float, ...]]]:
+    """Normalise records to ``(keys, value_tuple)``."""
+    if isinstance(symbol, Set):
+        return [(list(elem), (0.0,)) for elem in symbol.elements]
+    if isinstance(symbol, Parameter):
+        return [(list(keys), (float(val),)) for keys, val in symbol.records]
+    if isinstance(symbol, (Variable, Equation)):
+        return [
+            (list(keys), tuple(float(v) for v in vals))
+            for keys, vals in symbol.records
+        ]
+    return []
+
+
+def _value_count(symbol: SymbolBase) -> int:
+    if isinstance(symbol, Set):
+        return 1
+    if isinstance(symbol, Parameter):
+        return 1
+    if isinstance(symbol, (Variable, Equation)):
+        return 5
+    return 0
+
+
+def _record_count(symbol: SymbolBase) -> int:
     if isinstance(symbol, Set):
         return len(symbol.elements)
-    elif isinstance(symbol, Parameter) or isinstance(symbol, (Variable, Equation)):
+    if isinstance(symbol, Parameter):
+        return len(symbol.records)
+    if isinstance(symbol, (Variable, Equation)):
         return len(symbol.records)
     return 0
 
 
-def _write_settings() -> bytes:
-    """Write settings section (empty for basic implementation)."""
-    return MARKER_SETT + b"\x00\x00\x00\x00" + MARKER_SETT
+def _get_integer_size(span: int) -> int:
+    """Mirror gxfile.cpp::GetIntegerSize (boundary at 255 / 65535)."""
+    if span <= 0:
+        return _SZ_INTEGER
+    if span <= 255:
+        return _SZ_BYTE
+    if span <= 65535:
+        return _SZ_WORD
+    return _SZ_INTEGER
 
 
-def _write_uel(uel: list[str]) -> bytes:
-    """Write Unique Element List section."""
-    parts: list[bytes] = []
+def _write_data_section(
+    buf: io.BytesIO, symbol: SymbolBase, uel_index: dict[str, int]
+) -> None:
+    """``MARK_DATA + dim + nrecs + min/max[] + records + 0xFF``.
 
-    # Marker
-    parts.append(MARKER_UEL)
+    Records always emit ``FDim = 1`` (re-write all dimensions) and serialise
+    every value as ``vm_normal + IEEE-754 double``. The reader accepts this
+    as a valid uncompressed encoding.
+    """
+    _write_short_string(buf, _MARK_DATA)
+    dim = symbol.dimensions
+    _write_byte(buf, dim)
 
-    # Number of elements
-    parts.append(struct.pack("<I", len(uel)))
+    records = _records(symbol)
+    _write_int32(buf, len(records))
 
-    # Write each element
-    for element in uel:
-        elem_bytes = element.encode('ascii')
-        parts.append(struct.pack("B", len(elem_bytes)))
-        parts.append(elem_bytes)
+    if dim == 0:
+        _write_byte(buf, _END_OF_DATA)
+        return
+    if not records:
+        for _ in range(dim):
+            _write_int32(buf, 0)
+            _write_int32(buf, 0)
+        _write_byte(buf, _END_OF_DATA)
+        return
 
-    parts.append(MARKER_UEL)
+    indices_per_record = [
+        [uel_index[k] for k in keys] for keys, _ in records
+    ]
+    min_elem: list[int] = []
+    max_elem: list[int] = []
+    for d in range(dim):
+        col = [rec[d] for rec in indices_per_record]
+        min_elem.append(min(col))
+        max_elem.append(max(col))
+        _write_int32(buf, min_elem[d])
+        _write_int32(buf, max_elem[d])
 
-    return b"".join(parts)
+    elem_type = [_get_integer_size(max_elem[d] - min_elem[d] + 1) for d in range(dim)]
 
+    nval = _value_count(symbol)
+    for indices, (_, values) in zip(indices_per_record, records):
+        _write_byte(buf, 1)  # FDim = 1: write every dimension explicitly
+        for d in range(dim):
+            v = indices[d] - min_elem[d]
+            if elem_type[d] == _SZ_BYTE:
+                _write_byte(buf, v)
+            elif elem_type[d] == _SZ_WORD:
+                _write_uint16(buf, v)
+            else:
+                _write_int32(buf, v)
+        for k in range(nval):
+            _write_byte(buf, _VM_NORMAL)
+            _write_double(buf, values[k])
 
-def _write_acro() -> bytes:
-    """Write ACRO section (empty for basic implementation)."""
-    return MARKER_ACRO + b"\x00\x00\x00\x00" + MARKER_ACRO
-
-
-def _write_domains(domains: list[str]) -> bytes:
-    """Write domains section."""
-    parts: list[bytes] = []
-
-    # Marker
-    parts.append(MARKER_DOMS)
-
-    # Write domain names
-    for domain in domains:
-        domain_bytes = domain.encode('ascii')
-        parts.append(struct.pack("B", len(domain_bytes)))
-        parts.append(domain_bytes)
-
-    # End markers
-    parts.append(b"\x00" * 4)
-    parts.append(MARKER_DOMS)
-
-    return b"".join(parts)
-
-
-def _write_data_section(symbol: SymbolBase, uel: list[str], compress: bool) -> bytes:
-    """Write data section for a symbol."""
-    parts: list[bytes] = []
-
-    # Data marker
-    parts.append(MARKER_DATA)
-
-    # Header (19 bytes of metadata)
-    parts.append(b"\x01" + b"\xff" * 10 + b"\x00" * 4 + b"\xff" * 4)
-
-    # Write data based on symbol type
-    if isinstance(symbol, Set):
-        parts.append(_write_set_data(symbol, uel))
-    elif isinstance(symbol, Parameter):
-        parts.append(_write_parameter_data(symbol, uel, compress))
-    elif isinstance(symbol, (Variable, Equation)):
-        parts.append(_write_variable_data(symbol, uel))
-
-    return b"".join(parts)
+    _write_byte(buf, _END_OF_DATA)
 
 
-def _write_set_data(symbol: Set, uel: list[str]) -> bytes:
-    """Write set element data."""
-    if not symbol.elements:
-        return b""
-
-    parts: list[bytes] = []
-
-    for element_list in symbol.elements:
-        # For 1D sets
-        if len(element_list) == 1:
-            idx = uel.index(element_list[0]) + 1  # 1-based indexing
-            parts.append(b"\x02" + struct.pack("B", idx))
-
-    return b"".join(parts)
+# --------------------------------------------------------------------------
+# Symbol-table entry
+# --------------------------------------------------------------------------
 
 
-def _write_parameter_data(symbol: Parameter, uel: list[str], compress: bool) -> bytes:
-    """Write parameter data."""
-    if not symbol.records:
-        return b""
-
-    parts: list[bytes] = []
-
-    for keys, value in symbol.records:
-        # Write indices
-        for key in keys:
-            idx = uel.index(key) + 1  # 1-based indexing
-            parts.append(struct.pack("B", idx))
-
-        # Write value (double)
-        parts.append(b"\x0a")  # Double marker
-        parts.append(struct.pack("<d", value))
-
-    return b"".join(parts)
+def _write_symbol_entry(
+    buf: io.BytesIO, symbol: SymbolBase, sym_position: int
+) -> None:
+    _write_short_string(buf, symbol.name)
+    _write_int64(buf, sym_position)
+    _write_int32(buf, symbol.dimensions)
+    _write_byte(buf, _DATA_TYPE[symbol.sym_type])
+    _write_int32(buf, _DEFAULT_USER_INFO[symbol.sym_type])
+    _write_int32(buf, _record_count(symbol))
+    _write_int32(buf, 0)  # error count
+    _write_byte(buf, 0)   # set-text flag
+    _write_short_string(buf, symbol.description or "")
+    _write_byte(buf, 0)   # compression flag
+    _write_byte(buf, 0)   # SDomSymbols flag (relaxed domain)
+    _write_int32(buf, 0)  # comment count
 
 
-def _write_variable_data(symbol: Variable | Equation, uel: list[str]) -> bytes:
-    """Write variable/equation data (5 attributes per record)."""
-    if not symbol.records:
-        return b""
+# --------------------------------------------------------------------------
+# UEL builder
+# --------------------------------------------------------------------------
 
-    parts: list[bytes] = []
 
-    for keys, values in symbol.records:
-        # Write indices
-        for key in keys:
-            idx = uel.index(key) + 1  # 1-based indexing
-            parts.append(struct.pack("B", idx))
+def _build_uel(symbols: list[SymbolBase]) -> list[str]:
+    """Declared sets first (each contiguous, in symbol order); then any extra
+    labels referenced by parameter/variable records.
+    """
+    uel: list[str] = []
+    seen: set[str] = set()
 
-        # Write 5 doubles: level, marginal, lower, upper, scale
-        level, marginal, lower, upper, scale = values
-        parts.append(b"\x0a" + struct.pack("<d", level))
-        parts.append(b"\x0a" + struct.pack("<d", marginal))
-        parts.append(b"\x0a" + struct.pack("<d", lower))
-        parts.append(b"\x0a" + struct.pack("<d", upper))
-        parts.append(b"\x0a" + struct.pack("<d", scale))
+    def _add(name: str) -> None:
+        if name not in seen:
+            seen.add(name)
+            uel.append(name)
 
-    return b"".join(parts)
+    for symbol in symbols:
+        if isinstance(symbol, Set):
+            for element_list in symbol.elements:
+                for el in element_list:
+                    _add(el)
+
+    for symbol in symbols:
+        if isinstance(symbol, Parameter):
+            for keys, _ in symbol.records:
+                for k in keys:
+                    _add(k)
+        elif isinstance(symbol, (Variable, Equation)):
+            for keys, _ in symbol.records:
+                for k in keys:
+                    _add(k)
+
+    return uel

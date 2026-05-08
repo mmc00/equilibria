@@ -11,22 +11,21 @@ Modules:
     gtap_solver: Solver interface (IPOPT, PATH)
 
 Example:
-    >>> from equilibria.templates.gtap import GTAPSets, GTAPParameters, GTAPSolver
+    >>> from equilibria.templates.gtap import GTAPParameters, GTAPSolver
     >>> from equilibria.templates.gtap import build_gtap_contract
-    >>> 
-    >>> # Load data
-    >>> sets = GTAPSets()
-    >>> sets.load_from_gdx("asa7x5.gdx")
-    >>> 
-    >>> # Load parameters
-    >>> params = GTAPParameters()
-    >>> params.load_from_gdx("asa7x5.gdx")
-    >>> 
+    >>>
+    >>> # Load data — auto-detects HAR directory or .gdx file.
+    >>> # Preferred: directory with basedata*.har / sets*.har / default*.prm.
+    >>> params = GTAPParameters.from_dataset(
+    ...     "/path/to/standard_gtap_7", suffix="-9x10"
+    ... )
+    >>> sets = params.sets
+    >>>
     >>> # Build and solve model
     >>> from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
     >>> eq_builder = GTAPModelEquations(sets, params)
     >>> model = eq_builder.build_model()
-    >>> 
+    >>>
     >>> # Solve
     >>> solver = GTAPSolver(model)
     >>> result = solver.solve()

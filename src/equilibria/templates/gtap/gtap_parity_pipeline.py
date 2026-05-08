@@ -1642,6 +1642,8 @@ class GTAPParityRunner:
         gdx_file: Optional[Path] = None,
         gams_results_gdx: Optional[Path] = None,
         *,
+        dataset: Optional[Path] = None,
+        dataset_suffix: Optional[str] = None,
         sets_gdx: Optional[Path] = None,
         elasticities_gdx: Optional[Path] = None,
         benchmark_csv: Optional[Path] = None,
@@ -1684,14 +1686,17 @@ class GTAPParityRunner:
                 solution_year=self.solution_year,
             )
             self.data_label = str(self.bundle.sets_gdx)
+        elif dataset is not None:
+            # Native HAR-or-GDX path via the unified loader.
+            self.params = GTAPParameters.from_dataset(dataset, suffix=dataset_suffix)
+            self.sets = self.params.sets
+            self.data_label = str(dataset)
         elif self.gdx_file:
-            self.sets = GTAPSets()
-            self.sets.load_from_gdx(self.gdx_file)
-            self.params = GTAPParameters()
-            self.params.load_from_gdx(self.gdx_file)
+            self.params = GTAPParameters.from_dataset(self.gdx_file)
+            self.sets = self.params.sets
             self.data_label = str(self.gdx_file)
         else:
-            raise ValueError("Provide either gdx_file or sets_gdx")
+            raise ValueError("Provide either gdx_file, dataset, or sets_gdx")
 
         self.contract = build_gtap_contract({"closure": closure})
         self.equations = GTAPModelEquations(self.sets, self.params, self.contract.closure)

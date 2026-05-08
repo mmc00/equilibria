@@ -1102,11 +1102,26 @@ class GTAPBenchmarkValues:
             result[key] = val
         return result
 
-    def load_from_har(self, basedata_path: "Path", sets: "GTAPSets") -> None:
-        """Load benchmark values from a GEMPACK basedata.har file."""
+    def load_from_har(
+        self,
+        basedata_path: "Path",
+        sets: "GTAPSets",
+        *,
+        apply_scale: bool = True,
+    ) -> None:
+        """Load benchmark values from a GEMPACK basedata.har file.
+
+        Args:
+            basedata_path: Path to ``basedata*.har``.
+            sets: Sets container — used to resolve set elements.
+            apply_scale: When True (default), apply GAMS ``inScale=1e-6`` so
+                values match the Python model's calibrated units. When False,
+                preserve raw HAR magnitudes (millions of USD) — required for
+                writing GDX that GAMS getData.gms will scale itself.
+        """
         from equilibria.babel.har import read_har
         har = read_har(basedata_path)
-        S = 1e-6  # inScale (same as load_from_gdx)
+        S = 1e-6 if apply_scale else 1.0  # inScale (same as load_from_gdx)
 
         def _h(header: str, set_order: list, reorder: tuple | None, scale: float = S) -> dict:
             return self._har_to_dict(har, header, sets, set_order, reorder, scale)
@@ -1136,18 +1151,23 @@ class GTAPBenchmarkValues:
             self.vim[k] = self.vdip.get(k, 0.0) + self.vmip.get(k, 0.0)
         self.vst.update(_h("VST",   ["MARG", "REG"], r10))   # MARG×REG in HAR
 
-        # 2D (ACTS, REG) → (r, a)
-        self.vom.update(_h("VOSB", ["COMM", "REG"], r10))
+        # 3D make matrix (COMM, ACTS, REG) → (r, a, i) — load before vom derivation
+        self.makb.update(_h("MAKB", ["COMM", "ACTS", "REG"], r210))
+        self.maks.update(_h("MAKS", ["COMM", "ACTS", "REG"], r210))
+
+        # vom(r, a) = sum_i MAKB(i, a, r) — mirrors GDX `_load_param('vom')` path,
+        # which derives activity-level output from the make matrix rather than VOSB
+        # (VOSB is commodity-indexed in HAR, but the model uses vom indexed by activity).
+        self.vom.clear()
+        for (region, activity, _commodity), value in self.makb.items():
+            key = (region, activity)
+            self.vom[key] = self.vom.get(key, 0.0) + float(value)
 
         # 3D intermediate (COMM, ACTS, REG) → (r, i, a)
         self.vdfp.update(_h("VDFP", ["COMM", "ACTS", "REG"], r201))
         self.vmfp.update(_h("VMFP", ["COMM", "ACTS", "REG"], r201))
         self.vdfb.update(_h("VDFB", ["COMM", "ACTS", "REG"], r201))
         self.vmfb.update(_h("VMFB", ["COMM", "ACTS", "REG"], r201))
-
-        # 3D make matrix (COMM, ACTS, REG) → (r, a, i)
-        self.makb.update(_h("MAKB", ["COMM", "ACTS", "REG"], r210))
-        self.maks.update(_h("MAKS", ["COMM", "ACTS", "REG"], r210))
 
         # 3D factors (ENDW, ACTS, REG) → (r, f, a)
         self.vfm.update(_h("EVFP",  ["ENDW", "ACTS", "REG"], r201))
@@ -1167,6 +1187,8 @@ class GTAPBenchmarkValues:
         self.save.update(_h("SAVE", ["REG"], None))
         self.vdep.update(_h("VDEP", ["REG"], None))
         self.vkb.update(_h("VKB",   ["REG"], None))
+        # POP is in millions of persons, not monetary — no inScale.
+        self.pop.update(_h("POP",   ["REG"], None, scale=1.0))
 
         # Aggregate vfb from evfb: (r, f) = sum_a evfb(r, f, a)
         if self.evfb:
@@ -2199,7 +2221,48 @@ class GTAPParameters:
     shares: GTAPShareParameters = field(default_factory=GTAPShareParameters)
     calibrated: GTAPCalibratedShares = field(default_factory=GTAPCalibratedShares)  # GAMS-style calibrated shares
     shifts: GTAPShiftParameters = field(default_factory=GTAPShiftParameters)
-    
+
+    @classmethod
+    def from_dataset(
+        cls,
+        path: "str | Path",
+        *,
+        suffix: Optional[str] = None,
+    ) -> "GTAPParameters":
+        """Build a fully-loaded GTAPParameters from a dataset path.
+
+        Auto-detects the input format:
+
+        * **HAR directory** (preferred): a directory containing
+          ``basedata*.har`` / ``sets*.har`` / ``default*.prm`` and
+          optionally ``baserate*.har``. Loaded via the native HAR pipeline
+          (``equilibria.babel.har.load_gtap_from_har``).
+        * **GDX file** (legacy): a path ending in ``.gdx`` — uses the GDX
+          loader. Kept for backward compatibility while remaining call
+          sites are migrated.
+
+        Args:
+            path: Either a directory of HAR/PRM files or a ``.gdx`` file.
+            suffix: Aggregation tag (e.g. ``"-9x10"``). Only used in HAR
+                mode when the directory contains multiple aggregations.
+
+        Returns:
+            A fully-loaded ``GTAPParameters`` instance.
+        """
+        from equilibria.babel.har import load_gtap_from_har
+
+        p = Path(path)
+        if p.is_dir():
+            return load_gtap_from_har(p, suffix=suffix)
+        if p.suffix.lower() == ".gdx":
+            params = cls()
+            params.load_from_gdx(p)
+            return params
+        raise ValueError(
+            f"Unrecognized GTAP dataset path: {p!s}. Expected a HAR directory "
+            "or a .gdx file."
+        )
+
     def load_from_gdx(
         self,
         gdx_path: Path,
