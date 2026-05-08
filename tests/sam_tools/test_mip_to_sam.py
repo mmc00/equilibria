@@ -21,14 +21,6 @@ from equilibria.sam_tools.models import Sam
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SIMPLE_MIP = FIXTURES_DIR / "simple_mip.xlsx"
 
-# TODO: normalize_mip_accounts misclassifies FD columns (HH/GOV/INV/EXP) as 'J'
-# when those labels also appear as rows in the MIP. The whole pipeline cascades
-# from that bug. Tracked separately; xfail until the transform is rewritten.
-pytestmark = pytest.mark.xfail(
-    reason="MIP→SAM transform pipeline has a known FD misclassification bug",
-    strict=False,
-)
-
 
 class TestMIPParser:
     """Test MIP Excel parser."""
@@ -300,6 +292,13 @@ class TestFullPipeline:
         assert "L" in categories
         assert "K" in categories
 
+    @pytest.mark.xfail(
+        reason=(
+            "Pipeline transformations leave structural imbalances (sectors short, "
+            "households long) that final RAS cannot recover; needs proper closure."
+        ),
+        strict=False,
+    )
     def test_sam_balance(self):
         """Test that final SAM is reasonably balanced."""
         result = run_mip_to_sam(SIMPLE_MIP, ras_max_iter=100)
