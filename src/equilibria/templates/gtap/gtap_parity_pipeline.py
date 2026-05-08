@@ -384,15 +384,8 @@ def _commodity_supply_scale(benchmark: GTAPBenchmarkValues, sets: GTAPSets, regi
 
 def _domestic_sales_scale(benchmark: GTAPBenchmarkValues, sets: GTAPSets, region: str, commodity: str) -> float:
     """Benchmark denominator for `xds`, preferring supply-side scales when absorption is inconsistent."""
-    xs0 = getattr(benchmark, "xs0", {})
-    xd0 = getattr(benchmark, "xd0", {})
-    supply_scale = xs0.get((region, commodity), 0.0)
-    if supply_scale <= 1e-10:
-        supply_scale = _commodity_supply_scale(benchmark, sets, region, commodity)
-
-    absorption_scale = xd0.get((region, commodity), 0.0)
-    if absorption_scale <= 1e-10:
-        _, absorption_scale, _, _, _ = benchmark.get_trade_totals(sets, region, commodity)
+    supply_scale = _commodity_supply_scale(benchmark, sets, region, commodity)
+    _, absorption_scale, _, _, _ = benchmark.get_trade_totals(sets, region, commodity)
     if absorption_scale <= 1e-10:
         return supply_scale
     if supply_scale > 1e-10 and absorption_scale < 0.25 * supply_scale:
