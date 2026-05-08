@@ -1102,11 +1102,26 @@ class GTAPBenchmarkValues:
             result[key] = val
         return result
 
-    def load_from_har(self, basedata_path: "Path", sets: "GTAPSets") -> None:
-        """Load benchmark values from a GEMPACK basedata.har file."""
+    def load_from_har(
+        self,
+        basedata_path: "Path",
+        sets: "GTAPSets",
+        *,
+        apply_scale: bool = True,
+    ) -> None:
+        """Load benchmark values from a GEMPACK basedata.har file.
+
+        Args:
+            basedata_path: Path to ``basedata*.har``.
+            sets: Sets container — used to resolve set elements.
+            apply_scale: When True (default), apply GAMS ``inScale=1e-6`` so
+                values match the Python model's calibrated units. When False,
+                preserve raw HAR magnitudes (millions of USD) — required for
+                writing GDX that GAMS getData.gms will scale itself.
+        """
         from equilibria.babel.har import read_har
         har = read_har(basedata_path)
-        S = 1e-6  # inScale (same as load_from_gdx)
+        S = 1e-6 if apply_scale else 1.0  # inScale (same as load_from_gdx)
 
         def _h(header: str, set_order: list, reorder: tuple | None, scale: float = S) -> dict:
             return self._har_to_dict(har, header, sets, set_order, reorder, scale)

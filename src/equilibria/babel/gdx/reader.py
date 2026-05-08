@@ -268,15 +268,27 @@ def read_symbol_table(
 
 
 def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
-    """
-    Read the symbol table from GDX bytes.
+    """Parse the GDX V7 ``_SYMB_`` section.
 
-    Args:
-        data: Raw bytes from GDX file.
+    Layout per symbol (gxfile.cpp:551-575):
 
-    Returns:
-        List of symbol dictionaries with name, type, dimension, records, description.
+    * ShortString  name
+    * Int64        SPosition (offset of the symbol's _DATA_ section)
+    * Int32        SDim
+    * Byte         SDataType  (0=set, 1=parameter, 2=variable, 3=equation, 4=alias)
+    * Int32        SUserInfo
+    * Int32        SDataCount (record count)
+    * Int32        SErrors
+    * Byte         SSetText flag
+    * ShortString  SExplTxt   (description, max 255)
+    * Byte         SIsCompressed
+    * Byte         SDomSymbols flag — if 1, ``SDim`` Int32 entries follow
+    * Int32        CommentCount — if >0, that many ShortStrings follow
     """
+    # The ASCII ``_SYMB_`` is preceded by a 1-byte ShortString length (=6)
+    # and is also rewritten at the end of the section as a closing marker.
+    # ``find`` lands on the opening ASCII; skip just past it (length byte
+    # already accounted for by data.find returning the ASCII start).
     symb_pos: int = data.find(GDX_SYMB_MARKER)
     if symb_pos == -1:
         return []
@@ -286,107 +298,64 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
     if pos + 4 > len(data):
         return []
 
-    num_symbols: int = struct.unpack_from("<I", data, pos)[0]
+    num_symbols: int = struct.unpack_from("<i", data, pos)[0]
     pos += 4
 
     symbols: list[dict[str, Any]] = []
 
+    def _read_short_string(p: int) -> tuple[str, int]:
+        slen = data[p]
+        p += 1
+        s = data[p : p + slen].decode("ascii", errors="replace")
+        return s, p + slen
+
     for _ in range(num_symbols):
-        if pos + 35 > len(data):  # Minimum symbol size
-            break
-
         try:
-            # Name length (1 byte)
-            name_len: int = data[pos]
+            name, pos = _read_short_string(pos)
+            position = struct.unpack_from("<q", data, pos)[0]
+            pos += 8
+            dimension = struct.unpack_from("<i", data, pos)[0]
+            pos += 4
+            sym_type = data[pos]
             pos += 1
-
-            if name_len == 0 or name_len > 64 or pos + name_len > len(data):
-                break
-
-            # Name
-            name: str = data[pos : pos + name_len].decode("utf-8", errors="replace")
-            pos += name_len
-
-            # Type flag (1 byte)
-            type_flag: int = data[pos]
+            user_info = struct.unpack_from("<i", data, pos)[0]
+            pos += 4
+            records = struct.unpack_from("<i", data, pos)[0]
+            pos += 4
+            errors = struct.unpack_from("<i", data, pos)[0]
+            pos += 4
+            set_text_flag = data[pos]
             pos += 1
-
-            # Metadata (25 bytes)
-            # - byte 7: dimension count
-            # - bytes 16-19: record count
-            if pos + 25 > len(data):
-                break
-
-            dimension: int = data[pos + 7]
-            records: int = struct.unpack_from("<I", data, pos + 16)[0]
-            pos += 25
-
-            # Description length (1 byte)
-            desc_len: int = data[pos]
+            description, pos = _read_short_string(pos)
+            is_compressed = data[pos]
             pos += 1
-
-            # Description
-            description: str = ""
-            if 0 < desc_len < 200 and pos + desc_len <= len(data):
-                description = data[pos : pos + desc_len].decode(
-                    "utf-8", errors="replace"
-                )
-                pos += desc_len
-
-            # Variable padding: skip zeros until we find next symbol or end
-            # Minimum padding is 6 bytes, but can be more for parameters with domains
-            min_padding: int = 6
-            pos += min_padding
-
-            # Skip any additional zero bytes (domain info padding)
-            while pos < len(data) and data[pos] == 0:
-                pos += 1
-
-            # Map type flag to type code
-            # For sets: type_flag is usually 0x01 or 0x20 (alias)
-            # For parameters: type_flag varies
-            # NOTE: 0x01 with high dimension (>4) can be ambiguous
-            # NOTE: 0x3F is ambiguous - can be either set or parameter
-            # Sets don't have numeric values, parameters do
-            if type_flag == 0x01 and dimension > 4:
-                # High-dimensional sparse parameters often use 0x01
-                # Mark as unknown and refine later based on data section
-                sym_type = -1  # unknown
-            elif type_flag == 0x01 and dimension > 0:
-                sym_type = 0  # set
-            elif type_flag in (0x01, 0x20, 0x22, 0x45):
-                sym_type = 4 if type_flag == 0x20 else 0
-            elif type_flag in (0x3F, 0x64, 0x66, 0x6E):
-                # 0x3F can be either set or parameter
-                # Default to parameter unless proven otherwise
-                # In real GDX files, this is refined by checking data sections
-                # For standalone symbol table reading, default to parameter
-                sym_type = 1  # parameter
-            elif type_flag in (0x40, 0x48, 0x63, 0x67, 0xFD):
-                sym_type = 2  # variable
-            elif type_flag in (0x41, 0x68, 0x7E, 0xD9):
-                sym_type = 3  # equation
-            else:
-                # Heuristic: if dimension > 0 and not a known set flag, likely parameter
-                if dimension > 0 and type_flag not in (0x01, 0x20):
-                    sym_type = -1  # unknown
-                else:
-                    sym_type = type_flag
+            has_dom_symbols = data[pos]
+            pos += 1
+            if has_dom_symbols:
+                pos += 4 * dimension  # skip domain symbol indices
+            comment_count = struct.unpack_from("<i", data, pos)[0]
+            pos += 4
+            for _c in range(comment_count):
+                _comment, pos = _read_short_string(pos)
 
             symbols.append(
                 {
                     "name": name,
                     "type": sym_type,
                     "type_name": SYMBOL_TYPE_NAMES.get(
-                        sym_type, f"unknown({type_flag:#x})"
+                        sym_type, f"unknown({sym_type:#x})"
                     ),
-                    "type_flag": type_flag,
+                    "type_flag": sym_type,  # back-compat
                     "dimension": dimension,
                     "records": records,
                     "description": description,
+                    "position": position,
+                    "user_info": user_info,
+                    "errors": errors,
+                    "set_text": bool(set_text_flag),
+                    "is_compressed": bool(is_compressed),
                 }
             )
-
         except (IndexError, struct.error):
             break
 

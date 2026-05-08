@@ -121,7 +121,8 @@ def convert_har_to_gdx(
     """
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    p = load_gtap_from_har(har_dir, suffix=suffix)
+    # GAMS getData.gms applies its own inScale; emit raw HAR magnitudes.
+    p = load_gtap_from_har(har_dir, suffix=suffix, apply_scale=False)
 
     sets_path = out_dir / f"{base_name}Sets.gdx"
     dat_path = out_dir / f"{base_name}Dat.gdx"
@@ -198,7 +199,8 @@ def _build_dat_symbols(p) -> list:
         _param("VMIP", 2, _records_2d(b.vmip, (1, 0))),
         # primary factors (f, a, r)
         _param("EVFB", 3, _records_3d(b.evfb, (1, 2, 0))),
-        _param("EVFP", 3, _records_3d(getattr(b, "evfp", b.evfb), (1, 2, 0))),
+        # GTAPBenchmarkValues stores EVFP as `vfm` (factor payments at purchaser prices).
+        _param("EVFP", 3, _records_3d(b.vfm, (1, 2, 0))),
         _param("EVOS", 3, _records_3d(b.evos, (1, 2, 0))),
         # trade (i, r, rp)
         _param("VXSB", 3, _records_3d(b.vxsb, (1, 0, 2))),
@@ -213,9 +215,9 @@ def _build_dat_symbols(p) -> list:
         _param("VDEP", 1, _records_1d(b.vdep)),
         _param("VKB", 1, _records_1d(b.vkb)),
         _param("POP", 1, _records_1d(b.pop)),
-        # make matrix (i, a, r)
-        _param("MAKS", 3, _records_3d(b.maks, (1, 2, 0))),
-        _param("MAKB", 3, _records_3d(b.makb, (1, 2, 0))),
+        # make matrix (i, a, r) — Python keys are (r, a, i), so reorder (2, 1, 0)
+        _param("MAKS", 3, _records_3d(b.maks, (2, 1, 0))),
+        _param("MAKB", 3, _records_3d(b.makb, (2, 1, 0))),
     ]
 
 
@@ -268,7 +270,12 @@ def _build_prm_symbols(p) -> list:
 
 
 def _esubs_default(elasticities, margin: str) -> float:
-    """Margin elasticity ESUBS — fall back to 1.5 (GTAP default) when absent."""
+    """Margin elasticity ESUBS (GAMS name) — stored as ``sigmam`` in
+    ``GTAPElasticities`` (loaded from the PRM ESBS header). Fall back to
+    1.5 (GTAP default) when absent."""
+    sigmam = getattr(elasticities, "sigmam", None)
+    if isinstance(sigmam, dict) and margin in sigmam:
+        return float(sigmam[margin])
     val = getattr(elasticities, "esubs", None)
     if isinstance(val, dict):
         return float(val.get(margin, 1.5))

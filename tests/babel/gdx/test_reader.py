@@ -172,6 +172,17 @@ class TestReadHeader:
 class TestReadSymbolTable:
     """Tests for read_symbol_table_from_bytes() function."""
 
+    # Legacy heuristic ``type_flag`` codes used by these tests, mapped to
+    # the real GDX V7 ``SDataType`` byte (gxfile.cpp). Tests pass these
+    # legacy values through ``_create_symbol_entry`` for back-compat.
+    _LEGACY_TYPE_FLAG_TO_DATATYPE = {
+        0x01: 0,  # set
+        0x20: 4,  # alias
+        0x3F: 1,  # parameter
+        0x40: 2,  # variable
+        0x41: 3,  # equation
+    }
+
     def _create_symbol_entry(
         self,
         name: str,
@@ -180,32 +191,30 @@ class TestReadSymbolTable:
         records: int,
         description: str = "",
     ) -> bytes:
-        """Create a single symbol entry in GDX format."""
-        name_bytes: bytes = name.encode("utf-8")
-        desc_bytes: bytes = description.encode("utf-8")
+        """Create a single GDX V7 symbol entry (gxfile.cpp:551-575)."""
+        sym_type = self._LEGACY_TYPE_FLAG_TO_DATATYPE.get(type_flag, type_flag)
+        name_bytes = name.encode("ascii")
+        desc_bytes = description.encode("ascii")
 
-        entry: bytes = bytes([len(name_bytes)])
-        entry += name_bytes
-        entry += bytes([type_flag])
-
-        # 25 bytes metadata
-        metadata: bytes = b"\x00" * 7
-        metadata += bytes([dimension])
-        metadata += b"\x00" * 8
-        metadata += struct.pack("<I", records)
-        metadata += b"\x00" * 5  # 7+1+8+4+5 = 25 bytes
-        entry += metadata
-
-        entry += bytes([len(desc_bytes)])
-        entry += desc_bytes
-        entry += b"\x00" * 6
+        entry = bytes([len(name_bytes)]) + name_bytes
+        entry += struct.pack("<q", 0)              # SPosition
+        entry += struct.pack("<i", dimension)      # SDim
+        entry += bytes([sym_type])                 # SDataType
+        entry += struct.pack("<i", 0)              # SUserInfo
+        entry += struct.pack("<i", records)        # SDataCount
+        entry += struct.pack("<i", 0)              # SErrors
+        entry += bytes([0])                        # SSetText
+        entry += bytes([len(desc_bytes)]) + desc_bytes  # SExplTxt
+        entry += bytes([0])                        # SIsCompressed
+        entry += bytes([0])                        # SDomSymbols flag (no domain)
+        entry += struct.pack("<i", 0)              # CommentCount
 
         return entry
 
     def _create_symbol_table(self, symbols: list) -> bytes:
-        """Create a complete symbol table with _SYMB_ marker."""
+        """Create a complete symbol table with the ``_SYMB_`` marker."""
         data: bytes = b"_SYMB_"
-        data += struct.pack("<I", len(symbols))
+        data += struct.pack("<i", len(symbols))
 
         for name, type_flag, dim, records, desc in symbols:
             data += self._create_symbol_entry(name, type_flag, dim, records, desc)
@@ -374,8 +383,9 @@ class TestIntegrationWithRealGdx:
         result: dict = read_gdx(gdx_path)
 
         sets: list = get_sets(result)
-        assert len(sets) == 1
-        assert sets[0]["name"] == "i"
+        assert len(sets) == 2
+        set_names: list = sorted(s["name"] for s in sets)
+        assert set_names == ["i", "j"]
 
     def test_get_parameters_helper(self) -> None:
         """Should get all parameters."""
@@ -555,18 +565,16 @@ class TestMultidimFixture:
         assert sym["records"] == 24
 
     def test_read_multiple_sets(self) -> None:
-        """Should read sets and distinguish from aliases and equations."""
+        """Should read all four sets in the multidim fixture."""
         gdx_path: Path = (
             Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
         )
         result: dict = read_gdx(gdx_path)
 
         sets: list = get_sets(result)
-        set_names: list = [s["name"] for s in sets]
+        set_names: list = sorted(s["name"] for s in sets)
 
-        # Only "i" is a set; "j" is an alias, "k" is an equation
-        assert "i" in set_names
-        assert len(sets) == 1
+        assert set_names == ["i", "j", "k", "m"]
 
     def test_elements_from_multiple_sets(self) -> None:
         """Should contain elements from all symbols in UEL."""

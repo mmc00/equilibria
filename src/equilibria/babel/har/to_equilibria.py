@@ -65,6 +65,7 @@ def load_gtap_from_har(
     *,
     suffix: str | None = None,
     require_baserate: bool = False,
+    apply_scale: bool = True,
 ) -> "GTAPParameters":
     """Load a GTAP Standard 7 dataset from HAR/PRM files into a ``GTAPParameters``.
 
@@ -77,10 +78,18 @@ def load_gtap_from_har(
         require_baserate: If True, raise when ``baserate*.har`` is absent.
             By default the wrapper skips it and derives all tax rates from
             the benchmark SAM (matching ``derive_from_benchmark``).
+        apply_scale: When True (default), apply GAMS ``inScale=1e-6`` to
+            benchmark monetary flows so values match the Python model's
+            calibrated units. When False, preserve raw HAR magnitudes
+            (millions of USD) and skip downstream calibration — used by
+            ``convert_har_to_gdx`` to produce GDX files that GAMS
+            ``getData.gms`` will scale itself.
 
     Returns:
-        A ``GTAPParameters`` with sets, elasticities, benchmark, taxes and
-        calibrated shares populated.
+        A ``GTAPParameters`` with sets, elasticities, benchmark populated.
+        Taxes and calibrated shares are populated only when
+        ``apply_scale=True``; otherwise those derivations would operate on
+        unscaled magnitudes, so they are skipped.
 
     Raises:
         FileNotFoundError: If a required file is missing or the directory
@@ -116,10 +125,14 @@ def load_gtap_from_har(
     params = GTAPParameters()
     params.sets.load_from_har(sets_path, default_path=default_path)
     params.elasticities.load_from_har(default_path, params.sets)
-    params.benchmark.load_from_har(basedata_path, params.sets)
+    params.benchmark.load_from_har(basedata_path, params.sets, apply_scale=apply_scale)
     # makb arrives via basedata.har (after sets.har), so rebuild the output
     # structure now — sets.load_from_har was called with no make data.
     params.sets.rebuild_output_structure_from_makb(params.benchmark.makb)
+    if not apply_scale:
+        # Raw-magnitude load for GDX export — skip tax derivation and CES
+        # calibration, which both assume scaled units.
+        return params
     if baserate_path is not None:
         params.taxes.load_from_har(baserate_path, params.sets, params.benchmark)
     else:
