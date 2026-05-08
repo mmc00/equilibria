@@ -22,6 +22,21 @@ DEFAULT_GAMS_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resource
 DEFAULT_GDXDUMP_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
 
 
+def _gams_license_ok(gams_bin: Path) -> bool:
+    """Return False if GAMS exits with a licensing error on a trivial run."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        gms = Path(tmp) / "probe.gms"
+        gms.write_text("scalar x; x = 1;\n")
+        proc = subprocess.run(
+            [str(gams_bin), gms.name, "lo=3"],
+            cwd=tmp,
+            capture_output=True,
+            text=True,
+        )
+    return "licensing error" not in (proc.stderr + proc.stdout).lower()
+
+
 def _rms(values: list[float]) -> float:
     if not values:
         return 0.0
@@ -136,6 +151,8 @@ def test_pep2_gams_excel_vs_python_excel_key_scalars() -> None:
         pytest.skip(f"GAMS not found: {gams_bin}")
     if not gdxdump_bin.exists():
         pytest.skip(f"gdxdump not found: {gdxdump_bin}")
+    if not _gams_license_ok(gams_bin):
+        pytest.skip("GAMS license invalid for this build")
 
     model_file = PEP2_SCRIPTS / "PEP-1-1_v2_1_ipopt_excel.gms"
     if not model_file.exists():

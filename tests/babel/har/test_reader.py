@@ -57,7 +57,9 @@ def test_read_header_array_elements():
     from equilibria.babel.har.reader import read_har
     data = read_har(NUS333_SETS)
     reg = data["REG"]
-    assert list(reg.set_elements[0]) == ["USA", "ROW"]
+    # Set headers (1C/character) carry their elements directly in `array`.
+    # Indexed coefficient headers carry index labels in `set_elements`.
+    assert [str(e).strip() for e in reg.array] == ["USA", "ROW"]
 
 
 def test_missing_file_raises():
