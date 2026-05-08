@@ -41,6 +41,21 @@ def _max_abs_value(csv_file: Path) -> float:
     return max_abs
 
 
+def _gams_license_ok(gams_bin: Path) -> bool:
+    """Return False if GAMS exits with a licensing error on a trivial run."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        gms = Path(tmp) / "probe.gms"
+        gms.write_text("scalar x; x = 1;\n")
+        proc = subprocess.run(
+            [str(gams_bin), gms.name, "lo=3"],
+            cwd=tmp,
+            capture_output=True,
+            text=True,
+        )
+    return "licensing error" not in (proc.stderr + proc.stdout).lower()
+
+
 def _run_gams_model(gams_bin: Path, model_file: str) -> None:
     subprocess.run(
         [str(gams_bin), model_file, "lo=0"],
@@ -59,6 +74,8 @@ def test_pep2_gdx_vs_excel_loader_parity() -> None:
     gams_bin = Path(os.environ.get("GAMS_BIN", str(DEFAULT_GAMS_BIN)))
     if not gams_bin.exists():
         pytest.skip(f"GAMS not found: {gams_bin}")
+    if not _gams_license_ok(gams_bin):
+        pytest.skip("GAMS license invalid for this build")
     if not COMPARE_SCRIPT.exists():
         pytest.skip(f"Comparison script not found: {COMPARE_SCRIPT}")
 
@@ -110,6 +127,8 @@ def test_pep2_hardcoded_vs_dynamic_sets_parity() -> None:
         pytest.skip(f"GAMS not found: {gams_bin}")
     if not gdxdiff_bin.exists():
         pytest.skip(f"gdxdiff not found: {gdxdiff_bin}")
+    if not _gams_license_ok(gams_bin):
+        pytest.skip("GAMS license invalid for this build")
 
     dynamic_model = "PEP-1-1_v2_1_ipopt_excel_dynamic_sets.gms"
     hardcoded_model = "PEP-1-1_v2_1_ipopt_excel.gms"

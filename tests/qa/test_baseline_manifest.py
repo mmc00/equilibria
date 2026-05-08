@@ -11,6 +11,14 @@ from equilibria.baseline.manifest import build_baseline_manifest, load_baseline_
 from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
 from equilibria.templates.pep_model_solver import PEPModelSolver
 
+_RESULTS_GDX = Path(
+    "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+)
+pytestmark = pytest.mark.skipif(
+    not _RESULTS_GDX.exists(),
+    reason=f"Reference GAMS results GDX not present: {_RESULTS_GDX}",
+)
+
 
 @pytest.fixture(scope="module")
 def pep2_state():
