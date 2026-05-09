@@ -92,9 +92,10 @@ print(f"Status: {result.status}, residual: {result.residual:.2e}")
 ## Step 3 — Run a tariff shock
 
 The reference GAMS run shocks the *power* of import tariffs uniformly
-by 10 %: `tm_new = (1 + tm_old) * 1.1 − 1`. In Python this is encoded
-as `--shock-mode tm_pct` in the CLI, or directly when constructing the
-shock:
+by 10 %: `tm_new = (1 + tm_old) * 1.1 − 1`. The `tm_pct` mode encodes
+exactly that formula.
+
+### From the command line
 
 ```bash
 python scripts/gtap/run_gtap.py validate-shock \
@@ -106,9 +107,85 @@ python scripts/gtap/run_gtap.py validate-shock \
 ```
 
 The CLI runs the baseline, applies the shock, re-solves, and writes a
-JSON report with both pre- and post-shock variable levels. Internally
-this is :func:`scripts.gtap.run_gtap.validate_shock`, which calls the
-same `GTAPSolver` you used above.
+JSON report with both pre- and post-shock variable levels.
+
+### From a Python script
+
+The same flow can be reproduced programmatically — useful when you want
+to sweep multiple shock magnitudes, mix shocks across sectors, or chain
+the result into downstream analysis. The shock is applied directly on
+the `GTAPParameters` containers *before* the model is built, so the
+calibration and model assembly only need to be done once per experiment.
+
+```python
+from copy import deepcopy
+from pathlib import Path
+
+import equilibria
+from equilibria.templates.gtap import (
+    GTAPSets,
+    GTAPParameters,
+    GTAPSolver,
+    build_gtap_contract,
+)
+from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+equilibria.setup_logging(level="INFO")
+
+GDX = Path("path/to/basedata-9x10.gdx")
+
+# 1. Load sets and base parameters once.
+sets = GTAPSets()
+sets.load_from_gdx(GDX)
+base_params = GTAPParameters()
+base_params.load_from_gdx(GDX)
+contract = build_gtap_contract("standard")
+
+# 2. Solve the baseline.
+baseline_eq = GTAPModelEquations(sets, base_params)
+baseline_model = baseline_eq.build_model()
+baseline_solver = GTAPSolver(
+    baseline_model, closure=contract.closure, solver_name="path", params=base_params,
+)
+baseline_result = baseline_solver.solve()
+
+# 3. Apply a uniform 10% tariff shock on the power of `imptx` (= GAMS `tm`).
+#
+# The shock formula matches GAMS `tm.fx = tm.l * (1 + value)`:
+#     imptx_new = (1 + imptx_old) * (1 + value) - 1
+#
+# The diagonal (rp == r) is skipped because domestic sales carry no
+# import tariff; tiny non-zero entries there are calibration noise.
+shocked_params = deepcopy(base_params)
+imptx = shocked_params.taxes.imptx
+shock_value = 0.10
+for key in list(imptx.keys()):
+    if len(key) == 3 and key[0] == key[2]:  # skip diagonal rp == r
+        continue
+    current = float(imptx[key])
+    imptx[key] = (1.0 + current) * (1.0 + shock_value) - 1.0
+    if key in shocked_params.taxes.rtms:  # legacy alias kept in sync
+        shocked_params.taxes.rtms[key] = imptx[key]
+
+# 4. Solve the shocked model with the baseline as warm start.
+shock_eq = GTAPModelEquations(sets, shocked_params)
+shock_model = shock_eq.build_model()
+shock_solver = GTAPSolver(
+    shock_model, closure=contract.closure, solver_name="path", params=shocked_params,
+)
+shocked_result = shock_solver.solve()
+
+# 5. Inspect the deltas.
+print(f"Baseline status:  {baseline_result.status}")
+print(f"Shocked status:   {shocked_result.status}")
+```
+
+For partial shocks (single sector, single bilateral pair), index into
+`imptx` with the resolved 3-tuple `(source_region, commodity, dest_region)`
+instead of looping over all keys. The CLI helper
+`_apply_shock_to_params` in `scripts/gtap/run_gtap.py` does the same
+thing with extra index aliasing — feel free to copy it into your own
+script if you need that resolution logic.
 
 ## Step 4 — GAMS parity check
 
