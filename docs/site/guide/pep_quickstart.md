@@ -1,16 +1,15 @@
 # PEP — from zero to a solved baseline
 
 The PEP (Politique Économique et Pauvreté) template implements the
-PEP-1-1 v2.1 modular CGE model. It is calibrated against the standard
-PEP SAM in GDX format and can be solved with IPOPT, PATH or a built-in
-homotopy solver.
+PEP-1-1 v2.1 modular CGE model. It calibrates against the canonical
+PEP SAM and can be solved with IPOPT, PATH or a built-in homotopy
+solver.
 
 This guide walks through the minimal end-to-end flow:
 
-1. Locate (or generate) a SAM in GDX format.
-2. Calibrate the model.
-3. Solve the baseline.
-4. Inspect the solution and (optionally) compare against a GAMS reference.
+1. Calibrate from the bundled SAM.
+2. Solve the baseline.
+3. Inspect the solution and (optionally) compare against a GAMS reference.
 
 ## Prerequisites
 
@@ -18,29 +17,25 @@ This guide walks through the minimal end-to-end flow:
 pip install -e ".[pyomo,ipopt,excel]"
 ```
 
-A reference SAM ships with the repository at
-`src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx`. To use your
-own SAM, pass the path explicitly.
+The bundled PEP dataset (`SAM-V2_0.xlsx` + `VAL_PAR.xlsx`) ships inside
+the wheel and loads via `load_bundled("pep")`. To use a custom SAM,
+build a `PEPModelCalibrator` directly with your own paths.
 
 ## Step 1 — Calibrate
 
-`PEPModelCalibrator` runs all calibration phases (income, production,
-trade, final demand) in order. The result is a `PEPModelState` object
-that contains every calibrated parameter and base-year level.
+`load_bundled("pep")` reads the canonical Excel SAM, materialises the
+4D GDX layout the calibrator consumes (cached under
+`~/.cache/equilibria/pep/`), and returns a `PEPModelCalibrator` ready
+to run. The result of `.calibrate()` is a `PEPModelState` with every
+calibrated parameter and base-year level.
 
 ```python
-import logging
-from pathlib import Path
-
 import equilibria
-from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
+from equilibria import load_bundled
 
 equilibria.setup_logging(level="INFO")
 
-REPO = Path(equilibria.__file__).resolve().parents[2]
-SAM_FILE = REPO / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
-
-calibrator = PEPModelCalibrator(sam_file=SAM_FILE)
+calibrator = load_bundled("pep")
 state = calibrator.calibrate()
 
 print(state.report.summary())
