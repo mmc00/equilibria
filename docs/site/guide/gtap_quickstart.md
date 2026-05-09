@@ -17,18 +17,19 @@ This guide covers:
 pip install -e ".[pyomo,ipopt,excel,har]"
 ```
 
-A 9 × 10 GTAP dataset is required. The repository expects
-`basedata-9x10.gdx` (equivalent to `9x10Dat.gdx`); place it under
-`src/equilibria/templates/reference/gtap/data/` or pass its path
-explicitly.
+`equilibria` ships two GTAP datasets — the canonical 9×10 GAMS
+Standard 7 aggregation and a 3-region NUS333 (GTAPv7/GEMPACK). Both
+travel as native HAR/PRM files inside the wheel and load via
+`load_bundled("gtap", ...)`. To work with a custom aggregation, point
+`load_from_har` (or `load_from_gdx`) at your own files.
 
 ## Step 1 — Inspect the dataset
 
 ```python
-from equilibria.templates.gtap import GTAPSets
+from equilibria import load_bundled
 
-sets = GTAPSets()
-sets.load_from_gdx("path/to/basedata-9x10.gdx")
+params = load_bundled("gtap", "9x10")  # or "nus333"
+sets = params.sets
 
 print(f"Aggregation: {sets.aggregation_name}")
 print(f"Regions:      {sets.r}")
@@ -36,33 +37,27 @@ print(f"Commodities:  {sets.i}")
 print(f"Sectors:      {sets.j}")
 ```
 
+`load_bundled` reads the native HAR/PRM files (`basedata.har`,
+`sets.har`, `default.prm`, plus optional `baserate.har`) and returns a
+fully calibrated `GTAPParameters`. The 9×10 aggregation derives every
+tax rate from `basedata.har` wedges (no `baserate.har` exists for it
+upstream); NUS333 ships its own `baserate.har` from the GEMPACK pack.
+
 ## Step 2 — Build and solve the baseline
 
-`GTAPParameters` loads elasticities and taxes from the same GDX;
-`GTAPModelEquations` assembles the Pyomo model; `GTAPSolver` runs PATH
-(default) or IPOPT.
+`GTAPModelEquations` assembles the Pyomo model from the calibrated
+parameters; `GTAPSolver` runs PATH (default) or IPOPT.
 
 ```python
-from pathlib import Path
-
 import equilibria
-from equilibria.templates.gtap import (
-    GTAPSets,
-    GTAPParameters,
-    GTAPSolver,
-    build_gtap_contract,
-)
+from equilibria import load_bundled
+from equilibria.templates.gtap import GTAPSolver, build_gtap_contract
 from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
 equilibria.setup_logging(level="INFO")
 
-GDX = Path("path/to/basedata-9x10.gdx")
-
-sets = GTAPSets()
-sets.load_from_gdx(GDX)
-
-params = GTAPParameters()
-params.load_from_gdx(GDX)
+params = load_bundled("gtap", "9x10")
+sets = params.sets
 
 contract = build_gtap_contract("standard")  # default closure
 
@@ -88,12 +83,9 @@ exactly that formula. The shock is applied directly on the
 calibration and model assembly only need to be done once per experiment.
 
 ```python
-from pathlib import Path
-
 import equilibria
+from equilibria import load_bundled
 from equilibria.templates.gtap import (
-    GTAPSets,
-    GTAPParameters,
     GTAPSolver,
     apply_tariff_shock,
     build_gtap_contract,
@@ -102,13 +94,9 @@ from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
 equilibria.setup_logging(level="INFO")
 
-GDX = Path("path/to/basedata-9x10.gdx")
-
-# 1. Load sets and base parameters once.
-sets = GTAPSets()
-sets.load_from_gdx(GDX)
-base_params = GTAPParameters()
-base_params.load_from_gdx(GDX)
+# 1. Load base parameters once.
+base_params = load_bundled("gtap", "9x10")
+sets = base_params.sets
 contract = build_gtap_contract("standard")
 
 # 2. Solve the baseline.

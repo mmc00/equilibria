@@ -23,12 +23,16 @@ from equilibria.core import (
     SetManager,
     Variable,
 )
+from equilibria.datasets import dataset_path, list_bundled, load_bundled
 from equilibria.model import Model
 from equilibria.version import __version__
 
 __all__ = [
     "__version__",
     "setup_logging",
+    "dataset_path",
+    "list_bundled",
+    "load_bundled",
     "Model",
     "Block",
     "register_block",

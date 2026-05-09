@@ -2245,7 +2245,7 @@ class GTAPParameters:
         basedata_path: "Path",
         sets_path: "Path",
         default_path: "Path",
-        baserate_path: "Path",
+        baserate_path: "Optional[Path]" = None,
     ) -> None:
         """Load all parameters from GEMPACK HAR/PRM files.
 
@@ -2253,12 +2253,21 @@ class GTAPParameters:
             basedata_path: Path to basedata.har (benchmark monetary flows).
             sets_path: Path to sets.har (REG, COMM, ACTS, ENDW, MARG).
             default_path: Path to default.prm (elasticities).
-            baserate_path: Path to baserate.har (tax rates).
+            baserate_path: Optional baserate.har with explicit tax rate
+                headers (RTMS, RTFD, RTFM, RTIN, RTXS). Required by the
+                GTAPv7/GEMPACK pipeline (e.g. NUS333). Standard 7 GAMS
+                aggregations (e.g. 9x10) ship only the 3 core HAR files
+                and derive every tax rate from basedata wedges
+                (`imptx = (VMSB-VCIF)/VCIF`, etc.); pass ``None`` (or omit)
+                in that case.
         """
         self.sets.load_from_har(sets_path, default_path=default_path)
         self.elasticities.load_from_har(default_path, self.sets)
         self.benchmark.load_from_har(basedata_path, self.sets)
-        self.taxes.load_from_har(baserate_path, self.sets, self.benchmark)
+        if baserate_path is not None:
+            self.taxes.load_from_har(baserate_path, self.sets, self.benchmark)
+        else:
+            self.taxes.derive_from_benchmark(self.benchmark, self.sets)
         self.shares.calibrate(self.benchmark, self.elasticities, self.sets)
         self.calibrated.calibrate_from_benchmark(
             self.benchmark, self.elasticities, self.sets, self.taxes
