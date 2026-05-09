@@ -128,8 +128,74 @@ formula `tm_new = (1 + tm_old) * (1 + value) - 1` to every
 diagonal so domestic sales stay untaxed), and keeps the legacy `rtms`
 alias in sync. To restrict the shock to a subset, pass any combination
 of `commodities=`, `sources=`, `destinations=` — for example,
-`apply_tariff_shock(base_params, 0.10, commodities=["mnf"], sources=["China"])`
-only shocks Chinese manufacturing exports.
+`apply_tariff_shock(base_params, 0.10, commodities=["c_HeavyMnfc"], sources=["China"])`
+only shocks Chinese heavy-manufacturing exports.
+
+### Shocking other parameters
+
+`apply_tariff_shock` is a thin wrapper around the generic
+`apply_shock`, which can shock any registered container — not just
+import tariffs. List the available targets at runtime:
+
+```python
+from equilibria.templates.gtap import apply_shock, list_shock_targets
+
+list_shock_targets()
+# ['taxes.imptx', 'taxes.rtf', 'taxes.rtfd', 'taxes.rtfi',
+#  'taxes.rtgd', 'taxes.rtgi', 'taxes.rto', 'taxes.rtpd',
+#  'taxes.rtpi', 'taxes.rtxs']
+```
+
+The signature is:
+
+```python
+apply_shock(
+    params,
+    target: str,           # e.g. "taxes.rto", "taxes.rtf"
+    value: float,
+    *,
+    mode: ShockMode = "pct",   # "pct" | "power" | "set" | "add" | "mul"
+    inplace: bool = False,
+    **filters,             # commodities=, sources=, regions=, sectors=, factors=, destinations=
+)
+```
+
+Each target advertises its own filter names (matching its tuple-key
+dimensions); passing an unknown filter raises ``TypeError``. Examples:
+
+```python
+# +5% to the output-tax rate in every (region, sector) cell
+apply_shock(base_params, "taxes.rto", 0.05, mode="pct")
+
+# Set the factor tax on Land in Crops to zero, USA only
+apply_shock(
+    base_params,
+    "taxes.rtf",
+    0.0,
+    mode="set",
+    regions=["USA"],
+    factors=["Land"],
+    sectors=["c_Crops"],
+)
+
+# Power scaling on import tariffs (equivalent to apply_tariff_shock)
+apply_shock(base_params, "taxes.imptx", 0.10, mode="power")
+```
+
+Modes:
+
+| Mode | Formula | Typical use |
+|------|---------|-------------|
+| `pct` | `new = old * (1 + value)` | Scale a rate by a percentage |
+| `power` | `new = (1 + old) * (1 + value) - 1` | GAMS-style tariff/tax shocks |
+| `set` | `new = value` | Replace the rate outright |
+| `add` | `new = old + value` | Additive perturbation |
+| `mul` | `new = old * value` | Direct multiplicative override |
+| `tm_pct` | alias of `power` | Legacy name, kept for `apply_tariff_shock` |
+
+The diagonal-skip rule and the `rtms ↔ imptx` alias-sync that matter
+for trade taxes are encoded in the registry, so they apply
+automatically whenever `target="taxes.imptx"` or `target="taxes.rtxs"`.
 
 ## Step 4 — GAMS parity check
 
