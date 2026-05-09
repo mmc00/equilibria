@@ -25,6 +25,13 @@ ALLOWED_EXACT: set[str] = {
     "src/equilibria/babel/gdx/README.md",
     "src/equilibria/templates/gtap/README.md",
     "tests/babel/gdx/fixtures/SAM-V2_0.gdx",
+    # Sphinx documentation site:
+    #   - Makefile is the GNU Make / Sphinx convention; renaming would
+    #     break the standard `make html` workflow developers expect.
+    #   - sphinx-gallery looks specifically for README.rst inside each
+    #     examples directory; the name is hard-coded by the extension.
+    "docs/site/Makefile",
+    "docs/site/examples_src/README.rst",
 }
 
 # Directories where source/reference artifacts must keep upstream naming.
