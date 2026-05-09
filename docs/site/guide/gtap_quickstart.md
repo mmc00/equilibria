@@ -24,16 +24,6 @@ explicitly.
 
 ## Step 1 — Inspect the dataset
 
-The bundled CLI prints set sizes, region/commodity names, and a sanity
-summary of base-year flows:
-
-```bash
-python scripts/gtap/run_gtap.py info \
-    --gdx-file path/to/basedata-9x10.gdx
-```
-
-Programmatic equivalent:
-
 ```python
 from equilibria.templates.gtap import GTAPSets
 
@@ -93,28 +83,8 @@ print(f"Status: {result.status}, residual: {result.residual:.2e}")
 
 The reference GAMS run shocks the *power* of import tariffs uniformly
 by 10 %: `tm_new = (1 + tm_old) * 1.1 − 1`. The `tm_pct` mode encodes
-exactly that formula.
-
-### From the command line
-
-```bash
-python scripts/gtap/run_gtap.py validate-shock \
-    --gdx-file path/to/basedata-9x10.gdx \
-    --shock-variable tm \
-    --shock-mode tm_pct \
-    --shock-value 0.10 \
-    --output out/shock.json
-```
-
-The CLI runs the baseline, applies the shock, re-solves, and writes a
-JSON report with both pre- and post-shock variable levels.
-
-### From a Python script
-
-The same flow can be reproduced programmatically — useful when you want
-to sweep multiple shock magnitudes, mix shocks across sectors, or chain
-the result into downstream analysis. The shock is applied directly on
-the `GTAPParameters` containers *before* the model is built, so the
+exactly that formula. The shock is applied directly on the
+`GTAPParameters` containers *before* the model is built, so the
 calibration and model assembly only need to be done once per experiment.
 
 ```python
@@ -202,9 +172,9 @@ A few conventions baked into the template are worth knowing up front:
 * **Solver mode** — for full Standard 7 (10,296 equations), always use
   PATH in *nonlinear full* mode; the linearised block is for diagnostics
   only.
-* **Shock formula** — for parity with GAMS reference runs, use
-  `--shock-mode tm_pct` (power scaling). The legacy `pct` mode scales
-  only the rate and produces a smaller effective shock.
+* **Shock formula** — for parity with GAMS reference runs, call
+  `apply_tariff_shock(..., mode="tm_pct")` (power scaling). The legacy
+  `pct` mode scales only the rate and produces a smaller effective shock.
 * **`equation_scaling=True`** — strongly recommended for both baseline
   and shocked runs; without it the baseline residual stalls at ~1e-6
   instead of ~1e-9.
@@ -214,6 +184,6 @@ A few conventions baked into the template are worth knowing up front:
 | Symptom | Likely cause / fix |
 |---------|--------------------|
 | `PATH executable was not resolved by Pyomo` | PATH is not on `PATH`; install via `pip install -e ".[pyomo]"` and ensure `pyomo --solvers` lists `path`. |
-| Baseline residual ~1e-6 (expected ~1e-9) | `equation_scaling=True` was not passed; the CLI sets it automatically, but custom scripts must opt in. |
-| Shocked run shows wrong sign on tariff variables | The shock was applied with `pct` instead of `tm_pct`. Verify the CLI flag or the call to `_apply_shock_to_params`. |
+| Baseline residual ~1e-6 (expected ~1e-9) | `equation_scaling=True` was not passed to the PATH-CAPI helper. |
+| Shocked run shows wrong sign on tariff variables | The shock was applied with `mode="pct"` instead of `mode="tm_pct"` in `apply_tariff_shock`. |
 | GAMS parity comparison fails on `gdpmp` only | Known calibration trick in `cal.gms:652` overwrites `yi` deliberately; the Python template intentionally does not replicate it because doing so breaks convergence. See the parity status notes for context. |
