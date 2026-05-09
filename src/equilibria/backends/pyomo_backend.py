@@ -7,12 +7,15 @@ IPOPT, CONOPT, or other Pyomo-compatible solvers.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from equilibria.backends.base import Backend, Solution
+
+logger = logging.getLogger(__name__)
 
 try:
     from pyomo.environ import (
@@ -122,8 +125,8 @@ class PyomoBackend(Backend):
                 else:
                     # Multi-dimensional parameter without domain info (e.g., FD0)
                     # Skip these for now as they're only used for initialization, not constraints
-                    print(
-                        f"Warning: Skipping parameter {param_name} - no domains defined"
+                    logger.warning(
+                        "Skipping parameter %s - no domains defined", param_name
                     )
                     continue
             else:
@@ -228,10 +231,10 @@ class PyomoBackend(Backend):
                         expr = eq.build_expression(self.pyomo_model, indices)
                         if expr is not None:
                             constraint_dict[indices] = expr
-                    except Exception as e:
+                    except (ValueError, KeyError, AttributeError, TypeError) as e:
                         # Skip constraints that fail to build
-                        print(
-                            f"Warning: Could not build constraint {eq_name}{indices}: {e}"
+                        logger.warning(
+                            "Could not build constraint %s%s: %s", eq_name, indices, e
                         )
                         continue
 
