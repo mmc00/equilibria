@@ -1077,7 +1077,7 @@ class GTAPSolver:
             for idx in var:
                 try:
                     var_values[idx] = value(var[idx])
-                except:
+                except (ValueError, AttributeError):
                     var_values[idx] = None
             
             variables[var_name] = var_values

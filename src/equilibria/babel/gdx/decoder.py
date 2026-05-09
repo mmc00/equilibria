@@ -40,8 +40,11 @@ Delta Encoding Scheme for Parameters (OFFICIAL IMPLEMENTATION):
    - Otherwise: mapped special value
 """
 
+import logging
 import struct
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def get_integer_size(range_size: int) -> int:
@@ -275,7 +278,7 @@ def validate_against_csv(
         else:
             stats['missing_in_gdx'] += 1
             if stats['missing_in_gdx'] <= 5:
-                print(f"Warning: Missing in GDX: {key} = {csv_val}")
+                logger.warning("Missing in GDX: %s = %s", key, csv_val)
     
     # Check for extra values in GDX
     for key in gdx_values:

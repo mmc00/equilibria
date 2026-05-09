@@ -857,7 +857,7 @@ def _detect_sequence_type(values: list[tuple[int, float]]) -> tuple[str, float]:
                 log_ratio = math.log2(val2 / val1)
                 if abs(log_ratio - round(log_ratio)) < 0.01:
                     return ("geometric", ratio)
-            except:
+            except (ValueError, ZeroDivisionError):
                 pass
         
         # RULE 3: Large values with large delta → arithmetic
