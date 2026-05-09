@@ -76,9 +76,14 @@ dev = [
 
 # Documentation
 docs = [
-    "mkdocs>=1.5",
-    "mkdocs-material>=9.0",
-    "mkdocstrings[python]>=0.24",
+    "sphinx>=7.2",
+    "furo>=2024.1",
+    "myst-parser>=2.0",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.5",
+    "sphinx-gallery>=0.15",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
 ]
 
 # All optional dependencies
