@@ -274,6 +274,26 @@ results.plot()
 
 ## Implementation Status
 
+### MIP → SAM pipeline — structural closure (2026-05-08)
+
+`equilibria.sam_tools.api.run_mip_to_sam` converts a square-padded national-accounts MIP (sectors × sectors + final-demand columns + VA/IMP rows) into a fully-balanced SAM compatible with PEP CGE templates. The pipeline is mass-conserving and converges to row==col within tolerance on the full structured SAM:
+
+| Step | Effect |
+|------|--------|
+| `mip_balance_{gras,ras,sut_ras,entropy}` | Reconciles MIP block balance (PIB and Z identities) on the raw matrix |
+| `normalize_mip_accounts` | Drops square-padding artifacts; classifies columns into J (sectors) and FD (HH/GOV/INV/EXP) using a closed FD vocabulary |
+| `disaggregate_va_to_factors` | Splits VA aggregate row into L (labor) and K (capital) by configurable shares |
+| `create_factor_income_distribution` | Routes factor income to institutions (AG.hh, AG.gvt, AG.firm) per configurable shares |
+| `create_household_expenditure` | Moves I → FD.HH to I → AG.hh (households pay commodity columns) |
+| `create_government_flows` | Adds production tax (J → AG.ti), import tariff (J → AG.tm), routes ti/tm → AG.gvt, moves I → FD.GOV to I → AG.gvt |
+| `create_row_account` | Routes IMP × J cells (intermediate import use) to AG.row × J; moves I → FD.EXP to I → AG.row |
+| `create_make_matrix` | Diagonal make matrix (J → I) closing each sector's row income with its full column cost (intermediate + factors + IMP routed to ROW + taxes) |
+| `create_investment_account` | Sums positive savings (income > expenditure) into OTH.inv column; routes dissavings (income < expenditure) from OTH.inv row |
+| `create_x_block_on_sam` + `convert_exports_to_x_on_sam` | Promotes export demand to a dedicated X block with margin reallocation |
+| `_final_balance_normalized_sam` | Iterated GRAS on the fully-structured SAM with re-targeted (row+col)/2 averages each pass; preserves cell signs and conserves mass |
+
+Test fixture (`tests/sam_tools/fixtures/simple_mip.xlsx`, 3 sectors × 4 final-demand columns) closes to `max_row_col_abs_diff < 1.0` end-to-end. Full `tests/sam_tools/` suite: 77 passing.
+
 ### GTAP Standard 7 — GAMS reference parity (2026-05-06)
 
 The Python implementation of the **GTAP Standard 7** model template (`equilibria.templates.gtap`) is validated against the canonical GAMS reference (`COMP.gdx` from `tariff_sim.gms`, 9 sectors × 10 regions, 10% uniform import-tariff shock). Solver: PATH C API in nonlinear-full mode (16,166 vars × 16,166 eqs), residuals ~1e-11 (baseline) / ~1e-9 (shock).
