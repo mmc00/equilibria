@@ -118,7 +118,6 @@ the `GTAPParameters` containers *before* the model is built, so the
 calibration and model assembly only need to be done once per experiment.
 
 ```python
-from copy import deepcopy
 from pathlib import Path
 
 import equilibria
@@ -126,6 +125,7 @@ from equilibria.templates.gtap import (
     GTAPSets,
     GTAPParameters,
     GTAPSolver,
+    apply_tariff_shock,
     build_gtap_contract,
 )
 from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
@@ -149,25 +149,10 @@ baseline_solver = GTAPSolver(
 )
 baseline_result = baseline_solver.solve()
 
-# 3. Apply a uniform 10% tariff shock on the power of `imptx` (= GAMS `tm`).
-#
-# The shock formula matches GAMS `tm.fx = tm.l * (1 + value)`:
-#     imptx_new = (1 + imptx_old) * (1 + value) - 1
-#
-# The diagonal (rp == r) is skipped because domestic sales carry no
-# import tariff; tiny non-zero entries there are calibration noise.
-shocked_params = deepcopy(base_params)
-imptx = shocked_params.taxes.imptx
-shock_value = 0.10
-for key in list(imptx.keys()):
-    if len(key) == 3 and key[0] == key[2]:  # skip diagonal rp == r
-        continue
-    current = float(imptx[key])
-    imptx[key] = (1.0 + current) * (1.0 + shock_value) - 1.0
-    if key in shocked_params.taxes.rtms:  # legacy alias kept in sync
-        shocked_params.taxes.rtms[key] = imptx[key]
+# 3. Apply a uniform 10% tariff shock (GAMS-equivalent power scaling).
+shocked_params = apply_tariff_shock(base_params, value=0.10, mode="tm_pct")
 
-# 4. Solve the shocked model with the baseline as warm start.
+# 4. Solve the shocked model.
 shock_eq = GTAPModelEquations(sets, shocked_params)
 shock_model = shock_eq.build_model()
 shock_solver = GTAPSolver(
@@ -175,17 +160,18 @@ shock_solver = GTAPSolver(
 )
 shocked_result = shock_solver.solve()
 
-# 5. Inspect the deltas.
 print(f"Baseline status:  {baseline_result.status}")
 print(f"Shocked status:   {shocked_result.status}")
 ```
 
-For partial shocks (single sector, single bilateral pair), index into
-`imptx` with the resolved 3-tuple `(source_region, commodity, dest_region)`
-instead of looping over all keys. The CLI helper
-`_apply_shock_to_params` in `scripts/gtap/run_gtap.py` does the same
-thing with extra index aliasing — feel free to copy it into your own
-script if you need that resolution logic.
+`apply_tariff_shock` deep-copies the parameters, applies the GAMS
+formula `tm_new = (1 + tm_old) * (1 + value) - 1` to every
+`imptx[source, commodity, dest]` entry (skipping the `source == dest`
+diagonal so domestic sales stay untaxed), and keeps the legacy `rtms`
+alias in sync. To restrict the shock to a subset, pass any combination
+of `commodities=`, `sources=`, `destinations=` — for example,
+`apply_tariff_shock(base_params, 0.10, commodities=["mnf"], sources=["China"])`
+only shocks Chinese manufacturing exports.
 
 ## Step 4 — GAMS parity check
 
