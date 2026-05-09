@@ -60,7 +60,12 @@ from equilibria.templates.gtap.calibration_compare import (
 )
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult, SolverStatus
-from equilibria.templates.gtap.shocks import ShockMode, apply_tariff_shock
+from equilibria.templates.gtap.shocks import (
+    ShockMode,
+    apply_shock,
+    apply_tariff_shock,
+    list_shock_targets,
+)
 from equilibria.templates.gtap.gtap_parity_pipeline import (
     GTAPParityComparison,
     GTAPParityRunner,
@@ -106,7 +111,9 @@ __all__ = [
     "SolverStatus",
 
     # Shocks
+    "apply_shock",
     "apply_tariff_shock",
+    "list_shock_targets",
     "ShockMode",
     
     # Parity
