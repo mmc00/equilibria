@@ -1,6 +1,9 @@
 """equilibria - A Modern Python Framework for CGE Modeling."""
 
+from equilibria._logging import _install_null_handler, setup_logging
 from equilibria.blocks import Block, register_block
+
+_install_null_handler()
 from equilibria.contracts import (
     ModelBoundsConfig,
     ModelClosureConfig,
@@ -25,6 +28,7 @@ from equilibria.version import __version__
 
 __all__ = [
     "__version__",
+    "setup_logging",
     "Model",
     "Block",
     "register_block",

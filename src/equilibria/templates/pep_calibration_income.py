@@ -8,11 +8,14 @@ lines 427-469.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class IncomeCalibrationResult(BaseModel):
@@ -157,8 +160,8 @@ class IncomeCalibrator:
             # If parameter not found, try to get from SAM matrix
             return self._get_sam_matrix_value(*indices)
             
-        except Exception as e:
-            print(f"Warning: Error getting {param_name}{indices}: {e}")
+        except (KeyError, ValueError, TypeError, AttributeError) as e:
+            logger.warning("Error getting %s%s: %s", param_name, indices, e)
             return 0.0
     
     def _get_sam_matrix_value(self, *indices) -> float:
@@ -211,8 +214,8 @@ class IncomeCalibrator:
                     total += value
             return total
 
-        except Exception as e:
-            print(f"Warning: Error reading SAM matrix: {e}")
+        except (KeyError, ValueError, TypeError, OSError) as e:
+            logger.warning("Error reading SAM matrix: %s", e)
             return 0.0
     
     def calibrate(self) -> IncomeCalibrationResult:

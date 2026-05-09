@@ -24,6 +24,14 @@ ROOT = Path(__file__).resolve().parents[2]
 PEP2_DATA = ROOT / "src/equilibria/templates/reference/pep2/data"
 
 
+def _resolve_excel_sam_file() -> Path:
+    candidates = [PEP2_DATA / "SAM-V2_0.xlsx", PEP2_DATA / "SAM-V2_0_connect.xlsx"]
+    for path in candidates:
+        if path.exists():
+            return path
+    pytest.skip("Excel SAM baseline not available")
+
+
 def _build_base_gdx() -> object:
     c = PEPModelCalibrator(
         sam_file=PEP2_DATA / "SAM-V2_0.gdx",
@@ -35,7 +43,7 @@ def _build_base_gdx() -> object:
 
 def _build_base_excel() -> object:
     c = PEPModelCalibratorExcel(
-        sam_file=PEP2_DATA / "SAM-V2_0_connect.xlsx",
+        sam_file=_resolve_excel_sam_file(),
         val_par_file=PEP2_DATA / "VAL_PAR.xlsx",
         dynamic_sets=False,
     )
@@ -52,7 +60,7 @@ def _build_dynamic_gdx() -> object:
 
 def _build_dynamic_excel() -> object:
     c = PEPModelCalibratorExcelDynamic(
-        sam_file=PEP2_DATA / "SAM-V2_0_connect.xlsx",
+        sam_file=_resolve_excel_sam_file(),
         val_par_file=PEP2_DATA / "VAL_PAR.xlsx",
     )
     return c.calibrate()

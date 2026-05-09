@@ -1,3 +1,6 @@
+import struct
+
+
 def _decode_simple_parameter(
     section: bytes,
     elements: list[str],
@@ -55,7 +58,7 @@ def _decode_simple_parameter(
                     values[key] = value
                     pos = value_pos + 8
                     continue
-                except:
+                except (struct.error, IndexError):
                     pass
             pos += 1
         
@@ -76,7 +79,7 @@ def _decode_simple_parameter(
                 values[key] = value
                 pos += 13
                 continue
-            except:
+            except (struct.error, IndexError):
                 pass
             pos += 1
         
@@ -95,7 +98,7 @@ def _decode_simple_parameter(
                 values[key] = value
                 pos += 12
                 continue
-            except:
+            except (struct.error, IndexError):
                 pass
             pos += 1
         
@@ -109,7 +112,7 @@ def _decode_simple_parameter(
                 values[key] = value
                 pos += 10
                 continue
-            except:
+            except (struct.error, IndexError):
                 pass
             pos += 1
         
@@ -121,7 +124,7 @@ def _decode_simple_parameter(
                 values[key] = value
                 pos += 9
                 continue
-            except:
+            except (struct.error, IndexError):
                 pass
             pos += 1
         
