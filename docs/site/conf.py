@@ -103,3 +103,16 @@ html_theme_options = {
 doctest_global_setup = """
 import equilibria
 """
+
+# -- Benchmarks page (regenerated from committed CSVs) -----------------------
+
+_HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE / "_scripts"))
+try:
+    from render_benchmarks import render as _render_benchmarks  # noqa: E402
+    _render_benchmarks(
+        out_path=_HERE / "guide" / "benchmarks.md",
+        data_dir=_HERE / "_data" / "benchmarks",
+    )
+except Exception as exc:  # noqa: BLE001 — never fail a docs build on this
+    print(f"[conf.py] benchmarks render skipped: {exc}")

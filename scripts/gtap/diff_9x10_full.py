@@ -5,158 +5,26 @@ the Python model, aligns indices (dropping the GAMS time axis t∈{base,
 check, shock}), and reports counts of matching/diverging cells per
 variable. Symbols that don't exist on either side, or that are constant
 zero, are reported as 'skipped'.
+
+Pass --csv PATH to emit a long-form CSV consumed by the docs benchmark
+page (one row per (dataset, phase, var) plus a __SUMMARY__ row).
 """
 from __future__ import annotations
-import argparse, csv, subprocess, sys
+import argparse, sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+from _diff_core import (
+    list_populated_vars, gams_levels, find_py_var, compare_phase,
+    diff_phase_rows, write_csv, git_short_sha, split_t, build_derived,
+)
+
 GDX = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
 GAMS_COMP = ROOT / "src/equilibria/templates/reference/gtap/output/COMP.gdx"
-GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
-
-T_LABELS = {"base", "check", "shock"}
-
-
-def list_populated_vars() -> list[str]:
-    out = subprocess.run(
-        [GDXDUMP, str(GAMS_COMP), "Symbols"],
-        capture_output=True, text=True, check=True,
-    ).stdout
-    # Format: "  N  Name  Dim  Type  Records  Explanatory text"
-    # parts[0]=N, parts[1]=Name, parts[2]=Dim, parts[3]=Type, parts[4]=Records
-    names = []
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) < 5 or parts[3] != "Var":
-            continue
-        try:
-            n_records = int(parts[4])
-        except ValueError:
-            continue
-        if n_records > 0:
-            names.append(parts[1])
-    return names
-
-
-def gams_levels(symbol: str) -> dict:
-    """Return {tuple_keys: float_value} for all entries of `symbol`."""
-    res = subprocess.run(
-        [GDXDUMP, str(GAMS_COMP), "Format=csv", f"Symb={symbol}"],
-        capture_output=True, text=True, check=False,
-    )
-    if res.returncode != 0 or not res.stdout.strip():
-        return {}
-    out: dict = {}
-    reader = csv.reader(res.stdout.splitlines())
-    next(reader, None)
-    for row in reader:
-        if len(row) < 2:
-            continue
-        *keys, val = row
-        keys = tuple(k.strip('"') for k in keys)
-        try:
-            out[keys] = float(val)
-        except ValueError:
-            pass
-    return out
-
-
-def split_t(keys: tuple) -> tuple[tuple, str | None]:
-    """If the last key is base/check/shock, peel it off as the t-label."""
-    if keys and keys[-1] in T_LABELS:
-        return keys[:-1], keys[-1]
-    return keys, None
-
-
-def get_py_var_value(py_var, key: tuple) -> float | None:
-    """Fetch level from a Pyomo Var indexed by `key` (or a single scalar)."""
-    from pyomo.core import value
-    try:
-        if not key:
-            return float(value(py_var))
-        if len(key) == 1:
-            k0 = key[0]
-            if k0 in py_var:
-                return float(value(py_var[k0]))
-            for kk in py_var:
-                if str(kk) == k0:
-                    return float(value(py_var[kk]))
-            return None
-        if key in py_var:
-            return float(value(py_var[key]))
-        for kk in py_var:
-            if isinstance(kk, tuple) and len(kk) == len(key) and tuple(str(x) for x in kk) == key:
-                return float(value(py_var[kk]))
-        return None
-    except Exception:
-        return None
-
-
-def find_py_var(model, name: str):
-    """Try the literal name, then lowercase, then a case-insensitive scan."""
-    v = getattr(model, name, None)
-    if v is not None:
-        return v, name
-    v = getattr(model, name.lower(), None)
-    if v is not None:
-        return v, name.lower()
-    target = name.lower()
-    from pyomo.environ import Var
-    for comp in model.component_objects(Var, active=True):
-        if comp.name.lower() == target:
-            return comp, comp.name
-    return None, None
-
-
-def compare_phase(model_py, gams_all: dict, t_label: str, tol_rel: float, tol_abs: float):
-    """Compare GAMS values (filtered to t_label) against the Python model.
-
-    Returns dict with: n_total, n_match, n_diverge, n_missing, max_abs, max_rel,
-    worst (gams_key, py_val, gams_val, abs, rel).
-    """
-    n_total = 0
-    n_match = 0
-    n_diverge = 0
-    n_missing = 0
-    max_abs = 0.0
-    max_rel = 0.0
-    worst = None
-    for full_key, g_val in gams_all.items():
-        body, t = split_t(full_key)
-        if t is not None and t != t_label:
-            continue
-        n_total += 1
-        p_val = get_py_var_value(model_py, body) if body else None
-        if p_val is None and not body:
-            try:
-                from pyomo.core import value
-                p_val = float(value(model_py))
-            except Exception:
-                p_val = None
-        if p_val is None:
-            n_missing += 1
-            continue
-        d = p_val - g_val
-        rel = abs(d) / abs(g_val) if abs(g_val) > 1e-12 else (0.0 if abs(d) < tol_abs else float("inf"))
-        if abs(d) <= tol_abs or rel <= tol_rel:
-            n_match += 1
-        else:
-            n_diverge += 1
-        if abs(d) > max_abs:
-            max_abs = abs(d)
-        if rel != float("inf") and rel > max_rel:
-            max_rel = rel
-        if worst is None or abs(d) > abs(worst[3]):
-            worst = (full_key, p_val, g_val, d, rel)
-    return {
-        "n_total": n_total, "n_match": n_match, "n_diverge": n_diverge,
-        "n_missing": n_missing, "max_abs": max_abs, "max_rel": max_rel,
-        "worst": worst,
-    }
 
 
 def main():
@@ -168,6 +36,8 @@ def main():
                     help="Absolute tolerance fallback (default 1e-6)")
     ap.add_argument("--show-worst", action="store_true",
                     help="Print the single worst cell for each diverging symbol")
+    ap.add_argument("--csv", type=Path, default=None,
+                    help="If set, write benchmark rows to this CSV path")
     args = ap.parse_args()
 
     from equilibria.templates.gtap import GTAPParameters
@@ -185,9 +55,11 @@ def main():
         m_b, p_b, enforce_post_checks=False, strict_path_capi=False,
         closure_config=contract.closure, equation_scaling=True,
     )
-    print(f"  baseline residual={r_b.get('residual'):.3e}  code={r_b.get('termination_code')}")
+    res_b = float(r_b.get("residual") or 0.0)
+    print(f"  baseline residual={res_b:.3e}  code={r_b.get('termination_code')}")
 
     m_s = None
+    res_s = 0.0
     if args.phase != "base":
         print("\n=== Python shock 9x10 (10% imptx, rate scaling) ===")
         p_s = GTAPParameters()
@@ -217,61 +89,67 @@ def main():
             m_s, p_s, enforce_post_checks=False, strict_path_capi=False,
             closure_config=contract.closure, equation_scaling=True,
         )
-        print(f"  shock residual={r_s.get('residual'):.3e}  code={r_s.get('termination_code')}")
+        res_s = float(r_s.get("residual") or 0.0)
+        print(f"  shock residual={res_s:.3e}  code={r_s.get('termination_code')}")
 
-    var_names = list_populated_vars()
+    var_names = list_populated_vars(GAMS_COMP)
     print(f"\nPopulated GAMS Vars in COMP.gdx: {len(var_names)}")
 
-    phases = [("base", m_b)]
+    phases = [("base", m_b, res_b)]
     if args.phase != "base":
-        phases.append(("shock", m_s))
+        phases.append(("shock", m_s, res_s))
 
-    for phase, m_py in phases:
+    csv_rows: list[dict] = []
+    git_sha = git_short_sha(ROOT)
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    for phase, m_py, residual in phases:
         print(f"\n{'='*120}")
         print(f"PHASE: {phase}    (tol_rel={args.tol_rel}  tol_abs={args.tol_abs})")
         print(f"{'='*120}")
         print(f"{'gams_var':<14s} {'py_var':<14s} {'cells':>7s} {'match':>7s} {'diverge':>8s} {'missing':>8s} {'max_abs':>10s} {'max_rel':>10s}  status")
         print("-" * 120)
-        agg = {"vars_total": 0, "vars_match_all": 0, "vars_partial": 0,
-               "vars_no_py": 0, "cells_total": 0, "cells_match": 0,
-               "cells_diverge": 0, "cells_missing": 0}
+
+        rows, agg = diff_phase_rows(
+            dataset="9x10", phase=phase, var_names=var_names,
+            gdx_path=GAMS_COMP, model_py=m_py,
+            tol_rel=args.tol_rel, tol_abs=args.tol_abs,
+            residual=residual, git_sha=git_sha, generated_at=generated_at,
+            derived=build_derived(m_py),
+        )
+        csv_rows.extend(rows)
+
         diverge_details = []
-        for name in var_names:
-            agg["vars_total"] += 1
-            gams_all = gams_levels(name)
-            if not gams_all:
+        for r in rows:
+            if r["var"] == "__SUMMARY__":
                 continue
-            py_var, py_name = find_py_var(m_py, name)
-            if py_var is None:
-                # Count GAMS cells for this t to know coverage gap
-                n_t = sum(1 for k in gams_all if split_t(k)[1] == phase)
-                if n_t == 0:
-                    n_t = len(gams_all)
-                print(f"{name:<14s} {'<n/a>':<14s} {n_t:>7d} {0:>7d} {0:>8d} {n_t:>8d} {'—':>10s} {'—':>10s}  no-py")
-                agg["vars_no_py"] += 1
-                agg["cells_total"] += n_t
-                agg["cells_missing"] += n_t
-                continue
-            stats = compare_phase(py_var, gams_all, phase,
-                                  tol_rel=args.tol_rel, tol_abs=args.tol_abs)
-            agg["cells_total"] += stats["n_total"]
-            agg["cells_match"] += stats["n_match"]
-            agg["cells_diverge"] += stats["n_diverge"]
-            agg["cells_missing"] += stats["n_missing"]
-            if stats["n_total"] == 0:
-                continue
-            if stats["n_diverge"] == 0 and stats["n_missing"] == 0:
-                agg["vars_match_all"] += 1
+            cells = int(r["cells"])
+            match = int(r["match"])
+            diverge = int(r["diverge"])
+            missing = int(r["missing"])
+            mx_abs = r["max_abs_err"] or "—"
+            mx_rel = r["max_rel_err"] or "—"
+            if not r["py_var"]:
+                status = "no-py"
+                py = "<n/a>"
+            elif diverge == 0 and missing == 0:
                 status = "ok"
+                py = r["py_var"]
             else:
-                agg["vars_partial"] += 1
-                status = "diff" if stats["n_diverge"] else "miss"
-                if stats["worst"]:
-                    diverge_details.append((name, py_name, stats))
-            print(f"{name:<14s} {py_name or '?':<14s} {stats['n_total']:>7d} "
-                  f"{stats['n_match']:>7d} {stats['n_diverge']:>8d} "
-                  f"{stats['n_missing']:>8d} {stats['max_abs']:>10.2e} "
-                  f"{stats['max_rel']:>10.2e}  {status}")
+                status = "diff" if diverge else "miss"
+                py = r["py_var"]
+            print(f"{r['var']:<14s} {py:<14s} {cells:>7d} {match:>7d} "
+                  f"{diverge:>8d} {missing:>8d} {mx_abs:>10s} {mx_rel:>10s}  {status}")
+
+            # Recompute worst-cell on demand for show-worst.
+            if args.show_worst and (diverge > 0 or missing > 0) and r["py_var"]:
+                gams_all = gams_levels(GAMS_COMP, r["var"])
+                py_var, _ = find_py_var(m_py, r["var"], derived=build_derived(m_py))
+                if py_var is not None:
+                    s = compare_phase(py_var, gams_all, phase,
+                                      tol_rel=args.tol_rel, tol_abs=args.tol_abs)
+                    if s["worst"]:
+                        diverge_details.append((r["var"], r["py_var"], s))
 
         print("-" * 120)
         print(f"  Vars total:           {agg['vars_total']}")
@@ -294,6 +172,10 @@ def main():
                 key, p_val, g_val, d, rel = w
                 rel_str = f"{rel*100:.3f}%" if rel != float("inf") else "inf"
                 print(f"    {name:<12s} {str(key):<60s}  py={p_val:+.6e}  gams={g_val:+.6e}  Δ={d:+.3e}  rel={rel_str}")
+
+    if args.csv:
+        write_csv(args.csv, csv_rows)
+        print(f"\nWrote {len(csv_rows)} rows to {args.csv}")
 
 
 if __name__ == "__main__":
