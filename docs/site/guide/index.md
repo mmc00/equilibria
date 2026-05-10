@@ -17,6 +17,7 @@ mip_to_sam
 pep_quickstart
 gtap_quickstart
 path_capi
+benchmarks
 ```
 
 The {doc}`example gallery <../gallery/index>` complements these chapters with
