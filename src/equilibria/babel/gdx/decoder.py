@@ -1,8 +1,21 @@
-"""
-GDX Parameter Delta Decoder
+"""GDX Parameter Delta Decoder.
 
 This module implements the delta decoding algorithm for GDX parameters.
-Based on the official GDX source code from gdx/src/gxfile.cpp
+
+ATTRIBUTION
+-----------
+The algorithm encoded here is a Python re-expression of the delta-decode
+logic in `gdx/src/gxfile.cpp` from the official GAMS GDX API:
+
+    https://github.com/GAMS-dev/gdx
+    Copyright (c) 2017-2026 GAMS Software GmbH <support@gams.com>
+    Copyright (c) 2017-2026 GAMS Development Corp. <support@gams.com>
+    Licensed under the MIT License.
+
+The upstream MIT license is compatible with `equilibria`'s own MIT license;
+the only requirement is preservation of the copyright notice above. This file
+therefore is NOT a clean-room implementation — see the top-level NOTICE for
+the distinction. All other files in `equilibria.babel.gdx` are clean-room.
 
 Delta Encoding Scheme for Parameters (OFFICIAL IMPLEMENTATION):
 

@@ -202,9 +202,37 @@ GDX usa varios esquemas de compresión:
 
 Ver [guía de contribución](../../CONTRIBUTING.md)
 
-## 📝 Licencia
+## 📝 Licencia y origen
 
-[Especificar licencia]
+Este módulo es una **reimplementación clean-room** del formato GDX v7
+(con una excepción atribuida, ver abajo), desarrollada inspeccionando el
+layout binario de archivos GDX producidos por GAMS y leyendo documentación
+pública del formato. Fue escrito **sin consultar, copiar, traducir ni derivar**
+de:
+
+- GAMS Transfer (Python / R / Matlab),
+- las librerías cerradas de GAMS (`gdxcclib`, `gdxapi`), ni
+- ninguna otra implementación GDX de terceros.
+
+Las constantes de interoperabilidad usadas aquí (magic `GAMSGDX`, marcadores
+`_SYMB_` / `_UEL_` / `_DOMS_` / `_DATA_`, códigos de tipo de símbolo, etc.)
+son el formato de cable mismo — no son expresión protegida por copyright.
+
+### Excepción: `decoder.py`
+
+El archivo `decoder.py` **no** es clean-room. Es una re-expresión en Python
+del algoritmo de decodificación delta de parámetros en `gdx/src/gxfile.cpp`
+del proyecto oficial open-source de GAMS:
+
+> https://github.com/GAMS-dev/gdx — © 2017-2026 GAMS Software GmbH / GAMS
+> Development Corp. — Licencia MIT.
+
+La licencia MIT de `GAMS-dev/gdx` es compatible con la de `equilibria`. La
+única obligación es preservar el aviso de copyright del upstream, que aparece
+en la cabecera de `decoder.py` y en el `NOTICE` raíz del repositorio.
+
+Todo `equilibria.babel.gdx` se distribuye bajo licencia MIT. Ver el archivo
+`NOTICE` en la raíz para la declaración completa.
 
 ## 🔗 Referencias
 
