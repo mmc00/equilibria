@@ -66,8 +66,8 @@ def _render_dataset(slug: str, title: str, blurb: str, csv_path: Path) -> str:
     )
 
     parts.append("### Summary\n")
-    parts.append("| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual |")
-    parts.append("|-------|--------------|-------|-------|---------|---------|------------|----------|")
+    parts.append("| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |")
+    parts.append("|-------|--------------|-------|-------|---------|---------|------------|----------|------------|")
     for phase in ("base", "shock"):
         s = _summary_row(rows, phase)
         if not s:
@@ -80,10 +80,15 @@ def _render_dataset(slug: str, title: str, blurb: str, csv_path: Path) -> str:
                      and r["py_var"])
         n_total_vars = sum(1 for r in rows
                            if r["phase"] == phase and r["var"] != "__SUMMARY__")
+        try:
+            secs = float(s.get("solve_seconds") or 0.0)
+            secs_str = f"{secs:.2f}s"
+        except (ValueError, TypeError):
+            secs_str = "—"
         parts.append(
             f"| `{phase}` | {n_vars}/{n_total_vars} | {cells} | {match} | "
             f"{diverge} | {missing} | {_fmt_pct(match, cells)} | "
-            f"{float(s['residual']):.2e} |"
+            f"{float(s['residual']):.2e} | {secs_str} |"
         )
     parts.append("")
 

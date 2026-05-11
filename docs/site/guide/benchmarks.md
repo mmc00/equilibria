@@ -22,25 +22,25 @@ underlying CSV hold per-phase totals.
 
 Reference: `src/equilibria/templates/reference/gtap/output/COMP.gdx` (rate-scaled 10% imptx shock, `if_sub=False`, `rorflex=10`).
 
-*Generated `2026-05-11T01:10:43Z` from commit `74a114d`.*
+*Generated `2026-05-11T01:38:29Z` from commit `1ba8d6d`.*
 
 ### Summary
 
-| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual |
-|-------|--------------|-------|-------|---------|---------|------------|----------|
-| `base` | 138/138 | 59958 | 59958 | 0 | 0 | 100.00% | 2.22e-11 |
-| `shock` | 138/138 | 59978 | 59978 | 0 | 0 | 100.00% | 6.02e-13 |
+| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |
+|-------|--------------|-------|-------|---------|---------|------------|----------|------------|
+| `base` | 138/138 | 59958 | 59958 | 0 | 0 | 100.00% | 2.22e-11 | 6.57s |
+| `shock` | 138/138 | 59978 | 59978 | 0 | 0 | 100.00% | 6.02e-13 | 7.59s |
 
 ## GTAP Standard 7 — NUS333 (3 sectors × 3 regions × 3 factors)
 
 Reference: `output/nus333_neos/out.gdx` (NEOS job 18744693, power-scaled 10% imptx shock, residual region `ROW`).
 
-*Generated `2026-05-11T01:10:48Z` from commit `74a114d`.*
+*Generated `2026-05-11T01:38:34Z` from commit `1ba8d6d`.*
 
 ### Summary
 
-| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual |
-|-------|--------------|-------|-------|---------|---------|------------|----------|
-| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 |
-| `shock` | 138/138 | 1310 | 1310 | 0 | 0 | 100.00% | 2.08e-07 |
+| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |
+|-------|--------------|-------|-------|---------|---------|------------|----------|------------|
+| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 | 0.20s |
+| `shock` | 138/138 | 1310 | 1310 | 0 | 0 | 100.00% | 2.08e-07 | 0.22s |
 

@@ -24,7 +24,7 @@ CSV_FIELDS = [
     "dataset", "phase", "var", "py_var",
     "cells", "match", "diverge", "missing",
     "max_abs_err", "max_rel_err",
-    "residual", "git_sha", "generated_at",
+    "residual", "solve_seconds", "git_sha", "generated_at",
 ]
 
 # GAMS → Python name aliases.
@@ -312,6 +312,7 @@ def diff_phase_rows(
     gdx_path: Path, model_py, tol_rel: float, tol_abs: float,
     residual: float, git_sha: str, generated_at: str,
     derived: dict | None = None, key_remap=None,
+    solve_seconds: float = 0.0,
 ) -> tuple[list[dict], dict]:
     rows: list[dict] = []
     agg = {"vars_total": 0, "vars_match_all": 0, "vars_partial": 0, "vars_no_py": 0,
@@ -333,7 +334,9 @@ def diff_phase_rows(
                 "dataset": dataset, "phase": phase, "var": name, "py_var": "",
                 "cells": n_t, "match": 0, "diverge": 0, "missing": n_t,
                 "max_abs_err": "", "max_rel_err": "",
-                "residual": f"{residual:.6e}", "git_sha": git_sha, "generated_at": generated_at,
+                "residual": f"{residual:.6e}",
+                "solve_seconds": f"{solve_seconds:.3f}",
+                "git_sha": git_sha, "generated_at": generated_at,
             })
             continue
         s = compare_phase(py_var, gams_all, phase, tol_rel=tol_rel, tol_abs=tol_abs,
@@ -353,14 +356,18 @@ def diff_phase_rows(
             "cells": s["n_total"], "match": s["n_match"],
             "diverge": s["n_diverge"], "missing": s["n_missing"],
             "max_abs_err": f"{s['max_abs']:.6e}", "max_rel_err": f"{s['max_rel']:.6e}",
-            "residual": f"{residual:.6e}", "git_sha": git_sha, "generated_at": generated_at,
+            "residual": f"{residual:.6e}",
+            "solve_seconds": f"{solve_seconds:.3f}",
+            "git_sha": git_sha, "generated_at": generated_at,
         })
     rows.append({
         "dataset": dataset, "phase": phase, "var": "__SUMMARY__", "py_var": "",
         "cells": agg["cells_total"], "match": agg["cells_match"],
         "diverge": agg["cells_diverge"], "missing": agg["cells_missing"],
         "max_abs_err": "", "max_rel_err": "",
-        "residual": f"{residual:.6e}", "git_sha": git_sha, "generated_at": generated_at,
+        "residual": f"{residual:.6e}",
+        "solve_seconds": f"{solve_seconds:.3f}",
+        "git_sha": git_sha, "generated_at": generated_at,
     })
     return rows, agg
 

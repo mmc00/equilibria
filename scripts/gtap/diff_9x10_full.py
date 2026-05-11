@@ -10,7 +10,7 @@ Pass --csv PATH to emit a long-form CSV consumed by the docs benchmark
 page (one row per (dataset, phase, var) plus a __SUMMARY__ row).
 """
 from __future__ import annotations
-import argparse, sys
+import argparse, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,15 +59,18 @@ def main():
     p_b.load_from_gdx(GDX)
     eq_b = GTAPModelEquations(p_b.sets, p_b, contract.closure)
     m_b = eq_b.build_model()
+    _t0 = time.perf_counter()
     r_b = _run_path_capi_nonlinear_full(
         m_b, p_b, enforce_post_checks=False, strict_path_capi=False,
         closure_config=contract.closure, equation_scaling=True,
     )
+    sec_b = time.perf_counter() - _t0
     res_b = float(r_b.get("residual") or 0.0)
-    print(f"  baseline residual={res_b:.3e}  code={r_b.get('termination_code')}")
+    print(f"  baseline residual={res_b:.3e}  code={r_b.get('termination_code')}  solve={sec_b:.2f}s")
 
     m_s = None
     res_s = 0.0
+    sec_s = 0.0
     if args.phase != "base":
         print("\n=== Python shock 9x10 (10% imptx, rate scaling) ===")
         p_s = GTAPParameters()
@@ -93,25 +96,27 @@ def main():
                     dst[idx].set_value(v)
                 except Exception:
                     pass
+        _t0 = time.perf_counter()
         r_s = _run_path_capi_nonlinear_full(
             m_s, p_s, enforce_post_checks=False, strict_path_capi=False,
             closure_config=contract.closure, equation_scaling=True,
         )
+        sec_s = time.perf_counter() - _t0
         res_s = float(r_s.get("residual") or 0.0)
-        print(f"  shock residual={res_s:.3e}  code={r_s.get('termination_code')}")
+        print(f"  shock residual={res_s:.3e}  code={r_s.get('termination_code')}  solve={sec_s:.2f}s")
 
     var_names = list_populated_vars(GAMS_COMP)
     print(f"\nPopulated GAMS Vars in COMP.gdx: {len(var_names)}")
 
-    phases = [("base", m_b, res_b)]
+    phases = [("base", m_b, res_b, sec_b)]
     if args.phase != "base":
-        phases.append(("shock", m_s, res_s))
+        phases.append(("shock", m_s, res_s, sec_s))
 
     csv_rows: list[dict] = []
     git_sha = git_short_sha(ROOT)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    for phase, m_py, residual in phases:
+    for phase, m_py, residual, solve_seconds in phases:
         print(f"\n{'='*120}")
         print(f"PHASE: {phase}    (tol_rel={args.tol_rel}  tol_abs={args.tol_abs})")
         print(f"{'='*120}")
@@ -124,6 +129,7 @@ def main():
             tol_rel=args.tol_rel, tol_abs=args.tol_abs,
             residual=residual, git_sha=git_sha, generated_at=generated_at,
             derived=build_derived(m_py),
+            solve_seconds=solve_seconds,
         )
         csv_rows.extend(rows)
 
