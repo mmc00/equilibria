@@ -2214,6 +2214,8 @@ class GTAPParameters:
             elasticity_override_gdx: Optional GDX used to override only omegas/sigmas
                 after loading the base elasticity set (typically COMP.gdx).
         """
+        # Persist source path for components that need to read raw symbols (e.g. EVFB/EVOS for kappaf init).
+        self._source_gdx_path = gdx_path
         # First load sets
         self.sets.load_from_gdx(gdx_path)
         
