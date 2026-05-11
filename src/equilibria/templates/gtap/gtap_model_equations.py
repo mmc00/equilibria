@@ -1207,6 +1207,96 @@ class GTAPModelEquations:
                 total += float(rate) * float(vmsb_val or 0.0)
         return total
 
+    def _raw_gdx_paths(self) -> list:
+        """Return list of GDX paths to search for raw SAM symbols (EVFB, MAKS, etc)."""
+        paths = []
+        gdx_path = getattr(self.params, "_source_gdx_path", None)
+        if gdx_path is not None:
+            paths.append(Path(gdx_path))
+        for fallback in [
+            Path("output/nus333_inputs/nus333Dat.gdx"),
+            Path.cwd() / "output/nus333_inputs/nus333Dat.gdx",
+        ]:
+            if fallback.exists():
+                paths.append(fallback)
+        return paths
+
+    def _read_raw_gdx_param(self, name: str, n_dims: int = 3) -> dict:
+        """Read a GDX parameter via gdxdump, returning {(d1,d2,...): float}.
+
+        Tries case variants. Falls back across all candidate GDX paths.
+        """
+        candidate_paths = self._raw_gdx_paths()
+        import subprocess
+        gdxdump = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+        if not Path(gdxdump).exists() or not candidate_paths:
+            return {}
+        for variant in (name, name.lower(), name.upper()):
+            for path in candidate_paths:
+                try:
+                    out = subprocess.check_output(
+                        [gdxdump, str(path), f"symb={variant}", "Format=csv"],
+                        stderr=subprocess.DEVNULL, timeout=30,
+                    ).decode("utf-8", errors="ignore")
+                except Exception:
+                    continue
+                rows = {}
+                for line in out.splitlines()[1:]:
+                    parts = [p.strip().strip('"') for p in line.split(",")]
+                    if len(parts) < n_dims + 1:
+                        continue
+                    try:
+                        key = tuple(parts[:n_dims])
+                        rows[key] = float(parts[n_dims])
+                    except (ValueError, IndexError):
+                        continue
+                if rows:
+                    return rows
+        return {}
+
+    def _compute_kappaf_init(self) -> dict:
+        """kappaf(r,f,a) = (EVFB - EVOS) / EVFB per cal.gms:143-146."""
+        evfb = self._read_raw_gdx_param("EVFB", 3)
+        evos = self._read_raw_gdx_param("EVOS", 3)
+        if not evfb or not evos:
+            return {}
+        out = {}
+        for key, fb in evfb.items():
+            f, a, r = key
+            os_val = evos.get(key, 0.0)
+            if abs(fb) < 1e-12:
+                continue
+            out[(r, f, a)] = (fb - os_val) / fb
+        return out
+
+    def _compute_prdtx_init(self) -> dict:
+        """prdtx(r,a,i) = MAKB / MAKS - 1 per cal.gms:290-291."""
+        makb = self._read_raw_gdx_param("MAKB", 3)
+        maks = self._read_raw_gdx_param("MAKS", 3)
+        if not makb or not maks:
+            return {}
+        out = {}
+        for key, kb in makb.items():
+            i, a, r = key
+            ks = maks.get(key, 0.0)
+            if abs(ks) < 1e-12:
+                out[(r, a, i)] = 0.0
+            else:
+                out[(r, a, i)] = kb / ks - 1.0
+        return out
+
+    def _compute_chiInv_kstock(self) -> dict:
+        """kstock(r) = inscale * VKB(r). xigbl & xi are model Vars, not GDX params.
+
+        Returns {r: kstock_val} for use in chiInv Expression.
+        """
+        vkb = self._read_raw_gdx_param("VKB", 1)
+        if not vkb:
+            return {}
+        # GAMS inScale = 1e-6 per gtap_9x10_clean_inline.gms:17486
+        inscale = 1e-6
+        return {r: inscale * v for (r,), v in vkb.items()}
+
     def _add_sets(self, model: "ConcreteModel") -> None:
         """Add sets."""
         from pyomo.environ import Set
@@ -1718,7 +1808,7 @@ class GTAPModelEquations:
             fdepr = (vdep / vkb) if vkb > 0.0 else 0.0
             fdepr_data[(region,)] = fdepr
             depr_data[(region,)] = fdepr
-            rorflex_data[(region,)] = float(self.params.elasticities.rorflex.get(region, 1.0))
+            rorflex_data[(region,)] = float(self.params.elasticities.rorflex.get(region, 10.0))
             pop_data[(region,)] = _pop_value(region)
             for factor in self.sets.f:
                 if factor in self.sets.mf:
@@ -1995,7 +2085,7 @@ class GTAPModelEquations:
         create_indexed_param("alphaa_hhd", ["r", "i"], alphaa_hhd_data, 0.0)
         create_indexed_param("fdepr", ["r"], fdepr_data, 0.0)
         create_indexed_param("depr", ["r"], depr_data, 0.0)
-        create_indexed_param("rorflex", ["r"], rorflex_data, 1.0)
+        create_indexed_param("rorflex", ["r"], rorflex_data, 10.0)
         create_indexed_param("pop", ["r"], pop_data, 1.0)
         create_indexed_param("savf_bar", ["r"], savf_bar_data, 0.0)
         create_indexed_param("aft", ["r", "f"], aft_data, 0.0)
@@ -2008,7 +2098,7 @@ class GTAPModelEquations:
         - Prices = 1.0 (normalized)
         - Quantities = SAM values (millions)
         """
-        from pyomo.environ import Var, Reals, NonNegativeReals, Expression, value
+        from pyomo.environ import Var, Reals, NonNegativeReals, Expression, Param, value
         
         # Helper to get SAM value initialization
         def get_vom_init(m, r, a):
@@ -2691,7 +2781,7 @@ class GTAPModelEquations:
             # GAMS: pdp = pd * (1 + dintx)
             return (1.0 + m.dintx[r, i, aa]) * m.pd[r, i]
         model.pdp = Expression(model.r, model.i, model.aa, rule=pdp_expr_rule, doc="Agent domestic demand price (expression)")
-        
+
         def pmp_expr_rule(m, r, i, aa):
             # GAMS: pmp = pmt * (1 + mintx)
             return (1.0 + m.mintx[r, i, aa]) * m.pmt[r, i]
@@ -2856,6 +2946,93 @@ class GTAPModelEquations:
             for i in self.sets.i:
                 for r in self.sets.r:
                     model.lambdam[rp, i, r].fix(1.0)
+
+        # GAMS productivity/technical-shift Vars (cal.gms fixes all to 0 at benchmark).
+        # Declared here so parity diff against GAMS GDX matches; .fix(0) keeps DOF unchanged.
+        # Index sets follow model.gms declarations (fp ↔ Python model.f).
+        model.afecom = Var(model.f, within=Reals, initialize=0.0, doc="World-wide tech shift in VA demand by factor")
+        model.afesec = Var(model.a, within=Reals, initialize=0.0, doc="World-wide tech shift in VA demand by activity")
+        model.afefac = Var(model.r, model.f, within=Reals, initialize=0.0, doc="Region-wide tech shift in VA demand across factors")
+        model.afereg = Var(model.r, within=Reals, initialize=0.0, doc="Region-wide tech shift in VA demand")
+        model.afeall = Var(model.r, model.f, model.a, within=Reals, initialize=0.0, doc="Region/factor/activity tech shift in VA demand")
+        model.aiocom = Var(model.i, within=Reals, initialize=0.0, doc="World-wide tech shift in IO demand by input")
+        model.aiosec = Var(model.a, within=Reals, initialize=0.0, doc="World-wide tech shift in IO demand by activity")
+        model.aioreg = Var(model.r, within=Reals, initialize=0.0, doc="Region-wide tech shift in IO demand")
+        model.aioall = Var(model.r, model.i, model.a, within=Reals, initialize=0.0, doc="Region/input/activity tech shift in IO demand")
+        model.andsec = Var(model.a, within=Reals, initialize=0.0, doc="World-wide tech shift in ND demand by sector")
+        model.andreg = Var(model.r, within=Reals, initialize=0.0, doc="Region-wide tech shift in ND demand")
+        model.andall = Var(model.r, model.a, within=Reals, initialize=0.0, doc="Region/sector tech shift in ND demand")
+        model.avasec = Var(model.a, within=Reals, initialize=0.0, doc="World-wide tech shift in VA demand by sector")
+        model.avareg = Var(model.r, within=Reals, initialize=0.0, doc="Region-wide tech shift in VA demand")
+        model.avaall = Var(model.r, model.a, within=Reals, initialize=0.0, doc="Region/sector tech shift in VA demand")
+
+        for f in self.sets.f:
+            model.afecom[f].fix(0.0)
+            for r in self.sets.r:
+                model.afefac[r, f].fix(0.0)
+        for a in self.sets.a:
+            model.afesec[a].fix(0.0)
+            model.aiosec[a].fix(0.0)
+            model.andsec[a].fix(0.0)
+            model.avasec[a].fix(0.0)
+        for r in self.sets.r:
+            model.afereg[r].fix(0.0)
+            model.aioreg[r].fix(0.0)
+            model.andreg[r].fix(0.0)
+            model.avareg[r].fix(0.0)
+        for i in self.sets.i:
+            model.aiocom[i].fix(0.0)
+        for r in self.sets.r:
+            for f in self.sets.f:
+                for a in self.sets.a:
+                    model.afeall[r, f, a].fix(0.0)
+            for i in self.sets.i:
+                for a in self.sets.a:
+                    model.aioall[r, i, a].fix(0.0)
+            for a in self.sets.a:
+                model.andall[r, a].fix(0.0)
+                model.avaall[r, a].fix(0.0)
+
+        # Tier A — lambda/axp shifters (cal.gms inits to 1; recurrence keeps =1 with shifters=0).
+        model.lambdaf = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=1.0, doc="Factor specific technical change")
+        model.lambdai = Var(model.r, model.i, within=NonNegativeReals, initialize=1.0, doc="Investment expenditure technology")
+        model.lambdand = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="ND bundle shifter")
+        model.lambdava = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="VA bundle shifter")
+        model.axp = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="Production frontier shifter")
+        model.axpsec = Var(model.a, within=Reals, initialize=0.0, doc="World-wide shift in production by sector")
+        model.axpreg = Var(model.r, within=Reals, initialize=0.0, doc="Region-wide shift in production")
+        model.axpall = Var(model.r, model.a, within=Reals, initialize=0.0, doc="Region/sector shift in production")
+        # kappaf(r,f,a) = (EVFB - EVOS) / EVFB per cal.gms:143-146. Load EVFB/EVOS direct from GDX.
+        model.kappaf = Var(model.r, model.f, model.a, within=Reals, initialize=0.0, doc="Income tax on factor f used in activity a")
+        kappaf_init = self._compute_kappaf_init() if hasattr(self, "_compute_kappaf_init") else {}
+
+        for a in self.sets.a:
+            model.axpsec[a].fix(0.0)
+        for r in self.sets.r:
+            model.axpreg[r].fix(0.0)
+            for i in self.sets.i:
+                model.lambdai[r, i].fix(1.0)
+            for a in self.sets.a:
+                model.axp[r, a].fix(1.0)
+                model.axpall[r, a].fix(0.0)
+                model.lambdand[r, a].fix(1.0)
+                model.lambdava[r, a].fix(1.0)
+                for f in self.sets.f:
+                    model.lambdaf[r, f, a].fix(1.0)
+                    kf_val = float(kappaf_init.get((r, f, a), 0.0) or 0.0)
+                    model.kappaf[r, f, a].fix(kf_val)
+
+        # Tier C — tax shifters (=0 base, used to redistribute tax burden in scenarios).
+        model.dtxshft = Var(model.r, model.i, model.aa, within=Reals, initialize=0.0, doc="Domestic indirect tax shifter")
+        model.mtxshft = Var(model.r, model.i, model.aa, within=Reals, initialize=0.0, doc="Imported indirect tax shifter")
+        model.rtxshft = Var(model.r, model.aa, within=Reals, initialize=0.0, doc="Uniform indirect tax shifter")
+
+        for r in self.sets.r:
+            for aa in model.aa:
+                model.rtxshft[r, aa].fix(0.0)
+                for i in self.sets.i:
+                    model.dtxshft[r, i, aa].fix(0.0)
+                    model.mtxshft[r, i, aa].fix(0.0)
 
         def _safe_trade_component_value(component_name, key, default: float) -> float:
             component = getattr(model, component_name, None)
@@ -3321,6 +3498,160 @@ class GTAPModelEquations:
         model.chiSave = Var(within=NonNegativeReals, initialize=1.0, doc="Savings price adjustment")
         model.rorg = Var(within=NonNegativeReals, initialize=1.0, doc="Global rate of return")
         model.walras = Var(within=Reals, initialize=0.0, doc="Walras check")
+
+        # === Tier B/D: tax rates (broadcast from params), pmuv, derived prices, CDE elasticities,
+        # ytaxInd, chiInv. Placed AFTER all base Vars so Expressions can reference them. ===
+        prdtx_init = self._compute_prdtx_init()
+        kstock_init = self._compute_chiInv_kstock()
+        vdep = self._read_raw_gdx_param("VDEP", 1)
+        depr_init = {}
+        if vdep and kstock_init:
+            inscale = 1e-6
+            for (r,), vd in vdep.items():
+                ks = kstock_init.get(r, 0.0)
+                if abs(ks) > 1e-12:
+                    depr_init[r] = inscale * vd / ks
+
+        # cal.gms:316-318 — exptx(r,i,rp) = (VFOB - VXSB) / VXSB at baseline
+        # cal.gms:333-335 — imptx(rp,i,r) = (VMSB - VCIF) / VCIF at baseline (pmCIF*xw = inScale*VCIF)
+        # Use Param (mutable) so warm-start Var copies don't blow them away.
+        imptx_p = getattr(self.params.taxes, "imptx", {}) or {}
+        bench = getattr(self.params, "benchmark", None)
+        vfob_p = getattr(bench, "vfob", {}) if bench else {}
+        vxsb_p = getattr(bench, "vxsb", {}) if bench else {}
+        vmsb_p = getattr(bench, "vmsb", {}) if bench else {}
+        vcif_p = getattr(bench, "vcif", {}) if bench else {}
+
+        # benchmark.vxsb/vfob/vcif/vmsb are keyed (r, i, rp) per loader (line 1158-1161)
+        def _imptx_init(m, r, i, rp):
+            vcif = float(vcif_p.get((r, i, rp), 0.0) or 0.0)
+            vmsb = float(vmsb_p.get((r, i, rp), 0.0) or 0.0)
+            if vcif > 1e-12 and (r, i, rp) not in imptx_p:
+                return (vmsb - vcif) / vcif
+            return float(imptx_p.get((r, i, rp), 0.0) or 0.0)
+
+        def _exptx_init(m, r, i, rp):
+            vxsb = float(vxsb_p.get((r, i, rp), 0.0) or 0.0)
+            vfob = float(vfob_p.get((r, i, rp), 0.0) or 0.0)
+            if vxsb > 1e-12:
+                return (vfob - vxsb) / vxsb
+            return 0.0
+
+        model.imptx = Param(model.r, model.i, model.rp, within=Reals, initialize=_imptx_init, mutable=True, doc="Bilateral import taxes")
+        model.exptx = Param(model.r, model.i, model.rp, within=Reals, initialize=_exptx_init, mutable=True, doc="Bilateral export taxes")
+
+        def _prdtx_init(m, r, a, i):
+            return float(prdtx_init.get((r, a, i), 0.0) or 0.0)
+        model.prdtx = Param(model.r, model.a, model.i, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax")
+
+        rtf_p = getattr(self.params.taxes, "rtf", {}) or {}
+        def _fcttx_init(m, r, f, a):
+            return float(rtf_p.get((r, f, a), 0.0) or 0.0)
+        model.fcttx = Param(model.r, model.f, model.a, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production")
+        model.fctts = Param(model.r, model.f, model.a, within=Reals, initialize=0.0, mutable=True, doc="Subsidies on factors of production")
+
+        model.pmuv = Param(within=Reals, initialize=1.0, mutable=True, doc="Price of HIC manufactured exports")
+
+        # p(r,a,i) = ps(r,i)/(1+prdtx) when xFlag, else 1 (cal.gms:293-294)
+        # xFlag(r,a,i) is true iff MAKB(i,a,r) > 0; we proxy via prdtx_init membership.
+        x_flag = {k for k in prdtx_init.keys()}
+        def _p_rule(m, r, a, i):
+            if (r, a, i) not in x_flag:
+                return 1.0
+            return m.ps[r, i] / (1.0 + m.prdtx[r, a, i])
+        model.p = Expression(model.r, model.a, model.i, rule=_p_rule, doc="Pre-tax producer price")
+
+        def _ytaxInd_rule(m, r):
+            return m.ytaxTot[r] - m.ytax[r, "dt"]
+        model.ytaxInd = Expression(model.r, rule=_ytaxInd_rule, doc="Total revenues from indirect taxes")
+
+        def _chiInv_rule(m, r):
+            depr_r = float(depr_init.get(r, 0.0) or 0.0)
+            kstock_r = float(kstock_init.get(r, 0.0) or 0.0)
+            return (m.xiagg[r] - depr_r * kstock_r) / m.xigbl
+        model.chiInv = Expression(model.r, rule=_chiInv_rule, doc="Regional share of global net investment")
+
+        # CDE elasticities — xcshr(r,i,hhd) = pa*xa/yc per cal.gms:239
+        bh_p = getattr(self.params.elasticities, "subpar", {}) or {}
+        eh_p = getattr(self.params.elasticities, "incpar", {}) or {}
+        # xaFlag(r,i,'hhd'): nonzero where household consumes good i in region r.
+        # Proxy via initial xaa[r,i,'hhd'] > 0 (after build).
+        from pyomo.core import value as _val_xaflag
+        x_a_flag = set()
+        for r in self.sets.r:
+            for i in self.sets.i:
+                try:
+                    if abs(float(_val_xaflag(model.xaa[r, i, "hhd"]))) > 1e-12:
+                        x_a_flag.add((r, i))
+                except Exception:
+                    pass
+
+        def _xcshr_expr(m, r, i):
+            # model.gms:769 — xcshr = zcons / sum_j(zcons)
+            denom = sum(m.zcons[r, jp] for jp in m.i)
+            return m.zcons[r, i] / denom
+
+        def _ued_rule(m, r, i, j):
+            # cal.gms:600-603 — only fires when xaFlag(r,i,h) and xaFlag(r,j,h)
+            if (r, i) not in x_a_flag or (r, j) not in x_a_flag:
+                return 0.0
+            xcshr_i = _xcshr_expr(m, r, i)
+            bh_i = float(bh_p.get((r, i), 1.0) or 1.0)
+            eh_i = float(eh_p.get((r, i), 1.0) or 1.0)
+            num = eh_i * bh_i - sum(
+                _xcshr_expr(m, r, jp)
+                * float(eh_p.get((r, jp), 1.0) or 1.0)
+                * float(bh_p.get((r, jp), 1.0) or 1.0)
+                for jp in m.i
+            )
+            den = sum(
+                _xcshr_expr(m, r, jp) * float(eh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+            )
+            delta = 1.0 if i == j else 0.0
+            return xcshr_i * (-bh_i - num / den) + delta * (bh_i - 1.0)
+        model.ued = Expression(model.r, model.i, model.i, rule=_ued_rule, doc="Uncompensated price elasticities")
+
+        def _incelas_rule(m, r, i):
+            # cal.gms:605-608 — model.gms:1383 fires only when xaFlag(r,i,h)
+            if (r, i) not in x_a_flag:
+                return 0.0
+            eh_i = float(eh_p.get((r, i), 1.0) or 1.0)
+            bh_i = float(bh_p.get((r, i), 1.0) or 1.0)
+            num = eh_i * bh_i - sum(
+                _xcshr_expr(m, r, jp)
+                * float(eh_p.get((r, jp), 1.0) or 1.0)
+                * float(bh_p.get((r, jp), 1.0) or 1.0)
+                for jp in m.i
+            )
+            den = sum(
+                _xcshr_expr(m, r, jp) * float(eh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+            )
+            tail = -(bh_i - 1.0) + sum(
+                _xcshr_expr(m, r, jp) * float(bh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+            )
+            return num / den + tail
+        model.incelas = Expression(model.r, model.i, rule=_incelas_rule, doc="Income elasticities")
+
+        def _ced_rule(m, r, i, j):
+            # cal.gms:610 — model.gms:1388 fires only when xaFlag(r,i,h) and xaFlag(r,j,h)
+            if (r, i) not in x_a_flag or (r, j) not in x_a_flag:
+                return 0.0
+            return _ued_rule(m, r, i, j) + _xcshr_expr(m, r, j) * _incelas_rule(m, r, i)
+        model.ced = Expression(model.r, model.i, model.i, rule=_ced_rule, doc="Compensated price elasticities")
+
+        def _ape_rule(m, r, i, j):
+            # cal.gms:612-614 — only defined where xcshr(r,j,h)>0; model.gms:1391 also requires xaFlag(r,i)
+            if (r, i) not in x_a_flag or (r, j) not in x_a_flag:
+                return 0.0
+            xcshr_j = _xcshr_expr(m, r, j)
+            bh_i = float(bh_p.get((r, i), 1.0) or 1.0)
+            bh_j = float(bh_p.get((r, j), 1.0) or 1.0)
+            sum_term = sum(
+                _xcshr_expr(m, r, jp) * float(bh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+            )
+            delta = 1.0 if i == j else 0.0
+            return 1.0 - bh_j - bh_i + sum_term - delta * (1.0 - bh_i) / xcshr_j
+        model.ape = Expression(model.r, model.i, model.i, rule=_ape_rule, doc="Allen-Uzawa price elasticities")
 
         self._refresh_macro_initial_state(model)
         
@@ -5025,7 +5356,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             return sum(terms) == 1.0
         model.eq_ev = Constraint(model.r, rule=eq_ev_rule)
-        model.eq_ev.deactivate()
+        # GAMS keeps eveq active so welfare ev tracks shock state. Activate to match.
 
         def eq_cv_rule(model, r):
             terms = []
@@ -5043,7 +5374,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             return sum(terms) == 1.0
         model.eq_cv = Constraint(model.r, rule=eq_cv_rule)
-        model.eq_cv.deactivate()
+        # GAMS keeps cveq active so welfare cv tracks shock state. Activate to match.
 
         # ========================================================================
         # MARKET CLEARING
