@@ -1260,13 +1260,23 @@ class GTAPModelEquations:
         evos = self._read_raw_gdx_param("EVOS", 3)
         if not evfb or not evos:
             return {}
+        a_set = set(self.sets.a)
+        f_set = set(getattr(self.sets, "f", []) or [])
+        def map_a(raw):
+            if raw in a_set: return raw
+            if "c_" + raw in a_set: return "c_" + raw
+            return raw
+        def map_f(raw):
+            if raw in f_set: return raw
+            if "c_" + raw in f_set: return "c_" + raw
+            return raw
         out = {}
         for key, fb in evfb.items():
             f, a, r = key
             os_val = evos.get(key, 0.0)
             if abs(fb) < 1e-12:
                 continue
-            out[(r, f, a)] = (fb - os_val) / fb
+            out[(r, map_f(f), map_a(a))] = (fb - os_val) / fb
         return out
 
     def _compute_prdtx_init(self) -> dict:
@@ -1275,14 +1285,35 @@ class GTAPModelEquations:
         maks = self._read_raw_gdx_param("MAKS", 3)
         if not makb or not maks:
             return {}
+        # Build a map from raw commodity name → model.i name
+        # (NUS333 strips 'c_' prefix in model sets).
+        i_set = set(self.sets.i)
+        def map_i(raw):
+            if raw in i_set:
+                return raw
+            if raw.startswith("c_") and raw[2:] in i_set:
+                return raw[2:]
+            cand = "c_" + raw
+            if cand in i_set:
+                return cand
+            return raw
+        a_set = set(self.sets.a)
+        def map_a(raw):
+            if raw in a_set:
+                return raw
+            cand = "c_" + raw
+            if cand in a_set:
+                return cand
+            return raw
         out = {}
         for key, kb in makb.items():
             i, a, r = key
+            i_m, a_m = map_i(i), map_a(a)
             ks = maks.get(key, 0.0)
             if abs(ks) < 1e-12:
-                out[(r, a, i)] = 0.0
+                out[(r, a_m, i_m)] = 0.0
             else:
-                out[(r, a, i)] = kb / ks - 1.0
+                out[(r, a_m, i_m)] = kb / ks - 1.0
         return out
 
     def _compute_chiInv_kstock(self) -> dict:
@@ -3550,7 +3581,21 @@ class GTAPModelEquations:
         model.fcttx = Param(model.r, model.f, model.a, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production")
         model.fctts = Param(model.r, model.f, model.a, within=Reals, initialize=0.0, mutable=True, doc="Subsidies on factors of production")
 
-        model.pmuv = Param(within=Reals, initialize=1.0, mutable=True, doc="Price of HIC manufactured exports")
+        # pmuv: Tornqvist MUV deflator (model.gms:1237-1247). When closure
+        # supplies rmuv/imuv baskets, declare as Var and add eq_pmuv after
+        # pefob0/xw0 snapshots are built. Otherwise keep frozen at 1.0.
+        rmuv_set = tuple(getattr(self.closure, "rmuv", ()) or ())
+        imuv_set = tuple(getattr(self.closure, "imuv", ()) or ())
+        rmuv_set = tuple(r for r in rmuv_set if r in set(self.sets.r))
+        imuv_set = tuple(i for i in imuv_set if i in set(self.sets.i))
+        self._rmuv = rmuv_set
+        self._imuv = imuv_set
+        if rmuv_set and imuv_set:
+            model.pmuv = Var(within=NonNegativeReals, initialize=1.0,
+                             bounds=(0.001, None), doc="Tornqvist MUV deflator")
+        else:
+            model.pmuv = Param(within=Reals, initialize=1.0, mutable=True,
+                               doc="Price of HIC manufactured exports (frozen)")
 
         # p(r,a,i) = ps(r,i)/(1+prdtx) when xFlag, else 1 (cal.gms:293-294)
         # xFlag(r,a,i) is true iff MAKB(i,a,r) > 0; we proxy via prdtx_init membership.
@@ -3565,93 +3610,117 @@ class GTAPModelEquations:
             return m.ytaxTot[r] - m.ytax[r, "dt"]
         model.ytaxInd = Expression(model.r, rule=_ytaxInd_rule, doc="Total revenues from indirect taxes")
 
-        def _chiInv_rule(m, r):
+        # chiInv is frozen at calibration per cal.gms:426. Under RoRFlag=capFix
+        # (our default), savfeq has no chiInv term, so the variable is entirely
+        # free; GAMS leaves it at its cal-time value across all simulations.
+        def _chiInv_init(m, r):
             depr_r = float(depr_init.get(r, 0.0) or 0.0)
             kstock_r = float(kstock_init.get(r, 0.0) or 0.0)
-            return (m.xiagg[r] - depr_r * kstock_r) / m.xigbl
-        model.chiInv = Expression(model.r, rule=_chiInv_rule, doc="Regional share of global net investment")
+            try:
+                xi_r = float(value(m.xiagg[r]))
+                xig = float(value(m.xigbl))
+            except Exception:
+                return 0.0
+            if xig <= 1e-15:
+                return 0.0
+            return (xi_r - depr_r * kstock_r) / xig
+        model.chiInv = Param(model.r, within=Reals, initialize=_chiInv_init,
+                             mutable=True, doc="Regional share of global net investment (frozen at cal)")
 
-        # CDE elasticities — xcshr(r,i,hhd) = pa*xa/yc per cal.gms:239
+        # CDE elasticities — frozen at calibration values per cal.gms:600-614.
+        # GAMS model.gms declares uedeq/incelaseq/cedeq/apeeq but does NOT pair
+        # them with .ued/.incelas/.ced/.ape in `model gtap /.../` — so these
+        # symbols retain their cal.gms initial values across all solves.
         bh_p = getattr(self.params.elasticities, "subpar", {}) or {}
         eh_p = getattr(self.params.elasticities, "incpar", {}) or {}
-        # xaFlag(r,i,'hhd'): nonzero where household consumes good i in region r.
-        # Proxy via initial xaa[r,i,'hhd'] > 0 (after build).
+        # Calibration-time xcshr per cal.gms:239 — xcshr = pa*xa/yc (h='hhd').
+        # At calibration, pa=1, so xcshr = xa[r,i,hhd] / sum_j(xa[r,j,hhd]).
         from pyomo.core import value as _val_xaflag
         x_a_flag = set()
+        xcshr_cal: dict = {}
         for r in self.sets.r:
+            denom = 0.0
+            xa_r: dict = {}
             for i in self.sets.i:
                 try:
-                    if abs(float(_val_xaflag(model.xaa[r, i, "hhd"]))) > 1e-12:
-                        x_a_flag.add((r, i))
+                    xv = float(_val_xaflag(model.xaa[r, i, "hhd"]))
                 except Exception:
-                    pass
+                    xv = 0.0
+                xa_r[i] = xv
+                denom += xv
+                if abs(xv) > 1e-12:
+                    x_a_flag.add((r, i))
+            for i in self.sets.i:
+                xcshr_cal[(r, i)] = (xa_r[i] / denom) if denom > 1e-15 else 0.0
 
-        def _xcshr_expr(m, r, i):
-            # model.gms:769 — xcshr = zcons / sum_j(zcons)
-            denom = sum(m.zcons[r, jp] for jp in m.i)
-            return m.zcons[r, i] / denom
-
-        def _ued_rule(m, r, i, j):
-            # cal.gms:600-603 — only fires when xaFlag(r,i,h) and xaFlag(r,j,h)
+        def _ued_val(r, i, j) -> float:
             if (r, i) not in x_a_flag or (r, j) not in x_a_flag:
                 return 0.0
-            xcshr_i = _xcshr_expr(m, r, i)
+            xc_i = xcshr_cal[(r, i)]
             bh_i = float(bh_p.get((r, i), 1.0) or 1.0)
             eh_i = float(eh_p.get((r, i), 1.0) or 1.0)
             num = eh_i * bh_i - sum(
-                _xcshr_expr(m, r, jp)
-                * float(eh_p.get((r, jp), 1.0) or 1.0)
-                * float(bh_p.get((r, jp), 1.0) or 1.0)
-                for jp in m.i
+                xcshr_cal[(r, jp)] * float(eh_p.get((r, jp), 1.0) or 1.0)
+                * float(bh_p.get((r, jp), 1.0) or 1.0) for jp in self.sets.i
             )
             den = sum(
-                _xcshr_expr(m, r, jp) * float(eh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+                xcshr_cal[(r, jp)] * float(eh_p.get((r, jp), 1.0) or 1.0)
+                for jp in self.sets.i
             )
             delta = 1.0 if i == j else 0.0
-            return xcshr_i * (-bh_i - num / den) + delta * (bh_i - 1.0)
-        model.ued = Expression(model.r, model.i, model.i, rule=_ued_rule, doc="Uncompensated price elasticities")
+            return xc_i * (-bh_i - num / den) + delta * (bh_i - 1.0)
 
-        def _incelas_rule(m, r, i):
-            # cal.gms:605-608 — model.gms:1383 fires only when xaFlag(r,i,h)
+        def _incelas_val(r, i) -> float:
             if (r, i) not in x_a_flag:
                 return 0.0
             eh_i = float(eh_p.get((r, i), 1.0) or 1.0)
             bh_i = float(bh_p.get((r, i), 1.0) or 1.0)
             num = eh_i * bh_i - sum(
-                _xcshr_expr(m, r, jp)
-                * float(eh_p.get((r, jp), 1.0) or 1.0)
-                * float(bh_p.get((r, jp), 1.0) or 1.0)
-                for jp in m.i
+                xcshr_cal[(r, jp)] * float(eh_p.get((r, jp), 1.0) or 1.0)
+                * float(bh_p.get((r, jp), 1.0) or 1.0) for jp in self.sets.i
             )
             den = sum(
-                _xcshr_expr(m, r, jp) * float(eh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+                xcshr_cal[(r, jp)] * float(eh_p.get((r, jp), 1.0) or 1.0)
+                for jp in self.sets.i
             )
             tail = -(bh_i - 1.0) + sum(
-                _xcshr_expr(m, r, jp) * float(bh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+                xcshr_cal[(r, jp)] * float(bh_p.get((r, jp), 1.0) or 1.0)
+                for jp in self.sets.i
             )
             return num / den + tail
-        model.incelas = Expression(model.r, model.i, rule=_incelas_rule, doc="Income elasticities")
 
-        def _ced_rule(m, r, i, j):
-            # cal.gms:610 — model.gms:1388 fires only when xaFlag(r,i,h) and xaFlag(r,j,h)
+        def _ced_val(r, i, j) -> float:
             if (r, i) not in x_a_flag or (r, j) not in x_a_flag:
                 return 0.0
-            return _ued_rule(m, r, i, j) + _xcshr_expr(m, r, j) * _incelas_rule(m, r, i)
-        model.ced = Expression(model.r, model.i, model.i, rule=_ced_rule, doc="Compensated price elasticities")
+            return _ued_val(r, i, j) + xcshr_cal[(r, j)] * _incelas_val(r, i)
 
-        def _ape_rule(m, r, i, j):
-            # cal.gms:612-614 — only defined where xcshr(r,j,h)>0; model.gms:1391 also requires xaFlag(r,i)
+        def _ape_val(r, i, j) -> float:
             if (r, i) not in x_a_flag or (r, j) not in x_a_flag:
                 return 0.0
-            xcshr_j = _xcshr_expr(m, r, j)
+            xc_j = xcshr_cal[(r, j)]
+            if xc_j <= 1e-15:
+                return 0.0
             bh_i = float(bh_p.get((r, i), 1.0) or 1.0)
             bh_j = float(bh_p.get((r, j), 1.0) or 1.0)
             sum_term = sum(
-                _xcshr_expr(m, r, jp) * float(bh_p.get((r, jp), 1.0) or 1.0) for jp in m.i
+                xcshr_cal[(r, jp)] * float(bh_p.get((r, jp), 1.0) or 1.0)
+                for jp in self.sets.i
             )
             delta = 1.0 if i == j else 0.0
-            return 1.0 - bh_j - bh_i + sum_term - delta * (1.0 - bh_i) / xcshr_j
-        model.ape = Expression(model.r, model.i, model.i, rule=_ape_rule, doc="Allen-Uzawa price elasticities")
+            return 1.0 - bh_j - bh_i + sum_term - delta * (1.0 - bh_i) / xc_j
+
+        model.ued = Param(model.r, model.i, model.i, within=Reals,
+                          initialize=lambda m, r, i, j: _ued_val(r, i, j),
+                          mutable=True, doc="Uncompensated price elasticities (frozen at cal)")
+        model.incelas = Param(model.r, model.i, within=Reals,
+                              initialize=lambda m, r, i: _incelas_val(r, i),
+                              mutable=True, doc="Income elasticities (frozen at cal)")
+        model.ced = Param(model.r, model.i, model.i, within=Reals,
+                          initialize=lambda m, r, i, j: _ced_val(r, i, j),
+                          mutable=True, doc="Compensated price elasticities (frozen at cal)")
+        model.ape = Param(model.r, model.i, model.i, within=Reals,
+                          initialize=lambda m, r, i, j: _ape_val(r, i, j),
+                          mutable=True, doc="Allen-Uzawa price elasticities (frozen at cal)")
 
         self._refresh_macro_initial_state(model)
         
@@ -5473,6 +5542,51 @@ class GTAPModelEquations:
             )
             return model.pwfact * model.pwfact * model.mqfactw_bb * m_bs == m_sb * m_ss
         model.eq_pwfact = Constraint(rule=eq_pwfact_rule)
+
+        # eq_pmuv: Tornqvist MUV deflator (model.gms:1237-1247). Active when
+        # rmuv/imuv baskets are configured (pmuv was declared as Var above).
+        if self._rmuv and self._imuv:
+            pefob0_data: Dict[tuple, float] = {}
+            xw0_data: Dict[tuple, float] = {}
+            # pefob = (1 + exptx) * pe at calibration; pe0 = 1.
+            # Use exptx Param init (already set above from VFOB/VXSB).
+            for s in self._rmuv:
+                for j in self._imuv:
+                    for d in self.sets.r:
+                        try:
+                            ex = float(value(model.exptx[s, j, d]))
+                        except Exception:
+                            ex = 0.0
+                        pefob0_data[(s, j, d)] = 1.0 + ex
+                        try:
+                            xw0_data[(s, j, d)] = float(value(model.xw[s, j, d]))
+                        except Exception:
+                            xw0_data[(s, j, d)] = 0.0
+            model.pefob0 = Param(model.r, model.i, model.r, default=1.0,
+                                 initialize=pefob0_data, mutable=False)
+            model.xw0 = Param(model.r, model.i, model.r, default=0.0,
+                              initialize=xw0_data, mutable=False)
+            # mqmuv_bb = sum_{s,j,d} pefob0 * xw0  (calibration constant)
+            mqmuv_bb_data = sum(
+                pefob0_data.get((s, j, d), 1.0) * xw0_data.get((s, j, d), 0.0)
+                for s in self._rmuv for j in self._imuv for d in self.sets.r
+            )
+            model.mqmuv_bb = Param(initialize=(mqmuv_bb_data if mqmuv_bb_data > 0.0 else 1.0),
+                                   mutable=False)
+            rmuv_local = self._rmuv; imuv_local = self._imuv
+            def eq_pmuv_rule(m):
+                # Per cal-time pmuv0=1: pmuv^2 * M_bb * M_bs = M_sb * M_ss
+                # M_bs = pefob0 * xw    (sum over rmuv×imuv×r)
+                # M_sb = pefob  * xw0
+                # M_ss = pefob  * xw
+                m_bs = sum(m.pefob0[s, j, d] * m.xw[s, j, d]
+                           for s in rmuv_local for j in imuv_local for d in m.r)
+                m_sb = sum(m.pefob[s, j, d] * m.xw0[s, j, d]
+                           for s in rmuv_local for j in imuv_local for d in m.r)
+                m_ss = sum(m.pefob[s, j, d] * m.xw[s, j, d]
+                           for s in rmuv_local for j in imuv_local for d in m.r)
+                return m.pmuv * m.pmuv * m.mqmuv_bb * m_bs == m_sb * m_ss
+            model.eq_pmuv = Constraint(rule=eq_pmuv_rule)
 
         def eq_pnum_rule(model):
             return model.pnum == model.pwfact

@@ -294,50 +294,41 @@ results.plot()
 
 Test fixture (`tests/sam_tools/fixtures/simple_mip.xlsx`, 3 sectors × 4 final-demand columns) closes to `max_row_col_abs_diff < 1.0` end-to-end. Full `tests/sam_tools/` suite: 77 passing.
 
-### GTAP Standard 7 — GAMS reference parity (2026-05-06)
+### GTAP Standard 7 — full GAMS reference parity (2026-05-10)
 
-The Python implementation of the **GTAP Standard 7** model template (`equilibria.templates.gtap`) is validated against the canonical GAMS reference (`COMP.gdx` from `tariff_sim.gms`, 9 sectors × 10 regions, 10% uniform import-tariff shock). Solver: PATH C API in nonlinear-full mode (16,166 vars × 16,166 eqs), residuals ~1e-11 (baseline) / ~1e-9 (shock).
+The Python implementation of the **GTAP Standard 7** model template (`equilibria.templates.gtap`) reaches **100% cell-level parity** with the canonical GAMS reference for both validation datasets, in both baseline and 10% import-tariff shock phases. Solver: PATH C API in nonlinear-full mode, residuals ≤ 1e-6.
 
-**Cell-by-cell coverage** of all 139 populated GAMS Variables (≈60k cells per phase):
+| Dataset | Reference GDX | Baseline match | Shock match | Cells matching |
+|---------|---------------|---------------:|------------:|---------------:|
+| **9x10** (9 sectors × 10 regions, rate-scaled shock) | `COMP.gdx` (NEOS) | **100.00%** | **100.00%** | 59,978 / 59,978 |
+| **NUS333** (3 sectors × 2 regions × 3 factors, power-scaled shock) | `output/nus333_neos/out.gdx` | **100.00%** | **100.00%** | 1,310 / 1,310 |
 
-| Phase | Vars exact ✅ | Vars partial ⚠️ | Cells matching | Vars not modeled in Python |
-|-------|--------------:|---------------:|---------------:|---------------------------:|
-| baseline | 84 / 139 | 12 (mostly fixed/unused) | 41,446 / 41,457 (>99.97%) | 42 |
-| shock    | 76 / 139 | 20 | 38,336 / 41,477 (92.4%) | 42 |
+Coverage is over all 139 populated GAMS Variables per dataset (`ape`, `ced`, `incelas`, `ued`, `bh`, `eh`, `chiInv`, `pmuv`, `pwfact`, `pfact`, `regy`, `yc`, `yg`, `yi`, `rsav`, `gdpmp`, `rgdpmp`, `pgdpmp`, `pabs`, `pcons`, `pi`, `pa`, `pmp`, `pmt`, `pdp`, `pe`, `pet`, `pef[ob]`, `pmcif`, `pf`, `pfa`, `pft`, `pfy`, `pnd`, `pva`, `ps`, `pwmg`, `ptmg`, `nd`, `va`, `xp`, `xs`, `xds`, `xet`, `xmt`, `xa`/`xaa`, `xd`/`xda`, `xm`/`xma`, `xf`, `xft`, `xw`, `xwmg`, `xmgm`, `xtmg`, `xigbl`, `xi`/`xiagg`, `xc`, `xg`, `walras`, `mtax`, `etax`, `imptx`, `exptx`, `prdtx`, `fcttx`, `fctts`, `kappaf`, `tmarg`, `dintx`, `mintx`, `ytax`, `ytaxInd`, `ytaxTot`, `ytaxshr`, `rorc`, `rore`, `rorg`, `psave`, `phi`, `phiP`, `kstock`, `kapEnd`, `arent`, `chif`, `chiSave`, `savf`, `pop`, `factY`, `u`, `uh`, `ug`, `us`, `ev`, `cv`, `lambda*`, `axp`, `pwfact`, `pnum`, `risk`, `xscale`, `etrae`, `rtxshft`, `zcons`, `xcshr`, `pigbl`, `rsav`, ...).
 
-**Macro aggregates (1-D / 2-D)** — full mirror parity across 21 macros × 10 regions in **both** phases (≤0.01% rel error): `regy`, `yc`, `yg`, `yi`, `rsav`, `gdpmp`, `rgdpmp`, `pgdpmp`, `pabs`, `pcons`, `pi`, `pfact`, `kstock`, `u`, `uh`, `ug`, `us`, `facty`, `ytaxTot`, `phi`, `savf`, plus `arent`, `betap/g/s`, `chif`, `kapEnd`, `mintx`, `psave`, `ptmg`, `pwfact`, `xtmg`, `xigbl`, `xft`, `dintx`, `pa`, `pmp`, `pmt`, `pdp`, `pe`, `pet`, `pf`, `pfa` (baseline), `pnd`, `pva`, `nd`, `va`, `xp/xs/xds/xf/xet/xmt/xw`, `mtax/etax`, `lambda*`, `ytax/ytaxshr`, `tmarg`, `eh/bh/ev/cv`.
+**Three fixes that closed the last 4% gap (2026-05-10):**
 
-**Known divergences (shock only — under investigation):**
-
-| Variable | Cells diverging | Max abs / rel | Hypothesis |
-|----------|----------------:|---------------|------------|
-| `pm` (bilateral import price) | 810 / 1000 | 0.14 / 5.6% | Likely a bilateral wedge in pm = (1+imptx+mtax)·pmcif/chipm not exactly mirrored |
-| `pmcif`, `pefob` | ~570 / 1000 | ~5e-3 / 0.5% | Border price closure; small but systematic |
-| `pfa`, `pfy`, `pft` | 162 / 450 | 2.4% | Land/NatRes (sluggish) factor pricing in Oceania — `eq_pfeq` branch for sluggish uses `pabs` not `pft` |
-| `xmgm`, `xwmg` | 425 / 10000 (4.3%) | 5.8% | Trade-margin demand for `c_TransComm`-`c_Crops` route specifically |
-| `rore`, `rorg` | 100% | 48–117% | Pre-existing in baseline — alternative rate-of-return formula; affects only diagnostics |
+1. **CDE elasticities frozen at calibration.** `apeeq`, `cedeq`, `uedeq`, `incelaseq` are declared in `model.gms` but **not paired** with their variables in the `model gtap /.../` block — they retain their `cal.gms:600-614` values across all solves. Implemented in Python as mutable `Param` initialised from `xa[r,i,'hhd'] / sum_j(xa[r,j,'hhd'])` per `cal.gms:239`.
+2. **`chiInv` frozen at calibration** under `RoRFlag=capFix` (default closure). `savfeq` has no `chiInv` term in this mode, so the variable is free with no equation; GAMS leaves it at the cal-time value `(xi - depr·kstock) / xigbl`. Same Param freezing pattern.
+3. **`pmuv` Tornqvist deflator** implemented as `Var` + `eq_pmuv` (mirroring `eq_pwfact`'s Fisher index) when the closure supplies `rmuv`/`imuv` baskets. Critical: `pefob0` must be `(1 + exptx) * pe0` (not `value(model.pefob[s,j,d])` at build time, which is still 1.0 before equilibrium propagation). NUS333 uses `rmuv=("ROW",), imuv=("MFG",)`; 9x10 stays within tolerance with `pmuv=1.0`.
 
 **Reproduce:**
 
 ```bash
-# Macro deltas vs GAMS (10 regions × 3 macros, exact reference values)
+# Full per-variable diff for 9x10 (≈60k cells, both phases)
+.venv/bin/python scripts/gtap/diff_9x10_full.py --phase both
+
+# Full per-variable diff for NUS333 (≈1.3k cells, both phases)
+.venv/bin/python scripts/gtap/diff_nus333_full.py --phase both
+
+# Macro deltas vs GAMS (region × macro table)
 .venv/bin/python scripts/gtap/validate_gams_parity.py --shock-factor 0.10
-
-# Per-variable 1-D/2-D diff (21 macros)
-.venv/bin/python scripts/gtap/diff_9x10_vs_gams.py --phase both
-
-# Full coverage report (139 GAMS Vars, ~60k cells, both phases)
-.venv/bin/python scripts/gtap/diff_9x10_full.py --phase both --show-worst
-
-# NUS333 — power-scaled shock (matches comp_nus333.gms:149)
-.venv/bin/python scripts/gtap/compare_nus333_vs_neos.py
 ```
 
 Notes:
 - 9x10 uses **rate scaling** (`tm = tm_base * (1 + tm_shock)`); NUS333 uses **power scaling** (`(1+imptx) * 1.10 - 1`). The two datasets follow different upstream conventions.
 - Counterfactual builds must pass `t0_snapshot=base_model` so CES weights (alphad/alpham/betap/betag/betas) calibrate against the converged baseline rather than the perturbed state.
-- The 42 "not in Python" Vars are technical shifters (`afe*`, `aio*`, `ava*`, `axp*`, `lambda*` regional aggregates), elasticity diagnostics (`ape`, `ced`, `incelas`), tax shifters (`mtxshft`, `dtxshft`, `prdtx`), and bilateral tax instruments treated as parameters in Python (`imptx`, `exptx`, `kappaf`, `fctts`, `fcttx`).
-- See `CLAUDE.md` and `GTAP_VALIDATION_STATUS.md` for the full audit trail.
+- Tax-rate symbols (`imptx`, `exptx`, `prdtx`, `fcttx`, `fctts`) are mutable `Param`s, not `Var`s, so warm-start scripts that copy Vars between baseline and shock models do not overwrite the shocked values.
+- See `CLAUDE.md` and `GTAP_VALIDATION_STATUS.md` for the full audit trail; per-fix notes live in `~/.claude/projects/.../memory/gtap_full_parity_achieved.md`.
 
 ---
 
