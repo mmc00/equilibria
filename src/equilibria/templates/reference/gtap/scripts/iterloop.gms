@@ -130,6 +130,9 @@ loop(t0,
    pm.fx(r,i,rp,tsim)$(not xwFlag(r,i,rp))    = pm.l(r,i,rp,t0) ;
 
    xwmg.fx(r,i,rp,tsim)$(not tmgFlag(r,i,rp))  = 0 ;
+*  Force pwmg=0 on no-flow routes (mirrors 9x10 convention; default cal.gms
+*  init leaves pwmg=1 here, causing spurious divergence vs Python).
+   pwmg.l(r,i,rp,tsim)$(not tmgFlag(r,i,rp))   = 0 ;
    pwmg.fx(r,i,rp,tsim)$(not tmgFlag(r,i,rp))  = pwmg.l(r,i,rp,tsim) ;
    xmgm.fx(m,r,i,rp,tsim)$(not amgm(m,r,i,rp)) = 0 ;
 
