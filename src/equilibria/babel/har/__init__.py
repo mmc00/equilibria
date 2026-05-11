@@ -1,9 +1,7 @@
 """equilibria.babel.har — GEMPACK HAR file reader.
 
 Reads .har and .prm files produced by GEMPACK/RunGTAP without requiring
-GEMPACK to be installed.
-
-Requires: harpy3>=0.3  (pip install harpy3)
+GEMPACK to be installed. Pure-Python; no third-party dependency.
 """
 
 from equilibria.babel.har.reader import (
