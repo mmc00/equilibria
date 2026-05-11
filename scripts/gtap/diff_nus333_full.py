@@ -10,7 +10,7 @@ cells per phase (base, shock).
 Pass --csv PATH to emit benchmark rows in the same schema as the 9x10 diff.
 """
 from __future__ import annotations
-import argparse, sys
+import argparse, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -71,11 +71,15 @@ def main():
     print("=== Python baseline NUS333 ===")
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     m_b = builder_b.build_model()
+    _t0 = time.perf_counter()
     r_b = _solve(m_b, params, label="base")
+    sec_b = time.perf_counter() - _t0
     res_b = float(getattr(r_b, "residual", 0.0) or 0.0)
+    print(f"  baseline solve={sec_b:.2f}s")
 
     m_s = None
     res_s = 0.0
+    sec_s = 0.0
     if args.phase != "base":
         print("\n=== Python shock NUS333 (10% imptx, power scaling) ===")
         _apply_tariff_shock(params, factor=1.10)
@@ -85,21 +89,24 @@ def main():
         )
         m_s = builder_s.build_model()
         _copy_var_levels(m_b, m_s)
+        _t0 = time.perf_counter()
         r_s = _solve(m_s, params, label="shock")
+        sec_s = time.perf_counter() - _t0
         res_s = float(getattr(r_s, "residual", 0.0) or 0.0)
+        print(f"  shock solve={sec_s:.2f}s")
 
     var_names = list_populated_vars(GAMS_OUT)
     print(f"\nPopulated GAMS Vars in {GAMS_OUT.name}: {len(var_names)}")
 
-    phases = [("base", m_b, res_b)]
+    phases = [("base", m_b, res_b, sec_b)]
     if args.phase != "base":
-        phases.append(("shock", m_s, res_s))
+        phases.append(("shock", m_s, res_s, sec_s))
 
     csv_rows: list[dict] = []
     git_sha = git_short_sha(ROOT)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    for phase, m_py, residual in phases:
+    for phase, m_py, residual, solve_seconds in phases:
         print(f"\n{'='*120}")
         print(f"PHASE: {phase}    (tol_rel={args.tol_rel}  tol_abs={args.tol_abs})")
         print(f"{'='*120}")
@@ -112,6 +119,7 @@ def main():
             tol_rel=args.tol_rel, tol_abs=args.tol_abs,
             residual=residual, git_sha=git_sha, generated_at=generated_at,
             derived=build_derived(m_py), key_remap=_nus333_key_remap,
+            solve_seconds=solve_seconds,
         )
         csv_rows.extend(rows)
 
