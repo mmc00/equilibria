@@ -1,10 +1,269 @@
+"""Native pure-Python reader for GEMPACK HAR files.
+
+A HAR file is a sequence of Fortran unformatted records (each record framed
+by a 4-byte little-endian length prefix and the same length suffix). Headers
+are grouped: a 4-byte name record, a 92-byte metadata record (`"    "` +
+6-char type token + 70-char long name + 3 trailing ints), then a number of
+data records that depend on the type token.
+
+Supported types: 1CFULL (1-D character set), REFULL (real dense), RESPSE
+(real sparse), 2IFULL (2-D integer dense). These cover everything used by
+the GTAP datasets shipped with equilibria.
+
+CLEAN-ROOM REIMPLEMENTATION
+---------------------------
+This file is a clean-room reimplementation of the HAR format, developed by
+inspecting the on-disk byte layout of HAR files produced by GEMPACK / RunGTAP
+and by reading publicly available format descriptions. It was written WITHOUT
+viewing, copying, translating, or deriving from any third-party HAR
+implementation, including in particular `harpy3` / `harpy` (GPLv3) or any
+GEMPACK source distribution. The format-level constants used here (record
+framing, type tokens, set-descriptor layout, etc.) are the wire format itself
+— not copyrightable expression. Distributed under MIT (see top-level NOTICE).
+"""
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 
 import numpy as np
 
 from equilibria.babel.har.symbols import HeaderArray
+
+_PAD = b"    "
+_INT = struct.Struct("<i")
+
+
+def _iter_records(buf: bytes):
+    """Yield raw record bytes from a Fortran unformatted stream."""
+    pos = 0
+    n = len(buf)
+    while pos < n:
+        if pos + 4 > n:
+            return
+        rlen = _INT.unpack_from(buf, pos)[0]
+        pos += 4
+        if rlen < 0 or pos + rlen + 4 > n:
+            return
+        yield buf[pos:pos + rlen]
+        pos += rlen + 4  # skip the trailing length marker
+
+
+def _decode_str_block(blk: bytes, width: int = 12) -> list[str]:
+    """Split a fixed-width padded string block into a list of stripped strings."""
+    out: list[str] = []
+    p = 0
+    while p + width <= len(blk):
+        out.append(blk[p:p + width].decode("ascii", errors="replace").rstrip())
+        p += width
+    return out
+
+
+def _read_set_element_record(rec: bytes) -> list[str]:
+    """Decode a record holding set elements: pad(4) + 1 + n + n + n*12-byte names."""
+    if len(rec) < 16:
+        return []
+    n = _INT.unpack_from(rec, 8)[0]
+    return _decode_str_block(rec[16:16 + 12 * n])
+
+
+def _read_header(records: list[bytes], i: int) -> tuple[HeaderArray | None, int]:
+    """Parse one header block starting at `records[i]`. Returns (header, next_i)."""
+    name_rec = records[i]
+    if len(name_rec) != 4:
+        return None, i + 1
+    if i + 1 >= len(records):
+        return None, i + 1
+
+    name = name_rec.decode("ascii", errors="replace").rstrip()
+    meta = records[i + 1]
+    if len(meta) < 80 or meta[:4] != _PAD:
+        return None, i + 1
+
+    type_token = meta[4:10].decode("ascii", errors="replace")
+    long_name = meta[10:80].decode("ascii", errors="replace").rstrip()
+
+    if type_token == "1CFULL":
+        return _read_1cfull(name, long_name, records, i + 1)
+    if type_token == "REFULL":
+        return _read_refull(name, long_name, records, i + 1)
+    if type_token == "RESPSE":
+        return _read_respse(name, long_name, records, i + 1)
+    if type_token == "2IFULL":
+        return _read_2ifull(name, long_name, records, i + 1)
+
+    raise NotImplementedError(
+        f"HAR header {name!r} uses unsupported type {type_token!r}"
+    )
+
+
+def _read_1cfull(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+    """1CFULL: a 1-D character set.
+
+    The meta record (length 92) ends with two trailing ints (n_elements, width).
+    Element data follows in one or more records, each shaped:
+      pad(4) + flag + n_total + n_in_this_record + names...
+    where flag=2 means more records follow, flag=1 is the last.
+    """
+    meta = records[i]
+    n_total, width = struct.unpack_from("<2i", meta, 84)
+    elems: list[str] = []
+    j = i + 1
+    while len(elems) < n_total:
+        rec = records[j]
+        n_here = _INT.unpack_from(rec, 12)[0]
+        elems.extend(_decode_str_block(rec[16:16 + width * n_here], width=width))
+        j += 1
+    arr = np.array(elems[:n_total], dtype=object)
+    return (
+        HeaderArray(
+            name=name,
+            coeff_name=name,
+            long_name=long_name,
+            array=arr,
+            set_names=[],
+            set_elements=[],
+        ),
+        j,
+    )
+
+
+def _parse_set_descriptor(rec: bytes) -> tuple[str, list[str], int]:
+    """Decode the per-coefficient set descriptor record.
+
+    Layout:
+      [0:4]   pad
+      [4:8]   n_unique_sets (counts each distinct set once)
+      [8:12]  flag (= 1 when set names follow)
+      [12:16] ndim (true number of dimensions; may exceed n_unique_sets when
+              a set appears more than once, e.g. VMSB on REG×REG)
+      [16:28] coeff_name (12 chars padded)
+      [28:32] flag (= 1 when set names present)
+      [32:32 + 12*ndim] set names (one per dimension, with repeats)
+
+    Returns (coeff_name, set_names, ndim).
+    """
+    ndim = _INT.unpack_from(rec, 12)[0]
+    coeff_name = rec[16:28].decode("ascii", errors="replace").rstrip()
+    set_names = _decode_str_block(rec[32:32 + 12 * ndim])
+    return coeff_name, set_names, ndim
+
+
+def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+    """REFULL: a real dense N-dimensional array.
+
+    The descriptor reports ndim (one slot per dimension, with repeats when
+    the same set is reused, e.g. REG×REG) and ndim set names. The file
+    only stores element records for *unique* sets, so VMSB on COMM×REG×REG
+    has 3 set names but only 2 element records.
+
+    Block (after meta at index i):
+      i+1: set descriptor
+      i+2 .. i+1+n_unique: one record per *unique* set
+      i+2+n_unique: dim-summary record
+      i+3+n_unique: dim-metadata record
+      i+4+n_unique: data record (pad + int + n*float32)
+    """
+    desc = records[i + 1]
+    coeff_name, set_names, ndim = _parse_set_descriptor(desc)
+    unique_names: list[str] = []
+    for sn in set_names:
+        if sn not in unique_names:
+            unique_names.append(sn)
+    n_unique = len(unique_names)
+    elems_by_name = {
+        sn: _read_set_element_record(records[i + 2 + k])
+        for k, sn in enumerate(unique_names)
+    }
+    set_elements = [elems_by_name[sn] for sn in set_names]
+    shape = tuple(len(s) for s in set_elements)
+    data_rec = records[i + 4 + n_unique]
+    n = int(np.prod(shape)) if shape else 1
+    floats = struct.unpack_from(f"<{n}f", data_rec, 8)
+    arr = np.array(floats, dtype=np.float32).reshape(shape, order="F") if shape else np.array(floats, dtype=np.float32)
+    return (
+        HeaderArray(
+            name=name,
+            coeff_name=coeff_name,
+            long_name=long_name,
+            array=arr,
+            set_names=set_names,
+            set_elements=set_elements,
+        ),
+        i + 5 + n_unique,
+    )
+
+
+def _read_respse(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+    """RESPSE: a real sparse N-dimensional array.
+
+    Layout (after meta at index i):
+      i+1: set descriptor
+      i+2 .. i+1+ndim: set element records
+      i+2+ndim: sparse setup (we only need it to skip ahead)
+      i+3+ndim: data record (pad + 1 + nnz + nnz + idx[nnz] + val[nnz])
+                with idx 1-based Fortran-order flat indices.
+
+    Shape is taken from the set element records (no separate dim record).
+    """
+    desc = records[i + 1]
+    coeff_name, set_names, ndim = _parse_set_descriptor(desc)
+    unique_names: list[str] = []
+    for sn in set_names:
+        if sn not in unique_names:
+            unique_names.append(sn)
+    n_unique = len(unique_names)
+    elems_by_name = {
+        sn: _read_set_element_record(records[i + 2 + k])
+        for k, sn in enumerate(unique_names)
+    }
+    set_elements = [elems_by_name[sn] for sn in set_names]
+    shape = tuple(len(s) for s in set_elements)
+    data_rec = records[i + 3 + n_unique]
+    nnz = _INT.unpack_from(data_rec, 8)[0]
+    idx_off = 16
+    idx = struct.unpack_from(f"<{nnz}i", data_rec, idx_off)
+    val_off = idx_off + 4 * nnz
+    vals = struct.unpack_from(f"<{nnz}f", data_rec, val_off)
+    flat = np.zeros(int(np.prod(shape)) if shape else 1, dtype=np.float32)
+    for k, v in zip(idx, vals):
+        flat[k - 1] = v
+    arr = flat.reshape(shape, order="F") if shape else flat
+    return (
+        HeaderArray(
+            name=name,
+            coeff_name=coeff_name,
+            long_name=long_name,
+            array=arr,
+            set_names=set_names,
+            set_elements=set_elements,
+        ),
+        i + 4 + n_unique,
+    )
+
+
+def _read_2ifull(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+    """2IFULL: a 2-D integer dense array. The meta record's trailing ints hold
+    (rows, cols, width); the next record is the data record with pad(4) +
+    1 int + rows*cols 4-byte ints."""
+    meta = records[i]
+    rows = _INT.unpack_from(meta, 84)[0]
+    cols = _INT.unpack_from(meta, 88)[0]
+    data_rec = records[i + 1]
+    n = rows * cols
+    ints = struct.unpack_from(f"<{n}i", data_rec, 8)
+    arr = np.array(ints, dtype=np.int32).reshape((rows, cols), order="F")
+    return (
+        HeaderArray(
+            name=name,
+            coeff_name=name,
+            long_name=long_name,
+            array=arr,
+            set_names=[],
+            set_elements=[],
+        ),
+        i + 2,
+    )
 
 
 def read_har(
@@ -15,110 +274,47 @@ def read_har(
 
     Args:
         filepath: Path to the .har or .prm file.
-        select_headers: If provided, only these headers are loaded.
+        select_headers: If provided, only these headers are returned.
 
     Returns:
         Dict mapping header name → HeaderArray.
 
     Raises:
         FileNotFoundError: If filepath does not exist.
-        ImportError: If harpy3 is not installed.
     """
-    try:
-        import harpy
-    except ImportError as e:
-        raise ImportError(
-            "harpy3 is required to read HAR files. "
-            "Install it with: pip install harpy3"
-        ) from e
-
     filepath = Path(filepath)
     if not filepath.exists():
         raise FileNotFoundError(f"HAR file not found: {filepath}")
 
-    _load = getattr(harpy.HarFileObj, "loadFromDisk", None) or getattr(harpy.HarFileObj, "_loadFromDisk")
-    hf = _load(str(filepath))
-
-    all_names = hf.getHeaderArrayNames()
-    names_to_load = (
-        [n for n in all_names if n in select_headers]
-        if select_headers is not None
-        else all_names
-    )
-
-    def _get(obj, key, default=None):
-        # harpy3 newer API: dict-like via Mapping; older API: attribute access.
-        # Older HeaderArrayObj uses __getitem__ for SET-ELEMENT indexing, not keys —
-        # so only treat as dict if it's an actual Mapping/dict.
-        if isinstance(obj, dict):
-            v = obj.get(key, default)
-            return v if v is not None else default
-        return getattr(obj, key, default)
+    records = list(_iter_records(filepath.read_bytes()))
+    selected = set(select_headers) if select_headers is not None else None
 
     result: dict[str, HeaderArray] = {}
-    for name in names_to_load:
-        _geth = getattr(hf, "getHeaderArrayObj", None) or getattr(hf, "_getHeaderArrayObj")
-        obj = _geth(name)
-        if obj is None:
+    i = 0
+    while i < len(records):
+        if len(records[i]) != 4:
+            i += 1
             continue
-        raw_arr = _get(obj, "array", None)
-        if raw_arr is None:
-            continue
-        arr = np.array(raw_arr)
-
-        # New harpy3 API: 'sets' is a list[{'name', 'dim_desc'}]
-        sets_list = _get(obj, "sets", None)
-        is_list_of_dicts = (
-            isinstance(sets_list, list) and sets_list and isinstance(sets_list[0], dict)
-        )
-        if is_list_of_dicts:
-            set_names = [str(s.get("name", "")).strip() for s in sets_list]
-            set_elements = [
-                [str(e).strip() for e in (s.get("dim_desc") or [])]
-                for s in sets_list
-            ]
-        else:
-            # Older harpy API
-            raw_set_names = list(_get(obj, "setNames", []) or [])
-            raw_set_elements = list(_get(obj, "setElements", []) or [])
-            set_names = [
-                str(n).strip() if n is not None else "" for n in raw_set_names
-            ]
-            set_elements = [
-                [str(e).strip() for e in (elems or [])]
-                for elems in raw_set_elements
-            ]
-
-        long_name = _get(obj, "long_name", "") or ""
-        coeff_name = _get(obj, "coeff_name", "") or name
-        result[name] = HeaderArray(
-            name=name,
-            coeff_name=str(coeff_name).strip() if coeff_name else name,
-            long_name=str(long_name).strip(),
-            array=arr,
-            set_names=set_names,
-            set_elements=set_elements,
-        )
+        try:
+            ha, next_i = _read_header(records, i)
+        except (struct.error, IndexError, NotImplementedError) as exc:
+            raise ValueError(
+                f"Failed to parse HAR header at record {i} of {filepath}"
+            ) from exc
+        if ha is not None and (selected is None or ha.name in selected):
+            result[ha.name] = ha
+        i = next_i if ha is not None else i + 1
     return result
 
 
 def get_header_names(filepath: str | Path) -> list[str]:
-    """Return all header names in a HAR file without loading array data."""
-    try:
-        import harpy
-    except ImportError as e:
-        raise ImportError("harpy3 is required. Install with: pip install harpy3") from e
-    filepath = Path(filepath)
-    if not filepath.exists():
-        raise FileNotFoundError(f"HAR file not found: {filepath}")
-    _load = getattr(harpy.HarFileObj, "loadFromDisk", None) or getattr(harpy.HarFileObj, "_loadFromDisk")
-    hf = _load(str(filepath))
-    return hf.getHeaderArrayNames()
+    """Return all header names in a HAR file."""
+    return list(read_har(filepath).keys())
 
 
 def read_header_array(filepath: str | Path, name: str) -> HeaderArray:
     """Read a single named header array from a HAR file."""
-    data = read_har(filepath, select_headers=[name])
-    if name not in data:
-        raise KeyError(f"Header '{name}' not found in {filepath}")
-    return data[name]
+    out = read_har(filepath, select_headers=[name])
+    if name not in out:
+        raise KeyError(f"Header {name!r} not found in {filepath}")
+    return out[name]

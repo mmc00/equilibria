@@ -23,7 +23,6 @@ pip install -e ".[pyomo,excel]"
 | `pyomo` | Pyomo + a backend solver wiring | Solving full CGE models |
 | `ipopt` | `cyipopt` | NLP solves with IPOPT |
 | `excel` | `openpyxl`, `xlrd` | Reading SAM/MIP from Excel |
-| `har` | `harpy3` | Reading GTAP HAR files |
 | `viz`  | `matplotlib`, `plotly` | Plotting results |
 | `docs` | Sphinx + MyST + sphinx-gallery | Building these docs |
 

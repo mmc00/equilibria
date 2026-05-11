@@ -11,11 +11,10 @@ loose at 0.05pp to absorb solver tolerance.
 Slow (~3 min). Skips when:
   - NUS333 dataset directory is unset/missing
   - PATH C-API library is unavailable (path_capi_python)
-  - harpy3 (GEMPACK reader) not installed
 
 Run manually:
     EQUILIBRIA_NUS333_DIR=/Users/marmol/Downloads/10284 \\
-    uv run --with harpy3 pytest \\
+    uv run pytest \\
         tests/templates/gtap/test_nus333_landshock_parity.py -v -s
 """
 from __future__ import annotations
@@ -53,10 +52,6 @@ def _skip_reason() -> str | None:
         return f"PATH C-API library not found at {PATH_LIB}"
     if not PATH_CAPI_SRC.is_dir():
         return f"path-capi-python source not found at {PATH_CAPI_SRC}"
-    try:
-        import harpy  # noqa: F401
-    except ImportError:
-        return "harpy not installed (uv run --with harpy3 ...)"
     return None
 
 
