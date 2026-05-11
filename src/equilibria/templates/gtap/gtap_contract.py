@@ -249,6 +249,13 @@ class GTAPClosureConfig(ModelClosureConfig):
             "chiInv", "netInv", "gblValNetInv",
         )
     )
+
+    # Tornqvist MUV (price-of-manufactures) deflator basket. Per GAMS comp.gms:
+    #   rmuv ⊂ r (HIC regions), imuv ⊂ i (manufactures). pmuv solves
+    #   pmuveq Tornqvist over these baskets. If either is empty, pmuv is held
+    #   at calibration value (1.0). Defaults match the comp_nus333.gms config.
+    rmuv: Tuple[str, ...] = Field(default_factory=tuple)
+    imuv: Tuple[str, ...] = Field(default_factory=tuple)
     
     @field_validator("name", mode="before")
     @classmethod

@@ -568,15 +568,9 @@ class GTAPSolver:
                 self.model.pp[idx].fix(float(val))
                 fixed_count += 1
 
-        # Welfare variables are kept as Pyomo-only auxiliaries until the CDE
-        # block is ported with a numerically safe formulation for PATH.
-        for var_name in ("ev", "cv"):
-            if hasattr(self.model, var_name):
-                var = getattr(self.model, var_name)
-                for idx in var:
-                    val = var[idx].value if var[idx].value is not None else 1.0
-                    var[idx].fix(float(val))
-                    fixed_count += 1
+        # Welfare variables (cv, ev): activate their CDE-style defining equations
+        # and leave them free so PATH solves them alongside the MCP. They appear
+        # nowhere else in the system, so this only adds 1 var↔1 eq per region.
 
         # ===================================================================
         # 4. Fix PABS for regions without production (numeraire consistency)

@@ -66,7 +66,7 @@ def main():
         default_path=NUS333_HAR / "default.prm",
         baserate_path=NUS333_HAR / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False)
+    closure = GTAPClosureConfig(if_sub=False, rmuv=("ROW",), imuv=("MFG",))
 
     print("=== Python baseline NUS333 ===")
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)

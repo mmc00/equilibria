@@ -46,6 +46,14 @@ def main():
 
     contract = _build_gtap_contract_with_calibration("gtap_standard7_9x10")
 
+    # Match validate_gams_parity.py: GAMS NEOS reference uses ifSUB=0.
+    # Default Python closure has if_sub=True (substitutes/fixes pm, pmcif, pefob,
+    # pfa, pfy, xwmg, xmgm, pwmg, pp_rai); override to if_sub=False so these
+    # bilateral price/margin variables stay free and can adjust to the shock.
+    new_closure = contract.closure.model_copy(update={"if_sub": False})
+    contract = contract.model_copy(update={"closure": new_closure})
+    print(f"  closure: if_sub={contract.closure.if_sub}  numeraire={contract.closure.numeraire}")
+
     print("=== Python baseline 9x10 ===")
     p_b = GTAPParameters()
     p_b.load_from_gdx(GDX)
