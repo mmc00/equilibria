@@ -16,6 +16,8 @@ from pathlib import Path
 # Files that are intentionally kept with canonical uppercase naming.
 ALLOWED_EXACT: set[str] = {
     "AGENTS.md",
+    "Makefile",
+    "NOTICE",
     "README.md",
     "LICENSE",
     "CITATION.cff",
@@ -23,6 +25,7 @@ ALLOWED_EXACT: set[str] = {
     "GTAP_VALIDATION_STATUS.md",
     "skills/gams-to-equilibria/SKILL.md",
     "src/equilibria/babel/gdx/README.md",
+    "src/equilibria/babel/har/README.md",
     "src/equilibria/templates/gtap/README.md",
     "tests/babel/gdx/fixtures/SAM-V2_0.gdx",
     # Sphinx documentation site:
