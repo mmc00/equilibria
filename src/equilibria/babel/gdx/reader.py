@@ -1,10 +1,15 @@
-"""
-equilibria/babel/gdx/reader
+"""GDX file reader — pure-Python implementation.
 
-GDX file reader - Pure Python implementation.
+Native GDX reading without requiring GAMS installation.
 
-This module provides native GDX file reading capabilities without
-requiring GAMS installation.
+CLEAN-ROOM REIMPLEMENTATION of the GDX v7 wire format. Developed by
+inspecting the binary layout of files produced by GAMS and reading public
+documentation. Written WITHOUT consulting, copying, translating, or deriving
+from the official GAMS GDX libraries (`gdxcclib`, `gdxapi`, the C/Java/.NET
+SDKs), GAMS Transfer (Python/R/Matlab), or any other third-party GDX
+implementation. The interoperability constants below (magic `GAMSGDX`, marker
+strings, symbol-type codes) are the wire format itself, not copyrightable
+expression. Distributed under MIT (see top-level NOTICE).
 
 GDX Format Notes (Version 7):
 - First ~19 bytes: checksum/metadata

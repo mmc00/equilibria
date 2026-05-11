@@ -1,0 +1,68 @@
+equilibria
+Copyright (c) 2026 Marlon Molina
+
+Licensed under the MIT License (see LICENSE).
+
+================================================================================
+Third-party file formats — clean-room reimplementations
+================================================================================
+
+This project includes pure-Python readers and writers for two third-party
+binary file formats:
+
+  1. GEMPACK HAR / .prm  — `src/equilibria/babel/har/`
+  2. GAMS GDX (v7)       — `src/equilibria/babel/gdx/`
+
+Both implementations are CLEAN-ROOM reimplementations (with one explicitly
+attributed exception, noted below) developed by inspecting the on-disk byte
+layout of files produced by the respective tools and by reading publicly
+available format documentation. With the single exception listed below, they
+were written without viewing, copying, translating, or otherwise deriving
+from the source code of any third-party implementation, including in
+particular:
+
+  - `harpy3` / `harpy` (GPLv3) — the original Python HAR reader
+  - GEMPACK source distributions (proprietary)
+  - GAMS Transfer Python / R / Matlab (proprietary EULA)
+  - the closed-source GAMS shared libraries (`gdxcclib`, `gdxapi`)
+
+The format-level facts encoded here (record framing, type tokens, marker
+strings such as "GAMSGDX" / "_SYMB_" / "_UEL_", etc.) are unavoidable
+interoperability constants — they are the wire format itself, not
+copyrightable expression.
+
+The author warrants that:
+
+  - No GPL-licensed code (in particular, no code from `harpy3`) was read,
+    copied, or adapted at any point during development of these readers /
+    writers; and
+  - No proprietary GAMS or GEMPACK source code was consulted.
+
+================================================================================
+Attributed third-party derivation (NOT clean-room)
+================================================================================
+
+The single file `src/equilibria/babel/gdx/decoder.py` is NOT a clean-room
+reimplementation. It is a Python re-expression of the parameter delta-decode
+algorithm in `gdx/src/gxfile.cpp` from the official, open-source GAMS GDX API:
+
+    https://github.com/GAMS-dev/gdx
+    Copyright (c) 2017-2026 GAMS Software GmbH <support@gams.com>
+    Copyright (c) 2017-2026 GAMS Development Corp. <support@gams.com>
+    Licensed under the MIT License.
+
+The GAMS-dev/gdx project is distributed under the MIT License, which is
+compatible with `equilibria`'s own MIT license. The only obligation is to
+preserve the upstream copyright notice — reproduced both here and in the
+header of `decoder.py`. No other files in `equilibria.babel.gdx` derive from
+GAMS-dev/gdx.
+
+================================================================================
+
+As a result, the HAR and GDX modules in this repository are distributed under
+the MIT License (same as the rest of `equilibria`), depend on NO third-party
+HAR or GDX library at runtime, and carry no GPL or proprietary obligations.
+
+If you believe any file in this repository inadvertently includes material
+covered by another license, please open an issue so it can be removed or
+relicensed.
