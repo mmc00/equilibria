@@ -1,7 +1,8 @@
 # GTAP Python-to-GAMS Validation Status
 
-**Last updated:** 2026-05-01
-**Objective:** Replicate the GAMS NEOS 10% uniform import-tariff shock in the equilibria GTAP Standard 7 (9×10) Python template and reconcile endogenous deltas against a correct GAMS reference.
+**Last updated:** 2026-05-12
+**Status:** CLOSED — 100% parity achieved (see "Session 2026-05-12: Branch close-out").
+**Objective:** Replicate the GAMS NEOS 10% uniform import-tariff shock in the equilibria GTAP Standard 7 Python template (9×10 and 3×2 NUS333) and reconcile endogenous deltas cell-by-cell against the GAMS reference (NEOS and, where licensing permits, GAMS local).
 
 ---
 
@@ -185,9 +186,46 @@ Straightforward bug; fix when refreshing shock output.
 
 | File | Purpose |
 |------|---------|
-| `src/equilibria/templates/gtap/gtap_model_equations.py` | Main model equations. Key areas: `get_gdpmp_init`, `get_yi_init`, `get_xiagg_init`, `eq_ytax`, `eq_yc`, `eq_yg`, `eq_pabs`, `eq_gdpmp` |
-| `scripts/gtap/run_gtap.py` | CLI. Contains `validate-shock`, `_collect_key_quantities` (ytax bug), `_build_import_price_snapshot_block` |
-| `src/equilibria/templates/gtap/gtap_solver.py` | Solver wrapper. `apply_closure`, `apply_aggressive_fixing_for_mcp`, numeraire fixing |
-| `src/equilibria/templates/gtap/gtap_parameters.py` | Parameter loading, `savf_bar` calculation, final-demand splits |
-| `output/gtap_ifsub_false_warmstart.json` | Last good shocked run (signs inverted) |
-| `output/gtp_baseline_reverted.json` | Last good baseline run (res 1.12e-06) |
+| `src/equilibria/templates/gtap/gtap_model_equations.py` | Main model equations. CDE/chiInv frozen as Param post-calibration; `pmuv` Var+eq Tornqvist with `pefob0=(1+exptx)`. |
+| `scripts/gtap/run_gtap.py` | CLI. `validate-shock`, `_apply_shock_to_params` (`tm_pct`), `_collect_key_quantities` (emits canonical `ytax(r, gy)` over 10 streams). |
+| `scripts/gtap/diff_nus333_full.py` / `diff_9x10_full.py` | Cell-by-cell parity diffs vs GAMS reference GDX (NEOS or local). 0 divergent cells in both. |
+| `scripts/gtap/bench_nus333_dual.py` | Dual-reference benchmark (NEOS + GAMS local) + N=5 wall-time. |
+| `src/equilibria/templates/reference/gtap/scripts/postsim.gms` | GAMS postsim recalc of `pdp/pmp` for `alpha=0` cells so reference GDX matches NEOS convention. |
+| `docs/site/benchmarks.md` | Sphinx-rendered benchmarks page (parity + wall-time). |
+
+---
+
+## Session 2026-05-12: Branch close-out
+
+### Final parity state
+
+| Dataset | vs NEOS (base / shock) | vs GAMS local (base / shock) |
+|---------|------------------------|------------------------------|
+| NUS333 (3×2) | **100% / 100%** | **100% / 100%** |
+| 9×10        | **100% / 100%** | blocked — GAMS community license cap (2,500 rows; 9×10 has ~10k equations) |
+
+Cell-by-cell diffs (`diff_nus333_full.py`, `diff_9x10_full.py`) report 0 divergent cells across all variables and parameters in both base and shock.
+
+### Fixes that closed the gap (cumulative)
+
+1. **Region residual fix** — `NAmerica` (matches GAMS `rres`), not `RestofWorld`.
+2. **Shock formula `tm_pct`** — multiplies tariff *power*: `imptx_new = (1+imptx_old)*(1+v) − 1`.
+3. **Snapshot pinning at t0** — counterfactual model must receive `t0_snapshot=base_model`; otherwise CES weights recalibrate against perturbed state and invert shock direction.
+4. **Factor-price pinning** — `fix_endowments=True` + active `eq_xfteq` pins `pft=pabs`; deactivate `eq_xfteq` when `xft` is fixed.
+5. **9×10 shock convention** — rate-scaled, not power (`tm = tm_base*1.1`), confirmed by EastAsia regy delta 0.0% err.
+6. **CDE / `chiInv` elasticities frozen as Param post-calibration** — declared but unpaired in `model gtap` causes them to drift; freeze at cal-time `xcshr` (Param, not Expression).
+7. **`pmuv` Tornqvist as Var+eq** with `pefob0=(1+exptx)`.
+8. **`pwmg=0` where `tmarg=0`** — injected before `pwmg.fx` pin in NEOS bundle.
+9. **`pdp/pmp` postsim recalc** — `postsim.gms` recalculates `pdp = pd*(1+dintx)` and `pmp = pmt*(1+mintx)` for all cells (including `alpha=0` ones gated off by `pdpeq/pmpeq`), matching the 9×10 reference GDX convention.
+10. **`ytax(r, gy)` canonical 10 streams** — `_collect_key_quantities` now emits `pt/ft/fs/fc/pc/gc/ic/et/mt/dt` matching `model.gms:642-686`, plus derived `ytax_tot` and `ytax_ind = ytax_tot - ytax[r|dt]` (PR #3 / `28a9b93`).
+
+### Benchmarks (NUS333, N=5 wall-time)
+
+- Python median: 0.644s
+- GAMS local median: 0.848s
+- Ratio: Python ≈ 0.76× GAMS local
+
+### Open items (out of scope for this branch)
+
+- 9×10 GAMS local parity: requires a non-community GAMS license (community cap of 2,500 nonlinear rows blocks the ~10k-equation 9×10 model). NEOS reference is sufficient for current goals.
+- `output/gtap_ifsub_false_warmstart.json` and `output/gtp_baseline_reverted.json` are pre-fix snapshots and have been superseded by the parity CSVs under `benchmarks/`.
