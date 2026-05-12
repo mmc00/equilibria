@@ -1,14 +1,24 @@
-# equilibria — GTAP Standard 7 (9×10) GAMS/NEOS Parity Branch
+# equilibria — GTAP Standard 7 GAMS/NEOS Parity (CLOSED)
 
-## Objetivo del branch
+## Estado del branch
 
-Lograr **paridad exacta** entre el template Python `equilibria` GTAP Standard 7 (9 sectores × 10 regiones) y la referencia GAMS/NEOS (`out.gdx`, job 18737509, `tariff_comp.gms`, `ifSUB=0`) para:
+**Paridad 100% lograda en ambos datasets (base + shock 10%):**
+
+| Dataset | Python vs NEOS | Python vs GAMS local |
+|---------|----------------|----------------------|
+| NUS333 (3×2) | 100% / 100% | 100% / 100% |
+| 9x10        | 100% / 100% | bloqueado por licencia community |
+
+Detalles por sesión en `GTAP_VALIDATION_STATUS.md`. Trabajo activo del branch cerrado el 2026-05-12 (PR #3, commit `28a9b93` en `main`).
+
+## Objetivo original
+
+Lograr **paridad exacta** entre el template Python `equilibria` GTAP Standard 7 (9×10 y 3×2 NUS333) y la referencia GAMS/NEOS para:
 
 1. **Baseline** (pre-shock)
 2. **Shock uniforme de 10% en aranceles de importación** (`tm.fx = tm.l * 1.1`)
 
-**Criterio único de éxito:** signo y magnitud de los deltas endógenos coinciden con GAMS.
-La calidad de convergencia (residual) NO es criterio — sólo importa la paridad de deltas.
+**Criterio:** signo y magnitud de los deltas endógenos coinciden con GAMS.
 
 ## Reglas de trabajo (no negociables)
 
@@ -41,28 +51,32 @@ Residual: <valor si conocido>
 
 | Item | Estado |
 |------|--------|
-| Region residual fix | ✅ aplicado |
+| Region residual fix (`NAmerica`) | ✅ aplicado |
 | Shock formula fix (`tm_pct`) | ✅ aplicado |
-| `EastAsia regy_delta` vs GAMS | ✅ −20,991 vs −20,101 (4% error) |
-| Baseline nonlinear residual | ⚠️ 1.04e-06 (gate estricto 1e-8) |
-| Shocked nonlinear convergence (1000 pares) | ❌ residual 0.38 |
-| `gdpmp` baseline parity | ❌ 15.061 vs 15.220 |
-| Parity check variable-por-variable | ❌ pendiente |
-| Bug `_collect_key_quantities` ytax | ❌ pendiente (baja prio) |
+| `pdp/pmp` postsim recalc para alpha=0 | ✅ aplicado |
+| CDE/chiInv elasticities frozen como Param | ✅ aplicado |
+| `pmuv` Tornqvist Var+eq con `pefob0=(1+exptx)` | ✅ aplicado |
+| `pwmg=0` donde `tmarg=0` (NEOS bundle) | ✅ aplicado |
+| `ytax(r,gy)` con 10 streams canónicos | ✅ PR #3 |
+| Paridad 9x10 (base + shock vs NEOS) | ✅ 100% / 100% |
+| Paridad NUS333 (base + shock vs NEOS) | ✅ 100% / 100% |
+| Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
+| Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
 ## Archivos clave
 
 | Archivo | Propósito |
 |---------|-----------|
 | `src/equilibria/templates/gtap/gtap_model_equations.py` | Ecuaciones del modelo. Áreas críticas: `get_gdpmp_init`, `get_yi_init`, `get_xiagg_init`, `eq_ytax`, `eq_yc`, `eq_yg`, `eq_pabs`, `eq_gdpmp`. Líneas 1134, 1862, 4510, 4574 ya fijadas a `NAmerica`. |
-| `scripts/gtap/run_gtap.py` | CLI. `validate-shock`, `_apply_shock_to_params` (`tm_pct`), bug pendiente en `_collect_key_quantities` (583–594). |
+| `scripts/gtap/run_gtap.py` | CLI. `validate-shock`, `_apply_shock_to_params` (`tm_pct`), `_collect_key_quantities` (emite `ytax(r,gy)` con 10 streams canónicos). |
+| `scripts/gtap/diff_nus333_full.py` / `diff_9x10_full.py` | Diffs cell-by-cell vs GAMS (NEOS o local). 0 cells diverge en ambos. |
+| `scripts/gtap/bench_nus333_dual.py` | Benchmark dual-reference (NEOS + GAMS local) + wall-time N=5. |
 | `src/equilibria/templates/gtap/gtap_solver.py` | Wrapper PATH. `apply_closure`, `apply_aggressive_fixing_for_mcp`, fijación de numerario. |
 | `src/equilibria/templates/gtap/gtap_parameters.py` | Carga de parámetros, `savf_bar`, splits de demanda final. |
 | `GTAP_VALIDATION_STATUS.md` | Status detallado por sesión, hipótesis, hallazgos. |
-| `output/gtap_ifsub_false_warmstart.json` | Última corrida shockeada buena (signos invertidos, pre-fix). |
-| `output/gtp_baseline_reverted.json` | Última baseline buena (res 1.12e-06). |
+| `docs/site/benchmarks.md` | Página benchmarks rendered en Read the Docs (parity NEOS + local + wall-time). |
 
 ## Referencia GAMS
 
 - `tariff_comp.gms` con `ifSUB=0` (equivalente Python: `if_sub=False`).
-- Truco crítico GAMS en `cal.gms:652`: sobrescribe `yi = pi*depr*kstock + rsav + savf` dejando `xi` en valor de absorción → residual deliberado en `xieq` que el solver resuelve subiendo `xi` y `gdpmp`. Replicarlo en Python rompió convergencia (residual 21) — revertido.
+- NEOS jobs de referencia: 18737509 (9×10), regen NUS333 vía `build_nus333_neos_bundle.py` (postsim recalc `pdp/pmp` + `pwmg=0` fix incluidos upstream en `postsim.gms`/`iterloop.gms`).
