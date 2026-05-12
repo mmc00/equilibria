@@ -241,3 +241,11 @@ scripts/gtap/*
 examples/gtap/
 docs/GTAP_*.md
 docs/findings/gams_formulation_analysis.md
+
+# Local agent state and in-progress plans
+.claude/
+docs/superpowers/plans/
+
+# GTAP scratch artifacts (accidental `con` redirect, fixed-script experiments)
+src/equilibria/templates/reference/gtap/scripts/con
+src/equilibria/templates/reference/gtap/scripts/tariff_sim_fixed.gms
