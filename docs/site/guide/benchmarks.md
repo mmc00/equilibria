@@ -39,28 +39,21 @@ Reference: `src/equilibria/templates/reference/gtap/output/COMP.gdx` (rate-scale
 
 Reference: `output/nus333_neos/out.gdx` (NEOS job 18744693, power-scaled 10% imptx shock, residual region `ROW`).
 
-*Generated `2026-05-11T15:45:15Z` from commit `0c6969d`.*
+*Generated `2026-05-12T00:09:18Z` from commit `e5b9385`.*
 
 ### Parity vs GAMS NEOS reference
 
 | Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |
 |-------|--------------|-------|-------|---------|---------|------------|----------|------------|
-| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 | 0.30s |
-| `shock` | 138/138 | 1310 | 1310 | 0 | 0 | 100.00% | 2.08e-07 | 0.30s |
+| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 | 0.32s |
+| `shock` | 138/138 | 1310 | 1310 | 0 | 0 | 100.00% | 2.08e-07 | 0.32s |
 
 ### Parity vs GAMS local
 
 | Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |
 |-------|--------------|-------|-------|---------|---------|------------|----------|------------|
-| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 | 0.30s |
-| `shock` | 136/138 | 1310 | 1300 | 10 | 0 | 99.24% | 2.08e-07 | 0.30s |
-
-#### Top diverging variables — `shock`
-
-| Var | Py var | Cells | Diverge | Max abs err | Max rel err |
-|-----|--------|-------|---------|-------------|-------------|
-| `pmp` | `pmp` | 42 | 6 | 1.324174e-01 | 1.324174e-01 |
-| `pdp` | `pdp` | 42 | 4 | 4.999795e-02 | 4.999795e-02 |
+| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 | 0.32s |
+| `shock` | 138/138 | 1310 | 1310 | 0 | 0 | 100.00% | 2.08e-07 | 0.32s |
 
 ### Wall-time benchmark
 
@@ -68,8 +61,8 @@ Median / min / max / mean across the runs in `nus333_timing.csv`. The warm-up ru
 
 | Solver | N | Median | Min | Max | Mean |
 |--------|---|--------|-----|-----|------|
-| Python `equilibria` (PATH C API, nonlinear full) | 5 | 0.608s | 0.562s | 0.653s | 0.604s |
-| GAMS local (`comp_nus333.gms`, PATH via GAMS 53) | 5 | 0.808s | 0.751s | 0.836s | 0.804s |
+| Python `equilibria` (PATH C API, nonlinear full) | 5 | 0.644s | 0.608s | 0.702s | 0.643s |
+| GAMS local (`comp_nus333.gms`, PATH via GAMS 53) | 5 | 0.848s | 0.769s | 0.917s | 0.831s |
 
-*Median ratio Python / GAMS-local: **0.752×***
+*Median ratio Python / GAMS-local: **0.760×***
 

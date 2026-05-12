@@ -4,6 +4,14 @@
 *
 * --------------------------------------------------------------------------------------------------
 
+*  Recalc pdp/pmp post-solve for ALL cells (including alpha=0 ones where the
+*  pdpeq/pmpeq are gated off and `iterloop.gms` would otherwise leave them at
+*  the cal.gms init of 1.0). This matches the 9x10 reference GDX convention
+*  and the NEOS regen — both have pdp = pd*(1+dintx), pmp = pmt*(1+mintx) for
+*  every cell, not just the ones where alpha != 0.
+pdp.l(r,i,aa,t) = pd.l(r,i,t)*(1 + dintx.l(r,i,aa,t)) ;
+pmp.l(r,i,aa,t) = pmt.l(r,i,t)*(1 + mintx.l(r,i,aa,t)) ;
+
 *  SAM calculation
 
 *  Domestic production
