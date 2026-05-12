@@ -2551,6 +2551,10 @@ def _run_homotopy_shocked(
     prev_model = base_model
     final_result: dict[str, Any] = {"residual": float("inf"), "status": "not_run"}
     step_residuals: list[float] = []
+    # Capture per-step snapshots so callers (e.g. welfare decomposition) can
+    # integrate first-order contributions along the homotopy path.
+    step_models: list[Any] = []
+    step_params_list: list[GTAPParameters] = []
 
     for step in range(1, homotopy_steps + 1):
         fraction = step / homotopy_steps
@@ -2604,11 +2608,15 @@ def _run_homotopy_shocked(
                 f"{result['residual']:.3e} is high — warm-start for next step may be unreliable"
             )
         prev_model = step_model
+        step_models.append(step_model)
+        step_params_list.append(step_params)
         final_result = result
 
     final_result["homotopy_steps"] = homotopy_steps
     final_result["step_residuals"] = step_residuals
     final_result["shocked_model"] = prev_model
+    final_result["step_models"] = step_models
+    final_result["step_params"] = step_params_list
     return final_result
 
 
@@ -3758,6 +3766,18 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
         'Default False matches GAMS ifSUB=0 (full equation system active).'
     ),
 )
+@click.option(
+    '--welfare-decomp',
+    is_flag=True,
+    default=False,
+    help='Compute Huff/McDougall welfare decomposition (writes welfare_decomposition.csv).',
+)
+@click.option(
+    '--welfare-har',
+    type=click.Path(path_type=Path),
+    default=None,
+    help='Optional path for WELVIEW.har export (RunGTAP-compatible). Implies --welfare-decomp.',
+)
 @click.pass_context
 def validate_shock(
     ctx,
@@ -3775,6 +3795,8 @@ def validate_shock(
     homotopy_steps,
     calibrated_start,
     if_sub,
+    welfare_decomp,
+    welfare_har,
 ):
     """Run strict baseline + strict shocked path-capi validation for CI pipelines."""
     logger = ctx.obj['logger']
@@ -3907,6 +3929,62 @@ def validate_shock(
         baseline_quantities = _collect_key_quantities(base_model, base_params, scale_for_gams=True)
         shocked_quantities = _collect_key_quantities(shock_model, shock_params, scale_for_gams=True)
         delta_summary = _build_delta_summary(baseline_quantities, shocked_quantities)
+
+        if welfare_decomp or welfare_har:
+            from equilibria.templates.gtap.welfare_decomp import (
+                compute_welfare_decomposition,
+                compute_welfare_decomposition_homotopy,
+            )
+
+            output_dir = Path(output) if output else Path(".")
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            # Use homotopy path integration when available — gives exact RunGTAP equivalence.
+            homotopy_path = (
+                isinstance(shocked_result, dict)
+                and shocked_result.get("step_models")
+                and shocked_result.get("step_params")
+                and len(shocked_result["step_models"]) >= 2
+            )
+            if homotopy_path:
+                step_levels = [baseline_quantities] + [
+                    _collect_key_quantities(m, p, scale_for_gams=True)
+                    for m, p in zip(shocked_result["step_models"], shocked_result["step_params"])
+                ]
+                step_params_full = [base_params] + list(shocked_result["step_params"])
+                welfare_results = compute_welfare_decomposition_homotopy(
+                    step_params_full, step_levels,
+                )
+                click.echo(f"\nWelfare decomposition (Huff/RunGTAP, N={len(step_levels)-1} homotopy steps):")
+            else:
+                welfare_results = compute_welfare_decomposition(
+                    base_params, shock_params, baseline_quantities, shocked_quantities,
+                )
+                click.echo("\nWelfare decomposition (Huff/RunGTAP, single-step — residual ~1-3% expected):")
+
+            csv_path = output_dir / "welfare_decomposition.csv"
+            with csv_path.open("w") as fh:
+                first = next(iter(welfare_results.values()))
+                cols = ["region"] + list(first.as_dict().keys())
+                fh.write(",".join(cols) + "\n")
+                for region in sorted(welfare_results):
+                    row = welfare_results[region].as_dict()
+                    fh.write(region + "," + ",".join(f"{row[c]:.6f}" for c in cols[1:]) + "\n")
+            click.echo(f"  Wrote {csv_path}")
+
+            click.echo(f"  {'Region':<10} {'EV ($M)':>12} {'A':>10} {'T':>10} {'IS':>10} {'resid%':>8}")
+            for region in sorted(welfare_results):
+                w = welfare_results[region]
+                resid_pct = (100.0 * w.residual / w.EV) if abs(w.EV) > 1e-9 else 0.0
+                click.echo(
+                    f"  {region:<10} {w.EV:>12,.2f} {w.A_total:>10,.2f} "
+                    f"{w.T:>10,.2f} {w.IS:>10,.2f} {resid_pct:>+7.2f}%"
+                )
+
+            if welfare_har:
+                from equilibria.templates.gtap.welfare_decomp_har import write_welview_har
+                write_welview_har(Path(welfare_har), welfare_results)
+                click.echo(f"  Wrote {welfare_har}")
 
         income_block_vars = ["regy", "ytax_ind", "facty", "yc", "yg", "yi", "rsav"]
         income_block_maxima: dict[str, dict[str, float]] = {}

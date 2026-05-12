@@ -169,6 +169,72 @@ shock = {
 solver.apply_shock(shock)
 ```
 
+## Welfare Decomposition
+
+After solving baseline + shocked equilibria, decompose the equivalent
+variation (USD millions) into the standard Huff (1996) / McDougall (2003)
+contributions: allocative efficiency `A` (broken into 11 distortion
+buckets — `ptax, imptx, exptx, dftax, mftax, dctax, mctax, dgtax, mgtax,
+ditx, mitx`), terms-of-trade `T`, investment-savings `IS`, endowment
+`ENDW` and technical change `TECH`.
+
+```python
+from equilibria.templates.gtap.welfare_decomp import (
+    compute_welfare_decomposition,
+    compute_welfare_decomposition_homotopy,
+)
+
+# Single-step (residual ~1–3% vs RunGTAP)
+welfare = compute_welfare_decomposition(
+    base_params=base_params, base_model=baseline_model,
+    shock_params=shocked_params, shock_model=shock_model,
+)
+print(welfare["Oceania"].EV, welfare["Oceania"].A_total, welfare["Oceania"].T)
+
+# Homotopy (residual <0.01% — exact RunGTAP equivalence)
+welfare = compute_welfare_decomposition_homotopy(
+    base_params=base_params, base_model=baseline_model,
+    step_params=step_params, step_models=step_models,
+)
+```
+
+The 11 sub-buckets, integration variants, and the levels-vs-linearised
+residual analysis are covered in the dedicated guide:
+[`docs/site/guide/welfare_decomposition.md`](../../../../docs/site/guide/welfare_decomposition.md).
+
+### CLI
+
+```bash
+uv run python scripts/gtap/run_gtap.py validate-shock \
+    --gdx-file data/9x10/9x10Dat.gdx \
+    --variable rtms --index "(Oceania,c_Crops,EastAsia)" --value 0.10 \
+    --shock-mode tm_pct \
+    --output reports/welfare/ \
+    --welfare-decomp \
+    --homotopy-steps 4 \
+    --welfare-har reports/welfare/WELVIEW.har
+```
+
+Outputs:
+
+- `welfare_decomposition.csv` — one row per region, columns for `EV`,
+  `A_total`, all 11 buckets, `T`, `IS`, `ENDW`, `TECH`, `total`,
+  `residual_pct`.
+- `WELVIEW.har` (optional) — RunGTAP-compatible HAR with headers
+  `EVAL`, `ALET`, `ALEF` (2D `ALSR × REG`), `TOTE`, `ISE`, `ENDW`,
+  `TECH`, `TOT`. Readable by `harview` / `ViewHAR` and any GEMPACK
+  tool, plus `equilibria.babel.har.read_har`.
+
+### Why a residual?
+
+RunGTAP (GEMPACK) uses a linearised model where the Huff identity
+closes by construction. Equilibria solves the levels MCP, so the Huff
+formula `τ_b · Δq_b` is a first-order approximation with O(Δ²) error
+(typically 1–3 % for 10 % shocks). The homotopy variant solves N
+intermediate equilibria and computes Huff segment-wise; error decays as
+O(1/N²), so N=4 brings the residual below the parity tolerance the
+template already enforces against GAMS (1e-6).
+
 ## Validation
 
 Run parity checks against GAMS baseline:
@@ -342,7 +408,7 @@ python scripts/gtap/run_gtap_parity.py \
 - [ ] Energy/environmental extension (GTAP-E)
 - [ ] MyGTAP module (household heterogeneity)
 - [ ] Sub-regional modeling (NUTS2)
-- [ ] Welfare decomposition
+- [x] Welfare decomposition (Huff/RunGTAP, single-step + homotopy, see `docs/site/guide/welfare_decomposition.md`)
 - [ ] Sensitivity analysis
 - [x] GAMS parity testing system
 
