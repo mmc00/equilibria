@@ -145,14 +145,18 @@ def _load_comp_shock_deltas() -> dict[str, dict[str, float]]:
                 for k in regy_keys
             }
 
-    # ytax_ind from detailed ytax(r|tax_component)
+    # ytax_ind from detailed ytax(r|gy): canonical identity is
+    #   ytaxInd(r) = sum(gy, ytax(r,gy)) - ytax(r,"dt")
+    # so we must EXCLUDE the direct-tax stream when collapsing.
     if "ytax_ind" not in deltas and "ytax" in deltas:
         by_region: dict[str, float] = {}
         for key, val in deltas["ytax"].items():
             parts = key.split("|")
-            if not parts:
+            if len(parts) < 2:
                 continue
-            region = parts[0]
+            region, gy = parts[0], parts[1]
+            if gy == "dt":
+                continue
             by_region[region] = by_region.get(region, 0.0) + float(val)
         if by_region:
             deltas["ytax_ind"] = by_region
@@ -589,18 +593,150 @@ def _collect_key_quantities(
         if hasattr(model, "pwfact"):
             buckets["rorg"] = {"global": float(value(model.pwfact))}
 
-    if hasattr(model, "r") and hasattr(model, "a"):
-        ytax: dict[str, float] = {}
+    # ytax(r, gy) following GAMS canonical model.gms:642-686:
+    # one bucket per region × tax stream (pt, ft, fs, fc, pc, gc, ic, et, mt, dt).
+    # Sums match `ytaxeq` exactly; `ytax_tot = sum(gy, ytax)`; `ytax_ind = ytax_tot - ytax[r|dt]`.
+    if hasattr(model, "r") and hasattr(model, "a") and params is not None:
+        activity_labels = {str(a) for a in model.a}
+        ytax_by_gy: dict[str, float] = {}
+
+        def _xscale(r_str: str, a_str: str) -> float:
+            if not hasattr(model, "xscale"):
+                return 1.0
+            v = float(value(model.xscale[r_str, a_str]))
+            return v if v > 0.0 else 1.0
+
         for r in model.r:
-            for a in model.a:
-                rev = 0.0
-                if hasattr(model, "x") and hasattr(model, "p_rai") and params is not None:
+            r_str = str(r)
+            pt = ft = fs = fc = pc = gc = ic = et = mt = dt = 0.0
+
+            # pt: production tax = rto * p_rai * x
+            if hasattr(model, "x") and hasattr(model, "p_rai"):
+                for a in model.a:
+                    rto = float(params.taxes.rto.get((r_str, str(a)), 0.0))
+                    if rto == 0.0:
+                        continue
                     outputs = params.sets.activity_commodities.get(str(a), list(params.sets.i))
-                    tax_rate = float(params.taxes.rto.get((str(r), str(a)), 0.0))
                     for i in outputs:
-                        rev += tax_rate * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
-                ytax[f"{r}|{a}"] = rev
-        buckets["ytax_prod"] = ytax
+                        pt += rto * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
+
+            # ft / fs: factor taxes (positive) and subsidies (negative rates) — GAMS splits
+            # by sign of the rate stream; rtf carries the full schedule here.
+            if hasattr(model, "pf") and hasattr(model, "xf"):
+                for (rr, f, a), rtf in params.taxes.rtf.items():
+                    if str(rr) != r_str:
+                        continue
+                    rate = float(rtf)
+                    if rate == 0.0:
+                        continue
+                    term = rate * float(value(model.pf[r, f, a])) * float(value(model.xf[r, f, a])) / _xscale(r_str, str(a))
+                    if rate >= 0.0:
+                        ft += term
+                    else:
+                        fs += term
+
+            # fc: firm intermediate consumption tax (rtpd*pd*xda + rtpi*pmt*xma) for a ∈ activities
+            if hasattr(model, "pd") and hasattr(model, "xda"):
+                for (rr, i, a), rtpd in params.taxes.rtpd.items():
+                    if str(rr) != r_str or str(a) not in activity_labels:
+                        continue
+                    fc += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a])) / _xscale(r_str, str(a))
+            if hasattr(model, "pmt") and hasattr(model, "xma"):
+                for (rr, i, a), rtpi in params.taxes.rtpi.items():
+                    if str(rr) != r_str or str(a) not in activity_labels:
+                        continue
+                    fc += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a])) / _xscale(r_str, str(a))
+
+            # pc: private (household) consumption tax — rtpd/rtpi keyed at a=hhd
+            if hasattr(model, "pd") and hasattr(model, "xda"):
+                for (rr, i, a), rtpd in params.taxes.rtpd.items():
+                    if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
+                        continue
+                    pc += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+            if hasattr(model, "pmt") and hasattr(model, "xma"):
+                for (rr, i, a), rtpi in params.taxes.rtpi.items():
+                    if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
+                        continue
+                    pc += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+
+            # gc: government consumption tax (rtgd*pd*xda + rtgi*pmt*xma keyed at a=gov)
+            if hasattr(model, "pd") and hasattr(model, "xda"):
+                for (rr, i), rtgd in params.taxes.rtgd.items():
+                    if str(rr) != r_str:
+                        continue
+                    gc += float(rtgd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+            if hasattr(model, "pmt") and hasattr(model, "xma"):
+                for (rr, i), rtgi in params.taxes.rtgi.items():
+                    if str(rr) != r_str:
+                        continue
+                    gc += float(rtgi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+
+            # ic: investment consumption tax — rtpd/rtpi keyed at a=inv
+            if hasattr(model, "pd") and hasattr(model, "xda"):
+                for (rr, i, a), rtpd in params.taxes.rtpd.items():
+                    if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
+                        continue
+                    ic += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+            if hasattr(model, "pmt") and hasattr(model, "xma"):
+                for (rr, i, a), rtpi in params.taxes.rtpi.items():
+                    if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
+                        continue
+                    ic += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+
+            # et: export tax = rtxs * pefob * xw  (r is exporter)
+            if hasattr(model, "xw"):
+                for (exporter, i, importer), rtxs in params.taxes.rtxs.items():
+                    if str(exporter) != r_str:
+                        continue
+                    rate = float(rtxs)
+                    if rate == 0.0:
+                        continue
+                    et += rate * _pefob_price(r_str, str(i), str(importer)) * float(value(model.xw[r, i, importer]))
+
+            # mt: import tax = imptx * pmcif * xw  (r is importer)
+            if hasattr(model, "xw"):
+                for (exporter, i, importer), imptx_rate in params.taxes.imptx.items():
+                    if str(importer) != r_str:
+                        continue
+                    rate = float(imptx_rate)
+                    if rate == 0.0:
+                        continue
+                    mt += rate * _pmcif_price(str(exporter), str(i), r_str) * float(value(model.xw[exporter, i, r]))
+
+            # dt: direct tax = kappaf * pf * xf / xScale
+            if hasattr(model, "pf") and hasattr(model, "xf"):
+                for f in model.f:
+                    for a in model.a:
+                        kappa = float(params.taxes.kappaf_activity.get((r_str, str(f), str(a)), 0.0))
+                        if kappa == 0.0:
+                            continue
+                        dt += kappa * float(value(model.pf[r, f, a])) * float(value(model.xf[r, f, a])) / _xscale(r_str, str(a))
+
+            ytax_by_gy[f"{r_str}|pt"] = pt
+            ytax_by_gy[f"{r_str}|ft"] = ft
+            ytax_by_gy[f"{r_str}|fs"] = fs
+            ytax_by_gy[f"{r_str}|fc"] = fc
+            ytax_by_gy[f"{r_str}|pc"] = pc
+            ytax_by_gy[f"{r_str}|gc"] = gc
+            ytax_by_gy[f"{r_str}|ic"] = ic
+            ytax_by_gy[f"{r_str}|et"] = et
+            ytax_by_gy[f"{r_str}|mt"] = mt
+            ytax_by_gy[f"{r_str}|dt"] = dt
+
+        buckets["ytax"] = ytax_by_gy
+
+        ytax_tot: dict[str, float] = {}
+        for key, val in ytax_by_gy.items():
+            region = key.split("|", 1)[0]
+            ytax_tot[region] = ytax_tot.get(region, 0.0) + val
+        buckets["ytax_tot"] = ytax_tot
+        if "ytax_ind" not in buckets:
+            # Derived only when the model variable isn't present (canonical:
+            # ytax_ind = ytax_tot - ytax[r|dt]).
+            buckets["ytax_ind"] = {
+                region: ytax_tot[region] - ytax_by_gy.get(f"{region}|dt", 0.0)
+                for region in ytax_tot
+            }
 
     # Compatibility aliases and derived aggregates for COMP-style comparisons.
     if "pf" in buckets:
