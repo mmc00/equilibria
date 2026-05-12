@@ -16,6 +16,7 @@ installation
 mip_to_sam
 pep_quickstart
 gtap_quickstart
+welfare_decomposition
 path_capi
 benchmarks
 ```

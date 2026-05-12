@@ -10,6 +10,7 @@ This guide covers:
 2. Building the model and solving the baseline.
 3. Running a uniform 10 % tariff shock.
 4. Comparing the result against a reference GAMS/NEOS solution.
+5. Decomposing welfare changes (Huff/RunGTAP, optional WELVIEW.har).
 
 ## Prerequisites
 
@@ -215,6 +216,66 @@ print(f"Mismatches: {comparison.n_mismatches}")
 for mismatch in comparison.top_mismatches(10):
     print(f"  {mismatch.group}{mismatch.key}: diff={mismatch.abs_diff:.2e}")
 ```
+
+## Step 5 — Welfare decomposition
+
+Once you have a baseline and a shocked solution, the
+`welfare_decomp` module computes the Huff (1996) / McDougall (2003)
+decomposition that RunGTAP reports in `WELVIEW.har`. Total equivalent
+variation (USD M) splits additively into allocative efficiency (`A`,
+broken into 11 distortion sub-buckets), terms-of-trade (`T`),
+investment-savings (`IS`), endowment (`ENDW`) and technical (`TECH`)
+contributions:
+
+```python
+from equilibria.templates.gtap.welfare_decomp import (
+    compute_welfare_decomposition,
+    compute_welfare_decomposition_homotopy,
+)
+
+# Single-step (1–3 % residual vs RunGTAP — first-order approximation)
+welfare = compute_welfare_decomposition(
+    base_params=base_params,
+    base_model=baseline_model,
+    shock_params=shocked_params,
+    shock_model=shock_model,
+)
+
+for region, comp in welfare.items():
+    print(f"{region}: EV={comp.EV:+.1f}  A={comp.A_total:+.1f}  T={comp.T:+.1f}")
+```
+
+For RunGTAP-grade exactness (residual <0.01 %), use the homotopy
+variant — pass the per-step models/params captured by
+`_run_homotopy_shocked` in `scripts/gtap/run_gtap.py`:
+
+```python
+welfare = compute_welfare_decomposition_homotopy(
+    base_params=base_params, base_model=baseline_model,
+    step_params=step_params,           # list of N intermediate states
+    step_models=step_models,
+)
+```
+
+CLI:
+
+```bash
+uv run python scripts/gtap/run_gtap.py validate-shock \
+    --gdx-file data/9x10/9x10Dat.gdx \
+    --variable rtms --index "(Oceania,c_Crops,EastAsia)" --value 0.10 \
+    --shock-mode tm_pct \
+    --output reports/welfare/ \
+    --welfare-decomp \
+    --homotopy-steps 4 \
+    --welfare-har reports/welfare/WELVIEW.har
+```
+
+This writes `welfare_decomposition.csv` (one row per region with all
+sub-buckets) and an optional `WELVIEW.har` readable by `harview` /
+`ViewHAR` / any GEMPACK tool.
+
+See {doc}`welfare_decomposition` for the formulas, the 11-bucket
+table, and an interpretation example.
 
 ## Closure and shock conventions
 
