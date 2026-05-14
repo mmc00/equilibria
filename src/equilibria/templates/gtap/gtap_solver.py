@@ -222,9 +222,30 @@ class GTAPSolver:
             "pft": "pft",
             "ytax": "ytax",
             "pnum": "pnum",
+            # CDE / welfare state — needed for warm-starting altertax
+            "uh": "uh",
+            "zcons": "zcons",
+            "xcshr": "xcshr",
+            "phip": "phip",
+            "phi": "phi",
+            "ev": "ev",
+            "cv": "cv",
+            "ug": "ug",
+            "yc": "yc",
+            "yg": "yg",
+            "yi": "yi",
+            "regy": "regy",
+            "pabs": "pabs",
         }
 
         applied = 0
+        # The snapshot stores GTAP-semantic xda/xaa as xda/xscale (see
+        # _extract_xda_unscaled). When loading back into a model that
+        # represents xda/xaa in scaled form, multiply by xscale to undo the
+        # pre-division. Without this, eq_xd_agg residual at warm-start blows
+        # up to O(60) for high-volume agents.
+        rescale_by_xscale = {"xda", "xaa"}
+        xscale_attr = getattr(self.model, "xscale", None)
         for hint_name, model_name in hint_to_model.items():
             if not hasattr(hint, hint_name) or not hasattr(self.model, model_name):
                 continue
@@ -234,6 +255,7 @@ class GTAPSolver:
             if values is None:
                 continue
             if isinstance(values, dict):
+                needs_rescale = model_name in rescale_by_xscale and xscale_attr is not None
                 for idx, value in values.items():
                     if value is None or idx not in target:
                         continue
@@ -242,11 +264,18 @@ class GTAPSolver:
                     # set by apply_aggressive_fixing_for_mcp at shocked init levels.
                     if getattr(component, "fixed", False):
                         continue
+                    raw_value = float(value)
+                    if needs_rescale and isinstance(idx, tuple) and len(idx) == 3:
+                        try:
+                            scale = float(xscale_attr[idx[0], idx[2]])
+                        except (KeyError, AttributeError, TypeError, ValueError):
+                            scale = 1.0
+                        raw_value *= scale
                     if hasattr(component, "set_value"):
-                        component.set_value(float(value))
+                        component.set_value(raw_value)
                         applied += 1
                     elif hasattr(component, "value"):
-                        component.value = float(value)
+                        component.value = raw_value
                         applied += 1
                 continue
             if hasattr(target, "set_value"):
