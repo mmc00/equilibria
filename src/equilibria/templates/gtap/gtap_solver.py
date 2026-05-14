@@ -712,6 +712,44 @@ class GTAPSolver:
             distance = [0] * n_left
             inf = 10 ** 9
 
+            # Apply forced pairs from closure config before Hopcroft-Karp runs.
+            # These pin critical eq↔var pairings the matcher would otherwise
+            # steal (e.g. eq_ev[r] sharing vars with eq_uh[r]).
+            forced_pairs_template = getattr(
+                self.closure, "forced_mcp_pairs", ()
+            ) or ()
+            if forced_pairs_template:
+                eq_name_to_row = {c.name: i for i, c in enumerate(constraints_data)}
+                var_name_to_col = {v.name: j for j, v in enumerate(free_var_data)}
+                regions = list(self.model.r) if hasattr(self.model, "r") else [None]
+                expanded: list[tuple[str, str]] = []
+                for eq_tpl, var_tpl in forced_pairs_template:
+                    if "{r}" in eq_tpl or "{r}" in var_tpl:
+                        for r_idx in regions:
+                            expanded.append(
+                                (eq_tpl.format(r=r_idx), var_tpl.format(r=r_idx))
+                            )
+                    else:
+                        expanded.append((eq_tpl, var_tpl))
+                pinned = 0
+                for eq_name, var_name in expanded:
+                    row = eq_name_to_row.get(eq_name)
+                    col = var_name_to_col.get(var_name)
+                    if row is None or col is None:
+                        continue
+                    if col not in adjacency[row]:
+                        continue
+                    if pair_left[row] != -1 or pair_right[col] != -1:
+                        continue
+                    pair_left[row] = col
+                    pair_right[col] = row
+                    pinned += 1
+                if pinned:
+                    logger.info(
+                        "MCP matcher: pre-pinned %d forced pairs from closure config",
+                        pinned,
+                    )
+
             def _bfs() -> bool:
                 queue: deque[int] = deque()
                 found_augmenting = False

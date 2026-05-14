@@ -192,6 +192,14 @@ def _closure_template_data(name: str) -> Dict[str, Any]:
         base["fix_taxes"] = True         # taxes fixed at user-specified shocked level
         base["fix_technology"] = True
         base["fix_orphan_vars"] = True  # CD collapse leaves ev/cv/pd Vars dangling
+        # Pin welfare equations to their canonical Vars before the aggressive
+        # MCP fixer runs its bipartite matcher. Without these forced pairs the
+        # matcher pairs eq_ev[r] with uh[r] (also referenced in the body) and
+        # then "fixes" ev[r] as an orphan, freezing welfare at its init value.
+        base["forced_mcp_pairs"] = (
+            ("eq_ev[{r}]", "ev[{r}]"),
+            ("eq_cv[{r}]", "cv[{r}]"),
+        )
         return base
 
     raise ValueError(f"Unsupported GTAP closure name: {name!r}")
@@ -240,6 +248,13 @@ class GTAPClosureConfig(ModelClosureConfig):
     fix_endowments: bool = True
     fix_world_prices: bool = False
     fix_orphan_vars: bool = False  # altertax: fix Vars no active eq references
+    # Pre-pinned MCP pairs (eq_name, var_name) that the structural matcher in
+    # apply_aggressive_fixing_for_mcp must respect. Forces critical pairings the
+    # matcher would otherwise steal — e.g. eq_ev[r] body references uh, pop, ev,
+    # alphaa_hhd, bh, eh; without a forced pair the matcher can pair eq_ev with
+    # uh and orphan ev. Each entry is a (eq_template, var_template) tuple where
+    # "{r}" is substituted with each region in model.r.
+    forced_mcp_pairs: Tuple[Tuple[str, str], ...] = Field(default_factory=tuple)
     
     # Fixed and endogenous variables
     fixed: Tuple[str, ...] = Field(
