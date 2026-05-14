@@ -4112,5 +4112,106 @@ def validate_shock(
         sys.exit(1)
 
 
+@cli.command(name='altertax')
+@click.option('--gdx-file', type=click.Path(exists=True, path_type=Path), required=True,
+              help='Path to GTAP basedata GDX file')
+@click.option('--variable', default='rtms', show_default=True,
+              help='Tax variable to shock before rebalancing')
+@click.option('--index', default='all', show_default=True,
+              help='Shock index tuple, e.g. "(EastAsia,c_TextWapp,NAmerica)" or "all"')
+@click.option('--value', type=float, required=True,
+              help='Shock value (interpretation depends on --shock-mode)')
+@click.option('--shock-mode', type=click.Choice(['set', 'pct', 'mult', 'tm_pct']),
+              default='tm_pct', show_default=True,
+              help='Shock semantics. tm_pct mirrors GAMS tm.fx = tm.l*(1+v).')
+@click.option('--output', type=click.Path(path_type=Path), required=True,
+              help='Destination .har file for the rebalanced dataset')
+@click.option('--tee/--no-tee', default=False, help='Show solver output')
+@click.option('--path-license-string', default=None,
+              help='Optional PATH license string')
+@click.pass_context
+def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
+             tee, path_license_string):
+    """Rebalance a GTAP dataset under altertax (Malcolm 1998 CD invariance).
+
+    Applies altertax CD elasticity overrides + the user's tax shock,
+    solves via PATH C API (nonlinear full), then extracts a balanced
+    SAM into a HAR file consumable as a new baseline.
+    """
+    from equilibria.templates.gtap.altertax import (
+        apply_altertax_elasticities,
+        rebalance_to_altertax_dataset,
+    )
+
+    logger = ctx.obj['logger']
+    logger.info(f"Altertax rebalance: gdx={gdx_file} → {output}")
+
+    try:
+        click.echo(f"\n[1/4] Loading 9x10 baseline from {gdx_file.name}")
+        sets = GTAPSets()
+        sets.load_from_gdx(gdx_file)
+        base_params = GTAPParameters()
+        base_params.load_from_gdx(gdx_file)
+        click.echo(f"      R={sets.n_regions} I={sets.n_commodities} "
+                   f"A={sets.n_activities} F={sets.n_factors}")
+
+        click.echo("[2/4] Applying altertax CD elasticity overrides + shock")
+        shock_params = apply_altertax_elasticities(base_params, in_place=False)
+        shock_index = _parse_index(index)
+        applied = _apply_shock_to_params(
+            shock_params, variable, shock_index, value, shock_mode=shock_mode,
+        )
+        if not applied:
+            raise ValueError(f"Shock {variable}{shock_index}={value} did not apply.")
+        click.echo(f"      shock applied to {variable}{shock_index} (mode={shock_mode})")
+
+        click.echo("[3/4] Building model + solving via PATH C API (nonlinear full)")
+        contract = _build_gtap_contract_with_calibration({"closure": "altertax"})
+        equations = GTAPModelEquations(sets, shock_params, contract.closure)
+        model = equations.build_model()
+        solve_result = _run_path_capi_nonlinear_full(
+            model,
+            shock_params,
+            solver_output=tee,
+            path_license_string=path_license_string,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=contract.closure,
+            equation_scaling=True,
+        )
+        status = solve_result.get('status')
+        residual = solve_result.get('residual', float('nan'))
+        click.echo(f"      solve status={status} residual={residual:.2e}")
+        # Guardrail: refuse to write a "rebalanced" SAM from a non-converged
+        # solution — the values would be cold-init garbage, not equilibrium.
+        if status not in ('solved', 'success', 'optimal') or not (residual < 1e-3):
+            raise RuntimeError(
+                f"PATH solve did not converge (status={status}, "
+                f"residual={residual:.2e}); refusing to write HAR. The "
+                "altertax closure may need additional eq pairings — see "
+                "docs/plans/gtap_altertax_implementation_plan_2026-05-13.md."
+            )
+
+        click.echo(f"[4/4] Writing rebalanced HAR → {output}")
+        rebalance = rebalance_to_altertax_dataset(
+            base_params=base_params,
+            shock_params=shock_params,
+            shock_model=model,
+            sets=sets,
+            output_path=output,
+        )
+        click.echo(f"      {output.name} ({output.stat().st_size:,} bytes)")
+        click.echo("\n  SAM totals (USD M):")
+        for k, v in rebalance.sam_totals.items():
+            click.echo(f"    {k:14s} = {v:>14,.1f}")
+        click.echo("\n✓ Altertax rebalance complete")
+        sys.exit(0)
+
+    except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
+        click.echo(click.style(f"✗ Error: {e}", fg="red"), err=True)
+        sys.exit(1)
+
+
 if __name__ == '__main__':
     cli()
