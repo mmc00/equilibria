@@ -105,6 +105,9 @@ def _dim_metadata_record(shape: tuple) -> bytes:
 
 
 def _data_record(arr: np.ndarray) -> bytes:
+    # GEMPACK REFULL format requires float32 on disk; we keep arrays in
+    # float64 internally to avoid overflow on cold-init values, then cast
+    # at the very last moment.
     flat = np.asarray(arr, dtype=np.float32).flatten(order="F")
     payload = _PAD + _INT.pack(flat.size) + flat.tobytes()
     return _record(payload)
@@ -147,6 +150,9 @@ def _write_refull(
 # SAM extraction from solved model
 # ---------------------------------------------------------------------------
 
+_FINITE_CEIL = 1e15  # Reject obvious cold-init garbage (xa = 1e18 etc.).
+
+
 def _safe_value(var: Any, default: float = 0.0) -> float:
     try:
         v = pyo.value(var)
@@ -155,7 +161,11 @@ def _safe_value(var: Any, default: float = 0.0) -> float:
         v = getattr(var, "value", None)
     if v is None:
         return default
-    return max(0.0, float(v))
+    fv = float(v)
+    if not (fv == fv) or fv > _FINITE_CEIL or fv < -_FINITE_CEIL:
+        # NaN, inf, or absurdly large — treat as missing.
+        return default
+    return max(0.0, fv)
 
 
 def _model_var(model: pyo.ConcreteModel, name: str) -> Any:
@@ -222,8 +232,8 @@ def _extract_arrays(
         )
 
     # ---- Intermediate inputs (VDFB, VMFB) at market prices, by sector ----
-    vdfb = np.zeros((len(R), len(I), len(A)), dtype=np.float32)
-    vmfb = np.zeros((len(R), len(I), len(A)), dtype=np.float32)
+    vdfb = np.zeros((len(R), len(I), len(A)), dtype=np.float64)
+    vmfb = np.zeros((len(R), len(I), len(A)), dtype=np.float64)
     for r in R:
         for i in I:
             pd_val = _safe_value(pd_var[r, i], 1.0) if pd_var is not None else 1.0
@@ -239,12 +249,12 @@ def _extract_arrays(
                     )
 
     # ---- Final demand (private/gov/invest) ----
-    vdpb = np.zeros((len(R), len(I)), dtype=np.float32)
-    vmpb = np.zeros((len(R), len(I)), dtype=np.float32)
-    vdgb = np.zeros((len(R), len(I)), dtype=np.float32)
-    vmgb = np.zeros((len(R), len(I)), dtype=np.float32)
-    vdib = np.zeros((len(R), len(I)), dtype=np.float32)
-    vmib = np.zeros((len(R), len(I)), dtype=np.float32)
+    vdpb = np.zeros((len(R), len(I)), dtype=np.float64)
+    vmpb = np.zeros((len(R), len(I)), dtype=np.float64)
+    vdgb = np.zeros((len(R), len(I)), dtype=np.float64)
+    vmgb = np.zeros((len(R), len(I)), dtype=np.float64)
+    vdib = np.zeros((len(R), len(I)), dtype=np.float64)
+    vmib = np.zeros((len(R), len(I)), dtype=np.float64)
     for r in R:
         for i in I:
             pd_val = _safe_value(pd_var[r, i], 1.0) if pd_var is not None else 1.0
@@ -261,8 +271,8 @@ def _extract_arrays(
                     mvec[ri] = _safe_value(xma[r, i, agent]) * pmt_val
 
     # ---- Factor payments (EVFB, EVOS) ----
-    evfb = np.zeros((len(R), len(F), len(A)), dtype=np.float32)
-    evos = np.zeros((len(R), len(F), len(A)), dtype=np.float32)
+    evfb = np.zeros((len(R), len(F), len(A)), dtype=np.float64)
+    evos = np.zeros((len(R), len(F), len(A)), dtype=np.float64)
     for r in R:
         for f in F:
             for a in A:
@@ -276,8 +286,8 @@ def _extract_arrays(
                     evos[R_idx[r], F_idx[f], A_idx[a]] = pf_val * xf_val / (1.0 + rtf)
 
     # ---- Bilateral trade (VXSB, VMSB at fob/cif) ----
-    vxsb = np.zeros((len(R), len(I), len(R)), dtype=np.float32)
-    vmsb = np.zeros((len(R), len(I), len(R)), dtype=np.float32)
+    vxsb = np.zeros((len(R), len(I), len(R)), dtype=np.float64)
+    vmsb = np.zeros((len(R), len(I), len(R)), dtype=np.float64)
     if xw is not None:
         for r in R:
             for i in I:
@@ -425,7 +435,7 @@ def rebalance_to_altertax_dataset(
         )
 
     # Real-GDP scale (1D over REG)
-    rgdp_vec = np.array([scale_rgdpmp[r] for r in R], dtype=np.float32)
+    rgdp_vec = np.array([scale_rgdpmp[r] for r in R], dtype=np.float64)
     blob += _write_refull(
         "RGDP", "Real GDP scale 1/pgdpmp",
         "RGDP", ["REG"], [R], rgdp_vec,
