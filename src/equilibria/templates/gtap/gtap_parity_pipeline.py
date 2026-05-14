@@ -803,6 +803,13 @@ class GTAPVariableSnapshot:
     ev: Dict[str, float] = field(default_factory=dict)
     cv: Dict[str, float] = field(default_factory=dict)
 
+    # Derived price/aggregate Vars whose equations (eq_pvaeq, eq_rgdpmp) are CES
+    # CD-branch under altertax — without warm-starting these, they contribute
+    # O(0.5) Newton residuals from cold init.
+    pva: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    rgdpmp: Dict[str, float] = field(default_factory=dict)
+    gdpmp: Dict[str, float] = field(default_factory=dict)
+
     pnum: Optional[float] = None
     pabs: Dict[str, float] = field(default_factory=dict)
     walras: Optional[float] = None
@@ -874,6 +881,9 @@ class GTAPVariableSnapshot:
             phi=_extract_var_levels(model.phi) if hasattr(model, "phi") else {},
             ev=_extract_var_levels(model.ev) if hasattr(model, "ev") else {},
             cv=_extract_var_levels(model.cv) if hasattr(model, "cv") else {},
+            pva=_extract_var_levels(model.pva) if hasattr(model, "pva") else {},
+            rgdpmp=_extract_var_levels(model.rgdpmp) if hasattr(model, "rgdpmp") else {},
+            gdpmp=_extract_var_levels(model.gdpmp) if hasattr(model, "gdpmp") else {},
             pnum=float(value(model.pnum)) if hasattr(model, "pnum") else None,
             pabs=_extract_var_levels(model.pabs) if hasattr(model, "pabs") else {},
             walras=float(value(model.walras)) if hasattr(model, "walras") else None,

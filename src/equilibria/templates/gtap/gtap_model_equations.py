@@ -5034,9 +5034,17 @@ class GTAPModelEquations:
         #   pg^(1-sigmag) = sum_i g_share[r,i] * pa[r,i,gov]^(1-sigmag)
         def eq_ug_rule(model, r):
             sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
-            if abs(sigmag - 1.0) < 1e-8:
-                sigmag = 1.01
             expo = 1.0 - sigmag
+            if abs(expo) < 1e-6:
+                # CD limit: pg = prod_i pa^g_share. The (1−sigmag)→0 limit of the
+                # CES dual is the geometric mean. Avoid the ill-conditioned
+                # bump-to-1.01 trick that produced power=-100.
+                pg_index = 1.0
+                for i in model.i:
+                    g = value(model.g_share[r, i])
+                    if g > 0.0:
+                        pg_index = pg_index * (model.pa[r, i, "gov"] ** g)
+                return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
             pg_terms = sum(
                 value(model.g_share[r, i]) * model.pa[r, i, "gov"] ** expo
                 for i in model.i

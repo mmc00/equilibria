@@ -236,6 +236,9 @@ class GTAPSolver:
             "yi": "yi",
             "regy": "regy",
             "pabs": "pabs",
+            "pva": "pva",
+            "rgdpmp": "rgdpmp",
+            "gdpmp": "gdpmp",
         }
 
         applied = 0
