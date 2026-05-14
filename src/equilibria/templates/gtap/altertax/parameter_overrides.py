@@ -100,4 +100,16 @@ def apply_altertax_elasticities(
     for key in list(e.etrae.keys()):
         e.etrae[key] = o.etrae
 
+    # Re-calibrate shares with new elasticities. The calibrated shares (p_amw,
+    # p_af, ava, and_param, etc.) are functions of (xw/xmt) * pm**sigmaw and
+    # similar; they bake in the original sigmaw=5.0. Under altertax sigmaw=0.95
+    # the cached p_amw values are O(100) instead of O(0.1), and the
+    # ``rhs**(1/(1-sigmaw))`` initializer for pmt blows up to ~1e48.
+    if hasattr(target, "sets") and target.sets is not None:
+        target.shares.calibrate(target.benchmark, target.elasticities, target.sets)
+        if hasattr(target, "calibrated") and hasattr(target.calibrated, "calibrate_from_benchmark"):
+            target.calibrated.calibrate_from_benchmark(
+                target.benchmark, target.elasticities, target.sets, target.taxes
+            )
+
     return target
