@@ -2006,7 +2006,13 @@ def _run_path_capi_nonlinear_full(
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _closure_patches import apply_squareness_patches  # type: ignore
-    apply_squareness_patches(model, params, label="nonlinear-full")
+    fix_orphans = bool(getattr(closure_config, "fix_orphan_vars", False))
+    is_altertax = getattr(closure_config, "name", "") == "altertax"
+    apply_squareness_patches(
+        model, params, label="nonlinear-full",
+        fix_orphans=fix_orphans,
+        skip_xfteq_deact=is_altertax,
+    )
 
     # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
     # already-fixed variables, so only the remaining FREE variables get warm-started
@@ -2134,9 +2140,17 @@ def _run_path_capi_nonlinear_full(
             import sys as _sys
             _sys.path.insert(0, str(Path(__file__).resolve().parent))
             from _closure_patches import structural_matching  # type: ignore
+        forced = [("eq_pwfact", "pwfact")]
+        # Welfare measures: eq_ev/eq_cv each pair to ev/cv (1-to-1, isolated).
+        # Without forcing, the matcher can steal eq_ev to pair with some other
+        # Var in its body (e.g. uh) and leave ev[r] orphan — see altertax CLI.
+        if hasattr(model, "r") and hasattr(model, "eq_ev") and hasattr(model, "ev"):
+            for r_idx in list(model.r):
+                forced.append((f"eq_ev[{r_idx}]", f"ev[{r_idx}]"))
+                forced.append((f"eq_cv[{r_idx}]", f"cv[{r_idx}]"))
         free_variables = structural_matching(
             constraints, free_variables,
-            forced_pairs=[("eq_pwfact", "pwfact")],
+            forced_pairs=forced,
             label="nonlinear-full",
         )
 

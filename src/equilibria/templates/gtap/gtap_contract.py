@@ -191,6 +191,7 @@ def _closure_template_data(name: str) -> Dict[str, Any]:
         base["fix_endowments"] = True   # xft fixed (endowments don't move under CD)
         base["fix_taxes"] = True         # taxes fixed at user-specified shocked level
         base["fix_technology"] = True
+        base["fix_orphan_vars"] = True  # CD collapse leaves ev/cv/pd Vars dangling
         return base
 
     raise ValueError(f"Unsupported GTAP closure name: {name!r}")
@@ -238,6 +239,7 @@ class GTAPClosureConfig(ModelClosureConfig):
     fix_technology: bool = True
     fix_endowments: bool = True
     fix_world_prices: bool = False
+    fix_orphan_vars: bool = False  # altertax: fix Vars no active eq references
     
     # Fixed and endogenous variables
     fixed: Tuple[str, ...] = Field(

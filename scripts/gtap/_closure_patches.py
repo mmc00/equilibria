@@ -164,17 +164,75 @@ def deactivate_unmatched_xseq(model, params, *, label: str = "") -> int:
         if unmatched_eqs:
             print(f"[{label}] unmatched active eqs ({len(unmatched_eqs)}): {unmatched_eqs[:8]}")
         if unmatched_vars:
-            print(f"[{label}] unmatched free vars ({len(unmatched_vars)}): {unmatched_vars[:8]}")
+            # Print all when count is small (≤50) so altertax-style closure
+            # debugging can see the full collapse pattern; truncate otherwise.
+            shown = unmatched_vars if len(unmatched_vars) <= 50 else unmatched_vars[:8]
+            print(f"[{label}] unmatched free vars ({len(unmatched_vars)}): {shown}")
     return deact
 
 
-def apply_squareness_patches(model, params, *, label: str = "") -> dict[str, int]:
-    """Run all three post-closure patches in order. Returns counts per patch."""
-    return {
+def fix_orphan_free_vars(model, *, label: str = "") -> int:
+    """Fix any free Var data that no active Constraint references.
+
+    Under altertax (CD invariance, omegax=inf, all elasticities pinned), several
+    eqs collapse to ``Constraint.Skip`` (e.g. ``eq_ev`` when alpha or share is 0)
+    or to identities that no longer reference some Vars. Those Vars become
+    structurally orphaned and PATH cannot pair them — fix them at their
+    initialized value so the MCP system stays square.
+    """
+    referenced: set[int] = set()
+    for con in model.component_data_objects(Constraint, active=True, descend_into=True):
+        for v in identify_variables(con.body, include_fixed=False):
+            referenced.add(id(v))
+
+    fixed = 0
+    orphan_names: list[str] = []
+    for v in model.component_data_objects(Var, active=True, descend_into=True):
+        if v.fixed:
+            continue
+        if id(v) in referenced:
+            continue
+        if v.value is None:
+            v.set_value(0.0)
+        v.fix()
+        fixed += 1
+        orphan_names.append(v.name)
+
+    if fixed and label:
+        sample = orphan_names[:8]
+        print(f"[{label}] fixed {fixed} orphan free vars (no active eq refs them); sample={sample}")
+    return fixed
+
+
+def apply_squareness_patches(
+    model,
+    params,
+    *,
+    label: str = "",
+    fix_orphans: bool = False,
+    skip_xfteq_deact: bool = False,
+) -> dict[str, int]:
+    """Run all post-closure patches in order. Returns counts per patch.
+
+    ``fix_orphans=True`` adds a final pass that fixes Vars no active Constraint
+    references — needed for altertax where CD collapse leaves welfare/price Vars
+    structurally dangling.
+
+    ``skip_xfteq_deact=True`` skips the eq_xfteq deactivation. Altertax keeps
+    eq_xfteq active even when xft is fixed (it pins pft via demand identity);
+    deactivating it strips the 40 pft determinations and unbalances the MCP.
+    """
+    out = {
         "pft_fixed": fix_sluggish_pft(model, params, label=label),
-        "xfteq_deact": deactivate_xfteq_for_fixed_mobile(model, params, label=label),
+        "xfteq_deact": (
+            0 if skip_xfteq_deact
+            else deactivate_xfteq_for_fixed_mobile(model, params, label=label)
+        ),
         "xseq_deact": deactivate_unmatched_xseq(model, params, label=label),
     }
+    if fix_orphans:
+        out["orphan_fixed"] = fix_orphan_free_vars(model, label=label)
+    return out
 
 
 def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str = ""):
