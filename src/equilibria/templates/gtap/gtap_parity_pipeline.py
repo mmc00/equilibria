@@ -791,6 +791,25 @@ class GTAPVariableSnapshot:
     arent: Dict[str, float] = field(default_factory=dict)
     facty: Dict[str, float] = field(default_factory=dict)
 
+    # CDE / welfare state — needed when warm-starting altertax models where
+    # CDE elasticities are unchanged but PATH must rebuild equilibrium under
+    # CD Armington/value-added. Without these, eq_uh/eq_zcons start at cold-init
+    # and inject O(80) residuals into the Newton sequence.
+    uh: Dict[str, float] = field(default_factory=dict)
+    zcons: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    xcshr: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    phip: Dict[str, float] = field(default_factory=dict)
+    phi: Dict[str, float] = field(default_factory=dict)
+    ev: Dict[str, float] = field(default_factory=dict)
+    cv: Dict[str, float] = field(default_factory=dict)
+
+    # Derived price/aggregate Vars whose equations (eq_pvaeq, eq_rgdpmp) are CES
+    # CD-branch under altertax — without warm-starting these, they contribute
+    # O(0.5) Newton residuals from cold init.
+    pva: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    rgdpmp: Dict[str, float] = field(default_factory=dict)
+    gdpmp: Dict[str, float] = field(default_factory=dict)
+
     pnum: Optional[float] = None
     pabs: Dict[str, float] = field(default_factory=dict)
     walras: Optional[float] = None
@@ -854,6 +873,17 @@ class GTAPVariableSnapshot:
             yc=_extract_var_levels(model.yc) if hasattr(model, "yc") else {},
             yg=_extract_var_levels(model.yg) if hasattr(model, "yg") else {},
             yi=_extract_var_levels(model.yi) if hasattr(model, "yi") else {},
+            ug=_extract_var_levels(model.ug) if hasattr(model, "ug") else {},
+            uh=_extract_var_levels(model.uh) if hasattr(model, "uh") else {},
+            zcons=_extract_var_levels(model.zcons) if hasattr(model, "zcons") else {},
+            xcshr=_extract_var_levels(model.xcshr) if hasattr(model, "xcshr") else {},
+            phip=_extract_var_levels(model.phip) if hasattr(model, "phip") else {},
+            phi=_extract_var_levels(model.phi) if hasattr(model, "phi") else {},
+            ev=_extract_var_levels(model.ev) if hasattr(model, "ev") else {},
+            cv=_extract_var_levels(model.cv) if hasattr(model, "cv") else {},
+            pva=_extract_var_levels(model.pva) if hasattr(model, "pva") else {},
+            rgdpmp=_extract_var_levels(model.rgdpmp) if hasattr(model, "rgdpmp") else {},
+            gdpmp=_extract_var_levels(model.gdpmp) if hasattr(model, "gdpmp") else {},
             pnum=float(value(model.pnum)) if hasattr(model, "pnum") else None,
             pabs=_extract_var_levels(model.pabs) if hasattr(model, "pabs") else {},
             walras=float(value(model.walras)) if hasattr(model, "walras") else None,

@@ -2698,23 +2698,25 @@ class GTAPModelEquations:
             # GAMS cal.gms (lines 19391-19394): prdtx per commodity = makb/maks - 1;
             # p.l = ps/(1+prdtx) = 1/(1+prdtx).  Use commodity-specific prdtx so that
             # gx_param (calibrated with the same formula) is consistent with eq_po at init.
+            # For off-diagonal (a does not produce i): GAMS leaves p.l=1 (no makb/maks).
+            # Do NOT fall back to rto[r,a] there; that injects an unrelated tax.
             makb_val = float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0)
             maks_val = float(self.params.benchmark.maks.get((r, a, i), 0.0) or 0.0)
             if maks_val > 0 and makb_val > 0:
                 prdtx = makb_val / maks_val - 1.0
             else:
-                prdtx = float(self.params.taxes.rto.get((r, a), 0.0) or 0.0)
+                prdtx = 0.0
             return max(1.0 / max(1.0 + prdtx, 1e-12), 1e-8)
 
         def get_pp_rai_init(m, r, a, i):
             # pp.l = (1+prdtx)*p.l = 1.0 at benchmark (ps=1).
-            # Compute prdtx consistently with get_p_rai_init.
+            # Same convention as get_p_rai_init: off-diagonal uses prdtx=0 → pp=1.
             makb_val = float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0)
             maks_val = float(self.params.benchmark.maks.get((r, a, i), 0.0) or 0.0)
             if maks_val > 0 and makb_val > 0:
                 prdtx = makb_val / maks_val - 1.0
             else:
-                prdtx = float(self.params.taxes.rto.get((r, a), 0.0) or 0.0)
+                prdtx = 0.0
             return max((1.0 + prdtx) * get_p_rai_init(m, r, a, i), 1e-8)
 
         model.xp = Var(model.r, model.a, within=NonNegativeReals, initialize=get_vom_init, doc="Production")
@@ -4040,8 +4042,12 @@ class GTAPModelEquations:
         def eq_pvaeq_rule(model, r, a):
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
+            # CD limit: use cost-summing identity `pva·va = sum_f pfa·xf`. This is
+            # the SAM accounting identity that always holds at the benchmark and
+            # at any feasible point. Pins pva uniquely without the geometric-mean
+            # bias of the CD product form.
             if abs(expo) < 1e-8:
-                terms = []
+                f_terms = []
                 for f in model.f:
                     af_val = (
                         value(model.af_param[r, f, a])
@@ -4050,14 +4056,10 @@ class GTAPModelEquations:
                     )
                     if af_val <= 0.0:
                         continue
-                    lambdaf = max(self._lambdaf(r, f, a), 1e-8)
-                    terms.append((_m_pfa(r, f, a) / lambdaf) ** af_val)
-                if not terms:
+                    f_terms.append(_m_pfa(r, f, a) * model.xf[r, f, a])
+                if not f_terms:
                     return Constraint.Skip
-                prod = 1.0
-                for term in terms:
-                    prod *= term
-                return model.pva[r, a] == prod
+                return model.pva[r, a] * model.va[r, a] == sum(f_terms)
 
             terms = []
             for f in model.f:
@@ -5034,9 +5036,17 @@ class GTAPModelEquations:
         #   pg^(1-sigmag) = sum_i g_share[r,i] * pa[r,i,gov]^(1-sigmag)
         def eq_ug_rule(model, r):
             sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
-            if abs(sigmag - 1.0) < 1e-8:
-                sigmag = 1.01
             expo = 1.0 - sigmag
+            if abs(expo) < 1e-6:
+                # CD limit: pg = prod_i pa^g_share. The (1−sigmag)→0 limit of the
+                # CES dual is the geometric mean. Avoid the ill-conditioned
+                # bump-to-1.01 trick that produced power=-100.
+                pg_index = 1.0
+                for i in model.i:
+                    g = value(model.g_share[r, i])
+                    if g > 0.0:
+                        pg_index = pg_index * (model.pa[r, i, "gov"] ** g)
+                return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
             pg_terms = sum(
                 value(model.g_share[r, i]) * model.pa[r, i, "gov"] ** expo
                 for i in model.i

@@ -222,9 +222,33 @@ class GTAPSolver:
             "pft": "pft",
             "ytax": "ytax",
             "pnum": "pnum",
+            # CDE / welfare state — needed for warm-starting altertax
+            "uh": "uh",
+            "zcons": "zcons",
+            "xcshr": "xcshr",
+            "phip": "phip",
+            "phi": "phi",
+            "ev": "ev",
+            "cv": "cv",
+            "ug": "ug",
+            "yc": "yc",
+            "yg": "yg",
+            "yi": "yi",
+            "regy": "regy",
+            "pabs": "pabs",
+            "pva": "pva",
+            "rgdpmp": "rgdpmp",
+            "gdpmp": "gdpmp",
         }
 
         applied = 0
+        # The snapshot stores GTAP-semantic xda/xaa as xda/xscale (see
+        # _extract_xda_unscaled). When loading back into a model that
+        # represents xda/xaa in scaled form, multiply by xscale to undo the
+        # pre-division. Without this, eq_xd_agg residual at warm-start blows
+        # up to O(60) for high-volume agents.
+        rescale_by_xscale = {"xda", "xaa"}
+        xscale_attr = getattr(self.model, "xscale", None)
         for hint_name, model_name in hint_to_model.items():
             if not hasattr(hint, hint_name) or not hasattr(self.model, model_name):
                 continue
@@ -234,6 +258,7 @@ class GTAPSolver:
             if values is None:
                 continue
             if isinstance(values, dict):
+                needs_rescale = model_name in rescale_by_xscale and xscale_attr is not None
                 for idx, value in values.items():
                     if value is None or idx not in target:
                         continue
@@ -242,11 +267,18 @@ class GTAPSolver:
                     # set by apply_aggressive_fixing_for_mcp at shocked init levels.
                     if getattr(component, "fixed", False):
                         continue
+                    raw_value = float(value)
+                    if needs_rescale and isinstance(idx, tuple) and len(idx) == 3:
+                        try:
+                            scale = float(xscale_attr[idx[0], idx[2]])
+                        except (KeyError, AttributeError, TypeError, ValueError):
+                            scale = 1.0
+                        raw_value *= scale
                     if hasattr(component, "set_value"):
-                        component.set_value(float(value))
+                        component.set_value(raw_value)
                         applied += 1
                     elif hasattr(component, "value"):
-                        component.value = float(value)
+                        component.value = raw_value
                         applied += 1
                 continue
             if hasattr(target, "set_value"):
@@ -711,6 +743,44 @@ class GTAPSolver:
             pair_right = [-1] * n_right  # variable column -> equation row
             distance = [0] * n_left
             inf = 10 ** 9
+
+            # Apply forced pairs from closure config before Hopcroft-Karp runs.
+            # These pin critical eq↔var pairings the matcher would otherwise
+            # steal (e.g. eq_ev[r] sharing vars with eq_uh[r]).
+            forced_pairs_template = getattr(
+                self.closure, "forced_mcp_pairs", ()
+            ) or ()
+            if forced_pairs_template:
+                eq_name_to_row = {c.name: i for i, c in enumerate(constraints_data)}
+                var_name_to_col = {v.name: j for j, v in enumerate(free_var_data)}
+                regions = list(self.model.r) if hasattr(self.model, "r") else [None]
+                expanded: list[tuple[str, str]] = []
+                for eq_tpl, var_tpl in forced_pairs_template:
+                    if "{r}" in eq_tpl or "{r}" in var_tpl:
+                        for r_idx in regions:
+                            expanded.append(
+                                (eq_tpl.format(r=r_idx), var_tpl.format(r=r_idx))
+                            )
+                    else:
+                        expanded.append((eq_tpl, var_tpl))
+                pinned = 0
+                for eq_name, var_name in expanded:
+                    row = eq_name_to_row.get(eq_name)
+                    col = var_name_to_col.get(var_name)
+                    if row is None or col is None:
+                        continue
+                    if col not in adjacency[row]:
+                        continue
+                    if pair_left[row] != -1 or pair_right[col] != -1:
+                        continue
+                    pair_left[row] = col
+                    pair_right[col] = row
+                    pinned += 1
+                if pinned:
+                    logger.info(
+                        "MCP matcher: pre-pinned %d forced pairs from closure config",
+                        pinned,
+                    )
 
             def _bfs() -> bool:
                 queue: deque[int] = deque()

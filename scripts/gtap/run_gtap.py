@@ -2006,7 +2006,13 @@ def _run_path_capi_nonlinear_full(
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _closure_patches import apply_squareness_patches  # type: ignore
-    apply_squareness_patches(model, params, label="nonlinear-full")
+    fix_orphans = bool(getattr(closure_config, "fix_orphan_vars", False))
+    is_altertax = getattr(closure_config, "name", "") == "altertax"
+    apply_squareness_patches(
+        model, params, label="nonlinear-full",
+        fix_orphans=fix_orphans,
+        skip_xfteq_deact=is_altertax,
+    )
 
     # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
     # already-fixed variables, so only the remaining FREE variables get warm-started
@@ -2134,9 +2140,17 @@ def _run_path_capi_nonlinear_full(
             import sys as _sys
             _sys.path.insert(0, str(Path(__file__).resolve().parent))
             from _closure_patches import structural_matching  # type: ignore
+        forced = [("eq_pwfact", "pwfact")]
+        # Welfare measures: eq_ev/eq_cv each pair to ev/cv (1-to-1, isolated).
+        # Without forcing, the matcher can steal eq_ev to pair with some other
+        # Var in its body (e.g. uh) and leave ev[r] orphan — see altertax CLI.
+        if hasattr(model, "r") and hasattr(model, "eq_ev") and hasattr(model, "ev"):
+            for r_idx in list(model.r):
+                forced.append((f"eq_ev[{r_idx}]", f"ev[{r_idx}]"))
+                forced.append((f"eq_cv[{r_idx}]", f"cv[{r_idx}]"))
         free_variables = structural_matching(
             constraints, free_variables,
-            forced_pairs=[("eq_pwfact", "pwfact")],
+            forced_pairs=forced,
             label="nonlinear-full",
         )
 
@@ -4142,12 +4156,13 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
         apply_altertax_elasticities,
         rebalance_to_altertax_dataset,
     )
+    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
     logger = ctx.obj['logger']
     logger.info(f"Altertax rebalance: gdx={gdx_file} → {output}")
 
     try:
-        click.echo(f"\n[1/4] Loading 9x10 baseline from {gdx_file.name}")
+        click.echo(f"\n[1/5] Loading baseline from {gdx_file.name}")
         sets = GTAPSets()
         sets.load_from_gdx(gdx_file)
         base_params = GTAPParameters()
@@ -4155,7 +4170,32 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
         click.echo(f"      R={sets.n_regions} I={sets.n_commodities} "
                    f"A={sets.n_activities} F={sets.n_factors}")
 
-        click.echo("[2/4] Applying altertax CD elasticity overrides + shock")
+        # Step 2: solve the standard baseline first to get a clean snapshot.
+        # We then warm-start the altertax+shock model from this snapshot.
+        # Without it PATH is asked to jump from cold-init values straight to
+        # the altertax CD equilibrium with the shock applied — too far for a
+        # single Newton sequence (residual stalls at ~15).
+        click.echo("[2/5] Solving standard baseline for warm-start snapshot")
+        std_contract = _build_gtap_contract_with_calibration({})
+        base_eq = GTAPModelEquations(sets, base_params, std_contract.closure)
+        base_model = base_eq.build_model()
+        base_result = _run_path_capi_nonlinear_full(
+            base_model, base_params,
+            solver_output=tee, path_license_string=path_license_string,
+            enforce_post_checks=False, strict_path_capi=False,
+            closure_config=std_contract.closure, equation_scaling=True,
+        )
+        base_status = base_result.get('status')
+        base_residual = base_result.get('residual', float('nan'))
+        click.echo(f"      baseline status={base_status} residual={base_residual:.2e}")
+        if base_status not in ('solved', 'success', 'optimal', 'converged') or not (base_residual < 1e-3):
+            raise RuntimeError(
+                f"Standard baseline did not converge (status={base_status}, "
+                f"residual={base_residual:.2e}); cannot warm-start altertax."
+            )
+        warm_snapshot = GTAPVariableSnapshot.from_python_model(base_model)
+
+        click.echo("[3/5] Applying altertax CD elasticity overrides + shock")
         shock_params = apply_altertax_elasticities(base_params, in_place=False)
         shock_index = _parse_index(index)
         applied = _apply_shock_to_params(
@@ -4165,9 +4205,11 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
             raise ValueError(f"Shock {variable}{shock_index}={value} did not apply.")
         click.echo(f"      shock applied to {variable}{shock_index} (mode={shock_mode})")
 
-        click.echo("[3/4] Building model + solving via PATH C API (nonlinear full)")
+        click.echo("[4/5] Building altertax model + solving via PATH C API (nonlinear full)")
         contract = _build_gtap_contract_with_calibration({"closure": "altertax"})
-        equations = GTAPModelEquations(sets, shock_params, contract.closure)
+        equations = GTAPModelEquations(
+            sets, shock_params, contract.closure, is_counterfactual=True,
+        )
         model = equations.build_model()
         solve_result = _run_path_capi_nonlinear_full(
             model,
@@ -4178,13 +4220,14 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
             strict_path_capi=False,
             closure_config=contract.closure,
             equation_scaling=True,
+            solution_hint=warm_snapshot,
         )
         status = solve_result.get('status')
         residual = solve_result.get('residual', float('nan'))
-        click.echo(f"      solve status={status} residual={residual:.2e}")
+        click.echo(f"      altertax status={status} residual={residual:.2e}")
         # Guardrail: refuse to write a "rebalanced" SAM from a non-converged
         # solution — the values would be cold-init garbage, not equilibrium.
-        if status not in ('solved', 'success', 'optimal') or not (residual < 1e-3):
+        if status not in ('solved', 'success', 'optimal', 'converged') or not (residual < 1e-3):
             raise RuntimeError(
                 f"PATH solve did not converge (status={status}, "
                 f"residual={residual:.2e}); refusing to write HAR. The "
@@ -4192,7 +4235,7 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
                 "docs/plans/gtap_altertax_implementation_plan_2026-05-13.md."
             )
 
-        click.echo(f"[4/4] Writing rebalanced HAR → {output}")
+        click.echo(f"[5/5] Writing rebalanced HAR → {output}")
         rebalance = rebalance_to_altertax_dataset(
             base_params=base_params,
             shock_params=shock_params,
