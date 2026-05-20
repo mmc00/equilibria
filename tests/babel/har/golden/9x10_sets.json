@@ -1,0 +1,320 @@
+{
+  "headers": {
+    "ACTS": {
+      "dtype_kind": "U",
+      "long_name": "Set ACTS  activities                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        9
+      ],
+      "stats": {
+        "first": "a_agricultur",
+        "last": "a_OthService"
+      }
+    },
+    "COMM": {
+      "dtype_kind": "U",
+      "long_name": "Set COMM  commodities                                                 ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        10
+      ],
+      "stats": {
+        "first": "c_Crops     ",
+        "last": "c_OthService"
+      }
+    },
+    "DACT": {
+      "dtype_kind": "U",
+      "long_name": "Set DACT  disaggregated activities                                    ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        57
+      ],
+      "stats": {
+        "first": "a_pdr       ",
+        "last": "a_dwe       "
+      }
+    },
+    "DCOM": {
+      "dtype_kind": "U",
+      "long_name": "Set DCOM  disaggregated commodities                                   ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        57
+      ],
+      "stats": {
+        "first": "c_pdr       ",
+        "last": "c_dwe       "
+      }
+    },
+    "DEND": {
+      "dtype_kind": "U",
+      "long_name": "Set DEND  disaggregated endowment commodities                         ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        8
+      ],
+      "stats": {
+        "first": "Land        ",
+        "last": "NatlRes     "
+      }
+    },
+    "DMAR": {
+      "dtype_kind": "U",
+      "long_name": "Set DMAR  disaggregated margin commodities                            ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "c_otp       ",
+        "last": "c_atp       "
+      }
+    },
+    "DREG": {
+      "dtype_kind": "U",
+      "long_name": "Set DREG  disaggregated regions                                       ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        140
+      ],
+      "stats": {
+        "first": "aus         ",
+        "last": "xtw         "
+      }
+    },
+    "DREL": {
+      "dtype_kind": "U",
+      "long_name": "GTAP data release identifier                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "R9.0A_2011_Apr2016                                     ",
+        "last": "R9.0A_2011_Apr2016                                     "
+      }
+    },
+    "DVER": {
+      "dtype_kind": "f",
+      "long_name": "Format of GTAP Data                                                   ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": 5.0,
+        "last": 5.0,
+        "max": 5.0,
+        "min": 5.0,
+        "sum": 5.0
+      }
+    },
+    "ENDF": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDWF  fixed endowments                                           ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "NatRes      ",
+        "last": "NatRes      "
+      }
+    },
+    "ENDM": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDWM  mobile endowments                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "SkLab       ",
+        "last": "Capital     "
+      }
+    },
+    "ENDS": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDWS  sluggish endowments                                        ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "Land        ",
+        "last": "Land        "
+      }
+    },
+    "ENDW": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDW  endowments                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        5
+      ],
+      "stats": {
+        "first": "Land        ",
+        "last": "NatRes      "
+      }
+    },
+    "MACT": {
+      "dtype_kind": "U",
+      "long_name": "activity aggregation mapping                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        57
+      ],
+      "stats": {
+        "first": "a_agricultur",
+        "last": "a_OthService"
+      }
+    },
+    "MARG": {
+      "dtype_kind": "U",
+      "long_name": "Set MARG  margin commodities                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "c_TransComm ",
+        "last": "c_TransComm "
+      }
+    },
+    "MCOM": {
+      "dtype_kind": "U",
+      "long_name": "Commodity aggregation mapping                                         ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        57
+      ],
+      "stats": {
+        "first": "c_Crops     ",
+        "last": "c_OthService"
+      }
+    },
+    "MEND": {
+      "dtype_kind": "U",
+      "long_name": "factor endowments aggregation mapping                                 ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        8
+      ],
+      "stats": {
+        "first": "Land        ",
+        "last": "NatRes      "
+      }
+    },
+    "MMAR": {
+      "dtype_kind": "U",
+      "long_name": "margin commodities aggregation mapping                                ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "c_TransComm ",
+        "last": "c_TransComm "
+      }
+    },
+    "MREG": {
+      "dtype_kind": "U",
+      "long_name": "regional aggregation mapping                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        140
+      ],
+      "stats": {
+        "first": "Oceania     ",
+        "last": "RestofWorld "
+      }
+    },
+    "REG": {
+      "dtype_kind": "U",
+      "long_name": "Set REG  regions                                                      ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        10
+      ],
+      "stats": {
+        "first": "Oceania     ",
+        "last": "RestofWorld "
+      }
+    },
+    "TARS": {
+      "dtype_kind": "U",
+      "long_name": "Set TARSET  components of Tariff                                      ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "ADV         ",
+        "last": "SPE         "
+      }
+    },
+    "XXCD": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "at 19:08:11 on 25-JUN-2017                                            ",
+        "last": "at 19:08:11 on 25-JUN-2017                                            "
+      }
+    },
+    "XXCP": {
+      "dtype_kind": "U",
+      "long_name": "Fortran compiler used to make EXE which created this file             ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "IF64  ",
+        "last": "IF64  "
+      }
+    },
+    "XXCR": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "<GEMSIM v4.4 Jan 2016> [CleanUp-JGEA-data.tab]                        ",
+        "last": "<GEMPACK Release 11.4.003   January 2016>                             "
+      }
+    }
+  },
+  "path": "/Users/marmol/proyectos2/equilibria/.claude/worktrees/harwriter/src/equilibria/templates/reference/gtap/data/9x10/sets.har"
+}

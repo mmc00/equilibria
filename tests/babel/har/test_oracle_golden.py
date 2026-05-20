@@ -68,7 +68,11 @@ def test_writer_matches_oracle(fixture: Path, tmp_path: Path):
                 f"int sum mismatch for {name}"
             )
         else:
-            first = str(np.asarray(got.array).ravel()[0]).strip()
+            arr = np.asarray(got.array).ravel()
+            if arr.size == 0:
+                # Empty set — golden may record empty string for "first".
+                continue
+            first = str(arr[0]).strip()
             assert first == str(expected["stats"]["first"]).strip(), (
                 f"first-element mismatch for {name}"
             )

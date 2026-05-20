@@ -74,11 +74,16 @@ def _dump_har_with_harpy(harpy, path: Path) -> dict:
     out: dict = {"path": str(path), "headers": {}}
     for name in obj.getHeaderArrayNames():
         ha = obj.getHeaderArrayObj(name)
-        arr = ha.array
+        # HeaderArrayObj is dict-like (newer harpy API). Use item access
+        # for portability across versions.
+        arr = ha["array"]
         shape = list(arr.shape)
         dtype_kind = arr.dtype.kind
-        set_names = list(getattr(ha, "set_names", []) or [])
-        set_elements = [list(map(str, e)) for e in (getattr(ha, "set_elements", []) or [])]
+        sets = ha.get("sets") or []
+        set_names = [s["name"] for s in sets]
+        set_elements = [
+            [str(x).strip() for x in s.get("dim_desc", [])] for s in sets
+        ]
         if dtype_kind in ("f", "i"):
             stats = {
                 "sum": float(arr.sum()),
@@ -93,7 +98,7 @@ def _dump_har_with_harpy(harpy, path: Path) -> dict:
                 "last": str(arr.ravel()[-1]) if arr.size else "",
             }
         out["headers"][name] = {
-            "long_name": getattr(ha, "long_name", ""),
+            "long_name": ha.get("long_name", "") or "",
             "dtype_kind": dtype_kind,
             "shape": shape,
             "set_names": set_names,

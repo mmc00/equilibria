@@ -1,0 +1,481 @@
+{
+  "headers": {
+    "XXCD": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "at 13:04:56 on 02-JUN-2020                                            ",
+        "last": "at 13:04:56 on 02-JUN-2020                                            "
+      }
+    },
+    "XXCP": {
+      "dtype_kind": "U",
+      "long_name": "Fortran compiler used to make EXE which created this file             ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "GF64  ",
+        "last": "GF64  "
+      }
+    },
+    "XXCR": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "<GTPVEWv7.for 02-JUN-2020> [GTPVEWv7.tab,gtpvewv7.STI]                ",
+        "last": "<GEMPACK Release 12.1.003   January 2020>                             "
+      }
+    },
+    "rTFD": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on domestic com. c for use by act. a in r                   ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": -3.953397274017334,
+        "last": 0.20902855694293976,
+        "max": 5.0190629959106445,
+        "min": -6.51283073425293,
+        "sum": -13.353133201599121
+      }
+    },
+    "rTFE": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on primary factor e used by act. a in region r              ",
+      "set_elements": [
+        [
+          "LAND",
+          "LABOR",
+          "CAPITAL"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": -4.113178253173828,
+        "last": 1.7881348133087158,
+        "max": 21.89356803894043,
+        "min": -16.45011329650879,
+        "sum": 53.80839538574219
+      }
+    },
+    "rTFM": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on imported com. c for use by act. a in r                   ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": -4.114410400390625,
+        "last": 0.14985260367393494,
+        "max": 4.097269535064697,
+        "min": -4.70918607711792,
+        "sum": -14.273704528808594
+      }
+    },
+    "rTGD": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on domestic c purchased by government in r                  ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.23885132372379303,
+        "max": 1.1516927480697632,
+        "min": -0.8039821982383728,
+        "sum": 0.5865618586540222
+      }
+    },
+    "rTGM": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on imported c purchased by government in r                  ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 2.7585394382476807,
+        "max": 2.7585394382476807,
+        "min": 0.0,
+        "sum": 4.965052604675293
+      }
+    },
+    "rTID": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on domestic investment c in r                               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 1.9515008926391602,
+        "max": 3.754439115524292,
+        "min": 0.0,
+        "sum": 8.821733474731445
+      }
+    },
+    "rTIM": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on imported investment c in r                               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 3.6000306606292725,
+        "max": 6.238032817840576,
+        "min": 0.0,
+        "sum": 11.759446144104004
+      }
+    },
+    "rTIN": {
+      "dtype_kind": "f",
+      "long_name": " income tax rate on endowment e supplied to act. a in r               ",
+      "set_elements": [
+        [
+          "LAND",
+          "LABOR",
+          "CAPITAL"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 9.039320945739746,
+        "last": 7.206024646759033,
+        "max": 26.953392028808594,
+        "min": 0.0,
+        "sum": 203.96710205078125
+      }
+    },
+    "rTMS": {
+      "dtype_kind": "f",
+      "long_name": " source-spec. change in tax on imports of c from s to d               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.002350385533645749,
+        "max": 6.358544826507568,
+        "min": 0.0,
+        "sum": 19.836284637451172
+      }
+    },
+    "rTO": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on com. c supplied by act. a in region r                    ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.24391122162342072,
+        "last": 1.2503447532653809,
+        "max": 2.8860504627227783,
+        "min": -0.379024475812912,
+        "sum": 7.886716365814209
+      }
+    },
+    "rTPD": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on domestic c purchased by private hhld in r                ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 4.4753594398498535,
+        "last": 5.3547492027282715,
+        "max": 17.460369110107422,
+        "min": 0.6525610089302063,
+        "sum": 39.06015396118164
+      }
+    },
+    "rTPM": {
+      "dtype_kind": "f",
+      "long_name": " tax rate on imported c purchased by private hhld in r                ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 6.18834114074707,
+        "last": 7.192990303039551,
+        "max": 18.379243850708008,
+        "min": 0.011122891679406166,
+        "sum": 42.076725006103516
+      }
+    },
+    "rTXS": {
+      "dtype_kind": "f",
+      "long_name": " dest.-spec. tax/subsidy rate on exports of c from s to d             ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 1.587681531906128,
+        "min": -0.04964236170053482,
+        "sum": 3.1612515449523926
+      }
+    }
+  },
+  "path": "/Users/marmol/proyectos2/equilibria/.claude/worktrees/harwriter/src/equilibria/templates/reference/gtap/data/nus333/baserate.har"
+}
