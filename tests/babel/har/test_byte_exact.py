@@ -39,9 +39,6 @@ FIXTURES = [
 #     width that read_har does not record (only the stripped strings are
 #     surfaced). The writer re-packs at the minimum width that holds all
 #     elements, producing shorter element records.
-#   - REFULL/RESPSE meta-record filler ints at offset 80: GEMPACK writes
-#     type-specific magic values (1CFULL=2, REFULL=7, others vary) that
-#     we currently emit as a constant for 1CFULL and 0 for the rest.
 #   - Sparse vs dense storage: GEMPACK chose RESPSE for certain headers
 #     based on internal heuristics; read_har densifies on load, so the
 #     sparse-vs-dense signal is lost by the time write_har sees the data.
@@ -50,22 +47,22 @@ FIXTURES = [
 # byte-level divergence captured at this point.
 KNOWN_NON_BYTE_EXACT: dict[str, str] = {
     "sets.har": (
-        "1CFULL element-width padding and REFULL meta filler bytes are "
-        "structural information lost on read; L3 semantic round-trip "
-        "passes. See nus333_sets.diff / 9x10_sets.diff."
+        "1CFULL element-width padding is per-header structural info "
+        "discarded on read; L3 semantic round-trip passes. "
+        "See nus333_sets.diff / 9x10_sets.diff."
     ),
     "basedata.har": (
-        "REFULL/RESPSE meta filler ints and GEMPACK's sparse-vs-dense "
-        "storage choice are not preserved through read_har. L3 semantic "
+        "GEMPACK's sparse-vs-dense storage choice is not preserved "
+        "through read_har (RESPSE densifies on load). L3 semantic "
         "round-trip passes. See nus333_basedata.diff / 9x10_basedata.diff."
     ),
     "baserate.har": (
-        "Same 1CFULL/REFULL structural divergence as sets.har; L3 "
-        "semantic round-trip passes. See nus333_baserate.diff."
+        "Same 1CFULL element-width structural divergence as sets.har; "
+        "L3 semantic round-trip passes. See nus333_baserate.diff."
     ),
     "default.prm": (
-        "Same 1CFULL/REFULL structural divergence as sets.har; L3 "
-        "semantic round-trip passes. See nus333_default.diff."
+        "Same 1CFULL element-width structural divergence as sets.har; "
+        "L3 semantic round-trip passes. See nus333_default.diff."
     ),
 }
 

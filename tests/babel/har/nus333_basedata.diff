@@ -1,6 +1,6 @@
 # byte-exact diff for basedata.har
 # original size=17334 sha256=13e784b73f1fbf8ecdabc803c0454290aa5fb097f74bb5c59f0659511f841543
-# written  size=13807 sha256=ddcdb2f3373434f3c9c03d9e9ec87fd993d00c2f0af51d279a9921b473cfae10
+# written  size=14467 sha256=60cce8bf9e20d2d7e468637cbca9c7c5d1c8d779e4c79447a8667fcc91bce51c
 offset 0x68: orig=46 new=2c
 offset 0x70: orig=9c new=68
 offset 0xb0: orig=20 new=3c
@@ -199,4 +199,6 @@ offset 0x188: orig=20 new=43
 offset 0x189: orig=20 new=50
 offset 0x18a: orig=20 new=04
 offset 0x18b: orig=20 new=00
-... (truncated)
+offset 0x18c: orig=01 new=00
+offset 0x18e: orig=00 new=5c
+... (11201 more differences truncated)

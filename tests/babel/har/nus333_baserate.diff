@@ -1,6 +1,6 @@
 # byte-exact diff for baserate.har
 # original size=7481 sha256=e1e81057dfc1bcd7a2491a7306ca637648bd14fe17bd92b887c868fb383010ab
-# written  size=6118 sha256=79b1c9246510a8e46d7c09ff4d7745dfc1d849ef259fbfe346e84d5f222fb820
+# written  size=6378 sha256=1994e0e6b7bfdab816987c291d611bce43ba49b51a00e1a405c7345add13dbab
 offset 0x68: orig=46 new=36
 offset 0x70: orig=9c new=7c
 offset 0xba: orig=20 new=3c
@@ -199,4 +199,6 @@ offset 0x1a7: orig=30 new=20
 offset 0x1a8: orig=32 new=20
 offset 0x1a9: orig=2d new=20
 offset 0x1aa: orig=4a new=31
-... (truncated)
+offset 0x1ab: orig=55 new=43
+offset 0x1ac: orig=4e new=46
+... (4717 more differences truncated)

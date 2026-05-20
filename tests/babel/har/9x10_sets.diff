@@ -1,6 +1,6 @@
 # byte-exact diff for sets.har
 # original size=10723 sha256=317f6905ebc458bf7ad3aa01fca1ffbfd362e8dff8c9d9208a200f85832af533
-# written  size=10352 sha256=50c0fa19411953b8e87c3e08111e6574b3520bd81e0c46299eda5e4a8e0e0d61
+# written  size=10372 sha256=fbea056dbb5b24510258712c084beffec28a56d75fce4905708aef10e86eb309
 offset 0x68: orig=46 new=2e
 offset 0x70: orig=9c new=6c
 offset 0xb2: orig=20 new=3c
@@ -199,4 +199,6 @@ offset 0x189: orig=20 new=00
 offset 0x18a: orig=20 new=58
 offset 0x18b: orig=20 new=58
 offset 0x18c: orig=01 new=43
-... (truncated)
+offset 0x18d: orig=00 new=50
+offset 0x18e: orig=00 new=04
+... (7791 more differences truncated)

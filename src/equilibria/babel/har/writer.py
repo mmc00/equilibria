@@ -258,7 +258,11 @@ def _write_respse(out: bytearray, name: str, ha: HeaderArray) -> None:
     nnz = int(nz.size)
 
     _write_name_record(out, name)
-    meta_tail = wire.INT.pack(0) + wire.INT.pack(nnz) + wire.INT.pack(0)
+    # GEMPACK convention: field@80 is fixed rank-7, followed by 7 dim ints
+    # padded with 1s for ranks < 7. Matches what harpy expects and what the
+    # GEMPACK emitter produces for the reference fixtures.
+    shape7 = list(arr.shape) + [1] * (7 - arr.ndim)
+    meta_tail = wire.INT.pack(7) + b"".join(wire.INT.pack(d) for d in shape7)
     _write_meta_record(out, wire.TOKEN_RESPSE, ha.long_name, meta_tail)
 
     wire.write_record(out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names))
@@ -305,7 +309,11 @@ def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
     arr = np.ascontiguousarray(ha.array, dtype=np.float32)
 
     _write_name_record(out, name)
-    meta_tail = wire.INT.pack(arr.size) + wire.INT.pack(0) + wire.INT.pack(0)
+    # GEMPACK convention: field@80 is fixed rank-7, followed by 7 dim ints
+    # padded with 1s for ranks < 7. Matches what harpy expects and what the
+    # GEMPACK emitter produces for the reference fixtures.
+    shape7 = list(arr.shape) + [1] * (7 - arr.ndim)
+    meta_tail = wire.INT.pack(7) + b"".join(wire.INT.pack(d) for d in shape7)
     _write_meta_record(out, wire.TOKEN_REFULL, ha.long_name, meta_tail)
 
     wire.write_record(out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names))
