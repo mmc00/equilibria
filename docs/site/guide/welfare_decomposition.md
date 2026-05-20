@@ -105,8 +105,105 @@ Reading:
 - **EAsia** *gains* — the alloc gain comes from rebalancing trade away from distorted partners. ToT loss reflects worse export prices.
 - Residuals stay under 0.5% with homotopy N=4 (without homotopy they'd be 1-3%).
 
+## Shadow demand system (gtapv7.tab §11 port)
+
+For shocks under **non-default closures** — most notably `capFix` with the
+`swap dpsave(r) = del_tbalry(r)` recipe used to fix the trade-balance /
+world-income ratio — the simple 5-term Huff decomposition does not match
+RunGTAP exactly because RunGTAP routes the welfare calculation through an
+auxiliary *shadow demand system* (gtapv7.tab section 11) that picks up
+preference-shift effects from `dpsave`.
+
+Equilibria ports this shadow system to Python in
+`src/equilibria/templates/gtap/welfare_shadow.py`. It exposes a single
+function `integrate(...)` that solves the chain
+
+```
+E_qpev → E_ueprivev → E_dpavev → E_uelasev → E_ypev/E_ygev/E_ysaveev → E_yev → E_EV
+```
+
+step-by-step under one of four integrators:
+
+| Method | Order | Use case |
+|---|---|---|
+| `euler` (default, N=25) | O(h) | **Recommended for RunGTAP parity** — calibrated to GEMPACK's Gragg-8-16-32 discretisation |
+| `midpoint` | O(h²) | RK2 alternative; diverges from RunGTAP by ~2% at high N |
+| `gragg` | O(h²) leapfrog | Gragg modified midpoint, single ladder |
+| `bulirsch_stoer` | O(h^2k) | Gragg + Richardson on a ladder (academic reference; converges to the asymptotic ODE fixed point, **not** to RunGTAP's discrete answer) |
+
+### Example
+
+```python
+from equilibria.templates.gtap.welfare_shadow import ShadowBaseline, integrate
+
+base = ShadowBaseline(
+    region="USA",
+    commodities=("AGR", "MFG", "SER"),
+    PRIVEXP=9_949_302.0, GOVEXP=2_258_359.0, SAVE=594_183.0,
+    INCOME=12_801_844.0,
+    VPP={...}, INCPAR={...}, ALPHA={...}, DPARSUM=1.0,
+)
+
+# Plug RunGTAP's cumulative u and dpsave (or equilibria's solved values)
+res = integrate(base, u_pct=0.1725, dpsave_pct=16.18)
+print(res.EV_USDm)   # ≈ 14,888 USD M  (RunGTAP target: 14,933)
+```
+
+## RunGTAP parity validation (NUS333 + 9x10)
+
+Both datasets run under capFix closure; RunGTAP gets the swap
+`dpsave(r)=del_tbalry(r)` for all non-residual regions, equilibria uses
+`GTAPClosureConfig(savf_flag='capFix')`. Shock: 10% uniform `tm_pct`.
+
+### NUS333 (2 regions × 3 sectors, residual=ROW)
+
+| Variable | equilibria | RunGTAP | gap |
+|---|---:|---:|---:|
+| u USA %Δ | +0.1649% | +0.1725% | 0.008 pp |
+| u ROW %Δ | -0.8199% | -0.8308% | 0.011 pp |
+| **EV USA ($M)** | +14,888 | +14,933 | **-0.30%** |
+| **EV ROW ($M)** | -306,987 | -308,210 | **-0.40%** |
+
+### 9x10 (10 regions × 10 commodities, residual=NAmerica)
+
+Per-region EV via `welfare_shadow.integrate()`:
+
+| Region | equilibria | RunGTAP | gap | dpsave |
+|---|---:|---:|---:|---:|
+| Oceania | -8,529 | -8,556 | -0.32% | -1.27 |
+| EastAsia | -86,648 | -86,942 | -0.34% | -1.24 |
+| SEAsia | -24,141 | -24,593 | **-1.84%** | -14.23 |
+| SouthAsia | -12,189 | -12,221 | -0.26% | +0.84 |
+| NAmerica (residual) | -4,555 | -4,555 | -0.01% | 0.00 |
+| LatinAmer | -22,464 | -22,521 | -0.25% | +2.99 |
+| EU_28 | -81,358 | -85,873 | **-5.26%** | -25.99 |
+| MENA | -47,377 | -47,667 | -0.61% | +1.32 |
+| SSA | -13,572 | -13,634 | -0.45% | +1.51 |
+| RestofWorld | -49,663 | -50,042 | -0.76% | -2.95 |
+| **WORLD** | **-350,497** | **-356,605** | **-1.71%** | |
+
+### Summary
+
+| Metric | NUS333 | 9x10 |
+|---|---:|---:|
+| Avg per-region `u` gap | 0.010 pp | 0.114 pp |
+| EV WORLD gap | 0.35% | 1.71% |
+| Regions with EV gap <1% | 2/2 | 8/10 |
+| cgebox tolerance | 5% | 5% |
+
+The two outlier regions in 9x10 (SEAsia, EU_28) have extreme `|dpsave|`
+(>14% and >26% respectively) — the linear-trajectory approximation in the
+shadow integrator degrades when the closure absorbs very large
+trade-balance imbalances. The remaining 8 regions reproduce RunGTAP
+welfare to within 1% — well inside the cgebox-tolerated 5% residual band.
+
+Full reproducible workspace lives under `runs/nus333_compare/` and
+`runs/9x10_compare/`. See `verify_shadow_*.py`, `compare_*_report.py`
+and the corresponding `comparison.md` files.
+
 ## References
 
 - Huff, K.M. and T.W. Hertel (1996), "Decomposing Welfare Changes in the GTAP Model," GTAP Technical Paper 5.
 - Hertel, T.W. (1997), *Global Trade Analysis: Modeling and Applications*, Cambridge University Press, Chapter 3.
+- gtapv7.tab section 11 (Equivalent Variation), in the GTAPv7 tablo source distributed with RunGTAP 3.75.
 - McDougall, R.A. (2003), "A New Regional Household Demand System for GTAP," GTAP Technical Paper 20.
