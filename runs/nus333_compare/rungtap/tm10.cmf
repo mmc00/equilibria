@@ -1,0 +1,60 @@
+! NUS333 uniform 10% shock to import tariff power (tm) - GEMPACK / GTAPv7
+Auxiliary files = C:\runGTAP375\gtapv7 ;
+
+! Input data files - NUS333 dataset (identical to equilibria's NUS333)
+file GTAPSETS = sets.har ;
+file GTAPDATA = basedata.har ;
+file GTAPPARM = default.prm ;
+
+! Output files
+file GTAPSUM  = summary.har ;
+file WELVIEW  = decomp.har ;
+file GTAPVOL  = volume.har ;
+
+! Updated data
+Updated file GTAPDATA = updated.har ;
+
+! Solution method — extended Richardson extrapolation for tighter MCP-equivalence
+Method = Gragg ;
+Steps  = 8 16 32 ;
+Automatic accuracy = no ;
+Subintervals = 1 ;
+
+Verbal Description =
+NUS333 uniform 10pct shock to import tariff power (tm) ;
+
+! Standard GTAPv7 condensed closure
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc
+          tpreg tm tms tx txs
+          qe
+          qesf ;
+Rest Endogenous ;
+
+! Closure swap: pin USA's del_tbalry (= fixed trade-balance / world-income
+! ratio) to baseline by making it exogenous, releasing dpsave(USA) (savings
+! propensity shifter) to absorb the slack. Mirrors equilibria's capFix on
+! residual_region = "ROW": USA's savf pinned, ROW absorbs the capital-account
+! identity. Pattern documented in NUS333/CLOSURES.EXP and recommended in
+! gtapv7.tab:3356.
+swap dpsave("USA") = del_tbalry("USA") ;
+
+! 10% uniform shock to import tariff power
+Shock tm = uniform 10 ;
+
+! Run options
+CPU = yes ;
+NDS = yes ;
+log file = yes ;
+Extrapolation accuracy file = NO ;
