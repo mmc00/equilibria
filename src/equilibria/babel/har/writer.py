@@ -126,7 +126,10 @@ def _emit_header(out: bytearray, name: str, ha: HeaderArray, *, sparse: bool = F
     if ha.array.dtype == np.int32 and ha.array.ndim == 2 and not ha.set_names:
         _write_2ifull(out, name, ha)
         return
-    _validate_array_header(name, ha)
+    # Float arrays without set names are scalar/no-set REFULL (e.g. DVER).
+    # Skip the set-vs-ndim validator and let _write_refull handle it.
+    if ha.set_names:
+        _validate_array_header(name, ha)
     if ha.array.dtype in (np.float32, np.float64):
         if sparse:
             _write_respse(out, name, ha)
@@ -188,7 +191,10 @@ def _write_1cfull(out: bytearray, name: str, ha: HeaderArray) -> None:
     """
     elements = [str(e).rstrip() for e in ha.array.tolist()]
     n_total = len(elements)
-    width = wire.SET_NAME_WIDTH
+    # Width defaults to SET_NAME_WIDTH (12) but is widened if any element
+    # exceeds it (e.g. GEMPACK version strings stored in *_VER headers).
+    max_len = max((len(e.encode("ascii")) for e in elements), default=0)
+    width = max(wire.SET_NAME_WIDTH, max_len)
 
     _write_name_record(out, name)
     # Meta tail: filler flag (2 for 1CFULL) + n_total + width.
@@ -199,7 +205,7 @@ def _write_1cfull(out: bytearray, name: str, ha: HeaderArray) -> None:
 
     # For now emit a single record (multi-record chunking added in Task 5
     # if a fixture requires it).
-    rec = wire.write_set_element_record(elements, n_total=n_total, flag=1)
+    rec = wire.write_set_element_record(elements, n_total=n_total, flag=1, width=width)
     wire.write_record(out, rec)
 
 
