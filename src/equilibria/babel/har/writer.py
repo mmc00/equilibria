@@ -332,3 +332,140 @@ def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
     data.extend(wire.INT.pack(1))
     data.extend(flat.astype("<f4").tobytes())
     wire.write_record(out, bytes(data))
+
+
+# ── HarWriter builder ────────────────────────────────────────────────────────
+
+class HarWriter:
+    """High-level builder for HAR files.
+
+    Maintains a set registry: the first call to `add_set` (or the first
+    `add_array` that references a set) records its elements; subsequent
+    references must match exactly or a ValueError is raised. On `close()`,
+    sets are emitted as 1CFULL headers in first-registration order, then
+    arrays in add-call order.
+    """
+
+    def __init__(self, path: str | os.PathLike) -> None:
+        self._path = Path(path)
+        self._sets: dict[str, list[str]] = {}
+        self._arrays: list[tuple[str, HeaderArray, bool]] = []
+        self._closed = False
+
+    def __enter__(self) -> "HarWriter":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if exc_type is None and not self._closed:
+            self.close()
+
+    def add_set(self, name: str, elements: list[str]) -> None:
+        elements = list(elements)
+        if name in self._sets:
+            if self._sets[name] != elements:
+                raise ValueError(
+                    f"set {name!r} already registered with different elements: "
+                    f"existing={self._sets[name]!r}, new={elements!r}"
+                )
+            return
+        self._sets[name] = elements
+
+    def add_array(
+        self,
+        name: str,
+        array: np.ndarray,
+        set_names: list[str],
+        set_elements: list[list[str]] | None = None,
+        long_name: str = "",
+        *,
+        sparse: bool = False,
+    ) -> None:
+        array = np.asarray(array)
+        if set_elements is None:
+            set_elements = []
+            for sn in set_names:
+                if sn not in self._sets:
+                    raise ValueError(
+                        f"set {sn!r} not registered; "
+                        f"call add_set({sn!r}, [...]) first or "
+                        f"pass set_elements= explicitly"
+                    )
+                set_elements.append(list(self._sets[sn]))
+        else:
+            for sn, elems in zip(set_names, set_elements):
+                elems = list(elems)
+                if sn in self._sets:
+                    if self._sets[sn] != elems:
+                        raise ValueError(
+                            f"set {sn!r} elements conflict between array "
+                            f"{name!r} and previously registered set: "
+                            f"existing={self._sets[sn]!r}, new={elems!r}"
+                        )
+                else:
+                    self._sets[sn] = elems
+
+        ha = HeaderArray(
+            name=name,
+            coeff_name=name,
+            long_name=long_name,
+            array=array,
+            set_names=list(set_names),
+            set_elements=[list(e) for e in set_elements],
+        )
+        self._arrays.append((name, ha, sparse))
+
+    def add_dataframe(
+        self,
+        name: str,
+        df,
+        set_names: list[str],
+        long_name: str = "",
+    ) -> None:
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise RuntimeError("add_dataframe requires pandas") from exc
+
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError(
+                f"add_dataframe expects a 2-D pandas.DataFrame; "
+                f"got {type(df).__name__}"
+            )
+        if len(set_names) != 2:
+            raise ValueError(
+                f"add_dataframe expects 2 set_names; got {len(set_names)}. "
+                f"For higher ranks, call add_array with a numpy array."
+            )
+        index_elems = [str(x) for x in df.index.tolist()]
+        col_elems = [str(x) for x in df.columns.tolist()]
+        arr = df.values.astype(np.float32, copy=False)
+        self.add_array(
+            name,
+            arr,
+            set_names=set_names,
+            set_elements=[index_elems, col_elems],
+            long_name=long_name,
+        )
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+
+        headers: dict[str, HeaderArray] = {}
+        for sn, elems in self._sets.items():
+            headers[sn] = HeaderArray(
+                name=sn,
+                coeff_name=sn,
+                long_name=sn,
+                array=np.array(elems, dtype=object),
+                set_names=[],
+                set_elements=[],
+            )
+        sparse_names: list[str] = []
+        for name, ha, sparse in self._arrays:
+            headers[name] = ha
+            if sparse:
+                sparse_names.append(name)
+
+        write_har(self._path, headers, prefer_sparse=sparse_names)

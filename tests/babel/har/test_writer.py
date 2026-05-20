@@ -285,3 +285,106 @@ def test_write_2ifull_rejects_non_int32(tmp_path: Path):
     with pytest.raises(TypeError, match="int32"):
         out = bytearray()
         _write_2ifull(out, "RDLT", ha)
+
+
+# ── HarWriter builder ────────────────────────────────────────────────────────
+
+def test_harwriter_add_set_and_array(tmp_path: Path):
+    from equilibria.babel.har import HarWriter
+    out = tmp_path / "build.har"
+    w = HarWriter(out)
+    w.add_set("REG", ["USA", "ROW"])
+    w.add_set("COMM", ["AGR", "MFG", "SER"])
+    w.add_array(
+        "VDPP",
+        np.array([[1.0,2.0],[3.0,4.0],[5.0,6.0]], dtype=np.float32),
+        set_names=["COMM", "REG"],
+        long_name="domestic purchases",
+    )
+    w.close()
+    d = read_har(out)
+    assert {"REG", "COMM", "VDPP"} <= set(d.keys())
+    assert d["VDPP"].shape == (3, 2)
+    assert d["VDPP"].set_names == ["COMM", "REG"]
+
+
+def test_harwriter_context_manager(tmp_path: Path):
+    from equilibria.babel.har import HarWriter
+    out = tmp_path / "ctx.har"
+    with HarWriter(out) as w:
+        w.add_set("REG", ["USA", "ROW"])
+        w.add_array("X", np.array([1.0, 2.0], dtype=np.float32),
+                    set_names=["REG"], long_name="x")
+    d = read_har(out)
+    assert "X" in d
+
+
+def test_harwriter_auto_registers_sets_from_add_array(tmp_path: Path):
+    from equilibria.babel.har import HarWriter
+    out = tmp_path / "auto.har"
+    w = HarWriter(out)
+    w.add_array(
+        "VDPP",
+        np.array([[1.0]], dtype=np.float32),
+        set_names=["COMM", "REG"],
+        set_elements=[["AGR"], ["USA"]],
+        long_name="x",
+    )
+    w.close()
+    d = read_har(out)
+    assert "COMM" in d and "REG" in d
+    assert [str(e).strip() for e in d["COMM"].array] == ["AGR"]
+
+
+def test_harwriter_set_conflict_raises(tmp_path: Path):
+    from equilibria.babel.har import HarWriter
+    w = HarWriter(tmp_path / "conflict.har")
+    w.add_set("REG", ["USA", "ROW"])
+    with pytest.raises(ValueError, match="REG"):
+        w.add_set("REG", ["USA", "EUR"])
+
+
+def test_harwriter_array_conflicting_set_elements_raises(tmp_path: Path):
+    from equilibria.babel.har import HarWriter
+    w = HarWriter(tmp_path / "conflict2.har")
+    w.add_array(
+        "A", np.array([[1.0]], dtype=np.float32),
+        set_names=["COMM", "REG"],
+        set_elements=[["AGR"], ["USA"]],
+        long_name="x",
+    )
+    with pytest.raises(ValueError, match="REG"):
+        w.add_array(
+            "B", np.array([[2.0]], dtype=np.float32),
+            set_names=["COMM", "REG"],
+            set_elements=[["AGR"], ["EUR"]],
+            long_name="y",
+        )
+
+
+def test_harwriter_add_dataframe_2d(tmp_path: Path):
+    import pandas as pd
+    from equilibria.babel.har import HarWriter
+
+    df = pd.DataFrame(
+        [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+        index=pd.Index(["AGR","MFG","SER"], name="COMM"),
+        columns=pd.Index(["USA","ROW"], name="REG"),
+    )
+    out = tmp_path / "df.har"
+    with HarWriter(out) as w:
+        w.add_dataframe("VDPP", df, set_names=["COMM","REG"], long_name="dp")
+    d = read_har(out)
+    got = d["VDPP"]
+    assert got.shape == (3, 2)
+    assert got.set_names == ["COMM","REG"]
+    np.testing.assert_array_equal(got.array, df.values.astype(np.float32))
+
+
+def test_harwriter_add_dataframe_rejects_non_2d(tmp_path: Path):
+    import pandas as pd
+    from equilibria.babel.har import HarWriter
+    series = pd.Series([1.0, 2.0], name="X")
+    with pytest.raises(ValueError, match="2-D"):
+        with HarWriter(tmp_path / "bad.har") as w:
+            w.add_dataframe("X", series, set_names=["REG"], long_name="x")
