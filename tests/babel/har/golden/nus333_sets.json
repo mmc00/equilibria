@@ -1,0 +1,190 @@
+{
+  "headers": {
+    "ACTS": {
+      "dtype_kind": "U",
+      "long_name": "Set ACTS                                                              ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "AGR         ",
+        "last": "SER         "
+      }
+    },
+    "COMM": {
+      "dtype_kind": "U",
+      "long_name": "Set COMM                                                              ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "AGR         ",
+        "last": "SER         "
+      }
+    },
+    "DREL": {
+      "dtype_kind": "U",
+      "long_name": "GTAP data release identifier                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "R8.1_2007_Feb2013                                      ",
+        "last": "R8.1_2007_Feb2013                                      "
+      }
+    },
+    "DVER": {
+      "dtype_kind": "f",
+      "long_name": "Format of GTAP data                                                   ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": 6.0,
+        "last": 6.0,
+        "max": 6.0,
+        "min": 6.0,
+        "sum": 6.0
+      }
+    },
+    "ENDF": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDWF  Sector-specific endowment                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        0
+      ],
+      "stats": {
+        "first": "",
+        "last": ""
+      }
+    },
+    "ENDM": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDWM  Mobile endowments                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "LAND        ",
+        "last": "CAPITAL     "
+      }
+    },
+    "ENDS": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDWS  Sluggish factor                                            ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        0
+      ],
+      "stats": {
+        "first": "",
+        "last": ""
+      }
+    },
+    "ENDT": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDWT  Endowment Type                                             ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "mobile      ",
+        "last": "fixed       "
+      }
+    },
+    "ENDW": {
+      "dtype_kind": "U",
+      "long_name": "Set ENDW                                                              ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        3
+      ],
+      "stats": {
+        "first": "LAND        ",
+        "last": "CAPITAL     "
+      }
+    },
+    "MARG": {
+      "dtype_kind": "U",
+      "long_name": "Set MARG                                                              ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "SER         ",
+        "last": "SER         "
+      }
+    },
+    "REG": {
+      "dtype_kind": "U",
+      "long_name": "Set REG  Regions                                                      ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "USA         ",
+        "last": "ROW         "
+      }
+    },
+    "XXCD": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "at 21:10:20 on 01-AUG-2018                                            ",
+        "last": "at 21:10:20 on 01-AUG-2018                                            "
+      }
+    },
+    "XXCP": {
+      "dtype_kind": "U",
+      "long_name": "Fortran compiler used to make EXE which created this file             ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "IF64  ",
+        "last": "IF64  "
+      }
+    },
+    "XXCR": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "<GEMSIM v4.4 Jan 2016> [GTAPDataConv-SC.tab]                          ",
+        "last": "<GEMPACK Release 11.4.003   January 2016>                             "
+      }
+    }
+  },
+  "path": "/Users/marmol/proyectos2/equilibria/.claude/worktrees/harwriter/src/equilibria/templates/reference/gtap/data/nus333/sets.har"
+}

@@ -1,0 +1,1101 @@
+{
+  "headers": {
+    "DPSM": {
+      "dtype_kind": "f",
+      "long_name": "Sum of Distribution Parameters in Household Demand System             ",
+      "set_elements": [
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": 1.0,
+        "last": 1.0,
+        "max": 1.0,
+        "min": 1.0,
+        "sum": 2.0
+      }
+    },
+    "DREL": {
+      "dtype_kind": "U",
+      "long_name": "GTAP data release identifier                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "R8.1_2007_Feb2013                                      ",
+        "last": "R8.1_2007_Feb2013                                      "
+      }
+    },
+    "DVER": {
+      "dtype_kind": "f",
+      "long_name": "Format of GTAP data                                                   ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": 6.0,
+        "last": 6.0,
+        "max": 6.0,
+        "min": 6.0,
+        "sum": 6.0
+      }
+    },
+    "EVFB": {
+      "dtype_kind": "f",
+      "long_name": " primary factor purchases, by firms, at basic prices                  ",
+      "set_elements": [
+        [
+          "LAND",
+          "LABOR",
+          "CAPITAL"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 35950.1875,
+        "last": 11556847.0,
+        "max": 11556847.0,
+        "min": 0.0,
+        "sum": 45414320.0
+      }
+    },
+    "EVFP": {
+      "dtype_kind": "f",
+      "long_name": " primary factor purchases, at producers prices                        ",
+      "set_elements": [
+        [
+          "LAND",
+          "LABOR",
+          "CAPITAL"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 34471.4921875,
+        "last": 11763499.0,
+        "max": 14085577.0,
+        "min": 0.0,
+        "sum": 50229872.0
+      }
+    },
+    "EVOS": {
+      "dtype_kind": "f",
+      "long_name": " value of endowment supply in region r, net of direct tax             ",
+      "set_elements": [
+        [
+          "LAND",
+          "LABOR",
+          "CAPITAL"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 32969.9296875,
+        "last": 10780035.0,
+        "max": 10780035.0,
+        "min": 0.0,
+        "sum": 39493288.0
+      }
+    },
+    "MAKB": {
+      "dtype_kind": "f",
+      "long_name": " MAKE matrix at basic prices                                          ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 325641.59375,
+        "last": 47523364.0,
+        "max": 47523364.0,
+        "min": 0.0,
+        "sum": 108205808.0
+      }
+    },
+    "MAKS": {
+      "dtype_kind": "f",
+      "long_name": " MAKE matrix (before output tax/subsidy)                              ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 324849.25,
+        "last": 46936496.0,
+        "max": 46936496.0,
+        "min": 0.0,
+        "sum": 106151952.0
+      }
+    },
+    "SAVE": {
+      "dtype_kind": "f",
+      "long_name": "Savings - Net Expenditure at Agents' Prices                           ",
+      "set_elements": [
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": 594182.6875,
+        "last": 6308783.5,
+        "max": 6308783.5,
+        "min": 594182.6875,
+        "sum": 6902966.0
+      }
+    },
+    "VCIF": {
+      "dtype_kind": "f",
+      "long_name": " imports, at CIF prices                                               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2,
+        2
+      ],
+      "stats": {
+        "first": 1.4000000192027073e-05,
+        "last": 2031581.625,
+        "max": 9386700.0,
+        "min": 1.4000000192027073e-05,
+        "sum": 15321062.0
+      }
+    },
+    "VDEP": {
+      "dtype_kind": "f",
+      "long_name": "Capital Stock - Value of Depreciation                                 ",
+      "set_elements": [
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": 1259937.25,
+        "last": 4669627.5,
+        "max": 4669627.5,
+        "min": 1259937.25,
+        "sum": 5929565.0
+      }
+    },
+    "VDFB": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by firms, at basic prices                        ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 35027.52734375,
+        "last": 12490159.0,
+        "max": 12490159.0,
+        "min": 20668.783203125,
+        "sum": 45069356.0
+      }
+    },
+    "VDFP": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by firms, at producers prices                    ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 33642.75,
+        "last": 12516267.0,
+        "max": 12516267.0,
+        "min": 20668.78125,
+        "sum": 45485228.0
+      }
+    },
+    "VDGB": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by government, at basic prices                   ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.5789093971252441,
+        "last": 7088719.5,
+        "max": 7088719.5,
+        "min": 0.5789093971252441,
+        "sum": 9410465.0
+      }
+    },
+    "VDGP": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by government, at producers prices               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.5789093971252441,
+        "last": 7105651.0,
+        "max": 7105651.0,
+        "min": 0.5789093971252441,
+        "sum": 9428013.0
+      }
+    },
+    "VDIB": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by investment, at basic prices                   ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 335.8331604003906,
+        "last": 6491542.0,
+        "max": 6491542.0,
+        "min": 335.8331604003906,
+        "sum": 10703116.0
+      }
+    },
+    "VDIP": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by investment, at producers prices               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 335.8331604003906,
+        "last": 6618224.5,
+        "max": 6618224.5,
+        "min": 335.8331604003906,
+        "sum": 10910824.0
+      }
+    },
+    "VDPB": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by households, at basic prices                   ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 52576.51953125,
+        "last": 13005035.0,
+        "max": 13005035.0,
+        "min": 52576.51953125,
+        "sum": 27853124.0
+      }
+    },
+    "VDPP": {
+      "dtype_kind": "f",
+      "long_name": " domestic purchases, by households, at producers prices               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 54929.5078125,
+        "last": 13701422.0,
+        "max": 13701422.0,
+        "min": 54929.5078125,
+        "sum": 29585352.0
+      }
+    },
+    "VFOB": {
+      "dtype_kind": "f",
+      "long_name": " non-margin exports, at FOB prices                                    ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2,
+        2
+      ],
+      "stats": {
+        "first": 1.4000000192027073e-05,
+        "last": 2031581.625,
+        "max": 9002114.0,
+        "min": 1.4000000192027073e-05,
+        "sum": 14779058.0
+      }
+    },
+    "VKB": {
+      "dtype_kind": "f",
+      "long_name": "Capital Stock - Value at Beginning-of-Period                          ",
+      "set_elements": [
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": 31498432.0,
+        "last": 116740688.0,
+        "max": 116740688.0,
+        "min": 31498432.0,
+        "sum": 148239120.0
+      }
+    },
+    "VMFB": {
+      "dtype_kind": "f",
+      "long_name": " imported purchases, by firms, at basic prices                        ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 1383.30078125,
+        "last": 1107922.0,
+        "max": 5154705.5,
+        "min": 732.170166015625,
+        "sum": 10318027.0
+      }
+    },
+    "VMFP": {
+      "dtype_kind": "f",
+      "long_name": " imported purchases, by firms, at producers prices                    ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        3,
+        2
+      ],
+      "stats": {
+        "first": 1326.3861083984375,
+        "last": 1109582.25,
+        "max": 5184208.5,
+        "min": 699.260009765625,
+        "sum": 10436851.0
+      }
+    },
+    "VMGB": {
+      "dtype_kind": "f",
+      "long_name": " import purchases, by government, at basic prices                     ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.10724245756864548,
+        "last": 102513.7734375,
+        "max": 102513.7734375,
+        "min": 0.10724245756864548,
+        "sum": 163700.171875
+      }
+    },
+    "VMGP": {
+      "dtype_kind": "f",
+      "long_name": " import purchases, by government, at producers prices                 ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.10724245756864548,
+        "last": 105341.65625,
+        "max": 105341.65625,
+        "min": 0.10724245756864548,
+        "sum": 167260.34375
+      }
+    },
+    "VMIB": {
+      "dtype_kind": "f",
+      "long_name": " import purchases, by investment, at basic prices                     ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 43.075408935546875,
+        "last": 130130.6171875,
+        "max": 1391941.25,
+        "min": 43.075408935546875,
+        "sum": 1824787.5
+      }
+    },
+    "VMIP": {
+      "dtype_kind": "f",
+      "long_name": " import purchases, by investment, at producers prices                 ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 43.075408935546875,
+        "last": 134815.359375,
+        "max": 1478771.0,
+        "min": 43.075408935546875,
+        "sum": 1921699.625
+      }
+    },
+    "VMPB": {
+      "dtype_kind": "f",
+      "long_name": " import purchases, by households, at basic prices                     ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 12718.1728515625,
+        "last": 685202.6875,
+        "max": 1995513.875,
+        "min": 12718.1728515625,
+        "sum": 3356196.5
+      }
+    },
+    "VMPP": {
+      "dtype_kind": "f",
+      "long_name": " import purchases, by households, at producers prices                 ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 13505.216796875,
+        "last": 734489.25,
+        "max": 2362274.25,
+        "min": 13505.216796875,
+        "sum": 3818191.0
+      }
+    },
+    "VMSB": {
+      "dtype_kind": "f",
+      "long_name": " imports, at basic prices                                             ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2,
+        2
+      ],
+      "stats": {
+        "first": 1.4000000192027073e-05,
+        "last": 2031629.375,
+        "max": 9659015.0,
+        "min": 1.4000000192027073e-05,
+        "sum": 15662711.0
+      }
+    },
+    "VOSB": {
+      "dtype_kind": "f",
+      "long_name": " sales of domestic output supply, at basic prices                     ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 325641.5625,
+        "last": 47523364.0,
+        "max": 47523364.0,
+        "min": 325641.5625,
+        "sum": 108205808.0
+      }
+    },
+    "VST": {
+      "dtype_kind": "f",
+      "long_name": " margin exports                                                       ",
+      "set_elements": [
+        [
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "MARG",
+        "REG"
+      ],
+      "shape": [
+        1,
+        2
+      ],
+      "stats": {
+        "first": 28091.46875,
+        "last": 513912.90625,
+        "max": 513912.90625,
+        "min": 28091.46875,
+        "sum": 542004.375
+      }
+    },
+    "VTWR": {
+      "dtype_kind": "f",
+      "long_name": " margins by margin commodity                                          ",
+      "set_elements": [
+        [
+          "SER"
+        ],
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "MARG",
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        1,
+        3,
+        2,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 384585.8125,
+        "min": 0.0,
+        "sum": 542004.1875
+      }
+    },
+    "VXSB": {
+      "dtype_kind": "f",
+      "long_name": " non-margin exports, at basic prices                                  ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2,
+        2
+      ],
+      "stats": {
+        "first": 1.4000000192027073e-05,
+        "last": 2031581.625,
+        "max": 8881595.0,
+        "min": 1.4000000192027073e-05,
+        "sum": 14627746.0
+      }
+    },
+    "XXCD": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "at 21:10:20 on 01-AUG-2018                                            ",
+        "last": "at 21:10:20 on 01-AUG-2018                                            "
+      }
+    },
+    "XXCP": {
+      "dtype_kind": "U",
+      "long_name": "Fortran compiler used to make EXE which created this file             ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "IF64  ",
+        "last": "IF64  "
+      }
+    },
+    "XXCR": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "<GEMSIM v4.4 Jan 2016> [GTAPDataConv-SC.tab]                          ",
+        "last": "<GEMPACK Release 11.4.003   January 2016>                             "
+      }
+    }
+  },
+  "path": "/Users/marmol/proyectos2/equilibria/.claude/worktrees/harwriter/src/equilibria/templates/reference/gtap/data/nus333/basedata.har"
+}

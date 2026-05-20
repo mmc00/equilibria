@@ -221,6 +221,7 @@ For PEP pep2 production workflows, use:
 
 ```python
 from equilibria.babel import read_gdx, read_har, write_gdx
+from equilibria.babel.har import HarWriter, write_har
 
 # Read GAMS GDX files
 data = read_gdx("results.gdx")
@@ -229,6 +230,22 @@ parameters = data["parameters"]
 
 # Read GEMPACK HAR files
 data = read_har("database.har")
+
+# Round-trip mutate a HAR (alter-tax style shocks)
+data["rTMS"].array[...] *= 1.10
+write_har("baserate_shocked.har", data)
+
+# Build a HAR from scratch (numpy arrays or pandas DataFrames)
+import numpy as np
+with HarWriter("synthetic.har") as w:
+    w.add_set("REG", ["USA", "ROW"])
+    w.add_set("COMM", ["AGR", "MFG"])
+    w.add_array(
+        "VDPP",
+        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+        set_names=["COMM", "REG"],
+        long_name="domestic private purchases",
+    )
 
 # Write back to GDX (for GAMS users)
 write_gdx("python_results.gdx", solution)
@@ -478,6 +495,7 @@ print(list_solvers())
 | Modular blocks | ✅ | ❌ | ❌ | Partial |
 | Read GDX | ✅ | Native | ❌ | ✅ |
 | Read HAR | ✅ | ❌ | Native | ❌ |
+| Write HAR | ✅ | ❌ | Native | ❌ |
 | Open source | ✅ | ❌ | ❌ | ✅ |
 | IDE integration | Any | GAMS Studio | RunGTAP | VS Code |
 | Visualization | Built-in | Manual | ViewHAR | Plots.jl |
