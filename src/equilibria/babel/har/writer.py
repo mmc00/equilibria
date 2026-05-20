@@ -114,11 +114,33 @@ def _emit_header(out: bytearray, name: str, ha: HeaderArray) -> None:
     if _looks_like_1cfull(ha):
         _write_1cfull(out, name, ha)
         return
+    _validate_array_header(name, ha)
+    if ha.array.dtype in (np.float32, np.float64):
+        _write_refull(out, name, ha)
+        return
     raise NotImplementedError(
         f"writer does not yet support emitting {name!r} "
         f"(dtype={ha.array.dtype}, ndim={ha.array.ndim}, "
         f"set_names={ha.set_names!r})"
     )
+
+
+def _validate_array_header(name: str, ha: HeaderArray) -> None:
+    if ha.array.ndim != len(ha.set_names):
+        raise ValueError(
+            f"{name!r}: ndim {ha.array.ndim} != len(set_names) {len(ha.set_names)}"
+        )
+    if len(ha.set_elements) != len(ha.set_names):
+        raise ValueError(
+            f"{name!r}: len(set_elements) {len(ha.set_elements)} "
+            f"!= len(set_names) {len(ha.set_names)}"
+        )
+    for k, (sn, elems) in enumerate(zip(ha.set_names, ha.set_elements)):
+        if ha.array.shape[k] != len(elems):
+            raise ValueError(
+                f"{name!r}: shape[{k}]={ha.array.shape[k]} for set {sn!r} "
+                f"but set_elements[{k}] has {len(elems)} entries"
+            )
 
 
 # ── Per-token emitters ───────────────────────────────────────────────────────
@@ -164,3 +186,53 @@ def _write_1cfull(out: bytearray, name: str, ha: HeaderArray) -> None:
     # if a fixture requires it).
     rec = wire.write_set_element_record(elements, n_total=n_total, flag=1)
     wire.write_record(out, rec)
+
+
+def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
+    """Emit a REFULL header (real dense N-D array).
+
+    Block layout (records, in order):
+      0  name (4 bytes)
+      1  meta (PAD + "REFULL" + long_name(70) + 3 trailing ints)
+      2  set descriptor
+      3 .. 3+n_unique-1  one element record per unique set
+      3+n_unique         dim-summary record
+      4+n_unique         dim-metadata record
+      5+n_unique         data record (PAD + 1 + n*float32, Fortran order)
+    """
+    arr = np.ascontiguousarray(ha.array, dtype=np.float32)
+
+    _write_name_record(out, name)
+    meta_tail = wire.INT.pack(arr.size) + wire.INT.pack(0) + wire.INT.pack(0)
+    _write_meta_record(out, wire.TOKEN_REFULL, ha.long_name, meta_tail)
+
+    wire.write_record(out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names))
+
+    seen: set[str] = set()
+    for sn, elems in zip(ha.set_names, ha.set_elements):
+        if sn in seen:
+            continue
+        seen.add(sn)
+        rec = wire.write_set_element_record(elems, n_total=len(elems), flag=1)
+        wire.write_record(out, rec)
+
+    summary = bytearray()
+    summary.extend(wire.PAD)
+    summary.extend(wire.INT.pack(arr.ndim))
+    for dim in arr.shape:
+        summary.extend(wire.INT.pack(dim))
+    wire.write_record(out, bytes(summary))
+
+    meta_dim = bytearray()
+    meta_dim.extend(wire.PAD)
+    meta_dim.extend(wire.INT.pack(arr.ndim))
+    for _ in range(arr.ndim):
+        meta_dim.extend(wire.INT.pack(0))
+    wire.write_record(out, bytes(meta_dim))
+
+    flat = arr.flatten(order="F")
+    data = bytearray()
+    data.extend(wire.PAD)
+    data.extend(wire.INT.pack(1))
+    data.extend(flat.astype("<f4").tobytes())
+    wire.write_record(out, bytes(data))
