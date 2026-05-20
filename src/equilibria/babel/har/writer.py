@@ -27,8 +27,16 @@ from equilibria.babel.har import wire
 def write_har(
     path: str | os.PathLike,
     headers: Mapping[str, HeaderArray],
+    *,
+    prefer_sparse: list[str] | None = None,
 ) -> None:
     """Write a HAR file from a mapping of header name → HeaderArray.
+
+    Args:
+        path: target .har path.
+        headers: mapping of header name → HeaderArray.
+        prefer_sparse: names that should be emitted as RESPSE instead of
+            REFULL. Default: empty (always emit dense REFULL for floats).
 
     Emits all 1CFULL (set) headers first, then non-1CFULL headers, each
     group in mapping insertion order. Writes atomically via a temp file
@@ -39,6 +47,7 @@ def write_har(
 
     _validate_headers(headers)
 
+    prefer_sparse_set = set(prefer_sparse or [])
     target = Path(path)
     tmp = target.with_suffix(target.suffix + ".tmp")
 
@@ -46,7 +55,7 @@ def write_har(
     try:
         sets, arrays = _partition_sets_first(headers)
         for name, ha in [*sets, *arrays]:
-            _emit_header(out, name, ha)
+            _emit_header(out, name, ha, sparse=name in prefer_sparse_set)
         tmp.write_bytes(bytes(out))
         os.replace(tmp, target)
     except BaseException:
@@ -110,13 +119,19 @@ def _looks_like_1cfull(ha: HeaderArray) -> bool:
 
 # ── Dispatch ─────────────────────────────────────────────────────────────────
 
-def _emit_header(out: bytearray, name: str, ha: HeaderArray) -> None:
+def _emit_header(out: bytearray, name: str, ha: HeaderArray, *, sparse: bool = False) -> None:
     if _looks_like_1cfull(ha):
         _write_1cfull(out, name, ha)
         return
+    if ha.array.dtype == np.int32 and ha.array.ndim == 2 and not ha.set_names:
+        _write_2ifull(out, name, ha)
+        return
     _validate_array_header(name, ha)
     if ha.array.dtype in (np.float32, np.float64):
-        _write_refull(out, name, ha)
+        if sparse:
+            _write_respse(out, name, ha)
+        else:
+            _write_refull(out, name, ha)
         return
     raise NotImplementedError(
         f"writer does not yet support emitting {name!r} "
@@ -186,6 +201,87 @@ def _write_1cfull(out: bytearray, name: str, ha: HeaderArray) -> None:
     # if a fixture requires it).
     rec = wire.write_set_element_record(elements, n_total=n_total, flag=1)
     wire.write_record(out, rec)
+
+
+def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
+    """Emit a 2IFULL header (2-D integer dense).
+
+    Layout:
+      name record (4 bytes)
+      meta record (PAD + "2IFULL" + long_name(70) + filler + rows + cols)
+      data record (PAD + 1 + rows*cols * int32, Fortran order)
+    """
+    if ha.array.dtype != np.int32:
+        raise TypeError(
+            f"{name!r}: 2IFULL requires int32 dtype; got {ha.array.dtype}. "
+            f"Cast explicitly with .astype(np.int32) if truncation is intended."
+        )
+    if ha.array.ndim != 2:
+        raise ValueError(
+            f"{name!r}: 2IFULL requires 2-D array; got ndim={ha.array.ndim}"
+        )
+    rows, cols = ha.array.shape
+    _write_name_record(out, name)
+    # Filler at offset 80 so rows/cols land at 84/88 where the reader looks.
+    tail = wire.INT.pack(0) + wire.INT.pack(rows) + wire.INT.pack(cols)
+    _write_meta_record(out, wire.TOKEN_2IFULL, ha.long_name, tail)
+
+    flat = ha.array.flatten(order="F").astype("<i4")
+    data = bytearray()
+    data.extend(wire.PAD)
+    data.extend(wire.INT.pack(1))
+    data.extend(flat.tobytes())
+    wire.write_record(out, bytes(data))
+
+
+def _write_respse(out: bytearray, name: str, ha: HeaderArray) -> None:
+    """Emit a RESPSE header (real sparse N-D).
+
+    Block layout (records, in order):
+      0  name (4 bytes)
+      1  meta (PAD + "RESPSE" + long_name(70) + filler + nnz + 0)
+      2  set descriptor
+      3 .. 3+n_unique-1  one element record per unique set
+      3+n_unique         sparse-setup record (PAD + ndim + shape + nnz)
+      4+n_unique         data record (PAD + 1 + nnz + nnz + idx[nnz] + val[nnz])
+                         with idx 1-based Fortran-order flat indices.
+    """
+    arr = np.ascontiguousarray(ha.array, dtype=np.float32)
+    flat_f = arr.flatten(order="F")
+    nz = np.flatnonzero(flat_f)
+    nnz = int(nz.size)
+
+    _write_name_record(out, name)
+    meta_tail = wire.INT.pack(0) + wire.INT.pack(nnz) + wire.INT.pack(0)
+    _write_meta_record(out, wire.TOKEN_RESPSE, ha.long_name, meta_tail)
+
+    wire.write_record(out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names))
+
+    seen: set[str] = set()
+    for sn, elems in zip(ha.set_names, ha.set_elements):
+        if sn in seen:
+            continue
+        seen.add(sn)
+        rec = wire.write_set_element_record(elems, n_total=len(elems), flag=1)
+        wire.write_record(out, rec)
+
+    setup = bytearray()
+    setup.extend(wire.PAD)
+    setup.extend(wire.INT.pack(arr.ndim))
+    for dim in arr.shape:
+        setup.extend(wire.INT.pack(dim))
+    setup.extend(wire.INT.pack(nnz))
+    wire.write_record(out, bytes(setup))
+
+    data = bytearray()
+    data.extend(wire.PAD)
+    data.extend(wire.INT.pack(1))
+    data.extend(wire.INT.pack(nnz))
+    data.extend(wire.INT.pack(nnz))
+    for k in nz:
+        data.extend(wire.INT.pack(int(k) + 1))
+    data.extend(flat_f[nz].astype("<f4").tobytes())
+    wire.write_record(out, bytes(data))
 
 
 def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:

@@ -218,3 +218,70 @@ def test_write_refull_rejects_ndim_set_names_mismatch(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="ndim"):
         write_har(tmp_path / "bad.har", {"VDPP": ha})
+
+
+# ── RESPSE: sparse real ──────────────────────────────────────────────────────
+
+def test_write_respse_roundtrip(tmp_path: Path):
+    """Sparse 3-D float array: only a few non-zeros."""
+    arr = np.zeros((3, 3, 2), dtype=np.float32)
+    arr[0, 1, 0] = 7.5
+    arr[2, 0, 1] = -1.25
+    ha = HeaderArray(
+        name="MAKS",
+        coeff_name="MAKS",
+        long_name="make matrix sparse",
+        array=arr,
+        set_names=["COMM", "ACTS", "REG"],
+        set_elements=[
+            ["AGR","MFG","SER"], ["AGR","MFG","SER"], ["USA","ROW"],
+        ],
+    )
+    sets = {
+        "COMM": HeaderArray("COMM","COMM","c", np.array(["AGR","MFG","SER"],dtype=object),[],[]),
+        "ACTS": HeaderArray("ACTS","ACTS","a", np.array(["AGR","MFG","SER"],dtype=object),[],[]),
+        "REG":  HeaderArray("REG","REG","r", np.array(["USA","ROW"],dtype=object),[],[]),
+    }
+    out = tmp_path / "maks.har"
+    write_har(out, {**sets, "MAKS": ha}, prefer_sparse=["MAKS"])
+    d = read_har(out)
+    got = d["MAKS"]
+    assert got.shape == (3, 3, 2)
+    np.testing.assert_array_almost_equal(got.array, arr, decimal=5)
+
+
+# ── 2IFULL: 2-D int dense ───────────────────────────────────────────────────
+
+def test_write_2ifull_roundtrip(tmp_path: Path):
+    arr = np.array([[42]], dtype=np.int32)
+    ha = HeaderArray(
+        name="RDLT",
+        coeff_name="RDLT",
+        long_name="release date integer",
+        array=arr,
+        set_names=[],
+        set_elements=[],
+    )
+    out = tmp_path / "rdlt.har"
+    write_har(out, {"RDLT": ha})
+    d = read_har(out)
+    got = d["RDLT"]
+    assert got.shape == (1, 1)
+    assert got.array.dtype == np.int32
+    assert int(got.array[0, 0]) == 42
+
+
+def test_write_2ifull_rejects_non_int32(tmp_path: Path):
+    arr = np.array([[42.0]], dtype=np.float64)
+    ha = HeaderArray(
+        name="RDLT",
+        coeff_name="RDLT",
+        long_name="x",
+        array=arr,
+        set_names=[],
+        set_elements=[],
+    )
+    from equilibria.babel.har.writer import _write_2ifull
+    with pytest.raises(TypeError, match="int32"):
+        out = bytearray()
+        _write_2ifull(out, "RDLT", ha)
