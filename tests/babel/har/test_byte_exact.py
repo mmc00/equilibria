@@ -27,9 +27,47 @@ FIXTURES = [
     DATA / "9x10/basedata.har",
 ]
 
-# Populated as Task 9 confirms which fixtures pass / fail byte-exact.
-# Each entry maps fixture-name -> human-readable reason from the .diff sidecar.
-KNOWN_NON_BYTE_EXACT: dict[str, str] = {}
+# GEMPACK's HAR emission carries structural information that read_har does
+# not preserve, so write_har(read_har(p)) cannot reach byte equality with p
+# for the six GTAP fixtures shipped with equilibria. Per the spec's escape
+# hatch (section 4, "Opción 2"), these are documented xfails — L3 semantic
+# round-trip on the same fixtures is exact and provides the actual user-
+# facing guarantee.
+#
+# Concretely, the diverging bytes fall into three categories:
+#   - 1CFULL element records: GEMPACK pads each element to a per-header
+#     width that read_har does not record (only the stripped strings are
+#     surfaced). The writer re-packs at the minimum width that holds all
+#     elements, producing shorter element records.
+#   - REFULL/RESPSE meta-record filler ints at offset 80: GEMPACK writes
+#     type-specific magic values (1CFULL=2, REFULL=7, others vary) that
+#     we currently emit as a constant for 1CFULL and 0 for the rest.
+#   - Sparse vs dense storage: GEMPACK chose RESPSE for certain headers
+#     based on internal heuristics; read_har densifies on load, so the
+#     sparse-vs-dense signal is lost by the time write_har sees the data.
+#
+# See the per-fixture .diff sidecars next to this file for the exact
+# byte-level divergence captured at this point.
+KNOWN_NON_BYTE_EXACT: dict[str, str] = {
+    "sets.har": (
+        "1CFULL element-width padding and REFULL meta filler bytes are "
+        "structural information lost on read; L3 semantic round-trip "
+        "passes. See nus333_sets.diff / 9x10_sets.diff."
+    ),
+    "basedata.har": (
+        "REFULL/RESPSE meta filler ints and GEMPACK's sparse-vs-dense "
+        "storage choice are not preserved through read_har. L3 semantic "
+        "round-trip passes. See nus333_basedata.diff / 9x10_basedata.diff."
+    ),
+    "baserate.har": (
+        "Same 1CFULL/REFULL structural divergence as sets.har; L3 "
+        "semantic round-trip passes. See nus333_baserate.diff."
+    ),
+    "default.prm": (
+        "Same 1CFULL/REFULL structural divergence as sets.har; L3 "
+        "semantic round-trip passes. See nus333_default.diff."
+    ),
+}
 
 
 @pytest.mark.parametrize("fixture", FIXTURES, ids=lambda p: p.name)
