@@ -20,7 +20,7 @@ copyright = f"{date.today().year}, {author}"
 try:
     from equilibria.version import __version__ as release
 except Exception:  # noqa: BLE001 — fallback for partial installs
-    release = "0.4.0"
+    release = "0.5.1"
 version = ".".join(release.split(".")[:2])
 
 # -- General configuration ----------------------------------------------------
