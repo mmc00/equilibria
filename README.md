@@ -347,6 +347,13 @@ Notes:
 - Tax-rate symbols (`imptx`, `exptx`, `prdtx`, `fcttx`, `fctts`) are mutable `Param`s, not `Var`s, so warm-start scripts that copy Vars between baseline and shock models do not overwrite the shocked values.
 - See `CLAUDE.md` and `GTAP_VALIDATION_STATUS.md` for the full audit trail; per-fix notes live in `~/.claude/projects/.../memory/gtap_full_parity_achieved.md`.
 
+**Roadmap (in order):**
+
+1. **RunGtap welfare analysis compatibility** — port the EV/CV decomposition (allocative efficiency, terms of trade, investment-savings, endowment, technical change) so Python results line up with the standard RunGtap welfare report. *In progress (`templates/gtap/welfare_decomp.py`).*
+2. **Altertax** — implement the standard utility for re-balancing the baseline under altered tax rates while preserving equilibrium, so users can build counterfactual baselines without leaving Python.
+3. **Legacy GTAP model port** — backport the previous standard model version alongside Standard 7, enabling reproduction of studies built against the older specification.
+4. **Standard-model extensions** — selected extensions of the standard model (e.g. Francois-style trade-policy extensions) as opt-in modules.
+
 ---
 
 ## Examples

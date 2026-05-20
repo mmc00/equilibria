@@ -55,7 +55,10 @@ class WelfareComponents:
     IS: float = 0.0             # Investment-Saving (pnum-deflated)
     ENDW: float = 0.0           # Endowment change
     TECH: float = 0.0           # Technical change
-    EV: float = 0.0             # Equivalent variation in USD millions
+    EV: float = 0.0             # Equivalent variation in USD millions (sum of three pieces below)
+    EV_priv: float = 0.0        # yc_base · Δuh — private-consumption contribution to EV
+    EV_gov: float = 0.0         # yg_base · Δug — government-consumption contribution to EV
+    EV_save: float = 0.0        # rsav_base · Δus — savings contribution to EV
 
     @property
     def A_total(self) -> float:
@@ -79,6 +82,9 @@ class WelfareComponents:
             "TECH": self.TECH,
             "total": self.total,
             "EV": self.EV,
+            "EV_priv": self.EV_priv,
+            "EV_gov": self.EV_gov,
+            "EV_save": self.EV_save,
             "residual": self.residual,
             "residual_pct_of_EV": (100.0 * self.residual / self.EV) if abs(self.EV) > 1e-9 else 0.0,
         })
@@ -176,9 +182,17 @@ def compute_welfare_decomposition_homotopy(
             tgt.IS += comp.IS
             tgt.ENDW += comp.ENDW
             tgt.TECH += comp.TECH
+            # Path-integrated EV: each step contributes (yc_k · Δuh, yg_k · Δug,
+            # rsav_k · Δus) using the LOCAL baseline of that step rather than
+            # the global baseline. Summing across steps reproduces RunGTAP's
+            # Gragg-extrapolated EV because the local CDE/Cobb-Douglas
+            # curvature is picked up on each segment instead of being
+            # ignored by a single endpoint evaluation.
+            tgt.EV_priv += comp.EV_priv
+            tgt.EV_gov  += comp.EV_gov
+            tgt.EV_save += comp.EV_save
+            tgt.EV      += comp.EV
 
-    # EV is anchored to the global endpoints (base → final), not summed.
-    _attach_ev(out, step_params[0], step_levels[0], step_levels[-1])
     return out
 
 
@@ -348,13 +362,44 @@ def _attach_ev(
     base_levels: Snapshot,
     shock_levels: Snapshot,
 ) -> None:
-    """EV_r = vpm_base · (uh_shock - uh_base) in USD millions.
+    """Aggregate EV decomposition matching RunGTAP/GTAPVIEW (gtapv7.tab decomp.tab).
 
-    vpm_base is baseline private consumption (yc at t0). uh is the private utility
-    activity level (≈1.0 at baseline by construction).
+        EV_r = yc_base · Δuh   +   yg_base · Δug   +   rsav_base · Δus
+
+    where yc, yg, rsav are the baseline regional expenditures on private, public
+    and savings absorption, and (uh, ug, us) are the per-capita utility activity
+    levels of each sub-component (each ≈ 1.0 at baseline by construction).
+
+    RunGTAP's `EV` header in DECOMP.har is the same three-way sum, exposed there
+    as `upev + ugev + qsaveev` weighted by the corresponding baseline absorption.
+    For the standard tariff shock with pop fixed and tech unchanged, this
+    aggregation reproduces RunGTAP's `EV` to within solver tolerance.
+
+    The sub-components are kept on the result object as `EV_priv`, `EV_gov` and
+    `EV_save` so callers can inspect the contribution of each Cobb-Douglas
+    branch of the regional household.
     """
     for r in out:
-        vpm_base = _scalar(base_levels, "yc", r)
+        # Private piece — CDE / Cobb-Douglas private absorption.
+        yc_base = _scalar(base_levels, "yc", r)
         uh_base = _scalar(base_levels, "uh", r) or 1.0
         uh_shock = _scalar(shock_levels, "uh", r) or 1.0
-        out[r].EV = vpm_base * (uh_shock - uh_base)
+        ev_priv = yc_base * (uh_shock - uh_base)
+
+        # Government piece — Cobb-Douglas gov absorption (xg).
+        yg_base = _scalar(base_levels, "yg", r)
+        ug_base = _scalar(base_levels, "ug", r) or 1.0
+        ug_shock = _scalar(shock_levels, "ug", r) or 1.0
+        ev_gov = yg_base * (ug_shock - ug_base)
+
+        # Savings piece — rsav · Δus. us is the savings sub-utility; rsav is
+        # regional gross savings at baseline prices.
+        rsav_base = _scalar(base_levels, "rsav", r)
+        us_base = _scalar(base_levels, "us", r) or 1.0
+        us_shock = _scalar(shock_levels, "us", r) or 1.0
+        ev_save = rsav_base * (us_shock - us_base)
+
+        out[r].EV_priv = ev_priv
+        out[r].EV_gov = ev_gov
+        out[r].EV_save = ev_save
+        out[r].EV = ev_priv + ev_gov + ev_save
