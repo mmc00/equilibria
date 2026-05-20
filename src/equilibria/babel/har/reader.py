@@ -29,42 +29,14 @@ from pathlib import Path
 import numpy as np
 
 from equilibria.babel.har.symbols import HeaderArray
-
-_PAD = b"    "
-_INT = struct.Struct("<i")
-
-
-def _iter_records(buf: bytes):
-    """Yield raw record bytes from a Fortran unformatted stream."""
-    pos = 0
-    n = len(buf)
-    while pos < n:
-        if pos + 4 > n:
-            return
-        rlen = _INT.unpack_from(buf, pos)[0]
-        pos += 4
-        if rlen < 0 or pos + rlen + 4 > n:
-            return
-        yield buf[pos:pos + rlen]
-        pos += rlen + 4  # skip the trailing length marker
-
-
-def _decode_str_block(blk: bytes, width: int = 12) -> list[str]:
-    """Split a fixed-width padded string block into a list of stripped strings."""
-    out: list[str] = []
-    p = 0
-    while p + width <= len(blk):
-        out.append(blk[p:p + width].decode("ascii", errors="replace").rstrip())
-        p += width
-    return out
-
-
-def _read_set_element_record(rec: bytes) -> list[str]:
-    """Decode a record holding set elements: pad(4) + 1 + n + n + n*12-byte names."""
-    if len(rec) < 16:
-        return []
-    n = _INT.unpack_from(rec, 8)[0]
-    return _decode_str_block(rec[16:16 + 12 * n])
+from equilibria.babel.har.wire import (
+    PAD as _PAD,
+    INT as _INT,
+    iter_records as _iter_records,
+    decode_str_block as _decode_str_block,
+    read_set_element_record as _read_set_element_record,
+    parse_set_descriptor as _parse_set_descriptor,
+)
 
 
 def _read_header(records: list[bytes], i: int) -> tuple[HeaderArray | None, int]:
@@ -126,27 +98,6 @@ def _read_1cfull(name: str, long_name: str, records: list[bytes], i: int) -> tup
         ),
         j,
     )
-
-
-def _parse_set_descriptor(rec: bytes) -> tuple[str, list[str], int]:
-    """Decode the per-coefficient set descriptor record.
-
-    Layout:
-      [0:4]   pad
-      [4:8]   n_unique_sets (counts each distinct set once)
-      [8:12]  flag (= 1 when set names follow)
-      [12:16] ndim (true number of dimensions; may exceed n_unique_sets when
-              a set appears more than once, e.g. VMSB on REG×REG)
-      [16:28] coeff_name (12 chars padded)
-      [28:32] flag (= 1 when set names present)
-      [32:32 + 12*ndim] set names (one per dimension, with repeats)
-
-    Returns (coeff_name, set_names, ndim).
-    """
-    ndim = _INT.unpack_from(rec, 12)[0]
-    coeff_name = rec[16:28].decode("ascii", errors="replace").rstrip()
-    set_names = _decode_str_block(rec[32:32 + 12 * ndim])
-    return coeff_name, set_names, ndim
 
 
 def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:

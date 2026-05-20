@@ -17,6 +17,7 @@ mip_to_sam
 pep_quickstart
 gtap_quickstart
 welfare_decomposition
+har_io
 path_capi
 benchmarks
 ```
