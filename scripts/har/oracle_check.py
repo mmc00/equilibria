@@ -71,7 +71,11 @@ def _dump_har_with_harpy(harpy, path: Path) -> dict:
     array statistics. No internals.
     """
     obj = harpy.HarFileObj.loadFromDisk(str(path))
-    out: dict = {"path": str(path), "headers": {}}
+    try:
+        rel = path.resolve().relative_to(REPO_ROOT)
+    except ValueError:
+        rel = path
+    out: dict = {"path": str(rel), "headers": {}}
     for name in obj.getHeaderArrayNames():
         ha = obj.getHeaderArrayObj(name)
         # HeaderArrayObj is dict-like (newer harpy API). Use item access

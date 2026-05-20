@@ -511,7 +511,7 @@ wheels = [
 
 [[package]]
 name = "equilibria"
-version = "0.4.0"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
@@ -577,6 +577,9 @@ dev = [
     { name = "ruff" },
     { name = "ty" },
 ]
+har-oracle = [
+    { name = "harpy3" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -619,6 +622,7 @@ dev = [
     { name = "ruff", specifier = ">=0.4" },
     { name = "ty", specifier = ">=0.0.14" },
 ]
+har-oracle = [{ name = "harpy3", specifier = ">=0.3.1" }]
 
 [[package]]
 name = "et-xmlfile"
@@ -723,6 +727,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ec/20/5f5ad4da6a5a27c80f2ed2ee9aee3f9e36c66e56e21c00fde467b2f8f88f/furo-2025.12.19.tar.gz", hash = "sha256:188d1f942037d8b37cd3985b955839fea62baa1730087dc29d157677c857e2a7", size = 1661473 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f4/b2/50e9b292b5cac13e9e81272c7171301abc753a60460d21505b606e15cf21/furo-2025.12.19-py3-none-any.whl", hash = "sha256:bb0ead5309f9500130665a26bee87693c41ce4dbdff864dbfb6b0dae4673d24f", size = 339262 },
+]
+
+[[package]]
+name = "harpy3"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9e/2e/7f93180a6b549ed64b9579e623c68680171d9595e5d4411881e4d1c1bfb5/harpy3-0.3.1.tar.gz", hash = "sha256:3a50ca93287735c7ec7c5b1994034f0579e67e3931c96453ed39e5536e90e2d1", size = 4978408 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/44/202deadc6ba268bb9aac848fbd1d59d2451c125c64d5bcd476965a58d1b4/harpy3-0.3.1-py3-none-any.whl", hash = "sha256:c6d48d8ebe36de3d9e8c92e6dff073bf6cae180a93bfae0cccfea5faf876455b", size = 4983439 },
 ]
 
 [[package]]

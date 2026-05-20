@@ -140,7 +140,7 @@ def test_harpy_reads_writer_output(tmp_path: Path):
             long_name="domestic private purchases",
         )
 
-    obj = harpy.HarFileObj(str(out))
+    obj = harpy.HarFileObj.loadFromDisk(str(out))
     names = list(obj.getHeaderArrayNames())
     assert "REG" in names
     assert "COMM" in names
