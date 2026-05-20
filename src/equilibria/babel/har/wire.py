@@ -147,6 +147,14 @@ def build_set_descriptor(coeff_name: str, set_names: list[str]) -> bytes:
     The on-disk descriptor reports `n_unique_sets` (each distinct set name
     counted once) and `ndim` (the full count, with repeats). For an array
     with set_names=["COMM","REG","REG"], n_unique=2 and ndim=3.
+
+    GEMPACK-canonical trailing layout (required by harpy3 0.3.1 and the
+    Fortran HAR reader; see issue #12):
+
+      ... + set_names(12*ndim)
+          + set_status(1*n_unique)   # 'k' = known set, name resolved at load
+          + dim_sizes(4*n_unique)    # int32; 0 means "use the element record"
+          + Nexplicit(4)             # int32; 0 = no explicit subset overlay
     """
     unique: list[str] = []
     for sn in set_names:
@@ -166,4 +174,11 @@ def build_set_descriptor(coeff_name: str, set_names: list[str]) -> bytes:
     payload.extend(coeff_name.encode("ascii").ljust(SET_NAME_WIDTH, b" "))
     payload.extend(INT.pack(1))  # second flag: set names present
     payload.extend(encode_str_block(set_names, width=SET_NAME_WIDTH))
+    # Trailing fields required by GEMPACK / harpy3: status byte per dimension,
+    # then a dim_size int32 per dimension, then Nexplicit. (harpy3 reads NSets
+    # from the *ndim* slot, so the per-dim counts use ndim, not n_unique —
+    # repeated sets such as REG×REG get one byte/int per occurrence.)
+    payload.extend(b"k" * ndim)
+    payload.extend(b"\x00\x00\x00\x00" * ndim)
+    payload.extend(INT.pack(0))
     return bytes(payload)

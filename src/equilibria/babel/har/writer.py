@@ -326,18 +326,25 @@ def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
         rec = wire.write_set_element_record(elems, n_total=len(elems), flag=1)
         wire.write_record(out, rec)
 
+    # Dim-summary record (40 bytes): pad + ndim + 7 + shape padded to rank 7.
+    # GEMPACK fixes the on-disk rank slot to 7 (matches harpy3's expectation).
+    shape7 = list(arr.shape) + [1] * (7 - arr.ndim)
     summary = bytearray()
     summary.extend(wire.PAD)
     summary.extend(wire.INT.pack(arr.ndim))
-    for dim in arr.shape:
+    summary.extend(wire.INT.pack(7))
+    for dim in shape7:
         summary.extend(wire.INT.pack(dim))
     wire.write_record(out, bytes(summary))
 
+    # Dim-metadata record (64 bytes = pad + 2 + 7 pairs (use_set_flag=1, dim)).
+    # Without this, harpy3 ``_unpack_data`` chokes on the 4s15i read.
     meta_dim = bytearray()
     meta_dim.extend(wire.PAD)
-    meta_dim.extend(wire.INT.pack(arr.ndim))
-    for _ in range(arr.ndim):
-        meta_dim.extend(wire.INT.pack(0))
+    meta_dim.extend(wire.INT.pack(2))
+    for dim in shape7:
+        meta_dim.extend(wire.INT.pack(1))
+        meta_dim.extend(wire.INT.pack(dim))
     wire.write_record(out, bytes(meta_dim))
 
     flat = arr.flatten(order="F")
