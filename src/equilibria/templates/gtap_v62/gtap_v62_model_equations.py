@@ -518,6 +518,38 @@ class GTAPv62ModelEquations:
             doc="Margin commodity supply share (CD aggregator for ptmg)",
         )
 
+        # --- Phase 2c.3 — Income block parameters -------------------------
+        model.y_0 = Param(
+            model.r,
+            initialize=dict(c.y_0), default=1.0, mutable=False,
+            doc="Benchmark regional factor income (= sum_f EVOA)",
+        )
+        model.save_0 = Param(
+            model.r,
+            initialize=dict(c.save_0), default=0.0, mutable=False,
+            doc="Benchmark regional savings (= SAVE from SAM)",
+        )
+        model.savf_0 = Param(
+            model.r,
+            initialize=dict(c.savf_0), default=0.0, mutable=False,
+            doc="Benchmark net foreign savings (residual to close regional budget)",
+        )
+        # Income shares for CD-style allocation across uses
+        def _c_p_init(m, r):
+            y0 = c.y_0.get(r, 1.0)
+            return c.yp_0.get(r, 0.0) / y0 if y0 > 0.0 else 0.0
+        def _c_g_init(m, r):
+            y0 = c.y_0.get(r, 1.0)
+            return c.yg_0.get(r, 0.0) / y0 if y0 > 0.0 else 0.0
+        model.c_p = Param(
+            model.r, initialize=_c_p_init, mutable=False,
+            doc="Household share of regional income (yp_0/y_0)",
+        )
+        model.c_g = Param(
+            model.r, initialize=_c_g_init, mutable=False,
+            doc="Government share of regional income (yg_0/y_0)",
+        )
+
     # ------------------------------------------------------------------
     # Variables
     # ------------------------------------------------------------------
@@ -918,11 +950,8 @@ class GTAPv62ModelEquations:
         model.y = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, r: max(
-                sum(c.evom.get((f, r), 0.0) for f in self.sets.f),
-                lb,
-            ),
-            doc="y(r) — regional income",
+            initialize=lambda m, r: max(c.y_0.get(r, 1.0), lb),
+            doc="y(r) — regional income (= factor income at agent prices)",
         )
         model.yp = Var(
             model.r,
@@ -945,7 +974,7 @@ class GTAPv62ModelEquations:
         model.savf = Var(
             model.r,
             within=Reals,  # can be negative (capital outflow)
-            initialize=0.0,
+            initialize=lambda m, r: c.savf_0.get(r, 0.0),
             doc="savf(r) — net foreign savings",
         )
         model.rorg = Var(
@@ -1065,6 +1094,8 @@ class GTAPv62ModelEquations:
         self._add_trade_block(model)
         self._add_margins_block(model)
         self._add_market_clearing(model)
+        self._add_factor_markets(model)
+        self._add_income_and_closure(model)
 
     # ------------------------------------------------------------------
     # Equation blocks — Production
@@ -1728,6 +1759,107 @@ class GTAPv62ModelEquations:
             # Output side (left): qo at producer level
             return m.qo[i, r] * (1.0 + pyo_value(m.to[i, r])) == uses
         model.eq_market = Constraint(model.i, model.r, rule=eq_market_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Factor markets (Phase 2c.3)
+    # ------------------------------------------------------------------
+
+    def _add_factor_markets(self, model: "ConcreteModel") -> None:
+        """Factor market clearing.
+
+        v6.2 with all factors treated as mobile within the region (the
+        BOOK3X3 default — ETRE = -1 for all factors). The market-
+        clearing identity is
+
+            sum_j qfe(f, j, r) == qoes(f, r)
+
+        ``qoes`` is initialized at the benchmark factor income
+        (``evom`` = EVOA) and fixed by closure. ``pf(f, r)`` is the
+        regional wage that adjusts to clear the market.
+
+        Phase 2d will add the sluggish CET allocation for factors with
+        ETRE > 0 (e.g. Land in NUS333 / 9x10 datasets).
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        def eq_factor_clear_rule(m, f, r):
+            if pyo_value(m.evom[f, r]) <= 1e-8:
+                return Constraint.Skip
+            return sum(m.qfe[f, j, r] for j in m.j) == m.qoes[f, r]
+        model.eq_factor_clear = Constraint(model.f, model.r, rule=eq_factor_clear_rule)
+
+        # Factor supply pinned to benchmark (closure: endowments exogenous)
+        def eq_qoes_fixed_rule(m, f, r):
+            if pyo_value(m.evom[f, r]) <= 1e-8:
+                return Constraint.Skip
+            return m.qoes[f, r] == pyo_value(m.evom[f, r])
+        model.eq_qoes_fixed = Constraint(model.f, model.r, rule=eq_qoes_fixed_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Income and closure (Phase 2c.3)
+    # ------------------------------------------------------------------
+
+    def _add_income_and_closure(self, model: "ConcreteModel") -> None:
+        """Income decomposition + Walras + numeraire (Phase 2c.3).
+
+        Equations:
+        - eq_y:        y(r) = sum_f pf(f,r) * qoes(f,r)  (factor income)
+        - eq_yp:       yp(r) = c_p(r) * y(r)              (household share)
+        - eq_yg:       yg(r) = c_g(r) * y(r)              (gov share)
+        - eq_pgdpwld:  pgdpwld == 1                       (numeraire)
+        - eq_walras:   walras = sum_r [y - yp - yg - SAVE + savf]
+                                                    (global market clearing)
+
+        Phase 2c.3 simplification: tax revenue is folded into the
+        income shares ``c_p`` and ``c_g`` (calibrated from the SAM at
+        benchmark) rather than computed explicitly. Phase 2d will wire
+        explicit tax-revenue equations (per stream) and proper savings
+        dynamics.
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        # eq_y: regional factor income at agent prices
+        def eq_y_rule(m, r):
+            if pyo_value(m.y_0[r]) <= 1e-8:
+                return Constraint.Skip
+            return m.y[r] == sum(
+                m.pf[f, r] * m.qoes[f, r] for f in m.f
+                if pyo_value(m.evom[f, r]) > 0.0
+            )
+        model.eq_y = Constraint(model.r, rule=eq_y_rule)
+
+        # eq_yp: household share of regional income (CD-like fixed share)
+        def eq_yp_rule(m, r):
+            cp = float(pyo_value(m.c_p[r]))
+            if cp <= 0.0:
+                return Constraint.Skip
+            return m.yp[r] == cp * m.y[r]
+        model.eq_yp = Constraint(model.r, rule=eq_yp_rule)
+
+        # eq_yg: government share of regional income
+        def eq_yg_rule(m, r):
+            cg = float(pyo_value(m.c_g[r]))
+            if cg <= 0.0:
+                return Constraint.Skip
+            return m.yg[r] == cg * m.y[r]
+        model.eq_yg = Constraint(model.r, rule=eq_yg_rule)
+
+        # eq_pgdpwld: numeraire identity
+        def eq_pgdpwld_rule(m):
+            return m.pgdpwld == 1.0
+        model.eq_pgdpwld = Constraint(rule=eq_pgdpwld_rule)
+
+        # eq_walras: global market clearing residual.
+        # In a perfectly balanced SAM with all equations exact, sum_r
+        # [y - yp - yg - SAVE + savf] == 0. The walras variable absorbs
+        # any numerical discrepancy.
+        def eq_walras_rule(m):
+            return m.walras == sum(
+                m.y[r] - m.yp[r] - m.yg[r]
+                - pyo_value(m.save_0[r]) + m.savf[r]
+                for r in m.r
+            )
+        model.eq_walras = Constraint(rule=eq_walras_rule)
 
 
 __all__ = [

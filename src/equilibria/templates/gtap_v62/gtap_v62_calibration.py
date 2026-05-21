@@ -135,6 +135,19 @@ class DerivedV62Calibration:
     # Domestic absorption sum: VDS(i,r) = VDPM + VDGM + sum_j VDFM (already
     # in ``vds``). Margin commodity total: sum across regions of vst(m, r).
 
+    # ---- Income block (Phase 2c.3) --------------------------------------
+    # Regional factor-income aggregate, tax revenue total, and SAM
+    # closure values. The identity at benchmark is
+    #     y(r) = factor_income(r) + tax_revenue(r)
+    #     yp(r) + yg(r) + savings(r) = y(r) + savf(r)
+    # where ``savf`` is net foreign savings (current-account; sums to 0
+    # globally for a closed world).
+    y_0: Dict[str, float] = field(default_factory=dict)
+    factor_income_0: Dict[str, float] = field(default_factory=dict)
+    tax_revenue_0: Dict[str, float] = field(default_factory=dict)
+    save_0: Dict[str, float] = field(default_factory=dict)
+    savf_0: Dict[str, float] = field(default_factory=dict)
+
 
 def derive_calibration(
     sets: GTAPv62Sets,
@@ -498,6 +511,32 @@ def derive_calibration(
         if total_vst > 0.0:
             for r in sets.r:
                 out.share_st[(m_lbl, r)] = b.vst.get((m_lbl, r), 0.0) / total_vst
+
+    # ------------------------------------------------------------------
+    # Income block (Phase 2c.3)
+    # ------------------------------------------------------------------
+
+    # Regional income decomposition. For Phase 2c.3 we use the
+    # simplest static identity:
+    #     y(r) = factor income at agent prices  (= sum_f EVOA)
+    #     y(r) + savf(r) = yp(r) + yg(r) + savings(r)
+    # The residual ``savf_0`` closes each region's budget. In a
+    # perfectly balanced SAM, sum_r savf_0 = 0; small imbalances
+    # (BOOK3X3 ~1.7% of GDP) reflect tax revenue / depreciation /
+    # other flows not yet wired in this phase and are documented as
+    # a known calibration imperfection for Phase 2d.
+    for r in sets.r:
+        factor_inc = sum(out.evom.get((f, r), 0.0) for f in sets.f)
+        out.factor_income_0[r] = factor_inc
+        out.tax_revenue_0[r] = 0.0  # placeholder; full computation in Phase 2d
+        out.y_0[r] = factor_inc
+        out.save_0[r] = b.save.get(r, 0.0)
+        out.savf_0[r] = (
+            out.yp_0.get(r, 0.0)
+            + out.yg_0.get(r, 0.0)
+            + out.save_0.get(r, 0.0)
+            - factor_inc
+        )
 
     # Top Armington shares per (commodity, sector, region):
     # share of domestic vs imported in firm intermediate use.
