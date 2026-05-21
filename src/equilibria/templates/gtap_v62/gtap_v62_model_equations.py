@@ -448,6 +448,48 @@ class GTAPv62ModelEquations:
             doc="Top Armington: benchmark composite Armington price",
         )
 
+        # --- Phase 2c.1 — Household & government calibration --------------
+        model.alpha_dom_hhd = Param(
+            model.i, model.r,
+            initialize=dict(c.alpha_dom_hhd), default=0.0, mutable=False,
+            doc="Household Armington: domestic distribution parameter",
+        )
+        model.alpha_imp_hhd = Param(
+            model.i, model.r,
+            initialize=dict(c.alpha_imp_hhd), default=0.0, mutable=False,
+            doc="Household Armington: imported distribution parameter",
+        )
+        model.pp_0 = Param(
+            model.i, model.r,
+            initialize=dict(c.pp_0), default=1.0, mutable=False,
+            doc="Household Armington: benchmark composite price",
+        )
+        model.share_hhd_cd = Param(
+            model.i, model.r,
+            initialize=dict(c.share_hhd_cd), default=0.0, mutable=False,
+            doc="Household CD budget share on good i in r",
+        )
+        model.alpha_dom_gov = Param(
+            model.i, model.r,
+            initialize=dict(c.alpha_dom_gov), default=0.0, mutable=False,
+            doc="Government Armington: domestic distribution parameter",
+        )
+        model.alpha_imp_gov = Param(
+            model.i, model.r,
+            initialize=dict(c.alpha_imp_gov), default=0.0, mutable=False,
+            doc="Government Armington: imported distribution parameter",
+        )
+        model.pg_0 = Param(
+            model.i, model.r,
+            initialize=dict(c.pg_0), default=1.0, mutable=False,
+            doc="Government Armington: benchmark composite price",
+        )
+        model.share_gov_cd = Param(
+            model.i, model.r,
+            initialize=dict(c.share_gov_cd), default=0.0, mutable=False,
+            doc="Government CD budget share on good i in r",
+        )
+
     # ------------------------------------------------------------------
     # Variables
     # ------------------------------------------------------------------
@@ -602,7 +644,14 @@ class GTAPv62ModelEquations:
             doc="pf_int(i,j,r) — Armington composite price (firm side)",
         )
 
-        # --- Household demand (CDE) ---------------------------------------
+        # --- Household & government composite Armington prices (agent) ----
+        #
+        # Phase 2c.1 adds household and government variants of the firm-
+        # side Armington top nest. The variable names follow v6.2 TAB:
+        # pp(i,r), ppd(i,r), ppm(i,r) for household; pg(i,r), pgd(i,r),
+        # pgm(i,r) for government.
+
+        # --- Household demand (CD allocation across goods; CES Armington) -
 
         model.qpd = Var(
             model.i, model.r,
@@ -627,14 +676,48 @@ class GTAPv62ModelEquations:
         model.pp = Var(
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
+            initialize=lambda m, i, r: max(c.pp_0.get((i, r), 1.0), lb),
             doc="pp(i,r) — household composite Armington price",
         )
+        model.ppd = Var(
+            model.i, model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=lambda m, i, r: (
+                (1.0 + c.to.get((i, r), 0.0)) * (1.0 + c.tpd.get((i, r), 0.0))
+            ),
+            doc="ppd(i,r) — household domestic agent price",
+        )
+        model.ppm = Var(
+            model.i, model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=lambda m, i, r: 1.0 + c.tpi.get((i, r), 0.0),
+            doc="ppm(i,r) — household imported agent price",
+        )
+        # pcons_0 = sum_i share_hhd * pp_0 (consistent with linear CD aggregator).
+        def _pcons_init(m, r):
+            total = sum(
+                c.share_hhd_cd.get((i, r), 0.0) * c.pp_0.get((i, r), 1.0)
+                for i in self.sets.i
+            )
+            return max(total, lb)
+        model.pcons = Var(
+            model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=_pcons_init,
+            doc="pcons(r) — household consumption price index (linear CD aggregator)",
+        )
+        # up_0 = 1/pcons_0 so up * pcons * yp_0 = yp holds at benchmark.
+        def _up_init(m, r):
+            pcons_0 = sum(
+                c.share_hhd_cd.get((i, r), 0.0) * c.pp_0.get((i, r), 1.0)
+                for i in self.sets.i
+            )
+            return 1.0 / max(pcons_0, 1e-8)
         model.up = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="up(r) — private utility (CDE)",
+            initialize=_up_init,
+            doc="up(r) — private utility (Phase 2c.1: CD approximation of CDE)",
         )
 
         # --- Government demand (Cobb-Douglas, §7) -------------------------
@@ -662,20 +745,46 @@ class GTAPv62ModelEquations:
         model.pg = Var(
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
+            initialize=lambda m, i, r: max(c.pg_0.get((i, r), 1.0), lb),
             doc="pg(i,r) — gov composite Armington price",
         )
+        model.pgd = Var(
+            model.i, model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=lambda m, i, r: (
+                (1.0 + c.to.get((i, r), 0.0)) * (1.0 + c.tgd.get((i, r), 0.0))
+            ),
+            doc="pgd(i,r) — gov domestic agent price",
+        )
+        model.pgm = Var(
+            model.i, model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=lambda m, i, r: 1.0 + c.tgi.get((i, r), 0.0),
+            doc="pgm(i,r) — gov imported agent price",
+        )
+        def _pgov_init(m, r):
+            total = sum(
+                c.share_gov_cd.get((i, r), 0.0) * c.pg_0.get((i, r), 1.0)
+                for i in self.sets.i
+            )
+            return max(total, lb)
         model.pgov = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="pgov(r) — gov price index (CD)",
+            initialize=_pgov_init,
+            doc="pgov(r) — gov price index (linear CD aggregator across goods)",
         )
+        def _ug_init(m, r):
+            pgov_0 = sum(
+                c.share_gov_cd.get((i, r), 0.0) * c.pg_0.get((i, r), 1.0)
+                for i in self.sets.i
+            )
+            return 1.0 / max(pgov_0, 1e-8)
         model.ug = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="ug(r) — gov utility",
+            initialize=_ug_init,
+            doc="ug(r) — gov utility (ug_0 = 1/pgov_0)",
         )
 
         # --- Investment (sector cgds, §8) ---------------------------------
@@ -786,14 +895,14 @@ class GTAPv62ModelEquations:
         model.yp = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="yp(r) — household income",
+            initialize=lambda m, r: max(c.yp_0.get(r, 1.0), lb),
+            doc="yp(r) — household income (= total consumption expenditure at benchmark)",
         )
         model.yg = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="yg(r) — gov income",
+            initialize=lambda m, r: max(c.yg_0.get(r, 1.0), lb),
+            doc="yg(r) — gov income (= total gov expenditure at benchmark)",
         )
         model.psave = Var(
             model.r,
@@ -901,6 +1010,9 @@ class GTAPv62ModelEquations:
                      perturbation so the (1-σ) exponent is well-defined)
         """
         self._add_production_block(model)
+        self._add_household_demand_block(model)
+        self._add_government_demand_block(model)
+        self._add_investment_identities(model)
 
     # ------------------------------------------------------------------
     # Equation blocks — Production
@@ -1130,6 +1242,233 @@ class GTAPv62ModelEquations:
                 return Constraint.Skip
             return m.pfm[i, j, r] == m.pim[i, r] * (1.0 + pyo_value(m.tfi[i, j, r]))
         model.eq_pfm = Constraint(model.i, model.j, model.r, rule=eq_pfm_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Household demand (Phase 2c.1)
+    # ------------------------------------------------------------------
+
+    def _add_household_demand_block(self, model: "ConcreteModel") -> None:
+        """Household demand: top Armington (CES) + CD allocation across goods.
+
+        Equations:
+        - eq_pp:    composite Armington price (CES dual aggregator)
+        - eq_qp:    CD budget allocation: pp * qp = share * yp
+        - eq_qpd:   domestic demand from Armington (CES)
+        - eq_qpm:   imported demand from Armington
+        - eq_ppd:   ppd = pds * (1 + tpd)
+        - eq_ppm:   ppm = pim * (1 + tpi)
+        - eq_pcons: household price index (sum of pp * share)
+        - eq_up:    up = yp / pcons
+
+        Phase 2c.1 note: this is a Cobb-Douglas approximation of v6.2's
+        CDE demand system. The two coincide at the benchmark; small
+        differences from the CDE form appear under shocks with strong
+        income/substitution effects. CDE upgrade is deferred to
+        Phase 2d.
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        def _eps_sigma(sigma: float) -> bool:
+            return abs(sigma) < 1e-8
+
+        def _ces_cd_sigma(sigma: float) -> float:
+            if abs(sigma - 1.0) < 1e-8:
+                return 1.0 + 1e-3
+            return sigma
+
+        # eq_pp: Armington composite price for household
+        def eq_pp_rule(m, i, r):
+            ad = float(pyo_value(m.alpha_dom_hhd[i, r]))
+            ai = float(pyo_value(m.alpha_imp_hhd[i, r]))
+            if ad + ai <= 1e-12:
+                return Constraint.Skip
+            sigma_d = _ces_cd_sigma(float(pyo_value(m.esubd[i])))
+            exp = 1.0 - sigma_d
+            return m.pp[i, r] ** exp == ad * m.ppd[i, r] ** exp + ai * m.ppm[i, r] ** exp
+        model.eq_pp = Constraint(model.i, model.r, rule=eq_pp_rule)
+
+        # eq_qp: CD budget allocation
+        def eq_qp_rule(m, i, r):
+            cs = float(pyo_value(m.share_hhd_cd[i, r]))
+            if cs <= 0.0:
+                return Constraint.Skip
+            return m.pp[i, r] * m.qp[i, r] == cs * m.yp[r]
+        model.eq_qp = Constraint(model.i, model.r, rule=eq_qp_rule)
+
+        # eq_qpd: domestic demand (CES first-order condition with α calibrated)
+        def eq_qpd_rule(m, i, r):
+            ad = float(pyo_value(m.alpha_dom_hhd[i, r]))
+            if ad <= 0.0:
+                return Constraint.Skip
+            sigma_d = _ces_cd_sigma(float(pyo_value(m.esubd[i])))
+            return m.qpd[i, r] == ad * m.qp[i, r] * (m.pp[i, r] / m.ppd[i, r]) ** sigma_d
+        model.eq_qpd = Constraint(model.i, model.r, rule=eq_qpd_rule)
+
+        # eq_qpm: imported demand
+        def eq_qpm_rule(m, i, r):
+            ai = float(pyo_value(m.alpha_imp_hhd[i, r]))
+            if ai <= 0.0:
+                return Constraint.Skip
+            sigma_d = _ces_cd_sigma(float(pyo_value(m.esubd[i])))
+            return m.qpm[i, r] == ai * m.qp[i, r] * (m.pp[i, r] / m.ppm[i, r]) ** sigma_d
+        model.eq_qpm = Constraint(model.i, model.r, rule=eq_qpm_rule)
+
+        # eq_ppd: household domestic agent price
+        def eq_ppd_rule(m, i, r):
+            if float(pyo_value(m.alpha_dom_hhd[i, r])) <= 0.0:
+                return Constraint.Skip
+            return m.ppd[i, r] == m.pds[i, r] * (1.0 + pyo_value(m.tpd[i, r]))
+        model.eq_ppd = Constraint(model.i, model.r, rule=eq_ppd_rule)
+
+        # eq_ppm: household imported agent price
+        def eq_ppm_rule(m, i, r):
+            if float(pyo_value(m.alpha_imp_hhd[i, r])) <= 0.0:
+                return Constraint.Skip
+            return m.ppm[i, r] == m.pim[i, r] * (1.0 + pyo_value(m.tpi[i, r]))
+        model.eq_ppm = Constraint(model.i, model.r, rule=eq_ppm_rule)
+
+        # eq_pcons: household price index (CD aggregator, linear form for the
+        # benchmark identity sum_i pp * qp = pcons * yp_unit which at u=1 says
+        # pcons = sum_i share * pp).
+        def eq_pcons_rule(m, r):
+            terms = [
+                float(pyo_value(m.share_hhd_cd[i, r])) * m.pp[i, r]
+                for i in m.i
+                if pyo_value(m.share_hhd_cd[i, r]) > 0.0
+            ]
+            if not terms:
+                return Constraint.Skip
+            return m.pcons[r] == sum(terms)
+        model.eq_pcons = Constraint(model.r, rule=eq_pcons_rule)
+
+        # eq_up: household utility = real income.
+        # Normalization: up_0 = 1, so up_0 * yp_0 * pcons_0 = yp_0 ⇒ up = yp / (yp_0 * pcons).
+        def eq_up_rule(m, r):
+            yp_0 = max(float(self.derived.yp_0.get(r, 1.0)), 1e-8)
+            return m.up[r] * yp_0 * m.pcons[r] == m.yp[r]
+        model.eq_up = Constraint(model.r, rule=eq_up_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Government demand (Phase 2c.1)
+    # ------------------------------------------------------------------
+
+    def _add_government_demand_block(self, model: "ConcreteModel") -> None:
+        """Government demand: top Armington (CES) + CD allocation.
+
+        v6.2 government uses Cobb-Douglas by default (no ESBG in v6.2
+        TAB). Equation set mirrors the household block:
+
+        - eq_pg:   gov composite Armington price (CES dual)
+        - eq_qg:   CD allocation pg * qg = share * yg
+        - eq_qgd:  domestic demand from gov Armington
+        - eq_qgm:  imported demand
+        - eq_pgd:  pgd = pds * (1 + tgd)
+        - eq_pgm:  pgm = pim * (1 + tgi)
+        - eq_pgov: gov price index (CD aggregator)
+        - eq_ug:   ug = yg / pgov   (utility = real gov expenditure)
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        def _ces_cd_sigma(sigma: float) -> float:
+            if abs(sigma - 1.0) < 1e-8:
+                return 1.0 + 1e-3
+            return sigma
+
+        # eq_pg
+        def eq_pg_rule(m, i, r):
+            ad = float(pyo_value(m.alpha_dom_gov[i, r]))
+            ai = float(pyo_value(m.alpha_imp_gov[i, r]))
+            if ad + ai <= 1e-12:
+                return Constraint.Skip
+            sigma_d = _ces_cd_sigma(float(pyo_value(m.esubd[i])))
+            exp = 1.0 - sigma_d
+            return m.pg[i, r] ** exp == ad * m.pgd[i, r] ** exp + ai * m.pgm[i, r] ** exp
+        model.eq_pg = Constraint(model.i, model.r, rule=eq_pg_rule)
+
+        # eq_qg: CD budget allocation
+        def eq_qg_rule(m, i, r):
+            cs = float(pyo_value(m.share_gov_cd[i, r]))
+            if cs <= 0.0:
+                return Constraint.Skip
+            return m.pg[i, r] * m.qg[i, r] == cs * m.yg[r]
+        model.eq_qg = Constraint(model.i, model.r, rule=eq_qg_rule)
+
+        # eq_qgd
+        def eq_qgd_rule(m, i, r):
+            ad = float(pyo_value(m.alpha_dom_gov[i, r]))
+            if ad <= 0.0:
+                return Constraint.Skip
+            sigma_d = _ces_cd_sigma(float(pyo_value(m.esubd[i])))
+            return m.qgd[i, r] == ad * m.qg[i, r] * (m.pg[i, r] / m.pgd[i, r]) ** sigma_d
+        model.eq_qgd = Constraint(model.i, model.r, rule=eq_qgd_rule)
+
+        # eq_qgm
+        def eq_qgm_rule(m, i, r):
+            ai = float(pyo_value(m.alpha_imp_gov[i, r]))
+            if ai <= 0.0:
+                return Constraint.Skip
+            sigma_d = _ces_cd_sigma(float(pyo_value(m.esubd[i])))
+            return m.qgm[i, r] == ai * m.qg[i, r] * (m.pg[i, r] / m.pgm[i, r]) ** sigma_d
+        model.eq_qgm = Constraint(model.i, model.r, rule=eq_qgm_rule)
+
+        # eq_pgd / eq_pgm
+        def eq_pgd_rule(m, i, r):
+            if float(pyo_value(m.alpha_dom_gov[i, r])) <= 0.0:
+                return Constraint.Skip
+            return m.pgd[i, r] == m.pds[i, r] * (1.0 + pyo_value(m.tgd[i, r]))
+        model.eq_pgd = Constraint(model.i, model.r, rule=eq_pgd_rule)
+
+        def eq_pgm_rule(m, i, r):
+            if float(pyo_value(m.alpha_imp_gov[i, r])) <= 0.0:
+                return Constraint.Skip
+            return m.pgm[i, r] == m.pim[i, r] * (1.0 + pyo_value(m.tgi[i, r]))
+        model.eq_pgm = Constraint(model.i, model.r, rule=eq_pgm_rule)
+
+        # eq_pgov: gov price index (CD aggregator)
+        def eq_pgov_rule(m, r):
+            terms = [
+                float(pyo_value(m.share_gov_cd[i, r])) * m.pg[i, r]
+                for i in m.i
+                if pyo_value(m.share_gov_cd[i, r]) > 0.0
+            ]
+            if not terms:
+                return Constraint.Skip
+            return m.pgov[r] == sum(terms)
+        model.eq_pgov = Constraint(model.r, rule=eq_pgov_rule)
+
+        # eq_ug: government utility = yg / (pgov * yg_0)
+        def eq_ug_rule(m, r):
+            yg_0 = max(float(self.derived.yg_0.get(r, 1.0)), 1e-8)
+            return m.ug[r] * yg_0 * m.pgov[r] == m.yg[r]
+        model.eq_ug = Constraint(model.r, rule=eq_ug_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Investment identities (Phase 2c.1)
+    # ------------------------------------------------------------------
+
+    def _add_investment_identities(self, model: "ConcreteModel") -> None:
+        """Investment as a producing sector cgds.
+
+        v6.2 treats investment as an output of the CGDS sector, not an
+        explicit agent (Tabla 1 §8). The CGDS sector consumes
+        intermediates (already wired in the production block via
+        ``qfd(i, cgds, r)`` and ``qfm(i, cgds, r)``). Phase 2c.1 adds
+        two pass-through identities so external code can refer to the
+        investment quantity / price via the canonical v6.2 variables
+        ``qcgds`` / ``pcgds``:
+
+        - eq_qcgds_id: qcgds(cgds, r) == qo(cgds, r)
+        - eq_pcgds_id: pcgds(cgds, r) == ps(cgds, r)
+        """
+        from pyomo.environ import Constraint
+
+        def eq_qcgds_rule(m, cg, r):
+            return m.qcgds[cg, r] == m.qo[cg, r]
+        model.eq_qcgds = Constraint(model.cgds, model.r, rule=eq_qcgds_rule)
+
+        def eq_pcgds_rule(m, cg, r):
+            return m.pcgds[cg, r] == m.ps[cg, r]
+        model.eq_pcgds = Constraint(model.cgds, model.r, rule=eq_pcgds_rule)
 
 
 __all__ = [

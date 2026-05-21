@@ -74,13 +74,14 @@ def test_production_block_equations_present(book3x3_model) -> None:
 
 
 def test_total_constraint_cells_in_range(book3x3_model) -> None:
-    """Constraint cell count is within expected bounds for BOOK3X3."""
+    """Constraint cell count is within expected bounds for BOOK3X3.
+
+    After Phase 2c.1 (demand block + cgds identities), total cells
+    grow to ~400-450.
+    """
     from pyomo.environ import Constraint
     total = sum(len(list(c)) for c in book3x3_model.component_objects(Constraint))
-    # 12 cells (eq_qo, eq_pds) + 9*4 (eq_va/qfe/pfe/pva) + 12 (eq_va over j∈prod_comm)
-    # + 36 * 5 (eq_qf/pf_int/qfd/qfm/pfd/pfm)
-    # ≈ 250-300 cells. Use a wide range to allow for v6.2 sparsity skips.
-    assert 200 < total < 400, f"Total constraint cells = {total}"
+    assert 200 < total < 600, f"Total constraint cells = {total}"
 
 
 def test_benchmark_residual_zero_except_eq_qo(book3x3_model) -> None:

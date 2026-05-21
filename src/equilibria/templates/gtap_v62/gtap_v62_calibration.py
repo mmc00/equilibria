@@ -72,28 +72,35 @@ class DerivedV62Calibration:
     share_fac: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
 
     # Top Armington nest within each commodity input (CES between
-    # domestic and imported).
-    #
-    # ``share_dom`` and ``share_imp`` are the **value shares** at
-    # benchmark (VDFM and VIFM each over their sum). They sum to 1 by
-    # construction.
-    #
-    # ``alpha_dom`` and ``alpha_imp`` are the calibrated **distribution
-    # parameters** that go into the CES first-order conditions. They
-    # absorb the benchmark price ratio so that
-    # ``qfd = alpha_dom * qf * (pf_int / pfd)^σ`` is identically true at
-    # the benchmark with non-unit agent prices (because of tax wedges).
-    # They are computed from value shares via
-    #     alpha_d = share_dom * (pfd_0 / pf_int_0)^σ
-    # and similarly for alpha_m.
-    #
-    # ``pf_int_0`` is the benchmark CES composite Armington price for
-    # firm intermediate input ``i`` in sector ``j`` of region ``r``.
+    # domestic and imported). See firm-side notes; same scheme applies
+    # to households (``alpha_dom_hhd``) and government
+    # (``alpha_dom_gov``).
     share_dom: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     share_imp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     alpha_dom: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     alpha_imp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     pf_int_0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+
+    # ---- Household Armington (CES) + CD allocation across goods ---------
+    #
+    # Phase 2c.1 uses a Cobb-Douglas demand allocation across goods (a
+    # simplification of v6.2's CDE; full CDE port deferred to Phase 2d).
+    # The Armington between domestic and imported uses ESBD just like
+    # firm intermediates.
+    alpha_dom_hhd: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    alpha_imp_hhd: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    pp_0: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    # CD budget share of household total expenditure on good i in r
+    share_hhd_cd: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    # Benchmark household total consumption expenditure (= sum_i VDPA+VIPA)
+    yp_0: Dict[str, float] = field(default_factory=dict)
+
+    # ---- Government Armington (CES) + CD allocation across goods --------
+    alpha_dom_gov: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    alpha_imp_gov: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    pg_0: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    share_gov_cd: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    yg_0: Dict[str, float] = field(default_factory=dict)
 
 
 def derive_calibration(
@@ -247,6 +254,106 @@ def derive_calibration(
             for f in sets.f:
                 vf = b.vfm.get((f, j, r), 0.0)
                 out.share_fac[(f, j, r)] = vf / va_val
+
+    # ------------------------------------------------------------------
+    # Household and government Armington calibration (Phase 2c.1)
+    # ------------------------------------------------------------------
+
+    def _armington_calibrate(
+        vdm: float,
+        vim: float,
+        vda: float,
+        via: float,
+        sigma: float,
+        pds_0: float = 1.0,
+        pim_0: float = 1.0,
+    ) -> Tuple[float, float, float]:
+        """Return ``(alpha_d, alpha_m, p_int_0)`` for an Armington nest.
+
+        Calibrated so that the CES first-order conditions hold
+        identically at benchmark with agent prices
+
+            ``pdom_0 = pds_0 * (vda / vdm)``
+            ``pimp_0 = pim_0 * (via / vim)``
+
+        That is, the agent price equals the basic supply price times
+        ``(1 + agent_tax_rate)`` where ``(1 + rate)`` is read from the
+        SAM ratio of agent-price value to market-price value.
+
+        ``pds_0`` and ``pim_0`` are the basic prices seen by the
+        downstream agent (default 1.0 for the trivial case). In v6.2
+        with the standard convention, the basic supply price for
+        domestic commodities is ``pds = ps * (1 + to)`` so
+        ``pds_0 = 1 + to`` when ``ps_0 = 1``.
+        """
+        total_basic = vdm + vim
+        if total_basic <= 0.0:
+            return 0.0, 0.0, 1.0
+        # Agent-price wedges (just the agent-specific tax rate)
+        wedge_d = vda / vdm if vdm > 0.0 else 1.0
+        wedge_m = via / vim if vim > 0.0 else 1.0
+        pdom_0 = pds_0 * wedge_d
+        pimp_0 = pim_0 * wedge_m
+        total_agent = pdom_0 * vdm + pimp_0 * vim  # not vda+via because we include pds_0/pim_0 wedge
+        # cost-weighted benchmark composite (basic-qty divisor)
+        p_int0 = total_agent / total_basic
+        share_d = vdm / total_basic
+        share_m = vim / total_basic
+        sigma_eff = sigma if abs(sigma - 1.0) > 1e-8 else 1.0 + 1e-3
+        if p_int0 > 0.0:
+            ad = share_d * (pdom_0 / p_int0) ** sigma_eff
+            am = share_m * (pimp_0 / p_int0) ** sigma_eff
+        else:
+            ad, am = share_d, share_m
+        return ad, am, p_int0
+
+    for r in sets.r:
+        yp_total = 0.0
+        yg_total = 0.0
+        for i in sets.i:
+            sigma_d = float(params.elasticities.esubd.get(i, 1.0))
+            # Basic prices for downstream agents:
+            # - pds_0 = 1 + to (output tax wedge on domestic supply)
+            # - pim_0 = 1 (composite import; refined in Phase 2c.2 trade block)
+            pds0_i = 1.0 + out.to.get((i, r), 0.0)
+            pim0_i = 1.0
+
+            # Household
+            vd_h, vm_h = b.vdpm.get((i, r), 0.0), b.vipm.get((i, r), 0.0)
+            va_h, vai_h = b.vdpa.get((i, r), 0.0), b.vipa.get((i, r), 0.0)
+            ad_h, am_h, pp0 = _armington_calibrate(vd_h, vm_h, va_h, vai_h, sigma_d, pds0_i, pim0_i)
+            out.alpha_dom_hhd[(i, r)] = ad_h
+            out.alpha_imp_hhd[(i, r)] = am_h
+            out.pp_0[(i, r)] = pp0
+            # Household expenditure at agent prices includes the output-tax
+            # wedge carried by pds_0 (since pds = ps*(1+to) and VDPM is at
+            # pds level). Total = pp_0 * (VDPM + VIPM).
+            yp_total += pp0 * (vd_h + vm_h)
+
+            # Government
+            vd_g, vm_g = b.vdgm.get((i, r), 0.0), b.vigm.get((i, r), 0.0)
+            va_g, vai_g = b.vdga.get((i, r), 0.0), b.viga.get((i, r), 0.0)
+            ad_g, am_g, pg0 = _armington_calibrate(vd_g, vm_g, va_g, vai_g, sigma_d, pds0_i, pim0_i)
+            out.alpha_dom_gov[(i, r)] = ad_g
+            out.alpha_imp_gov[(i, r)] = am_g
+            out.pg_0[(i, r)] = pg0
+            yg_total += pg0 * (vd_g + vm_g)
+
+        out.yp_0[r] = yp_total
+        out.yg_0[r] = yg_total
+
+        # CD budget shares: at-benchmark expenditure share on good i
+        for i in sets.i:
+            spend_h = out.pp_0.get((i, r), 1.0) * (
+                b.vdpm.get((i, r), 0.0) + b.vipm.get((i, r), 0.0)
+            )
+            spend_g = out.pg_0.get((i, r), 1.0) * (
+                b.vdgm.get((i, r), 0.0) + b.vigm.get((i, r), 0.0)
+            )
+            if yp_total > 0.0:
+                out.share_hhd_cd[(i, r)] = spend_h / yp_total
+            if yg_total > 0.0:
+                out.share_gov_cd[(i, r)] = spend_g / yg_total
 
     # Top Armington shares per (commodity, sector, region):
     # share of domestic vs imported in firm intermediate use.
