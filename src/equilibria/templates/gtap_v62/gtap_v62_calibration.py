@@ -102,6 +102,39 @@ class DerivedV62Calibration:
     share_gov_cd: Dict[Tuple[str, str], float] = field(default_factory=dict)
     yg_0: Dict[str, float] = field(default_factory=dict)
 
+    # ---- Trade block (Phase 2c.2) ---------------------------------------
+    # Benchmark prices along the export → import chain. At benchmark
+    # with ps_0 = 1 (basic supply):
+    #     pe_0(i,s,d)    = 1 + txs(i,s,d)         (FOB)
+    #     pwmg_0(i,s,d)  = sum_m VTWR/VXWD        (per-unit transport)
+    #     pmcif_0(i,s,d) = pe_0 + pwmg_0          (CIF)
+    #     pms_0(i,s,d)   = pmcif_0 * (1 + tms)    (market price at d)
+    pe_0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    pwmg_0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    pmcif_0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    pms_0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    qxs_0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    # CES import composite (bottom Armington across sources):
+    # pim_0 = cost-weighted avg of pms_0 across sources
+    # alpha_xs(i,s,d) = (qxs_0_s / qim_0) * (pms_0_s / pim_0)^σ_m
+    pim_0: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    qim_0: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    alpha_xs: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+
+    # ---- Margins block (Phase 2c.2) -------------------------------------
+    # Margin commodity benchmark sales and demand
+    qst_0: Dict[Tuple[str, str], float] = field(default_factory=dict)   # margin sales (m, r)
+    qtm_0: Dict[str, float] = field(default_factory=dict)               # world margin demand (m)
+    ptmg_0: Dict[str, float] = field(default_factory=dict)              # world margin price (m)
+    # CD share for ptmg = prod_r pst^share_st(m,r)
+    share_st: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    # Per-shipment margin cost share: amgm(m,i,s,d) = VTWR(m,i,s,d) / sum_m VTWR(...)
+    amgm: Dict[Tuple[str, str, str, str], float] = field(default_factory=dict)
+
+    # ---- Market clearing aggregates (Phase 2c.2) ------------------------
+    # Domestic absorption sum: VDS(i,r) = VDPM + VDGM + sum_j VDFM (already
+    # in ``vds``). Margin commodity total: sum across regions of vst(m, r).
+
 
 def derive_calibration(
     sets: GTAPv62Sets,
@@ -144,6 +177,23 @@ def derive_calibration(
     #   txs(i,s,r) = VXMD(i,s,r) / VXWD(i,s,r) - 1   (exporter tax/subsidy)
     out.tms = _derived_rate_3d(b.vims, b.viws)
     out.txs = _derived_rate_3d(b.vxmd, b.vxwd)
+
+    # Composite import benchmark price pim_0(i, r): aggregate ratio of
+    # imports at agent (pms) prices to basic-price quantities. Needed
+    # *early* so the household/government/firm Armington calibrations
+    # can compute their imported-side agent prices consistently:
+    #     pfm_0 = pim_0 * (1 + tfi)
+    #     ppm_0 = pim_0 * (1 + tpi)
+    #     pgm_0 = pim_0 * (1 + tgi)
+    # When there is no import flow into (i,r), pim_0 defaults to 1.
+    for r in sets.r:
+        for i in sets.i:
+            sum_vims = sum(b.vims.get((i, s, r), 0.0) for s in sets.r if s != r)
+            sum_vxwd = sum(b.vxwd.get((i, s, r), 0.0) for s in sets.r if s != r)
+            if sum_vxwd > 0.0:
+                out.pim_0[(i, r)] = sum_vims / sum_vxwd
+            else:
+                out.pim_0[(i, r)] = 1.0
 
     # ------------------------------------------------------------------
     # Aggregate value flows: VOM, VOA, EVOM, VDS, VIM
@@ -314,9 +364,10 @@ def derive_calibration(
             sigma_d = float(params.elasticities.esubd.get(i, 1.0))
             # Basic prices for downstream agents:
             # - pds_0 = 1 + to (output tax wedge on domestic supply)
-            # - pim_0 = 1 (composite import; refined in Phase 2c.2 trade block)
+            # - pim_0 = sum_s VIMS / sum_s VXWD (composite import; precomputed
+            #   above before the Armington calibrations).
             pds0_i = 1.0 + out.to.get((i, r), 0.0)
-            pim0_i = 1.0
+            pim0_i = out.pim_0.get((i, r), 1.0)
 
             # Household
             vd_h, vm_h = b.vdpm.get((i, r), 0.0), b.vipm.get((i, r), 0.0)
@@ -355,6 +406,99 @@ def derive_calibration(
             if yg_total > 0.0:
                 out.share_gov_cd[(i, r)] = spend_g / yg_total
 
+    # ------------------------------------------------------------------
+    # Trade block calibration (Phase 2c.2)
+    # ------------------------------------------------------------------
+
+    # Per-shipment transport cost share amgm(m,i,s,d).
+    for m_lbl in sets.marg:
+        for i in sets.i:
+            for s in sets.r:
+                for d in sets.r:
+                    if s == d:
+                        continue
+                    total_vtwr = sum(
+                        b.vtwr.get((m_other, i, s, d), 0.0)
+                        for m_other in sets.marg
+                    )
+                    if total_vtwr <= 0.0:
+                        continue
+                    vtwr_m = b.vtwr.get((m_lbl, i, s, d), 0.0)
+                    out.amgm[(m_lbl, i, s, d)] = vtwr_m / total_vtwr
+
+    # Bilateral trade benchmark prices and quantities.
+    for i in sets.i:
+        sigma_m = float(params.elasticities.esubm.get(i, 1.0))
+        sigma_m_eff = sigma_m if abs(sigma_m - 1.0) > 1e-8 else 1.0 + 1e-3
+        for d in sets.r:
+            sources_with_flow = []
+            for s in sets.r:
+                if s == d:
+                    continue
+                vxwd = b.vxwd.get((i, s, d), 0.0)
+                vxmd = b.vxmd.get((i, s, d), 0.0)
+                vims = b.vims.get((i, s, d), 0.0)
+                viws = b.viws.get((i, s, d), 0.0)
+                if vxwd <= 0.0:
+                    continue
+                txs = out.txs.get((i, s, d), 0.0)
+                tms = out.tms.get((i, s, d), 0.0)
+                vtwr_total = sum(
+                    b.vtwr.get((m_lbl, i, s, d), 0.0) for m_lbl in sets.marg
+                )
+
+                # qxs_0 = VXWD (basic-price quantity at ps_0 = 1)
+                qxs0 = vxwd
+                pe0 = 1.0 + txs
+                # per-unit transport cost at benchmark
+                pwmg0 = vtwr_total / qxs0 if qxs0 > 0.0 else 0.0
+                pmcif0 = pe0 + pwmg0
+                pms0 = pmcif0 * (1.0 + tms)
+
+                out.qxs_0[(i, s, d)] = qxs0
+                out.pe_0[(i, s, d)] = pe0
+                out.pwmg_0[(i, s, d)] = pwmg0
+                out.pmcif_0[(i, s, d)] = pmcif0
+                out.pms_0[(i, s, d)] = pms0
+
+                sources_with_flow.append((s, qxs0, pms0))
+
+            if not sources_with_flow:
+                continue
+
+            # CES bottom Armington composite
+            qim0 = sum(q for _, q, _ in sources_with_flow)
+            # Cost identity: pim * qim = sum_s pms * qxs
+            pim0_cost = sum(p * q for _, q, p in sources_with_flow) / qim0
+            out.qim_0[(i, d)] = qim0
+            out.pim_0[(i, d)] = pim0_cost
+
+            # Distribution parameters: α_x_s = (qxs_s/qim) * (pms_s/pim)^σ
+            for s, qxs0, pms0 in sources_with_flow:
+                share_s = qxs0 / qim0
+                if pim0_cost > 0.0 and pms0 > 0.0:
+                    out.alpha_xs[(i, s, d)] = share_s * (pms0 / pim0_cost) ** sigma_m_eff
+                else:
+                    out.alpha_xs[(i, s, d)] = share_s
+
+    # ------------------------------------------------------------------
+    # Margins block calibration (Phase 2c.2)
+    # ------------------------------------------------------------------
+
+    for m_lbl in sets.marg:
+        # qst_0(m,r) = VST(m,r): margin commodity supply
+        for r in sets.r:
+            out.qst_0[(m_lbl, r)] = b.vst.get((m_lbl, r), 0.0)
+        # qtm_0(m) = total margin services demanded worldwide
+        out.qtm_0[m_lbl] = sum(b.vst.get((m_lbl, r), 0.0) for r in sets.r)
+        # ptmg_0(m) = 1 at benchmark (basic price normalization)
+        out.ptmg_0[m_lbl] = 1.0
+        # share_st(m,r) = VST(m,r) / total margin sales (CD aggregator)
+        total_vst = out.qtm_0[m_lbl]
+        if total_vst > 0.0:
+            for r in sets.r:
+                out.share_st[(m_lbl, r)] = b.vst.get((m_lbl, r), 0.0) / total_vst
+
     # Top Armington shares per (commodity, sector, region):
     # share of domestic vs imported in firm intermediate use.
     # Also computes the **distribution parameters** alpha_dom /
@@ -373,11 +517,16 @@ def derive_calibration(
                 out.share_dom[(i, j, r)] = sd
                 out.share_imp[(i, j, r)] = sm
 
-                # Benchmark agent prices.
+                # Benchmark agent prices (firm-side):
+                #     pfd_0 = (1 + to) * (1 + tfd)
+                #     pfm_0 = pim_0 * (1 + tfi)
+                # where pim_0 is the composite import benchmark price
+                # (precomputed above; defaults to 1 if no import flow).
+                pim0_ir = out.pim_0.get((i, r), 1.0)
                 pfd0 = (1.0 + out.to.get((i, r), 0.0)) * (
                     1.0 + out.tfd.get((i, j, r), 0.0)
                 )
-                pfm0 = 1.0 + out.tfi.get((i, j, r), 0.0)
+                pfm0 = pim0_ir * (1.0 + out.tfi.get((i, j, r), 0.0))
 
                 # Benchmark composite price (cost-weighted average over qf):
                 #     pf_int_0 * qf_0 = pfd_0 * vd + pfm_0 * vm

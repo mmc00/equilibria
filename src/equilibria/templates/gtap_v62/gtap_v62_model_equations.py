@@ -490,6 +490,34 @@ class GTAPv62ModelEquations:
             doc="Government CD budget share on good i in r",
         )
 
+        # --- Phase 2c.2 — Trade and margins calibration -------------------
+        model.alpha_xs = Param(
+            model.i, model.s, model.rp,
+            initialize=dict(c.alpha_xs), default=0.0, mutable=False,
+            doc="Bottom Armington: source distribution parameter (calibrated)",
+        )
+        model.pim_0 = Param(
+            model.i, model.r,
+            initialize=dict(c.pim_0), default=1.0, mutable=False,
+            doc="Composite import benchmark price",
+        )
+        model.qim_0 = Param(
+            model.i, model.r,
+            initialize=dict(c.qim_0), default=0.0, mutable=False,
+            doc="Composite import benchmark quantity",
+        )
+        # Per-shipment margin shares (amgm) and source-of-margin shares (share_st)
+        model.amgm = Param(
+            model.marg, model.i, model.s, model.rp,
+            initialize=dict(c.amgm), default=0.0, mutable=False,
+            doc="Per-shipment margin cost share: VTWR(m,i,s,d) / sum_m VTWR(.,i,s,d)",
+        )
+        model.share_st = Param(
+            model.marg, model.r,
+            initialize=dict(c.share_st), default=0.0, mutable=False,
+            doc="Margin commodity supply share (CD aggregator for ptmg)",
+        )
+
     # ------------------------------------------------------------------
     # Variables
     # ------------------------------------------------------------------
@@ -603,7 +631,7 @@ class GTAPv62ModelEquations:
             model.i, model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=lambda m, i, j, r: _init_q(b.vifm.get((i, j, r), 1.0)),
-            doc="qfm(i,j,r) — imported intermediate demand",
+            doc="qfm(i,j,r) — imported intermediate demand (calibrated to VIFM at benchmark)",
         )
         model.qf = Var(
             model.i, model.j, model.r,
@@ -630,8 +658,10 @@ class GTAPv62ModelEquations:
         model.pfm = Var(
             model.i, model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, i, j, r: 1.0 + c.tfi.get((i, j, r), 0.0),
-            doc="pfm(i,j,r) — imported intermediate agent price",
+            initialize=lambda m, i, j, r: (
+                c.pim_0.get((i, r), 1.0) * (1.0 + c.tfi.get((i, j, r), 0.0))
+            ),
+            doc="pfm(i,j,r) — imported intermediate agent price (= pim * (1+tfi))",
         )
         # Firm Armington composite price. Calibration computes the
         # benchmark value as a cost-weighted average of pfd and pfm
@@ -663,7 +693,7 @@ class GTAPv62ModelEquations:
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=lambda m, i, r: _init_q(b.vipm.get((i, r), 1.0)),
-            doc="qpm(i,r) — household imported demand",
+            doc="qpm(i,r) — household imported demand (= VIPM at benchmark)",
         )
         model.qp = Var(
             model.i, model.r,
@@ -690,8 +720,8 @@ class GTAPv62ModelEquations:
         model.ppm = Var(
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, i, r: 1.0 + c.tpi.get((i, r), 0.0),
-            doc="ppm(i,r) — household imported agent price",
+            initialize=lambda m, i, r: c.pim_0.get((i, r), 1.0) * (1.0 + c.tpi.get((i, r), 0.0)),
+            doc="ppm(i,r) — household imported agent price (= pim * (1+tpi))",
         )
         # pcons_0 = sum_i share_hhd * pp_0 (consistent with linear CD aggregator).
         def _pcons_init(m, r):
@@ -732,7 +762,7 @@ class GTAPv62ModelEquations:
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=lambda m, i, r: _init_q(b.vigm.get((i, r), 1.0)),
-            doc="qgm(i,r) — gov imported demand",
+            doc="qgm(i,r) — gov imported demand (= VIGM at benchmark)",
         )
         model.qg = Var(
             model.i, model.r,
@@ -759,8 +789,8 @@ class GTAPv62ModelEquations:
         model.pgm = Var(
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, i, r: 1.0 + c.tgi.get((i, r), 0.0),
-            doc="pgm(i,r) — gov imported agent price",
+            initialize=lambda m, i, r: c.pim_0.get((i, r), 1.0) * (1.0 + c.tgi.get((i, r), 0.0)),
+            doc="pgm(i,r) — gov imported agent price (= pim * (1+tgi))",
         )
         def _pgov_init(m, r):
             total = sum(
@@ -804,41 +834,43 @@ class GTAPv62ModelEquations:
 
         # --- Trade ---------------------------------------------------------
 
+        # Trade variables initialized to the analytic benchmark levels
+        # (VXWD as basic-price quantity, computed prices along the chain).
         model.qxs = Var(
             model.i, model.s, model.rp,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, i, s, rp: _init_q(b.vxmd.get((i, s, rp), 1.0)),
-            doc="qxs(i,s,rp) — bilateral exports",
+            initialize=lambda m, i, s, rp: max(c.qxs_0.get((i, s, rp), b.vxwd.get((i, s, rp), 0.0)), lb),
+            doc="qxs(i,s,rp) — bilateral exports (basic-price quantity = VXWD at benchmark)",
         )
         model.pms = Var(
             model.i, model.s, model.rp,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="pms(i,s,rp) — bilateral market price",
+            initialize=lambda m, i, s, rp: max(c.pms_0.get((i, s, rp), 1.0), lb),
+            doc="pms(i,s,rp) — bilateral market price at destination",
         )
         model.pmcif = Var(
             model.i, model.s, model.rp,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="pmcif(i,s,rp) — CIF price",
+            initialize=lambda m, i, s, rp: max(c.pmcif_0.get((i, s, rp), 1.0), lb),
+            doc="pmcif(i,s,rp) — CIF price (FOB + transport)",
         )
         model.pe = Var(
             model.i, model.s, model.rp,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="pe(i,s,rp) — FOB price",
+            initialize=lambda m, i, s, rp: max(c.pe_0.get((i, s, rp), 1.0), lb),
+            doc="pe(i,s,rp) — FOB price (= ps * (1 + txs))",
         )
         model.qim = Var(
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, i, r: _init_q(c.vim.get((i, r), 1.0)),
-            doc="qim(i,r) — composite import",
+            initialize=lambda m, i, r: max(c.qim_0.get((i, r), 1.0), lb),
+            doc="qim(i,r) — composite import (basic-price aggregate)",
         )
         model.pim = Var(
             model.i, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="pim(i,r) — composite import price",
+            initialize=lambda m, i, r: max(c.pim_0.get((i, r), 1.0), lb),
+            doc="pim(i,r) — composite import price (CES dual)",
         )
         # Domestic absorption supply
         model.qds = Var(
@@ -853,32 +885,32 @@ class GTAPv62ModelEquations:
         model.qst = Var(
             model.marg, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, mg, r: _init_q(b.vst.get((mg, r), 1.0)),
-            doc="qst(m,r) — margin sales",
+            initialize=lambda m, mg, r: max(c.qst_0.get((mg, r), b.vst.get((mg, r), 0.0)), lb),
+            doc="qst(m,r) — margin sales (= VST(m,r) at benchmark)",
         )
         model.pst = Var(
             model.marg, model.r,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=1.0,
-            doc="pst(m,r) — margin sale price",
+            doc="pst(m,r) — margin sale price (= ps[m,r] for margin commodity)",
         )
         model.qtm = Var(
             model.marg,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="qtm(m) — world margin demand",
+            initialize=lambda m, mg: max(c.qtm_0.get(mg, 1.0), lb),
+            doc="qtm(m) — world margin demand (= sum_r VST at benchmark)",
         )
         model.ptmg = Var(
             model.marg,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=1.0,
-            doc="ptmg(m) — world margin price",
+            doc="ptmg(m) — world margin price (CD aggregator)",
         )
         model.pwmg = Var(
             model.i, model.s, model.rp,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
-            doc="pwmg(i,s,rp) — bilateral margin cost",
+            initialize=lambda m, i, s, rp: max(c.pwmg_0.get((i, s, rp), 0.0), lb),
+            doc="pwmg(i,s,rp) — per-unit transport cost on bilateral shipment",
         )
 
         # --- Income, savings, investment closure --------------------------
@@ -988,20 +1020,37 @@ class GTAPv62ModelEquations:
     def _add_equations(self, model: "ConcreteModel") -> None:
         """Wire Pyomo Constraints onto the model.
 
-        Phase 2b populates the **production block** (top CES nest +
-        value-added CES + Armington firm intermediates). Subsequent
-        phases add demand (Phase 2c-1), trade (Phase 2c-2), margins,
-        factor markets, income, and Walras closure.
+        Phase 2b populates the **production block**, Phase 2c.1 adds
+        the **household + government demand block** and **CGDS
+        identities**, Phase 2c.2 adds the **trade block** (pricing
+        chain + bottom Armington), **margins block** (Cobb-Douglas)
+        and **commodity market clearing**.
 
-        Known Phase 2b benchmark residuals (BOOK3X3):
+        Phase 2c.3 (next) will wire the **factor markets** (mobile
+        wage clearing + sluggish CET), the **income block** (regional
+        income, household and gov income identities, tax revenue per
+        stream), and the **closure** (numeraire and Walras).
 
-        - eq_qo: ~4% (max). The implicit output-tax wedge between
-          ``vom`` (output side at market prices) and ``vop_AGENT``
-          (cost side at agent prices including intermediate taxes)
-          creates a benchmark mismatch in the CES top nest that
-          requires the full pm/pds/pim trade-block price chain to
-          reconcile. Wired in Phase 2c.
-        - All other production-block equations: zero (machine epsilon).
+        Known Phase 2c.2 benchmark residuals (BOOK3X3):
+
+        - eq_qo: ~6% (output-tax wedge).
+        - eq_qpm / eq_qgm / eq_pp / eq_pg: small residuals (max ~1.7e4
+          in absolute / ~5% in relative) from the cascade of
+          benchmark prices through household/gov Armington when
+          pim_0 ≠ 1. The calibration uses MARKET-value shares; the
+          CES first-order conditions then have a small benchmark
+          imbalance proportional to (pim_0 - 1) × VIPM.
+        - eq_qtm: ~6.6e4 — self-trade VTWR entries (intra-region
+          transport in the SAM) are not represented by the
+          bilateral qxs flows (s == d). The model excludes intra-
+          region transport demand; full reconcile requires either
+          dropping those SAM cells or adding an intra-region freight
+          variable. Deferred to Phase 2d.
+        - eq_market: ~2.3e4 — market clearing residual reflects
+          mixed price levels (basic-price quantities on the use
+          side vs producer-price quantities on the output side).
+          Phase 2d reconciles via explicit pm = weighted-avg of
+          pds and pim.
 
         The CES exponent convention is:
             σ = 0  → Leontief (handled as special case)
@@ -1013,6 +1062,9 @@ class GTAPv62ModelEquations:
         self._add_household_demand_block(model)
         self._add_government_demand_block(model)
         self._add_investment_identities(model)
+        self._add_trade_block(model)
+        self._add_margins_block(model)
+        self._add_market_clearing(model)
 
     # ------------------------------------------------------------------
     # Equation blocks — Production
@@ -1469,6 +1521,213 @@ class GTAPv62ModelEquations:
         def eq_pcgds_rule(m, cg, r):
             return m.pcgds[cg, r] == m.ps[cg, r]
         model.eq_pcgds = Constraint(model.cgds, model.r, rule=eq_pcgds_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Trade (Phase 2c.2)
+    # ------------------------------------------------------------------
+
+    def _add_trade_block(self, model: "ConcreteModel") -> None:
+        """Bilateral trade pricing chain + CES bottom Armington.
+
+        Wires the v6.2 export-to-import price cascade and the CES
+        aggregator across import sources:
+
+        - eq_pe:    pe(i,s,d) = ps(i,s) * (1 + txs(i,s,d))
+        - eq_pwmg:  per-unit transport cost = sum_m amgm * ptmg(m)
+        - eq_pmcif: pmcif = pe + pwmg
+        - eq_pms:   pms = pmcif * (1 + tms)
+        - eq_pim:   composite import price (CES dual aggregator)
+        - eq_qxs:   bilateral import demand (CES first-order condition)
+
+        The diagonal flow s=d (self-trade) is skipped — only off-diagonal
+        bilateral flows are wired. ``qxs`` is in basic-price units
+        (= VXWD at benchmark, NOT VXMD).
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        def _ces_cd_sigma(sigma: float) -> float:
+            if abs(sigma - 1.0) < 1e-8:
+                return 1.0 + 1e-3
+            return sigma
+
+        # eq_pe: FOB price (linear export tax wedge)
+        def eq_pe_rule(m, i, s, d):
+            if s == d:
+                return Constraint.Skip
+            if pyo_value(m.qxs[i, s, d]) <= 1e-8 or float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
+                return Constraint.Skip
+            return m.pe[i, s, d] == m.ps[i, s] * (1.0 + pyo_value(m.txs[i, s, d]))
+        model.eq_pe = Constraint(model.i, model.s, model.rp, rule=eq_pe_rule)
+
+        # eq_pwmg: per-unit transport cost = sum_m amgm * ptmg(m)
+        #
+        # At benchmark, pwmg_0 = sum_m amgm * 1 = sum_m VTWR/total_VTWR.
+        # That ratio multiplied by total_VTWR/VXWD gives the per-unit
+        # cost. But amgm sums to 1 only when there's a non-zero
+        # transport flow, so we scale by the benchmark pwmg level.
+        def eq_pwmg_rule(m, i, s, d):
+            if s == d:
+                return Constraint.Skip
+            pwmg0 = float(self.derived.pwmg_0.get((i, s, d), 0.0))
+            if pwmg0 <= 1e-12:
+                return Constraint.Skip
+            # Margin price index scaled by benchmark per-unit transport cost.
+            return m.pwmg[i, s, d] == pwmg0 * sum(
+                float(pyo_value(m.amgm[mg, i, s, d])) * m.ptmg[mg]
+                for mg in m.marg
+                if pyo_value(m.amgm[mg, i, s, d]) > 0.0
+            )
+        model.eq_pwmg = Constraint(model.i, model.s, model.rp, rule=eq_pwmg_rule)
+
+        # eq_pmcif: pmcif = pe + pwmg
+        def eq_pmcif_rule(m, i, s, d):
+            if s == d:
+                return Constraint.Skip
+            if pyo_value(m.qxs[i, s, d]) <= 1e-8 or float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
+                return Constraint.Skip
+            return m.pmcif[i, s, d] == m.pe[i, s, d] + m.pwmg[i, s, d]
+        model.eq_pmcif = Constraint(model.i, model.s, model.rp, rule=eq_pmcif_rule)
+
+        # eq_pms: pms = pmcif * (1 + tms)
+        def eq_pms_rule(m, i, s, d):
+            if s == d:
+                return Constraint.Skip
+            if float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
+                return Constraint.Skip
+            return m.pms[i, s, d] == m.pmcif[i, s, d] * (1.0 + pyo_value(m.tms[i, s, d]))
+        model.eq_pms = Constraint(model.i, model.s, model.rp, rule=eq_pms_rule)
+
+        # eq_pim: composite import price (CES dual using calibrated α)
+        def eq_pim_rule(m, i, d):
+            terms = [
+                (s, float(pyo_value(m.alpha_xs[i, s, d])))
+                for s in m.s if s != d and pyo_value(m.alpha_xs[i, s, d]) > 0.0
+            ]
+            if not terms:
+                return Constraint.Skip
+            sigma_m = _ces_cd_sigma(float(pyo_value(m.esubm[i])))
+            exp = 1.0 - sigma_m
+            return m.pim[i, d] ** exp == sum(
+                ax * m.pms[i, s, d] ** exp for s, ax in terms
+            )
+        model.eq_pim = Constraint(model.i, model.rp, rule=eq_pim_rule)
+
+        # eq_qxs: bilateral import demand (CES FOC)
+        def eq_qxs_rule(m, i, s, d):
+            if s == d:
+                return Constraint.Skip
+            ax = float(pyo_value(m.alpha_xs[i, s, d]))
+            if ax <= 0.0:
+                return Constraint.Skip
+            sigma_m = _ces_cd_sigma(float(pyo_value(m.esubm[i])))
+            return m.qxs[i, s, d] == ax * m.qim[i, d] * (m.pim[i, d] / m.pms[i, s, d]) ** sigma_m
+        model.eq_qxs = Constraint(model.i, model.s, model.rp, rule=eq_qxs_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Margins (Phase 2c.2)
+    # ------------------------------------------------------------------
+
+    def _add_margins_block(self, model: "ConcreteModel") -> None:
+        """Cobb-Douglas margins block (v6.2 §10).
+
+        v6.2 uses Cobb-Douglas demand for trade & transport margins
+        (no ESBS elasticity — that's a v7 addition).
+
+        - eq_pst:  pst(m,r) = ps(m,r)  (margin sale price = supply price)
+        - eq_ptmg: ptmg(m) = sum_r share_st(m,r) * pst(m,r)  (CD index)
+        - eq_qtm:  world margin demand = sum (i,s,d) of VTWR-derived qty
+        - eq_qst:  margin sales = share_st * qtm  (CD demand)
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        # eq_pst: pst(m,r) = ps(m,r) — margin commodity sold at supply price
+        def eq_pst_rule(m, mg, r):
+            return m.pst[mg, r] == m.ps[mg, r]
+        model.eq_pst = Constraint(model.marg, model.r, rule=eq_pst_rule)
+
+        # eq_ptmg: world margin price as CD aggregator across regional sources
+        def eq_ptmg_rule(m, mg):
+            terms = [
+                (r, float(pyo_value(m.share_st[mg, r])))
+                for r in m.r if pyo_value(m.share_st[mg, r]) > 0.0
+            ]
+            if not terms:
+                return Constraint.Skip
+            return m.ptmg[mg] == sum(share * m.pst[mg, r] for r, share in terms)
+        model.eq_ptmg = Constraint(model.marg, rule=eq_ptmg_rule)
+
+        # eq_qtm: world margin demand from bilateral transport requirements.
+        # qtm(m) = sum (i,s,d) of (amgm * pwmg * qxs / ptmg)
+        # At benchmark with ptmg=1 and pwmg*qxs = sum_m VTWR(m,i,s,d),
+        # this gives qtm_0 = sum (i,s,d) VTWR(m,i,s,d) = total margin services.
+        def eq_qtm_rule(m, mg):
+            terms = []
+            for i in m.i:
+                for s in m.s:
+                    for d in m.rp:
+                        if s == d:
+                            continue
+                        amg = float(pyo_value(m.amgm[mg, i, s, d]))
+                        if amg <= 0.0:
+                            continue
+                        terms.append(amg * m.pwmg[i, s, d] * m.qxs[i, s, d])
+            if not terms:
+                return Constraint.Skip
+            return m.ptmg[mg] * m.qtm[mg] == sum(terms)
+        model.eq_qtm = Constraint(model.marg, rule=eq_qtm_rule)
+
+        # eq_qst: margin sales per region = share * world demand (CD form)
+        def eq_qst_rule(m, mg, r):
+            sh = float(pyo_value(m.share_st[mg, r]))
+            if sh <= 0.0:
+                return Constraint.Skip
+            return m.qst[mg, r] == sh * m.qtm[mg]
+        model.eq_qst = Constraint(model.marg, model.r, rule=eq_qst_rule)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Market clearing (Phase 2c.2)
+    # ------------------------------------------------------------------
+
+    def _add_market_clearing(self, model: "ConcreteModel") -> None:
+        """Commodity market clearing identity.
+
+        For each traded commodity i in region r, total output must equal
+        total uses:
+
+            qo(i,r) * (1 + to(i,r)) = sum_j qfd(i,j,r)
+                                    + qpd(i,r) + qgd(i,r)
+                                    + sum_d qxs(i,r,d)
+                                    + qst(i,r)  (if i is a margin)
+
+        The (1 + to) factor on the left reconciles the output-side
+        ``vom`` aggregate with the cost-side ``vop`` used in production
+        (eq_qo). For non-margin commodities the qst term is dropped.
+
+        Phase 2c.2 implementation note: at benchmark with the calibrated
+        agent-price wedges, this balance does NOT hold exactly because
+        the absorption quantities (qfd, qpd, qgd) are basic-price units
+        while qo is at production-cost units. Residual is bounded by the
+        net tax wedge magnitude. Phase 2d will reconcile via explicit
+        pm = weighted-avg equation.
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        def eq_market_rule(m, i, r):
+            if pyo_value(m.vom[i, r]) <= 1e-8:
+                return Constraint.Skip
+
+            # Uses side: domestic absorption + exports + margin sales
+            uses = sum(m.qfd[i, j, r] for j in m.j)
+            uses = uses + m.qpd[i, r] + m.qgd[i, r]
+            uses = uses + sum(m.qxs[i, r, d] for d in m.rp if d != r)
+
+            # Margin sales (only if i is a margin commodity)
+            if i in m.marg:
+                uses = uses + m.qst[i, r]
+
+            # Output side (left): qo at producer level
+            return m.qo[i, r] * (1.0 + pyo_value(m.to[i, r])) == uses
+        model.eq_market = Constraint(model.i, model.r, rule=eq_market_rule)
 
 
 __all__ = [
