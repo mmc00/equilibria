@@ -1176,7 +1176,7 @@ class GTAPv62ModelEquations:
         def eq_pds_rule(m, j, r):
             if pyo_value(m.vom[j, r]) <= 1e-8:
                 return Constraint.Skip
-            return m.pds[j, r] == m.ps[j, r] * (1.0 + pyo_value(m.to[j, r]))
+            return m.pds[j, r] == m.ps[j, r] * (1.0 + m.to[j, r])
         model.eq_pds = Constraint(model.j, model.r, rule=eq_pds_rule)
 
         # ---------- eq_va: VA demand from CES top nest
@@ -1254,7 +1254,7 @@ class GTAPv62ModelEquations:
             sfac = float(pyo_value(m.share_fac[f, j, r]))
             if sfac <= 0.0:
                 return Constraint.Skip
-            return m.pfe[f, j, r] == m.pf[f, r] * (1.0 + pyo_value(m.tf[f, j, r]))
+            return m.pfe[f, j, r] == m.pf[f, r] * (1.0 + m.tf[f, j, r])
         model.eq_pfe = Constraint(model.f, model.j, model.r, rule=eq_pfe_rule)
 
         # ---------- eq_pf_int: Armington composite price for intermediates
@@ -1313,7 +1313,7 @@ class GTAPv62ModelEquations:
             sd = float(pyo_value(m.share_dom[i, j, r]))
             if sd <= 0.0:
                 return Constraint.Skip
-            return m.pfd[i, j, r] == m.pds[i, r] * (1.0 + pyo_value(m.tfd[i, j, r]))
+            return m.pfd[i, j, r] == m.pds[i, r] * (1.0 + m.tfd[i, j, r])
         model.eq_pfd = Constraint(model.i, model.j, model.r, rule=eq_pfd_rule)
 
         # ---------- eq_pfm: imported intermediate agent price
@@ -1323,7 +1323,7 @@ class GTAPv62ModelEquations:
             si = float(pyo_value(m.share_imp[i, j, r]))
             if si <= 0.0:
                 return Constraint.Skip
-            return m.pfm[i, j, r] == m.pim[i, r] * (1.0 + pyo_value(m.tfi[i, j, r]))
+            return m.pfm[i, j, r] == m.pim[i, r] * (1.0 + m.tfi[i, j, r])
         model.eq_pfm = Constraint(model.i, model.j, model.r, rule=eq_pfm_rule)
 
     # ------------------------------------------------------------------
@@ -1400,14 +1400,14 @@ class GTAPv62ModelEquations:
         def eq_ppd_rule(m, i, r):
             if float(pyo_value(m.alpha_dom_hhd[i, r])) <= 0.0:
                 return Constraint.Skip
-            return m.ppd[i, r] == m.pds[i, r] * (1.0 + pyo_value(m.tpd[i, r]))
+            return m.ppd[i, r] == m.pds[i, r] * (1.0 + m.tpd[i, r])
         model.eq_ppd = Constraint(model.i, model.r, rule=eq_ppd_rule)
 
         # eq_ppm: household imported agent price
         def eq_ppm_rule(m, i, r):
             if float(pyo_value(m.alpha_imp_hhd[i, r])) <= 0.0:
                 return Constraint.Skip
-            return m.ppm[i, r] == m.pim[i, r] * (1.0 + pyo_value(m.tpi[i, r]))
+            return m.ppm[i, r] == m.pim[i, r] * (1.0 + m.tpi[i, r])
         model.eq_ppm = Constraint(model.i, model.r, rule=eq_ppm_rule)
 
         # eq_pcons: household price index (CD aggregator, linear form for the
@@ -1498,13 +1498,13 @@ class GTAPv62ModelEquations:
         def eq_pgd_rule(m, i, r):
             if float(pyo_value(m.alpha_dom_gov[i, r])) <= 0.0:
                 return Constraint.Skip
-            return m.pgd[i, r] == m.pds[i, r] * (1.0 + pyo_value(m.tgd[i, r]))
+            return m.pgd[i, r] == m.pds[i, r] * (1.0 + m.tgd[i, r])
         model.eq_pgd = Constraint(model.i, model.r, rule=eq_pgd_rule)
 
         def eq_pgm_rule(m, i, r):
             if float(pyo_value(m.alpha_imp_gov[i, r])) <= 0.0:
                 return Constraint.Skip
-            return m.pgm[i, r] == m.pim[i, r] * (1.0 + pyo_value(m.tgi[i, r]))
+            return m.pgm[i, r] == m.pim[i, r] * (1.0 + m.tgi[i, r])
         model.eq_pgm = Constraint(model.i, model.r, rule=eq_pgm_rule)
 
         # eq_pgov: gov price index (CD aggregator)
@@ -1587,7 +1587,7 @@ class GTAPv62ModelEquations:
                 return Constraint.Skip
             if pyo_value(m.qxs[i, s, d]) <= 1e-8 or float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
                 return Constraint.Skip
-            return m.pe[i, s, d] == m.ps[i, s] * (1.0 + pyo_value(m.txs[i, s, d]))
+            return m.pe[i, s, d] == m.ps[i, s] * (1.0 + m.txs[i, s, d])
         model.eq_pe = Constraint(model.i, model.s, model.rp, rule=eq_pe_rule)
 
         # eq_pwmg: per-unit transport cost = sum_m amgm * ptmg(m)
@@ -1631,7 +1631,7 @@ class GTAPv62ModelEquations:
                 return Constraint.Skip
             if float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
                 return Constraint.Skip
-            return m.pms[i, s, d] == m.pmcif[i, s, d] * (1.0 + pyo_value(m.tms[i, s, d]))
+            return m.pms[i, s, d] == m.pmcif[i, s, d] * (1.0 + m.tms[i, s, d])
         model.eq_pms = Constraint(model.i, model.s, model.rp, rule=eq_pms_rule)
 
         # eq_pim: composite import price (CES dual using calibrated α)
@@ -1763,7 +1763,7 @@ class GTAPv62ModelEquations:
                 uses = uses + m.qst[i, r]
 
             # Output side (left): qo at producer level
-            return m.qo[i, r] * (1.0 + pyo_value(m.to[i, r])) == uses
+            return m.qo[i, r] * (1.0 + m.to[i, r]) == uses
         model.eq_market = Constraint(model.i, model.r, rule=eq_market_rule)
 
     # ------------------------------------------------------------------

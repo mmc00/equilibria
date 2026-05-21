@@ -363,14 +363,22 @@ def shock_command(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
-    # Probe solver availability
+    # Probe solver availability. The IDAES-installed IPOPT binary
+    # lives at .idaes-bin/ipopt.exe on Windows; SolverFactory's
+    # default probe won't find it without the explicit path.
     import pyomo.environ
     from pyomo.opt import SolverFactory
-    try:
-        solver_obj = SolverFactory(args.solver)
-        available = solver_obj.available(False)
-    except Exception:
-        available = False
+    available = False
+    if args.solver == "ipopt":
+        idaes_ipopt = Path(".idaes-bin/ipopt.exe")
+        if idaes_ipopt.exists():
+            available = True
+    if not available:
+        try:
+            solver_obj = SolverFactory(args.solver)
+            available = solver_obj.available(False)
+        except Exception:
+            available = False
 
     if not available:
         print(
@@ -385,9 +393,200 @@ def shock_command(args: argparse.Namespace) -> int:
         )
         return 2
 
-    # ... (full shock pipeline lives here when solvers are wired up)
-    print("Shock parity pipeline TODO — solver is available, implementation pending.")
+    # --- Wire the full shock pipeline ----------------------------------
+    from pyomo.environ import value, Objective, minimize, Var
+
+    # The auto-square helper applies the canonical v6.2 closure +
+    # identity equations + auto-fixes any dangling variable cells.
+    sys.path.insert(0, str(Path(__file__).parent))
+    from _make_square import apply_v62_closure_and_square
+
+    sets, params, model = build_book3x3_model(Path(args.dataset_dir))
+    closure_info = apply_v62_closure_and_square(model)
+    print(f"Closure: free={closure_info['free_vars']} cons={closure_info['active_cons']} "
+          f"mismatch={closure_info['mismatch']}")
+
+    if closure_info["mismatch"] != 0:
+        print(
+            f"WARNING: model has {closure_info['mismatch']} extra degenerate "
+            f"degrees of freedom. Using benchmark-anchored objective for IPOPT."
+        )
+
+    # Capture init values for the regularizer objective
+    init_values = {
+        (v.name, idx): v[idx].value
+        for v in model.component_objects(Var, active=True)
+        for idx in v
+        if not v[idx].fixed and v[idx].value is not None
+    }
+
+    def _obj(model, anchor: Dict, weight: float = 1.0) -> Any:
+        return weight * sum(
+            ((v[idx] - anchor.get((v.name, idx), 1.0))
+             / max(abs(anchor.get((v.name, idx), 1.0)), 1.0)) ** 2
+            for v in model.component_objects(Var, active=True)
+            for idx in v
+            if not v[idx].fixed
+        )
+
+    # Build solver with the configured backend
+    if args.solver == "ipopt":
+        # IDAES-installed ipopt at .idaes-bin/ipopt.exe (Windows)
+        ipopt_path = Path(".idaes-bin/ipopt.exe")
+        if ipopt_path.exists():
+            solver_obj = SolverFactory("ipopt", executable=str(ipopt_path))
+        else:
+            solver_obj = SolverFactory("ipopt")
+        solver_obj.options.update({
+            "max_iter": 5000,
+            "tol": 1e-6,
+            "print_level": 0,
+            "nlp_scaling_method": "gradient-based",
+        })
+    else:
+        solver_obj = SolverFactory(args.solver)
+
+    # === BASELINE SOLVE ===
+    model.obj = Objective(rule=lambda mm: _obj(mm, init_values), sense=minimize)
+    print("\nSolving BASELINE...")
+    res = solver_obj.solve(model, tee=False)
+    print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
+    baseline = {
+        (v.name, idx): value(v[idx])
+        for v in model.component_objects(Var, active=True)
+        for idx in v
+    }
+
+    # === SHOCK ===
+    # 10% tariff cut on the bilateral US food → EU import duty.
+    # GEMPACK Exp1a: ``Shock tms("food","usa","eu") = -10`` — that's
+    # a -10% change in the POWER of the tariff (= (1+t)*0.9 - 1).
+    old_tms = value(model.tms["food", "USA", "EU"])
+    new_tms = (1.0 + old_tms) * 0.9 - 1.0
+    model.tms["food", "USA", "EU"] = new_tms
+    print(f"\nShock: tms[food,USA,EU]: {old_tms:.4f} -> {new_tms:.4f}")
+
+    model.del_component(model.obj)
+    model.del_component("obj_index")
+    model.obj = Objective(rule=lambda mm: _obj(mm, baseline), sense=minimize)
+    print("Solving SHOCKED...")
+    res = solver_obj.solve(model, tee=False)
+    print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
+    shocked = {
+        (v.name, idx): value(v[idx])
+        for v in model.component_objects(Var, active=True)
+        for idx in v
+    }
+
+    # === COMPARE vs GEMPACK Exp1a-upd.har ===
+    upd_har_path = (
+        Path("runs/gtap_v62_oracle") / f"BOOK3X3_{args.experiment}"
+        / f"{args.experiment}-upd.har"
+    )
+    if not upd_har_path.exists():
+        print(f"\nGEMPACK reference not found: {upd_har_path}")
+        print(f"  Run: python scripts/gtap_v62/run_gempack_oracle.py "
+              f"{args.experiment} --dataset-dir {args.dataset_dir} "
+              f"--workdir runs/gtap_v62_oracle/BOOK3X3_{args.experiment}")
+        return 2
+
+    base_har_path = Path(args.dataset_dir) / "basedata.har"
+    cmp_results = compare_shock_vs_gempack(
+        baseline=baseline,
+        shocked=shocked,
+        base_har_path=base_har_path,
+        upd_har_path=upd_har_path,
+    )
+
+    print(f"\n{'Cell':<28s} {'GEMPACK %':>10s} {'Python %':>10s} {'pp diff':>10s}")
+    print("-" * 65)
+    for row in cmp_results:
+        print(f"  {row['label']:<26s} {row['gp_pct']:>+10.3f} {row['py_pct']:>+10.3f} "
+              f"{row['py_pct'] - row['gp_pct']:>+10.3f}")
+
+    report_path = workdir / f"shock_parity_{args.experiment}.json"
+    payload = {
+        "experiment": args.experiment,
+        "shock_applied": {
+            "var": "tms",
+            "key": ["food", "USA", "EU"],
+            "old": old_tms,
+            "new": new_tms,
+        },
+        "closure": closure_info,
+        "comparisons": cmp_results,
+    }
+    report_path.write_text(json.dumps(payload, indent=2, default=str),
+                          encoding="utf-8")
+    print(f"\nShock parity report: {report_path}")
     return 0
+
+
+def compare_shock_vs_gempack(
+    baseline: Dict,
+    shocked: Dict,
+    base_har_path: Path,
+    upd_har_path: Path,
+) -> List[Dict[str, Any]]:
+    """Compute Python vs GEMPACK percent changes for canonical cells.
+
+    The Python values are constructed as price-quantity products to
+    match GEMPACK's value-aggregate (V*) headers in the SAM.
+    """
+    base_har = read_har(base_har_path)
+    upd_har = read_har(upd_har_path)
+
+    def pct(new: float, old: float) -> float:
+        return (new / old - 1.0) * 100.0 if abs(old) > 1e-12 else 0.0
+
+    def gp_change(header: str, idx_tuple: Tuple[int, ...]) -> float:
+        base_arr = np.asarray(base_har[header].array)
+        upd_arr = np.asarray(upd_har[header].array)
+        return pct(upd_arr[idx_tuple], base_arr[idx_tuple])
+
+    rows: List[Dict[str, Any]] = []
+
+    # VIMS food USA -> EU (bilateral imports at market prices)
+    py_pct = pct(
+        shocked[("pms", ("food", "USA", "EU"))] * shocked[("qxs", ("food", "USA", "EU"))],
+        baseline[("pms", ("food", "USA", "EU"))] * baseline[("qxs", ("food", "USA", "EU"))],
+    )
+    rows.append({"label": "VIMS food USA->EU",
+                 "gp_pct": gp_change("VIMS", (0, 0, 1)), "py_pct": py_pct})
+
+    # VIWS food USA -> EU (bilateral imports at world prices)
+    py_pct = pct(
+        shocked[("pmcif", ("food", "USA", "EU"))] * shocked[("qxs", ("food", "USA", "EU"))],
+        baseline[("pmcif", ("food", "USA", "EU"))] * baseline[("qxs", ("food", "USA", "EU"))],
+    )
+    rows.append({"label": "VIWS food USA->EU",
+                 "gp_pct": gp_change("VIWS", (0, 0, 1)), "py_pct": py_pct})
+
+    # VXMD food USA -> EU (bilateral exports at market prices)
+    py_pct = pct(
+        shocked[("pe", ("food", "USA", "EU"))] * shocked[("qxs", ("food", "USA", "EU"))],
+        baseline[("pe", ("food", "USA", "EU"))] * baseline[("qxs", ("food", "USA", "EU"))],
+    )
+    rows.append({"label": "VXMD food USA->EU",
+                 "gp_pct": gp_change("VXMD", (0, 0, 1)), "py_pct": py_pct})
+
+    # VDPM food EU (household domestic food in EU)
+    py_pct = pct(
+        shocked[("pds", ("food", "EU"))] * shocked[("qpd", ("food", "EU"))],
+        baseline[("pds", ("food", "EU"))] * baseline[("qpd", ("food", "EU"))],
+    )
+    rows.append({"label": "VDPM food EU",
+                 "gp_pct": gp_change("VDPM", (0, 1)), "py_pct": py_pct})
+
+    # VIPM food EU (household imported food in EU)
+    py_pct = pct(
+        shocked[("pim", ("food", "EU"))] * shocked[("qpm", ("food", "EU"))],
+        baseline[("pim", ("food", "EU"))] * baseline[("qpm", ("food", "EU"))],
+    )
+    rows.append({"label": "VIPM food EU",
+                 "gp_pct": gp_change("VIPM", (0, 1)), "py_pct": py_pct})
+
+    return rows
 
 
 def main(argv: Optional[List[str]] = None) -> int:

@@ -318,3 +318,6 @@ runs/gtap_v62_oracle/
 
 # GTAP v6.2 parity report scratch outputs (reproducible via validate_v62_parity.py)
 runs/gtap_v62_parity/
+
+# IDAES-installed solver binaries (downloaded on demand)
+.idaes-bin/
