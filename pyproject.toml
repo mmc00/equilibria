@@ -177,6 +177,7 @@ markers = [
     "slow: marks tests as slow",
     "integration: marks integration tests",
     "gams: marks tests that require local GAMS installation and external solver tools",
+    "gempack: marks tests that require local GEMPACK / RunGTAP installation (Windows)",
 ]
 
 [tool.coverage.run]
