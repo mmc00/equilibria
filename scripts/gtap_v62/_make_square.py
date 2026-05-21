@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from pyomo.environ import Constraint, Var, value
+from pyomo.environ import Constraint, ConstraintList, Var, value
 
 
 def _vars_in_constraint(c) -> set:
@@ -28,6 +28,107 @@ def _vars_in_constraint(c) -> set:
     for v in identify_variables(c.body, include_fixed=False):
         out.add((v.parent_component().name, v.index()))
     return out
+
+
+def bake_baseline_residuals_as_slacks(
+    model: Any,
+    *,
+    tolerance: float = 1.0e-3,
+) -> Dict[str, Any]:
+    """Pre-balance the SAM by baking each non-zero baseline residual into
+    its equation as a constant slack.
+
+    Rationale
+    ---------
+    GEMPACK never asks whether ``F(x_0) == 0`` because it solves the
+    linearized (Johansen) form: derivatives at the SAM are all that
+    matter, and any baseline imbalance is implicitly dragged along as
+    a constant. A levels-MCP solver (PATH) instead enforces
+    ``F(x) == 0`` strictly and reports ``code=2`` (stationary point of
+    the merit function) when the SAM has structural imperfections it
+    cannot resolve (e.g. intra-region VTWR, ~1% market-clearing gap).
+
+    For BOOK3X3 the SAM imperfections are:
+      * ``eq_qtm``  ~6.6e4  — VTWR[m,i,s,s] diagonal (~65,838 total)
+      * ``eq_market`` ~2.3e4 — export margin pushed onto uses side
+        through ``qxs_0 = vxwd`` calibration (Phase 2d)
+      * ``eq_qo``   ~6e-2   — implicit output-tax wedge (held by
+        the calibrated ``to`` param; already balances)
+
+    Strategy
+    --------
+    For each ACTIVE constraint cell, evaluate ``body - rhs`` at the
+    benchmark. If |residual| > ``tolerance``, deactivate the cell and
+    replace it with a new constraint of the form ``body == rhs +
+    residual_0`` (i.e. add ``residual_0`` as a constant on the RHS).
+    The deltas (dF/dx · dx) are unchanged; only the constant offset
+    moves. Dynamics propagate identically.
+
+    Returns
+    -------
+    A dict ``{eq_name: [(idx, residual_0), ...]}`` of baked cells, plus
+    a top-level ``"n_baked"`` count and ``"max_abs_baked"`` magnitude.
+    """
+    info: Dict[str, Any] = {
+        "n_baked": 0,
+        "max_abs_baked": 0.0,
+        "by_eq": {},
+    }
+
+    # Holder for the replacement constraints. ConstraintList lets us add
+    # one cell at a time without per-equation rule scaffolding.
+    if not hasattr(model, "sam_baked_residuals"):
+        model.sam_baked_residuals = ConstraintList()
+
+    to_bake: List[Tuple[Any, Any, float, Any, Any, Any]] = []
+    for c in model.component_objects(Constraint, active=True):
+        for idx in list(c):
+            cobj = c[idx]
+            if not cobj.active:
+                continue
+            body_val = value(cobj.body)
+            if cobj.upper is not None and cobj.lower is not None \
+                    and cobj.upper is cobj.lower:
+                rhs = value(cobj.upper)
+                residual = body_val - rhs
+            elif cobj.upper is not None:
+                rhs = value(cobj.upper)
+                residual = body_val - rhs
+            elif cobj.lower is not None:
+                rhs = value(cobj.lower)
+                residual = body_val - rhs
+            else:
+                rhs = 0.0
+                residual = body_val
+
+            if abs(residual) <= tolerance:
+                continue
+            to_bake.append((c, idx, residual, cobj.body, cobj.lower, cobj.upper))
+
+    for c, idx, residual, body, lower, upper in to_bake:
+        # Deactivate the original cell.
+        c[idx].deactivate()
+
+        # Replacement: body - residual_0 == rhs  (equivalent to body == rhs + residual_0)
+        # For an equality constraint (lower == upper == rhs), build a new one.
+        if lower is not None and upper is not None:
+            rhs = value(upper)
+            model.sam_baked_residuals.add(body - residual == rhs)
+        elif upper is not None:
+            rhs = value(upper)
+            model.sam_baked_residuals.add(body - residual <= rhs)
+        elif lower is not None:
+            rhs = value(lower)
+            model.sam_baked_residuals.add(body - residual >= rhs)
+        else:
+            model.sam_baked_residuals.add(body - residual == 0)
+
+        info["n_baked"] += 1
+        info["max_abs_baked"] = max(info["max_abs_baked"], abs(residual))
+        eq_name = c.name
+        info["by_eq"].setdefault(eq_name, []).append((str(idx), residual))
+
+    return info
 
 
 def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:

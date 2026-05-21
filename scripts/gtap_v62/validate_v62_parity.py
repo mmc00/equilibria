@@ -406,12 +406,27 @@ def shock_command(args: argparse.Namespace) -> int:
     # The auto-square helper applies the canonical v6.2 closure +
     # identity equations + auto-fixes any dangling variable cells.
     sys.path.insert(0, str(Path(__file__).parent))
-    from _make_square import apply_v62_closure_and_square
+    from _make_square import (  # type: ignore
+        apply_v62_closure_and_square,
+        bake_baseline_residuals_as_slacks,
+    )
 
     sets, params, model = build_book3x3_model(Path(args.dataset_dir))
     closure_info = apply_v62_closure_and_square(model)
     print(f"Closure: free={closure_info['free_vars']} cons={closure_info['active_cons']} "
           f"mismatch={closure_info['mismatch']}")
+
+    # Phase 3.8 SAM pre-balance: bake each non-trivial baseline residual
+    # into its equation as a constant slack. This is the GEMPACK-style
+    # treatment — derivatives are unchanged, but F(x_0) = 0 holds
+    # exactly so PATH can move from the baseline without hitting a
+    # local minimum of the merit function caused by SAM imperfections.
+    prebal_info = bake_baseline_residuals_as_slacks(model, tolerance=1.0e-3)
+    print(
+        f"SAM prebalance: baked {prebal_info['n_baked']} cells, "
+        f"max_abs={prebal_info['max_abs_baked']:.4e}, "
+        f"families={sorted(prebal_info['by_eq'].keys())}"
+    )
 
     # Phase 3.7 reconciliation: KEEP the SAM-implicit ``to``.
     # The benchmark residuals after closure are dominated by:
@@ -535,6 +550,20 @@ def shock_command(args: argparse.Namespace) -> int:
         for idx in v
     }
 
+    # Diagnostic: which vars moved most between baseline and shocked?
+    deltas = []
+    for key, b_val in baseline.items():
+        s_val = shocked.get(key, b_val)
+        if b_val is None or s_val is None:
+            continue
+        absd = abs(s_val - b_val)
+        reld = absd / max(abs(b_val), 1e-9)
+        deltas.append((key, b_val, s_val, absd, reld))
+    deltas.sort(key=lambda x: -x[4])
+    print("\nTop 15 variables by relative change (baseline -> shocked):")
+    for key, b, s, ad, rd in deltas[:15]:
+        print(f"  {key[0]}{key[1]}: {b:>14.4e} -> {s:>14.4e}  Δabs={ad:>10.4e}  Δrel={rd*100:>+8.3f}%")
+
     # === COMPARE vs GEMPACK Exp1a-upd.har ===
     upd_har_path = (
         Path("runs/gtap_v62_oracle") / f"BOOK3X3_{args.experiment}"
@@ -571,6 +600,11 @@ def shock_command(args: argparse.Namespace) -> int:
             "new": new_tms,
         },
         "closure": closure_info,
+        "prebalance": {
+            "n_baked": prebal_info["n_baked"],
+            "max_abs_baked": prebal_info["max_abs_baked"],
+            "families": {k: len(v) for k, v in prebal_info["by_eq"].items()},
+        },
         "comparisons": cmp_results,
     }
     report_path.write_text(json.dumps(payload, indent=2, default=str),
