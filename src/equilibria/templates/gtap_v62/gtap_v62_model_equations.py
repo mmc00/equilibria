@@ -1426,9 +1426,12 @@ class GTAPv62ModelEquations:
 
         # eq_up: household utility = real income.
         # Normalization: up_0 = 1, so up_0 * yp_0 * pcons_0 = yp_0 ⇒ up = yp / (yp_0 * pcons).
+        # Written as up * pcons == yp / yp_0 so Pyomo standard_repn detects
+        # the bilinear (up * pcons) term cleanly (a `const * var * var`
+        # form is not always picked up by repn).
         def eq_up_rule(m, r):
             yp_0 = max(float(self.derived.yp_0.get(r, 1.0)), 1e-8)
-            return m.up[r] * yp_0 * m.pcons[r] == m.yp[r]
+            return m.up[r] * m.pcons[r] == m.yp[r] / yp_0
         model.eq_up = Constraint(model.r, rule=eq_up_rule)
 
     # ------------------------------------------------------------------
@@ -1519,10 +1522,12 @@ class GTAPv62ModelEquations:
             return m.pgov[r] == sum(terms)
         model.eq_pgov = Constraint(model.r, rule=eq_pgov_rule)
 
-        # eq_ug: government utility = yg / (pgov * yg_0)
+        # eq_ug: government utility = yg / (pgov * yg_0).
+        # Same restructuring as eq_up so standard_repn detects the
+        # bilinear (ug * pgov) term.
         def eq_ug_rule(m, r):
             yg_0 = max(float(self.derived.yg_0.get(r, 1.0)), 1e-8)
-            return m.ug[r] * yg_0 * m.pgov[r] == m.yg[r]
+            return m.ug[r] * m.pgov[r] == m.yg[r] / yg_0
         model.eq_ug = Constraint(model.r, rule=eq_ug_rule)
 
     # ------------------------------------------------------------------

@@ -109,6 +109,19 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
         info["added_identity_eqs"].append(("eq_rgdpmp", 3))
 
+    # eq_qim: composite import quantity = sum of bilateral imports
+    # qim(i,r) is used as input in eq_qxs but has no defining equation;
+    # the CES aggregator identity pim*qim = sum_s pms*qxs gives the
+    # economic content.
+    if not hasattr(model, "eq_qim"):
+        def eq_qim_rule(m, i, r):
+            return m.pim[i, r] * m.qim[i, r] == sum(
+                m.pms[i, s, r] * m.qxs[i, s, r]
+                for s in m.s if s != r
+            )
+        model.eq_qim = Constraint(model.i, model.r, rule=eq_qim_rule)
+        info["added_identity_eqs"].append(("eq_qim", 9))
+
     # ----- auto-fix dangling variables --------------------------------
     used_vars: set = set()
     for c in model.component_objects(Constraint, active=True):
@@ -146,11 +159,102 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
         deactivated_by_family.items(), key=lambda x: -x[1]
     )
 
-    # ----- final counts -----------------------------------------------
+    # ----- bipartite matching for MCP square --------------------------
+    # An MCP solver (PATH) needs one equation per variable. Use
+    # Hopcroft-Karp bipartite matching to find the largest matching.
+    # Variables that don't get matched are "structurally redundant"
+    # for this constraint system and must be fixed at their current
+    # value.
+    try:
+        import networkx as nx
+    except ImportError:
+        info["matched"] = None
+        info["fixed_unmatched"] = []
+    else:
+        G = nx.Graph()
+        for c in model.component_objects(Constraint, active=True):
+            for idx in c:
+                eq_node = ("EQ", c.name, idx)
+                G.add_node(eq_node, bipartite=0)
+                for v in identify_variables(c[idx].body, include_fixed=False):
+                    var_node = ("VAR", v.parent_component().name, v.index())
+                    G.add_node(var_node, bipartite=1)
+                    G.add_edge(eq_node, var_node)
+
+        eq_nodes = {n for n, d in G.nodes(data=True) if d.get("bipartite") == 0}
+        var_nodes = {n for n, d in G.nodes(data=True) if d.get("bipartite") == 1}
+        match = nx.bipartite.maximum_matching(G, top_nodes=eq_nodes)
+        matched_vars = {n for n in match if n in var_nodes}
+        unmatched_vars = var_nodes - matched_vars
+
+        unmatched_by_family: Dict[str, int] = {}
+        for _, var_name, idx in unmatched_vars:
+            var = getattr(model, var_name)
+            v = var[idx]
+            if not v.fixed:
+                v.fix(v.value or 0.0)
+                unmatched_by_family[var_name] = unmatched_by_family.get(var_name, 0) + 1
+
+        info["matched"] = len(matched_vars)
+        info["fixed_unmatched"] = sorted(
+            unmatched_by_family.items(), key=lambda x: -x[1]
+        )
+
+        # Deactivate equations whose body has no free variables anymore.
+        # This includes both trivially-satisfied identities and equations
+        # that became redundant after the unmatched-fix.
+        deactivated2: Dict[str, int] = {}
+        for c in model.component_objects(Constraint, active=True):
+            for idx in list(c):
+                free_in_body = list(
+                    identify_variables(c[idx].body, include_fixed=False)
+                )
+                if not free_in_body:
+                    c[idx].deactivate()
+                    deactivated2[c.name] = deactivated2.get(c.name, 0) + 1
+        info["deactivated_after_match"] = sorted(
+            deactivated2.items(), key=lambda x: -x[1]
+        )
+
+        # Re-do matching to find equations that are now over-constraining
+        # (more eqs than vars). Deactivate the unmatched eqs.
+        G2 = nx.Graph()
+        for c in model.component_objects(Constraint, active=True):
+            for idx in c:
+                eq_node = ("EQ", c.name, idx)
+                G2.add_node(eq_node, bipartite=0)
+                for v in identify_variables(c[idx].body, include_fixed=False):
+                    var_node = ("VAR", v.parent_component().name, v.index())
+                    G2.add_node(var_node, bipartite=1)
+                    G2.add_edge(eq_node, var_node)
+        eq_nodes2 = {n for n, d in G2.nodes(data=True) if d.get("bipartite") == 0}
+        var_nodes2 = {n for n, d in G2.nodes(data=True) if d.get("bipartite") == 1}
+        match2 = nx.bipartite.maximum_matching(G2, top_nodes=eq_nodes2)
+        matched_eqs = {n for n in match2 if n in eq_nodes2}
+        unmatched_eqs = eq_nodes2 - matched_eqs
+
+        # Deactivate redundant eqs
+        red_by_family: Dict[str, int] = {}
+        for _, eq_name, idx in unmatched_eqs:
+            eq = getattr(model, eq_name)
+            if eq[idx].active:
+                eq[idx].deactivate()
+                red_by_family[eq_name] = red_by_family.get(eq_name, 0) + 1
+        info["deactivated_redundant_eqs"] = sorted(
+            red_by_family.items(), key=lambda x: -x[1]
+        )
+
+    # ----- final counts (respecting cell-level deactivation) -----------
     free = sum(1 for v in model.component_objects(Var, active=True)
                for idx in v if not v[idx].fixed)
-    cons = sum(1 for c in model.component_objects(Constraint, active=True)
-               for _ in c)
+    # Pyomo's ``component_objects(Constraint, active=True)`` returns
+    # parent families, not cells; iterate cells and check ``active``
+    # at the cell level.
+    cons = 0
+    for c in model.component_objects(Constraint, active=True):
+        for idx in c:
+            if c[idx].active:
+                cons += 1
     info["free_vars"] = free
     info["active_cons"] = cons
     info["mismatch"] = free - cons

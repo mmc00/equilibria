@@ -406,6 +406,18 @@ def shock_command(args: argparse.Namespace) -> int:
     print(f"Closure: free={closure_info['free_vars']} cons={closure_info['active_cons']} "
           f"mismatch={closure_info['mismatch']}")
 
+    # Phase 3.6 reconciliation: zero out the implicit output-tax wedge
+    # ``to`` so eq_qo balances at benchmark. The SAM-implicit ``to`` =
+    # (vom/vop - 1) reflects a 1% imbalance in BOOK3X3 between the
+    # output side (vom) and the cost side (vop). Treating it as a real
+    # output tax produces a benchmark residual that propagates into
+    # eq_qo. Setting to=0 absorbs the SAM gap into the walras slack
+    # and unlocks the proper CES response to the shock.
+    for j in model.j:
+        for r in model.r:
+            if (j, r) in model.to:
+                model.to[j, r] = 0.0
+
     if closure_info["mismatch"] != 0:
         print(
             f"WARNING: model has {closure_info['mismatch']} extra degenerate "
@@ -420,7 +432,9 @@ def shock_command(args: argparse.Namespace) -> int:
         if not v[idx].fixed and v[idx].value is not None
     }
 
-    def _obj(model, anchor: Dict, weight: float = 1.0) -> Any:
+    # Tiny-weight regularizer (1e-6) — provides direction without
+    # distorting the equilibrium response.
+    def _obj(model, anchor: Dict, weight: float = 1e-6) -> Any:
         return weight * sum(
             ((v[idx] - anchor.get((v.name, idx), 1.0))
              / max(abs(anchor.get((v.name, idx), 1.0)), 1.0)) ** 2
