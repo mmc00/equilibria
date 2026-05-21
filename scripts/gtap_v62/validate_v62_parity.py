@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -368,12 +369,18 @@ def shock_command(args: argparse.Namespace) -> int:
     # default probe won't find it without the explicit path.
     import pyomo.environ
     from pyomo.opt import SolverFactory
+    use_path_capi = args.solver == "path-capi"
     available = False
-    if args.solver == "ipopt":
+    solver_obj = None
+    if use_path_capi:
+        # Defer availability check to runtime; the PATH dll + license
+        # are validated on first call.
+        available = True
+    elif args.solver == "ipopt":
         idaes_ipopt = Path(".idaes-bin/ipopt.exe")
         if idaes_ipopt.exists():
             available = True
-    if not available:
+    if not available and not use_path_capi:
         try:
             solver_obj = SolverFactory(args.solver)
             available = solver_obj.available(False)
@@ -406,17 +413,16 @@ def shock_command(args: argparse.Namespace) -> int:
     print(f"Closure: free={closure_info['free_vars']} cons={closure_info['active_cons']} "
           f"mismatch={closure_info['mismatch']}")
 
-    # Phase 3.6 reconciliation: zero out the implicit output-tax wedge
-    # ``to`` so eq_qo balances at benchmark. The SAM-implicit ``to`` =
-    # (vom/vop - 1) reflects a 1% imbalance in BOOK3X3 between the
-    # output side (vom) and the cost side (vop). Treating it as a real
-    # output tax produces a benchmark residual that propagates into
-    # eq_qo. Setting to=0 absorbs the SAM gap into the walras slack
-    # and unlocks the proper CES response to the shock.
-    for j in model.j:
-        for r in model.r:
-            if (j, r) in model.to:
-                model.to[j, r] = 0.0
+    # Phase 3.7 reconciliation: KEEP the SAM-implicit ``to``.
+    # The benchmark residuals after closure are dominated by:
+    #   eq_qtm  ~6.6e4 (intra-region VTWR — s==d entries)
+    #   eq_market ~2.3e4 (~1% SAM imbalance)
+    #   eq_qo   ~6e-2  (output tax wedge — kept implicit via ``to``)
+    # All other equations are at machine epsilon. Setting ``to=0``
+    # (the previous Phase 3.6 strategy) inflates eq_market by 20×
+    # because the SAM calibrates implicit ``to`` to ABSORB the vom/vop
+    # wedge. Keeping ``to`` as-calibrated leaves the benchmark much
+    # closer to feasibility and PATH converges to a usable equilibrium.
 
     if closure_info["mismatch"] != 0:
         print(
@@ -444,27 +450,61 @@ def shock_command(args: argparse.Namespace) -> int:
         )
 
     # Build solver with the configured backend
-    if args.solver == "ipopt":
-        # IDAES-installed ipopt at .idaes-bin/ipopt.exe (Windows)
-        ipopt_path = Path(".idaes-bin/ipopt.exe")
-        if ipopt_path.exists():
-            solver_obj = SolverFactory("ipopt", executable=str(ipopt_path))
-        else:
-            solver_obj = SolverFactory("ipopt")
-        solver_obj.options.update({
-            "max_iter": 5000,
-            "tol": 1e-6,
-            "print_level": 0,
-            "nlp_scaling_method": "gradient-based",
-        })
+    if use_path_capi:
+        from _path_capi_solver import solve_v62_with_path_capi  # type: ignore
+
+        license_string = os.environ.get("PATH_LICENSE_STRING") or args.path_license
+        path_lib = os.environ.get("PATH_CAPI_LIBPATH") or args.path_lib
+        lusol_lib = os.environ.get("PATH_CAPI_LIBLUSOL") or args.lusol_lib
+
+        def _solve_path_capi(label: str) -> Any:
+            print(f"\nSolving {label} with PATH C-API (licensed)...")
+            res = solve_v62_with_path_capi(
+                model,
+                output=bool(os.environ.get("PATH_CAPI_VERBOSE")),
+                license_string=license_string,
+                path_lib=path_lib,
+                lusol_lib=lusol_lib,
+            )
+            print(
+                f"  term_code={res.termination_code} residual={res.residual:.2e} "
+                f"walras={value(model.walras):.2e} "
+                f"major={res.major_iterations} minor={res.minor_iterations}"
+            )
+            return res
     else:
-        solver_obj = SolverFactory(args.solver)
+        if args.solver == "ipopt":
+            # IDAES-installed ipopt at .idaes-bin/ipopt.exe (Windows)
+            ipopt_path = Path(".idaes-bin/ipopt.exe")
+            if ipopt_path.exists():
+                solver_obj = SolverFactory("ipopt", executable=str(ipopt_path))
+            else:
+                solver_obj = SolverFactory("ipopt")
+            solver_obj.options.update({
+                "max_iter": 5000,
+                "tol": 1e-6,
+                "print_level": 0,
+                "nlp_scaling_method": "gradient-based",
+            })
+        else:
+            solver_obj = SolverFactory(args.solver)
 
     # === BASELINE SOLVE ===
-    model.obj = Objective(rule=lambda mm: _obj(mm, init_values), sense=minimize)
-    print("\nSolving BASELINE...")
-    res = solver_obj.solve(model, tee=False)
-    print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
+    if use_path_capi:
+        _solve_path_capi("BASELINE")
+    else:
+        model.obj = Objective(rule=lambda mm: _obj(mm, init_values), sense=minimize)
+        print("\nSolving BASELINE...")
+        res = solver_obj.solve(model, tee=False)
+        print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
+
+    # Diagnostic: equation residuals at the solved state (top 10 by max_abs).
+    print("\nBaseline equation residuals (top 10):")
+    eq_reports = collect_equation_residuals(model)
+    eq_reports.sort(key=lambda r: r.max_abs, reverse=True)
+    for er in eq_reports[:10]:
+        print(f"  {er.eq_name:<22s} max_abs={er.max_abs:>12.4e} sum_abs={er.sum_abs:>12.4e}")
+
     baseline = {
         (v.name, idx): value(v[idx])
         for v in model.component_objects(Var, active=True)
@@ -480,12 +520,15 @@ def shock_command(args: argparse.Namespace) -> int:
     model.tms["food", "USA", "EU"] = new_tms
     print(f"\nShock: tms[food,USA,EU]: {old_tms:.4f} -> {new_tms:.4f}")
 
-    model.del_component(model.obj)
-    model.del_component("obj_index")
-    model.obj = Objective(rule=lambda mm: _obj(mm, baseline), sense=minimize)
-    print("Solving SHOCKED...")
-    res = solver_obj.solve(model, tee=False)
-    print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
+    if use_path_capi:
+        _solve_path_capi("SHOCKED")
+    else:
+        model.del_component(model.obj)
+        model.del_component("obj_index")
+        model.obj = Objective(rule=lambda mm: _obj(mm, baseline), sense=minimize)
+        print("Solving SHOCKED...")
+        res = solver_obj.solve(model, tee=False)
+        print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
     shocked = {
         (v.name, idx): value(v[idx])
         for v in model.component_objects(Var, active=True)
@@ -653,7 +696,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     shock.add_argument(
         "--solver", default="ipopt",
-        help="Pyomo solver name (default: ipopt).",
+        help="Solver backend: 'ipopt' (NLP), 'path-capi' (MCP), or any "
+             "Pyomo SolverFactory name (default: ipopt).",
+    )
+    shock.add_argument(
+        "--path-license", default=None,
+        help="PATH license string (env: PATH_LICENSE_STRING). "
+             "Required for n>300 (full BOOK3X3 has 582 free vars).",
+    )
+    shock.add_argument(
+        "--path-lib", default="C:/GAMS/53/path52.dll",
+        help="PATH shared library path (env: PATH_CAPI_LIBPATH).",
+    )
+    shock.add_argument(
+        "--lusol-lib", default="C:/GAMS/53/lusol.dll",
+        help="LUSOL shared library path (env: PATH_CAPI_LIBLUSOL).",
     )
     shock.set_defaults(func=shock_command)
 
