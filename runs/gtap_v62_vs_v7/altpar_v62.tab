@@ -1,0 +1,158 @@
+!----------------------------------------------------------------------------!
+!                        Global Trade Analysis Project                       !
+!                         The GTAP Modeling Framework                        !
+!                     GTAP Altertax Params Modification Facility             !
+!----------------------------------------------------------------------------!
+!----------------------------------------------------------------------------!
+! HISTORY of this file                                                       !
+!----------------------------------------------------------------------------!
+! updated by JMH March 2000 for GTAP 5 !
+!----------------------------------------------------------------------------!
+! Version 1.0 September 1998: This file writes a new GTAP parameter          !
+! file to:                                                                   !
+!	- make all endowments mobile                                             !
+!	- make production and preferences Cobb Douglas                           !
+! 	- set RORDELTA = 0                                                       !
+! It can only be run in conjunction with GTAP.TAB version 4.1 or higher as it!
+! includes the switch for sluggish factors and ESUBT.                        !
+! It is also typically run in conjunction with a particular closure.         !
+! For more details, the reader is referred to GTAP technical paper No. 12.   !
+!----------------------------------------------------------------------------!
+!                                   FILES                                    !
+!----------------------------------------------------------------------------!
+
+FILE GTAPSETS # File with set specification #;
+FILE (NEW) ALTERPAR # The file containing new parameters. # ;
+
+!----------------------------------------------------------------------------!
+!                                    SETS                                    !
+!----------------------------------------------------------------------------!
+
+SET REG # Regions in the model #
+      MAXIMUM SIZE 45 READ ELEMENTS FROM FILE gtapsets HEADER "H1";
+
+SET TRAD_COMM # TRADED COMMODITIES #
+      MAXIMUM SIZE 50 READ ELEMENTS FROM FILE gtapsets HEADER "H2";
+
+SET CGDS_COMM # CAPITAL GOODS Commodities #
+      MAXIMUM SIZE 1  READ ELEMENTS FROM FILE gtapsets HEADER "H9";
+
+SET ENDW_COMM # ENDOWMENT COMMODITIES #
+      MAXIMUM SIZE 5  READ ELEMENTS FROM FILE gtapsets HEADER "H6";
+
+SET PROD_COMM # PRODUCED COMMODITIES  # = TRAD_COMM UNION CGDS_COMM ;
+
+SET DEMD_COMM # DEMANDED COMMODITIES # = ENDW_COMM UNION TRAD_COMM  ;
+
+SET NSAV_COMM # NON-SAVINGS COMMODITIES # = DEMD_COMM UNION CGDS_COMM ;
+
+SUBSET PROD_COMM IS SUBSET OF NSAV_COMM ;
+
+!----------------------------------------------------------------------------!
+!                      technology and preference parameters                  !
+!----------------------------------------------------------------------------!
+
+COEFFICIENT (integer) (all,i,ENDW_COMM)                             SLUG(i);
+          ! SLUG is a variable used to dynamically define the set of
+            sluggish  primary factor endowments.  It is zero for mobile
+            endowments and one for sluggish endowments. !
+
+COEFFICIENT (all,i,TRAD_COMM)(all,r,REG)                          SUBPAR(i,r)
+          ! the substitution parameter in the CDE
+            minimum expenditure function  !  ;
+
+COEFFICIENT (all,i,TRAD_COMM)(all,r,REG)                          INCPAR(i,r)
+          ! expansion parameter in the CDE minimum expenditure
+            function  !  ;
+
+COEFFICIENT (all,i,TRAD_COMM)                                     ESUBD(i)
+          ! the elasticity of substitution between domestic and
+            imported goods in the Armington aggregation structure
+            for all agents in all regions. ! ;
+
+COEFFICIENT (all,i,TRAD_COMM)                                     ESUBM(i)
+          ! the elasticity of substitution among imports from
+            different destinations in the Armington aggregation
+            structure of all agents in all regions. !;
+
+COEFFICIENT (all,j,PROD_COMM)                                     ESUBVA(j)
+          ! elasticity of substitution between capital, labor, and
+            possibly land, in the production of value-added in j  !;
+
+COEFFICIENT (all,i,ENDW_COMM)                                     ETRAE(i);
+          ! ETRAE is the elasticity of transformation for sluggish
+            primary factor endowments in the old parameter file. !
+
+COEFFICIENT (all, r, REG)                                         RORFLEX(r)
+          ! RORFLEX is the flexibility of expected net rate
+            of return on capital stock, in region r, with
+            respect to investment. If a region's capital stock
+            increases by 1%, then it is expected that the net
+            rate of return on capital will decline by
+            RORFLEX % !  ;
+
+COEFFICIENT   (Integer)                                            RORDELTA
+          ! RORDELTA is a binary coefficient which determines
+            the mechanism of allocating investment funds across regions.
+            When RORDELTA = 1, investment funds are allocated
+            across regions to equate the change in the expected
+            rates of return (i.e., rore(r)).  When RORDELTA = 0, investment
+            funds are allocated across regions to maintain the existing
+            composition of capital stocks ! ;
+
+COEFFICIENT (all,j,PROD_COMM)                                     ESUBT(j)
+          ! elasticity of substitution among composite intermediate inputs
+            in production.  !;
+
+!----------------------------------------------------------------------------!
+
+!----------------------------------------------------------------------------!
+!                   Setting new model parameters                             !
+!----------------------------------------------------------------------------!
+
+FORMULA (all,i,ENDW_COMM)
+      SLUG(i) = 0 ;
+
+FORMULA (all,i,TRAD_COMM)(all,r,REG)
+        SUBPAR(i,r)= 0 ;
+
+FORMULA (all,i,TRAD_COMM)(all,r,REG)
+        INCPAR(i,r) = 1 ;
+
+FORMULA (all,i,TRAD_COMM)
+        ESUBD(i)= 1;
+
+FORMULA (all,i,TRAD_COMM)
+        ESUBM(i)= 1;
+
+FORMULA (all,i,PROD_COMM)
+        ESUBVA(i)= 1;
+
+FORMULA (all,i,ENDW_COMM)
+        ETRAE(i)= -1;
+
+FORMULA (all,i,REG)
+        RORFLEX(i)= 10;
+
+FORMULA
+        RORDELTA = 1;
+
+FORMULA (all,i,PROD_COMM)
+        ESUBT(i)= 1;
+
+!----------------------------------------------------------------------------!
+!                   Writing model parameters                                 !
+!----------------------------------------------------------------------------!
+
+Write SLUG TO file ALTERPAR HEADER "SLUG";
+Write SUBPAR TO file ALTERPAR HEADER "SUBP";
+Write INCPAR TO file ALTERPAR HEADER "INCP";
+Write ESUBD TO file ALTERPAR HEADER "ESBD";
+Write ESUBM TO file ALTERPAR HEADER "ESBM";
+Write ESUBVA TO file ALTERPAR HEADER "ESBV";
+Write ETRAE TO file ALTERPAR HEADER "ETRE";!jmh mod!
+Write RORFLEX TO file ALTERPAR HEADER "RFLX";!jmh mod!
+Write RORDELTA TO file ALTERPAR HEADER "RDLT";!jmh mod!
+Write ESUBT TO file ALTERPAR HEADER "ESBT";
+
+

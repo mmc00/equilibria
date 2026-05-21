@@ -1,0 +1,1351 @@
+!<
+    ==========
+    DECOMP.TAB
+    ==========
+
+    Authors: Tom Hertel and Wusheng Yu
+
+    TAB file for displaying interesting welfare decomposition results via
+    viewhar
+
+
+    -------------------
+    History of the File
+    -------------------
+
+    September 2003: revised by Robert McDougall
+        - extended CNTalldemd from TRAD_COMM to DEMD_COMM
+        - new longnames
+        - module structure cleanups
+        - format cleanups
+    May 2000: revised by Ken Itakura
+        - added MARG_COMM and NMRG_COMM as in the version 5 of GTAP
+        - added Module structure
+        - added decomposition feature for I-S components
+    January 2000: revised by Tom Hertel
+        - changed trade volume definition to correspond to GTAP TAB file
+          (VXMD)
+        - removed endowment commodities from A2
+        - added full decomposition of endowment commodity tax effects (A3)
+        - added depreciation contribution to decomposition
+        - added contribution import-augmenting technical change
+        - removed non-homotheticity effect which is now subsumed in scale
+          factor
+        - fixed transport and terms of trade effects to correspond to the new
+          TAB file
+        - changed denominator for output and export taxes so that correspond
+          to same rates used elsewhere in GTAP
+        - added term for impact of change in preferences on EV
+    September 1998:
+        - added missing terms to the header for decomposition by tax type and
+          eliminated unnecessary sets.
+    June 1998:
+        - revised sets to fit with the GTAP.TAB file.
+        - added further resolution for the non-trade taxes.
+    December 1997: revised for the South Africa short course
+        - fixed a problem in the way trade volumes were computed
+    Summer 1997: revised for the 1997 GTAP short course
+    Early 1997: Inception
+
+
+    ------------------------------------
+    Overview of the DECOMP.TAB Structure
+    ------------------------------------
+
+    FILES
+    SETS
+    READS for Common Coefficients
+    Modules
+>!
+
+
+!<
+    -----
+    FILES
+    -----
+>!
+
+File
+    GTAPSETS # file with set specification #;
+File
+    GTAPSOL # file containing all solution variables #;
+File
+    GTAPBASE # file containing all base data #;
+File
+    GTAPUPDATE # file containing all updated base data #;
+File (new)
+    WELVIEW # file containing welfare decompositions #;
+
+
+!<
+    ----
+    SETS
+    ----
+>!
+
+Set
+    REG # regions in the model #
+    maximum size 10 read elements from file GTAPSETS header "H1";
+Set
+    TRAD_COMM # traded commodities #
+    maximum size 10 read elements from file GTAPSETS header "H2";
+Set
+    MARG_COMM # margin commodities #
+    maximum size 10 read elements from file GTAPSETS header "MARG";
+Subset
+    MARG_COMM is subset of TRAD_COMM;
+Set
+    NMRG_COMM # non-margin commodities # = TRAD_COMM - MARG_COMM;
+Set
+    CGDS_COMM # capital goods commodities #
+    maximum size 1 read elements from file GTAPSETS header "H9";
+Set
+    ENDW_COMM # endowment commodities #
+    maximum size 5 read elements from file GTAPSETS header "H6";
+Set
+    ENDWC_COMM # capital endowment commodity # (capital);
+Set
+    PROD_COMM # produced commodities # = TRAD_COMM UNION CGDS_COMM;
+Set
+    DEMD_COMM # demanded commodities # = ENDW_COMM UNION TRAD_COMM;
+Set
+    NSAV_COMM # non-savings commodities # = DEMD_COMM UNION CGDS_COMM;
+Subset
+    PROD_COMM is subset of NSAV_COMM;
+Subset
+    ENDWC_COMM is subset of NSAV_COMM;
+
+
+!<
+    The followings are new sets for DECOMP.TAB.  Supplementary sets for
+    "toggles" in VIEWHAR.
+>!
+
+Set
+    CTAX(pfacttax,prodtax,inputtax,contax,govtax,xtax,mtax);
+Set
+    TYPE(xtax,mtax);
+Subset
+    TYPE is subset of CTAX;
+Set
+    COLUMN(alloc_A1,endw_B1,tech_C1,pop_D1,tot_E1,IS_F1,pref_G1);
+Set
+    TECHTYPE(output,primfac,v_added,ininput,transp,import);
+Set
+    PRICES(pworld,pexport,pimport);
+Set
+    DIR(imported,domestic);
+Set
+    ACTIVITY(firm, private, govt);
+Set
+    COL(welcnt, dvol, taxrateb, taxrateu);
+Set
+    DIREC(import,export);
+Set
+    FORM(percent,value);
+Set
+    COLM(ISbal,p_cgds,p_save);
+
+
+!<
+    -----------------------------
+    READS for Common Coefficients
+    -----------------------------
+
+    Note: A common coefficient is the one used across several modules.
+>!
+
+Coefficient (all,i,ENDW_COMM)(all,r,REG)
+    BEVOA(i,r) # value of output at agent's prices #;
+Read
+    BEVOA from file GTAPBASE header "EVOA";
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BEVFA(i,j,r) # producer expenditure on i by industry j #;
+Read
+    BEVFA from file GTAPBASE header "EVFA";
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BVIFA(i,j,r) # purchases of imported i r for use in j in region r #;
+Read
+    BVIFA from file GTAPBASE header "VIFA";
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BVDFA(i,j,r) # purchases of domestic i r for use in j in region r #;
+Read
+    BVDFA from file GTAPBASE header "VDFA";
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    BVOA(i,r) # value of commodity i output in region r #;
+Formula (all,i,ENDW_COMM)(all,r,REG)
+    BVOA(i,r) = BEVOA(i,r);
+Formula (all,i,PROD_COMM)(all,r,REG)
+    BVOA(i,r)
+        = sum(j,ENDW_COMM, BEVFA(j,i,r))
+        + sum(j,TRAD_COMM, BVIFA(j,i,r) + BVDFA(j,i,r));        
+
+
+!<
+    =======
+    Modules
+    =======
+
+    A:  EV Decomposition: Summary
+    A1: Allocative Efficiency Effect: Commodity Summary
+    A2: Allocative Efficiency Effect: Tax Type Summary
+    AX: Decomposition of Allocative Effect, by Tax Type and Commodity
+    B1: Endowment Effect, Gross of Depreciation
+    B2: Endowment Effect: Depreciation
+    C1: Technical Change Effect
+    D1: Population Effect
+    E1: Terms of Trade Effect
+    F1: I-S Effect: Explanatory Factors
+>!
+
+
+!<
+    -----------------------------
+    A:  EV Decomposition: Summary
+    -----------------------------
+>!
+
+Coefficient (all,r,REG)
+    CNTalleffr(r)
+    # total contribution to regional EV of allocative effects #;
+Read
+    CNTalleffr from file GTAPSOL header "ALLR";
+
+Coefficient (all,r,REG)
+    CNTendwr(r)
+    # contribution to regional EV of changes in all ENDW_COMM #;
+Read
+    CNTendwr from file GTAPSOL header "ENDR";
+
+Coefficient (all,r,REG)
+    CNTtechr(r)
+    # contribution to regional EV of all technical change #;
+Read
+    CNTtechr from file GTAPSOL header "TECR";
+
+Coefficient (all,r,REG)
+    CNTpopr(r)
+    # contribution to regional EV of all technical change #;
+Read
+    CNTpopr from file GTAPSOL header "POPR";
+
+Coefficient (all,r,REG)
+    CNTtotr(r)
+    # contribution to regional EV of changes in its terms of trade #;
+Read
+    CNTtotr from file GTAPSOL header "TOTR";
+
+Coefficient (all,r,REG)
+    CNTcgdsr(r)
+    # contribution to regional EV of changes in the price of cgds #;
+Read
+    CNTcgdsr from file GTAPSOL header "CGDS";
+
+Coefficient (all,r,REG)
+    CNTdpar(r)
+    # contribution to regional EV of changes in preferences #;
+Read
+    CNTdpar from file GTAPSOL header "DPAR";
+
+Coefficient (all,r,REG)(all,j,COLUMN)
+    WELFARE(r,j) # aggregate report of welfare change #;
+Formula (all,r,REG)
+    WELFARE(r,"alloc_A1") = CNTalleffr(r);
+Formula (all,r,REG)
+    WELFARE(r,"endw_B1") = CNTendwr(r);
+Formula (all,r,REG)
+    WELFARE(r,"tech_C1") = CNTtechr(r);
+Formula (all,r,REG)
+    WELFARE(r,"pop_D1") = CNTpopr(r);
+Formula (all,r,REG)
+    WELFARE(r,"tot_E1") = CNTtotr(r);
+Formula (all,r,REG)
+    WELFARE(r,"IS_F1") = CNTcgdsr(r);
+Formula (all,r,REG)
+    WELFARE(r,"PREF_G1") = CNTdpar(r);
+
+Write
+    WELFARE to file WELVIEW header "A"
+    longname "EV Decomposition: Summary";
+
+
+!<
+    ---------------------------------------------------
+    A1: Allocative Efficiency Effect: Commodity Summary
+    ---------------------------------------------------
+>!
+
+Coefficient (all,i,DEMD_COMM)(all,r,REG)
+    CNTalleffir(i,r)
+    # total contribution to regional EV of allocative effects of i in r #;
+Read
+    CNTalleffir from file GTAPSOL header "AEFI";
+
+Coefficient (all,r,REG)(all,i,DEMD_COMM)
+    CNTalldemd(r,i) # transpose of CNTalleffir(i,r) #;
+Formula (all,r,REG)(all,i,DEMD_COMM)
+    CNTalldemd(r,i) = CNTalleffir(i,r);
+
+Write
+    CNTalldemd to file WELVIEW header "A1"
+    longname "Allocative Efficiency Effect: Commodity Summary";
+
+
+!<
+    --------------------------------------------------
+    A2: Allocative Efficiency Effect: Tax Type Summary
+    --------------------------------------------------
+>!
+
+Coefficient (all,r,REG)
+    CNTqor(r)
+    # contribution to WEV of changes in output of all NSAV_COMM from r #;
+Read
+    CNTqor from file GTAPSOL header "QOR";
+
+Coefficient (all,r,REG)
+    CNTqfer(r)
+    # contribution to WEV of changes in use of all ENDW_COMM in all j in r #;
+Read
+    CNTqfer from file GTAPSOL header "QFER";
+
+Coefficient (all,r,REG)
+    CNTqfmr(r)
+    # contribution to WEV of changes in use of imported int. in all j in r #;
+Read
+    CNTqfmr from file GTAPSOL header "QFMR";
+Coefficient (all,r,REG)
+    CNTqfdr(r)
+    # contribution to WEV of changes in use of domestic int. in all j in r #;
+Read
+    CNTqfdr from file GTAPSOL header "QFDR";
+Coefficient (all,r,REG)
+    CNTallir(r);
+Formula (all,r,REG)
+    CNTallir(r) = CNTqfmr(r) + CNTqfdr(r);
+
+Coefficient (all,r,REG)
+    CNTqpmr(r)
+    # contribution to WEV of changes in consumption of imported goods in r #;
+Read
+    CNTqpmr from file GTAPSOL header "QPMR";
+Coefficient (all,r,REG)
+    CNTqpdr(r)
+    # contribution to WEV of changes in consumption of domestic goods in r #;
+Read
+    CNTqpdr from file GTAPSOL header "QPDR";
+Coefficient (all,r,REG)
+    CNTallpr(r);
+Formula (all,r,REG)
+    CNTallpr(r) = CNTqpmr(r) + CNTqpdr(r);
+
+Coefficient (all,r,REG)
+    CNTqgmr(r)
+    # contribution to WEV of changes in gov't consumption of imports in r #;
+Read
+    CNTqgmr from file GTAPSOL header "QGMR";
+Coefficient (all,r,REG)
+    CNTqgdr(r)
+    # contrib. to WEV of changes in gov't consumption of domestics in r #;
+Read
+    CNTqgdr from file GTAPSOL header "QGDR";
+Coefficient (all,r,REG)
+    CNTallgr(r);
+Formula (all,r,REG)
+    CNTallgr(r) = CNTqgmr(r) + CNTqgdr(r);
+
+Coefficient (all,r,REG)
+    CNTqxsr(r)
+    # cont. to WEV of changes in exports of all goods from srce r to all dest #;
+Read
+    CNTqxsr from file GTAPSOL header "QXSR";
+
+Coefficient (all,r,REG)
+    CNTqimr(r)
+    # cont. to WEV of changes in imports of all goods from all srce to dest r #;
+Read
+    CNTqimr from file GTAPSOL header "QIMR";
+
+Coefficient (all,r,REG)(all,k,CTAX)
+    CNTalleffkr(r,k);
+Formula (all,r,REG)
+    CNTalleffkr(r,"pfacttax") = CNTqfer(r);
+Formula (all,r,REG)
+    CNTalleffkr(r,"prodtax") = CNTqor(r);
+Formula (all,r,REG)
+    CNTalleffkr(r,"inputtax") = CNTallir(r);
+Formula (all,r,REG)
+    CNTalleffkr(r,"contax") = CNTallpr(r);
+Formula (all,r,REG)
+    CNTalleffkr(r,"govtax") = CNTallgr(r);
+Formula (all,r,REG)
+    CNTalleffkr(r,"xtax") = CNTqxsr(r);
+Formula (all,r,REG)
+    CNTalleffkr(r,"mtax") = CNTqimr(r);
+
+Write
+    CNTalleffkr to file WELVIEW header "A2"
+    longname "Allocative Efficiency Effect: Tax Type Summary";
+
+
+!<
+    -----------------------------------------------------------------
+    AX: Decomposition of Allocative Effect, by Tax Type and Commodity
+    -----------------------------------------------------------------
+
+    AX0:  Preliminaries
+    A21:  Output Tax Effect
+    A22:  Domestic Tax Effect
+    A23:  Trade Tax Effect
+    A3:   Endowment Tax Effect
+>!
+
+
+!<
+    AX0:  Preliminaries
+    -------------------
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVDPM(i,r) # private household expenditure on domestic i in r #;
+Read
+    BVDPM from file GTAPBASE header "VDPM";
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVDGM(i,r) # government household expenditure on domestic i in r #;
+Read
+    BVDGM from file GTAPBASE header "VDGM";
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BVDFM(i,j,r) # purchases of domestic i r for use in j in region r #;
+Read
+    BVDFM from file GTAPBASE header "VDFM";
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVDPM(i,r) # private household expenditure on domestic i in r #;
+Read
+    UVDPM from file GTAPUPDATE header "VDPM";
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVDGM(i,r) # government household expenditure on domestic i in r #;
+Read
+    UVDGM from file GTAPUPDATE header "VDGM";
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UVDFM(i,j,r) # purchases of domestic i r for use in j in region r #;
+Read
+    UVDFM from file GTAPUPDATE header "VDFM";
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UVIFA(i,j,r) # purchases of imported i r for use in j in region r #;
+Read
+    UVIFA from file GTAPUPDATE header "VIFA";
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UVDFA(i,j,r) # purchases of domestic i r for use in j in region r #;
+Read
+    UVDFA from file GTAPUPDATE header "VDFA";
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BVXMD(i,r,s)
+    # exports of i from r to s at market prices (tradeables only) #;
+Read
+    BVXMD from file GTAPBASE header "VXMD";
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UVXMD(i,r,s)
+    # exports of i from r to s at market prices (tradeables only) #;
+Read
+    UVXMD from file GTAPUPDATE header "VXMD";
+
+
+!<
+    A21:  Output Tax Effect
+    -----------------------
+
+    A21:  Output Tax Effect
+    A211: Output Tax Effect: Explanatory Factors
+>!
+
+
+!<
+    A21:  Output Tax Effect
+    .......................
+>!
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    CNTqoir(i,r)
+    # contribution to WEV of changes in output of NSAV_COMM i in r #;
+Read
+    CNTqoir from file GTAPSOL header "QOIR";
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    OTAX(i,r);
+Formula (all,i,NSAV_COMM)(all,r,REG)
+    OTAX(i,r) = CNTqoir(i,r);
+
+Write
+    OTAX to file WELVIEW header "A21"
+    longname "Output Tax Effect";
+
+
+!<
+    A211: Output Tax Effect: Explanatory Factors
+    ............................................
+>!
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BVFM(i,j,r) # producer expenditure on i by j in r at market prices #;
+Read
+    BVFM from file GTAPBASE header "VFM";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVDM(i,r) # domestic sales of i in r at market prices (tradeables only) #;
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    BVDM(i,r) = BVDPM(i,r) + BVDGM(i,r) + sum(j,PROD_COMM, BVDFM(i,j,r));
+
+Coefficient (all,m,MARG_COMM)(all,r,REG)
+    BVST(m,r)
+    # exports of m from r for int'l transport at mkt prices (tradeables only) #;
+Read
+    BVST from file GTAPBASE header "VST";
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    BVOM(i,r) # value of commodity i output in region r at mkt prices #;
+Formula (all,i,ENDW_COMM)(all,r,REG)
+    BVOM(i,r) = sum(j,PROD_COMM, BVFM(i,j,r));
+Formula (all,m,MARG_COMM)(all,r,REG)
+    BVOM(m,r) = BVDM(m,r) + sum(s,REG, BVXMD(m,r,s)) + BVST(m,r);
+Formula (all,i,NMRG_COMM)(all,r,REG)
+    BVOM(i,r) = BVDM(i,r) + sum(s,REG, BVXMD(i,r,s));
+Formula (all,h,CGDS_COMM)(all,r,REG)
+    BVOM(h,r) = BVOA(h,r);
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    qo(i,r) # industry output of commodity i in region r #;
+Read
+    qo from file GTAPSOL header "qo";
+
+Zerodivide (nonzero_by_zero) default 0;
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    BOUTAX(i,r);
+Formula (all,i,NSAV_COMM)(all,r,REG)
+    BOUTAX(i,r) = [BVOM(i,r) - BVOA(i,r)] / BVOM(i,r) * 100;
+
+Zerodivide (nonzero_by_zero) off;
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UVFM(i,j,r) # producer expenditure on i by j in r at market prices #;
+Read
+    UVFM from file GTAPUPDATE header "VFM";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVDM(i,r) # domestic sales of i in r at market prices (tradeables only) #;
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    UVDM(i,r) = UVDPM(i,r) + UVDGM(i,r) + sum(j,PROD_COMM, UVDFM(i,j,r));
+
+Coefficient (all,m,MARG_COMM)(all,r,REG)
+    UVST(m,r)
+    # exports of m from r for int'l transport at mkt prices (tradeables only) #;
+Read
+    UVST from file GTAPUPDATE header "VST";
+
+Coefficient (all,i,ENDW_COMM)(all,r,REG)
+    UEVOA(i,r) # value of output at agent's prices #;
+Read
+    UEVOA from file GTAPUPDATE header "EVOA";
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UEVFA(i,j,r) # producer expenditure on i by industry j #;
+Read
+    UEVFA from file GTAPUPDATE header "EVFA";
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    UVOA(i,r) # value of commodity i output in region r #;
+Formula (all,i,ENDW_COMM)(all,r,REG)
+    UVOA(i,r) = UEVOA(i,r);
+Formula (all,i,PROD_COMM)(all,r,REG)
+    UVOA(i,r)
+        = sum(j,ENDW_COMM, UEVFA(j,i,r))
+        + sum(j,TRAD_COMM, UVIFA(j,i,r) + UVDFA(j,i,r));
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    UVOM(i,r) # value of commodity i output in region r at mkt prices #;
+Formula (all,i,ENDW_COMM)(all,r,REG)
+    UVOM(i,r) = sum(j,PROD_COMM, UVFM(i,j,r));
+Formula (all,m,MARG_COMM)(all,r,REG)
+    UVOM(m,r) = UVDM(m,r) + sum(s,REG, UVXMD(m,r,s)) + UVST(m,r);
+Formula (all,i,NMRG_COMM)(all,r,REG)
+    UVOM(i,r) = UVDM(i,r) + sum(s,REG, UVXMD(i,r,s));
+Formula (all,h,CGDS_COMM)(all,r,REG)
+    UVOM(h,r) = UVOA(h,r);
+
+Zerodivide (nonzero_by_zero) default 0;
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)
+    UOUTAX(i,r);
+Formula (all,i,NSAV_COMM)(all,r,REG)
+    UOUTAX(i,r) = [UVOM(i,r) - UVOA(i,r)] / UVOM(i,r) * 100;
+
+Zerodivide (nonzero_by_zero) off;
+
+Coefficient (all,i,NSAV_COMM)(all,r,REG)(all,c,COL)
+    OUTPUT(i,r,c);
+Formula (all,i,NSAV_COMM)(all,r,REG)
+    OUTPUT(i,r,"welcnt") = OTAX(i,r);
+Formula (all,i,NSAV_COMM)(all,r,REG)
+    OUTPUT(i,r,"dvol") = BVOM(i,r) * qo(i,r) / 100;
+Formula (all,i,NSAV_COMM)(all,r,REG)
+    OUTPUT(i,r,"taxrateb") = BOUTAX(i,r);
+Formula (all,i,NSAV_COMM)(all,r,REG)
+    OUTPUT(i,r,"taxrateu") = UOUTAX(i,r);
+
+Write
+    OUTPUT to file WELVIEW header "A211"
+    longname "Output Tax Effect: Explanatory Factors";
+
+
+!<
+    A22:  Domestic Tax Effect
+    -------------------------
+
+    A22:  Domestic Tax Effect: Summary
+    A221: Intermed. Input Tax Effect
+    A22F: Intermed. Input Tax Effect: Explanatory Factors
+    A22P: Private Cons. Tax Effect: Explanatory Factors
+    A22G: Government Cons. Tax Effect: Explanatory Factors
+>!
+
+
+!<
+    A22: Domestic Tax Effect: Summary
+    .................................
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    CNTqfmir(i,r)
+    # contribution to WEV of changes in use of imported int. i in all j in r #;
+Read
+    CNTqfmir from file GTAPSOL header "QFMI";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    CNTqpmir(i,r)
+    # contribution to WEV of changes in consumption of imported good i in r #;
+Read
+    CNTqpmir from file GTAPSOL header "QPMI";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    CNTqgmir(i,r)
+    # contribution to WEV of changes in gov't consumption of import i in r #;
+Read
+    CNTqgmir from file GTAPSOL header "QGMI";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    CNTqfdir(i,r)
+    # contribution to WEV of changes in use of domestic i in all j in r #;
+Read
+    CNTqfdir from file GTAPSOL header "QFDI";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    CNTqpdir(i,r)
+    # contribution to WEV of changes in consumption of domestic good i in r #;
+Read
+    CNTqpdir from file GTAPSOL header "QPDI";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    CNTqgdir(i,r)
+    # contribution to WEV of changes in gov't consumption of domestic i in r #;
+Read
+    CNTqgdir from file GTAPSOL header "QGDI";
+
+Coefficient (all,i,TRAD_COMM)(all,j,ACTIVITY)(all,r,REG)(all,t,DIR)
+    ATAX(i,j,r,t);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    ATAX(i,"firm",r,"imported") =  CNTqfmir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    ATAX(i,"private",r,"imported") = CNTqpmir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    ATAX(i,"govt",r,"imported") = CNTqgmir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    ATAX(i,"firm",r,"domestic") = CNTqfdir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    ATAX(i,"private",r,"domestic") = CNTqpdir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    ATAX(i,"govt",r,"domestic") = CNTqgdir(i,r);
+
+Write
+    ATAX to file WELVIEW header "A22"
+    longname "Domestic Tax Effect: Summary";
+
+
+!<
+    A221: Intermed. Input Tax Effect
+    ................................
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    CNTqfmijr(i,j,r)
+    # contribution to WEV of changes in use of improted int. i in j of r #;
+Read
+    CNTqfmijr from file GTAPSOL header "QFMJ";
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    CNTqfdijr(i,j,r)
+    # contribution to WEV of changes in use of domestic int. i in j of r #;
+Read
+    CNTqfdijr from file GTAPSOL header "QFDJ";
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)(all,t,DIR)
+    STAX(i,j,r,t);
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    STAX(i,j,r,"imported") = CNTqfmijr(i,j,r);
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    STAX(i,j,r,"domestic") = CNTqfdijr(i,j,r);
+
+Write
+    STAX to file WELVIEW header "A221"
+    longname "Intermed. Input Tax Effect";
+
+
+!<
+    A22F: Intermed. Input Tax Effect: Explanatory Factors
+    .....................................................
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BVIFM(i,j,r) # purchases of imports i for use in j in region r #;
+Read
+    BVIFM from file GTAPBASE header "VIFM";
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    qfm(i,j,r) # industry demands for aggregate imports #;
+Read
+    qfm from file GTAPSOL header "qfm";
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    qfd(i,j,r) # industry demands for domestic goods #;
+Read
+    qfd from file GTAPSOL header "qfd";
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UVIFM(i,j,r) # purchases of imports i for use in j in region r #;
+Read
+    UVIFM from file GTAPUPDATE header "VIFM";
+
+Zerodivide (nonzero_by_zero) default 0;
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    (all,t,DIR)(all,c,COL)
+    FIRM(i,j,r,t,c);
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)(all,t,DIR)
+    FIRM(i,j,r,t,"welcnt") = STAX(i,j,r,t);
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    FIRM(i,j,r,"imported","dvol") = [BVIFM(i,j,r) * qfm(i,j,r)] / 100;
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    FIRM(i,j,r,"domestic","dvol") = [BVDFM(i,j,r) * qfd(i,j,r)] / 100;
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    FIRM(i,j,r,"imported","taxrateb")
+        = 100 * [BVIFA(i,j,r) - BVIFM(i,j,r)] / BVIFM(i,j,r);
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    FIRM(i,j,r,"imported","taxrateu")
+        = 100 * [UVIFA(i,j,r) - UVIFM(i,j,r)] / UVIFM(i,j,r);
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    FIRM(i,j,r,"domestic","taxrateb")
+        = 100 * [BVDFA(i,j,r) - BVDFM(i,j,r)] / BVDFM(i,j,r);
+Formula (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    FIRM(i,j,r,"domestic","taxrateu")
+        = 100 * [UVDFA(i,j,r) - UVDFM(i,j,r)] / UVDFM(i,j,r);
+
+Zerodivide (nonzero_by_zero) off;
+
+Write
+    FIRM to file WELVIEW header "A22F"
+    longname "Intermed. Input Tax Effect: Explanatory Factors";
+
+
+!<
+    A22P: Private Cons. Tax Effect: Explanatory Factors
+    ...................................................
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVIPM(i,r) # private household expenditure on i in r #;
+Read
+    BVIPM from file GTAPBASE header "VIPM";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    qpm(i,r) # private hhld demand for imports of i in region r #;
+Read
+    qpm from file GTAPSOL header "qpm";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    qpd(i,r) # private hhld demand for domestic i in region r #;
+Read
+    qpd from file GTAPSOL header "qpd";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVIPA(i,r) # private household expenditure on imported i #;
+Read
+    BVIPA from file GTAPBASE header "VIPA";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVIPA(i,r) # private household expenditure on imported i #;
+Read
+    UVIPA from file GTAPUPDATE header "VIPA";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVIPM(i,r) # private household expenditure on i in r #;
+Read
+    UVIPM from file GTAPUPDATE header "VIPM";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVDPA(i,r) # private household expenditure on domestic i in r #;
+Read
+    BVDPA from file GTAPBASE header "VDPA";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVDPA(i,r) # private household expenditure on domestic i in r #;
+Read
+    UVDPA from file GTAPUPDATE header "VDPA";
+
+Zerodivide (nonzero_by_zero) default 0;
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,t,DIR)(all,c,COL)
+    PRIVATE(i,r,t,c);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,t,DIR)
+    PRIVATE(i,r,t,"welcnt") = ATAX(i,"private",r,t);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    PRIVATE(i,r,"imported","dvol") = [BVIPM(i,r) * qpm(i,r)] / 100;
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    PRIVATE(i,r,"domestic","dvol") = [BVDPM(i,r) * qpd(i,r)] / 100;
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    PRIVATE(i,r,"imported","taxrateb")
+        = 100 * [BVIPA(i,r) - BVIPM(i,r)] / BVIPM(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    PRIVATE(i,r,"imported","taxrateu")
+        = 100 * [UVIPA(i,r) - UVIPM(i,r)] / UVIPM(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    PRIVATE(i,r,"domestic","taxrateb")
+        = 100 * [BVDPA(i,r) - BVDPM(i,r)] / BVDPM(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    PRIVATE(i,r,"domestic","taxrateu")
+        = 100 * [UVDPA(i,r) - UVDPM(i,r)] / UVDPM(i,r);
+
+Zerodivide (nonzero_by_zero) off;
+
+Write
+    PRIVATE to file WELVIEW header "A22P"
+    longname "Private Cons. Tax Effect: Explanatory Factors";
+
+
+!<
+    A22G: Government Cons. Tax Effect: Explanatory Factors
+    ......................................................
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVIGM(i,r) # gov't household expenditure on i in r #;
+Read
+    BVIGM from file GTAPBASE header "VIGM";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    qgm(i,r) # government hhld demand for imports of i in region r #;
+Read
+    qgm from file GTAPSOL header "qgm";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    qgd(i,r) # government hhld demand for domestic i in region r #;
+Read
+    qgd from file GTAPSOL header "qgd";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVIGA(i,r) # government household expenditure on imported i #;
+Read
+    BVIGA from file GTAPBASE header "VIGA";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVIGA(i,r) # government household expenditure on imported i #;
+Read
+    UVIGA from file GTAPUPDATE header "VIGA";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVIGM(i,r) # gov't household expenditure on i in r #;
+Read
+    UVIGM from file GTAPUPDATE header "VIGM";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    BVDGA(i,r) # government household expenditure on domestic i in r #;
+Read
+    BVDGA from file GTAPBASE header "VDGA";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    UVDGA(i,r) # government household expenditure on domestic i in r #;
+Read
+    UVDGA from file GTAPUPDATE header "VDGA";
+
+Zerodivide (nonzero_by_zero) default 0;
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,t,DIR)(all,c,COL)
+    GOVT(i,r,t,c);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,t,DIR)
+    GOVT(i,r,t,"welcnt") = ATAX(i,"govt",r,t);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    GOVT(i,r,"imported","dvol") = [BVIGM(i,r) * qgm(i,r)] / 100;
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    GOVT(i,r,"domestic","dvol") = [BVDGM(i,r) * qgd(i,r)] / 100;
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    GOVT(i,r,"imported","taxrateb")
+        = 100 * [BVIGA(i,r) - BVIGM(i,r)] / BVIGM(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    GOVT(i,r,"imported","taxrateu")
+        = 100 * [UVIGA(i,r) - UVIGM(i,r)] / UVIGM(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    GOVT(i,r,"domestic","taxrateb")
+        = 100 * [BVDGA(i,r) - BVDGM(i,r)] / BVDGM(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    GOVT(i,r,"domestic","taxrateu")
+        = 100 * [UVDGA(i,r) - UVDGM(i,r)] / UVDGM(i,r);
+
+Zerodivide (nonzero_by_zero) off;
+
+Write
+    GOVT to file WELVIEW header "A22G"
+    longname "Government Cons. Tax Effect: Explanatory Factors";
+
+
+!<
+    A23:  Trade Tax Effect
+    ----------------------
+
+    A23:  Trade Tax Effect
+    A231: Trade Tax Effect: Explanatory Factors
+>!
+
+
+!<
+    A23:  Trade Tax Effect
+    ......................
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    CNTqxsirs(i,r,s)
+    # contrib. to WEV of changes in exports of i from srce r to dest s #;
+Read
+    CNTqxsirs from file GTAPSOL header "QXSS";
+
+Coefficient (all,i,TRAD_COMM)(all,s,REG)(all,r,REG)
+    CNTqimisr(i,s,r)
+    # contrib. to WEV of changes in imports of i from srce s to dest r #;
+Read
+    CNTqimisr from file GTAPSOL header "QIMS";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)(all,k,TYPE)
+    TTAX(i,r,s,k);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TTAX(i,r,s,"xtax") = CNTqxsirs(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TTAX(i,r,s,"mtax") = CNTqimisr(i,r,s);
+
+Write
+    TTAX to file WELVIEW header "A23"
+    longname "Trade Tax Effect";
+
+
+!<
+    A231: Trade Tax Effect: Explanatory Factors
+    ...........................................
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BVIMS(i,r,s) # imports of i from r to s at domestic market prices #;
+Read
+    BVIMS from file GTAPBASE header "VIMS";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BVIWS(i,r,s) # imports of i from r to s valued cif (tradeables only) #;
+Read
+    BVIWS from file GTAPBASE header "VIWS";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BIMTAX(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BIMTAX(i,r,s) = [BVIMS(i,r,s) - BVIWS(i,r,s)] / BVIWS(i,r,s) * 100;
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BVXWD(i,r,s) # exports of i from r to s valued fob (tradeables only) #;
+Read
+    BVXWD from file GTAPBASE header "VXWD";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BEXTAX(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    BEXTAX(i,r,s) = [BVXWD(i,r,s) - BVXMD(i,r,s)] / BVXWD(i,r,s) * 100;
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UVIMS(i,r,s) # imports of i from r to s at domestic market prices #;
+Read
+    UVIMS from file GTAPUPDATE header "VIMS";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UVIWS(i,r,s) # imports of i from r to s valued cif (tradeables only) #;
+Read
+    UVIWS from file GTAPUPDATE header "VIWS";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UIMTAX(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UIMTAX(i,r,s) = [UVIMS(i,r,s) - UVIWS(i,r,s)] / UVIWS(i,r,s) * 100;
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UVXWD(i,r,s) # exports of i from r to s valued fob (tradeables only) #;
+Read
+    UVXWD from file GTAPUPDATE header "VXWD";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UEXTAX(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    UEXTAX(i,r,s) = [UVXWD(i,r,s) - UVXMD(i,r,s)] / UVXWD(i,r,s) * 100;
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    qxs(i,r,s) # export sales of commodity i from r to region s #;
+Read
+    qxs from file GTAPSOL header "qxs";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)(all,c,COL)(all,d,DIREC)
+    TRADE(i,r,s,c,d);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"welcnt","import") = TTAX(i,r,s,"mtax");
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"welcnt","export") = TTAX(i,r,s,"xtax");
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"dvol","import") = BVXMD(i,r,s) * qxs(i,r,s) / 100;
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"dvol","export") = BVXMD(i,r,s) * qxs(i,r,s) / 100;
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"taxrateb","import") = BIMTAX(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"taxrateu","import") = UIMTAX(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"taxrateb","export") = BEXTAX(i,r,s);
+Formula (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    TRADE(i,r,s,"taxrateu","export") = UEXTAX(i,r,s);
+
+Write
+    TRADE to file WELVIEW header "A231"
+    longname "Trade Tax Effect: Explanatory Factors";
+
+
+!<
+    A3:   Endowment Tax Effect
+    --------------------------
+>!
+
+Coefficient (all,i,ENDW_COMM)(all,r,REG)
+    CNTqfeir(i,r)
+    # contribution to WEV of changes in use of all ENDW_COMM i in r #;
+Read
+    CNTqfeir from file GTAPSOL header "QEIR";
+
+Write CNTqfeir to file WELVIEW header "A3"
+    longname "Endowment Tax Effect";
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    CNTqfeijr(i,j,r)
+    # contribution to WEV of changes in use of all ENDW_COMM i in j of r #;
+Read
+    CNTqfeijr from file GTAPSOL header "EIJR";
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BENDTAX(i,j,r);
+Formula (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    BENDTAX(i,j,r) = [BEVFA(i,j,r) - BVFM(i,j,r)] / bvfm(i,j,r) * 100;
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UENDTAX(i,j,r);
+Formula (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    UENDTAX(i,j,r) = [UEVFA(i,j,r) - UVFM(i,j,r)] / uvfm(i,j,r) * 100;
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    qfe(i,j,r) # industry demands for endowment commodities #;
+Read
+    qfe from file GTAPSOL header "qfe";
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)(all,c,COL)
+    PFACTOR(i,j,r,c);
+Formula (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    PFACTOR(i,j,r,"welcnt") = CNTqfeijr(i,j,r);
+Formula (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    PFACTOR(i,j,r,"dvol") = BVFM(i,j,r) * qfe(i,j,r) / 100;
+Formula (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    PFACTOR(i,j,r,"taxrateb") = BENDTAX(i,j,r);
+Formula (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    PFACTOR(i,j,r,"taxrateu") = UENDTAX(i,j,r);
+
+Write PFACTOR to file WELVIEW header "A31"
+    longname "Endowment Tax Effect: Explanatory Factors";
+
+
+!<
+    -------------------------------------------
+    B1: Endowment Effect, Gross of Depreciation
+    -------------------------------------------
+>!
+
+Coefficient (all,i,ENDW_COMM)(all,r,REG)
+    CNTendwir(i,r) # contribution to regional EV of changes in ENDW_COMM i #;
+Read
+    CNTendwir from file GTAPSOL header "ENDI";
+
+Coefficient (all,r,REG)(all,i,ENDW_COMM)
+    CNTendw(r,i) # contribution to welfare by ENDW_COMM i in region r #;
+Formula (all,r,REG)(all,i,ENDW_COMM)
+    CNTendw(r,i) = CNTendwir(i,r);
+Write
+    CNTendw to file WELVIEW header "B1"
+    longname "Endowment Effect, Gross of Depreciation";
+
+
+!<
+    ----------------------------------
+    B2: Endowment Effect: Depreciation
+    ----------------------------------
+>!
+
+Coefficient (all,r,REG)
+    CNTkbr(r) # contribution to regional EV of depreciation #;
+Read
+    CNTkbr from file GTAPSOL header "CKBR";
+Write
+    CNTkbr to file WELVIEW header "B2"
+    longname "Endowment Effect: Depreciation";
+
+
+!<
+    ---------------------------
+    C1: Technical Change Effect
+    ---------------------------
+
+    C1:  Technical Change Effect: Summary
+    C1X: Technical Change Effect: Further Decomposition
+>!
+
+
+!<
+    C1:  Technical Change Effect: Summary
+    -------------------------------------
+>!
+
+Coefficient (all,r,REG)
+    CNTtech_aor(r)
+    # contribution to regional EV of output augmenting technical change #;
+Read
+    CNTtech_aor from file GTAPSOL header "AOR";
+
+Coefficient (all,r,REG)
+    CNTtech_afer(r)
+    # contribution to regional EV of primary factor augmenting tech change #;
+Read
+    CNTtech_afer from file GTAPSOL header "AFER";
+
+Coefficient (all,r,REG)
+    CNTtech_avar(r)
+    # contribution to regional EV of value added augmenting tech change #;
+Read
+    CNTtech_avar from file GTAPSOL header "AVAR";
+
+Coefficient (all,r,REG)
+    CNTtech_afr(r)
+    # cont. to regional EV of comp. int. input augmenting tech change #;
+Read
+    CNTtech_afr from file GTAPSOL header "AFR";
+
+Coefficient (all,r,REG)
+    CNTtech_atrr(r)
+    # contribution to regional EV of technical change in transportation #;
+Read
+    CNTtech_atrr from file GTAPSOL header "ATR";
+
+Coefficient (all,r,REG)
+    CNTtech_amsr(r)
+    # contribution to regional EV of import-augmenting technical change #;
+Read
+    CNTtech_amsr from file GTAPSOL header "AMSR";
+
+Coefficient (all,r,REG)(all,i,TECHTYPE)
+    CNTtech(r,i) # contribution to welfare change by tech #;
+Formula (all,r,REG)
+    CNTtech(r,"output") = CNTtech_aor(r);
+Formula (all,r,REG)
+    CNTtech(r,"primfac") = CNTtech_afer(r);
+Formula (all,r,REG)
+    CNTtech(r,"v_added") = CNTtech_avar(r);
+Formula (all,r,REG)
+    CNTtech(r,"ininput") = CNTtech_afr(r);
+Formula (all,r,REG)
+    CNTtech(r,"transp") = CNTtech_atrr(r);
+Formula (all,r,REG)
+    CNTtech(r,"import") = CNTtech_amsr(r);
+
+Write
+    CNTtech to file WELVIEW header "C1"
+    longname "Technical Change Effect: Summary";
+
+
+!<
+    C1X: Technical Change Effect: Further Decomposition
+    ---------------------------------------------------
+>!
+
+Coefficient (all,i,PROD_COMM)(all,r,REG)
+    CNTtech_aoir(i,r);
+Read
+    CNTtech_aoir from file GTAPSOL header "AOIR";
+Write
+    CNTtech_aoir to file WELVIEW header "C11"
+    longname "(ao) Output Augm. Tech. Change Effect";
+
+Coefficient (all,i,ENDW_COMM)(all,j,PROD_COMM)(all,r,REG)
+    Ctech_afeijr(i,j,r);
+Read
+    Ctech_afeijr from file GTAPSOL header "FEIJ";
+Write
+    Ctech_afeijr to file WELVIEW header "C12"
+    longname "(afe) Primary Factor Augm. Tech. Change Effect";
+
+Coefficient (all,j,PROD_COMM)(all,r,REG)
+    Ctech_avajr(j,r);
+Read
+    Ctech_avajr from file GTAPSOL header "AVJR";
+Write
+    Ctech_avajr to file WELVIEW header "C13"
+    longname "(ava) Value Added Augm. Tech. Change Effect";
+
+Coefficient (all,i,TRAD_COMM)(all,j,PROD_COMM)(all,r,REG)
+    Ctech_afijr(i,j,r);
+Read
+    Ctech_afijr from file GTAPSOL header "AFIJ";
+Write
+    Ctech_afijr to file WELVIEW header "C14"
+    longname "(af) Intermed. Input Augm. Tech. Change Effect";
+
+Coefficient (all,m,MARG_COMM)(all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    Ctech_mirs(m,i,r,s);
+Read
+    Ctech_mirs from file GTAPSOL header "MIRS";
+Write
+    Ctech_mirs to file WELVIEW header "C15"
+    longname "(atmfsd) Internat. Margin Augm. Tech. Change Effect";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,s,REG)
+    Ctech_amsirs(i,r,s);
+Read
+    Ctech_amsirs from file GTAPSOL header "AMIR";
+Write
+    Ctech_amsirs to file WELVIEW header "C16"
+    longname "(ams) Bilateral Import Augm. Tech. Change Effect";
+
+
+!<
+    ---------------------
+    D1: Population Effect
+    ---------------------
+
+    No decomposition required here.
+>!
+
+
+!<
+    -------------------------
+    E1: Terms of Trade Effect
+    -------------------------
+>!
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    c1_ir(i,r) # contribution of world price, px_i, to ToT #;
+Read
+    c1_ir from file GTAPSOL header "C1IR";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    c2_ir(i,r) # contribution of regional export price, px_ir, to ToT #;
+Read
+    c2_ir from file GTAPSOL header "C2IR";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)
+    c3_ir(i,r) # contribution of regional import price, pm_ir, to ToT #;
+Read
+    c3_ir from file GTAPSOL header "C3IR";
+
+Coefficient (all,i,TRAD_COMM)(all,r,REG)(all,t,PRICES)(all,s,FORM)
+    TOT(i,r,t,s)
+    # terms trade effects decomposed by effects of different prices #;
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    TOT(i,r,"pworld","percent") = c1_ir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    TOT(i,r,"pexport","percent") = c2_ir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    TOT(i,r,"pimport","percent") = -c3_ir(i,r);
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    TOT(i,r,"pworld","value")
+        = CNTtotr(r) * c1_ir(i,r)
+        / sum(j,TRAD_COMM, sum(t,PRICES, TOT(j,r,t,"percent")));
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    TOT(i,r,"pexport","value")
+        = CNTtotr(r) * c2_ir(i,r)
+        / sum(t,PRICES, sum(j,TRAD_COMM, TOT(j,r,t,"percent")));
+Formula (all,i,TRAD_COMM)(all,r,REG)
+    TOT(i,r,"pimport","value")
+        = -c3_ir(i,r) * CNTtotr(r)
+        / sum(t,PRICES, sum(j,TRAD_COMM, TOT(j,r,t,"percent")));
+
+Write
+    TOT to file WELVIEW header "E1"
+    longname "Terms of Trade Effect";
+
+
+!<
+    -----------------------------------
+    F1: I-S Effect: Explanatory Factors
+    -----------------------------------
+>!
+
+Coefficient (all,r,REG)
+    BSAVE(r) # expenditure on NET savings in region r at agent's prices #;
+Read
+    BSAVE from file GTAPBASE header "SAVE";
+
+Coefficient (ge 0)(all,r,REG)
+    BVDEP(r) # value of capital depeciation in r (exogenous) #;
+Read
+    BVDEP from file GTAPBASE header "VDEP";
+
+Coefficient (all,r,REG)
+    NETINV(r) # regional net investment in region r #;
+Formula (all,r,REG)
+    NETINV(r) = sum(k,CGDS_COMM, BVOA(k,r)) - BVDEP(r);
+
+Coefficient (all,r,REG)
+    ISBAL(r) # I-S balance, NETINV(r) - SAVE(r) #;
+Formula (all,r,REG)
+    ISBAL(r) = NETINV(r) - BSAVE(r);
+
+Coefficient (all,r,REG)
+    pcgds(r) # price of investment goods = ps("cgds",r) #;
+Read
+    pcgds from file GTAPSOL header "pcgd";
+
+Coefficient (all,r,REG)
+    psave(r) # price of savings in region r #;
+Read
+    psave from file GTAPSOL header "psav";
+
+Coefficient (all,r,REG)(all,j,COLM)
+    CGDSCOMP(r,j) # components of cgds effect #;
+Formula (all,r,REG)
+    CGDSCOMP(r,"ISbal") = ISBAL(r);
+Formula (all,r,REG)
+    CGDSCOMP(r,"p_cgds") = pcgds(r);
+Formula (all,r,REG)
+    CGDSCOMP(r,"p_save") = psave(r);
+Write
+    CGDSCOMP to file WELVIEW header "F1"
+    longname "I-S Effect: Explanatory Factors";
+
+
+!<
+    -----------------
+    END OF DECOMP.TAB
+    -----------------
+>!
