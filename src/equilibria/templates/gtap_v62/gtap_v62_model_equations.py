@@ -392,6 +392,61 @@ class GTAPv62ModelEquations:
             initialize=dict(c.evom), default=0.0, mutable=True,
             doc="Factor income at market prices (derived)",
         )
+        model.va_total = Param(
+            model.j, model.r,
+            initialize=dict(c.va_total), default=0.0, mutable=True,
+            doc="Value-added at market prices (derived)",
+        )
+
+        # --- Production-block calibrated CES shares -----------------------
+        # Top nest (CES between VA and intermediate composite)
+        model.share_va = Param(
+            model.j, model.r,
+            initialize=dict(c.share_va), default=0.0, mutable=False,
+            doc="Top nest: VA share of production cost (calibrated)",
+        )
+        model.share_int = Param(
+            model.i, model.j, model.r,
+            initialize=dict(c.share_int), default=0.0, mutable=False,
+            doc="Top nest: intermediate i share of production cost",
+        )
+        # VA nest (CES across factors)
+        model.share_fac = Param(
+            model.f, model.j, model.r,
+            initialize=dict(c.share_fac), default=0.0, mutable=False,
+            doc="VA nest: factor f share of value-added",
+        )
+        # Top Armington (CES between domestic and imported per intermediate)
+        model.share_dom = Param(
+            model.i, model.j, model.r,
+            initialize=dict(c.share_dom), default=0.0, mutable=False,
+            doc="Top Armington: domestic VALUE share at benchmark",
+        )
+        model.share_imp = Param(
+            model.i, model.j, model.r,
+            initialize=dict(c.share_imp), default=0.0, mutable=False,
+            doc="Top Armington: imported VALUE share at benchmark",
+        )
+        # Distribution parameters: absorb benchmark agent-price ratios
+        # so the CES first-order conditions hold identically when
+        # pfd_0 ≠ pfm_0 (i.e. when there are tax wedges).
+        model.alpha_dom = Param(
+            model.i, model.j, model.r,
+            initialize=dict(c.alpha_dom), default=0.0, mutable=False,
+            doc="Top Armington: domestic distribution parameter (calibrated)",
+        )
+        model.alpha_imp = Param(
+            model.i, model.j, model.r,
+            initialize=dict(c.alpha_imp), default=0.0, mutable=False,
+            doc="Top Armington: imported distribution parameter (calibrated)",
+        )
+        # Benchmark CES composite price (used for diagnostics; the model
+        # solves for pf_int endogenously).
+        model.pf_int_0 = Param(
+            model.i, model.j, model.r,
+            initialize=dict(c.pf_int_0), default=1.0, mutable=False,
+            doc="Top Armington: benchmark composite Armington price",
+        )
 
     # ------------------------------------------------------------------
     # Variables
@@ -417,23 +472,52 @@ class GTAPv62ModelEquations:
 
         # --- Output and producer prices -----------------------------------
 
+        # ``qo`` is initialized at the production-cost base (``vop``) so
+        # the CES top nest balances exactly at benchmark. The output-side
+        # aggregate (``vom``) may differ by the implicit output tax
+        # ``to``; this is handled inside ``eq_qo`` via the
+        # ``ps * (1 + to)`` wedge.
         model.qo = Var(
             model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, j, r: _init_q(c.vom.get((j, r), 1.0)),
+            initialize=lambda m, j, r: _init_q(c.vop.get((j, r), c.vom.get((j, r), 1.0))),
             doc="qo(j,r) — output of sector j in region r",
         )
         model.ps = Var(
             model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=1.0,
-            doc="ps(j,r) — supply price of commodity j (output) in region r",
+            doc="ps(j,r) — supply (cost) price of commodity j in region r (basic price)",
+        )
+        # Domestic supply price (with output tax wedge): pds = ps * (1 + to)
+        # Used by downstream agents (firms, households, government) as
+        # the basic price of domestic inputs.
+        model.pds = Var(
+            model.j, model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=lambda m, j, r: 1.0 + c.to.get((j, r), 0.0),
+            doc="pds(j,r) — domestic supply price (= ps * (1 + to))",
         )
         model.pm = Var(
             model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=1.0,
-            doc="pm(j,r) — market price of commodity j in region r",
+            doc="pm(j,r) — market price of commodity j in region r (weighted avg of pds and pim)",
+        )
+
+        # --- Value-added aggregate ----------------------------------------
+
+        model.va = Var(
+            model.j, model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=lambda m, j, r: _init_q(c.va_total.get((j, r), 1.0)),
+            doc="va(j,r) — value-added aggregate (quantity)",
+        )
+        model.pva = Var(
+            model.j, model.r,
+            within=NonNegativeReals, bounds=(lb, None),
+            initialize=1.0,
+            doc="pva(j,r) — value-added composite price",
         )
 
         # --- Factor demands and prices (commodity-level §12) --------------
@@ -487,24 +571,34 @@ class GTAPv62ModelEquations:
             ),
             doc="qf(i,j,r) — Armington composite intermediate",
         )
-        # pfd, pfm: agent prices (= (1+tfd) * pm_domestic etc — but
-        # we let them solve endogenously, initialize at 1)
+        # Agent prices include both upstream price levels and the firm-
+        # side intermediate tax wedge:
+        #   pfd(i,j,r) = pds(i,r) * (1 + tfd(i,j,r))
+        #   pfm(i,j,r) = pim(i,r) * (1 + tfi(i,j,r))
+        # Initialize at the analytic benchmark values so eq_pfd / eq_pfm
+        # residuals are zero before solve.
         model.pfd = Var(
             model.i, model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
+            initialize=lambda m, i, j, r: (
+                (1.0 + c.to.get((i, r), 0.0)) * (1.0 + c.tfd.get((i, j, r), 0.0))
+            ),
             doc="pfd(i,j,r) — domestic intermediate agent price",
         )
         model.pfm = Var(
             model.i, model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
+            initialize=lambda m, i, j, r: 1.0 + c.tfi.get((i, j, r), 0.0),
             doc="pfm(i,j,r) — imported intermediate agent price",
         )
+        # Firm Armington composite price. Calibration computes the
+        # benchmark value as a cost-weighted average of pfd and pfm
+        # (see :data:`DerivedV62Calibration.pf_int_0`); this guarantees
+        # the CES first-order conditions hold identically.
         model.pf_int = Var(
             model.i, model.j, model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=1.0,
+            initialize=lambda m, i, j, r: max(c.pf_int_0.get((i, j, r), 1.0), lb),
             doc="pf_int(i,j,r) — Armington composite price (firm side)",
         )
 
@@ -783,19 +877,259 @@ class GTAPv62ModelEquations:
     # ------------------------------------------------------------------
 
     def _add_equations(self, model: "ConcreteModel") -> None:
-        """Placeholder — no equations wired at Phase 2a.
+        """Wire Pyomo Constraints onto the model.
 
-        Phase 2b will populate this method with:
-        - Production block (e_qo, e_ps, e_qva, e_pva, e_qfe, e_pfe, e_qf, e_pf)
-        - Demand block (CDE households, CD government, investment-as-sector)
-        - Trade block (Armington top + bottom, FOB/CIF identities)
-        - Factor markets (mobile wages, sluggish CET)
-        - Income identities (e_y, e_yp, e_yg, e_taxrev)
-        - Closure (e_pgdpwld, e_walras, capital accumulation)
+        Phase 2b populates the **production block** (top CES nest +
+        value-added CES + Armington firm intermediates). Subsequent
+        phases add demand (Phase 2c-1), trade (Phase 2c-2), margins,
+        factor markets, income, and Walras closure.
+
+        Known Phase 2b benchmark residuals (BOOK3X3):
+
+        - eq_qo: ~4% (max). The implicit output-tax wedge between
+          ``vom`` (output side at market prices) and ``vop_AGENT``
+          (cost side at agent prices including intermediate taxes)
+          creates a benchmark mismatch in the CES top nest that
+          requires the full pm/pds/pim trade-block price chain to
+          reconcile. Wired in Phase 2c.
+        - All other production-block equations: zero (machine epsilon).
+
+        The CES exponent convention is:
+            σ = 0  → Leontief (handled as special case)
+            σ > 0  → standard CES with elasticity σ
+            σ = 1  → unit-elastic (Cobb-Douglas; handled by a small
+                     perturbation so the (1-σ) exponent is well-defined)
         """
-        # Intentionally empty in Phase 2a.
-        # The model can still be inspected/initialized without errors.
-        return None
+        self._add_production_block(model)
+
+    # ------------------------------------------------------------------
+    # Equation blocks — Production
+    # ------------------------------------------------------------------
+
+    def _add_production_block(self, model: "ConcreteModel") -> None:
+        """Top CES nest + VA CES + firm-side Armington top.
+
+        Equations added:
+        - eq_qo:    zero-profit unit cost identity (CES top nest)
+        - eq_va:    VA composite quantity from CES top nest
+        - eq_qf:    intermediate composite quantity from CES top nest
+        - eq_pva:   VA composite price (CES across factors)
+        - eq_qfe:   factor demand from VA CES
+        - eq_pfe:   factor agent price (regional wage + factor tax)
+        - eq_pf_int: Armington firm composite price for each intermediate
+        - eq_qfd:   domestic intermediate demand (Armington)
+        - eq_qfm:   imported intermediate demand (Armington)
+        - eq_pfd:   domestic intermediate agent price (market + tfd wedge)
+        - eq_pfm:   imported intermediate agent price (pim + tfi wedge)
+
+        All equations are unit-level CES first-order conditions
+        calibrated so that, at the benchmark (all prices = 1, quantities
+        = SAM values), residuals are zero.
+
+        References:
+            - v6.2 TAB lines ~700-1100 (production section in gtap.tab)
+            - notation_crosswalk.md §2-§4 for Tabla 1 mapping
+        """
+        from pyomo.environ import Constraint, value as pyo_value
+
+        # Convenience helpers
+        def _eps_sigma(sigma: float) -> bool:
+            """True if σ is small enough to treat as Leontief."""
+            return abs(sigma) < 1e-8
+
+        def _ces_cd_sigma(sigma: float) -> float:
+            """Perturb σ when it equals 1.0 to avoid (1-σ) = 0 pathologies."""
+            if abs(sigma - 1.0) < 1e-8:
+                return 1.0 + 1e-3
+            return sigma
+
+        # ---------- eq_qo: zero-profit unit cost identity (top CES nest)
+        #
+        # ``ps(j,r)`` is the BASIC (cost) price: what the producer pays
+        # for inputs per unit of output. The output tax wedge is
+        # captured separately via :func:`eq_pds` (``pds = ps * (1+to)``)
+        # and lives in the downstream price chain (eq_pfd, etc).
+        #
+        # CES cost function:
+        #     ps^(1-σ) = share_va * pva^(1-σ) + sum_i share_int(i) * pf_int(i)^(1-σ)
+        # Leontief (σ=0):
+        #     ps = share_va * pva + sum_i share_int(i) * pf_int(i)
+        def eq_qo_rule(m, j, r):
+            if pyo_value(m.vop[j, r]) <= 1e-8 if hasattr(m, "vop") else pyo_value(m.vom[j, r]) <= 1e-8:
+                return Constraint.Skip
+            sva = float(pyo_value(m.share_va[j, r]))
+            sigma_top = float(pyo_value(m.esubt[j]))
+
+            if _eps_sigma(sigma_top):
+                int_sum = sum(
+                    float(pyo_value(m.share_int[i, j, r])) * m.pf_int[i, j, r]
+                    for i in m.i
+                )
+                return m.ps[j, r] == sva * m.pva[j, r] + int_sum
+            sigma_top = _ces_cd_sigma(sigma_top)
+            exp = 1.0 - sigma_top
+            int_sum = sum(
+                float(pyo_value(m.share_int[i, j, r])) * m.pf_int[i, j, r] ** exp
+                for i in m.i
+            )
+            return m.ps[j, r] ** exp == sva * m.pva[j, r] ** exp + int_sum
+        model.eq_qo = Constraint(model.j, model.r, rule=eq_qo_rule)
+
+        # ---------- eq_pds: domestic supply price (output tax wedge)
+        #
+        # pds(j,r) = ps(j,r) * (1 + to(j,r))
+        def eq_pds_rule(m, j, r):
+            if pyo_value(m.vom[j, r]) <= 1e-8:
+                return Constraint.Skip
+            return m.pds[j, r] == m.ps[j, r] * (1.0 + pyo_value(m.to[j, r]))
+        model.eq_pds = Constraint(model.j, model.r, rule=eq_pds_rule)
+
+        # ---------- eq_va: VA demand from CES top nest
+
+        # CES first-order condition:
+        #   va(j,r) = share_va * qo * (ps/pva)^σ
+        # Leontief: va(j,r) = share_va * qo
+        def eq_va_rule(m, j, r):
+            sva = float(pyo_value(m.share_va[j, r]))
+            if sva <= 0.0:
+                return Constraint.Skip
+            sigma_top = float(pyo_value(m.esubt[j]))
+            if _eps_sigma(sigma_top):
+                return m.va[j, r] == sva * m.qo[j, r]
+            sigma_top = _ces_cd_sigma(sigma_top)
+            return m.va[j, r] == sva * m.qo[j, r] * (m.ps[j, r] / m.pva[j, r]) ** sigma_top
+        model.eq_va = Constraint(model.j, model.r, rule=eq_va_rule)
+
+        # ---------- eq_qf: intermediate composite demand from CES top nest
+
+        # qf(i,j,r) = share_int(i,j,r) * qo * (ps/pf_int(i,j,r))^σ
+        # Leontief:  qf(i,j,r) = share_int(i,j,r) * qo
+        def eq_qf_rule(m, i, j, r):
+            sint = float(pyo_value(m.share_int[i, j, r]))
+            if sint <= 0.0:
+                return Constraint.Skip
+            sigma_top = float(pyo_value(m.esubt[j]))
+            if _eps_sigma(sigma_top):
+                return m.qf[i, j, r] == sint * m.qo[j, r]
+            sigma_top = _ces_cd_sigma(sigma_top)
+            return m.qf[i, j, r] == sint * m.qo[j, r] * (m.ps[j, r] / m.pf_int[i, j, r]) ** sigma_top
+        model.eq_qf = Constraint(model.i, model.j, model.r, rule=eq_qf_rule)
+
+        # ---------- eq_pva: VA composite price (CES across factors)
+
+        # pva(j,r)^(1-σ_va) = sum_f share_fac(f,j,r) * pfe(f,j,r)^(1-σ_va)
+        def eq_pva_rule(m, j, r):
+            if pyo_value(m.va_total[j, r]) <= 1e-8:
+                return Constraint.Skip
+            sigma_va = float(pyo_value(m.esubva[j]))
+            sigma_va = _ces_cd_sigma(sigma_va)
+            exp = 1.0 - sigma_va
+            rhs = sum(
+                float(pyo_value(m.share_fac[f, j, r])) * m.pfe[f, j, r] ** exp
+                for f in m.f
+                if pyo_value(m.share_fac[f, j, r]) > 0.0
+            )
+            return m.pva[j, r] ** exp == rhs
+        model.eq_pva = Constraint(model.j, model.r, rule=eq_pva_rule)
+
+        # ---------- eq_qfe: factor demand from VA CES
+
+        # qfe(f,j,r) = share_fac(f,j,r) * va(j,r) * (pva / pfe)^σ_va
+        def eq_qfe_rule(m, f, j, r):
+            sfac = float(pyo_value(m.share_fac[f, j, r]))
+            if sfac <= 0.0:
+                return Constraint.Skip
+            sigma_va = float(pyo_value(m.esubva[j]))
+            sigma_va = _ces_cd_sigma(sigma_va)
+            return m.qfe[f, j, r] == sfac * m.va[j, r] * (m.pva[j, r] / m.pfe[f, j, r]) ** sigma_va
+        model.eq_qfe = Constraint(model.f, model.j, model.r, rule=eq_qfe_rule)
+
+        # ---------- eq_pfe: factor agent price = wage * (1 + factor tax)
+
+        # In v6.2, all factors have a regional aggregate price pf(f,r)
+        # (mobile or sluggish — Phase 2c distinguishes them via the CET
+        # block). Here we use the same identity for both kinds:
+        #
+        #   pfe(f,j,r) = pf(f,r) * (1 + tf(f,j,r))
+        #
+        # When the sluggish CET is added in Phase 2c, pf(f,r) will be
+        # replaced by pmes(f,r) for sluggish factors and the per-sector
+        # gap will reflect the CET shadow-price split.
+        def eq_pfe_rule(m, f, j, r):
+            sfac = float(pyo_value(m.share_fac[f, j, r]))
+            if sfac <= 0.0:
+                return Constraint.Skip
+            return m.pfe[f, j, r] == m.pf[f, r] * (1.0 + pyo_value(m.tf[f, j, r]))
+        model.eq_pfe = Constraint(model.f, model.j, model.r, rule=eq_pfe_rule)
+
+        # ---------- eq_pf_int: Armington composite price for intermediates
+        #
+        # CES dual price aggregator over AGENT prices, using calibrated
+        # distribution parameters (``alpha_dom`` / ``alpha_imp``). The
+        # distribution parameters absorb the benchmark agent-price
+        # ratios so the equation is identically satisfied at the
+        # calibration point even when pfd_0 ≠ pfm_0 (tax wedges).
+        #
+        #   pf_int^(1-σ_d) = alpha_dom * pfd^(1-σ_d) + alpha_imp * pfm^(1-σ_d)
+        def eq_pf_int_rule(m, i, j, r):
+            ad = float(pyo_value(m.alpha_dom[i, j, r]))
+            ai = float(pyo_value(m.alpha_imp[i, j, r]))
+            if ad + ai <= 1e-12:
+                return Constraint.Skip
+            sigma_d = float(pyo_value(m.esubd[i]))
+            sigma_d = _ces_cd_sigma(sigma_d)
+            exp = 1.0 - sigma_d
+            return m.pf_int[i, j, r] ** exp == ad * m.pfd[i, j, r] ** exp + ai * m.pfm[i, j, r] ** exp
+        model.eq_pf_int = Constraint(model.i, model.j, model.r, rule=eq_pf_int_rule)
+
+        # ---------- eq_qfd: domestic intermediate demand (Armington)
+        #
+        # CES first-order condition with calibrated distribution
+        # parameter (absorbs benchmark agent-price ratio):
+        #     qfd(i,j,r) = alpha_dom(i,j,r) * qf(i,j,r) * (pf_int / pfd)^σ_d
+        def eq_qfd_rule(m, i, j, r):
+            ad = float(pyo_value(m.alpha_dom[i, j, r]))
+            if ad <= 0.0:
+                return Constraint.Skip
+            sigma_d = float(pyo_value(m.esubd[i]))
+            sigma_d = _ces_cd_sigma(sigma_d)
+            return m.qfd[i, j, r] == ad * m.qf[i, j, r] * (m.pf_int[i, j, r] / m.pfd[i, j, r]) ** sigma_d
+        model.eq_qfd = Constraint(model.i, model.j, model.r, rule=eq_qfd_rule)
+
+        # ---------- eq_qfm: imported intermediate demand (Armington)
+        #
+        #     qfm(i,j,r) = alpha_imp(i,j,r) * qf(i,j,r) * (pf_int / pfm)^σ_d
+        def eq_qfm_rule(m, i, j, r):
+            ai = float(pyo_value(m.alpha_imp[i, j, r]))
+            if ai <= 0.0:
+                return Constraint.Skip
+            sigma_d = float(pyo_value(m.esubd[i]))
+            sigma_d = _ces_cd_sigma(sigma_d)
+            return m.qfm[i, j, r] == ai * m.qf[i, j, r] * (m.pf_int[i, j, r] / m.pfm[i, j, r]) ** sigma_d
+        model.eq_qfm = Constraint(model.i, model.j, model.r, rule=eq_qfm_rule)
+
+        # ---------- eq_pfd: domestic intermediate agent price
+        #
+        # pfd(i,j,r) = pds(i,r) * (1 + tfd(i,j,r))
+        #
+        # where pds(i,r) = ps(i,r) * (1 + to(i,r)) carries the output
+        # tax wedge from eq_pds.
+        def eq_pfd_rule(m, i, j, r):
+            sd = float(pyo_value(m.share_dom[i, j, r]))
+            if sd <= 0.0:
+                return Constraint.Skip
+            return m.pfd[i, j, r] == m.pds[i, r] * (1.0 + pyo_value(m.tfd[i, j, r]))
+        model.eq_pfd = Constraint(model.i, model.j, model.r, rule=eq_pfd_rule)
+
+        # ---------- eq_pfm: imported intermediate agent price
+
+        # pfm(i,j,r) = pim(i,r) * (1 + tfi(i,j,r))
+        def eq_pfm_rule(m, i, j, r):
+            si = float(pyo_value(m.share_imp[i, j, r]))
+            if si <= 0.0:
+                return Constraint.Skip
+            return m.pfm[i, j, r] == m.pim[i, r] * (1.0 + pyo_value(m.tfi[i, j, r]))
+        model.eq_pfm = Constraint(model.i, model.j, model.r, rule=eq_pfm_rule)
 
 
 __all__ = [

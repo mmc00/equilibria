@@ -117,14 +117,21 @@ def test_model_has_no_v7_specific_variables(book3x3_model) -> None:
     assert not leaked, f"v7-specific variables leaked into v6.2 model: {leaked}"
 
 
-def test_model_has_no_constraints_at_phase_2a(book3x3_model) -> None:
-    """Phase 2a is the skeleton — equations come in Phase 2b/2c."""
+def test_model_has_production_block_constraints(book3x3_model) -> None:
+    """Phase 2b wires the production block (~12 equations).
+
+    Demand, trade, factor markets, and Walras closure equations come
+    in Phase 2c. Check that Phase 2b production constraints are present
+    but the broader equation set is not yet wired.
+    """
     from pyomo.environ import Constraint
 
     n = sum(1 for _ in book3x3_model.component_objects(Constraint))
-    assert n == 0, (
-        f"Expected 0 constraints at Phase 2a, found {n}. "
-        f"Equation construction is Phase 2b/2c."
+    # Phase 2b adds 12 production-block equation families. Phase 2c will
+    # add demand/trade/factor/closure (~20 more). Cap loosely here.
+    assert 10 <= n <= 25, (
+        f"Expected ~12 constraints at Phase 2b, found {n}. "
+        f"Equation construction is staged 2b → 2c."
     )
 
 
