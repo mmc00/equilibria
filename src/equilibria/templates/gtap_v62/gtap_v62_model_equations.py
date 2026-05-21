@@ -1610,13 +1610,19 @@ class GTAPv62ModelEquations:
             )
         model.eq_pwmg = Constraint(model.i, model.s, model.rp, rule=eq_pwmg_rule)
 
-        # eq_pmcif: pmcif = pe + pwmg
+        # eq_pmcif: pmcif = ps + pwmg
+        #
+        # In v6.2 SAM convention, the bilateral export tax txs is
+        # collected by the exporter's government and does NOT flow
+        # into the importer's price chain. Hence pmcif (CIF at world
+        # prices) = ps (basic supply price) + per-unit transport.
+        # Reference: SAM identity VIWS = VXWD + sum_m VTWR.
         def eq_pmcif_rule(m, i, s, d):
             if s == d:
                 return Constraint.Skip
             if pyo_value(m.qxs[i, s, d]) <= 1e-8 or float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
                 return Constraint.Skip
-            return m.pmcif[i, s, d] == m.pe[i, s, d] + m.pwmg[i, s, d]
+            return m.pmcif[i, s, d] == m.ps[i, s] + m.pwmg[i, s, d]
         model.eq_pmcif = Constraint(model.i, model.s, model.rp, rule=eq_pmcif_rule)
 
         # eq_pms: pms = pmcif * (1 + tms)

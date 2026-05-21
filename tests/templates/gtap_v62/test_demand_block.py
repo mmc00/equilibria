@@ -97,19 +97,22 @@ def test_clean_demand_equations_balance_at_benchmark(book3x3_model) -> None:
         )
 
 
-def test_known_calibration_residuals_bounded(book3x3_model) -> None:
-    """Known residuals from pim_0 cascade are within documented bounds."""
-    # Composite Armington prices (eq_pp, eq_pg) — small relative residual
-    for name in ["eq_pp", "eq_pg"]:
+def test_armington_residuals_now_clean(book3x3_model) -> None:
+    """After Phase 2d SAM-consistent trade chain calibration, the
+    household and government Armington equations (eq_pp, eq_pg, eq_qpm,
+    eq_qgm) balance to machine epsilon.
+
+    Previously these had non-zero residuals because pim_0 was computed
+    via a price chain that didn't match the v6.2 SAM identity
+    VIWS = VXWD + sum_m VTWR. Phase 2d uses pmcif_0 = VIWS/VXWD
+    directly, which makes pim_0 = sum_VIMS/sum_VXWD consistent
+    throughout the calibration cascade.
+    """
+    for name in ["eq_pp", "eq_pg", "eq_qpm", "eq_qgm"]:
         eq = getattr(book3x3_model, name)
         max_residual = max((abs(_residual(eq[idx])) for idx in eq), default=0.0)
-        assert max_residual < 0.05, f"{name} residual {max_residual:.4e} > 5%"
-    # Imported demand (eq_qpm, eq_qgm) — magnitudes proportional to imported flows
-    for name, threshold in (("eq_qpm", 20_000), ("eq_qgm", 5_000)):
-        eq = getattr(book3x3_model, name)
-        max_residual = max((abs(_residual(eq[idx])) for idx in eq), default=0.0)
-        assert max_residual < threshold, (
-            f"{name} residual {max_residual:.4e} > {threshold}"
+        assert max_residual < 1e-6, (
+            f"{name!r} should balance after Phase 2d fix, got {max_residual:.4e}"
         )
 
 

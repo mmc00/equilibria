@@ -440,6 +440,23 @@ def derive_calibration(
                     out.amgm[(m_lbl, i, s, d)] = vtwr_m / total_vtwr
 
     # Bilateral trade benchmark prices and quantities.
+    #
+    # SAM-consistent calibration: derive the price chain directly from
+    # SAM totals so the identities VIWS = pmcif * qxs and VIMS = pms *
+    # qxs hold exactly at benchmark.
+    #
+    #     qxs_0 (i, s, d) = VXWD(i, s, d)
+    #     pe_0           = VXMD / VXWD  = 1 + txs   (FOB with export tax)
+    #     pmcif_0        = VIWS / VXWD              (CIF at world prices)
+    #     pwmg_0         = pmcif_0 - pe_0           (per-unit transport)
+    #     pms_0          = VIMS / VXWD              (price at destination)
+    #
+    # Note: ``pwmg_0 * qxs_0 = VIWS - VXMD`` is NOT identical to the
+    # sum-of-VTWR per shipment because v6.2 SAM convention has
+    # VIWS = VXWD + sum_m VTWR (transport added to BASIC export
+    # value, not market). The discrepancy goes into the difference
+    # between sum_m VTWR and (VIWS - VXMD) per cell. The aggregate
+    # margin demand qtm uses the raw VTWR sum (see eq_qtm).
     for i in sets.i:
         sigma_m = float(params.elasticities.esubm.get(i, 1.0))
         sigma_m_eff = sigma_m if abs(sigma_m - 1.0) > 1e-8 else 1.0 + 1e-3
@@ -454,19 +471,19 @@ def derive_calibration(
                 viws = b.viws.get((i, s, d), 0.0)
                 if vxwd <= 0.0:
                     continue
-                txs = out.txs.get((i, s, d), 0.0)
-                tms = out.tms.get((i, s, d), 0.0)
+
                 vtwr_total = sum(
                     b.vtwr.get((m_lbl, i, s, d), 0.0) for m_lbl in sets.marg
                 )
 
-                # qxs_0 = VXWD (basic-price quantity at ps_0 = 1)
                 qxs0 = vxwd
-                pe0 = 1.0 + txs
-                # per-unit transport cost at benchmark
-                pwmg0 = vtwr_total / qxs0 if qxs0 > 0.0 else 0.0
-                pmcif0 = pe0 + pwmg0
-                pms0 = pmcif0 * (1.0 + tms)
+                pe0 = vxmd / vxwd if vxwd > 0.0 else 1.0
+                # SAM identity: VIWS = VXWD + sum_m VTWR
+                # ⇒ pmcif_0 = 1 + sum_m VTWR / VXWD = VIWS / VXWD
+                #   pwmg_0  = sum_m VTWR / VXWD          (per-unit transport)
+                pwmg0 = vtwr_total / vxwd if vxwd > 0.0 else 0.0
+                pmcif0 = viws / vxwd if vxwd > 0.0 else 1.0 + pwmg0
+                pms0 = vims / vxwd if vxwd > 0.0 else pmcif0
 
                 out.qxs_0[(i, s, d)] = qxs0
                 out.pe_0[(i, s, d)] = pe0
@@ -479,9 +496,12 @@ def derive_calibration(
             if not sources_with_flow:
                 continue
 
-            # CES bottom Armington composite
+            # CES bottom Armington composite: pim * qim = sum_s pms * qxs.
+            # With qxs_0 = VXWD and pms_0 = VIMS/VXWD:
+            #   sum pms_0 * qxs_0 = sum VIMS
+            #   sum qxs_0 = sum VXWD
+            #   pim_0 = sum VIMS / sum VXWD  (matches the early calc)
             qim0 = sum(q for _, q, _ in sources_with_flow)
-            # Cost identity: pim * qim = sum_s pms * qxs
             pim0_cost = sum(p * q for _, q, p in sources_with_flow) / qim0
             out.qim_0[(i, d)] = qim0
             out.pim_0[(i, d)] = pim0_cost
