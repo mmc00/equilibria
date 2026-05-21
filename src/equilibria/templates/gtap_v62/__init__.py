@@ -18,16 +18,48 @@ Validation oracle: ``gtap.exe`` v6.2 in ``C:\\runGTAP375\\`` running the
 TAB on BOOK3X3 / NUS333 datasets.
 """
 
+from equilibria.templates.gtap_v62.gtap_v62_calibration import (
+    DerivedV62Calibration,
+    derive_calibration,
+)
+from equilibria.templates.gtap_v62.gtap_v62_contract import (
+    GTAPv62BoundsConfig,
+    GTAPv62ClosureConfig,
+    GTAPv62Contract,
+    GTAPv62EquationConfig,
+    build_gtap_v62_contract,
+    default_gtap_v62_contract,
+)
+from equilibria.templates.gtap_v62.gtap_v62_model_equations import (
+    GTAPv62ModelEquations,
+)
 from equilibria.templates.gtap_v62.gtap_v62_parameters import (
     GTAPv62BenchmarkValues,
     GTAPv62Elasticities,
     GTAPv62Parameters,
 )
 from equilibria.templates.gtap_v62.gtap_v62_sets import GTAPv62Sets
+from equilibria.templates.gtap_v62.gtap_v62_solver import (
+    GTAPv62Solver,
+    SolverResult,
+    SolverStatus,
+)
 
 __all__ = [
     "GTAPv62Sets",
     "GTAPv62Parameters",
     "GTAPv62Elasticities",
     "GTAPv62BenchmarkValues",
+    "DerivedV62Calibration",
+    "derive_calibration",
+    "GTAPv62Contract",
+    "GTAPv62ClosureConfig",
+    "GTAPv62EquationConfig",
+    "GTAPv62BoundsConfig",
+    "build_gtap_v62_contract",
+    "default_gtap_v62_contract",
+    "GTAPv62ModelEquations",
+    "GTAPv62Solver",
+    "SolverResult",
+    "SolverStatus",
 ]
