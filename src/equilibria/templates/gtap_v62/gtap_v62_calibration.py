@@ -81,19 +81,35 @@ class DerivedV62Calibration:
     alpha_imp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     pf_int_0: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
 
-    # ---- Household Armington (CES) + CD allocation across goods ---------
+    # ---- Household Armington (CES) + CDE allocation across goods --------
     #
-    # Phase 2c.1 uses a Cobb-Douglas demand allocation across goods (a
-    # simplification of v6.2's CDE; full CDE port deferred to Phase 2d).
-    # The Armington between domestic and imported uses ESBD just like
-    # firm intermediates.
+    # Phase 3.19: full CDE port (replaces the Phase 2c.1 Cobb-Douglas
+    # simplification). EY and EP are computed from CONSHR (=share_hhd_cd),
+    # INCPAR, SUBPAR per gtap.tab F1-F5. XWCONSHR is used by the CDE
+    # expenditure deflator (eq_pcons).
     alpha_dom_hhd: Dict[Tuple[str, str], float] = field(default_factory=dict)
     alpha_imp_hhd: Dict[Tuple[str, str], float] = field(default_factory=dict)
     pp_0: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    # CD budget share of household total expenditure on good i in r
+    # Benchmark consumption share = CONSHR(i,r) in gtap.tab (still named
+    # share_hhd_cd for legacy reasons; semantics are unchanged).
     share_hhd_cd: Dict[Tuple[str, str], float] = field(default_factory=dict)
     # Benchmark household total consumption expenditure (= sum_i VDPA+VIPA)
     yp_0: Dict[str, float] = field(default_factory=dict)
+    # Benchmark household composite Armington quantity (= VDPM + VIPM)
+    qp_0: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    # CDE coefficients (gtap.tab lines 1019-1050):
+    #   alpha_cde[i,r]    = 1 - SUBPAR(i,r)
+    #   uelaspriv[r]      = sum_n CONSHR(n,r) * INCPAR(n,r)
+    #   xwconshr[i,r]     = CONSHR(i,r) * INCPAR(i,r) / uelaspriv[r]
+    #   ape[i,k,r]        = Allen partial elasticity of substitution
+    #   ey[i,r]           = income elasticity of demand (HT F4)
+    #   ep[i,k,r]         = uncompensated price elasticity of demand (HT F5)
+    alpha_cde: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    uelaspriv: Dict[str, float] = field(default_factory=dict)
+    xwconshr: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    cde_ape: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    cde_ey: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    cde_ep: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
 
     # ---- Government Armington (CES) + CD allocation across goods --------
     alpha_dom_gov: Dict[Tuple[str, str], float] = field(default_factory=dict)
@@ -416,7 +432,10 @@ def derive_calibration(
         out.yp_0[r] = yp_total
         out.yg_0[r] = yg_total
 
-        # CD budget shares: at-benchmark expenditure share on good i
+        # CONSHR / CD shares: at-benchmark expenditure share on good i.
+        # share_hhd_cd is GEMPACK's CONSHR(i,r). The CDE coefficients are
+        # computed in a second pass below (CONSHR for all i needs to exist
+        # first).
         for i in sets.i:
             spend_h = out.pp_0.get((i, r), 1.0) * (
                 b.vdpm.get((i, r), 0.0) + b.vipm.get((i, r), 0.0)
@@ -428,6 +447,88 @@ def derive_calibration(
                 out.share_hhd_cd[(i, r)] = spend_h / yp_total
             if yg_total > 0.0:
                 out.share_gov_cd[(i, r)] = spend_g / yg_total
+            # Benchmark composite quantity for household consumption
+            out.qp_0[(i, r)] = (
+                b.vdpm.get((i, r), 0.0) + b.vipm.get((i, r), 0.0)
+            )
+
+    # ------------------------------------------------------------------
+    # CDE coefficients (Phase 3.19) — replaces Cobb-Douglas allocation.
+    # See c:/runGTAP375/gtap.tab lines 1011-1056 (HT F1-F5).
+    # ------------------------------------------------------------------
+    for r in sets.r:
+        # CONSHR(i,r) already in out.share_hhd_cd[(i, r)].
+        # ALPHA(i,r) = 1 - SUBPAR(i,r).
+        for i in sets.i:
+            subp_ir = float(params.elasticities.subpar.get((i, r), 0.0))
+            out.alpha_cde[(i, r)] = 1.0 - subp_ir
+
+        # UELASPRIV(r) = sum_n CONSHR(n,r) * INCPAR(n,r).
+        uel = 0.0
+        for n in sets.i:
+            cs_n = out.share_hhd_cd.get((n, r), 0.0)
+            inc_n = float(params.elasticities.incpar.get((n, r), 1.0))
+            uel += cs_n * inc_n
+        out.uelaspriv[r] = uel
+
+        # XWCONSHR(i,r) = CONSHR(i,r) * INCPAR(i,r) / UELASPRIV(r).
+        if uel > 0.0:
+            for i in sets.i:
+                cs_i = out.share_hhd_cd.get((i, r), 0.0)
+                inc_i = float(params.elasticities.incpar.get((i, r), 1.0))
+                out.xwconshr[(i, r)] = cs_i * inc_i / uel
+
+        # Sum_n CONSHR(n) * ALPHA(n), reused in APE and EY.
+        sum_cshr_alpha = sum(
+            out.share_hhd_cd.get((n, r), 0.0) * out.alpha_cde.get((n, r), 0.0)
+            for n in sets.i
+        )
+
+        # APE(i, k, r) — Allen partial elasticities.
+        for i in sets.i:
+            alpha_i = out.alpha_cde.get((i, r), 0.0)
+            cs_i = out.share_hhd_cd.get((i, r), 0.0)
+            for k in sets.i:
+                alpha_k = out.alpha_cde.get((k, r), 0.0)
+                if i == k:
+                    if cs_i > 0.0:
+                        out.cde_ape[(i, k, r)] = (
+                            2.0 * alpha_i - sum_cshr_alpha - alpha_i / cs_i
+                        )
+                    else:
+                        out.cde_ape[(i, k, r)] = 2.0 * alpha_i - sum_cshr_alpha
+                else:
+                    out.cde_ape[(i, k, r)] = alpha_i + alpha_k - sum_cshr_alpha
+
+        # EY(i, r) — income elasticity (HT F4).
+        # EY = (1/UELASPRIV) * [INCPAR_i*(1-ALPHA_i) + sum_n CONSHR_n*INCPAR_n*ALPHA_n]
+        #      + [ALPHA_i - sum_n CONSHR_n*ALPHA_n]
+        sum_cshr_inc_alpha = sum(
+            out.share_hhd_cd.get((n, r), 0.0)
+            * float(params.elasticities.incpar.get((n, r), 1.0))
+            * out.alpha_cde.get((n, r), 0.0)
+            for n in sets.i
+        )
+        for i in sets.i:
+            inc_i = float(params.elasticities.incpar.get((i, r), 1.0))
+            alpha_i = out.alpha_cde.get((i, r), 0.0)
+            term1 = (
+                (inc_i * (1.0 - alpha_i) + sum_cshr_inc_alpha) / uel
+                if uel > 0.0
+                else 0.0
+            )
+            term2 = alpha_i - sum_cshr_alpha
+            out.cde_ey[(i, r)] = term1 + term2
+
+        # EP(i, k, r) — uncompensated price elasticity (HT F5).
+        # EP(i, k, r) = (APE(i, k, r) - EY(i, r)) * CONSHR(k, r)
+        for i in sets.i:
+            ey_i = out.cde_ey.get((i, r), 0.0)
+            for k in sets.i:
+                cs_k = out.share_hhd_cd.get((k, r), 0.0)
+                out.cde_ep[(i, k, r)] = (
+                    out.cde_ape.get((i, k, r), 0.0) - ey_i
+                ) * cs_k
 
     # ------------------------------------------------------------------
     # Trade block calibration (Phase 2c.2)
