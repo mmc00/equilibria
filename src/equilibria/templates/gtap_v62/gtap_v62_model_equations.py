@@ -755,31 +755,22 @@ class GTAPv62ModelEquations:
             initialize=lambda m, i, r: c.pim_0.get((i, r), 1.0) * (1.0 + c.tpi.get((i, r), 0.0)),
             doc="ppm(i,r) — household imported agent price (= pim * (1+tpi))",
         )
-        # pcons_0 = sum_i share_hhd * pp_0 (consistent with linear CD aggregator).
-        def _pcons_init(m, r):
-            total = sum(
-                c.share_hhd_cd.get((i, r), 0.0) * c.pp_0.get((i, r), 1.0)
-                for i in self.sets.i
-            )
-            return max(total, lb)
+        # Phase 3.20 CDE normalization: at benchmark up_0 = 1 and
+        # pcons_0 = 1 (the dual deflator). The CDE expenditure-function
+        # identity (eq_pcons) requires up_0 = 1 for sum_i CONSHR_i_0 = 1
+        # to hold; the welfare identity (eq_up: pcons * up = yp/yp_0)
+        # then pins pcons_0 = 1.
         model.pcons = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=_pcons_init,
-            doc="pcons(r) — household consumption price index (linear CD aggregator)",
+            initialize=lambda m, r: 1.0,
+            doc="pcons(r) — CDE expenditure deflator (yp / (yp_0 * up))",
         )
-        # up_0 = 1/pcons_0 so up * pcons * yp_0 = yp holds at benchmark.
-        def _up_init(m, r):
-            pcons_0 = sum(
-                c.share_hhd_cd.get((i, r), 0.0) * c.pp_0.get((i, r), 1.0)
-                for i in self.sets.i
-            )
-            return 1.0 / max(pcons_0, 1e-8)
         model.up = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=_up_init,
-            doc="up(r) — private utility (Phase 2c.1: CD approximation of CDE)",
+            initialize=lambda m, r: 1.0,
+            doc="up(r) — private utility (Phase 3.20 levels-CDE normalisation)",
         )
 
         # --- Government demand (Cobb-Douglas, §7) -------------------------
@@ -1377,44 +1368,59 @@ class GTAPv62ModelEquations:
             return m.pp[i, r] ** exp == ad * m.ppd[i, r] ** exp + ai * m.ppm[i, r] ** exp
         model.eq_pp = Constraint(model.i, model.r, rule=eq_pp_rule)
 
-        # eq_qp: CDE log-linear demand (Phase 3.19). Replaces the
-        # Cobb-Douglas budget allocation pp*qp = share*yp.
+        # eq_qp: CDE levels demand (Phase 3.20). The expenditure share
+        # COMSHR_i(up, pp, yp) is endogenous — unlike Phase 3.19 the
+        # CDE coefficients update naturally as the solver moves state.
         #
-        #   qp(i,r) = qp_0(i,r)
-        #            * (yp(r) / yp_0(r))^EY(i,r)
-        #            * prod_k (pp(k,r) / pp_0(k,r))^EP(i,k,r)
+        #   share_i ≡ pp_i * qp_i / yp
+        #           = CONSHR_i_0
+        #             * up^(INCPAR_i * SUBPAR_i)
+        #             * ((pp_i / pp_i_0) / (yp / yp_0))^SUBPAR_i
         #
-        # At benchmark all ratios = 1 ⇒ qp = qp_0. Differentiating gives
-        # the GEMPACK PRIVDMNDS linearization to first order.
+        # At benchmark up=1, pp=pp_0, yp=yp_0 ⇒ share = CONSHR_0 ⇒ qp = qp_0.
+        # The expenditure-function identity (eq_cde_expfn below) gives
+        # sum_i share_i = 1 and implicitly defines `up`.
         derived = self.derived
+        params_e = self.params.elasticities
         eps_q = 1e-12
         eps_p = 1e-12
 
         def _safe_pos(x: float, eps: float = 1e-12) -> float:
             return x if x > eps else eps
 
+        def _cde_term(m, i, r):
+            """One summand of the CDE expenditure function /
+            expenditure-share expression:
+                CONSHR_i_0 * up^(INCPAR*SUBPAR)
+                          * ((pp_i/pp_i_0) / (yp/yp_0))^SUBPAR_i
+            Returns (share_expression, conshr_0)."""
+            cshr_0 = float(derived.share_hhd_cd.get((i, r), 0.0))
+            if cshr_0 <= 0.0:
+                return None, 0.0
+            subp = float(params_e.subpar.get((i, r), 0.0))
+            incp = float(params_e.incpar.get((i, r), 1.0))
+            pp_i_0 = _safe_pos(float(derived.pp_0.get((i, r), 1.0)))
+            yp_0 = _safe_pos(float(self.derived.yp_0.get(r, 1.0)))
+            # Numerically-friendly form: ratios are O(1) at benchmark
+            # and remain O(1) under realistic shocks.
+            ratio = (m.pp[i, r] / pp_i_0) / (m.yp[r] / yp_0)
+            expfn_term = (
+                cshr_0
+                * (m.up[r] ** (incp * subp))
+                * (ratio ** subp)
+            )
+            return expfn_term, cshr_0
+
         def eq_qp_rule(m, i, r):
             qp_0 = float(derived.qp_0.get((i, r), 0.0))
             if qp_0 <= eps_q:
-                # No consumption of good i at benchmark — pin qp to zero.
                 return m.qp[i, r] == 0.0
-            yp_0 = _safe_pos(float(self.derived.yp_0.get(r, 1.0)))
-            ey = float(derived.cde_ey.get((i, r), 0.0))
-            # Build prod_k (pp_k / pp_k_0)^EP_ik with skip-if-EP=0.
-            price_terms = []
-            for k in m.i:
-                ep_ik = float(derived.cde_ep.get((i, k, r), 0.0))
-                if abs(ep_ik) < 1e-12:
-                    continue
-                pp_k_0 = _safe_pos(float(derived.pp_0.get((k, r), 1.0)))
-                price_terms.append((m.pp[k, r] / pp_k_0) ** ep_ik)
-            # Multiplicative composition (Pyomo handles this as a power
-            # expression; IPOPT and PATH both accept ** with constant
-            # exponent on a positive variable).
-            rhs = qp_0 * (m.yp[r] / yp_0) ** ey
-            for term in price_terms:
-                rhs = rhs * term
-            return m.qp[i, r] == rhs
+            share_expr, cshr_0 = _cde_term(m, i, r)
+            if share_expr is None:
+                # CONSHR_0 = 0 ⇒ no consumption ⇒ pin to zero.
+                return m.qp[i, r] == 0.0
+            # share_i = pp_i * qp_i / yp ⇒ pp_i * qp_i = yp * share_i.
+            return m.pp[i, r] * m.qp[i, r] == m.yp[r] * share_expr
 
         model.eq_qp = Constraint(model.i, model.r, rule=eq_qp_rule)
 
@@ -1450,39 +1456,33 @@ class GTAPv62ModelEquations:
             return m.ppm[i, r] == m.pim[i, r] * (1.0 + m.tpi[i, r])
         model.eq_ppm = Constraint(model.i, model.r, rule=eq_ppm_rule)
 
-        # eq_pcons: CDE expenditure deflator (Phase 3.19).
-        # Geometric mean weighted by XWCONSHR = CONSHR * INCPAR / UELASPRIV
-        # (so that at the benchmark pcons = sum_i XWCONSHR * 1 = 1).
+        # eq_pcons: CDE expenditure-function identity (Phase 3.20).
+        # The expenditure function (HT F1-F3, Hanoch 1975) implicitly
+        # defines up via
         #
-        #   ln pcons(r) = sum_i XWCONSHR(i,r) * ln(pp(i,r) / pp_0(i,r))
-        #               + ln pcons_0(r)
+        #   sum_i CONSHR_i_0
+        #         * up^(INCPAR_i*SUBPAR_i)
+        #         * ((pp_i/pp_i_0)/(yp/yp_0))^SUBPAR_i  =  1.
         #
-        # written multiplicatively as
-        #   pcons(r) = pcons_0(r) * prod_i (pp(i,r) / pp_0(i,r))^XWCONSHR(i,r)
+        # At benchmark up=1, ratio=1 ⇒ sum_i CONSHR_i_0 = 1 ✓.
+        # Under shock the share allocation among goods adjusts as up,
+        # pp, and yp move — this is what makes the CDE coefficients
+        # "state-dependent" in the way GEMPACK's Gragg-multi does
+        # through coefficient refresh per substep.
+        #
+        # We re-use the variable name `pcons` to host this identity for
+        # closure-matching reasons; the conventional consumption price
+        # index is now derived as pcons_deflator = yp / (yp_0 * up).
         def eq_pcons_rule(m, r):
-            # pcons_0 = 1 (benchmark deflator is normalised to 1 because
-            # all pp_0 are at 1 + agent-tax wedges, and the geometric mean
-            # at benchmark equals the weighted sum of XWCONSHR=1).
-            pcons_0 = sum(
-                float(derived.xwconshr.get((i, r), 0.0))
-                * float(derived.pp_0.get((i, r), 1.0))
-                for i in m.i
-            )
-            if pcons_0 <= 0.0:
-                return Constraint.Skip
             terms = []
             for i in m.i:
-                w = float(derived.xwconshr.get((i, r), 0.0))
-                if abs(w) < 1e-12:
+                share_expr, cshr_0 = _cde_term(m, i, r)
+                if share_expr is None:
                     continue
-                pp_i_0 = _safe_pos(float(derived.pp_0.get((i, r), 1.0)))
-                terms.append((m.pp[i, r] / pp_i_0) ** w)
+                terms.append(share_expr)
             if not terms:
                 return Constraint.Skip
-            rhs = pcons_0
-            for t in terms:
-                rhs = rhs * t
-            return m.pcons[r] == rhs
+            return sum(terms) == 1.0
         model.eq_pcons = Constraint(model.r, rule=eq_pcons_rule)
 
         # eq_up: household utility = real income.
