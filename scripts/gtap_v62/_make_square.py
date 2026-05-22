@@ -263,16 +263,36 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
         info["added_identity_eqs"].append(("eq_rgdpmp", 3))
 
-    # eq_qim: composite import quantity = sum of bilateral imports
-    # qim(i,r) is used as input in eq_qxs but has no defining equation;
-    # the CES aggregator identity pim*qim = sum_s pms*qxs gives the
-    # economic content.
+    # eq_qim: Phase 3.23 — MKTCLIMP (gtap.tab line 2413-2419).
+    #
+    # The CES cost identity pim*qim = sum_s pms*qxs is TRIVIALLY satisfied
+    # by the bottom-Armington CES dual + eq_qxs, so it leaves qim
+    # effectively unconstrained. GEMPACK enforces a separate market-
+    # clearing equation linking qim to the SUM OF AGENT DEMANDS for the
+    # imported composite (households, government, firms):
+    #
+    #   qim(i,r) = sum_j SHRIFM(i,j,r) * qfm(i,j,r)
+    #            + SHRIPM(i,r)         * qpm(i,r)
+    #            + SHRIGM(i,r)         * qgm(i,r)              (linearized)
+    #
+    # In LEVELS we use the budget-share-weighted ratio identity that
+    # linearizes to this MKTCLIMP form at the benchmark:
+    #
+    #   qim = (1/pim_0) * [sum_j qfm + qpm + qgm]
+    #
+    # The 1/pim_0 factor reconciles the basic-price units of qim
+    # (= sum_s VXWD) with the agent-price units of qpm/qgm/qfm
+    # (= VIPM/VIGM/VIFM). At benchmark sum_agent = pim_0 * qim_0, so
+    # the identity gives qim = qim_0 ✓. Differentiating gives the
+    # share-weighted percent-change form of MKTCLIMP.
     if not hasattr(model, "eq_qim"):
-        # Phase 3.16: sum over all sources (incl. s == r) per GEMPACK.
         def eq_qim_rule(m, i, r):
-            return m.pim[i, r] * m.qim[i, r] == sum(
-                m.pms[i, s, r] * m.qxs[i, s, r]
-                for s in m.s
+            pim_0_val = float(value(m.pim_0[i, r])) if hasattr(m, "pim_0") else 1.0
+            if pim_0_val <= 1e-12:
+                return Constraint.Skip
+            return m.qim[i, r] == (1.0 / pim_0_val) * (
+                sum(m.qfm[i, j, r] for j in m.j)
+                + m.qpm[i, r] + m.qgm[i, r]
             )
         model.eq_qim = Constraint(model.i, model.r, rule=eq_qim_rule)
         info["added_identity_eqs"].append(("eq_qim", 9))
