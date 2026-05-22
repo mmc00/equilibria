@@ -1587,27 +1587,20 @@ class GTAPv62ModelEquations:
             return sigma
 
         # eq_pe: FOB price (linear export tax wedge)
+        # Phase 3.16: include s == d per GEMPACK gtap.tab convention
+        # (sum over k in REG includes k=s in aggregated SAMs).
         def eq_pe_rule(m, i, s, d):
-            if s == d:
-                return Constraint.Skip
             if pyo_value(m.qxs[i, s, d]) <= 1e-8 or float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
                 return Constraint.Skip
             return m.pe[i, s, d] == m.ps[i, s] * (1.0 + m.txs[i, s, d])
         model.eq_pe = Constraint(model.i, model.s, model.rp, rule=eq_pe_rule)
 
         # eq_pwmg: per-unit transport cost = sum_m amgm * ptmg(m)
-        #
-        # At benchmark, pwmg_0 = sum_m amgm * 1 = sum_m VTWR/total_VTWR.
-        # That ratio multiplied by total_VTWR/VXWD gives the per-unit
-        # cost. But amgm sums to 1 only when there's a non-zero
-        # transport flow, so we scale by the benchmark pwmg level.
+        # Phase 3.16: include s == d (diagonal margin services).
         def eq_pwmg_rule(m, i, s, d):
-            if s == d:
-                return Constraint.Skip
             pwmg0 = float(self.derived.pwmg_0.get((i, s, d), 0.0))
             if pwmg0 <= 1e-12:
                 return Constraint.Skip
-            # Margin price index scaled by benchmark per-unit transport cost.
             return m.pwmg[i, s, d] == pwmg0 * sum(
                 float(pyo_value(m.amgm[mg, i, s, d])) * m.ptmg[mg]
                 for mg in m.marg
@@ -1615,35 +1608,26 @@ class GTAPv62ModelEquations:
             )
         model.eq_pwmg = Constraint(model.i, model.s, model.rp, rule=eq_pwmg_rule)
 
-        # eq_pmcif: pmcif = ps + pwmg
-        #
-        # In v6.2 SAM convention, the bilateral export tax txs is
-        # collected by the exporter's government and does NOT flow
-        # into the importer's price chain. Hence pmcif (CIF at world
-        # prices) = ps (basic supply price) + per-unit transport.
-        # Reference: SAM identity VIWS = VXWD + sum_m VTWR.
+        # eq_pmcif: pmcif = ps + pwmg (Phase 3.16: include s == d).
         def eq_pmcif_rule(m, i, s, d):
-            if s == d:
-                return Constraint.Skip
             if pyo_value(m.qxs[i, s, d]) <= 1e-8 or float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
                 return Constraint.Skip
             return m.pmcif[i, s, d] == m.ps[i, s] + m.pwmg[i, s, d]
         model.eq_pmcif = Constraint(model.i, model.s, model.rp, rule=eq_pmcif_rule)
 
-        # eq_pms: pms = pmcif * (1 + tms)
+        # eq_pms: pms = pmcif * (1 + tms) (Phase 3.16: include s == d).
         def eq_pms_rule(m, i, s, d):
-            if s == d:
-                return Constraint.Skip
             if float(pyo_value(m.alpha_xs[i, s, d])) <= 0.0:
                 return Constraint.Skip
             return m.pms[i, s, d] == m.pmcif[i, s, d] * (1.0 + m.tms[i, s, d])
         model.eq_pms = Constraint(model.i, model.s, model.rp, rule=eq_pms_rule)
 
-        # eq_pim: composite import price (CES dual using calibrated α)
+        # eq_pim: composite import price (CES dual). Phase 3.16: sum
+        # over all sources (gtap.tab line 1767: sum(k,REG, ...)).
         def eq_pim_rule(m, i, d):
             terms = [
                 (s, float(pyo_value(m.alpha_xs[i, s, d])))
-                for s in m.s if s != d and pyo_value(m.alpha_xs[i, s, d]) > 0.0
+                for s in m.s if pyo_value(m.alpha_xs[i, s, d]) > 0.0
             ]
             if not terms:
                 return Constraint.Skip
@@ -1654,10 +1638,9 @@ class GTAPv62ModelEquations:
             )
         model.eq_pim = Constraint(model.i, model.rp, rule=eq_pim_rule)
 
-        # eq_qxs: bilateral import demand (CES FOC)
+        # eq_qxs: bilateral import demand. Phase 3.16: include s == d
+        # (gtap.tab line 1798: applies to all (r,s) including r=s).
         def eq_qxs_rule(m, i, s, d):
-            if s == d:
-                return Constraint.Skip
             ax = float(pyo_value(m.alpha_xs[i, s, d]))
             if ax <= 0.0:
                 return Constraint.Skip
@@ -1703,12 +1686,11 @@ class GTAPv62ModelEquations:
         # At benchmark with ptmg=1 and pwmg*qxs = sum_m VTWR(m,i,s,d),
         # this gives qtm_0 = sum (i,s,d) VTWR(m,i,s,d) = total margin services.
         def eq_qtm_rule(m, mg):
+            # Phase 3.16: include s == d (intra-region transport demand).
             terms = []
             for i in m.i:
                 for s in m.s:
                     for d in m.rp:
-                        if s == d:
-                            continue
                         amg = float(pyo_value(m.amgm[mg, i, s, d]))
                         if amg <= 0.0:
                             continue
@@ -1758,10 +1740,11 @@ class GTAPv62ModelEquations:
             if pyo_value(m.vom[i, r]) <= 1e-8:
                 return Constraint.Skip
 
-            # Uses side: domestic absorption + exports + margin sales
+            # Uses side: domestic absorption + exports + margin sales.
+            # Phase 3.16: include d == r in exports (diagonal trade).
             uses = sum(m.qfd[i, j, r] for j in m.j)
             uses = uses + m.qpd[i, r] + m.qgd[i, r]
-            uses = uses + sum(m.qxs[i, r, d] for d in m.rp if d != r)
+            uses = uses + sum(m.qxs[i, r, d] for d in m.rp)
 
             # Margin sales (only if i is a margin commodity)
             if i in m.marg:

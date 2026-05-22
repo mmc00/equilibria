@@ -199,10 +199,19 @@ def derive_calibration(
     #     ppm_0 = pim_0 * (1 + tpi)
     #     pgm_0 = pim_0 * (1 + tgi)
     # When there is no import flow into (i,r), pim_0 defaults to 1.
+    # Phase 3.16: include s == r per GEMPACK gtap.tab line 1763
+    # (MSHRS sums VIMS over k in REG, including k=s).  In aggregated
+    # SAMs like BOOK3X3 the diagonal VIMS[i,r,r] captures intra-region
+    # trade between subregions and contributes significantly (~30% of
+    # ROW's VIMS for food/mnfcs). The agent-level VIPM/VIGM/VIFM
+    # already include this via SAM identity:
+    #     sum_s VIMS[i,s,r] = VIPM[i,r] + VIGM[i,r] + sum_j VIFM[i,j,r]
+    # so qim_0 must include the diagonal for the calibration to be
+    # internally consistent (qim_0 = sum agent imports / pim_0).
     for r in sets.r:
         for i in sets.i:
-            sum_vims = sum(b.vims.get((i, s, r), 0.0) for s in sets.r if s != r)
-            sum_vxwd = sum(b.vxwd.get((i, s, r), 0.0) for s in sets.r if s != r)
+            sum_vims = sum(b.vims.get((i, s, r), 0.0) for s in sets.r)
+            sum_vxwd = sum(b.vxwd.get((i, s, r), 0.0) for s in sets.r)
             if sum_vxwd > 0.0:
                 out.pim_0[(i, r)] = sum_vims / sum_vxwd
             else:
@@ -223,7 +232,8 @@ def derive_calibration(
                 b.vdfm.get((i, j, r), 0.0) for j in sets.prod_comm
             ) + b.vdpm.get((i, r), 0.0) + b.vdgm.get((i, r), 0.0)
 
-            exports = sum(b.vxmd.get((i, r, rp), 0.0) for rp in sets.r if rp != r)
+            # Phase 3.16: include rp == r (diagonal exports — intra-region trade).
+            exports = sum(b.vxmd.get((i, r, rp), 0.0) for rp in sets.r)
             margin_sales = b.vst.get((i, r), 0.0)
 
             out.vom[(i, r)] = uses_dom + exports + margin_sales
@@ -256,14 +266,14 @@ def derive_calibration(
             )
             out.vds[(i, r)] = absorption
 
-    # Total imports (market and world price)
+    # Total imports (market and world price). Phase 3.16: include s == r.
     for r in sets.r:
         for i in sets.i:
             out.vim[(i, r)] = sum(
-                b.vims.get((i, s, r), 0.0) for s in sets.r if s != r
+                b.vims.get((i, s, r), 0.0) for s in sets.r
             )
             out.vimw[(i, r)] = sum(
-                b.viws.get((i, s, r), 0.0) for s in sets.r if s != r
+                b.viws.get((i, s, r), 0.0) for s in sets.r
             )
 
     # ------------------------------------------------------------------
@@ -455,14 +465,13 @@ def derive_calibration(
     # qxs_0 = VXMD with pe_0 = 1 and txs_0 = 0. Made parity WORSE
     # against the non-linearly-corrected GEMPACK reference (gap from
     # -2.5pp to -6.9pp on VIWS/VXMD).
+    # Phase 3.16: include s == d in bilateral Armington calibration.
     for i in sets.i:
         sigma_m = float(params.elasticities.esubm.get(i, 1.0))
         sigma_m_eff = sigma_m if abs(sigma_m - 1.0) > 1e-8 else 1.0 + 1e-3
         for d in sets.r:
             sources_with_flow = []
             for s in sets.r:
-                if s == d:
-                    continue
                 vxwd = b.vxwd.get((i, s, d), 0.0)
                 vxmd = b.vxmd.get((i, s, d), 0.0)
                 vims = b.vims.get((i, s, d), 0.0)

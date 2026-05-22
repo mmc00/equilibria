@@ -215,10 +215,11 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
     # the CES aggregator identity pim*qim = sum_s pms*qxs gives the
     # economic content.
     if not hasattr(model, "eq_qim"):
+        # Phase 3.16: sum over all sources (incl. s == r) per GEMPACK.
         def eq_qim_rule(m, i, r):
             return m.pim[i, r] * m.qim[i, r] == sum(
                 m.pms[i, s, r] * m.qxs[i, s, r]
-                for s in m.s if s != r
+                for s in m.s
             )
         model.eq_qim = Constraint(model.i, model.r, rule=eq_qim_rule)
         info["added_identity_eqs"].append(("eq_qim", 9))
