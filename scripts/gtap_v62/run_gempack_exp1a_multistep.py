@@ -82,6 +82,16 @@ METHOD_BLOCKS = {
         "automatic accuracy = yes;\nsubintervals = 1;",
         "Gragg-Bulirsch with automatic accuracy",
     ),
+    "GB_12_24_48": (
+        "Method = Gragg;\nSteps = 12 24 48;\n"
+        "automatic accuracy = no;\nsubintervals = 1;",
+        "Gragg-Bulirsch multi-step 12-24-48 (high-stencil convergence test)",
+    ),
+    "GB_24_48_96": (
+        "Method = Gragg;\nSteps = 24 48 96;\n"
+        "automatic accuracy = no;\nsubintervals = 1;",
+        "Gragg-Bulirsch multi-step 24-48-96 (very high stencil)",
+    ),
 }
 
 
