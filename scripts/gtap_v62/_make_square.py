@@ -178,6 +178,59 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
         model.pgdpmp[r].fix(1.0)
     info["fixed_explicit"].append(("pgdpmp", len(list(model.r))))
 
+    # Phase 3.18: fix variables that are trivially zero/unit by SAM structure.
+    # This removes them from the bipartite graph so the matching pairs the
+    # remaining (genuinely endogenous) variables with their defining equations.
+    n_trivial_pwmg = 0
+    n_trivial_pva = 0
+    n_trivial_qfe = 0
+
+    # pwmg[i, s, d] is the per-unit transport margin. It's economically 0 when
+    # (a) the commodity is itself a margin (svces) — services aren't shipped,
+    # or (b) intra-region (s == d, no transport required), or
+    # (c) the bilateral pwmg_0 calibration came out at 0 (no VTWR for this route).
+    for i in model.i:
+        for s in model.s:
+            for d in model.rp:
+                pwmg_var = model.pwmg[i, s, d]
+                if pwmg_var.fixed:
+                    continue
+                pwmg0 = pwmg_var.value or 0.0
+                # 1e-6 is the model-wide lower-bound floor; anything at
+                # the floor is economically zero.
+                if abs(pwmg0) <= 1e-5:
+                    pwmg_var.fix(pwmg0)
+                    n_trivial_pwmg += 1
+    info["fixed_explicit"].append(("pwmg_trivial", n_trivial_pwmg))
+
+    # pva[j, r]: VA price by sector. For CGDS (capital goods) production uses
+    # NO factor inputs (only intermediate goods), so pva[CGDS, r] doesn't have
+    # an economic role. Fix at 1.0 so eq_qo can still reference it without
+    # leaving it dangling.
+    for j in model.j:
+        for r in model.r:
+            sva = float(value(model.share_va[j, r])) if hasattr(model, "share_va") else 1.0
+            if sva <= 1e-12 and not model.pva[j, r].fixed:
+                model.pva[j, r].fix(1.0)
+                n_trivial_pva += 1
+    info["fixed_explicit"].append(("pva_no_VA", n_trivial_pva))
+
+    # qfe[f, j, r]: factor demand by sector. 0 when VFM[f, j, r] = 0
+    # (factor f not used by sector j in region r). For BOOK3X3:
+    # - CGDS uses no factors (capital goods produced from intermediates).
+    # - svces uses no Land (services don't use land in this aggregation).
+    for f in model.f:
+        for j in model.j:
+            for r in model.r:
+                qfe_var = model.qfe[f, j, r]
+                if qfe_var.fixed:
+                    continue
+                qfe0 = qfe_var.value or 0.0
+                if abs(qfe0) <= 1e-5:
+                    qfe_var.fix(qfe0)
+                    n_trivial_qfe += 1
+    info["fixed_explicit"].append(("qfe_no_factor_use", n_trivial_qfe))
+
     # ----- identity equations -----------------------------------------
     # eq_qds: qds(i,r) = sum_j qfd(i,j,r) + qpd(i,r) + qgd(i,r)
     if not hasattr(model, "eq_qds"):
@@ -223,6 +276,20 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
             )
         model.eq_qim = Constraint(model.i, model.r, rule=eq_qim_rule)
         info["added_identity_eqs"].append(("eq_qim", 9))
+
+    # Phase 3.18: eq_cgds_balance defines qo[CGDS, r] via regional
+    # savings-investment identity. The constant residual at benchmark
+    # (VDEP + DPGOV — components not modelled explicitly in v6.2 static)
+    # is absorbed by bake_baseline_residuals_as_slacks, leaving the
+    # derivatives intact so shock propagation is correct.
+    if not hasattr(model, "eq_cgds_balance"):
+        def eq_cgds_balance_rule(m, r):
+            return (
+                m.pcgds["CGDS", r] * m.qo["CGDS", r]
+                == m.y[r] - m.yp[r] - m.yg[r] + m.savf[r]
+            )
+        model.eq_cgds_balance = Constraint(model.r, rule=eq_cgds_balance_rule)
+        info["added_identity_eqs"].append(("eq_cgds_balance", 3))
 
     # ----- auto-fix dangling variables --------------------------------
     used_vars: set = set()
