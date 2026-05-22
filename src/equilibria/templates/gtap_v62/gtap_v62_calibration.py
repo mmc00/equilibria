@@ -451,12 +451,10 @@ def derive_calibration(
     #     pwmg_0         = pmcif_0 - pe_0           (per-unit transport)
     #     pms_0          = VIMS / VXWD              (price at destination)
     #
-    # Note: ``pwmg_0 * qxs_0 = VIWS - VXMD`` is NOT identical to the
-    # sum-of-VTWR per shipment because v6.2 SAM convention has
-    # VIWS = VXWD + sum_m VTWR (transport added to BASIC export
-    # value, not market). The discrepancy goes into the difference
-    # between sum_m VTWR and (VIWS - VXMD) per cell. The aggregate
-    # margin demand qtm uses the raw VTWR sum (see eq_qtm).
+    # Phase 3.11 experiment (REJECTED — see findings doc): tried
+    # qxs_0 = VXMD with pe_0 = 1 and txs_0 = 0. Made parity WORSE
+    # against the non-linearly-corrected GEMPACK reference (gap from
+    # -2.5pp to -6.9pp on VIWS/VXMD).
     for i in sets.i:
         sigma_m = float(params.elasticities.esubm.get(i, 1.0))
         sigma_m_eff = sigma_m if abs(sigma_m - 1.0) > 1e-8 else 1.0 + 1e-3
@@ -478,9 +476,6 @@ def derive_calibration(
 
                 qxs0 = vxwd
                 pe0 = vxmd / vxwd if vxwd > 0.0 else 1.0
-                # SAM identity: VIWS = VXWD + sum_m VTWR
-                # ⇒ pmcif_0 = 1 + sum_m VTWR / VXWD = VIWS / VXWD
-                #   pwmg_0  = sum_m VTWR / VXWD          (per-unit transport)
                 pwmg0 = vtwr_total / vxwd if vxwd > 0.0 else 0.0
                 pmcif0 = viws / vxwd if vxwd > 0.0 else 1.0 + pwmg0
                 pms0 = vims / vxwd if vxwd > 0.0 else pmcif0
@@ -496,11 +491,6 @@ def derive_calibration(
             if not sources_with_flow:
                 continue
 
-            # CES bottom Armington composite: pim * qim = sum_s pms * qxs.
-            # With qxs_0 = VXWD and pms_0 = VIMS/VXWD:
-            #   sum pms_0 * qxs_0 = sum VIMS
-            #   sum qxs_0 = sum VXWD
-            #   pim_0 = sum VIMS / sum VXWD  (matches the early calc)
             qim0 = sum(q for _, q, _ in sources_with_flow)
             pim0_cost = sum(p * q for _, q, p in sources_with_flow) / qim0
             out.qim_0[(i, d)] = qim0
