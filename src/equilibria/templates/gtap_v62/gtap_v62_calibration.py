@@ -661,23 +661,78 @@ def derive_calibration(
     for r in sets.r:
         factor_inc = sum(out.evom.get((f, r), 0.0) for f in sets.f)
         out.factor_income_0[r] = factor_inc
-        out.tax_revenue_0[r] = 0.0  # placeholder; full computation in Phase 2d
-        out.y_0[r] = factor_inc
+
+        # Phase 3.22: compute tax_revenue_0[r] explicitly as sum over
+        # all GTAP tax streams (V*A - V*M differences for benchmark).
+        # See gtap.tab line 2174:
+        #   INDTAX(r) = TPC(r) + TGC(r) + TIU(r) + TFU(r) + TOUT(r)
+        #              + TEX(r) + TIM(r)
+        # TPC: private consumption tax
+        tpc = sum(
+            (b.vdpa.get((i, r), 0.0) - b.vdpm.get((i, r), 0.0))
+            + (b.vipa.get((i, r), 0.0) - b.vipm.get((i, r), 0.0))
+            for i in sets.i
+        )
+        # TGC: government consumption tax
+        tgc = sum(
+            (b.vdga.get((i, r), 0.0) - b.vdgm.get((i, r), 0.0))
+            + (b.viga.get((i, r), 0.0) - b.vigm.get((i, r), 0.0))
+            for i in sets.i
+        )
+        # TIU: intermediate use tax (firms)
+        tiu = sum(
+            (b.vdfa.get((i, j, r), 0.0) - b.vdfm.get((i, j, r), 0.0))
+            + (b.vifa.get((i, j, r), 0.0) - b.vifm.get((i, j, r), 0.0))
+            for i in sets.i
+            for j in sets.prod_comm
+        )
+        # TFU: factor use tax (capital, labour, land charge above market wage)
+        tfu = sum(
+            b.evfa.get((f, j, r), 0.0) - b.vfm.get((f, j, r), 0.0)
+            for f in sets.f
+            for j in sets.prod_comm
+        )
+        # TOUT: output tax — currently calibrated as zero since
+        # our voa[i,r] = vom[i,r] (see VOA loop above). Kept for
+        # completeness; updates automatically if to[i,r] is later
+        # populated from a separate header.
+        tout = sum(
+            out.voa.get((i, r), 0.0) - out.vom.get((i, r), 0.0)
+            for i in sets.i
+        )
+        # TEX: export tax (r is the source/exporter)
+        tex = sum(
+            b.vxmd.get((i, r, d), 0.0) - b.vxwd.get((i, r, d), 0.0)
+            for i in sets.i
+            for d in sets.r
+        )
+        # TIM: import tariff (r is the destination/importer)
+        tim = sum(
+            b.vims.get((i, s, r), 0.0) - b.viws.get((i, s, r), 0.0)
+            for i in sets.i
+            for s in sets.r
+        )
+        tax_rev = tpc + tgc + tiu + tfu + tout + tex + tim
+        out.tax_revenue_0[r] = tax_rev
+
+        # New regional income: factor income + indirect tax revenue.
+        out.y_0[r] = factor_inc + tax_rev
+
         out.save_0[r] = b.save.get(r, 0.0)
         out.savf_0[r] = (
             out.yp_0.get(r, 0.0)
             + out.yg_0.get(r, 0.0)
             + out.save_0.get(r, 0.0)
-            - factor_inc
+            - out.y_0[r]
         )
 
-        # Phase 3.21: income decomposition shares for the CDE-elastic
-        # split (eq_yp, eq_yg). Computed against y_0 = factor_income to
-        # match how the model variable `y` is defined (see eq_y).
-        if factor_inc > 0.0:
-            out.xshrpriv[r] = out.yp_0.get(r, 0.0) / factor_inc
-            out.xshrgov[r] = out.yg_0.get(r, 0.0) / factor_inc
-            out.xshrsave[r] = out.save_0.get(r, 0.0) / factor_inc
+        # Phase 3.21/3.22: income decomposition shares for the CDE-
+        # elastic split (eq_yp, eq_yg). Computed against the new y_0 =
+        # factor_income + tax_revenue (matches GEMPACK's INCOME(r)).
+        if out.y_0[r] > 0.0:
+            out.xshrpriv[r] = out.yp_0.get(r, 0.0) / out.y_0[r]
+            out.xshrgov[r] = out.yg_0.get(r, 0.0) / out.y_0[r]
+            out.xshrsave[r] = out.save_0.get(r, 0.0) / out.y_0[r]
 
     # Top Armington shares per (commodity, sector, region):
     # share of domestic vs imported in firm intermediate use.

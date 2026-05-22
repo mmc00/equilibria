@@ -942,7 +942,14 @@ class GTAPv62ModelEquations:
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
             initialize=lambda m, r: max(c.y_0.get(r, 1.0), lb),
-            doc="y(r) — regional income (= factor income at agent prices)",
+            doc="y(r) — regional income (factor income + indirect tax revenue)",
+        )
+        # Phase 3.22: tax revenue is now an explicit endogenous flow.
+        model.tax_revenue = Var(
+            model.r,
+            within=Reals,
+            initialize=lambda m, r: c.tax_revenue_0.get(r, 0.0),
+            doc="tax_revenue(r) — total indirect tax revenue (TPC+TGC+TIU+TFU+TOUT+TEX+TIM)",
         )
         model.yp = Var(
             model.r,
@@ -1873,15 +1880,55 @@ class GTAPv62ModelEquations:
         """
         from pyomo.environ import Constraint, value as pyo_value
 
-        # eq_y: regional factor income at agent prices
+        # eq_y: regional income = factor income at agent prices + indirect taxes
+        # (Phase 3.22 adds the tax_revenue feedback channel).
         def eq_y_rule(m, r):
             if pyo_value(m.y_0[r]) <= 1e-8:
                 return Constraint.Skip
-            return m.y[r] == sum(
+            factor_inc = sum(
                 m.pf[f, r] * m.qoes[f, r] for f in m.f
                 if pyo_value(m.evom[f, r]) > 0.0
             )
+            return m.y[r] == factor_inc + m.tax_revenue[r]
         model.eq_y = Constraint(model.r, rule=eq_y_rule)
+
+        # eq_tax_revenue: sum of all indirect-tax streams in levels.
+        # Each stream = tax_rate * base_price * quantity (V*A - V*M form).
+        # See gtap.tab line 2174 (INDTAX(r) = TPC + TGC + TIU + TFU +
+        # TOUT + TEX + TIM).
+        def eq_tax_revenue_rule(m, r):
+            tpc = sum(
+                m.tpd[i, r] * m.pds[i, r] * m.qpd[i, r]
+                + m.tpi[i, r] * m.pim[i, r] * m.qpm[i, r]
+                for i in m.i
+            )
+            tgc = sum(
+                m.tgd[i, r] * m.pds[i, r] * m.qgd[i, r]
+                + m.tgi[i, r] * m.pim[i, r] * m.qgm[i, r]
+                for i in m.i
+            )
+            tiu = sum(
+                m.tfd[i, j, r] * m.pds[i, r] * m.qfd[i, j, r]
+                + m.tfi[i, j, r] * m.pim[i, r] * m.qfm[i, j, r]
+                for i in m.i for j in m.j
+            )
+            tfu = sum(
+                m.tf[f, j, r] * m.pf[f, r] * m.qfe[f, j, r]
+                for f in m.f for j in m.j
+            )
+            tout = sum(
+                m.to[i, r] * m.ps[i, r] * m.qo[i, r] for i in m.j
+            )
+            tex = sum(
+                m.txs[i, r, d] * m.ps[i, r] * m.qxs[i, r, d]
+                for i in m.i for d in m.rp
+            )
+            tim = sum(
+                m.tms[i, s, r] * m.pmcif[i, s, r] * m.qxs[i, s, r]
+                for i in m.i for s in m.s
+            )
+            return m.tax_revenue[r] == tpc + tgc + tiu + tfu + tout + tex + tim
+        model.eq_tax_revenue = Constraint(model.r, rule=eq_tax_revenue_rule)
 
         # Phase 3.21: CDE-elastic income split.
         #
