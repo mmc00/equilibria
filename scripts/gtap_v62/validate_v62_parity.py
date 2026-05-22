@@ -370,9 +370,10 @@ def shock_command(args: argparse.Namespace) -> int:
     import pyomo.environ
     from pyomo.opt import SolverFactory
     use_path_capi = args.solver == "path-capi"
+    use_hybrid = args.solver == "ipopt+path"
     available = False
     solver_obj = None
-    if use_path_capi:
+    if use_path_capi or use_hybrid:
         # Defer availability check to runtime; the PATH dll + license
         # are validated on first call.
         available = True
@@ -380,7 +381,7 @@ def shock_command(args: argparse.Namespace) -> int:
         idaes_ipopt = Path(".idaes-bin/ipopt.exe")
         if idaes_ipopt.exists():
             available = True
-    if not available and not use_path_capi:
+    if not available and not (use_path_capi or use_hybrid):
         try:
             solver_obj = SolverFactory(args.solver)
             available = solver_obj.available(False)
@@ -465,7 +466,7 @@ def shock_command(args: argparse.Namespace) -> int:
         )
 
     # Build solver with the configured backend
-    if use_path_capi:
+    if use_path_capi or use_hybrid:
         from _path_capi_solver import solve_v62_with_path_capi  # type: ignore
 
         license_string = os.environ.get("PATH_LICENSE_STRING") or args.path_license
@@ -489,8 +490,9 @@ def shock_command(args: argparse.Namespace) -> int:
                 f"major={res.major_iterations} minor={res.minor_iterations}"
             )
             return res
-    else:
-        if args.solver == "ipopt":
+
+    if use_hybrid or not (use_path_capi or use_hybrid):
+        if args.solver in ("ipopt", "ipopt+path"):
             # IDAES-installed ipopt at .idaes-bin/ipopt.exe (Windows)
             ipopt_path = Path(".idaes-bin/ipopt.exe")
             if ipopt_path.exists():
@@ -511,9 +513,21 @@ def shock_command(args: argparse.Namespace) -> int:
         _solve_path_capi("BASELINE")
     else:
         model.obj = Objective(rule=lambda mm: _obj(mm, init_values), sense=minimize)
-        print("\nSolving BASELINE...")
+        print("\nSolving BASELINE (IPOPT crash)...")
         res = solver_obj.solve(model, tee=False)
         print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
+        if use_hybrid:
+            ipopt_walras = abs(value(model.walras))
+            walras_threshold = float(os.environ.get("HYBRID_WALRAS_THRESHOLD", "1.0"))
+            if ipopt_walras > walras_threshold:
+                print(
+                    f"  Skipping PATH polish: |walras|={ipopt_walras:.2e} > "
+                    f"{walras_threshold} (IPOPT Mode A — unreliable warm start)"
+                )
+            else:
+                model.del_component(model.obj)
+                model.del_component("obj_index")
+                _solve_path_capi("BASELINE (PATH polish)")
 
     # Diagnostic: equation residuals at the solved state (top 10 by max_abs).
     print("\nBaseline equation residuals (top 10):")
@@ -540,12 +554,26 @@ def shock_command(args: argparse.Namespace) -> int:
     if use_path_capi:
         _solve_path_capi("SHOCKED")
     else:
-        model.del_component(model.obj)
-        model.del_component("obj_index")
+        if hasattr(model, "obj"):
+            model.del_component(model.obj)
+        if hasattr(model, "obj_index"):
+            model.del_component("obj_index")
         model.obj = Objective(rule=lambda mm: _obj(mm, baseline), sense=minimize)
-        print("Solving SHOCKED...")
+        print("Solving SHOCKED (IPOPT crash)...")
         res = solver_obj.solve(model, tee=False)
         print(f"  status: {res.solver.status}, walras: {value(model.walras):.2e}")
+        if use_hybrid:
+            ipopt_walras = abs(value(model.walras))
+            walras_threshold = float(os.environ.get("HYBRID_WALRAS_THRESHOLD", "1.0"))
+            if ipopt_walras > walras_threshold:
+                print(
+                    f"  Skipping PATH polish: |walras|={ipopt_walras:.2e} > "
+                    f"{walras_threshold} (IPOPT Mode A — unreliable warm start)"
+                )
+            else:
+                model.del_component(model.obj)
+                model.del_component("obj_index")
+                _solve_path_capi("SHOCKED (PATH polish)")
     shocked = {
         (v.name, idx): value(v[idx])
         for v in model.component_objects(Var, active=True)
@@ -765,8 +793,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     shock.add_argument(
         "--solver", default="ipopt",
-        help="Solver backend: 'ipopt' (NLP), 'path-capi' (MCP), or any "
-             "Pyomo SolverFactory name (default: ipopt).",
+        help="Solver backend: 'ipopt' (NLP), 'path-capi' (MCP), "
+             "'ipopt+path' (IPOPT crash + PATH polish), or any Pyomo "
+             "SolverFactory name (default: ipopt).",
     )
     shock.add_argument(
         "--path-license", default=None,
