@@ -51,13 +51,61 @@ from scripts.gtap_v62._make_square import (  # noqa: E402
 
 
 DATASETS = [
+    # User-generated GTAP v11.1 (2017) aggregations via GtapAgg, all
+    # using the same shock pattern: 10% tariff cut on the food/USA->EU
+    # bilateral (or its analog when commodity/region names differ).
+    {
+        "name": "gtap6_3x3",
+        "dir": Path("datasets/gtap6_3x3"),
+        "sets_file": "sets.har",
+        "prm_file": "default.prm",
+        "basedata": "basedata.har",
+        "shock": ("Food", "USA", "EU_28"),
+    },
+    {
+        "name": "gtap6_5x5",
+        "dir": Path("datasets/gtap6_5x5"),
+        "sets_file": "sets.har",
+        "prm_file": "default.prm",
+        "basedata": "basedata.har",
+        # Food sector exists; USA -> EU_28 corridor.
+        "shock": ("Food", "USA", "EU_28"),
+    },
+    {
+        "name": "gtap6_10x7",
+        "dir": Path("datasets/gtap6_10x7"),
+        "sets_file": "sets.har",
+        "prm_file": "default.prm",
+        "basedata": "basedata.har",
+        # In this aggregation, FoodProc replaces Food as the
+        # food-processing sector; USA -> EU_28 corridor.
+        "shock": ("FoodProc", "USA", "EU_28"),
+    },
+    {
+        "name": "gtap6_15x10",
+        "dir": Path("datasets/gtap6_15x10"),
+        "sets_file": "sets.har",
+        "prm_file": "default.prm",
+        "basedata": "basedata.har",
+        # OtherFood is the broadest non-trivial food bucket here.
+        "shock": ("OtherFood", "USA", "EU_28"),
+    },
+    {
+        "name": "gtap6_20x41",
+        "dir": Path("datasets/gtap6_20x41"),
+        "sets_file": "sets.har",
+        "prm_file": "default.prm",
+        "basedata": "basedata.har",
+        # turkiye-style 20-sector aggregation.
+        "shock": ("FoodProd", "USA", "EU_28"),
+    },
+    # Legacy GEMPACK RunGTAP datasets (kept for backward compatibility).
     {
         "name": "BOOK3X3",
         "dir": Path("C:/runGTAP375/BOOK3X3"),
         "sets_file": "SETS.HAR",
         "prm_file": "Default.prm",
         "basedata": "basedata.har",
-        # 10% tariff cut on food, USA→EU.
         "shock": ("food", "USA", "EU"),
     },
     {
@@ -66,7 +114,6 @@ DATASETS = [
         "sets_file": "SETS.HAR",
         "prm_file": "Default.prm",
         "basedata": "basedata.har",
-        # 10% tariff cut on Food, SSA→EU (mimicking BOOK3X3 Exp1a).
         "shock": ("Food", "SSA", "EU"),
     },
     {
@@ -75,7 +122,6 @@ DATASETS = [
         "sets_file": "sets.har",
         "prm_file": "default.prm",
         "basedata": "basedata.har",
-        # 10% tariff cut on FOOD, SAFRICA→EUNION.
         "shock": ("FOOD", "SAFRICA", "EUNION"),
     },
 ]

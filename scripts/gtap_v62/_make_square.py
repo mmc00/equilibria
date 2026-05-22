@@ -245,7 +245,7 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
     # eq_psave: psave(r) = pcgds("CGDS", r)
     if not hasattr(model, "eq_psave"):
         def eq_psave_rule(m, r):
-            return m.psave[r] == m.pcgds["CGDS", r]
+            return m.psave[r] == m.pcgds[next(iter(m.cgds)), r]
         model.eq_psave = Constraint(model.r, rule=eq_psave_rule)
         info["added_identity_eqs"].append(("eq_psave", 3))
 
@@ -303,9 +303,11 @@ def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
     # is absorbed by bake_baseline_residuals_as_slacks, leaving the
     # derivatives intact so shock propagation is correct.
     if not hasattr(model, "eq_cgds_balance"):
+        cgds_label = next(iter(model.cgds))
+
         def eq_cgds_balance_rule(m, r):
             return (
-                m.pcgds["CGDS", r] * m.qo["CGDS", r]
+                m.pcgds[cgds_label, r] * m.qo[cgds_label, r]
                 == m.y[r] - m.yp[r] - m.yg[r] + m.savf[r]
             )
         model.eq_cgds_balance = Constraint(model.r, rule=eq_cgds_balance_rule)

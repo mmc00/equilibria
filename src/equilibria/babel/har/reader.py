@@ -112,8 +112,15 @@ def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tup
       i+1: set descriptor
       i+2 .. i+1+n_unique: one record per *unique* set
       i+2+n_unique: dim-summary record
-      i+3+n_unique: dim-metadata record
+      i+3+n_unique: dim-metadata record (= chunk-1 meta for large arrays)
       i+4+n_unique: data record (pad + int + n*float32)
+
+    LARGE-ARRAY CHUNKING: when the total array exceeds GEMPACK's record
+    cap (~ 30 KB of float32 data), the data is split into a sequence of
+    chunks. Each chunk is a small meta record (~64 bytes) followed by a
+    data record, repeated until ``shape``'s total element count is
+    reached. We accumulate Fortran-order chunk data into a single flat
+    array.
     """
     desc = records[i + 1]
     coeff_name, set_names, ndim = _parse_set_descriptor(desc)
@@ -128,10 +135,45 @@ def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tup
     }
     set_elements = [elems_by_name[sn] for sn in set_names]
     shape = tuple(len(s) for s in set_elements)
-    data_rec = records[i + 4 + n_unique]
-    n = int(np.prod(shape)) if shape else 1
-    floats = struct.unpack_from(f"<{n}f", data_rec, 8)
-    arr = np.array(floats, dtype=np.float32).reshape(shape, order="F") if shape else np.array(floats, dtype=np.float32)
+    total_n = int(np.prod(shape)) if shape else 1
+
+    # Fast path: single data record. Try to read all total_n floats from
+    # records[i + 4 + n_unique]. If it fits, we're done.
+    data_idx = i + 4 + n_unique
+    first_rec = records[data_idx]
+    avail = (len(first_rec) - 8) // 4
+    if avail >= total_n:
+        floats = struct.unpack_from(f"<{total_n}f", first_rec, 8)
+        next_i = data_idx + 1
+    else:
+        # Chunked REFULL: array spans multiple data records. Each
+        # subsequent chunk is preceded by a small (~64 byte) meta record
+        # that we skip. Continue until we have total_n floats.
+        chunk_acc: list[float] = list(
+            struct.unpack_from(f"<{avail}f", first_rec, 8)
+        )
+        data_idx += 1
+        while len(chunk_acc) < total_n and data_idx < len(records):
+            rec = records[data_idx]
+            # Chunk-meta records are short (under ~200 bytes); skip them.
+            if len(rec) <= 200:
+                data_idx += 1
+                continue
+            avail_k = (len(rec) - 8) // 4
+            n_to_read = min(avail_k, total_n - len(chunk_acc))
+            if n_to_read <= 0:
+                break
+            chunk_acc.extend(
+                struct.unpack_from(f"<{n_to_read}f", rec, 8)
+            )
+            data_idx += 1
+        floats = chunk_acc
+        next_i = data_idx
+
+    arr = (
+        np.array(floats, dtype=np.float32).reshape(shape, order="F")
+        if shape else np.array(floats, dtype=np.float32)
+    )
     return (
         HeaderArray(
             name=name,
@@ -141,7 +183,7 @@ def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tup
             set_names=set_names,
             set_elements=set_elements,
         ),
-        i + 5 + n_unique,
+        next_i,
     )
 
 
