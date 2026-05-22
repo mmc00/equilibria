@@ -164,6 +164,19 @@ class DerivedV62Calibration:
     save_0: Dict[str, float] = field(default_factory=dict)
     savf_0: Dict[str, float] = field(default_factory=dict)
 
+    # ---- Phase 3.21: income decomposition shares -----------------------
+    # XSHR{PRIV,GOV,SAVE}(r) = yp_0/y_0, yg_0/y_0, save_0/y_0 — the
+    # benchmark shares of regional income across uses. In the GEMPACK
+    # static closure these drive the elasticity of yp/yg/save wrt the
+    # CDE expenditure deflator pcons (gtap.tab PRIVCONSEXP/GOVCONSEXP/
+    # SAVING, lines 2211-2224). Static-closure exponents:
+    #     yp ∝ y * pcons^(XSHRPRIV - 1)
+    #     yg ∝ y * pcons^XSHRPRIV
+    #     sav ∝ y * pcons^XSHRPRIV
+    xshrpriv: Dict[str, float] = field(default_factory=dict)
+    xshrgov: Dict[str, float] = field(default_factory=dict)
+    xshrsave: Dict[str, float] = field(default_factory=dict)
+
 
 def derive_calibration(
     sets: GTAPv62Sets,
@@ -657,6 +670,14 @@ def derive_calibration(
             + out.save_0.get(r, 0.0)
             - factor_inc
         )
+
+        # Phase 3.21: income decomposition shares for the CDE-elastic
+        # split (eq_yp, eq_yg). Computed against y_0 = factor_income to
+        # match how the model variable `y` is defined (see eq_y).
+        if factor_inc > 0.0:
+            out.xshrpriv[r] = out.yp_0.get(r, 0.0) / factor_inc
+            out.xshrgov[r] = out.yg_0.get(r, 0.0) / factor_inc
+            out.xshrsave[r] = out.save_0.get(r, 0.0) / factor_inc
 
     # Top Armington shares per (commodity, sector, region):
     # share of domestic vs imported in firm intermediate use.

@@ -1883,20 +1883,40 @@ class GTAPv62ModelEquations:
             )
         model.eq_y = Constraint(model.r, rule=eq_y_rule)
 
-        # eq_yp: household share of regional income (CD-like fixed share)
+        # Phase 3.21: CDE-elastic income split.
+        #
+        # GEMPACK static closure (gtap.tab PRIVCONSEXP / GOVCONSEXP /
+        # SAVING, lines 2211-2224, with dppriv = dpgov = dpsave = 0):
+        #   d ln(yp/y) = (XSHRPRIV - 1) * uepriv
+        #   d ln(yg/y) =        XSHRPRIV * uepriv
+        #   d ln(sav/y) =       XSHRPRIV * uepriv
+        # with uepriv ≡ d ln(pcons). Integrating gives the levels form:
+        #   yp = c_p * y * pcons^(XSHRPRIV - 1)
+        #   yg = c_g * y * pcons^XSHRPRIV
+        #   sav = c_sav * y * pcons^XSHRPRIV  (save_0 stays as Param —
+        #         the small budget imbalance is absorbed by walras)
+        # Under shock (e.g. tariff cut ⇒ pcons falls in the
+        # importing region), real household purchasing power rises:
+        #   yp/y goes UP, yg/y goes DOWN.
+        # This is the channel that GEMPACK has but our Phase 3.20
+        # static c_p / c_g closure was missing.
+        derived = self.derived
+
         def eq_yp_rule(m, r):
             cp = float(pyo_value(m.c_p[r]))
             if cp <= 0.0:
                 return Constraint.Skip
-            return m.yp[r] == cp * m.y[r]
+            xshrpriv = float(derived.xshrpriv.get(r, cp))
+            exponent = xshrpriv - 1.0
+            return m.yp[r] == cp * m.y[r] * m.pcons[r] ** exponent
         model.eq_yp = Constraint(model.r, rule=eq_yp_rule)
 
-        # eq_yg: government share of regional income
         def eq_yg_rule(m, r):
             cg = float(pyo_value(m.c_g[r]))
             if cg <= 0.0:
                 return Constraint.Skip
-            return m.yg[r] == cg * m.y[r]
+            xshrpriv = float(derived.xshrpriv.get(r, 0.0))
+            return m.yg[r] == cg * m.y[r] * m.pcons[r] ** xshrpriv
         model.eq_yg = Constraint(model.r, rule=eq_yg_rule)
 
         # eq_pgdpwld: numeraire identity
