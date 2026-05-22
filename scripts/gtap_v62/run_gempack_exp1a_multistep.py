@@ -41,14 +41,12 @@ from scripts.gtap_v62.run_gempack_oracle import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-GB246_BODY = """\
+def _build_body(method_block: str, verbal: str) -> str:
+    return f"""\
 file gtapPARM = Default.prm;
 Verbal Description =
-Experiment 1: 10% cut of tariff on US food exports to the EU (Gragg-Bulirsch multi-step);
-Method = Gragg;
-Steps = 2 4 6;
-automatic accuracy = no;
-subintervals = 1;
+Experiment 1: 10% cut of tariff on US food exports to the EU ({verbal});
+{method_block}
 ! Standard GE closure: psave varies by region, pfactwld is numeraire
  Exogenous
           pop
@@ -67,6 +65,26 @@ Shock tms("food","usa","eu")= -10 ;
 """
 
 
+# Predefined method blocks (callable via --variant).
+METHOD_BLOCKS = {
+    "GB246": (
+        "Method = Gragg;\nSteps = 2 4 6;\n"
+        "automatic accuracy = no;\nsubintervals = 1;",
+        "Gragg-Bulirsch multi-step 2-4-6",
+    ),
+    "GB48-12": (
+        "Method = Gragg;\nSteps = 4 8 12;\n"
+        "automatic accuracy = no;\nsubintervals = 1;",
+        "Gragg-Bulirsch multi-step 4-8-12",
+    ),
+    "GB_auto": (
+        "Method = Gragg;\nSteps = 2 4 6;\n"
+        "automatic accuracy = yes;\nsubintervals = 1;",
+        "Gragg-Bulirsch with automatic accuracy",
+    ),
+}
+
+
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -80,10 +98,16 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument(
         "--rungtap-dir", type=Path, default=DEFAULT_RUNGTAP_DIR,
     )
+    parser.add_argument(
+        "--variant", choices=list(METHOD_BLOCKS), default="GB246",
+        help="Stepping variant (see METHOD_BLOCKS).",
+    )
     args = parser.parse_args(argv)
 
     args.workdir.mkdir(parents=True, exist_ok=True)
-    exp_name = "Exp1a_GB246"
+    exp_name = f"Exp1a_{args.variant}"
+    method_block, verbal = METHOD_BLOCKS[args.variant]
+    body = _build_body(method_block, verbal)
 
     # 1. Stage dataset files.
     for fname in ("SETS.HAR", "basedata.har", "Default.prm", "CMFSTART"):
@@ -103,7 +127,7 @@ def main(argv: Optional[list] = None) -> int:
     )
     # Strip the body's local "file gtapPARM = ..." line (we set it in header).
     body_lines = [
-        line for line in GB246_BODY.splitlines()
+        line for line in body.splitlines()
         if not line.strip().lower().startswith("file gtapparm")
     ]
     cmf_path = args.workdir / f"{exp_name}.cmf"
