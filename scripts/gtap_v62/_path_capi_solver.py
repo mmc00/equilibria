@@ -53,6 +53,7 @@ def solve_v62_with_path_capi(
     lusol_lib: str | None = None,
     variable_scaling: bool = True,
     equation_scaling: bool = True,
+    perturbation: float = 0.0,
 ) -> PathCapiSolveResult:
     """Solve the (already squared) v6.2 Pyomo model with PATH C-API.
 
@@ -174,7 +175,17 @@ def solve_v62_with_path_capi(
                 )
         return out
 
-    y0 = [v / var_scale[i] for i, v in enumerate(data.x0)]
+    # Optional: perturb the initial point to break PATH out of a
+    # spurious stationary point of the merit function.
+    if perturbation > 0.0:
+        import random
+        rng = random.Random(42)
+        y0 = [
+            (v / var_scale[i]) * (1.0 + perturbation * (rng.random() - 0.5))
+            for i, v in enumerate(data.x0)
+        ]
+    else:
+        y0 = [v / var_scale[i] for i, v in enumerate(data.x0)]
 
     def _scale_bound(b: float, s: float) -> float:
         # PATH uses 1e20 as +/-infinity sentinel; keep it as-is.

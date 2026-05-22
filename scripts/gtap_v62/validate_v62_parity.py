@@ -483,6 +483,7 @@ def shock_command(args: argparse.Namespace) -> int:
                 lusol_lib=lusol_lib,
                 variable_scaling=os.environ.get("PATH_VAR_SCALE", "1") != "0",
                 equation_scaling=os.environ.get("PATH_EQ_SCALE", "1") != "0",
+                perturbation=float(os.environ.get("PATH_PERTURB", "0")),
             )
             print(
                 f"  term_code={res.termination_code} residual={res.residual:.2e} "
@@ -548,12 +549,20 @@ def shock_command(args: argparse.Namespace) -> int:
     # a -10% change in the POWER of the tariff (= (1+t)*0.9 - 1).
     old_tms = value(model.tms["food", "USA", "EU"])
     new_tms = (1.0 + old_tms) * 0.9 - 1.0
-    model.tms["food", "USA", "EU"] = new_tms
-    print(f"\nShock: tms[food,USA,EU]: {old_tms:.4f} -> {new_tms:.4f}")
+    n_steps = max(1, int(args.homotopy_steps))
+    print(f"\nShock: tms[food,USA,EU]: {old_tms:.4f} -> {new_tms:.4f} "
+          f"in {n_steps} substep(s)")
 
     if use_path_capi:
-        _solve_path_capi("SHOCKED")
+        for step in range(1, n_steps + 1):
+            alpha = step / n_steps
+            tms_step = (1 - alpha) * old_tms + alpha * new_tms
+            model.tms["food", "USA", "EU"] = tms_step
+            print(f"  Substep {step}/{n_steps}: tms = {tms_step:.4f} (α={alpha:.3f})")
+            _solve_path_capi(f"SHOCK substep {step}/{n_steps}")
     else:
+        # IPOPT (or ipopt+path) path — applies the full shock in one go.
+        model.tms["food", "USA", "EU"] = new_tms
         if hasattr(model, "obj"):
             model.del_component(model.obj)
         if hasattr(model, "obj_index"):
@@ -809,6 +818,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     shock.add_argument(
         "--lusol-lib", default="C:/GAMS/53/lusol.dll",
         help="LUSOL shared library path (env: PATH_CAPI_LIBLUSOL).",
+    )
+    shock.add_argument(
+        "--homotopy-steps", type=int, default=1,
+        help="Apply the shock in N substeps, re-solving at each step "
+             "(GEMPACK Gragg-style multi-step). Default 1 = full shock "
+             "in one solve. Use 4-10 for PATH on large shocks.",
     )
     shock.set_defaults(func=shock_command)
 
