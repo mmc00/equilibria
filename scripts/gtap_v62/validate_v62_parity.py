@@ -584,6 +584,38 @@ def shock_command(args: argparse.Namespace) -> int:
         upd_har_path=upd_har_path,
     )
 
+    # Optional: compare against the multi-step (non-linear) GEMPACK
+    # reference. The default BOOK3X3 Exp1a uses Method=Johansen Steps=1
+    # which systematically under-shoots non-linear responses. A Gragg
+    # 2-4-6 reference (produced by run_gempack_exp1a_multistep.py) is
+    # closer to the true equilibrium and a fairer parity benchmark.
+    gb_har_path = (
+        Path("runs/gtap_v62_oracle") / f"BOOK3X3_{args.experiment}_GB246"
+        / f"{args.experiment}_GB246-upd.har"
+    )
+    if gb_har_path.exists():
+        cmp_gb = compare_shock_vs_gempack(
+            baseline=baseline,
+            shocked=shocked,
+            base_har_path=base_har_path,
+            upd_har_path=gb_har_path,
+        )
+        print(
+            f"\n{'Cell':<28s} {'GraggGB %':>10s} {'Python %':>10s} {'pp diff':>10s}"
+        )
+        print("-" * 65)
+        for row in cmp_gb:
+            print(
+                f"  {row['label']:<26s} {row['gp_pct']:>+10.3f} "
+                f"{row['py_pct']:>+10.3f} {row['py_pct'] - row['gp_pct']:>+10.3f}"
+            )
+    else:
+        cmp_gb = None
+        print(
+            f"\n(Gragg multi-step reference not found at {gb_har_path}; "
+            f"run scripts/gtap_v62/run_gempack_exp1a_multistep.py to enable.)"
+        )
+
     print(f"\n{'Cell':<28s} {'GEMPACK %':>10s} {'Python %':>10s} {'pp diff':>10s}")
     print("-" * 65)
     for row in cmp_results:
@@ -605,7 +637,8 @@ def shock_command(args: argparse.Namespace) -> int:
             "max_abs_baked": prebal_info["max_abs_baked"],
             "families": {k: len(v) for k, v in prebal_info["by_eq"].items()},
         },
-        "comparisons": cmp_results,
+        "comparisons_johansen1": cmp_results,
+        "comparisons_gragg246": cmp_gb,
     }
     report_path.write_text(json.dumps(payload, indent=2, default=str),
                           encoding="utf-8")
