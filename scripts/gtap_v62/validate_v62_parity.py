@@ -480,6 +480,8 @@ def shock_command(args: argparse.Namespace) -> int:
                 license_string=license_string,
                 path_lib=path_lib,
                 lusol_lib=lusol_lib,
+                variable_scaling=os.environ.get("PATH_VAR_SCALE", "1") != "0",
+                equation_scaling=os.environ.get("PATH_EQ_SCALE", "1") != "0",
             )
             print(
                 f"  term_code={res.termination_code} residual={res.residual:.2e} "
