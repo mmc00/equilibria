@@ -92,16 +92,42 @@ which applies the regularizer with appropriate scaling.
 3. **Solve time scales gracefully**: BOOK3X3 takes ~10s, ASA7X5
    takes ~30s on IDAES IPOPT. Both deterministic.
 
+## Cross-dataset parity vs GEMPACK Gragg-multi (2-4-6)
+
+After this writeup we ran GEMPACK Gragg-multi on all three datasets
+using the same 10% tariff cut, via the new
+`scripts/gtap_v62/run_gempack_generic.py` driver.
+
+| Dataset  | Shock cell             | Metric | GEMPACK %  | Python %   |    Δpp |
+|:---------|:-----------------------|:-------|-----------:|-----------:|-------:|
+| BOOK3X3  | food / USA → EU        | VIWS   |   +53.5166 |   +53.0170 | -0.500 |
+|          |                        | VIMS   |   +38.1650 |   +37.7150 | -0.450 |
+| ACORS3X3 | Food / SSA → EU        | VIWS   |   +50.3029 |   +50.6020 | +0.299 |
+|          |                        | VIMS   |   +35.2726 |   +35.5410 | +0.268 |
+| ASA7X5   | FOOD / SAFRICA → EUNION| VIWS   |   +62.4214 |   +62.7470 | +0.326 |
+|          |                        | VIMS   |   +46.1793 |   +46.4730 | +0.294 |
+
+**All three datasets are at sub-1% relative gap vs GEMPACK:**
+
+| Dataset  | VIWS gap | % of GEMPACK magnitude |
+|:---------|---------:|-----------------------:|
+| BOOK3X3  | -0.500pp |                  0.93% |
+| ACORS3X3 | +0.299pp |                  0.59% |
+| ASA7X5   | +0.326pp |                  0.52% |
+
+Notes:
+- **Gap sign varies** (BOOK3X3 below, ACORS3X3 / ASA7X5 above
+  GEMPACK). This is consistent with the residual being higher-order
+  numerical (frozen-coefficient CES nonlinearity at large σ_m) rather
+  than a systematic structural bias.
+- **Best parity on ASA7X5 (0.52%)** — the largest dataset. The
+  Phase 3.23 MKTCLIMP fix is structurally clean.
+
 ## What this does NOT establish
 
-- **Parity vs GEMPACK on ACORS3X3 / ASA7X5**: we don't have GEMPACK
-  Gragg-multi reference runs for these datasets. The shock-response
-  numbers are economically plausible but not cross-validated against
-  an oracle. (Setting up GEMPACK references would take ~1 day per
-  dataset.)
 - **PATH support on larger datasets**: only tested IPOPT. PATH was
   already known to be stuck on BOOK3X3 shocked (Phase 3.18) and
-  would likely behave similarly here.
+  would likely behave similarly on the others.
 
 ## Files
 
@@ -111,18 +137,34 @@ which applies the regularizer with appropriate scaling.
   regression-style coverage — running the script verifies the model
   still builds and solves across all configured datasets.
 
+`scripts/gtap_v62/run_gempack_generic.py`:
+- New generic GEMPACK runner that accepts `--dataset-dir`,
+  `--shock-comm`, `--shock-src`, `--shock-dst`. Generalises the
+  BOOK3X3-only `run_gempack_exp1a_multistep.py`. Used to generate
+  the GEMPACK oracle references for ACORS3X3 and ASA7X5.
+
 ## Reproduce
 
 ```powershell
 $env:PYTHONIOENCODING = "utf-8"
 
-# Run all three datasets through the cross-dataset harness:
+# Run all three Python solves:
 python scripts/gtap_v62/test_cross_dataset.py
-
-# Or run BOOK3X3 through the canonical parity validator:
 python scripts/gtap_v62/validate_v62_parity.py shock `
     --experiment Exp1a --solver ipopt `
     --workdir runs/gtap_v62_parity/BOOK3X3_Exp1a
+
+# Generate GEMPACK Gragg-multi references for ACORS3X3 and ASA7X5:
+python scripts/gtap_v62/run_gempack_generic.py `
+    --workdir runs/gtap_v62_oracle/ACORS3X3_Shock1 `
+    --dataset-dir c:/runGTAP375/ACORS3X3 `
+    --shock-comm Food --shock-src SSA --shock-dst EU `
+    --exp-name ACORS3X3_Shock1
+python scripts/gtap_v62/run_gempack_generic.py `
+    --workdir runs/gtap_v62_oracle/ASA7X5_Shock1 `
+    --dataset-dir c:/runGTAP375/ASA7X5 `
+    --shock-comm FOOD --shock-src SAFRICA --shock-dst EUNION `
+    --exp-name ASA7X5_Shock1
 ```
 
 ## v6.2 branch status: complete
