@@ -131,6 +131,70 @@ def bake_baseline_residuals_as_slacks(
     return info
 
 
+def apply_v62_pipeline(
+    model: Any,
+    *,
+    mode: str = None,
+    bake_tolerance: float = 1e-3,
+) -> Dict[str, Any]:
+    """End-to-end closure + (optional) prebalance for v6.2.
+
+    Dispatches based on ``mode``:
+
+    - ``"nlp"`` (IPOPT/CONOPT): apply canonical closure → square the
+      system via bipartite matching → bake baseline residuals as
+      constant slacks so ``F(x_0) = 0`` exactly. IPOPT's walras
+      objective then absorbs any residual imbalance.
+
+    - ``"mcp"`` (PATH): apply canonical closure → square via bipartite
+      matching → **skip** the prebalance bake. PATH expects an MCP
+      formulation where one equation per variable holds at the
+      equilibrium; the baseline solve must converge from a near-
+      feasible starting point. The model is built without ``walras`` in
+      MCP mode (Walras' law makes one market clearing eq redundant
+      automatically), so the bipartite matcher produces a square
+      system.
+
+    If ``mode`` is None it is read from ``model._mode`` (set by
+    ``GTAPv62ModelEquations`` at build time), defaulting to "nlp".
+
+    Returns a merged stats dict with closure and prebalance info.
+    """
+    if mode is None:
+        mode = getattr(model, "_mode", "nlp")
+    if mode not in ("nlp", "mcp"):
+        raise ValueError(f"mode must be 'nlp' or 'mcp', got {mode!r}")
+
+    closure_info = apply_v62_closure_and_square(model)
+
+    # Prebalance: bake non-zero baseline residuals as constant slacks.
+    # In Phase 3.26 we keep this for BOTH modes by default, because the
+    # SAM imperfections (eq_cgds_balance ~1M, eq_qtm intra-region VTWR
+    # ~65K, eq_market ~25K) prevent F(x_0) = 0 from holding otherwise.
+    # The bake is a structural offset that preserves derivatives in
+    # both NLP and MCP formulations. Pass ``bake_tolerance=0`` to skip.
+    if bake_tolerance > 0:
+        prebal_info = bake_baseline_residuals_as_slacks(
+            model, tolerance=bake_tolerance
+        )
+    else:
+        prebal_info = {
+            "n_baked": 0,
+            "max_abs_baked": 0.0,
+            "by_eq": {},
+            "skipped_reason": "Prebalance skipped (bake_tolerance=0)",
+        }
+
+    return {
+        "mode": mode,
+        "closure": closure_info,
+        "prebalance": prebal_info,
+        "free_vars": closure_info["free_vars"],
+        "active_cons": closure_info["active_cons"],
+        "mismatch": closure_info["mismatch"],
+    }
+
+
 def apply_v62_closure_and_square(model: Any) -> Dict[str, Any]:
     """Fix the v6.2 canonical exogenous vars + auto-fix dangling vars.
 

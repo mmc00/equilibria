@@ -74,11 +74,23 @@ class GTAPv62ModelEquations:
         params: GTAPv62Parameters,
         closure: Optional[GTAPv62ClosureConfig] = None,
         derived: Optional[DerivedV62Calibration] = None,
+        mode: str = "nlp",
     ) -> None:
+        """
+        Args:
+            mode: "nlp" (default, IPOPT/CONOPT) or "mcp" (PATH). Mirrors
+                GTAP 7 GAMS ``ifMCP`` flag. NLP mode adds a `walras` Var
+                + `eq_walras` slack; MCP mode drops both (Walras' law
+                makes one equation redundant in equilibrium). See Phase
+                3.26 findings doc.
+        """
+        if mode not in ("nlp", "mcp"):
+            raise ValueError(f"mode must be 'nlp' or 'mcp', got {mode!r}")
         self.sets = sets
         self.params = params
         self.closure = closure or GTAPv62ClosureConfig()
         self.derived = derived if derived is not None else derive_calibration(sets, params)
+        self.mode = mode
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -1033,12 +1045,18 @@ class GTAPv62ModelEquations:
         )
 
         # --- Walras check -------------------------------------------------
-
-        model.walras = Var(
-            within=Reals,
-            initialize=0.0,
-            doc="walras — global market clearing residual",
-        )
+        # Phase 3.26: only present in NLP mode. In MCP mode, Walras'
+        # law makes one market clearing eq redundant in equilibrium,
+        # and the slack would over-determine PATH's complementarity
+        # structure.
+        if self.mode == "nlp":
+            model.walras = Var(
+                within=Reals,
+                initialize=0.0,
+                doc="walras — global market clearing residual",
+            )
+        # Tag the mode on the model so closure helpers can branch.
+        model._mode = self.mode
 
     # ------------------------------------------------------------------
     # Equations (Phase 2a: placeholder; Phase 2b populates)
@@ -1971,17 +1989,19 @@ class GTAPv62ModelEquations:
             return m.pgdpwld == 1.0
         model.eq_pgdpwld = Constraint(rule=eq_pgdpwld_rule)
 
-        # eq_walras: global market clearing residual.
+        # eq_walras: global market clearing residual. NLP-only.
         # In a perfectly balanced SAM with all equations exact, sum_r
         # [y - yp - yg - SAVE + savf] == 0. The walras variable absorbs
-        # any numerical discrepancy.
-        def eq_walras_rule(m):
-            return m.walras == sum(
-                m.y[r] - m.yp[r] - m.yg[r]
-                - pyo_value(m.save_0[r]) + m.savf[r]
-                for r in m.r
-            )
-        model.eq_walras = Constraint(rule=eq_walras_rule)
+        # any numerical discrepancy (NLP + IPOPT minimises walras²).
+        # In MCP mode this slack is omitted — see __init__ docstring.
+        if self.mode == "nlp":
+            def eq_walras_rule(m):
+                return m.walras == sum(
+                    m.y[r] - m.yp[r] - m.yg[r]
+                    - pyo_value(m.save_0[r]) + m.savf[r]
+                    for r in m.r
+                )
+            model.eq_walras = Constraint(rule=eq_walras_rule)
 
 
 __all__ = [

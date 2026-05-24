@@ -141,8 +141,13 @@ class ParityReport:
 
 def build_book3x3_model(
     dataset_dir: Path = BOOK3X3_DIR,
+    mode: str = "nlp",
 ) -> Tuple[GTAPv62Sets, GTAPv62Parameters, Any]:
-    """Build a fresh BOOK3X3 model. Returns (sets, params, pyomo_model)."""
+    """Build a fresh BOOK3X3 model. Returns (sets, params, pyomo_model).
+
+    Phase 3.26: ``mode`` selects the GTAP dual closure (``"nlp"`` for
+    IPOPT/CONOPT, ``"mcp"`` for PATH). See gtap.tab ifMCP analog.
+    """
     sets = GTAPv62Sets()
     sets.load_from_har(
         dataset_dir / "SETS.HAR",
@@ -154,7 +159,7 @@ def build_book3x3_model(
         default_prm_path=dataset_dir / "Default.prm",
         sets=sets,
     )
-    model = GTAPv62ModelEquations(sets, params).build_model()
+    model = GTAPv62ModelEquations(sets, params, mode=mode).build_model()
     return sets, params, model
 
 
@@ -404,25 +409,23 @@ def shock_command(args: argparse.Namespace) -> int:
     # --- Wire the full shock pipeline ----------------------------------
     from pyomo.environ import value, Objective, minimize, Var
 
-    # The auto-square helper applies the canonical v6.2 closure +
-    # identity equations + auto-fixes any dangling variable cells.
+    # Phase 3.26 dual-mode dispatch:
+    #   --solver path-capi → MCP mode (PATH, no walras, no prebalance)
+    #   --solver ipopt / ipopt+path → NLP mode (walras + prebalance bake)
+    pyomo_mode = "mcp" if use_path_capi else "nlp"
+    print(f"Pyomo build mode: {pyomo_mode}")
+
     sys.path.insert(0, str(Path(__file__).parent))
-    from _make_square import (  # type: ignore
-        apply_v62_closure_and_square,
-        bake_baseline_residuals_as_slacks,
+    from _make_square import apply_v62_pipeline  # type: ignore
+
+    sets, params, model = build_book3x3_model(Path(args.dataset_dir), mode=pyomo_mode)
+    pipeline_info = apply_v62_pipeline(model, mode=pyomo_mode, bake_tolerance=1.0e-3)
+    closure_info = pipeline_info["closure"]
+    prebal_info = pipeline_info["prebalance"]
+    print(
+        f"Closure: free={closure_info['free_vars']} cons={closure_info['active_cons']} "
+        f"mismatch={closure_info['mismatch']}"
     )
-
-    sets, params, model = build_book3x3_model(Path(args.dataset_dir))
-    closure_info = apply_v62_closure_and_square(model)
-    print(f"Closure: free={closure_info['free_vars']} cons={closure_info['active_cons']} "
-          f"mismatch={closure_info['mismatch']}")
-
-    # Phase 3.8 SAM pre-balance: bake each non-trivial baseline residual
-    # into its equation as a constant slack. This is the GEMPACK-style
-    # treatment — derivatives are unchanged, but F(x_0) = 0 holds
-    # exactly so PATH can move from the baseline without hitting a
-    # local minimum of the merit function caused by SAM imperfections.
-    prebal_info = bake_baseline_residuals_as_slacks(model, tolerance=1.0e-3)
     print(
         f"SAM prebalance: baked {prebal_info['n_baked']} cells, "
         f"max_abs={prebal_info['max_abs_baked']:.4e}, "
@@ -485,9 +488,13 @@ def shock_command(args: argparse.Namespace) -> int:
                 equation_scaling=os.environ.get("PATH_EQ_SCALE", "1") != "0",
                 perturbation=float(os.environ.get("PATH_PERTURB", "0")),
             )
+            walras_str = (
+                f"walras={value(model.walras):.2e} "
+                if hasattr(model, "walras") else "walras=N/A(mcp) "
+            )
             print(
                 f"  term_code={res.termination_code} residual={res.residual:.2e} "
-                f"walras={value(model.walras):.2e} "
+                f"{walras_str}"
                 f"major={res.major_iterations} minor={res.minor_iterations}"
             )
             return res
