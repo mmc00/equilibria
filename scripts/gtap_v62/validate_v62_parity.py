@@ -419,6 +419,16 @@ def shock_command(args: argparse.Namespace) -> int:
     from _make_square import apply_v62_pipeline  # type: ignore
 
     sets, params, model = build_book3x3_model(Path(args.dataset_dir), mode=pyomo_mode)
+
+    # Phase 3.29: run data-level health diagnostic right after loading
+    # SAM. Cheap, warns early if PATH is likely to fail.
+    if pyomo_mode == "mcp" or os.environ.get("V62_ALWAYS_DIAGNOSE"):
+        from diagnose_health import (  # type: ignore
+            check_dataset_for_path, print_health_report,
+        )
+        data_h = check_dataset_for_path(sets, params)
+        print_health_report(data_h)
+
     # Phase 3.27 SAM-close reduces baseline residuals by ~98% (1.17M → 37K),
     # but PATH still benefits from the bake to drive baseline residual to
     # exactly zero. Keep baking for both modes.
@@ -427,6 +437,19 @@ def shock_command(args: argparse.Namespace) -> int:
     pipeline_info = apply_v62_pipeline(
         model, mode=pyomo_mode, bake_tolerance=1.0e-3, params=params,
     )
+
+    # Phase 3.29: run Jacobian-level health diagnostic after closure +
+    # prebalance. Identifies the specific (eq, var) cells causing
+    # singularity BEFORE PATH wastes time on a doomed solve.
+    if pyomo_mode == "mcp" or os.environ.get("V62_ALWAYS_DIAGNOSE"):
+        from diagnose_health import (  # type: ignore
+            check_jacobian_singularity, print_health_report,
+        )
+        try:
+            jac_h = check_jacobian_singularity(model, params, top_k=8)
+            print_health_report(jac_h)
+        except Exception as exc:
+            print(f"  Jacobian diagnostic skipped: {exc}")
     closure_info = pipeline_info["closure"]
     prebal_info = pipeline_info["prebalance"]
     print(
