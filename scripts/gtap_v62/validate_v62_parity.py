@@ -422,7 +422,11 @@ def shock_command(args: argparse.Namespace) -> int:
     # Phase 3.27 SAM-close reduces baseline residuals by ~98% (1.17M → 37K),
     # but PATH still benefits from the bake to drive baseline residual to
     # exactly zero. Keep baking for both modes.
-    pipeline_info = apply_v62_pipeline(model, mode=pyomo_mode, bake_tolerance=1.0e-3)
+    # Phase 3.28: pass params so conditional_fixing (data-driven zero-flow
+    # fix) can run before bipartite matching.
+    pipeline_info = apply_v62_pipeline(
+        model, mode=pyomo_mode, bake_tolerance=1.0e-3, params=params,
+    )
     closure_info = pipeline_info["closure"]
     prebal_info = pipeline_info["prebalance"]
     print(

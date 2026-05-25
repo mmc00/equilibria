@@ -47,6 +47,7 @@ from equilibria.templates.gtap_v62 import (  # noqa: E402
 from scripts.gtap_v62._make_square import (  # noqa: E402
     apply_v62_closure_and_square,
     bake_baseline_residuals_as_slacks,
+    apply_v62_pipeline,
 )
 
 
@@ -170,19 +171,21 @@ def run_dataset(spec: dict) -> dict:
     print(f"  Constraints: {sum(1 for _ in model.component_data_objects(Constraint, active=True))}")
 
     # 3. Apply closure + prebalance.
-    info = apply_v62_closure_and_square(model)
-    n_free = sum(
-        1 for v in model.component_objects(Var, active=True)
-        for idx in v if not v[idx].fixed
+    # Phase 3.28: use full pipeline with conditional fixing.
+    import os as _os
+    _mode = _os.environ.get("V62_SOLVER_MODE", "nlp")
+    pipeline_info = apply_v62_pipeline(
+        model, mode=_mode, bake_tolerance=1.0e-3, params=params,
     )
-    n_active = sum(1 for _ in model.component_data_objects(Constraint, active=True))
-    print(f"  Closure: free={n_free} cons={n_active} mismatch={n_free - n_active}")
-    info["free_vars"] = n_free
-    info["active_cons"] = n_active
-    info["mismatch"] = n_free - n_active
-    prebal = bake_baseline_residuals_as_slacks(model)
+    info = pipeline_info["closure"]
+    cond = info.get("conditional_fixing", {})
+    print(f"  Conditional fixing: {cond.get('n_fixed_total', 0)} vars "
+          f"({cond.get('fixed_by_family', {})})")
+    print(f"  Closure: free={info['free_vars']} cons={info['active_cons']} "
+          f"mismatch={info['mismatch']}")
+    prebal = pipeline_info["prebalance"]
     print(f"  Prebalance: baked {prebal['n_baked']} cells, "
-          f"max_abs={prebal['max_abs_baked']:.2e}")
+          f"max_abs={prebal.get('max_abs_baked', 0):.2e}")
 
     # 4. Baseline solve.
     baseline_init = {

@@ -30,6 +30,96 @@ def _vars_in_constraint(c) -> set:
     return out
 
 
+def apply_v62_conditional_fixing(
+    model: Any,
+    params: Any,
+    *,
+    tol: float = 1.0e-9,
+) -> Dict[str, Any]:
+    """Phase 3.28: data-driven fixing of variables whose benchmark flow is 0.
+
+    Ports the ``apply_conditional_fixing`` logic from
+    ``templates/gtap/gtap_solver.py:341``. Looking at the benchmark V*M /
+    V*A values, fix variables associated with inactive routes:
+
+    - Bilateral trade vars (qxs, pms, pmcif, pe, pwmg) when both VXMD
+      and VXWD are 0 for that route.
+    - Household / government / firm absorption vars (qpd, qpm, qgd,
+      qgm, qfd, qfm) when their respective V*M flow is 0.
+    - Factor demand qfe when VFM is 0.
+
+    Removing structurally-irrelevant vars from the active MCP BEFORE
+    bipartite matching gives PATH a smaller, denser Jacobian — analogue
+    of v7's data-driven fixing that helps PATH converge.
+
+    Returns dict with per-family fix counts.
+    """
+    b = params.benchmark
+    fixed_by_family: Dict[str, int] = {}
+
+    def _fix_idx(var_name: str, idx, fallback: float = 0.0):
+        if not hasattr(model, var_name):
+            return False
+        var = getattr(model, var_name)
+        if idx not in var:
+            return False
+        cell = var[idx]
+        if cell.fixed:
+            return False
+        val = cell.value if cell.value is not None else fallback
+        # Some vars have lower bound > 0; relax to 0 before fixing at 0.
+        if val == 0.0 and cell.lb is not None and float(cell.lb) > 0.0:
+            cell.setlb(0.0)
+        cell.fix(float(val))
+        fixed_by_family[var_name] = fixed_by_family.get(var_name, 0) + 1
+        return True
+
+    # 1. Bilateral trade — no flow on a route ⇒ fix all related vars.
+    for i in model.i:
+        for s in model.s:
+            for d in model.rp:
+                vxmd = float(b.vxmd.get((i, s, d), 0.0))
+                vxwd = float(b.vxwd.get((i, s, d), 0.0))
+                if vxmd <= tol and vxwd <= tol:
+                    for vname in ("qxs", "pms", "pmcif", "pe", "pwmg"):
+                        _fix_idx(vname, (i, s, d))
+
+    # 2. Household absorption — no V*M ⇒ no demand for that good.
+    for i in model.i:
+        for r in model.r:
+            if float(b.vdpm.get((i, r), 0.0)) <= tol:
+                _fix_idx("qpd", (i, r))
+            if float(b.vipm.get((i, r), 0.0)) <= tol:
+                _fix_idx("qpm", (i, r))
+            if float(b.vdgm.get((i, r), 0.0)) <= tol:
+                _fix_idx("qgd", (i, r))
+            if float(b.vigm.get((i, r), 0.0)) <= tol:
+                _fix_idx("qgm", (i, r))
+
+    # 3. Firm intermediate absorption.
+    for i in model.i:
+        for j in model.j:
+            for r in model.r:
+                if float(b.vdfm.get((i, j, r), 0.0)) <= tol:
+                    _fix_idx("qfd", (i, j, r))
+                if float(b.vifm.get((i, j, r), 0.0)) <= tol:
+                    _fix_idx("qfm", (i, j, r))
+
+    # 4. Factor demand — no VFM ⇒ factor not used by sector.
+    # (Phase 3.18 already does this under "qfe_no_factor_use"; we
+    # repeat here for completeness in case it's called standalone.)
+    for f in model.f:
+        for j in model.j:
+            for r in model.r:
+                if float(b.vfm.get((f, j, r), 0.0)) <= tol:
+                    _fix_idx("qfe", (f, j, r))
+
+    return {
+        "fixed_by_family": fixed_by_family,
+        "n_fixed_total": sum(fixed_by_family.values()),
+    }
+
+
 def bake_baseline_residuals_as_slacks(
     model: Any,
     *,
@@ -136,6 +226,8 @@ def apply_v62_pipeline(
     *,
     mode: str = None,
     bake_tolerance: float = 1e-3,
+    params: Any = None,
+    conditional_fixing: bool = True,
 ) -> Dict[str, Any]:
     """End-to-end closure + (optional) prebalance for v6.2.
 
@@ -165,7 +257,18 @@ def apply_v62_pipeline(
     if mode not in ("nlp", "mcp"):
         raise ValueError(f"mode must be 'nlp' or 'mcp', got {mode!r}")
 
+    # Phase 3.28: data-driven conditional fixing BEFORE closure
+    # squaring. Fixes vars where the benchmark V*M flow is 0, mirroring
+    # v7's apply_conditional_fixing. This removes structurally-
+    # irrelevant vars from the active MCP, giving PATH a tighter
+    # Jacobian.
+    if conditional_fixing and params is not None:
+        cond_info = apply_v62_conditional_fixing(model, params)
+    else:
+        cond_info = {"fixed_by_family": {}, "n_fixed_total": 0}
+
     closure_info = apply_v62_closure_and_square(model)
+    closure_info["conditional_fixing"] = cond_info
 
     # Prebalance: bake non-zero baseline residuals as constant slacks.
     # In Phase 3.26 we keep this for BOTH modes by default, because the
