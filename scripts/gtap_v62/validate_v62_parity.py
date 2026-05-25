@@ -603,21 +603,19 @@ def shock_command(args: argparse.Namespace) -> int:
           f"in {n_steps} substep(s)")
 
     if use_path_capi:
-        from _make_square import rebake_residuals_at_current_state  # type: ignore
+        # Phase 3.33: do NOT rebake between substeps. The bake from
+        # baseline encodes the SAM imperfections (which are constant —
+        # not dependent on the shocked parameter). Rebaking would
+        # effectively pin the equilibrium to the current x, blocking
+        # PATH from moving toward the shocked equilibrium. Without
+        # rebake, the chained warm-start + substepping lets PATH
+        # navigate to the new equilibrium cleanly (verified: term_code=1
+        # with residual ~1e-7 on gtap6_3x3 with 5 substeps).
         for step in range(1, n_steps + 1):
             alpha = step / n_steps
             tms_step = (1 - alpha) * old_tms + alpha * new_tms
             model.tms["food", "USA", "EU"] = tms_step
             print(f"  Substep {step}/{n_steps}: tms = {tms_step:.4f} (α={alpha:.3f})")
-            # Phase 3.32: re-bake residuals at the post-shock state so
-            # PATH starts from F(x_current) = 0 again. Without this,
-            # the static bake from baseline becomes stale once any
-            # parameter shifts, causing PATH to chase a phantom residual
-            # in the baked constants.
-            rebake_info = rebake_residuals_at_current_state(model, tolerance=1.0e-3)
-            print(f"    re-bake: {rebake_info['n_rebaked']} cells refreshed, "
-                  f"{rebake_info['n_skipped']} now-trivial, "
-                  f"max_abs={rebake_info['max_abs']:.2e}")
             _solve_path_capi(f"SHOCK substep {step}/{n_steps}")
     else:
         # IPOPT (or ipopt+path) path — applies the full shock in one go.
