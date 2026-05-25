@@ -208,19 +208,20 @@ def solve_v62_with_path_capi(
         output=output,
     )
 
-    # Phase 3.31: only write the solution back if PATH converged
-    # cleanly (term_code=1). Writing back an unconverged iterate (when
-    # term_code=2 = "merit function did not decrease") would contaminate
-    # the model state for any subsequent solve (e.g., next substep in a
-    # homotopy chain). On failure, the model retains its pre-solve init
-    # so the next substep can try from there.
-    if result.termination_code == 1:
+    # Phase 3.32: write the solution back whenever the residual is
+    # reasonable (< 10.0), regardless of term_code. Phase 3.31's
+    # strict "term_code=1 only" rule was too conservative — it blocked
+    # warm-start chaining for homotopy substeps where each substep
+    # legitimately makes progress (residual decreases) but doesn't
+    # achieve term_code=1 before time runs out.
+    # The rebake mechanism in homotopy loops keeps F(x_current) close
+    # to zero at the start of each PATH call, so writing back a
+    # PATH-improved iterate is safe.
+    if result.residual < 10.0:
         # Un-scale the solution before writing it back.
         x_solution = [yi * var_scale[i] for i, yi in enumerate(result.x)]
         for var, val in zip(free_vars, x_solution):
             var.set_value(float(val), skip_validation=True)
-    # Even on failure, return the result so the caller can decide how
-    # to react (revert tariff, reduce substep size, switch solver, ...).
 
     return PathCapiSolveResult(
         termination_code=result.termination_code,

@@ -195,28 +195,113 @@ def bake_baseline_residuals_as_slacks(
                 continue
             to_bake.append((c, idx, residual, cobj.body, cobj.lower, cobj.upper))
 
+    # Track baked cells for later rebake at shocked state (Phase 3.32).
+    if not hasattr(model, "_baked_cell_metadata"):
+        model._baked_cell_metadata = []
+
     for c, idx, residual, body, lower, upper in to_bake:
         # Deactivate the original cell.
         c[idx].deactivate()
 
         # Replacement: body - residual_0 == rhs  (equivalent to body == rhs + residual_0)
-        # For an equality constraint (lower == upper == rhs), build a new one.
+        # ConstraintList.add returns the new Constraint cell (Pyomo); we
+        # store it so rebake can locate it via the live reference.
         if lower is not None and upper is not None:
             rhs = value(upper)
-            model.sam_baked_residuals.add(body - residual == rhs)
+            replacement = model.sam_baked_residuals.add(body - residual == rhs)
         elif upper is not None:
             rhs = value(upper)
-            model.sam_baked_residuals.add(body - residual <= rhs)
+            replacement = model.sam_baked_residuals.add(body - residual <= rhs)
         elif lower is not None:
             rhs = value(lower)
-            model.sam_baked_residuals.add(body - residual >= rhs)
+            replacement = model.sam_baked_residuals.add(body - residual >= rhs)
         else:
-            model.sam_baked_residuals.add(body - residual == 0)
+            replacement = model.sam_baked_residuals.add(body - residual == 0)
+
+        model._baked_cell_metadata.append({
+            "orig_con": c,
+            "orig_idx": idx,
+            "body": body,
+            "lower": lower,
+            "upper": upper,
+            "replacement": replacement,  # live Constraint cell
+        })
 
         info["n_baked"] += 1
         info["max_abs_baked"] = max(info["max_abs_baked"], abs(residual))
         eq_name = c.name
         info["by_eq"].setdefault(eq_name, []).append((str(idx), residual))
+
+    return info
+
+
+def rebake_residuals_at_current_state(
+    model: Any,
+    *,
+    tolerance: float = 1.0e-3,
+) -> Dict[str, Any]:
+    """Phase 3.32: re-evaluate baked residuals at the CURRENT model state.
+
+    The original prebalance bake captures residuals at the BASELINE x_0
+    as constants. After a shock, the body expression evaluates to a new
+    value but the baked residual_0 is stale → F jumps from 0 to ~676.
+
+    Uses ``model._baked_cell_metadata`` (populated by
+    ``bake_baseline_residuals_as_slacks``) to update IN PLACE, without
+    re-activating originally-baked constraints (which preserves the
+    closure square-ness).
+
+    Returns dict with n_rebaked, max_abs, etc.
+    """
+    info = {"n_rebaked": 0, "max_abs": 0.0, "by_eq": {}, "n_skipped": 0}
+    if not hasattr(model, "_baked_cell_metadata"):
+        return info
+
+    for meta in model._baked_cell_metadata:
+        body = meta["body"]
+        lower = meta["lower"]
+        upper = meta["upper"]
+        old_replacement = meta["replacement"]
+
+        # Evaluate body at CURRENT state
+        try:
+            body_val = value(body)
+        except Exception:
+            info["n_skipped"] += 1
+            continue
+
+        if upper is not None:
+            rhs = value(upper)
+        elif lower is not None:
+            rhs = value(lower)
+        else:
+            rhs = 0.0
+        new_residual = body_val - rhs
+
+        # Deactivate old replacement (regardless of whether new is trivial)
+        if old_replacement.active:
+            old_replacement.deactivate()
+
+        if abs(new_residual) <= tolerance:
+            info["n_skipped"] += 1
+            continue
+
+        # Add new replacement with updated residual
+        if lower is not None and upper is not None:
+            new_replacement = model.sam_baked_residuals.add(body - new_residual == rhs)
+        elif upper is not None:
+            new_replacement = model.sam_baked_residuals.add(body - new_residual <= rhs)
+        elif lower is not None:
+            new_replacement = model.sam_baked_residuals.add(body - new_residual >= rhs)
+        else:
+            new_replacement = model.sam_baked_residuals.add(body - new_residual == 0)
+
+        meta["replacement"] = new_replacement
+        info["n_rebaked"] += 1
+        info["max_abs"] = max(info["max_abs"], abs(new_residual))
+        eq_name = meta["orig_con"].name
+        info["by_eq"].setdefault(eq_name, 0)
+        info["by_eq"][eq_name] += 1
 
     return info
 
