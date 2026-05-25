@@ -1021,20 +1021,20 @@ class GTAPv62ModelEquations:
             initialize=1.0,
             doc="pgdpwld — world GDP price index (v6.2 numeraire)",
         )
+        # Phase 3.27: initialize gdpmp / rgdpmp to y_0 = factor income +
+        # tax revenue so the identity eq_gdpmp (gdpmp = y) holds at
+        # benchmark. Previously these were initialized to factor_income
+        # alone, leaving a tax_revenue-sized residual.
         model.gdpmp = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, r: max(
-                sum(c.evom.get((f, r), 0.0) for f in self.sets.f), lb,
-            ),
+            initialize=lambda m, r: max(c.y_0.get(r, 1.0), lb),
             doc="gdpmp(r) — nominal GDP at market prices",
         )
         model.rgdpmp = Var(
             model.r,
             within=NonNegativeReals, bounds=(lb, None),
-            initialize=lambda m, r: max(
-                sum(c.evom.get((f, r), 0.0) for f in self.sets.f), lb,
-            ),
+            initialize=lambda m, r: max(c.y_0.get(r, 1.0), lb),
             doc="rgdpmp(r) — real GDP",
         )
         model.pgdpmp = Var(

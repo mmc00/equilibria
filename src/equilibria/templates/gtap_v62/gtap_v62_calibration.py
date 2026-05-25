@@ -635,15 +635,33 @@ def derive_calibration(
         # qst_0(m,r) = VST(m,r): margin commodity supply
         for r in sets.r:
             out.qst_0[(m_lbl, r)] = b.vst.get((m_lbl, r), 0.0)
-        # qtm_0(m) = total margin services demanded worldwide
-        out.qtm_0[m_lbl] = sum(b.vst.get((m_lbl, r), 0.0) for r in sets.r)
+
+        # qtm_0(m) = total margin services demanded worldwide.
+        # Phase 3.27 SAM-close: subtract intra-region (s==d) VTWR from
+        # the supply side, matching the demand side which already
+        # excludes diagonal (amgm[m,i,r,r] = 0 in our calibration).
+        # Without this adjustment eq_qtm at benchmark has residual =
+        # sum_(i,r) VTWR(m,i,r,r) — typically ~65K USD in BOOK3X3-like
+        # aggregations with non-trivial intra-region trade.
+        total_vst_full = sum(b.vst.get((m_lbl, r), 0.0) for r in sets.r)
+        diag_vtwr = sum(
+            b.vtwr.get((m_lbl, i, r, r), 0.0)
+            for i in sets.i for r in sets.r
+        )
+        out.qtm_0[m_lbl] = total_vst_full - diag_vtwr
+
         # ptmg_0(m) = 1 at benchmark (basic price normalization)
         out.ptmg_0[m_lbl] = 1.0
-        # share_st(m,r) = VST(m,r) / total margin sales (CD aggregator)
-        total_vst = out.qtm_0[m_lbl]
-        if total_vst > 0.0:
+        # share_st(m,r) = VST(m,r) / total VST. Must sum to 1 so the
+        # Cobb-Douglas aggregator eq_ptmg holds at benchmark (since at
+        # benchmark all pst = 1 and ptmg = 1). We use the full VST sum
+        # here (NOT the qtm_0 adjusted value), independently of the
+        # eq_qtm intra-region subtraction.
+        if total_vst_full > 0.0:
             for r in sets.r:
-                out.share_st[(m_lbl, r)] = b.vst.get((m_lbl, r), 0.0) / total_vst
+                out.share_st[(m_lbl, r)] = (
+                    b.vst.get((m_lbl, r), 0.0) / total_vst_full
+                )
 
     # ------------------------------------------------------------------
     # Income block (Phase 2c.3)
@@ -692,13 +710,14 @@ def derive_calibration(
             for f in sets.f
             for j in sets.prod_comm
         )
-        # TOUT: output tax — currently calibrated as zero since
-        # our voa[i,r] = vom[i,r] (see VOA loop above). Kept for
-        # completeness; updates automatically if to[i,r] is later
-        # populated from a separate header.
+        # TOUT: output tax revenue. Phase 3.7 calibrates `to[i,r]` as
+        # the IMPLICIT output tax (= vom/vop - 1) so the production-side
+        # SAM gap is absorbed. The corresponding tax revenue is
+        # vom - vop (= (1+to) * vop - vop = to * vop). Iterate
+        # prod_comm to include the cgds sector too.
         tout = sum(
-            out.voa.get((i, r), 0.0) - out.vom.get((i, r), 0.0)
-            for i in sets.i
+            out.vom.get((i, r), 0.0) - out.vop.get((i, r), 0.0)
+            for i in sets.prod_comm
         )
         # TEX: export tax (r is the source/exporter)
         tex = sum(
@@ -718,7 +737,29 @@ def derive_calibration(
         # New regional income: factor income + indirect tax revenue.
         out.y_0[r] = factor_inc + tax_rev
 
-        out.save_0[r] = b.save.get(r, 0.0)
+        # Phase 3.27 SAM-close: reconcile save_0 with vom[cgds,r] so
+        # eq_cgds_balance holds exactly at benchmark.
+        #
+        # The HAR "SAVE" header is the savings AGGREGATE per region, but
+        # in v6.2 SAMs the cost-side cgds output (= sum of intermediate
+        # inputs to the cgds sector) typically differs from this
+        # aggregate by ~1.17M USD per region (= VDEP + DPGOV + DPPRIV
+        # flows that aren't modelled in the static-closure cgds sector).
+        # We force save_0 = vom[cgds, r] so the closure equation
+        #     pcgds * qo[cgds, r] = y - yp - yg + savf
+        # holds exactly at the benchmark. The mismatch is absorbed by
+        # savf_0 (foreign savings).
+        cgds_labels = list(sets.cgds)
+        if cgds_labels:
+            cgds_label = cgds_labels[0]
+            cgds_vom = out.vom.get((cgds_label, r), 0.0)
+            if cgds_vom > 0.0:
+                out.save_0[r] = cgds_vom
+            else:
+                out.save_0[r] = b.save.get(r, 0.0)
+        else:
+            out.save_0[r] = b.save.get(r, 0.0)
+
         out.savf_0[r] = (
             out.yp_0.get(r, 0.0)
             + out.yg_0.get(r, 0.0)

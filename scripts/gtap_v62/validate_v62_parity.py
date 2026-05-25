@@ -419,6 +419,9 @@ def shock_command(args: argparse.Namespace) -> int:
     from _make_square import apply_v62_pipeline  # type: ignore
 
     sets, params, model = build_book3x3_model(Path(args.dataset_dir), mode=pyomo_mode)
+    # Phase 3.27 SAM-close reduces baseline residuals by ~98% (1.17M → 37K),
+    # but PATH still benefits from the bake to drive baseline residual to
+    # exactly zero. Keep baking for both modes.
     pipeline_info = apply_v62_pipeline(model, mode=pyomo_mode, bake_tolerance=1.0e-3)
     closure_info = pipeline_info["closure"]
     prebal_info = pipeline_info["prebalance"]
