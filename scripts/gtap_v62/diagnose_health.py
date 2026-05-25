@@ -386,6 +386,95 @@ def check_jacobian_singularity(
 
 
 # ----------------------------------------------------------------------
+# Phase 3.30 — Auto-drop dead rows
+# ----------------------------------------------------------------------
+
+def drop_dead_rows(
+    model: Any,
+    params: Any = None,
+    threshold: float = 1e-6,
+) -> Dict[str, Any]:
+    """Deactivate Jacobian rows with norm below threshold.
+
+    Identifies structurally-redundant equations — those whose row in
+    J(x_0) has 2-norm below ``threshold``, meaning the equation
+    contributes essentially no usable Newton direction. For each such
+    equation:
+
+    1. Deactivate the constraint (removed from active set)
+    2. Fix one of its free variables at its current value
+       (so the system stays square)
+
+    The mismatch (#free_vars - #active_cons) should remain unchanged
+    because each drop removes one of each.
+
+    Use this AFTER bipartite matching but BEFORE prebalance baking —
+    no point in baking residuals on equations we're about to drop.
+
+    Args:
+        model: closed Pyomo model (bipartite-matched, mismatch=0)
+        params: GTAPv62Parameters (used by helpers but optional here)
+        threshold: row 2-norm cutoff. Default 1e-6 (six orders below 1).
+
+    Returns:
+        dict with:
+          - n_dropped: number of (eq, var) pairs dropped
+          - threshold: threshold used
+          - dropped: list of {eq_name, idx, row_norm, var_fixed}
+    """
+    from pyomo.core.expr.visitor import identify_variables
+
+    J, free_vars, active_cons, _ = _build_sparse_jacobian(model)
+    row_norms = np.sqrt(np.asarray((J.multiply(J)).sum(axis=1)).flatten())
+
+    # Sort dead rows by norm ascending so deterministic
+    dead_idx = sorted(
+        [i for i, n in enumerate(row_norms) if n < threshold and i < len(active_cons)],
+        key=lambda i: row_norms[i],
+    )
+
+    dropped: List[Dict[str, Any]] = []
+    for i in dead_idx:
+        con = active_cons[i]
+        if not con.active:
+            continue
+
+        # Find a free variable that appears in this constraint.
+        var_to_fix = None
+        for v in identify_variables(con.body, include_fixed=False):
+            if not v.fixed:
+                var_to_fix = v
+                break
+
+        # Deactivate the equation; fix one of its vars if any.
+        con.deactivate()
+        if var_to_fix is not None:
+            val = var_to_fix.value if var_to_fix.value is not None else 0.0
+            # If var has a positive lower bound but we want to fix at 0,
+            # relax the bound first.
+            if val == 0.0 and var_to_fix.lb is not None and float(var_to_fix.lb) > 0.0:
+                var_to_fix.setlb(0.0)
+            var_to_fix.fix(float(val))
+
+        parent = con.parent_component()
+        dropped.append({
+            "eq_name": parent.name,
+            "idx": str(con.index()),
+            "row_norm": float(row_norms[i]),
+            "var_fixed": (
+                f"{var_to_fix.parent_component().name}{var_to_fix.index()}"
+                if var_to_fix is not None else None
+            ),
+        })
+
+    return {
+        "n_dropped": len(dropped),
+        "threshold": threshold,
+        "dropped": dropped,
+    }
+
+
+# ----------------------------------------------------------------------
 # Pretty printer
 # ----------------------------------------------------------------------
 

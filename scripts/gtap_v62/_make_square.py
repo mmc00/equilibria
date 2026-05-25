@@ -228,6 +228,7 @@ def apply_v62_pipeline(
     bake_tolerance: float = 1e-3,
     params: Any = None,
     conditional_fixing: bool = True,
+    drop_dead_rows_threshold: float = 0.0,
 ) -> Dict[str, Any]:
     """End-to-end closure + (optional) prebalance for v6.2.
 
@@ -269,6 +270,23 @@ def apply_v62_pipeline(
 
     closure_info = apply_v62_closure_and_square(model)
     closure_info["conditional_fixing"] = cond_info
+
+    # Phase 3.30: optionally drop Jacobian rows with norm below threshold.
+    # When threshold > 0, runs after bipartite matching to remove
+    # structurally-redundant equations (e.g., BOOK3X3's
+    # eq_qxs[svces, r, r] which has row_norm ≈ 2e-9 due to amgm[m,i,r,r]=0).
+    # Each dropped row pair-deactivates one free variable to keep the
+    # system square.
+    drop_info: Dict[str, Any] = {"n_dropped": 0, "dropped": []}
+    if drop_dead_rows_threshold > 0:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).parent))
+        from diagnose_health import drop_dead_rows  # type: ignore
+        drop_info = drop_dead_rows(
+            model, params=params, threshold=drop_dead_rows_threshold,
+        )
+    closure_info["dead_rows_dropped"] = drop_info
 
     # Prebalance: bake non-zero baseline residuals as constant slacks.
     # In Phase 3.26 we keep this for BOTH modes by default, because the

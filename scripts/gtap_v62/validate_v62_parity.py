@@ -434,9 +434,21 @@ def shock_command(args: argparse.Namespace) -> int:
     # exactly zero. Keep baking for both modes.
     # Phase 3.28: pass params so conditional_fixing (data-driven zero-flow
     # fix) can run before bipartite matching.
+    # Phase 3.30: drop_dead_rows_threshold > 0 in MCP mode removes
+    # structurally-redundant equations (e.g., BOOK3X3 svces diagonal)
+    # so PATH doesn't hit a singular Jacobian.
+    drop_thr = 1.0e-6 if pyomo_mode == "mcp" else 0.0
     pipeline_info = apply_v62_pipeline(
         model, mode=pyomo_mode, bake_tolerance=1.0e-3, params=params,
+        drop_dead_rows_threshold=drop_thr,
     )
+    dr = pipeline_info["closure"].get("dead_rows_dropped", {})
+    if dr.get("n_dropped", 0) > 0:
+        print(f"  Dead-row drop: {dr['n_dropped']} rows deactivated "
+              f"(threshold={dr['threshold']})")
+        for d in dr["dropped"][:5]:
+            print(f"    • {d['eq_name']}{d['idx']}  row_norm={d['row_norm']:.2e}  "
+                  f"fixed_var={d['var_fixed']}")
 
     # Phase 3.29: run Jacobian-level health diagnostic after closure +
     # prebalance. Identifies the specific (eq, var) cells causing

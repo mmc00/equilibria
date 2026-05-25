@@ -208,10 +208,19 @@ def solve_v62_with_path_capi(
         output=output,
     )
 
-    # Un-scale the solution before writing it back.
-    x_solution = [yi * var_scale[i] for i, yi in enumerate(result.x)]
-    for var, val in zip(free_vars, x_solution):
-        var.set_value(float(val), skip_validation=True)
+    # Phase 3.31: only write the solution back if PATH converged
+    # cleanly (term_code=1). Writing back an unconverged iterate (when
+    # term_code=2 = "merit function did not decrease") would contaminate
+    # the model state for any subsequent solve (e.g., next substep in a
+    # homotopy chain). On failure, the model retains its pre-solve init
+    # so the next substep can try from there.
+    if result.termination_code == 1:
+        # Un-scale the solution before writing it back.
+        x_solution = [yi * var_scale[i] for i, yi in enumerate(result.x)]
+        for var, val in zip(free_vars, x_solution):
+            var.set_value(float(val), skip_validation=True)
+    # Even on failure, return the result so the caller can decide how
+    # to react (revert tariff, reduce substep size, switch solver, ...).
 
     return PathCapiSolveResult(
         termination_code=result.termination_code,
