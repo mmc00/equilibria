@@ -112,7 +112,12 @@ def solve_v62_with_path_capi(
         )
 
     # Build nonlinear callbacks (residual + Jacobian) using
-    # reverse_numeric mode — faster than symbolic for this model size.
+    # reverse_numeric mode — empirically faster than symbolic for our
+    # nested-CES model. Symbolic builds huge derivative expressions
+    # whose evaluation walks the full Pyomo tree; reverse_numeric does
+    # finite differences but with sparse-pattern-aware perturbation.
+    # Tested on gtap6_10x7 (Phase 3.35): reverse_numeric ~16s/iter,
+    # symbolic ~250s/iter. Both produce same equilibrium.
     adapter = PyomoMCPAdapter()
     data = adapter.build_nonlinear_from_equality_constraints(
         model,
