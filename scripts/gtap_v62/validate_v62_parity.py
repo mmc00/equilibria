@@ -437,9 +437,14 @@ def shock_command(args: argparse.Namespace) -> int:
     # Phase 3.30: drop_dead_rows_threshold > 0 in MCP mode removes
     # structurally-redundant equations (e.g., BOOK3X3 svces diagonal)
     # so PATH doesn't hit a singular Jacobian.
+    # Phase 3.36: bake_tolerance lowered 1e-3 → 1e-6. Larger datasets
+    # (gtap6_15x10) have ~150 SAM cells with baseline residuals in the
+    # 1e-5 – 1e-3 range. With tol=1e-3 those cells stayed ACTIVE and
+    # their cumulative 2-norm (~3.7e-3) trapped PATH at term_code=2.
+    # tol=1e-6 absorbs them, baseline reaches tc=1 r=5e-8 cleanly.
     drop_thr = 1.0e-6 if pyomo_mode == "mcp" else 0.0
     pipeline_info = apply_v62_pipeline(
-        model, mode=pyomo_mode, bake_tolerance=1.0e-3, params=params,
+        model, mode=pyomo_mode, bake_tolerance=1.0e-6, params=params,
         drop_dead_rows_threshold=drop_thr,
     )
     dr = pipeline_info["closure"].get("dead_rows_dropped", {})
