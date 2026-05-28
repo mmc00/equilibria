@@ -120,6 +120,80 @@ def apply_v62_conditional_fixing(
     }
 
 
+def apply_v62_diagonal_redundancy_fix(
+    model: Any,
+    params: Any,
+    *,
+    threshold: float = 0.99,
+) -> Dict[str, Any]:
+    """Phase 3.37: deactivate eq_qxs[i, r, r] when intra-region trade dominates.
+
+    Discovery (Phase 3.37 with Output_SetInterface hook on gtap6_15x10):
+    PATH's crash factorization detects 13 structurally singular constraints
+    that prevent it from taking any Newton step (terminates at major=0,
+    residual floor 1.97e-5 regardless of bake/matching). All 13 are
+    eq_qxs(i, r, r) diagonal cells for products with no significant
+    international trade — VegFruit and Construction in gtap6_15x10.
+
+    Mathematical origin:
+      eq_qxs(i, s, d): qxs(i,s,d) = α_xs(i,s,d) * qim(i,d) * (pim/pms)^σ_m
+    When vxmd(i, r, r) / Σ_s vxmd(i, s, r) → 1 (intra-region dominates),
+    α_xs(i, r, r) → 1 and pms(i, r, r) → pim(i, r) (the import composite
+    *is* the domestic supply). The equation reduces to qxs(i,r,r) =
+    qim(i,r), which is exactly what eq_qim already provides via
+    qim = sum_agent_demands / pim_0. Linearly dependent ⇒ singular.
+
+    Drop_dead_rows (Phase 3.30) uses row 2-norm and misses this because
+    the row has non-trivial coefficient norm — the dependency is rank-
+    related, not weak-coupling. PATH's LU pivoting detects it, but only
+    after wasting a crash phase and refusing all Newton steps.
+
+    The fix: detect the dominant-diagonal cells in SAM data BEFORE
+    bipartite matching, deactivate them, and let the matcher pair the
+    freed-up qxs(i, r, r) variable with whatever equation needs it.
+
+    Returns dict with deactivated cells and diagnostic info.
+    """
+    b = params.benchmark
+    info: Dict[str, Any] = {
+        "n_deactivated": 0,
+        "deactivated": [],
+        "by_family": {},
+    }
+
+    if not hasattr(model, "eq_qxs"):
+        return info
+
+    for i in model.i:
+        for r in model.r:
+            idx = (i, r, r)
+            if idx not in model.eq_qxs:
+                continue
+            cell = model.eq_qxs[idx]
+            if not cell.active:
+                continue
+
+            vxmd_diag = float(b.vxmd.get(idx, 0.0))
+            vxmd_total = sum(
+                float(b.vxmd.get((i, s, r), 0.0))
+                for s in model.s
+            )
+
+            if vxmd_total > 0 and vxmd_diag / vxmd_total > threshold:
+                cell.deactivate()
+                info["n_deactivated"] += 1
+                info["deactivated"].append({
+                    "i": str(i),
+                    "r": str(r),
+                    "diag_share": vxmd_diag / vxmd_total,
+                    "vxmd_diag": vxmd_diag,
+                })
+                family_key = str(i)
+                info["by_family"][family_key] = info["by_family"].get(family_key, 0) + 1
+
+    return info
+
+
 def bake_baseline_residuals_as_slacks(
     model: Any,
     *,
@@ -353,8 +427,18 @@ def apply_v62_pipeline(
     else:
         cond_info = {"fixed_by_family": {}, "n_fixed_total": 0}
 
+    # Phase 3.37: deactivate eq_qxs(i, r, r) when intra-region trade
+    # dominates (>99%). The diagonal of qxs becomes structurally
+    # redundant with eq_qim in this regime; PATH's LU pivoting detects
+    # it as singular and refuses Newton steps. Must run BEFORE bipartite
+    # matching so the matcher pairs qxs(i,r,r) with a different eq.
+    diag_redund_info: Dict[str, Any] = {"n_deactivated": 0, "deactivated": [], "by_family": {}}
+    if params is not None and mode == "mcp":
+        diag_redund_info = apply_v62_diagonal_redundancy_fix(model, params)
+
     closure_info = apply_v62_closure_and_square(model)
     closure_info["conditional_fixing"] = cond_info
+    closure_info["diagonal_redundancy"] = diag_redund_info
 
     # Phase 3.30: optionally drop Jacobian rows with norm below threshold.
     # When threshold > 0, runs after bipartite matching to remove

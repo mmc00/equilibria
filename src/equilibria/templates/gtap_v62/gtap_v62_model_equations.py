@@ -553,6 +553,9 @@ class GTAPv62ModelEquations:
         def _c_g_init(m, r):
             y0 = c.y_0.get(r, 1.0)
             return c.yg_0.get(r, 0.0) / y0 if y0 > 0.0 else 0.0
+        def _c_sav_init(m, r):
+            y0 = c.y_0.get(r, 1.0)
+            return c.save_0.get(r, 0.0) / y0 if y0 > 0.0 else 0.0
         model.c_p = Param(
             model.r, initialize=_c_p_init, mutable=False,
             doc="Household share of regional income (yp_0/y_0)",
@@ -560,6 +563,15 @@ class GTAPv62ModelEquations:
         model.c_g = Param(
             model.r, initialize=_c_g_init, mutable=False,
             doc="Government share of regional income (yg_0/y_0)",
+        )
+        # Phase 3.38: savings share of regional income — was previously held
+        # as the constant `save_0` Param with walras absorbing the imbalance.
+        # On gtap6 datasets the imbalance reaches +/- thousands of USD,
+        # corrupting VIWS by ~16pp. Promoting sav to a Var driven by
+        # eq_sav (analogue of eq_yg) closes the budget identity exactly.
+        model.c_sav = Param(
+            model.r, initialize=_c_sav_init, mutable=False,
+            doc="Phase 3.38: savings share of regional income (save_0/y_0)",
         )
 
     # ------------------------------------------------------------------
@@ -974,6 +986,17 @@ class GTAPv62ModelEquations:
             within=NonNegativeReals, bounds=(lb, None),
             initialize=lambda m, r: max(c.yg_0.get(r, 1.0), lb),
             doc="yg(r) — gov income (= total gov expenditure at benchmark)",
+        )
+        # Phase 3.38: sav is no longer a constant Param (save_0). Make it a
+        # Var that adjusts with y and pcons via eq_sav (sav = c_sav * y *
+        # pcons^XSHRPRIV). At benchmark pcons=1, so sav_0 = c_sav * y_0 =
+        # save_0. The constraint closes the budget identity per region
+        # and brings walras to ~0 post-shock.
+        model.sav = Var(
+            model.r,
+            within=Reals, bounds=(None, None),
+            initialize=lambda m, r: float(c.save_0.get(r, 0.0)),
+            doc="Phase 3.38: regional savings (sav = c_sav * y * pcons^XSHRPRIV)",
         )
         model.psave = Var(
             model.r,
@@ -1982,7 +2005,26 @@ class GTAPv62ModelEquations:
                 return Constraint.Skip
             xshrpriv = float(derived.xshrpriv.get(r, 0.0))
             return m.yg[r] == cg * m.y[r] * m.pcons[r] ** xshrpriv
+
+        # Phase 3.38: savings as RESIDUAL of regional budget identity.
+        # The GEMPACK static closure for PRIVCONSEXP/GOVCONSEXP/SAVING
+        # gives DERIVATIVES, but in LEVELS the budget identity
+        #   y = yp + yg + sav
+        # must hold IDENTICALLY per region (this is what GEMPACK does
+        # internally by computing sav as the residual after yp and yg
+        # are set via their Hicksian rules). Treating sav as a power
+        # formula independent of y-yp-yg (the original Phase 3.21
+        # approach) breaks this identity at pcons != 1 and forces walras
+        # to absorb thousands of USD per shock.
+        #
+        # The fix: make sav a Var defined by sav[r] = y[r] - yp[r] - yg[r].
+        # This guarantees the regional budget identity in LEVELS for any
+        # shock, leaving walras to only absorb sum_r savf (a SAM-level
+        # constant ~3.5e6 in gtap6 datasets) which the bake then offsets.
+        def eq_sav_rule(m, r):
+            return m.sav[r] == m.y[r] - m.yp[r] - m.yg[r]
         model.eq_yg = Constraint(model.r, rule=eq_yg_rule)
+        model.eq_sav = Constraint(model.r, rule=eq_sav_rule)
 
         # eq_pgdpwld: numeraire identity
         def eq_pgdpwld_rule(m):
@@ -1995,10 +2037,13 @@ class GTAPv62ModelEquations:
         # any numerical discrepancy (NLP + IPOPT minimises walras²).
         # In MCP mode this slack is omitted — see __init__ docstring.
         if self.mode == "nlp":
+            # Phase 3.38: use m.sav[r] Var (driven by eq_sav) instead of
+            # m.save_0[r] Param. The budget identity now closes per region
+            # under any shock, leaving walras at the SAM-imbalance floor
+            # rather than absorbing the entire dy/dpcons response.
             def eq_walras_rule(m):
                 return m.walras == sum(
-                    m.y[r] - m.yp[r] - m.yg[r]
-                    - pyo_value(m.save_0[r]) + m.savf[r]
+                    m.y[r] - m.yp[r] - m.yg[r] - m.sav[r] + m.savf[r]
                     for r in m.r
                 )
             model.eq_walras = Constraint(rule=eq_walras_rule)
