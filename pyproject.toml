@@ -123,6 +123,22 @@ dev = [
     "ty>=0.0.14",
 ]
 
+# Numerical-stack extras used during the Phase 3.36-3.38 GTAP v6.2
+# investigation: fetching/building external sparse solvers and
+# downloading the IDAES-bundled IPOPT. Not required for core equilibria
+# usage; install with `uv sync --group v62-explore` when you need to:
+#   * rebuild SuiteSparse / UMFPACK from source (cmake + scipy_openblas32)
+#   * run IPOPT NLP parity tests via the IDAES-shipped solver binaries
+#     (idaes-pse provides `idaes get-extensions` which fetches ipopt.exe
+#     and the HSL libraries)
+#   * experiment with alternate UMFPACK Python bindings (cvxopt)
+v62-explore = [
+    "cmake>=4.3",
+    "idaes-pse>=2.10",
+    "scipy-openblas32>=0.3.33",
+    "cvxopt>=1.3.3",
+]
+
 [tool.ruff]
 target-version = "py310"
 line-length = 88
