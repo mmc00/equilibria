@@ -1,0 +1,329 @@
+!This file was created for the GTAP v6.2 cross-dataset testing.
+! 20 sectors x 40+ regions x 5 factors — turkiye-style, largest test.
+! Mirrors the 20-sector aggregation of turkiyev1.agg with comparable
+! regional coverage but ~40 regions instead of 43.
+!
+! Section 1
+= = = = = =
+Rice	&
+Restofagri	&
+VegFruits	&
+CropsNe	&
+Milk	&
+ForestryW	&
+Fishing	&
+Otherm	&
+MeatProd	&
+VegOilFat	&
+Sugar	&
+FoodProd	&
+BevTobacco	&
+Textiles	&
+PaperProd	&
+Chem	&
+Mmetales	&
+Compu	&
+ElMaEq	&
+Services	&
+= = = = = =
+!
+! Section 2
+= = = = = =
+pdr	Paddy rice	&	Rice
+wht	Wheat	&	Restofagri
+gro	Cereal grains nec	&	Restofagri
+v_f	Vegetables, fruit, nuts	&	VegFruits
+osd	Oil seeds	&	Restofagri
+c_b	Sugar cane, sugar beet	&	Restofagri
+pfb	Plant-based fibers	&	Restofagri
+ocr	Crops nec	&	CropsNe
+ctl	Cattle,sheep,goats,horses	&	Restofagri
+oap	Animal products nec	&	Restofagri
+rmk	Raw milk	&	Milk
+wol	Wool, silk-worm cocoons	&	Restofagri
+frs	Forestry	&	ForestryW
+fsh	Fishing	&	Fishing
+coa	Coal	&	Otherm
+oil	Oil	&	Otherm
+gas	Gas	&	Otherm
+oxt	Minerals nec	&	Otherm
+cmt	Meat: cattle,sheep,goats,horse	&	MeatProd
+omt	Meat products nec	&	MeatProd
+vol	Vegetable oils and fats	&	VegOilFat
+mil	Dairy products	&	Milk
+pcr	Processed rice	&	Rice
+sgr	Sugar	&	Sugar
+ofd	Food products nec	&	FoodProd
+b_t	Beverages and tobacco products	&	BevTobacco
+tex	Textiles	&	Textiles
+wap	Wearing apparel	&	Textiles
+lea	Leather products	&	Textiles
+lum	Wood products	&	ForestryW
+ppp	Paper products, publishing	&	PaperProd
+p_c	Petroleum, coal products	&	Otherm
+chm	Chemical,rubber,plastic prods	&	Chem
+bph	Basic pharmaceutical products	&	Chem
+rpp	Rubber and plastic products	&	Chem
+nmm	Mineral products nec	&	Otherm
+i_s	Ferrous metals	&	Mmetales
+nfm	Metals nec	&	Mmetales
+fmp	Metal products	&	Mmetales
+ele	Computer, electronic and optical products	&	Compu
+eeq	Electrical equipment	&	ElMaEq
+ome	Machinery and equipment nec	&	ElMaEq
+mvh	Motor vehicles and parts	&	Otherm
+otn	Transport equipment nec	&	Otherm
+omf	Manufactures nec	&	Otherm
+ely	Electricity	&	Services
+gdt	Gas manufacture	&	Services
+wtr	Water	&	Services
+cns	Construction	&	Services
+trd	Trade	&	Services
+afs	Accommodation, Food and service activities	&	Services
+otp	Transport nec	&	Services
+wtp	Water transport	&	Services
+atp	Air transport	&	Services
+whs	Warehousing and support activities	&	Services
+cmn	Communication	&	Services
+ofi	Financial services nec	&	Services
+ins	Insurance	&	Services
+rsa	Real estate activities	&	Services
+obs	Business services nec	&	Services
+ros	Recreational and other services	&	Services
+osg	Public Administration and defense	&	Services
+edu	Education	&	Services
+hht	Human health and social work activities	&	Services
+dwe	Dwellings	&	Services
+= = = = = =
+!
+! Section 3
+= = = = = =
+USA          & United States
+CAN          & Canada
+MEX          & Mexico
+EU_28        & European Union 28
+GBR          & United Kingdom
+CHE          & Switzerland
+RUS          & Russian Federation
+TUR          & Turkey
+CHN          & China
+JPN          & Japan
+KOR          & Korea
+IND          & India
+IDN          & Indonesia
+THA          & Thailand
+VNM          & Vietnam
+AUS          & Australia
+NZL          & New Zealand
+ARG          & Argentina
+BRA          & Brazil
+CHL          & Chile
+COL          & Colombia
+PER          & Peru
+URY          & Uruguay
+PRY          & Paraguay
+SEAsia       & Southeast Asia (rest)
+EastAsia     & East Asia (rest)
+SouthAsia    & South Asia (rest)
+CentralAmer  & Central America
+Caribbean    & Caribbean
+SAU          & Saudi Arabia
+ARE          & United Arab Emirates
+ISR          & Israel
+EGY          & Egypt
+MENA         & Middle East & North Africa (rest)
+ZAF          & South Africa
+NGA          & Nigeria
+SSA          & Sub-Saharan Africa (rest)
+EFTA         & EFTA (Norway, Iceland)
+EasternEur   & Eastern Europe (non-EU)
+CentralAsia  & Central Asia
+ROW          & Rest of World
+= = = = = =
+!
+! Section 4
+= = = = = =
+aus            Australia                       & AUS
+nzl            New Zealand                     & NZL
+xoc            Rest of Oceania                 & ROW
+chn            China                           & CHN
+hkg            Hong Kong                       & EastAsia
+jpn            Japan                           & JPN
+kor            Korea                           & KOR
+mng            Mongolia                        & EastAsia
+twn            Taiwan                          & EastAsia
+xea            Rest of East Asia               & EastAsia
+brn            Brunei Darussalam               & SEAsia
+khm            Cambodia                        & SEAsia
+idn            Indonesia                       & IDN
+lao            Lao People's Democratic Republ  & SEAsia
+mys            Malaysia                        & SEAsia
+phl            Philippines                     & SEAsia
+sgp            Singapore                       & SEAsia
+tha            Thailand                        & THA
+vnm            Viet Nam                        & VNM
+xse            Rest of Southeast Asia          & SEAsia
+afg            Afghanistan                     & SouthAsia
+bgd            Bangladesh                      & SouthAsia
+ind            India                           & IND
+npl            Nepal                           & SouthAsia
+pak            Pakistan                        & SouthAsia
+lka            Sri Lanka                       & SouthAsia
+xsa            Rest of South Asia              & SouthAsia
+can            Canada                          & CAN
+usa            United States of America        & USA
+mex            Mexico                          & MEX
+xna            Rest of North America           & ROW
+arg            Argentina                       & ARG
+bol            Bolivia                         & ROW
+bra            Brazil                          & BRA
+chl            Chile                           & CHL
+col            Colombia                        & COL
+ecu            Ecuador                         & ROW
+pry            Paraguay                        & PRY
+per            Peru                            & PER
+ury            Uruguay                         & URY
+ven            Venezuela                       & ROW
+xsm            Rest of South America           & ROW
+cri            Costa Rica                      & CentralAmer
+gtm            Guatemala                       & CentralAmer
+hnd            Honduras                        & CentralAmer
+nic            Nicaragua                       & CentralAmer
+pan            Panama                          & CentralAmer
+slv            El Salvador                     & CentralAmer
+xca            Rest of Central America         & CentralAmer
+dom            Dominican Republic              & Caribbean
+hti            Haiti                           & Caribbean
+jam            Jamaica                         & Caribbean
+pri            Puerto Rico                     & Caribbean
+tto            Trinidad and Tobago             & Caribbean
+xcb            Caribbean                       & Caribbean
+aut            Austria                         & EU_28
+bel            Belgium                         & EU_28
+bgr            Bulgaria                        & EU_28
+hrv            Croatia                         & EU_28
+cyp            Cyprus                          & EU_28
+cze            Czech Republic                  & EU_28
+dnk            Denmark                         & EU_28
+est            Estonia                         & EU_28
+fin            Finland                         & EU_28
+fra            France                          & EU_28
+deu            Germany                         & EU_28
+grc            Greece                          & EU_28
+hun            Hungary                         & EU_28
+irl            Ireland                         & EU_28
+ita            Italy                           & EU_28
+lva            Latvia                          & EU_28
+ltu            Lithuania                       & EU_28
+lux            Luxembourg                      & EU_28
+mlt            Malta                           & EU_28
+nld            Netherlands                     & EU_28
+pol            Poland                          & EU_28
+prt            Portugal                        & EU_28
+rou            Romania                         & EU_28
+svk            Slovakia                        & EU_28
+svn            Slovenia                        & EU_28
+esp            Spain                           & EU_28
+swe            Sweden                          & EU_28
+gbr            United Kingdom                  & GBR
+che            Switzerland                     & CHE
+nor            Norway                          & EFTA
+xef            Rest of EFTA                    & EFTA
+alb            Albania                         & EasternEur
+srb            Serbia                          & EasternEur
+blr            Belarus                         & EasternEur
+rus            Russian Federation              & RUS
+ukr            Ukraine                         & EasternEur
+xee            Rest of Eastern Europe          & EasternEur
+xer            Rest of Europe                  & EasternEur
+kaz            Kazakhstan                      & CentralAsia
+kgz            Kyrgyztan                       & CentralAsia
+tjk            Tajikistan                      & CentralAsia
+uzb            Uzbekistan                      & CentralAsia
+xsu            Rest of Former Soviet Union     & CentralAsia
+arm            Armenia                         & CentralAsia
+aze            Azerbaijan                      & CentralAsia
+geo            Georgia                         & CentralAsia
+bhr            Bahrain                         & MENA
+irn            Iran Islamic Republic of        & MENA
+irq            Iraq                            & MENA
+isr            Israel                          & ISR
+jor            Jordan                          & MENA
+kwt            Kuwait                          & MENA
+lbn            Lebanon                         & MENA
+omn            Oman                            & MENA
+pse            State of Palestine              & MENA
+qat            Qatar                           & MENA
+sau            Saudi Arabia                    & SAU
+syr            Syria                           & MENA
+tur            Turkey                          & TUR
+are            United Arab Emirates            & ARE
+xws            Rest of Western Asia            & MENA
+dza            Algeria                         & MENA
+egy            Egypt                           & EGY
+mar            Morocco                         & MENA
+tun            Tunisia                         & MENA
+xnf            Rest of North Africa            & MENA
+ben            Benin                           & SSA
+bfa            Burkina Faso                    & SSA
+cmr            Cameroon                        & SSA
+civ            Cote d'Ivoire                   & SSA
+gha            Ghana                           & SSA
+gin            Guinea                          & SSA
+mli            Mali                            & SSA
+ner            Niger                           & SSA
+nga            Nigeria                         & NGA
+sen            Senegal                         & SSA
+tgo            Togo                            & SSA
+xwf            Rest of Western Africa          & SSA
+caf            Central African Republic        & SSA
+tcd            Chad                            & SSA
+cog            Congo                           & SSA
+cod            Congo the Democratic Republic   & SSA
+gnq            Equatorial Guinea               & SSA
+gab            Gabon                           & SSA
+ago            Angola                          & SSA
+stp            Sao Tome and Principe           & SSA
+bdi            Burundi                         & SSA
+com            Comoros                         & SSA
+eth            Ethiopia                        & SSA
+ken            Kenya                           & SSA
+mdg            Madagascar                      & SSA
+mwi            Malawi                          & SSA
+mus            Mauritius                       & SSA
+moz            Mozambique                      & SSA
+rwa            Rwanda                          & SSA
+sdn            Sudan                           & SSA
+tza            Tanzania                        & SSA
+uga            Uganda                          & SSA
+zmb            Zambia                          & SSA
+zwe            Zimbabwe                        & SSA
+xec            Rest of Eastern Africa          & SSA
+bwa            Botswana                        & SSA
+swz            Eswatini                        & SSA
+nam            Namibia                         & SSA
+zaf            South Africa                    & ZAF
+xsc            Rest of South African Customs   & SSA
+xtw            Rest of the World               & ROW
+= = = = = =
+!
+! Section 5
+= = = = = =
+Land         & sluggish &-1.000000 &
+UnSkLab      &   mobile &     --- &
+SkLab        &   mobile &     --- &
+Capital      &   mobile &     --- &
+NatRes       & sluggish &-0.001000 &
+= = = = = =
+!
+! Section 6
+= = = = = =
+Land           Land                            & Land
+tech_aspros    Technicians/AssocProfessional   & SkLab
+clerks         Clerks                          & UnSkLab
+service_shop   Service/Shop workers            & UnSkLab
+off_mgr_pros   Officials and Managers          & SkLab
+ag_othlowsk    Agricultural and Unskilled      & UnSkLab
+Capital        Capital                         & Capital
+NatlRes        Natural Resources               & NatRes
+= = = = = =
