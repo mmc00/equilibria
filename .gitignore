@@ -321,3 +321,25 @@ runs/gtap_v62_parity/
 
 # IDAES-installed solver binaries (downloaded on demand)
 .idaes-bin/
+
+# GtapAgg dataset zip originals (the unpacked contents under datasets/gtap6_*/ are tracked)
+datasets/*.zip
+
+# Locally-built SuiteSparse / UMFPACK artifacts (Phase 3.36 UMFPACK experiment)
+vendor/
+
+# GEMPACK oracle binary intermediates per experiment dir (regenerable from *.cmf)
+# We commit Shock1.cmf, Shock1-upd.har, Shock1_sol.har — these are the references.
+runs/gempack_*/Shock*.sl4
+runs/gempack_*/Shock*.slc
+runs/gempack_*/*.gempack.log
+runs/gempack_*/wmiccap.tmpwmic
+runs/gempack_*/SETS.HAR
+runs/gempack_*/Default.prm
+runs/gempack_*/basedata.har
+
+# Stray transient logs and aggregation files from Phase 3.36 investigation
+aggressive_drop.txt
+test_15x10_ext.txt
+turkiyev1.agg
+path_capi_stdout.log
