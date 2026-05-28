@@ -1,0 +1,30 @@
+! GraggBulirsch multi-step variant (2 4 6)
+file GTAPSETS = SETS.HAR ;
+file GTAPDATA = basedata.har ;
+file GTAPPARM = Default.prm ;
+Auxiliary files = gtap ;
+solution file = Shock1 ;
+Updated File GTAPDATA = Shock1-upd.har ;
+
+Verbal Description =
+10% tariff cut: tms(Food,USA,EU_28) = -10 ;
+Method = Gragg;
+Steps = 2 4 6;
+automatic accuracy = no;
+subintervals = 1;
+
+! Standard GE closure: psave varies by region, pfactwld is numeraire
+ Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tp tm tms tx txs
+          qo(ENDW_COMM,REG) ;
+ Rest Endogenous ;
+Shock tms("Food","USA","EU_28") = -10 ;
