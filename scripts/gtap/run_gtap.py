@@ -4100,8 +4100,19 @@ def validate_shock(
 
         if output:
             output.parent.mkdir(parents=True, exist_ok=True)
+
+            _DROP_KEYS = {'shocked_model', 'step_models', 'step_params', 'model'}
+
+            def _strip_unserializable(obj):
+                if isinstance(obj, dict):
+                    return {k: _strip_unserializable(v) for k, v in obj.items()
+                            if k not in _DROP_KEYS}
+                if isinstance(obj, list):
+                    return [_strip_unserializable(v) for v in obj]
+                return obj
+
             with open(output, 'w') as f:
-                json.dump(report, f, indent=2)
+                json.dump(_strip_unserializable(report), f, indent=2, default=str)
             click.echo(f"\nValidation shock report saved to: {output}")
 
         sys.exit(0 if success else 1)

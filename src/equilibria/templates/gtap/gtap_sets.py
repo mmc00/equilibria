@@ -105,6 +105,14 @@ class GTAPSets:
         # Load factor subsets
         self.mf = self._load_first_available_set(gdx_data, symbols, ("mf", "fm", "endwm"), gdx_path, required=False) or []
         self.sf = self._load_first_available_set(gdx_data, symbols, ("sf", "fnm", "endws"), gdx_path, required=False) or []
+
+        # GTAP v7 splits sluggish factors into ENDS (sluggish, CET) and ENDF
+        # (sector-specific / fixed). The template treats both as "sf" because
+        # neither participates in inter-sectoral mobility.
+        endf = self._load_first_available_set(gdx_data, symbols, ("endwf",), gdx_path, required=False) or []
+        for fname in endf:
+            if fname not in self.sf:
+                self.sf.append(fname)
         
         # Raw GTAP data provides active margin commodities via marg(comm),
         # but the standard model declares alias(m,i), i.e. full commodity set.

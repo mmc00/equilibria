@@ -649,6 +649,14 @@ def read_parameter_values(
     """
     symbol = get_symbol(gdx_data, symbol_name)
     if symbol is None:
+        # Heuristic symbol-table parser may miss/corrupt names after multi-dim
+        # parameters with domain references. Fall back to gdxdump when available.
+        filepath_fb: str = gdx_data.get("filepath", "")
+        if filepath_fb:
+            from equilibria.babel.gdx.gdxdump import read_parameter_with_gdxdump
+            vals = read_parameter_with_gdxdump(Path(filepath_fb), symbol_name)
+            if vals:
+                return vals
         raise ValueError(f"Symbol '{symbol_name}' not found in GDX data")
 
     if symbol["type"] != 1:  # Not a parameter

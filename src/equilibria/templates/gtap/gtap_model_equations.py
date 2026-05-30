@@ -956,17 +956,15 @@ class GTAPModelEquations:
                 else:
                     model.yg[r].set_value(value(model.betag[r]) * value(model.phi[r]) * regy_raw)
             if hasattr(model, "rsav") and r in model.rsav:
-                # Prefer SAM benchmark save directly so that eq_yi holds at init.
-                # Using betas*phi*regy_raw can drift if regy_raw ≠ regy_gams.
-                # GAMS cal.gms sets rsav.l(r) = save(r) (benchmark identity).
+                # GAMS cal.gms:621 trusts rsav.l from GDX directly (no positivity
+                # guard). Mirror that — falling back to betas*phi*regy when
+                # save_bench is negative produces near-zero rsav, which then
+                # blows up aus via the calibration below (eq_us residual ~1e10
+                # for EGY where save_bench=-0.012).
                 save_bench = float(self.params.benchmark.save.get(str(r), 0.0))
-                if save_bench > 0.0:
-                    model.rsav[r].set_value(save_bench)
-                else:
-                    model.rsav[r].set_value(value(model.betas[r]) * value(model.phi[r]) * regy_raw)
-            # Recalibrate aus consistently with final rsav.
-            # GAMS identity: aus.l(r) = pop.l(r) / (psave.l(r) * rsav.l(r))
-            # This ensures eq_us: us = aus*rsav/(psave*pop) gives us=1 at benchmark.
+                model.rsav[r].set_value(save_bench)
+            # GAMS cal.gms:800: aus.fx(r) = us.l*pop.l / (rsav.l/psave.l).
+            # Allow negative rsav — sign cancels in eq_us so us stays consistent.
             if hasattr(model, "aus") and r in model.aus:
                 rsav_val = value(model.rsav[r]) if hasattr(model, "rsav") and r in model.rsav else 0.0
                 pop_val = value(model.pop[r])
@@ -975,7 +973,7 @@ class GTAPModelEquations:
                     if hasattr(model, "psave") and r in model.psave
                     else 1.0
                 )
-                if rsav_val > 1e-12 and pop_val > 1e-12:
+                if abs(rsav_val) > 1e-12 and pop_val > 1e-12:
                     model.aus[r].set_value(pop_val / (psave_val * rsav_val))
             # GAMS cal.gms:619 calibrates betaP from BENCHMARK yc/regY (line ~1787).
             # Re-calibrating from post-init perturbed yc/xaa biases betap away from
@@ -5055,14 +5053,20 @@ class GTAPModelEquations:
             return model.us[r] == model.aus[r] * model.rsav[r] / (model.psave[r] * model.pop[r] + 1e-12)
         model.eq_us = Constraint(model.r, rule=eq_us_rule)
 
-        # Total utility (GAMS ueq, static Cobb-Douglas form)
+        # Total utility (GAMS ueq, static Cobb-Douglas form).
+        # GAMS uses log form: log(u) = log(au) + betaP*log(uh) + betaG*log(ug) + betaS*log(us)
+        # where a zero share term (e.g. betaS=0) contributes 0 even if us=0.
+        # In power form us^0 = 1 numerically but its derivative is undefined at us=0,
+        # which breaks autodiff. Drop terms with zero exponent to match GAMS semantics.
         def eq_u_rule(model, r):
-            return model.u[r] == (
-                model.au[r]
-                * (model.uh[r] ** model.betap[r])
-                * (model.ug[r] ** model.betag[r])
-                * (model.us[r] ** model.betas[r])
-            )
+            expr = model.au[r]
+            if float(value(model.betap[r])) != 0.0:
+                expr = expr * (model.uh[r] ** model.betap[r])
+            if float(value(model.betag[r])) != 0.0:
+                expr = expr * (model.ug[r] ** model.betag[r])
+            if float(value(model.betas[r])) != 0.0:
+                expr = expr * (model.us[r] ** model.betas[r])
+            return model.u[r] == expr
         model.eq_u = Constraint(model.r, rule=eq_u_rule)
 
         # Savings price adjustment (GAMS chiSaveeq, compStat-style static form)

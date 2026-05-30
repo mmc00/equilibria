@@ -15,7 +15,7 @@ from equilibria.templates.gtap_v62 import (
 )
 from _make_square import apply_v62_pipeline  # type: ignore
 
-IPOPT_PATH = ROOT / ".idaes-bin" / "ipopt.exe"
+IPOPT_PATH = Path(os.environ.get("EQUILIBRIA_IPOPT", str(ROOT / ".idaes-bin" / "ipopt")))
 
 DATASETS = [
     {"name": "gtap6_3x3",   "shock": ("Food",       "USA", "EU_28"), "gempack_viws": 62.359},

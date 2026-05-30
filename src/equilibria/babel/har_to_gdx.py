@@ -162,6 +162,40 @@ def write_nus333_gdx_bundle(
     return {"sets": sets_path, "dat": dat_path, "prm": prm_path}
 
 
+def write_v7_consolidated_gdx(
+    har_dir: str | Path,
+    out_path: str | Path,
+) -> Path:
+    """Read GTAP v7 HAR triple (sets.har + basedata.har + default.prm) and emit
+    one consolidated GDX consumable by `GTAPSets.load_from_gdx` +
+    `GTAPParameters.load_from_gdx`.
+
+    The v7 template auto-aliases set names (r/reg, i/comm, ...) and reads
+    elasticity parameter names via `get_elasticity_parameter_name`, so the
+    same SET_NAME_MAP / DAT_NAME_MAP / PRM_NAME_MAP used for nus333 apply.
+    """
+    har_dir = Path(har_dir)
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    sets_har = read_har(str(har_dir / "sets.har"))
+    data_har = read_har(str(har_dir / "basedata.har"))
+    prm_har = read_har(str(har_dir / "default.prm"))
+
+    set_syms = _build_set_symbols(sets_har)
+    dat_syms = _build_param_symbols(data_har, DAT_NAME_MAP, set_syms)
+    prm_syms = _build_param_symbols(prm_har, PRM_NAME_MAP, set_syms)
+
+    # _build_param_symbols prepends set_syms in its output; drop duplicates
+    # from prm_syms by filtering to the parameters only.
+    dat_params = [s for s in dat_syms if s not in set_syms]
+    prm_params = [s for s in prm_syms if s not in set_syms]
+
+    all_syms = [*set_syms, *dat_params, *prm_params]
+    write_gdx(out_path, all_syms)
+    return out_path
+
+
 def _build_set_symbols(sets_har: dict[str, HeaderArray]) -> list[Set]:
     """Build the GAMS sets that getData.gms loads from <base>Sets.gdx."""
     syms: list[Set] = []

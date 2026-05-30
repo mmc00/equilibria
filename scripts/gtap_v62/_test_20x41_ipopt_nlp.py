@@ -21,7 +21,7 @@ DATA = Path("datasets/gtap6_20x41")
 # Phase 3.25 doc used shock: FoodProd/USA/EU_28
 # We need to verify the actual commodity name in this dataset.
 SHOCK_KEY = ("FoodProd", "USA", "EU_28")
-IPOPT_PATH = ROOT / ".idaes-bin" / "ipopt.exe"
+IPOPT_PATH = Path(os.environ.get("EQUILIBRIA_IPOPT", str(ROOT / ".idaes-bin" / "ipopt")))
 
 print(f"\n=== gtap6_20x41 IPOPT NLP test (Phase 3.38) ===", flush=True)
 print(f"Shock target: tms{SHOCK_KEY}", flush=True)
@@ -64,11 +64,23 @@ solver = SolverFactory("ipopt", executable=str(IPOPT_PATH))
 # and degrades on very large sparse Jacobians. MUMPS handles >100K vars
 # with better memory locality and supports multifrontal LU.
 solver.options.update({
-    "max_iter": 3000,
+    "max_iter": 50,
     "tol": 1e-6,
     "linear_solver": "mumps",
     "nlp_scaling_method": "gradient-based",
-    "print_level": 3,  # iteration log so we can see progress
+    "print_level": 5,
+    "output_file": str(ROOT / "ipopt_20x41_metis.log"),
+    "file_print_level": 5,
+    "print_timing_statistics": "yes",
+    "mumps_mem_percent": 5000,
+    "mumps_pivtol": 1e-6,
+    "mumps_pivtolmax": 0.1,
+    # Phase 3.39 — Opcion #1: METIS reordering en lugar de AMF default
+    # mumps_pivot_order: 0=AMD, 1=user, 2=AMF, 3=SCOTCH, 4=PORD, 5=METIS,
+    #                    6=QAMD, 7=auto (default = AMF para tamaños medios)
+    "mumps_pivot_order": 5,
+    "mumps_permuting_scaling": 7,
+    "mumps_scaling": 77,
 })
 
 # --- BASELINE ---
