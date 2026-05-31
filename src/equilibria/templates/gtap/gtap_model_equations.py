@@ -4408,6 +4408,73 @@ class GTAPModelEquations:
             # when no agent-specific override is available.
             return float(self.params.elasticities.esubd.get((r, i), 2.0))
 
+        # GAMS cal.gms:181 defines xaFlag(r,i,aa)$xa.l(r,i,aa,t0) — a binary
+        # flag that turns OFF the Armington system when basic-price benchmark
+        # demand is zero. GAMS uses it to skip paeq/xapeq (model.gms:903,553),
+        # fix xa.l=0 (iterloop.gms:101) and skip alpha calibration (cal.gms:816).
+        # We replicate it from RAW benchmark (basic-price values vdfb/vmfb/etc.)
+        # BEFORE any synthetic floor is applied. Threshold 1e-7 ≈ USD 0.1
+        # after inScale=1e-6: real demand starts at USD millions (raw ≥ 1e+0
+        # post-scale), so anything below ~1e-7 is numerical noise / empty cell.
+        XA_FLAG_THRESHOLD = 1e-7
+
+        def _two_key(raw_map, region, commodity):
+            val = raw_map.get((region, commodity), None)
+            if val is None:
+                val = raw_map.get((commodity, region), 0.0)
+            return float(val or 0.0)
+
+        def _raw_basic_demand(r, i, aa):
+            """Sum vdXb + vmXb at basic prices (matches GAMS xa.l seed)."""
+            if aa in self.sets.a:
+                return float(self.params.benchmark.vdfb.get((r, i, aa), 0.0) or 0.0) + float(
+                    self.params.benchmark.vmfb.get((r, i, aa), 0.0) or 0.0
+                )
+            if aa == GTAP_HOUSEHOLD_AGENT:
+                return _two_key(self.params.benchmark.vdpb, r, i) + _two_key(self.params.benchmark.vmpb, r, i)
+            if aa == GTAP_GOVERNMENT_AGENT:
+                return _two_key(self.params.benchmark.vdgb, r, i) + _two_key(self.params.benchmark.vmgb, r, i)
+            if aa == GTAP_INVESTMENT_AGENT:
+                return _two_key(self.params.benchmark.vdib, r, i) + _two_key(self.params.benchmark.vmib, r, i)
+            if aa == GTAP_MARGIN_AGENT:
+                return float(self._vst_value(str(r), str(i)) or 0.0)
+            return 0.0
+
+        all_agents = list(self.sets.a) + [
+            GTAP_HOUSEHOLD_AGENT,
+            GTAP_GOVERNMENT_AGENT,
+            GTAP_INVESTMENT_AGENT,
+            GTAP_MARGIN_AGENT,
+        ]
+        xa_flag_cache: Dict[tuple[str, str, str], bool] = {}
+        for r in self.sets.r:
+            for i in self.sets.i:
+                for aa in all_agents:
+                    xa_flag_cache[(r, i, aa)] = _raw_basic_demand(r, i, aa) > XA_FLAG_THRESHOLD
+
+        def get_xa_flag(r, i, aa):
+            return xa_flag_cache.get((r, i, aa), False)
+
+        # Mirror iterloop.gms:101 — pin xaa/xda/xma to 0 where xaFlag=0 so the
+        # synthetic floor from get_vgm_init/get_vim_init doesn't leak into eq_paa
+        # via stale init values.
+        flag_off_fix_count = 0
+        for (r, i, aa), flag in xa_flag_cache.items():
+            if flag:
+                continue
+            if hasattr(model, "xaa") and (r, i, aa) in model.xaa:
+                model.xaa[r, i, aa].fix(0.0)
+                flag_off_fix_count += 1
+            if hasattr(model, "xda") and (r, i, aa) in model.xda:
+                model.xda[r, i, aa].fix(0.0)
+            if hasattr(model, "xma") and (r, i, aa) in model.xma:
+                model.xma[r, i, aa].fix(0.0)
+        if flag_off_fix_count:
+            logger.info(
+                "xa_flag: fixed xaa/xda/xma=0 for %d (r,i,aa) triples (GAMS xaFlag=0 mirror)",
+                flag_off_fix_count,
+            )
+
         # GAMS cal.gms:816-819 calibrates alphad/alpham at the BASELINE (t0) values.
         # When building a shock model, use the converged baseline snapshot rather than
         # current init (which is post-perturbation by _align_xi_xaa_post_scaling).
@@ -4415,12 +4482,10 @@ class GTAPModelEquations:
         benchmark_agent_armington_param_cache: Dict[tuple[str, str, str], tuple[float, float]] = {}
         for r in self.sets.r:
             for i in self.sets.i:
-                for aa in list(self.sets.a) + [
-                    GTAP_HOUSEHOLD_AGENT,
-                    GTAP_GOVERNMENT_AGENT,
-                    GTAP_INVESTMENT_AGENT,
-                    GTAP_MARGIN_AGENT,
-                ]:
+                for aa in all_agents:
+                    if not get_xa_flag(r, i, aa):
+                        benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
+                        continue
                     xaa_bench = max(float(value(t0_arm.xaa[r, i, aa])), 0.0)
                     xda_bench = max(float(value(t0_arm.xda[r, i, aa])), 0.0)
                     xma_bench = max(float(value(t0_arm.xma[r, i, aa])), 0.0)
@@ -4505,6 +4570,9 @@ class GTAPModelEquations:
         model.eq_mintxeq = Constraint(model.r, model.i, model.aa, rule=eq_mintxeq_rule)
 
         def eq_xda_rule(model, r, i, aa):
+            # xaFlag=0 → xda already fixed at 0; skip equation entirely.
+            if not get_xa_flag(r, i, aa):
+                return Constraint.Skip
             domestic_share, _ = get_benchmark_agent_armington_shares(r, i, aa)
             if domestic_share <= 0.0:
                 return model.xda[r, i, aa] == 0.0
@@ -4515,6 +4583,8 @@ class GTAPModelEquations:
         model.eq_xda = Constraint(model.r, model.i, model.aa, rule=eq_xda_rule)
 
         def eq_xma_rule(model, r, i, aa):
+            if not get_xa_flag(r, i, aa):
+                return Constraint.Skip
             _, import_share = get_benchmark_agent_armington_shares(r, i, aa)
             if import_share <= 0.0:
                 return model.xma[r, i, aa] == 0.0
@@ -4536,11 +4606,12 @@ class GTAPModelEquations:
         # Armington price CES aggregator by agent (GAMS paeq)
         # pa(r,i,aa)**(1-sigmam) = alphad*pdp**(1-sigmam) + alpham*pmp**(1-sigmam)
         def eq_paa_rule(model, r, i, aa):
-            # Get shares from benchmark data
+            # GAMS model.gms:903 — paeq is gated by xaFlag(r,i,aa).
+            if not get_xa_flag(r, i, aa):
+                return Constraint.Skip
             dom_share, imp_share = get_benchmark_agent_armington_shares(r, i, aa)
             alphad = dom_share
             alpham = imp_share
-            # Skip if no demand from this agent
             if alphad <= 0.0 and alpham <= 0.0:
                 return Constraint.Skip
             sigma_m = _top_armington_sigma(r, i, aa)
