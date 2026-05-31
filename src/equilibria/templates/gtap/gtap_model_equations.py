@@ -1866,10 +1866,16 @@ class GTAPModelEquations:
             ytax_ind_bench = self._compute_ytax_ind_bench(region)
             # Income-side total (kept for downstream factY/ytax-stream init).
             regy_income = max(facty_bench + ytax_ind_bench, 1e-8)
-            savings_total = raw_savings_total if raw_savings_total > 0.0 else max(
-                regy_income - private_total - government_total,
-                0.0,
-            )
+            # Preserve negative savings (e.g. EGY in GTAP v7) — GAMS calibrates
+            # betas directly from save.l even when < 0. The previous `> 0.0`
+            # guard zeroed it, leaving betap+betag=1 and rsav residual ≈ |save|.
+            if raw_savings_total != 0.0:
+                savings_total = raw_savings_total
+            else:
+                savings_total = max(
+                    regy_income - private_total - government_total,
+                    0.0,
+                )
             regional_savings_data[(region,)] = savings_total
             # GAMS cal.gms:629 fixes regY = yc + yg + rsav at calibration so
             # phi=1 falls out exactly (see betaCal block below). The income/
