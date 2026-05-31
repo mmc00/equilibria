@@ -4033,44 +4033,40 @@ class GTAPModelEquations:
             return model.pnd[r, a] ** expo == sum(terms)
         model.eq_pndeq = Constraint(model.r, model.a, rule=eq_pndeq_rule)
 
-        # Price of VA bundle (GAMS pvaeq)
-        # pva**(1-sigmav) = sum(f, af(r,f,a)*[pfa(r,f,a)/lambdaf(r,f,a)]**(1-sigmav))
+        # Price of VA bundle (GAMS pvaeq, model.gms:573-575)
+        #   pva**(1-sigmav) = sum(f, af*(pfa/lambdaf)**(1-sigmav))
+        # When sigmav=1 the CES degenerates to 1=sum(af)=1, a tautology that
+        # cannot pin pva. Use the budget identity pva*va = sum(pfa*xf) instead
+        # (the dual of the Cobb-Douglas problem), which matches GAMS behavior
+        # in the limit. Previous Python "pva = prod(pfa^af)" was the primal CD
+        # formula and breaks the calibration identity at benchmark.
         def eq_pvaeq_rule(model, r, a):
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
-            if abs(expo) < 1e-8:
-                terms = []
-                for f in model.f:
-                    af_val = (
-                        value(model.af_param[r, f, a])
-                        if hasattr(model, "af_param")
-                        else value(model.af_share[r, f, a])
-                    )
-                    if af_val <= 0.0:
-                        continue
-                    lambdaf = max(self._lambdaf(r, f, a), 1e-8)
-                    terms.append((_m_pfa(r, f, a) / lambdaf) ** af_val)
-                if not terms:
-                    return Constraint.Skip
-                prod = 1.0
-                for term in terms:
-                    prod *= term
-                return model.pva[r, a] == prod
 
-            terms = []
+            af_pairs = []
             for f in model.f:
                 af_val = (
                     value(model.af_param[r, f, a])
                     if hasattr(model, "af_param")
                     else value(model.af_share[r, f, a])
                 )
-                if af_val <= 0.0:
+                if af_val is None or af_val <= 0.0:
                     continue
+                af_pairs.append((f, af_val))
+            if not af_pairs:
+                return Constraint.Skip
+
+            if abs(expo) < 1e-8:
+                # Cobb-Douglas → dual budget identity pva*va = sum(pfa*xf).
+                return model.pva[r, a] * model.va[r, a] == sum(
+                    _m_pfa(r, f, a) * model.xf[r, f, a] for (f, _) in af_pairs
+                )
+
+            terms = []
+            for f, af_val in af_pairs:
                 lambdaf = max(self._lambdaf(r, f, a), 1e-8)
                 terms.append(af_val * (_m_pfa(r, f, a) / lambdaf) ** expo)
-
-            if not terms:
-                return Constraint.Skip
             return model.pva[r, a] ** expo == sum(terms)
         model.eq_pvaeq = Constraint(model.r, model.a, rule=eq_pvaeq_rule)
 
