@@ -4457,18 +4457,21 @@ class GTAPModelEquations:
 
         # Mirror iterloop.gms:101 — pin xaa/xda/xma to 0 where xaFlag=0 so the
         # synthetic floor from get_vgm_init/get_vim_init doesn't leak into eq_paa
-        # via stale init values.
+        # via stale init values. setlb(0) first because _add_bounds already
+        # applied lb=1e-8 (MIN_QUANTITY) for positive-init triples.
         flag_off_fix_count = 0
         for (r, i, aa), flag in xa_flag_cache.items():
             if flag:
                 continue
-            if hasattr(model, "xaa") and (r, i, aa) in model.xaa:
-                model.xaa[r, i, aa].fix(0.0)
-                flag_off_fix_count += 1
-            if hasattr(model, "xda") and (r, i, aa) in model.xda:
-                model.xda[r, i, aa].fix(0.0)
-            if hasattr(model, "xma") and (r, i, aa) in model.xma:
-                model.xma[r, i, aa].fix(0.0)
+            for var_name in ("xaa", "xda", "xma"):
+                if not hasattr(model, var_name):
+                    continue
+                var = getattr(model, var_name)
+                if (r, i, aa) not in var:
+                    continue
+                var[r, i, aa].setlb(0.0)
+                var[r, i, aa].fix(0.0)
+            flag_off_fix_count += 1
         if flag_off_fix_count:
             logger.info(
                 "xa_flag: fixed xaa/xda/xma=0 for %d (r,i,aa) triples (GAMS xaFlag=0 mirror)",
