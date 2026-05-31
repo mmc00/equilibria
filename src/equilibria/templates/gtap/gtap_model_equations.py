@@ -4286,10 +4286,12 @@ class GTAPModelEquations:
         # demand is zero. GAMS uses it to skip paeq/xapeq (model.gms:903,553),
         # fix xa.l=0 (iterloop.gms:101) and skip alpha calibration (cal.gms:816).
         # We replicate it from RAW benchmark (basic-price values vdfb/vmfb/etc.)
-        # BEFORE any synthetic floor is applied. Threshold 1e-7 ≈ USD 0.1
-        # after inScale=1e-6: real demand starts at USD millions (raw ≥ 1e+0
-        # post-scale), so anything below ~1e-7 is numerical noise / empty cell.
-        XA_FLAG_THRESHOLD = 1e-7
+        # BEFORE any synthetic floor is applied. GAMS `$xa.l` is true iff the
+        # SAM value is strictly nonzero — there is no numeric threshold; the
+        # SAM only has true zeros or real (possibly tiny) flows. Use 0.0 here
+        # to match that exactly; the 1e-8 synthetic floor lives in get_v*_init,
+        # not in the raw benchmark we test against.
+        XA_FLAG_THRESHOLD = 0.0
 
         def _two_key(raw_map, region, commodity):
             val = raw_map.get((region, commodity), None)
