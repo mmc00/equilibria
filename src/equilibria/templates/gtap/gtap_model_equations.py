@@ -4274,9 +4274,84 @@ class GTAPModelEquations:
         # ========================================================================
         # TRADE - CES ARMINGTON DOMESTIC/IMPORT
         # ========================================================================
-        
+
+        # GAMS cal.gms:181 defines xaFlag(r,i,aa)$xa.l(r,i,aa,t0) — a binary
+        # flag that turns OFF the Armington system when basic-price benchmark
+        # demand is zero. GAMS uses it to skip paeq/xapeq (model.gms:903,553),
+        # fix xa.l=0 (iterloop.gms:101) and skip alpha calibration (cal.gms:816).
+        # We replicate it from RAW benchmark (basic-price values vdfb/vmfb/etc.)
+        # BEFORE any synthetic floor is applied. Threshold 1e-7 ≈ USD 0.1
+        # after inScale=1e-6: real demand starts at USD millions (raw ≥ 1e+0
+        # post-scale), so anything below ~1e-7 is numerical noise / empty cell.
+        XA_FLAG_THRESHOLD = 1e-7
+
+        def _two_key(raw_map, region, commodity):
+            val = raw_map.get((region, commodity), None)
+            if val is None:
+                val = raw_map.get((commodity, region), 0.0)
+            return float(val or 0.0)
+
+        def _raw_basic_demand(r, i, aa):
+            """Sum vdXb + vmXb at basic prices (matches GAMS xa.l seed)."""
+            if aa in self.sets.a:
+                return float(self.params.benchmark.vdfb.get((r, i, aa), 0.0) or 0.0) + float(
+                    self.params.benchmark.vmfb.get((r, i, aa), 0.0) or 0.0
+                )
+            if aa == GTAP_HOUSEHOLD_AGENT:
+                return _two_key(self.params.benchmark.vdpb, r, i) + _two_key(self.params.benchmark.vmpb, r, i)
+            if aa == GTAP_GOVERNMENT_AGENT:
+                return _two_key(self.params.benchmark.vdgb, r, i) + _two_key(self.params.benchmark.vmgb, r, i)
+            if aa == GTAP_INVESTMENT_AGENT:
+                return _two_key(self.params.benchmark.vdib, r, i) + _two_key(self.params.benchmark.vmib, r, i)
+            if aa == GTAP_MARGIN_AGENT:
+                return float(self._vst_value(str(r), str(i)) or 0.0)
+            return 0.0
+
+        all_agents = list(self.sets.a) + [
+            GTAP_HOUSEHOLD_AGENT,
+            GTAP_GOVERNMENT_AGENT,
+            GTAP_INVESTMENT_AGENT,
+            GTAP_MARGIN_AGENT,
+        ]
+        xa_flag_cache: Dict[tuple[str, str, str], bool] = {}
+        for r in self.sets.r:
+            for i in self.sets.i:
+                for aa in all_agents:
+                    xa_flag_cache[(r, i, aa)] = _raw_basic_demand(r, i, aa) > XA_FLAG_THRESHOLD
+
+        def get_xa_flag(r, i, aa):
+            return xa_flag_cache.get((r, i, aa), False)
+
+        # Mirror iterloop.gms:101 — pin xaa/xda/xma to 0 where xaFlag=0 so the
+        # synthetic floor from get_vgm_init/get_vim_init doesn't leak into eq_paa
+        # via stale init values. setlb(0) first because _add_bounds already
+        # applied lb=1e-8 (MIN_QUANTITY) for positive-init triples.
+        flag_off_fix_count = 0
+        for (r, i, aa), flag in xa_flag_cache.items():
+            if flag:
+                continue
+            for var_name in ("xaa", "xda", "xma"):
+                if not hasattr(model, var_name):
+                    continue
+                var = getattr(model, var_name)
+                if (r, i, aa) not in var:
+                    continue
+                var[r, i, aa].setlb(0.0)
+                var[r, i, aa].fix(0.0)
+            flag_off_fix_count += 1
+        if flag_off_fix_count:
+            logger.info(
+                "xa_flag: fixed xaa/xda/xma=0 for %d (r,i,aa) triples (GAMS xaFlag=0 mirror)",
+                flag_off_fix_count,
+            )
+
         # Agent/activity demand for intermediate inputs by activity.
         def eq_xaa_activity_rule(model, r, i, a):
+            # GAMS xapeq (model.gms:553) is gated by $xaFlag(r,i,a).
+            # When xa_flag=0 xaa is already fixed to 0; skip to avoid the
+            # io*nd RHS forcing a nonzero residual.
+            if not get_xa_flag(r, i, a):
+                return Constraint.Skip
             io_val = (
                 value(model.io_param[r, i, a])
                 if hasattr(model, "io_param")
@@ -4302,14 +4377,20 @@ class GTAPModelEquations:
         model.eq_xaa_activity = Constraint(model.r, model.i, model.a, rule=eq_xaa_activity_rule)
 
         def eq_xaa_hhd_rule(model, r, i):
+            if not get_xa_flag(r, i, GTAP_HOUSEHOLD_AGENT):
+                return Constraint.Skip
             return model.xaa[r, i, GTAP_HOUSEHOLD_AGENT] == model.xc[r, i]
         model.eq_xaa_hhd = Constraint(model.r, model.i, rule=eq_xaa_hhd_rule)
 
         def eq_xaa_gov_rule(model, r, i):
+            if not get_xa_flag(r, i, GTAP_GOVERNMENT_AGENT):
+                return Constraint.Skip
             return model.xaa[r, i, GTAP_GOVERNMENT_AGENT] == model.xg[r, i]
         model.eq_xaa_gov = Constraint(model.r, model.i, rule=eq_xaa_gov_rule)
 
         def eq_xaa_inv_rule(model, r, i):
+            if not get_xa_flag(r, i, GTAP_INVESTMENT_AGENT):
+                return Constraint.Skip
             return model.xaa[r, i, GTAP_INVESTMENT_AGENT] == model.xi[r, i]
         model.eq_xaa_inv = Constraint(model.r, model.i, rule=eq_xaa_inv_rule)
 
@@ -4324,6 +4405,8 @@ class GTAPModelEquations:
                     alphaa_tmg[(str(r), i_m)] = self._vst_value(str(r), i_m) / denom
 
         def eq_xaa_tmg_rule(model, r, i):
+            if not get_xa_flag(r, i, GTAP_MARGIN_AGENT):
+                return Constraint.Skip
             i_str = str(i)
             if i_str not in margin_commodities:
                 return model.xaa[r, i, GTAP_MARGIN_AGENT] == 0.0
@@ -4403,76 +4486,6 @@ class GTAPModelEquations:
             # GAMS calibrates sigmam(r,i,aa) and defaults it to esubd(i,r)
             # when no agent-specific override is available.
             return float(self.params.elasticities.esubd.get((r, i), 2.0))
-
-        # GAMS cal.gms:181 defines xaFlag(r,i,aa)$xa.l(r,i,aa,t0) — a binary
-        # flag that turns OFF the Armington system when basic-price benchmark
-        # demand is zero. GAMS uses it to skip paeq/xapeq (model.gms:903,553),
-        # fix xa.l=0 (iterloop.gms:101) and skip alpha calibration (cal.gms:816).
-        # We replicate it from RAW benchmark (basic-price values vdfb/vmfb/etc.)
-        # BEFORE any synthetic floor is applied. Threshold 1e-7 ≈ USD 0.1
-        # after inScale=1e-6: real demand starts at USD millions (raw ≥ 1e+0
-        # post-scale), so anything below ~1e-7 is numerical noise / empty cell.
-        XA_FLAG_THRESHOLD = 1e-7
-
-        def _two_key(raw_map, region, commodity):
-            val = raw_map.get((region, commodity), None)
-            if val is None:
-                val = raw_map.get((commodity, region), 0.0)
-            return float(val or 0.0)
-
-        def _raw_basic_demand(r, i, aa):
-            """Sum vdXb + vmXb at basic prices (matches GAMS xa.l seed)."""
-            if aa in self.sets.a:
-                return float(self.params.benchmark.vdfb.get((r, i, aa), 0.0) or 0.0) + float(
-                    self.params.benchmark.vmfb.get((r, i, aa), 0.0) or 0.0
-                )
-            if aa == GTAP_HOUSEHOLD_AGENT:
-                return _two_key(self.params.benchmark.vdpb, r, i) + _two_key(self.params.benchmark.vmpb, r, i)
-            if aa == GTAP_GOVERNMENT_AGENT:
-                return _two_key(self.params.benchmark.vdgb, r, i) + _two_key(self.params.benchmark.vmgb, r, i)
-            if aa == GTAP_INVESTMENT_AGENT:
-                return _two_key(self.params.benchmark.vdib, r, i) + _two_key(self.params.benchmark.vmib, r, i)
-            if aa == GTAP_MARGIN_AGENT:
-                return float(self._vst_value(str(r), str(i)) or 0.0)
-            return 0.0
-
-        all_agents = list(self.sets.a) + [
-            GTAP_HOUSEHOLD_AGENT,
-            GTAP_GOVERNMENT_AGENT,
-            GTAP_INVESTMENT_AGENT,
-            GTAP_MARGIN_AGENT,
-        ]
-        xa_flag_cache: Dict[tuple[str, str, str], bool] = {}
-        for r in self.sets.r:
-            for i in self.sets.i:
-                for aa in all_agents:
-                    xa_flag_cache[(r, i, aa)] = _raw_basic_demand(r, i, aa) > XA_FLAG_THRESHOLD
-
-        def get_xa_flag(r, i, aa):
-            return xa_flag_cache.get((r, i, aa), False)
-
-        # Mirror iterloop.gms:101 — pin xaa/xda/xma to 0 where xaFlag=0 so the
-        # synthetic floor from get_vgm_init/get_vim_init doesn't leak into eq_paa
-        # via stale init values. setlb(0) first because _add_bounds already
-        # applied lb=1e-8 (MIN_QUANTITY) for positive-init triples.
-        flag_off_fix_count = 0
-        for (r, i, aa), flag in xa_flag_cache.items():
-            if flag:
-                continue
-            for var_name in ("xaa", "xda", "xma"):
-                if not hasattr(model, var_name):
-                    continue
-                var = getattr(model, var_name)
-                if (r, i, aa) not in var:
-                    continue
-                var[r, i, aa].setlb(0.0)
-                var[r, i, aa].fix(0.0)
-            flag_off_fix_count += 1
-        if flag_off_fix_count:
-            logger.info(
-                "xa_flag: fixed xaa/xda/xma=0 for %d (r,i,aa) triples (GAMS xaFlag=0 mirror)",
-                flag_off_fix_count,
-            )
 
         # GAMS cal.gms:816-819 calibrates alphad/alpham at the BASELINE (t0) values.
         # When building a shock model, use the converged baseline snapshot rather than
