@@ -206,17 +206,39 @@ def get_tax_parameter_name(internal_name: str) -> str:
     return mapping.get(internal_name.lower(), internal_name.upper())
 
 
-def get_elasticity_parameter_name(internal_name: str) -> str:
-    """Map internal elasticity name to GTAP Std 7 native name.
-    
-    Args:
-        internal_name: Internal name like 'esubva', 'esubd', 'esubm'
-        
+_ELASTICITY_HAR_SHORT_NAMES = {
+    'esubva': 'ESBV',
+    'esubt':  'ESBT',
+    'esubc':  'ESBC',
+    'esubd':  'ESBD',
+    'esubm':  'ESBM',
+    'esubg':  'ESBG',
+    'esubi':  'ESBI',
+    'esubq':  'ESBQ',
+    'etraq':  'ETRQ',
+    'etrae':  'ETRE',
+    'rorflex': 'RFLX',
+    'sigmam':  'ESBS',
+    'incpar':  'INCP',
+    'subpar':  'SUBP',
+}
+
+
+def get_elasticity_parameter_name(internal_name: str):
+    """Return candidate GTAP names for an internal elasticity name.
+
+    v7 ``default.gdx`` files use HAR short names (4-char like ``ESBG``);
+    earlier datasets use the long Std 7 uppercase form (``ESUBG``).
+    We try the HAR short name first when known, then the uppercase fallback.
+
     Returns:
-        GTAP Std 7 name like 'ESUBVA', 'ESUBD', 'ESUBM'
+        Tuple of candidate names in priority order.
     """
-    # GTAP Std 7 elasticity names are already uppercase
-    return internal_name.upper()
+    upper = internal_name.upper()
+    short = _ELASTICITY_HAR_SHORT_NAMES.get(internal_name.lower())
+    if short and short != upper:
+        return (short, upper)
+    return (upper,)
 
 
 # =============================================================================
@@ -320,21 +342,6 @@ def get_set_name(internal_name: str) -> str:
         GTAP Std 7 set name like 'REG', 'COMM', 'ACTS', 'ENDW'
     """
     return GTAP_STD7_SET_NAMES.get(internal_name.lower(), internal_name.upper())
-    
-    return mapping.get(internal_name.lower(), internal_name.upper())
-
-
-def get_elasticity_parameter_name(internal_name: str) -> str:
-    """Map internal elasticity name to GTAP Std 7 native name.
-    
-    Args:
-        internal_name: Internal name like 'esubva', 'esubd'
-        
-    Returns:
-        GTAP Std 7 name like 'ESUBVA', 'ESUBD'
-    """
-    # GTAP Std 7 elasticities are already uppercase versions
-    return internal_name.upper()
 
 
 # =============================================================================

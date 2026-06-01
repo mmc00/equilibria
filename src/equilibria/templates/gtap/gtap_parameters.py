@@ -95,7 +95,19 @@ class GTAPElasticities:
     sigmav: Dict[Tuple[str, str], float] = field(default_factory=dict)
     
     def load_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
-        """Load elasticities from GDX file using GTAP Standard 7 native parameter names."""
+        """Load elasticities from GDX file using GTAP Standard 7 native parameter names.
+
+        v7 ``default.gdx`` files store elasticities in GAMS *sets with values* and
+        a non-standard UEL ordering that our raw GDX reader cannot decode safely
+        (e.g. RFLX gets indexed by COMM labels instead of REG). When a sibling
+        ``default.prm`` HAR file exists next to the GDX, prefer that — the HAR
+        reader handles the v7 short-name layout correctly.
+        """
+        prm_sibling = gdx_path.parent.parent / "default.prm"
+        if prm_sibling.exists():
+            self.load_from_har(prm_sibling, sets)
+            return
+
         gdx_data = read_gdx(gdx_path)
 
         # Load production elasticities (GTAP Std 7 already uses ESUBVA, ESUBD uppercase)
@@ -167,18 +179,24 @@ class GTAPElasticities:
             target: Target dictionary to populate
             index_sets: Tuple of index sets for key validation
         """
-        # Convert internal name to GTAP Std 7 name
-        gtap_name = get_elasticity_parameter_name(name)
-        
-        values: Dict[Tuple[str, ...], float] = {}
-        try:
-            values = read_parameter_values(gdx_data, gtap_name)
-        except (KeyError, ValueError):
-            pass
+        # Convert internal name to candidate GTAP Std 7 / HAR names.
+        candidates = get_elasticity_parameter_name(name)
+        if isinstance(candidates, str):
+            candidates = (candidates,)
 
-        if not values:
-            values = read_parameter_with_gdxdump(gdx_path, gtap_name)
-        
+        values: Dict[Tuple[str, ...], float] = {}
+        gtap_name = candidates[0]
+        for candidate in candidates:
+            try:
+                values = read_parameter_values(gdx_data, candidate)
+            except (KeyError, ValueError):
+                values = {}
+            if not values:
+                values = read_parameter_with_gdxdump(gdx_path, candidate)
+            if values:
+                gtap_name = candidate
+                break
+
         # Reorder keys if needed
         if values:
             values = reorder_parameter_keys(gtap_name, values)
@@ -2219,10 +2237,14 @@ class GTAPParameters:
         # First load sets
         self.sets.load_from_gdx(gdx_path)
         
-        # Load elasticities from separate file if provided, otherwise from main file
+        # Load elasticities from separate file if provided, otherwise probe siblings.
         if elasticity_gdx is None:
-            candidate = gdx_path.with_name("default-9x10.gdx")
-            elast_file = candidate if candidate.exists() else gdx_path
+            elast_file = gdx_path
+            for sibling in ("default-9x10.gdx", "default.gdx"):
+                candidate = gdx_path.with_name(sibling)
+                if candidate.exists():
+                    elast_file = candidate
+                    break
         else:
             elast_file = elasticity_gdx
         self.elasticities.load_from_gdx(elast_file, self.sets)
