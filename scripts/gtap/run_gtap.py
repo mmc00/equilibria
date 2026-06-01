@@ -1007,7 +1007,10 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
             xmt_rhs = sum(value(model.xma[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
             xmt_residuals.append(xmt_lhs - xmt_rhs)
 
-    def _stats(residuals: list[float], tol: float = 1e-8) -> dict[str, Any]:
+    # tol=2e-8 absorbs the MIN_QUANTITY=1e-8 lower bound on xaa: inactive flows
+    # are clamped to 1e-8 while their economic RHS is 0, leaving a structural
+    # 1e-8 residual that is not a convergence failure.
+    def _stats(residuals: list[float], tol: float = 2e-8) -> dict[str, Any]:
         if not residuals:
             return {
                 "count": 0,
