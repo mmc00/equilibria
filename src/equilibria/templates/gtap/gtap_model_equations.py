@@ -5020,7 +5020,7 @@ class GTAPModelEquations:
             share = value(model.g_share[r, i])
             if share <= 0.0:
                 return model.xg[r, i] == 0.0
-            return model.xg[r, i] == share * model.yg[r] / (model.pa[r, i, "gov"] + 1e-12)
+            return model.pa[r, i, "gov"] * model.xg[r, i] == share * model.yg[r]
         model.eq_xg = Constraint(model.r, model.i, rule=eq_xg_rule)
         
         # Investment demand
@@ -5119,18 +5119,23 @@ class GTAPModelEquations:
 
         # Government utility per capita (GAMS ugeq, model.gms:826):
         #   ug = aug * xg_total / pop, where xg_total = yg / pg (line 821).
-        # Python lacks scalar pg; reconstruct pg as CES index of pa[r,i,gov] with g_share weights:
-        #   pg^(1-sigmag) = sum_i g_share[r,i] * pa[r,i,gov]^(1-sigmag)
+        # Cobb-Douglas (sigmag=1): pg = prod_i pa[r,i,gov]^g_share[r,i]
+        # CES (sigmag != 1): pg^(1-sigmag) = sum_i g_share[r,i] * pa[r,i,gov]^(1-sigmag)
         def eq_ug_rule(model, r):
             sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
-            if abs(sigmag - 1.0) < 1e-8:
-                sigmag = 1.01
-            expo = 1.0 - sigmag
-            pg_terms = sum(
-                value(model.g_share[r, i]) * model.pa[r, i, "gov"] ** expo
+            active_shares = [
+                (i, value(model.g_share[r, i]))
                 for i in model.i
                 if value(model.g_share[r, i]) > 0.0
-            )
+            ]
+            if abs(sigmag - 1.0) < 1e-8:
+                # CD exact: ug*pop * prod_i pa^g_share = aug*yg
+                pg_index = 1.0
+                for i, s in active_shares:
+                    pg_index = pg_index * model.pa[r, i, "gov"] ** s
+                return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
+            expo = 1.0 - sigmag
+            pg_terms = sum(s * model.pa[r, i, "gov"] ** expo for i, s in active_shares)
             pg_index = pg_terms ** (1.0 / expo)
             return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
         model.eq_ug = Constraint(model.r, rule=eq_ug_rule)
