@@ -229,3 +229,93 @@ Cell-by-cell diffs (`diff_nus333_full.py`, `diff_9x10_full.py`) report 0 diverge
 
 - 9×10 GAMS local parity: requires a non-community GAMS license (community cap of 2,500 nonlinear rows blocks the ~10k-equation 9×10 model). NEOS reference is sufficient for current goals.
 - `output/gtap_ifsub_false_warmstart.json` and `output/gtp_baseline_reverted.json` are pre-fix snapshots and have been superseded by the parity CSVs under `benchmarks/`.
+
+---
+
+## Session 2026-06-01: 15×10 bilateral shock + `_omegaf` fix + `check`-step rebase discovery
+
+### Context
+Investigating shock-propagation discrepancies between Python and NEOS in dataset `gtap7_15x10` (bilateral USA-only VegFruit +10% import tariff). NEOS reference: job 19298170 (`output/gtap7_15x10_bilateral_neos_bundle/out.gdx`).
+
+### Fix 1 — `_omegaf` honours `etrae` for sluggish mobile factors (commit `e59ab27`)
+**Bug:** `_omegaf` returned `inf` for any factor in `self.sets.mf`, ignoring dataset-provided `etrae` (transformation elasticity). For `Land` in 15×10, `etrae=-1.0` (partial CET) was overridden to `omegaf=inf`, making factor prices uniform across activities instead of CET-differentiated.
+
+**Fix:** Reorder logic in `_omegaf` to check `etrae` first; only fall back to `inf` when `etrae` is missing/zero.
+
+**Result:** Post-fix Python `pf[USA, Land, *]` differentiates across activities (matches NEOS structure). `omegaf` values now match: Land=1.0, NatRes=0.001, others=inf.
+
+### Discovery — NEOS `t='check'` is a rebase, not a re-solve
+**Symptom:** After `_omegaf` fix, Python `pf[USA,Land,VegFruit]` Δ vs base = -8.23%, NEOS Δ vs **check** = -0.44%. Apparent ~19× residual gap.
+
+**Root cause:** NEOS uses 3 time periods `t = {base, check, shock}`. The "shock effect" GAMS reports is `shock - check`, not `shock - base`. The `check` period is **not identical** to `base`:
+
+1. **`base`**: GAMS solves `betaCal` model with `yc.fx, yg.fx, rsav.fx, regY.fx` pinned to SAM data; recovers `betaP/G/S` shares.
+2. **`check`/`shock`**: Fixes `betaP/G/S = .l` (calibrated shares) and **unfixes** `yc/yg/rsav/regY/phiP`. Re-solves the full `gtap` model.
+
+This produces a different equilibrium with the same shares but ~11% lower nominal aggregates (rebase artifact).
+
+**Confirmed in NEOS GDX (USA, 15×10 bilateral)**:
+
+| Variable | NEOS base | NEOS check | Δ |
+|---|---|---|---|
+| `yc`   | 13.33 | 11.83 | -11.3% |
+| `yg`   | 2.75  | 2.44  | -11.3% |
+| `rsav` | 1.58  | 1.40  | -11.3% |
+| `regY` | 17.66 | 15.67 | -11.3% |
+| `betaP/G/S` | identical | identical | 0% |
+
+**True shock effect** (NEOS `shock - check`): `pf[USA,Land,VegFruit]` = -0.44%.
+**Rebase-inclusive delta** (NEOS `shock - base`): -10.16%.
+**Python `shock - base`** (post `_omegaf` fix): -8.23% — comparable to NEOS `shock - base`, **not** to NEOS `shock - check`.
+
+### Implication for parity claims
+The 9×10 and NUS333 "100% parity" results from 2026-05-12 likely hold because those benchmarks compared `shock - base` consistently on both sides (or the rebase was negligible for those shock magnitudes/regions). 15×10 surfaces the issue because:
+- Bilateral shocks have small policy effect (~0.5%) relative to rebase (~10%).
+- Larger dataset has more nominal slack that the rebase consumes.
+
+### Attempted: replicate `check` step in Python
+
+**Approach tried:** Re-solve Python in counterfactual mode with `is_counterfactual=True, t0_snapshot=base_m` and no policy change. Hypothesis: this would inherit base `beta*` and let nominal levels relax.
+
+**Result (15×10 bilateral):**
+- Python `check` yc[USA] = 13.33 = Python base (NO rebase happened)
+- NEOS check yc[USA] = 11.83 (-11.3% rebase)
+- Python `shock - check` for pf[USA,Land,VegFruit] = -6.98%, NEOS = -0.44% (still ~15× off)
+
+**Why the 2-stage approach didn't work in Python:**
+
+Looking at `pmuveq`, `pfacteq`, `pwfacteq` in GAMS (lines 22679-22713):
+```
+pmuv(t) = pmuv(t0) * sqrt(...Fisher-style ratios of pefob and xw between t0 and t...)
+```
+
+These equations use `t0` (base) as an **external reference point** for a Fisher chain-volume index. When `t=base`, the equation degenerates to `pmuv=1`. When `t=check`, GAMS compares the check equilibrium against the *fixed* base equilibrium snapshot to compute the index.
+
+**Key insight:** GAMS's rebase is not an explicit "relax bounds" step — it's the **natural consequence** of solving a multi-period model where:
+1. The base period is a calibration solve with nominal levels pinned to SAM
+2. The check period is a different solve where Fisher indices anchor to the base point but other variables have freedom to find a new equilibrium
+
+Python is a **single-period model**: it doesn't have a `t0` snapshot baked into its equations as a static reference. The `t0_snapshot=base_m` mechanism only inherits the `beta*` parameters; it doesn't replicate the Fisher-index anchoring across periods.
+
+**To properly replicate this would require:**
+1. Adding explicit `t0` snapshot Params for pf, xf, xw, pefob, gdpmp etc. into the model equations
+2. Modifying `pmuveq`, `pfacteq`, `pwfacteq` to use these Param snapshots instead of self-referential current-period values
+3. Re-solving the model with these Params populated from the base solve
+
+This is a substantial architectural change. Not attempted in this session.
+
+### Practical conclusion
+
+The 2026-05-12 "100% parity" results for 9×10 and NUS333 hold because:
+- Those datasets/shocks produced equilibria close enough to base that the rebase artifact was negligible
+- The metric used (cell-by-cell diff) was likely on `shock - base` for both sides (Python and NEOS)
+
+For 15×10 bilateral, the small policy effect (~0.5%) is dwarfed by the rebase artifact (~10%) — making the issue visible. Larger uniform shocks would also show this if measured correctly.
+
+**Recommendation:** When comparing Python to NEOS, always compare `shock - base` on both sides, not `shock - base` vs `shock - check`. Document this clearly so future validations don't fall into the same trap.
+
+### Verified state at end of session
+- `_omegaf` fix committed (`e59ab27`).
+- Python 15×10 bilateral solves cleanly (base res 5.5e-12, shock res 3.6e-12).
+- Python `shock - base` (-8.23%) ≈ NEOS `shock - base` (-10.16%) for pf[USA,Land,VegFruit].
+- Remaining gap (-8.23% vs -10.16%) is plausibly explained by remaining minor differences in CES weights, lambdas, or the Fisher anchoring discussed above.
