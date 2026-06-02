@@ -1,0 +1,390 @@
+=== Python baseline NUS333 ===
+[base] deactivated 6 eq_xfteq (xft fixed → over-determining)
+[base] structural matching: 545/545 pairs assigned
+
+🔍 Building Jacobian structure for 545 variables × 545 equations...
+   (expression-driven sparsity detection)
+
+
+✅ Jacobian structure built: 2,079 non-zero entries (0.70% density)
+
+[base] Solving (545 eqs)...
+[base] code=1  residual=5.730e-12
+[base] top-25 residuals:
+   eq_pmuv: callback=+1.3365e-09  sr=4.29e-03  paired_var=pmuv=1  bounds=[0.001,None]  sc=4.29e-03
+   eq_pwfact: callback=+1.3642e-12  sr=2.42e-04  paired_var=pf[ROW,LAND,AGR]=1.049  bounds=[0.001048996331743243,None]  sc=2.36e-02
+   eq_pfact[ROW]: callback=+4.5475e-13  sr=4.42e-04  paired_var=pfact[ROW]=1  bounds=[0.001,None]  sc=4.42e-04
+   eq_pdeq[ROW,MFG]: callback=+2.0606e-13  sr=1.00e-02  paired_var=xda[ROW,MFG,inv]=1.789  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xweq[ROW,MFG,ROW]: callback=+1.1724e-13  sr=1.49e-02  paired_var=xw[ROW,MFG,ROW]=8.882  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xmt_agg[ROW,MFG]: callback=+1.1546e-13  sr=1.00e-02  paired_var=xmt[ROW,MFG]=10.7  bounds=[0,None]  sc=1.00e+00
+   eq_pfact[USA]: callback=-1.1369e-13  sr=3.60e-03  paired_var=pfact[USA]=1  bounds=[0.001,None]  sc=3.60e-03
+   eq_pdeq[USA,MFG]: callback=-4.2633e-14  sr=1.00e-01  paired_var=xds[USA,MFG]=5.69  bounds=[1e-08,None]  sc=1.00e+00
+   eq_pdeq[USA,SER]: callback=-3.5527e-14  sr=1.00e-01  paired_var=xda[USA,SER,AGR]=0.08571  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xft[ROW,LABOR]: callback=+2.8422e-14  sr=1.00e-02  paired_var=xf[ROW,LABOR,MFG]=0.03146  bounds=[1e-08,None]  sc=8.32e-03
+   eq_pigbl: callback=+2.1316e-14  sr=1.45e-01  paired_var=pigbl=1  bounds=[0.0010000000000000002,None]  sc=1.45e-01
+   eq_x[ROW,MFG,MFG]: callback=+2.1316e-14  sr=9.72e-03  paired_var=x[ROW,MFG,MFG]=32.6  bounds=[0,None]  sc=1.00e+00
+   eq_pdeq[ROW,SER]: callback=+1.4211e-14  sr=1.00e-02  paired_var=xds[ROW,SER]=45.18  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xmt_agg[USA,MFG]: callback=-9.1038e-15  sr=1.00e-01  paired_var=xmt[USA,MFG]=1.901  bounds=[0,None]  sc=1.00e+00
+   eq_facty[ROW]: callback=-7.1054e-15  sr=8.32e-03  paired_var=facty[ROW]=28.96  bounds=[0,None]  sc=1.00e+00
+   eq_gdpmp[ROW]: callback=+7.1054e-15  sr=6.93e-02  paired_var=gdpmp[ROW]=41.77  bounds=[0,None]  sc=1.00e+00
+   eq_x[ROW,SER,SER]: callback=+7.1054e-15  sr=9.88e-03  paired_var=xp[ROW,SER]=0.4694  bounds=[0,None]  sc=9.88e-03
+   eq_pdeq[ROW,AGR]: callback=-6.6613e-15  sr=1.00e-02  paired_var=xda[ROW,AGR,SER]=0.001717  bounds=[1e-08,None]  sc=1.00e-02
+   eq_pfyeq[ROW,LABOR,MFG]: callback=-6.4393e-15  sr=1.00e+00  paired_var=pf[ROW,LABOR,MFG]=1.201  bounds=[0.00120143992988665,None]  sc=3.50e-03
+   eq_gdpmp[USA]: callback=+3.5527e-15  sr=1.27e-01  paired_var=gdpmp[USA]=14.06  bounds=[0,None]  sc=1.00e+00
+   eq_pgdpmp[USA]: callback=-3.5527e-15  sr=7.11e-02  paired_var=pgdpmp[USA]=1  bounds=[0.001,None]  sc=7.11e-02
+   eq_xd_agg[ROW,MFG]: callback=+3.5527e-15  sr=1.00e-02  paired_var=xd[ROW,MFG]=21.95  bounds=[0,None]  sc=1.00e+00
+   eq_xda[ROW,SER,hhd]: callback=+3.5527e-15  sr=3.96e-02  paired_var=xda[ROW,SER,hhd]=13.01  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xseq[USA,SER]: callback=+3.5527e-15  sr=1.00e+00  paired_var=xds[USA,SER]=17.87  bounds=[1e-08,None]  sc=1.00e+00
+   eq_yc[ROW]: callback=-3.5527e-15  sr=3.87e-02  paired_var=yc[ROW]=23.45  bounds=[None,None]  sc=1.00e+00
+  baseline solve=0.32s
+
+=== Python shock NUS333 (10% imptx, power scaling) ===
+Applied 10% tariff power shock to 12 imptx entries
+[shock] deactivated 6 eq_xfteq (xft fixed → over-determining)
+[shock] structural matching: 545/545 pairs assigned
+
+🔍 Building Jacobian structure for 545 variables × 545 equations...
+   (expression-driven sparsity detection)
+
+
+✅ Jacobian structure built: 2,161 non-zero entries (0.73% density)
+
+[shock] Solving (545 eqs)...
+[shock] code=1  residual=1.281e-07
+[shock] top-25 residuals:
+   eq_xiagg[ROW]: callback=-4.5054e-07  sr=9.86e-02  paired_var=yi[ROW]=11.41  bounds=[None,None]  sc=1.00e+00
+   eq_gdpmp[ROW]: callback=+4.4699e-07  sr=6.93e-02  paired_var=gdpmp[ROW]=42.83  bounds=[0,None]  sc=1.00e+00
+   eq_xda[ROW,MFG,inv]: callback=+3.9913e-07  sr=1.62e-01  paired_var=xaa[ROW,MFG,inv]=3.619  bounds=[1e-08,None]  sc=1.00e+00
+   eq_pgdpmp[ROW]: callback=-3.6148e-07  sr=2.39e-02  paired_var=pgdpmp[ROW]=1.032  bounds=[0.001,None]  sc=2.39e-02
+   eq_rgdpmp[ROW]: callback=-3.1100e-07  sr=6.93e-02  paired_var=rgdpmp[ROW]=41.49  bounds=[0,None]  sc=5.00e-01
+   eq_xma[ROW,MFG,inv]: callback=+2.2120e-07  sr=2.09e-01  paired_var=xma[ROW,MFG,inv]=1.25  bounds=[1e-08,None]  sc=1.00e+00
+   eq_pgdpmp[USA]: callback=-1.3896e-07  sr=7.11e-02  paired_var=pgdpmp[USA]=1.023  bounds=[0.001,None]  sc=7.11e-02
+   eq_rgdpmp[USA]: callback=-1.3088e-07  sr=1.27e-01  paired_var=rgdpmp[USA]=14.02  bounds=[0,None]  sc=5.00e-01
+   eq_gdpmp[USA]: callback=+1.1962e-07  sr=1.27e-01  paired_var=gdpmp[USA]=14.35  bounds=[0,None]  sc=1.00e+00
+   eq_pigbl: callback=-9.4858e-08  sr=1.45e-01  paired_var=pigbl=1.036  bounds=[0.0010000000000000002,None]  sc=1.45e-01
+   eq_paa[USA,MFG,MFG]: callback=+5.9833e-08  sr=4.09e-01  paired_var=pa[USA,MFG,MFG]=1.059  bounds=[0.001,None]  sc=4.09e-01
+   eq_paa[ROW,MFG,gov]: callback=+5.9073e-08  sr=4.09e-01  paired_var=pa[ROW,MFG,gov]=1.085  bounds=[0.001,None]  sc=4.09e-01
+   eq_paa[USA,MFG,inv]: callback=+5.8781e-08  sr=4.09e-01  paired_var=pa[USA,MFG,inv]=1.058  bounds=[0.001,None]  sc=3.80e-01
+   eq_paa[ROW,MFG,inv]: callback=+5.8096e-08  sr=4.09e-01  paired_var=pa[ROW,MFG,inv]=1.078  bounds=[0.001,None]  sc=1.62e-01
+   eq_paa[USA,MFG,hhd]: callback=+5.6509e-08  sr=4.09e-01  paired_var=pa[USA,MFG,hhd]=1.057  bounds=[0.001,None]  sc=2.14e-01
+   eq_paa[ROW,MFG,MFG]: callback=+4.9458e-08  sr=4.09e-01  paired_var=pa[ROW,MFG,MFG]=1.067  bounds=[0.001,None]  sc=4.09e-01
+   eq_paa[ROW,MFG,hhd]: callback=+4.3751e-08  sr=4.09e-01  paired_var=pa[ROW,MFG,hhd]=1.063  bounds=[0.001,None]  sc=6.06e-02
+   eq_paa[ROW,MFG,SER]: callback=+4.2005e-08  sr=4.09e-01  paired_var=pa[ROW,MFG,SER]=1.062  bounds=[0.001,None]  sc=4.09e-01
+   eq_xc[ROW,MFG]: callback=-3.8871e-08  sr=4.26e-02  paired_var=xc[ROW,MFG]=7.618  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xweq[ROW,MFG,ROW]: callback=-3.7690e-08  sr=1.49e-02  paired_var=xw[ROW,MFG,ROW]=7.094  bounds=[1e-08,None]  sc=1.00e+00
+   eq_paa[ROW,MFG,AGR]: callback=+3.6625e-08  sr=4.09e-01  paired_var=pd[ROW,MFG]=1.036  bounds=[0.001,None]  sc=6.06e-02
+   eq_paa[USA,MFG,SER]: callback=+3.4123e-08  sr=4.09e-01  paired_var=pa[USA,MFG,SER]=1.047  bounds=[0.001,None]  sc=4.09e-01
+   eq_xc[USA,SER]: callback=-2.9797e-08  sr=1.01e-01  paired_var=xc[USA,SER]=7.711  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xda[USA,MFG,hhd]: callback=+2.8860e-08  sr=2.14e-01  paired_var=xda[USA,MFG,hhd]=1.403  bounds=[1e-08,None]  sc=1.00e+00
+   eq_xda[ROW,MFG,hhd]: callback=+2.7954e-08  sr=6.06e-02  paired_var=xda[ROW,MFG,hhd]=4.99  bounds=[1e-08,None]  sc=1.00e+00
+  shock solve=0.43s
+
+Populated GAMS Vars in out.gdx: 139
+
+========================================================================================================================
+PHASE: base    (tol_rel=0.001  tol_abs=1e-06)
+========================================================================================================================
+gams_var       py_var           cells   match  diverge  missing    max_abs    max_rel  status
+------------------------------------------------------------------------------------------------------------------------
+afeall         afeall              18      18        0        0 0.000000e+00 0.000000e+00  ok
+afecom         afecom               3       3        0        0 0.000000e+00 0.000000e+00  ok
+afefac         afefac               6       6        0        0 0.000000e+00 0.000000e+00  ok
+afereg         afereg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+afesec         afesec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+aioall         aioall              18      18        0        0 0.000000e+00 0.000000e+00  ok
+aiocom         aiocom               3       3        0        0 0.000000e+00 0.000000e+00  ok
+aioreg         aioreg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+aiosec         aiosec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+andall         andall               6       6        0        0 0.000000e+00 0.000000e+00  ok
+andreg         andreg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+andsec         andsec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+ape            ape                 18      18        0        0 4.810801e-10 2.258651e-10  ok
+arent          arent                2       2        0        0 7.332200e-09 7.098178e-08  ok
+au             au                   2       2        0        0 0.000000e+00 0.000000e+00  ok
+aug            aug                  2       2        0        0 1.024292e-12 7.515141e-12  ok
+aus            aus                  2       2        0        0 2.886580e-15 1.715156e-15  ok
+avaall         avaall               6       6        0        0 0.000000e+00 0.000000e+00  ok
+avareg         avareg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+avasec         avasec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+axp            axp                  6       6        0        0 0.000000e+00 0.000000e+00  ok
+axpall         axpall               6       6        0        0 0.000000e+00 0.000000e+00  ok
+axpreg         axpreg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+axpsec         axpsec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+betag          betag                2       0        2        0 2.066645e-02 1.171508e-01  diff
+betap          betap                2       0        2        0 9.104686e-02 1.171507e-01  diff
+betas          betas                2       0        2        0 1.750785e-02 1.171508e-01  diff
+bh             bh                   6       6        0        0 3.647765e-11 1.116699e-10  ok
+ced            ced                 18      18        0        0 7.040316e-11 5.190066e-10  ok
+chiInv         chiInv               2       0        2        0 6.764675e-01 8.837694e-01  diff
+chiSave        chiSave              1       1        0        0 6.985250e-10 6.985250e-10  ok
+chif           chif                 2       2        0        0 4.154900e-09 6.397236e-08  ok
+cv             cv                   2       2        0        0 3.525300e-07 2.350215e-08  ok
+dintx          dintx               42      42        0        0 1.581256e-10 1.602562e-03  ok
+dtxshft        dtxshft             42      42        0        0 0.000000e+00 0.000000e+00  ok
+eh             eh                   6       6        0        0 4.031981e-10 3.571127e-10  ok
+etax           etax                 6       6        0        0 0.000000e+00 0.000000e+00  ok
+ev             ev                   2       2        0        0 5.289707e-07 5.316662e-08  ok
+exptx          exptx               12      12        0        0 1.041978e-10 2.098969e-07  ok
+factY          facty                2       2        0        0 9.014262e-07 7.420192e-08  ok
+fctts          fctts               18      18        0        0 0.000000e+00 0.000000e+00  ok
+fcttx          fcttx               18      18        0        0 1.023669e-10 1.690678e-09  ok
+gdpmp          gdpmp                2       2        0        0 2.042056e-06 7.853228e-08  ok
+imptx          imptx               12      12        0        0 5.097772e-10 1.778154e-08  ok
+incelas        incelas              6       6        0        0 9.241830e-11 1.223688e-10  ok
+kapEnd         kapEnd               2       2        0        0 1.696778e-06 3.886653e-08  ok
+kappaf         kappaf              14       0       14        0 2.123094e-01 1.000000e+00  diff
+kstock         kstock               2       2        0        0 0.000000e+00 0.000000e+00  ok
+lambdaf        lambdaf             18      18        0        0 0.000000e+00 0.000000e+00  ok
+lambdai        lambdai              6       6        0        0 0.000000e+00 0.000000e+00  ok
+lambdaio       lambdaio            18      18        0        0 0.000000e+00 0.000000e+00  ok
+lambdam        lambdam             12      12        0        0 0.000000e+00 0.000000e+00  ok
+lambdamg       lambdamg            36      36        0        0 0.000000e+00 0.000000e+00  ok
+lambdand       lambdand             6       6        0        0 0.000000e+00 0.000000e+00  ok
+lambdava       lambdava             6       6        0        0 0.000000e+00 0.000000e+00  ok
+mintx          mintx               42      42        0        0 8.457408e-10 1.602564e-03  ok
+mtax           mtax                 6       6        0        0 0.000000e+00 0.000000e+00  ok
+mtxshft        mtxshft             42      42        0        0 0.000000e+00 0.000000e+00  ok
+nd             nd                   6       6        0        0 6.340204e-08 1.189980e-07  ok
+p              p                   18      12        6        0 2.805094e-02 2.886051e-02  diff
+pa             pa                  42      42        0        0 8.758975e-08 8.758975e-08  ok
+pabs           pabs                 2       2        0        0 2.365211e-08 2.365211e-08  ok
+pcons          pcons                2       2        0        0 2.350172e-08 2.350172e-08  ok
+pd             pd                   6       6        0        0 8.417444e-08 8.417444e-08  ok
+pdp            pdp                 42      42        0        0 8.531232e-08 8.434358e-08  ok
+pe             pe                  12      12        0        0 8.417444e-08 8.417444e-08  ok
+pefob          pefob               12      12        0        0 8.415153e-08 8.417440e-08  ok
+pet            pet                  6       6        0        0 8.417444e-08 8.417444e-08  ok
+pf             pf                  18      18        0        0 6.228832e-07 5.712464e-07  ok
+pfa            pfa                 18      18        0        0 5.973387e-07 5.713189e-07  ok
+pfact          pfact                2       2        0        0 6.941395e-08 6.941395e-08  ok
+pft            pft                  6       6        0        0 5.713222e-07 5.713222e-07  ok
+pfy            pfy                 18      18        0        0 5.713222e-07 5.713222e-07  ok
+pg             pg(CES gov)          2       2        0        0 1.755074e-08 1.755074e-08  ok
+pgdpmp         pgdpmp               2       2        0        0 2.220446e-16 2.220446e-16  ok
+phi            phi                  2       0        2        0 1.048656e-01 1.048656e-01  diff
+phiP           phip                 2       2        0        0 1.547696e-09 1.547696e-09  ok
+pi             pi                   2       2        0        0 2.940390e-08 2.940390e-08  ok
+pigbl          pigbl                1       1        0        0 2.020069e-08 2.020069e-08  ok
+pm             pm                  12      12        0        0 8.696298e-08 7.504341e-08  ok
+pmcif          pmcif               12      12        0        0 8.308841e-08 7.522333e-08  ok
+pmp            pmp                 42      42        0        0 7.357169e-08 6.928415e-08  ok
+pmt            pmt                  6       6        0        0 6.892991e-08 6.892991e-08  ok
+pmuv           pmuv                 1       1        0        0 4.927621e-08 4.927621e-08  ok
+pnd            pnd                  6       6        0        0 3.675170e-08 3.675170e-08  ok
+pnum           pnum                 1       1        0        0 0.000000e+00 0.000000e+00  ok
+pop            pop                  2       2        0        0 0.000000e+00 0.000000e+00  ok
+pp             pp_rai              18      18        0        0 8.417444e-08 8.417444e-08  ok
+prdtx          prdtx               18      12        6        0 2.886051e-02 1.000000e+00  diff
+ps             ps                   6       6        0        0 8.417444e-08 8.417444e-08  ok
+psave          psave                2       2        0        0 3.010243e-08 3.010243e-08  ok
+ptmg           ptmg                 3       3        0        0 8.845009e-09 8.845009e-09  ok
+pva            pva                  6       6        0        0 9.162303e-08 9.162303e-08  ok
+pwfact         pwfact               1       1        0        0 1.110223e-15 1.110223e-15  ok
+pwmg           pwmg                12      12        0        0 4.652922e-06 4.652901e-06  ok
+px             px                   6       6        0        0 5.587635e-08 5.587635e-08  ok
+regY           regy                 2       2        0        0 4.264678e-11 1.149511e-12  ok
+rgdpmp         rgdpmp               2       2        0        0 2.042056e-06 7.853228e-08  ok
+rorc           rorc                 2       2        0        0 5.171714e-09 6.785105e-08  ok
+rore           rore                 2       2        0        0 1.304339e-08 3.208145e-07  ok
+rorg           rorg                 1       1        0        0 1.380696e-08 2.463763e-07  ok
+rsav           rsav                 2       2        0        0 3.148929e-07 1.034724e-07  ok
+rtxshft        rtxshft             14      14        0        0 0.000000e+00 0.000000e+00  ok
+savf           savf                 2       2        0        0 1.678979e-08 2.019317e-08  ok
+tmarg          tmarg               12      12        0        0 5.171552e-10 1.273081e-08  ok
+u              u                    2       2        0        0 2.542361e-08 2.542361e-08  ok
+ued            ued                 18      18        0        0 7.229403e-11 4.029113e-10  ok
+ug             ug                   2       2        0        0 8.592168e-08 8.592168e-08  ok
+uh             uh                   2       2        0        0 5.316705e-08 5.316705e-08  ok
+us             us                   2       2        0        0 7.336899e-08 7.336899e-08  ok
+va             va                   6       6        0        0 1.007586e-07 1.190377e-07  ok
+x              x                   18      18        0        0 1.514541e-06 1.191544e-07  ok
+xa             xaa                 42      42        0        0 1.129236e-06 6.484412e-07  ok
+xcshr          xcshr                6       6        0        0 4.313174e-09 8.946144e-08  ok
+xd             xd(=xda)            42      42        0        0 1.077510e-06 6.484412e-07  ok
+xds            xds                  6       6        0        0 6.013282e-07 7.190126e-08  ok
+xet            xet                  6       6        0        0 9.132127e-07 1.970858e-06  ok
+xf             xf                  18      18        0        0 5.562307e-08 1.594444e-07  ok
+xft            xft                  6       6        0        0 4.999995e-11 1.073825e-10  ok
+xg             xg(=yg/pg)           2       2        0        0 4.272131e-07 8.592168e-08  ok
+xi             xi(=xiagg)           2       2        0        0 1.696778e-06 4.764877e-07  ok
+xigbl          xigbl                1       1        0        0 2.976422e-06 4.311806e-07  ok
+xm             xm(=xma)            42      42        0        0 2.626347e-07 7.389930e-07  ok
+xmgm           xmgm                36      36        0        0 1.822864e-07 4.641285e-06  ok
+xmt            xmt                  6       6        0        0 3.348349e-07 2.575627e-07  ok
+xp             xp                   6       6        0        0 1.641606e-07 1.190146e-07  ok
+xs             xs                   6       6        0        0 1.514541e-06 1.191544e-07  ok
+xtmg           xtmg                 1       1        0        0 3.466425e-07 6.395567e-07  ok
+xw             xw                  12      12        0        0 1.692213e-07 1.861179e-05  ok
+xwmg           xwmg                12      12        0        0 7.327530e-09 4.856530e-07  ok
+yc             yc                   2       2        0        0 6.811144e-07 2.966490e-08  ok
+yg             yg                   2       2        0        0 3.661553e-07 1.034724e-07  ok
+yi             yi                   2       2        0        0 3.527311e-06 3.476227e-07  ok
+ytax           ytax                17      15        2        0 3.472781e+00 1.000000e+00  diff
+ytaxInd        ytaxInd              2       0        2        0 3.472781e+00 5.906583e-01  diff
+ytaxTot        ytaxTot              2       0        2        0 3.472781e+00 3.113762e-01  diff
+ytaxshr        ytaxshr             17      15        2        0 1.048886e-01 1.000000e+00  diff
+zcons          zcons                6       6        0        0 1.461989e-09 9.087900e-08  ok
+------------------------------------------------------------------------------------------------------------------------
+  Vars total:           139
+  Vars all-match:       126
+  Vars partial/diverge: 12
+  Vars not in Python:   0
+  Cells total:          1304
+  Cells match:          1260
+  Cells diverge:        44
+  Cells missing/no-py:  0
+  Match rate:           96.63%
+
+========================================================================================================================
+PHASE: shock    (tol_rel=0.001  tol_abs=1e-06)
+========================================================================================================================
+gams_var       py_var           cells   match  diverge  missing    max_abs    max_rel  status
+------------------------------------------------------------------------------------------------------------------------
+afeall         afeall              18      18        0        0 0.000000e+00 0.000000e+00  ok
+afecom         afecom               3       3        0        0 0.000000e+00 0.000000e+00  ok
+afefac         afefac               6       6        0        0 0.000000e+00 0.000000e+00  ok
+afereg         afereg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+afesec         afesec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+aioall         aioall              18      18        0        0 0.000000e+00 0.000000e+00  ok
+aiocom         aiocom               3       3        0        0 0.000000e+00 0.000000e+00  ok
+aioreg         aioreg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+aiosec         aiosec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+andall         andall               6       6        0        0 0.000000e+00 0.000000e+00  ok
+andreg         andreg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+andsec         andsec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+ape            ape                 18      18        0        0 4.810801e-10 2.258651e-10  ok
+arent          arent                2       0        2        0 2.495675e-03 2.341369e-02  diff
+au             au                   2       2        0        0 0.000000e+00 0.000000e+00  ok
+aug            aug                  2       2        0        0 1.024292e-12 7.515141e-12  ok
+aus            aus                  2       2        0        0 2.886580e-15 1.715156e-15  ok
+avaall         avaall               6       6        0        0 0.000000e+00 0.000000e+00  ok
+avareg         avareg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+avasec         avasec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+axp            axp                  6       6        0        0 0.000000e+00 0.000000e+00  ok
+axpall         axpall               6       6        0        0 0.000000e+00 0.000000e+00  ok
+axpreg         axpreg               2       2        0        0 0.000000e+00 0.000000e+00  ok
+axpsec         axpsec               3       3        0        0 0.000000e+00 0.000000e+00  ok
+betag          betag                2       0        2        0 2.066647e-02 1.171509e-01  diff
+betap          betap                2       0        2        0 9.104705e-02 1.171509e-01  diff
+betas          betas                2       0        2        0 1.750785e-02 1.171509e-01  diff
+bh             bh                   6       6        0        0 3.647765e-11 1.116699e-10  ok
+ced            ced                 18      18        0        0 7.040316e-11 5.190066e-10  ok
+chiInv         chiInv               2       0        2        0 6.764675e-01 8.837694e-01  diff
+chiSave        chiSave              1       0        1        0 1.556127e-03 1.554108e-03  diff
+chif           chif                 2       0        2        0 3.081264e-03 4.799781e-02  diff
+cv             cv                   2       0        2        0 2.044462e-01 1.967388e-02  diff
+dintx          dintx               42      42        0        0 1.581256e-10 1.602562e-03  ok
+dtxshft        dtxshft             42      42        0        0 0.000000e+00 0.000000e+00  ok
+eh             eh                   6       6        0        0 4.031981e-10 3.571127e-10  ok
+etax           etax                 6       6        0        0 0.000000e+00 0.000000e+00  ok
+ev             ev                   2       0        2        0 5.196195e-01 2.413022e-02  diff
+exptx          exptx               12      12        0        0 1.041978e-10 2.098969e-07  ok
+factY          facty                2       0        2        0 2.643876e-01 2.439556e-02  diff
+fctts          fctts               18      18        0        0 0.000000e+00 0.000000e+00  ok
+fcttx          fcttx               18      18        0        0 1.023669e-10 1.690678e-09  ok
+gdpmp          gdpmp                2       0        2        0 3.594435e-01 2.433903e-02  diff
+imptx          imptx               12      12        0        0 5.607552e-10 4.263138e-09  ok
+incelas        incelas              6       6        0        0 9.241830e-11 1.223688e-10  ok
+kapEnd         kapEnd               2       1        1        0 9.540928e-01 7.812271e-03  diff
+kappaf         kappaf              14       0       14        0 2.123094e-01 1.000000e+00  diff
+kstock         kstock               2       2        0        0 0.000000e+00 0.000000e+00  ok
+lambdaf        lambdaf             18      18        0        0 0.000000e+00 0.000000e+00  ok
+lambdai        lambdai              6       6        0        0 0.000000e+00 0.000000e+00  ok
+lambdaio       lambdaio            18      18        0        0 0.000000e+00 0.000000e+00  ok
+lambdam        lambdam             12      12        0        0 0.000000e+00 0.000000e+00  ok
+lambdamg       lambdamg            36      36        0        0 0.000000e+00 0.000000e+00  ok
+lambdand       lambdand             6       6        0        0 0.000000e+00 0.000000e+00  ok
+lambdava       lambdava             6       6        0        0 0.000000e+00 0.000000e+00  ok
+mintx          mintx               42      42        0        0 8.457408e-10 1.602564e-03  ok
+mtax           mtax                 6       6        0        0 0.000000e+00 0.000000e+00  ok
+mtxshft        mtxshft             42      42        0        0 0.000000e+00 0.000000e+00  ok
+nd             nd                   6       0        6        0 1.824628e-02 4.183579e-02  diff
+p              p                   18      13        5        0 3.901513e-02 3.755011e-02  diff
+pa             pa                  42       4       38        0 2.287170e-02 2.204202e-02  diff
+pabs           pabs                 2       0        2        0 2.054140e-02 1.966493e-02  diff
+pcons          pcons                2       0        2        0 2.047086e-02 1.959756e-02  diff
+pd             pd                   6       0        6        0 2.287170e-02 2.204202e-02  diff
+pdp            pdp                 42       0       42        0 2.302095e-02 2.204202e-02  diff
+pe             pe                  12       0       12        0 2.287170e-02 2.204202e-02  diff
+pefob          pefob               12       0       12        0 2.287170e-02 2.204202e-02  diff
+pet            pet                  6       0        6        0 2.287170e-02 2.204202e-02  diff
+pf             pf                  18       4       14        0 1.314074e-01 1.318597e-01  diff
+pfa            pfa                 18       4       14        0 1.260024e-01 1.318597e-01  diff
+pfact          pfact                2       0        2        0 2.441852e-02 2.366936e-02  diff
+pft            pft                  6       0        6        0 1.205138e-01 1.318597e-01  diff
+pfy            pfy                 18       4       14        0 1.205138e-01 1.318597e-01  diff
+pg             pg(CES gov)          2       0        2        0 2.287119e-02 2.204150e-02  diff
+pgdpmp         pgdpmp               2       0        2        0 2.448544e-02 2.337204e-02  diff
+phi            phi                  2       0        2        0 1.050276e-01 1.050385e-01  diff
+phiP           phip                 2       2        0        0 3.060646e-04 3.064123e-04  ok
+pi             pi                   2       0        2        0 1.862680e-02 1.772518e-02  diff
+pigbl          pigbl                1       0        1        0 2.624182e-03 2.539778e-03  diff
+pm             pm                  12       0       12        0 2.515887e-02 2.204202e-02  diff
+pmcif          pmcif               12       0       12        0 2.287170e-02 2.204202e-02  diff
+pmp            pmp                 42       0       42        0 9.418421e-03 8.451465e-03  diff
+pmt            pmt                  6       0        6        0 9.354443e-03 8.451465e-03  diff
+pmuv           pmuv                 1       0        1        0 7.924574e-03 7.705492e-03  diff
+pnd            pnd                  6       0        6        0 1.974220e-02 1.886752e-02  diff
+pnum           pnum                 1       1        0        0 0.000000e+00 0.000000e+00  ok
+pop            pop                  2       2        0        0 0.000000e+00 0.000000e+00  ok
+pp             pp_rai              18      12        6        0 2.287170e-02 2.204202e-02  diff
+prdtx          prdtx               18      12        6        0 2.886051e-02 1.000000e+00  diff
+ps             ps                   6       0        6        0 2.287170e-02 2.204202e-02  diff
+psave          psave                2       0        2        0 2.025730e-02 1.925174e-02  diff
+ptmg           ptmg                 3       2        1        0 6.901742e-03 6.848153e-03  diff
+pva            pva                  6       0        6        0 2.489082e-02 2.411863e-02  diff
+pwfact         pwfact               1       1        0        0 8.603784e-12 8.603784e-12  ok
+pwmg           pwmg                12       6        6        0 6.902914e-03 6.849324e-03  diff
+px             px                   6       0        6        0 2.287170e-02 2.204202e-02  diff
+regY           regy                 2       0        2        0 5.804723e-01 4.337607e-02  diff
+rgdpmp         rgdpmp               2       2        0        0 1.389918e-02 9.901378e-04  ok
+rorc           rorc                 2       0        2        0 5.874038e-04 9.562017e-03  diff
+rore           rore                 2       0        2        0 4.185455e-03 7.326663e-02  diff
+rorg           rorg                 1       0        1        0 2.982337e-03 5.580184e-02  diff
+rsav           rsav                 2       0        2        0 9.700150e-02 4.356067e-02  diff
+rtxshft        rtxshft             14      14        0        0 0.000000e+00 0.000000e+00  ok
+savf           savf                 2       0        2        0 2.181899e-03 2.539778e-03  diff
+tmarg          tmarg               12      12        0        0 5.171552e-10 1.273081e-08  ok
+u              u                    2       0        2        0 2.639184e-02 2.634838e-02  diff
+ued            ued                 18      18        0        0 7.229403e-11 4.029113e-10  ok
+ug             ug                   2       0        2        0 2.345622e-02 2.332362e-02  diff
+uh             uh                   2       0        2        0 2.415235e-02 2.413149e-02  diff
+us             us                   2       0        2        0 2.462128e-02 2.478611e-02  diff
+va             va                   6       0        6        0 9.766103e-03 4.183579e-02  diff
+x              x                   18      12        6        0 2.791179e-01 4.183579e-02  diff
+xa             xaa                 42       8       34        0 6.349719e-01 9.487424e-02  diff
+xcshr          xcshr                6       1        5        0 6.670178e-04 3.088112e-02  diff
+xd             xd(=xda)            42       8       34        0 6.115644e-01 9.470810e-02  diff
+xds            xds                  6       1        5        0 1.946392e-01 2.797340e-02  diff
+xet            xet                  6       0        6        0 1.315507e-01 1.973177e-01  diff
+xf             xf                  18       6       12        0 4.907830e-03 4.216924e-02  diff
+xft            xft                  6       6        0        0 4.999995e-11 1.073825e-10  ok
+xg             xg(=yg/pg)           2       0        2        0 1.720938e-01 2.332329e-02  diff
+xi             xi(=xiagg)           2       1        1        0 9.540928e-01 9.487424e-02  diff
+xigbl          xigbl                1       0        1        0 9.554142e-01 1.405999e-01  diff
+xm             xm(=xma)            42      11       31        0 1.138183e-01 1.061584e-01  diff
+xmgm           xmgm                36      30        6        0 5.343773e-03 1.973121e-01  diff
+xmt            xmt                  6       0        6        0 1.115601e-01 6.294236e-02  diff
+xp             xp                   6       0        6        0 2.761984e-02 4.183579e-02  diff
+xs             xs                   6       0        6        0 2.791179e-01 4.183579e-02  diff
+xtmg           xtmg                 1       1        0        0 2.425988e-04 5.611265e-04  ok
+xw             xw                  12       3        9        0 1.315507e-01 1.973177e-01  diff
+xwmg           xwmg                12       6        6        0 5.343899e-03 1.973177e-01  diff
+yc             yc                   2       0        2        0 4.505929e-01 4.332315e-02  diff
+yg             yg                   2       0        2        0 1.128097e-01 4.356067e-02  diff
+yi             yi                   2       0        2        0 1.069917e+00 1.034313e-01  diff
+ytax           ytax                20       3       17        0 3.427127e+00 1.000000e+00  diff
+ytaxInd        ytaxInd              2       0        2        0 3.390624e+00 5.588382e-01  diff
+ytaxTot        ytaxTot              2       0        2        0 3.356474e+00 3.167937e-01  diff
+ytaxshr        ytaxshr             20       5       15        0 1.035830e-01 1.000000e+00  diff
+zcons          zcons                6       2        4        0 1.761577e-04 3.111537e-02  diff
+------------------------------------------------------------------------------------------------------------------------
+  Vars total:           139
+  Vars all-match:       55
+  Vars partial/diverge: 83
+  Vars not in Python:   0
+  Cells total:          1310
+  Cells match:          719
+  Cells diverge:        591
+  Cells missing/no-py:  0
+  Match rate:           54.89%
