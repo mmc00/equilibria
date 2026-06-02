@@ -279,6 +279,23 @@ def compare_phase(model_py, gams_all: dict, t_label: str, tol_rel: float, tol_ab
         n_total += 1
         body_py = key_remap(body) if (body and key_remap) else body
         p_val = get_py_var_value(model_py, body_py) if body_py else None
+        # Phase 2.1+ multi-period: production-block Vars now carry t as last
+        # index. GAMS body was already peeled of t by split_t. Try appending
+        # t_label back when the bare lookup misses. The Python model may use a
+        # different t_set (e.g. only "base") even for shocked phases, so also
+        # try common labels.
+        if p_val is None and body_py:
+            # Prefer the model's actual base-period label (model_py.t0) over a
+            # hardcoded "base" so a future t_set rename doesn't silently break
+            # parity diffs. Fall back to "base" when t0 isn't exposed.
+            try:
+                base_label = next(iter(model_py.t0))
+            except Exception:
+                base_label = "base"
+            for t_try in (t_label, base_label):
+                p_val = get_py_var_value(model_py, body_py + (t_try,))
+                if p_val is not None:
+                    break
         if p_val is None and not body:
             try:
                 from pyomo.core import value

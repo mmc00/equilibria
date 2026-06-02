@@ -54,3 +54,34 @@ def test_prev_t_unknown_raises():
     t_set = ("base", "check", "shock")
     with pytest.raises(ValueError, match="not in t_set"):
         prev_t("foo", t_set)
+
+
+def _build_3p():
+    """Build with t_set=(base, check, shock) — for verifying t-indexing."""
+    return _build(("base", "check", "shock"))
+
+
+def test_production_vars_have_t_dim():
+    m = _build_3p()
+    for period in ("base", "check", "shock"):
+        assert ('USA', 'VegFruit', period) in m.xp, f"xp missing for {period}"
+        assert ('USA', 'VegFruit', period) in m.va
+        assert ('USA', 'VegFruit', period) in m.nd
+        assert ('USA', 'VegFruit', 'VegFruit', period) in m.x
+
+
+def test_production_vars_single_period_still_works():
+    m = _build(("base",))
+    assert ('USA', 'VegFruit', 'base') in m.xp
+    assert ('USA', 'VegFruit', 'check') not in m.xp
+
+
+def test_lift_to_t_broadcasts_init_across_periods():
+    """_lift_to_t must give every period the same initial value (warm start)."""
+    from pyomo.environ import value as pyo_value
+    m = _build_3p()
+    for r, a in [('USA', 'VegFruit'), ('EU_28', 'Chemicals')]:
+        v0 = pyo_value(m.xp[r, a, 'base'])
+        v1 = pyo_value(m.xp[r, a, 'check'])
+        v2 = pyo_value(m.xp[r, a, 'shock'])
+        assert v0 == v1 == v2, f"xp[{r},{a}] not broadcast: {v0}/{v1}/{v2}"

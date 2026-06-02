@@ -60,6 +60,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _t0(model):
+    """Return the base-period label from a built model. Centralizes the
+    'base' literal so future t_set conventions don't require a sweep."""
+    return next(iter(model.t0))
+
+
 PATH_CAPI_SRC_DEFAULT = Path("/Users/marmol/proyectos/path-capi-python/src")
 PATH_CAPI_LIB_DEFAULT = Path("/Users/marmol/proyectos2/equilibria/.cache/path_capi/libpath50.silicon.dylib")
 PATH_CAPI_LUSOL_DEFAULT = Path("/Users/marmol/proyectos2/equilibria/.cache/path_capi/liblusol.silicon.dylib")
@@ -618,7 +624,7 @@ def _collect_key_quantities(
                         continue
                     outputs = params.sets.activity_commodities.get(str(a), list(params.sets.i))
                     for i in outputs:
-                        pt += rto * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
+                        pt += rto * float(value(model.p_rai[r, a, i, _t0(model)])) * float(value(model.x[r, a, i, _t0(model)]))
 
             # ft / fs: NEOS reports ft.l = fs.l = 0 for v7 SAMs (separate fcttx
             # parameter, not loaded into Python). Python's rtf (derived from
@@ -630,48 +636,48 @@ def _collect_key_quantities(
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) not in activity_labels:
                         continue
-                    fc += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a])) / _xscale(r_str, str(a))
+                    fc += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a])) / _xscale(r_str, str(a))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) not in activity_labels:
                         continue
-                    fc += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a])) / _xscale(r_str, str(a))
+                    fc += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a])) / _xscale(r_str, str(a))
 
             # pc: private (household) consumption tax — rtpd/rtpi keyed at a=hhd
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
                         continue
-                    pc += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+                    pc += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a]))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
                         continue
-                    pc += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+                    pc += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a]))
 
             # gc: government consumption tax (rtgd*pd*xda + rtgi*pmt*xma keyed at a=gov)
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i), rtgd in params.taxes.rtgd.items():
                     if str(rr) != r_str:
                         continue
-                    gc += float(rtgd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                    gc += float(rtgd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i), rtgi in params.taxes.rtgi.items():
                     if str(rr) != r_str:
                         continue
-                    gc += float(rtgi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                    gc += float(rtgi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
 
             # ic: investment consumption tax — rtpd/rtpi keyed at a=inv
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
                         continue
-                    ic += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+                    ic += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a]))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
                         continue
-                    ic += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+                    ic += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a]))
 
             # et: export tax = rtxs * pefob * xw  (r is exporter)
             if hasattr(model, "xw"):
@@ -911,8 +917,8 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
             commodity_residuals: list[dict[str, Any]] = []
 
             for a in model.a:
-                nd = float(value(model.nd[r, a]))
-                pnd = float(value(model.pnd[r, a]))
+                nd = float(value(model.nd[r, a, _t0(model)]))
+                pnd = float(value(model.pnd[r, a, _t0(model)]))
                 pa = float(value(model.pa[r, i, a]))
                 xaa = float(value(model.xaa[r, i, a]))
                 io_val = (
@@ -992,11 +998,11 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
             else:
                 xa_residuals.append(0.0)
 
-            xd_lhs = value(model.xd[r, i])
+            xd_lhs = value(model.xd[r, i, _t0(model)])
             xd_rhs = sum(value(model.xda[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
             xd_residuals.append(xd_lhs - xd_rhs)
 
-            xmt_lhs = value(model.xmt[r, i])
+            xmt_lhs = value(model.xmt[r, i, _t0(model)])
             xmt_rhs = sum(value(model.xma[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
             xmt_residuals.append(xmt_lhs - xmt_rhs)
 
@@ -1625,7 +1631,7 @@ def _run_path_capi_linear_block(
                 rto = float(params.taxes.rto.get((str(r), str(a)), 0.0))
                 outputs = params.sets.activity_commodities.get(str(a), list(params.sets.i))
                 for i in outputs:
-                    ytax_total_const += rto * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
+                    ytax_total_const += rto * float(value(model.p_rai[r, a, i, _t0(model)])) * float(value(model.x[r, a, i, _t0(model)]))
 
             for (rr, f, a), rtf in params.taxes.rtf.items():
                 if str(rr) != str(r):
@@ -1638,7 +1644,7 @@ def _run_path_capi_linear_block(
             for (rr, i, a), rtpd in params.taxes.rtpd.items():
                 if str(rr) != str(r):
                     continue
-                term = float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+                term = float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a]))
                 if str(a) in activity_labels:
                     xscale_a = float(value(model.xscale[r, a]))
                     if xscale_a > 0.0:
@@ -1647,7 +1653,7 @@ def _run_path_capi_linear_block(
             for (rr, i, a), rtpi in params.taxes.rtpi.items():
                 if str(rr) != str(r):
                     continue
-                term = float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+                term = float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a]))
                 if str(a) in activity_labels:
                     xscale_a = float(value(model.xscale[r, a]))
                     if xscale_a > 0.0:
@@ -1657,11 +1663,11 @@ def _run_path_capi_linear_block(
             for (rr, i), rtgd in params.taxes.rtgd.items():
                 if str(rr) != str(r):
                     continue
-                ytax_total_const += float(rtgd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                ytax_total_const += float(rtgd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
             for (rr, i), rtgi in params.taxes.rtgi.items():
                 if str(rr) != str(r):
                     continue
-                ytax_total_const += float(rtgi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                ytax_total_const += float(rtgi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
 
             for (exporter, i, importer), rtxs in params.taxes.rtxs.items():
                 if str(exporter) != str(r):
@@ -1742,8 +1748,8 @@ def _run_path_capi_linear_block(
         for r in model.r:
             for i in model.i:
                 domestic_snapshot = sum(value(model.xda[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
-                expressions.append(model.xd[r, i] - domestic_snapshot)
-                variables.append(model.xd[r, i])
+                expressions.append(model.xd[r, i, _t0(model)] - domestic_snapshot)
+                variables.append(model.xd[r, i, _t0(model)])
         return expressions, variables
 
     def _build_trade_import_aggregation_snapshot_block() -> tuple[list[Any], list[Any]]:
@@ -1752,8 +1758,8 @@ def _run_path_capi_linear_block(
         for r in model.r:
             for i in model.i:
                 import_snapshot = sum(value(model.xma[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
-                expressions.append(model.xmt[r, i] - import_snapshot)
-                variables.append(model.xmt[r, i])
+                expressions.append(model.xmt[r, i, _t0(model)] - import_snapshot)
+                variables.append(model.xmt[r, i, _t0(model)])
         return expressions, variables
 
     def _build_import_price_snapshot_block() -> tuple[list[Any], list[Any]]:
@@ -1772,9 +1778,9 @@ def _run_path_capi_linear_block(
                     numer += w * rate
                     denom += w
                 rate = (numer / denom) if denom > 0.0 else 0.0
-                pd0 = float(value(model.pd[r, i]))
-                expressions.append(model.pmt[r, i] - pd0 * (1.0 + rate))
-                variables.append(model.pmt[r, i])
+                pd0 = float(value(model.pd[r, i, _t0(model)]))
+                expressions.append(model.pmt[r, i, _t0(model)] - pd0 * (1.0 + rate))
+                variables.append(model.pmt[r, i, _t0(model)])
         return expressions, variables
 
     block_results = []

@@ -42,6 +42,21 @@ def prev_t(t_val: str, t_set: Tuple[str, ...]) -> str | None:
     return t_set[idx - 1] if idx > 0 else None
 
 
+def _lift_to_t(init_func_or_value, t_set: Tuple[str, ...]):
+    """Wrap a single-period initializer to broadcast across all t in t_set.
+
+    Pyomo passes the model + every index including t. The wrapped fn
+    drops t (last positional arg) and calls the original initializer.
+    Scalars pass through unchanged.
+    """
+    if callable(init_func_or_value):
+        def _wrapped(m, *idx_with_t):
+            idx_no_t = idx_with_t[:-1]
+            return init_func_or_value(m, *idx_no_t)
+        return _wrapped
+    return init_func_or_value
+
+
 @dataclass
 class _InlineReferenceSnapshot:
     """Lightweight snapshot used only for benchmark-aligned initialization.
@@ -520,7 +535,7 @@ class GTAPModelEquations:
                         / max(float(pyo_value(model.xscale[r, aa])), 1e-12)
                         for aa in model.aa
                     )
-                    model.xd[r, i].set_value(max(total_xd, 1e-8))
+                    model.xd[r, i, "base"].set_value(max(total_xd, 1e-8))
 
                 # eq_xmt_agg: xmt = sum_aa(xma/xscale)
                 if hasattr(model, "xmt"):
@@ -529,23 +544,23 @@ class GTAPModelEquations:
                         / max(float(pyo_value(model.xscale[r, aa])), 1e-12)
                         for aa in model.aa
                     )
-                    model.xmt[r, i].set_value(max(total_xmt, 1e-8))
+                    model.xmt[r, i, "base"].set_value(max(total_xmt, 1e-8))
 
                 # eq_pdeq: xds = sum_aa(xda/xscale for aa with domestic_share>0)
                 # For simplicity use the same sum as xd (same result if all aa have share>0)
                 if hasattr(model, "xds"):
-                    model.xds[r, i].set_value(max(float(pyo_value(model.xd[r, i])), 1e-8))
+                    model.xds[r, i, "base"].set_value(max(float(pyo_value(model.xd[r, i, "base"])), 1e-8))
 
                 # eq_xseq (omega=inf case): xs = xds + xet  →  xet = xs - xds
                 # For finite omega, eq_xseq is a price eq: skip xet update.
                 omega = self.params.elasticities.omegax.get((r, i), float("inf"))
                 if omega == float("inf") and hasattr(model, "xet") and hasattr(model, "xs"):
-                    xs_val = float(pyo_value(model.xs[r, i]))
-                    xds_val = float(pyo_value(model.xds[r, i]))
-                    xet_old = max(float(pyo_value(model.xet[r, i])), 1e-12)
+                    xs_val = float(pyo_value(model.xs[r, i, "base"]))
+                    xds_val = float(pyo_value(model.xds[r, i, "base"]))
+                    xet_old = max(float(pyo_value(model.xet[r, i, "base"])), 1e-12)
                     xet_new = max(xs_val - xds_val, 0.0)
                     if xet_new > 1e-12 and abs(xet_new - xet_old) > 1e-14:
-                        model.xet[r, i].set_value(xet_new)
+                        model.xet[r, i, "base"].set_value(xet_new)
                         scale = xet_new / xet_old
                         # For omegaw=inf: eq_peteq says xet = sum(xw), eq_peeq says pe = pet.
                         # Scaling xw proportionally satisfies eq_peteq with xet_new.
@@ -642,25 +657,25 @@ class GTAPModelEquations:
                 if xf_val is not None:
                     model.xf[key].set_value(xf_val * xscale_val)
 
-        # Scale production aggregates - indexed by (r, a)
+        # Scale production aggregates - indexed by (r, a, t)
         for key in model.xp:
-            r, a = key
+            r, a, _t = key
             xscale_val = float(value(model.xscale[r, a]))
             if abs(xscale_val - 1.0) > 1e-12:
                 xp_val = value(model.xp[key])
                 if xp_val is not None:
                     model.xp[key].set_value(xp_val * xscale_val)
-        
+
         for key in model.va:
-            r, a = key
+            r, a, _t = key
             xscale_val = float(value(model.xscale[r, a]))
             if abs(xscale_val - 1.0) > 1e-12:
                 va_val = value(model.va[key])
                 if va_val is not None:
                     model.va[key].set_value(va_val * xscale_val)
-        
+
         for key in model.nd:
-            r, a = key
+            r, a, _t = key
             xscale_val = float(value(model.xscale[r, a]))
             if abs(xscale_val - 1.0) > 1e-12:
                 nd_val = value(model.nd[key])
@@ -693,7 +708,7 @@ class GTAPModelEquations:
                         value(model.xda[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
                         for aa in model.aa
                     )
-                    model.xd[r, i].set_value(max(total_xd, 1e-8))
+                    model.xd[r, i, "base"].set_value(max(total_xd, 1e-8))
 
         if hasattr(model, "xds") and hasattr(model, "xda"):
             for r in model.r:
@@ -702,7 +717,7 @@ class GTAPModelEquations:
                         value(model.xda[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
                         for aa in model.aa
                     )
-                    model.xds[r, i].set_value(max(total_xds, 1e-8))
+                    model.xds[r, i, "base"].set_value(max(total_xds, 1e-8))
 
         if hasattr(model, "xet") and hasattr(model, "xs") and hasattr(model, "xds"):
             for r in model.r:
@@ -712,10 +727,10 @@ class GTAPModelEquations:
                         for rp in model.rp
                     )
                     if not has_export_route:
-                        lb = model.xet[r, i].lb
+                        lb = model.xet[r, i, "base"].lb
                         if lb is not None and float(lb) > 0.0:
-                            model.xet[r, i].setlb(0.0)
-                        model.xet[r, i].set_value(0.0)
+                            model.xet[r, i, "base"].setlb(0.0)
+                        model.xet[r, i, "base"].set_value(0.0)
                         if hasattr(model, "xet_flag"):
                             model.xet_flag[r, i].set_value(0.0)
                         continue
@@ -723,23 +738,23 @@ class GTAPModelEquations:
                     # Match GAMS cal.gms initialization:
                     # xet.l = (ps.l*xs.l - pd.l*xds.l) / pet.l
                     numerator = (
-                        value(model.ps[r, i]) * value(model.xs[r, i])
-                        - value(model.pd[r, i]) * value(model.xds[r, i])
+                        value(model.ps[r, i, "base"]) * value(model.xs[r, i, "base"])
+                        - value(model.pd[r, i, "base"]) * value(model.xds[r, i, "base"])
                     )
-                    pet_val = max(value(model.pet[r, i]), 1e-12)
+                    pet_val = max(value(model.pet[r, i, "base"]), 1e-12)
                     xet_val = max(numerator / pet_val, 0.0)
                     if xet_val <= 0.0:
-                        lb = model.xet[r, i].lb
+                        lb = model.xet[r, i, "base"].lb
                         if lb is not None and float(lb) > 0.0:
-                            model.xet[r, i].setlb(0.0)
-                    model.xet[r, i].set_value(xet_val)
+                            model.xet[r, i, "base"].setlb(0.0)
+                    model.xet[r, i, "base"].set_value(xet_val)
                     if hasattr(model, "xet_flag"):
                         model.xet_flag[r, i].set_value(1.0 if xet_val > 1e-7 else 0.0)
 
         if hasattr(model, "gw_share") and hasattr(model, "xw") and hasattr(model, "xet"):
             for r in model.r:
                 for i in model.i:
-                    xet_val = max(value(model.xet[r, i]), 1e-12)
+                    xet_val = max(value(model.xet[r, i, "base"]), 1e-12)
                     omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
                     for rp in model.rp:
                         if value(model.xw_flag[r, i, rp]) <= 0.0:
@@ -747,7 +762,7 @@ class GTAPModelEquations:
                             continue
                         xw_val = max(value(model.xw[r, i, rp]), 0.0)
                         pe_val = max(value(model.pe[r, i, rp]), 1e-12)
-                        pet_val = max(value(model.pet[r, i]), 1e-12)
+                        pet_val = max(value(model.pet[r, i, "base"]), 1e-12)
                         if omegaw == float("inf"):
                             share = (pe_val * xw_val) / max(pet_val * xet_val, 1e-12)
                         else:
@@ -765,7 +780,7 @@ class GTAPModelEquations:
                         value(model.xma[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
                         for aa in model.aa
                     )
-                    model.xmt[r, i].set_value(max(total_xm, 1e-8))
+                    model.xmt[r, i, "base"].set_value(max(total_xm, 1e-8))
 
         self._refresh_cet_share_state(model)
 
@@ -895,8 +910,8 @@ class GTAPModelEquations:
                         prdtx = value(model.prdtx_rai[r, a, i]) if (r, a, i) in model.prdtx_rai else 0.0
                         if prdtx == 0.0:
                             continue
-                        p_rai_v = value(model.p_rai[r, a, i]) if (r, a, i) in model.p_rai else 1.0
-                        x_v = value(model.x[r, a, i]) if (r, a, i) in model.x else 0.0
+                        p_rai_v = value(model.p_rai[r, a, i, "base"]) if (r, a, i) in model.p_rai else 1.0
+                        x_v = value(model.x[r, a, i, "base"]) if (r, a, i) in model.x else 0.0
                         pt_total += prdtx * p_rai_v * x_v
                 model.ytax[r, "pt"].set_value(pt_total)
 
@@ -917,9 +932,9 @@ class GTAPModelEquations:
                         mintx = float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0)
                         scale = value(model.xscale[r, aa]) if aa in model.a and (r, aa) in model.xscale else 1.0
                         if dintx != 0.0 and (r, i, aa) in model.xda:
-                            ctax_total += dintx * value(model.pd[r, i]) * value(model.xda[r, i, aa]) / max(scale, 1e-12)
+                            ctax_total += dintx * value(model.pd[r, i, "base"]) * value(model.xda[r, i, aa]) / max(scale, 1e-12)
                         if mintx != 0.0 and (r, i, aa) in model.xma:
-                            ctax_total += mintx * value(model.pmt[r, i]) * value(model.xma[r, i, aa]) / max(scale, 1e-12)
+                            ctax_total += mintx * value(model.pmt[r, i, "base"]) * value(model.xma[r, i, aa]) / max(scale, 1e-12)
                 model.ytax[r, gy].set_value(ctax_total)
 
             if hasattr(model, "facty") and r in model.facty:
@@ -1042,7 +1057,7 @@ class GTAPModelEquations:
                     if terms:
                         rhs = sum(terms)
                         if rhs > 0.0:
-                            model.pmt[r, i].set_value(max(rhs ** (1.0 / expo), 1e-8))
+                            model.pmt[r, i, "base"].set_value(max(rhs ** (1.0 / expo), 1e-8))
 
             mqabs_tt = 0.0
             mqabs_t0 = 0.0
@@ -1156,12 +1171,12 @@ class GTAPModelEquations:
 
         for r in model.r:
             for i in model.i:
-                xs_val = max(value(model.xs[r, i]), 1e-12)
-                xds_val = max(value(model.xds[r, i]), 0.0)
-                xet_val = max(value(model.xet[r, i]), 0.0)
-                pd_val = max(value(model.pd[r, i]), 1e-12)
-                ps_val = max(value(model.ps[r, i]), 1e-12)
-                pet_val = max(value(model.pet[r, i]), 1e-12)
+                xs_val = max(value(model.xs[r, i, "base"]), 1e-12)
+                xds_val = max(value(model.xds[r, i, "base"]), 0.0)
+                xet_val = max(value(model.xet[r, i, "base"]), 0.0)
+                pd_val = max(value(model.pd[r, i, "base"]), 1e-12)
+                ps_val = max(value(model.ps[r, i, "base"]), 1e-12)
+                pet_val = max(value(model.pet[r, i, "base"]), 1e-12)
                 omega = self.params.elasticities.omegax.get((r, i), float("inf"))
 
                 if omega == float("inf"):
@@ -2624,7 +2639,7 @@ class GTAPModelEquations:
             if total_vxsb > 0.0:
                 return max(total_vxsb, 1e-8)
             xs_bench, xd_bench, _, _, _ = self.params.benchmark.get_trade_totals(self.sets, r, i)
-            numerator = value(model.ps[r, i]) * xs_bench - value(model.pd[r, i]) * xd_bench
+            numerator = value(model.ps[r, i, "base"]) * xs_bench - value(model.pd[r, i, "base"]) * xd_bench
             pet_val = 1.0
             if self.reference_snapshot:
                 ref_pet = self.reference_snapshot.pet.get((r, i))
@@ -2758,18 +2773,18 @@ class GTAPModelEquations:
                 prdtx = float(self.params.taxes.rto.get((r, a), 0.0) or 0.0)
             return max((1.0 + prdtx) * get_p_rai_init(m, r, a, i), 1e-8)
 
-        model.xp = Var(model.r, model.a, within=NonNegativeReals, initialize=get_vom_init, doc="Production")
-        model.x = Var(model.r, model.a, model.i, within=NonNegativeReals, initialize=get_make_init, doc="Output")
-        model.px = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="Unit cost")
-        model.p_rai = Var(model.r, model.a, model.i, within=NonNegativeReals, initialize=get_p_rai_init, doc="Pre-tax producer price by activity-commodity")
-        model.pp = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="Producer price (activity aggregate)")
-        model.pp_rai = Var(model.r, model.a, model.i, within=NonNegativeReals, initialize=get_pp_rai_init, doc="Producer price by activity-commodity")
-        
+        model.xp = Var(model.r, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_vom_init, self._t_set), doc="Production")
+        model.x = Var(model.r, model.a, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_make_init, self._t_set), doc="Output")
+        model.px = Var(model.r, model.a, model.t, within=NonNegativeReals, initialize=1.0, doc="Unit cost")
+        model.p_rai = Var(model.r, model.a, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_p_rai_init, self._t_set), doc="Pre-tax producer price by activity-commodity")
+        model.pp = Var(model.r, model.a, model.t, within=NonNegativeReals, initialize=1.0, doc="Producer price (activity aggregate)")
+        model.pp_rai = Var(model.r, model.a, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pp_rai_init, self._t_set), doc="Producer price by activity-commodity")
+
         # Supply (3 vars per r,i)
-        model.xs = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xs_init, doc="Domestic supply")
-        model.xds = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xds_init, doc="Supply of domestically produced goods")
-        model.ps = Var(model.r, model.i, within=NonNegativeReals, initialize=1.0, doc="Supply price")
-        model.pd = Var(model.r, model.i, within=NonNegativeReals, initialize=1.0, doc="Domestic price")
+        model.xs = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xs_init, self._t_set), doc="Domestic supply")
+        model.xds = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xds_init, self._t_set), doc="Supply of domestically produced goods")
+        model.ps = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=1.0, doc="Supply price")
+        model.pd = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=1.0, doc="Domestic price")
         
         # GAMS: pa(r,i,aa,t) - Agent-specific Armington price
         def get_pa_init(m, r, i, aa):
@@ -2805,9 +2820,9 @@ class GTAPModelEquations:
         
         # Trade - Domestic/Import split (4 vars per r,i)
         # GAMS has xmt and xds as Variables with defining equations (xmteq, xdseq)
-        model.xd = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xd_init, doc="Domestic demand")
-        model.xmt = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xmt_init, doc="Import demand")
-        model.pmt = Var(model.r, model.i, within=NonNegativeReals, initialize=get_pmt_init, doc="Import price")
+        model.xd = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xd_init, self._t_set), doc="Domestic demand")
+        model.xmt = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xmt_init, self._t_set), doc="Import demand")
+        model.pmt = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pmt_init, self._t_set), doc="Import price")
         model.xda = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_xda_init, doc="Domestic Armington demand by agent")
         model.xma = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_xma_init, doc="Imported Armington demand by agent")
         
@@ -2851,16 +2866,16 @@ class GTAPModelEquations:
         
         def pdp_expr_rule(m, r, i, aa):
             # GAMS: pdp = pd * (1 + dintx)
-            return (1.0 + m.dintx[r, i, aa]) * m.pd[r, i]
+            return (1.0 + m.dintx[r, i, aa]) * m.pd[r, i, "base"]
         model.pdp = Expression(model.r, model.i, model.aa, rule=pdp_expr_rule, doc="Agent domestic demand price (expression)")
 
         def pmp_expr_rule(m, r, i, aa):
             # GAMS: pmp = pmt * (1 + mintx)
-            return (1.0 + m.mintx[r, i, aa]) * m.pmt[r, i]
+            return (1.0 + m.mintx[r, i, aa]) * m.pmt[r, i, "base"]
         model.pmp = Expression(model.r, model.i, model.aa, rule=pmp_expr_rule, doc="Agent import demand price (expression)")
         
         # Trade - Domestic/Export split (4 vars per r,i)
-        model.xet = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xet_init, doc="Export supply")
+        model.xet = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xet_init, self._t_set), doc="Export supply")
         def get_pet_init(m, r, i):
             if self.reference_snapshot:
                 ref_pet = self.reference_snapshot.pet.get((r, i))
@@ -2868,13 +2883,13 @@ class GTAPModelEquations:
                     return float(ref_pet)
             return 1.0
 
-        model.pet = Var(model.r, model.i, within=NonNegativeReals, initialize=get_pet_init, doc="Export price")
-        
+        model.pet = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pet_init, self._t_set), doc="Export price")
+
         # Value added/intermediate bundles
-        model.va = Var(model.r, model.a, within=NonNegativeReals, initialize=get_va_init, doc="Value added bundle")
-        model.nd = Var(model.r, model.a, within=NonNegativeReals, initialize=get_nd_init, doc="Intermediate bundle")
-        model.pva = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="Value added price")
-        model.pnd = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="Intermediate price")
+        model.va = Var(model.r, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_va_init, self._t_set), doc="Value added bundle")
+        model.nd = Var(model.r, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_nd_init, self._t_set), doc="Intermediate bundle")
+        model.pva = Var(model.r, model.a, model.t, within=NonNegativeReals, initialize=1.0, doc="Value added price")
+        model.pnd = Var(model.r, model.a, model.t, within=NonNegativeReals, initialize=1.0, doc="Intermediate price")
 
         # Bilateral trade (2 vars per r,i,rp)  
         def get_pe_init(m, r, i, rp):
@@ -3660,7 +3675,7 @@ class GTAPModelEquations:
         def _p_rule(m, r, a, i):
             if (r, a, i) not in x_flag:
                 return 1.0
-            return m.ps[r, i] / (1.0 + m.prdtx[r, a, i])
+            return m.ps[r, i, "base"] / (1.0 + m.prdtx[r, a, i])
         model.p = Expression(model.r, model.a, model.i, rule=_p_rule, doc="Pre-tax producer price")
 
         def _ytaxInd_rule(m, r):
@@ -3903,10 +3918,10 @@ class GTAPModelEquations:
         # --------------------------------------------------------------------
         # GAMS-style substitution macros (ifSUB)
         # --------------------------------------------------------------------
-        def _m_pp(region, activity, commodity):
+        def _m_pp(region, activity, commodity, t="base"):
             if if_sub:
-                return (1.0 + value(model.prdtx_rai[region, activity, commodity])) * model.p_rai[region, activity, commodity]
-            return model.pp_rai[region, activity, commodity]
+                return (1.0 + value(model.prdtx_rai[region, activity, commodity])) * model.p_rai[region, activity, commodity, t]
+            return model.pp_rai[region, activity, commodity, t]
 
         def _m_xwmg(exporter, commodity, importer):
             if if_sub:
@@ -3967,43 +3982,43 @@ class GTAPModelEquations:
         # Legacy Pyomo-only profit identity. Keep the component for compatibility
         # with existing tooling/tests, but leave it inactive because GAMS uses the
         # explicit xpeq/pxeq make block instead of an extra px == pp equation.
-        def prf_y_rule(model, r, a):
-            return model.px[r, a] == model.pp[r, a]
-        model.prf_y = Constraint(model.r, model.a, rule=prf_y_rule)
+        def prf_y_rule(model, r, a, t):
+            return model.px[r, a, t] == model.pp[r, a, t]
+        model.prf_y = Constraint(model.r, model.a, model.t, rule=prf_y_rule)
         model.prf_y.deactivate()
 
         # Value-added and intermediate nests (GAMS exact formulation)
         # GAMS: nd(r,a,t) =e= and(r,a,t)*xp(r,a,t)*(px(r,a,t)/pnd(r,a,t))**sigmap(r,a)
         #                      * (axp(r,a,t)*lambdand(r,a,t))**(sigmap(r,a)-1)
-        def eq_nd_rule(model, r, a):
+        def eq_nd_rule(model, r, a, t):
             and_val = value(model.and_param[r, a])  # GAMS calibrated parameter
             if and_val <= 0.0:
                 return Constraint.Skip
             sigmap = self._get_sigmap(r, a)
-            px = model.px[r, a]
-            pnd = model.pnd[r, a]
+            px = model.px[r, a, t]
+            pnd = model.pnd[r, a, t]
             if value(pnd) <= 0:
                 return Constraint.Skip
             ratio = px / pnd
             shift = self._axp_shift(r, a) * self._lambdand(r, a)
-            return model.nd[r, a] == and_val * model.xp[r, a] * ratio**sigmap * shift**(sigmap - 1)
-        model.eq_nd = Constraint(model.r, model.a, rule=eq_nd_rule)
+            return model.nd[r, a, t] == and_val * model.xp[r, a, t] * ratio**sigmap * shift**(sigmap - 1)
+        model.eq_nd = Constraint(model.r, model.a, model.t, rule=eq_nd_rule)
 
         # GAMS: va(r,a,t) =e= ava(r,a,t)*xp(r,a,t)*(px(r,a,t)/pva(r,a,t))**sigmap(r,a)
         #                      * (axp(r,a,t)*lambdava(r,a,t))**(sigmap(r,a)-1)
-        def eq_va_rule(model, r, a):
+        def eq_va_rule(model, r, a, t):
             ava_val = value(model.ava_param[r, a])  # GAMS calibrated parameter
             if ava_val <= 0.0:
                 return Constraint.Skip
             sigmap = self._get_sigmap(r, a)
-            px = model.px[r, a]
-            pva = model.pva[r, a]
+            px = model.px[r, a, t]
+            pva = model.pva[r, a, t]
             if value(pva) <= 0:
                 return Constraint.Skip
             ratio = px / pva
             shift = self._axp_shift(r, a) * self._lambdava(r, a)
-            return model.va[r, a] == ava_val * model.xp[r, a] * ratio**sigmap * shift**(sigmap - 1)
-        model.eq_va = Constraint(model.r, model.a, rule=eq_va_rule)
+            return model.va[r, a, t] == ava_val * model.xp[r, a, t] * ratio**sigmap * shift**(sigmap - 1)
+        model.eq_va = Constraint(model.r, model.a, model.t, rule=eq_va_rule)
         
         # ========================================================================
         # PRICE EQUATIONS - CES COST FUNCTIONS (GAMS style)
@@ -4011,7 +4026,7 @@ class GTAPModelEquations:
 
         # Unit cost definition (GAMS pxeq)
         # px**(1-sigmap) = (axp**(sigmap-1)) * [and*(pnd/lambdand)**(1-sigmap) + ava*(pva/lambdava)**(1-sigmap)]
-        def eq_pxeq_rule(model, r, a):
+        def eq_pxeq_rule(model, r, a, t):
             and_val = value(model.and_param[r, a])
             ava_val = value(model.ava_param[r, a])
 
@@ -4029,22 +4044,22 @@ class GTAPModelEquations:
             sigmap = self._get_sigmap(r, a)
             expo = 1.0 - sigmap
             if abs(expo) < 1e-8:
-                nd_term = (model.pnd[r, a] / max(self._lambdand(r, a), 1e-8)) ** and_val if and_val > 0.0 else 1.0
-                va_term = (model.pva[r, a] / max(self._lambdava(r, a), 1e-8)) ** ava_val if ava_val > 0.0 else 1.0
-                return model.px[r, a] == nd_term * va_term
+                nd_term = (model.pnd[r, a, t] / max(self._lambdand(r, a), 1e-8)) ** and_val if and_val > 0.0 else 1.0
+                va_term = (model.pva[r, a, t] / max(self._lambdava(r, a), 1e-8)) ** ava_val if ava_val > 0.0 else 1.0
+                return model.px[r, a, t] == nd_term * va_term
 
             shift = self._axp_shift(r, a) ** (sigmap - 1.0)
             lambdand = max(self._lambdand(r, a), 1e-8)
             lambdava = max(self._lambdava(r, a), 1e-8)
 
-            term_nd = and_val * (model.pnd[r, a] / lambdand) ** expo if and_val > 0.0 else 0.0
-            term_va = ava_val * (model.pva[r, a] / lambdava) ** expo if ava_val > 0.0 else 0.0
-            return model.px[r, a] ** expo == shift * (term_nd + term_va)
-        model.eq_pxeq = Constraint(model.r, model.a, rule=eq_pxeq_rule)
+            term_nd = and_val * (model.pnd[r, a, t] / lambdand) ** expo if and_val > 0.0 else 0.0
+            term_va = ava_val * (model.pva[r, a, t] / lambdava) ** expo if ava_val > 0.0 else 0.0
+            return model.px[r, a, t] ** expo == shift * (term_nd + term_va)
+        model.eq_pxeq = Constraint(model.r, model.a, model.t, rule=eq_pxeq_rule)
 
         # Price of ND bundle (GAMS pndeq)
         # pnd**(1-sigmand) = sum(i, io(r,i,a)*[pa(r,i)/lambdaio(r,i,a)]**(1-sigmand))
-        def eq_pndeq_rule(model, r, a):
+        def eq_pndeq_rule(model, r, a, t):
             sigmand = self._get_sigmand(r, a)
             expo = 1.0 - sigmand
             if abs(expo) < 1e-8:
@@ -4066,7 +4081,7 @@ class GTAPModelEquations:
                 prod = 1.0
                 for term in terms:
                     prod *= term
-                return model.pnd[r, a] == prod
+                return model.pnd[r, a, t] == prod
 
             terms = []
             for i in model.i:
@@ -4089,8 +4104,8 @@ class GTAPModelEquations:
 
             if not terms:
                 return Constraint.Skip
-            return model.pnd[r, a] ** expo == sum(terms)
-        model.eq_pndeq = Constraint(model.r, model.a, rule=eq_pndeq_rule)
+            return model.pnd[r, a, t] ** expo == sum(terms)
+        model.eq_pndeq = Constraint(model.r, model.a, model.t, rule=eq_pndeq_rule)
 
         # Price of VA bundle (GAMS pvaeq, model.gms:573-575)
         #   pva**(1-sigmav) = sum(f, af*(pfa/lambdaf)**(1-sigmav))
@@ -4099,7 +4114,7 @@ class GTAPModelEquations:
         # (the dual of the Cobb-Douglas problem), which matches GAMS behavior
         # in the limit. Previous Python "pva = prod(pfa^af)" was the primal CD
         # formula and breaks the calibration identity at benchmark.
-        def eq_pvaeq_rule(model, r, a):
+        def eq_pvaeq_rule(model, r, a, t):
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
 
@@ -4118,7 +4133,7 @@ class GTAPModelEquations:
 
             if abs(expo) < 1e-8:
                 # Cobb-Douglas → dual budget identity pva*va = sum(pfa*xf).
-                return model.pva[r, a] * model.va[r, a] == sum(
+                return model.pva[r, a, t] * model.va[r, a, t] == sum(
                     _m_pfa(r, f, a) * model.xf[r, f, a] for (f, _) in af_pairs
                 )
 
@@ -4126,11 +4141,11 @@ class GTAPModelEquations:
             for f, af_val in af_pairs:
                 lambdaf = max(self._lambdaf(r, f, a), 1e-8)
                 terms.append(af_val * (_m_pfa(r, f, a) / lambdaf) ** expo)
-            return model.pva[r, a] ** expo == sum(terms)
-        model.eq_pvaeq = Constraint(model.r, model.a, rule=eq_pvaeq_rule)
+            return model.pva[r, a, t] ** expo == sum(terms)
+        model.eq_pvaeq = Constraint(model.r, model.a, model.t, rule=eq_pvaeq_rule)
 
         # Output allocation (GAMS xeq)
-        def eq_x_rule(model, r, a, i):
+        def eq_x_rule(model, r, a, i, t):
             outputs = self.sets.activity_commodities.get(a, [])
             if outputs and i not in outputs:
                 return Constraint.Skip
@@ -4143,12 +4158,12 @@ class GTAPModelEquations:
 
             omega = self._get_omegas(r, a)
             if omega == float("inf"):
-                return model.p_rai[r, a, i] == model.px[r, a]
+                return model.p_rai[r, a, i, t] == model.px[r, a, t]
 
-            return model.x[r, a, i] == share * (model.xp[r, a] / model.xscale[r, a]) * (model.p_rai[r, a, i] / model.px[r, a]) ** omega
-        model.eq_x = Constraint(model.r, model.a, model.i, rule=eq_x_rule)
+            return model.x[r, a, i, t] == share * (model.xp[r, a, t] / model.xscale[r, a]) * (model.p_rai[r, a, i, t] / model.px[r, a, t]) ** omega
+        model.eq_x = Constraint(model.r, model.a, model.i, model.t, rule=eq_x_rule)
 
-        def eq_po_rule(model, r, a):
+        def eq_po_rule(model, r, a, t):
             outputs = self.sets.activity_commodities.get(a)
             if not outputs:
                 return Constraint.Skip
@@ -4163,18 +4178,18 @@ class GTAPModelEquations:
             omega = self._get_omegas(r, a)
             if omega == float("inf"):
                 # GAMS xpeq with omegas=inf uses xp/xscale on the quantity side.
-                return (model.xp[r, a] / model.xscale[r, a]) == sum(model.x[r, a, i] for i in active_outputs)
+                return (model.xp[r, a, t] / model.xscale[r, a]) == sum(model.x[r, a, i, t] for i in active_outputs)
 
             exponent = 1.0 + omega
-            return model.px[r, a] ** exponent == sum(
-                value(model.gx_param[r, a, i]) * model.p_rai[r, a, i] ** exponent
+            return model.px[r, a, t] ** exponent == sum(
+                value(model.gx_param[r, a, i]) * model.p_rai[r, a, i, t] ** exponent
                 for i in active_outputs
             )
-        model.eq_po = Constraint(model.r, model.a, rule=eq_po_rule)
+        model.eq_po = Constraint(model.r, model.a, model.t, rule=eq_po_rule)
 
         # Commodity-level output tax mapping (GAMS ppeq structure):
         # pp(r,a,i) = (1 + prdtx(r,a,i)) * p(r,a,i)
-        def eq_pp_rai_rule(model, r, a, i):
+        def eq_pp_rai_rule(model, r, a, i, t):
             outputs = self.sets.activity_commodities.get(a, [])
             if outputs and i not in outputs:
                 return Constraint.Skip
@@ -4184,11 +4199,11 @@ class GTAPModelEquations:
             make_base = self.params.benchmark.makb.get((r, a, i), 0.0)
             if share <= 0.0 and make_base <= 0.0:
                 return Constraint.Skip
-            return model.pp_rai[r, a, i] == (1.0 + value(model.prdtx_rai[r, a, i])) * model.p_rai[r, a, i]
-        model.eq_pp_rai = Constraint(model.r, model.a, model.i, rule=eq_pp_rai_rule)
+            return model.pp_rai[r, a, i, t] == (1.0 + value(model.prdtx_rai[r, a, i])) * model.p_rai[r, a, i, t]
+        model.eq_pp_rai = Constraint(model.r, model.a, model.i, model.t, rule=eq_pp_rai_rule)
 
         # Commodity aggregation by make-route (GAMS peq)
-        def eq_peq_rule(model, r, a, i):
+        def eq_peq_rule(model, r, a, i, t):
             outputs = self.sets.activity_commodities.get(a, [])
             if outputs and i not in outputs:
                 return Constraint.Skip
@@ -4203,17 +4218,17 @@ class GTAPModelEquations:
 
             sigma = self._get_sigmas(r, i)
             if sigma == float("inf"):
-                return _m_pp(r, a, i) == model.ps[r, i]
+                return _m_pp(r, a, i, t) == model.ps[r, i, t]
 
-            return model.x[r, a, i] == ax_val * model.xs[r, i] * (model.ps[r, i] / _m_pp(r, a, i)) ** sigma
-        model.eq_peq = Constraint(model.r, model.a, model.i, rule=eq_peq_rule)
+            return model.x[r, a, i, t] == ax_val * model.xs[r, i, t] * (model.ps[r, i, t] / _m_pp(r, a, i, t)) ** sigma
+        model.eq_peq = Constraint(model.r, model.a, model.i, model.t, rule=eq_peq_rule)
         
         # ========================================================================
         # SUPPLY BLOCK
         # ========================================================================
         
         # Domestic supply (GAMS pseq)
-        def eq_xs_rule(model, r, i):
+        def eq_xs_rule(model, r, i, t):
             producing_activities = self.sets.commodity_activities.get(i, list(model.a))
             active_activities = [
                 a for a in producing_activities
@@ -4224,98 +4239,98 @@ class GTAPModelEquations:
 
             sigma = self._get_sigmas(r, i)
             if sigma == float("inf"):
-                return model.xs[r, i] == sum(model.x[r, a, i] for a in active_activities)
+                return model.xs[r, i, t] == sum(model.x[r, a, i, t] for a in active_activities)
 
             exponent = 1.0 - sigma
             if abs(exponent) < 1e-8:
                 return Constraint.Skip
-            return model.ps[r, i] ** exponent == sum(
-                value(model.p_ax[r, a, i]) * _m_pp(r, a, i) ** exponent
+            return model.ps[r, i, t] ** exponent == sum(
+                value(model.p_ax[r, a, i]) * _m_pp(r, a, i, t) ** exponent
                 for a in active_activities
             )
-        model.eq_xs = Constraint(model.r, model.i, rule=eq_xs_rule)
-        
+        model.eq_xs = Constraint(model.r, model.i, model.t, rule=eq_xs_rule)
+
         # Legacy Pyomo simplification. The CET block should determine ps/pd/pet
         # without an extra identity constraint.
-        def eq_ps_rule(model, r, i):
-            return model.ps[r, i] == model.pd[r, i]
-        model.eq_ps = Constraint(model.r, model.i, rule=eq_ps_rule)
+        def eq_ps_rule(model, r, i, t):
+            return model.ps[r, i, t] == model.pd[r, i, t]
+        model.eq_ps = Constraint(model.r, model.i, model.t, rule=eq_ps_rule)
         model.eq_ps.deactivate()
         
         # ========================================================================
         # TRADE - CET DOMESTIC/EXPORT ALLOCATION
         # ========================================================================
         
-        def eq_xds_rule(model, r, i):
+        def eq_xds_rule(model, r, i, t):
             omega = self.params.elasticities.omegax.get((r, i), float("inf"))
             gd_share = value(model.gd_share[r, i])
             if gd_share <= 0.0:
-                return model.xds[r, i] == 0.0
+                return model.xds[r, i, t] == 0.0
             if omega == float("inf"):
-                return model.pd[r, i] == model.ps[r, i]
-            return model.xds[r, i] == model.gd_share[r, i] * model.xs[r, i] * (model.pd[r, i] / model.ps[r, i]) ** omega
-        model.eq_xds = Constraint(model.r, model.i, rule=eq_xds_rule)
+                return model.pd[r, i, t] == model.ps[r, i, t]
+            return model.xds[r, i, t] == model.gd_share[r, i] * model.xs[r, i, t] * (model.pd[r, i, t] / model.ps[r, i, t]) ** omega
+        model.eq_xds = Constraint(model.r, model.i, model.t, rule=eq_xds_rule)
 
-        def eq_xet_rule(model, r, i):
+        def eq_xet_rule(model, r, i, t):
             omega = self.params.elasticities.omegax.get((r, i), float("inf"))
             if value(model.xet_flag[r, i]) <= 0.0:
                 return Constraint.Skip
             ge_share = value(model.ge_share[r, i])
             if ge_share <= 0.0:
-                return model.xet[r, i] == 0.0
+                return model.xet[r, i, t] == 0.0
             if omega == float("inf"):
-                return model.pet[r, i] == model.ps[r, i]
+                return model.pet[r, i, t] == model.ps[r, i, t]
             return (
-                model.xet[r, i]
+                model.xet[r, i, t]
                 == model.ge_share[r, i]
-                * model.xs[r, i]
-                * (model.pet[r, i] / model.ps[r, i]) ** omega
+                * model.xs[r, i, t]
+                * (model.pet[r, i, t] / model.ps[r, i, t]) ** omega
             )
-        model.eq_xet = Constraint(model.r, model.i, rule=eq_xet_rule)
+        model.eq_xet = Constraint(model.r, model.i, model.t, rule=eq_xet_rule)
 
-        def eq_xseq_rule(model, r, i):
+        def eq_xseq_rule(model, r, i, t):
             omega = self.params.elasticities.omegax.get((r, i), float("inf"))
             gd_share = value(model.gd_share[r, i])
             ge_share = value(model.ge_share[r, i])
             if omega == float("inf"):
-                return model.xs[r, i] == model.xds[r, i] + model.xet[r, i]
+                return model.xs[r, i, t] == model.xds[r, i, t] + model.xet[r, i, t]
             exponent = 1.0 + omega
             return (
-                model.ps[r, i] ** exponent
-                == model.gd_share[r, i] * model.pd[r, i] ** exponent
-                + model.ge_share[r, i] * model.pet[r, i] ** exponent
+                model.ps[r, i, t] ** exponent
+                == model.gd_share[r, i] * model.pd[r, i, t] ** exponent
+                + model.ge_share[r, i] * model.pet[r, i, t] ** exponent
             )
-        model.eq_xseq = Constraint(model.r, model.i, rule=eq_xseq_rule)
-        
+        model.eq_xseq = Constraint(model.r, model.i, model.t, rule=eq_xseq_rule)
+
         # Legacy Pyomo simplification. Aggregate export price should be governed
         # by peeq/peteq, not an extra pet == ps identity.
-        def eq_pe_rule(model, r, i):
-            return model.pet[r, i] == model.ps[r, i]
-        model.eq_pe = Constraint(model.r, model.i, rule=eq_pe_rule)
+        def eq_pe_rule(model, r, i, t):
+            return model.pet[r, i, t] == model.ps[r, i, t]
+        model.eq_pe = Constraint(model.r, model.i, model.t, rule=eq_pe_rule)
         model.eq_pe.deactivate()
 
         # Legacy Pyomo-only route price identity. Keep the component for
         # compatibility with tooling, but leave it inactive because GAMS
         # determines route prices through peeq/peteq instead.
-        def eq_pe_route_rule(model, r, i, rp):
+        def eq_pe_route_rule(model, r, i, rp, t):
             if r == rp:
                 return Constraint.Skip
             bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
             mirror_imports = self.params.benchmark.viws.get((rp, i, r), 0.0)
             if bilateral_exports <= 0.0 and mirror_imports <= 0.0:
                 return Constraint.Skip
-            return model.pe[r, i, rp] == model.pet[r, i]
-        model.eq_pe_route = Constraint(model.r, model.i, model.rp, rule=eq_pe_route_rule)
+            return model.pe[r, i, rp] == model.pet[r, i, t]
+        model.eq_pe_route = Constraint(model.r, model.i, model.rp, model.t, rule=eq_pe_route_rule)
         model.eq_pe_route.deactivate()
-        
+
         # Aggregate exports over bilateral flows. GAMS uses xw directly in the
         # CET block, so keep the same aggregation object here.
-        def eq_xet_agg_rule(model, r, i):
+        def eq_xet_agg_rule(model, r, i, t):
             active_partners = [rp for rp in model.rp if rp != r and self.params.benchmark.vxmd.get((r, i, rp), 0.0) > 0.0]
             if not active_partners:
-                return model.xet[r, i] == 0.0
-            return model.xet[r, i] == sum(model.xw[r, i, rp] for rp in active_partners)
-        model.eq_xet_agg = Constraint(model.r, model.i, rule=eq_xet_agg_rule)
+                return model.xet[r, i, t] == 0.0
+            return model.xet[r, i, t] == sum(model.xw[r, i, rp] for rp in active_partners)
+        model.eq_xet_agg = Constraint(model.r, model.i, model.t, rule=eq_xet_agg_rule)
         model.eq_xet_agg.deactivate()
         
         # Legacy Pyomo helper. Keep the component for compatibility with
@@ -4428,11 +4443,11 @@ class GTAPModelEquations:
             lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
             # Leontief shortcut: avoid (pnd/pa)**0 ill-conditioning.
             if abs(sigmand) < 1e-12:
-                return model.xaa[r, i, a] == io_val * model.nd[r, a] / lambdaio
+                return model.xaa[r, i, a] == io_val * model.nd[r, a, "base"] / lambdaio
             return model.xaa[r, i, a] == (
                 io_val
-                * model.nd[r, a]
-                * (model.pnd[r, a] / model.pa[r, i, a]) ** sigmand
+                * model.nd[r, a, "base"]
+                * (model.pnd[r, a, "base"] / model.pa[r, i, a]) ** sigmand
                 * (lambdaio ** (sigmand - 1.0))
             )
         model.eq_xaa_activity = Constraint(model.r, model.i, model.a, rule=eq_xaa_activity_rule)
@@ -4668,13 +4683,13 @@ class GTAPModelEquations:
         model.eq_xma = Constraint(model.r, model.i, model.aa, rule=eq_xma_rule)
 
         # GAMS xmteq/xdseq: aggregate demands defined as sum over agents
-        def eq_xd_agg_rule(model, r, i):
-            return model.xd[r, i] == sum(model.xda[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
-        model.eq_xd_agg = Constraint(model.r, model.i, rule=eq_xd_agg_rule)
+        def eq_xd_agg_rule(model, r, i, t):
+            return model.xd[r, i, t] == sum(model.xda[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
+        model.eq_xd_agg = Constraint(model.r, model.i, model.t, rule=eq_xd_agg_rule)
 
-        def eq_xmt_agg_rule(model, r, i):
-            return model.xmt[r, i] == sum(model.xma[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
-        model.eq_xmt_agg = Constraint(model.r, model.i, rule=eq_xmt_agg_rule)
+        def eq_xmt_agg_rule(model, r, i, t):
+            return model.xmt[r, i, t] == sum(model.xma[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
+        model.eq_xmt_agg = Constraint(model.r, model.i, model.t, rule=eq_xmt_agg_rule)
         
         # Armington price CES aggregator by agent (GAMS paeq)
         # pa(r,i,aa)**(1-sigmam) = alphad*pdp**(1-sigmam) + alpham*pmp**(1-sigmam)
@@ -4773,15 +4788,15 @@ class GTAPModelEquations:
             lambdam = _lambdam_value(rp, i, r)
             return model.xw[rp, i, r] == (
                 amw
-                * model.xmt[r, i]
-                * (model.pmt[r, i] / _m_pm(rp, i, r)) ** esubm
+                * model.xmt[r, i, "base"]
+                * (model.pmt[r, i, "base"] / _m_pm(rp, i, r)) ** esubm
                 * (lambdam ** (esubm - 1.0))
             )
         model.eq_xweq = Constraint(model.rp, model.i, model.r, rule=eq_xweq_rule)
         
         # Aggregate import price CES (GAMS pmteq)
         # pmt(r,i)**(1-esubm) = sum(rp, amw(rp,i,r)*pm(rp,i,r)**(1-esubm))
-        def eq_pmteq_rule(model, r, i):
+        def eq_pmteq_rule(model, r, i, t):
             esubm = self.params.elasticities.esubm.get((r, i), 5.0)
             expo = 1.0 - esubm
             if abs(expo) < 1e-8:
@@ -4791,7 +4806,7 @@ class GTAPModelEquations:
                 for rp in model.rp
             ]
             if not any(share > 0.0 for share in active_shares):
-                return model.pmt[r, i] == 1.0  # Default price if no imports
+                return model.pmt[r, i, t] == 1.0  # Default price if no imports
             terms = []
             for rp in model.rp:
                 amw = _get_import_source_share(model, r, i, rp)
@@ -4800,9 +4815,9 @@ class GTAPModelEquations:
                 lambdam = _lambdam_value(rp, i, r)
                 terms.append(amw * (_m_pm(rp, i, r) / lambdam) ** expo)
             if not terms:
-                return model.pmt[r, i] == 1.0
-            return model.pmt[r, i] ** expo == sum(terms)
-        model.eq_pmteq = Constraint(model.r, model.i, rule=eq_pmteq_rule)
+                return model.pmt[r, i, t] == 1.0
+            return model.pmt[r, i, t] ** expo == sum(terms)
+        model.eq_pmteq = Constraint(model.r, model.i, model.t, rule=eq_pmteq_rule)
         
         # Bilateral import price tariff-inclusive (GAMS pmeq)
         # pm(rp,i,r) = (1 + imptx(rp,i,r) + mtax(r,i))*pmcif(rp,i,r)
@@ -4841,16 +4856,16 @@ class GTAPModelEquations:
                 return Constraint.Skip
             omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
             if omegaw == float("inf"):
-                return model.pe[r, i, rp] == model.pet[r, i]
+                return model.pe[r, i, rp] == model.pet[r, i, "base"]
             return (
                 model.xw[r, i, rp]
-                == model.gw_share[r, i, rp] * model.xet[r, i] * (model.pe[r, i, rp] / model.pet[r, i]) ** omegaw
+                == model.gw_share[r, i, rp] * model.xet[r, i, "base"] * (model.pe[r, i, rp] / model.pet[r, i, "base"]) ** omegaw
             )
         model.eq_peeq = Constraint(model.r, model.i, model.rp, rule=eq_peeq_rule)
         
         # Aggregate export price CET (GAMS peteq)
         # pet(r,i)**(1+omegaw) = sum(rp, gw(r,i,rp)*pe(r,i,rp)**(1+omegaw))
-        def eq_peteq_rule(model, r, i):
+        def eq_peteq_rule(model, r, i, t):
             if value(model.xet_flag[r, i]) <= 0.0:
                 return Constraint.Skip
             active_routes: list[str] = []
@@ -4861,8 +4876,8 @@ class GTAPModelEquations:
                 return Constraint.Skip
             omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
             if omegaw == float("inf"):
-                return model.xet[r, i] == sum(
-                    model.xw[r, i, rp] 
+                return model.xet[r, i, t] == sum(
+                    model.xw[r, i, rp]
                     for rp in active_routes
                 )
             exponent = 1.0 + omegaw
@@ -4876,8 +4891,8 @@ class GTAPModelEquations:
                 terms.append(gw * model.pe[r, i, rp] ** exponent)
             if not terms:
                 return Constraint.Skip
-            return model.pet[r, i] ** exponent == sum(terms)
-        model.eq_peteq = Constraint(model.r, model.i, rule=eq_peteq_rule)
+            return model.pet[r, i, t] ** exponent == sum(terms)
+        model.eq_peteq = Constraint(model.r, model.i, model.t, rule=eq_peteq_rule)
         
         # ========================================================================
         # DOMESTIC MARKET EQUILIBRIUM (GAMS pdeq)
@@ -4885,13 +4900,13 @@ class GTAPModelEquations:
         
         # Domestic goods market equilibrium
         # xds(r,i) = sum(aa, xd(r,i,aa)/xScale(r,aa))
-        def eq_pdeq_rule(model, r, i):
-            return model.xds[r, i] == sum(
-                model.xda[r, i, aa] / model.xscale[r, aa] 
-                for aa in model.aa 
+        def eq_pdeq_rule(model, r, i, t):
+            return model.xds[r, i, t] == sum(
+                model.xda[r, i, aa] / model.xscale[r, aa]
+                for aa in model.aa
                 if get_benchmark_agent_armington_shares(r, i, aa)[0] > 0.0
             )
-        model.eq_pdeq = Constraint(model.r, model.i, rule=eq_pdeq_rule)
+        model.eq_pdeq = Constraint(model.r, model.i, model.t, rule=eq_pdeq_rule)
 
         # ========================================================================
         # FACTOR BLOCK
@@ -4919,10 +4934,10 @@ class GTAPModelEquations:
                 return Constraint.Skip
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            ratio = model.pva[r, a] / _m_pfa(r, f, a)
+            ratio = model.pva[r, a, "base"] / _m_pfa(r, f, a)
             sigmav = self._get_sigmav(r, a)
             lambdaf = self._lambdaf(r, f, a)
-            return model.xf[r, f, a] == af_val * model.va[r, a] * ratio**sigmav * lambdaf ** (sigmav - 1)
+            return model.xf[r, f, a] == af_val * model.va[r, a, "base"] * ratio**sigmav * lambdaf ** (sigmav - 1)
         model.eq_xfeq = Constraint(model.r, model.f, model.a, rule=eq_xfeq_rule)
 
         # Aggregate supply of factors from production shares
@@ -5331,7 +5346,7 @@ class GTAPModelEquations:
                     for i in self.sets.activity_commodities.get(a, list(model.i)):
                         if value(model.xflag[r, a, i]) <= 0.0:
                             continue
-                        total += model.prdtx_rai[r, a, i] * model.p_rai[r, a, i] * model.x[r, a, i]
+                        total += model.prdtx_rai[r, a, i] * model.p_rai[r, a, i, "base"] * model.x[r, a, i, "base"]
                 return model.ytax[r, gy] == total
 
             if gy == "ft":
@@ -5362,8 +5377,8 @@ class GTAPModelEquations:
                         dintx = float(self.params.taxes.dintx0.get((r, i, aa), 0.0))
                         mintx = float(self.params.taxes.mintx0.get((r, i, aa), 0.0))
                         scale = model.xscale[r, aa] if aa in model.a else 1.0
-                        total += dintx * model.pd[r, i] * model.xda[r, i, aa] / scale
-                        total += mintx * model.pmt[r, i] * model.xma[r, i, aa] / scale
+                        total += dintx * model.pd[r, i, "base"] * model.xda[r, i, aa] / scale
+                        total += mintx * model.pmt[r, i, "base"] * model.xma[r, i, aa] / scale
                 return model.ytax[r, gy] == total
 
             if gy == "et":
@@ -5805,9 +5820,9 @@ class GTAPModelEquations:
             for r in model.r:
                 for a in model.a:
                     for i in model.i:
-                        if (r, a, i) not in model.pp_rai:
+                        if (r, a, i, "base") not in model.pp_rai:
                             continue
-                        _fix_component(model.pp_rai[r, a, i], value(_m_pp(r, a, i)))
+                        _fix_component(model.pp_rai[r, a, i, "base"], value(_m_pp(r, a, i)))
 
             for r in model.r:
                 for i in model.i:

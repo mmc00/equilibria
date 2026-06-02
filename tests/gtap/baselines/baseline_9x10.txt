@@ -10,7 +10,7 @@
 
 ✅ Jacobian structure built: 72,746 non-zero entries (0.03% density)
 
-  baseline residual=2.742e-11  code=1  solve=8.88s
+  baseline residual=2.742e-11  code=1  solve=7.00s
 
 === Python shock 9x10 (10% imptx, rate scaling) ===
 [nonlinear-full] fixed 10 sluggish pft(r,f) (no eq references them)
@@ -23,7 +23,7 @@
 
 ✅ Jacobian structure built: 77,436 non-zero entries (0.03% density)
 
-  shock residual=7.279e-10  code=1  solve=10.27s
+  shock residual=7.279e-10  code=1  solve=9.42s
 
 Populated GAMS Vars in COMP.gdx: 139
 
