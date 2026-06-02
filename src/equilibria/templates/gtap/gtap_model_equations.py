@@ -4897,13 +4897,15 @@ class GTAPModelEquations:
             omega = self.params.elasticities.omegaf.get((region, factor))
             if omega is not None:
                 return float(omega)
-            # GAMS: mobile factors default to inf; sluggish come from -etrae.
+            # GAMS: -etrae[factor] is the CET elasticity. Honour it whenever
+            # finite (incl. for factors in mf such as Land in standard GTAP,
+            # which is "mobile with partial CET", not perfectly mobile).
+            etrae = self.params.elasticities.etrae.get(factor, float("inf"))
+            if etrae != float("inf") and etrae != 0.0:
+                return -float(etrae)
             if factor in self.sets.mf:
                 return float("inf")
-            etrae = self.params.elasticities.etrae.get(factor, float("inf"))
-            if etrae == float("inf"):
-                return float("inf")
-            return -float(etrae)
+            return float("inf")
 
         def _etaff(region, factor, activity):
             return float(
