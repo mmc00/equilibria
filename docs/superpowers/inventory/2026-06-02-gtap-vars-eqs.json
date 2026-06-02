@@ -1,0 +1,1824 @@
+{
+  "vars": [
+    {
+      "name": "xp",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Production"
+    },
+    {
+      "name": "x",
+      "dims": [
+        "r",
+        "a",
+        "i"
+      ],
+      "doc": "Output"
+    },
+    {
+      "name": "px",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Unit cost"
+    },
+    {
+      "name": "p_rai",
+      "dims": [
+        "r",
+        "a",
+        "i"
+      ],
+      "doc": "Pre-tax producer price by activity-commodity"
+    },
+    {
+      "name": "pp",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Producer price (activity aggregate)"
+    },
+    {
+      "name": "pp_rai",
+      "dims": [
+        "r",
+        "a",
+        "i"
+      ],
+      "doc": "Producer price by activity-commodity"
+    },
+    {
+      "name": "xs",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Domestic supply"
+    },
+    {
+      "name": "xds",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Supply of domestically produced goods"
+    },
+    {
+      "name": "ps",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Supply price"
+    },
+    {
+      "name": "pd",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Domestic price"
+    },
+    {
+      "name": "pa",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Armington price by agent"
+    },
+    {
+      "name": "dintx",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Indirect tax on domestic consumption"
+    },
+    {
+      "name": "mintx",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Indirect tax on import consumption"
+    },
+    {
+      "name": "xd",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Domestic demand"
+    },
+    {
+      "name": "xmt",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Import demand"
+    },
+    {
+      "name": "pmt",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Import price"
+    },
+    {
+      "name": "xda",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Domestic Armington demand by agent"
+    },
+    {
+      "name": "xma",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Imported Armington demand by agent"
+    },
+    {
+      "name": "xet",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Export supply"
+    },
+    {
+      "name": "pet",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Export price"
+    },
+    {
+      "name": "va",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Value added bundle"
+    },
+    {
+      "name": "nd",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Intermediate bundle"
+    },
+    {
+      "name": "pva",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Value added price"
+    },
+    {
+      "name": "pnd",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Intermediate price"
+    },
+    {
+      "name": "xe",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Bilateral exports"
+    },
+    {
+      "name": "xw",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Bilateral imports"
+    },
+    {
+      "name": "pe",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Bilateral export price by route"
+    },
+    {
+      "name": "pwmg",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Route-specific trade and transport margin price"
+    },
+    {
+      "name": "xwmg",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Demand for trade and transport services by route"
+    },
+    {
+      "name": "xmgm",
+      "dims": [
+        "m",
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Demand for TT services by mode and route"
+    },
+    {
+      "name": "xtmg",
+      "dims": [
+        "m"
+      ],
+      "doc": "Global demand for TT services by mode"
+    },
+    {
+      "name": "ptmg",
+      "dims": [
+        "m"
+      ],
+      "doc": "Margin commodity trade price index"
+    },
+    {
+      "name": "etax",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Export tax shifter uniform across destinations"
+    },
+    {
+      "name": "mtax",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Import tax shifter uniform across sources"
+    },
+    {
+      "name": "lambdam",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Second-level Armington preference shifter"
+    },
+    {
+      "name": "afecom",
+      "dims": [
+        "f"
+      ],
+      "doc": "World-wide tech shift in VA demand by factor"
+    },
+    {
+      "name": "afesec",
+      "dims": [
+        "a"
+      ],
+      "doc": "World-wide tech shift in VA demand by activity"
+    },
+    {
+      "name": "afefac",
+      "dims": [
+        "r",
+        "f"
+      ],
+      "doc": "Region-wide tech shift in VA demand across factors"
+    },
+    {
+      "name": "afereg",
+      "dims": [
+        "r"
+      ],
+      "doc": "Region-wide tech shift in VA demand"
+    },
+    {
+      "name": "afeall",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Region/factor/activity tech shift in VA demand"
+    },
+    {
+      "name": "aiocom",
+      "dims": [
+        "i"
+      ],
+      "doc": "World-wide tech shift in IO demand by input"
+    },
+    {
+      "name": "aiosec",
+      "dims": [
+        "a"
+      ],
+      "doc": "World-wide tech shift in IO demand by activity"
+    },
+    {
+      "name": "aioreg",
+      "dims": [
+        "r"
+      ],
+      "doc": "Region-wide tech shift in IO demand"
+    },
+    {
+      "name": "aioall",
+      "dims": [
+        "r",
+        "i",
+        "a"
+      ],
+      "doc": "Region/input/activity tech shift in IO demand"
+    },
+    {
+      "name": "andsec",
+      "dims": [
+        "a"
+      ],
+      "doc": "World-wide tech shift in ND demand by sector"
+    },
+    {
+      "name": "andreg",
+      "dims": [
+        "r"
+      ],
+      "doc": "Region-wide tech shift in ND demand"
+    },
+    {
+      "name": "andall",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Region/sector tech shift in ND demand"
+    },
+    {
+      "name": "avasec",
+      "dims": [
+        "a"
+      ],
+      "doc": "World-wide tech shift in VA demand by sector"
+    },
+    {
+      "name": "avareg",
+      "dims": [
+        "r"
+      ],
+      "doc": "Region-wide tech shift in VA demand"
+    },
+    {
+      "name": "avaall",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Region/sector tech shift in VA demand"
+    },
+    {
+      "name": "lambdaf",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Factor specific technical change"
+    },
+    {
+      "name": "lambdai",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Investment expenditure technology"
+    },
+    {
+      "name": "lambdand",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "ND bundle shifter"
+    },
+    {
+      "name": "lambdava",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "VA bundle shifter"
+    },
+    {
+      "name": "axp",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Production frontier shifter"
+    },
+    {
+      "name": "axpsec",
+      "dims": [
+        "a"
+      ],
+      "doc": "World-wide shift in production by sector"
+    },
+    {
+      "name": "axpreg",
+      "dims": [
+        "r"
+      ],
+      "doc": "Region-wide shift in production"
+    },
+    {
+      "name": "axpall",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": "Region/sector shift in production"
+    },
+    {
+      "name": "kappaf",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Income tax on factor f used in activity a"
+    },
+    {
+      "name": "dtxshft",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Domestic indirect tax shifter"
+    },
+    {
+      "name": "mtxshft",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Imported indirect tax shifter"
+    },
+    {
+      "name": "rtxshft",
+      "dims": [
+        "r",
+        "aa"
+      ],
+      "doc": "Uniform indirect tax shifter"
+    },
+    {
+      "name": "pm",
+      "dims": [
+        "rp",
+        "i",
+        "r"
+      ],
+      "doc": "Bilateral import price (tariff-inclusive)"
+    },
+    {
+      "name": "pmcif",
+      "dims": [
+        "rp",
+        "i",
+        "r"
+      ],
+      "doc": "CIF import price (FOB + margins)"
+    },
+    {
+      "name": "pefob",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "FOB export price"
+    },
+    {
+      "name": "xft",
+      "dims": [
+        "r",
+        "f"
+      ],
+      "doc": "Factor supply"
+    },
+    {
+      "name": "pft",
+      "dims": [
+        "r",
+        "f"
+      ],
+      "doc": "Factor price"
+    },
+    {
+      "name": "xf",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Factor demand"
+    },
+    {
+      "name": "pf",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Factor price by activity"
+    },
+    {
+      "name": "pfa",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Factor price tax inclusive"
+    },
+    {
+      "name": "pfy",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "After-tax factor price"
+    },
+    {
+      "name": "pwfact",
+      "dims": [],
+      "doc": "World factor price"
+    },
+    {
+      "name": "xc",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Private consumption"
+    },
+    {
+      "name": "xg",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Government consumption"
+    },
+    {
+      "name": "xi",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Investment"
+    },
+    {
+      "name": "xaa",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": "Agent/activity Armington demand"
+    },
+    {
+      "name": "regy",
+      "dims": [
+        "r"
+      ],
+      "doc": "Regional income"
+    },
+    {
+      "name": "yc",
+      "dims": [
+        "r"
+      ],
+      "doc": "Private income"
+    },
+    {
+      "name": "yg",
+      "dims": [
+        "r"
+      ],
+      "doc": "Government income"
+    },
+    {
+      "name": "yi",
+      "dims": [
+        "r"
+      ],
+      "doc": "Investment income"
+    },
+    {
+      "name": "rsav",
+      "dims": [
+        "r"
+      ],
+      "doc": "Regional savings"
+    },
+    {
+      "name": "facty",
+      "dims": [
+        "r"
+      ],
+      "doc": "Factor income net of depreciation"
+    },
+    {
+      "name": "ytax",
+      "dims": [
+        "r",
+        "gy"
+      ],
+      "doc": "Government tax revenue by stream"
+    },
+    {
+      "name": "ytaxTot",
+      "dims": [
+        "r"
+      ],
+      "doc": "Total government revenue"
+    },
+    {
+      "name": "ytax_ind",
+      "dims": [
+        "r"
+      ],
+      "doc": "Indirect tax revenue"
+    },
+    {
+      "name": "ytaxshr",
+      "dims": [
+        "r",
+        "gy"
+      ],
+      "doc": "Indirect tax revenues as share of regional income"
+    },
+    {
+      "name": "pnum",
+      "dims": [],
+      "doc": "Numeraire"
+    },
+    {
+      "name": "pabs",
+      "dims": [
+        "r"
+      ],
+      "doc": "Aggregate absorption price"
+    },
+    {
+      "name": "pi",
+      "dims": [
+        "r"
+      ],
+      "doc": "Investment price deflator"
+    },
+    {
+      "name": "pfact",
+      "dims": [
+        "r"
+      ],
+      "doc": "Regional factor price"
+    },
+    {
+      "name": "kstock",
+      "dims": [
+        "r"
+      ],
+      "doc": "Capital stock"
+    },
+    {
+      "name": "kapEnd",
+      "dims": [
+        "r"
+      ],
+      "doc": "End-of-period capital stock"
+    },
+    {
+      "name": "arent",
+      "dims": [
+        "r"
+      ],
+      "doc": "Rate of return after tax"
+    },
+    {
+      "name": "rorc",
+      "dims": [
+        "r"
+      ],
+      "doc": "Net rate of return to capital"
+    },
+    {
+      "name": "rore",
+      "dims": [
+        "r"
+      ],
+      "doc": "Expected rate of return"
+    },
+    {
+      "name": "gdpmp",
+      "dims": [
+        "r"
+      ],
+      "doc": "Nominal GDP at market prices"
+    },
+    {
+      "name": "rgdpmp",
+      "dims": [
+        "r"
+      ],
+      "doc": "Real GDP at market prices"
+    },
+    {
+      "name": "pgdpmp",
+      "dims": [
+        "r"
+      ],
+      "doc": "GDP price deflator"
+    },
+    {
+      "name": "xiagg",
+      "dims": [
+        "r"
+      ],
+      "doc": "Aggregate investment volume"
+    },
+    {
+      "name": "pcons",
+      "dims": [
+        "r"
+      ],
+      "doc": "Consumer price index"
+    },
+    {
+      "name": "xcshr",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Household budget share"
+    },
+    {
+      "name": "zcons",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "CDE auxiliary share factor"
+    },
+    {
+      "name": "phip",
+      "dims": [
+        "r"
+      ],
+      "doc": "Elasticity of expenditure wrt private utility"
+    },
+    {
+      "name": "phi",
+      "dims": [
+        "r"
+      ],
+      "doc": "Elasticity of total expenditure wrt utility"
+    },
+    {
+      "name": "uh",
+      "dims": [
+        "r"
+      ],
+      "doc": "Private utility per capita"
+    },
+    {
+      "name": "ug",
+      "dims": [
+        "r"
+      ],
+      "doc": "Government utility per capita"
+    },
+    {
+      "name": "us",
+      "dims": [
+        "r"
+      ],
+      "doc": "Savings utility per capita"
+    },
+    {
+      "name": "u",
+      "dims": [
+        "r"
+      ],
+      "doc": "Total utility"
+    },
+    {
+      "name": "psave",
+      "dims": [
+        "r"
+      ],
+      "doc": "Price of savings"
+    },
+    {
+      "name": "savf",
+      "dims": [
+        "r"
+      ],
+      "doc": "Foreign savings"
+    },
+    {
+      "name": "chif",
+      "dims": [
+        "r"
+      ],
+      "doc": "Share of nominal foreign savings in regional income"
+    },
+    {
+      "name": "ev",
+      "dims": [
+        "r"
+      ],
+      "doc": "Equivalent variation"
+    },
+    {
+      "name": "cv",
+      "dims": [
+        "r"
+      ],
+      "doc": "Compensating variation"
+    },
+    {
+      "name": "xigbl",
+      "dims": [],
+      "doc": "Global net investment"
+    },
+    {
+      "name": "pigbl",
+      "dims": [],
+      "doc": "Price of global investment"
+    },
+    {
+      "name": "chiSave",
+      "dims": [],
+      "doc": "Savings price adjustment"
+    },
+    {
+      "name": "rorg",
+      "dims": [],
+      "doc": "Global rate of return"
+    },
+    {
+      "name": "walras",
+      "dims": [],
+      "doc": "Walras check"
+    }
+  ],
+  "params_mutable": [
+    {
+      "name": "gd_share",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "gd_share"
+    },
+    {
+      "name": "ge_share",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "ge_share"
+    },
+    {
+      "name": "gw_share",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "gw_share"
+    },
+    {
+      "name": "xw_flag",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "xw_flag"
+    },
+    {
+      "name": "xet_flag",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "xet_flag"
+    },
+    {
+      "name": "aus",
+      "dims": [
+        "r"
+      ],
+      "doc": "aus"
+    },
+    {
+      "name": "betap",
+      "dims": [
+        "r"
+      ],
+      "doc": "betap"
+    },
+    {
+      "name": "betag",
+      "dims": [
+        "r"
+      ],
+      "doc": "betag"
+    },
+    {
+      "name": "betas",
+      "dims": [
+        "r"
+      ],
+      "doc": "betas"
+    },
+    {
+      "name": "imptx",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Bilateral import taxes"
+    },
+    {
+      "name": "exptx",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": "Bilateral export taxes"
+    },
+    {
+      "name": "prdtx",
+      "dims": [
+        "r",
+        "a",
+        "i"
+      ],
+      "doc": "Production tax"
+    },
+    {
+      "name": "fcttx",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Taxes on factors of production"
+    },
+    {
+      "name": "fctts",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": "Subsidies on factors of production"
+    },
+    {
+      "name": "pmuv",
+      "dims": [],
+      "doc": "Price of HIC manufactured exports (frozen)"
+    },
+    {
+      "name": "chiInv",
+      "dims": [
+        "r"
+      ],
+      "doc": "Regional share of global net investment (frozen at cal)"
+    },
+    {
+      "name": "ued",
+      "dims": [
+        "r",
+        "i",
+        "i"
+      ],
+      "doc": "Uncompensated price elasticities (frozen at cal)"
+    },
+    {
+      "name": "incelas",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": "Income elasticities (frozen at cal)"
+    },
+    {
+      "name": "ced",
+      "dims": [
+        "r",
+        "i",
+        "i"
+      ],
+      "doc": "Compensated price elasticities (frozen at cal)"
+    },
+    {
+      "name": "ape",
+      "dims": [
+        "r",
+        "i",
+        "i"
+      ],
+      "doc": "Allen-Uzawa price elasticities (frozen at cal)"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "prf_y",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_nd",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_va",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pxeq",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pndeq",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pvaeq",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_x",
+      "dims": [
+        "r",
+        "a",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_po",
+      "dims": [
+        "r",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pp_rai",
+      "dims": [
+        "r",
+        "a",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_peq",
+      "dims": [
+        "r",
+        "a",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xs",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ps",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xds",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xet",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xseq",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pe",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pe_route",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xet_agg",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xe_xw",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xaa_activity",
+      "dims": [
+        "r",
+        "i",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xaa_hhd",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xaa_gov",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xaa_inv",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xaa_tmg",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_dintxeq",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_mintxeq",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xda",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xma",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xd_agg",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xmt_agg",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_paa",
+      "dims": [
+        "r",
+        "i",
+        "aa"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xwmg",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xmgm",
+      "dims": [
+        "m",
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pwmg",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xtmg",
+      "dims": [
+        "m"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ptmg",
+      "dims": [
+        "m"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xweq",
+      "dims": [
+        "rp",
+        "i",
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pmteq",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pmeq",
+      "dims": [
+        "rp",
+        "i",
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pmcifeq",
+      "dims": [
+        "rp",
+        "i",
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pefobeq",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_peeq",
+      "dims": [
+        "r",
+        "i",
+        "rp"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_peteq",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pdeq",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xft",
+      "dims": [
+        "r",
+        "f"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xfeq",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xfteq",
+      "dims": [
+        "r",
+        "f"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pfeq",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pfaeq",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pfyeq",
+      "dims": [
+        "r",
+        "f",
+        "a"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_kstock",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xc",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xg",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xi",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xiagg",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_zcons",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_xcshr",
+      "dims": [
+        "r",
+        "i"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_phip",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_phi",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pcons",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pi",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_uh",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ug",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_psave",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_us",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_u",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_chisave",
+      "dims": [],
+      "doc": ""
+    },
+    {
+      "name": "eq_pigbl",
+      "dims": [],
+      "doc": ""
+    },
+    {
+      "name": "eq_xigbl",
+      "dims": [],
+      "doc": ""
+    },
+    {
+      "name": "eq_savf",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_chif",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_capAcct",
+      "dims": [],
+      "doc": ""
+    },
+    {
+      "name": "eq_kapEnd",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_arent",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_rorc",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_rore",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_rorg",
+      "dims": [],
+      "doc": ""
+    },
+    {
+      "name": "eq_facty",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ytax",
+      "dims": [
+        "r",
+        "gy"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ytax_tot",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ytax_ind",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_regy",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ytaxshreq",
+      "dims": [
+        "r",
+        "gy"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_yc",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_yg",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_yi",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_rsav",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pabs",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_gdpmp",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_rgdpmp",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pgdpmp",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_ev",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_cv",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pfact",
+      "dims": [
+        "r"
+      ],
+      "doc": ""
+    },
+    {
+      "name": "eq_pwfact",
+      "dims": [],
+      "doc": ""
+    },
+    {
+      "name": "eq_pnum",
+      "dims": [],
+      "doc": ""
+    },
+    {
+      "name": "eq_walras",
+      "dims": [],
+      "doc": ""
+    }
+  ],
+  "counts": {
+    "vars": 118,
+    "params_mutable": 20,
+    "constraints": 97
+  }
+}
