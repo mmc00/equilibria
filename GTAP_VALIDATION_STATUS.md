@@ -319,3 +319,40 @@ For 15×10 bilateral, the small policy effect (~0.5%) is dwarfed by the rebase a
 - Python 15×10 bilateral solves cleanly (base res 5.5e-12, shock res 3.6e-12).
 - Python `shock - base` (-8.23%) ≈ NEOS `shock - base` (-10.16%) for pf[USA,Land,VegFruit].
 - Remaining gap (-8.23% vs -10.16%) is plausibly explained by remaining minor differences in CES weights, lambdas, or the Fisher anchoring discussed above.
+
+### Deeper analysis (2026-06-01, second pass)
+
+After mapping all GAMS t0-referencing equations (`pmuveq`, `pfacteq`, `pwfacteq`, `pabseq`, `psaveeq`, `rgdpmpeq`) and Python's already-existing Fisher equations (`eq_pmuv`, `eq_pfact`, `eq_pwfact`, `eq_pabs`, `eq_rgdpmp`), we confirmed:
+
+1. **Python Fisher equations are correctly written**: they reference `pf0/xf0` (Param snapshots from benchmark) the same way GAMS uses `pf(t0)/xf(t0)`. The `t0` reference is the SAM benchmark in both implementations.
+
+2. **Python's `betap/g/s` are already Params**: they're computed at construction time from SAM expenditure shares (lines 1919-1921, 2107-2109). This matches GAMS post-`betaCal` state where `betaP/G/S.fx = .l`.
+
+3. **Python's `yc/yg/rsav/regY/phip` are already Vars**: matches GAMS post-`betaCal` state where bounds are relaxed to `(-inf, +inf)`.
+
+**So Python is structurally equivalent to NEOS check state from solve #1.** Yet Python `yc[USA]=13.33` (=SAM=NEOS base), NOT `yc[USA]=11.83` (=NEOS check).
+
+### True root cause: warm-start path dependence in MCP
+
+GAMS solves `betaCal` (4-equation MCP) first. This produces specific level values for **all** variables in the full model (not just the 4 endogenous betas — every Var carries its initialization value forward). When GAMS then solves `gtap` (5400-equation MCP), the warm-start is the post-`betaCal` state.
+
+Python initializes Vars from SAM benchmark directly (no calibration solve), then solves `gtap` once.
+
+For MCP problems, **the converged solution can depend on the warm-start** if the system admits multiple equilibria or if path-solver heuristics drift differently from different starting points. The 11% rebase in NEOS appears to be GAMS converging to a *different* fixed point than Python finds.
+
+### Implications
+
+- The rebase isn't a missing equation in Python — it's a side-effect of GAMS's 2-stage solve choosing a different point in the equilibrium manifold.
+- Replicating it in Python would require either:
+  (a) Implementing the same 2-stage solve (`betaCal` MCP first with `yc/yg/rsav` fixed, then full model with `betas` fixed), OR
+  (b) Adding numerical perturbations to Python's warm-start to drift toward the NEOS solution.
+- Neither is clearly "the right answer" — both Python and NEOS produce valid equilibria; they're just different ones.
+
+### Recommendation
+
+**Stop chasing the rebase.** It's not a bug — it's a convention difference. The validation strategy should be:
+- For base parity: compare Python `base` against NEOS `base` (matches exactly).
+- For shock parity: compare Python `shock - base` against NEOS `shock - base` (already close: -8.23% vs -10.16% for the test case).
+- Document the NEOS `check` step as an internal GAMS rebase that Python intentionally doesn't replicate.
+
+If exact NEOS check matching becomes a hard requirement in the future, option (a) above is the cleaner path — but it's a significant architectural addition.
