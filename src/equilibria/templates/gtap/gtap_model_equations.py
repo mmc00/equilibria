@@ -28,11 +28,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def prev_t(t_val: str, t_set: tuple) -> "str | None":
+def prev_t(t_val: str, t_set: Tuple[str, ...]) -> str | None:
     """Return the period preceding t_val in t_set, or None if t_val is the first.
 
     Mirrors GAMS ``tsim-1`` lag operator over an ordered set.
+
+    Raises:
+        ValueError: if t_val is not in t_set.
     """
+    if t_val not in t_set:
+        raise ValueError(f"prev_t: {t_val!r} not in t_set {t_set}")
     idx = t_set.index(t_val)
     return t_set[idx - 1] if idx > 0 else None
 
