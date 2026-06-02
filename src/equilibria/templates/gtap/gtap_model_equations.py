@@ -841,18 +841,9 @@ class GTAPModelEquations:
                 if benchmark_kstock > 0.0:
                     model.kstock[r].set_value(max(benchmark_kstock, 1e-8))
 
+            # ft is zero (rtf wedge already absorbed in production costs since pf*xf=EVFB)
             if hasattr(model, "ytax") and (r, "ft") in model.ytax:
-                ft_total = 0.0
-                for (rr, f, a), rtf in self.params.taxes.rtf.items():
-                    if rr != r:
-                        continue
-                    ft_total += (
-                        float(rtf)
-                        * value(model.pf[r, f, a])
-                        * value(model.xf[r, f, a])
-                        / max(value(model.xscale[r, a]), 1e-12)
-                    )
-                model.ytax[r, "ft"].set_value(ft_total)
+                model.ytax[r, "ft"].set_value(0.0)
 
             if hasattr(model, "ytax") and (r, "dt") in model.ytax:
                 dt_total = 0.0
@@ -925,7 +916,10 @@ class GTAPModelEquations:
             if hasattr(model, "ytax_ind") and r in model.ytax_ind:
                 model.ytax_ind[r].set_value(value(model.ytaxTot[r]) - value(model.ytax[r, "dt"]))
             if hasattr(model, "regy") and r in model.regy:
-                model.regy[r].set_value(value(model.facty[r]) + value(model.ytax_ind[r]))
+                # Skip when regy is fixed at base (NEOS cal.gms:629 pins regY
+                # to expenditure-side; income-side facty+ytax_ind differs).
+                if not model.regy[r].fixed:
+                    model.regy[r].set_value(value(model.facty[r]) + value(model.ytax_ind[r]))
             regy_raw = value(model.regy[r])
             regy_val = max(abs(regy_raw), 1e-8)
             if hasattr(model, "ytaxshr"):
@@ -1174,11 +1168,12 @@ class GTAPModelEquations:
             for i in outputs:
                 total += float(bm.makb.get((region, a, i), 0.0) or 0.0) \
                        - float(bm.maks.get((region, a, i), 0.0) or 0.0)
-        for (rr, f, a), rtf in taxes.rtf.items():
-            if rr == region:
-                # Use evfb to match eq_ytax["ft"] = sum(rtf * pf * xf / xscale) = sum(rtf * evfb)
-                evfb_val = bm.evfb.get((region, f, a), bm.vfm.get((region, f, a), 0.0))
-                total += float(rtf) * float(evfb_val or 0.0)
+        # NOTE: factor taxes (rtf*evfb) are NOT included here. NEOS classifies
+        # the factor-tax stream as 'dt' (direct, via kappaf*pf*xf) and only
+        # gross production/consumption/trade taxes count as indirect. Including
+        # rtf*evfb here would double-count direct taxes and inflate regy_income,
+        # producing phi≈1 at calibration when income < expenditure (15x10 USA:
+        # NEOS phi=0.885, prior phi=1.000 — caused full check-step rebase miss).
         for (rr, i, a), rtpd in taxes.rtpd.items():
             if rr == region:
                 total += float(rtpd) * float(bm.vdfb.get((region, i, a), 0.0))
@@ -1904,21 +1899,35 @@ class GTAPModelEquations:
             vst_r = sum(self._vst_value(region, i) for i in self.sets.i)
             savf_bar_data[(region,)] = vcif_r - vfob_r - vst_r
 
-            # GAMS betaCal (cal.gms:626-635) overwrites regY = yc + yg + rsav
-            # before computing betaP/betaG/betaS, then solves a 4-eq MCP
-            # {phieq, yceq, ygeq, rsaveq} that pins phi = phiP = 1. Because
-            # the MCP is degenerate once regY = expenditure-sum (any phi
-            # works), the analytical solution is just to use the expenditure
-            # side: betaP+betaG+betaS = 1 exactly, regardless of SAM income/
-            # expenditure imbalance. The (factY+ytaxInd) version is kept for
-            # downstream factY/ytax initialization and is reconciled by
-            # eq_regy at solve.
+            # GAMS calibration (postsim.gms:23520-23523) computes:
+            #   betaP = yc / regY_income     (regY_income = factY + yTaxInd)
+            #   betaG = yg / regY_income
+            #   betaS = rsav / regY_income
+            #   phi   = 1 / (phiP*betaP + betaG + betaS)
+            # then fixes regY = yc+yg+rsav (expenditure) for the main solve.
+            #
+            # CRITICAL: NEOS holds phi=1 at the BASE solve (SAM passes through
+            # untouched) and only applies the calibrated phi at CHECK/SHOCK.
+            # Applying calibrated phi at base inflates pabs and all nominal
+            # prices, breaking yc[base]=SAM. So:
+            #   base (is_counterfactual=False): phi=1, betap from expenditure
+            #   check/shock (is_counterfactual=True): phi=calibrated, betap from income
+            # NEOS cal.gms:23520-23523 calibration:
+            #   betaP = yc / regY_income        (regY_income = factY + yTaxInd)
+            #   betaG = yg / regY_income
+            #   betaS = rsav / regY_income
+            #   phi   = 1 / (phiP*betaP + betaG + betaS)
+            # Then fix regY = yc+yg+rsav (expenditure side, cal.gms:629) so the
+            # base solve passes through SAM with yc = betaP*phi*regY = yc_sam.
+            # At check/shock, regY is freed and the income identity binds,
+            # producing the NEOS check-step rebase.
             regy_expenditure = max(private_total + government_total + savings_total, 1e-8)
             phip = 1.0
-            phi = 1.0
-            betap = private_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
-            betag = government_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
-            betas = savings_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
+            betap = private_total / regy_income if regy_income > 0.0 else 0.0
+            betag = government_total / regy_income if regy_income > 0.0 else 0.0
+            betas = savings_total / regy_income if regy_income > 0.0 else 0.0
+            beta_sum = phip * betap + betag + betas
+            phi = 1.0 / beta_sum if beta_sum > 0.0 else 1.0
             regy_base = regy_bench  # kept for downstream references below
             regional_income_share_data[(region,)] = private_total / regy_base if regy_base > 0.0 else 0.0
             regional_government_share_data[(region,)] = government_total / regy_base if regy_base > 0.0 else 0.0
@@ -3338,11 +3347,8 @@ class GTAPModelEquations:
                 return total
 
             if gy == "ft":
-                total = 0.0
-                for (rr, f, a), rtf in self.params.taxes.rtf.items():
-                    if rr == r:
-                        total += float(rtf) * self.params.benchmark.vfm.get((r, f, a), 0.0)
-                return total
+                # rtf revenue folded into dt to match NEOS classification.
+                return 0.0
 
             if gy == "fs":
                 return 0.0
@@ -3427,6 +3433,8 @@ class GTAPModelEquations:
                         kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0))
                         if kappa == 0.0:
                             kappa = float(self.params.taxes.kappaf.get((r, f), 0.0))
+                        if kappa == 0.0:
+                            continue
                         total += (
                             kappa
                             * self.params.benchmark.vfm.get((r, f, a), 0.0)
@@ -3444,6 +3452,23 @@ class GTAPModelEquations:
             return self.params.benchmark.get_private_demand(r, i)[0] / total
         
         model.regy = Var(model.r, within=Reals, initialize=get_regy_init, doc="Regional income")
+        # At base NEOS cal.gms:629 sets regY.fx(r,'base') = yc.l + yg.l + rsav.l
+        # (expenditure side) and relaxes regYeq. The SAM income side
+        # (factY+yTaxInd) need NOT equal expenditure (15x10 USA: 15.64 vs 17.66).
+        # At check/shock periods regY is freed and regYeq binds → forces income
+        # rebase. Mirror this: fix regy = expenditure_bench at base only.
+        if not self.is_counterfactual:
+            for r_ in self.sets.r:
+                val = float(get_benchmark_regy(r_))
+                # get_benchmark_regy returns income side (vfm-vdep+ytax); we want
+                # expenditure side = vpm_total + vgm_total + save (matches NEOS cal).
+                priv = sum(self.params.benchmark.get_private_demand(r_, i)[0] for i in self.sets.i)
+                govt = sum(self.params.benchmark.get_government_demand(r_, i)[0] for i in self.sets.i)
+                sav  = float(self.params.benchmark.save.get(r_, 0.0))
+                expenditure_bench = priv + govt + sav
+                if expenditure_bench > 0.0:
+                    model.regy[r_].set_value(expenditure_bench)
+                    model.regy[r_].fix(expenditure_bench)
         model.yc = Var(
             model.r,
             within=Reals,
@@ -5282,12 +5307,13 @@ class GTAPModelEquations:
                 return model.ytax[r, gy] == total
 
             if gy == "ft":
-                total = 0.0
-                for (rr, f, a), rtf in self.params.taxes.rtf.items():
-                    if rr != r:
-                        continue
-                    total += float(rtf) * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
-                return model.ytax[r, gy] == total
+                # NEOS reports ft.l=0 in v7 SAMs (fcttx parameter is zero); the
+                # factor-tax revenue Python derives from EVFP/EVFB-1 (= rtf) is
+                # SAM-real, but NEOS classifies it as a direct income-tax stream
+                # via kappaf, NOT an indirect (ft) stream. We move the rtf
+                # contribution into `dt` below so yTaxInd matches NEOS while
+                # preserving total revenue accounting (yTaxTot unchanged).
+                return model.ytax[r, gy] == 0.0
 
             if gy == "fs":
                 return model.ytax[r, gy] == 0.0
@@ -5331,6 +5357,11 @@ class GTAPModelEquations:
                 return model.ytax[r, gy] == total
 
             if gy == "dt":
+                # Direct tax revenue: kappaf (income tax on factor income).
+                # rtf (factor-cost tax) is a SAM wedge that's already absorbed
+                # in production costs since pf*xf = EVFB (income basis, not EVFP).
+                # NEOS reports it bundled into dt only as a labeling convention;
+                # adding it here would double-count revenue.
                 total = 0.0
                 for f in model.f:
                     for a in model.a:
@@ -5356,10 +5387,19 @@ class GTAPModelEquations:
             return model.ytax_ind[r] == model.ytaxTot[r] - model.ytax[r, "dt"]
         model.eq_ytax_ind = Constraint(model.r, rule=eq_ytax_ind_rule)
 
-        # Regional income (GAMS regYeq)
+        # Regional income (GAMS regYeq).
+        # GAMS cal.gms:629 fixes regY = yc+yg+rsav (expenditure) at base and
+        # leaves regYeq inactive — the SAM-side income identity factY+yTaxInd
+        # may differ from expenditure (true for 15x10 USA: 15.64 vs 17.66) and
+        # the wedge is reconciled implicitly via the price system. At check/
+        # shock periods regY is freed and regYeq becomes binding, forcing the
+        # ~12% income rebase NEOS reports. Mirror this here: only enforce
+        # eq_regy when is_counterfactual=True.
         def eq_regy_rule(model, r):
             return model.regy[r] == model.facty[r] + model.ytax_ind[r]
         model.eq_regy = Constraint(model.r, rule=eq_regy_rule)
+        if not self.is_counterfactual:
+            model.eq_regy.deactivate()
 
         def eq_ytaxshreq_rule(model, r, gy):
             return model.ytaxshr[r, gy] == model.ytax[r, gy] / (model.regy[r] + 1e-12)

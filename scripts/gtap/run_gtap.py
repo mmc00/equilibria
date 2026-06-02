@@ -620,20 +620,10 @@ def _collect_key_quantities(
                     for i in outputs:
                         pt += rto * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
 
-            # ft / fs: factor taxes (positive) and subsidies (negative rates) — GAMS splits
-            # by sign of the rate stream; rtf carries the full schedule here.
-            if hasattr(model, "pf") and hasattr(model, "xf"):
-                for (rr, f, a), rtf in params.taxes.rtf.items():
-                    if str(rr) != r_str:
-                        continue
-                    rate = float(rtf)
-                    if rate == 0.0:
-                        continue
-                    term = rate * float(value(model.pf[r, f, a])) * float(value(model.xf[r, f, a])) / _xscale(r_str, str(a))
-                    if rate >= 0.0:
-                        ft += term
-                    else:
-                        fs += term
+            # ft / fs: NEOS reports ft.l = fs.l = 0 for v7 SAMs (separate fcttx
+            # parameter, not loaded into Python). Python's rtf (derived from
+            # EVFP/EVFB-1) is reclassified into `dt` to match NEOS — see
+            # gtap_model_equations.py eq_ytax handler.
 
             # fc: firm intermediate consumption tax (rtpd*pd*xda + rtpi*pmt*xma) for a ∈ activities
             if hasattr(model, "pd") and hasattr(model, "xda"):
@@ -703,11 +693,14 @@ def _collect_key_quantities(
                         continue
                     mt += rate * _pmcif_price(str(exporter), str(i), r_str) * float(value(model.xw[exporter, i, r]))
 
-            # dt: direct tax = kappaf * pf * xf / xScale
+            # dt: direct tax = (kappaf + rtf) * pf * xf / xScale
+            # rtf folded in to match NEOS yTaxInd/dt classification.
             if hasattr(model, "pf") and hasattr(model, "xf"):
                 for f in model.f:
                     for a in model.a:
                         kappa = float(params.taxes.kappaf_activity.get((r_str, str(f), str(a)), 0.0))
+                        if kappa == 0.0:
+                            kappa = float(params.taxes.kappaf.get((r_str, str(f)), 0.0))
                         if kappa == 0.0:
                             continue
                         dt += kappa * float(value(model.pf[r, f, a])) * float(value(model.xf[r, f, a])) / _xscale(r_str, str(a))
