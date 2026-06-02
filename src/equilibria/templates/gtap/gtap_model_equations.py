@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def prev_t(t_val: str, t_set: tuple) -> "str | None":
+    """Return the period preceding t_val in t_set, or None if t_val is the first.
+
+    Mirrors GAMS ``tsim-1`` lag operator over an ordered set.
+    """
+    idx = t_set.index(t_val)
+    return t_set[idx - 1] if idx > 0 else None
+
+
 @dataclass
 class _InlineReferenceSnapshot:
     """Lightweight snapshot used only for benchmark-aligned initialization.
@@ -65,7 +74,14 @@ class GTAPModelEquations:
         is_counterfactual: bool = False,
         residual_region: Optional[str] = None,
         t0_snapshot: Optional[Any] = None,
+        *,
+        t_set: Tuple[str, ...] = ("base",),
     ):
+        if not t_set:
+            raise ValueError("t_set must be non-empty")
+        if t_set[0] != "base":
+            raise ValueError(f"t_set[0] must be 'base', got {t_set[0]!r}")
+        self._t_set = tuple(t_set)
         # t0_snapshot: a base-solved Pyomo model whose Var levels define the
         # Fisher-index reference period.  When provided, base_pa/base_xaa/
         # base_pefob/base_pmcif/base_xw/base_pabs/base_rgdpmp are read from
@@ -1345,6 +1361,13 @@ class GTAPModelEquations:
         
         # Aliases for trade
         model.rp = Set(initialize=self.sets.r, doc="Regions (alias)")
+
+        # Multi-period sets (Phase 1.1 scaffolding)
+        model.t  = Set(initialize=self._t_set, ordered=True, doc="All periods")
+        model.t0 = Set(within=model.t, initialize=(self._t_set[0],),
+                       ordered=True, doc="Base period")
+        model.ts = Set(within=model.t, initialize=self._t_set[1:],
+                       ordered=True, doc="Simulation periods (non-base)")
     
     def _add_parameters(self, model: "ConcreteModel") -> None:
         """Add all parameters."""
