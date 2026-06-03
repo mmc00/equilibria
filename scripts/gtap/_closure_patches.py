@@ -22,16 +22,19 @@ from typing import Any
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.environ import Constraint, Var, value
 
+from _t_utils import t0
+
 
 def fix_sluggish_pft(model, params, *, label: str = "") -> int:
     """Fix `pft(r,f)` for sluggish factors — they're dangling (no eq references them)."""
     sf_set = set(getattr(params.sets, "sf", []) or [])
     fixed = 0
     if hasattr(model, "pft") and sf_set:
+        base = t0(model)
         for r in model.r:
             for f in model.f:
-                if str(f) in sf_set and not model.pft[r, f].fixed:
-                    model.pft[r, f].fix()
+                if str(f) in sf_set and not model.pft[r, f, base].fixed:
+                    model.pft[r, f, base].fix()
                     fixed += 1
     if fixed and label:
         print(f"[{label}] fixed {fixed} sluggish pft(r,f) (no eq references them)")
@@ -43,16 +46,17 @@ def deactivate_xfteq_for_fixed_mobile(model, params, *, label: str = "") -> int:
     mf_set = set(getattr(params.sets, "mf", []) or [])
     deact = 0
     if hasattr(model, "eq_xfteq") and mf_set:
+        base = t0(model)
         for r in model.r:
             for f in model.f:
                 if str(f) not in mf_set:
                     continue
                 if value(model.xftflag[r, f]) <= 0.0:
                     continue
-                if not model.xft[r, f].fixed:
+                if not model.xft[r, f, base].fixed:
                     continue
                 try:
-                    con = model.eq_xfteq[r, f]
+                    con = model.eq_xfteq[r, f, base]
                 except KeyError:
                     continue
                 if con.active:

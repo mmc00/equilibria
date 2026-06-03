@@ -28,9 +28,9 @@ out = {
         'regy': float(pyo_value(m.regy['USA'])),
         'facty': float(pyo_value(m.facty['USA'])),
         'ytax_ind': float(pyo_value(m.ytax_ind['USA'])),
-        'pft_UnSkLab': float(pyo_value(m.pft['USA','UnSkLab'])),
-        'pft_Land': float(pyo_value(m.pft['USA','Land'])),
-        'pft_Capital': float(pyo_value(m.pft['USA','Capital'])),
+        'pft_UnSkLab': float(pyo_value(m.pft['USA','UnSkLab','base'])),
+        'pft_Land': float(pyo_value(m.pft['USA','Land','base'])),
+        'pft_Capital': float(pyo_value(m.pft['USA','Capital','base'])),
         'pabs': float(pyo_value(m.pabs['USA'])),
     },
 }

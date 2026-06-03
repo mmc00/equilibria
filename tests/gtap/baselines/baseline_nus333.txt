@@ -32,7 +32,7 @@ INFO equilibria.templates.gtap.gtap_solver: MCP is already square or over-determ
 [base] code=1  residual=5.730e-12
 [base] top-25 residuals:
    eq_pmuv: callback=+1.3365e-09  sr=4.29e-03  paired_var=pmuv=1  bounds=[0.001,None]  sc=4.29e-03
-   eq_pwfact: callback=+1.3642e-12  sr=2.42e-04  paired_var=pf[ROW,LAND,AGR]=1.049  bounds=[0.001048996331743243,None]  sc=2.36e-02
+   eq_pwfact: callback=+1.3642e-12  sr=2.42e-04  paired_var=pf[ROW,LAND,AGR,base]=1.049  bounds=[0.001048996331743243,None]  sc=2.36e-02
    eq_pfact[ROW]: callback=+4.5475e-13  sr=4.42e-04  paired_var=pfact[ROW]=1  bounds=[0.001,None]  sc=4.42e-04
    eq_pdeq[ROW,MFG,base]: callback=+2.0606e-13  sr=1.00e-02  paired_var=xda[ROW,MFG,inv,base]=1.789  bounds=[1e-08,None]  sc=1.00e+00
    eq_xweq[ROW,MFG,ROW]: callback=+1.1724e-13  sr=1.49e-02  paired_var=xw[ROW,MFG,ROW,base]=8.882  bounds=[1e-08,None]  sc=1.00e+00
@@ -40,7 +40,7 @@ INFO equilibria.templates.gtap.gtap_solver: MCP is already square or over-determ
    eq_pfact[USA]: callback=-1.1369e-13  sr=3.60e-03  paired_var=pfact[USA]=1  bounds=[0.001,None]  sc=3.60e-03
    eq_pdeq[USA,MFG,base]: callback=-4.2633e-14  sr=1.00e-01  paired_var=xds[USA,MFG,base]=5.69  bounds=[1e-08,None]  sc=1.00e+00
    eq_pdeq[USA,SER,base]: callback=-3.5527e-14  sr=1.00e-01  paired_var=xda[USA,SER,AGR,base]=0.08571  bounds=[1e-08,None]  sc=1.00e+00
-   eq_xft[ROW,LABOR]: callback=+2.8422e-14  sr=1.00e-02  paired_var=xf[ROW,LABOR,MFG]=0.03146  bounds=[1e-08,None]  sc=8.32e-03
+   eq_xft[ROW,LABOR,base]: callback=+2.8422e-14  sr=1.00e-02  paired_var=xf[ROW,LABOR,MFG,base]=0.03146  bounds=[1e-08,None]  sc=8.32e-03
    eq_pigbl: callback=+2.1316e-14  sr=1.45e-01  paired_var=pigbl=1  bounds=[0.0010000000000000002,None]  sc=1.45e-01
    eq_x[ROW,MFG,MFG,base]: callback=+2.1316e-14  sr=9.72e-03  paired_var=x[ROW,MFG,MFG,base]=32.6  bounds=[0,None]  sc=1.00e+00
    eq_pdeq[ROW,SER,base]: callback=+1.4211e-14  sr=1.00e-02  paired_var=xds[ROW,SER,base]=45.18  bounds=[1e-08,None]  sc=1.00e+00
@@ -49,14 +49,14 @@ INFO equilibria.templates.gtap.gtap_solver: MCP is already square or over-determ
    eq_gdpmp[ROW]: callback=+7.1054e-15  sr=6.93e-02  paired_var=gdpmp[ROW]=41.77  bounds=[0,None]  sc=1.00e+00
    eq_x[ROW,SER,SER,base]: callback=+7.1054e-15  sr=9.88e-03  paired_var=xp[ROW,SER,base]=0.4694  bounds=[0,None]  sc=9.88e-03
    eq_pdeq[ROW,AGR,base]: callback=-6.6613e-15  sr=1.00e-02  paired_var=xda[ROW,AGR,SER,base]=0.001717  bounds=[1e-08,None]  sc=1.00e-02
-   eq_pfyeq[ROW,LABOR,MFG]: callback=-6.4393e-15  sr=1.00e+00  paired_var=pf[ROW,LABOR,MFG]=1.201  bounds=[0.00120143992988665,None]  sc=3.50e-03
+   eq_pfyeq[ROW,LABOR,MFG]: callback=-6.4393e-15  sr=1.00e+00  paired_var=pf[ROW,LABOR,MFG,base]=1.201  bounds=[0.00120143992988665,None]  sc=3.50e-03
    eq_gdpmp[USA]: callback=+3.5527e-15  sr=1.27e-01  paired_var=gdpmp[USA]=14.06  bounds=[0,None]  sc=1.00e+00
    eq_pgdpmp[USA]: callback=-3.5527e-15  sr=7.11e-02  paired_var=pgdpmp[USA]=1  bounds=[0.001,None]  sc=7.11e-02
    eq_xd_agg[ROW,MFG,base]: callback=+3.5527e-15  sr=1.00e-02  paired_var=xd[ROW,MFG,base]=21.95  bounds=[0,None]  sc=1.00e+00
    eq_xda[ROW,SER,hhd]: callback=+3.5527e-15  sr=3.96e-02  paired_var=xda[ROW,SER,hhd,base]=13.01  bounds=[1e-08,None]  sc=1.00e+00
    eq_xseq[USA,SER,base]: callback=+3.5527e-15  sr=1.00e+00  paired_var=xds[USA,SER,base]=17.87  bounds=[1e-08,None]  sc=1.00e+00
    eq_yc[ROW]: callback=-3.5527e-15  sr=3.87e-02  paired_var=yc[ROW]=23.45  bounds=[None,None]  sc=1.00e+00
-  baseline solve=0.26s
+  baseline solve=0.22s
 
 === Python shock NUS333 (10% imptx, power scaling) ===
 Applied 10% tariff power shock to 12 imptx entries
@@ -97,7 +97,7 @@ Applied 10% tariff power shock to 12 imptx entries
    eq_xc[USA,SER]: callback=-2.9797e-08  sr=1.01e-01  paired_var=xc[USA,SER]=7.711  bounds=[1e-08,None]  sc=1.00e+00
    eq_xda[USA,MFG,hhd]: callback=+2.8860e-08  sr=2.14e-01  paired_var=xda[USA,MFG,hhd,base]=1.403  bounds=[1e-08,None]  sc=1.00e+00
    eq_xda[ROW,MFG,hhd]: callback=+2.7954e-08  sr=6.06e-02  paired_var=xda[ROW,MFG,hhd,base]=4.99  bounds=[1e-08,None]  sc=1.00e+00
-  shock solve=0.25s
+  shock solve=0.26s
 
 Populated GAMS Vars in out.gdx: 139
 

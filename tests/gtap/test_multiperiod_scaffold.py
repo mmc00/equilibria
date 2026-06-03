@@ -104,6 +104,32 @@ def test_trade_vars_init_broadcasts_across_periods():
         (('USA', 'VegFruit', 'CAN', 'base'),        ('USA', 'VegFruit', 'CAN', 'check')),
     ]:
         if idx_base in m.pa and idx_check in m.pa:
-            assert pyo_value(m.pa[idx_base]) == pytest.approx(pyo_value(m.pa[idx_check]), rel=1e-8)
+            assert pyo_value(m.pa[idx_base]) == pyo_value(m.pa[idx_check])
         if idx_base in m.xw and idx_check in m.xw:
+            # xw had ~2e-9 roundoff per Phase 2.2 report — keep approx for this Var only.
             assert pyo_value(m.xw[idx_base]) == pytest.approx(pyo_value(m.xw[idx_check]), rel=1e-8)
+
+
+def test_factor_vars_have_t_dim():
+    m = _build_3p()
+    assert ('USA', 'UnSkLab', 'VegFruit', 'base') in m.pf
+    assert ('USA', 'UnSkLab', 'VegFruit', 'shock') in m.pfa
+    assert ('USA', 'UnSkLab', 'VegFruit', 'check') in m.xf
+    assert ('USA', 'UnSkLab', 'base') in m.pft
+    assert ('USA', 'UnSkLab', 'shock') in m.pft
+    assert ('USA', 'UnSkLab', 'base') in m.xft
+
+
+def test_factor_vars_init_broadcasts_across_periods():
+    """_lift_to_t broadcasts factor inits to every period (warm start)."""
+    import pytest
+    from pyomo.environ import value as pyo_value
+    m = _build_3p()
+    for (idx_base, idx_chk) in [
+        (('USA', 'UnSkLab', 'VegFruit', 'base'), ('USA', 'UnSkLab', 'VegFruit', 'check')),
+        (('USA', 'UnSkLab', 'base'),              ('USA', 'UnSkLab', 'check')),
+    ]:
+        if idx_base in m.pf and idx_chk in m.pf:
+            assert pyo_value(m.pf[idx_base]) == pyo_value(m.pf[idx_chk])
+        if idx_base in m.pft and idx_chk in m.pft:
+            assert pyo_value(m.pft[idx_base]) == pyo_value(m.pft[idx_chk])

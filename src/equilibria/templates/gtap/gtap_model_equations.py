@@ -648,9 +648,9 @@ class GTAPModelEquations:
         base_pabs = {r: max(float(value(model.pabs[r])), 1e-8) for r in model.r}
         base_rgdpmp = {r: max(float(value(model.rgdpmp[r])), 1e-8) for r in model.r}
 
-        # Scale factor demands (xf) - indexed by (r, f, a)
+        # Scale factor demands (xf) - indexed by (r, f, a, t)
         for key in model.xf:
-            r, f, a = key
+            r, f, a, _t = key
             xscale_val = float(value(model.xscale[r, a]))
             if abs(xscale_val - 1.0) > 1e-12:
                 xf_val = value(model.xf[key])
@@ -861,10 +861,10 @@ class GTAPModelEquations:
         for r in model.r:
             capital_factors = [f for f in model.f if str(f).lower() in ("capital", "cap", "k", "kap")]
             for f in model.f:
-                if hasattr(model, "xft") and (r, f) in model.xft and f in self.sets.mf:
-                    model.xft[r, f].set_value(
+                if hasattr(model, "xft") and (r, f, "base") in model.xft and f in self.sets.mf:
+                    model.xft[r, f, "base"].set_value(
                         sum(
-                            value(model.xf[r, f, a]) / max(value(model.xscale[r, a]), 1e-12)
+                            value(model.xf[r, f, a, "base"]) / max(value(model.xscale[r, a]), 1e-12)
                             for a in model.a
                         )
                     )
@@ -893,8 +893,8 @@ class GTAPModelEquations:
                             continue
                         dt_total += (
                             kappa
-                            * value(model.pf[r, f, a])
-                            * value(model.xf[r, f, a])
+                            * value(model.pf[r, f, a, "base"])
+                            * value(model.xf[r, f, a, "base"])
                             / max(value(model.xscale[r, a]), 1e-12)
                         )
                 model.ytax[r, "dt"].set_value(dt_total)
@@ -940,7 +940,7 @@ class GTAPModelEquations:
 
             if hasattr(model, "facty") and r in model.facty:
                 gross_factor_income = sum(
-                    value(model.pf[r, f, a]) * value(model.xf[r, f, a]) / max(value(model.xscale[r, a]), 1e-12)
+                    value(model.pf[r, f, a, "base"]) * value(model.xf[r, f, a, "base"]) / max(value(model.xscale[r, a]), 1e-12)
                     for f in model.f
                     for a in model.a
                 )
@@ -1125,8 +1125,8 @@ class GTAPModelEquations:
                     kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0))
                     cap_return += (
                         (1.0 - kappa)
-                        * value(model.pf[r, f, a])
-                        * value(model.xf[r, f, a])
+                        * value(model.pf[r, f, a, "base"])
+                        * value(model.xf[r, f, a, "base"])
                         / max(value(model.xscale[r, a]), 1e-12)
                     )
             arent_val = cap_return / max(value(model.kstock[r]), 1e-8) if capital_factors else 0.0
@@ -3252,12 +3252,12 @@ class GTAPModelEquations:
             doc="FOB export price",
         )
         
-        # Factors (4 vars per r,f)
-        model.xft = Var(model.r, model.f, within=NonNegativeReals, initialize=get_factor_supply_init, doc="Factor supply")
-        model.pft = Var(model.r, model.f, within=NonNegativeReals, initialize=get_pft_init, doc="Factor price")
-        model.xf = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_vfm_init, doc="Factor demand")
-        model.pf = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pf_init, doc="Factor price by activity")
-        model.pfa = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pfa_init, doc="Factor price tax inclusive")
+        # Factors (4 vars per r,f) — Phase 2.3: t-indexed
+        model.xft = Var(model.r, model.f, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_factor_supply_init, self._t_set), doc="Factor supply")
+        model.pft = Var(model.r, model.f, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pft_init, self._t_set), doc="Factor price")
+        model.xf = Var(model.r, model.f, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_vfm_init, self._t_set), doc="Factor demand")
+        model.pf = Var(model.r, model.f, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pf_init, self._t_set), doc="Factor price by activity")
+        model.pfa = Var(model.r, model.f, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pfa_init, self._t_set), doc="Factor price tax inclusive")
         model.pfy = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pfy_init, doc="After-tax factor price")
         model.pwfact = Var(within=NonNegativeReals, initialize=1.0, doc="World factor price")
         
@@ -3977,14 +3977,18 @@ class GTAPModelEquations:
                 return ((1.0 + imptx + mtax) * _m_pmcif(exporter, commodity, importer)) / chipm
             return model.pm[exporter, commodity, importer, "base"]
 
-        def _m_pfa(region, factor, activity):
+        def _m_pfa(region, factor, activity, t=None):
+            if t is None:
+                t = "base"
             if if_sub:
-                return model.pf[region, factor, activity] * (1.0 + _factor_tax_value(region, factor, activity))
-            return model.pfa[region, factor, activity]
+                return model.pf[region, factor, activity, t] * (1.0 + _factor_tax_value(region, factor, activity))
+            return model.pfa[region, factor, activity, t]
 
-        def _m_pfy(region, factor, activity):
+        def _m_pfy(region, factor, activity, t=None):
+            if t is None:
+                t = "base"
             if if_sub:
-                return model.pf[region, factor, activity] * (1.0 - _kappaf_value(region, factor, activity))
+                return model.pf[region, factor, activity, t] * (1.0 - _kappaf_value(region, factor, activity))
             return model.pfy[region, factor, activity]
         
         # ========================================================================
@@ -4933,18 +4937,18 @@ class GTAPModelEquations:
         # ========================================================================
 
         # Factor market clearing (distribute xft using gf share)
-        def eq_xft_rule(model, r, f):
+        def eq_xft_rule(model, r, f, t):
             if f not in self.sets.mf:
                 return Constraint.Skip
             if value(model.xftflag[r, f]) <= 0.0:
                 return Constraint.Skip
-            return model.xft[r, f] == sum(model.xf[r, f, a] / model.xscale[r, a] for a in model.a)
-        model.eq_xft = Constraint(model.r, model.f, rule=eq_xft_rule)
+            return model.xft[r, f, t] == sum(model.xf[r, f, a, t] / model.xscale[r, a] for a in model.a)
+        model.eq_xft = Constraint(model.r, model.f, model.t, rule=eq_xft_rule)
 
         # Factor demand (GAMS exact formulation)
         # GAMS: xf(r,f,a,t) =e= af(r,f,a,t)*va(r,a,t)*(pva(r,a,t)/pfa(r,f,a,t))**sigmav(r,a)
         #                       * (lambdaf(r,f,a,t))**(sigmav(r,a)-1)
-        def eq_xfeq_rule(model, r, f, a):
+        def eq_xfeq_rule(model, r, f, a, t):
             af_val = (
                 value(model.af_param[r, f, a])
                 if hasattr(model, "af_param")
@@ -4954,14 +4958,14 @@ class GTAPModelEquations:
                 return Constraint.Skip
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            ratio = model.pva[r, a, "base"] / _m_pfa(r, f, a)
+            ratio = model.pva[r, a, t] / _m_pfa(r, f, a, t)
             sigmav = self._get_sigmav(r, a)
             lambdaf = self._lambdaf(r, f, a)
-            return model.xf[r, f, a] == af_val * model.va[r, a, "base"] * ratio**sigmav * lambdaf ** (sigmav - 1)
-        model.eq_xfeq = Constraint(model.r, model.f, model.a, rule=eq_xfeq_rule)
+            return model.xf[r, f, a, t] == af_val * model.va[r, a, t] * ratio**sigmav * lambdaf ** (sigmav - 1)
+        model.eq_xfeq = Constraint(model.r, model.f, model.a, model.t, rule=eq_xfeq_rule)
 
         # Aggregate supply of factors from production shares
-        def eq_xfteq_rule(model, r, f):
+        def eq_xfteq_rule(model, r, f, t):
             if f not in self.sets.mf:
                 return Constraint.Skip
             if value(model.xftflag[r, f]) <= 0.0:
@@ -4970,8 +4974,8 @@ class GTAPModelEquations:
             if benchmark_supply <= 0:
                 return Constraint.Skip
             elasticity = float(value(model.etaf[r, f]))
-            return model.xft[r, f] == model.aft[r, f] * (model.pft[r, f] / (model.pabs[r] + 1e-12)) ** elasticity
-        model.eq_xfteq = Constraint(model.r, model.f, rule=eq_xfteq_rule)
+            return model.xft[r, f, t] == model.aft[r, f] * (model.pft[r, f, t] / (model.pabs[r] + 1e-12)) ** elasticity
+        model.eq_xfteq = Constraint(model.r, model.f, model.t, rule=eq_xfteq_rule)
 
         # Factor supply / law-of-one-price (GAMS pfeq(r,fp,a)).
         #
@@ -5000,48 +5004,49 @@ class GTAPModelEquations:
                 self.params.elasticities.etaff.get((region, factor, activity), 0.0)
             )
 
-        def eq_pfeq_rule(model, r, f, a):
+        def eq_pfeq_rule(model, r, f, a, t):
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
             gf = float(value(model.gf_share[r, f, a]))
             if gf <= 0.0:
                 return Constraint.Skip
-            pfy = _m_pfy(r, f, a)
+            pfy = _m_pfy(r, f, a, t)
             if f in self.sets.mf:
                 omegaf = _omegaf(r, f)
                 if omegaf == float("inf"):
                     # Perfect mobility: law of one price.
-                    return pfy == model.pft[r, f]
+                    return pfy == model.pft[r, f, t]
                 # Partial CET across activities.
-                return model.xf[r, f, a] == (
-                    model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
-                    * (pfy / model.pft[r, f]) ** omegaf
+                return model.xf[r, f, a, t] == (
+                    model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f, t]
+                    * (pfy / model.pft[r, f, t]) ** omegaf
                 )
             # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq
             # (model.gms:1096). No xft term — sluggish supply scales by gf only.
             etaff = _etaff(r, f, a)
-            return model.xf[r, f, a] == (
+            return model.xf[r, f, a, t] == (
                 model.xscale[r, a] * model.gf_share[r, f, a]
                 * (pfy / model.pabs[r]) ** etaff
             )
-        model.eq_pfeq = Constraint(model.r, model.f, model.a, rule=eq_pfeq_rule)
+        model.eq_pfeq = Constraint(model.r, model.f, model.a, model.t, rule=eq_pfeq_rule)
 
         # Factor prices tax inclusive (GAMS pfaeq)
-        def eq_pfaeq_rule(model, r, f, a):
+        def eq_pfaeq_rule(model, r, f, a, t):
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
             factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0))
-            return model.pfa[r, f, a] == model.pf[r, f, a] * (1.0 + factor_tax)
-        model.eq_pfaeq = Constraint(model.r, model.f, model.a, rule=eq_pfaeq_rule)
+            return model.pfa[r, f, a, t] == model.pf[r, f, a, t] * (1.0 + factor_tax)
+        model.eq_pfaeq = Constraint(model.r, model.f, model.a, model.t, rule=eq_pfaeq_rule)
 
         # Factor prices post-tax/subsidy (GAMS pfyeq)
+        # pfy stays single-period; reference pf at "base" since pfy itself has no t.
         def eq_pfyeq_rule(model, r, f, a):
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
             kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0))
             if kappa == 0.0:
                 kappa = float(self.params.taxes.kappaf.get((r, f), 0.0))
-            return model.pfy[r, f, a] == model.pf[r, f, a] * (1.0 - kappa)
+            return model.pfy[r, f, a] == model.pf[r, f, a, "base"] * (1.0 - kappa)
         model.eq_pfyeq = Constraint(model.r, model.f, model.a, rule=eq_pfyeq_rule)
 
         # Note: eq_pvaeq already defined above with GAMS formulation
@@ -5054,17 +5059,17 @@ class GTAPModelEquations:
         # Construct it now using a closure that references model.pf0/xf0 lazily.
         def eq_pfact_rule(model, r):
             m_bs = sum(
-                model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                model.pf0[r, f, a] * model.xf[r, f, a, "base"] / model.xscale[r, a]
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
             m_sb = sum(
-                model.pf[r, f, a] * model.xf0[r, f, a] / model.xscale[r, a]
+                model.pf[r, f, a, "base"] * model.xf0[r, f, a] / model.xscale[r, a]
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
             )
             m_ss = sum(
-                model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                model.pf[r, f, a, "base"] * model.xf[r, f, a, "base"] / model.xscale[r, a]
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
@@ -5087,7 +5092,7 @@ class GTAPModelEquations:
             if kstock_bench <= 0.0 or xft_bench_total <= 0.0:
                 return Constraint.Skip
             krat = xft_bench_total / kstock_bench
-            return krat * model.kstock[r] == sum(model.xft[r, f] for f in capital_factors)
+            return krat * model.kstock[r] == sum(model.xft[r, f, "base"] for f in capital_factors)
         model.eq_kstock = Constraint(model.r, rule=eq_kstock_rule)
         
         # ========================================================================
@@ -5321,7 +5326,7 @@ class GTAPModelEquations:
             for f in capital_factors:
                 for a in model.a:
                     kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0))
-                    cap_return += (1.0 - kappa) * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                    cap_return += (1.0 - kappa) * model.pf[r, f, a, "base"] * model.xf[r, f, a, "base"] / model.xscale[r, a]
             return model.arent[r] == cap_return / (model.kstock[r] + 1e-12)
         model.eq_arent = Constraint(model.r, rule=eq_arent_rule)
 
@@ -5353,7 +5358,7 @@ class GTAPModelEquations:
         # Factor income net of depreciation (GAMS factYeq)
         def eq_facty_rule(model, r):
             return model.facty[r] == (
-                sum(model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a] for f in model.f for a in model.a)
+                sum(model.pf[r, f, a, "base"] * model.xf[r, f, a, "base"] / model.xscale[r, a] for f in model.f for a in model.a)
                 - model.fdepr[r] * model.pi[r] * model.kstock[r]
             )
         model.eq_facty = Constraint(model.r, rule=eq_facty_rule)
@@ -5433,7 +5438,7 @@ class GTAPModelEquations:
                             kappa = float(self.params.taxes.kappaf.get((r, f), 0.0))
                         if kappa == 0.0:
                             continue
-                        total += kappa * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                        total += kappa * model.pf[r, f, a, "base"] * model.xf[r, f, a, "base"] / model.xscale[r, a]
                 return model.ytax[r, gy] == total
 
             return model.ytax[r, gy] == 0.0
@@ -5675,11 +5680,11 @@ class GTAPModelEquations:
             for f in self.sets.f:
                 for a in self.sets.a:
                     try:
-                        xf0_data[(r, f, a)] = float(value(model.xf[r, f, a]))
+                        xf0_data[(r, f, a)] = float(value(model.xf[r, f, a, "base"]))
                     except (KeyError, ValueError):
                         xf0_data[(r, f, a)] = 0.0
                     try:
-                        pf0_data[(r, f, a)] = float(value(model.pf[r, f, a]))
+                        pf0_data[(r, f, a)] = float(value(model.pf[r, f, a, "base"]))
                     except (KeyError, ValueError):
                         pf0_data[(r, f, a)] = 1.0
         model.xf0 = Param(model.r, model.f, model.a, initialize=xf0_data, default=0.0, mutable=False)
@@ -5731,17 +5736,17 @@ class GTAPModelEquations:
             # M_sb = mqfactw(t,t0)  → pf  * xf0
             # M_ss = mqfactw(t,t)   → pf  * xf
             m_bs = sum(
-                model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                model.pf0[r, f, a] * model.xf[r, f, a, "base"] / model.xscale[r, a]
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
             m_sb = sum(
-                model.pf[r, f, a] * model.xf0[r, f, a] / model.xscale[r, a]
+                model.pf[r, f, a, "base"] * model.xf0[r, f, a] / model.xscale[r, a]
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
             )
             m_ss = sum(
-                model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                model.pf[r, f, a, "base"] * model.xf[r, f, a, "base"] / model.xscale[r, a]
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
@@ -5864,8 +5869,8 @@ class GTAPModelEquations:
             for r in model.r:
                 for f in model.f:
                     for a in model.a:
-                        if (r, f, a) in model.pfa:
-                            _fix_component(model.pfa[r, f, a], value(_m_pfa(r, f, a)))
+                        if (r, f, a, "base") in model.pfa:
+                            _fix_component(model.pfa[r, f, a, "base"], value(_m_pfa(r, f, a)))
                         if (r, f, a) in model.pfy:
                             _fix_component(model.pfy[r, f, a], value(_m_pfy(r, f, a)))
     
@@ -5907,5 +5912,5 @@ class GTAPModelEquations:
 
     def _factor_price_term(self, model: "ConcreteModel", r: str, f: str, a: str):
         if hasattr(model, "pfa"):
-            return model.pfa[r, f, a]
-        return model.pf[r, f, a]
+            return model.pfa[r, f, a, "base"]
+        return model.pf[r, f, a, "base"]

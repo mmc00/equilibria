@@ -243,6 +243,8 @@ scripts/gtap/*
 !scripts/gtap/compare_9x10_rungtap.py
 !scripts/gtap/snapshot_15x10_base.py
 !scripts/gtap/inventory_vars_eqs.py
+!scripts/gtap/_t_utils.py
+!scripts/gtap/_closure_patches.py
 
 # NUS333 head-to-head workspace: keep scripts + small JSON/MD reports,
 # ignore generated solver artefacts (RunGTAP/GEMPACK + Python caches).
