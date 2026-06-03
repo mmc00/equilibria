@@ -455,13 +455,22 @@ def _fix_lagged_state(
     if tprev is None:
         return
 
+    import pyomo.core.base.param as _pm
+
     for var_name, _dims in LAGGED_VARS_WITH_DIMS:
         var = getattr(model, var_name, None)
         if var is None:
             continue
-        if not isinstance(var, _PyoVar):
-            # pmuv/pwfact may be Param in some closures — silently skip.
+        is_var = isinstance(var, _PyoVar)
+        is_param = isinstance(var, _pm.Param)
+        if not (is_var or is_param):
             continue
+        param_fixed_set: set | None = None
+        if is_param:
+            param_fixed_set = getattr(var, "_iterloop_fixed_indices", None)
+            if param_fixed_set is None:
+                param_fixed_set = set()
+                var._iterloop_fixed_indices = param_fixed_set
         for idx in list(var.keys()):
             if isinstance(idx, tuple):
                 if idx[-1] != tprev:
@@ -474,4 +483,12 @@ def _fix_lagged_state(
                 raise RuntimeError(
                     f"lagged var {var_name}[{idx}] has no value"
                 )
-            var[idx].fix(float(cv))
+            if is_var:
+                var[idx].fix(float(cv))
+            else:
+                # mutable Param: re-set value (idempotent) and record as fixed.
+                try:
+                    var[idx].set_value(float(cv))
+                except Exception:
+                    pass
+                param_fixed_set.add(idx)
