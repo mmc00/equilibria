@@ -177,3 +177,20 @@ def test_price_agg_vars_have_t_dim():
     assert ('USA', 'base') in m.pgdpmp
     assert ('USA', 'base') in m.gdpmp
     assert ('USA', 'base') in m.rgdpmp
+
+
+def test_welfare_savings_vars_have_t_dim():
+    m = _build(("base", "check", "shock"))
+    # Per-region utility/savings vars
+    for period in ("base", "check", "shock"):
+        assert ('USA', period) in m.uh, f"uh missing for {period}"
+        assert ('USA', period) in m.ug, f"ug missing for {period}"
+        assert ('USA', period) in m.us, f"us missing for {period}"
+        assert ('USA', period) in m.u, f"u missing for {period}"
+        assert ('USA', period) in m.pcons, f"pcons missing for {period}"
+        assert ('USA', period) in m.psave, f"psave missing for {period}"
+        assert ('USA', period) in m.savf, f"savf missing for {period}"
+    # Global rate of return: scalar-per-period
+    assert 'base' in m.rorg, "rorg missing base"
+    assert 'check' in m.rorg, "rorg missing check"
+    assert 'shock' in m.rorg, "rorg missing shock"
