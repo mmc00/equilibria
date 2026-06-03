@@ -3689,32 +3689,32 @@ class GTAPModelEquations:
         vcif_p = getattr(bench, "vcif", {}) if bench else {}
 
         # benchmark.vxsb/vfob/vcif/vmsb are keyed (r, i, rp) per loader (line 1158-1161)
-        def _imptx_init(m, r, i, rp):
+        def _imptx_init(m, r, i, rp, t):
             vcif = float(vcif_p.get((r, i, rp), 0.0) or 0.0)
             vmsb = float(vmsb_p.get((r, i, rp), 0.0) or 0.0)
             if vcif > 1e-12 and (r, i, rp) not in imptx_p:
                 return (vmsb - vcif) / vcif
             return float(imptx_p.get((r, i, rp), 0.0) or 0.0)
 
-        def _exptx_init(m, r, i, rp):
+        def _exptx_init(m, r, i, rp, t):
             vxsb = float(vxsb_p.get((r, i, rp), 0.0) or 0.0)
             vfob = float(vfob_p.get((r, i, rp), 0.0) or 0.0)
             if vxsb > 1e-12:
                 return (vfob - vxsb) / vxsb
             return 0.0
 
-        model.imptx = Param(model.r, model.i, model.rp, within=Reals, initialize=_imptx_init, mutable=True, doc="Bilateral import taxes")
-        model.exptx = Param(model.r, model.i, model.rp, within=Reals, initialize=_exptx_init, mutable=True, doc="Bilateral export taxes")
+        model.imptx = Param(model.r, model.i, model.rp, model.t, within=Reals, initialize=_imptx_init, mutable=True, doc="Bilateral import taxes (per period)")
+        model.exptx = Param(model.r, model.i, model.rp, model.t, within=Reals, initialize=_exptx_init, mutable=True, doc="Bilateral export taxes (per period)")
 
-        def _prdtx_init(m, r, a, i):
+        def _prdtx_init(m, r, a, i, t):
             return float(prdtx_init.get((r, a, i), 0.0) or 0.0)
-        model.prdtx = Param(model.r, model.a, model.i, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax")
+        model.prdtx = Param(model.r, model.a, model.i, model.t, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax (per period)")
 
         rtf_p = getattr(self.params.taxes, "rtf", {}) or {}
-        def _fcttx_init(m, r, f, a):
+        def _fcttx_init(m, r, f, a, t):
             return float(rtf_p.get((r, f, a), 0.0) or 0.0)
-        model.fcttx = Param(model.r, model.f, model.a, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production")
-        model.fctts = Param(model.r, model.f, model.a, within=Reals, initialize=0.0, mutable=True, doc="Subsidies on factors of production")
+        model.fcttx = Param(model.r, model.f, model.a, model.t, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production (per period)")
+        model.fctts = Param(model.r, model.f, model.a, model.t, within=Reals, initialize=0.0, mutable=True, doc="Subsidies on factors of production (per period)")
 
         # pmuv: Tornqvist MUV deflator (model.gms:1237-1247). When closure
         # supplies rmuv/imuv baskets, declare as Var and add eq_pmuv after
@@ -3738,7 +3738,7 @@ class GTAPModelEquations:
         def _p_rule(m, r, a, i):
             if (r, a, i) not in x_flag:
                 return 1.0
-            return m.ps[r, i, "base"] / (1.0 + m.prdtx[r, a, i])
+            return m.ps[r, i, "base"] / (1.0 + m.prdtx[r, a, i, "base"])
         model.p = Expression(model.r, model.a, model.i, rule=_p_rule, doc="Pre-tax producer price")
 
         def _ytaxInd_rule(m, r):
@@ -5870,7 +5870,7 @@ class GTAPModelEquations:
                 for j in self._imuv:
                     for d in self.sets.r:
                         try:
-                            ex = float(value(model.exptx[s, j, d]))
+                            ex = float(value(model.exptx[s, j, d, "base"]))
                         except Exception:
                             ex = 0.0
                         pefob0_data[(s, j, d)] = 1.0 + ex

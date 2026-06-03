@@ -420,12 +420,17 @@ class GTAPSolver:
                         var[idx].fix(1.0)
                         fixed_count += 1
         
-        # Fix bilateral taxes where no trade
+        # Fix bilateral taxes where no trade (only applies when declared as Vars;
+        # after Phase 2.8 imptx/exptx are mutable Params — already constant during solve).
+        from pyomo.environ import Var as _PYO_VAR
         tax_trade_vars = ["imptx", "exptx"]
         for var_name in tax_trade_vars:
             if not hasattr(self.model, var_name):
                 continue
             var = getattr(self.model, var_name)
+            if not isinstance(var, _PYO_VAR):
+                # Mutable Param — no fixing needed; it does not enter the MCP.
+                continue
             for idx in var:
                 if len(idx) >= 3:
                     r, i, rp = idx[0], idx[1], idx[2]

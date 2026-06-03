@@ -211,3 +211,24 @@ def test_all_vars_have_t_dim():
         if not any(x in ('base', 'check', 'shock') for x in sample_t):
             missing.append(v.name)
     assert missing == [], f"Vars missing t dim: {sorted(missing)}"
+
+
+def test_policy_params_have_t_dim():
+    """Phase 2.8: mutable policy Params must carry t as last dimension."""
+    m = _build(("base", "check", "shock"))
+    # imptx: (r, i, rp, t)
+    assert ('USA', 'VegFruit', 'CAN', 'base') in m.imptx
+    assert ('USA', 'VegFruit', 'CAN', 'check') in m.imptx
+    assert ('USA', 'VegFruit', 'CAN', 'shock') in m.imptx
+    # exptx: (r, i, rp, t)
+    assert ('USA', 'VegFruit', 'CAN', 'base') in m.exptx
+    assert ('USA', 'VegFruit', 'CAN', 'check') in m.exptx
+    # prdtx: (r, a, i, t)
+    assert ('USA', 'VegFruit', 'VegFruit', 'base') in m.prdtx
+    assert ('USA', 'VegFruit', 'VegFruit', 'check') in m.prdtx
+    # fcttx: (r, f, a, t)
+    assert ('USA', 'UnSkLab', 'VegFruit', 'base') in m.fcttx
+    assert ('USA', 'UnSkLab', 'VegFruit', 'check') in m.fcttx
+    # fctts: (r, f, a, t)
+    assert ('USA', 'UnSkLab', 'VegFruit', 'base') in m.fctts
+    assert ('USA', 'UnSkLab', 'VegFruit', 'shock') in m.fctts
