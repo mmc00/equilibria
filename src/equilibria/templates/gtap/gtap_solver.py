@@ -1028,10 +1028,8 @@ class GTAPSolver:
         # Get Walras value
         walras_val = float('inf')
         if hasattr(self.model, "walras"):
-            try:
-                walras_val = value(self.model.walras["base"])
-            except (KeyError, TypeError):
-                walras_val = value(self.model.walras)
+            t_label = next(iter(self.model.t))
+            walras_val = value(self.model.walras[t_label])
         
         # Get iterations
         iterations = results.solver.get("iterations", 0) or 0

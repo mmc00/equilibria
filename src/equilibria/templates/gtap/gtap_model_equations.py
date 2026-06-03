@@ -5070,17 +5070,17 @@ class GTAPModelEquations:
         # Construct it now using a closure that references model.pf0/xf0 lazily.
         def eq_pfact_rule(model, r, t):
             m_bs = sum(
-                model.pf0[r, f, a] * model.xf[r, f, a, "base"] / model.xscale[r, a]
+                model.pf0[r, f, a] * model.xf[r, f, a, t] / model.xscale[r, a]
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
             m_sb = sum(
-                model.pf[r, f, a, "base"] * model.xf0[r, f, a] / model.xscale[r, a]
+                model.pf[r, f, a, t] * model.xf0[r, f, a] / model.xscale[r, a]
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
             )
             m_ss = sum(
-                model.pf[r, f, a, "base"] * model.xf[r, f, a, "base"] / model.xscale[r, a]
+                model.pf[r, f, a, t] * model.xf[r, f, a, t] / model.xscale[r, a]
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
@@ -5754,17 +5754,17 @@ class GTAPModelEquations:
             # M_sb = mqfactw(t,t0)  → pf  * xf0
             # M_ss = mqfactw(t,t)   → pf  * xf
             m_bs = sum(
-                model.pf0[r, f, a] * model.xf[r, f, a, "base"] / model.xscale[r, a]
+                model.pf0[r, f, a] * model.xf[r, f, a, t] / model.xscale[r, a]
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
             m_sb = sum(
-                model.pf[r, f, a, "base"] * model.xf0[r, f, a] / model.xscale[r, a]
+                model.pf[r, f, a, t] * model.xf0[r, f, a] / model.xscale[r, a]
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
             )
             m_ss = sum(
-                model.pf[r, f, a, "base"] * model.xf[r, f, a, "base"] / model.xscale[r, a]
+                model.pf[r, f, a, t] * model.xf[r, f, a, t] / model.xscale[r, a]
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
@@ -5807,11 +5807,11 @@ class GTAPModelEquations:
                 # M_bs = pefob0 * xw    (sum over rmuv×imuv×r)
                 # M_sb = pefob  * xw0
                 # M_ss = pefob  * xw
-                m_bs = sum(m.pefob0[s, j, d] * m.xw[s, j, d, "base"]
+                m_bs = sum(m.pefob0[s, j, d] * m.xw[s, j, d, t]
                            for s in rmuv_local for j in imuv_local for d in m.r)
-                m_sb = sum(m.pefob[s, j, d, "base"] * m.xw0[s, j, d]
+                m_sb = sum(m.pefob[s, j, d, t] * m.xw0[s, j, d]
                            for s in rmuv_local for j in imuv_local for d in m.r)
-                m_ss = sum(m.pefob[s, j, d, "base"] * m.xw[s, j, d, "base"]
+                m_ss = sum(m.pefob[s, j, d, t] * m.xw[s, j, d, t]
                            for s in rmuv_local for j in imuv_local for d in m.r)
                 return m.pmuv[t] * m.pmuv[t] * m.mqmuv_bb * m_bs == m_sb * m_ss
             model.eq_pmuv = Constraint(model.t, rule=eq_pmuv_rule)
