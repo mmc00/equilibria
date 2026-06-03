@@ -303,7 +303,21 @@ def compare_phase(model_py, gams_all: dict, t_label: str, tol_rel: float, tol_ab
                 from pyomo.core import value
                 p_val = float(value(model_py))
             except Exception:
-                p_val = None
+                # model_py is an IndexedVar (t-indexed scalar) — try base label
+                try:
+                    base_label = next(iter(model_py.keys()))
+                    p_val = float(value(model_py[base_label]))
+                except Exception:
+                    p_val = None
+        # For t-indexed scalar Vars (body empty), try t_label or "base" as index
+        if p_val is None and not body:
+            from pyomo.core import value as _pv
+            for _t in (t_label, "base"):
+                try:
+                    p_val = float(_pv(model_py[_t]))
+                    break
+                except Exception:
+                    pass
         if p_val is None:
             n_missing += 1
             continue

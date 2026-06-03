@@ -549,7 +549,7 @@ def _collect_key_quantities(
 
         for r in model.r:
             regy_val = float(value(model.regy[r, t0(model)])) if hasattr(model, "regy") else 0.0
-            pabs_val = float(value(model.pabs[r])) if hasattr(model, "pabs") else 1.0
+            pabs_val = float(value(model.pabs[r, t0(model)])) if hasattr(model, "pabs") else 1.0
             yc_val = float(value(model.yc[r, t0(model)])) if hasattr(model, "yc") else 0.0
             yg_val = float(value(model.yg[r, t0(model)])) if hasattr(model, "yg") else 0.0
             yi_val = float(value(model.yi[r, t0(model)])) if hasattr(model, "yi") else 0.0
@@ -572,10 +572,10 @@ def _collect_key_quantities(
             rgdpmp[str(r)] = gdp_val / pabs_val if abs(pabs_val) > 1e-14 else 0.0
             rsav[str(r)] = float(value(model.rsav[r, t0(model)])) if hasattr(model, "rsav") else (regy_val - yc_val - yg_val)
             savf[str(r)] = yi_val
-            arent[str(r)] = float(value(model.pfact[r])) if hasattr(model, "pfact") else 0.0
+            arent[str(r)] = float(value(model.pfact[r, t0(model)])) if hasattr(model, "pfact") else 0.0
             kapend[str(r)] = kstock_val
-            rorc[str(r)] = float(value(model.pfact[r])) if hasattr(model, "pfact") else 0.0
-            rore[str(r)] = float(value(model.pwfact)) if hasattr(model, "pwfact") else 0.0
+            rorc[str(r)] = float(value(model.pfact[r, t0(model)])) if hasattr(model, "pfact") else 0.0
+            rore[str(r)] = float(value(model.pwfact[t0(model)])) if hasattr(model, "pwfact") else 0.0
             risk[str(r)] = rorc[str(r)] - rore[str(r)]
             pop[str(r)] = 1.0
             ug[str(r)] = yg_val
@@ -598,7 +598,7 @@ def _collect_key_quantities(
 
         # Scalar/global proxies represented as singleton buckets.
         if hasattr(model, "pwfact"):
-            buckets["rorg"] = {"global": float(value(model.pwfact))}
+            buckets["rorg"] = {"global": float(value(model.pwfact[t0(model)]))}
 
     # ytax(r, gy) following GAMS canonical model.gms:642-686:
     # one bucket per region × tax stream (pt, ft, fs, fc, pc, gc, ic, et, mt, dt).

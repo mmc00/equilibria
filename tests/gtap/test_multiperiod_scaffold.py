@@ -161,3 +161,19 @@ def test_regy_fixed_only_at_base():
     assert m.regy['USA', 'base'].fixed
     assert not m.regy['USA', 'check'].fixed
     assert not m.regy['USA', 'shock'].fixed
+
+
+def test_price_agg_vars_have_t_dim():
+    m = _build(("base", "check", "shock"))
+    # Scalar vars (indexed by t only)
+    assert 'base' in m.pmuv and 'check' in m.pmuv and 'shock' in m.pmuv
+    assert 'base' in m.pwfact and 'check' in m.pwfact
+    assert 'base' in m.pnum
+    assert 'base' in m.walras
+    # Per-region aggregates
+    assert ('USA', 'base') in m.pabs
+    assert ('USA', 'check') in m.pabs
+    assert ('USA', 'base') in m.pfact
+    assert ('USA', 'base') in m.pgdpmp
+    assert ('USA', 'base') in m.gdpmp
+    assert ('USA', 'base') in m.rgdpmp

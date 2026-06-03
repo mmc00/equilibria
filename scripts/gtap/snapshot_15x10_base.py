@@ -33,7 +33,7 @@ out = {
         'pft_UnSkLab': float(pyo_value(m.pft['USA','UnSkLab','base'])),
         'pft_Land': float(pyo_value(m.pft['USA','Land','base'])),
         'pft_Capital': float(pyo_value(m.pft['USA','Capital','base'])),
-        'pabs': float(pyo_value(m.pabs['USA'])),
+        'pabs': float(pyo_value(m.pabs['USA', _t])),
     },
 }
 print(json.dumps(out, indent=2))

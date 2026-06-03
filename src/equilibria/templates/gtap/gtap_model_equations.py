@@ -579,10 +579,10 @@ class GTAPModelEquations:
             delta_r = sum(delta_xi.get((r, i), 0.0) for i in model.i)
             if abs(delta_r) < 1e-14:
                 continue
-            old_gdpmp = float(pyo_value(model.gdpmp[r]))
-            model.gdpmp[r].set_value(max(old_gdpmp + delta_r, 1e-8))
-            old_rgdpmp = float(pyo_value(model.rgdpmp[r]))
-            model.rgdpmp[r].set_value(max(old_rgdpmp + delta_r, 1e-8))
+            old_gdpmp = float(pyo_value(model.gdpmp[r, "base"]))
+            model.gdpmp[r, "base"].set_value(max(old_gdpmp + delta_r, 1e-8))
+            old_rgdpmp = float(pyo_value(model.rgdpmp[r, "base"]))
+            model.rgdpmp[r, "base"].set_value(max(old_rgdpmp + delta_r, 1e-8))
 
         updated = sum(1 for v in delta_xi.values() if abs(v) > 1e-14)
         if updated:
@@ -645,8 +645,8 @@ class GTAPModelEquations:
             for i in model.i
             for rp in model.rp
         }
-        base_pabs = {r: max(float(value(model.pabs[r])), 1e-8) for r in model.r}
-        base_rgdpmp = {r: max(float(value(model.rgdpmp[r])), 1e-8) for r in model.r}
+        base_pabs = {r: max(float(value(model.pabs[r, "base"])), 1e-8) for r in model.r}
+        base_rgdpmp = {r: max(float(value(model.rgdpmp[r, "base"])), 1e-8) for r in model.r}
 
         # Scale factor demands (xf) - indexed by (r, f, a, t)
         for key in model.xf:
@@ -855,8 +855,8 @@ class GTAPModelEquations:
             for i in model.i
             for rp in model.rp
         }
-        base_pabs = {r: max(float(value(model.pabs[r])), 1e-8) for r in model.r}
-        base_rgdpmp = {r: max(float(value(model.rgdpmp[r])), 1e-8) for r in model.r}
+        base_pabs = {r: max(float(value(model.pabs[r, "base"])), 1e-8) for r in model.r}
+        base_rgdpmp = {r: max(float(value(model.rgdpmp[r, "base"])), 1e-8) for r in model.r}
 
         for r in model.r:
             capital_factors = [f for f in model.f if str(f).lower() in ("capital", "cap", "k", "kap")]
@@ -1096,11 +1096,11 @@ class GTAPModelEquations:
                     mqtrade_00 += pexp_0 * xexp_0 - pimp_0 * ximp_0
 
             gdp_current = max(mqabs_tt + mqtrade_tt, 1e-8)
-            model.gdpmp[r].set_value(gdp_current)
+            model.gdpmp[r, "base"].set_value(gdp_current)
 
             if mqabs_00 > 1e-12 and mqabs_0t > 1e-12:
                 pabs_fisher = base_pabs[r] * math.sqrt((mqabs_t0 / mqabs_00) * (mqabs_tt / mqabs_0t))
-                model.pabs[r].set_value(max(pabs_fisher, 1e-8))
+                model.pabs[r, "base"].set_value(max(pabs_fisher, 1e-8))
 
             mqgdp_00 = mqabs_00 + mqtrade_00
             mqgdp_t0 = mqabs_t0 + mqtrade_t0
@@ -1108,11 +1108,11 @@ class GTAPModelEquations:
             if self.is_counterfactual:
                 if mqgdp_00 > 1e-12 and mqgdp_t0 > 1e-12 and mqgdp_0t > 1e-12:
                     rgdp_fisher = base_rgdpmp[r] * math.sqrt((gdp_current / mqgdp_00) * (mqgdp_0t / mqgdp_t0))
-                    model.rgdpmp[r].set_value(max(rgdp_fisher, 1e-8))
+                    model.rgdpmp[r, "base"].set_value(max(rgdp_fisher, 1e-8))
             else:
                 # Baseline: rgdpmp = gdpmp (replicates GAMS rgdpmp.l = gdpmp.l assignment).
-                model.rgdpmp[r].set_value(max(gdp_current, 1e-8))
-            model.pgdpmp[r].set_value(max(gdp_current / max(value(model.rgdpmp[r]), 1e-8), 1e-8))
+                model.rgdpmp[r, "base"].set_value(max(gdp_current, 1e-8))
+            model.pgdpmp[r, "base"].set_value(max(gdp_current / max(value(model.rgdpmp[r, "base"]), 1e-8), 1e-8))
             pi_val = max(value(model.pi[r, "base"]), 1e-8)
             model.xiagg[r, "base"].set_value(max(value(model.yi[r, "base"]) / pi_val, 1e-8))
             model.kapEnd[r].set_value(
@@ -1156,7 +1156,7 @@ class GTAPModelEquations:
             for r in model.r
             if str(r) == self.residual_region
         )
-        model.walras.set_value(residual_gap)
+        model.walras["base"].set_value(residual_gap)
 
     def _refresh_cet_share_state(self, model: "ConcreteModel") -> None:
         """Recalibrate top-level CET shares from the current benchmark-consistent state.
@@ -3259,7 +3259,7 @@ class GTAPModelEquations:
         model.pf = Var(model.r, model.f, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pf_init, self._t_set), doc="Factor price by activity")
         model.pfa = Var(model.r, model.f, model.a, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pfa_init, self._t_set), doc="Factor price tax inclusive")
         model.pfy = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pfy_init, doc="After-tax factor price")
-        model.pwfact = Var(within=NonNegativeReals, initialize=1.0, doc="World factor price")
+        model.pwfact = Var(model.t, within=NonNegativeReals, initialize=1.0, doc="World factor price")
         
         # Income (3 vars per r) - GAMS-style benchmark calibration
         def get_benchmark_yc(r):
@@ -3565,18 +3565,18 @@ class GTAPModelEquations:
         )
         
         # Numeraire (all prices = 1.0 like GAMS)
-        model.pnum = Var(within=NonNegativeReals, initialize=1.0, doc="Numeraire")
-        model.pabs = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Aggregate absorption price")
+        model.pnum = Var(model.t, within=NonNegativeReals, initialize=1.0, doc="Numeraire")
+        model.pabs = Var(model.r, model.t, within=NonNegativeReals, initialize=1.0, doc="Aggregate absorption price")
         model.pi = Var(model.r, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pi_benchmark_init, self._t_set), doc="Investment price deflator")
-        model.pfact = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Regional factor price")
+        model.pfact = Var(model.r, model.t, within=NonNegativeReals, initialize=1.0, doc="Regional factor price")
         model.kstock = Var(model.r, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_kstock_init, self._t_set), doc="Capital stock")
         model.kapEnd = Var(model.r, within=NonNegativeReals, initialize=get_kapend_init, doc="End-of-period capital stock")
         model.arent = Var(model.r, within=NonNegativeReals, initialize=0.05, doc="Rate of return after tax")
         model.rorc = Var(model.r, within=Reals, initialize=0.05, doc="Net rate of return to capital")
         model.rore = Var(model.r, within=Reals, initialize=0.05, doc="Expected rate of return")
-        model.gdpmp = Var(model.r, within=NonNegativeReals, initialize=get_gdpmp_init, doc="Nominal GDP at market prices")
-        model.rgdpmp = Var(model.r, within=NonNegativeReals, initialize=get_gdpmp_init, doc="Real GDP at market prices")
-        model.pgdpmp = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="GDP price deflator")
+        model.gdpmp = Var(model.r, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_gdpmp_init, self._t_set), doc="Nominal GDP at market prices")
+        model.rgdpmp = Var(model.r, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_gdpmp_init, self._t_set), doc="Real GDP at market prices")
+        model.pgdpmp = Var(model.r, model.t, within=NonNegativeReals, initialize=1.0, doc="GDP price deflator")
         model.xiagg = Var(model.r, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xiagg_init, self._t_set), doc="Aggregate investment volume")
         # Utility and savings aggregates (single household representative)
         model.pcons = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Consumer price index")
@@ -3621,7 +3621,7 @@ class GTAPModelEquations:
         model.pigbl = Var(within=NonNegativeReals, initialize=get_pigbl_init, doc="Price of global investment")
         model.chiSave = Var(within=NonNegativeReals, initialize=1.0, doc="Savings price adjustment")
         model.rorg = Var(within=NonNegativeReals, initialize=1.0, doc="Global rate of return")
-        model.walras = Var(within=Reals, initialize=0.0, doc="Walras check")
+        model.walras = Var(model.t, within=Reals, initialize=0.0, doc="Walras check")
 
         # === Tier B/D: tax rates (broadcast from params), pmuv, derived prices, CDE elasticities,
         # ytaxInd, chiInv. Placed AFTER all base Vars so Expressions can reference them. ===
@@ -3684,10 +3684,10 @@ class GTAPModelEquations:
         self._rmuv = rmuv_set
         self._imuv = imuv_set
         if rmuv_set and imuv_set:
-            model.pmuv = Var(within=NonNegativeReals, initialize=1.0,
+            model.pmuv = Var(model.t, within=NonNegativeReals, initialize=1.0,
                              bounds=(0.001, None), doc="Tornqvist MUV deflator")
         else:
-            model.pmuv = Param(within=Reals, initialize=1.0, mutable=True,
+            model.pmuv = Param(model.t, within=Reals, initialize=1.0, mutable=True,
                                doc="Price of HIC manufactured exports (frozen)")
 
         # p(r,a,i) = ps(r,i)/(1+prdtx) when xFlag, else 1 (cal.gms:293-294)
@@ -4783,7 +4783,7 @@ class GTAPModelEquations:
             i_str = str(m)
             has_supply = any(alphaa_tmg.get((str(r), i_str), 0.0) > 0.0 for r in self.sets.r)
             if not has_supply:
-                return model.ptmg[m, "base"] == model.pnum
+                return model.ptmg[m, "base"] == model.pnum["base"]
             sigmamg = float(self.params.elasticities.sigmam.get(i_str, 1.0))
             if abs(sigmamg - 1.0) < 1e-8:
                 sigmamg = 1.01
@@ -4985,7 +4985,7 @@ class GTAPModelEquations:
             if benchmark_supply <= 0:
                 return Constraint.Skip
             elasticity = float(value(model.etaf[r, f]))
-            return model.xft[r, f, t] == model.aft[r, f] * (model.pft[r, f, t] / (model.pabs[r] + 1e-12)) ** elasticity
+            return model.xft[r, f, t] == model.aft[r, f] * (model.pft[r, f, t] / (model.pabs[r, t] + 1e-12)) ** elasticity
         model.eq_xfteq = Constraint(model.r, model.f, model.t, rule=eq_xfteq_rule)
 
         # Factor supply / law-of-one-price (GAMS pfeq(r,fp,a)).
@@ -5037,7 +5037,7 @@ class GTAPModelEquations:
             etaff = _etaff(r, f, a)
             return model.xf[r, f, a, t] == (
                 model.xscale[r, a] * model.gf_share[r, f, a]
-                * (pfy / model.pabs[r]) ** etaff
+                * (pfy / model.pabs[r, t]) ** etaff
             )
         model.eq_pfeq = Constraint(model.r, model.f, model.a, model.t, rule=eq_pfeq_rule)
 
@@ -5068,7 +5068,7 @@ class GTAPModelEquations:
         # M_bb is a calibration constant; pf0 and xf0 are defined later (eq_pwfact
         # block), so we defer this constraint construction until they exist.
         # Construct it now using a closure that references model.pf0/xf0 lazily.
-        def eq_pfact_rule(model, r):
+        def eq_pfact_rule(model, r, t):
             m_bs = sum(
                 model.pf0[r, f, a] * model.xf[r, f, a, "base"] / model.xscale[r, a]
                 for f in model.f for a in model.a
@@ -5084,7 +5084,7 @@ class GTAPModelEquations:
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
-            return model.pfact[r] * model.pfact[r] * model.mqfactr_bb[r] * m_bs == m_sb * m_ss
+            return model.pfact[r, t] * model.pfact[r, t] * model.mqfactr_bb[r] * m_bs == m_sb * m_ss
         # Constraint added after pf0/xf0/mqfactr_bb are constructed below.
         self._defer_eq_pfact = eq_pfact_rule
 
@@ -5556,8 +5556,8 @@ class GTAPModelEquations:
             for i in model.i
             for rp in model.rp
         }
-        base_pabs = {r: max(float(value(t0.pabs[r])), 1e-8) for r in model.r}
-        base_rgdpmp = {r: max(float(value(t0.rgdpmp[r])), 1e-8) for r in model.r}
+        base_pabs = {r: max(float(value(t0.pabs[r, "base"])), 1e-8) for r in model.r}
+        base_rgdpmp = {r: max(float(value(t0.rgdpmp[r, "base"])), 1e-8) for r in model.r}
 
         def _mqabs(model, region, *, price_base: bool, quantity_base: bool):
             total = 0.0
@@ -5596,7 +5596,7 @@ class GTAPModelEquations:
             for r in model.r
         }
 
-        def eq_pabs_rule(model, r):
+        def eq_pabs_rule(model, r, t):
             mqabs_00 = base_mqabs_00[r]
             if mqabs_00 <= 1e-12:
                 return Constraint.Skip
@@ -5604,13 +5604,13 @@ class GTAPModelEquations:
             mqabs_tt = _mqabs(model, r, price_base=False, quantity_base=False)
             mqabs_0t = _mqabs(model, r, price_base=True, quantity_base=False)
             scale = max((base_pabs[r] ** 2) * (mqabs_00 ** 2), 1e-12)
-            return (model.pabs[r] ** 2) * mqabs_00 * mqabs_0t / scale == (base_pabs[r] ** 2) * mqabs_t0 * mqabs_tt / scale
-        model.eq_pabs = Constraint(model.r, rule=eq_pabs_rule)
+            return (model.pabs[r, t] ** 2) * mqabs_00 * mqabs_0t / scale == (base_pabs[r] ** 2) * mqabs_t0 * mqabs_tt / scale
+        model.eq_pabs = Constraint(model.r, model.t, rule=eq_pabs_rule)
 
         # Nominal GDP at market prices (GAMS gdpmpeq)
-        def eq_gdpmp_rule(model, r):
-            return model.gdpmp[r] == _mqgdp(model, r, price_base=False, quantity_base=False)
-        model.eq_gdpmp = Constraint(model.r, rule=eq_gdpmp_rule)
+        def eq_gdpmp_rule(model, r, t):
+            return model.gdpmp[r, t] == _mqgdp(model, r, price_base=False, quantity_base=False)
+        model.eq_gdpmp = Constraint(model.r, model.t, rule=eq_gdpmp_rule)
 
         # GAMS rgdpmpeq (model.gms): Fisher quantity index of real GDP.
         #   rgdpmp(t) = rgdpmp(t0) * sqrt[ (gdpmp(t)/gdpmp(t0)) * (mqgdp(t0,t)/mqgdp(t,t0)) ]
@@ -5620,19 +5620,19 @@ class GTAPModelEquations:
         # `rgdpmp.l = gdpmp.l` (cal.gms:699), giving pgdpmp(base)=1 exactly.
         # The Fisher chain-volume only kicks in once a base reference exists.
         is_counterfactual = self.is_counterfactual or (self.t0_snapshot is not None)
-        def eq_rgdpmp_rule(model, r):
+        def eq_rgdpmp_rule(model, r, t):
             mqgdp_00 = base_mqgdp_00[r]
             if not is_counterfactual or mqgdp_00 <= 1e-12:
-                return model.rgdpmp[r] == model.gdpmp[r]
+                return model.rgdpmp[r, t] == model.gdpmp[r, t]
             mqgdp_0t = _mqgdp(model, r, price_base=True, quantity_base=False)
             mqgdp_t0 = _mqgdp(model, r, price_base=False, quantity_base=True)
             scale = max(mqgdp_00 ** 2, 1e-12)
-            return (model.rgdpmp[r] ** 2) * mqgdp_t0 / scale == mqgdp_00 * model.gdpmp[r] * mqgdp_0t / scale
-        model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
+            return (model.rgdpmp[r, t] ** 2) * mqgdp_t0 / scale == mqgdp_00 * model.gdpmp[r, t] * mqgdp_0t / scale
+        model.eq_rgdpmp = Constraint(model.r, model.t, rule=eq_rgdpmp_rule)
 
-        def eq_pgdpmp_rule(model, r):
-            return model.pgdpmp[r] * model.rgdpmp[r] == model.gdpmp[r]
-        model.eq_pgdpmp = Constraint(model.r, rule=eq_pgdpmp_rule)
+        def eq_pgdpmp_rule(model, r, t):
+            return model.pgdpmp[r, t] * model.rgdpmp[r, t] == model.gdpmp[r, t]
+        model.eq_pgdpmp = Constraint(model.r, model.t, rule=eq_pgdpmp_rule)
 
         # Welfare measures (GAMS eveq / cveq) for the representative household.
         def eq_ev_rule(model, r):
@@ -5745,10 +5745,10 @@ class GTAPModelEquations:
 
         # Now register the deferred eq_pfact (defined earlier as self._defer_eq_pfact).
         if hasattr(self, "_defer_eq_pfact"):
-            model.eq_pfact = Constraint(model.r, rule=self._defer_eq_pfact)
+            model.eq_pfact = Constraint(model.r, model.t, rule=self._defer_eq_pfact)
             del self._defer_eq_pfact
 
-        def eq_pwfact_rule(model):
+        def eq_pwfact_rule(model, t):
             # mqfactw(tp,tq) = sum pf(tp) * xf(tq) / xscale
             # M_bs = mqfactw(t0,t)  → pf0 * xf
             # M_sb = mqfactw(t,t0)  → pf  * xf0
@@ -5768,8 +5768,8 @@ class GTAPModelEquations:
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
-            return model.pwfact * model.pwfact * model.mqfactw_bb * m_bs == m_sb * m_ss
-        model.eq_pwfact = Constraint(rule=eq_pwfact_rule)
+            return model.pwfact[t] * model.pwfact[t] * model.mqfactw_bb * m_bs == m_sb * m_ss
+        model.eq_pwfact = Constraint(model.t, rule=eq_pwfact_rule)
 
         # eq_pmuv: Tornqvist MUV deflator (model.gms:1237-1247). Active when
         # rmuv/imuv baskets are configured (pmuv was declared as Var above).
@@ -5802,7 +5802,7 @@ class GTAPModelEquations:
             model.mqmuv_bb = Param(initialize=(mqmuv_bb_data if mqmuv_bb_data > 0.0 else 1.0),
                                    mutable=False)
             rmuv_local = self._rmuv; imuv_local = self._imuv
-            def eq_pmuv_rule(m):
+            def eq_pmuv_rule(m, t):
                 # Per cal-time pmuv0=1: pmuv^2 * M_bb * M_bs = M_sb * M_ss
                 # M_bs = pefob0 * xw    (sum over rmuv×imuv×r)
                 # M_sb = pefob  * xw0
@@ -5813,25 +5813,25 @@ class GTAPModelEquations:
                            for s in rmuv_local for j in imuv_local for d in m.r)
                 m_ss = sum(m.pefob[s, j, d, "base"] * m.xw[s, j, d, "base"]
                            for s in rmuv_local for j in imuv_local for d in m.r)
-                return m.pmuv * m.pmuv * m.mqmuv_bb * m_bs == m_sb * m_ss
-            model.eq_pmuv = Constraint(rule=eq_pmuv_rule)
+                return m.pmuv[t] * m.pmuv[t] * m.mqmuv_bb * m_bs == m_sb * m_ss
+            model.eq_pmuv = Constraint(model.t, rule=eq_pmuv_rule)
 
-        def eq_pnum_rule(model):
-            return model.pnum == model.pwfact
-        model.eq_pnum = Constraint(rule=eq_pnum_rule)
+        def eq_pnum_rule(model, t):
+            return model.pnum[t] == model.pwfact[t]
+        model.eq_pnum = Constraint(model.t, rule=eq_pnum_rule)
         # GAMS comp_nus333.gms keeps pnumeq active under ifMCP=1: pnum.fx=1 AND
         # pnum==pwfact ⇒ pwfact=1, and the Fisher index becomes a binding
         # constraint on (pf, xf) — anchoring the entire price system. Without
         # this, pwfact floats and prices have no anchor beyond pnum, which is
         # decoupled from pf via Fisher.
 
-        def eq_walras_rule(model):
+        def eq_walras_rule(model, t):
             target_regions = residual_regions if residual_regions else tuple(model.r)
-            return model.walras == sum(
-                model.yi[r, "base"] - (model.pi[r, "base"] * model.depr[r] * model.kstock[r, "base"] + model.rsav[r, "base"] + model.savf[r])
+            return model.walras[t] == sum(
+                model.yi[r, t] - (model.pi[r, t] * model.depr[r] * model.kstock[r, t] + model.rsav[r, t] + model.savf[r])
                 for r in target_regions
             )
-        model.eq_walras = Constraint(rule=eq_walras_rule)
+        model.eq_walras = Constraint(model.t, rule=eq_walras_rule)
 
         # Mirror GAMS ifSUB=1 behavior: substitute macro identities directly
         # into the active system and remove the standalone defining equations.
