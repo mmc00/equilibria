@@ -234,6 +234,145 @@ def _parse_index(index: str) -> tuple[str, ...]:
     return tuple(p for p in parts if p)
 
 
+def _build_flags_dict(params: "GTAPParameters") -> dict[str, dict]:
+    """Build the 15 activity-flag dicts iterloop.gms uses to identify
+    inactive flows.
+
+    Each flag maps ``idx_without_t`` to ``True`` when the benchmark SAM
+    has a strictly positive value for the corresponding flow. The
+    iterloop driver only acts on entries where the value is ``False``
+    (inactive flow → fix qty=0, price=baseline).
+
+    Mirrors the ``xxxFlag`` definitions in NEOS ``cal.gms``.
+    """
+    sets = params.sets
+    bench = params.benchmark
+    tol = 1e-9
+
+    vom = getattr(bench, "vom", {}) or {}
+    vom_i = getattr(bench, "vom_i", {}) or {}
+    evfb = getattr(bench, "evfb", {}) or {}
+    vfm = getattr(bench, "vfm", {}) or {}
+    vdfm = getattr(bench, "vdfm", {}) or {}
+    vifm = getattr(bench, "vifm", {}) or {}
+    vpm = getattr(bench, "vpm", {}) or {}
+    vgm = getattr(bench, "vgm", {}) or {}
+    vim = getattr(bench, "vim", {}) or {}
+    makb = getattr(bench, "makb", {}) or {}
+    vxsb = getattr(bench, "vxsb", {}) or {}
+    vtwr = getattr(bench, "vtwr", {}) or {}
+
+    def _f(d, key, default=0.0):
+        return float(d.get(key, default) or 0.0)
+
+    flags: dict[str, dict] = {}
+
+    # xpFlag(r, a) — production active
+    flags['xpFlag'] = {
+        (r, a): _f(vom, (r, a)) > tol
+        for r in sets.r for a in sets.a
+    }
+
+    # xsFlag(r, i) — domestic supply active
+    flags['xsFlag'] = {
+        (r, i): _f(vom_i, (r, i)) > tol
+        for r in sets.r for i in sets.i
+    }
+
+    # xFlag(r, a, i) — make/output pair active
+    flags['xFlag'] = {
+        (r, a, i): _f(makb, (r, a, i)) > tol
+        for r in sets.r for a in sets.a for i in sets.i
+    }
+
+    # xfFlag(r, f, a) — factor demand active
+    def _evfb_or_vfm(r, f, a):
+        v = _f(evfb, (r, f, a))
+        if v <= 0.0:
+            v = _f(vfm, (r, f, a))
+        return v
+    flags['xfFlag'] = {
+        (r, f, a): _evfb_or_vfm(r, f, a) > tol
+        for r in sets.r for f in sets.f for a in sets.a
+    }
+
+    # xftFlag(r, f) — factor stock active
+    flags['xftFlag'] = {
+        (r, f): sum(_evfb_or_vfm(r, f, a) for a in sets.a) > tol
+        for r in sets.r for f in sets.f
+    }
+
+    # ndFlag(r, a) — intermediate (non-VA) bundle active
+    flags['ndFlag'] = {
+        (r, a): sum(_f(vdfm, (r, i, a)) + _f(vifm, (r, i, a)) for i in sets.i) > tol
+        for r in sets.r for a in sets.a
+    }
+
+    # vaFlag(r, a) — value-added bundle active
+    flags['vaFlag'] = {
+        (r, a): sum(_evfb_or_vfm(r, f, a) for f in sets.f) > tol
+        for r in sets.r for a in sets.a
+    }
+
+    # xaFlag(r, i, aa) — Armington demand active per agent
+    aa = list(sets.aa) if hasattr(sets, 'aa') else list(sets.a) + list(getattr(sets, 'fd', []))
+    xa_flag: dict[tuple, bool] = {}
+    for r in sets.r:
+        for i in sets.i:
+            for ag in aa:
+                if ag in set(sets.a):
+                    v = _f(vdfm, (r, i, ag)) + _f(vifm, (r, i, ag))
+                elif ag == GTAP_HOUSEHOLD_AGENT or ag == 'hh' or ag == 'priv':
+                    v = _f(vpm, (r, i))
+                elif ag == GTAP_GOVERNMENT_AGENT or ag == 'gov':
+                    v = _f(vgm, (r, i))
+                elif ag == GTAP_INVESTMENT_AGENT or ag == 'inv':
+                    v = _f(vim, (r, i))
+                else:
+                    v = 0.0
+                xa_flag[(r, i, ag)] = v > tol
+    flags['xaFlag'] = xa_flag
+
+    # alphad/alpham (per agent): we treat both as "Armington active"; CES
+    # nest collapses if either share is zero. Same key shape as xaFlag.
+    flags['alphad'] = dict(xa_flag)
+    flags['alpham'] = dict(xa_flag)
+
+    # xwFlag(r, i, rp) — bilateral export route active
+    flags['xwFlag'] = {
+        (r, i, rp): _f(vxsb, (r, i, rp)) > tol
+        for r in sets.r for i in sets.i for rp in sets.r
+    }
+
+    # tmgFlag(r, i, rp) — trade margin active
+    def _margin(r, i, rp):
+        return sum(_f(vtwr, (r, i, rp, mode)) for mode in sets.m)
+    flags['tmgFlag'] = {
+        (r, i, rp): _margin(r, i, rp) > tol
+        for r in sets.r for i in sets.i for rp in sets.r
+    }
+
+    # xdFlag(r, i) — domestic Armington demand active
+    flags['xdFlag'] = {
+        (r, i): sum(_f(vdfm, (r, i, a)) for a in sets.a) > tol
+        for r in sets.r for i in sets.i
+    }
+
+    # xmtFlag(r, i) — import demand active
+    flags['xmtFlag'] = {
+        (r, i): sum(_f(vifm, (r, i, a)) for a in sets.a) > tol
+        for r in sets.r for i in sets.i
+    }
+
+    # xetFlag(r, i) — export supply active (any destination)
+    flags['xetFlag'] = {
+        (r, i): sum(_f(vxsb, (r, i, rp)) for rp in sets.r) > tol
+        for r in sets.r for i in sets.i
+    }
+
+    return flags
+
+
 def _apply_shock_to_params(
     params: GTAPParameters,
     variable: str,
