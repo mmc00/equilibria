@@ -1767,11 +1767,15 @@ class GTAPModelEquations:
                         amgm_data[(m, r, i, rp)] = share
                         lambdamg_data[(m, r, i, rp)] = 1.0
 
-        create_indexed_param("tmarg", ["r", "i", "rp"], tmarg_data, 0.0)
+        # tmarg is t-indexed (Phase 3.1): same calibrated value broadcast to every period.
+        def _tmarg_init(_m, r, i, rp, t):
+            return float(tmarg_data.get((r, i, rp), 0.0) or 0.0)
+        model.tmarg = Param(
+            model.r, model.i, model.rp, model.t,
+            initialize=_tmarg_init, default=0.0, doc="tmarg (per period)",
+        )
         create_indexed_param("amgm", ["m", "r", "i", "rp"], amgm_data, 0.0)
         create_indexed_param("lambdamg", ["m", "r", "i", "rp"], lambdamg_data, 1.0)
-        if not hasattr(model, "tmarg"):
-            model.tmarg = Param(model.r, model.i, model.rp, initialize={}, default=0.0, doc="tmarg")
         if not hasattr(model, "amgm"):
             model.amgm = Param(model.m, model.r, model.i, model.rp, initialize={}, default=0.0, doc="amgm")
         if not hasattr(model, "lambdamg"):
@@ -3219,7 +3223,7 @@ class GTAPModelEquations:
                     return max(bilateral_imports / max(xw_bench, 1e-12), 1e-8)
                 export_tax = float(self.params.taxes.rtxs.get((rp, i, r), 0.0) or 0.0)
                 etax = _trade_etax_value(rp, i, r)
-                tmarg = float(m.tmarg[rp, i, r]) if hasattr(m, "tmarg") else 0.0
+                tmarg = float(m.tmarg[rp, i, r, "base"]) if hasattr(m, "tmarg") else 0.0
                 return max(1.0 + export_tax + etax + tmarg, 1e-8)
 
             bilateral_exports = float(self.params.benchmark.vxmd.get((rp, i, r), 0.0) or 0.0)
@@ -3234,7 +3238,7 @@ class GTAPModelEquations:
             if bilateral_exports > 0.0 or vxsb_qty > 0.0:
                 export_tax = float(self.params.taxes.rtxs.get((rp, i, r), 0.0) or 0.0)
                 etax = _trade_etax_value(rp, i, r)
-                tmarg = float(m.tmarg[rp, i, r]) if hasattr(m, "tmarg") else 0.0
+                tmarg = float(m.tmarg[rp, i, r, "base"]) if hasattr(m, "tmarg") else 0.0
                 return max(1.0 + export_tax + etax + tmarg, 1e-8)
             return 1.0
             
@@ -3988,7 +3992,7 @@ class GTAPModelEquations:
 
         def _m_xwmg(exporter, commodity, importer):
             if if_sub:
-                return model.tmarg[exporter, commodity, importer] * model.xw[exporter, commodity, importer, "base"]
+                return model.tmarg[exporter, commodity, importer, "base"] * model.xw[exporter, commodity, importer, "base"]
             return model.xwmg[exporter, commodity, importer, "base"]
 
         def _m_xmgm(mode, exporter, commodity, importer):
@@ -4016,7 +4020,7 @@ class GTAPModelEquations:
 
         def _m_pmcif(exporter, commodity, importer):
             if if_sub:
-                tmarg = model.tmarg[exporter, commodity, importer]
+                tmarg = model.tmarg[exporter, commodity, importer, "base"]
                 return _m_pefob(exporter, commodity, importer) + _m_pwmg(exporter, commodity, importer) * tmarg
             return model.pmcif[exporter, commodity, importer, "base"]
 
@@ -4794,9 +4798,9 @@ class GTAPModelEquations:
 
         # Trade margins (GAMS xwmgeq/xmgmeq/pwmgeq/xtmgeq/ptmgeq - simplified static)
         def eq_xwmg_rule(model, r, i, rp):
-            if value(model.tmarg[r, i, rp]) <= 0.0:
+            if value(model.tmarg[r, i, rp, "base"]) <= 0.0:
                 return Constraint.Skip
-            return model.xwmg[r, i, rp, "base"] == model.tmarg[r, i, rp] * model.xw[r, i, rp, "base"]
+            return model.xwmg[r, i, rp, "base"] == model.tmarg[r, i, rp, "base"] * model.xw[r, i, rp, "base"]
         model.eq_xwmg = Constraint(model.r, model.i, model.rp, rule=eq_xwmg_rule)
 
         def eq_xmgm_rule(model, m, r, i, rp):
@@ -4807,7 +4811,7 @@ class GTAPModelEquations:
         model.eq_xmgm = Constraint(model.m, model.r, model.i, model.rp, rule=eq_xmgm_rule)
 
         def eq_pwmg_rule(model, r, i, rp):
-            if value(model.tmarg[r, i, rp]) <= 0.0:
+            if value(model.tmarg[r, i, rp, "base"]) <= 0.0:
                 return Constraint.Skip
             total = sum(
                 model.amgm[m, r, i, rp] * model.ptmg[m, "base"] / (model.lambdamg[m, r, i, rp] + 1e-12)
@@ -4916,7 +4920,7 @@ class GTAPModelEquations:
         def eq_pmcifeq_rule(model, rp, i, r):
             if value(model.xw_flag[rp, i, r]) <= 0.0:
                 return Constraint.Skip
-            tmarg = value(model.tmarg[rp, i, r])
+            tmarg = value(model.tmarg[rp, i, r, "base"])
             return model.pmcif[rp, i, r, "base"] == model.pefob[rp, i, r, "base"] + model.pwmg[rp, i, r, "base"] * tmarg
         model.eq_pmcifeq = Constraint(model.rp, model.i, model.r, rule=eq_pmcifeq_rule)
         

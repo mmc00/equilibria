@@ -456,7 +456,7 @@ class GTAPSolver:
             for idx in self.model.xwmg:
                 # xwmg is indexed (r, i, rp, t); margin flag is t-invariant.
                 r, i, rp, _t = idx
-                tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
+                tmarg = float(value(self.model.tmarg[r, i, rp, _t])) if hasattr(self.model, "tmarg") else 0.0
                 if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.xwmg, idx)
                     fixed_count += 1
@@ -464,7 +464,7 @@ class GTAPSolver:
         if hasattr(self.model, "pwmg"):
             for idx in self.model.pwmg:
                 r, i, rp, _t = idx
-                tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
+                tmarg = float(value(self.model.tmarg[r, i, rp, _t])) if hasattr(self.model, "tmarg") else 0.0
                 if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.pwmg, idx)
                     fixed_count += 1
