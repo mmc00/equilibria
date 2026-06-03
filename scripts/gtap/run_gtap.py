@@ -371,11 +371,11 @@ def _collect_key_quantities(
 
     def _pefob_price(exporter: str, commodity: str, importer: str) -> float:
         ratio = _pefob_ratio(exporter, commodity, importer)
-        return float(value(model.pe[exporter, commodity, importer])) * ratio
+        return float(value(model.pe[exporter, commodity, importer, _t0(model)])) * ratio
 
     def _pmcif_price(exporter: str, commodity: str, importer: str) -> float:
         ratio = _pmcif_ratio(exporter, commodity, importer)
-        return float(value(model.pe[exporter, commodity, importer])) * ratio
+        return float(value(model.pe[exporter, commodity, importer, _t0(model)])) * ratio
 
     buckets: dict[str, dict[str, float]] = {}
 
@@ -489,8 +489,8 @@ def _collect_key_quantities(
             for i in model.i:
                 for rp in model.rp:
                     if hasattr(model, "xw") and hasattr(model, "pwmg"):
-                        xw_val = float(value(model.xw[r, i, rp]))
-                        pwmg_val = float(value(model.pwmg[r, i, rp]))
+                        xw_val = float(value(model.xw[r, i, rp, _t0(model)]))
+                        pwmg_val = float(value(model.pwmg[r, i, rp, _t0(model)]))
                         xwmg[f"{r}|{i}|{rp}"] = xw_val * pwmg_val
         buckets["xwmg"] = xwmg
 
@@ -501,10 +501,10 @@ def _collect_key_quantities(
                 total = 0.0
                 for r in model.r:
                     for rp in model.rp:
-                        total += float(value(model.xw[r, i, rp])) * float(value(model.pwmg[r, i, rp]))
+                        total += float(value(model.xw[r, i, rp, _t0(model)])) * float(value(model.pwmg[r, i, rp, _t0(model)]))
                 xtmg[str(i)] = total
             elif hasattr(model, "ptmg"):
-                xtmg[str(i)] = float(value(model.ptmg[i]))
+                xtmg[str(i)] = float(value(model.ptmg[i, _t0(model)]))
             else:
                 xtmg[str(i)] = 0.0
         buckets["xtmg"] = xtmg
@@ -540,11 +540,11 @@ def _collect_key_quantities(
 
         def _pefob_price(exporter: str, commodity: str, importer: str) -> float:
             ratio = _pefob_ratio(exporter, commodity, importer)
-            return float(value(model.pe[exporter, commodity, importer])) * ratio
+            return float(value(model.pe[exporter, commodity, importer, _t0(model)])) * ratio
 
         def _pmcif_price(exporter: str, commodity: str, importer: str) -> float:
             ratio = _pmcif_ratio(exporter, commodity, importer)
-            return float(value(model.pe[exporter, commodity, importer])) * ratio
+            return float(value(model.pe[exporter, commodity, importer, _t0(model)])) * ratio
 
         for r in model.r:
             regy_val = float(value(model.regy[r])) if hasattr(model, "regy") else 0.0
@@ -558,14 +558,14 @@ def _collect_key_quantities(
             if hasattr(model, "xaa") and hasattr(model, "pa"):
                 for i in model.i:
                     for aa in (GTAP_HOUSEHOLD_AGENT, GTAP_GOVERNMENT_AGENT, GTAP_INVESTMENT_AGENT):
-                        gdp_val += float(value(model.pa[r, i, aa])) * float(value(model.xaa[r, i, aa]))
+                        gdp_val += float(value(model.pa[r, i, aa, _t0(model)])) * float(value(model.xaa[r, i, aa]))
             if hasattr(model, "xw") and hasattr(model, "pe"):
                 for i in model.i:
                     for rp in model.rp:
                         if str(rp) == str(r):
                             continue
-                        gdp_val += _pefob_price(str(r), str(i), str(rp)) * float(value(model.xw[r, i, rp]))
-                        gdp_val -= _pmcif_price(str(rp), str(i), str(r)) * float(value(model.xw[rp, i, r]))
+                        gdp_val += _pefob_price(str(r), str(i), str(rp)) * float(value(model.xw[r, i, rp, _t0(model)]))
+                        gdp_val -= _pmcif_price(str(rp), str(i), str(r)) * float(value(model.xw[rp, i, r, _t0(model)]))
 
             gdpmp[str(r)] = gdp_val
             rgdpmp[str(r)] = gdp_val / pabs_val if abs(pabs_val) > 1e-14 else 0.0
@@ -636,48 +636,48 @@ def _collect_key_quantities(
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) not in activity_labels:
                         continue
-                    fc += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a])) / _xscale(r_str, str(a))
+                    fc += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a, _t0(model)])) / _xscale(r_str, str(a))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) not in activity_labels:
                         continue
-                    fc += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a])) / _xscale(r_str, str(a))
+                    fc += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a, _t0(model)])) / _xscale(r_str, str(a))
 
             # pc: private (household) consumption tax — rtpd/rtpi keyed at a=hhd
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
                         continue
-                    pc += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a]))
+                    pc += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a, _t0(model)]))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
                         continue
-                    pc += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a]))
+                    pc += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a, _t0(model)]))
 
             # gc: government consumption tax (rtgd*pd*xda + rtgi*pmt*xma keyed at a=gov)
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i), rtgd in params.taxes.rtgd.items():
                     if str(rr) != r_str:
                         continue
-                    gc += float(rtgd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                    gc += float(rtgd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT, _t0(model)]))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i), rtgi in params.taxes.rtgi.items():
                     if str(rr) != r_str:
                         continue
-                    gc += float(rtgi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                    gc += float(rtgi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT, _t0(model)]))
 
             # ic: investment consumption tax — rtpd/rtpi keyed at a=inv
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
                         continue
-                    ic += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a]))
+                    ic += float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a, _t0(model)]))
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
                         continue
-                    ic += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a]))
+                    ic += float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a, _t0(model)]))
 
             # et: export tax = rtxs * pefob * xw  (r is exporter)
             if hasattr(model, "xw"):
@@ -687,7 +687,7 @@ def _collect_key_quantities(
                     rate = float(rtxs)
                     if rate == 0.0:
                         continue
-                    et += rate * _pefob_price(r_str, str(i), str(importer)) * float(value(model.xw[r, i, importer]))
+                    et += rate * _pefob_price(r_str, str(i), str(importer)) * float(value(model.xw[r, i, importer, _t0(model)]))
 
             # mt: import tax = imptx * pmcif * xw  (r is importer)
             if hasattr(model, "xw"):
@@ -697,7 +697,7 @@ def _collect_key_quantities(
                     rate = float(imptx_rate)
                     if rate == 0.0:
                         continue
-                    mt += rate * _pmcif_price(str(exporter), str(i), r_str) * float(value(model.xw[exporter, i, r]))
+                    mt += rate * _pmcif_price(str(exporter), str(i), r_str) * float(value(model.xw[exporter, i, r, _t0(model)]))
 
             # dt: direct tax = (kappaf + rtf) * pf * xf / xScale
             # rtf folded in to match NEOS yTaxInd/dt classification.
@@ -919,7 +919,7 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
             for a in model.a:
                 nd = float(value(model.nd[r, a, _t0(model)]))
                 pnd = float(value(model.pnd[r, a, _t0(model)]))
-                pa = float(value(model.pa[r, i, a]))
+                pa = float(value(model.pa[r, i, a, _t0(model)]))
                 xaa = float(value(model.xaa[r, i, a]))
                 io_val = (
                     float(value(model.io_param[r, i, a]))
@@ -948,7 +948,7 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
 
             if hasattr(model, "xc") and hasattr(model, "xcshr") and hasattr(model, "yc"):
                 xaa_hhd = float(value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT]))
-                pa_hhd = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT]))
+                pa_hhd = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT, _t0(model)]))
                 xcshr = float(value(model.xcshr[r, i]))
                 yc = float(value(model.yc[r]))
                 rhs = xcshr * yc
@@ -999,11 +999,11 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
                 xa_residuals.append(0.0)
 
             xd_lhs = value(model.xd[r, i, _t0(model)])
-            xd_rhs = sum(value(model.xda[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+            xd_rhs = sum(value(model.xda[r, i, aa, _t0(model)]) / value(model.xscale[r, aa]) for aa in model.aa)
             xd_residuals.append(xd_lhs - xd_rhs)
 
             xmt_lhs = value(model.xmt[r, i, _t0(model)])
-            xmt_rhs = sum(value(model.xma[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+            xmt_rhs = sum(value(model.xma[r, i, aa, _t0(model)]) / value(model.xscale[r, aa]) for aa in model.aa)
             xmt_residuals.append(xmt_lhs - xmt_rhs)
 
     # tol=2e-8 absorbs the MIN_QUANTITY=1e-8 lower bound on xaa: inactive flows
@@ -1194,7 +1194,7 @@ def _build_xi_block_diagnostics(
     xi_val = float(value(model.xi[region, commodity]))
     xiagg_val = float(value(model.xiagg[region]))
     pi_val = float(value(model.pi[region]))
-    pa_inv = float(value(model.pa[region, commodity, "inv"]))
+    pa_inv = float(value(model.pa[region, commodity, "inv", _t0(model)]))
     yi_val = float(value(model.yi[region]))
     axi_val = float(value(model.axi[region])) if hasattr(model, "axi") else 1.0
 
@@ -1215,7 +1215,7 @@ def _build_xi_block_diagnostics(
             share = float(value(model.i_share[region, i]))
             if share <= 0.0:
                 continue
-            pa_i = float(value(model.pa[region, i, "inv"]))
+            pa_i = float(value(model.pa[region, i, "inv", _t0(model)]))
             term = share * (pa_i ** expo)
             pi_terms.append(
                 {
@@ -1571,11 +1571,11 @@ def _run_path_capi_linear_block(
 
     def _pefob_price(exporter: str, commodity: str, importer: str) -> float:
         ratio = _pefob_ratio(exporter, commodity, importer)
-        return float(value(model.pe[exporter, commodity, importer])) * ratio
+        return float(value(model.pe[exporter, commodity, importer, _t0(model)])) * ratio
 
     def _pmcif_price(exporter: str, commodity: str, importer: str) -> float:
         ratio = _pmcif_ratio(exporter, commodity, importer)
-        return float(value(model.pe[exporter, commodity, importer])) * ratio
+        return float(value(model.pe[exporter, commodity, importer, _t0(model)])) * ratio
 
     def _build_final_demand_snapshot_block() -> tuple[list[Any], list[Any]]:
         expressions: list[Any] = []
@@ -1588,9 +1588,9 @@ def _run_path_capi_linear_block(
                 c_share = float(value(model.c_share[r, i]))
                 g_share = float(value(model.g_share[r, i]))
                 i_share = float(value(model.i_share[r, i]))
-                c_denom = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT])) + 1e-12
-                g_denom = float(value(model.pa[r, i, GTAP_GOVERNMENT_AGENT])) + 1e-12
-                i_denom = float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT])) + 1e-12
+                c_denom = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT, _t0(model)])) + 1e-12
+                g_denom = float(value(model.pa[r, i, GTAP_GOVERNMENT_AGENT, _t0(model)])) + 1e-12
+                i_denom = float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT, _t0(model)])) + 1e-12
                 expressions.append(model.xc[r, i] - (c_share * yc_val / c_denom))
                 variables.append(model.xc[r, i])
                 expressions.append(model.xg[r, i] - (g_share * yg_val / g_denom))
@@ -1618,7 +1618,7 @@ def _run_path_capi_linear_block(
             # from observed Armington prices and benchmark investment shares.
             pi0 = 0.0
             for i in model.i:
-                pi0 += float(value(model.i_share[r, i])) * float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT]))
+                pi0 += float(value(model.i_share[r, i])) * float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT, _t0(model)]))
             if pi0 <= 0.0:
                 pi0 = 1.0
 
@@ -1644,7 +1644,7 @@ def _run_path_capi_linear_block(
             for (rr, i, a), rtpd in params.taxes.rtpd.items():
                 if str(rr) != str(r):
                     continue
-                term = float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a]))
+                term = float(rtpd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, a, _t0(model)]))
                 if str(a) in activity_labels:
                     xscale_a = float(value(model.xscale[r, a]))
                     if xscale_a > 0.0:
@@ -1653,7 +1653,7 @@ def _run_path_capi_linear_block(
             for (rr, i, a), rtpi in params.taxes.rtpi.items():
                 if str(rr) != str(r):
                     continue
-                term = float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a]))
+                term = float(rtpi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, a, _t0(model)]))
                 if str(a) in activity_labels:
                     xscale_a = float(value(model.xscale[r, a]))
                     if xscale_a > 0.0:
@@ -1663,21 +1663,21 @@ def _run_path_capi_linear_block(
             for (rr, i), rtgd in params.taxes.rtgd.items():
                 if str(rr) != str(r):
                     continue
-                ytax_total_const += float(rtgd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                ytax_total_const += float(rtgd) * float(value(model.pd[r, i, _t0(model)])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT, _t0(model)]))
             for (rr, i), rtgi in params.taxes.rtgi.items():
                 if str(rr) != str(r):
                     continue
-                ytax_total_const += float(rtgi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                ytax_total_const += float(rtgi) * float(value(model.pmt[r, i, _t0(model)])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT, _t0(model)]))
 
             for (exporter, i, importer), rtxs in params.taxes.rtxs.items():
                 if str(exporter) != str(r):
                     continue
-                ytax_total_const += float(rtxs) * _pefob_price(str(r), str(i), str(importer)) * float(value(model.xw[r, i, importer]))
+                ytax_total_const += float(rtxs) * _pefob_price(str(r), str(i), str(importer)) * float(value(model.xw[r, i, importer, _t0(model)]))
             for (exporter, i, importer), imptx in params.taxes.imptx.items():
                 if str(importer) != str(r):
                     continue
                 rate = float(imptx)
-                ytax_total_const += rate * _pmcif_price(str(exporter), str(i), str(r)) * float(value(model.xw[exporter, i, r]))
+                ytax_total_const += rate * _pmcif_price(str(exporter), str(i), str(r)) * float(value(model.xw[exporter, i, r, _t0(model)]))
 
             direct_tax_const = 0.0
             for f in model.f:
@@ -1747,7 +1747,7 @@ def _run_path_capi_linear_block(
         variables: list[Any] = []
         for r in model.r:
             for i in model.i:
-                domestic_snapshot = sum(value(model.xda[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+                domestic_snapshot = sum(value(model.xda[r, i, aa, _t0(model)]) / value(model.xscale[r, aa]) for aa in model.aa)
                 expressions.append(model.xd[r, i, _t0(model)] - domestic_snapshot)
                 variables.append(model.xd[r, i, _t0(model)])
         return expressions, variables
@@ -1757,7 +1757,7 @@ def _run_path_capi_linear_block(
         variables: list[Any] = []
         for r in model.r:
             for i in model.i:
-                import_snapshot = sum(value(model.xma[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+                import_snapshot = sum(value(model.xma[r, i, aa, _t0(model)]) / value(model.xscale[r, aa]) for aa in model.aa)
                 expressions.append(model.xmt[r, i, _t0(model)] - import_snapshot)
                 variables.append(model.xmt[r, i, _t0(model)])
         return expressions, variables
@@ -2041,9 +2041,9 @@ def _run_path_capi_nonlinear_full(
         # pa[inv] specifically
         if hasattr(model, "pa"):
             _n_free_pa = sum(1 for idx in model.pa
-                            if not model.pa[idx].fixed and str(idx[-1]) == "inv")
+                            if not model.pa[idx].fixed and str(idx[-2]) == "inv")
             _n_fixed_pa = sum(1 for idx in model.pa
-                             if model.pa[idx].fixed and str(idx[-1]) == "inv")
+                             if model.pa[idx].fixed and str(idx[-2]) == "inv")
             _inv_diag.append(f"  pa[inv]:  {_n_free_pa}/{_n_free_pa+_n_fixed_pa} free  ({_n_fixed_pa} fixed)")
         logger.info(
             "Investment variable fixing after apply_aggressive_fixing_for_mcp:\n%s",

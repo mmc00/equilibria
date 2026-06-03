@@ -82,16 +82,18 @@ def build_derived(model) -> dict:
     out = {}
     from pyomo.core import value as _pyo_value
 
+    # Phase 2.2+: xda/xma carry t as last index. Callers (compare_phase) always
+    # append t before looking up derived vars, so these getters are 4-tuple only.
     def _xd(key):
-        if len(key) != 3:
-            return None
-        return _value_or_zero(model, "xda", key)
+        if len(key) == 4:
+            return _value_or_zero(model, "xda", key)
+        return None
     out["xd"] = _DerivedVar("xd(=xda)", _xd)
 
     def _xm(key):
-        if len(key) != 3:
-            return None
-        return _value_or_zero(model, "xma", key)
+        if len(key) == 4:
+            return _value_or_zero(model, "xma", key)
+        return None
     out["xm"] = _DerivedVar("xm(=xma)", _xm)
 
     def _xi(key):
@@ -108,7 +110,7 @@ def build_derived(model) -> dict:
             for i in model.i:
                 gs = _pyo_value(model.g_share[r, i])
                 if gs > 0.0:
-                    pa = _pyo_value(model.pa[r, i, "gov"])
+                    pa = _pyo_value(model.pa[r, i, "gov", "base"])
                     terms += gs * pa ** expo
             if terms <= 0.0:
                 return None

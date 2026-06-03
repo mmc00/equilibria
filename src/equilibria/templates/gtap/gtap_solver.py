@@ -449,7 +449,8 @@ class GTAPSolver:
         # and no free margin price on routes with zero benchmark margins.
         if hasattr(self.model, "xwmg"):
             for idx in self.model.xwmg:
-                r, i, rp = idx
+                # xwmg is indexed (r, i, rp, t); margin flag is t-invariant.
+                r, i, rp, _t = idx
                 tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
                 if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.xwmg, idx)
@@ -457,7 +458,7 @@ class GTAPSolver:
 
         if hasattr(self.model, "pwmg"):
             for idx in self.model.pwmg:
-                r, i, rp = idx
+                r, i, rp, _t = idx
                 tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
                 if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.pwmg, idx)
@@ -465,7 +466,8 @@ class GTAPSolver:
 
         if hasattr(self.model, "xmgm"):
             for idx in self.model.xmgm:
-                m, r, i, rp = idx
+                # xmgm is indexed (m, r, i, rp, t); amgm is t-invariant.
+                m, r, i, rp, _t = idx
                 share = float(value(self.model.amgm[m, r, i, rp])) if hasattr(self.model, "amgm") else 0.0
                 if share <= 0.0:
                     _fix_to_zero_with_lb(self.model.xmgm, idx)

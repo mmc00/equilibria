@@ -504,7 +504,7 @@ class GTAPModelEquations:
                 if share <= 0.0:
                     delta_xi[(r, i)] = 0.0
                     continue
-                pa_inv = max(float(pyo_value(model.pa[r, i, GTAP_INVESTMENT_AGENT])), 1e-12)
+                pa_inv = max(float(pyo_value(model.pa[r, i, GTAP_INVESTMENT_AGENT, "base"])), 1e-12)
                 xi_old = float(pyo_value(model.xi[r, i]))
                 xi_new = max(share * xiagg * (pi_val / pa_inv) ** sigmai_raw, 0.0)
                 delta = xi_new - xi_old
@@ -518,12 +518,12 @@ class GTAPModelEquations:
                 # Scale xda/xma proportionally so Armington shares are preserved.
                 if xi_old > 1e-12 and abs(delta) > 1e-14:
                     k = xi_new / xi_old
-                    if hasattr(model, "xda") and (r, i, GTAP_INVESTMENT_AGENT) in model.xda:
-                        old = float(pyo_value(model.xda[r, i, GTAP_INVESTMENT_AGENT]))
-                        model.xda[r, i, GTAP_INVESTMENT_AGENT].set_value(max(old * k, 0.0))
-                    if hasattr(model, "xma") and (r, i, GTAP_INVESTMENT_AGENT) in model.xma:
-                        old = float(pyo_value(model.xma[r, i, GTAP_INVESTMENT_AGENT]))
-                        model.xma[r, i, GTAP_INVESTMENT_AGENT].set_value(max(old * k, 0.0))
+                    if hasattr(model, "xda") and (r, i, GTAP_INVESTMENT_AGENT, "base") in model.xda:
+                        old = float(pyo_value(model.xda[r, i, GTAP_INVESTMENT_AGENT, "base"]))
+                        model.xda[r, i, GTAP_INVESTMENT_AGENT, "base"].set_value(max(old * k, 0.0))
+                    if hasattr(model, "xma") and (r, i, GTAP_INVESTMENT_AGENT, "base") in model.xma:
+                        old = float(pyo_value(model.xma[r, i, GTAP_INVESTMENT_AGENT, "base"]))
+                        model.xma[r, i, GTAP_INVESTMENT_AGENT, "base"].set_value(max(old * k, 0.0))
 
         # ---------- recompute aggregates so all aggregation eqs are satisfied --
         for r in model.r:
@@ -531,7 +531,7 @@ class GTAPModelEquations:
                 # eq_xd_agg: xd = sum_aa(xda/xscale)
                 if hasattr(model, "xd"):
                     total_xd = sum(
-                        float(pyo_value(model.xda[r, i, aa]))
+                        float(pyo_value(model.xda[r, i, aa, "base"]))
                         / max(float(pyo_value(model.xscale[r, aa])), 1e-12)
                         for aa in model.aa
                     )
@@ -540,7 +540,7 @@ class GTAPModelEquations:
                 # eq_xmt_agg: xmt = sum_aa(xma/xscale)
                 if hasattr(model, "xmt"):
                     total_xmt = sum(
-                        float(pyo_value(model.xma[r, i, aa]))
+                        float(pyo_value(model.xma[r, i, aa, "base"]))
                         / max(float(pyo_value(model.xscale[r, aa])), 1e-12)
                         for aa in model.aa
                     )
@@ -569,10 +569,10 @@ class GTAPModelEquations:
                             omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
                             if omegaw == float("inf"):
                                 for rp in model.rp:
-                                    if (r, i, rp) in model.xw:
-                                        xw_old = float(pyo_value(model.xw[r, i, rp]))
+                                    if (r, i, rp, "base") in model.xw:
+                                        xw_old = float(pyo_value(model.xw[r, i, rp, "base"]))
                                         if xw_old > 0.0:
-                                            model.xw[r, i, rp].set_value(xw_old * scale)
+                                            model.xw[r, i, rp, "base"].set_value(xw_old * scale)
 
         # ---------- update gdpmp / rgdpmp: Δgdpmp = Σ_i Δxi per region ----------
         for r in model.r:
@@ -616,7 +616,7 @@ class GTAPModelEquations:
         # Capture the base-year levels used by the compStat Fisher indices.
         # GAMS formulas mix current prices/quantities with the original t0 levels.
         base_pa = {
-            (r, i, agent): float(value(model.pa[r, i, agent]))
+            (r, i, agent): float(value(model.pa[r, i, agent, "base"]))
             for r in model.r
             for i in model.i
             for agent in final_demand_agents
@@ -628,26 +628,26 @@ class GTAPModelEquations:
             for agent in final_demand_agents
         }
         base_pefob = {
-            (r, i, rp): float(value(model.pefob[r, i, rp]))
+            (r, i, rp): float(value(model.pefob[r, i, rp, "base"]))
             for r in model.r
             for i in model.i
             for rp in model.rp
         }
         base_pmcif = {
-            (rp, i, r): float(value(model.pmcif[rp, i, r]))
+            (rp, i, r): float(value(model.pmcif[rp, i, r, "base"]))
             for rp in model.rp
             for i in model.i
             for r in model.r
         }
         base_xw = {
-            (r, i, rp): float(value(model.xw[r, i, rp]))
+            (r, i, rp): float(value(model.xw[r, i, rp, "base"]))
             for r in model.r
             for i in model.i
             for rp in model.rp
         }
         base_pabs = {r: max(float(value(model.pabs[r])), 1e-8) for r in model.r}
         base_rgdpmp = {r: max(float(value(model.rgdpmp[r])), 1e-8) for r in model.r}
-        
+
         # Scale factor demands (xf) - indexed by (r, f, a)
         for key in model.xf:
             r, f, a = key
@@ -684,14 +684,15 @@ class GTAPModelEquations:
 
         # GAMS also rescales activity-level Armington quantities on the
         # production side: xd(r,i,a), xm(r,i,a), xa(r,i,a).
+        # xaa is (r,i,aa); xda/xma are now (r,i,aa,t).
         for var_name in ("xda", "xma", "xaa"):
             if not hasattr(model, var_name):
                 continue
             var = getattr(model, var_name)
             for key in var:
-                if not isinstance(key, tuple) or len(key) != 3:
+                if not isinstance(key, tuple) or len(key) not in (3, 4):
                     continue
-                r, _i, aa = key
+                r, _i, aa = key[0], key[1], key[2]
                 if aa not in self.sets.a:
                     continue
                 xscale_val = float(value(model.xscale[r, aa]))
@@ -705,7 +706,7 @@ class GTAPModelEquations:
             for r in model.r:
                 for i in model.i:
                     total_xd = sum(
-                        value(model.xda[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
+                        value(model.xda[r, i, aa, "base"]) / max(value(model.xscale[r, aa]), 1e-12)
                         for aa in model.aa
                     )
                     model.xd[r, i, "base"].set_value(max(total_xd, 1e-8))
@@ -714,7 +715,7 @@ class GTAPModelEquations:
             for r in model.r:
                 for i in model.i:
                     total_xds = sum(
-                        value(model.xda[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
+                        value(model.xda[r, i, aa, "base"]) / max(value(model.xscale[r, aa]), 1e-12)
                         for aa in model.aa
                     )
                     model.xds[r, i, "base"].set_value(max(total_xds, 1e-8))
@@ -760,8 +761,8 @@ class GTAPModelEquations:
                         if value(model.xw_flag[r, i, rp]) <= 0.0:
                             model.gw_share[r, i, rp].set_value(0.0)
                             continue
-                        xw_val = max(value(model.xw[r, i, rp]), 0.0)
-                        pe_val = max(value(model.pe[r, i, rp]), 1e-12)
+                        xw_val = max(value(model.xw[r, i, rp, "base"]), 0.0)
+                        pe_val = max(value(model.pe[r, i, rp, "base"]), 1e-12)
                         pet_val = max(value(model.pet[r, i, "base"]), 1e-12)
                         if omegaw == float("inf"):
                             share = (pe_val * xw_val) / max(pet_val * xet_val, 1e-12)
@@ -777,7 +778,7 @@ class GTAPModelEquations:
             for r in model.r:
                 for i in model.i:
                     total_xm = sum(
-                        value(model.xma[r, i, aa]) / max(value(model.xscale[r, aa]), 1e-12)
+                        value(model.xma[r, i, aa, "base"]) / max(value(model.xscale[r, aa]), 1e-12)
                         for aa in model.aa
                     )
                     model.xmt[r, i, "base"].set_value(max(total_xm, 1e-8))
@@ -796,7 +797,7 @@ class GTAPModelEquations:
                 model.yc[r].set_value(yc_target)
                 for i in model.i:
                     share = max(float(value(model.c_share[r, i]) or 0.0), 0.0)
-                    pa_hhd = max(float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT]) or 1.0), 1e-12)
+                    pa_hhd = max(float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT, "base"]) or 1.0), 1e-12)
                     model.xc[r, i].set_value(max((share * yc_target) / pa_hhd, 0.0))
 
         if hasattr(model, "xaa") and hasattr(model, "xc"):
@@ -825,7 +826,7 @@ class GTAPModelEquations:
             GTAP_MARGIN_AGENT,
         )
         base_pa = {
-            (r, i, agent): float(value(model.pa[r, i, agent]))
+            (r, i, agent): float(value(model.pa[r, i, agent, "base"]))
             for r in model.r
             for i in model.i
             for agent in final_demand_agents
@@ -837,19 +838,19 @@ class GTAPModelEquations:
             for agent in final_demand_agents
         }
         base_pefob = {
-            (r, i, rp): float(value(model.pefob[r, i, rp]))
+            (r, i, rp): float(value(model.pefob[r, i, rp, "base"]))
             for r in model.r
             for i in model.i
             for rp in model.rp
         }
         base_pmcif = {
-            (rp, i, r): float(value(model.pmcif[rp, i, r]))
+            (rp, i, r): float(value(model.pmcif[rp, i, r, "base"]))
             for rp in model.rp
             for i in model.i
             for r in model.r
         }
         base_xw = {
-            (r, i, rp): float(value(model.xw[r, i, rp]))
+            (r, i, rp): float(value(model.xw[r, i, rp, "base"]))
             for r in model.r
             for i in model.i
             for rp in model.rp
@@ -931,10 +932,10 @@ class GTAPModelEquations:
                         dintx = float(self.params.taxes.dintx0.get((r, i, aa), 0.0) or 0.0)
                         mintx = float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0)
                         scale = value(model.xscale[r, aa]) if aa in model.a and (r, aa) in model.xscale else 1.0
-                        if dintx != 0.0 and (r, i, aa) in model.xda:
-                            ctax_total += dintx * value(model.pd[r, i, "base"]) * value(model.xda[r, i, aa]) / max(scale, 1e-12)
-                        if mintx != 0.0 and (r, i, aa) in model.xma:
-                            ctax_total += mintx * value(model.pmt[r, i, "base"]) * value(model.xma[r, i, aa]) / max(scale, 1e-12)
+                        if dintx != 0.0 and (r, i, aa, "base") in model.xda:
+                            ctax_total += dintx * value(model.pd[r, i, "base"]) * value(model.xda[r, i, aa, "base"]) / max(scale, 1e-12)
+                        if mintx != 0.0 and (r, i, aa, "base") in model.xma:
+                            ctax_total += mintx * value(model.pmt[r, i, "base"]) * value(model.xma[r, i, aa, "base"]) / max(scale, 1e-12)
                 model.ytax[r, gy].set_value(ctax_total)
 
             if hasattr(model, "facty") and r in model.facty:
@@ -964,9 +965,9 @@ class GTAPModelEquations:
             if hasattr(model, "yc") and r in model.yc:
                 # GAMS benchmark identity (cal.gms): yc = sum_i pa(r,i,hhd) * xa(r,i,hhd)
                 yc_demand = sum(
-                    value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT]) * value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT])
+                    value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT, "base"]) * value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT])
                     for i in model.i
-                    if (r, i, GTAP_HOUSEHOLD_AGENT) in model.pa and (r, i, GTAP_HOUSEHOLD_AGENT) in model.xaa
+                    if (r, i, GTAP_HOUSEHOLD_AGENT, "base") in model.pa and (r, i, GTAP_HOUSEHOLD_AGENT) in model.xaa
                 )
                 if yc_demand > 0.0:
                     model.yc[r].set_value(yc_demand)
@@ -977,9 +978,9 @@ class GTAPModelEquations:
             if hasattr(model, "yg") and r in model.yg:
                 # GAMS benchmark identity (cal.gms): yg = sum_i pa(r,i,gov) * xa(r,i,gov)
                 yg_demand = sum(
-                    value(model.pa[r, i, GTAP_GOVERNMENT_AGENT]) * value(model.xaa[r, i, GTAP_GOVERNMENT_AGENT])
+                    value(model.pa[r, i, GTAP_GOVERNMENT_AGENT, "base"]) * value(model.xaa[r, i, GTAP_GOVERNMENT_AGENT])
                     for i in model.i
-                    if (r, i, GTAP_GOVERNMENT_AGENT) in model.pa and (r, i, GTAP_GOVERNMENT_AGENT) in model.xaa
+                    if (r, i, GTAP_GOVERNMENT_AGENT, "base") in model.pa and (r, i, GTAP_GOVERNMENT_AGENT) in model.xaa
                 )
                 if yg_demand > 0.0:
                     model.yg[r].set_value(yg_demand)
@@ -1065,7 +1066,7 @@ class GTAPModelEquations:
             mqabs_00 = 0.0
             for i in model.i:
                 for agent in final_demand_agents:
-                    pa_t = float(value(model.pa[r, i, agent]))
+                    pa_t = float(value(model.pa[r, i, agent, "base"]))
                     xa_t = float(value(model.xaa[r, i, agent]))
                     pa_0 = base_pa[(r, i, agent)]
                     xa_0 = base_xaa[(r, i, agent)]
@@ -1080,13 +1081,13 @@ class GTAPModelEquations:
             mqtrade_00 = 0.0
             for i in model.i:
                 for rp in model.rp:
-                    pexp_t = float(value(model.pefob[r, i, rp]))
+                    pexp_t = float(value(model.pefob[r, i, rp, "base"]))
                     pexp_0 = base_pefob[(r, i, rp)]
-                    xexp_t = float(value(model.xw[r, i, rp]))
+                    xexp_t = float(value(model.xw[r, i, rp, "base"]))
                     xexp_0 = base_xw[(r, i, rp)]
-                    pimp_t = float(value(model.pmcif[rp, i, r]))
+                    pimp_t = float(value(model.pmcif[rp, i, r, "base"]))
                     pimp_0 = base_pmcif[(rp, i, r)]
-                    ximp_t = float(value(model.xw[rp, i, r]))
+                    ximp_t = float(value(model.xw[rp, i, r, "base"]))
                     ximp_0 = base_xw[(rp, i, r)]
 
                     mqtrade_tt += pexp_t * xexp_t - pimp_t * ximp_t
@@ -2110,9 +2111,9 @@ class GTAPModelEquations:
                 # i_share via inv agent
                 if xiagg_v > 1e-12 and pi_v > 1e-12:
                     for i in self.sets.i:
-                        if (region, i, GTAP_INVESTMENT_AGENT) in t0.xaa and (region, i, GTAP_INVESTMENT_AGENT) in t0.pa:
+                        if (region, i, GTAP_INVESTMENT_AGENT) in t0.xaa and (region, i, GTAP_INVESTMENT_AGENT, "base") in t0.pa:
                             xa_v = float(_val(t0.xaa[region, i, GTAP_INVESTMENT_AGENT]))
-                            pa_v = float(_val(t0.pa[region, i, GTAP_INVESTMENT_AGENT]))
+                            pa_v = float(_val(t0.pa[region, i, GTAP_INVESTMENT_AGENT, "base"]))
                             if xa_v > 0.0 and pa_v > 0.0:
                                 investment_share_data[(region, i)] = (xa_v / xiagg_v) * (pa_v / pi_v) ** sigmai
                 # g_share via gov agent: alphaa(r,i,gov) = (xa(r,i,gov)/xg(r))*(pa/pg)^sigmag
@@ -2124,9 +2125,9 @@ class GTAPModelEquations:
                         sigmag = 1.01
                     if xg_v > 1e-12 and pg_v > 1e-12:
                         for i in self.sets.i:
-                            if (region, i, GTAP_GOVERNMENT_AGENT) in t0.xaa and (region, i, GTAP_GOVERNMENT_AGENT) in t0.pa:
+                            if (region, i, GTAP_GOVERNMENT_AGENT) in t0.xaa and (region, i, GTAP_GOVERNMENT_AGENT, "base") in t0.pa:
                                 xa_v = float(_val(t0.xaa[region, i, GTAP_GOVERNMENT_AGENT]))
-                                pa_v = float(_val(t0.pa[region, i, GTAP_GOVERNMENT_AGENT]))
+                                pa_v = float(_val(t0.pa[region, i, GTAP_GOVERNMENT_AGENT, "base"]))
                                 if xa_v > 0.0 and pa_v > 0.0:
                                     government_share_data[(region, i)] = (xa_v / xg_v) * (pa_v / pg_v) ** sigmag
         create_indexed_param("yc_share_reg", ["r"], regional_income_share_data, 0.0)
@@ -2790,7 +2791,7 @@ class GTAPModelEquations:
         def get_pa_init(m, r, i, aa):
             return get_pa_benchmark_init(m, r, i, aa)
 
-        model.pa = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_pa_init, doc="Armington price by agent")
+        model.pa = Var(model.r, model.i, model.aa, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pa_init, self._t_set), doc="Armington price by agent")
         # Keep no-demand agent/commodity prices at their benchmark normalization.
         # In GAMS these combinations are filtered out by equation-domain flags.
         for r in self.sets.r:
@@ -2798,23 +2799,26 @@ class GTAPModelEquations:
                 for aa in model.aa:
                     domestic_value, imported_value = get_agent_trade_levels(model, r, i, aa)
                     if domestic_value <= 0.0 and imported_value <= 0.0:
-                        model.pa[r, i, aa].fix(1.0)
+                        for t in self._t_set:
+                            model.pa[r, i, aa, t].fix(1.0)
         model.dintx = Var(
             model.r,
             model.i,
             model.aa,
+            model.t,
             within=Reals,
             bounds=(-0.999, None),
-            initialize=get_dintx_init,
+            initialize=_lift_to_t(get_dintx_init, self._t_set),
             doc="Indirect tax on domestic consumption",
         )
         model.mintx = Var(
             model.r,
             model.i,
             model.aa,
+            model.t,
             within=Reals,
             bounds=(-0.999, None),
-            initialize=get_mintx_init,
+            initialize=_lift_to_t(get_mintx_init, self._t_set),
             doc="Indirect tax on import consumption",
         )
         
@@ -2823,8 +2827,8 @@ class GTAPModelEquations:
         model.xd = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xd_init, self._t_set), doc="Domestic demand")
         model.xmt = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xmt_init, self._t_set), doc="Import demand")
         model.pmt = Var(model.r, model.i, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_pmt_init, self._t_set), doc="Import price")
-        model.xda = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_xda_init, doc="Domestic Armington demand by agent")
-        model.xma = Var(model.r, model.i, model.aa, within=NonNegativeReals, initialize=get_xma_init, doc="Imported Armington demand by agent")
+        model.xda = Var(model.r, model.i, model.aa, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xda_init, self._t_set), doc="Domestic Armington demand by agent")
+        model.xma = Var(model.r, model.i, model.aa, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xma_init, self._t_set), doc="Imported Armington demand by agent")
         
         # Price pass-through expressions (NOT variables - derived from aggregate prices)
         # These are calculated values, not decision variables (matching GAMS structure)
@@ -2859,19 +2863,19 @@ class GTAPModelEquations:
                 return imp_val / total
             return self.params.shares.p_alpham.get((r, i), 0.5)  # Default 50% import
         
-        # paa is now just an alias to pa[r,i,aa]
+        # paa is now just an alias to pa[r,i,aa,t]
         def paa_expr_rule(m, r, i, aa):
-            return m.pa[r, i, aa]
+            return m.pa[r, i, aa, "base"]
         model.paa = Expression(model.r, model.i, model.aa, rule=paa_expr_rule, doc="Agent Armington price (expression alias)")
-        
+
         def pdp_expr_rule(m, r, i, aa):
             # GAMS: pdp = pd * (1 + dintx)
-            return (1.0 + m.dintx[r, i, aa]) * m.pd[r, i, "base"]
+            return (1.0 + m.dintx[r, i, aa, "base"]) * m.pd[r, i, "base"]
         model.pdp = Expression(model.r, model.i, model.aa, rule=pdp_expr_rule, doc="Agent domestic demand price (expression)")
 
         def pmp_expr_rule(m, r, i, aa):
             # GAMS: pmp = pmt * (1 + mintx)
-            return (1.0 + m.mintx[r, i, aa]) * m.pmt[r, i, "base"]
+            return (1.0 + m.mintx[r, i, aa, "base"]) * m.pmt[r, i, "base"]
         model.pmp = Expression(model.r, model.i, model.aa, rule=pmp_expr_rule, doc="Agent import demand price (expression)")
         
         # Trade - Domestic/Export split (4 vars per r,i)
@@ -2925,14 +2929,15 @@ class GTAPModelEquations:
                 return vxsb / pe_val
             return 0.0
 
-        model.xe = Var(model.r, model.i, model.rp, within=NonNegativeReals, initialize=get_xe_init, doc="Bilateral exports")
-        model.xw = Var(model.r, model.i, model.rp, within=NonNegativeReals, initialize=get_xw_init, doc="Bilateral imports")
+        model.xe = Var(model.r, model.i, model.rp, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xe_init, self._t_set), doc="Bilateral exports")
+        model.xw = Var(model.r, model.i, model.rp, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_xw_init, self._t_set), doc="Bilateral imports")
         model.pe = Var(
             model.r,
             model.i,
             model.rp,
+            model.t,
             within=NonNegativeReals,
-            initialize=get_pe_init,
+            initialize=_lift_to_t(get_pe_init, self._t_set),
             doc="Bilateral export price by route",
         )
 
@@ -2964,16 +2969,18 @@ class GTAPModelEquations:
             model.r,
             model.i,
             model.rp,
+            model.t,
             within=NonNegativeReals,
-            initialize=get_pwmg_init,
+            initialize=_lift_to_t(get_pwmg_init, self._t_set),
             doc="Route-specific trade and transport margin price",
         )
         model.xwmg = Var(
             model.r,
             model.i,
             model.rp,
+            model.t,
             within=NonNegativeReals,
-            initialize=get_xwmg_init,
+            initialize=_lift_to_t(get_xwmg_init, self._t_set),
             doc="Demand for trade and transport services by route",
         )
         model.xmgm = Var(
@@ -2981,8 +2988,9 @@ class GTAPModelEquations:
             model.r,
             model.i,
             model.rp,
+            model.t,
             within=NonNegativeReals,
-            initialize=get_xmgm_init,
+            initialize=_lift_to_t(get_xmgm_init, self._t_set),
             doc="Demand for TT services by mode and route",
         )
         model.xtmg = Var(
@@ -2993,6 +3001,7 @@ class GTAPModelEquations:
         )
         model.ptmg = Var(
             model.m,
+            model.t,
             within=NonNegativeReals,
             initialize=1.0,
             doc="Margin commodity trade price index",
@@ -3219,24 +3228,27 @@ class GTAPModelEquations:
             model.rp,
             model.i,
             model.r,
+            model.t,
             within=NonNegativeReals,
-            initialize=get_pm_init,
+            initialize=_lift_to_t(get_pm_init, self._t_set),
             doc="Bilateral import price (tariff-inclusive)",
         )
         model.pmcif = Var(
             model.rp,
             model.i,
             model.r,
+            model.t,
             within=NonNegativeReals,
-            initialize=get_pmcif_init,
+            initialize=_lift_to_t(get_pmcif_init, self._t_set),
             doc="CIF import price (FOB + margins)",
         )
         model.pefob = Var(
             model.r,
             model.i,
             model.rp,
+            model.t,
             within=NonNegativeReals,
-            initialize=get_pefob_init,
+            initialize=_lift_to_t(get_pefob_init, self._t_set),
             doc="FOB export price",
         )
         
@@ -3925,37 +3937,37 @@ class GTAPModelEquations:
 
         def _m_xwmg(exporter, commodity, importer):
             if if_sub:
-                return model.tmarg[exporter, commodity, importer] * model.xw[exporter, commodity, importer]
-            return model.xwmg[exporter, commodity, importer]
+                return model.tmarg[exporter, commodity, importer] * model.xw[exporter, commodity, importer, "base"]
+            return model.xwmg[exporter, commodity, importer, "base"]
 
         def _m_xmgm(mode, exporter, commodity, importer):
             if if_sub:
                 share = model.amgm[mode, exporter, commodity, importer]
                 lambdamg = model.lambdamg[mode, exporter, commodity, importer] + 1e-12
                 return share * _m_xwmg(exporter, commodity, importer) / lambdamg
-            return model.xmgm[mode, exporter, commodity, importer]
+            return model.xmgm[mode, exporter, commodity, importer, "base"]
 
         def _m_pwmg(exporter, commodity, importer):
             if if_sub:
                 return sum(
-                    model.amgm[m, exporter, commodity, importer] * model.ptmg[m]
+                    model.amgm[m, exporter, commodity, importer] * model.ptmg[m, "base"]
                     / (model.lambdamg[m, exporter, commodity, importer] + 1e-12)
                     for m in model.m
                 )
-            return model.pwmg[exporter, commodity, importer]
+            return model.pwmg[exporter, commodity, importer, "base"]
 
         def _m_pefob(exporter, commodity, importer):
             if if_sub:
                 export_tax = float(self.params.taxes.rtxs.get((exporter, commodity, importer), 0.0) or 0.0)
                 etax = _etax_value(exporter, commodity, importer)
-                return (1.0 + export_tax + etax) * model.pe[exporter, commodity, importer]
-            return model.pefob[exporter, commodity, importer]
+                return (1.0 + export_tax + etax) * model.pe[exporter, commodity, importer, "base"]
+            return model.pefob[exporter, commodity, importer, "base"]
 
         def _m_pmcif(exporter, commodity, importer):
             if if_sub:
                 tmarg = model.tmarg[exporter, commodity, importer]
                 return _m_pefob(exporter, commodity, importer) + _m_pwmg(exporter, commodity, importer) * tmarg
-            return model.pmcif[exporter, commodity, importer]
+            return model.pmcif[exporter, commodity, importer, "base"]
 
         def _m_pm(exporter, commodity, importer):
             if if_sub:
@@ -3963,7 +3975,7 @@ class GTAPModelEquations:
                 mtax = _mtax_value(importer, commodity, exporter)
                 chipm = _chipm_value(exporter, commodity, importer)
                 return ((1.0 + imptx + mtax) * _m_pmcif(exporter, commodity, importer)) / chipm
-            return model.pm[exporter, commodity, importer]
+            return model.pm[exporter, commodity, importer, "base"]
 
         def _m_pfa(region, factor, activity):
             if if_sub:
@@ -4075,7 +4087,7 @@ class GTAPModelEquations:
                     if io_val <= 0.0:
                         continue
                     lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
-                    terms.append((model.pa[r, i, a] / lambdaio) ** io_val)
+                    terms.append((model.pa[r, i, a, t] / lambdaio) ** io_val)
                 if not terms:
                     return Constraint.Skip
                 prod = 1.0
@@ -4100,7 +4112,7 @@ class GTAPModelEquations:
                     continue
                 lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
                 # Use agent-specific Armington price for activity a
-                terms.append(io_val * (model.pa[r, i, a] / lambdaio) ** expo)
+                terms.append(io_val * (model.pa[r, i, a, t] / lambdaio) ** expo)
 
             if not terms:
                 return Constraint.Skip
@@ -4319,7 +4331,7 @@ class GTAPModelEquations:
             mirror_imports = self.params.benchmark.viws.get((rp, i, r), 0.0)
             if bilateral_exports <= 0.0 and mirror_imports <= 0.0:
                 return Constraint.Skip
-            return model.pe[r, i, rp] == model.pet[r, i, t]
+            return model.pe[r, i, rp, t] == model.pet[r, i, t]
         model.eq_pe_route = Constraint(model.r, model.i, model.rp, model.t, rule=eq_pe_route_rule)
         model.eq_pe_route.deactivate()
 
@@ -4329,20 +4341,20 @@ class GTAPModelEquations:
             active_partners = [rp for rp in model.rp if rp != r and self.params.benchmark.vxmd.get((r, i, rp), 0.0) > 0.0]
             if not active_partners:
                 return model.xet[r, i, t] == 0.0
-            return model.xet[r, i, t] == sum(model.xw[r, i, rp] for rp in active_partners)
+            return model.xet[r, i, t] == sum(model.xw[r, i, rp, t] for rp in active_partners)
         model.eq_xet_agg = Constraint(model.r, model.i, model.t, rule=eq_xet_agg_rule)
         model.eq_xet_agg.deactivate()
         
         # Legacy Pyomo helper. Keep the component for compatibility with
         # snapshots/reporting, but do not include it in the active MCP.
-        def eq_xe_xw_rule(model, r, i, rp):
+        def eq_xe_xw_rule(model, r, i, rp, t):
             if r == rp:
                 return Constraint.Skip
             bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
             if bilateral_exports <= 0.0:
                 return Constraint.Skip
-            return model.xe[r, i, rp] == model.xw[r, i, rp]
-        model.eq_xe_xw = Constraint(model.r, model.i, model.rp, rule=eq_xe_xw_rule)
+            return model.xe[r, i, rp, t] == model.xw[r, i, rp, t]
+        model.eq_xe_xw = Constraint(model.r, model.i, model.rp, model.t, rule=eq_xe_xw_rule)
         model.eq_xe_xw.deactivate()
         
         # ========================================================================
@@ -4410,10 +4422,18 @@ class GTAPModelEquations:
                 if not hasattr(model, var_name):
                     continue
                 var = getattr(model, var_name)
-                if (r, i, aa) not in var:
-                    continue
-                var[r, i, aa].setlb(0.0)
-                var[r, i, aa].fix(0.0)
+                # xda/xma gained a trailing t index in Phase 2.2; xaa is still
+                # 3-indexed (Phase 2.3 will lift it). Detect and handle both.
+                key3 = (r, i, aa)
+                if key3 in var:
+                    var[key3].setlb(0.0)
+                    var[key3].fix(0.0)
+                else:
+                    for t in self._t_set:
+                        key4 = (r, i, aa, t)
+                        if key4 in var:
+                            var[key4].setlb(0.0)
+                            var[key4].fix(0.0)
             flag_off_fix_count += 1
         if flag_off_fix_count:
             logger.info(
@@ -4447,7 +4467,7 @@ class GTAPModelEquations:
             return model.xaa[r, i, a] == (
                 io_val
                 * model.nd[r, a, "base"]
-                * (model.pnd[r, a, "base"] / model.pa[r, i, a]) ** sigmand
+                * (model.pnd[r, a, "base"] / model.pa[r, i, a, "base"]) ** sigmand
                 * (lambdaio ** (sigmand - 1.0))
             )
         model.eq_xaa_activity = Constraint(model.r, model.i, model.a, rule=eq_xaa_activity_rule)
@@ -4493,7 +4513,7 @@ class GTAPModelEquations:
             if abs(sigmamg - 1.0) < 1e-8:
                 sigmamg = 1.01
             return model.xaa[r, i, GTAP_MARGIN_AGENT] == (
-                alpha * model.xtmg[i] * (model.ptmg[i] / (model.pa[r, i, GTAP_MARGIN_AGENT] + 1e-12)) ** sigmamg
+                alpha * model.xtmg[i] * (model.ptmg[i, "base"] / (model.pa[r, i, GTAP_MARGIN_AGENT, "base"] + 1e-12)) ** sigmamg
             )
         model.eq_xaa_tmg = Constraint(model.r, model.i, rule=eq_xaa_tmg_rule)
 
@@ -4575,8 +4595,8 @@ class GTAPModelEquations:
                         benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
                         continue
                     xaa_bench = max(float(value(t0_arm.xaa[r, i, aa])), 0.0)
-                    xda_bench = max(float(value(t0_arm.xda[r, i, aa])), 0.0)
-                    xma_bench = max(float(value(t0_arm.xma[r, i, aa])), 0.0)
+                    xda_bench = max(float(value(t0_arm.xda[r, i, aa, "base"])), 0.0)
+                    xma_bench = max(float(value(t0_arm.xma[r, i, aa, "base"])), 0.0)
                     if xaa_bench <= 0.0 or (xda_bench <= 0.0 and xma_bench <= 0.0):
                         benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
                         continue
@@ -4584,7 +4604,7 @@ class GTAPModelEquations:
                     sigma_m = _top_armington_sigma(r, i, aa)
                     pdp_bench = float(value(t0_arm.pdp[r, i, aa]))
                     pmp_bench = float(value(t0_arm.pmp[r, i, aa]))
-                    pa_bench = float(value(t0_arm.pa[r, i, aa]))
+                    pa_bench = float(value(t0_arm.pa[r, i, aa, "base"]))
                     if pa_bench <= 0.0:
                         benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
                         continue
@@ -4625,7 +4645,7 @@ class GTAPModelEquations:
                 denom = 0.0
 
             target = (numerator / denom) if denom > 0.0 else float(self.params.taxes.dintx0.get((r, i, aa), 0.0) or 0.0)
-            return model.dintx[r, i, aa] == target
+            return model.dintx[r, i, aa, "base"] == target
         model.eq_dintxeq = Constraint(model.r, model.i, model.aa, rule=eq_dintxeq_rule)
 
         def eq_mintxeq_rule(model, r, i, aa):
@@ -4654,7 +4674,7 @@ class GTAPModelEquations:
                 denom = 0.0
 
             target = (numerator / denom) if denom > 0.0 else float(self.params.taxes.mintx0.get((r, i, aa), 0.0) or 0.0)
-            return model.mintx[r, i, aa] == target
+            return model.mintx[r, i, aa, "base"] == target
         model.eq_mintxeq = Constraint(model.r, model.i, model.aa, rule=eq_mintxeq_rule)
 
         def eq_xda_rule(model, r, i, aa):
@@ -4663,11 +4683,11 @@ class GTAPModelEquations:
                 return Constraint.Skip
             domestic_share, _ = get_benchmark_agent_armington_shares(r, i, aa)
             if domestic_share <= 0.0:
-                return model.xda[r, i, aa] == 0.0
+                return model.xda[r, i, aa, "base"] == 0.0
             sigma_m = _top_armington_sigma(r, i, aa)
             if sigma_m == float("inf"):
                 return model.pdp[r, i, aa] == model.paa[r, i, aa]
-            return model.xda[r, i, aa] == domestic_share * model.xaa[r, i, aa] * (model.paa[r, i, aa] / model.pdp[r, i, aa]) ** sigma_m
+            return model.xda[r, i, aa, "base"] == domestic_share * model.xaa[r, i, aa] * (model.paa[r, i, aa] / model.pdp[r, i, aa]) ** sigma_m
         model.eq_xda = Constraint(model.r, model.i, model.aa, rule=eq_xda_rule)
 
         def eq_xma_rule(model, r, i, aa):
@@ -4675,20 +4695,20 @@ class GTAPModelEquations:
                 return Constraint.Skip
             _, import_share = get_benchmark_agent_armington_shares(r, i, aa)
             if import_share <= 0.0:
-                return model.xma[r, i, aa] == 0.0
+                return model.xma[r, i, aa, "base"] == 0.0
             sigma_m = _top_armington_sigma(r, i, aa)
             if sigma_m == float("inf"):
                 return model.pmp[r, i, aa] == model.paa[r, i, aa]
-            return model.xma[r, i, aa] == import_share * model.xaa[r, i, aa] * (model.paa[r, i, aa] / model.pmp[r, i, aa]) ** sigma_m
+            return model.xma[r, i, aa, "base"] == import_share * model.xaa[r, i, aa] * (model.paa[r, i, aa] / model.pmp[r, i, aa]) ** sigma_m
         model.eq_xma = Constraint(model.r, model.i, model.aa, rule=eq_xma_rule)
 
         # GAMS xmteq/xdseq: aggregate demands defined as sum over agents
         def eq_xd_agg_rule(model, r, i, t):
-            return model.xd[r, i, t] == sum(model.xda[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
+            return model.xd[r, i, t] == sum(model.xda[r, i, aa, "base"] / model.xscale[r, aa] for aa in model.aa)
         model.eq_xd_agg = Constraint(model.r, model.i, model.t, rule=eq_xd_agg_rule)
 
         def eq_xmt_agg_rule(model, r, i, t):
-            return model.xmt[r, i, t] == sum(model.xma[r, i, aa] / model.xscale[r, aa] for aa in model.aa)
+            return model.xmt[r, i, t] == sum(model.xma[r, i, aa, "base"] / model.xscale[r, aa] for aa in model.aa)
         model.eq_xmt_agg = Constraint(model.r, model.i, model.t, rule=eq_xmt_agg_rule)
         
         # Armington price CES aggregator by agent (GAMS paeq)
@@ -4706,9 +4726,9 @@ class GTAPModelEquations:
             expo = 1.0 - sigma_m
             if abs(expo) < 1e-8:  # Cobb-Douglas case
                 # pa = pdp^alphad * pmp^alpham
-                return model.pa[r, i, aa] == model.pdp[r, i, aa] ** alphad * model.pmp[r, i, aa] ** alpham
+                return model.pa[r, i, aa, "base"] == model.pdp[r, i, aa] ** alphad * model.pmp[r, i, aa] ** alpham
             # CES case
-            return model.pa[r, i, aa] ** expo == alphad * model.pdp[r, i, aa] ** expo + alpham * model.pmp[r, i, aa] ** expo
+            return model.pa[r, i, aa, "base"] ** expo == alphad * model.pdp[r, i, aa] ** expo + alpham * model.pmp[r, i, aa] ** expo
         model.eq_paa = Constraint(model.r, model.i, model.aa, rule=eq_paa_rule)
         
         # NOTE: eq_pmt moved to eq_pmteq (CES formulation) in bilateral trade section below
@@ -4717,24 +4737,24 @@ class GTAPModelEquations:
         def eq_xwmg_rule(model, r, i, rp):
             if value(model.tmarg[r, i, rp]) <= 0.0:
                 return Constraint.Skip
-            return model.xwmg[r, i, rp] == model.tmarg[r, i, rp] * model.xw[r, i, rp]
+            return model.xwmg[r, i, rp, "base"] == model.tmarg[r, i, rp] * model.xw[r, i, rp, "base"]
         model.eq_xwmg = Constraint(model.r, model.i, model.rp, rule=eq_xwmg_rule)
 
         def eq_xmgm_rule(model, m, r, i, rp):
             share = value(model.amgm[m, r, i, rp])
             if share <= 0.0:
                 return Constraint.Skip
-            return model.xmgm[m, r, i, rp] == share * _m_xwmg(r, i, rp) / (model.lambdamg[m, r, i, rp] + 1e-12)
+            return model.xmgm[m, r, i, rp, "base"] == share * _m_xwmg(r, i, rp) / (model.lambdamg[m, r, i, rp] + 1e-12)
         model.eq_xmgm = Constraint(model.m, model.r, model.i, model.rp, rule=eq_xmgm_rule)
 
         def eq_pwmg_rule(model, r, i, rp):
             if value(model.tmarg[r, i, rp]) <= 0.0:
                 return Constraint.Skip
             total = sum(
-                model.amgm[m, r, i, rp] * model.ptmg[m] / (model.lambdamg[m, r, i, rp] + 1e-12)
+                model.amgm[m, r, i, rp] * model.ptmg[m, "base"] / (model.lambdamg[m, r, i, rp] + 1e-12)
                 for m in model.m
             )
-            return model.pwmg[r, i, rp] == total
+            return model.pwmg[r, i, rp, "base"] == total
         model.eq_pwmg = Constraint(model.r, model.i, model.rp, rule=eq_pwmg_rule)
 
         def eq_xtmg_rule(model, m):
@@ -4748,17 +4768,17 @@ class GTAPModelEquations:
             i_str = str(m)
             has_supply = any(alphaa_tmg.get((str(r), i_str), 0.0) > 0.0 for r in self.sets.r)
             if not has_supply:
-                return model.ptmg[m] == model.pnum
+                return model.ptmg[m, "base"] == model.pnum
             sigmamg = float(self.params.elasticities.sigmam.get(i_str, 1.0))
             if abs(sigmamg - 1.0) < 1e-8:
                 sigmamg = 1.01
             expo = 1.0 - sigmamg
             terms = sum(
-                alphaa_tmg.get((str(r), i_str), 0.0) * model.pa[r, m, GTAP_MARGIN_AGENT] ** expo
+                alphaa_tmg.get((str(r), i_str), 0.0) * model.pa[r, m, GTAP_MARGIN_AGENT, "base"] ** expo
                 for r in model.r
                 if alphaa_tmg.get((str(r), i_str), 0.0) > 0.0
             )
-            return model.ptmg[m] ** expo == terms
+            return model.ptmg[m, "base"] ** expo == terms
         model.eq_ptmg = Constraint(model.m, rule=eq_ptmg_rule)
 
         # ========================================================================
@@ -4786,7 +4806,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             esubm = self.params.elasticities.esubm.get((r, i), 5.0)
             lambdam = _lambdam_value(rp, i, r)
-            return model.xw[rp, i, r] == (
+            return model.xw[rp, i, r, "base"] == (
                 amw
                 * model.xmt[r, i, "base"]
                 * (model.pmt[r, i, "base"] / _m_pm(rp, i, r)) ** esubm
@@ -4827,7 +4847,7 @@ class GTAPModelEquations:
             imptx = _imptx_rate_importer(r, i, rp)
             mtax = _mtax_value(r, i, rp)
             chipm = _chipm_value(rp, i, r)
-            return model.pm[rp, i, r] == ((1.0 + imptx + mtax) * model.pmcif[rp, i, r]) / chipm
+            return model.pm[rp, i, r, "base"] == ((1.0 + imptx + mtax) * model.pmcif[rp, i, r, "base"]) / chipm
         model.eq_pmeq = Constraint(model.rp, model.i, model.r, rule=eq_pmeq_rule)
         
         # CIF import price (GAMS pmcifeq)
@@ -4836,7 +4856,7 @@ class GTAPModelEquations:
             if value(model.xw_flag[rp, i, r]) <= 0.0:
                 return Constraint.Skip
             tmarg = value(model.tmarg[rp, i, r])
-            return model.pmcif[rp, i, r] == model.pefob[rp, i, r] + model.pwmg[rp, i, r] * tmarg
+            return model.pmcif[rp, i, r, "base"] == model.pefob[rp, i, r, "base"] + model.pwmg[rp, i, r, "base"] * tmarg
         model.eq_pmcifeq = Constraint(model.rp, model.i, model.r, rule=eq_pmcifeq_rule)
         
         # FOB export price (GAMS pefobeq)
@@ -4846,7 +4866,7 @@ class GTAPModelEquations:
                 return Constraint.Skip
             export_tax = float(self.params.taxes.rtxs.get((r, i, rp), 0.0))
             etax = _etax_value(r, i, rp)
-            return model.pefob[r, i, rp] == (1.0 + export_tax + etax) * model.pe[r, i, rp]
+            return model.pefob[r, i, rp, "base"] == (1.0 + export_tax + etax) * model.pe[r, i, rp, "base"]
         model.eq_pefobeq = Constraint(model.r, model.i, model.rp, rule=eq_pefobeq_rule)
         
         # Bilateral export supply CET (GAMS peeq)
@@ -4856,10 +4876,10 @@ class GTAPModelEquations:
                 return Constraint.Skip
             omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
             if omegaw == float("inf"):
-                return model.pe[r, i, rp] == model.pet[r, i, "base"]
+                return model.pe[r, i, rp, "base"] == model.pet[r, i, "base"]
             return (
-                model.xw[r, i, rp]
-                == model.gw_share[r, i, rp] * model.xet[r, i, "base"] * (model.pe[r, i, rp] / model.pet[r, i, "base"]) ** omegaw
+                model.xw[r, i, rp, "base"]
+                == model.gw_share[r, i, rp] * model.xet[r, i, "base"] * (model.pe[r, i, rp, "base"] / model.pet[r, i, "base"]) ** omegaw
             )
         model.eq_peeq = Constraint(model.r, model.i, model.rp, rule=eq_peeq_rule)
         
@@ -4877,7 +4897,7 @@ class GTAPModelEquations:
             omegaw = self.params.elasticities.omegaw.get((r, i), float("inf"))
             if omegaw == float("inf"):
                 return model.xet[r, i, t] == sum(
-                    model.xw[r, i, rp]
+                    model.xw[r, i, rp, t]
                     for rp in active_routes
                 )
             exponent = 1.0 + omegaw
@@ -4888,7 +4908,7 @@ class GTAPModelEquations:
                     if hasattr(model, "gw_share")
                     else float(self.params.shares.p_gw.get((r, i, rp), 0.0))
                 )
-                terms.append(gw * model.pe[r, i, rp] ** exponent)
+                terms.append(gw * model.pe[r, i, rp, t] ** exponent)
             if not terms:
                 return Constraint.Skip
             return model.pet[r, i, t] ** exponent == sum(terms)
@@ -4902,7 +4922,7 @@ class GTAPModelEquations:
         # xds(r,i) = sum(aa, xd(r,i,aa)/xScale(r,aa))
         def eq_pdeq_rule(model, r, i, t):
             return model.xds[r, i, t] == sum(
-                model.xda[r, i, aa] / model.xscale[r, aa]
+                model.xda[r, i, aa, t] / model.xscale[r, aa]
                 for aa in model.aa
                 if get_benchmark_agent_armington_shares(r, i, aa)[0] > 0.0
             )
@@ -5081,7 +5101,7 @@ class GTAPModelEquations:
             share = value(model.c_share[r, i])
             if share <= 0.0:
                 return model.xc[r, i] == 0.0
-            return model.pa[r, i, "hhd"] * model.xc[r, i] == model.xcshr[r, i] * model.yc[r]
+            return model.pa[r, i, "hhd", "base"] * model.xc[r, i] == model.xcshr[r, i] * model.yc[r]
         model.eq_xc = Constraint(model.r, model.i, rule=eq_xc_rule)
         
         # Government consumption
@@ -5090,7 +5110,7 @@ class GTAPModelEquations:
             share = value(model.g_share[r, i])
             if share <= 0.0:
                 return model.xg[r, i] == 0.0
-            return model.pa[r, i, "gov"] * model.xg[r, i] == share * model.yg[r]
+            return model.pa[r, i, "gov", "base"] * model.xg[r, i] == share * model.yg[r]
         model.eq_xg = Constraint(model.r, model.i, rule=eq_xg_rule)
         
         # Investment demand
@@ -5103,7 +5123,7 @@ class GTAPModelEquations:
             sigmai_raw = float(self.params.elasticities.esubi.get(r, 0.0))
             if abs(sigmai_raw - 1.0) < 1e-8:
                 sigmai_raw = 1.01  # match GAMS cal.gms: sigmai=1 → 1.01
-            return model.xi[r, i] == alphaa * model.xiagg[r] * (model.pi[r] / (model.pa[r, i, "inv"] + 1e-12)) ** sigmai_raw
+            return model.xi[r, i] == alphaa * model.xiagg[r] * (model.pi[r] / (model.pa[r, i, "inv", "base"] + 1e-12)) ** sigmai_raw
         model.eq_xi = Constraint(model.r, model.i, rule=eq_xi_rule)
 
         def eq_xiagg_rule(model, r):
@@ -5123,7 +5143,7 @@ class GTAPModelEquations:
                 return model.zcons[r, i] == 0.0
             return model.zcons[r, i] == (
                 model.alphaa_hhd[r, i] * model.bh[r, i]
-                * (model.pa[r, i, "hhd"] ** model.bh[r, i])
+                * (model.pa[r, i, "hhd", "base"] ** model.bh[r, i])
                 * (model.uh[r] ** (model.eh[r, i] * model.bh[r, i]))
                 * ((model.yc[r] / model.pop[r]) ** (-model.bh[r, i]))
             )
@@ -5151,7 +5171,7 @@ class GTAPModelEquations:
 
         # Consumer expenditure deflator (pcons) using shares
         def eq_pcons_rule(model, r):
-            return model.pcons[r] == sum(model.xcshr[r, i] * model.pa[r, i, "hhd"] for i in model.i)
+            return model.pcons[r] == sum(model.xcshr[r, i] * model.pa[r, i, "hhd", "base"] for i in model.i)
         model.eq_pcons = Constraint(model.r, rule=eq_pcons_rule)
 
         # Investment expenditure deflator (GAMS pieq, CES form)
@@ -5164,7 +5184,7 @@ class GTAPModelEquations:
                 sigmai_raw = 1.01  # match GAMS cal.gms: sigmai=1 → 1.01
             expo = 1.0 - sigmai_raw
             terms = [
-                value(model.i_share[r, i]) * model.pa[r, i, "inv"] ** expo
+                value(model.i_share[r, i]) * model.pa[r, i, "inv", "base"] ** expo
                 for i in model.i
                 if value(model.i_share[r, i]) > 0.0
             ]
@@ -5202,10 +5222,10 @@ class GTAPModelEquations:
                 # CD exact: ug*pop * prod_i pa^g_share = aug*yg
                 pg_index = 1.0
                 for i, s in active_shares:
-                    pg_index = pg_index * model.pa[r, i, "gov"] ** s
+                    pg_index = pg_index * model.pa[r, i, "gov", "base"] ** s
                 return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
             expo = 1.0 - sigmag
-            pg_terms = sum(s * model.pa[r, i, "gov"] ** expo for i, s in active_shares)
+            pg_terms = sum(s * model.pa[r, i, "gov", "base"] ** expo for i, s in active_shares)
             pg_index = pg_terms ** (1.0 / expo)
             return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
         model.eq_ug = Constraint(model.r, rule=eq_ug_rule)
@@ -5377,8 +5397,8 @@ class GTAPModelEquations:
                         dintx = float(self.params.taxes.dintx0.get((r, i, aa), 0.0))
                         mintx = float(self.params.taxes.mintx0.get((r, i, aa), 0.0))
                         scale = model.xscale[r, aa] if aa in model.a else 1.0
-                        total += dintx * model.pd[r, i, "base"] * model.xda[r, i, aa] / scale
-                        total += mintx * model.pmt[r, i, "base"] * model.xma[r, i, aa] / scale
+                        total += dintx * model.pd[r, i, "base"] * model.xda[r, i, aa, "base"] / scale
+                        total += mintx * model.pmt[r, i, "base"] * model.xma[r, i, aa, "base"] / scale
                 return model.ytax[r, gy] == total
 
             if gy == "et":
@@ -5387,7 +5407,7 @@ class GTAPModelEquations:
                     if rr != r:
                         continue
                     etax = _etax_value(r, i, rp)
-                    total += (float(rtxs) + etax) * model.pe[r, i, rp] * model.xw[r, i, rp]
+                    total += (float(rtxs) + etax) * model.pe[r, i, rp, "base"] * model.xw[r, i, rp, "base"]
                 return model.ytax[r, gy] == total
 
             if gy == "mt":
@@ -5396,7 +5416,7 @@ class GTAPModelEquations:
                     if importer != r:
                         continue
                     mtax = _mtax_value(r, i, exporter)
-                    total += (float(imptx) + mtax) * _m_pmcif(exporter, i, r) * model.xw[exporter, i, r]
+                    total += (float(imptx) + mtax) * _m_pmcif(exporter, i, r) * model.xw[exporter, i, r, "base"]
                 return model.ytax[r, gy] == total
 
             if gy == "dt":
@@ -5484,7 +5504,7 @@ class GTAPModelEquations:
         # (a base-solved model) when provided; falls back to current state.
         t0 = self.t0_snapshot if self.t0_snapshot is not None else model
         base_pa = {
-            (r, i, agent): float(value(t0.pa[r, i, agent]))
+            (r, i, agent): float(value(t0.pa[r, i, agent, "base"]))
             for r in model.r
             for i in model.i
             for agent in final_demand_agents
@@ -5496,19 +5516,19 @@ class GTAPModelEquations:
             for agent in final_demand_agents
         }
         base_pefob = {
-            (r, i, rp): float(value(t0.pefob[r, i, rp]))
+            (r, i, rp): float(value(t0.pefob[r, i, rp, "base"]))
             for r in model.r
             for i in model.i
             for rp in model.rp
         }
         base_pmcif = {
-            (rp, i, r): float(value(t0.pmcif[rp, i, r]))
+            (rp, i, r): float(value(t0.pmcif[rp, i, r, "base"]))
             for rp in model.rp
             for i in model.i
             for r in model.r
         }
         base_xw = {
-            (r, i, rp): float(value(t0.xw[r, i, rp]))
+            (r, i, rp): float(value(t0.xw[r, i, rp, "base"]))
             for r in model.r
             for i in model.i
             for rp in model.rp
@@ -5520,7 +5540,7 @@ class GTAPModelEquations:
             total = 0.0
             for i in model.i:
                 for agent in final_demand_agents:
-                    pa = base_pa[(region, i, agent)] if price_base else model.pa[region, i, agent]
+                    pa = base_pa[(region, i, agent)] if price_base else model.pa[region, i, agent, "base"]
                     xa = base_xaa[(region, i, agent)] if quantity_base else model.xaa[region, i, agent]
                     total += pa * xa
             return total
@@ -5531,8 +5551,8 @@ class GTAPModelEquations:
                 for rp in model.rp:
                     pexp = base_pefob[(region, i, rp)] if price_base else _m_pefob(region, i, rp)
                     pimp = base_pmcif[(rp, i, region)] if price_base else _m_pmcif(rp, i, region)
-                    xexp = base_xw[(region, i, rp)] if quantity_base else model.xw[region, i, rp]
-                    ximp = base_xw[(rp, i, region)] if quantity_base else model.xw[rp, i, region]
+                    xexp = base_xw[(region, i, rp)] if quantity_base else model.xw[region, i, rp, "base"]
+                    ximp = base_xw[(rp, i, region)] if quantity_base else model.xw[rp, i, region, "base"]
                     total += pexp * xexp - pimp * ximp
             return total
 
@@ -5622,7 +5642,7 @@ class GTAPModelEquations:
                     continue
                 terms.append(
                     alpha
-                    * ((model.pa[r, i, GTAP_HOUSEHOLD_AGENT] * model.pop[r] / model.cv[r]) ** bh)
+                    * ((model.pa[r, i, GTAP_HOUSEHOLD_AGENT, "base"] * model.pop[r] / model.cv[r]) ** bh)
                 )
             if not terms:
                 return Constraint.Skip
@@ -5744,7 +5764,7 @@ class GTAPModelEquations:
                             ex = 0.0
                         pefob0_data[(s, j, d)] = 1.0 + ex
                         try:
-                            xw0_data[(s, j, d)] = float(value(model.xw[s, j, d]))
+                            xw0_data[(s, j, d)] = float(value(model.xw[s, j, d, "base"]))
                         except Exception:
                             xw0_data[(s, j, d)] = 0.0
             model.pefob0 = Param(model.r, model.i, model.r, default=1.0,
@@ -5764,11 +5784,11 @@ class GTAPModelEquations:
                 # M_bs = pefob0 * xw    (sum over rmuv×imuv×r)
                 # M_sb = pefob  * xw0
                 # M_ss = pefob  * xw
-                m_bs = sum(m.pefob0[s, j, d] * m.xw[s, j, d]
+                m_bs = sum(m.pefob0[s, j, d] * m.xw[s, j, d, "base"]
                            for s in rmuv_local for j in imuv_local for d in m.r)
-                m_sb = sum(m.pefob[s, j, d] * m.xw0[s, j, d]
+                m_sb = sum(m.pefob[s, j, d, "base"] * m.xw0[s, j, d]
                            for s in rmuv_local for j in imuv_local for d in m.r)
-                m_ss = sum(m.pefob[s, j, d] * m.xw[s, j, d]
+                m_ss = sum(m.pefob[s, j, d, "base"] * m.xw[s, j, d, "base"]
                            for s in rmuv_local for j in imuv_local for d in m.r)
                 return m.pmuv * m.pmuv * m.mqmuv_bb * m_bs == m_sb * m_ss
             model.eq_pmuv = Constraint(rule=eq_pmuv_rule)
@@ -5827,19 +5847,19 @@ class GTAPModelEquations:
             for r in model.r:
                 for i in model.i:
                     for rp in model.rp:
-                        if (r, i, rp) in model.xwmg:
-                            _fix_component(model.xwmg[r, i, rp], value(_m_xwmg(r, i, rp)))
-                        if (r, i, rp) in model.pwmg:
-                            _fix_component(model.pwmg[r, i, rp], value(_m_pwmg(r, i, rp)))
-                        if (r, i, rp) in model.pefob:
-                            _fix_component(model.pefob[r, i, rp], value(_m_pefob(r, i, rp)))
-                        if (r, i, rp) in model.pmcif:
-                            _fix_component(model.pmcif[r, i, rp], value(_m_pmcif(r, i, rp)))
-                        if (r, i, rp) in model.pm:
-                            _fix_component(model.pm[r, i, rp], value(_m_pm(r, i, rp)))
+                        if (r, i, rp, "base") in model.xwmg:
+                            _fix_component(model.xwmg[r, i, rp, "base"], value(_m_xwmg(r, i, rp)))
+                        if (r, i, rp, "base") in model.pwmg:
+                            _fix_component(model.pwmg[r, i, rp, "base"], value(_m_pwmg(r, i, rp)))
+                        if (r, i, rp, "base") in model.pefob:
+                            _fix_component(model.pefob[r, i, rp, "base"], value(_m_pefob(r, i, rp)))
+                        if (r, i, rp, "base") in model.pmcif:
+                            _fix_component(model.pmcif[r, i, rp, "base"], value(_m_pmcif(r, i, rp)))
+                        if (r, i, rp, "base") in model.pm:
+                            _fix_component(model.pm[r, i, rp, "base"], value(_m_pm(r, i, rp)))
                         for m in model.m:
-                            if (m, r, i, rp) in model.xmgm:
-                                _fix_component(model.xmgm[m, r, i, rp], value(_m_xmgm(m, r, i, rp)))
+                            if (m, r, i, rp, "base") in model.xmgm:
+                                _fix_component(model.xmgm[m, r, i, rp, "base"], value(_m_xmgm(m, r, i, rp)))
 
             for r in model.r:
                 for f in model.f:

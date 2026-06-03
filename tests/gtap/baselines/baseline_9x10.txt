@@ -1,3 +1,37 @@
+2026-06-03 05:34:28,731 - equilibria.templates.gtap.gtap_model_equations - INFO - _align_xi_xaa_post_scaling: updated 100 (r,i) investment pairs (xi/xaa/xda/xma/xd/xmt/xds/xa/xet/gw_share/gdpmp) to income-side xiagg
+2026-06-03 05:34:28,765 - equilibria.templates.gtap.gtap_model_equations - INFO - xa_flag: fixed xaa/xda/xma=0 for 90 (r,i,aa) triples (GAMS xaFlag=0 mirror)
+2026-06-03 05:34:28,920 - equilibria.templates.gtap.gtap_solver - INFO - Applying closure: gtap_standard
+2026-06-03 05:34:28,943 - equilibria.templates.gtap.gtap_solver - INFO - Conditional fixing applied: 14030 variables fixed based on SAM data
+2026-06-03 05:34:28,950 - equilibria.templates.gtap.gtap_solver - INFO - MCP gap before aggressive fixing: -30 (free=15926, cons=15956)
+2026-06-03 05:34:28,950 - equilibria.templates.gtap.gtap_solver - INFO - MCP is already square or over-determined
+2026-06-03 05:34:28,950 - equilibria.templates.gtap.gtap_solver - INFO - Closure applied: 18421 variables fixed
+2026-06-03 05:34:28,969 - equilibria.templates.gtap.gtap_solver - INFO - Conditional fixing applied: 14030 variables fixed based on SAM data
+2026-06-03 05:34:28,976 - equilibria.templates.gtap.gtap_solver - INFO - MCP gap before aggressive fixing: -30 (free=15926, cons=15956)
+2026-06-03 05:34:28,976 - equilibria.templates.gtap.gtap_solver - INFO - MCP is already square or over-determined
+2026-06-03 05:34:29,152 - run_gtap - INFO - Investment variable fixing after apply_aggressive_fixing_for_mcp:
+  xi: 100/100 free  (0 fixed)
+  xiagg: 10/10 free  (0 fixed)
+  pi: 10/10 free  (0 fixed)
+  xaa[inv]: 100/100 free  (0 fixed)
+  pa[inv]:  100/100 free  (0 fixed)
+2026-06-03 05:34:30,369 - run_gtap - INFO - Full model scaling: row [1.449e-04, 1.000e+02], col [1.449e-04, 7.457e+01]
+2026-06-03 05:34:37,063 - equilibria.templates.gtap.gtap_model_equations - INFO - _align_xi_xaa_post_scaling: updated 100 (r,i) investment pairs (xi/xaa/xda/xma/xd/xmt/xds/xa/xet/gw_share/gdpmp) to income-side xiagg
+2026-06-03 05:34:37,075 - equilibria.templates.gtap.gtap_model_equations - INFO - xa_flag: fixed xaa/xda/xma=0 for 90 (r,i,aa) triples (GAMS xaFlag=0 mirror)
+2026-06-03 05:34:37,344 - equilibria.templates.gtap.gtap_solver - INFO - Applying closure: gtap_standard
+2026-06-03 05:34:37,367 - equilibria.templates.gtap.gtap_solver - INFO - Conditional fixing applied: 14030 variables fixed based on SAM data
+2026-06-03 05:34:37,374 - equilibria.templates.gtap.gtap_solver - INFO - MCP gap before aggressive fixing: -30 (free=15936, cons=15966)
+2026-06-03 05:34:37,374 - equilibria.templates.gtap.gtap_solver - INFO - MCP is already square or over-determined
+2026-06-03 05:34:37,374 - equilibria.templates.gtap.gtap_solver - INFO - Closure applied: 18421 variables fixed
+2026-06-03 05:34:37,393 - equilibria.templates.gtap.gtap_solver - INFO - Conditional fixing applied: 14030 variables fixed based on SAM data
+2026-06-03 05:34:37,400 - equilibria.templates.gtap.gtap_solver - INFO - MCP gap before aggressive fixing: -30 (free=15936, cons=15966)
+2026-06-03 05:34:37,400 - equilibria.templates.gtap.gtap_solver - INFO - MCP is already square or over-determined
+2026-06-03 05:34:37,637 - run_gtap - INFO - Investment variable fixing after apply_aggressive_fixing_for_mcp:
+  xi: 100/100 free  (0 fixed)
+  xiagg: 10/10 free  (0 fixed)
+  pi: 10/10 free  (0 fixed)
+  xaa[inv]: 100/100 free  (0 fixed)
+  pa[inv]:  100/100 free  (0 fixed)
+2026-06-03 05:34:38,877 - run_gtap - INFO - Full model scaling: row [1.449e-04, 1.000e+02], col [1.449e-04, 7.457e+01]
   closure: if_sub=False  numeraire=pnum
 === Python baseline 9x10 ===
 [nonlinear-full] fixed 10 sluggish pft(r,f) (no eq references them)
@@ -10,7 +44,7 @@
 
 ✅ Jacobian structure built: 72,746 non-zero entries (0.03% density)
 
-  baseline residual=2.742e-11  code=1  solve=7.00s
+  baseline residual=2.742e-11  code=1  solve=7.30s
 
 === Python shock 9x10 (10% imptx, rate scaling) ===
 [nonlinear-full] fixed 10 sluggish pft(r,f) (no eq references them)
@@ -23,7 +57,7 @@
 
 ✅ Jacobian structure built: 77,436 non-zero entries (0.03% density)
 
-  shock residual=7.279e-10  code=1  solve=9.42s
+  shock residual=7.279e-10  code=1  solve=9.63s
 
 Populated GAMS Vars in COMP.gdx: 139
 

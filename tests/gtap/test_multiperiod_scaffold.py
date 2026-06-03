@@ -85,3 +85,25 @@ def test_lift_to_t_broadcasts_init_across_periods():
         v1 = pyo_value(m.xp[r, a, 'check'])
         v2 = pyo_value(m.xp[r, a, 'shock'])
         assert v0 == v1 == v2, f"xp[{r},{a}] not broadcast: {v0}/{v1}/{v2}"
+
+
+def test_trade_vars_have_t_dim():
+    m = _build_3p()
+    assert ('USA', 'VegFruit', 'VegFruit', 'base') in m.pa
+    assert ('USA', 'VegFruit', 'CAN', 'base') in m.xw
+    assert ('USA', 'VegFruit', 'CAN', 'base') in m.pe
+    assert ('USA', 'VegFruit', 'CAN', 'shock') in m.pefob
+
+
+def test_trade_vars_init_broadcasts_across_periods():
+    """Verify _lift_to_t broadcasts trade-Var inits to every period (warm start)."""
+    from pyomo.environ import value as pyo_value
+    m = _build_3p()
+    for (idx_base, idx_check) in [
+        (('USA', 'VegFruit', 'VegFruit', 'base'),  ('USA', 'VegFruit', 'VegFruit', 'check')),
+        (('USA', 'VegFruit', 'CAN', 'base'),        ('USA', 'VegFruit', 'CAN', 'check')),
+    ]:
+        if idx_base in m.pa and idx_check in m.pa:
+            assert pyo_value(m.pa[idx_base]) == pytest.approx(pyo_value(m.pa[idx_check]), rel=1e-8)
+        if idx_base in m.xw and idx_check in m.xw:
+            assert pyo_value(m.xw[idx_base]) == pytest.approx(pyo_value(m.xw[idx_check]), rel=1e-8)
