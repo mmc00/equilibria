@@ -133,3 +133,31 @@ def test_factor_vars_init_broadcasts_across_periods():
             assert pyo_value(m.pf[idx_base]) == pyo_value(m.pf[idx_chk])
         if idx_base in m.pft and idx_chk in m.pft:
             assert pyo_value(m.pft[idx_base]) == pyo_value(m.pft[idx_chk])
+
+
+def test_income_vars_have_t_dim():
+    m = _build_3p()
+    for vname in ('yc', 'yg', 'rsav', 'regy', 'facty', 'ytax_ind',
+                  'yi', 'xi', 'xiagg', 'pi', 'kstock'):
+        v = getattr(m, vname, None)
+        if v is None:
+            continue  # not declared — note in report
+        # xi has 2 r/i indices; the rest are r-indexed.
+        if vname == 'xi':
+            assert ('USA', 'VegFruit', 'base') in v, f"{vname} missing base"
+            assert ('USA', 'VegFruit', 'check') in v, f"{vname} missing check"
+            assert ('USA', 'VegFruit', 'shock') in v, f"{vname} missing shock"
+        else:
+            assert ('USA', 'base') in v, f"{vname} missing base"
+            assert ('USA', 'check') in v, f"{vname} missing check"
+            assert ('USA', 'shock') in v, f"{vname} missing shock"
+    # ytax has extra (r, gy) index
+    assert ('USA', 'dt', 'base') in m.ytax
+
+
+def test_regy_fixed_only_at_base():
+    """eq_regy must be Constraint.Skip at base (regy anchored); active for ts."""
+    m = _build_3p()
+    assert m.regy['USA', 'base'].fixed
+    assert not m.regy['USA', 'check'].fixed
+    assert not m.regy['USA', 'shock'].fixed

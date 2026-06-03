@@ -99,7 +99,7 @@ def build_derived(model) -> dict:
     def _xi(key):
         if len(key) != 1:
             return None
-        return _value_or_zero(model, "xiagg", key[0])
+        return _value_or_zero(model, "xiagg", (key[0], "base"))
     out["xi"] = _DerivedVar("xi(=xiagg)", _xi)
 
     def _pg(r):
@@ -125,7 +125,7 @@ def build_derived(model) -> dict:
         if pg is None or pg <= 0.0:
             return None
         try:
-            yg = _pyo_value(model.yg[key[0]])
+            yg = _pyo_value(model.yg[key[0], "base"])
             return yg / pg
         except Exception:
             return None
