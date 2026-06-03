@@ -213,8 +213,8 @@ def run_synchronized_comparison():
             py_results['pd'][(r, i)] = float(value(model.pd[r, i]))
             py_results['xa'][(r, i)] = float(value(model.xa[r, i]))
             py_results['pa'][(r, i)] = float(value(model.pa[r, i]))
-            py_results['xc'][(r, i)] = float(value(model.xc[r, i]))
-            py_results['xg'][(r, i)] = float(value(model.xg[r, i]))
+            py_results['xc'][(r, i)] = float(value(model.xc[r, i, "base"]))
+            py_results['xg'][(r, i)] = float(value(model.xg[r, i, "base"]))
             py_results['xi'][(r, i)] = float(value(model.xi[r, i]))
             
         for f in model.f:

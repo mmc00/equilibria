@@ -468,7 +468,7 @@ def _collect_key_quantities(
             for i in model.i:
                 xa_ri = float(value(model.xa[r, i])) if hasattr(model, "xa") else 0.0
                 for aa in model.aa:
-                    xaa_val = float(value(model.xaa[r, i, aa])) if hasattr(model, "xaa") else 0.0
+                    xaa_val = float(value(model.xaa[r, i, aa, t0(model)])) if hasattr(model, "xaa") and (r, i, aa, t0(model)) in model.xaa else 0.0
                     if xa_ri > 1e-14:
                         alphaa[f"{r}|{i}|{aa}"] = xaa_val / xa_ri
                     else:
@@ -559,7 +559,7 @@ def _collect_key_quantities(
             if hasattr(model, "xaa") and hasattr(model, "pa"):
                 for i in model.i:
                     for aa in (GTAP_HOUSEHOLD_AGENT, GTAP_GOVERNMENT_AGENT, GTAP_INVESTMENT_AGENT):
-                        gdp_val += float(value(model.pa[r, i, aa, t0(model)])) * float(value(model.xaa[r, i, aa]))
+                        gdp_val += float(value(model.pa[r, i, aa, t0(model)])) * (float(value(model.xaa[r, i, aa, t0(model)])) if (r, i, aa, t0(model)) in model.xaa else 0.0)
             if hasattr(model, "xw") and hasattr(model, "pe"):
                 for i in model.i:
                     for rp in model.rp:
@@ -921,7 +921,7 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
                 nd = float(value(model.nd[r, a, t0(model)]))
                 pnd = float(value(model.pnd[r, a, t0(model)]))
                 pa = float(value(model.pa[r, i, a, t0(model)]))
-                xaa = float(value(model.xaa[r, i, a]))
+                xaa = float(value(model.xaa[r, i, a, t0(model)])) if (r, i, a, t0(model)) in model.xaa else 0.0
                 io_val = (
                     float(value(model.io_param[r, i, a]))
                     if hasattr(model, "io_param")
@@ -948,9 +948,9 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
                 )
 
             if hasattr(model, "xc") and hasattr(model, "xcshr") and hasattr(model, "yc"):
-                xaa_hhd = float(value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT]))
+                xaa_hhd = float(value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT, t0(model)])) if (r, i, GTAP_HOUSEHOLD_AGENT, t0(model)) in model.xaa else 0.0
                 pa_hhd = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT, t0(model)]))
-                xcshr = float(value(model.xcshr[r, i]))
+                xcshr = float(value(model.xcshr[r, i, t0(model)])) if (r, i, t0(model)) in model.xcshr else 0.0
                 yc = float(value(model.yc[r, t0(model)]))
                 rhs = xcshr * yc
                 commodity_residuals.append(
@@ -963,8 +963,8 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
                 )
 
             if hasattr(model, "xg"):
-                xaa_gov = float(value(model.xaa[r, i, GTAP_GOVERNMENT_AGENT]))
-                xg = float(value(model.xg[r, i]))
+                xaa_gov = float(value(model.xaa[r, i, GTAP_GOVERNMENT_AGENT, t0(model)])) if (r, i, GTAP_GOVERNMENT_AGENT, t0(model)) in model.xaa else 0.0
+                xg = float(value(model.xg[r, i, t0(model)])) if (r, i, t0(model)) in model.xg else 0.0
                 commodity_residuals.append(
                     {
                         "source": "gov",
@@ -975,7 +975,7 @@ def _build_path_capi_post_checks(model, params: GTAPParameters) -> dict[str, Any
                 )
 
             if hasattr(model, "xi"):
-                xaa_inv = float(value(model.xaa[r, i, GTAP_INVESTMENT_AGENT]))
+                xaa_inv = float(value(model.xaa[r, i, GTAP_INVESTMENT_AGENT, t0(model)])) if (r, i, GTAP_INVESTMENT_AGENT, t0(model)) in model.xaa else 0.0
                 xi = float(value(model.xi[r, i, t0(model)]))
                 commodity_residuals.append(
                     {
@@ -1592,10 +1592,10 @@ def _run_path_capi_linear_block(
                 c_denom = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT, t0(model)])) + 1e-12
                 g_denom = float(value(model.pa[r, i, GTAP_GOVERNMENT_AGENT, t0(model)])) + 1e-12
                 i_denom = float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT, t0(model)])) + 1e-12
-                expressions.append(model.xc[r, i] - (c_share * yc_val / c_denom))
-                variables.append(model.xc[r, i])
-                expressions.append(model.xg[r, i] - (g_share * yg_val / g_denom))
-                variables.append(model.xg[r, i])
+                expressions.append(model.xc[r, i, t0(model)] - (c_share * yc_val / c_denom))
+                variables.append(model.xc[r, i, t0(model)])
+                expressions.append(model.xg[r, i, t0(model)] - (g_share * yg_val / g_denom))
+                variables.append(model.xg[r, i, t0(model)])
                 expressions.append(model.xi[r, i, t0(model)] - (i_share * yi_val / i_denom))
                 variables.append(model.xi[r, i, t0(model)])
         return expressions, variables
@@ -1709,11 +1709,11 @@ def _run_path_capi_linear_block(
             expressions.append(model.regy[r, t_lbl] - regy_const)
             variables.append(model.regy[r, t_lbl])
 
-            expressions.append(model.yc[r, t_lbl] - model.betap[r] * (model.phi[r] / model.phip[r]) * model.regy[r, t_lbl])
+            expressions.append(model.yc[r, t_lbl] - model.betap[r] * (model.phi[r, "base"] / model.phip[r, "base"]) * model.regy[r, t_lbl])
             variables.append(model.yc[r, t_lbl])
-            expressions.append(model.yg[r, t_lbl] - model.betag[r] * model.phi[r] * model.regy[r, t_lbl])
+            expressions.append(model.yg[r, t_lbl] - model.betag[r] * model.phi[r, "base"] * model.regy[r, t_lbl])
             variables.append(model.yg[r, t_lbl])
-            expressions.append(model.rsav[r, t_lbl] - model.betas[r] * model.phi[r] * model.regy[r, t_lbl])
+            expressions.append(model.rsav[r, t_lbl] - model.betas[r] * model.phi[r, "base"] * model.regy[r, t_lbl])
             variables.append(model.rsav[r, t_lbl])
             expressions.append(model.yi[r, t_lbl] - model.regy[r, t_lbl] * model.yi_share_reg[r])
             variables.append(model.yi[r, t_lbl])
@@ -1723,12 +1723,12 @@ def _run_path_capi_linear_block(
         expressions, variables = _build_final_demand_snapshot_block()
         for r in model.r:
             for i in model.i:
-                expressions.append(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT] - model.xc[r, i])
-                variables.append(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT])
-                expressions.append(model.xaa[r, i, GTAP_GOVERNMENT_AGENT] - model.xg[r, i])
-                variables.append(model.xaa[r, i, GTAP_GOVERNMENT_AGENT])
-                expressions.append(model.xaa[r, i, GTAP_INVESTMENT_AGENT] - model.xi[r, i, t0(model)])
-                variables.append(model.xaa[r, i, GTAP_INVESTMENT_AGENT])
+                expressions.append(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT, t0(model)] - model.xc[r, i, t0(model)])
+                variables.append(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT, t0(model)])
+                expressions.append(model.xaa[r, i, GTAP_GOVERNMENT_AGENT, t0(model)] - model.xg[r, i, t0(model)])
+                variables.append(model.xaa[r, i, GTAP_GOVERNMENT_AGENT, t0(model)])
+                expressions.append(model.xaa[r, i, GTAP_INVESTMENT_AGENT, t0(model)] - model.xi[r, i, t0(model)])
+                variables.append(model.xaa[r, i, GTAP_INVESTMENT_AGENT, t0(model)])
         return expressions, variables
 
     # Snapshot builders use current model levels, so running them after previous
@@ -4026,8 +4026,8 @@ def validate_shock(
                 betap = float(value(model.betap[r])) if hasattr(model, "betap") else 0.0
                 betag = float(value(model.betag[r])) if hasattr(model, "betag") else 0.0
                 betas = float(value(model.betas[r])) if hasattr(model, "betas") else 0.0
-                phi = float(value(model.phi[r])) if hasattr(model, "phi") else 1.0
-                phip = float(value(model.phip[r])) if hasattr(model, "phip") else 1.0
+                phi = float(value(model.phi[r, _t])) if hasattr(model, "phi") and (r, _t) in model.phi else 1.0
+                phip = float(value(model.phip[r, _t])) if hasattr(model, "phip") and (r, _t) in model.phip else 1.0
                 yi_share = float(value(model.yi_share_reg[r])) if hasattr(model, "yi_share_reg") else 0.0
 
                 per_region[str(r)] = {

@@ -194,3 +194,20 @@ def test_welfare_savings_vars_have_t_dim():
     assert 'base' in m.rorg, "rorg missing base"
     assert 'check' in m.rorg, "rorg missing check"
     assert 'shock' in m.rorg, "rorg missing shock"
+
+
+def test_all_vars_have_t_dim():
+    """Audit: every Var in the model must have 't' as last index dimension."""
+    from pyomo.environ import Var
+    m = _build(("base", "check", "shock"))
+    missing = []
+    for v in m.component_objects(Var):
+        idx_iter = iter(v.index_set())
+        try:
+            sample = next(idx_iter)
+        except StopIteration:
+            continue
+        sample_t = sample if isinstance(sample, tuple) else (sample,)
+        if not any(x in ('base', 'check', 'shock') for x in sample_t):
+            missing.append(v.name)
+    assert missing == [], f"Vars missing t dim: {sorted(missing)}"

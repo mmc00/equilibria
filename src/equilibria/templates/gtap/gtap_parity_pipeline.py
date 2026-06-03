@@ -139,7 +139,8 @@ def _extract_xaa_unscaled(model) -> Dict[Any, float]:
     for idx in model.xaa:
         try:
             level = float(value(model.xaa[idx]))
-            if hasattr(model, "xscale") and isinstance(idx, tuple) and len(idx) == 3:
+            # xaa is now 4-indexed (r, i, aa, t); scale by xscale(r, aa)
+            if hasattr(model, "xscale") and isinstance(idx, tuple) and len(idx) == 4:
                 region = idx[0]
                 agent = idx[2]
                 scale = float(value(model.xscale[region, agent]))

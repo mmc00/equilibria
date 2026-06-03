@@ -317,8 +317,8 @@ def run_python_gtap():
             py_results['pft'] = { (r, f): float(value(model.pft[r, f])) for r in model.r for f in model.f }
             
             # Demand
-            py_results['xc'] = { (r, i): float(value(model.xc[r, i])) for r in model.r for i in model.i }
-            py_results['xg'] = { (r, i): float(value(model.xg[r, i])) for r in model.r for i in model.i }
+            py_results['xc'] = { (r, i): float(value(model.xc[r, i, "base"])) for r in model.r for i in model.i }
+            py_results['xg'] = { (r, i): float(value(model.xg[r, i, "base"])) for r in model.r for i in model.i }
             py_results['xi'] = { (r, i): float(value(model.xi[r, i])) for r in model.r for i in model.i }
             
             # Income

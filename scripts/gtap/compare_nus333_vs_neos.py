@@ -340,8 +340,8 @@ def _dump_gdpmp_decomp(model, label):
         for i in model.i:
             for aa in ("hhd", "gov", "inv"):
                 try:
-                    pa_v = float(value(model.pa[r, i, aa]))
-                    xaa_v = float(value(model.xaa[r, i, aa]))
+                    pa_v = float(value(model.pa[r, i, aa, "base"]))
+                    xaa_v = float(value(model.xaa[r, i, aa, "base"])) if (r, i, aa, "base") in model.xaa else 0.0
                     absorp_by_agent[aa] += pa_v * xaa_v
                     absorp += pa_v * xaa_v
                 except Exception:
@@ -471,7 +471,7 @@ def _extract_key(model, params):
             for i in model.i:
                 for aa in (GTAP_HH, GTAP_GOV, GTAP_INV):
                     try:
-                        gdp += float(value(model.pa[r, i, aa])) * float(value(model.xaa[r, i, aa]))
+                        gdp += float(value(model.pa[r, i, aa, "base"])) * (float(value(model.xaa[r, i, aa, "base"])) if (r, i, aa, "base") in model.xaa else 0.0)
                     except (KeyError, ValueError):
                         pass
         if hasattr(model, "xw") and hasattr(model, "pe"):
