@@ -4763,11 +4763,11 @@ class GTAPModelEquations:
 
         # GAMS xmteq/xdseq: aggregate demands defined as sum over agents
         def eq_xd_agg_rule(model, r, i, t):
-            return model.xd[r, i, t] == sum(model.xda[r, i, aa, "base"] / model.xscale[r, aa] for aa in model.aa)
+            return model.xd[r, i, t] == sum(model.xda[r, i, aa, t] / model.xscale[r, aa] for aa in model.aa)
         model.eq_xd_agg = Constraint(model.r, model.i, model.t, rule=eq_xd_agg_rule)
 
         def eq_xmt_agg_rule(model, r, i, t):
-            return model.xmt[r, i, t] == sum(model.xma[r, i, aa, "base"] / model.xscale[r, aa] for aa in model.aa)
+            return model.xmt[r, i, t] == sum(model.xma[r, i, aa, t] / model.xscale[r, aa] for aa in model.aa)
         model.eq_xmt_agg = Constraint(model.r, model.i, model.t, rule=eq_xmt_agg_rule)
         
         # Armington price CES aggregator by agent (GAMS paeq)
@@ -5249,6 +5249,7 @@ class GTAPModelEquations:
 
         # Consumer expenditure deflator (pcons) using shares
         def eq_pcons_rule(model, r, t):
+            # compStat: xcshr anchored at base — intentional
             return model.pcons[r, t] == sum(model.xcshr[r, i, "base"] * model.pa[r, i, "hhd", t] for i in model.i)
         model.eq_pcons = Constraint(model.r, model.t, rule=eq_pcons_rule)
 
@@ -5312,6 +5313,7 @@ class GTAPModelEquations:
 
         # Savings price (GAMS psaveeq, compStat-style static form)
         def eq_psave_rule(model, r, t):
+            # compStat: chiSave anchored at base — intentional
             return model.psave[r, t] == model.chiSave["base"] * model.pi[r, t]
         model.eq_psave = Constraint(model.r, model.t, rule=eq_psave_rule)
 
@@ -5374,6 +5376,7 @@ class GTAPModelEquations:
             if savf_flag == "capFix":
                 if is_residual:
                     return Constraint.Skip
+                # compStat: pigbl anchored at base — intentional
                 return model.savf[r, t] == model.pigbl["base"] * model.savf_bar[r]
             if savf_flag == "capSFix":
                 if is_residual:
@@ -5433,7 +5436,7 @@ class GTAPModelEquations:
             denom = 0.0
             for r in model.r:
                 net_invest = model.pi[r, t] * (model.xiagg[r, t] - model.depr[r] * model.kstock[r, t])
-                numer += model.rore[r, "base"] * net_invest
+                numer += model.rore[r, t] * net_invest
                 denom += net_invest
             return model.rorg[t] == numer / (denom + 1e-12)
         model.eq_rorg = Constraint(model.t, rule=eq_rorg_rule)
@@ -5569,11 +5572,13 @@ class GTAPModelEquations:
 
         # Private consumption expenditure (GAMS yceq)
         def eq_yc_rule(model, r, t):
+            # compStat: phi[r, "base"] / phip[r, "base"] anchored at base — intentional
             return model.yc[r, t] == model.betap[r] * (model.phi[r, "base"] / model.phip[r, "base"]) * model.regy[r, t]
         model.eq_yc = Constraint(model.r, model.t, rule=eq_yc_rule)
 
         # Government expenditure (GAMS ygeq)
         def eq_yg_rule(model, r, t):
+            # compStat: phi[r, "base"] anchored at base — intentional
             return model.yg[r, t] == model.betag[r] * model.phi[r, "base"] * model.regy[r, t]
         model.eq_yg = Constraint(model.r, model.t, rule=eq_yg_rule)
 
@@ -5589,6 +5594,7 @@ class GTAPModelEquations:
 
         # Regional savings (GAMS rsaveq)
         def eq_rsav_rule(model, r, t):
+            # compStat: phi[r, "base"] anchored at base — intentional
             return model.rsav[r, t] == model.betas[r] * model.phi[r, "base"] * model.regy[r, t]
         model.eq_rsav = Constraint(model.r, model.t, rule=eq_rsav_rule)
 
@@ -5973,7 +5979,7 @@ class GTAPModelEquations:
                             _fix_component(model.pfa[r, f, a, "base"], value(_m_pfa(r, f, a)))
                         for t in self._t_set:
                             if (r, f, a, t) in model.pfy:
-                                _fix_component(model.pfy[r, f, a, t], value(_m_pfy(r, f, a)))
+                                _fix_component(model.pfy[r, f, a, t], value(_m_pfy(r, f, a, t)))
     
     def _add_objective(self, model: "ConcreteModel") -> None:
         """Add dummy objective for NLP."""
