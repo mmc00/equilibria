@@ -948,10 +948,10 @@ class GTAPModelEquations:
                     gross_factor_income - value(model.fdepr[r]) * value(model.pi[r, "base"]) * value(model.kstock[r, "base"])
                 )
 
-            if hasattr(model, "ytaxTot") and r in model.ytaxTot:
-                model.ytaxTot[r].set_value(sum(value(model.ytax[r, gy, "base"]) for gy in model.gy))
+            if hasattr(model, "ytaxTot") and (r, "base") in model.ytaxTot:
+                model.ytaxTot[r, "base"].set_value(sum(value(model.ytax[r, gy, "base"]) for gy in model.gy))
             if hasattr(model, "ytax_ind") and (r, "base") in model.ytax_ind:
-                model.ytax_ind[r, "base"].set_value(value(model.ytaxTot[r]) - value(model.ytax[r, "dt", "base"]))
+                model.ytax_ind[r, "base"].set_value(value(model.ytaxTot[r, "base"]) - value(model.ytax[r, "dt", "base"]))
             if hasattr(model, "regy") and (r, "base") in model.regy:
                 # Skip when regy is fixed at base (NEOS cal.gms:629 pins regY
                 # to expenditure-side; income-side facty+ytax_ind differs).
@@ -3554,7 +3554,7 @@ class GTAPModelEquations:
         model.rsav = Var(model.r, model.t, within=Reals, initialize=_lift_to_t(get_rsav_init, self._t_set), doc="Regional savings")
         model.facty = Var(model.r, model.t, within=NonNegativeReals, initialize=_lift_to_t(get_facty_init, self._t_set), doc="Factor income net of depreciation")
         model.ytax = Var(model.r, model.gy, model.t, within=Reals, initialize=_lift_to_t(get_ytax_stream_init, self._t_set), doc="Government tax revenue by stream")
-        model.ytaxTot = Var(model.r, within=Reals, initialize=get_ytax_tot_init, doc="Total government revenue")
+        model.ytaxTot = Var(model.r, model.t, within=Reals, initialize=_lift_to_t(get_ytax_tot_init, self._t_set), doc="Total government revenue")
         model.ytax_ind = Var(model.r, model.t, within=Reals, initialize=_lift_to_t(get_ytax_ind_init, self._t_set), doc="Indirect tax revenue")
         model.ytaxshr = Var(
             model.r,
@@ -3700,7 +3700,7 @@ class GTAPModelEquations:
         model.p = Expression(model.r, model.a, model.i, rule=_p_rule, doc="Pre-tax producer price")
 
         def _ytaxInd_rule(m, r):
-            return m.ytaxTot[r] - m.ytax[r, "dt", "base"]
+            return m.ytaxTot[r, "base"] - m.ytax[r, "dt", "base"]
         model.ytaxInd = Expression(model.r, rule=_ytaxInd_rule, doc="Total revenues from indirect taxes")
 
         # chiInv is frozen at calibration per cal.gms:426. Under RoRFlag=capFix
@@ -4497,11 +4497,13 @@ class GTAPModelEquations:
             return model.xaa[r, i, GTAP_GOVERNMENT_AGENT] == model.xg[r, i]
         model.eq_xaa_gov = Constraint(model.r, model.i, rule=eq_xaa_gov_rule)
 
-        def eq_xaa_inv_rule(model, r, i):
+        def eq_xaa_inv_rule(model, r, i, t):
+            if t != "base":
+                return Constraint.Skip
             if not get_xa_flag(r, i, GTAP_INVESTMENT_AGENT):
                 return Constraint.Skip
-            return model.xaa[r, i, GTAP_INVESTMENT_AGENT] == model.xi[r, i, "base"]
-        model.eq_xaa_inv = Constraint(model.r, model.i, rule=eq_xaa_inv_rule)
+            return model.xaa[r, i, GTAP_INVESTMENT_AGENT] == model.xi[r, i, t]
+        model.eq_xaa_inv = Constraint(model.r, model.i, model.t, rule=eq_xaa_inv_rule)
 
         # GAMS xatmgeq (model.gms:1016): xa(r,i,tmg) = alphaa(r,i,tmg)*xtmg(i)*(ptmg(i)/pa(r,i,tmg))^sigmamg(i)
         # Only i ∈ margin-commodity set m has nonzero flow. alphaa_tmg(r,i) = vst(i,r) / sum_r' vst(i,r').
@@ -5111,21 +5113,25 @@ class GTAPModelEquations:
         # Private consumption — CDE form (GAMS xaceq, model.gms:774)
         # pa(r,i,hhd) * xa(r,i,hhd) = xcshr(r,i) * yc(r)
         # GAMS uses pa(r,i,h,t) where h = household agent 'hhd'
-        def eq_xc_rule(model, r, i):
+        def eq_xc_rule(model, r, i, t):
+            if t != "base":
+                return Constraint.Skip
             share = value(model.c_share[r, i])
             if share <= 0.0:
                 return model.xc[r, i] == 0.0
-            return model.pa[r, i, "hhd", "base"] * model.xc[r, i] == model.xcshr[r, i] * model.yc[r, "base"]
-        model.eq_xc = Constraint(model.r, model.i, rule=eq_xc_rule)
+            return model.pa[r, i, "hhd", t] * model.xc[r, i] == model.xcshr[r, i] * model.yc[r, t]
+        model.eq_xc = Constraint(model.r, model.i, model.t, rule=eq_xc_rule)
 
         # Government consumption
         # GAMS uses pa(r,i,gov,t) where gov = government agent
-        def eq_xg_rule(model, r, i):
+        def eq_xg_rule(model, r, i, t):
+            if t != "base":
+                return Constraint.Skip
             share = value(model.g_share[r, i])
             if share <= 0.0:
                 return model.xg[r, i] == 0.0
-            return model.pa[r, i, "gov", "base"] * model.xg[r, i] == share * model.yg[r, "base"]
-        model.eq_xg = Constraint(model.r, model.i, rule=eq_xg_rule)
+            return model.pa[r, i, "gov", t] * model.xg[r, i] == share * model.yg[r, t]
+        model.eq_xg = Constraint(model.r, model.i, model.t, rule=eq_xg_rule)
 
         # Investment demand
         # GAMS uses pa(r,i,inv,t) where inv = investment agent
@@ -5455,20 +5461,15 @@ class GTAPModelEquations:
         model.eq_ytax = Constraint(model.r, model.gy, model.t, rule=eq_ytax_rule)
 
         # Total tax revenue (GAMS ytaxToteq)
-        def eq_ytax_tot_rule(model, r):
-            return model.ytaxTot[r] == sum(model.ytax[r, gy, "base"] for gy in model.gy)
-        model.eq_ytax_tot = Constraint(model.r, rule=eq_ytax_tot_rule)
+        def eq_ytax_tot_rule(model, r, t):
+            return model.ytaxTot[r, t] == sum(model.ytax[r, gy, t] for gy in model.gy)
+        model.eq_ytax_tot = Constraint(model.r, model.t, rule=eq_ytax_tot_rule)
 
         # Indirect tax revenues (GAMS ytaxIndeq).
-        # At t='base' we reuse model.ytaxTot[r] (single Pyomo Expression
-        # reference) to preserve the original Jacobian density — inlining
-        # the sum here adds |gy| extra non-zeros per region and shifts the
-        # PATH-solved baseline by ~1e-11 (above our 1e-13 FP gate). For
-        # t in model.ts the inline sum is required since ytaxTot is base-only.
+        # Now that ytaxTot is t-indexed, both base and non-base periods can
+        # reference model.ytaxTot[r, t] directly — no inline-sum fallback needed.
         def eq_ytax_ind_rule(model, r, t):
-            if t == "base":
-                return model.ytax_ind[r, t] == model.ytaxTot[r] - model.ytax[r, "dt", t]
-            return model.ytax_ind[r, t] == sum(model.ytax[r, gy, t] for gy in model.gy) - model.ytax[r, "dt", t]
+            return model.ytax_ind[r, t] == model.ytaxTot[r, t] - model.ytax[r, "dt", t]
         model.eq_ytax_ind = Constraint(model.r, model.t, rule=eq_ytax_ind_rule)
 
         # Regional income (GAMS regYeq).
