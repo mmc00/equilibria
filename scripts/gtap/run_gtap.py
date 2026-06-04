@@ -234,6 +234,205 @@ def _parse_index(index: str) -> tuple[str, ...]:
     return tuple(p for p in parts if p)
 
 
+def _set_active_t_slice(model, tsim: str, t_set: tuple[str, ...]) -> None:
+    """Restrict the model to period ``tsim`` for PATH.
+
+    Two pieces:
+      1. Deactivate constraints whose last index dim is a period in
+         ``t_set`` and not ``tsim`` (scalar / time-invariant constraints
+         stay untouched).
+      2. Fix every Var entry whose last index dim is a period in
+         ``t_set`` and not ``tsim`` at its current ``.value``. This is
+         what keeps ``apply_squareness_patches`` and Hopcroft-Karp
+         matching seeing a square base (otherwise the matcher's
+         full-model view counts other-period vars as free, blowing the
+         squareness check).
+
+    The fixings done here are *period-scoped* and not undone — that's
+    fine: when we move on to period ``tsim+1`` we'll fix THIS period's
+    vars (now solved values) via ``_fix_lagged_state`` and re-activate
+    next-period vars implicitly by skipping them.
+    """
+    from pyomo.environ import Constraint as _PyoConstraint, Var as _PyoVar
+
+    t_lookup = set(t_set)
+
+    def _matches_t(idx) -> tuple[bool, bool]:
+        """Return (has_t_dim, matches_tsim).
+
+        An index dimension is considered the "t" dim iff its last
+        entry is a string that appears in ``t_set``. Commodity / region
+        names (also strings) are not in ``t_set`` so they're correctly
+        treated as time-invariant.
+        """
+        if idx is None:
+            return False, False
+        if isinstance(idx, tuple):
+            if not idx:
+                return False, False
+            last = idx[-1]
+        else:
+            last = idx
+        if isinstance(last, str) and last in t_lookup:
+            return True, last == tsim
+        return False, False
+
+    for con in model.component_objects(_PyoConstraint, active=None):
+        for idx in con.keys():
+            has_t, matches = _matches_t(idx)
+            if has_t and not matches:
+                con[idx].deactivate()
+
+    for var in model.component_objects(_PyoVar, active=None):
+        for idx in var.keys():
+            v_obj = var[idx]
+            if v_obj.fixed:
+                continue
+            has_t, matches = _matches_t(idx)
+            if not has_t or matches:
+                continue
+            cv = v_obj.value
+            if cv is None:
+                cv = 1.0
+            v_obj.fix(float(cv))
+
+
+def _warm_start_from_prev(new_model, prev_model) -> None:
+    """Copy solved Var values from prev_model into new_model.
+
+    Both models use ``t_set=("base",)`` so all indices are identical
+    (no ``t`` suffix). This mirrors GAMS: after each ``solve``, the
+    ``.l`` levels persist and the next period starts from them.
+    """
+    from pyomo.environ import Var as _V
+    for _var in new_model.component_objects(_V, active=None):
+        prev_var = getattr(prev_model, _var.name, None)
+        if prev_var is None:
+            continue
+        for idx in _var.keys():
+            try:
+                sv = prev_var[idx].value
+            except (KeyError, AttributeError):
+                continue
+            if sv is None:
+                continue
+            try:
+                _var[idx].set_value(float(sv), skip_validation=True)
+            except Exception:
+                pass
+
+
+def solve_sequential(
+    model,
+    params,
+    *,
+    closure_config,
+    t_set: tuple[str, ...],
+    equation_scaling: bool = True,
+    tol: float = 1e-8,
+    period_setup_fn=None,
+) -> dict[str, dict]:
+    """Solve GTAP period-by-period, building a fresh model per period.
+
+    Mirrors GAMS ``solveloop.gms``: each period is an independent
+    ``solve using mcp`` on a freshly-constructed single-period model,
+    warm-started from the previous period's solution. PATH sees the
+    same clean ~18k-var system GAMS provides, with no multi-period
+    Jacobian scaling artifacts.
+
+    ``model`` is ignored — it exists only for API compatibility.
+    All period models are built fresh via
+    ``GTAPModelEquations(..., t_set=("base",)).build_model()``.
+
+    ``period_setup_fn``, if provided, is called as
+    ``period_setup_fn(period_model, tsim, prev_model)`` after warm-
+    starting but before the PATH solve.  Use it to apply shocks
+    (e.g. ``imptx`` changes) to the fresh model for a specific period.
+
+    Returns a dict mapping period name → solver result dict.
+    The last period's solved model is stored in
+    ``results["_models"]`` for inspection.
+    """
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+    results: dict[str, dict] = {}
+    prev_model = None  # holds the previously-solved model for warm-starting
+    period_models: dict[str, Any] = {}
+
+    first_year = t_set[0]
+    from pyomo.environ import value as _pyo_val, Constraint as _PyoCon
+
+    for tsim in t_set:
+        is_cf = (tsim != first_year)
+        eq = GTAPModelEquations(
+            params.sets,
+            params,
+            closure_config,
+            t_set=("base",),
+            is_counterfactual=is_cf,
+        )
+        m = eq.build_model()
+
+        if prev_model is not None:
+            # Warm-start from the previous period's solution —
+            # identical to GAMS retaining .l levels across solves.
+            _warm_start_from_prev(m, prev_model)
+
+        if is_cf:
+            # Mirror GAMS cal.gms:629/650: at check/shock, regY is freed and
+            # regYeq binds (regy = facty + ytaxind).
+            #
+            # The check model is built with is_counterfactual=True, so regy
+            # is NOT fixed at expenditure bench.  After warm-starting (which
+            # copies regy=expenditure_bench=17.66 from base), we override regy
+            # to the income-side value (facty+ytaxind=15.63) from the previous
+            # solved model.  Since eq_regy is Constraint.Skip (model.ts=[] for
+            # t_set=("base",)), apply_aggressive_fixing_for_mcp will see regy
+            # as an unmatched free var and fix it at its current value (15.63).
+            # PATH then solves with regy fixed at the income-side value, and
+            # eq_yc/eq_yg/eq_rsav drive yc/yg/rsav to the check equilibrium.
+            for _r in m.r:
+                _regy_vd = m.regy[_r, "base"]
+                if prev_model is not None:
+                    try:
+                        _facty = _pyo_val(prev_model.facty[_r, "base"])
+                        _ytax  = _pyo_val(prev_model.ytax_ind[_r, "base"])
+                        if _facty is not None and _ytax is not None:
+                            _income_val = float(_facty) + float(_ytax)
+                            # Fix regy at the income-side value from the previous
+                            # period.  This mirrors GAMS where for check/shock
+                            # periods regY.fx → regYeq active → regy = facty+ytaxind.
+                            # Fixing directly (rather than activating eq_regy) avoids
+                            # the convergence issues that arise from adding an
+                            # extra constraint to an already-square system.
+                            _regy_vd.fix(_income_val)
+                    except Exception:
+                        pass
+
+        if period_setup_fn is not None:
+            period_setup_fn(m, tsim, prev_model)
+
+        r = _run_path_capi_nonlinear_full(
+            m, params,
+            closure_config=closure_config,
+            equation_scaling=equation_scaling,
+            path_capi_convergence_tol=tol,
+        )
+        code = r.get("code")
+        if code is None:
+            tc = r.get("termination_code")
+            code = 1 if tc == 1 else 0
+        residual = r.get("residual", float("inf"))
+        results[tsim] = {**r, "code": int(code), "residual": float(residual)}
+        period_models[tsim] = m
+        prev_model = m
+        if results[tsim]["code"] != 1:
+            break
+
+    results["_models"] = period_models
+    return results
+
+
 def _build_flags_dict(params: "GTAPParameters") -> dict[str, dict]:
     """Build the 15 activity-flag dicts iterloop.gms uses to identify
     inactive flows.
@@ -614,8 +813,8 @@ def _collect_key_quantities(
                         alphaa[f"{r}|{i}|{aa}"] = 0.0
 
                     if hasattr(model, "pdp") and hasattr(model, "paa"):
-                        paa = float(value(model.paa[r, i, aa]))
-                        pdp = float(value(model.pdp[r, i, aa]))
+                        paa = float(value(model.paa[r, i, aa, t0(model)]))
+                        pdp = float(value(model.pdp[r, i, aa, t0(model)]))
                         if paa > 1e-14:
                             dintx[f"{r}|{i}|{aa}"] = pdp / paa - 1.0
                         else:
@@ -2108,8 +2307,19 @@ def _run_path_capi_nonlinear_full(
     xi_diag_commodity: str = "c_Util_Cons",
     equation_scaling: bool = False,
     solution_hint=None,
+    active_t: Optional[str] = None,
+    active_t_set: Optional[tuple[str, ...]] = None,
 ) -> dict[str, Any]:
-    """Solve the full GTAP system through PATH C API nonlinear callbacks."""
+    """Solve the full GTAP system through PATH C API nonlinear callbacks.
+
+    When ``active_t`` is given, restricts the PATH problem to variables
+    and equations whose last index dimension equals ``active_t``. Used
+    by :func:`solve_sequential` for the per-period MCP solves. The
+    ``active_t_set`` argument supplies the full tuple of period names so
+    that the filter only treats string last-dims that are actual
+    periods as the t dimension (commodity/region names are also
+    strings).
+    """
     if PATH_CAPI_SRC_DEFAULT.exists() and str(PATH_CAPI_SRC_DEFAULT) not in sys.path:
         sys.path.insert(0, str(PATH_CAPI_SRC_DEFAULT))
 
@@ -2128,18 +2338,29 @@ def _run_path_capi_nonlinear_full(
 
     # Apply closure and conditional fixing based on SAM data
     solver_helper = GTAPSolver(model, closure=closure_config, solver_name="path", params=params)
-    if closure_config is not None:
-        solver_helper.apply_closure(closure_config)
-    solver_helper.apply_conditional_fixing()
+    if active_t is None:
+        # Single-period mode: apply closure + conditional fixing here as usual.
+        if closure_config is not None:
+            solver_helper.apply_closure(closure_config)
+        solver_helper.apply_conditional_fixing()
+    # else: sequential mode — closure + conditional fixing were applied by solve_sequential
+    #       before calling this function (after _set_active_t_slice). Do NOT re-apply
+    #       here: the re-application changes the adjacency graph seen by squareness
+    #       patches' H-K (by fixing additional vars like dintx) which causes spurious
+    #       over-determination by 1 at non-base periods.
     
-    # Make MCP square by fixing structural variables at their initialization values.
-    # This must happen BEFORE the warm-start hint so that the 90 unmatched structural
-    # vars are fixed at the shocked model's cold-init values (e.g. pmt initialized
-    # near the shocked equilibrium price) rather than at baseline values.
-    solver_helper.apply_aggressive_fixing_for_mcp()
+    # TEMP DIAG: count before patches
+    if active_t is not None:
+        from pyomo.environ import Var as _Dvpre, Constraint as _Dcpre
+        _nc_pre2 = sum(1 for c in model.component_data_objects(_Dcpre, active=True))
+        _nv_pre2 = sum(1 for v in model.component_data_objects(_Dvpre, active=True) if not v.fixed)
+        print(f"[DIAG {active_t}] BEFORE squareness patches: {_nc_pre2} cons, {_nv_pre2} vars")
 
-    # When the closure leaves the system over-determined (gap <= 0), the helper
-    # above does nothing. The same patches NUS333 needs apply here:
+    # Apply squareness patches FIRST so any constraints deactivated here
+    # are reflected in the gap that ``apply_aggressive_fixing_for_mcp``
+    # then sees. Otherwise aggressive sees gap=0 and bails, and we end up
+    # under-determined by exactly the count of patched constraints.
+    # Squareness patches:
     #  1. fix sluggish pft (dangling — no eq references them)
     #  2. deactivate eq_xfteq for mobile factors with xft fixed
     #  3. Hopcroft-Karp → deactivate unmatched eq_xseq under omegax=inf
@@ -2149,7 +2370,47 @@ def _run_path_capi_nonlinear_full(
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _closure_patches import apply_squareness_patches  # type: ignore
-    apply_squareness_patches(model, params, label="nonlinear-full")
+    # Forced pairs for squareness patches H-K: pin each eq to its primary LHS
+    # variable so H-K doesn't steal shared variables (e.g. xf) from local eqs.
+    # eq_xfeq[r,f,a,t] ↔ xf[r,f,a,t]: factor demand pairs with its own xf.
+    # This ensures eq_xft[r,f,t] remains unmatched (xft is fixed) → gets deactivated.
+    # Global income/tax eqs pinned to their aggregate LHS → don't steal xf vars.
+    _squareness_forced_pairs = [
+        ("eq_xfeq", "xf"),      # pin xf[r,f,a,t] to its demand eq before HK can steal it
+        ("eq_regy", "regy"),    # pin regy to its income identity so HK doesn't steal it
+        ("eq_pwfact", "pwfact"),
+        ("eq_facty", "facty"),
+        ("eq_pfact", "pfact"),
+        ("eq_ytax", "ytax"),
+    ]
+    apply_squareness_patches(model, params, label="nonlinear-full", forced_pairs=_squareness_forced_pairs)
+
+    # Make MCP square by fixing structural variables at their initialization values.
+    # This must happen BEFORE the warm-start hint so that the unmatched structural
+    # vars are fixed at the cold-init values rather than at baseline values.
+    solver_helper.apply_aggressive_fixing_for_mcp()
+
+    # TEMPORARY DIAGNOSTIC: count cons/vars right after patches
+    if active_t is not None:
+        from pyomo.environ import Var as _DiagVar
+        _nc_diag = sum(1 for c in model.component_data_objects(Constraint, active=True))
+        _nv_diag = sum(1 for v in model.component_data_objects(_DiagVar, active=True) if not v.fixed)
+        print(f"[DIAG {active_t}] after patches+aggressive: {_nc_diag} cons, {_nv_diag} vars")
+        # Also show t-sliced counts
+        _t_set_local = active_t_set or (active_t,)
+        _t_lkp = set(_t_set_local)
+        def _is_active_t(obj):
+            try:
+                idx = obj.index()
+            except:
+                return True
+            last = idx[-1] if isinstance(idx, tuple) else idx
+            if isinstance(last, str) and last in _t_lkp:
+                return last == active_t
+            return True
+        _nc_t = sum(1 for c in model.component_data_objects(Constraint, active=True) if _is_active_t(c))
+        _nv_t = sum(1 for v in model.component_data_objects(_DiagVar, active=True) if not v.fixed and _is_active_t(v))
+        print(f"[DIAG {active_t}] t-sliced: {_nc_t} cons, {_nv_t} vars")
 
     # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
     # already-fixed variables, so only the remaining FREE variables get warm-started
@@ -2246,6 +2507,23 @@ def _run_path_capi_nonlinear_full(
                 if _vd.lb is None or _vd.lb < _lb:
                     _vd.setlb(_lb)
 
+    # Upper bound on utility (uh) to prevent CDE divergence in non-base periods.
+    # With fractional bh exponents (e.g. 0.19 for Services), uh^(eh*bh) is very
+    # flat — PATH takes large Newton steps that drive uh to hundreds, causing
+    # zcons to explode and eq_uh residual to blow up. Cap uh at 1000x its warm-
+    # start value (equivalent to GAMS's implicit bound from near-equilibrium init).
+    _UH_UB_FACTOR = 1000.0
+    _uh_var = getattr(model, "uh", None)
+    if _uh_var is not None:
+        for _vd in _uh_var.values():
+            if _vd.fixed:
+                continue
+            _cur = _vd.value
+            if _cur is not None and _cur > 0:
+                _ub = _UH_UB_FACTOR * _cur
+                if _vd.ub is None or _vd.ub > _ub:
+                    _vd.setub(_ub)
+
     adapter = PyomoMCPAdapter()
     model_summary = adapter.summarize_model(model)
 
@@ -2268,6 +2546,28 @@ def _run_path_capi_nonlinear_full(
         key=lambda v: v.name,
     )
 
+    if active_t is not None:
+        _t_lookup = set(active_t_set) if active_t_set else {active_t}
+
+        def _idx_matches_t(obj) -> bool:
+            idx = getattr(obj, "index", lambda: None)()
+            if idx is None:
+                return True
+            if isinstance(idx, tuple):
+                if not idx:
+                    return True
+                last = idx[-1]
+            else:
+                last = idx
+            # Only treat string last-dims that are actual periods as
+            # the t dimension; commodity/region names are also strings.
+            if isinstance(last, str) and last in _t_lookup:
+                return last == active_t
+            return True
+
+        constraints = [c for c in constraints if _idx_matches_t(c)]
+        free_variables = [v for v in free_variables if _idx_matches_t(v)]
+
     # Hopcroft-Karp structural matching (avoid alphabetical-sort pairing pitfall).
     # GAMS-declared MCP pairings (model.gms:1419): force these to mirror GAMS.
     if len(constraints) == len(free_variables):
@@ -2279,7 +2579,15 @@ def _run_path_capi_nonlinear_full(
             from _closure_patches import structural_matching  # type: ignore
         free_variables = structural_matching(
             constraints, free_variables,
-            forced_pairs=[("eq_pwfact", "pwfact")],
+            forced_pairs=[
+                # GAMS MCP declared pairings (eq.var complementarity).
+                ("eq_pwfact", "pwfact"),
+                # Income/tax aggregate equations: pair with their LHS variable so
+                # H-K does NOT steal individual xf/pf vars from eq_xfeq/eq_pfeq.
+                ("eq_facty", "facty"),
+                ("eq_pfact", "pfact"),
+                ("eq_ytax", "ytax"),
+            ],
             label="nonlinear-full",
         )
 
