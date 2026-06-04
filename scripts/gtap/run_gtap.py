@@ -4229,6 +4229,18 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
     default=None,
     help='Optional path for WELVIEW.har export (RunGTAP-compatible). Implies --welfare-decomp.',
 )
+@click.option(
+    '--t-set',
+    default=None,
+    show_default=True,
+    help=(
+        'Comma-separated period names for multi-period sequential solve '
+        '(e.g. "base,check,shock"). When provided, uses solve_sequential '
+        '(Option C) instead of the legacy two-model approach. '
+        'The last period receives the shock; all others are unshocked. '
+        'Default: legacy two-model baseline+shock (backwards-compatible).'
+    ),
+)
 @click.pass_context
 def validate_shock(
     ctx,
@@ -4248,6 +4260,7 @@ def validate_shock(
     if_sub,
     welfare_decomp,
     welfare_har,
+    t_set,
 ):
     """Run strict baseline + strict shocked path-capi validation for CI pipelines."""
     logger = ctx.obj['logger']
@@ -4259,6 +4272,116 @@ def validate_shock(
         if raw_index and raw_index.lower() not in {"()", "all"} and not shock_index:
             raise ValueError(f"Invalid index format: {index}")
 
+        # Multi-period sequential path (--t-set provided)
+        if t_set is not None:
+            t_tuple = tuple(s.strip() for s in t_set.split(","))
+            if len(t_tuple) < 2:
+                raise ValueError("--t-set must have at least 2 periods (e.g. 'base,shock')")
+            shock_period = t_tuple[-1]
+            click.echo(f"\nMulti-period sequential solve: {' → '.join(t_tuple)}")
+            click.echo(f"  Shock applied in period: {shock_period}")
+
+            with click.progressbar(length=2, label='Loading data') as bar:
+                params = GTAPParameters()
+                params.load_from_gdx(gdx_file)
+                bar.update(1)
+
+                contract = _build_gtap_contract_with_calibration(closure)
+                if contract.closure.if_sub != if_sub:
+                    payload = contract.model_dump(mode="python")
+                    payload["closure"]["if_sub"] = if_sub
+                    contract = build_gtap_contract(payload)
+                bar.update(1)
+
+            # Build a period_setup_fn that applies the shock to the model's
+            # mutable Params when we enter the shock period.
+            _shock_variable = variable
+            _shock_index = shock_index
+            _shock_value = value
+            _shock_mode = shock_mode
+            _shock_period = shock_period
+
+            def _period_setup_shock(m, tsim, prev_model):
+                if tsim != _shock_period:
+                    return
+                from pyomo.environ import value as _pyo_val
+                taxes_snap = {}
+                # Collect current imptx values from model for all (r, i, rp)
+                if _shock_variable in ("rtms", "imptx") and hasattr(m, "imptx"):
+                    if _shock_index:
+                        # Single-cell shock: index is (exporter, i, importer)
+                        if len(_shock_index) == 3:
+                            exp, comm, imp = _shock_index
+                            if (exp, comm, imp, "base") in m.imptx:
+                                current = float(_pyo_val(m.imptx[exp, comm, imp, "base"]))
+                                if _shock_mode == "tm_pct":
+                                    new_val = (1.0 + current) * (1.0 + _shock_value) - 1.0
+                                elif _shock_mode == "pct":
+                                    new_val = current * (1.0 + _shock_value)
+                                elif _shock_mode == "mult":
+                                    new_val = current * _shock_value
+                                else:
+                                    new_val = _shock_value
+                                m.imptx[exp, comm, imp, "base"].set_value(new_val)
+                    else:
+                        # Uniform shock on all (exporter, i, importer) where exporter != importer
+                        for (exp, comm, imp, t) in m.imptx:
+                            if t != "base" or exp == imp:
+                                continue
+                            current = float(_pyo_val(m.imptx[exp, comm, imp, t]))
+                            if _shock_mode == "tm_pct":
+                                new_val = (1.0 + current) * (1.0 + _shock_value) - 1.0
+                            elif _shock_mode == "pct":
+                                new_val = current * (1.0 + _shock_value)
+                            elif _shock_mode == "mult":
+                                new_val = current * _shock_value
+                            else:
+                                new_val = _shock_value
+                            m.imptx[exp, comm, imp, t].set_value(new_val)
+
+            click.echo("Running sequential solve...")
+            seq_results = solve_sequential(
+                None, params,
+                closure_config=contract.closure,
+                t_set=t_tuple,
+                equation_scaling=True,
+                tol=strict_residual_tol,
+                period_setup_fn=_period_setup_shock,
+            )
+
+            period_models = seq_results.get("_models", {})
+            base_model_seq = period_models.get(t_tuple[0])
+            shock_model_seq = period_models.get(shock_period)
+
+            all_ok = all(
+                seq_results.get(p, {}).get("code") == 1
+                for p in t_tuple
+            )
+
+            click.echo(f"\n{'='*60}")
+            click.echo("Sequential Multi-Period Results")
+            click.echo(f"{'='*60}")
+            for p in t_tuple:
+                r = seq_results.get(p, {})
+                code = r.get("code", "?")
+                res = r.get("residual", float("nan"))
+                status_p = "converged" if code == 1 else "FAILED"
+                click.echo(f"  {p:12s}: {status_p:12s} (code={code}, res={res:.2e})")
+
+            if base_model_seq is not None and shock_model_seq is not None:
+                from pyomo.environ import value as _pyo_val2
+                _t0 = t0(base_model_seq)
+                for r in sorted(base_model_seq.r):
+                    try:
+                        yc_base = float(_pyo_val2(base_model_seq.yc[r, _t0]))
+                        yc_shock = float(_pyo_val2(shock_model_seq.yc[r, _t0]))
+                        click.echo(f"  yc[{r}]: base={yc_base:.4f}  {shock_period}={yc_shock:.4f}  Δ={yc_shock - yc_base:+.4f}")
+                    except Exception:
+                        pass
+
+            sys.exit(0 if all_ok else 1)
+
+        # Legacy two-model baseline+shock path
         # Baseline run
         with click.progressbar(length=3, label='Loading baseline') as bar:
             base_params = GTAPParameters()

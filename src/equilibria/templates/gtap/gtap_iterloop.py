@@ -167,6 +167,12 @@ LAGGED_VARS_WITH_DIMS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("lambdaf", ("r", "f", "a")),
     ("pf", ("r", "f", "a")),
     ("xf", ("r", "f", "a")),
+    # pft (factor supply price) is fixed as lagged state at non-base periods.
+    # eq_xfteq is deactivated for all fixed-xft periods (it over-determines with
+    # eq_xft). Since pft then has no dedicated equation, it must carry forward
+    # from tprev as a fixed lagged value — PATH treats it as data for the
+    # factor price equations (eq_pfeq law-of-one-price for mobile factors).
+    ("pft", ("r", "f")),
     ("pa", ("r", "i", "aa")),
     ("xaa", ("r", "i", "aa")),
     ("pe", ("r", "i", "rp")),
@@ -226,6 +232,65 @@ def apply_iterloop_fixings(
     _set_price_lower_bounds(model, tsim, t_set)
     _fix_inactive_flows(model, tsim, t_set, flags)
     _fix_lagged_state(model, tsim, t_set, first_year)
+    _fix_base_only_vars(model, tsim, first_year)
+
+
+# --- 3.6 base-only-eq vars --------------------------------------------------
+
+
+# Vars whose defining equations are anchored to first_year (Constraint.Skip
+# at other periods). When solving a non-first period, pin these at their
+# current ``.value`` (carried over from base after lagged-state seeding)
+# so the structural matching stays square.
+_BASE_ONLY_VARS: tuple[str, ...] = (
+    # Truly base-only: defining equations return Constraint.Skip at non-base.
+    # eq_ev / eq_cv → model_equations.py:5690 / 5712.
+    # eq_kapEnd / eq_arent / eq_rorc / eq_rore → model_equations.py:5371-5401
+    # (all have `if t != "base": return Constraint.Skip`).
+    # pft: eq_xfteq is deactivated (over-determines with eq_xft when xft is
+    # fixed). No dedicated equation remains for pft at non-base periods — fix
+    # it at the warm-started (previous-period) value so the factor price system
+    # is anchored. (The law-of-one-price eq_pfeq then pairs with pf[r,f,a],
+    # and pft is data consistent with the no-shock assumption at check.)
+    # These vars must be pinned at non-base periods so the structural bipartite
+    # matching sees a square sub-system and PATH doesn't get an unmatched free var.
+    "cv", "ev",
+    "kapEnd", "arent", "rorc", "rore",
+    "pft",
+)
+
+
+def _fix_base_only_vars(
+    model,
+    tsim: str,
+    first_year: str,
+) -> None:
+    """Pin vars whose defining eq lives only at ``first_year`` at non-first periods.
+
+    Without this, ``cv[r, tsim]``, ``arent[r, tsim]`` etc. are free variables
+    with no constraint binding them — the Hopcroft-Karp matcher then pairs
+    them with arbitrary surplus equations, breaking PATH's structural
+    pairing assumption.
+    """
+    from pyomo.environ import value as _val
+    from pyomo.core.base.var import Var as _Var
+
+    if tsim == first_year:
+        return
+    for v_name in _BASE_ONLY_VARS:
+        var = getattr(model, v_name, None)
+        if var is None or not isinstance(var, _Var):
+            continue
+        for idx in list(var.keys()):
+            if not (isinstance(idx, tuple) and idx and idx[-1] == tsim):
+                continue
+            vd = var[idx]
+            if vd.fixed:
+                continue
+            cv = vd.value
+            if cv is None:
+                cv = 1.0
+            vd.fix(float(cv))
 
 
 # --- 3.1 tax instruments ---------------------------------------------------

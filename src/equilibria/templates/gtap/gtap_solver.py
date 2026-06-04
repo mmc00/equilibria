@@ -614,12 +614,21 @@ class GTAPSolver:
         
         fixed_count = 0
         
-        # Count current state
-        constraints = sum(1 for c in self.model.component_objects(Con, active=True) 
-                        for _ in c)
-        free_vars = sum(1 for var in self.model.component_objects(Var, active=True)
-                       for idx in var if not var[idx].fixed)
-        
+        # Count current state — must check active state per ConstraintData,
+        # not just the parent component (Pyomo flags individual indices as
+        # inactive independently of the parent). Mirror the same per-data
+        # filter for Var to be precise on partially-fixed vars.
+        constraints = sum(
+            1 for c in self.model.component_data_objects(
+                Con, active=True, descend_into=True
+            )
+        )
+        free_vars = sum(
+            1 for v in self.model.component_data_objects(
+                Var, active=True, descend_into=True
+            ) if not v.fixed
+        )
+
         gap = free_vars - constraints
         logger.info(f"MCP gap before aggressive fixing: {gap} (free={free_vars}, cons={constraints})")
         
@@ -674,9 +683,13 @@ class GTAPSolver:
             return count
         
         def get_current_gap():
-            """Calculate current gap."""
-            free = sum(1 for var in self.model.component_objects(Var, active=True)
-                      for idx in var if not var[idx].fixed)
+            """Calculate current gap (uses per-data counts so deactivated
+            constraint indices are excluded — see comment above)."""
+            free = sum(
+                1 for v in self.model.component_data_objects(
+                    Var, active=True, descend_into=True
+                ) if not v.fixed
+            )
             return free - constraints
 
         current_gap = gap
