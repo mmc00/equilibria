@@ -1842,7 +1842,7 @@ class GTAPModelEquations:
             rorflex_data[(region,)] = float(self.params.elasticities.rorflex.get(region, 10.0))
             pop_data[(region,)] = _pop_value(region)
             for factor in self.sets.f:
-                if factor in self.sets.mf:
+                if factor in self.sets.mf or factor in self.sets.sf:
                     benchmark_xft = 0.0
                     for activity in self.sets.a:
                         factor_flow = float(
