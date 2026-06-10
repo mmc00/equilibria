@@ -4757,8 +4757,6 @@ class GTAPModelEquations:
 
         # Factor market clearing (distribute xft using gf share)
         def eq_xft_rule(model, r, f):
-            if f not in self.sets.mf:
-                return Constraint.Skip
             if value(model.xftflag[r, f]) <= 0.0:
                 return Constraint.Skip
             return model.xft[r, f] == sum(model.xf[r, f, a] / model.xscale[r, a] for a in model.a)
@@ -4785,8 +4783,6 @@ class GTAPModelEquations:
 
         # Aggregate supply of factors from production shares
         def eq_xfteq_rule(model, r, f):
-            if f not in self.sets.mf:
-                return Constraint.Skip
             if value(model.xftflag[r, f]) <= 0.0:
                 return Constraint.Skip
             benchmark_supply = float(value(model.aft[r, f]))
