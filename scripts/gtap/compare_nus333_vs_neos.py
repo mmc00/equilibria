@@ -147,7 +147,7 @@ def _structural_matching(constraints, free_vars, forced_pairs=None):
     return [free_vars[c] for c in perm]
 
 
-def _solve(model, params, *, label: str):
+def _solve(model, params, *, label: str, strict_dof: bool = True):
     from _closure_patches import apply_squareness_patches
 
     solver_helper = GTAPSolver(model, solver_name="path", params=params)
@@ -165,8 +165,9 @@ def _solve(model, params, *, label: str):
     )
     if len(free_vars) != len(constraints):
         print(f"[{label}] WARNING: DOF mismatch: {len(free_vars)} vars, {len(constraints)} eqs (continuing)")
-    assert len(free_vars) == len(constraints), \
-        f"degrees-of-freedom mismatch: {len(free_vars)} vars, {len(constraints)} eqs"
+    if strict_dof:
+        assert len(free_vars) == len(constraints), \
+            f"degrees-of-freedom mismatch: {len(free_vars)} vars, {len(constraints)} eqs"
 
     # Reorder free_vars so position i is structurally matched to constraints[i].
     # GAMS-declared MCP pairings (model.gms:1419): force these to mirror GAMS.
@@ -176,6 +177,11 @@ def _solve(model, params, *, label: str):
         forced_pairs=[("eq_pwfact", "pwfact")],
         label=label,
     )
+
+    # When over-determined (more eqs than vars after matching), trim constraints
+    # to the matched subset so PATH receives a square system.
+    if len(constraints) > len(free_vars):
+        constraints = constraints[: len(free_vars)]
 
     loader = PATHLoader(path_lib=PATH_LIB)
     runtime = loader.load()
