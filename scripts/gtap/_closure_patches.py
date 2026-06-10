@@ -24,30 +24,57 @@ from pyomo.environ import Constraint, Var, value
 
 
 def fix_sluggish_pft(model, params, *, label: str = "") -> int:
-    """Fix `pft(r,f)` for sluggish factors — they're dangling (no eq references them)."""
+    """Fix `pft(r,f)` for factors that are dangling (no eq references them).
+
+    Sluggish (sf) factors with xftflag=0 have no eq_xfteq constraint, so pft floats.
+    Fixed/fnm factors (neither mf nor sf) also never appear in pft-dependent equations.
+    Skips factors where xftflag=1 — those have eq_xfteq active and pft is anchored.
+    """
     sf_set = set(getattr(params.sets, "sf", []) or [])
+    mf_set = set(getattr(params.sets, "mf", []) or [])
     fixed = 0
-    if hasattr(model, "pft") and sf_set:
+    if hasattr(model, "pft"):
         for r in model.r:
             for f in model.f:
-                if str(f) in sf_set and not model.pft[r, f].fixed:
-                    model.pft[r, f].fix()
-                    fixed += 1
+                f_str = str(f)
+                # Only need to fix if not already fixed
+                if model.pft[r, f].fixed:
+                    continue
+                # Sluggish (sf) with active xftflag: pft anchored by eq_xfteq → skip
+                # Mobile (mf): pft determined by eq_pfeq law-of-one-price → skip
+                # Sluggish with xftflag=0 OR fnm (neither mf nor sf): pft is dangling → fix
+                if f_str in mf_set:
+                    continue
+                if hasattr(model, "xftflag"):
+                    try:
+                        if float(value(model.xftflag[r, f]) or 0.0) > 0.0:
+                            continue
+                    except Exception:
+                        pass
+                model.pft[r, f].fix()
+                fixed += 1
     if fixed and label:
-        print(f"[{label}] fixed {fixed} sluggish pft(r,f) (no eq references them)")
+        print(f"[{label}] fixed {fixed} dangling pft(r,f) (sluggish xftflag=0 or fnm)")
     return fixed
 
 
 def deactivate_xfteq_for_fixed_mobile(model, params, *, label: str = "") -> int:
-    """Deactivate eq_xfteq for mobile factors whose xft is fixed (over-determining)."""
-    mf_set = set(getattr(params.sets, "mf", []) or [])
+    """Deactivate eq_xfteq for all factors whose xft is fixed (over-determining).
+
+    When xft is fixed, eq_xfteq (supply curve) is over-determining for both
+    mobile and sluggish factors:
+    - Mobile (omegaf=inf): pft determined by eq_pfeq law-of-one-price.
+    - Sluggish (finite omegaf): pft determined by eq_xft market clearing.
+    In both cases, the supply curve eq_xfteq must be dropped.
+    """
     deact = 0
-    if hasattr(model, "eq_xfteq") and mf_set:
+    if hasattr(model, "eq_xfteq") and hasattr(model, "xftflag"):
         for r in model.r:
             for f in model.f:
-                if str(f) not in mf_set:
-                    continue
-                if value(model.xftflag[r, f]) <= 0.0:
+                try:
+                    if value(model.xftflag[r, f]) <= 0.0:
+                        continue
+                except Exception:
                     continue
                 if not model.xft[r, f].fixed:
                     continue
@@ -168,12 +195,202 @@ def deactivate_unmatched_xseq(model, params, *, label: str = "") -> int:
     return deact
 
 
+def deactivate_fixed_quantity_eqs(model, *, label: str = "") -> int:
+    """Deactivate eq_va when both va[r,a] and xp[r,a] are fixed.
+
+    When a sector has zero activity in the benchmark data and conditional fixing
+    pins both va and xp to zero, eq_va becomes over-determining — the price ratio
+    it encodes is already determined by other price equations.
+    """
+    deact = 0
+
+    # eq_va: deactivate when both va[r,a] and xp[r,a] are fixed
+    n_va = 0
+    if hasattr(model, "eq_va") and hasattr(model, "va") and hasattr(model, "xp"):
+        for idx in list(model.eq_va):
+            con = model.eq_va[idx]
+            if not con.active:
+                continue
+            r, a = idx
+            try:
+                va_fixed = model.va[r, a].fixed
+                xp_fixed = model.xp[r, a].fixed
+            except (KeyError, AttributeError):
+                continue
+            if va_fixed and xp_fixed:
+                con.deactivate()
+                n_va += 1
+                deact += 1
+    if n_va and label:
+        print(f"[{label}] deactivated {n_va} eq_va (va+xp fixed → over-determining)")
+
+    return deact
+
+
+def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
+    """Deactivate over-determining equations that have no unique free variable.
+
+    An equation is structurally redundant when every free variable it references
+    also appears in at least one other active equation. In that case the equation
+    adds a constraint without contributing a new DOF — it cannot be matched by
+    Hopcroft-Karp and will block solver convergence.
+
+    Only fires when the system is over-determined (n_eqs > n_vars). Cross-checks
+    each HK-unmatched equation to ensure it genuinely has zero unique variables
+    before deactivating.
+
+    NEVER_DEACT: equation blocks that define key variables even when those variables
+    appear in many other equations (the variable-appearance count gives false zero-unique
+    signals for widely-used variables like pmt, pm, pa, etc.).
+    """
+    # Equation families that DEFINE core variables — never deactivate even if
+    # HK marks them unmatched due to wide variable sharing.
+    NEVER_DEACT = {
+        "eq_pmteq",   # defines pmt (import price aggregate)
+        "eq_pmeq",    # defines pm (bilateral import price)
+        "eq_pfaeq",   # defines pfa (agent factor price)
+        "eq_pfyeq",   # defines pfy (household factor price)
+        "eq_pefobeq", # defines pefob (export fob price)
+        "eq_pmcifeq", # defines pmcif (import cif price)
+        "eq_xwmg",    # defines xwmg (margins)
+        "eq_walras",  # Walras law — must never be dropped
+        "eq_ytax",    # income tax streams
+    }
+    cons_snap = sorted(
+        model.component_data_objects(Constraint, active=True), key=lambda c: c.name
+    )
+    vars_snap = sorted(
+        (v for v in model.component_data_objects(Var, active=True) if not v.fixed),
+        key=lambda v: v.name,
+    )
+    n = len(cons_snap)
+    nv = len(vars_snap)
+    if n <= nv:
+        return 0
+
+    id2col = {id(v): j for j, v in enumerate(vars_snap)}
+    var_name_to_col = {v.name: j for j, v in enumerate(vars_snap)}
+    con_name_to_row = {c.name: u for u, c in enumerate(cons_snap)}
+    adj: list[list[int]] = []
+    for c in cons_snap:
+        cols: list[int] = []
+        seen: set[int] = set()
+        for v in identify_variables(c.body, include_fixed=False):
+            if v.fixed:
+                continue
+            col = id2col.get(id(v))
+            if col is None or col in seen:
+                continue
+            seen.add(col)
+            cols.append(col)
+        adj.append(cols)
+
+    pl = [-1] * n
+    pr = [-1] * nv
+    dist = [0] * n
+    INF = 10**9
+
+    # Pre-seed HK with forced pairs for key defining equations.
+    # Without this, HK may assign a widely-used variable (pmt, pm, pft, etc.)
+    # to a downstream equation (eq_xma, eq_paa, etc.) leaving the DEFINING
+    # equation unmatched — even though the variable is only DEFINED by one eq.
+    def _force_pair(eq_comp_name: str, var_comp_name: str) -> None:
+        comp_eq = getattr(model, eq_comp_name, None)
+        comp_var = getattr(model, var_comp_name, None)
+        if comp_eq is None or comp_var is None:
+            return
+        for idx in comp_eq:
+            con = comp_eq[idx]
+            if not con.active:
+                continue
+            eq_name = con.name
+            idx_str = ",".join(str(x) for x in idx) if isinstance(idx, tuple) else str(idx)
+            var_name = f"{var_comp_name}[{idx_str}]"
+            row = con_name_to_row.get(eq_name)
+            col = var_name_to_col.get(var_name)
+            if row is not None and col is not None and pl[row] == -1 and pr[col] == -1:
+                if col in adj[row]:
+                    pl[row] = col
+                    pr[col] = row
+
+    # Force-match defining equations to their primary output variable
+    _force_pair("eq_pmteq", "pmt")   # pmt[r,i] = Armington import price aggregate
+    _force_pair("eq_pmeq", "pm")     # pm[rp,i,r] = bilateral import price
+    _force_pair("eq_pft", "pft")     # pft[r,f] = sluggish factor aggregate price
+
+    def bfs() -> bool:
+        q: deque[int] = deque()
+        found = False
+        for u in range(n):
+            if pl[u] == -1:
+                dist[u] = 0
+                q.append(u)
+            else:
+                dist[u] = INF
+        while q:
+            u = q.popleft()
+            for v in adj[u]:
+                m = pr[v]
+                if m == -1:
+                    found = True
+                elif dist[m] == INF:
+                    dist[m] = dist[u] + 1
+                    q.append(m)
+        return found
+
+    def dfs(u: int) -> bool:
+        for v in adj[u]:
+            m = pr[v]
+            if m == -1 or (dist[m] == dist[u] + 1 and dfs(m)):
+                pl[u] = v
+                pr[v] = u
+                return True
+        dist[u] = INF
+        return False
+
+    while bfs():
+        for u in range(n):
+            if pl[u] == -1:
+                dfs(u)
+
+    # Count how many equations reference each variable (for unique-var test)
+    var_eq_count: dict[int, int] = {}
+    for u in range(n):
+        for col in adj[u]:
+            var_eq_count[col] = var_eq_count.get(col, 0) + 1
+
+    deact = 0
+    for u in range(n):
+        if pl[u] != -1:
+            continue
+        c = cons_snap[u]
+        # Never deactivate core-defining equation families
+        if c.parent_component().name in NEVER_DEACT:
+            if label:
+                print(f"[{label}] SKIP protected eq {c.name}")
+            continue
+        # Only deactivate if ALL free variables in this eq also appear elsewhere
+        has_unique = any(var_eq_count.get(col, 0) == 1 for col in adj[u])
+        if has_unique:
+            if label:
+                print(f"[{label}] WARN: skipping deactivation of {c.name} — has unique var")
+            continue
+        c.deactivate()
+        deact += 1
+
+    if deact and label:
+        print(f"[{label}] deactivated {deact} zero-unique-var over-determining eqs")
+    return deact
+
+
 def apply_squareness_patches(model, params, *, label: str = "") -> dict[str, int]:
-    """Run all three post-closure patches in order. Returns counts per patch."""
+    """Run all post-closure patches in order. Returns counts per patch."""
     return {
         "pft_fixed": fix_sluggish_pft(model, params, label=label),
         "xfteq_deact": deactivate_xfteq_for_fixed_mobile(model, params, label=label),
         "xseq_deact": deactivate_unmatched_xseq(model, params, label=label),
+        "fixed_qty_deact": deactivate_fixed_quantity_eqs(model, label=label),
+        "zero_unique_deact": deactivate_zero_unique_var_eqs(model, label=label),
     }
 
 
@@ -191,6 +408,7 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
     (mirrors GAMS `model gtap / eq.var, ... /` declared matching).
     """
     n = len(constraints)
+    nv = len(free_vars)
     var_id_to_col = {id(v): j for j, v in enumerate(free_vars)}
     adjacency: list[list[int]] = []
     for con in constraints:
@@ -275,4 +493,9 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
         n_natural = sum(1 for u in range(n) if pair_left[u] != -1)
         print(f"[{label}] structural matching: {n_natural}/{n} pairs assigned")
 
+    # Over-determined (n > nv): pair_left has n entries but free_vars has nv.
+    # Return only the first nv matched entries (caller will trim constraints to match).
+    if n > nv:
+        matched_cols = [c for c in pair_left if 0 <= c < nv]
+        return [free_vars[c] for c in matched_cols[:nv]]
     return [free_vars[c] for c in pair_left]

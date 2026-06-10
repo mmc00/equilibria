@@ -1659,6 +1659,34 @@ class GTAPModelEquations:
                 for a in self.sets.a:
                     gf_share_data[(r, f, a)] = xf_by_activity.get(a, 0.0) / total_xf
             for f in self.sets.sf:
+                # Sluggish factors use normalized CET shares (like mf), since
+                # eq_pfeq for sf is xf = xscale*gf_share*xft*(pfy/pft)^omegaf.
+                # At benchmark xft=sum(xf/xscale) so gf_share = xf/xft (normalized).
+                xf_by_activity_sf: Dict[str, float] = {}
+                total_xf_sf = 0.0
+                for a in self.sets.a:
+                    factor_flow = float(
+                        self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0
+                    )
+                    if factor_flow <= 0.0:
+                        continue
+                    kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+                    if kappa == 0.0:
+                        kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
+                    pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                    xf_val = max(factor_flow / pf_val, 0.0)
+                    if xf_val <= 0.0:
+                        continue
+                    xf_by_activity_sf[a] = xf_val
+                    total_xf_sf += xf_val
+                if total_xf_sf <= 0.0:
+                    continue
+                for a in self.sets.a:
+                    gf_share_data[(r, f, a)] = xf_by_activity_sf.get(a, 0.0) / total_xf_sf
+            # fnm factors (sector-specific, neither mf nor sf) use the absolute
+            # benchmark xf as gf — mirrors GAMS fnmeq where gf = xf.l at calibration.
+            fnm_factors = [f for f in self.sets.f if f not in self.sets.mf and f not in self.sets.sf]
+            for f in fnm_factors:
                 for a in self.sets.a:
                     factor_flow = float(
                         self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0
@@ -1671,7 +1699,6 @@ class GTAPModelEquations:
                         kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
                     pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
                     xf_val = max(factor_flow / pf_val, 0.0)
-                    # At benchmark pabs=pfy=1, so gf = xf.l * (1/1)^etaff = xf.l.
                     gf_share_data[(r, f, a)] = xf_val
 
         create_indexed_param("gf_share", ["r", "f", "a"], gf_share_data, 0.0)
@@ -1776,6 +1803,8 @@ class GTAPModelEquations:
         eh_data: Dict[tuple[str, str], float] = {}
         bh_data: Dict[tuple[str, str], float] = {}
         alphaa_hhd_data: Dict[tuple[str, str], float] = {}
+        self._zcons_init_data: Dict[tuple[str, str], float] = {}
+        zcons_init_data = self._zcons_init_data
         fdepr_data: Dict[tuple[str], float] = {}
         depr_data: Dict[tuple[str], float] = {}
         rorflex_data: Dict[tuple[str], float] = {}
@@ -1964,8 +1993,11 @@ class GTAPModelEquations:
                 uh_val = 1.0  # GAMS benchmark utility initialization
                 if yc_bench > 0.0 and xcshr_val > 0.0 and cde_alpha_den > 0.0:
                     alphaa_hhd_data[(region, commodity)] = ((xcshr_val / bh_val) * (((yc_pc / pa_val) ** bh_val)) * (uh_val ** (-eh_val * bh_val))) / cde_alpha_den
+                    # zcons at calibration: xcshr / cde_alpha_den (= alphaa*bh*(yc_pc/pa)^(-bh) with uh=1, pa=1)
+                    zcons_init_data[(region, commodity)] = xcshr_val / cde_alpha_den
                 else:
                     alphaa_hhd_data[(region, commodity)] = 0.0
+                    zcons_init_data[(region, commodity)] = 0.0
 
             if private_total > 0.0:
                 prod_term = 1.0
@@ -3489,12 +3521,10 @@ class GTAPModelEquations:
         model.pcons = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Consumer price index")
         model.xcshr = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xcshr_init, doc="Household budget share")
         # CDE: zcons is the unnormalised CDE share factor (per GAMS zconseq).
+        # Initialize at calibration value: xcshr / sum_j(xcshr_j/bh_j), ensuring
+        # sum_i(zcons_i/bh_i) == 1 at initialization (satisfies eq_uh at x0).
         def get_zcons_init(m, r, i):
-            xcshr0 = get_xcshr_init(m, r, i)
-            bh_val = float(self.params.elasticities.subpar.get((r, i), 1.0) or 1.0)
-            if abs(bh_val) < 1e-12:
-                bh_val = 1.0
-            return xcshr0 / bh_val if xcshr0 > 0.0 else 0.0
+            return self._zcons_init_data.get((r, i), 0.0)
         model.zcons = Var(model.r, model.i, within=NonNegativeReals, initialize=get_zcons_init, doc="CDE auxiliary share factor")
         # phip becomes a variable under CDE; initialized from calibration.
         model.phip = Var(model.r, within=NonNegativeReals, initialize=lambda m, r: float(m.phip0[r]), doc="Elasticity of expenditure wrt private utility")
@@ -4834,8 +4864,16 @@ class GTAPModelEquations:
                     model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
                     * (pfy / model.pft[r, f]) ** omegaf
                 )
+            if f in self.sets.sf:
+                # Sluggish factor CET allocation (GAMS pfteq/pfeq for fs):
+                # xf = gf_share * xft * (pfy/pft)^omegaf with finite omegaf = -etrae.
+                omegaf = _omegaf(r, f)
+                return model.xf[r, f, a] == (
+                    model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
+                    * (pfy / model.pft[r, f]) ** omegaf
+                )
             # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq
-            # (model.gms:1096). No xft term — sluggish supply scales by gf only.
+            # (model.gms:1096). No xft term — supply scales by gf only.
             etaff = _etaff(r, f, a)
             return model.xf[r, f, a] == (
                 model.xscale[r, a] * model.gf_share[r, f, a]
