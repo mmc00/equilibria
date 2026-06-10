@@ -1520,7 +1520,7 @@ class GTAPModelEquations:
                         any_flow = True
                     else:
                         xfflag_data[(r, f, a)] = 0.0
-                xftflag_data[(r, f)] = 1.0 if (any_flow and f in self.sets.mf) else 0.0
+                xftflag_data[(r, f)] = 1.0 if (any_flow and f in (self.sets.mf | self.sets.sf)) else 0.0
         create_indexed_param("xflag", ["r", "a", "i"], xflag_data, 0.0)
         create_indexed_param("xfflag", ["r", "f", "a"], xfflag_data, 0.0)
         create_indexed_param("xftflag", ["r", "f"], xftflag_data, 0.0)
