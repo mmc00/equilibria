@@ -282,6 +282,112 @@ def _gdxdump_params_only(gdx_path: Path, renames: dict[str, str] | None = None,
     return "\n".join(lines)
 
 
+def _prm_as_assignments(gdx_path: Path, renames: dict[str, str] | None = None) -> str:
+    """Convert gdxdump Parameter blocks to plain GAMS assignment statements.
+
+    Avoids $onMulti/$offMulti (confirmed to trigger $767 in NEOS GAMS 52.5.0).
+    Output style:
+        parameter etraq(*,*) ;
+        etraq("a_agricultur","Oceania") = -5 ;
+        ...
+    """
+    import subprocess, re as _re
+    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
+    if not GDXDUMP.exists() or not gdx_path.exists():
+        return f"* gdxdump not available or {gdx_path.name} not found\n"
+    try:
+        raw = subprocess.check_output(
+            [str(GDXDUMP), str(gdx_path)],
+            stderr=subprocess.DEVNULL, timeout=30
+        ).decode()
+    except Exception as e:
+        return f"* gdxdump failed: {e}\n"
+
+    renames_upper = {k.upper(): v for k, v in (renames or {}).items()}
+
+    out_parts: list[str] = []
+
+    # State machine: parse each Parameter/Scalar block
+    in_block = False
+    skip_block = False   # Set blocks
+    cur_name = ""        # GAMS-output name (after rename)
+    cur_dims = 0
+    cur_data: list[str] = []
+
+    def flush_block():
+        if not cur_name:
+            return
+        dims_str = ",".join(["*"] * cur_dims) if cur_dims else "*"
+        out_parts.append(f"parameter {cur_name}({dims_str}) ;")
+        for entry in cur_data:
+            out_parts.append(entry)
+
+    for line in raw.splitlines():
+        stripped = line.strip()
+
+        # Skip gdxdump directives
+        if stripped.startswith(("$onEmpty", "$offEmpty")):
+            continue
+
+        # Track Set blocks (skip entirely)
+        if stripped.startswith("Set "):
+            if in_block:
+                flush_block()
+                in_block = False
+                cur_data = []
+            skip_block = True
+            continue
+        if skip_block:
+            if stripped.endswith("/;") or stripped == "/;":
+                skip_block = False
+            continue
+
+        # New Parameter/Scalar block
+        if stripped.startswith("Parameter ") or stripped.startswith("Scalar "):
+            if in_block:
+                flush_block()
+                cur_data = []
+            m = _re.match(r'^(?:Parameter|Scalar)\s+(\w+)((?:\([^)]*\))?)', stripped)
+            if m:
+                sym_raw = m.group(1)
+                sym_up = sym_raw.upper()
+                dom_str = m.group(2)  # e.g. "(*,*)" or ""
+                out_name = renames_upper.get(sym_up, sym_raw)
+                dim_count = dom_str.count(",") + 1 if dom_str else 1
+                cur_name = out_name
+                cur_dims = dim_count
+                cur_data = []
+                in_block = True
+            continue
+
+        # End of block
+        if stripped == "/;" or stripped.endswith("/;"):
+            in_block = False
+            flush_block()
+            cur_data = []
+            cur_name = ""
+            continue
+
+        # Data lines inside a parameter block: 'a'.'b' value,
+        if in_block and stripped and not stripped.startswith("*"):
+            # Strip trailing comma
+            entry = stripped.rstrip(",").rstrip()
+            # Parse: 'key1'.'key2' ... value  OR  'key' value
+            # Split on last whitespace to get keys_part and value
+            parts = entry.rsplit(None, 1)
+            if len(parts) == 2:
+                keys_part, val = parts
+                # Convert 'k1'.'k2'.'k3' → "k1","k2","k3"
+                keys = [k.strip("'") for k in keys_part.split(".")]
+                keys_fmt = ",".join(f'"{k}"' for k in keys)
+                cur_data.append(f'{cur_name}({keys_fmt}) = {val} ;')
+
+    if in_block:
+        flush_block()
+
+    return "\n".join(out_parts) + "\n"
+
+
 def _build_getdata_replacement() -> str:
     """Build complete getData.gms replacement — fully self-contained, no $gdxin.
 
@@ -713,13 +819,12 @@ def _build_solve_gms_for_9x10() -> str:
     # Embed elasticity parameters from 9x10Prm.gdx BEFORE the derived-parameter
     # assignments (omegas = -etraq, sigmas = 1/esubq, ...) that use them.
     # Insert just before "parameters sigmap(r,a)" in the getdata_base text.
-    prm_dump = _gdxdump_params_only(prm_gdx, renames={"RORFLEX": "rorFlex0"})
+    # Use plain assignment style — $onMulti + data triggers $767 in NEOS GAMS 52.5.0.
+    prm_assignments = _prm_as_assignments(prm_gdx, renames={"RORFLEX": "rorFlex0"})
     prm_block = (
         "\n* --- Elasticity parameters from 9x10Prm.gdx ---\n"
-        "$onMulti\n"
-        + prm_dump
-        + "$offMulti\n"
-        "* END elasticity parameters\n\n"
+        + prm_assignments
+        + "* END elasticity parameters\n\n"
     )
     anchor = "parameters sigmap(r,a)"
     if anchor in getdata_base:
