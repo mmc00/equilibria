@@ -360,8 +360,17 @@ def _prm_as_assignments(gdx_path: Path, renames: dict[str, str] | None = None) -
                 in_block = True
             continue
 
-        # End of block
+        # End of block — may also contain a data entry on the same line
         if stripped == "/;" or stripped.endswith("/;"):
+            # Check if there's data before the /; terminator
+            data_part = stripped[:-2].rstrip().rstrip(",").rstrip()
+            if data_part and in_block and not data_part.startswith("*"):
+                parts = data_part.rsplit(None, 1)
+                if len(parts) == 2:
+                    keys_part, val = parts
+                    keys = [k.strip("'") for k in keys_part.split(".")]
+                    keys_fmt = ",".join(f'"{k}"' for k in keys)
+                    cur_data.append(f'{cur_name}({keys_fmt}) = {val} ;')
             in_block = False
             flush_block()
             cur_data = []
@@ -722,9 +731,9 @@ def _build_getdata_replacement_agg(gdx_path: Path) -> str:
     endwm = [f for f in endw if f not in ("NatRes", "Land")]
     # Rename params that collide with comp.gms's own declarations (pop, rorFlex)
     # to the *0 baseline-input names getData expects — mirrors the full-9x10 path.
-    dump = _gdxdump_params_only(
+    # Use assignment-style (not $onMulti) — $onMulti + data triggers $767 in NEOS 52.5.0.
+    dump = _prm_as_assignments(
         gdx_path, renames={"POP": "pop0", "RORFLEX": "rorFlex0"},
-        universal_domains=True,
     )
     is_elems = acts + comm + endw + [
         "TRD", "hhd", "gov", "inv", "deprY", "tmg", "itax", "ptax", "mtax",
@@ -769,7 +778,8 @@ def _build_getdata_replacement_agg(gdx_path: Path) -> str:
         "set mapa0(a,a0) ; set mapi0(i,i0) ;\n"
         "mapa0(a,a0)$(sameas(a,a0)) = yes ;\n"
         "mapi0(i,i0)$(sameas(i,i0)) = yes ;\n\n"
-        "$onMulti\n" + dump + "\n$offMulti\n\n"
+        "$onImplicitAssign\n"
+        + dump + "\n"
         "parameter fbep(*,*,*) ; fbep(fp,a0,r) = 0 ;\n"
         "parameter ftrv(*,*,*) ; ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;\n"
         "parameter ptax(*,*,*) ; ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;\n"
@@ -865,8 +875,8 @@ def _build_solve_gms_for_9x10() -> str:
             for idx, arg in enumerate(args, start=1):
                 inner = inner.replace(f"%{idx}", arg)
             return _inline(inner, depth + 1)
-        text = re.sub(r'\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE)
-        text = re.sub(r'\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE)
+        text = re.sub(r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE | re.MULTILINE)
+        text = re.sub(r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE | re.MULTILINE)
         return text
 
     inlined = _inline(COMP_GMS.read_text())
@@ -893,9 +903,6 @@ def _build_solve_gms_for_9x10() -> str:
 
     # Redirect the solution unload to out.gdx.
     inlined = inlined.replace('"%outDir%/%simName%.gdx"', '"out.gdx"')
-
-    # Suppress $141 (unassigned symbol) warnings — safe for CompStat.
-    inlined = "$onImplicitAssign\n" + inlined
 
     header = (
         "$setGlobal simType   CompStat\n"
@@ -954,10 +961,10 @@ def _build_solve_gms(agg_gdx: Path) -> str:
             for idx, arg in enumerate(args, start=1):
                 inner = inner.replace(f"%{idx}", arg)
             return _inline(inner, depth + 1)
-        text = re.sub(r'\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE)
+        text = re.sub(r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE | re.MULTILINE)
         # NOTE: batinclude args must stay on the SAME line — use [ \t] not \s,
         # else the arg group swallows the rest of the file (loop + execute_unload).
-        text = re.sub(r'\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE)
+        text = re.sub(r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE | re.MULTILINE)
         return text
 
     inlined = _inline(COMP_GMS.read_text())
@@ -1031,8 +1038,8 @@ def _build_solve_gms_9x10() -> str:
                     inner = inner.replace(f"%{idx}", arg)
                 return _inline(inner, depth + 1)
             return m.group(0)
-        text = re.sub(r'\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE)
-        text = re.sub(r'\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE)
+        text = re.sub(r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE | re.MULTILINE)
+        text = re.sub(r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE | re.MULTILINE)
         return text
 
     inlined = _inline(COMP_GMS.read_text())
