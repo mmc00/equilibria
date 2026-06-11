@@ -698,16 +698,23 @@ def _build_solve_gms_for_9x10() -> str:
     # Build the standard agg getData replacement from the flow data GDX.
     getdata_base = _build_getdata_replacement_agg(dat_gdx)
 
-    # Append elasticity parameters from Prm GDX (renames RORFLEX → rorFlex0).
+    # Embed elasticity parameters from 9x10Prm.gdx BEFORE the derived-parameter
+    # assignments (omegas = -etraq, sigmas = 1/esubq, ...) that use them.
+    # Insert just before "parameters sigmap(r,a)" in the getdata_base text.
     prm_dump = _gdxdump_params_only(prm_gdx, renames={"RORFLEX": "rorFlex0"})
-    getdata_replacement = (
-        getdata_base.rstrip()
-        + "\n\n* --- Elasticity parameters from 9x10Prm.gdx ---\n"
+    prm_block = (
+        "\n* --- Elasticity parameters from 9x10Prm.gdx ---\n"
         "$onMulti\n"
         + prm_dump
-        + "\n$offMulti\n"
-        "* END elasticity parameters\n"
+        + "$offMulti\n"
+        "* END elasticity parameters\n\n"
     )
+    anchor = "parameters sigmap(r,a)"
+    if anchor in getdata_base:
+        getdata_replacement = getdata_base.replace(anchor, prm_block + anchor, 1)
+    else:
+        # Fallback: append after the base
+        getdata_replacement = getdata_base.rstrip() + "\n" + prm_block
 
     def _inline(text: str, depth: int = 0) -> str:
         if depth > 5:
@@ -767,8 +774,25 @@ def _build_solve_gms_for_9x10() -> str:
     if n != 1:
         raise RuntimeError("could not find pnum.fx=1.5 shock anchor in comp.gms")
 
+    # Strip dynamic-simulation-only blocks: CompStat (base+shock) never enters them,
+    # but GAMS still compiles them and fires $149 (uncontrolled set) / $767 ($macro)
+    # for the years(tsim) conditions and %theMacro% directives inside.
+    for pattern in [
+        # ifDyn block: contains $setargs/$macro/%theMacro% compile-time directives
+        r'if\(years\(tsim\)\s+gt\s+FirstYear\s+and\s+ifDyn\s*,.*?^\s*\)\s*;',
+        # lag-fixing block (ne firstYear)
+        r'if\(years\(tsim\)\s+ne\s+firstYear\s*,.*?^\s*\)\s*;',
+        # dynamic solve guard (gt firstYear, without ifDyn)
+        r'if\(years\(tsim\)\s+gt\s+firstYear\s*,.*?^\s*\$\$endif.*?^\s*\)\s*;',
+    ]:
+        inlined, _ = re.subn(pattern, '* [years(tsim) block removed — CompStat only]',
+                              inlined, count=1, flags=re.DOTALL | re.MULTILINE | re.IGNORECASE)
+
     # Redirect the solution unload to out.gdx.
     inlined = inlined.replace('"%outDir%/%simName%.gdx"', '"out.gdx"')
+
+    # Suppress $141 (unassigned symbol) warnings — safe for CompStat.
+    inlined = "$onImplicitAssign\n" + inlined
 
     header = (
         "$setGlobal simType   CompStat\n"
@@ -778,6 +802,7 @@ def _build_solve_gms_for_9x10() -> str:
         "$setGlobal utility   cde\n$setGlobal savfFlag  capFix\n"
         "$setGlobal ifCal     0\n$setGlobal ifSUB     0\n"
         "$setGlobal ifCSV     0\n$setGlobal ifMCP     1\n"
+        "$setGlobal ifCSVAppend 0\n"
         "option mcp = path ;\n"
     )
     return header + inlined
