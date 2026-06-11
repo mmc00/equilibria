@@ -50,6 +50,7 @@ dependencies = [
     "pyomo>=6.9.5",
     "xlrd>=2.0.2",
     "certifi>=2026.1.4",
+    "click>=8.4.1",
 ]
 
 [project.optional-dependencies]
