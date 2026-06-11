@@ -128,9 +128,17 @@ def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tup
     }
     set_elements = [elems_by_name[sn] for sn in set_names]
     shape = tuple(len(s) for s in set_elements)
-    data_rec = records[i + 4 + n_unique]
     n = int(np.prod(shape)) if shape else 1
-    floats = struct.unpack_from(f"<{n}f", data_rec, 8)
+    # GEMPACK splits large arrays across multiple records when the data exceeds
+    # one record's capacity (~32 KB). Concatenate until we have n float32 values.
+    data_start = i + 4 + n_unique
+    raw = b""
+    extra = 0
+    while len(raw) < 8 + n * 4:
+        rec = records[data_start + extra]
+        raw += rec[8:] if extra > 0 else rec
+        extra += 1
+    floats = struct.unpack_from(f"<{n}f", raw, 8)
     arr = np.array(floats, dtype=np.float32).reshape(shape, order="F") if shape else np.array(floats, dtype=np.float32)
     return (
         HeaderArray(
@@ -141,7 +149,7 @@ def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tup
             set_names=set_names,
             set_elements=set_elements,
         ),
-        i + 5 + n_unique,
+        data_start + extra,
     )
 
 
@@ -170,14 +178,28 @@ def _read_respse(name: str, long_name: str, records: list[bytes], i: int) -> tup
     }
     set_elements = [elems_by_name[sn] for sn in set_names]
     shape = tuple(len(s) for s in set_elements)
-    data_rec = records[i + 3 + n_unique]
-    nnz = _INT.unpack_from(data_rec, 8)[0]
-    idx_off = 16
-    idx = struct.unpack_from(f"<{nnz}i", data_rec, idx_off)
-    val_off = idx_off + 4 * nnz
-    vals = struct.unpack_from(f"<{nnz}f", data_rec, val_off)
+    data_start = i + 3 + n_unique
+    # Each data record: pad(4) + counter_down(4) + nnz_total(4) + nnz_chunk(4)
+    #                   + idx[nnz_chunk] (4-byte ints) + val[nnz_chunk] (4-byte floats)
+    # counter_down goes n_recs..1; nnz_total is repeated in every record.
+    # Collect all (index, value) pairs across all chunk records.
+    all_idx: list[int] = []
+    all_val: list[float] = []
+    rec_off = data_start
+    while True:
+        rec = records[rec_off]
+        nnz_total = _INT.unpack_from(rec, 8)[0]
+        nnz_chunk = _INT.unpack_from(rec, 12)[0]
+        chunk_idx = struct.unpack_from(f"<{nnz_chunk}i", rec, 16)
+        chunk_val = struct.unpack_from(f"<{nnz_chunk}f", rec, 16 + 4 * nnz_chunk)
+        all_idx.extend(chunk_idx)
+        all_val.extend(chunk_val)
+        counter = _INT.unpack_from(rec, 4)[0]
+        rec_off += 1
+        if counter == 1:  # last chunk
+            break
     flat = np.zeros(int(np.prod(shape)) if shape else 1, dtype=np.float32)
-    for k, v in zip(idx, vals):
+    for k, v in zip(all_idx, all_val):
         flat[k - 1] = v
     arr = flat.reshape(shape, order="F") if shape else flat
     return (
@@ -189,7 +211,7 @@ def _read_respse(name: str, long_name: str, records: list[bytes], i: int) -> tup
             set_names=set_names,
             set_elements=set_elements,
         ),
-        i + 4 + n_unique,
+        rec_off,
     )
 
 
