@@ -1259,7 +1259,9 @@ class GTAPModelEquations:
         evfb = self._read_raw_gdx_param("EVFB", 3)
         evos = self._read_raw_gdx_param("EVOS", 3)
         if not evfb or not evos:
-            return {}
+            # Fallback: use pre-derived kappaf_activity from params.taxes (populated by load_from_har)
+            kaf = getattr(getattr(self.params, "taxes", None), "kappaf_activity", {}) or {}
+            return dict(kaf) if kaf else {}
         a_set = set(self.sets.a)
         f_set = set(getattr(self.sets, "f", []) or [])
         def map_a(raw):
@@ -1284,6 +1286,19 @@ class GTAPModelEquations:
         makb = self._read_raw_gdx_param("MAKB", 3)
         maks = self._read_raw_gdx_param("MAKS", 3)
         if not makb or not maks:
+            # Fallback: use params.benchmark.makb/maks (keyed (r,a,i), already scaled, no c_ prefix)
+            bench = getattr(self.params, "benchmark", None)
+            b_makb = getattr(bench, "makb", {}) if bench else {}
+            b_maks = getattr(bench, "maks", {}) if bench else {}
+            if b_makb and b_maks:
+                out = {}
+                for key, kb in b_makb.items():
+                    ks = b_maks.get(key, 0.0)
+                    if abs(ks) < 1e-12:
+                        out[key] = 0.0
+                    else:
+                        out[key] = float(kb) / float(ks) - 1.0
+                return out
             return {}
         # Build a map from raw commodity name → model.i name
         # (NUS333 strips 'c_' prefix in model sets).
