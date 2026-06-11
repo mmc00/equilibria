@@ -2659,16 +2659,16 @@ class GTAPModelEquations:
                 return max(total_intermediate, 1e-8)
             return max(get_vom_init(m, r, a) - get_va_init(m, r, a), 1e-8)
 
+        sf_set = set(getattr(self.sets, "sf", []) or [])
+
         def get_factor_supply_init(m, r, f):
-            if str(f) == "NatRes":
-                return 0.0
+            # sf factors (sluggish) now participate in eq_xft (xftflag=1),
+            # so xft must be initialized from benchmark factor flows, not 0.
             # GAMS if(1) branch: xft.l = sum_a pfy.l*xf.l / pft.l, with pft.l≈1.
             total = sum(get_pfy_init(m, r, f, a) * get_vfm_init(m, r, f, a) for a in self.sets.a)
             return max(total, 0.0)
 
         def get_pft_init(m, r, f):
-            if str(f) == "NatRes":
-                return 1e-8
             supply = get_factor_supply_init(m, r, f)
             if supply <= 0.0:
                 return 1e-8
@@ -4891,9 +4891,11 @@ class GTAPModelEquations:
                     * (pfy / model.pft[r, f]) ** omegaf
                 )
             if f in self.sets.sf:
-                # Sluggish factor CET allocation (GAMS pfteq/pfeq for fs):
-                # xf = gf_share * xft * (pfy/pft)^omegaf with finite omegaf = -etrae.
+                # Sluggish factor: same branch logic as mf.
+                # omegaf = -etrae; if etrae undefined, defaults to inf (perfect mobility).
                 omegaf = _omegaf(r, f)
+                if omegaf == float("inf"):
+                    return pfy == model.pft[r, f]
                 return model.xf[r, f, a] == (
                     model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
                     * (pfy / model.pft[r, f]) ** omegaf
