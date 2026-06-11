@@ -243,6 +243,18 @@ scripts/gtap/*
 !scripts/gtap/bench_nus333_dual.py
 !scripts/gtap/compare_nus333_rungtap.py
 !scripts/gtap/compare_9x10_rungtap.py
+!scripts/gtap/nl_compare.py
+!scripts/gtap/_nl_nonlinear.py
+!scripts/gtap/diff_closure.py
+!scripts/gtap/_closure_patches.py
+!scripts/gtap/build_9x10_altertax_neos_bundle.py
+!scripts/gtap/build_altertax_neos_bundle.py
+!scripts/gtap/submit_9x10_altertax_neos.py
+!scripts/gtap/submit_altertax_neos.py
+!scripts/gtap/gdx_to_gams_inline.py
+!scripts/gtap/diff_9x10_altertax.py
+!scripts/gtap/diff_nus333_altertax.py
+!scripts/gtap/diff_altertax.py
 
 # NUS333 head-to-head workspace: keep scripts + small JSON/MD reports,
 # ignore generated solver artefacts (RunGTAP/GEMPACK + Python caches).
