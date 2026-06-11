@@ -319,7 +319,9 @@ class GTAPSolver:
         # Fix endowments
         if closure.fix_endowments:
             if hasattr(self.model, "xft"):
+                sf_set = set(str(f) for f in self.model.sf) if hasattr(self.model, "sf") else set()
                 for idx in self.model.xft:
+                    r, f = idx
                     level = self.model.xft[idx].value
                     lb = self.model.xft[idx].lb
                     fixed_level = 1.0 if level is None else float(level)
@@ -502,9 +504,18 @@ class GTAPSolver:
         
         # ===================================================================
         # 3. Create xFlag: output exists if VOM(r,a) > 0
+        # Fall back to vom_i or makb when vom is empty (GTAPAgg datasets).
         # ===================================================================
         x_flag = set()
-        for (r, a), val in getattr(benchmark, 'vom', {}).items():
+        vom_src = getattr(benchmark, 'vom', {})
+        if not vom_src:
+            vom_src = getattr(benchmark, 'vom_i', {})
+        if not vom_src:
+            # Derive from makb: active if any make flow exists for (r,a)
+            for (r, a, i), val in getattr(benchmark, 'makb', {}).items():
+                if val is not None and abs(float(val)) > 1e-12:
+                    vom_src[(r, a)] = vom_src.get((r, a), 0.0) + float(val)
+        for (r, a), val in vom_src.items():
             if val is not None and float(val) > 0:
                 x_flag.add((r, a))
         

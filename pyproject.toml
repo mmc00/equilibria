@@ -1,7 +1,7 @@
 # pyproject.toml - equilibria: CGE modeling framework
 [project]
 name = "equilibria"
-version = "0.3.0"
+version = "0.5.1"
 description = "A modern Python framework for Computable General Equilibrium (CGE) modeling with modular equation blocks, universal data I/O, and auto-calibration."
 authors = [
     { name = "Marlon Molina", email = "dracomarmol@gmail.com" }
@@ -50,6 +50,7 @@ dependencies = [
     "pyomo>=6.9.5",
     "xlrd>=2.0.2",
     "certifi>=2026.1.4",
+    "click>=8.4.1",
 ]
 
 [project.optional-dependencies]
@@ -121,6 +122,13 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "ty>=0.0.14",
+]
+# Optional group: install harpy3 to enable the L7 harpy-oracle round-trip
+# tests for the HAR writer. CI never installs this group; the harpy library
+# is used ONLY as a black-box oracle in dev (see scripts/har/oracle_check.py
+# and src/equilibria/babel/har/README.md).
+har-oracle = [
+    "harpy3>=0.3.1",
 ]
 
 [tool.ruff]

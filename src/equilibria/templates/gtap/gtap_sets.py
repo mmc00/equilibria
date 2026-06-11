@@ -438,16 +438,13 @@ class GTAPSets:
         if not self.f:
             errors.append("Factors set (f) is empty")
         
-        # Check factor subsets cover all factors
+        # Check factor subsets are valid subsets of f
+        # Note: some factors may be in neither mf nor sf (fnm = sector-specific fixed, like NatRes)
         if self.f:
             all_factors = set(self.mf) | set(self.sf)
-            if all_factors != set(self.f):
-                missing = set(self.f) - all_factors
-                extra = all_factors - set(self.f)
-                if missing:
-                    errors.append(f"Factors not in mf or sf: {missing}")
-                if extra:
-                    errors.append(f"Extra factors in mf/sf: {extra}")
+            extra = all_factors - set(self.f)
+            if extra:
+                errors.append(f"Extra factors in mf/sf not in f: {extra}")
         
         # Check activity-commodity relationship
         if self.output_pairs:
@@ -532,14 +529,19 @@ class GTAPSets:
                     mobile_col = endwt_labels.index("mobile")
                 except ValueError:
                     mobile_col = 0
+                try:
+                    sluggish_col = endwt_labels.index("sluggish")
+                except ValueError:
+                    sluggish_col = -1
                 arr = eflg.array
                 for if_, fname in enumerate(endw_labels):
                     if fname not in self.f:
                         continue
                     if arr[if_, mobile_col] > 0.5:
                         self.mf.append(fname)
-                    else:
+                    elif sluggish_col >= 0 and arr[if_, sluggish_col] > 0.5:
                         self.sf.append(fname)
+                    # fixed factors (EFLG[:,fixed]=1) go into neither mf nor sf (fnm in GAMS)
 
         if not self.mf and not self.sf:
             mobile_keys = ("skl", "unsk", "cap", "lab")

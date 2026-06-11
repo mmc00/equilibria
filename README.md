@@ -221,6 +221,7 @@ For PEP pep2 production workflows, use:
 
 ```python
 from equilibria.babel import read_gdx, read_har, write_gdx
+from equilibria.babel.har import HarWriter, write_har
 
 # Read GAMS GDX files
 data = read_gdx("results.gdx")
@@ -229,6 +230,22 @@ parameters = data["parameters"]
 
 # Read GEMPACK HAR files
 data = read_har("database.har")
+
+# Round-trip mutate a HAR (alter-tax style shocks)
+data["rTMS"].array[...] *= 1.10
+write_har("baserate_shocked.har", data)
+
+# Build a HAR from scratch (numpy arrays or pandas DataFrames)
+import numpy as np
+with HarWriter("synthetic.har") as w:
+    w.add_set("REG", ["USA", "ROW"])
+    w.add_set("COMM", ["AGR", "MFG"])
+    w.add_array(
+        "VDPP",
+        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+        set_names=["COMM", "REG"],
+        long_name="domestic private purchases",
+    )
 
 # Write back to GDX (for GAMS users)
 write_gdx("python_results.gdx", solution)
@@ -329,6 +346,13 @@ Notes:
 - Counterfactual builds must pass `t0_snapshot=base_model` so CES weights (alphad/alpham/betap/betag/betas) calibrate against the converged baseline rather than the perturbed state.
 - Tax-rate symbols (`imptx`, `exptx`, `prdtx`, `fcttx`, `fctts`) are mutable `Param`s, not `Var`s, so warm-start scripts that copy Vars between baseline and shock models do not overwrite the shocked values.
 - See `CLAUDE.md` and `GTAP_VALIDATION_STATUS.md` for the full audit trail; per-fix notes live in `~/.claude/projects/.../memory/gtap_full_parity_achieved.md`.
+
+**Roadmap (in order):**
+
+1. **RunGtap welfare analysis compatibility** — port the EV/CV decomposition (allocative efficiency, terms of trade, investment-savings, endowment, technical change) so Python results line up with the standard RunGtap welfare report. *In progress (`templates/gtap/welfare_decomp.py`).*
+2. **Altertax** — implement the standard utility for re-balancing the baseline under altered tax rates while preserving equilibrium, so users can build counterfactual baselines without leaving Python.
+3. **Legacy GTAP model port** — backport the previous standard model version alongside Standard 7, enabling reproduction of studies built against the older specification.
+4. **Standard-model extensions** — selected extensions of the standard model (e.g. Francois-style trade-policy extensions) as opt-in modules.
 
 ---
 
@@ -478,6 +502,7 @@ print(list_solvers())
 | Modular blocks | ✅ | ❌ | ❌ | Partial |
 | Read GDX | ✅ | Native | ❌ | ✅ |
 | Read HAR | ✅ | ❌ | Native | ❌ |
+| Write HAR | ✅ | ❌ | Native | ❌ |
 | Open source | ✅ | ❌ | ❌ | ✅ |
 | IDE integration | Any | GAMS Studio | RunGTAP | VS Code |
 | Visualization | Built-in | Manual | ViewHAR | Plots.jl |
