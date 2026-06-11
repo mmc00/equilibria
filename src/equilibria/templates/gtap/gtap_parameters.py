@@ -491,7 +491,14 @@ class GTAPCalibratedShares:
     
     # Make shares (GAMS: gx)
     gx_param: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, a, i) - CET output share
-    
+
+    # Recalibrated price inits for non-standard elasticities (e.g. altertax CD).
+    # Empty dict → model falls back to initialize=1.0 (correct for standard GTAP).
+    # Populated by apply_altertax_elasticities so that pva/pnd initialise at the
+    # CD-consistent value: pva = prod_f(pfa_bench)^af, pnd = prod_i(pa_bench)^io.
+    pva_bench: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a)
+    pnd_bench: Dict[Tuple[str, str], float] = field(default_factory=dict)  # (r, a)
+
     def calibrate_from_benchmark(
         self,
         benchmark: "GTAPBenchmarkValues",

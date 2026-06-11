@@ -708,6 +708,15 @@ class GTAPModelEquations:
                     pet_val = max(value(model.pet[r, i]), 1e-12)
                     xet_val = max(numerator / pet_val, 0.0)
                     if xet_val <= 0.0:
+                        # Fallback: benchmark VXSB total.  Needed when finite omegax
+                        # (altertax) causes xs to initialize from maks-based levels
+                        # while xds is demand-based (makb), making ps*xs < pd*xds.
+                        xet_bench = sum(
+                            float(self.params.benchmark.vxsb.get((str(r), str(i), str(rp)), 0.0) or 0.0)
+                            for rp in model.rp
+                        )
+                        if xet_bench > 0.0:
+                            xet_val = xet_bench
                         lb = model.xet[r, i].lb
                         if lb is not None and float(lb) > 0.0:
                             model.xet[r, i].setlb(0.0)
@@ -2885,8 +2894,14 @@ class GTAPModelEquations:
         # Value added/intermediate bundles
         model.va = Var(model.r, model.a, within=NonNegativeReals, initialize=get_va_init, doc="Value added bundle")
         model.nd = Var(model.r, model.a, within=NonNegativeReals, initialize=get_nd_init, doc="Intermediate bundle")
-        model.pva = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="Value added price")
-        model.pnd = Var(model.r, model.a, within=NonNegativeReals, initialize=1.0, doc="Intermediate price")
+        _pva_bench = getattr(self.params.calibrated, "pva_bench", {})
+        _pnd_bench = getattr(self.params.calibrated, "pnd_bench", {})
+        def _get_pva_init(m, r, a):
+            return _pva_bench.get((r, a), 1.0)
+        def _get_pnd_init(m, r, a):
+            return _pnd_bench.get((r, a), 1.0)
+        model.pva = Var(model.r, model.a, within=NonNegativeReals, initialize=_get_pva_init, doc="Value added price")
+        model.pnd = Var(model.r, model.a, within=NonNegativeReals, initialize=_get_pnd_init, doc="Intermediate price")
 
         # Bilateral trade (2 vars per r,i,rp)  
         def get_pe_init(m, r, i, rp):
