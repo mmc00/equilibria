@@ -1167,6 +1167,7 @@ class GTAPBenchmarkValues:
         self.save.update(_h("SAVE", ["REG"], None))
         self.vdep.update(_h("VDEP", ["REG"], None))
         self.vkb.update(_h("VKB",   ["REG"], None))
+        self.pop.update(_h("POP",   ["REG"], None, scale=1.0))  # millions, not monetary
 
         # Aggregate vfb from evfb: (r, f) = sum_a evfb(r, f, a)
         if self.evfb:
