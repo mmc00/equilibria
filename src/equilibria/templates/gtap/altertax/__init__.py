@@ -23,6 +23,13 @@ Usage:
     )
 """
 
+from equilibria.templates.gtap.altertax.altertax_snapshot import (
+    build_altertax_warm_start_snapshot,
+)
+from equilibria.templates.gtap.altertax.outer_loop import (
+    apply_recalibration,
+    recalibrate_from_solution,
+)
 from equilibria.templates.gtap.altertax.parameter_overrides import (
     ALTERTAX_ELASTICITY_DEFAULTS,
     AltertaxElasticityOverrides,
@@ -38,5 +45,8 @@ __all__ = [
     "AltertaxElasticityOverrides",
     "apply_altertax_elasticities",
     "AltertaxRebalanceResult",
+    "apply_recalibration",
+    "build_altertax_warm_start_snapshot",
+    "recalibrate_from_solution",
     "rebalance_to_altertax_dataset",
 ]
