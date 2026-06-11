@@ -1,0 +1,512 @@
+{
+  "headers": {
+    "DREL": {
+      "dtype_kind": "U",
+      "long_name": "GTAP data release identifier                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "R8.1_2007_Feb2013                                      ",
+        "last": "R8.1_2007_Feb2013                                      "
+      }
+    },
+    "DVER": {
+      "dtype_kind": "f",
+      "long_name": "Format of GTAP data                                                   ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": 6.0,
+        "last": 6.0,
+        "max": 6.0,
+        "min": 6.0,
+        "sum": 6.0
+      }
+    },
+    "EFLG": {
+      "dtype_kind": "f",
+      "long_name": " binary (1,0) flag for endowment mobility                             ",
+      "set_elements": [
+        [
+          "LAND",
+          "LABOR",
+          "CAPITAL"
+        ],
+        [
+          "mobile",
+          "sluggish",
+          "fixed"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ENDWT"
+      ],
+      "shape": [
+        3,
+        3
+      ],
+      "stats": {
+        "first": 1.0,
+        "last": 0.0,
+        "max": 1.0,
+        "min": 0.0,
+        "sum": 3.0
+      }
+    },
+    "ESBC": {
+      "dtype_kind": "f",
+      "long_name": " Elasticity of subs among intermediate commodity inputs at region leve",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "sum": 0.0
+      }
+    },
+    "ESBD": {
+      "dtype_kind": "f",
+      "long_name": " Armington CES for domestic/imported allocation at region level       ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 2.382927894592285,
+        "last": 1.9394173622131348,
+        "max": 3.4455788135528564,
+        "min": 1.9394173622131348,
+        "sum": 15.535846710205078
+      }
+    },
+    "ESBG": {
+      "dtype_kind": "f",
+      "long_name": " Elasticity of subs among commodities in govt demand  at region level ",
+      "set_elements": [
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": 1.0,
+        "last": 1.0,
+        "max": 1.0,
+        "min": 1.0,
+        "sum": 2.0
+      }
+    },
+    "ESBI": {
+      "dtype_kind": "f",
+      "long_name": " Elasticity of subs among investment commodities  at region level     ",
+      "set_elements": [
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "sum": 0.0
+      }
+    },
+    "ESBM": {
+      "dtype_kind": "f",
+      "long_name": " Armington CES for regional allocation of imports at region level     ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 4.796114921569824,
+        "last": 3.8576574325561523,
+        "max": 7.54483699798584,
+        "min": 3.8576574325561523,
+        "sum": 32.397220611572266
+      }
+    },
+    "ESBQ": {
+      "dtype_kind": "f",
+      "long_name": " CES elasticity for allocation of commodity supply                    ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "sum": 0.0
+      }
+    },
+    "ESBS": {
+      "dtype_kind": "f",
+      "long_name": " Elasticity of subs among transportation service inputs               ",
+      "set_elements": [
+        [
+          "SER"
+        ]
+      ],
+      "set_names": [
+        "MARG"
+      ],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": 1.0,
+        "last": 1.0,
+        "max": 1.0,
+        "min": 1.0,
+        "sum": 1.0
+      }
+    },
+    "ESBT": {
+      "dtype_kind": "f",
+      "long_name": " Elasticity of subs among composite intermediate and factors at region",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "sum": 0.0
+      }
+    },
+    "ESBV": {
+      "dtype_kind": "f",
+      "long_name": " CES between primary factors in production at region level            ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.24807396531105042,
+        "last": 1.361359715461731,
+        "max": 1.361359715461731,
+        "min": 0.24807396531105042,
+        "sum": 5.368269920349121
+      }
+    },
+    "ETRE": {
+      "dtype_kind": "f",
+      "long_name": " CET between sectors for sluggish primary factors                     ",
+      "set_elements": [
+        [
+          "LAND",
+          "LABOR",
+          "CAPITAL"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "sum": 0.0
+      }
+    },
+    "ETRQ": {
+      "dtype_kind": "f",
+      "long_name": " Elasticity of transformation among commodities produced by industries",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": -9.999999974752427e-07,
+        "last": -9.999999974752427e-07,
+        "max": -9.999999974752427e-07,
+        "min": -9.999999974752427e-07,
+        "sum": -5.999999757477781e-06
+      }
+    },
+    "INCP": {
+      "dtype_kind": "f",
+      "long_name": "CDE expansion parameter                                               ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.16936899721622467,
+        "last": 1.1290500164031982,
+        "max": 1.1290500164031982,
+        "min": 0.16936899721622467,
+        "sum": 4.520532608032227
+      }
+    },
+    "RDLT": {
+      "dtype_kind": "i",
+      "long_name": "Investment allocation binary coefficient                              ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1,
+        1
+      ],
+      "stats": {
+        "first": 1.0,
+        "last": 1.0,
+        "max": 1.0,
+        "min": 1.0,
+        "sum": 1.0
+      }
+    },
+    "RFLX": {
+      "dtype_kind": "f",
+      "long_name": "Expected rate of return flexibility parameter                         ",
+      "set_elements": [
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": 10.0,
+        "last": 10.0,
+        "max": 10.0,
+        "min": 10.0,
+        "sum": 20.0
+      }
+    },
+    "SUBP": {
+      "dtype_kind": "f",
+      "long_name": "CDE substitution parameter                                            ",
+      "set_elements": [
+        [
+          "AGR",
+          "MFG",
+          "SER"
+        ],
+        [
+          "USA",
+          "ROW"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        3,
+        2
+      ],
+      "stats": {
+        "first": 0.8182220458984375,
+        "last": 0.32665613293647766,
+        "max": 0.8307713270187378,
+        "min": 0.17186464369297028,
+        "sum": 2.779594898223877
+      }
+    },
+    "XXCD": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "at 21:10:20 on 01-AUG-2018                                            ",
+        "last": "at 21:10:20 on 01-AUG-2018                                            "
+      }
+    },
+    "XXCP": {
+      "dtype_kind": "U",
+      "long_name": "Fortran compiler used to make EXE which created this file             ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "IF64  ",
+        "last": "IF64  "
+      }
+    },
+    "XXCR": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "<GEMSIM v4.4 Jan 2016> [GTAPDataConv-SC.tab]                          ",
+        "last": "<GEMPACK Release 11.4.003   January 2016>                             "
+      }
+    }
+  },
+  "path": "src/equilibria/templates/reference/gtap/data/nus333/default.prm"
+}

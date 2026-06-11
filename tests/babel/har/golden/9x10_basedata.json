@@ -1,0 +1,2295 @@
+{
+  "headers": {
+    "ADRV": {
+      "dtype_kind": "f",
+      "long_name": "anti-dumping duty                                                     ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "sum": 0.0
+      }
+    },
+    "CSEP": {
+      "dtype_kind": "f",
+      "long_name": "net intermediate input tax (if > 0) or subsidy (if < 0)               ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Domestic",
+          "Imported"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG",
+        "DIR"
+      ],
+      "shape": [
+        10,
+        9,
+        10,
+        2
+      ],
+      "stats": {
+        "first": -25.03974151611328,
+        "last": -8.904833521228284e-06,
+        "max": 139038.875,
+        "min": -2483.65771484375,
+        "sum": 709786.4375
+      }
+    },
+    "DPSM": {
+      "dtype_kind": "f",
+      "long_name": "Sum of Distribution Parameters in Household Demand System             ",
+      "set_elements": [
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        10
+      ],
+      "stats": {
+        "first": 1.0,
+        "last": 1.0,
+        "max": 1.0,
+        "min": 1.0,
+        "sum": 10.0
+      }
+    },
+    "DREL": {
+      "dtype_kind": "U",
+      "long_name": "GTAP data release identifier                                          ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "R9.0A_2011_Apr2016                                     ",
+        "last": "R9.0A_2011_Apr2016                                     "
+      }
+    },
+    "DVER": {
+      "dtype_kind": "f",
+      "long_name": "Format of GTAP Data                                                   ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": 5.0,
+        "last": 5.0,
+        "max": 5.0,
+        "min": 5.0,
+        "sum": 5.0
+      }
+    },
+    "EVFB": {
+      "dtype_kind": "f",
+      "long_name": "primary factor purchases, by firms, at basic prices                   ",
+      "set_elements": [
+        [
+          "Land",
+          "UnSkLab",
+          "SkLab",
+          "Capital",
+          "NatRes"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        5,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 7369.60107421875,
+        "last": 0.0,
+        "max": 4236516.0,
+        "min": 0.0,
+        "sum": 58750720.0
+      }
+    },
+    "EVFP": {
+      "dtype_kind": "f",
+      "long_name": "primary factor purchases, at purchasers prices                        ",
+      "set_elements": [
+        [
+          "Land",
+          "UnSkLab",
+          "SkLab",
+          "Capital",
+          "NatRes"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        5,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 7443.19873046875,
+        "last": 0.0,
+        "max": 4867470.5,
+        "min": 0.0,
+        "sum": 64483504.0
+      }
+    },
+    "EVOS": {
+      "dtype_kind": "f",
+      "long_name": "value of endowment supply in region r, net of direct tax              ",
+      "set_elements": [
+        [
+          "Land",
+          "UnSkLab",
+          "SkLab",
+          "Capital",
+          "NatRes"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        5,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 6518.4765625,
+        "last": 0.0,
+        "max": 3338910.5,
+        "min": 0.0,
+        "sum": 51768984.0
+      }
+    },
+    "FBEP": {
+      "dtype_kind": "f",
+      "long_name": "gross factor-based tax (if > 0) or subsidy (if < 0)                   ",
+      "set_elements": [
+        [
+          "Land",
+          "UnSkLab",
+          "SkLab",
+          "Capital",
+          "NatRes"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        5,
+        9,
+        10
+      ],
+      "stats": {
+        "first": -106.85762786865234,
+        "last": 0.0,
+        "max": 0.0,
+        "min": -30020.87109375,
+        "sum": -174801.609375
+      }
+    },
+    "FTRV": {
+      "dtype_kind": "f",
+      "long_name": "gross factor employment tax revenue                                   ",
+      "set_elements": [
+        [
+          "Land",
+          "UnSkLab",
+          "SkLab",
+          "Capital",
+          "NatRes"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "ENDW",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        5,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 180.4554901123047,
+        "last": 0.0,
+        "max": 876076.0625,
+        "min": 0.0,
+        "sum": 5907584.5
+      }
+    },
+    "ISEP": {
+      "dtype_kind": "f",
+      "long_name": "net investment input tax (if > 0) or subsidy (if < 0)                 ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Domestic",
+          "Imported"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "DIR"
+      ],
+      "shape": [
+        10,
+        10,
+        2
+      ],
+      "stats": {
+        "first": 0.2824287414550781,
+        "last": 71.80706024169922,
+        "max": 108717.7578125,
+        "min": -332.2563781738281,
+        "sum": 503368.75
+      }
+    },
+    "LICN": {
+      "dtype_kind": "U",
+      "long_name": "GTAP data licence details: subscriber's edition (unlimited)           ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "Licensed to GTAP Consortium Agency. User License No. 9.0-0000.",
+        "last": "Licensed to GTAP Consortium Agency. User License No. 9.0-0000."
+      }
+    },
+    "MAKB": {
+      "dtype_kind": "f",
+      "long_name": "MAKE matrix at basic prices                                           ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        10,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 35783.140625,
+        "last": 1789031.625,
+        "max": 14511170.0,
+        "min": 0.0,
+        "sum": 141872864.0
+      }
+    },
+    "MAKS": {
+      "dtype_kind": "f",
+      "long_name": "MAKE matrix (before output tax/subsidy)                               ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        10,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 35776.43359375,
+        "last": 1782121.875,
+        "max": 14038279.0,
+        "min": 0.0,
+        "sum": 139625040.0
+      }
+    },
+    "MFRV": {
+      "dtype_kind": "f",
+      "long_name": "export tax equivalent of MFA quota premia                             ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 15127.255859375,
+        "min": 0.0,
+        "sum": 22824.6640625
+      }
+    },
+    "OSEP": {
+      "dtype_kind": "f",
+      "long_name": "net ordinary output tax (if > 0) or subsidy (if < 0)                  ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 6.708967208862305,
+        "last": 6909.7373046875,
+        "max": 472891.3125,
+        "min": -23304.939453125,
+        "sum": 2247849.5
+      }
+    },
+    "POP": {
+      "dtype_kind": "f",
+      "long_name": "population                                                            ",
+      "set_elements": [
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        10
+      ],
+      "stats": {
+        "first": 36.82978057861328,
+        "last": 312.97686767578125,
+        "max": 1628.3773193359375,
+        "min": 36.82978057861328,
+        "sum": 6955.111328125
+      }
+    },
+    "SAVE": {
+      "dtype_kind": "f",
+      "long_name": "net saving, by region                                                 ",
+      "set_elements": [
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        10
+      ],
+      "stats": {
+        "first": 199542.40625,
+        "last": 667770.0,
+        "max": 3396990.0,
+        "min": 180493.203125,
+        "sum": 7763541.0
+      }
+    },
+    "TFRV": {
+      "dtype_kind": "f",
+      "long_name": "ordinary import duty                                                  ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 20.03843879699707,
+        "last": 0.0,
+        "max": 25845.830078125,
+        "min": 0.0,
+        "sum": 479388.5
+      }
+    },
+    "VCIF": {
+      "dtype_kind": "f",
+      "long_name": "imports, at CIF prices                                                ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 992.1069946289062,
+        "last": 3546.8154296875,
+        "max": 1747708.875,
+        "min": 6.177580833435059,
+        "sum": 20153936.0
+      }
+    },
+    "VDEP": {
+      "dtype_kind": "f",
+      "long_name": "capital depreciation                                                  ",
+      "set_elements": [
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        10
+      ],
+      "stats": {
+        "first": 229877.09375,
+        "last": 482927.90625,
+        "max": 2258271.5,
+        "min": 117259.765625,
+        "sum": 9031254.0
+      }
+    },
+    "VDFB": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by firms, at basic prices                         ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        10,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 3747.946044921875,
+        "last": 263717.8125,
+        "max": 4263423.0,
+        "min": 2.2441718578338623,
+        "sum": 60683812.0
+      }
+    },
+    "VDFP": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by firms, at purchasers prices                    ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        10,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 3722.90625,
+        "last": 263717.8125,
+        "max": 4293924.5,
+        "min": 2.2441718578338623,
+        "sum": 61239728.0
+      }
+    },
+    "VDGB": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by government, at basic prices                    ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 36.35664749145508,
+        "last": 627356.0625,
+        "max": 3726238.5,
+        "min": 0.3030329644680023,
+        "sum": 12306106.0
+      }
+    },
+    "VDGP": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by government, at purchasers prices               ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 36.356712341308594,
+        "last": 632113.3125,
+        "max": 3726243.25,
+        "min": 0.30339309573173523,
+        "sum": 12331909.0
+      }
+    },
+    "VDIB": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by investment, at basic prices                    ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 552.3233642578125,
+        "last": 55323.80078125,
+        "max": 2486585.5,
+        "min": 0.22751104831695557,
+        "sum": 13941701.0
+      }
+    },
+    "VDIP": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by investment, at purchasers prices               ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 552.6058349609375,
+        "last": 56990.6953125,
+        "max": 2595303.25,
+        "min": 0.22751104831695557,
+        "sum": 14310731.0
+      }
+    },
+    "VDPB": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by households, at basic prices                    ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 4871.3388671875,
+        "last": 451319.71875,
+        "max": 6625411.0,
+        "min": 1096.5810546875,
+        "sum": 35035324.0
+      }
+    },
+    "VDPP": {
+      "dtype_kind": "f",
+      "long_name": "domestic purchases, by households, at purchasers prices               ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 5104.90576171875,
+        "last": 450371.34375,
+        "max": 6677009.0,
+        "min": 1195.0684814453125,
+        "sum": 37238924.0
+      }
+    },
+    "VFOB": {
+      "dtype_kind": "f",
+      "long_name": "non-margin exports, at FOB prices                                     ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 857.68798828125,
+        "last": 3546.8154296875,
+        "max": 1715428.375,
+        "min": 5.9895853996276855,
+        "sum": 19377904.0
+      }
+    },
+    "VKB": {
+      "dtype_kind": "f",
+      "long_name": "capital stock                                                         ",
+      "set_elements": [
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "REG"
+      ],
+      "shape": [
+        10
+      ],
+      "stats": {
+        "first": 5746928.0,
+        "last": 12073198.0,
+        "max": 56456788.0,
+        "min": 2931494.25,
+        "sum": 225781344.0
+      }
+    },
+    "VMFB": {
+      "dtype_kind": "f",
+      "long_name": "imported purchases, by firms, at basic prices                         ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        10,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 410.991455078125,
+        "last": 34579.2890625,
+        "max": 1010025.875,
+        "min": 1.0761127471923828,
+        "sum": 13747932.0
+      }
+    },
+    "VMFP": {
+      "dtype_kind": "f",
+      "long_name": "imported purchases, by firms, at purchasers prices                    ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "a_agricultur",
+          "a_Extraction",
+          "a_ProcFood",
+          "a_TextWapp",
+          "a_LightMnfc",
+          "a_HeavyMnfc",
+          "a_Util_Cons",
+          "a_TransComm",
+          "a_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "ACTS",
+        "REG"
+      ],
+      "shape": [
+        10,
+        9,
+        10
+      ],
+      "stats": {
+        "first": 409.9712219238281,
+        "last": 34579.2890625,
+        "max": 1024147.4375,
+        "min": 1.0764514207839966,
+        "sum": 13901795.0
+      }
+    },
+    "VMGB": {
+      "dtype_kind": "f",
+      "long_name": "import purchases, by government, at basic prices                      ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 5.259678840637207,
+        "last": 5637.75244140625,
+        "max": 56297.75390625,
+        "min": 0.012052834033966064,
+        "sum": 222441.984375
+      }
+    },
+    "VMGP": {
+      "dtype_kind": "f",
+      "long_name": "import purchases, by government, at purchasers prices                 ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 5.622738361358643,
+        "last": 5679.30712890625,
+        "max": 56653.7734375,
+        "min": 0.012054180726408958,
+        "sum": 226644.6875
+      }
+    },
+    "VMIB": {
+      "dtype_kind": "f",
+      "long_name": "import purchases, by investment, at basic prices                      ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 0.05884766951203346,
+        "last": 8809.259765625,
+        "max": 356727.8125,
+        "min": 0.03261793032288551,
+        "sum": 2349721.25
+      }
+    },
+    "VMIP": {
+      "dtype_kind": "f",
+      "long_name": "import purchases, by investment, at purchasers prices                 ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 0.05884766951203346,
+        "last": 8881.06640625,
+        "max": 364373.8125,
+        "min": 0.03261793032288551,
+        "sum": 2484061.25
+      }
+    },
+    "VMPB": {
+      "dtype_kind": "f",
+      "long_name": "import purchases, by households, at basic prices                      ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 955.3606567382812,
+        "last": 25653.888671875,
+        "max": 405058.78125,
+        "min": 72.9102554321289,
+        "sum": 4313228.5
+      }
+    },
+    "VMPP": {
+      "dtype_kind": "f",
+      "long_name": "import purchases, by households, at purchasers prices                 ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 1005.7421875,
+        "last": 24116.072265625,
+        "max": 491057.3125,
+        "min": 76.9765853881836,
+        "sum": 4884878.0
+      }
+    },
+    "VMRT": {
+      "dtype_kind": "f",
+      "long_name": "Import tariff Rev by type of tariffs paid                             ",
+      "set_elements": [
+        [
+          "ADV",
+          "SPE"
+        ],
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "TARTYPE",
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        2,
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 14.778143882751465,
+        "last": 0.0,
+        "max": 23634.841796875,
+        "min": 0.0,
+        "sum": 479388.5
+      }
+    },
+    "VMSB": {
+      "dtype_kind": "f",
+      "long_name": "imports, at basic prices                                              ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 1012.1454467773438,
+        "last": 3546.8154296875,
+        "max": 1747709.0,
+        "min": 6.192296981811523,
+        "sum": 20633324.0
+      }
+    },
+    "VOSB": {
+      "dtype_kind": "f",
+      "long_name": "sales of domestic output supply, at basic prices                      ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10
+      ],
+      "stats": {
+        "first": 35783.140625,
+        "last": 1789031.625,
+        "max": 14511170.0,
+        "min": 11295.9794921875,
+        "sum": 141872848.0
+      }
+    },
+    "VRRV": {
+      "dtype_kind": "f",
+      "long_name": "export tax equivalent of voluntary export restraints                  ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "sum": 0.0
+      }
+    },
+    "VST": {
+      "dtype_kind": "f",
+      "long_name": "margin exports                                                        ",
+      "set_elements": [
+        [
+          "c_TransComm"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "MARG",
+        "REG"
+      ],
+      "shape": [
+        1,
+        10
+      ],
+      "stats": {
+        "first": 4106.92578125,
+        "last": 56336.44140625,
+        "max": 331739.125,
+        "min": 4106.92578125,
+        "sum": 776030.375
+      }
+    },
+    "VTWR": {
+      "dtype_kind": "f",
+      "long_name": "margins by margin commodity                                           ",
+      "set_elements": [
+        [
+          "c_TransComm"
+        ],
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "MARG",
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        1,
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 134.4190673828125,
+        "last": 0.0,
+        "max": 32495.05078125,
+        "min": 0.0,
+        "sum": 776030.625
+      }
+    },
+    "VXSB": {
+      "dtype_kind": "f",
+      "long_name": "non-margin exports, at basic prices                                   ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 857.68798828125,
+        "last": 3546.8154296875,
+        "max": 1715428.375,
+        "min": 5.951569080352783,
+        "sum": 19129902.0
+      }
+    },
+    "XTRV": {
+      "dtype_kind": "f",
+      "long_name": "ordinary export tax                                                   ",
+      "set_elements": [
+        [
+          "c_Crops",
+          "c_MeatLstk",
+          "c_Extraction",
+          "c_ProcFood",
+          "c_TextWapp",
+          "c_LightMnfc",
+          "c_HeavyMnfc",
+          "c_Util_Cons",
+          "c_TransComm",
+          "c_OthService"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ],
+        [
+          "Oceania",
+          "EastAsia",
+          "SEAsia",
+          "SouthAsia",
+          "NAmerica",
+          "LatinAmer",
+          "EU_28",
+          "MENA",
+          "SSA",
+          "RestofWorld"
+        ]
+      ],
+      "set_names": [
+        "COMM",
+        "REG",
+        "REG"
+      ],
+      "shape": [
+        10,
+        10,
+        10
+      ],
+      "stats": {
+        "first": 0.0,
+        "last": 0.0,
+        "max": 68669.421875,
+        "min": -1161.927734375,
+        "sum": 225177.875
+      }
+    },
+    "XXCD": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "at 19:08:11 on 25-JUN-2017                                            ",
+        "last": "at 19:08:11 on 25-JUN-2017                                            "
+      }
+    },
+    "XXCP": {
+      "dtype_kind": "U",
+      "long_name": "Fortran compiler used to make EXE which created this file             ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        1
+      ],
+      "stats": {
+        "first": "IF64  ",
+        "last": "IF64  "
+      }
+    },
+    "XXCR": {
+      "dtype_kind": "U",
+      "long_name": "CREATION INFORMATION                                                  ",
+      "set_elements": [],
+      "set_names": [],
+      "shape": [
+        2
+      ],
+      "stats": {
+        "first": "<GEMSIM v4.4 Jan 2016> [CleanUp-JGEA-data.tab]                        ",
+        "last": "<GEMPACK Release 11.4.003   January 2016>                             "
+      }
+    }
+  },
+  "path": "src/equilibria/templates/reference/gtap/data/9x10/basedata.har"
+}
