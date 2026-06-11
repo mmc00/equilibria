@@ -30,6 +30,21 @@ Lograr **paridad exacta** entre el template Python `equilibria` GTAP Standard 7 
 - **GAMS license expirada (Oct 2024):** sólo `gdxdump` CLI funciona para leer GDX (no `gdxpds`, no correr modelos GAMS).
 - **Dataset:** `basedata-9x10.gdx` ≡ `9x10Dat.gdx` (verificados idénticos).
 
+## Gate de regresión (obligatorio antes de cualquier PR)
+
+Antes de hacer merge de cualquier cambio que toque ecuaciones, parámetros, o carga de datos GTAP, correr:
+
+```bash
+uv run pytest tests/templates/gtap/test_gtap7_nl_parity.py -v
+```
+
+Este test construye el `.nl` de Python para cada dataset `gtap7_*` y compara coeficientes familia-por-familia contra los fixtures GAMS commiteados en `tests/fixtures/gtap7/`. No requiere solver ni NEOS — corre en <1s por dataset.
+
+- **0 diffs = OK.** Cualquier diff indica regresión en ecuaciones o parámetros.
+- **Para agregar un nuevo dataset:** generar fixtures con `nl_compare.py --dataset <name> --phase base shock --out-dir /tmp/nl_<name>`, copiar los `gams_*.nl` a `tests/fixtures/gtap7/<name>/`, commitear.
+- **`gtap7_20x41`** solo se corre localmente (fixture ~159MB, no está en git).
+- El CI corre este gate automáticamente en cada push/PR (`gtap7-nl-parity` job en `.github/workflows/tests.yml`).
+
 ## Disciplina de git (obligatoria)
 
 Cada corrida de validación debe tener un commit limpio asociado. Flujo obligatorio:
