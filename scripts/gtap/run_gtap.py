@@ -2113,6 +2113,35 @@ def _run_path_capi_nonlinear_full(
     runtime = loader.load()
     version = loader.version(runtime)
 
+    # Mirror GAMS presolve: when pnum is fixed as numeraire, pnumeq (pnum==pwfact)
+    # implies pwfact = pnum.  In the GAMS MCP model, pwfacteq.pwfact declares the
+    # Fisher-index equation as pwfact's complementary row, while pnumeq is a free
+    # row (no MCP pair).  With pnum.fx = pnum.l, GAMS presolve inlines pwfact=pnum
+    # everywhere, making pwfacteq trivially satisfied.
+    # Python replicates this with two steps that keep the system square:
+    #   1. fix pwfact = pnum (= 1.0)      → −1 free variable
+    #   2. deactivate eq_pwfact            → −1 active constraint
+    # eq_pnum remains active but with both sides fixed (pnum=1, pwfact=1) its
+    # Jacobian column is zero — PATH sees it as a trivially-satisfied row.
+    _pnum_comp = model.find_component("pnum")
+    _pwfact_comp = model.find_component("pwfact")
+    _eq_pwfact_comp = model.find_component("eq_pwfact")
+    if (
+        _pnum_comp is not None and not _pnum_comp.is_indexed() and _pnum_comp.fixed
+        and _pwfact_comp is not None and not _pwfact_comp.is_indexed()
+        and not _pwfact_comp.fixed
+        and _eq_pwfact_comp is not None and _eq_pwfact_comp.active
+    ):
+        from pyomo.environ import value as _pyo_value
+        _pnum_val = float(_pyo_value(_pnum_comp))
+        _pwfact_comp.fix(_pnum_val)
+        _eq_pwfact_comp.deactivate()
+        logger.info(
+            "Numeraire presolve: fixed pwfact=%.6f, deactivated eq_pwfact "
+            "(mirrors GAMS pnum.fx+pnumeq free-row presolve)",
+            _pnum_val,
+        )
+
     constraints = sorted(
         model.component_data_objects(Constraint, active=True, descend_into=True),
         key=lambda c: c.name,
@@ -2136,7 +2165,7 @@ def _run_path_capi_nonlinear_full(
             from _closure_patches import structural_matching  # type: ignore
         free_variables = structural_matching(
             constraints, free_variables,
-            forced_pairs=[("eq_pwfact", "pwfact")],
+            forced_pairs=[],
             label="nonlinear-full",
         )
 
