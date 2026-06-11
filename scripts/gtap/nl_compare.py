@@ -426,8 +426,20 @@ mdtx0(r)       = na ;
 """
 
 
-def _fmt_set(elements: list[str]) -> str:
-    return ", ".join(elements)
+def _fmt_set(elements: list[str], max_line: int = 150) -> str:
+    """Join set elements, breaking into multiple lines if needed (GAMS limit ~200 chars)."""
+    result, current = [], ""
+    for i, el in enumerate(elements):
+        sep = ", " if i < len(elements) - 1 else ""
+        candidate = (current + ", " + el) if current else el
+        if len(candidate + sep) > max_line and current:
+            result.append(current + ",")
+            current = el
+        else:
+            current = candidate
+    if current:
+        result.append(current)
+    return ("\n   ".join(result))
 
 
 def _compute_keep_a(keep_i: list[str]) -> list[str]:
