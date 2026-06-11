@@ -613,7 +613,7 @@ def _build_getdata_replacement_agg(gdx_path: Path) -> str:
         "etax", "vtax", "vsub", "dtax", "ctax", "bop", "tot",
     ] + reg
     return (
-        "\n* getData.gms REPLACEMENT (aggregated subset) — from "
+        "\n* getData.gms REPLACEMENT (aggregated subset) -- from "
         f"{gdx_path.name}\n"
         "sets\n"
         f'   acts           "Activities"      / {_fmt_set(acts)} /\n'
@@ -785,7 +785,7 @@ def _build_solve_gms_for_9x10() -> str:
         # dynamic solve guard (gt firstYear, without ifDyn)
         r'if\(years\(tsim\)\s+gt\s+firstYear\s*,.*?^\s*\$\$endif.*?^\s*\)\s*;',
     ]:
-        inlined, _ = re.subn(pattern, '* [years(tsim) block removed — CompStat only]',
+        inlined, _ = re.subn(pattern, '* [years(tsim) block removed -- CompStat only]',
                               inlined, count=1, flags=re.DOTALL | re.MULTILINE | re.IGNORECASE)
 
     # Redirect the solution unload to out.gdx.
