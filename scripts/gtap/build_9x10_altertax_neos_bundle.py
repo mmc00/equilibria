@@ -150,6 +150,41 @@ def _insert_pdp_pmp_recalc_before_unload(text: str) -> str:
     return pat.sub(fix + r"\1", text, count=1)
 
 
+def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
+    """Replace the numeraire-only shock block with a real tariff shock.
+
+    comp_altertax.gms ships with ``pnum.fx(tsim) = 1.5`` as a homogeneity
+    test.  For the altertax-tariff use-case we want the shock period to apply
+    a uniform tariff increase on all bilateral import flows so the solver
+    produces a rebalanced dataset at the new tariff structure.
+
+    The replacement mirrors tariff_shock.gms:
+        imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) = imptx.l(r,i,rp,tsim) * (1 + v);
+    """
+    old_block = (
+        "   if(sameas(tsim,'shock'),\n"
+        "      pnum.fx(tsim) = 1.5 ;\n"
+        "   ) ;"
+    )
+    pct = tariff_increase * 100
+    new_block = (
+        f"   if(sameas(tsim,'shock'),\n"
+        f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
+        f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
+        f"         imptx.l(r,i,rp,tsim) * {1.0 + tariff_increase} ;\n"
+        f"   ) ;"
+    )
+    if old_block not in text:
+        raise SystemExit(
+            "Could not locate numeraire shock block to replace.\n"
+            "Expected:\n" + old_block
+        )
+    n = text.count(old_block)
+    if n != 1:
+        raise SystemExit(f"Expected 1 occurrence of shock block, found {n}.")
+    return text.replace(old_block, new_block, 1)
+
+
 def merge_gdx(out_path: Path) -> None:
     """Merge 9x10Sets.gdx + 9x10Dat.gdx + 9x10Prm.gdx → in.gdx."""
     import gams.transfer as gt
@@ -268,6 +303,8 @@ def main() -> None:
     # Convention fixes.
     inlined = _insert_pwmg_fix_before_solve(inlined)
     inlined = _insert_pdp_pmp_recalc_before_unload(inlined)
+    # Replace numeraire-only shock with real tariff shock (+10% on all imptx).
+    inlined = _patch_shock_to_tariff(inlined, tariff_increase=0.10)
 
     out_gms = args.out_dir / "comp_9x10_altertax_neos.gms"
     out_gms.write_text(inlined)
