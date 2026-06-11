@@ -2090,7 +2090,7 @@ def _run_path_capi_nonlinear_full(
     # baseline. Python's PATH on 9x10 takes wider Newton steps and crashes
     # trying to evaluate (negative_yc)^(-0.9) or (0/0) in eq_yc.
     _NLB_FACTOR = 1e-3
-    for _vname in ("yc", "phi", "phip", "regy", "uh"):
+    for _vname in ("yc", "phi", "phip", "regy", "uh", "ug", "us"):
         _vv = getattr(model, _vname, None)
         if _vv is None:
             continue
