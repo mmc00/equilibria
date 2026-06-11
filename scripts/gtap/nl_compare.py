@@ -154,11 +154,13 @@ def build_python_nls(
     paths: dict[str, Path] = {}
     base_model = None  # cached base ConcreteModel for shock t0_snapshot
 
-    for period in ["base", "check", "shock"]:
+    for period in ["base", "check", "shock", "altertax"]:
         if period not in phases:
             continue
 
         params_to_use = p
+        period_closure = closure_config
+
         if period == "shock":
             p_shocked = copy.deepcopy(p)
             for key in list(p_shocked.taxes.imptx.keys()):
@@ -170,9 +172,26 @@ def build_python_nls(
                 print("  Building base model (for shock t0_snapshot) ...")
                 _, base_model = _build_python_nl("base", p, closure_config, out_dir)
 
+        elif period == "altertax":
+            # Malcolm (1998) CD-elasticity closure: override elasticities,
+            # use altertax closure preset. No tariff shock applied to the .nl —
+            # the .nl comparison is coefficient-only (structure check).
+            from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+            from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+            params_to_use = apply_altertax_elasticities(copy.deepcopy(p))
+            period_closure = GTAPClosureConfig(
+                name="altertax",
+                closure_type="MCP",
+                capital_mobility="mobile",
+                fix_endowments=False,
+                fix_taxes=True,
+                fix_technology=True,
+                if_sub=False,
+            )
+
         t0 = time.perf_counter()
         nl_path, built_model = _build_python_nl(
-            period, params_to_use, closure_config, out_dir,
+            period, params_to_use, period_closure, out_dir,
             base_model=base_model if period == "shock" else None,
         )
         if period == "base":
@@ -1335,6 +1354,36 @@ imptx.fx(r,i,rp,'shock') = imptx.l(r,i,rp,'base') * 1.10 ;
 * Write shock .nl via second CONVERT solve
 solve gtap using nlp maximizing walras ;
 """
+    elif phase == "altertax":
+        solve_block = """
+* ============================================================
+* CONVERT-mode solve (ALTERTAX period): write gtap.nl — Layer 6 diagnostic
+* Mirrors Malcolm (1998) altertax: CD elasticities (all subst. elast. = 1),
+* mobile factors (omegaf=inf or large), Armington 0.95.
+* Signatures from standard_gtap_7/cal.gms:
+*   esubva(a,r), esubd(i,r), esubm(i,r), etrae(fp,r), omegaf(r,fp).
+* Use NLP mode (ifMCP=0) — GAMS CONVERT cannot write .nl for MCP.
+* ============================================================
+rs(r) = yes ;
+ts('base') = yes ;
+
+* Apply altertax elasticity overrides (parameter_altertax.gms equivalent)
+esubva(a,r)  = 1 ;
+esubd(i,r)   = 0.95 ;
+esubm(i,r)   = 0.95 ;
+etrae(fp,r)  = 1 ;
+omegaf(r,fp) = 1 ;
+
+* Recalibrate derived elasticities from the overrides (mirrors cal.gms flow)
+sigmav(r,a)$(va.l(r,a,'base')) = 1 ;
+sigmam(r,i,aa)$(xa.l(r,i,aa,'base')) = 0.95 ;
+sigmaw(r,i)$(xmt.l(r,i,'base')) = 0.95 ;
+
+option limrow = 0, limcol = 0, solprint = off ;
+option NLP = CONVERT;
+gtap.optfile = 1 ;
+solve gtap using nlp maximizing walras ;
+"""
     else:
         solve_block = """
 * ============================================================
@@ -1924,7 +1973,7 @@ def main() -> None:
                     help="3x3 / 9x10 (9x10 GDX, optionally shrunk), or a GTAPAgg "
                          "registry key with a consolidated GDX, e.g. gtap7_3x3, "
                          "gtap7_5x5, gtap7_10x7, gtap7_20x41 (sets-agnostic NEOS).")
-    ap.add_argument("--phase", nargs="+", choices=["base", "check", "shock"],
+    ap.add_argument("--phase", nargs="+", choices=["base", "check", "shock", "altertax"],
                     default=["base", "check", "shock"])
     ap.add_argument("--neos-email", default="dracomarmol@gmail.com")
     ap.add_argument("--out-dir", type=Path, default=Path("/tmp/gtap_nl"))
