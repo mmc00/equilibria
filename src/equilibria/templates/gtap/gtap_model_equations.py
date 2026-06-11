@@ -1322,11 +1322,17 @@ class GTAPModelEquations:
         Returns {r: kstock_val} for use in chiInv Expression.
         """
         vkb = self._read_raw_gdx_param("VKB", 1)
-        if not vkb:
-            return {}
-        # GAMS inScale = 1e-6 per gtap_9x10_clean_inline.gms:17486
-        inscale = 1e-6
-        return {r: inscale * v for (r,), v in vkb.items()}
+        if vkb:
+            # GAMS inScale = 1e-6 per gtap_9x10_clean_inline.gms:17486
+            inscale = 1e-6
+            return {r: inscale * v for (r,), v in vkb.items()}
+        # Fallback: use pre-scaled vkb from params.benchmark (already in model units, scaled by 1e-6)
+        bench_vkb = getattr(self.params, "benchmark", None)
+        if bench_vkb is not None:
+            raw = getattr(bench_vkb, "vkb", {}) or {}
+            if raw:
+                return {r: float(v) for r, v in raw.items()}
+        return {}
 
     def _add_sets(self, model: "ConcreteModel") -> None:
         """Add sets."""
@@ -3572,6 +3578,14 @@ class GTAPModelEquations:
                 ks = kstock_init.get(r, 0.0)
                 if abs(ks) > 1e-12:
                     depr_init[r] = inscale * vd / ks
+        elif kstock_init:
+            # Fallback: vdep from params.benchmark (already scaled by 1e-6, matching kstock_init units)
+            bench = getattr(self.params, "benchmark", None)
+            bench_vdep = getattr(bench, "vdep", {}) if bench else {}
+            for r, ks in kstock_init.items():
+                vd = float(bench_vdep.get(r, 0.0) or 0.0)
+                if abs(ks) > 1e-12 and vd > 0.0:
+                    depr_init[r] = vd / ks
 
         # cal.gms:316-318 — exptx(r,i,rp) = (VFOB - VXSB) / VXSB at baseline
         # cal.gms:333-335 — imptx(rp,i,r) = (VMSB - VCIF) / VCIF at baseline (pmCIF*xw = inScale*VCIF)
@@ -3643,18 +3657,15 @@ class GTAPModelEquations:
         # chiInv is frozen at calibration per cal.gms:426. Under RoRFlag=capFix
         # (our default), savfeq has no chiInv term, so the variable is entirely
         # free; GAMS leaves it at its cal-time value across all simulations.
-        def _chiInv_init(m, r):
-            depr_r = float(depr_init.get(r, 0.0) or 0.0)
-            kstock_r = float(kstock_init.get(r, 0.0) or 0.0)
-            try:
-                xi_r = float(value(m.xiagg[r]))
-                xig = float(value(m.xigbl))
-            except Exception:
-                return 0.0
-            if xig <= 1e-15:
-                return 0.0
-            return (xi_r - depr_r * kstock_r) / xig
-        model.chiInv = Param(model.r, within=Reals, initialize=_chiInv_init,
+        # Pre-compute using get_benchmark_yi so chiInv is independent of xigbl Var
+        # initialization order (avoids lazy Param reading a partially-built model).
+        _xi_bench = {r: get_benchmark_yi(r) for r in self.sets.r}
+        _net_inv = {r: _xi_bench[r] - float(depr_init.get(r, 0.0)) * float(kstock_init.get(r, 0.0))
+                    for r in self.sets.r}
+        _xigbl_cal = sum(_net_inv.values())
+        _chiInv_vals = {r: (_net_inv[r] / _xigbl_cal if _xigbl_cal > 1e-15 else 0.0)
+                        for r in self.sets.r}
+        model.chiInv = Param(model.r, within=Reals, initialize=_chiInv_vals,
                              mutable=True, doc="Regional share of global net investment (frozen at cal)")
 
         # CDE elasticities — frozen at calibration values per cal.gms:600-614.
