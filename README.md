@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/logo.svg" alt="equilibria logo" width="200"/>
+<img src="docs/assets/logo.svg" alt="equilibria logo" width="120"/>
 
 # equilibria
 
