@@ -38,6 +38,8 @@ def main():
                     help="Print the single worst cell for each diverging symbol")
     ap.add_argument("--csv", type=Path, default=None,
                     help="If set, write benchmark rows to this CSV path")
+    ap.add_argument("--gdx", type=Path, default=None,
+                    help="Override GAMS COMP.gdx path (default: src/equilibria/templates/reference/gtap/output/COMP.gdx)")
     args = ap.parse_args()
 
     from equilibria.templates.gtap import GTAPParameters
@@ -105,8 +107,9 @@ def main():
         res_s = float(r_s.get("residual") or 0.0)
         print(f"  shock residual={res_s:.3e}  code={r_s.get('termination_code')}  solve={sec_s:.2f}s")
 
-    var_names = list_populated_vars(GAMS_COMP)
-    print(f"\nPopulated GAMS Vars in COMP.gdx: {len(var_names)}")
+    gdx_path = args.gdx if args.gdx else GAMS_COMP
+    var_names = list_populated_vars(gdx_path)
+    print(f"\nPopulated GAMS Vars in {gdx_path.name}: {len(var_names)}")
 
     phases = [("base", m_b, res_b, sec_b)]
     if args.phase != "base":
@@ -125,7 +128,7 @@ def main():
 
         rows, agg = diff_phase_rows(
             dataset="9x10", phase=phase, var_names=var_names,
-            gdx_path=GAMS_COMP, model_py=m_py,
+            gdx_path=gdx_path, model_py=m_py,
             tol_rel=args.tol_rel, tol_abs=args.tol_abs,
             residual=residual, git_sha=git_sha, generated_at=generated_at,
             derived=build_derived(m_py),
@@ -157,7 +160,7 @@ def main():
 
             # Recompute worst-cell on demand for show-worst.
             if args.show_worst and (diverge > 0 or missing > 0) and r["py_var"]:
-                gams_all = gams_levels(GAMS_COMP, r["var"])
+                gams_all = gams_levels(gdx_path, r["var"])
                 py_var, _ = find_py_var(m_py, r["var"], derived=build_derived(m_py))
                 if py_var is not None:
                     s = compare_phase(py_var, gams_all, phase,
