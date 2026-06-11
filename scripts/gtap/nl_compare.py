@@ -786,20 +786,6 @@ def _build_solve_gms_for_9x10() -> str:
     if n != 1:
         raise RuntimeError("could not find pnum.fx=1.5 shock anchor in comp.gms")
 
-    # Strip dynamic-simulation-only blocks: CompStat (base+shock) never enters them,
-    # but GAMS still compiles them and fires $149 (uncontrolled set) / $767 ($macro)
-    # for the years(tsim) conditions and %theMacro% directives inside.
-    for pattern in [
-        # ifDyn block: contains $setargs/$macro/%theMacro% compile-time directives
-        r'if\(years\(tsim\)\s+gt\s+FirstYear\s+and\s+ifDyn\s*,.*?^\s*\)\s*;',
-        # lag-fixing block (ne firstYear)
-        r'if\(years\(tsim\)\s+ne\s+firstYear\s*,.*?^\s*\)\s*;',
-        # dynamic solve guard (gt firstYear, without ifDyn)
-        r'if\(years\(tsim\)\s+gt\s+firstYear\s*,.*?^\s*\$\$endif.*?^\s*\)\s*;',
-    ]:
-        inlined, _ = re.subn(pattern, '* [years(tsim) block removed -- CompStat only]',
-                              inlined, count=1, flags=re.DOTALL | re.MULTILINE | re.IGNORECASE)
-
     # Redirect the solution unload to out.gdx.
     inlined = inlined.replace('"%outDir%/%simName%.gdx"', '"out.gdx"')
 
