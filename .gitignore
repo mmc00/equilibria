@@ -237,6 +237,7 @@ scripts/gtap/*
 !scripts/gtap/run_gtap.py
 !scripts/gtap/_diff_core.py
 !scripts/gtap/_parity_datasets.py
+!scripts/gtap/_nl_parser.py
 !scripts/gtap/diff_9x10_full.py
 !scripts/gtap/diff_nus333_full.py
 !scripts/gtap/bench_nus333_dual.py
