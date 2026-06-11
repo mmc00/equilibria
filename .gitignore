@@ -314,3 +314,14 @@ docs/superpowers/plans/
 # GTAP scratch artifacts (accidental `con` redirect, fixed-script experiments)
 src/equilibria/templates/reference/gtap/scripts/con
 src/equilibria/templates/reference/gtap/scripts/tariff_sim_fixed.gms
+
+# datasets/ — only commit basedata.har, sets.har, baserate.har, default.prm, v7_consolidated.gdx
+datasets/*/GDX/
+datasets/*/baseview.har
+datasets/*/co2.har
+datasets/*/gsdf*.har
+datasets/*/gtapSAM.har
+datasets/*/metadata.har
+datasets/*/CMFSTART
+datasets/*.agg
+datasets/*/*.agg

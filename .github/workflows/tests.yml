@@ -397,6 +397,28 @@ jobs:
           uv run python scripts/qa/print_structural_report_summary.py \
             output/ci_solver_dynamics_report.json
 
+  gtap7-nl-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run GTAP7 .nl parity gate
+        run: |
+          uv run pytest tests/templates/gtap/test_gtap7_nl_parity.py -v \
+            --tb=short
+
   gams-tests:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_gams }}
     runs-on: self-hosted
