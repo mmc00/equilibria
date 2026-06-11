@@ -85,22 +85,17 @@ def _build_python_nl(
     base-period levels.  The t_set is ("base", "shock") for shock, ("base",)
     for base.
     """
-    if period == "shock":
-        t_set = ("base", "shock")
-        is_cf = True
-        t0_snap = base_model
-    else:
-        t_set = ("base",)
-        is_cf = False
-        t0_snap = None
+    is_cf = period == "shock"
+    t0_snap = base_model if is_cf else None
+    rres = list(p.sets.r)[-1]
 
     eq = GTAPModelEquations(
         p.sets,
         p,
-        closure_config,
-        t_set=t_set,
+        closure=closure_config,
         is_counterfactual=is_cf,
         t0_snapshot=t0_snap,
+        residual_region=rres,
     )
     m = eq.build_model()
 
@@ -110,11 +105,7 @@ def _build_python_nl(
     solver_helper.apply_conditional_fixing()
 
     from _closure_patches import apply_squareness_patches
-    apply_squareness_patches(
-        m, p, label=f"nl-write-{period}",
-        forced_pairs=_SQUARENESS_FORCED_PAIRS,
-        unconditional_pairs=_SQUARENESS_UNCONDITIONAL_PAIRS,
-    )
+    apply_squareness_patches(m, p, label=f"nl-write-{period}")
     solver_helper.apply_aggressive_fixing_for_mcp()
 
     out_path = out_dir / f"python_{period}.nl"
@@ -131,23 +122,31 @@ def build_python_nls(
     closure_config,
     gdx_path: Path | None = None,
     do_shrink: bool = True,
+    har_dir: Path | None = None,
 ) -> dict[str, Path]:
     """Build Python .nl files for each period in phases.
 
     For the shock period, first builds (without solving) the base model to use
     as t0_snapshot, then builds the shock model with imptx*1.10.
 
-    gdx_path: GTAP GDX to load. Defaults to the 9x10 consolidated dataset.
+    gdx_path: GTAP GDX to load (uppercase symbols). Defaults to the 9x10 dataset.
+    har_dir: directory with HAR files (basedata/sets/default/baserate). When given,
+        load_from_har is used instead of load_from_gdx (for GTAPAgg compstat datasets).
     do_shrink: when True, shrink the loaded 9x10 to the KEEP_R x KEEP_I subset.
-        When False (e.g. loading a pre-aggregated subset GDX directly), use the
-        sets exactly as they come from the GDX — apples-to-apples with a GAMS
-        run on the same subset GDX.
     """
     print("\n=== Phase 1: Python → .nl ===")
     p = GTAPParameters()
-    p.load_from_gdx(gdx_path or GDX9)
-    if do_shrink:
-        _shrink_sets(p, KEEP_R, KEEP_I)
+    if har_dir is not None:
+        p.load_from_har(
+            basedata_path=har_dir / "basedata.har",
+            sets_path=har_dir / "sets.har",
+            default_path=har_dir / "default.prm",
+            baserate_path=har_dir / "baserate.har",
+        )
+    else:
+        p.load_from_gdx(gdx_path or GDX9)
+        if do_shrink:
+            _shrink_sets(p, KEEP_R, KEEP_I)
     print(f"  subset: r={list(p.sets.r)}  i={list(p.sets.i)}  a={list(p.sets.a)}")
 
     import copy
@@ -280,6 +279,43 @@ def _gdxdump_params_only(gdx_path: Path, renames: dict[str, str] | None = None,
             )
         lines.append(line)
     return "\n".join(lines)
+
+
+_PRM_HAR_NAME_MAP: dict[str, str] = {
+    "ESBD": "esubd", "ESBM": "esubm", "ESBT": "esubt", "ESBC": "esubc",
+    "ESBV": "esubva", "ESBQ": "esubq", "ESBG": "esubg", "ESBI": "esubi",
+    "ESBS": "esubs", "ETRQ": "etraq", "ETRE": "etrae",
+    "INCP": "incpar", "SUBP": "subpar", "RFLX": "rorFlex0",
+}
+
+
+def _prm_har_as_assignments(prm_path: Path) -> str:
+    """Emit GAMS parameter assignments from a GEMPACK default.prm file.
+
+    Reads elasticity headers (ESBD→esubd, ETRQ→etraq, etc.) and emits
+    plain GAMS assignment statements. Only emits headers in _PRM_HAR_NAME_MAP.
+    """
+    import numpy as np
+    from equilibria.babel.har.reader import read_har
+    headers = read_har(str(prm_path))
+    out_parts: list[str] = []
+    for har_name, gams_name in _PRM_HAR_NAME_MAP.items():
+        h = headers.get(har_name)
+        if h is None or h.array.ndim == 0:
+            continue
+        dims = h.array.ndim
+        dims_str = ",".join(["*"] * dims)
+        out_parts.append(f"parameter {gams_name}({dims_str}) ;")
+        label_lists = h.set_elements  # list of lists, one per dimension
+        it = np.nditer(h.array, flags=["multi_index"])
+        while not it.finished:
+            idx = it.multi_index
+            val = float(it[0])
+            if val != 0.0:
+                keys_fmt = ",".join(f'"{label_lists[d][i]}"' for d, i in enumerate(idx))
+                out_parts.append(f"{gams_name}({keys_fmt}) = {val} ;")
+            it.iternext()
+    return "\n".join(out_parts)
 
 
 def _prm_as_assignments(gdx_path: Path, renames: dict[str, str] | None = None) -> str:
@@ -712,13 +748,15 @@ def _gdx_set_elements(gdx_path: Path, set_name: str) -> list[str]:
     return _re.findall(r"'([^']+)'", raw)
 
 
-def _build_getdata_replacement_agg(gdx_path: Path) -> str:
+def _build_getdata_replacement_agg(gdx_path: Path, har_dir: Path | None = None) -> str:
     """getData.gms replacement for a pre-aggregated (balanced) subset GDX.
 
     Unlike the shrunk path (full 9x10 data + subset sets), this uses a single
     consolidated aggregated GDX (e.g. basedata-3x4.gdx from make_small_gdx) that
     contains ONLY the subset elements with summed/balanced flows — suitable for
     an actual MCP solve. Sets are read from the GDX so they match the data.
+    har_dir: when given, elasticity parameters are read from default.prm via
+        _prm_har_as_assignments (for GTAPAgg datasets whose GDX lacks elasticities).
     rorFlex0 is absent in the aggregate → defaulted to 0 (mirrors Python).
     """
     reg  = _gdx_set_elements(gdx_path, "REG")
@@ -735,10 +773,17 @@ def _build_getdata_replacement_agg(gdx_path: Path) -> str:
     dump = _prm_as_assignments(
         gdx_path, renames={"POP": "pop0", "RORFLEX": "rorFlex0"},
     )
-    is_elems = acts + comm + endw + [
+    if har_dir is not None and (har_dir / "default.prm").exists():
+        dump += "\n" + _prm_har_as_assignments(har_dir / "default.prm")
+    _seen: set[str] = set()
+    is_elems = []
+    for _e in acts + comm + endw + [
         "TRD", "hhd", "gov", "inv", "deprY", "tmg", "itax", "ptax", "mtax",
         "etax", "vtax", "vsub", "dtax", "ctax", "bop", "tot",
-    ] + reg
+    ] + reg:
+        if _e not in _seen:
+            is_elems.append(_e)
+            _seen.add(_e)
     return (
         "\n* getData.gms REPLACEMENT (aggregated subset) -- from "
         f"{gdx_path.name}\n"
@@ -918,17 +963,18 @@ def _build_solve_gms_for_9x10() -> str:
     return header + inlined
 
 
-def _build_solve_gms(agg_gdx: Path) -> str:
+def _build_solve_gms(agg_gdx: Path, har_dir: Path | None = None) -> str:
     """Build a self-contained comp.gms that SOLVES via MCP/PATH and writes out.gdx.
 
     Unlike _build_standalone_gms (CONVERT, truncated), this keeps the full
     comp.gms simulation loop + postsim (ifMCP=1), inlines the aggregated subset
     data, restricts rres/rmuv/imuv to the subset, replaces the placeholder
     pnum=1.5 shock with the 10% import-tariff shock, and unloads to out.gdx.
+    har_dir: when given, elasticities from default.prm are appended to getData.
     """
     import re
     scripts_dir = COMP_GMS.parent
-    getdata_replacement = _build_getdata_replacement_agg(agg_gdx)
+    getdata_replacement = _build_getdata_replacement_agg(agg_gdx, har_dir=har_dir)
 
     def _inline(text: str, depth: int = 0) -> str:
         if depth > 5:
@@ -1167,7 +1213,8 @@ def submit_and_fetch_gdx_9x10(out_dir: Path, neos_email: str) -> Path:
 
 
 def _build_standalone_gms(phase: str = "base", shrink: bool = False,
-                          agg_gdx: Path | None = None) -> str:
+                          agg_gdx: Path | None = None,
+                          har_dir: Path | None = None) -> str:
     """Build a self-contained .gms for NEOS submission.
 
     Inlines all $include files. Replaces getData.gms with embedded sets + data
@@ -1187,7 +1234,7 @@ def _build_standalone_gms(phase: str = "base", shrink: bool = False,
     scripts_dir = COMP_GMS.parent
     import re
     if agg_gdx is not None:
-        getdata_replacement = _build_getdata_replacement_agg(agg_gdx)
+        getdata_replacement = _build_getdata_replacement_agg(agg_gdx, har_dir=har_dir)
     elif shrink:
         getdata_replacement = _build_getdata_replacement_shrunk(KEEP_R, KEEP_I)
     else:
@@ -1401,17 +1448,17 @@ def _submit_and_fetch_nl(
     return out_path
 
 
-def submit_and_fetch_gdx(agg_gdx: Path, out_dir: Path, neos_email: str) -> Path:
+def submit_and_fetch_gdx(agg_gdx: Path, out_dir: Path, neos_email: str,
+                         har_dir: Path | None = None) -> Path:
     """Submit a GAMS MCP/PATH SOLVE of a GTAPAgg dataset to NEOS, fetch out.gdx.
 
     Builds the solve .gms (_build_solve_gms: ifMCP=1, PATH, 10% tariff shock,
     execute_unload 'out.gdx') and submits via category=complementarity solver=PATH.
-    Returns the path to the downloaded out.gdx (a GAMS reference solution suitable
-    for the residual test). Raises if NEOS errors or out.gdx is not returned.
+    har_dir: when given, elasticities from default.prm are appended to getData.
     """
     import xmlrpc.client, zipfile, io
     out_dir.mkdir(parents=True, exist_ok=True)
-    solve_gms = _build_solve_gms(agg_gdx)
+    solve_gms = _build_solve_gms(agg_gdx, har_dir=har_dir)
     (out_dir / "gtap_solve.gms").write_text(solve_gms)
     print(f"  solve .gms: {len(solve_gms.splitlines())} lines from {agg_gdx.name}")
 
@@ -1476,6 +1523,7 @@ def fetch_gams_nl(
     phases: list[str],
     shrink: bool = False,
     agg_gdx: Path | None = None,
+    har_dir: Path | None = None,
 ) -> dict[str, Path]:
     """Submit GTAP model to NEOS CONVERT for each requested phase.
 
@@ -1494,7 +1542,7 @@ def fetch_gams_nl(
             print(f"  Skipping GAMS .nl for 'check' period (no GAMS reference)")
             continue
         print(f"\n  Building standalone .gms for phase={phase} ...")
-        standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx)
+        standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx, har_dir=har_dir)
         standalone_path = out_dir / f"gtap_standalone_{phase}.gms"
         standalone_path.write_text(standalone_gms)
         print(f"  Standalone .gms: {len(standalone_gms.splitlines())} lines ({len(standalone_gms)//1024} KB)")
@@ -1954,10 +2002,14 @@ def main() -> None:
         closure_config = contract.closure.model_copy(update=closure_update)
 
     # Phase 1: Python → .nl  (_shrink_sets to KEEP_R x KEEP_I unless --full-9x10)
+    # compstat datasets (gtap7_*) have HAR files → load_from_har via har_dir.
+    _har_dir = (ROOT / "datasets" / ds.name) if use_agg else None
     if not args.skip_python:
         py_paths = build_python_nls(
-            args.phase, args.out_dir, closure_config, gdx_path=ds.agg_gdx,
-            do_shrink=not full)
+            args.phase, args.out_dir, closure_config,
+            gdx_path=(None if use_agg else ds.agg_gdx),
+            do_shrink=not full,
+            har_dir=_har_dir)
     else:
         py_paths = {p: args.out_dir / f"python_{p}.nl" for p in args.phase}
         print(f"\n[skip-python] Using existing Python .nl files in {args.out_dir}")
@@ -1968,7 +2020,8 @@ def main() -> None:
     if not args.skip_gams:
         gams_nl_paths = fetch_gams_nl(
             args.out_dir, args.neos_email, gams_phases, shrink=gams_shrink,
-            agg_gdx=(ds.agg_gdx if use_agg else None))
+            agg_gdx=(ds.agg_gdx if use_agg else None),
+            har_dir=_har_dir)
     else:
         for phase in gams_phases:
             # Support both old (gams_compstat.nl) and new (gams_base.nl / gams_shock.nl) names
