@@ -92,10 +92,14 @@ sphinx_gallery_conf = {
 html_theme = "furo"
 html_title = f"equilibria {version}"
 html_static_path = ["_static"]
+html_logo = str(ROOT / "docs" / "assets" / "equilibria-mark.svg")
+html_favicon = str(ROOT / "docs" / "assets" / "equilibria-favicon.svg")
 html_theme_options = {
     "source_repository": "https://github.com/mmc00/equilibria",
     "source_branch": "main",
     "source_directory": "docs/site/",
+    "light_logo": str(ROOT / "docs" / "assets" / "equilibria-mark.svg"),
+    "dark_logo": str(ROOT / "docs" / "assets" / "equilibria-mono-white.svg"),
 }
 
 # -- doctest ------------------------------------------------------------------
