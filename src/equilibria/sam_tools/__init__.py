@@ -45,17 +45,12 @@ from equilibria.sam_tools.mip_loader import (
     mip_summary,
     validate_mip_balances,
 )
-from equilibria.sam_tools.audit import AnchorSpec, AuditResult, audit_sam
 from equilibria.sam_tools.models import Sam
 from equilibria.sam_tools.parsers import export_sam, parse_sam
 
 __all__ = [
     # Core SAM class
     "Sam",
-    # Auditoría universal
-    "audit_sam",
-    "AnchorSpec",
-    "AuditResult",
     # Parsing and export
     "parse_sam",
     "export_sam",
