@@ -4924,6 +4924,42 @@ class GTAPModelEquations:
             )
         model.eq_pfeq = Constraint(model.r, model.f, model.a, rule=eq_pfeq_rule)
 
+        # GAMS pfteq (model.gms:1065): CET market-clearing condition for aggregate
+        # factor price pft.  MCP pair: pfteq.pft (active when omegaf finite and xftflag>0).
+        # With omegaf=inf (perfect mobility), the pft equation is
+        #   xft = sum_a xf/xscale   (factor market clearing)
+        # which is already expressed via eq_xfteq.  Python uses eq_pfteq as a
+        # free-row placeholder (mirrors GAMS pfteq free-row for omegaf=inf case);
+        # for finite omegaf, it actively determines pft.
+        # GAMS: 0 = pft^(1+omega) - sum_a gf * M_PFY^(1+omega)   (omegaf ≠ inf)
+        #        0 = xft - sum_a xf/xscale                         (omegaf = inf)
+        def eq_pfteq_rule(model, r, f):
+            if value(model.xftflag[r, f]) <= 0.0:
+                return Constraint.Skip
+            omegaf_val = _omegaf(r, f)
+            if omegaf_val == float("inf"):
+                # Perfect mobility: xft = sum_a xf/xscale (same as eq_xfteq denominator)
+                # This mirrors GAMS pfteq for omegaf=inf (free-row in MCP).
+                xs_sum = sum(
+                    model.xf[r, f, a] / model.xscale[r, a]
+                    for a in model.a
+                    if value(model.xfflag[r, f, a]) > 0.0 and value(model.xscale[r, a]) > 1e-12
+                )
+                return model.xft[r, f] == xs_sum
+            # Finite omegaf: CET price equilibrium
+            # 0 = pft^(1+omega) - sum_a gf * pfy^(1+omega)
+            expo = 1.0 + omegaf_val
+            if abs(expo) < 1e-10:
+                return Constraint.Skip
+            pft_term = model.pft[r, f] ** expo
+            pfy_sum = sum(
+                model.gf_share[r, f, a] * _m_pfy(r, f, a) ** expo
+                for a in model.a
+                if value(model.xfflag[r, f, a]) > 0.0 and float(value(model.gf_share[r, f, a])) > 0.0
+            )
+            return pft_term == pfy_sum
+        model.eq_pfteq = Constraint(model.r, model.f, rule=eq_pfteq_rule)
+
         # Factor prices tax inclusive (GAMS pfaeq)
         def eq_pfaeq_rule(model, r, f, a):
             if value(model.xfflag[r, f, a]) <= 0.0:
@@ -5537,21 +5573,25 @@ class GTAPModelEquations:
         #   pwfact**2 * M_bb * M_bs = M_sb * M_ss
         # where M_bb = sum xf0/xscale (constant), M_bs = sum xf/xscale,
         # M_sb = sum pf*xf0/xscale, M_ss = sum pf*xf/xscale.
-        # Snapshot xf0 AND pf0 from benchmark initialization. GAMS Fisher uses
-        # mqfactw(tp,tq) = sum_{r,f,a} pf(tp) * xf(tq) / xscale  (model.gms:1264).
-        # Python previously omitted pf0 from M_bb and M_bs, biasing pwfact at
-        # baseline (e.g., 1.15 instead of 1.0 in NUS333).
+        # Snapshot xf0 AND pf0 from the BASE-PERIOD SOLUTION (t0_snapshot) when
+        # available. GAMS Fisher uses pf(base)*xf(base) as the reference point;
+        # using the solved base levels makes pfact[base]=1 by construction, which
+        # is required for altertax check/shock periods to match GAMS.
+        # Falls back to current model init values (standard GTAP-7 baseline case).
+        _t0 = self.t0_snapshot  # solved base model; None for baseline period
         xf0_data: Dict[tuple[str, str, str], float] = {}
         pf0_data: Dict[tuple[str, str, str], float] = {}
         for r in self.sets.r:
             for f in self.sets.f:
                 for a in self.sets.a:
                     try:
-                        xf0_data[(r, f, a)] = float(value(model.xf[r, f, a]))
+                        _src_xf = _t0.xf[r, f, a] if _t0 is not None else model.xf[r, f, a]
+                        xf0_data[(r, f, a)] = float(value(_src_xf))
                     except (KeyError, ValueError):
                         xf0_data[(r, f, a)] = 0.0
                     try:
-                        pf0_data[(r, f, a)] = float(value(model.pf[r, f, a]))
+                        _src_pf = _t0.pf[r, f, a] if _t0 is not None else model.pf[r, f, a]
+                        pf0_data[(r, f, a)] = float(value(_src_pf))
                     except (KeyError, ValueError):
                         pf0_data[(r, f, a)] = 1.0
         model.xf0 = Param(model.r, model.f, model.a, initialize=xf0_data, default=0.0, mutable=False)
