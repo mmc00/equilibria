@@ -222,6 +222,14 @@ class GTAPSolver:
             "pft": "pft",
             "ytax": "ytax",
             "pnum": "pnum",
+            # Investment/savings block — critical for check/shock periods to avoid
+            # spurious MCP solutions where xiagg[rres] hits its lower bound (=0)
+            # because yi[rres] drifts negative without a good starting point.
+            "yi": "yi",
+            "xi": "xiagg",
+            "regy": "regy",
+            "yc": "yc",
+            "yg": "yg",
         }
 
         applied = 0
