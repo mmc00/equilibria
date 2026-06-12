@@ -5,11 +5,12 @@ Mirrors GAMS comp_altertax.gms three-period structure:
   check  → Python altertax re-solve (CD elasticities, all factors mobile, no imptx shock)
   shock  → Python altertax shock (+10% imptx, warm-started from check)
 
-Compares shock-period levels cell-by-cell against the NEOS altertax reference GDX
-(Job #19466592, +10% tariff shock).
+Compares shock-period levels cell-by-cell against the NEOS altertax reference GDX.
 
 Usage:
     uv run python scripts/gtap/diff_altertax.py
+    uv run python scripts/gtap/diff_altertax.py --dataset gtap7_3x3
+    uv run python scripts/gtap/diff_altertax.py --dataset gtap7_5x5
     uv run python scripts/gtap/diff_altertax.py --gdx output/9x10_altertax_neos_bundle/out.gdx
     uv run python scripts/gtap/diff_altertax.py --show-worst --tol-rel 1e-3
 """
@@ -30,17 +31,31 @@ from _diff_core import (
 GDX_9X10 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
 DEFAULT_NEOS_GDX = ROOT / "output/9x10_altertax_neos_bundle/out.gdx"
 
+# Dataset registry: name → (data_gdx_or_har_dir, neos_bundle_dir)
+DATASET_REGISTRY = {
+    "9x10": (GDX_9X10, ROOT / "output/9x10_altertax_neos_bundle", "gdx"),
+    "gtap7_3x3": (ROOT / "datasets/gtap7_3x3", ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har"),
+    "gtap7_3x4": (ROOT / "datasets/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har"),
+    "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har"),
+}
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--gdx", type=Path, default=DEFAULT_NEOS_GDX,
-                    help="GAMS altertax reference GDX (default: NEOS job #19466592)")
+    ap.add_argument("--dataset", default="9x10",
+                    choices=list(DATASET_REGISTRY.keys()),
+                    help="Dataset to use (default: 9x10)")
+    ap.add_argument("--gdx", type=Path, default=None,
+                    help="GAMS altertax reference GDX (overrides --dataset default)")
     ap.add_argument("--tol-rel", type=float, default=1e-3)
     ap.add_argument("--tol-abs", type=float, default=1e-6)
     ap.add_argument("--show-worst", action="store_true",
                     help="Print the worst diverging cell for each variable")
     ap.add_argument("--csv", type=Path, default=None)
     args = ap.parse_args()
+
+    data_path, bundle_dir, loader = DATASET_REGISTRY[args.dataset]
+    gdx_path = args.gdx or (bundle_dir / "out.gdx")
 
     from equilibria.templates.gtap import (
         GTAPParameters, GTAPModelEquations,
@@ -61,9 +76,33 @@ def main() -> None:
     sys.modules["run_gtap"] = run_gtap
     spec.loader.exec_module(run_gtap)
 
-    # Standard closure: if_sub=False (match GAMS ifSUB=0 reference)
-    contract = run_gtap._build_gtap_contract_with_calibration("gtap_standard7_9x10")
-    base_closure = contract.closure.model_copy(update={"if_sub": False})
+    # Load parameters for selected dataset
+    print(f"=== Loading dataset: {args.dataset} ===")
+    p_b_raw = GTAPParameters()
+    if loader == "gdx":
+        p_b_raw.load_from_gdx(data_path)
+    else:
+        p_b_raw.load_from_har(
+            basedata_path=data_path / "basedata.har",
+            sets_path=data_path / "sets.har",
+            default_path=data_path / "default.prm",
+            baserate_path=data_path / "baserate.har",
+        )
+
+    # Residual region: last region (HAR convention) or NAmerica (9x10)
+    res_region = "NAmerica" if args.dataset == "9x10" else list(p_b_raw.sets.r)[-1]
+
+    # Build closures
+    if args.dataset == "9x10":
+        contract = run_gtap._build_gtap_contract_with_calibration("gtap_standard7_9x10")
+        base_closure = contract.closure.model_copy(update={"if_sub": False})
+    else:
+        base_closure = GTAPClosureConfig(
+            name="base", closure_type="MCP",
+            capital_mobility="sluggish", fix_endowments=False,
+            fix_taxes=False, fix_technology=False, if_sub=False,
+            numeraire=(res_region, None),
+        )
 
     # Altertax closure: all factors mobile, taxes fixed, standard numeraire
     alt_closure = GTAPClosureConfig(
@@ -75,24 +114,20 @@ def main() -> None:
         fix_technology=True,
         if_sub=False,
         numeraire=base_closure.numeraire,
-        rmuv=base_closure.rmuv,
-        imuv=base_closure.imuv,
+        rmuv=getattr(base_closure, "rmuv", None),
+        imuv=getattr(base_closure, "imuv", None),
     )
 
     # =========================================================================
-    # [1/3] Python GTAP 9x10 altertax base period
-    #   Mirrors GAMS: altertax params applied FIRST (sigmav=1 etc), then
-    #   base solve, then recalibration of af/io/and/ava.
+    # [1/3] Python altertax base period
     # =========================================================================
-    print("=== [1/3] Python GTAP 9x10 altertax base (CD elast, mobile factors) ===")
-    p_b_raw = GTAPParameters()
-    p_b_raw.load_from_gdx(GDX_9X10)
+    print(f"=== [1/3] Python {args.dataset} altertax base (CD elast, mobile factors) ===")
 
     # Apply altertax elasticities before the base solve — mirrors GAMS order:
     # parameter_altertax.gms sets sigmav=1 etc., then betaCal is solved.
     p_alt = apply_altertax_elasticities(p_b_raw, in_place=False)
 
-    eq_b = GTAPModelEquations(p_alt.sets, p_alt, base_closure, residual_region="NAmerica")
+    eq_b = GTAPModelEquations(p_alt.sets, p_alt, base_closure, residual_region=res_region)
     m_b = eq_b.build_model()
     t0 = time.perf_counter()
     r_b = run_gtap._run_path_capi_nonlinear_full(
@@ -122,7 +157,7 @@ def main() -> None:
     warm_b = GTAPVariableSnapshot.from_python_model(m_b)
     eq_chk = GTAPModelEquations(
         p_alt.sets, p_alt, alt_closure,
-        is_counterfactual=True, residual_region="NAmerica", t0_snapshot=m_b,
+        is_counterfactual=True, residual_region=res_region, t0_snapshot=m_b,
     )
     m_chk = eq_chk.build_model()
     t0 = time.perf_counter()
@@ -151,7 +186,7 @@ def main() -> None:
     warm_chk = GTAPVariableSnapshot.from_python_model(m_chk)
     eq_alt = GTAPModelEquations(
         p_alt_shock.sets, p_alt_shock, alt_closure,
-        is_counterfactual=True, residual_region="NAmerica", t0_snapshot=m_b,
+        is_counterfactual=True, residual_region=res_region, t0_snapshot=m_b,
     )
     m_alt = eq_alt.build_model()
     t0 = time.perf_counter()
@@ -165,7 +200,6 @@ def main() -> None:
     res_alt = float(r_alt.get("residual") or 0.0)
     print(f"  shock residual={res_alt:.3e}  code={r_alt.get('termination_code')}  t={sec_alt:.2f}s")
 
-    gdx_path = args.gdx
     var_names = list_populated_vars(gdx_path)
     print(f"\nPopulated GAMS Vars in {gdx_path.name}: {len(var_names)}")
 
@@ -182,7 +216,7 @@ def main() -> None:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     rows, agg = diff_phase_rows(
-        dataset="9x10_altertax", phase=phase, var_names=var_names,
+        dataset=f"{args.dataset}_altertax", phase=phase, var_names=var_names,
         gdx_path=gdx_path, model_py=m_alt,
         tol_rel=args.tol_rel, tol_abs=args.tol_abs,
         residual=res_alt, git_sha=git_sha, generated_at=generated_at,
