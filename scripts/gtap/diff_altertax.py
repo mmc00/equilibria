@@ -45,7 +45,11 @@ def main() -> None:
     from equilibria.templates.gtap import (
         GTAPParameters, GTAPModelEquations,
     )
-    from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+    from equilibria.templates.gtap.altertax import (
+        apply_altertax_elasticities,
+        apply_recalibration,
+        recalibrate_from_solution,
+    )
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
@@ -61,32 +65,6 @@ def main() -> None:
     contract = run_gtap._build_gtap_contract_with_calibration("gtap_standard7_9x10")
     base_closure = contract.closure.model_copy(update={"if_sub": False})
 
-    # =========================================================================
-    # [1/3] Python GTAP 9x10 baseline (mirrors GAMS 'base' period calibration)
-    # =========================================================================
-    print("=== [1/3] Python GTAP 9x10 baseline ===")
-    p_b = GTAPParameters()
-    p_b.load_from_gdx(GDX_9X10)
-    eq_b = GTAPModelEquations(p_b.sets, p_b, base_closure, residual_region="NAmerica")
-    m_b = eq_b.build_model()
-    t0 = time.perf_counter()
-    r_b = run_gtap._run_path_capi_nonlinear_full(
-        m_b, p_b, enforce_post_checks=False, strict_path_capi=False,
-        closure_config=base_closure, equation_scaling=True,
-    )
-    sec_b = time.perf_counter() - t0
-    res_b = float(r_b.get("residual") or 0.0)
-    print(f"  baseline residual={res_b:.3e}  code={r_b.get('termination_code')}  t={sec_b:.2f}s")
-
-    # =========================================================================
-    # [2/3] Python altertax check period
-    #   - Apply CD elasticities + all factors mobile (altertax overrides)
-    #   - NO imptx shock (same as GAMS 'check' period)
-    #   - Warm-start from baseline
-    # =========================================================================
-    print("\n=== [2/3] Python altertax check period (CD elast, mobile factors, no shock) ===")
-    p_alt = apply_altertax_elasticities(p_b, in_place=False)
-
     # Altertax closure: all factors mobile, taxes fixed, standard numeraire
     alt_closure = GTAPClosureConfig(
         name="altertax",
@@ -101,7 +79,46 @@ def main() -> None:
         imuv=base_closure.imuv,
     )
 
-    # Check period: altertax params, no imptx shock, warm-start from baseline
+    # =========================================================================
+    # [1/3] Python GTAP 9x10 altertax base period
+    #   Mirrors GAMS: altertax params applied FIRST (sigmav=1 etc), then
+    #   base solve, then recalibration of af/io/and/ava.
+    # =========================================================================
+    print("=== [1/3] Python GTAP 9x10 altertax base (CD elast, mobile factors) ===")
+    p_b_raw = GTAPParameters()
+    p_b_raw.load_from_gdx(GDX_9X10)
+
+    # Apply altertax elasticities before the base solve — mirrors GAMS order:
+    # parameter_altertax.gms sets sigmav=1 etc., then betaCal is solved.
+    p_alt = apply_altertax_elasticities(p_b_raw, in_place=False)
+
+    eq_b = GTAPModelEquations(p_alt.sets, p_alt, base_closure, residual_region="NAmerica")
+    m_b = eq_b.build_model()
+    t0 = time.perf_counter()
+    r_b = run_gtap._run_path_capi_nonlinear_full(
+        m_b, p_alt, enforce_post_checks=False, strict_path_capi=False,
+        closure_config=base_closure, equation_scaling=True,
+    )
+    sec_b = time.perf_counter() - t0
+    res_b = float(r_b.get("residual") or 0.0)
+    print(f"  base residual={res_b:.3e}  code={r_b.get('termination_code')}  t={sec_b:.2f}s")
+
+    # Mirror GAMS lines 15052-15058: recalibrate af/io/and/ava from the solved
+    # base equilibrium before building the check period model.
+    recalib = recalibrate_from_solution(p_alt, m_b)
+    deltas = apply_recalibration(p_alt, recalib)
+    print(f"  post-base recalibration: max Δaf={deltas.get('af_param', 0):.3e}  "
+          f"Δio={deltas.get('io_param', 0):.3e}  Δand={deltas.get('and_param', 0):.3e}  "
+          f"Δava={deltas.get('ava_param', 0):.3e}")
+
+    # =========================================================================
+    # [2/3] Python altertax check period
+    #   - NO imptx shock (same as GAMS 'check' period)
+    #   - Warm-start from base altertax solution
+    # =========================================================================
+    print("\n=== [2/3] Python altertax check period (no shock, warm-start from base) ===")
+
+    # Check period: altertax params (recalibrated), no imptx shock, warm-start from base
     warm_b = GTAPVariableSnapshot.from_python_model(m_b)
     eq_chk = GTAPModelEquations(
         p_alt.sets, p_alt, alt_closure,

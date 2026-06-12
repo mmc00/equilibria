@@ -316,7 +316,8 @@ def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
     # Force-match defining equations to their primary output variable
     _force_pair("eq_pmteq", "pmt")   # pmt[r,i] = Armington import price aggregate
     _force_pair("eq_pmeq", "pm")     # pm[rp,i,r] = bilateral import price
-    _force_pair("eq_pft", "pft")     # pft[r,f] = sluggish factor aggregate price
+    _force_pair("eq_pft", "pft")     # pft[r,f] = sluggish factor aggregate price (legacy)
+    _force_pair("eq_pfteq", "pft")   # pft[r,f] = CET factor price equilibrium (altertax)
 
     def bfs() -> bool:
         q: deque[int] = deque()

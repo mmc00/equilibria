@@ -48,6 +48,9 @@ class AltertaxElasticityOverrides:
     sigmav: float = 1.0
     sigmap: float = 1.0
     sigmand: float = 1.0
+    # Government / investment expenditure (GAMS: esubg=esubi=1 in altertax)
+    esubg: float = 1.0
+    esubi: float = 1.0
 
 
 ALTERTAX_ELASTICITY_DEFAULTS = AltertaxElasticityOverrides()
@@ -95,6 +98,12 @@ def apply_altertax_elasticities(
     _override_dict(e.sigmand, o.sigmand)
     for key in list(e.etrae.keys()):
         e.etrae[key] = o.etrae
+    # GAMS parameter_altertax.gms: esubg(r)=esubi(r)=1 for all regions.
+    # esubg may already be 1 in the GDX; esubi is often absent (loaded as na/empty)
+    # and must be explicitly set so sigmai=1→1.01 in eq_pi/eq_xi.
+    for r in target.sets.r:
+        e.esubg[(r,)] = o.esubg
+        e.esubi[(r,)] = o.esubi
 
     # Recalibrate trade shares with the new esubm (sigmaw).
     # _calibrate_trade_shares uses esubm to compute amw weights; skipping this
@@ -103,11 +112,17 @@ def apply_altertax_elasticities(
     target.shares._calibrate_trade_shares(target.benchmark, target.elasticities, target.sets)
     target.shares.normalized.update_from_shares(target.shares)
 
-    # Recompute pva/pnd init values for the new elasticities.
-    # With CD (sigmav=1) and factor taxes, pva ≠ 1 even at benchmark:
-    #   pva = prod_f(pfa_bench / lambdaf)^af   (CD formula, lambdaf=1 at bench)
-    # GAMS recalibrates pva.l in cal.gms after applying new parameters.
-    _recalibrate_bench_prices(target)
+    # Recompute af shares consistent with sigma=1 (CD).
+    # GAMS calibrates af at base with pva=1 → af = pfa*xf/va, sum(af)=1.
+    # The original GTAP af_param was calibrated with original sigmav (≠1) and
+    # does NOT sum to 1. With sigma=1 the pvaeq degenerates to 1 = sum(af).
+    _recalibrate_af_shares(target)
+
+    # Use pva/pnd init = 1.0 (GAMS default: pva.l=1 for all periods).
+    # _recalibrate_bench_prices computes prod(pfa^af) ≈ 1.4-1.7, which
+    # diverges from GAMS equilibrium (pva=1) and causes PATH to fail.
+    target.calibrated.pva_bench = {}
+    target.calibrated.pnd_bench = {}
 
     return target
 
@@ -187,3 +202,61 @@ def _recalibrate_bench_prices(params: "GTAPParameters") -> None:  # noqa: F821
 
     cal.pva_bench = pva_bench
     cal.pnd_bench = pnd_bench
+
+
+def _recalibrate_af_shares(params: "GTAPParameters") -> None:  # noqa: F821
+    """Recompute af_param so sum_f(af[r,f,a]) = 1 for every (r,a).
+
+    With sigmav=1 (CD) the pvaeq constraint degenerates to 1 = sum_f(af).
+    The original af_param calibrated with original sigmav≠1 does not satisfy
+    this. Mirrors GAMS comp_altertax.gms:14469-14487 + post-betaCal calibration
+    where pva=1 at the benchmark point:
+
+        af(r,f,a) = pfa(r,f,a) * xf(r,f,a) / va(r,a)
+                  = pfa * xf / sum_f2(pfa * xf)
+
+    Factor prices and volumes computed from benchmark SAM at pva=1:
+        kappaf  = (EVFB - EVOS) / EVFB
+        pf      = 1 / (1 - kappaf)
+        xf      = EVFB / pf
+        pfa     = pf * (1 + rtf)
+        va      = sum_f(pfa * xf)  =  sum_f(EVFB * (1 + rtf))
+    """
+    cal = params.calibrated
+    sets = params.sets
+    taxes = params.taxes
+    bench = params.benchmark
+
+    def _kappa(r: str, f: str, a: str) -> float:
+        kap = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+        if kap == 0.0:
+            kap = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
+        return kap
+
+    def _pf(r: str, f: str, a: str) -> float:
+        return 1.0 / max(1.0 - _kappa(r, f, a), 1e-12)
+
+    def _pfa(r: str, f: str, a: str) -> float:
+        rtf = float(taxes.rtf.get((r, f, a), 0.0) or 0.0)
+        return _pf(r, f, a) * max(1.0 + rtf, 1e-12)
+
+    af_param: Dict[Tuple[str, str, str], float] = {}
+    for r in sets.r:
+        for a in sets.a:
+            pfa_xf: Dict[str, float] = {}
+            for f in sets.f:
+                key = (r, f, a)
+                evfb = float(bench.evfb.get(key, bench.vfm.get(key, 0.0)) or 0.0)
+                if evfb <= 0.0:
+                    continue
+                pf_val = _pf(r, f, a)
+                xf_val = evfb / pf_val
+                pfa_val = _pfa(r, f, a)
+                pfa_xf[f] = pfa_val * xf_val
+            va_val = sum(pfa_xf.values())
+            if va_val <= 0.0:
+                continue
+            for f, pxa in pfa_xf.items():
+                af_param[(r, f, a)] = pxa / va_val
+
+    cal.af_param.update(af_param)

@@ -4112,23 +4112,9 @@ class GTAPModelEquations:
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
             if abs(expo) < 1e-8:
-                terms = []
-                for f in model.f:
-                    af_val = (
-                        value(model.af_param[r, f, a])
-                        if hasattr(model, "af_param")
-                        else value(model.af_share[r, f, a])
-                    )
-                    if af_val <= 0.0:
-                        continue
-                    lambdaf = max(self._lambdaf(r, f, a), 1e-8)
-                    terms.append((_m_pfa(r, f, a) / lambdaf) ** af_val)
-                if not terms:
-                    return Constraint.Skip
-                prod = 1.0
-                for term in terms:
-                    prod *= term
-                return model.pva[r, a] == prod
+                # CD case (sigmav=1): pvaeq degenerates to 1=sum(af).
+                # GAMS leaves pva unconstrained → stays at init=1.0.
+                return model.pva[r, a] == 1.0
 
             terms = []
             for f in model.f:
@@ -5170,12 +5156,15 @@ class GTAPModelEquations:
 
         # Total utility (GAMS ueq, static Cobb-Douglas form)
         def eq_u_rule(model, r):
-            return model.u[r] == (
-                model.au[r]
-                * (model.uh[r] ** model.betap[r])
-                * (model.ug[r] ** model.betag[r])
-                * (model.us[r] ** model.betas[r])
-            )
+            # Skip us term when betas=0: us^0=1 is constant, and
+            # differentiating 0^(-1) at us=0 causes ZeroDivisionError.
+            bp = value(model.betap[r])
+            bg = value(model.betag[r])
+            bs = value(model.betas[r])
+            rhs = model.au[r] * (model.uh[r] ** bp) * (model.ug[r] ** bg)
+            if abs(bs) > 1e-12:
+                rhs = rhs * (model.us[r] ** bs)
+            return model.u[r] == rhs
         model.eq_u = Constraint(model.r, rule=eq_u_rule)
 
         # Savings price adjustment (GAMS chiSaveeq, compStat-style static form)
