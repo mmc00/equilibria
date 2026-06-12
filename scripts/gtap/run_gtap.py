@@ -2008,6 +2008,89 @@ def _run_path_capi_nonlinear_full(
         from _closure_patches import apply_squareness_patches  # type: ignore
     apply_squareness_patches(model, params, label="nonlinear-full")
 
+    # Mirror GAMS holdfixed=1: yi[rres] has no MCP pair (yieq is skipped for
+    # residual region). Without explicit fixing, yi[rres] floats freely in
+    # eq_xiagg[rres] (which has two free vars: yi and xiagg) and PATH can drive
+    # yi negative to satisfy xiagg>=0 complementarity. Fix yi[rres] at the
+    # income identity value so eq_xiagg determines xiagg = yi/pi > 0.
+    _residual_region = getattr(model, "_residual_region", None)
+    if _residual_region is None and params is not None:
+        _residual_region = getattr(params, "residual_region", None)
+    if _residual_region is None:
+        _residual_region = "NAmerica"
+    if hasattr(model, "yi") and hasattr(model, "eq_yi"):
+        for _r in model.r:
+            if str(_r) != _residual_region:
+                continue
+            _yi_data = model.yi[_r]
+            if _yi_data.fixed:
+                continue
+            # eq_yi[rres] is skipped → no constraint → fix at income identity
+            _eq_yi_skipped = True
+            try:
+                _c = model.eq_yi[_r]
+                _eq_yi_skipped = not _c.active
+            except KeyError:
+                _eq_yi_skipped = True
+            if not _eq_yi_skipped:
+                continue
+            # Compute income identity: pi*depr*kstock + rsav + savf
+            try:
+                from pyomo.environ import value as _pv
+                _pi = float(_pv(model.pi[_r]))
+                _depr = float(_pv(model.depr[_r]))
+                _kstock = float(_pv(model.kstock[_r]))
+                _rsav = float(_pv(model.rsav[_r])) if hasattr(model, "rsav") else 0.0
+                _savf = float(_pv(model.savf[_r])) if hasattr(model, "savf") else 0.0
+                _yi_val = _pi * _depr * _kstock + _rsav + _savf
+            except Exception:
+                _yi_val = float(_yi_data.value or 0.0)
+            _yi_data.fix(_yi_val)
+            logger.info(
+                "Residual region fix: yi[%s]=%.6f (income identity; mirrors GAMS holdfixed=1)",
+                _r, _yi_val,
+            )
+            # eq_walras is GAMS's free row (walraseq has no MCP pair in model.gms).
+            # With yi[rres] now fixed, eq_walras would over-determine walras.
+            # Deactivate it and fix walras=0 (Walras law holds at equilibrium).
+            _eq_walras = model.find_component("eq_walras")
+            _walras_var = model.find_component("walras")
+            if _eq_walras is not None and _eq_walras.active:
+                _eq_walras.deactivate()
+                logger.info("Deactivated eq_walras (free row; yi[rres] fixed)")
+
+    # Mirror GAMS pfteq free-row + holdfixed=1 for pft:
+    # In GAMS, pfteq is a FREE ROW (no MCP pair in comp_*.gms line 14288).
+    # With holdfixed=1, pft is pinned at its .l value (= 1.0 from initvar0g).
+    # Python mirrors this: deactivate eq_pfteq (free row) and fix pft at 1.0
+    # so that eq_xfteq (supply curve) determines xft and eq_pfeq determines pf.
+    if hasattr(model, "eq_pfteq") and hasattr(model, "pft"):
+        _pft_pfteq_fixed = 0
+        for _r in model.r:
+            for _f in model.f:
+                _pft_vd = model.pft[_r, _f]
+                if _pft_vd.fixed:
+                    continue
+                try:
+                    _eq_pfteq_vd = model.eq_pfteq[_r, _f]
+                except KeyError:
+                    continue
+                if not _eq_pfteq_vd.active:
+                    continue
+                # Deactivate eq_pfteq (free row) and fix pft at initialization
+                _eq_pfteq_vd.deactivate()
+                _pft_val = float(_pft_vd.value) if _pft_vd.value is not None else 1.0
+                if _pft_val <= 0:
+                    _pft_val = 1.0
+                _pft_vd.fix(_pft_val)
+                _pft_pfteq_fixed += 1
+        if _pft_pfteq_fixed:
+            logger.info(
+                "pfteq free-row: deactivated eq_pfteq + fixed %d pft[r,f]=init "
+                "(mirrors GAMS pfteq free-row + holdfixed=1 → pft.l=1)",
+                _pft_pfteq_fixed,
+            )
+
     # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
     # already-fixed variables, so only the remaining FREE variables get warm-started
     # from the baseline (or previous-step) solution.
@@ -2113,16 +2196,15 @@ def _run_path_capi_nonlinear_full(
     runtime = loader.load()
     version = loader.version(runtime)
 
-    # Mirror GAMS presolve: when pnum is fixed as numeraire, pnumeq (pnum==pwfact)
-    # implies pwfact = pnum.  In the GAMS MCP model, pwfacteq.pwfact declares the
-    # Fisher-index equation as pwfact's complementary row, while pnumeq is a free
-    # row (no MCP pair).  With pnum.fx = pnum.l, GAMS presolve inlines pwfact=pnum
-    # everywhere, making pwfacteq trivially satisfied.
-    # Python replicates this with two steps that keep the system square:
+    # Mirror GAMS presolve: pnumeq (pnum==pwfact) is a FREE ROW with no MCP pair,
+    # but with pnum.fx=1 GAMS presolve inlines pwfact=1 everywhere (including
+    # check and shock periods — GAMS out.gdx confirms pwfact=1 for all periods).
+    # pwfacteq.pwfact is declared as the active MCP pair but becomes trivially
+    # satisfied once pwfact=1 is substituted. Python replicates this:
     #   1. fix pwfact = pnum (= 1.0)      → −1 free variable
     #   2. deactivate eq_pwfact            → −1 active constraint
-    # eq_pnum remains active but with both sides fixed (pnum=1, pwfact=1) its
-    # Jacobian column is zero — PATH sees it as a trivially-satisfied row.
+    # eq_pnum remains active (trivially: 1=1) and eq_walras is already deactivated
+    # (free row, mirrors GAMS walraseq). System stays square.
     _pnum_comp = model.find_component("pnum")
     _pwfact_comp = model.find_component("pwfact")
     _eq_pwfact_comp = model.find_component("eq_pwfact")
@@ -2138,7 +2220,7 @@ def _run_path_capi_nonlinear_full(
         _eq_pwfact_comp.deactivate()
         logger.info(
             "Numeraire presolve: fixed pwfact=%.6f, deactivated eq_pwfact "
-            "(mirrors GAMS pnum.fx+pnumeq free-row presolve)",
+            "(mirrors GAMS pnum.fx+pnumeq free-row presolve; pwfact=1 in all periods)",
             _pnum_val,
         )
 
