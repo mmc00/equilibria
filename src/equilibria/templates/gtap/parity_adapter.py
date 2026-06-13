@@ -819,14 +819,19 @@ class GTAPParityAdapter:
                                 _item.set_value(_xg_new)
                         except Exception:
                             pass
-                # pfa[r,f,a] = pf[r,f,a] * (1 + rtf[r,f,a])   (eq_pfaeq)
+                # pfa[r,f,a] = pf[r,f,a] * (1 + fctts + fcttx)   (GAMS pfaeq)
+                # Use the SAME factor-tax wedge as eq_pfaeq (fctts subsidy + fcttx
+                # tax, both 0 for standard GTAP7) — NOT rtf. With rtf this recompute
+                # inflated pfa ~1.47× and clobbered the correct GAMS value seeded by
+                # apply_solution_hint (GAMS out.gdx has pfa==pf). See eq_pfaeq fix.
                 if hasattr(m_chk, "pfa") and hasattr(m_chk, "pf"):
                     for _f in m_chk.f:
                         for _a in m_chk.a:
                             try:
                                 _pf_v = float(_pyo_val2(m_chk.pf[_r, _f, _a]))
-                                _rtf = float(p_alt.taxes.rtf.get((_r, _f, _a), 0.0) or 0.0)
-                                _pfa_new = _pf_v * (1.0 + _rtf)
+                                _wedge = (float(_pyo_val2(m_chk.fctts[_r, _f, _a]))
+                                          + float(_pyo_val2(m_chk.fcttx[_r, _f, _a])))
+                                _pfa_new = _pf_v * (1.0 + _wedge)
                                 _item = m_chk.pfa[_r, _f, _a]
                                 if not (hasattr(_item, "fixed") and _item.fixed):
                                     _item.set_value(max(_pfa_new, 1e-8))

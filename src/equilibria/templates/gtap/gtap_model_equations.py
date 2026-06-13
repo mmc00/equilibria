@@ -5003,12 +5003,17 @@ class GTAPModelEquations:
             return pft_term == pfy_sum
         model.eq_pfteq = Constraint(model.r, model.f, rule=eq_pfteq_rule)
 
-        # Factor prices tax inclusive (GAMS pfaeq)
+        # Factor prices tax inclusive (GAMS pfaeq, comp.gms:2361):
+        #   pfa = pf*(1 + fctts + fcttx)
+        # Faithful to GAMS: the pfa wedge is the factor tax/subsidy pair
+        # (fcttx=RTFD/EVFB tax, fctts=-RTFI subsidy), NOT rtf. rtf=VFM/EVFB-1
+        # folds in kappaf (the factor rent, already carried by pfyeq), so using
+        # it here double-counts the rent into pfa (see line 3684-3687).
         def eq_pfaeq_rule(model, r, f, a):
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0))
-            return model.pfa[r, f, a] == model.pf[r, f, a] * (1.0 + factor_tax)
+            wedge = model.fctts[r, f, a] + model.fcttx[r, f, a]
+            return model.pfa[r, f, a] == model.pf[r, f, a] * (1.0 + wedge)
         model.eq_pfaeq = Constraint(model.r, model.f, model.a, rule=eq_pfaeq_rule)
 
         # Factor prices post-tax/subsidy (GAMS pfyeq)
