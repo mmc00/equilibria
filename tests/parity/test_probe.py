@@ -41,3 +41,24 @@ def test_load_missing_returns_none(tmp_path):
 def test_key_files_are_real_paths():
     for p in KEY_FILES:
         assert p.exists(), f"KEY_FILES entry missing: {p}"
+
+
+from _probe_queries import extract_solution, inject_solution
+
+
+def test_extract_inject_roundtrip_with_real_model():
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    adapter = AdapterRegistry.get("gtap")()
+    if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    m = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
+    sol = extract_solution(m)
+    assert "pf" in sol and len(sol["pf"]) > 0
+    from pyomo.environ import value
+    key = next(iter(sol["pf"]))
+    original = sol["pf"][key]
+    m.pf[key].set_value(0.0)
+    inject_solution(m, sol)
+    assert abs(value(m.pf[key]) - original) < 1e-12
