@@ -814,6 +814,32 @@ class GTAPVariableSnapshot:
     pabs: Dict[str, float] = field(default_factory=dict)
     walras: Optional[float] = None
 
+    # Income / capital / tax-aggregate vars exported by GAMS that feed eq_facty,
+    # eq_ytax_ind, eq_kapEnd, eq_psave, etc. Seeding these removes phantom
+    # residuals at the GAMS point (they were left at init before).
+    pi: Dict[str, float] = field(default_factory=dict)
+    kstock: Dict[str, float] = field(default_factory=dict)
+    kapEnd: Dict[str, float] = field(default_factory=dict)
+    ytax: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    ytaxTot: Dict[str, float] = field(default_factory=dict)
+    ytaxshr: Dict[str, float] = field(default_factory=dict)
+    xcshr: Dict[str, float] = field(default_factory=dict)
+    zcons: Dict[str, float] = field(default_factory=dict)
+    nd: Dict[str, float] = field(default_factory=dict)
+    chif: Dict[str, float] = field(default_factory=dict)
+    savf: Dict[str, float] = field(default_factory=dict)
+    psave: Dict[str, float] = field(default_factory=dict)
+    pgdpmp: Dict[str, float] = field(default_factory=dict)
+    pmuv: Dict[str, float] = field(default_factory=dict)
+    pwfact: Dict[str, float] = field(default_factory=dict)
+    rorc: Dict[str, float] = field(default_factory=dict)
+    rore: Dict[str, float] = field(default_factory=dict)
+    rorg: Dict[str, float] = field(default_factory=dict)
+    pfy: Dict[str, float] = field(default_factory=dict)
+    pm: Dict[str, float] = field(default_factory=dict)
+    pva: Dict[str, float] = field(default_factory=dict)
+    pnd: Dict[str, float] = field(default_factory=dict)
+
     def is_empty(self) -> bool:
         """Return whether the snapshot contains any non-scalar data."""
         for field_name, value in self.__dict__.items():
