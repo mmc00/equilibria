@@ -3695,13 +3695,20 @@ class GTAPModelEquations:
             return float(prdtx_init.get((r, a, i), 0.0) or 0.0)
         model.prdtx = Param(model.r, model.a, model.i, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax")
 
-        # GAMS betaCal: fcttx = inScale*ftrv/(pf*xf) = ftrv/EVFB = RTFD/EVFB (ad-valorem rate).
-        # ftrv comes from HAR header RTFD (rtfd in Python), NOT from rtf.
-        # rtf = VFM/EVFB-1 includes kappaf (factor rent), which is NOT a tax.
-        # In standard GTAP7 datasets RTFD=RTFM=0, so fcttx=fctts=0 — matching GAMS.
+        # GAMS betaCal (comp.gms:2833): ftrv(fp,a0,r) = evfp - evfb; then
+        #   fcttx = inScale*ftrv/(pf*xf) = ftrv/EVFB = (EVFP-EVFB)/EVFB.
+        # That ad-valorem ratio is EXACTLY Python's rtf (gtap_parameters.py:1484,
+        # rtf = vfm/evfb-1 with vfm←EVFP). The HAR header RTFD is empty in these
+        # datasets, but GAMS does NOT use RTFD — it uses ftrv=EVFP-EVFB, which is
+        # nonzero whenever EVFP≠EVFB (true for gtap7_3x3 AND 9x10). So to be
+        # faithful to GAMS, fcttx = rtf (fall back to RTFD only if rtf is absent).
         rtfd_p = getattr(self.params.taxes, "rtfd", {}) or {}
         rtfi_p = getattr(self.params.taxes, "rtfi", {}) or {}
+        rtf_p = getattr(self.params.taxes, "rtf", {}) or {}
         def _fcttx_init(m, r, f, a):
+            rtf = rtf_p.get((r, f, a))
+            if rtf is not None:
+                return float(rtf or 0.0)
             return float(rtfd_p.get((r, f, a), 0.0) or 0.0)
         def _fctts_init(m, r, f, a):
             return -abs(float(rtfi_p.get((r, f, a), 0.0) or 0.0))
