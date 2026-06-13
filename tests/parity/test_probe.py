@@ -111,6 +111,7 @@ def test_seed_gams_reports_coverage():
     m = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
     result = seed_gams_point(m, ref, "base")
     assert result["cells_set"] > 100
+    assert result["exportable_cells"] >= result["cells_set"]
     assert 0.0 <= result["coverage"] <= 1.0
     assert isinstance(result["below_threshold"], bool)
 
@@ -169,3 +170,27 @@ def test_cache_key_invalidates_on_real_key_file_touch(tmp_path):
     f.write_text("# v2  (an equation changed)")
     k2 = _cck("gtap7_3x3", "altertax_check", "altertax", [f])
     assert k1 != k2, "editing a key equation file must invalidate the cache"
+
+
+def test_seed_gams_coverage_is_vs_exported_not_all_free_vars(tmp_path):
+    """Coverage is cells_set / GAMS-exported-cells, NOT / all free vars. So when
+    the name mapping is healthy it should be high (~>0.85), unlike the old
+    free-var denominator that read ~0.68 and made the 95% gate unhittable."""
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
+    if not ref.exists():
+        pytest.skip("reference GDX absent")
+    adapter = AdapterRegistry.get("gtap")()
+    if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    fresh = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
+    res = seed_gams_point(fresh, ref, "base")
+    # exportable denominator is smaller than total free vars
+    assert res["exportable_cells"] <= res["total_free_cells"]
+    # healthy mapping → high coverage vs the exported universe
+    assert res["coverage"] >= 0.85, (
+        f"coverage vs exported too low: {res['coverage']:.2%} "
+        f"({res['cells_set']}/{res['exportable_cells']})"
+    )

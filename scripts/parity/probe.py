@@ -168,20 +168,28 @@ def main() -> int:
     if args.compare_ref:
         return _run_compare_ref(adapter, args)
 
-    model, key = _build_and_value(adapter, args.dataset, args.scenario,
-                                  args.cache_dir, args.no_cache)
-
     if args.seed_gams:
+        # Residual test at the GAMS point: seed onto a FRESH warm-started build,
+        # NOT the cache-injected (solved) model. The solved point would contaminate
+        # coverage (a degenerate solve leaves vars far from the GAMS values, and
+        # injecting GAMS onto it mixes states). A fresh build has full structure at
+        # init, so apply_solution_hint reaches its true coverage (~81% vs ~68%).
         if not args.gdx_ref:
             print("error: --seed-gams requires --gdx-ref", file=sys.stderr)
             return 2
+        model = adapter.build_warmstarted_model(args.dataset, args.scenario)
+        print(f"[seed-gams] fresh warm-started build (no cache)")
         res = seed_gams_point(model, Path(args.gdx_ref), args.seed_gams,
                               threshold=args.seed_threshold)
         print(f"[seed-gams {args.seed_gams}] set {res['cells_set']}/"
-              f"{res['total_cells']} cells ({res['coverage']:.0%})")
+              f"{res['exportable_cells']} GAMS-exported cells "
+              f"({res['coverage']:.0%}); {res['total_free_cells']} free vars total")
         if res["below_threshold"]:
             print(f"  WARNING: coverage {res['coverage']:.0%} < "
                   f"{args.seed_threshold:.0%} — results may be unreliable")
+    else:
+        model, _ = _build_and_value(adapter, args.dataset, args.scenario,
+                                    args.cache_dir, args.no_cache)
 
     if args.emit_json:
         print("__JSON__" + json.dumps(_query_to_dict(model, args)))
