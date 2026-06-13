@@ -157,3 +157,15 @@ def test_compare_ref_runs_against_head_itself(tmp_path):
     wl = subprocess.run(["git", "worktree", "list"], cwd=ROOT,
                         capture_output=True, text=True)
     assert "probe_compare_" not in wl.stdout
+
+
+from _probe_cache import compute_cache_key as _cck
+
+
+def test_cache_key_invalidates_on_real_key_file_touch(tmp_path):
+    f = tmp_path / "gtap_model_equations.py"
+    f.write_text("# v1")
+    k1 = _cck("gtap7_3x3", "altertax_check", "altertax", [f])
+    f.write_text("# v2  (an equation changed)")
+    k2 = _cck("gtap7_3x3", "altertax_check", "altertax", [f])
+    assert k1 != k2, "editing a key equation file must invalidate the cache"
