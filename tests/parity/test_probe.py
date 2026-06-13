@@ -62,3 +62,34 @@ def test_extract_inject_roundtrip_with_real_model():
     m.pf[key].set_value(0.0)
     inject_solution(m, sol)
     assert abs(value(m.pf[key]) - original) < 1e-12
+
+
+from _probe_queries import query_show, query_residuals
+
+
+def test_query_show_filters_by_region():
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    adapter = AdapterRegistry.get("gtap")()
+    if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    m = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
+    rows = query_show(m, ["pi"], region="ROW")
+    assert all(r["var"] == "pi" for r in rows)
+    assert all("ROW" in str(r["idx"]) for r in rows)
+    assert len(rows) >= 1
+
+
+def test_query_residuals_sorted_desc():
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    adapter = AdapterRegistry.get("gtap")()
+    if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    m = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
+    rows = query_residuals(m, top_n=5)
+    assert len(rows) <= 5
+    vals = [r["resid"] for r in rows]
+    assert vals == sorted(vals, reverse=True)
