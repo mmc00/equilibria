@@ -851,16 +851,17 @@ class GTAPModelEquations:
                     model.kstock[r].set_value(max(benchmark_kstock, 1e-8))
 
             if hasattr(model, "ytax") and (r, "ft") in model.ytax:
+                # eq_ytax[ft] = sum(fcttx * pf * xf / xscale); fcttx=ftrv/EVFB
+                # rtf=VFM/EVFB-1 includes kappaf (factor rent), NOT a tax.
                 ft_total = 0.0
-                for (rr, f, a), rtf in self.params.taxes.rtf.items():
-                    if rr != r:
-                        continue
-                    ft_total += (
-                        float(rtf)
-                        * value(model.pf[r, f, a])
-                        * value(model.xf[r, f, a])
-                        / max(value(model.xscale[r, a]), 1e-12)
-                    )
+                if hasattr(model, "fcttx"):
+                    for (rr, f, a) in [(rr, f, a) for (rr, f, a) in model.fcttx if rr == r]:
+                        ft_total += (
+                            value(model.fcttx[rr, f, a])
+                            * value(model.pf[r, f, a])
+                            * value(model.xf[r, f, a])
+                            / max(value(model.xscale[r, a]), 1e-12)
+                        )
                 model.ytax[r, "ft"].set_value(ft_total)
 
             if hasattr(model, "ytax") and (r, "dt") in model.ytax:
@@ -1171,49 +1172,54 @@ class GTAPModelEquations:
                 model.ge_share[r, i].set_value(max(ge_val, 0.0))
 
     def _compute_ytax_ind_bench(self, region: str) -> float:
-        """Compute total indirect tax revenue for a region at benchmark.
+        """Compute indirect tax revenue for a region at benchmark.
 
-        Uses the same formula as get_ytax_ind_init so that betap/regy calibration
-        is consistent with variable initialization.
+        Mirrors GAMS yTaxInd = yTaxTot - ytax("dt") — i.e. all tax streams
+        except "dt" (direct/factor-income taxes = kappaf*pf*xf = evfb-evos).
+        Streams included: pt, fc, pc, gc, ic, et, mt.  Streams excluded: dt, ft, fs.
         """
         bm = self.params.benchmark
         taxes = self.params.taxes
         sets = self.sets
         total = 0.0
+        # pt — production output taxes (makb at basic prices minus maks at supply prices)
         for a in sets.a:
             outputs = sets.activity_commodities.get(a, list(sets.i))
             for i in outputs:
                 total += float(bm.makb.get((region, a, i), 0.0) or 0.0) \
                        - float(bm.maks.get((region, a, i), 0.0) or 0.0)
-        for (rr, f, a), rtf in taxes.rtf.items():
-            if rr == region:
-                # Use evfb to match eq_ytax["ft"] = sum(rtf * pf * xf / xscale) = sum(rtf * evfb)
-                evfb_val = bm.evfb.get((region, f, a), bm.vfm.get((region, f, a), 0.0))
-                total += float(rtf) * float(evfb_val or 0.0)
+        # fc — firm intermediate commodity taxes (rtpd/rtpi on vdfb/vmfb)
         for (rr, i, a), rtpd in taxes.rtpd.items():
             if rr == region:
                 total += float(rtpd) * float(bm.vdfb.get((region, i, a), 0.0))
         for (rr, i, a), rtpi in taxes.rtpi.items():
             if rr == region:
                 total += float(rtpi) * float(bm.vmfb.get((region, i, a), 0.0))
+        # gc — government consumption taxes (vdgp-vdgb, vmgp-vmgb, or rtgd/rtgi on vdgb/vmgb)
         for (rr, i), rtgd in taxes.rtgd.items():
             if rr == region:
                 total += float(rtgd) * float(bm.vdgb.get((region, i), 0.0))
         for (rr, i), rtgi in taxes.rtgi.items():
             if rr == region:
                 total += float(rtgi) * float(bm.vmgb.get((region, i), 0.0))
+        # pc — private consumption taxes (purchaser minus basic prices)
+        # ic — investment consumption taxes (purchaser minus basic prices)
         for i in sets.i:
             total += float(bm.vdpp.get((region, i), 0.0) or 0.0) - float(bm.vdpb.get((region, i), 0.0) or 0.0)
             total += float(bm.vmpp.get((region, i), 0.0) or 0.0) - float(bm.vmpb.get((region, i), 0.0) or 0.0)
             total += float(bm.vdip.get((region, i), 0.0) or 0.0) - float(bm.vdib.get((region, i), 0.0) or 0.0)
             total += float(bm.vmip.get((region, i), 0.0) or 0.0) - float(bm.vmib.get((region, i), 0.0) or 0.0)
+        # et — export taxes (rtxs on vxsb)
         for (rr, i, rp), rtxs in taxes.rtxs.items():
             if rr == region:
                 total += float(rtxs) * float(bm.vxsb.get((region, i, rp), 0.0))
+        # mt — import taxes (imptx on vmsb, region as importer)
         for (exporter, i, importer), rate in taxes.imptx.items():
             if importer == region:
                 vmsb_val = bm.vmsb.get((exporter, i, region), 0.0)
                 total += float(rate) * float(vmsb_val or 0.0)
+        # NOTE: ft (rtf*evfb) and fs (fctts*evfb) and dt (kappaf*evfb = evfb-evos)
+        # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes).
         return total
 
     def _raw_gdx_paths(self) -> list:
@@ -1664,30 +1670,40 @@ class GTAPModelEquations:
         #                                  (absolute level at benchmark prices)
         # Both are stored in model.gf_share but have different semantics by factor
         # type; eq_pfeq consumes them accordingly.
+        #
+        # For counterfactual (check/shock) periods t0_snapshot is set to the
+        # solved base model. In that case params.shares.p_gf has been recalibrated
+        # from the base solution (gf = xf/(xscale*xft), sum=1) and must be used
+        # as-is — recomputing from benchmark SAM would revert to wrong shares.
+        _use_p_gf_directly = self.t0_snapshot is not None
         gf_share_data: Dict[tuple[str, str, str], float] = dict(self.params.shares.p_gf)
         for r in self.sets.r:
             for f in self.sets.mf:
-                xf_by_activity: Dict[str, float] = {}
-                total_xf = 0.0
-                for a in self.sets.a:
-                    factor_flow = float(
-                        self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0
-                    )
-                    if factor_flow <= 0.0:
+                if _use_p_gf_directly:
+                    # Trust the recalibrated p_gf values (already in gf_share_data).
+                    pass
+                else:
+                    xf_by_activity: Dict[str, float] = {}
+                    total_xf = 0.0
+                    for a in self.sets.a:
+                        factor_flow = float(
+                            self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0
+                        )
+                        if factor_flow <= 0.0:
+                            continue
+                        kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+                        if kappa == 0.0:
+                            kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
+                        pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                        xf_val = max(factor_flow / pf_val, 0.0)
+                        if xf_val <= 0.0:
+                            continue
+                        xf_by_activity[a] = xf_val
+                        total_xf += xf_val
+                    if total_xf <= 0.0:
                         continue
-                    kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
-                    if kappa == 0.0:
-                        kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
-                    pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
-                    xf_val = max(factor_flow / pf_val, 0.0)
-                    if xf_val <= 0.0:
-                        continue
-                    xf_by_activity[a] = xf_val
-                    total_xf += xf_val
-                if total_xf <= 0.0:
-                    continue
-                for a in self.sets.a:
-                    gf_share_data[(r, f, a)] = xf_by_activity.get(a, 0.0) / total_xf
+                    for a in self.sets.a:
+                        gf_share_data[(r, f, a)] = xf_by_activity.get(a, 0.0) / total_xf
             for f in self.sets.sf:
                 # Sluggish factors use normalized CET shares (like mf), since
                 # eq_pfeq for sf is xf = xscale*gf_share*xft*(pfy/pft)^omegaf.
@@ -1919,8 +1935,6 @@ class GTAPModelEquations:
                         pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
                         benchmark_xft += factor_flow / pf_val
                     aft_data[(region, factor)] = benchmark_xft
-                    # In standard GTAP, etaf defaults to 0 unless explicitly overridden.
-                    # Keep that default, but honor region/factor ETRAE when present.
                     etaf_data[(region, factor)] = _lookup_etrae(region, factor)
 
             facty_bench = max(factor_income - vdep, 0.0)
@@ -1959,21 +1973,21 @@ class GTAPModelEquations:
             vst_r = sum(self._vst_value(region, i) for i in self.sets.i)
             savf_bar_data[(region,)] = vcif_r - vfob_r - vst_r
 
-            # GAMS betaCal (cal.gms:626-635) overwrites regY = yc + yg + rsav
-            # before computing betaP/betaG/betaS, then solves a 4-eq MCP
-            # {phieq, yceq, ygeq, rsaveq} that pins phi = phiP = 1. Because
-            # the MCP is degenerate once regY = expenditure-sum (any phi
-            # works), the analytical solution is just to use the expenditure
-            # side: betaP+betaG+betaS = 1 exactly, regardless of SAM income/
-            # expenditure imbalance. The (factY+ytaxInd) version is kept for
-            # downstream factY/ytax initialization and is reconciled by
-            # eq_regy at solve.
+            # GAMS betaCal (cal.gms:3321-3337): betaP/betaG/betaS are initialised
+            # from the INCOME-SIDE regY = factY + yTaxInd (not expenditure-side).
+            # PATH then solves the degenerate betaCal MCP and stays near the initial
+            # point, so the final values equal the initial ones:
+            #   betaP = yc / regY_income,  betaG = yg / regY_income,  betaS = rsav / regY_income
+            #   phi   = 1 / (betaP/phiP + betaG + betaS)
+            # phiP ≈ 1 at benchmark (CDE collapses to CD weights), so phi < 1 when
+            # regY_income > yc+yg+rsav (which is the common SAM imbalance case).
+            regy_income_for_beta = regy_income  # = facty_bench + ytax_ind_bench
             regy_expenditure = max(private_total + government_total + savings_total, 1e-8)
             phip = 1.0
-            phi = 1.0
-            betap = private_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
-            betag = government_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
-            betas = savings_total / regy_expenditure if regy_expenditure > 0.0 else 0.0
+            betap = private_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
+            betag = government_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
+            betas = savings_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
+            phi = 1.0 / (betap / phip + betag + betas) if (betap / phip + betag + betas) > 0.0 else 1.0
             regy_base = regy_bench  # kept for downstream references below
             regional_income_share_data[(region,)] = private_total / regy_base if regy_base > 0.0 else 0.0
             regional_government_share_data[(region,)] = government_total / regy_base if regy_base > 0.0 else 0.0
@@ -2122,19 +2136,37 @@ class GTAPModelEquations:
                             if xa_v > 0.0 and pa_v > 0.0:
                                 investment_share_data[(region, i)] = (xa_v / xiagg_v) * (pa_v / pi_v) ** sigmai
                 # g_share via gov agent: alphaa(r,i,gov) = (xa(r,i,gov)/xg(r))*(pa/pg)^sigmag
-                if hasattr(t0, "xg") and hasattr(t0, "pg"):
-                    xg_v = float(_val(t0.xg[region])) if region in t0.xg else 0.0
-                    pg_v = float(_val(t0.pg[region])) if region in t0.pg else 1.0
+                # GAMS recalibrates alphaa at the betaCal solution (cal.gms:779-790).
+                # t0.xg is indexed by (r, i); there is no model.pg variable — compute
+                # pg_base from the CES price index using base-period pa values.
+                if hasattr(t0, "xg") and hasattr(t0, "xaa") and hasattr(t0, "pa"):
                     sigmag = float(self.params.elasticities.esubg.get(region, 1.0))
                     if abs(sigmag - 1.0) < 1e-8:
                         sigmag = 1.01
-                    if xg_v > 1e-12 and pg_v > 1e-12:
+                    expo = 1.0 - sigmag
+                    # Total government expenditure volume in base
+                    xg_total = sum(
+                        max(float(_val(t0.xg[region, i])), 0.0)
+                        for i in self.sets.i
+                        if (region, i) in t0.xg
+                    )
+                    if xg_total > 1e-12:
+                        # Compute pg_base from CES price index at base-period pa
+                        # pg^(1-sigma) = sum_i g_share[i] * pa[i]^(1-sigma)
+                        pg_terms = 0.0
                         for i in self.sets.i:
-                            if (region, i, GTAP_GOVERNMENT_AGENT) in t0.xaa and (region, i, GTAP_GOVERNMENT_AGENT) in t0.pa:
-                                xa_v = float(_val(t0.xaa[region, i, GTAP_GOVERNMENT_AGENT]))
+                            gs = government_share_data.get((region, i), 0.0)
+                            if gs > 0.0 and (region, i, GTAP_GOVERNMENT_AGENT) in t0.pa:
                                 pa_v = float(_val(t0.pa[region, i, GTAP_GOVERNMENT_AGENT]))
-                                if xa_v > 0.0 and pa_v > 0.0:
-                                    government_share_data[(region, i)] = (xa_v / xg_v) * (pa_v / pg_v) ** sigmag
+                                pg_terms += gs * (pa_v ** expo)
+                        pg_base = pg_terms ** (1.0 / expo) if pg_terms > 0.0 else 1.0
+                        # Recalibrate g_share: alphaa = (xg_i/xg_total)*(pa/pg)^sigmag
+                        for i in self.sets.i:
+                            if (region, i) in t0.xg and (region, i, GTAP_GOVERNMENT_AGENT) in t0.pa:
+                                xg_v = float(_val(t0.xg[region, i]))
+                                pa_v = float(_val(t0.pa[region, i, GTAP_GOVERNMENT_AGENT]))
+                                if xg_v > 0.0 and pa_v > 0.0 and pg_base > 0.0:
+                                    government_share_data[(region, i)] = (xg_v / xg_total) * (pa_v / pg_base) ** sigmag
         create_indexed_param("yc_share_reg", ["r"], regional_income_share_data, 0.0)
         create_indexed_param("yg_share_reg", ["r"], regional_government_share_data, 0.0)
         create_indexed_param("yi_share_reg", ["r"], regional_investment_share_data, 0.0)
@@ -3253,7 +3285,7 @@ class GTAPModelEquations:
         )
         
         # Factors (4 vars per r,f)
-        model.xft = Var(model.r, model.f, within=NonNegativeReals, initialize=get_factor_supply_init, doc="Factor supply")
+        model.xft = Var(model.r, model.f, bounds=(1e-8, None), initialize=get_factor_supply_init, doc="Factor supply")
         model.pft = Var(model.r, model.f, within=NonNegativeReals, initialize=get_pft_init, doc="Factor price")
         model.xf = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_vfm_init, doc="Factor demand")
         model.pf = Var(model.r, model.f, model.a, within=NonNegativeReals, initialize=get_pf_init, doc="Factor price by activity")
@@ -3649,11 +3681,18 @@ class GTAPModelEquations:
             return float(prdtx_init.get((r, a, i), 0.0) or 0.0)
         model.prdtx = Param(model.r, model.a, model.i, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax")
 
-        rtf_p = getattr(self.params.taxes, "rtf", {}) or {}
+        # GAMS betaCal: fcttx = inScale*ftrv/(pf*xf) = ftrv/EVFB = RTFD/EVFB (ad-valorem rate).
+        # ftrv comes from HAR header RTFD (rtfd in Python), NOT from rtf.
+        # rtf = VFM/EVFB-1 includes kappaf (factor rent), which is NOT a tax.
+        # In standard GTAP7 datasets RTFD=RTFM=0, so fcttx=fctts=0 — matching GAMS.
+        rtfd_p = getattr(self.params.taxes, "rtfd", {}) or {}
+        rtfi_p = getattr(self.params.taxes, "rtfi", {}) or {}
         def _fcttx_init(m, r, f, a):
-            return float(rtf_p.get((r, f, a), 0.0) or 0.0)
+            return float(rtfd_p.get((r, f, a), 0.0) or 0.0)
+        def _fctts_init(m, r, f, a):
+            return -abs(float(rtfi_p.get((r, f, a), 0.0) or 0.0))
         model.fcttx = Param(model.r, model.f, model.a, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production")
-        model.fctts = Param(model.r, model.f, model.a, within=Reals, initialize=0.0, mutable=True, doc="Subsidies on factors of production")
+        model.fctts = Param(model.r, model.f, model.a, within=Reals, initialize=_fctts_init, mutable=True, doc="Subsidies on factors of production")
 
         # pmuv: Tornqvist MUV deflator (model.gms:1237-1247). When closure
         # supplies rmuv/imuv baskets, declare as Var and add eq_pmuv after
@@ -4112,9 +4151,13 @@ class GTAPModelEquations:
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
             if abs(expo) < 1e-8:
-                # CD case (sigmav=1): pvaeq degenerates to 1=sum(af).
-                # GAMS leaves pva unconstrained → stays at init=1.0.
-                return model.pva[r, a] == 1.0
+                # CD case (sigmav=1): standard CES formula degenerates to 1=sum(af)=1
+                # (tautology — pva not in expression). Mirroring GAMS, the constraint
+                # is vacuous: use exp(log(pva)) == pva which is always satisfied and
+                # has zero Jacobian for pva. PATH then determines pva from the
+                # cross-Jacobian entries of pxeq (px = pnd^and * pva^ava) and
+                # eq_va (va = ava*xp*(px/pva)), exactly as GAMS PATH does.
+                return exp(log(model.pva[r, a])) == model.pva[r, a]
 
             terms = []
             for f in model.f:
@@ -4886,21 +4929,35 @@ class GTAPModelEquations:
                 if omegaf == float("inf"):
                     # Perfect mobility: law of one price.
                     return pfy == model.pft[r, f]
-                # Partial CET across activities.
-                return model.xf[r, f, a] == (
-                    model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
-                    * (pfy / model.pft[r, f]) ** omegaf
-                )
+                # Partial CET (finite omegaf): GAMS MCP pair is pfeq.pf
+                # (comp_altertax.gms line 2656). In GAMS, pfeq constrains pf via
+                # the CET supply inversion; xfeq.xf constrains xf from production
+                # demand. Both are active simultaneously, enforcing market clearing.
+                # Python CNS formulation mirrors this: eq_pfeq determines pf
+                # (not xf) by inverting the CET supply:
+                #   pfy = pft * (xf / (xscale * gf * xft))^(1/omegaf)
+                #   pf * (1-kappa) = pft * (xf / (xscale*gf*xft))^(1/omegaf)
+                # This leaves eq_xfeq to determine xf from production CES demand,
+                # avoiding the xf over-determination from having both supply and
+                # demand equations write xf as their LHS.
+                kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+                if kappa == 0.0:
+                    kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
+                denom = model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
+                xf_ratio = model.xf[r, f, a] / denom
+                # pf * (1-kappa) = pft * (xf/denom)^(1/omegaf)
+                return model.pf[r, f, a] * (1.0 - kappa) == model.pft[r, f] * xf_ratio ** (1.0 / omegaf)
             if f in self.sets.sf:
                 # Sluggish factor: same branch logic as mf.
-                # omegaf = -etrae; if etrae undefined, defaults to inf (perfect mobility).
                 omegaf = _omegaf(r, f)
                 if omegaf == float("inf"):
                     return pfy == model.pft[r, f]
-                return model.xf[r, f, a] == (
-                    model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
-                    * (pfy / model.pft[r, f]) ** omegaf
-                )
+                kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+                if kappa == 0.0:
+                    kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
+                denom = model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
+                xf_ratio = model.xf[r, f, a] / denom
+                return model.pf[r, f, a] * (1.0 - kappa) == model.pft[r, f] * xf_ratio ** (1.0 / omegaf)
             # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq
             # (model.gms:1096). No xft term — supply scales by gf only.
             etaff = _etaff(r, f, a)
@@ -5115,22 +5172,33 @@ class GTAPModelEquations:
 
         # Private utility (GAMS uheq, CDE form, model.gms:792-795)
         # 1 = sum_i zcons(r,i) / bh(r,i)
-        # Implicitly defines uh as the utility level consistent with zcons.
+        # Substituting zcons from eq_zcons: zcons/bh = alphaa*pa^bh*uh^(eh*bh)*(yc/pop)^(-bh)
+        # This form contains uh explicitly so PATH sees a non-zero ∂/∂uh Jacobian column.
+        # Without substitution, eq_uh has zero ∂/∂uh and PATH leaves uh at its lower bound.
         def eq_uh_rule(model, r):
-            terms = [
-                model.zcons[r, i] / model.bh[r, i]
-                for i in model.i
-                if value(model.c_share[r, i]) > 0.0
-            ]
+            terms = []
+            for i in model.i:
+                if value(model.c_share[r, i]) <= 0.0:
+                    continue
+                alphaa = model.alphaa_hhd[r, i]
+                bh = model.bh[r, i]
+                eh = model.eh[r, i]
+                pa = model.pa[r, i, "hhd"]
+                yc = model.yc[r]
+                pop = model.pop[r]
+                terms.append(
+                    alphaa * (pa ** bh) * (model.uh[r] ** (eh * bh)) * ((yc / pop) ** (-bh))
+                )
             if not terms:
                 return model.uh[r] == 1.0
             return sum(terms) == 1.0
         model.eq_uh = Constraint(model.r, rule=eq_uh_rule)
 
         # Government utility per capita (GAMS ugeq, model.gms:826):
-        #   ug = aug * xg_total / pop, where xg_total = yg / pg (line 821).
-        # Python lacks scalar pg; reconstruct pg as CES index of pa[r,i,gov] with g_share weights:
-        #   pg^(1-sigmag) = sum_i g_share[r,i] * pa[r,i,gov]^(1-sigmag)
+        #   ug = aug * xg / pop, with pg*xg = yg and pgeq defining pg.
+        # GAMS pgeq with sigmag→1: use sigma=1.01 (same as GAMS cal.gms:3478).
+        #   pg^(1-sigma) = sum_i g_share_i * pa^(1-sigma)  (ignoring axg calibration scalar)
+        # Then ug*pop*pg = aug*yg.
         def eq_ug_rule(model, r):
             sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
             if abs(sigmag - 1.0) < 1e-8:
@@ -5282,11 +5350,12 @@ class GTAPModelEquations:
                 return model.ytax[r, gy] == total
 
             if gy == "ft":
+                # GAMS: YTAX(r,"ft") = sum(fcttx * pf * xf / xscale)
+                # fcttx = ftrv/EVFB (explicit factor tax rate), NOT rtf.
+                # rtf = VFM/EVFB-1 includes kappaf (factor rent) which is not a tax.
                 total = 0.0
-                for (rr, f, a), rtf in self.params.taxes.rtf.items():
-                    if rr != r:
-                        continue
-                    total += float(rtf) * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                for (rr, f, a) in [(rr, f, a) for (rr, f, a) in model.fcttx if rr == r]:
+                    total += model.fcttx[rr, f, a] * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
                 return model.ytax[r, gy] == total
 
             if gy == "fs":

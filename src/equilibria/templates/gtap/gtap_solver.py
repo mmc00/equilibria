@@ -194,6 +194,7 @@ class GTAPSolver:
             "xs": "xs",
             "xds": "xds",
             "xd": "xda",
+            "xma": "xma",
             "px": "px",
             "pp": "pp",
             "ps": "ps",
@@ -219,7 +220,9 @@ class GTAPSolver:
             "xf": "xf",
             "xft": "xft",
             "pf": "pf",
+            "pfa": "pfa",
             "pft": "pft",
+            "pfact": "pfact",
             "ytax": "ytax",
             "pnum": "pnum",
             # Investment/savings block — critical for check/shock periods to avoid
@@ -227,9 +230,27 @@ class GTAPSolver:
             # because yi[rres] drifts negative without a good starting point.
             "yi": "yi",
             "xi": "xiagg",
+            "va": "va",
+            "gdpmp": "gdpmp",
+            "rgdpmp": "rgdpmp",
+            "ev": "ev",
+            "cv": "cv",
+            "pabs": "pabs",
             "regy": "regy",
             "yc": "yc",
             "yg": "yg",
+            # Utility block — seed uh/ug/us from GAMS to avoid spurious MCP solutions
+            # where uh collapses to its lower bound (0.001) with eq_uh slack.
+            "uh": "uh",
+            "ug": "ug",
+            "us": "us",
+            "u": "u",
+            "phi": "phi",
+            "phip": "phip",
+            "pcons": "pcons",
+            "rsav": "rsav",
+            "xigbl": "xigbl",
+            "pigbl": "pigbl",
         }
 
         applied = 0
