@@ -113,3 +113,25 @@ def test_seed_gams_reports_coverage():
     assert result["cells_set"] > 100
     assert 0.0 <= result["coverage"] <= 1.0
     assert isinstance(result["below_threshold"], bool)
+
+
+import subprocess
+
+
+def test_cli_show_runs_and_caches(tmp_path):
+    import pytest
+    env_cache = tmp_path / "cache"
+    cmd = [
+        "uv", "run", "python", "scripts/parity/probe.py",
+        "--template", "gtap", "--dataset", "gtap7_3x3",
+        "--scenario", "altertax_check", "--show", "pi", "--region", "ROW",
+        "--cache-dir", str(env_cache),
+    ]
+    r1 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300)
+    if "not available" in (r1.stdout + r1.stderr) or "Skip" in r1.stdout:
+        pytest.skip("gtap7_3x3 not available")
+    assert r1.returncode == 0, r1.stderr
+    assert "pi" in r1.stdout
+    r2 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=120)
+    assert r2.returncode == 0, r2.stderr
+    assert "cache hit" in r2.stdout.lower()
