@@ -438,9 +438,12 @@ def main() -> None:
     print("\n=== [3/3] Python altertax shock (+10% imptx, warm-started from check) ===")
     import copy
     p_alt_shock = copy.deepcopy(p_alt)
+    # GAMS comp.gms:3909: imptx.fx = (1 + imptx.l)*1.10 - 1  (tm_pct: scale the
+    # tariff POWER, not the rate). The old `imptx*1.10` scaled the rate, giving a
+    # ~10x smaller shock on low-tariff goods and diverging the whole shock period.
     for key in list(p_alt_shock.taxes.imptx.keys()):
         old = float(p_alt_shock.taxes.imptx[key] or 0.0)
-        p_alt_shock.taxes.imptx[key] = old * 1.10
+        p_alt_shock.taxes.imptx[key] = (1.0 + old) * 1.10 - 1.0
 
     warm_chk = GTAPVariableSnapshot.from_python_model(m_chk)
     eq_alt = GTAPModelEquations(
