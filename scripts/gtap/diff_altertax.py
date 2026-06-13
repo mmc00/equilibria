@@ -446,10 +446,15 @@ def main() -> None:
         p_alt_shock.taxes.imptx[key] = (1.0 + old) * 1.10 - 1.0
 
     warm_chk = GTAPVariableSnapshot.from_python_model(m_chk)
+    # NOTE: do NOT pass t0_snapshot=m_chk here. With t0=m_chk, pf0/xf0 (the Fisher-
+    # index benchmark) are pinned to the check solution, which is inconsistent with
+    # the shocked imptx and steers PATH into a degenerate basin (prices→0.04,
+    # code=2). Building WITHOUT t0 (so pf0/xf0 come from the calibrated benchmark)
+    # and warm-starting from the check snapshot converges (verified: same model
+    # converges to ~3e-9 from a full seed).
     eq_alt = GTAPModelEquations(
         p_alt_shock.sets, p_alt_shock, alt_closure,
         residual_region=res_region,
-        t0_snapshot=m_chk,
     )
     m_alt = eq_alt.build_model()
     t0 = time.perf_counter()
