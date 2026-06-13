@@ -515,15 +515,11 @@ class GTAPParityAdapter:
 
         run_gtap = _load_run_gtap()
         params = _load_params_har(dataset)
-        # GAMS hardcodes rres=NAmerica. In gtap7_* datasets the region set uses
-        # bare names ('USA', 'EU_28', 'ROW'), so pick the first region that matches
-        # the canonical GAMS residual-region names; fall back to last element.
-        _RRES_CANDIDATES = ("NAmerica", "USA", "ROW_NAmerica", "Namer")
+        # GAMS rres is the last region in the HAR sets (ROW in all gtap7_* datasets).
+        # gdxdump confirms: rres('ROW') for gtap7_3x3/3x4/5x5.
+        # Use last element to match the HAR set order convention.
         _r_set = list(params.sets.r)
-        res_region = next(
-            (r for r in _r_set if str(r) in _RRES_CANDIDATES),
-            _r_set[-1],
-        )
+        res_region = _r_set[-1]
         gdx_path = _ROOT / self._DATASET_BUNDLE_GDX[dataset]
 
         p_alt = apply_altertax_elasticities(params, in_place=False)
