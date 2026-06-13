@@ -237,6 +237,8 @@ class GTAPSolver:
             "cv": "cv",
             "pabs": "pabs",
             "regy": "regy",
+            "facty": "facty",
+            "ytax_ind": "ytax_ind",
             "yc": "yc",
             "yg": "yg",
             # Utility block — seed uh/ug/us from GAMS to avoid spurious MCP solutions
