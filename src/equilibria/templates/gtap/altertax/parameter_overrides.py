@@ -252,8 +252,15 @@ def _recalibrate_af_shares(params: "GTAPParameters") -> None:  # noqa: F821
         return 1.0 / max(1.0 - _kappa(r, f, a), 1e-12)
 
     def _pfa(r: str, f: str, a: str) -> float:
-        rtf = float(taxes.rtf.get((r, f, a), 0.0) or 0.0)
-        return _pf(r, f, a) * max(1.0 + rtf, 1e-12)
+        # GAMS comp_altertax.gms:2867 — pfa = pf*(1 + fctts + fcttx), NOT rtf.
+        # fcttx=ftrv/(pf·xf)=RTFD/EVFB, fctts=-fbep/(pf·xf)=-RTFI; both 0 when
+        # RTFD=RTFM=0. rtf folds in kappaf (factor rent) and varies by factor,
+        # distorting the relative af shares. Faithful to GAMS base calibration.
+        rtfd = getattr(taxes, "rtfd", {}) or {}
+        rtfi = getattr(taxes, "rtfi", {}) or {}
+        wedge = (float(rtfd.get((r, f, a), 0.0) or 0.0)
+                 - abs(float(rtfi.get((r, f, a), 0.0) or 0.0)))
+        return _pf(r, f, a) * max(1.0 + wedge, 1e-12)
 
     af_param: Dict[Tuple[str, str, str], float] = {}
     for r in sets.r:
