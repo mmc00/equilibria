@@ -138,6 +138,21 @@ def build_derived(model) -> dict:
         return _pg(key[0])
     out["pg"] = _DerivedVar("pg(CES gov)", _pg_outer)
 
+    # Expenditure-side regY = yc + yg + rsav. GAMS writes the BASE period from
+    # betaCal, where regY.fx = yc+yg+rsav (expenditure) — NOT the income identity
+    # regY=factY+ytaxInd that the variable `regy` carries. To compare like-for-like
+    # against the GAMS base GDX, use this view for regY in the base period only.
+    def _regy_exp(key):
+        if len(key) != 1:
+            return None
+        r = key[0]
+        try:
+            return (_pyo_value(model.yc[r]) + _pyo_value(model.yg[r])
+                    + _pyo_value(model.rsav[r]))
+        except Exception:
+            return None
+    out["regy_betacal"] = _DerivedVar("regY(=yc+yg+rsav)", _regy_exp)
+
     return out
 
 

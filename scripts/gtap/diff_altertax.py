@@ -484,12 +484,19 @@ def main() -> None:
     # =========================================================================
     print(f"\n{'='*60}")
     print("BASE PERIOD: Python m_b vs GAMS period='base' (pf, pfact, yc, regY)")
+    print("  NOTE: GAMS base regY = yc+yg+rsav (betaCal expenditure pin), not the")
+    print("  income identity factY+ytaxInd. We compare regY against Python's")
+    print("  expenditure view (regY_betacal) so it is like-for-like.")
     print(f"{'='*60}")
+    _base_derived = build_derived(m_b)
     for vname in ["pf", "pfact", "yc", "regY", "betaP", "phi"]:
         gams_all = gams_levels(gdx_path, vname)
         if not gams_all:
             continue
-        py_var, py_name = find_py_var(m_b, vname, derived=build_derived(m_b))
+        # GAMS base regY is the betaCal expenditure value → compare against the
+        # matching Python expenditure view, not the income-side `regy` Var.
+        py_lookup = "regY_betacal" if vname == "regY" else vname
+        py_var, py_name = find_py_var(m_b, py_lookup, derived=_base_derived)
         if py_var is None:
             print(f"  {vname}: no py var")
             continue
