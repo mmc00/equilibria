@@ -135,3 +135,25 @@ def test_cli_show_runs_and_caches(tmp_path):
     r2 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert r2.returncode == 0, r2.stderr
     assert "cache hit" in r2.stdout.lower()
+
+
+def test_compare_ref_runs_against_head_itself(tmp_path):
+    import pytest
+    r = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True
+    )
+    head = r.stdout.strip()
+    cmd = [
+        "uv", "run", "python", "scripts/parity/probe.py",
+        "--template", "gtap", "--dataset", "gtap7_3x3",
+        "--scenario", "altertax_check", "--show", "pi", "--region", "ROW",
+        "--compare-ref", head, "--cache-dir", str(tmp_path / "c"),
+    ]
+    out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=600)
+    if "not available" in (out.stdout + out.stderr):
+        pytest.skip("gtap7_3x3 not available")
+    assert out.returncode == 0, out.stderr
+    assert "HEAD" in out.stdout and "Δ" in out.stdout
+    wl = subprocess.run(["git", "worktree", "list"], cwd=ROOT,
+                        capture_output=True, text=True)
+    assert "probe_compare_" not in wl.stdout
