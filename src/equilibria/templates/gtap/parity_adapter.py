@@ -206,6 +206,11 @@ def _gams_snapshot_from_altertax_gdx(gdx_path: Path, period: str):
         xi=_slice(_gv(gdx_path, "xi"), period),
         va=_slice(_gv(gdx_path, "va"), period),
         regy=_slice(_gv(gdx_path, "regy"), period),
+        # factY/ytaxInd feed eq_regy (regy = facty + ytax_ind). Seeding regy alone
+        # left these two at init, so eq_regy showed a phantom residual at the GAMS
+        # point. GAMS GDX exports them as camelCase factY / ytaxInd.
+        facty=_slice(_gv(gdx_path, "factY"), period),
+        ytax_ind=_slice(_gv(gdx_path, "ytaxInd"), period),
         yc=_slice(_gv(gdx_path, "yc"), period),
         yg=_slice(_gv(gdx_path, "yg"), period),
         yi=_slice(_gv(gdx_path, "yi"), period),

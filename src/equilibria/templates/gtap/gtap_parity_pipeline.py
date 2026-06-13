@@ -803,6 +803,7 @@ class GTAPVariableSnapshot:
     pigbl: Optional[float] = None
     arent: Dict[str, float] = field(default_factory=dict)
     facty: Dict[str, float] = field(default_factory=dict)
+    ytax_ind: Dict[str, float] = field(default_factory=dict)
 
     gdpmp: Dict[str, float] = field(default_factory=dict)
     rgdpmp: Dict[str, float] = field(default_factory=dict)
