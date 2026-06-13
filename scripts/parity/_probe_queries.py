@@ -102,3 +102,35 @@ def query_residuals(model, top_n=15, family=None):
                 pass
     rows.sort(key=lambda r: r["resid"], reverse=True)
     return rows[:top_n]
+
+
+def seed_gams_point(model, gdx_path: Path, period: str, threshold: float = 0.95):
+    """Seed model with the GAMS point for `period` via apply_solution_hint.
+
+    Returns {cells_set, total_cells, coverage, below_threshold}. Coverage is
+    cells_set / total free Var cells in the model.
+    """
+    from equilibria.templates.gtap.parity_adapter import (
+        _gams_snapshot_from_altertax_gdx,
+    )
+    from equilibria.templates.gtap.gtap_solver import GTAPSolver
+
+    snap = _gams_snapshot_from_altertax_gdx(Path(gdx_path), period)
+    helper = GTAPSolver(model, solver_name="path")
+    cells_set = helper.apply_solution_hint(snap)
+
+    total = 0
+    for v in model.component_objects(Var, active=True):
+        for idx in v:
+            try:
+                if not v[idx].fixed:
+                    total += 1
+            except Exception:
+                total += 1
+    coverage = (cells_set / total) if total else 0.0
+    return {
+        "cells_set": cells_set,
+        "total_cells": total,
+        "coverage": coverage,
+        "below_threshold": coverage < threshold,
+    }
