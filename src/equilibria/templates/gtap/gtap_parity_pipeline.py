@@ -902,6 +902,26 @@ class GTAPVariableSnapshot:
             pnum=float(value(model.pnum)) if hasattr(model, "pnum") else None,
             pabs=_extract_var_levels(model.pabs) if hasattr(model, "pabs") else {},
             walras=float(value(model.walras)) if hasattr(model, "walras") else None,
+            # Factor agent price (pfa) — simple level extract.
+            pfa=_extract_var_levels(model.pfa) if hasattr(model, "pfa") else {},
+            # All remaining income/capital/tax/utility/GDP vars the dataclass holds.
+            # Without these a warm-start from a solved model (the altertax shock
+            # starting from the check solution) leaves dozens of vars at init —
+            # pfa/pfact/va/u/uh/ug/us/phi/phip/pcons/gdpmp/rgdpmp/ev/cv/rsav/... —
+            # and the shock solve collapses to a degenerate basin (prices→0.04,
+            # code=2). The GAMS shock point IS a valid equilibrium (a full GDX seed
+            # converges to ~3e-9); the warm-start just has to carry the same state.
+            **{
+                _f: _extract_var_levels(getattr(model, _f))
+                for _f in ("pi", "kstock", "kapEnd", "ytax", "ytaxTot", "ytaxshr",
+                           "xcshr", "zcons", "nd", "chif", "savf", "psave",
+                           "pgdpmp", "pmuv", "pwfact", "rorc", "rore", "rorg",
+                           "pfy", "pm", "pva", "pnd", "facty", "ytax_ind",
+                           "pfact", "va", "u", "uh", "ug", "us", "phi", "phip",
+                           "pcons", "gdpmp", "rgdpmp", "ev", "cv", "rsav",
+                           "xigbl", "pigbl", "arent")
+                if hasattr(model, _f)
+            },
         )
 
     @classmethod
