@@ -194,3 +194,27 @@ def test_seed_gams_coverage_is_vs_exported_not_all_free_vars(tmp_path):
         f"coverage vs exported too low: {res['coverage']:.2%} "
         f"({res['cells_set']}/{res['exportable_cells']})"
     )
+
+
+from _probe_params import extract_params, ALIAS_MAP, resolve_gams_symbol
+
+
+def test_extract_params_with_real_model():
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    adapter = AdapterRegistry.get("gtap")()
+    if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    m = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
+    params = extract_params(m)
+    assert "pf0" in params and len(params["pf0"]) > 0
+    assert all(isinstance(v, float) for v in params["pf0"].values())
+
+
+def test_alias_map_and_resolve():
+    assert ALIAS_MAP["pf0"] == "pf@base"
+    name, period = resolve_gams_symbol("pf0")
+    assert name == "pf" and period == "base"
+    name, period = resolve_gams_symbol("kappaf")
+    assert name == "kappaf" and period is None
