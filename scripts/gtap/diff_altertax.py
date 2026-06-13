@@ -445,25 +445,45 @@ def main() -> None:
         old = float(p_alt_shock.taxes.imptx[key] or 0.0)
         p_alt_shock.taxes.imptx[key] = (1.0 + old) * 1.10 - 1.0
 
-    warm_chk = GTAPVariableSnapshot.from_python_model(m_chk)
-    # NOTE: do NOT pass t0_snapshot=m_chk here. With t0=m_chk, pf0/xf0 (the Fisher-
-    # index benchmark) are pinned to the check solution, which is inconsistent with
-    # the shocked imptx and steers PATH into a degenerate basin (prices→0.04,
-    # code=2). Building WITHOUT t0 (so pf0/xf0 come from the calibrated benchmark)
-    # and warm-starting from the check snapshot converges (verified: same model
-    # converges to ~3e-9 from a full seed).
-    eq_alt = GTAPModelEquations(
-        p_alt_shock.sets, p_alt_shock, alt_closure,
-        residual_region=res_region,
-    )
-    m_alt = eq_alt.build_model()
+    # Homotopy from the check solution: apply imptx in HOMOTOPY_STEPS equal
+    # increments, warm-starting each step from the previous solution.
+    #   - Build WITHOUT t0_snapshot (t0=m_chk pins pf0/xf0 to the check and steers
+    #     PATH into a degenerate basin, code=2).
+    #   - A direct full-power solve from the check converges numerically but to the
+    #     WRONG (degenerate) basin (gdpmp[ROW]=0, pgdpmp at lower bound); the GAMS
+    #     shock equilibrium is reachable (a full GDX seed → ~3e-9) but the check is
+    #     outside its basin of attraction, so step gradually to follow the path.
+    imptx_check = {k: float(v or 0.0) for k, v in p_alt.taxes.imptx.items()}
+    imptx_shock = {k: (1.0 + v) * 1.10 - 1.0 for k, v in imptx_check.items()}
+    HOMOTOPY_STEPS = 5
+
     t0 = time.perf_counter()
-    r_alt = run_gtap._run_path_capi_nonlinear_full(
-        m_alt, p_alt_shock,
-        enforce_post_checks=False, strict_path_capi=False,
-        closure_config=alt_closure, equation_scaling=True,
-        solution_hint=warm_chk,
-    )
+    warm = GTAPVariableSnapshot.from_python_model(m_chk)
+    m_alt = None
+    p_alt_shock = None
+    r_alt = {"residual": float("inf"), "termination_code": 0}
+    for step in range(1, HOMOTOPY_STEPS + 1):
+        frac = step / HOMOTOPY_STEPS
+        p_step = copy.deepcopy(p_alt)
+        for key in list(p_step.taxes.imptx.keys()):
+            c = imptx_check.get(key, 0.0)
+            s = imptx_shock.get(key, 0.0)
+            p_step.taxes.imptx[key] = c + (s - c) * frac
+        # No t0_snapshot (calibrated benchmark pf0/xf0).
+        m_step = GTAPModelEquations(
+            p_step.sets, p_step, alt_closure, residual_region=res_region,
+        ).build_model()
+        r_step = run_gtap._run_path_capi_nonlinear_full(
+            m_step, p_step,
+            enforce_post_checks=False, strict_path_capi=False,
+            closure_config=alt_closure, equation_scaling=True,
+            solution_hint=warm,
+        )
+        print(f"  homotopy step {step}/{HOMOTOPY_STEPS} (frac={frac:.2f}): "
+              f"residual={float(r_step.get('residual') or 0):.3e} "
+              f"code={r_step.get('termination_code')}")
+        warm = GTAPVariableSnapshot.from_python_model(m_step)
+        m_alt, p_alt_shock, r_alt = m_step, p_step, r_step
     sec_alt = time.perf_counter() - t0
     res_alt = float(r_alt.get("residual") or 0.0)
     print(f"  shock residual={res_alt:.3e}  code={r_alt.get('termination_code')}  t={sec_alt:.2f}s")
