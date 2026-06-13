@@ -18,6 +18,15 @@ class ParityAdapter(Protocol):
     def build_solved_model(self, dataset: str, scenario: str) -> Any:
         ...
 
+    def build_warmstarted_model(self, dataset: str, scenario: str) -> Any:
+        """Build model at the warm-start point (before solver).
+
+        Default falls back to build_solved_model for adapters that don't
+        implement a separate warm-start phase. Override to expose the
+        pre-solver state for --check-warmstart diagnostics.
+        """
+        return self.build_solved_model(dataset, scenario)
+
     def load_gams_reference(self, gdx_path: Path) -> dict[str, dict[tuple, float]]:
         ...
 
