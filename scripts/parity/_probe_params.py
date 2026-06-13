@@ -114,3 +114,78 @@ def diff_params_vs_gams(model, gdx_path, period: str, tol_rel: float = 1e-3) -> 
         (diverge if n_div > 0 else ok).append(rec)
     diverge.sort(key=lambda r: r["max_rel"], reverse=True)
     return {"diverge": diverge, "ok": ok, "no_match": no_match}
+
+
+def _build_gtap7_har_models(dataset: str):
+    """Build the altertax model twice: WITHOUT and WITH t0_snapshot. Returns (m_no_t0, m_t0)."""
+    _ROOT = Path(__file__).resolve().parents[2]
+    import sys as _sys
+    if str(_ROOT / "src") not in _sys.path:
+        _sys.path.insert(0, str(_ROOT / "src"))
+    from equilibria.templates.gtap import GTAPParameters, GTAPModelEquations
+    from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    har = _ROOT / "datasets" / dataset
+    p = GTAPParameters()
+    p.load_from_har(
+        basedata_path=har / "basedata.har", sets_path=har / "sets.har",
+        default_path=har / "default.prm", baserate_path=har / "baserate.har",
+    )
+    p_alt = apply_altertax_elasticities(p, in_place=False)
+    res = list(p_alt.sets.r)[-1]
+    base_cl = GTAPClosureConfig(name="base", closure_type="MCP",
+                                capital_mobility="sluggish", fix_endowments=False,
+                                fix_taxes=False, fix_technology=False, if_sub=False,
+                                numeraire="pnum")
+    alt_cl = GTAPClosureConfig(name="altertax", closure_type="MCP",
+                               capital_mobility="mobile", fix_endowments=False,
+                               fix_taxes=True, fix_technology=True, if_sub=False,
+                               numeraire="pnum")
+    m_no_t0 = GTAPModelEquations(p_alt.sets, p_alt, alt_cl, residual_region=res).build_model()
+    # t0_snapshot must be a SOLVED base — the construction-dependence (pf0/Fisher
+    # anchors) only shows up against the solved base levels, not the freshly-built
+    # init values (which equal the no-t0 calibrated benchmark).
+    m_b = GTAPModelEquations(p_alt.sets, p_alt, base_cl, residual_region=res).build_model()
+    import importlib.util as _u
+    _spec = _u.spec_from_file_location("run_gtap", str(_ROOT / "scripts" / "gtap" / "run_gtap.py"))
+    _rg = _u.module_from_spec(_spec)
+    _sys.modules["run_gtap"] = _rg
+    _spec.loader.exec_module(_rg)
+    _rg._run_path_capi_nonlinear_full(
+        m_b, p_alt, enforce_post_checks=False, strict_path_capi=False,
+        closure_config=base_cl, equation_scaling=True,
+    )
+    m_t0 = GTAPModelEquations(p_alt.sets, p_alt, alt_cl, residual_region=res,
+                              t0_snapshot=m_b).build_model()
+    return m_no_t0, m_t0
+
+
+def diff_param_builds(dataset: str, tol_rel: float = 1e-3) -> list:
+    """Return Params whose value changes between build-without-t0 and build-with-t0.
+
+    Auto-detects the construction-dependent universe (the shock-bug signature)
+    without needing GAMS. Each entry: {param, cells, changed, max_rel, worst}.
+    """
+    m_a, m_b = _build_gtap7_har_models(dataset)
+    pa, pb = extract_params(m_a), extract_params(m_b)
+    changed = []
+    for name in sorted(set(pa) & set(pb)):
+        n_chg = 0
+        max_rel = 0.0
+        worst = None
+        for idx, va in pa[name].items():
+            vb = pb[name].get(idx)
+            if vb is None:
+                continue
+            rel = abs(va - vb) / max(abs(vb), 1e-12)
+            if rel > tol_rel:
+                n_chg += 1
+                if rel > max_rel:
+                    max_rel = rel
+                    worst = (idx, va, vb)
+        if n_chg > 0:
+            changed.append({"param": name, "cells": len(pa[name]), "changed": n_chg,
+                            "max_rel": max_rel, "worst": worst})
+    changed.sort(key=lambda r: r["max_rel"], reverse=True)
+    return changed

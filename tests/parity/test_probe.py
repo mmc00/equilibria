@@ -240,3 +240,29 @@ def test_diff_params_vs_gams_three_groups():
     assert isinstance(result["ok"], list)
     assert isinstance(result["no_match"], list)
     assert "kappaf" not in {r["param"] for r in result["diverge"]}
+
+
+from _probe_params import diff_param_builds
+
+
+def test_diff_param_builds_runs_and_is_well_formed():
+    """diff_param_builds returns a sorted list of {param,cells,changed,max_rel,worst}.
+
+    NOTE: it returns [] on the current (faithful) code — the t0-dependence that
+    caused the shock bug was the base solving to MIS-calibrated pf0; now the base
+    solves to the calibrated values, so with/without t0 agree. The tool is the
+    regression guard: if a future change re-introduces a build-dependent Param,
+    this surfaces it. So we assert structure + sortedness, not a specific param.
+    """
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    if ("gtap7_3x3", "altertax_check") not in AdapterRegistry.get("gtap")().enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    changed = diff_param_builds("gtap7_3x3", tol_rel=1e-3)
+    assert isinstance(changed, list)
+    for r in changed:
+        assert {"param", "cells", "changed", "max_rel", "worst"} <= set(r)
+        assert r["changed"] >= 1
+    rels = [r["max_rel"] for r in changed]
+    assert rels == sorted(rels, reverse=True)
