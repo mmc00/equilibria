@@ -91,6 +91,8 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
 
 **Pitfall clave:** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
 
+**Iteración rápida:** `scripts/parity/probe.py` — probe cacheado. Construye el modelo siempre (refleja el código actual) y cachea sólo el punto resuelto (invalidado por hash de las ecuaciones). Flags: `--show <vars> [--region R]`, `--residuals [--top N] [--family F]`, `--seed-gams <period> --gdx-ref <gdx>` (con gate de cobertura), `--compare-ref <commit>` (A/B automático entre commits). No reemplaza la cascada de 4 — acelera la iteración de hipótesis y la atribución.
+
 ## Archivos clave
 
 | Archivo | Propósito |
