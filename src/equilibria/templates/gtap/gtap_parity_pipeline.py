@@ -767,6 +767,7 @@ class GTAPVariableSnapshot:
     xmt: Dict[Tuple[str, str], float] = field(default_factory=dict)
     xet: Dict[Tuple[str, str], float] = field(default_factory=dict)
     xaa: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    xma: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
 
     xwmg: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     xmgm: Dict[Tuple[str, str, str, str], float] = field(default_factory=dict)
@@ -777,19 +778,36 @@ class GTAPVariableSnapshot:
     xf: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     xft: Dict[Tuple[str, str], float] = field(default_factory=dict)
     pf: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    pfa: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
     pft: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    pfact: Dict[str, float] = field(default_factory=dict)
 
     xc: Dict[Tuple[str, str], float] = field(default_factory=dict)
     xg: Dict[Tuple[str, str], float] = field(default_factory=dict)
     xi: Dict[Tuple[str, str], float] = field(default_factory=dict)
 
+    va: Dict[Tuple[str, str], float] = field(default_factory=dict)
     regy: Dict[str, float] = field(default_factory=dict)
     yc: Dict[str, float] = field(default_factory=dict)
     yg: Dict[str, float] = field(default_factory=dict)
     yi: Dict[str, float] = field(default_factory=dict)
+    uh: Dict[str, float] = field(default_factory=dict)
     ug: Dict[str, float] = field(default_factory=dict)
+    us: Dict[str, float] = field(default_factory=dict)
+    u: Dict[str, float] = field(default_factory=dict)
+    phi: Dict[str, float] = field(default_factory=dict)
+    phip: Dict[str, float] = field(default_factory=dict)
+    pcons: Dict[str, float] = field(default_factory=dict)
+    rsav: Dict[str, float] = field(default_factory=dict)
+    xigbl: Optional[float] = None
+    pigbl: Optional[float] = None
     arent: Dict[str, float] = field(default_factory=dict)
     facty: Dict[str, float] = field(default_factory=dict)
+
+    gdpmp: Dict[str, float] = field(default_factory=dict)
+    rgdpmp: Dict[str, float] = field(default_factory=dict)
+    ev: Dict[str, float] = field(default_factory=dict)
+    cv: Dict[str, float] = field(default_factory=dict)
 
     pnum: Optional[float] = None
     pabs: Dict[str, float] = field(default_factory=dict)
@@ -909,7 +927,9 @@ class GTAPVariableSnapshot:
             xf=read_level("xf"),
             xft=read_level("xft"),
             pf=read_level("pf"),
+            pfa=read_level("pfa"),
             pft=read_level("pft"),
+            pfact=read_level("pfact"),
             xc=read_level("xc"),
             xg=read_level("xg"),
             xi=read_level("xi"),
