@@ -88,8 +88,11 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
 | 1 | **Value/residual diff** | `triage.py` (locate→isolate→trace) | Dónde divergen valores resueltos | Variable específica diverge |
 | 2 | **Closure diff** | `diff_closure.py` | Variables fijas/libres, ecuaciones activas | Shock diverge ampliamente (nivel de precios entero) |
 | 3 | **.nl diff** | `nl_compare.py` | Coeficientes Jacobiano, forma algebraica | Pregunta sobre álgebra/coeficientes |
+| 4 | **Param/calibration diff** | `probe.py --params` | Constantes calibradas (pf0, base_rgdpmp, p_gf, betap) que dependen del modo de construcción (t0_snapshot) | El solver converge a un equilibrio válido pero los **niveles** difieren y las otras 4 dicen "todo bien" |
 
 **Pitfall clave:** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
+
+**Punto ciego cubierto por la 5ª herramienta:** las 4 primeras ven ecuaciones (.nl), punto-solución (residual), warm-start (variables sembradas) y closure (fija/libre), pero NINGUNA ve las **constantes horneadas en build** según `t0_snapshot` (pf0, base_rgdpmp, p_gf, betap). Precedente: el shock de gtap7_3x3 convergía a otro equilibrio porque las anclas Fisher dependían de t0_snapshot. Usar `probe.py --params` (vs GAMS) y `--params-compare-builds` (auto-detecta las construcción-dependientes). Lección extra: el closure diff hay que correrlo comparando AMBOS lados (Python vs GAMS), no solo Python.
 
 **Iteración rápida:** `scripts/parity/probe.py` — probe cacheado. Construye el modelo siempre (refleja el código actual) y cachea sólo el punto resuelto (invalidado por hash de las ecuaciones). Flags: `--show <vars> [--region R]`, `--residuals [--top N] [--family F]`, `--seed-gams <period> --gdx-ref <gdx>` (con gate de cobertura), `--compare-ref <commit>` (A/B automático entre commits). No reemplaza la cascada de 4 — acelera la iteración de hipótesis y la atribución.
 
