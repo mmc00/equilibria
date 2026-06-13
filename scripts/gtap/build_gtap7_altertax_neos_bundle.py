@@ -135,18 +135,38 @@ def _insert_pdp_pmp_recalc_before_unload(text: str) -> str:
     return pat.sub(fix + r"\1", text, count=1)
 
 
-def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
+def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
+                           homotopy_steps: int = 10) -> str:
+    """Replace the numeraire shock with a +tariff% import-tariff shock.
+
+    The altertax CD parameterization (esubva=1, esubd=esubm=0.95) makes the
+    +10% tariff shock a HARD basin: PATH cannot reach it one-shot from the
+    check solution (Locally Infeasible). We therefore ramp the tariff in
+    `homotopy_steps` equal increments, warm-starting each step from the last —
+    mirroring the Python homotopy in diff_altertax.py. We also raise iterlim
+    and attach a PATH options file (path.opt) for the larger iteration budget.
+    """
     old_block = (
         "   if(sameas(tsim,'shock'),\n"
         "      pnum.fx(tsim) = 1.5 ;\n"
         "   ) ;"
     )
     pct = tariff_increase * 100
+    factor = 1.0 + tariff_increase
+    # Homotopy loop: ramp imptx from check level to +tariff% over N steps.
     new_block = (
-        f"   if(sameas(tsim,'shock'),\n"
+        f"   options limrow = 3, limcol = 3, solprint = off, iterlim = 100000 ;\n"
+        f"   gtap.optfile = 1 ;\n"
         f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
-        f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
-        f"         imptx.l(r,i,rp,tsim) * {1.0 + tariff_increase} ;\n"
+        f"* === Homotopy continuation ({homotopy_steps} steps) — altertax CD shock is a hard\n"
+        f"* === basin PATH cannot reach one-shot from base (mirrors Python homotopy).\n"
+        f"   if(sameas(tsim,'shock') and years(tsim) gt firstYear,\n"
+        f"      imptx0(r,i,rp)$xwFlag(r,i,rp) = imptx.l(r,i,rp,tsim) ;\n"
+        f"      loop(hstep,\n"
+        f"         imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
+        f"            imptx0(r,i,rp) * (1 + {tariff_increase}*(ord(hstep)/card(hstep))) ;\n"
+        f"         solve gtap using mcp ;\n"
+        f"      ) ;\n"
         f"   ) ;"
     )
     if old_block not in text:
@@ -157,7 +177,47 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
     n = text.count(old_block)
     if n != 1:
         raise SystemExit(f"Expected 1 occurrence of shock block, found {n}.")
-    return text.replace(old_block, new_block, 1)
+    text = text.replace(old_block, new_block, 1)
+
+    # Declare the homotopy set + parameter just before the tsim solve loop.
+    loop_anchor = "rs(r) = yes ;\nts(t) = no ;\n\nloop(tsim,"
+    homotopy_decl = (
+        "rs(r) = yes ;\n"
+        "ts(t) = no ;\n\n"
+        "* --- Homotopy continuation support for the altertax CD shock (hard basin) ---\n"
+        f"set hstep / s1*s{homotopy_steps} / ;\n"
+        'parameter imptx0(r,i,rp) "base tariff rate before homotopy ramp" ;\n\n'
+        "loop(tsim,"
+    )
+    if loop_anchor in text:
+        text = text.replace(loop_anchor, homotopy_decl, 1)
+    else:
+        raise SystemExit(
+            "Could not locate the tsim solve loop to inject homotopy declarations."
+        )
+
+    # Skip the (now homotopy-handled) shock period in the generic one-shot solve.
+    generic_solve = '   if(years(tsim) gt firstYear,\n'
+    generic_solve_guarded = (
+        '   if(years(tsim) gt firstYear and (not sameas(tsim,\'shock\')),\n'
+    )
+    if generic_solve in text:
+        text = text.replace(generic_solve, generic_solve_guarded, 1)
+    return text
+
+
+PATH_OPT = """\
+* PATH options for altertax CD shock convergence (hard basin)
+convergence_tolerance 1e-10
+major_iteration_limit 5000
+minor_iteration_limit 100000
+cumulative_iteration_limit 500000
+crash_method none
+crash_perturb yes
+nms_searchtype line
+gradient_step_limit 1e6
+proximal_perturbation 0
+"""
 
 
 def _get_dataset_sets(gdx_path: Path) -> dict:
@@ -413,6 +473,10 @@ def main() -> None:
     out_gms = out_dir / f"comp_{dataset}_altertax_neos.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")
+
+    # PATH options file consumed by `gtap.optfile = 1` in the homotopy shock.
+    (out_dir / "path.opt").write_text(PATH_OPT)
+    print(f"  wrote path.opt (PATH options for homotopy shock)")
 
     remaining = re.findall(r"\$\$?(?:bat)?include\s+\"(\S+)\"", inlined)
     if remaining:
