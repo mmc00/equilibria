@@ -266,3 +266,21 @@ def test_diff_param_builds_runs_and_is_well_formed():
         assert r["changed"] >= 1
     rels = [r["max_rel"] for r in changed]
     assert rels == sorted(rels, reverse=True)
+
+
+def test_cli_params_runs(tmp_path):
+    import pytest
+    ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
+    if not ref.exists():
+        pytest.skip("reference GDX absent")
+    cmd = [
+        "uv", "run", "python", "scripts/parity/probe.py",
+        "--dataset", "gtap7_3x3", "--scenario", "altertax_check",
+        "--params", "--gdx-ref", str(ref), "--cache-dir", str(tmp_path / "c"),
+    ]
+    out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300)
+    if "not available" in (out.stdout + out.stderr):
+        pytest.skip("gtap7_3x3 not available")
+    assert out.returncode == 0, out.stderr
+    assert "coverage:" in out.stdout
+    assert "param" in out.stdout.lower()

@@ -26,6 +26,7 @@ from _probe_queries import (  # noqa: E402
     extract_solution, inject_solution, query_show, query_residuals,
     seed_gams_point,
 )
+from _probe_params import diff_params_vs_gams, diff_param_builds  # noqa: E402
 
 # Closure name per scenario (matches GTAPParityAdapter altertax closures).
 _CLOSURE_NAME = {
@@ -33,6 +34,14 @@ _CLOSURE_NAME = {
     "altertax_shock": "altertax",
     "baseline": "base",
     "shock_tm10": "base",
+}
+
+# GAMS period per scenario, for --params vs the GDX.
+_PARAMS_PERIOD = {
+    "altertax_check": "check",
+    "altertax_shock": "shock",
+    "baseline": "base",
+    "shock_tm10": "shock",
 }
 
 
@@ -145,6 +154,14 @@ def main() -> int:
     ap.add_argument("--compare-ref", dest="compare_ref")
     ap.add_argument("--emit-json", action="store_true",
                     help="emit query result as __JSON__-prefixed line (for --compare-ref subprocess)")
+    ap.add_argument("--params", action="store_true",
+                    help="diff all Pyomo Params vs the GAMS GDX (3 groups)")
+    ap.add_argument("--params-compare-builds", dest="params_compare_builds",
+                    action="store_true",
+                    help="report Params that change with/without t0_snapshot (no GAMS needed)")
+    ap.add_argument("--params-period", dest="params_period", default=None,
+                    help="GAMS period for --params (default: derived from scenario)")
+    ap.add_argument("--tol-rel", type=float, default=1e-3)
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--clear-cache", action="store_true")
     ap.add_argument("--cache-dir", type=Path, default=None)
@@ -164,6 +181,38 @@ def main() -> int:
         print(f"error: ({args.dataset!r}, {args.scenario!r}) not available; "
               f"have {adapter.enumerate_combinations()}", file=sys.stderr)
         return 2
+
+    if args.params_compare_builds:
+        changed = diff_param_builds(args.dataset, tol_rel=args.tol_rel)
+        print(f"=== Params that change with/without t0_snapshot ({len(changed)}) ===")
+        for r in changed[:args.top]:
+            w = r["worst"]
+            wc = f"{w[0]} no_t0={w[1]:.5f} t0={w[2]:.5f}" if w else ""
+            print(f"  {r['param']:<16s} {r['changed']}/{r['cells']} changed "
+                  f"max_rel={r['max_rel']:.3e}  {wc}")
+        if not changed:
+            print("  (none — no build-dependent Params; calibration is consistent)")
+        return 0
+
+    if args.params:
+        if not args.gdx_ref:
+            print("error: --params requires --gdx-ref", file=sys.stderr)
+            return 2
+        model = adapter.build_warmstarted_model(args.dataset, args.scenario)
+        period = args.params_period or _PARAMS_PERIOD.get(args.scenario, "base")
+        res = diff_params_vs_gams(model, Path(args.gdx_ref), period, tol_rel=args.tol_rel)
+        print(f"=== Param diff vs GAMS (period={period}) ===")
+        print(f"{'param':<18s} {'cells':>6s} {'match':>6s} {'diverge':>8s} "
+              f"{'max_rel':>10s}  worst")
+        for r in res["diverge"][:args.top]:
+            w = r["worst"]
+            wc = f"{w[0]} py={w[1]:.5f} gams={w[2]:.5f}" if w else ""
+            print(f"  {r['param']:<16s} {r['cells']:>6d} {r['match']:>6d} "
+                  f"{r['diverge']:>8d} {r['max_rel']:>10.3e}  {wc}")
+        n_verifiable = len(res["diverge"]) + len(res["ok"])
+        print(f"coverage: {n_verifiable} params verifiable vs GAMS, "
+              f"{len(res['no_match'])} with no GAMS counterpart")
+        return 0
 
     if args.compare_ref:
         return _run_compare_ref(adapter, args)
