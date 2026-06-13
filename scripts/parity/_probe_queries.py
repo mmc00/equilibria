@@ -51,3 +51,54 @@ def inject_solution(model: Any, solution: dict) -> int:
             except Exception:
                 pass
     return n
+
+
+def query_show(model, var_names, region=None, index_filter=None):
+    """Return [{var, idx, value}] for the named vars, optionally filtered."""
+    rows = []
+    for name in var_names:
+        comp = getattr(model, name, None)
+        if comp is None:
+            continue
+        for idx in comp:
+            key = _idx_key(idx)
+            if region is not None and region not in (str(k) for k in key):
+                continue
+            if index_filter is not None and index_filter not in (str(k) for k in key):
+                continue
+            try:
+                val = comp[idx].value
+            except Exception:
+                val = None
+            rows.append({"var": name, "idx": key, "value": val})
+    return rows
+
+
+def _family(name: str) -> str:
+    for sep in ("[", "("):
+        i = name.find(sep)
+        if i != -1:
+            return name[:i]
+    return name
+
+
+def query_residuals(model, top_n=15, family=None):
+    """Return [{eq, idx, resid}] = |body - target|, sorted desc."""
+    rows = []
+    for c in model.component_objects(Constraint, active=True):
+        if family is not None and c.local_name != family:
+            continue
+        for idx in c:
+            con = c[idx]
+            try:
+                body = value(con.body)
+                lo = con.lower
+                up = con.upper
+                tgt = (value(lo) if lo is not None
+                       else (value(up) if up is not None else 0.0))
+                rows.append({"eq": c.local_name, "idx": idx,
+                             "resid": abs(body - tgt)})
+            except Exception:
+                pass
+    rows.sort(key=lambda r: r["resid"], reverse=True)
+    return rows[:top_n]
