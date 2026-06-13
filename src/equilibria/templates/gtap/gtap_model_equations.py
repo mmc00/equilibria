@@ -5024,12 +5024,17 @@ class GTAPModelEquations:
             return pft_term == pfy_sum
         model.eq_pfteq = Constraint(model.r, model.f, rule=eq_pfteq_rule)
 
-        # Factor prices tax inclusive (GAMS pfaeq)
+        # Factor prices tax inclusive (GAMS pfaeq, comp.gms:2328):
+        #   pfa = pf*(1 + fctts + fcttx)
+        # Now that fcttx = rtf = (EVFP-EVFB)/EVFB (faithful to GAMS ftrv, see
+        # _fcttx_init), fctts+fcttx equals the old rtf value exactly, so this
+        # matches GAMS's canonical form. fctts/fcttx are Params (fctts=0,
+        # fcttx=rtf here), so this stays linear in pfa/pf.
         def eq_pfaeq_rule(model, r, f, a):
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0))
-            return model.pfa[r, f, a] == model.pf[r, f, a] * (1.0 + factor_tax)
+            wedge = model.fctts[r, f, a] + model.fcttx[r, f, a]
+            return model.pfa[r, f, a] == model.pf[r, f, a] * (1.0 + wedge)
         model.eq_pfaeq = Constraint(model.r, model.f, model.a, rule=eq_pfaeq_rule)
 
         # Factor prices post-tax/subsidy (GAMS pfyeq)
