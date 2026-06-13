@@ -229,3 +229,45 @@ Cell-by-cell diffs (`diff_nus333_full.py`, `diff_9x10_full.py`) report 0 diverge
 
 - 9×10 GAMS local parity: requires a non-community GAMS license (community cap of 2,500 nonlinear rows blocks the ~10k-equation 9×10 model). NEOS reference is sufficient for current goals.
 - `output/gtap_ifsub_false_warmstart.json` and `output/gtp_baseline_reverted.json` are pre-fix snapshots and have been superseded by the parity CSVs under `benchmarks/`.
+
+---
+
+## Session 2026-06-13: gtap7_3x3 altertax income-chain fixes (faithful to GAMS)
+
+**Context:** Debugging the gtap7_3x3 altertax `check` period (was ~56% cell match
+vs the local v53 reference). Used the residual test (probe.py `--seed-gams base`,
+seed coverage 94.8%) to isolate which equations genuinely diverge at the GAMS point
+vs. which are seed artifacts.
+
+**Root cause (one bug, three sites):** Python derived `fcttx` from the empty HAR
+`RTFD` header → `fcttx=0`, but GAMS uses `ftrv = EVFP − EVFB` (comp.gms:2833), so
+the factor-tax wedge is `(EVFP−EVFB)/EVFB = rtf ≈ 0.47`, nonzero (EVFP≠EVFB in both
+gtap7_3x3 and 9x10). Fixed faithfully to GAMS:
+
+1. `_compute_ytax_ind_bench` — include the `ft` stream `sum(rtf·evfb)` (was omitted
+   under the `fcttx=0` assumption). → ytaxInd 2.31→4.85 (GAMS 4.85), `betap`
+   0.754→0.632 (=GAMS), `betas` matches GAMS. `eq_yc`/`eq_yg` residual 1.9→5e-4.
+2. `_fcttx_init = rtf` (was `=RTFD=0`). → `eq_ytax[r,'ft']` residual 2.54→~0.
+3. `eq_pfaeq = pf·(1+fctts+fcttx)` (GAMS canonical comp.gms:2328; now fcttx=rtf so
+   numerically identical to the prior `pf·(1+rtf)`). → `eq_pfaeq` residual 2.4e-10.
+
+**Snapshot expansion:** added 23 income/capital/tax vars (pi, kstock, ytax, ytaxTot,
+nd, chif, savf, psave, pgdpmp, rorc/rore/rorg, pfy, pm, pva, pnd, …) to the altertax
+GDX snapshot so the residual test seeds them instead of leaving them at init.
+
+**Result (residual test at the GAMS local point):** residuals >1e-3 dropped 60→21,
+max residual ~2.5 → ~0.022. The entire income chain (eq_regy / eq_facty /
+eq_ytax_ind / eq_ytax_tot / eq_ytax[ft] / eq_yc / eq_yg / eq_pfaeq) collapsed to ~0.
+
+**ROW residual-region investment block: SANE.** What looked like a 1.9e6 explosion
+in eq_xda/eq_paa/eq_xiagg/eq_pi at warm-start was a seed artifact (pi/kstock/xiagg
+unseeded). With the full snapshot: pi[ROW]=1.0, xiagg[ROW]=yi[ROW]=13.04, eq_rsav[ROW]
+residual ~3e-3 (rounding in betas calibration). No structural bug.
+
+**Remaining lead:** `eq_pfeq` (~0.006–0.022, factor price tax-exclusive) — the
+dominant residual now, two orders smaller than the income-chain bugs just fixed.
+
+**nl-parity gate:** 5 passed throughout. End-to-end cell match dropped (52.6%, solver
+basins) but the residual test (clean metric) improved 3×; user prioritized GAMS
+fidelity over the altertax match. Tooling: probe.py (cached parity probe) added this
+session.
