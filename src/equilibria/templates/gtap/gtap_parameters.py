@@ -1640,13 +1640,13 @@ class GTAPShareParameters:
     p_axg: Dict[str, float] = field(default_factory=dict)     # r - Government CES shifter
     p_axi: Dict[str, float] = field(default_factory=dict)     # r - Investment CES shifter
     
-    def calibrate(self, benchmark: GTAPBenchmarkValues, elasticities: GTAPElasticities, 
-                  sets: GTAPSets) -> None:
+    def calibrate(self, benchmark: GTAPBenchmarkValues, elasticities: GTAPElasticities,
+                  sets: GTAPSets, taxes: "GTAPTaxRates | None" = None) -> None:
         """Calibrate all share parameters from benchmark data."""
         self._calibrate_production_shares(benchmark, sets)
         self._calibrate_armington_shares(benchmark, sets)
         self._calibrate_trade_shares(benchmark, elasticities, sets)
-        self._calibrate_factor_shares(benchmark, sets)
+        self._calibrate_factor_shares(benchmark, sets, taxes)
         self.normalized.update_from_shares(self)
 
     def _calibrate_production_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
@@ -1787,18 +1787,37 @@ class GTAPShareParameters:
                     if xw > 0.0:
                         self.p_gw[(r, i, rp)] = xw / xet
                             
-    def _calibrate_factor_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets) -> None:
-        """Calibrate factor share parameters."""
+    def _calibrate_factor_shares(self, benchmark: GTAPBenchmarkValues, sets: GTAPSets,
+                                 taxes: "GTAPTaxRates | None" = None) -> None:
+        """Calibrate factor share parameters.
+
+        GAMS gf (comp.gms:3545) is a CET supply share over factor QUANTITIES:
+        gf = xf/xft, with xf = EVFB/pf = EVFB*(1-kappaf) at benchmark (pf=1/(1-kappaf)).
+        Using raw EVFB (the buyer-price payment) instead of xf biases gf whenever
+        kappaf varies by activity (e.g. gtap7_3x3: gf 0.1846 vs GAMS 0.1805). Weight
+        by xf = EVFB*(1-kappaf) to match GAMS.
+        """
+        def _kappa(r, f, a):
+            if taxes is None:
+                return 0.0
+            k = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+            if k == 0.0:
+                k = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
+            return k
+
         for r in sets.r:
             for f in sets.f:
-                total_payment = sum(
-                    benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0))
-                    for a in sets.a
-                )
-                if total_payment > 0:
-                    for a in sets.a:
-                        value = benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0))
-                        self.p_gf[(r, f, a)] = value / total_payment
+                xf_by_a = {}
+                for a in sets.a:
+                    evfb = float(benchmark.evfb.get((r, f, a),
+                                                    benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
+                    if evfb <= 0.0:
+                        continue
+                    xf_by_a[a] = evfb * (1.0 - _kappa(r, f, a))
+                total_xf = sum(xf_by_a.values())
+                if total_xf > 0:
+                    for a, xf in xf_by_a.items():
+                        self.p_gf[(r, f, a)] = xf / total_xf
 
     def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot, sets: GTAPSets) -> None:
         """Update share parameters using an equilibrium CSV snapshot."""
@@ -2245,7 +2264,7 @@ class GTAPParameters:
         self.shifts.load_from_gdx(gdx_path)
 
         # Calibrate share parameters (simple shares)
-        self.shares.calibrate(self.benchmark, self.elasticities, self.sets)
+        self.shares.calibrate(self.benchmark, self.elasticities, self.sets, self.taxes)
         
         # Calibrate GAMS-style shares (and, ava, io, af, gx) from benchmark
         self.calibrated.calibrate_from_benchmark(self.benchmark, self.elasticities, self.sets, self.taxes)
@@ -2278,7 +2297,7 @@ class GTAPParameters:
             self.taxes.load_from_har(baserate_path, self.sets, self.benchmark)
         else:
             self.taxes.derive_from_benchmark(self.benchmark, self.sets)
-        self.shares.calibrate(self.benchmark, self.elasticities, self.sets)
+        self.shares.calibrate(self.benchmark, self.elasticities, self.sets, self.taxes)
         self.calibrated.calibrate_from_benchmark(
             self.benchmark, self.elasticities, self.sets, self.taxes
         )
