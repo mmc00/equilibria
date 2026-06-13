@@ -32,12 +32,20 @@ from _diff_core import (
 GDX_9X10 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
 DEFAULT_NEOS_GDX = ROOT / "output/9x10_altertax_neos_bundle/out.gdx"
 
-# Dataset registry: name → (data_gdx_or_har_dir, neos_bundle_dir)
+# Durable reference store (outside the gitignored output/, survives worktree
+# cleanups). Holds the regenerated PROPER altertax CD references — NOT the old
+# calibrated standard-GTAP runs that used to live in out_local.gdx.
+REFS_DIR = Path("/Users/marmol/proyectos2/equilibria_refs")
+
+# Dataset registry: name → (data_gdx_or_har_dir, neos_bundle_dir, loader, cd_ref)
+# cd_ref: durable altertax CD reference GDX (preferred over the bundle's out.gdx;
+# both override the deprecated out_local.gdx which was a different model).
 DATASET_REGISTRY = {
-    "9x10": (GDX_9X10, ROOT / "output/9x10_altertax_neos_bundle", "gdx"),
-    "gtap7_3x3": (ROOT / "datasets/gtap7_3x3", ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har"),
-    "gtap7_3x4": (ROOT / "datasets/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har"),
-    "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har"),
+    "9x10": (GDX_9X10, ROOT / "output/9x10_altertax_neos_bundle", "gdx", None),
+    "gtap7_3x3": (ROOT / "datasets/gtap7_3x3", ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har",
+                  REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_cd.gdx"),
+    "gtap7_3x4": (ROOT / "datasets/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har", None),
+    "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har", None),
 }
 
 
@@ -59,11 +67,18 @@ def main() -> None:
                     help="Skip Python check solve; seed shock from GAMS check period values directly")
     args = ap.parse_args()
 
-    data_path, bundle_dir, loader = DATASET_REGISTRY[args.dataset]
-    _default_gdx = bundle_dir / "out_local.gdx"
-    if not _default_gdx.exists():
-        _default_gdx = bundle_dir / "out.gdx"
-    gdx_path = args.gdx or _default_gdx
+    data_path, bundle_dir, loader, cd_ref = DATASET_REGISTRY[args.dataset]
+    # Reference precedence: explicit --gdx > durable CD ref > bundle out.gdx.
+    # out_local.gdx is intentionally NOT used: for gtap7_* it was a calibrated
+    # standard-GTAP run (esubd=2.43, esubm=4.76), a different model than the
+    # altertax CD shock Python computes (see equilibria_refs/.../README).
+    if args.gdx is not None:
+        gdx_path = args.gdx
+    elif cd_ref is not None and cd_ref.exists():
+        gdx_path = cd_ref
+    else:
+        gdx_path = bundle_dir / "out.gdx"
+    print(f"=== Reference GDX: {gdx_path} ===")
 
     from equilibria.templates.gtap import (
         GTAPParameters, GTAPModelEquations,
