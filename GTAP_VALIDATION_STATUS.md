@@ -271,3 +271,21 @@ dominant residual now, two orders smaller than the income-chain bugs just fixed.
 basins) but the residual test (clean metric) improved 3×; user prioritized GAMS
 fidelity over the altertax match. Tooling: probe.py (cached parity probe) added this
 session.
+
+### Shock-period status (open lead, warm-start/basin class)
+
+After the income-chain + gf fixes, the **check** period converges perfectly to
+GAMS (gdpmp/regy/pgdpmp/pabs all 0.0% rel; check residual 3.1e-11, code=1). The
+`diff_altertax` end-to-end match (~52-54%) compares the **shock** period, whose
+solve currently **fails**:
+
+- shock residual ~38-63, code=2; prices collapse to ~0.04 (GAMS shock prices RISE
+  to ~1.01-1.04 with the tariff).
+- Fails under both shock modes (old `imptx*1.10` and the corrected
+  `tm_pct = (1+imptx)*1.10-1`, c1bcc38) → not a magnitude issue.
+- The shock builds a fresh model with `t0_snapshot=m_chk` and
+  `solution_hint=warm_chk`. Suspect the shock warm-start or shock closure.
+
+Next steps (basin class, per parity skill): seed shock directly with the GAMS
+shock point to isolate warm-start vs closure; try `_run_homotopy_shocked`
+(run_gtap.py:2712); or a closure diff of shock vs check.
