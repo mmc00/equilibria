@@ -218,3 +218,25 @@ def test_alias_map_and_resolve():
     assert name == "pf" and period == "base"
     name, period = resolve_gams_symbol("kappaf")
     assert name == "kappaf" and period is None
+
+
+from _probe_params import diff_params_vs_gams
+
+
+def test_diff_params_vs_gams_three_groups():
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
+    if not ref.exists():
+        pytest.skip("reference GDX absent")
+    adapter = AdapterRegistry.get("gtap")()
+    if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    m = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
+    result = diff_params_vs_gams(m, ref, "check", tol_rel=1e-3)
+    assert "diverge" in result and "ok" in result and "no_match" in result
+    assert isinstance(result["diverge"], list)
+    assert isinstance(result["ok"], list)
+    assert isinstance(result["no_match"], list)
+    assert "kappaf" not in {r["param"] for r in result["diverge"]}
