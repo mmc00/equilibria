@@ -93,3 +93,23 @@ def test_query_residuals_sorted_desc():
     assert len(rows) <= 5
     vals = [r["resid"] for r in rows]
     assert vals == sorted(vals, reverse=True)
+
+
+from _probe_queries import seed_gams_point
+
+
+def test_seed_gams_reports_coverage():
+    import pytest
+    pytest.importorskip("pyomo")
+    from _adapter_protocol import AdapterRegistry
+    ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
+    if not ref.exists():
+        pytest.skip("reference GDX absent")
+    adapter = AdapterRegistry.get("gtap")()
+    if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
+        pytest.skip("gtap7_3x3 not available")
+    m = adapter.build_warmstarted_model("gtap7_3x3", "altertax_check")
+    result = seed_gams_point(m, ref, "base")
+    assert result["cells_set"] > 100
+    assert 0.0 <= result["coverage"] <= 1.0
+    assert isinstance(result["below_threshold"], bool)
