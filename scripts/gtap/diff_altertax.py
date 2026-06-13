@@ -469,9 +469,14 @@ def main() -> None:
             c = imptx_check.get(key, 0.0)
             s = imptx_shock.get(key, 0.0)
             p_step.taxes.imptx[key] = c + (s - c) * frac
-        # No t0_snapshot (calibrated benchmark pf0/xf0).
+        # No t0_snapshot (calibrated benchmark pf0/xf0) — avoids the degenerate
+        # basin. But t0_snapshot was also what turned on is_counterfactual, which
+        # selects the Fisher GDP-deflator formula in eq_rgdpmp (otherwise rgdpmp=
+        # gdpmp → pgdpmp pinned at 1.0 instead of GAMS's ~1.04). Pass the flag
+        # explicitly so the shock gets the Fisher deflator without the t0 pinning.
         m_step = GTAPModelEquations(
             p_step.sets, p_step, alt_closure, residual_region=res_region,
+            is_counterfactual=True,
         ).build_model()
         r_step = run_gtap._run_path_capi_nonlinear_full(
             m_step, p_step,
