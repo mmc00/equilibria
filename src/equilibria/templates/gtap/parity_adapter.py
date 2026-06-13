@@ -781,6 +781,90 @@ class GTAPParityAdapter:
                     "Could not build/apply GAMS check-period snapshot: %s", _snap_exc
                 )
 
+        # Post-seeding recompute of derived variables.
+        # After apply_solution_hint seeds primary variables (pa, yc, yg, pf, xf, regy, ...),
+        # variables that are algebraically determined by those primaries are stale.
+        # Recomputing them clears warm-start residuals in eq_xc, eq_xg, eq_pfaeq,
+        # eq_facty, eq_regy — reducing the distance PATH must travel.
+        try:
+            from pyomo.environ import value as _pyo_val2
+            for _r in m_chk.r:
+                # xc[r,i] = xcshr[r,i]*yc[r] / pa[r,i,hhd]   (eq_xc)
+                if hasattr(m_chk, "xc") and hasattr(m_chk, "xcshr") and hasattr(m_chk, "yc"):
+                    _yc_v = float(_pyo_val2(m_chk.yc[_r]))
+                    for _i in m_chk.i:
+                        try:
+                            _xcshr = float(_pyo_val2(m_chk.xcshr[_r, _i]))
+                            if _xcshr <= 0.0:
+                                continue
+                            _pa_hhd = max(float(_pyo_val2(m_chk.pa[_r, _i, "hhd"])), 1e-12)
+                            _xc_new = max(_xcshr * _yc_v / _pa_hhd, 1e-8)
+                            _item = m_chk.xc[_r, _i]
+                            if not (hasattr(_item, "fixed") and _item.fixed):
+                                _item.set_value(_xc_new)
+                        except Exception:
+                            pass
+                # xg[r,i] = g_share[r,i]*yg[r] / pa[r,i,gov]  (eq_xg)
+                if hasattr(m_chk, "xg") and hasattr(m_chk, "g_share") and hasattr(m_chk, "yg"):
+                    _yg_v = float(_pyo_val2(m_chk.yg[_r]))
+                    for _i in m_chk.i:
+                        try:
+                            _gs = float(_pyo_val2(m_chk.g_share[_r, _i]))
+                            if _gs <= 0.0:
+                                continue
+                            _pa_gov = max(float(_pyo_val2(m_chk.pa[_r, _i, "gov"])), 1e-12)
+                            _xg_new = max(_gs * _yg_v / _pa_gov, 1e-8)
+                            _item = m_chk.xg[_r, _i]
+                            if not (hasattr(_item, "fixed") and _item.fixed):
+                                _item.set_value(_xg_new)
+                        except Exception:
+                            pass
+                # pfa[r,f,a] = pf[r,f,a] * (1 + rtf[r,f,a])   (eq_pfaeq)
+                if hasattr(m_chk, "pfa") and hasattr(m_chk, "pf"):
+                    for _f in m_chk.f:
+                        for _a in m_chk.a:
+                            try:
+                                _pf_v = float(_pyo_val2(m_chk.pf[_r, _f, _a]))
+                                _rtf = float(p_alt.taxes.rtf.get((_r, _f, _a), 0.0) or 0.0)
+                                _pfa_new = _pf_v * (1.0 + _rtf)
+                                _item = m_chk.pfa[_r, _f, _a]
+                                if not (hasattr(_item, "fixed") and _item.fixed):
+                                    _item.set_value(max(_pfa_new, 1e-8))
+                            except Exception:
+                                pass
+                # facty[r] = sum(pf*xf/xscale) - fdepr*pi*kstock   (eq_facty)
+                if hasattr(m_chk, "facty"):
+                    try:
+                        _gross = sum(
+                            float(_pyo_val2(m_chk.pf[_r, _f, _a]))
+                            * float(_pyo_val2(m_chk.xf[_r, _f, _a]))
+                            / max(float(_pyo_val2(m_chk.xscale[_r, _a])), 1e-12)
+                            for _f in m_chk.f for _a in m_chk.a
+                        )
+                        _fdepr = float(_pyo_val2(m_chk.fdepr[_r]))
+                        _pi_v = float(_pyo_val2(m_chk.pi[_r]))
+                        _ks = float(_pyo_val2(m_chk.kstock[_r]))
+                        _facty_new = _gross - _fdepr * _pi_v * _ks
+                        _item = m_chk.facty[_r]
+                        if not (hasattr(_item, "fixed") and _item.fixed):
+                            _item.set_value(_facty_new)
+                    except Exception:
+                        pass
+                # ytax_ind[r] = ytaxTot[r] - ytax[r,dt]   (eq_ytax_ind)
+                # regy[r] = facty[r] + ytax_ind[r]         (eq_regy)
+                if hasattr(m_chk, "regy") and hasattr(m_chk, "facty") and hasattr(m_chk, "ytax_ind"):
+                    try:
+                        _ytax_ind_v = float(_pyo_val2(m_chk.ytax_ind[_r]))
+                        _facty_v = float(_pyo_val2(m_chk.facty[_r]))
+                        _regy_new = _facty_v + _ytax_ind_v
+                        _item = m_chk.regy[_r]
+                        if not (hasattr(_item, "fixed") and _item.fixed):
+                            _item.set_value(max(_regy_new, 1e-8))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         if not solve:
             return m_chk
 
