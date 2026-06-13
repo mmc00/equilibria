@@ -188,7 +188,7 @@ def _closure_template_data(name: str) -> Dict[str, Any]:
         base["label"] = "Altertax closure (Malcolm 1998 CD rebalance)"
         base["closure_type"] = "MCP"
         base["capital_mobility"] = "mobile"
-        base["fix_endowments"] = True   # xft fixed (endowments don't move under CD)
+        base["fix_endowments"] = False  # xft free for mobile factors (GAMS: xfteq.xft MCP pair)
         base["fix_taxes"] = True         # taxes fixed at user-specified shocked level
         base["fix_technology"] = True
         return base

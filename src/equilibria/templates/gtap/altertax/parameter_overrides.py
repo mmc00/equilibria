@@ -124,6 +124,21 @@ def apply_altertax_elasticities(
     target.calibrated.pva_bench = {}
     target.calibrated.pnd_bench = {}
 
+    # Mirror GAMS parameter_altertax.gms lines 1218-1223:
+    #   fnm(fp) = no ;           (remove all sector-specific factors)
+    #   fm(fp)  = yes ;          (make ALL factors mobile)
+    #   omegaf(r,fp) = 1.0 ;    (CET=1 / CD distribution for all factors)
+    # This ensures:
+    #   1. xftflag=1 for all factors (GAMS xftFlag(r,fm)$xft.l>0)
+    #   2. omegaf=1 (CD CET) — not inf — for all factors
+    #   3. etaf=0 for all mobile factors (set via gtap_model_equations.py)
+    all_factors = list(target.sets.f)
+    target.sets.mf = all_factors[:]
+    target.sets.sf = []
+    for r in target.sets.r:
+        for f in all_factors:
+            target.elasticities.omegaf[(r, f)] = o.omegaf  # = 1.0
+
     return target
 
 

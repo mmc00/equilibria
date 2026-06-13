@@ -1354,6 +1354,37 @@ imptx.fx(r,i,rp,'shock') = imptx.l(r,i,rp,'base') * 1.10 ;
 * Write shock .nl via second CONVERT solve
 solve gtap using nlp maximizing walras ;
 """
+    elif phase == "check":
+        solve_block = """
+* ============================================================
+* CONVERT-mode solve (CHECK period): write gtap.nl — Layer 6 diagnostic
+* Altertax check period: CD elasticities + mobile factors, NO tm shock.
+* This is the compStat betaCal→check transition: same closure as altertax
+* but tariffs unchanged (base period values). Mirrors Python altertax_check.
+* Use NLP mode (ifMCP=0) — GAMS CONVERT cannot write .nl for MCP.
+* ============================================================
+rs(r) = yes ;
+ts('base') = yes ;
+ts('check') = yes ;
+
+* Apply altertax elasticity overrides (parameter_altertax.gms equivalent)
+esubva(a,r)  = 1 ;
+esubd(i,r)   = 0.95 ;
+esubm(i,r)   = 0.95 ;
+etrae(fp,r)  = 1 ;
+omegaf(r,fp) = 1 ;
+
+* Recalibrate derived elasticities from the overrides
+sigmav(r,a)$(va.l(r,a,'base')) = 1 ;
+sigmam(r,i,aa)$(xa.l(r,i,aa,'base')) = 0.95 ;
+sigmaw(r,i)$(xmt.l(r,i,'base')) = 0.95 ;
+
+* Solve base first, then write check .nl (no tariff shock applied)
+option limrow = 0, limcol = 0, solprint = off ;
+option NLP = CONVERT;
+gtap.optfile = 1 ;
+solve gtap using nlp maximizing walras ;
+"""
     elif phase == "altertax":
         solve_block = """
 * ============================================================
@@ -1587,9 +1618,6 @@ def fetch_gams_nl(
 
     result: dict[str, Path] = {}
     for phase in phases:
-        if phase == "check":
-            print(f"  Skipping GAMS .nl for 'check' period (no GAMS reference)")
-            continue
         print(f"\n  Building standalone .gms for phase={phase} ...")
         standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx, har_dir=har_dir)
         standalone_path = out_dir / f"gtap_standalone_{phase}.gms"
@@ -2065,7 +2093,7 @@ def main() -> None:
 
     # Phase 2: GAMS → .nl via NEOS
     gams_nl_paths: dict[str, Path] = {}
-    gams_phases = [p for p in args.phase if p != "check"]
+    gams_phases = list(args.phase)
     if not args.skip_gams:
         gams_nl_paths = fetch_gams_nl(
             args.out_dir, args.neos_email, gams_phases, shrink=gams_shrink,

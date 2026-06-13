@@ -1995,6 +1995,42 @@ def _run_path_capi_nonlinear_full(
     # near the shocked equilibrium price) rather than at baseline values.
     solver_helper.apply_aggressive_fixing_for_mcp()
 
+    # For altertax closure (finite omegaf), deactivate eq_xft for mobile factors
+    # BEFORE apply_squareness_patches. The patches deactivate equations that have
+    # no unique variable — but eq_xfteq would be falsely flagged as over-determining
+    # when eq_xft is still active (both compete for xft). Remove eq_xft first.
+    #
+    # In GAMS altertax, factor market clearing is implicitly satisfied through the
+    # pfeq demand system + xfteq supply complementarity; there is NO separate clearing
+    # equation. Python's eq_xft mirrors GAMS pfteq for omegaf=inf (market clearing),
+    # but with finite omegaf that role belongs to eq_pfteq (CET price index). Having
+    # both eq_xft AND eq_xfteq active for xft over-determines the system.
+    _is_altertax_closure = (
+        closure_config is not None
+        and getattr(closure_config, "name", None) == "altertax"
+    )
+    if _is_altertax_closure and hasattr(model, "eq_xft"):
+        _mf_set = set(str(f) for f in model.mf) if hasattr(model, "mf") else set()
+        _xft_deact = 0
+        for _r in model.r:
+            for _f in model.f:
+                if str(_f) not in _mf_set:
+                    continue
+                try:
+                    _eq_xft_vd = model.eq_xft[_r, _f]
+                except KeyError:
+                    continue
+                if not _eq_xft_vd.active:
+                    continue
+                _eq_xft_vd.deactivate()
+                _xft_deact += 1
+        if _xft_deact:
+            logger.info(
+                "altertax: deactivated eq_xft for %d mobile (r,f) pairs "
+                "(clearing implicit via xfteq supply + pfeq demand)",
+                _xft_deact,
+            )
+
     # When the closure leaves the system over-determined (gap <= 0), the helper
     # above does nothing. The same patches NUS333 needs apply here:
     #  1. fix sluggish pft (dangling — no eq references them)
@@ -2060,10 +2096,21 @@ def _run_path_capi_nonlinear_full(
                 logger.info("Deactivated eq_walras (free row; yi[rres] fixed)")
 
     # Mirror GAMS pfteq free-row + holdfixed=1 for pft:
-    # In GAMS, pfteq is a FREE ROW (no MCP pair in comp_*.gms line 14288).
-    # With holdfixed=1, pft is pinned at its .l value (= 1.0 from initvar0g).
-    # Python mirrors this: deactivate eq_pfteq (free row) and fix pft at 1.0
-    # so that eq_xfteq (supply curve) determines xft and eq_pfeq determines pf.
+    # In GAMS standard GTAP, pfteq is a FREE ROW (no MCP pair) with holdfixed=1,
+    # pinning pft at its .l value (= 1.0). eq_xfteq determines xft, eq_pfeq
+    # determines pf (perfect mobility: pfy = pft).
+    #
+    # EXCEPTION — altertax closure (name="altertax"): pfteq is an ACTIVE equation
+    # that determines pft via the CET price index: pft^(1+omega) = sum gf*pfy^(1+omega).
+    # In GAMS comp_altertax.gms line 2656, pfteq appears as a free row (no MCP pair),
+    # but with holdfixed=0 (omegaf=1 finite CET), PATH actually treats the equation
+    # as active for non-benchmark periods. We leave pft free and eq_pfteq active.
+    # The base period of altertax uses a NON-altertax closure (name="base" or
+    # "gtap_standard"), so it still gets the standard pft-fix treatment.
+    _is_altertax_closure = (
+        closure_config is not None
+        and getattr(closure_config, "name", None) == "altertax"
+    )
     if hasattr(model, "eq_pfteq") and hasattr(model, "pft"):
         _pft_pfteq_fixed = 0
         for _r in model.r:
@@ -2077,6 +2124,8 @@ def _run_path_capi_nonlinear_full(
                     continue
                 if not _eq_pfteq_vd.active:
                     continue
+                if _is_altertax_closure:
+                    continue  # altertax: pfteq stays active, pft stays free (CET price eq)
                 # Deactivate eq_pfteq (free row) and fix pft at initialization
                 _eq_pfteq_vd.deactivate()
                 _pft_val = float(_pft_vd.value) if _pft_vd.value is not None else 1.0
@@ -2196,32 +2245,25 @@ def _run_path_capi_nonlinear_full(
     runtime = loader.load()
     version = loader.version(runtime)
 
-    # Mirror GAMS presolve: pnumeq (pnum==pwfact) is a FREE ROW with no MCP pair,
-    # but with pnum.fx=1 GAMS presolve inlines pwfact=1 everywhere (including
-    # check and shock periods — GAMS out.gdx confirms pwfact=1 for all periods).
-    # pwfacteq.pwfact is declared as the active MCP pair but becomes trivially
-    # satisfied once pwfact=1 is substituted. Python replicates this:
-    #   1. fix pwfact = pnum (= 1.0)      → −1 free variable
-    #   2. deactivate eq_pwfact            → −1 active constraint
-    # eq_pnum remains active (trivially: 1=1) and eq_walras is already deactivated
-    # (free row, mirrors GAMS walraseq). System stays square.
+    # Mirror GAMS numeraire chain: pnum.fx=1 + pnumeq(pnum=pwfact, free row) +
+    # pwfacteq.pwfact (Tornqvist, MCP pair). Leave pwfact FREE and both eqs active.
+    # pnumeq acts as a free equality row that forces pwfact=pnum=1.
+    # pwfacteq.pwfact (MCP pair, lb=-inf) then constrains Tornqvist(pf,xf)=pwfact=1,
+    # anchoring the nominal price level. System stays square: pwfact is the MCP pair
+    # variable for pwfacteq, and pnumeq is a free row that pins pwfact=1.
+    # Logging only — no model changes needed here.
     _pnum_comp = model.find_component("pnum")
     _pwfact_comp = model.find_component("pwfact")
-    _eq_pwfact_comp = model.find_component("eq_pwfact")
     if (
         _pnum_comp is not None and not _pnum_comp.is_indexed() and _pnum_comp.fixed
         and _pwfact_comp is not None and not _pwfact_comp.is_indexed()
         and not _pwfact_comp.fixed
-        and _eq_pwfact_comp is not None and _eq_pwfact_comp.active
     ):
         from pyomo.environ import value as _pyo_value
-        _pnum_val = float(_pyo_value(_pnum_comp))
-        _pwfact_comp.fix(_pnum_val)
-        _eq_pwfact_comp.deactivate()
         logger.info(
-            "Numeraire presolve: fixed pwfact=%.6f, deactivated eq_pwfact "
-            "(mirrors GAMS pnum.fx+pnumeq free-row presolve; pwfact=1 in all periods)",
-            _pnum_val,
+            "Numeraire presolve: pnum=%.6f fixed, pwfact free; eq_pnum+eq_pwfact active "
+            "(mirrors GAMS pnumeq free-row + pwfacteq.pwfact MCP pair)",
+            float(_pyo_value(_pnum_comp)),
         )
 
     constraints = sorted(
@@ -2237,7 +2279,11 @@ def _run_path_capi_nonlinear_full(
     )
 
     # Hopcroft-Karp structural matching (avoid alphabetical-sort pairing pitfall).
-    # GAMS-declared MCP pairings (model.gms:1419): force these to mirror GAMS.
+    # Mirror GAMS model statement pairings (comp_altertax.gms:2656):
+    #   xfteq.xft, pfeq.pf, pfaeq.pfa, pfyeq.pfy
+    # Without these, HK may pair pfeq with an unrelated variable, and the
+    # complementarity condition pf ≥ lb ⊥ pfeq fails to exclude the degenerate
+    # equilibrium where pf collapses to its lower bound.
     if len(constraints) == len(free_variables):
         try:
             from _closure_patches import structural_matching  # type: ignore
@@ -2245,9 +2291,47 @@ def _run_path_capi_nonlinear_full(
             import sys as _sys
             _sys.path.insert(0, str(Path(__file__).resolve().parent))
             from _closure_patches import structural_matching  # type: ignore
+
+        # Build forced pairs from GAMS model statement (eq_name ↔ var_name)
+        _gams_pairs: list[tuple[str, str]] = []
+        for _eq_comp, _var_comp in [
+            ("eq_pfeq",   "pf"),
+            ("eq_xfteq",  "xft"),
+            ("eq_pfaeq",  "pfa"),
+            ("eq_pfyeq",  "pfy"),
+            ("eq_xfeq",   "xf"),
+            ("eq_xpeq",   "xp"),
+            ("eq_ppeq",   "pp"),
+            ("eq_pdeq",   "pd"),
+            ("eq_ndeq",   "nd"),
+            ("eq_vaeq",   "va"),
+            ("eq_pxeq",   "px"),
+            ("eq_xapeq",  "xaa"),
+            ("eq_xeq",    "x"),
+            ("eq_pseq",   "ps"),
+            ("eq_pmteq",  "pmt"),
+            ("eq_pmeq",   "pm"),
+            ("eq_pwfact", "pwfact"),  # GAMS pwfacteq.pwfact — anchors price level
+        ]:
+            _eq_comp_obj = getattr(model, _eq_comp, None)
+            _var_comp_obj = getattr(model, _var_comp, None)
+            if _eq_comp_obj is None or _var_comp_obj is None:
+                continue
+            try:
+                for _idx in _eq_comp_obj:
+                    _con = _eq_comp_obj[_idx]
+                    if not _con.active:
+                        continue
+                    # Build the matching var name with same index
+                    _idx_str = ",".join(str(x) for x in _idx) if isinstance(_idx, tuple) else str(_idx)
+                    _var_name = f"{_var_comp}[{_idx_str}]"
+                    _gams_pairs.append((_con.name, _var_name))
+            except Exception:
+                pass
+
         free_variables = structural_matching(
             constraints, free_variables,
-            forced_pairs=[],
+            forced_pairs=_gams_pairs,
             label="nonlinear-full",
         )
 
