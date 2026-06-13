@@ -1218,8 +1218,22 @@ class GTAPModelEquations:
             if importer == region:
                 vmsb_val = bm.vmsb.get((exporter, i, region), 0.0)
                 total += float(rate) * float(vmsb_val or 0.0)
-        # NOTE: ft (rtf*evfb) and fs (fctts*evfb) and dt (kappaf*evfb = evfb-evos)
-        # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes).
+        # ft — factor-tax stream (fcttx*pf*xf = rtf*evfb at benchmark). GAMS yTaxInd
+        # = yTaxTot - ytax("dt") includes ft; it excludes ONLY the "dt" direct
+        # factor-income stream. ft is nonzero whenever the dataset has a factor-tax
+        # wedge (EVFP≠EVFB → rtf≠0, e.g. gtap7_3x3 where rtf≈0.47). Omitting it
+        # understated regY_income → betap=priv/regY_income inflated (0.754 vs the
+        # correct 0.632), biasing eq_yc/eq_yg. fcttx=rtf in these datasets.
+        for f in sets.f:
+            for a in sets.a:
+                rtf = float(taxes.rtf.get((region, f, a), 0.0) or 0.0)
+                if rtf == 0.0:
+                    continue
+                evfb = float(bm.evfb.get((region, f, a),
+                                         bm.vfm.get((region, f, a), 0.0)) or 0.0)
+                total += rtf * evfb
+        # fs (fctts*evfb subsidy) is 0 in standard datasets (RTFI absent); dt
+        # (kappaf*evfb = evfb-evos, direct factor tax) stays excluded per GAMS.
         return total
 
     def _raw_gdx_paths(self) -> list:
