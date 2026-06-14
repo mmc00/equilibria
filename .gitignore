@@ -256,6 +256,7 @@ scripts/gtap/*
 !scripts/gtap/diff_9x10_altertax.py
 !scripts/gtap/diff_nus333_altertax.py
 !scripts/gtap/diff_altertax.py
+!scripts/gtap/validate_reference.py
 
 # NUS333 head-to-head workspace: keep scripts + small JSON/MD reports,
 # ignore generated solver artefacts (RunGTAP/GEMPACK + Python caches).
