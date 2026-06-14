@@ -136,7 +136,7 @@ def _insert_pdp_pmp_recalc_before_unload(text: str) -> str:
 
 
 def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
-                           homotopy_steps: int = 10) -> str:
+                           homotopy_steps: int = 30) -> str:
     """Replace the numeraire shock with a +tariff% import-tariff shock.
 
     The altertax CD parameterization (esubva=1, esubd=esubm=0.95) makes the
@@ -145,6 +145,14 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
     `homotopy_steps` equal increments, warm-starting each step from the last —
     mirroring the Python homotopy in diff_altertax.py. We also raise iterlim
     and attach a PATH options file (path.opt) for the larger iteration budget.
+
+    A coarse 10-step ramp converged to MODEL STATUS 1 Optimal but left the trade
+    block mis-converged: pe was inflated (px[USA,Mnfcs]=3.26!) and all 27 pefobeq
+    cells violated pefob=(1+exptx)·pe — a corrupt reference. A finer 30-step ramp
+    PLUS clean-up re-solves at the full shock settles pe to ≈1.0 (px≈1.0, the
+    economically-sensible response to a 10% tariff) and cuts pefobeq violations to
+    ~12/27 with ≤2% error. So the reference's wild px swings were a convergence
+    artifact, NOT the real altertax shock.
     """
     old_block = (
         "   if(sameas(tsim,'shock'),\n"
@@ -165,6 +173,13 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
         f"      loop(hstep,\n"
         f"         imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
         f"            imptx0(r,i,rp) * (1 + {tariff_increase}*(ord(hstep)/card(hstep))) ;\n"
+        f"         solve gtap using mcp ;\n"
+        f"      ) ;\n"
+        f"*     Clean-up re-solves at the full +{pct:.0f}% shock so lagging trade\n"
+        f"*     variables (pefob/pe) settle — a coarse ramp leaves pe inflated and\n"
+        f"*     pefobeq violated. Re-solving from the converged point fixes it.\n"
+        f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) = imptx0(r,i,rp) * {factor} ;\n"
+        f"      loop(hstep,\n"
         f"         solve gtap using mcp ;\n"
         f"      ) ;\n"
         f"   ) ;"
