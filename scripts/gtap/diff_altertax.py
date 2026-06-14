@@ -491,10 +491,15 @@ def main() -> None:
         old = float(p_alt_shock.taxes.imptx[key] or 0.0)
         p_alt_shock.taxes.imptx[key] = old * 1.10
 
+    # t0_snapshot=m_b (the BASE), not m_chk: pf0/xf0 are the benchmark Fisher-index
+    # anchors (pf=1/(1-kappa), xf=evfb*(1-kappa)), the same as the check uses. Using
+    # the resolved check as t0 puts pf0/xf0 at the check equilibrium, which left the
+    # shock unable to converge against the cleaned reference (code=2). With the base
+    # snapshot the shock converges (code=1) from the full GAMS-shock warm-start.
     eq_alt = GTAPModelEquations(
         p_alt_shock.sets, p_alt_shock, alt_closure,
         residual_region=res_region,
-        t0_snapshot=m_chk,
+        t0_snapshot=m_b,
     )
     m_alt = eq_alt.build_model()
 
