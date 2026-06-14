@@ -1610,15 +1610,19 @@ class GTAPModelEquations:
                 )
                 if nd_p <= 0.0:
                     nd_p = adjusted_total_intermediate
-                # VA at purchaser prices: sum(pfa * xf_phys) = sum(evfb * (1+rtf))
+                # VA at purchaser prices = sum(pfa*xf). pfaeq is now pf*(1+fctts+fcttx)
+                # with fctts=fcttx=0 (GAMS-faithful), so pfa==pf and VA=sum(evfb) — the
+                # old (1+rtf) factor inflated va_p, mis-splitting the and/ava VA-ND
+                # shares (eq_va/eq_nd carried ~10% residual at the GAMS point, driving
+                # the regional pf/factY imbalance). Drop rtf; set ava=1-and so both
+                # production shares are consistent (and+ava=1, va=ava·xp at benchmark).
                 va_p = sum(
                     float(self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
-                    * (1.0 + float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0))
                     for f in self.sets.f
                 )
                 xp_model_equiv = nd_p + va_p
                 adjusted_and_param[(r, a)] = nd_p / xp_model_equiv if xp_model_equiv > 0.0 else 0.0
-                adjusted_ava_param[(r, a)] = float(self.params.calibrated.ava_param.get((r, a), 0.0) or 0.0)
+                adjusted_ava_param[(r, a)] = va_p / xp_model_equiv if xp_model_equiv > 0.0 else 0.0
 
                 # nd_share for eq_pxeq: use same nd_p / xp_model_equiv so and+ava=1
                 adjusted_nd_share[(r, a)] = adjusted_and_param[(r, a)]
