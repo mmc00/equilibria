@@ -5007,8 +5007,15 @@ class GTAPModelEquations:
         def eq_pfaeq_rule(model, r, f, a):
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0))
-            return model.pfa[r, f, a] == model.pf[r, f, a] * (1.0 + factor_tax)
+            # GAMS pfaeq: pfa = pf*(1 + fctts + fcttx). The factor-tax wedge is
+            # fctts+fcttx (from RTFD/RTFI), NOT rtf. rtf = VFM/EVFB-1 bundles in
+            # kappaf (factor rent), which is NOT a tax and belongs in pfyeq via
+            # kappaf — putting it in pfa double-counts and breaks pfa==pf where
+            # GAMS has fctts=fcttx=0 (standard GTAP7: RTFD=RTFM=0). Verified vs the
+            # CD reference out_altertax_cd.gdx: fctts=fcttx=0 everywhere → pfa==pf.
+            return model.pfa[r, f, a] == model.pf[r, f, a] * (
+                1.0 + model.fctts[r, f, a] + model.fcttx[r, f, a]
+            )
         model.eq_pfaeq = Constraint(model.r, model.f, model.a, rule=eq_pfaeq_rule)
 
         # Factor prices post-tax/subsidy (GAMS pfyeq)
