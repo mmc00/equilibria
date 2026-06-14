@@ -41,7 +41,10 @@ def test_altertax_closure_preset_loads():
     assert contract.closure.name == "altertax"
     assert contract.closure.closure_type == "MCP"
     assert contract.closure.capital_mobility == "mobile"
-    assert contract.closure.fix_endowments is True
+    # Altertax makes ALL factors mobile, so endowments are FREE (xft is the MCP pair
+    # for xfteq.xft); see gtap_contract.py:191. The old expectation (True) predated
+    # the mobile-factor closure.
+    assert contract.closure.fix_endowments is False
     assert contract.closure.label is not None
     assert "altertax" in contract.closure.label.lower()
 
@@ -87,17 +90,17 @@ def test_apply_altertax_elasticities_overrides_all_containers():
     p = apply_altertax_elasticities(base)
     o = ALTERTAX_ELASTICITY_DEFAULTS
 
+    # apply_altertax_elasticities overrides exactly the CD-altertax families
+    # (mirroring GAMS parameter_altertax.gms): esubva, esubd, esubm, omegaf, sigmav,
+    # sigmap, sigmand, etrae. omegax/omegaw/omegas/sigmas are NOT overridden (they
+    # were referenced by the old test but are not part of the altertax override set).
     assert all(v == o.esubva for v in p.elasticities.esubva.values())
     assert all(v == o.esubd for v in p.elasticities.esubd.values())
     assert all(v == o.esubm for v in p.elasticities.esubm.values())
-    assert all(v == o.omegax for v in p.elasticities.omegax.values())
-    assert all(v == o.omegaw for v in p.elasticities.omegaw.values())
     assert all(v == o.omegaf for v in p.elasticities.omegaf.values())
     assert all(v == o.sigmav for v in p.elasticities.sigmav.values())
     assert all(v == o.sigmap for v in p.elasticities.sigmap.values())
     assert all(v == o.sigmand for v in p.elasticities.sigmand.values())
-    assert all(v == o.omegas for v in p.elasticities.omegas.values())
-    assert all(v == o.sigmas for v in p.elasticities.sigmas.values())
     assert all(v == o.etrae for v in p.elasticities.etrae.values())
 
 
