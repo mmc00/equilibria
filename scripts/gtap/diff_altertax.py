@@ -471,13 +471,73 @@ def main() -> None:
         old = float(p_alt_shock.taxes.imptx[key] or 0.0)
         p_alt_shock.taxes.imptx[key] = old * 1.10
 
-    warm_chk = GTAPVariableSnapshot.from_python_model(m_chk)
     eq_alt = GTAPModelEquations(
         p_alt_shock.sets, p_alt_shock, alt_closure,
         residual_region=res_region,
         t0_snapshot=m_chk,
     )
     m_alt = eq_alt.build_model()
+
+    # Unfix regy (GAMS regYeq.regY endogenous in compStat) — same as the check.
+    for _r in p_alt_shock.sets.r:
+        try:
+            if hasattr(m_alt, "regy") and m_alt.regy[_r].fixed:
+                m_alt.regy[_r].unfix()
+        except Exception:
+            pass
+    # phiP[shock] = pcons[base] = 1.0 (GAMS phiP convention), same as the check.
+    for _r in p_alt_shock.sets.r:
+        try:
+            if hasattr(m_alt, "phip"):
+                m_alt.phip[_r].set_value(1.0)
+        except Exception:
+            pass
+
+    # Warm-start the shock from the GAMS SHOCK period — same full seed that took
+    # the check from 35% to ~5%. The CD shock is basin-sensitive; a check-only
+    # warm-start drifts (code=2, resid 1.7). Seeding ALL GAMS shock vars (incl.
+    # xd→xda, xm→xma) lands the GAMS basin.
+    if not args.no_gams_warm:
+        try:
+            from _diff_core import gams_levels, list_populated_vars  # type: ignore
+            _SHOCK_NAME_MAP = {
+                "ytaxInd": "ytax_ind", "factY": "facty", "phiP": "phip",
+                "regY": "regy", "xd": "xda", "xm": "xma",
+            }
+            _n_shock_warm = 0
+            for _vn in list_populated_vars(gdx_path):
+                _gvals = gams_levels(gdx_path, _vn)
+                _py_name = _SHOCK_NAME_MAP.get(_vn, _vn)
+                _pyvar = getattr(m_alt, _py_name, None)
+                if _pyvar is None:
+                    _pyvar = getattr(m_alt, _vn, None)
+                if _pyvar is None:
+                    _pyvar = getattr(m_alt, _vn.lower(), None)
+                if _pyvar is None:
+                    continue
+                for _gkey, _gval in _gvals.items():
+                    if not (isinstance(_gkey, tuple) and _gkey[-1] == "shock"):
+                        continue
+                    _pykey = _gkey[:-1]
+                    _pykey = tuple(
+                        _k[2:] if isinstance(_k, str) and len(_k) > 2
+                                and _k[1] == '_' and _k[0] in 'acfr'
+                        else _k
+                        for _k in _pykey
+                    )
+                    try:
+                        _v = _pyvar[_pykey] if len(_pykey) > 1 else _pyvar[_pykey[0]]
+                        if not _v.fixed:
+                            _v.set_value(float(_gval))
+                            _n_shock_warm += 1
+                    except Exception:
+                        pass
+            if _n_shock_warm:
+                print(f"  [GAMS-warm] Warm-started shock from GAMS shock values: {_n_shock_warm} vars set")
+        except Exception as _swe:
+            print(f"  [GAMS-warm shock] skipped: {_swe}")
+
+    warm_chk = GTAPVariableSnapshot.from_python_model(m_alt)
     t0 = time.perf_counter()
     r_alt = run_gtap._run_path_capi_nonlinear_full(
         m_alt, p_alt_shock,
