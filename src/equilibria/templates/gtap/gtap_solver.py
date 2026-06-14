@@ -194,6 +194,7 @@ class GTAPSolver:
             "xs": "xs",
             "xds": "xds",
             "xd": "xda",
+            "xma": "xma",
             "px": "px",
             "pp": "pp",
             "ps": "ps",
@@ -219,9 +220,37 @@ class GTAPSolver:
             "xf": "xf",
             "xft": "xft",
             "pf": "pf",
+            "pfa": "pfa",
             "pft": "pft",
+            "pfact": "pfact",
             "ytax": "ytax",
             "pnum": "pnum",
+            # Investment/savings block — critical for check/shock periods to avoid
+            # spurious MCP solutions where xiagg[rres] hits its lower bound (=0)
+            # because yi[rres] drifts negative without a good starting point.
+            "yi": "yi",
+            "xi": "xiagg",
+            "va": "va",
+            "gdpmp": "gdpmp",
+            "rgdpmp": "rgdpmp",
+            "ev": "ev",
+            "cv": "cv",
+            "pabs": "pabs",
+            "regy": "regy",
+            "yc": "yc",
+            "yg": "yg",
+            # Utility block — seed uh/ug/us from GAMS to avoid spurious MCP solutions
+            # where uh collapses to its lower bound (0.001) with eq_uh slack.
+            "uh": "uh",
+            "ug": "ug",
+            "us": "us",
+            "u": "u",
+            "phi": "phi",
+            "phip": "phip",
+            "pcons": "pcons",
+            "rsav": "rsav",
+            "xigbl": "xigbl",
+            "pigbl": "pigbl",
         }
 
         applied = 0
@@ -598,6 +627,32 @@ class GTAPSolver:
                     self.model.pabs[idx].fix(float(val))
                     fixed_count += 1
         
+        # Fix xft and pft for factors where xftflag=0 (no active supply/demand
+        # equations). Without this, xft[r,f] floats free with no matching equation,
+        # adding surplus DOF that the bipartite matcher cannot satisfy.
+        if hasattr(self.model, "xft") and hasattr(self.model, "xftflag"):
+            for idx in self.model.xft:
+                r, f = idx
+                try:
+                    flag = float(value(self.model.xftflag[r, f]) or 0.0)
+                except Exception:
+                    flag = 0.0
+                if flag <= 0.0 and not self.model.xft[r, f].fixed:
+                    val = self.model.xft[r, f].value
+                    self.model.xft[r, f].fix(float(val) if val is not None else 1.0)
+                    fixed_count += 1
+        if hasattr(self.model, "pft") and hasattr(self.model, "xftflag"):
+            for idx in self.model.pft:
+                r, f = idx
+                try:
+                    flag = float(value(self.model.xftflag[r, f]) or 0.0)
+                except Exception:
+                    flag = 0.0
+                if flag <= 0.0 and not self.model.pft[r, f].fixed:
+                    val = self.model.pft[r, f].value
+                    self.model.pft[r, f].fix(float(val) if val is not None else 1.0)
+                    fixed_count += 1
+
         logger.info(f"Conditional fixing applied: {fixed_count} variables fixed based on SAM data")
         return fixed_count
 
@@ -764,6 +819,17 @@ class GTAPSolver:
                 free_var_data[col]
                 for col, matched_row in enumerate(pair_right)
                 if matched_row == -1
+            ]
+
+            # Price variables must never be fixed by the structural matcher.
+            # When omegax is finite (altertax), eq_xds involves both xds and pd;
+            # the matching assigns eq_xds→xds, leaving pd structurally unmatched.
+            # But pd IS determined by eq_xseq — the graph assignment is a matching
+            # artifact, not a true degree-of-freedom excess.
+            _protected_var_names = {"pd", "pet", "pe", "ps", "pf", "pfact"}
+            unmatched_vars = [
+                vd for vd in unmatched_vars
+                if vd.parent_component().name not in _protected_var_names
             ]
 
             # Fix unmatched first by smallest absolute level.

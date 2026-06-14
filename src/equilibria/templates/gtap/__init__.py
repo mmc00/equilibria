@@ -75,6 +75,13 @@ from equilibria.templates.gtap.gtap_parity_pipeline import (
     load_gtap_gams_reference,
     run_gtap_parity_test,
 )
+from equilibria.templates.gtap.altertax import (
+    ALTERTAX_ELASTICITY_DEFAULTS,
+    AltertaxElasticityOverrides,
+    AltertaxRebalanceResult,
+    apply_altertax_elasticities,
+    rebalance_to_altertax_dataset,
+)
 
 __all__ = [
     # Sets
@@ -124,4 +131,11 @@ __all__ = [
     "compare_gtap_gams_parity",
     "load_gtap_gams_reference",
     "run_gtap_parity_test",
+
+    # Altertax
+    "ALTERTAX_ELASTICITY_DEFAULTS",
+    "AltertaxElasticityOverrides",
+    "AltertaxRebalanceResult",
+    "apply_altertax_elasticities",
+    "rebalance_to_altertax_dataset",
 ]

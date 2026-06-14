@@ -163,7 +163,7 @@ loop(tsim,
       pnum.fx(tsim) = 1.5 ;
    ) ;
 
-   options limrow = 3, limcol = 3, solprint = off, iterlim = 1000 ;
+   options limrow = 3, limcol = 3, solprint = off, iterlim = 50000 ;
 
    if(years(tsim) gt firstYear,
 

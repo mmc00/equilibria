@@ -1995,6 +1995,42 @@ def _run_path_capi_nonlinear_full(
     # near the shocked equilibrium price) rather than at baseline values.
     solver_helper.apply_aggressive_fixing_for_mcp()
 
+    # For altertax closure (finite omegaf), deactivate eq_xft for mobile factors
+    # BEFORE apply_squareness_patches. The patches deactivate equations that have
+    # no unique variable — but eq_xfteq would be falsely flagged as over-determining
+    # when eq_xft is still active (both compete for xft). Remove eq_xft first.
+    #
+    # In GAMS altertax, factor market clearing is implicitly satisfied through the
+    # pfeq demand system + xfteq supply complementarity; there is NO separate clearing
+    # equation. Python's eq_xft mirrors GAMS pfteq for omegaf=inf (market clearing),
+    # but with finite omegaf that role belongs to eq_pfteq (CET price index). Having
+    # both eq_xft AND eq_xfteq active for xft over-determines the system.
+    _is_altertax_closure = (
+        closure_config is not None
+        and getattr(closure_config, "name", None) == "altertax"
+    )
+    if _is_altertax_closure and hasattr(model, "eq_xft"):
+        _mf_set = set(str(f) for f in model.mf) if hasattr(model, "mf") else set()
+        _xft_deact = 0
+        for _r in model.r:
+            for _f in model.f:
+                if str(_f) not in _mf_set:
+                    continue
+                try:
+                    _eq_xft_vd = model.eq_xft[_r, _f]
+                except KeyError:
+                    continue
+                if not _eq_xft_vd.active:
+                    continue
+                _eq_xft_vd.deactivate()
+                _xft_deact += 1
+        if _xft_deact:
+            logger.info(
+                "altertax: deactivated eq_xft for %d mobile (r,f) pairs "
+                "(clearing implicit via xfteq supply + pfeq demand)",
+                _xft_deact,
+            )
+
     # When the closure leaves the system over-determined (gap <= 0), the helper
     # above does nothing. The same patches NUS333 needs apply here:
     #  1. fix sluggish pft (dangling — no eq references them)
@@ -2007,6 +2043,102 @@ def _run_path_capi_nonlinear_full(
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _closure_patches import apply_squareness_patches  # type: ignore
     apply_squareness_patches(model, params, label="nonlinear-full")
+
+    # Mirror GAMS holdfixed=1: yi[rres] has no MCP pair (yieq is skipped for
+    # residual region). Without explicit fixing, yi[rres] floats freely in
+    # eq_xiagg[rres] (which has two free vars: yi and xiagg) and PATH can drive
+    # yi negative to satisfy xiagg>=0 complementarity. Fix yi[rres] at the
+    # income identity value so eq_xiagg determines xiagg = yi/pi > 0.
+    _residual_region = getattr(model, "_residual_region", None)
+    if _residual_region is None and params is not None:
+        _residual_region = getattr(params, "residual_region", None)
+    if _residual_region is None:
+        _residual_region = "NAmerica"
+    if hasattr(model, "yi") and hasattr(model, "eq_yi"):
+        for _r in model.r:
+            if str(_r) != _residual_region:
+                continue
+            _yi_data = model.yi[_r]
+            if _yi_data.fixed:
+                continue
+            # eq_yi[rres] is skipped → no constraint → fix at income identity
+            _eq_yi_skipped = True
+            try:
+                _c = model.eq_yi[_r]
+                _eq_yi_skipped = not _c.active
+            except KeyError:
+                _eq_yi_skipped = True
+            if not _eq_yi_skipped:
+                continue
+            # Compute income identity: pi*depr*kstock + rsav + savf
+            try:
+                from pyomo.environ import value as _pv
+                _pi = float(_pv(model.pi[_r]))
+                _depr = float(_pv(model.depr[_r]))
+                _kstock = float(_pv(model.kstock[_r]))
+                _rsav = float(_pv(model.rsav[_r])) if hasattr(model, "rsav") else 0.0
+                _savf = float(_pv(model.savf[_r])) if hasattr(model, "savf") else 0.0
+                _yi_val = _pi * _depr * _kstock + _rsav + _savf
+            except Exception:
+                _yi_val = float(_yi_data.value or 0.0)
+            _yi_data.fix(_yi_val)
+            logger.info(
+                "Residual region fix: yi[%s]=%.6f (income identity; mirrors GAMS holdfixed=1)",
+                _r, _yi_val,
+            )
+            # eq_walras is GAMS's free row (walraseq has no MCP pair in model.gms).
+            # With yi[rres] now fixed, eq_walras would over-determine walras.
+            # Deactivate it and fix walras=0 (Walras law holds at equilibrium).
+            _eq_walras = model.find_component("eq_walras")
+            _walras_var = model.find_component("walras")
+            if _eq_walras is not None and _eq_walras.active:
+                _eq_walras.deactivate()
+                logger.info("Deactivated eq_walras (free row; yi[rres] fixed)")
+
+    # Mirror GAMS pfteq free-row + holdfixed=1 for pft:
+    # In GAMS standard GTAP, pfteq is a FREE ROW (no MCP pair) with holdfixed=1,
+    # pinning pft at its .l value (= 1.0). eq_xfteq determines xft, eq_pfeq
+    # determines pf (perfect mobility: pfy = pft).
+    #
+    # EXCEPTION — altertax closure (name="altertax"): pfteq is an ACTIVE equation
+    # that determines pft via the CET price index: pft^(1+omega) = sum gf*pfy^(1+omega).
+    # In GAMS comp_altertax.gms line 2656, pfteq appears as a free row (no MCP pair),
+    # but with holdfixed=0 (omegaf=1 finite CET), PATH actually treats the equation
+    # as active for non-benchmark periods. We leave pft free and eq_pfteq active.
+    # The base period of altertax uses a NON-altertax closure (name="base" or
+    # "gtap_standard"), so it still gets the standard pft-fix treatment.
+    _is_altertax_closure = (
+        closure_config is not None
+        and getattr(closure_config, "name", None) == "altertax"
+    )
+    if hasattr(model, "eq_pfteq") and hasattr(model, "pft"):
+        _pft_pfteq_fixed = 0
+        for _r in model.r:
+            for _f in model.f:
+                _pft_vd = model.pft[_r, _f]
+                if _pft_vd.fixed:
+                    continue
+                try:
+                    _eq_pfteq_vd = model.eq_pfteq[_r, _f]
+                except KeyError:
+                    continue
+                if not _eq_pfteq_vd.active:
+                    continue
+                if _is_altertax_closure:
+                    continue  # altertax: pfteq stays active, pft stays free (CET price eq)
+                # Deactivate eq_pfteq (free row) and fix pft at initialization
+                _eq_pfteq_vd.deactivate()
+                _pft_val = float(_pft_vd.value) if _pft_vd.value is not None else 1.0
+                if _pft_val <= 0:
+                    _pft_val = 1.0
+                _pft_vd.fix(_pft_val)
+                _pft_pfteq_fixed += 1
+        if _pft_pfteq_fixed:
+            logger.info(
+                "pfteq free-row: deactivated eq_pfteq + fixed %d pft[r,f]=init "
+                "(mirrors GAMS pfteq free-row + holdfixed=1 → pft.l=1)",
+                _pft_pfteq_fixed,
+            )
 
     # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
     # already-fixed variables, so only the remaining FREE variables get warm-started
@@ -2090,7 +2222,7 @@ def _run_path_capi_nonlinear_full(
     # baseline. Python's PATH on 9x10 takes wider Newton steps and crashes
     # trying to evaluate (negative_yc)^(-0.9) or (0/0) in eq_yc.
     _NLB_FACTOR = 1e-3
-    for _vname in ("yc", "phi", "phip", "regy", "uh"):
+    for _vname in ("yc", "phi", "phip", "regy", "uh", "ug", "us"):
         _vv = getattr(model, _vname, None)
         if _vv is None:
             continue
@@ -2113,6 +2245,27 @@ def _run_path_capi_nonlinear_full(
     runtime = loader.load()
     version = loader.version(runtime)
 
+    # Mirror GAMS numeraire chain: pnum.fx=1 + pnumeq(pnum=pwfact, free row) +
+    # pwfacteq.pwfact (Tornqvist, MCP pair). Leave pwfact FREE and both eqs active.
+    # pnumeq acts as a free equality row that forces pwfact=pnum=1.
+    # pwfacteq.pwfact (MCP pair, lb=-inf) then constrains Tornqvist(pf,xf)=pwfact=1,
+    # anchoring the nominal price level. System stays square: pwfact is the MCP pair
+    # variable for pwfacteq, and pnumeq is a free row that pins pwfact=1.
+    # Logging only — no model changes needed here.
+    _pnum_comp = model.find_component("pnum")
+    _pwfact_comp = model.find_component("pwfact")
+    if (
+        _pnum_comp is not None and not _pnum_comp.is_indexed() and _pnum_comp.fixed
+        and _pwfact_comp is not None and not _pwfact_comp.is_indexed()
+        and not _pwfact_comp.fixed
+    ):
+        from pyomo.environ import value as _pyo_value
+        logger.info(
+            "Numeraire presolve: pnum=%.6f fixed, pwfact free; eq_pnum+eq_pwfact active "
+            "(mirrors GAMS pnumeq free-row + pwfacteq.pwfact MCP pair)",
+            float(_pyo_value(_pnum_comp)),
+        )
+
     constraints = sorted(
         model.component_data_objects(Constraint, active=True, descend_into=True),
         key=lambda c: c.name,
@@ -2126,7 +2279,11 @@ def _run_path_capi_nonlinear_full(
     )
 
     # Hopcroft-Karp structural matching (avoid alphabetical-sort pairing pitfall).
-    # GAMS-declared MCP pairings (model.gms:1419): force these to mirror GAMS.
+    # Mirror GAMS model statement pairings (comp_altertax.gms:2656):
+    #   xfteq.xft, pfeq.pf, pfaeq.pfa, pfyeq.pfy
+    # Without these, HK may pair pfeq with an unrelated variable, and the
+    # complementarity condition pf ≥ lb ⊥ pfeq fails to exclude the degenerate
+    # equilibrium where pf collapses to its lower bound.
     if len(constraints) == len(free_variables):
         try:
             from _closure_patches import structural_matching  # type: ignore
@@ -2134,9 +2291,47 @@ def _run_path_capi_nonlinear_full(
             import sys as _sys
             _sys.path.insert(0, str(Path(__file__).resolve().parent))
             from _closure_patches import structural_matching  # type: ignore
+
+        # Build forced pairs from GAMS model statement (eq_name ↔ var_name)
+        _gams_pairs: list[tuple[str, str]] = []
+        for _eq_comp, _var_comp in [
+            ("eq_pfeq",   "pf"),
+            ("eq_xfteq",  "xft"),
+            ("eq_pfaeq",  "pfa"),
+            ("eq_pfyeq",  "pfy"),
+            ("eq_xfeq",   "xf"),
+            ("eq_xpeq",   "xp"),
+            ("eq_ppeq",   "pp"),
+            ("eq_pdeq",   "pd"),
+            ("eq_ndeq",   "nd"),
+            ("eq_vaeq",   "va"),
+            ("eq_pxeq",   "px"),
+            ("eq_xapeq",  "xaa"),
+            ("eq_xeq",    "x"),
+            ("eq_pseq",   "ps"),
+            ("eq_pmteq",  "pmt"),
+            ("eq_pmeq",   "pm"),
+            ("eq_pwfact", "pwfact"),  # GAMS pwfacteq.pwfact — anchors price level
+        ]:
+            _eq_comp_obj = getattr(model, _eq_comp, None)
+            _var_comp_obj = getattr(model, _var_comp, None)
+            if _eq_comp_obj is None or _var_comp_obj is None:
+                continue
+            try:
+                for _idx in _eq_comp_obj:
+                    _con = _eq_comp_obj[_idx]
+                    if not _con.active:
+                        continue
+                    # Build the matching var name with same index
+                    _idx_str = ",".join(str(x) for x in _idx) if isinstance(_idx, tuple) else str(_idx)
+                    _var_name = f"{_var_comp}[{_idx_str}]"
+                    _gams_pairs.append((_con.name, _var_name))
+            except Exception:
+                pass
+
         free_variables = structural_matching(
             constraints, free_variables,
-            forced_pairs=[("eq_pwfact", "pwfact")],
+            forced_pairs=_gams_pairs,
             label="nonlinear-full",
         )
 
@@ -4105,6 +4300,107 @@ def validate_shock(
             click.echo(f"\nValidation shock report saved to: {output}")
 
         sys.exit(0 if success else 1)
+
+    except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
+        click.echo(click.style(f"✗ Error: {e}", fg="red"), err=True)
+        sys.exit(1)
+
+
+@cli.command(name='altertax')
+@click.option('--gdx-file', type=click.Path(exists=True, path_type=Path), required=True,
+              help='Path to GTAP basedata GDX file')
+@click.option('--variable', default='rtms', show_default=True,
+              help='Tax variable to shock before rebalancing')
+@click.option('--index', default='all', show_default=True,
+              help='Shock index tuple, e.g. "(EastAsia,c_TextWapp,NAmerica)" or "all"')
+@click.option('--value', type=float, required=True,
+              help='Shock value (interpretation depends on --shock-mode)')
+@click.option('--shock-mode', type=click.Choice(['set', 'pct', 'mult', 'tm_pct']),
+              default='tm_pct', show_default=True,
+              help='Shock semantics. tm_pct mirrors GAMS tm.fx = tm.l*(1+v).')
+@click.option('--output', type=click.Path(path_type=Path), required=True,
+              help='Destination .har file for the rebalanced dataset')
+@click.option('--tee/--no-tee', default=False, help='Show solver output')
+@click.option('--path-license-string', default=None,
+              help='Optional PATH license string')
+@click.pass_context
+def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
+             tee, path_license_string):
+    """Rebalance a GTAP dataset under altertax (Malcolm 1998 CD invariance).
+
+    Applies altertax CD elasticity overrides + the user's tax shock,
+    solves via PATH C API (nonlinear full), then extracts a balanced
+    SAM into a HAR file consumable as a new baseline.
+    """
+    from equilibria.templates.gtap.altertax import (
+        apply_altertax_elasticities,
+        rebalance_to_altertax_dataset,
+    )
+
+    logger = ctx.obj['logger']
+    logger.info(f"Altertax rebalance: gdx={gdx_file} → {output}")
+
+    try:
+        click.echo(f"\n[1/4] Loading 9x10 baseline from {gdx_file.name}")
+        sets = GTAPSets()
+        sets.load_from_gdx(gdx_file)
+        base_params = GTAPParameters()
+        base_params.load_from_gdx(gdx_file)
+        click.echo(f"      R={sets.n_regions} I={sets.n_commodities} "
+                   f"A={sets.n_activities} F={sets.n_factors}")
+
+        click.echo("[2/4] Applying altertax CD elasticity overrides + shock")
+        shock_params = apply_altertax_elasticities(base_params, in_place=False)
+        shock_index = _parse_index(index)
+        applied = _apply_shock_to_params(
+            shock_params, variable, shock_index, value, shock_mode=shock_mode,
+        )
+        if not applied:
+            raise ValueError(f"Shock {variable}{shock_index}={value} did not apply.")
+        click.echo(f"      shock applied to {variable}{shock_index} (mode={shock_mode})")
+
+        click.echo("[3/4] Building model + solving via PATH C API (nonlinear full)")
+        contract = _build_gtap_contract_with_calibration({"closure": "altertax"})
+        equations = GTAPModelEquations(sets, shock_params, contract.closure)
+        model = equations.build_model()
+        solve_result = _run_path_capi_nonlinear_full(
+            model,
+            shock_params,
+            solver_output=tee,
+            path_license_string=path_license_string,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=contract.closure,
+            equation_scaling=True,
+        )
+        status = solve_result.get('status')
+        residual = solve_result.get('residual', float('nan'))
+        click.echo(f"      solve status={status} residual={residual:.2e}")
+        # Guardrail: refuse to write a "rebalanced" SAM from a non-converged
+        # solution — the values would be cold-init garbage, not equilibrium.
+        if status not in ('solved', 'success', 'optimal') or not (residual < 1e-3):
+            raise RuntimeError(
+                f"PATH solve did not converge (status={status}, "
+                f"residual={residual:.2e}); refusing to write HAR. The "
+                "altertax closure may need additional eq pairings — see "
+                "docs/plans/gtap_altertax_implementation_plan_2026-05-13.md."
+            )
+
+        click.echo(f"[4/4] Writing rebalanced HAR → {output}")
+        rebalance = rebalance_to_altertax_dataset(
+            base_params=base_params,
+            shock_params=shock_params,
+            shock_model=model,
+            sets=sets,
+            output_path=output,
+        )
+        click.echo(f"      {output.name} ({output.stat().st_size:,} bytes)")
+        click.echo("\n  SAM totals (USD M):")
+        for k, v in rebalance.sam_totals.items():
+            click.echo(f"    {k:14s} = {v:>14,.1f}")
+        click.echo("\n✓ Altertax rebalance complete")
+        sys.exit(0)
 
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)

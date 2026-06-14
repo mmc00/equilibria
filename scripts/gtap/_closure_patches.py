@@ -255,6 +255,8 @@ def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
         "eq_xwmg",    # defines xwmg (margins)
         "eq_walras",  # Walras law — must never be dropped
         "eq_ytax",    # income tax streams
+        "eq_xfteq",   # defines xft[r,f] total factor supply (CET supply curve, altertax)
+        "eq_pxeq",    # defines px[r,i] export price; dropped in omegax=inf leads to unconstrained px
     }
     cons_snap = sorted(
         model.component_data_objects(Constraint, active=True), key=lambda c: c.name
@@ -316,7 +318,10 @@ def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
     # Force-match defining equations to their primary output variable
     _force_pair("eq_pmteq", "pmt")   # pmt[r,i] = Armington import price aggregate
     _force_pair("eq_pmeq", "pm")     # pm[rp,i,r] = bilateral import price
-    _force_pair("eq_pft", "pft")     # pft[r,f] = sluggish factor aggregate price
+    _force_pair("eq_pft", "pft")     # pft[r,f] = sluggish factor aggregate price (legacy)
+    _force_pair("eq_pfteq", "pft")   # pft[r,f] = CET factor price equilibrium (altertax)
+    _force_pair("eq_xfteq", "xft")   # xft[r,f] = CET factor supply aggregate (altertax)
+    _force_pair("eq_pxeq", "px")     # px[r,i] = export price
 
     def bfs() -> bool:
         q: deque[int] = deque()

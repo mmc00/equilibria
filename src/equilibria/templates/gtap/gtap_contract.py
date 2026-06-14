@@ -178,7 +178,21 @@ def _closure_template_data(name: str) -> Dict[str, Any]:
         base["label"] = "MCP (Mixed Complementarity Problem) closure"
         base["closure_type"] = "MCP"
         return base
-    
+
+    elif closure_name == "altertax":
+        # Malcolm (1998) altertax: re-balance dataset under CD invariance.
+        # Mirrors cgebox/gtap/gams/configs/altertax.gms.
+        # All factors fully mobile; numeraire is exchange rate (proxy: pnum).
+        # Modules (Melitz, AEZ, CO2, MyGTAP, etc.) are off — equilibria's
+        # standard contract has none of them, so this is the natural state.
+        base["label"] = "Altertax closure (Malcolm 1998 CD rebalance)"
+        base["closure_type"] = "MCP"
+        base["capital_mobility"] = "mobile"
+        base["fix_endowments"] = False  # xft free for mobile factors (GAMS: xfteq.xft MCP pair)
+        base["fix_taxes"] = True         # taxes fixed at user-specified shocked level
+        base["fix_technology"] = True
+        return base
+
     raise ValueError(f"Unsupported GTAP closure name: {name!r}")
 
 
