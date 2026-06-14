@@ -268,7 +268,15 @@ def main() -> None:
             _WARM_PRICES = {"pft", "pf", "pfy", "pfact", "regy", "yc", "yg", "rsav",
                             "facty", "ytaxind", "ytax_ind", "phi", "pcons", "rore", "rorc", "arent",
                             "xft", "xf", "pabs", "pi", "psave", "savf", "chif",
-                            "ytaxtot", "kstock", "kapend"}
+                            "ytaxtot", "kstock", "kapend",
+                            # Quantities + sector prices: with etaf=0 (xft=aft fixed
+                            # mobile supply, GAMS-faithful) the factor block needs a
+                            # full warm-start to land in the GAMS basin, not just
+                            # prices. Seeding these took pfact EU_28 from 0.45 to 0.93.
+                            "va", "nd", "xp", "xa", "xs", "xds", "xet", "xmt", "xmgm",
+                            "pva", "pnd", "ps", "pd", "pet", "pe", "pm", "pmt", "px",
+                            "pa", "gdpmp", "rgdpmp", "pgdpmp", "u", "ug", "us", "uh",
+                            "xet", "xw", "xtmg", "ptmg", "pwfact", "pmuv"}
             # GDX camelCase → Python underscore/lowercase mapping
             _GAMS_TO_PY_NAME = {
                 "ytaxInd": "ytax_ind",   # Var in Python, Expression alias separate

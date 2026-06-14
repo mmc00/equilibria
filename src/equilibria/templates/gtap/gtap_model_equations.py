@@ -1935,7 +1935,10 @@ class GTAPModelEquations:
                         pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
                         benchmark_xft += factor_flow / pf_val
                     aft_data[(region, factor)] = benchmark_xft
-                    etaf_data[(region, factor)] = _lookup_etrae(region, factor)
+                    if factor in self.sets.mf:
+                        etaf_data[(region, factor)] = 0.0
+                    else:
+                        etaf_data[(region, factor)] = _lookup_etrae(region, factor)
 
             facty_bench = max(factor_income - vdep, 0.0)
             ytax_ind_bench = self._compute_ytax_ind_bench(region)
