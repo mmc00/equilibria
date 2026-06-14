@@ -32,6 +32,25 @@ from _diff_core import (
 GDX_9X10 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
 DEFAULT_NEOS_GDX = ROOT / "output/9x10_altertax_neos_bundle/out.gdx"
 
+
+def _convergence_gate(label: str, result, *, res_tol: float = 1e-6) -> bool:
+    """Loudly flag a non-converged Python solve. A match% computed against a
+    non-converged solution is MEANINGLESS — the old code printed code=2 quietly and
+    reported the match anyway (the shock looked like 55% when it had not converged).
+
+    Returns True if converged, False otherwise (prints a banner either way).
+    """
+    code = result.get("termination_code")
+    resid = float(result.get("residual") or 0.0)
+    converged = (code == 1) and (resid <= res_tol)
+    if not converged:
+        print("  " + "!" * 68)
+        print(f"  !!  {label} DID NOT CONVERGE: code={code}, residual={resid:.3e}")
+        print(f"  !!  The match% below is computed on a NON-CONVERGED solution and is")
+        print(f"  !!  MEANINGLESS. Fix convergence (warm-start/homotopy) before trusting it.")
+        print("  " + "!" * 68)
+    return converged
+
 # Durable reference store (outside the gitignored output/, survives worktree
 # cleanups). Holds the regenerated PROPER altertax CD references — NOT the old
 # calibrated standard-GTAP runs that used to live in out_local.gdx.
@@ -419,6 +438,7 @@ def main() -> None:
         sec_chk = time.perf_counter() - t0
         res_chk = float(r_chk.get("residual") or 0.0)
     print(f"  check residual={res_chk:.3e}  code={r_chk.get('termination_code')}  t={sec_chk:.2f}s")
+    _convergence_gate("CHECK solve", r_chk)
     # Diagnostics: print pft/pf/yc for first few vars
     try:
         from pyomo.environ import value as _pv
@@ -548,6 +568,7 @@ def main() -> None:
     sec_alt = time.perf_counter() - t0
     res_alt = float(r_alt.get("residual") or 0.0)
     print(f"  shock residual={res_alt:.3e}  code={r_alt.get('termination_code')}  t={sec_alt:.2f}s")
+    _convergence_gate("SHOCK solve", r_alt)
 
     var_names = list_populated_vars(gdx_path)
     print(f"\nPopulated GAMS Vars in {gdx_path.name}: {len(var_names)}")
