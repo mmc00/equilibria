@@ -78,14 +78,31 @@ Residual: <valor si conocido>
 | Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
 | Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
+## Herramientas de debug parity (cascade de 4)
+
+Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
+
+| # | Herramienta | Script | Ve | Ruta de uso |
+|---|-------------|--------|----|-------------|
+| 0 | **check-warmstart** | `triage.py --check-warmstart` | Residuales de ecuaciones + gaps de variables antes del solver | Solver converge a equilibrio equivocado |
+| 1 | **Value/residual diff** | `triage.py` (locate→isolate→trace) | Dónde divergen valores resueltos | Variable específica diverge |
+| 2 | **Closure diff** | `diff_closure.py` | Variables fijas/libres, ecuaciones activas | Shock diverge ampliamente (nivel de precios entero) |
+| 3 | **.nl diff** | `nl_compare.py` | Coeficientes Jacobiano, forma algebraica | Pregunta sobre álgebra/coeficientes |
+
+**Pitfall clave:** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
+
 ## Archivos clave
 
 | Archivo | Propósito |
 |---------|-----------|
 | `src/equilibria/templates/gtap/gtap_model_equations.py` | Ecuaciones del modelo. Áreas críticas: `get_gdpmp_init`, `get_yi_init`, `get_xiagg_init`, `eq_ytax`, `eq_yc`, `eq_yg`, `eq_pabs`, `eq_gdpmp`. Líneas 1134, 1862, 4510, 4574 ya fijadas a `NAmerica`. |
 | `scripts/gtap/run_gtap.py` | CLI. `validate-shock`, `_apply_shock_to_params` (`tm_pct`), `_collect_key_quantities` (emite `ytax(r,gy)` con 10 streams canónicos). |
+| `scripts/gtap/diff_altertax.py` | Diff cell-by-cell Python altertax vs NEOS out.gdx. 3 períodos: betaCal → check → shock. |
 | `scripts/gtap/diff_nus333_full.py` / `diff_9x10_full.py` | Diffs cell-by-cell vs GAMS (NEOS o local). 0 cells diverge en ambos. |
 | `scripts/gtap/bench_nus333_dual.py` | Benchmark dual-reference (NEOS + GAMS local) + wall-time N=5. |
+| `scripts/parity/triage.py` | CLI de debug parity: locate→isolate→trace→check-warmstart. |
+| `scripts/parity/_triage_steps.py` | Implementación de los 4 pasos de triage. |
+| `scripts/parity/_adapter_protocol.py` | Protocolo ParityAdapter + registry. |
 | `src/equilibria/templates/gtap/gtap_solver.py` | Wrapper PATH. `apply_closure`, `apply_aggressive_fixing_for_mcp`, fijación de numerario. |
 | `src/equilibria/templates/gtap/gtap_parameters.py` | Carga de parámetros, `savf_bar`, splits de demanda final. |
 | `GTAP_VALIDATION_STATUS.md` | Status detallado por sesión, hipótesis, hallazgos. |
