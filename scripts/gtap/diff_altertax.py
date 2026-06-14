@@ -286,8 +286,14 @@ def main() -> None:
                 "regY": "regy",          # lowercase in Python
                 "kapEnd": "kapEnd",      # same in Python
                 "chiSave": "chiSave",    # same in Python
+                "xd": "xda",             # GAMS xd(r,i,aa) → Python xda
+                "xm": "xma",             # GAMS xm(r,i,aa) → Python xma
             }
-            _WARM_SKIP_ALL_BUT_PRICES = True
+            # Seed ALL GAMS check vars (not just prices): with the GAMS-faithful
+            # etaf=0 + ava/and fixes the CD factor block is basin-sensitive, and a
+            # full warm-start lands the correct equilibrium (factY ~1-5%) where a
+            # price-only seed drifts to an intermediate basin.
+            _WARM_SKIP_ALL_BUT_PRICES = False
             _gams_all_vars = list_populated_vars(gdx_path)
             for _vn in _gams_all_vars:
                 if _WARM_SKIP_ALL_BUT_PRICES and _vn.lower() not in _WARM_PRICES:
