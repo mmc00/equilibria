@@ -5604,8 +5604,13 @@ class GTAPModelEquations:
                 return model.rgdpmp[r] == model.gdpmp[r]
             mqgdp_0t = _mqgdp(model, r, price_base=True, quantity_base=False)
             mqgdp_t0 = _mqgdp(model, r, price_base=False, quantity_base=True)
-            scale = max(mqgdp_00 ** 2, 1e-12)
-            return (model.rgdpmp[r] ** 2) * mqgdp_t0 / scale == mqgdp_00 * model.gdpmp[r] * mqgdp_0t / scale
+            # GAMS rgdpmpeq (compStat) is LINEAR-sqrt (single root), not the quadratic
+            # rewrite (spurious root — same class as eq_pfact/eq_pabs):
+            #   rgdpmp = sqrt(mqgdp_00 * gdpmp * mqgdp_0t / mqgdp_t0).
+            from pyomo.environ import sqrt as _pyo_sqrt
+            return model.rgdpmp[r] == _pyo_sqrt(
+                mqgdp_00 * model.gdpmp[r] * mqgdp_0t / (mqgdp_t0 + 1e-12)
+            )
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
 
         def eq_pgdpmp_rule(model, r):
