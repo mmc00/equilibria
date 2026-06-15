@@ -74,29 +74,58 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
             m, p_s, enforce_post_checks=False, strict_path_capi=False,
             closure_config=alt_clo, equation_scaling=True, solution_hint=hint)
 
-    # SINGLE model built at base imptx, reusing the diff_altertax recipe. The ramp
-    # then mutates model.imptx[...] IN PLACE and re-solves the SAME model — eq_pm/
-    # _m_pm read the live mutable Param (gtap_model_equations._imptx_rate_importer),
-    # so no rebuild is needed and the previous solution stays loaded as the warm
-    # start. This is what makes the homotopy stable: rebuilding a fresh model each
-    # step lost the warm-start state (see project memory).
-    _m_b, p_s, m = DA.build_altertax_models(p_b_raw, res, base_clo, alt_clo)
-    # capture the base imptx Param values so the ramp scales from them
-    imptx_base = {k: float(V(m.imptx[k])) for k in m.imptx}
+    from pyomo.environ import Var
 
-    # ---- PHASE 0: converged check anchor (imptx at base, GAMS check warm-start) ----
+    def snapshot_all(model):
+        """Complete state copy: every variable cell's value (not the lossy
+        GTAPVariableSnapshot). Re-seeding a FRESH model with this preserves the
+        equilibrium so the fresh model's presolve runs cleanly — the in-place
+        re-solve double-applies apply_closure/conditional-fixing and corrupts the
+        model (code=None), so we rebuild per step but transfer FULL state here."""
+        st = {}
+        for v in model.component_objects(Var, active=True):
+            for idx in v:
+                vd = v[idx]
+                if vd.value is not None:
+                    st[(v.name, idx)] = float(vd.value)
+        return st
+
+    def restore_all(model, st):
+        for v in model.component_objects(Var, active=True):
+            for idx in v:
+                key = (v.name, idx)
+                if key in st and not v[idx].fixed:
+                    try:
+                        v[idx].set_value(st[key])
+                    except Exception:
+                        pass
+
+    def build_at(mult: float):
+        p_raw = copy.deepcopy(p_b_raw)
+        if mult != 1.0:
+            for k in list(p_raw.taxes.imptx.keys()):
+                p_raw.taxes.imptx[k] = float(p_raw.taxes.imptx[k] or 0.0) * mult
+        _mb, p_alt, m_chk = DA.build_altertax_models(p_raw, res, base_clo, alt_clo)
+        return m_chk, p_alt
+
+    # ---- PHASE 0: converged check anchor (mult=1.0, GAMS check warm-start) ----
+    m, p_s = build_at(1.0)
     DA.warmstart_from_gams(m, gdx_path, "check")
     r = solve(m, p_s, GTAPVariableSnapshot.from_python_model(m))
     if verbose:
         print(f"  [check mult=1.0] code={r.get('termination_code')} resid={r.get('residual'):.2e} "
               f"pva[USA,Mnfcs]={V(m.pva['USA','Mnfcs']):.5f}")
+    prev_state = snapshot_all(m)
 
-    # ---- PHASE 1: ramp imptx 1.0 → ×1.1 IN PLACE, re-solve the same model ----
+    # ---- PHASE 1: ramp imptx 1.0 → ×1.1. Rebuild per step (presolve must run on a
+    # fresh model) but transfer the FULL previous solution so the warm start is exact.
     for step in range(1, ramp_steps + 1):
         mult = 1.0 + 0.1 * (step / ramp_steps)
-        for k, base in imptx_base.items():
-            m.imptx[k].set_value(base * mult)
+        m, p_s = build_at(mult)
+        restore_all(m, prev_state)
         r = solve(m, p_s, GTAPVariableSnapshot.from_python_model(m))
+        if r.get("termination_code") == 1:
+            prev_state = snapshot_all(m)
         if verbose and (step in (1, max(1, ramp_steps // 2), ramp_steps)
                         or r.get("termination_code") != 1):
             print(f"  [ramp {step}/{ramp_steps}] mult={mult:.4f} code={r.get('termination_code')} "
