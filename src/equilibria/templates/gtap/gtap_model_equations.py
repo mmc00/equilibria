@@ -5019,7 +5019,7 @@ class GTAPModelEquations:
             # kappaf (factor rent), which is NOT a tax and belongs in pfyeq via
             # kappaf — putting it in pfa double-counts and breaks pfa==pf where
             # GAMS has fctts=fcttx=0 (standard GTAP7: RTFD=RTFM=0). Verified vs the
-            # CD reference out_altertax_cd.gdx: fctts=fcttx=0 everywhere → pfa==pf.
+            # CD reference out_altertax_ifsub1.gdx: fctts=fcttx=0 everywhere → pfa==pf.
             return model.pfa[r, f, a] == model.pf[r, f, a] * (
                 1.0 + model.fctts[r, f, a] + model.fcttx[r, f, a]
             )

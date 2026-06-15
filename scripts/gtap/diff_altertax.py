@@ -62,7 +62,7 @@ REFS_DIR = Path("/Users/marmol/proyectos2/equilibria_refs")
 DATASET_REGISTRY = {
     "9x10": (GDX_9X10, ROOT / "output/9x10_altertax_neos_bundle", "gdx", None),
     "gtap7_3x3": (ROOT / "datasets/gtap7_3x3", ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har",
-                  REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_cd.gdx"),
+                  REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_ifsub1.gdx"),
     "gtap7_3x4": (ROOT / "datasets/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har", None),
     "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har", None),
 }
