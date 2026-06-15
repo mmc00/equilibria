@@ -263,16 +263,11 @@ def main() -> None:
         print("  [GAMS-warm] SKIPPED (--no-gams-warm)")
     else:
         try:
-            try:
-                from _diff_core import gams_levels  # type: ignore
-            except ImportError:
-                import sys as _sys
-                _sys.path.insert(0, str(Path(__file__).resolve().parent))
-                from _diff_core import gams_levels  # type: ignore
-            try:
-                from _diff_core import list_populated_vars  # type: ignore
-            except ImportError:
-                pass
+            # gams_levels / list_populated_vars are imported at module top (line 26).
+            # Do NOT re-import them locally here: a local import inside this
+            # conditional makes Python treat the names as locals for the whole
+            # function, so under --no-gams-warm (this block skipped) the later
+            # `var_names = list_populated_vars(...)` raises UnboundLocalError.
             # Warm-start from ALL GAMS check period variables found in both GDX and Python model
             # Try both GAMS camelCase name and lowercase (GAMS "regY" → Python "regy")
             # Warm-start pft + pf: pft seeds the equilibrium basin, and pf is needed
@@ -524,7 +519,8 @@ def main() -> None:
     # xd→xda, xm→xma) lands the GAMS basin.
     if not args.no_gams_warm:
         try:
-            from _diff_core import gams_levels, list_populated_vars  # type: ignore
+            # gams_levels / list_populated_vars come from the module-top import
+            # (line 26); re-importing locally would shadow them as function locals.
             _SHOCK_NAME_MAP = {
                 "ytaxInd": "ytax_ind", "factY": "facty", "phiP": "phip",
                 "regY": "regy", "xd": "xda", "xm": "xma",
