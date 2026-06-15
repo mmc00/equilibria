@@ -5568,14 +5568,22 @@ class GTAPModelEquations:
         }
 
         def eq_pabs_rule(model, r):
+            from pyomo.environ import sqrt as _pyo_sqrt
             mqabs_00 = base_mqabs_00[r]
             if mqabs_00 <= 1e-12:
                 return Constraint.Skip
             mqabs_t0 = _mqabs(model, r, price_base=False, quantity_base=True)
             mqabs_tt = _mqabs(model, r, price_base=False, quantity_base=False)
             mqabs_0t = _mqabs(model, r, price_base=True, quantity_base=False)
-            scale = max((base_pabs[r] ** 2) * (mqabs_00 ** 2), 1e-12)
-            return (model.pabs[r] ** 2) * mqabs_00 * mqabs_0t / scale == (base_pabs[r] ** 2) * mqabs_t0 * mqabs_tt / scale
+            # GAMS pabseq (compStat) is LINEAR in pabs (single positive sqrt root):
+            #   pabs = pabs0 * sqrt[(mqabs(t,t0)/mqabs(t0,t0))*(mqabs(t,t)/mqabs(t0,t))].
+            # The quadratic rewrite `pabs^2 * mqabs_00 * mqabs_0t == ...` admits a
+            # spurious root; since pabs feeds eq_xfteq (xft=aft*(pft/pabs)^etaf), a
+            # wrong root inflates the factor-price level (pf ~2x vs ifSUB=0). Faithful
+            # sqrt form, matching the eq_pfact fix.
+            return model.pabs[r] == base_pabs[r] * _pyo_sqrt(
+                (mqabs_t0 / mqabs_00) * (mqabs_tt / (mqabs_0t + 1e-12))
+            )
         model.eq_pabs = Constraint(model.r, rule=eq_pabs_rule)
 
         # Nominal GDP at market prices (GAMS gdpmpeq)
