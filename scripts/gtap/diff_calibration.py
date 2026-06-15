@@ -78,6 +78,17 @@ _RI_MAP = {
     "eh": "eh", "bh": "bh", "xcshr": "xcshr", "zcons": "zcons",
 }
 
+# Factor-block calibration inputs. These drive eq_pfeq/eq_pft/eq_pfact (the factor
+# price level). A bias here inflates pf→pft→pfact (gtap7_3x3: pf diverges ~188% vs
+# ifSUB=0). GAMS keys carry f_/a_ prefixes and a trailing period; py keys are bare.
+# value: (python_component, n_python_index_dims) — the GAMS body is normalised to
+# that many leading elements (prefixes stripped).
+_FACTOR_MAP = {
+    "gf": ("gf_share", 3),   # (r, f, a)
+    "aft": ("aft", 2),       # (r, f)
+    "xscale": ("xscale", 2), # (r, a)
+}
+
 
 def _py_region_value(model, comp_name, region):
     from pyomo.environ import value
@@ -222,6 +233,24 @@ def main() -> None:
             ok = (abs(py - gval) <= args.tol_abs) or (rel <= args.tol)
             n_diff += (not ok)
             rows.append((f"{gsym}", f"{region},{commodity}", py, gval, rel,
+                         "ok" if ok else "DIFF"))
+
+    # --- factor-block inputs (gf/aft/xscale), variable arity ---
+    for gsym, (pyname, ndim) in _FACTOR_MAP.items():
+        gvals = gams_levels(gdx_path, gsym)
+        for gkey, gval in gvals.items():
+            if not (isinstance(gkey, tuple) and gkey[-1] == args.period):
+                continue
+            body = tuple(_strip_c(e) for e in gkey[:-1])  # drop period, strip prefixes
+            if len(body) != ndim:
+                continue
+            py = _py_indexed_value(model, pyname, body)
+            if py is None:
+                continue
+            rel = _rel(py, gval, args.tol_abs)
+            ok = (abs(py - gval) <= args.tol_abs) or (rel <= args.tol)
+            n_diff += (not ok)
+            rows.append((f"{gsym}", ",".join(body), py, gval, rel,
                          "ok" if ok else "DIFF"))
 
     # Print: DIFFs first (sorted by rel desc), then a compact ok summary.
