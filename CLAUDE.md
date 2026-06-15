@@ -78,9 +78,9 @@ Residual: <valor si conocido>
 | Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
 | Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
-## Herramientas de debug parity (cascade de 4)
+## Herramientas de debug parity (cascade de 5)
 
-Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
+Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta — un sesgo de calibración bajo tolerancia se ve idéntico a "ruido de basin CD" hasta que la herramienta 4 lo aísla.
 
 | # | Herramienta | Script | Ve | Ruta de uso |
 |---|-------------|--------|----|-------------|
@@ -88,8 +88,11 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
 | 1 | **Value/residual diff** | `triage.py` (locate→isolate→trace) | Dónde divergen valores resueltos | Variable específica diverge |
 | 2 | **Closure diff** | `diff_closure.py` | Variables fijas/libres, ecuaciones activas | Shock diverge ampliamente (nivel de precios entero) |
 | 3 | **.nl diff** | `nl_compare.py` | Coeficientes Jacobiano, forma algebraica | Pregunta sobre álgebra/coeficientes |
+| 4 | **Calibration diff** | `diff_calibration.py` | Insumos de calibración en el benchmark vs GAMS: betaP/betaG/betaS, factY/yTaxInd/ytaxTot/phi/phiP, y **cada stream de `ytax`** (pt/fc/pc/gc/ic/dt/mt/et), por región, a tol 1e-4 | Una var de ingreso/impuesto (yc, ytax, regY) diverge ~1-2% y parece "ruido de basin", O validate_reference culpa a la referencia por eq_yc/eq_yg/eq_rsav |
 
-**Pitfall clave:** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
+**Pitfall clave (herramientas 0-3):** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
+
+**Pitfall clave (herramienta 4):** un sesgo de insumo de calibración de ~0.04% es **invisible** a la herramienta 1 (sale "ok" bajo `tol_rel=1e-3`) y mal atribuido por `validate_reference` (ve el residual downstream, culpa al GDX). Precedente: `ytax[ROW,'mt']` usaba `imptx·vmsb` (valor de mercado) en vez de `imptx·VCIF` (valor CIF), sesgando yTaxInd→regY→betaP en 0.039% — escondido varias sesiones hasta que `diff_calibration.py` lo marcó por stream (fix en `_compute_ytax_ind_bench`: `vmsb`→`vcif`). `regY` se compara income-side (Python regY == GAMS factY+yTaxInd), no contra el regY que GAMS fija expenditure-side.
 
 ## Archivos clave
 
@@ -97,7 +100,9 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
 |---------|-----------|
 | `src/equilibria/templates/gtap/gtap_model_equations.py` | Ecuaciones del modelo. Áreas críticas: `get_gdpmp_init`, `get_yi_init`, `get_xiagg_init`, `eq_ytax`, `eq_yc`, `eq_yg`, `eq_pabs`, `eq_gdpmp`. Líneas 1134, 1862, 4510, 4574 ya fijadas a `NAmerica`. |
 | `scripts/gtap/run_gtap.py` | CLI. `validate-shock`, `_apply_shock_to_params` (`tm_pct`), `_collect_key_quantities` (emite `ytax(r,gy)` con 10 streams canónicos). |
-| `scripts/gtap/diff_altertax.py` | Diff cell-by-cell Python altertax vs NEOS out.gdx. 3 períodos: betaCal → check → shock. |
+| `scripts/gtap/diff_altertax.py` | Diff cell-by-cell Python altertax vs NEOS out.gdx. 3 períodos: betaCal → check → shock. Flags: `--compare-gdx` (warm-start de un GDX, comparar contra otro), `--no-gams-warm`, `--use-gams-check`. |
+| `scripts/gtap/validate_reference.py` | Siembra un GDX GAMS en Python y reporta qué ecuaciones viola la PROPIA referencia (detecta GDX corrupto/mal convergido). |
+| `scripts/gtap/diff_calibration.py` | **Herramienta 4 de la cascada.** Diff de insumos de calibración (betaP/betaG/betaS, factY/yTaxInd, cada stream de `ytax`) Python vs GAMS en el benchmark, por región y stream, a tol 1e-4. Atrapa sesgos de calibración invisibles al comparador de solve. |
 | `scripts/gtap/diff_nus333_full.py` / `diff_9x10_full.py` | Diffs cell-by-cell vs GAMS (NEOS o local). 0 cells diverge en ambos. |
 | `scripts/gtap/bench_nus333_dual.py` | Benchmark dual-reference (NEOS + GAMS local) + wall-time N=5. |
 | `scripts/parity/triage.py` | CLI de debug parity: locate→isolate→trace→check-warmstart. |
