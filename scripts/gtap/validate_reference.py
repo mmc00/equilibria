@@ -179,8 +179,11 @@ def main() -> None:
 
     gdx_path = args.gdx
     if gdx_path is None:
+        # Default to the ifSUB=1 reference (the NEOS-generated model diff_altertax
+        # compares against by default). Pass --gdx .../out_altertax_ifsub0.gdx for
+        # the regenerated ifSUB=0 reference.
         gdx_path = Path(
-            f"/Users/marmol/proyectos2/equilibria_refs/{args.dataset}_altertax_cd/out_altertax_cd.gdx"
+            f"/Users/marmol/proyectos2/equilibria_refs/{args.dataset}_altertax_cd/out_altertax_ifsub1.gdx"
         )
     if not gdx_path.exists():
         print(f"ERROR: reference GDX not found: {gdx_path}")
