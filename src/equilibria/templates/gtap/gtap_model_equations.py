@@ -5611,10 +5611,18 @@ class GTAPModelEquations:
             # GAMS rgdpmpeq (compStat) is LINEAR-sqrt (single root), not the quadratic
             # rewrite (spurious root — same class as eq_pfact/eq_pabs):
             #   rgdpmp = sqrt(mqgdp_00 * gdpmp * mqgdp_0t / mqgdp_t0).
+            # The Fisher mqgdp terms include a trade balance (pefob·xw − pmcif·xw)
+            # that can transiently go negative DURING a PATH iteration (when
+            # warm-started/homotopy-seeded far from equilibrium), making the sqrt
+            # argument negative → "math domain error" crashes the solve. Guard the
+            # argument with a SMOOTH positive floor smax(arg) = (arg+sqrt(arg²+ε))/2:
+            # ≈ arg for arg≫√ε, ≈ 0⁺ for arg≤0, C¹-smooth so PATH stays evaluable.
+            # Identical to the bare sqrt at any feasible point (arg>0 there), so the
+            # equilibrium and the .nl seed coefficients are unchanged.
             from pyomo.environ import sqrt as _pyo_sqrt
-            return model.rgdpmp[r] == _pyo_sqrt(
-                mqgdp_00 * model.gdpmp[r] * mqgdp_0t / (mqgdp_t0 + 1e-12)
-            )
+            _arg = mqgdp_00 * model.gdpmp[r] * mqgdp_0t / (mqgdp_t0 + 1e-12)
+            _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
+            return model.rgdpmp[r] == _pyo_sqrt(_arg_pos + 1e-12)
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
 
         def eq_pgdpmp_rule(model, r):
