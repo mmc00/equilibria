@@ -17,10 +17,16 @@ So the bias only surfaces, diluted and amplified, in downstream solved variables
 
 This tool compares the BENCHMARK (period='base') calibration inputs directly:
 the regional expenditure shares betaP/betaG/betaS, the income aggregates
-factY / yTaxInd / ytaxTot / regY / phi / phiP, and — crucially — each ytax tax
-stream (pt, fc, pc, gc, ic, dt, mt, et, ...) BY REGION. At the benchmark there is
-no shock and no basin ambiguity, so a 0.04% bias is both visible and attributable
-to one stream (e.g. the `mt` stream that used vmsb instead of the CIF value).
+factY / yTaxInd / ytaxTot / regY / phi / phiP, each ytax tax stream (pt, fc, pc,
+gc, ic, dt, mt, et, ...) BY REGION, and the CDE / demand block eh / bh / xcshr /
+zcons BY (region, commodity). At the benchmark there is no shock and no basin
+ambiguity, so a 0.04% bias is both visible and attributable to one input (e.g.
+the `mt` stream that used vmsb instead of the CIF value).
+
+ALL calibration inputs live here: this is the single source of truth for "does
+Python's benchmark match GAMS before the solver runs". If everything here is ok
+but a warm-start residual persists (e.g. eq_phip), the gap is in the equation
+FORM or the MCP fixed-point — NOT in a calibrated input.
 
 Worked precedent (2026-06-14): Python's `ytax[ROW,'mt']` was 0.338282 vs GAMS
 0.323560 (imptx·vmsb instead of imptx·VCIF). It biased yTaxInd→regY→betaP by 0.04%,
@@ -64,6 +70,14 @@ _SCALAR_MAP = {
     "regY": "regy", "phi": "phi", "phiP": "phip",
 }
 
+# CDE / demand-block calibration inputs indexed by (region, commodity). GAMS keys
+# carry the c_ prefix and may add an hhd dim (xcshr/zcons); both are normalised.
+# These drive phiP (eq_phip = Σ xcshr·eh) and the household CDE demand — a fine
+# mismatch here biases phiP→yc and shows up as a check-period warm-start residual.
+_RI_MAP = {
+    "eh": "eh", "bh": "bh", "xcshr": "xcshr", "zcons": "zcons",
+}
+
 
 def _py_region_value(model, comp_name, region):
     from pyomo.environ import value
@@ -85,6 +99,27 @@ def _py_ytax_value(model, region, gy):
         return float(value(comp[region, gy]))
     except Exception:
         return None
+
+
+def _strip_c(s):
+    """Strip a leading GAMS set-type prefix (c_/a_/f_/r_), case-preserving."""
+    if isinstance(s, str) and len(s) > 2 and s[1] == "_" and s[0] in "acfr":
+        return s[2:]
+    return s
+
+
+def _py_indexed_value(model, comp_name, key):
+    """Read model.<comp>[key] tolerating (r,i) vs (r,i,hhd) shapes."""
+    from pyomo.environ import value
+    comp = getattr(model, comp_name, None)
+    if comp is None:
+        return None
+    for k in (key, key[:-1] if len(key) > 1 else key):  # try full, then drop last (hhd)
+        try:
+            return float(value(comp[k] if len(k) > 1 else comp[k[0]]))
+        except Exception:
+            continue
+    return None
 
 
 def _rel(py, g, tol_abs):
@@ -170,18 +205,37 @@ def main() -> None:
         n_diff += (not ok)
         rows.append((f"ytax[{gy}]", region, py, gval, rel, "ok" if ok else "DIFF"))
 
+    # --- CDE / demand-block inputs, per (region, commodity) ---
+    for gsym, pyname in _RI_MAP.items():
+        gvals = gams_levels(gdx_path, gsym)
+        for gkey, gval in gvals.items():
+            if not (isinstance(gkey, tuple) and gkey[-1] == args.period):
+                continue
+            body = gkey[:-1]  # drop the trailing period
+            # body is (r, c_i) for eh/bh or (r, c_i, hhd) for xcshr/zcons.
+            region = body[0]
+            commodity = _strip_c(body[1])
+            py = _py_indexed_value(model, pyname, (region, commodity))
+            if py is None:
+                continue
+            rel = _rel(py, gval, args.tol_abs)
+            ok = (abs(py - gval) <= args.tol_abs) or (rel <= args.tol)
+            n_diff += (not ok)
+            rows.append((f"{gsym}", f"{region},{commodity}", py, gval, rel,
+                         "ok" if ok else "DIFF"))
+
     # Print: DIFFs first (sorted by rel desc), then a compact ok summary.
     diffs = sorted([r for r in rows if r[5] == "DIFF"], key=lambda r: -r[4])
-    print(f"{'symbol':<14}{'region':<10}{'python':>14}{'gams':>14}{'rel':>10}  status")
-    print("-" * 74)
+    print(f"{'symbol':<14}{'region/cell':<16}{'python':>14}{'gams':>14}{'rel':>10}  status")
+    print("-" * 80)
     for sym, reg, py, g, rel, st in diffs:
         rel_s = f"{rel*100:.4f}%" if rel != float("inf") else "inf"
-        print(f"{sym:<14}{reg:<10}{py:>14.6f}{g:>14.6f}{rel_s:>10}  {st}")
+        print(f"{sym:<14}{reg:<16}{py:>14.6f}{g:>14.6f}{rel_s:>10}  {st}")
     if not diffs:
         print("  (no calibration inputs exceed tolerance)")
 
     n_ok = sum(1 for r in rows if r[5] == "ok")
-    print("-" * 74)
+    print("-" * 80)
     print(f"  checked={len(rows)}  ok={n_ok}  DIFF={n_diff}")
 
     if n_diff:
