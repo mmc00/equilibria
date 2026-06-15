@@ -78,9 +78,9 @@ Residual: <valor si conocido>
 | Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
 | Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
-## Herramientas de debug parity (cascade de 5)
+## Herramientas de debug parity (cascade de 6)
 
-Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta — un sesgo de calibración bajo tolerancia se ve idéntico a "ruido de basin CD" hasta que la herramienta 4 lo aísla.
+Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta — un sesgo de calibración bajo tolerancia se ve idéntico a "ruido de basin CD" hasta que la herramienta 4 lo aísla; y una diferencia de forma de ecuación que coincide numéricamente en el punto sembrado pasa el .nl pero la atrapa la herramienta 5.
 
 | # | Herramienta | Script | Ve | Ruta de uso |
 |---|-------------|--------|----|-------------|
@@ -88,7 +88,10 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta �
 | 1 | **Value/residual diff** | `triage.py` (locate→isolate→trace) | Dónde divergen valores resueltos | Variable específica diverge |
 | 2 | **Closure diff** | `diff_closure.py` | Variables fijas/libres, ecuaciones activas | Shock diverge ampliamente (nivel de precios entero) |
 | 3 | **.nl diff** | `nl_compare.py` | Coeficientes Jacobiano, forma algebraica | Pregunta sobre álgebra/coeficientes |
-| 4 | **Calibration diff** | `diff_calibration.py` | Insumos de calibración en el benchmark vs GAMS: betaP/betaG/betaS, factY/yTaxInd/ytaxTot/phi/phiP, y **cada stream de `ytax`** (pt/fc/pc/gc/ic/dt/mt/et), por región, a tol 1e-4 | Una var de ingreso/impuesto (yc, ytax, regY) diverge ~1-2% y parece "ruido de basin", O validate_reference culpa a la referencia por eq_yc/eq_yg/eq_rsav |
+| 4 | **Calibration diff** | `diff_calibration.py` | Insumos de calibración en el benchmark vs GAMS: betaP/betaG/betaS, factY/yTaxInd/ytaxTot/phi/phiP, cada stream de `ytax` (pt/fc/pc/gc/ic/dt/mt/et), CDE (eh/bh/xcshr/zcons), bloque factor (gf/aft/xscale), por región/celda a tol 1e-4 | Una var de ingreso/impuesto (yc, ytax, regY) diverge ~1-2% y parece "ruido de basin", O validate_reference culpa a la referencia por eq_yc/eq_yg/eq_rsav |
+| 5 | **Equation-form diff** | `diff_equation_form.py` | Forma simbólica expandida de una ecuación Python (coeficientes sustituidos, ej. 1/xscale → 10.0/100.0) lado a lado con la definición GAMS del `.gms` | Inputs (tool 4) y coeficientes (.nl tool 3) coinciden pero una familia sigue divergiendo → diferencia estructural de forma (1/xscale de más, factor extra, dominio de suma) que el .nl no muestra |
+
+**Pitfall clave (herramienta 5):** el .nl compara coeficientes en UN punto; una diferencia de forma que coincide numéricamente en la semilla pasa el gate. La tool 5 imprime ambas formas pareadas para inspección dirigida (no auto-diff: la igualdad simbólica cross-lenguaje es frágil).
 
 **Pitfall clave (herramientas 0-3):** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
 
@@ -102,7 +105,8 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta �
 | `scripts/gtap/run_gtap.py` | CLI. `validate-shock`, `_apply_shock_to_params` (`tm_pct`), `_collect_key_quantities` (emite `ytax(r,gy)` con 10 streams canónicos). |
 | `scripts/gtap/diff_altertax.py` | Diff cell-by-cell Python altertax vs NEOS out.gdx. 3 períodos: betaCal → check → shock. Flags: `--compare-gdx` (warm-start de un GDX, comparar contra otro), `--no-gams-warm`, `--use-gams-check`. |
 | `scripts/gtap/validate_reference.py` | Siembra un GDX GAMS en Python y reporta qué ecuaciones viola la PROPIA referencia (detecta GDX corrupto/mal convergido). |
-| `scripts/gtap/diff_calibration.py` | **Herramienta 4 de la cascada.** Diff de insumos de calibración (betaP/betaG/betaS, factY/yTaxInd, cada stream de `ytax`) Python vs GAMS en el benchmark, por región y stream, a tol 1e-4. Atrapa sesgos de calibración invisibles al comparador de solve. |
+| `scripts/gtap/diff_calibration.py` | **Herramienta 4 de la cascada.** Diff de insumos de calibración (betaP/betaG/betaS, factY/yTaxInd, cada stream de `ytax`, CDE eh/bh/xcshr/zcons, bloque factor gf/aft/xscale) Python vs GAMS en el benchmark, por región/celda, a tol 1e-4. Atrapa sesgos de calibración invisibles al comparador de solve. |
+| `scripts/gtap/diff_equation_form.py` | **Herramienta 5 de la cascada.** Imprime la forma simbólica expandida de una ecuación Python (1/xscale → literal 10.0/100.0) lado a lado con la definición GAMS del `.gms`. Atrapa diferencias estructurales de forma que el .nl (coeficientes en un punto) no muestra. Uso: `--eq eq_xd_agg --cell ROW,Svces --gams-eq xds`. |
 | `scripts/gtap/diff_nus333_full.py` / `diff_9x10_full.py` | Diffs cell-by-cell vs GAMS (NEOS o local). 0 cells diverge en ambos. |
 | `scripts/gtap/bench_nus333_dual.py` | Benchmark dual-reference (NEOS + GAMS local) + wall-time N=5. |
 | `scripts/parity/triage.py` | CLI de debug parity: locate→isolate→trace→check-warmstart. |
