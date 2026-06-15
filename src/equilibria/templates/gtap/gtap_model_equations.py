@@ -4160,13 +4160,13 @@ class GTAPModelEquations:
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
             if abs(expo) < 1e-8:
-                # CD case (sigmav=1): standard CES formula degenerates to 1=sum(af)=1
-                # (tautology — pva not in expression). Mirroring GAMS, the constraint
-                # is vacuous: use exp(log(pva)) == pva which is always satisfied and
-                # has zero Jacobian for pva. PATH then determines pva from the
-                # cross-Jacobian entries of pxeq (px = pnd^and * pva^ava) and
-                # eq_va (va = ava*xp*(px/pva)), exactly as GAMS PATH does.
-                return exp(log(model.pva[r, a])) == model.pva[r, a]
+                # CD case (sigmav=1): the old tautology exp(log(pva))==pva left pva
+                # with zero Jacobian → unanchored → PATH drifted it (→20). GAMS keeps
+                # pvaeq BINDING at σ=1. Anchor pva LOCALLY with a quasi-CD exponent
+                # (σ=1.001), WITHOUT nudging _get_sigmav globally (that reshapes
+                # eq_va/eq_xfeq and over-determines the MCP). With af calibrated at the
+                # matching σ and pfa=pf (no rtf), the GAMS point satisfies this exactly.
+                expo = 1.0 - 1.001
 
             terms = []
             for f in model.f:

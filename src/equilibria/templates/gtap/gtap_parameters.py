@@ -528,8 +528,12 @@ class GTAPCalibratedShares:
             return max(1.0 / max(1.0 - _kappa(r, f, a), 1e-12), 1e-12)
 
         def _pfa_bench(r: str, f: str, a: str) -> float:
-            factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
-            return _pf_bench(r, f, a) * max(1.0 + factor_tax, 1e-12)
+            # pfa = pf*(1 + fctts + fcttx), NOT pf*(1+rtf) — match eq_pfaeq/get_pfa_init
+            # (rtf bundles kappaf, already in pf). 5th and last (1+rtf) site; makes af
+            # consistent with the corrected pfaeq so eq_pvaeq closes at the GAMS point.
+            fctts = float(taxes.rtfi.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+            fcttx = float(taxes.rtfd.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+            return _pf_bench(r, f, a) * max(1.0 + fctts + fcttx, 1e-12)
         
         # Calculate intermediate values needed for calibration
         nd_values = {}  # ND bundle values
@@ -656,8 +660,11 @@ class GTAPCalibratedShares:
                 if va_val <= 0:
                     continue
                 
+                # Match eq_pvaeq's local quasi-CD exponent so af is calibrated with
+                # the same σ the binding equation uses.
                 sigmav = elasticities.sigmav.get((r, a), 1.0)
-                
+                if abs(sigmav - 1.0) < 1e-8:
+                    sigmav = 1.001
                 for f in sets.f:
                     xf_val = xf_values.get((r, f, a), 0.0)
                     if xf_val <= 0:
