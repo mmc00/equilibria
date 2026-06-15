@@ -88,6 +88,11 @@ def main() -> None:
                     help="Compare the converged Python solve against THIS GDX, while "
                          "warm-starting from --gdx. Lets you land Python in one basin "
                          "(via --gdx warm-start) and score it against a different reference.")
+    ap.add_argument("--if-sub", action="store_true",
+                    help="Build Python with if_sub=True (ifSUB=1: inline-substitute "
+                         "pp/pdp/pmp/xwmg/xmgm/pwmg/pmcif/pfa/pfy via macros). Default "
+                         "is if_sub=False (ifSUB=0). Use to compare apples-to-apples "
+                         "against an ifSUB=1 reference.")
     args = ap.parse_args()
 
     data_path, bundle_dir, loader, cd_ref = DATASET_REGISTRY[args.dataset]
@@ -141,15 +146,17 @@ def main() -> None:
     # Residual region: last region (HAR convention) or NAmerica (9x10)
     res_region = "NAmerica" if args.dataset == "9x10" else list(p_b_raw.sets.r)[-1]
 
-    # Build closures
+    # Build closures. if_sub selects the GAMS ifSUB model variant (False=ifSUB=0,
+    # the default full model Python validates; True=ifSUB=1, inline-substituted).
+    _ifsub = bool(args.if_sub)
     if args.dataset == "9x10":
         contract = run_gtap._build_gtap_contract_with_calibration("gtap_standard7_9x10")
-        base_closure = contract.closure.model_copy(update={"if_sub": False})
+        base_closure = contract.closure.model_copy(update={"if_sub": _ifsub})
     else:
         base_closure = GTAPClosureConfig(
             name="base", closure_type="MCP",
             capital_mobility="sluggish", fix_endowments=False,
-            fix_taxes=False, fix_technology=False, if_sub=False,
+            fix_taxes=False, fix_technology=False, if_sub=_ifsub,
             numeraire="pnum",
         )
 
@@ -161,7 +168,7 @@ def main() -> None:
         fix_endowments=False,
         fix_taxes=True,
         fix_technology=True,
-        if_sub=False,
+        if_sub=_ifsub,
         numeraire=base_closure.numeraire,
         rmuv=getattr(base_closure, "rmuv", None),
         imuv=getattr(base_closure, "imuv", None),
