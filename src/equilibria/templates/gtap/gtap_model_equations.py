@@ -1213,11 +1213,14 @@ class GTAPModelEquations:
         for (rr, i, rp), rtxs in taxes.rtxs.items():
             if rr == region:
                 total += float(rtxs) * float(bm.vxsb.get((region, i, rp), 0.0))
-        # mt — import taxes (imptx on vmsb, region as importer)
+        # mt — import taxes. GAMS ytax(r,'mt') = Σ imptx·pmcif·xw = imptx·VCIF
+        # (the CIF import value), NOT imptx·vmsb (the agent market-price value).
+        # Using vmsb over-states mt by the CIF-vs-market wedge and biases regY/betaP
+        # (gtap7_3x3 ROW: vmsb gave 0.338 vs the correct CIF 0.3236, ~0.04% in betaP).
         for (exporter, i, importer), rate in taxes.imptx.items():
             if importer == region:
-                vmsb_val = bm.vmsb.get((exporter, i, region), 0.0)
-                total += float(rate) * float(vmsb_val or 0.0)
+                vcif_val = bm.vcif.get((exporter, i, region), 0.0)
+                total += float(rate) * float(vcif_val or 0.0)
         # NOTE: ft (rtf*evfb) and fs (fctts*evfb) and dt (kappaf*evfb = evfb-evos)
         # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes).
         return total
