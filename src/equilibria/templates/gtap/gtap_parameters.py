@@ -550,8 +550,7 @@ class GTAPCalibratedShares:
                     evfb_val = float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
                     if evfb_val <= 0.0:
                         continue
-                    factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
-                    va_val += evfb_val * (1.0 + factor_tax)
+                    va_val += evfb_val
                 if va_val > 0:
                     va_values[(r, a)] = va_val
 

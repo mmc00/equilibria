@@ -1442,8 +1442,7 @@ class GTAPModelEquations:
                     )
                     if evfb_val <= 0.0:
                         continue
-                    factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
-                    va_level += evfb_val * (1.0 + factor_tax)
+                    va_level += evfb_val
 
                 xp_level = nd_level + va_level
                 if xp_level <= 0.0:
@@ -2258,8 +2257,7 @@ class GTAPModelEquations:
                 )
                 if evfb_val <= 0.0:
                     continue
-                factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
-                va_val += evfb_val * (1.0 + factor_tax)
+                va_val += evfb_val
 
             xp_val = nd_val + va_val
             if xp_val > 0.0:
@@ -2297,8 +2295,9 @@ class GTAPModelEquations:
 
         def get_pfa_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
-            factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
-            return max(pf_val * (1.0 + factor_tax), 1e-8)
+            fctts = float(self.params.taxes.rtfi.get((r, f, a), 0.0) or 0.0)
+            fcttx = float(self.params.taxes.rtfd.get((r, f, a), 0.0) or 0.0)
+            return max(pf_val * (1.0 + fctts + fcttx), 1e-8)
 
         def get_pfy_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
