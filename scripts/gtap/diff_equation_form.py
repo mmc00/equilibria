@@ -52,20 +52,23 @@ def _default_gms(dataset: str, ifsub: int) -> Path:
 
 
 def _extract_gams_eq(gms_path: Path, eq_name: str) -> str:
-    """Pull the GAMS equation block `eq_name(...).. <body> ;` verbatim."""
+    """Pull the GAMS equation DEFINITION block `eq_name(...).. <body with =X=> ;`.
+
+    Must skip the `Equations` declaration section (where the name appears followed
+    by a quoted description, no `..`), and require a relational operator (=e=/=g=/
+    =l=) in the body so a declaration is never mistaken for the definition.
+    """
     text = gms_path.read_text()
-    # Match  eqname(idx)$(cond)..  up to the terminating ';'
-    pat = re.compile(rf"(?m)^\s*{re.escape(eq_name)}\s*\([^)]*\)[^.]*\.\.(.*?);", re.S)
-    m = pat.search(text)
-    if not m:
-        # try without index list (scalar eq like pwfacteq(t))
-        pat2 = re.compile(rf"(?m)^\s*{re.escape(eq_name)}\b.*?\.\.(.*?);", re.S)
-        m = pat2.search(text)
-        if not m:
-            return f"(GAMS equation '{eq_name}' not found in {gms_path.name})"
-    body = m.group(0).strip()
-    # collapse runs of blank lines
-    return "\n".join(line.rstrip() for line in body.splitlines() if line.strip())
+    # All `name ... .. ... ;` blocks; keep the one whose body has a relational op.
+    candidates = re.finditer(
+        rf"(?m)^\s*{re.escape(eq_name)}\s*(\([^)]*\))?[^.;]*\.\.(.*?);", text, re.S
+    )
+    for m in candidates:
+        body = m.group(2)
+        if re.search(r"=[eEgGlL]=", body):
+            block = m.group(0).strip()
+            return "\n".join(ln.rstrip() for ln in block.splitlines() if ln.strip())
+    return f"(GAMS equation definition '{eq_name}' not found in {gms_path.name})"
 
 
 def _parse_cell(cell: str):
