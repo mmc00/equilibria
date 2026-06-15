@@ -3926,7 +3926,18 @@ class GTAPModelEquations:
                 val = self.params.benchmark.vcif.get((partner, commodity, region), 0.0)
             return float(val or 0.0)
 
-        def _imptx_rate_importer(importer, commodity, exporter) -> float:
+        def _imptx_rate_importer(importer, commodity, exporter):
+            # Returns the LIVE mutable Param model.imptx[exporter,commodity,importer]
+            # (not a baked float) so that re-seeding imptx between homotopy steps flows
+            # into the price equations (eq_pm, _m_pm) without rebuilding the model.
+            # model.imptx is indexed (r, i, rp) == (exporter, commodity, importer) per
+            # _imptx_init. Falls back to the float param only if the Param cell is
+            # absent (keeps the prior transposed-key tolerance for odd datasets).
+            if hasattr(model, "imptx"):
+                try:
+                    return model.imptx[exporter, commodity, importer]
+                except Exception:
+                    pass
             raw = self.params.taxes.imptx.get((exporter, commodity, importer))
             if raw is None:
                 raw = self.params.taxes.imptx.get((importer, commodity, exporter), 0.0)
