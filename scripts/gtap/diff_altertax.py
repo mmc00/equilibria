@@ -84,6 +84,10 @@ def main() -> None:
                     help="Skip GAMS warm-start for check period (use getData init only)")
     ap.add_argument("--use-gams-check", action="store_true",
                     help="Skip Python check solve; seed shock from GAMS check period values directly")
+    ap.add_argument("--compare-gdx", type=Path, default=None,
+                    help="Compare the converged Python solve against THIS GDX, while "
+                         "warm-starting from --gdx. Lets you land Python in one basin "
+                         "(via --gdx warm-start) and score it against a different reference.")
     args = ap.parse_args()
 
     data_path, bundle_dir, loader, cd_ref = DATASET_REGISTRY[args.dataset]
@@ -97,7 +101,12 @@ def main() -> None:
         gdx_path = cd_ref
     else:
         gdx_path = bundle_dir / "out.gdx"
-    print(f"=== Reference GDX: {gdx_path} ===")
+    # gdx_path drives BOTH warm-start and comparison unless --compare-gdx overrides
+    # the comparison target (warm-start still uses gdx_path).
+    compare_gdx_path = args.compare_gdx if args.compare_gdx is not None else gdx_path
+    print(f"=== Reference GDX (warm-start): {gdx_path} ===")
+    if compare_gdx_path != gdx_path:
+        print(f"=== Comparison GDX: {compare_gdx_path} ===")
 
     from equilibria.templates.gtap import (
         GTAPParameters, GTAPModelEquations,
@@ -571,8 +580,10 @@ def main() -> None:
     print(f"  shock residual={res_alt:.3e}  code={r_alt.get('termination_code')}  t={sec_alt:.2f}s")
     _convergence_gate("SHOCK solve", r_alt)
 
-    var_names = list_populated_vars(gdx_path)
-    print(f"\nPopulated GAMS Vars in {gdx_path.name}: {len(var_names)}")
+    # Shock comparison is scored against compare_gdx_path (== gdx_path unless
+    # --compare-gdx is given). Base/check diffs below stay on gdx_path (warm-start ref).
+    var_names = list_populated_vars(compare_gdx_path)
+    print(f"\nPopulated GAMS Vars in {compare_gdx_path.name}: {len(var_names)}")
 
     # =========================================================================
     # [base diff] Compare Python base altertax solve vs GAMS period='base'
@@ -642,7 +653,7 @@ def main() -> None:
 
     rows, agg = diff_phase_rows(
         dataset=f"{args.dataset}_altertax", phase=phase, var_names=var_names,
-        gdx_path=gdx_path, model_py=m_alt,
+        gdx_path=compare_gdx_path, model_py=m_alt,
         tol_rel=args.tol_rel, tol_abs=args.tol_abs,
         residual=res_alt, git_sha=git_sha, generated_at=generated_at,
         derived=build_derived(m_alt),
@@ -672,7 +683,7 @@ def main() -> None:
               f"{diverge:>8d} {missing:>8d} {mx_abs:>10s} {mx_rel:>10s}  {status}")
 
         if args.show_worst and (diverge > 0 or missing > 0) and r["py_var"]:
-            gams_all = gams_levels(gdx_path, r["var"])
+            gams_all = gams_levels(compare_gdx_path, r["var"])
             py_var, _ = find_py_var(m_alt, r["var"], derived=build_derived(m_alt))
             if py_var is not None:
                 s = compare_phase(py_var, gams_all, phase,
@@ -706,7 +717,7 @@ def main() -> None:
     param_rows, param_agg = diff_params_rows(
         dataset=f"{args.dataset}_altertax", phase=phase,
         param_names=ALTERTAX_PARAM_NAMES,
-        gdx_path=gdx_path, model_py=m_alt,
+        gdx_path=compare_gdx_path, model_py=m_alt,
         tol_rel=args.tol_rel, tol_abs=args.tol_abs,
         residual=res_alt, git_sha=git_sha, generated_at=generated_at,
         solve_seconds=sec_alt,
@@ -729,7 +740,7 @@ def main() -> None:
         print(f"{r['var']:<16s} {py_lbl:<22s} {cells:>7d} {match:>7d} "
               f"{diverge:>8d} {missing:>8d} {mx_abs:>10s} {mx_rel:>10s}  {status}")
         if args.show_worst and (diverge > 0 or missing > 0) and r["py_var"]:
-            gams_all = gams_levels(gdx_path, r["var"].lstrip("[par]"))
+            gams_all = gams_levels(compare_gdx_path, r["var"].lstrip("[par]"))
             from _diff_core import compare_phase_param, _find_py_param
             py_p, _ = _find_py_param(m_alt, r["var"].lstrip("[par]"))
             if py_p is not None:
