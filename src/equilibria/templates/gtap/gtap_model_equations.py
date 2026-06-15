@@ -423,7 +423,11 @@ class GTAPModelEquations:
         self._align_xi_xaa_post_scaling(model)
         self._add_equations(model)
         self._add_objective(model)
-        
+
+        # Propagate residual region so the solver anchors yi[rres] to the right region
+        # (default was hardcoded "NAmerica", absent in gtap7_*; yi[ROW] then floated).
+        model._residual_region = self.residual_region
+
         return model
     
     def _align_xi_xaa_post_scaling(self, model: "ConcreteModel") -> None:
