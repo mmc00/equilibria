@@ -68,6 +68,93 @@ DATASET_REGISTRY = {
 }
 
 
+# GDX camelCase → Python attribute name (shared by the warm-start helpers below
+# and main()). Kept module-level so homotopy_shock.py can reuse the exact mapping.
+GAMS_TO_PY_NAME = {
+    "ytaxInd": "ytax_ind", "ytaxTot": "ytaxTot", "factY": "facty",
+    "phiP": "phip", "regY": "regy", "kapEnd": "kapEnd", "chiSave": "chiSave",
+    "xd": "xda", "xm": "xma",
+}
+
+
+def _strip_set_prefix(k):
+    """('EU_28','Land','a_Food') member → strip GAMS a_/c_/f_/r_ prefix."""
+    if isinstance(k, str) and len(k) > 2 and k[1] == "_" and k[0] in "acfr":
+        return k[2:]
+    return k
+
+
+def warmstart_from_gams(model, gdx_path, period: str) -> int:
+    """Seed every matchable GAMS `period` value into `model` (levels only).
+    Returns count of cells set. Mirrors main()'s [2/3] full warm-start exactly
+    (all vars, prefix-stripped, camelCase-mapped) so a model built the same way
+    lands in the GAMS basin. Shared with homotopy_shock.py."""
+    n = 0
+    for vn in list_populated_vars(gdx_path):
+        try:
+            gvals = gams_levels(gdx_path, vn)
+        except Exception:
+            continue
+        py_name = GAMS_TO_PY_NAME.get(vn, vn)
+        pyvar = getattr(model, py_name, None)
+        if pyvar is None:
+            pyvar = getattr(model, vn, None)
+        if pyvar is None:
+            pyvar = getattr(model, vn.lower(), None)
+        if pyvar is None:
+            continue
+        for gkey, gval in gvals.items():
+            if not (isinstance(gkey, tuple) and gkey[-1] == period):
+                continue
+            pk = tuple(_strip_set_prefix(k) for k in gkey[:-1])
+            try:
+                v = pyvar[pk] if len(pk) > 1 else pyvar[pk[0]]
+                if not v.fixed:
+                    v.set_value(float(gval))
+                    n += 1
+            except Exception:
+                pass
+    return n
+
+
+def build_altertax_models(p_b_raw, res_region, base_closure, alt_closure):
+    """Build (m_b betaCal, p_alt, m_chk) with the EXACT [1/3]+[2/3] recipe from
+    main(): apply altertax elasticities, betaCal base model as t0_snapshot, the
+    phiP[check]=1.0 override on BOTH the calibration object and the built model,
+    and regy unfixed. Does NOT warm-start or solve — caller seeds + solves.
+    Reusable by homotopy_shock.py so the ramp starts from a real altertax check
+    (a naked altertax build does NOT converge — see project memory)."""
+    from equilibria.templates.gtap import GTAPModelEquations
+    from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+
+    p_alt = apply_altertax_elasticities(p_b_raw, in_place=False)
+    m_b = GTAPModelEquations(p_alt.sets, p_alt, base_closure, residual_region=res_region).build_model()
+
+    # phiP[check] = pcons[base] = 1.0 — set on the calibration object BEFORE build
+    # (the missing piece a naked rebuild skipped) and on the model after.
+    for _r in p_alt.sets.r:
+        try:
+            if hasattr(p_alt, "calibration") and hasattr(p_alt.calibration, "phip"):
+                p_alt.calibration.phip[(_r,)] = 1.0
+        except Exception:
+            pass
+    m_chk = GTAPModelEquations(
+        p_alt.sets, p_alt, alt_closure, residual_region=res_region, t0_snapshot=m_b,
+    ).build_model()
+    for _r in p_alt.sets.r:
+        try:
+            if hasattr(m_chk, "regy") and m_chk.regy[_r].fixed:
+                m_chk.regy[_r].unfix()
+        except Exception:
+            pass
+        try:
+            if hasattr(m_chk, "phip"):
+                m_chk.phip[_r].set_value(1.0)
+        except Exception:
+            pass
+    return m_b, p_alt, m_chk
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="9x10",
