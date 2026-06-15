@@ -39,6 +39,11 @@ from _diff_core import gams_levels, list_populated_vars  # type: ignore
 _GAMS_TO_PY_NAME = {
     "ytaxInd": "ytax_ind", "factY": "facty", "phiP": "phip", "regY": "regy",
     "xd": "xda", "xm": "xma", "p": "p_rai", "pp": "pp_rai",
+    # COMPLETE-SEEDING additions: map every GAMS Var to its Python counterpart so the
+    # full GAMS point can be seeded and the residual diff shows the TRUE list of bad
+    # equations in one pass (not artifacts of unseeded vars in their init state).
+    "xa": "xaa",            # GAMS xa(r,i,aa) → Python xaa(r,i,aa)
+    "factY".lower(): "facty",
 }
 
 # Python Vars with truly no GAMS counterpart (cannot be seeded). p_rai/pp_rai were
@@ -117,9 +122,29 @@ def _seed_gams(model, gdx_path: Path, period: str) -> set:
             if not (isinstance(gkey, tuple) and gkey[-1] == period):
                 continue
             pk = tuple(_strip_prefix(k) for k in gkey[:-1])
+            # Try the key as-is, then a few normalisations so the WHOLE GAMS point
+            # gets seeded (not just the trivially-matching vars):
+            #   - scalar var: pk==() → index with None / no index
+            #   - drop a singleton 'hhd' dim (GAMS uh/ev/cv/xcshr/zcons carry it, Python doesn't)
+            candidates = [pk]
+            if "hhd" in pk:
+                candidates.append(tuple(e for e in pk if e != "hhd"))
+            v = None
+            for cand in candidates:
+                try:
+                    if len(cand) == 0:
+                        # scalar Var: pyvar itself or pyvar[None]
+                        v = pyvar if pyvar.is_indexed() is False else pyvar[None]
+                    elif len(cand) == 1:
+                        v = pyvar[cand[0]]
+                    else:
+                        v = pyvar[cand]
+                    break
+                except Exception:
+                    v = None
+                    continue
             try:
-                v = pyvar[pk] if len(pk) > 1 else pyvar[pk[0]]
-                if not v.fixed:
+                if v is not None and not v.fixed:
                     v.set_value(float(gval))
                     seeded_ids.add(id(v))
             except Exception:
