@@ -70,14 +70,34 @@ class _DerivedScalar:
         return self._v
 
 
+def _strip_pfx_keepcase(s: str) -> str:
+    """Strip a single leading GAMS set-type prefix (a_/c_/f_/r_) preserving case.
+
+    Unlike _strip_gtap_prefix (which lowercases for fuzzy comparison), this keeps
+    the original case so the stripped element matches Pyomo's case-sensitive set
+    members (e.g. GAMS 'c_Food'/'a_Food' → Python 'Food', not 'food')."""
+    for pfx in ("a_", "c_", "f_", "r_"):
+        if s.startswith(pfx):
+            return s[len(pfx):]
+    return s
+
+
 def _value_or_zero(model, var_name, idx):
     v = getattr(model, var_name, None)
     if v is None:
         return None
-    try:
-        return float(v[idx].value if hasattr(v[idx], "value") else v[idx])
-    except Exception:
-        return None
+    # GAMS keys carry set-type prefixes (c_Food, a_Food) that Pyomo sets lack;
+    # try the raw key first, then the prefix-stripped (case-preserving) key.
+    candidates = [idx]
+    stripped = tuple(_strip_pfx_keepcase(str(k)) for k in idx)
+    if stripped != idx:
+        candidates.append(stripped)
+    for cand in candidates:
+        try:
+            return float(v[cand].value if hasattr(v[cand], "value") else v[cand])
+        except Exception:
+            continue
+    return None
 
 
 def build_derived(model) -> dict:
@@ -281,6 +301,13 @@ def get_py_var_value(py_var, key: tuple) -> float | None:
                 v = _try_index(py_var, shrunk)
                 if v is not None:
                     return v
+                # GAMS (r,c_Food,hhd) → Python (r,Food): drop hhd AND strip the
+                # set-type prefixes (case-preserving) so the residual key matches.
+                shrunk_np = tuple(_strip_pfx_keepcase(str(e)) for e in shrunk)
+                if shrunk_np != shrunk:
+                    v = _try_index(py_var, shrunk_np)
+                    if v is not None:
+                        return v
         if not is_derived and len(key) >= 2:
             permuted = key[:-2] + (key[-1], key[-2])
             v = _try_index(py_var, permuted)
