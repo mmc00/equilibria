@@ -143,11 +143,16 @@ def main() -> None:
         except Exception as e:
             print(f"  [warn] could not apply solver closure ({e}); showing BUILD state")
 
-    # Numeraire / Walras / welfare-report free rows are legitimately handled
-    # differently in Python (pnum fixed=1, walras is the slack check, ev/cv are
-    # post-solve welfare reports). They are NOT the multi-root economic class, so a
-    # mismatch there is benign — listed but not counted as a real flag.
-    BENIGN = {"pnumeq", "walraseq", "eveq", "cveq"}
+    # Free rows that are benign when Python keeps them active+paired:
+    #  - numeraire / Walras / welfare reports (pnum fixed=1, walras=slack, ev/cv=report);
+    #  - LINEAR market-clearing / balance identities (xseq with omegax=inf is xs=xds+xet;
+    #    capAccteq is Σsavf=0; savfeq under capFix is trivial) — these have ONE root, so
+    #    pairing them with the variable they define is correct, NOT the multi-root class.
+    # The DANGEROUS class is a power/quadratic free row (pfteq: pft^(1+omega)=Σgf·pfy^…),
+    # which is multi-valued; that is the only one PATH can converge to a wrong root for.
+    # NOTE: xseq/savfeq's benignness depends on omegax=inf / savfFlag=capFix — re-check
+    # for datasets with finite omegax or capFlex/capShrFix closures.
+    BENIGN = {"pnumeq", "walraseq", "eveq", "cveq", "xseq", "capAccteq", "savfeq"}
 
     print(f"\n=== Python state per GAMS FREE ROW (the mismatch-prone class) ===")
     print(f"  {'gams_eq':<12}{'python_eq':<16}{'py_active':>10}   note")
@@ -162,7 +167,10 @@ def main() -> None:
             note = "deactivated → matches GAMS free-row ✓"
             astr = f"{active}/{total}"
         elif eq in BENIGN:
-            note = "active but BENIGN (numeraire/walras/welfare report)"
+            _kind = ("numeraire/walras/welfare report"
+                     if eq in {"pnumeq", "walraseq", "eveq", "cveq"}
+                     else "linear market-clearing/balance identity (single root)")
+            note = f"active but BENIGN ({_kind})"
             astr = f"{active}/{total}"
         else:
             note = "ACTIVE+paired → MISMATCH vs GAMS free-row ⚠"
