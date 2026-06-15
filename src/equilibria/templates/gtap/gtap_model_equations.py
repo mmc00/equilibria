@@ -5040,13 +5040,22 @@ class GTAPModelEquations:
 
         # Note: eq_pvaeq already defined above with GAMS formulation
 
-        # Regional factor price index — GAMS pfacteq (model.gms:1253).
-        # Comp-stat Fisher index: pfact(r,t)^2 = (M_sb·M_ss)/(M_bb·M_bs)  per region,
-        # where mqfactr(r,tp,tq) = sum_{fp,a} pf(r,fp,a,tp)*xf(r,fp,a,tq)/xscale(r,a).
-        # M_bb is a calibration constant; pf0 and xf0 are defined later (eq_pwfact
-        # block), so we defer this constraint construction until they exist.
-        # Construct it now using a closure that references model.pf0/xf0 lazily.
+        # Regional factor price index — GAMS pfacteq (model.gms compStat, ll.2497-2500):
+        #   pfact(r,t) = pfact(r,t0) * sqrt[ (mqfactr(t,t0)/mqfactr(t0,t0))
+        #                                  * (mqfactr(t,t) /mqfactr(t0,t)) ]
+        # with pfact(r,t0)=1 and mqfactr(r,tp,tq)=sum_{fp,a} pf(tp)*xf(tq)/xscale.
+        # In our period mapping: m_sb=mqfactr(t,t0), mqfactr_bb=mqfactr(t0,t0),
+        # m_ss=mqfactr(t,t), m_bs=mqfactr(t0,t). So:
+        #   pfact = sqrt[ (m_sb/mqfactr_bb) * (m_ss/m_bs) ].
+        # IMPORTANT — keep this form LINEAR-in-pfact (a single positive sqrt root),
+        # NOT the algebraically-equivalent quadratic `pfact^2 * mqfactr_bb * m_bs ==
+        # m_sb * m_ss`. The quadratic admits a spurious root and PATH converged to it
+        # (pfact≈2.8 vs GAMS 1.0) without a strong factor-block warm-start, inflating
+        # the whole factor-price level. GAMS's sqrt form has one root and is faithful.
+        # M_bb is a calibration constant; pf0/xf0 are defined later (eq_pwfact block),
+        # so we defer this constraint construction until they exist.
         def eq_pfact_rule(model, r):
+            from pyomo.environ import sqrt as _pyo_sqrt
             m_bs = sum(
                 model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
                 for f in model.f for a in model.a
@@ -5062,7 +5071,9 @@ class GTAPModelEquations:
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
-            return model.pfact[r] * model.pfact[r] * model.mqfactr_bb[r] * m_bs == m_sb * m_ss
+            return model.pfact[r] == _pyo_sqrt(
+                (m_sb / model.mqfactr_bb[r]) * (m_ss / (m_bs + 1e-12))
+            )
         # Constraint added after pf0/xf0/mqfactr_bb are constructed below.
         self._defer_eq_pfact = eq_pfact_rule
 
