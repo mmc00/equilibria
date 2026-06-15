@@ -78,7 +78,7 @@ Residual: <valor si conocido>
 | Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
 | Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
-## Herramientas de debug parity (cascade de 6)
+## Herramientas de debug parity (cascade de 7)
 
 Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta — un sesgo de calibración bajo tolerancia se ve idéntico a "ruido de basin CD" hasta que la herramienta 4 lo aísla; y una diferencia de forma de ecuación que coincide numéricamente en el punto sembrado pasa el .nl pero la atrapa la herramienta 5.
 
@@ -90,8 +90,11 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta �
 | 3 | **.nl diff** | `nl_compare.py` | Coeficientes Jacobiano, forma algebraica | Pregunta sobre álgebra/coeficientes |
 | 4 | **Calibration diff** | `diff_calibration.py` | Insumos de calibración en el benchmark vs GAMS: betaP/betaG/betaS, factY/yTaxInd/ytaxTot/phi/phiP, cada stream de `ytax` (pt/fc/pc/gc/ic/dt/mt/et), CDE (eh/bh/xcshr/zcons), bloque factor (gf/aft/xscale), por región/celda a tol 1e-4 | Una var de ingreso/impuesto (yc, ytax, regY) diverge ~1-2% y parece "ruido de basin", O validate_reference culpa a la referencia por eq_yc/eq_yg/eq_rsav |
 | 5 | **Equation-form diff** | `diff_equation_form.py` | Forma simbólica expandida de una ecuación Python (coeficientes sustituidos, ej. 1/xscale → 10.0/100.0) lado a lado con la definición GAMS del `.gms` | Inputs (tool 4) y coeficientes (.nl tool 3) coinciden pero una familia sigue divergiendo → diferencia estructural de forma (1/xscale de más, factor extra, dominio de suma) que el .nl no muestra |
+| 6 | **MCP-pairing diff** | `diff_mcp_pairing.py` | Emparejamiento ecuación↔variable: parsea `model gtap /eq.var, .../` de GAMS (eq.var = emparejado, eq solo = FREE-ROW) y lo contrasta con qué ecuaciones Python desactiva (`--apply-closure`). Numéricamente invisible a tools 3-5 | El solve converge (code=1) pero a OTRA raíz de un bloque multivaluado (ej. pft≈3.6 vs 1.0). Causa raíz del factor-2: GAMS deja `pfteq` free-row, Python la resolvía para pft → raíz espuria |
 
 **Pitfall clave (herramienta 5):** el .nl compara coeficientes en UN punto; una diferencia de forma que coincide numéricamente en la semilla pasa el gate. La tool 5 imprime ambas formas pareadas para inspección dirigida (no auto-diff: la igualdad simbólica cross-lenguaje es frágil).
+
+**Pitfall clave (herramienta 6):** un emparejamiento MCP distinto (Python resuelve una ecuación que GAMS deja free-row) hace que PATH converja limpio (code=1, residual ~0) a una raíz DISTINTA de un bloque multivaluado. Invisible a inputs/coeficientes/formas — solo el bloque `model gtap` lo revela. Free-rows de gtap7_3x3: xseq, pfteq, savfeq, capAccteq, pnumeq, walraseq, eveq, cveq (los últimos 4 son benignos: numéraire/walras/bienestar).
 
 **Pitfall clave (herramientas 0-3):** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
 
@@ -107,6 +110,7 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta �
 | `scripts/gtap/validate_reference.py` | Siembra un GDX GAMS en Python y reporta qué ecuaciones viola la PROPIA referencia (detecta GDX corrupto/mal convergido). |
 | `scripts/gtap/diff_calibration.py` | **Herramienta 4 de la cascada.** Diff de insumos de calibración (betaP/betaG/betaS, factY/yTaxInd, cada stream de `ytax`, CDE eh/bh/xcshr/zcons, bloque factor gf/aft/xscale) Python vs GAMS en el benchmark, por región/celda, a tol 1e-4. Atrapa sesgos de calibración invisibles al comparador de solve. |
 | `scripts/gtap/diff_equation_form.py` | **Herramienta 5 de la cascada.** Imprime la forma simbólica expandida de una ecuación Python (1/xscale → literal 10.0/100.0) lado a lado con la definición GAMS del `.gms`. Atrapa diferencias estructurales de forma que el .nl (coeficientes en un punto) no muestra. Uso: `--eq eq_xd_agg --cell ROW,Svces --gams-eq xds`. |
+| `scripts/gtap/diff_mcp_pairing.py` | **Herramienta 6 de la cascada.** Parsea el emparejamiento MCP de GAMS (`model gtap /eq.var/`) y marca free-rows de GAMS que Python mantiene activas+emparejadas (clase del bug pfteq factor-2). `--apply-closure` refleja el estado real post-solver. Uso: `--dataset gtap7_3x3 --apply-closure`. |
 | `scripts/gtap/diff_nus333_full.py` / `diff_9x10_full.py` | Diffs cell-by-cell vs GAMS (NEOS o local). 0 cells diverge en ambos. |
 | `scripts/gtap/bench_nus333_dual.py` | Benchmark dual-reference (NEOS + GAMS local) + wall-time N=5. |
 | `scripts/parity/triage.py` | CLI de debug parity: locate→isolate→trace→check-warmstart. |
