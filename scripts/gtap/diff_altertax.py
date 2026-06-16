@@ -70,11 +70,21 @@ DATASET_REGISTRY = {
 
 # GDX camelCase → Python attribute name (shared by the warm-start helpers below
 # and main()). Kept module-level so homotopy_shock.py can reuse the exact mapping.
+# Mirrors validate_reference._GAMS_TO_PY_NAME so the warm-start seeds the WHOLE GAMS
+# point (not just the trivially-matching vars). The xa/p/pp entries were missing and
+# left xaa/p_rai/pp_rai at their init values, manufacturing spurious residuals in
+# eq_gdpmp/eq_x/eq_peq that destabilised PATH (see project_gtap7_3x3_sigma_test).
 GAMS_TO_PY_NAME = {
     "ytaxInd": "ytax_ind", "ytaxTot": "ytaxTot", "factY": "facty",
     "phiP": "phip", "regY": "regy", "kapEnd": "kapEnd", "chiSave": "chiSave",
     "xd": "xda", "xm": "xma",
+    "xa": "xaa",        # GAMS xa(r,i,aa) → Python xaa
+    "p": "p_rai",       # producer make-price → Python p_rai
+    "pp": "pp_rai",     # tax-inclusive producer price → Python pp_rai
 }
+
+# Scalar-by-t Vars that list_populated_vars DROPS (notably piGbl) — seed explicitly.
+_SCALAR_BY_T_VARS = ("piGbl", "xigbl", "rorg")
 
 
 def _strip_set_prefix(k):
@@ -86,11 +96,19 @@ def _strip_set_prefix(k):
 
 def warmstart_from_gams(model, gdx_path, period: str) -> int:
     """Seed every matchable GAMS `period` value into `model` (levels only).
-    Returns count of cells set. Mirrors main()'s [2/3] full warm-start exactly
-    (all vars, prefix-stripped, camelCase-mapped) so a model built the same way
-    lands in the GAMS basin. Shared with homotopy_shock.py."""
+    Returns count of cells set. COMPLETE seeder (ported from validate_reference.
+    _seed_gams): full camelCase/xa/p/pp name map, scalar-Var handling (empty key →
+    pyvar directly / pyvar[None]), singleton-'hhd' drop, AND the scalar-by-t Vars
+    that list_populated_vars omits (piGbl). An incomplete warm-start leaves derived
+    vars at init → spurious eq residuals → PATH drifts (project_gtap7_3x3_sigma_test).
+    Shared with homotopy_shock.py."""
     n = 0
-    for vn in list_populated_vars(gdx_path):
+    # list_populated_vars misses scalar-by-t Vars (piGbl); add them explicitly.
+    var_names = list(list_populated_vars(gdx_path))
+    for s in _SCALAR_BY_T_VARS:
+        if s not in var_names:
+            var_names.append(s)
+    for vn in var_names:
         try:
             gvals = gams_levels(gdx_path, vn)
         except Exception:
@@ -107,9 +125,26 @@ def warmstart_from_gams(model, gdx_path, period: str) -> int:
             if not (isinstance(gkey, tuple) and gkey[-1] == period):
                 continue
             pk = tuple(_strip_set_prefix(k) for k in gkey[:-1])
+            # key candidates: as-is, then drop a singleton 'hhd' dim (GAMS uh/ev/cv/
+            # xcshr/zcons carry it, Python doesn't).
+            candidates = [pk]
+            if "hhd" in pk:
+                candidates.append(tuple(e for e in pk if e != "hhd"))
+            v = None
+            for cand in candidates:
+                try:
+                    if len(cand) == 0:
+                        # scalar Var: the component itself, or pyvar[None]
+                        v = pyvar if pyvar.is_indexed() is False else pyvar[None]
+                    elif len(cand) == 1:
+                        v = pyvar[cand[0]]
+                    else:
+                        v = pyvar[cand]
+                    break
+                except Exception:
+                    v = None
             try:
-                v = pyvar[pk] if len(pk) > 1 else pyvar[pk[0]]
-                if not v.fixed:
+                if v is not None and not v.fixed:
                     v.set_value(float(gval))
                     n += 1
             except Exception:
