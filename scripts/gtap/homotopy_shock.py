@@ -108,6 +108,29 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
         _mb, p_alt, m_chk = DA.build_altertax_models(p_raw, res, base_clo, alt_clo)
         return m_chk, p_alt
 
+    # GAMS soft lower bounds (gms:3822-3833): X.lo(tsim) = 0.001·X.l(tsim-1) for every
+    # price. NOT a fix and NOT a GAMS value — a 0.1% floor derived from the PREVIOUS
+    # period's own converged level, so a free CD price (pva/pnd) cannot collapse toward 0
+    # mid-iteration (the exact failure we saw: pva→0.12→0.01). Faithful to GAMS, no
+    # hardcoding. base_vars carry the GAMS lo-bound list; Python Var names mapped.
+    _LO_VARS = {"px": "px", "pva": "pva", "pnd": "pnd", "p": "p_rai", "pa": "pa",
+                "pe": "pe", "pefob": "pefob", "pmcif": "pmcif"}
+
+    def apply_soft_lbs(model, prev):
+        n = 0
+        for _g, _pn in _LO_VARS.items():
+            v = getattr(model, _pn, None)
+            if v is None:
+                continue
+            for idx in v:
+                key = (_pn, idx)
+                if key in prev and prev[key] > 0 and not v[idx].fixed:
+                    try:
+                        v[idx].setlb(0.001 * prev[key]); n += 1
+                    except Exception:
+                        pass
+        return n
+
     # ---- PHASE 0: converged check anchor (mult=1.0, GAMS check warm-start) ----
     m, p_s = build_at(1.0)
     DA.warmstart_from_gams(m, gdx_path, "check")
@@ -123,6 +146,7 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
         mult = 1.0 + 0.1 * (step / ramp_steps)
         m, p_s = build_at(mult)
         restore_all(m, prev_state)
+        apply_soft_lbs(m, prev_state)  # GAMS X.lo = 0.001·X.l(prev step)
         r = solve(m, p_s, GTAPVariableSnapshot.from_python_model(m))
         if r.get("termination_code") == 1:
             prev_state = snapshot_all(m)
@@ -133,6 +157,7 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
 
     # ---- PHASE 2: clean-up re-seed pnd → pva inversion, re-solve to fixed point ----
     for cs in range(1, cleanup_steps + 1):
+        prev_cl = snapshot_all(m)  # for the soft LBs (prev cleanup iterate)
         for _r in p_s.sets.r:
             for _a in p_s.sets.a:
                 try:
@@ -160,6 +185,7 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
                         m.pva[_r, _a].set_value(max(pva, 1e-8))
                 except Exception:
                     pass
+        apply_soft_lbs(m, prev_cl)  # GAMS X.lo = 0.001·X.l(prev cleanup iterate)
         r = solve(m, p_s, GTAPVariableSnapshot.from_python_model(m))
         if verbose:
             print(f"  [cleanup {cs}/{cleanup_steps}] code={r.get('termination_code')} "
