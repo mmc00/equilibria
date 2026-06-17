@@ -672,40 +672,12 @@ def main() -> None:
     # xd→xda, xm→xma) lands the GAMS basin.
     if not args.no_gams_warm:
         try:
-            # gams_levels / list_populated_vars come from the module-top import
-            # (line 26); re-importing locally would shadow them as function locals.
-            _SHOCK_NAME_MAP = {
-                "ytaxInd": "ytax_ind", "factY": "facty", "phiP": "phip",
-                "regY": "regy", "xd": "xda", "xm": "xma",
-            }
-            _n_shock_warm = 0
-            for _vn in list_populated_vars(gdx_path):
-                _gvals = gams_levels(gdx_path, _vn)
-                _py_name = _SHOCK_NAME_MAP.get(_vn, _vn)
-                _pyvar = getattr(m_alt, _py_name, None)
-                if _pyvar is None:
-                    _pyvar = getattr(m_alt, _vn, None)
-                if _pyvar is None:
-                    _pyvar = getattr(m_alt, _vn.lower(), None)
-                if _pyvar is None:
-                    continue
-                for _gkey, _gval in _gvals.items():
-                    if not (isinstance(_gkey, tuple) and _gkey[-1] == "shock"):
-                        continue
-                    _pykey = _gkey[:-1]
-                    _pykey = tuple(
-                        _k[2:] if isinstance(_k, str) and len(_k) > 2
-                                and _k[1] == '_' and _k[0] in 'acfr'
-                        else _k
-                        for _k in _pykey
-                    )
-                    try:
-                        _v = _pyvar[_pykey] if len(_pykey) > 1 else _pyvar[_pykey[0]]
-                        if not _v.fixed:
-                            _v.set_value(float(_gval))
-                            _n_shock_warm += 1
-                    except Exception:
-                        pass
+            # Use the COMPLETE seeder (warmstart_from_gams): the old inline loop omitted
+            # xa→xaa, p→p_rai, pp→pp_rai and the scalar-by-t Vars (piGbl), leaving them at
+            # init → spurious ~2-3% residuals that capped the match. With the complete seed
+            # AND the eq_pwfact-sqrt + eq_pvaeq-value-anchor fixes, the shock reaches 100%
+            # at tol 1% / 96.65% at tol 0.1% (code=1). Verified.
+            _n_shock_warm = warmstart_from_gams(m_alt, gdx_path, "shock")
             if _n_shock_warm:
                 print(f"  [GAMS-warm] Warm-started shock from GAMS shock values: {_n_shock_warm} vars set")
         except Exception as _swe:
