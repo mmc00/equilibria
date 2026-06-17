@@ -5650,10 +5650,17 @@ class GTAPModelEquations:
                 share = value(model.c_share[r, i])
                 if alpha <= 0.0 or share <= 0.0:
                     continue
+                # GAMS eveq: alphaa·uh^(bh·eh)·(pa(r,i,hhd,t0)·Pop/ev)^bh = 1.
+                # The per-commodity BASE Armington price pa(r,i,hhd,t0) sits INSIDE the
+                # sum (raised to per-i bh), so it cannot be factored out. Python had
+                # dropped it (used pop/ev) — negligible at benchmark where pa(t0)≈1 but
+                # for shifted base prices (EU_28 hhd) it threw ev far off (0.0099 vs
+                # GAMS 8.34). Restore the pa(t0) factor to match GAMS exactly.
+                pa0 = base_pa.get((r, i, GTAP_HOUSEHOLD_AGENT), 1.0)
                 terms.append(
                     alpha
                     * (model.uh[r] ** (bh * eh))
-                    * ((model.pop[r] / model.ev[r]) ** bh)
+                    * ((pa0 * model.pop[r] / model.ev[r]) ** bh)
                 )
             if not terms:
                 return Constraint.Skip
