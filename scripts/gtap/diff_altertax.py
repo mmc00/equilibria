@@ -497,6 +497,12 @@ def main() -> None:
         except Exception as _we:
             print(f"  [GAMS-warm] skipped: {_we}")
 
+    # NOTE: --holdfix-pva is NOT applied to the CHECK. The check solve is code=2
+    # (never converges — a separate, long-standing issue) so holding pva/pnd there
+    # pushes it FURTHER off (pf rel 23%→93%), and the headline Match rate scores the
+    # SHOCK phase only — the CHECK/BASE blocks are diagnostic prints, not the metric.
+    # Holdfix belongs only on the converging shock (block below).
+
     warm_b = GTAPVariableSnapshot.from_python_model(m_chk)
     # Verify warm-start captured GAMS values
     try:
