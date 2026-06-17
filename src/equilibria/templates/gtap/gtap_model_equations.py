@@ -4175,12 +4175,25 @@ class GTAPModelEquations:
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
             if abs(expo) < 1e-8:
-                # CD case (sigmav=1): standard CES formula degenerates to 1=sum(af)=1
-                # (tautology — pva not in expression). Mirroring GAMS, the constraint
-                # is vacuous: use exp(log(pva)) == pva which is always satisfied and
-                # has zero Jacobian for pva. PATH then determines pva from the
-                # cross-Jacobian entries of pxeq (px = pnd^and * pva^ava) and
-                # eq_va (va = ava*xp*(px/pva)), exactly as GAMS PATH does.
+                # CD case (sigmav=1): the CES dual pva^(1-σ)=Σaf·(pfa/λ)^(1-σ) degenerates
+                # to the tautology 1=Σaf=1, leaving pva UNANCHORED → PATH slides it to a
+                # spurious branch (the gtap7_3x3 78.69% cap). The correct CD determinant is
+                # the VA-BUNDLE VALUE IDENTITY — GAMS xfeq summed over factors with Σaf=1:
+                #     pva·va = Σ_f (M_PFA·xf)   (value of the VA bundle = total factor cost).
+                # VERIFIED to reproduce GAMS pva EXACTLY (Σ(pfa·xf)/va = 1.01382 = GAMS
+                # pva[USA,Mnfcs], diff=0). Uses Python's own pfa(=M_PFA, ifSUB=0)/xf/va —
+                # NOT hardcoding. Anchors pva without the degenerate (px/pnd^and)^(1/ava)
+                # inversion (which just echoes a slid px). With the eq_pwfact linear-sqrt
+                # fix, lifts the shock match (tol 1%: 64%→92%). Falls back to the vacuous
+                # tautology only if va is absent / no active factor cell.
+                if hasattr(model, "va"):
+                    fterms = []
+                    for f in model.f:
+                        if hasattr(model, "xfflag") and value(model.xfflag[r, f, a]) <= 0.0:
+                            continue
+                        fterms.append(_m_pfa(r, f, a) * model.xf[r, f, a])
+                    if fterms:
+                        return model.pva[r, a] * model.va[r, a] == sum(fterms)
                 return exp(log(model.pva[r, a])) == model.pva[r, a]
 
             terms = []
@@ -5785,7 +5798,8 @@ class GTAPModelEquations:
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
-            return model.pwfact * model.pwfact * model.mqfactw_bb * m_bs == m_sb * m_ss
+            from pyomo.environ import sqrt as _pyo_sqrt
+            return model.pwfact == _pyo_sqrt((m_sb / model.mqfactw_bb) * (m_ss / (m_bs + 1e-12)))
         model.eq_pwfact = Constraint(rule=eq_pwfact_rule)
 
         # eq_pmuv: Tornqvist MUV deflator (model.gms:1237-1247). Active when
