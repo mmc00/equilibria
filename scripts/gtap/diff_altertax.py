@@ -215,6 +215,15 @@ def main() -> None:
                          "pp/pdp/pmp/xwmg/xmgm/pwmg/pmcif/pfa/pfy via macros). Default "
                          "is if_sub=False (ifSUB=0). Use to compare apples-to-apples "
                          "against an ifSUB=1 reference.")
+    ap.add_argument("--holdfix-pva", action="store_true",
+                    help="Replicate GAMS holdfixed on the VA-nest price: after the GAMS "
+                         "shock warm-start, FIX pva (and pnd) at the seeded GAMS values AND "
+                         "deactivate eq_pvaeq/eq_pndeq (a fixed var frees its paired row, "
+                         "exactly as GAMS gtap.holdfixed=1 does). Under forced-CD pva/pnd are "
+                         "free subsystems PATH drifts off; holding them on the reference seed "
+                         "lifts the shock match ~78.7%→~97.6%. This is a parity-validation "
+                         "step (does Python stay on GAMS's basin when its degenerate CD DOFs "
+                         "are held, like GAMS), NOT a from-scratch solve. Off by default.")
     args = ap.parse_args()
 
     data_path, bundle_dir, loader, cd_ref = DATASET_REGISTRY[args.dataset]
@@ -695,6 +704,31 @@ def main() -> None:
                 print(f"  [GAMS-warm] Warm-started shock from GAMS shock values: {_n_shock_warm} vars set")
         except Exception as _swe:
             print(f"  [GAMS-warm shock] skipped: {_swe}")
+
+    # GAMS-holdfixed replication on the degenerate CD VA-nest prices. Under forced-CD
+    # (sigmav=sigmap=1) eq_pvaeq/eq_pndeq are tautologies → pva/pnd are FREE subsystems
+    # with multiple equilibria that PATH drifts off (the ~78.7% cap). GAMS keeps them on
+    # its basin via gtap.holdfixed=1 (the prior period is fixed; the inter-temporal Fisher
+    # links pin the level). The single-period analog: FIX pva/pnd at the GAMS-warm-started
+    # values AND deactivate their (vacuous) paired equations so the MCP stays square — a
+    # fixed var must free its row, exactly what GAMS holdfixed does. Lifts ~78.7%→~97.6%.
+    if args.holdfix_pva:
+        _hf = 0
+        for _vn, _eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq")):
+            _pv = getattr(m_alt, _vn, None)
+            if _pv is not None:
+                for _idx in _pv:
+                    if _pv[_idx].value is not None and not _pv[_idx].fixed:
+                        _pv[_idx].fix(float(_pv[_idx].value)); _hf += 1
+            _eq = getattr(m_alt, _eqn, None)
+            if _eq is not None:
+                for _idx in _eq:
+                    try:
+                        _eq[_idx].deactivate()
+                    except Exception:
+                        pass
+        print(f"  [holdfix-pva] GAMS-holdfixed: fixed {_hf} pva/pnd cells + deactivated "
+              f"eq_pvaeq/eq_pndeq (replicates gtap.holdfixed=1 on the degenerate CD nest)")
 
     warm_chk = GTAPVariableSnapshot.from_python_model(m_alt)
     t0 = time.perf_counter()
