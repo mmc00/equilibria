@@ -62,10 +62,132 @@ REFS_DIR = Path("/Users/marmol/proyectos2/equilibria_refs")
 DATASET_REGISTRY = {
     "9x10": (GDX_9X10, ROOT / "output/9x10_altertax_neos_bundle", "gdx", None),
     "gtap7_3x3": (ROOT / "datasets/gtap7_3x3", ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har",
-                  REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_cd.gdx"),
+                  REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_ifsub1.gdx"),
     "gtap7_3x4": (ROOT / "datasets/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har", None),
     "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har", None),
 }
+
+
+# GDX camelCase → Python attribute name (shared by the warm-start helpers below
+# and main()). Kept module-level so homotopy_shock.py can reuse the exact mapping.
+# Mirrors validate_reference._GAMS_TO_PY_NAME so the warm-start seeds the WHOLE GAMS
+# point (not just the trivially-matching vars). The xa/p/pp entries were missing and
+# left xaa/p_rai/pp_rai at their init values, manufacturing spurious residuals in
+# eq_gdpmp/eq_x/eq_peq that destabilised PATH (see project_gtap7_3x3_sigma_test).
+GAMS_TO_PY_NAME = {
+    "ytaxInd": "ytax_ind", "ytaxTot": "ytaxTot", "factY": "facty",
+    "phiP": "phip", "regY": "regy", "kapEnd": "kapEnd", "chiSave": "chiSave",
+    "xd": "xda", "xm": "xma",
+    "xa": "xaa",        # GAMS xa(r,i,aa) → Python xaa
+    "p": "p_rai",       # producer make-price → Python p_rai
+    "pp": "pp_rai",     # tax-inclusive producer price → Python pp_rai
+}
+
+# Scalar-by-t Vars that list_populated_vars DROPS (notably piGbl) — seed explicitly.
+_SCALAR_BY_T_VARS = ("piGbl", "xigbl", "rorg")
+
+
+def _strip_set_prefix(k):
+    """('EU_28','Land','a_Food') member → strip GAMS a_/c_/f_/r_ prefix."""
+    if isinstance(k, str) and len(k) > 2 and k[1] == "_" and k[0] in "acfr":
+        return k[2:]
+    return k
+
+
+def warmstart_from_gams(model, gdx_path, period: str) -> int:
+    """Seed every matchable GAMS `period` value into `model` (levels only).
+    Returns count of cells set. COMPLETE seeder (ported from validate_reference.
+    _seed_gams): full camelCase/xa/p/pp name map, scalar-Var handling (empty key →
+    pyvar directly / pyvar[None]), singleton-'hhd' drop, AND the scalar-by-t Vars
+    that list_populated_vars omits (piGbl). An incomplete warm-start leaves derived
+    vars at init → spurious eq residuals → PATH drifts (project_gtap7_3x3_sigma_test).
+    Shared with homotopy_shock.py."""
+    n = 0
+    # list_populated_vars misses scalar-by-t Vars (piGbl); add them explicitly.
+    var_names = list(list_populated_vars(gdx_path))
+    for s in _SCALAR_BY_T_VARS:
+        if s not in var_names:
+            var_names.append(s)
+    for vn in var_names:
+        try:
+            gvals = gams_levels(gdx_path, vn)
+        except Exception:
+            continue
+        py_name = GAMS_TO_PY_NAME.get(vn, vn)
+        pyvar = getattr(model, py_name, None)
+        if pyvar is None:
+            pyvar = getattr(model, vn, None)
+        if pyvar is None:
+            pyvar = getattr(model, vn.lower(), None)
+        if pyvar is None:
+            continue
+        for gkey, gval in gvals.items():
+            if not (isinstance(gkey, tuple) and gkey[-1] == period):
+                continue
+            pk = tuple(_strip_set_prefix(k) for k in gkey[:-1])
+            # key candidates: as-is, then drop a singleton 'hhd' dim (GAMS uh/ev/cv/
+            # xcshr/zcons carry it, Python doesn't).
+            candidates = [pk]
+            if "hhd" in pk:
+                candidates.append(tuple(e for e in pk if e != "hhd"))
+            v = None
+            for cand in candidates:
+                try:
+                    if len(cand) == 0:
+                        # scalar Var: the component itself, or pyvar[None]
+                        v = pyvar if pyvar.is_indexed() is False else pyvar[None]
+                    elif len(cand) == 1:
+                        v = pyvar[cand[0]]
+                    else:
+                        v = pyvar[cand]
+                    break
+                except Exception:
+                    v = None
+            try:
+                if v is not None and not v.fixed:
+                    v.set_value(float(gval))
+                    n += 1
+            except Exception:
+                pass
+    return n
+
+
+def build_altertax_models(p_b_raw, res_region, base_closure, alt_closure):
+    """Build (m_b betaCal, p_alt, m_chk) with the EXACT [1/3]+[2/3] recipe from
+    main(): apply altertax elasticities, betaCal base model as t0_snapshot, the
+    phiP[check]=1.0 override on BOTH the calibration object and the built model,
+    and regy unfixed. Does NOT warm-start or solve — caller seeds + solves.
+    Reusable by homotopy_shock.py so the ramp starts from a real altertax check
+    (a naked altertax build does NOT converge — see project memory)."""
+    from equilibria.templates.gtap import GTAPModelEquations
+    from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+
+    p_alt = apply_altertax_elasticities(p_b_raw, in_place=False)
+    m_b = GTAPModelEquations(p_alt.sets, p_alt, base_closure, residual_region=res_region).build_model()
+
+    # phiP[check] = pcons[base] = 1.0 — set on the calibration object BEFORE build
+    # (the missing piece a naked rebuild skipped) and on the model after.
+    for _r in p_alt.sets.r:
+        try:
+            if hasattr(p_alt, "calibration") and hasattr(p_alt.calibration, "phip"):
+                p_alt.calibration.phip[(_r,)] = 1.0
+        except Exception:
+            pass
+    m_chk = GTAPModelEquations(
+        p_alt.sets, p_alt, alt_closure, residual_region=res_region, t0_snapshot=m_b,
+    ).build_model()
+    for _r in p_alt.sets.r:
+        try:
+            if hasattr(m_chk, "regy") and m_chk.regy[_r].fixed:
+                m_chk.regy[_r].unfix()
+        except Exception:
+            pass
+        try:
+            if hasattr(m_chk, "phip"):
+                m_chk.phip[_r].set_value(1.0)
+        except Exception:
+            pass
+    return m_b, p_alt, m_chk
 
 
 def main() -> None:
@@ -84,6 +206,24 @@ def main() -> None:
                     help="Skip GAMS warm-start for check period (use getData init only)")
     ap.add_argument("--use-gams-check", action="store_true",
                     help="Skip Python check solve; seed shock from GAMS check period values directly")
+    ap.add_argument("--compare-gdx", type=Path, default=None,
+                    help="Compare the converged Python solve against THIS GDX, while "
+                         "warm-starting from --gdx. Lets you land Python in one basin "
+                         "(via --gdx warm-start) and score it against a different reference.")
+    ap.add_argument("--if-sub", action="store_true",
+                    help="Build Python with if_sub=True (ifSUB=1: inline-substitute "
+                         "pp/pdp/pmp/xwmg/xmgm/pwmg/pmcif/pfa/pfy via macros). Default "
+                         "is if_sub=False (ifSUB=0). Use to compare apples-to-apples "
+                         "against an ifSUB=1 reference.")
+    ap.add_argument("--holdfix-pva", action="store_true",
+                    help="Replicate GAMS holdfixed on the VA-nest price: after the GAMS "
+                         "shock warm-start, FIX pva (and pnd) at the seeded GAMS values AND "
+                         "deactivate eq_pvaeq/eq_pndeq (a fixed var frees its paired row, "
+                         "exactly as GAMS gtap.holdfixed=1 does). Under forced-CD pva/pnd are "
+                         "free subsystems PATH drifts off; holding them on the reference seed "
+                         "lifts the shock match ~78.7%→~97.6%. This is a parity-validation "
+                         "step (does Python stay on GAMS's basin when its degenerate CD DOFs "
+                         "are held, like GAMS), NOT a from-scratch solve. Off by default.")
     args = ap.parse_args()
 
     data_path, bundle_dir, loader, cd_ref = DATASET_REGISTRY[args.dataset]
@@ -97,7 +237,12 @@ def main() -> None:
         gdx_path = cd_ref
     else:
         gdx_path = bundle_dir / "out.gdx"
-    print(f"=== Reference GDX: {gdx_path} ===")
+    # gdx_path drives BOTH warm-start and comparison unless --compare-gdx overrides
+    # the comparison target (warm-start still uses gdx_path).
+    compare_gdx_path = args.compare_gdx if args.compare_gdx is not None else gdx_path
+    print(f"=== Reference GDX (warm-start): {gdx_path} ===")
+    if compare_gdx_path != gdx_path:
+        print(f"=== Comparison GDX: {compare_gdx_path} ===")
 
     from equilibria.templates.gtap import (
         GTAPParameters, GTAPModelEquations,
@@ -132,15 +277,17 @@ def main() -> None:
     # Residual region: last region (HAR convention) or NAmerica (9x10)
     res_region = "NAmerica" if args.dataset == "9x10" else list(p_b_raw.sets.r)[-1]
 
-    # Build closures
+    # Build closures. if_sub selects the GAMS ifSUB model variant (False=ifSUB=0,
+    # the default full model Python validates; True=ifSUB=1, inline-substituted).
+    _ifsub = bool(args.if_sub)
     if args.dataset == "9x10":
         contract = run_gtap._build_gtap_contract_with_calibration("gtap_standard7_9x10")
-        base_closure = contract.closure.model_copy(update={"if_sub": False})
+        base_closure = contract.closure.model_copy(update={"if_sub": _ifsub})
     else:
         base_closure = GTAPClosureConfig(
             name="base", closure_type="MCP",
             capital_mobility="sluggish", fix_endowments=False,
-            fix_taxes=False, fix_technology=False, if_sub=False,
+            fix_taxes=False, fix_technology=False, if_sub=_ifsub,
             numeraire="pnum",
         )
 
@@ -152,7 +299,7 @@ def main() -> None:
         fix_endowments=False,
         fix_taxes=True,
         fix_technology=True,
-        if_sub=False,
+        if_sub=_ifsub,
         numeraire=base_closure.numeraire,
         rmuv=getattr(base_closure, "rmuv", None),
         imuv=getattr(base_closure, "imuv", None),
@@ -263,16 +410,11 @@ def main() -> None:
         print("  [GAMS-warm] SKIPPED (--no-gams-warm)")
     else:
         try:
-            try:
-                from _diff_core import gams_levels  # type: ignore
-            except ImportError:
-                import sys as _sys
-                _sys.path.insert(0, str(Path(__file__).resolve().parent))
-                from _diff_core import gams_levels  # type: ignore
-            try:
-                from _diff_core import list_populated_vars  # type: ignore
-            except ImportError:
-                pass
+            # gams_levels / list_populated_vars are imported at module top (line 26).
+            # Do NOT re-import them locally here: a local import inside this
+            # conditional makes Python treat the names as locals for the whole
+            # function, so under --no-gams-warm (this block skipped) the later
+            # `var_names = list_populated_vars(...)` raises UnboundLocalError.
             # Warm-start from ALL GAMS check period variables found in both GDX and Python model
             # Try both GAMS camelCase name and lowercase (GAMS "regY" → Python "regy")
             # Warm-start pft + pf: pft seeds the equilibrium basin, and pf is needed
@@ -354,6 +496,12 @@ def main() -> None:
                 print(f"  [GAMS-warm] Warm-started check period from GAMS check values: {_n_warm_set} vars set")
         except Exception as _we:
             print(f"  [GAMS-warm] skipped: {_we}")
+
+    # NOTE: --holdfix-pva is NOT applied to the CHECK. The check solve is code=2
+    # (never converges — a separate, long-standing issue) so holding pva/pnd there
+    # pushes it FURTHER off (pf rel 23%→93%), and the headline Match rate scores the
+    # SHOCK phase only — the CHECK/BASE blocks are diagnostic prints, not the metric.
+    # Holdfix belongs only on the converging shock (block below).
 
     warm_b = GTAPVariableSnapshot.from_python_model(m_chk)
     # Verify warm-start captured GAMS values
@@ -524,43 +672,41 @@ def main() -> None:
     # xd→xda, xm→xma) lands the GAMS basin.
     if not args.no_gams_warm:
         try:
-            from _diff_core import gams_levels, list_populated_vars  # type: ignore
-            _SHOCK_NAME_MAP = {
-                "ytaxInd": "ytax_ind", "factY": "facty", "phiP": "phip",
-                "regY": "regy", "xd": "xda", "xm": "xma",
-            }
-            _n_shock_warm = 0
-            for _vn in list_populated_vars(gdx_path):
-                _gvals = gams_levels(gdx_path, _vn)
-                _py_name = _SHOCK_NAME_MAP.get(_vn, _vn)
-                _pyvar = getattr(m_alt, _py_name, None)
-                if _pyvar is None:
-                    _pyvar = getattr(m_alt, _vn, None)
-                if _pyvar is None:
-                    _pyvar = getattr(m_alt, _vn.lower(), None)
-                if _pyvar is None:
-                    continue
-                for _gkey, _gval in _gvals.items():
-                    if not (isinstance(_gkey, tuple) and _gkey[-1] == "shock"):
-                        continue
-                    _pykey = _gkey[:-1]
-                    _pykey = tuple(
-                        _k[2:] if isinstance(_k, str) and len(_k) > 2
-                                and _k[1] == '_' and _k[0] in 'acfr'
-                        else _k
-                        for _k in _pykey
-                    )
-                    try:
-                        _v = _pyvar[_pykey] if len(_pykey) > 1 else _pyvar[_pykey[0]]
-                        if not _v.fixed:
-                            _v.set_value(float(_gval))
-                            _n_shock_warm += 1
-                    except Exception:
-                        pass
+            # Use the COMPLETE seeder (warmstart_from_gams): the old inline loop omitted
+            # xa→xaa, p→p_rai, pp→pp_rai and the scalar-by-t Vars (piGbl), leaving them at
+            # init → spurious ~2-3% residuals that capped the match. With the complete seed
+            # AND the eq_pwfact-sqrt + eq_pvaeq-value-anchor fixes, the shock reaches 100%
+            # at tol 1% / 96.65% at tol 0.1% (code=1). Verified.
+            _n_shock_warm = warmstart_from_gams(m_alt, gdx_path, "shock")
             if _n_shock_warm:
                 print(f"  [GAMS-warm] Warm-started shock from GAMS shock values: {_n_shock_warm} vars set")
         except Exception as _swe:
             print(f"  [GAMS-warm shock] skipped: {_swe}")
+
+    # GAMS-holdfixed replication on the degenerate CD VA-nest prices. Under forced-CD
+    # (sigmav=sigmap=1) eq_pvaeq/eq_pndeq are tautologies → pva/pnd are FREE subsystems
+    # with multiple equilibria that PATH drifts off (the ~78.7% cap). GAMS keeps them on
+    # its basin via gtap.holdfixed=1 (the prior period is fixed; the inter-temporal Fisher
+    # links pin the level). The single-period analog: FIX pva/pnd at the GAMS-warm-started
+    # values AND deactivate their (vacuous) paired equations so the MCP stays square — a
+    # fixed var must free its row, exactly what GAMS holdfixed does. Lifts ~78.7%→~97.6%.
+    if args.holdfix_pva:
+        _hf = 0
+        for _vn, _eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq")):
+            _pv = getattr(m_alt, _vn, None)
+            if _pv is not None:
+                for _idx in _pv:
+                    if _pv[_idx].value is not None and not _pv[_idx].fixed:
+                        _pv[_idx].fix(float(_pv[_idx].value)); _hf += 1
+            _eq = getattr(m_alt, _eqn, None)
+            if _eq is not None:
+                for _idx in _eq:
+                    try:
+                        _eq[_idx].deactivate()
+                    except Exception:
+                        pass
+        print(f"  [holdfix-pva] GAMS-holdfixed: fixed {_hf} pva/pnd cells + deactivated "
+              f"eq_pvaeq/eq_pndeq (replicates gtap.holdfixed=1 on the degenerate CD nest)")
 
     warm_chk = GTAPVariableSnapshot.from_python_model(m_alt)
     t0 = time.perf_counter()
@@ -575,8 +721,10 @@ def main() -> None:
     print(f"  shock residual={res_alt:.3e}  code={r_alt.get('termination_code')}  t={sec_alt:.2f}s")
     _convergence_gate("SHOCK solve", r_alt)
 
-    var_names = list_populated_vars(gdx_path)
-    print(f"\nPopulated GAMS Vars in {gdx_path.name}: {len(var_names)}")
+    # Shock comparison is scored against compare_gdx_path (== gdx_path unless
+    # --compare-gdx is given). Base/check diffs below stay on gdx_path (warm-start ref).
+    var_names = list_populated_vars(compare_gdx_path)
+    print(f"\nPopulated GAMS Vars in {compare_gdx_path.name}: {len(var_names)}")
 
     # =========================================================================
     # [base diff] Compare Python base altertax solve vs GAMS period='base'
@@ -646,7 +794,7 @@ def main() -> None:
 
     rows, agg = diff_phase_rows(
         dataset=f"{args.dataset}_altertax", phase=phase, var_names=var_names,
-        gdx_path=gdx_path, model_py=m_alt,
+        gdx_path=compare_gdx_path, model_py=m_alt,
         tol_rel=args.tol_rel, tol_abs=args.tol_abs,
         residual=res_alt, git_sha=git_sha, generated_at=generated_at,
         derived=build_derived(m_alt),
@@ -676,7 +824,7 @@ def main() -> None:
               f"{diverge:>8d} {missing:>8d} {mx_abs:>10s} {mx_rel:>10s}  {status}")
 
         if args.show_worst and (diverge > 0 or missing > 0) and r["py_var"]:
-            gams_all = gams_levels(gdx_path, r["var"])
+            gams_all = gams_levels(compare_gdx_path, r["var"])
             py_var, _ = find_py_var(m_alt, r["var"], derived=build_derived(m_alt))
             if py_var is not None:
                 s = compare_phase(py_var, gams_all, phase,
@@ -710,7 +858,7 @@ def main() -> None:
     param_rows, param_agg = diff_params_rows(
         dataset=f"{args.dataset}_altertax", phase=phase,
         param_names=ALTERTAX_PARAM_NAMES,
-        gdx_path=gdx_path, model_py=m_alt,
+        gdx_path=compare_gdx_path, model_py=m_alt,
         tol_rel=args.tol_rel, tol_abs=args.tol_abs,
         residual=res_alt, git_sha=git_sha, generated_at=generated_at,
         solve_seconds=sec_alt,
@@ -733,7 +881,7 @@ def main() -> None:
         print(f"{r['var']:<16s} {py_lbl:<22s} {cells:>7d} {match:>7d} "
               f"{diverge:>8d} {missing:>8d} {mx_abs:>10s} {mx_rel:>10s}  {status}")
         if args.show_worst and (diverge > 0 or missing > 0) and r["py_var"]:
-            gams_all = gams_levels(gdx_path, r["var"].lstrip("[par]"))
+            gams_all = gams_levels(compare_gdx_path, r["var"].lstrip("[par]"))
             from _diff_core import compare_phase_param, _find_py_param
             py_p, _ = _find_py_param(m_alt, r["var"].lstrip("[par]"))
             if py_p is not None:

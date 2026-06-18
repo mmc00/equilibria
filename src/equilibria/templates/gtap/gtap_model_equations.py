@@ -423,7 +423,11 @@ class GTAPModelEquations:
         self._align_xi_xaa_post_scaling(model)
         self._add_equations(model)
         self._add_objective(model)
-        
+
+        # Propagate residual region so the solver anchors yi[rres] to the right region
+        # (default was hardcoded "NAmerica", absent in gtap7_*; yi[ROW] then floated).
+        model._residual_region = self.residual_region
+
         return model
     
     def _align_xi_xaa_post_scaling(self, model: "ConcreteModel") -> None:
@@ -1213,11 +1217,14 @@ class GTAPModelEquations:
         for (rr, i, rp), rtxs in taxes.rtxs.items():
             if rr == region:
                 total += float(rtxs) * float(bm.vxsb.get((region, i, rp), 0.0))
-        # mt — import taxes (imptx on vmsb, region as importer)
+        # mt — import taxes. GAMS ytax(r,'mt') = Σ imptx·pmcif·xw = imptx·VCIF
+        # (the CIF import value), NOT imptx·vmsb (the agent market-price value).
+        # Using vmsb over-states mt by the CIF-vs-market wedge and biases regY/betaP
+        # (gtap7_3x3 ROW: vmsb gave 0.338 vs the correct CIF 0.3236, ~0.04% in betaP).
         for (exporter, i, importer), rate in taxes.imptx.items():
             if importer == region:
-                vmsb_val = bm.vmsb.get((exporter, i, region), 0.0)
-                total += float(rate) * float(vmsb_val or 0.0)
+                vcif_val = bm.vcif.get((exporter, i, region), 0.0)
+                total += float(rate) * float(vcif_val or 0.0)
         # NOTE: ft (rtf*evfb) and fs (fctts*evfb) and dt (kappaf*evfb = evfb-evos)
         # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes).
         return total
@@ -1439,8 +1446,7 @@ class GTAPModelEquations:
                     )
                     if evfb_val <= 0.0:
                         continue
-                    factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
-                    va_level += evfb_val * (1.0 + factor_tax)
+                    va_level += evfb_val
 
                 xp_level = nd_level + va_level
                 if xp_level <= 0.0:
@@ -2255,8 +2261,7 @@ class GTAPModelEquations:
                 )
                 if evfb_val <= 0.0:
                     continue
-                factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
-                va_val += evfb_val * (1.0 + factor_tax)
+                va_val += evfb_val
 
             xp_val = nd_val + va_val
             if xp_val > 0.0:
@@ -2294,8 +2299,9 @@ class GTAPModelEquations:
 
         def get_pfa_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
-            factor_tax = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
-            return max(pf_val * (1.0 + factor_tax), 1e-8)
+            fctts = float(self.params.taxes.rtfi.get((r, f, a), 0.0) or 0.0)
+            fcttx = float(self.params.taxes.rtfd.get((r, f, a), 0.0) or 0.0)
+            return max(pf_val * (1.0 + fctts + fcttx), 1e-8)
 
         def get_pfy_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
@@ -3920,7 +3926,18 @@ class GTAPModelEquations:
                 val = self.params.benchmark.vcif.get((partner, commodity, region), 0.0)
             return float(val or 0.0)
 
-        def _imptx_rate_importer(importer, commodity, exporter) -> float:
+        def _imptx_rate_importer(importer, commodity, exporter):
+            # Returns the LIVE mutable Param model.imptx[exporter,commodity,importer]
+            # (not a baked float) so that re-seeding imptx between homotopy steps flows
+            # into the price equations (eq_pm, _m_pm) without rebuilding the model.
+            # model.imptx is indexed (r, i, rp) == (exporter, commodity, importer) per
+            # _imptx_init. Falls back to the float param only if the Param cell is
+            # absent (keeps the prior transposed-key tolerance for odd datasets).
+            if hasattr(model, "imptx"):
+                try:
+                    return model.imptx[exporter, commodity, importer]
+                except Exception:
+                    pass
             raw = self.params.taxes.imptx.get((exporter, commodity, importer))
             if raw is None:
                 raw = self.params.taxes.imptx.get((importer, commodity, exporter), 0.0)
@@ -4158,12 +4175,25 @@ class GTAPModelEquations:
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
             if abs(expo) < 1e-8:
-                # CD case (sigmav=1): standard CES formula degenerates to 1=sum(af)=1
-                # (tautology — pva not in expression). Mirroring GAMS, the constraint
-                # is vacuous: use exp(log(pva)) == pva which is always satisfied and
-                # has zero Jacobian for pva. PATH then determines pva from the
-                # cross-Jacobian entries of pxeq (px = pnd^and * pva^ava) and
-                # eq_va (va = ava*xp*(px/pva)), exactly as GAMS PATH does.
+                # CD case (sigmav=1): the CES dual pva^(1-σ)=Σaf·(pfa/λ)^(1-σ) degenerates
+                # to the tautology 1=Σaf=1, leaving pva UNANCHORED → PATH slides it to a
+                # spurious branch (the gtap7_3x3 78.69% cap). The correct CD determinant is
+                # the VA-BUNDLE VALUE IDENTITY — GAMS xfeq summed over factors with Σaf=1:
+                #     pva·va = Σ_f (M_PFA·xf)   (value of the VA bundle = total factor cost).
+                # VERIFIED to reproduce GAMS pva EXACTLY (Σ(pfa·xf)/va = 1.01382 = GAMS
+                # pva[USA,Mnfcs], diff=0). Uses Python's own pfa(=M_PFA, ifSUB=0)/xf/va —
+                # NOT hardcoding. Anchors pva without the degenerate (px/pnd^and)^(1/ava)
+                # inversion (which just echoes a slid px). With the eq_pwfact linear-sqrt
+                # fix, lifts the shock match (tol 1%: 64%→92%). Falls back to the vacuous
+                # tautology only if va is absent / no active factor cell.
+                if hasattr(model, "va"):
+                    fterms = []
+                    for f in model.f:
+                        if hasattr(model, "xfflag") and value(model.xfflag[r, f, a]) <= 0.0:
+                            continue
+                        fterms.append(_m_pfa(r, f, a) * model.xf[r, f, a])
+                    if fterms:
+                        return model.pva[r, a] * model.va[r, a] == sum(fterms)
                 return exp(log(model.pva[r, a])) == model.pva[r, a]
 
             terms = []
@@ -5019,7 +5049,7 @@ class GTAPModelEquations:
             # kappaf (factor rent), which is NOT a tax and belongs in pfyeq via
             # kappaf — putting it in pfa double-counts and breaks pfa==pf where
             # GAMS has fctts=fcttx=0 (standard GTAP7: RTFD=RTFM=0). Verified vs the
-            # CD reference out_altertax_cd.gdx: fctts=fcttx=0 everywhere → pfa==pf.
+            # CD reference out_altertax_ifsub1.gdx: fctts=fcttx=0 everywhere → pfa==pf.
             return model.pfa[r, f, a] == model.pf[r, f, a] * (
                 1.0 + model.fctts[r, f, a] + model.fcttx[r, f, a]
             )
@@ -5037,13 +5067,22 @@ class GTAPModelEquations:
 
         # Note: eq_pvaeq already defined above with GAMS formulation
 
-        # Regional factor price index — GAMS pfacteq (model.gms:1253).
-        # Comp-stat Fisher index: pfact(r,t)^2 = (M_sb·M_ss)/(M_bb·M_bs)  per region,
-        # where mqfactr(r,tp,tq) = sum_{fp,a} pf(r,fp,a,tp)*xf(r,fp,a,tq)/xscale(r,a).
-        # M_bb is a calibration constant; pf0 and xf0 are defined later (eq_pwfact
-        # block), so we defer this constraint construction until they exist.
-        # Construct it now using a closure that references model.pf0/xf0 lazily.
+        # Regional factor price index — GAMS pfacteq (model.gms compStat, ll.2497-2500):
+        #   pfact(r,t) = pfact(r,t0) * sqrt[ (mqfactr(t,t0)/mqfactr(t0,t0))
+        #                                  * (mqfactr(t,t) /mqfactr(t0,t)) ]
+        # with pfact(r,t0)=1 and mqfactr(r,tp,tq)=sum_{fp,a} pf(tp)*xf(tq)/xscale.
+        # In our period mapping: m_sb=mqfactr(t,t0), mqfactr_bb=mqfactr(t0,t0),
+        # m_ss=mqfactr(t,t), m_bs=mqfactr(t0,t). So:
+        #   pfact = sqrt[ (m_sb/mqfactr_bb) * (m_ss/m_bs) ].
+        # IMPORTANT — keep this form LINEAR-in-pfact (a single positive sqrt root),
+        # NOT the algebraically-equivalent quadratic `pfact^2 * mqfactr_bb * m_bs ==
+        # m_sb * m_ss`. The quadratic admits a spurious root and PATH converged to it
+        # (pfact≈2.8 vs GAMS 1.0) without a strong factor-block warm-start, inflating
+        # the whole factor-price level. GAMS's sqrt form has one root and is faithful.
+        # M_bb is a calibration constant; pf0/xf0 are defined later (eq_pwfact block),
+        # so we defer this constraint construction until they exist.
         def eq_pfact_rule(model, r):
+            from pyomo.environ import sqrt as _pyo_sqrt
             m_bs = sum(
                 model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
                 for f in model.f for a in model.a
@@ -5059,7 +5098,9 @@ class GTAPModelEquations:
                 for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
-            return model.pfact[r] * model.pfact[r] * model.mqfactr_bb[r] * m_bs == m_sb * m_ss
+            return model.pfact[r] == _pyo_sqrt(
+                (m_sb / model.mqfactr_bb[r]) * (m_ss / (m_bs + 1e-12))
+            )
         # Constraint added after pf0/xf0/mqfactr_bb are constructed below.
         self._defer_eq_pfact = eq_pfact_rule
 
@@ -5554,14 +5595,22 @@ class GTAPModelEquations:
         }
 
         def eq_pabs_rule(model, r):
+            from pyomo.environ import sqrt as _pyo_sqrt
             mqabs_00 = base_mqabs_00[r]
             if mqabs_00 <= 1e-12:
                 return Constraint.Skip
             mqabs_t0 = _mqabs(model, r, price_base=False, quantity_base=True)
             mqabs_tt = _mqabs(model, r, price_base=False, quantity_base=False)
             mqabs_0t = _mqabs(model, r, price_base=True, quantity_base=False)
-            scale = max((base_pabs[r] ** 2) * (mqabs_00 ** 2), 1e-12)
-            return (model.pabs[r] ** 2) * mqabs_00 * mqabs_0t / scale == (base_pabs[r] ** 2) * mqabs_t0 * mqabs_tt / scale
+            # GAMS pabseq (compStat) is LINEAR in pabs (single positive sqrt root):
+            #   pabs = pabs0 * sqrt[(mqabs(t,t0)/mqabs(t0,t0))*(mqabs(t,t)/mqabs(t0,t))].
+            # The quadratic rewrite `pabs^2 * mqabs_00 * mqabs_0t == ...` admits a
+            # spurious root; since pabs feeds eq_xfteq (xft=aft*(pft/pabs)^etaf), a
+            # wrong root inflates the factor-price level (pf ~2x vs ifSUB=0). Faithful
+            # sqrt form, matching the eq_pfact fix.
+            return model.pabs[r] == base_pabs[r] * _pyo_sqrt(
+                (mqabs_t0 / mqabs_00) * (mqabs_tt / (mqabs_0t + 1e-12))
+            )
         model.eq_pabs = Constraint(model.r, rule=eq_pabs_rule)
 
         # Nominal GDP at market prices (GAMS gdpmpeq)
@@ -5583,8 +5632,21 @@ class GTAPModelEquations:
                 return model.rgdpmp[r] == model.gdpmp[r]
             mqgdp_0t = _mqgdp(model, r, price_base=True, quantity_base=False)
             mqgdp_t0 = _mqgdp(model, r, price_base=False, quantity_base=True)
-            scale = max(mqgdp_00 ** 2, 1e-12)
-            return (model.rgdpmp[r] ** 2) * mqgdp_t0 / scale == mqgdp_00 * model.gdpmp[r] * mqgdp_0t / scale
+            # GAMS rgdpmpeq (compStat) is LINEAR-sqrt (single root), not the quadratic
+            # rewrite (spurious root — same class as eq_pfact/eq_pabs):
+            #   rgdpmp = sqrt(mqgdp_00 * gdpmp * mqgdp_0t / mqgdp_t0).
+            # The Fisher mqgdp terms include a trade balance (pefob·xw − pmcif·xw)
+            # that can transiently go negative DURING a PATH iteration (when
+            # warm-started/homotopy-seeded far from equilibrium), making the sqrt
+            # argument negative → "math domain error" crashes the solve. Guard the
+            # argument with a SMOOTH positive floor smax(arg) = (arg+sqrt(arg²+ε))/2:
+            # ≈ arg for arg≫√ε, ≈ 0⁺ for arg≤0, C¹-smooth so PATH stays evaluable.
+            # Identical to the bare sqrt at any feasible point (arg>0 there), so the
+            # equilibrium and the .nl seed coefficients are unchanged.
+            from pyomo.environ import sqrt as _pyo_sqrt
+            _arg = mqgdp_00 * model.gdpmp[r] * mqgdp_0t / (mqgdp_t0 + 1e-12)
+            _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
+            return model.rgdpmp[r] == _pyo_sqrt(_arg_pos + 1e-12)
         model.eq_rgdpmp = Constraint(model.r, rule=eq_rgdpmp_rule)
 
         def eq_pgdpmp_rule(model, r):
@@ -5601,10 +5663,17 @@ class GTAPModelEquations:
                 share = value(model.c_share[r, i])
                 if alpha <= 0.0 or share <= 0.0:
                     continue
+                # GAMS eveq: alphaa·uh^(bh·eh)·(pa(r,i,hhd,t0)·Pop/ev)^bh = 1.
+                # The per-commodity BASE Armington price pa(r,i,hhd,t0) sits INSIDE the
+                # sum (raised to per-i bh), so it cannot be factored out. Python had
+                # dropped it (used pop/ev) — negligible at benchmark where pa(t0)≈1 but
+                # for shifted base prices (EU_28 hhd) it threw ev far off (0.0099 vs
+                # GAMS 8.34). Restore the pa(t0) factor to match GAMS exactly.
+                pa0 = base_pa.get((r, i, GTAP_HOUSEHOLD_AGENT), 1.0)
                 terms.append(
                     alpha
                     * (model.uh[r] ** (bh * eh))
-                    * ((model.pop[r] / model.ev[r]) ** bh)
+                    * ((pa0 * model.pop[r] / model.ev[r]) ** bh)
                 )
             if not terms:
                 return Constraint.Skip
@@ -5729,7 +5798,8 @@ class GTAPModelEquations:
                 for r in model.r for f in model.f for a in model.a
                 if value(model.xscale[r, a]) > 1e-12
             )
-            return model.pwfact * model.pwfact * model.mqfactw_bb * m_bs == m_sb * m_ss
+            from pyomo.environ import sqrt as _pyo_sqrt
+            return model.pwfact == _pyo_sqrt((m_sb / model.mqfactw_bb) * (m_ss / (m_bs + 1e-12)))
         model.eq_pwfact = Constraint(rule=eq_pwfact_rule)
 
         # eq_pmuv: Tornqvist MUV deflator (model.gms:1237-1247). Active when
