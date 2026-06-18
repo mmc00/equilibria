@@ -27,7 +27,7 @@ INTERPRETATION:
   - A flagged pair (eq_X ↔ x, sensitivity≈0) = eq_X is a tautology for x → x is a free DOF.
     The fix is to give x a real determinant (the missing economic identity), NOT to tweak a
     coefficient. Precedent: eq_pvaeq under CD → fixed with the VA-value identity
-    pva·va=Σ(pfa·xf). See PLAN_gtap7_3x3_shock_close.md.
+    pva·va=Σ(pfa·xf). See plan_gtap7_3x3_shock_close.md.
 """
 from __future__ import annotations
 import argparse
