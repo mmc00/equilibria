@@ -2,14 +2,17 @@
 
 ## Estado del branch
 
-**Paridad 100% lograda en ambos datasets (base + shock 10%):**
+**Paridad lograda (base + shock 10%):**
 
 | Dataset | Python vs NEOS | Python vs GAMS local |
 |---------|----------------|----------------------|
 | NUS333 (3×2) | 100% / 100% | 100% / 100% |
 | 9x10        | 100% / 100% | bloqueado por licencia community |
+| **gtap7_3x3 (altertax CD shock)** | — | **96.80% (tol 0.1%) / 100% (tol 1%), code=1** |
 
-Detalles por sesión en `GTAP_VALIDATION_STATUS.md`. Trabajo activo del branch cerrado el 2026-05-12 (PR #3, commit `28a9b93` en `main`).
+**gtap7_3x3 shock cerrado (2026-06-17): 78.69% → 96.80%/100%, fiel a GAMS, sin hardcodeo.** El cap 78.69% eran TRES errores que se tapaban entre sí: (1) `eq_pvaeq` bajo CD era la tautología `exp(log(pva))==pva` → pva libre (FALTABA la ecuación, no era una distinta); (2) `eq_pwfact` en forma cuadrática (raíz espuria) compensaba parcialmente el error de pva; (3) el warm-start del shock usaba un seeder incompleto. Fix fiel: eq_pvaeq → identidad de valor `pva·va = Σ_f(pfa·xf)` (verificada =GAMS exacto, diff=0); eq_pwfact → forma sqrt de GAMS; seeder completo en [3/3]. Commits `caf16a0`, `08e7c60`. Las herramientas de comparación (tools 3/4/6) NO lo veían porque una tautología es IGUAL en ambos modelos (no hay diferencia que comparar); lo destaparon el drift test (tool 7, síntoma) y `diff_tautology.py` (tool 9, causa — perturbar la var y ver si su ecuación reacciona).
+
+Detalles por sesión en `GTAP_VALIDATION_STATUS.md`. Plan/diagnóstico en `PLAN_gtap7_3x3_shock_close.md`. Trabajo previo del branch: PR #3, commit `28a9b93` en `main`.
 
 ## Objetivo original
 
