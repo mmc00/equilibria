@@ -528,8 +528,10 @@ class GTAPCalibratedShares:
             return max(1.0 / max(1.0 - _kappa(r, f, a), 1e-12), 1e-12)
 
         def _pfa_bench(r: str, f: str, a: str) -> float:
-            factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
-            return _pf_bench(r, f, a) * max(1.0 + factor_tax, 1e-12)
+            # pfa = pf*(1+fctts+fcttx), NOT pf*(1+rtf) — match eq_pfaeq (5th rtf site).
+            fctts = float(taxes.rtfi.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+            fcttx = float(taxes.rtfd.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+            return _pf_bench(r, f, a) * max(1.0 + fctts + fcttx, 1e-12)
         
         # Calculate intermediate values needed for calibration
         nd_values = {}  # ND bundle values
@@ -550,8 +552,7 @@ class GTAPCalibratedShares:
                     evfb_val = float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
                     if evfb_val <= 0.0:
                         continue
-                    factor_tax = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
-                    va_val += evfb_val * (1.0 + factor_tax)
+                    va_val += evfb_val
                 if va_val > 0:
                     va_values[(r, a)] = va_val
 

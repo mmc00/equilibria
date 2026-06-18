@@ -2,14 +2,17 @@
 
 ## Estado del branch
 
-**Paridad 100% lograda en ambos datasets (base + shock 10%):**
+**Paridad lograda (base + shock 10%):**
 
 | Dataset | Python vs NEOS | Python vs GAMS local |
 |---------|----------------|----------------------|
 | NUS333 (3×2) | 100% / 100% | 100% / 100% |
 | 9x10        | 100% / 100% | bloqueado por licencia community |
+| **gtap7_3x3 (altertax CD shock)** | — | **96.80% (tol 0.1%) / 100% (tol 1%), code=1** |
 
-Detalles por sesión en `GTAP_VALIDATION_STATUS.md`. Trabajo activo del branch cerrado el 2026-05-12 (PR #3, commit `28a9b93` en `main`).
+**gtap7_3x3 shock cerrado (2026-06-17): 78.69% → 96.80%/100%, fiel a GAMS, sin hardcodeo.** El cap 78.69% eran TRES errores que se tapaban entre sí: (1) `eq_pvaeq` bajo CD era la tautología `exp(log(pva))==pva` → pva libre (FALTABA la ecuación, no era una distinta); (2) `eq_pwfact` en forma cuadrática (raíz espuria) compensaba parcialmente el error de pva; (3) el warm-start del shock usaba un seeder incompleto. Fix fiel: eq_pvaeq → identidad de valor `pva·va = Σ_f(pfa·xf)` (verificada =GAMS exacto, diff=0); eq_pwfact → forma sqrt de GAMS; seeder completo en [3/3]. Commits `caf16a0`, `08e7c60`. Las herramientas de comparación (tools 3/4/6) NO lo veían porque una tautología es IGUAL en ambos modelos (no hay diferencia que comparar); lo destaparon el drift test (tool 7, síntoma) y `diff_tautology.py` (tool 9, causa — perturbar la var y ver si su ecuación reacciona).
+
+Detalles por sesión en `GTAP_VALIDATION_STATUS.md`. Plan/diagnóstico en `plan_gtap7_3x3_shock_close.md`. Trabajo previo del branch: PR #3, commit `28a9b93` en `main`.
 
 ## Objetivo original
 
@@ -22,6 +25,7 @@ Lograr **paridad exacta** entre el template Python `equilibria` GTAP Standard 7 
 
 ## Reglas de trabajo (no negociables)
 
+- **El modelo altertax ES MULTI-PERÍODO y NO se resuelve de un solo tiro (hecho, no opinión).** `diff_altertax.py` resuelve en 3 etapas SECUENCIALES: `[1/3]` betaCal/base → `[2/3]` check (sin shock) → `[3/3]` shock (+10% imptx), cada etapa warm-started de la anterior y encadenada vía `t0_snapshot` (igual que el `loop(tsim)` base→check→shock de GAMS). `gtap_parameters.py` reconoce el eje temporal (`time_order={'base':1,'check':2,'shock':3}`). Lo ÚNICO single-period es la representación INTERNA de cada slice (las Vars son `pva[r,a]`, sin índice `t`) — eso NO significa "el modelo es single-period" ni "resuelve de un golpe". NO confundir las dos cosas. La diferencia real con GAMS: GAMS CONGELA el período previo (`var.fx(tsim-1)` + `holdfixed=1`); Python lo pasa como `t0_snapshot` (lectura para Fisher) pero NO lo congela → el DOF libre (pva) se desliza. Fix fiel probado (2026-06-17): congelar el base (pva=1.0) durante el check → pva=0.8536 EXACTO GAMS, check 63%→97%. Ver `feedback_gtap_IS_multiperiod` y tool 8 `diff_holdfixed.py`.
 - **Solver:** siempre usar PATH C API en modo **nonlinear full** (10,296 ecuaciones). Nunca el bloque linear (1,370). IPOPT no aplica (degrees-of-freedom).
 - **ifMCP (GAMS) = 1:** el run de referencia NEOS (job 18737509) usa `ifMCP=1` → `solve using mcp` → PATH. Python también usa PATH. Ambos están alineados — NO cambiar a `ifMCP=0` (NLP/walras) porque cambiaría los valores de referencia y Python no soporta NLP en modo nonlinear full.
 - **equation_scaling=True:** siempre pasar `equation_scaling=True` a `_run_path_capi_nonlinear_full` (baseline Y shocked). Sin esto el baseline queda en code=2/res~1e-6 en vez de code=1/res~1e-9. Tanto `validate-shock` como `_run_homotopy_shocked` lo usan — `validate_gams_parity.py` también debe usarlo.
@@ -78,9 +82,9 @@ Residual: <valor si conocido>
 | Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
 | Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
-## Herramientas de debug parity (cascade de 4)
+## Herramientas de debug parity (cascade de 10)
 
-Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
+Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta — un sesgo de calibración bajo tolerancia se ve idéntico a "ruido de basin CD" hasta que la herramienta 4 lo aísla; y una diferencia de forma de ecuación que coincide numéricamente en el punto sembrado pasa el .nl pero la atrapa la herramienta 5. **Las tools 3-6 comparan Python vs GAMS asumiendo que el gap es una DIFERENCIA entre ellos; son ciegas a un gap que NO es diferencia: una variable que es un DOF libre/degenerado IDÉNTICAMENTE en ambos (tautología CD) — eso solo lo atrapa la tool 7 (drift test).**
 
 | # | Herramienta | Script | Ve | Ruta de uso |
 |---|-------------|--------|----|-------------|
@@ -88,8 +92,22 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
 | 1 | **Value/residual diff** | `triage.py` (locate→isolate→trace) | Dónde divergen valores resueltos | Variable específica diverge |
 | 2 | **Closure diff** | `diff_closure.py` | Variables fijas/libres, ecuaciones activas | Shock diverge ampliamente (nivel de precios entero) |
 | 3 | **.nl diff** | `nl_compare.py` | Coeficientes Jacobiano, forma algebraica | Pregunta sobre álgebra/coeficientes |
+| 4 | **Calibration diff** | `diff_calibration.py` | Insumos de calibración en el benchmark vs GAMS: betaP/betaG/betaS, factY/yTaxInd/ytaxTot/phi/phiP, cada stream de `ytax` (pt/fc/pc/gc/ic/dt/mt/et), CDE (eh/bh/xcshr/zcons), bloque factor (gf/aft/xscale), por región/celda a tol 1e-4 | Una var de ingreso/impuesto (yc, ytax, regY) diverge ~1-2% y parece "ruido de basin", O validate_reference culpa a la referencia por eq_yc/eq_yg/eq_rsav |
+| 5 | **Equation-form diff** | `diff_equation_form.py` | Forma simbólica expandida de una ecuación Python (coeficientes sustituidos, ej. 1/xscale → 10.0/100.0) lado a lado con la definición GAMS del `.gms` | Inputs (tool 4) y coeficientes (.nl tool 3) coinciden pero una familia sigue divergiendo → diferencia estructural de forma (1/xscale de más, factor extra, dominio de suma) que el .nl no muestra |
+| 6 | **MCP-pairing diff** | `diff_mcp_pairing.py` | Emparejamiento ecuación↔variable: parsea `model gtap /eq.var, .../` de GAMS (eq.var = emparejado, eq solo = FREE-ROW) y lo contrasta con qué ecuaciones Python desactiva (`--apply-closure`). Numéricamente invisible a tools 3-5 | El solve converge (code=1) pero a OTRA raíz de un bloque multivaluado (ej. pft≈3.6 vs 1.0). Causa raíz del factor-2: GAMS deja `pfteq` free-row, Python la resolvía para pft → raíz espuria |
+| 7 | **Drift test (free-DOF detector)** | `drift_test.py` | Siembra Python en el punto GAMS, RESUELVE, y rankea qué variables se ALEJAN de la semilla. Marca con ⚑ las que driftan mientras su ecuación pareada tiene residual≈0 = DOF libre/tautológico. Invisible a tools 3/4/6 porque NO hay diferencia Python-vs-GAMS — la var es libre igual en ambos | El solve converge (code=1) pero a OTRA rama de equilibrio y NINGUNA tool estática ve nada (coeficientes/pairing/calibración idénticos). Causa raíz del gap gtap7_3x3 78.69→97.68%: pva/pnd libres bajo CD (eq_pvaeq/eq_pndeq tautológicas), PATH los desliza; GAMS los pincha vía holdfix multi-período (externo a las ecuaciones) |
+| 8 | **Holdfixed/sequence diff** | `diff_holdfixed.py` | Parsea el bloque `var.fx(...tsim-1)=var.l(...tsim-1)` del `loop(tsim)` de GAMS → la lista de variables que GAMS CONGELA del período anterior (holdfixed=1), y contrasta con qué congela Python entre etapas [1/3]→[2/3]→[3/3]. Es la disciplina de SECUENCIA, no del solve estático — invisible a tools 0-7 (que miran UN solve). Da además la receta del fix fiel | La tool 7 ve el SÍNTOMA (pva se escapa) pero ninguna ve la CAUSA del lado GAMS: GAMS congela pf/xf/pa/pe/pabs/pfact/pwfact del período previo (ancla pva/pnd indirectamente); Python warm-startea pero NO congela → el DOF libre re-desliza. gtap7_3x3: GAMS congela 25 vars, Python 0 |
+| 9 | **Tautology / unanchored-var** | `diff_tautology.py` | Para cada par ecuación↔variable, PERTURBA la variable y mide ∂resid/∂var. Sensibilidad ≈0 → la ecuación NO restringe su propia variable pareada = es TAUTOLOGÍA = variable libre. Detecta la CAUSA (ecuación vacía) que la tool 7 solo ve como síntoma | El gap es una ecuación FALTANTE/tautológica (no una diferente). Las tools 3/4/6 son ciegas: ven coeficientes/pairing IDÉNTICOS (la tautología es igual en ambos modelos), residual ~0 en el punto GAMS (una tautología la satisface cualquier valor). Causa del cap 78.69%: eq_pvaeq bajo CD era `exp(log(pva))==pva` → pva libre. Fix: darle el determinante económico real `pva·va=Σ(pfa·xf)` |
 
-**Pitfall clave:** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup.
+**Pitfall clave (herramienta 5):** el .nl compara coeficientes en UN punto; una diferencia de forma que coincide numéricamente en la semilla pasa el gate. La tool 5 imprime ambas formas pareadas para inspección dirigida (no auto-diff: la igualdad simbólica cross-lenguaje es frágil).
+
+**Pitfall clave (herramienta 6):** un emparejamiento MCP distinto (Python resuelve una ecuación que GAMS deja free-row) hace que PATH converja limpio (code=1, residual ~0) a una raíz DISTINTA de un bloque multivaluado. Invisible a inputs/coeficientes/formas — solo el bloque `model gtap` lo revela. Free-rows de gtap7_3x3: xseq, pfteq, savfeq, capAccteq, pnumeq, walraseq, eveq, cveq (los últimos 4 son benignos: numéraire/walras/bienestar).
+
+**Pitfall clave (herramienta 7 — la que cierra el agujero de las tools 3/4/6):** cuando el gap NO es una diferencia Python-vs-GAMS sino un DOF libre/degenerado IDÉNTICO en ambos (ej. bajo CD `eq_pvaeq`/`eq_pndeq` son la tautología `exp(log(pva))==pva` en los DOS), ninguna comparación estática lo ve: el .nl ve coeficientes idénticos (tautología==tautología → gate verde), el MCP-pairing ve el mismo emparejamiento (`pvaeq.pva` en ambos → "pairing matches"), el residual en el punto GAMS es ~0 (una tautología la satisface cualquier valor). Solo el **drift test** lo atrapa: siembra en GAMS, resuelve, y la var libre se ALEJA aunque su residual sea ~0 (⚑). Precedente gtap7_3x3 (78.69→97.68%): pva/pnd se deslizan 4.7%, marcadas ⚑ por drift_test; GAMS las pincha vía holdfix multi-período (mecánica de solver/secuencia EXTERNA a las ecuaciones — por eso invisible a todo compare de modelo). El fix no es tocar ecuaciones: es HOLD (fijar var + desactivar la eq tautológica pareada = `gtap.holdfixed=1`), expuesto como `--holdfix-pva` en `diff_altertax.py`.
+
+**Pitfall clave (herramientas 0-3):** warm-start con keys GAMS (`a_Food`, `c_Agr`) falla silenciosamente en Pyomo porque los elementos del set son `Food`, `Agr`. Siempre normalizar prefijos `a_`/`c_`/`f_`/`r_` antes del lookup. Y: **más seeding ≠ mejor warm-start** — sembrar GAMS-derived vars (xa→xaa, p→p_rai, piGbl) que chocan con el init de Python aterriza un basin code=2 PEOR; el subset inline (xd/xm+camelCase) reproduce el code=1 baseline. El drift test usa el subset inline a propósito.
+
+**Pitfall clave (herramienta 4):** un sesgo de insumo de calibración de ~0.04% es **invisible** a la herramienta 1 (sale "ok" bajo `tol_rel=1e-3`) y mal atribuido por `validate_reference` (ve el residual downstream, culpa al GDX). Precedente: `ytax[ROW,'mt']` usaba `imptx·vmsb` (valor de mercado) en vez de `imptx·VCIF` (valor CIF), sesgando yTaxInd→regY→betaP en 0.039% — escondido varias sesiones hasta que `diff_calibration.py` lo marcó por stream (fix en `_compute_ytax_ind_bench`: `vmsb`→`vcif`). `regY` se compara income-side (Python regY == GAMS factY+yTaxInd), no contra el regY que GAMS fija expenditure-side.
 
 ## Archivos clave
 
@@ -97,7 +115,14 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta.
 |---------|-----------|
 | `src/equilibria/templates/gtap/gtap_model_equations.py` | Ecuaciones del modelo. Áreas críticas: `get_gdpmp_init`, `get_yi_init`, `get_xiagg_init`, `eq_ytax`, `eq_yc`, `eq_yg`, `eq_pabs`, `eq_gdpmp`. Líneas 1134, 1862, 4510, 4574 ya fijadas a `NAmerica`. |
 | `scripts/gtap/run_gtap.py` | CLI. `validate-shock`, `_apply_shock_to_params` (`tm_pct`), `_collect_key_quantities` (emite `ytax(r,gy)` con 10 streams canónicos). |
-| `scripts/gtap/diff_altertax.py` | Diff cell-by-cell Python altertax vs NEOS out.gdx. 3 períodos: betaCal → check → shock. |
+| `scripts/gtap/diff_altertax.py` | Diff cell-by-cell Python altertax vs NEOS out.gdx. 3 períodos: betaCal → check → shock. Flags: `--compare-gdx` (warm-start de un GDX, comparar contra otro), `--no-gams-warm`, `--use-gams-check`. |
+| `scripts/gtap/validate_reference.py` | Siembra un GDX GAMS en Python y reporta qué ecuaciones viola la PROPIA referencia (detecta GDX corrupto/mal convergido). |
+| `scripts/gtap/diff_calibration.py` | **Herramienta 4 de la cascada.** Diff de insumos de calibración (betaP/betaG/betaS, factY/yTaxInd, cada stream de `ytax`, CDE eh/bh/xcshr/zcons, bloque factor gf/aft/xscale) Python vs GAMS en el benchmark, por región/celda, a tol 1e-4. Atrapa sesgos de calibración invisibles al comparador de solve. |
+| `scripts/gtap/diff_equation_form.py` | **Herramienta 5 de la cascada.** Imprime la forma simbólica expandida de una ecuación Python (1/xscale → literal 10.0/100.0) lado a lado con la definición GAMS del `.gms`. Atrapa diferencias estructurales de forma que el .nl (coeficientes en un punto) no muestra. Uso: `--eq eq_xd_agg --cell ROW,Svces --gams-eq xds`. |
+| `scripts/gtap/diff_mcp_pairing.py` | **Herramienta 6 de la cascada.** Parsea el emparejamiento MCP de GAMS (`model gtap /eq.var/`) y marca free-rows de GAMS que Python mantiene activas+emparejadas (clase del bug pfteq factor-2). `--apply-closure` refleja el estado real post-solver. Uso: `--dataset gtap7_3x3 --apply-closure`. |
+| `scripts/gtap/drift_test.py` | **Herramienta 7 de la cascada (free-DOF detector).** Siembra Python en el punto GAMS, resuelve, rankea drift por variable; marca ⚑ las que driftan con su eq pareada en residual≈0 (DOF libre/tautológico). Reusa el build+seed de `diff_altertax`. Usa el seed INLINE (no el completo — over-seeding aterriza code=2). Atrapa el gap que tools 3/4/6 no ven: un DOF libre IDÉNTICO en Python y GAMS (ej. pva/pnd bajo CD). Uso: `--dataset gtap7_3x3 --gdx <ref> --period shock`. |
+| `scripts/gtap/diff_holdfixed.py` | **Herramienta 8 de la cascada (holdfixed/sequence diff).** Parsea `var.fx(...tsim-1)=var.l(...tsim-1)` del `loop(tsim)` de GAMS (la lista holdfixed del período previo) y reporta qué congela Python entre etapas (hoy: NADA). Es la disciplina de SECUENCIA — invisible a tools 0-7. Da la receta del fix fiel (congelar esas vars en los valores del período previo de PYTHON, no de GAMS). gtap7_3x3: GAMS congela 25 vars (pf/xf/pa/pe/pabs/pfact/pwfact… anclan pva/pnd), Python 0. Uso: `--gms <model_altertax_ifsub0.gms>`. |
+| `scripts/gtap/diff_tautology.py` | **Herramienta 9 de la cascada (tautology / unanchored-var detector).** Para cada par eq↔var, perturba la variable y mide ∂resid/∂var; sensibilidad≈0 → la ecuación es tautológica para su variable → variable libre (free DOF). Detecta la CAUSA (ecuación vacía de contenido) que tools 3/4/6 no ven (comparan diferencias; una tautología es IGUAL en ambos modelos) y que tool 7 solo ve como síntoma. Atrapó el bug que capó gtap7_3x3 en 78.69%: eq_pvaeq bajo CD = `exp(log(pva))==pva`. Uso: `--dataset gtap7_3x3 --gdx <ref> --period shock`. |
 | `scripts/gtap/diff_nus333_full.py` / `diff_9x10_full.py` | Diffs cell-by-cell vs GAMS (NEOS o local). 0 cells diverge en ambos. |
 | `scripts/gtap/bench_nus333_dual.py` | Benchmark dual-reference (NEOS + GAMS local) + wall-time N=5. |
 | `scripts/parity/triage.py` | CLI de debug parity: locate→isolate→trace→check-warmstart. |
