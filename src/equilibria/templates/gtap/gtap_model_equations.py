@@ -4702,6 +4702,13 @@ class GTAPModelEquations:
         def get_benchmark_agent_armington_shares(r, i, aa):
             return benchmark_agent_armington_param_cache.get((r, i, aa), (0.0, 0.0))
 
+        # Expose the calibrated top-Armington shares (alphad, alpham) on the model so
+        # diff_calibration (cascade tool 4) can audit the CES invariant alphad+alpham=1.
+        # A cell where they sum != 1 makes eq_paa unsatisfiable → region collapse (the
+        # gtap7_15x10 MEX bug). Previously this cache was a closure local, invisible to
+        # every tool. See memory project_gtap7_armington_shares_bug.
+        model._armington_shares_cache = dict(benchmark_agent_armington_param_cache)
+
         # NOTE: eq_pdp, eq_pmp, eq_paa removed - these are now Expression, not Var
         # The price pass-through relationships are encoded directly in the Expression definitions
 

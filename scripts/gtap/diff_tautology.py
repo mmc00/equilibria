@@ -62,6 +62,12 @@ _PAIRS = [
     ("eq_pfeq", "pf"), ("eq_pfteq", "pft"), ("eq_xfteq", "xft"), ("eq_va", "va"),
     ("eq_pdeq", "pd"), ("eq_peq", "p_rai"), ("eq_pmteq", "pmt"), ("eq_pwfact", "pwfact"),
     ("eq_pfact", "pfact"), ("eq_pabs", "pabs"), ("eq_yc", "yc"), ("eq_regy", "regy"),
+    # eq_paa↔pa added after the gtap7_15x10 MEX collapse: eq_paa is the top-Armington
+    # price (pa^(1-s)=alphad·pdp^(1-s)+alpham·pmp^(1-s)). It is NOT tautological per se,
+    # but when its calibrated shares don't sum to 1 it becomes UNSATISFIABLE — the perturb
+    # test still helps: a near-zero ∂resid/∂pa flags pa as effectively unanchored there.
+    # (The summing-to-1 break itself is caught by diff_calibration's alphad+alpham audit.)
+    ("eq_paa", "pa"),
 ]
 
 
