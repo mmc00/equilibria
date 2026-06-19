@@ -4678,6 +4678,23 @@ class GTAPModelEquations:
                         benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
                         continue
 
+                    # SURGICAL xaa consistency fix: the share denominator xaa_bench must be
+                    # the CES aggregate consistent with xda+xma — i.e. satisfy the benchmark
+                    # value identity pa·xaa = pdp·xda + pmp·xma. In MICROSCOPIC cells (agri
+                    # sectors of MEX/IND, demand ~1e-9) the xaa init is floored to ~1e-8,
+                    # inflating the denominator → shares sum to 0.767 not 1 → eq_paa CES
+                    # unsatisfiable → that region collapses (px[MEX,Grains] 1.0→0.52).
+                    # GAMS calibrates with a consistent xa.l (gms:23750). Use the value
+                    # identity ONLY when xaa_bench is materially inconsistent (>1% off): this
+                    # touches ~1 cell (the floored micro one), leaving every healthy cell's
+                    # xaa untouched. The naive global renormalize-to-1 (reverted 4ef5d8b)
+                    # changed 935 cells and DEcalibrated the model (98.45%→78.15%); this
+                    # only repairs the genuinely-inflated denominator. See memory
+                    # project_gtap7_armington_shares_bug.
+                    _xaa_consistent = (pdp_bench * xda_bench + pmp_bench * xma_bench) / pa_bench
+                    if _xaa_consistent > 0.0 and abs(_xaa_consistent / xaa_bench - 1.0) > 0.01:
+                        xaa_bench = _xaa_consistent
+
                     alphad = (xda_bench / xaa_bench) * (pdp_bench / pa_bench) ** sigma_m if xda_bench > 0.0 else 0.0
                     alpham = (xma_bench / xaa_bench) * (pmp_bench / pa_bench) ** sigma_m if xma_bench > 0.0 else 0.0
                     benchmark_agent_armington_param_cache[(r, i, aa)] = (alphad, alpham)
