@@ -65,6 +65,8 @@ DATASET_REGISTRY = {
                   REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_ifsub1.gdx"),
     "gtap7_3x4": (ROOT / "datasets/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har", None),
     "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har", None),
+    "gtap7_10x7": (ROOT / "datasets/gtap7_10x7", ROOT / "output/gtap7_10x7_altertax_neos_bundle", "har",
+                   REFS_DIR / "gtap7_10x7_altertax_cd/out_altertax_ifsub0.gdx"),
 }
 
 
@@ -150,6 +152,76 @@ def warmstart_from_gams(model, gdx_path, period: str) -> int:
             except Exception:
                 pass
     return n
+
+
+def complete_derived_seed(model) -> int:
+    """Seed the Python-ONLY demand-volume vars that GAMS does not carry, from the
+    already-seeded GAMS primals, so the GAMS point is a true fixed point of Python's
+    model (otherwise these stay at init → large eq_xc/eq_xg/eq_xi/eq_xd_agg residuals
+    that knock PATH off the GAMS basin, especially on bigger datasets).
+
+      xc[r,i]  = xaa[r,i,hhd]       (eq_xaa_hhd)
+      xg[r,i]  = xaa[r,i,gov]       (eq_xaa_gov)
+      xi[r,i]  = xaa[r,i,inv]       (eq_xaa_inv)
+      xd[r,i]  = Σ_aa xda/xscale    (eq_xd_agg  — GAMS xds)
+      xmt[r,i] = Σ_aa xma/xscale    (eq_xmt_agg — GAMS xmt)
+      xiagg[r] = Σ_i xi[r,i]        (eq_xiagg)
+
+    Pure derivation from the model's own seeded state (no hardcoding). Returns the
+    number of cells set."""
+    from pyomo.environ import value as _pv
+    n = 0
+    for r in model.r:
+        for i in model.i:
+            for vn, agent in (("xc", "hhd"), ("xg", "gov"), ("xi", "inv")):
+                v = getattr(model, vn, None)
+                if v is None:
+                    continue
+                try:
+                    v[r, i].set_value(float(_pv(model.xaa[r, i, agent]))); n += 1
+                except Exception:
+                    pass
+            try:
+                s = sum(float(_pv(model.xda[r, i, aa])) / float(_pv(model.xscale[r, aa]))
+                        for aa in model.aa)
+                model.xd[r, i].set_value(s); n += 1
+            except Exception:
+                pass
+            try:
+                s = sum(float(_pv(model.xma[r, i, aa])) / float(_pv(model.xscale[r, aa]))
+                        for aa in model.aa)
+                model.xmt[r, i].set_value(s); n += 1
+            except Exception:
+                pass
+        try:
+            model.xiagg[r].set_value(sum(float(_pv(model.xi[r, i])) for i in model.i)); n += 1
+        except Exception:
+            pass
+    return n
+
+
+def holdfix_cd_nest(model) -> int:
+    """Replicate GAMS gtap.holdfixed=1 on the degenerate-under-CD VA/ND nest prices:
+    FIX pva and pnd at their current (GAMS-seeded) values AND deactivate their paired
+    equations eq_pvaeq/eq_pndeq. Under forced-CD (sigmav=sigmap=1) those equations
+    are GAMS tautologies (1=Σaf, 1=Σio) that do NOT determine pva/pnd — GAMS pins them
+    via holdfixed in EVERY period (check included). A fixed var must free its paired
+    row, exactly as gtap.holdfixed=1 does. Returns the count of pva/pnd cells fixed."""
+    hf = 0
+    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq")):
+        v = getattr(model, vn, None)
+        if v is not None:
+            for idx in v:
+                if v[idx].value is not None and not v[idx].fixed:
+                    v[idx].fix(float(v[idx].value)); hf += 1
+        e = getattr(model, eqn, None)
+        if e is not None:
+            for idx in e:
+                try:
+                    e[idx].deactivate()
+                except Exception:
+                    pass
+    return hf
 
 
 def build_altertax_models(p_b_raw, res_region, base_closure, alt_closure):
@@ -497,11 +569,32 @@ def main() -> None:
         except Exception as _we:
             print(f"  [GAMS-warm] skipped: {_we}")
 
-    # NOTE: --holdfix-pva is NOT applied to the CHECK. The check solve is code=2
-    # (never converges — a separate, long-standing issue) so holding pva/pnd there
-    # pushes it FURTHER off (pf rel 23%→93%), and the headline Match rate scores the
-    # SHOCK phase only — the CHECK/BASE blocks are diagnostic prints, not the metric.
-    # Holdfix belongs only on the converging shock (block below).
+    # --- CHECK holdfix treatment (opt-in via --holdfix-pva) ----------------------
+    # GAMS holdfixes pva/pnd in EVERY period (gtap.holdfixed=1), the CHECK included:
+    # under CD eq_pvaeq/eq_pndeq are tautologies (1=Σaf, 1=Σio) that do NOT determine
+    # pva/pnd, so without holdfix PATH slides them — the CD geometric-mean dual gives
+    # pnd≈1.013 vs GAMS 1.000, inflating facty→regY→yc to ~2× on gtap7_10x7's check
+    # (yc[USA] 32.8 vs GAMS 12.09). Replicating the holdfix — fix pva/pnd at the
+    # GAMS-seeded values + deactivate the vacuous paired rows — collapses the check to
+    # the GAMS point (yc[USA] 12.086 = GAMS 12.093, all 7 regions ~0.1%, residual 4e-7).
+    #
+    # The holdfix needs a COMPLETE seed first, in two steps: (1) the full seeder
+    # warmstart_from_gams adds xa→xaa, p→p_rai, pp→pp_rai and scalar-by-t Vars the inline
+    # _WARM_PRICES loop omits; (2) complete_derived_seed fills Python's derived
+    # demand-volume vars (xc/xg/xi/xiagg/xd/xmt) that GAMS doesn't carry. Without a
+    # complete seed the holdfix pins pva/pnd against an inconsistent state and PATH drifts
+    # (the prior "NOT on the check" note — it was true for the incomplete-seed case).
+    #
+    # ALL of this is gated on --holdfix-pva: with the flag OFF the check is byte-identical
+    # to the legacy path (3x3/9x10 keep their code=1 check). The flag is only needed for
+    # the big CD datasets whose check otherwise inflates (gtap7_10x7+).
+    if args.holdfix_pva and not args.no_gams_warm:
+        _n_full = warmstart_from_gams(m_chk, gdx_path, "check")
+        _n_der = complete_derived_seed(m_chk)
+        _hf_chk = holdfix_cd_nest(m_chk)
+        print(f"  [holdfix-pva CHECK] complete-seeder {_n_full} + derived {_n_der} cells, "
+              f"then fixed {_hf_chk} pva/pnd + deactivated eq_pvaeq/eq_pndeq "
+              f"(GAMS gtap.holdfixed=1 on the check)")
 
     warm_b = GTAPVariableSnapshot.from_python_model(m_chk)
     # Verify warm-start captured GAMS values
@@ -680,6 +773,11 @@ def main() -> None:
             _n_shock_warm = warmstart_from_gams(m_alt, gdx_path, "shock")
             if _n_shock_warm:
                 print(f"  [GAMS-warm] Warm-started shock from GAMS shock values: {_n_shock_warm} vars set")
+            # NOTE: do NOT run complete_derived_seed on the SHOCK — it perturbs the
+            # converging shock basin (3x3: 100%/code=1 → 73%/code=2). The shock's own
+            # init for xc/xg/xi is already basin-consistent there; the derived-seed
+            # completion is only needed (and only safe) on the CHECK, whose init for
+            # those vars sits far enough off to knock PATH off the GAMS basin.
         except Exception as _swe:
             print(f"  [GAMS-warm shock] skipped: {_swe}")
 
