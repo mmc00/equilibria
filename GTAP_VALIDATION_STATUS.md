@@ -1,5 +1,25 @@
 # GTAP Python-to-GAMS Validation Status
 
+## Session 2026-06-19: gtap7_10x7 CHECK-period income bug closed
+
+**Symptom:** gtap7_10x7 altertax CHECK period `yc[USA]=32.8` vs GAMS 12.09 (~2.7×); `regY`/`facty` 2× in every region; check residual 2.48 (code=2).
+
+**Root cause (concrete, the pvaeq-class bug):** under CD (sigmav=sigmap=1) `eq_pvaeq`/`eq_pndeq` are GAMS tautologies (`1=Σaf`, `1=Σio`) that do NOT determine pva/pnd — GAMS pins them via `gtap.holdfixed=1` in **every** period (the check included). Python applied `--holdfix-pva` only to the SHOCK, never the check. The CD geometric-mean dual for pnd gives ≈1.013 vs GAMS 1.000 → inflates the factor-price system 2× → facty→regY→yc double. Found via the cascade: base EXACT + tool-4 calibration 686/686 OK (NOT a calibration bug) → pre-solve seed-residual probe isolated `eq_pndeq` (56 cells, Svces) as the sole structural disagreement.
+
+**DEAD END (reverted):** rewriting the `eq_pndeq` CD branch to the value identity `pnd·nd=Σ(pa·xaa)` (analog of the eq_pvaeq fix) passes the .nl gate 5/5 and reproduces GAMS pnd EXACTLY, but **breaks shock convergence** (3x3 shock 100%/code=1→88.91%/code=2; 10x7 shock residual 3.65e-7→10.46). A globally-correct equation change descalibrates the converging basin. Model left UNTOUCHED.
+
+**Faithful fix (in diff_altertax.py, gated on `--holdfix-pva`):** replicate `gtap.holdfixed=1` on the check — (1) complete seeder `warmstart_from_gams(check)`, (2) `complete_derived_seed` for Python-only vars GAMS doesn't carry (xc/xg/xi/xiagg/xd/xmt), (3) `holdfix_cd_nest` (fix pva/pnd at GAMS values + deactivate eq_pvaeq/eq_pndeq). All three needed together. Gated so the default path is byte-identical for 3x3/9x10 (which keep code=1 check).
+
+| gtap7_10x7 (`--holdfix-pva`) | before | after | GAMS |
+|---|---|---|---|
+| check `yc[USA]` | 32.83 (2.7×) | **12.086** | 12.093 ✓ |
+| check residual | 2.48 | **4.35e-7** | — |
+| shock match | 85.05% | **99.42%** | — |
+
+Check now matches GAMS in all 7 regions to ~0.1%. Ref: NEOS job 19621130 (ifSUB=0), stored `equilibria_refs/gtap7_10x7_altertax_cd/out_altertax_ifsub0.gdx`. Regression gate `test_gtap7_nl_parity.py` 5/5 pass (model untouched). Secondary: `run_gtap.py` linear-block gate `residual_tol` 1e-8→1e-6 (inert for parity — altertax uses nonlinear-full). Detail in memory `project_gtap7_10x7_check_holdfix`.
+
+---
+
 **Last updated:** 2026-05-12
 **Status:** CLOSED — 100% parity achieved (see "Session 2026-05-12: Branch close-out").
 **Objective:** Replicate the GAMS NEOS 10% uniform import-tariff shock in the equilibria GTAP Standard 7 Python template (9×10 and 3×2 NUS333) and reconcile endogenous deltas cell-by-cell against the GAMS reference (NEOS and, where licensing permits, GAMS local).
