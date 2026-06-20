@@ -64,9 +64,12 @@ DATASET_REGISTRY = {
     "gtap7_3x3": (ROOT / "datasets/gtap7_3x3", ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har",
                   REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_ifsub1.gdx"),
     "gtap7_3x4": (ROOT / "datasets/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har", None),
-    "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har", None),
+    "gtap7_5x5": (ROOT / "datasets/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har",
+                  REFS_DIR / "gtap7_5x5_altertax_cd/out_altertax_ifsub0.gdx"),
     "gtap7_10x7": (ROOT / "datasets/gtap7_10x7", ROOT / "output/gtap7_10x7_altertax_neos_bundle", "har",
                    REFS_DIR / "gtap7_10x7_altertax_cd/out_altertax_ifsub0.gdx"),
+    "gtap7_15x10": (ROOT / "datasets/gtap7_15x10", ROOT / "output/gtap7_15x10_altertax_neos_bundle", "har",
+                    REFS_DIR / "gtap7_15x10_altertax_cd/out_altertax_ifsub0.gdx"),
 }
 
 
