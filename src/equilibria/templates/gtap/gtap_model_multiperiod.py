@@ -198,3 +198,180 @@ class GTAPMultiPeriodModel:
                     m, cname,
                     Constraint([(period,)], rule=_make_scalar_rule(new_body, lb, ub)),
                 )
+
+    def build_equations_fisher(self, m: ConcreteModel) -> None:
+        """Inter-temporal Fisher GDP index as Jacobian rows.
+
+        Declares eq_rgdpmp[r,t] and eq_pgdpmp[r,t] with cross-period prices×quantities.
+        These replace the reflected (intra-period) versions created by build_equations_intra,
+        which used snapshot constants rather than live Vars from another period.
+
+        Fisher cross-product:
+          mqgdp(tp,tq,r) = Σ_{i,fd} pa[r,i,fd,tp]·xaa[r,i,fd,tq]
+                         + Σ_{i,rp}( pefob[r,i,rp,tp]·xw[r,i,rp,tq]
+                                    − pmcif[rp,i,r,tp]·xw[rp,i,r,tq] )
+        fd = {hhd, gov, inv, tmg}  — MUST include tmg (verified: reproduces GAMS exactly)
+
+        eq_rgdpmp[r,base]:  rgdpmp[r,base] == gdpmp[r,base]          (anchor)
+        eq_rgdpmp[r,t≠base]: rgdpmp[r,t] == rgdpmp[r,base]
+                              · sqrt( (gdpmp[r,t]/gdpmp[r,base]) · (mqgdp(base,t,r)/mqgdp(t,base,r)) )
+          with smooth positive guard on the sqrt argument.
+
+        eq_pgdpmp[r,t]:  pgdpmp[r,t] · rgdpmp[r,t] == gdpmp[r,t]
+        """
+        from pyomo.environ import Constraint, sqrt as _pyo_sqrt
+        from .gtap_model_equations import (
+            GTAP_HOUSEHOLD_AGENT as H,
+            GTAP_GOVERNMENT_AGENT as G,
+            GTAP_INVESTMENT_AGENT as I,
+            GTAP_MARGIN_AGENT as MG,
+        )
+
+        fd = (H, G, I, MG)
+
+        def _mqgdp(tp: str, tq: str, r: str):
+            """Fisher cross-product of absorption + net exports."""
+            # Final-demand absorption: Σ_{i,fd} pa[r,i,fd,tp] · xaa[r,i,fd,tq]
+            ab = sum(
+                m.pa[r, i, a, tp] * m.xaa[r, i, a, tq]
+                for i in m.i
+                for a in fd
+            )
+            # Net export value: Σ_{i,rp} ( pefob[r,i,rp,tp]·xw[r,i,rp,tq]
+            #                              − pmcif[rp,i,r,tp]·xw[rp,i,r,tq] )
+            tr = sum(
+                m.pefob[r, i, rp, tp] * m.xw[r, i, rp, tq]
+                - m.pmcif[rp, i, r, tp] * m.xw[rp, i, r, tq]
+                for i in m.i
+                for rp in m.r
+            )
+            return ab + tr
+
+        # Remove intra-period eq_rgdpmp / eq_pgdpmp (created by build_equations_intra)
+        # so we don't have duplicate bindings on rgdpmp/pgdpmp.
+        for cname in ("eq_rgdpmp", "eq_pgdpmp"):
+            comp = getattr(m, cname, None)
+            if comp is not None:
+                m.del_component(comp)
+
+        def _rgdpmp_rule(_m, r, t):
+            if t == "base":
+                # At benchmark, real GDP equals nominal GDP (pgdpmp=1 by construction).
+                return m.rgdpmp[r, "base"] == m.gdpmp[r, "base"]
+            # Fisher chain-volume index relative to base:
+            #   rgdpmp[t] = rgdpmp[base] · √( (gdpmp[t]/gdpmp[base]) · (mqgdp(base,t)/mqgdp(t,base)) )
+            # Smooth positive guard on the sqrt argument to keep PATH evaluable during
+            # iterations where the trade balance might transiently go negative:
+            #   arg_pos = (arg + √(arg²+ε))/2  →  ≈ arg for arg≫√ε, ≈ 0⁺ for arg≤0, C¹-smooth.
+            _mq_base_t = _mqgdp("base", t, r)   # price=base, qty=current
+            _mq_t_base = _mqgdp(t, "base", r)   # price=current, qty=base
+            _arg = (m.gdpmp[r, t] / m.gdpmp[r, "base"]) * (_mq_base_t / (_mq_t_base + 1e-12))
+            _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
+            return m.rgdpmp[r, t] == m.rgdpmp[r, "base"] * _pyo_sqrt(_arg_pos + 1e-12)
+
+        # Use the full (r, t) index set — all regions × all periods
+        all_rt = [(r, t) for r in m.r for t in m.t]
+        m.eq_rgdpmp = Constraint(all_rt, rule=_rgdpmp_rule)
+
+        def _pgdpmp_rule(_m, r, t):
+            return m.pgdpmp[r, t] * m.rgdpmp[r, t] == m.gdpmp[r, t]
+
+        m.eq_pgdpmp = Constraint(all_rt, rule=_pgdpmp_rule)
+
+    def seed_all_periods(self, m: ConcreteModel, gdx_path) -> None:
+        """Seed var[...,t] from a GAMS altertax GDX for t ∈ {base, check, shock}.
+
+        Handles the GAMS → Python mapping:
+          - Symbol aliases: xa→xaa, pa→pa, xw→xw, pefob→pefob, pmcif→pmcif, etc.
+          - Prefix stripping on index keys: c_Food→Food, a_Food→Food (but hhd/gov/inv/tmg untouched)
+          - Multi-period GDX has trailing 't' dimension matching PERIODS
+
+        Only unfixed VarData entries are seeded (fixed vars keep their value).
+        """
+        import subprocess
+        import csv as _csv
+        from pathlib import Path as _Path
+
+        gdx_path = _Path(gdx_path)
+        GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+        T_LABELS = {"base", "check", "shock"}
+
+        # GAMS symbol → Python Var name on m
+        _ALIAS = {
+            "xa": "xaa",
+            "pp": "pp_rai",
+            "p": "p_rai",
+            # Add others as needed; most names are identical
+        }
+
+        def _strip(k: str) -> str:
+            """Strip GAMS prefix a_/c_/f_/r_ from set elements."""
+            if isinstance(k, str) and len(k) > 2 and k[1] == "_" and k[0] in "acfr":
+                return k[2:]
+            return k
+
+        def _dump_sym(sym: str) -> dict:
+            res = subprocess.run(
+                [GDXDUMP, str(gdx_path), "Format=csv", f"Symb={sym}"],
+                capture_output=True, text=True, check=False,
+            )
+            if res.returncode != 0 or not res.stdout.strip():
+                return {}
+            out: dict = {}
+            reader = _csv.reader(res.stdout.splitlines())
+            next(reader, None)
+            for row in reader:
+                if len(row) < 2:
+                    continue
+                *keys, val = row
+                keys = tuple(k.strip('"') for k in keys)
+                try:
+                    out[keys] = float(val)
+                except ValueError:
+                    pass
+            return out
+
+        def _list_var_symbols() -> list:
+            res = subprocess.run(
+                [GDXDUMP, str(gdx_path), "Symbols"],
+                capture_output=True, text=True, check=False,
+            )
+            names = []
+            for line in res.stdout.splitlines():
+                parts = line.split()
+                if len(parts) < 5 or parts[3] != "Var":
+                    continue
+                try:
+                    if int(parts[4]) > 0:
+                        names.append(parts[1])
+                except ValueError:
+                    pass
+            return names
+
+        for gams_name in _list_var_symbols():
+            py_name = _ALIAS.get(gams_name, gams_name)
+            # Try to get the Var from m (case-sensitive, then lowercase)
+            py_var = getattr(m, py_name, None) or getattr(m, py_name.lower(), None)
+            if py_var is None:
+                continue
+            # Only seed indexed Vars that have a time axis
+            if not hasattr(py_var, "index_set"):
+                continue
+
+            data = _dump_sym(gams_name)
+            if not data:
+                continue
+
+            for gk, gval in data.items():
+                # Last key must be a period label
+                if not (gk and gk[-1] in T_LABELS):
+                    continue
+                t = gk[-1]
+                # Strip prefixes from non-period keys
+                stripped = tuple(_strip(x) for x in gk[:-1]) + (t,)
+                try:
+                    vd = py_var[stripped]
+                    if not vd.fixed:
+                        vd.set_value(float(gval))
+                except (KeyError, TypeError, ValueError):
+                    pass
