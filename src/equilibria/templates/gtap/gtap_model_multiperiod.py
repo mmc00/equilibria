@@ -40,13 +40,14 @@ class GTAPMultiPeriodModel:
         Init: all periods get the single-period benchmark value (base=check=shock).
         The within/domain is preserved from the single-period VarData.
         """
-        from pyomo.environ import Var, NonNegativeReals, Reals
+        from pyomo.environ import Var, NonNegativeReals
 
-        # Build a temporary single-period model to read Var families from
-        sp_model = GTAPModelEquations(
-            self.sets, self.params, self.closure,
-            residual_region=self.residual_region,
-        ).build_model()
+        # Build a temporary single-period model to read Var families from.
+        # Reuse the builder stored in __init__ (same immutable sets/params);
+        # build_model() runs apply_production_scaling + _align_xi_xaa_post_scaling
+        # so the reflected init values are the benchmark-consistent post-scaling
+        # values the solver actually warm-starts from.
+        sp_model = self._sp.build_model()
 
         periods = list(PERIODS)
 
@@ -91,7 +92,7 @@ class GTAPMultiPeriodModel:
                 try:
                     sp_val = float(first_data.value)
                 except (TypeError, ValueError):
-                    sp_val = 0.0
+                    sp_val = 1.0
 
                 def _mk_scalar_init(val):
                     def _init(_m, t):
