@@ -203,6 +203,9 @@ class GTAPMultiPeriodModel:
         """Inter-temporal Fisher GDP index as Jacobian rows.
 
         Declares eq_rgdpmp[r,t] and eq_pgdpmp[r,t] with cross-period prices×quantities.
+        Also re-declares eq_pabs[r,t], eq_pfact[r,t], eq_pwfact[t] as cross-period rows
+        so that check/shock periods reference live base-period Vars (m.pa/xaa/pf/xf['base'])
+        rather than construction-time float constants.
         These replace the reflected (intra-period) versions created by build_equations_intra,
         which used snapshot constants rather than live Vars from another period.
 
@@ -218,9 +221,24 @@ class GTAPMultiPeriodModel:
           with smooth positive guard on the sqrt argument.
 
         eq_pgdpmp[r,t]:  pgdpmp[r,t] · rgdpmp[r,t] == gdpmp[r,t]
+
+        eq_pabs[r,t≠base]:  pabs[r,t] == pabs[r,base]
+                             · sqrt( mqabs(t,base,r)/mqabs(base,base,r)
+                                   * mqabs(t,t,r)/(mqabs(base,t,r)+ε) )
+          with mqabs(tp,tq,r) = Σ_{i,fd} pa[r,i,fd,tp] · xaa[r,i,fd,tq]
+
+        eq_pfact[r,t≠base]:  pfact[r,t] == sqrt( mqfactr(t,base,r)/(mqfactr(base,base,r)+ε)
+                                                * mqfactr(t,t,r)/(mqfactr(base,t,r)+ε) )
+          with mqfactr(tp,tq,r) = Σ_{f,a} pf[r,f,a,tp] · xf[r,f,a,tq] / xscale[r,a]
+
+        eq_pwfact[t≠base]:  pwfact[t] == sqrt( mqfactw(t,base)/(mqfactw(base,base)+ε)
+                                              * mqfactw(t,t)/(mqfactw(base,t)+ε) )
+          with mqfactw(tp,tq) = Σ_{r,f,a} pf[r,f,a,tp] · xf[r,f,a,tq] / xscale[r,a]
         """
         from pyomo.environ import Constraint, sqrt as _pyo_sqrt
+        from pyomo.environ import value as _pv
         from .gtap_model_equations import (
+            GTAPModelEquations,
             GTAP_HOUSEHOLD_AGENT as H,
             GTAP_GOVERNMENT_AGENT as G,
             GTAP_INVESTMENT_AGENT as I,
@@ -277,6 +295,114 @@ class GTAPMultiPeriodModel:
             return m.pgdpmp[r, t] * m.rgdpmp[r, t] == m.gdpmp[r, t]
 
         m.eq_pgdpmp = Constraint(all_rt, rule=_pgdpmp_rule)
+
+        # ── cross-period Fisher rows for pabs, pfact, pwfact ─────────────────────
+        # Build a temporary single-period model to extract xscale values (floats).
+        # xscale is a time-invariant Param (production scaling); it lives in the
+        # single-period model and is NOT reflected as a Var in the multi-period model.
+        _sp_tmp = GTAPModelEquations(
+            self.sets, self.params, self.closure, residual_region=self.residual_region
+        ).build_model()
+        xscale_floats: dict = {}
+        for r in self.sets.r:
+            for a in self.sets.a:
+                try:
+                    xscale_floats[(r, a)] = max(float(_pv(_sp_tmp.xscale[r, a])), 1e-12)
+                except (KeyError, AttributeError):
+                    xscale_floats[(r, a)] = 1.0
+        del _sp_tmp  # free memory
+
+        def _mqabs_cross(tp: str, tq: str, r: str):
+            """Absorption Fisher cross: Σ_{i,fd} pa[r,i,fd,tp] · xaa[r,i,fd,tq]."""
+            return sum(
+                m.pa[r, i, a, tp] * m.xaa[r, i, a, tq]
+                for i in m.i
+                for a in fd
+            )
+
+        def _mqfactr_cross(tp: str, tq: str, r: str):
+            """Per-region factor Fisher cross: Σ_{f,a} pf[r,f,a,tp]·xf[r,f,a,tq]/xscale[r,a]."""
+            return sum(
+                m.pf[r, f, a, tp] * m.xf[r, f, a, tq] / xscale_floats.get((r, a), 1.0)
+                for f in m.f
+                for a in m.a
+                if xscale_floats.get((r, a), 0.0) > 1e-12
+            )
+
+        def _mqfactw_cross(tp: str, tq: str):
+            """World factor Fisher cross: Σ_{r,f,a} pf[r,f,a,tp]·xf[r,f,a,tq]/xscale[r,a]."""
+            return sum(
+                m.pf[r, f, a, tp] * m.xf[r, f, a, tq] / xscale_floats.get((r, a), 1.0)
+                for r in m.r
+                for f in m.f
+                for a in m.a
+                if xscale_floats.get((r, a), 0.0) > 1e-12
+            )
+
+        # Delete intra-period eq_pabs / eq_pfact / eq_pwfact.
+        # (After 3 calls to build_equations_intra each overwrites the previous, so only
+        # the 'shock' entries remain — but we delete them all to avoid any duplicate binding.)
+        for cname in ("eq_pabs", "eq_pfact", "eq_pwfact"):
+            comp = getattr(m, cname, None)
+            if comp is not None:
+                m.del_component(comp)
+
+        def _pabs_rule(_m, r, t):
+            if t == "base":
+                # Base period: pabs is already at benchmark (=1 by construction).
+                # Return the intra-period identity pabs[base] == pabs[base] * sqrt(1)
+                # which simplifies to the trivially-satisfied anchor pabs[base]==pabs[base].
+                # Use Constraint.Skip to avoid a vacuous row; the base period pabs[base]
+                # value is set by init=1.0 and constrained by other factor-price equations.
+                return Constraint.Skip
+            # Cross-period Fisher absorption price index:
+            #   pabs[r,t] = pabs[r,base] · sqrt( (mqabs(t,base)/mqabs(base,base))
+            #                                   · (mqabs(t,t)   /mqabs(base,t)) )
+            mq_bb = _mqabs_cross("base", "base", r)   # pq=base, qq=base (denom anchor)
+            mq_tb = _mqabs_cross(t, "base", r)        # price=current, qty=base
+            mq_tt = _mqabs_cross(t, t, r)             # price=current, qty=current
+            mq_bt = _mqabs_cross("base", t, r)        # price=base,    qty=current
+            _arg = (mq_tb / (mq_bb + 1e-12)) * (mq_tt / (mq_bt + 1e-12))
+            _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
+            return m.pabs[r, t] == m.pabs[r, "base"] * _pyo_sqrt(_arg_pos + 1e-12)
+
+        non_base_rt = [(r, t) for r in m.r for t in m.t if t != "base"]
+        m.eq_pabs = Constraint(non_base_rt, rule=_pabs_rule)
+
+        def _pfact_rule(_m, r, t):
+            if t == "base":
+                return Constraint.Skip
+            # Cross-period Fisher regional factor price index:
+            #   pfact[r,t] = sqrt( (mqfactr(t,base,r)/mqfactr(base,base,r))
+            #                    · (mqfactr(t,t,r)   /mqfactr(base,t,r)) )
+            # With pfact[r,base]=1 (benchmark normalization), same form as GAMS pfacteq
+            # but with live base-period pf/xf Vars replacing the frozen pf0/xf0 Params.
+            m_bb = _mqfactr_cross("base", "base", r)
+            m_sb = _mqfactr_cross(t, "base", r)     # price=current, qty=base
+            m_ss = _mqfactr_cross(t, t, r)           # price=current, qty=current
+            m_bs = _mqfactr_cross("base", t, r)      # price=base,    qty=current
+            _arg = (m_sb / (m_bb + 1e-12)) * (m_ss / (m_bs + 1e-12))
+            _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
+            return m.pfact[r, t] == _pyo_sqrt(_arg_pos + 1e-12)
+
+        m.eq_pfact = Constraint(non_base_rt, rule=_pfact_rule)
+
+        def _pwfact_rule(_m, t):
+            if t == "base":
+                return Constraint.Skip
+            # Cross-period Fisher world factor price index:
+            #   pwfact[t] = sqrt( (mqfactw(t,base)/mqfactw(base,base))
+            #                   · (mqfactw(t,t)   /mqfactw(base,t)) )
+            m_bb = _mqfactw_cross("base", "base")
+            m_sb = _mqfactw_cross(t, "base")          # price=current, qty=base
+            m_ss = _mqfactw_cross(t, t)               # price=current, qty=current
+            m_bs = _mqfactw_cross("base", t)          # price=base,    qty=current
+            _arg = (m_sb / (m_bb + 1e-12)) * (m_ss / (m_bs + 1e-12))
+            _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
+            return m.pwfact[t] == _pyo_sqrt(_arg_pos + 1e-12)
+
+        non_base_t = [t for t in m.t if t != "base"]
+        m.eq_pwfact = Constraint(non_base_t, rule=_pwfact_rule)
 
     def seed_all_periods(self, m: ConcreteModel, gdx_path) -> None:
         """Seed var[...,t] from a GAMS altertax GDX for t ∈ {base, check, shock}.
