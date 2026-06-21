@@ -143,6 +143,37 @@ class GTAPMultiPeriodModel:
 
         visitor = ExpressionReplacementVisitor(substitute=substitute)
 
+        def _make_rule(data_dict):
+            def _rule(_m, *key):
+                orig_key = key[:-1]  # strip trailing period
+                orig_key = orig_key[0] if len(orig_key) == 1 else orig_key
+                body, lb, ub = data_dict[orig_key]
+                if lb is not None and ub is not None and lb == ub:
+                    # equality constraint: body == value
+                    return body == lb
+                if lb is not None and ub is not None:
+                    # ranged constraint — return (lb, body, ub) tuple
+                    return (lb, body, ub)
+                if lb is not None:
+                    return body >= lb
+                if ub is not None:
+                    return body <= ub
+                return Constraint.Skip
+            return _rule
+
+        def _make_scalar_rule(body, lb, ub):
+            def _rule(_m, t):
+                if lb is not None and ub is not None and lb == ub:
+                    return body == lb
+                if lb is not None and ub is not None:
+                    return (lb, body, ub)
+                if lb is not None:
+                    return body >= lb
+                if ub is not None:
+                    return body <= ub
+                return Constraint.Skip
+            return _rule
+
         for con in sp.component_objects(Constraint, active=True):
             cname = con.name
             if con.is_indexed():
@@ -156,48 +187,76 @@ class GTAPMultiPeriodModel:
                     new_body = visitor.walk_expression(cd.body)
                     con_data[k] = (new_body, cd.lower, cd.upper)
 
-                def _make_rule(data_dict):
-                    def _rule(_m, *key):
-                        orig_key = key[:-1]  # strip trailing period
-                        orig_key = orig_key[0] if len(orig_key) == 1 else orig_key
-                        body, lb, ub = data_dict[orig_key]
-                        if lb is not None and ub is not None and lb == ub:
-                            # equality constraint: body == value
-                            return body == lb
-                        if lb is not None and ub is not None:
-                            # ranged constraint — return (lb, body, ub) tuple
-                            return (lb, body, ub)
-                        if lb is not None:
-                            return body >= lb
-                        if ub is not None:
-                            return body <= ub
-                        return Constraint.Skip
-                    return _rule
+                # If this constraint family already exists on m (from a prior period),
+                # MERGE: delete the old component and rebuild with a combined index set.
+                existing = m.find_component(cname)
+                if existing is not None and hasattr(existing, "index_set"):
+                    # Collect existing (index_key → (body,lb,ub)) from the live component.
+                    # existing.index_set() returns the combined index from all prior periods.
+                    merged_index = list(existing.index_set())
+                    merged_data: dict = {}
+                    # Re-use the live ConstraintData bodies from prior periods.
+                    for ei in merged_index:
+                        cd_e = existing[ei]
+                        # Store the raw expression body and bounds as-is (already Pyomo exprs).
+                        merged_data[ei] = (cd_e.body, cd_e.lower, cd_e.upper)
+                    # Append new period entries.
+                    for ni, data_tuple in zip(new_index, [con_data[k] for k in con]):
+                        merged_index.append(ni)
+                        merged_data[ni] = data_tuple
 
-                setattr(m, cname, Constraint(new_index, rule=_make_rule(con_data)))
+                    m.del_component(existing)
+
+                    def _make_merged_rule(d):
+                        def _rule(_m, *key):
+                            # Try tuple key first, then scalar, then (key[0],) for
+                            # scalar constraints whose merged data uses tuple keys.
+                            lookup = key if len(key) > 1 else key[0]
+                            if lookup not in d:
+                                # scalar constraint stored as (period,)
+                                lookup = (key[0],) if len(key) == 1 else key
+                            body, lb, ub = d[lookup]
+                            if lb is not None and ub is not None and lb == ub:
+                                return body == lb
+                            if lb is not None and ub is not None:
+                                return (lb, body, ub)
+                            if lb is not None:
+                                return body >= lb
+                            if ub is not None:
+                                return body <= ub
+                            return Constraint.Skip
+                        return _rule
+
+                    setattr(m, cname, Constraint(merged_index, rule=_make_merged_rule(merged_data)))
+                else:
+                    setattr(m, cname, Constraint(new_index, rule=_make_rule(con_data)))
             else:
                 # Scalar constraint — key is None in sp; mp gets key (period,)
                 cd = con[None]
                 new_body = visitor.walk_expression(cd.body)
                 lb, ub = cd.lower, cd.upper
 
-                def _make_scalar_rule(body, lb, ub):
-                    def _rule(_m, t):
-                        if lb is not None and ub is not None and lb == ub:
-                            return body == lb
-                        if lb is not None and ub is not None:
-                            return (lb, body, ub)
-                        if lb is not None:
-                            return body >= lb
-                        if ub is not None:
-                            return body <= ub
-                        return Constraint.Skip
-                    return _rule
-
-                setattr(
-                    m, cname,
-                    Constraint([(period,)], rule=_make_scalar_rule(new_body, lb, ub)),
-                )
+                # If this scalar constraint family already exists on m, merge periods.
+                existing = m.find_component(cname)
+                if existing is not None and hasattr(existing, "index_set"):
+                    merged_index = list(existing.index_set())
+                    merged_data_s: dict = {}
+                    for ei in merged_index:
+                        cd_e = existing[ei]
+                        merged_data_s[ei] = (cd_e.body, cd_e.lower, cd_e.upper)
+                    ni_s = (period,)
+                    merged_index.append(ni_s)
+                    merged_data_s[ni_s] = (new_body, lb, ub)
+                    m.del_component(existing)
+                    setattr(
+                        m, cname,
+                        Constraint(merged_index, rule=_make_merged_rule(merged_data_s)),
+                    )
+                else:
+                    setattr(
+                        m, cname,
+                        Constraint([(period,)], rule=_make_scalar_rule(new_body, lb, ub)),
+                    )
 
     def build_equations_fisher(self, m: ConcreteModel) -> None:
         """Inter-temporal Fisher GDP index as Jacobian rows.
