@@ -480,7 +480,9 @@ class GTAPSolver:
         # and no free margin price on routes with zero benchmark margins.
         if hasattr(self.model, "xwmg"):
             for idx in self.model.xwmg:
-                r, i, rp = idx
+                # Multi-period models extend the index with a trailing period dim;
+                # use only the first 3 elements (r, i, rp) for the tmarg lookup.
+                r, i, rp = idx[0], idx[1], idx[2]
                 tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
                 if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.xwmg, idx)
@@ -488,7 +490,7 @@ class GTAPSolver:
 
         if hasattr(self.model, "pwmg"):
             for idx in self.model.pwmg:
-                r, i, rp = idx
+                r, i, rp = idx[0], idx[1], idx[2]
                 tmarg = float(value(self.model.tmarg[r, i, rp])) if hasattr(self.model, "tmarg") else 0.0
                 if tmarg <= 0.0:
                     _fix_to_zero_with_lb(self.model.pwmg, idx)
@@ -496,8 +498,9 @@ class GTAPSolver:
 
         if hasattr(self.model, "xmgm"):
             for idx in self.model.xmgm:
-                m, r, i, rp = idx
-                share = float(value(self.model.amgm[m, r, i, rp])) if hasattr(self.model, "amgm") else 0.0
+                # xmgm is (m, r, i, rp) in single-period; (m, r, i, rp, t) multi-period.
+                mg, r, i, rp = idx[0], idx[1], idx[2], idx[3]
+                share = float(value(self.model.amgm[mg, r, i, rp])) if hasattr(self.model, "amgm") else 0.0
                 if share <= 0.0:
                     _fix_to_zero_with_lb(self.model.xmgm, idx)
                     fixed_count += 1
