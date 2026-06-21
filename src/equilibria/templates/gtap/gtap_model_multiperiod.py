@@ -103,3 +103,99 @@ class GTAPMultiPeriodModel:
 
             doc = v.doc if hasattr(v, "doc") and v.doc else ""
             setattr(m, name, Var(new_index, within=domain, initialize=init_fn, doc=doc))
+
+    def build_equations_intra(self, m: ConcreteModel, period: str) -> None:
+        """Replicate all single-period Constraint families onto m, indexed by (orig_key..., period).
+
+        Strategy: build a fresh single-period model, then for each Constraint family,
+        substitute every sp_var[k] reference in the body with m_var[(*k, period)]
+        using ExpressionReplacementVisitor's substitute dict (keyed by id).
+
+        The resulting constraints on m are named identically to the single-period ones
+        (e.g. eq_facty) but indexed by (original_key..., period), so
+        m.eq_facty["USA", "base"] holds the same algebraic body as sp.eq_facty["USA"]
+        evaluated at the multi-period vars for t=base.
+        """
+        from pyomo.environ import Constraint, Var
+        from pyomo.core.expr.visitor import ExpressionReplacementVisitor
+
+        # Build a fresh single-period model to get its Constraints and Vars.
+        sp = GTAPModelEquations(
+            self.sets, self.params, self.closure,
+            residual_region=self.residual_region,
+        ).build_model()
+
+        # Build substitute dict: id(sp_var[k]) -> m_var[(*k, period)]
+        # for every VarData in the single-period model.
+        substitute: dict = {}
+        for v in sp.component_objects(Var, active=True):
+            vname = v.name
+            mp_var = getattr(m, vname)
+            if v.is_indexed():
+                for k in v.index_set():
+                    sp_vd = v[k]
+                    kt = (*_astuple(k), period)
+                    substitute[id(sp_vd)] = mp_var[kt]
+            else:
+                # scalar Var — sp uses v[None], mp is indexed by (period,)
+                sp_vd = v[None]
+                substitute[id(sp_vd)] = mp_var[(period,)]
+
+        visitor = ExpressionReplacementVisitor(substitute=substitute)
+
+        for con in sp.component_objects(Constraint, active=True):
+            cname = con.name
+            if con.is_indexed():
+                # Build explicit index list: (orig_key..., period) for each key
+                new_index = [(*_astuple(k), period) for k in con]
+
+                # Capture (body, lower, upper) per original key to avoid closure issues
+                con_data: dict = {}
+                for k in con:
+                    cd = con[k]
+                    new_body = visitor.walk_expression(cd.body)
+                    con_data[k] = (new_body, cd.lower, cd.upper)
+
+                def _make_rule(data_dict):
+                    def _rule(_m, *key):
+                        orig_key = key[:-1]  # strip trailing period
+                        orig_key = orig_key[0] if len(orig_key) == 1 else orig_key
+                        body, lb, ub = data_dict[orig_key]
+                        if lb is not None and ub is not None and lb == ub:
+                            # equality constraint: body == value
+                            return body == lb
+                        if lb is not None and ub is not None:
+                            # ranged constraint — return (lb, body, ub) tuple
+                            return (lb, body, ub)
+                        if lb is not None:
+                            return body >= lb
+                        if ub is not None:
+                            return body <= ub
+                        return Constraint.Skip
+                    return _rule
+
+                setattr(m, cname, Constraint(new_index, rule=_make_rule(con_data)))
+            else:
+                # Scalar constraint — key is None in sp; mp gets key (period,)
+                cd = con[None]
+                new_body = visitor.walk_expression(cd.body)
+                lb, ub = cd.lower, cd.upper
+                body_captured = new_body
+
+                def _make_scalar_rule(body, lb, ub):
+                    def _rule(_m, t):
+                        if lb is not None and ub is not None and lb == ub:
+                            return body == lb
+                        if lb is not None and ub is not None:
+                            return (lb, body, ub)
+                        if lb is not None:
+                            return body >= lb
+                        if ub is not None:
+                            return body <= ub
+                        return Constraint.Skip
+                    return _rule
+
+                setattr(
+                    m, cname,
+                    Constraint([(period,)], rule=_make_scalar_rule(new_body, lb, ub)),
+                )
