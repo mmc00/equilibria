@@ -180,7 +180,6 @@ class GTAPMultiPeriodModel:
                 cd = con[None]
                 new_body = visitor.walk_expression(cd.body)
                 lb, ub = cd.lower, cd.upper
-                body_captured = new_body
 
                 def _make_scalar_rule(body, lb, ub):
                     def _rule(_m, t):
