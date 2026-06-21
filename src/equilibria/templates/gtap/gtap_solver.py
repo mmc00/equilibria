@@ -350,7 +350,7 @@ class GTAPSolver:
             if hasattr(self.model, "xft"):
                 sf_set = set(str(f) for f in self.model.sf) if hasattr(self.model, "sf") else set()
                 for idx in self.model.xft:
-                    r, f = idx
+                    r, f = idx[0], idx[1]  # safe for (r,f) or (r,f,t)
                     level = self.model.xft[idx].value
                     lb = self.model.xft[idx].lb
                     fixed_level = 1.0 if level is None else float(level)
@@ -635,25 +635,25 @@ class GTAPSolver:
         # adding surplus DOF that the bipartite matcher cannot satisfy.
         if hasattr(self.model, "xft") and hasattr(self.model, "xftflag"):
             for idx in self.model.xft:
-                r, f = idx
+                r, f = idx[0], idx[1]  # safe for (r,f) or (r,f,t)
                 try:
                     flag = float(value(self.model.xftflag[r, f]) or 0.0)
                 except Exception:
                     flag = 0.0
-                if flag <= 0.0 and not self.model.xft[r, f].fixed:
-                    val = self.model.xft[r, f].value
-                    self.model.xft[r, f].fix(float(val) if val is not None else 1.0)
+                if flag <= 0.0 and not self.model.xft[idx].fixed:
+                    val = self.model.xft[idx].value
+                    self.model.xft[idx].fix(float(val) if val is not None else 1.0)
                     fixed_count += 1
         if hasattr(self.model, "pft") and hasattr(self.model, "xftflag"):
             for idx in self.model.pft:
-                r, f = idx
+                r, f = idx[0], idx[1]  # safe for (r,f) or (r,f,t)
                 try:
                     flag = float(value(self.model.xftflag[r, f]) or 0.0)
                 except Exception:
                     flag = 0.0
-                if flag <= 0.0 and not self.model.pft[r, f].fixed:
-                    val = self.model.pft[r, f].value
-                    self.model.pft[r, f].fix(float(val) if val is not None else 1.0)
+                if flag <= 0.0 and not self.model.pft[idx].fixed:
+                    val = self.model.pft[idx].value
+                    self.model.pft[idx].fix(float(val) if val is not None else 1.0)
                     fixed_count += 1
 
         logger.info(f"Conditional fixing applied: {fixed_count} variables fixed based on SAM data")
@@ -676,15 +676,20 @@ class GTAPSolver:
         
         fixed_count = 0
         
-        # Count current state
-        constraints = sum(1 for c in self.model.component_objects(Con, active=True) 
-                        for _ in c)
-        free_vars = sum(1 for var in self.model.component_objects(Var, active=True)
-                       for idx in var if not var[idx].fixed)
-        
+        # Count current state — use component_data_objects so that individually
+        # deactivated ConstraintData cells (multi-period freeze) are excluded,
+        # matching the set that PATH actually sees.
+        constraints = sum(
+            1 for _ in self.model.component_data_objects(Con, active=True)
+        )
+        free_vars = sum(
+            1 for v in self.model.component_data_objects(Var, active=True)
+            if not v.fixed
+        )
+
         gap = free_vars - constraints
         logger.info(f"MCP gap before aggressive fixing: {gap} (free={free_vars}, cons={constraints})")
-        
+
         if gap <= 0:
             logger.info("MCP is already square or over-determined")
             return 0
@@ -736,10 +741,13 @@ class GTAPSolver:
             return count
         
         def get_current_gap():
-            """Calculate current gap."""
-            free = sum(1 for var in self.model.component_objects(Var, active=True)
-                      for idx in var if not var[idx].fixed)
-            return free - constraints
+            """Calculate current gap (uses component_data_objects for accuracy)."""
+            cons = sum(1 for _ in self.model.component_data_objects(Con, active=True))
+            free = sum(
+                1 for v in self.model.component_data_objects(Var, active=True)
+                if not v.fixed
+            )
+            return free - cons
 
         current_gap = gap
 
