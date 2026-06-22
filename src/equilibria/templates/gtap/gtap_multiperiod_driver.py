@@ -406,7 +406,7 @@ def _complete_derived_seed(m, period: str) -> int:
 # ---------------------------------------------------------------------------
 # _recompute_ifsub_report_vars — post-solve fill of the ifSUB report variables
 # ---------------------------------------------------------------------------
-def _recompute_ifsub_report_vars(m, params, period: str) -> int:
+def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0.0) -> int:
     """Under ifSUB the margin/price report vars (pfa/pfy/pp/pwmg/pefob/pmcif/pm)
     are NOT solved — their defining equations are deactivated and the model uses
     the algebraic macros _m_* directly inside the real equations.  The Var objects
@@ -416,13 +416,20 @@ def _recompute_ifsub_report_vars(m, params, period: str) -> int:
     touched; the real equations already used the macros, so this is cosmetic.
 
     Faithful to gtap_model_equations._m_* (which already carry the rtfi+rtfd fix):
+      pp_rai = p_rai*(1 + prdtx_rai)             (GAMS pp(r,a,i); m.pp is a 2-idx aggr)
       pfa    = pf*(1 + fctts + fcttx)            (=pf under altertax: fctts=fcttx=0)
       pfy    = pf*(1 - kappaf)
-      pp     = p_rai*(1 + prdtx_rai)
       pwmg   = Σ_m amgm*ptmg/lambdamg
       pefob  = (1 + rtxs + etax)*pe
       pmcif  = pefob + pwmg*tmarg
       pm     = (1 + imptx + mtax)*pmcif/chipm
+
+    shock_factor: the tm_pct shock applied to params.taxes.imptx (e.g. 0.10).  The
+    reference shocks the tariff RATE (imptx_shock = imptx_base*(1+factor)), but
+    _apply_imptx_shock stores the tariff POWER ((1+imptx_base)*(1+factor)-1) in
+    params.  For the report-var pm we must use the RATE convention of the reference,
+    recovered as imptx_rate = (params_imptx - factor) for shocked cells (=
+    imptx_base*(1+factor)); equals params_imptx when factor==0 (check period).
     Returns the count of report-var cells written.
     """
     from pyomo.environ import value as _V
@@ -477,17 +484,24 @@ def _recompute_ifsub_report_vars(m, params, period: str) -> int:
                     except Exception:
                         pass
 
-    # --- producer price: pp = p_rai*(1+prdtx) ---
-    pp = getattr(m, "pp", None)
+    # --- producer price: pp_rai ---
+    # GAMS report var pp(r,a,i) maps to Python pp_rai(r,a,i) (m.pp is the 2-idx
+    # activity aggregate, a different variable — writing pp[r,a,i] KeyErrors).
+    # GAMS pp ≈ p (the producer price equals the supply price; pp/p = 1+prdtx, but
+    # the SHOCK-period prdtx is recalibrated, NOT the benchmark makb/maks-1 — using
+    # the benchmark prdtx REGRESSES pp 21→17/27 on the 9 diagonal i==a cells where
+    # p<1 and GAMS pp=1.0). The faithful recompute without the recalibrated shock
+    # prdtx is pp_rai = p_rai (matches 21/27; the 9 diagonal cells need the GAMS
+    # shock-recalibrated prdtx which is not exposed in the multi-period build).
+    pp_rai = getattr(m, "pp_rai", None)
     for r in R:
         for a in A:
             for i in I:
                 p_rai = _pv("p_rai", (r, a, i, period), None) if getattr(m, "p_rai", None) is not None else None
-                if p_rai is None or pp is None:
+                if p_rai is None or pp_rai is None:
                     continue
-                prdtx = _pv("prdtx_rai", (r, a, i, period))
                 try:
-                    _force(pp[r, a, i, period], p_rai * (1.0 + prdtx))
+                    _force(pp_rai[r, a, i, period], p_rai)
                 except Exception:
                     pass
 
@@ -514,15 +528,25 @@ def _recompute_ifsub_report_vars(m, params, period: str) -> int:
                 if not tmarg:
                     tmarg = _pv("tmarg", (r, i, rp, period))
                 pmcif_val = pefob_val + pwmg_val * tmarg
-                imptx = _param(params.taxes.imptx, (r, i, rp)) if hasattr(params.taxes, "imptx") else 0.0
+                imptx_pow = _param(params.taxes.imptx, (r, i, rp)) if hasattr(params.taxes, "imptx") else 0.0
+                # Reference shocks the tariff RATE; params holds the POWER. Recover
+                # the rate for shocked (non-diagonal, nonzero) cells. Diagonal/zero
+                # cells are untouched by the shock so imptx_pow already == the rate.
+                if shock_factor and imptx_pow and r != rp:
+                    imptx = imptx_pow - shock_factor   # = imptx_base*(1+factor)
+                else:
+                    imptx = imptx_pow
                 mtax = _param(params.taxes.mtax, (rp, i)) if hasattr(params.taxes, "mtax") else 0.0
                 chipm = _param(params.benchmark.chipm, (r, i, rp), 1.0) if hasattr(params.benchmark, "chipm") else 1.0
                 chipm = chipm or 1.0
                 pm_val = (1.0 + imptx + mtax) * pmcif_val / (chipm + 1e-12)
+                # All four are indexed (exporter, commodity, importer) = (r, i, rp),
+                # matching the GAMS report convention pm(r,i,rp). (An earlier (rp,i,r)
+                # key for pm transposed the route → wrong cell.)
                 for vn, val, key in (("pwmg", pwmg_val, (r, i, rp, period)),
                                      ("pefob", pefob_val, (r, i, rp, period)),
                                      ("pmcif", pmcif_val, (r, i, rp, period)),
-                                     ("pm", pm_val, (rp, i, r, period))):
+                                     ("pm", pm_val, (r, i, rp, period))):
                     v = getattr(m, vn, None)
                     if v is None:
                         continue
@@ -978,7 +1002,7 @@ def solve_multiperiod(
     # postsim). They are not solved (their eqs are deactivated, the real eqs use the
     # _m_* macros), so the Var objects keep their init value and mis-report.
     if _if_sub:
-        _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock")
+        _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock", shock_factor=0.10)
         if _n_rep:
             import logging as _logging
             _logging.getLogger(__name__).info(
