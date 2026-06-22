@@ -404,6 +404,138 @@ def _complete_derived_seed(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _recompute_ifsub_report_vars — post-solve fill of the ifSUB report variables
+# ---------------------------------------------------------------------------
+def _recompute_ifsub_report_vars(m, params, period: str) -> int:
+    """Under ifSUB the margin/price report vars (pfa/pfy/pp/pwmg/pefob/pmcif/pm)
+    are NOT solved — their defining equations are deactivated and the model uses
+    the algebraic macros _m_* directly inside the real equations.  The Var objects
+    keep their init value, so a direct read mis-reports them (GAMS recomputes them
+    post-solve in postsim).  This mirrors that postsim: evaluate each macro on the
+    SOLVED values and write it back to the Var.  Only economy-inert report vars are
+    touched; the real equations already used the macros, so this is cosmetic.
+
+    Faithful to gtap_model_equations._m_* (which already carry the rtfi+rtfd fix):
+      pfa    = pf*(1 + fctts + fcttx)            (=pf under altertax: fctts=fcttx=0)
+      pfy    = pf*(1 - kappaf)
+      pp     = p_rai*(1 + prdtx_rai)
+      pwmg   = Σ_m amgm*ptmg/lambdamg
+      pefob  = (1 + rtxs + etax)*pe
+      pmcif  = pefob + pwmg*tmarg
+      pm     = (1 + imptx + mtax)*pmcif/chipm
+    Returns the count of report-var cells written.
+    """
+    from pyomo.environ import value as _V
+
+    def _pv(comp, key, default=0.0):
+        c = getattr(m, comp, None)
+        if c is None:
+            return default
+        try:
+            return float(_V(c[key]))
+        except Exception:
+            return default
+
+    def _param(d, key, default=0.0):
+        v = d.get(key)
+        if v is None and len(key) == 3:
+            v = d.get((key[2], key[1], key[0]))  # transposed tolerance
+        return float(v or default)
+
+    n = 0
+    R, A, I, F = list(m.r), list(m.a), list(m.i), list(m.f)
+    M = list(m.m) if hasattr(m, "m") else []
+
+    def _force(vd, val):
+        # Report vars may be fixed (by freeze/holdfix) — overwrite anyway, they are
+        # cosmetic. set_value works on fixed Vars.
+        nonlocal n
+        try:
+            vd.set_value(val)
+            n += 1
+            return True
+        except Exception:
+            return False
+
+    # --- factor prices: pfa, pfy ---
+    for r in R:
+        for f in F:
+            for a in A:
+                pf = _pv("pf", (r, f, a, period), None) if getattr(m, "pf", None) is not None else None
+                if pf is None:
+                    continue
+                fctts = _pv("fctts", (r, f, a, period))
+                fcttx = _pv("fcttx", (r, f, a, period))
+                kappaf = _pv("kappaf", (r, f, a, period))
+                for vn, val in (("pfa", pf * (1.0 + fctts + fcttx)),
+                                ("pfy", pf * (1.0 - kappaf))):
+                    v = getattr(m, vn, None)
+                    if v is None:
+                        continue
+                    try:
+                        _force(v[r, f, a, period], val)
+                    except Exception:
+                        pass
+
+    # --- producer price: pp = p_rai*(1+prdtx) ---
+    pp = getattr(m, "pp", None)
+    for r in R:
+        for a in A:
+            for i in I:
+                p_rai = _pv("p_rai", (r, a, i, period), None) if getattr(m, "p_rai", None) is not None else None
+                if p_rai is None or pp is None:
+                    continue
+                prdtx = _pv("prdtx_rai", (r, a, i, period))
+                try:
+                    _force(pp[r, a, i, period], p_rai * (1.0 + prdtx))
+                except Exception:
+                    pass
+
+    # --- trade prices: pwmg, pefob, pmcif, pm ---
+    for r in R:           # exporter
+        for i in I:
+            for rp in R:   # importer
+                pe = _pv("pe", (r, i, rp, period), None) if getattr(m, "pe", None) is not None else None
+                if pe is None:
+                    continue
+                # pwmg = Σ_m amgm*ptmg/lambdamg
+                pwmg_val = 0.0
+                for mm in M:
+                    amgm = _param(params.benchmark.amgm, (mm, r, i, rp)) if hasattr(params.benchmark, "amgm") else _pv("amgm", (mm, r, i, rp))
+                    ptmg = _pv("ptmg", (mm, period))
+                    lam = _pv("lambdamg", (mm, r, i, rp, period), 1.0) or 1.0
+                    pwmg_val += amgm * ptmg / (lam + 1e-12)
+                rtxs = _param(params.taxes.rtxs, (r, i, rp)) if hasattr(params.taxes, "rtxs") else 0.0
+                etax = _pv("etax", (r, i, period))
+                pefob_val = (1.0 + rtxs + etax) * pe
+                # tmarg is dim-3 (no period axis); imptx/mtax/chipm come from params
+                # (NOT model components — imptx isn't a model symbol here).
+                tmarg = _pv("tmarg", (r, i, rp))
+                if not tmarg:
+                    tmarg = _pv("tmarg", (r, i, rp, period))
+                pmcif_val = pefob_val + pwmg_val * tmarg
+                imptx = _param(params.taxes.imptx, (r, i, rp)) if hasattr(params.taxes, "imptx") else 0.0
+                mtax = _param(params.taxes.mtax, (rp, i)) if hasattr(params.taxes, "mtax") else 0.0
+                chipm = _param(params.benchmark.chipm, (r, i, rp), 1.0) if hasattr(params.benchmark, "chipm") else 1.0
+                chipm = chipm or 1.0
+                pm_val = (1.0 + imptx + mtax) * pmcif_val / (chipm + 1e-12)
+                for vn, val, key in (("pwmg", pwmg_val, (r, i, rp, period)),
+                                     ("pefob", pefob_val, (r, i, rp, period)),
+                                     ("pmcif", pmcif_val, (r, i, rp, period)),
+                                     ("pm", pm_val, (rp, i, r, period))):
+                    v = getattr(m, vn, None)
+                    if v is None:
+                        continue
+                    for k in (key, (r, i, rp, period)):
+                        try:
+                            if _force(v[k], val):
+                                break
+                        except Exception:
+                            continue
+    return n
+
+
+# ---------------------------------------------------------------------------
 # _holdfix_cd_nest — replicate GAMS gtap.holdfixed=1 on the CD-degenerate nest
 # ---------------------------------------------------------------------------
 def _holdfix_cd_nest(m, period: str) -> int:
@@ -841,6 +973,17 @@ def solve_multiperiod(
     code_shk = int(r_shk.get("termination_code") or 0)
     res_shk = float(r_shk.get("residual") or float("inf"))
     results["shock"] = {"code": code_shk, "residual": res_shk}
+
+    # Under ifSUB, recompute the report-only margin/price vars post-solve (GAMS
+    # postsim). They are not solved (their eqs are deactivated, the real eqs use the
+    # _m_* macros), so the Var objects keep their init value and mis-report.
+    if _if_sub:
+        _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock")
+        if _n_rep:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: recomputed %d ifSUB report-var cells (pfa/pfy/pp/pwmg/pefob/pmcif/pm)",
+                _n_rep)
 
     # Freeze shock as well (for completeness / report purposes).
     freeze_period(m, "shock")
