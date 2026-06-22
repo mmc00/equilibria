@@ -352,6 +352,58 @@ def _mute_welfare_tail(m, period: str, regions) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _complete_derived_seed — seed the Python-only demand-volume vars for a period
+# ---------------------------------------------------------------------------
+def _complete_derived_seed(m, period: str) -> int:
+    """Seed the Python-ONLY demand-volume vars that GAMS does not carry, from the
+    already-seeded GAMS primals of `period`, so the GAMS point is a true fixed point
+    of Python's model.  Otherwise xc/xg/xi/xd/xmt/xiagg stay at init → large
+    eq_xc/eq_xg/eq_xi/eq_xd_agg residuals that knock PATH off the GAMS basin.
+    t-aware mirror of diff_altertax.complete_derived_seed.  Returns cells set.
+
+      xc[r,i]  = xaa[r,i,hhd]      ; xg[r,i] = xaa[r,i,gov] ; xi[r,i] = xaa[r,i,inv]
+      xd[r,i]  = Σ_aa xda/xscale   ; xmt[r,i] = Σ_aa xma/xscale ; xiagg[r] = Σ_i xi
+    """
+    from pyomo.environ import value as _pv
+
+    def _set(v, idx, val):
+        try:
+            v[idx].set_value(float(val))
+            return 1
+        except Exception:
+            return 0
+
+    n = 0
+    for r in m.r:
+        for i in m.i:
+            for vn, agent in (("xc", "hhd"), ("xg", "gov"), ("xi", "inv")):
+                v = getattr(m, vn, None)
+                if v is None:
+                    continue
+                try:
+                    n += _set(v, (r, i, period), _pv(m.xaa[r, i, agent, period]))
+                except Exception:
+                    pass
+            try:
+                s = sum(float(_pv(m.xda[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
+                        for aa in m.aa)
+                n += _set(m.xd, (r, i, period), s)
+            except Exception:
+                pass
+            try:
+                s = sum(float(_pv(m.xma[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
+                        for aa in m.aa)
+                n += _set(m.xmt, (r, i, period), s)
+            except Exception:
+                pass
+        try:
+            n += _set(m.xiagg, (r, period), sum(float(_pv(m.xi[r, i, period])) for i in m.i))
+        except Exception:
+            pass
+    return n
+
+
+# ---------------------------------------------------------------------------
 # _holdfix_cd_nest — replicate GAMS gtap.holdfixed=1 on the CD-degenerate nest
 # ---------------------------------------------------------------------------
 def _holdfix_cd_nest(m, period: str) -> int:
@@ -619,6 +671,17 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "check period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
 
+    # Seed the Python-only derived demand-volume vars (xc/xg/xi/xd/xmt/xiagg) from
+    # the GAMS-seeded primals so the GAMS point is a true fixed point — else
+    # eq_xc/eq_xg/eq_xd carry residual that pulls PATH off the basin.  Part of the
+    # 3-piece faithful check recipe (project_gtap7_10x7_check_holdfix).
+    if holdfix_cd:
+        _n_der = _complete_derived_seed(m, "check")
+        if _n_der:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "check period: seeded %d derived demand-volume cells", _n_der)
+
     # Holdfix the CD-degenerate VA/ND nest (pva/pnd) at the GAMS-seeded values,
     # replicating GAMS gtap.holdfixed=1 in the check period.  Without this PATH
     # slides pva/pnd (free DOFs under CD) and collapses a region's price level.
@@ -660,8 +723,31 @@ def solve_multiperiod(
     # Freeze base and check; leave shock free.
     freeze_inactive_periods(m, "shock")
 
+    # Warm-start shock from check solved values (quantities) — this is the right
+    # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;
+    # since holdfix_cd will PIN pva/pnd, they must be re-seeded from the SHOCK GAMS
+    # values (1.0078 for ROW/Mnfcs, not the check's 0.7592) or the pin is wrong.
+    _pva_pnd_shock_seed = {}
+    if holdfix_cd:
+        for _vn in ("pva", "pnd"):
+            _v = getattr(m, _vn, None)
+            if _v is None:
+                continue
+            for _idx in _v:
+                _t = _idx[-1] if isinstance(_idx, tuple) else _idx
+                if _t == "shock" and _v[_idx].value is not None:
+                    _pva_pnd_shock_seed[(_vn, _idx)] = float(_v[_idx].value)
+
     # Warm-start shock from check solved values.
     _seed_period_from_prior(m, "check", "shock")
+
+    # Restore the SHOCK GAMS pva/pnd seed that the prior-seed just clobbered.
+    if holdfix_cd:
+        for (_vn, _idx), _val in _pva_pnd_shock_seed.items():
+            try:
+                getattr(m, _vn)[_idx].set_value(_val)
+            except Exception:
+                pass
 
     # Unfix regy[r,'shock'] (same as check period).
     for _r in params_shock.sets.r:
@@ -726,6 +812,14 @@ def solve_multiperiod(
             import logging as _logging
             _logging.getLogger(__name__).info(
                 "shock period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
+
+    # Seed derived demand-volume vars for shock (same as check).
+    if holdfix_cd:
+        _n_der = _complete_derived_seed(m, "shock")
+        if _n_der:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: seeded %d derived demand-volume cells", _n_der)
 
     # Holdfix the CD-degenerate VA/ND nest for shock (same as check).
     if holdfix_cd:
