@@ -471,10 +471,15 @@ class GTAPMultiPeriodModel:
             _base_rt,
             rule=lambda _m, r, t: _m.pfact[r, t] == 1.0,
         )
-        m.eq_pwfact_base = Constraint(
-            ["base"],
-            rule=lambda _m, t: _m.pwfact[t] == 1.0,
-        )
+        # FIX A: anchor pwfact['base'] == 1.0 by FIXING the Var rather than adding a
+        # Constraint.  eq_pnum[('base',)] already binds  pnum['base'] == pwfact['base'],
+        # and apply_closure fixes pnum['base'] = 1.0, so an additional Constraint
+        # eq_pwfact_base would create a duplicate binding (over-determination by 1 row).
+        # A Var fix eliminates the DOF without adding an active equation row.
+        try:
+            m.pwfact["base"].fix(1.0)
+        except (KeyError, AttributeError):
+            pass
 
         def _pabs_rule(_m, r, t):
             # Cross-period Fisher absorption price index:
