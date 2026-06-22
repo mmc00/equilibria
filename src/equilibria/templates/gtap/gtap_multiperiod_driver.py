@@ -351,6 +351,47 @@ def _mute_welfare_tail(m, period: str, regions) -> int:
     return n
 
 
+# ---------------------------------------------------------------------------
+# _holdfix_cd_nest — replicate GAMS gtap.holdfixed=1 on the CD-degenerate nest
+# ---------------------------------------------------------------------------
+def _holdfix_cd_nest(m, period: str) -> int:
+    """FIX pva/pnd for `period` at their current (GAMS-seeded) values AND deactivate
+    eq_pvaeq/eq_pndeq for that period.
+
+    Under forced-CD (sigmav=sigmap=1) eq_pvaeq/eq_pndeq degenerate to the GAMS
+    tautologies 1=Σaf / 1=Σio — they do NOT determine pva/pnd, so PATH slides them
+    to a different (valid) branch, collapsing a whole region's price level (USA:
+    pgdpmp 0.99→0.67 in the multi-period check).  GAMS pins them via holdfixed=1 in
+    EVERY period.  A fixed var must free its paired row, exactly as holdfixed does.
+    Mirrors diff_altertax.holdfix_cd_nest but t-aware (only the given period).
+    Returns the count of pva/pnd cells fixed.  See project_gtap7_10x7_check_holdfix.
+    """
+    hf = 0
+    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq")):
+        v = getattr(m, vn, None)
+        if v is not None:
+            for idx in v:
+                t = idx[-1] if isinstance(idx, tuple) else idx
+                if t != period:
+                    continue
+                vd = v[idx]
+                if vd.value is not None and not vd.fixed:
+                    vd.fix(float(vd.value))
+                    hf += 1
+        e = getattr(m, eqn, None)
+        if e is not None:
+            for idx in e:
+                t = idx[-1] if isinstance(idx, tuple) else idx
+                if t != period:
+                    continue
+                try:
+                    if e[idx].active:
+                        e[idx].deactivate()
+                except Exception:
+                    pass
+    return hf
+
+
 def solve_multiperiod(
     m,
     params,
@@ -359,6 +400,8 @@ def solve_multiperiod(
     ref_gdx=None,
     skip_base_solve: bool = False,
     mute_welfare: bool = True,
+    seed_from_prior: bool = False,
+    holdfix_cd: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -500,8 +543,14 @@ def solve_multiperiod(
     # Freeze base and shock; leave check free.
     freeze_inactive_periods(m, "check")
 
-    # Warm-start check from base solved values.
-    _seed_period_from_prior(m, "base", "check")
+    # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
+    # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
+    # (2026-06-22): _seed_period_from_prior(base→check) clobbered the GAMS check seed
+    # (pd[USA,Mnfcs] 0.983→1.0), sending PATH to a branch that collapses USA's whole
+    # price level (pgdpmp[USA] 0.99→0.67).  Keeping the GAMS seed + holdfix_cd below
+    # is the faithful recipe (project_gtap7_10x7_check_holdfix).
+    if seed_from_prior:
+        _seed_period_from_prior(m, "base", "check")
 
     # phiP[check] = pcons[base] = 1.0 (GAMS convention).
     for _r in p_alt.sets.r:
@@ -569,6 +618,16 @@ def solve_multiperiod(
             import logging as _logging
             _logging.getLogger(__name__).info(
                 "check period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
+
+    # Holdfix the CD-degenerate VA/ND nest (pva/pnd) at the GAMS-seeded values,
+    # replicating GAMS gtap.holdfixed=1 in the check period.  Without this PATH
+    # slides pva/pnd (free DOFs under CD) and collapses a region's price level.
+    if holdfix_cd:
+        _n_hf = _holdfix_cd_nest(m, "check")
+        if _n_hf:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "check period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
 
     # Solve check on m.
     r_chk = run_gtap._run_path_capi_nonlinear_full(
@@ -667,6 +726,14 @@ def solve_multiperiod(
             import logging as _logging
             _logging.getLogger(__name__).info(
                 "shock period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
+
+    # Holdfix the CD-degenerate VA/ND nest for shock (same as check).
+    if holdfix_cd:
+        _n_hf = _holdfix_cd_nest(m, "shock")
+        if _n_hf:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
 
     # Solve shock on m with shocked params.
     r_shk = run_gtap._run_path_capi_nonlinear_full(
