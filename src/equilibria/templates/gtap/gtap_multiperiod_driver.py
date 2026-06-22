@@ -306,6 +306,7 @@ def solve_multiperiod(
     closure,
     *,
     ref_gdx=None,
+    skip_base_solve: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -407,18 +408,30 @@ def solve_multiperiod(
     _replicate_sp_bounds(m, _sp_ref_base, "base")
     del _sp_ref_base
 
-    # Solve base on m via PATH.
-    r_base = run_gtap._run_path_capi_nonlinear_full(
-        m, p_alt,
-        enforce_post_checks=False,
-        strict_path_capi=False,
-        closure_config=base_closure,
-        equation_scaling=True,
-        solution_hint=None,
-    )
-    code_base = int(r_base.get("termination_code") or 0)
-    res_base = float(r_base.get("residual") or float("inf"))
-    results["base"] = {"code": code_base, "residual": res_base}
+    # Solve base on m via PATH — UNLESS skip_base_solve.
+    #
+    # FAITHFUL-TO-GAMS option (skip_base_solve=True): GAMS altertax does NOT run a
+    # full solve for the base period; it runs betaCal (a 4-eq MCP for betaP/gf/aft
+    # only) and uses the getData init as the calibrated benchmark (see
+    # diff_altertax.py:386 "GAMS altertax does NOT run a full solve for the base
+    # period" + the single-period [1/3] uses build_model() init directly). The
+    # base IS the GAMS reference point (seeded via seed_all_periods). PATH-solving
+    # it lets PATH wander to a ~28% nominal-level offset that then propagates into
+    # check/shock. Skipping the solve keeps the base EXACTLY at the GAMS point.
+    if skip_base_solve:
+        results["base"] = {"code": 1, "residual": 0.0, "skipped_solve": True}
+    else:
+        r_base = run_gtap._run_path_capi_nonlinear_full(
+            m, p_alt,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=base_closure,
+            equation_scaling=True,
+            solution_hint=None,
+        )
+        code_base = int(r_base.get("termination_code") or 0)
+        res_base = float(r_base.get("residual") or float("inf"))
+        results["base"] = {"code": code_base, "residual": res_base}
 
     # Freeze base period (holdfixed=1 for subsequent periods).
     freeze_period(m, "base")

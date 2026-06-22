@@ -6,6 +6,7 @@ solves via solve_multiperiod, then compares shock-period vars against GAMS.
 Gate: shock code==1 AND residual<1e-6 AND match>=96.80%
 """
 from __future__ import annotations
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -26,6 +27,16 @@ PASS_MATCH = 96.80  # percent
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--base-solve", action="store_true",
+        help="PATH-solve the base period (default: skip — GAMS-faithful, base is the "
+             "calibrated benchmark seeded from the reference; PATH-solving it lets PATH "
+             "wander to a ~28%% offset that propagates into check/shock).",
+    )
+    args = ap.parse_args()
+    skip_base_solve = not args.base_solve
+
     t0_wall = time.perf_counter()
 
     # ------------------------------------------------------------------
@@ -111,8 +122,12 @@ def main():
     print("  (This may take several minutes for PATH to solve each period)")
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
+    print(f"  skip_base_solve={skip_base_solve} "
+          f"({'GAMS-faithful: base frozen at reference' if skip_base_solve else 'base PATH-solved'})")
     t_solve = time.perf_counter()
-    results = solve_multiperiod(m, p_b_raw, alt_closure, ref_gdx=REF)
+    results = solve_multiperiod(
+        m, p_b_raw, alt_closure, ref_gdx=REF, skip_base_solve=skip_base_solve
+    )
     t_elapsed = time.perf_counter() - t_solve
     print(f"  solve_multiperiod done in {t_elapsed:.1f}s")
 
