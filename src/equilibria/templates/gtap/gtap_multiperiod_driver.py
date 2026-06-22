@@ -376,6 +376,43 @@ def solve_multiperiod(
     # Freeze check and shock periods; leave base free.
     freeze_inactive_periods(m, "base")
 
+    # FIX B (B1): deactivate eq_xft[r,f,'base'] for every (r,f) cell where
+    # eq_xfteq[r,f,'base'] is also active.  In the multi-period model the base
+    # period uses a non-altertax closure (name="base"), so the deactivation block
+    # inside _run_path_capi_nonlinear_full that fires only for name=="altertax"
+    # never runs, leaving BOTH eq_xft and eq_xfteq active for the same xft var →
+    # 14 surplus rows that make the system over-determined (code=0 / residual=inf).
+    # Replicating the single-period altertax deactivation for the base period:
+    # whenever eq_xfteq is active for (r,f,base), eq_xft is redundant and must go.
+    _eq_xft_mp = getattr(m, "eq_xft", None)
+    _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
+    if _eq_xft_mp is not None and _eq_xfteq_mp is not None:
+        _n_xft_deact_base = 0
+        for _r in m.r:
+            for _f in m.f:
+                _xfteq_idx = (_r, _f, "base")
+                try:
+                    _xfteq_cd = _eq_xfteq_mp[_xfteq_idx]
+                except KeyError:
+                    continue
+                if not _xfteq_cd.active:
+                    continue
+                # eq_xfteq is active for this (r,f,'base') → deactivate eq_xft
+                try:
+                    _xft_cd = _eq_xft_mp[(_r, _f, "base")]
+                except KeyError:
+                    continue
+                if _xft_cd.active:
+                    _xft_cd.deactivate()
+                    _n_xft_deact_base += 1
+        if _n_xft_deact_base:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "base period: deactivated eq_xft for %d (r,f) pairs "
+                "(eq_xfteq active → eq_xft redundant, no name==altertax gate)",
+                _n_xft_deact_base,
+            )
+
     # Replicate single-period build_model's structural fixing for base period.
     # build_model internally fixes ~500+ structural zeros (afeall, p_rai, chiSave,
     # etc.) that apply_conditional_fixing doesn't cover. Without this, aggressive
