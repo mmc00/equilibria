@@ -18,8 +18,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-DATASET_DIR = ROOT / "datasets" / "gtap7_3x3"
-REF = Path("/Users/marmol/proyectos2/equilibria_refs/gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx")
+REFS_ROOT = Path("/Users/marmol/proyectos2/equilibria_refs")
 
 PASS_CODE = 1
 PASS_RES = 1e-6
@@ -29,6 +28,12 @@ PASS_MATCH = 96.80  # percent
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
+        "--dataset", default="gtap7_3x3",
+        help="Dataset name under datasets/ (e.g. gtap7_3x3, gtap7_5x5, gtap7_10x7). "
+             "The GAMS reference is read from "
+             "equilibria_refs/<dataset>_altertax_cd/out_altertax_ifsub0.gdx.",
+    )
+    ap.add_argument(
         "--base-solve", action="store_true",
         help="PATH-solve the base period (default: skip — GAMS-faithful, base is the "
              "calibrated benchmark seeded from the reference; PATH-solving it lets PATH "
@@ -36,6 +41,11 @@ def main():
     )
     args = ap.parse_args()
     skip_base_solve = not args.base_solve
+
+    global DATASET_DIR, REF
+    DATASET_DIR = ROOT / "datasets" / args.dataset
+    REF = REFS_ROOT / f"{args.dataset}_altertax_cd" / "out_altertax_ifsub0.gdx"
+    print(f"=== dataset={args.dataset}  ref={REF} ===")
 
     t0_wall = time.perf_counter()
 
