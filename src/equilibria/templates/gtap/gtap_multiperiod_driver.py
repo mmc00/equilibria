@@ -404,6 +404,150 @@ def _complete_derived_seed(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _recompute_pm_pmt — post-solve fix of the bilateral/aggregate import prices
+# ---------------------------------------------------------------------------
+def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0) -> int:
+    """Recompute pm[e,i,imp] (bilateral) and pmt[imp,i] (aggregate) import prices.
+
+    BUG this fixes (shared by ifSUB=0 AND ifSUB=1): eq_pmeq defines
+    pm = (1 + imptx + mtax)*pmcif/chipm via `_imptx_rate_importer`, which reads the
+    LIVE Param `model.imptx`. But the multi-period model does NOT build a `model.imptx`
+    component, so `_imptx_rate_importer` falls back to `self.params.taxes.imptx` — the
+    BASE rate. In the shock the solved pmcif is correct, but the imptx wedge stays at
+    base, so pm is low by the shock factor on high-tariff agro routes (e.g.
+    pm[USA,Rice,JPN] 3.36 vs GAMS 3.59). pmt aggregates the low pm via eq_pmteq, and
+    pa/ytaxInd inherit. Verified vs GDX: imptx_shock = imptx_base*(1+shock_factor)
+    reproduces GAMS pm EXACTLY (USA,Rice,JPN: (1+2.082*1.10)*1.0913 = 3.5906 = GAMS).
+
+    Recompute pm = (1 + imptx_base*(1+shock_factor) + mtax)*pmcif/chipm on the SOLVED
+    pmcif, then re-evaluate eq_pmteq on the corrected pm to get pmt (reuses the model's
+    own CES formula — no duplication). shock_factor=0 → no-op for non-shock periods.
+    Returns the number of cells written.
+    """
+    from pyomo.environ import value as _V
+
+    n = 0
+    pm = getattr(m, "pm", None)
+    if pm is None or not hasattr(base_params, "taxes"):
+        return 0
+    imptx_map = getattr(base_params.taxes, "imptx", {})
+    f = 1.0 + float(shock_factor)
+
+    def _comp(name, key, default=None):
+        c = getattr(m, name, None)
+        if c is None:
+            return default
+        try:
+            return float(_V(c[key]))
+        except Exception:
+            return default
+
+    # 1. pm bilateral
+    for (e, i, imp), imptx_b in imptx_map.items():
+        pmcif = _comp("pmcif", (e, i, imp, period))
+        if pmcif is None:
+            continue
+        mtax = _comp("mtax", (imp, i, period), 0.0) or 0.0
+        chipm = _comp("chipm", (e, i, imp, period), 1.0) or 1.0
+        val = (1.0 + float(imptx_b) * f + mtax) * pmcif / (chipm + 1e-12)
+        try:
+            pm[e, i, imp, period].set_value(val)
+            n += 1
+        except Exception:
+            pass
+
+    # 2. pmt aggregate — solve eq_pmteq for pmt on the corrected pm WITHOUT
+    #    re-deriving the CES shares (fragile). The constraint is
+    #    `pmt**expo == Σ_e amw*(pm/lambdam)**expo`. Temporarily set pmt=1 so the body
+    #    evaluates to `1 - Σ`; then Σ = 1 - body, and pmt = Σ**(1/expo). This reuses
+    #    the model's OWN amw/lambdam/esubm — no duplicated share lookup.
+    from pyomo.environ import value as _PV
+    pmt = getattr(m, "pmt", None)
+    eq = getattr(m, "eq_pmteq", None)
+    if pmt is not None and eq is not None:
+        for imp in m.r:
+            for i in m.i:
+                idx = (imp, i, period)
+                try:
+                    cd = eq[idx]
+                    if not cd.active:
+                        continue
+                    pv = pmt[idx]
+                except (KeyError, TypeError):
+                    continue
+                try:
+                    esubm = float(base_params.elasticities.esubm.get((imp, i), 5.0))
+                except Exception:
+                    esubm = 5.0
+                expo = 1.0 - esubm
+                if abs(expo) < 1e-8:
+                    continue
+                old = pv.value
+                try:
+                    pv.set_value(1.0)            # → body = 1**expo - Σ = 1 - Σ
+                    body = float(_PV(cd.body))
+                    sigma = 1.0 - body
+                    if sigma > 0.0:
+                        pv.set_value(sigma ** (1.0 / expo))
+                        n += 1
+                    else:
+                        pv.set_value(old)
+                except Exception:
+                    try:
+                        pv.set_value(old)
+                    except Exception:
+                        pass
+
+    # 3. pa aggregate — pmp is an Expression = pmt*(1+mintx), so the corrected pmt
+    #    flows into eq_paa automatically. pa is a solved Var that used the OLD pmt, so
+    #    re-evaluate eq_paa for pa with the same set-to-1 trick (handles both CES and
+    #    CD forms: body = pa**expo - Σ for CES, or pa - prod for CD).
+    pa_var = getattr(m, "pa", None)
+    eqp = getattr(m, "eq_paa", None)
+    if pa_var is not None and eqp is not None:
+        for imp in m.r:
+            for i in m.i:
+                for aa in m.aa:
+                    idx = (imp, i, aa, period)
+                    try:
+                        cd = eqp[idx]
+                        if not cd.active:
+                            continue
+                        pv = pa_var[idx]
+                    except (KeyError, TypeError):
+                        continue
+                    try:
+                        sigma_m = float(base_params.elasticities.esubd.get((imp, i), 1.0))
+                    except Exception:
+                        sigma_m = 1.0
+                    expo = 1.0 - sigma_m
+                    old = pv.value
+                    try:
+                        if abs(expo) < 1e-8:
+                            # CD: body = pa - prod  → pa = prod = pa_old - body|_{pa=old}
+                            base = float(_PV(cd.body)) - (old or 0.0)  # = -prod
+                            prod = -base
+                            if prod > 0.0:
+                                pv.set_value(prod)
+                                n += 1
+                        else:
+                            pv.set_value(1.0)        # body = 1 - Σ
+                            body = float(_PV(cd.body))
+                            sigma = 1.0 - body
+                            if sigma > 0.0:
+                                pv.set_value(sigma ** (1.0 / expo))
+                                n += 1
+                            else:
+                                pv.set_value(old)
+                    except Exception:
+                        try:
+                            pv.set_value(old)
+                        except Exception:
+                            pass
+    return n
+
+
+# ---------------------------------------------------------------------------
 # _recompute_ytax_mt — post-solve fix of the import-tax revenue stream
 # ---------------------------------------------------------------------------
 def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0) -> int:
@@ -483,6 +627,22 @@ def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0) -
                 ry = float(_V(regy[r, period]))
                 ys[r, "mt", period].set_value(total / (ry + 1e-12))
                 n += 1
+            except Exception:
+                pass
+
+        # cascade to ytaxTot = Σ_gy ytax[r,gy] and ytax_ind = ytaxTot − ytax[r,dt]
+        # (those Vars were solved with the OLD ytax[mt]; recompute on the corrected mt).
+        ytot = getattr(m, "ytaxTot", None)
+        yind = getattr(m, "ytax_ind", None)
+        if ytot is not None:
+            try:
+                s = sum(float(_V(ytax[r, gy, period])) for gy in m.gy)
+                ytot[r, period].set_value(s)
+                n += 1
+                if yind is not None:
+                    dt = float(_V(ytax[r, "dt", period]))
+                    yind[r, period].set_value(s - dt)
+                    n += 1
             except Exception:
                 pass
     return n
@@ -1088,6 +1248,7 @@ def solve_multiperiod(
     # the +10% shock but the imptx coefficient does not, so ytax[mt] is ~8.8% low.
     # Shared by ifSUB=0 AND ifSUB=1 (not an ifSUB issue), so NOT gated on _if_sub.
     # Uses base imptx (p_alt) * (1+shock_factor); params_shock carries the POWER, wrong.
+    # Reads pmcif/xw (unaffected by the pm recompute below), so order vs pm is free.
     _n_mt = _recompute_ytax_mt(m, p_alt, "shock", shock_factor=0.10)
     if _n_mt:
         import logging as _logging
@@ -1096,7 +1257,9 @@ def solve_multiperiod(
 
     # Under ifSUB, recompute the report-only margin/price vars post-solve (GAMS
     # postsim). They are not solved (their eqs are deactivated, the real eqs use the
-    # _m_* macros), so the Var objects keep their init value and mis-report.
+    # _m_* macros), so the Var objects keep their init value and mis-report. This also
+    # sets pm — so the pm/pmt/pa recompute below MUST run AFTER it so pmt/pa derive
+    # from the final pm (otherwise ifSUB=1 leaves pm/pmt/pa mutually inconsistent).
     if _if_sub:
         _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock", shock_factor=0.10)
         if _n_rep:
@@ -1104,6 +1267,17 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "shock period: recomputed %d ifSUB report-var cells (pfa/pfy/pp/pwmg/pefob/pmcif/pm)",
                 _n_rep)
+
+    # Recompute pm[e,i,imp] (bilateral) and pmt[imp,i] (aggregate) import prices, then
+    # cascade to pa. eq_pmeq bakes the BASE imptx (model.imptx absent in MP → falls back
+    # to base), so pm is low by the shock factor on high-tariff agro routes; pmt/pa
+    # inherit. Shared by ifSUB=0 AND ifSUB=1 → NOT gated on _if_sub. Runs LAST so it
+    # overrides any pm the ifSUB report recompute set and derives pmt/pa consistently.
+    _n_pm = _recompute_pm_pmt(m, p_alt, "shock", shock_factor=0.10)
+    if _n_pm:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm)
 
     # Freeze shock as well (for completeness / report purposes).
     freeze_period(m, "shock")
