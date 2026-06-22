@@ -406,7 +406,8 @@ def _complete_derived_seed(m, period: str) -> int:
 # ---------------------------------------------------------------------------
 # _recompute_pm_pmt — post-solve fix of the bilateral/aggregate import prices
 # ---------------------------------------------------------------------------
-def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0) -> int:
+def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
+                      if_sub: bool = False) -> int:
     """Recompute pm[e,i,imp] (bilateral) and pmt[imp,i] (aggregate) import prices.
 
     BUG this fixes (shared by ifSUB=0 AND ifSUB=1): eq_pmeq defines
@@ -456,14 +457,28 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0) ->
         except Exception:
             pass
 
-    # 2. pmt aggregate — solve eq_pmteq for pmt on the corrected pm WITHOUT
-    #    re-deriving the CES shares (fragile). The constraint is
-    #    `pmt**expo == Σ_e amw*(pm/lambdam)**expo`. Temporarily set pmt=1 so the body
-    #    evaluates to `1 - Σ`; then Σ = 1 - body, and pmt = Σ**(1/expo). This reuses
-    #    the model's OWN amw/lambdam/esubm — no duplicated share lookup.
+    # 2. pmt aggregate — `pmt**expo == Σ_e amw*(pm/lambdam)**expo` (eq_pmteq).
+    #
+    #    Two paths depending on the ifSUB mode, because eq_pmteq's body uses the
+    #    `_m_pm` macro:
+    #      - ifSUB=0: `_m_pm` returns `model.pm` (the Var), which step 1 corrected.
+    #        The set-to-1 trick (set pmt=1 → body = 1 - Σ → Σ = 1 - body →
+    #        pmt = Σ**(1/expo)) re-evaluates the constraint on the CORRECTED pm.
+    #      - ifSUB=1: `_m_pm` is the ALGEBRAIC macro (reconstructs pm from pmcif with
+    #        the BASE imptx baked in), NOT `model.pm`. So the set-to-1 trick would read
+    #        the stale macro and ignore step 1's correction. Instead compute the CES
+    #        DIRECTLY from the corrected `model.pm`, reusing the model's OWN
+    #        amw (import_source_share) / lambdam / esubm — the exact coefficients of
+    #        eq_pmteq (gtap_model_equations.py:4787). Verified vs GDX:
+    #        pmt[JPN,Rice] = 1.0654 = GAMS exactly.
     from pyomo.environ import value as _PV
     pmt = getattr(m, "pmt", None)
     eq = getattr(m, "eq_pmteq", None)
+    shares = None
+    try:
+        shares = base_params.shares.normalized.import_source_share
+    except Exception:
+        shares = None
     if pmt is not None and eq is not None:
         for imp in m.r:
             for i in m.i:
@@ -483,6 +498,32 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0) ->
                 if abs(expo) < 1e-8:
                     continue
                 old = pv.value
+                if if_sub and shares is not None:
+                    # Direct CES on the corrected model.pm
+                    terms = []
+                    ok = True
+                    for rp in m.r:
+                        try:
+                            amw = float(shares.get((imp, i, rp), 0.0) or 0.0)
+                        except Exception:
+                            amw = 0.0
+                        if amw <= 0.0:
+                            continue
+                        pmv = _comp("pm", (rp, i, imp, period))
+                        if pmv is None:
+                            continue
+                        lam = _comp("lambdam", (rp, i, imp, period), 1.0) or 1.0
+                        lam = max(lam, 1e-12)
+                        terms.append(amw * (pmv / lam) ** expo)
+                    if terms:
+                        sigma = sum(terms)
+                        if sigma > 0.0:
+                            try:
+                                pv.set_value(sigma ** (1.0 / expo))
+                                n += 1
+                            except Exception:
+                                pass
+                    continue
                 try:
                     pv.set_value(1.0)            # → body = 1**expo - Σ = 1 - Σ
                     body = float(_PV(cd.body))
@@ -1273,7 +1314,7 @@ def solve_multiperiod(
     # to base), so pm is low by the shock factor on high-tariff agro routes; pmt/pa
     # inherit. Shared by ifSUB=0 AND ifSUB=1 → NOT gated on _if_sub. Runs LAST so it
     # overrides any pm the ifSUB report recompute set and derives pmt/pa consistently.
-    _n_pm = _recompute_pm_pmt(m, p_alt, "shock", shock_factor=0.10)
+    _n_pm = _recompute_pm_pmt(m, p_alt, "shock", shock_factor=0.10, if_sub=_if_sub)
     if _n_pm:
         import logging as _logging
         _logging.getLogger(__name__).info(
