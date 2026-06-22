@@ -300,6 +300,57 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
 # ---------------------------------------------------------------------------
 # solve_multiperiod — main public function
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _mute_welfare_tail — remove the inert welfare report rows from the MCP
+# ---------------------------------------------------------------------------
+# Measured (2026-06-22): the welfare variables {cv, ev, walras, u, ug, us} are a
+# RECURSIVE REPORT TAIL.  Blast-radius analysis (identify_variables over the full
+# single-period model): cv/ev/walras appear ONLY in their own defining equation;
+# u/ug/us feed only eq_u (itself a leaf).  They have NO economic feedback into the
+# real allocation — yet their defining equations carry huge residuals when the
+# warm-start is imperfect (eq_ug≈252, eq_cv≈31, eq_ev≈8), which poisons PATH's
+# global merit function and makes it report no_progress (code=2) even when every
+# REAL equation is satisfied to ~1e-3.  GAMS computes these post-solve (they are
+# report variables), not inside the simultaneous MCP.  Muting them (fix at seed +
+# deactivate the paired row, keeping the system square) lets PATH certify code=1.
+# DECISIVE with a CORRECT base: check from base-frozen goes code=2 res 1.1e-2 →
+# code=1 res 2.9e-11 once muted.  (uh is NOT muted — it feeds eq_zcons = real CDE
+# demand, so it has genuine blast radius.)
+_WELFARE_LEAVES = (
+    ("eq_cv", "cv"), ("eq_ev", "ev"), ("eq_walras", "walras"),
+    ("eq_u", "u"), ("eq_ug", "ug"), ("eq_us", "us"),
+)
+
+
+def _mute_welfare_tail(m, period: str, regions) -> int:
+    """Fix the inert welfare-leaf vars at their seed + deactivate their rows for
+    `period`.  Returns the count of rows deactivated.  Square-preserving: each
+    leaf eq_X pairs 1:1 with its own var X."""
+    n = 0
+    for eqn, vn in _WELFARE_LEAVES:
+        eqc = getattr(m, eqn, None)
+        vc = getattr(m, vn, None)
+        if eqc is None or vc is None:
+            continue
+        for r in regions:
+            for cand in [(r, period), (period,)]:
+                try:
+                    vd = vc[cand]
+                except (KeyError, TypeError):
+                    continue
+                if not vd.fixed and vd.value is not None:
+                    vd.fix(float(vd.value))
+                try:
+                    cd = eqc[cand]
+                    if cd.active:
+                        cd.deactivate()
+                        n += 1
+                except (KeyError, TypeError):
+                    pass
+                break
+    return n
+
+
 def solve_multiperiod(
     m,
     params,
@@ -307,6 +358,7 @@ def solve_multiperiod(
     *,
     ref_gdx=None,
     skip_base_solve: bool = False,
+    mute_welfare: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -508,6 +560,16 @@ def solve_multiperiod(
     _replicate_sp_bounds(m, _sp_ref_chk, "check")
     del _sp_ref_chk
 
+    # Mute the inert welfare-report tail so PATH can certify code=1 (see
+    # _mute_welfare_tail). Decisive once the base is exact (skip_base_solve):
+    # check goes code=2 res 1.1e-2 → code=1 res 2.9e-11.
+    if mute_welfare:
+        _n_mute = _mute_welfare_tail(m, "check", list(p_alt.sets.r))
+        if _n_mute:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "check period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
+
     # Solve check on m.
     r_chk = run_gtap._run_path_capi_nonlinear_full(
         m, p_alt,
@@ -597,6 +659,14 @@ def solve_multiperiod(
     _replicate_sp_fixing(m, _sp_ref_shk, "shock")
     _replicate_sp_bounds(m, _sp_ref_shk, "shock")
     del _sp_ref_shk
+
+    # Mute the inert welfare-report tail for shock (same as check).
+    if mute_welfare:
+        _n_mute = _mute_welfare_tail(m, "shock", list(params_shock.sets.r))
+        if _n_mute:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
 
     # Solve shock on m with shocked params.
     r_shk = run_gtap._run_path_capi_nonlinear_full(
