@@ -471,6 +471,39 @@ def solve_multiperiod(
         except Exception:
             pass
 
+    # FIX B (B2): deactivate eq_xft[r,f,'check'] where eq_xfteq[r,f,'check'] is active.
+    # Same logic as FIX B (B1) for base: the single-period altertax gate in
+    # _run_path_capi_nonlinear_full fires only for 2-index eq_xft (model.eq_xft[r,f]),
+    # but in the multi-period model the index is (r,f,period) — so KeyError silently
+    # skips the deactivation, leaving BOTH eq_xft AND eq_xfteq active for the same
+    # xft var → over-determined system (code=2, residual~3e-4).
+    _eq_xft_mp = getattr(m, "eq_xft", None)
+    _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
+    if _eq_xft_mp is not None and _eq_xfteq_mp is not None:
+        _n_xft_deact_chk = 0
+        for _r in m.r:
+            for _f in m.f:
+                try:
+                    _xfteq_cd = _eq_xfteq_mp[(_r, _f, "check")]
+                except KeyError:
+                    continue
+                if not _xfteq_cd.active:
+                    continue
+                try:
+                    _xft_cd = _eq_xft_mp[(_r, _f, "check")]
+                except KeyError:
+                    continue
+                if _xft_cd.active:
+                    _xft_cd.deactivate()
+                    _n_xft_deact_chk += 1
+        if _n_xft_deact_chk:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "check period: deactivated eq_xft for %d (r,f) pairs "
+                "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
+                _n_xft_deact_chk,
+            )
+
     # Replicate single-period structural fixing for check period.
     _sp_ref_chk = GTAPModelEquations(
         p_alt.sets, p_alt, alt_closure, residual_region=res_region,
@@ -530,6 +563,36 @@ def solve_multiperiod(
                 pnum_shock.fix(1.5)
     except (KeyError, AttributeError, TypeError):
         pass
+
+    # FIX B (B3): deactivate eq_xft[r,f,'shock'] where eq_xfteq[r,f,'shock'] is active.
+    # Same logic as B1/B2 for base/check: the single-period altertax gate silently
+    # KeyErrors on multi-period (r,f,period) indices, leaving the system over-determined.
+    _eq_xft_mp = getattr(m, "eq_xft", None)
+    _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
+    if _eq_xft_mp is not None and _eq_xfteq_mp is not None:
+        _n_xft_deact_shk = 0
+        for _r in m.r:
+            for _f in m.f:
+                try:
+                    _xfteq_cd = _eq_xfteq_mp[(_r, _f, "shock")]
+                except KeyError:
+                    continue
+                if not _xfteq_cd.active:
+                    continue
+                try:
+                    _xft_cd = _eq_xft_mp[(_r, _f, "shock")]
+                except KeyError:
+                    continue
+                if _xft_cd.active:
+                    _xft_cd.deactivate()
+                    _n_xft_deact_shk += 1
+        if _n_xft_deact_shk:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: deactivated eq_xft for %d (r,f) pairs "
+                "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
+                _n_xft_deact_shk,
+            )
 
     # Replicate single-period structural fixing for shock period.
     _sp_ref_shk = GTAPModelEquations(
