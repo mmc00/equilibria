@@ -404,6 +404,91 @@ def _complete_derived_seed(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _recompute_ytax_mt — post-solve fix of the import-tax revenue stream
+# ---------------------------------------------------------------------------
+def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0) -> int:
+    """Recompute ytax[r,'mt'] (import-tax revenue) and ytaxshr[r,'mt'] for `period`.
+
+    BUG this fixes (shared by ifSUB=0 AND ifSUB=1, ~8.8% low): eq_ytax for gy='mt'
+    bakes the BASE imptx coefficient (`self.params.taxes.imptx`) into the equation at
+    build time. In the shock period the solved xw/pmcif reflect the +10% tariff shock,
+    but the imptx coefficient stays at its base value, so ytax[mt] is low by the shock
+    factor. GAMS applies `tm.fx = tm.l*1.10` → imptx_shock = imptx_base*(1+shock_factor)
+    for EVERY route with imptx>0 (verified vs GDX: gams_shock/gams_base = 1.10 exact on
+    all routes, INCLUDING the e==importer diagonal — those are intra-region imports in
+    the aggregation, not zero domestic tariffs).
+
+    Recompute: ytax[r,mt] = Σ_{e,i: imp=r} (imptx_base*(1+shock_factor) + mtax)*pmcif*xw
+    on the SOLVED pmcif/xw. Then ytaxshr[r,mt] = ytax[r,mt]/regY (regY already matches
+    GAMS to <0.5%, and the mt delta is tiny vs ytaxTot, so the cascade is safe).
+    shock_factor=0.0 for non-shock periods → recompute is a no-op (imptx unchanged).
+    Returns the number of cells written.
+    """
+    from pyomo.environ import value as _V
+
+    n = 0
+    ytax = getattr(m, "ytax", None)
+    if ytax is None or not hasattr(base_params, "taxes"):
+        return 0
+    imptx_map = getattr(base_params.taxes, "imptx", {})
+    f = 1.0 + float(shock_factor)
+
+    def _mtax(imp, i):
+        c = getattr(m, "mtax", None)
+        if c is None:
+            return 0.0
+        try:
+            return float(_V(c[(imp, i, period)]))
+        except Exception:
+            return 0.0
+
+    def _pmcif(e, i, imp):
+        c = getattr(m, "pmcif", None)
+        if c is None:
+            return None
+        try:
+            return float(_V(c[(e, i, imp, period)]))
+        except Exception:
+            return None
+
+    def _xw(e, i, imp):
+        c = getattr(m, "xw", None)
+        if c is None:
+            return None
+        try:
+            return float(_V(c[(e, i, imp, period)]))
+        except Exception:
+            return None
+
+    for r in m.r:
+        total = 0.0
+        for (e, i, imp), imptx_b in imptx_map.items():
+            if imp != r:
+                continue
+            pmcif = _pmcif(e, i, imp)
+            xw = _xw(e, i, imp)
+            if pmcif is None or xw is None:
+                continue
+            total += (float(imptx_b) * f + _mtax(imp, i)) * pmcif * xw
+        try:
+            ytax[r, "mt", period].set_value(total)
+            n += 1
+        except Exception:
+            continue
+        # cascade to ytaxshr[r,mt] = ytax[r,mt] / regY
+        ys = getattr(m, "ytaxshr", None)
+        regy = getattr(m, "regy", None)
+        if ys is not None and regy is not None:
+            try:
+                ry = float(_V(regy[r, period]))
+                ys[r, "mt", period].set_value(total / (ry + 1e-12))
+                n += 1
+            except Exception:
+                pass
+    return n
+
+
+# ---------------------------------------------------------------------------
 # _recompute_ifsub_report_vars — post-solve fill of the ifSUB report variables
 # ---------------------------------------------------------------------------
 def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0.0) -> int:
@@ -997,6 +1082,17 @@ def solve_multiperiod(
     code_shk = int(r_shk.get("termination_code") or 0)
     res_shk = float(r_shk.get("residual") or float("inf"))
     results["shock"] = {"code": code_shk, "residual": res_shk}
+
+    # Recompute ytax[mt]/ytaxshr[mt] (import-tax revenue) post-solve. eq_ytax for
+    # gy='mt' bakes the BASE imptx coefficient; in the shock the solved xw/pmcif carry
+    # the +10% shock but the imptx coefficient does not, so ytax[mt] is ~8.8% low.
+    # Shared by ifSUB=0 AND ifSUB=1 (not an ifSUB issue), so NOT gated on _if_sub.
+    # Uses base imptx (p_alt) * (1+shock_factor); params_shock carries the POWER, wrong.
+    _n_mt = _recompute_ytax_mt(m, p_alt, "shock", shock_factor=0.10)
+    if _n_mt:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "shock period: recomputed %d ytax[mt]/ytaxshr[mt] cells", _n_mt)
 
     # Under ifSUB, recompute the report-only margin/price vars post-solve (GAMS
     # postsim). They are not solved (their eqs are deactivated, the real eqs use the
