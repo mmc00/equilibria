@@ -24,10 +24,55 @@ class GTAPMultiPeriodModel:
         self._sp = GTAPModelEquations(sets, params, closure, residual_region=residual_region)
 
     def build_sets(self) -> ConcreteModel:
+        from pyomo.environ import Param
         m = ConcreteModel()
         self._sp._add_sets(m)              # r,a,i,f,... actuales
         m.t = Set(initialize=list(PERIODS), ordered=True)
         m.t0 = Set(initialize=["base"], ordered=True)
+
+        # ── Time-invariant benchmark Params needed by apply_closure ──────────
+        # apply_closure (GTAPSolver) checks tmarg[r,i,rp] and amgm[mg,r,i,rp]
+        # to decide which margin vars to fix at zero.  Single-period build_model()
+        # creates these Params automatically; the multi-period model does not, so
+        # apply_closure falls back to tmarg=0 → fixes ALL margin vars (Cause 2).
+        # Build them here from params.benchmark.vtwr/vcif/vfob (same formula as
+        # GTAPModelEquations._build_trade_margin_params, lines 1787-1810).
+        bm = self.params.benchmark
+        sets = self.sets
+        tmarg_data: dict = {}
+        amgm_data: dict = {}
+        for r in sets.r:
+            for i in sets.i:
+                for rp in sets.rp if hasattr(sets, "rp") else sets.r:
+                    vtwr_total = sum(
+                        float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0)
+                        for mg in sets.m
+                    ) if hasattr(bm, "vtwr") else 0.0
+                    vcif = float(bm.vcif.get((r, i, rp), 0.0) or 0.0) if hasattr(bm, "vcif") else 0.0
+                    vfob = float(bm.vfob.get((r, i, rp), 0.0) or 0.0) if hasattr(bm, "vfob") else 0.0
+                    xw_bench = float(bm.vxsb.get((r, i, rp), 0.0) or 0.0) if hasattr(bm, "vxsb") else 0.0
+                    if xw_bench <= 0.0 and hasattr(bm, "vxmd"):
+                        xw_bench = float(bm.vxmd.get((r, i, rp), 0.0) or 0.0)
+                    tmarg_val = max(vcif - vfob, 0.0) / max(xw_bench, 1e-12) if xw_bench > 0.0 else 0.0
+                    tmarg_data[(r, i, rp)] = tmarg_val
+                    if vtwr_total > 0.0:
+                        for mg in sets.m:
+                            flow = float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0) if hasattr(bm, "vtwr") else 0.0
+                            amgm_data[(mg, r, i, rp)] = flow / vtwr_total if vtwr_total > 0.0 else 0.0
+
+        m.tmarg = Param(
+            m.r, m.i, m.r,          # (r, i, rp) — rp shares the r domain
+            initialize=tmarg_data,
+            default=0.0,
+            doc="trade-margin rate (vcif-vfob)/xw_bench",
+        )
+        m.amgm = Param(
+            m.m, m.r, m.i, m.r,     # (mg, r, i, rp)
+            initialize=amgm_data,
+            default=0.0,
+            doc="margin-good share in total margin demand",
+        )
+
         return m
 
     def build_vars(self, m: ConcreteModel) -> None:
@@ -406,14 +451,32 @@ class GTAPMultiPeriodModel:
             if comp is not None:
                 m.del_component(comp)
 
+        # ── Base-period anchors for price indices ────────────────────────────
+        # At the benchmark (base period) all price indices equal 1.0 by construction.
+        # Without explicit pinning equations, pabs[r,'base'], pfact[r,'base'], and
+        # pwfact['base'] are unconstrained free variables (their intra-period equations
+        # were deleted above and the Fisher cross-period rows only cover non-base t).
+        # These anchors (a) remove the 3+3+1=7 unmatched free-DOF gaps and (b) give
+        # Hopcroft-Karp the missing adjacency entries to achieve a full matching.
+        # Mirroring GAMS: pabs.fx(r,'base')=1, pfact.fx(r,'base')=1, pwfact.fx('base')=1.
+        # Index base anchors with (r, 'base') / ('base',) so that
+        # freeze_inactive_periods can deactivate them when base is frozen
+        # (the deactivator checks idx[-1] in PERIODS and skips non-base solves).
+        _base_rt = [(r, "base") for r in m.r]
+        m.eq_pabs_base = Constraint(
+            _base_rt,
+            rule=lambda _m, r, t: _m.pabs[r, t] == 1.0,
+        )
+        m.eq_pfact_base = Constraint(
+            _base_rt,
+            rule=lambda _m, r, t: _m.pfact[r, t] == 1.0,
+        )
+        m.eq_pwfact_base = Constraint(
+            ["base"],
+            rule=lambda _m, t: _m.pwfact[t] == 1.0,
+        )
+
         def _pabs_rule(_m, r, t):
-            if t == "base":
-                # Base period: pabs is already at benchmark (=1 by construction).
-                # Return the intra-period identity pabs[base] == pabs[base] * sqrt(1)
-                # which simplifies to the trivially-satisfied anchor pabs[base]==pabs[base].
-                # Use Constraint.Skip to avoid a vacuous row; the base period pabs[base]
-                # value is set by init=1.0 and constrained by other factor-price equations.
-                return Constraint.Skip
             # Cross-period Fisher absorption price index:
             #   pabs[r,t] = pabs[r,base] · sqrt( (mqabs(t,base)/mqabs(base,base))
             #                                   · (mqabs(t,t)   /mqabs(base,t)) )
@@ -429,8 +492,6 @@ class GTAPMultiPeriodModel:
         m.eq_pabs = Constraint(non_base_rt, rule=_pabs_rule)
 
         def _pfact_rule(_m, r, t):
-            if t == "base":
-                return Constraint.Skip
             # Cross-period Fisher regional factor price index:
             #   pfact[r,t] = sqrt( (mqfactr(t,base,r)/mqfactr(base,base,r))
             #                    · (mqfactr(t,t,r)   /mqfactr(base,t,r)) )
@@ -447,8 +508,6 @@ class GTAPMultiPeriodModel:
         m.eq_pfact = Constraint(non_base_rt, rule=_pfact_rule)
 
         def _pwfact_rule(_m, t):
-            if t == "base":
-                return Constraint.Skip
             # Cross-period Fisher world factor price index:
             #   pwfact[t] = sqrt( (mqfactw(t,base)/mqfactw(base,base))
             #                   · (mqfactw(t,t)   /mqfactw(base,t)) )
