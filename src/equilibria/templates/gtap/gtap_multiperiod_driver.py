@@ -376,42 +376,25 @@ def solve_multiperiod(
     # Freeze check and shock periods; leave base free.
     freeze_inactive_periods(m, "base")
 
-    # FIX B (B1): deactivate eq_xft[r,f,'base'] for every (r,f) cell where
-    # eq_xfteq[r,f,'base'] is also active.  In the multi-period model the base
-    # period uses a non-altertax closure (name="base"), so the deactivation block
-    # inside _run_path_capi_nonlinear_full that fires only for name=="altertax"
-    # never runs, leaving BOTH eq_xft and eq_xfteq active for the same xft var →
-    # 14 surplus rows that make the system over-determined (code=0 / residual=inf).
-    # Replicating the single-period altertax deactivation for the base period:
-    # whenever eq_xfteq is active for (r,f,base), eq_xft is redundant and must go.
-    _eq_xft_mp = getattr(m, "eq_xft", None)
-    _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
-    if _eq_xft_mp is not None and _eq_xfteq_mp is not None:
-        _n_xft_deact_base = 0
-        for _r in m.r:
-            for _f in m.f:
-                _xfteq_idx = (_r, _f, "base")
-                try:
-                    _xfteq_cd = _eq_xfteq_mp[_xfteq_idx]
-                except KeyError:
-                    continue
-                if not _xfteq_cd.active:
-                    continue
-                # eq_xfteq is active for this (r,f,'base') → deactivate eq_xft
-                try:
-                    _xft_cd = _eq_xft_mp[(_r, _f, "base")]
-                except KeyError:
-                    continue
-                if _xft_cd.active:
-                    _xft_cd.deactivate()
-                    _n_xft_deact_base += 1
-        if _n_xft_deact_base:
-            import logging as _logging
-            _logging.getLogger(__name__).info(
-                "base period: deactivated eq_xft for %d (r,f) pairs "
-                "(eq_xfteq active → eq_xft redundant, no name==altertax gate)",
-                _n_xft_deact_base,
-            )
+    # NOTE (2026-06-21): The former "FIX B" deactivated ALL 15 eq_xft[r,f,'base']
+    # here, on the false premise that eq_xft collides with eq_xfteq.  MEASURED:
+    # in the single-period BASE model (sluggish, name="base") BOTH eq_xft (15) and
+    # eq_xfteq (15) are active with 15 free xft vars, and the wrapper's own
+    # apply_squareness_patches + Hopcroft-Karp matcher reduce them to a square
+    # system (eq_xft→6, eq_xfteq→3) — the base reaches 96.8-100%.  eq_xft
+    # (xft == sum_a xf/xscale) is the FACTOR-MARKET-CLEARING = absolute-scale
+    # anchor.  Deactivating all of it freed the real-economy scale, so the base
+    # PATH solve — even seeded at the exact GAMS point — converged (code=1,
+    # res 5e-11) to a DEGENERATE branch ~25x inflated (va 0.20→68), which then
+    # poisoned check/shock via _seed_period_from_prior.  Fix: do NOT touch eq_xft
+    # at base; let the wrapper's own squareness patches run (they are not gated on
+    # name=="altertax").  This drops the base blow-up from 33609% to ~28%.
+    #
+    # For CHECK/SHOCK (altertax, all factors mobile) the wrapper's name=="altertax"
+    # block correctly deactivates eq_xft for mobile factors — but its 2-index key
+    # model.eq_xft[r,f] KeyErrors on the multi-period (r,f,period) index, so the
+    # FIX B (B2/B3) loops below still do that deactivation for check/shock (which
+    # IS correct there: single-period altertax also deactivates all 15 eq_xft).
 
     # Replicate single-period build_model's structural fixing for base period.
     # build_model internally fixes ~500+ structural zeros (afeall, p_rai, chiSave,
