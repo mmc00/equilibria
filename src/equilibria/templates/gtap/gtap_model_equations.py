@@ -3969,7 +3969,15 @@ class GTAPModelEquations:
         if_sub = bool(getattr(self.closure, "if_sub", True)) if self.closure is not None else True
 
         def _factor_tax_value(region, factor, activity) -> float:
-            return float(self.params.taxes.rtf.get((region, factor, activity), 0.0) or 0.0)
+            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259), NOT pf*(1+rtf).
+            # fctts/fcttx are the factor-use input taxes (Python rtfi/rtfd); under
+            # altertax both are 0 so pfa == pf. Using rtf here injected a spurious
+            # tax wedge that breaks eq_pvaeq/eq_xfeq under ifSUB=1 (where _m_pfa is
+            # substituted directly), collapsing a region's capital-price block.
+            # Mirrors gtap_parameters.py:531-534 (the pfa benchmark uses rtfi/rtfd).
+            rtfi = float(self.params.taxes.rtfi.get((region, factor, activity), 0.0) or 0.0)
+            rtfd = float(self.params.taxes.rtfd.get((region, factor, activity), 0.0) or 0.0)
+            return rtfi + rtfd
 
         def _kappaf_value(region, factor, activity) -> float:
             kappa = float(self.params.taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
