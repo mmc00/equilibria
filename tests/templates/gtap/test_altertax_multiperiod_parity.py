@@ -10,9 +10,13 @@ Unlike test_gtap7_nl_parity.py (a no-solve .nl coefficient diff), this catches
 regressions that CONVERGE to wrong values (e.g. the save<0 bug that silently
 dropped gtap7_3x4 to 94% while still reporting code=1).
 
-The test SKIPS (not fails) when either the fixture GDX is missing or the local
-PATH solver (path_capi_python) is unavailable -- so it self-skips on ubuntu-latest
-and actually runs on the self-hosted gams-tests job.
+This is a LOCAL-ONLY gate: it is intentionally NOT marked `gams`, so CI never
+collects it (no self-hosted runner is required). It SKIPS (not fails) when either
+the fixture GDX is missing or the local PATH solver (path_capi_python) is
+unavailable, so it is safe to run anywhere -- but it only does real work on a
+machine that has PATH + the dataset HAR (i.e. run it by hand to validate the
+multi-period pipeline). CI equation-FORM coverage for the MP model lives in the
+`.nl` gate (see test_gtap7_nl_parity.py and the MP .nl gate).
 
 Run:
     uv run pytest tests/templates/gtap/test_altertax_multiperiod_parity.py -v
@@ -162,7 +166,6 @@ def _solve_and_match(dataset: str, if_sub: bool):
     return codes, match_pct, tot
 
 
-@pytest.mark.gams
 @pytest.mark.parametrize("if_sub", [False, True], ids=["ifsub0", "ifsub1"])
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_altertax_multiperiod_parity(dataset: str, if_sub: bool) -> None:
