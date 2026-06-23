@@ -80,12 +80,15 @@ def _build_python_nl(
 ) -> Path:
     """Build Pyomo model for `period`, apply closure+patches, write .nl.
 
-    For the shock period, `base_model` (already-built base ConcreteModel) is
-    passed as `t0_snapshot` so that counterfactual equations reference correct
-    base-period levels.  The t_set is ("base", "shock") for shock, ("base",)
-    for base.
+    For the shock AND check periods, `base_model` (already-built base
+    ConcreteModel) is passed as `t0_snapshot` so that counterfactual equations
+    reference correct base-period levels.  The t_set is ("base", <period>) for
+    those, ("base",) for base.  The check is the altertax compStat
+    betaCal→check transition: counterfactual with the base frozen as snapshot,
+    but with NO tariff shock (imptx stays at base; that is applied only in the
+    shock branch of `build_python_nls`).
     """
-    is_cf = period == "shock"
+    is_cf = period in ("shock", "check")
     t0_snap = base_model if is_cf else None
     rres = list(p.sets.r)[-1]
 
@@ -172,6 +175,31 @@ def build_python_nls(
                 print("  Building base model (for shock t0_snapshot) ...")
                 _, base_model = _build_python_nl("base", p, closure_config, out_dir)
 
+        elif period == "check":
+            # Altertax compStat betaCal→check transition: CD elasticities
+            # (esubva=1, esubd=esubm=0.95, etrae=1, omegaf=1) + altertax closure,
+            # but the BASE is frozen as t0_snapshot and NO tariff shock is applied
+            # (imptx stays at base). Mirrors the GAMS check .nl
+            # (_build_standalone_gms phase=="check"). The altertax branch hardcodes
+            # if_sub=False; we match that here so the .nl gate is comparable —
+            # closure_config.if_sub (the run's choice) is not threaded through.
+            from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+            from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+            params_to_use = apply_altertax_elasticities(copy.deepcopy(p))
+            period_closure = GTAPClosureConfig(
+                name="altertax",
+                closure_type="MCP",
+                capital_mobility="mobile",
+                fix_endowments=False,
+                fix_taxes=True,
+                fix_technology=True,
+                if_sub=False,
+            )
+            # Ensure we have a base model for t0_snapshot (built once, reused).
+            if base_model is None:
+                print("  Building base model (for check t0_snapshot) ...")
+                _, base_model = _build_python_nl("base", p, closure_config, out_dir)
+
         elif period == "altertax":
             # Malcolm (1998) CD-elasticity closure: override elasticities,
             # use altertax closure preset. No tariff shock applied to the .nl —
@@ -192,7 +220,7 @@ def build_python_nls(
         t0 = time.perf_counter()
         nl_path, built_model = _build_python_nl(
             period, params_to_use, period_closure, out_dir,
-            base_model=base_model if period == "shock" else None,
+            base_model=base_model if period in ("shock", "check") else None,
         )
         if period == "base":
             base_model = built_model  # cache for shock
