@@ -20,6 +20,7 @@ welfare_decomposition
 har_io
 path_capi
 benchmarks
+gtap7_coverage_matrix
 ```
 
 The {doc}`example gallery <../gallery/index>` complements these chapters with

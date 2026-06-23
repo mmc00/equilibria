@@ -4,7 +4,7 @@
 
 **Goal:** Make one declarative table (`coverage_matrix.py`) the single source of truth for GTAP7 parity coverage — driving both parity gates' parameters/thresholds and generating the documentation table, with a CI sync test preventing drift.
 
-**Architecture:** A new `scripts/gtap/coverage_matrix.py` holds a frozen-dataclass list of coverage rows + query helpers + import-time schema validation. A generator `gen_coverage_doc.py` renders `docs/gtap7_coverage_matrix.md` from it. The two existing parity tests are re-wired to read rows from the matrix (the altertax test asserts per-row `gap_min` instead of a global 98%). A new golden-file sync test fails CI if the committed doc differs from the regenerated one.
+**Architecture:** A new `scripts/gtap/coverage_matrix.py` holds a frozen-dataclass list of coverage rows + query helpers + import-time schema validation. A generator `gen_coverage_doc.py` renders `docs/site/guide/gtap7_coverage_matrix.md` from it. The two existing parity tests are re-wired to read rows from the matrix (the altertax test asserts per-row `gap_min` instead of a global 98%). A new golden-file sync test fails CI if the committed doc differs from the regenerated one.
 
 **Tech Stack:** Python 3.11+, pytest, dataclasses. No new dependencies. Use `uv run python` / `uv run pytest` (never bare `python`).
 
@@ -25,8 +25,8 @@
 | File | Responsibility |
 |------|----------------|
 | `scripts/gtap/coverage_matrix.py` (new) | The data: `Row` dataclass, `ROWS` list, query helpers, import-time `_validate()`. |
-| `scripts/gtap/gen_coverage_doc.py` (new) | Render `docs/gtap7_coverage_matrix.md` from `ROWS`. CLI + importable `render()`. |
-| `docs/gtap7_coverage_matrix.md` (new, generated) | Golden file, committed, visible on GitHub/RTD. |
+| `scripts/gtap/gen_coverage_doc.py` (new) | Render `docs/site/guide/gtap7_coverage_matrix.md` from `ROWS`. CLI + importable `render()`. |
+| `docs/site/guide/gtap7_coverage_matrix.md` (new, generated) | Golden file, committed, visible on GitHub/RTD. |
 | `tests/templates/gtap/test_coverage_matrix.py` (new) | Schema self-test + doc-sync golden test. |
 | `tests/templates/gtap/test_altertax_multiperiod_parity.py` (modify) | Read `kind=="altertax"` rows; assert per-row `gap_min`; skip `blocked`. |
 | `tests/templates/gtap/test_gtap7_nl_parity.py` (modify) | Parametrize from `kind=="gtap"`, `ci_status=="ci"` rows. |
@@ -103,7 +103,7 @@ One declarative table (`ROWS`) describes parity coverage across
 dataset x kind (gtap|altertax) x ifSUB x phase (base/check/shock). It drives:
   * test_gtap7_nl_parity.py        (which gtap rows/phases run in CI)
   * test_altertax_multiperiod_parity.py  (per-row gap_min contract)
-  * gen_coverage_doc.py            (the generated docs/gtap7_coverage_matrix.md)
+  * gen_coverage_doc.py            (the generated docs/site/guide/gtap7_coverage_matrix.md)
 
 `gap_min` is a CONSERVATIVE floor the tests assert (margin below the measured
 value); `gap_note` is the measured snapshot for humans. `gap_min is None` only
@@ -213,13 +213,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `scripts/gtap/gen_coverage_doc.py`
-- Create: `docs/gtap7_coverage_matrix.md` (generated output, committed)
+- Create: `docs/site/guide/gtap7_coverage_matrix.md` (generated output, committed)
 
 **Interfaces:**
 - Consumes: `coverage_matrix.ROWS`, `nl_rows()`, `altertax_rows()` (Task 1).
 - Produces:
   - `render() -> str` — returns the full Markdown document as a string (deterministic).
-  - `DOC_PATH: Path` — `ROOT / "docs/gtap7_coverage_matrix.md"`.
+  - `DOC_PATH: Path` — `ROOT / "docs/site/guide/gtap7_coverage_matrix.md"`.
   - CLI: running the module writes `render()` to `DOC_PATH`.
 
 - [ ] **Step 1: Write the generator**
@@ -227,7 +227,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 Create `scripts/gtap/gen_coverage_doc.py`:
 
 ```python
-"""Generate docs/gtap7_coverage_matrix.md from coverage_matrix.ROWS.
+"""Generate docs/site/guide/gtap7_coverage_matrix.md from coverage_matrix.ROWS.
 
 Run:  uv run python scripts/gtap/gen_coverage_doc.py
 The output is a committed golden file; test_coverage_doc_sync enforces that the
@@ -243,7 +243,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 from coverage_matrix import nl_rows, altertax_rows  # noqa: E402
 
-DOC_PATH = ROOT / "docs/gtap7_coverage_matrix.md"
+DOC_PATH = ROOT / "docs/site/guide/gtap7_coverage_matrix.md"
 
 _BANNER = (
     "<!-- GENERATED FROM scripts/gtap/coverage_matrix.py — do not edit by hand.\n"
@@ -309,18 +309,18 @@ if __name__ == "__main__":
 - [ ] **Step 2: Generate the doc**
 
 Run: `uv run python scripts/gtap/gen_coverage_doc.py`
-Expected: prints `wrote .../docs/gtap7_coverage_matrix.md`.
+Expected: prints `wrote .../docs/site/guide/gtap7_coverage_matrix.md`.
 
 - [ ] **Step 3: Eyeball the output**
 
-Run: `cat docs/gtap7_coverage_matrix.md`
+Run: `cat docs/site/guide/gtap7_coverage_matrix.md`
 Expected: two Markdown tables, the banner near the top, `nus333` first row of the
 single-period table, `gtap7_20x41` last row of the altertax table.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/gtap/gen_coverage_doc.py docs/gtap7_coverage_matrix.md
+git add scripts/gtap/gen_coverage_doc.py docs/site/guide/gtap7_coverage_matrix.md
 git commit -m "feat(gtap): generate coverage matrix doc from the source
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
@@ -346,7 +346,7 @@ def test_coverage_doc_in_sync():
     import gen_coverage_doc
     committed = gen_coverage_doc.DOC_PATH.read_text(encoding="utf-8")
     assert committed == gen_coverage_doc.render(), (
-        "docs/gtap7_coverage_matrix.md is stale — run "
+        "docs/site/guide/gtap7_coverage_matrix.md is stale — run "
         "`uv run python scripts/gtap/gen_coverage_doc.py` and commit."
     )
 ```
@@ -361,9 +361,9 @@ Expected: PASS.
 Temporarily append a line to the doc and confirm the test fails:
 
 ```bash
-echo "stale" >> docs/gtap7_coverage_matrix.md
+echo "stale" >> docs/site/guide/gtap7_coverage_matrix.md
 uv run pytest tests/templates/gtap/test_coverage_matrix.py::test_coverage_doc_in_sync -q || echo "FAILED AS EXPECTED"
-git checkout docs/gtap7_coverage_matrix.md
+git checkout docs/site/guide/gtap7_coverage_matrix.md
 ```
 
 Expected: the run FAILS (prints the stale message), then `git checkout` restores it.
@@ -543,7 +543,7 @@ In `CLAUDE.md`, under the "Estado actual" / status section, add a one-line point
 (do not duplicate the table — the generated doc is the source):
 
 ```markdown
-> **Matriz de cobertura (fuente única):** ver [`docs/gtap7_coverage_matrix.md`](docs/gtap7_coverage_matrix.md), generada de `scripts/gtap/coverage_matrix.py`. NO editar a mano (CI `test_coverage_doc_in_sync` lo verifica).
+> **Matriz de cobertura (fuente única):** ver [`docs/site/guide/gtap7_coverage_matrix.md`](docs/site/guide/gtap7_coverage_matrix.md), generada de `scripts/gtap/coverage_matrix.py`. NO editar a mano (CI `test_coverage_doc_in_sync` lo verifica).
 ```
 
 - [ ] **Step 4: Link the generated doc from benchmarks.md**
@@ -597,5 +597,5 @@ unit-tests file list anyway.
 
 Confirm the doc is in sync and committed:
 ```bash
-uv run python scripts/gtap/gen_coverage_doc.py && git diff --quiet docs/gtap7_coverage_matrix.md && echo "DOC IN SYNC"
+uv run python scripts/gtap/gen_coverage_doc.py && git diff --quiet docs/site/guide/gtap7_coverage_matrix.md && echo "DOC IN SYNC"
 ```
