@@ -82,6 +82,8 @@ Residual: <valor si conocido>
 | Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
 | Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
+> **Matriz de cobertura (fuente única):** ver [`docs/gtap7_coverage_matrix.md`](docs/gtap7_coverage_matrix.md), generada de `scripts/gtap/coverage_matrix.py`. NO editar a mano (CI `test_coverage_doc_in_sync` lo verifica).
+
 ## Herramientas de debug parity (cascade de 10)
 
 Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta — un sesgo de calibración bajo tolerancia se ve idéntico a "ruido de basin CD" hasta que la herramienta 4 lo aísla; y una diferencia de forma de ecuación que coincide numéricamente en el punto sembrado pasa el .nl pero la atrapa la herramienta 5. **Las tools 3-6 comparan Python vs GAMS asumiendo que el gap es una DIFERENCIA entre ellos; son ciegas a un gap que NO es diferencia: una variable que es un DOF libre/degenerado IDÉNTICAMENTE en ambos (tautología CD) — eso solo lo atrapa la tool 7 (drift test).**

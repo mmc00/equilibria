@@ -31,9 +31,16 @@ DATASETS_DIR = ROOT / "datasets"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
+from coverage_matrix import nl_rows  # noqa: E402
+
 
 def _available_datasets() -> list[str]:
-    """Return dataset names that have both fixture NL files and HAR data."""
+    """Return dataset names that have both fixture NL files and HAR data.
+
+    No longer feeds DATASETS — kept to document the on-disk contract and
+    allow manual inspection.  The authoritative CI list comes from the
+    coverage matrix (nl_rows()).
+    """
     result = []
     for d in sorted(FIXTURES_DIR.iterdir()):
         if not d.is_dir():
@@ -45,7 +52,13 @@ def _available_datasets() -> list[str]:
     return result
 
 
-DATASETS = _available_datasets()
+# Datasets whose .nl gate runs in CI, per the coverage matrix.
+# Restricted to gtap7_* names: nus333/9x10 are kind="gtap" ci_status="ci"
+# but their parity is covered by dedicated tests, not this .nl fixture gate.
+DATASETS = [
+    r.dataset for r in nl_rows()
+    if r.ci_status == "ci" and r.dataset.startswith("gtap7_")
+]
 
 
 @pytest.mark.parametrize("dataset", DATASETS)
@@ -65,6 +78,8 @@ def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
         pytest.skip(f"Dataset {dataset!r} not in registry")
 
     fixture_dir = FIXTURES_DIR / dataset
+    if not (fixture_dir / "gams_base.nl").exists():
+        pytest.skip(f"no .nl fixtures for {dataset}")
     har_dir = DATASETS_DIR / dataset
     closure_config = GTAPClosureConfig(if_sub=False)
 

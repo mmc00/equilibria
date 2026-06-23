@@ -25,6 +25,13 @@ in the underlying CSV hold per-phase totals.
 > below is labelled with the host that produced it. Only compare *ratios*
 > (Python vs GAMS-local) across machines.
 
+## Coverage matrix
+
+The authoritative parity-coverage matrix (dataset × kind × ifSUB × phase, with
+per-row gap thresholds and CI status) is generated from
+`scripts/gtap/coverage_matrix.py`: see
+[GTAP 7 Parity Coverage Matrix](../../gtap7_coverage_matrix.md).
+
 ---
 
 ## macOS — Apple Silicon M3, 18 GB RAM
