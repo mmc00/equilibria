@@ -439,8 +439,3 @@ jobs:
 
       - name: Run GAMS parity tests
         run: uv run pytest -m gams
-
-      - name: Run altertax multi-period parity tests
-        run: |
-          uv run pytest tests/templates/gtap/test_altertax_multiperiod_parity.py -v \
-            --tb=short
