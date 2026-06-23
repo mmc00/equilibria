@@ -30,3 +30,13 @@ def test_matrix_helpers_partition():
     assert set(nl_rows()) | set(altertax_rows()) == set(ROWS)
     assert all(r.kind == "gtap" for r in nl_rows())
     assert all(r.kind == "altertax" for r in altertax_rows())
+
+
+def test_coverage_doc_in_sync():
+    """The committed doc must equal render() — regenerate + commit on drift."""
+    import gen_coverage_doc
+    committed = gen_coverage_doc.DOC_PATH.read_text(encoding="utf-8")
+    assert committed == gen_coverage_doc.render(), (
+        "docs/gtap7_coverage_matrix.md is stale — run "
+        "`uv run python scripts/gtap/gen_coverage_doc.py` and commit."
+    )
