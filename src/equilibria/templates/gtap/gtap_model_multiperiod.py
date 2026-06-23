@@ -161,7 +161,7 @@ class GTAPMultiPeriodModel:
         m.eq_facty["USA", "base"] holds the same algebraic body as sp.eq_facty["USA"]
         evaluated at the multi-period vars for t=base.
         """
-        from pyomo.environ import Constraint, Var
+        from pyomo.environ import Constraint, Var, Param, value as _pyo_value
         from pyomo.core.expr.visitor import ExpressionReplacementVisitor
 
         # Build a fresh single-period model to get its Constraints and Vars.
@@ -185,6 +185,25 @@ class GTAPMultiPeriodModel:
                 # scalar Var — sp uses v[None], mp is indexed by (period,)
                 sp_vd = v[None]
                 substitute[id(sp_vd)] = mp_var[(period,)]
+
+        # Also substitute every MUTABLE ParamData of the single-period model by its
+        # numeric VALUE.  Non-mutable Params are already baked into the constraint
+        # bodies as numeric literals, but mutable ones (e.g. aus, betap, betag, phip,
+        # fctts, fcttx, the ytax/yc/yg/rsav coefficients) survive as live references
+        # to the throwaway `sp` model.  When `sp` is garbage-collected those become
+        # `[Unattached ParamData]` in the replicated bodies and evaluate to garbage,
+        # corrupting the multi-period solve (regions with small values — e.g. EGY in
+        # 3x4 — are hit hardest).  Replacing them with their constant value makes the
+        # replicated equations self-contained, matching how non-mutable Params and
+        # the value(...)-evaluated coefficients (rorflex, depr) already behave.
+        for prm in sp.component_objects(Param, active=True):
+            if not prm.mutable:
+                continue
+            for k in prm:
+                try:
+                    substitute[id(prm[k])] = float(_pyo_value(prm[k]))
+                except Exception:
+                    pass
 
         visitor = ExpressionReplacementVisitor(substitute=substitute)
 
