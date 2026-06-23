@@ -224,6 +224,19 @@ many Pyomo Var cells match GAMS within `tol_rel=1e-3 / tol_abs=1e-6`
 and the worst absolute / relative error observed. The `__SUMMARY__` rows
 in the underlying CSV hold per-phase totals.
 
+> **Hardware sensitivity:** wall-time numbers depend on CPU, memory and
+> filesystem. Parity (cell-level matching vs GAMS) is *deterministic*
+> and identical across platforms, but solve times vary. Each section
+> below is labelled with the host that produced it. Only compare *ratios*
+> (Python vs GAMS-local) across machines.
+
+## Coverage matrix
+
+The authoritative parity-coverage matrix (dataset × kind × ifSUB × phase,
+with per-row gap thresholds and CI status) is generated from
+`scripts/gtap/coverage_matrix.py`: see
+[GTAP 7 Parity Coverage Matrix](gtap7_coverage_matrix.md).
+
 """
 
 

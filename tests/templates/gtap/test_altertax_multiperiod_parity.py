@@ -4,7 +4,8 @@ For each (dataset, ifSUB) this builds the multi-period model, seeds it from the
 committed GAMS GDX fixture, solves base->check->shock via solve_multiperiod, and
 asserts:
   1. all 3 periods converge (termination code == 1), and
-  2. the shock-period real-cell match vs the GDX is >= 98%.
+  2. the shock-period real-cell match vs the GDX is >= the per-row gap_min from
+     the coverage matrix (scripts/gtap/coverage_matrix.py).
 
 Unlike test_gtap7_nl_parity.py (a no-solve .nl coefficient diff), this catches
 regressions that CONVERGE to wrong values (e.g. the save<0 bug that silently
@@ -37,8 +38,12 @@ DATASETS_DIR = ROOT / "datasets"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
-DATASETS = ["gtap7_3x3", "gtap7_5x5", "gtap7_10x7"]
-MATCH_THRESHOLD = 98.0
+from coverage_matrix import altertax_rows  # noqa: E402
+
+# (dataset, ifsub_int, gap_min, ci_status) per altertax matrix row
+_ALTERTAX_CASES = [
+    (r.dataset, r.ifsub, r.gap_min, r.ci_status) for r in altertax_rows()
+]
 
 # Exclusion sets (denominator), identical to the session measurement harness.
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
@@ -166,11 +171,17 @@ def _solve_and_match(dataset: str, if_sub: bool):
     return codes, match_pct, tot
 
 
-@pytest.mark.parametrize("if_sub", [False, True], ids=["ifsub0", "ifsub1"])
-@pytest.mark.parametrize("dataset", DATASETS)
-def test_altertax_multiperiod_parity(dataset: str, if_sub: bool) -> None:
+@pytest.mark.parametrize(
+    "dataset,ifsub,gap_min,ci_status",
+    _ALTERTAX_CASES,
+    ids=[f"{r.dataset}-ifsub{r.ifsub}" for r in altertax_rows()],
+)
+def test_altertax_multiperiod_parity(dataset, ifsub, gap_min, ci_status):
+    if ci_status == "blocked":
+        pytest.skip(f"blocked reference: {dataset}")
     if not _has_path_solver():
         pytest.skip("path_capi_python (PATH solver) not available")
+    if_sub = bool(ifsub)
     ref = _fixture_gdx(dataset, if_sub)
     if not ref.exists():
         pytest.skip(f"fixture GDX missing: {ref}")
@@ -184,7 +195,7 @@ def test_altertax_multiperiod_parity(dataset: str, if_sub: bool) -> None:
         f"[{dataset}/{mode}] not all periods converged: {codes}"
     )
     assert tot > 0, f"[{dataset}/{mode}] no comparable cells found"
-    assert match_pct >= MATCH_THRESHOLD, (
+    assert match_pct >= gap_min, (
         f"[{dataset}/{mode}] real-cell match {match_pct:.2f}% "
-        f"< {MATCH_THRESHOLD}% (over {tot} cells)"
+        f"< gap_min {gap_min}% (over {tot} cells)"
     )
