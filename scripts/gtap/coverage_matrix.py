@@ -4,7 +4,7 @@ One declarative table (`ROWS`) describes parity coverage across
 dataset x kind (gtap|altertax) x ifSUB x phase (base/check/shock). It drives:
   * test_gtap7_nl_parity.py        (which gtap rows/phases run in CI)
   * test_altertax_multiperiod_parity.py  (per-row gap_min contract)
-  * gen_coverage_doc.py            (the generated docs/gtap7_coverage_matrix.md)
+  * gen_coverage_doc.py            (the generated docs/site/guide/gtap7_coverage_matrix.md)
 
 `gap_min` is a CONSERVATIVE floor the tests assert (margin below the measured
 value); `gap_note` is the measured snapshot for humans. `gap_min is None` only

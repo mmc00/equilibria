@@ -35,7 +35,7 @@ scripts/gtap/coverage_matrix.py          ← SINGLE SOURCE (rows + helpers)
         │
         ├──→ tests/templates/gtap/test_gtap7_nl_parity.py        (reads rows: which phases per dataset)
         ├──→ tests/templates/gtap/test_altertax_multiperiod_parity.py  (reads rows: per-row gap_min)
-        └──→ scripts/gtap/gen_coverage_doc.py ──→ docs/gtap7_coverage_matrix.md
+        └──→ scripts/gtap/gen_coverage_doc.py ──→ docs/site/guide/gtap7_coverage_matrix.md
                      ▲                                   │
                      └────── test_coverage_doc_sync ─────┘  (CI: regenerate == committed, else FAIL)
 ```
@@ -43,7 +43,7 @@ scripts/gtap/coverage_matrix.py          ← SINGLE SOURCE (rows + helpers)
 - **`coverage_matrix.py`** — the data: a list of `Row` records + small query
   helpers. No model building, no I/O beyond importing the dataclass.
 - **`gen_coverage_doc.py`** — reads the matrix, emits the Markdown table to
-  `docs/gtap7_coverage_matrix.md`. Deterministic (stable row order).
+  `docs/site/guide/gtap7_coverage_matrix.md`. Deterministic (stable row order).
 - **Tests** — consume the matrix (details below).
 
 ## The row schema
@@ -138,13 +138,13 @@ Notes:
 
 ### `test_coverage_doc_sync.py` (CI, new)
 - Regenerate the doc from the matrix in-memory and compare to the committed
-  `docs/gtap7_coverage_matrix.md`. On mismatch, FAIL with a diff and the message
+  `docs/site/guide/gtap7_coverage_matrix.md`. On mismatch, FAIL with a diff and the message
   "run `uv run python scripts/gtap/gen_coverage_doc.py` and commit". No solver, runs
   on ubuntu.
 
 ## The generated doc
 
-`docs/gtap7_coverage_matrix.md` — header + the two tables above, rendered from the
+`docs/site/guide/gtap7_coverage_matrix.md` — header + the two tables above, rendered from the
 matrix in stable order, with a top banner: "GENERATED FROM
 scripts/gtap/coverage_matrix.py — do not edit by hand; run gen_coverage_doc.py".
 Linked from `CLAUDE.md` (replacing the hand-maintained status table) and from

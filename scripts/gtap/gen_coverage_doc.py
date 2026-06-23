@@ -1,4 +1,4 @@
-"""Generate docs/gtap7_coverage_matrix.md from coverage_matrix.ROWS.
+"""Generate docs/site/guide/gtap7_coverage_matrix.md from coverage_matrix.ROWS.
 
 Run:  uv run python scripts/gtap/gen_coverage_doc.py
 The output is a committed golden file; test_coverage_doc_sync enforces that the
@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 from coverage_matrix import nl_rows, altertax_rows  # noqa: E402
 
-DOC_PATH = ROOT / "docs/gtap7_coverage_matrix.md"
+DOC_PATH = ROOT / "docs/site/guide/gtap7_coverage_matrix.md"
 
 _BANNER = (
     "<!-- GENERATED FROM scripts/gtap/coverage_matrix.py — do not edit by hand.\n"

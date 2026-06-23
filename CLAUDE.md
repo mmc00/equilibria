@@ -82,7 +82,7 @@ Residual: <valor si conocido>
 | Paridad NUS333 (base + shock vs GAMS local) | ✅ 100% / 100% |
 | Paridad 9x10 vs GAMS local | ⛔ bloqueado: licencia GAMS community (2500 rows) |
 
-> **Matriz de cobertura (fuente única):** ver [`docs/gtap7_coverage_matrix.md`](docs/gtap7_coverage_matrix.md), generada de `scripts/gtap/coverage_matrix.py`. NO editar a mano (CI `test_coverage_doc_in_sync` lo verifica).
+> **Matriz de cobertura (fuente única):** ver [`docs/site/guide/gtap7_coverage_matrix.md`](docs/site/guide/gtap7_coverage_matrix.md), generada de `scripts/gtap/coverage_matrix.py`. NO editar a mano (CI `test_coverage_doc_in_sync` lo verifica).
 
 ## Herramientas de debug parity (cascade de 10)
 
