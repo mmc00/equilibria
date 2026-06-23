@@ -34,25 +34,28 @@ def fix_sluggish_pft(model, params, *, label: str = "") -> int:
     mf_set = set(getattr(params.sets, "mf", []) or [])
     fixed = 0
     if hasattr(model, "pft"):
-        for r in model.r:
-            for f in model.f:
-                f_str = str(f)
-                # Only need to fix if not already fixed
-                if model.pft[r, f].fixed:
-                    continue
-                # Sluggish (sf) with active xftflag: pft anchored by eq_xfteq → skip
-                # Mobile (mf): pft determined by eq_pfeq law-of-one-price → skip
-                # Sluggish with xftflag=0 OR fnm (neither mf nor sf): pft is dangling → fix
-                if f_str in mf_set:
-                    continue
-                if hasattr(model, "xftflag"):
-                    try:
-                        if float(value(model.xftflag[r, f]) or 0.0) > 0.0:
-                            continue
-                    except Exception:
-                        pass
-                model.pft[r, f].fix()
-                fixed += 1
+        # Iterate over the actual index set of pft to handle both single-period
+        # (r, f) and multi-period (r, f, t) index shapes.
+        for idx in model.pft:
+            r, f = idx[0], idx[1]  # safe for (r,f) or (r,f,t)
+            f_str = str(f)
+            vd = model.pft[idx]
+            # Only need to fix if not already fixed
+            if vd.fixed:
+                continue
+            # Sluggish (sf) with active xftflag: pft anchored by eq_xfteq → skip
+            # Mobile (mf): pft determined by eq_pfeq law-of-one-price → skip
+            # Sluggish with xftflag=0 OR fnm (neither mf nor sf): pft is dangling → fix
+            if f_str in mf_set:
+                continue
+            if hasattr(model, "xftflag"):
+                try:
+                    if float(value(model.xftflag[r, f]) or 0.0) > 0.0:
+                        continue
+                except Exception:
+                    pass
+            vd.fix()
+            fixed += 1
     if fixed and label:
         print(f"[{label}] fixed {fixed} dangling pft(r,f) (sluggish xftflag=0 or fnm)")
     return fixed
@@ -69,22 +72,27 @@ def deactivate_xfteq_for_fixed_mobile(model, params, *, label: str = "") -> int:
     """
     deact = 0
     if hasattr(model, "eq_xfteq") and hasattr(model, "xftflag"):
-        for r in model.r:
-            for f in model.f:
-                try:
-                    if value(model.xftflag[r, f]) <= 0.0:
-                        continue
-                except Exception:
+        # Iterate over xft index to handle both (r,f) and (r,f,t) shapes.
+        for idx in model.xft:
+            r, f = idx[0], idx[1]  # safe for (r,f) or (r,f,t)
+            try:
+                if value(model.xftflag[r, f]) <= 0.0:
                     continue
-                if not model.xft[r, f].fixed:
-                    continue
+            except Exception:
+                continue
+            if not model.xft[idx].fixed:
+                continue
+            try:
+                con = model.eq_xfteq[idx]
+            except KeyError:
+                # Try (r,f) lookup as fallback for single-period
                 try:
                     con = model.eq_xfteq[r, f]
                 except KeyError:
                     continue
-                if con.active:
-                    con.deactivate()
-                    deact += 1
+            if con.active:
+                con.deactivate()
+                deact += 1
     if deact and label:
         print(f"[{label}] deactivated {deact} eq_xfteq (xft fixed → over-determining)")
     return deact
@@ -95,8 +103,19 @@ def deactivate_unmatched_xseq(model, params, *, label: str = "") -> int:
 
     Under omegax=inf the supply identity xs = xds + xet collapses (degenerate CET).
     Some (r,i) eq_xseq end up unmatched; those are the redundant ones to remove.
+
+    Only fires when the system is over-determined (n_eqs > n_free_vars).
+    When already square or under-determined, deactivating rows would break squareness.
     """
     if not hasattr(model, "eq_xseq"):
+        return 0
+
+    # Guard: only deactivate rows when over-determined.
+    _n_cons = sum(1 for _ in model.component_data_objects(Constraint, active=True))
+    _n_free = sum(
+        1 for v in model.component_data_objects(Var, active=True) if not v.fixed
+    )
+    if _n_cons <= _n_free:
         return 0
 
     cons_snap = sorted(
@@ -211,10 +230,10 @@ def deactivate_fixed_quantity_eqs(model, *, label: str = "") -> int:
             con = model.eq_va[idx]
             if not con.active:
                 continue
-            r, a = idx
+            r, a = idx[0], idx[1]  # safe for (r,a) or (r,a,t)
             try:
-                va_fixed = model.va[r, a].fixed
-                xp_fixed = model.xp[r, a].fixed
+                va_fixed = model.va[idx].fixed
+                xp_fixed = model.xp[idx].fixed
             except (KeyError, AttributeError):
                 continue
             if va_fixed and xp_fixed:

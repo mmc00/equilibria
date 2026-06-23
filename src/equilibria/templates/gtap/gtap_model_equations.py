@@ -1917,7 +1917,9 @@ class GTAPModelEquations:
             private_total = sum(_private_total(region, commodity) for commodity in self.sets.i)
             government_total = sum(_government_total(region, commodity) for commodity in self.sets.i)
             investment_total = sum(_investment_total(region, commodity) for commodity in self.sets.i)
-            raw_savings_total = float(self.params.benchmark.save.get(region, 0.0))
+            _save_raw = self.params.benchmark.save.get(region, None)
+            _save_present = _save_raw is not None
+            raw_savings_total = float(_save_raw or 0.0)
 
             vkb = float(self.params.benchmark.vkb.get(region, 0.0))
             vdep = float(self.params.benchmark.vdep.get(region, 0.0))
@@ -1954,10 +1956,20 @@ class GTAPModelEquations:
             ytax_ind_bench = self._compute_ytax_ind_bench(region)
             # Income-side total (kept for downstream factY/ytax-stream init).
             regy_income = max(facty_bench + ytax_ind_bench, 1e-8)
-            savings_total = raw_savings_total if raw_savings_total > 0.0 else max(
-                regy_income - private_total - government_total,
-                0.0,
-            )
+            # Use the benchmark save value DIRECTLY when present — including when it
+            # is NEGATIVE (a region with gross dissaving / current-account deficit,
+            # e.g. EGY in gtap7_3x4 has save=-0.0123). GAMS keeps rsav negative
+            # (betaS = rsav/regY < 0); the old `if raw_savings_total > 0.0` fallback
+            # clamped it to a positive value → betaS=0 instead of -0.057, breaking
+            # eq_phi (resid 5.5e-2) and cascading the whole region off. The fallback
+            # is only for SAMs where `save` is ABSENT, not negative.
+            if _save_present:
+                savings_total = raw_savings_total
+            else:
+                savings_total = max(
+                    regy_income - private_total - government_total,
+                    0.0,
+                )
             regional_savings_data[(region,)] = savings_total
             # GAMS cal.gms:629 fixes regY = yc + yg + rsav at calibration so
             # phi=1 falls out exactly (see betaCal block below). The income/
@@ -3969,7 +3981,15 @@ class GTAPModelEquations:
         if_sub = bool(getattr(self.closure, "if_sub", True)) if self.closure is not None else True
 
         def _factor_tax_value(region, factor, activity) -> float:
-            return float(self.params.taxes.rtf.get((region, factor, activity), 0.0) or 0.0)
+            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259), NOT pf*(1+rtf).
+            # fctts/fcttx are the factor-use input taxes (Python rtfi/rtfd); under
+            # altertax both are 0 so pfa == pf. Using rtf here injected a spurious
+            # tax wedge that breaks eq_pvaeq/eq_xfeq under ifSUB=1 (where _m_pfa is
+            # substituted directly), collapsing a region's capital-price block.
+            # Mirrors gtap_parameters.py:531-534 (the pfa benchmark uses rtfi/rtfd).
+            rtfi = float(self.params.taxes.rtfi.get((region, factor, activity), 0.0) or 0.0)
+            rtfd = float(self.params.taxes.rtfd.get((region, factor, activity), 0.0) or 0.0)
+            return rtfi + rtfd
 
         def _kappaf_value(region, factor, activity) -> float:
             kappa = float(self.params.taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
