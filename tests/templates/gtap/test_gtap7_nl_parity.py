@@ -50,7 +50,11 @@ DATASETS = _available_datasets()
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
-    """Python .nl coefficients match GAMS fixture for base and shock phases."""
+    """Python .nl coefficients match GAMS fixture for base/check/shock phases.
+
+    The "check" phase (multi-period altertax CD step) is only diffed when a
+    gams_check.nl fixture is present for the dataset.
+    """
     from nl_compare import build_python_nls, diff_nl_models, diff_bounds
     from _nl_parser import parse_nl
     from _parity_datasets import DATASETS as DS_REGISTRY
@@ -64,15 +68,22 @@ def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
     har_dir = DATASETS_DIR / dataset
     closure_config = GTAPClosureConfig(if_sub=False)
 
+    # The "check" phase (multi-period altertax CD step) is opt-in per dataset:
+    # it is compared only when a gams_check.nl fixture exists, so datasets that
+    # only carry base/shock fixtures keep passing unchanged.
+    phases = ["base", "shock"]
+    if (fixture_dir / "gams_check.nl").exists():
+        phases.insert(1, "check")
+
     build_python_nls(
-        phases=["base", "shock"],
+        phases=phases,
         out_dir=tmp_path,
         closure_config=closure_config,
         har_dir=har_dir,
     )
 
     tol_rel = 1e-4
-    for phase in ["base", "shock"]:
+    for phase in phases:
         py_nl = parse_nl(tmp_path / f"python_{phase}.nl")
         gams_nl = parse_nl(fixture_dir / f"gams_{phase}.nl")
 
