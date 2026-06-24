@@ -250,6 +250,7 @@ scripts/gtap/*
 !scripts/gtap/build_9x10_altertax_neos_bundle.py
 !scripts/gtap/build_altertax_neos_bundle.py
 !scripts/gtap/build_gtap7_altertax_neos_bundle.py
+!scripts/gtap/build_gtap7_pure_local_bundle.py
 !scripts/gtap/submit_9x10_altertax_neos.py
 !scripts/gtap/submit_altertax_neos.py
 !scripts/gtap/gdx_to_gams_inline.py
