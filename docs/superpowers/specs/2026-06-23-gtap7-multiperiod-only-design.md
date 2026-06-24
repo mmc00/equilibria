@@ -45,11 +45,14 @@ In `mode="gtap"`:
   `capital_mobility="sluggish"`) for **all three** periods (no `alt_closure`);
 - `holdfix_cd=False` (no forced CD → no pva/pnd pin, `_holdfix_cd_nest` not called);
 - keep the `tm_pct` 10% imptx shock for the shock period;
-- skip / neutralize the altertax-specific post-solve corrections that assume the
-  altertax param structure (revisit `_recompute_ytax_mt` / `_recompute_pm_pmt` /
-  `_recompute_ifsub_report_vars` — they must still be correct for the pure shock,
-  or be made conditional). This is the one area to validate carefully during
-  implementation; the MP==SP equality is the check that tells us we got it right.
+- **post-solve corrections** (`_recompute_ytax_mt` / `_recompute_pm_pmt` /
+  `_recompute_ifsub_report_vars`): keep them ON, passing `params` (gtap) instead
+  of `p_alt`. These patch a known MP bug where `ytax`/`pm` bake the BASE imptx
+  coefficient instead of the post-shock one; the tariff shock is still active in
+  gtap, so the patch is plausibly still correct. **Decision: do not pre-disable.**
+  Run MP==SP with the patch on; if any of `ytax`/`pm`/`pmt` diverges from SP,
+  disable that specific recompute in `mode="gtap"`. The MP==SP equality test
+  decides empirically — no guessing.
 
 `mode="altertax"` keeps today's behaviour exactly (default stays altertax so the
 existing altertax gate is untouched).
@@ -78,8 +81,10 @@ principle") is what guarantees a 0-diff against the same coefficient set.
 `scripts/gtap/coverage_matrix.py`:
 - remove the single-period `gtap` rows (`ifsub=None`, `.nl`-only);
 - gtap datasets become multi-period rows with `ifsub ∈ {0,1}` like altertax,
-  carrying a real `gap_min` (100 / "0 diffs" semantics for the MP `.nl` CI rows,
-  and a solver `gap_min` for the local solver rows where applicable);
+  carrying a **tolerant `gap_min` in the altertax style** (e.g. 98–99.5 floors,
+  `gap_note` the measured snapshot) — NOT a hard 100/exact contract. The MP==SP
+  equality is the engine-fidelity check during implementation; the committed
+  matrix floor is a conservative regression floor like altertax's;
 - update `_validate()` invariants (the `ifsub is None ⟺ kind == "gtap"` rule and
   the `gap_min is None ⟺ nl-only gtap7_*` rule both change — re-derive them).
 
@@ -101,9 +106,9 @@ To remove once MP is proven:
 - SP references in `CLAUDE.md`, `GTAP_VALIDATION_STATUS.md`,
   `docs/site/benchmarks.md`.
 
-Open question for the plan: whether to keep `homotopy_shock.py` as a debug tool
-(it is already flagged STALE in memory `project_gtap7_3x3_homotopy_deadend`).
-Default: delete unless it earns its keep as a diagnostic.
+`homotopy_shock.py` is **deleted** (already flagged STALE in memory
+`project_gtap7_3x3_homotopy_deadend`; the single-jump path is the best faithful
+result, so the homotopy ramp no longer earns its keep).
 
 ## Risk & verification
 
