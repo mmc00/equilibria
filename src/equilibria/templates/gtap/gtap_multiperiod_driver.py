@@ -203,37 +203,81 @@ def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
 # _collapse_pft_pfteq — period-aware pft/eq_pfteq collapse (gtap-mode only)
 # ---------------------------------------------------------------------------
 def _collapse_pft_pfteq(m, period: str) -> int:
-    """Collapse pft / eq_pfteq for the active period (gtap-mode squaring).
+    """Collapse the factor-price block for the active period (gtap-mode squaring).
 
-    Mirror of scripts/gtap/run_gtap.py:2138-2168, which no-ops on the MP model
-    because it uses 2-index (r,f) keys while the MP index is (r,f,period).  For
-    each (r,f) in the active period, deactivate eq_pfteq and fix pft at its
-    current value (>0).  This squares the factor-price block exactly as the
-    single-period sluggish base does.  gtap-mode ONLY — in altertax-mode
-    eq_pfteq is intentionally kept active for the CET price index.
+    Mirror of scripts/gtap/run_gtap.py:2138-2168 + gtap_solver.py:633-657 (the
+    xftflag-conditional fixing), both of which no-op on the MP model because they
+    use 2-index (r,f) keys while the MP index is (r,f,period) AND the MP model
+    carries no `xftflag` Param.  This reproduces the SP factor-block squaring the
+    MP model cannot do on its own:
 
-    Returns count of (r,f) pairs collapsed.
+      - REAL factors (xftflag>0 → eq_xfteq[r,f,period] / eq_pfteq[r,f,period]
+        live): GAMS pfteq is a free-row with holdfixed=1 pinning pft at .l=1.0.
+        Deactivate eq_pfteq and PIN pft at **1.0** (NOT the drifted seed — the seed
+        can carry a stale value from a prior period; GAMS holdfixes at 1.0).
+      - DANGLING NatRes (xftflag<=0 → eq_xfteq/eq_pfteq Constraint.Skip, so the
+        MP index KeyErrors): xft floats free with no matching row.  The SP
+        gtap_solver fixes xft at its benchmark init and pft at 1.0 for these.
+        Reproduce that: fix xft at its current (benchmark) init value, pft=1.0.
+
+    gtap-mode ONLY — in altertax-mode eq_pfteq is intentionally kept active for
+    the CET price index.
+
+    Returns count of (r,f) pairs squared (real collapses + NatRes fixes).
     """
     _eq_pfteq = getattr(m, "eq_pfteq", None)
+    _eq_xfteq = getattr(m, "eq_xfteq", None)
     _pft = getattr(m, "pft", None)
-    if _eq_pfteq is None or _pft is None:
+    _xft = getattr(m, "xft", None)
+    if _pft is None:
         return 0
     _n = 0
     for _r in m.r:
         for _f in m.f:
             try:
                 _pftvd = _pft[(_r, _f, period)]
-                _eqvd = _eq_pfteq[(_r, _f, period)]
             except KeyError:
                 continue
-            if _pftvd.fixed or not _eqvd.active:
-                continue
-            _eqvd.deactivate()
-            _val = float(_pftvd.value) if _pftvd.value not in (None, 0) else 1.0
-            if _val <= 0:
-                _val = 1.0
-            _pftvd.fix(_val)
-            _n += 1
+
+            # Determine whether this (r,f) is a REAL factor (eq_xfteq live) or a
+            # DANGLING NatRes (eq_xfteq Constraint.Skip → KeyError / inactive).
+            _eqxft = None
+            if _eq_xfteq is not None:
+                try:
+                    _eqxft = _eq_xfteq[(_r, _f, period)]
+                except KeyError:
+                    _eqxft = None
+            _is_real = _eqxft is not None and _eqxft.active
+
+            if _is_real:
+                # REAL factor: deactivate eq_pfteq (free-row), pin pft=1.0.
+                if _eq_pfteq is not None:
+                    try:
+                        _eqpft = _eq_pfteq[(_r, _f, period)]
+                        if _eqpft.active:
+                            _eqpft.deactivate()
+                    except KeyError:
+                        pass
+                if not _pftvd.fixed:
+                    _pftvd.fix(1.0)
+                    _n += 1
+            else:
+                # DANGLING NatRes: no eq_xfteq/eq_pfteq row → xft is a free DOF
+                # with no equation.  Fix xft at its benchmark init, pft=1.0
+                # (reproduces gtap_solver.apply_conditional_fixing xftflag<=0).
+                if _xft is not None:
+                    try:
+                        _xftvd = _xft[(_r, _f, period)]
+                        if not _xftvd.fixed:
+                            _xval = (float(_xftvd.value)
+                                     if _xftvd.value not in (None,) else 0.0)
+                            _xftvd.fix(_xval)
+                            _n += 1
+                    except KeyError:
+                        pass
+                if not _pftvd.fixed:
+                    _pftvd.fix(1.0)
+                    _n += 1
     return _n
 
 
