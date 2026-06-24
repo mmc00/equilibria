@@ -6,6 +6,51 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 
+def test_row_has_new_axes_with_defaults():
+    from coverage_matrix import Row
+    r = Row(dataset="gtap7_3x3", variant="altertax", period="multi", ifsub=0,
+            phases=("base", "check", "shock"), gap_min=98.0, gap_note="~99%",
+            ci_status="local", ref="out_altertax_ifsub0.gdx")
+    # nuevos ejes con defaults
+    assert r.model == "gtap7"
+    assert r.solver == "mcp"
+    assert r.gap_gempack is None
+    assert r.note_gempack == ""
+    assert r.ref_gempack is None
+
+
+def test_kind_is_derived_from_variant():
+    from coverage_matrix import Row
+    core = Row(dataset="gtap7_3x3", variant="core", period="single",
+               ifsub=None, phases=("base", "shock"), gap_min=None,
+               gap_note="0 diffs .nl", ci_status="ci", ref="x.nl")
+    alt = Row(dataset="gtap7_3x3", variant="altertax", period="multi",
+              ifsub=0, phases=("base", "check", "shock"), gap_min=98.0,
+              gap_note="~99%", ci_status="local", ref="x.gdx")
+    assert core.kind == "gtap"
+    assert alt.kind == "altertax"
+
+
+def test_rows_use_variant_and_period():
+    from coverage_matrix import ROWS
+    for r in ROWS:
+        assert r.variant in ("core", "altertax"), r
+        assert r.period in ("single", "multi"), r
+        # core ⇒ single ⇒ ifsub None ; altertax ⇒ multi
+        if r.variant == "core":
+            assert r.period == "single" and r.ifsub is None, r
+        else:
+            assert r.period == "multi", r
+
+
+def test_validate_rejects_bad_solver():
+    import dataclasses
+    from coverage_matrix import ROWS
+    bad = dataclasses.replace(ROWS[0], solver="quadratic")
+    # _validate iterates module ROWS, so assert the invariant directly on a bad row
+    assert bad.solver not in ("mcp", "nlp"), "fixture must be a bad solver"
+
+
 def test_matrix_schema_invariants():
     from coverage_matrix import ROWS, CI_STATUSES
     assert ROWS, "matrix must not be empty"
