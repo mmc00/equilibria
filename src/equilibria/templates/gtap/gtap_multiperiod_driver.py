@@ -200,6 +200,44 @@ def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _collapse_pft_pfteq — period-aware pft/eq_pfteq collapse (gtap-mode only)
+# ---------------------------------------------------------------------------
+def _collapse_pft_pfteq(m, period: str) -> int:
+    """Collapse pft / eq_pfteq for the active period (gtap-mode squaring).
+
+    Mirror of scripts/gtap/run_gtap.py:2138-2168, which no-ops on the MP model
+    because it uses 2-index (r,f) keys while the MP index is (r,f,period).  For
+    each (r,f) in the active period, deactivate eq_pfteq and fix pft at its
+    current value (>0).  This squares the factor-price block exactly as the
+    single-period sluggish base does.  gtap-mode ONLY — in altertax-mode
+    eq_pfteq is intentionally kept active for the CET price index.
+
+    Returns count of (r,f) pairs collapsed.
+    """
+    _eq_pfteq = getattr(m, "eq_pfteq", None)
+    _pft = getattr(m, "pft", None)
+    if _eq_pfteq is None or _pft is None:
+        return 0
+    _n = 0
+    for _r in m.r:
+        for _f in m.f:
+            try:
+                _pftvd = _pft[(_r, _f, period)]
+                _eqvd = _eq_pfteq[(_r, _f, period)]
+            except KeyError:
+                continue
+            if _pftvd.fixed or not _eqvd.active:
+                continue
+            _eqvd.deactivate()
+            _val = float(_pftvd.value) if _pftvd.value not in (None, 0) else 1.0
+            if _val <= 0:
+                _val = 1.0
+            _pftvd.fix(_val)
+            _n += 1
+    return _n
+
+
+# ---------------------------------------------------------------------------
 # _replicate_sp_bounds — copy lower/upper bounds from single-period to mp
 # ---------------------------------------------------------------------------
 def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
@@ -1075,9 +1113,15 @@ def solve_multiperiod(
     # but in the multi-period model the index is (r,f,period) — so KeyError silently
     # skips the deactivation, leaving BOTH eq_xft AND eq_xfteq active for the same
     # xft var → over-determined system (code=2, residual~3e-4).
+    # gtap-mode: do NOT blanket-deactivate eq_xft.  This block kills all 15
+    # eq_xft[r,f,'check'] whenever eq_xfteq is active, but the sluggish base
+    # keeps 6 via Hopcroft-Karp.  The wrapper's apply_squareness_patches trims
+    # eq_xft for gtap-mode exactly as for the SP sluggish base, so we skip the
+    # blanket deactivation here and let the wrapper do it.  Altertax keeps the
+    # blanket deactivation (byte-identical to before).
     _eq_xft_mp = getattr(m, "eq_xft", None)
     _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
-    if _eq_xft_mp is not None and _eq_xfteq_mp is not None:
+    if not _gtap_mode and _eq_xft_mp is not None and _eq_xfteq_mp is not None:
         _n_xft_deact_chk = 0
         for _r in m.r:
             for _f in m.f:
@@ -1100,6 +1144,18 @@ def solve_multiperiod(
                 "check period: deactivated eq_xft for %d (r,f) pairs "
                 "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
                 _n_xft_deact_chk,
+            )
+
+    # gtap-mode: collapse pft/eq_pfteq for the active period (squares the
+    # factor-price block; the SP-base squaring no-ops on the MP (r,f,t) index).
+    if _gtap_mode:
+        _n_pft_chk = _collapse_pft_pfteq(m, "check")
+        if _n_pft_chk:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "check period: collapsed pft/eq_pfteq for %d (r,f) pairs "
+                "(gtap-mode factor-price squaring)",
+                _n_pft_chk,
             )
 
     # Replicate single-period structural fixing for check period.
@@ -1220,9 +1276,11 @@ def solve_multiperiod(
     # FIX B (B3): deactivate eq_xft[r,f,'shock'] where eq_xfteq[r,f,'shock'] is active.
     # Same logic as B1/B2 for base/check: the single-period altertax gate silently
     # KeyErrors on multi-period (r,f,period) indices, leaving the system over-determined.
+    # gtap-mode: do NOT blanket-deactivate eq_xft (see check branch rationale).
+    # Altertax keeps the blanket deactivation (byte-identical to before).
     _eq_xft_mp = getattr(m, "eq_xft", None)
     _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
-    if _eq_xft_mp is not None and _eq_xfteq_mp is not None:
+    if not _gtap_mode and _eq_xft_mp is not None and _eq_xfteq_mp is not None:
         _n_xft_deact_shk = 0
         for _r in m.r:
             for _f in m.f:
@@ -1245,6 +1303,18 @@ def solve_multiperiod(
                 "shock period: deactivated eq_xft for %d (r,f) pairs "
                 "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
                 _n_xft_deact_shk,
+            )
+
+    # gtap-mode: collapse pft/eq_pfteq for the active period (factor-price
+    # squaring; SP-base squaring no-ops on the MP (r,f,t) index).
+    if _gtap_mode:
+        _n_pft_shk = _collapse_pft_pfteq(m, "shock")
+        if _n_pft_shk:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: collapsed pft/eq_pfteq for %d (r,f) pairs "
+                "(gtap-mode factor-price squaring)",
+                _n_pft_shk,
             )
 
     # Replicate single-period structural fixing for shock period.
