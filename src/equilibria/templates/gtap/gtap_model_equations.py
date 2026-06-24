@@ -1949,6 +1949,12 @@ class GTAPModelEquations:
                     aft_data[(region, factor)] = benchmark_xft
                     if factor in self.sets.mf:
                         etaf_data[(region, factor)] = 0.0
+                    elif str(getattr(self.closure, "name", "")) != "altertax":
+                        # gtap-mode: GAMS uses etaf=0 for ALL fm incl sluggish
+                        # Land (getData.gms:367-380); etrae belongs only in omegaf
+                        # (the CET nest), NOT in the eq_xfteq supply elasticity.
+                        # Altertax keeps the -etrae form (byte-identical).
+                        etaf_data[(region, factor)] = 0.0
                     else:
                         etaf_data[(region, factor)] = _lookup_etrae(region, factor)
 

@@ -466,3 +466,136 @@ refreshed the stale floor comment (was 60.74%/check~73.8%, now 67.94%/check 80.0
 - ytax[USA,mt] is 0.157 vs GAMS 0.260 (recompute ON, the closer variant). The
   `eq_ytax[*,mt]` base-baked coefficient is the residual cause; out of scope for
   Task 2 (the brief's measure-both-ways picked the closer variant).
+
+---
+---
+
+# Task 2 Fix #4 — FREE pft for real factors (invert the pin) — 2026-06-24
+
+**Status: DONE** (gate GREEN; CHECK 80.09 -> 100.00%, SHOCK 67.94 -> 67.12%, all 3
+periods code=1; xp-holdfix MEASURED OFF; altertax byte-for-byte unchanged.)
+
+Base commit: `e65d43c`. Worktree: `gtap7-multiperiod-matrix`.
+
+## The branch inversion (the core fix)
+
+`_collapse_pft_pfteq` (gtap_multiperiod_driver.py) REAL-factor branch inverted to
+GAMS gtap semantics (iterloop.gms:142-143 — pft/xft fixed ONLY for xftFlag=0; real
+factors stay FREE, `model gtap` block model.gms:1413 lists `pfteq` as a FREE ROW):
+
+- **OLD (altertax semantics, the bug):** for real factors, deactivate eq_pfteq and
+  PIN pft=1.0. This froze pf/pfy/pfa and capped CHECK at 80.09%.
+- **NEW (gtap semantics):** for real factors, leave pft FREE, KEEP eq_pfteq +
+  eq_xfteq ACTIVE; instead deactivate the redundant per-(r,f) `eq_xft[r,f,period]`
+  (the market-clearing row GAMS substitutes out; eq_xfteq.xft + eq_pfeq.pf carry
+  the block).
+- **NatRes (xftFlag<=0):** UNCHANGED — fix xft=benchmark init, pft=1.0.
+
+## Exact rows deactivated to square the system to code=1
+
+Freeing pft over-determines the factor block. The solver's own
+`[nonlinear-full] unmatched active eqs (4): [...]` log named EXACTLY the 4
+redundant rows the brief predicted (with only eq_xft deactivated, at the 93.06%
+freed point, code=0):
+
+```
+eq_pfyeq[EU_28,Land,Food], eq_pfyeq[USA,Land,Food], eq_pfyeq[ROW,Land,Food],
+eq_xfeq[USA,NatRes,Mnfcs]
+```
+
+These are deactivated via `_REDUNDANT_FACTOR_ROWS` (3 eq_pfyeq[Land,Food] pinned by
+the CET pfeq + 1 eq_xfeq NatRes). With them deactivated AND xp-holdfix OFF, the MCP
+gap is +3 (under by 3), which the solver's own structural matching cleanly squares
+(`MCP structural matching fixed 3 unmatched vars; gap now 0` → 1076/1076), code=1.
+Dropping only the 3 pfyeq (NOT eq_xfeq) gives SHOCK 65.99% (worse); the full 4-row
+set gives 66.89% pre-etaf — so the eq_xfeq deactivation is kept.
+
+## xp-holdfix ON/OFF measurement (decisive)
+
+The `_holdfix_activity_scale` (xp) patch was added to compensate for the OLD
+pinned-pft bug. With pft freed correctly it forces the WRONG factor-block root.
+Measured (4 redundant rows deactivated, pre-etaf), both code=1:
+
+| xp-holdfix | CHECK | SHOCK |
+|-----------|------:|------:|
+| ON (old)  | 64.03% | 61.26% |
+| OFF (new) | **99.40%** | **66.89%** |
+
+OFF wins on BOTH periods decisively → disabled for gtap-mode via the new module
+flag `_HOLDFIX_ACTIVITY_SCALE_GTAP = False`. The function is KEPT (not deleted);
+flip the flag to True to restore. This is the brief's "measure both ways, keep the
+better, do not silently remove" requirement, justified with numbers.
+
+## etaf=0-for-sluggish secondary fix (FOLDED IN — cheap + GAMS-faithful)
+
+`gtap_model_equations.py:1953`: sluggish (sf) factors now get `etaf=0` (GAMS
+getData.gms:367-380 uses etaf=0 for ALL fm incl Land; etrae belongs only in
+omegaf/CET), gated on `closure.name != "altertax"`. Effect on gtap-mode:
+
+| | CHECK | SHOCK |
+|---|------:|------:|
+| pft-free, xp-OFF, etaf=-etrae | 99.40% | 66.89% |
+| + etaf=0 for sf (kept)        | **100.00%** | **67.12%** |
+
+CHECK reaches EXACT 100% — strong evidence it is the correct GAMS elasticity.
+DECISIVE safety check: the nl-parity gate builds with `name="gtap_standard"`
+(default, != "altertax"), so this etaf change APPLIES in that build, and nl-parity
+STILL passes (5/5) — i.e. the etaf=0 coefficients match the committed GAMS .nl
+fixtures byte-for-byte. The altertax check/shock periods use `name="altertax"`
+(unaffected); the altertax base uses `name="base"` (etaf=0 now applies, GAMS-correct
+per nl-parity) and the altertax regression stays GREEN (2 passed).
+
+## Final measured results (deterministic)
+
+Period codes (ifSUB=0): `{'base': 1, 'check': 1, 'shock': 1}` — all converge.
+
+| Period | match% vs GAMS LOCAL (ifSUB=0) | cells | vs prior |
+|--------|--------------------------------|-------|----------|
+| check  | **100.00%** | 1326 | +19.91pp from 80.09% |
+| shock  | **67.12%**  | 1332 | -0.82pp from 67.94% |
+
+CHECK is now EXACT. SHOCK moved slightly down (the shock now inherits an EXACT
+check, but the remaining shock gap is the broad capital-block + tax-stream
+divergence — worst cells pf[USA,NatRes,Mnfcs] (the deactivated eq_xfeq NatRes cell),
+xw/xet/xigbl/savf/ror*/ytax[mt] — visible already in prior reports and unchanged by
+this factor-block fix). This is the next cascade tool's job, NOT inflated.
+
+## Test floor
+`SHOCK_MATCH_FLOOR_IFSUB0` 67.0 (unchanged numerically; just below the as-measured
+67.12%) + comment refreshed to record CHECK 100.00 / SHOCK 67.12 + the pft-free +
+etaf + xp-OFF rationale.
+
+## Regression verification (commands + output)
+1. gtap-mp gate:
+   `uv run pytest tests/templates/gtap/test_gtap_multiperiod_parity.py` -> `1 passed`
+2. nl-parity (byte-for-byte coefficient gate, obligatory per CLAUDE.md):
+   `uv run pytest tests/templates/gtap/test_gtap7_nl_parity.py` -> `5 passed`
+3. Altertax NOT regressed (top-priority constraint):
+   `uv run pytest tests/templates/gtap/test_altertax_multiperiod_parity.py -k gtap7_3x3`
+   -> `2 passed, 9 deselected`
+4. `uv run pytest tests/templates/gtap/test_multiperiod_driver.py`
+   -> `3 passed, 2 warnings` (the eq_u[ROW,base] complex-eval warning is
+   PRE-EXISTING — same `3 passed, 2 warnings` at clean HEAD e65d43c — ug[ROW,base]
+   goes slightly negative -> negative**fractional = complex. NOT this fix's
+   regression.)
+5. Related factor/etaf-path tests:
+   `test_gtap_sluggish_factor_pft + test_multiperiod_equations + test_gtap_structure
+   + test_altertax + test_coverage_matrix` -> `23 passed`;
+   `test_gtap_baseline_mirror + test_gtap_parity_pipeline` -> `26 passed, 6 skipped`.
+
+## Files changed
+- `src/equilibria/templates/gtap/gtap_multiperiod_driver.py`
+  (`_collapse_pft_pfteq` inverted real-factor branch + `_REDUNDANT_FACTOR_ROWS`
+  module tuple; `_HOLDFIX_ACTIVITY_SCALE_GTAP=False` flag gating both xp call
+  sites). Altertax (`not _gtap_mode`) path byte-for-byte unchanged.
+- `src/equilibria/templates/gtap/gtap_model_equations.py` (etaf=0 for sf,
+  gated `name != "altertax"`; matches GAMS .nl fixtures per nl-parity).
+- `tests/templates/gtap/test_gtap_multiperiod_parity.py` (floor comment refresh).
+
+## Concerns
+- Faithful, gtap-mode-gated, surgical, CHECK now EXACT. SHOCK remains the broad
+  capital/investment/savings loop + tax/GDP streams gap (visible at the EXACT
+  check), the next cascade tool's job — NOT inflated here.
+- Worst shock cell pf[USA,NatRes,Mnfcs]=9.27 vs GAMS 1.098 is the single dangling
+  NatRes cell whose eq_xfeq we deactivate to square (1 of 1332 cells); it does not
+  materially move the shock match%.
