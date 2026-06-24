@@ -896,6 +896,7 @@ def solve_multiperiod(
     mute_welfare: bool = True,
     seed_from_prior: bool = False,
     holdfix_cd: bool = True,
+    mode: str = "altertax",
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -932,13 +933,19 @@ def solve_multiperiod(
 
     run_gtap = _load_run_gtap()
 
+    if mode not in ("altertax", "gtap"):
+        raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
+    _gtap_mode = (mode == "gtap")
+
     # Determine residual region from the multi-period model's attribute or params.
     res_region = getattr(m, "_residual_region", None)
     if res_region is None:
         res_region = list(params.sets.r)[-1]
 
     # Apply altertax elasticities (mirrors diff_altertax [1/3] betaCal setup).
-    p_alt = apply_altertax_elasticities(params, in_place=False)
+    # gtap mode does NOT recalibrate: use params verbatim. altertax applies
+    # the betaCal elasticity overrides (diff_altertax [1/3]).
+    p_alt = params if _gtap_mode else apply_altertax_elasticities(params, in_place=False)
 
     # Build closures.
     _if_sub = getattr(closure, "if_sub", False) if closure is not None else False
@@ -1096,8 +1103,9 @@ def solve_multiperiod(
             )
 
     # Replicate single-period structural fixing for check period.
+    _chk_closure = base_closure if _gtap_mode else alt_closure
     _sp_ref_chk = GTAPModelEquations(
-        p_alt.sets, p_alt, alt_closure, residual_region=res_region,
+        p_alt.sets, p_alt, _chk_closure, residual_region=res_region,
     ).build_model()
     _replicate_sp_fixing(m, _sp_ref_chk, "check")
     _replicate_sp_bounds(m, _sp_ref_chk, "check")
@@ -1117,7 +1125,7 @@ def solve_multiperiod(
     # the GAMS-seeded primals so the GAMS point is a true fixed point — else
     # eq_xc/eq_xg/eq_xd carry residual that pulls PATH off the basin.  Part of the
     # 3-piece faithful check recipe (project_gtap7_10x7_check_holdfix).
-    if holdfix_cd:
+    if holdfix_cd and not _gtap_mode:
         _n_der = _complete_derived_seed(m, "check")
         if _n_der:
             import logging as _logging
@@ -1127,7 +1135,7 @@ def solve_multiperiod(
     # Holdfix the CD-degenerate VA/ND nest (pva/pnd) at the GAMS-seeded values,
     # replicating GAMS gtap.holdfixed=1 in the check period.  Without this PATH
     # slides pva/pnd (free DOFs under CD) and collapses a region's price level.
-    if holdfix_cd:
+    if holdfix_cd and not _gtap_mode:
         _n_hf = _holdfix_cd_nest(m, "check")
         if _n_hf:
             import logging as _logging
@@ -1139,7 +1147,7 @@ def solve_multiperiod(
         m, p_alt,
         enforce_post_checks=False,
         strict_path_capi=False,
-        closure_config=alt_closure,
+        closure_config=_chk_closure,
         equation_scaling=True,
         solution_hint=None,
     )
@@ -1170,7 +1178,7 @@ def solve_multiperiod(
     # since holdfix_cd will PIN pva/pnd, they must be re-seeded from the SHOCK GAMS
     # values (1.0078 for ROW/Mnfcs, not the check's 0.7592) or the pin is wrong.
     _pva_pnd_shock_seed = {}
-    if holdfix_cd:
+    if holdfix_cd and not _gtap_mode:
         for _vn in ("pva", "pnd"):
             _v = getattr(m, _vn, None)
             if _v is None:
@@ -1184,7 +1192,7 @@ def solve_multiperiod(
     _seed_period_from_prior(m, "check", "shock")
 
     # Restore the SHOCK GAMS pva/pnd seed that the prior-seed just clobbered.
-    if holdfix_cd:
+    if holdfix_cd and not _gtap_mode:
         for (_vn, _idx), _val in _pva_pnd_shock_seed.items():
             try:
                 getattr(m, _vn)[_idx].set_value(_val)
@@ -1240,8 +1248,9 @@ def solve_multiperiod(
             )
 
     # Replicate single-period structural fixing for shock period.
+    _shk_closure = base_closure if _gtap_mode else alt_closure
     _sp_ref_shk = GTAPModelEquations(
-        params_shock.sets, params_shock, alt_closure, residual_region=res_region,
+        params_shock.sets, params_shock, _shk_closure, residual_region=res_region,
     ).build_model()
     _replicate_sp_fixing(m, _sp_ref_shk, "shock")
     _replicate_sp_bounds(m, _sp_ref_shk, "shock")
@@ -1256,7 +1265,7 @@ def solve_multiperiod(
                 "shock period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
 
     # Seed derived demand-volume vars for shock (same as check).
-    if holdfix_cd:
+    if holdfix_cd and not _gtap_mode:
         _n_der = _complete_derived_seed(m, "shock")
         if _n_der:
             import logging as _logging
@@ -1264,7 +1273,7 @@ def solve_multiperiod(
                 "shock period: seeded %d derived demand-volume cells", _n_der)
 
     # Holdfix the CD-degenerate VA/ND nest for shock (same as check).
-    if holdfix_cd:
+    if holdfix_cd and not _gtap_mode:
         _n_hf = _holdfix_cd_nest(m, "shock")
         if _n_hf:
             import logging as _logging
@@ -1276,7 +1285,7 @@ def solve_multiperiod(
         m, params_shock,
         enforce_post_checks=False,
         strict_path_capi=False,
-        closure_config=alt_closure,
+        closure_config=_shk_closure,
         equation_scaling=True,
         solution_hint=None,
     )
@@ -1290,7 +1299,9 @@ def solve_multiperiod(
     # Shared by ifSUB=0 AND ifSUB=1 (not an ifSUB issue), so NOT gated on _if_sub.
     # Uses base imptx (p_alt) * (1+shock_factor); params_shock carries the POWER, wrong.
     # Reads pmcif/xw (unaffected by the pm recompute below), so order vs pm is free.
-    _n_mt = _recompute_ytax_mt(m, p_alt, "shock", shock_factor=0.10)
+    # gtap mode: pass params (not p_alt) since they are the same object; kept explicit.
+    _recompute_params = params if _gtap_mode else p_alt
+    _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10)
     if _n_mt:
         import logging as _logging
         _logging.getLogger(__name__).info(
@@ -1314,7 +1325,7 @@ def solve_multiperiod(
     # to base), so pm is low by the shock factor on high-tariff agro routes; pmt/pa
     # inherit. Shared by ifSUB=0 AND ifSUB=1 → NOT gated on _if_sub. Runs LAST so it
     # overrides any pm the ifSUB report recompute set and derives pmt/pa consistently.
-    _n_pm = _recompute_pm_pmt(m, p_alt, "shock", shock_factor=0.10, if_sub=_if_sub)
+    _n_pm = _recompute_pm_pmt(m, _recompute_params, "shock", shock_factor=0.10, if_sub=_if_sub)
     if _n_pm:
         import logging as _logging
         _logging.getLogger(__name__).info(
