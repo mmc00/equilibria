@@ -134,7 +134,7 @@ fase (regla de `CLAUDE.md`).
 
 | Fase | Nombre | Qué llena / entrega | Gate |
 |------|--------|---------------------|------|
-| **F0** | Esquema de la matriz *(habilitador)* | Extender `Row` (model/variant/period/solver/gempack), migración no destructiva, validación, doc con vistas + % global, tabla de modularización | `test_coverage_doc_in_sync` + canario 5/5 |
+| **F0** ✅ | Esquema de la matriz *(habilitador)* | Extender `Row` (model/variant/period/solver/gempack), migración no destructiva, validación, doc con vistas + % global, tabla de modularización | ✅ `test_coverage_doc_in_sync` + canario 5/5 |
 | **F1** | Multi-período GTAP7 (MCP) | Ejecutar el plan `2026-06-20-gtap-multiperiodo-plan.md` (eje `t` nativo, Fisher como filas, driver loop(tsim)). Llena `gtap7 × {core,altertax} × multi × mcp × ifSUB × 6 ds` | **Gate de decisión 3x3: code=1** + canario |
 | **F2** | Cierre de gaps a 99% (MCP) | Subir cada celda `partial` a ≥99% vs GAMS vía la cascada de 8–10 tools (EU_28 basin, Armington 15x10, etc.). 20x41 sigue `blocked` hasta ref sana | celdas ≥99% + canario |
 | **F3** | Modularización a bloques | Refactor de `gtap_model_equations.py` a `blocks/` (production CES anidada, Armington, CDE, instituciones/impuestos, cierre/Fisher). Llena la tabla de modularización | **0-diff `.nl` vs monolítico por extracción** + canario |
