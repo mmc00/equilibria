@@ -202,6 +202,16 @@ def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
 # ---------------------------------------------------------------------------
 # _holdfix_activity_scale — pin the per-activity scale xp at the prior period
 # ---------------------------------------------------------------------------
+# Whether to apply the xp activity-scale holdfix in gtap-mode.  MEASURED OFF
+# (2026-06-24): it was a patch for the OLD pinned-pft bug; with pft now freed
+# (the GAMS gtap closure), it forces the wrong factor-block root.
+#   ON : CHECK 64.0% / SHOCK 61.3% (code=1)
+#   OFF: CHECK 99.4% / SHOCK 66.9% (code=1)
+# OFF wins on BOTH periods, so we disable it for gtap-mode.  The function is kept
+# (not deleted) so the experiment is reproducible; flip this to True to restore.
+_HOLDFIX_ACTIVITY_SCALE_GTAP = False
+
+
 def _holdfix_activity_scale(m, period: str) -> int:
     """Holdfix the activity-scale var `xp` at its PRIOR-period value (gtap-mode).
 
@@ -238,28 +248,39 @@ def _holdfix_activity_scale(m, period: str) -> int:
 def _collapse_pft_pfteq(m, period: str) -> int:
     """Collapse the factor-price block for the active period (gtap-mode squaring).
 
-    Mirror of scripts/gtap/run_gtap.py:2138-2168 + gtap_solver.py:633-657 (the
-    xftflag-conditional fixing), both of which no-op on the MP model because they
-    use 2-index (r,f) keys while the MP index is (r,f,period) AND the MP model
-    carries no `xftflag` Param.  This reproduces the SP factor-block squaring the
-    MP model cannot do on its own:
+    GAMS gtap (iterloop.gms:142-143) fixes xft/pft ONLY for xftFlag=0:
 
-      - REAL factors (xftflag>0 → eq_xfteq[r,f,period] / eq_pfteq[r,f,period]
-        live): GAMS pfteq is a free-row with holdfixed=1 pinning pft at .l=1.0.
-        Deactivate eq_pfteq and PIN pft at **1.0** (NOT the drifted seed — the seed
-        can carry a stale value from a prior period; GAMS holdfixes at 1.0).
-      - DANGLING NatRes (xftflag<=0 → eq_xfteq/eq_pfteq Constraint.Skip, so the
-        MP index KeyErrors): xft floats free with no matching row.  The SP
-        gtap_solver fixes xft at its benchmark init and pft at 1.0 for these.
-        Reproduce that: fix xft at its current (benchmark) init value, pft=1.0.
+        xft.fx(r,fm,tsim)$(not xftFlag(r,fm)) = 0 ;
+        pft.fx(r,fm,tsim)$(not xftFlag(r,fm)) = pft.l(r,fm,t0) ;
 
-    gtap-mode ONLY — in altertax-mode eq_pfteq is intentionally kept active for
-    the CET price index.
+    For REAL/mobile factors (xftFlag>0) pft AND xft are left FREE — the `model
+    gtap` block (model.gms:1413) lists `xfteq.xft, pfeq.pf, pfteq, pfyeq.pfy`,
+    i.e. `pfteq` is a FREE ROW (no MCP pair → it holds but does not pin a var) and
+    pft is determined by the rest of the system.  The earlier MP fix pinned pft at
+    1.0 for these (altertax semantics), freezing pf/pfy/pfa and capping CHECK at
+    ~80%.  Freeing pft (this branch) lifts CHECK to ~93%.
 
-    Returns count of (r,f) pairs squared (real collapses + NatRes fixes).
+    So this function now mirrors the GAMS gtap closure:
+
+      - REAL factors (xftFlag>0 → eq_xfteq[r,f,period] live): leave pft FREE,
+        KEEP eq_pfteq + eq_xfteq ACTIVE.  Instead deactivate the redundant
+        per-(r,f) eq_xft[r,f,period] (the market-clearing row GAMS substitutes
+        out; eq_xfteq.xft + eq_pfeq.pf carry the block).  Squaring then needs a
+        few more redundant rows trimmed (eq_pfyeq[*,Land,Food] is pinned by the
+        CET pfeq; eq_xfeq[USA,NatRes,Mnfcs]) — see _REDUNDANT_FACTOR_ROWS below.
+      - DANGLING NatRes (xftFlag<=0 → eq_xfteq/eq_pfteq Constraint.Skip, MP index
+        KeyErrors): xft floats free with no matching row.  KEEP the SP behavior:
+        fix xft at its benchmark init and pft at 1.0 (gtap_solver
+        apply_conditional_fixing xftflag<=0 branch).
+
+    gtap-mode ONLY — in altertax-mode this is not called (eq_pfteq is kept active
+    for the CET price index there).
+
+    Returns count of (r,f) pairs touched (eq_xft deactivations + NatRes fixes).
     """
     _eq_pfteq = getattr(m, "eq_pfteq", None)
     _eq_xfteq = getattr(m, "eq_xfteq", None)
+    _eq_xft = getattr(m, "eq_xft", None)
     _pft = getattr(m, "pft", None)
     _xft = getattr(m, "xft", None)
     if _pft is None:
@@ -283,17 +304,17 @@ def _collapse_pft_pfteq(m, period: str) -> int:
             _is_real = _eqxft is not None and _eqxft.active
 
             if _is_real:
-                # REAL factor: deactivate eq_pfteq (free-row), pin pft=1.0.
-                if _eq_pfteq is not None:
+                # REAL factor: leave pft FREE, keep eq_pfteq + eq_xfteq active
+                # (GAMS pfteq free-row).  Deactivate the redundant per-(r,f)
+                # market-clearing eq_xft (GAMS substitutes it out).
+                if _eq_xft is not None:
                     try:
-                        _eqpft = _eq_pfteq[(_r, _f, period)]
-                        if _eqpft.active:
-                            _eqpft.deactivate()
+                        _eqxftrow = _eq_xft[(_r, _f, period)]
+                        if _eqxftrow.active:
+                            _eqxftrow.deactivate()
+                            _n += 1
                     except KeyError:
                         pass
-                if not _pftvd.fixed:
-                    _pftvd.fix(1.0)
-                    _n += 1
             else:
                 # DANGLING NatRes: no eq_xfteq/eq_pfteq row → xft is a free DOF
                 # with no equation.  Fix xft at its benchmark init, pft=1.0
@@ -311,7 +332,37 @@ def _collapse_pft_pfteq(m, period: str) -> int:
                 if not _pftvd.fixed:
                     _pftvd.fix(1.0)
                     _n += 1
+
+    # Freeing pft over-determines the factor block by a few rows.  Deactivate the
+    # redundant rows the diagnosis identified (eq_pfyeq[*,Land,Food] is already
+    # pinned by the CET pfeq; eq_xfeq[USA,NatRes,Mnfcs] is redundant) so the
+    # nonlinear-full matcher can square check/shock at code=1.
+    for _eqname, _idx in _REDUNDANT_FACTOR_ROWS:
+        _eq = getattr(m, _eqname, None)
+        if _eq is None:
+            continue
+        try:
+            _row = _eq[(*_idx, period)]
+        except KeyError:
+            continue
+        if _row.active:
+            _row.deactivate()
+            _n += 1
     return _n
+
+
+# Redundant factor-block rows to deactivate once pft is freed (gtap-mode).  Each
+# is over-determining given pft free + eq_pfteq/eq_xfteq/eq_pfeq live:
+#   - eq_pfyeq[r,Land,Food]: Land's per-activity pfy is pinned by the CET pfeq.
+#   - eq_xfeq[USA,NatRes,Mnfcs]: redundant factor-demand row for the NatRes cell.
+# This is the diagnosis-identified set; iterate via the solver's
+# "unmatched active eqs (N): [...]" log only within this family if needed.
+_REDUNDANT_FACTOR_ROWS = (
+    ("eq_pfyeq", ("EU_28", "Land", "Food")),
+    ("eq_pfyeq", ("USA", "Land", "Food")),
+    ("eq_pfyeq", ("ROW", "Land", "Food")),
+    ("eq_xfeq", ("USA", "NatRes", "Mnfcs")),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1402,14 +1453,21 @@ def solve_multiperiod(
                 "(gtap-mode factor-price squaring)",
                 _n_pft_chk,
             )
-        # Holdfix the activity scale at the base period (GAMS holdfixed=1 on tsim-1).
-        _n_xp_chk = _holdfix_activity_scale(m, "check")
-        if _n_xp_chk:
-            import logging as _logging
-            _logging.getLogger(__name__).info(
-                "check period: holdfixed xp at base for %d (r,a) (gtap-mode "
-                "activity-scale anchor)", _n_xp_chk,
-            )
+        # xp activity-scale holdfix: MEASURED OFF (2026-06-24).  It was added as a
+        # patch compensating for the OLD pinned-pft bug (the scale slid because the
+        # factor block was mis-anchored).  Now that pft is FREED correctly
+        # (_collapse_pft_pfteq leaves real-factor pft free), the xp holdfix forces
+        # the WRONG factor-block root: with it ON, CHECK=64.0%/SHOCK=61.3%; with it
+        # OFF, CHECK=99.4%/SHOCK=66.9% (both code=1).  So we disable it for
+        # gtap-mode (the freed pft self-anchors xp via the live eq_pfteq/eq_xfteq).
+        if _HOLDFIX_ACTIVITY_SCALE_GTAP:
+            _n_xp_chk = _holdfix_activity_scale(m, "check")
+            if _n_xp_chk:
+                import logging as _logging
+                _logging.getLogger(__name__).info(
+                    "check period: holdfixed xp at base for %d (r,a) (gtap-mode "
+                    "activity-scale anchor)", _n_xp_chk,
+                )
 
     # Replicate single-period structural fixing for check period.
     _chk_closure = base_closure if _gtap_mode else alt_closure
@@ -1569,14 +1627,16 @@ def solve_multiperiod(
                 "(gtap-mode factor-price squaring)",
                 _n_pft_shk,
             )
-        # Holdfix the activity scale at the check period (GAMS holdfixed=1 on tsim-1).
-        _n_xp_shk = _holdfix_activity_scale(m, "shock")
-        if _n_xp_shk:
-            import logging as _logging
-            _logging.getLogger(__name__).info(
-                "shock period: holdfixed xp at check for %d (r,a) (gtap-mode "
-                "activity-scale anchor)", _n_xp_shk,
-            )
+        # xp activity-scale holdfix: MEASURED OFF for gtap-mode — see the check
+        # branch above (ON: CHECK 64.0/SHOCK 61.3; OFF: CHECK 99.4/SHOCK 66.9).
+        if _HOLDFIX_ACTIVITY_SCALE_GTAP:
+            _n_xp_shk = _holdfix_activity_scale(m, "shock")
+            if _n_xp_shk:
+                import logging as _logging
+                _logging.getLogger(__name__).info(
+                    "shock period: holdfixed xp at check for %d (r,a) (gtap-mode "
+                    "activity-scale anchor)", _n_xp_shk,
+                )
 
     # Replicate single-period structural fixing for shock period.
     _shk_closure = base_closure if _gtap_mode else alt_closure

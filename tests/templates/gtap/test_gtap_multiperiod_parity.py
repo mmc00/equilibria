@@ -59,18 +59,21 @@ ALIAS = {
 }
 
 # Measured shock-period match% floor vs the GAMS LOCAL reference (ifSUB=0).
-# AS MEASURED 2026-06-24 (deterministic, 905/1332 cells): 67.94%, up from 64.64%
-# after the eq_pmeq shock-in-equations fix (Task 2: rebuild ONLY eq_pmeq[*,*,*,
-# 'shock'] with the tm_pct tariff power so the +10% wedge enters the SOLVED import
-# prices instead of a post-solve cosmetic patch).  The driver fixes (pft=1.0 +
-# NatRes fixing + skip_base_solve + eq_pmeq shock) SQUARE the system (all 3 periods
-# code=1) but do NOT fully close the value gap — check itself is ~80.1%, so the
-# shock still inherits a broad real-quantity + capital-block + tax-stream
-# divergence (xs/xp/xmt/va/xet/xigbl/savf/ror*/gdpmp/ytax*).  That is a real
-# remaining gap for the next cascade tool, NOT something to inflate.  The floor is
-# set just below the as-measured value so the gate is GREEN and the true number is
-# captured for the controller to set the coverage-matrix gap_min.  See the commit
-# message + .superpowers/sdd/task-2-report.md for the breakdown.
+# AS MEASURED 2026-06-24 (deterministic): CHECK 100.00% / SHOCK 67.12% (1332 cells),
+# after (1) FREEING pft for real factors (invert _collapse_pft_pfteq: GAMS gtap
+# iterloop.gms:142-143 fixes pft ONLY for xftFlag=0 — real/mobile factors stay FREE,
+# cleared by the live eq_pfteq free-row + eq_xfteq/eq_pfeq) and (2) setting etaf=0
+# for sluggish factors in gtap-mode (GAMS getData.gms:367-380 uses etaf=0 for ALL
+# fm incl Land; etrae belongs only in omegaf/CET).  This lifted CHECK 80.09% ->
+# 100.00% (EXACT baseline equilibrium); SHOCK moved 67.94% -> 67.12% (the shock now
+# inherits an EXACT check, but the remaining shock gap is a broad capital-block +
+# tax-stream divergence — xw/xet/xigbl/savf/ror*/ytax[mt] — visible already and
+# unchanged by this factor-block fix).  The xp activity-scale holdfix (a patch for
+# the OLD pinned-pft bug) was MEASURED OFF for gtap-mode (ON: CHECK 64.0/SHOCK 61.3;
+# OFF: CHECK 99.4/SHOCK 66.9 pre-etaf — OFF wins both).  All 3 periods code=1.  The
+# floor is set just below the as-measured shock value so the gate is GREEN and the
+# true number is captured for the coverage-matrix gap_min.  See the commit message
+# + .superpowers/sdd/task-2-report.md for the breakdown.
 SHOCK_MATCH_FLOOR_IFSUB0 = 67.0
 
 
