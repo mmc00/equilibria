@@ -67,6 +67,16 @@ def test_progress_buckets_sum_to_total():
     assert p["blocked"] >= 1
 
 
+def test_render_includes_new_sections():
+    import gen_coverage_doc
+    out = gen_coverage_doc.render()
+    assert "## Progreso global" in out
+    assert "## Modularización" in out
+    assert "solver" in out          # nueva columna
+    assert "gempack" in out.lower()  # nueva columna
+    assert "production_ces_nest" in out
+
+
 def test_blocks_declared_with_valid_status():
     from coverage_matrix import BLOCKS, BLOCK_STATUSES
     assert BLOCKS, "modularization table must list target blocks"

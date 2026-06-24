@@ -22,20 +22,23 @@ _BANNER = (
 )
 
 
-def _fmt_gap_min(v: float | None) -> str:
+def _fmt_gap(v: float | None) -> str:
     return "—" if v is None else f"{v:g}"
 
 
 def _row_cells(r) -> list[str]:
     ifsub = "—" if r.ifsub is None else str(r.ifsub)
     phases = ",".join(r.phases)
+    gempack = r.note_gempack or "—"
     return [
-        r.dataset, r.kind, ifsub, phases,
-        _fmt_gap_min(r.gap_min), r.gap_note, r.ci_status, r.ref,
+        r.dataset, r.kind, r.solver, ifsub, phases,
+        _fmt_gap(r.gap_min), r.gap_note, _fmt_gap(r.gap_gempack), gempack,
+        r.ci_status, r.ref,
     ]
 
 
-_HEADER = ["dataset", "kind", "ifsub", "phases", "gap_min", "gap_note", "ci_status", "ref"]
+_HEADER = ["dataset", "kind", "solver", "ifsub", "phases",
+           "gap_min", "gap_note", "gempack_min", "gempack_note", "ci_status", "ref"]
 
 
 def _table(rows) -> str:
@@ -46,15 +49,41 @@ def _table(rows) -> str:
     return "\n".join(lines)
 
 
+def _progress_section() -> str:
+    from coverage_matrix import progress
+    p = progress()
+    return "\n".join([
+        "## Progreso global",
+        "",
+        f"- total: {p['total']}",
+        f"- done (≥99% / 0-diff): {p['done']}",
+        f"- partial: {p['partial']}",
+        f"- blocked: {p['blocked']}",
+    ])
+
+
+def _blocks_section() -> str:
+    from coverage_matrix import BLOCKS
+    lines = ["## Modularización (refactor a bloques — F3)", "",
+             "| bloque | estado |", "|---|---|"]
+    for b in BLOCKS:
+        lines.append(f"| {b.name} | {b.status} |")
+    return "\n".join(lines)
+
+
 def render() -> str:
     parts = [
         "# GTAP 7 Parity Coverage Matrix",
         "",
         _BANNER,
         "",
-        "`gap_min` is the conservative floor the tests assert; `gap_note` is the "
-        "measured snapshot. `ci_status`: `ci` runs on ubuntu without a solver, "
-        "`local` needs PATH+GAMS (run by hand), `blocked` has an unsound reference.",
+        "`gap_min` is the conservative floor the tests assert vs GAMS; "
+        "`gempack_min` is the floor vs GEMPACK/RunGTAP; the `_note` columns are "
+        "measured snapshots. `solver`: `mcp` (PATH) or `nlp` (walras/ifMCP=0). "
+        "`ci_status`: `ci` runs on ubuntu without a solver, `local` needs "
+        "PATH+GAMS (run by hand), `blocked` has an unsound reference.",
+        "",
+        _progress_section(),
         "",
         "## Single-period (`.nl` coefficient gate, CI, no solver)",
         "",
@@ -63,6 +92,8 @@ def render() -> str:
         "## Altertax multi-period (solver gate, local-only)",
         "",
         _table(altertax_rows()),
+        "",
+        _blocks_section(),
         "",
     ]
     return "\n".join(parts)
