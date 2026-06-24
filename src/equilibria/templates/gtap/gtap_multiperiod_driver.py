@@ -200,6 +200,39 @@ def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _holdfix_activity_scale — pin the per-activity scale xp at the prior period
+# ---------------------------------------------------------------------------
+def _holdfix_activity_scale(m, period: str) -> int:
+    """Holdfix the activity-scale var `xp` at its PRIOR-period value (gtap-mode).
+
+    The per-activity scale xp[r,a] is a free DOF / multiplicity under the
+    gtap-mode closure: total factor endowments xft are pinned, but the scale can
+    redistribute across activities to a different valid root (proven: seeding the
+    GAMS point as an exact fixed point still lets PATH walk to a +21% root).  GAMS
+    pins it via `gtap.holdfixed=1` on tsim-1 (iterloop.gms / comp gms scaleopt).
+    The faithful analog is to fix xp at PYTHON'S OWN prior-period solved value
+    (NOT the GAMS reference — that would be seeding from the answer): base anchors
+    the check, check anchors the shock.  The squareness patches auto-resquare
+    (the now-redundant eq_po/eq_va rows are dropped by Hopcroft-Karp).
+    """
+    prior = "base" if period == "check" else "check"
+    xp = getattr(m, "xp", None)
+    if xp is None:
+        return 0
+    n = 0
+    for r in m.r:
+        for a in m.a:
+            try:
+                cur = xp[(r, a, period)]
+                pv = xp[(r, a, prior)]
+            except (KeyError, TypeError):
+                continue
+            if not cur.fixed and pv.value is not None:
+                cur.fix(float(pv.value))
+                n += 1
+    return n
+
+
 # _collapse_pft_pfteq — period-aware pft/eq_pfteq collapse (gtap-mode only)
 # ---------------------------------------------------------------------------
 def _collapse_pft_pfteq(m, period: str) -> int:
@@ -690,7 +723,8 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
 # ---------------------------------------------------------------------------
 # _recompute_ytax_mt — post-solve fix of the import-tax revenue stream
 # ---------------------------------------------------------------------------
-def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0) -> int:
+def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0,
+                       gtap_mode: bool = False) -> int:
     """Recompute ytax[r,'mt'] (import-tax revenue) and ytaxshr[r,'mt'] for `period`.
 
     BUG this fixes (shared by ifSUB=0 AND ifSUB=1, ~8.8% low): eq_ytax for gy='mt'
@@ -746,14 +780,31 @@ def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0) -
 
     for r in m.r:
         total = 0.0
-        for (e, i, imp), imptx_b in imptx_map.items():
-            if imp != r:
-                continue
-            pmcif = _pmcif(e, i, imp)
-            xw = _xw(e, i, imp)
-            if pmcif is None or xw is None:
-                continue
-            total += (float(imptx_b) * f + _mtax(imp, i)) * pmcif * xw
+        for key, imptx_b in imptx_map.items():
+            if gtap_mode:
+                # imptx/xw/pmcif are keyed (importer, good, exporter). Filter on
+                # the IMPORTER (col 0), and apply the tm_pct POWER rate
+                # (1+imptx)*f − 1 (GAMS tm.fx = tm.l*f shocks the tariff POWER),
+                # not the RATE form imptx*f which drops the flat +Δ increment.
+                imp, i, exp = key
+                if imp != r:
+                    continue
+                pmcif = _pmcif(imp, i, exp)
+                xw = _xw(imp, i, exp)
+                if pmcif is None or xw is None:
+                    continue
+                rate = (1.0 + float(imptx_b)) * f - 1.0
+                total += (rate + _mtax(imp, i)) * pmcif * xw
+            else:
+                # Altertax legacy path — byte-identical to before.
+                e, i, imp = key
+                if imp != r:
+                    continue
+                pmcif = _pmcif(e, i, imp)
+                xw = _xw(e, i, imp)
+                if pmcif is None or xw is None:
+                    continue
+                total += (float(imptx_b) * f + _mtax(imp, i)) * pmcif * xw
         try:
             ytax[r, "mt", period].set_value(total)
             n += 1
@@ -1218,6 +1269,14 @@ def solve_multiperiod(
                 "(gtap-mode factor-price squaring)",
                 _n_pft_chk,
             )
+        # Holdfix the activity scale at the base period (GAMS holdfixed=1 on tsim-1).
+        _n_xp_chk = _holdfix_activity_scale(m, "check")
+        if _n_xp_chk:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "check period: holdfixed xp at base for %d (r,a) (gtap-mode "
+                "activity-scale anchor)", _n_xp_chk,
+            )
 
     # Replicate single-period structural fixing for check period.
     _chk_closure = base_closure if _gtap_mode else alt_closure
@@ -1377,6 +1436,14 @@ def solve_multiperiod(
                 "(gtap-mode factor-price squaring)",
                 _n_pft_shk,
             )
+        # Holdfix the activity scale at the check period (GAMS holdfixed=1 on tsim-1).
+        _n_xp_shk = _holdfix_activity_scale(m, "shock")
+        if _n_xp_shk:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: holdfixed xp at check for %d (r,a) (gtap-mode "
+                "activity-scale anchor)", _n_xp_shk,
+            )
 
     # Replicate single-period structural fixing for shock period.
     _shk_closure = base_closure if _gtap_mode else alt_closure
@@ -1432,7 +1499,8 @@ def solve_multiperiod(
     # Reads pmcif/xw (unaffected by the pm recompute below), so order vs pm is free.
     # gtap mode: pass params (not p_alt) since they are the same object; kept explicit.
     _recompute_params = params if _gtap_mode else p_alt
-    _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10)
+    _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10,
+                               gtap_mode=_gtap_mode)
     if _n_mt:
         import logging as _logging
         _logging.getLogger(__name__).info(
