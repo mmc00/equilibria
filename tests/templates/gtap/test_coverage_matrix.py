@@ -67,6 +67,16 @@ def test_progress_buckets_sum_to_total():
     assert p["blocked"] >= 1
 
 
+def test_blocks_declared_with_valid_status():
+    from coverage_matrix import BLOCKS, BLOCK_STATUSES
+    assert BLOCKS, "modularization table must list target blocks"
+    names = {b.name for b in BLOCKS}
+    assert {"production_ces_nest", "armington_trade", "cde_demand",
+            "institutions_tax", "closure_fisher"} <= names
+    for b in BLOCKS:
+        assert b.status in BLOCK_STATUSES, b
+
+
 def test_matrix_schema_invariants():
     from coverage_matrix import ROWS, CI_STATUSES
     assert ROWS, "matrix must not be empty"

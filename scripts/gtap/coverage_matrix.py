@@ -45,6 +45,25 @@ class Row:
         return "altertax" if self.variant == "altertax" else "gtap"
 
 
+BLOCK_STATUSES = {"planned", "extracted", "tested", "verified"}
+
+
+@dataclass(frozen=True)
+class Block:
+    name: str
+    status: str   # planned | extracted | tested | verified (verified = 0-diff .nl)
+
+
+# Modularization roadmap (F3) — the target blocks the monolith decomposes into.
+BLOCKS: list[Block] = [
+    Block("production_ces_nest", "planned"),
+    Block("armington_trade", "planned"),
+    Block("cde_demand", "planned"),
+    Block("institutions_tax", "planned"),
+    Block("closure_fisher", "planned"),
+]
+
+
 ROWS: list[Row] = [
     # --- single-period .nl gate (CI, no solver) ---
     Row("nus333", "core", "single", None, ("base", "shock"), 99.5, "100% (NEOS+GAMS)", "ci", "nus333 NEOS"),
@@ -132,6 +151,8 @@ def _validate() -> None:
         # gempack floor, when present, is a sane sub-100 percentage
         if r.gap_gempack is not None:
             assert 0.0 < r.gap_gempack < 100.0, f"gap_gempack must be <100: {r}"
+    for b in BLOCKS:
+        assert b.status in BLOCK_STATUSES, f"bad block status: {b}"
 
 
 _validate()
