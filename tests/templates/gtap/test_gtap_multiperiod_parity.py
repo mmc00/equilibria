@@ -59,16 +59,19 @@ ALIAS = {
 }
 
 # Measured shock-period match% floor vs the GAMS LOCAL reference (ifSUB=0).
-# AS MEASURED 2026-06-24 (deterministic, 809/1332 cells): 60.74%.  The two proven
-# driver fixes (pft=1.0 + NatRes fixing + skip_base_solve) SQUARE the system
-# (all 3 periods code=1) but do NOT close the value gap — check itself is only
-# ~73.8%, so the shock inherits/compounds a broad real-quantity + capital-block +
-# tax-stream divergence (xs/xp/xmt/va/xet/xigbl/savf/ror*/gdpmp/ytax*).  That is a
-# real remaining gap for the next cascade tool, NOT something to inflate.  The
-# floor is set just below the as-measured value so the gate is GREEN and the true
-# number is captured for the controller to set the coverage-matrix gap_min.  See
-# the commit message + .superpowers/sdd/task-2-report.md for the breakdown.
-SHOCK_MATCH_FLOOR_IFSUB0 = 60.0
+# AS MEASURED 2026-06-24 (deterministic, 905/1332 cells): 67.94%, up from 64.64%
+# after the eq_pmeq shock-in-equations fix (Task 2: rebuild ONLY eq_pmeq[*,*,*,
+# 'shock'] with the tm_pct tariff power so the +10% wedge enters the SOLVED import
+# prices instead of a post-solve cosmetic patch).  The driver fixes (pft=1.0 +
+# NatRes fixing + skip_base_solve + eq_pmeq shock) SQUARE the system (all 3 periods
+# code=1) but do NOT fully close the value gap — check itself is ~80.1%, so the
+# shock still inherits a broad real-quantity + capital-block + tax-stream
+# divergence (xs/xp/xmt/va/xet/xigbl/savf/ror*/gdpmp/ytax*).  That is a real
+# remaining gap for the next cascade tool, NOT something to inflate.  The floor is
+# set just below the as-measured value so the gate is GREEN and the true number is
+# captured for the controller to set the coverage-matrix gap_min.  See the commit
+# message + .superpowers/sdd/task-2-report.md for the breakdown.
+SHOCK_MATCH_FLOOR_IFSUB0 = 67.0
 
 
 def _has_path_solver() -> bool:

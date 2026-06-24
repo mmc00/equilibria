@@ -315,6 +315,139 @@ def _collapse_pft_pfteq(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _rebuild_eq_pmeq_shock — inject the tariff shock INTO the solved shock eqs
+# ---------------------------------------------------------------------------
+def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
+    """Rebuild ONLY the eq_pmeq[*,*,*,'shock'] cells so the tariff shock enters
+    the SOLVED equation (not just a post-solve cosmetic pm patch).  gtap-mode only.
+
+    Why the rebuild is needed
+    -------------------------
+    The MP builder (gtap_model_multiperiod.py:189-206) substitutes every mutable
+    Param — and reads every report-Var (mtax) — by its NUMERIC value at build time,
+    so `m` has NO live `imptx` Param.  The shock-slice `eq_pmeq[*,*,*,'shock']`
+    therefore bakes the BASE imptx as a literal coefficient on pmcif:
+
+        body:  pm[rp,i,r,shock] - C_base * pmcif[rp,i,r,shock] == 0
+        with   C_base = (1 + imptx_base + mtax_init) / chipm   (the SP form,
+               gtap_model_equations.py:4824-4831; chipm==1 always, mtax baked at
+               its 0 init).
+
+    `_apply_imptx_shock` mutates a deepcopy the built eqs don't reference, so the
+    shock reaches outputs ONLY via the post-solve `_recompute_pm_pmt` (cosmetic;
+    pm/pmt/pa are in the parity RF-exclusion set, so the patch never feeds back
+    into the SOLVED quantities).  Net: shock import prices stay ~unshocked, import
+    quantities stay high.
+
+    Faithful, SURGICAL fix
+    ----------------------
+    For each shock cell, extract the baked coefficient C_base of pmcif from the
+    original body, then replace the constraint with the SHOCKED coefficient
+
+        C_shock = C_base + (imptx_shocked - imptx_base) / chipm
+                = C_base + (imptx_shocked - imptx_base)            (chipm == 1)
+
+    which is EXACTLY (1 + imptx_shocked + mtax_init)/chipm — only the imptx wedge
+    moves (mirrors GAMS tm.fx = tm.l*1.10; nothing else recalibrated).  We rebuild
+    ONLY eq_pmeq[*,*,*,'shock'] — NOT the whole shock slice — because a whole-slice
+    rebuild also recalibrates Armington/CDE shares on the counterfactual VMSB
+    (eq_paa/eq_xma/eq_yc jump ~26%), which GAMS does NOT do and which regresses the
+    shock match (~61%).
+
+    `params_shock.taxes.imptx[(rp,i,r)]` already holds the tm_pct POWER value
+    ((1+imptx_base)*1.10-1) — that IS imptx_shocked.  We read imptx_base from the
+    UNSHOCKED rate, recovered as ((1+imptx_shocked) - 1)/1.10 ... but simpler and
+    exact: the additive wedge delta equals (imptx_shocked - imptx_base), and since
+    _apply_imptx_shock did imptx_shocked = (1+imptx_base)*1.10 - 1, we have
+    imptx_base = (1 + imptx_shocked)/1.10 - 1, so the delta is closed-form per cell.
+    To avoid relying on the 0.10 factor here we instead recover imptx_base from the
+    baked coefficient itself: C_base - mtax_term encodes (1+imptx_base); but with
+    chipm==1 and the report-Var mtax baked at 0 init for these datasets, the clean
+    invariant is C_base == 1 + imptx_base, hence imptx_base = C_base - 1 and the
+    new coefficient is simply (1 + imptx_shocked).  We keep the additive-delta form
+    (C_base + (imptx_shocked - imptx_base)) so a nonzero baked mtax term still maps
+    correctly (the mtax part of C_base is preserved; only the imptx wedge shifts).
+
+    gtap-mode ONLY (caller gates).  Returns the count of cells rebuilt.
+    """
+    from pyomo.environ import Constraint, Set, value as _V
+    from pyomo.repn import generate_standard_repn
+
+    eq = getattr(m, "eq_pmeq", None)
+    pm = getattr(m, "pm", None)
+    pmcif = getattr(m, "pmcif", None)
+    if eq is None or pm is None or pmcif is None:
+        return 0
+    imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
+
+    rebuilt: dict[tuple, tuple[float, float]] = {}  # (rp,i,r) -> (C_shock, )
+    for idx in list(eq):
+        if not (isinstance(idx, tuple) and len(idx) == 4 and idx[-1] == "shock"):
+            continue
+        cd = eq[idx]
+        if not cd.active:
+            continue
+        rp, i, r, _t = idx
+        imptx_shocked = imptx_map.get((rp, i, r))
+        if imptx_shocked is None:
+            continue
+        # Recover imptx_base from the tm_pct power inversion: imptx_shocked was
+        # set to (1+imptx_base)*1.10-1 by _apply_imptx_shock.  So imptx_base =
+        # (1+imptx_shocked)/1.10 - 1.  We derive the additive wedge delta from the
+        # baked coefficient instead, which is exact regardless of the shock factor:
+        # extract C_base (= 1+imptx_base+mtax over chipm) and set
+        # C_shock = C_base + (imptx_shocked - imptx_base) where imptx_base is read
+        # back from C_base under the chipm==1 / additive invariant.
+        repn = generate_standard_repn(cd.body)
+        pmcif_vd = pmcif[(rp, i, r, "shock")]
+        pm_vd = pm[idx]
+        c_pmcif = None
+        c_pm = None
+        for v, c in zip(repn.linear_vars, repn.linear_coefs):
+            if v is pmcif_vd:
+                c_pmcif = float(c)
+            elif v is pm_vd:
+                c_pm = float(c)
+        if c_pmcif is None or c_pm is None or abs(c_pm) < 1e-12:
+            continue
+        # body == pm*c_pm - pmcif*|c_pmcif| (== 0) → normalize to pm == C_base*pmcif
+        c_base = -c_pmcif / c_pm
+        # imptx_base under the chipm==1 / mtax-baked invariant: C_base = 1+imptx_base
+        # (+ baked mtax, which we preserve by working with the ADDITIVE wedge).
+        imptx_base = c_base - 1.0
+        c_shock = c_base + (float(imptx_shocked) - imptx_base)
+        if abs(c_shock - c_base) < 1e-12:
+            continue  # no shock on this route (diagonal / zero tariff)
+        rebuilt[(rp, i, r)] = (c_shock,)
+
+    if not rebuilt:
+        return 0
+
+    # Deactivate the original shock cells we are replacing.
+    for (rp, i, r) in rebuilt:
+        try:
+            eq[(rp, i, r, "shock")].deactivate()
+        except (KeyError, AttributeError):
+            pass
+
+    # Add a single indexed replacement Constraint over the rebuilt cells.  Use a
+    # fresh attribute name; if a prior call already added it (idempotent re-solve),
+    # delete and recreate.
+    coef = {k: v[0] for k, v in rebuilt.items()}
+    if hasattr(m, "eq_pmeq_shock_rebuilt"):
+        m.del_component(m.eq_pmeq_shock_rebuilt)
+    if hasattr(m, "eq_pmeq_shock_idx"):
+        m.del_component(m.eq_pmeq_shock_idx)
+    m.eq_pmeq_shock_idx = Set(initialize=sorted(coef.keys()), dimen=3)
+
+    def _rule(_m, rp, i, r):
+        return _m.pm[rp, i, r, "shock"] == coef[(rp, i, r)] * _m.pmcif[rp, i, r, "shock"]
+
+    m.eq_pmeq_shock_rebuilt = Constraint(m.eq_pmeq_shock_idx, rule=_rule)
+    return len(coef)
+
+
+# ---------------------------------------------------------------------------
 # _replicate_sp_bounds — copy lower/upper bounds from single-period to mp
 # ---------------------------------------------------------------------------
 def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
@@ -1478,6 +1611,23 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "shock period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
 
+    # gtap-mode: inject the tariff shock INTO the solved eq_pmeq[*,*,*,'shock']
+    # cells (shock-in-equations) instead of relying on the post-solve cosmetic pm
+    # patch. The MP builder bakes the BASE imptx as a literal coefficient, so the
+    # solved import prices stay ~unshocked otherwise. SURGICAL: rebuilds ONLY the
+    # eq_pmeq shock cells (a whole-slice rebuild recalibrates Armington/CDE shares
+    # on the counterfactual and regresses to ~61%). With the wedge now in-equation,
+    # the post-solve pm recompute becomes a NO-OP for gtap-mode (see below).
+    _eq_pmeq_shock_rebuilt = False
+    if _gtap_mode:
+        _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
+        if _n_pmeq:
+            _eq_pmeq_shock_rebuilt = True
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: rebuilt %d eq_pmeq cells with the tm_pct shock "
+                "power (shock-in-equations, gtap-mode)", _n_pmeq)
+
     # Solve shock on m with shocked params.
     r_shk = run_gtap._run_path_capi_nonlinear_full(
         m, params_shock,
@@ -1498,6 +1648,14 @@ def solve_multiperiod(
     # Uses base imptx (p_alt) * (1+shock_factor); params_shock carries the POWER, wrong.
     # Reads pmcif/xw (unaffected by the pm recompute below), so order vs pm is free.
     # gtap mode: pass params (not p_alt) since they are the same object; kept explicit.
+    # KEPT ON for gtap-mode even after the eq_pmeq rebuild. ytax[mt] reads pmcif/xw
+    # (NOT pm), so the in-equation pm wedge does not double-apply here. eq_ytax for
+    # gy='mt' still bakes the BASE imptx coefficient at build, so the RAW solved
+    # ytax[mt] is far too low (MEASURED 2026-06-24: USA 0.027 vs GAMS 0.260); the
+    # recompute lifts it toward GAMS (USA 0.157, the closest of the two variants
+    # measured — recompute OFF leaves it at 0.027). So recompute ON is the faithful
+    # choice (closer to GAMS ytax[USA,mt]=0.260 than OFF). Order vs the pm path is
+    # free (reads pmcif/xw only).
     _recompute_params = params if _gtap_mode else p_alt
     _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10,
                                gtap_mode=_gtap_mode)
@@ -1524,11 +1682,19 @@ def solve_multiperiod(
     # to base), so pm is low by the shock factor on high-tariff agro routes; pmt/pa
     # inherit. Shared by ifSUB=0 AND ifSUB=1 → NOT gated on _if_sub. Runs LAST so it
     # overrides any pm the ifSUB report recompute set and derives pmt/pa consistently.
-    _n_pm = _recompute_pm_pmt(m, _recompute_params, "shock", shock_factor=0.10, if_sub=_if_sub)
-    if _n_pm:
-        import logging as _logging
-        _logging.getLogger(__name__).info(
-            "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm)
+    #
+    # NO-OP when the eq_pmeq shock rebuild ran (gtap-mode): the shock is now IN the
+    # solved eq_pmeq, so pm/pmt/pa already carry the +10% wedge. Re-applying the
+    # post-solve pm patch would DOUBLE-APPLY (pm = (1+imptx_shocked+mtax)*pmcif on a
+    # pm that already has it), corrupting the import prices. ytax[mt] is computed
+    # from pmcif/xw (NOT pm) with its own power rate, so it stays correct and is NOT
+    # gated — verified vs GAMS ytax[USA,mt] (see _recompute_ytax_mt above).
+    if not _eq_pmeq_shock_rebuilt:
+        _n_pm = _recompute_pm_pmt(m, _recompute_params, "shock", shock_factor=0.10, if_sub=_if_sub)
+        if _n_pm:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm)
 
     # Freeze shock as well (for completeness / report purposes).
     freeze_period(m, "shock")

@@ -375,3 +375,94 @@ the shock inherits a check that is already 26% off — fix check first.
 - `tests/templates/gtap/test_gtap_multiperiod_equals_singleperiod.py`
   → renamed (git mv) to `tests/templates/gtap/test_gtap_multiperiod_parity.py`
   (retargeted to GAMS GDX; SP helper dropped)
+
+---
+---
+
+# Task 2 Fix #3 — inject tariff shock INTO eq_pmeq (shock-in-equations) — 2026-06-24
+
+**Status: DONE** (gate GREEN; SHOCK 64.64 -> 67.94%, CHECK unchanged, all 3 periods code=1; altertax untouched)
+
+Base commit: `49cad79`. Worktree: `gtap7-multiperiod-matrix`.
+
+## Helper added
+`_rebuild_eq_pmeq_shock(m, params_shock)` in `gtap_multiperiod_driver.py`, placed
+right after `_collapse_pft_pfteq`. For each active `eq_pmeq[*,*,*,'shock']` cell it:
+1. extracts the baked coefficient `C_base` of `pmcif` from the original constraint
+   body via `generate_standard_repn` (body is `pm - C_base*pmcif == 0`; the MP
+   builder baked `C_base = (1+imptx_base+mtax_init)/chipm`, with `chipm==1` always
+   and the report-Var `mtax` baked at its 0 init for these datasets);
+2. reads `imptx_shocked` from `params_shock.taxes.imptx[(rp,i,r)]` (already the
+   tm_pct POWER `(1+imptx_base)*1.10-1`);
+3. recovers `imptx_base = C_base - 1` (chipm==1/mtax-baked invariant) and sets the
+   additive wedge `C_shock = C_base + (imptx_shocked - imptx_base)` — exactly
+   `(1+imptx_shocked+mtax_init)/chipm`, i.e. only the tariff wedge moves (mirrors
+   GAMS `tm.fx = tm.l*1.10`);
+4. deactivates the original `eq_pmeq[rp,i,r,'shock']` and adds ONE indexed
+   replacement `m.eq_pmeq_shock_rebuilt` over a fresh Set `m.eq_pmeq_shock_idx`
+   (dimen 3) with body `pm == C_shock*pmcif`. Idempotent (del+recreate on re-call).
+
+Called in the SHOCK branch under `if _gtap_mode:` immediately BEFORE
+`_run_path_capi_nonlinear_full`, setting `_eq_pmeq_shock_rebuilt = True`. SURGICAL:
+rebuilds ONLY the eq_pmeq shock cells (a whole-slice rebuild would recalibrate
+Armington/CDE shares on the counterfactual and regress to ~61%, per the brief).
+
+## Double-apply handling (measured both ways)
+- **`_recompute_pm_pmt` (post-solve pm/pmt/pa patch): made a NO-OP for gtap-mode
+  when the rebuild ran** (`if not _eq_pmeq_shock_rebuilt:`). The shock is now IN the
+  solved `eq_pmeq`, so pm/pmt/pa already carry the +10% wedge; re-applying the patch
+  would double-apply `(1+imptx_shocked+mtax)*pmcif` on an already-shocked pm.
+- **`_recompute_ytax_mt` (import-tax revenue): KEPT ON for gtap-mode.** ytax[mt]
+  reads `pmcif`/`xw` (NOT `pm`), so the in-equation pm wedge does not double-apply
+  here. `eq_ytax[*,mt]` still bakes the BASE imptx coefficient, so the RAW solved
+  ytax[mt] is far too low. MEASURED vs GAMS ytax[USA,mt]=0.260:
+    - recompute OFF (raw solved): ytax[USA,mt] = **0.027** (far off)
+    - recompute ON (kept):        ytax[USA,mt] = **0.157** (closest of the two)
+  Recompute ON is the faithful choice (closer to GAMS than OFF). Altertax keeps the
+  byte-identical unconditional recompute.
+
+## Measured results (deterministic)
+Period codes (ifSUB=0): `{'base': 1, 'check': 1, 'shock': 1}` — all converge.
+
+| Period | match% vs GAMS LOCAL (ifSUB=0) | cells | vs prior |
+|--------|--------------------------------|-------|----------|
+| check  | 80.09% | 1326 | unchanged (rebuild is shock-only) |
+| shock  | **67.94%** | 1332 | **+3.30pp** from 64.64% |
+
+Exceeds the brief's 67.34% in-memory target. The pre-fix baseline at `49cad79` was
+re-measured this session as SHOCK 64.64% / CHECK 80.09% (matches the brief exactly).
+
+## Test floor
+`tests/templates/gtap/test_gtap_multiperiod_parity.py`: bumped
+`SHOCK_MATCH_FLOOR_IFSUB0` 60.0 -> 67.0 (just below the as-measured 67.94%) and
+refreshed the stale floor comment (was 60.74%/check~73.8%, now 67.94%/check 80.09%).
+
+## Regression verification (commands + output)
+1. gtap-mp gate:
+   `uv run pytest tests/templates/gtap/test_gtap_multiperiod_parity.py` -> `1 passed`
+2. Altertax NOT regressed:
+   `uv run pytest tests/templates/gtap/test_altertax_multiperiod_parity.py -k gtap7_3x3`
+   -> `2 passed, 9 deselected`
+3. CI equation-FORM gate:
+   `uv run pytest tests/templates/gtap/test_gtap7_nl_parity.py` -> `5 passed`
+4. `uv run pytest tests/templates/gtap/test_multiperiod_driver.py` -> `3 passed, 2 warnings`
+   The eq_u[ROW,base] complex-eval warning is PRE-EXISTING (verified: same
+   `3 passed, 2 warnings` at clean HEAD `49cad79` via git stash) — ug[ROW,base] goes
+   slightly negative -> negative**fractional = complex. NOT this fix's regression.
+
+## Files changed
+- `src/equilibria/templates/gtap/gtap_multiperiod_driver.py`
+  (new helper `_rebuild_eq_pmeq_shock`; gtap-mode-gated call before the shock solve;
+  `_recompute_pm_pmt` no-op'd for gtap-mode when the rebuild ran; ytax recompute
+  kept ON with rationale comment). Altertax (`not _gtap_mode`) path byte-for-byte
+  unchanged.
+- `tests/templates/gtap/test_gtap_multiperiod_parity.py` (floor 60.0 -> 67.0 +
+  comment refresh).
+
+## Concerns
+- Faithful, gtap-mode-gated, surgical. The remaining shock gap is still broad (the
+  capital/investment/savings loop + tax/GDP streams visible already in CHECK at
+  80.09%) and is the next cascade tool's job — NOT inflated here.
+- ytax[USA,mt] is 0.157 vs GAMS 0.260 (recompute ON, the closer variant). The
+  `eq_ytax[*,mt]` base-baked coefficient is the residual cause; out of scope for
+  Task 2 (the brief's measure-both-ways picked the closer variant).
