@@ -404,22 +404,39 @@ _WELFARE_LEAVES = (
 )
 
 
-def _mute_welfare_tail(m, period: str, regions) -> int:
+def _mute_welfare_tail(m, period: str, regions, *, gtap_mode: bool = False) -> int:
     """Fix the inert welfare-leaf vars at their seed + deactivate their rows for
     `period`.  Returns the count of rows deactivated.  Square-preserving: each
-    leaf eq_X pairs 1:1 with its own var X."""
+    leaf eq_X pairs 1:1 with its own var X.
+
+    gtap_mode special-case: `walras` is NOT an inert leaf for the residual region
+    — `eq_walras` is the only live row carrying the residual-region investment
+    identity `walras = Σ_rres(yi − (pi·depr·kstock+rsav+savf))`, and `eq_yi` is
+    skipped for rres (faithful to GAMS `yieq$(not rres)`).  Muting it leaves
+    `yi[rres]` a free DOF that drifts (+50% on gtap7_3x3).  So in gtap_mode we
+    fix `walras=0` (equilibrium Walras law) but keep `eq_walras` ACTIVE; the
+    structural matcher then pairs `eq_walras ↔ yi[rres]`, pinning the residual
+    region's investment income.  Mirrors GAMS's free-row `walraseq` completion.
+    Altertax-mode keeps the byte-identical legacy behavior (deactivate + fix)."""
     n = 0
     for eqn, vn in _WELFARE_LEAVES:
         eqc = getattr(m, eqn, None)
         vc = getattr(m, vn, None)
         if eqc is None or vc is None:
             continue
+        keep_row = gtap_mode and vn == "walras"
         for r in regions:
             for cand in [(r, period), (period,)]:
                 try:
                     vd = vc[cand]
                 except (KeyError, TypeError):
                     continue
+                if keep_row:
+                    # Fix walras=0 (Walras law) but leave eq_walras live so the
+                    # matcher binds it to the free yi[rres].
+                    vd.set_value(0.0)
+                    vd.fix(0.0)
+                    break
                 if not vd.fixed and vd.value is not None:
                     vd.fix(float(vd.value))
                 try:
@@ -1215,7 +1232,7 @@ def solve_multiperiod(
     # _mute_welfare_tail). Decisive once the base is exact (skip_base_solve):
     # check goes code=2 res 1.1e-2 → code=1 res 2.9e-11.
     if mute_welfare:
-        _n_mute = _mute_welfare_tail(m, "check", list(p_alt.sets.r))
+        _n_mute = _mute_welfare_tail(m, "check", list(p_alt.sets.r), gtap_mode=_gtap_mode)
         if _n_mute:
             import logging as _logging
             _logging.getLogger(__name__).info(
@@ -1372,7 +1389,7 @@ def solve_multiperiod(
 
     # Mute the inert welfare-report tail for shock (same as check).
     if mute_welfare:
-        _n_mute = _mute_welfare_tail(m, "shock", list(params_shock.sets.r))
+        _n_mute = _mute_welfare_tail(m, "shock", list(params_shock.sets.r), gtap_mode=_gtap_mode)
         if _n_mute:
             import logging as _logging
             _logging.getLogger(__name__).info(
