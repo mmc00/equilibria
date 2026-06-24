@@ -102,3 +102,14 @@ def test_solve_multiperiod_solves_m_not_slices():
         "rgdpmp['shock'] and rgdpmp['base'] are all None or zero — "
         "m was not actually solved"
     )
+
+
+def test_solve_multiperiod_accepts_mode_kwarg():
+    """mode is a kw-only param defaulting to 'altertax' (back-compat)."""
+    import inspect
+    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    sig = inspect.signature(solve_multiperiod)
+    assert "mode" in sig.parameters
+    p = sig.parameters["mode"]
+    assert p.kind == inspect.Parameter.KEYWORD_ONLY
+    assert p.default == "altertax"
