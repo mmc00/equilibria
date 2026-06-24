@@ -16,6 +16,7 @@ diffs", not a percentage). `ci_status` records honestly what runs where:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 CI_STATUSES = {"ci", "local", "blocked"}
@@ -74,6 +75,31 @@ def nl_rows() -> list[Row]:
 
 def altertax_rows() -> list[Row]:
     return [r for r in ROWS if r.kind == "altertax"]
+
+
+def gtap7_rows() -> list[Row]:
+    return [r for r in ROWS if r.model == "gtap7"]
+
+
+def _is_done(r: Row) -> bool:
+    note = r.gap_note.strip().lower()
+    if "0 diffs" in note or "100%" in note:
+        return True
+    # parse a leading percentage like "99.30%" or "~99%"
+    m = re.search(r"(\d+(?:\.\d+)?)\s*%", note)
+    return bool(m) and float(m.group(1)) >= 99.0
+
+
+def progress() -> dict[str, int]:
+    buckets = {"done": 0, "partial": 0, "blocked": 0, "total": len(ROWS)}
+    for r in ROWS:
+        if r.ci_status == "blocked":
+            buckets["blocked"] += 1
+        elif _is_done(r):
+            buckets["done"] += 1
+        else:
+            buckets["partial"] += 1
+    return buckets
 
 
 VARIANTS = {"core", "altertax"}

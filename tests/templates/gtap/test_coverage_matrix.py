@@ -51,6 +51,22 @@ def test_validate_rejects_bad_solver():
     assert bad.solver not in ("mcp", "nlp"), "fixture must be a bad solver"
 
 
+def test_gtap7_rows_filters_model():
+    from coverage_matrix import gtap7_rows
+    rows = gtap7_rows()
+    assert rows, "expected gtap7 rows"
+    assert all(r.model == "gtap7" for r in rows)
+
+
+def test_progress_buckets_sum_to_total():
+    from coverage_matrix import ROWS, progress
+    p = progress()
+    assert p["total"] == len(ROWS)
+    assert p["done"] + p["partial"] + p["blocked"] == p["total"]
+    # the 20x41 blocked row must land in 'blocked'
+    assert p["blocked"] >= 1
+
+
 def test_matrix_schema_invariants():
     from coverage_matrix import ROWS, CI_STATUSES
     assert ROWS, "matrix must not be empty"
