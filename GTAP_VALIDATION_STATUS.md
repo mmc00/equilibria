@@ -249,3 +249,60 @@ Cell-by-cell diffs (`diff_nus333_full.py`, `diff_9x10_full.py`) report 0 diverge
 
 - 9×10 GAMS local parity: requires a non-community GAMS license (community cap of 2,500 nonlinear rows blocks the ~10k-equation 9×10 model). NEOS reference is sufficient for current goals.
 - `output/gtap_ifsub_false_warmstart.json` and `output/gtp_baseline_reverted.json` are pre-fix snapshots and have been superseded by the parity CSVs under `benchmarks/`.
+
+---
+
+## GTAP multi-período puro (mode="gtap") — sesión 2026-06-24
+
+**Objetivo:** llevar el modelo gtap PURO (shock arancelario +10% tm, no altertax) al motor
+multi-período `solve_multiperiod`, gateado por `ifSUB`, con vistas a deprecar el single-period.
+
+**Resultado (gtap7_3x3 vs GAMS LOCAL `out_gtap_shock_ifsub0.gdx`):**
+
+| Período | Inicio | Final | Estado |
+|---------|--------|-------|--------|
+| base    | —      | code=1 (skip_base_solve, ancla calibrada) | ✅ |
+| **check** | 60.74% | **100.00% EXACTO** | ✅ ecuaciones gtap MP == GAMS |
+| **shock** | 60.74% | **67.12%** | ⛔ basin (ver abajo) |
+
+**9 fixes concretos cerrados (todos `mode="gtap"`-gated, altertax byte-idéntico):**
+1. `mode="gtap"|"altertax"` en `solve_multiperiod` (salta betaCal, base_closure, sin CD holdfix).
+2. Referencia GAMS LOCAL generada (`out_gtap_shock_ifsub{0,1}.gdx`, GAMS v53 community, 3x3 cabe).
+3. Cuadrar factor block check/shock (pft/eq_pfteq collapse + NatRes fixing; el MP no tiene `xftflag`).
+4. `skip_base_solve=True` — el MP base no se manda a PATH (deslizaba el nivel de precios de USA 2×).
+5. `yi[ROW]` free-DOF: `eq_walras` viva + `walras=0` (ancla la inversión de la región residual;
+   `eq_yi` salteada para rres como GAMS). check 73.76→78.21%.
+6. `ytax[mt]`: filtro por importador (col 0) + tasa POWER `(1+imptx)*1.10-1` (era exportador + rate).
+7. `eq_pmeq` shock-in-equations: el builder MP hornea `imptx` base como literal; rebuild quirúrgico
+   SOLO de las celdas shock (no la slice entera → recalibraría shares). +3.30pp.
+8. **pft FREE para factores reales** (invirtió `_collapse_pft_pfteq`, que pineaba pft=1.0 con
+   semántica ALTERTAX; GAMS `iterloop.gms:145-146` fija pft SOLO para xftFlag=0). + etaf=0 para sf.
+   **check 80→100% EXACTO.** El parche previo `_holdfix_activity_scale` (xp) quedó contraproducente
+   tras este fix → desactivado (flag `_HOLDFIX_ACTIVITY_SCALE_GTAP=False`, con evidencia medida).
+
+**Gap del shock (67.12%) = BASIN genuino, verificado rigurosamente (NO un bug):**
+- El punto GAMS del shock SATISFACE las ecuaciones del MP (~1e-7 en trade/CET/Armington) — es una
+  raíz válida, pero PATH single-jump elige OTRA raíz válida.
+- Causa estructural: `omegax=omegaw=∞` en Manufactures → doméstico/exportado son sustitutos
+  perfectos; el split lo fija solo la demanda vía Armington alto (esubm=7.87). Múltiples allocaciones
+  consistentes para un salto de 10%. GAMS llega por homotopía ~30 pasos; Python da 1 salto.
+- **Homotopía = DEAD END probado:** rampa correctamente warm-starteada da 67.12% bit-idéntico en
+  N=5/10/20/30. La rama equivocada está SUAVEMENTE conectada al seed del check (al primer 1% de
+  arancel la rama continua de Python va con signo equivocado y nunca gira) — no hay fold que una
+  rampa más fina atrape. Cerrar más requeriría anclar el split a mano = sembrar desde la respuesta
+  (no fiel). El single-jump 67.12% es el mejor resultado FIEL.
+
+**Tech-debt fiel pendiente (no tocar hasta cerrar el basin):** `eq_ytax[mt]` (gtap_model_equations.py:5476)
+hornea `imptx` base como literal (clase eq_pmeq); hoy enmascarado por el post-solve `_recompute_ytax_mt`.
+Arreglarlo en-ecuación HOY regresiona (shock code 1→2, 67→64%) porque empuja revenue a un loop de
+ingreso off-basin. Diferir hasta cerrar el basin del bloque real.
+
+**Por qué costó (lección):** gtap y altertax difieren genuinamente (gtap usa esubva/CES real → pva
+DETERMINADO; altertax fuerza CD → pva libre, pinchado por holdfix). Varios fixes iniciales aplicaron
+semántica altertax por error (el pin de pft, el holdfix de xp) — eran compensaciones de UNA causa raíz.
+La maquinaria altertax (`_holdfix_cd_nest`/`_complete_derived_seed`) NO transfiere a gtap (probado:
+prenderla siembra desde GAMS o sobre-restringe). No hubo atajo vía altertax; el camino capa-por-capa
+con la cascada de tools fue el único fiel.
+
+**Gate:** `tests/templates/gtap/test_gtap_multiperiod_parity.py` (local-only, SKIP-safe), floor shock 67.0%.
+SP NO deprecado (el shock no está a paridad). Spec/plan: `docs/superpowers/specs|plans/2026-06-23-gtap7-multiperiod-only*`.
