@@ -1792,13 +1792,11 @@ class GTAPShareParameters:
                                  taxes: "GTAPTaxRates | None" = None) -> None:
         """Calibrate factor share parameters.
 
-        GAMS gf(r,f,a) at the benchmark = xf/xft (the physical QUANTITY share of the
-        factor's CET supply to activity a), where xf = EVFB·(1-kappaf) and
-        xft = sum_a xf (comp_*.gms:3577 with pft=pfy=1). kappaf differs by activity,
-        so gf = EVFB·(1-kappa) / sum_a(EVFB·(1-kappa)) — NOT the raw value share
-        EVFB/sum(EVFB). Using the value share mis-calibrated gf (EU_28/UnSkLab/Mnfcs:
-        0.18460 vs GAMS 0.18053), leaving eq_pfeq with a ~2% residual at the GAMS
-        shock point. Same (1-kappa) class as the af/ava/and fixes.
+        GAMS gf (comp.gms:3545) is a CET supply share over factor QUANTITIES:
+        gf = xf/xft, with xf = EVFB/pf = EVFB*(1-kappaf) at benchmark (pf=1/(1-kappaf)).
+        Using raw EVFB (the buyer-price payment) instead of xf biases gf whenever
+        kappaf varies by activity (e.g. gtap7_3x3: gf 0.1846 vs GAMS 0.1805). Weight
+        by xf = EVFB*(1-kappaf) to match GAMS.
         """
         def _kappa(r, f, a):
             if taxes is None:
@@ -1810,15 +1808,17 @@ class GTAPShareParameters:
 
         for r in sets.r:
             for f in sets.f:
-                xf_phys = {
-                    a: float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
-                       * (1.0 - _kappa(r, f, a))
-                    for a in sets.a
-                }
-                total_xf = sum(xf_phys.values())
+                xf_by_a = {}
+                for a in sets.a:
+                    evfb = float(benchmark.evfb.get((r, f, a),
+                                                    benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
+                    if evfb <= 0.0:
+                        continue
+                    xf_by_a[a] = evfb * (1.0 - _kappa(r, f, a))
+                total_xf = sum(xf_by_a.values())
                 if total_xf > 0:
-                    for a in sets.a:
-                        self.p_gf[(r, f, a)] = xf_phys[a] / total_xf
+                    for a, xf in xf_by_a.items():
+                        self.p_gf[(r, f, a)] = xf / total_xf
 
     def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot, sets: GTAPSets) -> None:
         """Update share parameters using an equilibrium CSV snapshot."""

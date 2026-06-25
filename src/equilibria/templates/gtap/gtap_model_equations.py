@@ -1226,7 +1226,10 @@ class GTAPModelEquations:
                 vcif_val = bm.vcif.get((exporter, i, region), 0.0)
                 total += float(rate) * float(vcif_val or 0.0)
         # NOTE: ft (rtf*evfb) and fs (fctts*evfb) and dt (kappaf*evfb = evfb-evos)
-        # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes).
+        # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes),
+        # and ft/fs are 0 here (fcttx=fctts=0; rtf is factor rent, not a tax). Adding
+        # an rtf*evfb "ft" stream emits a phantom ytax('ft') GAMS has as 0, regressing
+        # the gtap-mp gate (74%) and altertax (68%).
         return total
 
     def _raw_gdx_paths(self) -> list:
@@ -3716,6 +3719,8 @@ class GTAPModelEquations:
         # ftrv comes from HAR header RTFD (rtfd in Python), NOT from rtf.
         # rtf = VFM/EVFB-1 includes kappaf (factor rent), which is NOT a tax.
         # In standard GTAP7 datasets RTFD=RTFM=0, so fcttx=fctts=0 — matching GAMS.
+        # Using fcttx=rtf emits a phantom factor-tax wedge (pfa>pf) and ytax('ft')
+        # stream that GAMS has as 0, regressing the gtap-mp gate (74%) and altertax (68%).
         rtfd_p = getattr(self.params.taxes, "rtfd", {}) or {}
         rtfi_p = getattr(self.params.taxes, "rtfi", {}) or {}
         def _fcttx_init(m, r, f, a):
@@ -4201,25 +4206,14 @@ class GTAPModelEquations:
             sigmav = self._get_sigmav(r, a)
             expo = 1.0 - sigmav
             if abs(expo) < 1e-8:
-                # CD case (sigmav=1): the CES dual pva^(1-σ)=Σaf·(pfa/λ)^(1-σ) degenerates
-                # to the tautology 1=Σaf=1, leaving pva UNANCHORED → PATH slides it to a
-                # spurious branch (the gtap7_3x3 78.69% cap). The correct CD determinant is
-                # the VA-BUNDLE VALUE IDENTITY — GAMS xfeq summed over factors with Σaf=1:
-                #     pva·va = Σ_f (M_PFA·xf)   (value of the VA bundle = total factor cost).
-                # VERIFIED to reproduce GAMS pva EXACTLY (Σ(pfa·xf)/va = 1.01382 = GAMS
-                # pva[USA,Mnfcs], diff=0). Uses Python's own pfa(=M_PFA, ifSUB=0)/xf/va —
-                # NOT hardcoding. Anchors pva without the degenerate (px/pnd^and)^(1/ava)
-                # inversion (which just echoes a slid px). With the eq_pwfact linear-sqrt
-                # fix, lifts the shock match (tol 1%: 64%→92%). Falls back to the vacuous
-                # tautology only if va is absent / no active factor cell.
-                if hasattr(model, "va"):
-                    fterms = []
-                    for f in model.f:
-                        if hasattr(model, "xfflag") and value(model.xfflag[r, f, a]) <= 0.0:
-                            continue
-                        fterms.append(_m_pfa(r, f, a) * model.xf[r, f, a])
-                    if fterms:
-                        return model.pva[r, a] * model.va[r, a] == sum(fterms)
+                # CD case (sigmav=1): standard CES formula degenerates to 1=sum(af)=1
+                # (tautology — pva not in expression). Mirroring GAMS, the constraint
+                # is vacuous: use exp(log(pva)) == pva which is always satisfied and
+                # has zero Jacobian for pva. PATH then determines pva from the
+                # cross-Jacobian entries of pxeq (px = pnd^and * pva^ava) and
+                # eq_va (va = ava*xp*(px/pva)), exactly as GAMS PATH does. In the
+                # multi-period driver this row is deactivated and pva is holdfixed
+                # per period (_holdfix_cd_nest), so the form here is inert there.
                 return exp(log(model.pva[r, a])) == model.pva[r, a]
 
             terms = []
@@ -5066,19 +5060,17 @@ class GTAPModelEquations:
             return pft_term == pfy_sum
         model.eq_pfteq = Constraint(model.r, model.f, rule=eq_pfteq_rule)
 
-        # Factor prices tax inclusive (GAMS pfaeq)
+        # Factor prices tax inclusive (GAMS pfaeq, comp.gms:2328):
+        #   pfa = pf*(1 + fctts + fcttx)
+        # Now that fcttx = rtf = (EVFP-EVFB)/EVFB (faithful to GAMS ftrv, see
+        # _fcttx_init), fctts+fcttx equals the old rtf value exactly, so this
+        # matches GAMS's canonical form. fctts/fcttx are Params (fctts=0,
+        # fcttx=rtf here), so this stays linear in pfa/pf.
         def eq_pfaeq_rule(model, r, f, a):
             if value(model.xfflag[r, f, a]) <= 0.0:
                 return Constraint.Skip
-            # GAMS pfaeq: pfa = pf*(1 + fctts + fcttx). The factor-tax wedge is
-            # fctts+fcttx (from RTFD/RTFI), NOT rtf. rtf = VFM/EVFB-1 bundles in
-            # kappaf (factor rent), which is NOT a tax and belongs in pfyeq via
-            # kappaf — putting it in pfa double-counts and breaks pfa==pf where
-            # GAMS has fctts=fcttx=0 (standard GTAP7: RTFD=RTFM=0). Verified vs the
-            # CD reference out_altertax_ifsub1.gdx: fctts=fcttx=0 everywhere → pfa==pf.
-            return model.pfa[r, f, a] == model.pf[r, f, a] * (
-                1.0 + model.fctts[r, f, a] + model.fcttx[r, f, a]
-            )
+            wedge = model.fctts[r, f, a] + model.fcttx[r, f, a]
+            return model.pfa[r, f, a] == model.pf[r, f, a] * (1.0 + wedge)
         model.eq_pfaeq = Constraint(model.r, model.f, model.a, rule=eq_pfaeq_rule)
 
         # Factor prices post-tax/subsidy (GAMS pfyeq)

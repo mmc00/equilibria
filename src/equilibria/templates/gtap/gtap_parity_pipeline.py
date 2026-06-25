@@ -803,6 +803,12 @@ class GTAPVariableSnapshot:
     pigbl: Optional[float] = None
     arent: Dict[str, float] = field(default_factory=dict)
     facty: Dict[str, float] = field(default_factory=dict)
+    ytax_ind: Dict[str, float] = field(default_factory=dict)
+
+    gdpmp: Dict[str, float] = field(default_factory=dict)
+    rgdpmp: Dict[str, float] = field(default_factory=dict)
+    ev: Dict[str, float] = field(default_factory=dict)
+    cv: Dict[str, float] = field(default_factory=dict)
 
     gdpmp: Dict[str, float] = field(default_factory=dict)
     rgdpmp: Dict[str, float] = field(default_factory=dict)
@@ -812,6 +818,32 @@ class GTAPVariableSnapshot:
     pnum: Optional[float] = None
     pabs: Dict[str, float] = field(default_factory=dict)
     walras: Optional[float] = None
+
+    # Income / capital / tax-aggregate vars exported by GAMS that feed eq_facty,
+    # eq_ytax_ind, eq_kapEnd, eq_psave, etc. Seeding these removes phantom
+    # residuals at the GAMS point (they were left at init before).
+    pi: Dict[str, float] = field(default_factory=dict)
+    kstock: Dict[str, float] = field(default_factory=dict)
+    kapEnd: Dict[str, float] = field(default_factory=dict)
+    ytax: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    ytaxTot: Dict[str, float] = field(default_factory=dict)
+    ytaxshr: Dict[str, float] = field(default_factory=dict)
+    xcshr: Dict[str, float] = field(default_factory=dict)
+    zcons: Dict[str, float] = field(default_factory=dict)
+    nd: Dict[str, float] = field(default_factory=dict)
+    chif: Dict[str, float] = field(default_factory=dict)
+    savf: Dict[str, float] = field(default_factory=dict)
+    psave: Dict[str, float] = field(default_factory=dict)
+    pgdpmp: Dict[str, float] = field(default_factory=dict)
+    pmuv: Dict[str, float] = field(default_factory=dict)
+    pwfact: Dict[str, float] = field(default_factory=dict)
+    rorc: Dict[str, float] = field(default_factory=dict)
+    rore: Dict[str, float] = field(default_factory=dict)
+    rorg: Dict[str, float] = field(default_factory=dict)
+    pfy: Dict[str, float] = field(default_factory=dict)
+    pm: Dict[str, float] = field(default_factory=dict)
+    pva: Dict[str, float] = field(default_factory=dict)
+    pnd: Dict[str, float] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Return whether the snapshot contains any non-scalar data."""
@@ -875,6 +907,26 @@ class GTAPVariableSnapshot:
             pnum=float(value(model.pnum)) if hasattr(model, "pnum") else None,
             pabs=_extract_var_levels(model.pabs) if hasattr(model, "pabs") else {},
             walras=float(value(model.walras)) if hasattr(model, "walras") else None,
+            # Factor agent price (pfa) — simple level extract.
+            pfa=_extract_var_levels(model.pfa) if hasattr(model, "pfa") else {},
+            # All remaining income/capital/tax/utility/GDP vars the dataclass holds.
+            # Without these a warm-start from a solved model (the altertax shock
+            # starting from the check solution) leaves dozens of vars at init —
+            # pfa/pfact/va/u/uh/ug/us/phi/phip/pcons/gdpmp/rgdpmp/ev/cv/rsav/... —
+            # and the shock solve collapses to a degenerate basin (prices→0.04,
+            # code=2). The GAMS shock point IS a valid equilibrium (a full GDX seed
+            # converges to ~3e-9); the warm-start just has to carry the same state.
+            **{
+                _f: _extract_var_levels(getattr(model, _f))
+                for _f in ("pi", "kstock", "kapEnd", "ytax", "ytaxTot", "ytaxshr",
+                           "xcshr", "zcons", "nd", "chif", "savf", "psave",
+                           "pgdpmp", "pmuv", "pwfact", "rorc", "rore", "rorg",
+                           "pfy", "pm", "pva", "pnd", "facty", "ytax_ind",
+                           "pfact", "va", "u", "uh", "ug", "us", "phi", "phip",
+                           "pcons", "gdpmp", "rgdpmp", "ev", "cv", "rsav",
+                           "xigbl", "pigbl", "arent")
+                if hasattr(model, _f)
+            },
         )
 
     @classmethod
