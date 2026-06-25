@@ -328,3 +328,60 @@ con la cascada de tools fue el único fiel.
 gtap7_3x3 cierra el ciclo base→check→shock con check EXACTO y shock a paridad. Pendiente para deprecar:
 escalar la cadena a los demás datasets (5x5/10x7/15x10) y portar el gate `.nl` al motor MP (Tareas 3-6
 del plan). Spec/plan: `docs/superpowers/specs|plans/2026-06-23-gtap7-multiperiod-only*`.
+## Session 2026-06-13: gtap7_3x3 altertax income-chain fixes (faithful to GAMS)
+
+**Context:** Debugging the gtap7_3x3 altertax `check` period (was ~56% cell match
+vs the local v53 reference). Used the residual test (probe.py `--seed-gams base`,
+seed coverage 94.8%) to isolate which equations genuinely diverge at the GAMS point
+vs. which are seed artifacts.
+
+**Root cause (one bug, three sites):** Python derived `fcttx` from the empty HAR
+`RTFD` header → `fcttx=0`, but GAMS uses `ftrv = EVFP − EVFB` (comp.gms:2833), so
+the factor-tax wedge is `(EVFP−EVFB)/EVFB = rtf ≈ 0.47`, nonzero (EVFP≠EVFB in both
+gtap7_3x3 and 9x10). Fixed faithfully to GAMS:
+
+1. `_compute_ytax_ind_bench` — include the `ft` stream `sum(rtf·evfb)` (was omitted
+   under the `fcttx=0` assumption). → ytaxInd 2.31→4.85 (GAMS 4.85), `betap`
+   0.754→0.632 (=GAMS), `betas` matches GAMS. `eq_yc`/`eq_yg` residual 1.9→5e-4.
+2. `_fcttx_init = rtf` (was `=RTFD=0`). → `eq_ytax[r,'ft']` residual 2.54→~0.
+3. `eq_pfaeq = pf·(1+fctts+fcttx)` (GAMS canonical comp.gms:2328; now fcttx=rtf so
+   numerically identical to the prior `pf·(1+rtf)`). → `eq_pfaeq` residual 2.4e-10.
+
+**Snapshot expansion:** added 23 income/capital/tax vars (pi, kstock, ytax, ytaxTot,
+nd, chif, savf, psave, pgdpmp, rorc/rore/rorg, pfy, pm, pva, pnd, …) to the altertax
+GDX snapshot so the residual test seeds them instead of leaving them at init.
+
+**Result (residual test at the GAMS local point):** residuals >1e-3 dropped 60→21,
+max residual ~2.5 → ~0.022. The entire income chain (eq_regy / eq_facty /
+eq_ytax_ind / eq_ytax_tot / eq_ytax[ft] / eq_yc / eq_yg / eq_pfaeq) collapsed to ~0.
+
+**ROW residual-region investment block: SANE.** What looked like a 1.9e6 explosion
+in eq_xda/eq_paa/eq_xiagg/eq_pi at warm-start was a seed artifact (pi/kstock/xiagg
+unseeded). With the full snapshot: pi[ROW]=1.0, xiagg[ROW]=yi[ROW]=13.04, eq_rsav[ROW]
+residual ~3e-3 (rounding in betas calibration). No structural bug.
+
+**Remaining lead:** `eq_pfeq` (~0.006–0.022, factor price tax-exclusive) — the
+dominant residual now, two orders smaller than the income-chain bugs just fixed.
+
+**nl-parity gate:** 5 passed throughout. End-to-end cell match dropped (52.6%, solver
+basins) but the residual test (clean metric) improved 3×; user prioritized GAMS
+fidelity over the altertax match. Tooling: probe.py (cached parity probe) added this
+session.
+
+### Shock-period status (open lead, warm-start/basin class)
+
+After the income-chain + gf fixes, the **check** period converges perfectly to
+GAMS (gdpmp/regy/pgdpmp/pabs all 0.0% rel; check residual 3.1e-11, code=1). The
+`diff_altertax` end-to-end match (~52-54%) compares the **shock** period, whose
+solve currently **fails**:
+
+- shock residual ~38-63, code=2; prices collapse to ~0.04 (GAMS shock prices RISE
+  to ~1.01-1.04 with the tariff).
+- Fails under both shock modes (old `imptx*1.10` and the corrected
+  `tm_pct = (1+imptx)*1.10-1`, c1bcc38) → not a magnitude issue.
+- The shock builds a fresh model with `t0_snapshot=m_chk` and
+  `solution_hint=warm_chk`. Suspect the shock warm-start or shock closure.
+
+Next steps (basin class, per parity skill): seed shock directly with the GAMS
+shock point to isolate warm-start vs closure; try `_run_homotopy_shocked`
+(run_gtap.py:2712); or a closure diff of shock vs check.

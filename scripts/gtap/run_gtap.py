@@ -2153,7 +2153,9 @@ def _run_path_capi_nonlinear_full(
                     continue
                 if not _eq_pfteq_vd.active:
                     continue
-                # Deactivate eq_pfteq (GAMS `pfteq` is a free row with no MCP pair).
+                if _is_altertax_closure:
+                    continue  # altertax: pfteq stays active, pft stays free (CET price eq)
+                # Deactivate eq_pfteq (free row) and fix pft at initialization
                 _eq_pfteq_vd.deactivate()
                 _pft_val = float(_pft_vd.value) if _pft_vd.value is not None else 1.0
                 if _pft_val <= 0:

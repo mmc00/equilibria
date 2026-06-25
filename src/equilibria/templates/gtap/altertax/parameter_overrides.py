@@ -253,11 +253,10 @@ def _recalibrate_af_shares(params: "GTAPParameters") -> None:  # noqa: F821
 
     def _pfa(r: str, f: str, a: str) -> float:
         # pfa = pf*(1 + fctts + fcttx) with fctts=fcttx=0 (GAMS-faithful; the
-        # factor-tax wedge is NOT rtf — see eq_pfaeq, commit 485c227). So pfa==pf
-        # and af reduces to pfa*xf/Σ(pfa*xf) = EVFB/Σ(EVFB), the pure VA factor
-        # share (verified vs CD ref: EU_28/Capital/Svces af=0.5684=evfb-share).
-        # The old (1+rtf) factor mis-split af (Capital 0.488 vs GAMS 0.568),
-        # leaving eq_xfeq residual 0.076 and the regional pf/factY imbalance.
+        # factor-tax wedge is NOT rtf — see eq_pfaeq). So pfa==pf and af reduces to
+        # pfa*xf/Σ(pfa*xf) = EVFB/Σ(EVFB), the pure VA factor share. The old (1+rtf)
+        # factor mis-split af and emitted a phantom ytax('ft') stream (GAMS=0),
+        # regressing both the gtap-mp gate (74%) and altertax (68%).
         return _pf(r, f, a)
 
     af_param: Dict[Tuple[str, str, str], float] = {}

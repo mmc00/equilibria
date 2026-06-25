@@ -135,76 +135,18 @@ def _insert_pdp_pmp_recalc_before_unload(text: str) -> str:
     return pat.sub(fix + r"\1", text, count=1)
 
 
-def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
-                           homotopy_steps: int = 30) -> str:
-    """Replace the numeraire shock with a +tariff% import-tariff shock.
-
-    The altertax CD parameterization (esubva=1, esubd=esubm=0.95) makes the
-    +10% tariff shock a HARD basin: PATH cannot reach it one-shot from the
-    check solution (Locally Infeasible). We therefore ramp the tariff in
-    `homotopy_steps` equal increments, warm-starting each step from the last —
-    mirroring the Python homotopy in diff_altertax.py. We also raise iterlim
-    and attach a PATH options file (path.opt) for the larger iteration budget.
-
-    A coarse 10-step ramp converged to MODEL STATUS 1 Optimal but left the trade
-    block mis-converged: pe was inflated (px[USA,Mnfcs]=3.26!) and all 27 pefobeq
-    cells violated pefob=(1+exptx)·pe — a corrupt reference. A finer 30-step ramp
-    PLUS clean-up re-solves at the full shock settles pe to ≈1.0 (px≈1.0, the
-    economically-sensible response to a 10% tariff) and cuts pefobeq violations to
-    ~12/27 with ≤2% error. So the reference's wild px swings were a convergence
-    artifact, NOT the real altertax shock.
-    """
+def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
     old_block = (
         "   if(sameas(tsim,'shock'),\n"
         "      pnum.fx(tsim) = 1.5 ;\n"
         "   ) ;"
     )
     pct = tariff_increase * 100
-    factor = 1.0 + tariff_increase
-    # Homotopy loop: ramp imptx from check level to +tariff% over N steps.
     new_block = (
-        f"   options limrow = 3, limcol = 3, solprint = off, iterlim = 100000 ;\n"
-        f"   gtap.optfile = 1 ;\n"
+        f"   if(sameas(tsim,'shock'),\n"
         f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
-        f"* === Homotopy continuation ({homotopy_steps} steps) — altertax CD shock is a hard\n"
-        f"* === basin PATH cannot reach one-shot from base (mirrors Python homotopy).\n"
-        f"   if(sameas(tsim,'shock') and years(tsim) gt firstYear,\n"
-        f"      imptx0(r,i,rp)$xwFlag(r,i,rp) = imptx.l(r,i,rp,tsim) ;\n"
-        f"      loop(hstep,\n"
-        f"         imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
-        f"            imptx0(r,i,rp) * (1 + {tariff_increase}*(ord(hstep)/card(hstep))) ;\n"
-        f"         solve gtap using mcp ;\n"
-        f"      ) ;\n"
-        f"*     Clean-up re-solves at the full +{pct:.0f}% shock. The drivers (pf, pe)\n"
-        f"*     converge fine, but the 'definition' variables that depend on them\n"
-        f"*     (pfy/pfa/pefob/pmcif/pm) lag at their init and violate their identity\n"
-        f"*     equations. Re-seed them consistent from the converged drivers before\n"
-        f"*     each solve → pfyeq/pfaeq/pefobeq/pmcifeq/pmeq all go to 0 violations.\n"
-        f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) = imptx0(r,i,rp) * {factor} ;\n"
-        f"      loop(hstep,\n"
-        f"         pfy.l(r,fp,a,tsim)$xfFlag(r,fp,a) =\n"
-        f"            pf.l(r,fp,a,tsim) * (1 - kappaf.l(r,fp,a,tsim)) ;\n"
-        f"         pfa.l(r,fp,a,tsim)$xfFlag(r,fp,a) =\n"
-        f"            pf.l(r,fp,a,tsim) * (1 + fctts.l(r,fp,a,tsim) + fcttx.l(r,fp,a,tsim)) ;\n"
-        f"         pefob.l(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
-        f"            (1 + exptx.l(r,i,rp,tsim) + etax.l(r,i,tsim)) * pe.l(r,i,rp,tsim) ;\n"
-        f"         pmcif.l(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
-        f"            pefob.l(r,i,rp,tsim) + pwmg.l(r,i,rp,tsim)*tmarg.l(r,i,rp,tsim) ;\n"
-        f"         pm.l(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
-        f"            (1 + imptx.l(r,i,rp,tsim) + mtax.l(rp,i,tsim))\n"
-        f"            * pmcif.l(r,i,rp,tsim)/chipm(r,i,rp) ;\n"
-        f"*        pnd/pva are the CD-degenerate price bundles (sigmand=sigmav=1):\n"
-        f"*        pndeq is pnd = prod_i (pa/lambdaio)^io; pva is the px-consistent\n"
-        f"*        inversion of pxeq (px = pnd^and · pva^ava). They lag otherwise\n"
-        f"*        (pnd[USA,Mnfcs]=1.23, pva[USA,Svces]=1.08, both violating).\n"
-        f"         pnd.l(r,a,tsim)$ndFlag(r,a) =\n"
-        f"            prod(i$io(r,i,a,tsim),\n"
-        f"                 (pa.l(r,i,a,tsim)/lambdaio.l(r,i,a,tsim))**io(r,i,a,tsim)) ;\n"
-        f"         pva.l(r,a,tsim)$(vaFlag(r,a) and ava(r,a,tsim) gt 1e-6) =\n"
-        f"            (px.l(r,a,tsim) / (pnd.l(r,a,tsim)**and(r,a,tsim)))\n"
-        f"            ** (1/ava(r,a,tsim)) ;\n"
-        f"         solve gtap using mcp ;\n"
-        f"      ) ;\n"
+        f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
+        f"         imptx.l(r,i,rp,tsim) * {1.0 + tariff_increase} ;\n"
         f"   ) ;"
     )
     if old_block not in text:
@@ -215,47 +157,7 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
     n = text.count(old_block)
     if n != 1:
         raise SystemExit(f"Expected 1 occurrence of shock block, found {n}.")
-    text = text.replace(old_block, new_block, 1)
-
-    # Declare the homotopy set + parameter just before the tsim solve loop.
-    loop_anchor = "rs(r) = yes ;\nts(t) = no ;\n\nloop(tsim,"
-    homotopy_decl = (
-        "rs(r) = yes ;\n"
-        "ts(t) = no ;\n\n"
-        "* --- Homotopy continuation support for the altertax CD shock (hard basin) ---\n"
-        f"set hstep / s1*s{homotopy_steps} / ;\n"
-        'parameter imptx0(r,i,rp) "base tariff rate before homotopy ramp" ;\n\n'
-        "loop(tsim,"
-    )
-    if loop_anchor in text:
-        text = text.replace(loop_anchor, homotopy_decl, 1)
-    else:
-        raise SystemExit(
-            "Could not locate the tsim solve loop to inject homotopy declarations."
-        )
-
-    # Skip the (now homotopy-handled) shock period in the generic one-shot solve.
-    generic_solve = '   if(years(tsim) gt firstYear,\n'
-    generic_solve_guarded = (
-        '   if(years(tsim) gt firstYear and (not sameas(tsim,\'shock\')),\n'
-    )
-    if generic_solve in text:
-        text = text.replace(generic_solve, generic_solve_guarded, 1)
-    return text
-
-
-PATH_OPT = """\
-* PATH options for altertax CD shock convergence (hard basin)
-convergence_tolerance 1e-10
-major_iteration_limit 5000
-minor_iteration_limit 100000
-cumulative_iteration_limit 500000
-crash_method none
-crash_perturb yes
-nms_searchtype line
-gradient_step_limit 1e6
-proximal_perturbation 0
-"""
+    return text.replace(old_block, new_block, 1)
 
 
 def _get_dataset_sets(gdx_path: Path) -> dict:
@@ -511,10 +413,6 @@ def main() -> None:
     out_gms = out_dir / f"comp_{dataset}_altertax_neos.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")
-
-    # PATH options file consumed by `gtap.optfile = 1` in the homotopy shock.
-    (out_dir / "path.opt").write_text(PATH_OPT)
-    print(f"  wrote path.opt (PATH options for homotopy shock)")
 
     remaining = re.findall(r"\$\$?(?:bat)?include\s+\"(\S+)\"", inlined)
     if remaining:

@@ -130,6 +130,7 @@ Cada herramienta ve una capa distinta. Nunca concluir de una sola herramienta �
 | `scripts/parity/triage.py` | CLI de debug parity: locate→isolate→trace→check-warmstart. |
 | `scripts/parity/_triage_steps.py` | Implementación de los 4 pasos de triage. |
 | `scripts/parity/_adapter_protocol.py` | Protocolo ParityAdapter + registry. |
+| `scripts/parity/probe.py` | Probe cacheado (de `main`). `--show <vars>`, `--residuals [--top N]`, `--seed-gams <period> --gdx-ref <gdx>`, `--compare-ref <commit>`, y `--params`/`--params-compare-builds` (Param/calibration diff: detecta constantes horneadas en build según `t0_snapshot` — pf0, base_rgdpmp, p_gf, betap — que la cascada no ve). Acelera la iteración de hipótesis. Pitfall: warm-start con keys GAMS (`a_Food`) falla silenciosamente; normalizar prefijos `a_`/`c_`/`f_`/`r_`. |
 | `src/equilibria/templates/gtap/gtap_solver.py` | Wrapper PATH. `apply_closure`, `apply_aggressive_fixing_for_mcp`, fijación de numerario. |
 | `src/equilibria/templates/gtap/gtap_parameters.py` | Carga de parámetros, `savf_bar`, splits de demanda final. |
 | `GTAP_VALIDATION_STATUS.md` | Status detallado por sesión, hipótesis, hallazgos. |
