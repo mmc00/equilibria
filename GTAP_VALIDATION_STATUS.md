@@ -263,9 +263,9 @@ multi-período `solve_multiperiod`, gateado por `ifSUB`, con vistas a deprecar e
 |---------|--------|-------|--------|
 | base    | —      | code=1 (skip_base_solve, ancla calibrada) | ✅ |
 | **check** | 60.74% | **100.00% EXACTO** | ✅ ecuaciones gtap MP == GAMS |
-| **shock** | 60.74% | **67.12%** | ⛔ basin (ver abajo) |
+| **shock** | 60.74% | **99.70%** | ✅ paridad (0.30% basin Land sluggish) |
 
-**9 fixes concretos cerrados (todos `mode="gtap"`-gated, altertax byte-idéntico):**
+**10 fixes concretos cerrados (todos `mode="gtap"`-gated, altertax byte-idéntico):**
 1. `mode="gtap"|"altertax"` en `solve_multiperiod` (salta betaCal, base_closure, sin CD holdfix).
 2. Referencia GAMS LOCAL generada (`out_gtap_shock_ifsub{0,1}.gdx`, GAMS v53 community, 3x3 cabe).
 3. Cuadrar factor block check/shock (pft/eq_pfteq collapse + NatRes fixing; el MP no tiene `xftflag`).
@@ -280,22 +280,41 @@ multi-período `solve_multiperiod`, gateado por `ifSUB`, con vistas a deprecar e
    **check 80→100% EXACTO.** El parche previo `_holdfix_activity_scale` (xp) quedó contraproducente
    tras este fix → desactivado (flag `_HOLDFIX_ACTIVITY_SCALE_GTAP=False`, con evidencia medida).
 
-**Gap del shock (67.12%) = BASIN genuino, verificado rigurosamente (NO un bug):**
-- El punto GAMS del shock SATISFACE las ecuaciones del MP (~1e-7 en trade/CET/Armington) — es una
-  raíz válida, pero PATH single-jump elige OTRA raíz válida.
-- Causa estructural: `omegax=omegaw=∞` en Manufactures → doméstico/exportado son sustitutos
-  perfectos; el split lo fija solo la demanda vía Armington alto (esubm=7.87). Múltiples allocaciones
-  consistentes para un salto de 10%. GAMS llega por homotopía ~30 pasos; Python da 1 salto.
-- **Homotopía = DEAD END probado:** rampa correctamente warm-starteada da 67.12% bit-idéntico en
-  N=5/10/20/30. La rama equivocada está SUAVEMENTE conectada al seed del check (al primer 1% de
-  arancel la rama continua de Python va con signo equivocado y nunca gira) — no hay fold que una
-  rampa más fina atrape. Cerrar más requeriría anclar el split a mano = sembrar desde la respuesta
-  (no fiel). El single-jump 67.12% es el mejor resultado FIEL.
+9. **Cadena de 3 eslabones acoplados que cerró el shock 67.12→99.70%** (NO era basin — era un
+   shock incompletamente aplicado contaminando ingreso→demanda→reallocación Armington):
+   - **Link 1 — ancla NatRes:** NatRes es el factor sector-específico (`fnm`); su `eq_pfeq` con
+     `etaff=0` es `xf==xscale·gf` (vertical, pf-libre) → `pf[NatRes]` es un free-DOF que explotaba
+     a 9.27 bajo el shock diagonal. Fix: holdfix `xf[NatRes,a]` al valor previo + desactivar la
+     `eq_pfeq` redundante (GAMS holdfixea xf[NatRes] entre períodos, GDX-confirmado); quitar
+     `eq_xfeq[USA,NatRes,Mnfcs]` de `_REDUNDANT_FACTOR_ROWS`.
+   - **Link 2 — arancel doméstico-diagonal:** `_apply_imptx_shock` SALTABA la diagonal `r==rp`;
+     GAMS la shockea (GDX: `imptx[EU_28,Mnfcs,EU_28]` 0→0.1, `imptx[ROW,Mnfcs,ROW]` 0.029→0.132).
+     Fix: no saltar la diagonal en gtap-mode. `_rebuild_eq_pmeq_shock` la rutea sola (se auto-saltea
+     las celdas sin shock).
+   - **Link 3 — fuga de ingreso (la causa dominante):** `eq_ytax[mt]` (gtap_model_equations.py:5474)
+     horneaba el `imptx` BASE; con la diagonal shockeada, el stream de impuesto diagonal se perdía
+     del `regY` → ingreso/demanda colapsaba → el Armington "sobre-disparaba" reallocando sobre un
+     ingreso EQUIVOCADO. Fix: `_rebuild_eq_ytax_mt_shock` (espejo de `_rebuild_eq_pmeq_shock`) con
+     `imptx` shockeado (filtro col2 = convención `(exporter,good,importer)` = GAMS ytaxeq:680,
+     verificado ytax[USA,mt]=0.26003 exacto); `_recompute_ytax_mt` no-op para gtap-mode.
 
-**Tech-debt fiel pendiente (no tocar hasta cerrar el basin):** `eq_ytax[mt]` (gtap_model_equations.py:5476)
-hornea `imptx` base como literal (clase eq_pmeq); hoy enmascarado por el post-solve `_recompute_ytax_mt`.
-Arreglarlo en-ecuación HOY regresiona (shock code 1→2, 67→64%) porque empuja revenue a un loop de
-ingreso off-basin. Diferir hasta cerrar el basin del bloque real.
+   **Combinados:** check 100%, shock 99.70%, 3 períodos code=1, resid 4.1e-11. **Probado que el
+   punto GAMS ES un fixed-point** (seed-at-GAMS da 100.00%). Los 3 eslabones eran UN bug visto
+   desde 3 ángulos (el shock incompleto propagándose).
+
+10. (incluido en la cadena arriba — el conjunto de 3 links es el fix #10)
+
+**Gap residual del shock (0.30%) = basin genuino, PROBADO (no asumido):** el factor Land sluggish
+de EU_28/ROW (`pft[EU,Land]` 3.9%, `pf/xf` ~2%). El seed-at-GAMS sobre la cadena completa SE SOSTIENE
+en 100.00% → el punto GAMS es alcanzable; el 0.30% es un efecto single-jump del CET de Land sluggish,
+irreducible sin homotopía. **Es 0.30%, no 33%** — la homotopía sería el único lever, pero el costo/beneficio
+no lo justifica para 0.30%.
+
+**Lección sobre "basin":** la regla `[[feedback_gams_is_source_of_truth]]` / `basin NUNCA es la respuesta`
+se cumplió al pie. Un veredicto previo de "shock 67% = basin, homotopía dead-end" era una conclusión
+PREMATURA — debajo había una cadena de 3 bugs concretos (diagonal/NatRes/ytax[mt]). Cada vez que se
+empujó ("¿por qué baseline sí y shock no?"), apareció el siguiente eslabón. Solo el 0.30% final es basin,
+y se probó con seed-at-GAMS, no se asumió.
 
 **Por qué costó (lección):** gtap y altertax difieren genuinamente (gtap usa esubva/CES real → pva
 DETERMINADO; altertax fuerza CD → pva libre, pinchado por holdfix). Varios fixes iniciales aplicaron
@@ -304,5 +323,8 @@ La maquinaria altertax (`_holdfix_cd_nest`/`_complete_derived_seed`) NO transfie
 prenderla siembra desde GAMS o sobre-restringe). No hubo atajo vía altertax; el camino capa-por-capa
 con la cascada de tools fue el único fiel.
 
-**Gate:** `tests/templates/gtap/test_gtap_multiperiod_parity.py` (local-only, SKIP-safe), floor shock 67.0%.
-SP NO deprecado (el shock no está a paridad). Spec/plan: `docs/superpowers/specs|plans/2026-06-23-gtap7-multiperiod-only*`.
+**Gate:** `tests/templates/gtap/test_gtap_multiperiod_parity.py` (local-only, SKIP-safe), floor shock 99.0%.
+**Deprecación SP:** ahora SOBRE LA MESA — el shock está a paridad (99.70%, 0.30% basin probado).
+gtap7_3x3 cierra el ciclo base→check→shock con check EXACTO y shock a paridad. Pendiente para deprecar:
+escalar la cadena a los demás datasets (5x5/10x7/15x10) y portar el gate `.nl` al motor MP (Tareas 3-6
+del plan). Spec/plan: `docs/superpowers/specs|plans/2026-06-23-gtap7-multiperiod-only*`.
