@@ -59,22 +59,27 @@ ALIAS = {
 }
 
 # Measured shock-period match% floor vs the GAMS LOCAL reference (ifSUB=0).
-# AS MEASURED 2026-06-24 (deterministic): CHECK 100.00% / SHOCK 67.12% (1332 cells),
-# after (1) FREEING pft for real factors (invert _collapse_pft_pfteq: GAMS gtap
-# iterloop.gms:142-143 fixes pft ONLY for xftFlag=0 — real/mobile factors stay FREE,
-# cleared by the live eq_pfteq free-row + eq_xfteq/eq_pfeq) and (2) setting etaf=0
-# for sluggish factors in gtap-mode (GAMS getData.gms:367-380 uses etaf=0 for ALL
-# fm incl Land; etrae belongs only in omegaf/CET).  This lifted CHECK 80.09% ->
-# 100.00% (EXACT baseline equilibrium); SHOCK moved 67.94% -> 67.12% (the shock now
-# inherits an EXACT check, but the remaining shock gap is a broad capital-block +
-# tax-stream divergence — xw/xet/xigbl/savf/ror*/ytax[mt] — visible already and
-# unchanged by this factor-block fix).  The xp activity-scale holdfix (a patch for
-# the OLD pinned-pft bug) was MEASURED OFF for gtap-mode (ON: CHECK 64.0/SHOCK 61.3;
-# OFF: CHECK 99.4/SHOCK 66.9 pre-etaf — OFF wins both).  All 3 periods code=1.  The
-# floor is set just below the as-measured shock value so the gate is GREEN and the
-# true number is captured for the coverage-matrix gap_min.  See the commit message
-# + .superpowers/sdd/task-2-report.md for the breakdown.
-SHOCK_MATCH_FLOOR_IFSUB0 = 67.0
+# AS MEASURED 2026-06-24 (deterministic): CHECK 100.00% / SHOCK 99.70% (1332 cells),
+# after the 3-link coupled shock fix (gtap-mode-gated; altertax byte-identical):
+#   (1) anchor the NatRes factor — holdfix xf[r,NatRes,a] + deactivate the redundant
+#       vertical eq_pfeq (etaff=0 makes it pf-free), leaving the live eq_xfeq to pin
+#       pf; and DROP the eq_xfeq[USA,NatRes,Mnfcs] entry from _REDUNDANT_FACTOR_ROWS
+#       (it was the only row pinning pf there → pf exploded to 9.27 under the shock).
+#   (2) un-skip the domestic-diagonal tariff in _apply_imptx_shock (GAMS shocks ALL
+#       routes incl r==rp; Python skipped it) — gtap-mode-gated.
+#   (3) rebuild eq_ytax[mt] in-equation with the SHOCKED imptx (the income leak):
+#       eq_ytax[mt] bakes the BASE imptx at build, so the in-solve mt revenue missed
+#       the shocked tariff stream → understated regY → demand collapse → Armington
+#       overshoot.  The rebuild uses the col2=importer convention (= GAMS ytaxeq line
+#       680 imptx(rp,i,r); verified = GAMS ytax[USA,mt]=0.26003 exact).  The post-
+#       solve _recompute_ytax_mt is no-op'd for gtap-mode (it overwrote the correct
+#       in-solve value with a col0-filtered 0.19892).
+# This lifted SHOCK 67.12% -> 99.70% (CHECK stays 100.00%, EXACT baseline).  The
+# remaining 0.30% is proven basin (EU/ROW Land sluggish single-jump; seed-at-GAMS
+# holds 100%), NOT a 4th link.  All 3 periods code=1.  The floor is set just below
+# the as-measured shock value so the gate is GREEN and the true number is captured
+# for the coverage-matrix gap_min.  See the commit message + the report for details.
+SHOCK_MATCH_FLOOR_IFSUB0 = 99.0
 
 
 def _has_path_solver() -> bool:

@@ -599,3 +599,119 @@ etaf + xp-OFF rationale.
 - Worst shock cell pf[USA,NatRes,Mnfcs]=9.27 vs GAMS 1.098 is the single dangling
   NatRes cell whose eq_xfeq we deactivate to square (1 of 1332 cells); it does not
   materially move the shock match%.
+
+---
+---
+
+# Task 2 Fix #5 — 3-link coupled shock fix (diagonal tariff + NatRes anchor + ytax[mt] income leak) — 2026-06-24
+
+**Status: DONE** (gate GREEN; CHECK 100.00%, SHOCK 67.12 -> 99.70%, all 3 periods
+code=1; altertax byte-for-byte unchanged.)
+
+Worktree: `gtap7-multiperiod-matrix`. All three links applied as ONE commit,
+gtap-mode-gated. The three are one coupled bug: an incomplete diagonal tariff
+shock contaminating income -> demand -> Armington.
+
+## Link 1 — anchor the NatRes factor (kills the pf free-DOF explosion)
+
+`_collapse_pft_pfteq` (gtap_multiperiod_driver.py), DANGLING-NatRes `else:` branch:
+in addition to the existing xft=init/pft=1.0 fixing, for each `a in m.a` where
+`xf[(_r,_f,a,period)]` exists and is nonzero — **holdfix xf at its seeded value**
+AND **deactivate the redundant vertical `eq_pfeq[(_r,_f,a,period)]`** (etaff=0 makes
+eq_pfeq `xf == xscale*gf`, vertical/pf-free, so pf is a free DOF that explodes to
+9.27 under the diagonal shock). `eq_xfeq` stays active and now pins pf. Square-
+preserving (fix xf -1 DOF, deactivate eq_pfeq -1 row). GDX-confirmed GAMS holdfixes
+xf[r,NatRes,a] byte-identical across base/check/shock. Added `_xf`/`_eq_pfeq`
+handles to the function.
+
+AND in `_REDUNDANT_FACTOR_ROWS`: **REMOVED** `("eq_xfeq", ("USA", "NatRes",
+"Mnfcs"))` — it was deleting the only row that pins pf[USA,NatRes,Mnfcs] (the
+proximate cause of the explosion). The three `eq_pfyeq[*,Land,Food]` entries kept.
+
+## Link 2 — un-skip the domestic-diagonal tariff
+
+`_apply_imptx_shock(params, factor=0.10, gtap_mode=False)`: added `gtap_mode` param;
+the diagonal skip `if len(key)==3 and key[0]==key[2]: continue` is now gated
+`if not gtap_mode and ...` so gtap-mode shocks the domestic diagonal too (GDX:
+imptx[EU_28,Mnfcs,EU_28] 0->0.1, imptx[ROW,Mnfcs,ROW] 0.029->0.132 — GAMS shocks
+ALL routes incl r==rp). Call site (Phase-3 shock-params build) passes
+`gtap_mode=_gtap_mode`. `_rebuild_eq_pmeq_shock` self-skips no-shock cells
+(line 470-471) so the newly-shocked diagonal pm cells rebuild automatically — no
+change to that helper.
+
+## Link 3 — inject the shock into eq_ytax[mt] (the income leak; the dominant link)
+
+New helper `_rebuild_eq_ytax_mt_shock(m, params_shock)`, mirror of
+`_rebuild_eq_pmeq_shock`, placed right after it; rebuilds ONLY the
+`eq_ytax[*,'mt','shock']` cells with the SHOCKED imptx, IN the solved equation:
+
+```
+ytax[r,mt,shock] == Σ_{(exp,i,imp): imp==r}
+    (imptx_shocked[(exp,i,imp)] + mtax) · pmcif[exp,i,imp,shock] · xw[exp,i,imp,shock]
+```
+
+Idempotent (del+recreate `m.eq_ytax_mt_shock_rebuilt` over a fresh dimen-1 Set
+`m.eq_ytax_mt_shock_idx`). Hooked in the `if _gtap_mode:` block right after the
+eq_pmeq rebuild. The post-solve `_recompute_ytax_mt` call is gated `if not
+_gtap_mode:` (it now OVERWRITES the correct in-solve value with a slightly-off one).
+
+### KEY-CONVENTION CORRECTION (vs the brief's literal text)
+The brief said to mirror the gtap-mode `_recompute_ytax_mt` convention (col0=
+importer filter). That convention is itself LATENTLY BUGGY: I verified against the
+GAMS GDX that the **col2=importer** filter (the data convention is
+`(exporter, good, importer)`; GAMS ytaxeq model.gms:680 sums `imptx(rp,i,r)` over
+importer r=col2) gives `ytax[USA,mt] = 0.26003 = GAMS EXACT`, whereas the col0
+filter gives only 0.19892. So the rebuild uses **col2=importer** (matching the
+eq_ytax BUILD at gtap_model_equations.py:5474-5481 AND GAMS line 680), not the
+col0 convention from `_recompute_ytax_mt`. This is the same "produce the value GAMS
+reports" intent the brief states; the col0 text was an artifact of the buggy
+post-solve helper it referenced. With col0 the SHOCK measured only 95.50%
+(ytax[mt] worst cells unmatched); with the verified col2 fix it is 99.70%.
+
+## Measured results (deterministic)
+
+Period codes (ifSUB=0): `{'base': 1, 'check': 1, 'shock': 1}` — all converge.
+
+| Period | match% vs GAMS LOCAL (ifSUB=0) | cells | vs prior |
+|--------|--------------------------------|-------|----------|
+| check  | **100.00%** | 1326 | unchanged (EXACT baseline) |
+| shock  | **99.70%**  | 1332 | **+32.58pp** from 67.12% |
+
+Matches the brief's verified 99.70% exactly. Worst remaining shock cells:
+pft[EU_28,Land] rel 0.039, pf[EU_28,Land,Food] rel 0.024, xf[EU_28,Land,Food]
+rel 0.014, pft[ROW,Land] rel 0.012 — the proven EU/ROW Land sluggish single-jump
+basin (seed-at-GAMS holds 100%), NOT a 4th link. ytax[mt] cells are now matched
+(no longer in the worst list).
+
+## Test floor
+`SHOCK_MATCH_FLOOR_IFSUB0` 67.0 -> **99.0** (just below the as-measured 99.70%) +
+comment fully refreshed to document the 3-link fix.
+
+## Regression verification (commands + output)
+1. gtap-mp gate:
+   `uv run pytest tests/templates/gtap/test_gtap_multiperiod_parity.py -v` -> `1 passed in 4.22s`
+2. Altertax NOT regressed (top-priority constraint, byte-identical):
+   `uv run pytest tests/templates/gtap/test_altertax_multiperiod_parity.py -k gtap7_3x3 -v`
+   -> `2 passed`  (full suite: `6 passed, 5 skipped` — skips are missing fixtures)
+3. nl-parity (byte-for-byte coefficient gate, obligatory per CLAUDE.md):
+   `uv run pytest tests/templates/gtap/test_gtap7_nl_parity.py -v` -> `5 passed in 10.10s`
+4. The `test_multiperiod_driver.py` eq_u[ROW,base] complex-eval failure is
+   PRE-EXISTING (per the brief; fails at clean HEAD) — mentioned, not chased.
+
+## Files changed
+- `src/equilibria/templates/gtap/gtap_multiperiod_driver.py`
+  (Link 1: NatRes anchor in `_collapse_pft_pfteq` + `_REDUNDANT_FACTOR_ROWS` edit;
+  Link 2: `_apply_imptx_shock` gtap_mode param + call-site; Link 3: new
+  `_rebuild_eq_ytax_mt_shock` helper + gtap-mode hook + `_recompute_ytax_mt` gated
+  to `not _gtap_mode`). Altertax (`not _gtap_mode`) path byte-for-byte unchanged.
+- `tests/templates/gtap/test_gtap_multiperiod_parity.py` (floor 67.0 -> 99.0 +
+  comment refresh).
+
+## Concerns
+- ONE correction vs the brief's literal text: the ytax[mt] importer filter is
+  col2 (verified = GAMS 0.26003 exact), NOT the col0 convention the brief copied
+  from the buggy post-solve `_recompute_ytax_mt`. Same intent, correct convention;
+  documented in the helper docstring + this report. With the col0 text verbatim
+  the shock was 95.50%; with the verified col2 fix it is the brief's 99.70%.
+- Remaining 0.30% is the proven EU/ROW Land sluggish single-jump basin (seed-at-
+  GAMS holds 100%), NOT a 4th link — NOT inflated.
