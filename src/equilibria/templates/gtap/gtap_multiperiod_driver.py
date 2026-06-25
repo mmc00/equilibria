@@ -281,8 +281,10 @@ def _collapse_pft_pfteq(m, period: str) -> int:
     _eq_pfteq = getattr(m, "eq_pfteq", None)
     _eq_xfteq = getattr(m, "eq_xfteq", None)
     _eq_xft = getattr(m, "eq_xft", None)
+    _eq_pfeq = getattr(m, "eq_pfeq", None)
     _pft = getattr(m, "pft", None)
     _xft = getattr(m, "xft", None)
+    _xf = getattr(m, "xf", None)
     if _pft is None:
         return 0
     _n = 0
@@ -333,6 +335,38 @@ def _collapse_pft_pfteq(m, period: str) -> int:
                     _pftvd.fix(1.0)
                     _n += 1
 
+                # NatRes is the sector-specific (fnm) factor: eq_pfeq is
+                # `xf == xscale*gf*(pfy/pabs)^etaff` with etaff=0 → vertical
+                # supply (`xf == xscale*gf`, pf-free), so pf[NatRes,a] is a free
+                # DOF that explodes (→9.27) once the diagonal tariff enters.
+                # GAMS holdfixes xf[r,NatRes,a] across periods (GDX-confirmed:
+                # base/check/shock byte-identical) and lets the LIVE eq_xfeq set
+                # pf.  Mirror that: holdfix xf[NatRes,a] at its seeded value and
+                # deactivate the redundant vertical eq_pfeq row (leave eq_xfeq
+                # active → it now pins pf).  Square-preserving (fix xf −1 DOF,
+                # deactivate eq_pfeq −1 row).
+                if _xf is not None:
+                    for _a in m.a:
+                        try:
+                            _xfvd = _xf[(_r, _f, _a, period)]
+                        except KeyError:
+                            continue
+                        _xfval = (float(_xfvd.value)
+                                  if _xfvd.value is not None else 0.0)
+                        if abs(_xfval) < 1e-12:
+                            continue
+                        if not _xfvd.fixed:
+                            _xfvd.fix(_xfval)
+                            _n += 1
+                        if _eq_pfeq is not None:
+                            try:
+                                _pfeqrow = _eq_pfeq[(_r, _f, _a, period)]
+                                if _pfeqrow.active:
+                                    _pfeqrow.deactivate()
+                                    _n += 1
+                            except KeyError:
+                                pass
+
     # Freeing pft over-determines the factor block by a few rows.  Deactivate the
     # redundant rows the diagnosis identified (eq_pfyeq[*,Land,Food] is already
     # pinned by the CET pfeq; eq_xfeq[USA,NatRes,Mnfcs] is redundant) so the
@@ -354,14 +388,17 @@ def _collapse_pft_pfteq(m, period: str) -> int:
 # Redundant factor-block rows to deactivate once pft is freed (gtap-mode).  Each
 # is over-determining given pft free + eq_pfteq/eq_xfteq/eq_pfeq live:
 #   - eq_pfyeq[r,Land,Food]: Land's per-activity pfy is pinned by the CET pfeq.
-#   - eq_xfeq[USA,NatRes,Mnfcs]: redundant factor-demand row for the NatRes cell.
+# NOTE: eq_xfeq[USA,NatRes,Mnfcs] was REMOVED — it is the only row that pins
+# pf[USA,NatRes,Mnfcs]; deleting it was the proximate cause of the pf free-DOF
+# explosion under the diagonal shock.  The NatRes block is now squared in
+# _collapse_pft_pfteq (holdfix xf[NatRes,a] + deactivate the vertical eq_pfeq,
+# leaving eq_xfeq live to pin pf).
 # This is the diagnosis-identified set; iterate via the solver's
 # "unmatched active eqs (N): [...]" log only within this family if needed.
 _REDUNDANT_FACTOR_ROWS = (
     ("eq_pfyeq", ("EU_28", "Land", "Food")),
     ("eq_pfyeq", ("USA", "Land", "Food")),
     ("eq_pfyeq", ("ROW", "Land", "Food")),
-    ("eq_xfeq", ("USA", "NatRes", "Mnfcs")),
 )
 
 
@@ -499,6 +536,117 @@ def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _rebuild_eq_ytax_mt_shock — inject the tariff shock INTO the solved ytax[mt] eq
+# ---------------------------------------------------------------------------
+def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
+    """Rebuild ONLY the eq_ytax[*,'mt','shock'] cells so the import-tax revenue
+    stream carries the SHOCKED imptx IN the solved equation.  gtap-mode only.
+
+    Why the rebuild is needed (the dominant income leak)
+    ----------------------------------------------------
+    eq_ytax[r,'mt'] (gtap_model_equations.py:5474-5481) bakes the BASE imptx
+    coefficient at build time:
+
+        ytax[r,mt] == Σ_{(e,i,r): importer==r} (imptx_base + mtax_init)·pmcif·xw
+
+    With the diagonal shocked (Link 2), the in-solve mt revenue MISSES the entire
+    diagonal tariff stream on the large self-import flows → understates regY →
+    income/demand collapse → Armington overshoot.  This is the dominant link.
+    The post-solve `_recompute_ytax_mt` only patches the Var value AFTER the solve
+    (regY/demand already solved on the wrong mt), so it cannot heal the leak.
+
+    Faithful fix
+    ------------
+    Replace eq_ytax[*,'mt','shock'] with the SHOCKED form, IN the solved system,
+    mirroring the eq_ytax build (gtap_model_equations.py:5474-5481) AND GAMS
+    ytaxeq line 680 (`imptx(rp,i,r)·M_PMCIF(rp,i,r)·xw(rp,i,r)`):
+
+        ytax[r,mt,shock] == Σ_{(exp,i,imp): imp==r}
+            (imptx_shocked[(exp,i,imp)] + mtax)·pmcif[exp,i,imp,shock]·xw[exp,i,imp,shock]
+
+    The data convention is (exporter, good, importer) → col 2 is the IMPORTER, so
+    the importer-keyed filter is col 2 == r (verified against the GAMS GDX:
+    col2-filtered sum = 0.26003 = GAMS ytax[USA,mt] EXACT; the col0 filter gives
+    only 0.19892 — that is the latent bug in the post-solve _recompute_ytax_mt
+    gtap branch, which this in-equation rebuild now bypasses).  The shocked POWER
+    rate is already stored in params_shock.taxes.imptx by `_apply_imptx_shock`;
+    the bilinear pmcif·xw is on the live shock Vars; mtax is read at its current
+    Var value (≈0 init for these datasets), mirroring the eq_ytax build.
+
+    Idempotent on re-solve (del+recreate the replacement component), exactly like
+    _rebuild_eq_pmeq_shock.  gtap-mode ONLY (caller gates).  Returns the count of
+    cells rebuilt.
+    """
+    from pyomo.environ import Constraint, Set, value as _V
+
+    eq = getattr(m, "eq_ytax", None)
+    ytax = getattr(m, "ytax", None)
+    pmcif = getattr(m, "pmcif", None)
+    xw = getattr(m, "xw", None)
+    if eq is None or ytax is None or pmcif is None or xw is None:
+        return 0
+    imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
+    if not imptx_map:
+        return 0
+
+    _mtax = getattr(m, "mtax", None)
+
+    def _mtax_val(imp, i):
+        if _mtax is None:
+            return 0.0
+        try:
+            return float(_V(_mtax[(imp, i, "shock")]))
+        except Exception:
+            return 0.0
+
+    # Build the per-importer list of (good, exporter, imptx_shocked) terms, keyed
+    # by the IMPORTER = col 2 (data convention is (exporter, good, importer); GAMS
+    # ytaxeq line 680 sums imptx(rp,i,r) over the importer r = col 2).
+    terms_by_r: dict[str, list] = {}
+    for (exp, i, imp), imptx_shocked in imptx_map.items():
+        terms_by_r.setdefault(imp, []).append((i, exp, float(imptx_shocked)))
+
+    # Only rebuild cells whose shock eq exists and is active.
+    rebuilt_r: list[str] = []
+    for r in list(m.r):
+        try:
+            cd = eq[(r, "mt", "shock")]
+        except (KeyError, TypeError):
+            continue
+        if not getattr(cd, "active", False):
+            continue
+        if r not in terms_by_r:
+            continue
+        rebuilt_r.append(r)
+
+    if not rebuilt_r:
+        return 0
+
+    # Deactivate the original shock cells we are replacing.
+    for r in rebuilt_r:
+        try:
+            eq[(r, "mt", "shock")].deactivate()
+        except (KeyError, AttributeError):
+            pass
+
+    if hasattr(m, "eq_ytax_mt_shock_rebuilt"):
+        m.del_component(m.eq_ytax_mt_shock_rebuilt)
+    if hasattr(m, "eq_ytax_mt_shock_idx"):
+        m.del_component(m.eq_ytax_mt_shock_idx)
+    m.eq_ytax_mt_shock_idx = Set(initialize=sorted(rebuilt_r), dimen=1)
+
+    def _rule(_m, r):
+        total = 0.0
+        for (i, exp, imptx_shocked) in terms_by_r[r]:
+            total += (imptx_shocked + _mtax_val(r, i)) * \
+                _m.pmcif[exp, i, r, "shock"] * _m.xw[exp, i, r, "shock"]
+        return _m.ytax[r, "mt", "shock"] == total
+
+    m.eq_ytax_mt_shock_rebuilt = Constraint(m.eq_ytax_mt_shock_idx, rule=_rule)
+    return len(rebuilt_r)
+
+
+# ---------------------------------------------------------------------------
 # _replicate_sp_bounds — copy lower/upper bounds from single-period to mp
 # ---------------------------------------------------------------------------
 def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
@@ -550,15 +698,22 @@ def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
 # ---------------------------------------------------------------------------
 # _apply_imptx_shock — multiply all imptx entries by (1+factor) tariff-power
 # ---------------------------------------------------------------------------
-def _apply_imptx_shock(params, factor: float = 0.10) -> None:
+def _apply_imptx_shock(params, factor: float = 0.10, gtap_mode: bool = False) -> None:
     """Apply tm_pct-mode shock to params.taxes.imptx in-place.
 
     Mirrors GAMS: tm.fx = tm.l * (1+shock)
       → imptx_new = (1 + imptx_old) * (1 + factor) - 1
+
+    gtap_mode: GAMS shocks ALL routes, INCLUDING the domestic diagonal r==rp
+    (GDX-confirmed: imptx[EU_28,Mnfcs,EU_28] 0→0.1, imptx[ROW,Mnfcs,ROW]
+    0.029→0.132 — these are intra-region imports in the aggregation, not zero
+    domestic tariffs).  In altertax-mode (default) the diagonal is skipped
+    (byte-identical to before).
     """
     for key in list(params.taxes.imptx.keys()):
-        # Skip diagonal (domestic sales, rp==r) — no tariff
-        if len(key) == 3 and key[0] == key[2]:
+        # Skip diagonal (domestic sales, rp==r) — no tariff.  In gtap-mode GAMS
+        # shocks the diagonal too, so do NOT skip it there.
+        if not gtap_mode and len(key) == 3 and key[0] == key[2]:
             continue
         old = float(params.taxes.imptx[key] or 0.0)
         params.taxes.imptx[key] = (1.0 + old) * (1.0 + factor) - 1.0
@@ -1533,9 +1688,10 @@ def solve_multiperiod(
             pass
 
     # ── Phase 3: SHOCK period ────────────────────────────────────────────────
-    # Apply +10% imptx shock to params (tm_pct mode).
+    # Apply +10% imptx shock to params (tm_pct mode).  gtap-mode shocks the
+    # domestic diagonal too (GAMS shocks ALL routes); altertax skips it.
     params_shock = copy.deepcopy(p_alt)
-    _apply_imptx_shock(params_shock, factor=0.10)
+    _apply_imptx_shock(params_shock, factor=0.10, gtap_mode=_gtap_mode)
 
     # Freeze base and check; leave shock free.
     freeze_inactive_periods(m, "shock")
@@ -1688,6 +1844,20 @@ def solve_multiperiod(
                 "shock period: rebuilt %d eq_pmeq cells with the tm_pct shock "
                 "power (shock-in-equations, gtap-mode)", _n_pmeq)
 
+        # gtap-mode: inject the tariff shock INTO the solved eq_ytax[*,'mt','shock']
+        # cells too. eq_ytax[mt] bakes the BASE imptx coefficient at build; with the
+        # diagonal shocked (Link 2) the in-solve mt revenue otherwise misses the
+        # entire diagonal tariff stream → understates regY → demand collapse →
+        # Armington overshoot (the dominant income leak). The post-solve
+        # _recompute_ytax_mt only patches the Var AFTER the solve (too late: regY/
+        # demand already solved wrong), so it is no-op'd for gtap-mode below.
+        _n_ymt = _rebuild_eq_ytax_mt_shock(m, params_shock)
+        if _n_ymt:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: rebuilt %d eq_ytax[mt] cells with the shocked "
+                "imptx (income-leak fix, shock-in-equations, gtap-mode)", _n_ymt)
+
     # Solve shock on m with shocked params.
     r_shk = run_gtap._run_path_capi_nonlinear_full(
         m, params_shock,
@@ -1704,25 +1874,21 @@ def solve_multiperiod(
     # Recompute ytax[mt]/ytaxshr[mt] (import-tax revenue) post-solve. eq_ytax for
     # gy='mt' bakes the BASE imptx coefficient; in the shock the solved xw/pmcif carry
     # the +10% shock but the imptx coefficient does not, so ytax[mt] is ~8.8% low.
-    # Shared by ifSUB=0 AND ifSUB=1 (not an ifSUB issue), so NOT gated on _if_sub.
-    # Uses base imptx (p_alt) * (1+shock_factor); params_shock carries the POWER, wrong.
-    # Reads pmcif/xw (unaffected by the pm recompute below), so order vs pm is free.
-    # gtap mode: pass params (not p_alt) since they are the same object; kept explicit.
-    # KEPT ON for gtap-mode even after the eq_pmeq rebuild. ytax[mt] reads pmcif/xw
-    # (NOT pm), so the in-equation pm wedge does not double-apply here. eq_ytax for
-    # gy='mt' still bakes the BASE imptx coefficient at build, so the RAW solved
-    # ytax[mt] is far too low (MEASURED 2026-06-24: USA 0.027 vs GAMS 0.260); the
-    # recompute lifts it toward GAMS (USA 0.157, the closest of the two variants
-    # measured — recompute OFF leaves it at 0.027). So recompute ON is the faithful
-    # choice (closer to GAMS ytax[USA,mt]=0.260 than OFF). Order vs the pm path is
-    # free (reads pmcif/xw only).
-    _recompute_params = params if _gtap_mode else p_alt
-    _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10,
-                               gtap_mode=_gtap_mode)
-    if _n_mt:
-        import logging as _logging
-        _logging.getLogger(__name__).info(
-            "shock period: recomputed %d ytax[mt]/ytaxshr[mt] cells", _n_mt)
+    # ALTERTAX-ONLY now: in gtap-mode the shock is injected IN the solved
+    # eq_ytax[mt] (_rebuild_eq_ytax_mt_shock above) so regY/demand solve on the
+    # correct revenue. Re-running the post-solve recompute there OVERWRITES the
+    # correct in-solve value with a slightly-off one (toggle: ON=99.10%,
+    # OFF=99.70%), so it is gated to NOT gtap-mode.
+    # Altertax path is byte-identical to before (uses base imptx p_alt *
+    # (1+shock_factor); reads pmcif/xw, order vs pm free).
+    if not _gtap_mode:
+        _recompute_params = p_alt
+        _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10,
+                                   gtap_mode=_gtap_mode)
+        if _n_mt:
+            import logging as _logging
+            _logging.getLogger(__name__).info(
+                "shock period: recomputed %d ytax[mt]/ytaxshr[mt] cells", _n_mt)
 
     # Under ifSUB, recompute the report-only margin/price vars post-solve (GAMS
     # postsim). They are not solved (their eqs are deactivated, the real eqs use the
