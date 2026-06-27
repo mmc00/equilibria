@@ -22,16 +22,20 @@ GDX Format Notes (Version 7):
 - "_DOMS_" marker: Domain definitions
 - "_DATA_" marker: Data records (one per symbol)
 
-Symbol table entry structure (after _SYMB_ marker + 4-byte count):
-- 1 byte: name length
-- N bytes: name (ASCII)
-- 1 byte: type flag (0x01=set, 0x20=alias, 0x3f/0x66=parameter)
-- 25 bytes: metadata
-  - byte 7: dimension count
-  - bytes 16-19: record count (little-endian uint32)
-- 1 byte: description length
-- M bytes: description
-- 6 bytes: padding
+Symbol table entry structure (after _SYMB_ marker + 4-byte count). All
+little-endian; let q = offset just past the name bytes:
+- 1 byte:   name length
+- N bytes:  name (ASCII)
+- q+0  u64: data_offset (byte offset of this symbol's _DATA_ section)
+- q+8  u32: dimension
+- q+12 u8:  TYPE — 0=set 1=parameter 2=variable 3=equation 4=alias (decode directly)
+- q+13 u8:  userinfo (var subtype / equ type / alias target symbol index)
+- q+17 u32: record count
+- q+26 u8:  description length
+- q+27 D:   description (ASCII)
+- tail at endf=q+27+D: endf+1 dom_flag — 0x00 → 6-byte tail (no domain);
+  0x01 → 2 + 4*dim + 4 bytes (per-dimension u32 domain-set indices). The tail
+  length is self-describing, so advancing to the next record is deterministic.
 """
 
 # Standard library imports
@@ -296,99 +300,71 @@ def read_symbol_table_from_bytes(data: bytes) -> list[dict[str, Any]]:
 
     symbols: list[dict[str, Any]] = []
 
+    # GDX v7 _SYMB_ record (little-endian), parsed by its real layout — NOT by the
+    # old fixed-offset + skip-zeros heuristic, which read the low byte of the u64
+    # data_offset as a 1-byte "type_flag" and desynced after ~52 of 453 symbols.
+    # Let q = offset just after the name:
+    #   q+0  u64 data_offset   q+8  u32 dim   q+12 u8 TYPE (0=set 1=par 2=var 3=equ
+    #   4=alias)   q+13 u8 userinfo   q+17 u32 nrec   q+26 u8 desc_len   q+27 desc.
+    # Tail at endf=q+27+desc_len: endf+0 sep, endf+1 dom_flag (0=no domain → 6-byte
+    # tail; 1=explicit → 2 + 4*dim + 4 bytes of u32 domain-set indices). Advancing by
+    # the declared tail length is deterministic — no zero-skipping guess.
     for _ in range(num_symbols):
-        if pos + 35 > len(data):  # Minimum symbol size
-            break
-
         try:
-            # Name length (1 byte)
             name_len: int = data[pos]
             pos += 1
-
             if name_len == 0 or name_len > 64 or pos + name_len > len(data):
                 break
-
-            # Name
             name: str = data[pos : pos + name_len].decode("utf-8", errors="replace")
             pos += name_len
 
-            # Type flag (1 byte)
-            type_flag: int = data[pos]
-            pos += 1
-
-            # Metadata (25 bytes)
-            # - byte 7: dimension count
-            # - bytes 16-19: record count
-            if pos + 25 > len(data):
+            q: int = pos
+            if q + 27 > len(data):
                 break
+            data_offset: int = struct.unpack_from("<Q", data, q)[0]
+            dimension: int = struct.unpack_from("<I", data, q + 8)[0]
+            sym_type: int = data[q + 12]
+            userinfo: int = data[q + 13]
+            records: int = struct.unpack_from("<I", data, q + 17)[0]
+            desc_len: int = data[q + 26]
 
-            dimension: int = data[pos + 7]
-            records: int = struct.unpack_from("<I", data, pos + 16)[0]
-            pos += 25
-
-            # Description length (1 byte)
-            desc_len: int = data[pos]
-            pos += 1
-
-            # Description
             description: str = ""
-            if 0 < desc_len < 200 and pos + desc_len <= len(data):
-                description = data[pos : pos + desc_len].decode(
+            if desc_len and q + 27 + desc_len <= len(data):
+                description = data[q + 27 : q + 27 + desc_len].decode(
                     "utf-8", errors="replace"
                 )
-                pos += desc_len
+            endf: int = q + 27 + desc_len
+            if endf + 2 > len(data):
+                break
 
-            # Variable padding: skip zeros until we find next symbol or end
-            # Minimum padding is 6 bytes, but can be more for parameters with domains
-            min_padding: int = 6
-            pos += min_padding
-
-            # Skip any additional zero bytes (domain info padding)
-            while pos < len(data) and data[pos] == 0:
-                pos += 1
-
-            # Map type flag to type code
-            # For sets: type_flag is usually 0x01 or 0x20 (alias)
-            # For parameters: type_flag varies
-            # NOTE: 0x01 with high dimension (>4) can be ambiguous
-            # NOTE: 0x3F is ambiguous - can be either set or parameter
-            # Sets don't have numeric values, parameters do
-            if type_flag == 0x01 and dimension > 4:
-                # High-dimensional sparse parameters often use 0x01
-                # Mark as unknown and refine later based on data section
-                sym_type = -1  # unknown
-            elif type_flag == 0x01 and dimension > 0:
-                sym_type = 0  # set
-            elif type_flag in (0x01, 0x20, 0x22, 0x45):
-                sym_type = 4 if type_flag == 0x20 else 0
-            elif type_flag in (0x3F, 0x64, 0x66, 0x6E):
-                # 0x3F can be either set or parameter
-                # Default to parameter unless proven otherwise
-                # In real GDX files, this is refined by checking data sections
-                # For standalone symbol table reading, default to parameter
-                sym_type = 1  # parameter
-            elif type_flag in (0x40, 0x48, 0x63, 0x67, 0xFD):
-                sym_type = 2  # variable
-            elif type_flag in (0x41, 0x68, 0x7E, 0xD9):
-                sym_type = 3  # equation
+            dom_flag: int = data[endf + 1]
+            domain_idx: list[int] = []
+            if dom_flag == 0x01:
+                tail = 2 + 4 * dimension + 4
+                for d in range(dimension):
+                    if endf + 2 + 4 * d + 4 <= len(data):
+                        domain_idx.append(
+                            struct.unpack_from("<I", data, endf + 2 + 4 * d)[0]
+                        )
             else:
-                # Heuristic: if dimension > 0 and not a known set flag, likely parameter
-                if dimension > 0 and type_flag not in (0x01, 0x20):
-                    sym_type = -1  # unknown
-                else:
-                    sym_type = type_flag
+                tail = 6
+            pos = endf + tail  # deterministic advance to the next record
 
             symbols.append(
                 {
                     "name": name,
                     "type": sym_type,
                     "type_name": SYMBOL_TYPE_NAMES.get(
-                        sym_type, f"unknown({type_flag:#x})"
+                        sym_type, f"unknown({sym_type})"
                     ),
-                    "type_flag": type_flag,
+                    # Back-compat: the old field was the low byte of data_offset.
+                    "type_flag": data[q],
+                    "userinfo": userinfo,
                     "dimension": dimension,
                     "records": records,
                     "description": description,
+                    "data_offset": data_offset,
+                    "domain_idx": domain_idx,
                 }
             )
 

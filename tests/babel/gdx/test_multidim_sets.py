@@ -45,10 +45,11 @@ class Test2DSets:
         assert j_sym["dimension"] == 1
         assert j_sym["records"] == 3
 
-        # Check 2D parameter
+        # gdxdump truth: `map` is a 2-D SET (5 records), not a parameter — the
+        # old assertion encoded the pre-rewrite desync.
         map_sym = get_symbol(gdx_data, "map")
         assert map_sym is not None
-        assert map_sym["type_name"] == "parameter"
+        assert map_sym["type_name"] == "set"
         assert map_sym["dimension"] == 2
         assert map_sym["records"] == 5  # 5 mappings
 
@@ -259,11 +260,13 @@ class TestSetEdgeCases:
 
         sets = get_sets(gdx_data)
 
-        # Should have 2 sets: src, route (dst is an alias, cost is parameter)
-        assert len(sets) == 2
+        # gdxdump truth: set_2d_with_param.gdx has THREE sets (src, dst, route);
+        # cost is the only parameter. The old comment ("dst is an alias") and
+        # ==2 assertion encoded the pre-rewrite desync.
+        assert len(sets) == 3
 
         set_names = {s["name"] for s in sets}
-        assert set_names == {"src", "route"}
+        assert set_names == {"src", "dst", "route"}
 
         # All should be sets
         for s in sets:
@@ -296,9 +299,11 @@ class TestSetEdgeCases:
         assert len(k3_elem) == 2
         assert all(len(e) == 1 for e in k3_elem)
 
-        # j3 is an alias, not a set - should raise error
-        with pytest.raises(ValueError, match="not a set"):
-            read_set_elements(gdx_data, "j3")
+        # gdxdump truth: j3 is a 1-D SET (elements a, b), not an alias. The old
+        # "not a set" expectation encoded the pre-rewrite desync.
+        j3_elem = read_set_elements(gdx_data, "j3")
+        assert len(j3_elem) == 2
+        assert all(len(e) == 1 for e in j3_elem)
 
         k3_elem = read_set_elements(gdx_data, "k3")
         assert len(k3_elem) == 2

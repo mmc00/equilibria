@@ -172,34 +172,48 @@ class TestReadHeader:
 class TestReadSymbolTable:
     """Tests for read_symbol_table_from_bytes() function."""
 
+    # GAMS data type codes (the byte at q+12 in the real v7 record).
+    _TYPE_SET = 0
+    _TYPE_PARAMETER = 1
+    _TYPE_VARIABLE = 2
+    _TYPE_EQUATION = 3
+    _TYPE_ALIAS = 4
+
     def _create_symbol_entry(
         self,
         name: str,
-        type_flag: int,
+        sym_type: int,
         dimension: int,
         records: int,
         description: str = "",
     ) -> bytes:
-        """Create a single symbol entry in GDX format."""
+        """Create a single symbol entry in the REAL GDX v7 record layout.
+
+        The old helper emitted a 1-byte ``type_flag`` + 25-byte zero-metadata block
+        that did not match GAMS's actual format (it encoded the very bug the parser
+        rewrite removed). This emits the verified layout so the synthetic bytes are
+        valid GDX v7. ``sym_type`` is the GAMS data type (0=set 1=par 2=var 3=equ
+        4=alias) — the byte at q+12.
+
+        Layout (q = offset just after the name):
+            q+0  u64 data_offset   q+8  u32 dim   q+12 u8 type   q+13 u8 userinfo
+            q+14..16 zero(3)       q+17 u32 nrec  q+21..25 zero(5)  q+26 u8 desc_len
+            q+27 desc  then tail: sep(0) + dom_flag(0) + 4 zero  (6-byte no-domain tail)
+        """
         name_bytes: bytes = name.encode("utf-8")
         desc_bytes: bytes = description.encode("utf-8")
 
-        entry: bytes = bytes([len(name_bytes)])
-        entry += name_bytes
-        entry += bytes([type_flag])
-
-        # 25 bytes metadata
-        metadata: bytes = b"\x00" * 7
-        metadata += bytes([dimension])
-        metadata += b"\x00" * 8
-        metadata += struct.pack("<I", records)
-        metadata += b"\x00" * 5  # 7+1+8+4+5 = 25 bytes
-        entry += metadata
-
-        entry += bytes([len(desc_bytes)])
-        entry += desc_bytes
-        entry += b"\x00" * 6
-
+        entry: bytes = bytes([len(name_bytes)]) + name_bytes
+        entry += struct.pack("<Q", 0)            # q+0  data_offset (unused by symtab)
+        entry += struct.pack("<I", dimension)    # q+8  dim
+        entry += bytes([sym_type])               # q+12 type
+        entry += bytes([0])                      # q+13 userinfo
+        entry += b"\x00" * 3                      # q+14..16
+        entry += struct.pack("<I", records)      # q+17 nrec
+        entry += b"\x00" * 5                      # q+21..25
+        entry += bytes([len(desc_bytes)])        # q+26 desc_len
+        entry += desc_bytes                       # q+27 desc
+        entry += b"\x00" * 6                      # tail: sep + dom_flag=0 + 4 zero
         return entry
 
     def _create_symbol_table(self, symbols: list) -> bytes:
@@ -226,7 +240,7 @@ class TestReadSymbolTable:
 
     def test_single_set_symbol(self) -> None:
         """Should parse a single set symbol correctly."""
-        data: bytes = self._create_symbol_table([("i", 0x01, 1, 3, "industries")])
+        data: bytes = self._create_symbol_table([("i", 0, 1, 3, "industries")])
         result: list = read_symbol_table_from_bytes(data)
 
         assert len(result) == 1
@@ -240,7 +254,7 @@ class TestReadSymbolTable:
     def test_single_parameter_symbol(self) -> None:
         """Should parse a parameter symbol correctly."""
         data: bytes = self._create_symbol_table(
-            [("price", 0x3F, 1, 10, "market prices")]
+            [("price", 1, 1, 10, "market prices")]
         )
         result: list = read_symbol_table_from_bytes(data)
 
@@ -253,9 +267,9 @@ class TestReadSymbolTable:
         """Should parse multiple symbols correctly."""
         data: bytes = self._create_symbol_table(
             [
-                ("i", 0x01, 1, 3, "industries"),
-                ("j", 0x01, 1, 5, "commodities"),
-                ("sam", 0x66, 2, 15, "SAM matrix"),
+                ("i", 0, 1, 3, "industries"),
+                ("j", 0, 1, 5, "commodities"),
+                ("sam", 1, 2, 15, "SAM matrix"),
             ]
         )
         result: list = read_symbol_table_from_bytes(data)
@@ -268,7 +282,7 @@ class TestReadSymbolTable:
 
     def test_symbol_without_description(self) -> None:
         """Should handle symbols with empty description."""
-        data: bytes = self._create_symbol_table([("x", 0x01, 1, 2, "")])
+        data: bytes = self._create_symbol_table([("x", 0, 1, 2, "")])
         result: list = read_symbol_table_from_bytes(data)
 
         assert len(result) == 1
@@ -276,7 +290,7 @@ class TestReadSymbolTable:
 
     def test_alias_type(self) -> None:
         """Should correctly identify alias type."""
-        data: bytes = self._create_symbol_table([("j", 0x20, 1, 3, "alias")])
+        data: bytes = self._create_symbol_table([("j", 4, 1, 3, "alias")])
         result: list = read_symbol_table_from_bytes(data)
 
         assert len(result) == 1
@@ -374,8 +388,10 @@ class TestIntegrationWithRealGdx:
         result: dict = read_gdx(gdx_path)
 
         sets: list = get_sets(result)
-        assert len(sets) == 1
-        assert sets[0]["name"] == "i"
+        # gdxdump truth: simple_test.gdx has TWO sets (i, j). The old assertion
+        # (==1) encoded the pre-rewrite parser's desync, which lost j.
+        assert len(sets) == 2
+        assert {s["name"] for s in sets} == {"i", "j"}
 
     def test_get_parameters_helper(self) -> None:
         """Should get all parameters."""
@@ -564,9 +580,12 @@ class TestMultidimFixture:
         sets: list = get_sets(result)
         set_names: list = [s["name"] for s in sets]
 
-        # Only "i" is a set; "j" is an alias, "k" is an equation
+        # gdxdump truth: multidim_test.gdx has FOUR sets (i, j, k, m) — all 1-D.
+        # The old comment ("j is alias, k is equation") and ==1 assertion encoded
+        # the pre-rewrite desync; gdxdump Symbols shows i/j/k/m all as Set.
         assert "i" in set_names
-        assert len(sets) == 1
+        assert len(sets) == 4
+        assert set(set_names) == {"i", "j", "k", "m"}
 
     def test_elements_from_multiple_sets(self) -> None:
         """Should contain elements from all symbols in UEL."""
