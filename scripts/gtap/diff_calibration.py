@@ -51,6 +51,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import gams_levels  # type: ignore
+from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
 # Reuse validate_reference's model builder so the closure/elasticities match exactly.
 import importlib.util as _u
@@ -140,28 +141,35 @@ def _rel(py, g, tol_abs):
     return 0.0 if d < tol_abs else float("inf")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dataset", default="gtap7_3x3")
-    ap.add_argument("--gdx", type=Path, default=None,
-                    help="GAMS reference GDX (default: the dataset's ifsub1 ref)")
-    ap.add_argument("--period", default="base",
-                    help="GDX period to read GAMS calibration values from (default base)")
-    ap.add_argument("--tol", type=float, default=1e-4,
-                    help="Relative tolerance (default 1e-4 = 0.01%%; tighter than the "
-                         "solve comparator's 1e-3 so calibration bias is visible)")
-    ap.add_argument("--tol-abs", type=float, default=1e-9)
-    args = ap.parse_args()
+# ---------------------------------------------------------------------------
+# Human-readable formatter — KEPT for debug only; writes to STDERR so it can
+# never contaminate the JSON on stdout. Not called in the normal path.
+# ---------------------------------------------------------------------------
+def _debug_print(gdx_name, period, tol, rows, n_diff):
+    print(f"=== Calibration diff: Python (period='{period}') vs {gdx_name} ===",
+          file=sys.stderr)
+    print(f"    tol_rel={tol:g}\n", file=sys.stderr)
+    diffs = sorted([r for r in rows if r[5] == "DIFF"], key=lambda r: -r[4])
+    print(f"{'symbol':<14}{'region/cell':<16}{'python':>14}{'gams':>14}"
+          f"{'rel':>10}  status", file=sys.stderr)
+    for sym, reg, py, g, rel, st in diffs:
+        rel_s = f"{rel*100:.4f}%" if rel != float("inf") else "inf"
+        print(f"{sym:<14}{reg:<16}{py:>14.6f}{g:>14.6f}{rel_s:>10}  {st}",
+              file=sys.stderr)
+    n_ok = sum(1 for r in rows if r[5] == "ok")
+    print(f"  checked={len(rows)}  ok={n_ok}  DIFF={n_diff}", file=sys.stderr)
 
+
+def _work(args) -> dict:
     gdx_path = args.gdx
     if gdx_path is None:
-        gdx_path = Path(f"{DEFAULT_REFS}/{args.dataset}_altertax_cd/out_altertax_ifsub1.gdx")
+        gdx_path = Path(f"{DEFAULT_REFS}/{args.dataset}_altertax_cd/"
+                        f"out_altertax_ifsub1.gdx")
     if not gdx_path.exists():
-        print(f"ERROR: reference GDX not found: {gdx_path}")
-        sys.exit(2)
-
-    print(f"=== Calibration diff: Python (period='{args.period}') vs {gdx_path.name} ===")
-    print(f"    tol_rel={args.tol:g}\n")
+        return dict(status="error", period=args.period,
+                    headline=f"reference GDX not found: {gdx_path}",
+                    violations=[],
+                    meta={"error_kind": "gdx_not_found", "gdx": str(gdx_path)})
 
     # Build the Python benchmark model. The base period carries the calibrated
     # betas / income aggregates / ytax streams with no shock applied.
@@ -253,27 +261,64 @@ def main() -> None:
             rows.append((f"{gsym}", ",".join(body), py, gval, rel,
                          "ok" if ok else "DIFF"))
 
-    # Print: DIFFs first (sorted by rel desc), then a compact ok summary.
+    _debug_print(gdx_path.name, args.period, args.tol, rows, n_diff)
+
+    # Each calibration input that exceeds tolerance = one violation. value=rel
+    # (the relative bias). An infinite rel (gams≈0 but |py-gams|>tol_abs) keeps
+    # value=inf (serialized as "inf" by the shared emitter) and exposes the raw
+    # py/gams so the magnitude is still legible; rel_is_infinite flags it.
     diffs = sorted([r for r in rows if r[5] == "DIFF"], key=lambda r: -r[4])
-    print(f"{'symbol':<14}{'region/cell':<16}{'python':>14}{'gams':>14}{'rel':>10}  status")
-    print("-" * 80)
-    for sym, reg, py, g, rel, st in diffs:
-        rel_s = f"{rel*100:.4f}%" if rel != float("inf") else "inf"
-        print(f"{sym:<14}{reg:<16}{py:>14.6f}{g:>14.6f}{rel_s:>10}  {st}")
-    if not diffs:
-        print("  (no calibration inputs exceed tolerance)")
+    violations = []
+    for sym, reg, py, g, rel, _st in diffs:
+        idx = reg.split(",") if isinstance(reg, str) else [str(reg)]
+        v = make_violation(sym, idx, "calib_rel", rel)
+        v["py_value"] = py
+        v["gams_value"] = g
+        v["abs_diff"] = abs(py - g)
+        v["rel_is_infinite"] = (rel == float("inf"))
+        violations.append(v)
 
     n_ok = sum(1 for r in rows if r[5] == "ok")
-    print("-" * 80)
-    print(f"  checked={len(rows)}  ok={n_ok}  DIFF={n_diff}")
+    status = "dirty" if violations else "clean"
+    if violations:
+        worst = violations[0]
+        wrel = ("inf" if worst["rel_is_infinite"]
+                else f"{worst['value'] * 100:.4f}%")
+        headline = (
+            f"calibration diff ({args.period}): {n_diff} input(s) diverge from "
+            f"GAMS > {args.tol:g}; worst {worst['entity']}{worst['index']} "
+            f"py={worst['py_value']:.6f} gams={worst['gams_value']:.6f} "
+            f"rel={wrel} — a benchmark bias that hides under the solve tolerance")
+    else:
+        headline = (
+            f"calibration diff ({args.period}): all {len(rows)} checked input(s) "
+            f"match GAMS to {args.tol:g} — calibration is consistent; this layer "
+            f"does not explain the gap")
 
-    if n_diff:
-        print(f"\n⚠️  {n_diff} calibration input(s) diverge from GAMS at the benchmark. "
-              f"A bias here propagates into the solved shock and HIDES under the "
-              f"solve comparator's tolerance — fix the calibration before trusting parity.")
-        sys.exit(1)
-    print(f"\n✅ All calibration inputs match GAMS to {args.tol:g}.")
+    return dict(
+        status=status, period=args.period, headline=headline,
+        violations=violations,
+        meta={"gdx": str(gdx_path), "tol_rel": args.tol, "tol_abs": args.tol_abs,
+              "n_checked": len(rows), "n_ok": n_ok, "n_diff": n_diff})
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default="gtap7_3x3")
+    ap.add_argument("--gdx", type=Path, default=None,
+                    help="GAMS reference GDX (default: the dataset's ifsub1 ref)")
+    ap.add_argument("--period", default="base",
+                    help="GDX period to read GAMS calibration values from (default base)")
+    ap.add_argument("--tol", type=float, default=1e-4,
+                    help="Relative tolerance (default 1e-4 = 0.01%%; tighter than the "
+                         "solve comparator's 1e-3 so calibration bias is visible)")
+    ap.add_argument("--tol-abs", type=float, default=1e-9)
+    args = ap.parse_args()
+    # period here is a GDX-read period (default 'base'); it IS on the base/check/
+    # shock axis, so pass it through as the period_hint.
+    return run_tool("diff_calibration", args.dataset, lambda: _work(args),
+                    period_hint=args.period)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

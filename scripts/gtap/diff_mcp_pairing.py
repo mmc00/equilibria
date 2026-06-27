@@ -35,6 +35,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
+
 import importlib.util as _u
 _spec = _u.spec_from_file_location(
     "validate_reference", str(ROOT / "scripts" / "gtap" / "validate_reference.py")
@@ -110,7 +112,163 @@ def _py_family_state(model, gams_eq: str):
     return (pyname, active, total, None)
 
 
-def main() -> None:
+# Free rows that are benign when Python keeps them active+paired:
+#  - numeraire / Walras / welfare reports (pnum fixed=1, walras=slack, ev/cv=report);
+#  - LINEAR market-clearing / balance identities (xseq with omegax=inf is xs=xds+xet;
+#    capAccteq is Σsavf=0; savfeq under capFix is trivial) — these have ONE root, so
+#    pairing them with the variable they define is correct, NOT the multi-root class.
+# The DANGEROUS class is a power/quadratic free row (pfteq: pft^(1+omega)=Σgf·pfy^…),
+# which is multi-valued; that is the only one PATH can converge to a wrong root for.
+# NOTE: xseq/savfeq's benignness depends on omegax=inf / savfFlag=capFix — re-check
+# for datasets with finite omegax or capFlex/capShrFix closures.
+BENIGN = {"pnumeq", "walraseq", "eveq", "cveq", "xseq", "capAccteq", "savfeq"}
+_NUMERAIRE_WALRAS = {"pnumeq", "walraseq", "eveq", "cveq"}
+
+
+def _classify_free_row(eq: str, pyname, active: int, total: int) -> tuple[str, float, str]:
+    """Classify a GAMS FREE-ROW against Python state.
+
+    Returns (kind, severity, note). Only kind=='pairing_mismatch' (severity 1.0)
+    is a real violation: a multi-root ECONOMIC free-row that Python keeps
+    active+paired (the pfteq factor-2 class). Everything else is non-violating
+    context (severity 0.0).
+    """
+    if pyname is None:
+        return ("free_row_gams_only_no_py_eq", 0.0, "no Python eq (GAMS-only)")
+    if active == 0:
+        return ("matches", 0.0, "deactivated → matches GAMS free-row")
+    if eq in BENIGN:
+        kindnote = ("numeraire/walras/welfare report" if eq in _NUMERAIRE_WALRAS
+                    else "linear market-clearing/balance identity (single root)")
+        return ("benign_active", 0.0, f"active but BENIGN ({kindnote})")
+    return ("pairing_mismatch", 1.0,
+            "ACTIVE+paired in Python but FREE-ROW in GAMS → may converge to a "
+            "different root (pfteq factor-2 class)")
+
+
+# ---------------------------------------------------------------------------
+# Human-readable formatter — KEPT for debug only; writes to STDERR so it can
+# never contaminate the JSON on stdout. Not called in the normal path.
+# ---------------------------------------------------------------------------
+def _debug_print(model_name, gms_name, pairs, free_rows, rows):
+    print(f"=== GAMS `model {model_name}` pairing ({gms_name}) ===", file=sys.stderr)
+    print(f"  {len(pairs)} entries, {len(free_rows)} FREE ROWS:", file=sys.stderr)
+    print(f"    {', '.join(free_rows)}", file=sys.stderr)
+    print(f"\n  {'gams_eq':<12}{'python_eq':<16}{'py_active':>10}   note",
+          file=sys.stderr)
+    for r in rows:
+        astr = "-" if r["py_total"] == 0 and r["pyname"] is None else \
+            f"{r['py_active']}/{r['py_total']}"
+        print(f"  {r['gams_eq']:<12}{(r['pyname'] or '-'):<16}{astr:>10}   "
+              f"{r['note']}", file=sys.stderr)
+
+
+def _work(args) -> dict:
+    gms_path = Path(f"{DEFAULT_REFS}/{args.dataset}_altertax_cd/"
+                    f"model_altertax_ifsub{args.ifsub}.gms")
+    if not gms_path.exists():
+        return dict(status="error", period=args.period,
+                    headline=f"GAMS source not found: {gms_path}",
+                    violations=[],
+                    meta={"error_kind": "gams_source_missing",
+                          "gms_path": str(gms_path)})
+
+    pairs = _parse_gams_model(gms_path, args.model_name)
+    if not pairs:
+        return dict(status="error", period=args.period,
+                    headline=(f"model '{args.model_name}' block not parsed from "
+                              f"{gms_path.name}"),
+                    violations=[],
+                    meta={"error_kind": "model_block_unparsed",
+                          "gms_path": str(gms_path)})
+
+    free_rows = [eq for eq, var in pairs if var is None]
+    paired = [(eq, var) for eq, var in pairs if var is not None]
+
+    model, _p = _vr._build_model(args.dataset, args.period)
+    closure_applied = False
+    closure_warn = None
+    if args.apply_closure:
+        try:
+            _apply_solver_closure(model, args.dataset, _p)
+            closure_applied = True
+        except Exception as e:  # noqa: BLE001
+            closure_warn = str(e)
+
+    violations = []
+    rows = []  # full per-free-row detail for meta + debug print
+
+    # Direction 1: GAMS FREE-ROW vs Python state. The dangerous mismatch is a
+    # multi-root economic free-row that Python keeps active+paired.
+    for eq in free_rows:
+        pyname, active, total, _ = _py_family_state(model, eq)
+        kind, sev, note = _classify_free_row(eq, pyname, active, total)
+        rows.append({"gams_eq": eq, "pyname": pyname, "py_active": active,
+                     "py_total": total, "kind": kind, "note": note,
+                     "direction": "gams_free_row"})
+        if kind == "pairing_mismatch":
+            v = make_violation(eq, [eq], "mcp_pairing", sev)
+            v["kind"] = "pairing_mismatch"
+            v["python_eq"] = pyname
+            v["python_active"] = f"{active}/{total}"
+            v["gams_side"] = "free_row"
+            v["python_side"] = "active_paired"
+            v["note"] = note
+            violations.append(v)
+
+    # Direction 2 (the "or vice versa"): a GAMS-PAIRED equation that Python has
+    # fully DEACTIVATED — Python freed a row GAMS solves for a variable, so the
+    # variable Python should pin via that eq is left to drift. Candidate for the
+    # ytax/rorc root-selection class.
+    for eq, var in paired:
+        pyname, active, total, _ = _py_family_state(model, eq)
+        if pyname is not None and total > 0 and active == 0:
+            v = make_violation(eq, [eq], "mcp_pairing", 1.0)
+            v["kind"] = "free_row_python_only"
+            v["python_eq"] = pyname
+            v["python_active"] = f"{active}/{total}"
+            v["gams_paired_var"] = var
+            v["gams_side"] = f"paired(.{var})"
+            v["python_side"] = "deactivated"
+            v["note"] = (f"GAMS pairs {eq}.{var} but Python deactivates {pyname} "
+                         f"→ {var} is left unpaired (root-selection candidate)")
+            violations.append(v)
+            rows.append({"gams_eq": eq, "pyname": pyname, "py_active": active,
+                         "py_total": total, "kind": "free_row_python_only",
+                         "note": v["note"], "direction": "gams_paired"})
+
+    _debug_print(args.model_name, gms_path.name, pairs, free_rows, rows)
+
+    n_mismatch = len(violations)
+    n_benign = sum(1 for r in rows if r["kind"] == "benign_active")
+    status = "dirty" if violations else "clean"
+    if violations:
+        kinds = {}
+        for v in violations:
+            kinds[v["kind"]] = kinds.get(v["kind"], 0) + 1
+        kind_str = ", ".join(f"{n}×{k}" for k, n in kinds.items())
+        headline = (f"MCP pairing ({args.period}): {n_mismatch} divergent row(s) "
+                    f"[{kind_str}] — a GAMS free-row Python pairs (or a GAMS-paired "
+                    f"eq Python frees); candidate missing anchor / wrong root")
+    else:
+        headline = (f"MCP pairing ({args.period}): every economic GAMS free-row is "
+                    f"deactivated/absent in Python and every GAMS-paired eq is "
+                    f"active — pairing matches; this layer does not explain the gap")
+
+    return dict(
+        status=status, period=args.period, headline=headline,
+        violations=violations,
+        meta={"model_name": args.model_name, "ifsub": args.ifsub,
+              "gms_path": str(gms_path),
+              "n_model_entries": len(pairs), "n_free_rows": len(free_rows),
+              "free_rows": free_rows, "n_benign_active": n_benign,
+              "apply_closure": args.apply_closure,
+              "closure_applied": closure_applied,
+              "closure_warn": closure_warn,
+              "free_row_states": rows})
+
+
+def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--model-name", default="gtap", help="GAMS model name (default gtap)")
@@ -120,71 +278,8 @@ def main() -> None:
                     help="Run the solver setup (0 iterations) so free-row deactivations "
                          "and aggressive fixing are reflected in the Python state.")
     args = ap.parse_args()
-
-    gms_path = Path(f"{DEFAULT_REFS}/{args.dataset}_altertax_cd/model_altertax_ifsub{args.ifsub}.gms")
-    if not gms_path.exists():
-        print(f"ERROR: GAMS source not found: {gms_path}")
-        sys.exit(2)
-
-    pairs = _parse_gams_model(gms_path, args.model_name)
-    if not pairs:
-        print(f"ERROR: model '{args.model_name}' block not parsed from {gms_path.name}")
-        sys.exit(2)
-
-    free_rows = [eq for eq, var in pairs if var is None]
-    print(f"=== GAMS `model {args.model_name}` pairing ({gms_path.name}) ===")
-    print(f"  {len(pairs)} entries, {len(free_rows)} FREE ROWS (no MCP pair):")
-    print(f"    {', '.join(free_rows)}")
-
-    model, _p = _vr._build_model(args.dataset, args.period)
-    if args.apply_closure:
-        try:
-            _apply_solver_closure(model, args.dataset, _p)
-        except Exception as e:
-            print(f"  [warn] could not apply solver closure ({e}); showing BUILD state")
-
-    # Free rows that are benign when Python keeps them active+paired:
-    #  - numeraire / Walras / welfare reports (pnum fixed=1, walras=slack, ev/cv=report);
-    #  - LINEAR market-clearing / balance identities (xseq with omegax=inf is xs=xds+xet;
-    #    capAccteq is Σsavf=0; savfeq under capFix is trivial) — these have ONE root, so
-    #    pairing them with the variable they define is correct, NOT the multi-root class.
-    # The DANGEROUS class is a power/quadratic free row (pfteq: pft^(1+omega)=Σgf·pfy^…),
-    # which is multi-valued; that is the only one PATH can converge to a wrong root for.
-    # NOTE: xseq/savfeq's benignness depends on omegax=inf / savfFlag=capFix — re-check
-    # for datasets with finite omegax or capFlex/capShrFix closures.
-    BENIGN = {"pnumeq", "walraseq", "eveq", "cveq", "xseq", "capAccteq", "savfeq"}
-
-    print(f"\n=== Python state per GAMS FREE ROW (the mismatch-prone class) ===")
-    print(f"  {'gams_eq':<12}{'python_eq':<16}{'py_active':>10}   note")
-    print("  " + "-" * 64)
-    n_mismatch = 0
-    for eq in free_rows:
-        pyname, active, total, _ = _py_family_state(model, eq)
-        if pyname is None:
-            note = "no Python eq (GAMS-only)"
-            astr = "-"
-        elif active == 0:
-            note = "deactivated → matches GAMS free-row ✓"
-            astr = f"{active}/{total}"
-        elif eq in BENIGN:
-            _kind = ("numeraire/walras/welfare report"
-                     if eq in {"pnumeq", "walraseq", "eveq", "cveq"}
-                     else "linear market-clearing/balance identity (single root)")
-            note = f"active but BENIGN ({_kind})"
-            astr = f"{active}/{total}"
-        else:
-            note = "ACTIVE+paired → MISMATCH vs GAMS free-row ⚠"
-            astr = f"{active}/{total}"
-            n_mismatch += 1
-        print(f"  {eq:<12}{(pyname or '-'):<16}{astr:>10}   {note}")
-
-    print("  " + "-" * 64)
-    if n_mismatch:
-        print(f"\n⚠️  {n_mismatch} ECONOMIC GAMS free-row(s) are ACTIVE+paired in Python. "
-              f"PATH may solve them for a variable and pick a different root (the pfteq "
-              f"factor-2 class). These are the candidates for a remaining parity gap.")
-        sys.exit(1)
-    print(f"\n✅ Every economic GAMS free-row is deactivated/absent in Python — pairing matches.")
+    return run_tool("diff_mcp_pairing", args.dataset, lambda: _work(args),
+                    period_hint=args.period)
 
 
 def _apply_solver_closure(model, dataset, params):
@@ -204,4 +299,4 @@ def _apply_solver_closure(model, dataset, params):
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

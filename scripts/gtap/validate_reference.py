@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import gams_levels, list_populated_vars  # type: ignore
+from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
 # GAMS camelCase / aggregate → Python Var-name map (same as the warm-start maps).
 # p_rai/pp_rai DO have GAMS counterparts (the make-matrix producer-price Vars p/pp);
@@ -203,7 +204,112 @@ def _equation_residuals(model, seeded_ids: set):
     return by_family, fully_incomplete
 
 
-def main() -> None:
+def _idx_to_list(idx):
+    """Normalise a worst-cell idx (tuple / scalar / None) to a list for the JSON."""
+    if idx is None:
+        return []
+    if isinstance(idx, (list, tuple)):
+        return [str(x) for x in idx]
+    return [str(idx)]
+
+
+# ---------------------------------------------------------------------------
+# Human-readable formatter — KEPT for debug only; writes to STDERR so it can
+# never contaminate the JSON on stdout. Not called in the normal path.
+# ---------------------------------------------------------------------------
+def _debug_print(gdx_name, period, n_seeded, n_checked, n_partial,
+                 fully_incomplete, violating, tol, top):
+    print(f"=== Validating reference {gdx_name} (period='{period}') ===",
+          file=sys.stderr)
+    print(f"Seeded {n_seeded} variable cells from GAMS {period}", file=sys.stderr)
+    print(f"Families with >=1 checkable cell: {n_checked} ({n_partial} partial, "
+          f"{len(fully_incomplete)} fully un-checkable)", file=sys.stderr)
+    print(f"Families VIOLATED (> {tol:g}): {len(violating)}", file=sys.stderr)
+    for resid, fam, worst, n, n_inc in violating[:top]:
+        skip = f"({n_inc} unchecked)" if n_inc else ""
+        print(f"{resid:>12.4e}  {fam:<24} {str(worst):<28} {skip}",
+              file=sys.stderr)
+
+
+def _work(args) -> dict:
+    gdx_path = args.gdx
+    if gdx_path is None:
+        # Default to the ifSUB=1 reference (the NEOS-generated model diff_altertax
+        # compares against by default). Pass --gdx .../out_altertax_ifsub0.gdx for
+        # the regenerated ifSUB=0 reference.
+        gdx_path = Path(
+            f"/Users/marmol/proyectos2/equilibria_refs/{args.dataset}_altertax_cd/"
+            f"out_altertax_ifsub1.gdx"
+        )
+    if not gdx_path.exists():
+        return dict(status="error", period=args.period,
+                    headline=f"reference GDX not found: {gdx_path}",
+                    violations=[],
+                    meta={"error_kind": "gdx_not_found", "gdx": str(gdx_path)})
+
+    model, _ = _build_model(args.dataset, args.period)
+    seeded_ids = _seed_gams(model, gdx_path, args.period)
+    fams, fully_incomplete = _equation_residuals(model, seeded_ids)
+
+    violating = sorted(
+        ((rec["max"], fam, rec["worst"], rec["n"], rec["n_incomplete"])
+         for fam, rec in fams.items() if rec["max"] > args.tol),
+        reverse=True,
+    )
+    n_checked = sum(1 for rec in fams.values() if rec["n"] > 0)
+    n_partial = sum(1 for rec in fams.values()
+                    if rec["n"] > 0 and rec["n_incomplete"] > 0)
+
+    _debug_print(gdx_path.name, args.period, len(seeded_ids), n_checked,
+                 n_partial, fully_incomplete, violating, args.tol, args.top)
+
+    # Each VIOLATING family = one violation: the GAMS reference fails its OWN eq
+    # at the seeded point → the reference is mis-converged (or Python's eq/closure
+    # differs there). metric=residual; value=max residual on clean cells.
+    violations = []
+    for resid, fam, worst, n, n_inc in violating:
+        v = make_violation(fam, _idx_to_list(worst), "residual", resid)
+        v["cells_checked"] = n
+        v["cells_unchecked"] = n_inc
+        violations.append(v)
+
+    status = "dirty" if violations else "clean"
+    fi = sorted(fully_incomplete)
+    if violations:
+        worst_v = violations[0]
+        headline = (
+            f"reference {gdx_path.name} ({args.period}): VIOLATES {len(violations)} "
+            f"of its OWN equation famil(ies) > {args.tol:g}; worst "
+            f"{worst_v['entity']}{worst_v['index']}={worst_v['value']:.3e} — the "
+            f"reference is mis-converged or Python's eq/closure differs there")
+    else:
+        # 'clean' with un-checkable families is NOT a full clean: a violation in
+        # those would be invisible. Say so explicitly in the headline.
+        if fi:
+            headline = (
+                f"reference {gdx_path.name} ({args.period}): satisfies all "
+                f"{n_checked} CHECKABLE famil(ies) to {args.tol:g}, BUT "
+                f"{len(fi)} famil(ies) have no fully-seeded cell — a violation "
+                f"there would be invisible")
+        else:
+            headline = (
+                f"reference {gdx_path.name} ({args.period}): satisfies all "
+                f"{n_checked} equation famil(ies) to {args.tol:g} — the reference "
+                f"is internally consistent")
+
+    return dict(
+        status=status, period=args.period, headline=headline,
+        violations=violations,
+        meta={"gdx": str(gdx_path), "tol": args.tol,
+              "cells_seeded": len(seeded_ids),
+              "n_families_checked": n_checked,
+              "n_families_partial": n_partial,
+              "n_families_violating": len(violations),
+              "fully_incomplete": fi,
+              "n_fully_incomplete": len(fi)})
+
+
+def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--period", default="shock", choices=["base", "check", "shock"])
@@ -213,62 +319,9 @@ def main() -> None:
                     help="Max acceptable equation residual at the GAMS point")
     ap.add_argument("--top", type=int, default=20)
     args = ap.parse_args()
-
-    gdx_path = args.gdx
-    if gdx_path is None:
-        # Default to the ifSUB=1 reference (the NEOS-generated model diff_altertax
-        # compares against by default). Pass --gdx .../out_altertax_ifsub0.gdx for
-        # the regenerated ifSUB=0 reference.
-        gdx_path = Path(
-            f"/Users/marmol/proyectos2/equilibria_refs/{args.dataset}_altertax_cd/out_altertax_ifsub1.gdx"
-        )
-    if not gdx_path.exists():
-        print(f"ERROR: reference GDX not found: {gdx_path}")
-        sys.exit(2)
-
-    print(f"=== Validating reference {gdx_path.name} (period='{args.period}') ===")
-    model, _ = _build_model(args.dataset, args.period)
-    seeded_ids = _seed_gams(model, gdx_path, args.period)
-    print(f"Seeded {len(seeded_ids)} variable cells from GAMS {args.period}")
-
-    fams, fully_incomplete = _equation_residuals(model, seeded_ids)
-    violating = sorted(
-        ((rec["max"], fam, rec["worst"], rec["n"], rec["n_incomplete"])
-         for fam, rec in fams.items() if rec["max"] > args.tol),
-        reverse=True,
-    )
-    n_checked = sum(1 for rec in fams.values() if rec["n"] > 0)
-    n_partial = sum(1 for rec in fams.values() if rec["n"] > 0 and rec["n_incomplete"] > 0)
-
-    print(f"\nEquation families with >=1 checkable cell: {n_checked} "
-          f"({n_partial} partially checked, {len(fully_incomplete)} fully un-checkable)")
-    print(f"Families the GAMS point VIOLATES (> {args.tol:g}, clean cells only): {len(violating)}")
-    if violating:
-        print(f"\n{'residual':>12}  {'equation family':<24} {'worst cell':<28} skipped")
-        print("-" * 84)
-        for resid, fam, worst, n, n_inc in violating[:args.top]:
-            skip = f"({n_inc} cell(s) unchecked)" if n_inc else ""
-            print(f"{resid:>12.4e}  {fam:<24} {str(worst):<28} {skip}")
-        print(
-            "\n⚠️  The GAMS reference VIOLATES its own equations above (evaluated on "
-            "fully-seeded cells). Either the reference is mis-converged OR Python's "
-            "equation/closure differs there — investigate before trusting parity."
-        )
-        # Still surface un-checkable families so they are never silently passed.
-        if fully_incomplete:
-            print(f"\nℹ️  {len(fully_incomplete)} families could NOT be checked (no fully-"
-                  f"seeded cell): {', '.join(sorted(fully_incomplete))}")
-        sys.exit(1)
-    else:
-        print(
-            f"\n✅ The GAMS reference satisfies all CHECKABLE cells to {args.tol:g}."
-        )
-        if fully_incomplete:
-            print(f"\n⚠️  But {len(fully_incomplete)} families were NOT checkable (every "
-                  f"cell has an unseedable variable) — a violation there would be "
-                  f"INVISIBLE. Un-checked families: {', '.join(sorted(fully_incomplete))}")
-        sys.exit(0)
+    return run_tool("validate_reference", args.dataset, lambda: _work(args),
+                    period_hint=args.period)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

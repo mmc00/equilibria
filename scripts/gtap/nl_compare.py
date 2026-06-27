@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_solver import GTAPSolver
+from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
 GDX9 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
 COMP_GMS = ROOT / "src/equilibria/templates/reference/gtap/scripts/comp.gms"
@@ -1718,11 +1719,29 @@ def _family(name: str) -> str:
     return name
 
 
+def _split_name(name: str) -> tuple[str, list[str]]:
+    """Split 'eq_x[USA,Svces,Svces]' -> ('eq_x', ['USA','Svces','Svces']).
+
+    Returns (base, index_list). A bare name with no brackets -> (name, []).
+    """
+    for op, cl in (("[", "]"), ("(", ")")):
+        i = name.find(op)
+        if i != -1:
+            base = name[:i]
+            inner = name[i + 1:].rstrip(cl + " ")
+            if inner.endswith(cl):
+                inner = inner[:-1]
+            parts = [p.strip() for p in inner.split(",") if p.strip()]
+            return base, parts
+    return name, []
+
+
 def diff_nl_models(
     py_model: "NLModel",
     gams_model: "NLModel",
     tol_rel: float = 1e-4,
     py_period: str = "base",
+    cell_cap: int = 50,
 ) -> dict:
     """Compare two NLModel objects. Returns structured diff result.
 
@@ -1812,8 +1831,19 @@ def diff_nl_models(
     only_py_cons = sorted(py_con_names - gams_con_names)
     only_gams_cons = sorted(gams_con_names - py_con_names)
 
-    # Coefficient diff by constraint family (only constraints common to both)
+    # Coefficient diff by constraint family (only constraints common to both).
+    # n_common_cons==0 means the two .nl files share NO named constraint — almost
+    # always because the GAMS .nl lacks .row/.col sidecars so its rows parse as
+    # anonymous c[idx]. In that case a "0 diffs" result is VACUOUS (nothing was
+    # compared), NOT "algebra matches"; the caller must report that distinctly.
     family_stats: dict[str, dict] = {}
+    # Per-CELL Jacobian diffs (a coefficient lives at the eq↔var crossing). Each
+    # entry is the FULL info Phase 2 needs to name the exact cell and judge scale:
+    #   (con_name, vname, py_c, effective_gams_c, abs_diff, rel)
+    # Capped per family (cell_cap) so large datasets don't blow up the JSON; the
+    # real per-family count is tracked in family_stats["n_diff"] regardless.
+    cell_diffs: list[tuple] = []
+    cell_truncated: dict[str, int] = {}  # family -> how many were dropped by the cap
     common_cons = py_con_names & gams_con_names
 
     for con_name in common_cons:
@@ -1893,6 +1923,16 @@ def diff_nl_models(
                 if rel > fs["max_rel"]:
                     fs["max_rel"] = rel
                     fs["worst"] = (con_name, vname, py_c, gams_c, rel)
+                # Accumulate this Jacobian cell (capped per family). abs_diff and
+                # rel are BOTH kept: a 1e-9 coeff off 100% rel is noise, a 1.0
+                # coeff off 0.3 abs is the lead — Phase 2 needs both to not
+                # confuse scale.
+                abs_diff = abs(py_c - effective_gams_c)
+                if fs["n_diff"] <= cell_cap:
+                    cell_diffs.append(
+                        (con_name, vname, py_c, effective_gams_c, abs_diff, rel))
+                else:
+                    cell_truncated[fam] = cell_truncated.get(fam, 0) + 1
 
     return {
         "structural": structural,
@@ -1901,6 +1941,9 @@ def diff_nl_models(
         "only_py_cons": only_py_cons,
         "only_gams_cons": only_gams_cons,
         "family_stats": family_stats,
+        "cell_diffs": cell_diffs,
+        "cell_truncated": cell_truncated,
+        "n_common_cons": len(common_cons),
     }
 
 
@@ -2019,7 +2062,184 @@ def print_diff_report(result: dict, period: str, tol_rel: float = 1e-4) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-def main() -> None:
+def _phase_to_period(phase: str):
+    """nl_compare's --phase includes 'altertax', which is off the base/check/
+    shock axis. normalize_period collapses it to None; this is just explicit."""
+    return phase if phase in ("base", "check", "shock") else None
+
+
+def _cells_to_violations(result: dict) -> list[dict]:
+    """Map per-cell Jacobian diffs to common-schema violations.
+
+    entity names the eq↔var CROSSING (a coefficient lives there). index carries
+    the sets of BOTH sides. value=rel; diff_abs and diff_rel BOTH exposed so
+    Phase 2 can tell a 1e-9 coeff off 100% (noise) from a 1.0 coeff off 0.3 (lead).
+    """
+    viols = []
+    for con_name, vname, py_c, gams_c, abs_diff, rel in result.get("cell_diffs", []):
+        eq_base, eq_idx = _split_name(con_name)
+        var_base, var_idx = _split_name(vname)
+        v = make_violation(f"{eq_base} × {var_base}",
+                           {"eq": eq_idx, "var": var_idx}, "jac_coef_diff", rel)
+        v["diff_rel"] = rel
+        v["diff_abs"] = abs_diff
+        v["py_coeff"] = py_c
+        v["gams_coeff"] = gams_c
+        viols.append(v)
+    return viols
+
+
+def _run_nl(args) -> dict:
+    """Build/parse the .nl files, diff per phase, return a common-schema dict."""
+    from run_gtap import _build_gtap_contract_with_calibration  # noqa: F401
+    from _parity_datasets import DATASETS
+    from _nl_parser import parse_nl
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    global KEEP_R, KEEP_I
+    if args.keep_r:
+        KEEP_R = list(args.keep_r)
+    if args.keep_i:
+        KEEP_I = list(args.keep_i)
+    custom_subset = bool(args.keep_r or args.keep_i)
+    full = args.full_9x10
+    gams_shrink = (args.gams_shrink or custom_subset) and not full
+
+    ds = DATASETS.get(args.dataset) or DATASETS["9x10"]
+    use_agg = ds.mode == "compstat" and ds.agg_gdx is not None
+    if use_agg:
+        from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+        _reg = _gdx_set_elements(ds.agg_gdx, "REG")
+        _comm = _gdx_set_elements(ds.agg_gdx, "COMM")
+        _rres, _rmuv, _imuv = _muv_baskets(_reg, _comm)
+        closure_config = GTAPClosureConfig(if_sub=False, rmuv=_rmuv, imuv=_imuv)
+        full, gams_shrink = True, False
+    else:
+        contract = _build_gtap_contract_with_calibration(ds.nl_contract)
+        closure_update = {"if_sub": False}
+        if full:
+            closure_update["rmuv"], closure_update["imuv"] = ds.nl_full_muv
+        elif gams_shrink:
+            _rres, _rmuv, _imuv = _muv_baskets(KEEP_R, KEEP_I)
+            closure_update["rmuv"] = _rmuv
+            closure_update["imuv"] = _imuv
+        closure_config = contract.closure.model_copy(update=closure_update)
+
+    _har_dir = (ROOT / "datasets" / ds.name) if use_agg else None
+    if not args.skip_python:
+        py_paths = build_python_nls(
+            args.phase, args.out_dir, closure_config,
+            gdx_path=(None if use_agg else ds.agg_gdx),
+            do_shrink=not full, har_dir=_har_dir)
+    else:
+        py_paths = {p: args.out_dir / f"python_{p}.nl" for p in args.phase}
+
+    gams_nl_paths: dict[str, Path] = {}
+    if not args.skip_gams:
+        gams_nl_paths = fetch_gams_nl(
+            args.out_dir, args.neos_email, list(args.phase), shrink=gams_shrink,
+            agg_gdx=(ds.agg_gdx if use_agg else None), har_dir=_har_dir)
+    else:
+        for phase in args.phase:
+            for p in (args.out_dir / f"gams_{phase}.nl",
+                      args.out_dir / "gams_compstat.nl"):
+                if p.exists():
+                    gams_nl_paths[phase] = p
+                    break
+
+    per_phase = {}
+    all_viols = []
+    skipped = []
+    for period in args.phase:
+        py_nl = py_paths.get(period)
+        gams_nl = gams_nl_paths.get(period)
+        if py_nl is None or not Path(py_nl).exists():
+            skipped.append({"phase": period, "reason": "python_nl_missing"})
+            continue
+        if gams_nl is None or not Path(gams_nl).exists():
+            skipped.append({"phase": period, "reason": "gams_nl_missing"})
+            continue
+        py_m = parse_nl(py_nl)
+        gams_m = parse_nl(gams_nl)
+        result = diff_nl_models(py_m, gams_m, tol_rel=args.tol_rel,
+                                py_period=period, cell_cap=args.cell_cap)
+        print_diff_report(result, period, tol_rel=args.tol_rel)  # -> stderr
+        viols = _cells_to_violations(result)
+        for v in viols:
+            v["phase"] = period
+        all_viols.extend(viols)
+        n_diff = sum(fs["n_diff"] for fs in result["family_stats"].values())
+        per_phase[period] = {
+            "n_common_cons": result["n_common_cons"],
+            "comparable": result["n_common_cons"] > 0,
+            "n_cell_diffs_total": n_diff,
+            "n_cell_diffs_reported": len(viols),
+            "cell_truncated": result["cell_truncated"],
+            "structural": result["structural"],
+            "only_py_vars": result["only_py_vars"][:50],
+            "only_gams_vars": result["only_gams_vars"][:50],
+            "only_py_cons": result["only_py_cons"][:50],
+            "only_gams_cons": result["only_gams_cons"][:50],
+        }
+
+    if not per_phase and skipped:
+        return dict(
+            status="error", period=None,
+            headline=("no phase could be diffed — " +
+                      "; ".join(f"{s['phase']}:{s['reason']}" for s in skipped)),
+            violations=[], meta={"error_kind": "no_phase_diffed",
+                                 "skipped": skipped, "phases": list(args.phase),
+                                 "skip_gams": args.skip_gams,
+                                 "skip_python": args.skip_python})
+
+    diffed = list(per_phase.keys())
+    comparable_phases = [p for p, d in per_phase.items() if d["comparable"]]
+    n_total = sum(p["n_cell_diffs_total"] for p in per_phase.values())
+    # period: the phase if exactly one was diffed, else None (off the orchestrator
+    # axis). When None the per-phase detail lives in meta.per_phase.
+    period = _phase_to_period(diffed[0]) if len(diffed) == 1 else None
+
+    # NO phase shared any named constraint → the comparison was VACUOUS (the GAMS
+    # .nl has no .row/.col so its rows are anonymous c[idx]). Report error, NOT a
+    # spurious "clean" — Phase 2 must not read this as "algebra matches".
+    if not comparable_phases:
+        return dict(
+            status="error", period=period,
+            headline=(f"no common named constraints in any phase "
+                      f"({'/'.join(diffed)}) — GAMS .nl likely missing .row/.col "
+                      f"sidecars; coefficient diff is vacuous, not 'clean'"),
+            violations=[],
+            meta={"error_kind": "no_common_constraints",
+                  "comparison": "python_vs_gams_per_phase",
+                  "phases_diffed": diffed, "phases_skipped": skipped,
+                  "tol_rel": args.tol_rel, "dataset_mode": ds.mode,
+                  "per_phase": per_phase})
+
+    status = "dirty" if all_viols else "clean"
+    if status == "clean":
+        headline = (f"Jacobian coefficient diff ({'/'.join(comparable_phases)}): "
+                    f"0 cells differ at tol_rel={args.tol_rel:g} over "
+                    f"{sum(per_phase[p]['n_common_cons'] for p in comparable_phases)} "
+                    f"common constraints — algebra matches; this layer does not "
+                    f"explain the gap")
+    else:
+        worst = max(all_viols, key=lambda v: abs(v["value"]))
+        headline = (f"Jacobian coefficient diff ({'/'.join(comparable_phases)}): "
+                    f"{n_total} cell(s) differ > {args.tol_rel:g}; worst "
+                    f"{worst['entity']} rel={worst['diff_rel']:.2e} "
+                    f"abs={worst['diff_abs']:.2e}")
+    return dict(
+        status=status, period=period, headline=headline, violations=all_viols,
+        meta={"comparison": "python_vs_gams_per_phase",
+              "phases_diffed": diffed, "phases_comparable": comparable_phases,
+              "phases_skipped": skipped,
+              "tol_rel": args.tol_rel, "cell_cap": args.cell_cap,
+              "n_cell_diffs_total": n_total, "dataset_mode": ds.mode,
+              "per_phase": per_phase})
+
+
+def main() -> int:
     ap = argparse.ArgumentParser(description="GTAP .nl comparison tool (Layer 6 diagnostic)")
     ap.add_argument("--fetch-gdx-9x10", action="store_true",
                     help="Submit full 9x10 PATH solve to NEOS (10%% tariff shock), "
@@ -2052,129 +2272,27 @@ def main() -> None:
                          "(intermediate 9x10 sizes, e.g. 5x5). Implies --gams-shrink.")
     ap.add_argument("--keep-i", nargs="+", default=None,
                     help="Override KEEP_I: commodities to keep for the shrunk subset.")
+    ap.add_argument("--cell-cap", type=int, default=50,
+                    help="Max Jacobian-cell diffs reported per family in the JSON "
+                         "(prevents a huge payload on large datasets; the real "
+                         "per-family count is always in meta).")
     args = ap.parse_args()
 
+    # --fetch-gdx-9x10 is a NEOS side-effect (submit + download), not a diff. It
+    # still emits JSON (status clean on success, error on failure) so stdout stays
+    # parseable, but it is not a cascade-signal run.
     if args.fetch_gdx_9x10:
-        out = ROOT / "output" / "gtap9x10_neos"
-        gdx = submit_and_fetch_gdx_9x10(out_dir=out, neos_email=args.neos_email)
-        print(f"Got: {gdx}")
-        return
+        def _fetch() -> dict:
+            out = ROOT / "output" / "gtap9x10_neos"
+            gdx = submit_and_fetch_gdx_9x10(out_dir=out, neos_email=args.neos_email)
+            return dict(status="clean", period=None,
+                        headline=f"fetched 9x10 out.gdx: {gdx}",
+                        violations=[], meta={"mode": "fetch_gdx_9x10",
+                                             "gdx": str(gdx)})
+        return run_tool("nl_compare", args.dataset, _fetch)
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-
-    global KEEP_R, KEEP_I
-    if args.keep_r:
-        KEEP_R = list(args.keep_r)
-    if args.keep_i:
-        KEEP_I = list(args.keep_i)
-    custom_subset = bool(args.keep_r or args.keep_i)
-
-    full = args.full_9x10
-    gams_shrink = (args.gams_shrink or custom_subset) and not full
-    if full:
-        print("[full-9x10] BOTH sides on full 9x10 (no shrink)")
-    elif gams_shrink:
-        print(f"[gams-shrink] GAMS sets shrunk to KEEP_R={KEEP_R} KEEP_I={KEEP_I} "
-              f"(matches Python _shrink_sets)")
-
-    from run_gtap import _build_gtap_contract_with_calibration
-    from _parity_datasets import DATASETS
-    ds = DATASETS.get(args.dataset) or DATASETS["9x10"]
-
-    # GTAPAgg dataset (comp-stat with a consolidated GDX): run BOTH sides on the
-    # dataset's OWN sets, sets-agnostic. GAMS getData + Python load both come from
-    # ds.agg_gdx; rres/rmuv/imuv are derived from the GDX. No 9x10 contract / shrink.
-    use_agg = ds.mode == "compstat" and ds.agg_gdx is not None
-    if use_agg:
-        from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-        _reg = _gdx_set_elements(ds.agg_gdx, "REG")
-        _comm = _gdx_set_elements(ds.agg_gdx, "COMM")
-        _rres, _rmuv, _imuv = _muv_baskets(_reg, _comm)
-        closure_config = GTAPClosureConfig(if_sub=False, rmuv=_rmuv, imuv=_imuv)
-        full, gams_shrink = True, False
-        print(f"[agg] dataset={args.dataset} from {ds.agg_gdx.name} "
-              f"({len(_reg)}reg×{len(_comm)}comm, sets-agnostic NEOS)")
-    else:
-        # 9x10 family. "3x3" maps to the 9x10 GDX shrunk via --gams-shrink/--keep.
-        contract = _build_gtap_contract_with_calibration(ds.nl_contract)
-        closure_update = {"if_sub": False}
-        if full:
-            closure_update["rmuv"], closure_update["imuv"] = ds.nl_full_muv
-        elif gams_shrink:
-            _rres, _rmuv, _imuv = _muv_baskets(KEEP_R, KEEP_I)
-            closure_update["rmuv"] = _rmuv
-            closure_update["imuv"] = _imuv
-        closure_config = contract.closure.model_copy(update=closure_update)
-
-    # Phase 1: Python → .nl  (_shrink_sets to KEEP_R x KEEP_I unless --full-9x10)
-    # compstat datasets (gtap7_*) have HAR files → load_from_har via har_dir.
-    _har_dir = (ROOT / "datasets" / ds.name) if use_agg else None
-    if not args.skip_python:
-        py_paths = build_python_nls(
-            args.phase, args.out_dir, closure_config,
-            gdx_path=(None if use_agg else ds.agg_gdx),
-            do_shrink=not full,
-            har_dir=_har_dir)
-    else:
-        py_paths = {p: args.out_dir / f"python_{p}.nl" for p in args.phase}
-        print(f"\n[skip-python] Using existing Python .nl files in {args.out_dir}")
-
-    # Phase 2: GAMS → .nl via NEOS
-    gams_nl_paths: dict[str, Path] = {}
-    gams_phases = list(args.phase)
-    if not args.skip_gams:
-        gams_nl_paths = fetch_gams_nl(
-            args.out_dir, args.neos_email, gams_phases, shrink=gams_shrink,
-            agg_gdx=(ds.agg_gdx if use_agg else None),
-            har_dir=_har_dir)
-    else:
-        for phase in gams_phases:
-            # Support both old (gams_compstat.nl) and new (gams_base.nl / gams_shock.nl) names
-            candidates = [
-                args.out_dir / f"gams_{phase}.nl",
-                args.out_dir / "gams_compstat.nl",  # legacy fallback for base
-            ]
-            for p in candidates:
-                if p.exists():
-                    gams_nl_paths[phase] = p
-                    print(f"\n[skip-gams] Using existing {p.name} for {phase}")
-                    break
-            else:
-                print(f"\n[skip-gams] WARNING: no gams .nl for {phase} — skipping diff")
-
-    # Phase 3: Diff (per-phase, each Python .nl vs its GAMS counterpart)
-    from _nl_parser import parse_nl
-    print("\n=== Phase 3: Diff ===")
-    for period in args.phase:
-        py_nl = py_paths.get(period)
-        if py_nl is None or not Path(py_nl).exists():
-            print(f"  [{period}] Python .nl not found — skipping")
-            continue
-        gams_nl = gams_nl_paths.get(period)
-        if gams_nl is None or not gams_nl.exists():
-            print(f"  [{period}] GAMS .nl not found — skipping diff (Python .nl written)")
-            continue
-        py_m = parse_nl(py_nl)
-        gams_m = parse_nl(gams_nl)
-        print(f"  GAMS ({period}): {gams_m.n_vars} vars, {gams_m.n_cons} cons, {gams_m.n_nonzeros} nnz")
-        result = diff_nl_models(py_m, gams_m, tol_rel=args.tol_rel, py_period=period)
-        print_diff_report(result, period, tol_rel=args.tol_rel)
-
-        # Bounds diff: reveals iterloop.gms lower-bound differences
-        b_diffs, only_py_vars, only_gams_vars = diff_bounds(py_m, gams_m, tol_rel=args.tol_rel)
-        print(f"\n  Bounds diff [{period}]: {len(b_diffs)} variables with different lb/ub")
-        if b_diffs:
-            print(f"  {'variable':<50s} {'py_lb':>12s} {'g_lb':>12s} {'py_ub':>12s} {'g_ub':>12s}  flags")
-            print(f"  {'-'*50} {'-'*12} {'-'*12} {'-'*12} {'-'*12}  -----")
-            _INF = 1e30
-            def _fmt(v): return f"{v:.4e}" if abs(v) < _INF/2 else ("-inf" if v < 0 else "+inf")
-            for d in b_diffs[:60]:
-                flags = ("LB " if d["lb_diff"] else "   ") + ("UB" if d["ub_diff"] else "  ")
-                print(f"  {d['var']:<50s} {_fmt(d['py_lb']):>12s} {_fmt(d['g_lb']):>12s} "
-                      f"{_fmt(d['py_ub']):>12s} {_fmt(d['g_ub']):>12s}  {flags}")
-            if len(b_diffs) > 60:
-                print(f"  ... {len(b_diffs)-60} more")
+    return run_tool("nl_compare", args.dataset, lambda: _run_nl(args))
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

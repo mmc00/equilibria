@@ -45,6 +45,12 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import gams_levels, list_populated_vars  # type: ignore
 import diff_altertax as DA  # reuse the exact altertax build recipe + complete seeder
+from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
+
+# var → its (likely) paired eq, for the tautology / free-DOF (⚑) flag.
+_PAIR = {"pva": "eq_pvaeq", "pnd": "eq_pndeq", "px": "eq_po", "pf": "eq_pfeq",
+         "pfact": "eq_pfact", "pwfact": "eq_pwfact"}
+_PRICE_NEST = {"pva", "pnd", "va", "nd", "px"}
 
 
 def _build_run_gtap():
@@ -162,6 +168,108 @@ def run_drift(dataset: str, gdx_path: Path, period: str, top: int, tol: float):
     return code, resid, drifts, eq_resid
 
 
+def _is_free_dof(vname: str, rel: float, eq_resid: dict, tol: float) -> tuple[bool, str, float]:
+    """Return (is_free_dof, paired_eq, paired_eq_resid) for the ⚑ flag.
+
+    A var is a FREE/TAUTOLOGICAL DOF when it drifts >= tol while its paired
+    equation's residual at the seed is ~0 (the eq does not restrain its own var).
+    """
+    eqn = _PAIR.get(vname)
+    if not eqn:
+        return False, "", 0.0
+    er = eq_resid.get(eqn, 1.0)
+    return (er < 1e-6 and rel >= tol), eqn, er
+
+
+# ---------------------------------------------------------------------------
+# Human-readable formatter — KEPT for debug only; writes to STDERR so it can
+# never contaminate the JSON on stdout. Not called in the normal path.
+# ---------------------------------------------------------------------------
+def _debug_print(args, code, resid, drifts, eq_resid):
+    print(f"=== DRIFT TEST: {args.dataset} period={args.period} "
+          f"ref={args.gdx.name} ===", file=sys.stderr)
+    print(f"Solve: code={code} resid={resid:.3e}", file=sys.stderr)
+    if code != 1:
+        print("  ⚠️  Solve did NOT converge (code!=1) — CONVERGENCE problem, "
+              "not drift.", file=sys.stderr)
+    n_drift = sum(1 for d in drifts if d[0] >= args.tol)
+    print(f"\nVariables drifting >= {args.tol:g}: {n_drift}/{len(drifts)}",
+          file=sys.stderr)
+    for rel, vname, idx, sv, nv in drifts[:args.top]:
+        free, eqn, _er = _is_free_dof(vname, rel, eq_resid, args.tol)
+        flag = (f"  ⚑ {eqn} resid≈0 but var drifts → FREE/TAUTOLOGICAL DOF"
+                if free else "")
+        print(f"{rel*100:>7.2f}%  {vname:<12} {str(idx):<28} "
+              f"{sv:>12.5f} {nv:>12.5f}{flag}", file=sys.stderr)
+
+
+def _work(args) -> dict:
+    code, resid, drifts, eq_resid = run_drift(
+        args.dataset, args.gdx, args.period, args.top, args.tol)
+    _debug_print(args, code, resid, drifts, eq_resid)
+
+    # By its own docstring: code != 1 is a CONVERGENCE problem, not a drift one;
+    # the drift ranking is unreliable, so report it as an error for the cascade.
+    if code != 1:
+        return dict(
+            status="error", period=args.period,
+            headline=(f"solve did NOT converge (code={code}, resid={resid:.3e}) "
+                      f"— convergence problem, not drift; run tool 0 "
+                      f"(check-warmstart) first"),
+            violations=[],
+            meta={"error_kind": "no_convergence",
+                  "termination_code": code, "residual": resid,
+                  "gdx_ref": str(args.gdx), "tol": args.tol})
+
+    # Converged: rank drifters; a drifter whose paired eq resid≈0 is a free DOF.
+    viols = []
+    for rel, vname, idx, sv, nv in drifts:
+        if rel < args.tol:
+            continue
+        free, eqn, er = _is_free_dof(vname, rel, eq_resid, args.tol)
+        v = make_violation(vname, idx, "drift_rel", rel)
+        v["free_dof"] = bool(free)
+        v["paired_eq"] = eqn or None
+        v["paired_eq_resid"] = er
+        v["seeded"] = sv
+        v["solved"] = nv
+        viols.append(v)
+
+    # Tally leading drifters and detect the price-nest free-DOF signature.
+    top_vars: dict[str, int] = {}
+    for rel, vname, idx, sv, nv in drifts[: max(args.top, 10)]:
+        if rel >= args.tol:
+            top_vars[vname] = top_vars.get(vname, 0) + 1
+    lead = sorted(top_vars.items(), key=lambda kv: -kv[1])
+    price_nest_leads = any(v in _PRICE_NEST for v, _ in lead[:4])
+    n_free = sum(1 for v in viols if v["free_dof"])
+
+    status = "dirty" if viols else "clean"
+    if not viols:
+        headline = (f"seed-at-GAMS {args.period}: solve converged (code=1), "
+                    f"no variable drifts >= {args.tol:g} — the GAMS branch is "
+                    f"reachable; this layer does not explain the gap")
+    else:
+        worst = viols[0]
+        nest_note = ""
+        if price_nest_leads:
+            nest_note = (" — a PRICE/QUANTITY NEST leads; likely a FREE DOF, "
+                         "fix = HOLD (fix var + deactivate tautological paired eq)")
+        headline = (
+            f"seed-at-GAMS {args.period}: {len(viols)} var(s) drift >= "
+            f"{args.tol:g}, {n_free} flagged FREE-DOF (⚑); worst "
+            f"{worst['entity']}{worst['index']}={worst['value']*100:.2f}%"
+            f"{nest_note}")
+
+    return dict(
+        status=status, period=args.period, headline=headline, violations=viols,
+        meta={"termination_code": code, "residual": resid,
+              "n_drifters": len(viols), "n_free_dof": n_free,
+              "price_nest_leads": price_nest_leads,
+              "leading_vars": [{"var": v, "cells": n} for v, n in lead[:8]],
+              "tol": args.tol, "gdx_ref": str(args.gdx)})
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -171,44 +279,9 @@ def main():
     ap.add_argument("--top", type=int, default=25)
     ap.add_argument("--tol", type=float, default=1e-3, help="rel-drift threshold to count as drifting")
     args = ap.parse_args()
-
-    print(f"=== DRIFT TEST: {args.dataset} period={args.period} ref={args.gdx.name} ===")
-    code, resid, drifts, eq_resid = run_drift(args.dataset, args.gdx, args.period, args.top, args.tol)
-    print(f"Solve: code={code} resid={resid:.3e}")
-    if code != 1:
-        print("  ⚠️  Solve did NOT converge (code!=1) — this is a CONVERGENCE problem, not a")
-        print("     drift problem. Run tool 0 (triage.py --check-warmstart) first. Drift below")
-        print("     is still informative but read it as 'where the non-converged point sits'.")
-
-    n_drift = sum(1 for d in drifts if d[0] >= args.tol)
-    print(f"\nVariables drifting >= {args.tol:g} from the GAMS seed: {n_drift}/{len(drifts)}")
-    print(f"\n{'rel%':>8}  {'variable':<12} {'cell':<28} {'seeded':>12} {'solved':>12}")
-    print("-" * 80)
-    # map var → its (likely) paired eq for the tautology flag
-    pair = {"pva": "eq_pvaeq", "pnd": "eq_pndeq", "px": "eq_po", "pf": "eq_pfeq",
-            "pfact": "eq_pfact", "pwfact": "eq_pwfact"}
-    for rel, vname, idx, sv, nv in drifts[:args.top]:
-        flag = ""
-        eqn = pair.get(vname)
-        if eqn and eq_resid.get(eqn, 1.0) < 1e-6 and rel >= args.tol:
-            flag = f"  ⚑ {eqn} resid≈0 but var drifts → FREE/TAUTOLOGICAL DOF"
-        print(f"{rel*100:>7.2f}%  {vname:<12} {str(idx):<28} {sv:>12.5f} {nv:>12.5f}{flag}")
-
-    # Summary verdict
-    top_vars = {}
-    for rel, vname, idx, sv, nv in drifts[: max(args.top, 10)]:
-        if rel >= args.tol:
-            top_vars[vname] = top_vars.get(vname, 0) + 1
-    if top_vars:
-        lead = sorted(top_vars.items(), key=lambda kv: -kv[1])
-        print(f"\nTop drifting variables (count of cells): "
-              f"{', '.join(f'{v}×{n}' for v, n in lead[:8])}")
-        price_nest = {"pva", "pnd", "va", "nd", "px"}
-        if any(v in price_nest for v, _ in lead[:4]):
-            print("  → A PRICE/QUANTITY NEST leads the drift. Likely a FREE DOF (CD-degenerate "
-                  "eqs). Fix = HOLD it (fix var + deactivate the tautological paired eq), not an "
-                  "equation/coefficient bug. See --holdfix-pva in diff_altertax.py.")
+    return run_tool("drift_test", args.dataset, lambda: _work(args),
+                    period_hint=args.period)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
