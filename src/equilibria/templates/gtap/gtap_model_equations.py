@@ -5046,18 +5046,26 @@ class GTAPModelEquations:
                     if value(model.xfflag[r, f, a]) > 0.0 and value(model.xscale[r, a]) > 1e-12
                 )
                 return model.xft[r, f] == xs_sum
-            # Finite omegaf: CET price equilibrium
-            # 0 = pft^(1+omega) - sum_a gf * pfy^(1+omega)
+            # Finite omegaf: CET price-aggregation condition.
+            # GAMS pfteq is 0 = pft^(1+omega) - sum_a gf*pfy^(1+omega), but in the
+            # GAMS MCP it is a FREE-ROW (model gtap /... pfteq, .../ with no .pft) —
+            # PATH lets pft be determined by the rest of the factor nest (xfteq,
+            # pfeq) and only verifies this identity ex-post. Writing it in the
+            # QUADRATIC form pft^(1+omega) == sum (here 1+omega=2, a pure square) is
+            # MULTI-VALUED: pft^2 == K admits pft = ±sqrt(K), so PATH can slide to a
+            # spurious branch (the factor-2 class: pft ≈ wrong level). Same trap as
+            # eq_pwfact/eq_pfact/eq_pabs/eq_rgdpmp, all fixed to the single positive
+            # ROOT form. Mirror that here: pft == (sum_a gf*pfy^(1+omega))^(1/(1+omega))
+            # — one positive root, faithful to GAMS's free-row identity, square MCP.
             expo = 1.0 + omegaf_val
             if abs(expo) < 1e-10:
                 return Constraint.Skip
-            pft_term = model.pft[r, f] ** expo
             pfy_sum = sum(
                 model.gf_share[r, f, a] * _m_pfy(r, f, a) ** expo
                 for a in model.a
                 if value(model.xfflag[r, f, a]) > 0.0 and float(value(model.gf_share[r, f, a])) > 0.0
             )
-            return pft_term == pfy_sum
+            return model.pft[r, f] == pfy_sum ** (1.0 / expo)
         model.eq_pfteq = Constraint(model.r, model.f, rule=eq_pfteq_rule)
 
         # Factor prices tax inclusive (GAMS pfaeq, comp.gms:2328):
