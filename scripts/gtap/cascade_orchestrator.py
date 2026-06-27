@@ -91,15 +91,22 @@ def main() -> int:
         print(render_tree(report), file=sys.stderr)
         return 2
 
+    from cascade_kkt import kkt_layer, KKT_READER
+    from cascade_classify import UPSTREAM_STOP, BLOCKING_STOP
+
     period_results = {}
     for period in available:
-        period_results[period] = sweep_period(
+        results = sweep_period(
             args.dataset, period, ref.path,
             stop=not args.no_stop, timeout=args.tool_timeout)
-    # kkt_reader is set to 'pure-python' once Task 7 wires the KKT layer; until
-    # then the report carries the resolved reader path it WILL use.
+        # Append the KKT layer unless the sweep already stopped on a not-measurable
+        # condition (its result would be meaningless then).
+        if not results or results[-1].action not in (UPSTREAM_STOP, BLOCKING_STOP):
+            results.append(kkt_layer(args.dataset, period, ref.path))
+        period_results[period] = results
+
     report = build_report(args.dataset, args.periods, ref=ref,
-                          period_results=period_results, kkt_reader="pure-python")
+                          period_results=period_results, kkt_reader=KKT_READER)
     print(json.dumps(report))
     print(render_tree(report), file=sys.stderr)
     return 0
