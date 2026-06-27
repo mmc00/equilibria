@@ -639,23 +639,9 @@ def read_parameter_values(
     # Read raw bytes
     raw_data: bytes = Path(filepath).read_bytes()
 
-    # Find the _DATA_ section for this symbol
-    symbols: list[dict[str, Any]] = gdx_data["symbols"]
-    symbol_index: int = -1
-    for i, sym in enumerate(symbols):
-        if sym["name"] == symbol_name:
-            symbol_index = i
-            break
-
-    if symbol_index == -1:
-        return {}
-
-    # Get data sections
-    data_sections = read_data_sections(raw_data)
-    if symbol_index >= len(data_sections):
-        return {}
-
-    _, section = data_sections[symbol_index]
+    # Locate this symbol's _DATA_ section by its own data_offset (positional
+    # indexing is wrong: there are fewer _DATA_ sections than symbols).
+    section = _section_at_offset(raw_data, symbol["data_offset"])
     elements: list[str] = gdx_data.get("elements", [])
     dimension: int = symbol["dimension"]
     expected_records: int = symbol.get("records", 0)
@@ -1586,6 +1572,19 @@ def _build_index_tuple_with_offsets(
 # =============================================================================
 
 
+def _section_at_offset(data: bytes, data_offset: int) -> bytes:
+    """Return the _DATA_ section bytes for the symbol at ``data_offset``.
+
+    The marker is the 7-byte pascal-prefixed ``b"\\x06_DATA_"``; the section
+    payload starts immediately after it and runs to the next marker / EOF. We
+    over-slice to the next ``_DATA_`` occurrence (the per-record EOF byte 0xFF
+    bounds decoding, so a generous slice is safe)."""
+    start = data_offset + 7
+    nxt = data.find(b"_DATA_", start)
+    end = (nxt - 1) if nxt != -1 else len(data)  # -1 drops the pascal-prefix byte
+    return data[start:end]
+
+
 def read_variable_values(
     gdx_data: dict[str, Any],
     symbol_name: str,
@@ -1627,23 +1626,9 @@ def read_variable_values(
     # Read raw bytes
     raw_data: bytes = Path(filepath).read_bytes()
 
-    # Find the _DATA_ section for this symbol
-    symbols: list[dict[str, Any]] = gdx_data["symbols"]
-    symbol_index: int = -1
-    for i, sym in enumerate(symbols):
-        if sym["name"] == symbol_name:
-            symbol_index = i
-            break
-
-    if symbol_index == -1:
-        return {}
-
-    # Get data sections
-    data_sections = read_data_sections(raw_data)
-    if symbol_index >= len(data_sections):
-        return {}
-
-    _, section = data_sections[symbol_index]
+    # Locate this symbol's _DATA_ section by its own data_offset (positional
+    # indexing is wrong: there are fewer _DATA_ sections than symbols).
+    section = _section_at_offset(raw_data, symbol["data_offset"])
     elements: list[str] = gdx_data.get("elements", [])
     dimension: int = symbol["dimension"]
 
@@ -1692,23 +1677,9 @@ def read_equation_values(
     # Read raw bytes
     raw_data: bytes = Path(filepath).read_bytes()
 
-    # Find the _DATA_ section for this symbol
-    symbols: list[dict[str, Any]] = gdx_data["symbols"]
-    symbol_index: int = -1
-    for i, sym in enumerate(symbols):
-        if sym["name"] == symbol_name:
-            symbol_index = i
-            break
-
-    if symbol_index == -1:
-        return {}
-
-    # Get data sections
-    data_sections = read_data_sections(raw_data)
-    if symbol_index >= len(data_sections):
-        return {}
-
-    _, section = data_sections[symbol_index]
+    # Locate this symbol's _DATA_ section by its own data_offset (positional
+    # indexing is wrong: there are fewer _DATA_ sections than symbols).
+    section = _section_at_offset(raw_data, symbol["data_offset"])
     elements: list[str] = gdx_data.get("elements", [])
     dimension: int = symbol["dimension"]
 
