@@ -47,6 +47,24 @@ _spec.loader.exec_module(_vr)
 
 DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
 
+# Explicit GAMS-equation -> Python-constraint pairing. The name heuristic below
+# (eq_<gams_eq>, eq_<stem>, ...) is FRAGILE: it silently resolves to a same-named
+# but WRONG (often legacy/deactivated) Python constraint. That produced 3 false
+# positives on gtap7_3x3/check:
+#   - pseq.ps -> heuristic finds eq_ps (legacy `ps==pd`, deactivated) instead of
+#     the real homolog eq_xs (CES domestic supply, active);
+#   - dintxeq/mintxeq -> the eq is deactivated but the VARIABLE is fixed (an
+#     exogenous wedge / holdfix-equivalent), which is a valid pairing.
+# This dict is the authoritative GAMS->Python equation map for the cases where the
+# Python constraint name does NOT follow the eq_<gams_eq> convention. Anything not
+# listed falls back to the name heuristic (so unmapped/new datasets still work).
+GAMS_EQ_TO_PY = {
+    "pseq": "eq_xs",       # CES domestic supply determines ps (NOT eq_ps legacy)
+    "peq": "eq_peq",
+    "pseq.ps": "eq_xs",    # tolerated alias form
+}
+
+
 # GAMS equation name (lowercased, no 'eq' suffix conventions vary) → Python family.
 # Python uses eq_<name>; GAMS uses <name>eq. We map by stripping/adding around a stem.
 def _gams_eq_to_py(gams_eq: str) -> str:
@@ -87,11 +105,37 @@ def _parse_gams_model(gms_path: Path, model_name: str) -> list[tuple[str, str | 
     return pairs
 
 
-def _py_family_state(model, gams_eq: str):
-    """Return (py_eq_name_or_None, active_count, total, paired_var_fixed_frac)."""
-    from pyomo.environ import Constraint, Var
-    # candidate Python constraint names
-    cands = [f"eq_{gams_eq}"]
+def _var_fixed_frac(model, var_name):
+    """Return (fixed_count, total) for a Python Var, or None if absent.
+    A GAMS-paired variable that Python FIXES (exogenous wedge / holdfix-equivalent)
+    is a valid pairing even when its defining equation is deactivated."""
+    from pyomo.environ import Var
+    if not var_name:
+        return None
+    v = getattr(model, var_name, None)
+    if v is None or v.ctype is not Var:
+        return None
+    fixed = total = 0
+    for idx in v:
+        total += 1
+        if v[idx].fixed:
+            fixed += 1
+    return (fixed, total)
+
+
+def _py_family_state(model, gams_eq: str, paired_var: str | None = None):
+    """Return (py_eq_name_or_None, active_count, total, paired_var_fixed_frac).
+
+    Resolution order: the explicit GAMS_EQ_TO_PY map FIRST (authoritative for
+    non-conventional names like pseq->eq_xs), then the name heuristic as fallback.
+    paired_var_fixed_frac is (fixed,total) for the GAMS-paired variable, or None."""
+    from pyomo.environ import Constraint
+    # 1) explicit map wins (handles pseq->eq_xs and any other non-eq_<name> homolog)
+    cands = []
+    if gams_eq in GAMS_EQ_TO_PY:
+        cands.append(GAMS_EQ_TO_PY[gams_eq])
+    # 2) name heuristic fallback
+    cands.append(f"eq_{gams_eq}")
     if gams_eq.endswith("eq"):
         cands.append(f"eq_{gams_eq[:-2]}")     # pfteq -> eq_pft
     cands.append(f"eq_{gams_eq.replace('eq', '')}")
@@ -102,14 +146,15 @@ def _py_family_state(model, gams_eq: str):
         if comp is not None and comp.ctype is Constraint:
             pyname = c
             break
+    var_frac = _var_fixed_frac(model, paired_var)
     if comp is None:
-        return (None, 0, 0, None)
+        return (None, 0, 0, var_frac)
     active = total = 0
     for idx in comp:
         total += 1
         if comp[idx].active:
             active += 1
-    return (pyname, active, total, None)
+    return (pyname, active, total, var_frac)
 
 
 # Free rows that are benign when Python keeps them active+paired:
@@ -201,7 +246,7 @@ def _work(args) -> dict:
     # Direction 1: GAMS FREE-ROW vs Python state. The dangerous mismatch is a
     # multi-root economic free-row that Python keeps active+paired.
     for eq in free_rows:
-        pyname, active, total, _ = _py_family_state(model, eq)
+        pyname, active, total, _ = _py_family_state(model, eq, None)
         kind, sev, note = _classify_free_row(eq, pyname, active, total)
         rows.append({"gams_eq": eq, "pyname": pyname, "py_active": active,
                      "py_total": total, "kind": kind, "note": note,
@@ -220,9 +265,23 @@ def _work(args) -> dict:
     # fully DEACTIVATED — Python freed a row GAMS solves for a variable, so the
     # variable Python should pin via that eq is left to drift. Candidate for the
     # ytax/rorc root-selection class.
+    # EXCEPTION: if Python FIXES the paired variable, the deactivated equation is
+    # the correct Python encoding of an exogenous wedge / holdfix-equivalent (GAMS
+    # pins it via holdfixed=1 from the prior period). A fixed variable IS paired —
+    # not a free DOF — so this is NOT a violation (e.g. dintx/mintx tax wedges).
     for eq, var in paired:
-        pyname, active, total, _ = _py_family_state(model, eq)
+        pyname, active, total, var_frac = _py_family_state(model, eq, var)
         if pyname is not None and total > 0 and active == 0:
+            var_is_fixed = var_frac is not None and var_frac[1] > 0 and var_frac[0] == var_frac[1]
+            if var_is_fixed:
+                rows.append({"gams_eq": eq, "pyname": pyname, "py_active": active,
+                             "py_total": total, "kind": "benign_fixed_var",
+                             "note": (f"eq deactivated but var {var} is "
+                                      f"{var_frac[0]}/{var_frac[1]} FIXED "
+                                      f"(exogenous wedge / holdfix-equivalent) → "
+                                      f"valid pairing"),
+                             "direction": "gams_paired"})
+                continue
             v = make_violation(eq, [eq], "mcp_pairing", 1.0)
             v["kind"] = "free_row_python_only"
             v["python_eq"] = pyname
@@ -240,7 +299,7 @@ def _work(args) -> dict:
     _debug_print(args.model_name, gms_path.name, pairs, free_rows, rows)
 
     n_mismatch = len(violations)
-    n_benign = sum(1 for r in rows if r["kind"] == "benign_active")
+    n_benign = sum(1 for r in rows if r["kind"] in ("benign_active", "benign_fixed_var"))
     status = "dirty" if violations else "clean"
     if violations:
         kinds = {}
