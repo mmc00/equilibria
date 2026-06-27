@@ -187,18 +187,40 @@ complementarity slack) from the **existing local reference GDX** — no NEOS rou
 trip in the default path.
 
 - **Reader:** `src/equilibria/babel/gdx/reader.py::read_equation_values`
-  (pure-Python, license-independent; already extracts the `marginal` field).
-- **Implementation gate (FIRST step):** a smoke test that this reader actually
-  parses `out_altertax_ifsub0.gdx`. GDX reading is documented as fragile in
-  `CLAUDE.md`.
-  - If the smoke test **passes** → the KKT layer uses `read_equation_values`.
-  - If the pure-Python reader **fails** on that file → fall back to
-    `gdxdump <gdx>` in its **default text format** (NOT `Format=csv`, which yields
-    `.L` only), because the default text format includes `.L .M .Lo .Up .Scale`
-    per record; parse `.M` from there. Binary:
-    `/Library/Frameworks/GAMS.framework/Versions/53/Resources/gdxdump`.
-  - **Do not** build the complementarity logic until one of the two paths delivers
-    verified marginals from that GDX.
+  (pure-Python, license-independent; extracts the `marginal` field). This is the
+  primary path and stays primary.
+- **Implementation gate (RESOLVED 2026-06-27):** the spec required a smoke test
+  that this reader parses `out_altertax_ifsub0.gdx` BEFORE building the KKT logic.
+  **The gate fired and FAILED**, which is exactly what it was for. Findings, with
+  `gdxdump` (the repo's trusted GDX reader) as oracle:
+  - The ref GDX *does* contain equations and their `.M` marginals — `gdxdump
+    Symb=arenteq` shows per-record `'USA'.'check'.M 0.157…` etc., with the period
+    (`check`/`shock`) as a key dimension.
+  - But `reader.py`'s pure-Python symbol-type detection is a **byte-level
+    heuristic** (`_read_symbol_table` guesses type from `type_flag` magic bytes it
+    itself marks ambiguous) that **loses sync** on the GTAP GDX symbol table:
+    `read_gdx` returns garbage types (150, 248, …) and **0 equation symbols**, so
+    `read_equation_values` finds nothing.
+  - **Decision (user, with full scope visible):** FIX `reader.py` so it classifies
+    Var/Equ correctly for GTAP GDX, keeping it the primary license-independent path
+    — rather than fall back to `gdxdump`. This hardens a **shared** module
+    (30+ consumers across PEP calibration, GTAP parameters, SAM tools, QA), so the
+    fix is gated by a no-regression discipline (below), not a loose patch.
+  - **Do not** build the KKT complementarity logic until the repaired reader
+    returns verified equation marginals from that GDX, with the existing reader
+    test suite still green.
+- **Reader-fix discipline (REQUIRED, see plan):**
+  1. Establish the green baseline: `tests/babel/gdx/test_reader*.py` +
+     `test_multidim_sets.py` + `test_decoder_csv_validation.py` (81 tests, green
+     today). The 2 failures in `test_writer.py` are pre-existing and unrelated
+     (writer lacks Equation support) — out of scope.
+  2. Characterize the bug with `gdxdump` as the source of truth for which symbol is
+     Set/Param/Var/Equ.
+  3. TDD: a new failing test asserting `read_gdx(out_altertax_ifsub0.gdx)`
+     classifies the known equation families (e.g. `arenteq`, `apeeq`) as equations
+     and `read_equation_values` returns their marginals.
+  4. Fix `_read_symbol_table` minimally; the new test passes AND the full reader
+     suite stays green.
 - **Decision rule (dirty/clean):** for each MCP equation, check GAMS's
   complementarity (`marginal != 0 ⇒ binding`; `marginal == 0 ⇒ slack`) against the
   state Python gives the equation's paired variable (fixed/free, binding/slack, via
@@ -249,8 +271,10 @@ fallback.
 - **Dry-run** (`--dry-run`, no subprocess): prints the exact commands per
   (dataset, period) — used during design to validate `build_cmd` against the
   verified argparse.
-- **KKT smoke test**: `read_equation_values` parses `out_altertax_ifsub0.gdx` and
-  returns non-empty marginals (gates the complementarity logic).
+- **Reader fix (gates KKT)**: existing `tests/babel/gdx/` reader suite green as
+  baseline; new test asserts `read_gdx(out_altertax_ifsub0.gdx)` classifies known
+  equation families and `read_equation_values` returns non-empty marginals; reader
+  suite still green after the fix.
 - **End-to-end on gtap7_3x3** (check + shock): one full orchestrator run; assert
   the report shape and that the four-way error classification holds.
 - **Regression gate (mandatory before any merge that touches equations/params/data
