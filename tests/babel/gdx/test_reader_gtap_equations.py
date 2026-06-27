@@ -26,12 +26,11 @@ def test_many_equations_found():
     assert len(eqs) >= 50, f"found {len(eqs)}"  # gdxdump sees 103
 
 
-@pytest.mark.xfail(reason="_DATA_ var/equ decoder rewritten in Task 3; the "
-                          "symbol-table fix alone does not decode values yet")
 def test_arenteq_marginals_present_with_period_dim():
     data = read_gdx(str(REF))
     vals = read_equation_values(data, "arenteq")
-    assert vals
+    assert len(vals) == 6  # 3 regions (USA/EU_28/ROW) × {check, shock}
     key = next(k for k in vals if ("USA" in k and "check" in k))
-    assert math.isfinite(vals[key]["marginal"])
-    assert abs(vals[key]["marginal"] - 0.157338617290058) < 1e-9
+    assert abs(vals[key]["marginal"] - 0.157338617290058) < 1e-12
+    key2 = next(k for k in vals if ("USA" in k and "shock" in k))
+    assert abs(vals[key2]["marginal"] - 0.15719762962008) < 1e-12

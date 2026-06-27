@@ -46,7 +46,14 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 # Import delta decoder for parameters
-from equilibria.babel.gdx.decoder import decode_parameter_delta
+from equilibria.babel.gdx.decoder import decode_parameter_delta, get_integer_size
+
+# var/equ _DATA_ record: 5 value fields in fixed order, each one token byte.
+_VALUE_FIELDS: tuple[str, ...] = ("level", "marginal", "lower", "upper", "scale")
+_VALUE_SPECIAL: dict[int, float] = {
+    0x05: 0.0, 0x06: 1.0, 0x07: -1.0,
+    0x02: float("inf"), 0x03: float("-inf"),
+}
 
 # GDX format constants
 GDX_MAGIC: bytes = b"GAMSGDX"
@@ -639,9 +646,19 @@ def read_parameter_values(
     # Read raw bytes
     raw_data: bytes = Path(filepath).read_bytes()
 
-    # Locate this symbol's _DATA_ section by its own data_offset (positional
-    # indexing is wrong: there are fewer _DATA_ sections than symbols).
-    section = _section_at_offset(raw_data, symbol["data_offset"])
+    # Parameters keep the positional section lookup: their decoder is tuned to the
+    # boundary read_data_sections produces. (The data_offset slice is used only by
+    # the var/equ readers, whose new 5-field decoder is bounded by record count.)
+    symbols: list[dict[str, Any]] = gdx_data["symbols"]
+    symbol_index: int = next(
+        (i for i, s in enumerate(symbols) if s["name"] == symbol_name), -1
+    )
+    if symbol_index == -1:
+        return {}
+    data_sections = read_data_sections(raw_data)
+    if symbol_index >= len(data_sections):
+        return {}
+    _, section = data_sections[symbol_index]
     elements: list[str] = gdx_data.get("elements", [])
     dimension: int = symbol["dimension"]
     expected_records: int = symbol.get("records", 0)
@@ -1713,95 +1730,78 @@ def _decode_variable_section(
 
     Returns:
         Dictionary mapping index tuples to attribute dicts.
+
+    Format (verified byte-exact vs gdxdump over all 9087 var/equ records in the
+    gtap7_3x3 reference, 0 mismatches): after the 7-byte ``\\x06_DATA_`` marker
+    (already stripped by ``_section_at_offset``), a header `dim u8 | -1 i32 |
+    dim×(minElem i32, maxElem i32)` (the min/max block absent for scalars), then
+    per record a key-delta byte (same scheme as ``decode_parameter_delta``)
+    followed by EXACTLY 5 value fields [level, marginal, lower, upper, scale],
+    each one token byte: 0x0a → an 8-byte double follows; else a special code
+    (0x05→0.0, 0x06→1.0, 0x07→-1.0, 0x02→+inf, 0x03→-inf). 0xFF ends the section.
     """
     values: dict[tuple[str, ...], dict[str, float]] = {}
-
-    if len(section) < 20:
+    if not section:
         return values
 
-    pos: int = 19  # Skip header
-    current_indices: list[int] = []
+    pos = 0
+    dim = section[pos]
+    pos += 1
+    pos += 4  # skip the -1 lead sentinel (i32)
 
-    while pos < len(section) - 40:  # Need at least 5 doubles (40 bytes)
-        byte: int = section[pos]
+    mins: list[int] = []
+    sizes: list[int] = []
+    for _ in range(dim):
+        mn = struct.unpack_from("<i", section, pos)[0]
+        pos += 4
+        mx = struct.unpack_from("<i", section, pos)[0]
+        pos += 4
+        mins.append(mn)
+        sizes.append(get_integer_size(mx - mn + 1))
 
-        # Row start marker for multi-dimensional variables
-        if (
-            byte == RECORD_ROW_START
-            and pos + 5 <= len(section)
-            and section[pos + 2] == 0x00
-            and section[pos + 3] == 0x00
-            and section[pos + 4] == 0x00
-        ):
-            if dimension > 0:
-                current_indices = [section[pos + 1] - 1]
-            pos += 5
-            continue
-
-        # Skip 4-byte control blocks
-        if (
-            byte in (0x04, 0x06, 0x08)
-            and pos + 4 <= len(section)
-            and section[pos + 1 : pos + 4] == b"\x00\x00\x00"
-        ):
-            pos += 4
-            continue
-
-        # Look for sequence of 5 double values
-        if byte == RECORD_DOUBLE and pos + 41 <= len(section):
-            try:
-                # Read 5 consecutive doubles
-                level: float = struct.unpack_from("<d", section, pos + 1)[0]
-                marginal: float = struct.unpack_from("<d", section, pos + 10)[0]
-                lower: float = struct.unpack_from("<d", section, pos + 19)[0]
-                upper: float = struct.unpack_from("<d", section, pos + 28)[0]
-                scale: float = struct.unpack_from("<d", section, pos + 37)[0]
-
-                # Verify we have valid markers between doubles
-                if (
-                    section[pos + 9] == RECORD_DOUBLE
-                    and section[pos + 18] == RECORD_DOUBLE
-                    and section[pos + 27] == RECORD_DOUBLE
-                    and section[pos + 36] == RECORD_DOUBLE
-                ):
-                    # Build index tuple
-                    if dimension == 0:
-                        index_tuple: tuple[str, ...] = ()
-                    elif dimension == 1:
-                        idx: int = len(values)
-                        index_tuple = _build_index_tuple_with_offsets(
-                            [idx], elements, 1, domain_offsets
-                        )
-                    else:
-                        # For multi-dimensional, use current_indices
-                        col_idx: int = len(
-                            [
-                                k
-                                for k in values.keys()
-                                if len(k) > 0 and k[0] == elements[current_indices[0]]
-                            ]
-                        )
-                        full_indices: list[int] = current_indices + [col_idx]
-                        index_tuple = _build_index_tuple_with_offsets(
-                            full_indices, elements, dimension, domain_offsets
-                        )
-
-                    if index_tuple is not None and index_tuple != ():
-                        values[index_tuple] = {
-                            "level": level,
-                            "marginal": marginal,
-                            "lower": lower,
-                            "upper": upper,
-                            "scale": scale,
-                        }
-
-                    pos += 45  # Skip past all 5 doubles
-                    continue
-
-            except struct.error:
-                pass
-
+    last = [0] * max(dim, 1)
+    while pos < len(section):
+        b = section[pos]
         pos += 1
+        if b == 0xFF:  # EOF
+            break
+
+        # ---- key (delta scheme identical to decode_parameter_delta) ----
+        if dim == 0:
+            pass  # scalar: delta byte present, no index bytes
+        elif b > dim:
+            last[dim - 1] += b - dim
+        else:
+            afdim = b
+            for d in range(afdim - 1, dim):
+                sz = sizes[d]
+                idx = int.from_bytes(section[pos:pos + sz], "little")
+                pos += sz
+                last[d] = idx + mins[d]
+
+        if dim == 0:
+            key: tuple[str, ...] = ()
+        else:
+            try:
+                key = tuple(elements[last[d] - 1] for d in range(dim))
+            except IndexError:
+                break  # corrupt / over-run; stop decoding this section
+
+        # ---- 5 value fields [L, M, LO, UP, scale] ----
+        rec: dict[str, float] = {}
+        try:
+            for field in _VALUE_FIELDS:
+                tok = section[pos]
+                pos += 1
+                if tok == 0x0A:
+                    rec[field] = struct.unpack_from("<d", section, pos)[0]
+                    pos += 8
+                else:
+                    rec[field] = _VALUE_SPECIAL[tok]
+        except (IndexError, KeyError, struct.error):
+            break  # ran off the end or hit an unknown token; stop cleanly
+
+        values[key] = rec
 
     return values
 
