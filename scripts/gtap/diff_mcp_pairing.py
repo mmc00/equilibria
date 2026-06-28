@@ -208,15 +208,32 @@ def _debug_print(model_name, gms_name, pairs, free_rows, rows):
               f"{r['note']}", file=sys.stderr)
 
 
+# The `model gtap /eq.var/` pairing block is the SAME GAMS model for every dataset
+# (only sets/data differ), so a dataset lacking its own .gms can borrow a sibling's
+# for the pairing parse. The Python model build below is still dataset-specific.
+_GMS_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "9x10", "gtap7_15x10")
+
+
+def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
+    own = Path(f"{DEFAULT_REFS}/{dataset}_altertax_cd/model_altertax_ifsub{ifsub}.gms")
+    if own.exists():
+        return (own, False)
+    for fb in _GMS_FALLBACK_DATASETS:
+        cand = Path(f"{DEFAULT_REFS}/{fb}_altertax_cd/model_altertax_ifsub{ifsub}.gms")
+        if cand.exists():
+            return (cand, True)
+    return (None, False)
+
+
 def _work(args) -> dict:
-    gms_path = Path(f"{DEFAULT_REFS}/{args.dataset}_altertax_cd/"
-                    f"model_altertax_ifsub{args.ifsub}.gms")
-    if not gms_path.exists():
+    gms_path, gms_is_fallback = _resolve_gms_path(args.dataset, args.ifsub)
+    if gms_path is None:
         return dict(status="error", period=args.period,
-                    headline=f"GAMS source not found: {gms_path}",
+                    headline=f"GAMS source not found for {args.dataset} "
+                             f"(no own .gms, no fallback)",
                     violations=[],
                     meta={"error_kind": "gams_source_missing",
-                          "gms_path": str(gms_path)})
+                          "dataset": args.dataset})
 
     pairs = _parse_gams_model(gms_path, args.model_name)
     if not pairs:
@@ -318,7 +335,7 @@ def _work(args) -> dict:
         status=status, period=args.period, headline=headline,
         violations=violations,
         meta={"model_name": args.model_name, "ifsub": args.ifsub,
-              "gms_path": str(gms_path),
+              "gms_path": str(gms_path), "gms_is_fallback": gms_is_fallback,
               "n_model_entries": len(pairs), "n_free_rows": len(free_rows),
               "free_rows": free_rows, "n_benign_active": n_benign,
               "apply_closure": args.apply_closure,

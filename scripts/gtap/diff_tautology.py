@@ -40,7 +40,10 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import gams_levels, list_populated_vars  # type: ignore
+from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 import diff_altertax as DA
+
+DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
 
 
 def _build_run_gtap():
@@ -132,36 +135,71 @@ def run_tautology_scan(dataset: str, gdx_path: Path, period: str, delta: float, 
     return rows
 
 
-def main():
+def _default_gdx(dataset: str) -> Path:
+    return Path(f"{DEFAULT_REFS}/{dataset}_altertax_cd/out_altertax_ifsub0.gdx")
+
+
+def _work(args) -> dict:
+    gdx = args.gdx or _default_gdx(args.dataset)
+    if not gdx.exists():
+        return dict(status="error", period=args.period,
+                    headline=f"reference GDX not found: {gdx}",
+                    violations=[],
+                    meta={"error_kind": "gdx_not_found", "gdx": str(gdx)})
+
+    rows = run_tautology_scan(args.dataset, gdx, args.period, args.delta, args.tol)
+    rows.sort()  # lowest sensitivity first = most tautological
+
+    # human-readable table → stderr (never contaminates the JSON stdout line)
+    print(f"=== TAUTOLOGY / unanchored-var scan: {args.dataset} period={args.period} ===",
+          file=sys.stderr)
+    print(f"{'∂resid/∂var':>12}  {'equation':<14} {'var':<8} {'cell':<22} flag",
+          file=sys.stderr)
+    for sens, eqn, vn, cell, n in rows:
+        flag = "  ⚑ TAUTOLOGY → UNANCHORED" if sens < args.tol else ""
+        print(f"{sens:>12.3e}  {eqn:<14} {vn:<8} {str(cell):<22}{flag}", file=sys.stderr)
+
+    flagged = [r for r in rows if r[0] < args.tol]
+    violations = []
+    for sens, eqn, vn, cell, n in flagged:
+        v = make_violation(vn, list(cell) if isinstance(cell, tuple) else [cell],
+                           "dresid_dvar", float(sens))
+        v["kind"] = "unanchored_dof"
+        v["equation"] = eqn
+        v["cells_sampled"] = n
+        v["note"] = (f"{eqn} does NOT constrain {vn} (∂resid/∂var≈0) → {vn} is a FREE DOF "
+                     f"PATH places arbitrarily (root-selection cause)")
+        violations.append(v)
+
+    status = "dirty" if flagged else "clean"
+    if flagged:
+        worst = flagged[0]
+        headline = (f"unanchored-DOF scan ({args.period}): {len(flagged)} eq↔var pair(s) "
+                    f"with ∂resid/∂var<{args.tol:g} ⚑ — vacuous paired row = free DOF "
+                    f"(root-selection cause); worst {worst[1]}↔{worst[2]}")
+    else:
+        headline = (f"unanchored-DOF scan ({args.period}): every paired equation constrains "
+                    f"its variable — no free DOF; this layer does not explain the gap")
+    return dict(status=status, period=args.period, headline=headline,
+                violations=violations,
+                meta={"gdx": str(gdx), "n_pairs_checked": len(rows),
+                      "n_unanchored": len(flagged), "delta": args.delta, "tol": args.tol})
+
+
+def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", default="gtap7_3x3")
-    ap.add_argument("--gdx", type=Path, required=True)
+    ap.add_argument("--gdx", type=Path, default=None,
+                    help="reference GDX (default: DEFAULT_REFS/<dataset>_altertax_cd/out_altertax_ifsub0.gdx)")
     ap.add_argument("--period", default="shock", choices=["check", "shock"])
     ap.add_argument("--delta", type=float, default=1e-4, help="relative perturbation of the var")
     ap.add_argument("--tol", type=float, default=1e-6,
                     help="sensitivity below this = the eq does NOT constrain its var (tautology)")
     args = ap.parse_args()
-
-    print(f"=== TAUTOLOGY / unanchored-var scan: {args.dataset} period={args.period} ===")
-    print("For each eq↔var MCP pair: perturb var by δ, measure ∂resid_eq/∂var (lowest cell).")
-    print("Sensitivity ≈ 0 → the equation is VACUOUS for its paired var → var is a FREE DOF.\n")
-    rows = run_tautology_scan(args.dataset, args.gdx, args.period, args.delta, args.tol)
-    rows.sort()  # lowest sensitivity first = most tautological
-    print(f"{'∂resid/∂var':>12}  {'equation':<14} {'var':<8} {'cell':<22} flag")
-    print("-" * 70)
-    for sens, eqn, vn, cell, n in rows:
-        flag = "  ⚑ TAUTOLOGY → var UNANCHORED (free DOF)" if sens < args.tol else ""
-        print(f"{sens:>12.3e}  {eqn:<14} {vn:<8} {str(cell):<22}{flag}")
-    flagged = [r for r in rows if r[0] < args.tol]
-    if flagged:
-        print(f"\n⚑ {len(flagged)} pair(s) where the equation does NOT constrain its variable.")
-        print("  These are free DOFs PATH places arbitrarily — the CAUSE static tools (3/4/6)")
-        print("  miss (they see identical vacuous eqs in both models). Fix = give the var its")
-        print("  missing economic determinant (e.g. eq_pvaeq → pva·va=Σ(pfa·xf)), not a coeff tweak.")
-    else:
-        print("\nNo tautological pairs found — every paired equation constrains its variable.")
+    return run_tool("diff_tautology", args.dataset, lambda: _work(args),
+                    period_hint=args.period)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

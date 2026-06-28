@@ -8,11 +8,15 @@ from cascade_run import sweep_period
 
 
 def _fake_runner(script):
-    """script: dict layer_name -> (payload, exit_code). Returns a runner."""
+    """script: dict layer_name -> (payload, exit_code). Returns a runner.
+    Layers not in `script` default to clean (so adding cascade layers doesn't
+    break tests that only care about a subset)."""
+    _CLEAN = ({"status": "clean", "meta": {}, "headline": ""}, 0)
+
     def runner(argv, timeout):
         # argv[1] is the tool script path; map by basename stem to a layer name.
-        name = next(k for k in script if k in argv[1])
-        return script[name]
+        name = next((k for k in script if k in argv[1]), None)
+        return script[name] if name is not None else _CLEAN
     return runner
 
 
@@ -26,8 +30,12 @@ def test_stops_at_first_dirty():
     results = sweep_period("gtap7_3x3", "shock", gdx,
                            runner=_fake_runner(script))
     names = [r.name for r in results]
-    assert names == ["mcp_pairing", "nl_compare"]
+    # holdfixed/tautology default to clean here, so the sweep passes them and stops
+    # at the first dirty (nl_compare). Later layers must NOT run.
+    assert names == ["mcp_pairing", "holdfixed", "tautology", "nl_compare"]
+    assert results[-1].name == "nl_compare"
     assert results[-1].action == "explain_stop"
+    assert "calibration" not in names
 
 
 def test_no_convergence_stops_before_seed_layers():
