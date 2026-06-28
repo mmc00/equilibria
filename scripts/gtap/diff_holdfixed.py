@@ -44,6 +44,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
+
+DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+
 # GAMS var name → Python Var attribute (same convention as diff_altertax.GAMS_TO_PY_NAME).
 _GAMS_TO_PY = {
     "factY": "facty", "regY": "regy", "phiP": "phip", "ytaxInd": "ytax_ind",
@@ -80,55 +84,121 @@ def python_stage_freezes_anything() -> tuple[bool, str]:
             "prior-stage holdfix of the full GAMS set.")
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gms", type=Path,
-                    default=Path("/Users/marmol/proyectos2/equilibria_refs/"
-                                 "gtap7_3x3_altertax_cd/model_altertax_ifsub0.gms"))
-    args = ap.parse_args()
+# rough role tags so the price anchors that pin pva stand out
+_ROLE = {
+    "pf": "factor price  ← anchors pva (VA nest)",
+    "xf": "factor qty    ← anchors pva (VA nest)",
+    "pa": "Armington price ← anchors pnd",
+    "pe": "export price", "pefob": "export price (fob)", "pmcif": "import price (cif)",
+    "pm": "import price", "xw": "bilateral trade qty",
+    "pabs": "absorption price index (Fisher)", "pfact": "factor price index (Fisher)",
+    "pwfact": "world factor price (numeraire chain)", "pmuv": "MUV deflator (report)",
+    "pi": "investment price", "psave": "savings price", "ptmg": "margin price",
+    "uh": "household utility", "gdpmp": "nominal GDP", "rgdpmp": "real GDP (report)",
+    "pgdpmp": "GDP deflator (report)",
+    "axp": "tech (fixed param-like)", "lambdand": "tech", "lambdava": "tech",
+    "lambdaio": "tech", "lambdaf": "tech",
+}
+# the price/qty anchors that indirectly pin the CD free DOFs (pva/pnd)
+_ANCHOR_VARS = ("pf", "xf", "pa", "pe", "pmcif", "pm", "pabs", "pfact", "pwfact")
 
-    if not args.gms.exists():
-        print(f"ERROR: GAMS file not found: {args.gms}")
-        sys.exit(2)
 
-    hf = parse_holdfix_set(args.gms)
-    print(f"=== HOLDFIXED / SEQUENCE diff (GAMS {args.gms.name}) ===")
-    print(f"\nGAMS freezes {len(hf)} variables from the PREVIOUS period before each "
-          f"`solve gtap` (loop(tsim) + holdfixed=1):")
-    print(f"\n  {'GAMS var':<12} {'Python Var':<14} role")
-    print("  " + "-" * 56)
-    # rough role tags so the price anchors that pin pva stand out
-    role = {
-        "pf": "factor price  ← anchors pva (VA nest)",
-        "xf": "factor qty    ← anchors pva (VA nest)",
-        "pa": "Armington price ← anchors pnd",
-        "pe": "export price", "pefob": "export price (fob)", "pmcif": "import price (cif)",
-        "pm": "import price", "xw": "bilateral trade qty",
-        "pabs": "absorption price index (Fisher)", "pfact": "factor price index (Fisher)",
-        "pwfact": "world factor price (numeraire chain)", "pmuv": "MUV deflator (report)",
-        "pi": "investment price", "psave": "savings price", "ptmg": "margin price",
-        "uh": "household utility", "gdpmp": "nominal GDP", "rgdpmp": "real GDP (report)",
-        "pgdpmp": "GDP deflator (report)",
-        "axp": "tech (fixed param-like)", "lambdand": "tech", "lambdava": "tech",
-        "lambdaio": "tech", "lambdaf": "tech",
-    }
+def _default_gms(dataset: str) -> Path:
+    return Path(f"{DEFAULT_REFS}/{dataset}_altertax_cd/model_altertax_ifsub0.gms")
+
+
+# The holdfix block (loop(tsim) + var.fx(tsim-1)) is the SAME GAMS model for every
+# dataset — only the sets/data differ. So if a dataset's own .gms is absent we may
+# fall back to any sibling dataset's .gms for the sequence-holdfix parse.
+_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "9x10", "gtap7_15x10")
+
+
+def _resolve_gms(dataset: str, explicit) -> tuple[Path | None, bool]:
+    """Return (gms_path_or_None, used_fallback)."""
+    if explicit is not None:
+        return (explicit, False)
+    own = _default_gms(dataset)
+    if own.exists():
+        return (own, False)
+    for fb in _FALLBACK_DATASETS:
+        cand = _default_gms(fb)
+        if cand.exists():
+            return (cand, True)
+    return (None, False)
+
+
+def _work(args) -> dict:
+    gms, used_fallback = _resolve_gms(args.dataset, args.gms)
+    if gms is None or not gms.exists():
+        return dict(status="error", period=args.period,
+                    headline=f"GAMS model source not found for {args.dataset} "
+                             f"(no own .gms, no fallback)",
+                    violations=[],
+                    meta={"error_kind": "gams_source_missing",
+                          "dataset": args.dataset})
+
+    hf = parse_holdfix_set(gms)
+    frozen, note = python_stage_freezes_anything()
+    anchors = [gv for gv, _ in hf if gv in _ANCHOR_VARS]
+
+    # human-readable summary → stderr
+    print(f"=== HOLDFIXED / SEQUENCE diff (GAMS {gms.name}) ===", file=sys.stderr)
+    print(f"GAMS freezes {len(hf)} prior-period vars; Python freezes "
+          f"{'some' if frozen else 'NONE'}.", file=sys.stderr)
     for gv, _raw in hf:
         pv = _GAMS_TO_PY.get(gv, gv)
-        print(f"  {gv:<12} {pv:<14} {role.get(gv, '')}")
+        print(f"  {gv:<12} {pv:<14} {_ROLE.get(gv, '')}", file=sys.stderr)
 
-    frozen, note = python_stage_freezes_anything()
-    print(f"\nPython stage chain freezes the previous stage? {'YES' if frozen else 'NO'}")
-    print(f"  → {note}")
+    # Violation model: GAMS freezes a prior-period holdfix set; Python freezes none of
+    # it between stages → the sequence anchor is absent → free CD DOFs re-slide. Each
+    # GAMS-frozen var that Python does NOT freeze is a missing anchor. Anchors that
+    # pin pva/pnd are the dangerous ones; flag the set as dirty when Python freezes 0.
+    violations = []
+    if not frozen and hf:
+        for gv, _raw in hf:
+            pv = _GAMS_TO_PY.get(gv, gv)
+            is_anchor = gv in _ANCHOR_VARS
+            v = make_violation(gv, [], "holdfix_missing", 1.0 if is_anchor else 0.5)
+            v["kind"] = "missing_prior_period_holdfix"
+            v["python_var"] = pv
+            v["is_pva_anchor"] = is_anchor
+            v["role"] = _ROLE.get(gv, "")
+            violations.append(v)
 
-    anchors = [gv for gv, _ in hf if gv in ("pf", "xf", "pa", "pe", "pmcif", "pm",
-                                            "pabs", "pfact", "pwfact")]
-    print(f"\nKEY: GAMS pins pva/pnd INDIRECTLY by freezing the price/qty anchors "
-          f"{anchors} from the prior period. Python freezes NONE of these between stages,")
-    print(f"so the free CD DOFs (pva/pnd) re-slide each solve (tool 7 ⚑ symptom). FAITHFUL")
-    print(f"FIX (no hardcoding): before the shock solve, .fix() these vars at the PYTHON")
-    print(f"check-stage levels (not GAMS values), replicating var.fx(tsim-1)=var.l(tsim-1).")
+    status = "dirty" if violations else "clean"
+    if violations:
+        headline = (f"holdfix/sequence diff: GAMS freezes {len(hf)} prior-period vars "
+                    f"({len(anchors)} pva/pnd anchors: {anchors}); Python freezes NONE "
+                    f"between stages → missing sequence anchor, free CD DOFs re-slide "
+                    f"(root-selection cause)")
+    else:
+        headline = (f"holdfix/sequence diff: Python replicates GAMS's prior-period "
+                    f"holdfix — sequence anchor present; this layer does not explain the gap")
+    return dict(status=status, period=args.period, headline=headline,
+                violations=violations,
+                meta={"gms_path": str(gms), "gms_is_fallback": used_fallback,
+                      "n_gams_holdfix": len(hf),
+                      "n_anchors": len(anchors), "anchors": anchors,
+                      "python_freezes_prior_stage": frozen,
+                      "python_note": note,
+                      "holdfix_set": [gv for gv, _ in hf]})
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--dataset", default="gtap7_3x3")
+    ap.add_argument("--gms", type=Path, default=None,
+                    help="GAMS model .gms (default: DEFAULT_REFS/<dataset>_altertax_cd/"
+                         "model_altertax_ifsub0.gms)")
+    ap.add_argument("--period", default="check", choices=["base", "check", "shock"],
+                    help="period label for the JSON (the holdfix set is sequence-wide)")
+    ap.add_argument("--gdx", type=Path, default=None,
+                    help="unused (accepted for orchestrator builder uniformity)")
+    args = ap.parse_args()
+    return run_tool("diff_holdfixed", args.dataset, lambda: _work(args),
+                    period_hint=args.period)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

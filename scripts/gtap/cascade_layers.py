@@ -58,8 +58,26 @@ def _c_drift(ds, period, gdx):
             "--gdx", str(gdx), "--period", period]
 
 
+def _c_holdfixed(ds, period, gdx):
+    # tool 8: sequence holdfix diff. The .gms path is derived from the dataset
+    # inside the tool; --gdx is accepted but unused (uniform builder signature).
+    return [PY, f"{GTAP}/diff_holdfixed.py", "--dataset", ds, "--period", period]
+
+
+def _c_tautology(ds, period, gdx):
+    # tool 9: unanchored-DOF (root-selection) detector. Solves at the GAMS seed.
+    return [PY, f"{GTAP}/diff_tautology.py", "--dataset", ds,
+            "--gdx", str(gdx), "--period", period]
+
+
+# Order = causal: structural pairing (mcp) → ANCHOR-MISSING (holdfix/tautology, the
+# root-selection cause) → algebra/inputs (nl/calibration) → reference health → seed
+# residual / drift (symptoms). The anchor-missing layers go right after mcp_pairing so
+# a root-selection gap (the recurring class) is flagged BEFORE the downstream symptoms.
 LAYER_SPECS: list[LayerSpec] = [
     LayerSpec("mcp_pairing",        f"{GTAP}/diff_mcp_pairing.py",   ("base", "check", "shock"), False, _c_pairing),
+    LayerSpec("holdfixed",          f"{GTAP}/diff_holdfixed.py",     ("base", "check", "shock"), False, _c_holdfixed),
+    LayerSpec("tautology",          f"{GTAP}/diff_tautology.py",     ("check", "shock"),         True,  _c_tautology),
     LayerSpec("nl_compare",         f"{GTAP}/nl_compare.py",         ("base", "check", "shock"), False, _c_nl),
     LayerSpec("calibration",        f"{GTAP}/diff_calibration.py",   ("base", "check", "shock"), False, _c_calibration),
     LayerSpec("validate_reference", f"{GTAP}/validate_reference.py", ("base", "check", "shock"), False, _c_validate_ref),

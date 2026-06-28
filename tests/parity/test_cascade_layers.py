@@ -14,10 +14,29 @@ def _argv(name, dataset, period, gdx=GDX):
     return build_cmd(layer_by_name(name), dataset, period, gdx)
 
 
-def test_six_subprocess_layers_in_diagnostic_order():
+def test_subprocess_layers_in_diagnostic_order():
     names = [l.name for l in LAYER_SPECS]
-    assert names == ["mcp_pairing", "nl_compare", "calibration",
-                     "validate_reference", "probe_seed", "drift_test"]
+    # anchor-missing layers (holdfixed/tautology) sit right after mcp_pairing so a
+    # root-selection gap is flagged before the downstream symptom layers.
+    assert names == ["mcp_pairing", "holdfixed", "tautology", "nl_compare",
+                     "calibration", "validate_reference", "probe_seed", "drift_test"]
+
+
+def test_holdfixed_argv():
+    argv = _argv("holdfixed", "gtap7_3x3", "check")
+    assert "diff_holdfixed.py" in argv[1]
+    assert "--dataset" in argv and "gtap7_3x3" in argv
+
+
+def test_tautology_argv():
+    argv = _argv("tautology", "gtap7_3x3", "check")
+    assert "diff_tautology.py" in argv[1]
+    assert "--gdx" in argv and "--period" in argv and "check" in argv
+
+
+def test_tautology_has_no_base():
+    # tautology needs a solve (check/shock), like drift
+    assert build_cmd(layer_by_name("tautology"), "9x10", "base", GDX) is None
 
 
 def test_mcp_pairing_argv():
