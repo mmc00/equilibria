@@ -299,6 +299,14 @@ def main() -> None:
                          "lifts the shock match ~78.7%→~97.6%. This is a parity-validation "
                          "step (does Python stay on GAMS's basin when its degenerate CD DOFs "
                          "are held, like GAMS), NOT a from-scratch solve. Off by default.")
+    ap.add_argument("--seed-from-prior", default=None,
+                    help="INHERITANCE sweep (bench): seed this var's check START from the "
+                         "PYTHON prior period (m_b) instead of warmstart_from_gams(check). "
+                         "GAMS does var.l(check)=var.l(base); Python seeds from the GAMS "
+                         "check value. This tests the faithful inheritance SOURCE, one var "
+                         "per bench round. Only the seed (start point) changes; the solve "
+                         "still moves the var. Comma-separated for multiple (but keep ONE "
+                         "per round for an attributable delta).")
     args = ap.parse_args()
 
     data_path, bundle_dir, loader, cd_ref = DATASET_REGISTRY[args.dataset]
@@ -571,6 +579,30 @@ def main() -> None:
                 print(f"  [GAMS-warm] Warm-started check period from GAMS check values: {_n_warm_set} vars set")
         except Exception as _we:
             print(f"  [GAMS-warm] skipped: {_we}")
+
+    # --- INHERITANCE sweep: override one var's check SEED to the Python prior period
+    # (m_b) value, mirroring GAMS var.l(check)=var.l(base). Only the start point changes.
+    if args.seed_from_prior:
+        from pyomo.environ import value as _pv_inh
+        _inh_vars = [s.strip() for s in args.seed_from_prior.split(",") if s.strip()]
+        _n_inh = 0
+        for _vn in _inh_vars:
+            _vb = getattr(m_b, _vn, None)
+            _vc = getattr(m_chk, _vn, None)
+            if _vb is None or _vc is None:
+                print(f"  [seed-from-prior] {_vn}: not found, skipped")
+                continue
+            for _idx in _vc:
+                try:
+                    if _vc[_idx].fixed:
+                        continue
+                    _prior = float(_pv_inh(_vb[_idx]))
+                    _vc[_idx].set_value(_prior)
+                    _n_inh += 1
+                except Exception:
+                    pass
+        print(f"  [seed-from-prior] seeded {_n_inh} cells of {_inh_vars} from PYTHON prior "
+              f"(m_b) — mirrors GAMS var.l(check)=var.l(base)")
 
     # --- CHECK holdfix treatment (opt-in via --holdfix-pva) ----------------------
     # GAMS holdfixes pva/pnd in EVERY period (gtap.holdfixed=1), the CHECK included:
