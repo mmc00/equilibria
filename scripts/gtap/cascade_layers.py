@@ -70,6 +70,13 @@ def _c_tautology(ds, period, gdx):
             "--gdx", str(gdx), "--period", period]
 
 
+def _c_causal(ds, period, gdx):
+    # tool 10: causal-propagation (symptom-vs-cause, DIRECT coupling only — see its
+    # docstring limit). Seeds at the GAMS point, perturbs bucket-A vars.
+    return [PY, f"{GTAP}/diff_causal_propagation.py", "--dataset", ds,
+            "--gdx", str(gdx), "--period", period]
+
+
 # Order = causal: structural pairing (mcp) → ANCHOR-MISSING (holdfix/tautology, the
 # root-selection cause) → algebra/inputs (nl/calibration) → reference health → seed
 # residual / drift (symptoms). The anchor-missing layers go right after mcp_pairing so
@@ -78,6 +85,7 @@ LAYER_SPECS: list[LayerSpec] = [
     LayerSpec("mcp_pairing",        f"{GTAP}/diff_mcp_pairing.py",   ("base", "check", "shock"), False, _c_pairing),
     LayerSpec("holdfixed",          f"{GTAP}/diff_holdfixed.py",     ("base", "check", "shock"), False, _c_holdfixed),
     LayerSpec("tautology",          f"{GTAP}/diff_tautology.py",     ("check", "shock"),         True,  _c_tautology),
+    LayerSpec("causal_propagation", f"{GTAP}/diff_causal_propagation.py", ("check", "shock"),     True,  _c_causal),
     LayerSpec("nl_compare",         f"{GTAP}/nl_compare.py",         ("base", "check", "shock"), False, _c_nl),
     LayerSpec("calibration",        f"{GTAP}/diff_calibration.py",   ("base", "check", "shock"), False, _c_calibration),
     LayerSpec("validate_reference", f"{GTAP}/validate_reference.py", ("base", "check", "shock"), False, _c_validate_ref),

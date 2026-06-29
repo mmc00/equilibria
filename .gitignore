@@ -262,6 +262,9 @@ scripts/gtap/*
 !scripts/gtap/diff_calibration.py
 !scripts/gtap/diff_equation_form.py
 !scripts/gtap/diff_mcp_pairing.py
+!scripts/gtap/diff_holdfixed.py
+!scripts/gtap/diff_tautology.py
+!scripts/gtap/diff_causal_propagation.py
 !scripts/gtap/build_v7_processed_from_raw.py
 !scripts/gtap/coverage_matrix.py
 !scripts/gtap/gen_coverage_doc.py

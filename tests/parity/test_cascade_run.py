@@ -32,7 +32,8 @@ def test_stops_at_first_dirty():
     names = [r.name for r in results]
     # holdfixed/tautology default to clean here, so the sweep passes them and stops
     # at the first dirty (nl_compare). Later layers must NOT run.
-    assert names == ["mcp_pairing", "holdfixed", "tautology", "nl_compare"]
+    assert names == ["mcp_pairing", "holdfixed", "tautology", "causal_propagation",
+                     "nl_compare"]
     assert results[-1].name == "nl_compare"
     assert results[-1].action == "explain_stop"
     assert "calibration" not in names
