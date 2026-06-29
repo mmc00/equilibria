@@ -18,8 +18,9 @@ def test_subprocess_layers_in_diagnostic_order():
     names = [l.name for l in LAYER_SPECS]
     # anchor-missing layers (holdfixed/tautology) sit right after mcp_pairing so a
     # root-selection gap is flagged before the downstream symptom layers.
-    assert names == ["mcp_pairing", "holdfixed", "tautology", "nl_compare",
-                     "calibration", "validate_reference", "probe_seed", "drift_test"]
+    assert names == ["mcp_pairing", "holdfixed", "tautology", "causal_propagation",
+                     "nl_compare", "calibration", "validate_reference", "probe_seed",
+                     "drift_test"]
 
 
 def test_holdfixed_argv():
