@@ -114,6 +114,73 @@ def make_violation(entity: str, index: Any, metric: str, value: float) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# DETECTION vs PRESCRIPTION (the firm-observation / unproven-recipe split)
+#
+# A static tool (holdfixed/tautology/mcp_pairing/nl_compare/calibration: it READS
+# structure, it does not RUN a solve) can observe a cause FIRMLY but its proposed FIX
+# is only an INFERENCE — it never measured that the fix works. The schema must keep
+# these apart so the orchestrator never shows a static recipe as proven truth.
+#
+#   detection   = WHAT was observed. May be "firm" for any tool.
+#   prescription = HOW to fix it. Born "hypothesis"; rises to "confirmed" ONLY when a
+#                  measuring tool SEEDED the recipe, the solve CONVERGED (code=1), AND
+#                  the PREDICTED EFFECT occurred (the match moved as the recipe said).
+#                  All three, recorded in `validated_by`. Anything less = sello vacío.
+# ---------------------------------------------------------------------------
+
+def make_detection(what: str, evidence: str, *, confidence: str = "firm") -> dict:
+    """WHAT the tool observed. confidence defaults to 'firm' — a tool may be sure of
+    its observation even when its recipe is unproven."""
+    if confidence not in ("firm", "tentative"):
+        confidence = "tentative"
+    return {"what": str(what), "evidence": str(evidence), "confidence": confidence}
+
+
+def make_validation(*, tool: str, converged: bool, predicted_effect: str,
+                    predicted_effect_observed: bool, evidence: str) -> dict | None:
+    """A prescription is validated ONLY if a measuring tool ran it, it converged,
+    AND the predicted effect was observed. Returns a validation record iff ALL hold;
+    otherwise None (so a partial/empty validation can NEVER mark a recipe confirmed)."""
+    if not (converged and predicted_effect_observed):
+        return None
+    return {
+        "tool": str(tool),
+        "converged": True,
+        "predicted_effect": str(predicted_effect),
+        "predicted_effect_observed": True,
+        "evidence": str(evidence),
+    }
+
+
+def make_prescription(how: str, *, validated_by: dict | None = None) -> dict:
+    """HOW to fix the detected cause. status='hypothesis' UNLESS validated_by is a
+    full make_validation() record (converged + predicted effect observed). A static
+    tool passes validated_by=None → always 'hypothesis'. The status is DERIVED from
+    the validation, never set directly — a tool cannot self-declare 'confirmed'."""
+    valid = (
+        isinstance(validated_by, dict)
+        and validated_by.get("converged") is True
+        and validated_by.get("predicted_effect_observed") is True
+    )
+    return {
+        "how": str(how),
+        "status": "confirmed" if valid else "hypothesis",
+        "validated_by": validated_by if valid else None,
+    }
+
+
+def with_diagnosis(violation: dict, *, detection: dict | None = None,
+                   prescription: dict | None = None) -> dict:
+    """Attach detection/prescription sub-objects to a violation (in place + return).
+    Both optional so existing tools that emit neither keep their current shape."""
+    if detection is not None:
+        violation["detection"] = detection
+    if prescription is not None:
+        violation["prescription"] = prescription
+    return violation
+
+
 def _sort_violations(violations: list[dict]) -> list[dict]:
     """Sort by |value| descending; tolerate non-numeric values (sink last)."""
     def _key(v: dict):

@@ -44,7 +44,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
+from _parity_json import (  # noqa: E402 — shared JSON contract
+    make_violation, run_tool, make_detection, make_prescription, with_diagnosis,
+)
 
 DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
 
@@ -163,6 +165,23 @@ def _work(args) -> dict:
             v["python_var"] = pv
             v["is_pva_anchor"] = is_anchor
             v["role"] = _ROLE.get(gv, "")
+            # DETECTION is firm (we parsed the .gms and saw the var.fx(tsim-1) entry +
+            # that Python freezes none). PRESCRIPTION is a HYPOTHESIS: this tool is
+            # STATIC — it never ran a solve, so it cannot know that "freeze it in Python"
+            # works. (It does NOT: var.fx(tsim-1) means inherit-from-prior-and-free, not
+            # anchor-intra-period; measured pf[check]≠pf[base] proves the recipe wrong.)
+            with_diagnosis(
+                v,
+                detection=make_detection(
+                    what=f"GAMS freezes prior-period {gv} (var.fx(tsim-1)); Python freezes none",
+                    evidence=f"var.fx({gv}...tsim-1) in {gms.name}; Python stage chain freezes 0",
+                    confidence="firm",
+                ),
+                prescription=make_prescription(
+                    how=f"freeze {pv} at the Python prior-stage value before the next solve",
+                    validated_by=None,  # static tool — never measured the effect → hypothesis
+                ),
+            )
             violations.append(v)
 
     status = "dirty" if violations else "clean"
