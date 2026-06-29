@@ -266,6 +266,7 @@ scripts/gtap/*
 !scripts/gtap/diff_tautology.py
 !scripts/gtap/diff_causal_propagation.py
 !scripts/gtap/pairing_table.py
+!scripts/gtap/inheritance_table.py
 !scripts/gtap/bench.py
 !scripts/gtap/build_v7_processed_from_raw.py
 !scripts/gtap/coverage_matrix.py

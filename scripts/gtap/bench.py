@@ -63,12 +63,14 @@ def mcp_precheck(dataset: str, period: str = "shock") -> dict:
 # So the bench INVOKES diff_altertax.py as a subprocess (the real 73% pipeline) and parses
 # its --csv (per-variable diverge counts). The delta granularity is per-VARIABLE, which is
 # enough to see which block moved toward/away from GAMS.
-def solve_and_match(dataset: str, gdx: Path) -> dict:
+def solve_and_match(dataset: str, gdx: Path, extra_args=None) -> dict:
     import subprocess, csv, tempfile
     csv_path = Path(tempfile.gettempdir()) / f"bench_diff_{dataset}.csv"
     cmd = [str(ROOT / ".venv" / "bin" / "python"),
            str(ROOT / "scripts" / "gtap" / "diff_altertax.py"),
            "--dataset", dataset, "--gdx", str(gdx), "--csv", str(csv_path)]
+    if extra_args:
+        cmd += extra_args
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     # match rate from stdout (diff_altertax prints "Match rate: NN.NN%")
     match_rate = 0.0
@@ -110,6 +112,9 @@ def main():
     ap.add_argument("--reset", action="store_true", help="forget the snapshot and exit")
     ap.add_argument("--move-eps", type=float, default=1e-4,
                     help="min |Δ abs-error| to count a cell as moved")
+    ap.add_argument("--seed-from-prior", default=None,
+                    help="pass through to diff_altertax: seed this var's check start from "
+                         "the Python prior period (inheritance sweep, one var per round)")
     args = ap.parse_args()
     snap = _snap_path(args.dataset)
 
@@ -136,7 +141,8 @@ def main():
         return 0
 
     # 2. solve + per-variable match (via diff_altertax subprocess)
-    cur = solve_and_match(args.dataset, args.gdx)
+    extra = ["--seed-from-prior", args.seed_from_prior] if args.seed_from_prior else None
+    cur = solve_and_match(args.dataset, args.gdx, extra_args=extra)
     print(f"[solve] check code={cur['check_code']} shock code={cur['shock_code']} | "
           f"match {cur['match_rate']:.2f}%")
     if cur["match_rate"] == 0.0 and cur.get("stderr_tail"):
