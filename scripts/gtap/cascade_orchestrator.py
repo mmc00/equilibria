@@ -29,6 +29,76 @@ def _has_unproven_prescription(payload: dict) -> bool:
     return False
 
 
+# The known GTAP region set is data-driven; we recognise a region as the first index
+# element when it is NOT a commodity/activity/factor (those are the OTHER dims). Since
+# the orchestrator is sets-agnostic, we treat any first-index token shared across ≥2
+# dirty layers as a candidate common locus — region OR block. A token that appears for
+# only one layer is not a correlation, so it is dropped.
+def _violation_loci(payload: dict) -> set[str]:
+    """The set of first-index tokens (regions/blocks) this layer's violations touch."""
+    loci: set[str] = set()
+    if not isinstance(payload, dict):
+        return loci
+    for v in payload.get("violations", []) or []:
+        if not isinstance(v, dict):
+            continue
+        idx = v.get("index")
+        tok = None
+        if isinstance(idx, list) and idx:
+            tok = idx[0]
+        elif isinstance(idx, dict):
+            # dict index (e.g. Jacobian cell) — take the first value's first element
+            for vals in idx.values():
+                if isinstance(vals, list) and vals:
+                    tok = vals[0]
+                    break
+        if tok:
+            loci.add(str(tok))
+    return loci
+
+
+def _correlate_by_region(results) -> list[dict]:
+    """Group the DIRTY layers that share a common first-index token (region/block).
+    Returns [{locus, layers:[...], entities:[...], note}] for loci touched by ≥2
+    distinct layers. Pure aggregation over existing violations — no new measurement,
+    and the note says 'probable common upstream cause', never asserts it."""
+    from collections import defaultdict
+    locus_layers: dict[str, set[str]] = defaultdict(set)
+    locus_entities: dict[str, set[str]] = defaultdict(set)
+    for r in results:
+        if r.action != EXPLAIN_STOP:  # only dirty layers
+            continue
+        payload = r.raw if isinstance(r.raw, dict) else {}
+        seen_layer_loci: set[str] = set()
+        # record each (locus, layer) once, and the specific entity AT that locus
+        for v in payload.get("violations", []) or []:
+            if not isinstance(v, dict):
+                continue
+            idx = v.get("index")
+            first = idx[0] if isinstance(idx, list) and idx else None
+            if not first:
+                continue
+            loc = str(first)
+            seen_layer_loci.add(loc)
+            # the entity flagged AT THIS locus by this layer (not the layer's whole list)
+            locus_entities[loc].add(f"{r.name}:{v.get('entity')}")
+        for loc in seen_layer_loci:
+            locus_layers[loc].add(r.name)
+    groups = []
+    for loc, layers in locus_layers.items():
+        if len(layers) < 2:  # a single layer touching a locus is not a correlation
+            continue
+        groups.append({
+            "locus": loc,
+            "layers": sorted(layers),
+            "entities": sorted(locus_entities.get(loc, []))[:12],
+            "note": (f"{len(layers)} layers converge on '{loc}' "
+                     f"→ probable common upstream cause (not asserted)"),
+        })
+    groups.sort(key=lambda g: -len(g["layers"]))
+    return groups
+
+
 def build_report(dataset, requested_periods, *, ref, period_results, kkt_reader):
     available, dropped = resolve_periods(dataset, requested_periods)
     periods = {}
@@ -48,6 +118,10 @@ def build_report(dataset, requested_periods, *, ref, period_results, kkt_reader)
                  "unproven_prescription": _has_unproven_prescription(r.raw)}
                 for r in results
             ],
+            # Group the dirty layers that touch a COMMON region so the reader doesn't
+            # have to correlate by hand (≥2 distinct layers on the same region = a
+            # probable common upstream cause). Honest: says "probable", never asserts.
+            "correlated_groups": _correlate_by_region(results),
         }
     explained = {p: d["first_dirty_layer"] for p, d in periods.items()
                  if d["first_dirty_layer"]}
@@ -87,6 +161,9 @@ def render_tree(report: dict) -> str:
             rx_mark = ("  [PRESCRIPCIÓN HIPÓTESIS — no medida]"
                        if layer.get("unproven_prescription") else "")
             lines.append(f"    [{layer['tool']:18}] {mark} — {layer['headline']}{rx_mark}")
+        for g in d.get("correlated_groups", []):
+            lines.append(f"    ↳ CORRELATED @ {g['locus']}: "
+                         f"{' + '.join(g['layers'])} → probable common upstream cause")
     lines.append(f"verdict: {report['verdict']}")
     return "\n".join(lines)
 
