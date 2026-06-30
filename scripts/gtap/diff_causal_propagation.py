@@ -210,7 +210,28 @@ def main() -> int:
     ap.add_argument("--gdx", type=Path, default=None)
     ap.add_argument("--period", default="shock", choices=["check", "shock"])
     ap.add_argument("--delta", type=float, default=1e-4)
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap only)")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
+    # pure-gtap shock is wired in solve_multiperiod (multi-period, in-place
+    # rebuilds). Accept the flag (the orchestrator passes it) but emit an
+    # honest mode_unsupported rather than diff the wrong model. Use
+    # seed_and_solve --mode gtap for the pure-gtap diagnostic.
+    if args.mode == "gtap":
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=getattr(args, "period", None),
+                headline=("diff_causal_propagation does not support --mode gtap (altertax-only tool); "
+                          "use seed_and_solve --mode gtap for the pure-gtap diagnostic."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("diff_causal_propagation", args.dataset, _unsupported,
+                        period_hint=getattr(args, "period", None))
     return run_tool("diff_causal_propagation", args.dataset, lambda: _work(args),
                     period_hint=args.period)
 

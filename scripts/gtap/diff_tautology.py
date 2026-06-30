@@ -196,7 +196,32 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=1e-4, help="relative perturbation of the var")
     ap.add_argument("--tol", type=float, default=1e-6,
                     help="sensitivity below this = the eq does NOT constrain its var (tautology)")
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap only)")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED, honestly: diff_tautology perturbs vars in the SINGLE-period
+    # altertax model and measures ∂resid/∂var. The pure-gtap shock equations only exist
+    # after solve_multiperiod's in-place rebuilds (multi-period); perturbing the single-
+    # period gtap build would probe the wrong (un-shocked) equations. seed_and_solve
+    # --mode gtap is the faithful pure-gtap path (its residual tail already surfaces an
+    # unanchored/tautological eq as a high resid-at-GAMS with a clean post-solve resid).
+    if args.mode == "gtap":
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=args.period,
+                headline=("diff_tautology does not support --mode gtap: it perturbs the "
+                          "single-period altertax model; the pure-gtap shock equations are "
+                          "built by solve_multiperiod (multi-period, in-place rebuilds). "
+                          "Use seed_and_solve --mode gtap."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("diff_tautology", args.dataset, _unsupported,
+                        period_hint=args.period)
+
     return run_tool("diff_tautology", args.dataset, lambda: _work(args),
                     period_hint=args.period)
 

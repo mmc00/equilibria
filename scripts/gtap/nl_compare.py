@@ -2276,7 +2276,32 @@ def main() -> int:
                     help="Max Jacobian-cell diffs reported per family in the JSON "
                          "(prevents a huge payload on large datasets; the real "
                          "per-family count is always in meta).")
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap only)")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock is multi-period — the
+    # tariff wedge enters the equations via solve_multiperiod(mode="gtap") (the
+    # _rebuild_eq_pmeq_shock / NatRes-anchor / ytax[mt] in-equation rebuilds, which
+    # MUTATE constraints in-place at solve time). A single-period .nl write (what
+    # this tool does) cannot capture those, so a gtap .nl would diff the WRONG
+    # (un-shocked) equations and a "clean" would be a lie. Emit an explicit
+    # mode_unsupported error rather than silently writing an altertax/un-shocked .nl.
+    if args.mode == "gtap":
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=args.phase[0] if args.phase else None,
+                headline=("nl_compare does not support --mode gtap: the pure-gtap "
+                          "shock is wired in solve_multiperiod (constraints rebuilt "
+                          "in-place at solve time), which a single-period .nl write "
+                          "cannot represent. Use seed_and_solve --mode gtap instead."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("nl_compare", args.dataset, _unsupported,
+                        period_hint=args.phase[0] if args.phase else None)
 
     # --fetch-gdx-9x10 is a NEOS side-effect (submit + download), not a diff. It
     # still emits JSON (status clean on success, error on failure) so stdout stays

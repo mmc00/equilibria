@@ -99,13 +99,14 @@ def _correlate_by_region(results) -> list[dict]:
     return groups
 
 
-def build_report(dataset, requested_periods, *, ref, period_results, kkt_reader):
+def build_report(dataset, requested_periods, *, ref, period_results, kkt_reader,
+                 mode="altertax", ifsub=0):
     available, dropped = resolve_periods(dataset, requested_periods)
     periods = {}
     for period, results in period_results.items():
         first_dirty = next((r.name for r in results if r.action == EXPLAIN_STOP), None)
         periods[period] = {
-            "scenario": scenario_for(dataset, period),
+            "scenario": scenario_for(dataset, period, mode),
             "first_dirty_layer": first_dirty,
             "layers": [
                 {"tool": r.name, "status": r.status, "error_kind": r.error_kind,
@@ -129,6 +130,8 @@ def build_report(dataset, requested_periods, *, ref, period_results, kkt_reader)
                if explained else "no layer explained the gap")
     return {
         "dataset": dataset,
+        "mode": mode,
+        "ifsub": ifsub,
         "ref": {"path": str(ref.path) if ref.path else None,
                 "source": ref.source},
         "kkt_reader": kkt_reader,
@@ -172,19 +175,29 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="parity cascade orchestrator (Phase 2)")
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--periods", nargs="+", default=["check", "shock"])
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="model family the cascade targets (default altertax CD; "
+                         "'gtap' = pure real-CES)")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode of the reference + model build")
+    ap.add_argument("--ref", type=Path, default=None,
+                    help="explicit reference GDX (overrides the resolver)")
     ap.add_argument("--no-stop", action="store_true",
                     help="run all layers without pruning (debug)")
     ap.add_argument("--tool-timeout", type=float, default=600.0)
     args = ap.parse_args()
 
-    ref = resolve_ref_gdx(args.dataset)
-    print(f"[orchestrator] ref: {ref.note}", file=sys.stderr)
+    ref = resolve_ref_gdx(args.dataset, mode=args.mode, ifsub=args.ifsub,
+                          explicit=args.ref)
+    print(f"[orchestrator] mode={args.mode} ifsub={args.ifsub} ref: {ref.note}",
+          file=sys.stderr)
     available, dropped = resolve_periods(args.dataset, args.periods)
     if not ref.usable:
         # No usable ref -> never build a GDX-dependent command. Abort with a
         # structured report so 'could not measure' never reads as clean.
         report = build_report(args.dataset, args.periods, ref=ref,
-                              period_results={}, kkt_reader="n/a")
+                              period_results={}, kkt_reader="n/a",
+                              mode=args.mode, ifsub=args.ifsub)
         report["verdict"] = "aborted: no usable reference GDX"
         print(json.dumps(report))
         print(render_tree(report), file=sys.stderr)
@@ -197,7 +210,8 @@ def main() -> int:
     for period in available:
         results = sweep_period(
             args.dataset, period, ref.path,
-            stop=not args.no_stop, timeout=args.tool_timeout)
+            stop=not args.no_stop, timeout=args.tool_timeout,
+            mode=args.mode, ifsub=args.ifsub)
         # Append the KKT layer unless the sweep already stopped on a not-measurable
         # condition (its result would be meaningless then).
         if not results or results[-1].action not in (UPSTREAM_STOP, BLOCKING_STOP):
@@ -205,7 +219,8 @@ def main() -> int:
         period_results[period] = results
 
     report = build_report(args.dataset, args.periods, ref=ref,
-                          period_results=period_results, kkt_reader=KKT_READER)
+                          period_results=period_results, kkt_reader=KKT_READER,
+                          mode=args.mode, ifsub=args.ifsub)
     print(json.dumps(report))
     print(render_tree(report), file=sys.stderr)
     return 0

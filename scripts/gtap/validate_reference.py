@@ -318,7 +318,35 @@ def main() -> int:
     ap.add_argument("--tol", type=float, default=1e-2,
                     help="Max acceptable equation residual at the GAMS point")
     ap.add_argument("--top", type=int, default=20)
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap only)")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock equations are produced by
+    # solve_multiperiod(mode="gtap") via an in-place constraint-rebuild SEQUENCE
+    # (_rebuild_eq_pmeq_shock / NatRes anchor / _rebuild_eq_ytax_mt_shock + an imptx
+    # param shock, applied in a specific order). validate_reference checks residuals
+    # on the AS-BUILT equations; without re-running that exact mutation sequence the
+    # shock-period equations here would be the UN-shocked ones, so a residual verdict
+    # would be measured against the wrong model. Replicating the sequence risks subtle
+    # infidelity. seed_and_solve --mode gtap runs the real driver and is the faithful
+    # path for the pure-gtap residual-at-GAMS question. Emit mode_unsupported.
+    if args.mode == "gtap":
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=args.period,
+                headline=("validate_reference does not support --mode gtap: the "
+                          "pure-gtap shock equations are built by solve_multiperiod's "
+                          "in-place rebuild sequence, which this static residual check "
+                          "cannot reproduce faithfully. Use seed_and_solve --mode gtap."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("validate_reference", args.dataset, _unsupported,
+                        period_hint=args.period)
+
     return run_tool("validate_reference", args.dataset, lambda: _work(args),
                     period_hint=args.period)
 

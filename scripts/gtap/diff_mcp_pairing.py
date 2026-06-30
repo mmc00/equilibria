@@ -353,7 +353,26 @@ def main() -> int:
     ap.add_argument("--apply-closure", action="store_true",
                     help="Run the solver setup (0 iterations) so free-row deactivations "
                          "and aggressive fixing are reflected in the Python state.")
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
+    # pure-gtap shock is wired in solve_multiperiod (multi-period, in-place
+    # rebuilds). Accept the flag (the orchestrator passes it) but emit an
+    # honest mode_unsupported rather than diff the wrong model. Use
+    # seed_and_solve --mode gtap for the pure-gtap diagnostic.
+    if args.mode == "gtap":
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=getattr(args, "period", None),
+                headline=("diff_mcp_pairing does not support --mode gtap (altertax-only tool); "
+                          "use seed_and_solve --mode gtap for the pure-gtap diagnostic."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("diff_mcp_pairing", args.dataset, _unsupported,
+                        period_hint=getattr(args, "period", None))
     return run_tool("diff_mcp_pairing", args.dataset, lambda: _work(args),
                     period_hint=args.period)
 

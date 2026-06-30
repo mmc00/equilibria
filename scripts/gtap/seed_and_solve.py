@@ -225,6 +225,194 @@ def run_seed_and_solve(dataset: str, gdx_path: Path, period: str, top: int):
     }
 
 
+def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
+    """Period-aware DISCIPLINE-1 cascade for the MULTI-PERIOD gtap model. Sets the
+    Python-only derived aggregates (xd/xmt/xc/xg/xi/xiagg/kapEnd/xigbl/pigbl) for the
+    given period slice from their own identities, so the residual TAIL reflects the
+    EQUATION, not an un-seeded init. Without this the MP gtap tail is dominated by
+    spurious eq_xc/eq_xda/eq_xaa/eq_xigbl residuals of ~1-2 (seed-incomplete artifact,
+    NOT a differing equation) — exactly the trap DISCIPLINE 1 in the module docstring
+    warns about. Mirrors _cascade_derived_seed but every var carries the (...,period)
+    index. Returns cells set."""
+    t = period
+    n = 0
+    for r in m.r:
+        for i in m.i:
+            try:
+                n += setv(m.xd, (r, i, t), sum(V(m.xda[r, i, aa, t]) / V(m.xscale[r, aa, t])
+                          for aa in m.aa if (r, aa, t) in m.xscale))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xmt, (r, i, t), sum(V(m.xma[r, i, aa, t]) / V(m.xscale[r, aa, t])
+                          for aa in m.aa if (r, aa, t) in m.xscale))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xc, (r, i, t), V(m.xcshr[r, i, t]) * V(m.yc[r, t]) / max(V(m.pa[r, i, "hhd", t]), 1e-9))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xg, (r, i, t), V(m.g_share[r, i, t]) * V(m.yg[r, t]) / max(V(m.pa[r, i, "gov", t]), 1e-9))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xi, (r, i, t), V(m.xaa[r, i, "inv", t]))
+            except Exception:
+                pass
+    for r in m.r:
+        try:
+            n += setv(m.xiagg, (r, t), V(m.yi[r, t]) / max(V(m.pi[r, t]), 1e-9))
+        except Exception:
+            pass
+        try:
+            n += setv(m.kapEnd, (r, t), (1 - V(m.depr[r])) * V(m.kstock[r, t]) + V(m.xiagg[r, t]))
+        except Exception:
+            pass
+    try:
+        n += setv(m.xigbl, (t,), sum(V(m.xiagg[r, t]) - V(m.depr[r]) * V(m.kstock[r, t]) for r in m.r))
+    except Exception:
+        pass
+    try:
+        num = sum(V(m.pi[r, t]) * (V(m.xiagg[r, t]) - V(m.depr[r]) * V(m.kstock[r, t])) for r in m.r)
+        n += setv(m.pigbl, (t,), num / max(V(m.xigbl[t]), 1e-9))
+    except Exception:
+        pass
+    return n
+
+
+def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
+                            if_sub: bool):
+    """PURE-GTAP (real-CES, non-altertax) variant.
+
+    The pure-gtap shock is intrinsically MULTI-PERIOD: the tariff wedge enters via
+    solve_multiperiod(mode="gtap") (the _rebuild_eq_pmeq_shock / NatRes anchor /
+    ytax[mt] rebuild links), which the single-period altertax build does NOT call.
+    So we build the FULL multi-period gtap model (mirroring
+    test_gtap_multiperiod_parity._solve_and_match / measure_gtap_pure_tols.py),
+    seed it from the GAMS gtap GDX (the fixture IS the seed across base/check/shock),
+    solve via solve_multiperiod(mode="gtap"), and compute the residual TAIL for the
+    requested period on a FRESH re-seeded build (so the residual reflects the SEED,
+    not the post-solve state — same discipline as the altertax path).
+    """
+    from pyomo.environ import value as V, Constraint
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_model_multiperiod import (
+        GTAPMultiPeriodModel, PERIODS,
+    )
+    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
+    data_dir = ROOT / "datasets" / dataset
+
+    def _load_params():
+        p = GTAPParameters()
+        p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
+                        default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")
+        return p
+
+    def _gc(p, if_sub_):
+        return GTAPClosureConfig(
+            name="base", closure_type="MCP", capital_mobility="sluggish",
+            fix_endowments=False, fix_taxes=False, fix_technology=False,
+            if_sub=if_sub_, numeraire="pnum")
+
+    def _build_seeded():
+        p = _load_params()
+        rr = list(p.sets.r)[-1]
+        gc = _gc(p, if_sub)
+        mp = GTAPMultiPeriodModel(p.sets, p, gc, residual_region=rr)
+        m = mp.build_sets()
+        mp.build_vars(m)
+        for per in PERIODS:
+            mp.build_equations_intra(m, per)
+        mp.build_equations_fisher(m)
+        m._residual_region = rr
+        mp.seed_all_periods(m, gdx_path)
+        return p, gc, m
+
+    # 1) Build + seed + SOLVE the full multi-period gtap model.
+    p, gc, m = _build_seeded()
+
+    def _sentinel():
+        # sentinel: the first finite price var FOR THE REQUESTED PERIOD.
+        for nm in ("pft", "pf", "px", "pa"):
+            comp = getattr(m, nm, None)
+            if comp is None:
+                continue
+            for idx in comp:
+                if not (isinstance(idx, tuple) and idx and idx[-1] == period):
+                    continue
+                try:
+                    val = float(V(comp[idx]))
+                    if val > 1e-6:
+                        return f"{nm}{tuple(str(x) for x in idx)}", val
+                except Exception:
+                    pass
+        return "(none)", None
+
+    sent_name, sent_before = _sentinel()
+
+    res = solve_multiperiod(
+        m, p, gc, ref_gdx=gdx_path,
+        skip_base_solve=True, mute_welfare=True,
+        seed_from_prior=False, holdfix_cd=False, mode="gtap")
+    code = res.get(period, {}).get("code")
+    resid = float(res.get(period, {}).get("residual") or 0.0)
+    _, sent_after = _sentinel()
+
+    # 2) Residual TAIL at the SEED — fresh re-seeded build, filter constraints to
+    #    the requested period (MP constraints are indexed (...,period)). DISCIPLINE 1:
+    #    cascade the Python-only derived aggregates for this period BEFORE reading the
+    #    residual, else eq_xc/eq_xda/eq_xaa/eq_xigbl carry spurious ~1-2 seed-incomplete
+    #    residuals that masquerade as differing equations.
+    _p2, _gc2, m2 = _build_seeded()
+
+    def _setv(comp, key, val):
+        try:
+            comp[key].set_value(val)
+            return 1
+        except Exception:
+            return 0
+
+    n_cascade = _cascade_derived_seed_mp(m2, V, _setv, period)
+    eq_resid = []  # (resid, family, idx-without-period)
+    for c in m2.component_objects(Constraint, active=True):
+        for idx in c:
+            cd = c[idx]
+            if not cd.active:
+                continue
+            # period filter: keep only this period's slice.
+            if isinstance(idx, tuple):
+                if not idx or idx[-1] != period:
+                    continue
+                body_idx = idx[:-1] if len(idx) > 1 else ()
+            else:
+                if idx != period:
+                    continue
+                body_idx = ()
+            try:
+                b = V(cd.body)
+                lo = V(cd.lower) if cd.lower is not None else None
+                up = V(cd.upper) if cd.upper is not None else None
+                rr_ = 0.0
+                if lo is not None:
+                    rr_ = max(rr_, abs(b - lo))
+                if up is not None:
+                    rr_ = max(rr_, abs(b - up))
+                eq_resid.append((rr_, c.name, body_idx))
+            except Exception:
+                pass
+    eq_resid.sort(reverse=True)
+    median = statistics.median([r_ for r_, _, _ in eq_resid]) if eq_resid else 0.0
+
+    return {
+        "code": code, "resid": resid, "median": median, "eq_resid": eq_resid,
+        "n_seed": None, "n_cascade": n_cascade,
+        "sent_name": sent_name, "sent_before": sent_before, "sent_after": sent_after,
+    }
+
+
 def _classify_eq(family: str, idx) -> str:
     """benign | real — leaf (rgdpmp/pgdpmp) and ROW-region rows are benign-known."""
     if family in _LEAF_EQS:
@@ -235,8 +423,12 @@ def _classify_eq(family: str, idx) -> str:
     return "real"
 
 
-def _work(dataset: str, gdx_path: Path, period: str, top: int) -> dict:
-    out = run_seed_and_solve(dataset, gdx_path, period, top)
+def _work(dataset: str, gdx_path: Path, period: str, top: int,
+          mode: str = "altertax", if_sub: bool = False) -> dict:
+    if mode == "gtap":
+        out = run_seed_and_solve_gtap(dataset, gdx_path, period, top, if_sub)
+    else:
+        out = run_seed_and_solve(dataset, gdx_path, period, top)
     code, resid = out["code"], out["resid"]
     sb, sa = out["sent_before"], out["sent_after"]
     drift = (abs(sa - sb) / abs(sb)) if (sb and sa and abs(sb) > 1e-9) else None
@@ -287,6 +479,7 @@ def _work(dataset: str, gdx_path: Path, period: str, top: int) -> dict:
         "violations": violations,
         "period": period,
         "meta": {
+            "mode": mode, "if_sub": int(if_sub),
             "solve_code": code, "solve_resid": resid, "residual_median": out["median"],
             "n_seeded": out["n_seed"], "n_cascaded": out["n_cascade"],
             "n_real_resid": len(real), "n_benign_resid": len(benign),
@@ -305,9 +498,14 @@ def main() -> int:
     ap.add_argument("--gdx", required=True, type=Path)
     ap.add_argument("--period", default="shock", choices=["base", "check", "shock"])
     ap.add_argument("--top", type=int, default=20, help="how many residual-tail eqs to report")
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap build only)")
     args = ap.parse_args()
     return run_tool("seed_and_solve", args.dataset,
-                    lambda: _work(args.dataset, args.gdx, args.period, args.top),
+                    lambda: _work(args.dataset, args.gdx, args.period, args.top,
+                                  mode=args.mode, if_sub=bool(args.ifsub)),
                     period_hint=args.period)
 
 
