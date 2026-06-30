@@ -4137,9 +4137,16 @@ class GTAPModelEquations:
             sigmap = self._get_sigmap(r, a)
             expo = 1.0 - sigmap
             if abs(expo) < 1e-8:
-                nd_term = (model.pnd[r, a] / max(self._lambdand(r, a), 1e-8)) ** and_val if and_val > 0.0 else 1.0
-                va_term = (model.pva[r, a] / max(self._lambdava(r, a), 1e-8)) ** ava_val if ava_val > 0.0 else 1.0
-                return model.px[r, a] == nd_term * va_term
+                # CD case (sigmap=1): GAMS writes px**(1-sigmap) =e= ... which under
+                # sigmap=1 self-degenerates to 1 == shift*(and+ava) — px DROPS OUT of its
+                # own body (px**0=1). GAMS leaves pxeq.px paired but px not in the body;
+                # PATH anchors px from the cross-Jacobian of the block (eq_va, etc.).
+                # Mirror that EXACTLY (like eq_pvaeq's CD branch): tautology, px free.
+                # (Previously this branch wrote px == pnd^and * pva^ava — the SOLVED CD
+                #  form — which RE-introduced px into its own row, over-constraining it to
+                #  Python's own CD point ≠ the GAMS branch. That asymmetry is the bug
+                #  CONVERT flagged: GAMS degenerates pxeq, equilibria did not.)
+                return exp(log(model.px[r, a])) == model.px[r, a]
 
             shift = self._axp_shift(r, a) ** (sigmap - 1.0)
             lambdand = max(self._lambdand(r, a), 1e-8)
@@ -4156,25 +4163,13 @@ class GTAPModelEquations:
             sigmand = self._get_sigmand(r, a)
             expo = 1.0 - sigmand
             if abs(expo) < 1e-8:
-                terms = []
-                for i in model.i:
-                    io_val = (
-                        value(model.io_param[r, i, a])
-                        if hasattr(model, "io_param")
-                        else value(model.p_io[r, i, a])
-                    )
-                    if not self.params.shifts.lambdaio:
-                        io_val = value(model.p_io[r, i, a])
-                    if io_val <= 0.0:
-                        continue
-                    lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
-                    terms.append((model.pa[r, i, a] / lambdaio) ** io_val)
-                if not terms:
-                    return Constraint.Skip
-                prod = 1.0
-                for term in terms:
-                    prod *= term
-                return model.pnd[r, a] == prod
+                # CD case (sigmand=1): GAMS pnd**(1-sigmand) =e= ... self-degenerates to
+                # 1 == sum(io) — pnd DROPS OUT of its own body. Mirror that (tautology,
+                # pnd free, anchored by the block cross-Jacobian via xapeq/pxeq), exactly
+                # as GAMS does and as eq_pvaeq's CD branch already does. The previous
+                # solved form (pnd == prod(pa/lambda)^io) over-constrained pnd to Python's
+                # own CD point. (CONVERT-flagged asymmetry; see eq_pxeq CD branch.)
+                return exp(log(model.pnd[r, a])) == model.pnd[r, a]
 
             terms = []
             for i in model.i:
