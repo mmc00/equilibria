@@ -7,17 +7,17 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 
 def test_matrix_schema_invariants():
-    from coverage_matrix import ROWS, CI_STATUSES
+    from coverage_matrix import ROWS, CI_STATUSES, KINDS
     assert ROWS, "matrix must not be empty"
     for r in ROWS:
-        # ifsub is None iff kind == "gtap"
+        # ifsub is None iff kind == "gtap" (the .nl gate); the SOLVE kinds carry 0/1
         assert (r.ifsub is None) == (r.kind == "gtap"), r
-        assert r.kind in ("gtap", "altertax"), r
+        assert r.kind in KINDS, r
         assert r.ci_status in CI_STATUSES, r
         assert r.phases, r
         # gap_min invariants do NOT apply to blocked rows (never asserted).
         if r.ci_status != "blocked":
-            # gap_min is None exactly for the .nl-only gtap7_* single-period rows
+            # gap_min is None exactly for the .nl-only gtap7_* rows
             nl_only = r.kind == "gtap" and r.dataset.startswith("gtap7_")
             assert (r.gap_min is None) == nl_only, r
             # a non-None gap_min must be a sane floor (never an exact 100)
@@ -26,10 +26,11 @@ def test_matrix_schema_invariants():
 
 
 def test_matrix_helpers_partition():
-    from coverage_matrix import ROWS, nl_rows, altertax_rows
-    assert set(nl_rows()) | set(altertax_rows()) == set(ROWS)
+    from coverage_matrix import ROWS, nl_rows, altertax_rows, gtap_solve_rows
+    assert set(nl_rows()) | set(altertax_rows()) | set(gtap_solve_rows()) == set(ROWS)
     assert all(r.kind == "gtap" for r in nl_rows())
     assert all(r.kind == "altertax" for r in altertax_rows())
+    assert all(r.kind == "gtap_solve" for r in gtap_solve_rows())
 
 
 def test_coverage_doc_in_sync():
