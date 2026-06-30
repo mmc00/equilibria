@@ -265,6 +265,7 @@ scripts/gtap/*
 !scripts/gtap/diff_holdfixed.py
 !scripts/gtap/diff_tautology.py
 !scripts/gtap/diff_causal_propagation.py
+!scripts/gtap/seed_and_solve.py
 !scripts/gtap/pairing_table.py
 !scripts/gtap/inheritance_table.py
 !scripts/gtap/bench.py

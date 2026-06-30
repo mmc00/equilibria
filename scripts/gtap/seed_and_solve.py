@@ -1,0 +1,315 @@
+"""Cascade tool 11 — SEED-AND-SOLVE: the equilibrium-selection vs differing-equation
+discriminator. THE tool that should run FIRST when the cell-by-cell gate misses target.
+
+WHAT IT DOES: seed Python at the EXACT GAMS reference point, run the real PATH solve, and
+report whether the point STAYS (residual ~0 after solve, vars hold) or GOES (solve drifts/
+fails). The binary answer settles the root question that cost this project two false closures:
+
+  - STAYS  → the GAMS point IS a fixed point of equilibria → the gap is EQUILIBRIUM SELECTION
+             (two valid solutions, the solve picks the other). No equation differs. Stop
+             chasing "the culprit equation" — it does not exist.
+  - GOES   → the GAMS point is NOT a fixed point → an equation DIFFERS from GAMS. The drift
+             direction + the residual TAIL name the candidate equation to chase next.
+
+CRITICAL — read the residual TAIL, not the median. With ~1100 equations the median is ~1e-13
+(looks like a clean fixed point) while a handful of >1e-4 equations carry the entire signal.
+Reading the median instead of the tail is exactly what produced the two false "fixed-point to
+1e-10, equilibrium selection" closures in this project. This tool ranks and reports the worst
+N equation residuals AT the seed; that tail is the lead.
+
+TWO SETUP DISCIPLINES (each one previously manufactured a false "differing equation" lead):
+  1. CASCADE the derived-var seed. warmstart_from_gams does NOT seed Python-only derived
+     aggregates (xd/xmt/xc/xg/xi/xiagg/xigbl/pigbl/kapEnd) consistently with their components,
+     so eq_xd_agg/eq_xc/eq_xaa/eq_xigbl show spurious residuals 1–2 that CASCADE to ~0 once
+     the derived vars are set from their own identities. A genuinely-differing equation does
+     NOT fall on consistent seed; an artifact does. This tool cascades the derived seed first.
+  2. BUILD THE SHOCK MODEL WITH THE TAX SHOCK APPLIED BEFORE BUILD. For the shock period,
+     imptx*1.10 must be applied to the params BEFORE build_model — NOT by seeding shock values
+     onto a base-built model (that leaves model.imptx at base while pm is shock → false 0.014
+     residual on eq_pmeq). diff_altertax's shock build does this; this tool mirrors it.
+
+DECISIVE PRECEDENT: gtap7_3x3 altertax shock. Seeded the exact GAMS point and solved → it
+DRIFTED (code=2, pft[EU_28,NatRes] 1.004→1.05). The residual tail's only real non-ROW/non-leaf
+entry was eq_xi (0.006–0.010). Traced to an esubi key-shape bug (sigmai=0 Leontief vs GAMS 1.01
+CES; commit 0e2db11). The seed-and-solve test named the differing equation in ONE run — after
+eight other leads. See project_gtap7_3x3_gap_is_factor_bias.
+
+Usage:
+    uv run python scripts/gtap/seed_and_solve.py --dataset gtap7_3x3 \\
+        --gdx tests/fixtures/gtap7_altertax/gtap7_3x3/out_altertax_ifsub0.gdx \\
+        --period shock --top 20
+
+JSON contract (shared _parity_json schema): status=clean (STAYS = equilibrium selection,
+nothing to fix) | dirty (GOES = a differing equation, see violations = residual tail) |
+error (solve crash). exit 0/1/2.
+"""
+from __future__ import annotations
+import argparse
+import copy
+import statistics
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
+sys.path.insert(0, str(ROOT / "tests" / "templates" / "gtap"))
+_PATH_CAPI = Path("/Users/marmol/proyectos/path-capi-python/src")
+if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
+    sys.path.insert(0, str(_PATH_CAPI))
+
+from _diff_core import gams_levels, list_populated_vars  # type: ignore  # noqa: E402
+import diff_altertax as DA  # reuse the exact altertax build recipe + shock build  # noqa: E402
+from _parity_json import make_violation, make_detection, run_tool  # noqa: E402
+
+# Residual above which an equation counts as "not satisfied at the GAMS point".
+RESID_TOL = 1e-4
+# Families that are KNOWN-benign even when they carry residual at the GAMS point:
+# rgdpmp/pgdpmp are report leaves (no feedback); ROW-region rows ride a corrupt reference
+# (project_gtap7_3x3_ref_corrupt_ROW). The tool flags these separately so the real lead
+# (non-leaf, non-ROW) is not buried.
+_LEAF_EQS = {"eq_rgdpmp", "eq_pgdpmp"}
+
+
+def _build_run_gtap():
+    import importlib.util as _u
+    spec = _u.spec_from_file_location("run_gtap", str(ROOT / "scripts" / "gtap" / "run_gtap.py"))
+    mod = _u.module_from_spec(spec)
+    sys.modules["run_gtap"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _cascade_derived_seed(m, V, setv) -> int:
+    """DISCIPLINE 1: set the Python-only derived aggregates from their own identities so
+    their residual reflects the equation, not an un-seeded init. Returns cells set."""
+    n = 0
+    for r in m.r:
+        for i in m.i:
+            try:
+                n += setv(m.xd, (r, i), sum(V(m.xda[r, i, aa]) / V(m.xscale[r, aa])
+                          for aa in m.aa if (r, aa) in m.xscale))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xmt, (r, i), sum(V(m.xma[r, i, aa]) / V(m.xscale[r, aa])
+                          for aa in m.aa if (r, aa) in m.xscale))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xc, (r, i), V(m.xcshr[r, i]) * V(m.yc[r]) / max(V(m.pa[r, i, "hhd"]), 1e-9))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xg, (r, i), V(m.g_share[r, i]) * V(m.yg[r]) / max(V(m.pa[r, i, "gov"]), 1e-9))
+            except Exception:
+                pass
+            try:
+                n += setv(m.xi, (r, i), V(m.xaa[r, i, "inv"]))
+            except Exception:
+                pass
+    for r in m.r:
+        try:
+            n += setv(m.xiagg, (r,), V(m.yi[r]) / max(V(m.pi[r]), 1e-9))
+        except Exception:
+            pass
+        try:
+            n += setv(m.kapEnd, (r,), (1 - V(m.depr[r])) * V(m.kstock[r]) + V(m.xiagg[r]))
+        except Exception:
+            pass
+    try:
+        n += setv(m.xigbl, None, sum(V(m.xiagg[r]) - V(m.depr[r]) * V(m.kstock[r]) for r in m.r))
+    except Exception:
+        pass
+    try:
+        num = sum(V(m.pi[r]) * (V(m.xiagg[r]) - V(m.depr[r]) * V(m.kstock[r])) for r in m.r)
+        n += setv(m.pigbl, None, num / max(V(m.xigbl), 1e-9))
+    except Exception:
+        pass
+    return n
+
+
+def run_seed_and_solve(dataset: str, gdx_path: Path, period: str, top: int):
+    import pyomo.environ as pyo
+    from pyomo.environ import value as V, Constraint
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
+
+    run_gtap = _build_run_gtap()
+    data_dir = ROOT / "datasets" / dataset
+    p = GTAPParameters()
+    p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
+                    default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")
+    res = list(p.sets.r)[-1]
+    base_clo = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish",
+        fix_endowments=False, fix_taxes=False, fix_technology=False, if_sub=False, numeraire="pnum")
+    alt_clo = GTAPClosureConfig(name="altertax", closure_type="MCP", capital_mobility="mobile",
+        fix_endowments=False, fix_taxes=True, fix_technology=True, if_sub=False, numeraire="pnum")
+
+    # DISCIPLINE 2: build the shock model with the tax shock applied BEFORE build.
+    p_shock = p
+    if period == "shock":
+        p_shock = copy.deepcopy(p)
+        for k in list(p_shock.taxes.imptx.keys()):
+            p_shock.taxes.imptx[k] = float(p_shock.taxes.imptx[k] or 0.0) * 1.10
+    _mb, p_alt, m = DA.build_altertax_models(p_shock, res, base_clo, alt_clo)
+
+    # Seed the exact GAMS point for the requested period (complete warm-start).
+    n_seed = DA.warmstart_from_gams(m, gdx_path, period)
+
+    def setv(comp, key, val):
+        try:
+            comp[key].set_value(val)
+            return 1
+        except Exception:
+            return 0
+
+    n_cascade = _cascade_derived_seed(m, V, setv)
+
+    # Record a sentinel var to report stay/drift unambiguously (first finite price).
+    def _sentinel():
+        for nm in ("pft", "pf", "px", "pa"):
+            comp = getattr(m, nm, None)
+            if comp is None:
+                continue
+            for idx in comp:
+                try:
+                    val = float(V(comp[idx]))
+                    if val > 1e-6:
+                        return f"{nm}{tuple(str(x) for x in (idx if isinstance(idx, tuple) else (idx,)))}", val
+                except Exception:
+                    pass
+        return "(none)", None
+    sent_name, sent_before = _sentinel()
+
+    # SOLVE from the seed.
+    r = run_gtap._run_path_capi_nonlinear_full(
+        m, p_alt, enforce_post_checks=False, strict_path_capi=False,
+        closure_config=alt_clo, equation_scaling=True,
+        solution_hint=GTAPVariableSnapshot.from_python_model(m))
+    code = r.get("termination_code")
+    resid = float(r.get("residual") or 0.0)
+    _, sent_after = _sentinel()
+
+    # Residual TAIL at the (cascaded) seed — re-seed the GAMS point + cascade AGAIN on a
+    # fresh build so the residual reflects the SEED, not the post-solve state.
+    _mb2, p_alt2, m2 = DA.build_altertax_models(p_shock, res, base_clo, alt_clo)
+    DA.warmstart_from_gams(m2, gdx_path, period)
+    _cascade_derived_seed(m2, V, setv)
+    eq_resid = []  # (resid, family, idx)
+    for c in m2.component_objects(Constraint, active=True):
+        for idx in c:
+            cd = c[idx]
+            if not cd.active:
+                continue
+            try:
+                b = V(cd.body)
+                lo = V(cd.lower) if cd.lower is not None else None
+                up = V(cd.upper) if cd.upper is not None else None
+                rr = 0.0
+                if lo is not None:
+                    rr = max(rr, abs(b - lo))
+                if up is not None:
+                    rr = max(rr, abs(b - up))
+                eq_resid.append((rr, c.name, idx))
+            except Exception:
+                pass
+    eq_resid.sort(reverse=True)
+    median = statistics.median([r_ for r_, _, _ in eq_resid]) if eq_resid else 0.0
+
+    return {
+        "code": code, "resid": resid, "median": median, "eq_resid": eq_resid,
+        "n_seed": n_seed, "n_cascade": n_cascade,
+        "sent_name": sent_name, "sent_before": sent_before, "sent_after": sent_after,
+    }
+
+
+def _classify_eq(family: str, idx) -> str:
+    """benign | real — leaf (rgdpmp/pgdpmp) and ROW-region rows are benign-known."""
+    if family in _LEAF_EQS:
+        return "benign"
+    idx_str = " ".join(str(x) for x in (idx if isinstance(idx, (tuple, list)) else (idx,)))
+    if "ROW" in idx_str:
+        return "benign"
+    return "real"
+
+
+def _work(dataset: str, gdx_path: Path, period: str, top: int) -> dict:
+    out = run_seed_and_solve(dataset, gdx_path, period, top)
+    code, resid = out["code"], out["resid"]
+    sb, sa = out["sent_before"], out["sent_after"]
+    drift = (abs(sa - sb) / abs(sb)) if (sb and sa and abs(sb) > 1e-9) else None
+
+    # Tail above tol, split benign vs real.
+    tail = [(r_, fam, idx) for r_, fam, idx in out["eq_resid"] if r_ > RESID_TOL]
+    real = [(r_, fam, idx) for r_, fam, idx in tail if _classify_eq(fam, idx) == "real"]
+    benign = [(r_, fam, idx) for r_, fam, idx in tail if _classify_eq(fam, idx) == "benign"]
+
+    # STAYS iff solve converged AND no REAL equation carries residual at the seed.
+    stays = (code == 1 and resid < 1e-6 and not real)
+
+    violations = []
+    for r_, fam, idx in (real + benign)[:top]:
+        v = make_violation(fam, idx, "resid_at_gams", r_)
+        v["class"] = _classify_eq(fam, idx)
+        violations.append(v)
+
+    if stays:
+        headline = (f"STAYS: GAMS point is a fixed point of equilibria "
+                    f"(solve code={code}, resid={resid:.1e}, no real eq residual) "
+                    f"→ EQUILIBRIUM SELECTION, no differing equation to chase")
+        detection = make_detection(
+            what="GAMS point is a stable fixed point",
+            evidence=f"seeded GAMS {period}, solved code={code} resid={resid:.1e}, "
+                     f"residual tail has 0 real (non-leaf/non-ROW) equations",
+            confidence="firm")
+        status = "clean"
+    else:
+        worst = real[0] if real else (tail[0] if tail else None)
+        worst_str = (f"{worst[1]}{tuple(str(x) for x in (worst[2] if isinstance(worst[2], (tuple, list)) else (worst[2],)))}"
+                     f"={worst[0]:.3g}") if worst else "(solve failed)"
+        drift_str = f", sentinel {out['sent_name']} {sb:.4f}→{sa:.4f} ({100*drift:+.2f}%)" if drift else ""
+        headline = (f"GOES: GAMS point is NOT a fixed point (solve code={code}, resid={resid:.1e}"
+                    f"{drift_str}) → an equation DIFFERS. Worst REAL residual: {worst_str}. "
+                    f"Read the TAIL (below), not the median ({out['median']:.1e}). "
+                    f"Next: CONVERT-diff that equation vs GAMS.")
+        detection = make_detection(
+            what=f"an equation differs from GAMS (GAMS point not a fixed point); top real residual {worst_str}",
+            evidence=f"seeded GAMS {period}, solved code={code} resid={resid:.1e}; "
+                     f"{len(real)} real + {len(benign)} benign(leaf/ROW) eqs with resid>{RESID_TOL:g}",
+            confidence="firm")
+        status = "dirty"
+
+    return {
+        "status": status,
+        "headline": headline,
+        "violations": violations,
+        "period": period,
+        "meta": {
+            "solve_code": code, "solve_resid": resid, "residual_median": out["median"],
+            "n_seeded": out["n_seed"], "n_cascaded": out["n_cascade"],
+            "n_real_resid": len(real), "n_benign_resid": len(benign),
+            "sentinel": out["sent_name"], "sentinel_before": sb, "sentinel_after": sa,
+            "sentinel_drift_pct": (100 * drift) if drift else None,
+            "detection": detection,
+            "note": ("median masks the signal — the tail (worst eqs) is the lead; "
+                     "benign = rgdpmp/pgdpmp report leaves + ROW corrupt-ref rows"),
+        },
+    }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Cascade tool 11: seed-and-solve (selection vs differing-eq).")
+    ap.add_argument("--dataset", required=True)
+    ap.add_argument("--gdx", required=True, type=Path)
+    ap.add_argument("--period", default="shock", choices=["base", "check", "shock"])
+    ap.add_argument("--top", type=int, default=20, help="how many residual-tail eqs to report")
+    args = ap.parse_args()
+    return run_tool("seed_and_solve", args.dataset,
+                    lambda: _work(args.dataset, args.gdx, args.period, args.top),
+                    period_hint=args.period)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -77,11 +77,22 @@ def _c_causal(ds, period, gdx):
             "--gdx", str(gdx), "--period", period]
 
 
-# Order = causal: structural pairing (mcp) → ANCHOR-MISSING (holdfix/tautology, the
-# root-selection cause) → algebra/inputs (nl/calibration) → reference health → seed
-# residual / drift (symptoms). The anchor-missing layers go right after mcp_pairing so
-# a root-selection gap (the recurring class) is flagged BEFORE the downstream symptoms.
+def _c_seed_and_solve(ds, period, gdx):
+    # tool 11: seed-and-solve — THE selection-vs-differing-eq discriminator. Seeds the
+    # exact GAMS point (derived-seed cascaded, shock built before build), solves, and
+    # reports STAYS (= equilibrium selection, no differing eq) vs GOES (= an eq differs,
+    # named by the residual TAIL). Runs FIRST: it answers the root question in one solve.
+    return [PY, f"{GTAP}/seed_and_solve.py", "--dataset", ds,
+            "--gdx", str(gdx), "--period", period]
+
+
+# Order = causal, AND seed-and-solve goes FIRST because it answers the ROOT question
+# (selection vs differing-equation) in ONE solve and names the differing equation via
+# the residual tail — the lesson that cost two false closures was running it LAST.
+# After it: structural pairing (mcp) → ANCHOR-MISSING (holdfix/tautology) → algebra/
+# inputs (nl/calibration) → reference health → seed residual / drift (symptoms).
 LAYER_SPECS: list[LayerSpec] = [
+    LayerSpec("seed_and_solve",     f"{GTAP}/seed_and_solve.py",     ("check", "shock"),         True,  _c_seed_and_solve),
     LayerSpec("mcp_pairing",        f"{GTAP}/diff_mcp_pairing.py",   ("base", "check", "shock"), False, _c_pairing),
     LayerSpec("holdfixed",          f"{GTAP}/diff_holdfixed.py",     ("base", "check", "shock"), False, _c_holdfixed),
     LayerSpec("tautology",          f"{GTAP}/diff_tautology.py",     ("check", "shock"),         True,  _c_tautology),
