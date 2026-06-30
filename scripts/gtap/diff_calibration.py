@@ -313,7 +313,28 @@ def main() -> int:
                     help="Relative tolerance (default 1e-4 = 0.01%%; tighter than the "
                          "solve comparator's 1e-3 so calibration bias is visible)")
     ap.add_argument("--tol-abs", type=float, default=1e-9)
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap only)")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
+    # pure-gtap shock is wired in solve_multiperiod (multi-period, in-place
+    # rebuilds). Accept the flag (the orchestrator passes it) but emit an
+    # honest mode_unsupported rather than diff the wrong model. Use
+    # seed_and_solve --mode gtap for the pure-gtap diagnostic.
+    if args.mode == "gtap":
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=getattr(args, "period", None),
+                headline=("diff_calibration does not support --mode gtap (altertax-only tool); "
+                          "use seed_and_solve --mode gtap for the pure-gtap diagnostic."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("diff_calibration", args.dataset, _unsupported,
+                        period_hint=getattr(args, "period", None))
     # period here is a GDX-read period (default 'base'); it IS on the base/check/
     # shock axis, so pass it through as the period_hint.
     return run_tool("diff_calibration", args.dataset, lambda: _work(args),

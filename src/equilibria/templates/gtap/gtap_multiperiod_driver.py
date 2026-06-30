@@ -647,6 +647,173 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _rebuild_import_demand_shock_ifsub — inject the tariff shock into eq_xweq/eq_pmteq
+# under ifSUB=1, where _rebuild_eq_pmeq_shock rewrites 0 cells.
+# ---------------------------------------------------------------------------
+def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
+    """ifSUB=1 counterpart of _rebuild_eq_pmeq_shock.
+
+    Under ifSUB=1 the margin/price eqs are deactivated; the import price `pm` is the
+    inlined macro _m_pm = (1+imptx+mtax)/chipm · pmcif, BAKED into eq_xweq (bilateral
+    import demand) and eq_pmteq (aggregate import CES) at BUILD time with the BASE
+    imptx. So _rebuild_eq_pmeq_shock finds 0 active eq_pmeq cells and the +10% wedge
+    never enters the import equations → import quantities stay high (xm[USA] +150%,
+    SHOCK ~55%). This is the ifSUB=1 leg of the same income/price leak the active-eq
+    rebuilds fix for ifSUB=0.
+
+    Faithful, surgical fix: rebuild ONLY the shock-slice cells of eq_xweq and eq_pmteq,
+    replicating their exact CES rules but with a SHOCKED _m_pm — i.e. the imptx wedge
+    moves base→shocked (mtax/chipm/amw/esubm/lambdam/pmcif Var all preserved). Mirrors
+    GAMS tm.fx = tm.l*1.10; nothing else recalibrated. gtap-mode + ifSUB only.
+
+    Returns the count of (eq_xweq + eq_pmteq) shock cells rebuilt.
+    """
+    from pyomo.environ import Constraint, Set, value as _V
+
+    pmcif = getattr(m, "pmcif", None)
+    pmt = getattr(m, "pmt", None)
+    xw = getattr(m, "xw", None)
+    xmt = getattr(m, "xmt", None)
+    eq_xweq = getattr(m, "eq_xweq", None)
+    eq_pmteq = getattr(m, "eq_pmteq", None)
+    if any(c is None for c in (pmcif, pmt, xw, xmt, eq_xweq, eq_pmteq)):
+        return 0
+    imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
+    if not imptx_map:
+        return 0
+
+    _mtax = getattr(m, "mtax", None)
+    _chipm = getattr(m, "chipm", None)
+
+    def _mtax_val(imp, i):
+        if _mtax is None:
+            return 0.0
+        for key in ((imp, i, "shock"), (imp, i)):
+            try:
+                return float(_V(_mtax[key]))
+            except Exception:
+                pass
+        return 0.0
+
+    def _chipm_val(rp, i, r):
+        if _chipm is None:
+            return 1.0
+        for key in ((rp, i, r, "shock"), (rp, i, r)):
+            try:
+                v = float(_V(_chipm[key]))
+                return v if abs(v) > 1e-12 else 1.0
+            except Exception:
+                pass
+        return 1.0
+
+    def _amw(r, i, rp):
+        return float(params.shares.normalized.import_source_share.get((r, i, rp), 0.0) or 0.0)
+
+    def _esubm(r, i):
+        return float(params.elasticities.esubm.get((r, i), 5.0))
+
+    _lambdam = getattr(m, "lambdam", None)
+
+    def _lambdam_val(rp, i, r):
+        if _lambdam is None:
+            return 1.0
+        for key in ((rp, i, r, "shock"), (rp, i, r)):
+            try:
+                v = float(_V(_lambdam[key]))
+                return v if abs(v) > 1e-12 else 1.0
+            except Exception:
+                pass
+        return 1.0
+
+    # SHOCKED _m_pm as a Pyomo expression in the model's pmcif Var (shock slice):
+    #   pm_shocked(rp,i,r) = (1 + imptx_shocked + mtax)/chipm · pmcif[rp,i,r,shock]
+    def _pm_shocked(rp, i, r):
+        imptx_s = imptx_map.get((rp, i, r))
+        if imptx_s is None:
+            return None
+        mtax = _mtax_val(r, i)
+        chipm = _chipm_val(rp, i, r)
+        return ((1.0 + float(imptx_s) + mtax) / chipm) * pmcif[rp, i, r, "shock"]
+
+    # --- eq_xweq: xw = amw·xmt·(pmt/pm)^esubm·lambdam^(esubm-1) ---
+    xweq_cells = []
+    for idx in list(eq_xweq):
+        if not (isinstance(idx, tuple) and len(idx) == 4 and idx[-1] == "shock"):
+            continue
+        if not eq_xweq[idx].active:
+            continue
+        rp, i, r, _t = idx
+        if (rp, i, r) not in imptx_map:
+            continue
+        if _amw(r, i, rp) <= 0.0:
+            continue
+        xweq_cells.append((rp, i, r))
+
+    # --- eq_pmteq: pmt^(1-esubm) = sum_rp amw·(pm/lambdam)^(1-esubm) ---
+    pmteq_cells = []
+    for idx in list(eq_pmteq):
+        if not (isinstance(idx, tuple) and len(idx) == 3 and idx[-1] == "shock"):
+            continue
+        if not eq_pmteq[idx].active:
+            continue
+        r, i, _t = idx
+        expo = 1.0 - _esubm(r, i)
+        if abs(expo) < 1e-8:
+            continue
+        if not any(_amw(r, i, rp) > 0.0 and (rp, i, r) in imptx_map for rp in m.rp):
+            continue
+        pmteq_cells.append((r, i))
+
+    if not xweq_cells and not pmteq_cells:
+        return 0
+
+    for (rp, i, r) in xweq_cells:
+        eq_xweq[(rp, i, r, "shock")].deactivate()
+    for (r, i) in pmteq_cells:
+        eq_pmteq[(r, i, "shock")].deactivate()
+
+    if hasattr(m, "eq_xweq_shock_ifsub_idx"):
+        m.del_component(m.eq_xweq_shock_ifsub)
+        m.del_component(m.eq_xweq_shock_ifsub_idx)
+    if hasattr(m, "eq_pmteq_shock_ifsub_idx"):
+        m.del_component(m.eq_pmteq_shock_ifsub)
+        m.del_component(m.eq_pmteq_shock_ifsub_idx)
+
+    if xweq_cells:
+        m.eq_xweq_shock_ifsub_idx = Set(initialize=sorted(xweq_cells), dimen=3)
+
+        def _xw_rule(_m, rp, i, r):
+            amw = _amw(r, i, rp)
+            esubm = _esubm(r, i)
+            lambdam = _lambdam_val(rp, i, r)
+            pm_s = _pm_shocked(rp, i, r)
+            return _m.xw[rp, i, r, "shock"] == (
+                amw * _m.xmt[r, i, "shock"]
+                * (_m.pmt[r, i, "shock"] / pm_s) ** esubm
+                * (lambdam ** (esubm - 1.0)))
+        m.eq_xweq_shock_ifsub = Constraint(m.eq_xweq_shock_ifsub_idx, rule=_xw_rule)
+
+    if pmteq_cells:
+        m.eq_pmteq_shock_ifsub_idx = Set(initialize=sorted(pmteq_cells), dimen=2)
+
+        def _pmt_rule(_m, r, i):
+            esubm = _esubm(r, i)
+            expo = 1.0 - esubm
+            terms = []
+            for rp in _m.rp:
+                amw = _amw(r, i, rp)
+                if amw <= 0.0 or (rp, i, r) not in imptx_map:
+                    continue
+                lambdam = _lambdam_val(rp, i, r)
+                pm_s = _pm_shocked(rp, i, r)
+                terms.append(amw * (pm_s / lambdam) ** expo)
+            return _m.pmt[r, i, "shock"] ** expo == sum(terms)
+        m.eq_pmteq_shock_ifsub = Constraint(m.eq_pmteq_shock_ifsub_idx, rule=_pmt_rule)
+
+    return len(xweq_cells) + len(pmteq_cells)
+
+
+# ---------------------------------------------------------------------------
 # _replicate_sp_bounds — copy lower/upper bounds from single-period to mp
 # ---------------------------------------------------------------------------
 def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
@@ -1834,6 +2001,15 @@ def solve_multiperiod(
     # eq_pmeq shock cells (a whole-slice rebuild recalibrates Armington/CDE shares
     # on the counterfactual and regresses to ~61%). With the wedge now in-equation,
     # the post-solve pm recompute becomes a NO-OP for gtap-mode (see below).
+    # Params used by the post-solve recomputes below. Initialised here (not only
+    # inside the `if not _gtap_mode` ytax[mt] block at line ~1885) because the
+    # pm/pmt/pa recompute at the end (gated on `not _eq_pmeq_shock_rebuilt`) also
+    # reads it: in gtap-mode + ifSUB=1 the eq_pmeq shock rebuild rewrites 0 cells
+    # (the margin eqs are deactivated under ifSUB → eq_pmeq[*,*,*,shock] inactive),
+    # so `_eq_pmeq_shock_rebuilt` stays False and that recompute runs with
+    # `_recompute_params` otherwise-unbound. `p_alt` (the base-rate, no-shock params;
+    # the recomputes apply shock_factor themselves) is defined in both modes.
+    _recompute_params = p_alt
     _eq_pmeq_shock_rebuilt = False
     if _gtap_mode:
         _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
@@ -1843,6 +2019,18 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "shock period: rebuilt %d eq_pmeq cells with the tm_pct shock "
                 "power (shock-in-equations, gtap-mode)", _n_pmeq)
+        else:
+            # ifSUB=1: eq_pmeq is deactivated (the import price is the inlined macro
+            # _m_pm baked into eq_xweq/eq_pmteq at build with BASE imptx). Inject the
+            # shock there instead, else the wedge never enters the import equations
+            # (xm[USA] +150%, SHOCK ~55%). gtap-mode + ifSUB leg of the same leak.
+            _n_imp = _rebuild_import_demand_shock_ifsub(m, params, params_shock)
+            if _n_imp:
+                _eq_pmeq_shock_rebuilt = True
+                import logging as _logging
+                _logging.getLogger(__name__).info(
+                    "shock period: rebuilt %d eq_xweq/eq_pmteq cells with the shocked "
+                    "imptx (ifSUB import-price leak fix, gtap-mode)", _n_imp)
 
         # gtap-mode: inject the tariff shock INTO the solved eq_ytax[*,'mt','shock']
         # cells too. eq_ytax[mt] bakes the BASE imptx coefficient at build; with the

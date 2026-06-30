@@ -311,7 +311,27 @@ def main() -> int:
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--clear-cache", action="store_true")
     ap.add_argument("--cache-dir", type=Path, default=None)
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap only)")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED: probe drives the parity ADAPTER (altertax scenarios);
+    # the pure-gtap MP solve is not an adapter scenario. Accept the flag (the
+    # orchestrator passes it) but emit an honest mode_unsupported. seed_and_solve
+    # --mode gtap is the faithful pure-gtap seed-and-solve path.
+    if args.mode == "gtap" and not args.emit_json:
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=args.seed_gams,
+                headline=("probe does not support --mode gtap (drives the altertax "
+                          "parity adapter); use seed_and_solve --mode gtap."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("probe", args.dataset, _unsupported,
+                        period_hint=args.seed_gams)
 
     # --emit-json is the LEGACY internal channel used by --compare-ref's
     # subprocess. It must stay a __JSON__-prefixed line (NOT the common schema)

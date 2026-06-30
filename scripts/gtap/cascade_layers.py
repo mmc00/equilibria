@@ -20,70 +20,82 @@ class LayerSpec:
     tool: str
     periods: tuple[str, ...]
     seeds: bool
-    build: Callable[[str, str, Optional[Path]], list[str]]
+    build: Callable[..., list[str]]
 
 
 def _benchmark_period(ds: str) -> str:
     return "check" if "check" in SCENARIO_BY_PERIOD[family(ds)] else "base"
 
 
-def _c_pairing(ds, period, gdx):
+def _mode_flags(mode: str, ifsub: int) -> list[str]:
+    """Flags appended to every model-building tool so it builds the SAME model the
+    cascade is targeting (gtap-pure vs altertax CD; ifSUB mode). Tools default to
+    mode=altertax/ifsub=0 when the flags are absent → altertax runs are unchanged."""
+    f = []
+    if mode != "altertax":
+        f += ["--mode", mode]
+    if ifsub:
+        f += ["--ifsub", str(ifsub)]
+    return f
+
+
+def _c_pairing(ds, period, gdx, mode, ifsub):
     return [PY, f"{GTAP}/diff_mcp_pairing.py", "--dataset", ds,
-            "--period", period, "--apply-closure"]
+            "--period", period, "--apply-closure"] + _mode_flags(mode, ifsub)
 
 
-def _c_nl(ds, period, gdx):
+def _c_nl(ds, period, gdx, mode, ifsub):
     return [PY, f"{GTAP}/nl_compare.py", "--dataset", ds,
-            "--phase", period, "--skip-gams"]
+            "--phase", period, "--skip-gams"] + _mode_flags(mode, ifsub)
 
 
-def _c_calibration(ds, period, gdx):
+def _c_calibration(ds, period, gdx, mode, ifsub):
     return [PY, f"{GTAP}/diff_calibration.py", "--dataset", ds,
-            "--gdx", str(gdx), "--period", _benchmark_period(ds)]
+            "--gdx", str(gdx), "--period", _benchmark_period(ds)] + _mode_flags(mode, ifsub)
 
 
-def _c_validate_ref(ds, period, gdx):
+def _c_validate_ref(ds, period, gdx, mode, ifsub):
     return [PY, f"{GTAP}/validate_reference.py", "--dataset", ds,
-            "--period", period, "--gdx", str(gdx)]
+            "--period", period, "--gdx", str(gdx)] + _mode_flags(mode, ifsub)
 
 
-def _c_probe_seed(ds, period, gdx):
+def _c_probe_seed(ds, period, gdx, mode, ifsub):
     return [PY, f"{PARITY}/probe.py", "--template", "gtap", "--dataset", ds,
-            "--scenario", scenario_for(ds, period),
-            "--seed-gams", period, "--gdx-ref", str(gdx), "--residuals"]
+            "--scenario", scenario_for(ds, period, mode),
+            "--seed-gams", period, "--gdx-ref", str(gdx), "--residuals"] + _mode_flags(mode, ifsub)
 
 
-def _c_drift(ds, period, gdx):
+def _c_drift(ds, period, gdx, mode, ifsub):
     return [PY, f"{GTAP}/drift_test.py", "--dataset", ds,
-            "--gdx", str(gdx), "--period", period]
+            "--gdx", str(gdx), "--period", period] + _mode_flags(mode, ifsub)
 
 
-def _c_holdfixed(ds, period, gdx):
+def _c_holdfixed(ds, period, gdx, mode, ifsub):
     # tool 8: sequence holdfix diff. The .gms path is derived from the dataset
     # inside the tool; --gdx is accepted but unused (uniform builder signature).
-    return [PY, f"{GTAP}/diff_holdfixed.py", "--dataset", ds, "--period", period]
+    return [PY, f"{GTAP}/diff_holdfixed.py", "--dataset", ds, "--period", period] + _mode_flags(mode, ifsub)
 
 
-def _c_tautology(ds, period, gdx):
+def _c_tautology(ds, period, gdx, mode, ifsub):
     # tool 9: unanchored-DOF (root-selection) detector. Solves at the GAMS seed.
     return [PY, f"{GTAP}/diff_tautology.py", "--dataset", ds,
-            "--gdx", str(gdx), "--period", period]
+            "--gdx", str(gdx), "--period", period] + _mode_flags(mode, ifsub)
 
 
-def _c_causal(ds, period, gdx):
+def _c_causal(ds, period, gdx, mode, ifsub):
     # tool 10: causal-propagation (symptom-vs-cause, DIRECT coupling only — see its
     # docstring limit). Seeds at the GAMS point, perturbs bucket-A vars.
     return [PY, f"{GTAP}/diff_causal_propagation.py", "--dataset", ds,
-            "--gdx", str(gdx), "--period", period]
+            "--gdx", str(gdx), "--period", period] + _mode_flags(mode, ifsub)
 
 
-def _c_seed_and_solve(ds, period, gdx):
+def _c_seed_and_solve(ds, period, gdx, mode, ifsub):
     # tool 11: seed-and-solve — THE selection-vs-differing-eq discriminator. Seeds the
     # exact GAMS point (derived-seed cascaded, shock built before build), solves, and
     # reports STAYS (= equilibrium selection, no differing eq) vs GOES (= an eq differs,
     # named by the residual TAIL). Runs FIRST: it answers the root question in one solve.
     return [PY, f"{GTAP}/seed_and_solve.py", "--dataset", ds,
-            "--gdx", str(gdx), "--period", period]
+            "--gdx", str(gdx), "--period", period] + _mode_flags(mode, ifsub)
 
 
 # Order = causal, AND seed-and-solve goes FIRST because it answers the ROOT question
@@ -113,7 +125,8 @@ def layer_by_name(name: str) -> LayerSpec:
 
 
 def build_cmd(layer: LayerSpec, dataset: str, period: str,
-              gdx: Optional[Path]) -> Optional[list[str]]:
+              gdx: Optional[Path], mode: str = "altertax",
+              ifsub: int = 0) -> Optional[list[str]]:
     if period not in layer.periods:
         return None
-    return layer.build(dataset, period, gdx)
+    return layer.build(dataset, period, gdx, mode, ifsub)

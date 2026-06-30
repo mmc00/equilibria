@@ -278,7 +278,32 @@ def main():
     ap.add_argument("--period", default="shock", choices=["check", "shock"])
     ap.add_argument("--top", type=int, default=25)
     ap.add_argument("--tol", type=float, default=1e-3, help="rel-drift threshold to count as drifting")
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
+                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
+                    help="ifSUB mode (pure-gtap only)")
     args = ap.parse_args()
+
+    # mode=gtap UNSUPPORTED, honestly: drift_test seeds + solves the SINGLE-period
+    # altertax model. The pure-gtap shock is multi-period (the tariff wedge enters
+    # via solve_multiperiod's in-place rebuilds), so a single-period gtap solve would
+    # drift FROM the wrong (un-shocked) equations. seed_and_solve --mode gtap already
+    # runs the faithful multi-period gtap solve and reports the sentinel drift +
+    # residual tail — use it for the pure-gtap drift/free-DOF question.
+    if args.mode == "gtap":
+        def _unsupported() -> dict:
+            return dict(
+                status="error", period=args.period,
+                headline=("drift_test does not support --mode gtap: it seeds+solves the "
+                          "single-period altertax model; the pure-gtap shock is wired in "
+                          "solve_multiperiod (multi-period, in-place rebuilds). Use "
+                          "seed_and_solve --mode gtap (it reports the gtap sentinel drift)."),
+                violations=[],
+                meta={"error_kind": "mode_unsupported", "mode": "gtap",
+                      "ifsub": args.ifsub})
+        return run_tool("drift_test", args.dataset, _unsupported,
+                        period_hint=args.period)
+
     return run_tool("drift_test", args.dataset, lambda: _work(args),
                     period_hint=args.period)
 

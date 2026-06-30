@@ -45,11 +45,12 @@ def run_layer(argv: list[str], timeout: float) -> tuple[dict, int]:
 
 def sweep_period(dataset: str, period: str, gdx: Optional[Path], *,
                  stop: bool = True, timeout: float = 600.0,
+                 mode: str = "altertax", ifsub: int = 0,
                  runner: Callable[[list[str], float], tuple[dict, int]] = run_layer
                  ) -> list[LayerResult]:
     results: list[LayerResult] = []
     for layer in LAYER_SPECS:
-        argv = build_cmd(layer, dataset, period, gdx)
+        argv = build_cmd(layer, dataset, period, gdx, mode, ifsub)
         if argv is None:
             results.append(LayerResult(
                 layer.name, "skipped", None,
