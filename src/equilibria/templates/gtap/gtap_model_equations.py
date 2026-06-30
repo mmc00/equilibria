@@ -5178,7 +5178,14 @@ class GTAPModelEquations:
             alphaa = value(model.i_share[r, i])
             if alphaa <= 0.0:
                 return model.xi[r, i] == 0.0
-            sigmai_raw = float(self.params.elasticities.esubi.get(r, 0.0))
+            # esubi is keyed by TUPLE (r,) — a bare-string lookup esubi.get(r) returns
+            # None→0.0 (silent), collapsing this to Leontief (sigmai=0) instead of the
+            # GAMS CES sigmai=1.01. Try both key shapes (cf project_gtap7_3x3_esubi_keyshape:
+            # the same key-shape bug class — it reappeared here in eq_xi).
+            sigmai_raw = self.params.elasticities.esubi.get((r,))
+            if sigmai_raw is None:
+                sigmai_raw = self.params.elasticities.esubi.get(r, 0.0)
+            sigmai_raw = float(sigmai_raw or 0.0)
             if abs(sigmai_raw - 1.0) < 1e-8:
                 sigmai_raw = 1.01  # match GAMS cal.gms: sigmai=1 → 1.01
             return model.xi[r, i] == alphaa * model.xiagg[r] * (model.pi[r] / (model.pa[r, i, "inv"] + 1e-12)) ** sigmai_raw
