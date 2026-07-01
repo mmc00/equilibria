@@ -145,11 +145,19 @@ def _fix_acts_comm_collision(text: str) -> str:
     if not m:
         return text
     block = m.group(1)
+    # DELETE the `set.comm` line entirely (and its `*  User-defined commodities`
+    # header comment).  A commented-out marker LEFT IN PLACE breaks GAMS ("$182
+    # Closing / missing", "$409 Unrecognizable item") — a `*` line inside a set
+    # element list is mishandled — so remove the whole line, leaving the block a
+    # clean acts ∪ endw ∪ stdlab ∪ reg (== the intended union, since comm == acts).
     new_block = re.sub(
-        r'(^\s*)set\.comm(\s*$)',
-        r'\1*  [dropped: acts==comm, union unchanged] set.comm\2',
-        block, count=1, flags=re.MULTILINE,
+        r'\n[ \t]*\*[ \t]*User-defined commodities[ \t]*\n(?:[ \t]*\n)*[ \t]*set\.comm[ \t]*',
+        '',
+        block, count=1,
     )
+    if new_block == block:
+        # Fallback: at least remove the bare set.comm line.
+        new_block = re.sub(r'\n[ \t]*set\.comm[ \t]*(?=\n)', '', block, count=1)
     if new_block == block:
         return text
     return text.replace(block, new_block, 1)
