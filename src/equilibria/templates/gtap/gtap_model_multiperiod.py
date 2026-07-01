@@ -569,6 +569,10 @@ class GTAPMultiPeriodModel:
             "xa": "xaa",
             "pp": "pp_rai",
             "p": "p_rai",
+            "xd": "xda",  # GAMS xd(r,i,aa) → Python xda; without this the per-agent
+            "xm": "xma",  # xd/xm map to Python's xd/xm AGGREGATE (r,i,t) → 4-key
+                          # seed KeyErrors silently → xda/xma stay at init (final-demand
+                          # agents ~17% off), fabricating a phantom eq_pdeq residual.
             # Add others as needed; most names are identical
         }
 
