@@ -14,7 +14,7 @@ Three axes / kinds:
   * "altertax"   — the altertax-CD multi-period SOLVE gate (PATH, local), per ifSUB.
   * "gtap_solve" — the PURE-gtap (real-CES, non-altertax) multi-period SOLVE gate
                    (PATH, local), per ifSUB. CHECK + SHOCK match% vs the GAMS LOCAL
-                   out_gtap_shock_ifsub{0,1}.gdx. Only gtap7_3x3 has these fixtures.
+                   out_gtap_shock_ifsub{0,1}.gdx (gtap7_3x3 local, gtap7_5x5 via NEOS).
 
 `gap_min` is a CONSERVATIVE floor the tests assert (margin below the measured
 value); `gap_note` is the measured snapshot for humans. `gap_min is None` only
@@ -71,16 +71,15 @@ ROWS: list[Row] = [
     # --- PURE-gtap (real-CES, non-altertax) multi-period SOLVE gate, local-only ---
     # gtap7_3x3: local GAMS (community license fits). gtap7_5x5: GAMS refs generated
     # via NEOS (job 19755905/6, PATH/MCP — exceeds the 2500-row community limit).
-    # CHECK exact (100%) all rows; SHOCK measured @ tol1%. ifSUB=1 CLOSED 55→98.95%
-    # (3x3) / 98.09% (5x5): import-wedge fix + supply-balance pairing fix (eq_xseq
-    # kept as GAMS free-row + HARD-forced supply-block pairing), gated to gtap-mode.
-    # gtap7_5x5 ifSUB=0 = 64.87%: the SAME supply-balance bug is present under
-    # ifSUB=0 too (3x3 ifSUB=0 passed by structural luck); the fix activates there
-    # but does not yet converge to the GAMS point — OPEN LEAD.
-    Row("gtap7_3x3", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "99.70% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx"),
-    Row("gtap7_3x3", "gtap_solve", 1, ("base", "check", "shock"), 98.0, "98.95% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx"),
-    Row("gtap7_5x5", "gtap_solve", 0, ("base", "check", "shock"), 60.0, "64.87% (CHECK 100%; supply-block lead open)", "local", "out_gtap_shock_ifsub0.gdx (NEOS)"),
-    Row("gtap7_5x5", "gtap_solve", 1, ("base", "check", "shock"), 97.0, "98.09% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx (NEOS)"),
+    # CHECK exact (100%) all rows; SHOCK measured @ tol1%. ALL CLOSED (commit f570e32):
+    # the real-sluggish factor price pft was wrongly FIXED by fix_sluggish_pft (it used
+    # a nonexistent xftflag Param → except:pass → froze pft against the tariff). Freeing
+    # it (eq_xfteq.active guard) + deleting the 3x3-hardcoded eq_pfyeq trim (matcher
+    # squares automatically) closed 5x5 ifSUB=0 64.87→100% and improved every case.
+    Row("gtap7_3x3", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "100% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx"),
+    Row("gtap7_3x3", "gtap_solve", 1, ("base", "check", "shock"), 98.0, "99.4% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx"),
+    Row("gtap7_5x5", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "100% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx (NEOS)"),
+    Row("gtap7_5x5", "gtap_solve", 1, ("base", "check", "shock"), 99.0, "99.59% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx (NEOS)"),
 ]
 
 

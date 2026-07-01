@@ -75,10 +75,12 @@ def render() -> str:
         "## Pure-gtap (real-CES) multi-period SOLVE gate (PATH, local-only)",
         "",
         "The non-altertax real-CES model solved base→check→shock in `mode=\"gtap\"`, "
-        "per ifSUB, vs the GAMS LOCAL `out_gtap_shock_ifsub{0,1}.gdx`. Only gtap7_3x3 "
-        "has these fixtures today. Both ifSUB modes are at parity: ifSUB=1 closed "
-        "55→98.95% (commit 982e47f) once eq_xseq (the supply balance, a GAMS "
-        "free-row) was kept active and the GAMS supply-block pairing HARD-forced.",
+        "per ifSUB, vs the GAMS LOCAL `out_gtap_shock_ifsub{0,1}.gdx` (gtap7_3x3 local, "
+        "gtap7_5x5 via NEOS). All four cases are at parity: the sluggish factor price "
+        "pft was wrongly FIXED by fix_sluggish_pft (via a nonexistent xftflag Param), "
+        "freezing it against the tariff shock. Freeing it (eq_xfteq.active guard) + "
+        "removing the 3x3-hardcoded eq_pfyeq trim (the matcher squares automatically) "
+        "closed gtap7_5x5 ifSUB=0 64.87→100% and improved every case (commit f570e32).",
         "",
         _table(gtap_solve_rows()),
         "",
