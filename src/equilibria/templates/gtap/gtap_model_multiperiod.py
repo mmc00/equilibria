@@ -434,6 +434,12 @@ class GTAPMultiPeriodModel:
                 except (KeyError, AttributeError):
                     xscale_floats[(r, a)] = 1.0
         del _sp_tmp  # free memory
+        # Stash the (r,a) xscale floats on m so diagnostic seeders (seed_and_solve's
+        # derived-var cascade) can recover the SAME scaling the baked equation bodies
+        # use — the MP model has no `xscale` component (it's a literal in each body),
+        # so `m.xscale[...]` AttributeErrors and the cascade silently skips `xd`,
+        # leaving it at init and fabricating a phantom eq_xd_agg residual.
+        m._xscale_floats = dict(xscale_floats)
 
         def _mqabs_cross(tp: str, tq: str, r: str):
             """Absorption Fisher cross: Σ_{i,fd} pa[r,i,fd,tp] · xaa[r,i,fd,tq]."""
