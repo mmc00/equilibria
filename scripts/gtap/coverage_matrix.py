@@ -80,6 +80,10 @@ ROWS: list[Row] = [
     Row("gtap7_3x3", "gtap_solve", 1, ("base", "check", "shock"), 98.0, "99.4% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx"),
     Row("gtap7_5x5", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "100% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx (NEOS)"),
     Row("gtap7_5x5", "gtap_solve", 1, ("base", "check", "shock"), 99.0, "99.59% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx (NEOS)"),
+    # gtap7_10x7 ifSUB=0: NEOS ref (job 19760909, PATH, CLEAN solve). The same pft-free
+    # fix generalizes — 100% with zero worst-cells (>1% count 0). Confirms the fix is not
+    # dataset-specific. (ifSUB=1 + 15x10 NEOS bundles hit a builder inlining error, TODO.)
+    Row("gtap7_10x7", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "100% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx (NEOS)"),
 ]
 
 
