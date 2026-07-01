@@ -579,6 +579,13 @@ class GTAPMultiPeriodModel:
             "xm": "xma",  # xd/xm map to Python's xd/xm AGGREGATE (r,i,t) → 4-key
                           # seed KeyErrors silently → xda/xma stay at init (final-demand
                           # agents ~17% off), fabricating a phantom eq_pdeq residual.
+            # camelCase income vars: GAMS uses camelCase, Python snake/lowercase. Without
+            # these the seed leaves them at init → phantom eq_ytaxind/eq_regy residuals
+            # (ytax_ind 2.31 vs GAMS 2.674 = ytaxTot-dt).
+            "ytaxInd": "ytax_ind",
+            "factY": "facty",
+            "phiP": "phip",
+            "regY": "regy",
             # Add others as needed; most names are identical
         }
 
