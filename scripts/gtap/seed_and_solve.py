@@ -236,16 +236,24 @@ def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
     index. Returns cells set."""
     t = period
     n = 0
+    # The MP model has no `xscale` component (baked as a literal in each equation body).
+    # The builder stashes the (r,a) floats on m._xscale_floats; non-activity agents
+    # (hhd/gov/inv/tmg) have xscale=1. Using this recovers the SAME scaling the
+    # eq_xd_agg/eq_xmt_agg bodies use — without it `xd`/`xmt` stay at init (phantom
+    # eq_xd_agg residual ~1.45).
+    _xsf = getattr(m, "_xscale_floats", {}) or {}
+    def _xs(r, aa):
+        return _xsf.get((r, aa), 1.0)
     for r in m.r:
         for i in m.i:
             try:
-                n += setv(m.xd, (r, i, t), sum(V(m.xda[r, i, aa, t]) / V(m.xscale[r, aa, t])
-                          for aa in m.aa if (r, aa, t) in m.xscale))
+                n += setv(m.xd, (r, i, t), sum(V(m.xda[r, i, aa, t]) / _xs(r, aa)
+                          for aa in m.aa))
             except Exception:
                 pass
             try:
-                n += setv(m.xmt, (r, i, t), sum(V(m.xma[r, i, aa, t]) / V(m.xscale[r, aa, t])
-                          for aa in m.aa if (r, aa, t) in m.xscale))
+                n += setv(m.xmt, (r, i, t), sum(V(m.xma[r, i, aa, t]) / _xs(r, aa)
+                          for aa in m.aa))
             except Exception:
                 pass
             try:
