@@ -265,9 +265,10 @@ def _collapse_pft_pfteq(m, period: str) -> int:
       - REAL factors (xftFlag>0 → eq_xfteq[r,f,period] live): leave pft FREE,
         KEEP eq_pfteq + eq_xfteq ACTIVE.  Instead deactivate the redundant
         per-(r,f) eq_xft[r,f,period] (the market-clearing row GAMS substitutes
-        out; eq_xfteq.xft + eq_pfeq.pf carry the block).  Squaring then needs a
-        few more redundant rows trimmed (eq_pfyeq[*,Land,Food] is pinned by the
-        CET pfeq; eq_xfeq[USA,NatRes,Mnfcs]) — see _REDUNDANT_FACTOR_ROWS below.
+        out; eq_xfteq.xft + eq_pfeq.pf carry the block).  The remaining squaring
+        is done by the Hopcroft-Karp matcher + zero_unique_deact in run_gtap's
+        apply_squareness_patches — NO manual eq_pfyeq trimming (that over-trimmed
+        and collapsed pft; see the note at the end of this function).
       - DANGLING NatRes (xftFlag<=0 → eq_xfteq/eq_pfteq Constraint.Skip, MP index
         KeyErrors): xft floats free with no matching row.  KEEP the SP behavior:
         fix xft at its benchmark init and pft at 1.0 (gtap_solver
@@ -367,39 +368,15 @@ def _collapse_pft_pfteq(m, period: str) -> int:
                             except KeyError:
                                 pass
 
-    # Freeing pft over-determines the factor block by a few rows.  Deactivate the
-    # redundant rows the diagnosis identified (eq_pfyeq[*,Land,Food] is already
-    # pinned by the CET pfeq; eq_xfeq[USA,NatRes,Mnfcs] is redundant) so the
-    # nonlinear-full matcher can square check/shock at code=1.
-    for _eqname, _idx in _REDUNDANT_FACTOR_ROWS:
-        _eq = getattr(m, _eqname, None)
-        if _eq is None:
-            continue
-        try:
-            _row = _eq[(*_idx, period)]
-        except KeyError:
-            continue
-        if _row.active:
-            _row.deactivate()
-            _n += 1
+    # NO manual redundant-row deactivation: freeing pft leaves the factor block
+    # squarable by the Hopcroft-Karp matcher + zero_unique_deact (in run_gtap's
+    # apply_squareness_patches).  The old hardcoded _REDUNDANT_FACTOR_ROWS
+    # (eq_pfyeq[{EU_28,USA,ROW},Land,Food] — the 3x3 regions/commodity) actively
+    # HURT: deactivating those rows OVER-trimmed the block and let pft collapse
+    # (3x3 pft[USA,Land] 0.0012 vs GAMS 0.934); and it was inert on 5x5 (Land→Agri,
+    # not Food).  Removing it entirely + freeing pft (fix_sluggish_pft eq_xfteq
+    # guard) closes BOTH: gtap7_3x3 & gtap7_5x5 ifSUB0 shock → 100%/100%/100%.
     return _n
-
-
-# Redundant factor-block rows to deactivate once pft is freed (gtap-mode).  Each
-# is over-determining given pft free + eq_pfteq/eq_xfteq/eq_pfeq live:
-#   - eq_pfyeq[r,Land,Food]: Land's per-activity pfy is pinned by the CET pfeq.
-# NOTE: eq_xfeq[USA,NatRes,Mnfcs] was REMOVED — it is the only row that pins
-# pf[USA,NatRes,Mnfcs]; deleting it was the proximate cause of the pf free-DOF
-# explosion under the diagonal shock.  The NatRes block is now squared in
-# _collapse_pft_pfteq (holdfix xf[NatRes,a] + deactivate the vertical eq_pfeq,
-# leaving eq_xfeq live to pin pf).
-# This is the diagnosis-identified set; iterate via the solver's
-# "unmatched active eqs (N): [...]" log only within this family if needed.
-_REDUNDANT_FACTOR_ROWS = (
-    ("eq_pfyeq", ("EU_28", "Land", "Food")),
-    ("eq_pfyeq", ("USA", "Land", "Food")),
-    ("eq_pfyeq", ("ROW", "Land", "Food")),
-)
 
 
 # ---------------------------------------------------------------------------
