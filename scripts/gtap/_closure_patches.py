@@ -48,6 +48,25 @@ def fix_sluggish_pft(model, params, *, label: str = "") -> int:
             # Sluggish with xftflag=0 OR fnm (neither mf nor sf): pft is dangling → fix
             if f_str in mf_set:
                 continue
+            # A REAL sluggish factor has an ACTIVE eq_xfteq[r,f,(t)] that anchors pft
+            # (CET factor-supply curve) — pft must stay FREE.  Only a DANGLING factor
+            # (no/inactive eq_xfteq) has a floating pft to fix.  The `xftflag` Param
+            # does NOT exist on the multi-period model, so the old `xftflag>0` guard
+            # silently fell through (except:pass) and WRONGLY fixed pft for real
+            # sluggish factors (Land) at the warm-start value → frozen against the
+            # shock (gtap7_5x5 ifSUB0: pft[USA,Land] stuck at CHECK 0.866, never moved
+            # to SHOCK 0.794 → 64.87%).  Check eq_xfteq directly (dataset-agnostic).
+            _eq_xfteq = getattr(model, "eq_xfteq", None)
+            if _eq_xfteq is not None:
+                _row = None
+                for _k in (((r, f, idx[-1]) if len(idx) >= 3 else (r, f)), (r, f)):
+                    try:
+                        _row = _eq_xfteq[_k]
+                        break
+                    except (KeyError, TypeError):
+                        continue
+                if _row is not None and getattr(_row, "active", False):
+                    continue  # real factor: pft anchored by eq_xfteq → leave FREE
             if hasattr(model, "xftflag"):
                 try:
                     if float(value(model.xftflag[r, f]) or 0.0) > 0.0:
