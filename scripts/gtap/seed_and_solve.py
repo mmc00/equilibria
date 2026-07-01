@@ -256,12 +256,19 @@ def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
                           for aa in m.aa))
             except Exception:
                 pass
+            # DERIVE xc/xg/xi from the QUANTITY identity xc=xaa[hhd], xg=xaa[gov],
+            # xi=xaa[inv] (eq_xaa_hhd/gov/inv) — NOT the price formula g_share·yg/pa.
+            # xaa is seeded directly from GAMS, so the identity reproduces the GAMS
+            # point; the price formula diverges from it (yg/pa not perfectly consistent
+            # with the seeded xaa at the GAMS point) → xg 3.52 vs xaa[gov] 3.02 →
+            # phantom ±0.50 residual split across eq_xg/eq_xaa_gov. Mirrors
+            # complete_derived_seed. (xi already used the identity.)
             try:
-                n += setv(m.xc, (r, i, t), V(m.xcshr[r, i, t]) * V(m.yc[r, t]) / max(V(m.pa[r, i, "hhd", t]), 1e-9))
+                n += setv(m.xc, (r, i, t), V(m.xaa[r, i, "hhd", t]))
             except Exception:
                 pass
             try:
-                n += setv(m.xg, (r, i, t), V(m.g_share[r, i, t]) * V(m.yg[r, t]) / max(V(m.pa[r, i, "gov", t]), 1e-9))
+                n += setv(m.xg, (r, i, t), V(m.xaa[r, i, "gov", t]))
             except Exception:
                 pass
             try:
