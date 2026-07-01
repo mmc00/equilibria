@@ -45,3 +45,5 @@ The non-altertax real-CES model solved base→check→shock in `mode="gtap"`, pe
 |---|---|---|---|---|---|---|---|
 | gtap7_3x3 | gtap_solve | 0 | base,check,shock | 99 | 99.70% (CHECK 100%) | local | out_gtap_shock_ifsub0.gdx |
 | gtap7_3x3 | gtap_solve | 1 | base,check,shock | 98 | 98.95% (CHECK 100%) | local | out_gtap_shock_ifsub1.gdx |
+| gtap7_5x5 | gtap_solve | 0 | base,check,shock | 60 | 64.87% (CHECK 100%; supply-block lead open) | local | out_gtap_shock_ifsub0.gdx (NEOS) |
+| gtap7_5x5 | gtap_solve | 1 | base,check,shock | 97 | 98.09% (CHECK 100%) | local | out_gtap_shock_ifsub1.gdx (NEOS) |
