@@ -68,7 +68,15 @@ RESID_TOL = 1e-4
 # rgdpmp/pgdpmp are report leaves (no feedback); ROW-region rows ride a corrupt reference
 # (project_gtap7_3x3_ref_corrupt_ROW). The tool flags these separately so the real lead
 # (non-leaf, non-ROW) is not buried.
-_LEAF_EQS = {"eq_rgdpmp", "eq_pgdpmp"}
+#
+# WELFARE LEAVES: eq_cv/eq_ev/eq_walras/eq_u/eq_ug/eq_us are inert report rows that the
+# driver mutes (_mute_welfare_tail) — no economic feedback into the equilibrium, so a
+# residual there at the GAMS point is benign and must not bury the real lead. (eq_uh is
+# NOT here: uh feeds eq_zcons = real CDE demand, so it has genuine blast radius.)
+_LEAF_EQS = {
+    "eq_rgdpmp", "eq_pgdpmp",
+    "eq_cv", "eq_ev", "eq_walras", "eq_u", "eq_ug", "eq_us",
+}
 
 
 def _build_run_gtap():
