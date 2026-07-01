@@ -32,3 +32,10 @@
 | gtap7_3x4 | altertax | 0 | base,check,shock | 99 | 99.61% | local | out_altertax_ifsub0.gdx |
 | gtap7_3x4 | altertax | 1 | base,check,shock | 99 | 99.56% | local | out_altertax_ifsub1.gdx |
 | gtap7_20x41 | altertax | 0 | base | — | blocked | blocked | NEOS ref Infeasible |
+
+## Pure-gtap multi-period SOLVE (real-CES, solver gate, local-only)
+
+| dataset | kind | ifsub | phases | gap_min | gap_note | ci_status | ref |
+|---|---|---|---|---|---|---|---|
+| gtap7_3x3 | gtap_solve | 0 | base,check,shock | 99 | 99.70% | local | out_gtap_shock_ifsub0.gdx |
+| gtap7_3x3 | gtap_solve | 1 | base,check,shock | 98 | 98.95% | local | out_gtap_shock_ifsub1.gdx |
