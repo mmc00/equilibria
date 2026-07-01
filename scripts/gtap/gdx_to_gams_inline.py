@@ -69,6 +69,15 @@ _GETDATA_SKIP = {
     "DVER", "DPSM", "ISEP", "CSEP", "MFRV", "OSEP", "TFRV", "VMRT", "XTRV",
     "RORFLEX",  # the elasticity rorFlex is loaded as `rorFlex0=rorFlex` so this
                 # uppercase variant from a different file is redundant.
+    # gtap7_15x10 (and other margin-structured datasets) GDX extras that
+    # getData.gms does NOT declare — VMTS is a bilateral margin param, and the
+    # rT* are pre-computed tax RATES that getData recomputes from the value
+    # params (VDFB/VDFP/…), so injecting them is both redundant AND breaks the
+    # compile ("$140 Unknown symbol"; NEOS jobs 19760911/12).  Present only in
+    # datasets with an explicit margin/tax-rate block (absent in 3x3/5x5/10x7).
+    "VMTS",
+    "rTFD", "rTFE", "rTFM", "rTGD", "rTGM", "rTID", "rTIM", "rTIN",
+    "rTMS", "rTO", "rTPD", "rTPM", "rTXS",
 }
 
 

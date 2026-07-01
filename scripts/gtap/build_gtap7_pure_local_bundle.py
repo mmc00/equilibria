@@ -102,6 +102,59 @@ def _force_ifsub(text: str, ifsub: int) -> str:
     return new
 
 
+def _elements_of(text: str, set_name: str) -> set:
+    """Extract the element names of an inline `Set <name> / ... /;` block."""
+    m = re.search(
+        rf'(?im)^\s*[Ss]et\s+{re.escape(set_name)}\b[^\n]*/\s*\n(.*?)\n\s*/\s*;',
+        text, re.S,
+    )
+    if not m:
+        return set()
+    els = set()
+    for ln in m.group(1).splitlines():
+        ln = ln.split("*", 1)[0].strip().rstrip(",").strip()
+        if not ln or ln.startswith("set."):
+            continue
+        tok = re.split(r"[\s,.]", ln)[0].strip().strip("'\"")
+        if tok:
+            els.add(tok)
+    return els
+
+
+def _fix_acts_comm_collision(text: str) -> str:
+    """Drop the `set.comm` line from the `set is` composite when acts == comm.
+
+    `set is` (SAM accounts) unions acts ∪ comm ∪ endw ∪ stdlab ∪ reg by listing each
+    `set.<name>` marker.  In datasets whose activity and commodity elements share the
+    SAME names (e.g. gtap7_15x10: both are Rice/Grains/… with NO a_/c_ prefix, unlike
+    3x3/5x5/10x7 which are prefixed), listing set.acts THEN set.comm redeclares those
+    elements and GAMS raises "$172 Element is redefined" (verified locally: $onMulti
+    does NOT help — it permits set RE-declaration, not duplicate elements in one list).
+    When acts == comm the union equals acts alone, so dropping the `set.comm` line from
+    the `set is` block is exact and safe.  Only fires on the collision (prefixed
+    datasets are untouched).  set.comm stays in the OTHER composites (aa, i) which are
+    subsets of the already-complete `is`.
+    """
+    acts = _elements_of(text, "acts")
+    comm = _elements_of(text, "comm")
+    if not acts or acts != comm:
+        return text  # prefixed (no collision) or sets not found — nothing to fix
+    m = re.search(
+        r'(set is "SAM accounts for aggregated SAM" /.*?/\s*;)', text, re.S
+    )
+    if not m:
+        return text
+    block = m.group(1)
+    new_block = re.sub(
+        r'(^\s*)set\.comm(\s*$)',
+        r'\1*  [dropped: acts==comm, union unchanged] set.comm\2',
+        block, count=1, flags=re.MULTILINE,
+    )
+    if new_block == block:
+        return text
+    return text.replace(block, new_block, 1)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True,
@@ -159,6 +212,11 @@ def main() -> None:
     if idx == -1:
         raise SystemExit("Could not find getData set-decl marker.")
     inlined = inlined[:idx] + "\n" + data_block + "\n" + inlined[idx:]
+
+    # Fix the acts==comm element collision in the `set is` composite (unprefixed
+    # datasets like gtap7_15x10 → "$172 Element is redefined").  See
+    # _fix_acts_comm_collision.  No-op for prefixed datasets (3x3/5x5/10x7).
+    inlined = _fix_acts_comm_collision(inlined)
 
     # Split inline_params into Dat-side and Prm-side (same split as altertax).
     params_block = params_path.read_text()
