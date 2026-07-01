@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
-from coverage_matrix import nl_rows, altertax_rows  # noqa: E402
+from coverage_matrix import nl_rows, altertax_rows, gtap_solve_rows  # noqa: E402
 
 DOC_PATH = ROOT / "docs/site/guide/gtap7_coverage_matrix.md"
 
@@ -63,6 +63,10 @@ def render() -> str:
         "## Altertax multi-period (solver gate, local-only)",
         "",
         _table(altertax_rows()),
+        "",
+        "## Pure-gtap multi-period SOLVE (real-CES, solver gate, local-only)",
+        "",
+        _table(gtap_solve_rows()),
         "",
     ]
     return "\n".join(parts)
