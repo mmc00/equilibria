@@ -1,5 +1,44 @@
 # GTAP Python-to-GAMS Validation Status
 
+## Session 2026-07-01: pure-gtap (real-CES) ifSUB=1 shock closed 55→98.95%
+
+**Gate:** `test_gtap_multiperiod_parity.py` (mode="gtap", NOT altertax), gtap7_3x3,
+vs `out_gtap_shock_ifsub1.gdx`. Harness `measure_gtap_pure_tols.py --ifsub 1`.
+**Result:** SHOCK 55.63% → **98.95% @ tol1%** (82.28/97.60/98.95 @ 0.1/0.5/1%),
+CHECK 100% exact, codes 1/1/1. Faithful, no hardcoding, zero regression
+(altertax ifsub0/1 + gtap-pure ifsub0 gates green, nl-parity 5/5). Commit `982e47f`.
+
+**Two links, both STRUCTURAL PAIRING bugs (not equations):**
+
+1. **Import-price macro (55→~76%):** under ifSUB=1 the import price is the inlined
+   `_m_pm` macro baked into eq_xweq/eq_pmteq at build with the BASE imptx, so the
+   +10% wedge never entered. `_rebuild_import_demand_shock_ifsub` rebuilds those
+   shock cells with `_m_pm` inlined on the LIVE `pe`+`ptmg` Vars (GAMS has NO
+   pm/pmcif Vars under ifSUB=1) — verified exact against the CONVERT e544/e553.
+
+2. **Supply-balance pairing (76→98.95%) — the real cause of EU_28's -13% slide:**
+   Python's Hopcroft-Karp matcher paired the price eqs to the QUANTITIES
+   (eq_xs→xs, eq_pdeq→xds, eq_peteq→xet), leaving `eq_xseq` (`xs==xds+xet`, a GAMS
+   FREE-ROW) unmatched → `deactivate_unmatched_xseq` dropped it → the physical
+   supply balance broke (xds+xet exceeded xs by +2.6 for EU_28,Svces) → the whole
+   region's price chain (pf/pfact/ps/pd/pe) slid -13% to a SPURIOUS root, USA +9%
+   mirror, ROW (residual) anchored, numéraire pwfact=1.0 fine. Fix: keep eq_xseq
+   active (`protect_xseq`) + HARD-force the GAMS supply-block pairing
+   (pseq↔ps, xdseq↔xds, pdeq↔pd, xeteq↔xet, peteq↔pet, xseq↔xs); `structural_matching`
+   gained a hard-pair flag skipping the adjacency check (the quantity⊥price MCP
+   complementarity a square system can't express by adjacency). All gated to
+   gtap-mode+ifSUB=1 via the `eq_xweq_shock_ifsub` sentinel.
+
+**The decisive diagnostic (the CONVERT+seed test):** generate the GAMS reference as
+canonical Pyomo (`convert_gams.py --if-sub`), seed it at the GAMS point → it STAYS;
+evaluate that GAMS system's residual AT PYTHON's solved point → **2.6, 71 equations
+violated** (worst = xseq[EU_28,Svces]). A point that violates 71 GAMS eqs is NOT a
+GAMS equilibrium → it was NOT multi-equilibrium (the long-chased false verdict) but a
+DIFFERING PAIRING. Run this test FIRST for "multi-eq vs differing-pairing", before
+exhausting per-variable holdfixes (fixing pfact/pd/pft to GAMS all did nothing — the
+region was self-consistent at the wrong level). The seed_and_solve gtap tail stays
+confounded (its m2 skips the shock rebuilds) — ignore its eq_xweq=2.46 verdict.
+
 ## Session 2026-06-19: gtap7_10x7 CHECK-period income bug closed
 
 **Symptom:** gtap7_10x7 altertax CHECK period `yc[USA]=32.8` vs GAMS 12.09 (~2.7×); `regY`/`facty` 2× in every region; check residual 2.48 (code=2).
