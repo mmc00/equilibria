@@ -2061,7 +2061,11 @@ def _run_path_capi_nonlinear_full(
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _closure_patches import apply_squareness_patches  # type: ignore
-    apply_squareness_patches(model, params, label="nonlinear-full")
+    # gtap-mode+ifSUB=1: keep eq_xseq (supply balance, a GAMS free-row) active; the
+    # GAMS supply-block pairing is HARD-forced in structural_matching below instead.
+    _protect_xseq = getattr(model, "eq_xweq_shock_ifsub", None) is not None
+    apply_squareness_patches(model, params, label="nonlinear-full",
+                             protect_xseq=_protect_xseq)
 
     # Mirror GAMS holdfixed=1: yi[rres] has no MCP pair (yieq is skipped for
     # residual region). Without explicit fixing, yi[rres] floats freely in
@@ -2335,28 +2339,98 @@ def _run_path_capi_nonlinear_full(
             ("eq_ndeq",   "nd"),
             ("eq_vaeq",   "va"),
             ("eq_pxeq",   "px"),
+            ("eq_pvaeq",  "pva"),  # GAMS pvaeq.pva — value-added price (chain to ps)
+            ("eq_pfact",  "pfact"),  # GAMS pfacteq.pfact — per-region factor-price index
             ("eq_xapeq",  "xaa"),
             ("eq_xeq",    "x"),
             ("eq_pseq",   "ps"),
             ("eq_pmteq",  "pmt"),
             ("eq_pmeq",   "pm"),
+            ("eq_xweq",   "xw"),   # GAMS xweq.xw — bilateral import demand ↔ xw
+            # gtap-mode + ifSUB=1 shocked trade rebuilds (only present then;
+            # getattr→None otherwise).  They inline _m_pm on the LIVE pe/ptmg Vars
+            # (GAMS has NO pm/pmcif Vars under ifSUB=1), so force them to xw/pmt to
+            # mirror GAMS's declared xweq.xw / pmteq.pmt (model.gms:2617).
+            ("eq_xweq_shock_ifsub",    "xw"),
+            ("eq_pmteq_shock_ifsub",   "pmt"),
             ("eq_pwfact", "pwfact"),  # GAMS pwfacteq.pwfact — anchors price level
         ]:
             _eq_comp_obj = getattr(model, _eq_comp, None)
             _var_comp_obj = getattr(model, _var_comp, None)
             if _eq_comp_obj is None or _var_comp_obj is None:
                 continue
+            # The shock-rebuild components (gtap-mode+ifSUB=1) are indexed WITHOUT
+            # the trailing period (dimen 3/2), but the paired var carries it, so
+            # append 'shock' when building the var key for those.
+            _needs_period = _eq_comp in (
+                "eq_xweq_shock_ifsub", "eq_pmteq_shock_ifsub",
+            )
             try:
                 for _idx in _eq_comp_obj:
                     _con = _eq_comp_obj[_idx]
                     if not _con.active:
                         continue
-                    # Build the matching var name with same index
-                    _idx_str = ",".join(str(x) for x in _idx) if isinstance(_idx, tuple) else str(_idx)
+                    # Build the matching var name with same index (+period if the
+                    # rebuild component dropped it).
+                    _parts = list(_idx) if isinstance(_idx, tuple) else [_idx]
+                    if _needs_period:
+                        _parts = _parts + ["shock"]
+                    _idx_str = ",".join(str(x) for x in _parts)
                     _var_name = f"{_var_comp}[{_idx_str}]"
                     _gams_pairs.append((_con.name, _var_name))
             except Exception:
                 pass
+
+        # gtap-mode+ifSUB=1 SUPPLY-BLOCK pairing (omegax=inf).  Replicate GAMS's
+        # declared MCP pairing of the degenerate CET block, verified against the
+        # CONVERT canonical (conv_shock.py, EU_28/USA/ROW × Svces):
+        #   pseq↔ps, xdseq↔xds, pdeq↔pd, xeteq↔xet, peteq↔pet   and   xseq is a
+        #   FREE-ROW (xs==xds+xet, always active).
+        # Python's default Hopcroft-Karp instead pairs the price eqs to the
+        # QUANTITIES (eq_xs→xs, eq_pdeq→xds, eq_peteq→xet), leaving eq_xseq unmatched
+        # → deactivated → the supply balance breaks (xds+xet>xs by +2.6 for
+        # EU_28,Svces) → that region's price level slides -13% to a spurious root
+        # (GAMS's convert violates 71 eqs at Python's point).  Map GAMS eq→Python eq:
+        #   pseq=eq_xs (xs==Σx), xdseq=eq_xds (pd==ps), pdeq=eq_pdeq (xds==Σxda),
+        #   xeteq=eq_xet (pet==ps), peteq=eq_peteq, xseq=eq_xseq.
+        # These are HARD pairs (3rd tuple elem True): the quantity/price rows do not
+        # contain the paired var in their body (the MCP complementarity does), so the
+        # adjacency check must be skipped; PATH's positional pairing tolerates it as
+        # long as the full Jacobian stays nonsingular.
+        if getattr(model, "eq_xweq_shock_ifsub", None) is not None:
+            _omegax = getattr(getattr(params, "elasticities", None), "omegax", {}) or {}
+            _eq_xseq = getattr(model, "eq_xseq", None)
+            if _eq_xseq is not None:
+                # GAMS eq (Python component) -> paired var basename
+                _supply_cycle = [
+                    ("eq_xs",    "ps"),    # pseq ↔ ps
+                    ("eq_xds",   "xds"),   # xdseq ↔ xds
+                    ("eq_pdeq",  "pd"),    # pdeq ↔ pd
+                    ("eq_xet",   "xet"),   # xeteq ↔ xet
+                    ("eq_peteq", "pet"),   # peteq ↔ pet
+                    ("eq_xseq",  "xs"),    # xseq (free-row) ↔ xs
+                ]
+                for _idx in _eq_xseq:
+                    if not (isinstance(_idx, tuple) and len(_idx) == 3
+                            and _idx[-1] == "shock"):
+                        continue
+                    if not _eq_xseq[_idx].active:
+                        continue
+                    _r, _i, _t = _idx
+                    if _omegax.get((_r, _i), float("inf")) != float("inf"):
+                        continue
+                    for _eqn, _varn in _supply_cycle:
+                        _ec = getattr(model, _eqn, None)
+                        _vc = getattr(model, _varn, None)
+                        if _ec is None or _vc is None:
+                            continue
+                        try:
+                            if not _ec[_idx].active:
+                                continue
+                        except (KeyError, TypeError):
+                            continue
+                        _gams_pairs.append(
+                            (f"{_eqn}[{_r},{_i},shock]", f"{_varn}[{_r},{_i},shock]", True))
 
         free_variables = structural_matching(
             constraints, free_variables,
