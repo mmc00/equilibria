@@ -69,12 +69,18 @@ ROWS: list[Row] = [
     Row("gtap7_3x4", "altertax", 1, ("base", "check", "shock"), 99.0, "99.72% (96.46% @0.5%)", "local", "out_altertax_ifsub1.gdx"),
     Row("gtap7_20x41", "altertax", 0, ("base",), None, "blocked: ref violates 37 own eqs", "blocked", "out_altertax_ifsub0.gdx (corrupt)"),
     # --- PURE-gtap (real-CES, non-altertax) multi-period SOLVE gate, local-only ---
-    # Only gtap7_3x3 has out_gtap_shock_ifsub{0,1}.gdx. CHECK exact (100%) both;
-    # SHOCK measured @ tol1%. ifSUB=1 CLOSED 55→98.95% (commit 982e47f): import-wedge
-    # fix (55→76%) + supply-balance pairing fix (76→98.95%; eq_xseq kept as GAMS
-    # free-row + HARD-forced supply-block pairing).
+    # gtap7_3x3: local GAMS (community license fits). gtap7_5x5: GAMS refs generated
+    # via NEOS (job 19755905/6, PATH/MCP — exceeds the 2500-row community limit).
+    # CHECK exact (100%) all rows; SHOCK measured @ tol1%. ifSUB=1 CLOSED 55→98.95%
+    # (3x3) / 98.09% (5x5): import-wedge fix + supply-balance pairing fix (eq_xseq
+    # kept as GAMS free-row + HARD-forced supply-block pairing), gated to gtap-mode.
+    # gtap7_5x5 ifSUB=0 = 64.87%: the SAME supply-balance bug is present under
+    # ifSUB=0 too (3x3 ifSUB=0 passed by structural luck); the fix activates there
+    # but does not yet converge to the GAMS point — OPEN LEAD.
     Row("gtap7_3x3", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "99.70% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx"),
     Row("gtap7_3x3", "gtap_solve", 1, ("base", "check", "shock"), 98.0, "98.95% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx"),
+    Row("gtap7_5x5", "gtap_solve", 0, ("base", "check", "shock"), 60.0, "64.87% (CHECK 100%; supply-block lead open)", "local", "out_gtap_shock_ifsub0.gdx (NEOS)"),
+    Row("gtap7_5x5", "gtap_solve", 1, ("base", "check", "shock"), 97.0, "98.09% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx (NEOS)"),
 ]
 
 
