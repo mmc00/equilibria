@@ -407,12 +407,21 @@ def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
     return deact
 
 
-def apply_squareness_patches(model, params, *, label: str = "") -> dict[str, int]:
-    """Run all post-closure patches in order. Returns counts per patch."""
+def apply_squareness_patches(model, params, *, label: str = "",
+                             protect_xseq: bool = False) -> dict[str, int]:
+    """Run all post-closure patches in order. Returns counts per patch.
+
+    protect_xseq: when True, do NOT deactivate unmatched eq_xseq (the supply
+    balance xs==xds+xet).  Used in gtap-mode+ifSUB=1, where eq_xseq must stay a
+    FREE-ROW (as in GAMS) and the caller instead HARD-forces the GAMS supply-block
+    pairing (pseq↔ps, xdseq↔xds, pdeq↔pd, xeteq↔xet, peteq↔pet, xseq↔xs).  Dropping
+    eq_xseq there breaks the physical balance and lands a spurious root.
+    """
     return {
         "pft_fixed": fix_sluggish_pft(model, params, label=label),
         "xfteq_deact": deactivate_xfteq_for_fixed_mobile(model, params, label=label),
-        "xseq_deact": deactivate_unmatched_xseq(model, params, label=label),
+        "xseq_deact": (0 if protect_xseq
+                       else deactivate_unmatched_xseq(model, params, label=label)),
         "fixed_qty_deact": deactivate_fixed_quantity_eqs(model, label=label),
         "zero_unique_deact": deactivate_zero_unique_var_eqs(model, label=label),
     }
@@ -456,14 +465,23 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
     eq_name_to_row = {c.name: i for i, c in enumerate(constraints)}
     var_name_to_col = {v.name: j for j, v in enumerate(free_vars)}
     if forced_pairs:
-        for eq_name, var_name in forced_pairs:
+        for _fp in forced_pairs:
+            # A forced pair is (eq_name, var_name) or (eq_name, var_name, hard).
+            # hard=True forces the assignment even when var is NOT in the eq body —
+            # this mirrors GAMS's MCP complementarity between a QUANTITY equation and
+            # a PRICE (e.g. pdeq: xds==sum(xd) ⊥ pd), where the price does not appear
+            # in the row body but the market-clearing pins it.  PATH's positional
+            # pairing (F[i]⊥var[i]) tolerates this as long as the full Jacobian is
+            # nonsingular; the price influences the row transitively through demand.
+            eq_name, var_name = _fp[0], _fp[1]
+            hard = len(_fp) > 2 and bool(_fp[2])
             r = eq_name_to_row.get(eq_name)
             c = var_name_to_col.get(var_name)
             if r is None or c is None:
                 if label:
                     print(f"[{label}] matching WARN: forced pair {eq_name}<->{var_name} not found")
                 continue
-            if c not in adjacency[r]:
+            if c not in adjacency[r] and not hard:
                 if label:
                     print(f"[{label}] matching WARN: forced pair {eq_name}<->{var_name} not in adjacency")
                 continue

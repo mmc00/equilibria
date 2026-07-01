@@ -663,20 +663,31 @@ def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
 
     Faithful, surgical fix: rebuild ONLY the shock-slice cells of eq_xweq and eq_pmteq,
     replicating their exact CES rules but with a SHOCKED _m_pm — i.e. the imptx wedge
-    moves base→shocked (mtax/chipm/amw/esubm/lambdam/pmcif Var all preserved). Mirrors
-    GAMS tm.fx = tm.l*1.10; nothing else recalibrated. gtap-mode + ifSUB only.
+    moves base→shocked (mtax/chipm/amw/esubm/lambdam all preserved). Mirrors GAMS
+    tm.fx = tm.l*1.10; nothing else recalibrated. gtap-mode + ifSUB only.
+
+    LINK 2 (export-side pairing): _m_pm must be inlined on the LIVE `pe` Var (via the
+    _m_pefob/_m_pmcif chain), NOT on the `pmcif` Var.  Under ifSUB=1 the MP model does
+    not replicate the single-period `.fix()` on pm/pmcif/pefob and their defining eqs
+    are deactivated, so pmcif is a FREE orphan Var.  Referencing it made the bipartite
+    matcher pair a rebuilt trade eq to pmcif instead of xw/pmt, leaving
+    eq_xweq_shock_ifsub / eq_pmteq_shock_ifsub as free-rows (xw +19%, pmt pinned 1.10,
+    SHOCK ~76%).  Inlining on pe (paired to eq_peeq/eq_peteq) restores the original
+    ifSUB=1 free-variable footprint (xw/xmt/pmt only) so the rebuilt eqs bind — see the
+    _pm_shocked pairing note.  Export prices (pe) then rise with the shock as in GAMS
+    (pe[USA,·,EU_28] base 1.0 → shock 1.02-1.03), which the frozen pmcif dropped.
 
     Returns the count of (eq_xweq + eq_pmteq) shock cells rebuilt.
     """
     from pyomo.environ import Constraint, Set, value as _V
 
-    pmcif = getattr(m, "pmcif", None)
+    _pe_guard = getattr(m, "pe", None)
     pmt = getattr(m, "pmt", None)
     xw = getattr(m, "xw", None)
     xmt = getattr(m, "xmt", None)
     eq_xweq = getattr(m, "eq_xweq", None)
     eq_pmteq = getattr(m, "eq_pmteq", None)
-    if any(c is None for c in (pmcif, pmt, xw, xmt, eq_xweq, eq_pmteq)):
+    if any(c is None for c in (_pe_guard, pmt, xw, xmt, eq_xweq, eq_pmteq)):
         return 0
     imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
     if not imptx_map:
@@ -725,15 +736,106 @@ def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
                 pass
         return 1.0
 
-    # SHOCKED _m_pm as a Pyomo expression in the model's pmcif Var (shock slice):
-    #   pm_shocked(rp,i,r) = (1 + imptx_shocked + mtax)/chipm · pmcif[rp,i,r,shock]
+    # Export-price macro operands.  Under ifSUB=1 GAMS substitutes pm/pmcif/pefob
+    # OUT entirely — they are NOT solved variables (model.gms $macro 1222-1225 and
+    # the commented pmeq.pm/pmcifeq.pmcif/pefobeq.pefob in the model statement).
+    # _m_pm is the fully-inlined chain, verified against the CONVERT canonical Pyomo
+    # (conv_shock.py e544/e553):
+    #   _m_pefob(r,i,rp) = (1 + rtxs + etax)·pe[r,i,rp]
+    #   _m_pwmg(r,i,rp)  = Σ_m amgm[m,r,i,rp]·ptmg[m] / lambdamg[m,r,i,rp]   (ptmg LIVE)
+    #   _m_pmcif(r,i,rp) = _m_pefob + _m_pwmg·tmarg[r,i,rp]
+    #   _m_pm(r,i,rp)    = (1 + imptx_shocked + mtax)/chipm · _m_pmcif
+    # The ONLY live Vars in this chain are pe (paired to eq_peeq/eq_peteq) and ptmg
+    # (paired to eq_ptmg) — both already determined by their own equations, so the
+    # rebuilt trade eqs keep the correct free-variable footprint (xw/xmt/pmt) and pair
+    # to xw/pmt.  rtxs/etax/amgm/lambdamg/tmarg are exogenous (read at value); imptx
+    # carries the tm_pct shock.  pm/pmcif/pefob are NOT referenced (GAMS has no such
+    # variables under ifSUB=1) — a prior draft that referenced the orphan pmcif Var
+    # made the matcher steal a trade eq for it (free-rows, xw +19%).
+    pe = getattr(m, "pe", None)
+    ptmg = getattr(m, "ptmg", None)
+    _tmarg = getattr(m, "tmarg", None)
+    _amgm = getattr(m, "amgm", None)
+    _lambdamg = getattr(m, "lambdamg", None)
+    modes = list(getattr(m, "m", []) or [])
+
+    def _export_tax(rp, i, r):
+        rtxs = getattr(getattr(params, "taxes", None), "rtxs", {}) or {}
+        return float(rtxs.get((rp, i, r), 0.0) or 0.0)
+
+    _etax = getattr(m, "etax", None)
+
+    def _etax_val(rp, i):
+        # GAMS etax(r,i) indexed by exporter + commodity only.
+        if _etax is None:
+            return 0.0
+        for key in ((rp, i, "shock"), (rp, i)):
+            try:
+                return float(_V(_etax[key]))
+            except Exception:
+                pass
+        return 0.0
+
+    def _tmarg_val(rp, i, r):
+        if _tmarg is None:
+            return 0.0
+        for key in ((rp, i, r, "shock"), (rp, i, r)):
+            try:
+                return float(_V(_tmarg[key]))
+            except Exception:
+                pass
+        return 0.0
+
+    def _amgm_val(mode, rp, i, r):
+        if _amgm is None:
+            return 0.0
+        for key in ((mode, rp, i, r, "shock"), (mode, rp, i, r)):
+            try:
+                return float(_V(_amgm[key]))
+            except Exception:
+                pass
+        return 0.0
+
+    def _lambdamg_val(mode, rp, i, r):
+        if _lambdamg is None:
+            return 1.0
+        for key in ((mode, rp, i, r, "shock"), (mode, rp, i, r)):
+            try:
+                v = float(_V(_lambdamg[key]))
+                return v if abs(v) > 1e-12 else 1.0
+            except Exception:
+                pass
+        return 1.0
+
+    def _pwmg_expr(rp, i, r):
+        # _m_pwmg = Σ_m amgm·ptmg[m]/lambdamg  (ptmg = LIVE margin-price Var).
+        if ptmg is None or not modes:
+            return 0.0
+        terms = []
+        for mode in modes:
+            amgm = _amgm_val(mode, rp, i, r)
+            if amgm == 0.0:
+                continue
+            try:
+                pt = ptmg[mode, "shock"]
+            except (KeyError, TypeError):
+                continue
+            terms.append(amgm * pt / _lambdamg_val(mode, rp, i, r))
+        return sum(terms) if terms else 0.0
+
+    # SHOCKED _m_pm as a Pyomo expression on the LIVE pe (and ptmg) Vars:
+    #   _m_pefob = (1 + rtxs + etax)·pe[rp,i,r,shock]
+    #   _m_pmcif = _m_pefob + _m_pwmg·tmarg
+    #   _pm_shocked = (1 + imptx_shocked + mtax)/chipm · _m_pmcif
     def _pm_shocked(rp, i, r):
         imptx_s = imptx_map.get((rp, i, r))
-        if imptx_s is None:
+        if imptx_s is None or pe is None:
             return None
         mtax = _mtax_val(r, i)
         chipm = _chipm_val(rp, i, r)
-        return ((1.0 + float(imptx_s) + mtax) / chipm) * pmcif[rp, i, r, "shock"]
+        pefob = (1.0 + _export_tax(rp, i, r) + _etax_val(rp, i)) * pe[rp, i, r, "shock"]
+        pmcif = pefob + _pwmg_expr(rp, i, r) * _tmarg_val(rp, i, r)
+        return ((1.0 + float(imptx_s) + mtax) / chipm) * pmcif
 
     # --- eq_xweq: xw = amw·xmt·(pmt/pm)^esubm·lambdam^(esubm-1) ---
     xweq_cells = []
