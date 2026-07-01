@@ -337,6 +337,23 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
         mp.build_equations_fisher(m)
         m._residual_region = rr
         mp.seed_all_periods(m, gdx_path)
+        m._gtap_mode = True
+        # CRITICAL for the shock period: the pure-gtap tariff shock is NOT a param
+        # multiply before build — the DRIVER injects it into the shock-slice equations
+        # at solve time (_rebuild_eq_pmeq_shock / _rebuild_import_demand_shock_ifsub /
+        # _rebuild_eq_ytax_mt_shock).  A fresh built model has those eqs in BASE form,
+        # so evaluating the residual at shocked seed values fabricates phantom residuals
+        # on everything tariff-dependent (eq_pmeq/eq_ytax[mt]/eq_xweq).  Replicate the
+        # driver's shock injection here so the residual reflects the ACTUAL shock system.
+        if period == "shock":
+            import copy as _copy
+            from equilibria.templates.gtap import gtap_multiperiod_driver as _drv
+            p_shock = _copy.deepcopy(p)
+            _drv._apply_imptx_shock(p_shock, 0.10, gtap_mode=True)
+            _n_pmeq = _drv._rebuild_eq_pmeq_shock(m, p_shock)
+            if not _n_pmeq:  # ifSUB=1 leg: eq_pmeq inactive, inject into eq_xweq/eq_pmteq
+                _drv._rebuild_import_demand_shock_ifsub(m, p, p_shock)
+            _drv._rebuild_eq_ytax_mt_shock(m, p_shock)
         return p, gc, m
 
     # 1) Build + seed + SOLVE the full multi-period gtap model.
