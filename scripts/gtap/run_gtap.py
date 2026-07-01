@@ -2061,11 +2061,12 @@ def _run_path_capi_nonlinear_full(
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _closure_patches import apply_squareness_patches  # type: ignore
-    # gtap-mode+ifSUB=1: keep eq_xseq (supply balance, a GAMS free-row) active; the
-    # GAMS supply-block pairing is HARD-forced in structural_matching below instead.
-    _protect_xseq = getattr(model, "eq_xweq_shock_ifsub", None) is not None
+    # pure-gtap mode (both ifSUB): keep eq_xseq (supply balance, a GAMS free-row)
+    # active; the GAMS supply-block pairing is HARD-forced in structural_matching
+    # below instead.  Gated on the driver's _gtap_mode flag (altertax unaffected).
+    _gtap_mode = bool(getattr(model, "_gtap_mode", False))
     apply_squareness_patches(model, params, label="nonlinear-full",
-                             protect_xseq=_protect_xseq)
+                             protect_xseq=_gtap_mode)
 
     # Mirror GAMS holdfixed=1: yi[rres] has no MCP pair (yieq is skipped for
     # residual region). Without explicit fixing, yi[rres] floats freely in
@@ -2397,7 +2398,7 @@ def _run_path_capi_nonlinear_full(
         # contain the paired var in their body (the MCP complementarity does), so the
         # adjacency check must be skipped; PATH's positional pairing tolerates it as
         # long as the full Jacobian stays nonsingular.
-        if getattr(model, "eq_xweq_shock_ifsub", None) is not None:
+        if bool(getattr(model, "_gtap_mode", False)):
             _omegax = getattr(getattr(params, "elasticities", None), "omegax", {}) or {}
             _eq_xseq = getattr(model, "eq_xseq", None)
             if _eq_xseq is not None:

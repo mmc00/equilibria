@@ -1726,6 +1726,13 @@ def solve_multiperiod(
 
     # Store reference to m on itself for residual_region use
     m._residual_region = res_region
+    # Flag pure-gtap (real-CES) mode so the solver's supply-block pairing fix fires
+    # for BOTH ifSUB modes (not just the ifSUB=1 rebuild sentinel).  Under gtap-mode
+    # eq_xseq (the supply balance) must stay a GAMS free-row + the supply-block
+    # pairing HARD-forced; the matcher otherwise deactivates eq_xseq and slides the
+    # region's price level (5x5 ifSUB=0 without this = 64.87%; 3x3 ifSUB=0 passed by
+    # luck).  altertax does NOT set this → its matching is byte-unchanged.
+    m._gtap_mode = bool(_gtap_mode)
 
     # ── Phase 1: BASE period ─────────────────────────────────────────────────
     # Freeze check and shock periods; leave base free.
