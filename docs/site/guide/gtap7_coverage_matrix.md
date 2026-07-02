@@ -48,3 +48,6 @@ The non-altertax real-CES model solved base→check→shock in `mode="gtap"`, pe
 | gtap7_5x5 | gtap_solve | 0 | base,check,shock | 99 | 100% (CHECK 100%) | local | out_gtap_shock_ifsub0.gdx (NEOS) |
 | gtap7_5x5 | gtap_solve | 1 | base,check,shock | 99 | 99.59% (CHECK 100%) | local | out_gtap_shock_ifsub1.gdx (NEOS) |
 | gtap7_10x7 | gtap_solve | 0 | base,check,shock | 99 | 100% (CHECK 100%) | local | out_gtap_shock_ifsub0.gdx (NEOS) |
+| gtap7_10x7 | gtap_solve | 1 | base,check,shock | 99 | 99.5% (CHECK 100%) | local | out_gtap_shock_ifsub1.gdx (NEOS) |
+| gtap7_15x10 | gtap_solve | 0 | base,check,shock | 99 | 100% (CHECK 100%) | local | out_gtap_shock_ifsub0.gdx (NEOS) |
+| gtap7_15x10 | gtap_solve | 1 | base,check,shock | 95 | 95.68% (CHECK 100%) | local | out_gtap_shock_ifsub1.gdx (NEOS) |

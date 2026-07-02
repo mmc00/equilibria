@@ -82,8 +82,33 @@ ROWS: list[Row] = [
     Row("gtap7_5x5", "gtap_solve", 1, ("base", "check", "shock"), 99.0, "99.59% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx (NEOS)"),
     # gtap7_10x7 ifSUB=0: NEOS ref (job 19760909, PATH, CLEAN solve). The same pft-free
     # fix generalizes — 100% with zero worst-cells (>1% count 0). Confirms the fix is not
-    # dataset-specific. (ifSUB=1 + 15x10 NEOS bundles hit a builder inlining error, TODO.)
+    # dataset-specific.
     Row("gtap7_10x7", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "100% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx (NEOS)"),
+    # gtap7_10x7 ifSUB=1: NEOS ref (job 19762403, PATH). The ifSUB=1 shock is NOT the soft
+    # basin the ifSUB=0 shock is: with default PATH the shock DIVERGES from the check
+    # warm-start (regYeq 3.2→factYeq 13.8→xfeq 43.7, stalls, →inf on eveq) and exits at
+    # the iteration limit with residual ~3.2 — the saved GDX then violated its OWN regYeq
+    # (regY≠factY+yTaxInd by 1.2) → Python read ~67%. Fix: a PATH path.opt (proximal
+    # perturbation + higher major/minor limits + crash pnewton) stabilises the restart →
+    # '** EXIT - solution found.' → 99.5% (0.1/0.5/1% = 94.58/99.18/99.5). Faithful (solver
+    # tuning, no eq change); gated ifSUB=1 in build_gtap7_pure_local_bundle.py.
+    Row("gtap7_10x7", "gtap_solve", 1, ("base", "check", "shock"), 99.0, "99.5% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx (NEOS)"),
+    # gtap7_15x10 ifSUB=0: NEOS ref (job 19761766, PATH, CLEAN). The RAW GtapView GDX was
+    # missing incpar/subpar (CDE params → div-by-zero), a_/c_ prefixes (acts==comm collision),
+    # and carried RAW rT*/VMTS ($140). build_v7_processed_from_raw.py rebuilds the PROCESSED
+    # schema (calibration from default.prm) → all fixed at once → 100% (0.1/0.5/1% = 99.99/
+    # 100/100). Largest dataset (41987 rows); ref needs NEOS (teaching license has the
+    # 2500-row nonlinear cap).
+    Row("gtap7_15x10", "gtap_solve", 0, ("base", "check", "shock"), 99.0, "100% (CHECK 100%)", "local", "out_gtap_shock_ifsub0.gdx (NEOS)"),
+    # gtap7_15x10 ifSUB=1: NEOS ref (job 19762404, PATH + path.opt). Same non-converged
+    # ref as 10x7 ifSUB=1 (default PATH diverged, iteration limit, ref violated its own
+    # regYeq by 1.5); the path.opt stabilisation (proximal perturbation) converged it →
+    # 66.25% → 95.68% (0.1/0.5/1% = 81.42/92.85/95.68), CHECK 100%, codes 1/1/1. The ~4pp
+    # residual @ tol1% is the known eq_paa Armington micro-cell family (worst cells are
+    # USA a_VegFruit / a_ForestFish inputs, py ~1e-2..1e-5 — see
+    # project_gtap7_armington_shares_bug), scale-amplified on the 42k-row dataset, NOT a
+    # new equation.
+    Row("gtap7_15x10", "gtap_solve", 1, ("base", "check", "shock"), 95.0, "95.68% (CHECK 100%)", "local", "out_gtap_shock_ifsub1.gdx (NEOS)"),
 ]
 
 

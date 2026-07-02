@@ -85,6 +85,58 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
     return text.replace(old_block, new_block, 1)
 
 
+def _inject_path_opt_for_shock(text: str) -> str:
+    """Attach a PATH `path.opt` to the shock `solve gtap using mcp` (ifSUB=1).
+
+    The ifSUB=1 shock on the large datasets (10x7, 15x10) is NOT the "soft basin"
+    the ifSUB=0 / small-dataset shock is: with the default PATH settings PATH
+    DIVERGES from the check warm-start — the residual climbs (regYeq 3.2 → factYeq
+    13.8 → xfeq 43.7), stalls on `xfeq(USA,SkLab,Manuf)` at 34.15 for three majors,
+    then blows to inf on `eveq(USA,hhd)` and quits with `** EXIT - iteration limit`
+    at residual ~3-4 (verified in NEOS jobs 19761836/7 solve.log).  The saved out.gdx
+    is that non-converged point, so it violates its OWN regYeq (regY ≠ factY+yTaxInd
+    by 1.2-1.5) — that is what made Python's parity read ~66% against it.
+
+    The faithful fix is solver STABILISATION, not a model change: a proximal
+    perturbation to damp the diverging Newton steps, plus higher major/minor limits
+    and a better crash so PATH can climb out of the stall.  This is standard PATH
+    tuning for a hard MCP restart; it changes no equation and hardcodes no value.
+
+    Gated to ifSUB=1 (the ifSUB=0 bundle is byte-identical and already converges to
+    a 100%-parity out.gdx — do not perturb it).
+    """
+    opt_lines = "\n".join([
+        "convergence_tolerance 1e-9",
+        "major_iteration_limit 2000",
+        "minor_iteration_limit 100000",
+        "cumulative_iteration_limit 1000000",
+        "proximal_perturbation 1e-2",
+        "crash_method pnewton",
+        "crash_perturb yes",
+        "nms_initial_reference_factor 2",
+        "gradient_step_limit 20",
+        "restart_limit 5",
+        "lemke_start automatic",
+        "time_limit 3600",
+    ])
+    optfile_block = (
+        "\n* === PATH stabilisation for the ifSUB=1 shock restart (see\n"
+        "* === _inject_path_opt_for_shock): default PATH diverges from the check\n"
+        "* === warm-start on the large datasets; a proximal perturbation + higher\n"
+        "* === iteration limits let it converge.  Faithful (solver tuning, no eq change).\n"
+        "$onecho > path.opt\n"
+        f"{opt_lines}\n"
+        "$offecho\n"
+        "   gtap.optfile = 1 ;\n"
+    )
+    anchor = "   options limrow = 3, limcol = 3, solprint = off, iterlim = 1000 ;"
+    if text.count(anchor) != 1:
+        raise SystemExit(
+            f"Expected exactly 1 shock-solve options anchor, found {text.count(anchor)}."
+        )
+    return text.replace(anchor, anchor + "\n" + optfile_block, 1)
+
+
 def _force_ifsub(text: str, ifsub: int) -> str:
     """Force the ifSUB compile-time switch to a fixed value.
 
@@ -277,6 +329,13 @@ def main() -> None:
 
     # Apply the tm_pct tariff shock (replaces the numeraire pnum.fx jump).
     inlined = _patch_shock_to_tariff(inlined, tariff_increase=args.tariff)
+
+    # ifSUB=1 only: attach a PATH path.opt to stabilise the diverging shock restart
+    # (default PATH hits the iteration limit at residual ~3-4, saving a non-converged
+    # out.gdx that violates its own regYeq).  ifSUB=0 stays byte-identical.
+    if ifsub == 1:
+        inlined = _inject_path_opt_for_shock(inlined)
+        print("  injected PATH path.opt for the ifSUB=1 shock restart")
 
     out_gms = out_dir / f"comp_{dataset}_gtap_shock_ifsub{ifsub}.gms"
     out_gms.write_text(inlined)
