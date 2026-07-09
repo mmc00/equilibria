@@ -161,8 +161,24 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
 
 
 def _get_dataset_sets(gdx_path: Path) -> dict:
-    """Read reg/comm/endw sets from consolidated GDX."""
-    import gams.transfer as gt
+    """Read reg/comm/endw sets from consolidated GDX.
+
+    Prefers gams.transfer (real GAMS install) when available; falls back to
+    equilibria's pure-Python GDX reader (no GAMS install required) otherwise.
+    """
+    try:
+        import gams.transfer as gt
+    except ImportError:
+        from equilibria.babel.gdx.reader import read_gdx, read_set_elements, get_symbol
+        d = read_gdx(str(gdx_path))
+
+        def _read(name: str) -> list[str]:
+            # v7_consolidated.gdx uses uppercase canonical GAMS set names
+            # (REG/COMM/ENDW); solved out.gdx fixtures use lowercase.
+            actual = name if get_symbol(d, name) is not None else name.upper()
+            return [t[0] for t in read_set_elements(d, actual)]
+
+        return {"reg": _read("reg"), "comm": _read("comm"), "endw": _read("endw")}
     c = gt.Container(str(gdx_path), system_directory=GAMS_SYS)
     return {
         "reg":  list(c["reg"].records["uni"].values),

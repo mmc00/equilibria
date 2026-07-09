@@ -1089,9 +1089,26 @@ class GTAPBenchmarkValues:
         """
         import itertools
 
-        if header not in har_data:
-            return {}
-        arr = har_data[header].array
+        # HAR headers are conventionally case-insensitive 4-char codes, but
+        # different GEMPACK export tools capitalize them differently —
+        # basedata.har ships pure-uppercase (VDFB, VDPP...) while
+        # baserate.har ships mixed-case (rTFD, rTMS, rTIN...). A plain `in`
+        # check against a caller-supplied uppercase name (e.g. "RTFD")
+        # silently misses the mixed-case key and returns {} — which is how
+        # rtfd/rtfi/rtf/rtms/rtxs went unnoticed as always-empty for any
+        # dataset shipping a baserate.har (confirmed: gtap7_15x10 has real,
+        # sizeable RTFD/FTRV data that this made invisible, producing a
+        # false-zero ytax('ft') stream vs GAMS's genuinely non-zero one).
+        if header in har_data:
+            resolved = header
+        else:
+            match = next(
+                (k for k in har_data if k.upper() == header.upper()), None
+            )
+            if match is None:
+                return {}
+            resolved = match
+        arr = har_data[resolved].array
         _SET_MAP: dict = {
             "REG": sets.r, "COMM": sets.i, "ACTS": sets.a,
             "ENDW": sets.f, "MARG": sets.marg,

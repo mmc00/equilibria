@@ -42,6 +42,7 @@ little-endian; let q = offset just past the name bytes:
 from __future__ import annotations
 
 import struct
+import zlib
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -72,6 +73,126 @@ SYMBOL_TYPE_NAMES: dict[int, str] = {
 }
 
 
+# zlib stream first byte (CMF): low nibble 8 = deflate method, common GDX values.
+_ZLIB_CMF_CANDIDATES: bytes = bytes([0x78])
+_ZLIB_FLG_CANDIDATES: bytes = bytes([0x9C, 0x01, 0xDA, 0x5E, 0x1D])
+
+
+def _decompress_gdx_sections(data: bytes) -> bytes:
+    """
+    Expand a zlib-per-section GDX (v7, above some internal size threshold) into
+    an equivalent uncompressed byte layout that the marker-scanning readers
+    below can parse unmodified.
+
+    GAMS switches to compressing each section (_SYMB_, _UEL_, _DATA_, _DOMS_...)
+    independently with raw zlib once the file crosses a size threshold — the
+    section markers themselves become invisible to a plain byte search. Detect
+    every zlib stream start (CMF/FLG header bytes), decompress each one, and
+    splice the decompressed bytes back into the buffer at the same relative
+    position (preserving any uncompressed spans verbatim). If no zlib streams
+    are found, the input is returned unchanged (uncompressed GDX, the common
+    case for small files) — this makes the pre-pass a no-op safe to always run.
+
+    Args:
+        data: Raw bytes of a .gdx file.
+
+    Returns:
+        Bytes with every detected zlib section replaced by its decompressed
+        content. Byte-identical to `data` if no zlib streams were detected.
+    """
+    candidates: list[int] = []
+    start = 0
+    while True:
+        p = data.find(_ZLIB_CMF_CANDIDATES, start)
+        if p == -1:
+            break
+        if p + 1 < len(data) and data[p + 1] in _ZLIB_FLG_CANDIDATES:
+            candidates.append(p)
+        start = p + 1
+
+    if not candidates:
+        return data
+
+    spans: list[tuple[int, int, bytes]] = []
+    last_end = 0
+    for p in candidates:
+        if p < last_end:
+            continue  # inside a previously-consumed stream
+        try:
+            decompressor = zlib.decompressobj()
+            out = decompressor.decompress(data[p:])
+            consumed = len(data) - p - len(decompressor.unused_data)
+        except zlib.error:
+            continue
+        if len(out) < 4:
+            continue
+        spans.append((p, p + consumed, out))
+        last_end = p + consumed
+
+    if not spans:
+        return data
+
+    out_buf = bytearray()
+    cursor = 0
+    for span_start, span_end, decompressed in spans:
+        out_buf += data[cursor:span_start]
+        out_buf += decompressed
+        cursor = span_end
+    out_buf += data[cursor:]
+    return bytes(out_buf)
+
+
+_raw_cache: dict[str, bytes] = {}
+_expanded_cache: dict[str, bytes] = {}
+
+
+def _read_gdx_bytes(filepath: str) -> bytes:
+    """
+    Read a .gdx file's RAW (on-disk) bytes, with a small per-filepath cache
+    (the value-reader entry points below each re-read the file independently,
+    once per symbol lookup).
+
+    NOTE: these are the raw bytes, NOT zlib-expanded — ``data_offset``
+    (recorded per-symbol in the symbol table) is always relative to this raw
+    layout, for both compressed and uncompressed GDX. Use
+    ``_section_at_offset`` to resolve a symbol's _DATA_ section from these
+    bytes (it handles the per-symbol zlib-stream case itself). Use
+    ``_read_gdx_expanded`` instead when you need whole-file marker scanning
+    (symbol table / UEL / domains).
+
+    Args:
+        filepath: Path to the GDX file (string key, as stored in gdx_data).
+
+    Returns:
+        Raw file bytes.
+    """
+    cached = _raw_cache.get(filepath)
+    if cached is not None:
+        return cached
+    raw = Path(filepath).read_bytes()
+    _raw_cache[filepath] = raw
+    return raw
+
+
+def _read_gdx_expanded(filepath: str) -> bytes:
+    """
+    Read a .gdx file and return it with every per-section zlib stream
+    decompressed and spliced back in place, for whole-file marker scanning
+    (symbol table / UEL / domains). See ``_decompress_gdx_sections``.
+
+    NOT suitable for per-symbol _DATA_ lookups by ``data_offset`` — those
+    offsets are relative to the RAW file, and splicing shifts everything
+    after the first compressed span. Use ``_read_gdx_bytes`` +
+    ``_section_at_offset`` for that.
+    """
+    cached = _expanded_cache.get(filepath)
+    if cached is not None:
+        return cached
+    expanded = _decompress_gdx_sections(_read_gdx_bytes(filepath))
+    _expanded_cache[filepath] = expanded
+    return expanded
+
+
 def read_gdx(filepath: str | Path) -> dict[str, Any]:
     """
     Read a GDX file and return its contents.
@@ -97,10 +218,11 @@ def read_gdx(filepath: str | Path) -> dict[str, Any]:
     if not filepath.suffix.lower() == ".gdx":
         raise ValueError(f"Expected .gdx file, got: {filepath.suffix}")
 
-    with open(file=filepath, mode="rb") as f:
-        data: bytes = f.read()
+    filepath_str = str(filepath)
+    raw: bytes = _read_gdx_bytes(filepath_str)
 
-    header: dict[str, Any] = read_header_from_bytes(data)
+    header: dict[str, Any] = read_header_from_bytes(raw)
+    data: bytes = _read_gdx_expanded(filepath_str)
     symbols: list[dict[str, Any]] = read_symbol_table_from_bytes(data)
     elements: list[str] = read_uel_from_bytes(data)
     domains: list[str] = read_domains_from_bytes(data)
@@ -643,8 +765,8 @@ def read_parameter_values(
     if not filepath:
         raise ValueError("GDX data missing filepath - cannot read raw bytes")
 
-    # Read raw bytes
-    raw_data: bytes = Path(filepath).read_bytes()
+    # Read raw bytes (transparently decompressed if zlib-per-section)
+    raw_data: bytes = _read_gdx_bytes(filepath)
 
     # Parameters keep the positional section lookup: their decoder is tuned to the
     # boundary read_data_sections produces. (The data_offset slice is used only by
@@ -1589,17 +1711,42 @@ def _build_index_tuple_with_offsets(
 # =============================================================================
 
 
-def _section_at_offset(data: bytes, data_offset: int) -> bytes:
+def _section_at_offset(raw_data: bytes, data_offset: int) -> bytes:
     """Return the _DATA_ section bytes for the symbol at ``data_offset``.
 
-    The marker is the 7-byte pascal-prefixed ``b"\\x06_DATA_"``; the section
-    payload starts immediately after it and runs to the next marker / EOF. We
-    over-slice to the next ``_DATA_`` occurrence (the per-record EOF byte 0xFF
-    bounds decoding, so a generous slice is safe)."""
-    start = data_offset + 7
-    nxt = data.find(b"_DATA_", start)
-    end = (nxt - 1) if nxt != -1 else len(data)  # -1 drops the pascal-prefix byte
-    return data[start:end]
+    ``data_offset`` is always a byte offset into the file's RAW (on-disk, not
+    zlib-expanded) bytes — this holds for both compressed and uncompressed
+    GDX. Two layouts:
+
+    - Uncompressed: ``data_offset`` points directly at the 7-byte
+      pascal-prefixed marker ``b"\\x06_DATA_"``; the section payload starts
+      immediately after it and runs to the next marker / EOF (over-sliced;
+      the per-record 0xFF EOF byte bounds decoding, so a generous slice is
+      safe).
+    - Compressed (GDX above GAMS's per-section zlib threshold — see
+      ``_decompress_gdx_sections``): each symbol's _DATA_ section is its OWN
+      independent zlib stream, NOT part of one shared expanded buffer (a
+      naive whole-file splice desyncs every offset after the first
+      compressed span). ``data_offset + 3`` (a 3-byte tag we don't decode)
+      is the zlib stream start; decompressing it directly yields the same
+      pascal-prefixed ``b"\\x06_DATA_"`` marker, self-terminated by the
+      stream's own EOF (no next-marker search needed or possible — the next
+      bytes in the raw file belong to a DIFFERENT compressed stream).
+    """
+    if raw_data[data_offset : data_offset + 7] == b"\x06_DATA_":
+        start = data_offset + 7
+        nxt = raw_data.find(b"_DATA_", start)
+        end = (nxt - 1) if nxt != -1 else len(raw_data)  # -1 drops the pascal-prefix byte
+        return raw_data[start:end]
+
+    try:
+        decompressor = zlib.decompressobj()
+        out = decompressor.decompress(raw_data[data_offset + 3 :])
+    except zlib.error:
+        return b""
+    if out[:7] != b"\x06_DATA_":
+        return b""
+    return out[7:]
 
 
 def read_variable_values(
@@ -1640,8 +1787,8 @@ def read_variable_values(
     if not filepath:
         raise ValueError("GDX data missing filepath - cannot read raw bytes")
 
-    # Read raw bytes
-    raw_data: bytes = Path(filepath).read_bytes()
+    # Read raw bytes (transparently decompressed if zlib-per-section)
+    raw_data: bytes = _read_gdx_bytes(filepath)
 
     # Locate this symbol's _DATA_ section by its own data_offset (positional
     # indexing is wrong: there are fewer _DATA_ sections than symbols).
@@ -1691,8 +1838,8 @@ def read_equation_values(
     if not filepath:
         raise ValueError("GDX data missing filepath - cannot read raw bytes")
 
-    # Read raw bytes
-    raw_data: bytes = Path(filepath).read_bytes()
+    # Read raw bytes (transparently decompressed if zlib-per-section)
+    raw_data: bytes = _read_gdx_bytes(filepath)
 
     # Locate this symbol's _DATA_ section by its own data_offset (positional
     # indexing is wrong: there are fewer _DATA_ sections than symbols).
@@ -1846,264 +1993,99 @@ def read_set_elements(
     if dimension == 0 or records == 0:
         return []
 
-    # Read raw bytes
-    raw_data: bytes = Path(filepath).read_bytes()
-
-    # Find the _DATA_ section for this symbol
-    symbols: list[dict[str, Any]] = gdx_data["symbols"]
-    symbol_index: int = -1
-    for i, sym in enumerate(symbols):
-        if sym["name"] == set_name:
-            symbol_index = i
-            break
-
-    if symbol_index == -1:
-        return []
-
-    # Get data sections
-    data_sections = read_data_sections(raw_data)
-    if symbol_index >= len(data_sections):
-        return []
-
-    _, section = data_sections[symbol_index]
+    # Locate the section by data_offset (not positional read_data_sections
+    # indexing — there are fewer _DATA_ sections than symbols, and on a
+    # zlib-per-section GDX each symbol's section is its own independent
+    # compressed stream; _section_at_offset handles both layouts).
+    raw_data: bytes = _read_gdx_bytes(filepath)
+    section = _section_at_offset(raw_data, symbol["data_offset"])
     elements: list[str] = gdx_data.get("elements", [])
 
-    # Calculate domain offsets
-    domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
-
-    return _decode_set_section(section, elements, dimension, domain_offsets, records)
+    return _decode_set_section(section, elements, dimension, records)
 
 
 def _decode_set_section(
     section: bytes,
     elements: list[str],
     dimension: int,
-    domain_offsets: list[int],
     expected_records: int,
 ) -> list[tuple[str, ...]]:
     """
     Decode a _DATA_ section for a set.
 
-    Sets store index tuples. The format can be complex, so we use a pragmatic
-    approach: for 1D sets, we take the first N elements from the UEL that
-    correspond to the set's domain. For multi-dimensional sets, we parse the
-    binary structure.
+    Same key-delta scheme as ``_decode_variable_section`` (see its docstring
+    for the byte-verified format), except a set record carries ONE trailing
+    marker byte (the element's optional explanatory-text field — 0x05 =
+    empty/no text, matching ``_VALUE_SPECIAL``) instead of the 5 numeric
+    value fields a variable/equation record carries. Header:
+    ``dim u8 | -1 i32 | dim×(minElem i32, maxElem i32)``, then per record a
+    key-delta byte (identical scheme to ``decode_parameter_delta``) followed
+    by the 1-byte text marker. 0xFF ends the section. Verified byte-exact
+    against gdxdump-known set contents (reg/comm/t/endw/mapa0, both a plain
+    and a zlib-per-section-compressed GDX).
 
     Args:
-        section: Raw bytes of the _DATA_ section.
+        section: Raw bytes of the _DATA_ section (marker already stripped).
         elements: UEL elements list.
-        dimension: Set dimension (1, 2, 3, etc.).
-        domain_offsets: Offset in UEL for each dimension.
-        expected_records: Number of records expected in the set.
+        dimension: Set dimension (1, 2, 3, ...).
+        expected_records: Number of records expected in the set (unused for
+            decoding — the stream is self-terminating via 0xFF — kept for
+            the empty-section short-circuit and API compatibility).
 
     Returns:
         List of index tuples representing set elements.
     """
     result: list[tuple[str, ...]] = []
-
-    if len(section) < 20 or expected_records == 0:
+    if not section or expected_records == 0:
         return result
 
-    # For 1D sets, use a simple approach: take elements from the UEL
-    # starting at the domain offset
-    if dimension == 1 and len(domain_offsets) > 0:
-        start_idx = domain_offsets[0]
-        end_idx = start_idx + expected_records
-        for i in range(start_idx, min(end_idx, len(elements))):
-            result.append((elements[i],))
-        return result
+    pos = 0
+    dim = section[pos]
+    pos += 1
+    pos += 4  # skip the -1 lead sentinel (i32)
 
-    # For multi-dimensional sets, parse the binary structure  
-    # Format patterns discovered through reverse engineering:
-    # 2D: 01 <dim1> 00 00 00 <dim2_int32> 05 [<delta+2> 05]...
-    # 3D: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> 05 [<delta+2> 05]...
-    # 4D: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> <dim4_int32> 05 [<delta+2> 05]...
-    # First tuple has full int32s, subsequent tuples in same row use delta encoding
-    pos: int = 19  # Skip header
-    current_indices: list[int] = []  # Current tuple being built (0-based indices)
+    mins: list[int] = []
+    sizes: list[int] = []
+    for _ in range(dim):
+        mn = struct.unpack_from("<i", section, pos)[0]
+        pos += 4
+        mx = struct.unpack_from("<i", section, pos)[0]
+        pos += 4
+        mins.append(mn)
+        sizes.append(get_integer_size(mx - mn + 1))
 
-    while pos < len(section) - 1:
-        # Look for tuple start: 01 <dim1> 00 00 00
-        if (section[pos] == RECORD_ROW_START and 
-            pos + 4 < len(section) and
-            section[pos + 2] == 0x00 and
-            section[pos + 3] == 0x00 and
-            section[pos + 4] == 0x00):
-            
-            dim1_idx = section[pos + 1] - 1  # Convert from 1-based to 0-based
-            
-            if dim1_idx >= len(elements):
-                pos += 1
-                continue
-            
-            # For 2D: read 1 int32 (dim2)
-            # For 3D: read 2 int32s (dim2, dim3)
-            # For 4D: read 3 int32s (dim2, dim3, dim4)
-            num_int32s = dimension - 1
-            bytes_needed = 5 + (num_int32s * 4) + 1  # header(5) + int32s + marker(1)
-            
-            if pos + bytes_needed > len(section):
-                pos += 1
-                continue
-            
-            try:
-                indices = [dim1_idx]
-                
-                # Read int32 values for remaining dimensions
-                for i in range(num_int32s):
-                    offset = pos + 5 + (i * 4)
-                    dim_idx_1based = struct.unpack_from("<I", section, offset)[0]
-                    
-                    if dim_idx_1based < 1 or dim_idx_1based > len(elements):
-                        raise ValueError("Invalid index")
-                    
-                    indices.append(dim_idx_1based - 1)
-                
-                # Check for marker after all int32s
-                marker_pos = pos + 5 + (num_int32s * 4)
-                marker = section[marker_pos]
-                
-                if marker not in (0x05, 0x06):
-                    pos += 1
-                    continue
-                
-                # Validate all indices and create tuple
-                if all(idx < len(elements) for idx in indices):
-                    tuple_elem = tuple(elements[idx] for idx in indices)
-                    result.append(tuple_elem)
-                    current_indices = indices
-                    pos += bytes_needed
-                    continue
-                    
-            except (struct.error, ValueError):
-                pass
-        
-        # Look for additional tuples using delta encoding
-        # Pattern: <delta_byte> 05 means update dimension(s)
-        # The delta_byte encodes which dimension changes and by how much
-        # For 2D: delta_byte >= 2 means increment last dim by (delta_byte - 2)
-        # For 3D+: delta_byte indicates DimFrst (first changing dimension)
-        # For 4D: [delta_byte] [byte] [int32_dim3] [int32_dim4] [padding] [marker]
-        elif (len(current_indices) == dimension and
-              pos + 1 < len(section)):
-            
-            # Check if this looks like a delta pattern
-            # Either: section[pos + 1] is a marker (0x05/0x06) for 2D/3D
-            # Or: dimension >= 4 and there's a marker at pos + 13 (4D pattern)
-            is_delta_pattern = (
-                section[pos + 1] in (0x05, 0x06) or  # 2D/3D pattern
-                (dimension >= 4 and pos + 14 <= len(section) and section[pos + 13] in (0x05, 0x06))  # 4D pattern
-            )
-            
-            if not is_delta_pattern:
-                pos += 1
-                continue
-            
-            delta_byte = section[pos]
-            
-            if dimension == 2 and delta_byte >= 2:
-                # 2D: delta_byte - 2 = increment for last dimension
-                delta = delta_byte - 2
-                if delta >= 1:
-                    new_indices = current_indices.copy()
-                    new_last_dim_0based = new_indices[-1] + delta
-                    
-                    if new_last_dim_0based < len(elements):
-                        new_indices[-1] = new_last_dim_0based
-                        
-                        if all(idx < len(elements) for idx in new_indices):
-                            tuple_elem = tuple(elements[idx] for idx in new_indices)
-                            result.append(tuple_elem)
-                            current_indices = new_indices
-                            pos += 2
-                            continue
-            
-            elif dimension >= 3 and 1 <= delta_byte <= len(elements):
-                # 3D+: delta_byte indicates the new value for a dimension
-                # Try different interpretations based on context
-                new_indices = current_indices.copy()
-                
-                # Check for 4D pattern: [delta_byte] [byte] [int32_dim3] [int32_dim4] [padding] [marker]
-                # Total: 1 + 1 + 4 + 4 + 3 + 1 = 14 bytes
-                if (dimension >= 4 and pos + 14 <= len(section) and 
-                    section[pos + 13] in (0x05, 0x06)):
-                    # 4D update: delta_byte + 1 = dim2, int32s for dim3 and dim4
-                    try:
-                        # delta_byte + 1 = new dim2 index (0-based)
-                        new_dim2 = delta_byte + 1
-                        if new_dim2 < len(elements):
-                            new_indices[1] = new_dim2
-                        
-                        # Read int32s for dim3 and dim4 (big-endian, 1-based)
-                        dim3_1based = struct.unpack_from(">I", section, pos + 2)[0]
-                        dim4_1based = struct.unpack_from(">I", section, pos + 6)[0]
-                        
-                        new_dim3 = dim3_1based - 1
-                        new_dim4 = dim4_1based - 1
-                        
-                        if new_dim3 < len(elements):
-                            new_indices[2] = new_dim3
-                        if new_dim4 < len(elements):
-                            new_indices[3] = new_dim4
-                        
-                        if all(idx < len(elements) for idx in new_indices):
-                            tuple_elem = tuple(elements[idx] for idx in new_indices)
-                            result.append(tuple_elem)
-                            current_indices = new_indices
-                            pos += 14  # Skip full pattern
-                            continue
-                    except struct.error:
-                        pass
-                
-                # Check if there's an int32 after the marker (complex update for 3D)
-                # Pattern: [delta_byte] [marker] [int32_dim3 (4 bytes)] [padding (3 bytes)] [marker]
-                # Total: 1 + 1 + 4 + 3 + 1 = 10 bytes
-                if (pos + 10 <= len(section) and 
-                    section[pos + 1] in (0x05, 0x06) and
-                    section[pos + 9] in (0x05, 0x06)):
-                    # Complex update: delta_byte for dim2, int32 for dim3
-                    try:
-                        # delta_byte + 2 = new dim2 index (0-based)
-                        new_dim2 = delta_byte + 2
-                        if new_dim2 < len(elements):
-                            new_indices[1] = new_dim2
-                        
-                        # Read int32 for dim3 (big-endian, 1-based, so subtract 1)
-                        dim3_1based = struct.unpack_from(">I", section, pos + 2)[0]
-                        new_dim3 = dim3_1based - 1
-                        if new_dim3 < len(elements):
-                            new_indices[-1] = new_dim3
-                        
-                        if all(idx < len(elements) for idx in new_indices):
-                            tuple_elem = tuple(elements[idx] for idx in new_indices)
-                            result.append(tuple_elem)
-                            current_indices = new_indices
-                            pos += 10  # Skip delta, marker, int32, padding, marker
-                            continue
-                    except struct.error:
-                        pass
-                
-                # Simple update: delta_byte + 2 = new last dim index (0-based)
-                new_idx = delta_byte + 2
-                if new_idx < len(elements):
-                    new_indices[-1] = new_idx
-                    
-                    if all(idx < len(elements) for idx in new_indices):
-                        tuple_elem = tuple(elements[idx] for idx in new_indices)
-                        result.append(tuple_elem)
-                        current_indices = new_indices
-                        pos += 2
-                        continue
-        
+    last = [0] * max(dim, 1)
+    while pos < len(section):
+        b = section[pos]
         pos += 1
+        if b == 0xFF:  # EOF
+            break
 
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_result = []
-    for elem in result:
-        if elem not in seen:
-            seen.add(elem)
-            unique_result.append(elem)
-    
-    return unique_result
+        if dim == 0:
+            pass  # scalar set element: delta byte present, no index bytes
+        elif b > dim:
+            last[dim - 1] += b - dim
+        else:
+            afdim = b
+            for d in range(afdim - 1, dim):
+                sz = sizes[d]
+                idx = int.from_bytes(section[pos:pos + sz], "little")
+                pos += sz
+                last[d] = idx + mins[d]
+
+        if dim == 0:
+            key: tuple[str, ...] = ()
+        else:
+            try:
+                key = tuple(elements[last[d] - 1] for d in range(dim))
+            except IndexError:
+                break  # corrupt / over-run; stop decoding this section
+
+        if pos >= len(section):
+            break
+        pos += 1  # consume the 1-byte text marker (0x05 = no text)
+
+        result.append(key)
+
+    return result
 
