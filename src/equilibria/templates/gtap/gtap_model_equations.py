@@ -3633,6 +3633,12 @@ class GTAPModelEquations:
         # phi: GAMS phieq closes betaP/phiP + betaG + betaS to sum to 1/phi.
         model.phi = Var(model.r, within=NonNegativeReals, initialize=lambda m, r: float(m.phi0[r]), doc="Elasticity of total expenditure wrt utility")
         model.uh = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Private utility per capita")
+        # GAMS pgeq/xgeq: aggregate government price/quantity, kept as SEPARATE
+        # variables (not inlined into ugeq) so ugeq stays linear like GAMS's:
+        #   ugeq..  ug =e= aug*xg/pop
+        # See eq_pg/eq_xg_agg/eq_ug below (project_gtap7_15x10_ug_jacobian_collapse_root_cause).
+        model.pg = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Aggregate government price index (GAMS pg)")
+        model.xg_agg = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Aggregate real government expenditure (GAMS xg)")
         model.ug = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Government utility per capita")
         model.us = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Savings utility per capita")
         model.u = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Total utility")
@@ -3888,7 +3894,7 @@ class GTAPModelEquations:
 
         price_vars = [
             'px', 'pp', 'p_rai', 'pp_rai', 'ps', 'pd', 'pa', 'pmt', 'pet', 'pva', 'pnd', 'pft', 'pf', 'pfa', 'pfy',
-            'pnum', 'pabs', 'pfact', 'pwfact', 'pgdpmp', 'psave', 'pigbl',
+            'pnum', 'pabs', 'pfact', 'pwfact', 'pgdpmp', 'psave', 'pigbl', 'pg',
         ]
         # GAMS lower-bounds prices aggressively, but not Armington/trade quantities.
         # Keeping positive floors on quantities like xmt/xd/xa can create artificial
@@ -4997,15 +5003,27 @@ class GTAPModelEquations:
                 # This leaves eq_xfeq to determine xf from production CES demand,
                 # avoiding the xf over-determination from having both supply and
                 # demand equations write xf as their LHS.
+                #
+                # Written CROSS-MULTIPLIED (both sides raised to omegaf) instead
+                # of dividing by denom=xscale*gf*xft directly: xft can be tiny
+                # (e.g. xft[CAN,Land,shock]≈9e-4 at this check-seed), and
+                # dividing xf by a near-zero denom before exponentiating produced
+                # a Jacobian column/row 3100x worse than GAMS's corresponding
+                # xft column (see project_gtap7_15x10_ug_jacobian_collapse_root_
+                # cause — eq_pfeq[CAN,Land,*] became the new worst-row family
+                # after the eq_ug fix). Algebraically identical at the solution
+                # (denom>0 always, xfflag/gf_share already gated >0 above), just
+                # avoids amplifying a near-zero denominator before the ^(1/omegaf).
                 kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
                 if kappa == 0.0:
                     kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
                 denom = model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
-                xf_ratio = model.xf[r, f, a] / denom
-                # pf * (1-kappa) = pft * (xf/denom)^(1/omegaf)
-                return model.pf[r, f, a] * (1.0 - kappa) == model.pft[r, f] * xf_ratio ** (1.0 / omegaf)
+                pf_term = (model.pf[r, f, a] * (1.0 - kappa)) ** omegaf
+                pft_term = model.pft[r, f] ** omegaf
+                return pf_term * denom == pft_term * model.xf[r, f, a]
             if f in self.sets.sf:
-                # Sluggish factor: same branch logic as mf.
+                # Sluggish factor: same branch logic as mf (see above for the
+                # cross-multiplied rationale).
                 omegaf = _omegaf(r, f)
                 if omegaf == float("inf"):
                     return pfy == model.pft[r, f]
@@ -5013,8 +5031,9 @@ class GTAPModelEquations:
                 if kappa == 0.0:
                     kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
                 denom = model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
-                xf_ratio = model.xf[r, f, a] / denom
-                return model.pf[r, f, a] * (1.0 - kappa) == model.pft[r, f] * xf_ratio ** (1.0 / omegaf)
+                pf_term = (model.pf[r, f, a] * (1.0 - kappa)) ** omegaf
+                pft_term = model.pft[r, f] ** omegaf
+                return pf_term * denom == pft_term * model.xf[r, f, a]
             # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq
             # (model.gms:1096). No xft term — supply scales by gf only.
             etaff = _etaff(r, f, a)
@@ -5282,12 +5301,22 @@ class GTAPModelEquations:
             return sum(terms) == 1.0
         model.eq_uh = Constraint(model.r, rule=eq_uh_rule)
 
-        # Government utility per capita (GAMS ugeq, model.gms:826):
-        #   ug = aug * xg / pop, with pg*xg = yg and pgeq defining pg.
-        # GAMS pgeq with sigmag→1: use sigma=1.01 (same as GAMS cal.gms:3478).
-        #   pg^(1-sigma) = sum_i g_share_i * pa^(1-sigma)  (ignoring axg calibration scalar)
-        # Then ug*pop*pg = aug*yg.
-        def eq_ug_rule(model, r):
+        # Government price/quantity/utility (GAMS pgeq/xgeq/ugeq, model.gms:22147-
+        # 22162). Kept as THREE separate equations/variables — matching GAMS
+        # exactly — instead of one collapsed nonlinear equation: collapsing
+        # concentrated the CES price-index nonlinearity and the large aug[r]
+        # coefficient (1500-4400 across regions) into a single Jacobian row,
+        # producing a row norm 32x GAMS's worst row (eq_ug[ROW]=8097 vs GAMS's
+        # max 254) and 7 of Python's top-8 largest rows — see
+        # project_gtap7_15x10_ug_jacobian_collapse_root_cause. GAMS spreads the
+        # same algebra across pgeq (CES index, no aug), xgeq (price*qty=spend,
+        # no aug, no CES), ugeq (LINEAR in xg, only the aug/pop coefficient) —
+        # a much better-conditioned chain, even though the three forms agree
+        # algebraically at the solution.
+        #
+        # eq_pg (GAMS pgeq, sigmag→1 uses sigma=1.01 per cal.gms:3478):
+        #   pg^(1-sigma) = sum_i g_share_i * pa^(1-sigma)
+        def eq_pg_rule(model, r):
             sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
             if abs(sigmag - 1.0) < 1e-8:
                 sigmag = 1.01
@@ -5297,8 +5326,24 @@ class GTAPModelEquations:
                 for i in model.i
                 if value(model.g_share[r, i]) > 0.0
             )
-            pg_index = pg_terms ** (1.0 / expo)
-            return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
+            return model.pg[r] ** expo == pg_terms
+        model.eq_pg = Constraint(model.r, rule=eq_pg_rule)
+
+        # eq_xg_agg (GAMS xgeq): pg*xg = yg  (price * real qty = nominal spend)
+        def eq_xg_agg_rule(model, r):
+            return model.pg[r] * model.xg_agg[r] == model.yg[r]
+        model.eq_xg_agg = Constraint(model.r, rule=eq_xg_agg_rule)
+
+        # eq_ug (GAMS ugeq): ug = aug * xg / pop  — LINEAR in xg_agg.
+        # NOTE: write it exactly as GAMS does (divide by pop), not the
+        # cross-multiplied "ug*pop = aug*xg_agg" form — aug[r] itself is
+        # aug=pop/government_total (can be ~1500-4400), so cross-multiplying
+        # makes ∂/∂xg_agg = aug directly (huge); GAMS's own .nl (via CONVERT)
+        # confirms the divided form: e.g. ugeq(USA) is the single-coefficient
+        # linear row `x_ug - 0.3636*x_xg >= 0` (0.3636 = aug[USA]/pop[USA]),
+        # not aug[USA] alone. pop[r]>0 always (no divide-by-zero risk).
+        def eq_ug_rule(model, r):
+            return model.ug[r] == model.aug[r] * model.xg_agg[r] / model.pop[r]
         model.eq_ug = Constraint(model.r, rule=eq_ug_rule)
 
         # Savings price (GAMS psaveeq, compStat-style static form)
