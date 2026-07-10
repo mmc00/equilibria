@@ -36,7 +36,7 @@ from equilibria.baseline.compatibility import (
     BaselineCompatibilityReport,
     evaluate_strict_gams_baseline_compatibility,
 )
-from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+from equilibria.babel.gdx.reader import read_gdx, read_parameter_values, get_symbol
 from equilibria.blocks.equilibrium import PEPMacroClosureInit
 from equilibria.blocks.production import PEPProductionAccountingInit
 from equilibria.blocks.trade import (
@@ -1603,7 +1603,21 @@ class IPOPTSolver:
                 # Fallback to in-process reader if gdxdump is unavailable or empty.
                 if not records:
                     try:
-                        values = read_parameter_values(gdx, sym)
+                        dim_offsets = None
+                        # For PEP Results.gdx: dim0 typically iterates over sectors
+                        # (UEL[0:nJ]) and the last dimension over scenarios
+                        # (UEL[-3:] = BASE/SIM1/VAR), when the file has no set symbols.
+                        gdx_symbol = get_symbol(gdx, sym)
+                        if gdx_symbol and gdx_symbol["dimension"] >= 1:
+                            # Try common scenario suffixes to auto-detect offset
+                            elements = gdx.get("elements", [])
+                            if elements and elements[-1].lower() in ("var", "sim1", "base"):
+                                n_scen = 3  # BASE, SIM1, VAR
+                                # Build offsets: first dims start at 0, last dim at -n_scen
+                                nd = gdx_symbol["dimension"]
+                                n_sectors = len(elements) - n_scen
+                                dim_offsets = [0] * (nd - 1) + [n_sectors]
+                        values = read_parameter_values(gdx, sym, domain_offsets=dim_offsets)
                     except Exception:
                         continue
                     for raw_key, raw_val in values.items():
