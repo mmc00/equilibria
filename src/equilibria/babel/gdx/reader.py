@@ -604,6 +604,7 @@ def read_data_sections(data: bytes) -> list[tuple[int, bytes]]:
 def read_parameter_values(
     gdx_data: dict[str, Any],
     symbol_name: str,
+    domain_offsets: list[int] | None = None,
 ) -> dict[tuple[str, ...], float]:
     """
     Read parameter values from GDX data.
@@ -618,6 +619,10 @@ def read_parameter_values(
     Args:
         gdx_data: Result from read_gdx().
         symbol_name: Name of the parameter to read.
+        domain_offsets: Optional list of UEL start offsets per dimension. When
+            provided, these override the auto-computed offsets from set symbols.
+            Use when the GDX has parameters but no set symbols (e.g. Results.gdx).
+            Example: [0, 17] means dim0 starts at UEL[0], dim1 at UEL[17].
 
     Returns:
         Dictionary mapping index tuples to values.
@@ -665,7 +670,13 @@ def read_parameter_values(
 
     # Calculate domain offsets based on set definitions
     # Each set in the GDX occupies a contiguous range in the UEL
-    domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
+    if domain_offsets is not None:
+        # Caller-provided offsets override auto-computed ones.
+        # This handles GDX files that store only parameters (no set symbols),
+        # where _calculate_domain_offsets would return all zeros.
+        pass
+    else:
+        domain_offsets = _calculate_domain_offsets(gdx_data, dimension)
 
     return _decode_parameter_section(
         section, elements, dimension, domain_offsets, expected_records

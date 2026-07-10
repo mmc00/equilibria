@@ -852,7 +852,7 @@ class PEPModelEquations:
                 p_ji = vars.P.get((j, i), 0.0)
                 if b_xt <= 0 or beta_xt <= 0 or pt_j <= 0 or p_ji <= 0:
                     continue
-                expected_xs = xst_j / (b_xt ** (1 + sigma_xt)) * (p_ji / (beta_xt * pt_j)) ** sigma_xt
+                expected_xs = xst_j / (b_xt ** (1 + sigma_xt)) * (beta_xt * pt_j / p_ji) ** sigma_xt
                 residuals[f"EQ59_{j}_{i}"] = vars.XS.get((j, i), 0.0) - expected_xs
         
         # EQ60: XS(j,i) = CET between exports and local
