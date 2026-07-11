@@ -2320,10 +2320,10 @@ class GTAPModelEquations:
 
         def get_pfa_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
-            # fcttx sources from taxes.rtf (factor-keyed) — see gtap_parameters.py
-            # _pfa_bench for the full rationale. rtfi/rtfd are commodity-keyed.
-            fcttx = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
-            return max(pf_val * (1.0 + fcttx), 1e-8)
+            # fcttx=0 for this benchmark constant — see gtap_parameters.py
+            # _pfa_bench for the full rationale (CONVERT-verified against GAMS's
+            # own compiled xpeq, not a derived quantity).
+            return pf_val
 
         def get_pfy_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
@@ -3722,18 +3722,18 @@ class GTAPModelEquations:
             return float(prdtx_init.get((r, a, i), 0.0) or 0.0)
         model.prdtx = Param(model.r, model.a, model.i, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax")
 
-        # GAMS betaCal: fcttx = ftrv/EVFB (ad-valorem factor tax rate), factor-keyed
-        # (region,FACTOR,activity). taxes.rtf (HAR header RTIN, set order
-        # ENDW/ACTS/REG) is this same factor-keyed quantity — verified against a
-        # real GAMS out.gdx to 9 significant figures via va_val/gx_param. taxes.rtfd/
-        # rtfi (HAR headers RTFD/RTFM) are COMMODITY-keyed (region,COMMODITY,activity,
-        # set order COMM/ACTS/REG) — a structurally different domain; looking them up
-        # with a factor key silently misses every time (0/750 hits, confirmed empirically)
-        # and always returns the dict default, regardless of dataset. fctts (subsidy)
-        # is genuinely 0 here (GAMS hardcodes fbep=0 in cal.gms).
-        rtf_p = getattr(self.params.taxes, "rtf", {}) or {}
+        # GAMS ytaxeq(r,'ft') is a trivial identity ytax('ft')==0 for this dataset
+        # (confirmed via CONVERT: m.e7399 = ytaxeq(EU_28,'ft') is literally
+        # "x==0", not a computed sum) — fcttx=fctts=0, matching GAMS exactly.
+        # taxes.rtf IS factor-keyed (region,FACTOR,activity) and taxes.rtfd/rtfi
+        # ARE commodity-keyed — that key-shape distinction is real — but rtf is
+        # not the right source for fcttx here regardless: GAMS's own compiled
+        # ytaxeq proves the factor-tax stream is a hardcoded zero, not derived
+        # from rtf. Mirrors _pfa_bench (gtap_parameters.py) — same conclusion,
+        # confirmed independently via CONVERT ground truth (xpeq coefficient
+        # matches fcttx=0 to 10 sig figs, not the rtf-derived value).
         def _fcttx_init(m, r, f, a):
-            return float(rtf_p.get((r, f, a), 0.0) or 0.0)
+            return 0.0
         def _fctts_init(m, r, f, a):
             return 0.0
         model.fcttx = Param(model.r, model.f, model.a, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production")

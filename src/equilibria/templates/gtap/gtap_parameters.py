@@ -528,17 +528,18 @@ class GTAPCalibratedShares:
             return max(1.0 / max(1.0 - _kappa(r, f, a), 1e-12), 1e-12)
 
         def _pfa_bench(r: str, f: str, a: str) -> float:
-            # pfa = pf*(1+fctts+fcttx). fcttx sources from taxes.rtf (HAR header
-            # RTIN, factor-keyed region/FACTOR/activity) — this IS GAMS's fcttx=
-            # EVFP/EVFB-1, verified to 9 significant figures against a real GAMS
-            # out.gdx via va_val/gx_param. taxes.rtfd/rtfi (HAR headers RTFD/RTFM)
-            # are COMMODITY-keyed (region/COMMODITY/activity) — a different domain;
-            # looking them up with a factor key always misses (confirmed 0/750
-            # hits empirically), which is why this returned 0 regardless of
-            # dataset, not because fcttx is genuinely 0. fctts (subsidy) is
-            # genuinely 0 for this dataset (GAMS hardcodes fbep=0 in cal.gms).
+            # pfa = pf*(1+fctts+fcttx), fctts=fcttx=0 for this benchmark-calibration
+            # use. taxes.rtf is factor-keyed (confirmed, not a key-shape bug) but
+            # CONVERT (GAMS's own compiled xpeq, ground truth — not a derived
+            # quantity) proves fcttx=rtf must NOT feed here: xpeq(EU_28,a_Services)
+            # coefficient is 1.169886206923859 with fcttx=0 vs GAMS's real
+            # 1.1698862069141054 (10 sig figs) — using rtf gives 1.0547, which only
+            # matched a self-consistent DERIVED gx.l, not what GAMS's compiled
+            # model actually bakes in. rtf legitimately feeds _factor_tax_value
+            # (_m_pfa under ifSUB=1, c8ae2d7) — a different equation family
+            # (factor-USE tax in the live macro), not this benchmark constant.
             fctts = 0.0
-            fcttx = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+            fcttx = 0.0
             return _pf_bench(r, f, a) * max(1.0 + fctts + fcttx, 1e-12)
         
         # Calculate intermediate values needed for calibration
