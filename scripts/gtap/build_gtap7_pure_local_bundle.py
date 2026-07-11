@@ -319,6 +319,34 @@ def main() -> None:
     close_idx = inlined.find(close_marker, a_idx)
     if close_idx < 0:
         raise SystemExit("Could not locate Prm.gdx close $gdxin marker.")
+
+    # Some v7_consolidated.gdx datasets (e.g. gtap7_15x10, gtap7_3x4) don't
+    # embed the CDE/CES elasticity parameters (incpar/subpar/esubi/...) —
+    # unlike gtap7_3x3/5x5/10x7/20x41, which already carry them under GAMS
+    # lowercase names. Without them cal.gms's CDE income-allocation module
+    # (eh0/bh0 = incpar/subpar) divides by zero. Detect the gap (no
+    # "parameter incpar(" declaration in prm_block) and inject from the
+    # dataset's own default.prm (GEMPACK HAR) via the same
+    # _prm_har_as_assignments emitter nl_compare.py already uses for this
+    # exact case.
+    if "parameter incpar(" not in prm_block:
+        prm_har_path = DATASETS_DIR / dataset / "default.prm"
+        if prm_har_path.exists():
+            import nl_compare as _nlc
+            elast_block = _nlc._prm_har_as_assignments(prm_har_path)
+            # comp.gms (via getData.gms, already inlined) declares these
+            # params with real domains — a fresh `parameter name(*,*) ;`
+            # redeclaration is GAMS error 184. Keep only the assignment
+            # lines (`name(...) = val ;`), drop the declaration lines.
+            assign_lines = [
+                ln for ln in elast_block.splitlines()
+                if not re.match(r"^\s*parameter\s+\w+\(", ln)
+            ]
+            elast_block = "\n".join(assign_lines)
+            if elast_block.strip():
+                prm_block += "\n" + elast_block
+                print(f"  injected default.prm elasticities (incpar/subpar/esub*) for {dataset}")
+
     insert_at = close_idx + len(close_marker)
     inlined = inlined[:insert_at] + "\n" + prm_block + "\n" + inlined[insert_at:]
 
