@@ -528,17 +528,15 @@ class GTAPCalibratedShares:
             return max(1.0 / max(1.0 - _kappa(r, f, a), 1e-12), 1e-12)
 
         def _pfa_bench(r: str, f: str, a: str) -> float:
-            # pfa = pf*(1+fctts+fcttx). fcttx sources from taxes.rtf (HAR
-            # header RTIN, factor-keyed (region,FACTOR,activity)) — NOT
-            # taxes.rtfd (HAR header RTFD, commodity-keyed (region,COMMODITY,
-            # activity), a completely different quantity; looking it up with
-            # a factor key always silently missed). rtf is ALREADY GAMS's own
-            # fcttx=EVFP/EVFB-1 (derive_from_benchmark computes rate=vfm_val/
-            # evfb-1, vfm=EVFP) — verified numerically identical to GAMS's
-            # ftrv/EVFB to full float precision. fctts (subsidy) is genuinely
-            # 0 for this dataset (GAMS hardcodes fbep=0 in cal.gms) — same
-            # fix applied in gtap_model_equations.py's model.fcttx/model.
-            # fctts Param init (see project_gtap7_15x10_ytax_ft_fix_2026_07_10).
+            # pfa = pf*(1+fctts+fcttx). fcttx sources from taxes.rtf (HAR header
+            # RTIN, factor-keyed region/FACTOR/activity) — this IS GAMS's fcttx=
+            # EVFP/EVFB-1, verified to 9 significant figures against a real GAMS
+            # out.gdx via va_val/gx_param. taxes.rtfd/rtfi (HAR headers RTFD/RTFM)
+            # are COMMODITY-keyed (region/COMMODITY/activity) — a different domain;
+            # looking them up with a factor key always misses (confirmed 0/750
+            # hits empirically), which is why this returned 0 regardless of
+            # dataset, not because fcttx is genuinely 0. fctts (subsidy) is
+            # genuinely 0 for this dataset (GAMS hardcodes fbep=0 in cal.gms).
             fctts = 0.0
             fcttx = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
             return _pf_bench(r, f, a) * max(1.0 + fctts + fcttx, 1e-12)
@@ -554,30 +552,24 @@ class GTAPCalibratedShares:
         for r in sets.r:
             for a in sets.a:
                 # Value added (sum of factor payments)
-                # Match GAMS initialization (cal.gms line 189):
-                # xf.l = inScale*EVFB/pf.l, pfa.l = pf.l*(1+fctts+fcttx),
-                # va.l = sum(pfa.l*xf.l)/pva.l
-                # => at pva=pf=1 benchmark: va contribution = EVFB*(1+fcttx)
-                # = EVFP (since fcttx=EVFP/EVFB-1, exactly self.params.taxes.
-                # rtf). PREVIOUSLY this summed evfb_val alone (no *(1+fcttx)
-                # factor), despite the comment already prescribing it —
-                # verified via gdxdump this under-states va by the SAME
-                # magnitude as fcttx (e.g. EU_28,Services: Python's old
-                # va=7.517 vs GAMS's real va=9.164, an 18% gap fully
-                # explained by evfb*(1+fcttx)=evfp summing to 9.164485250,
-                # matching GAMS to 9 significant figures). This directly
-                # feeds xp_val=va_val+nd_val, which feeds gx_param's
-                # calibration (project_gtap7_15x10_xd_investigation_
-                # seed_and_solve_2026_07_10 — the root cause of the eq_x
-                # residual seed_and_solve flagged, NOT an xScale bug as
-                # first hypothesized).
+                # Match GAMS initialization:
+                # xf = EVFB/pf, pfa = pf*(1+rtf), va = sum(pfa*xf)/pva
+                # => va contribution = EVFB*(1+rtf) when pva=1.
+                # NOTE: "rtf" here means fctts+fcttx (rtfi/rtfd), which are
+                # genuinely 0 for standard GTAP7 datasets — NOT
+                # self.params.taxes.rtf (HAR header RTIN), which is a
+                # kappaf-family rent wedge (EVFP/EVFB-1), not a tax. Verified
+                # via gdxdump: GAMS's fcttx.L is 0 in every cell of a real
+                # out.gdx. Using taxes.rtf here inflated va_val by ~20%+ and
+                # broke check-period convergence (95.68%→64.59%,
+                # code=1→2) — see
+                # project_gtap7_15x10_bisect_va_val_fragility_2026_07_10.
                 va_val = 0.0
                 for f in sets.f:
                     evfb_val = float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
                     if evfb_val <= 0.0:
                         continue
-                    fcttx = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
-                    va_val += evfb_val * (1.0 + fcttx)
+                    va_val += evfb_val
                 if va_val > 0:
                     va_values[(r, a)] = va_val
 
