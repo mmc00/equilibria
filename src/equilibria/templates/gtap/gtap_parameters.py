@@ -552,24 +552,24 @@ class GTAPCalibratedShares:
         for r in sets.r:
             for a in sets.a:
                 # Value added (sum of factor payments)
-                # Match GAMS initialization:
-                # xf = EVFB/pf, pfa = pf*(1+rtf), va = sum(pfa*xf)/pva
-                # => va contribution = EVFB*(1+rtf) when pva=1.
-                # NOTE: "rtf" here means fctts+fcttx (rtfi/rtfd), which are
-                # genuinely 0 for standard GTAP7 datasets — NOT
-                # self.params.taxes.rtf (HAR header RTIN), which is a
-                # kappaf-family rent wedge (EVFP/EVFB-1), not a tax. Verified
-                # via gdxdump: GAMS's fcttx.L is 0 in every cell of a real
-                # out.gdx. Using taxes.rtf here inflated va_val by ~20%+ and
-                # broke check-period convergence (95.68%→64.59%,
-                # code=1→2) — see
-                # project_gtap7_15x10_bisect_va_val_fragility_2026_07_10.
+                # Match GAMS initialization (cal.gms): xf=EVFB/pf, pfa=pf*(1+fcttx),
+                # va=sum(pfa*xf)/pva => at pva=pf=1: va contribution=EVFB*(1+fcttx).
+                # fcttx sources from taxes.rtf (HAR RTIN, factor-keyed) — CONVERT-verified
+                # (comp.gms regenerated fresh from today's code, matching the fresh GDX's
+                # own generation): GAMS's real xpeq(EU_28,Services) coefficient is
+                # 1.0546777000957692, matching this formula to 8-9 sig figs (vs 1.1699 for
+                # fcttx=0). A PRIOR CONVERT check on the STALE committed comp.gms (never
+                # regenerated after 2f41b31's CDE-elasticity fix) wrongly showed fcttx=0 —
+                # that .gms didn't correspond to the fresh GDX's generation at all, so the
+                # comparison was apples-to-oranges. Always regenerate comp.gms fresh before
+                # trusting CONVERT against a regenerated fixture.
                 va_val = 0.0
                 for f in sets.f:
                     evfb_val = float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
                     if evfb_val <= 0.0:
                         continue
-                    va_val += evfb_val
+                    fcttx = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+                    va_val += evfb_val * (1.0 + fcttx)
                 if va_val > 0:
                     va_values[(r, a)] = va_val
 
