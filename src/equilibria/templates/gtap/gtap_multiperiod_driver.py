@@ -284,6 +284,113 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _recalibrate_gx_ax — replicate GAMS iterloop's per-period gx/ax recalibration
+# ---------------------------------------------------------------------------
+# Same block, same mechanism as and/ava and io/af — GAMS recomputes:
+#   gx(r,a,i,t) = (x.l/xp.l)*(px.l/p.l)**omegas(r,a)           [omegas != inf]
+#   ax(r,a,i,t) = (x.l/xs.l)*((1+prdtx.l)*p.l/ps.l)**sigmas(r,i)  [sigmas != inf]
+# every period from that period's own solved values. Python's gx_param/p_ax
+# (Python's name for GAMS's ax) are also benchmark-frozen. Rebuilds eq_x (gx)
+# and eq_peq (ax) for the active period. if_sub=True form only (this dataset).
+def _recalibrate_gx_ax(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_x/eq_peq for active_period using gx/ax recomputed from
+    prior_period's own solved x/xp/px/p_rai (gx) and x/xs/ps/p_rai/prdtx_rai (ax).
+
+    Returns the count of cells rebuilt (gx+ax combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_x = getattr(m, "eq_x", None)
+    x = getattr(m, "x", None)
+    xp = getattr(m, "xp", None)
+    px = getattr(m, "px", None)
+    p_rai = getattr(m, "p_rai", None)
+    xscale = getattr(m, "xscale", None)
+
+    eq_peq = getattr(m, "eq_peq", None)
+    xs = getattr(m, "xs", None)
+    ps = getattr(m, "ps", None)
+    prdtx_rai = getattr(m, "prdtx_rai", None)
+
+    omegas_map = getattr(params.elasticities, "omegas", {}) or {}
+    sigmas_map = getattr(params.elasticities, "sigmas", {}) or {}
+
+    n_rebuilt = 0
+
+    if None not in (eq_x, x, xp, px, p_rai, xscale):
+        for idx in list(eq_x):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, a, i, _t = idx
+            prior_idx = (r, a, i, prior_period)
+            xp_prior_idx = (r, a, prior_period)
+            omega = float(omegas_map.get((r, a), 1.0))
+            if omega == float("inf"):
+                continue  # eq_x's inf branch writes a price identity, not gx-driven
+            try:
+                x_prior = float(_V(x[prior_idx]))
+                xp_prior = float(_V(xp[xp_prior_idx]))
+                px_prior = float(_V(px[xp_prior_idx]))
+                p_rai_prior = float(_V(p_rai[prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if xp_prior <= 0.0 or p_rai_prior <= 0.0:
+                continue
+            # GAMS's own gx formula is (x.l/xp.l)*(px.l/p.l)^omega — xscale is a
+            # Python-only report scaler baked into eq_x's RHS, not part of gx itself.
+            gx_new = (x_prior / xp_prior) * (px_prior / p_rai_prior) ** omega
+            if gx_new <= 0.0 or not eq_x[idx].active:
+                continue
+            eq_x[idx].deactivate()
+            xp_idx = (r, a, active_period)
+            xs_val = xscale[xp_idx] if xp_idx in xscale else xscale.get((r, a), 1.0)
+            m.add_component(
+                f"_eq_x_recal_{r}_{a}_{i}_{active_period}",
+                Constraint(expr=x[idx] == gx_new * (xp[xp_idx] / xs_val)
+                           * (p_rai[idx] / px[xp_idx]) ** omega),
+            )
+            n_rebuilt += 1
+
+    if None not in (eq_peq, x, xs, ps, p_rai, prdtx_rai):
+        for idx in list(eq_peq):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, a, i, _t = idx
+            prior_idx = (r, a, i, prior_period)
+            xs_prior_idx = (r, i, prior_period)
+            sigma = float(sigmas_map.get((r, i), 2.0))
+            if sigma == float("inf"):
+                continue
+            try:
+                x_prior = float(_V(x[prior_idx]))
+                xs_prior = float(_V(xs[xs_prior_idx]))
+                ps_prior = float(_V(ps[xs_prior_idx]))
+                prdtx_prior = float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+                p_rai_prior = float(_V(p_rai[prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if xs_prior <= 0.0 or ps_prior <= 0.0:
+                continue
+            pp_prior = (1.0 + prdtx_prior) * p_rai_prior
+            if pp_prior <= 0.0:
+                continue
+            ax_new = (x_prior / xs_prior) * (ps_prior / pp_prior) ** sigma
+            if ax_new <= 0.0 or not eq_peq[idx].active:
+                continue
+            eq_peq[idx].deactivate()
+            xs_idx = (r, i, active_period)
+            prdtx_val = float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+            m.add_component(
+                f"_eq_peq_recal_{r}_{a}_{i}_{active_period}",
+                Constraint(expr=x[idx] == ax_new * xs[xs_idx]
+                           * (ps[xs_idx] / ((1.0 + prdtx_val) * p_rai[idx])) ** sigma),
+            )
+            n_rebuilt += 1
+
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
 # freeze_inactive_periods — freeze vars AND deactivate constraints for inactive periods
 # ---------------------------------------------------------------------------
 def freeze_inactive_periods(m, active_period: str) -> int:
@@ -1995,6 +2102,7 @@ def solve_multiperiod(
     # nd/va/xp/pnd/pva/px.
     _recalibrate_and_ava(m, p_alt, "check", "base")
     _recalibrate_io_af(m, p_alt, "check", "base")
+    _recalibrate_gx_ax(m, p_alt, "check", "base")
 
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
@@ -2162,6 +2270,7 @@ def solve_multiperiod(
     # Must come AFTER freeze_inactive_periods (same ordering as check above).
     _recalibrate_and_ava(m, params_shock, "shock", "check")
     _recalibrate_io_af(m, params_shock, "shock", "check")
+    _recalibrate_gx_ax(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;

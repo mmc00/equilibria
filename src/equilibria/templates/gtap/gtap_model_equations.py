@@ -1664,11 +1664,15 @@ class GTAPModelEquations:
             model.lambdaio = Param(model.r, model.i, model.a, initialize={}, default=1.0, doc="lambdaio")
         create_indexed_param("af_param", ["r", "f", "a"], self.params.calibrated.af_param, 0.0, mutable=True)
         create_indexed_param("af_xf_param", ["r", "f", "a"], scaled_af_xf_param, 0.0)
-        create_indexed_param("gx_param", ["r", "a", "i"], self.params.calibrated.gx_param, 0.0)
+        # mutable=True: same per-period recalibration as and/ava/io/af — GAMS's
+        # iterloop.gms also recomputes gx(r,a,i,t)/ax(r,a,i,t) every period from
+        # that period's own solved x/xp/px/p (gx) and x/xs/p/ps/prdtx (ax).
+        # See _recalibrate_gx_ax.
+        create_indexed_param("gx_param", ["r", "a", "i"], self.params.calibrated.gx_param, 0.0, mutable=True)
         create_indexed_param("xscale", ["r", "aa"], xscale_data, 1.0)
 
         create_indexed_param("p_io", ["r", "i", "a"], adjusted_p_io, 0.0)
-        create_indexed_param("p_ax", ["r", "a", "i"], self.params.shares.p_ax, 0.0)
+        create_indexed_param("p_ax", ["r", "a", "i"], self.params.shares.p_ax, 0.0, mutable=True)
         create_indexed_param("gd_share", ["r", "i"], self.params.shares.p_gd, 0.0, mutable=True)
         create_indexed_param("ge_share", ["r", "i"], self.params.shares.p_ge, 0.0, mutable=True)
         create_indexed_param("gw_share", ["r", "i", "rp"], self.params.shares.p_gw, 0.0, mutable=True)
