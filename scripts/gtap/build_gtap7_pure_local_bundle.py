@@ -324,16 +324,45 @@ def main() -> None:
     # embed the CDE/CES elasticity parameters (incpar/subpar/esubi/...) —
     # unlike gtap7_3x3/5x5/10x7/20x41, which already carry them under GAMS
     # lowercase names. Without them cal.gms's CDE income-allocation module
-    # (eh0/bh0 = incpar/subpar) divides by zero. Detect the gap (no
-    # "parameter incpar(" declaration in prm_block) and inject from the
-    # dataset's own default.prm (GEMPACK HAR) via the same
+    # (eh0/bh0 = incpar/subpar) divides by zero. Detect the gap and inject
+    # from the dataset's own default.prm (GEMPACK HAR) via the same
     # _prm_har_as_assignments emitter nl_compare.py already uses for this
     # exact case.
-    if "parameter incpar(" not in prm_block:
+    #
+    # DETECTION BUG (found 2026-07-13 via a gtap7_5x5 CONVERT run failing to
+    # compile): the inliner (gdx_to_gams_inline.py) NEVER emits a literal
+    # "parameter incpar(...) ;" declaration line for ANY dataset — it only
+    # emits a `* incpar data (N cells)` comment followed by bare assignment
+    # lines (`incpar('c_Agri','USA') = ... ;`). The old check ("parameter
+    # incpar(" not in prm_block) is therefore ALWAYS true, firing the
+    # injection unconditionally — including for gtap7_5x5, which genuinely
+    # already has incpar/subpar embedded (confirmed via gdxdump + this
+    # inliner's own output). The redundant injection happened to be
+    # harmless there only because THIS session's prefix fix to
+    # _prm_har_as_assignments (1cdd60d) coincidentally re-derived the SAME
+    # c_/a_-prefixed keys 5x5 already uses — but gtap7_15x10 uses NO
+    # prefix at all on its comm/acts set elements (`Rice`, not `c_Rice` —
+    # confirmed via its own inlined `Set comm .../ Rice, Grains, ... /`
+    # block), so the SAME injection there emits keys ("c_Rice") that don't
+    # exist in that dataset's own sets, hard-failing GAMS Error 170 (domain
+    # violation) once CONVERT's stricter compile is used (PATH's own solve
+    # path tolerates it, which is why this went unnoticed for weeks).
+    #
+    # Correct detection: check for the comment marker the inliner ACTUALLY
+    # emits (`* incpar data`), not a declaration line that never exists.
+    #
+    # PREFIX BUG (found 2026-07-13 right after the detection-bug fix above):
+    # whether comm/acts elements carry a c_/a_ prefix in THIS dataset's own
+    # inlined sets is not universal either — gtap7_5x5 does, gtap7_15x10
+    # does not (bare `Rice`/`Grains` for both comm and acts). Injecting the
+    # wrong convention hard-fails GAMS Error 170 at compile. Detect from the
+    # already-built `inlined` text itself rather than assuming.
+    if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
         prm_har_path = DATASETS_DIR / dataset / "default.prm"
         if prm_har_path.exists():
             import nl_compare as _nlc
-            elast_block = _nlc._prm_har_as_assignments(prm_har_path)
+            use_prefix = _nlc._detect_prm_prefix_convention(inlined)
+            elast_block = _nlc._prm_har_as_assignments(prm_har_path, use_prefix=use_prefix)
             # comp.gms (via getData.gms, already inlined) declares these
             # params with real domains — a fresh `parameter name(*,*) ;`
             # redeclaration is GAMS error 184. Keep only the assignment

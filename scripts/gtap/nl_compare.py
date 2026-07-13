@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 import argparse
 import base64
+import re
 import sys
 import time
 from pathlib import Path
@@ -337,26 +338,49 @@ _PRM_HAR_NAME_MAP: dict[str, str] = {
 }
 
 
-# GEMPACK set name -> GAMS element prefix. GAMS's inlined .gms sets carry
-# a domain prefix on COMM/ACTS elements (c_Agri/a_Agri) but NOT on
-# REG/ENDW/etc (USA, Land) — confirmed via the comp.gms's own set blocks
-# (`a_Rice`, `c_Rice` vs bare `USA`/`Land`). default.prm's own set_elements
-# never carry this prefix (GEMPACK has no such convention), so any header
-# indexed by COMM/ACTS must be re-prefixed before use in an inlined .gms,
-# or GAMS raises "Error 170" (domain violation) trying to match "Agri"
-# against a set that only contains "c_Agri"/"a_Agri" — confirmed via a
-# fresh gtap7_5x5 CONVERT run that failed with exactly this error until
-# this fix (see project_gtap7_15x10_fcttx_fixture_saga's sibling sessions —
-# the SAME bug was silently present in gtap7_15x10's injected esubd/incpar/
-# subpar too, just never triggered a hard compile error there).
+# GEMPACK set name -> GAMS element prefix. WHETHER an inlined .gms's comm/
+# acts sets carry a domain prefix on their elements (c_Agri/a_Agri) or not
+# (bare Agri) is DATASET-SPECIFIC, not universal — confirmed empirically:
+# gtap7_5x5's inlined `Set comm / c_Agri, ... /` carries the prefix, but
+# gtap7_15x10's inlined `Set comm / Rice, ... /` does NOT (bare element
+# names, even though comm and acts share the same underlying commodity
+# labels there — the disambiguation lives in the i0/i alias domain
+# mechanism instead, not in the element name). Passing the WRONG choice
+# hard-fails GAMS Error 170 (domain violation) at compile time — confirmed
+# both ways: unprefixed keys against 5x5's prefixed set, and prefixed keys
+# against 15x10's bare set. There is no way to know which convention a
+# given comp.gms uses without inspecting it — callers MUST pass
+# `use_prefix=` explicitly (detected via _detect_prm_prefix_convention
+# below), do not assume True or False.
 _PRM_SET_PREFIX = {"COMM": "c_", "ACTS": "a_", "MARG": "c_"}
 
 
-def _prm_har_as_assignments(prm_path: Path) -> str:
+def _detect_prm_prefix_convention(comp_gms_text: str) -> bool:
+    """Return True if this comp.gms's inlined comm/acts sets carry a c_/a_
+    prefix on their elements, False if they use bare names.
+
+    Checks the `Set comm 'Set COMM ...' / ... /` block emitted by the GDX
+    inliner (gdx_to_gams_inline.py) for the FIRST element's prefix — cheap
+    and reliable since a dataset is internally consistent (either every
+    comm/acts element is prefixed or none are).
+    """
+    m = re.search(r"Set\s+comm\b[^/]*/\s*([A-Za-z0-9_]+)", comp_gms_text)
+    if not m:
+        return False
+    return m.group(1).startswith("c_")
+
+
+def _prm_har_as_assignments(prm_path: Path, use_prefix: bool = True) -> str:
     """Emit GAMS parameter assignments from a GEMPACK default.prm file.
 
     Reads elasticity headers (ESBD→esubd, ETRQ→etraq, etc.) and emits
     plain GAMS assignment statements. Only emits headers in _PRM_HAR_NAME_MAP.
+
+    `use_prefix` must reflect the TARGET comp.gms's own comm/acts set
+    convention (see _detect_prm_prefix_convention) — it is dataset-specific,
+    not universal. Defaults to True (the historical/5x5 convention) only for
+    backward compatibility with existing callers; new callers should always
+    pass it explicitly.
     """
     import numpy as np
     from equilibria.babel.har.reader import read_har
@@ -371,7 +395,7 @@ def _prm_har_as_assignments(prm_path: Path) -> str:
         out_parts.append(f"parameter {gams_name}({dims_str}) ;")
         label_lists = h.set_elements  # list of lists, one per dimension
         set_names = getattr(h, "set_names", None) or [None] * dims
-        prefixes = [_PRM_SET_PREFIX.get(sn, "") for sn in set_names]
+        prefixes = [_PRM_SET_PREFIX.get(sn, "") if use_prefix else "" for sn in set_names]
         it = np.nditer(h.array, flags=["multi_index"])
         while not it.finished:
             idx = it.multi_index
