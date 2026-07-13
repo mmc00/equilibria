@@ -179,6 +179,111 @@ def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> in
 
 
 # ---------------------------------------------------------------------------
+# _recalibrate_io_af — replicate GAMS iterloop's per-period io/af recalibration
+# ---------------------------------------------------------------------------
+# Same block, same mechanism as _recalibrate_and_ava — GAMS recomputes:
+#   io(r,i,a,t) = (xa.l(r,i,a,t)/nd.l(r,a,t)) * (pa.l(r,i,a,t)/pnd.l(r,a,t))**sigmand(r,a)
+#   af(r,fp,a,t) = (xf.l(r,fp,a,t)/va.l(r,a,t)) * (pfa.l(r,fp,a,t)/pva.l(r,a,t))**sigmav(r,a)
+# every period from that period's own solved values. Python's io_param/af_param
+# are also benchmark-frozen constants (same substitution mechanism as and/ava).
+# Rebuilds eq_xaa_activity (io) and eq_xfeq (af) for the active period.
+def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_xaa_activity/eq_xfeq for active_period using io/af recomputed
+    from prior_period's own solved xaa/nd/pa/pnd (io) and xf/va/pfa/pva (af).
+
+    Returns the count of cells rebuilt (io+af combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_xaa = getattr(m, "eq_xaa_activity", None)
+    xaa = getattr(m, "xaa", None)
+    nd = getattr(m, "nd", None)
+    pa = getattr(m, "pa", None)
+    pnd = getattr(m, "pnd", None)
+    lambdaio = getattr(m, "lambdaio", None)
+
+    eq_xfeq = getattr(m, "eq_xfeq", None)
+    xf = getattr(m, "xf", None)
+    va = getattr(m, "va", None)
+    pfa = getattr(m, "pfa", None)
+    pva = getattr(m, "pva", None)
+
+    sigmand_map = getattr(params.elasticities, "sigmand", {}) or {}
+    sigmav_map = getattr(params.elasticities, "sigmav", {}) or {}
+    lambdaf_map = getattr(params.shifts, "lambdaf", {}) or {}
+
+    n_rebuilt = 0
+
+    if None not in (eq_xaa, xaa, nd, pa, pnd, lambdaio):
+        for idx in list(eq_xaa):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, a, _t = idx
+            prior_idx = (r, i, a, prior_period)
+            nd_prior_idx = (r, a, prior_period)
+            try:
+                xaa_prior = float(_V(xaa[prior_idx]))
+                nd_prior = float(_V(nd[nd_prior_idx]))
+                pa_prior = float(_V(pa[prior_idx]))
+                pnd_prior = float(_V(pnd[nd_prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if nd_prior <= 0.0 or pnd_prior <= 0.0:
+                continue
+            sigmand = float(sigmand_map.get((r, a), 1.0))
+            io_new = (xaa_prior / nd_prior) * (pa_prior / pnd_prior) ** sigmand
+            if io_new <= 0.0 or not eq_xaa[idx].active:
+                continue
+            eq_xaa[idx].deactivate()
+            lio = max(float(_V(lambdaio[idx[:-1]])) if idx[:-1] in lambdaio else 1.0, 1e-8)
+            nd_idx = (r, a, active_period)
+            if abs(sigmand) < 1e-12:
+                m.add_component(
+                    f"_eq_xaa_recal_{r}_{i}_{a}_{active_period}",
+                    Constraint(expr=xaa[idx] == io_new * nd[nd_idx] / lio),
+                )
+            else:
+                m.add_component(
+                    f"_eq_xaa_recal_{r}_{i}_{a}_{active_period}",
+                    Constraint(expr=xaa[idx] == io_new * nd[nd_idx]
+                               * (pnd[nd_idx] / pa[idx]) ** sigmand * (lio ** (sigmand - 1.0))),
+                )
+            n_rebuilt += 1
+
+    if None not in (eq_xfeq, xf, va, pfa, pva):
+        for idx in list(eq_xfeq):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, f, a, _t = idx
+            prior_idx = (r, f, a, prior_period)
+            va_prior_idx = (r, a, prior_period)
+            try:
+                xf_prior = float(_V(xf[prior_idx]))
+                va_prior = float(_V(va[va_prior_idx]))
+                pfa_prior = float(_V(pfa[prior_idx]))
+                pva_prior = float(_V(pva[va_prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if va_prior <= 0.0 or pva_prior <= 0.0:
+                continue
+            sigmav = float(sigmav_map.get((r, a), 1.0))
+            af_new = (xf_prior / va_prior) * (pfa_prior / pva_prior) ** sigmav
+            if af_new <= 0.0 or not eq_xfeq[idx].active:
+                continue
+            eq_xfeq[idx].deactivate()
+            lf = max(float(lambdaf_map.get((r, f, a), 1.0)), 1e-8)
+            va_idx = (r, a, active_period)
+            m.add_component(
+                f"_eq_xfeq_recal_{r}_{f}_{a}_{active_period}",
+                Constraint(expr=xf[idx] == af_new * va[va_idx]
+                           * (pva[va_idx] / pfa[idx]) ** sigmav * (lf ** (sigmav - 1.0))),
+            )
+            n_rebuilt += 1
+
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
 # freeze_inactive_periods — freeze vars AND deactivate constraints for inactive periods
 # ---------------------------------------------------------------------------
 def freeze_inactive_periods(m, active_period: str) -> int:
@@ -1889,6 +1994,7 @@ def solve_multiperiod(
     # CONSTRAINT itself using base's already-solved (seeded, gtap-mode)
     # nd/va/xp/pnd/pva/px.
     _recalibrate_and_ava(m, p_alt, "check", "base")
+    _recalibrate_io_af(m, p_alt, "check", "base")
 
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
@@ -2055,6 +2161,7 @@ def solve_multiperiod(
 
     # Must come AFTER freeze_inactive_periods (same ordering as check above).
     _recalibrate_and_ava(m, params_shock, "shock", "check")
+    _recalibrate_io_af(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;

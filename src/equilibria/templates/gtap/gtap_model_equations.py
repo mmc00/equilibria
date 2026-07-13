@@ -1654,12 +1654,15 @@ class GTAPModelEquations:
         # periods. Needs mutable=True to support that in-place update.
         create_indexed_param("and_param", ["r", "a"], adjusted_and_param, 0.0, mutable=True)
         create_indexed_param("ava_param", ["r", "a"], adjusted_ava_param, 0.0, mutable=True)
-        create_indexed_param("io_param", ["r", "i", "a"], self.params.calibrated.io_param, 0.0)
+        # mutable=True: same per-period recalibration as and_param/ava_param —
+        # GAMS's iterloop.gms recomputes io(r,i,a,t)/af(r,fp,a,t) every period too
+        # (same "Calibration of parameters" block). See _recalibrate_io_af.
+        create_indexed_param("io_param", ["r", "i", "a"], self.params.calibrated.io_param, 0.0, mutable=True)
         if self.params.shifts.lambdaio:
             create_indexed_param("lambdaio", ["r", "i", "a"], self.params.shifts.lambdaio, 1.0)
         else:
             model.lambdaio = Param(model.r, model.i, model.a, initialize={}, default=1.0, doc="lambdaio")
-        create_indexed_param("af_param", ["r", "f", "a"], self.params.calibrated.af_param, 0.0)
+        create_indexed_param("af_param", ["r", "f", "a"], self.params.calibrated.af_param, 0.0, mutable=True)
         create_indexed_param("af_xf_param", ["r", "f", "a"], scaled_af_xf_param, 0.0)
         create_indexed_param("gx_param", ["r", "a", "i"], self.params.calibrated.gx_param, 0.0)
         create_indexed_param("xscale", ["r", "aa"], xscale_data, 1.0)
