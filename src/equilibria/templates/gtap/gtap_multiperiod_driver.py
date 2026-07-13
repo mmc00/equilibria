@@ -489,6 +489,144 @@ def _recalibrate_alphad_alpham(m, params, active_period: str, prior_period: str)
 
 
 # ---------------------------------------------------------------------------
+# _recalibrate_alphaa_gov_inv — per-period recal of government/investment shares
+# ---------------------------------------------------------------------------
+# Same block. GAMS recomputes:
+#   alphaa(r,i,gov,t) = (xa.l(r,i,gov,t)/xg.l(r,t))*(pa.l(r,i,gov,t)/pg.l(r,t))**sigmag(r)
+#   alphaa(r,i,inv,t) = (xa.l(r,i,inv,t)/xi.l(r,t))*(pa.l(r,i,inv,t)/pi.l(r,t))**sigmai(r)
+# every period. Python's g_share/i_share are also benchmark-frozen constants.
+# Rebuilds eq_xg+eq_pg (gov) and eq_xi (inv) for the active period.
+def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_xg/eq_pg (government) and eq_xi (investment) for active_period
+    using alphaa recomputed from prior_period's own solved xaa/xg/xi/pa/pg/pi.
+
+    Returns the count of cells rebuilt (gov+inv combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    xaa = getattr(m, "xaa", None)
+    pa = getattr(m, "pa", None)
+
+    eq_xg = getattr(m, "eq_xg", None)
+    eq_pg = getattr(m, "eq_pg", None)
+    xg = getattr(m, "xg", None)
+    pg = getattr(m, "pg", None)
+
+    eq_xi = getattr(m, "eq_xi", None)
+    xi = getattr(m, "xi", None)
+    xiagg = getattr(m, "xiagg", None)
+    pi_ = getattr(m, "pi", None)
+
+    if None in (xaa, pa):
+        return 0
+
+    esubg_map = getattr(params.elasticities, "esubg", {}) or {}
+    esubi_map = getattr(params.elasticities, "esubi", {}) or {}
+
+    n_rebuilt = 0
+
+    # ── Government (xg + pg) ────────────────────────────────────────────────
+    if None not in (eq_xg, eq_pg, xg, pg):
+        sigmag_by_r = {}
+        alphaa_gov_new = {}
+        for idx in list(eq_xg):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, _t = idx
+            xaa_prior = (r, i, "gov", prior_period)
+            xg_prior_idx = (r, prior_period)
+            try:
+                xaa_val = float(_V(xaa[xaa_prior]))
+                xg_prior = float(_V(xg[xg_prior_idx]))
+                pa_prior = float(_V(pa[xaa_prior]))
+                pg_prior = float(_V(pg[(r, prior_period)]))
+            except (KeyError, Exception):
+                continue
+            if xg_prior <= 0.0 or pg_prior <= 0.0:
+                continue
+            sigmag = float(esubg_map.get(r, 1.0))
+            if abs(sigmag - 1.0) < 1e-8:
+                sigmag = 1.01
+            sigmag_by_r[r] = sigmag
+            share = (xaa_val / xg_prior) * (pa_prior / pg_prior) ** sigmag
+            if share > 0.0:
+                alphaa_gov_new[(r, i)] = share
+
+        for idx in list(eq_xg):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, _t = idx
+            share = alphaa_gov_new.get((r, i))
+            if share is None or not eq_xg[idx].active:
+                continue
+            eq_xg[idx].deactivate()
+            m.add_component(
+                f"_eq_xg_recal_{r}_{i}_{active_period}",
+                Constraint(expr=xg[idx] == share * m.yg[(r, active_period)]
+                           / (pa[(r, i, "gov", active_period)] + 1e-12)),
+            )
+            n_rebuilt += 1
+
+        for r_idx in list(eq_pg):
+            if not (isinstance(r_idx, tuple) and r_idx[-1] == active_period):
+                continue
+            r = r_idx[0]
+            sigmag = sigmag_by_r.get(r)
+            if sigmag is None or not eq_pg[r_idx].active:
+                continue
+            expo = 1.0 - sigmag
+            terms = [
+                alphaa_gov_new[(r, i)] * pa[(r, i, "gov", active_period)] ** expo
+                for i in m.i if (r, i) in alphaa_gov_new
+            ]
+            if not terms:
+                continue
+            eq_pg[r_idx].deactivate()
+            m.add_component(
+                f"_eq_pg_recal_{r}_{active_period}",
+                Constraint(expr=pg[r_idx] ** expo == sum(terms)),
+            )
+            n_rebuilt += 1
+
+    # ── Investment (xi) ──────────────────────────────────────────────────────
+    if None not in (eq_xi, xi, xiagg, pi_):
+        for idx in list(eq_xi):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, _t = idx
+            xaa_prior = (r, i, "inv", prior_period)
+            xi_prior_idx = (r, prior_period)
+            try:
+                xaa_val = float(_V(xaa[xaa_prior]))
+                xiagg_prior = float(_V(xiagg[xi_prior_idx]))
+                pa_prior = float(_V(pa[xaa_prior]))
+                pi_prior = float(_V(pi_[(r, prior_period)]))
+            except (KeyError, Exception):
+                continue
+            if xiagg_prior <= 0.0 or pi_prior <= 0.0:
+                continue
+            sigmai_raw = esubi_map.get((r,))
+            if sigmai_raw is None:
+                sigmai_raw = esubi_map.get(r, 0.0)
+            sigmai_raw = float(sigmai_raw or 0.0)
+            if abs(sigmai_raw - 1.0) < 1e-8:
+                sigmai_raw = 1.01
+            alphaa_new = (xaa_val / xiagg_prior) * (pa_prior / pi_prior) ** sigmai_raw
+            if alphaa_new <= 0.0 or not eq_xi[idx].active:
+                continue
+            eq_xi[idx].deactivate()
+            m.add_component(
+                f"_eq_xi_recal_{r}_{i}_{active_period}",
+                Constraint(expr=xi[idx] == alphaa_new * xiagg[(r, active_period)]
+                           * (pi_[(r, active_period)]
+                              / (pa[(r, i, "inv", active_period)] + 1e-12)) ** sigmai_raw),
+            )
+            n_rebuilt += 1
+
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
 # freeze_inactive_periods — freeze vars AND deactivate constraints for inactive periods
 # ---------------------------------------------------------------------------
 def freeze_inactive_periods(m, active_period: str) -> int:
@@ -2202,6 +2340,7 @@ def solve_multiperiod(
     _recalibrate_io_af(m, p_alt, "check", "base")
     _recalibrate_gx_ax(m, p_alt, "check", "base")
     _recalibrate_alphad_alpham(m, p_alt, "check", "base")
+    _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
 
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
@@ -2371,6 +2510,7 @@ def solve_multiperiod(
     _recalibrate_io_af(m, params_shock, "shock", "check")
     _recalibrate_gx_ax(m, params_shock, "shock", "check")
     _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
+    _recalibrate_alphaa_gov_inv(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;

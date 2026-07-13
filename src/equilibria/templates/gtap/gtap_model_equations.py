@@ -2216,8 +2216,11 @@ class GTAPModelEquations:
         create_indexed_param("yg_share_reg", ["r"], regional_government_share_data, 0.0)
         create_indexed_param("yi_share_reg", ["r"], regional_investment_share_data, 0.0)
         create_indexed_param("c_share", ["r", "i"], private_share_data, 0.0)
-        create_indexed_param("g_share", ["r", "i"], government_share_data, 0.0)
-        create_indexed_param("i_share", ["r", "i"], investment_share_data, 0.0)
+        # mutable=True: same per-period recalibration as and/ava/io/af/alphad —
+        # GAMS's iterloop.gms also recomputes alphaa(r,i,gov,t)/alphaa(r,i,inv,t)
+        # every period. See _recalibrate_alphaa_gov_inv.
+        create_indexed_param("g_share", ["r", "i"], government_share_data, 0.0, mutable=True)
+        create_indexed_param("i_share", ["r", "i"], investment_share_data, 0.0, mutable=True)
         create_indexed_param("axi", ["r"], axi_data, 1.0)
         create_indexed_param("invwgt", ["r"], invwgt_data, 0.0)
         create_indexed_param("savwgt", ["r"], savwgt_data, 0.0)
@@ -3353,6 +3356,11 @@ class GTAPModelEquations:
             return max(get_benchmark_yi(r), 1e-8)
 
         def get_pi_benchmark_init(m, r):
+            # value() (not bare float()) is required once i_share is mutable=True
+            # (recalibrated per-period by _recalibrate_alphaa_gov_inv) — a bare
+            # float() on a mutable ParamData raises TypeError; float() on an
+            # immutable one worked by accident (Pyomo treats it as a near-literal).
+            from pyomo.environ import value as _pyo_value
             sigmai_raw = float(self.params.elasticities.esubi.get(r, 0.0))
             # At benchmark all pa=1 and axi=1, so pi=1 regardless of sigmai.
             # GAMS cal.gms bumps sigmai=1 → 1.01 (CES not CD)
@@ -3361,7 +3369,7 @@ class GTAPModelEquations:
             expo = 1.0 - sigmai_raw
             terms = []
             for i in self.sets.i:
-                share = float(m.i_share[r, i])
+                share = float(_pyo_value(m.i_share[r, i]))
                 if share <= 0.0:
                     continue
                 pa_inv = get_pa_benchmark_init(m, r, i, GTAP_INVESTMENT_AGENT)
@@ -3371,7 +3379,8 @@ class GTAPModelEquations:
             return max((sum(terms) ** (1.0 / expo)) / max(float(m.axi[r]), 1e-12), 1e-8)
 
         def get_xi_init(m, r, i):
-            share = float(m.i_share[r, i])
+            from pyomo.environ import value as _pyo_value
+            share = float(_pyo_value(m.i_share[r, i]))
             if share <= 0.0:
                 return 0.0
             sigmai_raw = float(self.params.elasticities.esubi.get(r, 0.0))
