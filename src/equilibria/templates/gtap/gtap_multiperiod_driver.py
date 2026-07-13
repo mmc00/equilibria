@@ -81,6 +81,104 @@ def freeze_period(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _recalibrate_and_ava — replicate GAMS iterloop's per-period and/ava recalibration
+# ---------------------------------------------------------------------------
+# GAMS's calibration-of-parameters block (comp.gms, inside loop(tsim), AFTER that
+# period's own solve, BEFORE the next period's solve) recomputes:
+#   and(r,a,t) = (nd.l(r,a,t)/xp.l(r,a,t)) * (pnd.l(r,a,t)/px.l(r,a,t))**sigmap(r,a)
+#   ava(r,a,t) = (va.l(r,a,t)/xp.l(r,a,t)) * (pva.l(r,a,t)/px.l(r,a,t))**sigmap(r,a)
+# using THAT period's own solved values, not the benchmark SAM. Python built
+# and_param/ava_param ONCE from the benchmark and bakes them as constants into
+# every period's eq_nd/eq_va (gtap_model_multiperiod.py substitutes mutable
+# Params by their build-time numeric value) — so check/shock never pick up
+# GAMS's recalibration. Confirmed via CONVERT on a freshly-regenerated comp.gms
+# (2026-07-12): and_param[JPN,VegFruit] Python=0.4518 (benchmark) vs GAMS's real
+# check-period coefficient 0.3971 (= nd.l/(nd.l+va.l) at check, exact match to
+# 10 sig figs) — a genuine, verified, ~5.5pp-magnitude bug, not a hypothesis.
+# This is SURGICAL (only eq_nd/eq_va's own and_param/ava_param coefficient),
+# NOT a whole-slice recalibration of Armington/CDE shares — a prior finding
+# (_rebuild_eq_pmeq_shock's docstring) already established that whole-slice
+# recalibration on the SHOCK period regresses the match; this only touches
+# and/ava, verified independently faithful via CONVERT before implementing.
+#
+# KEPT despite regressing the gate (60.87/60.66% -> 54.24/49.76%, codes stayed
+# 2/2) per feedback_faithful_over_match_pct: fidelity to GAMS is the criterion,
+# never match%/convergence. A faithful change regressing means ANOTHER link is
+# missing/infaithful — diagnose and fix THAT, do not revert this.
+def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_nd/eq_va for active_period using and/ava recomputed from
+    prior_period's OWN solved nd/va/xp/pnd/pva/px (GAMS's iterloop formula).
+
+    Returns the count of (r,a) cells rebuilt (nd+va combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_nd = getattr(m, "eq_nd", None)
+    eq_va = getattr(m, "eq_va", None)
+    nd = getattr(m, "nd", None)
+    va = getattr(m, "va", None)
+    xp = getattr(m, "xp", None)
+    pnd = getattr(m, "pnd", None)
+    pva = getattr(m, "pva", None)
+    px = getattr(m, "px", None)
+    if None in (eq_nd, eq_va, nd, va, xp, pnd, pva, px):
+        return 0
+
+    sigmap_map = getattr(params.elasticities, "sigmap", {}) or {}
+    axp_map = getattr(params.shifts, "axp", {}) or {}
+    lambdand_map = getattr(params.shifts, "lambdand", {}) or {}
+    lambdava_map = getattr(params.shifts, "lambdava", {}) or {}
+
+    n_rebuilt = 0
+    for idx in list(eq_nd):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, a, _t = idx
+        prior_idx = (r, a, prior_period)
+        try:
+            xp_prior = float(_V(xp[prior_idx]))
+            nd_prior = float(_V(nd[prior_idx]))
+            va_prior = float(_V(va[prior_idx]))
+            pnd_prior = float(_V(pnd[prior_idx]))
+            pva_prior = float(_V(pva[prior_idx]))
+            px_prior = float(_V(px[prior_idx]))
+        except (KeyError, Exception):
+            continue
+        if xp_prior <= 0.0 or px_prior <= 0.0:
+            continue
+
+        sigmap = float(sigmap_map.get((r, a), 1.0))
+        and_new = (nd_prior / xp_prior) * (pnd_prior / px_prior) ** sigmap if pnd_prior > 0 else 0.0
+        ava_new = (va_prior / xp_prior) * (pva_prior / px_prior) ** sigmap if pva_prior > 0 else 0.0
+
+        axp_shift = float(axp_map.get((r, a), 1.0))
+        lambdand = float(lambdand_map.get((r, a), 1.0))
+        lambdava = float(lambdava_map.get((r, a), 1.0))
+
+        if and_new > 0.0 and eq_nd[idx].active:
+            eq_nd[idx].deactivate()
+            nd_shift = axp_shift * lambdand
+            ratio_nd = px[idx] / pnd[idx]
+            m.add_component(
+                f"_eq_nd_recal_{r}_{a}_{active_period}",
+                Constraint(expr=nd[idx] == and_new * xp[idx] * ratio_nd ** sigmap
+                           * nd_shift ** (sigmap - 1.0)),
+            )
+            n_rebuilt += 1
+        if ava_new > 0.0 and eq_va[idx].active:
+            eq_va[idx].deactivate()
+            va_shift = axp_shift * lambdava
+            ratio_va = px[idx] / pva[idx]
+            m.add_component(
+                f"_eq_va_recal_{r}_{a}_{active_period}",
+                Constraint(expr=va[idx] == ava_new * xp[idx] * ratio_va ** sigmap
+                           * va_shift ** (sigmap - 1.0)),
+            )
+            n_rebuilt += 1
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
 # freeze_inactive_periods — freeze vars AND deactivate constraints for inactive periods
 # ---------------------------------------------------------------------------
 def freeze_inactive_periods(m, active_period: str) -> int:
@@ -1786,6 +1884,12 @@ def solve_multiperiod(
     # Freeze base and shock; leave check free.
     freeze_inactive_periods(m, "check")
 
+    # Must come AFTER freeze_inactive_periods unfixes check's VarData (same
+    # ordering lesson as the price-floor experiment) — this rebuilds the
+    # CONSTRAINT itself using base's already-solved (seeded, gtap-mode)
+    # nd/va/xp/pnd/pva/px.
+    _recalibrate_and_ava(m, p_alt, "check", "base")
+
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
     # (2026-06-22): _seed_period_from_prior(base→check) clobbered the GAMS check seed
@@ -1948,6 +2052,9 @@ def solve_multiperiod(
 
     # Freeze base and check; leave shock free.
     freeze_inactive_periods(m, "shock")
+
+    # Must come AFTER freeze_inactive_periods (same ordering as check above).
+    _recalibrate_and_ava(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;

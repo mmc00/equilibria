@@ -1648,8 +1648,12 @@ class GTAPModelEquations:
             key: value / max(xscale_data[(key[0], key[2])], 1e-12)
             for key, value in self.params.calibrated.af_param.items()
         }
-        create_indexed_param("and_param", ["r", "a"], adjusted_and_param, 0.0)
-        create_indexed_param("ava_param", ["r", "a"], adjusted_ava_param, 0.0)
+        # mutable=True: GAMS's iterloop.gms recalibrates and(r,a,t)/ava(r,a,t) EVERY
+        # period from that period's OWN solved nd.l/va.l/xp.l (not the benchmark) —
+        # gtap_multiperiod_driver._recalibrate_and_ava replicates this between
+        # periods. Needs mutable=True to support that in-place update.
+        create_indexed_param("and_param", ["r", "a"], adjusted_and_param, 0.0, mutable=True)
+        create_indexed_param("ava_param", ["r", "a"], adjusted_ava_param, 0.0, mutable=True)
         create_indexed_param("io_param", ["r", "i", "a"], self.params.calibrated.io_param, 0.0)
         if self.params.shifts.lambdaio:
             create_indexed_param("lambdaio", ["r", "i", "a"], self.params.shifts.lambdaio, 1.0)
