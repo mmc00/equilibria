@@ -552,18 +552,21 @@ def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str
             if share > 0.0:
                 alphaa_gov_new[(r, i)] = share
 
+        xg_agg = getattr(m, "xg_agg", None)
         for idx in list(eq_xg):
             if not (isinstance(idx, tuple) and idx[-1] == active_period):
                 continue
             r, i, _t = idx
             share = alphaa_gov_new.get((r, i))
-            if share is None or not eq_xg[idx].active:
+            sigmag = sigmag_by_r.get(r)
+            if share is None or sigmag is None or xg_agg is None or not eq_xg[idx].active:
                 continue
             eq_xg[idx].deactivate()
             m.add_component(
                 f"_eq_xg_recal_{r}_{i}_{active_period}",
-                Constraint(expr=xg[idx] == share * m.yg[(r, active_period)]
-                           / (pa[(r, i, "gov", active_period)] + 1e-12)),
+                Constraint(expr=xg[idx] == share * xg_agg[(r, active_period)]
+                           * (pg[(r, active_period)]
+                              / (pa[(r, i, "gov", active_period)] + 1e-12)) ** sigmag),
             )
             n_rebuilt += 1
 

@@ -5206,11 +5206,25 @@ class GTAPModelEquations:
         
         # Government consumption
         # GAMS uses pa(r,i,gov,t) where gov = government agent
+        # GAMS cal.gms: sigmag(r)$(sigmag(r) eq 1) = 1.01 [exact CD form avoided,
+        # same discipline as eq_xi below]. GAMS xa(r,i,gov,t) =
+        # alphaa(r,i,gov,t)*xg.l(r,t)*(pa(r,i,gov,t)/pg(r,t))**(-sigmag(r)) —
+        # a genuine CES demand, not xg=share*yg/pa (implicitly sigmag=1 exact,
+        # which under-weights price response whenever esubg!=0). The old CD-only
+        # form was internally consistent with itself (share calibrated once at
+        # sigmag=1 exact) but became inconsistent once and_ava-class per-period
+        # recalibration supplies alphaa computed via GAMS's real sigmag=1.01 CES
+        # formula — see _recalibrate_alphaa_gov_inv, gtap_multiperiod_driver.py.
         def eq_xg_rule(model, r, i):
             share = value(model.g_share[r, i])
             if share <= 0.0:
                 return model.xg[r, i] == 0.0
-            return model.xg[r, i] == share * model.yg[r] / (model.pa[r, i, "gov"] + 1e-12)
+            sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
+            if abs(sigmag - 1.0) < 1e-8:
+                sigmag = 1.01
+            return model.xg[r, i] == share * model.xg_agg[r] * (
+                model.pg[r] / (model.pa[r, i, "gov"] + 1e-12)
+            ) ** sigmag
         model.eq_xg = Constraint(model.r, model.i, rule=eq_xg_rule)
         
         # Investment demand
