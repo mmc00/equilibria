@@ -391,6 +391,104 @@ def _recalibrate_gx_ax(m, params, active_period: str, prior_period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _recalibrate_alphad_alpham — replicate GAMS's per-period Armington-share recal
+# ---------------------------------------------------------------------------
+# Same block, same mechanism. GAMS recomputes:
+#   alphad(r,i,aa,t) = (xd.l(r,i,aa,t)/xa.l(r,i,aa,t))*(pdp.l/pa.l)**sigmam(r,i,aa)
+#   alpham(r,i,aa,t) = (xm.l(r,i,aa,t)/xa.l(r,i,aa,t))*(pmp.l/pa.l)**sigmam(r,i,aa)
+# every period from that period's own solved values. Python's alphad/alpham
+# aren't even Params — they're plain floats cached in a closure dict at build
+# time (get_benchmark_agent_armington_shares), baked directly into eq_paa's
+# rule. Rebuilds eq_paa from scratch with the recalibrated shares.
+def _recalibrate_alphad_alpham(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_paa for active_period using alphad/alpham recomputed from
+    prior_period's own solved xda/xma/xaa/pd/pmt/dintx/mintx/pa.
+
+    Returns the count of (r,i,aa) cells rebuilt.
+
+    NOTE: GAMS's pdp/pmp = (1+dintx)*pd / (1+mintx)*pmt (pdp_expr_rule /
+    pmp_expr_rule, gtap_model_equations.py:2951-2959) are Pyomo Expressions
+    in the single-period model — build_equations_intra only copies Var and
+    Constraint components onto the multi-period model `m`, NOT Expressions,
+    so m has no .pdp/.pmp at all (confirmed empirically: AttributeError).
+    Recompute pdp/pmp directly from their own live Vars (pd, pmt, dintx,
+    mintx) instead of relying on a component that doesn't exist on `m`.
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_paa = getattr(m, "eq_paa", None)
+    xda = getattr(m, "xda", None)
+    xma = getattr(m, "xma", None)
+    xaa = getattr(m, "xaa", None)
+    pd = getattr(m, "pd", None)
+    pmt = getattr(m, "pmt", None)
+    dintx = getattr(m, "dintx", None)
+    mintx = getattr(m, "mintx", None)
+    pa = getattr(m, "pa", None)
+    if None in (eq_paa, xda, xma, xaa, pd, pmt, dintx, mintx, pa):
+        return 0
+
+    esubd_map = getattr(params.elasticities, "esubd", {}) or {}
+
+    def _pdp(idx):
+        r, i, aa, t = idx
+        return (1.0 + dintx[idx]) * pd[(r, i, t)]
+
+    def _pmp(idx):
+        r, i, aa, t = idx
+        return (1.0 + mintx[idx]) * pmt[(r, i, t)]
+
+    n_rebuilt = 0
+    for idx in list(eq_paa):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, i, aa, _t = idx
+        prior_idx = (r, i, aa, prior_period)
+        prior_2d = (r, i, prior_period)
+        try:
+            xda_prior = float(_V(xda[prior_idx]))
+            xma_prior = float(_V(xma[prior_idx]))
+            xaa_prior = float(_V(xaa[prior_idx]))
+            pd_prior = float(_V(pd[prior_2d]))
+            pmt_prior = float(_V(pmt[prior_2d]))
+            dintx_prior = float(_V(dintx[prior_idx]))
+            mintx_prior = float(_V(mintx[prior_idx]))
+            pa_prior = float(_V(pa[prior_idx]))
+        except (KeyError, Exception):
+            continue
+        if xaa_prior <= 0.0 or pa_prior <= 0.0:
+            continue
+        pdp_prior = (1.0 + dintx_prior) * pd_prior
+        pmp_prior = (1.0 + mintx_prior) * pmt_prior
+
+        sigmam = float(esubd_map.get((r, i), 2.0))
+        alphad_new = (xda_prior / xaa_prior) * (pdp_prior / pa_prior) ** sigmam if pdp_prior > 0 else 0.0
+        alpham_new = (xma_prior / xaa_prior) * (pmp_prior / pa_prior) ** sigmam if pmp_prior > 0 else 0.0
+        if alphad_new <= 0.0 and alpham_new <= 0.0:
+            continue
+        if not eq_paa[idx].active:
+            continue
+        eq_paa[idx].deactivate()
+
+        expo = 1.0 - sigmam
+        pdp_expr = _pdp(idx)
+        pmp_expr = _pmp(idx)
+        if abs(expo) < 1e-8:
+            m.add_component(
+                f"_eq_paa_recal_{r}_{i}_{aa}_{active_period}",
+                Constraint(expr=pa[idx] == pdp_expr ** alphad_new * pmp_expr ** alpham_new),
+            )
+        else:
+            m.add_component(
+                f"_eq_paa_recal_{r}_{i}_{aa}_{active_period}",
+                Constraint(expr=pa[idx] ** expo == alphad_new * pdp_expr ** expo
+                           + alpham_new * pmp_expr ** expo),
+            )
+        n_rebuilt += 1
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
 # freeze_inactive_periods — freeze vars AND deactivate constraints for inactive periods
 # ---------------------------------------------------------------------------
 def freeze_inactive_periods(m, active_period: str) -> int:
@@ -2103,6 +2201,7 @@ def solve_multiperiod(
     _recalibrate_and_ava(m, p_alt, "check", "base")
     _recalibrate_io_af(m, p_alt, "check", "base")
     _recalibrate_gx_ax(m, p_alt, "check", "base")
+    _recalibrate_alphad_alpham(m, p_alt, "check", "base")
 
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
@@ -2271,6 +2370,7 @@ def solve_multiperiod(
     _recalibrate_and_ava(m, params_shock, "shock", "check")
     _recalibrate_io_af(m, params_shock, "shock", "check")
     _recalibrate_gx_ax(m, params_shock, "shock", "check")
+    _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;
