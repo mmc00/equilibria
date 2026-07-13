@@ -337,6 +337,21 @@ _PRM_HAR_NAME_MAP: dict[str, str] = {
 }
 
 
+# GEMPACK set name -> GAMS element prefix. GAMS's inlined .gms sets carry
+# a domain prefix on COMM/ACTS elements (c_Agri/a_Agri) but NOT on
+# REG/ENDW/etc (USA, Land) — confirmed via the comp.gms's own set blocks
+# (`a_Rice`, `c_Rice` vs bare `USA`/`Land`). default.prm's own set_elements
+# never carry this prefix (GEMPACK has no such convention), so any header
+# indexed by COMM/ACTS must be re-prefixed before use in an inlined .gms,
+# or GAMS raises "Error 170" (domain violation) trying to match "Agri"
+# against a set that only contains "c_Agri"/"a_Agri" — confirmed via a
+# fresh gtap7_5x5 CONVERT run that failed with exactly this error until
+# this fix (see project_gtap7_15x10_fcttx_fixture_saga's sibling sessions —
+# the SAME bug was silently present in gtap7_15x10's injected esubd/incpar/
+# subpar too, just never triggered a hard compile error there).
+_PRM_SET_PREFIX = {"COMM": "c_", "ACTS": "a_", "MARG": "c_"}
+
+
 def _prm_har_as_assignments(prm_path: Path) -> str:
     """Emit GAMS parameter assignments from a GEMPACK default.prm file.
 
@@ -355,12 +370,16 @@ def _prm_har_as_assignments(prm_path: Path) -> str:
         dims_str = ",".join(["*"] * dims)
         out_parts.append(f"parameter {gams_name}({dims_str}) ;")
         label_lists = h.set_elements  # list of lists, one per dimension
+        set_names = getattr(h, "set_names", None) or [None] * dims
+        prefixes = [_PRM_SET_PREFIX.get(sn, "") for sn in set_names]
         it = np.nditer(h.array, flags=["multi_index"])
         while not it.finished:
             idx = it.multi_index
             val = float(it[0])
             if val != 0.0:
-                keys_fmt = ",".join(f'"{label_lists[d][i]}"' for d, i in enumerate(idx))
+                keys_fmt = ",".join(
+                    f'"{prefixes[d]}{label_lists[d][i]}"' for d, i in enumerate(idx)
+                )
                 out_parts.append(f"{gams_name}({keys_fmt}) = {val} ;")
             it.iternext()
     return "\n".join(out_parts)
