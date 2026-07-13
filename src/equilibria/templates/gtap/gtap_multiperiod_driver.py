@@ -630,6 +630,114 @@ def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str
 
 
 # ---------------------------------------------------------------------------
+# _recalibrate_alphaa_hhd — per-period recal of the CDE household share
+# ---------------------------------------------------------------------------
+# Same block. GAMS recomputes (CDE branch, comp.gms ~line 23648):
+#   alphaa(r,i,h,t) = ((xcshr.l/bh.l)*((yc.l/pop.l)/pa.l)**bh.l * uh.l**(-eh.l*bh.l))
+#                     / sum(j, xcshr.l(j)/bh.l(j))
+# every period. bh/eh are frozen CDE ELASTICITIES by design (CLAUDE.md — not
+# recalibrated by GAMS either, only the SHARE alphaa_hhd is). pop is a static
+# (region-only, no time index) Param — no prior-period lookup needed for it.
+# Rebuilds eq_zcons for the active period (eq_xcshr/eq_phip consume zcons
+# live, so they pick up the recalibration transitively without needing their
+# own rebuild).
+def _recalibrate_alphaa_hhd(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_zcons for active_period using alphaa_hhd recomputed from
+    prior_period's own solved xcshr/uh/yc/pa (bh/eh stay frozen elasticities).
+
+    Returns the count of (r,i) cells rebuilt.
+
+    NOTE: bh/eh/pop are non-mutable Params in the single-period model — the
+    multi-period substitution mechanism bakes non-mutable Params as literals
+    directly into constraint bodies WITHOUT copying the Param component onto
+    `m` at all (confirmed empirically: m has no .bh/.eh/.pop attribute).
+    Read them from `params.elasticities.incpar/subpar` and
+    `params.benchmark.pop` directly instead (the same source
+    gtap_model_equations.py itself reads from when building eh_data/bh_data/
+    pop_data — see build_model lines ~1912-2069).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_zcons = getattr(m, "eq_zcons", None)
+    xcshr = getattr(m, "xcshr", None)
+    uh = getattr(m, "uh", None)
+    yc = getattr(m, "yc", None)
+    pa = getattr(m, "pa", None)
+    if None in (eq_zcons, xcshr, uh, yc, pa):
+        return 0
+
+    def _bh(r, i):
+        val = float(params.elasticities.subpar.get((r, i), 1.0) or 1.0)
+        return val if abs(val) > 1e-12 else 1.0
+
+    def _eh(r, i):
+        return float(params.elasticities.incpar.get((r, i), 1.0) or 1.0)
+
+    def _pop(r):
+        raw = params.benchmark.pop
+        val = raw.get(r)
+        if val is None:
+            val = raw.get((r,), 1.0)
+        return float(val or 1.0)
+
+    n_rebuilt = 0
+    # First pass: compute the per-(r,i) numerator, then the per-r denominator sum.
+    numer = {}
+    for idx in list(eq_zcons):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, i, _t = idx
+        prior_2d = (r, i, prior_period)
+        prior_3d = (r, i, "hhd", prior_period)
+        try:
+            xcshr_prior = float(_V(xcshr[prior_2d]))
+            uh_prior = float(_V(uh[(r, prior_period)]))
+            yc_prior = float(_V(yc[(r, prior_period)]))
+            pa_prior = float(_V(pa[prior_3d]))
+        except (KeyError, Exception):
+            continue
+        bh_val = _bh(r, i)
+        eh_val = _eh(r, i)
+        pop_val = _pop(r)
+        if bh_val <= 0.0 or pa_prior <= 0.0 or pop_val <= 0.0:
+            continue
+        term = (xcshr_prior / bh_val) * ((yc_prior / pop_val) / pa_prior) ** bh_val \
+            * uh_prior ** (-eh_val * bh_val)
+        numer[(r, i)] = term
+
+    denom_by_r = {}
+    for (r, i), term in numer.items():
+        denom_by_r[r] = denom_by_r.get(r, 0.0) + term
+
+    for idx in list(eq_zcons):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, i, _t = idx
+        term = numer.get((r, i))
+        denom = denom_by_r.get(r)
+        if term is None or not denom or denom <= 0.0 or not eq_zcons[idx].active:
+            continue
+        alphaa_new = term / denom
+        if alphaa_new <= 0.0:
+            continue
+        eq_zcons[idx].deactivate()
+        bh_val = _bh(r, i)
+        eh_val = _eh(r, i)
+        pop_val = _pop(r)
+        m.add_component(
+            f"_eq_zcons_recal_{r}_{i}_{active_period}",
+            Constraint(expr=m.zcons[idx] == (
+                alphaa_new * bh_val
+                * (pa[(r, i, "hhd", active_period)] ** bh_val)
+                * (uh[(r, active_period)] ** (eh_val * bh_val))
+                * ((yc[(r, active_period)] / pop_val) ** (-bh_val))
+            )),
+        )
+        n_rebuilt += 1
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
 # freeze_inactive_periods — freeze vars AND deactivate constraints for inactive periods
 # ---------------------------------------------------------------------------
 def freeze_inactive_periods(m, active_period: str) -> int:
@@ -2344,6 +2452,7 @@ def solve_multiperiod(
     _recalibrate_gx_ax(m, p_alt, "check", "base")
     _recalibrate_alphad_alpham(m, p_alt, "check", "base")
     _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
+    _recalibrate_alphaa_hhd(m, p_alt, "check", "base")
 
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
@@ -2514,6 +2623,7 @@ def solve_multiperiod(
     _recalibrate_gx_ax(m, params_shock, "shock", "check")
     _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
     _recalibrate_alphaa_gov_inv(m, params_shock, "shock", "check")
+    _recalibrate_alphaa_hhd(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;
