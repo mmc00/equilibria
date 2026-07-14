@@ -2413,7 +2413,7 @@ def _run_path_capi_nonlinear_full(
                 ]
                 for _idx in _eq_xseq:
                     if not (isinstance(_idx, tuple) and len(_idx) == 3
-                            and _idx[-1] == "shock"):
+                            and _idx[-1] in ("check", "shock")):
                         continue
                     if not _eq_xseq[_idx].active:
                         continue
@@ -2431,7 +2431,7 @@ def _run_path_capi_nonlinear_full(
                         except (KeyError, TypeError):
                             continue
                         _gams_pairs.append(
-                            (f"{_eqn}[{_r},{_i},shock]", f"{_varn}[{_r},{_i},shock]", True))
+                            (f"{_eqn}[{_r},{_i},{_t}]", f"{_varn}[{_r},{_i},{_t}]", True))
 
         free_variables = structural_matching(
             constraints, free_variables,
