@@ -116,6 +116,22 @@ def _load_from_gdx(path: Path) -> dict[str, Any]:
         elif r == "ttdh0o" and c in {"hrp", "hup", "hrr", "hur"}:
             data["ttdh0O"][c] = float(val)
 
+    # Fill missing elasticities with GAMS defaults when GDX has sparse PARJ/PARI.
+    # GAMS reads the XLSX which has all sectors; GDX may only have AGR.
+    all_j = ["agr", "ind", "ser", "adm"]
+    all_i = ["agr", "food", "othind", "ser", "adm"]
+    for _j in all_j:
+        data["sigma_KD"].setdefault(_j, 0.8)
+        data["sigma_LD"].setdefault(_j, 0.8)
+        data["sigma_VA"].setdefault(_j, 1.5)
+        data["sigma_XT"].setdefault(_j, 2.0)
+    for _i in all_i:
+        data["sigma_M"].setdefault(_i, 2.0)
+        data["sigma_XD"].setdefault(_i, 2.0)
+    for _j in all_j:
+        for _i in all_i:
+            data["sigma_X"].setdefault((_j, _i), 2.0)
+
     return data
 
 
