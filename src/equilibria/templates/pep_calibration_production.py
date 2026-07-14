@@ -534,10 +534,38 @@ class ProductionCalibrator:
                     / self.result.KDCO[j]
                 )
 
-        # Calculate factor supplies
+        # ── Normalise factor prices to unity (GAMS convention, PEP parity) ──
+        # GAMS fixes WCO=RCO=1 by construction. The SAM records the wage bill,
+        # and factor quantities are measured in "unit-price" efficiency units.
+        # PEDRO's averaged-from-taxes WCO/RCO may differ from 1; rescale so
+        # the value (WCO×LDCO = wage bill) is preserved while WCO:=1.
+        for j in J:
+            wco_old = self.result.WCO.get(j, 1.0)
+            rco_old = self.result.RCO.get(j, 1.0)
+            if wco_old != 0:
+                # Rescale: LDCO' = LDCO × WCO,  WCO' = 1  → same total value
+                self.result.WCO[j] = 1.0
+                ldco = self.result.LDCO.get(j, 0)
+                self.result.LDCO[j] = ldco * wco_old
+                # Also rescale each LDO(l,j) proportionally
+                for l in L:
+                    key = (l, j)
+                    v = self.result.LDO.get(key, 0)
+                    if v != 0:
+                        self.result.LDO[key] = v * wco_old
+            if rco_old != 0:
+                self.result.RCO[j] = 1.0
+                kdco = self.result.KDCO.get(j, 0)
+                self.result.KDCO[j] = kdco * rco_old
+                for k in K:
+                    key = (k, j)
+                    v = self.result.KDO.get(key, 0)
+                    if v != 0:
+                        self.result.KDO[key] = v * rco_old
+
+        # Recompute factor supplies after rescaling
         for l in L:
             self.result.LSO[l] = sum(self.result.LDO.get((l, j), 0) for j in J)
-
         for k in K:
             self.result.KSO[k] = sum(self.result.KDO.get((k, j), 0) for j in J)
 
