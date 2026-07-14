@@ -1180,7 +1180,8 @@ class GTAPModelEquations:
 
         Mirrors GAMS yTaxInd = yTaxTot - ytax("dt") — i.e. all tax streams
         except "dt" (direct/factor-income taxes = kappaf*pf*xf = evfb-evos).
-        Streams included: pt, fc, pc, gc, ic, et, mt.  Streams excluded: dt, ft, fs.
+        Streams included: pt, fc, pc, gc, ic, et, mt, ft.  Stream excluded: dt.
+        fs is 0 (fctts=0 for standard GTAP7 datasets).
         """
         bm = self.params.benchmark
         taxes = self.params.taxes
@@ -1225,11 +1226,17 @@ class GTAPModelEquations:
             if importer == region:
                 vcif_val = bm.vcif.get((exporter, i, region), 0.0)
                 total += float(rate) * float(vcif_val or 0.0)
-        # NOTE: ft (rtf*evfb) and fs (fctts*evfb) and dt (kappaf*evfb = evfb-evos)
-        # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes),
-        # and ft/fs are 0 here (fcttx=fctts=0; rtf is factor rent, not a tax). Adding
-        # an rtf*evfb "ft" stream emits a phantom ytax('ft') GAMS has as 0, regressing
-        # the gtap-mp gate (74%) and altertax (68%).
+        # ft — factor tax revenue (fcttx*pf*xf/xscale, GAMS eq_ytax_rule's 'ft'
+        # branch). At benchmark pf*xf/xscale == evfb (buyer-price factor flow),
+        # so this reduces to rtf*evfb (fcttx sources from taxes.rtf; see
+        # eq_pfa's M_PFA comment). Confirmed exact against a real GAMS run of
+        # gtap7_3x3 (ytax('ft') base: USA 2.02907, EU_28 2.54417, ROW 2.17840 —
+        # byte-identical to rtf*evfb here). dt (kappaf*evfb = evfb-evos) is the
+        # only stream GAMS's yTaxInd excludes; fs is 0 (fctts=0 for GTAP7).
+        for (rr, f, a), rtf in taxes.rtf.items():
+            if rr == region:
+                evfb = bm.evfb.get((region, f, a), bm.vfm.get((region, f, a), 0.0)) or 0.0
+                total += float(rtf) * float(evfb)
         return total
 
     def _raw_gdx_paths(self) -> list:
