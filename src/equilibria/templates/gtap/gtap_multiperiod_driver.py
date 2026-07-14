@@ -2278,6 +2278,59 @@ def _holdfix_cd_nest(m, period: str) -> int:
     return hf
 
 
+# ---------------------------------------------------------------------------
+# _holdfix_fnm_pf — replicate GAMS pf.fx(r,fp,a,tsim-1)=pf.l(r,fp,a,tsim-1)
+# for sector-specific (fnm) factors with etaff=0.
+# ---------------------------------------------------------------------------
+def _holdfix_fnm_pf(m, params, period: str) -> int:
+    """FIX pf[r,f,a,period] for sector-specific (non-mobile, non-sluggish)
+    factors whose etaff elasticity is 0 (or undeclared, defaulting to 0 in
+    BOTH GAMS and Python — confirmed via the reference GDX: etaff has zero
+    entries for these factors, e.g. NatRes).
+
+    eq_pfeq's fnm branch is `xf == xscale*gf*(pfy/pabs)**etaff`; with etaff=0
+    this is `xf == xscale*gf` — a pure identity in xf that says NOTHING about
+    pf. pf is therefore a genuinely free DOF, identically in GAMS and Python
+    (not a Python bug — confirmed via comp.gms: `etaff(r,fp,a) = 0 ;` is
+    GAMS's OWN default). GAMS anchors it by FIXING pf.fx(r,fp,a,tsim-1) to the
+    previous period's solved value in EVERY period's loop iteration (comp.gms
+    line ~24947) — the same holdfix mechanism as _holdfix_cd_nest, just for a
+    different degenerate family. Without this, PATH's line search lets pf
+    float freely and explodes (confirmed via PATH_CAPI_PROGRESS_HISTORY_FILE
+    trace: pf[JPN,NatRes,OtherFood,check] repeatedly hit ~12000 mid-line-search
+    before backtracking, the worst-x-inf-norm family in the whole solve).
+
+    Returns the count of pf cells fixed.
+    """
+    fset = getattr(params, "sets", None)
+    if fset is None:
+        return 0
+    mf_set = set(str(f) for f in getattr(fset, "mf", []))
+    sf_set = set(str(f) for f in getattr(fset, "sf", []))
+    etaff = getattr(getattr(params, "elasticities", None), "etaff", {}) or {}
+
+    pf = getattr(m, "pf", None)
+    if pf is None:
+        return 0
+
+    hf = 0
+    for idx in pf:
+        if not (isinstance(idx, tuple) and len(idx) == 4):
+            continue
+        r, f, a, t = idx
+        if t != period:
+            continue
+        if f in mf_set or f in sf_set:
+            continue  # only the fnm (sector-specific) branch is degenerate here
+        if float(etaff.get((r, f, a), 0.0) or 0.0) != 0.0:
+            continue  # nonzero etaff genuinely determines pf, nothing to fix
+        vd = pf[idx]
+        if vd.value is not None and not vd.fixed:
+            vd.fix(float(vd.value))
+            hf += 1
+    return hf
+
+
 def solve_multiperiod(
     m,
     params,
@@ -2585,6 +2638,28 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "check period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
 
+    # Holdfix pf for sector-specific (fnm) factors with etaff=0 (e.g. NatRes),
+    # replicating GAMS pf.fx(r,fp,a,tsim-1)=pf.l(...) every period. Without
+    # this, pf is a genuinely free DOF (fnmeq degenerates to an xf-only
+    # identity when etaff=0) and PATH's line search lets it explode.
+    _n_hf_pf = _holdfix_fnm_pf(m, p_alt, "check")
+    if _n_hf_pf:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
+
+    # TEMP DEBUG HOOK (session-local, remove before commit): export the fully
+    # recalibrated, fully-unfixed check-period model to .nl right before PATH
+    # would solve it — for a CONVERT/GAMS comparison and a NEOS submission.
+    # Controlled by an env var so it's a no-op normally.
+    import os as _os_dbg
+    import sys as _sys_dbg
+    _nl_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK")
+    if _nl_export_path:
+        m.write(_nl_export_path, format="nl", io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote check-period .nl to {_nl_export_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check")
+
     # Solve check on m.
     r_chk = run_gtap._run_path_capi_nonlinear_full(
         m, p_alt,
@@ -2592,6 +2667,7 @@ def solve_multiperiod(
         strict_path_capi=False,
         closure_config=_chk_closure,
         equation_scaling=True,
+        solver_output=bool(_os_dbg.environ.get("EQUILIBRIA_DEBUG_PATH_VERBOSE")),
         solution_hint=None,
     )
     code_chk = int(r_chk.get("termination_code") or 0)
@@ -2755,6 +2831,14 @@ def solve_multiperiod(
             import logging as _logging
             _logging.getLogger(__name__).info(
                 "shock period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
+
+    # Holdfix pf for sector-specific (fnm) factors with etaff=0, shock period
+    # (same rationale as check — see _holdfix_fnm_pf docstring).
+    _n_hf_pf = _holdfix_fnm_pf(m, params_shock, "shock")
+    if _n_hf_pf:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "shock period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
 
     # gtap-mode: inject the tariff shock INTO the solved eq_pmeq[*,*,*,'shock']
     # cells (shock-in-equations) instead of relying on the post-solve cosmetic pm

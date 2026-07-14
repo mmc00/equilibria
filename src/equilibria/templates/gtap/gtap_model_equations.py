@@ -5506,8 +5506,17 @@ class GTAPModelEquations:
         
         # Factor income net of depreciation (GAMS factYeq)
         def eq_facty_rule(model, r):
+            # xfflag(r,f,a)<=0 cells have no defining equation (eq_xfeq/eq_pfeq
+            # both Constraint.Skip them) — xf/pf there are unanchored free DOF.
+            # GAMS's factYeq only sums over the (f,a) pairs it actually declares
+            # (confirmed via CONVERT: 109 terms for USA vs Python's un-gated 150)
+            # so it must gate on xfflag too, or these free DOF leak into facty.
             return model.facty[r] == (
-                sum(model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a] for f in model.f for a in model.a)
+                sum(
+                    model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                    for f in model.f for a in model.a
+                    if value(model.xfflag[r, f, a]) > 0.0
+                )
                 - model.fdepr[r] * model.pi[r] * model.kstock[r]
             )
         model.eq_facty = Constraint(model.r, rule=eq_facty_rule)

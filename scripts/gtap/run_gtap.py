@@ -2439,6 +2439,35 @@ def _run_path_capi_nonlinear_full(
             label="nonlinear-full",
         )
 
+    # TEMP DEBUG HOOK (session-local, remove before commit): dump the exact
+    # square (constraints, free_variables) pair PATH is about to solve, for a
+    # Jacobian condition-number probe done OUTSIDE the solve call. No-op unless
+    # the env var is set.
+    _dbg_dump_path = os.environ.get("EQUILIBRIA_DEBUG_DUMP_SQUARE_SYSTEM")
+    if _dbg_dump_path:
+        import pickle as _pickle
+        def _detect_period(_name: str) -> str | None:
+            for _p in ("base", "check", "shock"):
+                if (_name.endswith(f",{_p}]") or _name.endswith(f"[{_p}]")
+                        or _name.endswith(f"_{_p}")):
+                    return _p
+            return None
+
+        _period_votes: dict[str, int] = {}
+        for _c in constraints[:200]:
+            _p = _detect_period(_c.name)
+            if _p:
+                _period_votes[_p] = _period_votes.get(_p, 0) + 1
+        _period_suffix = max(_period_votes, key=_period_votes.get) if _period_votes else "unknown"
+        _dump_path_per_period = f"{_dbg_dump_path}.{_period_suffix}"
+        with open(_dump_path_per_period, "wb") as _f:
+            _pickle.dump({
+                "con_names": [c.name for c in constraints],
+                "var_names": [v.name for v in free_variables],
+            }, _f)
+        print(f"[debug] dumped {len(constraints)} con names / {len(free_variables)} var names "
+              f"to {_dump_path_per_period}", file=sys.stderr)
+
     if len(constraints) != len(free_variables):
         return {
             "status": "failed",
