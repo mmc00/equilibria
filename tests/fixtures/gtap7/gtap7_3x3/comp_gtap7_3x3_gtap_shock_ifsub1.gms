@@ -363,90 +363,8 @@ parameters
 *        HANDLING OF FBEP and FTRV
 
 fbep(fp,a0,r) = 0 ;
-
 * === Inlined PARAMETER data from in.gdx ===
 $onImplicitAssign
-* pop0 data (3 cells)
-pop0('USA') = 325.1471252 ;
-pop0('EU_28') = 513.8722534 ;
-pop0('ROW') = 6674.864258 ;
-
-
-ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;
-ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;
-
-* --------------------------------------------------------------------------------------------------
-*
-*     Read in CO2 emissions data
-*
-* --------------------------------------------------------------------------------------------------
-
-Parameters
-   mdf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
-   mmf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
-   mdp(i0, r)              "CO2 emissions from domestic private demand"
-   mmp(i0, r)              "CO2 emissions from domestic private demand"
-   mdg(i0, r)              "CO2 emissions from domestic public demand"
-   mmg(i0, r)              "CO2 emissions from domestic public demand"
-   mdi(i0, r)              "CO2 emissions from investment demand"
-   mmi(i0, r)              "CO2 emissions from investment demand"
-;
-
-$ifthen exist "%inDir%/%BaseName%Emiss.gdx"
-   * [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Emiss.gdx"
-   * [stripped for NEOS inline] $load mdf mmf mdp mmp mdg mmg mdi mmi
-   * [stripped for NEOS inline] $gdxin
-$else
-   mdf(i0,a0,r) = 0 ;
-   mmf(i0,a0,r) = 0 ;
-   mdp(i0,r)    = 0 ;
-   mmp(i0,r)    = 0 ;
-   mdg(i0,r)    = 0 ;
-   mmg(i0,r)    = 0 ;
-   mdi(i0,r)    = 0 ;
-   mmi(i0,r)    = 0 ;
-$endif
-
-* --------------------------------------------------------------------------------------------------
-*
-*     Read in the GTAP Parameters
-*
-* --------------------------------------------------------------------------------------------------
-
-Parameters
-   esubt(a0,r)       "Top level CES substitution elasticity"
-   esubc(a0,r)       "ND nest CES substitution elasticity"
-   esubva(a0,r)      "VA nest CES substitution elasticity"
-
-   etraq(a0,r)       "CET make elasticity"
-   esubq(i0,r)       "CES make elasticity"
-
-   incpar(i0,r)      "CDE expansion parameter"
-   subpar(i0,r)      "CDE substitution parameter"
-
-   esubg(r)          "CES government expenditure elasticity"
-   esubi(r)          "CES investment expenditure elasticity"
-
-   esubd(i0,r)       "Top level Armington elasticity"
-   esubm(i0,r)       "Second level Armington elasticity"
-   esubs(i0)         "CES margin elasticity"
-
-   etrae(fp,r)       "CET elasticity for factors"
-   rorFlex0(r)       "Flexibility of foreign capital"
-;
-
-* [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Prm.gdx"
-* [stripped for NEOS inline] $loadDC esubt=esubt esubc=esubc esubva=esubva
-* [stripped for NEOS inline] $loadDC etraq=etraq esubq=esubq
-* [stripped for NEOS inline] $loadDC incpar=incpar subpar=subpar esubg=esubg esubi=esubi
-* [stripped for NEOS inline] $loadDC esubd=esubd esubm=esubm esubs=esubs
-* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex
-* [stripped for NEOS inline] $gdxin
-
-* === Inlined PARAMETER data from in.gdx ===
-
-$onImplicitAssign
-
 * vdfb data (27 cells)
 vdfb('c_Food','a_Food','USA') = 542355 ;
 vdfb('c_Food','a_Food','EU_28') = 500638.0625 ;
@@ -963,6 +881,11 @@ vkb('USA') = 45406700 ;
 vkb('EU_28') = 45244080 ;
 vkb('ROW') = 123050744 ;
 
+* pop0 data (3 cells)
+pop0('USA') = 325.1471252 ;
+pop0('EU_28') = 513.8722534 ;
+pop0('ROW') = 6674.864258 ;
+
 * maks data (9 cells)
 maks('c_Food','a_Food','USA') = 1579235.5 ;
 maks('c_Food','a_Food','EU_28') = 1987133.75 ;
@@ -988,6 +911,82 @@ makb('c_Svces','a_Svces','ROW') = 52126932 ;
 * esubt (empty in GDX — relying on $onImplicitAssign suppression)
 
 * esubc (empty in GDX — relying on $onImplicitAssign suppression)
+
+
+ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;
+ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;
+
+* --------------------------------------------------------------------------------------------------
+*
+*     Read in CO2 emissions data
+*
+* --------------------------------------------------------------------------------------------------
+
+Parameters
+   mdf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
+   mmf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
+   mdp(i0, r)              "CO2 emissions from domestic private demand"
+   mmp(i0, r)              "CO2 emissions from domestic private demand"
+   mdg(i0, r)              "CO2 emissions from domestic public demand"
+   mmg(i0, r)              "CO2 emissions from domestic public demand"
+   mdi(i0, r)              "CO2 emissions from investment demand"
+   mmi(i0, r)              "CO2 emissions from investment demand"
+;
+
+$ifthen exist "%inDir%/%BaseName%Emiss.gdx"
+   * [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Emiss.gdx"
+   * [stripped for NEOS inline] $load mdf mmf mdp mmp mdg mmg mdi mmi
+   * [stripped for NEOS inline] $gdxin
+$else
+   mdf(i0,a0,r) = 0 ;
+   mmf(i0,a0,r) = 0 ;
+   mdp(i0,r)    = 0 ;
+   mmp(i0,r)    = 0 ;
+   mdg(i0,r)    = 0 ;
+   mmg(i0,r)    = 0 ;
+   mdi(i0,r)    = 0 ;
+   mmi(i0,r)    = 0 ;
+$endif
+
+* --------------------------------------------------------------------------------------------------
+*
+*     Read in the GTAP Parameters
+*
+* --------------------------------------------------------------------------------------------------
+
+Parameters
+   esubt(a0,r)       "Top level CES substitution elasticity"
+   esubc(a0,r)       "ND nest CES substitution elasticity"
+   esubva(a0,r)      "VA nest CES substitution elasticity"
+
+   etraq(a0,r)       "CET make elasticity"
+   esubq(i0,r)       "CES make elasticity"
+
+   incpar(i0,r)      "CDE expansion parameter"
+   subpar(i0,r)      "CDE substitution parameter"
+
+   esubg(r)          "CES government expenditure elasticity"
+   esubi(r)          "CES investment expenditure elasticity"
+
+   esubd(i0,r)       "Top level Armington elasticity"
+   esubm(i0,r)       "Second level Armington elasticity"
+   esubs(i0)         "CES margin elasticity"
+
+   etrae(fp,r)       "CET elasticity for factors"
+   rorFlex0(r)       "Flexibility of foreign capital"
+;
+
+* [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Prm.gdx"
+* [stripped for NEOS inline] $loadDC esubt=esubt esubc=esubc esubva=esubva
+* [stripped for NEOS inline] $loadDC etraq=etraq esubq=esubq
+* [stripped for NEOS inline] $loadDC incpar=incpar subpar=subpar esubg=esubg esubi=esubi
+* [stripped for NEOS inline] $loadDC esubd=esubd esubm=esubm esubs=esubs
+* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex
+* [stripped for NEOS inline] $gdxin
+
+* === Inlined PARAMETER data from in.gdx ===
+
+$onImplicitAssign
 
 * esubva data (9 cells)
 esubva('a_Food','USA') = 0.5901468396 ;
