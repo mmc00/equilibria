@@ -1831,6 +1831,17 @@ class GTAPShareParameters:
         Using raw EVFB (the buyer-price payment) instead of xf biases gf whenever
         kappaf varies by activity (e.g. gtap7_3x3: gf 0.1846 vs GAMS 0.1805). Weight
         by xf = EVFB*(1-kappaf) to match GAMS.
+
+        fnm (sector-specific, neither mf nor sf) factors are the ONE exception:
+        GAMS's cal.gms computes gf(r,fnm,a,t) = xf.l*(pabs.l/pfy.l)**etaff — an
+        ABSOLUTE level (pabs=pfy=1 at benchmark, so the price ratio is a no-op
+        there), never normalized to sum to 1 across activities like the mf/sf
+        branches. This p_gf is the ONLY source check/shock periods use for gf_share
+        (gtap_model_equations.py's _use_p_gf_directly path trusts it as-is), so
+        normalizing fnm here — even though the base-period build later overrides it
+        correctly — silently corrupts every check/shock solve. Confirmed against a
+        real GAMS run of gtap7_3x3: normalizing NatRes made gf 0.295/0.705 (sum=1)
+        vs GAMS's actual 0.0079/0.0188 (bare xf level, sum≈0.027).
         """
         def _kappa(r, f, a):
             if taxes is None:
@@ -1839,6 +1850,8 @@ class GTAPShareParameters:
             if k == 0.0:
                 k = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
             return k
+
+        fnm_factors = {f for f in sets.f if f not in sets.mf and f not in sets.sf}
 
         for r in sets.r:
             for f in sets.f:
@@ -1849,6 +1862,10 @@ class GTAPShareParameters:
                     if evfb <= 0.0:
                         continue
                     xf_by_a[a] = evfb * (1.0 - _kappa(r, f, a))
+                if f in fnm_factors:
+                    for a, xf in xf_by_a.items():
+                        self.p_gf[(r, f, a)] = xf
+                    continue
                 total_xf = sum(xf_by_a.values())
                 if total_xf > 0:
                     for a, xf in xf_by_a.items():
