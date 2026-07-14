@@ -4032,15 +4032,30 @@ class GTAPModelEquations:
         if_sub = bool(getattr(self.closure, "if_sub", True)) if self.closure is not None else True
 
         def _factor_tax_value(region, factor, activity) -> float:
-            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259), NOT pf*(1+rtf).
-            # fctts/fcttx are the factor-use input taxes (Python rtfi/rtfd); under
-            # altertax both are 0 so pfa == pf. Using rtf here injected a spurious
-            # tax wedge that breaks eq_pvaeq/eq_xfeq under ifSUB=1 (where _m_pfa is
-            # substituted directly), collapsing a region's capital-price block.
-            # Mirrors gtap_parameters.py:531-534 (the pfa benchmark uses rtfi/rtfd).
-            rtfi = float(self.params.taxes.rtfi.get((region, factor, activity), 0.0) or 0.0)
-            rtfd = float(self.params.taxes.rtfd.get((region, factor, activity), 0.0) or 0.0)
-            return rtfi + rtfd
+            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259). fctts comes
+            # from fbep (0 by GAMS's own default) and fcttx = ftrv/(pf*xf) where
+            # ftrv=evfp-evfb (getData.gms:226) -- at benchmark pf*xf==evfb, so
+            # fcttx == evfp/evfb - 1 == Python's taxes.rtf (derive_from_benchmark:
+            # rtf = vfm/evfb - 1, vfm IS evfp under a different HAR column name).
+            # Confirmed via 3 INDEPENDENT sources, not just CONVERT-on-one-.gms:
+            # (1) real .gms getData.gms/cal.gms source text (this comment's cite),
+            # (2) a from-scratch reimplementation, Julia's GlobalTradeAnalysis-
+            #     ProjectModelV7.jl (github.com/mivanic/...), whose
+            #     prepare_taxes.jl literally computes `tfe = evfp ./ evfb`
+            #     unconditionally (no ifSUB-style branch) and build_model!.jl's
+            #     e_pfe applies `pfe = peb * tfe` always,
+            # (3) direct numeric check against a real local GAMS run of
+            #     gtap7_3x3 (EU_28/UnSkLab/Svces: implied wedge 0.42559462 vs
+            #     rtf 0.4255946209969903 -- matches to 7 sig figs).
+            # rtfi/rtfd (the OLD source here) are None/empty for every dataset
+            # checked -- not a real alternate mapping, just an empty fallback
+            # that silently produced pfa==pf. NOTE: this was tried before on
+            # gtap7_15x10 (4 attempts, all regressed PATH convergence 1->2
+            # despite being individually CONVERT-verified correct -- see
+            # project_gtap7_15x10_fcttx_convert_ground_truth_2026_07_11). Being
+            # tried again here on gtap7_3x3 specifically to see if the same
+            # regression reproduces on a different/smaller dataset.
+            return float(self.params.taxes.rtf.get((region, factor, activity), 0.0) or 0.0)
 
         def _kappaf_value(region, factor, activity) -> float:
             kappa = float(self.params.taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
