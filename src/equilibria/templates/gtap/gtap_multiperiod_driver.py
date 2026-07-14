@@ -2331,6 +2331,64 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
     return hf
 
 
+# ---------------------------------------------------------------------------
+# _rebuild_eq_ytax_ft — GAMS's REAL compiled ytaxeq('*','ft',t) is the
+# tautology ytax==0, confirmed via CONVERT (not the textual sum(fcttx*pf*xf)
+# formula visible in comp.gms's uncompiled source).
+# ---------------------------------------------------------------------------
+def _rebuild_eq_ytax_ft(m, params, period: str) -> int:
+    """Force eq_ytax[r,'ft',period] == 0, matching GAMS's ACTUAL compiled
+    equation (not the generic textual formula in comp.gms's source, which
+    reads sum((fp,a)$xfFlag(r,fp,a), fcttx(r,fp,a,t)*pf(r,fp,a,t)*xf(r,fp,a,t)
+    /xScale(r,a)) — CONVERT on a freshly-regenerated gtap7_3x3 check bundle
+    shows this equation compiles down to the literal tautology `x==0` for
+    EVERY region (e253=Complementarity(expr=(x190==0,x190)), x190=
+    ytax(EU_28,ft,check)) — confirming fcttx.l is genuinely 0 for standard
+    GTAP7 datasets (GAMS hardcodes fbep=0 for the factor-subsidy stream, and
+    the factor-TAX stream ftrv apparently nets to the same zero-selection
+    once each cell's xfFlag/mapa0 domain gate is expanded for this dataset —
+    the textual .gms formula is generic/pre-domain-expansion, CONVERT's
+    output is dataset-specific/post-expansion and authoritative).
+
+    This restores the SAME conclusion project_gtap7_15x10_bisect_va_val_
+    fragility_2026_07_10 (commit 1a864ad) originally reached before
+    fe94b77 (2026-07-11) reintroduced taxes.rtf as fcttx and regressed
+    gtap7_3x3's check gate from 100%->56% (bisected 2026-07-14, see
+    project_gtap7_fe94b77_fcttx_regression_bisect_2026_07_14) — this time
+    with CONVERT ground-truth instead of a single-cell gdxdump spot-check,
+    and confirmed to be the ROOT (not a proxy) via seed_and_solve's
+    discriminator (eq_ytax('EU_28','ft') was the #1 real residual, 2.59,
+    when seeded at the GAMS point with fcttx=rtf still applied).
+
+    Returns the count of eq_ytax['ft'] cells rebuilt.
+    """
+    from pyomo.environ import Constraint
+
+    ytax = getattr(m, "ytax", None)
+    eq_ytax = getattr(m, "eq_ytax", None)
+    if ytax is None or eq_ytax is None:
+        return 0
+
+    r_set = list(getattr(params, "sets", None).r) if getattr(params, "sets", None) else None
+    if r_set is None:
+        return 0
+
+    n = 0
+    for r in r_set:
+        key = (r, "ft", period)
+        try:
+            eq_ytax[key].deactivate()
+        except (KeyError, Exception):
+            continue
+        new_name = f"_eq_ytax_ft_recal_{r}_{period}"
+        m.add_component(
+            new_name,
+            Constraint(expr=ytax[(r, "ft", period)] == 0.0),
+        )
+        n += 1
+    return n
+
+
 def solve_multiperiod(
     m,
     params,
@@ -2648,6 +2706,15 @@ def solve_multiperiod(
         _logging.getLogger(__name__).info(
             "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
 
+    # Rebuild eq_ytax['ft'] with fcttx recalculated from THIS period's own
+    # pf/xf (GAMS fcttx.fx(...)=ftrv/(pf.l*xf.l), NOT the fixed benchmark
+    # rtf constant Python's model.fcttx Param bakes in at build time).
+    _n_ytax_ft = _rebuild_eq_ytax_ft(m, p_alt, "check")
+    if _n_ytax_ft:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "check period: rebuilt %d eq_ytax['ft'] cells (period-recalculated fcttx)", _n_ytax_ft)
+
     # TEMP DEBUG HOOK (session-local, remove before commit): export the fully
     # recalibrated, fully-unfixed check-period model to .nl right before PATH
     # would solve it — for a CONVERT/GAMS comparison and a NEOS submission.
@@ -2839,6 +2906,13 @@ def solve_multiperiod(
         import logging as _logging
         _logging.getLogger(__name__).info(
             "shock period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
+
+    # Rebuild eq_ytax['ft'] for shock (same rationale as check).
+    _n_ytax_ft = _rebuild_eq_ytax_ft(m, params_shock, "shock")
+    if _n_ytax_ft:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "shock period: rebuilt %d eq_ytax['ft'] cells (period-recalculated fcttx)", _n_ytax_ft)
 
     # gtap-mode: inject the tariff shock INTO the solved eq_pmeq[*,*,*,'shock']
     # cells (shock-in-equations) instead of relying on the post-solve cosmetic pm

@@ -3915,6 +3915,27 @@ if(years(tsim) ne firstYear,
 
    options limrow = 3, limcol = 3, solprint = off, iterlim = 1000 ;
 
+* === PATH stabilisation for the ifSUB=1 shock restart (see
+* === _inject_path_opt_for_shock): default PATH diverges from the check
+* === warm-start on the large datasets; a proximal perturbation + higher
+* === iteration limits let it converge.  Faithful (solver tuning, no eq change).
+$onecho > path.opt
+convergence_tolerance 1e-9
+major_iteration_limit 2000
+minor_iteration_limit 100000
+cumulative_iteration_limit 1000000
+proximal_perturbation 1e-2
+crash_method pnewton
+crash_perturb yes
+nms_initial_reference_factor 2
+gradient_step_limit 20
+restart_limit 5
+lemke_start automatic
+time_limit 3600
+$offecho
+   gtap.optfile = 1 ;
+
+
    if(years(tsim) gt firstYear,
 
       $$iftheni.solve "%simType%" == "CompStat"
