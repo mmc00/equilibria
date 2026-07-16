@@ -2607,24 +2607,53 @@ def _run_path_capi_nonlinear_full(
                   f"(run standalone: /opt/homebrew/bin/ipopt {_scaled_nl_export_path})",
                   file=sys.stderr)
 
-        opt = _PyoSF3("ipopt")
-        # ROOT CAUSE (confirmed via GAMS's own IPOPT solver manual,
-        # gams.com/latest/docs/S_IPOPT.html): nlp_scaling_method's default is
-        # "gradient-based IF GAMS scaleopt is not set, otherwise none" — GAMS
-        # running with scaleopt=1 SILENTLY sets nlp_scaling_method=none
-        # inside IPOPT, so its own model-level scaling is the ONLY scaling
-        # applied. The prior attempt here applied Jacobian-based scaling via
-        # core.scale_model but left nlp_scaling_method at IPOPT's vanilla
-        # default (gradient-based) — stacking a SECOND scaling pass on top of
-        # the first, which is why that run hit feasibility-restoration mode
-        # even EARLIER (iteration ~7) than the unscaled run (iteration
-        # ~220-240). Setting nlp_scaling_method=none here replicates exactly
-        # what GAMS does under scaleopt=1: one scaling pass, not two.
-        opt.options["nlp_scaling_method"] = "none"
-        opt.options["max_iter"] = 1000
-        res = opt.solve(_solve_target, tee=True)
-        if _solve_target is not model:
-            _PyoTF3("core.scale_model").propagate_solution(_solve_target, model)
+        # FAST PATH: solve the Pyomo model THROUGH GAMS's own engine
+        # (SolverFactory('gams', solver='ipopt')) instead of a standalone
+        # IPOPT. Pyomo's gams_writer translates the ConcreteModel to a
+        # temporary .gms, GAMS compiles+solves it with its bundled IPOPT
+        # (which is ~25x faster here — ~2-3 min vs ~1 hr — because GAMS adds
+        # scaleopt=1 model scaling + MC19 linear-system equilibration + a
+        # better warm-start that the standalone .nl path lacks) and returns
+        # the solution into the Pyomo Vars. Roundtrip verified working on a
+        # small NLP. When this path is used, do NOT pre-scale via
+        # core.scale_model — GAMS does its own scaling, and stacking ours on
+        # top would re-introduce the double-scaling bug from the other branch.
+        if os.environ.get("EQUILIBRIA_DEBUG_NLP_VIA_GAMS"):
+            os.environ["PATH"] = (
+                "/Library/Frameworks/GAMS.framework/Versions/Current/Resources:"
+                + os.environ.get("PATH", "")
+            )
+            opt = _PyoSF3("gams")
+            # Solve the UNSCALED model directly — GAMS applies its own
+            # scaleopt. add_options injects a .gms directive setting
+            # scaleopt=1 (row/col scaling) to match the real GAMS gtap run.
+            res = opt.solve(
+                model,
+                solver="ipopt",
+                tee=True,
+                add_options=["option nlp=ipopt;"],
+                io_options={"symbolic_solver_labels": True},
+            )
+            print(f"[nlp-square] solved via GAMS/IPOPT: status={res.solver.status} "
+                  f"term={res.solver.termination_condition}", file=sys.stderr)
+        else:
+            opt = _PyoSF3("ipopt")
+            # ROOT CAUSE (confirmed via GAMS's own IPOPT solver manual,
+            # gams.com/latest/docs/S_IPOPT.html): nlp_scaling_method's default
+            # is "gradient-based IF GAMS scaleopt is not set, otherwise none"
+            # — GAMS running with scaleopt=1 SILENTLY sets
+            # nlp_scaling_method=none inside IPOPT, so its own model-level
+            # scaling is the ONLY scaling applied. A prior attempt applied
+            # Jacobian-based scaling via core.scale_model but left
+            # nlp_scaling_method at IPOPT's vanilla default (gradient-based)
+            # — stacking a SECOND scaling pass, hitting feasibility-
+            # restoration mode by iteration ~7. Setting nlp_scaling_method=
+            # none replicates GAMS under scaleopt=1: one scaling pass.
+            opt.options["nlp_scaling_method"] = "none"
+            opt.options["max_iter"] = 1000
+            res = opt.solve(_solve_target, tee=True)
+            if _solve_target is not model:
+                _PyoTF3("core.scale_model").propagate_solution(_solve_target, model)
         rows = []
         for _c in model.component_objects(_PyoCon3, active=True):
             for _idx in _c:

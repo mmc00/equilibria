@@ -215,6 +215,50 @@ def _fix_acts_comm_collision(text: str) -> str:
     return text.replace(block, new_block, 1)
 
 
+def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> str:
+    """Emit GAMS assignment lines for a factor header (FBEP/FTRV) read from a
+    basedata.har, matching the inliner's own `* <NAME> data (N cells)` block
+    format (index order ENDW/factor, ACTS/activity, REG/region; raw values).
+
+    The ACTS element gets whatever prefix the dataset's own inlined sets use for
+    activities (gtap7_3x3 uses `a_Food`; gtap7_15x10 uses bare `Rice`) — detected
+    from the already-built `inlined` .gms so the emitted keys resolve against the
+    dataset's real sets (else GAMS Error 170 domain violation at compile).
+    """
+    import sys as _sys
+    _src = str(ROOT / "src")
+    if _src not in _sys.path:
+        _sys.path.insert(0, _src)
+    from equilibria.babel.har.reader import read_har  # type: ignore
+    import numpy as _np
+
+    try:
+        har = read_har(har_path, select_headers=[header])
+    except Exception:
+        return ""
+    h = har.get(header)
+    if h is None or getattr(h, "rank", 0) != 3:
+        return ""
+
+    # Detect the activity-set prefix from the inlined .gms's own EVFB block
+    # (same (ENDW, ACTS, REG) domain): e.g. `evfb('Land','a_Food','USA')` → a_.
+    act_prefix = ""
+    m = re.search(r"(?:^|\n)evfb\('[^']+','([acfr])_", inlined)
+    if m:
+        act_prefix = m.group(1) + "_"
+
+    endw_labels, acts_labels, reg_labels = h.set_elements
+    lines = [f"* {header} data (injected from basedata.har)"]
+    nz = _np.argwhere(h.array != 0)
+    for idx in nz:
+        f_lbl = endw_labels[idx[0]]
+        a_lbl = acts_labels[idx[1]]
+        r_lbl = reg_labels[idx[2]]
+        val = float(h.array[tuple(idx)])
+        lines.append(f"{header}('{f_lbl}','{act_prefix}{a_lbl}','{r_lbl}') = {val:.10g} ;")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True,
@@ -407,6 +451,30 @@ def main() -> None:
             if elast_block.strip():
                 prm_block += "\n" + elast_block
                 print(f"  injected default.prm elasticities (incpar/subpar/esub*) for {dataset}")
+
+    # FBEP/FTRV injection (found 2026-07-16): some datasets' v7_consolidated.gdx
+    # LOSE the FBEP (factor subsidy) / FTRV (factor tax) symbols during
+    # aggregation — gtap7_3x3's v7 has no FBEP symbol at all, so the inliner
+    # never emits a `* FBEP data` block and getData.gms's hardcoded `fbep=0`
+    # (and its `ftrv = evfp - evfb` fallback) win, producing a subsidy-BLIND
+    # reference GDX (fctts=0, pfa/pf wedge = net rtf). But the dataset's OWN
+    # basedata.har DOES carry the real FBEP/FTRV (3x3: 12/36 nonzero cells,
+    # FBEP total -0.1674 — IDENTICAL to 15x10's 177-cell total, i.e. a faithful
+    # aggregation of the same underlying subsidies). Python loads FBEP/FTRV from
+    # that basedata.har and computes fctts=-fbep/evfb, fcttx=ftrv/evfb — so a
+    # subsidy-blind reference mismatches Python for every subsidized (ag) factor.
+    # Fix: when the inlined .gms lacks the FBEP/FTRV data blocks (v7 dropped
+    # them), inject them from basedata.har with the dataset's own set-prefix
+    # convention, so the regenerated reference GDX carries the real subsidies.
+    for _sym, _n_idx in (("FBEP", 3), ("FTRV", 3)):
+        if f"* {_sym} data" in inlined or f"\n{_sym}(" in inlined:
+            continue  # already present (from the v7 via the inliner)
+        _blk = _fbep_ftrv_har_as_assignments(
+            DATASETS_DIR / dataset / "basedata.har", _sym, inlined)
+        if _blk.strip():
+            prm_block += "\n" + _blk
+            _ncells = _blk.count(" = ")
+            print(f"  injected {_sym} ({_ncells} cells) from basedata.har for {dataset}")
 
     insert_at = close_idx + len(close_marker)
     inlined = inlined[:insert_at] + "\n" + prm_block + "\n" + inlined[insert_at:]

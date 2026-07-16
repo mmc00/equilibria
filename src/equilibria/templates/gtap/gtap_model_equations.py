@@ -1626,16 +1626,25 @@ class GTAPModelEquations:
                 )
                 if nd_p <= 0.0:
                     nd_p = adjusted_total_intermediate
-                # VA at purchaser prices = sum(pfa*xf). pfaeq is now pf*(1+fctts+fcttx)
-                # with fctts=fcttx=0 (GAMS-faithful), so pfa==pf and VA=sum(evfb) — the
-                # old (1+rtf) factor inflated va_p, mis-splitting the and/ava VA-ND
-                # shares (eq_va/eq_nd carried ~10% residual at the GAMS point, driving
-                # the regional pf/factY imbalance). Drop rtf; set ava=1-and so both
-                # production shares are consistent (and+ava=1, va=ava·xp at benchmark).
-                va_p = sum(
-                    float(self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
-                    for f in self.sets.f
-                )
+                # VA at purchaser prices = sum(pfa*xf), pfa = pf*(1 + fctts + fcttx)
+                # (GAMS cal.gms). The two factor wedges are the real, decomposed
+                # HAR headers — fctts = -fbep/evfb (subsidy), fcttx = ftrv/evfb
+                # (tax) — NOT rtf = evfp/evfb-1 (the NET wedge, which conflates the
+                # two and drops the subsidy sign). fbep is large for ag Land/labor
+                # (EU/US farm subsidies), so with fctts=0 va_p was understated and
+                # the and/ava VA-ND split was wrong (ava=0.311 vs GAMS 0.374 for
+                # EU_28,Food → eq_va/eq_nd ~0.09-0.12 residual at the GAMS seed).
+                # This mirrors _pfa_bench/va_val in gtap_parameters.py exactly, so
+                # model.ava_param now matches params.calibrated.ava_param and GAMS's
+                # benchmark va/xp share. and+ava=1 still holds (both scale with xp).
+                va_p = 0.0
+                for f in self.sets.f:
+                    evfb_val = float(self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
+                    if evfb_val <= 0.0:
+                        continue
+                    fbep_val = float(self.params.benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                    ftrv_val = float(self.params.benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
+                    va_p += evfb_val + (ftrv_val - fbep_val)
                 xp_model_equiv = nd_p + va_p
                 adjusted_and_param[(r, a)] = nd_p / xp_model_equiv if xp_model_equiv > 0.0 else 0.0
                 adjusted_ava_param[(r, a)] = va_p / xp_model_equiv if xp_model_equiv > 0.0 else 0.0
@@ -3753,20 +3762,31 @@ class GTAPModelEquations:
             return float(prdtx_init.get((r, a, i), 0.0) or 0.0)
         model.prdtx = Param(model.r, model.a, model.i, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax")
 
-        # GAMS betaCal: fcttx = ftrv/EVFB (ad-valorem factor tax rate), factor-keyed
-        # (region,FACTOR,activity). taxes.rtf (HAR header RTIN, set order
-        # ENDW/ACTS/REG) is this same factor-keyed quantity — verified against a
-        # real GAMS out.gdx to 9 significant figures via va_val/gx_param. taxes.rtfd/
-        # rtfi (HAR headers RTFD/RTFM) are COMMODITY-keyed (region,COMMODITY,activity,
-        # set order COMM/ACTS/REG) — a structurally different domain; looking them up
-        # with a factor key silently misses every time (0/750 hits, confirmed empirically)
-        # and always returns the dict default, regardless of dataset. fctts (subsidy)
-        # is genuinely 0 here (GAMS hardcodes fbep=0 in cal.gms).
-        rtf_p = getattr(self.params.taxes, "rtf", {}) or {}
+        # GAMS betaCal factor wedges (cal.gms:162, 23902), the LIVE Params that
+        # eq_pfaeq (pfa = pf*(1 + fctts + fcttx)) and eq_ytax read — the exact
+        # decomposed counterpart of _pfa_bench/_factor_tax_value:
+        #   fcttx =  ftrv/evfb  (factor TAX,     HAR FTRV)
+        #   fctts = -fbep/evfb  (factor SUBSIDY, HAR FBEP)
+        # Both already inScale-scaled by the loader. fbep is genuinely large and
+        # nonzero for subsidized factors (Land/Capital/labor of ag sectors — EU/US
+        # farm & land subsidies, ~177 cells in 15x10). The OLD source (taxes.rtf =
+        # evfp/evfb - 1) is the NET wedge (evfp already nets tax against subsidy);
+        # it collapses fctts into fcttx and drops the sign, so with fbep!=0 the
+        # subsidy was being ignored (fctts=0) — understating pfa→va→ytax(fs) and
+        # producing the eq_va/eq_nd/eq_ytax residuals that made PATH/IPOPT diverge.
+        # Verified: -fbep/evfb reproduces GAMS fctts (EU_28,Land,OtherCrops=0.510902)
+        # and ftrv/evfb reproduces fcttx (0.026), sum == pfa/pf-1, all exact.
+        bm = self.params.benchmark
         def _fcttx_init(m, r, f, a):
-            return float(rtf_p.get((r, f, a), 0.0) or 0.0)
+            evfb_val = float(bm.evfb.get((r, f, a), 0.0) or 0.0)
+            if evfb_val <= 0.0:
+                return 0.0
+            return float(bm.ftrv.get((r, f, a), 0.0) or 0.0) / evfb_val
         def _fctts_init(m, r, f, a):
-            return 0.0
+            evfb_val = float(bm.evfb.get((r, f, a), 0.0) or 0.0)
+            if evfb_val <= 0.0:
+                return 0.0
+            return -float(bm.fbep.get((r, f, a), 0.0) or 0.0) / evfb_val
         model.fcttx = Param(model.r, model.f, model.a, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production")
         model.fctts = Param(model.r, model.f, model.a, within=Reals, initialize=_fctts_init, mutable=True, doc="Subsidies on factors of production")
 
@@ -5559,7 +5579,15 @@ class GTAPModelEquations:
                 return model.ytax[r, gy] == total
 
             if gy == "fs":
-                return model.ytax[r, gy] == 0.0
+                # GAMS ytaxeq (model.gms:652): YTAX(r,"fs") = sum(fctts*pf*xf/xscale)
+                # — the factor-SUBSIDY revenue stream, mirror of "ft" with fctts
+                # (= -fbep/evfb, negative) instead of fcttx. Was hardcoded 0 while
+                # fctts was 0; now that fctts is the real factor subsidy it is a
+                # genuine (negative) government stream feeding ytaxTot→yTaxInd→regY.
+                total = 0.0
+                for (rr, f, a) in [(rr, f, a) for (rr, f, a) in model.fctts if rr == r]:
+                    total += model.fctts[rr, f, a] * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                return model.ytax[r, gy] == total
 
             if gy in ("fc", "pc", "gc", "ic"):
                 if gy == "fc":

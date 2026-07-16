@@ -1078,6 +1078,56 @@ etrae('NatRes','ROW') = -0.001000000047 ;
 rorFlex0('USA') = 10 ;
 rorFlex0('EU_28') = 10 ;
 rorFlex0('ROW') = 10 ;
+* FBEP data (injected from basedata.har)
+FBEP('Land','a_Food','USA') = -9419.345703 ;
+FBEP('Land','a_Food','EU_28') = -24050.85156 ;
+FBEP('Land','a_Food','ROW') = -36261.22656 ;
+FBEP('UnSkLab','a_Food','USA') = -2072.498291 ;
+FBEP('UnSkLab','a_Food','EU_28') = -23071.52148 ;
+FBEP('UnSkLab','a_Food','ROW') = -12537.58203 ;
+FBEP('SkLab','a_Food','USA') = -2023.032715 ;
+FBEP('SkLab','a_Food','EU_28') = -7168.943359 ;
+FBEP('SkLab','a_Food','ROW') = -1042.674805 ;
+FBEP('Capital','a_Food','USA') = -3635.937988 ;
+FBEP('Capital','a_Food','EU_28') = -18409.45508 ;
+FBEP('Capital','a_Food','ROW') = -27742.77734 ;
+* FTRV data (injected from basedata.har)
+FTRV('Land','a_Food','USA') = 2070.950684 ;
+FTRV('Land','a_Food','EU_28') = 2027.685181 ;
+FTRV('Land','a_Food','ROW') = 7298.186035 ;
+FTRV('UnSkLab','a_Food','USA') = 24356.07227 ;
+FTRV('UnSkLab','a_Food','EU_28') = 69758.61719 ;
+FTRV('UnSkLab','a_Food','ROW') = 88330.11719 ;
+FTRV('UnSkLab','a_Mnfcs','USA') = 143519.5938 ;
+FTRV('UnSkLab','a_Mnfcs','EU_28') = 204866.1094 ;
+FTRV('UnSkLab','a_Mnfcs','ROW') = 201491.4844 ;
+FTRV('UnSkLab','a_Svces','USA') = 676310.5625 ;
+FTRV('UnSkLab','a_Svces','EU_28') = 766386.5 ;
+FTRV('UnSkLab','a_Svces','ROW') = 785347.0625 ;
+FTRV('SkLab','a_Food','USA') = 12469.69629 ;
+FTRV('SkLab','a_Food','EU_28') = 40294.38672 ;
+FTRV('SkLab','a_Food','ROW') = 19635.19336 ;
+FTRV('SkLab','a_Mnfcs','USA') = 47483.75781 ;
+FTRV('SkLab','a_Mnfcs','EU_28') = 210499.0781 ;
+FTRV('SkLab','a_Mnfcs','ROW') = 106336.125 ;
+FTRV('SkLab','a_Svces','USA') = 773199.6875 ;
+FTRV('SkLab','a_Svces','EU_28') = 1092328.375 ;
+FTRV('SkLab','a_Svces','ROW') = 712390.3125 ;
+FTRV('Capital','a_Food','USA') = 11290.52051 ;
+FTRV('Capital','a_Food','EU_28') = 10041.88184 ;
+FTRV('Capital','a_Food','ROW') = 19329.10938 ;
+FTRV('Capital','a_Mnfcs','USA') = 48505.62109 ;
+FTRV('Capital','a_Mnfcs','EU_28') = 29975.99414 ;
+FTRV('Capital','a_Mnfcs','ROW') = 72090.55469 ;
+FTRV('Capital','a_Svces','USA') = 302947 ;
+FTRV('Capital','a_Svces','EU_28') = 189786.7812 ;
+FTRV('Capital','a_Svces','ROW') = 234718.4219 ;
+FTRV('NatRes','a_Food','USA') = 264.7532043 ;
+FTRV('NatRes','a_Food','EU_28') = 296.8175659 ;
+FTRV('NatRes','a_Food','ROW') = 1318.46167 ;
+FTRV('NatRes','a_Mnfcs','USA') = 3799.888184 ;
+FTRV('NatRes','a_Mnfcs','EU_28') = 604.5817871 ;
+FTRV('NatRes','a_Mnfcs','ROW') = 7699.074219 ;
 
 * --------------------------------------------------------------------------------------------------
 *
