@@ -2733,6 +2733,37 @@ def solve_multiperiod(
         print(f"[export] wrote check-period .nl to {_nl_export_path}", file=_sys_dbg.stderr)
         raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check")
 
+    # TEMP DEBUG HOOK (session-local): export the fully-prepared check-period
+    # Pyomo model to a GAMS .gms (Pyomo's gams_writer, flat/scalar form) right
+    # before PATH would solve it — so it can be diffed equation-by-equation
+    # against the GAMS bundle's own .gms (both now in GAMS syntax). Accepts a
+    # period suffix via EQUILIBRIA_DEBUG_EXPORT_GMS_PERIOD (default: this call's
+    # active period is check). No-op unless the env var is set.
+    _gms_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK")
+    if _gms_export_path:
+        # GAMS writer needs exactly one objective; the CNS/MCP model has none.
+        # Mirror the NLP formulation (maximize walras): deactivate eq_walras[check]
+        # and expose walras[check] as the Objective — same as GAMS's ifMCP=0 branch.
+        from pyomo.environ import Objective as _PyoObjGms, maximize as _pyo_max_gms
+        _ew_gms = getattr(m, "eq_walras", None)
+        if _ew_gms is not None:
+            for _idx in list(_ew_gms):
+                _match = (_idx and _idx[-1] == "check") if isinstance(_idx, tuple) else (_idx == "check")
+                if _match and _ew_gms[_idx].active:
+                    _ew_gms[_idx].deactivate()
+        _wv_gms = getattr(m, "walras", None)
+        try:
+            _wvd_gms = _wv_gms["check"]
+        except Exception:
+            _wvd_gms = _wv_gms
+        if _wvd_gms is not None and _wvd_gms.fixed:
+            _wvd_gms.unfix()
+        m._nlp_walras_objective_gms = _PyoObjGms(expr=_wvd_gms, sense=_pyo_max_gms)
+        m.write(_gms_export_path, format="gams",
+                io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote check-period .gms to {_gms_export_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK: stopping right before PATH solves check")
+
     # TEMP DEBUG HOOK (session-local, remove before commit): same export, but
     # reformulated as an NLP (maximize walras) instead of a CNS (min 0 s.t.
     # equalities) — mirrors GAMS's ifMCP=0 branch (`solve gtap using nlp
