@@ -18,8 +18,10 @@ from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel, PERIODS
 from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-gdx_ref = ROOT / "output/gtap7_3x3_pure_local_bundle/out_3x3_nlp.gdx"
-d = ROOT / "datasets" / "gtap7_3x3"
+DATASET = sys.argv[1] if len(sys.argv) > 1 else "gtap7_3x3"
+_bundle = {"gtap7_3x3": "out_3x3_nlp.gdx", "gtap7_5x5": "out_5x5_nlp.gdx"}.get(DATASET)
+gdx_ref = ROOT / f"output/{DATASET}_pure_local_bundle/{_bundle}"
+d = ROOT / "datasets" / DATASET
 p = GTAPParameters()
 p.load_from_har(basedata_path=d/"basedata.har", sets_path=d/"sets.har", default_path=d/"default.prm", baserate_path=d/"baserate.har")
 rr = list(p.sets.r)[-1]
