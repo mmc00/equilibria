@@ -32,7 +32,10 @@ mp.seed_all_periods(m, gdx_ref)
 solve_multiperiod(m, p, gc, ref_gdx=gdx_ref, skip_base_solve=True, mute_welfare=True,
                   seed_from_prior=False, holdfix_cd=False, mode="gtap")
 
-# collect ALL variable values (all periods) into per-symbol dicts
+# collect ALL variable AND parameter values (all periods) into per-symbol dicts.
+# Params are dumped with a p_ prefix so the diff can compare calibrated inputs
+# (gf/aft/gf_share/and_param/...) against the GAMS GDX's own params.
+from pyomo.environ import Param
 syms = {}
 for v in m.component_objects(Var, active=True):
     nm = v.name
@@ -42,7 +45,23 @@ for v in m.component_objects(Var, active=True):
         except Exception:
             continue
         key = idx if isinstance(idx, tuple) else (idx,)
-        syms.setdefault(nm, {})[tuple(str(x) for x in key)] = val
+        syms.setdefault("v_" + nm, {})[tuple(str(x) for x in key)] = val
+for pcomp in m.component_objects(Param, active=True):
+    nm = pcomp.name
+    try:
+        items = list(pcomp.items())
+    except Exception:
+        continue
+    for idx, pv in items:
+        try:
+            val = float(V(pv)) if hasattr(pv, "__float__") or True else float(pv)
+        except Exception:
+            try:
+                val = float(pv)
+            except Exception:
+                continue
+        key = idx if isinstance(idx, tuple) else (idx,)
+        syms.setdefault("p_" + nm, {})[tuple(str(x) for x in key)] = val
 
 # write a GAMS .gms that declares each symbol as a parameter over its keys and unloads
 out = ROOT / "output" / "pyshock_data.gms"
@@ -52,7 +71,7 @@ for nm, cells in syms.items():
     if not cells:
         continue
     dim = len(next(iter(cells)))
-    gnm = f"v_{nm}"
+    gnm = nm  # already prefixed v_/p_ above
     sym_names.append(gnm)
     idxset = ",".join(["*"] * dim) if dim else ""
     lines.append(f"parameter {gnm}({idxset});" if dim else f"scalar {gnm};")
