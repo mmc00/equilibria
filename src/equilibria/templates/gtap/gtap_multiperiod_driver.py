@@ -1265,6 +1265,65 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
     if eq is None or ytax is None or pmcif is None or xw is None:
         return 0
     imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
+    # LIVE M_PMCIF chain (same as _rebuild_import_demand_shock_ifsub): under ifSUB=1
+    # the pmcif Var is a frozen orphan, so ytax[mt] = Σ imptx·pmcif·xw baked pmcif at
+    # its seed value → mt revenue stays at the pre-shock CIF price (mt ~2.5% low across
+    # all regions).  GAMS uses M_PMCIF = M_PEFOB + M_PWMG·tmarg live on pe/ptmg.
+    _pe = getattr(m, "pe", None)
+    _ptmg = getattr(m, "ptmg", None)
+    _tmarg = getattr(m, "tmarg", None)
+    _amgm = getattr(m, "amgm", None)
+    _lambdamg = getattr(m, "lambdamg", None)
+    _etax = getattr(m, "etax", None)
+    _modes = list(getattr(m, "m", []) or [])
+    _rtxs = getattr(getattr(params_shock, "taxes", None), "rtxs", {}) or {}
+
+    def _exptax(rp, i, r):
+        return float(_rtxs.get((rp, i, r), 0.0) or 0.0)
+
+    def _etaxv(rp, i):
+        if _etax is None:
+            return 0.0
+        for k in ((rp, i, "shock"), (rp, i)):
+            try:
+                return float(_V(_etax[k]))
+            except Exception:
+                pass
+        return 0.0
+
+    def _rd(comp, *ks):
+        if comp is None:
+            return None
+        for k in ks:
+            try:
+                return float(_V(comp[k]))
+            except Exception:
+                pass
+        return None
+
+    def _pmcif_live(rp, i, r):
+        # (1+rtxs+etax)·pe + Σ_m amgm·ptmg[m]/lambdamg · tmarg  — live on pe/ptmg.
+        if _pe is None:
+            return None
+        try:
+            pefob = (1.0 + _exptax(rp, i, r) + _etaxv(rp, i)) * _pe[rp, i, r, "shock"]
+        except (KeyError, TypeError):
+            return None
+        tmarg = _rd(_tmarg, (rp, i, r, "shock"), (rp, i, r)) or 0.0
+        pwmg = 0.0
+        if _ptmg is not None and _modes and tmarg:
+            for mode in _modes:
+                amgm = _rd(_amgm, (mode, rp, i, r, "shock"), (mode, rp, i, r)) or 0.0
+                if amgm == 0.0:
+                    continue
+                try:
+                    pt = _ptmg[mode, "shock"]
+                except (KeyError, TypeError):
+                    continue
+                lam = _rd(_lambdamg, (mode, rp, i, r, "shock"), (mode, rp, i, r)) or 1.0
+                pwmg = pwmg + amgm * pt / (lam if lam else 1.0)
+        return pefob + pwmg * tmarg
+
     if not imptx_map:
         return 0
 
@@ -1317,8 +1376,10 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
     def _rule(_m, r):
         total = 0.0
         for (i, exp, imptx_shocked) in terms_by_r[r]:
-            total += (imptx_shocked + _mtax_val(r, i)) * \
-                _m.pmcif[exp, i, r, "shock"] * _m.xw[exp, i, r, "shock"]
+            _cif = _pmcif_live(exp, i, r)
+            if _cif is None:
+                _cif = _m.pmcif[exp, i, r, "shock"]  # fallback (non-ifSUB path)
+            total += (imptx_shocked + _mtax_val(r, i)) * _cif * _m.xw[exp, i, r, "shock"]
         return _m.ytax[r, "mt", "shock"] == total
 
     m.eq_ytax_mt_shock_rebuilt = Constraint(m.eq_ytax_mt_shock_idx, rule=_rule)
