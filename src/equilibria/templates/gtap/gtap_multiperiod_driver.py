@@ -964,14 +964,26 @@ def _collapse_pft_pfteq(m, period: str) -> int:
             _is_real = _eqxft is not None and _eqxft.active
 
             if _is_real:
-                # REAL factor: leave pft FREE, keep eq_pfteq + eq_xfteq active
-                # (GAMS pfteq free-row).  Deactivate the redundant per-(r,f)
-                # market-clearing eq_xft (GAMS substitutes it out).
-                if _eq_xft is not None:
+                # REAL factor: GAMS's `model gtap` block lists pfteq as a genuine
+                # FREE ROW (no MCP pair) in BOTH ifSUB modes — confirmed by
+                # diff_mcp_pairing against model_altertax_ifsub{0,1}.gms (gams_side
+                # =free_row for pfteq in each).  The prior recipe kept eq_pfteq
+                # active and deactivated eq_xft, trusting Hopcroft-Karp to square
+                # it — but the matcher then PAIRS eq_pfteq to a variable
+                # (pairing_mismatch), over-determining the factor-price block and
+                # letting PATH's line search explode pf (USA,UnSkLab pf 1.33→7.85
+                # under ifSUB=1, check code 1→2).  Faithful fix: deactivate
+                # eq_pfteq itself (mirror GAMS's free-row) and KEEP eq_xft active
+                # as the market-clearing pair — pft stays free, determined by
+                # eq_xfteq/eq_pfeq.  Restores 3x3 ifSUB1 check/shock to code 1/1
+                # (pf explosion gone) and lifts 5x5 ifSUB1 check 2→1 / shock +11pp;
+                # inert on ifSUB0 3x3 (already 1/1/1).  .nl gate unaffected
+                # (closure/pairing change, not an equation change).
+                if _eq_pfteq is not None:
                     try:
-                        _eqxftrow = _eq_xft[(_r, _f, period)]
-                        if _eqxftrow.active:
-                            _eqxftrow.deactivate()
+                        _pfteqrow = _eq_pfteq[(_r, _f, period)]
+                        if _pfteqrow.active:
+                            _pfteqrow.deactivate()
                             _n += 1
                     except KeyError:
                         pass
@@ -2648,6 +2660,66 @@ def solve_multiperiod(
         import logging as _logging
         _logging.getLogger(__name__).info(
             "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
+
+    # TEMP DEBUG PROBE (session-local): report the seed state of a target factor
+    # price + its paired equation residuals right before PATH solves check.
+    import os as _os_probe
+    _probe_pf = _os_probe.environ.get("EQUILIBRIA_DEBUG_PROBE_PF_CHECK")
+    if _probe_pf:
+        import sys as _sys_probe
+        from pyomo.environ import value as _Vp, Constraint as _Cp
+        _rr_p, _ff_p = _probe_pf.split(",")[0], _probe_pf.split(",")[1]
+        print(f"[probe-pf] --- {_rr_p},{_ff_p} check seed state ---", file=_sys_probe.stderr)
+        for _idx in getattr(m, "pf", []):
+            if _idx[0] == _rr_p and _idx[1] == _ff_p and _idx[-1] == "check":
+                _vd = m.pf[_idx]
+                print(f"[probe-pf]   pf{_idx} = {_Vp(_vd):.6f}  fixed={_vd.fixed}", file=_sys_probe.stderr)
+        for _nm in ("pft", "xf", "xft"):
+            _comp = getattr(m, _nm, None)
+            if _comp is None:
+                continue
+            for _idx in _comp:
+                if _idx[0] == _rr_p and _rr_p and len(_idx) >= 2 and _idx[1] == _ff_p and _idx[-1] == "check":
+                    try:
+                        print(f"[probe-pf]   {_nm}{_idx} = {_Vp(_comp[_idx]):.6f}  fixed={_comp[_idx].fixed}", file=_sys_probe.stderr)
+                    except Exception:
+                        pass
+        # residuals of any active constraint touching this factor
+        _rows = []
+        for _c in m.component_objects(_Cp, active=True):
+            _nml = _c.name.lower()
+            if not any(k in _nml for k in ("pf", "xf", "fnm", "endw", "fact")):
+                continue
+            for _idx in _c:
+                _cd = _c[_idx]
+                if not _cd.active:
+                    continue
+                _si = str(_idx)
+                if _rr_p not in _si or _ff_p not in _si or "check" not in _si:
+                    continue
+                try:
+                    _b = _Vp(_cd.body)
+                    _lo = _Vp(_cd.lower) if _cd.lower is not None else None
+                    _up = _Vp(_cd.upper) if _cd.upper is not None else None
+                    _res = 0.0
+                    if _lo is not None:
+                        _res = max(_res, abs(_b - _lo))
+                    if _up is not None:
+                        _res = max(_res, abs(_b - _up))
+                    _rows.append((_res, _c.name, _si))
+                except Exception:
+                    pass
+        _rows.sort(reverse=True)
+        for _res, _n, _i in _rows[:12]:
+            print(f"[probe-pf]   resid {_res:.6e}  {_n}{_i}", file=_sys_probe.stderr)
+        # is eq_pfteq / eq_xfteq active for this (r,f)?
+        for _eqn in ("eq_pfteq", "eq_xfteq", "eq_fnm", "eq_pfeq"):
+            _eqc = getattr(m, _eqn, None)
+            if _eqc is None:
+                continue
+            for _idx in _eqc:
+                if _rr_p in str(_idx) and _ff_p in str(_idx) and "check" in str(_idx):
+                    print(f"[probe-pf]   {_eqn}{_idx} active={_eqc[_idx].active}", file=_sys_probe.stderr)
 
     # TEMP DEBUG HOOK (session-local, remove before commit): export the fully
     # recalibrated, fully-unfixed check-period model to .nl right before PATH
