@@ -2661,6 +2661,128 @@ def solve_multiperiod(
         print(f"[export] wrote check-period .nl to {_nl_export_path}", file=_sys_dbg.stderr)
         raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check")
 
+    # TEMP DEBUG HOOK (session-local, remove before commit): same export, but
+    # reformulated as an NLP (maximize walras) instead of a CNS (min 0 s.t.
+    # equalities) — mirrors GAMS's ifMCP=0 branch (`solve gtap using nlp
+    # maximizing walras`), which gives IPOPT a real objective gradient to
+    # follow instead of leaving it to satisfy a pure equality system with no
+    # slack. eq_walras[..., "check"] is deactivated (it would otherwise
+    # doubly constrain `walras` on top of the Objective) and `walras` is
+    # exposed as the Objective directly, exactly like GAMS's walraseq being a
+    # free-row/objective-row instead of a paired equality under ifMCP=0.
+    _nl_export_nlp_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP")
+    if _nl_export_nlp_path:
+        from pyomo.environ import Objective as _PyoObjective, maximize as _pyo_maximize
+        _eq_walras_chk = getattr(m, "eq_walras", None)
+        if _eq_walras_chk is not None:
+            for _idx in list(_eq_walras_chk):
+                if isinstance(_idx, tuple):
+                    if _idx and _idx[-1] == "check":
+                        _eq_walras_chk[_idx].deactivate()
+                elif _idx == "check":
+                    _eq_walras_chk[_idx].deactivate()
+        _walras_var = getattr(m, "walras", None)
+        if _walras_var is None:
+            raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: model has no `walras` Var")
+        try:
+            _walras_vd = _walras_var["check"]
+        except Exception:
+            _walras_vd = _walras_var
+        # gtap_mode's _mute_welfare_tail (above) FIXES walras=0 (Walras law,
+        # correct for the MCP/CNS formulation where eq_walras pins yi[rres]
+        # instead). Under NLP (maximize walras), walras must be the FREE
+        # objective variable instead — GAMS's ifMCP=0 branch does not fix it
+        # either (walraseq is the objective row, not a constraint pinning
+        # yi[rres]). Without unfixing here the objective is a constant 0 with
+        # no gradient, which is exactly what made the first NLP export
+        # indistinguishable from the plain CNS export (both showed a flat
+        # objective=0.0 throughout every IPOPT iteration).
+        _walras_vd.unfix()
+        m._nlp_walras_objective = _PyoObjective(expr=_walras_vd, sense=_pyo_maximize)
+        m.write(_nl_export_nlp_path, format="nl", io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote check-period NLP(maximize walras) .nl to {_nl_export_nlp_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: stopping right before PATH solves check")
+
+    # TEMP DEBUG HOOK (session-local, remove before commit): SAME NLP
+    # reformulation as above, but SOLVES in-process via Pyomo's IPOPT
+    # interface (instead of exporting + a standalone `ipopt` CLI run) so the
+    # post-solve residual per Constraint is readable directly — diagnoses
+    # WHICH equation IPOPT's "locally infeasible" verdict is actually citing,
+    # rather than just the aggregate constraint-violation scalar.
+    _solve_nlp_report_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT")
+    if _solve_nlp_report_path:
+        from pyomo.environ import (
+            Objective as _PyoObjective2, maximize as _pyo_maximize2,
+            SolverFactory as _PyoSolverFactory, value as _pyo_value2, Constraint as _PyoConstraint2,
+        )
+        import json as _json_dbg
+        _eq_walras_chk2 = getattr(m, "eq_walras", None)
+        if _eq_walras_chk2 is not None:
+            for _idx in list(_eq_walras_chk2):
+                if isinstance(_idx, tuple):
+                    if _idx and _idx[-1] == "check":
+                        _eq_walras_chk2[_idx].deactivate()
+                elif _idx == "check":
+                    _eq_walras_chk2[_idx].deactivate()
+        _walras_var2 = getattr(m, "walras", None)
+        try:
+            _walras_vd2 = _walras_var2["check"]
+        except Exception:
+            _walras_vd2 = _walras_var2
+        _walras_vd2.unfix()
+        m._nlp_walras_objective = _PyoObjective2(expr=_walras_vd2, sense=_pyo_maximize2)
+        opt = _PyoSolverFactory("ipopt")
+        opt.options["max_iter"] = 1000
+        # Numerical-scaling tuning aimed at near-zero SAM cells (e.g.
+        # xd[CHN,Rice,MachEq]~1.1e-6 against sigma_m=3.87 — a tiny base value
+        # raised to a steep exponent amplifies ordinary Newton-step price
+        # noise into an outsized absolute residual). gradient-based scaling
+        # rescales each row/col by its Jacobian's own magnitude instead of
+        # leaving IPOPT's default (unit) scaling to treat a 1e-6 row the same
+        # as an O(1) row. mu_strategy=adaptive + bound_relax_factor=0 mirror
+        # what a hand-tuned barrier path does for exactly this shape of
+        # problem (many O(1) blocks, a few O(1e-6) blocks) instead of using
+        # a fixed global barrier schedule that serves the O(1) rows and
+        # starves the O(1e-6) rows of resolution.
+        opt.options["nlp_scaling_method"] = "gradient-based"
+        opt.options["bound_relax_factor"] = 0
+        opt.options["mu_strategy"] = "adaptive"
+        opt.options["tol"] = 1e-7
+        res = opt.solve(m, tee=True)
+        rows = []
+        for c in m.component_objects(_PyoConstraint2, active=True):
+            for idx in c:
+                cd = c[idx]
+                if not cd.active:
+                    continue
+                if isinstance(idx, tuple):
+                    if not idx or idx[-1] != "check":
+                        continue
+                elif idx != "check":
+                    continue
+                try:
+                    b = _pyo_value2(cd.body)
+                    lo = _pyo_value2(cd.lower) if cd.lower is not None else None
+                    up = _pyo_value2(cd.upper) if cd.upper is not None else None
+                    r = 0.0
+                    if lo is not None:
+                        r = max(r, abs(b - lo))
+                    if up is not None:
+                        r = max(r, abs(b - up))
+                    rows.append((r, c.name, str(idx)))
+                except Exception:
+                    pass
+        rows.sort(reverse=True)
+        report = {
+            "solver_status": str(res.solver.status),
+            "termination_condition": str(res.solver.termination_condition),
+            "walras_value": _pyo_value2(_walras_vd2),
+            "top_residuals": [{"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]],
+        }
+        Path(_solve_nlp_report_path).write_text(_json_dbg.dumps(report, indent=2))
+        print(f"[report] wrote {_solve_nlp_report_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT: stopping after in-process NLP solve+report")
+
     # Solve check on m.
     r_chk = run_gtap._run_path_capi_nonlinear_full(
         m, p_alt,
