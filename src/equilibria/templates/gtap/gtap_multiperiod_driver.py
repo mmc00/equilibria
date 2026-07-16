@@ -207,10 +207,35 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
     va = getattr(m, "va", None)
     pfa = getattr(m, "pfa", None)
     pva = getattr(m, "pva", None)
+    pf = getattr(m, "pf", None)
 
     sigmand_map = getattr(params.elasticities, "sigmand", {}) or {}
     sigmav_map = getattr(params.elasticities, "sigmav", {}) or {}
     lambdaf_map = getattr(params.shifts, "lambdaf", {}) or {}
+
+    # if_sub: GAMS's xfeq uses the LIVE macro M_PFA = pf*(1+fctts+fcttx), NOT the
+    # pfa Var (which is eliminated under if_sub). The rebuilt eq_xfeq below must
+    # keep the same live pf-dependence, else xf stops responding to pf and the
+    # factor price becomes a free DOF that explodes (pf[Land] 11.4 vs GAMS 0.98).
+    # The wedge (fctts+fcttx) = (ftrv-fbep)/evfb is a constant per (r,f,a).
+    # if_sub detection: under if_sub the pfa Var is eliminated (no eq_pfaeq pins
+    # it), so xfeq uses the live macro. Detect by the pfaeq being absent/inactive.
+    _eq_pfaeq = getattr(m, "eq_pfaeq", None)
+    _if_sub = True
+    if _eq_pfaeq is not None:
+        try:
+            _if_sub = not any(_eq_pfaeq[_i].active for _i in _eq_pfaeq)
+        except Exception:
+            _if_sub = True
+    _bm = getattr(params, "benchmark", None)
+    def _wedge(r, f, a):
+        if _bm is None:
+            return 0.0
+        evfb = float(_bm.evfb.get((r, f, a), 0.0) or 0.0)
+        if evfb <= 0.0:
+            return 0.0
+        return (float(_bm.ftrv.get((r, f, a), 0.0) or 0.0)
+                - float(_bm.fbep.get((r, f, a), 0.0) or 0.0)) / evfb
 
     n_rebuilt = 0
 
@@ -273,10 +298,18 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
             eq_xfeq[idx].deactivate()
             lf = max(float(lambdaf_map.get((r, f, a), 1.0)), 1e-8)
             va_idx = (r, a, active_period)
+            # Denominator = M_PFA. Under if_sub use the LIVE macro pf*(1+wedge) so
+            # xf responds to the live pf (anchoring the factor price); else the
+            # eliminated pfa Var bakes to a constant and pf becomes a free DOF that
+            # explodes (pf[Land] 11.4 vs GAMS 0.98). Not if_sub → the live pfa Var.
+            if _if_sub and pf is not None:
+                _m_pfa_live = pf[idx] * (1.0 + _wedge(r, f, a))
+            else:
+                _m_pfa_live = pfa[idx]
             m.add_component(
                 f"_eq_xfeq_recal_{r}_{f}_{a}_{active_period}",
                 Constraint(expr=xf[idx] == af_new * va[va_idx]
-                           * (pva[va_idx] / pfa[idx]) ** sigmav * (lf ** (sigmav - 1.0))),
+                           * (pva[va_idx] / _m_pfa_live) ** sigmav * (lf ** (sigmav - 1.0))),
             )
             n_rebuilt += 1
 
