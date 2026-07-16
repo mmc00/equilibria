@@ -1236,6 +1236,19 @@ class GTAPBenchmarkValues:
         # previously-used rtf=evfp/evfb-1 conflates the tax (ftrv) and subsidy
         # (fbep) into one net wedge, giving the wrong sign/magnitude whenever
         # fbep!=0 (e.g. EU_28,Land,OtherCrops: rtf=-0.485 vs true fcttx=+0.026).
+        #
+        # GAMS's ORDER (getData.gms): (1) ftrv = evfp - evfb  [line 916/7330],
+        # then (2) the raw FTRV header OVERWRITES it [injected data, line 1094+].
+        # So the header WINS where it has a value, and evfp-evfb is the fallback
+        # where the header is 0/absent. For most datasets the header carries ftrv
+        # (3x3 EU_28,UnSkLab=69759 ≠ evfp-evfb=46687, header wins). But some cells
+        # have a ZERO header (10x7 IND,Land,Rice) where GAMS keeps evfp-evfb=−13.18;
+        # reading only the header there drops ftrv → fcttx=0 vs GAMS −0.0011 →
+        # ytax(ft) wrong sign. Replicate GAMS's order: evfp-evfb base, header override.
+        for _k in set(self.vfm) | set(self.evfb):
+            _v = float(self.vfm.get(_k, 0.0) or 0.0) - float(self.evfb.get(_k, 0.0) or 0.0)
+            if _v != 0.0:
+                self.ftrv[_k] = _v
         self.ftrv.update(_h("FTRV", ["ENDW", "ACTS", "REG"], r201))
 
         # 3D trade (COMM, REG, REG) → (r, i, rp)
