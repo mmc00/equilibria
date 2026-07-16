@@ -3151,6 +3151,33 @@ def solve_multiperiod(
                 "shock period: rebuilt %d eq_ytax[mt] cells with the shocked "
                 "imptx (income-leak fix, shock-in-equations, gtap-mode)", _n_ymt)
 
+    # TEMP DEBUG HOOK (session-local): export the fully-prepared SHOCK-period Pyomo
+    # model to a GAMS .gms (walras as maximize objective) right before PATH solves
+    # it — for an equation-by-equation diff of the shock tariff rebuild vs the GAMS
+    # bundle. No-op unless the env var is set.
+    import os as _os_shk
+    import sys as _sys_shk
+    _gms_shk_path = _os_shk.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK")
+    if _gms_shk_path:
+        from pyomo.environ import Objective as _PyoObjShk, maximize as _pyo_max_shk
+        _ew_shk = getattr(m, "eq_walras", None)
+        if _ew_shk is not None:
+            for _idx in list(_ew_shk):
+                _match = (_idx and _idx[-1] == "shock") if isinstance(_idx, tuple) else (_idx == "shock")
+                if _match and _ew_shk[_idx].active:
+                    _ew_shk[_idx].deactivate()
+        _wv_shk = getattr(m, "walras", None)
+        try:
+            _wvd_shk = _wv_shk["shock"]
+        except Exception:
+            _wvd_shk = _wv_shk
+        if _wvd_shk is not None and _wvd_shk.fixed:
+            _wvd_shk.unfix()
+        m._nlp_walras_objective_shk = _PyoObjShk(expr=_wvd_shk, sense=_pyo_max_shk)
+        m.write(_gms_shk_path, format="gams", io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote shock-period .gms to {_gms_shk_path}", file=_sys_shk.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK: stopping right before PATH solves shock")
+
     # Solve shock on m with shocked params.
     r_shk = run_gtap._run_path_capi_nonlinear_full(
         m, params_shock,
