@@ -1459,7 +1459,17 @@ class GTAPModelEquations:
                     )
                     if evfb_val <= 0.0:
                         continue
-                    va_level += evfb_val
+                    # VA at purchaser prices = Σ pfa·xf = Σ evfb·(1+fctts+fcttx),
+                    # wedge = (ftrv-fbep)/evfb (HAR FBEP/FTRV). MUST include the
+                    # subsidy wedge here too: for heavily-subsidized ag sectors
+                    # (EU_28,Crops) dropping it makes xp = nd+Σevfb = 0.260 fall
+                    # BELOW the 0.316 decile boundary → round(log10) = -1 → xscale
+                    # = 10 (GAMS's is 1, xp = 0.337 WITH the wedge). That 10x
+                    # xscale inflates every Crops quantity (xf/xm/xd) by 10x. Same
+                    # va-without-subsidy class as the va_p/ava_param fix.
+                    fbep_val = float(self.params.benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                    ftrv_val = float(self.params.benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
+                    va_level += evfb_val + (ftrv_val - fbep_val)
 
                 xp_level = nd_level + va_level
                 if xp_level <= 0.0:
