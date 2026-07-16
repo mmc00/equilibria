@@ -2567,9 +2567,19 @@ def _run_path_capi_nonlinear_full(
             _walras_vd_sq = _walras_var_sq[_walras_idx] if _walras_idx is not None else _walras_var_sq[_period_for_walras]
         except Exception:
             _walras_vd_sq = _walras_var_sq
-        if _walras_vd_sq.fixed:
-            _walras_vd_sq.unfix()
-        model._nlp_walras_objective_sq = _PyoObj3(expr=_walras_vd_sq, sense=_pyo_max3)
+        if _nlp_solve_mode:
+            # Keep the MCP closure EXACTLY: walras stays fixed=0 (Walras law),
+            # eq_walras stays active pinning yi[rres] — this is the true
+            # equilibrium GAMS's NLP also reaches (walras=0 there too). Solve the
+            # pure feasibility system with a constant objective (IPOPT needs one
+            # active objective but the CNS system has none). Do NOT unfix walras
+            # and maximize it — that adds a spurious DOF and lands walras=168.
+            from pyomo.environ import Objective as _PyoObjConst
+            model._nlp_walras_objective_sq = _PyoObjConst(expr=0.0, sense=_pyo_max3)
+        else:
+            if _walras_vd_sq.fixed:
+                _walras_vd_sq.unfix()
+            model._nlp_walras_objective_sq = _PyoObj3(expr=_walras_vd_sq, sense=_pyo_max3)
 
         # KEY FIX: GAMS runs this SAME IPOPT (3.14.19, verified same version,
         # zero user-set options — "List of user-set options:" is EMPTY in its
