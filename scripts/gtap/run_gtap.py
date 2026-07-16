@@ -2483,11 +2483,19 @@ def _run_path_capi_nonlinear_full(
     # what PATH/MCP would treat as fixed/inactive, before swapping in
     # `walras` as the NLP objective in place of eq_walras.
     _nlp_solve_report_path = os.environ.get("EQUILIBRIA_DEBUG_SQUARE_NLP_SOLVE_REPORT")
+    # EQUILIBRIA_GTAP_SOLVE_NLP=1 reuses this exact in-process NLP (maximize walras
+    # via IPOPT) machinery but RETURNS the solved result instead of raising, so the
+    # driver solves EVERY period as NLP (base/check/shock) — an apples-to-apples
+    # NLP-vs-NLP comparison against a GAMS ifMCP=0 reference (IPOPT slop cancels on
+    # both sides). When set, we synthesize a report path so the block below runs.
+    _nlp_solve_mode = bool(os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP"))
+    if _nlp_solve_mode and not _nlp_solve_report_path:
+        _nlp_solve_report_path = "/dev/null"
     # Optional: only fire the NLP hook for a specific period (base|check|shock),
     # letting PATH solve the others normally so the driver reaches the target
     # period with the correct multi-period freeze/warm-start in place.
     _nlp_only_period = os.environ.get("EQUILIBRIA_DEBUG_NLP_ONLY_PERIOD")
-    if _nlp_solve_report_path and _nlp_only_period:
+    if _nlp_solve_report_path and _nlp_only_period and not _nlp_solve_mode:
         _pv: dict[str, int] = {}
         for _c in constraints[:200]:
             for _p in ("base", "check", "shock"):
@@ -2535,19 +2543,28 @@ def _run_path_capi_nonlinear_full(
                         break
                 if _period_for_walras:
                     break
+        # CRITICAL for SOLVE_NLP mode: GAMS's `solve gtap using nlp maximizing
+        # walras` KEEPS walraseq active (it DEFINES walras = Σ excess income) and
+        # maximizes the free walras var — the max feasible excess is 0 at
+        # equilibrium, so this drives the system to market-clearing. Deactivating
+        # eq_walras (as the REPORT hook does) leaves walras unconstrained → IPOPT
+        # cranks it to +∞ (walras=4.9e4, infeasible). So: in solve mode, KEEP
+        # eq_walras active; only the REPORT hook deactivates it.
         _walras_deactivated_here = False
+        _walras_idx = None
         for _idx in list(_eq_walras_sq):
             _cd = _eq_walras_sq[_idx]
             _matches_period = (
                 (isinstance(_idx, tuple) and _idx and _idx[-1] == _period_for_walras)
                 or (_idx == _period_for_walras)
             )
-            if _matches_period and _cd.active:
-                _cd.deactivate()
-                _walras_deactivated_here = True
+            if _matches_period:
                 _walras_idx = _idx
+                if _cd.active and not _nlp_solve_mode:
+                    _cd.deactivate()
+                    _walras_deactivated_here = True
         try:
-            _walras_vd_sq = _walras_var_sq[_walras_idx] if _walras_deactivated_here else _walras_var_sq[_period_for_walras]
+            _walras_vd_sq = _walras_var_sq[_walras_idx] if _walras_idx is not None else _walras_var_sq[_period_for_walras]
         except Exception:
             _walras_vd_sq = _walras_var_sq
         if _walras_vd_sq.fixed:
@@ -2578,7 +2595,17 @@ def _run_path_capi_nonlinear_full(
         # one. Not just an IPOPT-option tweak: this is the layer GAMS
         # actually uses that was missing from every attempt so far.
         from pyomo.environ import Suffix as _PyoSuffix3
+        # EQUILIBRIA_GTAP_NLP_NO_JACSCALE=1 skips the Jacobian pre-scaling and
+        # solves the RAW model with nlp_scaling_method=none — closer to what GAMS
+        # does (model-level scaleopt only, no core.scale_model pre-pass). The
+        # extreme Jacobian scale spread (row 1e-7..1e4) can make IPOPT diverge on
+        # the shock period; the raw model with GAMS-style scaling is more robust.
+        _skip_jacscale = bool(os.environ.get("EQUILIBRIA_GTAP_NLP_NO_JACSCALE"))
         try:
+            if _skip_jacscale:
+                print("[nlp-square] skipping Jacobian pre-scale (NO_JACSCALE); solving raw model",
+                      file=sys.stderr)
+                raise RuntimeError("skip-jacscale")
             from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP as _PyomoNLP3
             _nlp_probe = _PyomoNLP3(model)
             _jac = _nlp_probe.evaluate_jacobian()
@@ -2664,9 +2691,29 @@ def _run_path_capi_nonlinear_full(
             # none replicates GAMS under scaleopt=1: one scaling pass.
             opt.options["nlp_scaling_method"] = "none"
             opt.options["max_iter"] = 1000
-            res = opt.solve(_solve_target, tee=True)
+            # In SOLVE_NLP mode, tolerate a non-optimal IPOPT exit: load whatever
+            # solution IPOPT reached (load_solutions=False avoids the hard
+            # "bad status: error" raise) and propagate it so the period still
+            # reports and the driver proceeds to measure it.
+            _tee_nlp = not _nlp_solve_mode
+            try:
+                res = opt.solve(_solve_target, tee=_tee_nlp)
+            except Exception as _e_nlp:
+                if not _nlp_solve_mode:
+                    raise
+                print(f"[nlp-square] IPOPT solve raised ({_e_nlp}); retrying with "
+                      f"load_solutions=False", file=sys.stderr)
+                res = opt.solve(_solve_target, tee=False, load_solutions=False)
+                try:
+                    if res.solution and len(res.solution) > 0:
+                        _solve_target.solutions.load_from(res)
+                except Exception:
+                    pass
             if _solve_target is not model:
-                _PyoTF3("core.scale_model").propagate_solution(_solve_target, model)
+                try:
+                    _PyoTF3("core.scale_model").propagate_solution(_solve_target, model)
+                except Exception:
+                    pass
         rows = []
         for _c in model.component_objects(_PyoCon3, active=True):
             for _idx in _c:
@@ -2696,6 +2743,25 @@ def _run_path_capi_nonlinear_full(
             "walras_value": _pyo_val3(_walras_vd_sq),
             "top_residuals": [{"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]],
         }
+        if _nlp_solve_mode:
+            # NLP-vs-NLP solve mode: the IPOPT solve already wrote the solution
+            # back onto the Pyomo Vars (in place). Return a PATH-compatible dict so
+            # the multi-period driver treats this period as solved and proceeds.
+            _nlp_resid = max((r_ for r_, _, _ in rows), default=0.0)
+            _nlp_ok = str(res.solver.termination_condition) in ("optimal", "locallyOptimal")
+            print(f"[nlp-square] SOLVE_NLP mode: term={res.solver.termination_condition} "
+                  f"worst_resid={_nlp_resid:.3e} walras={_pyo_val3(_walras_vd_sq):.3e}",
+                  file=sys.stderr)
+            return {
+                "status": "converged" if _nlp_ok else "failed",
+                "success": bool(_nlp_ok),
+                "solver": "ipopt-nlp",
+                "message": "Solved GTAP squared system as NLP (maximize walras) via IPOPT",
+                "termination_code": 1 if _nlp_ok else 2,
+                "residual": float(_nlp_resid),
+                "major_iterations": 0, "minor_iterations": 0,
+                "function_evaluations": 0, "jacobian_evaluations": 0,
+            }
         Path(_nlp_solve_report_path).write_text(_json3.dumps(report, indent=2))
         print(f"[nlp-square] wrote {_nlp_solve_report_path}", file=sys.stderr)
         raise RuntimeError("EQUILIBRIA_DEBUG_SQUARE_NLP_SOLVE_REPORT: stopping after in-process squared NLP solve+report")
