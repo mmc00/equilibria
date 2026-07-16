@@ -4032,30 +4032,25 @@ class GTAPModelEquations:
         if_sub = bool(getattr(self.closure, "if_sub", True)) if self.closure is not None else True
 
         def _factor_tax_value(region, factor, activity) -> float:
-            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259). fctts comes
-            # from fbep (0 by GAMS's own default) and fcttx = ftrv/(pf*xf) where
-            # ftrv=evfp-evfb (getData.gms:226) -- at benchmark pf*xf==evfb, so
-            # fcttx == evfp/evfb - 1 == Python's taxes.rtf (derive_from_benchmark:
-            # rtf = vfm/evfb - 1, vfm IS evfp under a different HAR column name).
-            # Confirmed via 3 INDEPENDENT sources, not just CONVERT-on-one-.gms:
-            # (1) real .gms getData.gms/cal.gms source text (this comment's cite),
-            # (2) a from-scratch reimplementation, Julia's GlobalTradeAnalysis-
-            #     ProjectModelV7.jl (github.com/mivanic/...), whose
-            #     prepare_taxes.jl literally computes `tfe = evfp ./ evfb`
-            #     unconditionally (no ifSUB-style branch) and build_model!.jl's
-            #     e_pfe applies `pfe = peb * tfe` always,
-            # (3) direct numeric check against a real local GAMS run of
-            #     gtap7_3x3 (EU_28/UnSkLab/Svces: implied wedge 0.42559462 vs
-            #     rtf 0.4255946209969903 -- matches to 7 sig figs).
-            # rtfi/rtfd (the OLD source here) are None/empty for every dataset
-            # checked -- not a real alternate mapping, just an empty fallback
-            # that silently produced pfa==pf. NOTE: this was tried before on
-            # gtap7_15x10 (4 attempts, all regressed PATH convergence 1->2
-            # despite being individually CONVERT-verified correct -- see
-            # project_gtap7_15x10_fcttx_convert_ground_truth_2026_07_11). Being
-            # tried again here on gtap7_3x3 specifically to see if the same
-            # regression reproduces on a different/smaller dataset.
-            return float(self.params.taxes.rtf.get((region, factor, activity), 0.0) or 0.0)
+            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259) — the LIVE
+            # counterpart of _pfa_bench's benchmark calibration. Both wedges:
+            #   fctts = -fbep/evfb  (factor subsidy, HAR FBEP)
+            #   fcttx =  ftrv/evfb  (factor tax,     HAR FTRV)
+            # so the total wedge is (ftrv - fbep)/evfb. Verified EXACT vs the
+            # reference GDX (EU_28,Land,OtherCrops: (ftrv-fbep)/evfb = 0.536905
+            # == pfa/pf - 1). The old source, taxes.rtf = evfp/evfb - 1, is the
+            # NET (evfp already nets tax against subsidy), which gives the wrong
+            # sign/magnitude whenever fbep!=0 (same cell: rtf = -0.485, not
+            # +0.537) — that is why routing _m_pfa through rtf regressed
+            # gtap7_15x10 in earlier attempts (the subsidy was being SUBTRACTED
+            # instead of ADDED). fbep/ftrv are the faithful, decomposed sources.
+            bm = self.params.benchmark
+            evfb_val = float(bm.evfb.get((region, factor, activity), 0.0) or 0.0)
+            if evfb_val <= 0.0:
+                return 0.0
+            fbep_val = float(bm.fbep.get((region, factor, activity), 0.0) or 0.0)
+            ftrv_val = float(bm.ftrv.get((region, factor, activity), 0.0) or 0.0)
+            return (ftrv_val - fbep_val) / evfb_val
 
         def _kappaf_value(region, factor, activity) -> float:
             kappa = float(self.params.taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
