@@ -19,7 +19,7 @@ from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodMode
 from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
 DATASET = sys.argv[1] if len(sys.argv) > 1 else "gtap7_3x3"
-_bundle = {"gtap7_3x3": "out_3x3_nlp.gdx", "gtap7_5x5": "out_5x5_nlp.gdx"}.get(DATASET)
+_bundle = {"gtap7_3x3": "out_3x3_nlp.gdx", "gtap7_5x5": "out_5x5_nlp.gdx", "gtap7_10x7": "out_10x7_nlp.gdx", "gtap7_15x10": "out_15x10_nlp.gdx"}.get(DATASET)
 gdx_ref = ROOT / f"output/{DATASET}_pure_local_bundle/{_bundle}"
 d = ROOT / "datasets" / DATASET
 p = GTAPParameters()
