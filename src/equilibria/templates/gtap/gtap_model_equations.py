@@ -1226,17 +1226,20 @@ class GTAPModelEquations:
             if importer == region:
                 vcif_val = bm.vcif.get((exporter, i, region), 0.0)
                 total += float(rate) * float(vcif_val or 0.0)
-        # ft — factor tax revenue (fcttx*pf*xf/xscale, GAMS eq_ytax_rule's 'ft'
-        # branch). At benchmark pf*xf/xscale == evfb (buyer-price factor flow),
-        # so this reduces to rtf*evfb (fcttx sources from taxes.rtf; see
-        # eq_pfa's M_PFA comment). Confirmed exact against a real GAMS run of
-        # gtap7_3x3 (ytax('ft') base: USA 2.02907, EU_28 2.54417, ROW 2.17840 —
-        # byte-identical to rtf*evfb here). dt (kappaf*evfb = evfb-evos) is the
-        # only stream GAMS's yTaxInd excludes; fs is 0 (fctts=0 for GTAP7).
-        for (rr, f, a), rtf in taxes.rtf.items():
-            if rr == region:
-                evfb = bm.evfb.get((region, f, a), bm.vfm.get((region, f, a), 0.0)) or 0.0
-                total += float(rtf) * float(evfb)
+        # ft + fs — factor tax and factor SUBSIDY revenue (GAMS eq_ytax's 'ft'
+        # and 'fs' branches). At benchmark pf*xf/xscale == evfb, so:
+        #   ft = Σ fcttx*evfb = Σ ftrv   (factor tax,     HAR FTRV)
+        #   fs = Σ fctts*evfb = Σ(-fbep)  (factor subsidy,  HAR FBEP)
+        # yTaxTot sums over ALL gy including both, so yTaxInd must too. The OLD
+        # code used rtf*evfb (the NET wedge evfp/evfb-1) for ft and dropped fs —
+        # correct only when fbep=0. With real fbep (EU/US ag subsidies) that
+        # under-counted the subsidy in regY, biasing betaP → eq_yc residual
+        # (EU_28 ~0.093 at the GAMS point). ftrv - fbep is the faithful, decomposed
+        # net that matches the live eq_ytax[ft]+eq_ytax[fs]. dt stays excluded.
+        for (rr, f, a) in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
+            ftrv_val = float(bm.ftrv.get((region, f, a), 0.0) or 0.0)
+            fbep_val = float(bm.fbep.get((region, f, a), 0.0) or 0.0)
+            total += ftrv_val - fbep_val
         return total
 
     def _raw_gdx_paths(self) -> list:

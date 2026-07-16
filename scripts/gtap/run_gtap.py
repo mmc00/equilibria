@@ -2483,6 +2483,19 @@ def _run_path_capi_nonlinear_full(
     # what PATH/MCP would treat as fixed/inactive, before swapping in
     # `walras` as the NLP objective in place of eq_walras.
     _nlp_solve_report_path = os.environ.get("EQUILIBRIA_DEBUG_SQUARE_NLP_SOLVE_REPORT")
+    # Optional: only fire the NLP hook for a specific period (base|check|shock),
+    # letting PATH solve the others normally so the driver reaches the target
+    # period with the correct multi-period freeze/warm-start in place.
+    _nlp_only_period = os.environ.get("EQUILIBRIA_DEBUG_NLP_ONLY_PERIOD")
+    if _nlp_solve_report_path and _nlp_only_period:
+        _pv: dict[str, int] = {}
+        for _c in constraints[:200]:
+            for _p in ("base", "check", "shock"):
+                if _c.name.endswith(f",{_p}]") or _c.name.endswith(f"[{_p}]") or _c.name.endswith(f"_{_p}"):
+                    _pv[_p] = _pv.get(_p, 0) + 1
+        _this_period = max(_pv, key=_pv.get) if _pv else "unknown"
+        if _this_period != _nlp_only_period:
+            _nlp_solve_report_path = None  # skip hook this period; PATH solves it
     if _nlp_solve_report_path:
         from pyomo.environ import (
             Objective as _PyoObj3, maximize as _pyo_max3, SolverFactory as _PyoSF3,
