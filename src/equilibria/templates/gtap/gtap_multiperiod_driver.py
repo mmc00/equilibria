@@ -2561,12 +2561,20 @@ def solve_multiperiod(
     # ordering lesson as the price-floor experiment) — this rebuilds the
     # CONSTRAINT itself using base's already-solved (seeded, gtap-mode)
     # nd/va/xp/pnd/pva/px.
-    _recalibrate_and_ava(m, p_alt, "check", "base")
-    _recalibrate_io_af(m, p_alt, "check", "base")
-    _recalibrate_gx_ax(m, p_alt, "check", "base")
-    _recalibrate_alphad_alpham(m, p_alt, "check", "base")
-    _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
-    _recalibrate_alphaa_hhd(m, p_alt, "check", "base")
+    # GAMS pure-gtap real-CES calibrates the share params ONCE at base (loop(t0))
+    # and holds them CONSTANT across periods — the reference GDX proves af/and/ava/
+    # gx/alphad/alpham/alphaa/gd/ge/gw are byte-identical base=check=shock. So in
+    # gtap-mode we must NOT re-recalibrate per period (doing so, e.g. af[EU_28,Land,
+    # Food]=0.1106 vs GAMS 0.1001, over-prices the sluggish factor: pf[Land] 19%
+    # high in the shock → shock capped ~95%). Altertax DOES recalibrate per period
+    # (GAMS iterloop for altertax) so it keeps the recal. Gated on _gtap_mode.
+    if not _gtap_mode:
+        _recalibrate_and_ava(m, p_alt, "check", "base")
+        _recalibrate_io_af(m, p_alt, "check", "base")
+        _recalibrate_gx_ax(m, p_alt, "check", "base")
+        _recalibrate_alphad_alpham(m, p_alt, "check", "base")
+        _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
+        _recalibrate_alphaa_hhd(m, p_alt, "check", "base")  # altertax only
 
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
@@ -2968,12 +2976,21 @@ def solve_multiperiod(
     freeze_inactive_periods(m, "shock")
 
     # Must come AFTER freeze_inactive_periods (same ordering as check above).
-    _recalibrate_and_ava(m, params_shock, "shock", "check")
-    _recalibrate_io_af(m, params_shock, "shock", "check")
-    _recalibrate_gx_ax(m, params_shock, "shock", "check")
-    _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
-    _recalibrate_alphaa_gov_inv(m, params_shock, "shock", "check")
-    _recalibrate_alphaa_hhd(m, params_shock, "shock", "check")
+    # EXPERIMENT (env-gated): GAMS's pure-gtap real-CES run calibrates the share
+    # params (af/and/ava/io/gx/alpha*) ONCE at base (loop(t0)) and holds them
+    # CONSTANT across periods — the GDX proves af/and/ava[EU_28,Food] are byte-
+    # identical base=check=shock. Python re-recalibrates them every period, which
+    # for the shock yields af[EU_28,Land,Food]=0.1106 vs GAMS's constant 0.1001,
+    # over-pricing the sluggish factor (pf[Land] 19% high). Skip the recal to test.
+    # Same as the check block: GAMS holds share params constant across periods in
+    # pure-gtap. Skip the per-period recal in gtap-mode (altertax keeps it).
+    if not _gtap_mode:
+        _recalibrate_and_ava(m, params_shock, "shock", "check")
+        _recalibrate_io_af(m, params_shock, "shock", "check")
+        _recalibrate_gx_ax(m, params_shock, "shock", "check")
+        _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
+        _recalibrate_alphaa_gov_inv(m, params_shock, "shock", "check")
+        _recalibrate_alphaa_hhd(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;
