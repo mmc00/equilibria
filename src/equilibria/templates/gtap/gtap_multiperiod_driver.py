@@ -2353,6 +2353,19 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
     mf_set = set(str(f) for f in getattr(fset, "mf", []))
     sf_set = set(str(f) for f in getattr(fset, "sf", []))
     etaff = getattr(getattr(params, "elasticities", None), "etaff", {}) or {}
+    _bm = getattr(params, "benchmark", None)
+
+    def _has_flow(r, f, a):
+        # GAMS xfFlag(r,fp,a) = 1 iff there is a factor flow (evfb>0). GAMS holdfixes
+        # pf ONLY where NOT xfFlag (pf.fx$(not xfFlag), comp.gms:3880) — a cell WITH a
+        # flow is left LIVE and anchored by eq_pfeq (the fnm supply/CET row). Fixing a
+        # flowing fnm cell (e.g. NatRes[ROW,Mnfcs], evfb=0.572) freezes its pf*xf out of
+        # factY → residual-region income collapses under the shock (yc[ROW] -22% ->
+        # zcons -> xw[ROW] blow-up). So only fix the genuinely-flowless cells.
+        if _bm is None:
+            return True
+        v = _bm.evfb.get((r, f, a), _bm.vfm.get((r, f, a), 0.0))
+        return abs(float(v or 0.0)) > 1e-12
 
     pf = getattr(m, "pf", None)
     if pf is None:
@@ -2369,6 +2382,8 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
             continue  # only the fnm (sector-specific) branch is degenerate here
         if float(etaff.get((r, f, a), 0.0) or 0.0) != 0.0:
             continue  # nonzero etaff genuinely determines pf, nothing to fix
+        if _has_flow(r, f, a):
+            continue  # xfFlag=1: GAMS leaves pf LIVE (eq_pfeq anchors it); do not fix
         vd = pf[idx]
         if vd.value is not None and not vd.fixed:
             vd.fix(float(vd.value))
