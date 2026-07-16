@@ -528,17 +528,32 @@ class GTAPCalibratedShares:
             return max(1.0 / max(1.0 - _kappa(r, f, a), 1e-12), 1e-12)
 
         def _pfa_bench(r: str, f: str, a: str) -> float:
-            # pfa = pf*(1+fctts+fcttx). fcttx sources from taxes.rtf (HAR header
-            # RTIN, factor-keyed region/FACTOR/activity) — this IS GAMS's fcttx=
-            # EVFP/EVFB-1, verified to 9 significant figures against a real GAMS
-            # out.gdx via va_val/gx_param. taxes.rtfd/rtfi (HAR headers RTFD/RTFM)
-            # are COMMODITY-keyed (region/COMMODITY/activity) — a different domain;
-            # looking them up with a factor key always misses (confirmed 0/750
-            # hits empirically), which is why this returned 0 regardless of
-            # dataset, not because fcttx is genuinely 0. fctts (subsidy) is
-            # genuinely 0 for this dataset (GAMS hardcodes fbep=0 in cal.gms).
+            # pfa = pf*(1+fctts+fcttx) (GAMS cal.gms:23902). Two factor wedges:
+            #
+            # fcttx (factor TAX) sources from taxes.rtf (HAR RTIN, factor-keyed).
+            #
+            # fctts (factor SUBSIDY) = -inScale*fbep/(pf*xf) (cal.gms:162). At the
+            # benchmark xf = evfb/pf, so pf*xf = evfb and this reduces to
+            # fctts = -fbep/evfb (both already inScale-scaled by the loader).
+            # fbep (HAR FBEP, "Gross factor-based subsidy payments") is genuinely
+            # large and nonzero for subsidized factors — Land/Capital/labor of
+            # agricultural sectors (~177 cells in 15x10: EU/US farm & land
+            # subsidies). Previously hardcoded to 0 here (mirroring getData.gms's
+            # own `fbep=0` default, which carries a GAMS source comment "FIX THIS
+            # — inconsistency in FBEP/FTRV handling"); that zeroed fctts and
+            # understated pfa→va→xp→gx for ag factors, producing the
+            # eq_po/eq_nd/eq_va/eq_xfeq residuals (~0.1-0.24 at the GAMS seed)
+            # that made PATH/IPOPT diverge on gtap7_15x10. Verified: -fbep/evfb
+            # reproduces GAMS's fctts (EU_28,Land,OtherCrops=0.510902) exactly.
             fctts = 0.0
-            fcttx = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
+            fcttx = 0.0
+            if benchmark is not None:
+                evfb_val = float(benchmark.evfb.get((r, f, a), 0.0) or 0.0)
+                if evfb_val > 0.0:
+                    fbep_val = float(benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                    ftrv_val = float(benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
+                    fctts = -fbep_val / evfb_val
+                    fcttx = ftrv_val / evfb_val
             return _pf_bench(r, f, a) * max(1.0 + fctts + fcttx, 1e-12)
         
         # Calculate intermediate values needed for calibration
@@ -563,13 +578,25 @@ class GTAPCalibratedShares:
                 # that .gms didn't correspond to the fresh GDX's generation at all, so the
                 # comparison was apples-to-oranges. Always regenerate comp.gms fresh before
                 # trusting CONVERT against a regenerated fixture.
+                # va = sum_f(pfa*xf) = sum_f evfb*(1+fctts+fcttx) at benchmark
+                # (pf*xf=evfb, pfa=pf*(1+fctts+fcttx)). MUST include fctts (factor
+                # subsidy = -fbep/evfb) — it is large for ag Land/Capital/labor
+                # and dropping it understated va→xp→gx (gx≈1 instead of 0.724 for
+                # EU_28,OtherCrops), the root of gtap7_15x10's ag-sector
+                # eq_po/eq_nd/eq_va residuals. Same fbep/evfb term as _pfa_bench.
                 va_val = 0.0
                 for f in sets.f:
                     evfb_val = float(benchmark.evfb.get((r, f, a), benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
                     if evfb_val <= 0.0:
                         continue
-                    fcttx = float(taxes.rtf.get((r, f, a), 0.0) or 0.0) if taxes is not None else 0.0
-                    va_val += evfb_val * (1.0 + fcttx)
+                    # fctts = -fbep/evfb (subsidy), fcttx = ftrv/evfb (tax) —
+                    # the two faithful factor-wedge sources (HAR FBEP/FTRV),
+                    # NOT rtf=evfp/evfb-1 (which conflates them into a wrong net).
+                    fbep_val = float(benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                    ftrv_val = float(benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
+                    fctts = -fbep_val / evfb_val
+                    fcttx = ftrv_val / evfb_val
+                    va_val += evfb_val * (1.0 + fctts + fcttx)
                 if va_val > 0:
                     va_values[(r, a)] = va_val
 
@@ -751,6 +778,8 @@ class GTAPBenchmarkValues:
     vfb: Dict[Tuple[str, str], float] = field(default_factory=dict)     # (r, f) - Factor income
     evfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Factor payments at basic prices
     evos: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Factor remuneration net of direct tax
+    fbep: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Gross factor-based subsidy payments (HAR FBEP); GAMS fctts = -inScale*fbep/(pf*xf)
+    ftrv: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, f, a) - Gross factor employment tax revenue (HAR FTRV); GAMS fcttx = inScale*ftrv/(pf*xf) = ftrv/evfb
     vmfp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Imported factors at purchaser prices?
     vmfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)  # (r, i, a) - Factor payments imported
     
@@ -1195,6 +1224,19 @@ class GTAPBenchmarkValues:
         self.vfm.update(_h("EVFP",  ["ENDW", "ACTS", "REG"], r201))
         self.evfb.update(_h("EVFB", ["ENDW", "ACTS", "REG"], r201))
         self.evos.update(_h("EVOS", ["ENDW", "ACTS", "REG"], r201))
+        # Gross factor-based subsidy payments (real, nonzero for ag Land/Capital/
+        # labor). GAMS's getData.gms hardcodes fbep=0 (with a "FIX THIS —
+        # inconsistency in FBEP/FTRV handling" comment), but the reference data
+        # carries the true subsidy in the FBEP header; the calibration then sets
+        # fctts = -inScale*fbep/(pf*xf) (cal.gms:162), so dropping fbep zeroes
+        # fctts and understates pfa/va/xp for subsidized (agricultural) factors.
+        self.fbep.update(_h("FBEP", ["ENDW", "ACTS", "REG"], r201))
+        # Gross factor employment tax revenue. GAMS fcttx = inScale*ftrv/(pf*xf)
+        # = ftrv/evfb at benchmark. This is the FAITHFUL fcttx source — the
+        # previously-used rtf=evfp/evfb-1 conflates the tax (ftrv) and subsidy
+        # (fbep) into one net wedge, giving the wrong sign/magnitude whenever
+        # fbep!=0 (e.g. EU_28,Land,OtherCrops: rtf=-0.485 vs true fcttx=+0.026).
+        self.ftrv.update(_h("FTRV", ["ENDW", "ACTS", "REG"], r201))
 
         # 3D trade (COMM, REG, REG) → (r, i, rp)
         self.vxsb.update(_h("VXSB", ["COMM", "REG", "REG"], r102))
