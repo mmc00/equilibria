@@ -88,6 +88,25 @@ Base is exact (100%). The check/shock floors are lower because the altertax NLP 
 
 Python is solved via PATH (nonlinear-full MCP) against the cleanly-converged **NEOS** MCP reference (regenerated 2026-07-17, subsidy-aware, `eq_pxeq` clean). Same per-stage contract as the NLP gate; `test_gtap7_mcp_parity.py` runs the real PATH solve, measures match%/code, and asserts `match ≥ floor` and `code == 1` for every stage. With clean refs the match is 99%+ everywhere (base/check exact, shock ≥99.3 except 15×10's known eq_paa Armington micro-cell family ~95%) — the ~89–97 the NLP gate reads is the mis-converged NLP ref, NOT the model. See [the live matrix](../_static/gtap7_mcp_matrix.html).
 
+### Pure-gtap (real-CES)
+
+100% across every stage on 3×3/5×5/10×7 (both ifSUB) against the NEOS-regenerated `out_gtap_shock_ifsub{N}.gdx` refs; 15×10 shock ~95% is the same eq_paa Armington micro-cell family. This is the symmetric counterpart of the pure-gtap NLP gate — the earlier ~63% was a subsidy-blind (`ytax[ft]=0`) reference, not the model.
+
+| dataset | ifsub | base ≥ | check ≥ | shock ≥ | ref |
+|---|---|---|---|---|---|
+| gtap7_3x3 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_3x3 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
+| gtap7_5x5 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_5x5 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
+| gtap7_10x7 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_10x7 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
+| gtap7_15x10 | 0 | 99 | 99 | 94 | out_gtap_shock_ifsub0.gdx |
+| gtap7_15x10 | 1 | 99 | 99 | 94 | out_gtap_shock_ifsub1.gdx |
+
+### Altertax (CD)
+
+Base/check exact, shock ≥99.3 (15×10 ~95% eq_paa). The cleanly-converged MCP references make this the daily fidelity gate — where the NLP gate's mis-converged ref capped the match at 89–97%, PATH against a clean MCP ref reaches 99%+.
+
 | dataset | ifsub | base ≥ | check ≥ | shock ≥ | ref |
 |---|---|---|---|---|---|
 | gtap7_3x3 | 0 | 99 | 99 | 99 | out_altertax_ifsub0.gdx |

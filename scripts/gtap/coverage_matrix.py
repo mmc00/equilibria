@@ -181,9 +181,29 @@ ROWS.extend(_NLP_ROWS)
 # the match is 99%+ everywhere (base/check exact; shock ≥99.3 except 15x10's known
 # eq_paa micro-cell ~95%) — this is what the NLP refs COULDN'T show because they were
 # mis-converged. The test (test_gtap7_mcp_parity.py) runs the real PATH solve, measures
-# match%/code per stage, and asserts match >= floor + code == 1. altertax-mode only
-# (the pure-gtap MCP gate lives in gtap_solve rows). Floors a few pp below measured.
+# match%/code per stage, and asserts match >= floor + code == 1. Two modes, symmetric
+# with the NLP gate: PURE (real-CES, ref out_gtap_shock_ifsub{N}.gdx) + ALTERTAX (CD,
+# ref out_altertax_ifsub{N}.gdx). Floors a few pp below measured.
 _MCP_ROWS: list[Row] = [
+    # --- pure real-CES (ref regenerated via NEOS 2026-07-17, subsidy-aware) ---
+    # measured 2026-07-17: 3x3/5x5/10x7 all 100/100/100 code=1 (both ifSUB); 15x10 slower.
+    Row("gtap7_3x3", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x3", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_5x5", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_5x5", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_10x7", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_10x7", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_15x10", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 94.0), mode="pure"),
+    Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 94.0), mode="pure"),
+    # --- altertax CD (ref out_altertax_ifsub{N}.gdx) ---
     Row("gtap7_3x3", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_3x3", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",

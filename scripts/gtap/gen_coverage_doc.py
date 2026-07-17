@@ -148,7 +148,22 @@ def render() -> str:
         "family ~95%) — the ~89–97 the NLP gate reads is the mis-converged NLP ref, NOT "
         "the model. See [the live matrix](../_static/gtap7_mcp_matrix.html).",
         "",
-        _nlp_table(mcp_rows()),
+        "### Pure-gtap (real-CES)",
+        "",
+        "100% across every stage on 3×3/5×5/10×7 (both ifSUB) against the NEOS-regenerated "
+        "`out_gtap_shock_ifsub{N}.gdx` refs; 15×10 shock ~95% is the same eq_paa Armington "
+        "micro-cell family. This is the symmetric counterpart of the pure-gtap NLP gate — "
+        "the earlier ~63% was a subsidy-blind (`ytax[ft]=0`) reference, not the model.",
+        "",
+        _nlp_table([r for r in mcp_rows() if r.mode == "pure"]),
+        "",
+        "### Altertax (CD)",
+        "",
+        "Base/check exact, shock ≥99.3 (15×10 ~95% eq_paa). The cleanly-converged MCP "
+        "references make this the daily fidelity gate — where the NLP gate's mis-converged "
+        "ref capped the match at 89–97%, PATH against a clean MCP ref reaches 99%+.",
+        "",
+        _nlp_table([r for r in mcp_rows() if r.mode == "altertax"]),
         "",
     ]
     return "\n".join(parts)

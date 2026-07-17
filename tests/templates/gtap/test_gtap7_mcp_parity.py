@@ -27,7 +27,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_altertax"
+ALTERTAX_FIXTURES = ROOT / "tests/fixtures/gtap7_altertax"
+PURE_FIXTURES = ROOT / "tests/fixtures/gtap7"
 DATASETS_DIR = ROOT / "datasets"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
@@ -56,8 +57,10 @@ def _has_solver() -> bool:
     return importlib.util.find_spec("path_capi_python") is not None
 
 
-def _fixture_gdx(dataset: str, ifsub: int) -> Path:
-    return FIXTURES_DIR / dataset / f"out_altertax_ifsub{ifsub}.gdx"
+def _fixture_gdx(dataset: str, ifsub: int, mode: str = "altertax") -> Path:
+    if mode == "pure":
+        return PURE_FIXTURES / dataset / f"out_gtap_shock_ifsub{ifsub}.gdx"
+    return ALTERTAX_FIXTURES / dataset / f"out_altertax_ifsub{ifsub}.gdx"
 
 
 def _strip(s):
@@ -66,11 +69,10 @@ def _strip(s):
     return s
 
 
-def _solve_and_measure(dataset: str, ifsub: int, gdx: Path):
+def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     """Build + seed + solve base→check→shock via PATH (MCP); return
     {period: {"match": float, "code": int, "total": int}}."""
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_model_multiperiod import (
         GTAPMultiPeriodModel, PERIODS,
@@ -84,11 +86,23 @@ def _solve_and_measure(dataset: str, ifsub: int, gdx: Path):
     p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
                     default_path=d / "default.prm", baserate_path=d / "baserate.har")
     rr = list(p.sets.r)[-1]
-    pa = apply_altertax_elasticities(p, in_place=False)
-    ac = GTAPClosureConfig(name="altertax", closure_type="MCP",
-                           capital_mobility="mobile", fix_endowments=False,
-                           fix_taxes=True, fix_technology=True,
-                           if_sub=bool(ifsub), numeraire="pnum")
+
+    if mode == "altertax":
+        from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+        pa = apply_altertax_elasticities(p, in_place=False)
+        ac = GTAPClosureConfig(name="altertax", closure_type="MCP",
+                               capital_mobility="mobile", fix_endowments=False,
+                               fix_taxes=True, fix_technology=True,
+                               if_sub=bool(ifsub), numeraire="pnum")
+        solve_mode = "altertax"
+    else:  # pure real-CES
+        pa = p
+        ac = GTAPClosureConfig(name="base", closure_type="MCP",
+                               capital_mobility="sluggish", fix_endowments=False,
+                               fix_taxes=False, fix_technology=False,
+                               if_sub=bool(ifsub), numeraire="pnum")
+        solve_mode = "gtap"
+
     mp = GTAPMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
@@ -100,7 +114,7 @@ def _solve_and_measure(dataset: str, ifsub: int, gdx: Path):
 
     res = solve_multiperiod(m, p, ac, ref_gdx=gdx, skip_base_solve=True,
                             mute_welfare=True, seed_from_prior=False,
-                            holdfix_cd=True)
+                            holdfix_cd=True, mode=solve_mode)
     codes = {k: res[k]["code"] for k in res}
 
     def measure(period: str):
@@ -150,21 +164,21 @@ def _solve_and_measure(dataset: str, ifsub: int, gdx: Path):
 @pytest.mark.parametrize(
     "dataset,ifsub,mode,floors,ci_status",
     _MCP_CASES,
-    ids=[f"{r.dataset}-ifsub{r.ifsub}" for r in mcp_rows()],
+    ids=[f"{r.dataset}-{r.mode}-ifsub{r.ifsub}" for r in mcp_rows()],
 )
 def test_gtap7_mcp_parity(dataset, ifsub, mode, floors, ci_status):
     if ci_status == "blocked":
         pytest.skip(f"blocked: {dataset}")
     if not _has_solver():
         pytest.skip("PATH solver (path_capi_python) not available")
-    gdx = _fixture_gdx(dataset, ifsub)
+    gdx = _fixture_gdx(dataset, ifsub, mode)
     if not gdx.exists():
         pytest.skip(f"fixture GDX missing: {gdx}")
     if not (DATASETS_DIR / dataset / "basedata.har").exists():
         pytest.skip(f"dataset HAR missing: {dataset}")
 
-    per = _solve_and_measure(dataset, ifsub, gdx)
-    tag = f"{dataset}/ifSUB={ifsub}"
+    per = _solve_and_measure(dataset, ifsub, mode, gdx)
+    tag = f"{dataset}/{mode}/ifSUB={ifsub}"
 
     bad_codes = {k: v["code"] for k, v in per.items() if v["code"] != 1}
     assert not bad_codes, f"[{tag}] stages did not converge: {bad_codes}"
