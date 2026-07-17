@@ -2631,7 +2631,16 @@ def solve_multiperiod(
     # (GAMS iterloop for altertax) so it keeps the recal. Gated on _gtap_mode.
     if not _gtap_mode:
         _recalibrate_and_ava(m, p_alt, "check", "base")
-        _recalibrate_io_af(m, p_alt, "check", "base")
+        # NOTE: _recalibrate_io_af is NOT called — GAMS holds io AND af CONSTANT
+        # across periods (iterloop.gms has ZERO `af(`/`io(` assignments; the GDX
+        # proves af[EU_28,Land,Food]=0.11716 and io[EU_28,Food,Food]=0.51534 are
+        # byte-identical base=check=shock). Re-recalibrating af per period from the
+        # prior period's pfa (which itself drifts) over-weighted the subsidized
+        # sluggish Land factor → af 0.1287 vs 0.1172 → pf[Land] shock 1.06 vs GAMS
+        # 0.96 → pft[Land] re-slid to ≈1.0 (the sluggish-Land free-DOF). Dropping
+        # this recal + the af_param subsidy-wedge calibration fix (parameter_
+        # overrides._recalibrate_af_shares) closed pft[Land] to 0.9109 = GAMS and
+        # lifted the shock gate 98.21% → 99.93%. Faithful: af is calibrated ONCE.
         _recalibrate_gx_ax(m, p_alt, "check", "base")
         _recalibrate_alphad_alpham(m, p_alt, "check", "base")
         _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
@@ -3047,7 +3056,8 @@ def solve_multiperiod(
     # pure-gtap. Skip the per-period recal in gtap-mode (altertax keeps it).
     if not _gtap_mode:
         _recalibrate_and_ava(m, params_shock, "shock", "check")
-        _recalibrate_io_af(m, params_shock, "shock", "check")
+        # _recalibrate_io_af NOT called — see the check-block note above: GAMS holds
+        # io/af constant across periods; re-recalibrating slid the sluggish-Land pft.
         _recalibrate_gx_ax(m, params_shock, "shock", "check")
         _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
         _recalibrate_alphaa_gov_inv(m, params_shock, "shock", "check")

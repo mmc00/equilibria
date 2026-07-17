@@ -263,13 +263,26 @@ def _recalibrate_af_shares(params: "GTAPParameters") -> None:  # noqa: F821
     def _pf(r: str, f: str, a: str) -> float:
         return 1.0 / max(1.0 - _kappa(r, f, a), 1e-12)
 
+    def _wedge(r: str, f: str, a: str) -> float:
+        # fctts + fcttx = (ftrv - fbep) / evfb  — the factor SUBSIDY+TAX wedge.
+        # NOT rtf (which conflates the two and mis-splits af → phantom ytax('ft')).
+        evfb = float(bench.evfb.get((r, f, a), 0.0) or 0.0)
+        if evfb <= 0.0:
+            return 0.0
+        ftrv = float(bench.ftrv.get((r, f, a), 0.0) or 0.0)
+        fbep = float(bench.fbep.get((r, f, a), 0.0) or 0.0)
+        return (ftrv - fbep) / evfb
+
     def _pfa(r: str, f: str, a: str) -> float:
-        # pfa = pf*(1 + fctts + fcttx) with fctts=fcttx=0 (GAMS-faithful; the
-        # factor-tax wedge is NOT rtf — see eq_pfaeq). So pfa==pf and af reduces to
-        # pfa*xf/Σ(pfa*xf) = EVFB/Σ(EVFB), the pure VA factor share. The old (1+rtf)
-        # factor mis-split af and emitted a phantom ytax('ft') stream (GAMS=0),
-        # regressing both the gtap-mp gate (74%) and altertax (68%).
-        return _pf(r, f, a)
+        # pfa = pf*(1 + fctts + fcttx), the tax/subsidy-inclusive factor price GAMS
+        # uses to weight af (cal.gms:729 af=(xf/va)*(pfa/pva)^sigmav; pva=1 at base).
+        # The wedge is (ftrv-fbep)/evfb, NOT rtf. Verified vs the altertax GDX: with
+        # the subsidy wedge, af[EU_28,Land,Food]=0.11716 EXACT (GAMS constant), where
+        # pfa=pf (wedge=0) gave 0.11183 (−4.5%) → under-weighted the subsidized ag
+        # Land factor → pf[Land] wrong in the shock (the sluggish-Land free-DOF that
+        # re-slid to pft≈1.0 instead of GAMS's 0.91). The old (1+rtf) form was wrong
+        # because rtf conflates tax+subsidy; (ftrv-fbep)/evfb separates them.
+        return _pf(r, f, a) * (1.0 + _wedge(r, f, a))
 
     af_param: Dict[Tuple[str, str, str], float] = {}
     for r in sets.r:
