@@ -1,83 +1,4 @@
-"""Generate docs/site/guide/gtap7_nlp_matrix.html — the rich per-stage NLP-vs-NLP
-matrix (match% tint + convergence chip), by RE-RUNNING the measurement.
-
-Unlike the markdown coverage table (which carries only the versioned per-stage
-FLOORS), this page shows the freshly MEASURED match% and return code for every
-stage. Nothing is hardcoded: it drives the same solve+measure the local test uses
-(test_gtap7_nlp_parity._solve_and_measure) over every coverage-matrix nlp row.
-
-Run (local only — needs the NLP solve toolchain + dataset HARs):
-    uv run python scripts/gtap/gen_nlp_matrix_page.py
-    uv run python scripts/gtap/gen_nlp_matrix_page.py --no-solve   # floors only (CI-safe)
-"""
-from __future__ import annotations
-
-import argparse
-import importlib.util
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts/gtap"))
-sys.path.insert(0, str(ROOT / "tests/templates/gtap"))
-sys.path.insert(0, str(ROOT / "src"))
-# Local PATH/NLP toolchain lives outside the venv (absent on CI → falls back to
-# floors-only rendering).
-_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
-if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
-    sys.path.insert(0, str(_PATH_CAPI_SRC))
-
-from coverage_matrix import nlp_rows  # noqa: E402
-
-# Sphinx copies _static/ verbatim to the built site; the doc links to it as
-# ../_static/gtap7_nlp_matrix.html. (A raw .html under guide/ is NOT served.)
-DOC_PATH = ROOT / "docs/site/_static/gtap7_nlp_matrix.html"
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_nlp"
-
-
-def _has_solver() -> bool:
-    return importlib.util.find_spec("path_capi_python") is not None
-
-
-def _measure_all():
-    """Return {(dataset, mode, ifsub): {period: {match, code}}} by running the solve.
-    Falls back to None per cell when a fixture/solver is missing (rendered as n/a)."""
-    from test_gtap7_nlp_parity import _solve_and_measure, _fixture_gdx
-    results = {}
-    for r in nlp_rows():
-        key = (r.dataset, r.mode, r.ifsub)
-        gdx = _fixture_gdx(r.dataset, r.mode, r.ifsub)
-        if not gdx.exists() or not (ROOT / "datasets" / r.dataset / "basedata.har").exists():
-            results[key] = None
-            continue
-        try:
-            results[key] = _solve_and_measure(r.dataset, r.ifsub, r.mode, gdx)
-        except Exception as exc:  # noqa: BLE001
-            print(f"  ! {key}: measure failed ({exc})", file=sys.stderr)
-            results[key] = None
-    return results
-
-
-def _rows_js(measured):
-    """Build the pure[] / alt[] JS arrays the page template consumes."""
-    def one(r):
-        floors = dict(r.stage_floors)
-        m = measured.get((r.dataset, r.mode, r.ifsub)) if measured else None
-
-        def cell(stage):
-            fl = floors[stage]
-            if m and stage in m:
-                return f'[{m[stage]["match"]:.1f}, {m[stage]["code"]}, {fl:g}]'
-            return f'[null, null, {fl:g}]'  # not measured → n/a, floor shown
-        return (f'{{ ds: "{r.dataset}", ifsub: {r.ifsub}, '
-                f'base: {cell("base")}, check: {cell("check")}, shock: {cell("shock")} }}')
-
-    pure = [one(r) for r in nlp_rows() if r.mode == "pure"]
-    alt = [one(r) for r in nlp_rows() if r.mode == "altertax"]
-    return ",\n    ".join(pure), ",\n    ".join(alt)
-
-
-_TEMPLATE = r"""<!doctype html>
+<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GTAP7 NLP-vs-NLP Convergence Matrix</title>
@@ -175,15 +96,27 @@ _TEMPLATE = r"""<!doctype html>
   <footer>
     <span>base = benchmark · check = no-shock · shock = +10% import tariff</span>
     <span>match @ 1% tol · floor = versioned contract</span>
-    <span>__STAMP__</span>
+    <span>measured by gen_nlp_matrix_page.py</span>
   </footer>
 </div>
 <script>
   const pure = [
-    __PURE__
+    { ds: "gtap7_3x3", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_3x3", ifsub: 1, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_5x5", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_5x5", ifsub: 1, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_10x7", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_10x7", ifsub: 1, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] }
   ];
   const alt = [
-    __ALT__
+    { ds: "gtap7_3x3", ifsub: 0, base: [100.0, 1, 99], check: [96.3, 1, 93], shock: [96.5, 1, 93] },
+    { ds: "gtap7_3x3", ifsub: 1, base: [100.0, 1, 99], check: [91.5, 1, 88], shock: [91.4, 1, 88] },
+    { ds: "gtap7_3x4", ifsub: 0, base: [100.0, 1, 99], check: [97.2, 1, 94], shock: [97.2, 1, 94] },
+    { ds: "gtap7_3x4", ifsub: 1, base: [100.0, 1, 99], check: [94.5, 1, 91], shock: [94.4, 1, 91] },
+    { ds: "gtap7_5x5", ifsub: 0, base: [100.0, 1, 99], check: [97.3, 1, 94], shock: [89.8, 1, 86] },
+    { ds: "gtap7_5x5", ifsub: 1, base: [100.0, 1, 99], check: [97.8, 1, 94], shock: [97.5, 1, 94] },
+    { ds: "gtap7_10x7", ifsub: 0, base: [100.0, 1, 99], check: [95.7, 1, 92], shock: [94.2, 1, 91] },
+    { ds: "gtap7_10x7", ifsub: 1, base: [100.0, 1, 99], check: [96.1, 1, 93], shock: [96.3, 1, 93] }
   ];
   function cls(v, code) {
     if (v === null) return "s-na";
@@ -211,37 +144,3 @@ _TEMPLATE = r"""<!doctype html>
   document.getElementById("alt-body").innerHTML = alt.map(row).join("");
 </script>
 </body></html>
-"""
-
-
-def render(measured, stamp: str) -> str:
-    pure_js, alt_js = _rows_js(measured)
-    return (_TEMPLATE
-            .replace("__PURE__", pure_js)
-            .replace("__ALT__", alt_js)
-            .replace("__STAMP__", stamp))
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--no-solve", action="store_true",
-                    help="render floors only (no solve) — CI-safe / offline")
-    args = ap.parse_args()
-
-    if args.no_solve or not _has_solver():
-        if not args.no_solve:
-            print("NLP solver unavailable → rendering floors only", file=sys.stderr)
-        measured = None
-        stamp = "floors only (not re-measured)"
-    else:
-        print("Re-running NLP solves to measure the matrix…", file=sys.stderr)
-        measured = _measure_all()
-        stamp = "measured by gen_nlp_matrix_page.py"
-
-    DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DOC_PATH.write_text(render(measured, stamp), encoding="utf-8")
-    print(f"wrote {DOC_PATH}")
-
-
-if __name__ == "__main__":
-    main()

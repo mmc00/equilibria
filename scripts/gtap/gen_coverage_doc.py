@@ -116,7 +116,7 @@ def render() -> str:
         "`match ≥ floor` and `code == 1` for every stage. The measured snapshot is "
         "**not** stored in the matrix (it would be a dead copy) — regenerate the rich "
         "view with `scripts/gtap/gen_nlp_matrix_page.py`, which re-runs the "
-        "measurement. See [the live matrix](gtap7_nlp_matrix.html).",
+        "measurement. See [the live matrix](../_static/gtap7_nlp_matrix.html).",
         "",
         "### Pure-gtap (real-CES)",
         "",
