@@ -83,3 +83,20 @@ Base is exact (100%). The check/shock floors are lower because the altertax NLP 
 | gtap7_5x5 | 1 | 99 | 94 | 94 | out_altertax_nlp_ifsub1.gdx |
 | gtap7_10x7 | 0 | 99 | 92 | 91 | out_altertax_nlp_ifsub0.gdx |
 | gtap7_10x7 | 1 | 99 | 93 | 93 | out_altertax_nlp_ifsub1.gdx |
+
+## MCP fidelity gate (PATH both sides, local-only)
+
+Python is solved via PATH (nonlinear-full MCP) against the cleanly-converged **NEOS** MCP reference (regenerated 2026-07-17, subsidy-aware, `eq_pxeq` clean). Same per-stage contract as the NLP gate; `test_gtap7_mcp_parity.py` runs the real PATH solve, measures match%/code, and asserts `match ≥ floor` and `code == 1` for every stage. With clean refs the match is 99%+ everywhere (base/check exact, shock ≥99.3 except 15×10's known eq_paa Armington micro-cell family ~95%) — the ~89–97 the NLP gate reads is the mis-converged NLP ref, NOT the model. See [the live matrix](../_static/gtap7_mcp_matrix.html).
+
+| dataset | ifsub | base ≥ | check ≥ | shock ≥ | ref |
+|---|---|---|---|---|---|
+| gtap7_3x3 | 0 | 99 | 99 | 99 | out_altertax_ifsub0.gdx |
+| gtap7_3x3 | 1 | 99 | 99 | 99 | out_altertax_ifsub1.gdx |
+| gtap7_3x4 | 0 | 99 | 99 | 99 | out_altertax_ifsub0.gdx |
+| gtap7_3x4 | 1 | 99 | 99 | 99 | out_altertax_ifsub1.gdx |
+| gtap7_5x5 | 0 | 99 | 99 | 99 | out_altertax_ifsub0.gdx |
+| gtap7_5x5 | 1 | 99 | 99 | 99 | out_altertax_ifsub1.gdx |
+| gtap7_10x7 | 0 | 99 | 99 | 98 | out_altertax_ifsub0.gdx |
+| gtap7_10x7 | 1 | 99 | 99 | 98 | out_altertax_ifsub1.gdx |
+| gtap7_15x10 | 0 | 99 | 99 | 94 | out_altertax_ifsub0.gdx |
+| gtap7_15x10 | 1 | 99 | 99 | 93 | out_altertax_ifsub1.gdx |

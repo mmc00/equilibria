@@ -30,7 +30,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 CI_STATUSES = {"ci", "local", "blocked"}
-KINDS = {"gtap", "altertax", "gtap_solve", "nlp"}
+KINDS = {"gtap", "altertax", "gtap_solve", "nlp", "mcp"}
+_PERSTAGE_KINDS = {"nlp", "mcp"}  # kinds that carry per-stage stage_floors + mode
 
 
 @dataclass(frozen=True)
@@ -174,6 +175,39 @@ _NLP_ROWS: list[Row] = [
 ROWS.extend(_NLP_ROWS)
 
 
+# --- MCP gate (Python MCP/PATH vs the clean NEOS MCP reference), per stage ---
+# Same per-stage contract as the NLP gate, but Python solves via PATH (nonlinear-full)
+# against the CLEANLY-CONVERGED NEOS MCP refs (regenerated 2026-07-17). With clean refs
+# the match is 99%+ everywhere (base/check exact; shock ≥99.3 except 15x10's known
+# eq_paa micro-cell ~95%) — this is what the NLP refs COULDN'T show because they were
+# mis-converged. The test (test_gtap7_mcp_parity.py) runs the real PATH solve, measures
+# match%/code per stage, and asserts match >= floor + code == 1. altertax-mode only
+# (the pure-gtap MCP gate lives in gtap_solve rows). Floors a few pp below measured.
+_MCP_ROWS: list[Row] = [
+    Row("gtap7_3x3", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    Row("gtap7_3x3", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    Row("gtap7_3x4", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    Row("gtap7_3x4", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    Row("gtap7_5x5", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    Row("gtap7_5x5", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    Row("gtap7_10x7", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
+    Row("gtap7_10x7", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
+    Row("gtap7_15x10", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 94.0), mode="altertax"),
+    Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 93.0), mode="altertax"),
+]
+ROWS.extend(_MCP_ROWS)
+
+
 def nl_rows() -> list[Row]:
     return [r for r in ROWS if r.kind == "gtap"]
 
@@ -190,6 +224,10 @@ def nlp_rows() -> list[Row]:
     return [r for r in ROWS if r.kind == "nlp"]
 
 
+def mcp_rows() -> list[Row]:
+    return [r for r in ROWS if r.kind == "mcp"]
+
+
 def _validate() -> None:
     """Import-time schema invariants — fail fast on a malformed matrix."""
     for r in ROWS:
@@ -198,19 +236,19 @@ def _validate() -> None:
         assert r.kind in KINDS, f"bad kind: {r}"
         assert r.ci_status in CI_STATUSES, f"bad ci_status: {r}"
         assert r.phases, f"empty phases: {r}"
-        if r.kind == "nlp":
-            # Per-stage rows carry `stage_floors` (contract floor per phase) + `mode`;
-            # the row-level gap_min is None (the floor lives per stage; match is measured
-            # by the test at run time, never stored here).
-            assert r.gap_min is None, f"nlp row must have row-level gap_min None: {r}"
-            assert r.mode in {"pure", "altertax"}, f"nlp row bad mode: {r}"
-            assert r.stage_floors is not None, f"nlp row missing stage_floors: {r}"
+        if r.kind in _PERSTAGE_KINDS:
+            # Per-stage rows (nlp/mcp) carry `stage_floors` (contract floor per phase)
+            # + `mode`; row-level gap_min is None (floor lives per stage; match is
+            # measured by the test at run time, never stored here).
+            assert r.gap_min is None, f"{r.kind} row must have row-level gap_min None: {r}"
+            assert r.mode in {"pure", "altertax"}, f"{r.kind} row bad mode: {r}"
+            assert r.stage_floors is not None, f"{r.kind} row missing stage_floors: {r}"
             floors = dict(r.stage_floors)
-            assert set(floors) == set(r.phases), f"nlp stage_floors/phases mismatch: {r}"
+            assert set(floors) == set(r.phases), f"{r.kind} stage_floors/phases mismatch: {r}"
             for ph, f in floors.items():
                 assert 0.0 < f <= 100.0, f"stage floor out of range: {r} {ph}={f}"
             continue
-        assert r.stage_floors is None and r.mode is None, f"non-nlp row must not carry stage_floors/mode: {r}"
+        assert r.stage_floors is None and r.mode is None, f"non-perstage row must not carry stage_floors/mode: {r}"
         # gap_min invariants do NOT apply to blocked rows (never asserted).
         if r.ci_status != "blocked":
             nl_only = r.kind == "gtap" and r.dataset.startswith("gtap7_")

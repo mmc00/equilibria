@@ -15,10 +15,10 @@ def test_matrix_schema_invariants():
         assert r.kind in KINDS, r
         assert r.ci_status in CI_STATUSES, r
         assert r.phases, r
-        if r.kind == "nlp":
+        if r.kind in ("nlp", "mcp"):
             # per-stage rows: row-level gap_min is None; the floor lives per stage
             # in stage_floors, and match is MEASURED by the test at run time (never
-            # stored). mode distinguishes pure/altertax within the NLP gate.
+            # stored). mode distinguishes pure/altertax within the gate.
             assert r.gap_min is None, r
             assert r.mode in {"pure", "altertax"}, r
             assert r.stage_floors is not None, r
@@ -40,14 +40,15 @@ def test_matrix_schema_invariants():
 
 def test_matrix_helpers_partition():
     from coverage_matrix import (
-        ROWS, nl_rows, altertax_rows, gtap_solve_rows, nlp_rows,
+        ROWS, nl_rows, altertax_rows, gtap_solve_rows, nlp_rows, mcp_rows,
     )
-    assert (set(nl_rows()) | set(altertax_rows())
-            | set(gtap_solve_rows()) | set(nlp_rows())) == set(ROWS)
+    assert (set(nl_rows()) | set(altertax_rows()) | set(gtap_solve_rows())
+            | set(nlp_rows()) | set(mcp_rows())) == set(ROWS)
     assert all(r.kind == "gtap" for r in nl_rows())
     assert all(r.kind == "altertax" for r in altertax_rows())
     assert all(r.kind == "gtap_solve" for r in gtap_solve_rows())
     assert all(r.kind == "nlp" for r in nlp_rows())
+    assert all(r.kind == "mcp" for r in mcp_rows())
 
 
 def test_coverage_doc_in_sync():

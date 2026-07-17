@@ -27,38 +27,64 @@ _PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
 if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 
-from coverage_matrix import nlp_rows  # noqa: E402
+from coverage_matrix import nlp_rows, mcp_rows  # noqa: E402
 
 # Sphinx copies _static/ verbatim to the built site; the doc links to it as
-# ../_static/gtap7_nlp_matrix.html. (A raw .html under guide/ is NOT served.)
-DOC_PATH = ROOT / "docs/site/_static/gtap7_nlp_matrix.html"
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_nlp"
+# ../_static/gtap7_<gate>_matrix.html. (A raw .html under guide/ is NOT served.)
+def _doc_path(gate):
+    return ROOT / f"docs/site/_static/gtap7_{gate}_matrix.html"
+
+
+# NLP refs live in tests/fixtures/gtap7_nlp/<ds>_<mode>_ifsub<N>.gdx; MCP refs are the
+# clean NEOS altertax fixtures. Each gate imports its own solve+measure from its test.
+def _gate_config(gate):
+    if gate == "mcp":
+        from test_gtap7_mcp_parity import _solve_and_measure, _fixture_gdx
+        return {
+            "rows": mcp_rows(),
+            "gdx": lambda r: _fixture_gdx(r.dataset, r.ifsub),
+            "measure": lambda r, gdx: _solve_and_measure(r.dataset, r.ifsub, gdx),
+            "eyebrow": "GTAP Standard 7 · Python vs GAMS · PATH/MCP both sides",
+            "lede": ("Python solved via PATH (nonlinear-full MCP) against the "
+                     "cleanly-converged NEOS MCP reference. With clean refs the match "
+                     "is 99%+ everywhere — the 89–97 the NLP gate reads is the "
+                     "mis-converged NLP reference, not the model."),
+        }
+    from test_gtap7_nlp_parity import _solve_and_measure, _fixture_gdx
+    return {
+        "rows": nlp_rows(),
+        "gdx": lambda r: _fixture_gdx(r.dataset, r.mode, r.ifsub),
+        "measure": lambda r, gdx: _solve_and_measure(r.dataset, r.ifsub, r.mode, gdx),
+        "eyebrow": "GTAP Standard 7 · Python vs GAMS · NLP/IPOPT both sides",
+        "lede": ("Python solved as NLP (EQUILIBRIA_GTAP_SOLVE_NLP=1) against the GAMS "
+                 "ifMCP=0 reference — same IPOPT both sides, so solver tolerance "
+                 "cancels and the number reflects model fidelity."),
+    }
 
 
 def _has_solver() -> bool:
     return importlib.util.find_spec("path_capi_python") is not None
 
 
-def _measure_all():
+def _measure_all(cfg):
     """Return {(dataset, mode, ifsub): {period: {match, code}}} by running the solve.
     Falls back to None per cell when a fixture/solver is missing (rendered as n/a)."""
-    from test_gtap7_nlp_parity import _solve_and_measure, _fixture_gdx
     results = {}
-    for r in nlp_rows():
+    for r in cfg["rows"]:
         key = (r.dataset, r.mode, r.ifsub)
-        gdx = _fixture_gdx(r.dataset, r.mode, r.ifsub)
+        gdx = cfg["gdx"](r)
         if not gdx.exists() or not (ROOT / "datasets" / r.dataset / "basedata.har").exists():
             results[key] = None
             continue
         try:
-            results[key] = _solve_and_measure(r.dataset, r.ifsub, r.mode, gdx)
+            results[key] = cfg["measure"](r, gdx)
         except Exception as exc:  # noqa: BLE001
             print(f"  ! {key}: measure failed ({exc})", file=sys.stderr)
             results[key] = None
     return results
 
 
-def _rows_js(measured):
+def _rows_js(cfg, measured):
     """Build the pure[] / alt[] JS arrays the page template consumes."""
     def one(r):
         floors = dict(r.stage_floors)
@@ -72,8 +98,8 @@ def _rows_js(measured):
         return (f'{{ ds: "{r.dataset}", ifsub: {r.ifsub}, '
                 f'base: {cell("base")}, check: {cell("check")}, shock: {cell("shock")} }}')
 
-    pure = [one(r) for r in nlp_rows() if r.mode == "pure"]
-    alt = [one(r) for r in nlp_rows() if r.mode == "altertax"]
+    pure = [one(r) for r in cfg["rows"] if r.mode == "pure"]
+    alt = [one(r) for r in cfg["rows"] if r.mode == "altertax"]
     return ",\n    ".join(pure), ",\n    ".join(alt)
 
 
@@ -139,9 +165,9 @@ _TEMPLATE = r"""<!doctype html>
   footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--ink-faint);display:flex;flex-wrap:wrap;gap:6px 16px;}
 </style></head><body>
 <div class="wrap">
-  <p class="eyebrow">GTAP Standard 7 · Python vs GAMS · NLP/IPOPT both sides</p>
-  <h1>NLP-vs-NLP convergence &amp; parity matrix</h1>
-  <p class="lede">Python solved as NLP (<code>EQUILIBRIA_GTAP_SOLVE_NLP=1</code>) against the GAMS <code>ifMCP=0</code> reference — same IPOPT both sides, so solver tolerance cancels and the number reflects <b>model fidelity</b>. Cell-by-cell match at 1% tolerance, per period, with the solve return code. Measured by re-running the solve (<code>gen_nlp_matrix_page.py</code>); the floor under each cell is the versioned contract the test asserts.</p>
+  <p class="eyebrow">__EYEBROW__</p>
+  <h1>__H1__</h1>
+  <p class="lede">__LEDE__ Cell-by-cell match at 1% tolerance, per period, with the solve return code. Measured by re-running the solve (<code>gen_nlp_matrix_page.py</code>); the floor under each cell is the versioned contract the test asserts.</p>
 
   <div class="legend">
     <span class="li rule" style="width:100%">Each cell: measured match% (color) · convergence chip · contract floor</span>
@@ -154,14 +180,7 @@ _TEMPLATE = r"""<!doctype html>
       <span class="chip nonconv">✕ code 2</span></span>
   </div>
 
-  <section>
-    <div class="mode-head"><h2>Pure-gtap</h2><span class="tag">real-CES · ifSUB=0 &amp; 1</span></div>
-    <div class="tablecard"><div class="scroll"><table>
-      <thead><tr><th class="lbl">Dataset · ifSUB</th><th class="grp">Base</th><th>Check</th><th>Shock</th></tr></thead>
-      <tbody id="pure-body"></tbody>
-    </table></div></div>
-    <div class="note"><span>⤷</span><span><b>The 5×5 shock was the fix.</b> It read 59.56% / code 2 (infeasible) until the Python-only Jacobian pre-scale was dropped — GAMS solves the raw model, and once Python does too, IPOPT lands in GAMS's basin (<code>pfact[ROW]</code> 1.25 → 0.996). All pure datasets now 100% across every stage, both ifSUB.</span></div>
-  </section>
+  __PURE_SECTION__
 
   <section>
     <div class="mode-head"><h2>Altertax</h2><span class="tag">CD · ifSUB=0 &amp; 1</span></div>
@@ -214,9 +233,29 @@ _TEMPLATE = r"""<!doctype html>
 """
 
 
-def render(measured, stamp: str) -> str:
-    pure_js, alt_js = _rows_js(measured)
+_PURE_SECTION = """<section>
+    <div class="mode-head"><h2>Pure-gtap</h2><span class="tag">real-CES · ifSUB=0 &amp; 1</span></div>
+    <div class="tablecard"><div class="scroll"><table>
+      <thead><tr><th class="lbl">Dataset · ifSUB</th><th class="grp">Base</th><th>Check</th><th>Shock</th></tr></thead>
+      <tbody id="pure-body"></tbody>
+    </table></div></div>
+    <div class="note"><span>⤷</span><span><b>The 5×5 shock was the fix.</b> It read 59.56% / code 2 (infeasible) until the Python-only Jacobian pre-scale was dropped — GAMS solves the raw model, and once Python does too, IPOPT lands in GAMS's basin (<code>pfact[ROW]</code> 1.25 → 0.996). All pure datasets now 100% across every stage, both ifSUB.</span></div>
+  </section>"""
+
+
+def render(cfg, gate, measured, stamp: str) -> str:
+    pure_js, alt_js = _rows_js(cfg, measured)
+    if gate == "mcp":
+        h1 = "MCP convergence &amp; parity matrix"
+        pure_section = ""  # MCP is altertax-only (pure MCP lives in gtap_solve)
+    else:
+        h1 = "NLP-vs-NLP convergence &amp; parity matrix"
+        pure_section = _PURE_SECTION
     return (_TEMPLATE
+            .replace("__EYEBROW__", cfg["eyebrow"])
+            .replace("__H1__", h1)
+            .replace("__LEDE__", cfg["lede"])
+            .replace("__PURE_SECTION__", pure_section)
             .replace("__PURE__", pure_js)
             .replace("__ALT__", alt_js)
             .replace("__STAMP__", stamp))
@@ -224,23 +263,27 @@ def render(measured, stamp: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--gate", choices=("nlp", "mcp"), default="nlp",
+                    help="which gate's matrix to render (default nlp)")
     ap.add_argument("--no-solve", action="store_true",
                     help="render floors only (no solve) — CI-safe / offline")
     args = ap.parse_args()
 
+    cfg = _gate_config(args.gate)
     if args.no_solve or not _has_solver():
         if not args.no_solve:
-            print("NLP solver unavailable → rendering floors only", file=sys.stderr)
+            print("solver unavailable → rendering floors only", file=sys.stderr)
         measured = None
         stamp = "floors only (not re-measured)"
     else:
-        print("Re-running NLP solves to measure the matrix…", file=sys.stderr)
-        measured = _measure_all()
+        print(f"Re-running {args.gate.upper()} solves to measure the matrix…", file=sys.stderr)
+        measured = _measure_all(cfg)
         stamp = "measured by gen_nlp_matrix_page.py"
 
-    DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DOC_PATH.write_text(render(measured, stamp), encoding="utf-8")
-    print(f"wrote {DOC_PATH}")
+    out = _doc_path(args.gate)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render(cfg, args.gate, measured, stamp), encoding="utf-8")
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":

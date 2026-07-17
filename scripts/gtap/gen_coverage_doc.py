@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 from coverage_matrix import (  # noqa: E402
-    nl_rows, altertax_rows, gtap_solve_rows, nlp_rows,
+    nl_rows, altertax_rows, gtap_solve_rows, nlp_rows, mcp_rows,
 )
 
 DOC_PATH = ROOT / "docs/site/guide/gtap7_coverage_matrix.md"
@@ -136,6 +136,19 @@ def render() -> str:
         "change. Every stage still converges (`code == 1`).",
         "",
         _nlp_table([r for r in nlp_rows() if r.mode == "altertax"]),
+        "",
+        "## MCP fidelity gate (PATH both sides, local-only)",
+        "",
+        "Python is solved via PATH (nonlinear-full MCP) against the cleanly-converged "
+        "**NEOS** MCP reference (regenerated 2026-07-17, subsidy-aware, `eq_pxeq` clean). "
+        "Same per-stage contract as the NLP gate; `test_gtap7_mcp_parity.py` runs the "
+        "real PATH solve, measures match%/code, and asserts `match ≥ floor` and "
+        "`code == 1` for every stage. With clean refs the match is 99%+ everywhere "
+        "(base/check exact, shock ≥99.3 except 15×10's known eq_paa Armington micro-cell "
+        "family ~95%) — the ~89–97 the NLP gate reads is the mis-converged NLP ref, NOT "
+        "the model. See [the live matrix](../_static/gtap7_mcp_matrix.html).",
+        "",
+        _nlp_table(mcp_rows()),
         "",
     ]
     return "\n".join(parts)
