@@ -100,8 +100,8 @@ Python is solved via PATH (nonlinear-full MCP) against the cleanly-converged **N
 | gtap7_5x5 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
 | gtap7_10x7 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
 | gtap7_10x7 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
-| gtap7_15x10 | 0 | 99 | 99 | 94 | out_gtap_shock_ifsub0.gdx |
-| gtap7_15x10 | 1 | 99 | 99 | 94 | out_gtap_shock_ifsub1.gdx |
+| gtap7_15x10 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_15x10 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
 
 ### Altertax (CD)
 

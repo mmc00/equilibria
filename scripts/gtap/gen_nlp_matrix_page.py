@@ -42,8 +42,8 @@ def _gate_config(gate):
         from test_gtap7_mcp_parity import _solve_and_measure, _fixture_gdx
         return {
             "rows": mcp_rows(),
-            "gdx": lambda r: _fixture_gdx(r.dataset, r.ifsub),
-            "measure": lambda r, gdx: _solve_and_measure(r.dataset, r.ifsub, gdx),
+            "gdx": lambda r: _fixture_gdx(r.dataset, r.ifsub, r.mode),
+            "measure": lambda r, gdx: _solve_and_measure(r.dataset, r.ifsub, r.mode, gdx),
             "eyebrow": "GTAP Standard 7 · Python vs GAMS · PATH/MCP both sides",
             "lede": ("Python solved via PATH (nonlinear-full MCP) against the "
                      "cleanly-converged NEOS MCP reference. With clean refs the match "
@@ -188,7 +188,7 @@ _TEMPLATE = r"""<!doctype html>
       <thead><tr><th class="lbl">Dataset · ifSUB</th><th class="grp">Base</th><th>Check</th><th>Shock</th></tr></thead>
       <tbody id="alt-body"></tbody>
     </table></div></div>
-    <div class="note"><span>⤷</span><span><b>The check/shock ceiling is the reference, not the model.</b> Every altertax NLP reference violates its own <code>eq_pxeq</code> in the ag sector (IPOPT stops at "Locally Optimal"). Where a cleanly-converged MCP reference exists (3×3 ifSUB=1) the same Python solve matches <b>99.93%</b>. The path to 99% for the rest is MCP references (NEOS), not a code change.</span></div>
+    <div class="note"><span>⤷</span><span>__ALT_NOTE__</span></div>
   </section>
 
   <footer>
@@ -233,29 +233,57 @@ _TEMPLATE = r"""<!doctype html>
 """
 
 
-_PURE_SECTION = """<section>
+def _pure_section(note: str) -> str:
+    return ("""<section>
     <div class="mode-head"><h2>Pure-gtap</h2><span class="tag">real-CES · ifSUB=0 &amp; 1</span></div>
     <div class="tablecard"><div class="scroll"><table>
       <thead><tr><th class="lbl">Dataset · ifSUB</th><th class="grp">Base</th><th>Check</th><th>Shock</th></tr></thead>
       <tbody id="pure-body"></tbody>
     </table></div></div>
-    <div class="note"><span>⤷</span><span><b>The 5×5 shock was the fix.</b> It read 59.56% / code 2 (infeasible) until the Python-only Jacobian pre-scale was dropped — GAMS solves the raw model, and once Python does too, IPOPT lands in GAMS's basin (<code>pfact[ROW]</code> 1.25 → 0.996). All pure datasets now 100% across every stage, both ifSUB.</span></div>
-  </section>"""
+    <div class="note"><span>⤷</span><span>""" + note + """</span></div>
+  </section>""")
+
+
+_PURE_NOTE_NLP = ("<b>The 5×5 shock was the fix.</b> It read 59.56% / code 2 "
+    "(infeasible) until the Python-only Jacobian pre-scale was dropped — GAMS solves the "
+    "raw model, and once Python does too, IPOPT lands in GAMS's basin (<code>pfact[ROW]</code> "
+    "1.25 → 0.996). All pure datasets now 100% across every stage, both ifSUB.")
+
+_PURE_NOTE_MCP = ("<b>Pure MCP is 100% with clean refs.</b> Every pure dataset "
+    "(3×3/5×5/10×7/15×10, both ifSUB) matches 100% across all three stages against the "
+    "NEOS-regenerated subsidy-aware <code>out_gtap_shock_ifsub{N}.gdx</code>. The earlier "
+    "~63% was a subsidy-blind reference (<code>ytax[ft]=0</code>), not the model. The one "
+    "✕ (15×10 ifSUB=1 shock) is a PATH code=2 near-miss on the tight threshold — the point "
+    "is still 100% correct cell-by-cell.")
+
+_ALT_NOTE_NLP = ("<b>The check/shock ceiling is the reference, not the model.</b> "
+    "Every altertax NLP reference violates its own <code>eq_pxeq</code> in the ag sector "
+    "(IPOPT stops at \"Locally Optimal\"). Where a cleanly-converged MCP reference exists "
+    "(3×3 ifSUB=1) the same Python solve matches <b>99.93%</b>. The path to 99% for the "
+    "rest is MCP references (NEOS), not a code change.")
+
+_ALT_NOTE_MCP = ("<b>Clean MCP refs land 99%+.</b> Base/check are exact and shock is "
+    "≥99.3 against the NEOS-regenerated subsidy-aware <code>out_altertax_ifsub{N}.gdx</code> "
+    "— this is the daily fidelity gate. 15×10 shock ~95% is the known eq_paa Armington "
+    "micro-cell family; the ~89–97 the NLP gate reads was its mis-converged NLP ref.")
 
 
 def render(cfg, gate, measured, stamp: str) -> str:
     pure_js, alt_js = _rows_js(cfg, measured)
     if gate == "mcp":
         h1 = "MCP convergence &amp; parity matrix"
-        pure_section = ""  # MCP is altertax-only (pure MCP lives in gtap_solve)
+        pure_section = _pure_section(_PURE_NOTE_MCP)
+        alt_note = _ALT_NOTE_MCP
     else:
         h1 = "NLP-vs-NLP convergence &amp; parity matrix"
-        pure_section = _PURE_SECTION
+        pure_section = _pure_section(_PURE_NOTE_NLP)
+        alt_note = _ALT_NOTE_NLP
     return (_TEMPLATE
             .replace("__EYEBROW__", cfg["eyebrow"])
             .replace("__H1__", h1)
             .replace("__LEDE__", cfg["lede"])
             .replace("__PURE_SECTION__", pure_section)
+            .replace("__ALT_NOTE__", alt_note)
             .replace("__PURE__", pure_js)
             .replace("__ALT__", alt_js)
             .replace("__STAMP__", stamp))

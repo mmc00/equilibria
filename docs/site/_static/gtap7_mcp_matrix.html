@@ -75,7 +75,14 @@
       <span class="chip nonconv">✕ code 2</span></span>
   </div>
 
-  
+  <section>
+    <div class="mode-head"><h2>Pure-gtap</h2><span class="tag">real-CES · ifSUB=0 &amp; 1</span></div>
+    <div class="tablecard"><div class="scroll"><table>
+      <thead><tr><th class="lbl">Dataset · ifSUB</th><th class="grp">Base</th><th>Check</th><th>Shock</th></tr></thead>
+      <tbody id="pure-body"></tbody>
+    </table></div></div>
+    <div class="note"><span>⤷</span><span><b>Pure MCP is 100% with clean refs.</b> Every pure dataset (3×3/5×5/10×7/15×10, both ifSUB) matches 100% across all three stages against the NEOS-regenerated subsidy-aware <code>out_gtap_shock_ifsub{N}.gdx</code>. The earlier ~63% was a subsidy-blind reference (<code>ytax[ft]=0</code>), not the model. The one ✕ (15×10 ifSUB=1 shock) is a PATH code=2 near-miss on the tight threshold — the point is still 100% correct cell-by-cell.</span></div>
+  </section>
 
   <section>
     <div class="mode-head"><h2>Altertax</h2><span class="tag">CD · ifSUB=0 &amp; 1</span></div>
@@ -83,7 +90,7 @@
       <thead><tr><th class="lbl">Dataset · ifSUB</th><th class="grp">Base</th><th>Check</th><th>Shock</th></tr></thead>
       <tbody id="alt-body"></tbody>
     </table></div></div>
-    <div class="note"><span>⤷</span><span><b>The check/shock ceiling is the reference, not the model.</b> Every altertax NLP reference violates its own <code>eq_pxeq</code> in the ag sector (IPOPT stops at "Locally Optimal"). Where a cleanly-converged MCP reference exists (3×3 ifSUB=1) the same Python solve matches <b>99.93%</b>. The path to 99% for the rest is MCP references (NEOS), not a code change.</span></div>
+    <div class="note"><span>⤷</span><span><b>Clean MCP refs land 99%+.</b> Base/check are exact and shock is ≥99.3 against the NEOS-regenerated subsidy-aware <code>out_altertax_ifsub{N}.gdx</code> — this is the daily fidelity gate. 15×10 shock ~95% is the known eq_paa Armington micro-cell family; the ~89–97 the NLP gate reads was its mis-converged NLP ref.</span></div>
   </section>
 
   <footer>
@@ -94,7 +101,14 @@
 </div>
 <script>
   const pure = [
-    
+    { ds: "gtap7_3x3", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_3x3", ifsub: 1, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_5x5", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_5x5", ifsub: 1, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_10x7", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_10x7", ifsub: 1, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_15x10", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 1, 99] },
+    { ds: "gtap7_15x10", ifsub: 1, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [100.0, 2, 99] }
   ];
   const alt = [
     { ds: "gtap7_3x3", ifsub: 0, base: [100.0, 1, 99], check: [100.0, 1, 99], shock: [99.9, 1, 99] },
