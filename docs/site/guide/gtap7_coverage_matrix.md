@@ -31,8 +31,8 @@ Builds + seeds + solves base→check→shock in altertax-CD mode; asserts 3×cod
 | gtap7_5x5 | altertax | 1 | base,check,shock | 99.5 | 99.81% (98.38% @0.5%) | local | out_altertax_ifsub1.gdx |
 | gtap7_10x7 | altertax | 0 | base,check,shock | 98 | 99.33% (96.83% @0.5%) | local | out_altertax_ifsub0.gdx |
 | gtap7_10x7 | altertax | 1 | base,check,shock | 98 | 99.31% (96.81% @0.5%) | local | out_altertax_ifsub1.gdx |
-| gtap7_15x10 | altertax | 0 | base,check,shock | 99 | 99.57% (98.19% @0.5%) | local | out_altertax_ifsub0.gdx |
-| gtap7_15x10 | altertax | 1 | base,check,shock | 99 | 99.40% (97.92% @0.5%) | local | out_altertax_ifsub1.gdx |
+| gtap7_15x10 | altertax | 0 | base,check,shock | 94 | 95.8% (CHECK 100%, clean ref) | local | out_altertax_ifsub0.gdx |
+| gtap7_15x10 | altertax | 1 | base,check,shock | 93 | 94.5% (CHECK 100%, clean ref) | local | out_altertax_ifsub1.gdx |
 | gtap7_3x4 | altertax | 0 | base,check,shock | 99 | 99.72% (96.79% @0.5%) | local | out_altertax_ifsub0.gdx |
 | gtap7_3x4 | altertax | 1 | base,check,shock | 99 | 99.72% (96.46% @0.5%) | local | out_altertax_ifsub1.gdx |
 | gtap7_20x41 | altertax | 0 | base | — | blocked: ref violates 37 own eqs | blocked | out_altertax_ifsub0.gdx (corrupt) |
