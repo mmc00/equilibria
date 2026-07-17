@@ -320,6 +320,62 @@ def _patch_dataset_sets(text: str, sets: dict) -> str:
     return text
 
 
+def _elements_of(text: str, set_name: str) -> set:
+    """Extract the element names of an inline `Set <name> / ... /;` block."""
+    m = re.search(
+        rf'(?im)^\s*[Ss]et\s+{re.escape(set_name)}\b[^\n]*/\s*\n(.*?)\n\s*/\s*;',
+        text, re.S,
+    )
+    if not m:
+        return set()
+    els = set()
+    for ln in m.group(1).splitlines():
+        ln = ln.split("*", 1)[0].strip().rstrip(",").strip()
+        if not ln or ln.startswith("set."):
+            continue
+        tok = re.split(r"[\s,.]", ln)[0].strip().strip("'\"")
+        if tok:
+            els.add(tok)
+    return els
+
+
+def _fix_acts_comm_collision(text: str) -> str:
+    """Drop the `set.comm` line from the `set is` composite when acts == comm.
+
+    Ported from build_gtap7_pure_local_bundle.py (commit 9da8917). `set is` (SAM
+    accounts) unions acts ∪ comm ∪ endw ∪ stdlab ∪ reg via `set.<name>` markers. In
+    datasets whose activity and commodity elements share the SAME names (e.g.
+    gtap7_3x4 / gtap7_15x10: both Food/Mnfcs/… with NO a_/c_ prefix, unlike
+    3x3/5x5/10x7 which are prefixed), listing set.acts THEN set.comm redeclares those
+    elements → GAMS "$172 Element is redefined" (verified: $onMulti does NOT help —
+    it permits set re-declaration, not duplicate elements in one list). When
+    acts == comm the union equals acts alone, so dropping `set.comm` from `set is` is
+    exact and safe. Only fires on the collision (prefixed datasets untouched).
+    """
+    acts = _elements_of(text, "acts")
+    comm = _elements_of(text, "comm")
+    if not acts or acts != comm:
+        return text  # prefixed (no collision) or sets not found — nothing to fix
+    m = re.search(
+        r'(set is "SAM accounts for aggregated SAM" /.*?/\s*;)', text, re.S
+    )
+    if not m:
+        return text
+    block = m.group(1)
+    # DELETE the whole `set.comm` line + its header comment (a commented-out marker
+    # left in place breaks GAMS: `*` inside a set element list is mishandled).
+    new_block = re.sub(
+        r'\n[ \t]*\*[ \t]*User-defined commodities[ \t]*\n(?:[ \t]*\n)*[ \t]*set\.comm[ \t]*',
+        '',
+        block, count=1,
+    )
+    if new_block == block:
+        new_block = re.sub(r'\n[ \t]*set\.comm[ \t]*(?=\n)', '', block, count=1)
+    if new_block == block:
+        return text
+    return text.replace(block, new_block, 1)
+
+
 def run_inliner(in_gdx: Path, out_data: Path, out_params: Path) -> None:
     cmd = [
         "uv", "run", "--with", "gamsapi", "--with", "pandas",
@@ -438,6 +494,11 @@ def main() -> None:
     if idx == -1:
         raise SystemExit("Could not find getData set-decl marker.")
     inlined = inlined[:idx] + "\n" + data_block + "\n" + inlined[idx:]
+
+    # Drop set.comm from `set is` when acts == comm (bare/unprefixed datasets like
+    # 3x4/15x10) — else GAMS "$172 Element is redefined". No-op for prefixed sets.
+    # MUST run AFTER the data_block (which carries the `set is` composite) is inlined.
+    inlined = _fix_acts_comm_collision(inlined)
 
     # Split inline_params into Dat-side and Prm-side.
     params_block = params_path.read_text()
