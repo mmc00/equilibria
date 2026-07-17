@@ -2248,6 +2248,22 @@ def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0
         except Exception:
             return False
 
+    # The factor tax/subsidy wedge fctts+fcttx = (ftrv-fbep)/evfb comes from the
+    # benchmark HAR, NOT from model Vars/Params (m.fctts/m.fcttx are 0 under altertax).
+    # Reading them off the model gave pfa=pf (missing the wedge) → pfa[EU_28,UnSkLab,
+    # Food] 1.37 vs GAMS 2.26 (39% off). Compute it from the benchmark like
+    # _recalibrate_io_af._wedge does. (Same subsidy-wedge omission class as the af fix.)
+    _bmk = getattr(params, "benchmark", None)
+
+    def _pfa_wedge(r, f, a):
+        if _bmk is None:
+            return 0.0
+        evfb = float(_bmk.evfb.get((r, f, a), 0.0) or 0.0)
+        if evfb <= 0.0:
+            return 0.0
+        return (float(_bmk.ftrv.get((r, f, a), 0.0) or 0.0)
+                - float(_bmk.fbep.get((r, f, a), 0.0) or 0.0)) / evfb
+
     # --- factor prices: pfa, pfy ---
     for r in R:
         for f in F:
@@ -2255,10 +2271,8 @@ def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0
                 pf = _pv("pf", (r, f, a, period), None) if getattr(m, "pf", None) is not None else None
                 if pf is None:
                     continue
-                fctts = _pv("fctts", (r, f, a, period))
-                fcttx = _pv("fcttx", (r, f, a, period))
                 kappaf = _pv("kappaf", (r, f, a, period))
-                for vn, val in (("pfa", pf * (1.0 + fctts + fcttx)),
+                for vn, val in (("pfa", pf * (1.0 + _pfa_wedge(r, f, a))),
                                 ("pfy", pf * (1.0 - kappaf))):
                     v = getattr(m, vn, None)
                     if v is None:
