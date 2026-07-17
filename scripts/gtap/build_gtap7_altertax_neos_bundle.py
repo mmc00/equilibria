@@ -563,6 +563,32 @@ def main() -> None:
         inject_txt = "\n\n" + "\n".join(inject_lines) + "\n"
         inlined = inlined[:anchor_end] + inject_txt + inlined[anchor_end:]
 
+    # CDE/CES elasticity injection (ported from build_gtap7_pure_local_bundle.py,
+    # commit 2f41b31): some v7_consolidated.gdx datasets (gtap7_3x4, gtap7_15x10)
+    # don't embed incpar/subpar/esub* — without them cal.gms's CDE income module
+    # (eh0/bh0 = incpar/subpar) divides by zero → SOLVE skipped. Inject from the
+    # dataset's own default.prm. Detect the c_/a_ prefix convention from the inlined
+    # sets (5x5 prefixed, 15x10/3x4 bare) — the wrong convention hard-fails GAMS
+    # Error 170. Check the comment marker the inliner actually emits, not a
+    # declaration line that never exists.
+    if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
+        prm_har_path = DATASETS_DIR / dataset / "default.prm"
+        if prm_har_path.exists():
+            import nl_compare as _nlc
+            use_prefix = _nlc._detect_prm_prefix_convention(inlined)
+            elast_block = _nlc._prm_har_as_assignments(prm_har_path, use_prefix=use_prefix)
+            # getData.gms (already inlined) declares these params with real domains —
+            # a fresh `parameter name(*,*) ;` redeclaration is GAMS error 184. Keep
+            # only the assignment lines, drop the declaration lines.
+            assign_lines = [
+                ln for ln in elast_block.splitlines()
+                if not re.match(r"^\s*parameter\s+\w+\(", ln)
+            ]
+            elast_block = "\n".join(assign_lines)
+            if elast_block.strip():
+                prm_block += "\n" + elast_block
+                print(f"  injected CDE/CES elasticities (incpar/subpar/esub*) for {dataset}")
+
     rorflex_anchor = "* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex\n"
     a_idx = inlined.find(rorflex_anchor)
     if a_idx < 0:
