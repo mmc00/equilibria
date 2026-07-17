@@ -2623,17 +2623,23 @@ def _run_path_capi_nonlinear_full(
         # feasibility-restoration → "locally infeasible" on check+shock. Skipping it
         # in altertax mode makes the NLP solve MORE faithful to GAMS (raw model,
         # nlp_scaling_method=none), and it converges optimal (resid ~1e-9).
-        _is_altertax_nlp = (
-            closure_config is not None
-            and getattr(closure_config, "name", None) == "altertax"
-        )
-        _skip_jacscale = (
-            bool(os.environ.get("EQUILIBRIA_GTAP_NLP_NO_JACSCALE"))
-            or _is_altertax_nlp
-        )
-        if _is_altertax_nlp and not os.environ.get("EQUILIBRIA_GTAP_NLP_NO_JACSCALE"):
-            print("[nlp-square] altertax closure: skipping Jacobian pre-scale "
-                  "(faithful to GAMS scaleopt=1 = no in-solver rescale)", file=sys.stderr)
+        # FAITHFUL-TO-GAMS (2026-07-17, extended from altertax to ALL modes): GAMS
+        # solves the RAW model — model.gms sets gtap.scaleopt=1 with NO explicit
+        # var.scale(...) assignments (= unit scale factors = no in-solver rescale),
+        # AND scaleopt=1 silently sets IPOPT's nlp_scaling_method=none. equilibria's
+        # core.scale_model Jacobian pre-pass is a Python-only invention. In altertax
+        # it drove IPOPT infeasible; in PURE-gtap it lands IPOPT in a DIFFERENT local
+        # optimum on the shock — e.g. gtap7_5x5: WITH pre-scale the Energy sector
+        # (esubm=11.5) blows up (xw[USA,Energy,ROW]=4.26 vs GAMS 0.027, pfact[ROW]=1.25
+        # vs 0.996) → shock infeasible/59.56%; WITHOUT it, IPOPT stays in GAMS's basin
+        # → pfact[ROW]=0.996 EXACT, shock 100%. The seeded GAMS point is representable
+        # in Python EXACTLY (pfact/pva/px/pm/xw all match to 5 digits), so it was never
+        # a model or convexity issue — purely the pre-scale steering the solver. 3x3
+        # and 10x7 pure are UNCHANGED (100% either way). So skip the pre-scale for the
+        # NLP path unconditionally (raw model + nlp_scaling_method=none = what GAMS does).
+        _skip_jacscale = True
+        print("[nlp-square] skipping Jacobian pre-scale (faithful to GAMS: raw model, "
+              "nlp_scaling_method=none)", file=sys.stderr)
         try:
             if _skip_jacscale:
                 print("[nlp-square] skipping Jacobian pre-scale (NO_JACSCALE); solving raw model",
