@@ -31,11 +31,18 @@ def main() -> None:
                     help="Explicit bundle directory (overrides --dataset)")
     ap.add_argument("--ifsub", type=int, choices=(0, 1), default=None,
                     help="Pick comp_<dataset>_altertax_neos_ifsub<N>.gms (per-ifSUB bundles)")
+    ap.add_argument("--gms", type=Path, default=None,
+                    help="Explicit .gms path (bypasses name inference; for pure-gtap "
+                         "bundles whose file is comp_<ds>_gtap_shock_ifsub<N>.gms). "
+                         "in.gdx is taken from the .gms's own directory.")
     ap.add_argument("--email", default="dracomarmol@gmail.com")
     ap.add_argument("--no-wait", action="store_true")
     args = ap.parse_args()
 
-    if args.bundle_dir:
+    if args.gms:
+        gms_path = args.gms
+        bundle_dir = gms_path.parent
+    elif args.bundle_dir:
         bundle_dir = args.bundle_dir
     elif args.dataset:
         bundle_dir = ROOT / "output" / f"{args.dataset}_altertax_neos_bundle"
@@ -44,7 +51,9 @@ def main() -> None:
 
     # Pick the .gms: prefer the exact per-ifSUB file when --ifsub given, else the
     # single comp_*.gms (excluding the *_nlp.gms debug variants).
-    if args.ifsub is not None and args.dataset:
+    if args.gms:
+        pass  # gms_path already set above
+    elif args.ifsub is not None and args.dataset:
         gms_path = bundle_dir / f"comp_{args.dataset}_altertax_neos_ifsub{args.ifsub}.gms"
         if not gms_path.exists():
             raise SystemExit(f"No {gms_path.name} in {bundle_dir}")
