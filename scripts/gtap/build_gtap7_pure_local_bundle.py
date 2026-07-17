@@ -215,6 +215,50 @@ def _fix_acts_comm_collision(text: str) -> str:
     return text.replace(block, new_block, 1)
 
 
+def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> str:
+    """Emit GAMS assignment lines for a factor header (FBEP/FTRV) read from a
+    basedata.har, matching the inliner's own `* <NAME> data (N cells)` block
+    format (index order ENDW/factor, ACTS/activity, REG/region; raw values).
+
+    The ACTS element gets whatever prefix the dataset's own inlined sets use for
+    activities (gtap7_3x3 uses `a_Food`; gtap7_15x10 uses bare `Rice`) — detected
+    from the already-built `inlined` .gms so the emitted keys resolve against the
+    dataset's real sets (else GAMS Error 170 domain violation at compile).
+    """
+    import sys as _sys
+    _src = str(ROOT / "src")
+    if _src not in _sys.path:
+        _sys.path.insert(0, _src)
+    from equilibria.babel.har.reader import read_har  # type: ignore
+    import numpy as _np
+
+    try:
+        har = read_har(har_path, select_headers=[header])
+    except Exception:
+        return ""
+    h = har.get(header)
+    if h is None or getattr(h, "rank", 0) != 3:
+        return ""
+
+    # Detect the activity-set prefix from the inlined .gms's own EVFB block
+    # (same (ENDW, ACTS, REG) domain): e.g. `evfb('Land','a_Food','USA')` → a_.
+    act_prefix = ""
+    m = re.search(r"(?:^|\n)evfb\('[^']+','([acfr])_", inlined)
+    if m:
+        act_prefix = m.group(1) + "_"
+
+    endw_labels, acts_labels, reg_labels = h.set_elements
+    lines = [f"* {header} data (injected from basedata.har)"]
+    nz = _np.argwhere(h.array != 0)
+    for idx in nz:
+        f_lbl = endw_labels[idx[0]]
+        a_lbl = acts_labels[idx[1]]
+        r_lbl = reg_labels[idx[2]]
+        val = float(h.array[tuple(idx)])
+        lines.append(f"{header}('{f_lbl}','{act_prefix}{a_lbl}','{r_lbl}') = {val:.10g} ;")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True,
@@ -286,6 +330,22 @@ def main() -> None:
         "EVFB", "EVFP", "EVOS", "VXSB", "VFOB", "VCIF", "VMSB",
         "VST", "VTWR", "SAVE", "VDEP", "VKB", "POP", "MAKS", "MAKB", "pop0",
     }
+    # BUG FIX (found 2026-07-14): the inliner's `* <name> data (N cells)`
+    # marker comments carry the GAMS parameter's LOWERCASE spelling (e.g.
+    # `* evfb data (36 cells)`), but `dat_param_names` above lists the
+    # UPPERCASE GDX header names (`EVFB`, `EVFP`, ...). The membership check
+    # `current_target in dat_param_names` was therefore case-sensitive and
+    # ALWAYS false for every one of these params — evfb/evfp (and every
+    # other dat_param_names entry) silently fell into prm_lines instead of
+    # dat_lines, so `dat_block` never actually contained their real values.
+    # This is what let `ftrv = evfp - evfb` (inserted right before dat_block)
+    # evaluate on GAMS's implicit-zero defaults regardless of where dat_block
+    # was positioned — fixing the insertion ORDER alone (see the ftrv_anchor
+    # block below) was not sufficient without ALSO fixing this membership
+    # check, since the wrongly-placed data would just end up in prm_block
+    # instead, contributing nothing at either position. Normalize both sides
+    # to uppercase for the comparison.
+    dat_param_names_upper = {n.upper() for n in dat_param_names}
     header = params_block.split("\n")[0]
     dat_lines, prm_lines = [header], [header]
     current_target = None
@@ -300,16 +360,32 @@ def main() -> None:
             dat_lines.append(line)
             prm_lines.append(line)
             continue
-        target_dat = current_target in dat_param_names if current_target else False
+        target_dat = current_target.upper() in dat_param_names_upper if current_target else False
         (dat_lines if target_dat else prm_lines).append(line)
     dat_block = "\n".join(dat_lines)
     prm_block = "\n".join(prm_lines)
 
+    # BUG FIX (found 2026-07-14): the original getData.gms computes
+    # `ftrv = evfp - evfb` (and `fbep = 0`) RIGHT AFTER its own
+    # `execute_load "...Dat.gdx", ..., evfb, evfp, evos, ...` — i.e. the
+    # data injection happens BEFORE the ftrv calculation in the real GAMS
+    # source. This inliner previously inserted `dat_block` (which carries
+    # the real evfb/evfp/etc. values) AFTER the ftrv anchor line instead of
+    # BEFORE it — so in every generated bundle (local AND NEOS, both bundle
+    # builders share this exact anchor/insertion pattern), `ftrv` was
+    # computed while evfb/evfp were still at GAMS's implicit default (0),
+    # making ftrv (and therefore fcttx, in periods/models that source fcttx
+    # from ftrv) silently and universally zero — confirmed via a `display`
+    # instrumentation of a real local GAMS run showing EVFB/EVFP/ftrv all
+    # "( ALL 0.000 )" right after the (mis-ordered) assignment. This directly
+    # explains gtap7_3x3's own gams_levels(ref,'fcttx') reading all-zero:
+    # not GAMS's genuine behavior, but an artifact of this inliner's bundle
+    # (including the reference GDX fixtures generated by it/its NEOS twin).
     ftrv_anchor = "ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;"
     f_idx = inlined.find(ftrv_anchor)
     if f_idx < 0:
         raise SystemExit("Could not find ftrv anchor for Dat params block.")
-    inlined = inlined[:f_idx] + "\n" + dat_block + "\n\n" + inlined[f_idx:]
+    inlined = inlined[:f_idx] + dat_block + "\n\n" + inlined[f_idx:]
 
     rorflex_anchor = "* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex\n"
     a_idx = inlined.find(rorflex_anchor)
@@ -319,6 +395,87 @@ def main() -> None:
     close_idx = inlined.find(close_marker, a_idx)
     if close_idx < 0:
         raise SystemExit("Could not locate Prm.gdx close $gdxin marker.")
+
+    # Some v7_consolidated.gdx datasets (e.g. gtap7_15x10, gtap7_3x4) don't
+    # embed the CDE/CES elasticity parameters (incpar/subpar/esubi/...) —
+    # unlike gtap7_3x3/5x5/10x7/20x41, which already carry them under GAMS
+    # lowercase names. Without them cal.gms's CDE income-allocation module
+    # (eh0/bh0 = incpar/subpar) divides by zero. Detect the gap and inject
+    # from the dataset's own default.prm (GEMPACK HAR) via the same
+    # _prm_har_as_assignments emitter nl_compare.py already uses for this
+    # exact case.
+    #
+    # DETECTION BUG (found 2026-07-13 via a gtap7_5x5 CONVERT run failing to
+    # compile): the inliner (gdx_to_gams_inline.py) NEVER emits a literal
+    # "parameter incpar(...) ;" declaration line for ANY dataset — it only
+    # emits a `* incpar data (N cells)` comment followed by bare assignment
+    # lines (`incpar('c_Agri','USA') = ... ;`). The old check ("parameter
+    # incpar(" not in prm_block) is therefore ALWAYS true, firing the
+    # injection unconditionally — including for gtap7_5x5, which genuinely
+    # already has incpar/subpar embedded (confirmed via gdxdump + this
+    # inliner's own output). The redundant injection happened to be
+    # harmless there only because THIS session's prefix fix to
+    # _prm_har_as_assignments (1cdd60d) coincidentally re-derived the SAME
+    # c_/a_-prefixed keys 5x5 already uses — but gtap7_15x10 uses NO
+    # prefix at all on its comm/acts set elements (`Rice`, not `c_Rice` —
+    # confirmed via its own inlined `Set comm .../ Rice, Grains, ... /`
+    # block), so the SAME injection there emits keys ("c_Rice") that don't
+    # exist in that dataset's own sets, hard-failing GAMS Error 170 (domain
+    # violation) once CONVERT's stricter compile is used (PATH's own solve
+    # path tolerates it, which is why this went unnoticed for weeks).
+    #
+    # Correct detection: check for the comment marker the inliner ACTUALLY
+    # emits (`* incpar data`), not a declaration line that never exists.
+    #
+    # PREFIX BUG (found 2026-07-13 right after the detection-bug fix above):
+    # whether comm/acts elements carry a c_/a_ prefix in THIS dataset's own
+    # inlined sets is not universal either — gtap7_5x5 does, gtap7_15x10
+    # does not (bare `Rice`/`Grains` for both comm and acts). Injecting the
+    # wrong convention hard-fails GAMS Error 170 at compile. Detect from the
+    # already-built `inlined` text itself rather than assuming.
+    if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
+        prm_har_path = DATASETS_DIR / dataset / "default.prm"
+        if prm_har_path.exists():
+            import nl_compare as _nlc
+            use_prefix = _nlc._detect_prm_prefix_convention(inlined)
+            elast_block = _nlc._prm_har_as_assignments(prm_har_path, use_prefix=use_prefix)
+            # comp.gms (via getData.gms, already inlined) declares these
+            # params with real domains — a fresh `parameter name(*,*) ;`
+            # redeclaration is GAMS error 184. Keep only the assignment
+            # lines (`name(...) = val ;`), drop the declaration lines.
+            assign_lines = [
+                ln for ln in elast_block.splitlines()
+                if not re.match(r"^\s*parameter\s+\w+\(", ln)
+            ]
+            elast_block = "\n".join(assign_lines)
+            if elast_block.strip():
+                prm_block += "\n" + elast_block
+                print(f"  injected default.prm elasticities (incpar/subpar/esub*) for {dataset}")
+
+    # FBEP/FTRV injection (found 2026-07-16): some datasets' v7_consolidated.gdx
+    # LOSE the FBEP (factor subsidy) / FTRV (factor tax) symbols during
+    # aggregation — gtap7_3x3's v7 has no FBEP symbol at all, so the inliner
+    # never emits a `* FBEP data` block and getData.gms's hardcoded `fbep=0`
+    # (and its `ftrv = evfp - evfb` fallback) win, producing a subsidy-BLIND
+    # reference GDX (fctts=0, pfa/pf wedge = net rtf). But the dataset's OWN
+    # basedata.har DOES carry the real FBEP/FTRV (3x3: 12/36 nonzero cells,
+    # FBEP total -0.1674 — IDENTICAL to 15x10's 177-cell total, i.e. a faithful
+    # aggregation of the same underlying subsidies). Python loads FBEP/FTRV from
+    # that basedata.har and computes fctts=-fbep/evfb, fcttx=ftrv/evfb — so a
+    # subsidy-blind reference mismatches Python for every subsidized (ag) factor.
+    # Fix: when the inlined .gms lacks the FBEP/FTRV data blocks (v7 dropped
+    # them), inject them from basedata.har with the dataset's own set-prefix
+    # convention, so the regenerated reference GDX carries the real subsidies.
+    for _sym, _n_idx in (("FBEP", 3), ("FTRV", 3)):
+        if f"* {_sym} data" in inlined or f"\n{_sym}(" in inlined:
+            continue  # already present (from the v7 via the inliner)
+        _blk = _fbep_ftrv_har_as_assignments(
+            DATASETS_DIR / dataset / "basedata.har", _sym, inlined)
+        if _blk.strip():
+            prm_block += "\n" + _blk
+            _ncells = _blk.count(" = ")
+            print(f"  injected {_sym} ({_ncells} cells) from basedata.har for {dataset}")
+
     insert_at = close_idx + len(close_marker)
     inlined = inlined[:insert_at] + "\n" + prm_block + "\n" + inlined[insert_at:]
 

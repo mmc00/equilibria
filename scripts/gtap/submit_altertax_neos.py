@@ -29,22 +29,40 @@ def main() -> None:
                          "Bundle dir defaults to output/<dataset>_altertax_neos_bundle")
     ap.add_argument("--bundle-dir", type=Path, default=None,
                     help="Explicit bundle directory (overrides --dataset)")
+    ap.add_argument("--ifsub", type=int, choices=(0, 1), default=None,
+                    help="Pick comp_<dataset>_altertax_neos_ifsub<N>.gms (per-ifSUB bundles)")
+    ap.add_argument("--gms", type=Path, default=None,
+                    help="Explicit .gms path (bypasses name inference; for pure-gtap "
+                         "bundles whose file is comp_<ds>_gtap_shock_ifsub<N>.gms). "
+                         "in.gdx is taken from the .gms's own directory.")
     ap.add_argument("--email", default="dracomarmol@gmail.com")
     ap.add_argument("--no-wait", action="store_true")
     args = ap.parse_args()
 
-    if args.bundle_dir:
+    if args.gms:
+        gms_path = args.gms
+        bundle_dir = gms_path.parent
+    elif args.bundle_dir:
         bundle_dir = args.bundle_dir
     elif args.dataset:
         bundle_dir = ROOT / "output" / f"{args.dataset}_altertax_neos_bundle"
     else:
         bundle_dir = ROOT / "output/9x10_altertax_neos_bundle"
 
-    # Find the .gms file — any comp_*.gms in the bundle dir
-    gms_candidates = list(bundle_dir.glob("comp_*.gms"))
-    if not gms_candidates:
-        raise SystemExit(f"No comp_*.gms found in {bundle_dir}")
-    gms_path = gms_candidates[0]
+    # Pick the .gms: prefer the exact per-ifSUB file when --ifsub given, else the
+    # single comp_*.gms (excluding the *_nlp.gms debug variants).
+    if args.gms:
+        pass  # gms_path already set above
+    elif args.ifsub is not None and args.dataset:
+        gms_path = bundle_dir / f"comp_{args.dataset}_altertax_neos_ifsub{args.ifsub}.gms"
+        if not gms_path.exists():
+            raise SystemExit(f"No {gms_path.name} in {bundle_dir}")
+    else:
+        gms_candidates = [g for g in bundle_dir.glob("comp_*.gms")
+                          if not g.name.endswith("_nlp.gms")]
+        if not gms_candidates:
+            raise SystemExit(f"No comp_*.gms found in {bundle_dir}")
+        gms_path = gms_candidates[0]
     gdx_path = bundle_dir / "in.gdx"
     if not gms_path.exists() or not gdx_path.exists():
         raise SystemExit(f"Bundle incomplete; missing {gms_path} or {gdx_path}")

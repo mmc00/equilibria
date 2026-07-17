@@ -31,8 +31,8 @@ Builds + seeds + solves base→check→shock in altertax-CD mode; asserts 3×cod
 | gtap7_5x5 | altertax | 1 | base,check,shock | 99.5 | 99.81% (98.38% @0.5%) | local | out_altertax_ifsub1.gdx |
 | gtap7_10x7 | altertax | 0 | base,check,shock | 98 | 99.33% (96.83% @0.5%) | local | out_altertax_ifsub0.gdx |
 | gtap7_10x7 | altertax | 1 | base,check,shock | 98 | 99.31% (96.81% @0.5%) | local | out_altertax_ifsub1.gdx |
-| gtap7_15x10 | altertax | 0 | base,check,shock | 99 | 99.57% (98.19% @0.5%) | local | out_altertax_ifsub0.gdx |
-| gtap7_15x10 | altertax | 1 | base,check,shock | 99 | 99.40% (97.92% @0.5%) | local | out_altertax_ifsub1.gdx |
+| gtap7_15x10 | altertax | 0 | base,check,shock | 94 | 95.8% (CHECK 100%, clean ref) | local | out_altertax_ifsub0.gdx |
+| gtap7_15x10 | altertax | 1 | base,check,shock | 93 | 94.5% (CHECK 100%, clean ref) | local | out_altertax_ifsub1.gdx |
 | gtap7_3x4 | altertax | 0 | base,check,shock | 99 | 99.72% (96.79% @0.5%) | local | out_altertax_ifsub0.gdx |
 | gtap7_3x4 | altertax | 1 | base,check,shock | 99 | 99.72% (96.46% @0.5%) | local | out_altertax_ifsub1.gdx |
 | gtap7_20x41 | altertax | 0 | base | — | blocked: ref violates 37 own eqs | blocked | out_altertax_ifsub0.gdx (corrupt) |
@@ -51,3 +51,71 @@ The non-altertax real-CES model solved base→check→shock in `mode="gtap"`, pe
 | gtap7_10x7 | gtap_solve | 1 | base,check,shock | 99 | 99.5% (CHECK 100%) | local | out_gtap_shock_ifsub1.gdx (NEOS) |
 | gtap7_15x10 | gtap_solve | 0 | base,check,shock | 99 | 100% (CHECK 100%) | local | out_gtap_shock_ifsub0.gdx (NEOS) |
 | gtap7_15x10 | gtap_solve | 1 | base,check,shock | 95 | 95.68% (CHECK 100%) | local | out_gtap_shock_ifsub1.gdx (NEOS) |
+
+## NLP-vs-NLP fidelity gate (IPOPT both sides, local-only)
+
+Python is solved as an NLP (`EQUILIBRIA_GTAP_SOLVE_NLP=1`, maximize walras) against the GAMS `ifMCP=0` NLP reference. Same IPOPT on both sides, so the solver's equality tolerance cancels and the cell-by-cell match reflects **model fidelity**, not solver noise. Unlike the other gates this reports a floor **per stage** (base/check/shock): `test_gtap7_nlp_parity.py` runs the real solve, measures match% @ tol1% and the return code, and asserts `match ≥ floor` and `code == 1` for every stage. The measured snapshot is **not** stored in the matrix (it would be a dead copy) — regenerate the rich view with `scripts/gtap/gen_nlp_matrix_page.py`, which re-runs the measurement. See [the live matrix](../_static/gtap7_nlp_matrix.html).
+
+### Pure-gtap (real-CES)
+
+100% across every stage, both ifSUB, after the Jacobian pre-scale skip (commit e4c40d7 — GAMS solves the raw model; the Python-only pre-scale steered IPOPT to a wrong basin on the 5×5 shock, 59.56% → 100%).
+
+| dataset | ifsub | base ≥ | check ≥ | shock ≥ | ref |
+|---|---|---|---|---|---|
+| gtap7_3x3 | 0 | 99 | 99 | 99 | out_3x3_ifsub0_nlp.gdx |
+| gtap7_3x3 | 1 | 99 | 99 | 99 | out_3x3_nlp.gdx |
+| gtap7_5x5 | 0 | 99 | 99 | 99 | out_5x5_ifsub0_nlp.gdx |
+| gtap7_5x5 | 1 | 99 | 99 | 99 | out_5x5_nlp.gdx |
+| gtap7_10x7 | 0 | 99 | 99 | 99 | out_10x7_ifsub0_nlp.gdx |
+| gtap7_10x7 | 1 | 99 | 99 | 99 | out_10x7_nlp.gdx |
+
+### Altertax (CD)
+
+Base is exact (100%). The check/shock floors are lower because the altertax NLP references are themselves mis-converged — IPOPT stops at "Locally Optimal" and the ref violates its own `eq_pxeq` in the ag sector. Where a cleanly-converged MCP reference exists (3×3 ifSUB=1) the same Python solve reaches 99.93%; the path to 99% for the rest is MCP references, not a code change. Every stage still converges (`code == 1`).
+
+| dataset | ifsub | base ≥ | check ≥ | shock ≥ | ref |
+|---|---|---|---|---|---|
+| gtap7_3x3 | 0 | 99 | 93 | 93 | out_altertax_nlp_ifsub0.gdx |
+| gtap7_3x3 | 1 | 99 | 88 | 88 | out_altertax_nlp_ifsub1.gdx |
+| gtap7_3x4 | 0 | 99 | 94 | 94 | out_altertax_nlp_ifsub0.gdx |
+| gtap7_3x4 | 1 | 99 | 91 | 91 | out_altertax_nlp_ifsub1.gdx |
+| gtap7_5x5 | 0 | 99 | 94 | 86 | out_altertax_nlp_ifsub0.gdx |
+| gtap7_5x5 | 1 | 99 | 94 | 94 | out_altertax_nlp_ifsub1.gdx |
+| gtap7_10x7 | 0 | 99 | 92 | 91 | out_altertax_nlp_ifsub0.gdx |
+| gtap7_10x7 | 1 | 99 | 93 | 93 | out_altertax_nlp_ifsub1.gdx |
+
+## MCP fidelity gate (PATH both sides, local-only)
+
+Python is solved via PATH (nonlinear-full MCP) against the cleanly-converged **NEOS** MCP reference (regenerated 2026-07-17, subsidy-aware, `eq_pxeq` clean). Same per-stage contract as the NLP gate; `test_gtap7_mcp_parity.py` runs the real PATH solve, measures match%/code, and asserts `match ≥ floor` and `code == 1` for every stage. With clean refs the match is 99%+ everywhere (base/check exact, shock ≥99.3 except 15×10's known eq_paa Armington micro-cell family ~95%) — the ~89–97 the NLP gate reads is the mis-converged NLP ref, NOT the model. See [the live matrix](../_static/gtap7_mcp_matrix.html).
+
+### Pure-gtap (real-CES)
+
+100% across every stage on 3×3/5×5/10×7 (both ifSUB) against the NEOS-regenerated `out_gtap_shock_ifsub{N}.gdx` refs; 15×10 shock ~95% is the same eq_paa Armington micro-cell family. This is the symmetric counterpart of the pure-gtap NLP gate — the earlier ~63% was a subsidy-blind (`ytax[ft]=0`) reference, not the model.
+
+| dataset | ifsub | base ≥ | check ≥ | shock ≥ | ref |
+|---|---|---|---|---|---|
+| gtap7_3x3 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_3x3 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
+| gtap7_5x5 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_5x5 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
+| gtap7_10x7 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_10x7 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
+| gtap7_15x10 | 0 | 99 | 99 | 99 | out_gtap_shock_ifsub0.gdx |
+| gtap7_15x10 | 1 | 99 | 99 | 99 | out_gtap_shock_ifsub1.gdx |
+
+### Altertax (CD)
+
+Base/check exact, shock ≥99.3 (15×10 ~95% eq_paa). The cleanly-converged MCP references make this the daily fidelity gate — where the NLP gate's mis-converged ref capped the match at 89–97%, PATH against a clean MCP ref reaches 99%+.
+
+| dataset | ifsub | base ≥ | check ≥ | shock ≥ | ref |
+|---|---|---|---|---|---|
+| gtap7_3x3 | 0 | 99 | 99 | 99 | out_altertax_ifsub0.gdx |
+| gtap7_3x3 | 1 | 99 | 99 | 99 | out_altertax_ifsub1.gdx |
+| gtap7_3x4 | 0 | 99 | 99 | 99 | out_altertax_ifsub0.gdx |
+| gtap7_3x4 | 1 | 99 | 99 | 99 | out_altertax_ifsub1.gdx |
+| gtap7_5x5 | 0 | 99 | 99 | 99 | out_altertax_ifsub0.gdx |
+| gtap7_5x5 | 1 | 99 | 99 | 99 | out_altertax_ifsub1.gdx |
+| gtap7_10x7 | 0 | 99 | 99 | 98 | out_altertax_ifsub0.gdx |
+| gtap7_10x7 | 1 | 99 | 99 | 98 | out_altertax_ifsub1.gdx |
+| gtap7_15x10 | 0 | 99 | 99 | 94 | out_altertax_ifsub0.gdx |
+| gtap7_15x10 | 1 | 99 | 99 | 93 | out_altertax_ifsub1.gdx |

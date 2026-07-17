@@ -86,6 +86,13 @@ GAMS_TO_PY_NAME = {
     "xa": "xaa",        # GAMS xa(r,i,aa) → Python xaa
     "p": "p_rai",       # producer make-price → Python p_rai
     "pp": "pp_rai",     # tax-inclusive producer price → Python pp_rai
+    # GAMS xg(r,t) is the AGGREGATE real gov expenditure scalar (pg*xg=yg) → Python
+    # xg_agg[r]. Python's xg[r,i] is the DISAGGREGATED per-commodity gov demand
+    # (GAMS xa(r,i,gov,t)) — different var/arity. Without this alias the seed hits
+    # xg[r,i] with a 1-key (r,) that never matches → xg_agg stays at init 1.0 →
+    # phantom eq_xg_agg residual (pg*1−yg ≈ 2.68) that MASKS the real seed_and_solve
+    # tail. Mirrors seed_all_periods (gtap_model_multiperiod.py:598) which HAS it.
+    "xg": "xg_agg",
 }
 
 # Scalar-by-t Vars that list_populated_vars DROPS (notably piGbl) — seed explicitly.
