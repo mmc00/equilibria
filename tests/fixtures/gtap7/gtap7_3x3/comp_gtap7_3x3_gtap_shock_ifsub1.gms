@@ -363,90 +363,8 @@ parameters
 *        HANDLING OF FBEP and FTRV
 
 fbep(fp,a0,r) = 0 ;
-
 * === Inlined PARAMETER data from in.gdx ===
 $onImplicitAssign
-* pop0 data (3 cells)
-pop0('USA') = 325.1471252 ;
-pop0('EU_28') = 513.8722534 ;
-pop0('ROW') = 6674.864258 ;
-
-
-ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;
-ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;
-
-* --------------------------------------------------------------------------------------------------
-*
-*     Read in CO2 emissions data
-*
-* --------------------------------------------------------------------------------------------------
-
-Parameters
-   mdf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
-   mmf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
-   mdp(i0, r)              "CO2 emissions from domestic private demand"
-   mmp(i0, r)              "CO2 emissions from domestic private demand"
-   mdg(i0, r)              "CO2 emissions from domestic public demand"
-   mmg(i0, r)              "CO2 emissions from domestic public demand"
-   mdi(i0, r)              "CO2 emissions from investment demand"
-   mmi(i0, r)              "CO2 emissions from investment demand"
-;
-
-$ifthen exist "%inDir%/%BaseName%Emiss.gdx"
-   * [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Emiss.gdx"
-   * [stripped for NEOS inline] $load mdf mmf mdp mmp mdg mmg mdi mmi
-   * [stripped for NEOS inline] $gdxin
-$else
-   mdf(i0,a0,r) = 0 ;
-   mmf(i0,a0,r) = 0 ;
-   mdp(i0,r)    = 0 ;
-   mmp(i0,r)    = 0 ;
-   mdg(i0,r)    = 0 ;
-   mmg(i0,r)    = 0 ;
-   mdi(i0,r)    = 0 ;
-   mmi(i0,r)    = 0 ;
-$endif
-
-* --------------------------------------------------------------------------------------------------
-*
-*     Read in the GTAP Parameters
-*
-* --------------------------------------------------------------------------------------------------
-
-Parameters
-   esubt(a0,r)       "Top level CES substitution elasticity"
-   esubc(a0,r)       "ND nest CES substitution elasticity"
-   esubva(a0,r)      "VA nest CES substitution elasticity"
-
-   etraq(a0,r)       "CET make elasticity"
-   esubq(i0,r)       "CES make elasticity"
-
-   incpar(i0,r)      "CDE expansion parameter"
-   subpar(i0,r)      "CDE substitution parameter"
-
-   esubg(r)          "CES government expenditure elasticity"
-   esubi(r)          "CES investment expenditure elasticity"
-
-   esubd(i0,r)       "Top level Armington elasticity"
-   esubm(i0,r)       "Second level Armington elasticity"
-   esubs(i0)         "CES margin elasticity"
-
-   etrae(fp,r)       "CET elasticity for factors"
-   rorFlex0(r)       "Flexibility of foreign capital"
-;
-
-* [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Prm.gdx"
-* [stripped for NEOS inline] $loadDC esubt=esubt esubc=esubc esubva=esubva
-* [stripped for NEOS inline] $loadDC etraq=etraq esubq=esubq
-* [stripped for NEOS inline] $loadDC incpar=incpar subpar=subpar esubg=esubg esubi=esubi
-* [stripped for NEOS inline] $loadDC esubd=esubd esubm=esubm esubs=esubs
-* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex
-* [stripped for NEOS inline] $gdxin
-
-* === Inlined PARAMETER data from in.gdx ===
-
-$onImplicitAssign
-
 * vdfb data (27 cells)
 vdfb('c_Food','a_Food','USA') = 542355 ;
 vdfb('c_Food','a_Food','EU_28') = 500638.0625 ;
@@ -963,6 +881,11 @@ vkb('USA') = 45406700 ;
 vkb('EU_28') = 45244080 ;
 vkb('ROW') = 123050744 ;
 
+* pop0 data (3 cells)
+pop0('USA') = 325.1471252 ;
+pop0('EU_28') = 513.8722534 ;
+pop0('ROW') = 6674.864258 ;
+
 * maks data (9 cells)
 maks('c_Food','a_Food','USA') = 1579235.5 ;
 maks('c_Food','a_Food','EU_28') = 1987133.75 ;
@@ -988,6 +911,82 @@ makb('c_Svces','a_Svces','ROW') = 52126932 ;
 * esubt (empty in GDX — relying on $onImplicitAssign suppression)
 
 * esubc (empty in GDX — relying on $onImplicitAssign suppression)
+
+
+ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;
+ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;
+
+* --------------------------------------------------------------------------------------------------
+*
+*     Read in CO2 emissions data
+*
+* --------------------------------------------------------------------------------------------------
+
+Parameters
+   mdf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
+   mmf(i0, a0, r)          "CO2 emissions from domestic intermediate demand"
+   mdp(i0, r)              "CO2 emissions from domestic private demand"
+   mmp(i0, r)              "CO2 emissions from domestic private demand"
+   mdg(i0, r)              "CO2 emissions from domestic public demand"
+   mmg(i0, r)              "CO2 emissions from domestic public demand"
+   mdi(i0, r)              "CO2 emissions from investment demand"
+   mmi(i0, r)              "CO2 emissions from investment demand"
+;
+
+$ifthen exist "%inDir%/%BaseName%Emiss.gdx"
+   * [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Emiss.gdx"
+   * [stripped for NEOS inline] $load mdf mmf mdp mmp mdg mmg mdi mmi
+   * [stripped for NEOS inline] $gdxin
+$else
+   mdf(i0,a0,r) = 0 ;
+   mmf(i0,a0,r) = 0 ;
+   mdp(i0,r)    = 0 ;
+   mmp(i0,r)    = 0 ;
+   mdg(i0,r)    = 0 ;
+   mmg(i0,r)    = 0 ;
+   mdi(i0,r)    = 0 ;
+   mmi(i0,r)    = 0 ;
+$endif
+
+* --------------------------------------------------------------------------------------------------
+*
+*     Read in the GTAP Parameters
+*
+* --------------------------------------------------------------------------------------------------
+
+Parameters
+   esubt(a0,r)       "Top level CES substitution elasticity"
+   esubc(a0,r)       "ND nest CES substitution elasticity"
+   esubva(a0,r)      "VA nest CES substitution elasticity"
+
+   etraq(a0,r)       "CET make elasticity"
+   esubq(i0,r)       "CES make elasticity"
+
+   incpar(i0,r)      "CDE expansion parameter"
+   subpar(i0,r)      "CDE substitution parameter"
+
+   esubg(r)          "CES government expenditure elasticity"
+   esubi(r)          "CES investment expenditure elasticity"
+
+   esubd(i0,r)       "Top level Armington elasticity"
+   esubm(i0,r)       "Second level Armington elasticity"
+   esubs(i0)         "CES margin elasticity"
+
+   etrae(fp,r)       "CET elasticity for factors"
+   rorFlex0(r)       "Flexibility of foreign capital"
+;
+
+* [stripped for NEOS inline] $gdxin "%inDir%/%BaseName%Prm.gdx"
+* [stripped for NEOS inline] $loadDC esubt=esubt esubc=esubc esubva=esubva
+* [stripped for NEOS inline] $loadDC etraq=etraq esubq=esubq
+* [stripped for NEOS inline] $loadDC incpar=incpar subpar=subpar esubg=esubg esubi=esubi
+* [stripped for NEOS inline] $loadDC esubd=esubd esubm=esubm esubs=esubs
+* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex
+* [stripped for NEOS inline] $gdxin
+
+* === Inlined PARAMETER data from in.gdx ===
+
+$onImplicitAssign
 
 * esubva data (9 cells)
 esubva('a_Food','USA') = 0.5901468396 ;
@@ -1079,6 +1078,56 @@ etrae('NatRes','ROW') = -0.001000000047 ;
 rorFlex0('USA') = 10 ;
 rorFlex0('EU_28') = 10 ;
 rorFlex0('ROW') = 10 ;
+* FBEP data (injected from basedata.har)
+FBEP('Land','a_Food','USA') = -9419.345703 ;
+FBEP('Land','a_Food','EU_28') = -24050.85156 ;
+FBEP('Land','a_Food','ROW') = -36261.22656 ;
+FBEP('UnSkLab','a_Food','USA') = -2072.498291 ;
+FBEP('UnSkLab','a_Food','EU_28') = -23071.52148 ;
+FBEP('UnSkLab','a_Food','ROW') = -12537.58203 ;
+FBEP('SkLab','a_Food','USA') = -2023.032715 ;
+FBEP('SkLab','a_Food','EU_28') = -7168.943359 ;
+FBEP('SkLab','a_Food','ROW') = -1042.674805 ;
+FBEP('Capital','a_Food','USA') = -3635.937988 ;
+FBEP('Capital','a_Food','EU_28') = -18409.45508 ;
+FBEP('Capital','a_Food','ROW') = -27742.77734 ;
+* FTRV data (injected from basedata.har)
+FTRV('Land','a_Food','USA') = 2070.950684 ;
+FTRV('Land','a_Food','EU_28') = 2027.685181 ;
+FTRV('Land','a_Food','ROW') = 7298.186035 ;
+FTRV('UnSkLab','a_Food','USA') = 24356.07227 ;
+FTRV('UnSkLab','a_Food','EU_28') = 69758.61719 ;
+FTRV('UnSkLab','a_Food','ROW') = 88330.11719 ;
+FTRV('UnSkLab','a_Mnfcs','USA') = 143519.5938 ;
+FTRV('UnSkLab','a_Mnfcs','EU_28') = 204866.1094 ;
+FTRV('UnSkLab','a_Mnfcs','ROW') = 201491.4844 ;
+FTRV('UnSkLab','a_Svces','USA') = 676310.5625 ;
+FTRV('UnSkLab','a_Svces','EU_28') = 766386.5 ;
+FTRV('UnSkLab','a_Svces','ROW') = 785347.0625 ;
+FTRV('SkLab','a_Food','USA') = 12469.69629 ;
+FTRV('SkLab','a_Food','EU_28') = 40294.38672 ;
+FTRV('SkLab','a_Food','ROW') = 19635.19336 ;
+FTRV('SkLab','a_Mnfcs','USA') = 47483.75781 ;
+FTRV('SkLab','a_Mnfcs','EU_28') = 210499.0781 ;
+FTRV('SkLab','a_Mnfcs','ROW') = 106336.125 ;
+FTRV('SkLab','a_Svces','USA') = 773199.6875 ;
+FTRV('SkLab','a_Svces','EU_28') = 1092328.375 ;
+FTRV('SkLab','a_Svces','ROW') = 712390.3125 ;
+FTRV('Capital','a_Food','USA') = 11290.52051 ;
+FTRV('Capital','a_Food','EU_28') = 10041.88184 ;
+FTRV('Capital','a_Food','ROW') = 19329.10938 ;
+FTRV('Capital','a_Mnfcs','USA') = 48505.62109 ;
+FTRV('Capital','a_Mnfcs','EU_28') = 29975.99414 ;
+FTRV('Capital','a_Mnfcs','ROW') = 72090.55469 ;
+FTRV('Capital','a_Svces','USA') = 302947 ;
+FTRV('Capital','a_Svces','EU_28') = 189786.7812 ;
+FTRV('Capital','a_Svces','ROW') = 234718.4219 ;
+FTRV('NatRes','a_Food','USA') = 264.7532043 ;
+FTRV('NatRes','a_Food','EU_28') = 296.8175659 ;
+FTRV('NatRes','a_Food','ROW') = 1318.46167 ;
+FTRV('NatRes','a_Mnfcs','USA') = 3799.888184 ;
+FTRV('NatRes','a_Mnfcs','EU_28') = 604.5817871 ;
+FTRV('NatRes','a_Mnfcs','ROW') = 7699.074219 ;
 
 * --------------------------------------------------------------------------------------------------
 *
@@ -3914,6 +3963,27 @@ if(years(tsim) ne firstYear,
    ) ;
 
    options limrow = 3, limcol = 3, solprint = off, iterlim = 1000 ;
+
+* === PATH stabilisation for the ifSUB=1 shock restart (see
+* === _inject_path_opt_for_shock): default PATH diverges from the check
+* === warm-start on the large datasets; a proximal perturbation + higher
+* === iteration limits let it converge.  Faithful (solver tuning, no eq change).
+$onecho > path.opt
+convergence_tolerance 1e-9
+major_iteration_limit 2000
+minor_iteration_limit 100000
+cumulative_iteration_limit 1000000
+proximal_perturbation 1e-2
+crash_method pnewton
+crash_perturb yes
+nms_initial_reference_factor 2
+gradient_step_limit 20
+restart_limit 5
+lemke_start automatic
+time_limit 3600
+$offecho
+   gtap.optfile = 1 ;
+
 
    if(years(tsim) gt firstYear,
 

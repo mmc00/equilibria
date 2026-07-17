@@ -48,6 +48,22 @@ def _resolve_solve(arg_solver: str) -> str:
     return body
 
 
+def _force_ifsub(text: str, ifsub: int) -> str:
+    """Force the compile-time ifSUB switch. comp_altertax.gms uses
+    `$setGlobal ifSUB 1`; replace it so we can generate both the ifsub0 and
+    ifsub1 reference GDXs (the parity fixtures need both)."""
+    new, n = re.subn(
+        r"^\$setGlobal\s+ifSUB\s+\d+\s*$",
+        f"$setGlobal ifSUB       {ifsub}",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if n != 1:
+        raise SystemExit(f"Could not find `$setGlobal ifSUB` to set to {ifsub}.")
+    return new
+
+
 def _inline_includes(text: str) -> str:
     def _sub_batinclude(m: re.Match) -> str:
         target = m.group("file")
@@ -161,8 +177,24 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
 
 
 def _get_dataset_sets(gdx_path: Path) -> dict:
-    """Read reg/comm/endw sets from consolidated GDX."""
-    import gams.transfer as gt
+    """Read reg/comm/endw sets from consolidated GDX.
+
+    Prefers gams.transfer (real GAMS install) when available; falls back to
+    equilibria's pure-Python GDX reader (no GAMS install required) otherwise.
+    """
+    try:
+        import gams.transfer as gt
+    except ImportError:
+        from equilibria.babel.gdx.reader import read_gdx, read_set_elements, get_symbol
+        d = read_gdx(str(gdx_path))
+
+        def _read(name: str) -> list[str]:
+            # v7_consolidated.gdx uses uppercase canonical GAMS set names
+            # (REG/COMM/ENDW); solved out.gdx fixtures use lowercase.
+            actual = name if get_symbol(d, name) is not None else name.upper()
+            return [t[0] for t in read_set_elements(d, actual)]
+
+        return {"reg": _read("reg"), "comm": _read("comm"), "endw": _read("endw")}
     c = gt.Container(str(gdx_path), system_directory=GAMS_SYS)
     return {
         "reg":  list(c["reg"].records["uni"].values),
@@ -288,6 +320,62 @@ def _patch_dataset_sets(text: str, sets: dict) -> str:
     return text
 
 
+def _elements_of(text: str, set_name: str) -> set:
+    """Extract the element names of an inline `Set <name> / ... /;` block."""
+    m = re.search(
+        rf'(?im)^\s*[Ss]et\s+{re.escape(set_name)}\b[^\n]*/\s*\n(.*?)\n\s*/\s*;',
+        text, re.S,
+    )
+    if not m:
+        return set()
+    els = set()
+    for ln in m.group(1).splitlines():
+        ln = ln.split("*", 1)[0].strip().rstrip(",").strip()
+        if not ln or ln.startswith("set."):
+            continue
+        tok = re.split(r"[\s,.]", ln)[0].strip().strip("'\"")
+        if tok:
+            els.add(tok)
+    return els
+
+
+def _fix_acts_comm_collision(text: str) -> str:
+    """Drop the `set.comm` line from the `set is` composite when acts == comm.
+
+    Ported from build_gtap7_pure_local_bundle.py (commit 9da8917). `set is` (SAM
+    accounts) unions acts ∪ comm ∪ endw ∪ stdlab ∪ reg via `set.<name>` markers. In
+    datasets whose activity and commodity elements share the SAME names (e.g.
+    gtap7_3x4 / gtap7_15x10: both Food/Mnfcs/… with NO a_/c_ prefix, unlike
+    3x3/5x5/10x7 which are prefixed), listing set.acts THEN set.comm redeclares those
+    elements → GAMS "$172 Element is redefined" (verified: $onMulti does NOT help —
+    it permits set re-declaration, not duplicate elements in one list). When
+    acts == comm the union equals acts alone, so dropping `set.comm` from `set is` is
+    exact and safe. Only fires on the collision (prefixed datasets untouched).
+    """
+    acts = _elements_of(text, "acts")
+    comm = _elements_of(text, "comm")
+    if not acts or acts != comm:
+        return text  # prefixed (no collision) or sets not found — nothing to fix
+    m = re.search(
+        r'(set is "SAM accounts for aggregated SAM" /.*?/\s*;)', text, re.S
+    )
+    if not m:
+        return text
+    block = m.group(1)
+    # DELETE the whole `set.comm` line + its header comment (a commented-out marker
+    # left in place breaks GAMS: `*` inside a set element list is mishandled).
+    new_block = re.sub(
+        r'\n[ \t]*\*[ \t]*User-defined commodities[ \t]*\n(?:[ \t]*\n)*[ \t]*set\.comm[ \t]*',
+        '',
+        block, count=1,
+    )
+    if new_block == block:
+        new_block = re.sub(r'\n[ \t]*set\.comm[ \t]*(?=\n)', '', block, count=1)
+    if new_block == block:
+        return text
+    return text.replace(block, new_block, 1)
+
+
 def run_inliner(in_gdx: Path, out_data: Path, out_params: Path) -> None:
     cmd = [
         "uv", "run", "--with", "gamsapi", "--with", "pandas",
@@ -299,6 +387,52 @@ def run_inliner(in_gdx: Path, out_data: Path, out_params: Path) -> None:
     subprocess.run(cmd, check=True, cwd=str(ROOT))
 
 
+def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> str:
+    """Emit GAMS assignment lines for a factor header (FBEP/FTRV) read from a
+    basedata.har (index order ENDW/factor, ACTS/activity, REG/region; raw values).
+
+    Ported from build_gtap7_pure_local_bundle.py (commit d3dfb73): some datasets'
+    v7_consolidated.gdx LOSE the FBEP (factor subsidy) symbol during aggregation
+    — gtap7_3x3's v7 has no FBEP at all, so getData.gms's hardcoded `fbep=0` wins
+    and the reference GDX is subsidy-BLIND (fctts=0, ytax(fs)=0). Python loads the
+    real FBEP from basedata.har (fctts=-fbep/evfb), so a subsidy-blind reference
+    mismatches Python for every subsidized (ag) factor. Inject the real header.
+
+    The ACTS element gets whatever prefix the dataset's own inlined sets use for
+    activities (gtap7_3x3 uses `a_Food`) — detected from the inlined EVFB block.
+    """
+    import sys as _sys
+    _src = str(ROOT / "src")
+    if _src not in _sys.path:
+        _sys.path.insert(0, _src)
+    from equilibria.babel.har.reader import read_har  # type: ignore
+    import numpy as _np
+
+    try:
+        har = read_har(har_path, select_headers=[header])
+    except Exception:
+        return ""
+    h = har.get(header)
+    if h is None or getattr(h, "rank", 0) != 3:
+        return ""
+
+    act_prefix = ""
+    m = re.search(r"(?:^|\n)evfb\('[^']+','([acfr])_", inlined)
+    if m:
+        act_prefix = m.group(1) + "_"
+
+    endw_labels, acts_labels, reg_labels = h.set_elements
+    lines = [f"* {header} data (injected from basedata.har)"]
+    nz = _np.argwhere(h.array != 0)
+    for idx in nz:
+        f_lbl = endw_labels[idx[0]]
+        a_lbl = acts_labels[idx[1]]
+        r_lbl = reg_labels[idx[2]]
+        val = float(h.array[tuple(idx)])
+        lines.append(f"{header}('{f_lbl}','{act_prefix}{a_lbl}','{r_lbl}') = {val:.10g} ;")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True,
@@ -307,6 +441,8 @@ def main() -> None:
                     help="Output directory (default: output/<dataset>_altertax_neos_bundle)")
     ap.add_argument("--tariff", type=float, default=0.10,
                     help="Uniform tariff shock fraction (default: 0.10 = +10%%)")
+    ap.add_argument("--ifsub", type=int, choices=(0, 1), default=1,
+                    help="ifSUB compile switch (default 1); the parity fixtures need both")
     args = ap.parse_args()
 
     dataset = args.dataset
@@ -342,6 +478,7 @@ def main() -> None:
 
     print("\n=== [3/4] Inlining $include directives ===")
     main_script = _read("comp_altertax.gms")
+    main_script = _force_ifsub(main_script, args.ifsub)
     inlined = _inline_includes(main_script)
     print(f"  inlined size: {len(inlined):,} chars")
 
@@ -358,6 +495,11 @@ def main() -> None:
         raise SystemExit("Could not find getData set-decl marker.")
     inlined = inlined[:idx] + "\n" + data_block + "\n" + inlined[idx:]
 
+    # Drop set.comm from `set is` when acts == comm (bare/unprefixed datasets like
+    # 3x4/15x10) — else GAMS "$172 Element is redefined". No-op for prefixed sets.
+    # MUST run AFTER the data_block (which carries the `set is` composite) is inlined.
+    inlined = _fix_acts_comm_collision(inlined)
+
     # Split inline_params into Dat-side and Prm-side.
     params_block = params_path.read_text()
     dat_param_names = {
@@ -366,6 +508,15 @@ def main() -> None:
         "EVFB", "EVFP", "EVOS", "VXSB", "VFOB", "VCIF", "VMSB",
         "VST", "VTWR", "SAVE", "VDEP", "VKB", "POP", "MAKS", "MAKB", "pop0",
     }
+    # CASE-INSENSITIVE match (ported from build_gtap7_pure_local_bundle.py, commit
+    # d3dfb73): the inliner emits comment anchors in LOWERCASE (`* ftrv data`,
+    # `* evfb data`) but dat_param_names lists UPPERCASE. A case-sensitive
+    # `current_target in dat_param_names` silently mis-routed FTRV/EVFB/... into
+    # prm_lines instead of dat_lines → the raw factor-tax data was DROPPED → the
+    # generated reference had ftrv=0, fcttx=0, ytax(ft)=0 for EVERY altertax
+    # dataset this builder made. That's why the altertax parity gate saw
+    # ytax[USA,ft]=0 in GAMS vs Python's real 3.099.
+    dat_param_names_upper = {n.upper() for n in dat_param_names}
     header = params_block.split("\n")[0]
     dat_lines, prm_lines = [header], [header]
     current_target = None
@@ -380,7 +531,7 @@ def main() -> None:
             dat_lines.append(line)
             prm_lines.append(line)
             continue
-        target_dat = current_target in dat_param_names if current_target else False
+        target_dat = current_target.upper() in dat_param_names_upper if current_target else False
         (dat_lines if target_dat else prm_lines).append(line)
     dat_block = "\n".join(dat_lines)
     prm_block = "\n".join(prm_lines)
@@ -390,6 +541,53 @@ def main() -> None:
     if f_idx < 0:
         raise SystemExit("Could not find ftrv anchor for Dat params block.")
     inlined = inlined[:f_idx] + "\n" + dat_block + "\n\n" + inlined[f_idx:]
+
+    # FBEP/FTRV injection (ported from build_gtap7_pure_local_bundle.py, 2026-07-16):
+    # vanilla getData.gms hardcodes `fbep=0` and `ftrv=evfp-evfb` — it NEVER reads an
+    # FBEP header — so a dataset whose v7 dropped FBEP yields a subsidy-BLIND reference
+    # (fctts=0, ytax(fs)=0). gtap7_3x3's v7 has no FBEP at all. Python loads the real
+    # FBEP/FTRV from basedata.har (fctts=-fbep/evfb), so the reference mismatched Python
+    # for every subsidized (ag) factor: ytax[r,fs] py≈0.09 vs GAMS 0. Inject the real
+    # header AFTER both anchors (GAMS is case-insensitive → `FBEP(...)` overrides `fbep=0`;
+    # `FTRV(...)` overrides `ftrv=evfp-evfb` where the header has a nonzero value).
+    anchor_end = inlined.find(ftrv_anchor) + len(ftrv_anchor)
+    inject_lines = []
+    for _sym in ("FBEP", "FTRV"):
+        _blk = _fbep_ftrv_har_as_assignments(
+            DATASETS_DIR / dataset / "basedata.har", _sym, inlined)
+        if _blk.strip():
+            inject_lines.append(_blk)
+            _ncells = _blk.count(" = ")
+            print(f"  injected {_sym} ({_ncells} cells) from basedata.har for {dataset}")
+    if inject_lines:
+        inject_txt = "\n\n" + "\n".join(inject_lines) + "\n"
+        inlined = inlined[:anchor_end] + inject_txt + inlined[anchor_end:]
+
+    # CDE/CES elasticity injection (ported from build_gtap7_pure_local_bundle.py,
+    # commit 2f41b31): some v7_consolidated.gdx datasets (gtap7_3x4, gtap7_15x10)
+    # don't embed incpar/subpar/esub* — without them cal.gms's CDE income module
+    # (eh0/bh0 = incpar/subpar) divides by zero → SOLVE skipped. Inject from the
+    # dataset's own default.prm. Detect the c_/a_ prefix convention from the inlined
+    # sets (5x5 prefixed, 15x10/3x4 bare) — the wrong convention hard-fails GAMS
+    # Error 170. Check the comment marker the inliner actually emits, not a
+    # declaration line that never exists.
+    if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
+        prm_har_path = DATASETS_DIR / dataset / "default.prm"
+        if prm_har_path.exists():
+            import nl_compare as _nlc
+            use_prefix = _nlc._detect_prm_prefix_convention(inlined)
+            elast_block = _nlc._prm_har_as_assignments(prm_har_path, use_prefix=use_prefix)
+            # getData.gms (already inlined) declares these params with real domains —
+            # a fresh `parameter name(*,*) ;` redeclaration is GAMS error 184. Keep
+            # only the assignment lines, drop the declaration lines.
+            assign_lines = [
+                ln for ln in elast_block.splitlines()
+                if not re.match(r"^\s*parameter\s+\w+\(", ln)
+            ]
+            elast_block = "\n".join(assign_lines)
+            if elast_block.strip():
+                prm_block += "\n" + elast_block
+                print(f"  injected CDE/CES elasticities (incpar/subpar/esub*) for {dataset}")
 
     rorflex_anchor = "* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex\n"
     a_idx = inlined.find(rorflex_anchor)
@@ -410,7 +608,7 @@ def main() -> None:
     inlined = _insert_pdp_pmp_recalc_before_unload(inlined)
     inlined = _patch_shock_to_tariff(inlined, tariff_increase=args.tariff)
 
-    out_gms = out_dir / f"comp_{dataset}_altertax_neos.gms"
+    out_gms = out_dir / f"comp_{dataset}_altertax_neos_ifsub{args.ifsub}.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")
 

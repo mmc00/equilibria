@@ -273,6 +273,7 @@ scripts/gtap/*
 !scripts/gtap/build_v7_processed_from_raw.py
 !scripts/gtap/coverage_matrix.py
 !scripts/gtap/gen_coverage_doc.py
+!scripts/gtap/gen_nlp_matrix_page.py
 # Phase-2 cascade orchestrator modules
 !scripts/gtap/cascade_config.py
 !scripts/gtap/cascade_layers.py
@@ -280,6 +281,9 @@ scripts/gtap/*
 !scripts/gtap/cascade_run.py
 !scripts/gtap/cascade_orchestrator.py
 !scripts/gtap/cascade_kkt.py
+!scripts/gtap/measure_nlp_vs_nlp.py
+!scripts/gtap/measure_nlp_vs_nlp_altertax.py
+!scripts/gtap/regen_altertax_reference.py
 
 # NUS333 head-to-head workspace: keep scripts + small JSON/MD reports,
 # ignore generated solver artefacts (RunGTAP/GEMPACK + Python caches).

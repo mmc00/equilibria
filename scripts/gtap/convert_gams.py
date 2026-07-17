@@ -76,35 +76,78 @@ def _source_gms(dataset: str, if_sub: bool) -> Path:
 
 def _rewrite_for_convert(src_text: str, period: str) -> str:
     """Rewrite the comp .gms to (1) turn scaling OFF (levels-vs-levels), (2) route the
-    gtap MCP solve through CONVERT, (3) for check, abort right after the check solve."""
+    gtap MCP solve through CONVERT, (3) for check, abort right after the check solve.
+
+    Two distinct comp.gms shapes exist across datasets:
+    (a) separate standalone `solve gtap using mcp ;` per period (2+ matches) — CONVERT-route
+        the first, abort right after the second (the check standalone).
+    (b) ONE `solve gtap using mcp ;` textually, executed multiple times inside a single
+        `loop(tsim, ...)` over t={base,check,shock} (gtap7_15x10 and any other multi-period
+        bundle sharing this structure). `option mcp=convert` is a SOLVER SETTING, not
+        control flow — setting it once before the loop routes CONVERT to the FIRST
+        execution of that solve statement (tsim="base", the first set element), regardless
+        of any abort placed after it. An abort inserted unconditionally right after the
+        solve (case a's approach) would therefore silently capture BASE, not check/shock,
+        even though it looks like it "worked" (GAMS does halt, dict/pyomo files DO get
+        written) — confirmed empirically: two prior attempts both captured base while
+        appearing to target check. Fix: gate `option mcp=convert;` itself on
+        `sameas(tsim,"check")` (or "shock"), placed INSIDE the loop each iteration, so
+        CONVERT only activates when the loop reaches the requested period — then abort
+        unconditionally right after that solve.
+    """
     out = src_text
 
     # (1) scaleopt = 0 on gtap (NOT on dyncal/dynGTAP — leave those as-is).
     out = re.sub(r"gtap\.scaleopt\s*=\s*1\s*;", "gtap.scaleopt = 0 ;", out, count=1)
 
-    # (2) route the gtap solve through CONVERT. The optfile mechanism is the clean way:
-    #     set gtap.optfile and write convert.opt alongside. We force the solver to CONVERT
-    #     by injecting `option mcp=convert;` just before the FIRST `solve gtap using mcp`.
-    #     (betaCal/dyncal solves are left on the default solver.)
-    m = re.search(r"^(\s*)solve\s+gtap\s+using\s+mcp\s*;", out, flags=re.MULTILINE)
-    if not m:
+    solves = list(re.finditer(r"^(\s*)solve\s+gtap\s+using\s+mcp\s*;", out, flags=re.MULTILINE))
+    if not solves:
         raise RuntimeError("Could not find `solve gtap using mcp ;` in the .gms to route to CONVERT.")
-    indent = m.group(1)
-    inject = f"{indent}option mcp=convert;\n{indent}gtap.optfile = 1;\n"
-    out = out[:m.start()] + inject + out[m.start():]
 
-    # (3) period selection. For shock: let it run through (CONVERT writes the LAST gtap solve,
-    #     which is the shock). For check: abort right AFTER the check solve so CONVERT emits the
-    #     check model. The check solve is the gtap solve INSIDE the homotopy/check loop; we abort
-    #     after the first standalone `solve gtap using mcp ;` that is NOT inside the ramp.
-    if period == "check":
-        # Insert an abort after the check-period solve. The committed comp has a standalone
-        # `solve gtap using mcp ;` for the check before the shock block; abort right after it.
-        solves = list(re.finditer(r"^(\s*)solve\s+gtap\s+using\s+mcp\s*;", out, flags=re.MULTILINE))
-        if len(solves) >= 2:
-            # second gtap-solve = the check standalone (first is now CONVERT-routed); abort after it
-            after = solves[1].end()
-            out = out[:after] + f'\n{solves[1].group(1)}abort$(1) "CONVERT: emitted check model" ;\n' + out[after:]
+    if len(solves) >= 2:
+        # Case (a): separate standalone solves per period. CONVERT-route the first
+        # unconditionally (base/check share no loop — the first IS the one we want for
+        # base, and for check we route+abort at the 2nd standalone solve instead).
+        first = solves[0]
+        indent = first.group(1)
+        inject = f"{indent}option mcp=convert;\n{indent}gtap.optfile = 1;\n"
+        out = out[:first.start()] + inject + out[first.start():]
+        if period == "check":
+            # Re-locate solves in the now-shifted text and route+abort at the 2nd match
+            # instead (the check standalone) — undo the unconditional routing above by
+            # re-running from scratch with the routing targeted at solves[1].
+            out = src_text
+            out = re.sub(r"gtap\.scaleopt\s*=\s*1\s*;", "gtap.scaleopt = 0 ;", out, count=1)
+            solves2 = list(re.finditer(r"^(\s*)solve\s+gtap\s+using\s+mcp\s*;", out, flags=re.MULTILINE))
+            target = solves2[1]
+            indent = target.group(1)
+            inject = f"{indent}option mcp=convert;\n{indent}gtap.optfile = 1;\n"
+            out = out[:target.start()] + inject + out[target.start():]
+            after = target.end() + len(inject)
+            out = out[:after] + f'\n{indent}abort$(1) "CONVERT: emitted check model" ;\n' + out[after:]
+        return out
+
+    # Case (b): one solve statement, executed repeatedly inside loop(tsim, ...). `option`
+    # is a global solver setting, not a conditional assignment — `option x$cond` is not
+    # valid GAMS. Gate CONVERT's activation with an `if(sameas(tsim,"want"), ...)` block
+    # around the option/optfile lines instead, so the solver only routes to CONVERT on
+    # the loop iteration we actually want, not the first one textually reached.
+    target = solves[0]
+    indent = target.group(1)
+    want = "check" if period == "check" else "shock"
+    inject = (
+        f'{indent}if(sameas(tsim,"{want}"),\n'
+        f'{indent}   option mcp=convert;\n'
+        f'{indent}   gtap.optfile = 1;\n'
+        f'{indent}) ;\n'
+    )
+    out = out[:target.start()] + inject + out[target.start():]
+    after = target.end() + len(inject)
+    out = (
+        out[:after]
+        + f'\n{indent}abort$(sameas(tsim,"{want}")) "CONVERT: emitted {period} model" ;\n'
+        + out[after:]
+    )
     return out
 
 

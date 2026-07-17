@@ -1180,7 +1180,8 @@ class GTAPModelEquations:
 
         Mirrors GAMS yTaxInd = yTaxTot - ytax("dt") — i.e. all tax streams
         except "dt" (direct/factor-income taxes = kappaf*pf*xf = evfb-evos).
-        Streams included: pt, fc, pc, gc, ic, et, mt.  Streams excluded: dt, ft, fs.
+        Streams included: pt, fc, pc, gc, ic, et, mt, ft.  Stream excluded: dt.
+        fs is 0 (fctts=0 for standard GTAP7 datasets).
         """
         bm = self.params.benchmark
         taxes = self.params.taxes
@@ -1225,11 +1226,20 @@ class GTAPModelEquations:
             if importer == region:
                 vcif_val = bm.vcif.get((exporter, i, region), 0.0)
                 total += float(rate) * float(vcif_val or 0.0)
-        # NOTE: ft (rtf*evfb) and fs (fctts*evfb) and dt (kappaf*evfb = evfb-evos)
-        # are excluded — GAMS yTaxInd excludes the "dt" stream (direct factor taxes),
-        # and ft/fs are 0 here (fcttx=fctts=0; rtf is factor rent, not a tax). Adding
-        # an rtf*evfb "ft" stream emits a phantom ytax('ft') GAMS has as 0, regressing
-        # the gtap-mp gate (74%) and altertax (68%).
+        # ft + fs — factor tax and factor SUBSIDY revenue (GAMS eq_ytax's 'ft'
+        # and 'fs' branches). At benchmark pf*xf/xscale == evfb, so:
+        #   ft = Σ fcttx*evfb = Σ ftrv   (factor tax,     HAR FTRV)
+        #   fs = Σ fctts*evfb = Σ(-fbep)  (factor subsidy,  HAR FBEP)
+        # yTaxTot sums over ALL gy including both, so yTaxInd must too. The OLD
+        # code used rtf*evfb (the NET wedge evfp/evfb-1) for ft and dropped fs —
+        # correct only when fbep=0. With real fbep (EU/US ag subsidies) that
+        # under-counted the subsidy in regY, biasing betaP → eq_yc residual
+        # (EU_28 ~0.093 at the GAMS point). ftrv - fbep is the faithful, decomposed
+        # net that matches the live eq_ytax[ft]+eq_ytax[fs]. dt stays excluded.
+        for (rr, f, a) in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
+            ftrv_val = float(bm.ftrv.get((region, f, a), 0.0) or 0.0)
+            fbep_val = float(bm.fbep.get((region, f, a), 0.0) or 0.0)
+            total += ftrv_val - fbep_val
         return total
 
     def _raw_gdx_paths(self) -> list:
@@ -1449,7 +1459,17 @@ class GTAPModelEquations:
                     )
                     if evfb_val <= 0.0:
                         continue
-                    va_level += evfb_val
+                    # VA at purchaser prices = Σ pfa·xf = Σ evfb·(1+fctts+fcttx),
+                    # wedge = (ftrv-fbep)/evfb (HAR FBEP/FTRV). MUST include the
+                    # subsidy wedge here too: for heavily-subsidized ag sectors
+                    # (EU_28,Crops) dropping it makes xp = nd+Σevfb = 0.260 fall
+                    # BELOW the 0.316 decile boundary → round(log10) = -1 → xscale
+                    # = 10 (GAMS's is 1, xp = 0.337 WITH the wedge). That 10x
+                    # xscale inflates every Crops quantity (xf/xm/xd) by 10x. Same
+                    # va-without-subsidy class as the va_p/ava_param fix.
+                    fbep_val = float(self.params.benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                    ftrv_val = float(self.params.benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
+                    va_level += evfb_val + (ftrv_val - fbep_val)
 
                 xp_level = nd_level + va_level
                 if xp_level <= 0.0:
@@ -1619,16 +1639,25 @@ class GTAPModelEquations:
                 )
                 if nd_p <= 0.0:
                     nd_p = adjusted_total_intermediate
-                # VA at purchaser prices = sum(pfa*xf). pfaeq is now pf*(1+fctts+fcttx)
-                # with fctts=fcttx=0 (GAMS-faithful), so pfa==pf and VA=sum(evfb) — the
-                # old (1+rtf) factor inflated va_p, mis-splitting the and/ava VA-ND
-                # shares (eq_va/eq_nd carried ~10% residual at the GAMS point, driving
-                # the regional pf/factY imbalance). Drop rtf; set ava=1-and so both
-                # production shares are consistent (and+ava=1, va=ava·xp at benchmark).
-                va_p = sum(
-                    float(self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
-                    for f in self.sets.f
-                )
+                # VA at purchaser prices = sum(pfa*xf), pfa = pf*(1 + fctts + fcttx)
+                # (GAMS cal.gms). The two factor wedges are the real, decomposed
+                # HAR headers — fctts = -fbep/evfb (subsidy), fcttx = ftrv/evfb
+                # (tax) — NOT rtf = evfp/evfb-1 (the NET wedge, which conflates the
+                # two and drops the subsidy sign). fbep is large for ag Land/labor
+                # (EU/US farm subsidies), so with fctts=0 va_p was understated and
+                # the and/ava VA-ND split was wrong (ava=0.311 vs GAMS 0.374 for
+                # EU_28,Food → eq_va/eq_nd ~0.09-0.12 residual at the GAMS seed).
+                # This mirrors _pfa_bench/va_val in gtap_parameters.py exactly, so
+                # model.ava_param now matches params.calibrated.ava_param and GAMS's
+                # benchmark va/xp share. and+ava=1 still holds (both scale with xp).
+                va_p = 0.0
+                for f in self.sets.f:
+                    evfb_val = float(self.params.benchmark.evfb.get((r, f, a), self.params.benchmark.vfm.get((r, f, a), 0.0)) or 0.0)
+                    if evfb_val <= 0.0:
+                        continue
+                    fbep_val = float(self.params.benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                    ftrv_val = float(self.params.benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
+                    va_p += evfb_val + (ftrv_val - fbep_val)
                 xp_model_equiv = nd_p + va_p
                 adjusted_and_param[(r, a)] = nd_p / xp_model_equiv if xp_model_equiv > 0.0 else 0.0
                 adjusted_ava_param[(r, a)] = va_p / xp_model_equiv if xp_model_equiv > 0.0 else 0.0
@@ -1648,20 +1677,31 @@ class GTAPModelEquations:
             key: value / max(xscale_data[(key[0], key[2])], 1e-12)
             for key, value in self.params.calibrated.af_param.items()
         }
-        create_indexed_param("and_param", ["r", "a"], adjusted_and_param, 0.0)
-        create_indexed_param("ava_param", ["r", "a"], adjusted_ava_param, 0.0)
-        create_indexed_param("io_param", ["r", "i", "a"], self.params.calibrated.io_param, 0.0)
+        # mutable=True: GAMS's iterloop.gms recalibrates and(r,a,t)/ava(r,a,t) EVERY
+        # period from that period's OWN solved nd.l/va.l/xp.l (not the benchmark) —
+        # gtap_multiperiod_driver._recalibrate_and_ava replicates this between
+        # periods. Needs mutable=True to support that in-place update.
+        create_indexed_param("and_param", ["r", "a"], adjusted_and_param, 0.0, mutable=True)
+        create_indexed_param("ava_param", ["r", "a"], adjusted_ava_param, 0.0, mutable=True)
+        # mutable=True: same per-period recalibration as and_param/ava_param —
+        # GAMS's iterloop.gms recomputes io(r,i,a,t)/af(r,fp,a,t) every period too
+        # (same "Calibration of parameters" block). See _recalibrate_io_af.
+        create_indexed_param("io_param", ["r", "i", "a"], self.params.calibrated.io_param, 0.0, mutable=True)
         if self.params.shifts.lambdaio:
             create_indexed_param("lambdaio", ["r", "i", "a"], self.params.shifts.lambdaio, 1.0)
         else:
             model.lambdaio = Param(model.r, model.i, model.a, initialize={}, default=1.0, doc="lambdaio")
-        create_indexed_param("af_param", ["r", "f", "a"], self.params.calibrated.af_param, 0.0)
+        create_indexed_param("af_param", ["r", "f", "a"], self.params.calibrated.af_param, 0.0, mutable=True)
         create_indexed_param("af_xf_param", ["r", "f", "a"], scaled_af_xf_param, 0.0)
-        create_indexed_param("gx_param", ["r", "a", "i"], self.params.calibrated.gx_param, 0.0)
+        # mutable=True: same per-period recalibration as and/ava/io/af — GAMS's
+        # iterloop.gms also recomputes gx(r,a,i,t)/ax(r,a,i,t) every period from
+        # that period's own solved x/xp/px/p (gx) and x/xs/p/ps/prdtx (ax).
+        # See _recalibrate_gx_ax.
+        create_indexed_param("gx_param", ["r", "a", "i"], self.params.calibrated.gx_param, 0.0, mutable=True)
         create_indexed_param("xscale", ["r", "aa"], xscale_data, 1.0)
 
         create_indexed_param("p_io", ["r", "i", "a"], adjusted_p_io, 0.0)
-        create_indexed_param("p_ax", ["r", "a", "i"], self.params.shares.p_ax, 0.0)
+        create_indexed_param("p_ax", ["r", "a", "i"], self.params.shares.p_ax, 0.0, mutable=True)
         create_indexed_param("gd_share", ["r", "i"], self.params.shares.p_gd, 0.0, mutable=True)
         create_indexed_param("ge_share", ["r", "i"], self.params.shares.p_ge, 0.0, mutable=True)
         create_indexed_param("gw_share", ["r", "i", "rp"], self.params.shares.p_gw, 0.0, mutable=True)
@@ -2205,8 +2245,11 @@ class GTAPModelEquations:
         create_indexed_param("yg_share_reg", ["r"], regional_government_share_data, 0.0)
         create_indexed_param("yi_share_reg", ["r"], regional_investment_share_data, 0.0)
         create_indexed_param("c_share", ["r", "i"], private_share_data, 0.0)
-        create_indexed_param("g_share", ["r", "i"], government_share_data, 0.0)
-        create_indexed_param("i_share", ["r", "i"], investment_share_data, 0.0)
+        # mutable=True: same per-period recalibration as and/ava/io/af/alphad —
+        # GAMS's iterloop.gms also recomputes alphaa(r,i,gov,t)/alphaa(r,i,inv,t)
+        # every period. See _recalibrate_alphaa_gov_inv.
+        create_indexed_param("g_share", ["r", "i"], government_share_data, 0.0, mutable=True)
+        create_indexed_param("i_share", ["r", "i"], investment_share_data, 0.0, mutable=True)
         create_indexed_param("axi", ["r"], axi_data, 1.0)
         create_indexed_param("invwgt", ["r"], invwgt_data, 0.0)
         create_indexed_param("savwgt", ["r"], savwgt_data, 0.0)
@@ -2239,9 +2282,13 @@ class GTAPModelEquations:
         # Stored init in phi0 Param; phi itself becomes a Var added with the other Vars.
         create_indexed_param("phi0", ["r"], phi_data, 1.0)
         create_indexed_param("chif0", ["r"], chif_data, 0.0)
+        # eh/bh are CDE ELASTICITIES (frozen Params by design — see CLAUDE.md
+        # "CDE/chiInv elasticities frozen como Param"), NOT recalibrated per
+        # period by GAMS (only alphaa/zcons SHARES are, from cal.gms's
+        # "Calibration of parameters" block). Only alphaa_hhd needs mutable=True.
         create_indexed_param("eh", ["r", "i"], eh_data, 1.0)
         create_indexed_param("bh", ["r", "i"], bh_data, 1.0)
-        create_indexed_param("alphaa_hhd", ["r", "i"], alphaa_hhd_data, 0.0)
+        create_indexed_param("alphaa_hhd", ["r", "i"], alphaa_hhd_data, 0.0, mutable=True)
         create_indexed_param("fdepr", ["r"], fdepr_data, 0.0)
         create_indexed_param("depr", ["r"], depr_data, 0.0)
         create_indexed_param("rorflex", ["r"], rorflex_data, 10.0)
@@ -2320,9 +2367,10 @@ class GTAPModelEquations:
 
         def get_pfa_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
-            fctts = float(self.params.taxes.rtfi.get((r, f, a), 0.0) or 0.0)
-            fcttx = float(self.params.taxes.rtfd.get((r, f, a), 0.0) or 0.0)
-            return max(pf_val * (1.0 + fctts + fcttx), 1e-8)
+            # fcttx sources from taxes.rtf (factor-keyed) — see gtap_parameters.py
+            # _pfa_bench for the full rationale. rtfi/rtfd are commodity-keyed.
+            fcttx = float(self.params.taxes.rtf.get((r, f, a), 0.0) or 0.0)
+            return max(pf_val * (1.0 + fcttx), 1e-8)
 
         def get_pfy_init(m, r, f, a):
             pf_val = get_pf_init(m, r, f, a)
@@ -3341,6 +3389,11 @@ class GTAPModelEquations:
             return max(get_benchmark_yi(r), 1e-8)
 
         def get_pi_benchmark_init(m, r):
+            # value() (not bare float()) is required once i_share is mutable=True
+            # (recalibrated per-period by _recalibrate_alphaa_gov_inv) — a bare
+            # float() on a mutable ParamData raises TypeError; float() on an
+            # immutable one worked by accident (Pyomo treats it as a near-literal).
+            from pyomo.environ import value as _pyo_value
             sigmai_raw = float(self.params.elasticities.esubi.get(r, 0.0))
             # At benchmark all pa=1 and axi=1, so pi=1 regardless of sigmai.
             # GAMS cal.gms bumps sigmai=1 → 1.01 (CES not CD)
@@ -3349,7 +3402,7 @@ class GTAPModelEquations:
             expo = 1.0 - sigmai_raw
             terms = []
             for i in self.sets.i:
-                share = float(m.i_share[r, i])
+                share = float(_pyo_value(m.i_share[r, i]))
                 if share <= 0.0:
                     continue
                 pa_inv = get_pa_benchmark_init(m, r, i, GTAP_INVESTMENT_AGENT)
@@ -3359,7 +3412,8 @@ class GTAPModelEquations:
             return max((sum(terms) ** (1.0 / expo)) / max(float(m.axi[r]), 1e-12), 1e-8)
 
         def get_xi_init(m, r, i):
-            share = float(m.i_share[r, i])
+            from pyomo.environ import value as _pyo_value
+            share = float(_pyo_value(m.i_share[r, i]))
             if share <= 0.0:
                 return 0.0
             sigmai_raw = float(self.params.elasticities.esubi.get(r, 0.0))
@@ -3633,6 +3687,12 @@ class GTAPModelEquations:
         # phi: GAMS phieq closes betaP/phiP + betaG + betaS to sum to 1/phi.
         model.phi = Var(model.r, within=NonNegativeReals, initialize=lambda m, r: float(m.phi0[r]), doc="Elasticity of total expenditure wrt utility")
         model.uh = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Private utility per capita")
+        # GAMS pgeq/xgeq: aggregate government price/quantity, kept as SEPARATE
+        # variables (not inlined into ugeq) so ugeq stays linear like GAMS's:
+        #   ugeq..  ug =e= aug*xg/pop
+        # See eq_pg/eq_xg_agg/eq_ug below (project_gtap7_15x10_ug_jacobian_collapse_root_cause).
+        model.pg = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Aggregate government price index (GAMS pg)")
+        model.xg_agg = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Aggregate real government expenditure (GAMS xg)")
         model.ug = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Government utility per capita")
         model.us = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Savings utility per capita")
         model.u = Var(model.r, within=NonNegativeReals, initialize=1.0, doc="Total utility")
@@ -3715,18 +3775,31 @@ class GTAPModelEquations:
             return float(prdtx_init.get((r, a, i), 0.0) or 0.0)
         model.prdtx = Param(model.r, model.a, model.i, within=Reals, initialize=_prdtx_init, mutable=True, doc="Production tax")
 
-        # GAMS betaCal: fcttx = inScale*ftrv/(pf*xf) = ftrv/EVFB = RTFD/EVFB (ad-valorem rate).
-        # ftrv comes from HAR header RTFD (rtfd in Python), NOT from rtf.
-        # rtf = VFM/EVFB-1 includes kappaf (factor rent), which is NOT a tax.
-        # In standard GTAP7 datasets RTFD=RTFM=0, so fcttx=fctts=0 — matching GAMS.
-        # Using fcttx=rtf emits a phantom factor-tax wedge (pfa>pf) and ytax('ft')
-        # stream that GAMS has as 0, regressing the gtap-mp gate (74%) and altertax (68%).
-        rtfd_p = getattr(self.params.taxes, "rtfd", {}) or {}
-        rtfi_p = getattr(self.params.taxes, "rtfi", {}) or {}
+        # GAMS betaCal factor wedges (cal.gms:162, 23902), the LIVE Params that
+        # eq_pfaeq (pfa = pf*(1 + fctts + fcttx)) and eq_ytax read — the exact
+        # decomposed counterpart of _pfa_bench/_factor_tax_value:
+        #   fcttx =  ftrv/evfb  (factor TAX,     HAR FTRV)
+        #   fctts = -fbep/evfb  (factor SUBSIDY, HAR FBEP)
+        # Both already inScale-scaled by the loader. fbep is genuinely large and
+        # nonzero for subsidized factors (Land/Capital/labor of ag sectors — EU/US
+        # farm & land subsidies, ~177 cells in 15x10). The OLD source (taxes.rtf =
+        # evfp/evfb - 1) is the NET wedge (evfp already nets tax against subsidy);
+        # it collapses fctts into fcttx and drops the sign, so with fbep!=0 the
+        # subsidy was being ignored (fctts=0) — understating pfa→va→ytax(fs) and
+        # producing the eq_va/eq_nd/eq_ytax residuals that made PATH/IPOPT diverge.
+        # Verified: -fbep/evfb reproduces GAMS fctts (EU_28,Land,OtherCrops=0.510902)
+        # and ftrv/evfb reproduces fcttx (0.026), sum == pfa/pf-1, all exact.
+        bm = self.params.benchmark
         def _fcttx_init(m, r, f, a):
-            return float(rtfd_p.get((r, f, a), 0.0) or 0.0)
+            evfb_val = float(bm.evfb.get((r, f, a), 0.0) or 0.0)
+            if evfb_val <= 0.0:
+                return 0.0
+            return float(bm.ftrv.get((r, f, a), 0.0) or 0.0) / evfb_val
         def _fctts_init(m, r, f, a):
-            return -abs(float(rtfi_p.get((r, f, a), 0.0) or 0.0))
+            evfb_val = float(bm.evfb.get((r, f, a), 0.0) or 0.0)
+            if evfb_val <= 0.0:
+                return 0.0
+            return -float(bm.fbep.get((r, f, a), 0.0) or 0.0) / evfb_val
         model.fcttx = Param(model.r, model.f, model.a, within=Reals, initialize=_fcttx_init, mutable=True, doc="Taxes on factors of production")
         model.fctts = Param(model.r, model.f, model.a, within=Reals, initialize=_fctts_init, mutable=True, doc="Subsidies on factors of production")
 
@@ -3888,7 +3961,7 @@ class GTAPModelEquations:
 
         price_vars = [
             'px', 'pp', 'p_rai', 'pp_rai', 'ps', 'pd', 'pa', 'pmt', 'pet', 'pva', 'pnd', 'pft', 'pf', 'pfa', 'pfy',
-            'pnum', 'pabs', 'pfact', 'pwfact', 'pgdpmp', 'psave', 'pigbl',
+            'pnum', 'pabs', 'pfact', 'pwfact', 'pgdpmp', 'psave', 'pigbl', 'pg',
         ]
         # GAMS lower-bounds prices aggressively, but not Armington/trade quantities.
         # Keeping positive floors on quantities like xmt/xd/xa can create artificial
@@ -3992,15 +4065,25 @@ class GTAPModelEquations:
         if_sub = bool(getattr(self.closure, "if_sub", True)) if self.closure is not None else True
 
         def _factor_tax_value(region, factor, activity) -> float:
-            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259), NOT pf*(1+rtf).
-            # fctts/fcttx are the factor-use input taxes (Python rtfi/rtfd); under
-            # altertax both are 0 so pfa == pf. Using rtf here injected a spurious
-            # tax wedge that breaks eq_pvaeq/eq_xfeq under ifSUB=1 (where _m_pfa is
-            # substituted directly), collapsing a region's capital-price block.
-            # Mirrors gtap_parameters.py:531-534 (the pfa benchmark uses rtfi/rtfd).
-            rtfi = float(self.params.taxes.rtfi.get((region, factor, activity), 0.0) or 0.0)
-            rtfd = float(self.params.taxes.rtfd.get((region, factor, activity), 0.0) or 0.0)
-            return rtfi + rtfd
+            # GAMS M_PFA = pf*(1 + fctts + fcttx) (model.gms:1259) — the LIVE
+            # counterpart of _pfa_bench's benchmark calibration. Both wedges:
+            #   fctts = -fbep/evfb  (factor subsidy, HAR FBEP)
+            #   fcttx =  ftrv/evfb  (factor tax,     HAR FTRV)
+            # so the total wedge is (ftrv - fbep)/evfb. Verified EXACT vs the
+            # reference GDX (EU_28,Land,OtherCrops: (ftrv-fbep)/evfb = 0.536905
+            # == pfa/pf - 1). The old source, taxes.rtf = evfp/evfb - 1, is the
+            # NET (evfp already nets tax against subsidy), which gives the wrong
+            # sign/magnitude whenever fbep!=0 (same cell: rtf = -0.485, not
+            # +0.537) — that is why routing _m_pfa through rtf regressed
+            # gtap7_15x10 in earlier attempts (the subsidy was being SUBTRACTED
+            # instead of ADDED). fbep/ftrv are the faithful, decomposed sources.
+            bm = self.params.benchmark
+            evfb_val = float(bm.evfb.get((region, factor, activity), 0.0) or 0.0)
+            if evfb_val <= 0.0:
+                return 0.0
+            fbep_val = float(bm.fbep.get((region, factor, activity), 0.0) or 0.0)
+            ftrv_val = float(bm.ftrv.get((region, factor, activity), 0.0) or 0.0)
+            return (ftrv_val - fbep_val) / evfb_val
 
         def _kappaf_value(region, factor, activity) -> float:
             kappa = float(self.params.taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
@@ -4997,15 +5080,27 @@ class GTAPModelEquations:
                 # This leaves eq_xfeq to determine xf from production CES demand,
                 # avoiding the xf over-determination from having both supply and
                 # demand equations write xf as their LHS.
+                #
+                # Written CROSS-MULTIPLIED (both sides raised to omegaf) instead
+                # of dividing by denom=xscale*gf*xft directly: xft can be tiny
+                # (e.g. xft[CAN,Land,shock]≈9e-4 at this check-seed), and
+                # dividing xf by a near-zero denom before exponentiating produced
+                # a Jacobian column/row 3100x worse than GAMS's corresponding
+                # xft column (see project_gtap7_15x10_ug_jacobian_collapse_root_
+                # cause — eq_pfeq[CAN,Land,*] became the new worst-row family
+                # after the eq_ug fix). Algebraically identical at the solution
+                # (denom>0 always, xfflag/gf_share already gated >0 above), just
+                # avoids amplifying a near-zero denominator before the ^(1/omegaf).
                 kappa = float(self.params.taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
                 if kappa == 0.0:
                     kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
                 denom = model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
-                xf_ratio = model.xf[r, f, a] / denom
-                # pf * (1-kappa) = pft * (xf/denom)^(1/omegaf)
-                return model.pf[r, f, a] * (1.0 - kappa) == model.pft[r, f] * xf_ratio ** (1.0 / omegaf)
+                pf_term = (model.pf[r, f, a] * (1.0 - kappa)) ** omegaf
+                pft_term = model.pft[r, f] ** omegaf
+                return pf_term * denom == pft_term * model.xf[r, f, a]
             if f in self.sets.sf:
-                # Sluggish factor: same branch logic as mf.
+                # Sluggish factor: same branch logic as mf (see above for the
+                # cross-multiplied rationale).
                 omegaf = _omegaf(r, f)
                 if omegaf == float("inf"):
                     return pfy == model.pft[r, f]
@@ -5013,8 +5108,9 @@ class GTAPModelEquations:
                 if kappa == 0.0:
                     kappa = float(self.params.taxes.kappaf.get((r, f), 0.0) or 0.0)
                 denom = model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
-                xf_ratio = model.xf[r, f, a] / denom
-                return model.pf[r, f, a] * (1.0 - kappa) == model.pft[r, f] * xf_ratio ** (1.0 / omegaf)
+                pf_term = (model.pf[r, f, a] * (1.0 - kappa)) ** omegaf
+                pft_term = model.pft[r, f] ** omegaf
+                return pf_term * denom == pft_term * model.xf[r, f, a]
             # Sector-specific factor supply curve (fnm): mirrors GAMS fnmeq
             # (model.gms:1096). No xft term — supply scales by gf only.
             etaff = _etaff(r, f, a)
@@ -5164,11 +5260,25 @@ class GTAPModelEquations:
         
         # Government consumption
         # GAMS uses pa(r,i,gov,t) where gov = government agent
+        # GAMS cal.gms: sigmag(r)$(sigmag(r) eq 1) = 1.01 [exact CD form avoided,
+        # same discipline as eq_xi below]. GAMS xa(r,i,gov,t) =
+        # alphaa(r,i,gov,t)*xg.l(r,t)*(pa(r,i,gov,t)/pg(r,t))**(-sigmag(r)) —
+        # a genuine CES demand, not xg=share*yg/pa (implicitly sigmag=1 exact,
+        # which under-weights price response whenever esubg!=0). The old CD-only
+        # form was internally consistent with itself (share calibrated once at
+        # sigmag=1 exact) but became inconsistent once and_ava-class per-period
+        # recalibration supplies alphaa computed via GAMS's real sigmag=1.01 CES
+        # formula — see _recalibrate_alphaa_gov_inv, gtap_multiperiod_driver.py.
         def eq_xg_rule(model, r, i):
             share = value(model.g_share[r, i])
             if share <= 0.0:
                 return model.xg[r, i] == 0.0
-            return model.xg[r, i] == share * model.yg[r] / (model.pa[r, i, "gov"] + 1e-12)
+            sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
+            if abs(sigmag - 1.0) < 1e-8:
+                sigmag = 1.01
+            return model.xg[r, i] == share * model.xg_agg[r] * (
+                model.pg[r] / (model.pa[r, i, "gov"] + 1e-12)
+            ) ** sigmag
         model.eq_xg = Constraint(model.r, model.i, rule=eq_xg_rule)
         
         # Investment demand
@@ -5282,12 +5392,22 @@ class GTAPModelEquations:
             return sum(terms) == 1.0
         model.eq_uh = Constraint(model.r, rule=eq_uh_rule)
 
-        # Government utility per capita (GAMS ugeq, model.gms:826):
-        #   ug = aug * xg / pop, with pg*xg = yg and pgeq defining pg.
-        # GAMS pgeq with sigmag→1: use sigma=1.01 (same as GAMS cal.gms:3478).
-        #   pg^(1-sigma) = sum_i g_share_i * pa^(1-sigma)  (ignoring axg calibration scalar)
-        # Then ug*pop*pg = aug*yg.
-        def eq_ug_rule(model, r):
+        # Government price/quantity/utility (GAMS pgeq/xgeq/ugeq, model.gms:22147-
+        # 22162). Kept as THREE separate equations/variables — matching GAMS
+        # exactly — instead of one collapsed nonlinear equation: collapsing
+        # concentrated the CES price-index nonlinearity and the large aug[r]
+        # coefficient (1500-4400 across regions) into a single Jacobian row,
+        # producing a row norm 32x GAMS's worst row (eq_ug[ROW]=8097 vs GAMS's
+        # max 254) and 7 of Python's top-8 largest rows — see
+        # project_gtap7_15x10_ug_jacobian_collapse_root_cause. GAMS spreads the
+        # same algebra across pgeq (CES index, no aug), xgeq (price*qty=spend,
+        # no aug, no CES), ugeq (LINEAR in xg, only the aug/pop coefficient) —
+        # a much better-conditioned chain, even though the three forms agree
+        # algebraically at the solution.
+        #
+        # eq_pg (GAMS pgeq, sigmag→1 uses sigma=1.01 per cal.gms:3478):
+        #   pg^(1-sigma) = sum_i g_share_i * pa^(1-sigma)
+        def eq_pg_rule(model, r):
             sigmag = float(self.params.elasticities.esubg.get(r, 1.0))
             if abs(sigmag - 1.0) < 1e-8:
                 sigmag = 1.01
@@ -5297,8 +5417,24 @@ class GTAPModelEquations:
                 for i in model.i
                 if value(model.g_share[r, i]) > 0.0
             )
-            pg_index = pg_terms ** (1.0 / expo)
-            return model.ug[r] * model.pop[r] * pg_index == model.aug[r] * model.yg[r]
+            return model.pg[r] ** expo == pg_terms
+        model.eq_pg = Constraint(model.r, rule=eq_pg_rule)
+
+        # eq_xg_agg (GAMS xgeq): pg*xg = yg  (price * real qty = nominal spend)
+        def eq_xg_agg_rule(model, r):
+            return model.pg[r] * model.xg_agg[r] == model.yg[r]
+        model.eq_xg_agg = Constraint(model.r, rule=eq_xg_agg_rule)
+
+        # eq_ug (GAMS ugeq): ug = aug * xg / pop  — LINEAR in xg_agg.
+        # NOTE: write it exactly as GAMS does (divide by pop), not the
+        # cross-multiplied "ug*pop = aug*xg_agg" form — aug[r] itself is
+        # aug=pop/government_total (can be ~1500-4400), so cross-multiplying
+        # makes ∂/∂xg_agg = aug directly (huge); GAMS's own .nl (via CONVERT)
+        # confirms the divided form: e.g. ugeq(USA) is the single-coefficient
+        # linear row `x_ug - 0.3636*x_xg >= 0` (0.3636 = aug[USA]/pop[USA]),
+        # not aug[USA] alone. pop[r]>0 always (no divide-by-zero risk).
+        def eq_ug_rule(model, r):
+            return model.ug[r] == model.aug[r] * model.xg_agg[r] / model.pop[r]
         model.eq_ug = Constraint(model.r, rule=eq_ug_rule)
 
         # Savings price (GAMS psaveeq, compStat-style static form)
@@ -5420,8 +5556,17 @@ class GTAPModelEquations:
         
         # Factor income net of depreciation (GAMS factYeq)
         def eq_facty_rule(model, r):
+            # xfflag(r,f,a)<=0 cells have no defining equation (eq_xfeq/eq_pfeq
+            # both Constraint.Skip them) — xf/pf there are unanchored free DOF.
+            # GAMS's factYeq only sums over the (f,a) pairs it actually declares
+            # (confirmed via CONVERT: 109 terms for USA vs Python's un-gated 150)
+            # so it must gate on xfflag too, or these free DOF leak into facty.
             return model.facty[r] == (
-                sum(model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a] for f in model.f for a in model.a)
+                sum(
+                    model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                    for f in model.f for a in model.a
+                    if value(model.xfflag[r, f, a]) > 0.0
+                )
                 - model.fdepr[r] * model.pi[r] * model.kstock[r]
             )
         model.eq_facty = Constraint(model.r, rule=eq_facty_rule)
@@ -5447,7 +5592,15 @@ class GTAPModelEquations:
                 return model.ytax[r, gy] == total
 
             if gy == "fs":
-                return model.ytax[r, gy] == 0.0
+                # GAMS ytaxeq (model.gms:652): YTAX(r,"fs") = sum(fctts*pf*xf/xscale)
+                # — the factor-SUBSIDY revenue stream, mirror of "ft" with fctts
+                # (= -fbep/evfb, negative) instead of fcttx. Was hardcoded 0 while
+                # fctts was 0; now that fctts is the real factor subsidy it is a
+                # genuine (negative) government stream feeding ytaxTot→yTaxInd→regY.
+                total = 0.0
+                for (rr, f, a) in [(rr, f, a) for (rr, f, a) in model.fctts if rr == r]:
+                    total += model.fctts[rr, f, a] * model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                return model.ytax[r, gy] == total
 
             if gy in ("fc", "pc", "gc", "ic"):
                 if gy == "fc":

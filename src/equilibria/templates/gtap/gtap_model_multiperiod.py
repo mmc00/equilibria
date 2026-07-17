@@ -586,6 +586,16 @@ class GTAPMultiPeriodModel:
             "factY": "facty",
             "phiP": "phip",
             "regY": "regy",
+            # GAMS xg(r,t) is the AGGREGATE government real-expenditure scalar
+            # (pg*xg=yg, ugeq: ug=aug*xg/pop) — Python's model.xg is the
+            # DISAGGREGATED per-commodity government demand xg[r,i] (GAMS's
+            # xa(r,i,gov,t) sourcing block), a different variable with a
+            # different index shape. Without this alias, seeding would try
+            # `getattr(m, "xg")` and hit the disaggregated Var with the wrong
+            # index arity, silently skipping every (r,t) entry via the
+            # try/except KeyError/TypeError catch-all — leaving xg_agg stuck
+            # at its init value of 1.0 for every region.
+            "xg": "xg_agg",
             # Add others as needed; most names are identical
         }
 

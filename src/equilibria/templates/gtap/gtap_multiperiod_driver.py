@@ -81,6 +81,696 @@ def freeze_period(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _recalibrate_and_ava — replicate GAMS iterloop's per-period and/ava recalibration
+# ---------------------------------------------------------------------------
+# GAMS's calibration-of-parameters block (comp.gms, inside loop(tsim), AFTER that
+# period's own solve, BEFORE the next period's solve) recomputes:
+#   and(r,a,t) = (nd.l(r,a,t)/xp.l(r,a,t)) * (pnd.l(r,a,t)/px.l(r,a,t))**sigmap(r,a)
+#   ava(r,a,t) = (va.l(r,a,t)/xp.l(r,a,t)) * (pva.l(r,a,t)/px.l(r,a,t))**sigmap(r,a)
+# using THAT period's own solved values, not the benchmark SAM. Python built
+# and_param/ava_param ONCE from the benchmark and bakes them as constants into
+# every period's eq_nd/eq_va (gtap_model_multiperiod.py substitutes mutable
+# Params by their build-time numeric value) — so check/shock never pick up
+# GAMS's recalibration. Confirmed via CONVERT on a freshly-regenerated comp.gms
+# (2026-07-12): and_param[JPN,VegFruit] Python=0.4518 (benchmark) vs GAMS's real
+# check-period coefficient 0.3971 (= nd.l/(nd.l+va.l) at check, exact match to
+# 10 sig figs) — a genuine, verified, ~5.5pp-magnitude bug, not a hypothesis.
+# This is SURGICAL (only eq_nd/eq_va's own and_param/ava_param coefficient),
+# NOT a whole-slice recalibration of Armington/CDE shares — a prior finding
+# (_rebuild_eq_pmeq_shock's docstring) already established that whole-slice
+# recalibration on the SHOCK period regresses the match; this only touches
+# and/ava, verified independently faithful via CONVERT before implementing.
+#
+# KEPT despite regressing the gate (60.87/60.66% -> 54.24/49.76%, codes stayed
+# 2/2) per feedback_faithful_over_match_pct: fidelity to GAMS is the criterion,
+# never match%/convergence. A faithful change regressing means ANOTHER link is
+# missing/infaithful — diagnose and fix THAT, do not revert this.
+def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_nd/eq_va for active_period using and/ava recomputed from
+    prior_period's OWN solved nd/va/xp/pnd/pva/px (GAMS's iterloop formula).
+
+    Returns the count of (r,a) cells rebuilt (nd+va combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_nd = getattr(m, "eq_nd", None)
+    eq_va = getattr(m, "eq_va", None)
+    nd = getattr(m, "nd", None)
+    va = getattr(m, "va", None)
+    xp = getattr(m, "xp", None)
+    pnd = getattr(m, "pnd", None)
+    pva = getattr(m, "pva", None)
+    px = getattr(m, "px", None)
+    if None in (eq_nd, eq_va, nd, va, xp, pnd, pva, px):
+        return 0
+
+    sigmap_map = getattr(params.elasticities, "sigmap", {}) or {}
+    axp_map = getattr(params.shifts, "axp", {}) or {}
+    lambdand_map = getattr(params.shifts, "lambdand", {}) or {}
+    lambdava_map = getattr(params.shifts, "lambdava", {}) or {}
+
+    n_rebuilt = 0
+    for idx in list(eq_nd):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, a, _t = idx
+        prior_idx = (r, a, prior_period)
+        try:
+            xp_prior = float(_V(xp[prior_idx]))
+            nd_prior = float(_V(nd[prior_idx]))
+            va_prior = float(_V(va[prior_idx]))
+            pnd_prior = float(_V(pnd[prior_idx]))
+            pva_prior = float(_V(pva[prior_idx]))
+            px_prior = float(_V(px[prior_idx]))
+        except (KeyError, Exception):
+            continue
+        if xp_prior <= 0.0 or px_prior <= 0.0:
+            continue
+
+        sigmap = float(sigmap_map.get((r, a), 1.0))
+        and_new = (nd_prior / xp_prior) * (pnd_prior / px_prior) ** sigmap if pnd_prior > 0 else 0.0
+        ava_new = (va_prior / xp_prior) * (pva_prior / px_prior) ** sigmap if pva_prior > 0 else 0.0
+
+        axp_shift = float(axp_map.get((r, a), 1.0))
+        lambdand = float(lambdand_map.get((r, a), 1.0))
+        lambdava = float(lambdava_map.get((r, a), 1.0))
+
+        if and_new > 0.0 and eq_nd[idx].active:
+            eq_nd[idx].deactivate()
+            nd_shift = axp_shift * lambdand
+            ratio_nd = px[idx] / pnd[idx]
+            m.add_component(
+                f"_eq_nd_recal_{r}_{a}_{active_period}",
+                Constraint(expr=nd[idx] == and_new * xp[idx] * ratio_nd ** sigmap
+                           * nd_shift ** (sigmap - 1.0)),
+            )
+            n_rebuilt += 1
+        if ava_new > 0.0 and eq_va[idx].active:
+            eq_va[idx].deactivate()
+            va_shift = axp_shift * lambdava
+            ratio_va = px[idx] / pva[idx]
+            m.add_component(
+                f"_eq_va_recal_{r}_{a}_{active_period}",
+                Constraint(expr=va[idx] == ava_new * xp[idx] * ratio_va ** sigmap
+                           * va_shift ** (sigmap - 1.0)),
+            )
+            n_rebuilt += 1
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
+# _recalibrate_io_af — replicate GAMS iterloop's per-period io/af recalibration
+# ---------------------------------------------------------------------------
+# Same block, same mechanism as _recalibrate_and_ava — GAMS recomputes:
+#   io(r,i,a,t) = (xa.l(r,i,a,t)/nd.l(r,a,t)) * (pa.l(r,i,a,t)/pnd.l(r,a,t))**sigmand(r,a)
+#   af(r,fp,a,t) = (xf.l(r,fp,a,t)/va.l(r,a,t)) * (pfa.l(r,fp,a,t)/pva.l(r,a,t))**sigmav(r,a)
+# every period from that period's own solved values. Python's io_param/af_param
+# are also benchmark-frozen constants (same substitution mechanism as and/ava).
+# Rebuilds eq_xaa_activity (io) and eq_xfeq (af) for the active period.
+def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_xaa_activity/eq_xfeq for active_period using io/af recomputed
+    from prior_period's own solved xaa/nd/pa/pnd (io) and xf/va/pfa/pva (af).
+
+    Returns the count of cells rebuilt (io+af combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_xaa = getattr(m, "eq_xaa_activity", None)
+    xaa = getattr(m, "xaa", None)
+    nd = getattr(m, "nd", None)
+    pa = getattr(m, "pa", None)
+    pnd = getattr(m, "pnd", None)
+    lambdaio = getattr(m, "lambdaio", None)
+
+    eq_xfeq = getattr(m, "eq_xfeq", None)
+    xf = getattr(m, "xf", None)
+    va = getattr(m, "va", None)
+    pfa = getattr(m, "pfa", None)
+    pva = getattr(m, "pva", None)
+    pf = getattr(m, "pf", None)
+
+    sigmand_map = getattr(params.elasticities, "sigmand", {}) or {}
+    sigmav_map = getattr(params.elasticities, "sigmav", {}) or {}
+    lambdaf_map = getattr(params.shifts, "lambdaf", {}) or {}
+
+    # if_sub: GAMS's xfeq uses the LIVE macro M_PFA = pf*(1+fctts+fcttx), NOT the
+    # pfa Var (which is eliminated under if_sub). The rebuilt eq_xfeq below must
+    # keep the same live pf-dependence, else xf stops responding to pf and the
+    # factor price becomes a free DOF that explodes (pf[Land] 11.4 vs GAMS 0.98).
+    # The wedge (fctts+fcttx) = (ftrv-fbep)/evfb is a constant per (r,f,a).
+    # if_sub detection: under if_sub the pfa Var is eliminated (no eq_pfaeq pins
+    # it), so xfeq uses the live macro. Detect by the pfaeq being absent/inactive.
+    _eq_pfaeq = getattr(m, "eq_pfaeq", None)
+    _if_sub = True
+    if _eq_pfaeq is not None:
+        try:
+            _if_sub = not any(_eq_pfaeq[_i].active for _i in _eq_pfaeq)
+        except Exception:
+            _if_sub = True
+    _bm = getattr(params, "benchmark", None)
+    def _wedge(r, f, a):
+        if _bm is None:
+            return 0.0
+        evfb = float(_bm.evfb.get((r, f, a), 0.0) or 0.0)
+        if evfb <= 0.0:
+            return 0.0
+        return (float(_bm.ftrv.get((r, f, a), 0.0) or 0.0)
+                - float(_bm.fbep.get((r, f, a), 0.0) or 0.0)) / evfb
+
+    n_rebuilt = 0
+
+    if None not in (eq_xaa, xaa, nd, pa, pnd, lambdaio):
+        for idx in list(eq_xaa):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, a, _t = idx
+            prior_idx = (r, i, a, prior_period)
+            nd_prior_idx = (r, a, prior_period)
+            try:
+                xaa_prior = float(_V(xaa[prior_idx]))
+                nd_prior = float(_V(nd[nd_prior_idx]))
+                pa_prior = float(_V(pa[prior_idx]))
+                pnd_prior = float(_V(pnd[nd_prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if nd_prior <= 0.0 or pnd_prior <= 0.0:
+                continue
+            sigmand = float(sigmand_map.get((r, a), 1.0))
+            io_new = (xaa_prior / nd_prior) * (pa_prior / pnd_prior) ** sigmand
+            if io_new <= 0.0 or not eq_xaa[idx].active:
+                continue
+            eq_xaa[idx].deactivate()
+            lio = max(float(_V(lambdaio[idx[:-1]])) if idx[:-1] in lambdaio else 1.0, 1e-8)
+            nd_idx = (r, a, active_period)
+            if abs(sigmand) < 1e-12:
+                m.add_component(
+                    f"_eq_xaa_recal_{r}_{i}_{a}_{active_period}",
+                    Constraint(expr=xaa[idx] == io_new * nd[nd_idx] / lio),
+                )
+            else:
+                m.add_component(
+                    f"_eq_xaa_recal_{r}_{i}_{a}_{active_period}",
+                    Constraint(expr=xaa[idx] == io_new * nd[nd_idx]
+                               * (pnd[nd_idx] / pa[idx]) ** sigmand * (lio ** (sigmand - 1.0))),
+                )
+            n_rebuilt += 1
+
+    if None not in (eq_xfeq, xf, va, pfa, pva):
+        for idx in list(eq_xfeq):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, f, a, _t = idx
+            prior_idx = (r, f, a, prior_period)
+            va_prior_idx = (r, a, prior_period)
+            try:
+                xf_prior = float(_V(xf[prior_idx]))
+                va_prior = float(_V(va[va_prior_idx]))
+                pfa_prior = float(_V(pfa[prior_idx]))
+                pva_prior = float(_V(pva[va_prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if va_prior <= 0.0 or pva_prior <= 0.0:
+                continue
+            sigmav = float(sigmav_map.get((r, a), 1.0))
+            af_new = (xf_prior / va_prior) * (pfa_prior / pva_prior) ** sigmav
+            if af_new <= 0.0 or not eq_xfeq[idx].active:
+                continue
+            eq_xfeq[idx].deactivate()
+            lf = max(float(lambdaf_map.get((r, f, a), 1.0)), 1e-8)
+            va_idx = (r, a, active_period)
+            # Denominator = M_PFA. Under if_sub use the LIVE macro pf*(1+wedge) so
+            # xf responds to the live pf (anchoring the factor price); else the
+            # eliminated pfa Var bakes to a constant and pf becomes a free DOF that
+            # explodes (pf[Land] 11.4 vs GAMS 0.98). Not if_sub → the live pfa Var.
+            if _if_sub and pf is not None:
+                _m_pfa_live = pf[idx] * (1.0 + _wedge(r, f, a))
+            else:
+                _m_pfa_live = pfa[idx]
+            m.add_component(
+                f"_eq_xfeq_recal_{r}_{f}_{a}_{active_period}",
+                Constraint(expr=xf[idx] == af_new * va[va_idx]
+                           * (pva[va_idx] / _m_pfa_live) ** sigmav * (lf ** (sigmav - 1.0))),
+            )
+            n_rebuilt += 1
+
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
+# _recalibrate_gx_ax — replicate GAMS iterloop's per-period gx/ax recalibration
+# ---------------------------------------------------------------------------
+# Same block, same mechanism as and/ava and io/af — GAMS recomputes:
+#   gx(r,a,i,t) = (x.l/xp.l)*(px.l/p.l)**omegas(r,a)           [omegas != inf]
+#   ax(r,a,i,t) = (x.l/xs.l)*((1+prdtx.l)*p.l/ps.l)**sigmas(r,i)  [sigmas != inf]
+# every period from that period's own solved values. Python's gx_param/p_ax
+# (Python's name for GAMS's ax) are also benchmark-frozen. Rebuilds eq_x (gx)
+# and eq_peq (ax) for the active period. if_sub=True form only (this dataset).
+def _recalibrate_gx_ax(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_x/eq_peq for active_period using gx/ax recomputed from
+    prior_period's own solved x/xp/px/p_rai (gx) and x/xs/ps/p_rai/prdtx_rai (ax).
+
+    Returns the count of cells rebuilt (gx+ax combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_x = getattr(m, "eq_x", None)
+    x = getattr(m, "x", None)
+    xp = getattr(m, "xp", None)
+    px = getattr(m, "px", None)
+    p_rai = getattr(m, "p_rai", None)
+    xscale = getattr(m, "xscale", None)
+
+    eq_peq = getattr(m, "eq_peq", None)
+    xs = getattr(m, "xs", None)
+    ps = getattr(m, "ps", None)
+    prdtx_rai = getattr(m, "prdtx_rai", None)
+
+    omegas_map = getattr(params.elasticities, "omegas", {}) or {}
+    sigmas_map = getattr(params.elasticities, "sigmas", {}) or {}
+
+    n_rebuilt = 0
+
+    if None not in (eq_x, x, xp, px, p_rai, xscale):
+        for idx in list(eq_x):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, a, i, _t = idx
+            prior_idx = (r, a, i, prior_period)
+            xp_prior_idx = (r, a, prior_period)
+            omega = float(omegas_map.get((r, a), 1.0))
+            if omega == float("inf"):
+                continue  # eq_x's inf branch writes a price identity, not gx-driven
+            try:
+                x_prior = float(_V(x[prior_idx]))
+                xp_prior = float(_V(xp[xp_prior_idx]))
+                px_prior = float(_V(px[xp_prior_idx]))
+                p_rai_prior = float(_V(p_rai[prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if xp_prior <= 0.0 or p_rai_prior <= 0.0:
+                continue
+            # GAMS's own gx formula is (x.l/xp.l)*(px.l/p.l)^omega — xscale is a
+            # Python-only report scaler baked into eq_x's RHS, not part of gx itself.
+            gx_new = (x_prior / xp_prior) * (px_prior / p_rai_prior) ** omega
+            if gx_new <= 0.0 or not eq_x[idx].active:
+                continue
+            eq_x[idx].deactivate()
+            xp_idx = (r, a, active_period)
+            xs_val = xscale[xp_idx] if xp_idx in xscale else xscale.get((r, a), 1.0)
+            m.add_component(
+                f"_eq_x_recal_{r}_{a}_{i}_{active_period}",
+                Constraint(expr=x[idx] == gx_new * (xp[xp_idx] / xs_val)
+                           * (p_rai[idx] / px[xp_idx]) ** omega),
+            )
+            n_rebuilt += 1
+
+    if None not in (eq_peq, x, xs, ps, p_rai, prdtx_rai):
+        for idx in list(eq_peq):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, a, i, _t = idx
+            prior_idx = (r, a, i, prior_period)
+            xs_prior_idx = (r, i, prior_period)
+            sigma = float(sigmas_map.get((r, i), 2.0))
+            if sigma == float("inf"):
+                continue
+            try:
+                x_prior = float(_V(x[prior_idx]))
+                xs_prior = float(_V(xs[xs_prior_idx]))
+                ps_prior = float(_V(ps[xs_prior_idx]))
+                prdtx_prior = float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+                p_rai_prior = float(_V(p_rai[prior_idx]))
+            except (KeyError, Exception):
+                continue
+            if xs_prior <= 0.0 or ps_prior <= 0.0:
+                continue
+            pp_prior = (1.0 + prdtx_prior) * p_rai_prior
+            if pp_prior <= 0.0:
+                continue
+            ax_new = (x_prior / xs_prior) * (ps_prior / pp_prior) ** sigma
+            if ax_new <= 0.0 or not eq_peq[idx].active:
+                continue
+            eq_peq[idx].deactivate()
+            xs_idx = (r, i, active_period)
+            prdtx_val = float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+            m.add_component(
+                f"_eq_peq_recal_{r}_{a}_{i}_{active_period}",
+                Constraint(expr=x[idx] == ax_new * xs[xs_idx]
+                           * (ps[xs_idx] / ((1.0 + prdtx_val) * p_rai[idx])) ** sigma),
+            )
+            n_rebuilt += 1
+
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
+# _recalibrate_alphad_alpham — replicate GAMS's per-period Armington-share recal
+# ---------------------------------------------------------------------------
+# Same block, same mechanism. GAMS recomputes:
+#   alphad(r,i,aa,t) = (xd.l(r,i,aa,t)/xa.l(r,i,aa,t))*(pdp.l/pa.l)**sigmam(r,i,aa)
+#   alpham(r,i,aa,t) = (xm.l(r,i,aa,t)/xa.l(r,i,aa,t))*(pmp.l/pa.l)**sigmam(r,i,aa)
+# every period from that period's own solved values. Python's alphad/alpham
+# aren't even Params — they're plain floats cached in a closure dict at build
+# time (get_benchmark_agent_armington_shares), baked directly into eq_paa's
+# rule. Rebuilds eq_paa from scratch with the recalibrated shares.
+def _recalibrate_alphad_alpham(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_paa for active_period using alphad/alpham recomputed from
+    prior_period's own solved xda/xma/xaa/pd/pmt/dintx/mintx/pa.
+
+    Returns the count of (r,i,aa) cells rebuilt.
+
+    NOTE: GAMS's pdp/pmp = (1+dintx)*pd / (1+mintx)*pmt (pdp_expr_rule /
+    pmp_expr_rule, gtap_model_equations.py:2951-2959) are Pyomo Expressions
+    in the single-period model — build_equations_intra only copies Var and
+    Constraint components onto the multi-period model `m`, NOT Expressions,
+    so m has no .pdp/.pmp at all (confirmed empirically: AttributeError).
+    Recompute pdp/pmp directly from their own live Vars (pd, pmt, dintx,
+    mintx) instead of relying on a component that doesn't exist on `m`.
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_paa = getattr(m, "eq_paa", None)
+    xda = getattr(m, "xda", None)
+    xma = getattr(m, "xma", None)
+    xaa = getattr(m, "xaa", None)
+    pd = getattr(m, "pd", None)
+    pmt = getattr(m, "pmt", None)
+    dintx = getattr(m, "dintx", None)
+    mintx = getattr(m, "mintx", None)
+    pa = getattr(m, "pa", None)
+    if None in (eq_paa, xda, xma, xaa, pd, pmt, dintx, mintx, pa):
+        return 0
+
+    esubd_map = getattr(params.elasticities, "esubd", {}) or {}
+
+    def _pdp(idx):
+        r, i, aa, t = idx
+        return (1.0 + dintx[idx]) * pd[(r, i, t)]
+
+    def _pmp(idx):
+        r, i, aa, t = idx
+        return (1.0 + mintx[idx]) * pmt[(r, i, t)]
+
+    n_rebuilt = 0
+    for idx in list(eq_paa):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, i, aa, _t = idx
+        prior_idx = (r, i, aa, prior_period)
+        prior_2d = (r, i, prior_period)
+        try:
+            xda_prior = float(_V(xda[prior_idx]))
+            xma_prior = float(_V(xma[prior_idx]))
+            xaa_prior = float(_V(xaa[prior_idx]))
+            pd_prior = float(_V(pd[prior_2d]))
+            pmt_prior = float(_V(pmt[prior_2d]))
+            dintx_prior = float(_V(dintx[prior_idx]))
+            mintx_prior = float(_V(mintx[prior_idx]))
+            pa_prior = float(_V(pa[prior_idx]))
+        except (KeyError, Exception):
+            continue
+        if xaa_prior <= 0.0 or pa_prior <= 0.0:
+            continue
+        pdp_prior = (1.0 + dintx_prior) * pd_prior
+        pmp_prior = (1.0 + mintx_prior) * pmt_prior
+
+        sigmam = float(esubd_map.get((r, i), 2.0))
+        alphad_new = (xda_prior / xaa_prior) * (pdp_prior / pa_prior) ** sigmam if pdp_prior > 0 else 0.0
+        alpham_new = (xma_prior / xaa_prior) * (pmp_prior / pa_prior) ** sigmam if pmp_prior > 0 else 0.0
+        if alphad_new <= 0.0 and alpham_new <= 0.0:
+            continue
+        if not eq_paa[idx].active:
+            continue
+        eq_paa[idx].deactivate()
+
+        expo = 1.0 - sigmam
+        pdp_expr = _pdp(idx)
+        pmp_expr = _pmp(idx)
+        if abs(expo) < 1e-8:
+            m.add_component(
+                f"_eq_paa_recal_{r}_{i}_{aa}_{active_period}",
+                Constraint(expr=pa[idx] == pdp_expr ** alphad_new * pmp_expr ** alpham_new),
+            )
+        else:
+            m.add_component(
+                f"_eq_paa_recal_{r}_{i}_{aa}_{active_period}",
+                Constraint(expr=pa[idx] ** expo == alphad_new * pdp_expr ** expo
+                           + alpham_new * pmp_expr ** expo),
+            )
+        n_rebuilt += 1
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
+# _recalibrate_alphaa_gov_inv — per-period recal of government/investment shares
+# ---------------------------------------------------------------------------
+# Same block. GAMS recomputes:
+#   alphaa(r,i,gov,t) = (xa.l(r,i,gov,t)/xg.l(r,t))*(pa.l(r,i,gov,t)/pg.l(r,t))**sigmag(r)
+#   alphaa(r,i,inv,t) = (xa.l(r,i,inv,t)/xi.l(r,t))*(pa.l(r,i,inv,t)/pi.l(r,t))**sigmai(r)
+# every period. Python's g_share/i_share are also benchmark-frozen constants.
+# Rebuilds eq_xg+eq_pg (gov) and eq_xi (inv) for the active period.
+def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_xg/eq_pg (government) and eq_xi (investment) for active_period
+    using alphaa recomputed from prior_period's own solved xaa/xg/xi/pa/pg/pi.
+
+    Returns the count of cells rebuilt (gov+inv combined).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    xaa = getattr(m, "xaa", None)
+    pa = getattr(m, "pa", None)
+
+    eq_xg = getattr(m, "eq_xg", None)
+    eq_pg = getattr(m, "eq_pg", None)
+    xg = getattr(m, "xg", None)
+    pg = getattr(m, "pg", None)
+
+    eq_xi = getattr(m, "eq_xi", None)
+    xi = getattr(m, "xi", None)
+    xiagg = getattr(m, "xiagg", None)
+    pi_ = getattr(m, "pi", None)
+
+    if None in (xaa, pa):
+        return 0
+
+    esubg_map = getattr(params.elasticities, "esubg", {}) or {}
+    esubi_map = getattr(params.elasticities, "esubi", {}) or {}
+
+    n_rebuilt = 0
+
+    # ── Government (xg + pg) ────────────────────────────────────────────────
+    if None not in (eq_xg, eq_pg, xg, pg):
+        sigmag_by_r = {}
+        alphaa_gov_new = {}
+        for idx in list(eq_xg):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, _t = idx
+            xaa_prior = (r, i, "gov", prior_period)
+            xg_prior_idx = (r, prior_period)
+            try:
+                xaa_val = float(_V(xaa[xaa_prior]))
+                xg_prior = float(_V(xg[xg_prior_idx]))
+                pa_prior = float(_V(pa[xaa_prior]))
+                pg_prior = float(_V(pg[(r, prior_period)]))
+            except (KeyError, Exception):
+                continue
+            if xg_prior <= 0.0 or pg_prior <= 0.0:
+                continue
+            sigmag = float(esubg_map.get(r, 1.0))
+            if abs(sigmag - 1.0) < 1e-8:
+                sigmag = 1.01
+            sigmag_by_r[r] = sigmag
+            share = (xaa_val / xg_prior) * (pa_prior / pg_prior) ** sigmag
+            if share > 0.0:
+                alphaa_gov_new[(r, i)] = share
+
+        xg_agg = getattr(m, "xg_agg", None)
+        for idx in list(eq_xg):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, _t = idx
+            share = alphaa_gov_new.get((r, i))
+            sigmag = sigmag_by_r.get(r)
+            if share is None or sigmag is None or xg_agg is None or not eq_xg[idx].active:
+                continue
+            eq_xg[idx].deactivate()
+            m.add_component(
+                f"_eq_xg_recal_{r}_{i}_{active_period}",
+                Constraint(expr=xg[idx] == share * xg_agg[(r, active_period)]
+                           * (pg[(r, active_period)]
+                              / (pa[(r, i, "gov", active_period)] + 1e-12)) ** sigmag),
+            )
+            n_rebuilt += 1
+
+        for r_idx in list(eq_pg):
+            if not (isinstance(r_idx, tuple) and r_idx[-1] == active_period):
+                continue
+            r = r_idx[0]
+            sigmag = sigmag_by_r.get(r)
+            if sigmag is None or not eq_pg[r_idx].active:
+                continue
+            expo = 1.0 - sigmag
+            terms = [
+                alphaa_gov_new[(r, i)] * pa[(r, i, "gov", active_period)] ** expo
+                for i in m.i if (r, i) in alphaa_gov_new
+            ]
+            if not terms:
+                continue
+            eq_pg[r_idx].deactivate()
+            m.add_component(
+                f"_eq_pg_recal_{r}_{active_period}",
+                Constraint(expr=pg[r_idx] ** expo == sum(terms)),
+            )
+            n_rebuilt += 1
+
+    # ── Investment (xi) ──────────────────────────────────────────────────────
+    if None not in (eq_xi, xi, xiagg, pi_):
+        for idx in list(eq_xi):
+            if not (isinstance(idx, tuple) and idx[-1] == active_period):
+                continue
+            r, i, _t = idx
+            xaa_prior = (r, i, "inv", prior_period)
+            xi_prior_idx = (r, prior_period)
+            try:
+                xaa_val = float(_V(xaa[xaa_prior]))
+                xiagg_prior = float(_V(xiagg[xi_prior_idx]))
+                pa_prior = float(_V(pa[xaa_prior]))
+                pi_prior = float(_V(pi_[(r, prior_period)]))
+            except (KeyError, Exception):
+                continue
+            if xiagg_prior <= 0.0 or pi_prior <= 0.0:
+                continue
+            sigmai_raw = esubi_map.get((r,))
+            if sigmai_raw is None:
+                sigmai_raw = esubi_map.get(r, 0.0)
+            sigmai_raw = float(sigmai_raw or 0.0)
+            if abs(sigmai_raw - 1.0) < 1e-8:
+                sigmai_raw = 1.01
+            alphaa_new = (xaa_val / xiagg_prior) * (pa_prior / pi_prior) ** sigmai_raw
+            if alphaa_new <= 0.0 or not eq_xi[idx].active:
+                continue
+            eq_xi[idx].deactivate()
+            m.add_component(
+                f"_eq_xi_recal_{r}_{i}_{active_period}",
+                Constraint(expr=xi[idx] == alphaa_new * xiagg[(r, active_period)]
+                           * (pi_[(r, active_period)]
+                              / (pa[(r, i, "inv", active_period)] + 1e-12)) ** sigmai_raw),
+            )
+            n_rebuilt += 1
+
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
+# _recalibrate_alphaa_hhd — per-period recal of the CDE household share
+# ---------------------------------------------------------------------------
+# Same block. GAMS recomputes (CDE branch, comp.gms ~line 23648):
+#   alphaa(r,i,h,t) = ((xcshr.l/bh.l)*((yc.l/pop.l)/pa.l)**bh.l * uh.l**(-eh.l*bh.l))
+#                     / sum(j, xcshr.l(j)/bh.l(j))
+# every period. bh/eh are frozen CDE ELASTICITIES by design (CLAUDE.md — not
+# recalibrated by GAMS either, only the SHARE alphaa_hhd is). pop is a static
+# (region-only, no time index) Param — no prior-period lookup needed for it.
+# Rebuilds eq_zcons for the active period (eq_xcshr/eq_phip consume zcons
+# live, so they pick up the recalibration transitively without needing their
+# own rebuild).
+def _recalibrate_alphaa_hhd(m, params, active_period: str, prior_period: str) -> int:
+    """Rebuild eq_zcons for active_period using alphaa_hhd recomputed from
+    prior_period's own solved xcshr/uh/yc/pa (bh/eh stay frozen elasticities).
+
+    Returns the count of (r,i) cells rebuilt.
+
+    NOTE: bh/eh/pop are non-mutable Params in the single-period model — the
+    multi-period substitution mechanism bakes non-mutable Params as literals
+    directly into constraint bodies WITHOUT copying the Param component onto
+    `m` at all (confirmed empirically: m has no .bh/.eh/.pop attribute).
+    Read them from `params.elasticities.incpar/subpar` and
+    `params.benchmark.pop` directly instead (the same source
+    gtap_model_equations.py itself reads from when building eh_data/bh_data/
+    pop_data — see build_model lines ~1912-2069).
+    """
+    from pyomo.environ import Constraint, value as _V
+
+    eq_zcons = getattr(m, "eq_zcons", None)
+    xcshr = getattr(m, "xcshr", None)
+    uh = getattr(m, "uh", None)
+    yc = getattr(m, "yc", None)
+    pa = getattr(m, "pa", None)
+    if None in (eq_zcons, xcshr, uh, yc, pa):
+        return 0
+
+    def _bh(r, i):
+        val = float(params.elasticities.subpar.get((r, i), 1.0) or 1.0)
+        return val if abs(val) > 1e-12 else 1.0
+
+    def _eh(r, i):
+        return float(params.elasticities.incpar.get((r, i), 1.0) or 1.0)
+
+    def _pop(r):
+        raw = params.benchmark.pop
+        val = raw.get(r)
+        if val is None:
+            val = raw.get((r,), 1.0)
+        return float(val or 1.0)
+
+    n_rebuilt = 0
+    # First pass: compute the per-(r,i) numerator, then the per-r denominator sum.
+    numer = {}
+    for idx in list(eq_zcons):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, i, _t = idx
+        prior_2d = (r, i, prior_period)
+        prior_3d = (r, i, "hhd", prior_period)
+        try:
+            xcshr_prior = float(_V(xcshr[prior_2d]))
+            uh_prior = float(_V(uh[(r, prior_period)]))
+            yc_prior = float(_V(yc[(r, prior_period)]))
+            pa_prior = float(_V(pa[prior_3d]))
+        except (KeyError, Exception):
+            continue
+        bh_val = _bh(r, i)
+        eh_val = _eh(r, i)
+        pop_val = _pop(r)
+        if bh_val <= 0.0 or pa_prior <= 0.0 or pop_val <= 0.0:
+            continue
+        term = (xcshr_prior / bh_val) * ((yc_prior / pop_val) / pa_prior) ** bh_val \
+            * uh_prior ** (-eh_val * bh_val)
+        numer[(r, i)] = term
+
+    denom_by_r = {}
+    for (r, i), term in numer.items():
+        denom_by_r[r] = denom_by_r.get(r, 0.0) + term
+
+    for idx in list(eq_zcons):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, i, _t = idx
+        term = numer.get((r, i))
+        denom = denom_by_r.get(r)
+        if term is None or not denom or denom <= 0.0 or not eq_zcons[idx].active:
+            continue
+        alphaa_new = term / denom
+        if alphaa_new <= 0.0:
+            continue
+        eq_zcons[idx].deactivate()
+        bh_val = _bh(r, i)
+        eh_val = _eh(r, i)
+        pop_val = _pop(r)
+        m.add_component(
+            f"_eq_zcons_recal_{r}_{i}_{active_period}",
+            Constraint(expr=m.zcons[idx] == (
+                alphaa_new * bh_val
+                * (pa[(r, i, "hhd", active_period)] ** bh_val)
+                * (uh[(r, active_period)] ** (eh_val * bh_val))
+                * ((yc[(r, active_period)] / pop_val) ** (-bh_val))
+            )),
+        )
+        n_rebuilt += 1
+    return n_rebuilt
+
+
+# ---------------------------------------------------------------------------
 # freeze_inactive_periods — freeze vars AND deactivate constraints for inactive periods
 # ---------------------------------------------------------------------------
 def freeze_inactive_periods(m, active_period: str) -> int:
@@ -307,14 +997,26 @@ def _collapse_pft_pfteq(m, period: str) -> int:
             _is_real = _eqxft is not None and _eqxft.active
 
             if _is_real:
-                # REAL factor: leave pft FREE, keep eq_pfteq + eq_xfteq active
-                # (GAMS pfteq free-row).  Deactivate the redundant per-(r,f)
-                # market-clearing eq_xft (GAMS substitutes it out).
-                if _eq_xft is not None:
+                # REAL factor: GAMS's `model gtap` block lists pfteq as a genuine
+                # FREE ROW (no MCP pair) in BOTH ifSUB modes — confirmed by
+                # diff_mcp_pairing against model_altertax_ifsub{0,1}.gms (gams_side
+                # =free_row for pfteq in each).  The prior recipe kept eq_pfteq
+                # active and deactivated eq_xft, trusting Hopcroft-Karp to square
+                # it — but the matcher then PAIRS eq_pfteq to a variable
+                # (pairing_mismatch), over-determining the factor-price block and
+                # letting PATH's line search explode pf (USA,UnSkLab pf 1.33→7.85
+                # under ifSUB=1, check code 1→2).  Faithful fix: deactivate
+                # eq_pfteq itself (mirror GAMS's free-row) and KEEP eq_xft active
+                # as the market-clearing pair — pft stays free, determined by
+                # eq_xfteq/eq_pfeq.  Restores 3x3 ifSUB1 check/shock to code 1/1
+                # (pf explosion gone) and lifts 5x5 ifSUB1 check 2→1 / shock +11pp;
+                # inert on ifSUB0 3x3 (already 1/1/1).  .nl gate unaffected
+                # (closure/pairing change, not an equation change).
+                if _eq_pfteq is not None:
                     try:
-                        _eqxftrow = _eq_xft[(_r, _f, period)]
-                        if _eqxftrow.active:
-                            _eqxftrow.deactivate()
+                        _pfteqrow = _eq_pfteq[(_r, _f, period)]
+                        if _pfteqrow.active:
+                            _pfteqrow.deactivate()
                             _n += 1
                     except KeyError:
                         pass
@@ -563,6 +1265,65 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
     if eq is None or ytax is None or pmcif is None or xw is None:
         return 0
     imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
+    # LIVE M_PMCIF chain (same as _rebuild_import_demand_shock_ifsub): under ifSUB=1
+    # the pmcif Var is a frozen orphan, so ytax[mt] = Σ imptx·pmcif·xw baked pmcif at
+    # its seed value → mt revenue stays at the pre-shock CIF price (mt ~2.5% low across
+    # all regions).  GAMS uses M_PMCIF = M_PEFOB + M_PWMG·tmarg live on pe/ptmg.
+    _pe = getattr(m, "pe", None)
+    _ptmg = getattr(m, "ptmg", None)
+    _tmarg = getattr(m, "tmarg", None)
+    _amgm = getattr(m, "amgm", None)
+    _lambdamg = getattr(m, "lambdamg", None)
+    _etax = getattr(m, "etax", None)
+    _modes = list(getattr(m, "m", []) or [])
+    _rtxs = getattr(getattr(params_shock, "taxes", None), "rtxs", {}) or {}
+
+    def _exptax(rp, i, r):
+        return float(_rtxs.get((rp, i, r), 0.0) or 0.0)
+
+    def _etaxv(rp, i):
+        if _etax is None:
+            return 0.0
+        for k in ((rp, i, "shock"), (rp, i)):
+            try:
+                return float(_V(_etax[k]))
+            except Exception:
+                pass
+        return 0.0
+
+    def _rd(comp, *ks):
+        if comp is None:
+            return None
+        for k in ks:
+            try:
+                return float(_V(comp[k]))
+            except Exception:
+                pass
+        return None
+
+    def _pmcif_live(rp, i, r):
+        # (1+rtxs+etax)·pe + Σ_m amgm·ptmg[m]/lambdamg · tmarg  — live on pe/ptmg.
+        if _pe is None:
+            return None
+        try:
+            pefob = (1.0 + _exptax(rp, i, r) + _etaxv(rp, i)) * _pe[rp, i, r, "shock"]
+        except (KeyError, TypeError):
+            return None
+        tmarg = _rd(_tmarg, (rp, i, r, "shock"), (rp, i, r)) or 0.0
+        pwmg = 0.0
+        if _ptmg is not None and _modes and tmarg:
+            for mode in _modes:
+                amgm = _rd(_amgm, (mode, rp, i, r, "shock"), (mode, rp, i, r)) or 0.0
+                if amgm == 0.0:
+                    continue
+                try:
+                    pt = _ptmg[mode, "shock"]
+                except (KeyError, TypeError):
+                    continue
+                lam = _rd(_lambdamg, (mode, rp, i, r, "shock"), (mode, rp, i, r)) or 1.0
+                pwmg = pwmg + amgm * pt / (lam if lam else 1.0)
+        return pefob + pwmg * tmarg
+
     if not imptx_map:
         return 0
 
@@ -615,8 +1376,10 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
     def _rule(_m, r):
         total = 0.0
         for (i, exp, imptx_shocked) in terms_by_r[r]:
-            total += (imptx_shocked + _mtax_val(r, i)) * \
-                _m.pmcif[exp, i, r, "shock"] * _m.xw[exp, i, r, "shock"]
+            _cif = _pmcif_live(exp, i, r)
+            if _cif is None:
+                _cif = _m.pmcif[exp, i, r, "shock"]  # fallback (non-ifSUB path)
+            total += (imptx_shocked + _mtax_val(r, i)) * _cif * _m.xw[exp, i, r, "shock"]
         return _m.ytax[r, "mt", "shock"] == total
 
     m.eq_ytax_mt_shock_rebuilt = Constraint(m.eq_ytax_mt_shock_idx, rule=_rule)
@@ -1485,6 +2248,22 @@ def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0
         except Exception:
             return False
 
+    # The factor tax/subsidy wedge fctts+fcttx = (ftrv-fbep)/evfb comes from the
+    # benchmark HAR, NOT from model Vars/Params (m.fctts/m.fcttx are 0 under altertax).
+    # Reading them off the model gave pfa=pf (missing the wedge) → pfa[EU_28,UnSkLab,
+    # Food] 1.37 vs GAMS 2.26 (39% off). Compute it from the benchmark like
+    # _recalibrate_io_af._wedge does. (Same subsidy-wedge omission class as the af fix.)
+    _bmk = getattr(params, "benchmark", None)
+
+    def _pfa_wedge(r, f, a):
+        if _bmk is None:
+            return 0.0
+        evfb = float(_bmk.evfb.get((r, f, a), 0.0) or 0.0)
+        if evfb <= 0.0:
+            return 0.0
+        return (float(_bmk.ftrv.get((r, f, a), 0.0) or 0.0)
+                - float(_bmk.fbep.get((r, f, a), 0.0) or 0.0)) / evfb
+
     # --- factor prices: pfa, pfy ---
     for r in R:
         for f in F:
@@ -1492,10 +2271,8 @@ def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0
                 pf = _pv("pf", (r, f, a, period), None) if getattr(m, "pf", None) is not None else None
                 if pf is None:
                     continue
-                fctts = _pv("fctts", (r, f, a, period))
-                fcttx = _pv("fcttx", (r, f, a, period))
                 kappaf = _pv("kappaf", (r, f, a, period))
-                for vn, val in (("pfa", pf * (1.0 + fctts + fcttx)),
+                for vn, val in (("pfa", pf * (1.0 + _pfa_wedge(r, f, a))),
                                 ("pfy", pf * (1.0 - kappaf))):
                     v = getattr(m, vn, None)
                     if v is None:
@@ -1619,6 +2396,75 @@ def _holdfix_cd_nest(m, period: str) -> int:
                 except Exception:
                     pass
     return hf
+
+
+# ---------------------------------------------------------------------------
+# _holdfix_fnm_pf — replicate GAMS pf.fx(r,fp,a,tsim-1)=pf.l(r,fp,a,tsim-1)
+# for sector-specific (fnm) factors with etaff=0.
+# ---------------------------------------------------------------------------
+def _holdfix_fnm_pf(m, params, period: str) -> int:
+    """FIX pf[r,f,a,period] for sector-specific (non-mobile, non-sluggish)
+    factors whose etaff elasticity is 0 (or undeclared, defaulting to 0 in
+    BOTH GAMS and Python — confirmed via the reference GDX: etaff has zero
+    entries for these factors, e.g. NatRes).
+
+    eq_pfeq's fnm branch is `xf == xscale*gf*(pfy/pabs)**etaff`; with etaff=0
+    this is `xf == xscale*gf` — a pure identity in xf that says NOTHING about
+    pf. pf is therefore a genuinely free DOF, identically in GAMS and Python
+    (not a Python bug — confirmed via comp.gms: `etaff(r,fp,a) = 0 ;` is
+    GAMS's OWN default). GAMS anchors it by FIXING pf.fx(r,fp,a,tsim-1) to the
+    previous period's solved value in EVERY period's loop iteration (comp.gms
+    line ~24947) — the same holdfix mechanism as _holdfix_cd_nest, just for a
+    different degenerate family. Without this, PATH's line search lets pf
+    float freely and explodes (confirmed via PATH_CAPI_PROGRESS_HISTORY_FILE
+    trace: pf[JPN,NatRes,OtherFood,check] repeatedly hit ~12000 mid-line-search
+    before backtracking, the worst-x-inf-norm family in the whole solve).
+
+    Returns the count of pf cells fixed.
+    """
+    fset = getattr(params, "sets", None)
+    if fset is None:
+        return 0
+    mf_set = set(str(f) for f in getattr(fset, "mf", []))
+    sf_set = set(str(f) for f in getattr(fset, "sf", []))
+    etaff = getattr(getattr(params, "elasticities", None), "etaff", {}) or {}
+    _bm = getattr(params, "benchmark", None)
+
+    def _has_flow(r, f, a):
+        # GAMS xfFlag(r,fp,a) = 1 iff there is a factor flow (evfb>0). GAMS holdfixes
+        # pf ONLY where NOT xfFlag (pf.fx$(not xfFlag), comp.gms:3880) — a cell WITH a
+        # flow is left LIVE and anchored by eq_pfeq (the fnm supply/CET row). Fixing a
+        # flowing fnm cell (e.g. NatRes[ROW,Mnfcs], evfb=0.572) freezes its pf*xf out of
+        # factY → residual-region income collapses under the shock (yc[ROW] -22% ->
+        # zcons -> xw[ROW] blow-up). So only fix the genuinely-flowless cells.
+        if _bm is None:
+            return True
+        v = _bm.evfb.get((r, f, a), _bm.vfm.get((r, f, a), 0.0))
+        return abs(float(v or 0.0)) > 1e-12
+
+    pf = getattr(m, "pf", None)
+    if pf is None:
+        return 0
+
+    hf = 0
+    for idx in pf:
+        if not (isinstance(idx, tuple) and len(idx) == 4):
+            continue
+        r, f, a, t = idx
+        if t != period:
+            continue
+        if f in mf_set or f in sf_set:
+            continue  # only the fnm (sector-specific) branch is degenerate here
+        if float(etaff.get((r, f, a), 0.0) or 0.0) != 0.0:
+            continue  # nonzero etaff genuinely determines pf, nothing to fix
+        if _has_flow(r, f, a):
+            continue  # xfFlag=1: GAMS leaves pf LIVE (eq_pfeq anchors it); do not fix
+        vd = pf[idx]
+        if vd.value is not None and not vd.fixed:
+            vd.fix(float(vd.value))
+            hf += 1
+    return hf
+
 
 
 def solve_multiperiod(
@@ -1786,6 +2632,34 @@ def solve_multiperiod(
     # Freeze base and shock; leave check free.
     freeze_inactive_periods(m, "check")
 
+    # Must come AFTER freeze_inactive_periods unfixes check's VarData (same
+    # ordering lesson as the price-floor experiment) — this rebuilds the
+    # CONSTRAINT itself using base's already-solved (seeded, gtap-mode)
+    # nd/va/xp/pnd/pva/px.
+    # GAMS pure-gtap real-CES calibrates the share params ONCE at base (loop(t0))
+    # and holds them CONSTANT across periods — the reference GDX proves af/and/ava/
+    # gx/alphad/alpham/alphaa/gd/ge/gw are byte-identical base=check=shock. So in
+    # gtap-mode we must NOT re-recalibrate per period (doing so, e.g. af[EU_28,Land,
+    # Food]=0.1106 vs GAMS 0.1001, over-prices the sluggish factor: pf[Land] 19%
+    # high in the shock → shock capped ~95%). Altertax DOES recalibrate per period
+    # (GAMS iterloop for altertax) so it keeps the recal. Gated on _gtap_mode.
+    if not _gtap_mode:
+        _recalibrate_and_ava(m, p_alt, "check", "base")
+        # NOTE: _recalibrate_io_af is NOT called — GAMS holds io AND af CONSTANT
+        # across periods (iterloop.gms has ZERO `af(`/`io(` assignments; the GDX
+        # proves af[EU_28,Land,Food]=0.11716 and io[EU_28,Food,Food]=0.51534 are
+        # byte-identical base=check=shock). Re-recalibrating af per period from the
+        # prior period's pfa (which itself drifts) over-weighted the subsidized
+        # sluggish Land factor → af 0.1287 vs 0.1172 → pf[Land] shock 1.06 vs GAMS
+        # 0.96 → pft[Land] re-slid to ≈1.0 (the sluggish-Land free-DOF). Dropping
+        # this recal + the af_param subsidy-wedge calibration fix (parameter_
+        # overrides._recalibrate_af_shares) closed pft[Land] to 0.9109 = GAMS and
+        # lifted the shock gate 98.21% → 99.93%. Faithful: af is calibrated ONCE.
+        _recalibrate_gx_ax(m, p_alt, "check", "base")
+        _recalibrate_alphad_alpham(m, p_alt, "check", "base")
+        _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
+        _recalibrate_alphaa_hhd(m, p_alt, "check", "base")  # altertax only
+
     # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
     # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
     # (2026-06-22): _seed_period_from_prior(base→check) clobbered the GAMS check seed
@@ -1917,6 +2791,241 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "check period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
 
+    # Holdfix pf for sector-specific (fnm) factors with etaff=0 (e.g. NatRes),
+    # replicating GAMS pf.fx(r,fp,a,tsim-1)=pf.l(...) every period. Without
+    # this, pf is a genuinely free DOF (fnmeq degenerates to an xf-only
+    # identity when etaff=0) and PATH's line search lets it explode.
+    _n_hf_pf = _holdfix_fnm_pf(m, p_alt, "check")
+    if _n_hf_pf:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
+
+    # TEMP DEBUG PROBE (session-local): report the seed state of a target factor
+    # price + its paired equation residuals right before PATH solves check.
+    import os as _os_probe
+    _probe_pf = _os_probe.environ.get("EQUILIBRIA_DEBUG_PROBE_PF_CHECK")
+    if _probe_pf:
+        import sys as _sys_probe
+        from pyomo.environ import value as _Vp, Constraint as _Cp
+        _rr_p, _ff_p = _probe_pf.split(",")[0], _probe_pf.split(",")[1]
+        print(f"[probe-pf] --- {_rr_p},{_ff_p} check seed state ---", file=_sys_probe.stderr)
+        for _idx in getattr(m, "pf", []):
+            if _idx[0] == _rr_p and _idx[1] == _ff_p and _idx[-1] == "check":
+                _vd = m.pf[_idx]
+                print(f"[probe-pf]   pf{_idx} = {_Vp(_vd):.6f}  fixed={_vd.fixed}", file=_sys_probe.stderr)
+        for _nm in ("pft", "xf", "xft"):
+            _comp = getattr(m, _nm, None)
+            if _comp is None:
+                continue
+            for _idx in _comp:
+                if _idx[0] == _rr_p and _rr_p and len(_idx) >= 2 and _idx[1] == _ff_p and _idx[-1] == "check":
+                    try:
+                        print(f"[probe-pf]   {_nm}{_idx} = {_Vp(_comp[_idx]):.6f}  fixed={_comp[_idx].fixed}", file=_sys_probe.stderr)
+                    except Exception:
+                        pass
+        # residuals of any active constraint touching this factor
+        _rows = []
+        for _c in m.component_objects(_Cp, active=True):
+            _nml = _c.name.lower()
+            if not any(k in _nml for k in ("pf", "xf", "fnm", "endw", "fact")):
+                continue
+            for _idx in _c:
+                _cd = _c[_idx]
+                if not _cd.active:
+                    continue
+                _si = str(_idx)
+                if _rr_p not in _si or _ff_p not in _si or "check" not in _si:
+                    continue
+                try:
+                    _b = _Vp(_cd.body)
+                    _lo = _Vp(_cd.lower) if _cd.lower is not None else None
+                    _up = _Vp(_cd.upper) if _cd.upper is not None else None
+                    _res = 0.0
+                    if _lo is not None:
+                        _res = max(_res, abs(_b - _lo))
+                    if _up is not None:
+                        _res = max(_res, abs(_b - _up))
+                    _rows.append((_res, _c.name, _si))
+                except Exception:
+                    pass
+        _rows.sort(reverse=True)
+        for _res, _n, _i in _rows[:12]:
+            print(f"[probe-pf]   resid {_res:.6e}  {_n}{_i}", file=_sys_probe.stderr)
+        # is eq_pfteq / eq_xfteq active for this (r,f)?
+        for _eqn in ("eq_pfteq", "eq_xfteq", "eq_fnm", "eq_pfeq"):
+            _eqc = getattr(m, _eqn, None)
+            if _eqc is None:
+                continue
+            for _idx in _eqc:
+                if _rr_p in str(_idx) and _ff_p in str(_idx) and "check" in str(_idx):
+                    print(f"[probe-pf]   {_eqn}{_idx} active={_eqc[_idx].active}", file=_sys_probe.stderr)
+
+    # TEMP DEBUG HOOK (session-local, remove before commit): export the fully
+    # recalibrated, fully-unfixed check-period model to .nl right before PATH
+    # would solve it — for a CONVERT/GAMS comparison and a NEOS submission.
+    # Controlled by an env var so it's a no-op normally.
+    import os as _os_dbg
+    import sys as _sys_dbg
+    _nl_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK")
+    if _nl_export_path:
+        m.write(_nl_export_path, format="nl", io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote check-period .nl to {_nl_export_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check")
+
+    # TEMP DEBUG HOOK (session-local): export the fully-prepared check-period
+    # Pyomo model to a GAMS .gms (Pyomo's gams_writer, flat/scalar form) right
+    # before PATH would solve it — so it can be diffed equation-by-equation
+    # against the GAMS bundle's own .gms (both now in GAMS syntax). Accepts a
+    # period suffix via EQUILIBRIA_DEBUG_EXPORT_GMS_PERIOD (default: this call's
+    # active period is check). No-op unless the env var is set.
+    _gms_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK")
+    if _gms_export_path:
+        # GAMS writer needs exactly one objective; the CNS/MCP model has none.
+        # Mirror the NLP formulation (maximize walras): deactivate eq_walras[check]
+        # and expose walras[check] as the Objective — same as GAMS's ifMCP=0 branch.
+        from pyomo.environ import Objective as _PyoObjGms, maximize as _pyo_max_gms
+        _ew_gms = getattr(m, "eq_walras", None)
+        if _ew_gms is not None:
+            for _idx in list(_ew_gms):
+                _match = (_idx and _idx[-1] == "check") if isinstance(_idx, tuple) else (_idx == "check")
+                if _match and _ew_gms[_idx].active:
+                    _ew_gms[_idx].deactivate()
+        _wv_gms = getattr(m, "walras", None)
+        try:
+            _wvd_gms = _wv_gms["check"]
+        except Exception:
+            _wvd_gms = _wv_gms
+        if _wvd_gms is not None and _wvd_gms.fixed:
+            _wvd_gms.unfix()
+        m._nlp_walras_objective_gms = _PyoObjGms(expr=_wvd_gms, sense=_pyo_max_gms)
+        m.write(_gms_export_path, format="gams",
+                io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote check-period .gms to {_gms_export_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK: stopping right before PATH solves check")
+
+    # TEMP DEBUG HOOK (session-local, remove before commit): same export, but
+    # reformulated as an NLP (maximize walras) instead of a CNS (min 0 s.t.
+    # equalities) — mirrors GAMS's ifMCP=0 branch (`solve gtap using nlp
+    # maximizing walras`), which gives IPOPT a real objective gradient to
+    # follow instead of leaving it to satisfy a pure equality system with no
+    # slack. eq_walras[..., "check"] is deactivated (it would otherwise
+    # doubly constrain `walras` on top of the Objective) and `walras` is
+    # exposed as the Objective directly, exactly like GAMS's walraseq being a
+    # free-row/objective-row instead of a paired equality under ifMCP=0.
+    _nl_export_nlp_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP")
+    if _nl_export_nlp_path:
+        from pyomo.environ import Objective as _PyoObjective, maximize as _pyo_maximize
+        _eq_walras_chk = getattr(m, "eq_walras", None)
+        if _eq_walras_chk is not None:
+            for _idx in list(_eq_walras_chk):
+                if isinstance(_idx, tuple):
+                    if _idx and _idx[-1] == "check":
+                        _eq_walras_chk[_idx].deactivate()
+                elif _idx == "check":
+                    _eq_walras_chk[_idx].deactivate()
+        _walras_var = getattr(m, "walras", None)
+        if _walras_var is None:
+            raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: model has no `walras` Var")
+        try:
+            _walras_vd = _walras_var["check"]
+        except Exception:
+            _walras_vd = _walras_var
+        # gtap_mode's _mute_welfare_tail (above) FIXES walras=0 (Walras law,
+        # correct for the MCP/CNS formulation where eq_walras pins yi[rres]
+        # instead). Under NLP (maximize walras), walras must be the FREE
+        # objective variable instead — GAMS's ifMCP=0 branch does not fix it
+        # either (walraseq is the objective row, not a constraint pinning
+        # yi[rres]). Without unfixing here the objective is a constant 0 with
+        # no gradient, which is exactly what made the first NLP export
+        # indistinguishable from the plain CNS export (both showed a flat
+        # objective=0.0 throughout every IPOPT iteration).
+        _walras_vd.unfix()
+        m._nlp_walras_objective = _PyoObjective(expr=_walras_vd, sense=_pyo_maximize)
+        m.write(_nl_export_nlp_path, format="nl", io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote check-period NLP(maximize walras) .nl to {_nl_export_nlp_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: stopping right before PATH solves check")
+
+    # TEMP DEBUG HOOK (session-local, remove before commit): SAME NLP
+    # reformulation as above, but SOLVES in-process via Pyomo's IPOPT
+    # interface (instead of exporting + a standalone `ipopt` CLI run) so the
+    # post-solve residual per Constraint is readable directly — diagnoses
+    # WHICH equation IPOPT's "locally infeasible" verdict is actually citing,
+    # rather than just the aggregate constraint-violation scalar.
+    _solve_nlp_report_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT")
+    if _solve_nlp_report_path:
+        from pyomo.environ import (
+            Objective as _PyoObjective2, maximize as _pyo_maximize2,
+            SolverFactory as _PyoSolverFactory, value as _pyo_value2, Constraint as _PyoConstraint2,
+        )
+        import json as _json_dbg
+        _eq_walras_chk2 = getattr(m, "eq_walras", None)
+        if _eq_walras_chk2 is not None:
+            for _idx in list(_eq_walras_chk2):
+                if isinstance(_idx, tuple):
+                    if _idx and _idx[-1] == "check":
+                        _eq_walras_chk2[_idx].deactivate()
+                elif _idx == "check":
+                    _eq_walras_chk2[_idx].deactivate()
+        _walras_var2 = getattr(m, "walras", None)
+        try:
+            _walras_vd2 = _walras_var2["check"]
+        except Exception:
+            _walras_vd2 = _walras_var2
+        _walras_vd2.unfix()
+        m._nlp_walras_objective = _PyoObjective2(expr=_walras_vd2, sense=_pyo_maximize2)
+        opt = _PyoSolverFactory("ipopt")
+        opt.options["max_iter"] = 1000
+        # Numerical-scaling tuning aimed at near-zero SAM cells (e.g.
+        # xd[CHN,Rice,MachEq]~1.1e-6 against sigma_m=3.87 — a tiny base value
+        # raised to a steep exponent amplifies ordinary Newton-step price
+        # noise into an outsized absolute residual). gradient-based scaling
+        # rescales each row/col by its Jacobian's own magnitude instead of
+        # leaving IPOPT's default (unit) scaling to treat a 1e-6 row the same
+        # as an O(1) row. mu_strategy=adaptive + bound_relax_factor=0 mirror
+        # what a hand-tuned barrier path does for exactly this shape of
+        # problem (many O(1) blocks, a few O(1e-6) blocks) instead of using
+        # a fixed global barrier schedule that serves the O(1) rows and
+        # starves the O(1e-6) rows of resolution.
+        opt.options["nlp_scaling_method"] = "gradient-based"
+        opt.options["bound_relax_factor"] = 0
+        opt.options["mu_strategy"] = "adaptive"
+        opt.options["tol"] = 1e-7
+        res = opt.solve(m, tee=True)
+        rows = []
+        for c in m.component_objects(_PyoConstraint2, active=True):
+            for idx in c:
+                cd = c[idx]
+                if not cd.active:
+                    continue
+                if isinstance(idx, tuple):
+                    if not idx or idx[-1] != "check":
+                        continue
+                elif idx != "check":
+                    continue
+                try:
+                    b = _pyo_value2(cd.body)
+                    lo = _pyo_value2(cd.lower) if cd.lower is not None else None
+                    up = _pyo_value2(cd.upper) if cd.upper is not None else None
+                    r = 0.0
+                    if lo is not None:
+                        r = max(r, abs(b - lo))
+                    if up is not None:
+                        r = max(r, abs(b - up))
+                    rows.append((r, c.name, str(idx)))
+                except Exception:
+                    pass
+        rows.sort(reverse=True)
+        report = {
+            "solver_status": str(res.solver.status),
+            "termination_condition": str(res.solver.termination_condition),
+            "walras_value": _pyo_value2(_walras_vd2),
+            "top_residuals": [{"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]],
+        }
+        Path(_solve_nlp_report_path).write_text(_json_dbg.dumps(report, indent=2))
+        print(f"[report] wrote {_solve_nlp_report_path}", file=_sys_dbg.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT: stopping after in-process NLP solve+report")
+
     # Solve check on m.
     r_chk = run_gtap._run_path_capi_nonlinear_full(
         m, p_alt,
@@ -1924,6 +3033,7 @@ def solve_multiperiod(
         strict_path_capi=False,
         closure_config=_chk_closure,
         equation_scaling=True,
+        solver_output=bool(_os_dbg.environ.get("EQUILIBRIA_DEBUG_PATH_VERBOSE")),
         solution_hint=None,
     )
     code_chk = int(r_chk.get("termination_code") or 0)
@@ -1948,6 +3058,24 @@ def solve_multiperiod(
 
     # Freeze base and check; leave shock free.
     freeze_inactive_periods(m, "shock")
+
+    # Must come AFTER freeze_inactive_periods (same ordering as check above).
+    # EXPERIMENT (env-gated): GAMS's pure-gtap real-CES run calibrates the share
+    # params (af/and/ava/io/gx/alpha*) ONCE at base (loop(t0)) and holds them
+    # CONSTANT across periods — the GDX proves af/and/ava[EU_28,Food] are byte-
+    # identical base=check=shock. Python re-recalibrates them every period, which
+    # for the shock yields af[EU_28,Land,Food]=0.1106 vs GAMS's constant 0.1001,
+    # over-pricing the sluggish factor (pf[Land] 19% high). Skip the recal to test.
+    # Same as the check block: GAMS holds share params constant across periods in
+    # pure-gtap. Skip the per-period recal in gtap-mode (altertax keeps it).
+    if not _gtap_mode:
+        _recalibrate_and_ava(m, params_shock, "shock", "check")
+        # _recalibrate_io_af NOT called — see the check-block note above: GAMS holds
+        # io/af constant across periods; re-recalibrating slid the sluggish-Land pft.
+        _recalibrate_gx_ax(m, params_shock, "shock", "check")
+        _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
+        _recalibrate_alphaa_gov_inv(m, params_shock, "shock", "check")
+        _recalibrate_alphaa_hhd(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
     # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;
@@ -2080,6 +3208,14 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "shock period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
 
+    # Holdfix pf for sector-specific (fnm) factors with etaff=0, shock period
+    # (same rationale as check — see _holdfix_fnm_pf docstring).
+    _n_hf_pf = _holdfix_fnm_pf(m, params_shock, "shock")
+    if _n_hf_pf:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "shock period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
+
     # gtap-mode: inject the tariff shock INTO the solved eq_pmeq[*,*,*,'shock']
     # cells (shock-in-equations) instead of relying on the post-solve cosmetic pm
     # patch. The MP builder bakes the BASE imptx as a literal coefficient, so the
@@ -2131,6 +3267,33 @@ def solve_multiperiod(
             _logging.getLogger(__name__).info(
                 "shock period: rebuilt %d eq_ytax[mt] cells with the shocked "
                 "imptx (income-leak fix, shock-in-equations, gtap-mode)", _n_ymt)
+
+    # TEMP DEBUG HOOK (session-local): export the fully-prepared SHOCK-period Pyomo
+    # model to a GAMS .gms (walras as maximize objective) right before PATH solves
+    # it — for an equation-by-equation diff of the shock tariff rebuild vs the GAMS
+    # bundle. No-op unless the env var is set.
+    import os as _os_shk
+    import sys as _sys_shk
+    _gms_shk_path = _os_shk.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK")
+    if _gms_shk_path:
+        from pyomo.environ import Objective as _PyoObjShk, maximize as _pyo_max_shk
+        _ew_shk = getattr(m, "eq_walras", None)
+        if _ew_shk is not None:
+            for _idx in list(_ew_shk):
+                _match = (_idx and _idx[-1] == "shock") if isinstance(_idx, tuple) else (_idx == "shock")
+                if _match and _ew_shk[_idx].active:
+                    _ew_shk[_idx].deactivate()
+        _wv_shk = getattr(m, "walras", None)
+        try:
+            _wvd_shk = _wv_shk["shock"]
+        except Exception:
+            _wvd_shk = _wv_shk
+        if _wvd_shk is not None and _wvd_shk.fixed:
+            _wvd_shk.unfix()
+        m._nlp_walras_objective_shk = _PyoObjShk(expr=_wvd_shk, sense=_pyo_max_shk)
+        m.write(_gms_shk_path, format="gams", io_options={"symbolic_solver_labels": True})
+        print(f"[export] wrote shock-period .gms to {_gms_shk_path}", file=_sys_shk.stderr)
+        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK: stopping right before PATH solves shock")
 
     # Solve shock on m with shocked params.
     r_shk = run_gtap._run_path_capi_nonlinear_full(
