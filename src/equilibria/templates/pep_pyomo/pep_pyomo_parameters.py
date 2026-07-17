@@ -39,6 +39,16 @@ class PEPParams:
         self._flat.setdefault("eta", 1.0)
         self._flat.setdefault("kmob", 1.0)
         self._flat.setdefault("sigma_XD", 2.0)
+        # Rate params the solver reads as `state.income.get(name+"O", {})` — the stripped
+        # name defaults to an empty dict (→ 0.0 per index) when the calibration omits it.
+        # Mirrors _extract_parameters (pep_model_solver_ipopt.py:1010-1103).
+        for stripped, benchO in (("sh0", "sh0O"), ("sh1", "sh1O"), ("tr0", "tr0O"),
+                                 ("tr1", "tr1O"), ("ttdh0", "ttdh0O"), ("ttdh1", "ttdh1O"),
+                                 ("ttdf0", "ttdf0O"), ("ttdf1", "ttdf1O"),
+                                 ("ttiw", "ttiwO"), ("ttik", "ttikO"), ("ttip", "ttipO"),
+                                 ("ttic", "tticO"), ("ttim", "ttimO"), ("ttix", "ttixO")):
+            if stripped not in self._flat:
+                self._flat[stripped] = dict(self._flat.get(benchO, {}))
         # gamma_INV[i] = PCO[i]*INVO[i] / Σ_i PCO*INVO ; gamma_GVT[i] = PCO[i]*CGO[i] / Σ
         pco = self._flat.get("PCO", {})
         invo = self._flat.get("INVO", {})
@@ -49,6 +59,21 @@ class PEPParams:
             "gamma_INV", {i: pco.get(i, 0.0) * invo.get(i, 0.0) / tot_inv for i in invo})
         self._flat.setdefault(
             "gamma_GVT", {i: pco.get(i, 0.0) * cgo.get(i, 0.0) / tot_gvt for i in cgo})
+        # world prices: equations use PWM/PWX, calibration stores PWMO/PWXO (held fixed)
+        self._flat.setdefault("PWM", dict(self._flat.get("PWMO", {})))
+        self._flat.setdefault("PWX", dict(self._flat.get("PWXO", {})))
+        # CES elasticities from rho (pep_model_solver_ipopt.py:1074/1078/1082):
+        #   sigma_XT = 1/(rho_XT - 1) ; sigma_X = 1/(rho_X - 1) ; sigma_M = 1/(1 + rho_M)
+        def _sig(rho_name, f):
+            rho = self._flat.get(rho_name, {})
+            return {k: f(v) for k, v in rho.items()} if isinstance(rho, dict) else {}
+        self._flat.setdefault("sigma_XT", _sig("rho_XT", lambda r: 1.0 / (r - 1) if r != 1 else 0.0))
+        self._flat.setdefault("sigma_X", _sig("rho_X", lambda r: 1.0 / (r - 1) if r != 1 else 0.0))
+        self._flat.setdefault("sigma_M", _sig("rho_M", lambda r: 1.0 / (1 + r) if r != -1 else 0.0))
+        # TIPO[j] = ttip[j]*PPO[j]*XSTO[j] (benchmark production tax; ipopt:1120-1125)
+        ttip, ppo, xsto = (self._flat.get(n, {}) for n in ("ttip", "PPO", "XSTO"))
+        self._flat.setdefault("TIPO", {j: ttip.get(j, 0.0) * ppo.get(j, 0.0) * xsto.get(j, 0.0)
+                                       for j in xsto})
 
     def __contains__(self, name: str) -> bool:
         return name in self._flat

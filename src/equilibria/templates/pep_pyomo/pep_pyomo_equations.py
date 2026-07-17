@@ -1,0 +1,171 @@
+"""PEP CGE model as a Pyomo ConcreteModel — Vars + all ~96 EQ Constraints.
+
+Faithful port of the cyipopt residual system (pep_model_equations.py). Each residual
+`f(x)=0` becomes a Pyomo `Constraint` `lhs == rhs`. Sets/params come from PEPSets/PEPParams
+(which wrap the calibrated PEPModelState). The `$`-masks of the GAMS/residual code are
+resolved at construction from the `*O`/`*O0` benchmark params (an equation instance is
+built only where its benchmark level is non-zero), matching the cyipopt active-set.
+
+Builder entry point: `build_pep_model(state, variant="base", form="nlp") -> ConcreteModel`.
+  variant: "base" (EQ1..EQ98 + WALRAS) | "objdef" (adds OBJDEF: OBJ==0, free OBJ)
+  form:    "nlp" (min 0 over the equality system) | "mcp" (walras⊥LEON, e fixed numeraire)
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from pyomo.environ import (
+    ConcreteModel, Var, Constraint, Objective, Reals, NonNegativeReals,
+    Param, value, minimize,
+)
+
+from .pep_pyomo_sets import PEPSets
+from .pep_pyomo_parameters import PEPParams
+
+POS = (1e-6, None)   # strictly positive (prices, quantities that must stay > 0)
+
+
+def _active(p: PEPParams, mask: str, *idx) -> bool:
+    """True where the benchmark mask level is non-zero (the GAMS $-guard)."""
+    try:
+        return abs(p.get(mask, *idx)) > 1e-12
+    except KeyError:
+        return False
+
+
+def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> ConcreteModel:
+    S = PEPSets.from_state(state)
+    P = PEPParams(state)
+    m = ConcreteModel(name=f"PEP_{variant}_{form}")
+    m._pep = {"sets": S, "params": P, "variant": variant, "form": form}
+
+    # ---- python-side index lists (Pyomo Sets are implicit via rule domains) ----
+    H, F, K, L, J, I = S.H, S.F, S.K, S.L, S.J, S.I
+    AG, AGNG, AGD, I1 = S.AG, S.AGNG, S.AGD, S.I1
+    LDact = [(l, j) for l in L for j in J if _active(P, "LDO", l, j)]
+    KDact = [(k, j) for k in K for j in J if _active(P, "KDO", k, j)]
+    XSact = [(j, i) for j in J for i in I if _active(P, "XSO", j, i)]
+    IMact = [i for i in I if _active(P, "IMO", i)]
+    DDact = [i for i in I if _active(P, "DDO", i)]
+    EXDact = [i for i in I if _active(P, "EXDO", i)]
+    EXact = [(j, i) for j in J for i in I if _active(P, "EXO", j, i)]
+    DSact = [(j, i) for j in J for i in I if _active(P, "DSO", j, i)]
+    m._pep["idx"] = dict(LDact=LDact, KDact=KDact, XSact=XSact, IMact=IMact,
+                         DDact=DDact, EXDact=EXDact, EXact=EXact, DSact=DSact)
+
+    # ================= VARIABLES (init at benchmark *O levels) =================
+    def _init(name):
+        def r(mm, *idx):
+            try:
+                return P.get(name, *idx) or 1e-6
+            except KeyError:
+                return 1e-6
+        return r
+
+    # production
+    m.VA = Var(J, domain=NonNegativeReals, initialize=_init("VAO"))
+    m.CI = Var(J, domain=NonNegativeReals, initialize=_init("CIO"))
+    m.LDC = Var(J, domain=NonNegativeReals, initialize=_init("LDCO"))
+    m.KDC = Var(J, domain=NonNegativeReals, initialize=_init("KDCO"))
+    m.LD = Var(L, J, domain=NonNegativeReals, initialize=_init("LDO"))
+    m.KD = Var(K, J, domain=NonNegativeReals, initialize=_init("KDO"))
+    m.DI = Var(I, J, domain=NonNegativeReals, initialize=_init("DIO"))
+    m.XST = Var(J, domain=NonNegativeReals, initialize=_init("XSTO"))
+    m.XS = Var(J, I, domain=NonNegativeReals, initialize=_init("XSO"))
+    # prices (positive)
+    m.WC = Var(J, bounds=POS, initialize=_init("WCO"))
+    m.RC = Var(J, bounds=POS, initialize=_init("RCO"))
+    m.PP = Var(J, bounds=POS, initialize=_init("PPO"))
+    m.PT = Var(J, bounds=POS, initialize=_init("PTO"))
+    m.PVA = Var(J, bounds=POS, initialize=_init("PVAO"))
+    m.PCI = Var(J, bounds=POS, initialize=_init("PCIO"))
+    m.W = Var(L, bounds=POS, initialize=_init("WO"))
+    m.RK = Var(K, bounds=POS, initialize=_init("RKO"))
+    m.R = Var(K, J, bounds=POS, initialize=_init("RO"))
+    m.WTI = Var(L, J, bounds=POS, initialize=_init("WTIO"))
+    m.RTI = Var(K, J, bounds=POS, initialize=_init("RTIO"))
+    m.P = Var(J, I, bounds=POS, initialize=_init("PO"))
+    m.PC = Var(I, bounds=POS, initialize=_init("PCO"))
+    m.PD = Var(I, bounds=POS, initialize=_init("PDO"))
+    m.PM = Var(I, bounds=POS, initialize=_init("PMO"))
+    m.PE = Var(I, bounds=POS, initialize=_init("PEO"))
+    m.PE_FOB = Var(I, bounds=POS, initialize=_init("PE_FOBO"))
+    m.PL = Var(I, bounds=POS, initialize=_init("PLO"))
+    # trade quantities
+    m.IM = Var(I, domain=NonNegativeReals, initialize=_init("IMO"))
+    m.DD = Var(I, domain=NonNegativeReals, initialize=_init("DDO"))
+    m.DS = Var(J, I, domain=NonNegativeReals, initialize=_init("DSO"))
+    m.EX = Var(J, I, domain=NonNegativeReals, initialize=_init("EXO"))
+    m.EXD = Var(I, domain=NonNegativeReals, initialize=_init("EXDO"))
+    m.Q = Var(I, domain=NonNegativeReals, initialize=_init("QO"))
+    # income (households)
+    m.YH = Var(H, domain=NonNegativeReals, initialize=_init("YHO"))
+    m.YHL = Var(H, domain=NonNegativeReals, initialize=_init("YHLO"))
+    m.YHK = Var(H, domain=NonNegativeReals, initialize=_init("YHKO"))
+    m.YHTR = Var(H, domain=Reals, initialize=_init("YHTRO"))
+    m.YDH = Var(H, domain=NonNegativeReals, initialize=_init("YDHO"))
+    m.CTH = Var(H, domain=NonNegativeReals, initialize=_init("CTHO"))
+    m.SH = Var(H, domain=Reals, initialize=_init("SHO"))
+    m.TDH = Var(H, domain=Reals, initialize=_init("TDHO"))
+    m.C = Var(I, H, domain=NonNegativeReals, initialize=_init("CO"))
+    # income (firms)
+    m.YF = Var(F, domain=NonNegativeReals, initialize=_init("YFO"))
+    m.YFK = Var(F, domain=NonNegativeReals, initialize=_init("YFKO"))
+    m.YFTR = Var(F, domain=Reals, initialize=_init("YFTRO"))
+    m.YDF = Var(F, domain=NonNegativeReals, initialize=_init("YDFO"))
+    m.SF = Var(F, domain=Reals, initialize=_init("SFO"))
+    m.TDF = Var(F, domain=Reals, initialize=_init("TDFO"))
+    # transfers (full AG x AG)
+    m.TR = Var(AG, AG, domain=Reals, initialize=_init("TRO"))
+    # government
+    for nm in ("YG", "YGK", "TDHT", "TDFT", "TPRODN", "TPRCTS", "TIWT", "TIKT",
+               "TIPT", "TICT", "TIMT", "TIXT", "YGTR", "SG", "G"):
+        setattr(m, nm, Var(domain=Reals, initialize=P.get(nm + "O") if (nm + "O") in P else 0.0))
+    m.TIW = Var(L, J, domain=Reals, initialize=_init("TIWO"))
+    m.TIK = Var(K, J, domain=Reals, initialize=_init("TIKO"))
+    m.TIP = Var(J, domain=Reals, initialize=_init("TIPO"))
+    m.TIC = Var(I, domain=Reals, initialize=_init("TICO"))
+    m.TIM = Var(I, domain=Reals, initialize=_init("TIMO"))
+    m.TIX = Var(I, domain=Reals, initialize=_init("TIXO"))
+    # rest of world
+    m.YROW = Var(domain=Reals, initialize=P.get("YROWO") if "YROWO" in P else 0.0)
+    m.SROW = Var(domain=Reals, initialize=P.get("SROWO") if "SROWO" in P else 0.0)
+    m.CAB = Var(domain=Reals, initialize=P.get("CABO") if "CABO" in P else 0.0)
+    # demand
+    m.GFCF = Var(domain=Reals, initialize=P.get("GFCFO") if "GFCFO" in P else 0.0)
+    m.INV = Var(I, domain=Reals, initialize=_init("INVO"))
+    m.CG = Var(I, domain=Reals, initialize=_init("CGO"))
+    m.DIT = Var(I, domain=Reals, initialize=_init("DITO"))
+    m.MRGN = Var(I, domain=Reals, initialize=_init("MRGNO"))
+    m.VSTK = Var(I, domain=Reals, initialize=_init("VSTKO"))
+    m.CMIN = Var(I, H, domain=NonNegativeReals, initialize=_init("CMINO"))
+    # macro / price indices / real
+    for nm in ("PIXCON", "PIXGDP", "PIXINV", "PIXGVT"):
+        setattr(m, nm, Var(bounds=POS, initialize=1.0))
+    for nm in ("GDP_BP", "GDP_MP", "GDP_IB", "GDP_FD", "IT"):
+        setattr(m, nm, Var(domain=Reals, initialize=P.get(nm + "O") if (nm + "O") in P else 0.0))
+    m.CTH_REAL = Var(H, domain=NonNegativeReals, initialize=_init("CTHO"))
+    for nm in ("G_REAL", "GDP_BP_REAL", "GDP_MP_REAL", "GFCF_REAL"):
+        setattr(m, nm, Var(domain=NonNegativeReals, initialize=1.0))
+    m.LS = Var(L, domain=NonNegativeReals, initialize=_init("LSO"))
+    m.KS = Var(K, domain=NonNegativeReals, initialize=_init("KSO"))
+    m.e = Var(bounds=POS, initialize=1.0)     # exchange rate / numeraire
+    m.LEON = Var(domain=Reals, initialize=0.0)  # Walras slack (free)
+    if variant == "objdef":
+        m.OBJ = Var(domain=Reals, initialize=0.0)
+
+    # Constraints are attached by the block builders (imported lazily to keep this
+    # file navigable). Each returns the count of instantiated constraints.
+    from .pep_pyomo_blocks import attach_all_blocks
+    n = attach_all_blocks(m, S, P, m._pep["idx"], variant)
+    m._pep["n_constraints"] = n
+
+    # objective / closure
+    if form == "mcp":
+        m.e.fix(1.0)  # numeraire; walras⊥LEON handled by the solver pairing
+    if variant == "objdef":
+        m.OBJDEF = Constraint(expr=m.OBJ == 0.0)
+        m.OBJECTIVE = Objective(expr=m.OBJ, sense=minimize)
+    else:
+        m.OBJECTIVE = Objective(expr=0.0, sense=minimize)  # pure feasibility
+    return m
