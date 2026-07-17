@@ -10,11 +10,24 @@ def test_matrix_schema_invariants():
     from coverage_matrix import ROWS, CI_STATUSES, KINDS
     assert ROWS, "matrix must not be empty"
     for r in ROWS:
-        # ifsub is None iff kind == "gtap" (the .nl gate); the SOLVE kinds carry 0/1
+        # ifsub is None iff kind == "gtap" (the .nl gate); SOLVE/nlp kinds carry 0/1
         assert (r.ifsub is None) == (r.kind == "gtap"), r
         assert r.kind in KINDS, r
         assert r.ci_status in CI_STATUSES, r
         assert r.phases, r
+        if r.kind == "nlp":
+            # per-stage rows: row-level gap_min is None; the floor lives per stage
+            # in stage_floors, and match is MEASURED by the test at run time (never
+            # stored). mode distinguishes pure/altertax within the NLP gate.
+            assert r.gap_min is None, r
+            assert r.mode in {"pure", "altertax"}, r
+            assert r.stage_floors is not None, r
+            floors = dict(r.stage_floors)
+            assert set(floors) == set(r.phases), r
+            for f in floors.values():
+                assert 0.0 < f <= 100.0, r
+            continue
+        assert r.stage_floors is None and r.mode is None, r
         # gap_min invariants do NOT apply to blocked rows (never asserted).
         if r.ci_status != "blocked":
             # gap_min is None exactly for the .nl-only gtap7_* rows
@@ -26,11 +39,15 @@ def test_matrix_schema_invariants():
 
 
 def test_matrix_helpers_partition():
-    from coverage_matrix import ROWS, nl_rows, altertax_rows, gtap_solve_rows
-    assert set(nl_rows()) | set(altertax_rows()) | set(gtap_solve_rows()) == set(ROWS)
+    from coverage_matrix import (
+        ROWS, nl_rows, altertax_rows, gtap_solve_rows, nlp_rows,
+    )
+    assert (set(nl_rows()) | set(altertax_rows())
+            | set(gtap_solve_rows()) | set(nlp_rows())) == set(ROWS)
     assert all(r.kind == "gtap" for r in nl_rows())
     assert all(r.kind == "altertax" for r in altertax_rows())
     assert all(r.kind == "gtap_solve" for r in gtap_solve_rows())
+    assert all(r.kind == "nlp" for r in nlp_rows())
 
 
 def test_coverage_doc_in_sync():
