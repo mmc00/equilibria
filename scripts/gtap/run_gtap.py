@@ -2610,7 +2610,30 @@ def _run_path_capi_nonlinear_full(
         # does (model-level scaleopt only, no core.scale_model pre-pass). The
         # extreme Jacobian scale spread (row 1e-7..1e4) can make IPOPT diverge on
         # the shock period; the raw model with GAMS-style scaling is more robust.
-        _skip_jacscale = bool(os.environ.get("EQUILIBRIA_GTAP_NLP_NO_JACSCALE"))
+        #
+        # FAITHFUL-TO-GAMS (2026-07-16): the altertax model sets `gtap.scaleopt=1`
+        # WITHOUT any explicit `var.scale(...)` assignments (verified in
+        # standard_gtap_7/model.gms:1425 + cal.gms — no `.scale` lines exist), so
+        # scaleopt=1 applies unit scale factors = NO in-solver rescaling, AND (per
+        # the GAMS/IPOPT manual) scaleopt=1 SILENTLY sets IPOPT's
+        # nlp_scaling_method=none. i.e. GAMS solves the RAW model. equilibria's
+        # core.scale_model Jacobian pre-pass is a Python-only invention (added for
+        # the tiny-SAM-cell 15x10 datasets); for altertax it is BOTH unfaithful and
+        # actively harmful — the 1e-7..1e4 spread drives IPOPT into
+        # feasibility-restoration → "locally infeasible" on check+shock. Skipping it
+        # in altertax mode makes the NLP solve MORE faithful to GAMS (raw model,
+        # nlp_scaling_method=none), and it converges optimal (resid ~1e-9).
+        _is_altertax_nlp = (
+            closure_config is not None
+            and getattr(closure_config, "name", None) == "altertax"
+        )
+        _skip_jacscale = (
+            bool(os.environ.get("EQUILIBRIA_GTAP_NLP_NO_JACSCALE"))
+            or _is_altertax_nlp
+        )
+        if _is_altertax_nlp and not os.environ.get("EQUILIBRIA_GTAP_NLP_NO_JACSCALE"):
+            print("[nlp-square] altertax closure: skipping Jacobian pre-scale "
+                  "(faithful to GAMS scaleopt=1 = no in-solver rescale)", file=sys.stderr)
         try:
             if _skip_jacscale:
                 print("[nlp-square] skipping Jacobian pre-scale (NO_JACSCALE); solving raw model",

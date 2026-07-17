@@ -48,6 +48,22 @@ def _resolve_solve(arg_solver: str) -> str:
     return body
 
 
+def _force_ifsub(text: str, ifsub: int) -> str:
+    """Force the compile-time ifSUB switch. comp_altertax.gms uses
+    `$setGlobal ifSUB 1`; replace it so we can generate both the ifsub0 and
+    ifsub1 reference GDXs (the parity fixtures need both)."""
+    new, n = re.subn(
+        r"^\$setGlobal\s+ifSUB\s+\d+\s*$",
+        f"$setGlobal ifSUB       {ifsub}",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if n != 1:
+        raise SystemExit(f"Could not find `$setGlobal ifSUB` to set to {ifsub}.")
+    return new
+
+
 def _inline_includes(text: str) -> str:
     def _sub_batinclude(m: re.Match) -> str:
         target = m.group("file")
@@ -315,6 +331,52 @@ def run_inliner(in_gdx: Path, out_data: Path, out_params: Path) -> None:
     subprocess.run(cmd, check=True, cwd=str(ROOT))
 
 
+def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> str:
+    """Emit GAMS assignment lines for a factor header (FBEP/FTRV) read from a
+    basedata.har (index order ENDW/factor, ACTS/activity, REG/region; raw values).
+
+    Ported from build_gtap7_pure_local_bundle.py (commit d3dfb73): some datasets'
+    v7_consolidated.gdx LOSE the FBEP (factor subsidy) symbol during aggregation
+    — gtap7_3x3's v7 has no FBEP at all, so getData.gms's hardcoded `fbep=0` wins
+    and the reference GDX is subsidy-BLIND (fctts=0, ytax(fs)=0). Python loads the
+    real FBEP from basedata.har (fctts=-fbep/evfb), so a subsidy-blind reference
+    mismatches Python for every subsidized (ag) factor. Inject the real header.
+
+    The ACTS element gets whatever prefix the dataset's own inlined sets use for
+    activities (gtap7_3x3 uses `a_Food`) — detected from the inlined EVFB block.
+    """
+    import sys as _sys
+    _src = str(ROOT / "src")
+    if _src not in _sys.path:
+        _sys.path.insert(0, _src)
+    from equilibria.babel.har.reader import read_har  # type: ignore
+    import numpy as _np
+
+    try:
+        har = read_har(har_path, select_headers=[header])
+    except Exception:
+        return ""
+    h = har.get(header)
+    if h is None or getattr(h, "rank", 0) != 3:
+        return ""
+
+    act_prefix = ""
+    m = re.search(r"(?:^|\n)evfb\('[^']+','([acfr])_", inlined)
+    if m:
+        act_prefix = m.group(1) + "_"
+
+    endw_labels, acts_labels, reg_labels = h.set_elements
+    lines = [f"* {header} data (injected from basedata.har)"]
+    nz = _np.argwhere(h.array != 0)
+    for idx in nz:
+        f_lbl = endw_labels[idx[0]]
+        a_lbl = acts_labels[idx[1]]
+        r_lbl = reg_labels[idx[2]]
+        val = float(h.array[tuple(idx)])
+        lines.append(f"{header}('{f_lbl}','{act_prefix}{a_lbl}','{r_lbl}') = {val:.10g} ;")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", required=True,
@@ -323,6 +385,8 @@ def main() -> None:
                     help="Output directory (default: output/<dataset>_altertax_neos_bundle)")
     ap.add_argument("--tariff", type=float, default=0.10,
                     help="Uniform tariff shock fraction (default: 0.10 = +10%%)")
+    ap.add_argument("--ifsub", type=int, choices=(0, 1), default=1,
+                    help="ifSUB compile switch (default 1); the parity fixtures need both")
     args = ap.parse_args()
 
     dataset = args.dataset
@@ -358,6 +422,7 @@ def main() -> None:
 
     print("\n=== [3/4] Inlining $include directives ===")
     main_script = _read("comp_altertax.gms")
+    main_script = _force_ifsub(main_script, args.ifsub)
     inlined = _inline_includes(main_script)
     print(f"  inlined size: {len(inlined):,} chars")
 
@@ -382,6 +447,15 @@ def main() -> None:
         "EVFB", "EVFP", "EVOS", "VXSB", "VFOB", "VCIF", "VMSB",
         "VST", "VTWR", "SAVE", "VDEP", "VKB", "POP", "MAKS", "MAKB", "pop0",
     }
+    # CASE-INSENSITIVE match (ported from build_gtap7_pure_local_bundle.py, commit
+    # d3dfb73): the inliner emits comment anchors in LOWERCASE (`* ftrv data`,
+    # `* evfb data`) but dat_param_names lists UPPERCASE. A case-sensitive
+    # `current_target in dat_param_names` silently mis-routed FTRV/EVFB/... into
+    # prm_lines instead of dat_lines → the raw factor-tax data was DROPPED → the
+    # generated reference had ftrv=0, fcttx=0, ytax(ft)=0 for EVERY altertax
+    # dataset this builder made. That's why the altertax parity gate saw
+    # ytax[USA,ft]=0 in GAMS vs Python's real 3.099.
+    dat_param_names_upper = {n.upper() for n in dat_param_names}
     header = params_block.split("\n")[0]
     dat_lines, prm_lines = [header], [header]
     current_target = None
@@ -396,7 +470,7 @@ def main() -> None:
             dat_lines.append(line)
             prm_lines.append(line)
             continue
-        target_dat = current_target in dat_param_names if current_target else False
+        target_dat = current_target.upper() in dat_param_names_upper if current_target else False
         (dat_lines if target_dat else prm_lines).append(line)
     dat_block = "\n".join(dat_lines)
     prm_block = "\n".join(prm_lines)
@@ -406,6 +480,27 @@ def main() -> None:
     if f_idx < 0:
         raise SystemExit("Could not find ftrv anchor for Dat params block.")
     inlined = inlined[:f_idx] + "\n" + dat_block + "\n\n" + inlined[f_idx:]
+
+    # FBEP/FTRV injection (ported from build_gtap7_pure_local_bundle.py, 2026-07-16):
+    # vanilla getData.gms hardcodes `fbep=0` and `ftrv=evfp-evfb` — it NEVER reads an
+    # FBEP header — so a dataset whose v7 dropped FBEP yields a subsidy-BLIND reference
+    # (fctts=0, ytax(fs)=0). gtap7_3x3's v7 has no FBEP at all. Python loads the real
+    # FBEP/FTRV from basedata.har (fctts=-fbep/evfb), so the reference mismatched Python
+    # for every subsidized (ag) factor: ytax[r,fs] py≈0.09 vs GAMS 0. Inject the real
+    # header AFTER both anchors (GAMS is case-insensitive → `FBEP(...)` overrides `fbep=0`;
+    # `FTRV(...)` overrides `ftrv=evfp-evfb` where the header has a nonzero value).
+    anchor_end = inlined.find(ftrv_anchor) + len(ftrv_anchor)
+    inject_lines = []
+    for _sym in ("FBEP", "FTRV"):
+        _blk = _fbep_ftrv_har_as_assignments(
+            DATASETS_DIR / dataset / "basedata.har", _sym, inlined)
+        if _blk.strip():
+            inject_lines.append(_blk)
+            _ncells = _blk.count(" = ")
+            print(f"  injected {_sym} ({_ncells} cells) from basedata.har for {dataset}")
+    if inject_lines:
+        inject_txt = "\n\n" + "\n".join(inject_lines) + "\n"
+        inlined = inlined[:anchor_end] + inject_txt + inlined[anchor_end:]
 
     rorflex_anchor = "* [stripped for NEOS inline] $loadDC etrae=etrae rorFlex0=rorFlex\n"
     a_idx = inlined.find(rorflex_anchor)
@@ -426,7 +521,7 @@ def main() -> None:
     inlined = _insert_pdp_pmp_recalc_before_unload(inlined)
     inlined = _patch_shock_to_tariff(inlined, tariff_increase=args.tariff)
 
-    out_gms = out_dir / f"comp_{dataset}_altertax_neos.gms"
+    out_gms = out_dir / f"comp_{dataset}_altertax_neos_ifsub{args.ifsub}.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")
 
