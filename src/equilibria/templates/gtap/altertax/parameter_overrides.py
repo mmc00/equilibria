@@ -139,6 +139,18 @@ def apply_altertax_elasticities(
         for f in all_factors:
             target.elasticities.omegaf[(r, f)] = o.omegaf  # = 1.0
 
+    # Recalibrate p_gf with the NOW-mobile factor classification. _calibrate_factor_shares
+    # branches on fnm = {f not in mf and not in sf}: fnm factors get the ABSOLUTE bare-xf
+    # gf (cal.gms:881 gf(r,fnm,a)=xf·(pabs/pfy)^etaff), mf/sf get the NORMALIZED share
+    # (cal.gms:875 gf=xf/xft·(pft/pfy)^omegaf). It was computed earlier with the RAW sets
+    # (NatRes ∈ fnm → absolute 0.0079), but altertax just set fnm=∅ (mf=all) — mirroring
+    # GAMS comp_altertax.gms:146-147 `fnm(fp)=no; fm(fp)=yes`. GAMS's cal.gms then computes
+    # gf for NatRes via the NORMALIZED fm branch (verified vs the altertax GDX:
+    # gf[EU_28,NatRes,Food]=0.2953 sum=1, NOT the pure-gtap 0.0079 sum≈0.027). Without this
+    # recal, check/shock trust the stale absolute p_gf (_use_p_gf_directly) → eq_pfteq[NatRes]
+    # residual 0.82 at the GAMS point → pft/pf[Land,NatRes] drift ~9.6% in shock.
+    target.shares._calibrate_factor_shares(target.benchmark, target.sets, target.taxes)
+
     return target
 
 
