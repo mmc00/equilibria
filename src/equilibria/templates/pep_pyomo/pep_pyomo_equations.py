@@ -233,10 +233,79 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     m.G.fix(_bench("GO"))
     m.CAB.fix(_bench("CABO"))
 
+    # ---- MCP square-closure: fix structurally-zero cells of matrix variables ----
+    # The equations are instantiated only over their active masks (XSact/DSact/…), but the
+    # Vars are declared DENSE. In the NLP a constant-0 objective absorbs the extra free DOF;
+    # an MCP must be SQUARE (one eq per free var). So fix every matrix-var cell that has NO
+    # equation defining it (outside its benchmark mask) at its benchmark value. This mirrors
+    # the GAMS $-guard that makes those cells exogenous zeros.
+    if form == "mcp":
+        # TR endogenous cells = the union of the transfer equations' actual masks:
+        #   EQ47 TR(agng,h) where lambda_TR_households≠0; EQ48 TR('gvt',h) all h;
+        #   EQ49 TR(ag,f) where lambda_TR_firms≠0; EQ50 TR(agng,'gvt'); EQ51 TR(agd,'row').
+        lam_h = P.get("lambda_TR_households") if "lambda_TR_households" in P else {}
+        lam_f = P.get("lambda_TR_firms") if "lambda_TR_firms" in P else {}
+        tr_active = set()
+        if isinstance(lam_h, dict):
+            tr_active |= set(lam_h.keys())
+        if isinstance(lam_f, dict):
+            tr_active |= set(lam_f.keys())
+        for h in H:
+            tr_active.add(("gvt", h))
+        for ag in AGNG:
+            tr_active.add((ag, "gvt"))
+        for ag in AGD:
+            tr_active.add((ag, "row"))
+        for a in AG:
+            for b in AG:
+                if (a, b) not in tr_active:
+                    m.TR[a, b].fix(_bench("TRO", a, b))
+        # quantity/price matrix vars: fix cells outside the make/trade masks
+        _fix_outside = [
+            (m.XS, [(j, i) for j in J for i in I], XSact),
+            (m.DS, [(j, i) for j in J for i in I], DSact),
+            (m.EX, [(j, i) for j in J for i in I], EXact),
+            (m.P,  [(j, i) for j in J for i in I], XSact),   # P defined only where sector produces i
+            (m.DI, [(i, j) for i in I for j in J], None),    # DI dense (all i,j via aij) — keep
+            (m.IM, [i for i in I], IMact),
+            (m.EXD, [i for i in I], EXDact),
+        ]
+        # factor vars (R/RTI/TIK on capital-mask KDact; WTI/TIW on labor-mask LDact) and
+        # trade prices (PD/DD on DDact; PM/PE/PE_FOB/EXD/TIM/TIX on IM/EXD masks) — fix the
+        # cells whose defining equation wasn't instantiated by its $-mask.
+        _fix_outside += [
+            (m.R,   [(k, j) for k in K for j in J], KDact),
+            (m.RTI, [(k, j) for k in K for j in J], KDact),
+            (m.TIK, [(k, j) for k in K for j in J], KDact),
+            (m.WTI, [(l, j) for l in L for j in J], LDact),
+            (m.TIW, [(l, j) for l in L for j in J], LDact),
+            (m.PD,  [i for i in I], DDact),
+            (m.DD,  [i for i in I], DDact),
+            (m.PM,  [i for i in I], IMact),
+            (m.TIM, [i for i in I], IMact),
+            (m.PE,  [i for i in I], EXDact),
+            (m.PE_FOB, [i for i in I], EXDact),
+            (m.TIX, [i for i in I], EXDact),
+            (m.PL,  [i for i in I], DDact),
+        ]
+        for var, allkeys, active in _fix_outside:
+            if active is None:
+                continue
+            act = set(active)
+            for k in allkeys:
+                if k not in act:
+                    try:
+                        var[k].fix(0.0)
+                    except Exception:
+                        pass
+
     # objective / closure
-    if variant == "objdef":
-        m.OBJDEF = Constraint(expr=m.OBJ == 0.0)
-        m.OBJECTIVE = Objective(expr=m.OBJ, sense=minimize)
-    else:
-        m.OBJECTIVE = Objective(expr=0.0, sense=minimize)  # pure feasibility
+    # MCP is a pure complementarity system — NO objective (the bridge/PATH pairs eqs↔vars).
+    # NLP forms carry a constant/dummy objective so IPOPT solves the feasibility system.
+    if form != "mcp":
+        if variant == "objdef":
+            m.OBJDEF = Constraint(expr=m.OBJ == 0.0)
+            m.OBJECTIVE = Objective(expr=m.OBJ, sense=minimize)
+        else:
+            m.OBJECTIVE = Objective(expr=0.0, sense=minimize)  # pure feasibility
     return m
