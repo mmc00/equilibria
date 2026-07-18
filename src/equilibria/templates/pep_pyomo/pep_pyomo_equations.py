@@ -182,8 +182,21 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     # macro / price indices / real
     for nm in ("PIXCON", "PIXGDP", "PIXINV", "PIXGVT"):
         setattr(m, nm, Var(bounds=POS, initialize=1.0))
+    # GDP_IB is a pure report var appearing ONLY in eq92. Seeding it from GDP_IBO leaves
+    # eq92 with the calibration's 2026 imbalance (GDP_MPO 53681 ≠ GDP_IBO 51655) — an
+    # infeasibility that forces IPOPT to drift the whole system. GDP_IB is free, so seed
+    # it from the eq92 RHS (factor income + TPRODN + TPRCTS) → the seed is fully feasible
+    # and IPOPT stays at the benchmark. (GDP_IB then reports the income-side GDP, 53681.)
+    _gdp_ib_seed = (sum(_bench("WO", l) * _bench("LDO", l, j) for (l, j) in LDact)
+                    + sum(_bench("RO", k, j) * _bench("KDO", k, j) for (k, j) in KDact)
+                    + _gov_seed["TPRODN"] + _gov_seed["TPRCTS"])
+    _macro_seed = {"GDP_BP": _bench("GDP_BPO"), "GDP_MP": _bench("GDP_MPO"),
+                   "GDP_IB": _gdp_ib_seed, "GDP_FD": _bench("GDP_FDO"), "IT": _bench("ITO")}
     for nm in ("GDP_BP", "GDP_MP", "GDP_IB", "GDP_FD", "IT"):
-        setattr(m, nm, Var(domain=Reals, initialize=P.get(nm + "O") if (nm + "O") in P else 0.0))
+        seed = _macro_seed.get(nm, 0.0)
+        if seed in (0.0, 1e-6) and (nm + "O") in P:
+            seed = P.get(nm + "O")
+        setattr(m, nm, Var(domain=Reals, initialize=seed))
     m.CTH_REAL = Var(H, domain=NonNegativeReals, initialize=_init("CTHO"))
     # real vars = nominal / price-index; at benchmark PIX*=1 so seed = nominal *O level
     _real_nom = {"G_REAL": "GO", "GDP_BP_REAL": "GDP_BPO",

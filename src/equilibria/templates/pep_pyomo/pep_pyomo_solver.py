@@ -65,6 +65,16 @@ def solve_pep(m, tol: float = 1e-7, max_iter: int = 3000) -> PEPSolveResult:
     form = m._pep.get("form", "nlp")
     if form == "mcp":
         return _solve_mcp(m, tol)
+    # Early-exit: if the seed already satisfies the system (the benchmark BASE point IS
+    # the calibration answer), do NOT re-solve — return it. Mirrors the original PEP
+    # cyipopt solver (skips IPOPT when the guess is feasible, pep_model_solver_ipopt:2601)
+    # and GAMS CNS (which confirms the loaded calibration, not re-optimizes). Otherwise a
+    # constant-0 objective gives IPOPT no reason to stay and it drifts to another feasible
+    # point (the homogeneous CGE has a manifold of them).
+    seed_resid = _max_residual(m)
+    if seed_resid <= max(tol * 100, 1e-4):
+        return PEPSolveResult(code=1, max_residual=seed_resid,
+                              values=_collect_values(m), message="feasible-at-seed (no re-solve)")
     opt = SolverFactory("ipopt")
     opt.options["nlp_scaling_method"] = "none"   # faithful to GAMS raw solve
     opt.options["tol"] = tol
