@@ -126,8 +126,13 @@ def _solve_mcp(m, tol: float) -> PEPSolveResult:
     if not opt.available(exception_flag=False):
         return PEPSolveResult(code=2, max_residual=float("nan"),
                               message="path_capi_bridge solver unavailable")
+    # Pass the exact free-variable list so the bridge doesn't infer it (its inference
+    # excludes now-fixed structural-zero cells that still appear in market/income eqs,
+    # giving a spurious expr≠var mismatch). The model is square (358 free vars = 358 eqs).
+    from pyomo.environ import Var
+    free_vars = [v for v in m.component_data_objects(Var, active=True) if not v.fixed]
     try:
-        res = opt.solve(m, load_solutions=True)
+        res = opt.solve(m, load_solutions=True, variables=free_vars)
         tc = str(res.solver.termination_condition)
     except Exception as e:  # noqa: BLE001
         return PEPSolveResult(code=2, max_residual=float("nan"),
