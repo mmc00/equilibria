@@ -304,14 +304,21 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
                     m.RC[j].fix(_bench("RCO", j) or 1.0)
                 except Exception:
                     pass
+        # CRITICAL (from the GAMS PEP reference): structurally-zero cells fix QUANTITIES
+        # at 0 but PRICES at 1 — `pcomp.fx$(xcomp0=0)=1; xcomp.fx$(xcomp0=0)=0`. Fixing a
+        # price at 0 makes ratio/division terms blow up and PATH diverges (7.7e15). So the
+        # fill value depends on whether the var is a price.
+        _PRICE_VARS = {"PD", "PM", "PE", "PE_FOB", "PL", "P", "PC", "PT", "PP", "PVA",
+                       "PCI", "W", "RK", "R", "WC", "RC", "WTI", "RTI"}
         for var, allkeys, active in _fix_outside:
             if active is None:
                 continue
             act = set(active)
+            fill = 1.0 if var.name in _PRICE_VARS else 0.0
             for k in allkeys:
                 if k not in act:
                     try:
-                        var[k].fix(0.0)
+                        var[k].fix(fill)
                     except Exception:
                         pass
 

@@ -61,7 +61,7 @@ def attach_all_blocks(m, S, P, idx, variant) -> int:
         if B == 0:
             return Constraint.Skip
         return m.LDC[j] == B * sum(p("beta_LD", l, j) * m.LD[l, j] ** (-rho)
-                                   for l in L) ** (-1.0 / rho)
+                                   for l in L if (l, j) in LDact) ** (-1.0 / rho)
     add("eq5", J, eq5)
 
     def eq6(m, l, j):
