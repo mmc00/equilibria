@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/plans/2026-07-16-gtap7-ifsub1-shock-closed-saga.md

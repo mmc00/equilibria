@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/plans/2026-07-17-xmodel-parity-plan.md

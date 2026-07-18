@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/plans/2026-06-20-gtap-multiperiodo-plan.md

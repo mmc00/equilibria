@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/plans/2026-07-06-gtap7-15x10-ifsub1-vegfruit-attempts-log.md

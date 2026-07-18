@@ -117,6 +117,44 @@ report = run_gams_comparison(
 print(report.summary())
 ```
 
+## Pyomo port — NLP and MCP forms
+
+PEP-1-1 is also available as a **Pyomo** model
+(`equilibria.templates.pep_pyomo`), unifying it with the GTAP template on a
+single engine (the original PEP solver used cyipopt). `build_pep_model` takes
+a `variant` (`"base"` or `"objdef"`, which adds a dummy `OBJDEF: OBJ==0`
+objective) and a `form`:
+
+- **`form="nlp"`** — the equality system solved by IPOPT on the raw model
+  (`nlp_scaling_method=none`, faithful to GAMS's raw solve).
+- **`form="mcp"`** — the same system as a mixed complementarity problem
+  (WALRAS ⊥ LEON free-row, `e` fixed as numeraire) solved by PATH. This is the
+  first PEP-MCP.
+
+```python
+from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
+
+model = build_pep_model(state, variant="base", form="mcp")
+result = solve_pep(model)          # code=1 at the calibrated benchmark
+```
+
+To run the reference SIM1 counterfactual (a 25% export-tax cut), apply the
+shock to the calibrated state **before** building — this scales the `ttixO`
+benchmark exactly as GAMS's `ttix.fx = ttixO*0.75` does:
+
+```python
+from equilibria.templates.pep_pyomo.pep_pyomo_scenarios import apply_sim1_export_tax_cut
+
+apply_sim1_export_tax_cut(state)   # ttixO *= 0.75, in place
+model = build_pep_model(state, variant="base", form="mcp")
+result = solve_pep(model)          # GDP_BP moves 46707 → 46748.2
+```
+
+Both forms are validated cell-by-cell against a GAMS reference solved by the
+same engine, and the two forms mirror each other exactly — see the
+{doc}`PEP coverage matrix <pep_coverage_matrix>`.
+
 ## CLI shortcuts
 
 For day-to-day work, the helper scripts under `scripts/cli/` wrap the

@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/plans/2026-06-24-equilibria-1.0-roadmap-design.md
