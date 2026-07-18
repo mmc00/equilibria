@@ -277,7 +277,7 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
             (m.R,   [(k, j) for k in K for j in J], KDact),
             (m.RTI, [(k, j) for k in K for j in J], KDact),
             (m.TIK, [(k, j) for k in K for j in J], KDact),
-            (m.WTI, [(l, j) for l in L for j in J], LDact),
+            # WTI now has EQ70 over ALL (l,j) — no cells to fix. TIW: EQ37 is LDact-masked.
             (m.TIW, [(l, j) for l in L for j in J], LDact),
             (m.PD,  [i for i in I], DDact),
             (m.DD,  [i for i in I], DDact),

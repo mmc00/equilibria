@@ -34,9 +34,17 @@ def attach_all_blocks(m, S, P, idx, variant) -> int:
     add("eq2", J, lambda m, j: m.CI[j] == p("io", j) * m.XST[j])
 
     def eq3(m, j):
+        # GAMS instantiates EQ3 over ALL j (the VA CES) — 4 instances, no $-mask. For the
+        # degenerate admin sector (B_VA=0, beta_VA=0: VA is not a CES of L,K — it's a pure
+        # pass-through) GAMS still emits the row; mirror it as VA==LDC+KDC so VA stays
+        # determined and the instance count matches. Non-degenerate sectors use the CES.
         rho, bv, B = p("rho_VA", j), p("beta_VA", j), p("B_VA", j)
-        if B == 0 or bv in (0.0, 1.0):
-            return Constraint.Skip
+        if B == 0:
+            return m.VA[j] == m.LDC[j] + m.KDC[j]
+        if bv <= 0.0:
+            return m.VA[j] == B * m.KDC[j]
+        if bv >= 1.0:
+            return m.VA[j] == B * m.LDC[j]
         return m.VA[j] == B * (bv * m.LDC[j] ** (-rho)
                                + (1 - bv) * m.KDC[j] ** (-rho)) ** (-1.0 / rho)
     add("eq3", J, eq3)
@@ -227,7 +235,10 @@ def attach_all_blocks(m, S, P, idx, variant) -> int:
     add("eq66", J, lambda m, j: m.PT[j] == (1 + p("ttip", j)) * m.PP[j])
     add("eq67", J, lambda m, j: m.PCI[j] * m.CI[j] == sum(m.PC[i] * m.DI[i, j] for i in I))
     add("eq68", J, lambda m, j: m.PVA[j] * m.VA[j] == m.WC[j] * m.LDC[j] + m.RC[j] * m.KDC[j])
-    add("eq70", LDact, lambda m, l, j: m.WTI[l, j] == m.W[l] * (1 + p("ttiw", l, j)))
+    # GAMS instantiates EQ70 over ALL (l,j) (WTI defined for every labor type × sector),
+    # not just the LDO-active mask.
+    add("eq70", [(l, j) for l in L for j in J],
+        lambda m, l, j: m.WTI[l, j] == m.W[l] * (1 + p("ttiw", l, j)))
     add("eq72", KDact, lambda m, k, j: m.RTI[k, j] == m.R[k, j] * (1 + p("ttik", k, j)))
     add("eq73", KDact, lambda m, k, j: (m.R[k, j] == m.RK[k])
         if p("kmob") else Constraint.Skip)
