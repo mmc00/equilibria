@@ -233,6 +233,16 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     m.G.fix(_bench("GO"))
     m.CAB.fix(_bench("CABO"))
 
+    # NOTE on structural-zero prices (e.g. PD['othind'], which has no domestic supply so
+    # eq77 is $-masked out): GAMS's PEP NLP/CNS does NOT pin such a price — it keeps the
+    # calibrated SAM value (valPD['othind']=1.132), a benign free DOF that no equilibrium
+    # value depends on. So the NLP leaves it at its seed (100% GAMS parity). The MCP form
+    # DOES pin it (to 1.0) below — the square complementarity system needs a determinate
+    # value for the zero-quantity cell, and 1.0 is inert. This is the ONE cell where the
+    # NLP↔MCP mirror is 99.79% not 100%, and that gap is faithful, not a bug: forcing the
+    # NLP to 1.0 would break GAMS parity to manufacture a mirror. (Do NOT re-add a
+    # both-forms price fix — verified 2026-07-18 that GAMS keeps 1.132 here.)
+
     # ---- MCP square-closure: fix structurally-zero cells of matrix variables ----
     # The equations are instantiated only over their active masks (XSact/DSact/…), but the
     # Vars are declared DENSE. In the NLP a constant-0 objective absorbs the extra free DOF;
