@@ -54,12 +54,29 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
                          DDact=DDact, EXDact=EXDact, EXact=EXact, DSact=DSact)
 
     # ================= VARIABLES (init at benchmark *O levels) =================
+    # Benchmark levels missing from calibration, filled from CGE normalization:
+    #   W/RK/R = 1.0 (factor prices normalized at base), TIW/TIK from tax·price·quantity.
+    def _bench(name, *idx):
+        try:
+            v = P.get(name, *idx)
+            if v not in (None, 0.0):
+                return v
+        except KeyError:
+            pass
+        if name in ("WO", "RKO", "RO", "PPO", "PTO", "PVAO", "PCIO", "WCO", "RCO",
+                    "PCO", "PDO", "PMO", "PEO", "PE_FOBO", "PLO", "PO", "WTIO", "RTIO"):
+            return 1.0                       # prices normalized to 1 at benchmark
+        if name == "TIWO" and len(idx) == 2:
+            l, j = idx
+            return P.get("ttiw", l, j) * 1.0 * P.get("LDO", l, j)
+        if name == "TIKO" and len(idx) == 2:
+            k, j = idx
+            return P.get("ttik", k, j) * 1.0 * P.get("KDO", k, j)
+        return 1e-6
+
     def _init(name):
         def r(mm, *idx):
-            try:
-                return P.get(name, *idx) or 1e-6
-            except KeyError:
-                return 1e-6
+            return _bench(name, *idx)
         return r
 
     # production
@@ -160,9 +177,24 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     n = attach_all_blocks(m, S, P, m._pep["idx"], variant)
     m._pep["n_constraints"] = n
 
+    # ---- closure: fix numeraire + exogenous vars at benchmark (both NLP and MCP) ----
+    # Without this the homogeneous CGE system has a scaling DOF and IPOPT drifts to a
+    # spurious scaled root. e is the PEP numeraire; KS/LS/PWM/PWX/CMIN/VSTK/G/CAB are
+    # closure-fixed (pep_contract.py:74-89).
+    m.e.fix(1.0)
+    for k in K:
+        m.KS[k].fix(_bench("KSO", k))
+    for l in L:
+        m.LS[l].fix(_bench("LSO", l))
+    # PWM/PWX are constant params (world prices), not Vars — already fixed by construction.
+    for i in I:
+        m.VSTK[i].fix(_bench("VSTKO", i))
+        for h in H:
+            m.CMIN[i, h].fix(_bench("CMINO", i, h))
+    m.G.fix(_bench("GO"))
+    m.CAB.fix(_bench("CABO"))
+
     # objective / closure
-    if form == "mcp":
-        m.e.fix(1.0)  # numeraire; walras⊥LEON handled by the solver pairing
     if variant == "objdef":
         m.OBJDEF = Constraint(expr=m.OBJ == 0.0)
         m.OBJECTIVE = Objective(expr=m.OBJ, sense=minimize)
