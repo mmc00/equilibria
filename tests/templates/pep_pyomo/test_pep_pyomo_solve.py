@@ -122,7 +122,61 @@ def test_nlp_mcp_mirror(state):
 
 
 MCP_REF = ROOT / "src/equilibria/templates/reference/pep2/scripts/Results_mcp.gdx"
+MCP_REF_SIM1 = ROOT / "src/equilibria/templates/reference/pep2/scripts/Results_mcp_sim1.gdx"
 _GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/53/Resources/gdxdump"
+
+
+def _read_gams_var_levels(gdx_path):
+    """Parse the .L levels of every Variable in a raw-symbol GAMS gdx (via gdxdump),
+    handling scalar-inline (`Variable NAME desc /L v, M v /;`) and matrix
+    (`Variable NAME(*) desc / 'k'.L v, … /`). Returns {(var, idx): level}, idx None/str/tuple."""
+    import subprocess
+    import re
+    txt = subprocess.run([_GDXDUMP, str(gdx_path)], capture_output=True, text=True).stdout
+    out, cur = {}, None
+    for line in txt.splitlines():
+        sm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\s+.*?/L\s+([-\d.E+]+)", line)
+        if sm and "(" not in line.split("/")[0]:
+            out[(sm.group(1), None)] = float(sm.group(2)); continue
+        hm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\(", line)
+        if hm:
+            cur = hm.group(1); continue
+        if cur:
+            rm = re.match(r"\s*(.+?)\.L\s+([-\d.E+]+)", line)
+            if rm:
+                kp = rm.group(1).replace("'", "").strip()
+                idx = tuple(kp.split(".")) if "." in kp else kp
+                out[(cur, idx)] = float(rm.group(2))
+            if line.strip().endswith("/;"):
+                cur = None
+    return out
+
+
+def _diff_mcp_vs_gams(m, gams):
+    """Cell-by-cell match of a solved Pyomo MCP model against parsed GAMS levels.
+    Returns (ok, total, bad_list). LEON (Walras slack) excluded."""
+    from pyomo.environ import value
+    tot = ok = 0
+    bad = []
+
+    def match(a, b):
+        return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
+    for (vname, idx), gval in gams.items():
+        if vname.lower() == "leon":
+            continue
+        pv = m.find_component(vname)
+        if pv is None:
+            continue
+        try:
+            pval = float(value(pv[idx] if idx is not None else pv, exception=False))
+        except Exception:
+            continue
+        tot += 1
+        if match(pval, gval):
+            ok += 1
+        else:
+            bad.append((vname, idx, pval, gval))
+    return ok, tot, bad
 
 
 @pytest.mark.skipif(not SAM.exists() or not MCP_REF.exists(),
@@ -141,54 +195,51 @@ def test_mcp_matches_gams_native_mcp(state):
         pytest.skip("path_capi_python unavailable for MCP solve")
     if not Path(_GDXDUMP).exists():
         pytest.skip("gdxdump (GAMS) unavailable")
-    from pyomo.environ import value
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
     from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
     _ensure_path_lib()
-
-    # read the GAMS-native MCP levels via gdxdump (raw Variable symbols: PD, GDP_BP, …)
-    import subprocess
-    import re
-    txt = subprocess.run([_GDXDUMP, str(MCP_REF)], capture_output=True, text=True).stdout
-    gams, cur = {}, None
-    for line in txt.splitlines():
-        sm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\s+.*?/L\s+([-\d.E+]+)", line)
-        if sm and "(" not in line.split("/")[0]:
-            gams[(sm.group(1), None)] = float(sm.group(2)); continue
-        hm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\(", line)
-        if hm:
-            cur = hm.group(1); continue
-        if cur:
-            rm = re.match(r"\s*(.+?)\.L\s+([-\d.E+]+)", line)
-            if rm:
-                kp = rm.group(1).replace("'", "").strip()
-                idx = tuple(kp.split(".")) if "." in kp else kp
-                gams[(cur, idx)] = float(rm.group(2))
-            if line.strip().endswith("/;"):
-                cur = None
-
+    gams = _read_gams_var_levels(MCP_REF)
     m = build_pep_model(state, variant="base", form="mcp")
     r = solve_pep(m)
     assert r.code == 1, f"MCP solve did not converge: {r.message}"
-
-    def match(a, b):
-        return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
-    tot = ok = 0
-    bad = []
-    for (vname, idx), gval in gams.items():
-        if vname.lower() in ("leon",):
-            continue
-        pv = m.find_component(vname)
-        if pv is None:
-            continue
-        try:
-            pval = float(value(pv[idx] if idx is not None else pv, exception=False))
-        except Exception:
-            continue
-        tot += 1
-        if match(pval, gval):
-            ok += 1
-        else:
-            bad.append((vname, idx, pval, gval))
+    ok, tot, bad = _diff_mcp_vs_gams(m, gams)
     assert tot > 200, f"too few comparable cells ({tot}) — gdx read likely broke"
     assert not bad, f"MCP↔GAMS mismatches ({ok}/{tot}): {bad[:5]}"
+
+
+@pytest.mark.skipif(not SAM.exists() or not MCP_REF_SIM1.exists(),
+                    reason="pep2 SAM or GAMS SIM1 MCP reference not present")
+def test_mcp_sim1_shock_matches_gams():
+    """The SIM1 counterfactual (−25% export tax: `ttix.fx=ttixO*0.75`) applied in Python via
+    apply_sim1_export_tax_cut, solved as MCP, must match the GAMS-native SIM1 MCP
+    (Results_mcp_sim1.gdx) cell-by-cell — the base+shock cycle closed on one engine. GAMS
+    moves GDP_BP 46707→46748.2084; Python must land there too (proves the MCP actually
+    re-solves the shock, not early-exits at base). Skips cleanly without PATH/gdxdump.
+
+    Uses a FRESH calibration (not the module `state` fixture) because the shock mutates
+    ttixO in place — sharing it would contaminate the base-case tests."""
+    import sys
+    from pyomo.environ import value
+    src = "/Users/marmol/proyectos/path-capi-python/src"
+    if Path(src).exists() and src not in sys.path:
+        sys.path.insert(0, src)
+    if importlib.util.find_spec("path_capi_python") is None:
+        pytest.skip("path_capi_python unavailable for MCP solve")
+    if not Path(_GDXDUMP).exists():
+        pytest.skip("gdxdump (GAMS) unavailable")
+    from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
+    from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
+    from equilibria.templates.pep_pyomo.pep_pyomo_scenarios import apply_sim1_export_tax_cut
+    _ensure_path_lib()
+    gams = _read_gams_var_levels(MCP_REF_SIM1)
+    state = PEPModelCalibrator(sam_file=SAM, val_par_file=VALPAR).calibrate()   # fresh
+    apply_sim1_export_tax_cut(state)          # ttixO *= 0.75, in place, before build
+    m = build_pep_model(state, variant="base", form="mcp")
+    r = solve_pep(m)
+    assert r.code == 1, f"SIM1 MCP solve did not converge: {r.message}"
+    gdp = float(value(m.GDP_BP, exception=False))
+    assert abs(gdp - 46748.2084) < 1.0, f"SIM1 GDP_BP={gdp}, expected ~46748.2084 (base is 46707)"
+    ok, tot, bad = _diff_mcp_vs_gams(m, gams)
+    assert tot > 200, f"too few comparable cells ({tot})"
+    assert not bad, f"SIM1 MCP↔GAMS mismatches ({ok}/{tot}): {bad[:5]}"
