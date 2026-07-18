@@ -61,3 +61,61 @@ def test_faithful_at_benchmark(state):
                 break
     # only eq92 (the calibration's 2026 GDP_IB imbalance) may violate
     assert set(violated) <= {"eq92"}, f"unexpected benchmark violations: {sorted(set(violated))}"
+
+
+@pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
+def test_no_ces_overflow_at_benchmark(state):
+    """Every constraint body must be FINITE at the benchmark seed. The MCP square-closure
+    fixes structural-zero labor cells (LD=0); eq5's composite-labor CES must skip them
+    (`if (l,j) in LDact`) or `0**(-rho)` overflows — the bug that made PATH 'diverge' to a
+    constant 7.74e15 (a deterministic eval overflow, not a solver basin). Guards eq5/eq7."""
+    import math
+    from pyomo.environ import Constraint, value
+    from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+    m = build_pep_model(state, variant="base", form="mcp")
+    bad = []
+    for c in m.component_data_objects(Constraint, active=True):
+        b = value(c.body, exception=False)
+        if b is None or math.isinf(b) or math.isnan(b) or abs(b) > 1e10:
+            bad.append(c.name)
+    assert not bad, f"constraint bodies overflow at benchmark (CES 0**-rho?): {bad[:6]}"
+
+
+@pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
+def test_nlp_mcp_mirror(state):
+    """NLP and MCP forms, solved from the same feasible benchmark seed, land on the same
+    point (the parity anchor). 465/466 economic cells match exactly; the ONE difference is
+    PD['othind'] (NLP keeps GAMS's calibrated 1.132; the MCP square-closure pins the
+    zero-domestic-supply good's price to an inert 1.0). LEON (the Walras slack) is
+    form-defining and excluded. Requires PATH for the MCP solve; skips cleanly otherwise."""
+    import sys
+    src = "/Users/marmol/proyectos/path-capi-python/src"
+    if Path(src).exists() and src not in sys.path:
+        sys.path.insert(0, src)
+    if importlib.util.find_spec("path_capi_python") is None:
+        pytest.skip("path_capi_python unavailable for MCP mirror")
+    from pyomo.environ import Var, value
+    from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
+    _ensure_path_lib()
+
+    def vals(m):
+        d = {}
+        for v in m.component_objects(Var, active=True):
+            for idx in v:
+                x = value(v[idx], exception=False)
+                if x is not None:
+                    d[(v.name, idx)] = float(x)
+        return d
+
+    mn = build_pep_model(state, variant="base", form="nlp"); rn = solve_pep(mn); vn = vals(mn)
+    mm = build_pep_model(state, variant="base", form="mcp"); rm = solve_pep(mm); vm = vals(mm)
+    assert rn.code == 1 and rm.code == 1, f"NLP={rn.message} MCP={rm.message}"
+    keys = [k for k in (set(vn) & set(vm)) if k[0] != "LEON"]
+
+    def match(a, b):
+        return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
+    diffs = sorted((k for k in keys if not match(vn[k], vm[k])), key=lambda k: -abs(vn[k] - vm[k]))
+    # exactly one faithful difference: the free zero-quantity price PD['othind']
+    assert diffs == [("PD", "othind")], (
+        f"unexpected NLP↔MCP mirror diffs: {[(k, vn[k], vm[k]) for k in diffs[:5]]}")
