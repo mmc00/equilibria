@@ -287,7 +287,23 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
             (m.PE_FOB, [i for i in I], EXDact),
             (m.TIX, [i for i in I], EXDact),
             (m.PL,  [i for i in I], DDact),
+            # factor DEMAND cells: KD/LD are dense but endogenous only on their masks
+            (m.KD,  [(k, j) for k in K for j in J], KDact),
+            (m.LD,  [(l, j) for l in L for j in J], LDact),
         ]
+        # composite factor vars for sectors with NO capital (KDCO==0, e.g. admin):
+        # KDC and RC are exogenous zeros there (GAMS masks EQ7/EQ8 by KDCO).
+        _cap_sectors = [j for j in J if _active(P, "KDCO", j)]
+        for j in J:
+            if j not in _cap_sectors:
+                try:
+                    m.KDC[j].fix(0.0)
+                except Exception:
+                    pass
+                try:
+                    m.RC[j].fix(_bench("RCO", j) or 1.0)
+                except Exception:
+                    pass
         for var, allkeys, active in _fix_outside:
             if active is None:
                 continue
