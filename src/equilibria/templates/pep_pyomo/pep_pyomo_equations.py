@@ -152,9 +152,15 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
         "TIWT": _tiwt, "TIKT": _tikt, "TIPT": _tipt, "TICT": _tict, "TIMT": _timt,
         "TIXT": _tixt, "TPRODN": _tiwt + _tikt + _tipt, "TPRCTS": _tict + _timt + _tixt,
         "TDHT": sum(_bench("TDHO", h) for h in H), "TDFT": sum(_bench("TDFO", f) for f in F),
-        "YGK": _bench("YGKO"), "YGTR": 0.0, "YG": _bench("YGO"), "SG": _bench("SGO"),
+        "YGK": _bench("YGKO"),
+        "YGTR": sum(_bench("TRO", "gvt", ag) for ag in AGNG),   # eq34
         "G": _bench("GO"),
     }
+    # YG (eq22) and SG (eq43) seeded from their component identities for consistency
+    _gov_seed["YG"] = (_gov_seed["YGK"] + _gov_seed["TDHT"] + _gov_seed["TDFT"]
+                       + _gov_seed["TPRODN"] + _gov_seed["TPRCTS"] + _gov_seed["YGTR"])
+    _gov_seed["SG"] = (_gov_seed["YG"]
+                       - sum(_bench("TRO", ag, "gvt") for ag in AGNG) - _gov_seed["G"])
     for nm in ("YG", "YGK", "TDHT", "TDFT", "TPRODN", "TPRCTS", "TIWT", "TIKT",
                "TIPT", "TICT", "TIMT", "TIXT", "YGTR", "SG", "G"):
         seed = _gov_seed.get(nm, 0.0)
