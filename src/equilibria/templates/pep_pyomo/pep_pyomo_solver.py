@@ -18,6 +18,24 @@ from typing import Any
 from pyomo.environ import SolverFactory, Var, Constraint, value
 
 
+def _ensure_path_lib() -> None:
+    """Point PATH_CAPI_LIBPATH at the PATH C-API dylib (like GTAP's run_gtap), so the
+    MCP solve is self-contained. Searches the known locations; no-op if already set."""
+    import os
+    from pathlib import Path
+    if os.environ.get("PATH_CAPI_LIBPATH"):
+        return
+    for cand in (
+        "/Users/marmol/proyectos2/equilibria/.cache/path_capi/libpath50.silicon.dylib",
+        "/Users/marmol/proyectos/path-capi-python/notes/tmp/path_capi_artifacts/"
+        "aarch64-apple-darwin/libpath.dylib",
+        "/Library/Frameworks/GAMS.framework/Versions/53/Resources/libpath52.dylib",
+    ):
+        if Path(cand).exists():
+            os.environ["PATH_CAPI_LIBPATH"] = cand
+            return
+
+
 @dataclass
 class PEPSolveResult:
     code: int                      # 1 = optimal/feasible, 2 = not converged
@@ -89,15 +107,32 @@ def solve_pep(m, tol: float = 1e-7, max_iter: int = 3000) -> PEPSolveResult:
 
 
 def _solve_mcp(m, tol: float) -> PEPSolveResult:
-    """MCP via PATH (walras⊥LEON). Requires path-capi-python; error clearly if absent."""
+    """MCP via PATH — the square PEP system (equality constraints, e fixed numeraire,
+    WALRAS⊥LEON free-row) solved through path-capi's PATHCAPIBridgeSolver, which pairs
+    equations↔variables and calls PATH. Requires path-capi-python; clear error if absent."""
     import importlib.util
     if importlib.util.find_spec("path_capi_python") is None:
         return PEPSolveResult(code=2, max_residual=float("nan"),
                               message="path_capi_python unavailable for MCP solve")
-    # The square PEP system with e fixed + walras⊥LEON is solved as a complementarity
-    # problem; reuse the nonlinear-full PATH driver the GTAP template exposes.
-    from path_capi_python import solve_nonlinear_full  # type: ignore
-    code = solve_nonlinear_full(m, tol=tol)  # returns PATH status code (1=solved)
+    _ensure_path_lib()
+    import path_capi_python  # noqa: F401  (registers the 'path_capi_bridge' SolverFactory)
+    # Early-exit at a feasible seed, same as NLP (BASE is the calibration point).
+    seed_resid = _max_residual(m)
+    if seed_resid <= max(tol * 100, 1e-4):
+        return PEPSolveResult(code=1, max_residual=seed_resid,
+                              values=_collect_values(m),
+                              message="feasible-at-seed (no re-solve, MCP)")
+    opt = SolverFactory("path_capi_bridge")
+    if not opt.available(exception_flag=False):
+        return PEPSolveResult(code=2, max_residual=float("nan"),
+                              message="path_capi_bridge solver unavailable")
+    try:
+        res = opt.solve(m, load_solutions=True)
+        tc = str(res.solver.termination_condition)
+    except Exception as e:  # noqa: BLE001
+        return PEPSolveResult(code=2, max_residual=float("nan"),
+                              message=f"PATH solve error: {e}")
     resid = _max_residual(m)
-    return PEPSolveResult(code=1 if code == 1 else 2, max_residual=resid,
-                          values=_collect_values(m), message=f"PATH code={code}")
+    ok = tc in ("optimal", "feasible") or resid <= max(tol * 100, 1e-4)
+    return PEPSolveResult(code=1 if ok else 2, max_residual=resid,
+                          values=_collect_values(m), message=f"PATH {tc}")
