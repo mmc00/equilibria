@@ -314,19 +314,29 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
                     m.RC[j].fix(_bench("RCO", j) or 1.0)
                 except Exception:
                     pass
-        # CRITICAL (from the GAMS PEP reference): structurally-zero cells fix QUANTITIES
-        # at 0 but PRICES at 1 — `pcomp.fx$(xcomp0=0)=1; xcomp.fx$(xcomp0=0)=0`. Fixing a
-        # price at 0 makes ratio/division terms blow up and PATH diverges (7.7e15). So the
-        # fill value depends on whether the var is a price.
-        _PRICE_VARS = {"PD", "PM", "PE", "PE_FOB", "PL", "P", "PC", "PT", "PP", "PVA",
-                       "PCI", "W", "RK", "R", "WC", "RC", "WTI", "RTI"}
+        # Structurally-zero cells: fix QUANTITIES at 0, PRICES at their BENCHMARK level.
+        # GAMS leaves a price whose defining eq is $-masked out (e.g. PD['othind'], no
+        # domestic demand) UNPAIRED-but-free, so PATH keeps it at its init = the calibrated
+        # PDO['othind']=1.132. We reproduce that by filling a structural-zero price from its
+        # *O benchmark (fallback 1.0 if none) — NOT a blind 1.0, which mismatched GAMS's
+        # 1.132 on that one cell. A price must never be 0 (ratio/`x**(-rho)` terms overflow
+        # → PATH 7.7e15), so the fallback stays 1.0, never 0.
+        _PRICE_BENCH = {"PD": "PDO", "PM": "PMO", "PE": "PEO", "PE_FOB": "PE_FOBO",
+                        "PL": "PLO", "P": "PO", "PC": "PCO", "PT": "PTO", "PP": "PPO",
+                        "PVA": "PVAO", "PCI": "PCIO", "W": "WO", "RK": "RKO", "R": "RO",
+                        "WC": "WCO", "RC": "RCO", "WTI": "WTIO", "RTI": "RTIO"}
         for var, allkeys, active in _fix_outside:
             if active is None:
                 continue
             act = set(active)
-            fill = 1.0 if var.name in _PRICE_VARS else 0.0
+            bench_name = _PRICE_BENCH.get(var.name)
             for k in allkeys:
                 if k not in act:
+                    if bench_name is not None:            # price cell
+                        bval = _bench(bench_name, *(k if isinstance(k, tuple) else (k,)))
+                        fill = bval if bval else 1.0       # never 0 (overflow guard)
+                    else:                                  # quantity cell
+                        fill = 0.0
                     try:
                         var[k].fix(fill)
                     except Exception:

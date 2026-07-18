@@ -83,11 +83,11 @@ def test_no_ces_overflow_at_benchmark(state):
 
 @pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
 def test_nlp_mcp_mirror(state):
-    """NLP and MCP forms, solved from the same feasible benchmark seed, land on the same
-    point (the parity anchor). 465/466 economic cells match exactly; the ONE difference is
-    PD['othind'] (NLP keeps GAMS's calibrated 1.132; the MCP square-closure pins the
-    zero-domestic-supply good's price to an inert 1.0). LEON (the Walras slack) is
-    form-defining and excluded. Requires PATH for the MCP solve; skips cleanly otherwise."""
+    """NLP and MCP forms, solved from the same feasible benchmark seed, land on the SAME
+    point (the parity anchor) — 466/466 economic cells match exactly. Structural-zero prices
+    (e.g. PD['othind'], no domestic demand) are filled from their *O benchmark in BOTH forms,
+    matching GAMS (whose native MCP leaves them free at PDO=1.132). LEON (the Walras slack)
+    is form-defining and excluded. Requires PATH for the MCP solve; skips cleanly otherwise."""
     import sys
     src = "/Users/marmol/proyectos/path-capi-python/src"
     if Path(src).exists() and src not in sys.path:
@@ -116,6 +116,6 @@ def test_nlp_mcp_mirror(state):
     def match(a, b):
         return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
     diffs = sorted((k for k in keys if not match(vn[k], vm[k])), key=lambda k: -abs(vn[k] - vm[k]))
-    # exactly one faithful difference: the free zero-quantity price PD['othind']
-    assert diffs == [("PD", "othind")], (
+    # NLP and MCP are an exact mirror — no cell differs
+    assert diffs == [], (
         f"unexpected NLP↔MCP mirror diffs: {[(k, vn[k], vm[k]) for k in diffs[:5]]}")

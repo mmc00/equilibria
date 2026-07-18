@@ -116,12 +116,13 @@ def _solve_mcp(m, tol: float) -> PEPSolveResult:
                               message="path_capi_python unavailable for MCP solve")
     _ensure_path_lib()
     import path_capi_python  # noqa: F401  (registers the 'path_capi_bridge' SolverFactory)
-    # Early-exit at a feasible seed, same as NLP (BASE is the calibration point).
-    seed_resid = _max_residual(m)
-    if seed_resid <= max(tol * 100, 1e-4):
-        return PEPSolveResult(code=1, max_residual=seed_resid,
-                              values=_collect_values(m),
-                              message="feasible-at-seed (no re-solve, MCP)")
+    # NO early-exit for the MCP. The benchmark BASE point (GDP_BP=46707) is the CALIBRATION
+    # seed, NOT a model solution — GAMS's own MCP solve MOVES off it to GDP_BP=46748.2084
+    # (== valGDP_BP['SIM1'], where it closes the calibration's 2026 GDP_IB hole so
+    # GDP_MP==GDP_IB and LEON->0). Exiting at the seed would report the un-solved benchmark
+    # and DIVERGE from GAMS by ~0.1% on every quantity. Faithful behavior: run PATH and let
+    # it find the true fixed point, exactly as GAMS does. (The NLP early-exit is separate;
+    # its GAMS reference is the CNS-confirmed BASE — a different provenance.)
     opt = SolverFactory("path_capi_bridge")
     if not opt.available(exception_flag=False):
         return PEPSolveResult(code=2, max_residual=float("nan"),
