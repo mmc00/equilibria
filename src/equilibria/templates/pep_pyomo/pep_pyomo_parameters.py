@@ -43,12 +43,30 @@ class PEPParams:
         # name defaults to an empty dict (→ 0.0 per index) when the calibration omits it.
         # Mirrors _extract_parameters (pep_model_solver_ipopt.py:1010-1103).
         for stripped, benchO in (("sh0", "sh0O"), ("sh1", "sh1O"), ("tr0", "tr0O"),
-                                 ("tr1", "tr1O"), ("ttdh0", "ttdh0O"), ("ttdh1", "ttdh1O"),
-                                 ("ttdf0", "ttdf0O"), ("ttdf1", "ttdf1O"),
+                                 ("tr1", "tr1O"), ("ttdh0", "ttdh0O"),
+                                 ("ttdf0", "ttdf0O"),
                                  ("ttiw", "ttiwO"), ("ttik", "ttikO"), ("ttip", "ttipO"),
                                  ("ttic", "tticO"), ("ttim", "ttimO"), ("ttix", "ttixO")):
             if stripped not in self._flat:
                 self._flat[stripped] = dict(self._flat.get(benchO, {}))
+        # ttdh1/ttdf1 are INFERRED, not copied (pep_model_solver_ipopt.py:1013-1025):
+        #   TDH_h = max(YHO - YDHO - TRO[gvt,h], 0); ttdh1[h] = (TDH_h - ttdh0[h]) / YHO_h
+        #   TDF_f = max(YFO - YDFO, 0);             ttdf1[f] = TDF_f / YFKO_f
+        yho, ydho = self._flat.get("YHO", {}), self._flat.get("YDHO", {})
+        tro, ttdh0 = self._flat.get("TRO", {}), self._flat.get("ttdh0", {})
+        ttdh1 = {}
+        for h in yho:
+            yh = yho.get(h, 0.0)
+            tdh = max(yho.get(h, 0.0) - ydho.get(h, 0.0) - tro.get(("gvt", h), 0.0), 0.0)
+            ttdh1[h] = (tdh - ttdh0.get(h, 0.0)) / yh if abs(yh) > 1e-12 else 0.0
+        self._flat.setdefault("ttdh1", ttdh1)
+        yfo, ydfo, yfko = (self._flat.get(n, {}) for n in ("YFO", "YDFO", "YFKO"))
+        ttdf1 = {}
+        for f in yfo:
+            yfk = yfko.get(f, 0.0)
+            tdf = max(yfo.get(f, 0.0) - ydfo.get(f, 0.0), 0.0)
+            ttdf1[f] = tdf / yfk if abs(yfk) > 1e-12 else 0.0
+        self._flat.setdefault("ttdf1", ttdf1)
         # gamma_INV[i] = PCO[i]*INVO[i] / Σ_i PCO*INVO ; gamma_GVT[i] = PCO[i]*CGO[i] / Σ
         pco = self._flat.get("PCO", {})
         invo = self._flat.get("INVO", {})

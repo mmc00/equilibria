@@ -134,16 +134,33 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     m.TDF = Var(F, domain=Reals, initialize=_init("TDFO"))
     # transfers (full AG x AG)
     m.TR = Var(AG, AG, domain=Reals, initialize=_init("TRO"))
-    # government
-    for nm in ("YG", "YGK", "TDHT", "TDFT", "TPRODN", "TPRCTS", "TIWT", "TIKT",
-               "TIPT", "TICT", "TIMT", "TIXT", "YGTR", "SG", "G"):
-        setattr(m, nm, Var(domain=Reals, initialize=P.get(nm + "O") if (nm + "O") in P else 0.0))
     m.TIW = Var(L, J, domain=Reals, initialize=_init("TIWO"))
     m.TIK = Var(K, J, domain=Reals, initialize=_init("TIKO"))
     m.TIP = Var(J, domain=Reals, initialize=_init("TIPO"))
     m.TIC = Var(I, domain=Reals, initialize=_init("TICO"))
     m.TIM = Var(I, domain=Reals, initialize=_init("TIMO"))
     m.TIX = Var(I, domain=Reals, initialize=_init("TIXO"))
+    # government aggregates — seed from the defining sums (eq24-34) so they're seed-consistent,
+    # not 0 (TIWTO/TIKTO/... aren't calibrated params).
+    _tiwt = sum(_bench("TIWO", l, j) for l in L for j in J)
+    _tikt = sum(_bench("TIKO", k, j) for k in K for j in J)
+    _tipt = sum(_bench("TIPO", j) for j in J)
+    _tict = sum(_bench("TICO", i) for i in I)
+    _timt = sum(_bench("TIMO", i) for i in I)
+    _tixt = sum(_bench("TIXO", i) for i in I)
+    _gov_seed = {
+        "TIWT": _tiwt, "TIKT": _tikt, "TIPT": _tipt, "TICT": _tict, "TIMT": _timt,
+        "TIXT": _tixt, "TPRODN": _tiwt + _tikt + _tipt, "TPRCTS": _tict + _timt + _tixt,
+        "TDHT": sum(_bench("TDHO", h) for h in H), "TDFT": sum(_bench("TDFO", f) for f in F),
+        "YGK": _bench("YGKO"), "YGTR": 0.0, "YG": _bench("YGO"), "SG": _bench("SGO"),
+        "G": _bench("GO"),
+    }
+    for nm in ("YG", "YGK", "TDHT", "TDFT", "TPRODN", "TPRCTS", "TIWT", "TIKT",
+               "TIPT", "TICT", "TIMT", "TIXT", "YGTR", "SG", "G"):
+        seed = _gov_seed.get(nm, 0.0)
+        if seed in (0.0, 1e-6) and (nm + "O") in P:
+            seed = P.get(nm + "O")
+        setattr(m, nm, Var(domain=Reals, initialize=seed))
     # rest of world
     m.YROW = Var(domain=Reals, initialize=P.get("YROWO") if "YROWO" in P else 0.0)
     m.SROW = Var(domain=Reals, initialize=P.get("SROWO") if "SROWO" in P else 0.0)
@@ -162,8 +179,11 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     for nm in ("GDP_BP", "GDP_MP", "GDP_IB", "GDP_FD", "IT"):
         setattr(m, nm, Var(domain=Reals, initialize=P.get(nm + "O") if (nm + "O") in P else 0.0))
     m.CTH_REAL = Var(H, domain=NonNegativeReals, initialize=_init("CTHO"))
-    for nm in ("G_REAL", "GDP_BP_REAL", "GDP_MP_REAL", "GFCF_REAL"):
-        setattr(m, nm, Var(domain=NonNegativeReals, initialize=1.0))
+    # real vars = nominal / price-index; at benchmark PIX*=1 so seed = nominal *O level
+    _real_nom = {"G_REAL": "GO", "GDP_BP_REAL": "GDP_BPO",
+                 "GDP_MP_REAL": "GDP_MPO", "GFCF_REAL": "GFCFO"}
+    for nm, nomO in _real_nom.items():
+        setattr(m, nm, Var(domain=NonNegativeReals, initialize=_bench(nomO)))
     m.LS = Var(L, domain=NonNegativeReals, initialize=_init("LSO"))
     m.KS = Var(K, domain=NonNegativeReals, initialize=_init("KSO"))
     m.e = Var(bounds=POS, initialize=1.0)     # exchange rate / numeraire
