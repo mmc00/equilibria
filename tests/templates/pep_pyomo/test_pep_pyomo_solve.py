@@ -243,3 +243,60 @@ def test_mcp_sim1_shock_matches_gams():
     ok, tot, bad = _diff_mcp_vs_gams(m, gams)
     assert tot > 200, f"too few comparable cells ({tot})"
     assert not bad, f"SIM1 MCP↔GAMS mismatches ({ok}/{tot}): {bad[:5]}"
+
+
+@pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
+def test_objdef_variant_equals_base_nlp(state):
+    """The objdef variant adds a DUMMY objective (`OBJDEF: OBJ==0`, min OBJ) — the
+    `SOLVE NLP MINIMIZING OBJ` lineage. A constant objective can't change the equilibrium, so
+    objdef-NLP must land on the exact same point as base-NLP (467/467 cells)."""
+    from pyomo.environ import Var, value
+    from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
+
+    def vals(m):
+        d = {}
+        for v in m.component_objects(Var, active=True):
+            if v.name == "OBJ":
+                continue
+            for i in v:
+                x = value(v[i], exception=False)
+                if x is not None:
+                    d[(v.name, i)] = float(x)
+        return d
+    mb = build_pep_model(state, variant="base", form="nlp"); rb = solve_pep(mb)
+    mo = build_pep_model(state, variant="objdef", form="nlp"); ro = solve_pep(mo)
+    assert rb.code == 1 and ro.code == 1, f"base={rb.message} objdef={ro.message}"
+    assert mo.find_component("OBJDEF") is not None, "objdef-NLP must carry the OBJDEF constraint"
+    vb, vo = vals(mb), vals(mo)
+    keys = set(vb) & set(vo)
+
+    def match(a, b):
+        return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
+    bad = [k for k in keys if not match(vb[k], vo[k])]
+    assert not bad, f"objdef-NLP diverged from base at {bad[:5]}"
+
+
+@pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
+def test_objdef_mcp_is_square_and_solves(state):
+    """objdef + MCP must stay SQUARE: OBJ is an NLP-only construct (its OBJDEF equation is
+    added only on the NLP path), so it must NOT be declared for the MCP form — else it's an
+    unpaired free var (359 vars vs 358 eqs) and PATH errors 'Got 358 expressions for 359
+    variables'. Guards against that regression. Skips cleanly without PATH."""
+    import sys
+    src = "/Users/marmol/proyectos/path-capi-python/src"
+    if Path(src).exists() and src not in sys.path:
+        sys.path.insert(0, src)
+    if importlib.util.find_spec("path_capi_python") is None:
+        pytest.skip("path_capi_python unavailable for MCP solve")
+    from pyomo.environ import Var, Constraint
+    from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
+    _ensure_path_lib()
+    m = build_pep_model(state, variant="objdef", form="mcp")
+    assert m.find_component("OBJ") is None, "OBJ must not exist in the MCP form (unpaired free var)"
+    nfree = sum(1 for v in m.component_data_objects(Var, active=True) if not v.fixed)
+    ncon = sum(1 for _ in m.component_data_objects(Constraint, active=True))
+    assert nfree == ncon, f"objdef+mcp not square: {nfree} free vars vs {ncon} eqs"
+    r = solve_pep(m)
+    assert r.code == 1, f"objdef+mcp did not solve: {r.message}"

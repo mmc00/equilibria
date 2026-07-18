@@ -207,7 +207,11 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     m.KS = Var(K, domain=NonNegativeReals, initialize=_init("KSO"))
     m.e = Var(bounds=POS, initialize=1.0)     # exchange rate / numeraire
     m.LEON = Var(domain=Reals, initialize=0.0)  # Walras slack (free)
-    if variant == "objdef":
+    # OBJ is the dummy objective var of the `SOLVE NLP MINIMIZING OBJ` (objdef) lineage — an
+    # NLP-only construct. In an MCP it has no defining equation (OBJDEF is added only on the
+    # NLP path below), so declaring it would leave one unpaired free var and break squareness
+    # (359 vars vs 358 eqs). So OBJ exists only for the NLP form.
+    if variant == "objdef" and form != "mcp":
         m.OBJ = Var(domain=Reals, initialize=0.0)
 
     # Constraints are attached by the block builders (imported lazily to keep this
