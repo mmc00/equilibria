@@ -36,6 +36,22 @@ def _ensure_path_lib() -> None:
             return
 
 
+def _ensure_path_module() -> None:
+    """Make `import path_capi_python` work even when the package isn't pip-installed in the
+    active interpreter (e.g. a fresh `uv run` subprocess launched by the parity skill).
+    Injects its known src dir onto sys.path — no-op if the module already imports. Mirrors
+    _ensure_path_lib's self-contained discovery of the dylib."""
+    import sys
+    import importlib.util
+    from pathlib import Path
+    if importlib.util.find_spec("path_capi_python") is not None:
+        return
+    for src in ("/Users/marmol/proyectos/path-capi-python/src",):
+        if (Path(src) / "path_capi_python").exists() and src not in sys.path:
+            sys.path.insert(0, src)
+            return
+
+
 @dataclass
 class PEPSolveResult:
     code: int                      # 1 = optimal/feasible, 2 = not converged
@@ -111,6 +127,7 @@ def _solve_mcp(m, tol: float) -> PEPSolveResult:
     WALRAS⊥LEON free-row) solved through path-capi's PATHCAPIBridgeSolver, which pairs
     equations↔variables and calls PATH. Requires path-capi-python; clear error if absent."""
     import importlib.util
+    _ensure_path_module()   # inject path-capi-python's src onto sys.path if not importable
     if importlib.util.find_spec("path_capi_python") is None:
         return PEPSolveResult(code=2, max_residual=float("nan"),
                               message="path_capi_python unavailable for MCP solve")
