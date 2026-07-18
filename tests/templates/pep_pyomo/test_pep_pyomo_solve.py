@@ -119,3 +119,76 @@ def test_nlp_mcp_mirror(state):
     # NLP and MCP are an exact mirror — no cell differs
     assert diffs == [], (
         f"unexpected NLP↔MCP mirror diffs: {[(k, vn[k], vm[k]) for k in diffs[:5]]}")
+
+
+MCP_REF = ROOT / "src/equilibria/templates/reference/pep2/scripts/Results_mcp.gdx"
+_GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/53/Resources/gdxdump"
+
+
+@pytest.mark.skipif(not SAM.exists() or not MCP_REF.exists(),
+                    reason="pep2 SAM or GAMS-native MCP reference not present")
+def test_mcp_matches_gams_native_mcp(state):
+    """The Pyomo MCP solve must match the GAMS-NATIVE MCP (Results_mcp.gdx, from
+    PEP-1-1_v2_1_mcp_solve.gms: MODEL /ALL/ + SOLVE USING MCP, base case) cell-by-cell —
+    same formulation, same PATH engine, so the solver tolerance cancels. This is the
+    definitive fidelity gate for the MCP form (100% / 285 economic cells). Skips cleanly
+    if PATH or gdxdump is unavailable."""
+    import sys
+    src = "/Users/marmol/proyectos/path-capi-python/src"
+    if Path(src).exists() and src not in sys.path:
+        sys.path.insert(0, src)
+    if importlib.util.find_spec("path_capi_python") is None:
+        pytest.skip("path_capi_python unavailable for MCP solve")
+    if not Path(_GDXDUMP).exists():
+        pytest.skip("gdxdump (GAMS) unavailable")
+    from pyomo.environ import value
+    from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
+    _ensure_path_lib()
+
+    # read the GAMS-native MCP levels via gdxdump (raw Variable symbols: PD, GDP_BP, …)
+    import subprocess
+    import re
+    txt = subprocess.run([_GDXDUMP, str(MCP_REF)], capture_output=True, text=True).stdout
+    gams, cur = {}, None
+    for line in txt.splitlines():
+        sm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\s+.*?/L\s+([-\d.E+]+)", line)
+        if sm and "(" not in line.split("/")[0]:
+            gams[(sm.group(1), None)] = float(sm.group(2)); continue
+        hm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\(", line)
+        if hm:
+            cur = hm.group(1); continue
+        if cur:
+            rm = re.match(r"\s*(.+?)\.L\s+([-\d.E+]+)", line)
+            if rm:
+                kp = rm.group(1).replace("'", "").strip()
+                idx = tuple(kp.split(".")) if "." in kp else kp
+                gams[(cur, idx)] = float(rm.group(2))
+            if line.strip().endswith("/;"):
+                cur = None
+
+    m = build_pep_model(state, variant="base", form="mcp")
+    r = solve_pep(m)
+    assert r.code == 1, f"MCP solve did not converge: {r.message}"
+
+    def match(a, b):
+        return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
+    tot = ok = 0
+    bad = []
+    for (vname, idx), gval in gams.items():
+        if vname.lower() in ("leon",):
+            continue
+        pv = m.find_component(vname)
+        if pv is None:
+            continue
+        try:
+            pval = float(value(pv[idx] if idx is not None else pv, exception=False))
+        except Exception:
+            continue
+        tot += 1
+        if match(pval, gval):
+            ok += 1
+        else:
+            bad.append((vname, idx, pval, gval))
+    assert tot > 200, f"too few comparable cells ({tot}) — gdx read likely broke"
+    assert not bad, f"MCP↔GAMS mismatches ({ok}/{tot}): {bad[:5]}"
