@@ -2372,9 +2372,18 @@ def _holdfix_cd_nest(m, period: str) -> int:
     EVERY period.  A fixed var must free its paired row, exactly as holdfixed does.
     Mirrors diff_altertax.holdfix_cd_nest but t-aware (only the given period).
     Returns the count of pva/pnd cells fixed.  See project_gtap7_10x7_check_holdfix.
+
+    px is the SAME degenerate family: GAMS pxeq at sigmap=1 collapses to the
+    tautology px**0 == and+ava (1==1) — px is a free DOF parked at its warm-start
+    (the clean ramped gtap7_15x10 ref shows px/pf frozen base→check→shock).
+    Python's eq_pxeq CD branch instead ADDS the geometric-mean dual
+    px = pnd^and·pva^ava, a determinant GAMS does not have — at the GAMS point it
+    carries residual (eq_pxeq[CAN,Metals]=0.43, seed_and_solve vs the clean ref)
+    and pushed the whole CAN/Metals block ~42% off (the ifsub0 87.76% ceiling).
+    Hold px exactly like pva/pnd.
     """
     hf = 0
-    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq")):
+    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq"), ("px", "eq_pxeq")):
         v = getattr(m, vn, None)
         if v is not None:
             for idx in v:
