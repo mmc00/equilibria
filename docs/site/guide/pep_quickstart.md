@@ -103,19 +103,25 @@ Path("out/pep_solution.json").write_text(json.dumps(solution.to_dict(), indent=2
 
 ## Step 4 — (Optional) GAMS parity check
 
-If you have access to a reference Results GDX produced by the PEP-1-1
-GAMS model, you can compare variable-by-variable:
+If you have GAMS installed locally, `run_gams_comparison` runs the
+reference PEP-1-1 `.gms` model and compares the resulting GDX
+variable-by-variable against the Python solution:
 
 ```python
 from equilibria.templates.gams_comparison import run_gams_comparison
 
 report = run_gams_comparison(
-    python_solution=solution,
-    gams_results_gdx=REPO / "src/equilibria/templates/reference/pep2/scripts/Results.gdx",
-    rel_tol=1e-4,
+    gams_file=REPO / "src/equilibria/templates/reference/pep2/scripts/PEP-1-1_v2_1_ipopt_excel.gms",
+    equilibria_solution=solution,
+    tolerance=1e-4,
 )
-print(report.summary())
+print(report.generate_summary())
 ```
+
+If you already have a solved reference `Results.gdx`, warm-start the
+solver from it instead (`init_mode="gams"` plus `gams_results_gdx=` on
+`PEPModelSolver`), or use the parity gates described in the
+{doc}`PEP coverage matrix <pep_coverage_matrix>`.
 
 ## Pyomo port — NLP and MCP forms
 
