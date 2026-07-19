@@ -1,5 +1,37 @@
 # GTAP Python-to-GAMS Validation Status
 
+## Session 2026-07-18/19: 15×10 altertax shock closed 94.5/95.8 → 99.5/99.5 (branch gtap_gaps)
+
+**Gate:** `test_altertax_multiperiod_parity` / `measure_gate_tols.py`, tol 1%.
+**Result:** ifsub0/ifsub1 = **99.5/99.5 @1%** (98.0 @0.5%), codes 1/1/1, floors 94/93→99/99
+(`coverage_matrix.py`), cero regresión en el sweep (3x3 99.93/99.93, 3x4 99.67/99.72,
+5x5 99.88/99.88, 10x7 99.29/99.30). El "known eq_paa family" de la matriz NO era irreducible —
+eran TRES problemas apilados:
+
+1. **Merge perdido:** el fix quirúrgico de shares Armington (`1bb11e6`, junio) + el audit de
+   tools (`156d36c`/`4a20ec7`) quedaron huérfanos en `booming-message` y nunca llegaron a main.
+   Cherry-picked (`10ea7e1`/`58a23ff`) → la familia eq_paa desaparece completa de la cola.
+2. **Referencia auto-inconsistente:** el GDX 2026-07-17 violaba su PROPIO xfeq
+   (`xf[GBR,Capital,Rice,shock]=−0.0048` vs RHS CES +0.24, evaluado a mano con la calibración
+   verificada idéntica af/gx/and/ava/fctts/fcttx/kappaf/omegas 0 DIFF). Causa: opciones PATH
+   default en NEOS. Fix: regen ONE-SHOT (fiel a los scripts originales — la rampa se descartó:
+   parquea los DOF path-dependent) con `path.opt` apretado inline vía `$onecho`
+   (refs `bfb12ca`/`81e765f`, 4/4 Optimal, 0 celdas negativas).
+3. **El triple degenerado del CD-nest:** bajo sigmap=sigmav=1 los pxeq/pvaeq/pndeq de GAMS son
+   tautologías → pva/pnd/px sub-determinados. **Prueba GAMS-vs-GAMS:** tres runs del mismo
+   sistema, tres parkings (la rampeada dejó CAN/Metals 42% off; la apretada clavó
+   `pva[USA,Chemicals,shock]=0.001` EN SU BOUND). Python agregaba un determinante propio
+   (dual CD `px=pnd^and·pva^ava`) que contradecía el parking de la ref (residual 0.915 →
+   xd[USA,Chemicals] 11×). Fix (`95b5c5f`): pin del triple COMPLETO al slice shock del GDX +
+   desactivar el dual agregado. TRAMPA: el primer intento pineó px en valores del CHECK (px
+   faltaba en el bloque de re-siembra) — un hold vale lo que vale su fuente de seed.
+
+Laterales: floors 1e-8 de cantidades eliminados (`c2c6cab`, unfaithful — GAMS solo acota
+precios; hacían infactible el punto GAMS en micro-celdas); inits ytax[ft]/[fs] fieles
+(`f2d565e`). **Resto 0.5% del 15×10:** familia micro-importaciones JPN Rice (~6% rel sobre
+cantidades ~2e-5) — nombrada, no diagnosticada. Documentación completa:
+`~/proyectos/notes/economics/cge/gtap7_15x10_altertax_parity_close.md`.
+
 ## Session 2026-07-01: pure-gtap (real-CES) ifSUB=1 shock closed 55→98.95%
 
 **Gate:** `test_gtap_multiperiod_parity.py` (mode="gtap", NOT altertax), gtap7_3x3,
