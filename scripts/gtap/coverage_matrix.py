@@ -233,10 +233,12 @@ _MCP_ROWS: list[Row] = [
         "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
     Row("gtap7_10x7", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
+    # 15x10 shock floor raised 94/93 → 99: measured 99.5/99.5 vs the ONE-SHOT tight-
+    # path.opt refs with the CD-degenerate triple (pva/pnd/px) pinned (2026-07-19).
     Row("gtap7_15x10", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 94.0), mode="altertax"),
+        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 93.0), mode="altertax"),
+        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
 ]
 ROWS.extend(_MCP_ROWS)
 

@@ -2492,6 +2492,15 @@ def solve_multiperiod(
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
+    PATH options: unless the caller already set PATH_CAPI_OPTIONS, the solves run
+    with the SAME path.opt the GAMS reference bundles solve with (crash_method
+    none, nms_searchtype line, convergence_tolerance 1e-10, raised limits).
+    This is a solver-discipline mirror, not a tuning knob: with default options
+    PATH's crash phase JUMPS BASINS even when seeded AT an exact solution —
+    measured on gtap7_15x10 pure ifsub0 seeded at the GAMS point: default options
+    walk pft[USA,Land] 0.646→0.357 (+45%, lands the xw=0/pe=57.7 autarky corner,
+    shock match 89.8%); with the GAMS options it stays (drift 0.52%, resid 5.7e-12).
+
     Strategy (freeze_inactive_periods per period):
     For each period in (base, check, shock):
 
@@ -2526,6 +2535,22 @@ def solve_multiperiod(
     from equilibria.templates.gtap import GTAPModelEquations
 
     run_gtap = _load_run_gtap()
+
+    # GAMS-mirror PATH options (see the docstring). Default only — an existing
+    # PATH_CAPI_OPTIONS (user or harness) always wins.
+    import os
+    if not os.environ.get("PATH_CAPI_OPTIONS"):
+        os.environ["PATH_CAPI_OPTIONS"] = (
+            "convergence_tolerance 1e-10\n"
+            "major_iteration_limit 5000\n"
+            "minor_iteration_limit 100000\n"
+            "cumulative_iteration_limit 500000\n"
+            "crash_method none\n"
+            "crash_perturb yes\n"
+            "nms_searchtype line\n"
+            "gradient_step_limit 1e6\n"
+            "proximal_perturbation 0\n"
+        )
 
     if mode not in ("altertax", "gtap"):
         raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
