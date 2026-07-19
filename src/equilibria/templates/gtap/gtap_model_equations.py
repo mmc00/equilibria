@@ -1180,8 +1180,8 @@ class GTAPModelEquations:
 
         Mirrors GAMS yTaxInd = yTaxTot - ytax("dt") — i.e. all tax streams
         except "dt" (direct/factor-income taxes = kappaf*pf*xf = evfb-evos).
-        Streams included: pt, fc, pc, gc, ic, et, mt, ft.  Stream excluded: dt.
-        fs is 0 (fctts=0 for standard GTAP7 datasets).
+        Streams included: pt, fc, pc, gc, ic, et, mt, ft, fs.  Stream excluded: dt.
+        ft+fs enter as the decomposed net ftrv−fbep (see the loop below).
         """
         bm = self.params.benchmark
         taxes = self.params.taxes
@@ -3522,14 +3522,24 @@ class GTAPModelEquations:
                 return total
 
             if gy == "ft":
+                # Mirror the LIVE eq_ytax[ft] at benchmark (pf·xf/xscale == evfb):
+                # ft = Σ fcttx·evfb = Σ ftrv. The old rtf·vfm mixed the NET wedge
+                # (rtf nets subsidy against tax) with the wrong value base.
                 total = 0.0
-                for (rr, f, a), rtf in self.params.taxes.rtf.items():
+                for (rr, f, a), evfb_val in self.params.benchmark.evfb.items():
                     if rr == r:
-                        total += float(rtf) * self.params.benchmark.vfm.get((r, f, a), 0.0)
+                        total += float(self.params.benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
                 return total
 
             if gy == "fs":
-                return 0.0
+                # Mirror the LIVE eq_ytax[fs]: fs = Σ fctts·evfb = Σ(−fbep) (FBEP is
+                # stored negative in the HAR, so the stream is positive revenue).
+                # Was hardcoded 0 from before the factor-subsidy wedge existed.
+                total = 0.0
+                for (rr, f, a), evfb_val in self.params.benchmark.evfb.items():
+                    if rr == r:
+                        total += -float(self.params.benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                return total
 
             if gy in ("fc", "pc", "gc", "ic"):
                 if gy == "fc":
