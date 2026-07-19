@@ -92,6 +92,7 @@ sphinx_gallery_conf = {
 html_theme = "furo"
 html_title = f"equilibria {version}"
 html_static_path = ["_static"]
+html_css_files = ["matrix.css"]
 html_logo = str(ROOT / "docs" / "assets" / "equilibria-mark.svg")
 html_favicon = str(ROOT / "docs" / "assets" / "equilibria-favicon.svg")
 html_theme_options = {
