@@ -534,36 +534,18 @@ class ProductionCalibrator:
                     / self.result.KDCO[j]
                 )
 
-        # ── Normalise factor prices to unity (GAMS convention, PEP parity) ──
-        # GAMS fixes WCO=RCO=1 by construction. The SAM records the wage bill,
-        # and factor quantities are measured in "unit-price" efficiency units.
-        # PEDRO's averaged-from-taxes WCO/RCO may differ from 1; rescale so
-        # the value (WCO×LDCO = wage bill) is preserved while WCO:=1.
-        for j in J:
-            wco_old = self.result.WCO.get(j, 1.0)
-            rco_old = self.result.RCO.get(j, 1.0)
-            if wco_old != 0:
-                # Rescale: LDCO' = LDCO × WCO,  WCO' = 1  → same total value
-                self.result.WCO[j] = 1.0
-                ldco = self.result.LDCO.get(j, 0)
-                self.result.LDCO[j] = ldco * wco_old
-                # Also rescale each LDO(l,j) proportionally
-                for l in L:
-                    key = (l, j)
-                    v = self.result.LDO.get(key, 0)
-                    if v != 0:
-                        self.result.LDO[key] = v * wco_old
-            if rco_old != 0:
-                self.result.RCO[j] = 1.0
-                kdco = self.result.KDCO.get(j, 0)
-                self.result.KDCO[j] = kdco * rco_old
-                for k in K:
-                    key = (k, j)
-                    v = self.result.KDO.get(key, 0)
-                    if v != 0:
-                        self.result.KDO[key] = v * rco_old
+        # NOTE: a WCO/RCO→1.0 normalisation was REMOVED here (was commit adae178). Its
+        # premise — "GAMS fixes WCO=RCO=1 by construction, PVAO=1" — is FALSE: the GAMS
+        # reference (Results.gdx) has valWC['agr']=1.15, valPVA['agr']=1.088, valPP=1.066
+        # (only the tax-free sectors ser/adm are 1.0). The composite wage IS the CES
+        # aggregate computed just above (Σ WTIO·LDO / LDCO ≈ 1.15, matching GAMS exactly);
+        # W[l] IS the numéraire 1.0. Overwriting WCO to 1.0 while rescaling the quantities
+        # broke the benchmark (15 factor/income equations violated: eq6/eq8/eq11/eq87) and
+        # is what turned the CI structural-gates red. GAMS is the source of truth → keep the
+        # CES-computed WCO/RCO. (The PEDRO/413-XLSX parity tests adae178 cited do NOT
+        # compare WCO and are gated on GAMS anyway; verified unaffected.)
 
-        # Recompute factor supplies after rescaling
+        # Factor supplies from the calibrated demands.
         for l in L:
             self.result.LSO[l] = sum(self.result.LDO.get((l, j), 0) for j in J)
         for k in K:
