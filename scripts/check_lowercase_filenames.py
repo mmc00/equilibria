@@ -16,6 +16,7 @@ from pathlib import Path
 # Files that are intentionally kept with canonical uppercase naming.
 ALLOWED_EXACT: set[str] = {
     "AGENTS.md",
+    "CHANGELOG.md",
     "Makefile",
     "NOTICE",
     "README.md",

@@ -1,28 +1,29 @@
-# User guide
+---
+orphan: true
+---
 
-The guide is organized around the three main workflows in `equilibria`:
+# User guide map
 
-1. **Data preparation** — turning raw IO/MIP tables into a balanced SAM
-   (`equilibria.sam_tools`).
-2. **Model calibration & solution** — fitting a model template (PEP, GTAP)
-   to a SAM and solving baselines or shocks.
-3. **Validation** — comparing Python results against reference GAMS
-   solutions to verify parity.
+The documentation is organized in five areas — this page is the map.
 
-```{toctree}
-:maxdepth: 1
+**Start here** — [Installation](installation.md), then the
+[architecture overview](architecture.md) for how the framework fits
+together.
 
-installation
-mip_to_sam
-pep_quickstart
-gtap_quickstart
-welfare_decomposition
-har_io
-path_capi
-benchmarks
-gtap7_coverage_matrix
-pep_coverage_matrix
-```
+**Templates** — the [templates overview](templates.md) lists every model
+template and its parity status; then per-template guides:
+[GTAP quickstart](gtap_quickstart.md), [PEP quickstart](pep_quickstart.md),
+[welfare decomposition](welfare_decomposition.md).
 
-The {doc}`example gallery <../gallery/index>` complements these chapters with
-short, runnable scripts that are re-executed on every documentation build.
+**Data & solvers** — [MIP → SAM](mip_to_sam.md) balancing,
+[HAR I/O](har_io.md), and the [PATH C API](path_capi.md) solver wrapper.
+
+**Validation & parity** — [benchmarks](benchmarks.md) and the coverage
+matrices: [GTAP 7](gtap7_coverage_matrix.md) ·
+[PEP-1-1](pep_coverage_matrix.md).
+
+**Reference** — the [API reference](../api/index.md) and the
+[changelog](../changelog.md).
+
+The {doc}`example gallery <../gallery/index>` complements these chapters
+with short, runnable scripts re-executed on every documentation build.

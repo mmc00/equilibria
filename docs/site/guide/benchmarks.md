@@ -41,10 +41,9 @@ Reference: `src/equilibria/templates/reference/gtap/output/COMP.gdx` (rate-scale
 
 ### Parity vs GAMS NEOS reference
 
-| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |
-|-------|--------------|-------|-------|---------|---------|------------|----------|------------|
-| `base` | 138/138 | 59958 | 59958 | 0 | 0 | 100.00% | 2.22e-11 | 6.57s |
-| `shock` | 138/138 | 59978 | 59978 | 0 | 0 | 100.00% | 6.02e-13 | 7.59s |
+```{raw} html
+<div class="mx-card"><div class="mx-scroll"><table class="mx-table"><thead><tr><th class="mx-lbl">Phase</th><th>Vars matched</th><th>Cells</th><th>Match</th><th>Diverge</th><th>Missing</th><th>Match rate</th><th>Residual</th><th>Solve time</th></tr></thead><tbody><tr><td class="mx-lbl"><span class="mx-ds">base</span></td><td>138/138</td><td>59958</td><td>59958</td><td>0</td><td>0</td><td><div class="mx-cell"><span class="mx-num mx-good">100.00%</span><span class="mx-chip mx-good">✓ match</span></div></td><td><span class="mx-ref">2.22e-11</span></td><td><span class="mx-ref">6.57s</span></td></tr><tr><td class="mx-lbl"><span class="mx-ds">shock</span></td><td>138/138</td><td>59978</td><td>59978</td><td>0</td><td>0</td><td><div class="mx-cell"><span class="mx-num mx-good">100.00%</span><span class="mx-chip mx-good">✓ match</span></div></td><td><span class="mx-ref">6.02e-13</span></td><td><span class="mx-ref">7.59s</span></td></tr></tbody></table></div></div>
+```
 
 > ℹ️ **GAMS-local parity not available for 9x10.** The model has ~10k equations and exceeds the GAMS community-license limit of 2500 rows/cols for nonlinear models. Only the NEOS reference run is used for 9x10.
 
@@ -56,26 +55,25 @@ Reference: `output/nus333_neos/out.gdx` (NEOS job 18744693, power-scaled 10% imp
 
 ### Parity vs GAMS NEOS reference
 
-| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |
-|-------|--------------|-------|-------|---------|---------|------------|----------|------------|
-| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 | 0.32s |
-| `shock` | 138/138 | 1310 | 1310 | 0 | 0 | 100.00% | 2.08e-07 | 0.32s |
+```{raw} html
+<div class="mx-card"><div class="mx-scroll"><table class="mx-table"><thead><tr><th class="mx-lbl">Phase</th><th>Vars matched</th><th>Cells</th><th>Match</th><th>Diverge</th><th>Missing</th><th>Match rate</th><th>Residual</th><th>Solve time</th></tr></thead><tbody><tr><td class="mx-lbl"><span class="mx-ds">base</span></td><td>138/138</td><td>1304</td><td>1304</td><td>0</td><td>0</td><td><div class="mx-cell"><span class="mx-num mx-good">100.00%</span><span class="mx-chip mx-good">✓ match</span></div></td><td><span class="mx-ref">1.98e-11</span></td><td><span class="mx-ref">0.32s</span></td></tr><tr><td class="mx-lbl"><span class="mx-ds">shock</span></td><td>138/138</td><td>1310</td><td>1310</td><td>0</td><td>0</td><td><div class="mx-cell"><span class="mx-num mx-good">100.00%</span><span class="mx-chip mx-good">✓ match</span></div></td><td><span class="mx-ref">2.08e-07</span></td><td><span class="mx-ref">0.32s</span></td></tr></tbody></table></div></div>
+```
 
 ### Parity vs GAMS local
 
-| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |
-|-------|--------------|-------|-------|---------|---------|------------|----------|------------|
-| `base` | 138/138 | 1304 | 1304 | 0 | 0 | 100.00% | 1.98e-11 | 0.32s |
-| `shock` | 138/138 | 1310 | 1310 | 0 | 0 | 100.00% | 2.08e-07 | 0.32s |
+```{raw} html
+<div class="mx-card"><div class="mx-scroll"><table class="mx-table"><thead><tr><th class="mx-lbl">Phase</th><th>Vars matched</th><th>Cells</th><th>Match</th><th>Diverge</th><th>Missing</th><th>Match rate</th><th>Residual</th><th>Solve time</th></tr></thead><tbody><tr><td class="mx-lbl"><span class="mx-ds">base</span></td><td>138/138</td><td>1304</td><td>1304</td><td>0</td><td>0</td><td><div class="mx-cell"><span class="mx-num mx-good">100.00%</span><span class="mx-chip mx-good">✓ match</span></div></td><td><span class="mx-ref">1.98e-11</span></td><td><span class="mx-ref">0.32s</span></td></tr><tr><td class="mx-lbl"><span class="mx-ds">shock</span></td><td>138/138</td><td>1310</td><td>1310</td><td>0</td><td>0</td><td><div class="mx-cell"><span class="mx-num mx-good">100.00%</span><span class="mx-chip mx-good">✓ match</span></div></td><td><span class="mx-ref">2.08e-07</span></td><td><span class="mx-ref">0.32s</span></td></tr></tbody></table></div></div>
+```
 
 ### Wall-time benchmark
 
 Median / min / max / mean across the runs in `nus333_timing.csv`. The warm-up run is discarded — both sides solve from cold state then are re-run N times. Lower is better.
 
-| Solver | N | Median | Min | Max | Mean |
-|--------|---|--------|-----|-----|------|
-| Python `equilibria` (PATH C API, nonlinear full) | 5 | 0.644s | 0.608s | 0.702s | 0.643s |
-| GAMS local (`comp_nus333.gms`, PATH via GAMS 53) | 5 | 0.848s | 0.769s | 0.917s | 0.831s |
+```{raw} html
+<div class="mx-card"><div class="mx-scroll"><table class="mx-table"><thead><tr><th class="mx-lbl">Solver</th><th>N</th><th>Median</th><th>Min</th><th>Max</th><th>Mean</th></tr></thead><tbody><tr><td class="mx-lbl"><span class="mx-ds">Python equilibria</span><span class="mx-sub">PATH C API, nonlinear full</span></td><td>5</td><td>0.644s</td><td>0.608s</td><td>0.702s</td><td>0.643s</td></tr><tr><td class="mx-lbl"><span class="mx-ds">GAMS local</span><span class="mx-sub">comp_nus333.gms, PATH via GAMS 53</span></td><td>5</td><td>0.848s</td><td>0.769s</td><td>0.917s</td><td>0.831s</td></tr></tbody></table></div></div>
+```
 
-*Median ratio Python / GAMS-local: **0.760×***
+```{raw} html
+<div class="mx-note"><span>⤷</span><span>Median ratio Python / GAMS-local: <b>0.760×</b></span></div>
+```
 

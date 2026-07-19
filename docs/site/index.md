@@ -45,10 +45,38 @@ Auto-generated reference for the public modules.
 
 ```{toctree}
 :hidden:
-:caption: Guide
+:caption: Start here
 
 guide/installation
-guide/index
+guide/architecture
+```
+
+```{toctree}
+:hidden:
+:caption: Templates
+
+guide/templates
+guide/gtap_quickstart
+guide/pep_quickstart
+guide/welfare_decomposition
+```
+
+```{toctree}
+:hidden:
+:caption: Data & solvers
+
+guide/mip_to_sam
+guide/har_io
+guide/path_capi
+```
+
+```{toctree}
+:hidden:
+:caption: Validation & parity
+
+guide/benchmarks
+guide/gtap7_coverage_matrix
+guide/pep_coverage_matrix
 ```
 
 ```{toctree}
@@ -63,4 +91,5 @@ gallery/index
 :caption: Reference
 
 api/index
+changelog
 ```
