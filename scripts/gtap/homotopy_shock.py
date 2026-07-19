@@ -131,13 +131,21 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
                         pass
         return n
 
+    def _sent(m):
+        # Dataset-agnostic sentinel: first pva cell (the old print hardcoded
+        # USA/Mnfcs, which only exists in gtap7_3x3 and crashed every other dataset).
+        idx = next(iter(m.pva), None)
+        if idx is None:
+            return "pva[]=n/a"
+        return f"pva[{','.join(map(str, idx))}]={V(m.pva[idx]):.5f}"
+
     # ---- PHASE 0: converged check anchor (mult=1.0, GAMS check warm-start) ----
     m, p_s = build_at(1.0)
     DA.warmstart_from_gams(m, gdx_path, "check")
     r = solve(m, p_s, GTAPVariableSnapshot.from_python_model(m))
     if verbose:
         print(f"  [check mult=1.0] code={r.get('termination_code')} resid={r.get('residual'):.2e} "
-              f"pva[USA,Mnfcs]={V(m.pva['USA','Mnfcs']):.5f}")
+              f"{_sent(m)}")
     prev_state = snapshot_all(m)
 
     # ---- PHASE 1: ramp imptx 1.0 → ×1.1. Rebuild per step (presolve must run on a
@@ -153,7 +161,7 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
         if verbose and (step in (1, max(1, ramp_steps // 2), ramp_steps)
                         or r.get("termination_code") != 1):
             print(f"  [ramp {step}/{ramp_steps}] mult={mult:.4f} code={r.get('termination_code')} "
-                  f"resid={r.get('residual'):.2e} pva[USA,Mnfcs]={V(m.pva['USA','Mnfcs']):.5f}")
+                  f"resid={r.get('residual'):.2e} {_sent(m)}")
 
     # ---- PHASE 2: clean-up re-seed pnd → pva inversion, re-solve to fixed point ----
     for cs in range(1, cleanup_steps + 1):
@@ -189,7 +197,7 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
         r = solve(m, p_s, GTAPVariableSnapshot.from_python_model(m))
         if verbose:
             print(f"  [cleanup {cs}/{cleanup_steps}] code={r.get('termination_code')} "
-                  f"resid={r.get('residual'):.2e} pva[USA,Mnfcs]={V(m.pva['USA','Mnfcs']):.5f}")
+                  f"resid={r.get('residual'):.2e} {_sent(m)}")
 
     return m, p_s, r
 
