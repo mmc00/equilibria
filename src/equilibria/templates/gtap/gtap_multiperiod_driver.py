@@ -2372,9 +2372,19 @@ def _holdfix_cd_nest(m, period: str) -> int:
     EVERY period.  A fixed var must free its paired row, exactly as holdfixed does.
     Mirrors diff_altertax.holdfix_cd_nest but t-aware (only the given period).
     Returns the count of pva/pnd cells fixed.  See project_gtap7_10x7_check_holdfix.
+
+    px is the third member of the degenerate family: GAMS pxeq at sigmap=1 is the
+    tautology px**0 == and+ava, so px parks wherever the run's path/bounds leave it
+    (GAMS-vs-GAMS proof: three refs of the same system park pva/px differently; the
+    tight one-shot ref parks pva[USA,Chemicals,shock] AT its 0.001 bound). Python's
+    eq_pxeq CD branch is an ADDED determinant (px=pnd^and·pva^ava) GAMS does not
+    have — with pva pinned at the ref's parking it CONTRADICTS the ref's px
+    (eq_pxeq[USA,Chemicals]=0.915 at the seeded point) and blows the block up
+    (xd[USA,Chemicals,*] ~11×). Pin px at the ref's shock slice (re-seeded upstream)
+    and deactivate the added dual — replicating the ref's parking wholesale.
     """
     hf = 0
-    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq")):
+    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq"), ("px", "eq_pxeq")):
         v = getattr(m, vn, None)
         if v is not None:
             for idx in v:
@@ -3081,12 +3091,15 @@ def solve_multiperiod(
         _recalibrate_alphaa_hhd(m, params_shock, "shock", "check")
 
     # Warm-start shock from check solved values (quantities) — this is the right
-    # warm start for convergence.  BUT it overwrites pva/pnd with the CHECK values;
-    # since holdfix_cd will PIN pva/pnd, they must be re-seeded from the SHOCK GAMS
+    # warm start for convergence.  BUT it overwrites pva/pnd/px with the CHECK values;
+    # since holdfix_cd will PIN pva/pnd/px, they must be re-seeded from the SHOCK GAMS
     # values (1.0078 for ROW/Mnfcs, not the check's 0.7592) or the pin is wrong.
+    # px joined the pinned family with the eq_pxeq hold: the FIRST px-hold attempt
+    # failed precisely because px was missing HERE and got pinned at CHECK values
+    # (px[MEX,Rice] froze at 1.0 vs the ref's 0.672 → gate 87.76→86.09, reverted).
     _pva_pnd_shock_seed = {}
     if holdfix_cd and not _gtap_mode:
-        for _vn in ("pva", "pnd"):
+        for _vn in ("pva", "pnd", "px"):
             _v = getattr(m, _vn, None)
             if _v is None:
                 continue
