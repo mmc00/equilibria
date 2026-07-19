@@ -32,6 +32,20 @@ precios; hacían infactible el punto GAMS en micro-celdas); inits ytax[ft]/[fs] 
 cantidades ~2e-5) — nombrada, no diagnosticada. Documentación completa:
 `~/proyectos/notes/economics/cge/gtap7_15x10_altertax_parity_close.md`.
 
+**Epílogo (mismo 07-19): pure 15×10 ifsub0 100→89.8→100, deuda "wrong-branch" CERRADA.**
+El regen de la página MCP destapó que quitar los floors regresionó el shock PURE ifsub0 a
+89.8% (determinístico, 2 corridas): sin `lb=1e-8`, PATH visita la esquina de autarquía
+`xw=0` (slack de complementariedad) → `pet/pe[USA,OtherCrops,*]` vuela a 57.7 (59×). El
+A/B decisivo: seed-at-GAMS con opciones default → PATH ABANDONA el punto exacto (pft
++45%, la fase de crash salta de cuenca desde una solución); con el `path.opt` de GAMS
+(`crash_method none`, `nms_searchtype line`, `convergence_tolerance 1e-10`) → SE QUEDA
+(drift 0.52%, resid 5.7e-12). Fix (`92f67bc`): `solve_multiperiod` defaultea
+`PATH_CAPI_OPTIONS` al path.opt de las refs (override del usuario respetado) — simetría
+de disciplina de solver, cero cambio de modelo. Resultado: pure ifsub0 shock **100.0%**
+@1% (99.98 @0.5%), altertax 99.5 idéntico al decimal, canary 3x3 99.93 idéntico. La
+deuda de junio "15x10 wrong-branch (xp=0.840 vs 0.697), candidato PATH basis/warm-start"
+era EXACTAMENTE esto: la fase de crash con opciones default.
+
 ## Session 2026-07-01: pure-gtap (real-CES) ifSUB=1 shock closed 55→98.95%
 
 **Gate:** `test_gtap_multiperiod_parity.py` (mode="gtap", NOT altertax), gtap7_3x3,

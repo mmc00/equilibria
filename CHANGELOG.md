@@ -30,6 +30,12 @@ commit log.
 - Removed the unfaithful `1e-8` lower-bound floor on quantity variables
   (GAMS bounds prices only): microscopic cells below the floor made the
   GAMS point infeasible in Python and blew up their paired CES prices.
+- Multi-period gate solves now default to the same PATH options the GAMS
+  reference bundles solve with (`crash_method none`, `nms_searchtype line`,
+  `convergence_tolerance 1e-10`; `PATH_CAPI_OPTIONS` overrides win). With
+  default options PATH's crash phase jumps basins even from an exact
+  solution — this closed the long-open 15x10 pure "wrong-branch" debt
+  (shock 89.8 → 100.0% @1%).
 - `ytax[ft]/[fs]` variable inits aligned with the live `eq_ytax`
   (`Σftrv` / `−Σfbep`; `fs` was hardcoded 0).
 
