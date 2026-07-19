@@ -7,7 +7,7 @@ steers IPOPT to a wrong basin — see project_gtap7_altertax_ref_and_nlp_scaling
 MCP form: PATH via path-capi-python (walras⊥LEON free-row, e fixed numeraire), mirroring
 the GTAP MCP path. Falls back to a clear error if PATH is unavailable.
 
-The benchmark BASE reproduces the SAM, so seeding at *O levels and solving should return
+The benchmark BASE reproduces the SAM, so seeding at ``*O`` levels and solving should return
 residual≈0 (the cyipopt solver early-exits there) — that is the parity anchor.
 """
 from __future__ import annotations
