@@ -2492,14 +2492,18 @@ def solve_multiperiod(
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
-    PATH options: unless the caller already set PATH_CAPI_OPTIONS, the solves run
-    with the SAME path.opt the GAMS reference bundles solve with (crash_method
-    none, nms_searchtype line, convergence_tolerance 1e-10, raised limits).
-    This is a solver-discipline mirror, not a tuning knob: with default options
-    PATH's crash phase JUMPS BASINS even when seeded AT an exact solution —
-    measured on gtap7_15x10 pure ifsub0 seeded at the GAMS point: default options
-    walk pft[USA,Land] 0.646→0.357 (+45%, lands the xw=0/pe=57.7 autarky corner,
-    shock match 89.8%); with the GAMS options it stays (drift 0.52%, resid 5.7e-12).
+    PATH options: unless the caller already set PATH_CAPI_OPTIONS, each MODE
+    defaults to the options its OWN reference bundles were solved with:
+    altertax → the tight inline path.opt of the regenerated NEOS bundles
+    (crash_method none, nms_searchtype line, convergence_tolerance 1e-10);
+    gtap (pure) → PATH defaults (the pure bundles carry no path.opt).
+    This is a solver-discipline mirror, not a tuning knob. Historical note:
+    the June "crash phase jumps basins" episode (pure 15x10 ifsub0, default
+    options walked into the xw=0/pe=57.7 autarky corner, 89.8%) was a corner
+    FABRICATED by the then lb=0 boxes on xw/xet — with those domains freed
+    (GAMS declares quantities free) the corner no longer exists and defaults
+    land the ref root on every pure dataset, while the tight set walks
+    15x10 ifsub0 into an alternative Land-block root (90.91%).
 
     Strategy (freeze_inactive_periods per period):
     For each period in (base, check, shock):
@@ -2536,10 +2540,21 @@ def solve_multiperiod(
 
     run_gtap = _load_run_gtap()
 
-    # GAMS-mirror PATH options (see the docstring). Default only — an existing
-    # PATH_CAPI_OPTIONS (user or harness) always wins.
+    if mode not in ("altertax", "gtap"):
+        raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
+    _gtap_mode = (mode == "gtap")
+
+    # PATH options default = the options the reference bundles for THIS mode were
+    # solved with (an existing PATH_CAPI_OPTIONS — user or harness — always wins):
+    #   - altertax: the tight path.opt inlined via $onecho in the regenerated
+    #     one-shot NEOS bundles (crash_method none, tol 1e-10, raised limits).
+    #   - gtap (pure): NO path.opt in the bundles → NEOS solved them with PATH
+    #     DEFAULTS, so the gate must too. With xw/xet free (no fabricated lb=0
+    #     corners) defaults land the ref root on every pure dataset; the tight
+    #     altertax set instead walks 15x10 ifsub0 into an alternative root of
+    #     the USA Land CET block (xf[USA,Land,Rice] 12x, shock 90.91%).
     import os
-    if not os.environ.get("PATH_CAPI_OPTIONS"):
+    if not _gtap_mode and not os.environ.get("PATH_CAPI_OPTIONS"):
         os.environ["PATH_CAPI_OPTIONS"] = (
             "convergence_tolerance 1e-10\n"
             "major_iteration_limit 5000\n"
@@ -2551,10 +2566,6 @@ def solve_multiperiod(
             "gradient_step_limit 1e6\n"
             "proximal_perturbation 0\n"
         )
-
-    if mode not in ("altertax", "gtap"):
-        raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
-    _gtap_mode = (mode == "gtap")
 
     # Determine residual region from the multi-period model's attribute or params.
     res_region = getattr(m, "_residual_region", None)
