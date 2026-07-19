@@ -6,8 +6,9 @@ orphan: true
 
 The documentation is organized in five areas — this page is the map.
 
-**Start here** — [Installation](installation.md), then the architecture
-overview for how the framework fits together.
+**Start here** — [Installation](installation.md), then the
+[architecture overview](architecture.md) for how the framework fits
+together.
 
 **Templates** — the templates overview lists every model template and its
 parity status; then per-template guides:

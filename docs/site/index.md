@@ -48,6 +48,7 @@ Auto-generated reference for the public modules.
 :caption: Start here
 
 guide/installation
+guide/architecture
 ```
 
 ```{toctree}
