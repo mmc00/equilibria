@@ -4005,18 +4005,14 @@ class GTAPModelEquations:
             if hasattr(model, var_name):
                 _set_relative_positive_lower_bound(getattr(model, var_name))
         
-        # Conditional quantity vars: can be zero if benchmark is zero
-        # Only set lb=1e-8 if initial value is positive
-        # xf: factor demand can be zero (e.g., Land/NatRes not used in services)
-        # xw, xe: bilateral trade can be zero for certain trade pairs
-        conditional_quantity_vars = ['xet', 'xda', 'xma', 'xe', 'xc', 'xg', 'xi', 'xaa', 'xds', 'xf', 'xw', 'xwmg', 'xmgm', 'xtmg']
-        for var_name in conditional_quantity_vars:
-            if hasattr(model, var_name):
-                var = getattr(model, var_name)
-                for idx in var:
-                    init_val = value(var[idx])
-                    if init_val is not None and init_val > MIN_QUANTITY:
-                        var[idx].setlb(MIN_QUANTITY)
+        # Quantity vars carry NO positive floor — faithful to GAMS, which lower-bounds
+        # prices aggressively (see above) but never Armington/trade/factor quantities.
+        # A 1e-8 floor here is UNFAITHFUL for microscopic cells whose GAMS solution
+        # falls below it (gtap7_15x10 altertax: GAMS xma[CHN,Grains,MachEq]=2.89e-9):
+        # the GAMS point becomes infeasible in Python, the warm-start seed gets
+        # clamped (W1002), the cell sticks at the floor and its paired CES price
+        # explodes (pa 1.04→18.3) — exactly the artificial state the comment above
+        # warns about. The NonNegativeReals domain already provides lb=0.
     
     def _add_equations(self, model: "ConcreteModel") -> None:
         """Add all equations for square system."""
