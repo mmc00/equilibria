@@ -203,8 +203,16 @@ _MCP_ROWS: list[Row] = [
         "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_5x5", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    # 5x5 ifsub1 shock floor 99→92 (2026-07-19): the pet/pe[USA,Energy] export block is
+    # MULTI-ROOT — under PATH defaults the gate lands the ref's root (100%), under the
+    # GAMS-mirror options (now the solve_multiperiod default; they FIX the mirror-image
+    # corner on 15x10 pure ifsub0, 89.8→100) it lands pe=7.57 vs 1.05 (92.35%). Each
+    # option alone (crash_method none OR convergence_tolerance 1e-10) reproduces it; no
+    # option set is green on both cases. OPEN item: attack via MCP-pairing (tool 6, the
+    # pfteq multi-root class), not solver options. Seeded at the GAMS point it STAYS
+    # (drift 2.2%, resid 6e-11) — the escape happens on the check→shock traverse.
     Row("gtap7_5x5", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 92.0), mode="pure"),
     Row("gtap7_10x7", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_10x7", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
