@@ -67,6 +67,10 @@ autodoc_default_options = {
 autodoc_typehints = "description"
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
+# Render docstring "Attributes:" sections as :ivar: fields instead of
+# .. attribute:: directives — avoids duplicate-object warnings when autodoc
+# also documents the real (pydantic) class attributes.
+napoleon_use_ivar = True
 
 # -- Intersphinx --------------------------------------------------------------
 
