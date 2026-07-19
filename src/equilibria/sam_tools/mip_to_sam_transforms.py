@@ -374,9 +374,9 @@ def create_government_flows(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
     Consolidate government flows (fiscal revenues + expenditure).
 
     Creates:
-    - ("AG", "ti") → ("AG", "gvt"): Indirect taxes
-    - ("AG", "tm") → ("AG", "gvt"): Import tariffs
-    - ("AG", "gvt") → ("I", *): Government consumption
+    - ``("AG", "ti") → ("AG", "gvt")``: Indirect taxes
+    - ``("AG", "tm") → ("AG", "gvt")``: Import tariffs
+    - ``("AG", "gvt") → ("I", *)``: Government consumption
     """
     tax_rates = op.get("tax_rates", DEFAULT_TAX_RATES)
 
@@ -548,8 +548,8 @@ def create_investment_account(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
     Create savings-investment closure.
 
     Creates:
-    - ("AG", *) → ("OTH", "inv"): Savings from institutions
-    - ("I", *) → ("OTH", "inv"): Investment demand
+    - ``("AG", *) → ("OTH", "inv")``: Savings from institutions
+    - ``("I", *) → ("OTH", "inv")``: Investment demand
     """
     df = sam.to_dataframe()
 

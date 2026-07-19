@@ -18,10 +18,7 @@ The PEP-1-1 v2.1 port — see the
 
 .. automodule:: equilibria.templates.pep_pyomo.pep_pyomo_scenarios
    :members:
-```
 
-```{note}
-`pep_pyomo_solver` (the IPOPT/PATH solve driver) is excluded from the
-generated reference until its module docstring is valid reST (unbalanced
-`*` emphasis breaks the strict docs build).
+.. automodule:: equilibria.templates.pep_pyomo.pep_pyomo_solver
+   :members:
 ```

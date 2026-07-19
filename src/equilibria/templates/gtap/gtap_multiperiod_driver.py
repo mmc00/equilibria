@@ -11,7 +11,7 @@ replicating GAMS iterloop.gms:149-178 `var.fx(tsim-1) = var.l(tsim-1)`.
 
 Public API
 ----------
-solve_multiperiod(m, params, closure, *, ref_gdx=None) -> dict
+``solve_multiperiod(m, params, closure, *, ref_gdx=None) -> dict``
     Returns {period: {"code": int, "residual": float}} for each period.
 
 freeze_period(m, period)
@@ -778,6 +778,7 @@ def freeze_inactive_periods(m, active_period: str) -> int:
 
     This makes the full multi-period model `m` look like a single-period system
     to PATH:
+
       - active_period vars are free; inactive-period vars are fixed.
       - active_period constraints are active (Jacobian rows for PATH).
       - inactive-period constraints are deactivated (no rows → square system).
@@ -2483,6 +2484,7 @@ def solve_multiperiod(
 
     Strategy (freeze_inactive_periods per period):
     For each period in (base, check, shock):
+
       1. freeze_inactive_periods(m, period) — pin all non-active-period vars
       2. seed active period from prior-period solved values (warm start)
       3. apply period-specific setup (altertax elasticities, imptx shock, pnum)
@@ -2491,6 +2493,7 @@ def solve_multiperiod(
          for the next period will also freeze them — idempotent)
 
     The multi-period model `m` must already have:
+
       - build_vars, build_equations_intra (all 3 periods), build_equations_fisher
 
     Fisher rows (eq_rgdpmp, eq_pgdpmp, eq_pabs, eq_pfact, eq_pwfact) are live
