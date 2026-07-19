@@ -2553,9 +2553,19 @@ def solve_multiperiod(
     #     corners) defaults land the ref root on every pure dataset; the tight
     #     altertax set instead walks 15x10 ifsub0 into an alternative root of
     #     the USA Land CET block (xf[USA,Land,Rice] 12x, shock 90.91%).
+    # The default is stamped with a sentinel first line so a LATER call in the
+    # same process can tell "ours from a previous call" from "user-set" and
+    # re-derive per its own mode (env vars are sticky; without this, an
+    # altertax solve would leak the tight set into a subsequent pure solve).
     import os
-    if not _gtap_mode and not os.environ.get("PATH_CAPI_OPTIONS"):
+    _OPT_SENTINEL = "* per-mode default set by solve_multiperiod\n"
+    _cur_opts = os.environ.get("PATH_CAPI_OPTIONS")
+    if _cur_opts is not None and _cur_opts.startswith(_OPT_SENTINEL):
+        os.environ.pop("PATH_CAPI_OPTIONS", None)
+        _cur_opts = None
+    if not _gtap_mode and not _cur_opts:
         os.environ["PATH_CAPI_OPTIONS"] = (
+            _OPT_SENTINEL +
             "convergence_tolerance 1e-10\n"
             "major_iteration_limit 5000\n"
             "minor_iteration_limit 100000\n"
