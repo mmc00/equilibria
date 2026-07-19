@@ -43,7 +43,7 @@ source_suffix = {
 }
 
 master_doc = "index"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "examples_src"]
 
 # MyST options — enable common extensions.
 myst_enable_extensions = [
@@ -67,6 +67,10 @@ autodoc_default_options = {
 autodoc_typehints = "description"
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
+# Render docstring "Attributes:" sections as :ivar: fields instead of
+# .. attribute:: directives — avoids duplicate-object warnings when autodoc
+# also documents the real (pydantic) class attributes.
+napoleon_use_ivar = True
 
 # -- Intersphinx --------------------------------------------------------------
 
@@ -92,6 +96,7 @@ sphinx_gallery_conf = {
 html_theme = "furo"
 html_title = f"equilibria {version}"
 html_static_path = ["_static"]
+html_css_files = ["matrix.css"]
 html_logo = str(ROOT / "docs" / "assets" / "equilibria-mark.svg")
 html_favicon = str(ROOT / "docs" / "assets" / "equilibria-favicon.svg")
 html_theme_options = {

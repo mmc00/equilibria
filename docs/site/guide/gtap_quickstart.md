@@ -15,8 +15,11 @@ This guide covers:
 ## Prerequisites
 
 ```bash
-pip install -e ".[pyomo,ipopt,excel,har]"
+pip install -e ".[pyomo,ipopt,excel]"
 ```
+
+The HAR reader is native pure-Python (`equilibria.babel.har`) — no extra
+needed to load the bundled HAR datasets.
 
 `equilibria` ships two GTAP datasets — the canonical 9×10 GAMS
 Standard 7 aggregation and a 3-region NUS333 (GTAPv7/GEMPACK). Both

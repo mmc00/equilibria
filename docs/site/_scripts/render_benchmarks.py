@@ -16,6 +16,8 @@ import csv
 import statistics
 from pathlib import Path
 
+import matrix_html as mx
+
 DATASETS = [
     ("9x10", "GTAP Standard 7 — 9 sectors × 10 regions",
      "Reference: `src/equilibria/templates/reference/gtap/output/COMP.gdx` "
@@ -62,10 +64,11 @@ def _fmt_pct(num: int, den: int) -> str:
 
 
 def _parity_block(rows: list[dict], heading: str) -> list[str]:
-    """Render a parity Summary table + Top-diverging sections for `rows`."""
+    """Render a parity summary card + top-diverging cards for `rows`."""
     parts = [f"### {heading}\n"]
-    parts.append("| Phase | Vars matched | Cells | Match | Diverge | Missing | Match rate | Residual | Solve time |")
-    parts.append("|-------|--------------|-------|-------|---------|---------|------------|----------|------------|")
+    headers = ["Phase", "Vars matched", "Cells", "Match", "Diverge",
+               "Missing", "Match rate", "Residual", "Solve time"]
+    body = []
     for phase in ("base", "shock"):
         s = _summary_row(rows, phase)
         if not s:
@@ -83,11 +86,18 @@ def _parity_block(rows: list[dict], heading: str) -> list[str]:
             secs_str = f"{secs:.2f}s"
         except (ValueError, TypeError):
             secs_str = "—"
-        parts.append(
-            f"| `{phase}` | {n_vars}/{n_total_vars} | {cells} | {match} | "
-            f"{diverge} | {missing} | {_fmt_pct(match, cells)} | "
-            f"{float(s['residual']):.2e} | {secs_str} |"
+        rate = (match / cells * 100) if cells else 0.0
+        rate_cell = mx.cell(
+            mx.num(f"{rate:.2f}%", mx.floor_tone(rate)),
+            mx.chip("✓ match" if diverge == 0 else f"{diverge} diverge",
+                    "good" if diverge == 0 else "warn"),
         )
+        body.append([
+            mx.label(phase), f"{n_vars}/{n_total_vars}", str(cells),
+            str(match), str(diverge), str(missing), rate_cell,
+            mx.ref(f"{float(s['residual']):.2e}"), mx.ref(secs_str),
+        ])
+    parts.append(mx.raw(mx.tablecard(headers, body)))
     parts.append("")
 
     for phase in ("base", "shock"):
@@ -95,13 +105,14 @@ def _parity_block(rows: list[dict], heading: str) -> list[str]:
         if not worst:
             continue
         parts.append(f"#### Top diverging variables — `{phase}`\n")
-        parts.append("| Var | Py var | Cells | Diverge | Max abs err | Max rel err |")
-        parts.append("|-----|--------|-------|---------|-------------|-------------|")
-        for r in worst:
-            parts.append(
-                f"| `{r['var']}` | `{r['py_var']}` | {r['cells']} | "
-                f"{r['diverge']} | {r['max_abs_err']} | {r['max_rel_err']} |"
-            )
+        tbody = [
+            [mx.label(r["var"], r["py_var"]), r["cells"], r["diverge"],
+             mx.ref(r["max_abs_err"]), mx.ref(r["max_rel_err"])]
+            for r in worst
+        ]
+        parts.append(mx.raw(mx.tablecard(
+            ["Var · py var", "Cells", "Diverge", "Max abs err", "Max rel err"],
+            tbody)))
         parts.append("")
     return parts
 
@@ -147,16 +158,21 @@ def _timing_block(timing_csv: Path) -> list[str]:
         f"`{timing_csv.name}`. The warm-up run is discarded — both sides solve "
         "from cold state then are re-run N times. Lower is better.\n"
     )
-    parts.append("| Solver | N | Median | Min | Max | Mean |")
-    parts.append("|--------|---|--------|-----|-----|------|")
-    n_py, med_py, mn_py, mx_py, mean_py = _stat(py)
+    n_py, med_py, mn_py, mx_py_, mean_py = _stat(py)
     n_g, med_g, mn_g, mx_g, mean_g = _stat(gams)
-    parts.append(f"| Python `equilibria` (PATH C API, nonlinear full) | {n_py} | {med_py} | {mn_py} | {mx_py} | {mean_py} |")
-    parts.append(f"| GAMS local (`comp_nus333.gms`, PATH via GAMS 53) | {n_g} | {med_g} | {mn_g} | {mx_g} | {mean_g} |")
+    body = [
+        [mx.label("Python equilibria", "PATH C API, nonlinear full"),
+         n_py, med_py, mn_py, mx_py_, mean_py],
+        [mx.label("GAMS local", "comp_nus333.gms, PATH via GAMS 53"),
+         n_g, med_g, mn_g, mx_g, mean_g],
+    ]
+    parts.append(mx.raw(mx.tablecard(
+        ["Solver", "N", "Median", "Min", "Max", "Mean"], body)))
     if py and gams:
         ratio = statistics.median(py) / statistics.median(gams)
         parts.append("")
-        parts.append(f"*Median ratio Python / GAMS-local: **{ratio:.3f}×***")
+        parts.append(mx.raw(mx.note(
+            f"Median ratio Python / GAMS-local: <b>{ratio:.3f}×</b>")))
     parts.append("")
     return parts
 
