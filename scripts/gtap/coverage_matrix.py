@@ -160,26 +160,27 @@ _NLP_ROWS: list[Row] = [
         "out_10x7_ifsub0_nlp.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_10x7", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_10x7_nlp.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
-    # ALTERTAX (CD) — base 100%; check/shock ceiling is the mis-converged NLP ref
-    # (violates its own eq_pxeq, IPOPT "Locally Optimal"), NOT the model. Where an MCP
-    # ref exists (3x3 ifSUB=1) the same Python gate reaches 99.93%. Floors a few pp
-    # below the measured snapshot; code==1 asserted for every stage.
+    # ALTERTAX (CD) — the old 86-94 check/shock ceiling ("mis-converged NLP ref")
+    # DISSOLVED with the 2026-07-19 fixes (orphaned xaa-shares fix recovered +
+    # unfaithful 1e-8 quantity floors removed): measured check 100% on ALL datasets,
+    # shock 99.2-99.9 vs the SAME NLP refs. Floors raised to the new reality
+    # (check 99, shock 99 / 98 for 10x7); code==1 asserted for every stage.
     Row("gtap7_3x3", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 93.0, 93.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_3x3", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 88.0, 88.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_3x4", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 94.0, 94.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_3x4", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 91.0, 91.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_5x5", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 94.0, 86.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_5x5", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 94.0, 94.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_10x7", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 92.0, 91.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
     Row("gtap7_10x7", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 93.0, 93.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
 ]
 ROWS.extend(_NLP_ROWS)
 
