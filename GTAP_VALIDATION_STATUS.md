@@ -1,5 +1,59 @@
 # GTAP Python-to-GAMS Validation Status
 
+## Session 2026-07-19 (tarde): pure 5x5 ifSUB=1 shock 92.35 → 100 — las "multi-raíces" del MCP eran esquinas FABRICADAS por bounds que GAMS no tiene (branch gtap_mcp_free_trade_qty)
+
+**Gate:** `test_gtap7_mcp_parity`, tol 1%. **Resultado: 18/18 filas verdes** (pure + altertax
+× ambos ifSUB × 6 datasets), 5x5 ifsub1 shock **100/100/100 code=1** (era 92.35, floor 92→99),
+15x10 ifsub0 **100** conservado. Gate `.nl` 5/5 limpio.
+
+**Causa raíz (dos capas, ambas de FIDELIDAD, cero cambio de ecuaciones):**
+
+1. **Dominios: GAMS declara TODAS las cantidades LIBRES** (un solo bloque `Variables`; las
+   únicas `.lo` del comp son pisos 0.001·prior de PRECIOS + utilidades — verificado exhaustivo
+   en el .gms del bundle). Python les fabricaba `lb=0` vía `NonNegativeReals`. Bajo MCP esa
+   caja convierte filas `=E=` duras en descartables: PATH estacionó el bloque exportador
+   USA,Energy en `xw=xet=0` con `eq_xet` (`pet==ps`, rama omegax=inf) **violada por 6.54**
+   pero leída como holgura de complementariedad — y con sigmaw≈11.5 la demanda CES a
+   pe≈7.2× cae a ~1e-11, dentro de tolerancia. Esa esquina de autarquía **no existe en el
+   sistema GAMS** (variable libre ⇒ F=0 exacto). Fix: `xw`/`xet` → `within=Reals`
+   (los dominios se REFLEJAN del builder single-period al multi-período). La esquina de
+   junio en 15×10 ifsub0 (`pet/pe[USA,OtherCrops]`→57.7, "wrong-branch") era LA MISMA clase.
+2. **Opciones PATH por modo = las de la propia ref.** Los bundles PURE de NEOS no llevan
+   path.opt (defaults); solo los ALTERTAX llevan el set apretado inline `$onecho`. El default
+   global de `92f67bc` (set apretado para todo) era el mirror de las refs altertax aplicado a
+   pure: con los dominios ya libres, ese set camina 15×10 ifsub0 a una raíz alternativa REAL
+   del bloque CET de Land (`xf[USA,Land,Rice]` 12×, 90.91%, todo interior, code=1), mientras
+   defaults aterriza la raíz de la ref en TODOS los pure (A/B medido: 5x5if1 100, 15x10if0
+   100). `solve_multiperiod` ahora defaultea por modo (altertax→apretado, gtap→defaults),
+   con sentinel anti-fuga entre llamadas del mismo proceso (env var pegajosa) y override del
+   usuario siempre respetado.
+
+**Matriz A/B completa del shock (la que nombra la causa):**
+
+| Config | 5x5 if1 | 15x10 if0 |
+|---|---|---|
+| cajas lb=0 + defaults | 100 | 89.8 (esquina autarquía OtherCrops) |
+| cajas lb=0 + set apretado | 92.35 (esquina autarquía Energy) | 100 |
+| **libres + defaults (pure ahora)** | **100** | **100** |
+| libres + set apretado | 100 | 90.91 (raíz alternativa Land) |
+
+Ninguna diagonal era alcanzable con bounds: cada option-set elegía CUÁL esquina espuria
+visitaba. Con las esquinas muertas, defaults (= opciones de la ref pure) cierra ambos.
+
+**Método (cascada + 2 trampas de Pyomo):** repro con dump de celdas → la esquina se
+caracterizó ANTES de teorizar (xw==0 vs GAMS>0, xet en bound, pe=pet uniforme) → el .gms
+de la ref respondió admisibilidad (bloque `Variables` libre, sin `positive`) → introspección
+post-solve dio la fila violada-pero-aceptada. Trampas que costaron un ciclo: `setlb(None)`
+NO quita la cota del DOMINIO (`NonNegativeReals` sigue imponiendo 0 — hay que mutar
+`domain=Reals`), y `_replicate_sp_bounds` re-copia los bounds del modelo single-period por
+etapa (el primer A/B "falsado" nunca probó la hipótesis). Corrección al epílogo de la
+sesión anterior: "PATH crash jumps basins from an exact solution" era el síntoma — la cuenca
+a la que saltaba solo existía por la caja fabricada.
+
+**Pendiente de la clase:** el resto de cantidades sigue `NonNegativeReals` (xs/xds/xmt/xm/
+xf/…). No mordieron aún — la clase completa se cierra si aparece otra esquina (extender
+`Reals` var por var con evidencia, o wholesale con sweep completo).
+
 ## Session 2026-07-18/19: 15×10 altertax shock closed 94.5/95.8 → 99.5/99.5 (branch gtap_gaps)
 
 **Gate:** `test_altertax_multiperiod_parity` / `measure_gate_tols.py`, tol 1%.
