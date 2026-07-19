@@ -261,6 +261,38 @@ def _work(args) -> dict:
             rows.append((f"{gsym}", ",".join(body), py, gval, rel,
                          "ok" if ok else "DIFF"))
 
+    # --- top-Armington shares alphad/alpham: Python vs GAMS, per cell ---
+    # The shares come from alphad=(xda/xaa)·(pdp/pa)^sigma (GAMS gms:23750). The CORRECT
+    # invariant is NOT "sum to 1" — under CES with benchmark prices != 1 the shares do
+    # NOT sum to 1, and that is fine (GAMS has the same). E.g. IND/VegFruit/Grains: both
+    # Python AND GAMS sum to 1.1214 (pdp=pmp≈0.10, pa=1) — NOT a bug. The REAL bug
+    # (gtap7_15x10 MEX/Rice/gov) is where Python's shares DIVERGE from GAMS's: Python
+    # 0.767 vs GAMS 1.0000, because Python's xaa init is inflated (floored ~1e-8) while
+    # GAMS calibrates with a consistent xa.l. So compare Python alphad/alpham AGAINST the
+    # GAMS-stored values, not against 1. (Earlier "sum to 1" audit was wrong — it false-
+    # positived on the IND CES cells where Python matches GAMS. See memory.)
+    _share_cache = getattr(model, "_armington_shares_cache", None)
+    if _share_cache:
+        g_alphad = gams_levels(gdx_path, "alphad")
+        g_alpham = gams_levels(gdx_path, "alpham")
+        for (r, i, aa), (ad, am) in _share_cache.items():
+            if ad + am <= 0.0:
+                continue  # cell not active (no demand)
+            # GAMS keys are prefixed (c_<comm>, a_<act>) + trailing period.
+            gk = (str(r), f"c_{i}", aa if aa in ("hhd", "gov", "inv") else f"a_{aa}", args.period)
+            gad = g_alphad.get(gk)
+            gam = g_alpham.get(gk)
+            if gad is None and gam is None:
+                continue  # not in GAMS ref (can't compare)
+            gad = gad or 0.0
+            gam = gam or 0.0
+            for label, py, g in (("alphad", ad, gad), ("alpham", am, gam)):
+                rel = _rel(py, g, args.tol_abs)
+                ok = (abs(py - g) <= args.tol_abs) or (rel <= args.tol)
+                n_diff += (not ok)
+                rows.append((label, f"{r},{_strip_c(i)},{aa}", py, g, rel,
+                             "ok" if ok else "DIFF"))
+
     _debug_print(gdx_path.name, args.period, args.tol, rows, n_diff)
 
     # Each calibration input that exceeds tolerance = one violation. value=rel

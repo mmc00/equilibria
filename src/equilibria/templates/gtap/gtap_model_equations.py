@@ -1180,8 +1180,8 @@ class GTAPModelEquations:
 
         Mirrors GAMS yTaxInd = yTaxTot - ytax("dt") — i.e. all tax streams
         except "dt" (direct/factor-income taxes = kappaf*pf*xf = evfb-evos).
-        Streams included: pt, fc, pc, gc, ic, et, mt, ft.  Stream excluded: dt.
-        fs is 0 (fctts=0 for standard GTAP7 datasets).
+        Streams included: pt, fc, pc, gc, ic, et, mt, ft, fs.  Stream excluded: dt.
+        ft+fs enter as the decomposed net ftrv−fbep (see the loop below).
         """
         bm = self.params.benchmark
         taxes = self.params.taxes
@@ -3522,14 +3522,24 @@ class GTAPModelEquations:
                 return total
 
             if gy == "ft":
+                # Mirror the LIVE eq_ytax[ft] at benchmark (pf·xf/xscale == evfb):
+                # ft = Σ fcttx·evfb = Σ ftrv. The old rtf·vfm mixed the NET wedge
+                # (rtf nets subsidy against tax) with the wrong value base.
                 total = 0.0
-                for (rr, f, a), rtf in self.params.taxes.rtf.items():
+                for (rr, f, a), evfb_val in self.params.benchmark.evfb.items():
                     if rr == r:
-                        total += float(rtf) * self.params.benchmark.vfm.get((r, f, a), 0.0)
+                        total += float(self.params.benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
                 return total
 
             if gy == "fs":
-                return 0.0
+                # Mirror the LIVE eq_ytax[fs]: fs = Σ fctts·evfb = Σ(−fbep) (FBEP is
+                # stored negative in the HAR, so the stream is positive revenue).
+                # Was hardcoded 0 from before the factor-subsidy wedge existed.
+                total = 0.0
+                for (rr, f, a), evfb_val in self.params.benchmark.evfb.items():
+                    if rr == r:
+                        total += -float(self.params.benchmark.fbep.get((r, f, a), 0.0) or 0.0)
+                return total
 
             if gy in ("fc", "pc", "gc", "ic"):
                 if gy == "fc":
@@ -3995,18 +4005,14 @@ class GTAPModelEquations:
             if hasattr(model, var_name):
                 _set_relative_positive_lower_bound(getattr(model, var_name))
         
-        # Conditional quantity vars: can be zero if benchmark is zero
-        # Only set lb=1e-8 if initial value is positive
-        # xf: factor demand can be zero (e.g., Land/NatRes not used in services)
-        # xw, xe: bilateral trade can be zero for certain trade pairs
-        conditional_quantity_vars = ['xet', 'xda', 'xma', 'xe', 'xc', 'xg', 'xi', 'xaa', 'xds', 'xf', 'xw', 'xwmg', 'xmgm', 'xtmg']
-        for var_name in conditional_quantity_vars:
-            if hasattr(model, var_name):
-                var = getattr(model, var_name)
-                for idx in var:
-                    init_val = value(var[idx])
-                    if init_val is not None and init_val > MIN_QUANTITY:
-                        var[idx].setlb(MIN_QUANTITY)
+        # Quantity vars carry NO positive floor — faithful to GAMS, which lower-bounds
+        # prices aggressively (see above) but never Armington/trade/factor quantities.
+        # A 1e-8 floor here is UNFAITHFUL for microscopic cells whose GAMS solution
+        # falls below it (gtap7_15x10 altertax: GAMS xma[CHN,Grains,MachEq]=2.89e-9):
+        # the GAMS point becomes infeasible in Python, the warm-start seed gets
+        # clamped (W1002), the cell sticks at the floor and its paired CES price
+        # explodes (pa 1.04→18.3) — exactly the artificial state the comment above
+        # warns about. The NonNegativeReals domain already provides lb=0.
     
     def _add_equations(self, model: "ConcreteModel") -> None:
         """Add all equations for square system."""
@@ -4678,12 +4684,36 @@ class GTAPModelEquations:
                         benchmark_agent_armington_param_cache[(r, i, aa)] = (0.0, 0.0)
                         continue
 
+                    # SURGICAL xaa consistency fix: the share denominator xaa_bench must be
+                    # the CES aggregate consistent with xda+xma — i.e. satisfy the benchmark
+                    # value identity pa·xaa = pdp·xda + pmp·xma. In MICROSCOPIC cells (agri
+                    # sectors of MEX/IND, demand ~1e-9) the xaa init is floored to ~1e-8,
+                    # inflating the denominator → shares sum to 0.767 not 1 → eq_paa CES
+                    # unsatisfiable → that region collapses (px[MEX,Grains] 1.0→0.52).
+                    # GAMS calibrates with a consistent xa.l (gms:23750). Use the value
+                    # identity ONLY when xaa_bench is materially inconsistent (>1% off): this
+                    # touches ~1 cell (the floored micro one), leaving every healthy cell's
+                    # xaa untouched. The naive global renormalize-to-1 (reverted 4ef5d8b)
+                    # changed 935 cells and DEcalibrated the model (98.45%→78.15%); this
+                    # only repairs the genuinely-inflated denominator. See memory
+                    # project_gtap7_armington_shares_bug.
+                    _xaa_consistent = (pdp_bench * xda_bench + pmp_bench * xma_bench) / pa_bench
+                    if _xaa_consistent > 0.0 and abs(_xaa_consistent / xaa_bench - 1.0) > 0.01:
+                        xaa_bench = _xaa_consistent
+
                     alphad = (xda_bench / xaa_bench) * (pdp_bench / pa_bench) ** sigma_m if xda_bench > 0.0 else 0.0
                     alpham = (xma_bench / xaa_bench) * (pmp_bench / pa_bench) ** sigma_m if xma_bench > 0.0 else 0.0
                     benchmark_agent_armington_param_cache[(r, i, aa)] = (alphad, alpham)
 
         def get_benchmark_agent_armington_shares(r, i, aa):
             return benchmark_agent_armington_param_cache.get((r, i, aa), (0.0, 0.0))
+
+        # Expose the calibrated top-Armington shares (alphad, alpham) on the model so
+        # diff_calibration (cascade tool 4) can audit the CES invariant alphad+alpham=1.
+        # A cell where they sum != 1 makes eq_paa unsatisfiable → region collapse (the
+        # gtap7_15x10 MEX bug). Previously this cache was a closure local, invisible to
+        # every tool. See memory project_gtap7_armington_shares_bug.
+        model._armington_shares_cache = dict(benchmark_agent_armington_param_cache)
 
         # NOTE: eq_pdp, eq_pmp, eq_paa removed - these are now Expression, not Var
         # The price pass-through relationships are encoded directly in the Expression definitions

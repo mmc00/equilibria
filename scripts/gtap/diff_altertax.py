@@ -216,9 +216,12 @@ def holdfix_cd_nest(model) -> int:
     equations eq_pvaeq/eq_pndeq. Under forced-CD (sigmav=sigmap=1) those equations
     are GAMS tautologies (1=Σaf, 1=Σio) that do NOT determine pva/pnd — GAMS pins them
     via holdfixed in EVERY period (check included). A fixed var must free its paired
-    row, exactly as gtap.holdfixed=1 does. Returns the count of pva/pnd cells fixed."""
+    row, exactly as gtap.holdfixed=1 does. Returns the count of pva/pnd cells fixed.
+    px is the third degenerate member (GAMS pxeq at sigmap=1 = tautology 1==and+ava);
+    Python's CD-dual eq_pxeq is an ADDED determinant — pin px at the seeded value and
+    deactivate it (see _holdfix_cd_nest in gtap_multiperiod_driver for the evidence)."""
     hf = 0
-    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq")):
+    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq"), ("px", "eq_pxeq")):
         v = getattr(model, vn, None)
         if v is not None:
             for idx in v:
