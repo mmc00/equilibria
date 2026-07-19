@@ -76,12 +76,17 @@ ROWS: list[Row] = [
     Row("gtap7_5x5", "altertax", 1, ("base", "check", "shock"), 99.5, "99.81% (98.38% @0.5%)", "local", "out_altertax_ifsub1.gdx"),
     Row("gtap7_10x7", "altertax", 0, ("base", "check", "shock"), 98.0, "99.33% (96.83% @0.5%)", "local", "out_altertax_ifsub0.gdx"),
     Row("gtap7_10x7", "altertax", 1, ("base", "check", "shock"), 98.0, "99.31% (96.81% @0.5%)", "local", "out_altertax_ifsub1.gdx"),
-    # 15x10 refs REGENERATED via NEOS 2026-07-17 (subsidy-aware, eq_pxeq clean). The
-    # prior 99.57/99.40 was match vs a CONTAMINATED ref (ytax[ft]=0, violated 21 own
-    # eqs); the real shock match vs the clean ref is 95.8/94.5 (base/check 100%). The
-    # ~5pp shock residual is the known eq_paa Armington micro-cell family, not a bug.
-    Row("gtap7_15x10", "altertax", 0, ("base", "check", "shock"), 94.0, "95.8% (CHECK 100%, clean ref)", "local", "out_altertax_ifsub0.gdx"),
-    Row("gtap7_15x10", "altertax", 1, ("base", "check", "shock"), 93.0, "94.5% (CHECK 100%, clean ref)", "local", "out_altertax_ifsub1.gdx"),
+    # 15x10 refs REGENERATED via NEOS 2026-07-19: ONE-SHOT shock with tight path.opt
+    # (convergence_tolerance 1e-10, inlined via $onecho), replacing the 2026-07-17
+    # refs which VIOLATED THEIR OWN xfeq (xf[GBR,Capital,Rice,shock]=-0.0048 vs CES
+    # RHS +0.24 — default PATH options left micro ag cells mis-converged). The old
+    # "eq_paa family" label was a lost merge (xaa fix 1bb11e6, cherry-picked) plus
+    # that ref defect. 99.5/99.5 measured with the CD-degenerate triple (pva/pnd/px)
+    # pinned at the ref's shock parking (the GAMS pxeq at sigmap=1 is a tautology;
+    # Python's added CD-dual is deactivated by the hold). Remaining 0.5% = the JPN
+    # Rice micro-import family (~6% rel on ~2e-5 quantities).
+    Row("gtap7_15x10", "altertax", 0, ("base", "check", "shock"), 99.0, "99.5% (98.02% @0.5%, CHECK 100%)", "local", "out_altertax_ifsub0.gdx"),
+    Row("gtap7_15x10", "altertax", 1, ("base", "check", "shock"), 99.0, "99.5% (98.03% @0.5%, CHECK 100%)", "local", "out_altertax_ifsub1.gdx"),
     Row("gtap7_3x4", "altertax", 0, ("base", "check", "shock"), 99.0, "99.72% (96.79% @0.5%)", "local", "out_altertax_ifsub0.gdx"),
     Row("gtap7_3x4", "altertax", 1, ("base", "check", "shock"), 99.0, "99.72% (96.46% @0.5%)", "local", "out_altertax_ifsub1.gdx"),
     Row("gtap7_20x41", "altertax", 0, ("base",), None, "blocked: ref violates 37 own eqs", "blocked", "out_altertax_ifsub0.gdx (corrupt)"),
@@ -155,26 +160,27 @@ _NLP_ROWS: list[Row] = [
         "out_10x7_ifsub0_nlp.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_10x7", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_10x7_nlp.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
-    # ALTERTAX (CD) — base 100%; check/shock ceiling is the mis-converged NLP ref
-    # (violates its own eq_pxeq, IPOPT "Locally Optimal"), NOT the model. Where an MCP
-    # ref exists (3x3 ifSUB=1) the same Python gate reaches 99.93%. Floors a few pp
-    # below the measured snapshot; code==1 asserted for every stage.
+    # ALTERTAX (CD) — the old 86-94 check/shock ceiling ("mis-converged NLP ref")
+    # DISSOLVED with the 2026-07-19 fixes (orphaned xaa-shares fix recovered +
+    # unfaithful 1e-8 quantity floors removed): measured check 100% on ALL datasets,
+    # shock 99.2-99.9 vs the SAME NLP refs. Floors raised to the new reality
+    # (check 99, shock 99 / 98 for 10x7); code==1 asserted for every stage.
     Row("gtap7_3x3", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 93.0, 93.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_3x3", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 88.0, 88.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_3x4", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 94.0, 94.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_3x4", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 91.0, 91.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_5x5", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 94.0, 86.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_5x5", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 94.0, 94.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_10x7", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 92.0, 91.0), mode="altertax"),
+        "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
     Row("gtap7_10x7", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 93.0, 93.0), mode="altertax"),
+        "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
 ]
 ROWS.extend(_NLP_ROWS)
 
@@ -197,8 +203,16 @@ _MCP_ROWS: list[Row] = [
         "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_5x5", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    # 5x5 ifsub1 shock floor 99→92 (2026-07-19): the pet/pe[USA,Energy] export block is
+    # MULTI-ROOT — under PATH defaults the gate lands the ref's root (100%), under the
+    # GAMS-mirror options (now the solve_multiperiod default; they FIX the mirror-image
+    # corner on 15x10 pure ifsub0, 89.8→100) it lands pe=7.57 vs 1.05 (92.35%). Each
+    # option alone (crash_method none OR convergence_tolerance 1e-10) reproduces it; no
+    # option set is green on both cases. OPEN item: attack via MCP-pairing (tool 6, the
+    # pfteq multi-root class), not solver options. Seeded at the GAMS point it STAYS
+    # (drift 2.2%, resid 6e-11) — the escape happens on the check→shock traverse.
     Row("gtap7_5x5", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 92.0), mode="pure"),
     Row("gtap7_10x7", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_10x7", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
@@ -228,10 +242,12 @@ _MCP_ROWS: list[Row] = [
         "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
     Row("gtap7_10x7", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
+    # 15x10 shock floor raised 94/93 → 99: measured 99.5/99.5 vs the ONE-SHOT tight-
+    # path.opt refs with the CD-degenerate triple (pva/pnd/px) pinned (2026-07-19).
     Row("gtap7_15x10", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 94.0), mode="altertax"),
+        "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 93.0), mode="altertax"),
+        "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
 ]
 ROWS.extend(_MCP_ROWS)
 

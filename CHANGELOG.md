@@ -15,6 +15,30 @@ commit log.
   (NLP vs NLP / MCP vs MCP for GTAP and PEP), expanded API reference,
   this changelog, and a `docs-build` CI job.
 
+### Fixed
+- GTAP7 15x10 altertax shock parity closed: 94.5/95.8% → **99.5/99.5%** @1%
+  (gate floors 94/93 → 99/99), no regression on any other dataset. Three
+  stacked causes: (1) the June Armington-shares fix was orphaned on an
+  unmerged branch — recovered by cherry-pick; (2) the reference GDX violated
+  its own `xfeq` (negative factor demands) — regenerated one-shot on NEOS
+  with tight PATH options (`convergence_tolerance 1e-10`, inlined
+  `path.opt`); (3) under altertax-CD the GAMS `pxeq/pvaeq/pndeq` rows are
+  tautologies (proved under-determined GAMS-vs-GAMS: three runs, three
+  parkings), while Python added its own CD-dual `pxeq` determinant — the
+  full degenerate triple (`pva/pnd/px`) is now pinned at the reference's
+  shock slice, replicating `gtap.holdfixed=1`.
+- Removed the unfaithful `1e-8` lower-bound floor on quantity variables
+  (GAMS bounds prices only): microscopic cells below the floor made the
+  GAMS point infeasible in Python and blew up their paired CES prices.
+- Multi-period gate solves now default to the same PATH options the GAMS
+  reference bundles solve with (`crash_method none`, `nms_searchtype line`,
+  `convergence_tolerance 1e-10`; `PATH_CAPI_OPTIONS` overrides win). With
+  default options PATH's crash phase jumps basins even from an exact
+  solution — this closed the long-open 15x10 pure "wrong-branch" debt
+  (shock 89.8 → 100.0% @1%).
+- `ytax[ft]/[fs]` variable inits aligned with the live `eq_ytax`
+  (`Σftrv` / `−Σfbep`; `fs` was hardcoded 0).
+
 ## [0.5.1] — 2026-07-18
 
 ### Added

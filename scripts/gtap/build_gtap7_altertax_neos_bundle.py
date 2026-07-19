@@ -151,20 +151,58 @@ def _insert_pdp_pmp_recalc_before_unload(text: str) -> str:
     return pat.sub(fix + r"\1", text, count=1)
 
 
-def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
+def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
+                           homotopy_steps: int = 0) -> str:
+    """Replace the numeraire shock with a +tariff% import-tariff shock.
+
+    homotopy_steps=0 (default) applies the tariff ONE-SHOT. For the larger
+    datasets (15x10) the altertax CD shock is a HARD basin: NEOS PATH reports
+    Optimal one-shot but leaves the microscopic ag cells mis-converged — the
+    2026-07-17 ifsub0 ref has xf[GBR,Capital,Rice,shock]=-0.0048 while its own
+    xfeq CES RHS is +0.24 (the reference violates its own equation). With
+    homotopy_steps=N (>0) the tariff ramps in N equal increments plus N clean-up
+    re-solves at the full shock (restored from 815bceb, which documented the
+    same corrupt-reference failure mode for a coarse ramp), and a path.opt with
+    tightened convergence must accompany the bundle (written by main()).
+    """
     old_block = (
         "   if(sameas(tsim,'shock'),\n"
         "      pnum.fx(tsim) = 1.5 ;\n"
         "   ) ;"
     )
     pct = tariff_increase * 100
-    new_block = (
-        f"   if(sameas(tsim,'shock'),\n"
-        f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
-        f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
-        f"         imptx.l(r,i,rp,tsim) * {1.0 + tariff_increase} ;\n"
-        f"   ) ;"
-    )
+    factor = 1.0 + tariff_increase
+    if homotopy_steps <= 0:
+        new_block = (
+            f"   if(sameas(tsim,'shock'),\n"
+            f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
+            f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
+            f"         imptx.l(r,i,rp,tsim) * {factor} ;\n"
+            f"   ) ;"
+        )
+    else:
+        new_block = (
+            f"   options limrow = 3, limcol = 3, solprint = off, iterlim = 100000 ;\n"
+            f"   gtap.optfile = 1 ;\n"
+            f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
+            f"* === Homotopy continuation ({homotopy_steps} steps) — altertax CD shock is a hard\n"
+            f"* === basin PATH cannot cleanly reach one-shot (micro ag cells mis-converge).\n"
+            f"   if(sameas(tsim,'shock') and years(tsim) gt firstYear,\n"
+            f"      imptx0(r,i,rp)$xwFlag(r,i,rp) = imptx.l(r,i,rp,tsim) ;\n"
+            f"      loop(hstep,\n"
+            f"         imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
+            f"            imptx0(r,i,rp) * (1 + {tariff_increase}*(ord(hstep)/card(hstep))) ;\n"
+            f"         solve gtap using mcp ;\n"
+            f"      ) ;\n"
+            f"*     Clean-up re-solves at the full +{pct:.0f}% shock so lagging trade\n"
+            f"*     variables (pefob/pe) settle — a coarse ramp leaves pe inflated and\n"
+            f"*     pefobeq violated. Re-solving from the converged point fixes it.\n"
+            f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) = imptx0(r,i,rp) * {factor} ;\n"
+            f"      loop(hstep,\n"
+            f"         solve gtap using mcp ;\n"
+            f"      ) ;\n"
+            f"   ) ;"
+        )
     if old_block not in text:
         raise SystemExit(
             "Could not locate numeraire shock block to replace.\n"
@@ -173,7 +211,49 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
     n = text.count(old_block)
     if n != 1:
         raise SystemExit(f"Expected 1 occurrence of shock block, found {n}.")
-    return text.replace(old_block, new_block, 1)
+    text = text.replace(old_block, new_block, 1)
+    if homotopy_steps <= 0:
+        return text
+
+    # Declare the homotopy set + parameter just before the tsim solve loop.
+    loop_anchor = "rs(r) = yes ;\nts(t) = no ;\n\nloop(tsim,"
+    homotopy_decl = (
+        "rs(r) = yes ;\n"
+        "ts(t) = no ;\n\n"
+        "* --- Homotopy continuation support for the altertax CD shock (hard basin) ---\n"
+        f"set hstep / s1*s{homotopy_steps} / ;\n"
+        'parameter imptx0(r,i,rp) "base tariff rate before homotopy ramp" ;\n\n'
+        "loop(tsim,"
+    )
+    if loop_anchor in text:
+        text = text.replace(loop_anchor, homotopy_decl, 1)
+    else:
+        raise SystemExit(
+            "Could not locate the tsim solve loop to inject homotopy declarations."
+        )
+
+    # Skip the (now homotopy-handled) shock period in the generic one-shot solve.
+    generic_solve = '   if(years(tsim) gt firstYear,\n'
+    generic_solve_guarded = (
+        '   if(years(tsim) gt firstYear and (not sameas(tsim,\'shock\')),\n'
+    )
+    if generic_solve in text:
+        text = text.replace(generic_solve, generic_solve_guarded, 1)
+    return text
+
+
+PATH_OPT = """\
+* PATH options for altertax CD shock convergence (hard basin)
+convergence_tolerance 1e-10
+major_iteration_limit 5000
+minor_iteration_limit 100000
+cumulative_iteration_limit 500000
+crash_method none
+crash_perturb yes
+nms_searchtype line
+gradient_step_limit 1e6
+proximal_perturbation 0
+"""
 
 
 def _get_dataset_sets(gdx_path: Path) -> dict:
@@ -443,6 +523,11 @@ def main() -> None:
                     help="Uniform tariff shock fraction (default: 0.10 = +10%%)")
     ap.add_argument("--ifsub", type=int, choices=(0, 1), default=1,
                     help="ifSUB compile switch (default 1); the parity fixtures need both")
+    ap.add_argument("--homotopy", type=int, default=0,
+                    help="Tariff-ramp steps for the shock solve (0 = one-shot, the default). "
+                         "Use 30 for the large datasets (15x10): one-shot NEOS PATH reports "
+                         "Optimal but mis-converges the micro ag cells (ref violates its own "
+                         "xfeq). Writes path.opt alongside the bundle.")
     args = ap.parse_args()
 
     dataset = args.dataset
@@ -606,11 +691,21 @@ def main() -> None:
 
     inlined = _insert_pwmg_fix_before_solve(inlined)
     inlined = _insert_pdp_pmp_recalc_before_unload(inlined)
-    inlined = _patch_shock_to_tariff(inlined, tariff_increase=args.tariff)
+    inlined = _patch_shock_to_tariff(inlined, tariff_increase=args.tariff,
+                                     homotopy_steps=args.homotopy)
+
+    if args.homotopy > 0:
+        # NEOS jobs carry ONLY the .gms + in.gdx — materialize path.opt from inside
+        # the model text so gtap.optfile=1 finds it on the NEOS machine too.
+        inlined = "$onecho > path.opt\n" + PATH_OPT + "$offecho\n\n" + inlined
 
     out_gms = out_dir / f"comp_{dataset}_altertax_neos_ifsub{args.ifsub}.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")
+    if args.homotopy > 0:
+        (out_dir / "path.opt").write_text(PATH_OPT)
+        print(f"  wrote path.opt (PATH options for homotopy shock, {args.homotopy} steps; "
+              f"also inlined via $onecho for NEOS)")
 
     remaining = re.findall(r"\$\$?(?:bat)?include\s+\"(\S+)\"", inlined)
     if remaining:
