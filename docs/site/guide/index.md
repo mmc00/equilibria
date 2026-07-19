@@ -22,7 +22,8 @@ template and its parity status; then per-template guides:
 matrices: [GTAP 7](gtap7_coverage_matrix.md) ·
 [PEP-1-1](pep_coverage_matrix.md).
 
-**Reference** — the [API reference](../api/index.md) and the changelog.
+**Reference** — the [API reference](../api/index.md) and the
+[changelog](../changelog.md).
 
 The {doc}`example gallery <../gallery/index>` complements these chapters
 with short, runnable scripts re-executed on every documentation build.

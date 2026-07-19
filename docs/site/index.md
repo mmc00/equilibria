@@ -91,4 +91,5 @@ gallery/index
 :caption: Reference
 
 api/index
+changelog
 ```
