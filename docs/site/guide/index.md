@@ -10,8 +10,8 @@ The documentation is organized in five areas — this page is the map.
 [architecture overview](architecture.md) for how the framework fits
 together.
 
-**Templates** — the templates overview lists every model template and its
-parity status; then per-template guides:
+**Templates** — the [templates overview](templates.md) lists every model
+template and its parity status; then per-template guides:
 [GTAP quickstart](gtap_quickstart.md), [PEP quickstart](pep_quickstart.md),
 [welfare decomposition](welfare_decomposition.md).
 

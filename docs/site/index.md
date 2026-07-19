@@ -55,6 +55,7 @@ guide/architecture
 :hidden:
 :caption: Templates
 
+guide/templates
 guide/gtap_quickstart
 guide/pep_quickstart
 guide/welfare_decomposition

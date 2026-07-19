@@ -98,5 +98,5 @@ implementation before it is considered done.
 | `equilibria.simulations` | Scenario runtime, adapters, multi-model wrappers |
 | `equilibria.contracts`, `equilibria.qa` | Validation contracts and SAM/QA checks |
 
-See the templates overview (next page) for per-template status and
+See the {doc}`templates overview <templates>` for per-template status and
 the {doc}`API reference <../api/index>` for the generated reference.
