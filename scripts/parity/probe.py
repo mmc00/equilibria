@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """Cached, flag-driven parity probe — Tool #1 of the cascade (seed-at-GAMS scan).
 
-See docs/superpowers/specs/2026-06-12-probe-cached-parity-tool-design.md.
-
 PHASE 1 (JSON-only output): this tool now prints EXACTLY one pure-JSON object to
 stdout in every mode and every path. There is no text mode and no `--json` flag —
 JSON is the output. All build/solve/log chatter is redirected to stderr by
