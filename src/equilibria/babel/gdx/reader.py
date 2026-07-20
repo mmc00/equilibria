@@ -918,10 +918,7 @@ def _detect_sequence_type(values: list[tuple[int, float]]) -> tuple[str, float]:
     # Calculate both parameters
     delta = (val2 - val1) / gap
 
-    if val1 != 0 and abs(val1) > 1e-10:
-        ratio = (val2 / val1) ** (1.0 / gap)
-    else:
-        ratio = 1.0
+    ratio = (val2 / val1) ** (1.0 / gap) if val1 != 0 and abs(val1) > 1e-10 else 1.0
 
     # Case 1: Three or more values - use variance analysis
     if len(values) >= 3:

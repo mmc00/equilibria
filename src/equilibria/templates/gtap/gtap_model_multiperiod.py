@@ -4,6 +4,8 @@ de GAMS) para que los enlaces Fisher inter-temporales sean filas del Jacobiano."
 
 from __future__ import annotations
 
+import contextlib
+
 from pyomo.environ import ConcreteModel, Set
 
 from .gtap_model_equations import GTAPModelEquations
@@ -237,10 +239,8 @@ class GTAPMultiPeriodModel:
             if not prm.mutable:
                 continue
             for k in prm:
-                try:
+                with contextlib.suppress(Exception):
                     substitute[id(prm[k])] = float(_pyo_value(prm[k]))
-                except Exception:
-                    pass
 
         visitor = ExpressionReplacementVisitor(substitute=substitute)
 
@@ -304,7 +304,9 @@ class GTAPMultiPeriodModel:
                         # Store the raw expression body and bounds as-is (already Pyomo exprs).
                         merged_data[ei] = (cd_e.body, cd_e.lower, cd_e.upper)
                     # Append new period entries.
-                    for ni, data_tuple in zip(new_index, [con_data[k] for k in con]):
+                    for ni, data_tuple in zip(
+                        new_index, [con_data[k] for k in con], strict=False
+                    ):
                         merged_index.append(ni)
                         merged_data[ni] = data_tuple
 
@@ -553,10 +555,8 @@ class GTAPMultiPeriodModel:
         # and apply_closure fixes pnum['base'] = 1.0, so an additional Constraint
         # eq_pwfact_base would create a duplicate binding (over-determination by 1 row).
         # A Var fix eliminates the DOF without adding an active equation row.
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             m.pwfact["base"].fix(1.0)
-        except (KeyError, AttributeError):
-            pass
 
         def _pabs_rule(_m, r, t):
             # Cross-period Fisher absorption price index:
@@ -674,10 +674,8 @@ class GTAPMultiPeriodModel:
                     continue
                 *keys, val = row
                 keys = tuple(k.strip('"') for k in keys)
-                try:
+                with contextlib.suppress(ValueError):
                     out[keys] = float(val)
-                except ValueError:
-                    pass
             return out
 
         def _list_var_symbols() -> list:

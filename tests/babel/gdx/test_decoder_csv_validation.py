@@ -150,14 +150,14 @@ class TestGDXDecoderAgainstCSV:
         tolerance = 0.01
         all_match = all(
             abs(decoded_values[k] - expected_values[k]) <= tolerance
-            for k in expected_values.keys()
+            for k in expected_values
         )
         assert all_match, "Not all values match within tolerance"
 
         # Calculate match statistics
         match_count = sum(
             1
-            for k in expected_values.keys()
+            for k in expected_values
             if abs(decoded_values[k] - expected_values[k]) <= tolerance
         )
         match_rate = match_count / len(expected_values)

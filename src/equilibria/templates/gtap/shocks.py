@@ -188,7 +188,7 @@ def apply_shock(
                 continue
         if any(
             allowed is not None and component not in allowed
-            for component, allowed in zip(key, resolved_filters)
+            for component, allowed in zip(key, resolved_filters, strict=False)
         ):
             continue
         if predicate is not None and not predicate(key):

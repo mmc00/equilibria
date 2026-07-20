@@ -56,7 +56,7 @@ def test_read_5d_dense_parameter():
     )
 
     # Check that all tuples have 5 dimensions
-    for key in values.keys():
+    for key in values:
         assert len(key) == 5, f"Key should have 5 dimensions, got {len(key)}: {key}"
 
     # Spot check a few values

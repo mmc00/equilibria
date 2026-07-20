@@ -615,9 +615,7 @@ def build_gtap_contract(
 
         # Handle closure updates
         closure_value = updates.get("closure")
-        if isinstance(closure_value, Mapping) or isinstance(
-            closure_value, (str, GTAPClosureConfig)
-        ):
+        if isinstance(closure_value, (Mapping, str, GTAPClosureConfig)):
             updates["closure"] = build_gtap_closure_config(closure_value).model_dump(
                 mode="python"
             )

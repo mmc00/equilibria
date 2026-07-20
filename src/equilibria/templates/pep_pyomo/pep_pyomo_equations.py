@@ -13,6 +13,7 @@ Builder entry point: `build_pep_model(state, variant="base", form="nlp") -> Conc
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from pyomo.environ import (
@@ -58,16 +59,16 @@ def build_pep_model(
     EXDact = [i for i in I if _active(P, "EXDO", i)]
     EXact = [(j, i) for j in J for i in I if _active(P, "EXO", j, i)]
     DSact = [(j, i) for j in J for i in I if _active(P, "DSO", j, i)]
-    m._pep["idx"] = dict(
-        LDact=LDact,
-        KDact=KDact,
-        XSact=XSact,
-        IMact=IMact,
-        DDact=DDact,
-        EXDact=EXDact,
-        EXact=EXact,
-        DSact=DSact,
-    )
+    m._pep["idx"] = {
+        "LDact": LDact,
+        "KDact": KDact,
+        "XSact": XSact,
+        "IMact": IMact,
+        "DDact": DDact,
+        "EXDact": EXDact,
+        "EXact": EXact,
+        "DSact": DSact,
+    }
 
     # ================= VARIABLES (init at benchmark *O levels) =================
     # Benchmark levels missing from calibration, filled from CGE normalization:
@@ -366,8 +367,8 @@ def build_pep_model(
                 [(i, j) for i in I for j in J],
                 None,
             ),  # DI dense (all i,j via aij) — keep
-            (m.IM, [i for i in I], IMact),
-            (m.EXD, [i for i in I], EXDact),
+            (m.IM, list(I), IMact),
+            (m.EXD, list(I), EXDact),
         ]
         # factor vars (R/RTI/TIK on capital-mask KDact; WTI/TIW on labor-mask LDact) and
         # trade prices (PD/DD on DDact; PM/PE/PE_FOB/EXD/TIM/TIX on IM/EXD masks) — fix the
@@ -378,14 +379,14 @@ def build_pep_model(
             (m.TIK, [(k, j) for k in K for j in J], KDact),
             # WTI now has EQ70 over ALL (l,j) — no cells to fix. TIW: EQ37 is LDact-masked.
             (m.TIW, [(l, j) for l in L for j in J], LDact),
-            (m.PD, [i for i in I], DDact),
-            (m.DD, [i for i in I], DDact),
-            (m.PM, [i for i in I], IMact),
-            (m.TIM, [i for i in I], IMact),
-            (m.PE, [i for i in I], EXDact),
-            (m.PE_FOB, [i for i in I], EXDact),
-            (m.TIX, [i for i in I], EXDact),
-            (m.PL, [i for i in I], DDact),
+            (m.PD, list(I), DDact),
+            (m.DD, list(I), DDact),
+            (m.PM, list(I), IMact),
+            (m.TIM, list(I), IMact),
+            (m.PE, list(I), EXDact),
+            (m.PE_FOB, list(I), EXDact),
+            (m.TIX, list(I), EXDact),
+            (m.PL, list(I), DDact),
             # factor DEMAND cells: KD/LD are dense but endogenous only on their masks
             (m.KD, [(k, j) for k in K for j in J], KDact),
             (m.LD, [(l, j) for l in L for j in J], LDact),
@@ -395,14 +396,10 @@ def build_pep_model(
         _cap_sectors = [j for j in J if _active(P, "KDCO", j)]
         for j in J:
             if j not in _cap_sectors:
-                try:
+                with contextlib.suppress(Exception):
                     m.KDC[j].fix(0.0)
-                except Exception:
-                    pass
-                try:
+                with contextlib.suppress(Exception):
                     m.RC[j].fix(_bench("RCO", j) or 1.0)
-                except Exception:
-                    pass
         # Structurally-zero cells: fix QUANTITIES at 0, PRICES at their BENCHMARK level.
         # GAMS leaves a price whose defining eq is $-masked out (e.g. PD['othind'], no
         # domestic demand) UNPAIRED-but-free, so PATH keeps it at its init = the calibrated
@@ -444,10 +441,8 @@ def build_pep_model(
                         fill = bval if bval else 1.0  # never 0 (overflow guard)
                     else:  # quantity cell
                         fill = 0.0
-                    try:
+                    with contextlib.suppress(Exception):
                         var[k].fix(fill)
-                    except Exception:
-                        pass
 
     # objective / closure
     # MCP is a pure complementarity system — NO objective (the bridge/PATH pairs eqs↔vars).

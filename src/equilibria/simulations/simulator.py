@@ -112,10 +112,7 @@ class Simulator:
         if definition is not None:
             normalized_var = definition.var
 
-        if target_index is None:
-            values = shock_value
-        else:
-            values = {target_index: shock_value}
+        values = shock_value if target_index is None else {target_index: shock_value}
 
         return Scenario(
             name=scenario_name,

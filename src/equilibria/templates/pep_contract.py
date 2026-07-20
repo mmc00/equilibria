@@ -191,9 +191,7 @@ def build_pep_contract(
         base = default_pep_contract().model_dump(mode="python")
         updates = dict(value)
         closure_value = updates.get("closure")
-        if isinstance(closure_value, Mapping) or isinstance(
-            closure_value, (str, PEPClosureConfig)
-        ):
+        if isinstance(closure_value, (Mapping, str, PEPClosureConfig)):
             updates["closure"] = build_pep_closure_config(closure_value).model_dump(
                 mode="python"
             )

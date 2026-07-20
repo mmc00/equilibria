@@ -332,7 +332,7 @@ def create_factor_income_distribution(sam: Sam, op: dict[str, Any]) -> dict[str,
         "total_distributed": total_distributed,
         "distribution_by_factor": distribution_by_factor,
         "institutions_created": list(
-            {inst for shares in factor_shares.values() for inst in shares.keys()}
+            {inst for shares in factor_shares.values() for inst in shares}
         ),
     }
 
@@ -627,10 +627,7 @@ def create_investment_account(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
         income = float(df.loc[ag_key, :].sum())
 
         # Expenditure = sum of column
-        if ag_key in df.columns:
-            expenditure = float(df.loc[:, ag_key].sum())
-        else:
-            expenditure = 0.0
+        expenditure = float(df.loc[:, ag_key].sum()) if ag_key in df.columns else 0.0
 
         savings = income - expenditure
         if savings > 1e-14:

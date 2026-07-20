@@ -244,7 +244,7 @@ class PyomoBackend(Backend):
                         domain_sets = []
                         for dim_idx, domain in enumerate(eq.domains):
                             unique_vals = sorted(
-                                set(idx[dim_idx] for idx in constraint_dict)
+                                {idx[dim_idx] for idx in constraint_dict}
                             )
                             domain_sets.append((domain, unique_vals))
 

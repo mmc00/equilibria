@@ -220,7 +220,7 @@ def _read_respse(
         if counter == 1:  # last chunk
             break
     flat = np.zeros(int(np.prod(shape)) if shape else 1, dtype=np.float32)
-    for k, v in zip(all_idx, all_val):
+    for k, v in zip(all_idx, all_val, strict=False):
         flat[k - 1] = v
     arr = flat.reshape(shape, order="F") if shape else flat
     return (

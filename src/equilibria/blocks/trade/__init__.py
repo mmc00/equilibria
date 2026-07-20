@@ -356,17 +356,14 @@ class ArmingtonCES(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QD0" in calibrated:
-            if "QD" in var_manager:
-                var_manager.get("QD").value = calibrated["QD0"].copy()
-        if "QM0" in calibrated:
-            if "QM" in var_manager:
-                var_manager.get("QM").value = self._ensure_positive(
-                    calibrated["QM0"].copy()
-                )
-        if "QA0" in calibrated:
-            if "QA" in var_manager:
-                var_manager.get("QA").value = calibrated["QA0"].copy()
+        if "QD0" in calibrated and "QD" in var_manager:
+            var_manager.get("QD").value = calibrated["QD0"].copy()
+        if "QM0" in calibrated and "QM" in var_manager:
+            var_manager.get("QM").value = self._ensure_positive(
+                calibrated["QM0"].copy()
+            )
+        if "QA0" in calibrated and "QA" in var_manager:
+            var_manager.get("QA").value = calibrated["QA0"].copy()
 
     @staticmethod
     def _ensure_positive(values: np.ndarray) -> np.ndarray:
@@ -661,12 +658,10 @@ class CETExports(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "XE0" in calibrated:
-            if "XE" in var_manager:
-                var_manager.get("XE").value = calibrated["XE0"].copy()
-        if "XD0" in calibrated:
-            if "XD" in var_manager:
-                var_manager.get("XD").value = calibrated["XD0"].copy()
+        if "XE0" in calibrated and "XE" in var_manager:
+            var_manager.get("XE").value = calibrated["XE0"].copy()
+        if "XD0" in calibrated and "XD" in var_manager:
+            var_manager.get("XD").value = calibrated["XD0"].copy()
 
 
 class PEPTradeFlowInit(Block):
@@ -1292,7 +1287,7 @@ class PEPCommodityBalanceInit(Block):
     ) -> None:
         _ = mode
         I = tuple(set_manager.get("I"))
-        H = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+        H = tuple(set_manager.get("H")) if "H" in set_manager else ()
 
         ddo0 = self._first_map(parameters, "DDO0", "DDO")
         imo0 = self._first_map(parameters, "IMO0", "IMO")
@@ -1390,7 +1385,7 @@ class PEPCommodityBalanceInit(Block):
         variables: dict[str, Any],
     ) -> dict[str, float]:
         I = tuple(set_manager.get("I"))
-        H = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+        H = tuple(set_manager.get("H")) if "H" in set_manager else ()
 
         ddo0 = self._first_map(parameters, "DDO0", "DDO")
         imo0 = self._first_map(parameters, "IMO0", "IMO")

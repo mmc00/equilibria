@@ -255,7 +255,7 @@ def test_methods_diverge_on_large_dpsave():
     is the calibration we ship.
     """
     base = nus333_usa_baseline()
-    kw = dict(u_pct=0.1725, dpsave_pct=16.18)
+    kw = {"u_pct": 0.1725, "dpsave_pct": 16.18}
     euler25 = integrate(base, **kw, method="euler", n_steps=25)
     bs = integrate(base, **kw, method="bulirsch_stoer")
     # Both should sit in the right neighbourhood of $14k USD M.

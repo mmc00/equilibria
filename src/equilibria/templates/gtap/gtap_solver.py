@@ -371,7 +371,7 @@ class GTAPSolver:
         if closure.fix_endowments:
             if hasattr(self.model, "xft"):
                 sf_set = (
-                    set(str(f) for f in self.model.sf)
+                    {str(f) for f in self.model.sf}
                     if hasattr(self.model, "sf")
                     else set()
                 )

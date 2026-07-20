@@ -58,10 +58,7 @@ class _FakePepSimulator:
 
     def run_scenarios(self, **kwargs: Any) -> dict[str, Any]:
         scenarios = kwargs["scenarios"]
-        if not scenarios:
-            name = "base"
-        else:
-            name = scenarios[0].name
+        name = "base" if not scenarios else scenarios[0].name
         is_analytic = self.mode == "analytic"
         fd = 0 if is_analytic else 100
         wall = 0.1 if is_analytic else 1.0

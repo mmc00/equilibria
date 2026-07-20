@@ -194,15 +194,12 @@ class Household(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "WF0" in calibrated:
-            if "WF" in var_manager:
-                var_manager.get("WF").value = calibrated["WF0"].copy()
-        if "FSUP0" in calibrated:
-            if "FSUP" in var_manager:
-                var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
-        if "YH0" in calibrated:
-            if "YH" in var_manager:
-                var_manager.get("YH").value = np.array([calibrated["YH0"]])
+        if "WF0" in calibrated and "WF" in var_manager:
+            var_manager.get("WF").value = calibrated["WF0"].copy()
+        if "FSUP0" in calibrated and "FSUP" in var_manager:
+            var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
+        if "YH0" in calibrated and "YH" in var_manager:
+            var_manager.get("YH").value = np.array([calibrated["YH0"]])
 
 
 class Government(Block):
@@ -366,10 +363,7 @@ class Government(Block):
                 QM0 = trade_params["QM0"]
                 # Get prices - try LES blocks or default to 1.0
                 les_params = data.get_block_params("LES_hrp")
-                if "PA0" in les_params:
-                    PA0 = les_params["PA0"]
-                else:
-                    PA0 = np.ones(n_comm)
+                PA0 = les_params["PA0"] if "PA0" in les_params else np.ones(n_comm)
 
                 # Extract government consumption from SAM
                 # Government pays to commodities (AGR, IND, AGR_2, etc.)
@@ -437,12 +431,10 @@ class Government(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "XG0" in calibrated:
-            if "XG" in var_manager:
-                var_manager.get("XG").value = _ensure_positive_array(calibrated["XG0"])
-        if "YG0" in calibrated:
-            if "YG" in var_manager:
-                var_manager.get("YG").value = np.array([calibrated["YG0"]])
+        if "XG0" in calibrated and "XG" in var_manager:
+            var_manager.get("XG").value = _ensure_positive_array(calibrated["XG0"])
+        if "YG0" in calibrated and "YG" in var_manager:
+            var_manager.get("YG").value = np.array([calibrated["YG0"]])
 
 
 class RestOfWorld(Block):
@@ -596,10 +588,7 @@ class RestOfWorld(Block):
             else:
                 QM0 = np.zeros(n_comm)
 
-            if "XE0" in cet_params:
-                QE0 = cet_params["XE0"]
-            else:
-                QE0 = np.zeros(n_comm)
+            QE0 = cet_params["XE0"] if "XE0" in cet_params else np.zeros(n_comm)
 
             # World prices (normalized to 1)
             pwm = np.ones(n_comm)
@@ -624,16 +613,13 @@ class RestOfWorld(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QM0" in calibrated:
-            if "QM" in var_manager:
-                var_manager.get("QM").value = _ensure_positive_array(
-                    calibrated["QM0"].copy()
-                )
-        if "QE0" in calibrated:
-            if "QE" in var_manager:
-                var_manager.get("QE").value = _ensure_positive_array(
-                    calibrated["QE0"].copy()
-                )
-        if "FSAV0" in calibrated:
-            if "FSAV" in var_manager:
-                var_manager.get("FSAV").value = np.array([calibrated["FSAV0"]])
+        if "QM0" in calibrated and "QM" in var_manager:
+            var_manager.get("QM").value = _ensure_positive_array(
+                calibrated["QM0"].copy()
+            )
+        if "QE0" in calibrated and "QE" in var_manager:
+            var_manager.get("QE").value = _ensure_positive_array(
+                calibrated["QE0"].copy()
+            )
+        if "FSAV0" in calibrated and "FSAV" in var_manager:
+            var_manager.get("FSAV").value = np.array([calibrated["FSAV0"]])

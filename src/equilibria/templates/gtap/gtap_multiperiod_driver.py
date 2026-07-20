@@ -25,6 +25,7 @@ freeze_inactive_periods(m, active_period)
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import importlib.util as _iu
 import sys
@@ -886,10 +887,8 @@ def freeze_inactive_periods(m, active_period: str) -> int:
                 # Unfix active period vars so PATH can move them.
                 vd = v[idx]
                 if vd.fixed:
-                    try:
+                    with contextlib.suppress(Exception):
                         vd.unfix()
-                    except Exception:
-                        pass
                 continue
             vd = v[idx]
             if vd.fixed:
@@ -1258,7 +1257,7 @@ def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
         pm_vd = pm[idx]
         c_pmcif = None
         c_pm = None
-        for v, c in zip(repn.linear_vars, repn.linear_coefs):
+        for v, c in zip(repn.linear_vars, repn.linear_coefs, strict=False):
             if v is pmcif_vd:
                 c_pmcif = float(c)
             elif v is pm_vd:
@@ -1280,10 +1279,8 @@ def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
 
     # Deactivate the original shock cells we are replacing.
     for rp, i, r in rebuilt:
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             eq[(rp, i, r, "shock")].deactivate()
-        except (KeyError, AttributeError):
-            pass
 
     # Add a single indexed replacement Constraint over the rebuilt cells.  Use a
     # fresh attribute name; if a prior call already added it (idempotent re-solve),
@@ -1453,10 +1450,8 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
 
     # Deactivate the original shock cells we are replacing.
     for r in rebuilt_r:
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             eq[(r, "mt", "shock")].deactivate()
-        except (KeyError, AttributeError):
-            pass
 
     if hasattr(m, "eq_ytax_mt_shock_rebuilt"):
         m.del_component(m.eq_ytax_mt_shock_rebuilt)
@@ -1964,10 +1959,8 @@ def _complete_derived_seed(m, period: str) -> int:
                 v = getattr(m, vn, None)
                 if v is None:
                     continue
-                try:
+                with contextlib.suppress(Exception):
                     n += _set(v, (r, i, period), _pv(m.xaa[r, i, agent, period]))
-                except Exception:
-                    pass
             try:
                 s = sum(
                     float(_pv(m.xda[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
@@ -1984,12 +1977,10 @@ def _complete_derived_seed(m, period: str) -> int:
                 n += _set(m.xmt, (r, i, period), s)
             except Exception:
                 pass
-        try:
+        with contextlib.suppress(Exception):
             n += _set(
                 m.xiagg, (r, period), sum(float(_pv(m.xi[r, i, period])) for i in m.i)
             )
-        except Exception:
-            pass
     return n
 
 
@@ -2126,10 +2117,8 @@ def _recompute_pm_pmt(
                     else:
                         pv.set_value(old)
                 except Exception:
-                    try:
+                    with contextlib.suppress(Exception):
                         pv.set_value(old)
-                    except Exception:
-                        pass
 
     # 3. pa aggregate — pmp is an Expression = pmt*(1+mintx), so the corrected pmt
     #    flows into eq_paa automatically. pa is a solved Var that used the OLD pmt, so
@@ -2175,10 +2164,8 @@ def _recompute_pm_pmt(
                             else:
                                 pv.set_value(old)
                     except Exception:
-                        try:
+                        with contextlib.suppress(Exception):
                             pv.set_value(old)
-                        except Exception:
-                            pass
     return n
 
 
@@ -2402,10 +2389,8 @@ def _recompute_ifsub_report_vars(
                     v = getattr(m, vn, None)
                     if v is None:
                         continue
-                    try:
+                    with contextlib.suppress(Exception):
                         _force(v[r, f, a, period], val)
-                    except Exception:
-                        pass
 
     # --- producer price: pp_rai ---
     # GAMS report var pp(r,a,i) maps to Python pp_rai(r,a,i) (m.pp is the 2-idx
@@ -2427,10 +2412,8 @@ def _recompute_ifsub_report_vars(
                 )
                 if p_rai is None or pp_rai is None:
                     continue
-                try:
+                with contextlib.suppress(Exception):
                     _force(pp_rai[r, a, i, period], p_rai)
-                except Exception:
-                    pass
 
     # --- trade prices: pwmg, pefob, pmcif, pm ---
     for r in R:  # exporter
@@ -2590,8 +2573,8 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
     fset = getattr(params, "sets", None)
     if fset is None:
         return 0
-    mf_set = set(str(f) for f in getattr(fset, "mf", []))
-    sf_set = set(str(f) for f in getattr(fset, "sf", []))
+    mf_set = {str(f) for f in getattr(fset, "mf", [])}
+    sf_set = {str(f) for f in getattr(fset, "sf", [])}
     etaff = getattr(getattr(params, "elasticities", None), "etaff", {}) or {}
     _bm = getattr(params, "benchmark", None)
 
@@ -3079,13 +3062,11 @@ def solve_multiperiod(
                     and _idx[1] == _ff_p
                     and _idx[-1] == "check"
                 ):
-                    try:
+                    with contextlib.suppress(Exception):
                         print(
                             f"[probe-pf]   {_nm}{_idx} = {_Vp(_comp[_idx]):.6f}  fixed={_comp[_idx].fixed}",
                             file=_sys_probe.stderr,
                         )
-                    except Exception:
-                        pass
         # residuals of any active constraint touching this factor
         _rows = []
         for _c in m.component_objects(_Cp, active=True):
@@ -3419,10 +3400,8 @@ def solve_multiperiod(
     # Restore the SHOCK GAMS pva/pnd seed that the prior-seed just clobbered.
     if holdfix_cd and not _gtap_mode:
         for (_vn, _idx), _val in _pva_pnd_shock_seed.items():
-            try:
+            with contextlib.suppress(Exception):
                 getattr(m, _vn)[_idx].set_value(_val)
-            except Exception:
-                pass
 
     # Unfix regy[r,'shock'] (same as check period).
     for _r in params_shock.sets.r:

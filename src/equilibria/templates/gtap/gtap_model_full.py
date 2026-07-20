@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
 
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_parameters import GTAPParameters
+    from equilibria.templates.gtap.gtap_sets import GTAPSets
+
 
 class GTAPFullModel:
     """Complete GTAP CGE model with realistic structure.
@@ -469,7 +473,7 @@ class GTAPFullModel:
 
         # CES Value-added aggregator
         def ces_va(model, r, a):
-            esub = model.esubva[r, a] if (r, a) in model.esubva else 1.0
+            esub = model.esubva.get((r, a), 1.0)
             if esub == 0:
                 # Leontief
                 return model.va[r, a] == min(

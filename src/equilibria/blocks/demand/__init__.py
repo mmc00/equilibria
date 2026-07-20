@@ -214,10 +214,7 @@ class LESConsumer(Block):
 
             # Get prices from trade block
             trade_params = data.get_block_params("Armington")
-            if "PA0" in trade_params:
-                PA0 = trade_params["PA0"]
-            else:
-                PA0 = np.ones(n_comm)
+            PA0 = trade_params["PA0"] if "PA0" in trade_params else np.ones(n_comm)
 
             # Calculate expenditure
             expenditure = QD0 * PA0
@@ -244,12 +241,10 @@ class LESConsumer(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QD0" in calibrated:
-            if "QD" in var_manager:
-                var_manager.get("QD").value = calibrated["QD0"].copy()
-        if "Y0" in calibrated:
-            if "Y" in var_manager:
-                var_manager.get("Y").value = np.array([calibrated["Y0"]])
+        if "QD0" in calibrated and "QD" in var_manager:
+            var_manager.get("QD").value = calibrated["QD0"].copy()
+        if "Y0" in calibrated and "Y" in var_manager:
+            var_manager.get("Y").value = np.array([calibrated["Y0"]])
 
 
 class CobbDouglasConsumer(Block):
@@ -416,10 +411,7 @@ class CobbDouglasConsumer(Block):
 
             # Get prices from trade block
             trade_params = data.get_block_params("Armington")
-            if "PA0" in trade_params:
-                PA0 = trade_params["PA0"]
-            else:
-                PA0 = np.ones(n_comm)
+            PA0 = trade_params["PA0"] if "PA0" in trade_params else np.ones(n_comm)
 
             # Calculate expenditure shares
             expenditure = QD0 * PA0
@@ -441,9 +433,7 @@ class CobbDouglasConsumer(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QD0" in calibrated:
-            if "QD" in var_manager:
-                var_manager.get("QD").value = calibrated["QD0"].copy()
-        if "Y0" in calibrated:
-            if "Y" in var_manager:
-                var_manager.get("Y").value = np.array([calibrated["Y0"]])
+        if "QD0" in calibrated and "QD" in var_manager:
+            var_manager.get("QD").value = calibrated["QD0"].copy()
+        if "Y0" in calibrated and "Y" in var_manager:
+            var_manager.get("Y").value = np.array([calibrated["Y0"]])

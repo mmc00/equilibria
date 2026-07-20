@@ -244,7 +244,7 @@ def _emit_symb_section(
     out = bytearray()
     out += _pascal(MARKER_SYMB)
     out += _u32(len(symbols))
-    for sym, off in zip(symbols, data_offsets):
+    for sym, off in zip(symbols, data_offsets, strict=False):
         is_domain = isinstance(sym, Set) and sym.name in domain_set_names
         out += _emit_symbol_entry(sym, off, is_domain=is_domain, sym_index=sym_index)
     out += _pascal(MARKER_SYMB)
@@ -470,7 +470,7 @@ def _emit_param_data(sym: Parameter, uel: list[str]) -> bytes:
 
     last = [0] * dim
     first = True
-    for r, val in zip(rec_indices, rec_values):
+    for r, val in zip(rec_indices, rec_values, strict=False):
         af_dim = dim
         for d in range(dim):
             if r[d] != last[d]:

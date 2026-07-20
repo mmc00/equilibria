@@ -115,10 +115,7 @@ def _sam_balance_stats(sam: Sam) -> dict[str, float]:
     matrix = sam.matrix
     row_sums = matrix.sum(axis=1)
     col_sums = matrix.sum(axis=0)
-    if matrix.size == 0:
-        max_diff = 0.0
-    else:
-        max_diff = float(np.max(np.abs(row_sums - col_sums)))
+    max_diff = 0.0 if matrix.size == 0 else float(np.max(np.abs(row_sums - col_sums)))
     return {
         "total": float(matrix.sum()),
         "max_row_col_abs_diff": max_diff,

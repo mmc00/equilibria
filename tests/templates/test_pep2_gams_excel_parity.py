@@ -65,8 +65,7 @@ def _run_gams_model(gams_bin: Path, model_file: str) -> None:
         [str(gams_bin), model_file, "lo=0"],
         cwd=PEP2_SCRIPTS,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -91,8 +90,7 @@ def test_pep2_gdx_vs_excel_loader_parity() -> None:
         cwd=PEP2_SCRIPTS,
         env=env,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -148,8 +146,7 @@ def test_pep2_hardcoded_vs_dynamic_sets_parity() -> None:
         ["cp", "Results.gdx", dynamic_results.name],
         cwd=PEP2_SCRIPTS,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -160,8 +157,7 @@ def test_pep2_hardcoded_vs_dynamic_sets_parity() -> None:
         ["cp", "Results.gdx", hardcoded_results.name],
         cwd=PEP2_SCRIPTS,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

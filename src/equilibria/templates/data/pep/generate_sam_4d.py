@@ -60,8 +60,12 @@ def read_sam_excel_4d(filepath: Path) -> dict:
 
     # Build 4D dictionary
     sam_4d = {}
-    for i, (row_cat, row_elem) in enumerate(zip(row_categories, row_elements)):
-        for j, (col_cat, col_elem) in enumerate(zip(col_categories, col_elements)):
+    for i, (row_cat, row_elem) in enumerate(
+        zip(row_categories, row_elements, strict=False)
+    ):
+        for j, (col_cat, col_elem) in enumerate(
+            zip(col_categories, col_elements, strict=False)
+        ):
             value = float(data.iloc[i, j])
             if value != 0:  # Sparse storage
                 sam_4d[(row_cat, row_elem, col_cat, col_elem)] = value

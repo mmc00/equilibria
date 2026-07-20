@@ -119,9 +119,9 @@ def test_ipopt_contract_equation_include_filters_hard_constraints() -> None:
     )
 
     hard = solver._build_hard_constraints()
-    expected = set(f"EQ85_{l}" for l in state.sets["L"]) | set(
+    expected = {f"EQ85_{l}" for l in state.sets["L"]} | {
         f"EQ86_{k}" for k in state.sets["K"]
-    )
+    }
 
     assert set(hard) == expected
 

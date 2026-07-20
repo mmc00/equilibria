@@ -90,8 +90,7 @@ def _read_variable_levels_from_gdxdump(
     try:
         proc = subprocess.run(
             [gdxdump, str(gdx_path), f"Symb={symbol_name}"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -144,8 +143,7 @@ def _read_parameter_from_gdxdump(
     try:
         proc = subprocess.run(
             [gdxdump, str(gdx_path), f"Symb={symbol_name}", "format=csv"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -162,8 +160,7 @@ def _read_parameter_from_gdxdump(
     try:
         proc = subprocess.run(
             [gdxdump, str(gdx_path), f"Symb={symbol_name}"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -201,8 +198,7 @@ def read_set_with_gdxdump(gdx_path: Path, set_name: str) -> list[str]:
     try:
         proc = subprocess.run(
             [gdxdump, str(gdx_path), f"Symb={set_name}"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )

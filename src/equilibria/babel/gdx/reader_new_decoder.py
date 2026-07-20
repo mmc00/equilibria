@@ -1,5 +1,10 @@
 import struct
 
+# Fallback decoder lives in the primary reader module; imported here so the
+# short-section path below resolves (this module is an alternate decoder and
+# was previously calling an undefined name).
+from equilibria.babel.gdx.reader import _decode_simple_parameter_fallback
+
 
 def _decode_simple_parameter(
     section: bytes,

@@ -741,7 +741,7 @@ def collect_python_benchmark_levels(
         else:
             component_value = value(component, exception=False)
             if component_value is not None:
-                symbol_levels[tuple()] = float(component_value)
+                symbol_levels[()] = float(component_value)
 
         if symbol_levels:
             levels[symbol.lower()] = symbol_levels

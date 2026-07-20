@@ -368,12 +368,10 @@ class LeontiefIntermediate(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "XST0" in calibrated:
-            if "XST" in var_manager:
-                var_manager.get("XST").value = calibrated["XST0"].copy()
-        if "Z0" in calibrated:
-            if "Z" in var_manager:
-                var_manager.get("Z").value = calibrated["Z0"].copy()
+        if "XST0" in calibrated and "XST" in var_manager:
+            var_manager.get("XST").value = calibrated["XST0"].copy()
+        if "Z0" in calibrated and "Z" in var_manager:
+            var_manager.get("Z").value = calibrated["Z0"].copy()
 
 
 class CETTransformation(Block):
@@ -601,12 +599,10 @@ class CETTransformation(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "XD0" in calibrated:
-            if "XD" in var_manager:
-                var_manager.get("XD").value = calibrated["XD0"].copy()
-        if "XE0" in calibrated:
-            if "XE" in var_manager:
-                var_manager.get("XE").value = calibrated["XE0"].copy()
+        if "XD0" in calibrated and "XD" in var_manager:
+            var_manager.get("XD").value = calibrated["XD0"].copy()
+        if "XE0" in calibrated and "XE" in var_manager:
+            var_manager.get("XE").value = calibrated["XE0"].copy()
 
 
 class PEPProductionAccountingInit(Block):

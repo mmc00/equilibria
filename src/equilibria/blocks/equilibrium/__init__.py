@@ -169,15 +169,12 @@ class MarketClearing(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QS0" in calibrated:
-            if "QS" in var_manager:
-                var_manager.get("QS").value = calibrated["QS0"].copy()
-        if "QD0" in calibrated:
-            if "QD" in var_manager:
-                var_manager.get("QD").value = calibrated["QD0"].copy()
-        if "P0" in calibrated:
-            if "P" in var_manager:
-                var_manager.get("P").value = calibrated["P0"].copy()
+        if "QS0" in calibrated and "QS" in var_manager:
+            var_manager.get("QS").value = calibrated["QS0"].copy()
+        if "QD0" in calibrated and "QD" in var_manager:
+            var_manager.get("QD").value = calibrated["QD0"].copy()
+        if "P0" in calibrated and "P" in var_manager:
+            var_manager.get("P").value = calibrated["P0"].copy()
 
 
 class PriceNormalization(Block):
@@ -285,9 +282,8 @@ class PriceNormalization(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "P0" in calibrated:
-            if "P" in var_manager:
-                var_manager.get("P").value = calibrated["P0"].copy()
+        if "P0" in calibrated and "P" in var_manager:
+            var_manager.get("P").value = calibrated["P0"].copy()
 
 
 class FactorMarketClearing(Block):
@@ -405,10 +401,7 @@ class FactorMarketClearing(Block):
             # Get data from household block
             hh_params = data.get_block_params("Household")
 
-            if "FSUP0" in hh_params:
-                FSUP0 = hh_params["FSUP0"]
-            else:
-                FSUP0 = np.ones(n_factors)
+            FSUP0 = hh_params["FSUP0"] if "FSUP0" in hh_params else np.ones(n_factors)
 
             WF0 = np.ones(n_factors)
 
@@ -425,15 +418,12 @@ class FactorMarketClearing(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "FSUP0" in calibrated:
-            if "FSUP" in var_manager:
-                var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
-        if "FD0" in calibrated:
-            if "FD" in var_manager:
-                var_manager.get("FD").value = calibrated["FD0"].copy()
-        if "WF0" in calibrated:
-            if "WF" in var_manager:
-                var_manager.get("WF").value = calibrated["WF0"].copy()
+        if "FSUP0" in calibrated and "FSUP" in var_manager:
+            var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
+        if "FD0" in calibrated and "FD" in var_manager:
+            var_manager.get("FD").value = calibrated["FD0"].copy()
+        if "WF0" in calibrated and "WF" in var_manager:
+            var_manager.get("WF").value = calibrated["WF0"].copy()
 
 
 class PEPMacroClosureInit(Block):
@@ -494,9 +484,9 @@ class PEPMacroClosureInit(Block):
     ) -> None:
         _ = mode
         I = tuple(set_manager.get("I"))
-        K = tuple(set_manager.get("K")) if "K" in set_manager else tuple()
-        J = tuple(set_manager.get("J")) if "J" in set_manager else tuple()
-        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else tuple()
+        K = tuple(set_manager.get("K")) if "K" in set_manager else ()
+        J = tuple(set_manager.get("J")) if "J" in set_manager else ()
+        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else ()
 
         alpha = max(0.0, min(1.0, self._scalar(parameters, "macro_alpha", 1.0)))
 
@@ -519,7 +509,7 @@ class PEPMacroClosureInit(Block):
         cg = self._first_map(variables, "CG")
         inv = self._first_map(variables, "INV")
         vstk = self._first_map(variables, "VSTK")
-        h_set = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+        h_set = tuple(set_manager.get("H")) if "H" in set_manager else ()
 
         e = self._scalar(variables, "e", 1.0)
         yrow_cur = self._scalar(variables, "YROW", 0.0)
@@ -591,10 +581,10 @@ class PEPMacroClosureInit(Block):
         variables: dict[str, Any],
     ) -> dict[str, float]:
         I = tuple(set_manager.get("I"))
-        K = tuple(set_manager.get("K")) if "K" in set_manager else tuple()
-        J = tuple(set_manager.get("J")) if "J" in set_manager else tuple()
-        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else tuple()
-        h_set = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+        K = tuple(set_manager.get("K")) if "K" in set_manager else ()
+        J = tuple(set_manager.get("J")) if "J" in set_manager else ()
+        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else ()
+        h_set = tuple(set_manager.get("H")) if "H" in set_manager else ()
 
         imo0 = self._first_map(parameters, "IMO0")
         exdo0 = self._first_map(parameters, "EXDO0", "EXDO")

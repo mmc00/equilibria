@@ -205,7 +205,7 @@ class GTAPSets:
         raw_data = symbol.get("data", {})
         if raw_data:
             if isinstance(raw_data, dict):
-                return [str(element) for element in raw_data.keys()]
+                return [str(element) for element in raw_data]
             return [str(element) for element in raw_data]
 
         try:
@@ -338,7 +338,7 @@ class GTAPSets:
 
         pairs = self._extract_output_pairs(gdx_data)
         if not pairs and self.is_diagonal:
-            pairs = list(zip(self.a, self.i))
+            pairs = list(zip(self.a, self.i, strict=False))
 
         self.output_pairs = pairs
 

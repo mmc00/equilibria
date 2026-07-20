@@ -116,10 +116,7 @@ class GAMSNLPReferenceManifest(BaseModel):
     def _normalize_model_types(cls, value: Any) -> tuple[str, ...]:
         if value is None:
             raise ValueError("script_model_types must be non-empty.")
-        if isinstance(value, str):
-            items = [value]
-        else:
-            items = list(value)
+        items = [value] if isinstance(value, str) else list(value)
 
         seen: set[str] = set()
         ordered: list[str] = []

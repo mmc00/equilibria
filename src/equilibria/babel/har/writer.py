@@ -12,6 +12,7 @@ black-box oracle via scripts/har/oracle_check.py. Distributed under MIT.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import warnings
 from collections.abc import Mapping
@@ -61,10 +62,8 @@ def write_har(
         os.replace(tmp, target)
     except BaseException:
         if tmp.exists():
-            try:
+            with contextlib.suppress(OSError):
                 tmp.unlink()
-            except OSError:
-                pass
         raise
 
 
@@ -155,7 +154,7 @@ def _validate_array_header(name: str, ha: HeaderArray) -> None:
             f"{name!r}: len(set_elements) {len(ha.set_elements)} "
             f"!= len(set_names) {len(ha.set_names)}"
         )
-    for k, (sn, elems) in enumerate(zip(ha.set_names, ha.set_elements)):
+    for k, (sn, elems) in enumerate(zip(ha.set_names, ha.set_elements, strict=False)):
         if ha.array.shape[k] != len(elems):
             raise ValueError(
                 f"{name!r}: shape[{k}]={ha.array.shape[k]} for set {sn!r} "
@@ -273,7 +272,7 @@ def _write_respse(out: bytearray, name: str, ha: HeaderArray) -> None:
     )
 
     seen: set[str] = set()
-    for sn, elems in zip(ha.set_names, ha.set_elements):
+    for sn, elems in zip(ha.set_names, ha.set_elements, strict=False):
         if sn in seen:
             continue
         seen.add(sn)
@@ -326,7 +325,7 @@ def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
     )
 
     seen: set[str] = set()
-    for sn, elems in zip(ha.set_names, ha.set_elements):
+    for sn, elems in zip(ha.set_names, ha.set_elements, strict=False):
         if sn in seen:
             continue
         seen.add(sn)
@@ -421,7 +420,7 @@ class HarWriter:
                     )
                 set_elements.append(list(self._sets[sn]))
         else:
-            for sn, elems in zip(set_names, set_elements):
+            for sn, elems in zip(set_names, set_elements, strict=False):
                 elems = list(elems)
                 if sn in self._sets:
                     if self._sets[sn] != elems:

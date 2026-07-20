@@ -1647,9 +1647,8 @@ class IPOPTSolver:
             if (
                 self.enforce_strict_gams_baseline
                 and self.strict_baseline_report is not None
-            ):
-                if not self.strict_baseline_report.passed:
-                    raise RuntimeError(self.strict_baseline_report.summary())
+            ) and not self.strict_baseline_report.passed:
+                raise RuntimeError(self.strict_baseline_report.summary())
             return
 
         self._strict_baseline_checked = True
@@ -2194,11 +2193,11 @@ class IPOPTSolver:
             r"([A-Za-z_][A-Za-z0-9_]*)(?:\[(.*)\])?", packed_name.strip()
         )
         if not match:
-            return packed_name.strip().upper(), tuple()
+            return packed_name.strip().upper(), ()
         root = match.group(1).upper()
         raw_indices = match.group(2)
         if raw_indices is None or raw_indices == "":
-            return root, tuple()
+            return root, ()
         indices = tuple(
             part.strip().lower() for part in raw_indices.split(",") if part.strip()
         )

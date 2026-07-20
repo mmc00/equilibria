@@ -16,6 +16,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
+import contextlib
+
 from pyomo.environ import value as pv
 from test_multiperiod_sets import _load_3x3_params
 
@@ -95,24 +97,16 @@ def test_fisher_pabs_pfact_pwfact_are_cross_period_rows():
     for r in regions:
         for i in m.i:
             for a in fd_agents:
-                try:
+                with contextlib.suppress(KeyError, AttributeError):
                     m.pa[r, i, a, "base"].set_value(pv(m.pa[r, i, a, "base"]) * SCALE)
-                except (KeyError, AttributeError):
-                    pass
-                try:
+                with contextlib.suppress(KeyError, AttributeError):
                     m.xaa[r, i, a, "base"].set_value(pv(m.xaa[r, i, a, "base"]) * SCALE)
-                except (KeyError, AttributeError):
-                    pass
         for f in m.f:
             for a in m.a:
-                try:
+                with contextlib.suppress(KeyError, AttributeError):
                     m.pf[r, f, a, "base"].set_value(pv(m.pf[r, f, a, "base"]) * SCALE)
-                except (KeyError, AttributeError):
-                    pass
-                try:
+                with contextlib.suppress(KeyError, AttributeError):
                     m.xf[r, f, a, "base"].set_value(pv(m.xf[r, f, a, "base"]) * SCALE)
-                except (KeyError, AttributeError):
-                    pass
 
     # After perturbation: residuals must REACT (prove the constraint is live/cross-period)
     pabs_worst = max(_resid_pabs(r) for r in regions)

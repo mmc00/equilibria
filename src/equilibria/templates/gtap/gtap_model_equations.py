@@ -24,6 +24,10 @@ from equilibria.templates.gtap.gtap_parameters import (
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
 
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_parameters import GTAPParameters
+    from equilibria.templates.gtap.gtap_sets import GTAPSets
+
 logger = logging.getLogger(__name__)
 
 
@@ -247,9 +251,7 @@ class GTAPModelEquations:
         if symbol_lc in targets:
             return True
         alias = aliases.get(symbol_lc)
-        if alias is not None and alias in targets:
-            return True
-        return False
+        return bool(alias is not None and alias in targets)
 
     @staticmethod
     def _normalize_override_map(
@@ -5117,7 +5119,7 @@ class GTAPModelEquations:
 
         # p(r,a,i) = ps(r,i)/(1+prdtx) when xFlag, else 1 (cal.gms:293-294)
         # xFlag(r,a,i) is true iff MAKB(i,a,r) > 0; we proxy via prdtx_init membership.
-        x_flag = {k for k in prdtx_init.keys()}
+        x_flag = set(prdtx_init.keys())
 
         def _p_rule(m, r, a, i):
             if (r, a, i) not in x_flag:
@@ -6054,7 +6056,7 @@ class GTAPModelEquations:
 
         # GAMS xatmgeq (model.gms:1016): xa(r,i,tmg) = alphaa(r,i,tmg)*xtmg(i)*(ptmg(i)/pa(r,i,tmg))^sigmamg(i)
         # Only i ∈ margin-commodity set m has nonzero flow. alphaa_tmg(r,i) = vst(i,r) / sum_r' vst(i,r').
-        margin_commodities = set(str(mm) for mm in self.sets.m)
+        margin_commodities = {str(mm) for mm in self.sets.m}
         alphaa_tmg = {}
         for i_m in margin_commodities:
             denom = sum(self._vst_value(str(rp), i_m) for rp in self.sets.r)

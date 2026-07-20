@@ -21,7 +21,7 @@ import json
 import logging
 import math
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -41,6 +41,7 @@ from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_parameters import (
     GTAPBenchmarkValues,
     GTAPParameters,
+    GTAPTaxRates,
 )
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult
@@ -1128,10 +1129,7 @@ class GTAPVariableSnapshot:
         snapshot = cls()
         data = snapshot.__dict__.copy()
         ytax_by_region: dict[str, float] = defaultdict(float)
-        if len(sets.m) == 1:
-            margin_commodity = sets.m[0]
-        else:
-            margin_commodity = None
+        margin_commodity = sets.m[0] if len(sets.m) == 1 else None
 
         for row in rows:
             if not _row_matches_year(row, year):

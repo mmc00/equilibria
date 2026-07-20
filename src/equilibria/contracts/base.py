@@ -15,10 +15,7 @@ def normalize_string_tuple(value: Any) -> tuple[str, ...]:
 
     if value is None:
         return ()
-    if isinstance(value, str):
-        items = [value]
-    else:
-        items = list(value)
+    items = [value] if isinstance(value, str) else list(value)
 
     normalized: list[str] = []
     seen: set[str] = set()

@@ -174,8 +174,7 @@ def test_pep2_gams_excel_vs_python_excel_key_scalars() -> None:
         [str(gams_bin), model_file.name, "lo=0"],
         cwd=PEP2_SCRIPTS,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

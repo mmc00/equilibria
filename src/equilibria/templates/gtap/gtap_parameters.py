@@ -13,6 +13,7 @@ Parameters include:
 
 from __future__ import annotations
 
+import contextlib
 import math
 from collections import defaultdict
 from collections.abc import Sequence
@@ -217,10 +218,8 @@ class GTAPElasticities:
         gtap_name = get_elasticity_parameter_name(name)
 
         values: dict[tuple[str, ...], float] = {}
-        try:
+        with contextlib.suppress(KeyError, ValueError):
             values = read_parameter_values(gdx_data, gtap_name)
-        except (KeyError, ValueError):
-            pass
 
         if not values:
             values = read_parameter_with_gdxdump(gdx_path, gtap_name)
@@ -2069,9 +2068,8 @@ class GTAPShareParameters:
         for r in sets.r:
             for a in sets.a:
                 outputs = sets.activity_commodities.get(a, [])
-                if not outputs:
-                    if a in sets.a_to_i:
-                        outputs = [sets.a_to_i[a]]
+                if not outputs and a in sets.a_to_i:
+                    outputs = [sets.a_to_i[a]]
                 if not outputs:
                     continue
 

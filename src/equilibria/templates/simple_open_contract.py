@@ -157,9 +157,7 @@ def build_simple_open_contract(
         base = default_simple_open_contract().model_dump(mode="python")
         updates = dict(value)
         closure_value = updates.get("closure")
-        if isinstance(closure_value, Mapping) or isinstance(
-            closure_value, (str, SimpleOpenClosureConfig)
-        ):
+        if isinstance(closure_value, (Mapping, str, SimpleOpenClosureConfig)):
             updates["closure"] = build_simple_open_closure_config(
                 closure_value
             ).model_dump(mode="python")

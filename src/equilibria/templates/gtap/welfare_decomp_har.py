@@ -138,7 +138,7 @@ def _write_refull(
     for sn in set_names:
         if sn not in unique_names:
             unique_names.append(sn)
-    name_to_elems = dict(zip(set_names, set_elements))
+    name_to_elems = dict(zip(set_names, set_elements, strict=False))
     shape = tuple(len(set_elements[i]) for i in range(len(set_names)))
 
     blob = _name_record(name) + _meta_record("REFULL", long_name)

@@ -300,21 +300,6 @@ def get_set_name(internal_name: str) -> str:
     """
     return GTAP_STD7_SET_NAMES.get(internal_name.lower(), internal_name.upper())
 
-    return mapping.get(internal_name.lower(), internal_name.upper())
-
-
-def get_elasticity_parameter_name(internal_name: str) -> str:
-    """Map internal elasticity name to GTAP Std 7 native name.
-
-    Args:
-        internal_name: Internal name like 'esubva', 'esubd'
-
-    Returns:
-        GTAP Std 7 name like 'ESUBVA', 'ESUBD'
-    """
-    # GTAP Std 7 elasticities are already uppercase versions
-    return internal_name.upper()
-
 
 # =============================================================================
 # Index Mapping
