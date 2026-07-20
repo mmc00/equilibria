@@ -9,6 +9,19 @@ commit log.
 
 ## [Unreleased]
 
+### Fixed
+- GTAP7 pure 5x5 ifSUB=1 MCP shock parity closed: 92.35% → **100%** (MCP
+  gate 18/18 rows green, floor restored 92 → 99). The "multi-root pet/pe
+  export block" was a spurious complementarity corner FABRICATED by Python:
+  GAMS declares every quantity as a free variable (its MCP rows must hold
+  with F=0 exactly), while Python's `NonNegativeReals` box let PATH park
+  `xw=xet=0` and read the violated `pet==ps` row as bound slack. `xw`/`xet`
+  are now free (`Reals`); the June 15x10 "autarky corner / crash jumps
+  basins" episode was the same class. PATH options now default per mode to
+  the options each reference family was actually solved with (pure bundles
+  carry no `path.opt` → PATH defaults; altertax bundles → the tight inlined
+  set), which also keeps 15x10 pure ifSUB=0 at 100%.
+
 ### Added
 - F-docs: restructured documentation site (six sections), architecture
   overview, templates overview, artifact-style parity matrices

@@ -2995,7 +2995,13 @@ class GTAPModelEquations:
         model.pmp = Expression(model.r, model.i, model.aa, rule=pmp_expr_rule, doc="Agent import demand price (expression)")
         
         # Trade - Domestic/Export split (4 vars per r,i)
-        model.xet = Var(model.r, model.i, within=NonNegativeReals, initialize=get_xet_init, doc="Export supply")
+        # xet is FREE (not NonNegativeReals): GAMS declares every quantity in a
+        # plain `Variables` block with no lower bound, so its MCP rows must hold
+        # with F=0 exactly. A fabricated lb=0 box lets PATH park xet at the bound
+        # and read a violated eq_xet (pet==ps under omegax=inf) as complementarity
+        # slack — a spurious corner root (xw=xet=0, pe=pet>>ps) that does not
+        # exist in GAMS (gtap7_5x5 ifSUB=1 shock 92.35%->100%).
+        model.xet = Var(model.r, model.i, within=Reals, initialize=get_xet_init, doc="Export supply")
         def get_pet_init(m, r, i):
             if self.reference_snapshot:
                 ref_pet = self.reference_snapshot.pet.get((r, i))
@@ -3052,7 +3058,10 @@ class GTAPModelEquations:
             return 0.0
 
         model.xe = Var(model.r, model.i, model.rp, within=NonNegativeReals, initialize=get_xe_init, doc="Bilateral exports")
-        model.xw = Var(model.r, model.i, model.rp, within=NonNegativeReals, initialize=get_xw_init, doc="Bilateral imports")
+        # xw is FREE for the same reason as xet above: with lb=0, PATH can park a
+        # whole export block at xw=0 while the CES import-demand rows (residual
+        # ~1e-11 once pe blows past the demand elasticity) read as bound slack.
+        model.xw = Var(model.r, model.i, model.rp, within=Reals, initialize=get_xw_init, doc="Bilateral imports")
         model.pe = Var(
             model.r,
             model.i,
