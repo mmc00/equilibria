@@ -19,6 +19,8 @@
 
 **15×10 altertax cerrado (2026-07-19, branch gtap_gaps): 94.5/95.8 → 99.5/99.5, cero regresión.** El "known eq_paa family" NO era irreducible — eran TRES problemas apilados: (1) el fix de shares Armington de junio (`1bb11e6`) huérfano en `booming-message`, nunca mergeado (cherry-picked); (2) la ref 2026-07-17 violaba su PROPIO xfeq (xf negativo, opciones PATH default en NEOS) → regen ONE-SHOT con path.opt apretado inline `$onecho` (la RAMPA quedó DESCARTADA: parquea los DOF degenerados path-dependent — probado GAMS-vs-GAMS con 3 runs/3 parkings, uno clavó pva[USA,Chemicals] en su bound 0.001); (3) bajo altertax-CD los pxeq/pvaeq/pndeq de GAMS son tautologías y Python AGREGABA un dual CD para px que contradecía el parking de la ref → pin del triple COMPLETO pva/pnd/px al slice shock del GDX + desactivar el dual (`95b5c5f`; TRAMPA: un hold vale lo que su FUENTE de seed — el primer intento pineó valores del check y empeoró). Laterales: floors 1e-8 de cantidades eliminados (unfaithful, GAMS solo acota precios), inits ytax[ft]/[fs] fieles. Resto 0.5% = micro-importaciones JPN Rice (~2e-5). Doc completa: `~/proyectos/notes/economics/cge/gtap7_15x10_altertax_parity_close.md`.
 
+**Pure 5x5 ifSUB=1 shock cerrado (2026-07-19 tarde): 92.35% → 100%, MCP sweep 18/18.** Las "multi-raíces pet/pe" del MCP eran esquinas FABRICADAS: GAMS declara TODAS las cantidades LIBRES (bloque `Variables`, cero `positive`, `.lo` solo en precios 0.001·prior) y Python les ponía `lb=0` (`NonNegativeReals`) → bajo MCP la caja convierte filas `=E=` duras en descartables (PATH estacionó `xw=xet=0` con `eq_xet` `pet==ps` violada 6.54 leída como holgura; con sigmaw≈11.5 la demanda CES a pe 7.2× cae a ~1e-11 = dentro de tolerancia). La esquina de junio del 15×10 ifsub0 (pe→57.7, "crash jumps basins") era LA MISMA clase — el salto de cuenca solo existía por la caja. Fix: `xw`/`xet` → `Reals` + **opciones PATH por modo = las de la propia ref** (bundles pure SIN path.opt → defaults; altertax → set apretado; sentinel anti-fuga env entre llamadas). Matriz A/B 2×2 completa en `GTAP_VALIDATION_STATUS.md`. Trampas Pyomo: `setlb(None)` NO quita la cota del dominio (mutar `domain`), y `_replicate_sp_bounds` re-copia bounds del sp-model por etapa. Clase abierta: el resto de cantidades sigue `NonNegativeReals` — si aparece otra esquina, extender `Reals` con evidencia.
+
 Detalles por sesión en `GTAP_VALIDATION_STATUS.md`. Plan/diagnóstico en `plan_gtap7_3x3_shock_close.md`. Trabajo previo del branch: PR #3, commit `28a9b93` en `main`.
 
 ## Objetivo original
@@ -55,6 +57,19 @@ Este test construye el `.nl` de Python para cada dataset `gtap7_*` y compara coe
 - **Para agregar un nuevo dataset:** generar fixtures con `nl_compare.py --dataset <name> --phase base shock --out-dir /tmp/nl_<name>`, copiar los `gams_*.nl` a `tests/fixtures/gtap7/<name>/`, commitear.
 - **`gtap7_20x41`** solo se corre localmente (fixture ~159MB, no está en git).
 - El CI corre este gate automáticamente en cada push/PR (`gtap7-nl-parity` job en `.github/workflows/tests.yml`).
+
+## Gates de integración locales NLP-vs-NLP + MCP-vs-MCP (obligatorios antes de push/PR)
+
+Los sweeps completos de paridad (`test_gtap7_mcp_parity` 18 filas + `test_gtap7_nlp_parity` 14 filas, marcados `integration`) son la prueba de regresión REAL de los gaps y son LOCAL-ONLY (necesitan PATH C-API/IPOPT + fixtures — CI no puede correrlos). Antes de CUALQUIER push/PR que toque territorio GTAP:
+
+```bash
+uv run python scripts/gtap/run_parity_gates.py        # full: gates + regen docs + stamp (~20 min)
+uv run python scripts/gtap/run_parity_gates.py --quick # solo gates, sin stamp (iteración)
+```
+
+El runner corre los 4 gates (MCP, NLP, `.nl`, coverage-sync), **regenera la doc medida** (coverage matrix .md + las 2 páginas HTML — la doc SIEMPRE refleja lo medido; si cambian, commitearlas), y escribe `.git/gtap-parity-gates.stamp` con el hash de los árboles de INPUT (src/…/gtap, scripts/gtap, tests de gates, fixtures — commits de docs NO lo invalidan).
+
+**Enforcement por hook de Claude** (`.claude/settings.json`, PreToolUse sobre Bash → `scripts/gtap/claude_hooks/block_push_without_gates.py`): cualquier `git push` / `gh pr create|merge` se BLOQUEA (exit 2, la razón vuelve a Claude) si el stamp falta o está stale, o si hay paths de gate sucios. Pushes que NO cambian los árboles GTAP vs origin/main pasan sin stamp (trabajo no-GTAP nunca se bloquea). Escape de emergencia: `GTAP_GATES_SKIP=1`. Checker rápido manual: `python3 scripts/gtap/check_parity_gates_stamp.py`.
 
 ## Disciplina de git (obligatoria)
 

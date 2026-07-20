@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 ROOT = Path(__file__).resolve().parents[3]
 ALTERTAX_FIXTURES = ROOT / "tests/fixtures/gtap7_altertax"
 PURE_FIXTURES = ROOT / "tests/fixtures/gtap7"
