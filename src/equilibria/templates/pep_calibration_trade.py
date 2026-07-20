@@ -279,7 +279,9 @@ class TradeCalibrator:
                     try:
                         val = df_ji.iloc[i + 1, j + 1]
                         if pd.notna(val):
-                            params["sigma_X"][(sector.lower(), comm.lower())] = float(val)
+                            params["sigma_X"][(sector.lower(), comm.lower())] = float(
+                                val
+                            )
                         else:
                             params["sigma_X"][(sector.lower(), comm.lower())] = 2.0
                     except (IndexError, ValueError):
@@ -299,10 +301,12 @@ class TradeCalibrator:
         commodities = ["AGR", "FOOD", "OTHIND", "SER", "ADM"]
 
         return {
-            "sigma_XT": {s: 2.0 for s in sectors},
-            "sigma_X": {(j.lower(), i.lower()): 2.0 for j in sectors for i in commodities},
-            "sigma_M": {c: 2.0 for c in commodities},
-            "sigma_XD": {c: 2.0 for c in commodities},
+            "sigma_XT": dict.fromkeys(sectors, 2.0),
+            "sigma_X": {
+                (j.lower(), i.lower()): 2.0 for j in sectors for i in commodities
+            },
+            "sigma_M": dict.fromkeys(commodities, 2.0),
+            "sigma_XD": dict.fromkeys(commodities, 2.0),
         }
 
     def _get_sam_value(self, *indices) -> float:
@@ -316,7 +320,10 @@ class TradeCalibrator:
                     return float(sam_matrix.get(indices_upper, 0.0))
                 total = 0.0
                 for key, value in sam_matrix.items():
-                    if all(i >= len(indices_upper) or key[i] == indices_upper[i] for i in range(len(indices_upper))):
+                    if all(
+                        i >= len(indices_upper) or key[i] == indices_upper[i]
+                        for i in range(len(indices_upper))
+                    ):
                         total += float(value)
                 return total
 
@@ -460,7 +467,9 @@ class TradeCalibrator:
                 if tmrg_x != 0:
                     self.result.tmrg_X[(i, ij)] = tmrg_x
 
-        logger.info(f"Read {len(self.result.IMO)} imports, {len(self.result.EXDO)} exports")
+        logger.info(
+            f"Read {len(self.result.IMO)} imports, {len(self.result.EXDO)} exports"
+        )
 
     def _calibrate_import_demand(self) -> None:
         """Calibrate import and domestic demand."""
@@ -472,15 +481,15 @@ class TradeCalibrator:
             self.result.DDO[i] = ddo
 
         # Base prices (numeraire = 1.0)
-        self.result.PLO = {i: 1.0 for i in I}
-        self.result.PWMO = {i: 1.0 for i in I}
+        self.result.PLO = dict.fromkeys(I, 1.0)
+        self.result.PWMO = dict.fromkeys(I, 1.0)
 
     def _calibrate_export_supply(self) -> None:
         """Calibrate export supply."""
         I = self.sets["I"]
 
         # Base export price
-        self.result.PEO = {i: 1.0 for i in I}
+        self.result.PEO = dict.fromkeys(I, 1.0)
 
     def _calibrate_prices_and_taxes(self) -> None:
         """Calibrate preliminary prices and taxes (PCO and ttimO)."""
@@ -547,7 +556,9 @@ class TradeCalibrator:
             # PMO(i)
             pwm = self.result.PWMO.get(i, 1.0)
             ttim = self.result.ttimO.get(i, 0)
-            self.result.PMO[i] = ((1 + ttim) * eO * pwm + margin_sum) * (1 + self.result.tticO.get(i, 0))
+            self.result.PMO[i] = ((1 + ttim) * eO * pwm + margin_sum) * (
+                1 + self.result.tticO.get(i, 0)
+            )
 
     def _calibrate_margins(self) -> None:
         """Calibrate trade margins."""
@@ -573,21 +584,27 @@ class TradeCalibrator:
             for ij in I:
                 pc = self.result.PCO.get(i, 1.0)
                 if pc != 0:
-                    self.result.tmrg_X[(i, ij)] = self.result.tmrg_X.get((i, ij), 0) / pc
+                    self.result.tmrg_X[(i, ij)] = (
+                        self.result.tmrg_X.get((i, ij), 0) / pc
+                    )
 
                 exdo = self.result.EXDO.get(ij, 0)
                 if exdo != 0:
                     # tmrg_X(ij,i)$EXDO(i) = tmrg_X(ij,i)/SUM[j,EXO(j,i)] (line 505-506)
-                    sum_exo = sum(self.result.EXO.get((j, ij), 0) for j in self.sets["J"])
+                    sum_exo = sum(
+                        self.result.EXO.get((j, ij), 0) for j in self.sets["J"]
+                    )
                     if sum_exo != 0:
-                        self.result.tmrg_X[(i, ij)] = self.result.tmrg_X.get((i, ij), 0) / sum_exo
+                        self.result.tmrg_X[(i, ij)] = (
+                            self.result.tmrg_X.get((i, ij), 0) / sum_exo
+                        )
 
     def _calibrate_cet_parameters(self) -> None:
         """Calibrate CET parameters for trade (Section 4.6.2)."""
         I = self.sets["I"]
         J = self.sets["J"]
 
-        sigma_XT = self.val_par.get("sigma_XT", {j: 2.0 for j in J})
+        sigma_XT = self.val_par.get("sigma_XT", dict.fromkeys(J, 2.0))
         sigma_X = self.val_par.get("sigma_X", {})
 
         # rho_XT(j) = (1+sigma_XT(j))/sigma_XT(j) (line 600)
@@ -614,18 +631,14 @@ class TradeCalibrator:
                 po = self.result.PO.get((j, i), 0)
 
                 if xso != 0 and denom != 0:
-                    self.result.beta_XT[(j, i)] = (
-                        po * (xso ** (1 - rho)) / denom
-                    )
+                    self.result.beta_XT[(j, i)] = po * (xso ** (1 - rho)) / denom
 
             # B_XT(j)
-            xsto = sum(
-                self.result.XSO.get((j, i), 0.0)
-                for i in I
-            )
+            xsto = sum(self.result.XSO.get((j, i), 0.0) for i in I)
             if xsto != 0 and rho != 0:
                 sum_term = sum(
-                    self.result.beta_XT.get((j, i), 0) * (self.result.XSO.get((j, i), 0) ** rho)
+                    self.result.beta_XT.get((j, i), 0)
+                    * (self.result.XSO.get((j, i), 0) ** rho)
                     for i in I
                     if self.result.XSO.get((j, i), 0) != 0
                 )
@@ -660,7 +673,7 @@ class TradeCalibrator:
                 # B_X(j,i)
                 if xso != 0 and rho != 0:
                     beta = self.result.beta_X.get((j, i), 0.5)
-                    term = beta * (exo ** rho) + (1 - beta) * (dso ** rho)
+                    term = beta * (exo**rho) + (1 - beta) * (dso**rho)
                     if term != 0:
                         self.result.B_X[(j, i)] = xso / (term ** (1 / rho))
 
@@ -668,7 +681,7 @@ class TradeCalibrator:
         """Calibrate CES parameters for imports (Section 4.6.3.1)."""
         I = self.sets["I"]
 
-        sigma_M = self.val_par.get("sigma_M", {i: 2.0 for i in I})
+        sigma_M = self.val_par.get("sigma_M", dict.fromkeys(I, 2.0))
 
         # rho_M(i) = (1-sigma_M(i))/sigma_M(i) (line 625)
         for i in I:
@@ -752,7 +765,9 @@ class TradeCalibrator:
                     for ij in I
                 )
                 peo = self.result.PEO.get(i, 0)
-                self.result.PE_FOBO[i] = (1 + self.result.ttixO.get(i, 0)) * (peo + margin_sum)
+                self.result.PE_FOBO[i] = (1 + self.result.ttixO.get(i, 0)) * (
+                    peo + margin_sum
+                )
 
                 # PWXO(i) = PE_FOBO(i)/eO
                 self.result.PWXO[i] = self.result.PE_FOBO[i] / self.result.eO
@@ -764,9 +779,21 @@ class TradeCalibrator:
 
         # MRGNO(i) = SUM[ij,tmrg(i,ij)*DDO(ij)] + SUM[ij,tmrg(i,ij)*IMO(ij)] + SUM[(j,ij),tmrg_X(i,ij)*EXO(j,ij)]
         for i in I:
-            mrgn_d = sum(self.result.tmrg.get((i, ij), 0) * self.result.DDO.get(ij, 0) for ij in I)
-            mrgn_m = sum(self.result.tmrg.get((i, ij), 0) * self.result.IMO.get(ij, 0) for ij in I)
-            mrgn_x = sum(self.result.tmrg_X.get((i, ij), 0) * self.result.EXO.get((j, ij), 0) for j in self.sets["J"] for ij in I)
+            mrgn_d = sum(
+                self.result.tmrg.get((i, ij), 0) * self.result.DDO.get(ij, 0)
+                for ij in I
+            )
+            mrgn_m = sum(
+                self.result.tmrg.get((i, ij), 0) * self.result.IMO.get(ij, 0)
+                for ij in I
+            )
+            mrgn_x = sum(
+                self.result.tmrg_X.get((i, ij), 0) * self.result.EXO.get((j, ij), 0)
+                for j in self.sets["J"]
+                for ij in I
+            )
             self.result.MRGNO[i] = mrgn_d + mrgn_m + mrgn_x
 
-        logger.info(f"Calibrated composite demand for {len(self.result.QO)} commodities")
+        logger.info(
+            f"Calibrated composite demand for {len(self.result.QO)} commodities"
+        )

@@ -8,18 +8,18 @@ This module provides market equilibrium-related equation blocks:
 from __future__ import annotations
 
 import typing
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
+from equilibria.core.parameters import Parameter
+from equilibria.core.sets import SetManager
 from equilibria.core.symbolic_equations import (
     SymbolicEquation,
 )
-from equilibria.core.parameters import Parameter
-from equilibria.core.sets import SetManager
 from equilibria.core.variables import Variable
 
 if TYPE_CHECKING:
@@ -120,8 +120,8 @@ class MarketClearing(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for market clearing."""
-                QS = getattr(pyomo_model, "QS")
-                QD = getattr(pyomo_model, "QD")
+                QS = pyomo_model.QS
+                QD = pyomo_model.QD
 
                 i = indices[0]
                 return QS[i] == QD[i]
@@ -253,7 +253,7 @@ class PriceNormalization(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for price normalization."""
-                P = getattr(pyomo_model, "P")
+                P = pyomo_model.P
 
                 # Fix the numeraire price to 1
                 return P[numeraire_value] == 1.0
@@ -378,8 +378,8 @@ class FactorMarketClearing(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for factor market clearing."""
-                FSUP = getattr(pyomo_model, "FSUP")
-                FD = getattr(pyomo_model, "FD")
+                FSUP = pyomo_model.FSUP
+                FD = pyomo_model.FD
 
                 f = indices[0]
                 # Sum factor demand over all sectors
@@ -537,7 +537,9 @@ class PEPMacroClosureInit(Block):
             lam = float(lambda_rk.get(("row", k), 0.0))
             for j in J:
                 if abs(kdo0.get((k, j), 0.0)) > 1e-12:
-                    yrow_new += lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    yrow_new += (
+                        lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    )
         for agd in AGD:
             yrow_new += float(tr.get(("row", agd), 0.0))
 
@@ -555,7 +557,12 @@ class PEPMacroClosureInit(Block):
         variables["SROW"] = srow
         variables["CAB"] = -srow
 
-        it_new = sum(float(v) for v in sh.values()) + sum(float(v) for v in sf.values()) + float(sg) + srow
+        it_new = (
+            sum(float(v) for v in sh.values())
+            + sum(float(v) for v in sf.values())
+            + float(sg)
+            + srow
+        )
         it = self._set_or_blend(it_cur, it_new, alpha)
         variables["IT"] = it
 
@@ -567,7 +574,10 @@ class PEPMacroClosureInit(Block):
         for i in I:
             cons_i = sum(float(c.get((i, h), 0.0)) for h in h_set)
             gdp_fd_new += float(pc.get(i, 0.0)) * (
-                cons_i + float(cg.get(i, 0.0)) + float(inv.get(i, 0.0)) + float(vstk.get(i, 0.0))
+                cons_i
+                + float(cg.get(i, 0.0))
+                + float(inv.get(i, 0.0))
+                + float(vstk.get(i, 0.0))
             )
             gdp_fd_new += float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
             gdp_fd_new -= float(pwm.get(i, 0.0)) * e * float(im.get(i, 0.0))
@@ -622,7 +632,9 @@ class PEPMacroClosureInit(Block):
             lam = float(lambda_rk.get(("row", k), 0.0))
             for j in J:
                 if abs(kdo0.get((k, j), 0.0)) > 1e-12:
-                    yrow_rhs += lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    yrow_rhs += (
+                        lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    )
         for agd in AGD:
             yrow_rhs += float(tr.get(("row", agd), 0.0))
 
@@ -633,13 +645,21 @@ class PEPMacroClosureInit(Block):
         for agd in AGD:
             srow_rhs -= float(tr.get((agd, "row"), 0.0))
 
-        it_rhs = sum(float(v) for v in sh.values()) + sum(float(v) for v in sf.values()) + float(sg) + srow
+        it_rhs = (
+            sum(float(v) for v in sh.values())
+            + sum(float(v) for v in sf.values())
+            + float(sg)
+            + srow
+        )
 
         gdp_fd_rhs = 0.0
         for i in I:
             cons_i = sum(float(c.get((i, h), 0.0)) for h in h_set)
             gdp_fd_rhs += float(pc.get(i, 0.0)) * (
-                cons_i + float(cg.get(i, 0.0)) + float(inv.get(i, 0.0)) + float(vstk.get(i, 0.0))
+                cons_i
+                + float(cg.get(i, 0.0))
+                + float(inv.get(i, 0.0))
+                + float(vstk.get(i, 0.0))
             )
             gdp_fd_rhs += float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
             gdp_fd_rhs -= float(pwm.get(i, 0.0)) * e * float(im.get(i, 0.0))

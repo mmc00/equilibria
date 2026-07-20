@@ -11,17 +11,14 @@ Key functions:
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal, Mapping, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
 
 from equilibria.sam_tools.balancing import (
-    balance_mip_entropy,
-    balance_mip_gras,
-    balance_mip_ras,
-    balance_mip_sut_ras,
     gras_balance,
 )
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
@@ -38,6 +35,7 @@ from equilibria.sam_tools.mip_to_sam_transforms import (
     normalize_mip_accounts,
 )
 from equilibria.sam_tools.models import Sam
+from equilibria.sam_tools.parsers import export_sam
 from equilibria.sam_tools.sam_transforms import (
     align_ti_to_gvt_j_on_sam,
     convert_exports_to_x_on_sam,
@@ -48,7 +46,6 @@ from equilibria.sam_tools.sam_transforms import (
     move_tx_to_ti_on_i_on_sam,
     normalize_pep_accounts_on_sam,
 )
-from equilibria.sam_tools.parsers import export_sam
 
 # Type alias for balancing method
 BalancingMethod = Literal["ras", "gras", "sut_ras", "entropy", "none"]
@@ -129,11 +126,7 @@ def _sam_balance_stats(sam: Sam) -> dict[str, float]:
 
 
 def _identity_commodity_to_sector(sam: Sam) -> dict[str, str]:
-    return {
-        elem: elem
-        for cat, elem in sam.row_keys
-        if str(cat).strip().lower() == "i"
-    }
+    return {elem: elem for cat, elem in sam.row_keys if str(cat).strip().lower() == "i"}
 
 
 def run_ieem_to_pep(
@@ -198,21 +191,32 @@ def run_ieem_to_pep(
     )
     record("move_k", move_k_to_ji_on_sam(sam, {"commodity_to_sector": mapping}))
     record("move_l", move_l_to_ji_on_sam(sam, {"commodity_to_sector": mapping}))
-    record("move_margins", move_margin_to_i_margin_on_sam(sam, {"margin_commodity": margin_commodity, "col": "I.*"}))
+    record(
+        "move_margins",
+        move_margin_to_i_margin_on_sam(
+            sam, {"margin_commodity": margin_commodity, "col": "I.*"}
+        ),
+    )
     record("move_tx", move_tx_to_ti_on_i_on_sam(sam, {"col": "I.*"}))
 
-    resolved_output: Path | None = Path(output_path).resolve() if output_path is not None else None
+    resolved_output: Path | None = (
+        Path(output_path).resolve() if output_path is not None else None
+    )
     if resolved_output is not None:
         export_sam(sam, resolved_output, output_format="excel", output_symbol="SAM")
 
-    resolved_report: Path | None = Path(report_path).resolve() if report_path is not None else None
+    resolved_report: Path | None = (
+        Path(report_path).resolve() if report_path is not None else None
+    )
     if resolved_report is not None:
         resolved_report.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "input_path": str(input_file),
             "mapping_path": str(mapping_file),
             "sheet_name": sheet_name,
-            "output_path": str(resolved_output) if resolved_output is not None else None,
+            "output_path": str(resolved_output)
+            if resolved_output is not None
+            else None,
             "steps": _to_jsonable(steps),
         }
         resolved_report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -440,7 +444,9 @@ def run_mip_to_sam(
 
     # MIP balancing using selected method
     if balancing_method != "none":
-        mip_balance_result = _apply_mip_balancing(sam, balancing_method, ras_max_iter, ras_tol)
+        mip_balance_result = _apply_mip_balancing(
+            sam, balancing_method, ras_max_iter, ras_tol
+        )
         record(
             f"mip_balance_{balancing_method}",
             {
@@ -505,7 +511,9 @@ def run_mip_to_sam(
     )
 
     # Export
-    resolved_output: Path | None = Path(output_path).resolve() if output_path is not None else None
+    resolved_output: Path | None = (
+        Path(output_path).resolve() if output_path is not None else None
+    )
     if resolved_output is not None:
         export_sam(sam, resolved_output, output_format="excel", output_symbol="SAM")
 
@@ -521,7 +529,9 @@ def run_mip_to_sam(
         },
     )
 
-    resolved_report: Path | None = Path(report_path).resolve() if report_path is not None else None
+    resolved_report: Path | None = (
+        Path(report_path).resolve() if report_path is not None else None
+    )
     if resolved_report is not None:
         resolved_report.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -532,7 +542,9 @@ def run_mip_to_sam(
             "factor_to_household_shares": factor_to_household_shares,
             "tax_rates": tax_rates,
             "product_tax_rates": product_tax_rates,
-            "output_path": str(resolved_output) if resolved_output is not None else None,
+            "output_path": str(resolved_output)
+            if resolved_output is not None
+            else None,
             "steps": _to_jsonable(steps),
             "mip_equations": {
                 "1_product_balance": "X = Z_d @ 1 + F_d",

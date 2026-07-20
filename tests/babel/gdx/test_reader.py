@@ -204,16 +204,16 @@ class TestReadSymbolTable:
         desc_bytes: bytes = description.encode("utf-8")
 
         entry: bytes = bytes([len(name_bytes)]) + name_bytes
-        entry += struct.pack("<Q", 0)            # q+0  data_offset (unused by symtab)
-        entry += struct.pack("<I", dimension)    # q+8  dim
-        entry += bytes([sym_type])               # q+12 type
-        entry += bytes([0])                      # q+13 userinfo
-        entry += b"\x00" * 3                      # q+14..16
-        entry += struct.pack("<I", records)      # q+17 nrec
-        entry += b"\x00" * 5                      # q+21..25
-        entry += bytes([len(desc_bytes)])        # q+26 desc_len
-        entry += desc_bytes                       # q+27 desc
-        entry += b"\x00" * 6                      # tail: sep + dom_flag=0 + 4 zero
+        entry += struct.pack("<Q", 0)  # q+0  data_offset (unused by symtab)
+        entry += struct.pack("<I", dimension)  # q+8  dim
+        entry += bytes([sym_type])  # q+12 type
+        entry += bytes([0])  # q+13 userinfo
+        entry += b"\x00" * 3  # q+14..16
+        entry += struct.pack("<I", records)  # q+17 nrec
+        entry += b"\x00" * 5  # q+21..25
+        entry += bytes([len(desc_bytes)])  # q+26 desc_len
+        entry += desc_bytes  # q+27 desc
+        entry += b"\x00" * 6  # tail: sep + dom_flag=0 + 4 zero
         return entry
 
     def _create_symbol_table(self, symbols: list) -> bytes:
@@ -253,9 +253,7 @@ class TestReadSymbolTable:
 
     def test_single_parameter_symbol(self) -> None:
         """Should parse a parameter symbol correctly."""
-        data: bytes = self._create_symbol_table(
-            [("price", 1, 1, 10, "market prices")]
-        )
+        data: bytes = self._create_symbol_table([("price", 1, 1, 10, "market prices")])
         result: list = read_symbol_table_from_bytes(data)
 
         assert len(result) == 1
@@ -645,7 +643,11 @@ class TestSparseFixture:
 
 
 @pytest.mark.skipif(
-    not (Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx").exists(),
+    not (
+        Path(__file__).parent.parent.parent
+        / "fixtures"
+        / "variables_equations_test.gdx"
+    ).exists(),
     reason="Test fixture variables_equations_test.gdx not found",
 )
 class TestReadParameterValues:
@@ -656,7 +658,9 @@ class TestReadParameterValues:
         from equilibria.babel.gdx.reader import read_parameter_values
 
         gdx_path: Path = (
-            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "variables_equations_test.gdx"
         )
         result: dict = read_gdx(gdx_path)
         values: dict = read_parameter_values(result, "sam")
@@ -674,7 +678,9 @@ class TestReadParameterValues:
         from equilibria.babel.gdx.reader import read_parameter_values
 
         gdx_path: Path = (
-            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "variables_equations_test.gdx"
         )
         result: dict = read_gdx(gdx_path)
         values: dict = read_parameter_values(result, "price")
@@ -688,7 +694,9 @@ class TestReadParameterValues:
         from equilibria.babel.gdx.reader import read_parameter_values
 
         gdx_path: Path = (
-            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "variables_equations_test.gdx"
         )
         result: dict = read_gdx(gdx_path)
 
@@ -700,7 +708,9 @@ class TestReadParameterValues:
         from equilibria.babel.gdx.reader import read_parameter_values
 
         gdx_path: Path = (
-            Path(__file__).parent.parent.parent / "fixtures" / "variables_equations_test.gdx"
+            Path(__file__).parent.parent.parent
+            / "fixtures"
+            / "variables_equations_test.gdx"
         )
         result: dict = read_gdx(gdx_path)
 

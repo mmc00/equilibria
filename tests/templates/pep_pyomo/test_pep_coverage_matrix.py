@@ -1,5 +1,6 @@
 """Tests for the PEP coverage matrix (single source of truth) — mirrors the GTAP
 coverage-matrix test. Schema invariants + the committed doc stays in sync with render()."""
+
 import sys
 from pathlib import Path
 
@@ -8,7 +9,8 @@ sys.path.insert(0, str(ROOT / "scripts/pep"))
 
 
 def test_pep_matrix_schema_invariants():
-    from pep_coverage_matrix import ROWS, CI_STATUSES, KINDS, FORMS
+    from pep_coverage_matrix import CI_STATUSES, FORMS, KINDS, ROWS
+
     assert ROWS, "matrix must not be empty"
     for r in ROWS:
         assert r.kind in KINDS, r
@@ -20,9 +22,11 @@ def test_pep_matrix_schema_invariants():
 
 
 def test_pep_matrix_helpers_partition():
-    from pep_coverage_matrix import ROWS, nlp_rows, mcp_rows, mirror_rows, variant_rows
-    assert (set(nlp_rows()) | set(mcp_rows()) | set(mirror_rows())
-            | set(variant_rows())) == set(ROWS)
+    from pep_coverage_matrix import ROWS, mcp_rows, mirror_rows, nlp_rows, variant_rows
+
+    assert (
+        set(nlp_rows()) | set(mcp_rows()) | set(mirror_rows()) | set(variant_rows())
+    ) == set(ROWS)
     assert all(r.kind == "nlp" for r in nlp_rows())
     assert all(r.kind == "mcp" for r in mcp_rows())
     assert all(r.kind == "mirror" for r in mirror_rows())
@@ -32,6 +36,7 @@ def test_pep_matrix_helpers_partition():
 def test_pep_coverage_doc_in_sync():
     """The committed doc must equal render() — regenerate + commit on drift."""
     import gen_pep_coverage_doc
+
     committed = gen_pep_coverage_doc.DOC_PATH.read_text(encoding="utf-8")
     assert committed == gen_pep_coverage_doc.render(), (
         "docs/site/guide/pep_coverage_matrix.md is stale — run "

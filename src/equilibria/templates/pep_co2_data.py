@@ -43,7 +43,11 @@ def normalize_co2_inputs(
     tco2scal: float = 1.0,
 ) -> dict[str, Any]:
     """Normalize flexible user inputs into one canonical CO2 block."""
-    block: dict[str, Any] = {"co2_intensity": {}, "tco2b": {}, "tco2scal": float(tco2scal)}
+    block: dict[str, Any] = {
+        "co2_intensity": {},
+        "tco2b": {},
+        "tco2scal": float(tco2scal),
+    }
 
     if co2_data is not None:
         if isinstance(co2_data, (str, Path, pd.DataFrame)):
@@ -90,11 +94,15 @@ def normalize_co2_inputs(
             field_name="tco2b",
             allow_negative=True,
         )
-    block["tco2scal"] = _normalize_scalar(block.get("tco2scal", tco2scal), field_name="tco2scal")
+    block["tco2scal"] = _normalize_scalar(
+        block.get("tco2scal", tco2scal), field_name="tco2scal"
+    )
     return block
 
 
-def validate_and_fill_co2_block(block: Mapping[str, Any], sectors: list[str]) -> dict[str, Any]:
+def validate_and_fill_co2_block(
+    block: Mapping[str, Any], sectors: list[str]
+) -> dict[str, Any]:
     """Validate CO2 data against calibrated sectors and fill missing entries with zero."""
     sector_keys = [str(item).strip().lower() for item in sectors]
     sector_set = set(sector_keys)
@@ -139,35 +147,28 @@ def attach_co2_metrics(
 ) -> None:
     """Attach derived CO2 metrics to one solved variable bundle."""
     co2_intensity = {
-        j: float(params.get("co2_intensity", {}).get(j, 0.0))
-        for j in sectors
+        j: float(params.get("co2_intensity", {}).get(j, 0.0)) for j in sectors
     }
-    tco2b = {
-        j: float(params.get("tco2b", {}).get(j, 0.0))
-        for j in sectors
-    }
+    tco2b = {j: float(params.get("tco2b", {}).get(j, 0.0)) for j in sectors}
     tco2scal = float(params.get("tco2scal", 1.0))
     emissions = {
         j: co2_intensity[j] * float(getattr(vars_obj, "XST", {}).get(j, 0.0))
         for j in sectors
     }
-    unit_tax = {
-        j: carbon_unit_tax(params, vars_obj, j)
-        for j in sectors
-    }
+    unit_tax = {j: carbon_unit_tax(params, vars_obj, j) for j in sectors}
     tax_revenue = {
         j: unit_tax[j] * float(getattr(vars_obj, "XST", {}).get(j, 0.0))
         for j in sectors
     }
 
-    setattr(vars_obj, "co2_intensity", co2_intensity)
-    setattr(vars_obj, "tco2b", tco2b)
-    setattr(vars_obj, "tco2scal", tco2scal)
-    setattr(vars_obj, "co2_emissions", emissions)
-    setattr(vars_obj, "co2_unit_tax", unit_tax)
-    setattr(vars_obj, "co2_tax_revenue", tax_revenue)
-    setattr(vars_obj, "co2_total_emissions", float(sum(emissions.values())))
-    setattr(vars_obj, "co2_total_tax", float(sum(tax_revenue.values())))
+    vars_obj.co2_intensity = co2_intensity
+    vars_obj.tco2b = tco2b
+    vars_obj.tco2scal = tco2scal
+    vars_obj.co2_emissions = emissions
+    vars_obj.co2_unit_tax = unit_tax
+    vars_obj.co2_tax_revenue = tax_revenue
+    vars_obj.co2_total_emissions = float(sum(emissions.values()))
+    vars_obj.co2_total_tax = float(sum(tax_revenue.values()))
 
 
 def _load_co2_table(source: str | Path | pd.DataFrame) -> dict[str, Any]:

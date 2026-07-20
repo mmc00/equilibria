@@ -23,7 +23,6 @@ from equilibria.babel.gdx.writer import write_gdx
 from equilibria.babel.har.reader import read_har
 from equilibria.babel.har.symbols import HeaderArray
 
-
 # ── single-file API (kept stable for prior callers) ──────────────────────────
 
 
@@ -56,24 +55,54 @@ def write_har_to_gdx(har_paths: list[str | Path], out_path: str | Path) -> None:
 
 # HAR header name (uppercase) → GAMS symbol name (lowercase) used by getData.gms.
 DAT_NAME_MAP: dict[str, str] = {
-    "VDFB": "vdfb", "VDFP": "vdfp", "VMFB": "vmfb", "VMFP": "vmfp",
-    "VDPB": "vdpb", "VDPP": "vdpp", "VMPB": "vmpb", "VMPP": "vmpp",
-    "VDGB": "vdgb", "VDGP": "vdgp", "VMGB": "vmgb", "VMGP": "vmgp",
-    "VDIB": "vdib", "VDIP": "vdip", "VMIB": "vmib", "VMIP": "vmip",
-    "EVFB": "evfb", "EVFP": "evfp", "EVOS": "evos",
-    "VXSB": "vxsb", "VFOB": "vfob", "VCIF": "vcif", "VMSB": "vmsb",
-    "VST": "vst", "VTWR": "vtwr",
-    "SAVE": "save", "VDEP": "vdep", "VKB": "vkb", "POP": "pop",
-    "MAKS": "maks", "MAKB": "makb",
+    "VDFB": "vdfb",
+    "VDFP": "vdfp",
+    "VMFB": "vmfb",
+    "VMFP": "vmfp",
+    "VDPB": "vdpb",
+    "VDPP": "vdpp",
+    "VMPB": "vmpb",
+    "VMPP": "vmpp",
+    "VDGB": "vdgb",
+    "VDGP": "vdgp",
+    "VMGB": "vmgb",
+    "VMGP": "vmgp",
+    "VDIB": "vdib",
+    "VDIP": "vdip",
+    "VMIB": "vmib",
+    "VMIP": "vmip",
+    "EVFB": "evfb",
+    "EVFP": "evfp",
+    "EVOS": "evos",
+    "VXSB": "vxsb",
+    "VFOB": "vfob",
+    "VCIF": "vcif",
+    "VMSB": "vmsb",
+    "VST": "vst",
+    "VTWR": "vtwr",
+    "SAVE": "save",
+    "VDEP": "vdep",
+    "VKB": "vkb",
+    "POP": "pop",
+    "MAKS": "maks",
+    "MAKB": "makb",
 }
 
 PRM_NAME_MAP: dict[str, str] = {
-    "ESBT": "esubt", "ESBC": "esubc", "ESBV": "esubva",
-    "ETRQ": "etraq", "ESBQ": "esubq",
-    "INCP": "incpar", "SUBP": "subpar",
-    "ESBG": "esubg", "ESBI": "esubi",
-    "ESBD": "esubd", "ESBM": "esubm", "ESBS": "esubs",
-    "ETRE": "etrae", "RFLX": "rorFlex",
+    "ESBT": "esubt",
+    "ESBC": "esubc",
+    "ESBV": "esubva",
+    "ETRQ": "etraq",
+    "ESBQ": "esubq",
+    "INCP": "incpar",
+    "SUBP": "subpar",
+    "ESBG": "esubg",
+    "ESBI": "esubi",
+    "ESBD": "esubd",
+    "ESBM": "esubm",
+    "ESBS": "esubs",
+    "ETRE": "etrae",
+    "RFLX": "rorFlex",
 }
 
 # Parent set for HAR subset headers (1D string arrays). When a HAR subset has
@@ -241,9 +270,7 @@ def _build_param_symbols(
 
 def _is_set_header(h: HeaderArray) -> bool:
     return (
-        h.array.ndim == 1
-        and h.array.dtype.kind in ("U", "S", "O")
-        and not h.set_names
+        h.array.ndim == 1 and h.array.dtype.kind in ("U", "S", "O") and not h.set_names
     )
 
 
@@ -292,6 +319,8 @@ def _records_from_array(
         val = float(arr[idx])
         if val == 0.0:
             continue
-        keys = [f"{pref[d]}{str(h.set_elements[d][i]).strip()}" for d, i in enumerate(idx)]
+        keys = [
+            f"{pref[d]}{str(h.set_elements[d][i]).strip()}" for d, i in enumerate(idx)
+        ]
         records.append((keys, val))
     return records

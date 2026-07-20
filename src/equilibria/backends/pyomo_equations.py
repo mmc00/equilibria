@@ -79,11 +79,11 @@ class CESAggregationEquation(PyomoEquation):
         j = indices[0]  # Sector index
 
         # Get Pyomo variables and parameters
-        VA = getattr(pyomo_model, "VA")
-        FD = getattr(pyomo_model, "FD")
-        B_VA = getattr(pyomo_model, "B_VA")
-        beta_VA = getattr(pyomo_model, "beta_VA")
-        sigma_VA = getattr(pyomo_model, "sigma_VA")
+        VA = pyomo_model.VA
+        FD = pyomo_model.FD
+        B_VA = pyomo_model.B_VA
+        beta_VA = pyomo_model.beta_VA
+        sigma_VA = pyomo_model.sigma_VA
 
         # For simplicity, use a linearized version or Cobb-Douglas
         # Full CES requires careful handling of the exponent
@@ -93,7 +93,7 @@ class CESAggregationEquation(PyomoEquation):
         F_set = pyomo_model.F
 
         # Build product expression
-        from pyomo.environ import log, exp
+        from pyomo.environ import log
 
         # log(VA) = log(B_VA) + sum(beta * log(FD))
         # This is the Cobb-Douglas case (sigma = 1)
@@ -113,9 +113,9 @@ class LeontiefEquation(PyomoEquation):
         """Build Leontief constraint for commodity-sector pair."""
         i, j = indices
 
-        XST = getattr(pyomo_model, "XST")
-        Z = getattr(pyomo_model, "Z")
-        a_io = getattr(pyomo_model, "a_io")
+        XST = pyomo_model.XST
+        Z = pyomo_model.Z
+        a_io = pyomo_model.a_io
 
         return XST[i, j] == a_io[i, j] * Z[j]
 

@@ -13,15 +13,13 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, field_validator
 
 from equilibria.core.calibration_mixin import CalibrationMixin
-from equilibria.core.equations import Equation
 from equilibria.core.parameters import Parameter
 from equilibria.core.sets import SetManager
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
 
 if TYPE_CHECKING:
-    from equilibria.core.calibration_data import CalibrationData
-    from equilibria.core.calibration_phase import CalibrationPhase
+    pass
 
 
 class ParameterSpec(BaseModel):

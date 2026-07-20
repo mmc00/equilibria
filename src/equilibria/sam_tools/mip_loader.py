@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -177,7 +176,7 @@ class MIPConfig:
     combined_sheet_name: str = "mip"
 
     @classmethod
-    def bolivia_format(cls) -> "MIPConfig":
+    def bolivia_format(cls) -> MIPConfig:
         """Configuration for Bolivia MIP format.
 
         The Bolivia MIP uses separate sheets for each component.
@@ -195,7 +194,7 @@ class MIPConfig:
         )
 
     @classmethod
-    def combined_format(cls, sheet_name: str = "mip") -> "MIPConfig":
+    def combined_format(cls, sheet_name: str = "mip") -> MIPConfig:
         """Configuration for combined single-sheet MIP format.
 
         This format has all data in one sheet with structure:

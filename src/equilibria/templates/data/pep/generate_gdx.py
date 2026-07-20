@@ -4,11 +4,9 @@ This script converts the PEP SAM Excel file to GDX format for use with GAMS.
 """
 
 from pathlib import Path
-import numpy as np
-import pandas as pd
 
+from equilibria.babel.gdx.symbols import Parameter, Set
 from equilibria.babel.gdx.writer import write_gdx
-from equilibria.babel.gdx.symbols import Set, Parameter
 from equilibria.templates.data.pep import load_default_pep_sam
 
 
@@ -170,13 +168,13 @@ def generate_calibration_gdx(sam, output_path: Path) -> None:
             name=price_name, dimensions=1, domain=["I"], records=price_records
         )
         symbols.append(price_param)
-    print(f"  Written base year prices (all normalized to 1.0)")
+    print("  Written base year prices (all normalized to 1.0)")
 
     # Write factor prices (normalized to 1.0)
     wf0_records = [([f], 1.0) for f in factors]
     wf0_param = Parameter(name="WF0", dimensions=1, domain=["F"], records=wf0_records)
     symbols.append(wf0_param)
-    print(f"  Written WF0: factor prices")
+    print("  Written WF0: factor prices")
 
     # Write GDX file
     write_gdx(str(output_path), symbols)

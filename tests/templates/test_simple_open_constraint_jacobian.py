@@ -10,7 +10,9 @@ from equilibria.templates.simple_open_constraint_jacobian import (
 
 def test_simple_open_harness_analytic_mode_avoids_fd() -> None:
     contract = build_simple_open_contract("simple_open_v1")
-    harness = SimpleOpenConstraintJacobianHarness(contract=contract, jacobian_mode="analytic")
+    harness = SimpleOpenConstraintJacobianHarness(
+        contract=contract, jacobian_mode="analytic"
+    )
 
     x0 = harness.benchmark_point
     residuals = harness.evaluate_constraints(x0)
@@ -26,9 +28,15 @@ def test_simple_open_harness_analytic_mode_avoids_fd() -> None:
 
 
 def test_simple_open_harness_numeric_mode_matches_analytic_reference() -> None:
-    contract = build_simple_open_contract({"closure": {"name": "flexible_external_balance"}})
-    analytic = SimpleOpenConstraintJacobianHarness(contract=contract, jacobian_mode="analytic")
-    numeric = SimpleOpenConstraintJacobianHarness(contract=contract, jacobian_mode="numeric")
+    contract = build_simple_open_contract(
+        {"closure": {"name": "flexible_external_balance"}}
+    )
+    analytic = SimpleOpenConstraintJacobianHarness(
+        contract=contract, jacobian_mode="analytic"
+    )
+    numeric = SimpleOpenConstraintJacobianHarness(
+        contract=contract, jacobian_mode="numeric"
+    )
 
     x0 = analytic.benchmark_point
     a_rows, a_cols = analytic.jacobian_structure()

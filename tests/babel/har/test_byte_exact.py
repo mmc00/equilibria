@@ -5,6 +5,7 @@ GEMPACK-emitted source for the six GTAP fixtures shipped with equilibria.
 A fixture that cannot reach byte equality due to GEMPACK non-determinism
 is xfailed with a sibling .diff file documenting the divergence.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -88,9 +89,7 @@ def test_byte_exact(fixture: Path, tmp_path: Path):
         # files with the same stem (sets.har, basedata.har in both datasets)
         # don't clobber each other.
         diff_path = (
-            REPO_ROOT
-            / "tests/babel/har"
-            / f"{fixture.parent.name}_{fixture.stem}.diff"
+            REPO_ROOT / "tests/babel/har" / f"{fixture.parent.name}_{fixture.stem}.diff"
         )
         diff_path.parent.mkdir(parents=True, exist_ok=True)
         orig_bytes = fixture.read_bytes()

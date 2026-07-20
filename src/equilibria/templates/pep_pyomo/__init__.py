@@ -14,4 +14,5 @@ Two solve forms:
   - NLP:  constant/zero objective over the equality system (both variants)
   - MCP:  WALRAS ⊥ LEON free-row, EQ84 over I1 (agr excluded), e fixed numeraire
 """
+
 from __future__ import annotations

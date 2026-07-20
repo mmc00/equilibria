@@ -8,13 +8,16 @@ The sensitivity test detects the bug: if the constraint still uses construction-
 float constants (not live base-period Vars), perturbing base-period Vars has no
 effect on the shock residual — making it insensitive when it should be sensitive.
 """
-import sys, pathlib
+
+import pathlib
+import sys
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
-from test_multiperiod_sets import _load_3x3_params
 from pyomo.environ import value as pv
+from test_multiperiod_sets import _load_3x3_params
 
 REF = pathlib.Path(
     "/Users/marmol/proyectos2/equilibria_refs/gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"
@@ -23,6 +26,7 @@ REF = pathlib.Path(
 
 def _build_and_seed(p):
     from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+
     rr = list(p.sets.r)[-1]
     mp = GTAPMultiPeriodModel(p.sets, p, None, residual_region=rr)
     m = mp.build_sets()
@@ -75,9 +79,15 @@ def test_fisher_pabs_pfact_pwfact_are_cross_period_rows():
 
     # At GAMS seed, all residuals should be ~0
     for r in regions:
-        assert _resid_pabs(r) < 1e-3, f"eq_pabs[{r},shock] pre-perturb resid too large: {_resid_pabs(r)}"
-        assert _resid_pfact(r) < 1e-3, f"eq_pfact[{r},shock] pre-perturb resid too large: {_resid_pfact(r)}"
-    assert _resid_pwfact() < 1e-3, f"eq_pwfact[shock] pre-perturb resid too large: {_resid_pwfact()}"
+        assert _resid_pabs(r) < 1e-3, (
+            f"eq_pabs[{r},shock] pre-perturb resid too large: {_resid_pabs(r)}"
+        )
+        assert _resid_pfact(r) < 1e-3, (
+            f"eq_pfact[{r},shock] pre-perturb resid too large: {_resid_pfact(r)}"
+        )
+    assert _resid_pwfact() < 1e-3, (
+        f"eq_pwfact[shock] pre-perturb resid too large: {_resid_pwfact()}"
+    )
 
     # Perturb ALL base-period pa/xaa/pf/xf by SCALE (far from equilibrium).
     # A cross-period Fisher row uses m.pa[r,i,fd,'base'] → residual grows.

@@ -5,9 +5,9 @@ from equilibria.baseline.compatibility import (
     evaluate_strict_gams_baseline_compatibility,
 )
 from equilibria.baseline.gams_nlp_reference import (
+    GAMSNLPReferenceManifest,
     GAMSReferenceArtifact,
     GAMSScenarioReference,
-    GAMSNLPReferenceManifest,
     build_gams_nlp_reference_manifest,
     ensure_gams_script_uses_nlp,
     extract_gams_solve_model_types,

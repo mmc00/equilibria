@@ -5,14 +5,12 @@ and that variables are properly defined.
 """
 
 import numpy as np
-import pytest
 
 from equilibria.blocks import (
     ArmingtonCES,
+    CESValueAdded,
     CETExports,
     CETTransformation,
-    CESValueAdded,
-    CobbDouglasConsumer,
     FactorMarketClearing,
     Government,
     Household,
@@ -23,8 +21,6 @@ from equilibria.blocks import (
     RestOfWorld,
 )
 from equilibria.core import Set, SetManager
-from equilibria.core.parameters import Parameter
-from equilibria.core.variables import Variable
 
 
 def create_test_sets():

@@ -44,7 +44,9 @@ class SimpleOpenGAMSReferenceManifest(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal["simple_open_gams_reference/v1"] = "simple_open_gams_reference/v1"
+    schema_version: Literal["simple_open_gams_reference/v1"] = (
+        "simple_open_gams_reference/v1"
+    )
     generated_at: str
     model: Literal["simple_open_v1"] = "simple_open_v1"
     source: Literal["gams"] = "gams"
@@ -108,15 +110,19 @@ class SimpleOpenGAMSReferenceManifest(BaseModel):
         return out
 
     @model_validator(mode="after")
-    def _check_consistency(self) -> "SimpleOpenGAMSReferenceManifest":
+    def _check_consistency(self) -> SimpleOpenGAMSReferenceManifest:
         if "nlp" not in self.script_model_types:
             raise ValueError("SimpleOpen reference script must solve USING NLP.")
         missing = [
-            name for name in _CANONICAL_SIMPLE_OPEN_CLOSURES if name not in self.closure_references
+            name
+            for name in _CANONICAL_SIMPLE_OPEN_CLOSURES
+            if name not in self.closure_references
         ]
         if missing:
             joined = ", ".join(missing)
-            raise ValueError(f"SimpleOpen reference manifest is missing canonical closures: {joined}")
+            raise ValueError(
+                f"SimpleOpen reference manifest is missing canonical closures: {joined}"
+            )
         return self
 
     def to_dict(self) -> dict[str, Any]:
@@ -140,7 +146,9 @@ def _artifact_from_path(path: Path | str) -> GAMSReferenceArtifact:
     artifact_path = Path(path)
     if not artifact_path.exists():
         raise FileNotFoundError(f"Reference artifact not found: {artifact_path}")
-    return GAMSReferenceArtifact(path=str(artifact_path), sha256=file_sha256(artifact_path))
+    return GAMSReferenceArtifact(
+        path=str(artifact_path), sha256=file_sha256(artifact_path)
+    )
 
 
 def build_simple_open_gams_reference_manifest(

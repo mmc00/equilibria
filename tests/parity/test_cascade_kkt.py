@@ -6,10 +6,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from cascade_kkt import read_marginals, kkt_layer, KKT_READER
+from cascade_kkt import KKT_READER, kkt_layer, read_marginals
 
-REF = Path("/Users/marmol/proyectos2/equilibria_refs/"
-           "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx")
+REF = Path(
+    "/Users/marmol/proyectos2/equilibria_refs/"
+    "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"
+)
 pytestmark = pytest.mark.skipif(not REF.exists(), reason="durable ref GDX absent")
 
 

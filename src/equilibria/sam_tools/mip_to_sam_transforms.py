@@ -11,7 +11,6 @@ from equilibria.sam_tools.models import Sam
 from equilibria.sam_tools.sam_transforms import ensure_key
 from equilibria.sam_tools.selectors import norm_text, norm_text_lower
 
-
 DEFAULT_VA_FACTOR_SHARES = {"L": 0.65, "K": 0.35}
 
 DEFAULT_FACTOR_TO_HOUSEHOLD_SHARES = {
@@ -44,7 +43,14 @@ def _get_fd_columns(sam: Sam) -> list[tuple[str, str]]:
     for cat, elem in sam.col_keys:
         cat_lower = norm_text_lower(cat)
         elem_lower = norm_text_lower(elem)
-        if cat_lower == "fd" or elem_lower in {"hh", "gov", "gvt", "inv", "exp", "export"}:
+        if cat_lower == "fd" or elem_lower in {
+            "hh",
+            "gov",
+            "gvt",
+            "inv",
+            "exp",
+            "export",
+        }:
             fd_cols.append((cat, elem))
     return fd_cols
 
@@ -218,10 +224,18 @@ def disaggregate_va_to_factors(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
     # Find VA row
     va_key = _get_va_aggregate_row(sam)
     if va_key is None:
-        return {"factors_created": [], "total_va": 0.0, "error": "VA aggregate row not found"}
+        return {
+            "factors_created": [],
+            "total_va": 0.0,
+            "error": "VA aggregate row not found",
+        }
 
     if va_key not in df.index:
-        return {"factors_created": [], "total_va": 0.0, "error": f"VA key {va_key} not in index"}
+        return {
+            "factors_created": [],
+            "total_va": 0.0,
+            "error": f"VA key {va_key} not in index",
+        }
 
     # Create L and K rows
     l_key = ("L", "labor")
@@ -271,14 +285,18 @@ def create_factor_income_distribution(sam: Sam, op: dict[str, Any]) -> dict[str,
         ("AG", "hh") → ("L", "labor") = 61.75        # 65 * 0.95 to households
         ("AG", "gvt") → ("L", "labor") = 3.25        # 65 * 0.05 taxes
     """
-    factor_shares = op.get("factor_to_household_shares", DEFAULT_FACTOR_TO_HOUSEHOLD_SHARES)
+    factor_shares = op.get(
+        "factor_to_household_shares", DEFAULT_FACTOR_TO_HOUSEHOLD_SHARES
+    )
 
     df = sam.to_dataframe()
     total_distributed = 0.0
     distribution_by_factor: dict[str, float] = {}
 
     # Get factor keys (L, K)
-    factor_keys = [(cat, elem) for cat, elem in sam.row_keys if norm_text_lower(cat) in {"l", "k"}]
+    factor_keys = [
+        (cat, elem) for cat, elem in sam.row_keys if norm_text_lower(cat) in {"l", "k"}
+    ]
 
     for factor_key in factor_keys:
         factor_cat = factor_key[0]
@@ -313,7 +331,9 @@ def create_factor_income_distribution(sam: Sam, op: dict[str, Any]) -> dict[str,
     return {
         "total_distributed": total_distributed,
         "distribution_by_factor": distribution_by_factor,
-        "institutions_created": list({inst for shares in factor_shares.values() for inst in shares.keys()}),
+        "institutions_created": list(
+            {inst for shares in factor_shares.values() for inst in shares.keys()}
+        ),
     }
 
 
@@ -338,7 +358,11 @@ def create_household_expenditure(sam: Sam, op: dict[str, Any]) -> dict[str, Any]
             break
 
     if hh_fd_key is None:
-        return {"converted": 0, "total_expenditure": 0.0, "error": "HH final demand not found"}
+        return {
+            "converted": 0,
+            "total_expenditure": 0.0,
+            "error": "HH final demand not found",
+        }
 
     # Ensure AG.hh exists
     hh_key = ("AG", "hh")
@@ -532,7 +556,9 @@ def create_row_account(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
                 continue
 
             df.loc[row_key, exp_fd_key] = 0.0
-            df.loc[row_key, row_acct_key] += value  # Picked up by convert_exports_to_x_on_sam
+            df.loc[row_key, row_acct_key] += (
+                value  # Picked up by convert_exports_to_x_on_sam
+            )
             total_exports += value
 
     sam.replace_dataframe(df)

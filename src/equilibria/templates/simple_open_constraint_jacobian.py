@@ -73,7 +73,9 @@ class SimpleOpenConstraintJacobianHarness(ConstraintJacobianHarness):
         return float(inner ** (1.0 / rho))
 
     @staticmethod
-    def _cet_target(*, theta: float, phi: float, d: float, e: float, er: float, pfx: float) -> float:
+    def _cet_target(
+        *, theta: float, phi: float, d: float, e: float, er: float, pfx: float
+    ) -> float:
         trade_term = e * er / pfx
         inner = (theta * (d**phi)) + ((1.0 - theta) * (trade_term**phi))
         return float(inner ** (1.0 / phi))
@@ -118,7 +120,13 @@ class SimpleOpenConstraintJacobianHarness(ConstraintJacobianHarness):
         )
         return {
             "EQ_VA": float(context.VA - va_target),
-            "EQ_INT": float(context.INT - ((context.a_int * context.X) + (context.b_ext * (context.CAB - context.FSAV)))),
+            "EQ_INT": float(
+                context.INT
+                - (
+                    (context.a_int * context.X)
+                    + (context.b_ext * (context.CAB - context.FSAV))
+                )
+            ),
             "EQ_CET": float(context.X - cet_target),
         }
 
@@ -134,7 +142,9 @@ class SimpleOpenConstraintJacobianHarness(ConstraintJacobianHarness):
             common = inner ** ((1.0 / context.rho_va) - 1.0)
             return {
                 self._var_idx("VA"): 1.0,
-                self._var_idx("ER"): -context.alpha_va * common * (context.ER ** (context.rho_va - 1.0)),
+                self._var_idx("ER"): -context.alpha_va
+                * common
+                * (context.ER ** (context.rho_va - 1.0)),
                 self._var_idx("PFX"): -(1.0 - context.alpha_va)
                 * common
                 * (context.PFX ** (context.rho_va - 1.0)),
@@ -154,8 +164,14 @@ class SimpleOpenConstraintJacobianHarness(ConstraintJacobianHarness):
                 (1.0 - context.theta_cet) * (trade_term**context.phi_cet)
             )
             common = inner ** ((1.0 / context.phi_cet) - 1.0)
-            d_h_d_d = context.theta_cet * common * (context.D ** (context.phi_cet - 1.0))
-            d_h_d_trade = (1.0 - context.theta_cet) * common * (trade_term ** (context.phi_cet - 1.0))
+            d_h_d_d = (
+                context.theta_cet * common * (context.D ** (context.phi_cet - 1.0))
+            )
+            d_h_d_trade = (
+                (1.0 - context.theta_cet)
+                * common
+                * (trade_term ** (context.phi_cet - 1.0))
+            )
             return {
                 self._var_idx("X"): 1.0,
                 self._var_idx("D"): -d_h_d_d,

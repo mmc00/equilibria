@@ -65,9 +65,13 @@ class ConstraintJacobianHarness:
         self.n_variables = int(n_variables)
         self.constraint_names = tuple(constraint_names or ())
         self.variable_names = tuple(variable_names or ())
-        self.variable_index = {name: idx for idx, name in enumerate(self.variable_names)}
+        self.variable_index = {
+            name: idx for idx, name in enumerate(self.variable_names)
+        }
         self.sparsity_reference_x = (
-            None if sparsity_reference_x is None else np.array(sparsity_reference_x, dtype=float)
+            None
+            if sparsity_reference_x is None
+            else np.array(sparsity_reference_x, dtype=float)
         )
         self.sparsity_tol = float(sparsity_tol)
         self.jacobian_mode = str(jacobian_mode).strip().lower()
@@ -116,7 +120,11 @@ class ConstraintJacobianHarness:
                 if analytic is None:
                     continue
                 analytic_rows.add(row)
-                scale = float(self._constraint_scale[row]) if self._constraint_scale is not None else 1.0
+                scale = (
+                    float(self._constraint_scale[row])
+                    if self._constraint_scale is not None
+                    else 1.0
+                )
                 for col, value in analytic.items():
                     jac[row, col] = float(value) / scale
 
@@ -176,7 +184,9 @@ class ConstraintJacobianHarness:
         numeric_rows = tuple(row for row in range(m) if row not in analytic_rows)
         if numeric_rows:
             for col in range(n):
-                step = max(1e-8, fd_eps * max(abs(float(self.sparsity_reference_x[col])), 1.0))
+                step = max(
+                    1e-8, fd_eps * max(abs(float(self.sparsity_reference_x[col])), 1.0)
+                )
                 x_plus = self.sparsity_reference_x.copy()
                 x_plus[col] += step
                 self._stats.finite_difference_eval_count += 1

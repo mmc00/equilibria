@@ -86,7 +86,9 @@ def load_baseline_manifest(path: Path | str) -> BaselineManifest:
         val_par_file=data.get("val_par_file"),
         val_par_sha256=data.get("val_par_sha256"),
         set_sizes={str(k): int(v) for k, v in dict(data.get("set_sizes", {})).items()},
-        state_anchors={str(k): float(v) for k, v in dict(data.get("state_anchors", {})).items()},
+        state_anchors={
+            str(k): float(v) for k, v in dict(data.get("state_anchors", {})).items()
+        },
         metadata=dict(data.get("metadata", {})),
     )
 
@@ -114,11 +116,15 @@ def build_baseline_manifest(
         results_gdx=str(results_path),
         results_gdx_sha256=file_sha256(results_path) if results_path.exists() else "",
         parameters_gdx=str(params_path) if params_path else None,
-        parameters_gdx_sha256=file_sha256(params_path) if params_path and params_path.exists() else None,
+        parameters_gdx_sha256=file_sha256(params_path)
+        if params_path and params_path.exists()
+        else None,
         sam_file=str(sam_path) if sam_path else None,
         sam_sha256=file_sha256(sam_path) if sam_path and sam_path.exists() else None,
         val_par_file=str(val_path) if val_path else None,
-        val_par_sha256=file_sha256(val_path) if val_path and val_path.exists() else None,
+        val_par_sha256=file_sha256(val_path)
+        if val_path and val_path.exists()
+        else None,
         set_sizes={name: len(elements) for name, elements in state.sets.items()},
         state_anchors=compute_state_anchors(state),
         metadata=metadata or {},

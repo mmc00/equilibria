@@ -11,7 +11,9 @@ SCRIPT = ROOT / "scripts" / "parity" / "generate_pep_gams_nlp_reference.py"
 
 
 def _load_module() -> Any:
-    spec = importlib.util.spec_from_file_location("generate_pep_gams_nlp_reference", SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "generate_pep_gams_nlp_reference", SCRIPT
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -19,7 +21,9 @@ def _load_module() -> Any:
     return module
 
 
-def test_cli_main_skip_gams_generates_manifest(tmp_path: Path, monkeypatch: Any) -> None:
+def test_cli_main_skip_gams_generates_manifest(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
     module = _load_module()
 
     gms_script = tmp_path / "reference.gms"
@@ -43,8 +47,12 @@ def test_cli_main_skip_gams_generates_manifest(tmp_path: Path, monkeypatch: Any)
         scenario_dir = out_dir / "scenarios" / scenario_name / "scripts"
         scenario_dir.mkdir(parents=True, exist_ok=True)
         (scenario_dir / "Results.gdx").write_bytes(f"{scenario_name}-results".encode())
-        (scenario_dir / "Parameters.gdx").write_bytes(f"{scenario_name}-parameters".encode())
-        (scenario_dir / "PreSolveLevels.gdx").write_bytes(f"{scenario_name}-presolve".encode())
+        (scenario_dir / "Parameters.gdx").write_bytes(
+            f"{scenario_name}-parameters".encode()
+        )
+        (scenario_dir / "PreSolveLevels.gdx").write_bytes(
+            f"{scenario_name}-presolve".encode()
+        )
 
     monkeypatch.setattr(
         sys,
@@ -77,4 +85,6 @@ def test_cli_main_skip_gams_generates_manifest(tmp_path: Path, monkeypatch: Any)
     assert payload["scenario_slices"]["base"] == "sim1"
     assert payload["scenario_slices"]["government_spending"] == "sim1"
     assert payload["scenario_references"]["base"]["results_gdx"]["sha256"]
-    assert payload["scenario_references"]["government_spending"]["results_gdx"]["sha256"]
+    assert payload["scenario_references"]["government_spending"]["results_gdx"][
+        "sha256"
+    ]

@@ -19,8 +19,8 @@ Round-tripped against `equilibria.babel.har.reader.read_har` for validation.
 from __future__ import annotations
 
 import struct
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Dict, Iterable, Mapping
 
 import numpy as np
 
@@ -45,7 +45,9 @@ def _name_record(name: str) -> bytes:
     return _record(name.upper().ljust(4)[:4].encode("ascii"))
 
 
-def _meta_record(type_token: str, long_name: str, *, n_total: int = 0, width: int = 12) -> bytes:
+def _meta_record(
+    type_token: str, long_name: str, *, n_total: int = 0, width: int = 12
+) -> bytes:
     """92-byte metadata: pad(4) + type(6) + long_name(70) + 3 trailing ints (12).
 
     Layout matches GEMPACK convention observed in real HAR files:
@@ -197,8 +199,12 @@ def write_welview_har(
         ("TOT", "Total decomposition (sum of components, USD M)", total_vec),
     ]:
         blob += _write_refull(
-            header, long_name, header,
-            ["REG"], [regions], vec,
+            header,
+            long_name,
+            header,
+            ["REG"],
+            [regions],
+            vec,
         )
 
     # 2D header: ALSR × REG

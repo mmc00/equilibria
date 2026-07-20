@@ -18,7 +18,6 @@ constraints 1-3 when IMP_F > 0. See bolivia_mip_technical_report.md for proof.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -89,7 +88,9 @@ class RASBalancer(BaseModel):
         mode = self.resolve_ras_type(ras_type)
         target = self._build_targets(row_totals, col_totals, mode)
 
-        max_diff_before = float(np.max(np.abs(row_totals - col_totals))) if sam.size else 0.0
+        max_diff_before = (
+            float(np.max(np.abs(row_totals - col_totals))) if sam.size else 0.0
+        )
         max_diff_after = max_diff_before
         converged = max_diff_before <= tolerance
         iterations = 0
@@ -110,7 +111,9 @@ class RASBalancer(BaseModel):
                     elif current_cols[j] > 0.0:
                         sam[:, j] *= target[j] / current_cols[j]
 
-                max_diff_after = float(np.max(np.abs(sam.sum(axis=1) - sam.sum(axis=0))))
+                max_diff_after = float(
+                    np.max(np.abs(sam.sum(axis=1) - sam.sum(axis=0)))
+                )
                 iterations = step
                 if max_diff_after <= tolerance:
                     converged = True
@@ -237,7 +240,7 @@ def gras_balance(
     for iteration in range(max_iter):
         # Adjust rows
         row_sums = P.sum(axis=1) - N.sum(axis=1)
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             r_factors = np.where(np.abs(row_sums) > 1e-10, row_targets / row_sums, 1)
             r_factors = np.nan_to_num(r_factors, nan=1.0, posinf=1.0, neginf=1.0)
         P = P * np.abs(r_factors)[:, np.newaxis]
@@ -245,7 +248,7 @@ def gras_balance(
 
         # Adjust columns
         col_sums = P.sum(axis=0) - N.sum(axis=0)
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             c_factors = np.where(np.abs(col_sums) > 1e-10, col_targets / col_sums, 1)
             c_factors = np.nan_to_num(c_factors, nan=1.0, posinf=1.0, neginf=1.0)
         P = P * np.abs(c_factors)
@@ -318,7 +321,9 @@ def _compute_mip_errors(
     """
     # Product balance: X = Z_d @ 1 + F_d (domestic only)
     product_supply = X
-    product_demand = Z_d.sum(axis=1) + F_d.sum(axis=1) if F_d.ndim > 1 else Z_d.sum(axis=1) + F_d
+    product_demand = (
+        Z_d.sum(axis=1) + F_d.sum(axis=1) if F_d.ndim > 1 else Z_d.sum(axis=1) + F_d
+    )
     error_product = float(np.abs(product_supply - product_demand).sum())
 
     # Industry balance: X = Z_d.T @ 1 + Z_m.T @ 1 + VA
@@ -487,7 +492,9 @@ def balance_mip_gras(
         r_Zd = r_Zd * (total_c / total_r)
 
     # Balance Z_d with GRAS
-    Z_d_bal, iters, converged = gras_balance(Z_d, r_Zd, c_Zd, max_iter=max_iter, tol=tol)
+    Z_d_bal, iters, converged = gras_balance(
+        Z_d, r_Zd, c_Zd, max_iter=max_iter, tol=tol
+    )
 
     # Recalculate F_d as residual to satisfy product balance exactly
     # (same formula as cge_babel/balance_mip_methods.py)
@@ -591,7 +598,9 @@ def balance_mip_sut_ras(
         c_ext = c_ext * (total_r / total_c)
 
     # Apply GRAS to extended matrix
-    M_ext_bal, iters, converged = gras_balance(M_ext, r_ext, c_ext, max_iter=max_iter, tol=tol)
+    M_ext_bal, iters, converged = gras_balance(
+        M_ext, r_ext, c_ext, max_iter=max_iter, tol=tol
+    )
 
     # Extract balanced blocks
     Z_d_bal = M_ext_bal[:, :n]
@@ -649,13 +658,13 @@ def _cross_entropy_balance(
     for it in range(max_iter):
         # Row scaling
         row_sums = M_bal.sum(axis=1)
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             lambda_r = np.where(row_sums > 1e-10, row_targets / row_sums, 1)
         M_bal = M_bal * lambda_r[:, np.newaxis]
 
         # Column scaling
         col_sums = M_bal.sum(axis=0)
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             mu_c = np.where(col_sums > 1e-10, col_targets / col_sums, 1)
         M_bal = M_bal * mu_c
 
@@ -839,9 +848,17 @@ def balance_complete_mip(
 
     # Extract blocks
     Z_d = M[:n_products, :n_sectors]
-    Z_m = M[import_row_indices, :n_sectors] if import_row_indices else np.zeros((n_products, n_sectors))
+    Z_m = (
+        M[import_row_indices, :n_sectors]
+        if import_row_indices
+        else np.zeros((n_products, n_sectors))
+    )
     F_d = M[:n_products, fd_col_indices]
-    F_m = M[import_row_indices, fd_col_indices] if import_row_indices else np.zeros((n_products, len(fd_col_indices)))
+    F_m = (
+        M[import_row_indices, fd_col_indices]
+        if import_row_indices
+        else np.zeros((n_products, len(fd_col_indices)))
+    )
     VA = M[va_row_indices, :n_sectors]
     X = Z_d.sum(axis=0) + VA.sum(axis=0)
 
@@ -850,7 +867,12 @@ def balance_complete_mip(
 
     # Balance using GRAS
     result = balance_mip_gras(
-        Z_d, Z_m, F_d, F_m, VA, X,
+        Z_d,
+        Z_m,
+        F_d,
+        F_m,
+        VA,
+        X,
         max_iter=max_iterations,
         tol=tolerance,
     )

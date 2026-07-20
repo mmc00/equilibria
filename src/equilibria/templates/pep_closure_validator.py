@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from equilibria.contracts import ModelClosureValidationReport, validate_closure_structure
+from equilibria.contracts import (
+    ModelClosureValidationReport,
+    validate_closure_structure,
+)
 
 
 class PEPClosureValidationReport(ModelClosureValidationReport):

@@ -97,11 +97,15 @@ class Simulator:
                     f"Variable '{definition.var}' does not support op '{op}'. Available: {choices}"
                 )
         target_index = self._normalize_shock_index(index=index, definition=definition)
-        scenario_name = name if name is not None else self._default_shock_name(
-            var=normalized_var,
-            index=target_index,
-            op=normalized_op,
-            value=shock_value,
+        scenario_name = (
+            name
+            if name is not None
+            else self._default_shock_name(
+                var=normalized_var,
+                index=target_index,
+                op=normalized_op,
+                value=shock_value,
+            )
         )
 
         values: float | dict[str, float]
@@ -175,9 +179,7 @@ class Simulator:
 
         self._validate_scenarios(scenarios)
         reference_gdx = (
-            Path(reference_results_gdx)
-            if reference_results_gdx is not None
-            else None
+            Path(reference_results_gdx) if reference_results_gdx is not None else None
         )
 
         report: dict[str, Any] = {

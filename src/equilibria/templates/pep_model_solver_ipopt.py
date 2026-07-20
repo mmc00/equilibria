@@ -13,30 +13,30 @@ Or with conda:
 
 Usage:
     from equilibria.templates.pep_model_solver_ipopt import IPOPTSolver
-    
+
     solver = IPOPTSolver(calibrated_state)
     solution = solver.solve()
 """
 
 from __future__ import annotations
 
-import logging
 import copy
+import logging
 import re
 import shutil
 import subprocess
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, Tuple
+from typing import Any, Literal
 
 import numpy as np
 
+from equilibria.babel.gdx.reader import get_symbol, read_gdx, read_parameter_values
 from equilibria.baseline.compatibility import (
     BaselineCompatibilityReport,
     evaluate_strict_gams_baseline_compatibility,
 )
-from equilibria.babel.gdx.reader import read_gdx, read_parameter_values, get_symbol
 from equilibria.blocks.equilibrium import PEPMacroClosureInit
 from equilibria.blocks.production import PEPProductionAccountingInit
 from equilibria.blocks.trade import (
@@ -49,15 +49,25 @@ from equilibria.core.sets import Set, SetManager
 from equilibria.solver.guards import rebuild_tax_detail_from_rates
 from equilibria.solver.jacobians import solver_stats_payload
 from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
-from equilibria.templates.init_strategies import build_init_strategy, normalize_init_mode
+from equilibria.templates.init_strategies import (
+    build_init_strategy,
+    normalize_init_mode,
+)
 from equilibria.templates.pep_closure_validator import (
     PEPClosureValidationReport,
     validate_pep_closure_structure,
 )
 from equilibria.templates.pep_constraint_jacobian import PEPConstraintJacobianHarness
 from equilibria.templates.pep_contract import PEPContract, build_pep_contract
-from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
-from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
+from equilibria.templates.pep_model_equations import (
+    PEPModelEquations,
+    PEPModelVariables,
+    SolverResult,
+)
+from equilibria.templates.pep_runtime_config import (
+    PEPRuntimeConfig,
+    build_pep_runtime_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +76,7 @@ DEBUG_SIMPLE_ITERATION_METHOD = "__debug_simple_iteration"
 # Try to import IPOPT
 try:
     import cyipopt
+
     IPOPT_AVAILABLE = True
     logger.info("IPOPT (cyipopt) is available")
 except ImportError:
@@ -81,7 +92,7 @@ class CGEProblem:
     constant objective. IPOPT then searches for a feasible point of the
     nonlinear system instead of minimizing distance to a benchmark.
     """
-    
+
     def __init__(
         self,
         equations: PEPModelEquations,
@@ -94,7 +105,7 @@ class CGEProblem:
         jacobian_mode: str = "analytic",
     ):
         """Initialize the CGE optimization problem.
-        
+
         Args:
             equations: PEPModelEquations instance
             sets: Model sets
@@ -120,35 +131,37 @@ class CGEProblem:
             sparsity_reference_x=None,
             jacobian_mode=jacobian_mode,
         )
-        
+
     def objective(self, x: np.ndarray) -> float:
         """Return a constant objective for pure-feasibility solve."""
         _ = x
         return 0.0
-    
+
     def gradient(self, x: np.ndarray) -> np.ndarray:
         """Return the zero gradient for the constant feasibility objective."""
         return np.zeros_like(x)
-    
+
     def _compute_residuals(self, x: np.ndarray) -> np.ndarray:
         """Compute all equation residuals.
-        
+
         Args:
             x: Decision variables
-            
+
         Returns:
             Vector of residuals
         """
         # Convert array to variables
         vars = self._array_to_variables(x)
-        
+
         # Calculate all residuals
         residual_dict = self.equations.calculate_all_residuals(vars)
 
         # Build a fixed residual ordering on first evaluation so vector length
         # remains constant under finite-difference perturbations.
         if self._residual_names is None:
-            self._residual_names = [name for name in residual_dict if name not in self.hard_constraints]
+            self._residual_names = [
+                name for name in residual_dict if name not in self.hard_constraints
+            ]
 
         # Convert to array with optional block weights (prefix-based, e.g. EQ52)
         weighted_values = []
@@ -161,19 +174,21 @@ class CGEProblem:
                     break
             weighted_values.append(value * w)
         residuals = np.array(weighted_values, dtype=float)
-        
+
         # Use fixed residual scaling from first evaluation to avoid the
         # non-smooth objective induced by per-iteration self-scaling.
         if self._residual_scale is None:
             self._residual_scale = np.maximum(np.abs(residuals), 1.0)
         residuals = residuals / self._residual_scale
-        
+
         self.n_evaluations += 1
-        
+
         if self.n_evaluations % 100 == 0:
-            rms = np.sqrt(np.mean(residuals ** 2))
-            logger.debug(f"Function evaluation {self.n_evaluations}: RMS residual = {rms:.2e}")
-        
+            rms = np.sqrt(np.mean(residuals**2))
+            logger.debug(
+                f"Function evaluation {self.n_evaluations}: RMS residual = {rms:.2e}"
+            )
+
         return residuals
 
     def _compute_constraint_residuals(self, x: np.ndarray) -> np.ndarray:
@@ -193,18 +208,18 @@ class CGEProblem:
     def jacobianstructure(self) -> tuple[np.ndarray, np.ndarray]:
         """Dense Jacobian structure indices."""
         return self.constraint_harness.jacobian_structure()
-    
+
     def _array_to_variables(self, x: np.ndarray) -> PEPModelVariables:
         """Convert optimization variables to PEPModelVariables.
-        
+
         Args:
             x: Optimization variables array
-            
+
         Returns:
             PEPModelVariables instance
         """
         return pep_array_to_variables(x, self.sets)
-    
+
     def _variables_to_array(self, vars: PEPModelVariables) -> np.ndarray:
         """Convert PEPModelVariables to array."""
         return pep_variables_to_array(vars, self.sets)
@@ -212,7 +227,7 @@ class CGEProblem:
 
 class IPOPTSolver:
     """IPOPT-based solver for PEP model."""
-    
+
     def __init__(
         self,
         calibrated_state: Any,
@@ -237,7 +252,7 @@ class IPOPTSolver:
         initial_vars: PEPModelVariables | None = None,
     ):
         """Initialize the solver with calibrated model state.
-        
+
         Args:
             calibrated_state: PEPModelState from calibration
             tolerance: Convergence tolerance for residuals
@@ -246,41 +261,55 @@ class IPOPTSolver:
         self.state = calibrated_state
         self.contract = build_pep_contract(contract)
         self.runtime_config = build_pep_runtime_config(config)
-        self.tolerance = float(self.runtime_config.tolerance if tolerance is None else tolerance)
-        self.max_iterations = int(self.runtime_config.max_iterations if max_iterations is None else max_iterations)
+        self.tolerance = float(
+            self.runtime_config.tolerance if tolerance is None else tolerance
+        )
+        self.max_iterations = int(
+            self.runtime_config.max_iterations
+            if max_iterations is None
+            else max_iterations
+        )
         requested_init_mode = str(init_mode).strip().lower()
         self.init_mode = normalize_init_mode(init_mode)
         self.blockwise_commodity_alpha = blockwise_commodity_alpha
         self.blockwise_trade_market_alpha = blockwise_trade_market_alpha
         self.blockwise_macro_alpha = blockwise_macro_alpha
-        self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx is not None else None
-        self.gams_parameters_gdx = Path(gams_parameters_gdx) if gams_parameters_gdx is not None else None
+        self.gams_results_gdx = (
+            Path(gams_results_gdx) if gams_results_gdx is not None else None
+        )
+        self.gams_parameters_gdx = (
+            Path(gams_parameters_gdx) if gams_parameters_gdx is not None else None
+        )
         self.gams_results_slice = gams_results_slice.lower()
-        self.baseline_manifest = Path(baseline_manifest) if baseline_manifest is not None else None
+        self.baseline_manifest = (
+            Path(baseline_manifest) if baseline_manifest is not None else None
+        )
         self.require_baseline_manifest = require_baseline_manifest
         self.baseline_compatibility_rel_tol = baseline_compatibility_rel_tol
         self.enforce_strict_gams_baseline = enforce_strict_gams_baseline
         self.sam_file = Path(sam_file) if sam_file is not None else None
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
         self.gdxdump_bin = gdxdump_bin
-        self.initial_vars = copy.deepcopy(initial_vars) if initial_vars is not None else None
+        self.initial_vars = (
+            copy.deepcopy(initial_vars) if initial_vars is not None else None
+        )
         self.strict_baseline_report: BaselineCompatibilityReport | None = None
         self._strict_baseline_checked = False
         self._last_bound_names: list[str] = []
         self.last_closure_validation_report: dict[str, Any] | None = None
-        
+
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
         self.params = self._extract_parameters(calibrated_state)
-        
+
         # Initialize equations
         self.equations = PEPModelEquations(
             self.sets,
             self.params,
             activation_masks=self.contract.equations.activation_masks,
         )
-        
-        logger.info(f"Initialized IPOPT Solver")
+
+        logger.info("Initialized IPOPT Solver")
         logger.info(f"  Sets: {len(self.sets)} categories")
         logger.info(f"  Tolerance: {self.tolerance}")
         logger.info(f"  Max iterations: {self.max_iterations}")
@@ -380,7 +409,9 @@ class IPOPTSolver:
         )
         if diagnostics:
             max_abs = max(abs(v) for v in diagnostics.values())
-            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[
+                :6
+            ]
             logger.info(
                 "gams_blockwise trade residuals: max=%0.6e | %s",
                 max_abs,
@@ -415,7 +446,9 @@ class IPOPTSolver:
         )
         if diagnostics:
             max_abs = max(abs(v) for v in diagnostics.values())
-            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[
+                :6
+            ]
             logger.info(
                 "gams_blockwise transformation residuals: max=%0.6e | %s",
                 max_abs,
@@ -462,8 +495,12 @@ class IPOPTSolver:
             vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
         vars.TIPT = sum(vars.TIP.values())
         vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
-        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        vars.YG = (
+            vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        )
+        tr_to_govt = sum(
+            vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", [])
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
 
         diagnostics = block.validate_initialization(
@@ -473,7 +510,9 @@ class IPOPTSolver:
         )
         if diagnostics:
             max_abs = max(abs(v) for v in diagnostics.values())
-            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[
+                :6
+            ]
             logger.info(
                 "gams_blockwise production residuals: max=%0.6e | %s",
                 max_abs,
@@ -529,7 +568,9 @@ class IPOPTSolver:
         )
         if diagnostics:
             max_abs = max(abs(v) for v in diagnostics.values())
-            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:8]
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[
+                :8
+            ]
             logger.info(
                 "gams_blockwise commodity residuals (alpha=%0.2f): max=%0.6e | %s",
                 alpha,
@@ -569,7 +610,9 @@ class IPOPTSolver:
         )
         if diagnostics:
             max_abs = max(abs(v) for v in diagnostics.values())
-            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:8]
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[
+                :8
+            ]
             logger.info(
                 "gams_blockwise market residuals (alpha=%0.2f): max=%0.6e | %s",
                 float(self.blockwise_trade_market_alpha),
@@ -630,7 +673,9 @@ class IPOPTSolver:
         )
         if diagnostics:
             max_abs = max(abs(v) for v in diagnostics.values())
-            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[:6]
+            top = sorted(diagnostics.items(), key=lambda kv: abs(kv[1]), reverse=True)[
+                :6
+            ]
             logger.info(
                 "gams_blockwise macro residuals (alpha=%0.2f): max=%0.6e | %s",
                 float(self.blockwise_macro_alpha),
@@ -664,22 +709,32 @@ class IPOPTSolver:
                 vars.PC.get(ij, 1.0) * self.params.get("tmrg_X", {}).get((ij, i), 0.0)
                 for ij in self.sets.get("I", [])
             )
-            vars.TIX[i] = ttix * (vars.PE.get(i, 0.0) + margin_sum) * vars.EXD.get(i, 0.0)
+            vars.TIX[i] = (
+                ttix * (vars.PE.get(i, 0.0) + margin_sum) * vars.EXD.get(i, 0.0)
+            )
 
         vars.TICT = sum(vars.TIC.values())
         vars.TIMT = sum(vars.TIM.values())
         vars.TIXT = sum(vars.TIX.values())
         vars.TPRCTS = vars.TICT + vars.TIMT + vars.TIXT
         vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
-        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        vars.YG = (
+            vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        )
+        tr_to_govt = sum(
+            vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", [])
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
 
     def _recompute_gdp_aggregates(self, vars: PEPModelVariables) -> None:
         """Recompute GDP aggregate identities from current levels."""
-        vars.GDP_BP = sum(
-            vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0) for j in self.sets.get("J", [])
-        ) + vars.TIPT
+        vars.GDP_BP = (
+            sum(
+                vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0)
+                for j in self.sets.get("J", [])
+            )
+            + vars.TIPT
+        )
         vars.GDP_MP = vars.GDP_BP + vars.TPRCTS
 
         gdp_ib = 0.0
@@ -696,7 +751,10 @@ class IPOPTSolver:
         for i in self.sets.get("I", []):
             cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
             gdp_fd += vars.PC.get(i, 0.0) * (
-                cons_i + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0)
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
             )
             gdp_fd += vars.PE_FOB.get(i, 0.0) * vars.EXD.get(i, 0.0)
             gdp_fd -= vars.PWM.get(i, 0.0) * vars.e * vars.IM.get(i, 0.0)
@@ -721,8 +779,12 @@ class IPOPTSolver:
     def _coupled_trade_score(residuals: dict[str, float]) -> float:
         """Weighted score for coupled trade block (lower is better)."""
         keys = [
-            k for k in residuals
-            if k.startswith("EQ63_") or k.startswith("EQ64_") or k.startswith("EQ84_") or k.startswith("EQ88_")
+            k
+            for k in residuals
+            if k.startswith("EQ63_")
+            or k.startswith("EQ64_")
+            or k.startswith("EQ84_")
+            or k.startswith("EQ88_")
         ]
         if not keys:
             return 0.0
@@ -733,7 +795,7 @@ class IPOPTSolver:
         vals = np.array(list(residuals.values()), dtype=float)
         if vals.size == 0:
             return 0.0, 0.0
-        rms = float(np.sqrt(np.mean(vals ** 2)))
+        rms = float(np.sqrt(np.mean(vals**2)))
         mx = float(np.max(np.abs(vals)))
         return rms, mx
 
@@ -832,7 +894,10 @@ class IPOPTSolver:
         tmrg_x = self.params.get("tmrg_X", {})
 
         def _im_from64(i: str, dd: float) -> float:
-            if abs(float(imo0.get(i, 0.0))) <= 1e-12 or abs(float(ddo0.get(i, 0.0))) <= 1e-12:
+            if (
+                abs(float(imo0.get(i, 0.0))) <= 1e-12
+                or abs(float(ddo0.get(i, 0.0))) <= 1e-12
+            ):
                 return max(0.0, float(vars.IM.get(i, 0.0)))
             beta = float(beta_m.get(i, 0.0))
             sig = float(sigma_m.get(i, 2.0))
@@ -843,7 +908,7 @@ class IPOPTSolver:
             ratio = (beta / (1.0 - beta)) * (pd / pm)
             if ratio <= 0.0:
                 return max(0.0, float(vars.IM.get(i, 0.0)))
-            return max(0.0, float((ratio ** sig) * dd))
+            return max(0.0, float((ratio**sig) * dd))
 
         def _q_from63(i: str, dd: float, im: float) -> float:
             rho = float(rho_m.get(i, -0.5))
@@ -874,7 +939,9 @@ class IPOPTSolver:
                     if abs(float(imo0.get(ij, 0.0))) > 1e-12:
                         m += t * float(vars.IM.get(ij, 0.0))
                     if abs(float(exdo0.get(ij, 0.0))) > 1e-12:
-                        m += float(tmrg_x.get((i, ij), 0.0)) * float(vars.EXD.get(ij, 0.0))
+                        m += float(tmrg_x.get((i, ij), 0.0)) * float(
+                            vars.EXD.get(ij, 0.0)
+                        )
                 vars.MRGN[i] = m
 
         # Freeze DD from EQ88 supply as requested.
@@ -959,7 +1026,7 @@ class IPOPTSolver:
                     obj = (
                         w63 * (q_try - q63) ** 2
                         + w84 * (q_try - q84) ** 2
-                        + w64 * (eq64_pen ** 2)
+                        + w64 * (eq64_pen**2)
                     )
                     if obj < best_obj:
                         best_obj = obj
@@ -1023,7 +1090,7 @@ class IPOPTSolver:
             yfk_f = yfko_base.get(f, 0.0)
             tdf_f = max(yfo_base.get(f, 0.0) - ydfo_base.get(f, 0.0), 0.0)
             inferred_ttdf1[f] = (tdf_f / yfk_f) if abs(yfk_f) > 1e-12 else 0.0
-        
+
         def _safe_sigma_plus_one(rho_val: float, fallback: float = 1.0) -> float:
             denom = 1 + rho_val
             if abs(denom) < 1e-12:
@@ -1031,112 +1098,138 @@ class IPOPTSolver:
             return 1 / denom
 
         # Income parameters
-        params.update({
-            "lambda_RK": state.income.get("lambda_RK", {}),
-            "lambda_WL": state.income.get("lambda_WL", {}),
-            "lambda_TR_households": state.income.get("lambda_TR_households", {}),
-            "lambda_TR_firms": state.income.get("lambda_TR_firms", {}),
-            "sh1": state.income.get("sh1O", {}),
-            "tr1": state.income.get("tr1O", {}),
-        })
-        
+        params.update(
+            {
+                "lambda_RK": state.income.get("lambda_RK", {}),
+                "lambda_WL": state.income.get("lambda_WL", {}),
+                "lambda_TR_households": state.income.get("lambda_TR_households", {}),
+                "lambda_TR_firms": state.income.get("lambda_TR_firms", {}),
+                "sh1": state.income.get("sh1O", {}),
+                "tr1": state.income.get("tr1O", {}),
+            }
+        )
+
         # Production parameters
-        params.update({
-            "io": state.production.get("io", {}),
-            "v": state.production.get("v", {}),
-            "aij": state.production.get("aij", {}),
-            "rho_VA": state.production.get("rho_VA", {}),
-            "beta_VA": state.production.get("beta_VA", {}),
-            "B_VA": state.production.get("B_VA", {}),
-            "sigma_VA": state.production.get("sigma_VA", {}),
-            "rho_KD": state.production.get("rho_KD", {}),
-            "beta_KD": state.production.get("beta_KD", {}),
-            "B_KD": state.production.get("B_KD", {}),
-            "sigma_KD": state.production.get("sigma_KD", {}),
-            "rho_LD": state.production.get("rho_LD", {}),
-            "beta_LD": state.production.get("beta_LD", {}),
-            "B_LD": state.production.get("B_LD", {}),
-            "sigma_LD": state.production.get("sigma_LD", {}),
-            "ttiw": state.production.get("ttiwO", {}),
-            "ttik": state.production.get("ttikO", {}),
-            "ttip": state.production.get("ttipO", {}),
-            "LS": state.production.get("LSO", {}),
-            "KS": state.production.get("KSO", {}),
-            "KDO0": state.production.get("KDO", {}),
-            "LDO0": state.production.get("LDO", {}),
-        })
-        
+        params.update(
+            {
+                "io": state.production.get("io", {}),
+                "v": state.production.get("v", {}),
+                "aij": state.production.get("aij", {}),
+                "rho_VA": state.production.get("rho_VA", {}),
+                "beta_VA": state.production.get("beta_VA", {}),
+                "B_VA": state.production.get("B_VA", {}),
+                "sigma_VA": state.production.get("sigma_VA", {}),
+                "rho_KD": state.production.get("rho_KD", {}),
+                "beta_KD": state.production.get("beta_KD", {}),
+                "B_KD": state.production.get("B_KD", {}),
+                "sigma_KD": state.production.get("sigma_KD", {}),
+                "rho_LD": state.production.get("rho_LD", {}),
+                "beta_LD": state.production.get("beta_LD", {}),
+                "B_LD": state.production.get("B_LD", {}),
+                "sigma_LD": state.production.get("sigma_LD", {}),
+                "ttiw": state.production.get("ttiwO", {}),
+                "ttik": state.production.get("ttikO", {}),
+                "ttip": state.production.get("ttipO", {}),
+                "LS": state.production.get("LSO", {}),
+                "KS": state.production.get("KSO", {}),
+                "KDO0": state.production.get("KDO", {}),
+                "LDO0": state.production.get("LDO", {}),
+            }
+        )
+
         # Trade parameters
-        params.update({
-            "rho_XT": state.trade.get("rho_XT", {}),
-            "beta_XT": state.trade.get("beta_XT", {}),
-            "B_XT": state.trade.get("B_XT", {}),
-            "sigma_XT": {j: 1/(params["rho_XT"].get(j, 1)-1) if params["rho_XT"].get(j, 1) != 1 else 2.0 for j in params.get("rho_XT", {})},
-            "rho_X": state.trade.get("rho_X", {}),
-            "beta_X": state.trade.get("beta_X", {}),
-            "B_X": state.trade.get("B_X", {}),
-            "sigma_X": {(j, i): 1/(params["rho_X"].get((j, i), 1)-1) if params["rho_X"].get((j, i), 1) != 1 else 2.0 for j, i in params.get("rho_X", {})},
-            "rho_M": state.trade.get("rho_M", {}),
-            "beta_M": state.trade.get("beta_M", {}),
-            "B_M": state.trade.get("B_M", {}),
-            "sigma_M": {i: 1/(1+params["rho_M"].get(i, -0.5)) for i in params.get("rho_M", {})},
-            "sigma_XD": {i: 2.0 for i in state.sets.get("I", [])},
-            "ttic": state.trade.get("tticO", {}),
-            "ttim": state.trade.get("ttimO", {}),
-            "ttix": state.trade.get("ttixO", {}),
-            "tmrg": state.trade.get("tmrg", {}),
-            "tmrg_X": state.trade.get("tmrg_X", {}),
-            "EXDO": state.trade.get("EXDO", {}),
-        })
-        
+        params.update(
+            {
+                "rho_XT": state.trade.get("rho_XT", {}),
+                "beta_XT": state.trade.get("beta_XT", {}),
+                "B_XT": state.trade.get("B_XT", {}),
+                "sigma_XT": {
+                    j: 1 / (params["rho_XT"].get(j, 1) - 1)
+                    if params["rho_XT"].get(j, 1) != 1
+                    else 2.0
+                    for j in params.get("rho_XT", {})
+                },
+                "rho_X": state.trade.get("rho_X", {}),
+                "beta_X": state.trade.get("beta_X", {}),
+                "B_X": state.trade.get("B_X", {}),
+                "sigma_X": {
+                    (j, i): 1 / (params["rho_X"].get((j, i), 1) - 1)
+                    if params["rho_X"].get((j, i), 1) != 1
+                    else 2.0
+                    for j, i in params.get("rho_X", {})
+                },
+                "rho_M": state.trade.get("rho_M", {}),
+                "beta_M": state.trade.get("beta_M", {}),
+                "B_M": state.trade.get("B_M", {}),
+                "sigma_M": {
+                    i: 1 / (1 + params["rho_M"].get(i, -0.5))
+                    for i in params.get("rho_M", {})
+                },
+                "sigma_XD": dict.fromkeys(state.sets.get("I", []), 2.0),
+                "ttic": state.trade.get("tticO", {}),
+                "ttim": state.trade.get("ttimO", {}),
+                "ttix": state.trade.get("ttixO", {}),
+                "tmrg": state.trade.get("tmrg", {}),
+                "tmrg_X": state.trade.get("tmrg_X", {}),
+                "EXDO": state.trade.get("EXDO", {}),
+            }
+        )
+
         # LES parameters
-        params.update({
-            "gamma_LES": state.les_parameters.get("gamma_LES", {}),
-            "sigma_Y": state.les_parameters.get("sigma_Y", {}),
-            "frisch": state.les_parameters.get("frisch", {}),
-        })
-        
+        params.update(
+            {
+                "gamma_LES": state.les_parameters.get("gamma_LES", {}),
+                "sigma_Y": state.les_parameters.get("sigma_Y", {}),
+                "frisch": state.les_parameters.get("frisch", {}),
+            }
+        )
+
         # Additional parameters
-        params.update({
-            "eta": 1,
-            "sh0": {},
-            "tr0": state.income.get("tr0O", {}),
-            "ttdh0": ttdh0_base,
-            "ttdh1": inferred_ttdh1,
-            "ttdf0": {},
-            "ttdf1": inferred_ttdf1,
-            "TRO": state.income.get("TRO", {}),
-            "PWX": state.trade.get("PWXO", {}),
-            "CMIN0": state.les_parameters.get("CMINO", {}),
-            "CO0": state.consumption.get("CO", {}),
-            "VSTK0": state.consumption.get("VSTKO", {}),
-            "G0": state.consumption.get("GO", 0.0),
-            "PWM0": state.trade.get("PWMO", {}),
-            "CAB0": state.income.get("CABO", 0.0),
-            "e0": 1.0,
-            "PCO0": state.trade.get("PCO", {}),
-            "PVAO0": state.production.get("PVAO", {}),
-            "VAO0": state.production.get("VAO", {}),
-            "TIPO0": {
-                j: state.production.get("ttipO", {}).get(j, 0.0)
-                * state.production.get("PPO", {}).get(j, 0.0)
-                * state.production.get("XSTO", {}).get(j, 0.0)
-                for j in state.sets.get("J", [])
-            },
-            "kmob": 1.0,
-            "PT": state.production.get("PTO", {}),
-            "EXDO0": state.trade.get("EXDO", {}),
-            "IMO0": state.trade.get("IMO", {}),
-            "DDO0": state.trade.get("DDO", {}),
-            "DSO0": state.trade.get("DSO", {}),
-            "EXO0": state.trade.get("EXO", {}),
-            "XSO0": state.trade.get("XSO", {}),
-            "XSTO0": state.production.get("XSTO", {}),
-        })
+        params.update(
+            {
+                "eta": 1,
+                "sh0": {},
+                "tr0": state.income.get("tr0O", {}),
+                "ttdh0": ttdh0_base,
+                "ttdh1": inferred_ttdh1,
+                "ttdf0": {},
+                "ttdf1": inferred_ttdf1,
+                "TRO": state.income.get("TRO", {}),
+                "PWX": state.trade.get("PWXO", {}),
+                "CMIN0": state.les_parameters.get("CMINO", {}),
+                "CO0": state.consumption.get("CO", {}),
+                "VSTK0": state.consumption.get("VSTKO", {}),
+                "G0": state.consumption.get("GO", 0.0),
+                "PWM0": state.trade.get("PWMO", {}),
+                "CAB0": state.income.get("CABO", 0.0),
+                "e0": 1.0,
+                "PCO0": state.trade.get("PCO", {}),
+                "PVAO0": state.production.get("PVAO", {}),
+                "VAO0": state.production.get("VAO", {}),
+                "TIPO0": {
+                    j: state.production.get("ttipO", {}).get(j, 0.0)
+                    * state.production.get("PPO", {}).get(j, 0.0)
+                    * state.production.get("XSTO", {}).get(j, 0.0)
+                    for j in state.sets.get("J", [])
+                },
+                "kmob": 1.0,
+                "PT": state.production.get("PTO", {}),
+                "EXDO0": state.trade.get("EXDO", {}),
+                "IMO0": state.trade.get("IMO", {}),
+                "DDO0": state.trade.get("DDO", {}),
+                "DSO0": state.trade.get("DSO", {}),
+                "EXO0": state.trade.get("EXO", {}),
+                "XSO0": state.trade.get("XSO", {}),
+                "XSTO0": state.production.get("XSTO", {}),
+            }
+        )
 
         inv_base = state.consumption.get("INVO", {})
         pc_base = state.trade.get("PCO", {})
-        inv_nom = {i: inv_base.get(i, 0.0) * pc_base.get(i, 1.0) for i in state.sets.get("I", [])}
+        inv_nom = {
+            i: inv_base.get(i, 0.0) * pc_base.get(i, 1.0)
+            for i in state.sets.get("I", [])
+        }
         inv_total = sum(inv_nom.values())
         params["gamma_INV"] = {
             i: (inv_nom.get(i, 0.0) / inv_total if abs(inv_total) > 1e-12 else 0.0)
@@ -1144,7 +1237,10 @@ class IPOPTSolver:
         }
 
         cg_base = state.consumption.get("CGO", {})
-        cg_nom = {i: cg_base.get(i, 0.0) * pc_base.get(i, 1.0) for i in state.sets.get("I", [])}
+        cg_nom = {
+            i: cg_base.get(i, 0.0) * pc_base.get(i, 1.0)
+            for i in state.sets.get("I", [])
+        }
         cg_total = sum(cg_nom.values())
         params["gamma_GVT"] = {
             i: (cg_nom.get(i, 0.0) / cg_total if abs(cg_total) > 1e-12 else 0.0)
@@ -1153,19 +1249,22 @@ class IPOPTSolver:
 
         rho_kd = params.get("rho_KD", {})
         sigma_kd_from_val_par = dict(params.get("sigma_KD", {}))
-        sigma_kd_from_rho = {j: _safe_sigma_plus_one(rho_kd.get(j, 0), 1.0) for j in rho_kd}
+        sigma_kd_from_rho = {
+            j: _safe_sigma_plus_one(rho_kd.get(j, 0), 1.0) for j in rho_kd
+        }
         params["sigma_KD"] = {**sigma_kd_from_rho, **sigma_kd_from_val_par}
 
         rho_ld = params.get("rho_LD", {})
         sigma_ld_from_val_par = dict(params.get("sigma_LD", {}))
-        sigma_ld_from_rho = {j: _safe_sigma_plus_one(rho_ld.get(j, 0), 1.0) for j in rho_ld}
+        sigma_ld_from_rho = {
+            j: _safe_sigma_plus_one(rho_ld.get(j, 0), 1.0) for j in rho_ld
+        }
         params["sigma_LD"] = {**sigma_ld_from_rho, **sigma_ld_from_val_par}
 
         rho_va = params.get("rho_VA", {})
         sigma_va_from_val_par = dict(params.get("sigma_VA", {}))
         sigma_va_from_rho = {
-            j: _safe_sigma_plus_one(rho_va.get(j, 0.0), 1.5)
-            for j in rho_va
+            j: _safe_sigma_plus_one(rho_va.get(j, 0.0), 1.5) for j in rho_va
         }
         params["sigma_VA"] = {**sigma_va_from_rho, **sigma_va_from_val_par}
 
@@ -1177,12 +1276,16 @@ class IPOPTSolver:
 
         rho_x = params.get("rho_X", {})
         params["sigma_X"] = {
-            (j, i): (1 / (rho_x.get((j, i), 1) - 1) if rho_x.get((j, i), 1) != 1 else 2.0)
+            (j, i): (
+                1 / (rho_x.get((j, i), 1) - 1) if rho_x.get((j, i), 1) != 1 else 2.0
+            )
             for (j, i) in rho_x
         }
 
         rho_m = params.get("rho_M", {})
-        params["sigma_M"] = {i: _safe_sigma_plus_one(rho_m.get(i, -0.5), 2.0) for i in rho_m}
+        params["sigma_M"] = {
+            i: _safe_sigma_plus_one(rho_m.get(i, -0.5), 2.0) for i in rho_m
+        }
 
         lambda_tr_combined: dict[tuple[str, str], float] = {}
         lambda_tr_combined.update(params.get("lambda_TR_households", {}))
@@ -1211,8 +1314,12 @@ class IPOPTSolver:
             for j in J
             for i in I
         }
-        params["io"] = {j: (ci_q[j] / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0) for j in J}
-        params["v"] = {j: (vao.get(j, 0.0) / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0) for j in J}
+        params["io"] = {
+            j: (ci_q[j] / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0) for j in J
+        }
+        params["v"] = {
+            j: (vao.get(j, 0.0) / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0) for j in J
+        }
 
         lambda_tr_combined: dict[tuple[str, str], float] = {}
         lambda_tr_combined.update(params.get("lambda_TR_households", {}))
@@ -1222,20 +1329,20 @@ class IPOPTSolver:
         for j in state.sets.get("J", []):
             params.setdefault("beta_VA", {}).setdefault(j, 1.0)
             params.setdefault("B_VA", {}).setdefault(j, 1.0)
-        
+
         return params
-    
+
     def _create_initial_guess(self) -> PEPModelVariables:
         """Create initial guess for variables from calibrated values."""
         vars = PEPModelVariables()
         state = self.state
-        
+
         # Initialize from calibrated state (using "O" suffix values as starting point)
         tro = self.params.get("TRO", {})
         for ag in self.sets.get("AG", []):
             for agj in self.sets.get("AG", []):
                 vars.TR[(ag, agj)] = tro.get((ag, agj), 0)
-        
+
         # Production variables
         for j in self.sets.get("J", []):
             vars.VA[j] = state.production.get("VAO", {}).get(j, 0)
@@ -1249,23 +1356,23 @@ class IPOPTSolver:
             vars.PCI[j] = state.production.get("PCIO", {}).get(j, 1.0)
             vars.WC[j] = state.production.get("WCO", {}).get(j, 1.0)
             vars.RC[j] = state.production.get("RCO", {}).get(j, 1.0)
-            
+
             for l in self.sets.get("L", []):
                 vars.LD[(l, j)] = state.production.get("LDO", {}).get((l, j), 0)
                 vars.WTI[(l, j)] = state.production.get("WTIO", {}).get((l, j), 1.0)
-            
+
             for k in self.sets.get("K", []):
                 vars.KD[(k, j)] = state.production.get("KDO", {}).get((k, j), 0)
                 vars.RTI[(k, j)] = state.production.get("RTIO", {}).get((k, j), 1.0)
                 vars.R[(k, j)] = 1.0  # Base price
-            
+
             for i in self.sets.get("I", []):
                 vars.DI[(i, j)] = state.production.get("DIO", {}).get((i, j), 0)
                 vars.XS[(j, i)] = state.trade.get("XSO", {}).get((j, i), 0)
                 vars.DS[(j, i)] = state.trade.get("DSO", {}).get((j, i), 0)
                 vars.EX[(j, i)] = state.trade.get("EXO", {}).get((j, i), 0)
                 vars.P[(j, i)] = state.trade.get("PO", {}).get((j, i), 1.0)
-        
+
         # Initialize wages
         for l in self.sets.get("L", []):
             vars.W[l] = 1.0  # Numeraire
@@ -1281,7 +1388,7 @@ class IPOPTSolver:
             params=self.params,
             include_tip=False,
         )
-        
+
         # Income variables
         for h in self.sets.get("H", []):
             vars.YH[h] = state.income.get("YHO", {}).get(h, 0)
@@ -1292,10 +1399,10 @@ class IPOPTSolver:
             vars.CTH[h] = state.income.get("CTHO", {}).get(h, 0)
             vars.SH[h] = vars.YDH[h] - vars.CTH[h]
             vars.TDH[h] = vars.YH[h] - vars.YDH[h] - vars.TR.get(("gvt", h), 0.0)
-            
+
             for ag in self.sets.get("AG", []):
                 vars.TR[(h, ag)] = tro.get((h, ag), vars.TR.get((h, ag), 0))
-        
+
         for f in self.sets.get("F", []):
             vars.YF[f] = state.income.get("YFO", {}).get(f, 0)
             vars.YFK[f] = state.income.get("YFKO", {}).get(f, 0)
@@ -1303,10 +1410,10 @@ class IPOPTSolver:
             vars.YDF[f] = state.income.get("YDFO", {}).get(f, 0)
             vars.SF[f] = vars.YDF[f]
             vars.TDF[f] = vars.YF[f] - vars.YDF[f]
-            
+
             for ag in self.sets.get("AG", []):
                 vars.TR[(f, ag)] = tro.get((f, ag), vars.TR.get((f, ag), 0))
-        
+
         # Government variables
         vars.YG = state.income.get("YGO", 0)
         vars.YGK = state.income.get("YGKO", 0)
@@ -1323,7 +1430,7 @@ class IPOPTSolver:
         vars.YGTR = state.income.get("YGTRO", 0)
         vars.G = state.consumption.get("GO", 0)
         vars.SG = state.income.get("SGO", 0)
-        
+
         # Trade variables
         for i in self.sets.get("I", []):
             vars.IM[i] = state.trade.get("IMO", {}).get(i, 0)
@@ -1346,7 +1453,7 @@ class IPOPTSolver:
             vars.INV[i] = state.consumption.get("INVO", {}).get(i, 0)
             vars.CG[i] = state.consumption.get("CGO", {}).get(i, 0)
             vars.VSTK[i] = state.consumption.get("VSTKO", {}).get(i, 0)
-        
+
         # Consumption variables
         for h in self.sets.get("H", []):
             for i in self.sets.get("I", []):
@@ -1368,24 +1475,30 @@ class IPOPTSolver:
 
         # Recompute savings variables from accounting identities using calibrated TR.
         for h in self.sets.get("H", []):
-            tr_out_h = sum(vars.TR.get((agng, h), 0.0) for agng in self.sets.get("AGNG", []))
+            tr_out_h = sum(
+                vars.TR.get((agng, h), 0.0) for agng in self.sets.get("AGNG", [])
+            )
             vars.SH[h] = vars.YDH.get(h, 0.0) - vars.CTH.get(h, 0.0) - tr_out_h
 
         for f in self.sets.get("F", []):
             tr_out_f = sum(vars.TR.get((ag, f), 0.0) for ag in self.sets.get("AG", []))
             vars.SF[f] = vars.YDF.get(f, 0.0) - tr_out_f
 
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        tr_to_govt = sum(
+            vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", [])
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
-        
+
         # ROW variables
         vars.YROW = state.income.get("YROWO", 0)
         vars.SROW = -state.income.get("CABO", 0)
         vars.CAB = state.income.get("CABO", 0)
-        
+
         # Investment
         vars.IT = state.income.get("ITO", 0)
-        stock_value = sum(vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", []))
+        stock_value = sum(
+            vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", [])
+        )
         vars.GFCF = vars.IT - stock_value
 
         # Aggregate tax and transfer totals consistent with initialized detail.
@@ -1397,12 +1510,16 @@ class IPOPTSolver:
         vars.TICT = sum(vars.TIC.values())
         vars.TIMT = sum(vars.TIM.values())
         vars.TIXT = sum(vars.TIX.values())
-        vars.YGTR = sum(vars.TR.get(("gvt", agng), 0.0) for agng in self.sets.get("AGNG", []))
+        vars.YGTR = sum(
+            vars.TR.get(("gvt", agng), 0.0) for agng in self.sets.get("AGNG", [])
+        )
         vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
         vars.TPRCTS = vars.TICT + vars.TIMT + vars.TIXT
-        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        vars.YG = (
+            vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
-        
+
         # GDP variables
         vars.GDP_BP = state.gdp.get("GDP_BPO", 0)
         vars.GDP_MP = state.gdp.get("GDP_MPO", 0)
@@ -1411,27 +1528,32 @@ class IPOPTSolver:
         for i in self.sets.get("I", []):
             cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
             gdp_fd += vars.PC.get(i, 0.0) * (
-                cons_i + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0)
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
             )
             gdp_fd += vars.PE_FOB.get(i, 0.0) * vars.EXD.get(i, 0.0)
             gdp_fd -= vars.PWM.get(i, 0.0) * vars.e * vars.IM.get(i, 0.0)
         vars.GDP_FD = gdp_fd
-        
+
         # Price indices
         vars.PIXCON = state.real_variables.get("PIXCONO", 1.0)
         vars.PIXGDP = state.real_variables.get("PIXGDPO", 1.0)
         vars.PIXGVT = state.real_variables.get("PIXGVTO", 1.0)
         vars.PIXINV = state.real_variables.get("PIXINVO", 1.0)
-        
+
         # Real variables
         for h in self.sets.get("H", []):
             vars.CTH_REAL[h] = state.real_variables.get("CTH_REALO", {}).get(h, 0)
         vars.G_REAL = state.real_variables.get("G_REALO", 0)
         vars.GDP_BP_REAL = state.real_variables.get("GDP_BP_REALO", 0)
-        vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        vars.GDP_MP_REAL = (
+            vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        )
         vars.GFCF_REAL = vars.GFCF / vars.PIXINV if abs(vars.PIXINV) > 1e-12 else 0.0
         vars.LEON = 0.0
-        
+
         # Exchange rate
         vars.e = state.trade.get("eO", 1.0)
 
@@ -1452,7 +1574,7 @@ class IPOPTSolver:
         vars.ttik = dict(self.params.get("ttik", {}))
 
         build_init_strategy(self.init_mode).apply(self, vars)
-        
+
         return vars
 
     def _sync_policy_params_from_vars(self, vars: PEPModelVariables) -> None:
@@ -1522,7 +1644,10 @@ class IPOPTSolver:
     def _ensure_strict_gams_baseline_compatibility(self) -> None:
         """Validate gams baseline compatibility once per solver instance."""
         if self._strict_baseline_checked:
-            if self.enforce_strict_gams_baseline and self.strict_baseline_report is not None:
+            if (
+                self.enforce_strict_gams_baseline
+                and self.strict_baseline_report is not None
+            ):
                 if not self.strict_baseline_report.passed:
                     raise RuntimeError(self.strict_baseline_report.summary())
             return
@@ -1560,7 +1685,9 @@ class IPOPTSolver:
         """Overlay initial guess with BASE levels from GAMS Results.gdx."""
         gdx_path = self._resolve_gams_levels_path()
         if gdx_path is None:
-            logger.warning("gams init requested but no Results.gdx found; using calibrated initial guess")
+            logger.warning(
+                "gams init requested but no Results.gdx found; using calibrated initial guess"
+            )
             return
 
         try:
@@ -1569,7 +1696,10 @@ class IPOPTSolver:
             n_updates = 0
             # Prefer gdxdump for Results.gdx overlays; the lightweight reader can
             # miss records on some val* symbols in this file.
-            gdxdump_bin = shutil.which("gdxdump") or "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+            gdxdump_bin = (
+                shutil.which("gdxdump")
+                or "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+            )
             gdxdump_available = Path(gdxdump_bin).exists()
 
             value_pattern = re.compile(
@@ -1594,7 +1724,9 @@ class IPOPTSolver:
                             stderr=subprocess.STDOUT,
                         )
                         for m in value_pattern.finditer(out):
-                            labels = tuple(x.lower() for x in label_pattern.findall(m.group(1)))
+                            labels = tuple(
+                                x.lower() for x in label_pattern.findall(m.group(1))
+                            )
                             value = float(m.group(2))
                             records.append((labels, value))
                     except Exception:
@@ -1611,17 +1743,27 @@ class IPOPTSolver:
                         if gdx_symbol and gdx_symbol["dimension"] >= 1:
                             # Try common scenario suffixes to auto-detect offset
                             elements = gdx.get("elements", [])
-                            if elements and elements[-1].lower() in ("var", "sim1", "base"):
+                            if elements and elements[-1].lower() in (
+                                "var",
+                                "sim1",
+                                "base",
+                            ):
                                 n_scen = 3  # BASE, SIM1, VAR
                                 # Build offsets: first dims start at 0, last dim at -n_scen
                                 nd = gdx_symbol["dimension"]
                                 n_sectors = len(elements) - n_scen
                                 dim_offsets = [0] * (nd - 1) + [n_sectors]
-                        values = read_parameter_values(gdx, sym, domain_offsets=dim_offsets)
+                        values = read_parameter_values(
+                            gdx, sym, domain_offsets=dim_offsets
+                        )
                     except Exception:
                         continue
                     for raw_key, raw_val in values.items():
-                        key_t = raw_key if isinstance(raw_key, tuple) else ((raw_key,) if raw_key != () else ())
+                        key_t = (
+                            raw_key
+                            if isinstance(raw_key, tuple)
+                            else ((raw_key,) if raw_key != () else ())
+                        )
                         labels = tuple(str(k).lower() for k in key_t)
                         records.append((labels, float(raw_val)))
 
@@ -1670,7 +1812,9 @@ class IPOPTSolver:
         tro = income.get("TRO", {})
         for ag in self.sets.get("AG", []):
             for agj in self.sets.get("AG", []):
-                vars.TR[(ag, agj)] = float(tro.get((ag, agj), vars.TR.get((ag, agj), 0.0)))
+                vars.TR[(ag, agj)] = float(
+                    tro.get((ag, agj), vars.TR.get((ag, agj), 0.0))
+                )
 
         for j in self.sets.get("J", []):
             vars.VA[j] = float(production.get("VAO", {}).get(j, vars.VA.get(j, 0.0)))
@@ -1687,22 +1831,40 @@ class IPOPTSolver:
 
             for l in self.sets.get("L", []):
                 key = (l, j)
-                vars.LD[key] = float(production.get("LDO", {}).get(key, vars.LD.get(key, 0.0)))
-                vars.WTI[key] = float(production.get("WTIO", {}).get(key, vars.WTI.get(key, 1.0)))
+                vars.LD[key] = float(
+                    production.get("LDO", {}).get(key, vars.LD.get(key, 0.0))
+                )
+                vars.WTI[key] = float(
+                    production.get("WTIO", {}).get(key, vars.WTI.get(key, 1.0))
+                )
 
             for k in self.sets.get("K", []):
                 key = (k, j)
-                vars.KD[key] = float(production.get("KDO", {}).get(key, vars.KD.get(key, 0.0)))
-                vars.RTI[key] = float(production.get("RTIO", {}).get(key, vars.RTI.get(key, 1.0)))
+                vars.KD[key] = float(
+                    production.get("KDO", {}).get(key, vars.KD.get(key, 0.0))
+                )
+                vars.RTI[key] = float(
+                    production.get("RTIO", {}).get(key, vars.RTI.get(key, 1.0))
+                )
 
             for i in self.sets.get("I", []):
                 key_ij = (i, j)
                 key_ji = (j, i)
-                vars.DI[key_ij] = float(production.get("DIO", {}).get(key_ij, vars.DI.get(key_ij, 0.0)))
-                vars.XS[key_ji] = float(trade.get("XSO", {}).get(key_ji, vars.XS.get(key_ji, 0.0)))
-                vars.DS[key_ji] = float(trade.get("DSO", {}).get(key_ji, vars.DS.get(key_ji, 0.0)))
-                vars.EX[key_ji] = float(trade.get("EXO", {}).get(key_ji, vars.EX.get(key_ji, 0.0)))
-                vars.P[key_ji] = float(trade.get("PO", {}).get(key_ji, vars.P.get(key_ji, 1.0)))
+                vars.DI[key_ij] = float(
+                    production.get("DIO", {}).get(key_ij, vars.DI.get(key_ij, 0.0))
+                )
+                vars.XS[key_ji] = float(
+                    trade.get("XSO", {}).get(key_ji, vars.XS.get(key_ji, 0.0))
+                )
+                vars.DS[key_ji] = float(
+                    trade.get("DSO", {}).get(key_ji, vars.DS.get(key_ji, 0.0))
+                )
+                vars.EX[key_ji] = float(
+                    trade.get("EXO", {}).get(key_ji, vars.EX.get(key_ji, 0.0))
+                )
+                vars.P[key_ji] = float(
+                    trade.get("PO", {}).get(key_ji, vars.P.get(key_ji, 1.0))
+                )
 
         # No explicit WO/RO/RKO in calibrated state; keep initialized numeraire defaults.
         for l in self.sets.get("L", []):
@@ -1724,7 +1886,9 @@ class IPOPTSolver:
             vars.PD[i] = float(trade.get("PDO", {}).get(i, vars.PD.get(i, 1.0)))
             vars.PM[i] = float(trade.get("PMO", {}).get(i, vars.PM.get(i, 1.0)))
             vars.PE[i] = float(trade.get("PEO", {}).get(i, vars.PE.get(i, 1.0)))
-            vars.PE_FOB[i] = float(trade.get("PE_FOBO", {}).get(i, vars.PE_FOB.get(i, 1.0)))
+            vars.PE_FOB[i] = float(
+                trade.get("PE_FOBO", {}).get(i, vars.PE_FOB.get(i, 1.0))
+            )
             vars.PWM[i] = float(trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0)))
             vars.PWX[i] = float(trade.get("PWXO", {}).get(i, vars.PWX.get(i, 1.0)))
             vars.PL[i] = float(trade.get("PLO", {}).get(i, vars.PL.get(i, 1.0)))
@@ -1733,9 +1897,13 @@ class IPOPTSolver:
             vars.TIX[i] = float(trade.get("TIXO", {}).get(i, vars.TIX.get(i, 0.0)))
             vars.MRGN[i] = float(trade.get("MRGNO", {}).get(i, vars.MRGN.get(i, 0.0)))
             vars.DIT[i] = float(production.get("DITO", {}).get(i, vars.DIT.get(i, 0.0)))
-            vars.INV[i] = float(consumption.get("INVO", {}).get(i, vars.INV.get(i, 0.0)))
+            vars.INV[i] = float(
+                consumption.get("INVO", {}).get(i, vars.INV.get(i, 0.0))
+            )
             vars.CG[i] = float(consumption.get("CGO", {}).get(i, vars.CG.get(i, 0.0)))
-            vars.VSTK[i] = float(consumption.get("VSTKO", {}).get(i, vars.VSTK.get(i, 0.0)))
+            vars.VSTK[i] = float(
+                consumption.get("VSTKO", {}).get(i, vars.VSTK.get(i, 0.0))
+            )
 
         for h in self.sets.get("H", []):
             vars.YH[h] = float(income.get("YHO", {}).get(h, vars.YH.get(h, 0.0)))
@@ -1750,19 +1918,36 @@ class IPOPTSolver:
                     vars.sh0.get(h, 0.0) + vars.sh1.get(h, 0.0) * vars.YDH.get(h, 0.0),
                 )
             )
-            vars.TDH[h] = float(income.get("TDHO", {}).get(h, vars.YH.get(h, 0.0) - vars.YDH.get(h, 0.0) - vars.TR.get(("gvt", h), 0.0)))
+            vars.TDH[h] = float(
+                income.get("TDHO", {}).get(
+                    h,
+                    vars.YH.get(h, 0.0)
+                    - vars.YDH.get(h, 0.0)
+                    - vars.TR.get(("gvt", h), 0.0),
+                )
+            )
             for i in self.sets.get("I", []):
                 key = (i, h)
-                vars.C[key] = float(consumption.get("CO", {}).get(key, vars.C.get(key, 0.0)))
-                vars.CMIN[key] = float(les.get("CMINO", {}).get(key, vars.CMIN.get(key, 0.0)))
+                vars.C[key] = float(
+                    consumption.get("CO", {}).get(key, vars.C.get(key, 0.0))
+                )
+                vars.CMIN[key] = float(
+                    les.get("CMINO", {}).get(key, vars.CMIN.get(key, 0.0))
+                )
 
         for f in self.sets.get("F", []):
             vars.YF[f] = float(income.get("YFO", {}).get(f, vars.YF.get(f, 0.0)))
             vars.YFK[f] = float(income.get("YFKO", {}).get(f, vars.YFK.get(f, 0.0)))
             vars.YFTR[f] = float(income.get("YFTRO", {}).get(f, vars.YFTR.get(f, 0.0)))
             vars.YDF[f] = float(income.get("YDFO", {}).get(f, vars.YDF.get(f, 0.0)))
-            vars.SF[f] = float(income.get("SFO", {}).get(f, vars.SF.get(f, vars.YDF.get(f, 0.0))))
-            vars.TDF[f] = float(income.get("TDFO", {}).get(f, vars.YF.get(f, 0.0) - vars.YDF.get(f, 0.0)))
+            vars.SF[f] = float(
+                income.get("SFO", {}).get(f, vars.SF.get(f, vars.YDF.get(f, 0.0)))
+            )
+            vars.TDF[f] = float(
+                income.get("TDFO", {}).get(
+                    f, vars.YF.get(f, 0.0) - vars.YDF.get(f, 0.0)
+                )
+            )
 
         vars.YG = float(income.get("YGO", vars.YG))
         vars.YGK = float(income.get("YGKO", vars.YGK))
@@ -1797,7 +1982,9 @@ class IPOPTSolver:
         vars.PIXGVT = float(real.get("PIXGVTO", vars.PIXGVT))
         vars.PIXINV = float(real.get("PIXINVO", vars.PIXINV))
         for h in self.sets.get("H", []):
-            vars.CTH_REAL[h] = float(real.get("CTH_REALO", {}).get(h, vars.CTH_REAL.get(h, 0.0)))
+            vars.CTH_REAL[h] = float(
+                real.get("CTH_REALO", {}).get(h, vars.CTH_REAL.get(h, 0.0))
+            )
         vars.G_REAL = float(real.get("G_REALO", vars.G_REAL))
         vars.GDP_BP_REAL = float(real.get("GDP_BP_REALO", vars.GDP_BP_REAL))
         vars.GDP_MP_REAL = float(real.get("GDP_MP_REALO", vars.GDP_MP_REAL))
@@ -1815,7 +2002,9 @@ class IPOPTSolver:
         for k in self.sets.get("K", []):
             for j in self.sets.get("J", []):
                 ttik = self.params.get("ttik", {}).get((k, j), 0.0)
-                vars.TIK[(k, j)] = ttik * vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0.0)
+                vars.TIK[(k, j)] = (
+                    ttik * vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0.0)
+                )
         for j in self.sets.get("J", []):
             ttip = self.params.get("ttip", {}).get(j, 0.0)
             vars.TIP[j] = ttip * vars.PP.get(j, 0.0) * vars.XST.get(j, 0.0)
@@ -1839,8 +2028,12 @@ class IPOPTSolver:
             refresh_agg = True
         if refresh_agg:
             vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
-            vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
-            tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+            vars.YG = (
+                vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+            )
+            tr_to_govt = sum(
+                vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", [])
+            )
             vars.SG = vars.YG - tr_to_govt - vars.G
 
             # Keep GDP_IB pre-solve aligned with EQ92 after tax-aggregate refresh.
@@ -1883,7 +2076,10 @@ class IPOPTSolver:
             ci_j = vars.CI.get(j, 0.0)
             if abs(ci_j) > 1e-12:
                 vars.PCI[j] = (
-                    sum(vars.PC.get(i, 1.0) * vars.DI.get((i, j), 0.0) for i in self.sets.get("I", []))
+                    sum(
+                        vars.PC.get(i, 1.0) * vars.DI.get((i, j), 0.0)
+                        for i in self.sets.get("I", [])
+                    )
                     / ci_j
                 )
             if abs(xst_j) > 1e-12:
@@ -1891,7 +2087,9 @@ class IPOPTSolver:
                     vars.PVA.get(j, 0.0) * vars.VA.get(j, 0.0)
                     + vars.PCI.get(j, 0.0) * vars.CI.get(j, 0.0)
                 ) / xst_j
-            vars.PT[j] = (1.0 + self.params.get("ttip", {}).get(j, 0.0)) * vars.PP.get(j, 0.0)
+            vars.PT[j] = (1.0 + self.params.get("ttip", {}).get(j, 0.0)) * vars.PP.get(
+                j, 0.0
+            )
 
         for i in self.sets.get("I", []):
             vars.DIT[i] = sum(vars.DI.get((i, j), 0.0) for j in self.sets.get("J", []))
@@ -1925,16 +2123,22 @@ class IPOPTSolver:
 
         vars.TIXT = sum(vars.TIX.values())
         vars.TPRCTS = vars.TICT + vars.TIMT + vars.TIXT
-        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        vars.YG = (
+            vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        )
 
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0) for agng in self.sets.get("AGNG", []))
+        tr_to_govt = sum(
+            vars.TR.get((agng, "gvt"), 0) for agng in self.sets.get("AGNG", [])
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
 
         vars.CAB = self.state.income.get("CABO", vars.CAB)
         vars.SROW = -vars.CAB
 
         vars.IT = self.state.income.get("ITO", vars.IT)
-        stock_value = sum(vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", []))
+        stock_value = sum(
+            vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", [])
+        )
         vars.GFCF = vars.IT - stock_value
 
         gdp_ib = 0.0
@@ -1947,19 +2151,28 @@ class IPOPTSolver:
         gdp_ib += vars.TPRODN + vars.TPRCTS
         vars.GDP_IB = gdp_ib
         vars.GDP_MP = vars.GDP_BP + vars.TPRCTS
-        vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        vars.GDP_MP_REAL = (
+            vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        )
         vars.GFCF_REAL = vars.GFCF / vars.PIXINV if abs(vars.PIXINV) > 1e-12 else 0.0
 
         gdp_fd = 0.0
         for i in self.sets.get("I", []):
             cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
             gdp_fd += vars.PC.get(i, 0.0) * (
-                cons_i + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0)
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
             )
             gdp_fd += vars.PE_FOB.get(i, 0.0) * vars.EXD.get(i, 0.0)
             gdp_fd -= vars.PWM.get(i, 0.0) * vars.e * vars.IM.get(i, 0.0)
         vars.GDP_FD = gdp_fd
-        walras_i = "agr" if "agr" in self.sets.get("I", []) else (self.sets.get("I", [None])[0])
+        walras_i = (
+            "agr"
+            if "agr" in self.sets.get("I", [])
+            else (self.sets.get("I", [None])[0])
+        )
         if walras_i is not None:
             vars.LEON = (
                 vars.Q.get(walras_i, 0.0)
@@ -1970,21 +2183,25 @@ class IPOPTSolver:
                 - vars.DIT.get(walras_i, 0.0)
                 - vars.MRGN.get(walras_i, 0.0)
             )
-    
+
     def _variables_to_array(self, vars: PEPModelVariables) -> np.ndarray:
         """Convert variables to flat array for solver."""
         return pep_variables_to_array(vars, self.sets)
 
     def _parse_packed_name(self, packed_name: str) -> tuple[str, tuple[str, ...]]:
         """Split packed variable name like `KD[cap,agr]` into root and indices."""
-        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?:\[(.*)\])?", packed_name.strip())
+        match = re.fullmatch(
+            r"([A-Za-z_][A-Za-z0-9_]*)(?:\[(.*)\])?", packed_name.strip()
+        )
         if not match:
             return packed_name.strip().upper(), tuple()
         root = match.group(1).upper()
         raw_indices = match.group(2)
         if raw_indices is None or raw_indices == "":
             return root, tuple()
-        indices = tuple(part.strip().lower() for part in raw_indices.split(",") if part.strip())
+        indices = tuple(
+            part.strip().lower() for part in raw_indices.split(",") if part.strip()
+        )
         return root, indices
 
     def _is_gams_strict_active_name(self, packed_name: str, tol: float = 1e-12) -> bool:
@@ -2025,11 +2242,15 @@ class IPOPTSolver:
 
         if root == "KS" and len(indices) == 1:
             k = indices[0]
-            return any(abs(float(kdo0.get((k, j), 0.0))) > tol for j in self.sets.get("J", []))
+            return any(
+                abs(float(kdo0.get((k, j), 0.0))) > tol for j in self.sets.get("J", [])
+            )
 
         if root in {"RC", "KDC"} and len(indices) == 1:
             j = indices[0]
-            return any(abs(float(kdo0.get((k, j), 0.0))) > tol for k in self.sets.get("K", []))
+            return any(
+                abs(float(kdo0.get((k, j), 0.0))) > tol for k in self.sets.get("K", [])
+            )
 
         if root in {"DD", "PD", "PL"} and len(indices) == 1:
             i = indices[0]
@@ -2045,7 +2266,9 @@ class IPOPTSolver:
 
         return True
 
-    def _build_variable_bounds(self, x_ref: np.ndarray | None = None) -> Tuple[np.ndarray, np.ndarray]:
+    def _build_variable_bounds(
+        self, x_ref: np.ndarray | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Build lower/upper bounds matching _variables_to_array ordering."""
         lb: list[float] = []
         ub: list[float] = []
@@ -2074,9 +2297,9 @@ class IPOPTSolver:
         # positive variables are lower-bounded only, nonnegative variables have
         # no artificial upper cap, and free variables remain unbounded unless
         # fixed by closure or activation masks.
-        POS = (1e-6, np.inf)   # strictly positive (prices, exchange rate)
-        NONNEG = (0.0, np.inf) # non-negative quantities/flows
-        FREE = (-np.inf, np.inf) # potentially signed closure/tax terms
+        POS = (1e-6, np.inf)  # strictly positive (prices, exchange rate)
+        NONNEG = (0.0, np.inf)  # non-negative quantities/flows
+        FREE = (-np.inf, np.inf)  # potentially signed closure/tax terms
 
         # Production variables
         for _j in self.sets.get("J", []):
@@ -2208,7 +2431,9 @@ class IPOPTSolver:
 
             for _i in self.sets.get("I", []):
                 add(f"C[{_i},{_h}]", *NONNEG)
-                cmin_fix = float(self.state.les_parameters.get("CMINO", {}).get((_i, _h), 0.0))
+                cmin_fix = float(
+                    self.state.les_parameters.get("CMINO", {}).get((_i, _h), 0.0)
+                )
                 cmin_lo, cmin_hi = self._apply_contract_bounds(
                     name=f"CMIN[{_i},{_h}]",
                     default_lower=NONNEG[0],
@@ -2216,7 +2441,6 @@ class IPOPTSolver:
                     benchmark_value=cmin_fix,
                 )
                 add(f"CMIN[{_i},{_h}]", cmin_lo, cmin_hi)
-
 
         for _f in self.sets.get("F", []):
             add(f"YF[{_f}]", *NONNEG)
@@ -2375,25 +2599,43 @@ class IPOPTSolver:
         """Overwrite fixed-closure variable levels from current calibrated state."""
         for l in self.sets.get("L", []):
             if self._is_contract_closure_fixed_name(f"LS[{l}]"):
-                vars.LS[l] = float(self.state.production.get("LSO", {}).get(l, vars.LS.get(l, 0.0)))
+                vars.LS[l] = float(
+                    self.state.production.get("LSO", {}).get(l, vars.LS.get(l, 0.0))
+                )
         for k in self.sets.get("K", []):
             if self._is_contract_closure_fixed_name(f"KS[{k}]"):
-                vars.KS[k] = float(self.state.production.get("KSO", {}).get(k, vars.KS.get(k, 0.0)))
+                vars.KS[k] = float(
+                    self.state.production.get("KSO", {}).get(k, vars.KS.get(k, 0.0))
+                )
             for j in self.sets.get("J", []):
                 if self._is_contract_closure_fixed_name(f"KD[{k},{j}]"):
-                    vars.KD[(k, j)] = float(self.state.production.get("KDO", {}).get((k, j), vars.KD.get((k, j), 0.0)))
+                    vars.KD[(k, j)] = float(
+                        self.state.production.get("KDO", {}).get(
+                            (k, j), vars.KD.get((k, j), 0.0)
+                        )
+                    )
         for i in self.sets.get("I", []):
             if self._is_contract_closure_fixed_name(f"PWM[{i}]"):
-                vars.PWM[i] = float(self.state.trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0)))
+                vars.PWM[i] = float(
+                    self.state.trade.get("PWMO", {}).get(i, vars.PWM.get(i, 1.0))
+                )
             if self._is_contract_closure_fixed_name(f"PWX[{i}]"):
-                vars.PWX[i] = float(self.state.trade.get("PWXO", {}).get(i, vars.PWX.get(i, 1.0)))
+                vars.PWX[i] = float(
+                    self.state.trade.get("PWXO", {}).get(i, vars.PWX.get(i, 1.0))
+                )
             if self._is_contract_closure_fixed_name(f"VSTK[{i}]"):
-                vars.VSTK[i] = float(self.state.consumption.get("VSTKO", {}).get(i, vars.VSTK.get(i, 0.0)))
+                vars.VSTK[i] = float(
+                    self.state.consumption.get("VSTKO", {}).get(
+                        i, vars.VSTK.get(i, 0.0)
+                    )
+                )
         for h in self.sets.get("H", []):
             for i in self.sets.get("I", []):
                 if self._is_contract_closure_fixed_name(f"CMIN[{i},{h}]"):
                     vars.CMIN[(i, h)] = float(
-                        self.state.les_parameters.get("CMINO", {}).get((i, h), vars.CMIN.get((i, h), 0.0))
+                        self.state.les_parameters.get("CMINO", {}).get(
+                            (i, h), vars.CMIN.get((i, h), 0.0)
+                        )
                     )
 
         if self._is_contract_closure_fixed_name("G"):
@@ -2401,13 +2643,19 @@ class IPOPTSolver:
         if self._is_contract_closure_fixed_name("CAB"):
             vars.CAB = float(self.state.income.get("CABO", vars.CAB))
         if self._is_contract_closure_fixed_name("e"):
-            vars.e = float(self.state.trade.get("eO", vars.e if abs(vars.e) > 0 else 1.0))
+            vars.e = float(
+                self.state.trade.get("eO", vars.e if abs(vars.e) > 0 else 1.0)
+            )
 
         tro = self.params.get("TRO", {})
         if self._is_contract_closure_fixed_name("TR[gvt,gvt]"):
-            vars.TR[("gvt", "gvt")] = float(tro.get(("gvt", "gvt"), vars.TR.get(("gvt", "gvt"), 0.0)))
+            vars.TR[("gvt", "gvt")] = float(
+                tro.get(("gvt", "gvt"), vars.TR.get(("gvt", "gvt"), 0.0))
+            )
         if self._is_contract_closure_fixed_name("TR[row,row]"):
-            vars.TR[("row", "row")] = float(tro.get(("row", "row"), vars.TR.get(("row", "row"), 0.0)))
+            vars.TR[("row", "row")] = float(
+                tro.get(("row", "row"), vars.TR.get(("row", "row"), 0.0))
+            )
 
     def _build_hard_constraints(self) -> list[str]:
         """Equation residuals enforced as hard equalities c(x)=0."""
@@ -2483,7 +2731,11 @@ class IPOPTSolver:
             symbols.append("EXD")
         elif root == "LS" and len(indices) == 1:
             symbols.append("LS")
-        elif root == "KS" and len(indices) == 1 and self.contract.closure.capital_mobility == "mobile":
+        elif (
+            root == "KS"
+            and len(indices) == 1
+            and self.contract.closure.capital_mobility == "mobile"
+        ):
             symbols.append("KS")
         elif root == "PWM" and len(indices) == 1:
             symbols.append("PWM")
@@ -2501,7 +2753,11 @@ class IPOPTSolver:
                 symbols.append("TR_AGD_ROW")
             if recipient == "row" and source in self.sets.get("AGNG", []):
                 symbols.append("TR_ROW_AGNG")
-        elif root == "KD" and len(indices) == 2 and self.contract.closure.capital_mobility == "sector_specific":
+        elif (
+            root == "KD"
+            and len(indices) == 2
+            and self.contract.closure.capital_mobility == "sector_specific"
+        ):
             symbols.append("KS")
 
         return tuple(symbols)
@@ -2516,9 +2772,14 @@ class IPOPTSolver:
     ) -> tuple[float, float]:
         if self._is_contract_bounds_free_name(name):
             return -np.inf, np.inf
-        if self.contract.bounds.fixed_from_closure and self._is_contract_closure_fixed_name(name):
+        if (
+            self.contract.bounds.fixed_from_closure
+            and self._is_contract_closure_fixed_name(name)
+        ):
             if benchmark_value is None:
-                raise ValueError(f"Missing benchmark value for fixed closure symbol {name!r}.")
+                raise ValueError(
+                    f"Missing benchmark value for fixed closure symbol {name!r}."
+                )
             return float(benchmark_value), float(benchmark_value)
         return float(default_lower), float(default_upper)
 
@@ -2538,7 +2799,9 @@ class IPOPTSolver:
         fixed_by_closure: list[str] = []
         fixed_by_bounds_only: list[str] = []
         for name, lower, upper in zip(bound_names, lb, ub, strict=False):
-            is_fixed = bool(np.isfinite(lower) and np.isfinite(upper) and np.isclose(lower, upper))
+            is_fixed = bool(
+                np.isfinite(lower) and np.isfinite(upper) and np.isclose(lower, upper)
+            )
             if is_fixed:
                 if self._is_contract_closure_fixed_name(name):
                     fixed_by_closure.append(name)
@@ -2549,10 +2812,18 @@ class IPOPTSolver:
 
         supported_symbols = self._supported_contract_closure_symbols()
         unsupported_fixed = tuple(
-            sorted(symbol for symbol in self.contract.closure.fixed if symbol not in supported_symbols)
+            sorted(
+                symbol
+                for symbol in self.contract.closure.fixed
+                if symbol not in supported_symbols
+            )
         )
         unsupported_endogenous = tuple(
-            sorted(symbol for symbol in self.contract.closure.endogenous if symbol not in supported_symbols)
+            sorted(
+                symbol
+                for symbol in self.contract.closure.endogenous
+                if symbol not in supported_symbols
+            )
         )
 
         report = validate_pep_closure_structure(
@@ -2575,21 +2846,21 @@ class IPOPTSolver:
             "feasible point for square problem found" in normalized
             or "solved to acceptable level" in normalized
         )
-    
+
     def solve_ipopt(self) -> SolverResult:
         """Solve model using IPOPT nonlinear optimization.
-        
+
         Returns:
             SolverResult with solution
         """
         if not IPOPT_AVAILABLE:
             logger.error("IPOPT not available. Install with: pip install cyipopt")
             raise ImportError("cyipopt not installed")
-        
+
         logger.info("=" * 70)
         logger.info("STARTING IPOPT SOLUTION")
         logger.info("=" * 70)
-        
+
         # Create initial guess
         if self.initial_vars is not None:
             vars = copy.deepcopy(self.initial_vars)
@@ -2600,7 +2871,7 @@ class IPOPTSolver:
         self._enforce_fixed_closure_levels(vars)
         x0 = self._variables_to_array(vars)
         n_vars = len(x0)
-        
+
         logger.info(f"Number of variables: {n_vars}")
         closure_report = self.build_closure_validation_report()
         if not closure_report.is_valid:
@@ -2611,7 +2882,7 @@ class IPOPTSolver:
         # feasible enough. This keeps excel/gams behavior consistent in BASE.
         init_residuals = self.equations.calculate_all_residuals(vars)
         init_vals = np.array(list(init_residuals.values()), dtype=float)
-        init_rms = float(np.sqrt(np.mean(init_vals ** 2))) if init_vals.size else 0.0
+        init_rms = float(np.sqrt(np.mean(init_vals**2))) if init_vals.size else 0.0
         if init_rms <= self.tolerance:
             logger.info(
                 "Initial guess satisfies tolerance (RMS=%.3e <= %.3e); skipping IPOPT.",
@@ -2634,14 +2905,18 @@ class IPOPTSolver:
                     objective_eval_count=0,
                 ),
             )
-        
+
         hard_constraints = self._build_hard_constraints()
 
-        def _build_problem_context(x_ref: np.ndarray) -> tuple[CGEProblem, Any, np.ndarray, np.ndarray]:
+        def _build_problem_context(
+            x_ref: np.ndarray,
+        ) -> tuple[CGEProblem, Any, np.ndarray, np.ndarray]:
             lb_ctx, ub_ctx = self._build_variable_bounds(x_ref=x_ref)
             variable_names = list(self._last_bound_names)
             if len(lb_ctx) != n_vars:
-                raise ValueError(f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}")
+                raise ValueError(
+                    f"Bounds length {len(lb_ctx)} does not match variable count {n_vars}"
+                )
             problem_ctx = CGEProblem(
                 equations=self.equations,
                 sets=self.sets,
@@ -2652,7 +2927,9 @@ class IPOPTSolver:
                 hard_constraints=hard_constraints,
                 jacobian_mode=self.runtime_config.jacobian_mode,
             )
-            problem_ctx.constraint_harness.sparsity_reference_x = np.array(x_ref, dtype=float)
+            problem_ctx.constraint_harness.sparsity_reference_x = np.array(
+                x_ref, dtype=float
+            )
 
             class IPOPTProblem:
                 def __init__(self, cge_problem):
@@ -2700,7 +2977,9 @@ class IPOPTSolver:
             nlp.add_option("acceptable_tol", max(self.tolerance * 10, 1e-6))
             nlp.add_option("acceptable_iter", 12)
             nlp.add_option("max_iter", max_iter)
-            nlp.add_option("print_level", 5 if logger.isEnabledFor(logging.DEBUG) else 3)
+            nlp.add_option(
+                "print_level", 5 if logger.isEnabledFor(logging.DEBUG) else 3
+            )
             nlp.add_option("mu_strategy", "adaptive")
             nlp.add_option("mu_init", 1e-2 if not warm_start else 1e-4)
             nlp.add_option("hessian_approximation", "limited-memory")
@@ -2728,12 +3007,16 @@ class IPOPTSolver:
 
         acceptable_square_max_abs = max(self.tolerance * 100.0, 1e-4)
 
-        def _candidate_summary(problem_ctx: CGEProblem, x: np.ndarray, info: dict[str, Any]) -> dict[str, Any]:
+        def _candidate_summary(
+            problem_ctx: CGEProblem, x: np.ndarray, info: dict[str, Any]
+        ) -> dict[str, Any]:
             vars_candidate = problem_ctx._array_to_variables(x)
             residuals_candidate = self.equations.calculate_all_residuals(vars_candidate)
             vals_candidate = np.array(list(residuals_candidate.values()), dtype=float)
             rms_candidate = (
-                float(np.sqrt(np.mean(vals_candidate ** 2))) if vals_candidate.size else 0.0
+                float(np.sqrt(np.mean(vals_candidate**2)))
+                if vals_candidate.size
+                else 0.0
             )
             max_abs_candidate = (
                 float(np.max(np.abs(vals_candidate))) if vals_candidate.size else 0.0
@@ -2759,7 +3042,9 @@ class IPOPTSolver:
                 "converged": converged_candidate,
             }
 
-        def _candidate_better(candidate: dict[str, Any], incumbent: dict[str, Any] | None) -> bool:
+        def _candidate_better(
+            candidate: dict[str, Any], incumbent: dict[str, Any] | None
+        ) -> bool:
             if incumbent is None:
                 return True
             cand_key = (
@@ -2856,13 +3141,21 @@ class IPOPTSolver:
             logger.info(f"  Final objective: {info_best.get('obj_val', 0):.2e}")
             logger.info(
                 "  Jacobian mode: %s",
-                result.solver_stats.get("jacobian_mode") if result.solver_stats else self.runtime_config.jacobian_mode,
+                result.solver_stats.get("jacobian_mode")
+                if result.solver_stats
+                else self.runtime_config.jacobian_mode,
             )
             logger.info(
                 "  Constraint evals: %s, Jacobian evals: %s, FD evals: %s",
-                result.solver_stats.get("constraint_eval_count") if result.solver_stats else 0,
-                result.solver_stats.get("jacobian_eval_count") if result.solver_stats else 0,
-                result.solver_stats.get("finite_difference_eval_count") if result.solver_stats else 0,
+                result.solver_stats.get("constraint_eval_count")
+                if result.solver_stats
+                else 0,
+                result.solver_stats.get("jacobian_eval_count")
+                if result.solver_stats
+                else 0,
+                result.solver_stats.get("finite_difference_eval_count")
+                if result.solver_stats
+                else 0,
             )
 
             return result
@@ -2880,13 +3173,13 @@ class IPOPTSolver:
                 objective_eval_count=0,
             )
             return result
-    
+
     def solve(self, method: str = "auto") -> SolverResult:
         """Solve using best available method.
-        
+
         Args:
             method: "auto", "ipopt", or internal debug method
-            
+
         Returns:
             SolverResult
         """

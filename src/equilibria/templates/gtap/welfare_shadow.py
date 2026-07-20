@@ -16,12 +16,13 @@ needs to reproduce RunGTAP's `EV` under non-default closures (e.g. capFix
 with the `swap dpsave = del_tbalry` recipe, which makes `dpsave` move
 endogenously and breaks the trivial `EV = INCOME * u / 100` formula).
 """
+
 from __future__ import annotations
 
 import copy
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Tuple
+from typing import Literal
 
 
 @dataclass
@@ -33,19 +34,19 @@ class ShadowBaseline:
     """
 
     region: str
-    commodities: Tuple[str, ...]
+    commodities: tuple[str, ...]
 
     # Monetary baselines
-    PRIVEXP: float           # private absorption
-    GOVEXP: float            # government absorption
-    SAVE: float              # regional savings
-    INCOME: float            # = PRIVEXP + GOVEXP + SAVE
-    VPP: Dict[str, float]    # private consumption by commodity (purchaser prices)
+    PRIVEXP: float  # private absorption
+    GOVEXP: float  # government absorption
+    SAVE: float  # regional savings
+    INCOME: float  # = PRIVEXP + GOVEXP + SAVE
+    VPP: dict[str, float]  # private consumption by commodity (purchaser prices)
 
     # CDE parameters
-    INCPAR: Dict[str, float]   # income elasticity per commodity
-    ALPHA: Dict[str, float]    # substitution parameter per commodity
-    DPARSUM: float             # baseline sum of distribution parameters (header DPSM)
+    INCPAR: dict[str, float]  # income elasticity per commodity
+    ALPHA: dict[str, float]  # substitution parameter per commodity
+    DPARSUM: float  # baseline sum of distribution parameters (header DPSM)
 
 
 @dataclass
@@ -71,13 +72,13 @@ class ShadowState:
     UTILPRIVEV: float = 1.0
     UTILGOVEV: float = 1.0
     UTILSAVEEV: float = 1.0
-    UTILELAS: float = 1.0      # main-model coef (Formula; recomputed from main shares)
-    UTILELASEV: float = 1.0    # shadow-system coef (Update = uelasev; used in E_yev)
+    UTILELAS: float = 1.0  # main-model coef (Formula; recomputed from main shares)
+    UTILELASEV: float = 1.0  # shadow-system coef (Update = uelasev; used in E_yev)
     PRIVEXPEV: float = 0.0
     GOVEXPEV: float = 0.0
     SAVEEV: float = 0.0
     INCOMEEV: float = 0.0
-    VPPEV: Dict[str, float] = field(default_factory=dict)
+    VPPEV: dict[str, float] = field(default_factory=dict)
     DPARPRIV: float = 0.0
     DPARGOV: float = 0.0
     DPARSAVE: float = 0.0
@@ -98,10 +99,10 @@ class ShadowState:
     XSHRSAVE: float = 0.0
 
     # Shadow-derived (recomputed each step from shadow primitives)
-    CONSHR: Dict[str, float] = field(default_factory=dict)
+    CONSHR: dict[str, float] = field(default_factory=dict)
     UELASPRIV: float = 0.0
-    XWCONSHR: Dict[str, float] = field(default_factory=dict)
-    EYEV: Dict[str, float] = field(default_factory=dict)
+    XWCONSHR: dict[str, float] = field(default_factory=dict)
+    EYEV: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -124,9 +125,9 @@ class ShadowResult:
 def _make_state(base: ShadowBaseline) -> ShadowState:
     """Initial state at baseline coefficients (E_yev's coefs at t=0)."""
     st = ShadowState()
-    st.UTILPRIVEV = 1.0   # UTILPRIV initial per gtapv7.tab:1503
-    st.UTILGOVEV = 1.0    # UTILGOV initial per gtapv7.tab:1510
-    st.UTILSAVEEV = 1.0   # UTILSAVE initial per gtapv7.tab:1517
+    st.UTILPRIVEV = 1.0  # UTILPRIV initial per gtapv7.tab:1503
+    st.UTILGOVEV = 1.0  # UTILGOV initial per gtapv7.tab:1510
+    st.UTILSAVEEV = 1.0  # UTILSAVE initial per gtapv7.tab:1517
     st.PRIVEXPEV = base.PRIVEXP
     st.GOVEXPEV = base.GOVEXP
     st.SAVEEV = base.SAVE
@@ -158,15 +159,17 @@ def _apply_main_update(
     the integrator where _apply_updates is called for the shadow coefs.
     """
     st.PRIVEXP_main *= 1.0 + ypriv_step / 100.0
-    st.GOVEXP_main  *= 1.0 + ygov_step / 100.0
-    st.SAVE_main    *= 1.0 + ysave_step / 100.0
-    st.INCOME_main  *= 1.0 + y_step / 100.0
+    st.GOVEXP_main *= 1.0 + ygov_step / 100.0
+    st.SAVE_main *= 1.0 + ysave_step / 100.0
+    st.INCOME_main *= 1.0 + y_step / 100.0
     st.XSHRPRIV = st.PRIVEXP_main / st.INCOME_main
-    st.XSHRGOV  = st.GOVEXP_main  / st.INCOME_main
-    st.XSHRSAVE = st.SAVE_main    / st.INCOME_main
+    st.XSHRGOV = st.GOVEXP_main / st.INCOME_main
+    st.XSHRSAVE = st.SAVE_main / st.INCOME_main
 
 
-def _recompute_derived(st: ShadowState, base: ShadowBaseline, *, freeze_main: bool = True) -> None:
+def _recompute_derived(
+    st: ShadowState, base: ShadowBaseline, *, freeze_main: bool = True
+) -> None:
     """Derived coefficients = pure functions of primitives — recompute each step.
 
     Mirrors the Formula (non-initial) lines in gtapv7.tab section 11. The
@@ -186,8 +189,7 @@ def _recompute_derived(st: ShadowState, base: ShadowBaseline, *, freeze_main: bo
     st.UELASPRIV = sum(st.CONSHR[c] * base.INCPAR[c] for c in base.commodities)
 
     st.XWCONSHR = {
-        c: st.CONSHR[c] * base.INCPAR[c] / st.UELASPRIV
-        for c in base.commodities
+        c: st.CONSHR[c] * base.INCPAR[c] / st.UELASPRIV for c in base.commodities
     }
 
     # EYEV per gtapv7.tab:3617-3623 (shadow's own; uses CONSHREV not main CONSHR)
@@ -196,9 +198,10 @@ def _recompute_derived(st: ShadowState, base: ShadowBaseline, *, freeze_main: bo
         st.CONSHR[c] * base.INCPAR[c] * base.ALPHA[c] for c in base.commodities
     )
     st.EYEV = {
-        c: (1.0 / st.UELASPRIV) * (
-            base.INCPAR[c] * (1.0 - base.ALPHA[c]) + sum_conshr_inc_alpha
-        ) + base.ALPHA[c] - sum_conshr_alpha
+        c: (1.0 / st.UELASPRIV)
+        * (base.INCPAR[c] * (1.0 - base.ALPHA[c]) + sum_conshr_inc_alpha)
+        + base.ALPHA[c]
+        - sum_conshr_alpha
         for c in base.commodities
     }
 
@@ -232,7 +235,7 @@ def _step(
     ddpgov: float,
     ddpsave: float,
     dau: float = 0.0,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Solve the linearised chain for one substep at current coefficients.
 
     Returns the step's percent-change increments for every endogenous variable.
@@ -290,13 +293,17 @@ def _step(
     }
 
 
-def _apply_updates(st: ShadowState, base: ShadowBaseline, step: Dict[str, float]) -> None:
+def _apply_updates(
+    st: ShadowState, base: ShadowBaseline, step: dict[str, float]
+) -> None:
     """Update mutable coefficients after a step, per the Update lines in gtapv7.tab."""
     # Coefficient updates (percent-change form: X_new = X * (1 + var/100))
     st.UTILPRIVEV *= 1.0 + step["upev"] / 100.0
     st.UTILGOVEV *= 1.0 + step["ugev"] / 100.0
-    st.UTILSAVEEV *= 1.0 + step["qsaveev"] / 100.0  # actually (change)-form but same result
-    st.UTILELASEV *= 1.0 + step["uelasev"] / 100.0   # gtapv7.tab:3753-3756
+    st.UTILSAVEEV *= (
+        1.0 + step["qsaveev"] / 100.0
+    )  # actually (change)-form but same result
+    st.UTILELASEV *= 1.0 + step["uelasev"] / 100.0  # gtapv7.tab:3753-3756
 
     st.PRIVEXPEV *= 1.0 + step["ypev"] / 100.0
     st.GOVEXPEV *= 1.0 + step["ygev"] / 100.0
@@ -305,7 +312,7 @@ def _apply_updates(st: ShadowState, base: ShadowBaseline, step: Dict[str, float]
 
     for c in base.commodities:
         # qpev[c] = EYEV[c] * (ypev - dpop), with dpop=0 here. EYEV is current.
-        dqpev_c = st.EYEV[c] * step["ypev"]   # qpev - pop, but dpop=0
+        dqpev_c = st.EYEV[c] * step["ypev"]  # qpev - pop, but dpop=0
         st.VPPEV[c] *= 1.0 + dqpev_c / 100.0
 
     _recompute_derived(st, base)
@@ -320,7 +327,7 @@ def _midpoint_step(
     ddpgov: float,
     ddpsave: float,
     dau: float = 0.0,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """One midpoint-method (RK2) step.
 
     Computes the slope at the midpoint of the interval (estimated by a
@@ -331,7 +338,9 @@ def _midpoint_step(
     """
     # 1) Predictor: half-step at current state.
     mid_state = copy.deepcopy(st)
-    half = _step(mid_state, base, du / 2, dpop / 2, ddppriv / 2, ddpgov / 2, ddpsave / 2, dau / 2)
+    half = _step(
+        mid_state, base, du / 2, dpop / 2, ddppriv / 2, ddpgov / 2, ddpsave / 2, dau / 2
+    )
     _apply_updates(mid_state, base, half)
 
     # 2) Corrector: full-step increments computed at the predicted midpoint.
@@ -356,7 +365,7 @@ def _gragg_modified_midpoint(
     ygov_pct: float = 0.0,
     ysave_pct: float = 0.0,
     y_pct: float = 0.0,
-) -> Tuple[ShadowResult, ShadowState]:
+) -> tuple[ShadowResult, ShadowState]:
     """Gragg's modified midpoint method with `n` subdivisions over [0,1].
 
     Returns the cumulative percent-change result *and* the final state.
@@ -379,48 +388,48 @@ def _gragg_modified_midpoint(
     # y_0 (baseline state) and a *snapshot* of its coef vector for the
     # leapfrog. We track (coefs, accumulators) as separate dicts so we can
     # do additive arithmetic on them.
-    def _state_to_vec(st: ShadowState) -> Dict[str, float]:
+    def _state_to_vec(st: ShadowState) -> dict[str, float]:
         vec = {
-            "UTILPRIVEV":   st.UTILPRIVEV,
-            "UTILGOVEV":    st.UTILGOVEV,
-            "UTILSAVEEV":   st.UTILSAVEEV,
-            "UTILELASEV":   st.UTILELASEV,
-            "PRIVEXPEV":    st.PRIVEXPEV,
-            "GOVEXPEV":     st.GOVEXPEV,
-            "SAVEEV":       st.SAVEEV,
-            "INCOMEEV":     st.INCOMEEV,
+            "UTILPRIVEV": st.UTILPRIVEV,
+            "UTILGOVEV": st.UTILGOVEV,
+            "UTILSAVEEV": st.UTILSAVEEV,
+            "UTILELASEV": st.UTILELASEV,
+            "PRIVEXPEV": st.PRIVEXPEV,
+            "GOVEXPEV": st.GOVEXPEV,
+            "SAVEEV": st.SAVEEV,
+            "INCOMEEV": st.INCOMEEV,
             "PRIVEXP_main": st.PRIVEXP_main,
-            "GOVEXP_main":  st.GOVEXP_main,
-            "SAVE_main":    st.SAVE_main,
-            "INCOME_main":  st.INCOME_main,
+            "GOVEXP_main": st.GOVEXP_main,
+            "SAVE_main": st.SAVE_main,
+            "INCOME_main": st.INCOME_main,
         }
         for c in base.commodities:
             vec[f"VPPEV[{c}]"] = st.VPPEV[c]
         return vec
 
-    def _vec_to_state(vec: Dict[str, float]) -> ShadowState:
+    def _vec_to_state(vec: dict[str, float]) -> ShadowState:
         st = ShadowState()
         st.UTILPRIVEV = vec["UTILPRIVEV"]
-        st.UTILGOVEV  = vec["UTILGOVEV"]
+        st.UTILGOVEV = vec["UTILGOVEV"]
         st.UTILSAVEEV = vec["UTILSAVEEV"]
         st.UTILELASEV = vec["UTILELASEV"]
-        st.PRIVEXPEV  = vec["PRIVEXPEV"]
-        st.GOVEXPEV   = vec["GOVEXPEV"]
-        st.SAVEEV     = vec["SAVEEV"]
-        st.INCOMEEV   = vec["INCOMEEV"]
+        st.PRIVEXPEV = vec["PRIVEXPEV"]
+        st.GOVEXPEV = vec["GOVEXPEV"]
+        st.SAVEEV = vec["SAVEEV"]
+        st.INCOMEEV = vec["INCOMEEV"]
         st.VPPEV = {c: vec[f"VPPEV[{c}]"] for c in base.commodities}
         # Main-model expenditures and derived shares from the vector.
         st.PRIVEXP_main = vec["PRIVEXP_main"]
-        st.GOVEXP_main  = vec["GOVEXP_main"]
-        st.SAVE_main    = vec["SAVE_main"]
-        st.INCOME_main  = vec["INCOME_main"]
+        st.GOVEXP_main = vec["GOVEXP_main"]
+        st.SAVE_main = vec["SAVE_main"]
+        st.INCOME_main = vec["INCOME_main"]
         st.XSHRPRIV = st.PRIVEXP_main / st.INCOME_main
-        st.XSHRGOV  = st.GOVEXP_main  / st.INCOME_main
-        st.XSHRSAVE = st.SAVE_main    / st.INCOME_main
+        st.XSHRGOV = st.GOVEXP_main / st.INCOME_main
+        st.XSHRSAVE = st.SAVE_main / st.INCOME_main
         _recompute_derived(st, base)
         return st
 
-    def _rate(vec: Dict[str, float]) -> Tuple[Dict[str, float], Dict[str, float]]:
+    def _rate(vec: dict[str, float]) -> tuple[dict[str, float], dict[str, float]]:
         """Per-unit-time rates dS/dt evaluated at state `vec` with full inputs.
 
         Returns (coef_rates, accum_rates) — the dimensionless rate vectors
@@ -428,24 +437,33 @@ def _gragg_modified_midpoint(
         inputs (u_pct, ..., dpsave_pct) because the chain is linear in them.
         """
         st = _vec_to_state(vec)
-        step = _step(st, base, u_pct, dpop_pct, dppriv_pct, dpgov_pct, ddpsave=dpsave_pct, dau=dau_pct)
+        step = _step(
+            st,
+            base,
+            u_pct,
+            dpop_pct,
+            dppriv_pct,
+            dpgov_pct,
+            ddpsave=dpsave_pct,
+            dau=dau_pct,
+        )
         # Coefficient rates: dCoef/dt = (var_unit / 100) * Coef
         coef_rates = {
-            "UTILPRIVEV":   (step["upev"]    / 100.0) * st.UTILPRIVEV,
-            "UTILGOVEV":    (step["ugev"]    / 100.0) * st.UTILGOVEV,
-            "UTILSAVEEV":   (step["qsaveev"] / 100.0) * st.UTILSAVEEV,
-            "UTILELASEV":   (step["uelasev"] / 100.0) * st.UTILELASEV,
-            "PRIVEXPEV":    (step["ypev"]    / 100.0) * st.PRIVEXPEV,
-            "GOVEXPEV":     (step["ygev"]    / 100.0) * st.GOVEXPEV,
-            "SAVEEV":       (step["ysaveev"] / 100.0) * st.SAVEEV,
-            "INCOMEEV":     (step["yev"]     / 100.0) * st.INCOMEEV,
+            "UTILPRIVEV": (step["upev"] / 100.0) * st.UTILPRIVEV,
+            "UTILGOVEV": (step["ugev"] / 100.0) * st.UTILGOVEV,
+            "UTILSAVEEV": (step["qsaveev"] / 100.0) * st.UTILSAVEEV,
+            "UTILELASEV": (step["uelasev"] / 100.0) * st.UTILELASEV,
+            "PRIVEXPEV": (step["ypev"] / 100.0) * st.PRIVEXPEV,
+            "GOVEXPEV": (step["ygev"] / 100.0) * st.GOVEXPEV,
+            "SAVEEV": (step["ysaveev"] / 100.0) * st.SAVEEV,
+            "INCOMEEV": (step["yev"] / 100.0) * st.INCOMEEV,
             # Main-model expenditure rates driven by EXOGENOUS real-economy
             # trajectories (ypriv/ygov/ysave/y), independent of the shadow
             # system. With ypriv_pct=0 etc. these reduce to "frozen baseline".
             "PRIVEXP_main": (ypriv_pct / 100.0) * st.PRIVEXP_main,
-            "GOVEXP_main":  (ygov_pct  / 100.0) * st.GOVEXP_main,
-            "SAVE_main":    (ysave_pct / 100.0) * st.SAVE_main,
-            "INCOME_main":  (y_pct     / 100.0) * st.INCOME_main,
+            "GOVEXP_main": (ygov_pct / 100.0) * st.GOVEXP_main,
+            "SAVE_main": (ysave_pct / 100.0) * st.SAVE_main,
+            "INCOME_main": (y_pct / 100.0) * st.INCOME_main,
         }
         for c in base.commodities:
             # qpev[c] = EYEV[c] * ypev (with pop=0)
@@ -460,7 +478,22 @@ def _gragg_modified_midpoint(
     # Initialise y_0 = baseline coef vector, accumulators = 0.
     st0 = _make_state(base)
     vec_0 = _state_to_vec(st0)
-    accum_0 = {k: 0.0 for k in ("yev", "ypev", "ygev", "ysaveev", "upev", "ugev", "qsaveev", "uelasev", "ueprivev", "dpavev", "EV")}
+    accum_0 = dict.fromkeys(
+        (
+            "yev",
+            "ypev",
+            "ygev",
+            "ysaveev",
+            "upev",
+            "ugev",
+            "qsaveev",
+            "uelasev",
+            "ueprivev",
+            "dpavev",
+            "EV",
+        ),
+        0.0,
+    )
 
     # Gragg kickoff (Euler half).
     cr0, ar0 = _rate(vec_0)
@@ -479,8 +512,12 @@ def _gragg_modified_midpoint(
 
     # Final smoothing step.
     cr_final, ar_final = _rate(vec_curr)
-    vec_smooth = {k: 0.5 * (vec_curr[k] + vec_prev[k] + h * cr_final[k]) for k in vec_curr}
-    accum_smooth = {k: 0.5 * (accum_curr[k] + accum_prev[k] + h * ar_final[k]) for k in accum_curr}
+    vec_smooth = {
+        k: 0.5 * (vec_curr[k] + vec_prev[k] + h * cr_final[k]) for k in vec_curr
+    }
+    accum_smooth = {
+        k: 0.5 * (accum_curr[k] + accum_prev[k] + h * ar_final[k]) for k in accum_curr
+    }
 
     res = ShadowResult(
         region=base.region,
@@ -506,7 +543,7 @@ def _bulirsch_stoer(
     dppriv_pct: float,
     dpgov_pct: float,
     dpsave_pct: float,
-    ladder: List[int],
+    ladder: list[int],
     *,
     ypriv_pct: float = 0.0,
     ygov_pct: float = 0.0,
@@ -518,11 +555,21 @@ def _bulirsch_stoer(
     on the cumulative outputs. Mirrors what GEMPACK's Gragg solver does for
     `Steps = 8 16 32` in the CMF file.
     """
-    estimates: List[ShadowResult] = []
+    estimates: list[ShadowResult] = []
     for n in ladder:
         res, _ = _gragg_modified_midpoint(
-            base, u_pct, dau_pct, dpop_pct, dppriv_pct, dpgov_pct, dpsave_pct, n,
-            ypriv_pct=ypriv_pct, ygov_pct=ygov_pct, ysave_pct=ysave_pct, y_pct=y_pct,
+            base,
+            u_pct,
+            dau_pct,
+            dpop_pct,
+            dppriv_pct,
+            dpgov_pct,
+            dpsave_pct,
+            n,
+            ypriv_pct=ypriv_pct,
+            ygov_pct=ygov_pct,
+            ysave_pct=ysave_pct,
+            y_pct=y_pct,
         )
         estimates.append(res)
 
@@ -530,8 +577,18 @@ def _bulirsch_stoer(
     # error expansion is in even powers of h, so the extrapolation polynomial
     # in h^2 kills the next orders with each ladder point. With 3 ladder
     # points we get O(h^6) accuracy.
-    fields = ("yev_pct", "ypev_pct", "ygev_pct", "ysaveev_pct", "ueprivev_pct",
-              "uelasev_pct", "qsaveev_pct", "upev_pct", "ugev_pct", "EV_USDm")
+    fields = (
+        "yev_pct",
+        "ypev_pct",
+        "ygev_pct",
+        "ysaveev_pct",
+        "ueprivev_pct",
+        "uelasev_pct",
+        "qsaveev_pct",
+        "upev_pct",
+        "ugev_pct",
+        "EV_USDm",
+    )
     h2 = [(1.0 / n) ** 2 for n in ladder]
     M = len(ladder)
     out = ShadowResult(region=base.region)
@@ -544,7 +601,9 @@ def _bulirsch_stoer(
         for k in range(1, M):
             for i in range(M - k):
                 ratio_sq = h2[i] / h2[i + k]
-                T[i][k] = T[i + 1][k - 1] + (T[i + 1][k - 1] - T[i][k - 1]) / (ratio_sq - 1.0)
+                T[i][k] = T[i + 1][k - 1] + (T[i + 1][k - 1] - T[i][k - 1]) / (
+                    ratio_sq - 1.0
+                )
         setattr(out, field_name, T[0][M - 1])
     return out
 
@@ -559,7 +618,7 @@ def integrate(
     au_pct: float = 0.0,
     n_steps: int = 25,
     method: Literal["euler", "midpoint", "gragg", "bulirsch_stoer"] = "euler",
-    bs_ladder: Tuple[int, ...] = (8, 16, 32),
+    bs_ladder: tuple[int, ...] = (8, 16, 32),
     ypriv_pct: float = 0.0,
     ygov_pct: float = 0.0,
     ysave_pct: float = 0.0,
@@ -643,10 +702,17 @@ def integrate(
     if method == "gragg":
         res, _ = _gragg_modified_midpoint(
             base,
-            u_pct=u_pct, dau_pct=au_pct, dpop_pct=pop_pct,
-            dppriv_pct=dppriv_pct, dpgov_pct=dpgov_pct, dpsave_pct=dpsave_pct,
+            u_pct=u_pct,
+            dau_pct=au_pct,
+            dpop_pct=pop_pct,
+            dppriv_pct=dppriv_pct,
+            dpgov_pct=dpgov_pct,
+            dpsave_pct=dpsave_pct,
             n=n_steps,
-            ypriv_pct=ypriv_pct, ygov_pct=ygov_pct, ysave_pct=ysave_pct, y_pct=y_pct,
+            ypriv_pct=ypriv_pct,
+            ygov_pct=ygov_pct,
+            ysave_pct=ysave_pct,
+            y_pct=y_pct,
         )
         return res
 
@@ -701,9 +767,18 @@ def integrate(
             _apply_main_update(st2, dypriv, dygov, dysave, dy)
         else:
             mid = copy.deepcopy(st2)
-            half = _step(mid, base, du/2, dpop/2, ddppriv/2, ddpgov/2, ddpsave/2, dau/2)
+            half = _step(
+                mid,
+                base,
+                du / 2,
+                dpop / 2,
+                ddppriv / 2,
+                ddpgov / 2,
+                ddpsave / 2,
+                dau / 2,
+            )
             _apply_updates(mid, base, half)
-            _apply_main_update(mid, dypriv/2, dygov/2, dysave/2, dy/2)
+            _apply_main_update(mid, dypriv / 2, dygov / 2, dysave / 2, dy / 2)
             step = _step(mid, base, du, dpop, ddppriv, ddpgov, ddpsave, dau)
             ev_cum += (mid.INCOMEEV / 100.0) * step["yev"]
             _apply_updates(st2, base, step)

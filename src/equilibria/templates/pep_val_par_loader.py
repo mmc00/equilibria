@@ -24,9 +24,7 @@ def _map_sector(label: str) -> str:
         "othind": "ind",
         "ser": "ser",
         "adm": "adm",
-    }.get(
-        _norm_label(label), _norm_label(label)
-    )
+    }.get(_norm_label(label), _norm_label(label))
 
 
 def _map_commodity(label: str) -> str:
@@ -105,7 +103,12 @@ def _load_from_gdx(path: Path) -> dict[str, Any]:
         c = _map_agent(col)
         if r == "frisch" and c in {"hrp", "hup", "hrr", "hur"}:
             data["frisch"][c] = float(val)
-        elif r in {"agr", "food", "othind", "ser", "adm"} and c in {"hrp", "hup", "hrr", "hur"}:
+        elif r in {"agr", "food", "othind", "ser", "adm"} and c in {
+            "hrp",
+            "hup",
+            "hrr",
+            "hur",
+        }:
             data["sigma_Y"][(r, c)] = float(val)
         elif r == "sh0o" and c in {"hrp", "hup", "hrr", "hur"}:
             data["sh0O"][c] = float(val)
@@ -153,10 +156,12 @@ def _load_from_xlsx(path: Path) -> dict[str, Any]:
         for r in range(start_row + 1, len(df)):
             c0 = df.iloc[r, 0] if df.shape[1] > 0 else None
             txt = _norm_label(c0) if pd.notna(c0) else ""
-            if (
-                "parameters indexed in" in txt
-                or txt in {"parj", "pari", "parji", "parag"}
-            ):
+            if "parameters indexed in" in txt or txt in {
+                "parj",
+                "pari",
+                "parji",
+                "parag",
+            }:
                 return r
         return len(df)
 
@@ -242,7 +247,12 @@ def _load_from_xlsx(path: Path) -> dict[str, Any]:
                     continue
                 if pname == "frisch" and h in {"hrp", "hup", "hrr", "hur"}:
                     data["frisch"][h] = float(v)
-                elif pname in {"agr", "food", "othind", "ser", "adm"} and h in {"hrp", "hup", "hrr", "hur"}:
+                elif pname in {"agr", "food", "othind", "ser", "adm"} and h in {
+                    "hrp",
+                    "hup",
+                    "hrr",
+                    "hur",
+                }:
                     data["sigma_Y"][(pname, h)] = float(v)
                 elif pname == "sh0o" and h in {"hrp", "hup", "hrr", "hur"}:
                     data["sh0O"][h] = float(v)
@@ -296,7 +306,9 @@ def _load_from_xlsx(path: Path) -> dict[str, Any]:
 
     # PARJI range A21:F26
     parji_rows = df.iloc[20:26, 0:6].copy()
-    i_headers = [_map_commodity(x) for x in parji_rows.iloc[0, 1:].tolist() if pd.notna(x)]
+    i_headers = [
+        _map_commodity(x) for x in parji_rows.iloc[0, 1:].tolist() if pd.notna(x)
+    ]
     for _, row in parji_rows.iloc[1:].iterrows():
         if pd.isna(row.iloc[0]):
             continue
@@ -320,7 +332,12 @@ def _load_from_xlsx(path: Path) -> dict[str, Any]:
                 continue
             if pname == "frisch" and h in {"hrp", "hup", "hrr", "hur"}:
                 data["frisch"][h] = float(v)
-            elif pname in {"agr", "food", "othind", "ser", "adm"} and h in {"hrp", "hup", "hrr", "hur"}:
+            elif pname in {"agr", "food", "othind", "ser", "adm"} and h in {
+                "hrp",
+                "hup",
+                "hrr",
+                "hur",
+            }:
                 data["sigma_Y"][(pname, h)] = float(v)
             elif pname == "sh0o" and h in {"hrp", "hup", "hrr", "hur"}:
                 data["sh0O"][h] = float(v)

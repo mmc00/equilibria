@@ -112,7 +112,13 @@ def test_pep_adapter_fit_base_state_uses_excel_dynamic_sam_for_excel_inputs(
     captured: dict[str, object] = {}
 
     class _FakeExcelDynamicSAM:
-        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+        def __init__(
+            self,
+            *,
+            sam_file: Path,
+            val_par_file: Path | None,
+            accounts: dict[str, str] | None,
+        ):
             captured["sam_file"] = sam_file
             captured["val_par_file"] = val_par_file
             captured["accounts"] = accounts
@@ -151,7 +157,13 @@ def test_pep_adapter_fit_base_state_uses_dynamic_sam_for_gdx_inputs(
     captured: dict[str, object] = {}
 
     class _FakeDynamicSAM:
-        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+        def __init__(
+            self,
+            *,
+            sam_file: Path,
+            val_par_file: Path | None,
+            accounts: dict[str, str] | None,
+        ):
             captured["sam_file"] = sam_file
             captured["val_par_file"] = val_par_file
             captured["accounts"] = accounts
@@ -186,7 +198,13 @@ def test_pep_adapter_prepares_runtime_cri_excel_with_transform_and_qa(
     captured: dict[str, object] = {}
 
     class _FakeExcelDynamicSAM:
-        def __init__(self, *, sam_file: Path, val_par_file: Path | None, accounts: dict[str, str] | None):
+        def __init__(
+            self,
+            *,
+            sam_file: Path,
+            val_par_file: Path | None,
+            accounts: dict[str, str] | None,
+        ):
             captured["cal_sam_file"] = sam_file
             captured["cal_val_par_file"] = val_par_file
             captured["cal_accounts"] = accounts
@@ -277,14 +295,18 @@ def test_pep_adapter_solve_state_passes_contract_and_config(
                 iterations=1,
                 final_residual=0.0,
                 message="ok",
-                variables=SimpleNamespace(GDP_BP=1.0, GDP_MP=1.0, CTH={}, IT=0.0, EXD={}, IM={}),
+                variables=SimpleNamespace(
+                    GDP_BP=1.0, GDP_MP=1.0, CTH={}, IT=0.0, EXD={}, IM={}
+                ),
             )
 
         def validate_solution(self, solution: object) -> dict[str, object]:
             captured["validated_solution"] = solution
             return {"passed": True}
 
-    monkeypatch.setattr("equilibria.simulations.adapters.pep.PEPModelSolver", _FakeSolver)
+    monkeypatch.setattr(
+        "equilibria.simulations.adapters.pep.PEPModelSolver", _FakeSolver
+    )
 
     adapter = PepAdapter(
         sam_file="sam.gdx",
@@ -315,7 +337,14 @@ def test_pep_adapter_solve_state_passes_contract_and_config(
     assert kwargs["config"].name == "default_ipopt"
     assert kwargs["sam_file"] == Path("sam.gdx")
     assert captured["method"] == "ipopt"
-    assert kwargs["contract"].closure.fixed == ("G", "CAB", "PWM", "CMIN", "VSTK", "TR_SELF")
+    assert kwargs["contract"].closure.fixed == (
+        "G",
+        "CAB",
+        "PWM",
+        "CMIN",
+        "VSTK",
+        "TR_SELF",
+    )
 
 
 def test_pep_adapter_hard_fail_raises_on_failed_sam_qa(

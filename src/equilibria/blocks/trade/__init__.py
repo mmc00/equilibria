@@ -14,9 +14,9 @@ from pydantic import Field
 
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
-from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.parameters import Parameter
 from equilibria.core.sets import SetManager
+from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
 
 
@@ -227,13 +227,13 @@ class ArmingtonCES(Block):
 
                 i = indices[0]
 
-                QA = getattr(pyomo_model, "QA")
-                QD = getattr(pyomo_model, "QD")
-                QM = getattr(pyomo_model, "QM")
-                A_Ar = getattr(pyomo_model, "A_Ar")
-                alpha_D = getattr(pyomo_model, "alpha_D")
-                alpha_M = getattr(pyomo_model, "alpha_M")
-                sigma_Ar = getattr(pyomo_model, "sigma_Ar")
+                QA = pyomo_model.QA
+                QD = pyomo_model.QD
+                QM = pyomo_model.QM
+                A_Ar = pyomo_model.A_Ar
+                alpha_D = pyomo_model.alpha_D
+                alpha_M = pyomo_model.alpha_M
+                sigma_Ar = pyomo_model.sigma_Ar
 
                 # Log-linearized form for Cobb-Douglas (sigma = 1)
                 # log(QA[i]) = log(A_Ar[i]) + alpha_D[i]*log(QD[i]) + alpha_M[i]*log(QM[i])
@@ -254,11 +254,11 @@ class ArmingtonCES(Block):
 
                 i = indices[0]
 
-                PD = getattr(pyomo_model, "PD")
-                PA = getattr(pyomo_model, "PA")
-                QA = getattr(pyomo_model, "QA")
-                QD = getattr(pyomo_model, "QD")
-                alpha_D = getattr(pyomo_model, "alpha_D")
+                PD = pyomo_model.PD
+                PA = pyomo_model.PA
+                QA = pyomo_model.QA
+                QD = pyomo_model.QD
+                alpha_D = pyomo_model.alpha_D
 
                 # PD[i]/PA[i] = alpha_D[i] * QA[i]/QD[i]
                 # log(PD[i]) - log(PA[i]) = log(alpha_D[i]) + log(QA[i]) - log(QD[i])
@@ -279,11 +279,11 @@ class ArmingtonCES(Block):
 
                 i = indices[0]
 
-                PM = getattr(pyomo_model, "PM")
-                PA = getattr(pyomo_model, "PA")
-                QA = getattr(pyomo_model, "QA")
-                QM = getattr(pyomo_model, "QM")
-                alpha_M = getattr(pyomo_model, "alpha_M")
+                PM = pyomo_model.PM
+                PA = pyomo_model.PA
+                QA = pyomo_model.QA
+                QM = pyomo_model.QM
+                alpha_M = pyomo_model.alpha_M
 
                 # PM[i]/PA[i] = alpha_M[i] * QA[i]/QM[i]
                 lhs = log(PM[i]) - log(PA[i])
@@ -361,7 +361,9 @@ class ArmingtonCES(Block):
                 var_manager.get("QD").value = calibrated["QD0"].copy()
         if "QM0" in calibrated:
             if "QM" in var_manager:
-                var_manager.get("QM").value = self._ensure_positive(calibrated["QM0"].copy())
+                var_manager.get("QM").value = self._ensure_positive(
+                    calibrated["QM0"].copy()
+                )
         if "QA0" in calibrated:
             if "QA" in var_manager:
                 var_manager.get("QA").value = calibrated["QA0"].copy()
@@ -564,12 +566,12 @@ class CETExports(Block):
 
                 j = indices[0]
 
-                Z = getattr(pyomo_model, "Z")
-                XD = getattr(pyomo_model, "XD")
-                XE = getattr(pyomo_model, "XE")
-                B_X = getattr(pyomo_model, "B_X")
-                xi_D = getattr(pyomo_model, "xi_D")
-                xi_E = getattr(pyomo_model, "xi_E")
+                Z = pyomo_model.Z
+                XD = pyomo_model.XD
+                XE = pyomo_model.XE
+                B_X = pyomo_model.B_X
+                xi_D = pyomo_model.xi_D
+                xi_E = pyomo_model.xi_E
 
                 # Log-linearized form
                 # log(Z[j]) = log(B_X[j]) + xi_D[j]*log(XD[j]) + xi_E[j]*log(XE[j])
@@ -590,12 +592,12 @@ class CETExports(Block):
 
                 j = indices[0]
 
-                PE = getattr(pyomo_model, "PE")
-                PD = getattr(pyomo_model, "PD")
-                XE = getattr(pyomo_model, "XE")
-                XD = getattr(pyomo_model, "XD")
-                xi_E = getattr(pyomo_model, "xi_E")
-                xi_D = getattr(pyomo_model, "xi_D")
+                PE = pyomo_model.PE
+                PD = pyomo_model.PD
+                XE = pyomo_model.XE
+                XD = pyomo_model.XD
+                xi_E = pyomo_model.xi_E
+                xi_D = pyomo_model.xi_D
 
                 # PE[j]/PD[j] = (xi_E[j]/xi_D[j]) * (XE[j]/XD[j])
                 lhs = log(PE[j]) - log(PD[j])
@@ -686,25 +688,59 @@ class PEPTradeFlowInit(Block):
         self.required_sets = ["I", "J"]
         self.parameters = {
             "QO0": ParameterSpec(name="QO0", domains=("I",), description="Benchmark Q"),
-            "DDO0": ParameterSpec(name="DDO0", domains=("I",), description="Benchmark DD"),
-            "IMO0": ParameterSpec(name="IMO0", domains=("I",), description="Benchmark IM"),
-            "EXDO0": ParameterSpec(name="EXDO0", domains=("I",), description="Benchmark EXD"),
-            "PCO0": ParameterSpec(name="PCO0", domains=("I",), description="Benchmark PC"),
-            "PDO0": ParameterSpec(name="PDO0", domains=("I",), description="Benchmark PD"),
-            "PMO0": ParameterSpec(name="PMO0", domains=("I",), description="Benchmark PM"),
-            "MRGNO0": ParameterSpec(name="MRGNO0", domains=("I",), description="Benchmark MRGN"),
-            "DITO0": ParameterSpec(name="DITO0", domains=("I",), description="Benchmark DIT"),
+            "DDO0": ParameterSpec(
+                name="DDO0", domains=("I",), description="Benchmark DD"
+            ),
+            "IMO0": ParameterSpec(
+                name="IMO0", domains=("I",), description="Benchmark IM"
+            ),
+            "EXDO0": ParameterSpec(
+                name="EXDO0", domains=("I",), description="Benchmark EXD"
+            ),
+            "PCO0": ParameterSpec(
+                name="PCO0", domains=("I",), description="Benchmark PC"
+            ),
+            "PDO0": ParameterSpec(
+                name="PDO0", domains=("I",), description="Benchmark PD"
+            ),
+            "PMO0": ParameterSpec(
+                name="PMO0", domains=("I",), description="Benchmark PM"
+            ),
+            "MRGNO0": ParameterSpec(
+                name="MRGNO0", domains=("I",), description="Benchmark MRGN"
+            ),
+            "DITO0": ParameterSpec(
+                name="DITO0", domains=("I",), description="Benchmark DIT"
+            ),
         }
         self.variables = {
-            "Q": VariableSpec(name="Q", domains=("I",), lower=0.0, description="Composite demand"),
-            "DD": VariableSpec(name="DD", domains=("I",), lower=0.0, description="Domestic demand"),
-            "IM": VariableSpec(name="IM", domains=("I",), lower=0.0, description="Imports"),
-            "EXD": VariableSpec(name="EXD", domains=("I",), lower=0.0, description="Export demand"),
-            "PC": VariableSpec(name="PC", domains=("I",), lower=0.0, description="Composite price"),
-            "PD": VariableSpec(name="PD", domains=("I",), lower=0.0, description="Domestic price"),
-            "PM": VariableSpec(name="PM", domains=("I",), lower=0.0, description="Import price"),
-            "MRGN": VariableSpec(name="MRGN", domains=("I",), lower=0.0, description="Margins"),
-            "DIT": VariableSpec(name="DIT", domains=("I",), lower=0.0, description="Intermediate demand"),
+            "Q": VariableSpec(
+                name="Q", domains=("I",), lower=0.0, description="Composite demand"
+            ),
+            "DD": VariableSpec(
+                name="DD", domains=("I",), lower=0.0, description="Domestic demand"
+            ),
+            "IM": VariableSpec(
+                name="IM", domains=("I",), lower=0.0, description="Imports"
+            ),
+            "EXD": VariableSpec(
+                name="EXD", domains=("I",), lower=0.0, description="Export demand"
+            ),
+            "PC": VariableSpec(
+                name="PC", domains=("I",), lower=0.0, description="Composite price"
+            ),
+            "PD": VariableSpec(
+                name="PD", domains=("I",), lower=0.0, description="Domestic price"
+            ),
+            "PM": VariableSpec(
+                name="PM", domains=("I",), lower=0.0, description="Import price"
+            ),
+            "MRGN": VariableSpec(
+                name="MRGN", domains=("I",), lower=0.0, description="Margins"
+            ),
+            "DIT": VariableSpec(
+                name="DIT", domains=("I",), lower=0.0, description="Intermediate demand"
+            ),
         }
 
     def setup(
@@ -875,7 +911,9 @@ class PEPTradeFlowInit(Block):
             term = 0.0
             for i in I:
                 if abs(xso.get((j, i), 0.0)) > 1e-12:
-                    term += float(beta_xt.get((j, i), 0.0)) * (xs.get((j, i), 0.0) ** rho)
+                    term += float(beta_xt.get((j, i), 0.0)) * (
+                        xs.get((j, i), 0.0) ** rho
+                    )
             expected = b * (term ** (1.0 / rho)) if term > 0.0 else 0.0
             residuals[f"EQ58_{j}"] = xst.get(j, 0.0) - expected
 
@@ -917,7 +955,10 @@ class PEPTradeFlowInit(Block):
 
         for j in J:
             for i in I:
-                if abs(exo.get((j, i), 0.0)) <= 1e-12 or abs(dso.get((j, i), 0.0)) <= 1e-12:
+                if (
+                    abs(exo.get((j, i), 0.0)) <= 1e-12
+                    or abs(dso.get((j, i), 0.0)) <= 1e-12
+                ):
                     continue
                 beta = float(beta_x.get((j, i), 0.0))
                 sig = float(sigma_x.get((j, i), 2.0))
@@ -1036,7 +1077,9 @@ class PEPTradeTransformationInit(Block):
             s = 0.0
             for i in I:
                 if abs(xso.get((j, i), 0.0)) > 1e-12:
-                    s += float(beta_xt.get((j, i), 0.0)) * (float(xs.get((j, i), 0.0)) ** rho)
+                    s += float(beta_xt.get((j, i), 0.0)) * (
+                        float(xs.get((j, i), 0.0)) ** rho
+                    )
             if s > 0.0:
                 xst[j] = b * (s ** (1.0 / rho))
 
@@ -1070,7 +1113,9 @@ class PEPTradeTransformationInit(Block):
                 s = 0.0
                 for i in I:
                     if abs(xso.get((j, i), 0.0)) > 1e-12:
-                        s += float(beta_xt.get((j, i), 0.0)) * (float(xs.get((j, i), 0.0)) ** rho)
+                        s += float(beta_xt.get((j, i), 0.0)) * (
+                            float(xs.get((j, i), 0.0)) ** rho
+                        )
                 expected_xst = b * (s ** (1.0 / rho)) if s > 0.0 else 0.0
                 residuals[f"EQ58_{j}"] = float(xst.get(j, 0.0)) - expected_xst
 
@@ -1088,7 +1133,9 @@ class PEPTradeTransformationInit(Block):
                 p_ji = float(p.get((j, i), 0.0))
                 if beta <= 0.0 or p_ji <= 0.0:
                     continue
-                expected_xs = xst_j / (b ** (1.0 + sig)) * ((p_ji / (beta * pt_j)) ** sig)
+                expected_xs = (
+                    xst_j / (b ** (1.0 + sig)) * ((p_ji / (beta * pt_j)) ** sig)
+                )
                 residuals[f"EQ59_{j}_{i}"] = float(xs.get((j, i), 0.0)) - expected_xs
 
         return residuals
@@ -1200,7 +1247,9 @@ class PEPCommodityBalanceInit(Block):
         fb = f(dd_max)
         if not (np.isfinite(fa) and np.isfinite(fb)):
             # Fallback proportional split
-            share = max(0.0, min(1.0, dd0 / (dd0 + im0) if (dd0 + im0) > 1e-12 else 0.5))
+            share = max(
+                0.0, min(1.0, dd0 / (dd0 + im0) if (dd0 + im0) > 1e-12 else 0.5)
+            )
             dd = share * budget / pd
             im = (budget - pd * dd) / pm
             return max(dd, 0.0), max(im, 0.0)
@@ -1301,12 +1350,20 @@ class PEPCommodityBalanceInit(Block):
                     continue
                 if has_dd and not has_im:
                     q[i] = q_target
-                    dd[i] = (float(pc.get(i, 0.0)) * q_target / float(pd.get(i, 1.0))) if abs(float(pd.get(i, 1.0))) > 1e-12 else float(dd.get(i, 0.0))
+                    dd[i] = (
+                        (float(pc.get(i, 0.0)) * q_target / float(pd.get(i, 1.0)))
+                        if abs(float(pd.get(i, 1.0))) > 1e-12
+                        else float(dd.get(i, 0.0))
+                    )
                     im[i] = 0.0
                     continue
                 if has_im and not has_dd:
                     q[i] = q_target
-                    im[i] = (float(pc.get(i, 0.0)) * q_target / float(pm.get(i, 1.0))) if abs(float(pm.get(i, 1.0))) > 1e-12 else float(im.get(i, 0.0))
+                    im[i] = (
+                        (float(pc.get(i, 0.0)) * q_target / float(pm.get(i, 1.0)))
+                        if abs(float(pm.get(i, 1.0))) > 1e-12
+                        else float(im.get(i, 0.0))
+                    )
                     dd[i] = 0.0
                     continue
 
@@ -1383,10 +1440,18 @@ class PEPCommodityBalanceInit(Block):
             if abs(rho) > 1e-12:
                 term = 0.0
                 if abs(imo0.get(i, 0.0)) > 1e-12:
-                    term += float(beta_m.get(i, 0.5)) * (float(im.get(i, 0.0)) ** (-rho))
+                    term += float(beta_m.get(i, 0.5)) * (
+                        float(im.get(i, 0.0)) ** (-rho)
+                    )
                 if abs(ddo0.get(i, 0.0)) > 1e-12:
-                    term += (1.0 - float(beta_m.get(i, 0.5))) * (float(dd.get(i, 0.0)) ** (-rho))
-                expected_q = float(b_m.get(i, 1.0)) * (term ** (-1.0 / rho)) if term > 0.0 else 0.0
+                    term += (1.0 - float(beta_m.get(i, 0.5))) * (
+                        float(dd.get(i, 0.0)) ** (-rho)
+                    )
+                expected_q = (
+                    float(b_m.get(i, 1.0)) * (term ** (-1.0 / rho))
+                    if term > 0.0
+                    else 0.0
+                )
                 residuals[f"EQ63_{i}"] = float(q.get(i, 0.0)) - expected_q
 
             expected_q84 = (
@@ -1468,7 +1533,11 @@ class PEPTradeMarketClearingInit(Block):
 
         for i in I:
             if abs(ddo0.get(i, 0.0)) > 1e-12:
-                dd_new = sum(float(ds.get((j, i), 0.0)) for j in J if abs(dso0.get((j, i), 0.0)) > 1e-12)
+                dd_new = sum(
+                    float(ds.get((j, i), 0.0))
+                    for j in J
+                    if abs(dso0.get((j, i), 0.0)) > 1e-12
+                )
                 dd[i] = (1.0 - alpha) * float(dd.get(i, 0.0)) + alpha * dd_new
 
             if abs(imo0.get(i, 0.0)) > 1e-12 and abs(ddo0.get(i, 0.0)) > 1e-12:
@@ -1477,7 +1546,9 @@ class PEPTradeMarketClearingInit(Block):
                 pd_i = float(pd.get(i, 0.0))
                 pm_i = float(pm.get(i, 0.0))
                 if 0.0 < beta < 1.0 and pd_i > 0.0 and pm_i > 0.0:
-                    im_new = ((beta / (1.0 - beta)) * (pd_i / pm_i)) ** sig * float(dd.get(i, 0.0))
+                    im_new = ((beta / (1.0 - beta)) * (pd_i / pm_i)) ** sig * float(
+                        dd.get(i, 0.0)
+                    )
                     im[i] = (1.0 - alpha) * float(im.get(i, 0.0)) + alpha * im_new
 
     def validate_initialization(
@@ -1510,11 +1581,17 @@ class PEPTradeMarketClearingInit(Block):
                 pd_i = float(pd.get(i, 0.0))
                 pm_i = float(pm.get(i, 0.0))
                 if 0.0 < beta < 1.0 and pd_i > 0.0 and pm_i > 0.0:
-                    expected_im = ((beta / (1.0 - beta)) * (pd_i / pm_i)) ** sig * float(dd.get(i, 0.0))
+                    expected_im = (
+                        (beta / (1.0 - beta)) * (pd_i / pm_i)
+                    ) ** sig * float(dd.get(i, 0.0))
                     residuals[f"EQ64_{i}"] = float(im.get(i, 0.0)) - expected_im
 
             if abs(ddo0.get(i, 0.0)) > 1e-12:
-                supply = sum(float(ds.get((j, i), 0.0)) for j in J if abs(dso0.get((j, i), 0.0)) > 1e-12)
+                supply = sum(
+                    float(ds.get((j, i), 0.0))
+                    for j in J
+                    if abs(dso0.get((j, i), 0.0)) > 1e-12
+                )
                 residuals[f"EQ88_{i}"] = supply - float(dd.get(i, 0.0))
 
         return residuals

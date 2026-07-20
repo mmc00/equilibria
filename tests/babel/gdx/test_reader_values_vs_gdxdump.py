@@ -4,18 +4,22 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.babel.gdx.reader import read_gdx, read_equation_values
+from equilibria.babel.gdx.reader import read_equation_values, read_gdx
 
 GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/53/Resources/gdxdump"
-REF = Path("/Users/marmol/proyectos2/equilibria_refs/"
-           "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx")
+REF = Path(
+    "/Users/marmol/proyectos2/equilibria_refs/"
+    "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"
+)
 pytestmark = pytest.mark.skipif(
-    not REF.exists() or not Path(GDXDUMP).exists(), reason="ref or gdxdump absent")
+    not REF.exists() or not Path(GDXDUMP).exists(), reason="ref or gdxdump absent"
+)
 
 
 def _gdxdump_marginals(name):
-    out = subprocess.run([GDXDUMP, str(REF), f"Symb={name}"],
-                         capture_output=True, text=True).stdout
+    out = subprocess.run(
+        [GDXDUMP, str(REF), f"Symb={name}"], capture_output=True, text=True
+    ).stdout
     vals = {}
     for m in re.finditer(r"((?:'[^']*'\.)+)M\s+([-\d.eE+]+)", out):
         key = tuple(p.strip("'") for p in m.group(1).rstrip(".").split("."))

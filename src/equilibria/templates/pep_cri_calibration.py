@@ -25,21 +25,19 @@ Hierarchy:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from equilibria.templates.pep_calibration_income import IncomeCalibrator
 from equilibria.templates.pep_calibration_unified import (
     PEPModelCalibrator,
-    PEPModelState,
 )
-from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
 from equilibria.templates.pep_calibration_unified_dynamic import (
     PEPModelCalibratorDynamicSAM,
     PEPModelCalibratorExcelDynamicSAM,
 )
-
-import logging
+from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +60,9 @@ class PEPCRIIncomeCalibrator(IncomeCalibrator):
         """
         super()._calibrate_rest_of_world()
 
-        L = self.sets['L']
+        L = self.sets["L"]
         labor_to_row = sum(
-            self._get_sam_value('SAM', 'AG', 'ROW', 'L', l.upper()) for l in L
+            self._get_sam_value("SAM", "AG", "ROW", "L", l.upper()) for l in L
         )
         self.result.YROWO += labor_to_row
 
@@ -76,16 +74,15 @@ class PEPCRIIncomeCalibrator(IncomeCalibrator):
         """
         super()._calibrate_shares()
 
-        J = self.sets['J']
-        L = self.sets['L']
+        J = self.sets["J"]
+        L = self.sets["L"]
 
         # Add lambda_WL for 'row' (cross-border labor share)
         for l in L:
             l_upper = l.upper()
-            lambda_wl_raw = self._get_sam_value('SAM', 'AG', 'ROW', 'L', l_upper)
+            lambda_wl_raw = self._get_sam_value("SAM", "AG", "ROW", "L", l_upper)
             ldo_sum = sum(
-                self._get_sam_value('SAM', 'L', l_upper, 'J', j.upper())
-                for j in J
+                self._get_sam_value("SAM", "L", l_upper, "J", j.upper()) for j in J
             )
             if ldo_sum != 0:
                 self.result.lambda_WL[("row", l)] = lambda_wl_raw / ldo_sum
@@ -217,7 +214,9 @@ class PEPCRIModelCalibratorDynamicSAM(_CRIMixin, PEPModelCalibratorDynamicSAM):
         )
 
 
-class PEPCRIModelCalibratorExcelDynamicSAM(_CRIMixin, PEPModelCalibratorExcelDynamicSAM):
+class PEPCRIModelCalibratorExcelDynamicSAM(
+    _CRIMixin, PEPModelCalibratorExcelDynamicSAM
+):
     """Excel dynamic-SAM calibrator for CRI/ICIO SAMs."""
 
     def __init__(

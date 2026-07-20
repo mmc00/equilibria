@@ -9,18 +9,18 @@ This module provides production-related equation blocks including:
 from __future__ import annotations
 
 import typing
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
+from equilibria.core.parameters import Parameter
+from equilibria.core.sets import SetManager
 from equilibria.core.symbolic_equations import (
     SymbolicEquation,
 )
-from equilibria.core.parameters import Parameter
-from equilibria.core.sets import SetManager
 from equilibria.core.variables import Variable
 
 if TYPE_CHECKING:
@@ -125,16 +125,16 @@ class CESValueAdded(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for CES aggregation."""
-                from pyomo.environ import log, exp, summation
+                from pyomo.environ import exp, log, summation
 
                 j = indices[0]
 
                 # Get Pyomo variables and parameters
-                VA = getattr(pyomo_model, "VA")
-                FD = getattr(pyomo_model, "FD")
-                B_VA = getattr(pyomo_model, "B_VA")
-                beta_VA = getattr(pyomo_model, "beta_VA")
-                sigma_VA = getattr(pyomo_model, "sigma_VA")
+                VA = pyomo_model.VA
+                FD = pyomo_model.FD
+                B_VA = pyomo_model.B_VA
+                beta_VA = pyomo_model.beta_VA
+                sigma_VA = pyomo_model.sigma_VA
 
                 # For simplicity, use log-linearized Cobb-Douglas form
                 # log(VA[j]) = log(B_VA[j]) + sum_f(beta_VA[f,j] * log(FD[f,j]))
@@ -189,12 +189,12 @@ class CESValueAdded(Block):
                 f, j = indices
 
                 # Get Pyomo variables and parameters
-                WF = getattr(pyomo_model, "WF")
-                PVA = getattr(pyomo_model, "PVA")
-                VA = getattr(pyomo_model, "VA")
-                FD = getattr(pyomo_model, "FD")
-                beta_VA = getattr(pyomo_model, "beta_VA")
-                sigma_VA = getattr(pyomo_model, "sigma_VA")
+                WF = pyomo_model.WF
+                PVA = pyomo_model.PVA
+                VA = pyomo_model.VA
+                FD = pyomo_model.FD
+                beta_VA = pyomo_model.beta_VA
+                sigma_VA = pyomo_model.sigma_VA
 
                 # For Cobb-Douglas (sigma = 1):
                 # WF[f] = PVA[j] * beta_VA[f,j] * VA[j] / FD[f,j]
@@ -317,9 +317,9 @@ class LeontiefIntermediate(Block):
                 i, j = indices
 
                 # Get Pyomo variables and parameters
-                XST = getattr(pyomo_model, "XST")
-                Z = getattr(pyomo_model, "Z")
-                a_io = getattr(pyomo_model, "a_io")
+                XST = pyomo_model.XST
+                Z = pyomo_model.Z
+                a_io = pyomo_model.a_io
 
                 # Linear constraint: XST[i,j] - a_io[i,j] * Z[j] = 0
                 return XST[i, j] == a_io[i, j] * Z[j]
@@ -468,11 +468,11 @@ class CETTransformation(Block):
 
                 j = indices[0]
 
-                XD = getattr(pyomo_model, "XD")
-                XE = getattr(pyomo_model, "XE")
-                B_CET = getattr(pyomo_model, "B_CET")
-                gamma_D = getattr(pyomo_model, "gamma_D")
-                gamma_E = getattr(pyomo_model, "gamma_E")
+                XD = pyomo_model.XD
+                XE = pyomo_model.XE
+                B_CET = pyomo_model.B_CET
+                gamma_D = pyomo_model.gamma_D
+                gamma_E = pyomo_model.gamma_E
 
                 # Simplified: log(XD + XE) = log(B_CET) + gamma_D * log(XD) + gamma_E * log(XE)
                 lhs = log(XD[j] + XE[j])
@@ -521,12 +521,12 @@ class CETTransformation(Block):
 
                 j = indices[0]
 
-                PD = getattr(pyomo_model, "PD")
-                PE = getattr(pyomo_model, "PE")
-                XD = getattr(pyomo_model, "XD")
-                XE = getattr(pyomo_model, "XE")
-                gamma_D = getattr(pyomo_model, "gamma_D")
-                gamma_E = getattr(pyomo_model, "gamma_E")
+                PD = pyomo_model.PD
+                PE = pyomo_model.PE
+                XD = pyomo_model.XD
+                XE = pyomo_model.XE
+                gamma_D = pyomo_model.gamma_D
+                gamma_E = pyomo_model.gamma_E
 
                 # log(PD/PE) = log(gamma_D/gamma_E) + (rho-1) * log(XD/XE)
                 # Simplified: log(PD) - log(PE) = log(gamma_D) - log(gamma_E) + log(XD) - log(XE)
@@ -716,19 +716,22 @@ class PEPProductionAccountingInit(Block):
 
         residuals: dict[str, float] = {}
         for j in J:
-            residuals[f"EQ2_{j}"] = float(ci.get(j, 0.0)) - float(io.get(j, 0.0)) * float(xst.get(j, 0.0))
+            residuals[f"EQ2_{j}"] = float(ci.get(j, 0.0)) - float(
+                io.get(j, 0.0)
+            ) * float(xst.get(j, 0.0))
             for i in I:
-                residuals[f"EQ9_{i}_{j}"] = float(di.get((i, j), 0.0)) - float(aij.get((i, j), 0.0)) * float(ci.get(j, 0.0))
+                residuals[f"EQ9_{i}_{j}"] = float(di.get((i, j), 0.0)) - float(
+                    aij.get((i, j), 0.0)
+                ) * float(ci.get(j, 0.0))
             lhs67 = float(pci.get(j, 0.0)) * float(ci.get(j, 0.0))
             rhs67 = sum(float(pc.get(i, 0.0)) * float(di.get((i, j), 0.0)) for i in I)
             residuals[f"EQ67_{j}"] = lhs67 - rhs67
-            residuals[f"EQ65_{j}"] = (
-                float(pp.get(j, 0.0)) * float(xst.get(j, 0.0))
-                - (
-                    float(pva.get(j, 0.0)) * float(va.get(j, 0.0))
-                    + float(pci.get(j, 0.0)) * float(ci.get(j, 0.0))
-                )
+            residuals[f"EQ65_{j}"] = float(pp.get(j, 0.0)) * float(xst.get(j, 0.0)) - (
+                float(pva.get(j, 0.0)) * float(va.get(j, 0.0))
+                + float(pci.get(j, 0.0)) * float(ci.get(j, 0.0))
             )
         for i in I:
-            residuals[f"EQ56_{i}"] = float(dit.get(i, 0.0)) - sum(float(di.get((i, j), 0.0)) for j in J)
+            residuals[f"EQ56_{i}"] = float(dit.get(i, 0.0)) - sum(
+                float(di.get((i, j), 0.0)) for j in J
+            )
         return residuals

@@ -16,6 +16,7 @@ Con anchors país-específicos:
     result = audit_sam(df, anchors=anchors)
     result.to_markdown("audit_report.md")
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -24,19 +25,20 @@ from typing import Any
 
 import pandas as pd
 
-
 # ---------------------------------------------------------------------------
 # Tipos de datos
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AnchorSpec:
     """Flujo conocido con rango publicado — para validación país-específica."""
+
     name: str
-    cells: list[tuple[str, str]]       # [(row, col), ...]
+    cells: list[tuple[str, str]]  # [(row, col), ...]
     expected_min: float
     expected_max: float
-    source: str = ""                   # ej. "BoP MBP6 2023"
+    source: str = ""  # ej. "BoP MBP6 2023"
 
 
 @dataclass
@@ -50,6 +52,7 @@ class CheckResult:
 @dataclass
 class AuditResult:
     """Resultado completo de la auditoría."""
+
     checks: list[CheckResult] = field(default_factory=list)
     anchor_checks: list[CheckResult] = field(default_factory=list)
 
@@ -110,6 +113,7 @@ class AuditResult:
 # Checks universales
 # ---------------------------------------------------------------------------
 
+
 def _check_balance(df: pd.DataFrame, tol: float = 1e-4) -> CheckResult:
     """Fila = columna para cada cuenta (condición SAM fundamental)."""
     residuals = df.sum(axis=1) - df.sum(axis=0)
@@ -120,8 +124,11 @@ def _check_balance(df: pd.DataFrame, tol: float = 1e-4) -> CheckResult:
         name="Balance fila=col",
         passed=passed,
         value=max_res,
-        detail=(f"max residual={max_res:.2e} en '{worst}' (tol={tol:.0e})"
-                if not passed else f"max residual={max_res:.2e}"),
+        detail=(
+            f"max residual={max_res:.2e} en '{worst}' (tol={tol:.0e})"
+            if not passed
+            else f"max residual={max_res:.2e}"
+        ),
     )
 
 
@@ -145,10 +152,14 @@ def _check_square(df: pd.DataFrame) -> CheckResult:
     square = rows == cols
     same_accounts = set(df.index.tolist()) == set(df.columns.tolist())
     passed = square and same_accounts
-    detail = (f"{rows}×{cols}, cuentas filas==cols: {same_accounts}"
-              if not passed else f"OK ({rows}×{rows})")
-    return CheckResult(name="Cuadrada y simétrica", passed=passed,
-                       value=rows, detail=detail)
+    detail = (
+        f"{rows}×{cols}, cuentas filas==cols: {same_accounts}"
+        if not passed
+        else f"OK ({rows}×{rows})"
+    )
+    return CheckResult(
+        name="Cuadrada y simétrica", passed=passed, value=rows, detail=detail
+    )
 
 
 def _check_pib_expenditure(
@@ -195,8 +206,8 @@ def _check_pib_expenditure(
         if investment_account and investment_account in accounts:
             pib_g += float(df.loc[act, investment_account])
         if row_account and row_account in accounts:
-            pib_g += float(df.loc[act, row_account])   # X
-            pib_g -= float(df.loc[row_account, act])   # − M int
+            pib_g += float(df.loc[act, row_account])  # X
+            pib_g -= float(df.loc[row_account, act])  # − M int
 
     if row_account and row_account in accounts:
         for acc in [household_account, government_account, investment_account]:
@@ -208,10 +219,12 @@ def _check_pib_expenditure(
 
     gap_pct = abs(pib_p - pib_g) / abs(pib_p) * 100
     passed = gap_pct <= tol_pct
-    detail = (f"PIB(P)={pib_p:,.2f}, PIB(G)={pib_g:,.2f}, "
-              f"gap={gap_pct:.2f}% (tol={tol_pct}%)")
-    return CheckResult(name="PIB(P)≈PIB(G)", passed=passed,
-                       value=gap_pct, detail=detail)
+    detail = (
+        f"PIB(P)={pib_p:,.2f}, PIB(G)={pib_g:,.2f}, gap={gap_pct:.2f}% (tol={tol_pct}%)"
+    )
+    return CheckResult(
+        name="PIB(P)≈PIB(G)", passed=passed, value=gap_pct, detail=detail
+    )
 
 
 def _check_s_minus_i_plus_b9(
@@ -229,8 +242,12 @@ def _check_s_minus_i_plus_b9(
         return CheckResult("S−I+B9=0", True, 0.0, "omitido (cuentas no especificadas)")
     accounts = list(df.index)
     if capital_account not in accounts or row_account not in accounts:
-        return CheckResult("S−I+B9=0", False, 0.0,
-                           f"cuenta '{capital_account}' o '{row_account}' no encontrada")
+        return CheckResult(
+            "S−I+B9=0",
+            False,
+            0.0,
+            f"cuenta '{capital_account}' o '{row_account}' no encontrada",
+        )
     cc_row = float(df.loc[capital_account, row_account])
     row_cc = float(df.loc[row_account, capital_account])
     b9_row = cc_row - row_cc
@@ -252,8 +269,9 @@ def _check_diagonal(df: pd.DataFrame, tol: float = 1e-9) -> CheckResult:
     # Advertencia blanda: diagonal puede existir (ej. Hogares→Hogares por D7)
     passed = pct < 10.0
     detail = f"diagonal={diag_sum:,.2f} ({pct:.1f}% del total)"
-    return CheckResult(name="Diagonal <10% total", passed=passed,
-                       value=pct, detail=detail)
+    return CheckResult(
+        name="Diagonal <10% total", passed=passed, value=pct, detail=detail
+    )
 
 
 def _check_anchors(df: pd.DataFrame, anchors: list[AnchorSpec]) -> list[CheckResult]:
@@ -264,17 +282,24 @@ def _check_anchors(df: pd.DataFrame, anchors: list[AnchorSpec]) -> list[CheckRes
             if r in df.index and c in df.columns:
                 total += float(df.loc[r, c])
         passed = anc.expected_min <= total <= anc.expected_max
-        detail = (f"[{anc.expected_min:,.0f}, {anc.expected_max:,.0f}]"
-                  f"  fuente: {anc.source}")
-        results.append(CheckResult(
-            name=anc.name, passed=passed, value=total, detail=detail,
-        ))
+        detail = (
+            f"[{anc.expected_min:,.0f}, {anc.expected_max:,.0f}]  fuente: {anc.source}"
+        )
+        results.append(
+            CheckResult(
+                name=anc.name,
+                passed=passed,
+                value=total,
+                detail=detail,
+            )
+        )
     return results
 
 
 # ---------------------------------------------------------------------------
 # Función principal
 # ---------------------------------------------------------------------------
+
 
 def audit_sam(
     df: pd.DataFrame,
@@ -319,17 +344,19 @@ def audit_sam(
 
     # Checks macro (requieren especificar cuentas)
     if activity_accounts and factor_accounts:
-        result.checks.append(_check_pib_expenditure(
-            df,
-            activity_accounts=activity_accounts,
-            factor_accounts=factor_accounts,
-            household_account=household_account,
-            government_account=government_account,
-            investment_account=investment_account,
-            row_account=row_account,
-            tprod_account=tprod_account,
-            tol_pct=pib_tol_pct,
-        ))
+        result.checks.append(
+            _check_pib_expenditure(
+                df,
+                activity_accounts=activity_accounts,
+                factor_accounts=factor_accounts,
+                household_account=household_account,
+                government_account=government_account,
+                investment_account=investment_account,
+                row_account=row_account,
+                tprod_account=tprod_account,
+                tol_pct=pib_tol_pct,
+            )
+        )
 
     if capital_account and row_account:
         result.checks.append(_check_s_minus_i_plus_b9(df, capital_account, row_account))

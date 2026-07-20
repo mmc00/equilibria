@@ -16,6 +16,7 @@ Run manually:
     EQUILIBRIA_NUS333_DIR=/Users/marmol/Downloads/10284 \
     uv run pytest tests/templates/gtap/test_nus333_neos_parity.py -v -s
 """
+
 from __future__ import annotations
 
 import os
@@ -25,15 +26,23 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-NUS333_DIR = Path(os.environ.get("EQUILIBRIA_NUS333_DIR", "/Users/marmol/Downloads/10284"))
+NUS333_DIR = Path(
+    os.environ.get("EQUILIBRIA_NUS333_DIR", "/Users/marmol/Downloads/10284")
+)
 PATH_LIB = ROOT / ".cache/path_capi/libpath50.silicon.dylib"
 PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
 
 # NEOS reference (job 18744693, comp_nus333.gms after tariff power shock).
 NEOS_REF = {
-    "gdpmp": {"USA": (14.0617801139, 14.7063426837), "ROW": (41.7695611026, 42.4668724204)},
-    "regy":  {"USA": (12.8018441072, 13.3823164142), "ROW": (37.0999386636, 37.6635926896)},
-    "u":     {"USA": (1.0,            1.0016493028),  "ROW": (1.0,           0.9918010965)},
+    "gdpmp": {
+        "USA": (14.0617801139, 14.7063426837),
+        "ROW": (41.7695611026, 42.4668724204),
+    },
+    "regy": {
+        "USA": (12.8018441072, 13.3823164142),
+        "ROW": (37.0999386636, 37.6635926896),
+    },
+    "u": {"USA": (1.0, 1.0016493028), "ROW": (1.0, 0.9918010965)},
 }
 
 TOL_PP = 0.01  # absolute Δ% tolerance in percentage points
@@ -63,11 +72,12 @@ def nus333_results():
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
     from compare_nus333_vs_neos import (
-        _solve,
         _apply_tariff_shock,
         _copy_var_levels,
         _extract_key,
+        _solve,
     )
+
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
     from equilibria.templates.gtap.gtap_solver import GTAPClosureConfig
@@ -81,14 +91,19 @@ def nus333_results():
     )
     closure = GTAPClosureConfig(if_sub=False)
 
-    builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
+    builder_b = GTAPModelEquations(
+        params.sets, params, residual_region="ROW", closure=closure
+    )
     model_b = builder_b.build_model()
     _solve(model_b, params, label="base")
     base = _extract_key(model_b, params)
 
     _apply_tariff_shock(params, factor=1.10)
     builder_s = GTAPModelEquations(
-        params.sets, params, residual_region="ROW", closure=closure,
+        params.sets,
+        params,
+        residual_region="ROW",
+        closure=closure,
         t0_snapshot=model_b,
     )
     model_s = builder_s.build_model()
@@ -100,11 +115,17 @@ def nus333_results():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("var,region", [
-    ("gdpmp", "USA"), ("gdpmp", "ROW"),
-    ("regy", "USA"),  ("regy", "ROW"),
-    ("u", "USA"),     ("u", "ROW"),
-])
+@pytest.mark.parametrize(
+    "var,region",
+    [
+        ("gdpmp", "USA"),
+        ("gdpmp", "ROW"),
+        ("regy", "USA"),
+        ("regy", "ROW"),
+        ("u", "USA"),
+        ("u", "ROW"),
+    ],
+)
 def test_nus333_neos_delta_parity(nus333_results, var, region):
     """Each macro Δ% must be within TOL_PP of the NEOS GAMS reference."""
     base, shock = nus333_results

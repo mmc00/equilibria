@@ -9,20 +9,21 @@ full provenance statement. No harpy3, harpy, or GEMPACK source has been
 consulted in writing this code. harpy3 is used only as a sandboxed
 black-box oracle via scripts/har/oracle_check.py. Distributed under MIT.
 """
+
 from __future__ import annotations
 
 import os
 import warnings
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 import numpy as np
 
-from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har import wire
-
+from equilibria.babel.har.symbols import HeaderArray
 
 # ── Top-level entry ──────────────────────────────────────────────────────────
+
 
 def write_har(
     path: str | os.PathLike,
@@ -69,6 +70,7 @@ def write_har(
 
 # ── Validation ───────────────────────────────────────────────────────────────
 
+
 def _validate_headers(headers: Mapping[str, HeaderArray]) -> None:
     for name, ha in headers.items():
         if not (1 <= len(name) <= wire.NAME_WIDTH):
@@ -78,13 +80,10 @@ def _validate_headers(headers: Mapping[str, HeaderArray]) -> None:
         try:
             name.encode("ascii")
         except UnicodeEncodeError as exc:
-            raise ValueError(
-                f"header name {name!r} must be ASCII"
-            ) from exc
+            raise ValueError(f"header name {name!r} must be ASCII") from exc
         if any(ch.isalpha() and not ch.isupper() for ch in name):
             warnings.warn(
-                f"header name {name!r} is not uppercase ASCII; "
-                f"written verbatim",
+                f"header name {name!r} is not uppercase ASCII; written verbatim",
                 UserWarning,
                 stacklevel=3,
             )
@@ -119,7 +118,10 @@ def _looks_like_1cfull(ha: HeaderArray) -> bool:
 
 # ── Dispatch ─────────────────────────────────────────────────────────────────
 
-def _emit_header(out: bytearray, name: str, ha: HeaderArray, *, sparse: bool = False) -> None:
+
+def _emit_header(
+    out: bytearray, name: str, ha: HeaderArray, *, sparse: bool = False
+) -> None:
     if _looks_like_1cfull(ha):
         _write_1cfull(out, name, ha)
         return
@@ -162,6 +164,7 @@ def _validate_array_header(name: str, ha: HeaderArray) -> None:
 
 
 # ── Per-token emitters ───────────────────────────────────────────────────────
+
 
 def _write_name_record(out: bytearray, name: str) -> None:
     """4-byte name record, right-padded with spaces to NAME_WIDTH."""
@@ -265,7 +268,9 @@ def _write_respse(out: bytearray, name: str, ha: HeaderArray) -> None:
     meta_tail = wire.INT.pack(7) + b"".join(wire.INT.pack(d) for d in shape7)
     _write_meta_record(out, wire.TOKEN_RESPSE, ha.long_name, meta_tail)
 
-    wire.write_record(out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names))
+    wire.write_record(
+        out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names)
+    )
 
     seen: set[str] = set()
     for sn, elems in zip(ha.set_names, ha.set_elements):
@@ -316,7 +321,9 @@ def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
     meta_tail = wire.INT.pack(7) + b"".join(wire.INT.pack(d) for d in shape7)
     _write_meta_record(out, wire.TOKEN_REFULL, ha.long_name, meta_tail)
 
-    wire.write_record(out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names))
+    wire.write_record(
+        out, wire.build_set_descriptor(ha.coeff_name or name, ha.set_names)
+    )
 
     seen: set[str] = set()
     for sn, elems in zip(ha.set_names, ha.set_elements):
@@ -357,6 +364,7 @@ def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
 
 # ── HarWriter builder ────────────────────────────────────────────────────────
 
+
 class HarWriter:
     """High-level builder for HAR files.
 
@@ -373,7 +381,7 @@ class HarWriter:
         self._arrays: list[tuple[str, HeaderArray, bool]] = []
         self._closed = False
 
-    def __enter__(self) -> "HarWriter":
+    def __enter__(self) -> HarWriter:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -449,8 +457,7 @@ class HarWriter:
 
         if not isinstance(df, pd.DataFrame):
             raise ValueError(
-                f"add_dataframe expects a 2-D pandas.DataFrame; "
-                f"got {type(df).__name__}"
+                f"add_dataframe expects a 2-D pandas.DataFrame; got {type(df).__name__}"
             )
         if len(set_names) != 2:
             raise ValueError(

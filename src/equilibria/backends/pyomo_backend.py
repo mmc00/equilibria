@@ -211,7 +211,6 @@ class PyomoBackend(Backend):
             model: equilibria Model instance
         """
         from pyomo.environ import Constraint
-        from equilibria.backends.pyomo_equations import PyomoEquation
 
         constraint_count = 0
         for eq_name in model.equation_manager.list_equations():
@@ -245,7 +244,7 @@ class PyomoBackend(Backend):
                         domain_sets = []
                         for dim_idx, domain in enumerate(eq.domains):
                             unique_vals = sorted(
-                                set(idx[dim_idx] for idx in constraint_dict.keys())
+                                set(idx[dim_idx] for idx in constraint_dict)
                             )
                             domain_sets.append((domain, unique_vals))
 
@@ -295,11 +294,7 @@ class PyomoBackend(Backend):
                 # These equations use closures and won't work with Pyomo
                 pass
         if constraint_count == 0:
-            setattr(
-                self.pyomo_model,
-                "dummy_constraint",
-                Constraint(expr=1 == 1),
-            )
+            self.pyomo_model.dummy_constraint = Constraint(expr=1 == 1)
 
     def solve(self, options: dict[str, Any] | None = None) -> Solution:
         """Solve the Pyomo model.

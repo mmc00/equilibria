@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from typing import Any
 
 from equilibria.sam_tools.models import Sam
 from equilibria.sam_tools.selectors import (
-    indices_for_selector,
     norm_text,
     norm_text_lower,
 )
@@ -23,7 +23,13 @@ DEFAULT_COMMODITY_TO_SECTOR: dict[str, str] = {
 SPECIAL_LABELS = {"S-HH", "S-FIRM", "S-GVT", "S-ROW", "INV", "VSTK"}
 
 
-def _add_value(matrix: np.ndarray, key_index: dict[tuple[str, str], int], row_key: tuple[str, str], col_key: tuple[str, str], value: float) -> None:
+def _add_value(
+    matrix: np.ndarray,
+    key_index: dict[tuple[str, str], int],
+    row_key: tuple[str, str],
+    col_key: tuple[str, str],
+    value: float,
+) -> None:
     if abs(value) <= 1e-14:
         return
     if row_key not in key_index or col_key not in key_index:
@@ -43,7 +49,19 @@ def _label_to_key(label: str) -> tuple[str, str] | None:
         return ("L", label_up.lower())
     if label_up in {"CAP", "LAND"}:
         return ("K", label_up.lower())
-    if label_up in {"HRP", "HRR", "HUP", "HUR", "FIRM", "GVT", "ROW", "TD", "TI", "TM", "TX"}:
+    if label_up in {
+        "HRP",
+        "HRR",
+        "HUP",
+        "HUR",
+        "FIRM",
+        "GVT",
+        "ROW",
+        "TD",
+        "TI",
+        "TM",
+        "TX",
+    }:
         return ("AG", label_up.lower())
     if label_up == "MARG":
         return ("MARG", "MARG")
@@ -70,7 +88,19 @@ def _build_pep_key_order(labels: list[str]) -> list[tuple[str, str]]:
             ag_keys.append(key)
         elif cat == "MARG":
             has_marg = True
-    ag_order = ["ti", "tm", "tx", "td", "hrp", "hrr", "hup", "hur", "firm", "gvt", "row"]
+    ag_order = [
+        "ti",
+        "tm",
+        "tx",
+        "td",
+        "hrp",
+        "hrr",
+        "hup",
+        "hur",
+        "firm",
+        "gvt",
+        "row",
+    ]
     ag_sorted = [("AG", elem) for elem in ag_order if ("AG", elem) in ag_keys]
     keys = j_keys + i_keys + l_keys + k_keys + ag_sorted
     if has_marg:
@@ -79,7 +109,9 @@ def _build_pep_key_order(labels: list[str]) -> list[tuple[str, str]]:
     return keys
 
 
-def _locate_key(keys: list[tuple[str, str]], target: tuple[str, str]) -> tuple[str, str] | None:
+def _locate_key(
+    keys: list[tuple[str, str]], target: tuple[str, str]
+) -> tuple[str, str] | None:
     target_norm = (norm_text_lower(target[0]), norm_text_lower(target[1]))
     for key in keys:
         key_norm = (norm_text_lower(key[0]), norm_text_lower(key[1]))
@@ -117,7 +149,9 @@ def convert_exports_to_x_on_sam(sam: Sam) -> dict[str, float]:
     j_rows = [key for key in sam.row_keys if norm_text_lower(key[0]) == "j"]
     converted = 0
     total_export = 0.0
-    for commodity in [elem for cat, elem in sam.row_keys if norm_text_lower(cat) == "i"]:
+    for commodity in [
+        elem for cat, elem in sam.row_keys if norm_text_lower(cat) == "i"
+    ]:
         i_key = ("I", commodity)
         x_key = ("X", commodity)
         if i_key not in df.index or x_key not in df.index:
@@ -144,7 +178,9 @@ def convert_exports_to_x_on_sam(sam: Sam) -> dict[str, float]:
     return {"converted_commodities": converted, "total_export_value": total_export}
 
 
-def move_margin_to_i_margin_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+def move_margin_to_i_margin_on_sam(
+    sam: Sam, op: dict[str, Any] | None = None
+) -> dict[str, Any]:
     cfg = op or {}
     margin_commodity = norm_text(cfg.get("margin_commodity", "ser"))
     margin_row = ("MARG", "MARG")
@@ -153,7 +189,11 @@ def move_margin_to_i_margin_on_sam(sam: Sam, op: dict[str, Any] | None = None) -
     if margin_row not in df.index or margin_target not in df.index:
         return {"margin_commodity": margin_target[1], "moved_total": 0.0, "columns": 0}
 
-    commodity_cols = [(idx, key) for idx, key in enumerate(sam.col_keys) if norm_text_lower(key[0]) == "i"]
+    commodity_cols = [
+        (idx, key)
+        for idx, key in enumerate(sam.col_keys)
+        if norm_text_lower(key[0]) == "i"
+    ]
     moved_total = 0.0
     for c_idx, col_key in commodity_cols:
         value = float(df.loc[margin_row, col_key])
@@ -171,7 +211,9 @@ def move_margin_to_i_margin_on_sam(sam: Sam, op: dict[str, Any] | None = None) -
     }
 
 
-def move_tx_to_ti_on_i_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+def move_tx_to_ti_on_i_on_sam(
+    sam: Sam, op: dict[str, Any] | None = None
+) -> dict[str, Any]:
     cfg = op or {}
     row_tx = ("AG", "tx")
     row_ti = ("AG", "ti")
@@ -179,7 +221,11 @@ def move_tx_to_ti_on_i_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dic
     if row_tx not in df.index or row_ti not in df.index:
         return {"moved_total": 0.0, "columns": 0}
 
-    commodity_cols = [(idx, key) for idx, key in enumerate(sam.col_keys) if norm_text_lower(key[0]) == "i"]
+    commodity_cols = [
+        (idx, key)
+        for idx, key in enumerate(sam.col_keys)
+        if norm_text_lower(key[0]) == "i"
+    ]
     moved_total = 0.0
     cols_moved = 0
     for c_idx, col_key in commodity_cols:
@@ -198,7 +244,9 @@ def move_tx_to_ti_on_i_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dic
     }
 
 
-def collapse_margin_account_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+def collapse_margin_account_on_sam(
+    sam: Sam, op: dict[str, Any] | None = None
+) -> dict[str, Any]:
     cfg = op or {}
     margin_key = ("MARG", "MARG")
     margin_commodity = norm_text(cfg.get("margin_commodity", "ser"))
@@ -259,13 +307,20 @@ def collapse_margin_account_on_sam(sam: Sam, op: dict[str, Any] | None = None) -
     }
 
 
-def collapse_tx_account_into_ti_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+def collapse_tx_account_into_ti_on_sam(
+    sam: Sam, op: dict[str, Any] | None = None
+) -> dict[str, Any]:
     _ = op or {}
     tx_key = ("AG", "tx")
     ti_key = ("AG", "ti")
 
     df = sam.to_dataframe()
-    if tx_key not in df.index or ti_key not in df.index or tx_key not in df.columns or ti_key not in df.columns:
+    if (
+        tx_key not in df.index
+        or ti_key not in df.index
+        or tx_key not in df.columns
+        or ti_key not in df.columns
+    ):
         return {
             "row_moved_total": 0.0,
             "column_moved_total": 0.0,
@@ -302,13 +357,16 @@ def _move_factor_to_ji_on_sam(
     cfg = op or {}
     raw_mapping = cfg.get("commodity_to_sector") or DEFAULT_COMMODITY_TO_SECTOR
     commodity_to_sector = {
-        norm_text_lower(k): norm_text(v)
-        for k, v in raw_mapping.items()
+        norm_text_lower(k): norm_text(v) for k, v in raw_mapping.items()
     }
     default_sector = norm_text(cfg.get("default_sector", "ind"))
     strict_targets = bool(cfg.get("strict_targets", True))
 
-    factor_keys = [key for key in sam.row_keys if norm_text_lower(key[0]) == norm_text_lower(factor_category)]
+    factor_keys = [
+        key
+        for key in sam.row_keys
+        if norm_text_lower(key[0]) == norm_text_lower(factor_category)
+    ]
     moved_by_commodity: dict[str, float] = {}
     missing_targets: list[str] = []
 
@@ -341,7 +399,9 @@ def _move_factor_to_ji_on_sam(
     return {
         "source_category": factor_category.upper(),
         "sources": len(factor_keys),
-        "commodities": len([key for key in df.columns if norm_text_lower(key[0]) == "i"]),
+        "commodities": len(
+            [key for key in df.columns if norm_text_lower(key[0]) == "i"]
+        ),
         "default_sector": default_sector,
         "moved_total": moved_total,
         "moved_by_commodity": moved_by_commodity,
@@ -357,12 +417,13 @@ def move_l_to_ji_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str,
     return _move_factor_to_ji_on_sam(sam, factor_category="L", op=op)
 
 
-def move_nonmargin_i_to_ji_on_sam(sam: Sam, op: dict[str, Any] | None = None) -> dict[str, Any]:
+def move_nonmargin_i_to_ji_on_sam(
+    sam: Sam, op: dict[str, Any] | None = None
+) -> dict[str, Any]:
     cfg = op or {}
     raw_mapping = cfg.get("commodity_to_sector") or DEFAULT_COMMODITY_TO_SECTOR
     commodity_to_sector = {
-        norm_text_lower(k): norm_text(v)
-        for k, v in raw_mapping.items()
+        norm_text_lower(k): norm_text(v) for k, v in raw_mapping.items()
     }
     default_sector = norm_text(cfg.get("default_sector", "ind"))
     margin_commodities = cfg.get("margin_commodities")
@@ -419,8 +480,7 @@ def move_row_factor_inflows_to_owning_agents_on_sam(
 ) -> dict[str, Any]:
     cfg = op or {}
     factor_categories = {
-        norm_text_lower(item)
-        for item in cfg.get("factor_categories", ["K", "L"])
+        norm_text_lower(item) for item in cfg.get("factor_categories", ["K", "L"])
     }
     source_agent = norm_text(cfg.get("source_agent", "row"))
     source_col = ("AG", source_agent)
@@ -441,7 +501,9 @@ def move_row_factor_inflows_to_owning_agents_on_sam(
     moved_total = 0.0
     moved_by_factor: dict[str, float] = {}
     unresolved_factors: list[str] = []
-    factor_rows = [key for key in sam.row_keys if norm_text_lower(key[0]) in factor_categories]
+    factor_rows = [
+        key for key in sam.row_keys if norm_text_lower(key[0]) in factor_categories
+    ]
     for factor_key in factor_rows:
         value = float(df.loc[factor_key, source_col])
         if abs(value) <= 1e-14:
@@ -549,7 +611,9 @@ def normalize_pep_accounts_on_sam(sam: Sam) -> dict[str, int]:
             c_key = _label_to_key(norm_text(c_label[1]))
             if c_key is None:
                 continue
-            _add_value(pep_matrix, key_index, r_key, c_key, float(df.loc[r_label, c_label]))
+            _add_value(
+                pep_matrix, key_index, r_key, c_key, float(df.loc[r_label, c_label])
+            )
     savings_to_agent = {
         "S-HH": ["HRP", "HRR", "HUP", "HUR"],
         "S-FIRM": ["FIRM"],
@@ -565,7 +629,9 @@ def normalize_pep_accounts_on_sam(sam: Sam) -> dict[str, int]:
             if raw_col_key is None:
                 continue
             value = float(df.loc[row_key, raw_col_key])
-            _add_value(pep_matrix, key_index, ("OTH", "INV"), ("AG", agent.lower()), value)
+            _add_value(
+                pep_matrix, key_index, ("OTH", "INV"), ("AG", agent.lower()), value
+            )
     if ("OTH", "VSTK") in df.index:
         vstk_total = float(df.loc[("OTH", "VSTK"), :].sum())
         _add_value(pep_matrix, key_index, ("OTH", "VSTK"), ("OTH", "INV"), vstk_total)
@@ -591,7 +657,9 @@ def normalize_pep_accounts_on_sam(sam: Sam) -> dict[str, int]:
                     float(df.loc[raw_key, raw_target_key]),
                 )
     multi_index = pd.MultiIndex.from_tuples(pep_keys)
-    sam.replace_dataframe(pd.DataFrame(pep_matrix, index=multi_index, columns=multi_index))
+    sam.replace_dataframe(
+        pd.DataFrame(pep_matrix, index=multi_index, columns=multi_index)
+    )
     return {
         "raw_labels": len(labels),
         "pep_accounts": len(pep_keys),

@@ -10,18 +10,21 @@ from pathlib import Path
 
 import pytest
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PEP2_SCRIPTS = PROJECT_ROOT / "src/equilibria/templates/reference/pep2/scripts"
 COMPARE_SCRIPT = PEP2_SCRIPTS / "compare_ipopt_vs_excel.sh"
 DEFAULT_GAMS_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams")
-DEFAULT_GDXDIFF_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdiff")
+DEFAULT_GDXDIFF_BIN = Path(
+    "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdiff"
+)
 
 
 def _collect_diff_symbols(diff_txt: Path) -> set[str]:
     symbols: set[str] = set()
     for line in diff_txt.read_text().splitlines():
-        m = re.match(r"\s*([A-Za-z0-9_]+)\s+(Data are different|Keys are different)", line)
+        m = re.match(
+            r"\s*([A-Za-z0-9_]+)\s+(Data are different|Keys are different)", line
+        )
         if m:
             symbols.add(m.group(1))
     return symbols
@@ -44,6 +47,7 @@ def _max_abs_value(csv_file: Path) -> float:
 def _gams_license_ok(gams_bin: Path) -> bool:
     """Return False if GAMS exits with a licensing error on a trivial run."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmp:
         gms = Path(tmp) / "probe.gms"
         gms.write_text("scalar x; x = 1;\n")

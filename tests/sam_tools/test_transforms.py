@@ -9,8 +9,6 @@ from equilibria.sam_tools.sam_transforms import (
     clear_agent_self_transfers_on_sam,
     collapse_margin_account_on_sam,
     collapse_tx_account_into_ti_on_sam,
-    convert_exports_to_x_on_sam,
-    create_x_block_on_sam,
     move_k_to_ji_on_sam,
     move_l_to_ji_on_sam,
     move_margin_to_i_margin_on_sam,
@@ -40,7 +38,11 @@ def _build_pep_like_matrix() -> Sam:
         ("AG", "row"),
     ]
     matrix = np.zeros((len(keys), len(keys)), dtype=float)
-    df = pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
+    df = pd.DataFrame(
+        matrix,
+        index=pd.MultiIndex.from_tuples(keys),
+        columns=pd.MultiIndex.from_tuples(keys),
+    )
     sam = Sam(dataframe=df)
     return sam
 

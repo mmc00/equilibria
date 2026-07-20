@@ -1,12 +1,13 @@
-import math
 from pathlib import Path
 
 import pytest
 
-from equilibria.babel.gdx.reader import read_gdx, read_equation_values
+from equilibria.babel.gdx.reader import read_equation_values, read_gdx
 
-REF = Path("/Users/marmol/proyectos2/equilibria_refs/"
-           "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx")
+REF = Path(
+    "/Users/marmol/proyectos2/equilibria_refs/"
+    "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"
+)
 pytestmark = pytest.mark.skipif(not REF.exists(), reason="durable ref GDX absent")
 
 

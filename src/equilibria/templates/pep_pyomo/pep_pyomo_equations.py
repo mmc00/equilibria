@@ -10,19 +10,25 @@ Builder entry point: `build_pep_model(state, variant="base", form="nlp") -> Conc
   variant: "base" (EQ1..EQ98 + WALRAS) | "objdef" (adds OBJDEF: OBJ==0, free OBJ)
   form:    "nlp" (min 0 over the equality system) | "mcp" (walras⊥LEON, e fixed numeraire)
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 from pyomo.environ import (
-    ConcreteModel, Var, Constraint, Objective, Reals, NonNegativeReals,
-    Param, value, minimize,
+    ConcreteModel,
+    Constraint,
+    NonNegativeReals,
+    Objective,
+    Reals,
+    Var,
+    minimize,
 )
 
-from .pep_pyomo_sets import PEPSets
 from .pep_pyomo_parameters import PEPParams
+from .pep_pyomo_sets import PEPSets
 
-POS = (1e-6, None)   # strictly positive (prices, quantities that must stay > 0)
+POS = (1e-6, None)  # strictly positive (prices, quantities that must stay > 0)
 
 
 def _active(p: PEPParams, mask: str, *idx) -> bool:
@@ -33,7 +39,9 @@ def _active(p: PEPParams, mask: str, *idx) -> bool:
         return False
 
 
-def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> ConcreteModel:
+def build_pep_model(
+    state: Any, variant: str = "base", form: str = "nlp"
+) -> ConcreteModel:
     S = PEPSets.from_state(state)
     P = PEPParams(state)
     m = ConcreteModel(name=f"PEP_{variant}_{form}")
@@ -50,8 +58,16 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     EXDact = [i for i in I if _active(P, "EXDO", i)]
     EXact = [(j, i) for j in J for i in I if _active(P, "EXO", j, i)]
     DSact = [(j, i) for j in J for i in I if _active(P, "DSO", j, i)]
-    m._pep["idx"] = dict(LDact=LDact, KDact=KDact, XSact=XSact, IMact=IMact,
-                         DDact=DDact, EXDact=EXDact, EXact=EXact, DSact=DSact)
+    m._pep["idx"] = dict(
+        LDact=LDact,
+        KDact=KDact,
+        XSact=XSact,
+        IMact=IMact,
+        DDact=DDact,
+        EXDact=EXDact,
+        EXact=EXact,
+        DSact=DSact,
+    )
 
     # ================= VARIABLES (init at benchmark *O levels) =================
     # Benchmark levels missing from calibration, filled from CGE normalization:
@@ -63,9 +79,27 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
                 return v
         except KeyError:
             pass
-        if name in ("WO", "RKO", "RO", "PPO", "PTO", "PVAO", "PCIO", "WCO", "RCO",
-                    "PCO", "PDO", "PMO", "PEO", "PE_FOBO", "PLO", "PO", "WTIO", "RTIO"):
-            return 1.0                       # prices normalized to 1 at benchmark
+        if name in (
+            "WO",
+            "RKO",
+            "RO",
+            "PPO",
+            "PTO",
+            "PVAO",
+            "PCIO",
+            "WCO",
+            "RCO",
+            "PCO",
+            "PDO",
+            "PMO",
+            "PEO",
+            "PE_FOBO",
+            "PLO",
+            "PO",
+            "WTIO",
+            "RTIO",
+        ):
+            return 1.0  # prices normalized to 1 at benchmark
         if name == "TIWO" and len(idx) == 2:
             l, j = idx
             return P.get("ttiw", l, j) * 1.0 * P.get("LDO", l, j)
@@ -77,6 +111,7 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     def _init(name):
         def r(mm, *idx):
             return _bench(name, *idx)
+
         return r
 
     # production
@@ -149,20 +184,49 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     _timt = sum(_bench("TIMO", i) for i in I)
     _tixt = sum(_bench("TIXO", i) for i in I)
     _gov_seed = {
-        "TIWT": _tiwt, "TIKT": _tikt, "TIPT": _tipt, "TICT": _tict, "TIMT": _timt,
-        "TIXT": _tixt, "TPRODN": _tiwt + _tikt + _tipt, "TPRCTS": _tict + _timt + _tixt,
-        "TDHT": sum(_bench("TDHO", h) for h in H), "TDFT": sum(_bench("TDFO", f) for f in F),
+        "TIWT": _tiwt,
+        "TIKT": _tikt,
+        "TIPT": _tipt,
+        "TICT": _tict,
+        "TIMT": _timt,
+        "TIXT": _tixt,
+        "TPRODN": _tiwt + _tikt + _tipt,
+        "TPRCTS": _tict + _timt + _tixt,
+        "TDHT": sum(_bench("TDHO", h) for h in H),
+        "TDFT": sum(_bench("TDFO", f) for f in F),
         "YGK": _bench("YGKO"),
-        "YGTR": sum(_bench("TRO", "gvt", ag) for ag in AGNG),   # eq34
+        "YGTR": sum(_bench("TRO", "gvt", ag) for ag in AGNG),  # eq34
         "G": _bench("GO"),
     }
     # YG (eq22) and SG (eq43) seeded from their component identities for consistency
-    _gov_seed["YG"] = (_gov_seed["YGK"] + _gov_seed["TDHT"] + _gov_seed["TDFT"]
-                       + _gov_seed["TPRODN"] + _gov_seed["TPRCTS"] + _gov_seed["YGTR"])
-    _gov_seed["SG"] = (_gov_seed["YG"]
-                       - sum(_bench("TRO", ag, "gvt") for ag in AGNG) - _gov_seed["G"])
-    for nm in ("YG", "YGK", "TDHT", "TDFT", "TPRODN", "TPRCTS", "TIWT", "TIKT",
-               "TIPT", "TICT", "TIMT", "TIXT", "YGTR", "SG", "G"):
+    _gov_seed["YG"] = (
+        _gov_seed["YGK"]
+        + _gov_seed["TDHT"]
+        + _gov_seed["TDFT"]
+        + _gov_seed["TPRODN"]
+        + _gov_seed["TPRCTS"]
+        + _gov_seed["YGTR"]
+    )
+    _gov_seed["SG"] = (
+        _gov_seed["YG"] - sum(_bench("TRO", ag, "gvt") for ag in AGNG) - _gov_seed["G"]
+    )
+    for nm in (
+        "YG",
+        "YGK",
+        "TDHT",
+        "TDFT",
+        "TPRODN",
+        "TPRCTS",
+        "TIWT",
+        "TIKT",
+        "TIPT",
+        "TICT",
+        "TIMT",
+        "TIXT",
+        "YGTR",
+        "SG",
+        "G",
+    ):
         seed = _gov_seed.get(nm, 0.0)
         if seed in (0.0, 1e-6) and (nm + "O") in P:
             seed = P.get(nm + "O")
@@ -187,11 +251,19 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     # infeasibility that forces IPOPT to drift the whole system. GDP_IB is free, so seed
     # it from the eq92 RHS (factor income + TPRODN + TPRCTS) → the seed is fully feasible
     # and IPOPT stays at the benchmark. (GDP_IB then reports the income-side GDP, 53681.)
-    _gdp_ib_seed = (sum(_bench("WO", l) * _bench("LDO", l, j) for (l, j) in LDact)
-                    + sum(_bench("RO", k, j) * _bench("KDO", k, j) for (k, j) in KDact)
-                    + _gov_seed["TPRODN"] + _gov_seed["TPRCTS"])
-    _macro_seed = {"GDP_BP": _bench("GDP_BPO"), "GDP_MP": _bench("GDP_MPO"),
-                   "GDP_IB": _gdp_ib_seed, "GDP_FD": _bench("GDP_FDO"), "IT": _bench("ITO")}
+    _gdp_ib_seed = (
+        sum(_bench("WO", l) * _bench("LDO", l, j) for (l, j) in LDact)
+        + sum(_bench("RO", k, j) * _bench("KDO", k, j) for (k, j) in KDact)
+        + _gov_seed["TPRODN"]
+        + _gov_seed["TPRCTS"]
+    )
+    _macro_seed = {
+        "GDP_BP": _bench("GDP_BPO"),
+        "GDP_MP": _bench("GDP_MPO"),
+        "GDP_IB": _gdp_ib_seed,
+        "GDP_FD": _bench("GDP_FDO"),
+        "IT": _bench("ITO"),
+    }
     for nm in ("GDP_BP", "GDP_MP", "GDP_IB", "GDP_FD", "IT"):
         seed = _macro_seed.get(nm, 0.0)
         if seed in (0.0, 1e-6) and (nm + "O") in P:
@@ -199,13 +271,17 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
         setattr(m, nm, Var(domain=Reals, initialize=seed))
     m.CTH_REAL = Var(H, domain=NonNegativeReals, initialize=_init("CTHO"))
     # real vars = nominal / price-index; at benchmark PIX*=1 so seed = nominal *O level
-    _real_nom = {"G_REAL": "GO", "GDP_BP_REAL": "GDP_BPO",
-                 "GDP_MP_REAL": "GDP_MPO", "GFCF_REAL": "GFCFO"}
+    _real_nom = {
+        "G_REAL": "GO",
+        "GDP_BP_REAL": "GDP_BPO",
+        "GDP_MP_REAL": "GDP_MPO",
+        "GFCF_REAL": "GFCFO",
+    }
     for nm, nomO in _real_nom.items():
         setattr(m, nm, Var(domain=NonNegativeReals, initialize=_bench(nomO)))
     m.LS = Var(L, domain=NonNegativeReals, initialize=_init("LSO"))
     m.KS = Var(K, domain=NonNegativeReals, initialize=_init("KSO"))
-    m.e = Var(bounds=POS, initialize=1.0)     # exchange rate / numeraire
+    m.e = Var(bounds=POS, initialize=1.0)  # exchange rate / numeraire
     m.LEON = Var(domain=Reals, initialize=0.0)  # Walras slack (free)
     # OBJ is the dummy objective var of the `SOLVE NLP MINIMIZING OBJ` (objdef) lineage — an
     # NLP-only construct. In an MCP it has no defining equation (OBJDEF is added only on the
@@ -217,6 +293,7 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
     # Constraints are attached by the block builders (imported lazily to keep this
     # file navigable). Each returns the count of instantiated constraints.
     from .pep_pyomo_blocks import attach_all_blocks
+
     n = attach_all_blocks(m, S, P, m._pep["idx"], variant)
     m._pep["n_constraints"] = n
 
@@ -279,8 +356,16 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
             (m.XS, [(j, i) for j in J for i in I], XSact),
             (m.DS, [(j, i) for j in J for i in I], DSact),
             (m.EX, [(j, i) for j in J for i in I], EXact),
-            (m.P,  [(j, i) for j in J for i in I], XSact),   # P defined only where sector produces i
-            (m.DI, [(i, j) for i in I for j in J], None),    # DI dense (all i,j via aij) — keep
+            (
+                m.P,
+                [(j, i) for j in J for i in I],
+                XSact,
+            ),  # P defined only where sector produces i
+            (
+                m.DI,
+                [(i, j) for i in I for j in J],
+                None,
+            ),  # DI dense (all i,j via aij) — keep
             (m.IM, [i for i in I], IMact),
             (m.EXD, [i for i in I], EXDact),
         ]
@@ -288,22 +373,22 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
         # trade prices (PD/DD on DDact; PM/PE/PE_FOB/EXD/TIM/TIX on IM/EXD masks) — fix the
         # cells whose defining equation wasn't instantiated by its $-mask.
         _fix_outside += [
-            (m.R,   [(k, j) for k in K for j in J], KDact),
+            (m.R, [(k, j) for k in K for j in J], KDact),
             (m.RTI, [(k, j) for k in K for j in J], KDact),
             (m.TIK, [(k, j) for k in K for j in J], KDact),
             # WTI now has EQ70 over ALL (l,j) — no cells to fix. TIW: EQ37 is LDact-masked.
             (m.TIW, [(l, j) for l in L for j in J], LDact),
-            (m.PD,  [i for i in I], DDact),
-            (m.DD,  [i for i in I], DDact),
-            (m.PM,  [i for i in I], IMact),
+            (m.PD, [i for i in I], DDact),
+            (m.DD, [i for i in I], DDact),
+            (m.PM, [i for i in I], IMact),
             (m.TIM, [i for i in I], IMact),
-            (m.PE,  [i for i in I], EXDact),
+            (m.PE, [i for i in I], EXDact),
             (m.PE_FOB, [i for i in I], EXDact),
             (m.TIX, [i for i in I], EXDact),
-            (m.PL,  [i for i in I], DDact),
+            (m.PL, [i for i in I], DDact),
             # factor DEMAND cells: KD/LD are dense but endogenous only on their masks
-            (m.KD,  [(k, j) for k in K for j in J], KDact),
-            (m.LD,  [(l, j) for l in L for j in J], LDact),
+            (m.KD, [(k, j) for k in K for j in J], KDact),
+            (m.LD, [(l, j) for l in L for j in J], LDact),
         ]
         # composite factor vars for sectors with NO capital (KDCO==0, e.g. admin):
         # KDC and RC are exogenous zeros there (GAMS masks EQ7/EQ8 by KDCO).
@@ -325,10 +410,26 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
         # *O benchmark (fallback 1.0 if none) — NOT a blind 1.0, which mismatched GAMS's
         # 1.132 on that one cell. A price must never be 0 (ratio/`x**(-rho)` terms overflow
         # → PATH 7.7e15), so the fallback stays 1.0, never 0.
-        _PRICE_BENCH = {"PD": "PDO", "PM": "PMO", "PE": "PEO", "PE_FOB": "PE_FOBO",
-                        "PL": "PLO", "P": "PO", "PC": "PCO", "PT": "PTO", "PP": "PPO",
-                        "PVA": "PVAO", "PCI": "PCIO", "W": "WO", "RK": "RKO", "R": "RO",
-                        "WC": "WCO", "RC": "RCO", "WTI": "WTIO", "RTI": "RTIO"}
+        _PRICE_BENCH = {
+            "PD": "PDO",
+            "PM": "PMO",
+            "PE": "PEO",
+            "PE_FOB": "PE_FOBO",
+            "PL": "PLO",
+            "P": "PO",
+            "PC": "PCO",
+            "PT": "PTO",
+            "PP": "PPO",
+            "PVA": "PVAO",
+            "PCI": "PCIO",
+            "W": "WO",
+            "RK": "RKO",
+            "R": "RO",
+            "WC": "WCO",
+            "RC": "RCO",
+            "WTI": "WTIO",
+            "RTI": "RTIO",
+        }
         for var, allkeys, active in _fix_outside:
             if active is None:
                 continue
@@ -336,10 +437,12 @@ def build_pep_model(state: Any, variant: str = "base", form: str = "nlp") -> Con
             bench_name = _PRICE_BENCH.get(var.name)
             for k in allkeys:
                 if k not in act:
-                    if bench_name is not None:            # price cell
-                        bval = _bench(bench_name, *(k if isinstance(k, tuple) else (k,)))
-                        fill = bval if bval else 1.0       # never 0 (overflow guard)
-                    else:                                  # quantity cell
+                    if bench_name is not None:  # price cell
+                        bval = _bench(
+                            bench_name, *(k if isinstance(k, tuple) else (k,))
+                        )
+                        fill = bval if bval else 1.0  # never 0 (overflow guard)
+                    else:  # quantity cell
                         fill = 0.0
                     try:
                         var[k].fix(fill)

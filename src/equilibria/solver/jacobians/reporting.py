@@ -136,20 +136,27 @@ def compare_jacobian_modes(
             analytic=analytic_entry,
             numeric=numeric_entry,
             deltas=JacobianModeDelta(
-                iteration_delta=int(analytic_entry.iterations) - int(numeric_entry.iterations),
+                iteration_delta=int(analytic_entry.iterations)
+                - int(numeric_entry.iterations),
                 final_residual_delta=float(analytic_entry.final_residual)
                 - float(numeric_entry.final_residual),
-                wall_time_delta_seconds=float(analytic_stats.get("wall_time_seconds", 0.0))
+                wall_time_delta_seconds=float(
+                    analytic_stats.get("wall_time_seconds", 0.0)
+                )
                 - float(numeric_stats.get("wall_time_seconds", 0.0)),
                 analytic_speedup_vs_numeric=_safe_ratio(
                     float(numeric_stats.get("wall_time_seconds", 0.0)),
                     float(analytic_stats.get("wall_time_seconds", 0.0)),
                 ),
-                constraint_eval_delta=int(analytic_stats.get("constraint_eval_count", 0))
+                constraint_eval_delta=int(
+                    analytic_stats.get("constraint_eval_count", 0)
+                )
                 - int(numeric_stats.get("constraint_eval_count", 0)),
                 jacobian_eval_delta=int(analytic_stats.get("jacobian_eval_count", 0))
                 - int(numeric_stats.get("jacobian_eval_count", 0)),
-                finite_difference_eval_delta=int(analytic_stats.get("finite_difference_eval_count", 0))
+                finite_difference_eval_delta=int(
+                    analytic_stats.get("finite_difference_eval_count", 0)
+                )
                 - int(numeric_stats.get("finite_difference_eval_count", 0)),
             ),
         )
@@ -185,7 +192,10 @@ def evaluate_jacobian_mode_gate(
         analytic_cmp = analytic.get("comparison")
         numeric_cmp = numeric.get("comparison")
         if isinstance(analytic_cmp, dict) and isinstance(numeric_cmp, dict):
-            if bool(analytic_cmp["passed"]) is False and bool(numeric_cmp["passed"]) is True:
+            if (
+                bool(analytic_cmp["passed"]) is False
+                and bool(numeric_cmp["passed"]) is True
+            ):
                 failures.append(
                     f"{scenario_name}: analytic parity failed while numeric parity passed"
                 )

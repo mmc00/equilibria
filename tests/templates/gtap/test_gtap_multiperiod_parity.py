@@ -25,6 +25,7 @@ self-hosted runner / no solver there) — mirror of the altertax gate.  Run by h
 
     uv run pytest tests/templates/gtap/test_gtap_multiperiod_parity.py -v
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -50,12 +51,29 @@ if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
 # lines 49-57.
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
 RF = {
-    "pfa", "pfy", "pm", "pmcif", "pefob", "pwmg", "pp", "pdp", "pmp",
-    "xwmg", "xmgm", "lambdamg", "imptx", "exptx",
+    "pfa",
+    "pfy",
+    "pm",
+    "pmcif",
+    "pefob",
+    "pwmg",
+    "pp",
+    "pdp",
+    "pmp",
+    "xwmg",
+    "xmgm",
+    "lambdamg",
+    "imptx",
+    "exptx",
 }
 ALIAS = {
-    "xa": "xaa", "xd": "xda", "xm": "xma", "pp": "pp_rai", "p": "p_rai",
-    "ytaxInd": "ytax_ind", "ytaxind": "ytax_ind",
+    "xa": "xaa",
+    "xd": "xda",
+    "xm": "xma",
+    "pp": "pp_rai",
+    "p": "p_rai",
+    "ytaxInd": "ytax_ind",
+    "ytaxind": "ytax_ind",
 }
 
 # Measured shock-period match% floor vs the GAMS LOCAL reference (ifSUB=0).
@@ -102,9 +120,14 @@ def _gtap_closure(if_sub: bool):
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     return GTAPClosureConfig(
-        name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=if_sub, numeraire="pnum",
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=if_sub,
+        numeraire="pnum",
     )
 
 
@@ -113,14 +136,15 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
 
     Returns (codes_dict, match_pct, total, worst) for the requested period.
     """
+    from _diff_core import gams_levels, list_populated_vars, split_t
+    from pyomo.environ import value as V
+
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_multiperiod import (
-        GTAPMultiPeriodModel,
         PERIODS,
+        GTAPMultiPeriodModel,
     )
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from pyomo.environ import value as V
-    from _diff_core import gams_levels, list_populated_vars, split_t
 
     ref = _fixture_gdx(dataset, if_sub)
     d = DATASETS_DIR / dataset
@@ -146,9 +170,15 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
     # instead of letting PATH slide the USA price level; holdfix_cd=False (the
     # gtap-mode driver path does not run the altertax CD-nest holdfix).
     res = solve_multiperiod(
-        m, p, gc, ref_gdx=ref,
-        skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, holdfix_cd=False, mode="gtap",
+        m,
+        p,
+        gc,
+        ref_gdx=ref,
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=False,
+        holdfix_cd=False,
+        mode="gtap",
     )
     codes = {k: res[k]["code"] for k in res}
 
@@ -189,8 +219,10 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
                 continue
             tot += 1
             d_abs = abs(val - gval)
-            rel = d_abs / abs(gval) if abs(gval) > 1e-12 else (
-                0.0 if d_abs < 1e-6 else 9e9
+            rel = (
+                d_abs / abs(gval)
+                if abs(gval) > 1e-12
+                else (0.0 if d_abs < 1e-6 else 9e9)
             )
             if d_abs <= 1e-6 or rel <= 1e-2:
                 match += 1

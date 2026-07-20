@@ -13,26 +13,39 @@ Modules:
 Example:
     >>> from equilibria.templates.gtap import GTAPSets, GTAPParameters, GTAPSolver
     >>> from equilibria.templates.gtap import build_gtap_contract
-    >>> 
+    >>>
     >>> # Load data
     >>> sets = GTAPSets()
     >>> sets.load_from_gdx("asa7x5.gdx")
-    >>> 
+    >>>
     >>> # Load parameters
     >>> params = GTAPParameters()
     >>> params.load_from_gdx("asa7x5.gdx")
-    >>> 
+    >>>
     >>> # Build and solve model
     >>> from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
     >>> eq_builder = GTAPModelEquations(sets, params)
     >>> model = eq_builder.build_model()
-    >>> 
+    >>>
     >>> # Solve
     >>> solver = GTAPSolver(model)
     >>> result = solver.solve()
     >>> print(f"Status: {result.status}")
 """
 
+from equilibria.templates.gtap.altertax import (
+    ALTERTAX_ELASTICITY_DEFAULTS,
+    AltertaxElasticityOverrides,
+    AltertaxRebalanceResult,
+    apply_altertax_elasticities,
+    rebalance_to_altertax_dataset,
+)
+from equilibria.templates.gtap.calibration_compare import (
+    CalibrationDiff,
+    collect_python_benchmark_levels,
+    collect_python_calibration_maps,
+    compare_calibration,
+)
 from equilibria.templates.gtap.gtap_contract import (
     GTAPBoundsConfig,
     GTAPClosureConfig,
@@ -52,11 +65,14 @@ from equilibria.templates.gtap.gtap_parameters import (
     GTAPShareParameters,
     GTAPTaxRates,
 )
-from equilibria.templates.gtap.calibration_compare import (
-    CalibrationDiff,
-    compare_calibration,
-    collect_python_benchmark_levels,
-    collect_python_calibration_maps,
+from equilibria.templates.gtap.gtap_parity_pipeline import (
+    GTAPGAMSReference,
+    GTAPParityComparison,
+    GTAPParityRunner,
+    GTAPVariableSnapshot,
+    compare_gtap_gams_parity,
+    load_gtap_gams_reference,
+    run_gtap_parity_test,
 )
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult, SolverStatus
@@ -66,27 +82,10 @@ from equilibria.templates.gtap.shocks import (
     apply_tariff_shock,
     list_shock_targets,
 )
-from equilibria.templates.gtap.gtap_parity_pipeline import (
-    GTAPParityComparison,
-    GTAPParityRunner,
-    GTAPGAMSReference,
-    GTAPVariableSnapshot,
-    compare_gtap_gams_parity,
-    load_gtap_gams_reference,
-    run_gtap_parity_test,
-)
-from equilibria.templates.gtap.altertax import (
-    ALTERTAX_ELASTICITY_DEFAULTS,
-    AltertaxElasticityOverrides,
-    AltertaxRebalanceResult,
-    apply_altertax_elasticities,
-    rebalance_to_altertax_dataset,
-)
 
 __all__ = [
     # Sets
     "GTAPSets",
-    
     # Parameters
     "GTAPParameters",
     "GAMSCalibrationDump",
@@ -99,7 +98,6 @@ __all__ = [
     "compare_calibration",
     "collect_python_benchmark_levels",
     "collect_python_calibration_maps",
-    
     # Contract
     "GTAPContract",
     "GTAPClosureConfig",
@@ -108,21 +106,17 @@ __all__ = [
     "build_gtap_closure_config",
     "build_gtap_contract",
     "default_gtap_contract",
-    
     # Model
     "GTAPModelEquations",
-    
     # Solver
     "GTAPSolver",
     "SolverResult",
     "SolverStatus",
-
     # Shocks
     "apply_shock",
     "apply_tariff_shock",
     "list_shock_targets",
     "ShockMode",
-    
     # Parity
     "GTAPParityComparison",
     "GTAPParityRunner",
@@ -131,7 +125,6 @@ __all__ = [
     "compare_gtap_gams_parity",
     "load_gtap_gams_reference",
     "run_gtap_parity_test",
-
     # Altertax
     "ALTERTAX_ELASTICITY_DEFAULTS",
     "AltertaxElasticityOverrides",

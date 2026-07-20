@@ -31,7 +31,9 @@ def normalize_string_tuple(value: Any) -> tuple[str, ...]:
     return tuple(normalized)
 
 
-def deep_merge_model_dicts(base: dict[str, Any], updates: Mapping[str, Any]) -> dict[str, Any]:
+def deep_merge_model_dicts(
+    base: dict[str, Any], updates: Mapping[str, Any]
+) -> dict[str, Any]:
     """Recursively merge nested dictionaries used to build contract/config models."""
 
     merged = deepcopy(base)
@@ -56,7 +58,9 @@ class ModelClosureConfig(BaseModel):
     endogenous: tuple[str, ...] = Field(default_factory=tuple)
     label: str | None = None
 
-    @field_validator("name", "numeraire", "numeraire_mode", "capital_mobility", mode="before")
+    @field_validator(
+        "name", "numeraire", "numeraire_mode", "capital_mobility", mode="before"
+    )
     @classmethod
     def _normalize_required_text(cls, value: Any) -> str:
         text = str(value).strip()
@@ -78,11 +82,13 @@ class ModelClosureConfig(BaseModel):
         return normalize_string_tuple(value)
 
     @model_validator(mode="after")
-    def _check_overlap(self) -> "ModelClosureConfig":
+    def _check_overlap(self) -> ModelClosureConfig:
         overlap = set(self.fixed) & set(self.endogenous)
         if overlap:
             overlap_text = ", ".join(sorted(overlap))
-            raise ValueError(f"Closure fixed/endogenous overlap is not allowed: {overlap_text}")
+            raise ValueError(
+                f"Closure fixed/endogenous overlap is not allowed: {overlap_text}"
+            )
         return self
 
 
@@ -192,7 +198,7 @@ class ModelReferenceConfig(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _check_enabled_fields(self) -> "ModelReferenceConfig":
+    def _check_enabled_fields(self) -> ModelReferenceConfig:
         if not self.enabled:
             return self
 
@@ -321,13 +327,17 @@ def validate_closure_structure(
     if numeraire is not None:
         numeraire_text = str(numeraire).strip() or None
         numeraire = numeraire_text
-        numeraire_is_fixed = numeraire_text in fixed_names if numeraire_text is not None else None
+        numeraire_is_fixed = (
+            numeraire_text in fixed_names if numeraire_text is not None else None
+        )
 
     messages: list[str] = []
     if duplicate_equations:
         messages.append(f"Duplicate active equations: {', '.join(duplicate_equations)}")
     if duplicate_free_variables:
-        messages.append(f"Duplicate free endogenous variables: {', '.join(duplicate_free_variables)}")
+        messages.append(
+            f"Duplicate free endogenous variables: {', '.join(duplicate_free_variables)}"
+        )
     if unsupported_fixed:
         messages.append(
             "Unsupported fixed closure symbols: "
@@ -344,7 +354,9 @@ def validate_closure_structure(
             f"(active_equations={active_equation_count}, free_variables={free_endogenous_variable_count})."
         )
     if numeraire is not None and not numeraire_is_fixed:
-        messages.append(f"Numeraire {numeraire!r} is not fixed by the current closure/bounds.")
+        messages.append(
+            f"Numeraire {numeraire!r} is not fixed by the current closure/bounds."
+        )
 
     is_valid = (
         system_shape == "square"
@@ -368,6 +380,8 @@ def validate_closure_structure(
         duplicate_equations=duplicate_equations,
         duplicate_free_variables=duplicate_free_variables,
         unsupported_fixed_symbols=tuple(sorted(dict.fromkeys(unsupported_fixed))),
-        unsupported_endogenous_symbols=tuple(sorted(dict.fromkeys(unsupported_endogenous))),
+        unsupported_endogenous_symbols=tuple(
+            sorted(dict.fromkeys(unsupported_endogenous))
+        ),
         messages=tuple(messages),
     )

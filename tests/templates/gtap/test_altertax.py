@@ -11,11 +11,9 @@ Heavy integration tests against a real solved 9x10 model live in
 
 from __future__ import annotations
 
-import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, Tuple
 
 import pytest
 
@@ -29,7 +27,6 @@ from equilibria.templates.gtap.gtap_parameters import (
     GTAPElasticities,
     GTAPParameters,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1. Closure preset
@@ -152,7 +149,7 @@ class _MockModel:
     pgdpmp: _MockVar = field(default_factory=_MockVar)
 
 
-def _build_synthetic_model() -> Tuple[_MockModel, GTAPParameters, SimpleNamespace]:
+def _build_synthetic_model() -> tuple[_MockModel, GTAPParameters, SimpleNamespace]:
     """Tiny 2-region, 2-commodity, 1-sector, 1-factor model."""
     R = ["USA", "EU"]
     I = ["c1", "c2"]
@@ -195,7 +192,10 @@ def test_rebalance_writes_har_file(tmp_path: Path):
     out = tmp_path / "altertax.har"
 
     result = rebalance_to_altertax_dataset(
-        params, params, model, sets,
+        params,
+        params,
+        model,
+        sets,
         output_path=out,
     )
 
@@ -213,7 +213,11 @@ def test_rebalance_sam_totals_match_inputs(tmp_path: Path):
     out = tmp_path / "altertax.har"
 
     result = rebalance_to_altertax_dataset(
-        params, params, model, sets, output_path=out,
+        params,
+        params,
+        model,
+        sets,
+        output_path=out,
     )
 
     # 2 regions × 2 commodities × 4 agents at xda=10 with pd=1.0 gives 80 for VDFB+VxxB.
@@ -242,9 +246,23 @@ def test_rebalance_har_roundtrips_via_reader(tmp_path: Path):
     headers = read_har(out)
     # All standard GTAP basedata headers present
     expected = {
-        "REG", "COMM", "ACTS", "ENDW",
-        "VDFB", "VMFB", "VDPB", "VMPB", "VDGB", "VMGB", "VDIB", "VMIB",
-        "EVFB", "EVOS", "VXSB", "VMSB", "RGDP",
+        "REG",
+        "COMM",
+        "ACTS",
+        "ENDW",
+        "VDFB",
+        "VMFB",
+        "VDPB",
+        "VMPB",
+        "VDGB",
+        "VMGB",
+        "VDIB",
+        "VMIB",
+        "EVFB",
+        "EVOS",
+        "VXSB",
+        "VMSB",
+        "RGDP",
     }
     assert expected.issubset(set(headers.keys()))
 
@@ -254,7 +272,11 @@ def test_rebalance_evos_reflects_factor_tax(tmp_path: Path):
     model, params, sets = _build_synthetic_model()
     out = tmp_path / "altertax.har"
     result = rebalance_to_altertax_dataset(
-        params, params, model, sets, output_path=out,
+        params,
+        params,
+        model,
+        sets,
+        output_path=out,
     )
 
     # EVFB total = 100. EVOS = 50/(1+0.10) + 50/(1+0.05) ≈ 45.4545 + 47.6190 = 93.0736

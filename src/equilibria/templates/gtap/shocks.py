@@ -12,9 +12,10 @@ compatibility and ergonomics; new tax types only need to be added to the
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, Literal, Optional, Tuple
+from typing import Literal
 
 from equilibria.templates.gtap.gtap_parameters import GTAPParameters
 
@@ -34,12 +35,12 @@ class _ContainerSpec:
     """
 
     path: str
-    dim_names: Tuple[str, ...]
-    skip_diagonal: Optional[Tuple[int, int]] = None
-    aliases: Tuple[str, ...] = field(default_factory=tuple)
+    dim_names: tuple[str, ...]
+    skip_diagonal: tuple[int, int] | None = None
+    aliases: tuple[str, ...] = field(default_factory=tuple)
 
 
-_REGISTRY: Dict[str, _ContainerSpec] = {
+_REGISTRY: dict[str, _ContainerSpec] = {
     # Taxes -----------------------------------------------------------------
     "taxes.imptx": _ContainerSpec(
         path="taxes.imptx",
@@ -123,8 +124,8 @@ def apply_shock(
     *,
     mode: ShockMode = "pct",
     inplace: bool = False,
-    predicate: Optional[Callable[[tuple], bool]] = None,
-    **filters: Optional[Iterable[str]],
+    predicate: Callable[[tuple], bool] | None = None,
+    **filters: Iterable[str] | None,
 ) -> GTAPParameters:
     """Apply a generic shock to any registered parameter container.
 
@@ -158,8 +159,7 @@ def apply_shock(
 
     if target not in _REGISTRY:
         raise ValueError(
-            f"Unknown shock target: {target!r}. "
-            f"Available: {list_shock_targets()}"
+            f"Unknown shock target: {target!r}. Available: {list_shock_targets()}"
         )
     spec = _REGISTRY[target]
 
@@ -174,7 +174,7 @@ def apply_shock(
     container = _resolve_container(out, spec.path)
     aliases = [_resolve_container(out, p) for p in spec.aliases]
 
-    resolved_filters: list[Optional[set]] = [
+    resolved_filters: list[set | None] = [
         set(filters[name]) if filters.get(name) is not None else None
         for name in spec.dim_names
     ]
@@ -208,9 +208,9 @@ def apply_tariff_shock(
     value: float,
     *,
     mode: ShockMode = "tm_pct",
-    commodities: Optional[Iterable[str]] = None,
-    sources: Optional[Iterable[str]] = None,
-    destinations: Optional[Iterable[str]] = None,
+    commodities: Iterable[str] | None = None,
+    sources: Iterable[str] | None = None,
+    destinations: Iterable[str] | None = None,
     inplace: bool = False,
 ) -> GTAPParameters:
     """Tariff-specific wrapper around `apply_shock` for ``taxes.imptx``.

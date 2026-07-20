@@ -18,7 +18,9 @@ class GAMSFlowInitializationStrategy(InitializationStrategy):
 
     mode = "excel"
 
-    def apply(self, solver: InitStrategySolverProtocol, vars: PEPModelVariables) -> None:
+    def apply(
+        self, solver: InitStrategySolverProtocol, vars: PEPModelVariables
+    ) -> None:
         solver._overlay_with_calibrated_levels(vars)
         solver._sync_lambda_tr_from_levels(vars)
         solver._sync_policy_params_from_vars(vars)
@@ -37,7 +39,9 @@ class GAMSBlockwiseInitializationStrategy(InitializationStrategy):
 
     mode = "gams_blockwise"
 
-    def apply(self, solver: InitStrategySolverProtocol, vars: PEPModelVariables) -> None:
+    def apply(
+        self, solver: InitStrategySolverProtocol, vars: PEPModelVariables
+    ) -> None:
         solver._overlay_with_calibrated_levels(vars)
         solver._sync_lambda_tr_from_levels(vars)
         solver._sync_policy_params_from_vars(vars)

@@ -6,6 +6,7 @@ For each GEMPACK-emitted fixture shipped with equilibria, round-trip:
 at HeaderArray level. Repeated set names (e.g. VMSB on COMM x REG x REG)
 must be preserved.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -42,7 +43,9 @@ def _ha_equal(a, b) -> tuple[bool, str]:
     if a.array.shape != b.array.shape:
         return False, f"shape for {a.name!r}: {a.array.shape} != {b.array.shape}"
     if a.array.dtype == object:
-        if [str(x).strip() for x in a.array.tolist()] != [str(x).strip() for x in b.array.tolist()]:
+        if [str(x).strip() for x in a.array.tolist()] != [
+            str(x).strip() for x in b.array.tolist()
+        ]:
             return False, f"set elements differ for {a.name!r}"
     elif a.array.dtype.kind == "i":
         if not np.array_equal(a.array, b.array):
@@ -64,14 +67,15 @@ def test_semantic_roundtrip(fixture: Path, tmp_path: Path):
     # rTGM). The writer emits them verbatim with a UserWarning — suppress
     # the noise in the round-trip suite.
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         write_har(out, original)
 
     roundtripped = read_har(out)
     assert set(original.keys()) == set(roundtripped.keys()), (
-        f"header sets differ: missing={set(original)-set(roundtripped)}, "
-        f"extra={set(roundtripped)-set(original)}"
+        f"header sets differ: missing={set(original) - set(roundtripped)}, "
+        f"extra={set(roundtripped) - set(original)}"
     )
     for name in original:
         ok, msg = _ha_equal(original[name], roundtripped[name])

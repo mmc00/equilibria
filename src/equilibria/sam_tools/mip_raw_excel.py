@@ -297,11 +297,13 @@ class MIPRawSAM(Sam):
         """
         path = Path(path)
 
-        raw_df, sector_labels, fd_labels, va_row_idx, import_row_idx = _parse_mip_raw_matrix(
-            path,
-            sheet_name,
-            va_row_label=va_row_label,
-            import_row_label=import_row_label,
+        raw_df, sector_labels, fd_labels, va_row_idx, import_row_idx = (
+            _parse_mip_raw_matrix(
+                path,
+                sheet_name,
+                va_row_label=va_row_label,
+                import_row_label=import_row_label,
+            )
         )
 
         data_start_row, data_start_col = _find_data_start(raw_df)

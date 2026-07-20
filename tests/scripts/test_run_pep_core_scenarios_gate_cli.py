@@ -88,7 +88,9 @@ class _FakePepSimulator:
         }
 
 
-def test_cli_main_success_with_reference_manifest(monkeypatch: Any, tmp_path: Path) -> None:
+def test_cli_main_success_with_reference_manifest(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     module = _load_module()
     monkeypatch.setattr(module, "PepSimulator", _FakePepSimulator)
 
@@ -125,7 +127,9 @@ def test_cli_main_success_with_reference_manifest(monkeypatch: Any, tmp_path: Pa
     assert payload["scenarios"]["government_spending"]["solve"]["converged"] is True
 
 
-def test_cli_main_returns_2_when_reference_manifest_is_incomplete(monkeypatch: Any, tmp_path: Path) -> None:
+def test_cli_main_returns_2_when_reference_manifest_is_incomplete(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     module = _load_module()
     monkeypatch.setattr(module, "PepSimulator", _FakePepSimulator)
 
@@ -152,7 +156,9 @@ def test_cli_main_returns_2_when_reference_manifest_is_incomplete(monkeypatch: A
     assert code == 2
 
 
-def test_cli_accepts_official_gams_nlp_reference_manifest(monkeypatch: Any, tmp_path: Path) -> None:
+def test_cli_accepts_official_gams_nlp_reference_manifest(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     module = _load_module()
     monkeypatch.setattr(module, "PepSimulator", _FakePepSimulator)
 
@@ -169,11 +175,11 @@ def test_cli_accepts_official_gams_nlp_reference_manifest(monkeypatch: Any, tmp_
                 "script_model_types": ["nlp"],
                 "gms_script": {"path": "reference.gms", "sha256": "gms-sha"},
                 "sam_file": {"path": "sam.xlsx", "sha256": "sam-sha"},
-                    "scenario_slices": {
-                        "base": "sim1",
-                        "export_tax": "sim1",
-                        "import_price_agr": "sim1",
-                        "import_shock": "sim1",
+                "scenario_slices": {
+                    "base": "sim1",
+                    "export_tax": "sim1",
+                    "import_price_agr": "sim1",
+                    "import_shock": "sim1",
                     "government_spending": "sim1",
                 },
                 "scenario_references": {
@@ -187,7 +193,10 @@ def test_cli_accepts_official_gams_nlp_reference_manifest(monkeypatch: Any, tmp_
                     },
                     "import_price_agr": {
                         "slice": "sim1",
-                        "results_gdx": {"path": "imp_price.gdx", "sha256": "imp-price-sha"},
+                        "results_gdx": {
+                            "path": "imp_price.gdx",
+                            "sha256": "imp-price-sha",
+                        },
                     },
                     "import_shock": {
                         "slice": "sim1",

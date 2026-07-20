@@ -1,8 +1,9 @@
 """Manual IEEM->PEP pipeline built on top of the core ``Sam`` class."""
+
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from equilibria.sam_tools.balancing import RASBalancer
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
@@ -17,7 +18,6 @@ from equilibria.sam_tools.sam_transforms import (
     move_tx_to_ti_on_i_on_sam,
     normalize_pep_accounts_on_sam,
 )
-
 
 BUILD_STEPS: Sequence[str] = (
     "normalize_accounts",
@@ -70,7 +70,9 @@ def _record_step(name: str, detail: dict[str, float]) -> dict[str, float]:
     return detail
 
 
-def run_manual_pipeline(sam: Sam, *, ras_tol: float = 1e-9, ras_max_iter: int = 500) -> ManualPipelineSummary:
+def run_manual_pipeline(
+    sam: Sam, *, ras_tol: float = 1e-9, ras_max_iter: int = 500
+) -> ManualPipelineSummary:
     """Run the manual sequence of IEEM -> PEP transformations.
 
     Args:
@@ -94,11 +96,16 @@ def run_manual_pipeline(sam: Sam, *, ras_tol: float = 1e-9, ras_max_iter: int = 
     balance_result = balancer.balance_dataframe(
         sam.to_dataframe(), tolerance=ras_tol, max_iterations=ras_max_iter
     )
-    steps.append(_record_step("balance_ras", {
-        "max_diff_before": balance_result.max_diff_before,
-        "max_diff_after": balance_result.max_diff_after,
-        "iterations": float(balance_result.iterations),
-    }))
+    steps.append(
+        _record_step(
+            "balance_ras",
+            {
+                "max_diff_before": balance_result.max_diff_before,
+                "max_diff_after": balance_result.max_diff_after,
+                "iterations": float(balance_result.iterations),
+            },
+        )
+    )
     sam.replace_dataframe(balance_result.matrix)
 
     return ManualPipelineSummary(sam, steps)
