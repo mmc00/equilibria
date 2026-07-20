@@ -15,16 +15,12 @@ from pathlib import Path
 
 # Files that are intentionally kept with canonical uppercase naming.
 ALLOWED_EXACT: set[str] = {
-    "AGENTS.md",
     "CHANGELOG.md",
     "Makefile",
     "NOTICE",
     "README.md",
     "LICENSE",
     "CITATION.cff",
-    "CLAUDE.md",
-    "GTAP_VALIDATION_STATUS.md",
-    "skills/gams-to-equilibria/SKILL.md",
     "src/equilibria/babel/gdx/README.md",
     "src/equilibria/babel/har/README.md",
     "src/equilibria/templates/gtap/README.md",
