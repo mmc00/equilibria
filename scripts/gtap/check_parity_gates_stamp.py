@@ -40,7 +40,17 @@ GENERATED_DOCS = [
     "docs/site/_static/gtap7_nlp_matrix.html",
 ]
 
-STAMP_REL = ".git/gtap-parity-gates.stamp"
+STAMP_NAME = "gtap-parity-gates.stamp"
+
+
+def stamp_path(repo: Path) -> Path:
+    """Per-worktree stamp location. In a linked worktree `.git` is a FILE
+    (gitdir pointer), so resolve the real git dir via rev-parse."""
+    git_dir = _git(repo, "rev-parse", "--git-dir") or ".git"
+    p = Path(git_dir)
+    if not p.is_absolute():
+        p = repo / p
+    return p / STAMP_NAME
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -79,13 +89,13 @@ def check(repo: Path | None = None) -> tuple[bool, str]:
     main_hash = input_hash(repo, "origin/main")
     if head_hash == main_hash:
         return True, "no gate-relevant GTAP changes vs origin/main — stamp not required"
-    stamp_path = repo / STAMP_REL
-    if not stamp_path.exists():
+    sp = stamp_path(repo)
+    if not sp.exists():
         return False, (
             "GTAP gate-relevant changes vs origin/main but no parity-gates stamp.\n"
             "Run: uv run python scripts/gtap/run_parity_gates.py"
         )
-    stamp = stamp_path.read_text().split()[0] if stamp_path.read_text().strip() else ""
+    stamp = sp.read_text().split()[0] if sp.read_text().strip() else ""
     if stamp != head_hash:
         return False, (
             "parity-gates stamp is STALE (gate-relevant content changed since the "

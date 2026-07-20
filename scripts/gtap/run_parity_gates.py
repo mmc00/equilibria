@@ -35,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_parity_gates_stamp import (  # noqa: E402
-    GENERATED_DOCS, STAMP_REL, dirty_watched, input_hash, repo_root,
+    GENERATED_DOCS, dirty_watched, input_hash, repo_root, stamp_path,
 )
 
 GATE_TESTS = [
@@ -91,8 +91,9 @@ def main() -> int:
             print(f"\nDoc regeneration failed: {' '.join(cmd)} — no stamp written.")
             return rc
 
-    (repo / STAMP_REL).write_text(input_hash(repo, "HEAD") + "\n")
-    print(f"\nGates GREEN — stamp written to {STAMP_REL}")
+    sp = stamp_path(repo)
+    sp.write_text(input_hash(repo, "HEAD") + "\n")
+    print(f"\nGates GREEN — stamp written to {sp}")
 
     changed = subprocess.run(["git", "status", "--porcelain", "--", *GENERATED_DOCS],
                              cwd=repo, capture_output=True, text=True).stdout.strip()
