@@ -1,1 +1,0 @@
-../../../../proyectos/dev-tools/equilibria-tools/plans/gtap7_status_sweep_2026-06-30.md

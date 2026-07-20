@@ -177,6 +177,81 @@ def _timing_block(timing_csv: Path) -> list[str]:
     return parts
 
 
+def _nlp_timing_section(data_dir: Path) -> list[str]:
+    """Render the NLP wall-time section from `nlp_timing.csv`.
+
+    Unlike the per-dataset MCP timing block, this is ONE table spanning every
+    (dataset, mode, ifSUB) row the benchmark ran, because the whole point is the
+    cross-dataset scaling that the NLP/IPOPT path makes possible locally.
+    """
+    csv_path = data_dir / "nlp_timing.csv"
+    if not csv_path.exists():
+        return []
+    rows = _read_csv(csv_path)
+    if not rows:
+        return []
+    meta = rows[0]
+
+    # group per (dataset, mode, ifsub) preserving first-seen order
+    groups: dict[tuple, dict[str, list[float]]] = {}
+    order: list[tuple] = []
+    for r in rows:
+        key = (r["dataset"], r.get("mode", ""), r.get("ifsub", ""))
+        if key not in groups:
+            groups[key] = {"py": [], "gams": []}
+            order.append(key)
+        for col, bucket in (("python_seconds", "py"), ("gams_local_seconds", "gams")):
+            v = (r.get(col) or "").strip()
+            if v:
+                try:
+                    groups[key][bucket].append(float(v))
+                except ValueError:
+                    pass
+
+    parts = ["## NLP wall-time (Python IPOPT vs GAMS local IPOPT)\n"]
+    parts.append(
+        "The MCP path uses PATH, which the GAMS community license caps at "
+        "1000 rows — so anything larger than ~NUS333 must go to NEOS and cannot "
+        "be timed head-to-head locally. The **NLP path uses IPOPT, an "
+        "open-source solver GAMS does *not* license-cap**, so both sides run on "
+        "the same host up to `gtap7_15x10`. Python solves the full "
+        "base→check→shock sequence with `EQUILIBRIA_GTAP_SOLVE_NLP=1`; GAMS runs "
+        "the same bundle with `ifMCP=0` + `option nlp=ipopt`. Regenerate with "
+        "`make benchmarks-nlp` (from `nlp_timing.csv`).\n"
+    )
+    parts.append(
+        f"*Generated `{meta['generated_at']}` from commit `{meta['git_sha']}`. "
+        "Warm-up run discarded; N timed runs per side. Lower is better.*\n"
+    )
+    headers = ["Dataset", "Mode", "ifSUB", "N",
+               "Python median", "GAMS median", "Python / GAMS"]
+    body = []
+    for key in order:
+        ds, mode, ifsub = key
+        py = groups[key]["py"]
+        gm = groups[key]["gams"]
+        n = max(len(py), len(gm))
+        py_med = f"{statistics.median(py):.3f}s" if py else "—"
+        gm_med = f"{statistics.median(gm):.3f}s" if gm else mx.ref("no local ref")
+        if py and gm:
+            ratio = statistics.median(py) / statistics.median(gm)
+            ratio_cell = mx.num(f"{ratio:.2f}×", "good" if ratio <= 1.0 else "warn")
+        else:
+            ratio_cell = "—"
+        body.append([mx.label(ds, mode), mode, str(ifsub), str(n),
+                     py_med, gm_med, ratio_cell])
+    parts.append(mx.raw(mx.tablecard(headers, body)))
+    parts.append("")
+    parts.append(mx.raw(mx.note(
+        "A ratio ≤ 1× means Python is at least as fast as GAMS-local on that "
+        "row. Rows with <b>no local ref</b> are timed Python-only — they exceed "
+        "what a local GAMS NLP reference was generated for, but IPOPT still "
+        "solves them in-process (the historical large-model hang was "
+        "PATH-specific, not IPOPT).")))
+    parts.append("")
+    return parts
+
+
 def _render_dataset(slug: str, title: str, blurb: str, data_dir: Path) -> str:
     parts = [f"## {title}\n", blurb, ""]
     neos_csv = data_dir / f"{slug}.csv"
@@ -228,8 +303,9 @@ when GAMS can run locally. Numbers come from CSVs committed under
 files (it has no GAMS/PATH installed). Regenerate locally with:
 
 ```bash
-make benchmarks           # all datasets
+make benchmarks           # all datasets (parity + MCP wall-time)
 make benchmarks-nus333    # NUS333 only (also produces local parity + timing)
+make benchmarks-nlp       # NLP wall-time: Python IPOPT vs GAMS local IPOPT
 ```
 
 The default number of timing runs is `BENCH_RUNS=5` (override on the
@@ -260,6 +336,9 @@ def render(out_path: Path, data_dir: Path) -> None:
     body = [HEADER]
     for slug, title, blurb in DATASETS:
         body.append(_render_dataset(slug, title, blurb, data_dir))
+    nlp = _nlp_timing_section(data_dir)
+    if nlp:
+        body.append("\n".join(nlp))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(body) + "\n")
 
