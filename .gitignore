@@ -353,7 +353,21 @@ docs/findings/gams_formulation_analysis.md
 
 # Local agent state and in-progress plans
 .claude/
-docs/superpowers/plans/
+.superpowers/
+docs/superpowers/
+
+# Personal dev-tools mounts (stow symlinks into ~/proyectos/dev-tools;
+# not part of the published repo — see AGENTS.md/CLAUDE.md, plan logs, parity_cascade)
+/.claude
+/AGENTS.md
+/CLAUDE.md
+/parity_cascade
+/submit_nl_to_neos_path.py
+/[0-9][0-9][0-9][0-9]-*.md
+/gtap7_status_sweep_*.md
+/GTAP_VALIDATION_STATUS.md
+/plan_*.md
+/skills/
 
 # GTAP scratch artifacts (accidental `con` redirect, fixed-script experiments)
 src/equilibria/templates/reference/gtap/scripts/con

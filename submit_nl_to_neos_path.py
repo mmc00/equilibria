@@ -1,1 +1,0 @@
-../../../../proyectos/dev-tools/equilibria-tools/scripts/submit_nl_to_neos_path.py

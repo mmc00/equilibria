@@ -345,7 +345,7 @@ Notes:
 - 9x10 uses **rate scaling** (`tm = tm_base * (1 + tm_shock)`); NUS333 uses **power scaling** (`(1+imptx) * 1.10 - 1`). The two datasets follow different upstream conventions.
 - Counterfactual builds must pass `t0_snapshot=base_model` so CES weights (alphad/alpham/betap/betag/betas) calibrate against the converged baseline rather than the perturbed state.
 - Tax-rate symbols (`imptx`, `exptx`, `prdtx`, `fcttx`, `fctts`) are mutable `Param`s, not `Var`s, so warm-start scripts that copy Vars between baseline and shock models do not overwrite the shocked values.
-- See `CLAUDE.md` and `GTAP_VALIDATION_STATUS.md` for the full audit trail; per-fix notes live in `~/.claude/projects/.../memory/gtap_full_parity_achieved.md`.
+- See the [GTAP parity documentation](https://equilibria.readthedocs.io/) for the full audit trail and per-dataset coverage matrix.
 
 **Roadmap (in order):**
 
