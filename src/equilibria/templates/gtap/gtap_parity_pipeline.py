@@ -26,15 +26,18 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values, read_variable_values
-from equilibria.templates.gtap import (
-    GTAPModelEquations,
+# Import from submodules (not the parent package) to avoid a circular import:
+# `equilibria.templates.gtap.__init__` imports this module, so importing back
+# from the package would leave it partially initialized. Submodule-direct
+# imports also make the ordering isort-stable.
+from equilibria.templates.gtap.gtap_contract import build_gtap_contract
+from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+from equilibria.templates.gtap.gtap_parameters import (
+    GTAPBenchmarkValues,
     GTAPParameters,
-    GTAPSets,
-    GTAPSolver,
-    build_gtap_contract,
 )
-from equilibria.templates.gtap.gtap_parameters import GTAPBenchmarkValues
-from equilibria.templates.gtap.gtap_solver import SolverResult
+from equilibria.templates.gtap.gtap_sets import GTAPSets
+from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult
 
 logger = logging.getLogger(__name__)
 
