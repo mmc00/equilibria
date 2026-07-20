@@ -242,6 +242,7 @@ scripts/gtap/*
 !scripts/gtap/diff_9x10_full.py
 !scripts/gtap/diff_nus333_full.py
 !scripts/gtap/bench_nus333_dual.py
+!scripts/gtap/bench_nlp_timing.py
 !scripts/gtap/compare_nus333_rungtap.py
 !scripts/gtap/compare_9x10_rungtap.py
 !scripts/gtap/nl_compare.py
