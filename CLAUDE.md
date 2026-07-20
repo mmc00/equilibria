@@ -58,6 +58,19 @@ Este test construye el `.nl` de Python para cada dataset `gtap7_*` y compara coe
 - **`gtap7_20x41`** solo se corre localmente (fixture ~159MB, no está en git).
 - El CI corre este gate automáticamente en cada push/PR (`gtap7-nl-parity` job en `.github/workflows/tests.yml`).
 
+## Gates de integración locales NLP-vs-NLP + MCP-vs-MCP (obligatorios antes de push/PR)
+
+Los sweeps completos de paridad (`test_gtap7_mcp_parity` 18 filas + `test_gtap7_nlp_parity` 14 filas, marcados `integration`) son la prueba de regresión REAL de los gaps y son LOCAL-ONLY (necesitan PATH C-API/IPOPT + fixtures — CI no puede correrlos). Antes de CUALQUIER push/PR que toque territorio GTAP:
+
+```bash
+uv run python scripts/gtap/run_parity_gates.py        # full: gates + regen docs + stamp (~20 min)
+uv run python scripts/gtap/run_parity_gates.py --quick # solo gates, sin stamp (iteración)
+```
+
+El runner corre los 4 gates (MCP, NLP, `.nl`, coverage-sync), **regenera la doc medida** (coverage matrix .md + las 2 páginas HTML — la doc SIEMPRE refleja lo medido; si cambian, commitearlas), y escribe `.git/gtap-parity-gates.stamp` con el hash de los árboles de INPUT (src/…/gtap, scripts/gtap, tests de gates, fixtures — commits de docs NO lo invalidan).
+
+**Enforcement por hook de Claude** (`.claude/settings.json`, PreToolUse sobre Bash → `scripts/gtap/claude_hooks/block_push_without_gates.py`): cualquier `git push` / `gh pr create|merge` se BLOQUEA (exit 2, la razón vuelve a Claude) si el stamp falta o está stale, o si hay paths de gate sucios. Pushes que NO cambian los árboles GTAP vs origin/main pasan sin stamp (trabajo no-GTAP nunca se bloquea). Escape de emergencia: `GTAP_GATES_SKIP=1`. Checker rápido manual: `python3 scripts/gtap/check_parity_gates_stamp.py`.
+
 ## Disciplina de git (obligatoria)
 
 Cada corrida de validación debe tener un commit limpio asociado. Flujo obligatorio:
