@@ -17,6 +17,7 @@ Default pep2 members (from PEPModelState):
   AGNG = AG \\ {gvt}                  non-government agents
   AGD  = AG \\ {row}                  domestic agents
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -44,13 +45,19 @@ class PEPSets:
         return [i for i in self.I if i != self.walras_i]
 
     @classmethod
-    def from_state(cls, state: Any) -> "PEPSets":
+    def from_state(cls, state: Any) -> PEPSets:
         s = state.sets
         I = list(s["I"])
         walras_i = "agr" if "agr" in I else (I[0] if I else "agr")
         return cls(
-            H=list(s["H"]), F=list(s["F"]), K=list(s["K"]), L=list(s["L"]),
-            J=list(s["J"]), I=I,
-            AG=list(s["AG"]), AGNG=list(s["AGNG"]), AGD=list(s["AGD"]),
+            H=list(s["H"]),
+            F=list(s["F"]),
+            K=list(s["K"]),
+            L=list(s["L"]),
+            J=list(s["J"]),
+            I=I,
+            AG=list(s["AG"]),
+            AGNG=list(s["AGNG"]),
+            AGD=list(s["AGD"]),
             walras_i=walras_i,
         )

@@ -17,9 +17,10 @@ re-loading via ``GTAPParameters.load_from_har`` (round-trip validated by
 from __future__ import annotations
 
 import struct
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any
 
 import numpy as np
 import pyomo.environ as pyo
@@ -40,6 +41,7 @@ _INT = struct.Struct("<i")
 # HAR low-level writers (factored from welfare_decomp_har.py)
 # ---------------------------------------------------------------------------
 
+
 def _record(payload: bytes) -> bytes:
     n = len(payload)
     return _INT.pack(n) + payload + _INT.pack(n)
@@ -53,7 +55,9 @@ def _name_record(name: str) -> bytes:
     return _record(name.upper().ljust(4)[:4].encode("ascii"))
 
 
-def _meta_record(type_token: str, long_name: str, *, n_total: int = 0, width: int = 12) -> bytes:
+def _meta_record(
+    type_token: str, long_name: str, *, n_total: int = 0, width: int = 12
+) -> bytes:
     payload = (
         _PAD
         + type_token.ljust(6)[:6].encode("ascii")
@@ -65,7 +69,7 @@ def _meta_record(type_token: str, long_name: str, *, n_total: int = 0, width: in
 
 def _set_descriptor(coeff_name: str, set_names: Iterable[str]) -> bytes:
     sn = list(set_names)
-    unique: List[str] = []
+    unique: list[str] = []
     for s in sn:
         if s not in unique:
             unique.append(s)
@@ -81,7 +85,7 @@ def _set_descriptor(coeff_name: str, set_names: Iterable[str]) -> bytes:
     return _record(payload)
 
 
-def _set_element_record(elements: List[str]) -> bytes:
+def _set_element_record(elements: list[str]) -> bytes:
     n = len(elements)
     payload = (
         _PAD
@@ -113,7 +117,7 @@ def _data_record(arr: np.ndarray) -> bytes:
     return _record(payload)
 
 
-def _write_1cfull(name: str, long_name: str, elements: List[str]) -> bytes:
+def _write_1cfull(name: str, long_name: str, elements: list[str]) -> bytes:
     return (
         _name_record(name)
         + _meta_record("1CFULL", long_name, n_total=len(elements), width=12)
@@ -125,15 +129,15 @@ def _write_refull(
     name: str,
     long_name: str,
     coeff_name: str,
-    set_names: List[str],
-    set_elements: List[List[str]],
+    set_names: list[str],
+    set_elements: list[list[str]],
     array: np.ndarray,
 ) -> bytes:
-    unique_names: List[str] = []
+    unique_names: list[str] = []
     for sn in set_names:
         if sn not in unique_names:
             unique_names.append(sn)
-    name_to_elems = dict(zip(set_names, set_elements))
+    name_to_elems = dict(zip(set_names, set_elements, strict=False))
     shape = tuple(len(set_elements[i]) for i in range(len(set_names)))
 
     blob = _name_record(name) + _meta_record("REFULL", long_name)
@@ -162,7 +166,7 @@ def _safe_value(var: Any, default: float = 0.0) -> float:
     if v is None:
         return default
     fv = float(v)
-    if not (fv == fv) or fv > _FINITE_CEIL or fv < -_FINITE_CEIL:
+    if fv != fv or fv > _FINITE_CEIL or fv < -_FINITE_CEIL:
         # NaN, inf, or absurdly large — treat as missing.
         return default
     return max(0.0, fv)
@@ -188,19 +192,19 @@ class AltertaxRebalanceResult:
     """
 
     output_path: Path
-    regions: List[str]
-    commodities: List[str]
-    sectors: List[str]
-    factors: List[str]
-    scale_rgdpmp: Dict[str, float]
-    sam_totals: Dict[str, float]
+    regions: list[str]
+    commodities: list[str]
+    sectors: list[str]
+    factors: list[str]
+    scale_rgdpmp: dict[str, float]
+    sam_totals: dict[str, float]
 
 
 def _extract_arrays(
     model: pyo.ConcreteModel,
     base_params: GTAPParameters,
     sets: GTAPSets,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """Extract VxxB arrays from solved Pyomo state.
 
     Mirrors steps 2-3 of cgebox altertax.gms, simplified for the standard
@@ -327,6 +331,7 @@ def _extract_arrays(
 # Top-level rebalance
 # ---------------------------------------------------------------------------
 
+
 def rebalance_to_altertax_dataset(
     base_params: GTAPParameters,
     shock_params: GTAPParameters,
@@ -365,13 +370,13 @@ def rebalance_to_altertax_dataset(
 
     # Real-GDP scale (step 9): 1/pgdpmp_shock
     pgdpmp = _model_var(shock_model, "pgdpmp")
-    scale_rgdpmp: Dict[str, float] = {}
+    scale_rgdpmp: dict[str, float] = {}
     if pgdpmp is not None:
         for r in R:
             v = _safe_value(pgdpmp[r], 1.0)
             scale_rgdpmp[r] = 1.0 / v if v > 0 else 1.0
     else:
-        scale_rgdpmp = {r: 1.0 for r in R}
+        scale_rgdpmp = dict.fromkeys(R, 1.0)
 
     # ---- Build HAR blob ----
     blob = b""
@@ -405,14 +410,18 @@ def rebalance_to_altertax_dataset(
         # Note: EVFB/EVOS are (R, F, A); VDFB/VMFB are (R, I, A). Choose accordingly.
         if h in ("EVFB", "EVOS"):
             blob += _write_refull(
-                h, long_names[h], h,
+                h,
+                long_names[h],
+                h,
                 ["REG", "ENDW", "ACTS"],
                 [R, F, A],
                 arrays[h],
             )
         else:
             blob += _write_refull(
-                h, long_names[h], h,
+                h,
+                long_names[h],
+                h,
                 ["REG", "COMM", "ACTS"],
                 [R, I, A],
                 arrays[h],
@@ -420,7 +429,9 @@ def rebalance_to_altertax_dataset(
 
     for h in headers_3d_rir:
         blob += _write_refull(
-            h, long_names[h], h,
+            h,
+            long_names[h],
+            h,
             ["REG", "COMM", "REG"],
             [R, I, R],
             arrays[h],
@@ -428,7 +439,9 @@ def rebalance_to_altertax_dataset(
 
     for h in headers_2d:
         blob += _write_refull(
-            h, long_names[h], h,
+            h,
+            long_names[h],
+            h,
             ["REG", "COMM"],
             [R, I],
             arrays[h],
@@ -437,8 +450,12 @@ def rebalance_to_altertax_dataset(
     # Real-GDP scale (1D over REG)
     rgdp_vec = np.array([scale_rgdpmp[r] for r in R], dtype=np.float64)
     blob += _write_refull(
-        "RGDP", "Real GDP scale 1/pgdpmp",
-        "RGDP", ["REG"], [R], rgdp_vec,
+        "RGDP",
+        "Real GDP scale 1/pgdpmp",
+        "RGDP",
+        ["REG"],
+        [R],
+        rgdp_vec,
     )
 
     output_path = Path(output_path)

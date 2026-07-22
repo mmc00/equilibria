@@ -135,7 +135,9 @@ def test_ieem_adapter_supports_native_hook_solver_and_compare() -> None:
     ).fit()
 
     report = sim.run_scenarios(
-        scenarios=[Scenario(name="plus_three", shocks=[Shock(var="x", op="add", values=3.0)])],
+        scenarios=[
+            Scenario(name="plus_three", shocks=[Shock(var="x", op="add", values=3.0)])
+        ],
         reference_results_gdx="dummy.gdx",
         warm_start=True,
     )

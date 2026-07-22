@@ -125,7 +125,9 @@ def compare_with_gams(
     mismatches: list[dict[str, Any]] = []
 
     for symbol in symbols:
-        for idx, gams_val in _iter_slice_records(gdxdump, results_path, symbol, gams_slice):
+        for idx, gams_val in _iter_slice_records(
+            gdxdump, results_path, symbol, gams_slice
+        ):
             py_val = get_solution_value(solution_vars, symbol, idx, solution_params)
             if py_val is None:
                 missing += 1

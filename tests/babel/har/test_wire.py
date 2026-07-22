@@ -4,23 +4,27 @@ Each encoder must produce bytes that the matching decoder parses back to
 the original input. These tests do not touch any HAR fixture — they only
 exercise the wire-format primitives in isolation.
 """
+
 from __future__ import annotations
 
 import pytest
 
 from equilibria.babel.har import wire
 
-
 # ── Fortran record framing ───────────────────────────────────────────────────
 
-@pytest.mark.parametrize("payload", [
-    b"",
-    b"x",
-    b"abcd",
-    b"\x00\x01\x02\x03\x04",
-    b"hello world",
-    b"A" * 1024,
-])
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"",
+        b"x",
+        b"abcd",
+        b"\x00\x01\x02\x03\x04",
+        b"hello world",
+        b"A" * 1024,
+    ],
+)
 def test_write_record_roundtrip(payload):
     out = bytearray()
     wire.write_record(out, payload)
@@ -37,6 +41,7 @@ def test_write_multiple_records_roundtrip():
 
 
 # ── Fixed-width string blocks ────────────────────────────────────────────────
+
 
 def test_encode_decode_str_block_default_width():
     strings = ["USA", "ROW", "AGR"]
@@ -64,6 +69,7 @@ def test_encode_str_block_rejects_overlong():
 
 # ── Set-element record codec ─────────────────────────────────────────────────
 
+
 def test_set_element_record_roundtrip_single_record():
     elements = ["USA", "ROW", "EUR", "ASI"]
     rec = wire.write_set_element_record(elements, n_total=len(elements), flag=1)
@@ -76,6 +82,7 @@ def test_set_element_record_roundtrip_empty():
 
 
 # ── Set-descriptor codec ─────────────────────────────────────────────────────
+
 
 def test_set_descriptor_roundtrip_simple():
     payload = wire.build_set_descriptor("VDPP", ["COMM", "REG"])

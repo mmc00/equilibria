@@ -46,15 +46,13 @@ def dataset_path(category: Category, name: str) -> Path:
     if category == "gtap":
         if name not in _GTAP_DATASETS:
             raise ValueError(
-                f"Unknown gtap dataset: {name!r}. "
-                f"Available: {sorted(_GTAP_DATASETS)}"
+                f"Unknown gtap dataset: {name!r}. Available: {sorted(_GTAP_DATASETS)}"
             )
         return _GTAP_DATASETS[name]
     if category == "pep":
         if name not in _PEP_DATASETS:
             raise ValueError(
-                f"Unknown pep dataset: {name!r}. "
-                f"Available: {sorted(_PEP_DATASETS)}"
+                f"Unknown pep dataset: {name!r}. Available: {sorted(_PEP_DATASETS)}"
             )
         return _PEP_DATASETS[name]
     raise ValueError(f"Unknown category: {category!r}. Expected 'gtap' or 'pep'.")
@@ -119,10 +117,7 @@ def load_bundled(category: Category, name: str = "default"):
         cache_dir.mkdir(parents=True, exist_ok=True)
         sam_gdx = cache_dir / "SAM-V2_0_4D.gdx"
 
-        if (
-            not sam_gdx.exists()
-            or sam_gdx.stat().st_mtime < sam_xlsx.stat().st_mtime
-        ):
+        if not sam_gdx.exists() or sam_gdx.stat().st_mtime < sam_xlsx.stat().st_mtime:
             generate_sam_4d_gdx(sam_xlsx, sam_gdx)
 
         return PEPModelCalibrator(sam_file=sam_gdx, val_par_file=val_par_xlsx)

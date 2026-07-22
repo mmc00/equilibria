@@ -14,7 +14,9 @@ class StrictGAMSInitializationStrategy(InitializationStrategy):
 
     mode = "gams"
 
-    def apply(self, solver: InitStrategySolverProtocol, vars: PEPModelVariables) -> None:
+    def apply(
+        self, solver: InitStrategySolverProtocol, vars: PEPModelVariables
+    ) -> None:
         solver._ensure_strict_gams_baseline_compatibility()
         solver._overlay_with_gams_levels(vars)
         solver._sync_lambda_tr_from_levels(vars)
@@ -22,7 +24,9 @@ class StrictGAMSInitializationStrategy(InitializationStrategy):
         _set_walras_residual(solver, vars)
 
 
-def _set_walras_residual(solver: InitStrategySolverProtocol, vars: PEPModelVariables) -> None:
+def _set_walras_residual(
+    solver: InitStrategySolverProtocol, vars: PEPModelVariables
+) -> None:
     i_set = solver.sets.get("I", [])
     walras_i = "agr" if "agr" in i_set else (i_set[0] if i_set else None)
     if walras_i is None:

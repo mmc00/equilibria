@@ -92,8 +92,8 @@ print(gdx_data['elements'])
 
 ```python
 from equilibria.babel.gdx.reader import (
-    read_gdx, 
-    get_sets, 
+    read_gdx,
+    get_sets,
     get_parameters,
     get_variables,
     get_equations

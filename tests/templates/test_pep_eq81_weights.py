@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables
+from equilibria.templates.pep_model_equations import (
+    PEPModelEquations,
+    PEPModelVariables,
+)
 
 
 def _minimal_sets() -> dict[str, list[str]]:

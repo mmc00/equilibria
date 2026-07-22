@@ -14,6 +14,7 @@ This test gates on the resolver returning exactly the pfteq violation.
 Requires the local GAMS reference + the model build path, so it is skipped when
 the reference .gms is absent.
 """
+
 import sys
 from pathlib import Path
 
@@ -34,6 +35,7 @@ pytestmark = pytest.mark.skipif(
 
 def _run_check():
     import argparse
+
     from diff_mcp_pairing import _work
 
     args = argparse.Namespace(

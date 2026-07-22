@@ -7,13 +7,14 @@ compatible with Pyomo and other algebraic modeling languages.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from equilibria.core.sets import SetManager
     from equilibria.core.parameters import Parameter
+    from equilibria.core.sets import SetManager
     from equilibria.core.variables import Variable
 
 

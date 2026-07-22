@@ -11,7 +11,7 @@ than ``(r,)``).
 from __future__ import annotations
 
 from dataclasses import fields
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from equilibria.templates.gtap.altertax.calibration_sequence import (
     compute_altertax_initial_values,
@@ -20,9 +20,9 @@ from equilibria.templates.gtap.gtap_parameters import GTAPParameters
 from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
 
-def _unwrap_single(d: Dict[Tuple, float]) -> Dict[str, float]:
+def _unwrap_single(d: dict[tuple, float]) -> dict[str, float]:
     """Convert ``{("r",): v}`` to ``{"r": v}`` for vars indexed by a single set."""
-    out: Dict[str, float] = {}
+    out: dict[str, float] = {}
     for k, v in d.items():
         if isinstance(k, tuple) and len(k) == 1:
             out[k[0]] = v
@@ -31,9 +31,9 @@ def _unwrap_single(d: Dict[Tuple, float]) -> Dict[str, float]:
     return out
 
 
-def _drop_agent_dim(d: Dict[Tuple, float]) -> Dict[str, float]:
+def _drop_agent_dim(d: dict[tuple, float]) -> dict[str, float]:
     """Convert ``{("r","hhd"): v}`` to ``{"r": v}`` for welfare vars."""
-    out: Dict[str, float] = {}
+    out: dict[str, float] = {}
     for k, v in d.items():
         if isinstance(k, tuple) and len(k) >= 1:
             out[k[0]] = v
@@ -42,7 +42,7 @@ def _drop_agent_dim(d: Dict[Tuple, float]) -> Dict[str, float]:
 
 def build_altertax_warm_start_snapshot(
     params: GTAPParameters,
-    baseline: Optional[GTAPVariableSnapshot] = None,
+    baseline: GTAPVariableSnapshot | None = None,
 ) -> GTAPVariableSnapshot:
     """Build a warm-start snapshot for the altertax solve.
 
@@ -52,7 +52,7 @@ def build_altertax_warm_start_snapshot(
     model build itself picks up the new wedges -- the snapshot only carries
     the variable initial *levels*.
     """
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
     if baseline is not None:
         for f in fields(GTAPVariableSnapshot):
             val = getattr(baseline, f.name, None)

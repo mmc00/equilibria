@@ -3,7 +3,7 @@ Comprehensive tests for multidimensional sets in GDX reader.
 
 Tests cover 2D, 3D, 4D sets with various patterns:
 - Sparse sets
-- Full/dense sets  
+- Full/dense sets
 - Cartesian products
 - Empty sets
 - Sets with parameters
@@ -77,7 +77,9 @@ class Test2DSets:
 
     def test_2d_cartesian_product(self) -> None:
         """Should read 2D set representing Cartesian product."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_cartesian.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_cartesian.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         cart_sym = get_symbol(gdx_data, "cart")
@@ -91,9 +93,12 @@ class Test2DSets:
         # Check all combinations exist
         elements_set = set(elements)
         expected = {
-            ("a1", "b1"), ("a1", "b2"),
-            ("a2", "b1"), ("a2", "b2"),
-            ("a3", "b1"), ("a3", "b2"),
+            ("a1", "b1"),
+            ("a1", "b2"),
+            ("a2", "b1"),
+            ("a2", "b2"),
+            ("a3", "b1"),
+            ("a3", "b2"),
         }
         assert elements_set == expected
 
@@ -112,7 +117,9 @@ class Test2DSets:
 
     def test_2d_set_with_parameter(self) -> None:
         """Should read 2D set when file also contains parameters."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         # Should have 4 symbols: src, dst, route, cost
@@ -138,7 +145,9 @@ class Test2DSets:
 
     def test_2d_set_preserves_order(self) -> None:
         """Should preserve insertion order of set elements."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         elements = read_set_elements(gdx_data, "route")
@@ -239,7 +248,9 @@ class TestSetEdgeCases:
 
     def test_read_nonexistent_set_raises(self) -> None:
         """Should raise error for non-existent set."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         with pytest.raises(ValueError, match="Symbol 'nonexistent' not found"):
@@ -247,7 +258,9 @@ class TestSetEdgeCases:
 
     def test_read_parameter_as_set_raises(self) -> None:
         """Should raise error when trying to read parameter as set."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         with pytest.raises(ValueError, match="not a set"):
@@ -255,7 +268,9 @@ class TestSetEdgeCases:
 
     def test_get_all_sets_filters_correctly(self) -> None:
         """Should filter only sets when getting all sets."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         sets = get_sets(gdx_data)
@@ -274,7 +289,9 @@ class TestSetEdgeCases:
 
     def test_2d_set_element_types(self) -> None:
         """Should return tuples of strings for 2D sets."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         elements = read_set_elements(gdx_data, "route")
@@ -320,7 +337,9 @@ class TestSetPerformance:
 
     def test_multiple_set_reads_consistent(self) -> None:
         """Should return same results when reading set multiple times."""
-        fixture = Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        fixture = (
+            Path(__file__).parent.parent.parent / "fixtures" / "set_2d_with_param.gdx"
+        )
         gdx_data = read_gdx(fixture)
 
         elements1 = read_set_elements(gdx_data, "route")

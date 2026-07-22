@@ -10,7 +10,6 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, Tuple
 
 import pytest
 
@@ -21,7 +20,6 @@ from equilibria.templates.gtap.welfare_decomp import (
     compute_welfare_decomposition_homotopy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Lightweight mocks for GTAPParameters
 # ---------------------------------------------------------------------------
@@ -29,32 +27,32 @@ from equilibria.templates.gtap.welfare_decomp import (
 
 @dataclass
 class _MockBenchmark:
-    vom: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    vmsb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    vxsb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    vfob: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    vcif: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    evfb: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    evos: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    vdpb: Dict[Tuple, float] = field(default_factory=dict)
-    vdpp: Dict[Tuple, float] = field(default_factory=dict)
-    vmpb: Dict[Tuple, float] = field(default_factory=dict)
-    vmpp: Dict[Tuple, float] = field(default_factory=dict)
-    vdgb: Dict[Tuple, float] = field(default_factory=dict)
-    vdgp: Dict[Tuple, float] = field(default_factory=dict)
-    vmgb: Dict[Tuple, float] = field(default_factory=dict)
-    vmgp: Dict[Tuple, float] = field(default_factory=dict)
-    vdib: Dict[Tuple, float] = field(default_factory=dict)
-    vdip: Dict[Tuple, float] = field(default_factory=dict)
-    vmib: Dict[Tuple, float] = field(default_factory=dict)
-    vmip: Dict[Tuple, float] = field(default_factory=dict)
+    vom: dict[tuple[str, str], float] = field(default_factory=dict)
+    vmsb: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    vxsb: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    vfob: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    vcif: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    evfb: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    evos: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    vdpb: dict[tuple, float] = field(default_factory=dict)
+    vdpp: dict[tuple, float] = field(default_factory=dict)
+    vmpb: dict[tuple, float] = field(default_factory=dict)
+    vmpp: dict[tuple, float] = field(default_factory=dict)
+    vdgb: dict[tuple, float] = field(default_factory=dict)
+    vdgp: dict[tuple, float] = field(default_factory=dict)
+    vmgb: dict[tuple, float] = field(default_factory=dict)
+    vmgp: dict[tuple, float] = field(default_factory=dict)
+    vdib: dict[tuple, float] = field(default_factory=dict)
+    vdip: dict[tuple, float] = field(default_factory=dict)
+    vmib: dict[tuple, float] = field(default_factory=dict)
+    vmip: dict[tuple, float] = field(default_factory=dict)
 
 
 @dataclass
 class _MockTaxes:
-    rto: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    rtms: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    rtxs: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    rto: dict[tuple[str, str], float] = field(default_factory=dict)
+    rtms: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    rtxs: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
 
 def _mock_params(regions, factors=("Labor",)):
@@ -68,7 +66,7 @@ def _mock_params(regions, factors=("Labor",)):
 
 def _snapshot(**buckets):
     """Build a `_collect_key_quantities`-style snapshot from kwargs."""
-    out: Dict[str, Dict[str, float]] = {}
+    out: dict[str, dict[str, float]] = {}
     for bucket_name, values in buckets.items():
         out[bucket_name] = {}
         for key, val in values.items():
@@ -88,8 +86,17 @@ def _snapshot(**buckets):
 def test_alloc_buckets_eleven():
     assert len(ALLOC_BUCKETS) == 11
     assert set(ALLOC_BUCKETS) == {
-        "ptax", "imptx", "exptx", "dftax", "mftax",
-        "dctax", "mctax", "dgtax", "mgtax", "ditx", "mitx",
+        "ptax",
+        "imptx",
+        "exptx",
+        "dftax",
+        "mftax",
+        "dctax",
+        "mctax",
+        "dgtax",
+        "mgtax",
+        "ditx",
+        "mitx",
     }
 
 
@@ -108,7 +115,17 @@ def test_welfare_components_as_dict_has_all_keys():
     d = w.as_dict()
     for bucket in ALLOC_BUCKETS:
         assert f"A_{bucket}" in d
-    for key in ("A_total", "T", "IS", "ENDW", "TECH", "total", "EV", "residual", "residual_pct_of_EV"):
+    for key in (
+        "A_total",
+        "T",
+        "IS",
+        "ENDW",
+        "TECH",
+        "total",
+        "EV",
+        "residual",
+        "residual_pct_of_EV",
+    ):
         assert key in d
 
 
@@ -183,20 +200,26 @@ def test_terms_of_trade_exporter_gains_importer_loses_symmetric():
     base.benchmark.vcif[("USA", "wheat", "CHN")] = 110.0
 
     snap_base = _snapshot(xw={("USA", "wheat", "CHN"): 100.0}, pnum={"__scalar__": 1.0})
-    snap_shock = _snapshot(xw={("USA", "wheat", "CHN"): 110.0}, pnum={"__scalar__": 1.0})
+    snap_shock = _snapshot(
+        xw={("USA", "wheat", "CHN"): 110.0}, pnum={"__scalar__": 1.0}
+    )
 
-    out = compute_welfare_decomposition(base, _mock_params(["USA", "CHN"]), snap_base, snap_shock)
+    out = compute_welfare_decomposition(
+        base, _mock_params(["USA", "CHN"]), snap_base, snap_shock
+    )
 
     # pfob_base = 100/100 = 1.0; Δxw = 10 ⇒ USA gains +10
-    assert out["USA"].T == pytest.approx(10.0)
+    assert pytest.approx(10.0) == out["USA"].T
     # pcif_base = 110/100 = 1.1; CHN loses 1.1·10 = -11
-    assert out["CHN"].T == pytest.approx(-11.0)
+    assert pytest.approx(-11.0) == out["CHN"].T
 
 
 def test_endowment_zero_when_factors_unchanged():
     base = _mock_params(["USA"], factors=["Labor"])
     snap = _snapshot(xft={("USA", "Labor"): 100.0}, pft={("USA", "Labor"): 1.0})
-    out = compute_welfare_decomposition(base, _mock_params(["USA"], factors=["Labor"]), snap, snap)
+    out = compute_welfare_decomposition(
+        base, _mock_params(["USA"], factors=["Labor"]), snap, snap
+    )
     assert out["USA"].ENDW == 0.0
 
 
@@ -204,14 +227,18 @@ def test_endowment_positive_when_factor_grows():
     base = _mock_params(["USA"], factors=["Labor"])
     snap_b = _snapshot(xft={("USA", "Labor"): 100.0}, pft={("USA", "Labor"): 1.0})
     snap_s = _snapshot(xft={("USA", "Labor"): 105.0}, pft={("USA", "Labor"): 1.0})
-    out = compute_welfare_decomposition(base, _mock_params(["USA"], factors=["Labor"]), snap_b, snap_s)
-    assert out["USA"].ENDW == pytest.approx(5.0)
+    out = compute_welfare_decomposition(
+        base, _mock_params(["USA"], factors=["Labor"]), snap_b, snap_s
+    )
+    assert pytest.approx(5.0) == out["USA"].ENDW
 
 
 def test_tech_always_zero_in_current_impl():
     """TECH is a stub until aoreg/afe surfaced."""
     base = _mock_params(["USA"])
-    out = compute_welfare_decomposition(base, _mock_params(["USA"]), _snapshot(), _snapshot())
+    out = compute_welfare_decomposition(
+        base, _mock_params(["USA"]), _snapshot(), _snapshot()
+    )
     assert out["USA"].TECH == 0.0
 
 
@@ -222,7 +249,7 @@ def test_ev_uses_yc_base_times_delta_uh():
 
     out = compute_welfare_decomposition(base, _mock_params(["USA"]), snap_b, snap_s)
     # EV = 1000 · (1.005 - 1.0) = 5.0
-    assert out["USA"].EV == pytest.approx(5.0)
+    assert pytest.approx(5.0) == out["USA"].EV
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +279,9 @@ def test_homotopy_with_two_steps_equals_single_step():
     final.benchmark.vom[("USA", "agri")] = 110.0
 
     single = compute_welfare_decomposition(base, final, _snapshot(), _snapshot())
-    homo = compute_welfare_decomposition_homotopy([base, final], [_snapshot(), _snapshot()])
+    homo = compute_welfare_decomposition_homotopy(
+        [base, final], [_snapshot(), _snapshot()]
+    )
 
     assert homo["USA"].A["ptax"] == pytest.approx(single["USA"].A["ptax"])
 

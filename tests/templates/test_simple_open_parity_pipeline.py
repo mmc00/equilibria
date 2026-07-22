@@ -10,7 +10,9 @@ from equilibria.templates.simple_open_parity_pipeline import (
 )
 
 
-def test_load_simple_open_gams_reference_uses_babel_reader(monkeypatch: Any, tmp_path: Path) -> None:
+def test_load_simple_open_gams_reference_uses_babel_reader(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     gdx_path = tmp_path / "simple_open.gdx"
     gdx_path.write_bytes(b"dummy")
 
@@ -20,7 +22,14 @@ def test_load_simple_open_gams_reference_uses_babel_reader(monkeypatch: Any, tmp
         assert Path(path) == gdx_path
         return {"filepath": str(gdx_path), "symbols": [], "elements": [], "domains": []}
 
-    def fake_decode(*, gdx_path: Path, gdx_data: dict[str, Any], symbol_name: str, ordered_names: tuple[str, ...], fill_missing_with_zero: bool) -> dict[str, float]:
+    def fake_decode(
+        *,
+        gdx_path: Path,
+        gdx_data: dict[str, Any],
+        symbol_name: str,
+        ordered_names: tuple[str, ...],
+        fill_missing_with_zero: bool,
+    ) -> dict[str, float]:
         calls.append(symbol_name)
         if symbol_name == "benchmark":
             return {"VA": 1.0, "INT": 0.5}
@@ -29,7 +38,12 @@ def test_load_simple_open_gams_reference_uses_babel_reader(monkeypatch: Any, tmp
         if symbol_name == "residual":
             return {"EQ_VA": 0.0, "EQ_INT": 0.0, "EQ_CET": 0.0}
         if symbol_name == "calib":
-            return {"alpha_va": 0.4, "modelstat": 1.0, "solvestat": 1.0, "closure_code": 101.0}
+            return {
+                "alpha_va": 0.4,
+                "modelstat": 1.0,
+                "solvestat": 1.0,
+                "closure_code": 101.0,
+            }
         raise AssertionError(symbol_name)
 
     monkeypatch.setattr(
@@ -47,12 +61,19 @@ def test_load_simple_open_gams_reference_uses_babel_reader(monkeypatch: Any, tmp
         benchmark={"VA": 1.0, "INT": 0.5},
         level={"VA": 1.0, "INT": 0.5},
         residual={"EQ_VA": 0.0, "EQ_INT": 0.0, "EQ_CET": 0.0},
-        calib={"alpha_va": 0.4, "modelstat": 1.0, "solvestat": 1.0, "closure_code": 101.0},
+        calib={
+            "alpha_va": 0.4,
+            "modelstat": 1.0,
+            "solvestat": 1.0,
+            "closure_code": 101.0,
+        },
     )
     assert calls == ["benchmark", "level", "residual", "calib"]
 
 
-def test_compare_simple_open_gams_parity_passes_with_matching_reference(monkeypatch: Any, tmp_path: Path) -> None:
+def test_compare_simple_open_gams_parity_passes_with_matching_reference(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     gdx_path = tmp_path / "simple_open.gdx"
     gdx_path.write_bytes(b"dummy")
 
@@ -83,18 +104,18 @@ def test_compare_simple_open_gams_parity_passes_with_matching_reference(monkeypa
                 "FSAV": 1.0,
             },
             residual={"EQ_VA": 0.0, "EQ_INT": 0.0, "EQ_CET": 0.0},
-                calib={
-                    "alpha_va": 0.4,
-                    "rho_va": 0.75,
-                    "a_int": 0.5,
-                    "b_ext": 0.1,
-                    "theta_cet": 0.6,
-                    "phi_cet": 1.2,
-                    "closure_code": 101.0,
-                    "modelstat": 1.0,
-                    "solvestat": 1.0,
-                },
-            ),
+            calib={
+                "alpha_va": 0.4,
+                "rho_va": 0.75,
+                "a_int": 0.5,
+                "b_ext": 0.1,
+                "theta_cet": 0.6,
+                "phi_cet": 1.2,
+                "closure_code": 101.0,
+                "modelstat": 1.0,
+                "solvestat": 1.0,
+            },
+        ),
     )
 
     comparison = compare_simple_open_gams_parity(
@@ -109,7 +130,9 @@ def test_compare_simple_open_gams_parity_passes_with_matching_reference(monkeypa
     assert comparison.residual_mismatches == 0
 
 
-def test_compare_simple_open_gams_parity_detects_mismatch(monkeypatch: Any, tmp_path: Path) -> None:
+def test_compare_simple_open_gams_parity_detects_mismatch(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     gdx_path = tmp_path / "simple_open.gdx"
     gdx_path.write_bytes(b"dummy")
 
@@ -140,18 +163,18 @@ def test_compare_simple_open_gams_parity_detects_mismatch(monkeypatch: Any, tmp_
                 "FSAV": 1.0,
             },
             residual={"EQ_VA": 1e-3, "EQ_INT": 0.0, "EQ_CET": 0.0},
-                calib={
-                    "alpha_va": 0.4,
-                    "rho_va": 0.75,
-                    "a_int": 0.5,
-                    "b_ext": 0.1,
-                    "theta_cet": 0.6,
-                    "phi_cet": 1.2,
-                    "closure_code": 101.0,
-                    "modelstat": 7.0,
-                    "solvestat": 1.0,
-                },
-            ),
+            calib={
+                "alpha_va": 0.4,
+                "rho_va": 0.75,
+                "a_int": 0.5,
+                "b_ext": 0.1,
+                "theta_cet": 0.6,
+                "phi_cet": 1.2,
+                "closure_code": 101.0,
+                "modelstat": 7.0,
+                "solvestat": 1.0,
+            },
+        ),
     )
 
     comparison = compare_simple_open_gams_parity(

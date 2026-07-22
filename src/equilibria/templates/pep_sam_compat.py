@@ -239,7 +239,9 @@ def write_grid_to_excel(grid: SAMGrid, matrix: np.ndarray, output: Path) -> None
     n_rows, n_cols = matrix.shape
     for i in range(n_rows):
         for j in range(n_cols):
-            out_df.iat[grid.data_start_row + i, grid.data_start_col + j] = float(matrix[i, j])
+            out_df.iat[grid.data_start_row + i, grid.data_start_col + j] = float(
+                matrix[i, j]
+            )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -326,11 +328,12 @@ def enforce_export_value_balance(
         x_col = ci[col_x]
         for r, (row_cat, row_elem) in enumerate(row_keys):
             value = float(out[r, x_col])
-            if row_cat == "J":
-                rhs += value
-            elif row_cat == "I":
-                rhs += value
-            elif row_cat == "AG" and row_elem == "gvt":
+            if (
+                row_cat == "J"
+                or row_cat == "I"
+                or row_cat == "AG"
+                and row_elem == "gvt"
+            ):
                 rhs += value
 
         delta = rhs - lhs
@@ -397,7 +400,9 @@ def transform_sam_to_pep_compatible(
         tol=tol,
         max_iter=max_iter,
     )
-    exp_adjustments = enforce_export_value_balance(balanced, grid.row_keys, grid.col_keys)
+    exp_adjustments = enforce_export_value_balance(
+        balanced, grid.row_keys, grid.col_keys
+    )
 
     write_grid_to_excel(grid, balanced, output_path)
 

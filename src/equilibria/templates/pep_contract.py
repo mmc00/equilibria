@@ -128,7 +128,9 @@ class PEPBoundsConfig(ModelBoundsConfig):
     name: str = "economic"
     positive: Literal["lower_only"] = "lower_only"
     fixed_from_closure: bool = True
-    free: tuple[str, ...] = Field(default_factory=lambda: ("SG", "SF", "SH", "SROW", "LEON"))
+    free: tuple[str, ...] = Field(
+        default_factory=lambda: ("SG", "SF", "SH", "SROW", "LEON")
+    )
 
 
 class PEPContract(ModelContract):
@@ -143,7 +145,9 @@ class PEPContract(ModelContract):
 def default_pep_contract() -> PEPContract:
     """Return the canonical public PEP NLP contract."""
 
-    return PEPContract(closure=PEPClosureConfig.model_validate(_closure_template_data("pep_default")))
+    return PEPContract(
+        closure=PEPClosureConfig.model_validate(_closure_template_data("pep_default"))
+    )
 
 
 def build_pep_closure_config(
@@ -169,7 +173,9 @@ def build_pep_closure_config(
     )
 
 
-def build_pep_contract(value: str | Mapping[str, Any] | PEPContract | None = None) -> PEPContract:
+def build_pep_contract(
+    value: str | Mapping[str, Any] | PEPContract | None = None,
+) -> PEPContract:
     """Resolve a contract name, mapping override, or concrete contract."""
 
     if value is None:
@@ -185,10 +191,12 @@ def build_pep_contract(value: str | Mapping[str, Any] | PEPContract | None = Non
         base = default_pep_contract().model_dump(mode="python")
         updates = dict(value)
         closure_value = updates.get("closure")
-        if isinstance(closure_value, Mapping):
-            updates["closure"] = build_pep_closure_config(closure_value).model_dump(mode="python")
-        elif isinstance(closure_value, (str, PEPClosureConfig)):
-            updates["closure"] = build_pep_closure_config(closure_value).model_dump(mode="python")
+        if isinstance(closure_value, (Mapping, str, PEPClosureConfig)):
+            updates["closure"] = build_pep_closure_config(closure_value).model_dump(
+                mode="python"
+            )
         merged = deep_merge_model_dicts(base, updates)
         return PEPContract.model_validate(merged)
-    raise TypeError("PEP contract value must be None, a contract name string, a mapping, or PEPContract.")
+    raise TypeError(
+        "PEP contract value must be None, a contract name string, a mapping, or PEPContract."
+    )

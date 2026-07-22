@@ -58,8 +58,12 @@ def load_workflow_config(config_path: Path) -> SAMWorkflowConfig:
     input_path = _resolve_path(input_cfg.get("path"), base_dir, "input.path")
     output_path = _resolve_path(output_cfg.get("path"), base_dir, "output.path")
 
-    input_format = _norm_format(input_cfg.get("format") or _infer_format_from_path(input_path))
-    output_format = _norm_format(output_cfg.get("format") or _infer_format_from_path(output_path))
+    input_format = _norm_format(
+        input_cfg.get("format") or _infer_format_from_path(input_path)
+    )
+    output_format = _norm_format(
+        output_cfg.get("format") or _infer_format_from_path(output_path)
+    )
 
     input_options = input_cfg.get("options") or {}
     if not isinstance(input_options, dict):
@@ -72,7 +76,9 @@ def load_workflow_config(config_path: Path) -> SAMWorkflowConfig:
         if value is None:
             continue
         if key.endswith("_path") and isinstance(value, (str, Path)):
-            resolved_input_options[key] = _resolve_path(value, base_dir, f"input.options.{key}")
+            resolved_input_options[key] = _resolve_path(
+                value, base_dir, f"input.options.{key}"
+            )
         else:
             resolved_input_options[key] = value
 

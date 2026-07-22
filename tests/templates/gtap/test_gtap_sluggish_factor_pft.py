@@ -5,15 +5,17 @@ These tests verify that after the fix:
   - aft/etaf are calibrated for sf factors
   - eq_xft and eq_xfteq constraints exist for sf factors
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Minimal mock helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_sets(regions, activities, factors, mobile_factors, sluggish_factors):
     """Build a minimal GTAPSets-like namespace."""
@@ -42,6 +44,7 @@ def _make_params(evfb_data: dict, vfm_data: dict, etrae_data: dict | None = None
 # Tests
 # ---------------------------------------------------------------------------
 
+
 def test_xftflag_activated_for_sf_with_flow():
     """xftflag[(r, sf)] must be 1.0 when evfb has flow for that (r, sf, a)."""
     sets = _make_sets(
@@ -67,9 +70,13 @@ def test_xftflag_activated_for_sf_with_flow():
                 val = params.benchmark.evfb.get((r, f, a), 0.0)
                 if abs(val) > 1e-12:
                     any_flow = True
-            xftflag_data[(r, f)] = 1.0 if (any_flow and f in (sets.mf | sets.sf)) else 0.0
+            xftflag_data[(r, f)] = (
+                1.0 if (any_flow and f in (sets.mf | sets.sf)) else 0.0
+            )
 
-    assert xftflag_data[("RegA", "Land")] == 1.0, "Land should be flagged when it has flow"
+    assert xftflag_data[("RegA", "Land")] == 1.0, (
+        "Land should be flagged when it has flow"
+    )
     assert xftflag_data[("RegA", "Capital")] == 1.0, "Capital should still be flagged"
 
 
@@ -95,9 +102,13 @@ def test_xftflag_zero_for_sf_without_flow():
                 val = params.benchmark.evfb.get((r, f, a), 0.0)
                 if abs(val) > 1e-12:
                     any_flow = True
-            xftflag_data[(r, f)] = 1.0 if (any_flow and f in (sets.mf | sets.sf)) else 0.0
+            xftflag_data[(r, f)] = (
+                1.0 if (any_flow and f in (sets.mf | sets.sf)) else 0.0
+            )
 
-    assert xftflag_data[("RegA", "Land")] == 0.0, "Land should NOT be flagged when no flow"
+    assert xftflag_data[("RegA", "Land")] == 0.0, (
+        "Land should NOT be flagged when no flow"
+    )
 
 
 def test_aft_calibrated_for_sf():
@@ -126,7 +137,8 @@ def test_aft_calibrated_for_sf():
                 benchmark_xft = 0.0
                 for activity in ["Act1", "Act2"]:
                     factor_flow = float(
-                        params.benchmark.evfb.get((region, factor, activity), 0.0) or 0.0
+                        params.benchmark.evfb.get((region, factor, activity), 0.0)
+                        or 0.0
                     )
                     if factor_flow <= 0.0:
                         continue

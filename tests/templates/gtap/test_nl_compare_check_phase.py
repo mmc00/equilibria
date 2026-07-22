@@ -18,6 +18,7 @@ check t0 snapshot (not rebuilt).
 
 Runs in a few seconds; skips cleanly if the HAR dataset is absent.
 """
+
 from __future__ import annotations
 
 import sys
@@ -41,11 +42,14 @@ def har_dir() -> Path:
     return d
 
 
-def test_check_phase_builds_counterfactual_altertax(har_dir: Path, tmp_path: Path, monkeypatch) -> None:
+def test_check_phase_builds_counterfactual_altertax(
+    har_dir: Path, tmp_path: Path, monkeypatch
+) -> None:
     """The check phase builds a CD-altertax counterfactual with a base snapshot."""
+    from nl_compare import build_python_nls
+
     from equilibria.templates.gtap import gtap_model_equations as gme
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from nl_compare import build_python_nls
 
     real_init = gme.GTAPModelEquations.__init__
     calls: list[dict] = []
@@ -59,7 +63,7 @@ def test_check_phase_builds_counterfactual_altertax(har_dir: Path, tmp_path: Pat
         calls.append(
             {
                 "is_counterfactual": kwargs.get("is_counterfactual", False),
-                "t0_snapshot": kwargs.get("t0_snapshot", None),
+                "t0_snapshot": kwargs.get("t0_snapshot"),
                 "esubva_vals": esubva_vals,
                 "imptx_vals": imptx_vals,
             }
@@ -76,7 +80,9 @@ def test_check_phase_builds_counterfactual_altertax(har_dir: Path, tmp_path: Pat
     )
 
     # The check phase must produce a python_check.nl.
-    assert (tmp_path / "python_check.nl").exists(), "check phase did not write python_check.nl"
+    assert (tmp_path / "python_check.nl").exists(), (
+        "check phase did not write python_check.nl"
+    )
 
     # Base must be built exactly once (reused as the check t0 snapshot).
     assert len(calls) == 2, (

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tests.sam_tools.fixtures import IEEM_RAW_GROUPS, write_sample_ieem_raw_excel
 
 from equilibria.sam_tools.api import run_ieem_to_pep
 from equilibria.sam_tools.models import Sam
-from tests.sam_tools.fixtures import IEEM_RAW_GROUPS, write_sample_ieem_raw_excel
 
 
 def _write_mapping_template(path: Path) -> None:
@@ -39,8 +39,8 @@ def test_run_ieem_to_pep_returns_sam_and_steps(tmp_path: Path) -> None:
     matrix = np.zeros((len(IEEM_RAW_GROUPS), len(IEEM_RAW_GROUPS)), dtype=float)
     matrix[0, 1] = 10.0  # A-AGR -> C-AGR
     matrix[1, 7] = 10.0  # C-AGR -> ROW (exports)
-    matrix[3, 1] = 5.0   # USK -> C-AGR
-    matrix[2, 1] = 2.0   # MARG -> C-AGR
+    matrix[3, 1] = 5.0  # USK -> C-AGR
+    matrix[2, 1] = 2.0  # MARG -> C-AGR
     write_sample_ieem_raw_excel(raw_path, matrix)
     _write_mapping_template(mapping_path)
 

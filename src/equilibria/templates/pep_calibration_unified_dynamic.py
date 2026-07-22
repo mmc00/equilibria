@@ -91,14 +91,18 @@ class PEPModelCalibratorDynamic(PEPModelCalibrator):
     """GDX-based unified calibrator with dynamic sets enabled by default."""
 
     def __init__(self, sam_file: Path | str, val_par_file: Path | str | None = None):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+        super().__init__(
+            sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True
+        )
 
 
 class PEPModelCalibratorExcelDynamic(PEPModelCalibratorExcel):
     """Excel-based unified calibrator with dynamic sets enabled by default."""
 
     def __init__(self, sam_file: Path | str, val_par_file: Path | str | None = None):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+        super().__init__(
+            sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True
+        )
 
 
 class PEPModelCalibratorDynamicSAM(PEPModelCalibrator):
@@ -115,7 +119,9 @@ class PEPModelCalibratorDynamicSAM(PEPModelCalibrator):
         val_par_file: Path | str | None = None,
         accounts: dict[str, str] | None = None,
     ):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+        super().__init__(
+            sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True
+        )
         self.sam_data = remap_dynamic_sam_accounts(self.sam_data, accounts=accounts)
         self._resolved_sets = derive_dynamic_sets_from_sam(self.sam_data)
 
@@ -129,6 +135,8 @@ class PEPModelCalibratorExcelDynamicSAM(PEPModelCalibratorExcel):
         val_par_file: Path | str | None = None,
         accounts: dict[str, str] | None = None,
     ):
-        super().__init__(sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True)
+        super().__init__(
+            sam_file=sam_file, val_par_file=val_par_file, dynamic_sets=True
+        )
         self.sam_data = remap_dynamic_sam_accounts(self.sam_data, accounts=accounts)
         self._resolved_sets = derive_dynamic_sets_from_sam(self.sam_data)

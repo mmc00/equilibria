@@ -49,7 +49,9 @@ def _base_state() -> PEPModelState:
     )
 
 
-def test_pep_simulator_end_to_end_scenarios_with_optional_reference(monkeypatch: Any) -> None:
+def test_pep_simulator_end_to_end_scenarios_with_optional_reference(
+    monkeypatch: Any,
+) -> None:
     captured: list[dict[str, Any]] = []
 
     def _fake_fit(self: PepAdapter) -> PEPModelState:
@@ -102,7 +104,14 @@ def test_pep_simulator_end_to_end_scenarios_with_optional_reference(monkeypatch:
         abs_tol: float,
         rel_tol: float,
     ) -> dict[str, Any]:
-        _ = self, solution_vars, solution_params, reference_results_gdx, abs_tol, rel_tol
+        _ = (
+            self,
+            solution_vars,
+            solution_params,
+            reference_results_gdx,
+            abs_tol,
+            rel_tol,
+        )
         return {"passed": True, "gams_slice": reference_slice}
 
     def _fake_key(self: PepAdapter, vars_obj: Any) -> dict[str, float]:

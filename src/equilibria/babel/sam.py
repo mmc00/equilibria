@@ -202,7 +202,9 @@ class SAM(BaseModel):
         balancer = RASBalancer()
         result = balancer.balance_dataframe(self.data)
         balanced_df = result.matrix
-        return SAM(data=balanced_df, sets=self.sets.copy(), name=f"{self.name}_balanced")
+        return SAM(
+            data=balanced_df, sets=self.sets.copy(), name=f"{self.name}_balanced"
+        )
 
     def get_submatrix(self, rows: list[str], cols: list[str]) -> pd.DataFrame:
         """Extract submatrix for specific accounts.

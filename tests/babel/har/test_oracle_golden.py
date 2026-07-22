@@ -6,6 +6,7 @@ sandbox venv with harpy3 installed. CI never installs harpy3; it only
 reads the committed JSON files and compares them to what our own reader
 sees on the writer's output.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,7 +43,9 @@ def test_writer_matches_oracle(fixture: Path, tmp_path: Path):
         pytest.skip(f"fixture not present: {fixture}")
     gp = _golden_path(fixture)
     if not gp.exists():
-        pytest.skip(f"golden not present: {gp}; run scripts/har/oracle_check.py refresh")
+        pytest.skip(
+            f"golden not present: {gp}; run scripts/har/oracle_check.py refresh"
+        )
 
     golden = json.loads(gp.read_text())["headers"]
 
@@ -57,7 +60,9 @@ def test_writer_matches_oracle(fixture: Path, tmp_path: Path):
         got = d[name]
         assert list(got.shape) == expected["shape"], f"shape mismatch for {name}"
         assert got.set_names == expected["set_names"], f"set_names mismatch for {name}"
-        assert got.set_elements == expected["set_elements"], f"set_elements mismatch for {name}"
+        assert got.set_elements == expected["set_elements"], (
+            f"set_elements mismatch for {name}"
+        )
         if expected["dtype_kind"] in ("f",):
             tol = 1e-4
             assert abs(float(got.array.sum()) - expected["stats"]["sum"]) < tol * (

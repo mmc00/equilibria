@@ -4,9 +4,10 @@ from pathlib import Path
 
 from equilibria.babel.gdx.reader import read_gdx
 from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
-from equilibria.templates.pep_calibration_unified_excel import _build_sam_data_from_excel
+from equilibria.templates.pep_calibration_unified_excel import (
+    _build_sam_data_from_excel,
+)
 from equilibria.templates.pep_dynamic_sets import derive_dynamic_sets_from_sam
-
 
 PEP2_ROOT = Path("src/equilibria/templates/reference/pep2")
 

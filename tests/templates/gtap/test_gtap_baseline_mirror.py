@@ -36,9 +36,7 @@ _CAL_DUMP = Path(
         "notes/tmp/18700775-gams_cal_dump_9x10.gdx",
     )
 )
-_COMP_CSV = Path(
-    "src/equilibria/templates/reference/gtap/comp/COMP_generated.csv"
-)
+_COMP_CSV = Path("src/equilibria/templates/reference/gtap/comp/COMP_generated.csv")
 _PATH_LIB = ROOT / ".cache/path_capi/libpath50.silicon.dylib"
 _PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
 
@@ -63,6 +61,7 @@ def _skip_if_missing():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_gams_csv(csv_path: Path) -> dict[tuple, float]:
     """Read COMP_generated.csv into a flat dict keyed by (variable, *indices)."""
@@ -109,13 +108,13 @@ def _run_baseline_solve():
     if str(scripts_gtap) not in sys.path:
         sys.path.insert(0, str(scripts_gtap))
 
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-
     from run_gtap import (  # type: ignore
         _build_gtap_contract_with_calibration,
         _run_path_capi_nonlinear_full,
     )
+
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
     contract = _build_gtap_contract_with_calibration("gtap_standard7_9x10")
     # GAMS NEOS reference (job 18737509, tariff_comp.gms) uses ifSUB=0.
@@ -142,6 +141,7 @@ def _run_baseline_solve():
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def baseline_solve_result():
     """Run baseline solve once and cache the result for all tests in this module."""
@@ -152,7 +152,7 @@ def baseline_solve_result():
 class TestBaselineMirrorInvariants:
     """After converged baseline solve, Python must mirror GAMS within tolerance."""
 
-    RESIDUAL_TOL = 1e-4      # solver must reach this residual
+    RESIDUAL_TOL = 1e-4  # solver must reach this residual
     MIRROR_TOL_LOOSE = 5e-3  # absolute tolerance for macro-level comparison
     MIRROR_TOL_STRICT = 1e-3  # tolerance for strict gate (post Fase 2)
     MAX_MISMATCHES_LOOSE = 0  # with tol=5e-3: 0 non-xd mismatches allowed
@@ -193,13 +193,17 @@ class TestBaselineMirrorInvariants:
         """All non-xd variables must match GAMS within 5e-3 (0 mismatches allowed)."""
         _skip_if_missing()
         model, _ = baseline_solve_result
-        self._check_parity(model, tol=self.MIRROR_TOL_LOOSE, max_mm=self.MAX_MISMATCHES_LOOSE)
+        self._check_parity(
+            model, tol=self.MIRROR_TOL_LOOSE, max_mm=self.MAX_MISMATCHES_LOOSE
+        )
 
     def test_gams_parity_strict(self, baseline_solve_result):
         """All non-xd variables must match GAMS within 1e-3 (up to 5 mismatches tolerated)."""
         _skip_if_missing()
         model, _ = baseline_solve_result
-        self._check_parity(model, tol=self.MIRROR_TOL_STRICT, max_mm=self.MAX_MISMATCHES_STRICT)
+        self._check_parity(
+            model, tol=self.MIRROR_TOL_STRICT, max_mm=self.MAX_MISMATCHES_STRICT
+        )
 
     # ------------------------------------------------------------------
 
@@ -254,11 +258,16 @@ class TestBaselineMirrorInvariants:
                 n_compared += 1
                 ad = abs(pv - gv)
                 if ad > tol:
-                    mismatches.append({
-                        "group": attr, "key": k,
-                        "python": pv, "gams": gv,
-                        "abs_diff": ad, "rel_diff": ad / max(abs(gv), 1e-10),
-                    })
+                    mismatches.append(
+                        {
+                            "group": attr,
+                            "key": k,
+                            "python": pv,
+                            "gams": gv,
+                            "abs_diff": ad,
+                            "rel_diff": ad / max(abs(gv), 1e-10),
+                        }
+                    )
 
         mismatches.sort(key=lambda m: m["abs_diff"], reverse=True)
         n_mm = len(mismatches)

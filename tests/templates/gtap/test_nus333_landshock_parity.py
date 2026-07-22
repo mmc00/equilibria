@@ -17,6 +17,7 @@ Run manually:
     uv run pytest \\
         tests/templates/gtap/test_nus333_landshock_parity.py -v -s
 """
+
 from __future__ import annotations
 
 import os
@@ -26,7 +27,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-NUS333_DIR = Path(os.environ.get("EQUILIBRIA_NUS333_DIR", "/Users/marmol/Downloads/10284"))
+NUS333_DIR = Path(
+    os.environ.get("EQUILIBRIA_NUS333_DIR", "/Users/marmol/Downloads/10284")
+)
 PATH_LIB = ROOT / ".cache/path_capi/libpath50.silicon.dylib"
 PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
 
@@ -34,12 +37,12 @@ PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
 # (base, shock) levels straight from out.gdx.
 NEOS_REF = {
     "gdpmp": {"USA": (14.0617801139, 13.9713240), "ROW": (41.7695610, 40.7481620)},
-    "regy":  {"USA": (12.8018441,    12.7200460), "ROW": (37.0999390, 36.1951400)},
-    "u":     {"USA": (1.0,            1.0013400),  "ROW": (1.0,        0.9891750)},
+    "regy": {"USA": (12.8018441, 12.7200460), "ROW": (37.0999390, 36.1951400)},
+    "u": {"USA": (1.0, 1.0013400), "ROW": (1.0, 0.9891750)},
 }
 
 LAND_CUT = 0.30  # cut 30% of ROW land productivity (matches GAMS landCut)
-TOL_PP = 0.05    # absolute Δ% tolerance in percentage points
+TOL_PP = 0.05  # absolute Δ% tolerance in percentage points
 
 
 def _skip_reason() -> str | None:
@@ -76,7 +79,8 @@ def landshock_results():
     sys.path.insert(0, str(PATH_CAPI_SRC))
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-    from compare_nus333_vs_neos import _solve, _copy_var_levels, _extract_key
+    from compare_nus333_vs_neos import _copy_var_levels, _extract_key, _solve
+
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
     from equilibria.templates.gtap.gtap_solver import GTAPClosureConfig
@@ -90,13 +94,18 @@ def landshock_results():
     )
     closure = GTAPClosureConfig(if_sub=False)
 
-    builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
+    builder_b = GTAPModelEquations(
+        params.sets, params, residual_region="ROW", closure=closure
+    )
     model_b = builder_b.build_model()
     _solve(model_b, params, label="base")
     base = _extract_key(model_b, params)
 
     builder_s = GTAPModelEquations(
-        params.sets, params, residual_region="ROW", closure=closure,
+        params.sets,
+        params,
+        residual_region="ROW",
+        closure=closure,
         t0_snapshot=model_b,
     )
     model_s = builder_s.build_model()
@@ -109,11 +118,17 @@ def landshock_results():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("var,region", [
-    ("gdpmp", "USA"), ("gdpmp", "ROW"),
-    ("regy", "USA"),  ("regy", "ROW"),
-    ("u", "USA"),     ("u", "ROW"),
-])
+@pytest.mark.parametrize(
+    "var,region",
+    [
+        ("gdpmp", "USA"),
+        ("gdpmp", "ROW"),
+        ("regy", "USA"),
+        ("regy", "ROW"),
+        ("u", "USA"),
+        ("u", "ROW"),
+    ],
+)
 def test_nus333_landshock_delta_parity(landshock_results, var, region):
     """Each macro Δ% must be within TOL_PP of the NEOS GAMS landshock reference."""
     base, shock = landshock_results

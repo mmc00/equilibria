@@ -217,7 +217,9 @@ def test_simulator_warm_start_uses_last_converged_solution_only() -> None:
     report = sim.run_scenarios(
         scenarios=[
             Scenario(name="fails", shocks=[Shock(var="X", op="add", values=2.0)]),
-            Scenario(name="after_fail", shocks=[Shock(var="X", op="scale", values=0.5)]),
+            Scenario(
+                name="after_fail", shocks=[Shock(var="X", op="scale", values=0.5)]
+            ),
         ],
         warm_start=True,
     )

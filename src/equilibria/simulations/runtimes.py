@@ -76,4 +76,3 @@ def clear_mapping_runtime(model: str | None = None) -> None:
 def available_mapping_runtimes() -> tuple[str, ...]:
     """List model keys with registered runtime hooks."""
     return tuple(sorted(_MAPPING_RUNTIME_REGISTRY))
-

@@ -70,6 +70,7 @@ class PEPModelCalibratorExcel(PEPModelCalibrator):
         self._input_sets = sets
         self._use_dynamic_sets = dynamic_sets
         self._resolved_sets = (
-            sets if sets is not None
+            sets
+            if sets is not None
             else (derive_dynamic_sets_from_sam(self.sam_data) if dynamic_sets else None)
         )

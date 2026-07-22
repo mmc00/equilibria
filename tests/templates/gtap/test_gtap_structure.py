@@ -66,7 +66,9 @@ def test_loads_multi_output_structure_from_make_symbol(
         lambda _: multi_output_gdx_payload,
     )
 
-    def mock_read_parameter_values(_: dict[str, object], name: str) -> dict[tuple[str, ...], float]:
+    def mock_read_parameter_values(
+        _: dict[str, object], name: str
+    ) -> dict[tuple[str, ...], float]:
         if name == "makb":
             return {
                 ("c_Crops", "a_agricultur", "NAmerica"): 10.0,
@@ -112,7 +114,9 @@ def test_loads_bijective_non_diagonal_structure(
         lambda _: one_to_one_gdx_payload,
     )
 
-    def mock_read_parameter_values(_: dict[str, object], name: str) -> dict[tuple[str, ...], float]:
+    def mock_read_parameter_values(
+        _: dict[str, object], name: str
+    ) -> dict[tuple[str, ...], float]:
         if name == "makb":
             return {
                 ("c_Food", "a_AgroProd", "NAmerica"): 10.0,
@@ -201,13 +205,15 @@ def test_tax_rates_derive_agent_consumption_wedges_from_benchmark() -> None:
 
     params.taxes.derive_agent_consumption_taxes(params.benchmark, sets)
 
-    assert params.taxes.dintx0[("NAmerica", "c_Crops", "a_agricultur")] == pytest.approx(0.15)
-    assert params.taxes.mintx0[("NAmerica", "c_Crops", "a_agricultur")] == pytest.approx(0.25)
+    assert params.taxes.dintx0[
+        ("NAmerica", "c_Crops", "a_agricultur")
+    ] == pytest.approx(0.15)
+    assert params.taxes.mintx0[
+        ("NAmerica", "c_Crops", "a_agricultur")
+    ] == pytest.approx(0.25)
     assert params.taxes.dintx0[("NAmerica", "c_Crops", "hhd")] == pytest.approx(0.10)
     assert params.taxes.mintx0[("NAmerica", "c_Crops", "hhd")] == pytest.approx(0.25)
     assert params.taxes.dintx0[("NAmerica", "c_Crops", "gov")] == pytest.approx(0.20)
     assert params.taxes.mintx0[("NAmerica", "c_Crops", "gov")] == pytest.approx(0.25)
     assert params.taxes.dintx0[("NAmerica", "c_Crops", "inv")] == pytest.approx(0.10)
     assert params.taxes.mintx0[("NAmerica", "c_Crops", "inv")] == pytest.approx(0.25)
-
-

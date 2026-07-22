@@ -18,6 +18,7 @@ Run:
     uv run pytest tests/templates/gtap/test_gtap7_mcp_parity.py -v
     uv run pytest tests/templates/gtap/test_gtap7_mcp_parity.py -v -k "15x10"
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -43,10 +44,31 @@ if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
-RF = {"pfa", "pfy", "pm", "pmcif", "pefob", "pwmg", "pp", "pdp", "pmp",
-      "xwmg", "xmgm", "lambdamg", "imptx", "exptx"}
-ALIAS = {"xa": "xaa", "xd": "xda", "xm": "xma", "pp": "pp_rai", "p": "p_rai",
-         "ytaxInd": "ytax_ind", "ytaxind": "ytax_ind"}
+RF = {
+    "pfa",
+    "pfy",
+    "pm",
+    "pmcif",
+    "pefob",
+    "pwmg",
+    "pp",
+    "pdp",
+    "pmp",
+    "xwmg",
+    "xmgm",
+    "lambdamg",
+    "imptx",
+    "exptx",
+}
+ALIAS = {
+    "xa": "xaa",
+    "xd": "xda",
+    "xm": "xma",
+    "pp": "pp_rai",
+    "p": "p_rai",
+    "ytaxInd": "ytax_ind",
+    "ytaxind": "ytax_ind",
+}
 TOL = 1e-2
 
 _MCP_CASES = [
@@ -74,35 +96,54 @@ def _strip(s):
 def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     """Build + seed + solve base→check→shock via PATH (MCP); return
     {period: {"match": float, "code": int, "total": int}}."""
+    from _diff_core import gams_levels, list_populated_vars, split_t
+    from pyomo.environ import value as V
+
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_model_multiperiod import (
-        GTAPMultiPeriodModel, PERIODS,
+        PERIODS,
+        GTAPMultiPeriodModel,
     )
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from pyomo.environ import value as V
-    from _diff_core import gams_levels, list_populated_vars, split_t
 
     d = DATASETS_DIR / dataset
     p = GTAPParameters()
-    p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
-                    default_path=d / "default.prm", baserate_path=d / "baserate.har")
+    p.load_from_har(
+        basedata_path=d / "basedata.har",
+        sets_path=d / "sets.har",
+        default_path=d / "default.prm",
+        baserate_path=d / "baserate.har",
+    )
     rr = list(p.sets.r)[-1]
 
     if mode == "altertax":
         from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+
         pa = apply_altertax_elasticities(p, in_place=False)
-        ac = GTAPClosureConfig(name="altertax", closure_type="MCP",
-                               capital_mobility="mobile", fix_endowments=False,
-                               fix_taxes=True, fix_technology=True,
-                               if_sub=bool(ifsub), numeraire="pnum")
+        ac = GTAPClosureConfig(
+            name="altertax",
+            closure_type="MCP",
+            capital_mobility="mobile",
+            fix_endowments=False,
+            fix_taxes=True,
+            fix_technology=True,
+            if_sub=bool(ifsub),
+            numeraire="pnum",
+        )
         solve_mode = "altertax"
     else:  # pure real-CES
         pa = p
-        ac = GTAPClosureConfig(name="base", closure_type="MCP",
-                               capital_mobility="sluggish", fix_endowments=False,
-                               fix_taxes=False, fix_technology=False,
-                               if_sub=bool(ifsub), numeraire="pnum")
+        ac = GTAPClosureConfig(
+            name="base",
+            closure_type="MCP",
+            capital_mobility="sluggish",
+            fix_endowments=False,
+            fix_taxes=False,
+            fix_technology=False,
+            if_sub=bool(ifsub),
+            numeraire="pnum",
+        )
         solve_mode = "gtap"
 
     mp = GTAPMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
@@ -114,9 +155,17 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     m._residual_region = rr
     mp.seed_all_periods(m, gdx)
 
-    res = solve_multiperiod(m, p, ac, ref_gdx=gdx, skip_base_solve=True,
-                            mute_welfare=True, seed_from_prior=False,
-                            holdfix_cd=True, mode=solve_mode)
+    res = solve_multiperiod(
+        m,
+        p,
+        ac,
+        ref_gdx=gdx,
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=False,
+        holdfix_cd=True,
+        mode=solve_mode,
+    )
     codes = {k: res[k]["code"] for k in res}
 
     def measure(period: str):
@@ -139,7 +188,11 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
                 if t != period:
                     continue
                 st = tuple(_strip(x) for x in body)
-                idx = (period,) if not st else ((st[0], period) if len(st) == 1 else (*st, period))
+                idx = (
+                    (period,)
+                    if not st
+                    else ((st[0], period) if len(st) == 1 else (*st, period))
+                )
                 val = None
                 for cand in [idx, (*body, period) if body else (period,)]:
                     try:
@@ -151,7 +204,9 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
                     continue
                 tot += 1
                 da = abs(val - gval)
-                rel = da / abs(gval) if abs(gval) > 1e-12 else (0.0 if da < 1e-6 else 9e9)
+                rel = (
+                    da / abs(gval) if abs(gval) > 1e-12 else (0.0 if da < 1e-6 else 9e9)
+                )
                 if da <= 1e-6 or rel <= TOL:
                     match += 1
         return {"match": 100.0 * match / max(tot, 1), "total": tot}
@@ -184,8 +239,11 @@ def test_gtap7_mcp_parity(dataset, ifsub, mode, floors, ci_status, code2_ok):
 
     # code==1 everywhere, EXCEPT the named code2_ok stages where PATH lands the correct
     # point (100% cell match) but returns code=2 (near-miss). Those allow code in {1,2}.
-    bad_codes = {k: v["code"] for k, v in per.items()
-                 if v["code"] != 1 and not (v["code"] == 2 and k in code2_ok)}
+    bad_codes = {
+        k: v["code"]
+        for k, v in per.items()
+        if v["code"] != 1 and not (v["code"] == 2 and k in code2_ok)
+    }
     assert not bad_codes, f"[{tag}] stages did not converge: {bad_codes}"
 
     for stage, floor in floors.items():

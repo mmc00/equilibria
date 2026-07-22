@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -95,8 +96,7 @@ def _groups_from_spec(
     missing = [group for group in group_order if group not in group_positions]
     if missing:
         raise ValueError(
-            "Missing required IEEM groups in input sheet: "
-            + ", ".join(missing)
+            "Missing required IEEM groups in input sheet: " + ", ".join(missing)
         )
 
     positions = [group_positions[group] for group in group_order]
@@ -109,7 +109,11 @@ def _groups_from_spec(
     groups: list[_IEEMGroup] = []
     for idx, group in enumerate(group_order):
         start_row = group_positions[group]
-        end_row = group_positions[group_order[idx + 1]] if idx + 1 < len(group_order) else len(raw_df)
+        end_row = (
+            group_positions[group_order[idx + 1]]
+            if idx + 1 < len(group_order)
+            else len(raw_df)
+        )
         labels: list[str] = []
         for row in range(start_row, end_row):
             val = raw_df.iat[row, label_col]
@@ -247,7 +251,11 @@ class IEEMRawSAM(Sam):
             **parse_kwargs,
         )
         multi_index, _ = build_multiindex_labels(labels, category="RAW")
-        return cls(dataframe=pd.DataFrame(matrix_df.to_numpy(dtype=float), index=multi_index, columns=multi_index))
+        return cls(
+            dataframe=pd.DataFrame(
+                matrix_df.to_numpy(dtype=float), index=multi_index, columns=multi_index
+            )
+        )
 
     def aggregate(self, mapping_path: Path) -> IEEMRawSAM:
         super().aggregate(mapping_path)

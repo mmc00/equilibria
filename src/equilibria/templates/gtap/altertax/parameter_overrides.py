@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Dict, Tuple
 
 from equilibria.templates.gtap.gtap_parameters import (
     GTAPElasticities,
@@ -56,7 +55,7 @@ class AltertaxElasticityOverrides:
 ALTERTAX_ELASTICITY_DEFAULTS = AltertaxElasticityOverrides()
 
 
-def _override_dict(target: Dict, value: float) -> int:
+def _override_dict(target: dict, value: float) -> int:
     """Replace every value in ``target`` with ``value``. Returns count."""
     n = 0
     for key in list(target.keys()):
@@ -109,7 +108,9 @@ def apply_altertax_elasticities(
     # _calibrate_trade_shares uses esubm to compute amw weights; skipping this
     # leaves p_amw calibrated with the old (e.g. 5.07) exponent, causing
     # get_pmt_init to blow up to ~40,000 when esubm changes to 0.95.
-    target.shares._calibrate_trade_shares(target.benchmark, target.elasticities, target.sets)
+    target.shares._calibrate_trade_shares(
+        target.benchmark, target.elasticities, target.sets
+    )
     target.shares.normalized.update_from_shares(target.shares)
 
     # Recompute af shares consistent with sigma=1 (CD).
@@ -154,7 +155,7 @@ def apply_altertax_elasticities(
     return target
 
 
-def _recalibrate_bench_prices(params: "GTAPParameters") -> None:  # noqa: F821
+def _recalibrate_bench_prices(params: GTAPParameters) -> None:  # noqa: F821
     """Recompute pva_bench / pnd_bench consistent with current elasticities.
 
     Mirrors GAMS cal.gms recalibration that runs after parameter_altertax.gms
@@ -188,7 +189,7 @@ def _recalibrate_bench_prices(params: "GTAPParameters") -> None:  # noqa: F821
         return 1.0
 
     # --- pva_bench: CD or CES over factors ---
-    pva_bench: Dict[Tuple[str, str], float] = {}
+    pva_bench: dict[tuple[str, str], float] = {}
     for r in sets.r:
         for a in sets.a:
             sigma_v = e.sigmav.get((r, a), 1.0)
@@ -198,17 +199,20 @@ def _recalibrate_bench_prices(params: "GTAPParameters") -> None:  # noqa: F821
                 pva_bench[(r, a)] = 1.0
                 continue
             if abs(1.0 - sigma_v) < 1e-8:  # CD
-                log_pva = sum(av * math.log(max(_pfa_bench(r, f, a), 1e-12))
-                              for f, av in active.items())
+                log_pva = sum(
+                    av * math.log(max(_pfa_bench(r, f, a), 1e-12))
+                    for f, av in active.items()
+                )
                 pva_bench[(r, a)] = math.exp(log_pva)
             else:
                 expo = 1.0 - sigma_v
-                ces_sum = sum(av * (_pfa_bench(r, f, a) ** expo)
-                              for f, av in active.items())
+                ces_sum = sum(
+                    av * (_pfa_bench(r, f, a) ** expo) for f, av in active.items()
+                )
                 pva_bench[(r, a)] = max(ces_sum, 1e-12) ** (1.0 / expo)
 
     # --- pnd_bench: CD or CES over intermediates ---
-    pnd_bench: Dict[Tuple[str, str], float] = {}
+    pnd_bench: dict[tuple[str, str], float] = {}
     for r in sets.r:
         for a in sets.a:
             sigma_nd = e.sigmand.get((r, a), 1.0)
@@ -218,20 +222,23 @@ def _recalibrate_bench_prices(params: "GTAPParameters") -> None:  # noqa: F821
                 pnd_bench[(r, a)] = 1.0
                 continue
             if abs(1.0 - sigma_nd) < 1e-8:  # CD
-                log_pnd = sum(iv * math.log(max(_pa_bench(r, i, a), 1e-12))
-                              for i, iv in active.items())
+                log_pnd = sum(
+                    iv * math.log(max(_pa_bench(r, i, a), 1e-12))
+                    for i, iv in active.items()
+                )
                 pnd_bench[(r, a)] = math.exp(log_pnd)
             else:
                 expo = 1.0 - sigma_nd
-                ces_sum = sum(iv * (_pa_bench(r, i, a) ** expo)
-                              for i, iv in active.items())
+                ces_sum = sum(
+                    iv * (_pa_bench(r, i, a) ** expo) for i, iv in active.items()
+                )
                 pnd_bench[(r, a)] = max(ces_sum, 1e-12) ** (1.0 / expo)
 
     cal.pva_bench = pva_bench
     cal.pnd_bench = pnd_bench
 
 
-def _recalibrate_af_shares(params: "GTAPParameters") -> None:  # noqa: F821
+def _recalibrate_af_shares(params: GTAPParameters) -> None:  # noqa: F821
     """Recompute af_param so sum_f(af[r,f,a]) = 1 for every (r,a).
 
     With sigmav=1 (CD) the pvaeq constraint degenerates to 1 = sum_f(af).
@@ -284,10 +291,10 @@ def _recalibrate_af_shares(params: "GTAPParameters") -> None:  # noqa: F821
         # because rtf conflates tax+subsidy; (ftrv-fbep)/evfb separates them.
         return _pf(r, f, a) * (1.0 + _wedge(r, f, a))
 
-    af_param: Dict[Tuple[str, str, str], float] = {}
+    af_param: dict[tuple[str, str, str], float] = {}
     for r in sets.r:
         for a in sets.a:
-            pfa_xf: Dict[str, float] = {}
+            pfa_xf: dict[str, float] = {}
             for f in sets.f:
                 key = (r, f, a)
                 evfb = float(bench.evfb.get(key, bench.vfm.get(key, 0.0)) or 0.0)

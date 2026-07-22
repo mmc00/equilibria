@@ -7,7 +7,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from equilibria.templates.simple_open_contract import SimpleOpenContract, build_simple_open_contract
+from equilibria.templates.simple_open_contract import (
+    SimpleOpenContract,
+    build_simple_open_contract,
+)
 
 
 def _canonical_variable_names() -> tuple[str, ...]:
@@ -51,7 +54,9 @@ def _va_target(*, alpha: float, rho: float, er: float, pfx: float) -> float:
     return float(inner ** (1.0 / rho))
 
 
-def _cet_target(*, theta: float, phi: float, d: float, e: float, er: float, pfx: float) -> float:
+def _cet_target(
+    *, theta: float, phi: float, d: float, e: float, er: float, pfx: float
+) -> float:
     trade_term = e * er / pfx
     inner = (theta * (d**phi)) + ((1.0 - theta) * (trade_term**phi))
     return float(inner ** (1.0 / phi))
@@ -99,7 +104,9 @@ def default_simple_open_benchmark_parameters(
 def _benchmark_levels_from_parameters(
     params: SimpleOpenBenchmarkParameters,
 ) -> dict[str, float]:
-    va = _va_target(alpha=params.alpha_va, rho=params.rho_va, er=params.ER, pfx=params.PFX)
+    va = _va_target(
+        alpha=params.alpha_va, rho=params.rho_va, er=params.ER, pfx=params.PFX
+    )
     x = _cet_target(
         theta=params.theta_cet,
         phi=params.phi_cet,

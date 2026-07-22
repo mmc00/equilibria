@@ -155,15 +155,24 @@ def test_cli_main_accepts_official_manifest(monkeypatch: Any, tmp_path: Path) ->
                 "problem_type": "nlp",
                 "solver": "ipopt",
                 "script_model_types": ["nlp"],
-                "gms_script": {"path": "simple_open_v1_benchmark.gms", "sha256": "gms-sha"},
+                "gms_script": {
+                    "path": "simple_open_v1_benchmark.gms",
+                    "sha256": "gms-sha",
+                },
                 "closure_references": {
                     "simple_open_default": {
                         "closure": "simple_open_default",
-                        "results_gdx": {"path": str(default_gdx), "sha256": "default-sha"},
+                        "results_gdx": {
+                            "path": str(default_gdx),
+                            "sha256": "default-sha",
+                        },
                     },
                     "flexible_external_balance": {
                         "closure": "flexible_external_balance",
-                        "results_gdx": {"path": str(flexible_gdx), "sha256": "flex-sha"},
+                        "results_gdx": {
+                            "path": str(flexible_gdx),
+                            "sha256": "flex-sha",
+                        },
                     },
                 },
             }

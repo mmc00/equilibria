@@ -3,9 +3,12 @@
 The pep2 BASE benchmark reproduces the SAM, so a faithful model solved from the
 benchmark point must return a small max residual (the cyipopt solver early-exits there).
 A large residual means an equation differs from the reference — a real fidelity bug."""
+
 from __future__ import annotations
-from pathlib import Path
+
 import importlib.util
+from pathlib import Path
+
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -17,25 +20,31 @@ _HAS_IPOPT = importlib.util.find_spec("pyomo") is not None
 @pytest.fixture(scope="module")
 def state():
     from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
+
     return PEPModelCalibrator(sam_file=SAM, val_par_file=VALPAR).calibrate()
 
 
 @pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
 def test_base_benchmark_residual_small(state):
     from pyomo.environ import SolverFactory
+
     if not SolverFactory("ipopt").available():
         pytest.skip("ipopt not available")
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
-    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _max_residual
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import _max_residual, solve_pep
+
     m = build_pep_model(state, variant="base", form="nlp")
     # residual AT the seed (before solving) — the benchmark should nearly satisfy the system
     seed_resid = _max_residual(m)
     res = solve_pep(m)
     # after solving it must be feasible; report both for diagnosis
-    assert res.code == 1, f"did not converge: {res.message} (resid {res.max_residual:.2e})"
+    assert res.code == 1, (
+        f"did not converge: {res.message} (resid {res.max_residual:.2e})"
+    )
     assert res.max_residual < 1e-3, (
         f"max residual {res.max_residual:.2e} too large (seed was {seed_resid:.2e}) — "
-        f"an equation likely differs from the reference")
+        f"an equation likely differs from the reference"
+    )
 
 
 @pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
@@ -45,22 +54,29 @@ def test_faithful_at_benchmark(state):
     documented imbalance (GDP_MPO − GDP_IBO ≈ 2026, state.validation.passed=False) —
     a reference DATA hole, not a port bug. This is the structural-fidelity gate."""
     from pyomo.environ import Constraint, value
+
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+
     m = build_pep_model(state, variant="base", form="nlp")
     violated = []
     for c in m.component_objects(Constraint, active=True):
         for idx in c:
             con = c[idx]
             body = value(con.body, exception=False)
-            tgt = (value(con.lower, exception=False) if con.lower is not None
-                   else value(con.upper, exception=False))
+            tgt = (
+                value(con.lower, exception=False)
+                if con.lower is not None
+                else value(con.upper, exception=False)
+            )
             if body is None or tgt is None:
                 continue
-            if abs(body - tgt) > 1.0:            # 1.0 unit tolerance on ~1e4-scale levels
+            if abs(body - tgt) > 1.0:  # 1.0 unit tolerance on ~1e4-scale levels
                 violated.append(c.name)
                 break
     # only eq92 (the calibration's 2026 GDP_IB imbalance) may violate
-    assert set(violated) <= {"eq92"}, f"unexpected benchmark violations: {sorted(set(violated))}"
+    assert set(violated) <= {"eq92"}, (
+        f"unexpected benchmark violations: {sorted(set(violated))}"
+    )
 
 
 @pytest.mark.skipif(not SAM.exists(), reason="pep2 SAM not present")
@@ -70,8 +86,11 @@ def test_no_ces_overflow_at_benchmark(state):
     (`if (l,j) in LDact`) or `0**(-rho)` overflows — the bug that made PATH 'diverge' to a
     constant 7.74e15 (a deterministic eval overflow, not a solver basin). Guards eq5/eq7."""
     import math
+
     from pyomo.environ import Constraint, value
+
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+
     m = build_pep_model(state, variant="base", form="mcp")
     bad = []
     for c in m.component_data_objects(Constraint, active=True):
@@ -89,14 +108,20 @@ def test_nlp_mcp_mirror(state):
     matching GAMS (whose native MCP leaves them free at PDO=1.132). LEON (the Walras slack)
     is form-defining and excluded. Requires PATH for the MCP solve; skips cleanly otherwise."""
     import sys
+
     src = "/Users/marmol/proyectos/path-capi-python/src"
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
     if importlib.util.find_spec("path_capi_python") is None:
         pytest.skip("path_capi_python unavailable for MCP mirror")
     from pyomo.environ import Var, value
+
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
-    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import (
+        _ensure_path_lib,
+        solve_pep,
+    )
+
     _ensure_path_lib()
 
     def vals(m):
@@ -108,21 +133,31 @@ def test_nlp_mcp_mirror(state):
                     d[(v.name, idx)] = float(x)
         return d
 
-    mn = build_pep_model(state, variant="base", form="nlp"); rn = solve_pep(mn); vn = vals(mn)
-    mm = build_pep_model(state, variant="base", form="mcp"); rm = solve_pep(mm); vm = vals(mm)
+    mn = build_pep_model(state, variant="base", form="nlp")
+    rn = solve_pep(mn)
+    vn = vals(mn)
+    mm = build_pep_model(state, variant="base", form="mcp")
+    rm = solve_pep(mm)
+    vm = vals(mm)
     assert rn.code == 1 and rm.code == 1, f"NLP={rn.message} MCP={rm.message}"
     keys = [k for k in (set(vn) & set(vm)) if k[0] != "LEON"]
 
     def match(a, b):
         return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
-    diffs = sorted((k for k in keys if not match(vn[k], vm[k])), key=lambda k: -abs(vn[k] - vm[k]))
+
+    diffs = sorted(
+        (k for k in keys if not match(vn[k], vm[k])), key=lambda k: -abs(vn[k] - vm[k])
+    )
     # NLP and MCP are an exact mirror — no cell differs
     assert diffs == [], (
-        f"unexpected NLP↔MCP mirror diffs: {[(k, vn[k], vm[k]) for k in diffs[:5]]}")
+        f"unexpected NLP↔MCP mirror diffs: {[(k, vn[k], vm[k]) for k in diffs[:5]]}"
+    )
 
 
 MCP_REF = ROOT / "src/equilibria/templates/reference/pep2/scripts/Results_mcp.gdx"
-MCP_REF_SIM1 = ROOT / "src/equilibria/templates/reference/pep2/scripts/Results_mcp_sim1.gdx"
+MCP_REF_SIM1 = (
+    ROOT / "src/equilibria/templates/reference/pep2/scripts/Results_mcp_sim1.gdx"
+)
 _GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/53/Resources/gdxdump"
 
 
@@ -130,17 +165,25 @@ def _read_gams_var_levels(gdx_path):
     """Parse the .L levels of every Variable in a raw-symbol GAMS gdx (via gdxdump),
     handling scalar-inline (`Variable NAME desc /L v, M v /;`) and matrix
     (`Variable NAME(*) desc / 'k'.L v, … /`). Returns {(var, idx): level}, idx None/str/tuple."""
-    import subprocess
     import re
-    txt = subprocess.run([_GDXDUMP, str(gdx_path)], capture_output=True, text=True).stdout
+    import subprocess
+
+    txt = subprocess.run(
+        [_GDXDUMP, str(gdx_path)], capture_output=True, text=True
+    ).stdout
     out, cur = {}, None
     for line in txt.splitlines():
-        sm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\s+.*?/L\s+([-\d.E+]+)", line)
+        sm = re.match(
+            r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\s+.*?/L\s+([-\d.E+]+)",
+            line,
+        )
         if sm and "(" not in line.split("/")[0]:
-            out[(sm.group(1), None)] = float(sm.group(2)); continue
+            out[(sm.group(1), None)] = float(sm.group(2))
+            continue
         hm = re.match(r"\s*(?:free|positive)?\s*Variable\s+([A-Za-z_]+)\(", line)
         if hm:
-            cur = hm.group(1); continue
+            cur = hm.group(1)
+            continue
         if cur:
             rm = re.match(r"\s*(.+?)\.L\s+([-\d.E+]+)", line)
             if rm:
@@ -156,11 +199,13 @@ def _diff_mcp_vs_gams(m, gams):
     """Cell-by-cell match of a solved Pyomo MCP model against parsed GAMS levels.
     Returns (ok, total, bad_list). LEON (Walras slack) excluded."""
     from pyomo.environ import value
+
     tot = ok = 0
     bad = []
 
     def match(a, b):
         return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
+
     for (vname, idx), gval in gams.items():
         if vname.lower() == "leon":
             continue
@@ -179,8 +224,10 @@ def _diff_mcp_vs_gams(m, gams):
     return ok, tot, bad
 
 
-@pytest.mark.skipif(not SAM.exists() or not MCP_REF.exists(),
-                    reason="pep2 SAM or GAMS-native MCP reference not present")
+@pytest.mark.skipif(
+    not SAM.exists() or not MCP_REF.exists(),
+    reason="pep2 SAM or GAMS-native MCP reference not present",
+)
 def test_mcp_matches_gams_native_mcp(state):
     """The Pyomo MCP solve must match the GAMS-NATIVE MCP (Results_mcp.gdx, from
     PEP-1-1_v2_1_mcp_solve.gms: MODEL /ALL/ + SOLVE USING MCP, base case) cell-by-cell —
@@ -188,6 +235,7 @@ def test_mcp_matches_gams_native_mcp(state):
     definitive fidelity gate for the MCP form (100% / 285 economic cells). Skips cleanly
     if PATH or gdxdump is unavailable."""
     import sys
+
     src = "/Users/marmol/proyectos/path-capi-python/src"
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
@@ -196,7 +244,11 @@ def test_mcp_matches_gams_native_mcp(state):
     if not Path(_GDXDUMP).exists():
         pytest.skip("gdxdump (GAMS) unavailable")
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
-    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import (
+        _ensure_path_lib,
+        solve_pep,
+    )
+
     _ensure_path_lib()
     gams = _read_gams_var_levels(MCP_REF)
     m = build_pep_model(state, variant="base", form="mcp")
@@ -207,8 +259,10 @@ def test_mcp_matches_gams_native_mcp(state):
     assert not bad, f"MCP↔GAMS mismatches ({ok}/{tot}): {bad[:5]}"
 
 
-@pytest.mark.skipif(not SAM.exists() or not MCP_REF_SIM1.exists(),
-                    reason="pep2 SAM or GAMS SIM1 MCP reference not present")
+@pytest.mark.skipif(
+    not SAM.exists() or not MCP_REF_SIM1.exists(),
+    reason="pep2 SAM or GAMS SIM1 MCP reference not present",
+)
 def test_mcp_sim1_shock_matches_gams():
     """The SIM1 counterfactual (−25% export tax: `ttix.fx=ttixO*0.75`) applied in Python via
     apply_sim1_export_tax_cut, solved as MCP, must match the GAMS-native SIM1 MCP
@@ -219,7 +273,9 @@ def test_mcp_sim1_shock_matches_gams():
     Uses a FRESH calibration (not the module `state` fixture) because the shock mutates
     ttixO in place — sharing it would contaminate the base-case tests."""
     import sys
+
     from pyomo.environ import value
+
     src = "/Users/marmol/proyectos/path-capi-python/src"
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
@@ -229,17 +285,25 @@ def test_mcp_sim1_shock_matches_gams():
         pytest.skip("gdxdump (GAMS) unavailable")
     from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
-    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
-    from equilibria.templates.pep_pyomo.pep_pyomo_scenarios import apply_sim1_export_tax_cut
+    from equilibria.templates.pep_pyomo.pep_pyomo_scenarios import (
+        apply_sim1_export_tax_cut,
+    )
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import (
+        _ensure_path_lib,
+        solve_pep,
+    )
+
     _ensure_path_lib()
     gams = _read_gams_var_levels(MCP_REF_SIM1)
-    state = PEPModelCalibrator(sam_file=SAM, val_par_file=VALPAR).calibrate()   # fresh
-    apply_sim1_export_tax_cut(state)          # ttixO *= 0.75, in place, before build
+    state = PEPModelCalibrator(sam_file=SAM, val_par_file=VALPAR).calibrate()  # fresh
+    apply_sim1_export_tax_cut(state)  # ttixO *= 0.75, in place, before build
     m = build_pep_model(state, variant="base", form="mcp")
     r = solve_pep(m)
     assert r.code == 1, f"SIM1 MCP solve did not converge: {r.message}"
     gdp = float(value(m.GDP_BP, exception=False))
-    assert abs(gdp - 46748.2084) < 1.0, f"SIM1 GDP_BP={gdp}, expected ~46748.2084 (base is 46707)"
+    assert abs(gdp - 46748.2084) < 1.0, (
+        f"SIM1 GDP_BP={gdp}, expected ~46748.2084 (base is 46707)"
+    )
     ok, tot, bad = _diff_mcp_vs_gams(m, gams)
     assert tot > 200, f"too few comparable cells ({tot})"
     assert not bad, f"SIM1 MCP↔GAMS mismatches ({ok}/{tot}): {bad[:5]}"
@@ -251,6 +315,7 @@ def test_objdef_variant_equals_base_nlp(state):
     `SOLVE NLP MINIMIZING OBJ` lineage. A constant objective can't change the equilibrium, so
     objdef-NLP must land on the exact same point as base-NLP (467/467 cells)."""
     from pyomo.environ import Var, value
+
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
     from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
 
@@ -264,15 +329,21 @@ def test_objdef_variant_equals_base_nlp(state):
                 if x is not None:
                     d[(v.name, i)] = float(x)
         return d
-    mb = build_pep_model(state, variant="base", form="nlp"); rb = solve_pep(mb)
-    mo = build_pep_model(state, variant="objdef", form="nlp"); ro = solve_pep(mo)
+
+    mb = build_pep_model(state, variant="base", form="nlp")
+    rb = solve_pep(mb)
+    mo = build_pep_model(state, variant="objdef", form="nlp")
+    ro = solve_pep(mo)
     assert rb.code == 1 and ro.code == 1, f"base={rb.message} objdef={ro.message}"
-    assert mo.find_component("OBJDEF") is not None, "objdef-NLP must carry the OBJDEF constraint"
+    assert mo.find_component("OBJDEF") is not None, (
+        "objdef-NLP must carry the OBJDEF constraint"
+    )
     vb, vo = vals(mb), vals(mo)
     keys = set(vb) & set(vo)
 
     def match(a, b):
         return abs(a - b) <= 1e-4 + 1e-4 * max(abs(a), abs(b))
+
     bad = [k for k in keys if not match(vb[k], vo[k])]
     assert not bad, f"objdef-NLP diverged from base at {bad[:5]}"
 
@@ -284,17 +355,25 @@ def test_objdef_mcp_is_square_and_solves(state):
     unpaired free var (359 vars vs 358 eqs) and PATH errors 'Got 358 expressions for 359
     variables'. Guards against that regression. Skips cleanly without PATH."""
     import sys
+
     src = "/Users/marmol/proyectos/path-capi-python/src"
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
     if importlib.util.find_spec("path_capi_python") is None:
         pytest.skip("path_capi_python unavailable for MCP solve")
-    from pyomo.environ import Var, Constraint
+    from pyomo.environ import Constraint, Var
+
     from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
-    from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep, _ensure_path_lib
+    from equilibria.templates.pep_pyomo.pep_pyomo_solver import (
+        _ensure_path_lib,
+        solve_pep,
+    )
+
     _ensure_path_lib()
     m = build_pep_model(state, variant="objdef", form="mcp")
-    assert m.find_component("OBJ") is None, "OBJ must not exist in the MCP form (unpaired free var)"
+    assert m.find_component("OBJ") is None, (
+        "OBJ must not exist in the MCP form (unpaired free var)"
+    )
     nfree = sum(1 for v in m.component_data_objects(Var, active=True) if not v.fixed)
     ncon = sum(1 for _ in m.component_data_objects(Constraint, active=True))
     assert nfree == ncon, f"objdef+mcp not square: {nfree} free vars vs {ncon} eqs"

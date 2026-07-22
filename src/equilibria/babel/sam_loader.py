@@ -152,8 +152,8 @@ class SAM4D(BaseModel):
         Args:
             output_path: Path for output GDX file
         """
-        from equilibria.babel.gdx.writer import write_gdx
         from equilibria.babel.gdx.symbols import Parameter
+        from equilibria.babel.gdx.writer import write_gdx
 
         # Create parameter with correct dimensions
         domains = ["*"] * (self.rdim + self.cdim)

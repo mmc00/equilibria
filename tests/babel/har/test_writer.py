@@ -5,6 +5,7 @@ do not require any GEMPACK fixture — they exercise the writer's own
 encoders by constructing HeaderArrays in memory and round-tripping
 through the reader.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,8 +16,8 @@ import pytest
 from equilibria.babel.har import HeaderArray, read_har
 from equilibria.babel.har.writer import write_har
 
-
 # ── 1CFULL: 1-D character set ────────────────────────────────────────────────
+
 
 def test_write_1cfull_single_record_roundtrip(tmp_path: Path):
     """Set of 2 elements — fits in a single element record."""
@@ -97,7 +98,7 @@ def test_write_har_atomic_on_failure(tmp_path: Path):
         name="BAD!",
         coeff_name="BAD!",
         long_name="x",
-        array=np.array([1.0+2j], dtype=np.complex64),
+        array=np.array([1.0 + 2j], dtype=np.complex64),
         set_names=[],
         set_elements=[],
     )
@@ -108,6 +109,7 @@ def test_write_har_atomic_on_failure(tmp_path: Path):
 
 
 # ── REFULL: real dense N-D ───────────────────────────────────────────────────
+
 
 def test_write_refull_2d_roundtrip(tmp_path: Path):
     arr = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
@@ -120,10 +122,17 @@ def test_write_refull_2d_roundtrip(tmp_path: Path):
         set_elements=[["AGR", "MFG", "SER"], ["USA", "ROW"]],
     )
     sets = {
-        "COMM": HeaderArray("COMM", "COMM", "commodities",
-                            np.array(["AGR","MFG","SER"], dtype=object), [], []),
-        "REG":  HeaderArray("REG", "REG", "regions",
-                            np.array(["USA","ROW"], dtype=object), [], []),
+        "COMM": HeaderArray(
+            "COMM",
+            "COMM",
+            "commodities",
+            np.array(["AGR", "MFG", "SER"], dtype=object),
+            [],
+            [],
+        ),
+        "REG": HeaderArray(
+            "REG", "REG", "regions", np.array(["USA", "ROW"], dtype=object), [], []
+        ),
     }
     out = tmp_path / "vdpp.har"
     write_har(out, {**sets, "VDPP": ha})
@@ -131,7 +140,7 @@ def test_write_refull_2d_roundtrip(tmp_path: Path):
     got = d["VDPP"]
     assert got.shape == (3, 2)
     assert got.set_names == ["COMM", "REG"]
-    assert got.set_elements == [["AGR","MFG","SER"], ["USA","ROW"]]
+    assert got.set_elements == [["AGR", "MFG", "SER"], ["USA", "ROW"]]
     np.testing.assert_array_equal(got.array, arr)
 
 
@@ -144,13 +153,20 @@ def test_write_refull_repeated_set_roundtrip(tmp_path: Path):
         long_name="bilateral trade flows",
         array=arr,
         set_names=["COMM", "REG", "REG"],
-        set_elements=[["AGR","MFG","SER"], ["USA","ROW"], ["USA","ROW"]],
+        set_elements=[["AGR", "MFG", "SER"], ["USA", "ROW"], ["USA", "ROW"]],
     )
     sets = {
-        "COMM": HeaderArray("COMM","COMM","commodities",
-                            np.array(["AGR","MFG","SER"],dtype=object),[],[]),
-        "REG":  HeaderArray("REG","REG","regions",
-                            np.array(["USA","ROW"],dtype=object),[],[]),
+        "COMM": HeaderArray(
+            "COMM",
+            "COMM",
+            "commodities",
+            np.array(["AGR", "MFG", "SER"], dtype=object),
+            [],
+            [],
+        ),
+        "REG": HeaderArray(
+            "REG", "REG", "regions", np.array(["USA", "ROW"], dtype=object), [], []
+        ),
     }
     out = tmp_path / "vmsb.har"
     write_har(out, {**sets, "VMSB": ha})
@@ -170,16 +186,31 @@ def test_write_refull_3d_distinct_sets_roundtrip(tmp_path: Path):
         array=arr,
         set_names=["COMM", "ACTS", "REG"],
         set_elements=[
-            ["AGR","MFG","SER"], ["AGR","MFG","SER"], ["USA","ROW"],
+            ["AGR", "MFG", "SER"],
+            ["AGR", "MFG", "SER"],
+            ["USA", "ROW"],
         ],
     )
     sets = {
-        "COMM": HeaderArray("COMM","COMM","commodities",
-                            np.array(["AGR","MFG","SER"],dtype=object),[],[]),
-        "ACTS": HeaderArray("ACTS","ACTS","activities",
-                            np.array(["AGR","MFG","SER"],dtype=object),[],[]),
-        "REG":  HeaderArray("REG","REG","regions",
-                            np.array(["USA","ROW"],dtype=object),[],[]),
+        "COMM": HeaderArray(
+            "COMM",
+            "COMM",
+            "commodities",
+            np.array(["AGR", "MFG", "SER"], dtype=object),
+            [],
+            [],
+        ),
+        "ACTS": HeaderArray(
+            "ACTS",
+            "ACTS",
+            "activities",
+            np.array(["AGR", "MFG", "SER"], dtype=object),
+            [],
+            [],
+        ),
+        "REG": HeaderArray(
+            "REG", "REG", "regions", np.array(["USA", "ROW"], dtype=object), [], []
+        ),
     }
     out = tmp_path / "vdfb.har"
     write_har(out, {**sets, "VDFB": ha})
@@ -197,11 +228,15 @@ def test_write_refull_rejects_shape_set_mismatch(tmp_path: Path):
         long_name="x",
         array=np.zeros((3, 2), dtype=np.float32),
         set_names=["COMM", "REG"],
-        set_elements=[["A","B"], ["X","Y"]],
+        set_elements=[["A", "B"], ["X", "Y"]],
     )
     sets = {
-        "COMM": HeaderArray("COMM","COMM","c", np.array(["A","B"],dtype=object),[],[]),
-        "REG":  HeaderArray("REG","REG","r", np.array(["X","Y"],dtype=object),[],[]),
+        "COMM": HeaderArray(
+            "COMM", "COMM", "c", np.array(["A", "B"], dtype=object), [], []
+        ),
+        "REG": HeaderArray(
+            "REG", "REG", "r", np.array(["X", "Y"], dtype=object), [], []
+        ),
     }
     with pytest.raises(ValueError, match="shape"):
         write_har(tmp_path / "bad.har", {**sets, "VDPP": ha})
@@ -214,13 +249,14 @@ def test_write_refull_rejects_ndim_set_names_mismatch(tmp_path: Path):
         long_name="x",
         array=np.zeros((3, 2), dtype=np.float32),
         set_names=["COMM"],
-        set_elements=[["A","B","C"]],
+        set_elements=[["A", "B", "C"]],
     )
     with pytest.raises(ValueError, match="ndim"):
         write_har(tmp_path / "bad.har", {"VDPP": ha})
 
 
 # ── RESPSE: sparse real ──────────────────────────────────────────────────────
+
 
 def test_write_respse_roundtrip(tmp_path: Path):
     """Sparse 3-D float array: only a few non-zeros."""
@@ -234,13 +270,21 @@ def test_write_respse_roundtrip(tmp_path: Path):
         array=arr,
         set_names=["COMM", "ACTS", "REG"],
         set_elements=[
-            ["AGR","MFG","SER"], ["AGR","MFG","SER"], ["USA","ROW"],
+            ["AGR", "MFG", "SER"],
+            ["AGR", "MFG", "SER"],
+            ["USA", "ROW"],
         ],
     )
     sets = {
-        "COMM": HeaderArray("COMM","COMM","c", np.array(["AGR","MFG","SER"],dtype=object),[],[]),
-        "ACTS": HeaderArray("ACTS","ACTS","a", np.array(["AGR","MFG","SER"],dtype=object),[],[]),
-        "REG":  HeaderArray("REG","REG","r", np.array(["USA","ROW"],dtype=object),[],[]),
+        "COMM": HeaderArray(
+            "COMM", "COMM", "c", np.array(["AGR", "MFG", "SER"], dtype=object), [], []
+        ),
+        "ACTS": HeaderArray(
+            "ACTS", "ACTS", "a", np.array(["AGR", "MFG", "SER"], dtype=object), [], []
+        ),
+        "REG": HeaderArray(
+            "REG", "REG", "r", np.array(["USA", "ROW"], dtype=object), [], []
+        ),
     }
     out = tmp_path / "maks.har"
     write_har(out, {**sets, "MAKS": ha}, prefer_sparse=["MAKS"])
@@ -251,6 +295,7 @@ def test_write_respse_roundtrip(tmp_path: Path):
 
 
 # ── 2IFULL: 2-D int dense ───────────────────────────────────────────────────
+
 
 def test_write_2ifull_roundtrip(tmp_path: Path):
     arr = np.array([[42]], dtype=np.int32)
@@ -282,6 +327,7 @@ def test_write_2ifull_rejects_non_int32(tmp_path: Path):
         set_elements=[],
     )
     from equilibria.babel.har.writer import _write_2ifull
+
     with pytest.raises(TypeError, match="int32"):
         out = bytearray()
         _write_2ifull(out, "RDLT", ha)
@@ -289,15 +335,17 @@ def test_write_2ifull_rejects_non_int32(tmp_path: Path):
 
 # ── HarWriter builder ────────────────────────────────────────────────────────
 
+
 def test_harwriter_add_set_and_array(tmp_path: Path):
     from equilibria.babel.har import HarWriter
+
     out = tmp_path / "build.har"
     w = HarWriter(out)
     w.add_set("REG", ["USA", "ROW"])
     w.add_set("COMM", ["AGR", "MFG", "SER"])
     w.add_array(
         "VDPP",
-        np.array([[1.0,2.0],[3.0,4.0],[5.0,6.0]], dtype=np.float32),
+        np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32),
         set_names=["COMM", "REG"],
         long_name="domestic purchases",
     )
@@ -310,17 +358,23 @@ def test_harwriter_add_set_and_array(tmp_path: Path):
 
 def test_harwriter_context_manager(tmp_path: Path):
     from equilibria.babel.har import HarWriter
+
     out = tmp_path / "ctx.har"
     with HarWriter(out) as w:
         w.add_set("REG", ["USA", "ROW"])
-        w.add_array("X", np.array([1.0, 2.0], dtype=np.float32),
-                    set_names=["REG"], long_name="x")
+        w.add_array(
+            "X",
+            np.array([1.0, 2.0], dtype=np.float32),
+            set_names=["REG"],
+            long_name="x",
+        )
     d = read_har(out)
     assert "X" in d
 
 
 def test_harwriter_auto_registers_sets_from_add_array(tmp_path: Path):
     from equilibria.babel.har import HarWriter
+
     out = tmp_path / "auto.har"
     w = HarWriter(out)
     w.add_array(
@@ -338,6 +392,7 @@ def test_harwriter_auto_registers_sets_from_add_array(tmp_path: Path):
 
 def test_harwriter_set_conflict_raises(tmp_path: Path):
     from equilibria.babel.har import HarWriter
+
     w = HarWriter(tmp_path / "conflict.har")
     w.add_set("REG", ["USA", "ROW"])
     with pytest.raises(ValueError, match="REG"):
@@ -346,16 +401,19 @@ def test_harwriter_set_conflict_raises(tmp_path: Path):
 
 def test_harwriter_array_conflicting_set_elements_raises(tmp_path: Path):
     from equilibria.babel.har import HarWriter
+
     w = HarWriter(tmp_path / "conflict2.har")
     w.add_array(
-        "A", np.array([[1.0]], dtype=np.float32),
+        "A",
+        np.array([[1.0]], dtype=np.float32),
         set_names=["COMM", "REG"],
         set_elements=[["AGR"], ["USA"]],
         long_name="x",
     )
     with pytest.raises(ValueError, match="REG"):
         w.add_array(
-            "B", np.array([[2.0]], dtype=np.float32),
+            "B",
+            np.array([[2.0]], dtype=np.float32),
             set_names=["COMM", "REG"],
             set_elements=[["AGR"], ["EUR"]],
             long_name="y",
@@ -364,26 +422,29 @@ def test_harwriter_array_conflicting_set_elements_raises(tmp_path: Path):
 
 def test_harwriter_add_dataframe_2d(tmp_path: Path):
     import pandas as pd
+
     from equilibria.babel.har import HarWriter
 
     df = pd.DataFrame(
         [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
-        index=pd.Index(["AGR","MFG","SER"], name="COMM"),
-        columns=pd.Index(["USA","ROW"], name="REG"),
+        index=pd.Index(["AGR", "MFG", "SER"], name="COMM"),
+        columns=pd.Index(["USA", "ROW"], name="REG"),
     )
     out = tmp_path / "df.har"
     with HarWriter(out) as w:
-        w.add_dataframe("VDPP", df, set_names=["COMM","REG"], long_name="dp")
+        w.add_dataframe("VDPP", df, set_names=["COMM", "REG"], long_name="dp")
     d = read_har(out)
     got = d["VDPP"]
     assert got.shape == (3, 2)
-    assert got.set_names == ["COMM","REG"]
+    assert got.set_names == ["COMM", "REG"]
     np.testing.assert_array_equal(got.array, df.values.astype(np.float32))
 
 
 def test_harwriter_add_dataframe_rejects_non_2d(tmp_path: Path):
     import pandas as pd
+
     from equilibria.babel.har import HarWriter
+
     series = pd.Series([1.0, 2.0], name="X")
     with pytest.raises(ValueError, match="2-D"):
         with HarWriter(tmp_path / "bad.har") as w:

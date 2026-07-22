@@ -233,7 +233,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                     continue
                 ld_sum = 0.0
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0)) <= 1e-12:
+                    if (
+                        abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0))
+                        <= 1e-12
+                    ):
                         continue
                     ld_sum += vars.LD.get((l, j), 0.0)
                     add(f"LD[{l},{j}]", -(lam * vars.W.get(l, 0.0)))
@@ -248,7 +251,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                 if lam == 0:
                     continue
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                    if (
+                        abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0))
+                        <= 1e-12
+                    ):
                         continue
                     add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
                     add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
@@ -304,7 +310,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                 if lam == 0:
                     continue
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                    if (
+                        abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0))
+                        <= 1e-12
+                    ):
                         continue
                     add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
                     add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
@@ -349,7 +358,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                 if lam == 0:
                     continue
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                    if (
+                        abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0))
+                        <= 1e-12
+                    ):
                         continue
                     add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
                     add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
@@ -378,7 +390,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add("TIWT", 1.0)
             for l in self.sets.get("L", []):
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0)) > 1e-12:
+                    if (
+                        abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0))
+                        > 1e-12
+                    ):
                         add(f"TIW[{l},{j}]", -1.0)
             return result
 
@@ -386,7 +401,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add("TIKT", 1.0)
             for k in self.sets.get("K", []):
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) > 1e-12:
+                    if (
+                        abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0))
+                        > 1e-12
+                    ):
                         add(f"TIK[{k},{j}]", -1.0)
             return result
 
@@ -504,14 +522,22 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             i = constraint_name.split("_", 1)[1]
             ttix = self.equations.params.get("ttix", {}).get(i, 0.0)
             margin_sum = sum(
-                vars.PC.get(ij, 1.0) * self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0)
+                vars.PC.get(ij, 1.0)
+                * self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0)
                 for ij in self.sets.get("I", [])
             )
             add(f"TIX[{i}]", 1.0)
             add(f"PE[{i}]", -(ttix * vars.EXD.get(i, 0.0)))
             add(f"EXD[{i}]", -(ttix * (vars.PE.get(i, 0.0) + margin_sum)))
             for ij in self.sets.get("I", []):
-                add(f"PC[{ij}]", -(ttix * self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0) * vars.EXD.get(i, 0.0)))
+                add(
+                    f"PC[{ij}]",
+                    -(
+                        ttix
+                        * self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0)
+                        * vars.EXD.get(i, 0.0)
+                    ),
+                )
             return result
 
         if constraint_name == "EQ43":
@@ -537,7 +563,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                 if lam == 0:
                     continue
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                    if (
+                        abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0))
+                        <= 1e-12
+                    ):
                         continue
                     add(f"R[{k},{j}]", -(lam * vars.KD.get((k, j), 0.0)))
                     add(f"KD[{k},{j}]", -(lam * vars.R.get((k, j), 0.0)))
@@ -564,7 +593,9 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
 
         if constraint_name.startswith("EQ47_"):
             _, agng, h = constraint_name.split("_", 2)
-            lam = self.equations.params.get("lambda_TR_households", {}).get((agng, h), 0.0)
+            lam = self.equations.params.get("lambda_TR_households", {}).get(
+                (agng, h), 0.0
+            )
             add(f"TR[{agng},{h}]", 1.0)
             add(f"YDH[{h}]", -lam)
             return result
@@ -684,7 +715,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                 if beta_xt <= 0 or xs_ji <= 0:
                     return None
                 active.append((i, beta_xt, xs_ji))
-                term += beta_xt * (xs_ji ** rho_xt)
+                term += beta_xt * (xs_ji**rho_xt)
             if term <= 0 or b_xt <= 0:
                 return None
             coeff = b_xt * (term ** ((1.0 / rho_xt) - 1.0))
@@ -704,7 +735,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             if b_xt <= 0 or beta_xt <= 0 or pt_j <= 0 or p_ji <= 0:
                 return None
             ratio = p_ji / (beta_xt * pt_j)
-            scale_factor = (ratio ** sigma_xt) / (b_xt ** (1.0 + sigma_xt))
+            scale_factor = (ratio**sigma_xt) / (b_xt ** (1.0 + sigma_xt))
             expected_xs = xst_j * scale_factor
             add(f"XS[{j},{i}]", 1.0)
             add(f"XST[{j}]", -scale_factor)
@@ -724,7 +755,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             ratio_factor = ((1.0 - beta_x) / beta_x) * (pe_i / pl_i)
             if ratio_factor <= 0:
                 return None
-            alloc = ratio_factor ** sigma_x
+            alloc = ratio_factor**sigma_x
             expected_ex = alloc * ds_ji
             add(f"EX[{j},{i}]", 1.0)
             add(f"DS[{j},{i}]", -alloc)
@@ -737,21 +768,29 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             rho_x = self.equations.params.get("rho_X", {}).get((j, i), 1.0)
             b_x = self.equations.params.get("B_X", {}).get((j, i), 1.0)
             beta_x = self.equations.params.get("beta_X", {}).get((j, i), 0.5)
-            if rho_x == 0 or b_x <= 0 or (j, i) not in self.equations.params.get("beta_X", {}):
+            if (
+                rho_x == 0
+                or b_x <= 0
+                or (j, i) not in self.equations.params.get("beta_X", {})
+            ):
                 return None
             term = 0.0
             ex_ji = vars.EX.get((j, i), 0.0)
             ds_ji = vars.DS.get((j, i), 0.0)
-            active_ex = abs(self.equations.params.get("EXO0", {}).get((j, i), 0.0)) > 1e-12
-            active_ds = abs(self.equations.params.get("DSO0", {}).get((j, i), 0.0)) > 1e-12
+            active_ex = (
+                abs(self.equations.params.get("EXO0", {}).get((j, i), 0.0)) > 1e-12
+            )
+            active_ds = (
+                abs(self.equations.params.get("DSO0", {}).get((j, i), 0.0)) > 1e-12
+            )
             if active_ex:
                 if beta_x <= 0 or ex_ji <= 0:
                     return None
-                term += beta_x * (ex_ji ** rho_x)
+                term += beta_x * (ex_ji**rho_x)
             if active_ds:
                 if beta_x >= 1 or ds_ji <= 0:
                     return None
-                term += (1.0 - beta_x) * (ds_ji ** rho_x)
+                term += (1.0 - beta_x) * (ds_ji**rho_x)
             if term <= 0:
                 return None
             coeff = b_x * (term ** ((1.0 / rho_x) - 1.0))
@@ -759,14 +798,18 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             if active_ex:
                 add(f"EX[{j},{i}]", -(coeff * beta_x * (ex_ji ** (rho_x - 1.0))))
             if active_ds:
-                add(f"DS[{j},{i}]", -(coeff * (1.0 - beta_x) * (ds_ji ** (rho_x - 1.0))))
+                add(
+                    f"DS[{j},{i}]", -(coeff * (1.0 - beta_x) * (ds_ji ** (rho_x - 1.0)))
+                )
             return result
 
         if constraint_name.startswith("EQ62_"):
             i = constraint_name.split("_", 1)[1]
             sigma_xd = self.equations.params.get("sigma_XD", {}).get(i, 1.0)
             exdo = self.equations.params.get("EXDO", {}).get(i, 0.0)
-            pwx_i = vars.PWX.get(i, self.equations.params.get("PWX", {}).get(i, vars.PWM.get(i, 1.0)))
+            pwx_i = vars.PWX.get(
+                i, self.equations.params.get("PWX", {}).get(i, vars.PWM.get(i, 1.0))
+            )
             pe_fob_i = vars.PE_FOB.get(i, 0.0)
             if abs(exdo) <= 1e-12 or pwx_i <= 0 or pe_fob_i <= 0 or vars.e <= 0:
                 return None
@@ -819,7 +862,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             ratio_factor = (beta_m / (1.0 - beta_m)) * (pd_i / pm_i)
             if ratio_factor <= 0:
                 return None
-            alloc = ratio_factor ** sigma_m
+            alloc = ratio_factor**sigma_m
             expected_im = alloc * dd_i
             add(f"IM[{i}]", 1.0)
             add(f"DD[{i}]", -alloc)
@@ -857,10 +900,16 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             j = constraint_name.split("_", 1)[1]
             add(f"PVA[{j}]", vars.VA.get(j, 0.0))
             add(f"VA[{j}]", vars.PVA.get(j, 0.0))
-            if any(abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0)) > 1e-12 for l in self.sets.get("L", [])):
+            if any(
+                abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0)) > 1e-12
+                for l in self.sets.get("L", [])
+            ):
                 add(f"WC[{j}]", -vars.LDC.get(j, 0.0))
                 add(f"LDC[{j}]", -vars.WC.get(j, 0.0))
-            if any(abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) > 1e-12 for k in self.sets.get("K", [])):
+            if any(
+                abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) > 1e-12
+                for k in self.sets.get("K", [])
+            ):
                 add(f"RC[{j}]", -vars.KDC.get(j, 0.0))
                 add(f"KDC[{j}]", -vars.RC.get(j, 0.0))
             return result
@@ -909,7 +958,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add(f"PE[{i}]", 1.0)
             add(f"PE_FOB[{i}]", -(1.0 / (1.0 + ttix)))
             for ij in self.sets.get("I", []):
-                add(f"PC[{ij}]", self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0))
+                add(
+                    f"PC[{ij}]",
+                    self.equations.params.get("tmrg_X", {}).get((ij, i), 0.0),
+                )
             return result
 
         if constraint_name.startswith("EQ77_"):
@@ -919,7 +971,10 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add(f"PD[{i}]", 1.0)
             add(f"PL[{i}]", -factor)
             for ij in self.sets.get("I", []):
-                add(f"PC[{ij}]", -(factor * self.equations.params.get("tmrg", {}).get((ij, i), 0.0)))
+                add(
+                    f"PC[{ij}]",
+                    -(factor * self.equations.params.get("tmrg", {}).get((ij, i), 0.0)),
+                )
             return result
 
         if constraint_name.startswith("EQ78_"):
@@ -931,7 +986,13 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add("e", -(factor * vars.PWM.get(i, 0.0)))
             add(f"PWM[{i}]", -(factor * vars.e))
             for ij in self.sets.get("I", []):
-                add(f"PC[{ij}]", -((1.0 + ttic) * self.equations.params.get("tmrg", {}).get((ij, i), 0.0)))
+                add(
+                    f"PC[{ij}]",
+                    -(
+                        (1.0 + ttic)
+                        * self.equations.params.get("tmrg", {}).get((ij, i), 0.0)
+                    ),
+                )
             return result
 
         if constraint_name.startswith("EQ79_"):
@@ -1076,13 +1137,19 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add("TPRCTS", -1.0)
             for l in self.sets.get("L", []):
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0)) <= 1e-12:
+                    if (
+                        abs(self.equations.params.get("LDO0", {}).get((l, j), 0.0))
+                        <= 1e-12
+                    ):
                         continue
                     add(f"W[{l}]", -vars.LD.get((l, j), 0.0))
                     add(f"LD[{l},{j}]", -vars.W.get(l, 0.0))
             for k in self.sets.get("K", []):
                 for j in self.sets.get("J", []):
-                    if abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0)) <= 1e-12:
+                    if (
+                        abs(self.equations.params.get("KDO0", {}).get((k, j), 0.0))
+                        <= 1e-12
+                    ):
                         continue
                     add(f"R[{k},{j}]", -vars.KD.get((k, j), 0.0))
                     add(f"KD[{k},{j}]", -vars.R.get((k, j), 0.0))
@@ -1120,7 +1187,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             cth = vars.CTH.get(h, 0.0)
             add(f"CTH_REAL[{h}]", 1.0)
             add(f"CTH[{h}]", -(1.0 / pixcon))
-            add("PIXCON", cth / (pixcon ** 2))
+            add("PIXCON", cth / (pixcon**2))
             return result
 
         if constraint_name == "EQ95":
@@ -1128,7 +1195,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add("G_REAL", 1.0)
             if abs(pixgvt) > 1e-12:
                 add("G", -(1.0 / pixgvt))
-                add("PIXGVT", vars.G / (pixgvt ** 2))
+                add("PIXGVT", vars.G / (pixgvt**2))
             return result
 
         if constraint_name == "EQ96":
@@ -1136,7 +1203,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add("GDP_BP_REAL", 1.0)
             if abs(pixgdp) > 1e-12:
                 add("GDP_BP", -(1.0 / pixgdp))
-                add("PIXGDP", vars.GDP_BP / (pixgdp ** 2))
+                add("PIXGDP", vars.GDP_BP / (pixgdp**2))
             return result
 
         if constraint_name == "EQ97":
@@ -1144,14 +1211,14 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
             add("GDP_MP_REAL", 1.0)
             if abs(pixcon) > 1e-12:
                 add("GDP_MP", -(1.0 / pixcon))
-                add("PIXCON", vars.GDP_MP / (pixcon ** 2))
+                add("PIXCON", vars.GDP_MP / (pixcon**2))
             return result
 
         if constraint_name == "EQ98":
             add("GFCF_REAL", 1.0)
             if abs(vars.PIXINV) > 1e-12:
                 add("GFCF", -(1.0 / vars.PIXINV))
-                add("PIXINV", vars.GFCF / (vars.PIXINV ** 2))
+                add("PIXINV", vars.GFCF / (vars.PIXINV**2))
             return result
 
         if constraint_name == "EQ80":
@@ -1195,7 +1262,7 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                 tip = vars.TIP.get(j, 0.0)
                 unit_base = unit_base_by_j[j]
                 dnum1_dpva = va0
-                dnum1_dva = -(va0 * tip) / (va ** 2)
+                dnum1_dva = -(va0 * tip) / (va**2)
                 dnum1_dtip = va0 / va
                 dnum2_dpva = va
                 dnum2_dva = pva
@@ -1205,15 +1272,28 @@ class PEPConstraintJacobianHarness(ConstraintJacobianHarness):
                 d_a_dva = dnum1_dva / den1
                 d_a_dtip = dnum1_dtip / den1
                 d_b_dpva = dnum2_dpva / den2
-                d_b_dva = (dnum2_dva * den2 - num2 * dden2_dva) / (den2 ** 2)
+                d_b_dva = (dnum2_dva * den2 - num2 * dden2_dva) / (den2**2)
                 d_b_dtip = dnum2_dtip / den2
-                add(f"PVA[{j}]", -((b_term * d_a_dpva + a_term * d_b_dpva) / (2.0 * f_term)))
-                add(f"VA[{j}]", -((b_term * d_a_dva + a_term * d_b_dva) / (2.0 * f_term)))
-                add(f"TIP[{j}]", -((b_term * d_a_dtip + a_term * d_b_dtip) / (2.0 * f_term)))
+                add(
+                    f"PVA[{j}]",
+                    -((b_term * d_a_dpva + a_term * d_b_dpva) / (2.0 * f_term)),
+                )
+                add(
+                    f"VA[{j}]",
+                    -((b_term * d_a_dva + a_term * d_b_dva) / (2.0 * f_term)),
+                )
+                add(
+                    f"TIP[{j}]",
+                    -((b_term * d_a_dtip + a_term * d_b_dtip) / (2.0 * f_term)),
+                )
             return result
 
         if constraint_name == "WALRAS":
-            walras_i = "agr" if "agr" in self.sets.get("I", []) else (self.sets.get("I", [None])[0])
+            walras_i = (
+                "agr"
+                if "agr" in self.sets.get("I", [])
+                else (self.sets.get("I", [None])[0])
+            )
             if walras_i is None:
                 return result
             add("LEON", 1.0)

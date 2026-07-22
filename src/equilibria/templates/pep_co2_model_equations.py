@@ -30,7 +30,9 @@ class PEPCO2ModelEquations(PEPCRIModelEquations):
         for j in self.J:
             ttip = self.params.get("ttip", {}).get(j, 0.0)
             carbon_tax = carbon_unit_tax(self.params, vars, j)
-            expected_tip = (ttip * vars.PP.get(j, 0.0) + carbon_tax) * vars.XST.get(j, 0.0)
+            expected_tip = (ttip * vars.PP.get(j, 0.0) + carbon_tax) * vars.XST.get(
+                j, 0.0
+            )
             residuals[f"EQ39_{j}"] = vars.TIP.get(j, 0.0) - expected_tip
         return residuals
 

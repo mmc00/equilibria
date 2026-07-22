@@ -14,7 +14,9 @@ from equilibria.baseline import (
 )
 
 
-def test_extract_gams_solve_model_types_reads_unique_model_types(tmp_path: Path) -> None:
+def test_extract_gams_solve_model_types_reads_unique_model_types(
+    tmp_path: Path,
+) -> None:
     script = tmp_path / "reference.gms"
     script.write_text(
         """
@@ -117,7 +119,9 @@ def test_reference_manifest_requires_base_slice(tmp_path: Path) -> None:
         )
 
 
-def test_build_gams_nlp_reference_manifest_with_scenario_references(tmp_path: Path) -> None:
+def test_build_gams_nlp_reference_manifest_with_scenario_references(
+    tmp_path: Path,
+) -> None:
     gms_script = tmp_path / "reference_nlp.gms"
     gms_script.write_text(
         """
@@ -144,7 +148,10 @@ def test_build_gams_nlp_reference_manifest_with_scenario_references(tmp_path: Pa
                 {
                     "slice": "BASE",
                     "results_gdx": {"path": str(base_results), "sha256": "abc123"},
-                    "parameters_gdx": {"path": str(base_parameters), "sha256": "def456"},
+                    "parameters_gdx": {
+                        "path": str(base_parameters),
+                        "sha256": "def456",
+                    },
                 }
             ),
             "government_spending": {

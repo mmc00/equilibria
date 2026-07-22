@@ -1,9 +1,13 @@
 """GTAP altertax MULTI-PERIODO builder. NO toca el single-period gtap_model_equations.
 Arma un ConcreteModel con eje t={base,check,shock} presente (estructura del loop(tsim)
 de GAMS) para que los enlaces Fisher inter-temporales sean filas del Jacobiano."""
+
 from __future__ import annotations
-from typing import Any, Optional
+
+import contextlib
+
 from pyomo.environ import ConcreteModel, Set
+
 from .gtap_model_equations import GTAPModelEquations
 
 PERIODS = ("base", "check", "shock")
@@ -15,18 +19,21 @@ def _astuple(k):
 
 
 class GTAPMultiPeriodModel:
-    def __init__(self, sets, params, closure=None, residual_region: Optional[str] = None):
+    def __init__(self, sets, params, closure=None, residual_region: str | None = None):
         self.sets = sets
         self.params = params
         self.closure = closure
         self.residual_region = residual_region
         # builder single-period reusable para sets/vars/eqs base
-        self._sp = GTAPModelEquations(sets, params, closure, residual_region=residual_region)
+        self._sp = GTAPModelEquations(
+            sets, params, closure, residual_region=residual_region
+        )
 
     def build_sets(self) -> ConcreteModel:
         from pyomo.environ import Param
+
         m = ConcreteModel()
-        self._sp._add_sets(m)              # r,a,i,f,... actuales
+        self._sp._add_sets(m)  # r,a,i,f,... actuales
         m.t = Set(initialize=list(PERIODS), ordered=True)
         m.t0 = Set(initialize=["base"], ordered=True)
 
@@ -44,30 +51,61 @@ class GTAPMultiPeriodModel:
         for r in sets.r:
             for i in sets.i:
                 for rp in sets.rp if hasattr(sets, "rp") else sets.r:
-                    vtwr_total = sum(
-                        float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0)
-                        for mg in sets.m
-                    ) if hasattr(bm, "vtwr") else 0.0
-                    vcif = float(bm.vcif.get((r, i, rp), 0.0) or 0.0) if hasattr(bm, "vcif") else 0.0
-                    vfob = float(bm.vfob.get((r, i, rp), 0.0) or 0.0) if hasattr(bm, "vfob") else 0.0
-                    xw_bench = float(bm.vxsb.get((r, i, rp), 0.0) or 0.0) if hasattr(bm, "vxsb") else 0.0
+                    vtwr_total = (
+                        sum(
+                            float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0)
+                            for mg in sets.m
+                        )
+                        if hasattr(bm, "vtwr")
+                        else 0.0
+                    )
+                    vcif = (
+                        float(bm.vcif.get((r, i, rp), 0.0) or 0.0)
+                        if hasattr(bm, "vcif")
+                        else 0.0
+                    )
+                    vfob = (
+                        float(bm.vfob.get((r, i, rp), 0.0) or 0.0)
+                        if hasattr(bm, "vfob")
+                        else 0.0
+                    )
+                    xw_bench = (
+                        float(bm.vxsb.get((r, i, rp), 0.0) or 0.0)
+                        if hasattr(bm, "vxsb")
+                        else 0.0
+                    )
                     if xw_bench <= 0.0 and hasattr(bm, "vxmd"):
                         xw_bench = float(bm.vxmd.get((r, i, rp), 0.0) or 0.0)
-                    tmarg_val = max(vcif - vfob, 0.0) / max(xw_bench, 1e-12) if xw_bench > 0.0 else 0.0
+                    tmarg_val = (
+                        max(vcif - vfob, 0.0) / max(xw_bench, 1e-12)
+                        if xw_bench > 0.0
+                        else 0.0
+                    )
                     tmarg_data[(r, i, rp)] = tmarg_val
                     if vtwr_total > 0.0:
                         for mg in sets.m:
-                            flow = float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0) if hasattr(bm, "vtwr") else 0.0
-                            amgm_data[(mg, r, i, rp)] = flow / vtwr_total if vtwr_total > 0.0 else 0.0
+                            flow = (
+                                float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0)
+                                if hasattr(bm, "vtwr")
+                                else 0.0
+                            )
+                            amgm_data[(mg, r, i, rp)] = (
+                                flow / vtwr_total if vtwr_total > 0.0 else 0.0
+                            )
 
         m.tmarg = Param(
-            m.r, m.i, m.r,          # (r, i, rp) — rp shares the r domain
+            m.r,
+            m.i,
+            m.r,  # (r, i, rp) — rp shares the r domain
             initialize=tmarg_data,
             default=0.0,
             doc="trade-margin rate (vcif-vfob)/xw_bench",
         )
         m.amgm = Param(
-            m.m, m.r, m.i, m.r,     # (mg, r, i, rp)
+            m.m,
+            m.r,
+            m.i,
+            m.r,  # (mg, r, i, rp)
             initialize=amgm_data,
             default=0.0,
             doc="margin-good share in total margin demand",
@@ -85,7 +123,7 @@ class GTAPMultiPeriodModel:
         Init: all periods get the single-period benchmark value (base=check=shock).
         The within/domain is preserved from the single-period VarData.
         """
-        from pyomo.environ import Var, NonNegativeReals
+        from pyomo.environ import NonNegativeReals, Var
 
         # Build a temporary single-period model to read Var families from.
         # Reuse the builder stored in __init__ (same immutable sets/params);
@@ -109,11 +147,7 @@ class GTAPMultiPeriodModel:
 
             if v.is_indexed():
                 # Build explicit list of (orig_key..., t) tuples
-                new_index = [
-                    (*_astuple(k), t)
-                    for k in v.index_set()
-                    for t in periods
-                ]
+                new_index = [(*_astuple(k), t) for k in v.index_set() for t in periods]
 
                 # Capture values from single-period: key → float
                 sp_vals = {}
@@ -127,6 +161,7 @@ class GTAPMultiPeriodModel:
                     def _init(_m, *key):
                         *orig, _t = key
                         return vals_dict.get(tuple(orig), 1.0)
+
                     return _init
 
                 init_fn = _mk_init(sp_vals)
@@ -142,6 +177,7 @@ class GTAPMultiPeriodModel:
                 def _mk_scalar_init(val):
                     def _init(_m, t):
                         return val
+
                     return _init
 
                 init_fn = _mk_scalar_init(sp_val)
@@ -161,12 +197,15 @@ class GTAPMultiPeriodModel:
         m.eq_facty["USA", "base"] holds the same algebraic body as sp.eq_facty["USA"]
         evaluated at the multi-period vars for t=base.
         """
-        from pyomo.environ import Constraint, Var, Param, value as _pyo_value
         from pyomo.core.expr.visitor import ExpressionReplacementVisitor
+        from pyomo.environ import Constraint, Param, Var
+        from pyomo.environ import value as _pyo_value
 
         # Build a fresh single-period model to get its Constraints and Vars.
         sp = GTAPModelEquations(
-            self.sets, self.params, self.closure,
+            self.sets,
+            self.params,
+            self.closure,
             residual_region=self.residual_region,
         ).build_model()
 
@@ -200,10 +239,8 @@ class GTAPMultiPeriodModel:
             if not prm.mutable:
                 continue
             for k in prm:
-                try:
+                with contextlib.suppress(Exception):
                     substitute[id(prm[k])] = float(_pyo_value(prm[k]))
-                except Exception:
-                    pass
 
         visitor = ExpressionReplacementVisitor(substitute=substitute)
 
@@ -223,6 +260,7 @@ class GTAPMultiPeriodModel:
                 if ub is not None:
                     return body <= ub
                 return Constraint.Skip
+
             return _rule
 
         def _make_scalar_rule(body, lb, ub):
@@ -236,6 +274,7 @@ class GTAPMultiPeriodModel:
                 if ub is not None:
                     return body <= ub
                 return Constraint.Skip
+
             return _rule
 
         for con in sp.component_objects(Constraint, active=True):
@@ -265,7 +304,9 @@ class GTAPMultiPeriodModel:
                         # Store the raw expression body and bounds as-is (already Pyomo exprs).
                         merged_data[ei] = (cd_e.body, cd_e.lower, cd_e.upper)
                     # Append new period entries.
-                    for ni, data_tuple in zip(new_index, [con_data[k] for k in con]):
+                    for ni, data_tuple in zip(
+                        new_index, [con_data[k] for k in con], strict=False
+                    ):
                         merged_index.append(ni)
                         merged_data[ni] = data_tuple
 
@@ -289,9 +330,14 @@ class GTAPMultiPeriodModel:
                             if ub is not None:
                                 return body <= ub
                             return Constraint.Skip
+
                         return _rule
 
-                    setattr(m, cname, Constraint(merged_index, rule=_make_merged_rule(merged_data)))
+                    setattr(
+                        m,
+                        cname,
+                        Constraint(merged_index, rule=_make_merged_rule(merged_data)),
+                    )
                 else:
                     setattr(m, cname, Constraint(new_index, rule=_make_rule(con_data)))
             else:
@@ -313,13 +359,17 @@ class GTAPMultiPeriodModel:
                     merged_data_s[ni_s] = (new_body, lb, ub)
                     m.del_component(existing)
                     setattr(
-                        m, cname,
+                        m,
+                        cname,
                         Constraint(merged_index, rule=_make_merged_rule(merged_data_s)),
                     )
                 else:
                     setattr(
-                        m, cname,
-                        Constraint([(period,)], rule=_make_scalar_rule(new_body, lb, ub)),
+                        m,
+                        cname,
+                        Constraint(
+                            [(period,)], rule=_make_scalar_rule(new_body, lb, ub)
+                        ),
                     )
 
     def build_equations_fisher(self, m: ConcreteModel) -> None:
@@ -358,14 +408,24 @@ class GTAPMultiPeriodModel:
                                               * mqfactw(t,t)/(mqfactw(base,t)+ε) )
           with mqfactw(tp,tq) = Σ_{r,f,a} pf[r,f,a,tp] · xf[r,f,a,tq] / xscale[r,a]
         """
-        from pyomo.environ import Constraint, sqrt as _pyo_sqrt
+        from pyomo.environ import Constraint
+        from pyomo.environ import sqrt as _pyo_sqrt
         from pyomo.environ import value as _pv
+
+        from .gtap_model_equations import (
+            GTAP_GOVERNMENT_AGENT as G,
+        )
+        from .gtap_model_equations import (
+            GTAP_HOUSEHOLD_AGENT as H,
+        )
+        from .gtap_model_equations import (
+            GTAP_INVESTMENT_AGENT as I,
+        )
+        from .gtap_model_equations import (
+            GTAP_MARGIN_AGENT as MG,
+        )
         from .gtap_model_equations import (
             GTAPModelEquations,
-            GTAP_HOUSEHOLD_AGENT as H,
-            GTAP_GOVERNMENT_AGENT as G,
-            GTAP_INVESTMENT_AGENT as I,
-            GTAP_MARGIN_AGENT as MG,
         )
 
         fd = (H, G, I, MG)
@@ -373,11 +433,7 @@ class GTAPMultiPeriodModel:
         def _mqgdp(tp: str, tq: str, r: str):
             """Fisher cross-product of absorption + net exports."""
             # Final-demand absorption: Σ_{i,fd} pa[r,i,fd,tp] · xaa[r,i,fd,tq]
-            ab = sum(
-                m.pa[r, i, a, tp] * m.xaa[r, i, a, tq]
-                for i in m.i
-                for a in fd
-            )
+            ab = sum(m.pa[r, i, a, tp] * m.xaa[r, i, a, tq] for i in m.i for a in fd)
             # Net export value: Σ_{i,rp} ( pefob[r,i,rp,tp]·xw[r,i,rp,tq]
             #                              − pmcif[rp,i,r,tp]·xw[rp,i,r,tq] )
             tr = sum(
@@ -404,9 +460,11 @@ class GTAPMultiPeriodModel:
             # Smooth positive guard on the sqrt argument to keep PATH evaluable during
             # iterations where the trade balance might transiently go negative:
             #   arg_pos = (arg + √(arg²+ε))/2  →  ≈ arg for arg≫√ε, ≈ 0⁺ for arg≤0, C¹-smooth.
-            _mq_base_t = _mqgdp("base", t, r)   # price=base, qty=current
-            _mq_t_base = _mqgdp(t, "base", r)   # price=current, qty=base
-            _arg = (m.gdpmp[r, t] / m.gdpmp[r, "base"]) * (_mq_base_t / (_mq_t_base + 1e-12))
+            _mq_base_t = _mqgdp("base", t, r)  # price=base, qty=current
+            _mq_t_base = _mqgdp(t, "base", r)  # price=current, qty=base
+            _arg = (m.gdpmp[r, t] / m.gdpmp[r, "base"]) * (
+                _mq_base_t / (_mq_t_base + 1e-12)
+            )
             _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
             return m.rgdpmp[r, t] == m.rgdpmp[r, "base"] * _pyo_sqrt(_arg_pos + 1e-12)
 
@@ -443,11 +501,7 @@ class GTAPMultiPeriodModel:
 
         def _mqabs_cross(tp: str, tq: str, r: str):
             """Absorption Fisher cross: Σ_{i,fd} pa[r,i,fd,tp] · xaa[r,i,fd,tq]."""
-            return sum(
-                m.pa[r, i, a, tp] * m.xaa[r, i, a, tq]
-                for i in m.i
-                for a in fd
-            )
+            return sum(m.pa[r, i, a, tp] * m.xaa[r, i, a, tq] for i in m.i for a in fd)
 
         def _mqfactr_cross(tp: str, tq: str, r: str):
             """Per-region factor Fisher cross: Σ_{f,a} pf[r,f,a,tp]·xf[r,f,a,tq]/xscale[r,a]."""
@@ -501,19 +555,17 @@ class GTAPMultiPeriodModel:
         # and apply_closure fixes pnum['base'] = 1.0, so an additional Constraint
         # eq_pwfact_base would create a duplicate binding (over-determination by 1 row).
         # A Var fix eliminates the DOF without adding an active equation row.
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             m.pwfact["base"].fix(1.0)
-        except (KeyError, AttributeError):
-            pass
 
         def _pabs_rule(_m, r, t):
             # Cross-period Fisher absorption price index:
             #   pabs[r,t] = pabs[r,base] · sqrt( (mqabs(t,base)/mqabs(base,base))
             #                                   · (mqabs(t,t)   /mqabs(base,t)) )
-            mq_bb = _mqabs_cross("base", "base", r)   # pq=base, qq=base (denom anchor)
-            mq_tb = _mqabs_cross(t, "base", r)        # price=current, qty=base
-            mq_tt = _mqabs_cross(t, t, r)             # price=current, qty=current
-            mq_bt = _mqabs_cross("base", t, r)        # price=base,    qty=current
+            mq_bb = _mqabs_cross("base", "base", r)  # pq=base, qq=base (denom anchor)
+            mq_tb = _mqabs_cross(t, "base", r)  # price=current, qty=base
+            mq_tt = _mqabs_cross(t, t, r)  # price=current, qty=current
+            mq_bt = _mqabs_cross("base", t, r)  # price=base,    qty=current
             _arg = (mq_tb / (mq_bb + 1e-12)) * (mq_tt / (mq_bt + 1e-12))
             _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
             return m.pabs[r, t] == m.pabs[r, "base"] * _pyo_sqrt(_arg_pos + 1e-12)
@@ -528,9 +580,9 @@ class GTAPMultiPeriodModel:
             # With pfact[r,base]=1 (benchmark normalization), same form as GAMS pfacteq
             # but with live base-period pf/xf Vars replacing the frozen pf0/xf0 Params.
             m_bb = _mqfactr_cross("base", "base", r)
-            m_sb = _mqfactr_cross(t, "base", r)     # price=current, qty=base
-            m_ss = _mqfactr_cross(t, t, r)           # price=current, qty=current
-            m_bs = _mqfactr_cross("base", t, r)      # price=base,    qty=current
+            m_sb = _mqfactr_cross(t, "base", r)  # price=current, qty=base
+            m_ss = _mqfactr_cross(t, t, r)  # price=current, qty=current
+            m_bs = _mqfactr_cross("base", t, r)  # price=base,    qty=current
             _arg = (m_sb / (m_bb + 1e-12)) * (m_ss / (m_bs + 1e-12))
             _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
             return m.pfact[r, t] == _pyo_sqrt(_arg_pos + 1e-12)
@@ -542,9 +594,9 @@ class GTAPMultiPeriodModel:
             #   pwfact[t] = sqrt( (mqfactw(t,base)/mqfactw(base,base))
             #                   · (mqfactw(t,t)   /mqfactw(base,t)) )
             m_bb = _mqfactw_cross("base", "base")
-            m_sb = _mqfactw_cross(t, "base")          # price=current, qty=base
-            m_ss = _mqfactw_cross(t, t)               # price=current, qty=current
-            m_bs = _mqfactw_cross("base", t)          # price=base,    qty=current
+            m_sb = _mqfactw_cross(t, "base")  # price=current, qty=base
+            m_ss = _mqfactw_cross(t, t)  # price=current, qty=current
+            m_bs = _mqfactw_cross("base", t)  # price=base,    qty=current
             _arg = (m_sb / (m_bb + 1e-12)) * (m_ss / (m_bs + 1e-12))
             _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
             return m.pwfact[t] == _pyo_sqrt(_arg_pos + 1e-12)
@@ -562,8 +614,8 @@ class GTAPMultiPeriodModel:
 
         Only unfixed VarData entries are seeded (fixed vars keep their value).
         """
-        import subprocess
         import csv as _csv
+        import subprocess
         from pathlib import Path as _Path
 
         gdx_path = _Path(gdx_path)
@@ -577,8 +629,8 @@ class GTAPMultiPeriodModel:
             "p": "p_rai",
             "xd": "xda",  # GAMS xd(r,i,aa) → Python xda; without this the per-agent
             "xm": "xma",  # xd/xm map to Python's xd/xm AGGREGATE (r,i,t) → 4-key
-                          # seed KeyErrors silently → xda/xma stay at init (final-demand
-                          # agents ~17% off), fabricating a phantom eq_pdeq residual.
+            # seed KeyErrors silently → xda/xma stay at init (final-demand
+            # agents ~17% off), fabricating a phantom eq_pdeq residual.
             # camelCase income vars: GAMS uses camelCase, Python snake/lowercase. Without
             # these the seed leaves them at init → phantom eq_ytaxind/eq_regy residuals
             # (ytax_ind 2.31 vs GAMS 2.674 = ytaxTot-dt).
@@ -608,7 +660,9 @@ class GTAPMultiPeriodModel:
         def _dump_sym(sym: str) -> dict:
             res = subprocess.run(
                 [GDXDUMP, str(gdx_path), "Format=csv", f"Symb={sym}"],
-                capture_output=True, text=True, check=False,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             if res.returncode != 0 or not res.stdout.strip():
                 return {}
@@ -620,16 +674,16 @@ class GTAPMultiPeriodModel:
                     continue
                 *keys, val = row
                 keys = tuple(k.strip('"') for k in keys)
-                try:
+                with contextlib.suppress(ValueError):
                     out[keys] = float(val)
-                except ValueError:
-                    pass
             return out
 
         def _list_var_symbols() -> list:
             res = subprocess.run(
                 [GDXDUMP, str(gdx_path), "Symbols"],
-                capture_output=True, text=True, check=False,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             names = []
             for line in res.stdout.splitlines():

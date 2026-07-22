@@ -5,7 +5,6 @@ it correctly reads account names from the Excel file.
 """
 
 import numpy as np
-import pytest
 
 from equilibria.core.calibration_data import CalibrationData
 from equilibria.templates.data.pep import load_default_pep_sam

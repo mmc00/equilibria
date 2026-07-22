@@ -57,7 +57,9 @@ def _rms(values: list[float]) -> float:
     return math.sqrt(sum(v * v for v in values) / len(values))
 
 
-def summarize_residuals(residuals: dict[str, float], top_n: int = 15) -> ResidualSummary:
+def summarize_residuals(
+    residuals: dict[str, float], top_n: int = 15
+) -> ResidualSummary:
     values = list(residuals.values())
     max_abs = max((abs(v) for v in values), default=0.0)
     top = sorted(residuals.items(), key=lambda kv: abs(kv[1]), reverse=True)[:top_n]
@@ -130,7 +132,9 @@ def evaluate_block_gates(
         values = list(subset.values())
         block_max = max((abs(v) for v in values), default=0.0)
         block_rms = _rms(values)
-        passed = (block_max <= contract.max_abs_gate) and (block_rms <= contract.rms_gate)
+        passed = (block_max <= contract.max_abs_gate) and (
+            block_rms <= contract.rms_gate
+        )
 
         block_results.append(
             BlockGateResult(
@@ -140,7 +144,9 @@ def evaluate_block_gates(
                 rms=block_rms,
                 max_abs_gate=contract.max_abs_gate,
                 rms_gate=contract.rms_gate,
-                top_abs=sorted(subset.items(), key=lambda kv: abs(kv[1]), reverse=True)[:8],
+                top_abs=sorted(subset.items(), key=lambda kv: abs(kv[1]), reverse=True)[
+                    :8
+                ],
             )
         )
 
@@ -154,7 +160,7 @@ def evaluate_block_gates(
                 first_failed_block = r.block
                 break
 
-    overall_passed = (first_failed_block is None)
+    overall_passed = first_failed_block is None
 
     return {
         "overall_passed": overall_passed,
@@ -168,7 +174,9 @@ _NUM_RE = re.compile(r"([-+]?\d+(?:\.\d+)?(?:[Ee][-+]?\d+)?)")
 _LAB_RE = re.compile(r"'([^']*)'")
 
 
-def _gdxdump_records(gdxdump_bin: str, gdx_path: Path, symbol: str) -> list[tuple[tuple[str, ...], float]]:
+def _gdxdump_records(
+    gdxdump_bin: str, gdx_path: Path, symbol: str
+) -> list[tuple[tuple[str, ...], float]]:
     out = subprocess.check_output(
         [gdxdump_bin, str(gdx_path), f"symb={symbol}"],
         text=True,
@@ -209,12 +217,20 @@ def _read_symbol_records(
     gams_slice: str,
 ) -> dict[tuple[str, ...], float]:
     """Read one val* symbol, preferring gdxdump and falling back to read_gdx."""
-    gdxdump_path = shutil.which(gdxdump_bin) if Path(gdxdump_bin).name == gdxdump_bin else gdxdump_bin
+    gdxdump_path = (
+        shutil.which(gdxdump_bin)
+        if Path(gdxdump_bin).name == gdxdump_bin
+        else gdxdump_bin
+    )
     records: list[tuple[tuple[str, ...], float]] = []
 
     if gdxdump_bin:
         try:
-            bin_for_call = str(gdxdump_path) if (gdxdump_path and Path(gdxdump_path).exists()) else str(gdxdump_bin)
+            bin_for_call = (
+                str(gdxdump_path)
+                if (gdxdump_path and Path(gdxdump_path).exists())
+                else str(gdxdump_bin)
+            )
             records = _gdxdump_records(bin_for_call, gdx_path, symbol)
         except Exception:
             records = []
@@ -273,7 +289,10 @@ def evaluate_eq29_eq39_against_gams(
     j_keys = sorted(
         {
             k[0]
-            for k in list(tip_rec.keys()) + list(pp_rec.keys()) + list(xst_rec.keys()) + list(ttip_rec.keys())
+            for k in list(tip_rec.keys())
+            + list(pp_rec.keys())
+            + list(xst_rec.keys())
+            + list(ttip_rec.keys())
             if len(k) == 1
         }
     )
@@ -308,7 +327,12 @@ def evaluate_eq29_eq39_against_gams(
     i_keys = sorted(
         {
             k[0]
-            for k in list(tic_rec.keys()) + list(ttic_rec.keys()) + list(pd_rec.keys()) + list(dd_rec.keys()) + list(pm_rec.keys()) + list(im_rec.keys())
+            for k in list(tic_rec.keys())
+            + list(ttic_rec.keys())
+            + list(pd_rec.keys())
+            + list(dd_rec.keys())
+            + list(pm_rec.keys())
+            + list(im_rec.keys())
             if len(k) == 1
         }
     )
@@ -321,7 +345,11 @@ def evaluate_eq29_eq39_against_gams(
         py_pm = float(vars_obj.PM.get(i, 0.0))
         py_im = float(vars_obj.IM.get(i, 0.0))
         py_denom = 1.0 + py_ttic
-        py_expected = 0.0 if abs(py_denom) < 1e-12 else (py_ttic / py_denom) * (py_pd * py_dd + py_pm * py_im)
+        py_expected = (
+            0.0
+            if abs(py_denom) < 1e-12
+            else (py_ttic / py_denom) * (py_pd * py_dd + py_pm * py_im)
+        )
         py_res = py_tic - py_expected
 
         g_tic = float(tic_rec.get((i,), 0.0))
@@ -331,7 +359,11 @@ def evaluate_eq29_eq39_against_gams(
         g_pm = float(pm_rec.get((i,), 0.0))
         g_im = float(im_rec.get((i,), 0.0))
         g_denom = 1.0 + g_ttic
-        g_expected = 0.0 if abs(g_denom) < 1e-12 else (g_ttic / g_denom) * (g_pd * g_dd + g_pm * g_im)
+        g_expected = (
+            0.0
+            if abs(g_denom) < 1e-12
+            else (g_ttic / g_denom) * (g_pd * g_dd + g_pm * g_im)
+        )
         g_res = g_tic - g_expected
 
         delta = py_res - g_res
@@ -346,7 +378,11 @@ def evaluate_eq29_eq39_against_gams(
 
     max_abs_eq40_delta = max((abs(r["delta"]) for r in eq40_rows), default=0.0)
     max_abs_overall_delta = max(abs(eq29_delta), max_abs_eq39_delta, max_abs_eq40_delta)
-    passed = (abs(eq29_delta) <= tol) and (max_abs_eq39_delta <= tol) and (max_abs_eq40_delta <= tol)
+    passed = (
+        (abs(eq29_delta) <= tol)
+        and (max_abs_eq39_delta <= tol)
+        and (max_abs_eq40_delta <= tol)
+    )
 
     eq39_rows.sort(key=lambda r: abs(r["delta"]), reverse=True)
     eq40_rows.sort(key=lambda r: abs(r["delta"]), reverse=True)
@@ -671,7 +707,9 @@ def evaluate_residual_parity_against_gams(
                 "rms_delta": block_rms,
                 "max_abs_tol": max_abs_tol,
                 "rms_tol": rms_tol,
-                "top_abs_delta": sorted(subset.items(), key=lambda kv: abs(kv[1]), reverse=True)[:8],
+                "top_abs_delta": sorted(
+                    subset.items(), key=lambda kv: abs(kv[1]), reverse=True
+                )[:8],
             }
         )
         if first_failed_block is None and not passed:
@@ -687,7 +725,9 @@ def evaluate_residual_parity_against_gams(
         "rms_delta": overall_rms_delta,
         "max_abs_tol": max_abs_tol,
         "rms_tol": rms_tol,
-        "top_abs_delta": sorted(delta_residuals.items(), key=lambda kv: abs(kv[1]), reverse=True)[:20],
+        "top_abs_delta": sorted(
+            delta_residuals.items(), key=lambda kv: abs(kv[1]), reverse=True
+        )[:20],
         "blocks": blocks,
     }
 
@@ -719,9 +759,13 @@ def evaluate_results_baseline_compatibility(
     rel_delta = abs_delta / denom
 
     anchor_passed = rel_delta <= rel_tol
-    requested_recs = _read_symbol_records(gdxdump_bin, gdx_path, "valGDP_BP", requested_slice)
+    requested_recs = _read_symbol_records(
+        gdxdump_bin, gdx_path, "valGDP_BP", requested_slice
+    )
     requested_slice_has_records = bool(requested_recs)
-    requested_slice_gdp_bp = float(requested_recs.get((), 0.0)) if requested_recs else 0.0
+    requested_slice_gdp_bp = (
+        float(requested_recs.get((), 0.0)) if requested_recs else 0.0
+    )
 
     if requested_slice == "base":
         passed = anchor_passed
@@ -791,7 +835,10 @@ def classify_pipeline_outcome(
                 "reason": "initialization_error",
                 "first_failed_block": None,
             }
-        if any(token in err for token in ("ipopt", "solve", "converg", "iteration", "residual")):
+        if any(
+            token in err
+            for token in ("ipopt", "solve", "converg", "iteration", "residual")
+        ):
             return {
                 "kind": "solver_dynamics",
                 "reason": "solve_runtime_error",

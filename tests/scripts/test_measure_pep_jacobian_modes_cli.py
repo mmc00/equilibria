@@ -58,10 +58,7 @@ class _FakePepSimulator:
 
     def run_scenarios(self, **kwargs: Any) -> dict[str, Any]:
         scenarios = kwargs["scenarios"]
-        if not scenarios:
-            name = "base"
-        else:
-            name = scenarios[0].name
+        name = "base" if not scenarios else scenarios[0].name
         is_analytic = self.mode == "analytic"
         fd = 0 if is_analytic else 100
         wall = 0.1 if is_analytic else 1.0
@@ -104,7 +101,9 @@ class _FakePepSimulator:
 class _FakePepSimulatorGateFail(_FakePepSimulator):
     def run_scenarios(self, **kwargs: Any) -> dict[str, Any]:
         payload = super().run_scenarios(**kwargs)
-        entry = payload["base"] if payload["base"] is not None else payload["scenarios"][0]
+        entry = (
+            payload["base"] if payload["base"] is not None else payload["scenarios"][0]
+        )
         if self.mode == "analytic" and entry["name"] == "import_shock":
             entry["solve"]["solver_stats"]["finite_difference_eval_count"] = 3
         return payload
@@ -134,10 +133,17 @@ def test_cli_main_gate_passes(monkeypatch: Any, tmp_path: Path) -> None:
     assert code == 0
     payload = json.loads(out_file.read_text())
     assert payload["gate"]["passed"] is True
-    assert payload["mode_comparison"]["export_tax"]["deltas"]["analytic_speedup_vs_numeric"] == 10.0
+    assert (
+        payload["mode_comparison"]["export_tax"]["deltas"][
+            "analytic_speedup_vs_numeric"
+        ]
+        == 10.0
+    )
 
 
-def test_cli_main_gate_fails_when_analytic_uses_fd(monkeypatch: Any, tmp_path: Path) -> None:
+def test_cli_main_gate_fails_when_analytic_uses_fd(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     module = _load_module()
     monkeypatch.setattr(module, "PepSimulator", _FakePepSimulatorGateFail)
 
@@ -161,4 +167,6 @@ def test_cli_main_gate_fails_when_analytic_uses_fd(monkeypatch: Any, tmp_path: P
     assert code == 2
     payload = json.loads(out_file.read_text())
     assert payload["gate"]["passed"] is False
-    assert any("finite_difference_eval_count" in item for item in payload["gate"]["failures"])
+    assert any(
+        "finite_difference_eval_count" in item for item in payload["gate"]["failures"]
+    )

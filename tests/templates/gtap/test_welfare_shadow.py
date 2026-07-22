@@ -8,22 +8,18 @@ Stoer) converge to the expected order-of-magnitude EV.
 
 No external solver or HAR I/O — uses synthetic NUS333-shaped baselines.
 """
-from __future__ import annotations
 
-import math
+from __future__ import annotations
 
 import pytest
 
 from equilibria.templates.gtap.welfare_shadow import (
     ShadowBaseline,
     ShadowResult,
-    ShadowState,
-    integrate,
     _make_state,
-    _recompute_derived,
     _step,
+    integrate,
 )
-
 
 # ---------------------------------------------------------------------------
 # NUS333-like USA baseline (numbers extracted from basedata.har + default.prm).
@@ -71,10 +67,10 @@ def test_make_state_initialises_coefs_at_baseline():
     assert st.UTILELASEV == 1.0
 
     # Main shares from baseline ratios.
-    assert st.XSHRPRIV == pytest.approx(base.PRIVEXP / base.INCOME)
-    assert st.XSHRGOV == pytest.approx(base.GOVEXP / base.INCOME)
-    assert st.XSHRSAVE == pytest.approx(base.SAVE / base.INCOME)
-    assert st.XSHRPRIV + st.XSHRGOV + st.XSHRSAVE == pytest.approx(1.0)
+    assert pytest.approx(base.PRIVEXP / base.INCOME) == st.XSHRPRIV
+    assert pytest.approx(base.GOVEXP / base.INCOME) == st.XSHRGOV
+    assert pytest.approx(base.SAVE / base.INCOME) == st.XSHRSAVE
+    assert pytest.approx(1.0) == st.XSHRPRIV + st.XSHRGOV + st.XSHRSAVE
 
 
 def test_recompute_derived_matches_known_uelaspriv():
@@ -83,12 +79,10 @@ def test_recompute_derived_matches_known_uelaspriv():
     st = _make_state(base)
 
     # CONSHR_c × INCPAR_c summed: 0.0069×0.1694 + 0.2047×0.8781 + 0.7884×1.0389
-    expected = sum(
-        (base.VPP[c] / base.PRIVEXP) * base.INCPAR[c] for c in COMMS_NUS333
-    )
-    assert st.UELASPRIV == pytest.approx(expected, rel=1e-9)
+    expected = sum((base.VPP[c] / base.PRIVEXP) * base.INCPAR[c] for c in COMMS_NUS333)
+    assert pytest.approx(expected, rel=1e-9) == st.UELASPRIV
     # NUS333 is calibrated so UELASPRIV ≈ 1 by construction.
-    assert st.UELASPRIV == pytest.approx(1.0, rel=1e-3)
+    assert pytest.approx(1.0, rel=1e-3) == st.UELASPRIV
 
 
 def test_recompute_derived_xwconshr_sums_to_one():
@@ -177,9 +171,7 @@ def test_step_dpavev_share_weighted_sum():
     base = nus333_usa_baseline()
     st = _make_state(base)
     step = _step(st, base, du=0.0, dpop=0.0, ddppriv=0.5, ddpgov=0.3, ddpsave=1.2)
-    expected = (
-        st.XSHRPRIV * 0.5 + st.XSHRGOV * 0.3 + st.XSHRSAVE * 1.2
-    )
+    expected = st.XSHRPRIV * 0.5 + st.XSHRGOV * 0.3 + st.XSHRSAVE * 1.2
     assert step["dpavev"] == pytest.approx(expected, rel=1e-9)
 
 
@@ -234,7 +226,11 @@ def test_integrate_default_method_is_euler_n25():
     base = nus333_usa_baseline()
     default = integrate(base, u_pct=0.1725, dpsave_pct=16.18)
     explicit = integrate(
-        base, u_pct=0.1725, dpsave_pct=16.18, method="euler", n_steps=25,
+        base,
+        u_pct=0.1725,
+        dpsave_pct=16.18,
+        method="euler",
+        n_steps=25,
     )
     assert default.EV_USDm == pytest.approx(explicit.EV_USDm, rel=1e-9)
 
@@ -243,7 +239,11 @@ def test_all_methods_agree_on_zero_shock():
     base = nus333_usa_baseline()
     for method in ("euler", "midpoint", "gragg", "bulirsch_stoer"):
         res = integrate(
-            base, u_pct=0.0, dpsave_pct=0.0, n_steps=8, method=method,
+            base,
+            u_pct=0.0,
+            dpsave_pct=0.0,
+            n_steps=8,
+            method=method,
         )
         assert res.EV_USDm == pytest.approx(0.0, abs=1e-9), method
 
@@ -255,12 +255,12 @@ def test_methods_diverge_on_large_dpsave():
     is the calibration we ship.
     """
     base = nus333_usa_baseline()
-    kw = dict(u_pct=0.1725, dpsave_pct=16.18)
+    kw = {"u_pct": 0.1725, "dpsave_pct": 16.18}
     euler25 = integrate(base, **kw, method="euler", n_steps=25)
-    bs      = integrate(base, **kw, method="bulirsch_stoer")
+    bs = integrate(base, **kw, method="bulirsch_stoer")
     # Both should sit in the right neighbourhood of $14k USD M.
     assert 13_000 < euler25.EV_USDm < 16_000
-    assert 13_000 < bs.EV_USDm      < 16_000
+    assert 13_000 < bs.EV_USDm < 16_000
     # And they should differ by the documented ~2% structural gap.
     assert abs(euler25.EV_USDm - bs.EV_USDm) > 100.0
 
@@ -300,14 +300,14 @@ def test_nus333_usa_default_matches_rungtap_within_1pct():
 
 def test_nus333_usa_sub_components_match_expected_signs():
     """Under a positive tariff shock for USA:
-        - dpsave is positive (savings preference rose)
-        - log(UTILSAVEEV) grows → log_term positive → yev < u
-        - uelasev negative
-        - qsaveev positive (savings volume rose in shadow system)
+    - dpsave is positive (savings preference rose)
+    - log(UTILSAVEEV) grows → log_term positive → yev < u
+    - uelasev negative
+    - qsaveev positive (savings volume rose in shadow system)
     """
     base = nus333_usa_baseline()
     res = integrate(base, u_pct=0.1725, dpsave_pct=16.18)
-    assert res.yev_pct > 0.0          # USA gains welfare
-    assert res.yev_pct < 0.1725        # log_term shaves it from raw u
-    assert res.uelasev_pct < 0.0       # dpavev > 0 dominates
-    assert res.qsaveev_pct > 0.0       # virtual savings volume rises
+    assert res.yev_pct > 0.0  # USA gains welfare
+    assert res.yev_pct < 0.1725  # log_term shaves it from raw u
+    assert res.uelasev_pct < 0.0  # dpavev > 0 dominates
+    assert res.qsaveev_pct > 0.0  # virtual savings volume rises

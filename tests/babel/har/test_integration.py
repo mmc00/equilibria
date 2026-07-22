@@ -4,6 +4,7 @@ These tests exercise the writer through real equilibria consumers
 (the GTAP loader and a DataFrame-based export workflow) plus the
 alter-tax-style round-trip simulating a tariff shock.
 """
+
 from __future__ import annotations
 
 import warnings
@@ -20,6 +21,7 @@ NUS333 = DATA / "nus333"
 
 
 # ── E2E-1: GTAP loader round-trip ─────────────────────────────────────────────
+
 
 def test_gtap_loader_consumes_writer_output(tmp_path: Path):
     """Read a HAR, write it back via our writer, and assert that the
@@ -49,6 +51,7 @@ def test_gtap_loader_consumes_writer_output(tmp_path: Path):
 
 # ── E2E-2: Alter-tax tariff-shock round-trip ─────────────────────────────────
 
+
 def test_altertax_tariff_shock_roundtrip(tmp_path: Path):
     """Read baserate.har, multiply the bilateral import-tariff stream rTMS
     by 1.10, write back, re-read, assert the mutation survived intact."""
@@ -65,11 +68,15 @@ def test_altertax_tariff_shock_roundtrip(tmp_path: Path):
 
     reread = read_har(out)
     np.testing.assert_allclose(
-        reread["rTMS"].array, tm_orig * 1.10, rtol=1e-6, atol=0,
+        reread["rTMS"].array,
+        tm_orig * 1.10,
+        rtol=1e-6,
+        atol=0,
     )
 
 
 # ── E2E-3: DataFrame → HAR → reader ──────────────────────────────────────────
+
 
 def test_dataframe_export_end_to_end(tmp_path: Path):
     """Construct a HAR purely from pandas DataFrames and read it back."""
@@ -98,20 +105,25 @@ def test_dataframe_export_end_to_end(tmp_path: Path):
 
 # ── E2E-4: Optional harpy3 interop check ─────────────────────────────────────
 
+
 def _harpy_available() -> bool:
     try:
         import harpy3  # type: ignore  # noqa
+
         return True
     except ImportError:
         try:
             import harpy  # type: ignore  # noqa
+
             return True
         except ImportError:
             return False
 
 
-@pytest.mark.skipif(not _harpy_available(),
-                    reason="harpy3/harpy not installed in this env (expected in CI)")
+@pytest.mark.skipif(
+    not _harpy_available(),
+    reason="harpy3/harpy not installed in this env (expected in CI)",
+)
 def test_harpy_reads_writer_output(tmp_path: Path):
     """If harpy3/harpy happens to be installed (local dev sandbox), verify it
     can read our output. CI never has harpy3 installed; this test skips

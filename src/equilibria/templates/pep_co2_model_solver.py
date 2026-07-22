@@ -91,7 +91,9 @@ class PEPCO2IPOPTSolver(PEPCRIIPOPTSolver):
 
     def _extract_parameters(self, state: Any) -> dict[str, Any]:
         params = super()._extract_parameters(state)
-        block = validate_and_fill_co2_block(get_state_co2_block(state), state.sets.get("J", []))
+        block = validate_and_fill_co2_block(
+            get_state_co2_block(state), state.sets.get("J", [])
+        )
         set_state_co2_block(state, block)
         params["co2_intensity"] = dict(block["co2_intensity"])
         params["tco2b"] = dict(block["tco2b"])
@@ -123,15 +125,23 @@ class PEPCO2IPOPTSolver(PEPCRIIPOPTSolver):
             carbon_tax = _cut(self.params, vars, j)
             if include_pt:
                 vars.PT[j] = (1.0 + ttip) * vars.PP.get(j, 0.0) + carbon_tax
-            vars.TIP[j] = (ttip * vars.PP.get(j, 0.0) + carbon_tax) * vars.XST.get(j, 0.0)
+            vars.TIP[j] = (ttip * vars.PP.get(j, 0.0) + carbon_tax) * vars.XST.get(
+                j, 0.0
+            )
 
         vars.TIPT = sum(vars.TIP.values())
         vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
-        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        vars.YG = (
+            vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        )
+        tr_to_govt = sum(
+            vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", [])
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
         self._recompute_gdp_aggregates(vars)
-        vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        vars.GDP_MP_REAL = (
+            vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        )
         attach_co2_metrics(vars, self.params, self.sets.get("J", []))
 
     def _has_active_carbon_tax(self) -> bool:
@@ -175,7 +185,9 @@ class PEPCO2ModelSolver(PEPCRIModelSolver):
 
     def _extract_parameters(self, state: Any) -> dict[str, Any]:
         params = super()._extract_parameters(state)
-        block = validate_and_fill_co2_block(get_state_co2_block(state), state.sets.get("J", []))
+        block = validate_and_fill_co2_block(
+            get_state_co2_block(state), state.sets.get("J", [])
+        )
         set_state_co2_block(state, block)
         params["co2_intensity"] = dict(block["co2_intensity"])
         params["tco2b"] = dict(block["tco2b"])
@@ -192,7 +204,9 @@ class PEPCO2ModelSolver(PEPCRIModelSolver):
         vars_ipopt = ipopt_solver._create_initial_guess()
         self.params = ipopt_solver.params
         self.equations = ipopt_solver.equations
-        self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
+        self.last_closure_validation_report = (
+            ipopt_solver.last_closure_validation_report
+        )
         attach_co2_metrics(vars_ipopt, self.params, self.sets.get("J", []))
         return vars_ipopt
 
@@ -221,7 +235,9 @@ class PEPCO2ModelSolver(PEPCRIModelSolver):
             result = ipopt_solver.solve_ipopt()
             self.params = ipopt_solver.params
             self.equations = ipopt_solver.equations
-            self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
+            self.last_closure_validation_report = (
+                ipopt_solver.last_closure_validation_report
+            )
             attach_co2_metrics(result.variables, self.params, self.sets.get("J", []))
             return result
 

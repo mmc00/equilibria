@@ -1,13 +1,14 @@
 """The correlated-by-region grouper: dirty layers sharing a common first-index token
 (region/block) are grouped so the reader doesn't correlate by hand. A locus touched by
 only ONE layer is not a correlation. Only EXPLAIN_STOP (dirty) layers participate."""
+
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from cascade_classify import LayerResult, EXPLAIN_STOP, CONTINUE
+from cascade_classify import CONTINUE, EXPLAIN_STOP, LayerResult
 from cascade_orchestrator import _correlate_by_region
 
 

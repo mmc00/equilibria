@@ -32,8 +32,9 @@ def test_read_3d_sparse_parameter():
     # Check each value
     for key, expected_val in expected.items():
         assert key in values, f"Missing key {key}"
-        assert abs(values[key] - expected_val) < 0.001, \
+        assert abs(values[key] - expected_val) < 0.001, (
             f"Value mismatch for {key}: expected {expected_val}, got {values[key]}"
+        )
 
 
 def test_read_4d_sparse_parameter():
@@ -60,8 +61,9 @@ def test_read_4d_sparse_parameter():
     # Check each value
     for key, expected_val in expected.items():
         assert key in values, f"Missing key {key}"
-        assert abs(values[key] - expected_val) < 0.001, \
+        assert abs(values[key] - expected_val) < 0.001, (
             f"Value mismatch for {key}: expected {expected_val}, got {values[key]}"
+        )
 
 
 def test_read_3d_dense_parameter():

@@ -5,6 +5,7 @@ Tres niveles:
   - Smoke: audit_sam completo en SAMs pequeñas bien/mal formadas
   - End-to-end: SAM 12x12 realista (Bolivia 2023 sintética) con anchors
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -13,7 +14,6 @@ import pytest
 
 from equilibria.sam_tools.audit import (
     AnchorSpec,
-    AuditResult,
     CheckResult,
     _check_balance,
     _check_diagonal,
@@ -23,12 +23,14 @@ from equilibria.sam_tools.audit import (
     audit_sam,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_sam(accounts: list[str], values: dict[tuple[str, str], float]) -> pd.DataFrame:
+
+def _make_sam(
+    accounts: list[str], values: dict[tuple[str, str], float]
+) -> pd.DataFrame:
     """Construye un DataFrame SAM cuadrado y balanceado a partir de flujos."""
     df = pd.DataFrame(0.0, index=accounts, columns=accounts)
     for (r, c), v in values.items():
@@ -39,36 +41,43 @@ def _make_sam(accounts: list[str], values: dict[tuple[str, str], float]) -> pd.D
 def _balanced_3x3() -> pd.DataFrame:
     """SAM 3×3 balanceada mínima: Prod→Factor→Hog→Prod."""
     accounts = ["Prod", "Factor", "Hog"]
-    df = _make_sam(accounts, {
-        ("Factor", "Prod"): 100.0,   # VA
-        ("Hog",    "Factor"): 100.0, # salario
-        ("Prod",   "Hog"): 100.0,    # consumo
-    })
+    df = _make_sam(
+        accounts,
+        {
+            ("Factor", "Prod"): 100.0,  # VA
+            ("Hog", "Factor"): 100.0,  # salario
+            ("Prod", "Hog"): 100.0,  # consumo
+        },
+    )
     return df
 
 
 def _balanced_5x5() -> pd.DataFrame:
     """SAM 5×5 con sector externo y cuenta capital, balanceada."""
     accts = ["Act", "Factor", "Hog", "ROW", "CC"]
-    df = _make_sam(accts, {
-        ("Factor", "Act"): 200.0,
-        ("Hog",    "Factor"): 180.0,
-        ("Act",    "Hog"): 150.0,
-        ("Act",    "ROW"): 60.0,    # X
-        ("ROW",    "Act"): 40.0,    # M
-        ("CC",     "Hog"): 20.0,    # ahorro Hog
-        ("Act",    "CC"): 20.0,     # inversión
-        ("ROW",    "Factor"): 20.0, # D1_ROW debit
-        ("Factor", "ROW"): 20.0,    # D1_ROW credit
-        ("CC",     "ROW"): 20.0,    # B9 inflow
-        ("ROW",    "CC"): 20.0,     # B9 outflow
-    })
+    df = _make_sam(
+        accts,
+        {
+            ("Factor", "Act"): 200.0,
+            ("Hog", "Factor"): 180.0,
+            ("Act", "Hog"): 150.0,
+            ("Act", "ROW"): 60.0,  # X
+            ("ROW", "Act"): 40.0,  # M
+            ("CC", "Hog"): 20.0,  # ahorro Hog
+            ("Act", "CC"): 20.0,  # inversión
+            ("ROW", "Factor"): 20.0,  # D1_ROW debit
+            ("Factor", "ROW"): 20.0,  # D1_ROW credit
+            ("CC", "ROW"): 20.0,  # B9 inflow
+            ("ROW", "CC"): 20.0,  # B9 outflow
+        },
+    )
     return df
 
 
 # ============================================================================
 # UNIT TESTS — cada check en aislamiento
 # ============================================================================
+
 
 class TestCheckSquare:
     def test_square_same_accounts(self):
@@ -131,13 +140,13 @@ class TestCheckBalance:
 
     def test_unbalanced_sam_fails(self):
         df = _balanced_3x3()
-        df.loc["Prod", "Hog"] += 50.0   # rompe balance
+        df.loc["Prod", "Hog"] += 50.0  # rompe balance
         r = _check_balance(df, tol=1e-4)
         assert not r.passed
 
     def test_custom_tolerance(self):
         df = _balanced_3x3()
-        df.loc["Prod", "Hog"] += 0.05   # gap=0.05
+        df.loc["Prod", "Hog"] += 0.05  # gap=0.05
         assert not _check_balance(df, tol=1e-4).passed
         assert _check_balance(df, tol=1.0).passed
 
@@ -173,12 +182,15 @@ class TestCheckSMinusIPlusB9:
     def test_balanced_s_i_b9(self):
         # SAM donde S=I y B9=0
         accts = ["Act", "Hog", "CC", "ROW"]
-        df = _make_sam(accts, {
-            ("Hog", "Act"): 100.0,
-            ("Act", "Hog"): 80.0,
-            ("CC",  "Hog"): 20.0,  # ahorro
-            ("Act", "CC"):  20.0,  # inversión
-        })
+        df = _make_sam(
+            accts,
+            {
+                ("Hog", "Act"): 100.0,
+                ("Act", "Hog"): 80.0,
+                ("CC", "Hog"): 20.0,  # ahorro
+                ("Act", "CC"): 20.0,  # inversión
+            },
+        )
         r = _check_s_minus_i_plus_b9(df, "CC", "ROW")
         # S=20, I=20, B9=0 → gap=0
         assert r.passed
@@ -199,27 +211,27 @@ class TestAnchorCheck:
     def test_anchor_within_range_passes(self):
         df = _balanced_3x3()
         df.loc["Prod", "Hog"] = 100.0
-        anchors = [AnchorSpec("test", [("Prod","Hog")], 90, 110, "test")]
+        anchors = [AnchorSpec("test", [("Prod", "Hog")], 90, 110, "test")]
         result = audit_sam(df, anchors=anchors)
         assert result.anchor_checks[0].passed
 
     def test_anchor_below_range_fails(self):
         df = _balanced_3x3()
-        anchors = [AnchorSpec("test", [("Prod","Hog")], 200, 300, "test")]
+        anchors = [AnchorSpec("test", [("Prod", "Hog")], 200, 300, "test")]
         result = audit_sam(df, anchors=anchors)
         assert not result.anchor_checks[0].passed
 
     def test_anchor_sums_multiple_cells(self):
         df = _balanced_5x5()
         # X = (Act,ROW) = 60
-        anchors = [AnchorSpec("X", [("Act","ROW")], 55, 65, "src")]
+        anchors = [AnchorSpec("X", [("Act", "ROW")], 55, 65, "src")]
         result = audit_sam(df, anchors=anchors)
         assert result.anchor_checks[0].passed
         assert abs(result.anchor_checks[0].value - 60.0) < 1e-9
 
     def test_missing_cell_treated_as_zero(self):
         df = _balanced_3x3()
-        anchors = [AnchorSpec("missing", [("X","Y")], -1, 1, "src")]
+        anchors = [AnchorSpec("missing", [("X", "Y")], -1, 1, "src")]
         result = audit_sam(df, anchors=anchors)
         assert result.anchor_checks[0].passed  # 0 in [-1, 1]
 
@@ -227,6 +239,7 @@ class TestAnchorCheck:
 # ============================================================================
 # SMOKE TESTS — audit_sam completo en SAMs pequeñas
 # ============================================================================
+
 
 class TestAuditSamSmoke:
     def test_balanced_sam_passes_universal_checks(self):
@@ -308,6 +321,7 @@ class TestAuditSamSmoke:
 # END-TO-END TESTS — SAM 12×12 sintética tipo Bolivia
 # ============================================================================
 
+
 @pytest.fixture
 def bolivia_synthetic_sam() -> pd.DataFrame:
     """SAM 12×12 sintética calibrada a magnitudes Bolivia 2023 (USD MM).
@@ -321,95 +335,103 @@ def bolivia_synthetic_sam() -> pd.DataFrame:
     Cuenta_Capital misma también balance.
     """
     accts = [
-        "Agricultura", "Industria", "Servicios",
-        "T_prod", "Trabajo", "Capital",
-        "Hogares", "Firmas", "Gobierno",
-        "ROW", "Inversion", "Cuenta_Capital",
+        "Agricultura",
+        "Industria",
+        "Servicios",
+        "T_prod",
+        "Trabajo",
+        "Capital",
+        "Hogares",
+        "Firmas",
+        "Gobierno",
+        "ROW",
+        "Inversion",
+        "Cuenta_Capital",
     ]
     df = pd.DataFrame(0.0, index=accts, columns=accts)
 
     # CI 3×3
     df.loc["Agricultura", "Agricultura"] = 500
-    df.loc["Agricultura", "Industria"]   = 1_200
-    df.loc["Agricultura", "Servicios"]   = 300
-    df.loc["Industria",   "Agricultura"] = 800
-    df.loc["Industria",   "Industria"]   = 5_000
-    df.loc["Industria",   "Servicios"]   = 2_000
-    df.loc["Servicios",   "Agricultura"] = 400
-    df.loc["Servicios",   "Industria"]   = 2_000
-    df.loc["Servicios",   "Servicios"]   = 3_500
+    df.loc["Agricultura", "Industria"] = 1_200
+    df.loc["Agricultura", "Servicios"] = 300
+    df.loc["Industria", "Agricultura"] = 800
+    df.loc["Industria", "Industria"] = 5_000
+    df.loc["Industria", "Servicios"] = 2_000
+    df.loc["Servicios", "Agricultura"] = 400
+    df.loc["Servicios", "Industria"] = 2_000
+    df.loc["Servicios", "Servicios"] = 3_500
 
     # M intermedias
     df.loc["ROW", "Agricultura"] = 200
-    df.loc["ROW", "Industria"]   = 3_000
-    df.loc["ROW", "Servicios"]   = 1_500
+    df.loc["ROW", "Industria"] = 3_000
+    df.loc["ROW", "Servicios"] = 1_500
 
     # VA
-    df.loc["Trabajo",  "Agricultura"] = 1_500
-    df.loc["Trabajo",  "Industria"]   = 8_000
-    df.loc["Trabajo",  "Servicios"]   = 10_000
-    df.loc["Capital",  "Agricultura"] = 2_000
-    df.loc["Capital",  "Industria"]   = 6_000
-    df.loc["Capital",  "Servicios"]   = 8_000
+    df.loc["Trabajo", "Agricultura"] = 1_500
+    df.loc["Trabajo", "Industria"] = 8_000
+    df.loc["Trabajo", "Servicios"] = 10_000
+    df.loc["Capital", "Agricultura"] = 2_000
+    df.loc["Capital", "Industria"] = 6_000
+    df.loc["Capital", "Servicios"] = 8_000
 
     # T_prod: debe cuadrar → Gobierno recibe 2_500 de T_prod
-    df.loc["T_prod",   "Agricultura"] = 200
-    df.loc["T_prod",   "Industria"]   = 800
-    df.loc["T_prod",   "Servicios"]   = 600
-    df.loc["T_prod",   "Hogares"]     = 500
-    df.loc["T_prod",   "Gobierno"]    = 200
-    df.loc["T_prod",   "Inversion"]   = 200
+    df.loc["T_prod", "Agricultura"] = 200
+    df.loc["T_prod", "Industria"] = 800
+    df.loc["T_prod", "Servicios"] = 600
+    df.loc["T_prod", "Hogares"] = 500
+    df.loc["T_prod", "Gobierno"] = 200
+    df.loc["T_prod", "Inversion"] = 200
     # T_prod col sum = 200+800+600 = 1_600 → T_prod row sum debe = 500+200+200 = 900
     # Para cuadrar T_prod: Gobierno paga 900 a T_prod (impuestos netos a la producción)
-    df.loc["Gobierno", "T_prod"]      = 900
+    df.loc["Gobierno", "T_prod"] = 900
 
     # Exportaciones
     df.loc["Agricultura", "ROW"] = 500
-    df.loc["Industria",   "ROW"] = 10_500
-    df.loc["Servicios",   "ROW"] = 700
+    df.loc["Industria", "ROW"] = 10_500
+    df.loc["Servicios", "ROW"] = 700
 
     # M finales
-    df.loc["ROW", "Hogares"]   = 2_000
-    df.loc["ROW", "Gobierno"]  = 300
+    df.loc["ROW", "Hogares"] = 2_000
+    df.loc["ROW", "Gobierno"] = 300
     df.loc["ROW", "Inversion"] = 2_000
 
     # Factor → inst
     # Trabajo col = 1_500+8_000+10_000 = 19_500
     # Trabajo row = Hogares + ROW credit
-    df.loc["Trabajo", "ROW"] = 12.0       # D1 credit
-    df.loc["ROW",     "Trabajo"] = 5.0    # D1 debit
+    df.loc["Trabajo", "ROW"] = 12.0  # D1 credit
+    df.loc["ROW", "Trabajo"] = 5.0  # D1 debit
     df.loc["Hogares", "Trabajo"] = 19_500 - 12.0  # = 19_488
 
     # Capital col = 2_000+6_000+8_000 = 16_000
     df.loc["Hogares", "Capital"] = 5_280
-    df.loc["Firmas",  "Capital"] = 10_720  # 5_280+10_720 = 16_000 ✓
+    df.loc["Firmas", "Capital"] = 10_720  # 5_280+10_720 = 16_000 ✓
 
     # D4/D7 simplificados (ROW outflows to institutions)
-    df.loc["Hogares", "ROW"]  = 1_419   # remesas
-    df.loc["ROW",     "Hogares"] = 280  # D4/D7 ROW→Hogares
-    df.loc["Firmas",  "ROW"]  = 500
-    df.loc["Gobierno","ROW"]  = 50
+    df.loc["Hogares", "ROW"] = 1_419  # remesas
+    df.loc["ROW", "Hogares"] = 280  # D4/D7 ROW→Hogares
+    df.loc["Firmas", "ROW"] = 500
+    df.loc["Gobierno", "ROW"] = 50
 
     # Consumo de hogares — calibrado para que PIB(G) ≈ PIB(P) = 37,100
     # PIB(G) = C_h + C_g + I + X - M = C_h + 8,100 + 7,000 + 11,700 - 9,000
     # → C_h = 37,100 - 17,800 = 19,300
-    df.loc["Agricultura", "Hogares"]  = 2_000
-    df.loc["Industria",   "Hogares"]  = 11_500
-    df.loc["Servicios",   "Hogares"]  = 5_800
+    df.loc["Agricultura", "Hogares"] = 2_000
+    df.loc["Industria", "Hogares"] = 11_500
+    df.loc["Servicios", "Hogares"] = 5_800
 
     # Consumo gobierno
     df.loc["Agricultura", "Gobierno"] = 100
-    df.loc["Industria",   "Gobierno"] = 2_000
-    df.loc["Servicios",   "Gobierno"] = 6_000
+    df.loc["Industria", "Gobierno"] = 2_000
+    df.loc["Servicios", "Gobierno"] = 6_000
 
     # D5 (impuestos directos → Gobierno)
     df.loc["Gobierno", "Hogares"] = 3_500
-    df.loc["Gobierno", "Firmas"]  = 510
+    df.loc["Gobierno", "Firmas"] = 510
 
     # FBCF
     df.loc["Agricultura", "Inversion"] = 500
-    df.loc["Industria",   "Inversion"] = 4_000
-    df.loc["Servicios",   "Inversion"] = 2_500
+    df.loc["Industria", "Inversion"] = 4_000
+    df.loc["Servicios", "Inversion"] = 2_500
 
     # B9 ROW → Cuenta_Capital
     df.loc["Cuenta_Capital", "ROW"] = 1_169
@@ -466,29 +488,37 @@ class TestAuditEndToEnd:
         anchors = [
             AnchorSpec(
                 "X_total",
-                [("Agricultura","ROW"), ("Industria","ROW"), ("Servicios","ROW")],
-                10_000, 13_000, "BoP MBP6 sintético",
+                [("Agricultura", "ROW"), ("Industria", "ROW"), ("Servicios", "ROW")],
+                10_000,
+                13_000,
+                "BoP MBP6 sintético",
             ),
             AnchorSpec(
                 "Remesas",
-                [("Hogares","ROW")],
-                1_000, 2_000, "BoP MBP6 sintético",
+                [("Hogares", "ROW")],
+                1_000,
+                2_000,
+                "BoP MBP6 sintético",
             ),
             AnchorSpec(
                 "D1_ROW_credit",
-                [("Trabajo","ROW")],
-                10, 15, "BoP MBP6 sintético",
+                [("Trabajo", "ROW")],
+                10,
+                15,
+                "BoP MBP6 sintético",
             ),
         ]
         result = audit_sam(bolivia_synthetic_sam, anchors=anchors)
         for c in result.anchor_checks:
             assert c.passed, f"Anchor falló: {c.name} val={c.value:.2f} — {c.detail}"
 
-    def test_markdown_report_contains_all_sections(self, bolivia_synthetic_sam, tmp_path):
-        anchors = [AnchorSpec("X", [("Industria","ROW")], 9_000, 12_000, "test")]
+    def test_markdown_report_contains_all_sections(
+        self, bolivia_synthetic_sam, tmp_path
+    ):
+        anchors = [AnchorSpec("X", [("Industria", "ROW")], 9_000, 12_000, "test")]
         result = audit_sam(
             bolivia_synthetic_sam,
-            activity_accounts=["Agricultura","Industria","Servicios"],
+            activity_accounts=["Agricultura", "Industria", "Servicios"],
             anchors=anchors,
         )
         path = tmp_path / "bolivia_audit.md"
@@ -501,8 +531,8 @@ class TestAuditEndToEnd:
     def test_corrupted_sam_detected(self, bolivia_synthetic_sam):
         """Introducir error: una celda negativa y un desbalance."""
         df = bolivia_synthetic_sam.copy()
-        df.loc["Agricultura", "ROW"] = -100.0   # negativo
-        df.loc["Industria",   "Hogares"] += 5_000  # desbalance
+        df.loc["Agricultura", "ROW"] = -100.0  # negativo
+        df.loc["Industria", "Hogares"] += 5_000  # desbalance
         result = audit_sam(df)
         assert not result.passed
         failing_names = [c.name for c in result.failing()]
@@ -510,11 +540,11 @@ class TestAuditEndToEnd:
         assert any("Balance" in n for n in failing_names)
 
     def test_audit_result_n_counts(self, bolivia_synthetic_sam):
-        anchors = [AnchorSpec("X", [("Industria","ROW")], 0, 999_999, "test")]
+        anchors = [AnchorSpec("X", [("Industria", "ROW")], 0, 999_999, "test")]
         result = audit_sam(
             bolivia_synthetic_sam,
-            activity_accounts=["Agricultura","Industria","Servicios"],
-            factor_accounts=["Trabajo","Capital"],
+            activity_accounts=["Agricultura", "Industria", "Servicios"],
+            factor_accounts=["Trabajo", "Capital"],
             capital_account="Cuenta_Capital",
             row_account="ROW",
             anchors=anchors,

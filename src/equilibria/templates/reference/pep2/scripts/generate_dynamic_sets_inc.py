@@ -68,9 +68,17 @@ def _read_sets_from_sam(sam_xlsx: Path) -> dict[str, list[str]]:
     if not k:
         k = _unique([e for c, e in zip(col_cats, col_elems, strict=False) if c == "k"])
 
-    ag_raw = _unique([e for c, e in zip(row_cats, row_elems, strict=False) if c in {"ag", "agents"}])
+    ag_raw = _unique(
+        [e for c, e in zip(row_cats, row_elems, strict=False) if c in {"ag", "agents"}]
+    )
     if not ag_raw:
-        ag_raw = _unique([e for c, e in zip(col_cats, col_elems, strict=False) if c in {"ag", "agents"}])
+        ag_raw = _unique(
+            [
+                e
+                for c, e in zip(col_cats, col_elems, strict=False)
+                if c in {"ag", "agents"}
+            ]
+        )
     non_agent_accounts = {"td", "ti", "tm", "tx", "usk", "sk", "cap", "land"}
     ag = [a for a in ag_raw if a not in non_agent_accounts]
 
@@ -94,7 +102,9 @@ def _read_sets_from_sam(sam_xlsx: Path) -> dict[str, list[str]]:
     }
 
 
-def _emit_set_block(name: str, desc: str, members: list[str], domain: str | None = None) -> str:
+def _emit_set_block(
+    name: str, desc: str, members: list[str], domain: str | None = None
+) -> str:
     dom = f"({domain})" if domain else ""
     lines = [f"{name}{dom} {desc}", "/"]
     for m in members:
@@ -105,7 +115,10 @@ def _emit_set_block(name: str, desc: str, members: list[str], domain: str | None
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print("Usage: generate_dynamic_sets_inc.py <SAM.xlsx> <output.inc>", file=sys.stderr)
+        print(
+            "Usage: generate_dynamic_sets_inc.py <SAM.xlsx> <output.inc>",
+            file=sys.stderr,
+        )
         return 2
 
     sam_xlsx = Path(sys.argv[1]).resolve()
@@ -124,7 +137,9 @@ def main() -> int:
             "",
             _emit_set_block("I", "All commodities dynamic", sets["I"]),
             "",
-            _emit_set_block("I1", "All commodities except agriculture dynamic", sets["I1"], "I"),
+            _emit_set_block(
+                "I1", "All commodities except agriculture dynamic", sets["I1"], "I"
+            ),
             "",
             _emit_set_block("L", "Labor categories dynamic", sets["L"]),
             "",
@@ -132,7 +147,9 @@ def main() -> int:
             "",
             _emit_set_block("AG", "All agents dynamic", sets["AG"]),
             "",
-            _emit_set_block("AGNG", "Non governmental agents dynamic", sets["AGNG"], "AG"),
+            _emit_set_block(
+                "AGNG", "Non governmental agents dynamic", sets["AGNG"], "AG"
+            ),
             "",
             _emit_set_block("AGD", "Domestic agents dynamic", sets["AGD"], "AG"),
             "",

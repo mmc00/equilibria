@@ -32,7 +32,7 @@ class TestWriteSimpleParameter:
             dimensions=1,
             description="Prices",
             domain=["i"],
-            records=[(["agr"], 1.5), (["mfg"], 2.0)]
+            records=[(["agr"], 1.5), (["mfg"], 2.0)],
         )
 
         # Write to file
@@ -50,7 +50,7 @@ class TestWriteSimpleParameter:
             name="X",
             sym_type="parameter",
             dimensions=1,
-            records=[(["a"], 10.0), (["b"], 20.0), (["c"], 30.0)]
+            records=[(["a"], 10.0), (["b"], 20.0), (["c"], 30.0)],
         )
 
         # Write
@@ -77,7 +77,7 @@ class TestWriteSet:
             sym_type="set",
             dimensions=1,
             description="Industries",
-            elements=[["agr"], ["mfg"], ["srv"]]
+            elements=[["agr"], ["mfg"], ["srv"]],
         )
 
         output_file = tmp_path / "test_set.gdx"
@@ -91,7 +91,7 @@ class TestWriteSet:
             name="regions",
             sym_type="set",
             dimensions=1,
-            elements=[["north"], ["south"], ["east"], ["west"]]
+            elements=[["north"], ["south"], ["east"], ["west"]],
         )
 
         output_file = tmp_path / "test_set.gdx"
@@ -120,7 +120,7 @@ class TestWrite2DParameter:
                 (["a", "y"], 2.0),
                 (["b", "x"], 3.0),
                 (["b", "y"], 4.0),
-            ]
+            ],
         )
 
         output_file = tmp_path / "matrix.gdx"
@@ -145,7 +145,7 @@ class TestWriteVariable:
             records=[
                 (["agr"], (100.0, 0.0, 0.0, float("inf"), 1.0)),
                 (["mfg"], (200.0, 0.5, 0.0, float("inf"), 1.0)),
-            ]
+            ],
         )
 
         output_file = tmp_path / "var.gdx"
@@ -170,7 +170,7 @@ class TestWriteEquation:
             records=[
                 (["agr"], (0.0, 1.5, 0.0, 0.0, 1.0)),
                 (["mfg"], (0.0, 2.0, 0.0, 0.0, 1.0)),
-            ]
+            ],
         )
 
         output_file = tmp_path / "eq.gdx"
@@ -188,18 +188,13 @@ class TestWriteMultipleSymbols:
 
     def test_write_set_and_parameter(self, tmp_path: Path) -> None:
         """Should write multiple symbols to one file."""
-        s = Set(
-            name="i",
-            sym_type="set",
-            dimensions=1,
-            elements=[["a"], ["b"], ["c"]]
-        )
+        s = Set(name="i", sym_type="set", dimensions=1, elements=[["a"], ["b"], ["c"]])
 
         p = Parameter(
             name="X",
             sym_type="parameter",
             dimensions=1,
-            records=[(["a"], 1.0), (["b"], 2.0), (["c"], 3.0)]
+            records=[(["a"], 1.0), (["b"], 2.0), (["c"], 3.0)],
         )
 
         output_file = tmp_path / "multi.gdx"
@@ -218,12 +213,7 @@ class TestWriteEdgeCases:
 
     def test_write_empty_parameter(self, tmp_path: Path) -> None:
         """Should handle parameter with no records."""
-        p = Parameter(
-            name="empty",
-            sym_type="parameter",
-            dimensions=1,
-            records=[]
-        )
+        p = Parameter(name="empty", sym_type="parameter", dimensions=1, records=[])
 
         output_file = tmp_path / "empty.gdx"
         write_gdx(output_file, [p])
@@ -241,10 +231,7 @@ class TestWriteEdgeCases:
     def test_write_to_nonexistent_directory(self, tmp_path: Path) -> None:
         """Should create directory if needed."""
         p = Parameter(
-            name="X",
-            sym_type="parameter",
-            dimensions=1,
-            records=[(["a"], 1.0)]
+            name="X", sym_type="parameter", dimensions=1, records=[(["a"], 1.0)]
         )
 
         # Write to non-existent subdirectory
@@ -267,7 +254,7 @@ class TestWriteSpecialValues:
             records=[
                 (["a"], float("inf")),
                 (["b"], float("-inf")),
-            ]
+            ],
         )
 
         output_file = tmp_path / "inf.gdx"
@@ -281,7 +268,7 @@ class TestWriteSpecialValues:
             name="zeros",
             sym_type="parameter",
             dimensions=1,
-            records=[(["a"], 0.0), (["b"], 0.0)]
+            records=[(["a"], 0.0), (["b"], 0.0)],
         )
 
         output_file = tmp_path / "zeros.gdx"

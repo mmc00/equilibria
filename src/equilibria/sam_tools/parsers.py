@@ -31,7 +31,9 @@ def _normalize_format(fmt: str | SAMFormat) -> SAMFormat:
 def _load_from_excel(path: Path) -> SamTable:
     """Load a canonical Excel SAM grid into a ``SamTable``."""
     grid = load_sam_grid(path)
-    sam = Sam.from_matrix(grid.matrix.copy().astype(float), grid.row_keys, grid.col_keys)
+    sam = Sam.from_matrix(
+        grid.matrix.copy().astype(float), grid.row_keys, grid.col_keys
+    )
     return SamTable(
         sam=sam,
         source_path=path,
@@ -108,11 +110,17 @@ def parse_table(
         return load_ieem_raw_excel_table(
             input_path=path,
             sheet_name=str(opts.get("sheet_name", "MCS2016")),
-            group_order=tuple(opts["group_order"]) if isinstance(opts.get("group_order"), (list, tuple)) else None,
-            group_aliases=opts.get("group_aliases") if isinstance(opts.get("group_aliases"), dict) else None,
+            group_order=tuple(opts["group_order"])
+            if isinstance(opts.get("group_order"), (list, tuple))
+            else None,
+            group_aliases=opts.get("group_aliases")
+            if isinstance(opts.get("group_aliases"), dict)
+            else None,
             group_col=int(opts["group_col"]) if "group_col" in opts else None,
             label_col=int(opts["label_col"]) if "label_col" in opts else None,
-            data_start_col=int(opts["data_start_col"]) if "data_start_col" in opts else None,
+            data_start_col=int(opts["data_start_col"])
+            if "data_start_col" in opts
+            else None,
         )
 
     raise ValueError(f"Unsupported input format: {fmt}")
@@ -120,7 +128,11 @@ def parse_table(
 
 def _write_excel_preserving_layout(table: SamTable, output_path: Path) -> None:
     """Write table values into the original Excel layout when available."""
-    if table.raw_df is None or table.data_start_row is None or table.data_start_col is None:
+    if (
+        table.raw_df is None
+        or table.data_start_row is None
+        or table.data_start_col is None
+    ):
         raise ValueError("No original Excel layout available")
 
     out_df = table.raw_df.copy()
@@ -214,7 +226,11 @@ def export_table(
 
     if format_enum == SAMFormat.GDX:
         records = _write_table_to_gdx(table, output_path, output_symbol)
-        return {"format": SAMFormat.GDX.value, "records": records, "symbol": output_symbol}
+        return {
+            "format": SAMFormat.GDX.value,
+            "records": records,
+            "symbol": output_symbol,
+        }
 
     raise ValueError(f"Unsupported output format: {output_format}")
 

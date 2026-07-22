@@ -7,21 +7,22 @@ in lockstep.
 CLEAN-ROOM REIMPLEMENTATION — see reader.py and the babel/har/README.md
 for the full provenance statement. Distributed under MIT.
 """
+
 from __future__ import annotations
 
 import struct
-from typing import Iterator
+from collections.abc import Iterator
 
 # ── Wire constants ───────────────────────────────────────────────────────────
 
-PAD = b"    "                       # 4-byte ASCII space padding used in
-                                    # name and meta records
-INT = struct.Struct("<i")           # 4-byte little-endian int
+PAD = b"    "  # 4-byte ASCII space padding used in
+# name and meta records
+INT = struct.Struct("<i")  # 4-byte little-endian int
 
-NAME_WIDTH = 4                      # header name field
-LONG_NAME_WIDTH = 70                # long-name field inside the meta record
-SET_NAME_WIDTH = 12                 # per-element + per-set-name width
-META_RECORD_MIN_LEN = 80            # pad(4) + type(6) + long(70)
+NAME_WIDTH = 4  # header name field
+LONG_NAME_WIDTH = 70  # long-name field inside the meta record
+SET_NAME_WIDTH = 12  # per-element + per-set-name width
+META_RECORD_MIN_LEN = 80  # pad(4) + type(6) + long(70)
 
 # Type tokens — exactly 6 ASCII bytes, fixed
 TOKEN_1CFULL = "1CFULL"
@@ -31,6 +32,7 @@ TOKEN_2IFULL = "2IFULL"
 
 
 # ── Fortran record framing ───────────────────────────────────────────────────
+
 
 def iter_records(buf: bytes) -> Iterator[bytes]:
     """Yield raw record bytes from a Fortran unformatted stream.
@@ -47,7 +49,7 @@ def iter_records(buf: bytes) -> Iterator[bytes]:
         pos += 4
         if rlen < 0 or pos + rlen + 4 > n:
             return
-        yield buf[pos:pos + rlen]
+        yield buf[pos : pos + rlen]
         pos += rlen + 4  # skip the trailing length marker
 
 
@@ -60,12 +62,13 @@ def write_record(out: bytearray, payload: bytes) -> None:
 
 # ── Fixed-width string blocks ────────────────────────────────────────────────
 
+
 def decode_str_block(blk: bytes, width: int = SET_NAME_WIDTH) -> list[str]:
     """Split a fixed-width padded string block into stripped strings."""
     out: list[str] = []
     p = 0
     while p + width <= len(blk):
-        out.append(blk[p:p + width].decode("ascii", errors="replace").rstrip())
+        out.append(blk[p : p + width].decode("ascii", errors="replace").rstrip())
         p += width
     return out
 
@@ -89,12 +92,13 @@ def encode_str_block(strings: list[str], width: int = SET_NAME_WIDTH) -> bytes:
 
 # ── Set-element record codec ─────────────────────────────────────────────────
 
+
 def read_set_element_record(rec: bytes) -> list[str]:
     """Decode a set-elements record: pad(4) + flag(4) + n_total(4) + n_here(4) + names."""
     if len(rec) < 16:
         return []
     n = INT.unpack_from(rec, 8)[0]
-    return decode_str_block(rec[16:16 + SET_NAME_WIDTH * n])
+    return decode_str_block(rec[16 : 16 + SET_NAME_WIDTH * n])
 
 
 def write_set_element_record(
@@ -120,6 +124,7 @@ def write_set_element_record(
 
 # ── Set-descriptor codec ─────────────────────────────────────────────────────
 
+
 def parse_set_descriptor(rec: bytes) -> tuple[str, list[str], int]:
     """Decode the per-coefficient set descriptor record.
 
@@ -137,7 +142,7 @@ def parse_set_descriptor(rec: bytes) -> tuple[str, list[str], int]:
     """
     ndim = INT.unpack_from(rec, 12)[0]
     coeff_name = rec[16:28].decode("ascii", errors="replace").rstrip()
-    set_names = decode_str_block(rec[32:32 + SET_NAME_WIDTH * ndim])
+    set_names = decode_str_block(rec[32 : 32 + SET_NAME_WIDTH * ndim])
     return coeff_name, set_names, ndim
 
 
@@ -163,9 +168,7 @@ def build_set_descriptor(coeff_name: str, set_names: list[str]) -> bytes:
     ndim = len(set_names)
     n_unique = len(unique)
     if len(coeff_name) > SET_NAME_WIDTH:
-        raise ValueError(
-            f"coeff_name {coeff_name!r} exceeds {SET_NAME_WIDTH} bytes"
-        )
+        raise ValueError(f"coeff_name {coeff_name!r} exceeds {SET_NAME_WIDTH} bytes")
     payload = bytearray()
     payload.extend(PAD)
     payload.extend(INT.pack(n_unique))

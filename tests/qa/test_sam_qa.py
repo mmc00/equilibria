@@ -87,7 +87,9 @@ def test_sam_qa_fails_for_known_cri_unfixed_excel() -> None:
 
 
 def test_sam_qa_strict_structural_fails_for_known_cri_fixed_excel() -> None:
-    sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx")
+    sam_file = Path(
+        "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx"
+    )
     assert sam_file.exists()
 
     report = run_sam_qa_from_file(sam_file, strict_structural=True)

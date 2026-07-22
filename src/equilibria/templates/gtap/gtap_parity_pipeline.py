@@ -21,27 +21,39 @@ import json
 import logging
 import math
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
-from equilibria.babel.gdx.reader import read_gdx, read_parameter_values, read_variable_values
-from equilibria.templates.gtap import (
-    GTAPModelEquations,
-    GTAPParameters,
-    GTAPSets,
-    GTAPSolver,
-    build_gtap_contract,
+from equilibria.babel.gdx.reader import (
+    read_gdx,
+    read_parameter_values,
+    read_variable_values,
 )
-from equilibria.templates.gtap.gtap_parameters import GTAPBenchmarkValues
-from equilibria.templates.gtap.gtap_solver import SolverResult
+
+# Import from submodules (not the parent package) to avoid a circular import:
+# `equilibria.templates.gtap.__init__` imports this module, so importing back
+# from the package would leave it partially initialized. Submodule-direct
+# imports also make the ordering isort-stable.
+from equilibria.templates.gtap.gtap_contract import build_gtap_contract
+from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+from equilibria.templates.gtap.gtap_parameters import (
+    GTAPBenchmarkValues,
+    GTAPParameters,
+    GTAPTaxRates,
+)
+from equilibria.templates.gtap.gtap_sets import GTAPSets
+from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult
 
 logger = logging.getLogger(__name__)
 
-_STANDARD_GTAP_GENERATED_SCALE_CACHE: Dict[Path, Dict[Tuple[str, str, str, str, str], float]] = {}
+_STANDARD_GTAP_GENERATED_SCALE_CACHE: dict[
+    Path, dict[tuple[str, str, str, str, str], float]
+] = {}
 
 
-def _is_standard_gtap_9x10_sets(sets: Optional[GTAPSets]) -> bool:
+def _is_standard_gtap_9x10_sets(sets: GTAPSets | None) -> bool:
     """Return whether GTAP sets match the 9x10 agricultural aggregation."""
     if sets is None:
         return False
@@ -73,7 +85,7 @@ def _as_float(value: Any) -> float:
     return float(text)
 
 
-def _row_matches_year(row: Dict[str, str], year: str) -> bool:
+def _row_matches_year(row: dict[str, str], year: str) -> bool:
     """Return whether a postsim CSV row belongs to the selected year label."""
     return _normalize_year_token(row.get("Year", "")) == year
 
@@ -83,11 +95,11 @@ def _clean_label(value: Any) -> str:
     return str(value).strip()
 
 
-def _extract_var_levels(var) -> Dict[Any, float]:
+def _extract_var_levels(var) -> dict[Any, float]:
     """Extract Pyomo variable values into a plain dictionary."""
     from pyomo.environ import value
 
-    result: Dict[Any, float] = {}
+    result: dict[Any, float] = {}
     for idx in var:
         try:
             result[idx] = float(value(var[idx]))
@@ -96,7 +108,7 @@ def _extract_var_levels(var) -> Dict[Any, float]:
     return result
 
 
-def _extract_xda_unscaled(model) -> Dict[Any, float]:
+def _extract_xda_unscaled(model) -> dict[Any, float]:
     """Extract xda levels divided by xscale, approximating GTAP ``xd`` semantics.
 
     Returns ``xda[r,i,aa] / xscale[r,aa]`` for each index.  When ``xda`` was
@@ -112,7 +124,7 @@ def _extract_xda_unscaled(model) -> Dict[Any, float]:
     if not hasattr(model, "xda"):
         return {}
 
-    result: Dict[Any, float] = {}
+    result: dict[Any, float] = {}
     for idx in model.xda:
         try:
             level = float(value(model.xda[idx]))
@@ -128,14 +140,14 @@ def _extract_xda_unscaled(model) -> Dict[Any, float]:
     return result
 
 
-def _extract_xaa_unscaled(model) -> Dict[Any, float]:
+def _extract_xaa_unscaled(model) -> dict[Any, float]:
     """Extract xaa levels and remove xscale so values align with GTAP `xa` semantics."""
     from pyomo.environ import value
 
     if not hasattr(model, "xaa"):
         return {}
 
-    result: Dict[Any, float] = {}
+    result: dict[Any, float] = {}
     for idx in model.xaa:
         try:
             level = float(value(model.xaa[idx]))
@@ -151,13 +163,13 @@ def _extract_xaa_unscaled(model) -> Dict[Any, float]:
     return result
 
 
-def _normalize_singleton_keys(values: Dict[Any, float]) -> Dict[Tuple[str], float]:
+def _normalize_singleton_keys(values: dict[Any, float]) -> dict[tuple[str], float]:
     """Normalize 1D variable keys to one-element tuple form.
 
     This avoids mixed key shapes (e.g. ``"c_Food"`` vs ``("c_Food",)``)
     when comparing snapshots built from different backends.
     """
-    normalized: Dict[Tuple[str], float] = {}
+    normalized: dict[tuple[str], float] = {}
     for key, value in values.items():
         if isinstance(key, tuple):
             if len(key) == 1:
@@ -169,7 +181,7 @@ def _normalize_singleton_keys(values: Dict[Any, float]) -> Dict[Tuple[str], floa
     return normalized
 
 
-def _extract_gtap_factor_prices(model) -> Dict[Any, float]:
+def _extract_gtap_factor_prices(model) -> dict[Any, float]:
     """Extract factor prices using GTAP gross-price semantics when available."""
     from pyomo.environ import value
 
@@ -177,12 +189,15 @@ def _extract_gtap_factor_prices(model) -> Dict[Any, float]:
         return {}
 
     pf_values = _extract_var_levels(model.pf)
-    if getattr(model, "_equilibria_factor_price_representation", "") != "net_of_direct_tax":
+    if (
+        getattr(model, "_equilibria_factor_price_representation", "")
+        != "net_of_direct_tax"
+    ):
         return pf_values
     if not hasattr(model, "kappaf_activity"):
         return pf_values
 
-    gross_values: Dict[Any, float] = {}
+    gross_values: dict[Any, float] = {}
     for idx, net_value in pf_values.items():
         try:
             wedge = float(value(model.kappaf_activity[idx]))
@@ -192,9 +207,9 @@ def _extract_gtap_factor_prices(model) -> Dict[Any, float]:
     return gross_values
 
 
-def _apply_output_pairs(sets: GTAPSets, pairs: Iterable[Tuple[str, str]]) -> None:
+def _apply_output_pairs(sets: GTAPSets, pairs: Iterable[tuple[str, str]]) -> None:
     """Populate GTAP output-structure metadata from explicit make pairs."""
-    unique_pairs: List[Tuple[str, str]] = []
+    unique_pairs: list[tuple[str, str]] = []
     for activity, commodity in pairs:
         if activity not in sets.a or commodity not in sets.i:
             continue
@@ -219,9 +234,8 @@ def _apply_output_pairs(sets: GTAPSets, pairs: Iterable[Tuple[str, str]]) -> Non
     if not unique_pairs:
         return
 
-    if (
-        all(len(outputs) == 1 for outputs in sets.activity_commodities.values())
-        and all(len(activities) == 1 for activities in sets.commodity_activities.values())
+    if all(len(outputs) == 1 for outputs in sets.activity_commodities.values()) and all(
+        len(activities) == 1 for activities in sets.commodity_activities.values()
     ):
         sets.a_to_i = {
             activity: outputs[0]
@@ -241,7 +255,9 @@ def _repair_factor_subsets_from_labels(sets: GTAPSets, factors: Sequence[str]) -
     sets.f = valid_factors
 
     raw_mf = [factor for factor in sets.mf if factor in valid_factors]
-    raw_sf = [factor for factor in sets.sf if factor in valid_factors and factor not in raw_mf]
+    raw_sf = [
+        factor for factor in sets.sf if factor in valid_factors and factor not in raw_mf
+    ]
     assigned = set(raw_mf) | set(raw_sf)
 
     for factor in valid_factors:
@@ -274,11 +290,13 @@ def _derive_factor_tax_wedges_from_standard_gtap_csv(
 
     reference_year = "1" if "1" in factor_years else solution_year
     if reference_year == benchmark_year:
-        alternatives = sorted(year for year in factor_years if year and year != benchmark_year)
+        alternatives = sorted(
+            year for year in factor_years if year and year != benchmark_year
+        )
         if alternatives:
             reference_year = alternatives[0]
 
-    pft_levels: Dict[Tuple[str, str], float] = {}
+    pft_levels: dict[tuple[str, str], float] = {}
     for row in rows:
         if _normalize_year_token(row.get("Year", "")) != reference_year:
             continue
@@ -304,7 +322,9 @@ def _derive_factor_tax_wedges_from_standard_gtap_csv(
             continue
         if aggregate_value is None or abs(gross_value) <= 1e-10:
             continue
-        taxes.kappaf_activity[(region, factor, activity)] = 1.0 - (aggregate_value / gross_value)
+        taxes.kappaf_activity[(region, factor, activity)] = 1.0 - (
+            aggregate_value / gross_value
+        )
 
 
 def _safe_ratio(value: float, scale: float) -> float:
@@ -314,7 +334,9 @@ def _safe_ratio(value: float, scale: float) -> float:
     return float(value) / float(scale)
 
 
-def _regional_income_scale(benchmark: GTAPBenchmarkValues, sets: GTAPSets, region: str) -> float:
+def _regional_income_scale(
+    benchmark: GTAPBenchmarkValues, sets: GTAPSets, region: str
+) -> float:
     """Benchmark denominator for regional income variables."""
     factor_income = sum(
         benchmark.vfm.get((region, factor, activity), 0.0)
@@ -324,9 +346,15 @@ def _regional_income_scale(benchmark: GTAPBenchmarkValues, sets: GTAPSets, regio
     if factor_income > 1e-10:
         return factor_income
 
-    total_absorption = sum(benchmark.vpm.get((region, commodity), 0.0) for commodity in sets.i)
-    total_absorption += sum(benchmark.vgm.get((region, commodity), 0.0) for commodity in sets.i)
-    total_absorption += sum(benchmark.vim.get((region, commodity), 0.0) for commodity in sets.i)
+    total_absorption = sum(
+        benchmark.vpm.get((region, commodity), 0.0) for commodity in sets.i
+    )
+    total_absorption += sum(
+        benchmark.vgm.get((region, commodity), 0.0) for commodity in sets.i
+    )
+    total_absorption += sum(
+        benchmark.vim.get((region, commodity), 0.0) for commodity in sets.i
+    )
     return total_absorption
 
 
@@ -339,7 +367,9 @@ def _agent_benchmark_total(
 ) -> float:
     """Benchmark total Armington demand for an agent/commodity pair."""
     if agent in sets.a:
-        return benchmark.vdfm.get((region, commodity, agent), 0.0) + benchmark.vifm.get((region, commodity, agent), 0.0)
+        return benchmark.vdfm.get((region, commodity, agent), 0.0) + benchmark.vifm.get(
+            (region, commodity, agent), 0.0
+        )
     if agent == "hhd":
         return benchmark.vpm.get((region, commodity), 0.0)
     if agent == "gov":
@@ -360,7 +390,10 @@ def _agent_domestic_benchmark(
 ) -> float:
     """Benchmark domestic demand for an agent/commodity pair."""
     if agent in sets.a:
-        return benchmark.vdfb.get((region, commodity, agent), benchmark.vdfm.get((region, commodity, agent), 0.0))
+        return benchmark.vdfb.get(
+            (region, commodity, agent),
+            benchmark.vdfm.get((region, commodity, agent), 0.0),
+        )
     if agent == "hhd":
         return benchmark.vdpb.get((region, commodity), 0.0)
     if agent == "gov":
@@ -372,17 +405,23 @@ def _agent_domestic_benchmark(
     return 0.0
 
 
-def _commodity_supply_scale(benchmark: GTAPBenchmarkValues, sets: GTAPSets, region: str, commodity: str) -> float:
+def _commodity_supply_scale(
+    benchmark: GTAPBenchmarkValues, sets: GTAPSets, region: str, commodity: str
+) -> float:
     """Benchmark quantity scale for commodity-level quantities in the Python template."""
     source_activities = sets.commodity_activities.get(commodity, [])
     if source_activities:
-        total = sum(benchmark.vom.get((region, activity), 0.0) for activity in source_activities)
+        total = sum(
+            benchmark.vom.get((region, activity), 0.0) for activity in source_activities
+        )
         if total > 1e-10:
             return total
     return benchmark.vom_i.get((region, commodity), 0.0)
 
 
-def _domestic_sales_scale(benchmark: GTAPBenchmarkValues, sets: GTAPSets, region: str, commodity: str) -> float:
+def _domestic_sales_scale(
+    benchmark: GTAPBenchmarkValues, sets: GTAPSets, region: str, commodity: str
+) -> float:
     """Benchmark denominator for `xds`, preferring supply-side scales when absorption is inconsistent."""
     supply_scale = _commodity_supply_scale(benchmark, sets, region, commodity)
     _, absorption_scale, _, _, _ = benchmark.get_trade_totals(sets, region, commodity)
@@ -393,13 +432,15 @@ def _domestic_sales_scale(benchmark: GTAPBenchmarkValues, sets: GTAPSets, region
     return absorption_scale
 
 
-def _load_csv_rows(csv_path: Path) -> List[Dict[str, str]]:
+def _load_csv_rows(csv_path: Path) -> list[dict[str, str]]:
     """Read a standard_gtap_7 postsim CSV file."""
     with Path(csv_path).open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 
-def _resolve_standard_gtap_reference_csv(csv_path: Path, sets: Optional[GTAPSets] = None) -> Path:
+def _resolve_standard_gtap_reference_csv(
+    csv_path: Path, sets: GTAPSets | None = None
+) -> Path:
     """Resolve the preferred standard_gtap reference CSV for the active set domain."""
     candidate = Path(csv_path)
     if candidate.suffix.lower() != ".csv" or candidate.name != "COMP.csv":
@@ -413,20 +454,29 @@ def _resolve_standard_gtap_reference_csv(csv_path: Path, sets: Optional[GTAPSets
     ):
         if replacement.exists():
             if replacement != candidate:
-                logger.info("Using 9x10-compatible GTAP reference CSV %s instead of %s", replacement, candidate)
+                logger.info(
+                    "Using 9x10-compatible GTAP reference CSV %s instead of %s",
+                    replacement,
+                    candidate,
+                )
             return replacement
     return candidate
 
 
-def _standard_gtap_generated_scale_map(csv_path: Path) -> Dict[Tuple[str, str, str, str, str], float]:
+def _standard_gtap_generated_scale_map(
+    csv_path: Path,
+) -> dict[tuple[str, str, str, str, str], float]:
     """Infer per-row scaling for generated comparator CSVs from the NEOS export when available."""
     candidate = Path(csv_path)
     cached = _STANDARD_GTAP_GENERATED_SCALE_CACHE.get(candidate)
     if cached is not None:
         return cached
 
-    scale_map: Dict[Tuple[str, str, str, str, str], float] = {}
-    if candidate.name not in {"COMP_generated.csv", "COMP_equilibria.csv"} or candidate.parent.name != "comp":
+    scale_map: dict[tuple[str, str, str, str, str], float] = {}
+    if (
+        candidate.name not in {"COMP_generated.csv", "COMP_equilibria.csv"}
+        or candidate.parent.name != "comp"
+    ):
         _STANDARD_GTAP_GENERATED_SCALE_CACHE[candidate] = scale_map
         return scale_map
 
@@ -456,7 +506,11 @@ def _standard_gtap_generated_scale_map(csv_path: Path) -> Dict[Tuple[str, str, s
         )
         generated_value = generated_values.get(key)
         neos_value = _as_float(row.get("Value"))
-        if generated_value is None or abs(generated_value) <= 1e-12 or abs(neos_value) <= 1e-12:
+        if (
+            generated_value is None
+            or abs(generated_value) <= 1e-12
+            or abs(neos_value) <= 1e-12
+        ):
             continue
 
         ratio = neos_value / generated_value
@@ -464,7 +518,7 @@ def _standard_gtap_generated_scale_map(csv_path: Path) -> Dict[Tuple[str, str, s
             continue
 
         exponent = round(math.log10(ratio))
-        snapped = 10.0 ** exponent
+        snapped = 10.0**exponent
         if abs(ratio - snapped) / snapped <= 1e-6:
             scale_map[key] = snapped
 
@@ -511,9 +565,29 @@ def _standard_gtap_csv_scale_factor(
         return 1.0e7
 
     quantity_or_income_vars = {
-        "xp", "x", "xs", "xds", "xd", "xw", "xwmg", "xmgm", "xtmg",
-        "xaa", "xa", "xe", "xmt", "xet", "xf", "xft", "xc", "xg", "xi",
-        "regY", "yc", "yg", "yi",
+        "xp",
+        "x",
+        "xs",
+        "xds",
+        "xd",
+        "xw",
+        "xwmg",
+        "xmgm",
+        "xtmg",
+        "xaa",
+        "xa",
+        "xe",
+        "xmt",
+        "xet",
+        "xf",
+        "xft",
+        "xc",
+        "xg",
+        "xi",
+        "regY",
+        "yc",
+        "yg",
+        "yi",
     }
     return 1.0e6 if variable in quantity_or_income_vars else 1.0
 
@@ -570,12 +644,12 @@ def _enrich_sets_from_standard_gtap_csv(
 ) -> None:
     """Derive make/output pairs from `x(r,a,i)` rows in a postsim CSV."""
     rows = _load_csv_rows(csv_path)
-    regions: List[str] = []
-    activities: List[str] = []
-    commodities: List[str] = []
-    factors: List[str] = []
-    margins: List[str] = []
-    pairs: List[Tuple[str, str]] = []
+    regions: list[str] = []
+    activities: list[str] = []
+    commodities: list[str] = []
+    factors: list[str] = []
+    margins: list[str] = []
+    pairs: list[tuple[str, str]] = []
     for row in rows:
         variable = _clean_label(row.get("Variable"))
         year = _normalize_year_token(row.get("Year", ""))
@@ -640,8 +714,8 @@ def _load_standard_gtap_benchmark_from_csv(
     rows = _load_csv_rows(csv_path)
     benchmark = GTAPBenchmarkValues()
 
-    p_solution: Dict[Tuple[str, str, str], float] = {}
-    x_solution: Dict[Tuple[str, str, str], float] = {}
+    p_solution: dict[tuple[str, str, str], float] = {}
+    x_solution: dict[tuple[str, str, str], float] = {}
 
     for row in rows:
         variable = _clean_label(row.get("Variable"))
@@ -664,7 +738,9 @@ def _load_standard_gtap_benchmark_from_csv(
         if variable == "evfb" and region and sector and qualifier:
             benchmark.evfb[(region, qualifier, sector)] = value
             benchmark.vfm[(region, qualifier, sector)] = value
-            benchmark.vfb[(region, sector)] = benchmark.vfb.get((region, sector), 0.0) + value
+            benchmark.vfb[(region, sector)] = (
+                benchmark.vfb.get((region, sector), 0.0) + value
+            )
         elif variable == "evos" and region and sector and qualifier:
             benchmark.evos[(region, qualifier, sector)] = value
         elif variable == "vdfp" and region and sector and qualifier:
@@ -717,7 +793,9 @@ def _load_standard_gtap_benchmark_from_csv(
         price = p_solution.get(key, 1.0)
         make_value = quantity * price
         benchmark.makb[(region, activity, commodity)] = make_value
-        benchmark.vom[(region, activity)] = benchmark.vom.get((region, activity), 0.0) + make_value
+        benchmark.vom[(region, activity)] = (
+            benchmark.vom.get((region, activity), 0.0) + make_value
+        )
 
     benchmark._derive_output_totals(sets)
     benchmark._derive_intermediate_totals(sets)
@@ -731,119 +809,119 @@ class GTAPDataBundle:
     """Split data bundle for `standard_gtap_7` style parity runs."""
 
     sets_gdx: Path
-    elasticities_gdx: Optional[Path] = None
-    benchmark_csv: Optional[Path] = None
-    benchmark_gdx: Optional[Path] = None
+    elasticities_gdx: Path | None = None
+    benchmark_csv: Path | None = None
+    benchmark_gdx: Path | None = None
 
 
 @dataclass(frozen=True)
 class GTAPVariableSnapshot:
     """Snapshot of GTAP variable values."""
 
-    xp: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    x: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    xp: dict[tuple[str, str], float] = field(default_factory=dict)
+    x: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
-    xs: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    xds: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    xd: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    xs: dict[tuple[str, str], float] = field(default_factory=dict)
+    xds: dict[tuple[str, str], float] = field(default_factory=dict)
+    xd: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
-    px: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    pp: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    ps: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    pd: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    pa: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    paa: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    pdp: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    px: dict[tuple[str, str], float] = field(default_factory=dict)
+    pp: dict[tuple[str, str], float] = field(default_factory=dict)
+    ps: dict[tuple[str, str], float] = field(default_factory=dict)
+    pd: dict[tuple[str, str], float] = field(default_factory=dict)
+    pa: dict[tuple[str, str], float] = field(default_factory=dict)
+    paa: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    pdp: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
-    pmt: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    pmcif: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    pmt: dict[tuple[str, str], float] = field(default_factory=dict)
+    pmcif: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
-    pet: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    pe: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    pefob: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    pet: dict[tuple[str, str], float] = field(default_factory=dict)
+    pe: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    pefob: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
-    xe: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    xw: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    xmt: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    xet: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    xaa: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    xma: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
+    xe: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    xw: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    xmt: dict[tuple[str, str], float] = field(default_factory=dict)
+    xet: dict[tuple[str, str], float] = field(default_factory=dict)
+    xaa: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    xma: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
-    xwmg: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    xmgm: Dict[Tuple[str, str, str, str], float] = field(default_factory=dict)
-    pwmg: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    xtmg: Dict[Tuple[str], float] = field(default_factory=dict)
-    ptmg: Dict[Tuple[str], float] = field(default_factory=dict)
+    xwmg: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    xmgm: dict[tuple[str, str, str, str], float] = field(default_factory=dict)
+    pwmg: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    xtmg: dict[tuple[str], float] = field(default_factory=dict)
+    ptmg: dict[tuple[str], float] = field(default_factory=dict)
 
-    xf: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    xft: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    pf: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    pfa: Dict[Tuple[str, str, str], float] = field(default_factory=dict)
-    pft: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    pfact: Dict[str, float] = field(default_factory=dict)
+    xf: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    xft: dict[tuple[str, str], float] = field(default_factory=dict)
+    pf: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    pfa: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    pft: dict[tuple[str, str], float] = field(default_factory=dict)
+    pfact: dict[str, float] = field(default_factory=dict)
 
-    xc: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    xg: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    xi: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    xc: dict[tuple[str, str], float] = field(default_factory=dict)
+    xg: dict[tuple[str, str], float] = field(default_factory=dict)
+    xi: dict[tuple[str, str], float] = field(default_factory=dict)
 
-    va: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    regy: Dict[str, float] = field(default_factory=dict)
-    yc: Dict[str, float] = field(default_factory=dict)
-    yg: Dict[str, float] = field(default_factory=dict)
-    yi: Dict[str, float] = field(default_factory=dict)
-    uh: Dict[str, float] = field(default_factory=dict)
-    ug: Dict[str, float] = field(default_factory=dict)
-    us: Dict[str, float] = field(default_factory=dict)
-    u: Dict[str, float] = field(default_factory=dict)
-    phi: Dict[str, float] = field(default_factory=dict)
-    phip: Dict[str, float] = field(default_factory=dict)
-    pcons: Dict[str, float] = field(default_factory=dict)
-    rsav: Dict[str, float] = field(default_factory=dict)
-    xigbl: Optional[float] = None
-    pigbl: Optional[float] = None
-    arent: Dict[str, float] = field(default_factory=dict)
-    facty: Dict[str, float] = field(default_factory=dict)
-    ytax_ind: Dict[str, float] = field(default_factory=dict)
+    va: dict[tuple[str, str], float] = field(default_factory=dict)
+    regy: dict[str, float] = field(default_factory=dict)
+    yc: dict[str, float] = field(default_factory=dict)
+    yg: dict[str, float] = field(default_factory=dict)
+    yi: dict[str, float] = field(default_factory=dict)
+    uh: dict[str, float] = field(default_factory=dict)
+    ug: dict[str, float] = field(default_factory=dict)
+    us: dict[str, float] = field(default_factory=dict)
+    u: dict[str, float] = field(default_factory=dict)
+    phi: dict[str, float] = field(default_factory=dict)
+    phip: dict[str, float] = field(default_factory=dict)
+    pcons: dict[str, float] = field(default_factory=dict)
+    rsav: dict[str, float] = field(default_factory=dict)
+    xigbl: float | None = None
+    pigbl: float | None = None
+    arent: dict[str, float] = field(default_factory=dict)
+    facty: dict[str, float] = field(default_factory=dict)
+    ytax_ind: dict[str, float] = field(default_factory=dict)
 
-    gdpmp: Dict[str, float] = field(default_factory=dict)
-    rgdpmp: Dict[str, float] = field(default_factory=dict)
-    ev: Dict[str, float] = field(default_factory=dict)
-    cv: Dict[str, float] = field(default_factory=dict)
+    gdpmp: dict[str, float] = field(default_factory=dict)
+    rgdpmp: dict[str, float] = field(default_factory=dict)
+    ev: dict[str, float] = field(default_factory=dict)
+    cv: dict[str, float] = field(default_factory=dict)
 
-    gdpmp: Dict[str, float] = field(default_factory=dict)
-    rgdpmp: Dict[str, float] = field(default_factory=dict)
-    ev: Dict[str, float] = field(default_factory=dict)
-    cv: Dict[str, float] = field(default_factory=dict)
+    gdpmp: dict[str, float] = field(default_factory=dict)
+    rgdpmp: dict[str, float] = field(default_factory=dict)
+    ev: dict[str, float] = field(default_factory=dict)
+    cv: dict[str, float] = field(default_factory=dict)
 
-    pnum: Optional[float] = None
-    pabs: Dict[str, float] = field(default_factory=dict)
-    walras: Optional[float] = None
+    pnum: float | None = None
+    pabs: dict[str, float] = field(default_factory=dict)
+    walras: float | None = None
 
     # Income / capital / tax-aggregate vars exported by GAMS that feed eq_facty,
     # eq_ytax_ind, eq_kapEnd, eq_psave, etc. Seeding these removes phantom
     # residuals at the GAMS point (they were left at init before).
-    pi: Dict[str, float] = field(default_factory=dict)
-    kstock: Dict[str, float] = field(default_factory=dict)
-    kapEnd: Dict[str, float] = field(default_factory=dict)
-    ytax: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    ytaxTot: Dict[str, float] = field(default_factory=dict)
-    ytaxshr: Dict[str, float] = field(default_factory=dict)
-    xcshr: Dict[str, float] = field(default_factory=dict)
-    zcons: Dict[str, float] = field(default_factory=dict)
-    nd: Dict[str, float] = field(default_factory=dict)
-    chif: Dict[str, float] = field(default_factory=dict)
-    savf: Dict[str, float] = field(default_factory=dict)
-    psave: Dict[str, float] = field(default_factory=dict)
-    pgdpmp: Dict[str, float] = field(default_factory=dict)
-    pmuv: Dict[str, float] = field(default_factory=dict)
-    pwfact: Dict[str, float] = field(default_factory=dict)
-    rorc: Dict[str, float] = field(default_factory=dict)
-    rore: Dict[str, float] = field(default_factory=dict)
-    rorg: Dict[str, float] = field(default_factory=dict)
-    pfy: Dict[str, float] = field(default_factory=dict)
-    pm: Dict[str, float] = field(default_factory=dict)
-    pva: Dict[str, float] = field(default_factory=dict)
-    pnd: Dict[str, float] = field(default_factory=dict)
+    pi: dict[str, float] = field(default_factory=dict)
+    kstock: dict[str, float] = field(default_factory=dict)
+    kapEnd: dict[str, float] = field(default_factory=dict)
+    ytax: dict[tuple[str, str], float] = field(default_factory=dict)
+    ytaxTot: dict[str, float] = field(default_factory=dict)
+    ytaxshr: dict[str, float] = field(default_factory=dict)
+    xcshr: dict[str, float] = field(default_factory=dict)
+    zcons: dict[str, float] = field(default_factory=dict)
+    nd: dict[str, float] = field(default_factory=dict)
+    chif: dict[str, float] = field(default_factory=dict)
+    savf: dict[str, float] = field(default_factory=dict)
+    psave: dict[str, float] = field(default_factory=dict)
+    pgdpmp: dict[str, float] = field(default_factory=dict)
+    pmuv: dict[str, float] = field(default_factory=dict)
+    pwfact: dict[str, float] = field(default_factory=dict)
+    rorc: dict[str, float] = field(default_factory=dict)
+    rore: dict[str, float] = field(default_factory=dict)
+    rorg: dict[str, float] = field(default_factory=dict)
+    pfy: dict[str, float] = field(default_factory=dict)
+    pm: dict[str, float] = field(default_factory=dict)
+    pva: dict[str, float] = field(default_factory=dict)
+    pnd: dict[str, float] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Return whether the snapshot contains any non-scalar data."""
@@ -857,7 +935,7 @@ class GTAPVariableSnapshot:
         return True
 
     @classmethod
-    def from_python_model(cls, model) -> "GTAPVariableSnapshot":
+    def from_python_model(cls, model) -> GTAPVariableSnapshot:
         """Extract a snapshot from a solved Python/Pyomo model."""
         from pyomo.environ import value
 
@@ -868,7 +946,9 @@ class GTAPVariableSnapshot:
             xds=(
                 _extract_var_levels(model.xds)
                 if hasattr(model, "xds")
-                else _extract_var_levels(model.xd) if hasattr(model, "xd") else {}
+                else _extract_var_levels(model.xd)
+                if hasattr(model, "xd")
+                else {}
             ),
             xd=_extract_xda_unscaled(model),
             px=_extract_var_levels(model.px) if hasattr(model, "px") else {},
@@ -892,7 +972,9 @@ class GTAPVariableSnapshot:
             xmgm=_extract_var_levels(model.xmgm) if hasattr(model, "xmgm") else {},
             pwmg=_extract_var_levels(model.pwmg) if hasattr(model, "pwmg") else {},
             xtmg=_extract_var_levels(model.xtmg) if hasattr(model, "xtmg") else {},
-            ptmg=_normalize_singleton_keys(_extract_var_levels(model.ptmg)) if hasattr(model, "ptmg") else {},
+            ptmg=_normalize_singleton_keys(_extract_var_levels(model.ptmg))
+            if hasattr(model, "ptmg")
+            else {},
             xf=_extract_var_levels(model.xf) if hasattr(model, "xf") else {},
             xft=_extract_var_levels(model.xft) if hasattr(model, "xft") else {},
             pf=_extract_gtap_factor_prices(model),
@@ -918,26 +1000,64 @@ class GTAPVariableSnapshot:
             # converges to ~3e-9); the warm-start just has to carry the same state.
             **{
                 _f: _extract_var_levels(getattr(model, _f))
-                for _f in ("pi", "kstock", "kapEnd", "ytax", "ytaxTot", "ytaxshr",
-                           "xcshr", "zcons", "nd", "chif", "savf", "psave",
-                           "pgdpmp", "pmuv", "pwfact", "rorc", "rore", "rorg",
-                           "pfy", "pm", "pva", "pnd", "facty", "ytax_ind",
-                           "pfact", "va", "u", "uh", "ug", "us", "phi", "phip",
-                           "pcons", "gdpmp", "rgdpmp", "ev", "cv", "rsav",
-                           "xigbl", "pigbl", "arent")
+                for _f in (
+                    "pi",
+                    "kstock",
+                    "kapEnd",
+                    "ytax",
+                    "ytaxTot",
+                    "ytaxshr",
+                    "xcshr",
+                    "zcons",
+                    "nd",
+                    "chif",
+                    "savf",
+                    "psave",
+                    "pgdpmp",
+                    "pmuv",
+                    "pwfact",
+                    "rorc",
+                    "rore",
+                    "rorg",
+                    "pfy",
+                    "pm",
+                    "pva",
+                    "pnd",
+                    "facty",
+                    "ytax_ind",
+                    "pfact",
+                    "va",
+                    "u",
+                    "uh",
+                    "ug",
+                    "us",
+                    "phi",
+                    "phip",
+                    "pcons",
+                    "gdpmp",
+                    "rgdpmp",
+                    "ev",
+                    "cv",
+                    "rsav",
+                    "xigbl",
+                    "pigbl",
+                    "arent",
+                )
                 if hasattr(model, _f)
             },
         )
 
     @classmethod
-    def from_gdx(cls, gdx_path: Path, sets: GTAPSets) -> "GTAPVariableSnapshot":
+    def from_gdx(cls, gdx_path: Path, sets: GTAPSets) -> GTAPVariableSnapshot:
         """Extract a snapshot from a GAMS result GDX."""
         gdx_data = read_gdx(gdx_path)
 
-        def read_level(name: str) -> Dict[Any, float]:
+        def read_level(name: str) -> dict[Any, float]:
             try:
                 values = read_variable_values(gdx_data, name)
-                return {key: float(attrs.get("level", 0.0)) for key, attrs in values.items()}
+                return {
+                    key: float(attrs.get("level", 0.0)) for key, attrs in values.items()
+                }
             except Exception:
                 try:
                     values = read_parameter_values(gdx_data, name)
@@ -1001,18 +1121,15 @@ class GTAPVariableSnapshot:
         sets: GTAPSets,
         *,
         solution_year: int | str = 1,
-    ) -> "GTAPVariableSnapshot":
+    ) -> GTAPVariableSnapshot:
         """Extract solution values from a `postsim.gms` CSV export."""
         year = _normalize_year_token(solution_year)
         rows = _load_csv_rows(csv_path)
 
         snapshot = cls()
         data = snapshot.__dict__.copy()
-        ytax_by_region: Dict[str, float] = defaultdict(float)
-        if len(sets.m) == 1:
-            margin_commodity = sets.m[0]
-        else:
-            margin_commodity = None
+        ytax_by_region: dict[str, float] = defaultdict(float)
+        margin_commodity = sets.m[0] if len(sets.m) == 1 else None
 
         for row in rows:
             if not _row_matches_year(row, year):
@@ -1057,7 +1174,13 @@ class GTAPVariableSnapshot:
                 data["xwmg"][(region, sector, qualifier)] = value
             elif variable == "pwmg" and region and sector and qualifier:
                 data["pwmg"][(region, sector, qualifier)] = value
-            elif variable == "xmgm" and region and sector and qualifier and margin_commodity:
+            elif (
+                variable == "xmgm"
+                and region
+                and sector
+                and qualifier
+                and margin_commodity
+            ):
                 data["xmgm"][(margin_commodity, region, sector, qualifier)] = value
             elif variable == "xtmg" and sector:
                 data["xtmg"][(sector,)] = value
@@ -1101,7 +1224,9 @@ class GTAPVariableSnapshot:
                 ytax_by_region[region] += value
 
         for region in set(data["regy"]) | set(ytax_by_region):
-            data["facty"][region] = float(data["regy"].get(region, 0.0)) - float(ytax_by_region.get(region, 0.0))
+            data["facty"][region] = float(data["regy"].get(region, 0.0)) - float(
+                ytax_by_region.get(region, 0.0)
+            )
 
         return cls(**data)
 
@@ -1116,10 +1241,10 @@ class GTAPParityComparison:
     n_mismatches: int
     max_abs_diff: float
     max_rel_diff: float
-    mismatches: List[Dict[str, Any]]
-    summary: Dict[str, Any]
+    mismatches: list[dict[str, Any]]
+    summary: dict[str, Any]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a dictionary."""
         return asdict(self)
 
@@ -1143,10 +1268,10 @@ class GTAPGAMSReference:
     def load(
         cls,
         gdx_path: Path,
-        sets: Optional[GTAPSets] = None,
+        sets: GTAPSets | None = None,
         *,
         solution_year: int | str = 1,
-    ) -> "GTAPGAMSReference":
+    ) -> GTAPGAMSReference:
         """Load a reference snapshot from CSV or GDX."""
         gdx_path = Path(gdx_path)
 
@@ -1311,7 +1436,9 @@ def normalize_gams_snapshot_against_benchmark(
         scale = vtwr_margin.get((margin, region, commodity, partner), 0.0)
         if scale <= 1e-10:
             scale = benchmark.vtwr.get((margin, commodity, region, partner), 0.0)
-        normalized.xmgm[(margin, region, commodity, partner)] = _safe_ratio(value, scale)
+        normalized.xmgm[(margin, region, commodity, partner)] = _safe_ratio(
+            value, scale
+        )
 
     for (margin,), value in snapshot.xtmg.items():
         vtwr_margin = getattr(benchmark, "vtwr_margin", {})
@@ -1339,20 +1466,31 @@ def normalize_gams_snapshot_against_benchmark(
     for (region, factor), value in snapshot.xft.items():
         scale = benchmark.vfb.get((region, factor), 0.0)
         if scale <= 1e-10:
-            scale = sum(benchmark.vfm.get((region, factor, activity), 0.0) for activity in sets.a)
+            scale = sum(
+                benchmark.vfm.get((region, factor, activity), 0.0)
+                for activity in sets.a
+            )
         normalized.xft[(region, factor)] = _safe_ratio(value, scale)
 
     for (region, commodity), value in snapshot.xc.items():
-        normalized.xc[(region, commodity)] = _safe_ratio(value, benchmark.vpm.get((region, commodity), 0.0))
+        normalized.xc[(region, commodity)] = _safe_ratio(
+            value, benchmark.vpm.get((region, commodity), 0.0)
+        )
 
     for (region, commodity), value in snapshot.xg.items():
-        normalized.xg[(region, commodity)] = _safe_ratio(value, benchmark.vgm.get((region, commodity), 0.0))
+        normalized.xg[(region, commodity)] = _safe_ratio(
+            value, benchmark.vgm.get((region, commodity), 0.0)
+        )
 
     for (region, commodity), value in snapshot.xi.items():
-        normalized.xi[(region, commodity)] = _safe_ratio(value, benchmark.vim.get((region, commodity), 0.0))
+        normalized.xi[(region, commodity)] = _safe_ratio(
+            value, benchmark.vim.get((region, commodity), 0.0)
+        )
 
     for region, value in snapshot.regy.items():
-        normalized.regy[region] = _safe_ratio(value, _regional_income_scale(benchmark, sets, region))
+        normalized.regy[region] = _safe_ratio(
+            value, _regional_income_scale(benchmark, sets, region)
+        )
 
     for region, value in snapshot.yc.items():
         scale = sum(benchmark.vpm.get((region, commodity), 0.0) for commodity in sets.i)
@@ -1370,16 +1508,16 @@ def normalize_gams_snapshot_against_benchmark(
 
 
 def compare_variable_groups(
-    python: Dict,
-    gams: Dict,
+    python: dict,
+    gams: dict,
     group_name: str,
     tolerance: float = 1e-6,
-) -> Tuple[int, int, float, List[Dict[str, Any]]]:
+) -> tuple[int, int, float, list[dict[str, Any]]]:
     """Compare one variable group."""
     n_compared = 0
     n_mismatches = 0
     max_diff = 0.0
-    mismatches: List[Dict[str, Any]] = []
+    mismatches: list[dict[str, Any]] = []
 
     all_keys = set(python.keys()) | set(gams.keys())
     for key in all_keys:
@@ -1412,27 +1550,66 @@ def compare_variable_groups(
 def _detect_degenerate_groups(
     py_snapshot: GTAPVariableSnapshot,
     gams_snapshot: GTAPVariableSnapshot,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Detect blocks that collapsed near zero in the Python solution."""
 
-    def collapse_ratio(py_values: Dict[Any, float], gams_values: Dict[Any, float]) -> tuple[int, int, float]:
-        relevant = [key for key, gams_value in gams_values.items() if abs(gams_value) > 1e-8]
+    def collapse_ratio(
+        py_values: dict[Any, float], gams_values: dict[Any, float]
+    ) -> tuple[int, int, float]:
+        relevant = [
+            key for key, gams_value in gams_values.items() if abs(gams_value) > 1e-8
+        ]
         if not relevant:
             return 0, 0, 0.0
         collapsed = sum(1 for key in relevant if abs(py_values.get(key, 0.0)) <= 1e-6)
         return collapsed, len(relevant), collapsed / len(relevant)
 
     quantity_groups = [
-        "xp", "x", "xs", "xds", "xd", "xe", "xw", "xmt", "xet", "xaa",
-        "xwmg", "xmgm", "xtmg", "xf", "xft", "xc", "xg", "xi", "regy", "yc", "yg", "yi",
+        "xp",
+        "x",
+        "xs",
+        "xds",
+        "xd",
+        "xe",
+        "xw",
+        "xmt",
+        "xet",
+        "xaa",
+        "xwmg",
+        "xmgm",
+        "xtmg",
+        "xf",
+        "xft",
+        "xc",
+        "xg",
+        "xi",
+        "regy",
+        "yc",
+        "yg",
+        "yi",
     ]
     price_groups = [
-        "px", "pp", "ps", "pd", "pa", "paa", "pdp", "pmt", "pmcif",
-        "pet", "pe", "pefob", "pwmg", "ptmg", "pf", "pft", "pabs",
+        "px",
+        "pp",
+        "ps",
+        "pd",
+        "pa",
+        "paa",
+        "pdp",
+        "pmt",
+        "pmcif",
+        "pet",
+        "pe",
+        "pefob",
+        "pwmg",
+        "ptmg",
+        "pf",
+        "pft",
+        "pabs",
     ]
 
-    collapsed_quantities: Dict[str, float] = {}
-    collapsed_prices: Dict[str, float] = {}
+    collapsed_quantities: dict[str, float] = {}
+    collapsed_prices: dict[str, float] = {}
     total_quantity_collapsed = 0
     total_quantity_relevant = 0
     total_price_collapsed = 0
@@ -1462,14 +1639,11 @@ def _detect_degenerate_groups(
         else 0.0
     )
     price_ratio = (
-        total_price_collapsed / total_price_relevant
-        if total_price_relevant
-        else 0.0
+        total_price_collapsed / total_price_relevant if total_price_relevant else 0.0
     )
 
-    dead_numeraire_suspected = (
-        quantity_ratio >= 0.5
-        and any(group in collapsed_prices for group in ("pf", "pft"))
+    dead_numeraire_suspected = quantity_ratio >= 0.5 and any(
+        group in collapsed_prices for group in ("pf", "pft")
     )
 
     return {
@@ -1486,7 +1660,7 @@ def compare_gtap_gams_parity(
     gams_reference: GTAPGAMSReference,
     tolerance: float = 1e-6,
     *,
-    benchmark: Optional[GTAPBenchmarkValues] = None,
+    benchmark: GTAPBenchmarkValues | None = None,
     normalize_reference: bool = False,
 ) -> GTAPParityComparison:
     """Compare a Python model or snapshot against a GAMS reference."""
@@ -1505,7 +1679,7 @@ def compare_gtap_gams_parity(
             gams_reference.sets,
         )
 
-    all_mismatches: List[Dict[str, Any]] = []
+    all_mismatches: list[dict[str, Any]] = []
     n_compared = 0
     n_mismatches = 0
     max_abs_diff = 0.0
@@ -1631,7 +1805,7 @@ def _build_standard_gtap_params(
     *,
     benchmark_year: str,
     solution_year: str,
-) -> Tuple[GTAPSets, GTAPParameters]:
+) -> tuple[GTAPSets, GTAPParameters]:
     """Build GTAP sets and parameters from a split standard_gtap_7 bundle."""
     sets = GTAPSets()
     sets.load_from_gdx(bundle.sets_gdx)
@@ -1690,11 +1864,15 @@ def _build_standard_gtap_params(
             solution_year=resolved_solution_year,
         )
     params.shares.calibrate(params.benchmark, params.elasticities, sets)
-    params.calibrated.calibrate_from_benchmark(params.benchmark, params.elasticities, sets)
+    params.calibrated.calibrate_from_benchmark(
+        params.benchmark, params.elasticities, sets
+    )
     if resolved_benchmark_csv:
         from equilibria.templates.gtap.gtap_equilibrium import GTAPEquilibriumSnapshot
 
-        snapshot = GTAPEquilibriumSnapshot.from_csv(resolved_benchmark_csv, year=int(resolved_solution_year))
+        snapshot = GTAPEquilibriumSnapshot.from_csv(
+            resolved_benchmark_csv, year=int(resolved_solution_year)
+        )
         params.apply_equilibrium_snapshot(snapshot)
     return sets, params
 
@@ -1704,16 +1882,16 @@ class GTAPParityRunner:
 
     def __init__(
         self,
-        gdx_file: Optional[Path] = None,
-        gams_results_gdx: Optional[Path] = None,
+        gdx_file: Path | None = None,
+        gams_results_gdx: Path | None = None,
         *,
-        sets_gdx: Optional[Path] = None,
-        elasticities_gdx: Optional[Path] = None,
-        benchmark_csv: Optional[Path] = None,
-        benchmark_gdx: Optional[Path] = None,
+        sets_gdx: Path | None = None,
+        elasticities_gdx: Path | None = None,
+        benchmark_csv: Path | None = None,
+        benchmark_gdx: Path | None = None,
         closure: str = "gtap_standard",
         solver: str = "ipopt",
-        solver_options: Optional[Dict[str, Any]] = None,
+        solver_options: dict[str, Any] | None = None,
         tolerance: float = 1e-6,
         benchmark_year: int | str = 2011,
         solution_year: int | str = 1,
@@ -1733,7 +1911,7 @@ class GTAPParityRunner:
         self.gdx_file = Path(gdx_file) if gdx_file else None
         self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx else None
 
-        self.bundle: Optional[GTAPDataBundle] = None
+        self.bundle: GTAPDataBundle | None = None
         if sets_gdx:
             self.bundle = GTAPDataBundle(
                 sets_gdx=Path(sets_gdx),
@@ -1759,10 +1937,12 @@ class GTAPParityRunner:
             raise ValueError("Provide either gdx_file or sets_gdx")
 
         self.contract = build_gtap_contract({"closure": closure})
-        self.equations = GTAPModelEquations(self.sets, self.params, self.contract.closure)
+        self.equations = GTAPModelEquations(
+            self.sets, self.params, self.contract.closure
+        )
         self.model = self.equations.build_model()
 
-        self.gams_reference: Optional[GTAPGAMSReference] = None
+        self.gams_reference: GTAPGAMSReference | None = None
         if self.gams_results_gdx and self.gams_results_gdx.exists():
             self.gams_reference = GTAPGAMSReference.load(
                 self.gams_results_gdx,
@@ -1789,13 +1969,17 @@ class GTAPParityRunner:
                 )
             solver.apply_solution_hint(reference_hint)
         result = solver.solve()
-        logger.info("Python solve: %s, Walras=%s", result.status.value, result.walras_value)
+        logger.info(
+            "Python solve: %s, Walras=%s", result.status.value, result.walras_value
+        )
         return result
 
-    def run_gams(self, gams_script: Optional[Path] = None) -> GTAPGAMSReference:
+    def run_gams(self, gams_script: Path | None = None) -> GTAPGAMSReference:
         """Return the available GAMS reference."""
         if gams_script and Path(gams_script).exists():
-            raise NotImplementedError("GAMS execution is not implemented in the parity runner")
+            raise NotImplementedError(
+                "GAMS execution is not implemented in the parity runner"
+            )
         if self.gams_reference:
             return self.gams_reference
         raise ValueError("No GAMS reference available")
@@ -1876,7 +2060,7 @@ class GTAPParityRunner:
 
 def load_gtap_gams_reference(
     gdx_path: Path,
-    sets: Optional[GTAPSets] = None,
+    sets: GTAPSets | None = None,
     *,
     solution_year: int | str = 1,
 ) -> GTAPGAMSReference:
@@ -1885,20 +2069,20 @@ def load_gtap_gams_reference(
 
 
 def run_gtap_parity_test(
-    gdx_file: Optional[Path] = None,
-    gams_results_gdx: Optional[Path] = None,
+    gdx_file: Path | None = None,
+    gams_results_gdx: Path | None = None,
     *,
-    sets_gdx: Optional[Path] = None,
-    elasticities_gdx: Optional[Path] = None,
-    benchmark_csv: Optional[Path] = None,
-    benchmark_gdx: Optional[Path] = None,
+    sets_gdx: Path | None = None,
+    elasticities_gdx: Path | None = None,
+    benchmark_csv: Path | None = None,
+    benchmark_gdx: Path | None = None,
     closure: str = "gtap_standard",
-    solver_options: Optional[Dict[str, Any]] = None,
+    solver_options: dict[str, Any] | None = None,
     tolerance: float = 1e-6,
     benchmark_year: int | str = 2011,
     solution_year: int | str = 1,
     normalize_reference: bool = True,
-    output_file: Optional[Path] = None,
+    output_file: Path | None = None,
 ) -> GTAPParityComparison:
     """Convenience wrapper for a parity run."""
     runner = GTAPParityRunner(

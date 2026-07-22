@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-
 IEEM_RAW_GROUPS: list[tuple[str, str]] = [
     ("actividades productivas", "act_agr"),
     ("bienes y servicios", "com_agr"),
@@ -46,4 +45,6 @@ def write_sample_ieem_raw_excel(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        pd.DataFrame(raw).to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+        pd.DataFrame(raw).to_excel(
+            writer, sheet_name=sheet_name, index=False, header=False
+        )

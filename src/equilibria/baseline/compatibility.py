@@ -67,8 +67,12 @@ class BaselineCompatibilityReport:
             "rel_tol": self.rel_tol,
             "manifest_path": self.manifest_path,
             "checks": [c.to_dict() for c in self.checks],
-            "state_anchors": {k: _safe_scalar(v) for k, v in self.state_anchors.items()},
-            "results_anchors": {k: _safe_scalar(v) for k, v in self.results_anchors.items()},
+            "state_anchors": {
+                k: _safe_scalar(v) for k, v in self.state_anchors.items()
+            },
+            "results_anchors": {
+                k: _safe_scalar(v) for k, v in self.results_anchors.items()
+            },
         }
 
     def summary(self) -> str:
@@ -152,7 +156,11 @@ def _read_symbol_records(
     gams_slice: str,
     gdxdump_bin: str,
 ) -> dict[tuple[str, ...], float]:
-    gdxdump_path = shutil.which(gdxdump_bin) if Path(gdxdump_bin).name == gdxdump_bin else gdxdump_bin
+    gdxdump_path = (
+        shutil.which(gdxdump_bin)
+        if Path(gdxdump_bin).name == gdxdump_bin
+        else gdxdump_bin
+    )
     records: list[tuple[tuple[str, ...], float]] = []
     if gdxdump_path and Path(gdxdump_path).exists():
         try:
@@ -281,7 +289,11 @@ def _extract_parameters_gdx_map(
     symbol: str,
     gdxdump_bin: str,
 ) -> dict[tuple[str, ...], float]:
-    gdxdump_path = shutil.which(gdxdump_bin) if Path(gdxdump_bin).name == gdxdump_bin else gdxdump_bin
+    gdxdump_path = (
+        shutil.which(gdxdump_bin)
+        if Path(gdxdump_bin).name == gdxdump_bin
+        else gdxdump_bin
+    )
     records: list[tuple[tuple[str, ...], float]] = []
     if gdxdump_path and Path(gdxdump_path).exists():
         try:
@@ -327,7 +339,9 @@ def _compare_sparse_maps(
     return mismatch_count == 0, mismatch_count, max_abs, max_rel
 
 
-def _compare_float(expected: float, actual: float, rel_tol: float) -> tuple[bool, float, float]:
+def _compare_float(
+    expected: float, actual: float, rel_tol: float
+) -> tuple[bool, float, float]:
     abs_delta = abs(actual - expected)
     rel_delta = abs_delta / max(abs(expected), abs(actual), 1.0)
     passed = (abs_delta <= 1e-6) or (rel_delta <= rel_tol)
@@ -391,7 +405,9 @@ def evaluate_strict_gams_baseline_compatibility(
     if slice_name == "base":
         for key, state_value in state_anchors.items():
             results_value = results_anchors.get(key, 0.0)
-            passed, abs_delta, rel_delta = _compare_float(state_value, results_value, rel_tol)
+            passed, abs_delta, rel_delta = _compare_float(
+                state_value, results_value, rel_tol
+            )
             checks.append(
                 BaselineCheckResult(
                     code=f"BSL_ANCHOR_{key}",
@@ -411,7 +427,9 @@ def evaluate_strict_gams_baseline_compatibility(
         )
         for key, state_value in state_anchors.items():
             results_value = base_anchors.get(key, 0.0)
-            passed, abs_delta, rel_delta = _compare_float(state_value, results_value, rel_tol)
+            passed, abs_delta, rel_delta = _compare_float(
+                state_value, results_value, rel_tol
+            )
             checks.append(
                 BaselineCheckResult(
                     code=f"BSL_BASE_ANCHOR_{key}",
@@ -522,7 +540,8 @@ def evaluate_strict_gams_baseline_compatibility(
         checks.append(
             BaselineCheckResult(
                 code="BSL_MANIFEST_SLICE",
-                passed=manifest_obj.gams_slice in ({slice_name, "base"} if slice_name != "base" else {"base"}),
+                passed=manifest_obj.gams_slice
+                in ({slice_name, "base"} if slice_name != "base" else {"base"}),
                 message="Manifest gams slice is compatible with requested strict_gams slice",
                 expected="base or " + slice_name if slice_name != "base" else "base",
                 actual=manifest_obj.gams_slice,
@@ -552,11 +571,14 @@ def evaluate_strict_gams_baseline_compatibility(
                     )
                 )
             else:
-                current_parameters_hash = file_sha256(parameters_path) if parameters_path.exists() else ""
+                current_parameters_hash = (
+                    file_sha256(parameters_path) if parameters_path.exists() else ""
+                )
                 checks.append(
                     BaselineCheckResult(
                         code="BSL_PARAMETERS_HASH",
-                        passed=current_parameters_hash == manifest_obj.parameters_gdx_sha256,
+                        passed=current_parameters_hash
+                        == manifest_obj.parameters_gdx_sha256,
                         message="Parameters.gdx hash matches manifest",
                         expected=manifest_obj.parameters_gdx_sha256,
                         actual=current_parameters_hash,
@@ -625,7 +647,9 @@ def evaluate_strict_gams_baseline_compatibility(
 
         for key, expected_value in manifest_obj.state_anchors.items():
             actual_value = float(state_anchors.get(key, 0.0))
-            passed, abs_delta, rel_delta = _compare_float(expected_value, actual_value, rel_tol)
+            passed, abs_delta, rel_delta = _compare_float(
+                expected_value, actual_value, rel_tol
+            )
             checks.append(
                 BaselineCheckResult(
                     code=f"BSL_MANIFEST_ANCHOR_{key}",

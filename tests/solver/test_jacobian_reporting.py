@@ -95,4 +95,7 @@ def test_evaluate_jacobian_mode_gate_flags_worse_analytic_result() -> None:
 
     assert gate["passed"] is False
     assert any("finite_difference_eval_count" in msg for msg in gate["failures"])
-    assert any("analytic parity failed while numeric parity passed" in msg for msg in gate["failures"])
+    assert any(
+        "analytic parity failed while numeric parity passed" in msg
+        for msg in gate["failures"]
+    )

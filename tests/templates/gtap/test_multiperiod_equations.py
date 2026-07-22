@@ -1,14 +1,17 @@
 # tests/templates/gtap/test_multiperiod_equations.py
-import sys, pathlib
+import pathlib
+import sys
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
-from test_multiperiod_sets import _load_3x3_params
 from pyomo.environ import value as pv
+from test_multiperiod_sets import _load_3x3_params
 
 
 def test_intra_eq_matches_single_period_at_base():
-    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
     from equilibria.templates.gtap import GTAPModelEquations
+    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+
     p = _load_3x3_params()
     rr = list(p.sets.r)[-1]
     sp = GTAPModelEquations(p.sets, p, None, residual_region=rr).build_model()

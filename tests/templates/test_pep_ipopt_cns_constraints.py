@@ -19,7 +19,6 @@ from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibrato
 from equilibria.templates.pep_constraint_jacobian import PEPConstraintJacobianHarness
 from equilibria.templates.pep_model_solver_ipopt import CGEProblem, IPOPTSolver
 
-
 ROOT = Path(__file__).resolve().parents[2]
 PEP2_DATA = ROOT / "src/equilibria/templates/reference/pep2/data"
 
@@ -120,9 +119,9 @@ def test_ipopt_contract_equation_include_filters_hard_constraints() -> None:
     )
 
     hard = solver._build_hard_constraints()
-    expected = set(f"EQ85_{l}" for l in state.sets["L"]) | set(
+    expected = {f"EQ85_{l}" for l in state.sets["L"]} | {
         f"EQ86_{k}" for k in state.sets["K"]
-    )
+    }
 
     assert set(hard) == expected
 
@@ -142,7 +141,9 @@ def test_ipopt_activation_masks_all_active_affect_equations_and_bounds() -> None
     )
 
     inactive_import = next(
-        i for i in state.sets["I"] if abs(default_solver.params.get("IMO0", {}).get(i, 0.0)) <= 1e-12
+        i
+        for i in state.sets["I"]
+        if abs(default_solver.params.get("IMO0", {}).get(i, 0.0)) <= 1e-12
     )
 
     default_hard = default_solver._build_hard_constraints()
@@ -185,7 +186,9 @@ def test_ipopt_bounds_follow_gams_domains_for_nonfixed_variables() -> None:
 
 
 def test_ipopt_square_feasible_messages_are_accepted() -> None:
-    assert IPOPTSolver._ipopt_reports_square_feasible("Feasible point for square problem found.")
+    assert IPOPTSolver._ipopt_reports_square_feasible(
+        "Feasible point for square problem found."
+    )
     assert IPOPTSolver._ipopt_reports_square_feasible("Solved To Acceptable Level")
     assert not IPOPTSolver._ipopt_reports_square_feasible(
         "Maximum number of iterations exceeded"
@@ -284,7 +287,10 @@ def test_constraint_harness_uses_analytic_eq66_derivatives() -> None:
     values = harness.evaluate_jacobian_values(x0)
     assert rows.tolist() == [0, 0]
 
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     ttip = solver.equations.params.get("ttip", {}).get("agr", 0.0)
 
@@ -296,7 +302,9 @@ def test_constraint_harness_uses_analytic_eq66_derivatives() -> None:
 
 def test_constraint_harness_numeric_mode_uses_finite_differences_for_eq66() -> None:
     state = _build_dynamic_sam_excel()
-    solver = IPOPTSolver(state, tolerance=1e-6, max_iterations=1, config={"jacobian_mode": "numeric"})
+    solver = IPOPTSolver(
+        state, tolerance=1e-6, max_iterations=1, config={"jacobian_mode": "numeric"}
+    )
 
     vars0 = solver._create_initial_guess()
     x0 = solver._variables_to_array(vars0)
@@ -322,7 +330,9 @@ def test_constraint_harness_numeric_mode_uses_finite_differences_for_eq66() -> N
 
 def test_ipopt_solver_reports_jacobian_stats() -> None:
     state = _build_base_gdx()
-    solver = IPOPTSolver(state, tolerance=1e-8, max_iterations=300, config={"jacobian_mode": "analytic"})
+    solver = IPOPTSolver(
+        state, tolerance=1e-8, max_iterations=300, config={"jacobian_mode": "analytic"}
+    )
 
     result = solver.solve_ipopt()
 
@@ -354,14 +364,17 @@ def test_constraint_harness_uses_analytic_eq95_derivatives() -> None:
     values = harness.evaluate_jacobian_values(x0)
     assert rows.tolist() == [0, 0, 0]
 
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     pixgvt = vars0.PIXGVT
 
     assert set(observed) == {"G_REAL", "G", "PIXGVT"}
     assert observed["G_REAL"] == pytest.approx(1.0 / scale)
     assert observed["G"] == pytest.approx(-(1.0 / pixgvt) / scale)
-    assert observed["PIXGVT"] == pytest.approx((vars0.G / (pixgvt ** 2)) / scale)
+    assert observed["PIXGVT"] == pytest.approx((vars0.G / (pixgvt**2)) / scale)
 
 
 def test_constraint_harness_scales_analytic_eq79_derivatives() -> None:
@@ -389,12 +402,22 @@ def test_constraint_harness_scales_analytic_eq79_derivatives() -> None:
     harness.evaluate_constraints(x_scaled)
     rows, cols = harness.jacobian_structure()
     values = harness.evaluate_jacobian_values(x_scaled)
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     vars_scaled = pep_array_to_variables(x_scaled, solver.sets)
 
     assert rows.tolist() == [0, 0, 0, 0, 0, 0]
-    assert set(observed) == {"PC[agr]", "Q[agr]", "PM[agr]", "IM[agr]", "PD[agr]", "DD[agr]"}
+    assert set(observed) == {
+        "PC[agr]",
+        "Q[agr]",
+        "PM[agr]",
+        "IM[agr]",
+        "PD[agr]",
+        "DD[agr]",
+    }
     assert observed["PC[agr]"] == pytest.approx(vars_scaled.Q["agr"] / scale)
     assert observed["Q[agr]"] == pytest.approx(vars_scaled.PC["agr"] / scale)
     assert observed["PM[agr]"] == pytest.approx(-vars_scaled.IM["agr"] / scale)
@@ -423,7 +446,10 @@ def test_constraint_harness_uses_analytic_eq64_derivatives() -> None:
     harness.evaluate_constraints(x0)
     rows, cols = harness.jacobian_structure()
     values = harness.evaluate_jacobian_values(x0)
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     beta_m = solver.equations.params.get("beta_M", {}).get("agr", 0.0)
     sigma_m = solver.equations.params.get("sigma_M", {}).get("agr", 2.0)
@@ -460,7 +486,10 @@ def test_constraint_harness_uses_analytic_eq63_derivatives() -> None:
     harness.evaluate_constraints(x0)
     rows, cols = harness.jacobian_structure()
     values = harness.evaluate_jacobian_values(x0)
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     rho_m = solver.equations.params.get("rho_M", {}).get("agr", -0.5)
     b_m = solver.equations.params.get("B_M", {}).get("agr", 1.0)
@@ -472,8 +501,12 @@ def test_constraint_harness_uses_analytic_eq63_derivatives() -> None:
 
     assert set(observed) == {"Q[agr]", "IM[agr]", "DD[agr]"}
     assert observed["Q[agr]"] == pytest.approx(1.0 / scale)
-    assert observed["IM[agr]"] == pytest.approx(-(coeff * beta_m * (im_i ** (-rho_m - 1.0))) / scale)
-    assert observed["DD[agr]"] == pytest.approx(-(coeff * (1.0 - beta_m) * (dd_i ** (-rho_m - 1.0))) / scale)
+    assert observed["IM[agr]"] == pytest.approx(
+        -(coeff * beta_m * (im_i ** (-rho_m - 1.0))) / scale
+    )
+    assert observed["DD[agr]"] == pytest.approx(
+        -(coeff * (1.0 - beta_m) * (dd_i ** (-rho_m - 1.0))) / scale
+    )
 
 
 def test_constraint_harness_uses_analytic_eq3_derivatives() -> None:
@@ -496,7 +529,10 @@ def test_constraint_harness_uses_analytic_eq3_derivatives() -> None:
     harness.evaluate_constraints(x0)
     rows, cols = harness.jacobian_structure()
     values = harness.evaluate_jacobian_values(x0)
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     rho_va = solver.equations.params.get("rho_VA", {}).get("agr", -1.0)
     beta_va = solver.equations.params.get("beta_VA", {}).get("agr", 0.5)
@@ -508,8 +544,12 @@ def test_constraint_harness_uses_analytic_eq3_derivatives() -> None:
 
     assert set(observed) == {"VA[agr]", "LDC[agr]", "KDC[agr]"}
     assert observed["VA[agr]"] == pytest.approx(1.0 / scale)
-    assert observed["LDC[agr]"] == pytest.approx(-(coeff * beta_va * (ldc_j ** (-rho_va - 1.0))) / scale)
-    assert observed["KDC[agr]"] == pytest.approx(-(coeff * (1.0 - beta_va) * (kdc_j ** (-rho_va - 1.0))) / scale)
+    assert observed["LDC[agr]"] == pytest.approx(
+        -(coeff * beta_va * (ldc_j ** (-rho_va - 1.0))) / scale
+    )
+    assert observed["KDC[agr]"] == pytest.approx(
+        -(coeff * (1.0 - beta_va) * (kdc_j ** (-rho_va - 1.0))) / scale
+    )
 
 
 def test_constraint_harness_uses_analytic_eq41_derivatives() -> None:
@@ -532,15 +572,24 @@ def test_constraint_harness_uses_analytic_eq41_derivatives() -> None:
     harness.evaluate_constraints(x0)
     rows, cols = harness.jacobian_structure()
     values = harness.evaluate_jacobian_values(x0)
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     ttim = solver.equations.params.get("ttim", {}).get("agr", 0.0)
 
     assert set(observed) == {"TIM[agr]", "e", "PWM[agr]", "IM[agr]"}
     assert observed["TIM[agr]"] == pytest.approx(1.0 / scale)
-    assert observed["e"] == pytest.approx(-(ttim * vars0.PWM["agr"] * vars0.IM["agr"]) / scale)
-    assert observed["PWM[agr]"] == pytest.approx(-(ttim * vars0.e * vars0.IM["agr"]) / scale)
-    assert observed["IM[agr]"] == pytest.approx(-(ttim * vars0.e * vars0.PWM["agr"]) / scale)
+    assert observed["e"] == pytest.approx(
+        -(ttim * vars0.PWM["agr"] * vars0.IM["agr"]) / scale
+    )
+    assert observed["PWM[agr]"] == pytest.approx(
+        -(ttim * vars0.e * vars0.IM["agr"]) / scale
+    )
+    assert observed["IM[agr]"] == pytest.approx(
+        -(ttim * vars0.e * vars0.PWM["agr"]) / scale
+    )
 
 
 def test_constraint_harness_uses_analytic_eq52_derivatives() -> None:
@@ -563,14 +612,21 @@ def test_constraint_harness_uses_analytic_eq52_derivatives() -> None:
     harness.evaluate_constraints(x0)
     rows, cols = harness.jacobian_structure()
     values = harness.evaluate_jacobian_values(x0)
-    observed = {names[col]: value for col, value in zip(cols.tolist(), values.tolist(), strict=False)}
+    observed = {
+        names[col]: value
+        for col, value in zip(cols.tolist(), values.tolist(), strict=False)
+    }
     scale = float(harness._constraint_scale[0])
     gamma = solver.equations.params.get("gamma_LES", {}).get(("agr", "hrp"), 0.0)
 
     assert observed["C[agr,hrp]"] == pytest.approx(vars0.PC["agr"] / scale)
     assert observed["CTH[hrp]"] == pytest.approx(-gamma / scale)
-    assert observed["PC[agr]"] == pytest.approx((vars0.C[("agr", "hrp")] + (gamma - 1.0) * vars0.CMIN[("agr", "hrp")]) / scale)
-    assert observed["CMIN[agr,hrp]"] == pytest.approx(((gamma - 1.0) * vars0.PC["agr"]) / scale)
+    assert observed["PC[agr]"] == pytest.approx(
+        (vars0.C[("agr", "hrp")] + (gamma - 1.0) * vars0.CMIN[("agr", "hrp")]) / scale
+    )
+    assert observed["CMIN[agr,hrp]"] == pytest.approx(
+        ((gamma - 1.0) * vars0.PC["agr"]) / scale
+    )
 
 
 def test_constraint_harness_covers_all_hard_constraints_for_default_benchmark() -> None:
@@ -591,7 +647,11 @@ def test_constraint_harness_covers_all_hard_constraints_for_default_benchmark() 
     )
 
     vars_bench = pep_array_to_variables(x0, solver.sets)
-    missing = [name for name in hard if harness._analytic_constraint_derivatives(name, vars_bench) is None]
+    missing = [
+        name
+        for name in hard
+        if harness._analytic_constraint_derivatives(name, vars_bench) is None
+    ]
 
     assert missing == []
 
@@ -641,7 +701,17 @@ def test_ipopt_bounds_config_can_release_closure_fixed_symbol() -> None:
         state,
         contract={
             "closure": {
-                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "fixed": [
+                    "G",
+                    "CAB",
+                    "KS",
+                    "LS",
+                    "PWM",
+                    "PWX",
+                    "CMIN",
+                    "VSTK",
+                    "TR_SELF",
+                ],
                 "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
             },
             "bounds": {
@@ -732,7 +802,17 @@ def test_ipopt_contract_supports_ks_fixed_closure_bounds_mobile_capital() -> Non
         state,
         contract={
             "closure": {
-                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "fixed": [
+                    "G",
+                    "CAB",
+                    "KS",
+                    "LS",
+                    "PWM",
+                    "PWX",
+                    "CMIN",
+                    "VSTK",
+                    "TR_SELF",
+                ],
                 "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
                 "capital_mobility": "mobile",
             }
@@ -755,7 +835,17 @@ def test_ipopt_contract_maps_ks_to_kd_when_capital_is_sector_specific() -> None:
         state,
         contract={
             "closure": {
-                "fixed": ["G", "CAB", "KS", "LS", "PWM", "PWX", "CMIN", "VSTK", "TR_SELF"],
+                "fixed": [
+                    "G",
+                    "CAB",
+                    "KS",
+                    "LS",
+                    "PWM",
+                    "PWX",
+                    "CMIN",
+                    "VSTK",
+                    "TR_SELF",
+                ],
                 "endogenous": ["IT", "SH", "SF", "SG", "SROW"],
                 "capital_mobility": "sector_specific",
             }

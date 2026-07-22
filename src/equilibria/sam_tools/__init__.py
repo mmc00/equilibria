@@ -20,6 +20,7 @@ from equilibria.sam_tools.api import (
     run_ieem_to_pep,
     run_mip_to_sam,
 )
+from equilibria.sam_tools.audit import AnchorSpec, AuditResult, audit_sam
 from equilibria.sam_tools.balancing import (
     MIPBalanceResult,
     RASBalancer,
@@ -45,7 +46,6 @@ from equilibria.sam_tools.mip_loader import (
     mip_summary,
     validate_mip_balances,
 )
-from equilibria.sam_tools.audit import AnchorSpec, AuditResult, audit_sam
 from equilibria.sam_tools.models import Sam
 from equilibria.sam_tools.parsers import export_sam, parse_sam
 

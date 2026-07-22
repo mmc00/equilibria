@@ -51,7 +51,7 @@ class Set(SymbolBase):
     sym_type: SymbolType = SymbolType.set
     elements: list[list[str]] = Field(
         default_factory=list,
-        description="Set elements (each element is a list of keys)"
+        description="Set elements (each element is a list of keys)",
     )
 
 
@@ -74,8 +74,7 @@ class Parameter(SymbolBase):
 
     sym_type: SymbolType = SymbolType.parameter
     records: list[tuple[list[str], float]] = Field(
-        default_factory=list,
-        description="Parameter records: (keys, value)"
+        default_factory=list, description="Parameter records: (keys, value)"
     )
 
 
@@ -99,7 +98,7 @@ class Variable(SymbolBase):
     sym_type: SymbolType = SymbolType.variable
     records: list[tuple[list[str], tuple[float, float, float, float, float]]] = Field(
         default_factory=list,
-        description="Variable records: (keys, (level, marginal, lower, upper, scale))"
+        description="Variable records: (keys, (level, marginal, lower, upper, scale))",
     )
 
 
@@ -114,5 +113,5 @@ class Equation(SymbolBase):
     sym_type: SymbolType = SymbolType.equation
     records: list[tuple[list[str], tuple[float, float, float, float, float]]] = Field(
         default_factory=list,
-        description="Equation records: (keys, (level, marginal, lower, upper, scale))"
+        description="Equation records: (keys, (level, marginal, lower, upper, scale))",
     )

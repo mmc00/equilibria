@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from tests.sam_tools.fixtures import IEEM_RAW_GROUPS, write_sample_ieem_raw_excel
 
 from equilibria.sam_tools.manual_pipeline import run_from_excel
 from equilibria.sam_tools.models import Sam
-from equilibria.sam_tools.sam_transforms import create_x_block_on_sam, convert_exports_to_x_on_sam
-from tests.sam_tools.fixtures import IEEM_RAW_GROUPS, write_sample_ieem_raw_excel
+from equilibria.sam_tools.sam_transforms import (
+    convert_exports_to_x_on_sam,
+    create_x_block_on_sam,
+)
 
 
 def test_manual_pipeline_runs_on_fixture(tmp_path) -> None:
@@ -27,7 +30,11 @@ def test_manual_pipeline_runs_on_fixture(tmp_path) -> None:
 def test_create_x_block_adds_export_accounts() -> None:
     keys = [("I", "agr"), ("I", "ser")]
     matrix = np.zeros((2, 2), dtype=float)
-    df = pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
+    df = pd.DataFrame(
+        matrix,
+        index=pd.MultiIndex.from_tuples(keys),
+        columns=pd.MultiIndex.from_tuples(keys),
+    )
     sam = Sam(dataframe=df)
 
     result = create_x_block_on_sam(sam)
@@ -41,7 +48,11 @@ def test_convert_exports_moves_value_from_i_to_x() -> None:
     keys = [("I", "agr"), ("X", "agr"), ("J", "agr"), ("AG", "row")]
     n = len(keys)
     matrix = np.zeros((n, n), dtype=float)
-    df = pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
+    df = pd.DataFrame(
+        matrix,
+        index=pd.MultiIndex.from_tuples(keys),
+        columns=pd.MultiIndex.from_tuples(keys),
+    )
     df.loc[("I", "agr"), ("AG", "row")] = 20.0
     df.loc[("J", "agr"), ("I", "agr")] = 20.0
 

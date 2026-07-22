@@ -19,7 +19,9 @@ def test_build_init_strategy_modes() -> None:
     assert CANONICAL_INIT_MODES == ("gams", "excel", "gams_blockwise")
     assert isinstance(build_init_strategy("gams"), StrictGAMSInitializationStrategy)
     assert isinstance(build_init_strategy("excel"), GAMSFlowInitializationStrategy)
-    assert isinstance(build_init_strategy("gams_blockwise"), GAMSBlockwiseInitializationStrategy)
+    assert isinstance(
+        build_init_strategy("gams_blockwise"), GAMSBlockwiseInitializationStrategy
+    )
 
 
 @pytest.mark.parametrize(

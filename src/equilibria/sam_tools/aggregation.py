@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    from equilibria.sam_tools.models import Sam
+    pass
+
 
 def _norm_text(value: str | Iterable[str]) -> str:
     if isinstance(value, tuple):
@@ -20,7 +21,7 @@ def _norm_text_lower(value: str | Iterable[str]) -> str:
     return _norm_text(value).lower()
 
 
-def load_mapping(mapping_path: Path) -> Tuple[dict[str, str], list[str]]:
+def load_mapping(mapping_path: Path) -> tuple[dict[str, str], list[str]]:
     mapping_df = pd.read_excel(mapping_path, sheet_name="mapping")
     required = {"original", "aggregated"}
     if not required.issubset(set(mapping_df.columns)):
@@ -67,6 +68,8 @@ def aggregate_dataframe(
     return aggregated.reindex(index=ordered, columns=ordered, fill_value=0.0)
 
 
-def build_multiindex_labels(labels: Iterable[str], category: str = "RAW") -> Tuple[pd.MultiIndex, list[tuple[str, str]]]:
+def build_multiindex_labels(
+    labels: Iterable[str], category: str = "RAW"
+) -> tuple[pd.MultiIndex, list[tuple[str, str]]]:
     normalized = [(_norm_text(category), _norm_text(label)) for label in labels]
     return pd.MultiIndex.from_tuples(normalized), normalized

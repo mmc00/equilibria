@@ -55,7 +55,9 @@ class LevelsComparisonReport:
 class EquilibriaLevelsExtractor:
     """Extract `val*` levels from Equilibria solved variables/parameters."""
 
-    def __init__(self, vars_obj: PEPModelVariables, params: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, vars_obj: PEPModelVariables, params: dict[str, Any] | None = None
+    ) -> None:
         self.vars_obj = vars_obj
         self.params = params or {}
 
@@ -140,7 +142,9 @@ class GAMSLevelsExtractor:
         return None
 
     @staticmethod
-    def _gdxdump_records(gdxdump_bin: Path, gdx_file: Path, symbol: str) -> list[tuple[tuple[str, ...], float]]:
+    def _gdxdump_records(
+        gdxdump_bin: Path, gdx_file: Path, symbol: str
+    ) -> list[tuple[tuple[str, ...], float]]:
         out = subprocess.check_output(
             [str(gdxdump_bin), str(gdx_file), f"symb={symbol}"],
             text=True,
@@ -215,7 +219,9 @@ class LevelsComparator:
 
                 compared += 1
                 abs_diff = abs(float(py_value) - float(gams_value))
-                rel_diff = abs_diff / max(abs(float(gams_value)), abs(float(py_value)), 1.0)
+                rel_diff = abs_diff / max(
+                    abs(float(gams_value)), abs(float(py_value)), 1.0
+                )
                 if abs_diff > self.abs_tol and rel_diff > self.rel_tol:
                     mismatches.append(
                         {

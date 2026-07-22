@@ -71,12 +71,8 @@ class FinalCalibrationResult(BaseModel):
 
     # GDP measures (lines 678-685)
     GDP_BPO: float = Field(default=0.0, description="GDP at basic prices (GDP_BPO)")
-    GDP_MPO: float = Field(
-        default=0.0, description="GDP at market prices (GDP_MPO)"
-    )
-    GDP_IBO: float = Field(
-        default=0.0, description="GDP by income approach (GDP_IBO)"
-    )
+    GDP_MPO: float = Field(default=0.0, description="GDP at market prices (GDP_MPO)")
+    GDP_IBO: float = Field(default=0.0, description="GDP by income approach (GDP_IBO)")
     GDP_FDO: float = Field(
         default=0.0, description="GDP by expenditure approach (GDP_FDO)"
     )
@@ -103,9 +99,7 @@ class FinalCalibrationResult(BaseModel):
     PIXCONO: float = Field(default=1.0, description="Consumer price index (PIXCONO)")
     PIXGDPO: float = Field(default=1.0, description="GDP deflator (PIXGDPO)")
     PIXGVTO: float = Field(default=1.0, description="Government price index (PIXGVTO)")
-    PIXINVO: float = Field(
-        default=1.0, description="Investment price index (PIXINVO)"
-    )
+    PIXINVO: float = Field(default=1.0, description="Investment price index (PIXINVO)")
 
     # Validation results
     validation_passed: bool = Field(
@@ -202,7 +196,7 @@ class FinalCalibrator:
 
         return {
             "sigma_Y": {(c, h): 1.0 for c in commodities for h in households},
-            "frisch": {h: -2.0 for h in households},
+            "frisch": dict.fromkeys(households, -2.0),
         }
 
     def _get_sam_value(self, *indices) -> float:
@@ -216,7 +210,10 @@ class FinalCalibrator:
                     return float(sam_matrix.get(indices_upper, 0.0))
                 total = 0.0
                 for key, value in sam_matrix.items():
-                    if all(i >= len(indices_upper) or key[i] == indices_upper[i] for i in range(len(indices_upper))):
+                    if all(
+                        i >= len(indices_upper) or key[i] == indices_upper[i]
+                        for i in range(len(indices_upper))
+                    ):
                         total += float(value)
                 return total
 
@@ -348,7 +345,7 @@ class FinalCalibrator:
 
         # Get parameters from VAL_PAR
         sigma_y_raw = self.val_par.get("sigma_Y", {})
-        frisch = self.val_par.get("frisch", {h: -2.0 for h in H})
+        frisch = self.val_par.get("frisch", dict.fromkeys(H, -2.0))
 
         # Assign frisch parameters
         for h in H:
@@ -397,11 +394,11 @@ class FinalCalibrator:
                 gamma = self.result.gamma_LES.get((i, h), 0)
 
                 if pco != 0 and frisch_h != 0:
-                    self.result.CMINO[(i, h)] = co + gamma * (
-                        ctho / (pco * frisch_h)
-                    )
+                    self.result.CMINO[(i, h)] = co + gamma * (ctho / (pco * frisch_h))
 
-        logger.info(f"Calibrated LES parameters for {len(self.result.gamma_LES)} entries")
+        logger.info(
+            f"Calibrated LES parameters for {len(self.result.gamma_LES)} entries"
+        )
 
     def _calibrate_gdp_measures(self) -> None:
         """Calibrate all GDP measures (lines 680-685)."""
@@ -450,9 +447,7 @@ class FinalCalibrator:
             self.trade.PE_FOBO.get(i, 0) * self.trade.EXDO.get(i, 0) for i in I
         )
         imports = sum(
-            self.trade.PWMO.get(i, 1.0)
-            * self.trade.eO
-            * self.trade.IMO.get(i, 0)
+            self.trade.PWMO.get(i, 1.0) * self.trade.eO * self.trade.IMO.get(i, 0)
             for i in I
         )
         self.result.GDP_FDO = domestic_demand + exports - imports

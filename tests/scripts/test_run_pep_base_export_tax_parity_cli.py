@@ -11,7 +11,9 @@ SCRIPT = ROOT / "scripts" / "cli" / "run_pep_base_export_tax_parity.py"
 
 
 def _load_module() -> Any:
-    spec = importlib.util.spec_from_file_location("run_pep_base_export_tax_parity", SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "run_pep_base_export_tax_parity", SCRIPT
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)

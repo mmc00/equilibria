@@ -31,7 +31,9 @@ def test_evaluate_block_gates_fail_fast_stops_first_block():
         "EQ88_agr": 0.0,
         "EQ44": 0.0,
     }
-    out = evaluate_block_gates(residuals, contracts=default_equation_contracts(), fail_fast=True)
+    out = evaluate_block_gates(
+        residuals, contracts=default_equation_contracts(), fail_fast=True
+    )
     assert out["overall_passed"] is False
     assert out["first_failed_block"] == "production_tax_consistency"
     assert len(out["blocks"]) == 1
@@ -46,7 +48,9 @@ def test_evaluate_block_gates_non_fail_fast_reports_all():
         "EQ88_agr": 3.0,
         "WALRAS": 4.0,
     }
-    out = evaluate_block_gates(residuals, contracts=default_equation_contracts(), fail_fast=False)
+    out = evaluate_block_gates(
+        residuals, contracts=default_equation_contracts(), fail_fast=False
+    )
     assert out["overall_passed"] is False
     assert len(out["blocks"]) == len(default_equation_contracts())
     failed = [b for b in out["blocks"] if not b["passed"]]

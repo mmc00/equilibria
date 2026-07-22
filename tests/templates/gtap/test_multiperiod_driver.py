@@ -2,7 +2,9 @@
 #
 # TDD contract: after solve_multiperiod(m, p, None), `m` ITSELF carries solved
 # values satisfying the shock Fisher rows — proving PATH solved `m` (not a slice).
-import sys, pathlib
+import pathlib
+import sys
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 from test_multiperiod_sets import _load_3x3_params
@@ -15,8 +17,9 @@ def _build_mp_model(p):
     esubd/esubt/esubs as the single-period reference model built in
     solve_multiperiod (which calls apply_altertax_elasticities first).
     """
-    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+
     p_alt = apply_altertax_elasticities(p, in_place=False)
     rr = list(p_alt.sets.r)[-1]
     mp = GTAPMultiPeriodModel(p_alt.sets, p_alt, None, residual_region=rr)
@@ -31,6 +34,7 @@ def _build_mp_model(p):
 def test_driver_runs_three_periods():
     """Basic smoke test: driver returns codes for all 3 periods."""
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
     p = _load_3x3_params()
     m = _build_mp_model(p)
     res = solve_multiperiod(m, p, None)
@@ -50,6 +54,7 @@ def test_solve_multiperiod_solves_m_not_slices():
     and not just vacuously satisfied by default-init vars.
     """
     from pyomo.environ import value as pyo_value
+
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     p = _load_3x3_params()
@@ -90,7 +95,7 @@ def test_solve_multiperiod_solves_m_not_slices():
 
             # Verify rgdpmp[r,'shock'] is non-trivially solved (not stuck at 1.0 init).
             rgdp_shock = pyo_value(m.rgdpmp[r, "shock"])
-            rgdp_base  = pyo_value(m.rgdpmp[r, "base"])
+            rgdp_base = pyo_value(m.rgdpmp[r, "base"])
             if rgdp_base is not None and rgdp_base > 0:
                 any_nontrivial = True  # at least the base anchor was set
         except (KeyError, AttributeError) as e:
@@ -107,7 +112,9 @@ def test_solve_multiperiod_solves_m_not_slices():
 def test_solve_multiperiod_accepts_mode_kwarg():
     """mode is a kw-only param defaulting to 'altertax' (back-compat)."""
     import inspect
+
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
     sig = inspect.signature(solve_multiperiod)
     assert "mode" in sig.parameters
     p = sig.parameters["mode"]

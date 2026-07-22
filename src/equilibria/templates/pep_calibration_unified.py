@@ -6,10 +6,10 @@ and produce a complete calibrated model state.
 
 Usage:
     from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
-    
+
     calibrator = PEPModelCalibrator(sam_file_path)
     result = calibrator.calibrate()
-    
+
     # Access all calibrated variables
     print(f"GDP: {result.gdp['GDP_BPO']}")
     print(f"Imports: {result.trade['IMO']}")
@@ -26,17 +26,19 @@ from typing import Any
 from pydantic import BaseModel
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+from equilibria.templates.pep_calibration_final import FinalCalibrator
 from equilibria.templates.pep_calibration_income import IncomeCalibrator
 from equilibria.templates.pep_calibration_production import ProductionCalibrator
 from equilibria.templates.pep_calibration_trade import TradeCalibrator
-from equilibria.templates.pep_calibration_final import FinalCalibrator
 from equilibria.templates.pep_dynamic_sets import derive_dynamic_sets_from_sam
 from equilibria.templates.pep_val_par_loader import load_val_par
 
 logger = logging.getLogger(__name__)
 
 
-def _build_uppercase_sam_matrix(sam_data: dict[str, Any]) -> dict[tuple[str, str, str, str], float]:
+def _build_uppercase_sam_matrix(
+    sam_data: dict[str, Any],
+) -> dict[tuple[str, str, str, str], float]:
     """Materialize SAM into an uppercase-keyed 4D matrix.
 
     GDX files produced from Excel can preserve mixed/lower-case element labels
@@ -86,28 +88,28 @@ def _build_uppercase_sam_matrix(sam_data: dict[str, Any]) -> dict[tuple[str, str
 @dataclass
 class PEPModelState:
     """Complete calibrated state of the PEP model."""
-    
+
     # Model sets
     sets: dict[str, list[str]] = field(default_factory=dict)
-    
+
     # Income block (Phase 1-2)
     income: dict[str, Any] = field(default_factory=dict)
-    
+
     # Production block (Phase 3)
     production: dict[str, Any] = field(default_factory=dict)
-    
+
     # Trade block (Phase 4)
     trade: dict[str, Any] = field(default_factory=dict)
-    
+
     # Final integration (Phase 5)
     consumption: dict[str, Any] = field(default_factory=dict)
     gdp: dict[str, float] = field(default_factory=dict)
     real_variables: dict[str, Any] = field(default_factory=dict)
     les_parameters: dict[str, Any] = field(default_factory=dict)
-    
+
     # Validation results
     validation: dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert state to dictionary."""
         return {
@@ -121,12 +123,12 @@ class PEPModelState:
             "les_parameters": self.les_parameters,
             "validation": self.validation,
         }
-    
+
     def save_json(self, filepath: Path) -> None:
         """Save state to JSON file."""
         # Convert to dict and handle non-serializable types
         data = self.to_dict()
-        
+
         def convert_value(v):
             if isinstance(v, dict):
                 return {str(k): convert_value(val) for k, val in v.items()}
@@ -136,27 +138,27 @@ class PEPModelState:
                 return round(v, 6)
             else:
                 return v
-        
+
         data = convert_value(data)
-        
-        with open(filepath, 'w') as f:
+
+        with open(filepath, "w") as f:
             json.dump(data, f, indent=2)
-        
+
         logger.info(f"Model state saved to {filepath}")
 
 
 class CalibrationReport(BaseModel):
     """Report generated from calibration run."""
-    
+
     status: str = "pending"
     phases_completed: list[str] = []
     phases_failed: list[str] = []
-    
+
     # Summary statistics
     total_households: int = 0
     total_sectors: int = 0
     total_commodities: int = 0
-    
+
     # Key indicators
     gdp_bpo: float = 0.0
     gdp_mpo: float = 0.0
@@ -165,35 +167,35 @@ class CalibrationReport(BaseModel):
     trade_balance: float = 0.0
     total_consumption: float = 0.0
     total_investment: float = 0.0
-    
+
     # Validation
     validation_passed: bool = False
     validation_warnings: list[str] = []
     validation_errors: list[str] = []
-    
+
     def print_summary(self) -> None:
         """Print a formatted summary report."""
         print("\n" + "=" * 70)
         print("PEP MODEL CALIBRATION REPORT")
         print("=" * 70)
-        
+
         print(f"\nStatus: {self.status}")
-        
+
         print("\nCompleted Phases:")
         for phase in self.phases_completed:
             print(f"  ✓ {phase}")
-        
+
         if self.phases_failed:
             print("\nFailed Phases:")
             for phase in self.phases_failed:
                 print(f"  ✗ {phase}")
-        
-        print(f"\nModel Dimensions:")
+
+        print("\nModel Dimensions:")
         print(f"  Households:   {self.total_households}")
         print(f"  Sectors:      {self.total_sectors}")
         print(f"  Commodities:  {self.total_commodities}")
-        
-        print(f"\nKey Indicators:")
+
+        print("\nKey Indicators:")
         print(f"  GDP (Basic Prices):     {self.gdp_bpo:15,.2f}")
         print(f"  GDP (Market Prices):    {self.gdp_mpo:15,.2f}")
         print(f"  Total Exports:          {self.total_exports:15,.2f}")
@@ -201,33 +203,33 @@ class CalibrationReport(BaseModel):
         print(f"  Trade Balance:          {self.trade_balance:15,.2f}")
         print(f"  Total Consumption:      {self.total_consumption:15,.2f}")
         print(f"  Total Investment:       {self.total_investment:15,.2f}")
-        
-        print(f"\nValidation:")
+
+        print("\nValidation:")
         if self.validation_passed:
             print("  ✓ All validation checks passed")
         else:
             print("  ✗ Validation issues detected")
-        
+
         if self.validation_warnings:
             print("\n  Warnings:")
             for warning in self.validation_warnings[:5]:  # Show first 5
                 print(f"    - {warning}")
             if len(self.validation_warnings) > 5:
                 print(f"    ... and {len(self.validation_warnings) - 5} more")
-        
+
         if self.validation_errors:
             print("\n  Errors:")
             for error in self.validation_errors[:5]:  # Show first 5
                 print(f"    - {error}")
             if len(self.validation_errors) > 5:
                 print(f"    ... and {len(self.validation_errors) - 5} more")
-        
+
         print("\n" + "=" * 70)
 
 
 class PEPModelCalibrator:
     """Unified calibrator that runs all PEP calibration phases."""
-    
+
     def __init__(
         self,
         sam_file: Path | str,
@@ -236,7 +238,7 @@ class PEPModelCalibrator:
         dynamic_sets: bool = False,
     ):
         """Initialize the unified calibrator.
-        
+
         Args:
             sam_file: Path to SAM GDX file
             val_par_file: Optional path to VAL_PAR Excel file
@@ -246,39 +248,42 @@ class PEPModelCalibrator:
         self.val_par_data = load_val_par(self.val_par_file)
         self.state = PEPModelState()
         self.report = CalibrationReport()
-        
+
         # Load SAM data
         logger.info(f"Loading SAM from {self.sam_file}")
         self.sam_data = read_gdx(self.sam_file)
         self.sam_data["sam_matrix"] = _build_uppercase_sam_matrix(self.sam_data)
-        logger.info(f"✓ Loaded SAM with {len(self.sam_data.get('symbols', []))} symbols")
+        logger.info(
+            f"✓ Loaded SAM with {len(self.sam_data.get('symbols', []))} symbols"
+        )
         self._input_sets = sets
         self._use_dynamic_sets = dynamic_sets
         self._resolved_sets = (
-            sets if sets is not None
+            sets
+            if sets is not None
             else (derive_dynamic_sets_from_sam(self.sam_data) if dynamic_sets else None)
         )
-    
+
     def calibrate(self) -> PEPModelState:
         """Run complete calibration of all phases.
-        
+
         Returns:
             PEPModelState with all calibrated variables
         """
         logger.info("=" * 70)
         logger.info("STARTING UNIFIED PEP MODEL CALIBRATION")
         logger.info("=" * 70)
-        
+
         try:
             # Phase 1-2: Income and Shares
             self._run_income_calibration()
-            
+
             # Phase 3: Production
             self._run_production_calibration()
-            
+
             # Phase 4: Trade
             self._run_trade_calibration()
-            
+
             # Phase 5: Final Integration
             self._run_final_calibration()
 
@@ -292,15 +297,15 @@ class PEPModelCalibrator:
 
             # Generate report
             self._generate_report()
-            
+
             self.report.status = "completed"
             logger.info("✓ Unified calibration completed successfully")
-            
+
         except Exception as e:
             self.report.status = "failed"
             logger.error(f"✗ Calibration failed: {e}")
             raise
-        
+
         return self.state
 
     # Relative threshold above which the savings closure is skipped.
@@ -357,9 +362,7 @@ class PEPModelCalibrator:
         yrowo = float(income.get("YROWO", 0.0))
         pe_fobo = trade.get("PE_FOBO", {})
         exdo = trade.get("EXDO", {})
-        exports = sum(
-            float(pe_fobo.get(i, 0.0)) * float(exdo.get(i, 0.0)) for i in I
-        )
+        exports = sum(float(pe_fobo.get(i, 0.0)) * float(exdo.get(i, 0.0)) for i in I)
         tr_from_row = sum(float(TRO.get((agd, "row"), 0.0)) for agd in AGD)
         srowo_new = yrowo - exports - tr_from_row
 
@@ -380,8 +383,10 @@ class PEPModelCalibrator:
                 "Savings closure SKIPPED (structural delta too large): "
                 "ΔSGO=%+.2f (%.4f%%), ΔSROWO=%+.2f (%.4f%%). "
                 "SAM-direct values preserved; EQ43/EQ45 resolved by solver.",
-                sg_delta, sg_rel * 100,
-                srow_delta, srow_rel * 100,
+                sg_delta,
+                sg_rel * 100,
+                srow_delta,
+                srow_rel * 100,
             )
             return
 
@@ -402,9 +407,7 @@ class PEPModelCalibrator:
         # PCO = 1.0 at base; VSTKO comes from consumption.
         pco = trade.get("PCO", {})
         vstko = consumption.get("VSTKO", {})
-        vstk_value = sum(
-            float(pco.get(i, 1.0)) * float(vstko.get(i, 0.0)) for i in I
-        )
+        vstk_value = sum(float(pco.get(i, 1.0)) * float(vstko.get(i, 0.0)) for i in I)
         gfcfo_old = float(consumption.get("GFCFO", 0.0))
         gfcfo_new = ito_new - vstk_value
         consumption["GFCFO"] = gfcfo_new
@@ -412,8 +415,12 @@ class PEPModelCalibrator:
         logger.info(
             "Savings closure applied: ΔSGO=%+.2f (%.2f→%.2f), "
             "ΔSROWO=%+.2f (%.2f→%.2f), ΔITO=%+.2f, ΔGFCFO=%+.2f",
-            sg_delta, sgo_old, sgo_new,
-            srow_delta, srowo_old, srowo_new,
+            sg_delta,
+            sgo_old,
+            sgo_new,
+            srow_delta,
+            srowo_old,
+            srowo_new,
             ito_new - ito_old,
             gfcfo_new - gfcfo_old,
         )
@@ -423,14 +430,14 @@ class PEPModelCalibrator:
         logger.info("\n" + "=" * 70)
         logger.info("PHASE 1-2: Income and Shares Calibration")
         logger.info("=" * 70)
-        
+
         calibrator = IncomeCalibrator(
             self.sam_data,
             val_par_data=self.val_par_data,
             sets=self._resolved_sets,
         )
         result = calibrator.calibrate()
-        
+
         # Store in state
         self.state.sets = calibrator.sets
         self.state.income = {
@@ -478,20 +485,21 @@ class PEPModelCalibrator:
             "ttdf0O": self.val_par_data.get("ttdf0O", {}),
             "ttdh0O": self.val_par_data.get("ttdh0O", {}),
         }
-        
+
         self.report.phases_completed.append("Income and Shares (Phase 1-2)")
         logger.info("✓ Income calibration complete")
-    
+
     def _run_production_calibration(self) -> None:
         """Run Phase 3: Production calibration."""
         logger.info("\n" + "=" * 70)
         logger.info("PHASE 3: Production Block Calibration")
         logger.info("=" * 70)
-        
+
         # Get income result from state
         from equilibria.templates.pep_calibration_income import IncomeCalibrationResult
+
         income_result = IncomeCalibrationResult(**self.state.income)
-        
+
         calibrator = ProductionCalibrator(
             self.sam_data,
             income_result,
@@ -499,7 +507,7 @@ class PEPModelCalibrator:
             sets=self.state.sets,
         )
         result = calibrator.calibrate()
-        
+
         # Store in state
         self.state.production = {
             "KDO": result.KDO,
@@ -541,23 +549,25 @@ class PEPModelCalibrator:
             "beta_VA": result.beta_VA,
             "B_VA": result.B_VA,
         }
-        
+
         self.report.phases_completed.append("Production (Phase 3)")
         logger.info("✓ Production calibration complete")
-    
+
     def _run_trade_calibration(self) -> None:
         """Run Phase 4: Trade calibration."""
         logger.info("\n" + "=" * 70)
         logger.info("PHASE 4: Trade Block Calibration")
         logger.info("=" * 70)
-        
+
         # Get previous results
         from equilibria.templates.pep_calibration_income import IncomeCalibrationResult
-        from equilibria.templates.pep_calibration_production import ProductionCalibrationResult
-        
+        from equilibria.templates.pep_calibration_production import (
+            ProductionCalibrationResult,
+        )
+
         income_result = IncomeCalibrationResult(**self.state.income)
         production_result = ProductionCalibrationResult(**self.state.production)
-        
+
         calibrator = TradeCalibrator(
             self.sam_data,
             production_result,
@@ -565,7 +575,7 @@ class PEPModelCalibrator:
             sets=self.state.sets,
         )
         result = calibrator.calibrate()
-        
+
         # Store in state
         self.state.trade = {
             "IMO": result.IMO,
@@ -604,25 +614,27 @@ class PEPModelCalibrator:
             "B_M": result.B_M,
             "MRGNO": result.MRGNO,
         }
-        
+
         self.report.phases_completed.append("Trade (Phase 4)")
         logger.info("✓ Trade calibration complete")
-    
+
     def _run_final_calibration(self) -> None:
         """Run Phase 5: Final integration."""
         logger.info("\n" + "=" * 70)
         logger.info("PHASE 5: Final Integration")
         logger.info("=" * 70)
-        
+
         # Get all previous results
         from equilibria.templates.pep_calibration_income import IncomeCalibrationResult
-        from equilibria.templates.pep_calibration_production import ProductionCalibrationResult
+        from equilibria.templates.pep_calibration_production import (
+            ProductionCalibrationResult,
+        )
         from equilibria.templates.pep_calibration_trade import TradeCalibrationResult
-        
+
         income_result = IncomeCalibrationResult(**self.state.income)
         production_result = ProductionCalibrationResult(**self.state.production)
         trade_result = TradeCalibrationResult(**self.state.trade)
-        
+
         calibrator = FinalCalibrator(
             self.sam_data,
             income_result,
@@ -632,7 +644,7 @@ class PEPModelCalibrator:
             sets=self.state.sets,
         )
         result = calibrator.calibrate()
-        
+
         # Store in state
         self.state.consumption = {
             "CO": result.CO,
@@ -642,14 +654,14 @@ class PEPModelCalibrator:
             "VSTKO": result.VSTKO,
             "GFCFO": result.GFCFO,
         }
-        
+
         self.state.gdp = {
             "GDP_BPO": result.GDP_BPO,
             "GDP_MPO": result.GDP_MPO,
             "GDP_IBO": result.GDP_IBO,
             "GDP_FDO": result.GDP_FDO,
         }
-        
+
         self.state.real_variables = {
             "CTH_REALO": result.CTH_REALO,
             "G_REALO": result.G_REALO,
@@ -661,65 +673,67 @@ class PEPModelCalibrator:
             "PIXGVTO": result.PIXGVTO,
             "PIXINVO": result.PIXINVO,
         }
-        
+
         self.state.les_parameters = {
             "sigma_Y": result.sigma_Y,
             "gamma_LES": result.gamma_LES,
             "CMINO": result.CMINO,
             "frisch": result.frisch,
         }
-        
+
         self.state.validation = {
             "passed": result.validation_passed,
             "errors": result.validation_errors,
         }
-        
+
         self.report.phases_completed.append("Final Integration (Phase 5)")
         logger.info("✓ Final calibration complete")
-    
+
     def _generate_report(self) -> None:
         """Generate calibration report."""
         # Model dimensions
         self.report.total_households = len(self.state.sets.get("H", []))
         self.report.total_sectors = len(self.state.sets.get("J", []))
         self.report.total_commodities = len(self.state.sets.get("I", []))
-        
+
         # Key indicators
         self.report.gdp_bpo = self.state.gdp.get("GDP_BPO", 0.0)
         self.report.gdp_mpo = self.state.gdp.get("GDP_MPO", 0.0)
-        
+
         trade_data = self.state.trade
         self.report.total_exports = sum(trade_data.get("EXDO", {}).values())
         self.report.total_imports = sum(trade_data.get("IMO", {}).values())
-        self.report.trade_balance = self.report.total_exports - self.report.total_imports
-        
+        self.report.trade_balance = (
+            self.report.total_exports - self.report.total_imports
+        )
+
         consumption_data = self.state.consumption
         co_data = consumption_data.get("CO", {})
         self.report.total_consumption = sum(co_data.values())
         self.report.total_investment = sum(consumption_data.get("INVO", {}).values())
-        
+
         # Validation
         validation_data = self.state.validation
         self.report.validation_passed = validation_data.get("passed", False)
         self.report.validation_errors = validation_data.get("errors", [])
-        
+
         # Add warnings for GDP differences
         gdp_diff = abs(self.report.gdp_bpo - self.state.gdp.get("GDP_FDO", 0.0))
         if gdp_diff > 0.01 * self.report.gdp_bpo:
             self.report.validation_warnings.append(
                 f"GDP_BPO differs from GDP_FDO by {gdp_diff:,.2f}"
             )
-    
+
     def save_report(self, filepath: Path | str) -> None:
         """Save calibration report to file."""
         filepath = Path(filepath)
         report_dict = self.report.model_dump()
-        
-        with open(filepath, 'w') as f:
+
+        with open(filepath, "w") as f:
             json.dump(report_dict, f, indent=2)
-        
+
         logger.info(f"Report saved to {filepath}")
-    
+
     def print_report(self) -> None:
         """Print calibration report to console."""
         self.report.print_summary()

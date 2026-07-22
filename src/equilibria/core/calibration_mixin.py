@@ -12,11 +12,7 @@ import numpy as np
 from pydantic import model_validator
 
 if TYPE_CHECKING:
-    from equilibria.core.calibration_data import CalibrationData
-    from equilibria.core.calibration_phase import CalibrationPhase
-    from equilibria.core.parameters import Parameter, ParameterManager
-    from equilibria.core.sets import SetManager
-    from equilibria.core.variables import Variable, VariableManager
+    pass
 
 
 class CalibrationMixin:

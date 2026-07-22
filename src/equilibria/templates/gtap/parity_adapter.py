@@ -1,4 +1,5 @@
 """GTAP ParityAdapter — wraps GTAPModelEquations build/solve + _diff_core lookups."""
+
 from __future__ import annotations
 
 import copy
@@ -21,6 +22,7 @@ _DATASET_HAR = {
 
 def _load_run_gtap():
     import importlib.util as _u
+
     spec = _u.spec_from_file_location(
         "run_gtap", str(_ROOT / "scripts" / "gtap" / "run_gtap.py")
     )
@@ -32,6 +34,7 @@ def _load_run_gtap():
 
 def _load_params_gdx(dataset: str, gdx_rel: str):
     from equilibria.templates.gtap import GTAPParameters
+
     params = GTAPParameters()
     params.load_from_gdx(_ROOT / gdx_rel)
     return params
@@ -39,6 +42,7 @@ def _load_params_gdx(dataset: str, gdx_rel: str):
 
 def _load_params_har(dataset: str):
     from equilibria.templates.gtap import GTAPParameters
+
     har_dir = _ROOT / _DATASET_HAR[dataset]
     params = GTAPParameters()
     params.load_from_har(
@@ -67,7 +71,7 @@ def _apply_gams_warmstart_brute(model, gdx_path: Path, period: str) -> int:
     def _strip(s: str) -> str:
         for p in _PREFIXES:
             if s.startswith(p):
-                return s[len(p):]
+                return s[len(p) :]
         return s
 
     # Pre-load all GDX variables for the requested period into a flat dict:
@@ -87,7 +91,11 @@ def _apply_gams_warmstart_brute(model, gdx_path: Path, period: str) -> int:
                 dims = k[:-1]
                 # Strip GAMS prefixes and 'hhd' household placeholder
                 stripped = tuple(_strip(x) for x in dims if x not in ("hhd",))
-                py_key: object = stripped[0] if len(stripped) == 1 else (stripped if stripped else None)
+                py_key: object = (
+                    stripped[0]
+                    if len(stripped) == 1
+                    else (stripped if stripped else None)
+                )
                 if py_key is not None:
                     out[py_key] = float(v)
             _gdx_cache[name] = out
@@ -122,15 +130,16 @@ def _gams_snapshot_from_altertax_gdx(gdx_path: Path, period: str):
     Activity/commodity/factor dimensions use GAMS prefixes (a_, c_, f_, r_).
     This function strips the period suffix and GAMS prefixes to produce Pyomo-compatible keys.
     """
-    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
     from _diff_core import gams_levels as _gv  # type: ignore[import-not-found]
+
+    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
     _PREFIXES = ("a_", "c_", "f_", "r_")
 
     def _strip(s: str) -> str:
         for p in _PREFIXES:
             if s.startswith(p):
-                return s[len(p):]
+                return s[len(p) :]
         return s
 
     def _slice(raw: dict, period: str) -> dict:
@@ -273,19 +282,29 @@ def _build_altertax_check_model(params, res_region: str):
     p_alt = apply_altertax_elasticities(params, in_place=False)
 
     base_closure = GTAPClosureConfig(
-        name="base", closure_type="MCP",
-        capital_mobility="sluggish", fix_endowments=False,
-        fix_taxes=False, fix_technology=False, if_sub=False,
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=False,
         numeraire="pnum",
     )
     alt_closure = GTAPClosureConfig(
-        name="altertax", closure_type="MCP",
-        capital_mobility="mobile", fix_endowments=False,
-        fix_taxes=True, fix_technology=True, if_sub=False,
+        name="altertax",
+        closure_type="MCP",
+        capital_mobility="mobile",
+        fix_endowments=False,
+        fix_taxes=True,
+        fix_technology=True,
+        if_sub=False,
         numeraire="pnum",
     )
 
-    eq_b = GTAPModelEquations(p_alt.sets, p_alt, base_closure, residual_region=res_region)
+    eq_b = GTAPModelEquations(
+        p_alt.sets, p_alt, base_closure, residual_region=res_region
+    )
     m_b = eq_b.build_model()
 
     # phiP[check] = pcons[base] = 1.0 (GAMS convention)
@@ -297,7 +316,11 @@ def _build_altertax_check_model(params, res_region: str):
             pass
 
     eq_chk = GTAPModelEquations(
-        p_alt.sets, p_alt, alt_closure, residual_region=res_region, t0_snapshot=m_b,
+        p_alt.sets,
+        p_alt,
+        alt_closure,
+        residual_region=res_region,
+        t0_snapshot=m_b,
     )
     m_chk = eq_chk.build_model()
 
@@ -319,7 +342,6 @@ def _build_altertax_check_model(params, res_region: str):
 
     # Warm-start pft + pf + pfy from GAMS check GDX if available
     try:
-        from _diff_core import gams_levels, list_populated_vars  # type: ignore[import-not-found]
         # Try to find the bundle GDX for this dataset
         _ds_key = None
         for k in _DATASET_HAR:
@@ -370,10 +392,16 @@ class GTAPParityAdapter:
 
     def name_aliases(self) -> dict[str, str]:
         from _diff_core import _NAME_ALIAS  # type: ignore[import-not-found]
+
         return dict(_NAME_ALIAS)
 
     def load_gams_reference(self, gdx_path) -> dict[str, dict[tuple, float]]:
-        from _diff_core import gams_levels, list_populated_vars, split_t  # type: ignore[import-not-found]
+        from _diff_core import (  # type: ignore[import-not-found]
+            gams_levels,
+            list_populated_vars,
+            split_t,
+        )
+
         gdx_path = Path(gdx_path)
         out: dict[str, dict[tuple, float]] = {}
         for vname in list_populated_vars(gdx_path):
@@ -383,9 +411,13 @@ class GTAPParityAdapter:
                 body, _t = split_t(key)
                 # Normalize GAMS set-type prefixes (a_, c_, f_, r_) to bare names
                 body = tuple(
-                    k[2:] if isinstance(k, str) and len(k) > 2
-                           and k[1] == "_" and k[0] in "acfr"
-                    else k for k in body
+                    k[2:]
+                    if isinstance(k, str)
+                    and len(k) > 2
+                    and k[1] == "_"
+                    and k[0] in "acfr"
+                    else k
+                    for k in body
                 )
                 # Drop singleton household dimension ('hhd') — Python collapses it
                 body = tuple(k for k in body if k != "hhd")
@@ -396,9 +428,15 @@ class GTAPParityAdapter:
                 out[vname] = stripped
         return out
 
-    def load_gams_reference_period(self, gdx_path, period: str) -> dict[str, dict[tuple, float]]:
+    def load_gams_reference_period(
+        self, gdx_path, period: str
+    ) -> dict[str, dict[tuple, float]]:
         """Load GAMS reference keeping only keys from a specific period t."""
-        from _diff_core import gams_levels, list_populated_vars  # type: ignore[import-not-found]
+        from _diff_core import (  # type: ignore[import-not-found]
+            gams_levels,
+            list_populated_vars,
+        )
+
         gdx_path = Path(gdx_path)
         out: dict[str, dict[tuple, float]] = {}
         for vname in list_populated_vars(gdx_path):
@@ -409,9 +447,13 @@ class GTAPParityAdapter:
                     body = key[:-1]
                     # strip GAMS set prefixes
                     body = tuple(
-                        k[2:] if isinstance(k, str) and len(k) > 2
-                               and k[1] == "_" and k[0] in "acfr"
-                        else k for k in body
+                        k[2:]
+                        if isinstance(k, str)
+                        and len(k) > 2
+                        and k[1] == "_"
+                        and k[0] in "acfr"
+                        else k
+                        for k in body
                     )
                     # drop singleton household dimension
                     body = tuple(k for k in body if k != "hhd")
@@ -440,7 +482,11 @@ class GTAPParityAdapter:
         return self.load_gams_reference(gdx_path)
 
     def find_py_var(self, model: Any, gams_name: str) -> tuple[Any | None, str | None]:
-        from _diff_core import find_py_var, build_derived  # type: ignore[import-not-found]
+        from _diff_core import (  # type: ignore[import-not-found]
+            build_derived,
+            find_py_var,
+        )
+
         derived = build_derived(model)
         return find_py_var(model, gams_name, derived=derived)
 
@@ -457,7 +503,8 @@ class GTAPParityAdapter:
 
         # --- Legacy GDX datasets (9x10, nus333) ---
         from equilibria.templates.gtap import (
-            GTAPParameters, build_gtap_contract, GTAPModelEquations,
+            GTAPModelEquations,
+            build_gtap_contract,
         )
         from equilibria.templates.gtap.altertax import apply_altertax_elasticities
 
@@ -469,13 +516,19 @@ class GTAPParityAdapter:
 
         std_contract = build_gtap_contract({})
         base_eq = GTAPModelEquations(
-            params.sets, params, residual_region=residual_region,
+            params.sets,
+            params,
+            residual_region=residual_region,
             closure=std_contract.closure,
         )
         m_b = base_eq.build_model()
         run_gtap._run_path_capi_nonlinear_full(
-            m_b, params, enforce_post_checks=False, strict_path_capi=False,
-            closure_config=std_contract.closure, equation_scaling=True,
+            m_b,
+            params,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=std_contract.closure,
+            equation_scaling=True,
         )
 
         if scenario == "baseline":
@@ -484,37 +537,60 @@ class GTAPParityAdapter:
         if scenario == "altertax":
             shock_params = apply_altertax_elasticities(params, in_place=False)
             contract = build_gtap_contract({"closure": "altertax"})
-            from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
+            from equilibria.templates.gtap.gtap_parity_pipeline import (
+                GTAPVariableSnapshot,
+            )
+
             warm = GTAPVariableSnapshot.from_python_model(m_b)
             alt_sets = getattr(shock_params, "sets", None) or params.sets
             eq = GTAPModelEquations(
-                alt_sets, shock_params, contract.closure, is_counterfactual=True,
-                residual_region=residual_region, t0_snapshot=m_b,
+                alt_sets,
+                shock_params,
+                contract.closure,
+                is_counterfactual=True,
+                residual_region=residual_region,
+                t0_snapshot=m_b,
             )
             m_alt = eq.build_model()
             run_gtap._run_path_capi_nonlinear_full(
-                m_alt, shock_params,
-                enforce_post_checks=False, strict_path_capi=False,
-                closure_config=contract.closure, equation_scaling=True,
+                m_alt,
+                shock_params,
+                enforce_post_checks=False,
+                strict_path_capi=False,
+                closure_config=contract.closure,
+                equation_scaling=True,
                 solution_hint=warm,
             )
             return m_alt
 
         if scenario == "shock_tm10":
             shock_params = run_gtap._apply_shock_to_params(
-                params, shock_mode="tm_pct", shock_value=0.10,
+                params,
+                shock_mode="tm_pct",
+                shock_value=0.10,
             )
             contract = build_gtap_contract({"closure": "shock"})
-            from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
+            from equilibria.templates.gtap.gtap_parity_pipeline import (
+                GTAPVariableSnapshot,
+            )
+
             warm = GTAPVariableSnapshot.from_python_model(m_b)
             eq = GTAPModelEquations(
-                params.sets, shock_params, contract.closure, is_counterfactual=True,
-                residual_region=residual_region, t0_snapshot=m_b,
+                params.sets,
+                shock_params,
+                contract.closure,
+                is_counterfactual=True,
+                residual_region=residual_region,
+                t0_snapshot=m_b,
             )
             m_s = eq.build_model()
             run_gtap._run_path_capi_nonlinear_full(
-                m_s, shock_params, enforce_post_checks=False, strict_path_capi=False,
-                closure_config=contract.closure, equation_scaling=True,
+                m_s,
+                shock_params,
+                enforce_post_checks=False,
+                strict_path_capi=False,
+                closure_config=contract.closure,
+                equation_scaling=True,
                 solution_hint=warm,
             )
             return m_s
@@ -537,11 +613,11 @@ class GTAPParityAdapter:
 
     def _build_gtap7_altertax(self, dataset: str, scenario: str, solve: bool) -> Any:
         """Build gtap7_* altertax model, optionally solving with PATH."""
+
         from equilibria.templates.gtap import GTAPModelEquations
         from equilibria.templates.gtap.altertax import apply_altertax_elasticities
         from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
         from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
-        from _diff_core import gams_levels, list_populated_vars  # type: ignore[import-not-found]
 
         run_gtap = _load_run_gtap()
         params = _load_params_har(dataset)
@@ -555,25 +631,38 @@ class GTAPParityAdapter:
         p_alt = apply_altertax_elasticities(params, in_place=False)
 
         base_closure = GTAPClosureConfig(
-            name="base", closure_type="MCP",
-            capital_mobility="sluggish", fix_endowments=False,
-            fix_taxes=False, fix_technology=False, if_sub=False,
+            name="base",
+            closure_type="MCP",
+            capital_mobility="sluggish",
+            fix_endowments=False,
+            fix_taxes=False,
+            fix_technology=False,
+            if_sub=False,
             numeraire="pnum",
         )
         alt_closure = GTAPClosureConfig(
-            name="altertax", closure_type="MCP",
-            capital_mobility="mobile", fix_endowments=False,
-            fix_taxes=True, fix_technology=True, if_sub=False,
+            name="altertax",
+            closure_type="MCP",
+            capital_mobility="mobile",
+            fix_endowments=False,
+            fix_taxes=True,
+            fix_technology=True,
+            if_sub=False,
             numeraire="pnum",
         )
 
         # betaCal base model — solve first so t0_snapshot carries real prices
-        eq_b = GTAPModelEquations(p_alt.sets, p_alt, base_closure, residual_region=res_region)
+        eq_b = GTAPModelEquations(
+            p_alt.sets, p_alt, base_closure, residual_region=res_region
+        )
         m_b = eq_b.build_model()
         run_gtap._run_path_capi_nonlinear_full(
-            m_b, p_alt,
-            enforce_post_checks=False, strict_path_capi=False,
-            closure_config=base_closure, equation_scaling=True,
+            m_b,
+            p_alt,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=base_closure,
+            equation_scaling=True,
         )
 
         # phiP[check] = 1.0 (GAMS convention: pcons[base]=1)
@@ -586,7 +675,11 @@ class GTAPParityAdapter:
 
         # Build check model
         eq_chk = GTAPModelEquations(
-            p_alt.sets, p_alt, alt_closure, residual_region=res_region, t0_snapshot=m_b,
+            p_alt.sets,
+            p_alt,
+            alt_closure,
+            residual_region=res_region,
+            t0_snapshot=m_b,
         )
         m_chk = eq_chk.build_model()
 
@@ -640,7 +733,10 @@ class GTAPParityAdapter:
         # Seed ev/cv from GDX check values BEFORE fixing, so they're fixed at GAMS value.
         if gdx_path.exists():
             try:
-                from _diff_core import gams_levels as _gams_lv_ev  # type: ignore[import-not-found]
+                from _diff_core import (
+                    gams_levels as _gams_lv_ev,  # type: ignore[import-not-found]
+                )
+
                 for _vn, _gdxn in [("ev", "ev"), ("cv", "cv")]:
                     _vobj = getattr(m_chk, _vn, None)
                     if _vobj is None:
@@ -667,7 +763,9 @@ class GTAPParityAdapter:
                     for _idx in list(_vobj):
                         _item = _vobj[_idx]
                         if not _item.fixed:
-                            _item.fix(float(_item.value) if _item.value is not None else 1.0)
+                            _item.fix(
+                                float(_item.value) if _item.value is not None else 1.0
+                            )
                     _eobj.deactivate()
                 except Exception:
                     pass
@@ -678,8 +776,11 @@ class GTAPParityAdapter:
         # PATH to a different valid equilibrium. Seed pf from GDX to match GAMS starting point.
         # Also compute pfa = pf*(1+rtf) consistently to avoid eq_pfaeq residuals.
         if gdx_path.exists() and hasattr(m_chk, "pf"):
-            from _diff_core import gams_levels as _gams_lv_pf  # type: ignore[import-not-found]
+            from _diff_core import (
+                gams_levels as _gams_lv_pf,  # type: ignore[import-not-found]
+            )
             from pyomo.environ import value as _pyo_val
+
             _gams_pf = _gams_lv_pf(gdx_path, "pf")
             for _r in m_chk.r:
                 for _f in m_chk.f:
@@ -694,9 +795,13 @@ class GTAPParityAdapter:
                                 _pf_item.set_value(float(_pf_val))
                             # pfa = pf*(1+rtf) — keep consistent with eq_pfaeq
                             if hasattr(m_chk, "pfa"):
-                                _rtf = float(p_alt.taxes.rtf.get((_r, _f, _a), 0.0) or 0.0)
+                                _rtf = float(
+                                    p_alt.taxes.rtf.get((_r, _f, _a), 0.0) or 0.0
+                                )
                                 _pfa_item = m_chk.pfa[_r, _f, _a]
-                                if not (hasattr(_pfa_item, "fixed") and _pfa_item.fixed):
+                                if not (
+                                    hasattr(_pfa_item, "fixed") and _pfa_item.fixed
+                                ):
                                     _pfa_item.set_value(float(_pf_val) * (1.0 + _rtf))
                         except Exception:
                             pass
@@ -709,7 +814,10 @@ class GTAPParityAdapter:
         # This gap produces large residuals in eq_xiagg/eq_xigbl/eq_pigbl/eq_kapEnd at
         # warm-start, steering PATH to the wrong equilibrium basin.
         if gdx_path.exists() and hasattr(m_chk, "xiagg"):
-            from _diff_core import gams_levels as _gams_lv  # type: ignore[import-not-found]
+            from _diff_core import (
+                gams_levels as _gams_lv,  # type: ignore[import-not-found]
+            )
+
             _gams_xi = _gams_lv(gdx_path, "xi")
             _gams_pi = _gams_lv(gdx_path, "pi")
             for _r in m_chk.r:
@@ -768,13 +876,17 @@ class GTAPParityAdapter:
                 _chk_hint = _gams_snapshot_from_altertax_gdx(gdx_path, "check")
                 # Apply named-snapshot fields first (covers snapshot-mapped vars)
                 from equilibria.templates.gtap.gtap_solver import GTAPSolver
-                _helper = GTAPSolver(m_chk, closure=alt_closure, solver_name="path", params=p_alt)
+
+                _helper = GTAPSolver(
+                    m_chk, closure=alt_closure, solver_name="path", params=p_alt
+                )
                 _helper.apply_solution_hint(_chk_hint)
                 # After seeding xda/xma from GDX xd/xm (3D), recompute 2D aggregates
                 # (xd, xds, xmt) from xda/xma so eq_xd_agg/eq_pdeq/eq_xmt_agg are
                 # satisfied at warm-start. These 2D vars don't exist separately in GDX.
                 if hasattr(m_chk, "xscale"):
                     from pyomo.environ import value as _pyo_val
+
                     for _r in m_chk.r:
                         for _i in m_chk.i:
                             try:
@@ -807,6 +919,7 @@ class GTAPParityAdapter:
                                 pass
             except Exception as _snap_exc:
                 import logging as _log
+
                 _log.getLogger(__name__).warning(
                     "Could not build/apply GAMS check-period snapshot: %s", _snap_exc
                 )
@@ -818,16 +931,23 @@ class GTAPParityAdapter:
         # eq_facty, eq_regy — reducing the distance PATH must travel.
         try:
             from pyomo.environ import value as _pyo_val2
+
             for _r in m_chk.r:
                 # xc[r,i] = xcshr[r,i]*yc[r] / pa[r,i,hhd]   (eq_xc)
-                if hasattr(m_chk, "xc") and hasattr(m_chk, "xcshr") and hasattr(m_chk, "yc"):
+                if (
+                    hasattr(m_chk, "xc")
+                    and hasattr(m_chk, "xcshr")
+                    and hasattr(m_chk, "yc")
+                ):
                     _yc_v = float(_pyo_val2(m_chk.yc[_r]))
                     for _i in m_chk.i:
                         try:
                             _xcshr = float(_pyo_val2(m_chk.xcshr[_r, _i]))
                             if _xcshr <= 0.0:
                                 continue
-                            _pa_hhd = max(float(_pyo_val2(m_chk.pa[_r, _i, "hhd"])), 1e-12)
+                            _pa_hhd = max(
+                                float(_pyo_val2(m_chk.pa[_r, _i, "hhd"])), 1e-12
+                            )
                             _xc_new = max(_xcshr * _yc_v / _pa_hhd, 1e-8)
                             _item = m_chk.xc[_r, _i]
                             if not (hasattr(_item, "fixed") and _item.fixed):
@@ -835,14 +955,20 @@ class GTAPParityAdapter:
                         except Exception:
                             pass
                 # xg[r,i] = g_share[r,i]*yg[r] / pa[r,i,gov]  (eq_xg)
-                if hasattr(m_chk, "xg") and hasattr(m_chk, "g_share") and hasattr(m_chk, "yg"):
+                if (
+                    hasattr(m_chk, "xg")
+                    and hasattr(m_chk, "g_share")
+                    and hasattr(m_chk, "yg")
+                ):
                     _yg_v = float(_pyo_val2(m_chk.yg[_r]))
                     for _i in m_chk.i:
                         try:
                             _gs = float(_pyo_val2(m_chk.g_share[_r, _i]))
                             if _gs <= 0.0:
                                 continue
-                            _pa_gov = max(float(_pyo_val2(m_chk.pa[_r, _i, "gov"])), 1e-12)
+                            _pa_gov = max(
+                                float(_pyo_val2(m_chk.pa[_r, _i, "gov"])), 1e-12
+                            )
                             _xg_new = max(_gs * _yg_v / _pa_gov, 1e-8)
                             _item = m_chk.xg[_r, _i]
                             if not (hasattr(_item, "fixed") and _item.fixed):
@@ -855,7 +981,9 @@ class GTAPParityAdapter:
                         for _a in m_chk.a:
                             try:
                                 _pf_v = float(_pyo_val2(m_chk.pf[_r, _f, _a]))
-                                _rtf = float(p_alt.taxes.rtf.get((_r, _f, _a), 0.0) or 0.0)
+                                _rtf = float(
+                                    p_alt.taxes.rtf.get((_r, _f, _a), 0.0) or 0.0
+                                )
                                 _pfa_new = _pf_v * (1.0 + _rtf)
                                 _item = m_chk.pfa[_r, _f, _a]
                                 if not (hasattr(_item, "fixed") and _item.fixed):
@@ -869,7 +997,8 @@ class GTAPParityAdapter:
                             float(_pyo_val2(m_chk.pf[_r, _f, _a]))
                             * float(_pyo_val2(m_chk.xf[_r, _f, _a]))
                             / max(float(_pyo_val2(m_chk.xscale[_r, _a])), 1e-12)
-                            for _f in m_chk.f for _a in m_chk.a
+                            for _f in m_chk.f
+                            for _a in m_chk.a
                         )
                         _fdepr = float(_pyo_val2(m_chk.fdepr[_r]))
                         _pi_v = float(_pyo_val2(m_chk.pi[_r]))
@@ -882,7 +1011,11 @@ class GTAPParityAdapter:
                         pass
                 # ytax_ind[r] = ytaxTot[r] - ytax[r,dt]   (eq_ytax_ind)
                 # regy[r] = facty[r] + ytax_ind[r]         (eq_regy)
-                if hasattr(m_chk, "regy") and hasattr(m_chk, "facty") and hasattr(m_chk, "ytax_ind"):
+                if (
+                    hasattr(m_chk, "regy")
+                    and hasattr(m_chk, "facty")
+                    and hasattr(m_chk, "ytax_ind")
+                ):
                     try:
                         _ytax_ind_v = float(_pyo_val2(m_chk.ytax_ind[_r]))
                         _facty_v = float(_pyo_val2(m_chk.facty[_r]))
@@ -902,9 +1035,12 @@ class GTAPParityAdapter:
         # matching GAMS's betaCal→check sequential approach. Pass _chk_hint as
         # solution_hint so PATH re-applies GAMS values after aggressive fixing.
         run_gtap._run_path_capi_nonlinear_full(
-            m_chk, p_alt,
-            enforce_post_checks=False, strict_path_capi=False,
-            closure_config=alt_closure, equation_scaling=True,
+            m_chk,
+            p_alt,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=alt_closure,
+            equation_scaling=True,
             solution_hint=_chk_hint,
         )
 
@@ -919,14 +1055,20 @@ class GTAPParityAdapter:
 
         warm_chk = GTAPVariableSnapshot.from_python_model(m_chk)
         eq_alt = GTAPModelEquations(
-            p_alt_shock.sets, p_alt_shock, alt_closure,
-            residual_region=res_region, t0_snapshot=m_chk,
+            p_alt_shock.sets,
+            p_alt_shock,
+            alt_closure,
+            residual_region=res_region,
+            t0_snapshot=m_chk,
         )
         m_alt = eq_alt.build_model()
         run_gtap._run_path_capi_nonlinear_full(
-            m_alt, p_alt_shock,
-            enforce_post_checks=False, strict_path_capi=False,
-            closure_config=alt_closure, equation_scaling=True,
+            m_alt,
+            p_alt_shock,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=alt_closure,
+            equation_scaling=True,
             solution_hint=warm_chk,
         )
         return m_alt

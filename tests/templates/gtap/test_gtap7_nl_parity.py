@@ -18,6 +18,7 @@ Run:
     uv run pytest tests/templates/gtap/test_gtap7_nl_parity.py -v
     uv run pytest tests/templates/gtap/test_gtap7_nl_parity.py -v -k gtap7_10x7
 """
+
 from __future__ import annotations
 
 import sys
@@ -56,7 +57,8 @@ def _available_datasets() -> list[str]:
 # Restricted to gtap7_* names: nus333/9x10 are kind="gtap" ci_status="ci"
 # but their parity is covered by dedicated tests, not this .nl fixture gate.
 DATASETS = [
-    r.dataset for r in nl_rows()
+    r.dataset
+    for r in nl_rows()
     if r.ci_status == "ci" and r.dataset.startswith("gtap7_")
 ]
 
@@ -68,9 +70,10 @@ def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
     The "check" phase (multi-period altertax CD step) is only diffed when a
     gams_check.nl fixture is present for the dataset.
     """
-    from nl_compare import build_python_nls, diff_nl_models, diff_bounds
     from _nl_parser import parse_nl
     from _parity_datasets import DATASETS as DS_REGISTRY
+    from nl_compare import build_python_nls, diff_bounds, diff_nl_models
+
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     ds = DS_REGISTRY.get(dataset)

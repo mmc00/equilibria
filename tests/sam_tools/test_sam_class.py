@@ -4,13 +4,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
 
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
 from equilibria.sam_tools.models import Sam
 
 
-def _write_ieem_raw_excel(path: Path, matrix: np.ndarray, sheet_name: str = "MCS2016") -> None:
+def _write_ieem_raw_excel(
+    path: Path, matrix: np.ndarray, sheet_name: str = "MCS2016"
+) -> None:
     groups = [
         ("actividades productivas", "act_agr"),
         ("Bienes y servicios", "com_agr"),
@@ -42,7 +43,9 @@ def _write_ieem_raw_excel(path: Path, matrix: np.ndarray, sheet_name: str = "MCS
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        pd.DataFrame(raw).to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+        pd.DataFrame(raw).to_excel(
+            writer, sheet_name=sheet_name, index=False, header=False
+        )
 
 
 def _write_ieem_mapping(path: Path) -> None:

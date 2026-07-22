@@ -12,7 +12,11 @@ from equilibria.sam_tools.models import Sam, SAMWorkflowConfig
 def _sample_dataframe() -> pd.DataFrame:
     keys = [("I", "agr"), ("I", "ser")]
     matrix = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float)
-    return pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
+    return pd.DataFrame(
+        matrix,
+        index=pd.MultiIndex.from_tuples(keys),
+        columns=pd.MultiIndex.from_tuples(keys),
+    )
 
 
 def test_sam_requires_square_and_matching_accounts() -> None:
@@ -41,7 +45,11 @@ def test_sam_update_matrix_enforces_shape() -> None:
 def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
     keys = [("RAW", "a"), ("RAW", "b")]
     matrix = np.array([[10.0, 5.0], [2.0, 8.0]], dtype=float)
-    df = pd.DataFrame(matrix, index=pd.MultiIndex.from_tuples(keys), columns=pd.MultiIndex.from_tuples(keys))
+    df = pd.DataFrame(
+        matrix,
+        index=pd.MultiIndex.from_tuples(keys),
+        columns=pd.MultiIndex.from_tuples(keys),
+    )
     sam = Sam(dataframe=df)
 
     mapping_path = tmp_path / "mapping.xlsx"
@@ -55,7 +63,9 @@ def test_sam_aggregate_and_balance(tmp_path: Path) -> None:
         mapping_df.to_excel(writer, sheet_name="mapping", index=False)
 
     sam.aggregate(mapping_path)
-    assert {(cat, elem) for cat, elem in sam.row_keys} == {(cat, elem) for cat, elem in sam.col_keys}
+    assert {(cat, elem) for cat, elem in sam.row_keys} == {
+        (cat, elem) for cat, elem in sam.col_keys
+    }
     assert (sam.matrix.shape[0], sam.matrix.shape[1]) == (1, 1)
 
     # Unbalanced matrix -> run RAS and expect closure

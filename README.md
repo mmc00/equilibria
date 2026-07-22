@@ -528,6 +528,18 @@ If you use **equilibria** in your research, please cite:
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+### Dev quickstart
+
+```bash
+uv sync --dev
+uv tool install prek && prek install   # pre-commit hooks (ruff + ty + hygiene)
+prek run --all-files
+```
+
+Hooks are fast hygiene only (format / lint / type, no solver). Use `prek`, not
+`pre-commit` — same config, faster runner. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the `ty` ratchet and the separate parity gates.
+
 **Areas where we need help:**
 
 - 📚 Documentation and tutorials

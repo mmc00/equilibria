@@ -12,7 +12,9 @@ SIM1 (the one uncommented simulation in the reference .gms): a 25% cut to the ex
 rate — `ttix.fx(i) = ttixO(i)*0.75`. (The comment says "all indirect tax rates" but only
 the ttix line is active; GAMS is the source of truth, so only ttix is scaled.)
 """
+
 from __future__ import annotations
+
 from typing import Any
 
 
@@ -22,7 +24,9 @@ def apply_sim1_export_tax_cut(state: Any, factor: float = 0.75) -> Any:
     Idempotent only per fresh calibration — call on a newly calibrated state, not twice."""
     trade = getattr(state, "trade", None)
     if not isinstance(trade, dict) or "ttixO" not in trade:
-        raise ValueError("state.trade['ttixO'] not found — cannot apply the SIM1 export-tax shock")
+        raise ValueError(
+            "state.trade['ttixO'] not found — cannot apply the SIM1 export-tax shock"
+        )
     for i in list(trade["ttixO"]):
         trade["ttixO"][i] = trade["ttixO"][i] * factor
     return state
