@@ -19,8 +19,10 @@ template and its parity status; then per-template guides:
 [HAR I/O](har_io.md), and the [PATH C API](path_capi.md) solver wrapper.
 
 **Validation & parity** — [benchmarks](benchmarks.md) and the coverage
-matrices: [GTAP 7](gtap7_coverage_matrix.md) ·
-[PEP-1-1](pep_coverage_matrix.md).
+matrices, one page per (model × reference): GTAP 7 —
+[against GAMS](gtap7_coverage_matrix.md); PEP-1-1
+[coverage](pep_coverage_matrix.md). (GEMPACK and GTAP 6 pages appear as
+their references and rows land.)
 
 **Reference** — the [API reference](../api/index.md) and the
 [changelog](../changelog.md).
