@@ -73,3 +73,32 @@ def test_coverage_doc_in_sync():
         "docs/site/guide/gtap7_coverage_matrix.md is stale — run "
         "`uv run python scripts/gtap/gen_coverage_doc.py` and commit."
     )
+
+
+def test_new_axes_default_and_validate():
+    from coverage_matrix import MODELS, REFERENCES, ROWS
+
+    # every existing row defaults to gtap7 / gams (non-destructive migration)
+    assert all(r.model == "gtap7" for r in ROWS), (
+        "existing rows must default model=gtap7"
+    )
+    assert all(r.reference == "gams" for r in ROWS), (
+        "existing rows must default reference=gams"
+    )
+    # the invariant sets exist and contain the axis values
+    assert "gtap6" in MODELS and "gtap7" in MODELS
+    assert "gams" in REFERENCES and "gempack" in REFERENCES
+    # _validate rejects an out-of-domain model/reference
+    import dataclasses
+
+    import coverage_matrix as cm
+    import pytest as _pt
+
+    bad = dataclasses.replace(ROWS[0], model="gtap9")
+    saved = cm.ROWS
+    try:
+        cm.ROWS = [*saved, bad]
+        with _pt.raises(AssertionError):
+            cm._validate()
+    finally:
+        cm.ROWS = saved

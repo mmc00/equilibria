@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 CI_STATUSES = {"ci", "local", "blocked"}
 KINDS = {"gtap", "altertax", "gtap_solve", "nlp", "mcp"}
 _PERSTAGE_KINDS = {"nlp", "mcp"}  # kinds that carry per-stage stage_floors + mode
+MODELS = {"gtap6", "gtap7"}          # model axis (F0-resto)
+REFERENCES = {"gams", "gempack"}     # comparison-reference axis (F0-resto)
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,10 @@ class Row:
     # correct (100% cell match). The test allows code in {1,2} ONLY for the stages listed
     # here; every other stage stays code==1 (non-negotiable). A tuple of stage names.
     code2_ok: tuple = ()
+    # Model + comparison-reference axes (F0-resto). Default to the historical
+    # implicit values so every existing row migrates non-destructively.
+    model: str = "gtap7"       # "gtap7" | "gtap6"
+    reference: str = "gams"    # comparison reference: "gams" | "gempack"
 
 
 ROWS: list[Row] = [
@@ -280,6 +286,8 @@ def _validate() -> None:
         assert r.kind in KINDS, f"bad kind: {r}"
         assert r.ci_status in CI_STATUSES, f"bad ci_status: {r}"
         assert r.phases, f"empty phases: {r}"
+        assert r.model in MODELS, f"bad model: {r}"
+        assert r.reference in REFERENCES, f"bad reference: {r}"
         if r.kind in _PERSTAGE_KINDS:
             # Per-stage rows (nlp/mcp) carry `stage_floors` (contract floor per phase)
             # + `mode`; row-level gap_min is None (floor lives per stage; match is
