@@ -11,9 +11,10 @@ Hierarchy:
 
 from __future__ import annotations
 
-from typing import Any
-
-from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables
+from equilibria.templates.pep_model_equations import (
+    PEPModelEquations,
+    PEPModelVariables,
+)
 
 
 class PEPCRIModelEquations(PEPModelEquations):

@@ -6,16 +6,14 @@ caching results, and managing dummy data generation.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
-import re
 
 if TYPE_CHECKING:
     from equilibria.babel import SAM
-    from equilibria.core.parameters import Parameter
-    from equilibria.core.sets import Set, SetManager
 
 
 class CalibrationError(Exception):

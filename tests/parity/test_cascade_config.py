@@ -5,7 +5,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from cascade_config import (
-    family, scenario_for, resolve_periods, resolve_ref_gdx, GdxResolution,
+    family,
+    resolve_periods,
+    resolve_ref_gdx,
+    scenario_for,
 )
 
 

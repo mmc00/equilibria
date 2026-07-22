@@ -6,7 +6,6 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from cascade_layers import LAYER_SPECS, build_cmd, layer_by_name
 
-
 GDX = Path("/ref/out.gdx")
 
 
@@ -18,9 +17,17 @@ def test_subprocess_layers_in_diagnostic_order():
     names = [l.name for l in LAYER_SPECS]
     # anchor-missing layers (holdfixed/tautology) sit right after mcp_pairing so a
     # root-selection gap is flagged before the downstream symptom layers.
-    assert names == ["mcp_pairing", "holdfixed", "tautology", "causal_propagation",
-                     "nl_compare", "calibration", "validate_reference", "probe_seed",
-                     "drift_test"]
+    assert names == [
+        "mcp_pairing",
+        "holdfixed",
+        "tautology",
+        "causal_propagation",
+        "nl_compare",
+        "calibration",
+        "validate_reference",
+        "probe_seed",
+        "drift_test",
+    ]
 
 
 def test_holdfixed_argv():
@@ -42,8 +49,11 @@ def test_tautology_has_no_base():
 
 def test_mcp_pairing_argv():
     argv = _argv("mcp_pairing", "gtap7_3x3", "shock")
-    assert argv[-4:] == ["--dataset", "gtap7_3x3", "--period", "shock"][:0] + \
-        ["--dataset", "gtap7_3x3", "--period", "shock", "--apply-closure"][-4:]
+    assert (
+        argv[-4:]
+        == ["--dataset", "gtap7_3x3", "--period", "shock"][:0]
+        + ["--dataset", "gtap7_3x3", "--period", "shock", "--apply-closure"][-4:]
+    )
     assert "diff_mcp_pairing.py" in argv[1]
     assert "--apply-closure" in argv
 
@@ -63,8 +73,16 @@ def test_calibration_pins_benchmark_period_check():
 
 def test_probe_seed_argv():
     argv = _argv("probe_seed", "gtap7_3x3", "shock")
-    for tok in ("--template", "gtap", "--scenario", "altertax_shock",
-                "--seed-gams", "shock", "--gdx-ref", "--residuals"):
+    for tok in (
+        "--template",
+        "gtap",
+        "--scenario",
+        "altertax_shock",
+        "--seed-gams",
+        "shock",
+        "--gdx-ref",
+        "--residuals",
+    ):
         assert tok in argv
 
 

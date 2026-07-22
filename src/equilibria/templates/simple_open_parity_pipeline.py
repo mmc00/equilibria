@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import struct
 from dataclasses import asdict, dataclass
 from pathlib import Path
-import struct
 from typing import Any
 
 from equilibria.babel.gdx.reader import read_data_sections, read_gdx
@@ -76,6 +76,7 @@ class SimpleOpenParityComparison:
 
         return asdict(self)
 
+
 def _read_symbol_section(
     *,
     gdx_path: Path,
@@ -95,7 +96,9 @@ def _read_symbol_section(
 
     sections = read_data_sections(gdx_path.read_bytes())
     if symbol_index >= len(sections):
-        raise ValueError(f"No _DATA_ section found for symbol '{symbol_name}' in {gdx_path}")
+        raise ValueError(
+            f"No _DATA_ section found for symbol '{symbol_name}' in {gdx_path}"
+        )
     _, section = sections[symbol_index]
     return symbol_meta, section
 
@@ -189,7 +192,11 @@ def load_simple_open_gams_reference(gdx_path: str | Path) -> SimpleOpenGAMSRefer
         ordered_names=_CALIBRATION_ORDER,
         fill_missing_with_zero=False,
     )
-    closure_code = int(round(float(calib.get("closure_code", -1)))) if "closure_code" in calib else -1
+    closure_code = (
+        int(round(float(calib.get("closure_code", -1))))
+        if "closure_code" in calib
+        else -1
+    )
     closure_names: tuple[str, ...]
     if closure_code == 101:
         closure_names = ("simple_open_default",)
@@ -251,7 +258,9 @@ def compare_simple_open_gams_parity(
     spec: SimpleOpenParitySpec = build_simple_open_parity_spec(resolved_contract)
     reference = load_simple_open_gams_reference(gdx_path)
 
-    expected_closure_code = 101.0 if spec.closure_name == "simple_open_default" else 202.0
+    expected_closure_code = (
+        101.0 if spec.closure_name == "simple_open_default" else 202.0
+    )
     expected_params = {
         "alpha_va": float(spec.benchmark_parameters.alpha_va),
         "rho_va": float(spec.benchmark_parameters.rho_va),
@@ -261,26 +270,34 @@ def compare_simple_open_gams_parity(
         "phi_cet": float(spec.benchmark_parameters.phi_cet),
         "closure_code": expected_closure_code,
     }
-    benchmark_compared, benchmark_mismatches, benchmark_max_abs, benchmark_details = _compare_named_values(
-        spec.benchmark_levels,
-        reference.benchmark,
-        abs_tol=float(abs_tol),
+    benchmark_compared, benchmark_mismatches, benchmark_max_abs, benchmark_details = (
+        _compare_named_values(
+            spec.benchmark_levels,
+            reference.benchmark,
+            abs_tol=float(abs_tol),
+        )
     )
-    level_compared, level_mismatches, level_max_abs, level_details = _compare_named_values(
-        spec.benchmark_levels,
-        reference.level,
-        abs_tol=float(abs_tol),
+    level_compared, level_mismatches, level_max_abs, level_details = (
+        _compare_named_values(
+            spec.benchmark_levels,
+            reference.level,
+            abs_tol=float(abs_tol),
+        )
     )
-    expected_residual = {name: 0.0 for name in spec.equation_names}
-    residual_compared, residual_mismatches, residual_max_abs, residual_details = _compare_named_values(
-        expected_residual,
-        reference.residual,
-        abs_tol=float(abs_tol),
+    expected_residual = dict.fromkeys(spec.equation_names, 0.0)
+    residual_compared, residual_mismatches, residual_max_abs, residual_details = (
+        _compare_named_values(
+            expected_residual,
+            reference.residual,
+            abs_tol=float(abs_tol),
+        )
     )
-    parameter_compared, parameter_mismatches, parameter_max_abs, parameter_details = _compare_named_values(
-        expected_params,
-        reference.calib,
-        abs_tol=float(abs_tol),
+    parameter_compared, parameter_mismatches, parameter_max_abs, parameter_details = (
+        _compare_named_values(
+            expected_params,
+            reference.calib,
+            abs_tol=float(abs_tol),
+        )
     )
 
     active_closure_match = spec.closure_name in reference.closure_names

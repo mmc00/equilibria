@@ -11,7 +11,9 @@ SCRIPT = ROOT / "scripts" / "parity" / "measure_simple_open_jacobian_modes.py"
 
 
 def _load_module() -> Any:
-    spec = importlib.util.spec_from_file_location("measure_simple_open_jacobian_modes", SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "measure_simple_open_jacobian_modes", SCRIPT
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -37,5 +39,15 @@ def test_cli_main_gate_passes(tmp_path: Path, monkeypatch: Any) -> None:
     assert code == 0
     payload = json.loads(out_file.read_text())
     assert payload["gate"]["passed"] is True
-    assert payload["mode_comparison"]["simple_open_default"]["analytic"]["solver_stats"]["finite_difference_eval_count"] == 0
-    assert payload["mode_comparison"]["flexible_external_balance"]["numeric"]["solver_stats"]["finite_difference_eval_count"] > 0
+    assert (
+        payload["mode_comparison"]["simple_open_default"]["analytic"]["solver_stats"][
+            "finite_difference_eval_count"
+        ]
+        == 0
+    )
+    assert (
+        payload["mode_comparison"]["flexible_external_balance"]["numeric"][
+            "solver_stats"
+        ]["finite_difference_eval_count"]
+        > 0
+    )

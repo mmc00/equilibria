@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "parity"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from _probe_cache import compute_cache_key, store_solution, load_solution, KEY_FILES
+from _probe_cache import KEY_FILES, compute_cache_key, load_solution, store_solution
 
 
 def test_cache_key_changes_when_key_file_changes(tmp_path):
@@ -48,8 +48,10 @@ from _probe_queries import extract_solution, inject_solution
 
 def test_extract_inject_roundtrip_with_real_model():
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
+
     adapter = AdapterRegistry.get("gtap")()
     if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
         pytest.skip("gtap7_3x3 not available")
@@ -57,6 +59,7 @@ def test_extract_inject_roundtrip_with_real_model():
     sol = extract_solution(m)
     assert "pf" in sol and len(sol["pf"]) > 0
     from pyomo.environ import value
+
     key = next(iter(sol["pf"]))
     original = sol["pf"][key]
     m.pf[key].set_value(0.0)
@@ -64,13 +67,15 @@ def test_extract_inject_roundtrip_with_real_model():
     assert abs(value(m.pf[key]) - original) < 1e-12
 
 
-from _probe_queries import query_show, query_residuals
+from _probe_queries import query_residuals, query_show
 
 
 def test_query_show_filters_by_region():
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
+
     adapter = AdapterRegistry.get("gtap")()
     if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
         pytest.skip("gtap7_3x3 not available")
@@ -83,8 +88,10 @@ def test_query_show_filters_by_region():
 
 def test_query_residuals_sorted_desc():
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
+
     adapter = AdapterRegistry.get("gtap")()
     if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
         pytest.skip("gtap7_3x3 not available")
@@ -100,8 +107,10 @@ from _probe_queries import seed_gams_point
 
 def test_seed_gams_reports_coverage():
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
+
     ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
     if not ref.exists():
         pytest.skip("reference GDX absent")
@@ -121,12 +130,25 @@ import subprocess
 
 def test_cli_show_runs_and_caches(tmp_path):
     import pytest
+
     env_cache = tmp_path / "cache"
     cmd = [
-        "uv", "run", "python", "scripts/parity/probe.py",
-        "--template", "gtap", "--dataset", "gtap7_3x3",
-        "--scenario", "altertax_check", "--show", "pi", "--region", "ROW",
-        "--cache-dir", str(env_cache),
+        "uv",
+        "run",
+        "python",
+        "scripts/parity/probe.py",
+        "--template",
+        "gtap",
+        "--dataset",
+        "gtap7_3x3",
+        "--scenario",
+        "altertax_check",
+        "--show",
+        "pi",
+        "--region",
+        "ROW",
+        "--cache-dir",
+        str(env_cache),
     ]
     r1 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300)
     if "not available" in (r1.stdout + r1.stderr) or "Skip" in r1.stdout:
@@ -140,23 +162,39 @@ def test_cli_show_runs_and_caches(tmp_path):
 
 def test_compare_ref_runs_against_head_itself(tmp_path):
     import pytest
+
     r = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True
     )
     head = r.stdout.strip()
     cmd = [
-        "uv", "run", "python", "scripts/parity/probe.py",
-        "--template", "gtap", "--dataset", "gtap7_3x3",
-        "--scenario", "altertax_check", "--show", "pi", "--region", "ROW",
-        "--compare-ref", head, "--cache-dir", str(tmp_path / "c"),
+        "uv",
+        "run",
+        "python",
+        "scripts/parity/probe.py",
+        "--template",
+        "gtap",
+        "--dataset",
+        "gtap7_3x3",
+        "--scenario",
+        "altertax_check",
+        "--show",
+        "pi",
+        "--region",
+        "ROW",
+        "--compare-ref",
+        head,
+        "--cache-dir",
+        str(tmp_path / "c"),
     ]
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=600)
     if "not available" in (out.stdout + out.stderr):
         pytest.skip("gtap7_3x3 not available")
     assert out.returncode == 0, out.stderr
     assert "HEAD" in out.stdout and "Δ" in out.stdout
-    wl = subprocess.run(["git", "worktree", "list"], cwd=ROOT,
-                        capture_output=True, text=True)
+    wl = subprocess.run(
+        ["git", "worktree", "list"], cwd=ROOT, capture_output=True, text=True
+    )
     assert "probe_compare_" not in wl.stdout
 
 
@@ -177,8 +215,10 @@ def test_seed_gams_coverage_is_vs_exported_not_all_free_vars(tmp_path):
     the name mapping is healthy it should be high (~>0.85), unlike the old
     free-var denominator that read ~0.68 and made the 95% gate unhittable."""
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
+
     ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
     if not ref.exists():
         pytest.skip("reference GDX absent")
@@ -196,13 +236,15 @@ def test_seed_gams_coverage_is_vs_exported_not_all_free_vars(tmp_path):
     )
 
 
-from _probe_params import extract_params, ALIAS_MAP, resolve_gams_symbol
+from _probe_params import ALIAS_MAP, extract_params, resolve_gams_symbol
 
 
 def test_extract_params_with_real_model():
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
+
     adapter = AdapterRegistry.get("gtap")()
     if ("gtap7_3x3", "altertax_check") not in adapter.enumerate_combinations():
         pytest.skip("gtap7_3x3 not available")
@@ -225,8 +267,10 @@ from _probe_params import diff_params_vs_gams
 
 def test_diff_params_vs_gams_three_groups():
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
+
     ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
     if not ref.exists():
         pytest.skip("reference GDX absent")
@@ -255,9 +299,13 @@ def test_diff_param_builds_runs_and_is_well_formed():
     this surfaces it. So we assert structure + sortedness, not a specific param.
     """
     import pytest
+
     pytest.importorskip("pyomo")
     from _adapter_protocol import AdapterRegistry
-    if ("gtap7_3x3", "altertax_check") not in AdapterRegistry.get("gtap")().enumerate_combinations():
+
+    if ("gtap7_3x3", "altertax_check") not in AdapterRegistry.get(
+        "gtap"
+    )().enumerate_combinations():
         pytest.skip("gtap7_3x3 not available")
     changed = diff_param_builds("gtap7_3x3", tol_rel=1e-3)
     assert isinstance(changed, list)
@@ -270,13 +318,24 @@ def test_diff_param_builds_runs_and_is_well_formed():
 
 def test_cli_params_runs(tmp_path):
     import pytest
+
     ref = ROOT / "output" / "gtap7_3x3_altertax_neos_bundle" / "out_local.gdx"
     if not ref.exists():
         pytest.skip("reference GDX absent")
     cmd = [
-        "uv", "run", "python", "scripts/parity/probe.py",
-        "--dataset", "gtap7_3x3", "--scenario", "altertax_check",
-        "--params", "--gdx-ref", str(ref), "--cache-dir", str(tmp_path / "c"),
+        "uv",
+        "run",
+        "python",
+        "scripts/parity/probe.py",
+        "--dataset",
+        "gtap7_3x3",
+        "--scenario",
+        "altertax_check",
+        "--params",
+        "--gdx-ref",
+        str(ref),
+        "--cache-dir",
+        str(tmp_path / "c"),
     ]
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300)
     if "not available" in (out.stdout + out.stderr):

@@ -5,11 +5,11 @@ SAM(category1, element1, category2, element2) = value
 """
 
 from pathlib import Path
-import pandas as pd
-import numpy as np
 
-from equilibria.babel.gdx.writer import write_gdx
+import pandas as pd
+
 from equilibria.babel.gdx.symbols import Parameter
+from equilibria.babel.gdx.writer import write_gdx
 
 
 def read_sam_excel_4d(filepath: Path) -> dict:
@@ -60,8 +60,12 @@ def read_sam_excel_4d(filepath: Path) -> dict:
 
     # Build 4D dictionary
     sam_4d = {}
-    for i, (row_cat, row_elem) in enumerate(zip(row_categories, row_elements)):
-        for j, (col_cat, col_elem) in enumerate(zip(col_categories, col_elements)):
+    for i, (row_cat, row_elem) in enumerate(
+        zip(row_categories, row_elements, strict=False)
+    ):
+        for j, (col_cat, col_elem) in enumerate(
+            zip(col_categories, col_elements, strict=False)
+        ):
             value = float(data.iloc[i, j])
             if value != 0:  # Sparse storage
                 sam_4d[(row_cat, row_elem, col_cat, col_elem)] = value
@@ -100,7 +104,7 @@ def generate_sam_4d_gdx(excel_path: Path, output_path: Path) -> None:
 
     print(f"✓ Generated 4D SAM GDX: {output_path}")
     print(f"  Records: {len(records)}")
-    print(f"  Format: SAM(cat1, elem1, cat2, elem2) = value")
+    print("  Format: SAM(cat1, elem1, cat2, elem2) = value")
 
     # Show sample entries
     print("\nSample entries:")
@@ -111,8 +115,25 @@ def generate_sam_4d_gdx(excel_path: Path, output_path: Path) -> None:
 def main():
     """Generate 4D SAM GDX."""
     repo_root = Path(__file__).resolve().parents[5]
-    excel_path = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "SAM-V2_0.xls"
-    output_path = repo_root / "src" / "equilibria" / "templates" / "data" / "pep" / "SAM-V2_0_4D.gdx"
+    excel_path = (
+        repo_root
+        / "src"
+        / "equilibria"
+        / "templates"
+        / "reference"
+        / "pep2"
+        / "data"
+        / "SAM-V2_0.xls"
+    )
+    output_path = (
+        repo_root
+        / "src"
+        / "equilibria"
+        / "templates"
+        / "data"
+        / "pep"
+        / "SAM-V2_0_4D.gdx"
+    )
 
     generate_sam_4d_gdx(excel_path, output_path)
 

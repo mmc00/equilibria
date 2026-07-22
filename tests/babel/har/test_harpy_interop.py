@@ -10,6 +10,7 @@ own reader round-tripped them cleanly.
 These tests run only when ``harpy`` is importable. CI does not install harpy;
 install it via ``uv sync --group har-oracle`` to enable this layer.
 """
+
 from __future__ import annotations
 
 import warnings

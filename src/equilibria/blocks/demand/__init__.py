@@ -8,18 +8,18 @@ This module provides consumer demand-related equation blocks including:
 from __future__ import annotations
 
 import typing
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
+from equilibria.core.parameters import Parameter
+from equilibria.core.sets import SetManager
 from equilibria.core.symbolic_equations import (
     SymbolicEquation,
 )
-from equilibria.core.parameters import Parameter
-from equilibria.core.sets import SetManager
 from equilibria.core.variables import Variable
 
 if TYPE_CHECKING:
@@ -161,11 +161,11 @@ class LESConsumer(Block):
 
                 i = indices[0]
 
-                QD = getattr(pyomo_model, "QD")
-                PA = getattr(pyomo_model, "PA")
-                Y = getattr(pyomo_model, "Y")
-                gamma = getattr(pyomo_model, "gamma")
-                beta = getattr(pyomo_model, "beta")
+                QD = pyomo_model.QD
+                PA = pyomo_model.PA
+                Y = pyomo_model.Y
+                gamma = pyomo_model.gamma
+                beta = pyomo_model.beta
 
                 # Calculate subsistence expenditure
                 I_set = pyomo_model.I
@@ -185,9 +185,9 @@ class LESConsumer(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for budget constraint."""
-                PA = getattr(pyomo_model, "PA")
-                QD = getattr(pyomo_model, "QD")
-                Y = getattr(pyomo_model, "Y")
+                PA = pyomo_model.PA
+                QD = pyomo_model.QD
+                Y = pyomo_model.Y
 
                 I_set = pyomo_model.I
                 total_exp = sum(PA[i] * QD[i] for i in I_set)
@@ -214,10 +214,7 @@ class LESConsumer(Block):
 
             # Get prices from trade block
             trade_params = data.get_block_params("Armington")
-            if "PA0" in trade_params:
-                PA0 = trade_params["PA0"]
-            else:
-                PA0 = np.ones(n_comm)
+            PA0 = trade_params["PA0"] if "PA0" in trade_params else np.ones(n_comm)
 
             # Calculate expenditure
             expenditure = QD0 * PA0
@@ -244,12 +241,10 @@ class LESConsumer(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QD0" in calibrated:
-            if "QD" in var_manager:
-                var_manager.get("QD").value = calibrated["QD0"].copy()
-        if "Y0" in calibrated:
-            if "Y" in var_manager:
-                var_manager.get("Y").value = np.array([calibrated["Y0"]])
+        if "QD0" in calibrated and "QD" in var_manager:
+            var_manager.get("QD").value = calibrated["QD0"].copy()
+        if "Y0" in calibrated and "Y" in var_manager:
+            var_manager.get("Y").value = np.array([calibrated["Y0"]])
 
 
 class CobbDouglasConsumer(Block):
@@ -368,10 +363,10 @@ class CobbDouglasConsumer(Block):
 
                 i = indices[0]
 
-                QD = getattr(pyomo_model, "QD")
-                PA = getattr(pyomo_model, "PA")
-                Y = getattr(pyomo_model, "Y")
-                alpha = getattr(pyomo_model, "alpha")
+                QD = pyomo_model.QD
+                PA = pyomo_model.PA
+                Y = pyomo_model.Y
+                alpha = pyomo_model.alpha
 
                 # Log-linearized: log(QD[i]) = log(alpha[i]) + log(Y) - log(PA[i])
                 lhs = log(QD[i])
@@ -387,9 +382,9 @@ class CobbDouglasConsumer(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for budget constraint."""
-                PA = getattr(pyomo_model, "PA")
-                QD = getattr(pyomo_model, "QD")
-                Y = getattr(pyomo_model, "Y")
+                PA = pyomo_model.PA
+                QD = pyomo_model.QD
+                Y = pyomo_model.Y
 
                 I_set = pyomo_model.I
                 total_exp = sum(PA[i] * QD[i] for i in I_set)
@@ -416,10 +411,7 @@ class CobbDouglasConsumer(Block):
 
             # Get prices from trade block
             trade_params = data.get_block_params("Armington")
-            if "PA0" in trade_params:
-                PA0 = trade_params["PA0"]
-            else:
-                PA0 = np.ones(n_comm)
+            PA0 = trade_params["PA0"] if "PA0" in trade_params else np.ones(n_comm)
 
             # Calculate expenditure shares
             expenditure = QD0 * PA0
@@ -441,9 +433,7 @@ class CobbDouglasConsumer(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QD0" in calibrated:
-            if "QD" in var_manager:
-                var_manager.get("QD").value = calibrated["QD0"].copy()
-        if "Y0" in calibrated:
-            if "Y" in var_manager:
-                var_manager.get("Y").value = np.array([calibrated["Y0"]])
+        if "QD0" in calibrated and "QD" in var_manager:
+            var_manager.get("QD").value = calibrated["QD0"].copy()
+        if "Y0" in calibrated and "Y" in var_manager:
+            var_manager.get("Y").value = np.array([calibrated["Y0"]])

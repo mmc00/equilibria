@@ -15,7 +15,17 @@ def test_simple_open_parity_spec_default_is_canonical_contract() -> None:
     assert spec.contract_name == "simple_open_v1"
     assert spec.closure_name == "simple_open_default"
     assert spec.equation_names == ("EQ_VA", "EQ_INT", "EQ_CET")
-    assert spec.variable_names == ("VA", "INT", "X", "D", "E", "ER", "PFX", "CAB", "FSAV")
+    assert spec.variable_names == (
+        "VA",
+        "INT",
+        "X",
+        "D",
+        "E",
+        "ER",
+        "PFX",
+        "CAB",
+        "FSAV",
+    )
     assert spec.benchmark_levels["PFX"] == pytest.approx(1.0)
     assert spec.benchmark_levels["ER"] == pytest.approx(1.0)
     assert spec.benchmark_levels["CAB"] == pytest.approx(1.0)
@@ -23,12 +33,14 @@ def test_simple_open_parity_spec_default_is_canonical_contract() -> None:
 
 
 def test_simple_open_parity_spec_follows_flexible_external_balance_closure() -> None:
-    contract = build_simple_open_contract({"closure": {"name": "flexible_external_balance"}})
+    contract = build_simple_open_contract(
+        {"closure": {"name": "flexible_external_balance"}}
+    )
     spec = build_simple_open_parity_spec(contract)
 
     assert spec.closure_name == "flexible_external_balance"
-    assert spec.benchmark_parameters.CAB == pytest.approx(0.82)
-    assert spec.benchmark_parameters.FSAV == pytest.approx(0.82)
+    assert pytest.approx(0.82) == spec.benchmark_parameters.CAB
+    assert pytest.approx(0.82) == spec.benchmark_parameters.FSAV
     assert spec.benchmark_levels["ER"] == pytest.approx(1.08)
     assert spec.benchmark_levels["D"] == pytest.approx(1.04)
     assert spec.benchmark_levels["E"] == pytest.approx(0.93)

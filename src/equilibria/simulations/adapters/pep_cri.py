@@ -23,8 +23,8 @@ from equilibria.simulations.types import Scenario
 from equilibria.templates.pep_calibration_unified import PEPModelState
 from equilibria.templates.pep_cri_calibration import (
     PEPCRIModelCalibrator,
-    PEPCRIModelCalibratorExcel,
     PEPCRIModelCalibratorDynamicSAM,
+    PEPCRIModelCalibratorExcel,
     PEPCRIModelCalibratorExcelDynamicSAM,
 )
 from equilibria.templates.pep_cri_solver import PEPCRIModelSolver

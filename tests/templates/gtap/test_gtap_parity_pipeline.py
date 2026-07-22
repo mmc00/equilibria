@@ -7,32 +7,30 @@ and CGEBox GAMS results.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pyomo.environ import ConcreteModel, Param, Set, Var
 
 from equilibria.templates.gtap import GTAPParameters, GTAPSets
+from equilibria.templates.gtap.gtap_parameters import GTAPTaxRates
 from equilibria.templates.gtap.gtap_parity_pipeline import (
+    GTAPGAMSReference,
     GTAPParityComparison,
     GTAPParityRunner,
-    GTAPGAMSReference,
     GTAPVariableSnapshot,
-    _resolve_standard_gtap_reference_csv,
-    _resolve_standard_gtap_years,
     _derive_factor_tax_wedges_from_standard_gtap_csv,
     _enrich_sets_from_standard_gtap_csv,
+    _resolve_standard_gtap_reference_csv,
+    _resolve_standard_gtap_years,
     compare_gtap_gams_parity,
     compare_variable_groups,
     run_gtap_parity_test,
 )
-from equilibria.templates.gtap.gtap_parameters import GTAPTaxRates
-from equilibria.templates.gtap.gtap_solver import SolverResult, SolverStatus
 
 
 class TestGTAPVariableSnapshot:
     """Tests for GTAPVariableSnapshot."""
-    
+
     def test_empty_snapshot(self):
         """Test creating empty snapshot."""
         snap = GTAPVariableSnapshot()
@@ -40,7 +38,7 @@ class TestGTAPVariableSnapshot:
         assert snap.walras is None
         assert len(snap.xp) == 0
         assert snap.is_empty() is True
-    
+
     def test_snapshot_creation(self):
         """Test snapshot with data."""
         snap = GTAPVariableSnapshot(
@@ -192,9 +190,13 @@ class TestStandardGTAPSetEnrichment:
         )
 
         assert taxes.kappaf_activity[("R1", "SkLab", "a_mine")] == pytest.approx(0.2)
-        assert taxes.kappaf_activity[("R1", "SkLab", "a_food")] == pytest.approx(1.0 - (1.0 / 1.10))
+        assert taxes.kappaf_activity[("R1", "SkLab", "a_food")] == pytest.approx(
+            1.0 - (1.0 / 1.10)
+        )
 
-    def test_resolve_standard_gtap_years_falls_back_to_available_tokens(self, tmp_path: Path):
+    def test_resolve_standard_gtap_years_falls_back_to_available_tokens(
+        self, tmp_path: Path
+    ):
         """standard_gtap_7 CSVs with year labels 1/2/3 should override incompatible defaults."""
         csv_path = tmp_path / "COMP.csv"
         csv_path.write_text(
@@ -218,17 +220,25 @@ class TestStandardGTAPSetEnrichment:
         assert benchmark_year == "1"
         assert solution_year == "1"
 
-    def test_resolve_standard_gtap_reference_csv_prefers_generated_9x10_output(self, tmp_path: Path):
+    def test_resolve_standard_gtap_reference_csv_prefers_generated_9x10_output(
+        self, tmp_path: Path
+    ):
         """9x10 parity should prefer a domain-compatible generated comparator CSV."""
         root_csv = tmp_path / "COMP.csv"
         generated_csv = tmp_path / "comp" / "COMP_generated.csv"
         neos_csv = tmp_path / "comp_neos" / "COMP.csv"
 
-        root_csv.write_text("Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8")
+        root_csv.write_text(
+            "Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8"
+        )
         generated_csv.parent.mkdir(parents=True, exist_ok=True)
-        generated_csv.write_text("Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8")
+        generated_csv.write_text(
+            "Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8"
+        )
         neos_csv.parent.mkdir(parents=True, exist_ok=True)
-        neos_csv.write_text("Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8")
+        neos_csv.write_text(
+            "Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8"
+        )
 
         sets = GTAPSets(
             r=["R1"],
@@ -241,13 +251,19 @@ class TestStandardGTAPSetEnrichment:
 
         assert _resolve_standard_gtap_reference_csv(root_csv, sets) == generated_csv
 
-    def test_resolve_standard_gtap_reference_csv_leaves_specific_or_non_9x10_paths(self, tmp_path: Path):
+    def test_resolve_standard_gtap_reference_csv_leaves_specific_or_non_9x10_paths(
+        self, tmp_path: Path
+    ):
         """Non-9x10 sets or already-specific CSV paths should remain unchanged."""
         root_csv = tmp_path / "COMP.csv"
-        root_csv.write_text("Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8")
+        root_csv.write_text(
+            "Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8"
+        )
         direct_csv = tmp_path / "comp_neos" / "COMP.csv"
         direct_csv.parent.mkdir(parents=True, exist_ok=True)
-        direct_csv.write_text("Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8")
+        direct_csv.write_text(
+            "Variable,Region,Sector,Qualifier,Year,Value\n", encoding="utf-8"
+        )
 
         sets = GTAPSets(
             r=["R1"],
@@ -261,61 +277,62 @@ class TestStandardGTAPSetEnrichment:
         assert _resolve_standard_gtap_reference_csv(root_csv, sets) == root_csv
         assert _resolve_standard_gtap_reference_csv(direct_csv, sets) == direct_csv
 
+
 class TestCompareVariableGroups:
     """Tests for variable group comparison."""
-    
+
     def test_identical_values(self):
         """Test comparison with identical values."""
         python = {("r1", "a1"): 1.0, ("r2", "a2"): 2.0}
         gams = {("r1", "a1"): 1.0, ("r2", "a2"): 2.0}
-        
+
         n_comp, n_mism, max_diff, mismatches = compare_variable_groups(
             python, gams, "test", tolerance=1e-6
         )
-        
+
         assert n_comp == 2
         assert n_mism == 0
         assert max_diff == 0.0
         assert len(mismatches) == 0
-    
+
     def test_with_mismatches(self):
         """Test comparison with mismatches."""
         python = {("r1", "a1"): 1.0, ("r2", "a2"): 2.0}
         gams = {("r1", "a1"): 1.001, ("r2", "a2"): 2.0}
-        
+
         n_comp, n_mism, max_diff, mismatches = compare_variable_groups(
             python, gams, "test", tolerance=1e-6
         )
-        
+
         assert n_comp == 2
         assert n_mism == 1
         assert max_diff == pytest.approx(0.001, abs=1e-10)
         assert len(mismatches) == 1
         assert mismatches[0]["group"] == "test"
-    
+
     def test_missing_in_python(self):
         """Test when Python has missing values."""
         python = {("r1", "a1"): 1.0}
         gams = {("r1", "a1"): 1.0, ("r2", "a2"): 0.0}
-        
+
         n_comp, n_mism, max_diff, mismatches = compare_variable_groups(
             python, gams, "test", tolerance=1e-6
         )
-        
+
         # Should not count (r2, a2) as both are 0
         assert n_comp == 1
-    
+
     def test_tolerance_check(self):
         """Test tolerance threshold."""
         python = {("r1", "a1"): 1.0}
         gams = {("r1", "a1"): 1.0000001}
-        
+
         # Should pass with loose tolerance
         n_comp1, n_mism1, _, _ = compare_variable_groups(
             python, gams, "test", tolerance=1e-3
         )
         assert n_mism1 == 0
-        
+
         # Should fail with tight tolerance
         n_comp2, n_mism2, _, _ = compare_variable_groups(
             python, gams, "test", tolerance=1e-9
@@ -325,7 +342,7 @@ class TestCompareVariableGroups:
 
 class TestGTAPParityComparison:
     """Tests for GTAPParityComparison dataclass."""
-    
+
     def test_to_dict(self):
         """Test conversion to dictionary."""
         comp = GTAPParityComparison(
@@ -338,12 +355,12 @@ class TestGTAPParityComparison:
             mismatches=[],
             summary={"test": "data"},
         )
-        
+
         d = comp.to_dict()
         assert d["passed"] is True
         assert d["tolerance"] == 1e-6
         assert d["n_variables_compared"] == 100
-    
+
     def test_to_json(self):
         """Test conversion to JSON."""
         comp = GTAPParityComparison(
@@ -358,7 +375,7 @@ class TestGTAPParityComparison:
             ],
             summary={},
         )
-        
+
         json_str = comp.to_json()
         assert '"passed": false' in json_str
         assert '"n_mismatches": 5' in json_str
@@ -366,7 +383,7 @@ class TestGTAPParityComparison:
 
 class TestCompareGTAPParity:
     """Tests for compare_gtap_gams_parity function."""
-    
+
     def test_perfect_match(self, monkeypatch):
         """Test when Python and GAMS match perfectly."""
         py_snap = GTAPVariableSnapshot(
@@ -374,7 +391,7 @@ class TestCompareGTAPParity:
             pnum=1.0,
             walras=0.0,
         )
-        
+
         gams_ref = GTAPGAMSReference(
             gdx_path=Path("test.gdx"),
             sets=None,
@@ -383,13 +400,13 @@ class TestCompareGTAPParity:
             solvestat=1.0,
             solve_time=1.0,
         )
-        
+
         result = compare_gtap_gams_parity(py_snap, gams_ref, tolerance=1e-6)
-        
+
         assert result.passed is True
         assert result.n_mismatches == 0
         assert result.max_abs_diff == 0.0
-    
+
     def test_with_mismatches(self):
         """Test when there are mismatches."""
         py_snap = GTAPVariableSnapshot(
@@ -397,13 +414,13 @@ class TestCompareGTAPParity:
             pnum=1.0,
             walras=0.0,
         )
-        
+
         gams_snap = GTAPVariableSnapshot(
             xp={("USA", "agr"): 1.1, ("EUR", "mfg"): 2.0},  # 10% difference
             pnum=1.0,
             walras=0.0,
         )
-        
+
         gams_ref = GTAPGAMSReference(
             gdx_path=Path("test.gdx"),
             sets=None,
@@ -412,9 +429,9 @@ class TestCompareGTAPParity:
             solvestat=1.0,
             solve_time=1.0,
         )
-        
+
         result = compare_gtap_gams_parity(py_snap, gams_ref, tolerance=1e-6)
-        
+
         assert result.passed is False
         assert result.n_mismatches >= 1
         assert result.max_abs_diff >= 0.1
@@ -484,7 +501,7 @@ class TestCompareGTAPParity:
 
 class TestGTAPParityRunner:
     """Tests for GTAPParityRunner."""
-    
+
     def test_initialization_with_split_bundle(self, tmp_path: Path, monkeypatch):
         """Test runner initialization in standard_gtap_7 bundle mode."""
         sets = GTAPSets(
@@ -532,7 +549,7 @@ class TestGTAPParityRunner:
         assert runner.sets is sets
         assert runner.params is params
         assert runner.model == {"ok": True}
-    
+
     def test_run_python_mocked(self, tmp_path: Path, monkeypatch):
         """Test running Python model with mocking."""
         # This would require extensive mocking of the full model
@@ -570,27 +587,27 @@ class TestGTAPParityRunner:
 
 class TestIntegration:
     """Integration tests requiring actual GDX files."""
-    
+
     @pytest.mark.skip(reason="Requires actual GTAP GDX files")
     def test_full_parity_check(self):
         """Test full parity check with real data.
-        
+
         This test requires:
         - A GTAP data GDX file
         - A GAMS results GDX file
         """
         gdx_file = Path("data/asa7x5.gdx")
         gams_results = Path("results/gams_results.gdx")
-        
+
         if not gdx_file.exists() or not gams_results.exists():
             pytest.skip("GDX files not available")
-        
+
         result = run_gtap_parity_test(
             gdx_file=gdx_file,
             gams_results_gdx=gams_results,
             tolerance=1e-6,
         )
-        
+
         # Should complete without error
         assert result is not None
         assert result.n_variables_compared > 0
@@ -598,24 +615,24 @@ class TestIntegration:
 
 class TestRunGTAPParityTest:
     """Tests for run_gtap_parity_test convenience function."""
-    
+
     def test_missing_files(self, tmp_path: Path):
         """Test with missing files."""
         gdx_file = tmp_path / "nonexistent.gdx"
         gams_results = tmp_path / "nonexistent_results.gdx"
-        
+
         with pytest.raises(FileNotFoundError):
             run_gtap_parity_test(gdx_file=gdx_file, gams_results_gdx=gams_results)
 
 
 class TestEdgeCases:
     """Edge case tests."""
-    
+
     def test_empty_comparison(self):
         """Test comparison with empty snapshots."""
         py_snap = GTAPVariableSnapshot()
         gams_snap = GTAPVariableSnapshot()
-        
+
         gams_ref = GTAPGAMSReference(
             gdx_path=Path("test.gdx"),
             sets=None,
@@ -624,21 +641,21 @@ class TestEdgeCases:
             solvestat=1.0,
             solve_time=1.0,
         )
-        
+
         result = compare_gtap_gams_parity(py_snap, gams_ref, tolerance=1e-6)
-        
+
         # Should pass (nothing to compare)
         assert result.passed is True
-    
+
     def test_nan_values(self):
         """Test handling of NaN values."""
         py_snap = GTAPVariableSnapshot(
-            xp={("USA", "agr"): float('nan')},
+            xp={("USA", "agr"): float("nan")},
         )
         gams_snap = GTAPVariableSnapshot(
             xp={("USA", "agr"): 1.0},
         )
-        
+
         gams_ref = GTAPGAMSReference(
             gdx_path=Path("test.gdx"),
             sets=None,
@@ -647,21 +664,21 @@ class TestEdgeCases:
             solvestat=1.0,
             solve_time=1.0,
         )
-        
+
         # Should handle NaN gracefully
         result = compare_gtap_gams_parity(py_snap, gams_ref, tolerance=1e-6)
         # NaN != anything, so this will be a mismatch
         assert result.n_mismatches >= 0  # Could be 0 if NaN handling skips it
-    
+
     def test_inf_values(self):
         """Test handling of infinity values."""
         py_snap = GTAPVariableSnapshot(
-            xp={("USA", "agr"): float('inf')},
+            xp={("USA", "agr"): float("inf")},
         )
         gams_snap = GTAPVariableSnapshot(
-            xp={("USA", "agr"): float('inf')},
+            xp={("USA", "agr"): float("inf")},
         )
-        
+
         gams_ref = GTAPGAMSReference(
             gdx_path=Path("test.gdx"),
             sets=None,
@@ -670,7 +687,7 @@ class TestEdgeCases:
             solvestat=1.0,
             solve_time=1.0,
         )
-        
+
         result = compare_gtap_gams_parity(py_snap, gams_ref, tolerance=1e-6)
         # inf - inf = nan, so this is tricky
         assert result is not None

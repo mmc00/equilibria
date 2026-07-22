@@ -5,11 +5,11 @@ for comparison with the original VAL_PAR.gdx.
 """
 
 from pathlib import Path
-import pandas as pd
-import numpy as np
 
+import pandas as pd
+
+from equilibria.babel.gdx.symbols import Parameter, Set
 from equilibria.babel.gdx.writer import write_gdx
-from equilibria.babel.gdx.symbols import Set, Parameter
 
 
 def read_val_par_excel(filepath: Path) -> dict:
@@ -187,8 +187,19 @@ def generate_val_par_gdx(excel_path: Path, output_path: Path) -> None:
 def main():
     """Generate VAL_PAR.gdx for equilibria."""
     repo_root = Path(__file__).resolve().parents[5]
-    excel_path = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data" / "VAL_PAR.xlsx"
-    output_path = repo_root / "src" / "equilibria" / "templates" / "data" / "pep" / "VAL_PAR.gdx"
+    excel_path = (
+        repo_root
+        / "src"
+        / "equilibria"
+        / "templates"
+        / "reference"
+        / "pep2"
+        / "data"
+        / "VAL_PAR.xlsx"
+    )
+    output_path = (
+        repo_root / "src" / "equilibria" / "templates" / "data" / "pep" / "VAL_PAR.gdx"
+    )
 
     generate_val_par_gdx(excel_path, output_path)
 

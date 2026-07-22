@@ -25,8 +25,6 @@ API
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Tuple
-
 from equilibria.templates.gtap.gtap_parameters import GTAPParameters
 
 
@@ -39,7 +37,7 @@ def _level(var, idx, default=0.0):
 
 def recalibrate_from_solution(
     params: GTAPParameters, model
-) -> Dict[str, Dict[Tuple, float]]:
+) -> dict[str, dict[tuple, float]]:
     """Recalibrate share parameters from a solved altertax model.
 
     GAMS reference (comp_altertax.gms:15052-15058)::
@@ -51,10 +49,10 @@ def recalibrate_from_solution(
     """
     sets = params.sets
     elas = params.elasticities
-    out_and: Dict[Tuple[str, str], float] = {}
-    out_ava: Dict[Tuple[str, str], float] = {}
-    out_io: Dict[Tuple[str, str, str], float] = {}
-    out_af: Dict[Tuple[str, str, str], float] = {}
+    out_and: dict[tuple[str, str], float] = {}
+    out_ava: dict[tuple[str, str], float] = {}
+    out_io: dict[tuple[str, str, str], float] = {}
+    out_af: dict[tuple[str, str, str], float] = {}
 
     for r in sets.r:
         for a in sets.a:
@@ -83,8 +81,8 @@ def recalibrate_from_solution(
                     if xa_l <= 0.0:
                         continue
                     pa_l = _level(model.pa, (r, i, a), 1.0) or 1.0
-                    out_io[(r, i, a)] = (
-                        (xa_l / nd_l) * ((pa_l / max(pnd_l, 1e-12)) ** sigmand)
+                    out_io[(r, i, a)] = (xa_l / nd_l) * (
+                        (pa_l / max(pnd_l, 1e-12)) ** sigmand
                     )
             if va_l > 0 and pva_l > 0:
                 for f in sets.f:
@@ -92,9 +90,7 @@ def recalibrate_from_solution(
                     if xf_l <= 0.0:
                         continue
                     pfa_l = _level(model.pfa, (r, f, a), 1.0) or 1.0
-                    out_af[(r, f, a)] = (
-                        (xf_l / va_l) * ((pfa_l / pva_l) ** sigmav)
-                    )
+                    out_af[(r, f, a)] = (xf_l / va_l) * ((pfa_l / pva_l) ** sigmav)
     return {
         "and_param": out_and,
         "ava_param": out_ava,
@@ -103,7 +99,7 @@ def recalibrate_from_solution(
     }
 
 
-def _max_param_delta(old: Dict[Tuple, float], new: Dict[Tuple, float]) -> float:
+def _max_param_delta(old: dict[tuple, float], new: dict[tuple, float]) -> float:
     max_d = 0.0
     for k, v in new.items():
         old_v = float(old.get(k, 0.0) or 0.0)
@@ -114,8 +110,8 @@ def _max_param_delta(old: Dict[Tuple, float], new: Dict[Tuple, float]) -> float:
 
 
 def apply_recalibration(
-    params: GTAPParameters, recalib: Dict[str, Dict[Tuple, float]]
-) -> Dict[str, float]:
+    params: GTAPParameters, recalib: dict[str, dict[tuple, float]]
+) -> dict[str, float]:
     """Mutate ``params.calibrated.*`` in-place with recalibrated shares.
 
     Also sets ``params._altertax_outer_recalibrated = True`` so the
@@ -124,11 +120,11 @@ def apply_recalibration(
 
     Returns ``{name: max_delta}`` per parameter for convergence reporting.
     """
-    deltas: Dict[str, float] = {}
+    deltas: dict[str, float] = {}
     for name, new in recalib.items():
         old = getattr(params.calibrated, name)
         deltas[name] = _max_param_delta(old, new)
         for k, v in new.items():
             old[k] = v
-    setattr(params, "_altertax_outer_recalibrated", True)
+    params._altertax_outer_recalibrated = True
     return deltas

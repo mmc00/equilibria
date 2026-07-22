@@ -8,7 +8,12 @@ import pytest
 
 import equilibria.sam_tools.parsers as io_module
 from equilibria.sam_tools.models import Sam, SamTable
-from equilibria.sam_tools.parsers import export_sam, export_table, parse_sam, parse_table
+from equilibria.sam_tools.parsers import (
+    export_sam,
+    export_table,
+    parse_sam,
+    parse_table,
+)
 
 
 def _write_canonical_excel(
@@ -32,7 +37,9 @@ def _write_canonical_excel(
         pd.DataFrame(grid).to_excel(writer, sheet_name="SAM", index=False, header=False)
 
 
-def _write_ieem_raw_excel(path: Path, matrix: np.ndarray, sheet_name: str = "RAW") -> None:
+def _write_ieem_raw_excel(
+    path: Path, matrix: np.ndarray, sheet_name: str = "RAW"
+) -> None:
     groups = [
         ("actividades productivas", "act_agr"),
         ("Bienes y servicios", "com_agr"),
@@ -64,7 +71,9 @@ def _write_ieem_raw_excel(path: Path, matrix: np.ndarray, sheet_name: str = "RAW
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        pd.DataFrame(raw).to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+        pd.DataFrame(raw).to_excel(
+            writer, sheet_name=sheet_name, index=False, header=False
+        )
 
 
 def _build_table(
@@ -81,7 +90,9 @@ def _build_table(
     )
 
 
-def _to_cell_map(table: SamTable) -> dict[tuple[tuple[str, str], tuple[str, str]], float]:
+def _to_cell_map(
+    table: SamTable,
+) -> dict[tuple[tuple[str, str], tuple[str, str]], float]:
     out: dict[tuple[tuple[str, str], tuple[str, str]], float] = {}
     for i, r_key in enumerate(table.row_keys):
         for j, c_key in enumerate(table.col_keys):
@@ -95,7 +106,12 @@ def _to_cell_map(table: SamTable) -> dict[tuple[tuple[str, str], tuple[str, str]
 def test_parse_table_excel_roundtrip_small_fixture(tmp_path: Path) -> None:
     output_excel = tmp_path / "sam.xlsx"
     keys = [("A", "a"), ("A", "b")]
-    table = _build_table(np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
+    table = _build_table(
+        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float),
+        keys,
+        tmp_path / "in.xlsx",
+        "excel",
+    )
 
     info = export_table(table, output_excel, output_format="excel", output_symbol="SAM")
     assert info["format"] == "excel"
@@ -109,7 +125,12 @@ def test_parse_table_excel_roundtrip_small_fixture(tmp_path: Path) -> None:
 def test_parse_sam_returns_core_sam(tmp_path: Path) -> None:
     output_excel = tmp_path / "sam.xlsx"
     keys = [("A", "a"), ("A", "b")]
-    table = _build_table(np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
+    table = _build_table(
+        np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float),
+        keys,
+        tmp_path / "in.xlsx",
+        "excel",
+    )
     export_table(table, output_excel, output_format="excel", output_symbol="SAM")
 
     sam = parse_sam(output_excel, "excel")
@@ -136,7 +157,12 @@ def test_export_sam_writes_without_table_wrapper(tmp_path: Path) -> None:
 def test_export_table_gdx_returns_metadata(tmp_path: Path) -> None:
     output_gdx = tmp_path / "sam.gdx"
     keys = [("AG", "gvt"), ("I", "agr")]
-    table = _build_table(np.array([[1.5, 0.0], [0.0, 2.5]], dtype=float), keys, tmp_path / "in.gdx", "gdx")
+    table = _build_table(
+        np.array([[1.5, 0.0], [0.0, 2.5]], dtype=float),
+        keys,
+        tmp_path / "in.gdx",
+        "gdx",
+    )
 
     info = export_table(table, output_gdx, output_format="gdx", output_symbol="SAM")
     assert info["format"] == "gdx"
@@ -145,7 +171,9 @@ def test_export_table_gdx_returns_metadata(tmp_path: Path) -> None:
     assert output_gdx.exists()
 
 
-def test_parse_table_gdx_with_mocked_reader(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_parse_table_gdx_with_mocked_reader(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     fake_path = tmp_path / "fake.gdx"
     fake_path.write_bytes(b"fake")
 
@@ -154,7 +182,9 @@ def test_parse_table_gdx_with_mocked_reader(monkeypatch: pytest.MonkeyPatch, tmp
         ("I", "agr", "AG", "gvt"): 2.5,
     }
 
-    monkeypatch.setattr(io_module, "read_gdx", lambda _path: {"filepath": str(fake_path), "symbols": []})
+    monkeypatch.setattr(
+        io_module, "read_gdx", lambda _path: {"filepath": str(fake_path), "symbols": []}
+    )
     monkeypatch.setattr(io_module, "read_parameter_values", lambda _gdx, _name: values)
 
     loaded = parse_table(fake_path, "gdx")
@@ -171,7 +201,9 @@ def test_parse_table_ieem_raw_excel_with_sheet_option(tmp_path: Path) -> None:
     matrix[0, 1] = 12.0
     _write_ieem_raw_excel(raw_file, matrix, sheet_name="CUSTOM_SHEET")
 
-    table = parse_table(raw_file, "ieem_raw_excel", options={"sheet_name": "CUSTOM_SHEET"})
+    table = parse_table(
+        raw_file, "ieem_raw_excel", options={"sheet_name": "CUSTOM_SHEET"}
+    )
     assert table.source_format == "ieem_raw_excel"
     assert table.matrix.shape == (10, 10)
     assert all(cat == "RAW" for cat, _ in table.row_keys)
@@ -180,6 +212,13 @@ def test_parse_table_ieem_raw_excel_with_sheet_option(tmp_path: Path) -> None:
 
 def test_export_table_rejects_unsupported_format(tmp_path: Path) -> None:
     keys = [("AG", "gvt")]
-    table = _build_table(np.array([[1.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel")
+    table = _build_table(
+        np.array([[1.0]], dtype=float), keys, tmp_path / "in.xlsx", "excel"
+    )
     with pytest.raises(ValueError, match="Unsupported output format"):
-        export_table(table, tmp_path / "out.unknown", output_format="unknown", output_symbol="SAM")
+        export_table(
+            table,
+            tmp_path / "out.unknown",
+            output_format="unknown",
+            output_symbol="SAM",
+        )

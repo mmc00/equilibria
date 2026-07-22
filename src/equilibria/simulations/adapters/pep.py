@@ -26,16 +26,23 @@ from equilibria.templates.pep_calibration_unified_excel import (
     PEPModelCalibratorExcel,
 )
 from equilibria.templates.pep_contract import PEPContract, build_pep_contract
-from equilibria.templates.pep_model_solver import PEPModelSolver
 from equilibria.templates.pep_cri_transform import (
     should_apply_cri_pep_fix,
     transform_sam_to_pep_compatible,
 )
-from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
+from equilibria.templates.pep_model_solver import PEPModelSolver
+from equilibria.templates.pep_runtime_config import (
+    PEPRuntimeConfig,
+    build_pep_runtime_config,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
-DEFAULT_VAL_PAR_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
+DEFAULT_SAM_FILE = (
+    REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
+)
+DEFAULT_VAL_PAR_FILE = (
+    REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
+)
 DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
 DEFAULT_CRI_ACCOUNTS = {
     "gvt": "gvt",
@@ -51,7 +58,9 @@ DEFAULT_CRI_ACCOUNTS = {
 logger = logging.getLogger(__name__)
 
 
-def _deep_merge_dict(base: dict[str, Any], updates: Mapping[str, Any]) -> dict[str, Any]:
+def _deep_merge_dict(
+    base: dict[str, Any], updates: Mapping[str, Any]
+) -> dict[str, Any]:
     merged = deepcopy(base)
     for key, value in updates.items():
         if isinstance(value, Mapping) and isinstance(merged.get(key), dict):
@@ -98,13 +107,19 @@ class PepAdapter(BaseModelAdapter):
         self.contract = build_pep_contract(contract)
         self.runtime_config = build_pep_runtime_config(config)
         self.solve_tolerance = (
-            float(self.runtime_config.tolerance) if solve_tolerance is None else float(solve_tolerance)
+            float(self.runtime_config.tolerance)
+            if solve_tolerance is None
+            else float(solve_tolerance)
         )
         self.max_iterations = (
-            int(self.runtime_config.max_iterations) if max_iterations is None else int(max_iterations)
+            int(self.runtime_config.max_iterations)
+            if max_iterations is None
+            else int(max_iterations)
         )
         self.gdxdump_bin = str(gdxdump_bin)
-        self.accounts = dict(accounts) if accounts is not None else dict(DEFAULT_CRI_ACCOUNTS)
+        self.accounts = (
+            dict(accounts) if accounts is not None else dict(DEFAULT_CRI_ACCOUNTS)
+        )
         self.sam_qa_mode = str(sam_qa_mode).strip().lower()
         self.sam_qa_report = Path(sam_qa_report) if sam_qa_report is not None else None
         self.sam_qa_balance_rel_tol = float(sam_qa_balance_rel_tol)
@@ -112,8 +127,12 @@ class PepAdapter(BaseModelAdapter):
         self.sam_qa_max_samples = int(sam_qa_max_samples)
         self.sam_qa_strict_structural = bool(sam_qa_strict_structural)
         self.cri_fix_mode = str(cri_fix_mode).strip().lower()
-        self.cri_fix_output = Path(cri_fix_output) if cri_fix_output is not None else None
-        self.cri_fix_report = Path(cri_fix_report) if cri_fix_report is not None else None
+        self.cri_fix_output = (
+            Path(cri_fix_output) if cri_fix_output is not None else None
+        )
+        self.cri_fix_report = (
+            Path(cri_fix_report) if cri_fix_report is not None else None
+        )
         self.cri_fix_target_mode = str(cri_fix_target_mode)
         self.cri_fix_margin_commodity = str(cri_fix_margin_commodity)
         self._sets: dict[str, list[str]] = {}
@@ -147,12 +166,14 @@ class PepAdapter(BaseModelAdapter):
             output_sam = (
                 self.cri_fix_output
                 if self.cri_fix_output is not None
-                else Path("output") / f"{sam_file_for_run.stem}-pep-compatible{sam_file_for_run.suffix}"
+                else Path("output")
+                / f"{sam_file_for_run.stem}-pep-compatible{sam_file_for_run.suffix}"
             )
             report_json = (
                 self.cri_fix_report
                 if self.cri_fix_report is not None
-                else Path("output") / f"{sam_file_for_run.stem}-pep-compatible-report.json"
+                else Path("output")
+                / f"{sam_file_for_run.stem}-pep-compatible-report.json"
             )
             self.last_cri_fix_report = transform_sam_to_pep_compatible(
                 input_sam=sam_file_for_run,
@@ -188,7 +209,9 @@ class PepAdapter(BaseModelAdapter):
             return
         if self.sam_qa_mode == "hard_fail":
             raise RuntimeError(f"SAM QA failed: {summary}")
-        logger.warning("%s; continuing because sam_qa_mode=%s", summary, self.sam_qa_mode)
+        logger.warning(
+            "%s; continuing because sam_qa_mode=%s", summary, self.sam_qa_mode
+        )
 
     def fit_base_state(self) -> PEPModelState:
         sam_file_for_run = self._prepare_runtime_sam_file()
@@ -361,7 +384,9 @@ class PepAdapter(BaseModelAdapter):
         return pep_key_indicators(vars_obj)
 
     @staticmethod
-    def _apply_scalar_op(current: float, op: str, values: float | dict[str, float]) -> float:
+    def _apply_scalar_op(
+        current: float, op: str, values: float | dict[str, float]
+    ) -> float:
         if isinstance(values, dict):
             if "*" not in values:
                 raise ValueError("Scalar shock with dict values requires '*' entry.")

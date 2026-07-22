@@ -1,4 +1,5 @@
 """Tests for the GTAP7 coverage matrix (single source of truth)."""
+
 import sys
 from pathlib import Path
 
@@ -7,7 +8,8 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 
 def test_matrix_schema_invariants():
-    from coverage_matrix import ROWS, CI_STATUSES, KINDS
+    from coverage_matrix import CI_STATUSES, KINDS, ROWS
+
     assert ROWS, "matrix must not be empty"
     for r in ROWS:
         # ifsub is None iff kind == "gtap" (the .nl gate); SOLVE/nlp kinds carry 0/1
@@ -40,10 +42,21 @@ def test_matrix_schema_invariants():
 
 def test_matrix_helpers_partition():
     from coverage_matrix import (
-        ROWS, nl_rows, altertax_rows, gtap_solve_rows, nlp_rows, mcp_rows,
+        ROWS,
+        altertax_rows,
+        gtap_solve_rows,
+        mcp_rows,
+        nl_rows,
+        nlp_rows,
     )
-    assert (set(nl_rows()) | set(altertax_rows()) | set(gtap_solve_rows())
-            | set(nlp_rows()) | set(mcp_rows())) == set(ROWS)
+
+    assert (
+        set(nl_rows())
+        | set(altertax_rows())
+        | set(gtap_solve_rows())
+        | set(nlp_rows())
+        | set(mcp_rows())
+    ) == set(ROWS)
     assert all(r.kind == "gtap" for r in nl_rows())
     assert all(r.kind == "altertax" for r in altertax_rows())
     assert all(r.kind == "gtap_solve" for r in gtap_solve_rows())
@@ -54,6 +67,7 @@ def test_matrix_helpers_partition():
 def test_coverage_doc_in_sync():
     """The committed doc must equal render() — regenerate + commit on drift."""
     import gen_coverage_doc
+
     committed = gen_coverage_doc.DOC_PATH.read_text(encoding="utf-8")
     assert committed == gen_coverage_doc.render(), (
         "docs/site/guide/gtap7_coverage_matrix.md is stale — run "

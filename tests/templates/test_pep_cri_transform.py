@@ -8,7 +8,6 @@ from equilibria.templates.pep_cri_transform import (
     transform_sam_to_pep_compatible,
 )
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CRI_SAM = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams.xlsx"
 
@@ -16,7 +15,10 @@ CRI_SAM = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams
 def test_should_apply_cri_pep_fix_skips_fixed_and_pep_compatible_names() -> None:
     assert should_apply_cri_pep_fix("SAM-CRI-gams.xlsx", mode="auto") is True
     assert should_apply_cri_pep_fix("SAM-CRI-gams-fixed.xlsx", mode="auto") is False
-    assert should_apply_cri_pep_fix("SAM-CRI-gams-pep-compatible.xlsx", mode="auto") is False
+    assert (
+        should_apply_cri_pep_fix("SAM-CRI-gams-pep-compatible.xlsx", mode="auto")
+        is False
+    )
 
 
 def test_transform_sam_to_pep_compatible_passes_repo_cri_qa(tmp_path: Path) -> None:

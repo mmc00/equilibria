@@ -251,12 +251,12 @@ def _get_default_val_par() -> dict[str, Any]:
     commodities = ["AGR", "FOOD", "OTHIND", "SER", "ADM"]
 
     return {
-        "sigma_KD": {s: 0.8 for s in sectors},
-        "sigma_LD": {s: 0.8 for s in sectors},
-        "sigma_VA": {s: 1.5 for s in sectors},
-        "sigma_XT": {s: 2.0 for s in sectors},
-        "sigma_M": {c: 2.0 for c in commodities},
-        "sigma_XD": {c: 2.0 for c in commodities},
+        "sigma_KD": dict.fromkeys(sectors, 0.8),
+        "sigma_LD": dict.fromkeys(sectors, 0.8),
+        "sigma_VA": dict.fromkeys(sectors, 1.5),
+        "sigma_XT": dict.fromkeys(sectors, 2.0),
+        "sigma_M": dict.fromkeys(commodities, 2.0),
+        "sigma_XD": dict.fromkeys(commodities, 2.0),
     }
 
 
@@ -320,7 +320,10 @@ class ProductionCalibrator:
                     return float(sam_matrix.get(indices_upper, 0.0))
                 total = 0.0
                 for key, value in sam_matrix.items():
-                    if all(i >= len(indices_upper) or key[i] == indices_upper[i] for i in range(len(indices_upper))):
+                    if all(
+                        i >= len(indices_upper) or key[i] == indices_upper[i]
+                        for i in range(len(indices_upper))
+                    ):
                         total += float(value)
                 return total
 
@@ -366,16 +369,12 @@ class ProductionCalibrator:
 
         for i in I:
             i_upper = i.upper()
-            ddo = sum(
-                self._get_sam_value("J", j.upper(), "I", i_upper)
-                for j in J
-            )
+            ddo = sum(self._get_sam_value("J", j.upper(), "I", i_upper) for j in J)
             imo = self._get_sam_value("AG", "ROW", "I", i_upper)
             tico = self._get_sam_value("AG", "TI", "I", i_upper)
             timo = self._get_sam_value("AG", "TM", "I", i_upper)
             margin_sum = sum(
-                self._get_sam_value("I", ij.upper(), "I", i_upper)
-                for ij in I
+                self._get_sam_value("I", ij.upper(), "I", i_upper) for ij in I
             )
 
             denominator = ddo + imo
@@ -458,7 +457,7 @@ class ProductionCalibrator:
                 self.result.LDO[(l, j)] = ldo_raw
 
         # Base prices (numeraire = 1.0)
-        WO = {l: 1.0 for l in L}
+        WO = dict.fromkeys(L, 1.0)
         RO = {(k, j): 1.0 for k in K for j in J}
 
         logger.debug("Calculating labor taxes and wages...")
@@ -711,8 +710,8 @@ class ProductionCalibrator:
         J = self.sets["J"]
 
         # Read elasticity parameters from VAL_PAR
-        sigma_KD = self.val_par.get("sigma_KD", {j: 0.8 for j in J})
-        sigma_LD = self.val_par.get("sigma_LD", {j: 0.8 for j in J})
+        sigma_KD = self.val_par.get("sigma_KD", dict.fromkeys(J, 0.8))
+        sigma_LD = self.val_par.get("sigma_LD", dict.fromkeys(J, 0.8))
 
         # Calculate rho parameters
         for j in J:
@@ -798,7 +797,7 @@ class ProductionCalibrator:
 
         # Calculate VA (value added) CES parameters (lines 656-666)
         # rho_VA(j), beta_VA(j), B_VA(j)
-        sigma_VA = self.val_par.get("sigma_VA", {j: 1.5 for j in J})
+        sigma_VA = self.val_par.get("sigma_VA", dict.fromkeys(J, 1.5))
 
         for j in J:
             ldc = self.result.LDCO.get(j, 0)

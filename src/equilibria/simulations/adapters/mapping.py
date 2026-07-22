@@ -62,7 +62,9 @@ class MappingAdapter(BaseModelAdapter):
         self.model_label = str(model_label)
         self._base_state = copy.deepcopy(base_state) if base_state is not None else None
         self._state_loader = state_loader
-        self._shock_definitions = list(shock_definitions) if shock_definitions is not None else None
+        self._shock_definitions = (
+            list(shock_definitions) if shock_definitions is not None else None
+        )
         self._solve_fn = solve_fn
         self._compare_fn = compare_fn
         self._key_indicators_fn = key_indicators_fn
@@ -237,7 +239,9 @@ class MappingAdapter(BaseModelAdapter):
         return lookup[wanted]
 
     @staticmethod
-    def _apply_scalar(current: float, op: str, values: float | dict[str, float]) -> float:
+    def _apply_scalar(
+        current: float, op: str, values: float | dict[str, float]
+    ) -> float:
         if isinstance(values, dict):
             if "*" not in values:
                 raise ValueError("Scalar shock with dict values requires '*' entry.")
@@ -261,7 +265,9 @@ class MappingAdapter(BaseModelAdapter):
         *,
         var_name: str,
     ) -> dict[str, float]:
-        src = {str(k): float(v) for k, v in current.items() if isinstance(v, (int, float))}
+        src = {
+            str(k): float(v) for k, v in current.items() if isinstance(v, (int, float))
+        }
         if isinstance(values, dict):
             updates = {str(k): float(v) for k, v in values.items()}
             unknown = {k for k in updates if k != "*" and k not in src}

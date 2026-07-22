@@ -8,18 +8,18 @@ This module provides market equilibrium-related equation blocks:
 from __future__ import annotations
 
 import typing
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
+from equilibria.core.parameters import Parameter
+from equilibria.core.sets import SetManager
 from equilibria.core.symbolic_equations import (
     SymbolicEquation,
 )
-from equilibria.core.parameters import Parameter
-from equilibria.core.sets import SetManager
 from equilibria.core.variables import Variable
 
 if TYPE_CHECKING:
@@ -120,8 +120,8 @@ class MarketClearing(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for market clearing."""
-                QS = getattr(pyomo_model, "QS")
-                QD = getattr(pyomo_model, "QD")
+                QS = pyomo_model.QS
+                QD = pyomo_model.QD
 
                 i = indices[0]
                 return QS[i] == QD[i]
@@ -169,15 +169,12 @@ class MarketClearing(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QS0" in calibrated:
-            if "QS" in var_manager:
-                var_manager.get("QS").value = calibrated["QS0"].copy()
-        if "QD0" in calibrated:
-            if "QD" in var_manager:
-                var_manager.get("QD").value = calibrated["QD0"].copy()
-        if "P0" in calibrated:
-            if "P" in var_manager:
-                var_manager.get("P").value = calibrated["P0"].copy()
+        if "QS0" in calibrated and "QS" in var_manager:
+            var_manager.get("QS").value = calibrated["QS0"].copy()
+        if "QD0" in calibrated and "QD" in var_manager:
+            var_manager.get("QD").value = calibrated["QD0"].copy()
+        if "P0" in calibrated and "P" in var_manager:
+            var_manager.get("P").value = calibrated["P0"].copy()
 
 
 class PriceNormalization(Block):
@@ -253,7 +250,7 @@ class PriceNormalization(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for price normalization."""
-                P = getattr(pyomo_model, "P")
+                P = pyomo_model.P
 
                 # Fix the numeraire price to 1
                 return P[numeraire_value] == 1.0
@@ -285,9 +282,8 @@ class PriceNormalization(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "P0" in calibrated:
-            if "P" in var_manager:
-                var_manager.get("P").value = calibrated["P0"].copy()
+        if "P0" in calibrated and "P" in var_manager:
+            var_manager.get("P").value = calibrated["P0"].copy()
 
 
 class FactorMarketClearing(Block):
@@ -378,8 +374,8 @@ class FactorMarketClearing(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for factor market clearing."""
-                FSUP = getattr(pyomo_model, "FSUP")
-                FD = getattr(pyomo_model, "FD")
+                FSUP = pyomo_model.FSUP
+                FD = pyomo_model.FD
 
                 f = indices[0]
                 # Sum factor demand over all sectors
@@ -405,10 +401,7 @@ class FactorMarketClearing(Block):
             # Get data from household block
             hh_params = data.get_block_params("Household")
 
-            if "FSUP0" in hh_params:
-                FSUP0 = hh_params["FSUP0"]
-            else:
-                FSUP0 = np.ones(n_factors)
+            FSUP0 = hh_params["FSUP0"] if "FSUP0" in hh_params else np.ones(n_factors)
 
             WF0 = np.ones(n_factors)
 
@@ -425,15 +418,12 @@ class FactorMarketClearing(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "FSUP0" in calibrated:
-            if "FSUP" in var_manager:
-                var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
-        if "FD0" in calibrated:
-            if "FD" in var_manager:
-                var_manager.get("FD").value = calibrated["FD0"].copy()
-        if "WF0" in calibrated:
-            if "WF" in var_manager:
-                var_manager.get("WF").value = calibrated["WF0"].copy()
+        if "FSUP0" in calibrated and "FSUP" in var_manager:
+            var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
+        if "FD0" in calibrated and "FD" in var_manager:
+            var_manager.get("FD").value = calibrated["FD0"].copy()
+        if "WF0" in calibrated and "WF" in var_manager:
+            var_manager.get("WF").value = calibrated["WF0"].copy()
 
 
 class PEPMacroClosureInit(Block):
@@ -494,9 +484,9 @@ class PEPMacroClosureInit(Block):
     ) -> None:
         _ = mode
         I = tuple(set_manager.get("I"))
-        K = tuple(set_manager.get("K")) if "K" in set_manager else tuple()
-        J = tuple(set_manager.get("J")) if "J" in set_manager else tuple()
-        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else tuple()
+        K = tuple(set_manager.get("K")) if "K" in set_manager else ()
+        J = tuple(set_manager.get("J")) if "J" in set_manager else ()
+        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else ()
 
         alpha = max(0.0, min(1.0, self._scalar(parameters, "macro_alpha", 1.0)))
 
@@ -519,7 +509,7 @@ class PEPMacroClosureInit(Block):
         cg = self._first_map(variables, "CG")
         inv = self._first_map(variables, "INV")
         vstk = self._first_map(variables, "VSTK")
-        h_set = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+        h_set = tuple(set_manager.get("H")) if "H" in set_manager else ()
 
         e = self._scalar(variables, "e", 1.0)
         yrow_cur = self._scalar(variables, "YROW", 0.0)
@@ -537,7 +527,9 @@ class PEPMacroClosureInit(Block):
             lam = float(lambda_rk.get(("row", k), 0.0))
             for j in J:
                 if abs(kdo0.get((k, j), 0.0)) > 1e-12:
-                    yrow_new += lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    yrow_new += (
+                        lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    )
         for agd in AGD:
             yrow_new += float(tr.get(("row", agd), 0.0))
 
@@ -555,7 +547,12 @@ class PEPMacroClosureInit(Block):
         variables["SROW"] = srow
         variables["CAB"] = -srow
 
-        it_new = sum(float(v) for v in sh.values()) + sum(float(v) for v in sf.values()) + float(sg) + srow
+        it_new = (
+            sum(float(v) for v in sh.values())
+            + sum(float(v) for v in sf.values())
+            + float(sg)
+            + srow
+        )
         it = self._set_or_blend(it_cur, it_new, alpha)
         variables["IT"] = it
 
@@ -567,7 +564,10 @@ class PEPMacroClosureInit(Block):
         for i in I:
             cons_i = sum(float(c.get((i, h), 0.0)) for h in h_set)
             gdp_fd_new += float(pc.get(i, 0.0)) * (
-                cons_i + float(cg.get(i, 0.0)) + float(inv.get(i, 0.0)) + float(vstk.get(i, 0.0))
+                cons_i
+                + float(cg.get(i, 0.0))
+                + float(inv.get(i, 0.0))
+                + float(vstk.get(i, 0.0))
             )
             gdp_fd_new += float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
             gdp_fd_new -= float(pwm.get(i, 0.0)) * e * float(im.get(i, 0.0))
@@ -581,10 +581,10 @@ class PEPMacroClosureInit(Block):
         variables: dict[str, Any],
     ) -> dict[str, float]:
         I = tuple(set_manager.get("I"))
-        K = tuple(set_manager.get("K")) if "K" in set_manager else tuple()
-        J = tuple(set_manager.get("J")) if "J" in set_manager else tuple()
-        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else tuple()
-        h_set = tuple(set_manager.get("H")) if "H" in set_manager else tuple()
+        K = tuple(set_manager.get("K")) if "K" in set_manager else ()
+        J = tuple(set_manager.get("J")) if "J" in set_manager else ()
+        AGD = tuple(set_manager.get("AGD")) if "AGD" in set_manager else ()
+        h_set = tuple(set_manager.get("H")) if "H" in set_manager else ()
 
         imo0 = self._first_map(parameters, "IMO0")
         exdo0 = self._first_map(parameters, "EXDO0", "EXDO")
@@ -622,7 +622,9 @@ class PEPMacroClosureInit(Block):
             lam = float(lambda_rk.get(("row", k), 0.0))
             for j in J:
                 if abs(kdo0.get((k, j), 0.0)) > 1e-12:
-                    yrow_rhs += lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    yrow_rhs += (
+                        lam * float(r.get((k, j), 1.0)) * float(kd.get((k, j), 0.0))
+                    )
         for agd in AGD:
             yrow_rhs += float(tr.get(("row", agd), 0.0))
 
@@ -633,13 +635,21 @@ class PEPMacroClosureInit(Block):
         for agd in AGD:
             srow_rhs -= float(tr.get((agd, "row"), 0.0))
 
-        it_rhs = sum(float(v) for v in sh.values()) + sum(float(v) for v in sf.values()) + float(sg) + srow
+        it_rhs = (
+            sum(float(v) for v in sh.values())
+            + sum(float(v) for v in sf.values())
+            + float(sg)
+            + srow
+        )
 
         gdp_fd_rhs = 0.0
         for i in I:
             cons_i = sum(float(c.get((i, h), 0.0)) for h in h_set)
             gdp_fd_rhs += float(pc.get(i, 0.0)) * (
-                cons_i + float(cg.get(i, 0.0)) + float(inv.get(i, 0.0)) + float(vstk.get(i, 0.0))
+                cons_i
+                + float(cg.get(i, 0.0))
+                + float(inv.get(i, 0.0))
+                + float(vstk.get(i, 0.0))
             )
             gdp_fd_rhs += float(pe_fob.get(i, 0.0)) * float(exd.get(i, 0.0))
             gdp_fd_rhs -= float(pwm.get(i, 0.0)) * e * float(im.get(i, 0.0))

@@ -96,7 +96,9 @@ class SimpleOpenContract(ModelContract):
 
     name: str = "simple_open_v1"
     closure: SimpleOpenClosureConfig = Field(default_factory=SimpleOpenClosureConfig)
-    equations: SimpleOpenEquationConfig = Field(default_factory=SimpleOpenEquationConfig)
+    equations: SimpleOpenEquationConfig = Field(
+        default_factory=SimpleOpenEquationConfig
+    )
     bounds: SimpleOpenBoundsConfig = Field(default_factory=SimpleOpenBoundsConfig)
 
 
@@ -122,7 +124,9 @@ def build_simple_open_closure_config(
     if isinstance(value, SimpleOpenClosureConfig):
         return value
     if isinstance(value, str):
-        return SimpleOpenClosureConfig.model_validate(_simple_open_closure_template_data(value))
+        return SimpleOpenClosureConfig.model_validate(
+            _simple_open_closure_template_data(value)
+        )
     if isinstance(value, Mapping):
         closure_name = value.get("name", value.get("preset", "simple_open_default"))
         base = _simple_open_closure_template_data(str(closure_name))
@@ -153,14 +157,10 @@ def build_simple_open_contract(
         base = default_simple_open_contract().model_dump(mode="python")
         updates = dict(value)
         closure_value = updates.get("closure")
-        if isinstance(closure_value, Mapping):
-            updates["closure"] = build_simple_open_closure_config(closure_value).model_dump(
-                mode="python"
-            )
-        elif isinstance(closure_value, (str, SimpleOpenClosureConfig)):
-            updates["closure"] = build_simple_open_closure_config(closure_value).model_dump(
-                mode="python"
-            )
+        if isinstance(closure_value, (Mapping, str, SimpleOpenClosureConfig)):
+            updates["closure"] = build_simple_open_closure_config(
+                closure_value
+            ).model_dump(mode="python")
         merged = deep_merge_model_dicts(base, updates)
         return SimpleOpenContract.model_validate(merged)
     raise TypeError(

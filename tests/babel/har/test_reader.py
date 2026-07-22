@@ -11,6 +11,7 @@ external-path dependency. Golden values were captured against `harpy3`
   - 2IFULL with shape (1,1) (NUS333 default.prm RDLT)
   - RESPSE sparse arrays (NUS333 MAKS)
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,6 +36,7 @@ NINEX10_BASE = NINEX10 / "basedata.har"
 
 # ── Header counts (golden against harpy3) ────────────────────────────────────
 
+
 @pytest.mark.parametrize(
     "path,expected",
     [
@@ -52,6 +54,7 @@ def test_header_count(path: Path, expected: int):
 
 # ── HeaderArray dataclass ────────────────────────────────────────────────────
 
+
 def test_header_array_creation():
     arr = HeaderArray(
         name="VDPP",
@@ -66,6 +69,7 @@ def test_header_array_creation():
 
 
 # ── 1CFULL: 1-D character set ────────────────────────────────────────────────
+
 
 def test_1cfull_single_record_set():
     """NUS333 REG: 2 elements, fits in one element record."""
@@ -99,6 +103,7 @@ def test_1cfull_large_multi_record():
 
 
 # ── REFULL: real dense N-D ───────────────────────────────────────────────────
+
 
 def test_refull_2d():
     d = read_har(NUS333_BASE)
@@ -140,6 +145,7 @@ def test_refull_3d_repeated_set():
 
 # ── RESPSE: real sparse N-D ──────────────────────────────────────────────────
 
+
 def test_respse_3d():
     """MAKS in basedata.har is a 3-D sparse REAL array."""
     d = read_har(NUS333_BASE)
@@ -151,6 +157,7 @@ def test_respse_3d():
 
 
 # ── 2IFULL: 2-D integer dense ────────────────────────────────────────────────
+
 
 def test_2ifull_minimal_shape():
     """RDLT in default.prm: shape (1,1) — exposed off-by-4-bytes bug.
@@ -165,6 +172,7 @@ def test_2ifull_minimal_shape():
 
 
 # ── select_headers filter ────────────────────────────────────────────────────
+
 
 def test_select_headers_filters():
     d = read_har(NUS333_BASE, select_headers=["VDPP", "VKB"])
@@ -184,6 +192,7 @@ def test_read_header_array_missing_raises():
 
 # ── Convenience APIs ─────────────────────────────────────────────────────────
 
+
 def test_get_header_names():
     names = get_header_names(NUS333_BASE)
     assert "VDPP" in names
@@ -197,6 +206,7 @@ def test_missing_file_raises():
 
 def test_public_api_import():
     from equilibria.babel.har import HeaderArray, get_header_names, read_har
+
     assert callable(read_har)
     assert callable(get_header_names)
     assert HeaderArray is not None
@@ -204,8 +214,10 @@ def test_public_api_import():
 
 # ── GTAP loader integration (uses repo-shipped HAR) ──────────────────────────
 
+
 def test_gtap_sets_load_from_har():
     from equilibria.templates.gtap.gtap_sets import GTAPSets
+
     sets = GTAPSets()
     sets.load_from_har(NUS333_SETS)
     assert sets.r == ["USA", "ROW"]
@@ -218,6 +230,7 @@ def test_gtap_sets_load_from_har():
 def test_gtap_benchmark_load_from_har():
     from equilibria.templates.gtap.gtap_parameters import GTAPBenchmarkValues
     from equilibria.templates.gtap.gtap_sets import GTAPSets
+
     sets = GTAPSets()
     sets.load_from_har(NUS333_SETS)
     bench = GTAPBenchmarkValues()
@@ -232,6 +245,7 @@ def test_gtap_benchmark_load_from_har():
 def test_gtap_elasticities_load_from_har():
     from equilibria.templates.gtap.gtap_parameters import GTAPElasticities
     from equilibria.templates.gtap.gtap_sets import GTAPSets
+
     sets = GTAPSets()
     sets.load_from_har(NUS333_SETS)
     elast = GTAPElasticities()
@@ -248,6 +262,7 @@ def test_gtap_taxes_load_from_har():
         GTAPTaxRates,
     )
     from equilibria.templates.gtap.gtap_sets import GTAPSets
+
     sets = GTAPSets()
     sets.load_from_har(NUS333_SETS)
     bench = GTAPBenchmarkValues()
@@ -260,6 +275,7 @@ def test_gtap_taxes_load_from_har():
 
 def test_gtap_parameters_load_from_har_roundtrip():
     from equilibria.templates.gtap.gtap_parameters import GTAPParameters
+
     params = GTAPParameters()
     params.load_from_har(
         basedata_path=NUS333_BASE,

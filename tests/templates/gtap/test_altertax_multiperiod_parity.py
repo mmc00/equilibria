@@ -24,6 +24,7 @@ Run:
     uv run pytest tests/templates/gtap/test_altertax_multiperiod_parity.py -v \
         -k "gtap7_3x3 and ifsub1"
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -48,12 +49,29 @@ _ALTERTAX_CASES = [
 # Exclusion sets (denominator), identical to the session measurement harness.
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
 RF = {
-    "pfa", "pfy", "pm", "pmcif", "pefob", "pwmg", "pp", "pdp", "pmp",
-    "xwmg", "xmgm", "lambdamg", "imptx", "exptx",
+    "pfa",
+    "pfy",
+    "pm",
+    "pmcif",
+    "pefob",
+    "pwmg",
+    "pp",
+    "pdp",
+    "pmp",
+    "xwmg",
+    "xmgm",
+    "lambdamg",
+    "imptx",
+    "exptx",
 }
 ALIAS = {
-    "xa": "xaa", "xd": "xda", "xm": "xma", "pp": "pp_rai", "p": "p_rai",
-    "ytaxInd": "ytax_ind", "ytaxind": "ytax_ind",
+    "xa": "xaa",
+    "xd": "xda",
+    "xm": "xma",
+    "pp": "pp_rai",
+    "p": "p_rai",
+    "ytaxInd": "ytax_ind",
+    "ytaxind": "ytax_ind",
 }
 
 # Local PATH solver lives outside the venv; add its src dir so find_spec can
@@ -82,16 +100,17 @@ def _fixture_gdx(dataset: str, if_sub: bool) -> Path:
 
 def _solve_and_match(dataset: str, if_sub: bool):
     """Build, seed, solve, compare. Returns (codes_dict, match_pct, total)."""
+    from _diff_core import gams_levels, list_populated_vars, split_t
+    from pyomo.environ import value as V
+
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_model_multiperiod import (
-        GTAPMultiPeriodModel,
         PERIODS,
+        GTAPMultiPeriodModel,
     )
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from pyomo.environ import value as V
-    from _diff_core import gams_levels, list_populated_vars, split_t
 
     ref = _fixture_gdx(dataset, if_sub)
     d = DATASETS_DIR / dataset
@@ -105,9 +124,14 @@ def _solve_and_match(dataset: str, if_sub: bool):
     rr = list(p.sets.r)[-1]
     pa = apply_altertax_elasticities(p, in_place=False)
     ac = GTAPClosureConfig(
-        name="altertax", closure_type="MCP", capital_mobility="mobile",
-        fix_endowments=False, fix_taxes=True, fix_technology=True,
-        if_sub=if_sub, numeraire="pnum",
+        name="altertax",
+        closure_type="MCP",
+        capital_mobility="mobile",
+        fix_endowments=False,
+        fix_taxes=True,
+        fix_technology=True,
+        if_sub=if_sub,
+        numeraire="pnum",
     )
     mp = GTAPMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
     m = mp.build_sets()
@@ -119,9 +143,14 @@ def _solve_and_match(dataset: str, if_sub: bool):
     mp.seed_all_periods(m, ref)
 
     res = solve_multiperiod(
-        m, p, ac, ref_gdx=ref,
-        skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, holdfix_cd=True,
+        m,
+        p,
+        ac,
+        ref_gdx=ref,
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=False,
+        holdfix_cd=True,
     )
     codes = {k: res[k]["code"] for k in res}
 
@@ -161,8 +190,10 @@ def _solve_and_match(dataset: str, if_sub: bool):
                 continue
             tot += 1
             d_abs = abs(val - gval)
-            rel = d_abs / abs(gval) if abs(gval) > 1e-12 else (
-                0.0 if d_abs < 1e-6 else 9e9
+            rel = (
+                d_abs / abs(gval)
+                if abs(gval) > 1e-12
+                else (0.0 if d_abs < 1e-6 else 9e9)
             )
             if d_abs <= 1e-6 or rel <= 1e-2:
                 match += 1

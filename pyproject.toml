@@ -152,6 +152,24 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # do not perform function calls in argument defaults
+    # Domain/scientific-code noise: kept intentionally rather than churn the
+    # model. Reviewed one-by-one 2026-07-20 while adding pre-commit; the real
+    # bugs among them (F821 undefined names) were fixed, not ignored.
+    "E741",   # ambiguous var name: I/l/O are standard CGE notation (Investment, ...)
+    "ARG001", # unused function arg: Pyomo rule/callback signatures
+    "ARG002", # unused method arg: overrides / interface conformance
+    "ARG003", # unused class-method arg: interface conformance
+    "ARG005", # unused lambda arg: Pyomo constraint lambdas
+    "B007",   # unused loop control var: iterate-by-index patterns
+    "F841",   # unused local: kept CGE intermediates (RHS are side-effect-free reads)
+    "E402",   # import not at top: deliberate ordering (e.g. _install_null_handler
+              # before submodule imports in __init__; conditional imports in scripts)
+    "F401",   # unused import: package __init__ re-exports for the public API
+    "B023",   # loop-var closure: Pyomo constraint-rule factories in solver code —
+              # subtle; deferred to a dedicated pass with the parity sweep as gate
+    "B025",   # duplicate try-except arm: defensive struct/value decoding in gdx reader
+    # Pure-style simplifications left for a dedicated lint pass (not bugs):
+    "SIM102", "SIM105", "SIM108", "SIM117", "B017", "B904",
 ]
 
 [tool.ruff.lint.isort]

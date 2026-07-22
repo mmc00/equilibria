@@ -1,0 +1,178 @@
+# Config estándar de pre-commit, consumida por prek (runner Rust drop-in).
+#   Instalar:  uv tool install prek && prek install
+#   Correr todo:  prek run --all-files
+# Solo higiene rápida (format/lint/type) — SIN solver/GAMS. Los parity gates
+# GTAP/PEP los enforcea un hook aparte (scripts/gtap/run_parity_gates.py).
+minimum_pre_commit_version: "3.0.0"
+
+# Datos/oráculos byte-sensibles: NUNCA reformatear (goldens, .diff, GAMS refs,
+# fixtures GDX/HAR). Se excluyen de TODOS los hooks.
+exclude: |
+  (?x)^(
+    src/equilibria/templates/reference/.*|
+    .*/golden/.*|
+    .*/fixtures/.*|
+    .*\.(diff|gms|inc|gdx|har|prm|gdt)$
+  )$
+
+repos:
+  # Higiene estándar (prek resuelve repos remotos igual que pre-commit).
+  # Los que MODIFICAN archivos se acotan a la librería + tests (^(src|tests)/)
+  # y a tipos de código; scripts/examples/docs son utilidades de dev, fuera del
+  # candado. Los de solo-lectura corren amplio (no reescriben nada).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        types_or: [python, pyi, yaml, toml, markdown]
+        files: ^(src|tests)/
+      - id: end-of-file-fixer
+        types_or: [python, pyi, yaml, toml, markdown]
+        files: ^(src|tests)/
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+
+  # Local: reusa [tool.ruff] y el `ty` del dependency-group dev, vía uv run.
+  # Acotados a la librería + tests (^(src|tests)/); scripts/examples/docs son
+  # utilidades de dev y quedan fuera del candado.
+  - repo: local
+    hooks:
+      - id: ruff-lint
+        name: ruff (lint --fix)
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        files: ^(src|tests)/
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        files: ^(src|tests)/
+        require_serial: true
+
+      - id: ty
+        name: ty (type check — ratchet, excluye deuda de tipos congelada)
+        entry: uv run ty check
+        language: system
+        types_or: [python, pyi]
+        files: ^(src|tests)/
+        require_serial: true
+        # Candado: bloquea en archivos limpios; excluye los que hoy tienen
+        # diagnostics (backlog de la fase F-ty). Regenerar con:
+        #   uv run python scripts/dev/gen_ty_exclude.py
+        exclude: |
+          (?x)^(
+              src/equilibria/babel/gdx/decoder\.py|
+              src/equilibria/babel/gdx/reader\.py|
+              src/equilibria/babel/gdx/writer\.py|
+              src/equilibria/babel/har_to_gdx\.py|
+              src/equilibria/backends/pyomo_backend\.py|
+              src/equilibria/baseline/gams_nlp_reference\.py|
+              src/equilibria/baseline/simple_open_gams_reference\.py|
+              src/equilibria/blocks/demand/__init__\.py|
+              src/equilibria/blocks/equilibrium/__init__\.py|
+              src/equilibria/blocks/institutions/__init__\.py|
+              src/equilibria/blocks/production/__init__\.py|
+              src/equilibria/blocks/trade/__init__\.py|
+              src/equilibria/core/calibration_data\.py|
+              src/equilibria/core/calibration_mixin\.py|
+              src/equilibria/core/calibration_phase\.py|
+              src/equilibria/core/sets\.py|
+              src/equilibria/core/symbolic_equations\.py|
+              src/equilibria/model\.py|
+              src/equilibria/sam_tools/api\.py|
+              src/equilibria/sam_tools/ieem_raw_excel\.py|
+              src/equilibria/sam_tools/manual_pipeline\.py|
+              src/equilibria/sam_tools/models\.py|
+              src/equilibria/sam_tools/sam_transforms\.py|
+              src/equilibria/simulations/adapters/pep\.py|
+              src/equilibria/simulations/adapters/pep_co2\.py|
+              src/equilibria/simulations/adapters/pep_cri\.py|
+              src/equilibria/simulations/simulator\.py|
+              src/equilibria/solver/jacobians/base\.py|
+              src/equilibria/solver/jacobians/reporting\.py|
+              src/equilibria/templates/data/pep/generate_sam_4d\.py|
+              src/equilibria/templates/gtap/altertax/calibration_sequence\.py|
+              src/equilibria/templates/gtap/altertax/outer_loop\.py|
+              src/equilibria/templates/gtap/altertax/parameter_overrides\.py|
+              src/equilibria/templates/gtap/altertax/postmodel\.py|
+              src/equilibria/templates/gtap/calibration_compare\.py|
+              src/equilibria/templates/gtap/gtap_contract\.py|
+              src/equilibria/templates/gtap/gtap_model_equations\.py|
+              src/equilibria/templates/gtap/gtap_model_multiperiod\.py|
+              src/equilibria/templates/gtap/gtap_multiperiod_driver\.py|
+              src/equilibria/templates/gtap/gtap_parameters\.py|
+              src/equilibria/templates/gtap/gtap_parity_pipeline\.py|
+              src/equilibria/templates/gtap/gtap_sets\.py|
+              src/equilibria/templates/gtap/gtap_solver\.py|
+              src/equilibria/templates/gtap/parity_adapter\.py|
+              src/equilibria/templates/gtap/shocks\.py|
+              src/equilibria/templates/gtap/welfare_shadow\.py|
+              src/equilibria/templates/init_strategies/base\.py|
+              src/equilibria/templates/pep_calibration_unified\.py|
+              src/equilibria/templates/pep_calibration_unified_excel\.py|
+              src/equilibria/templates/pep_co2_model_solver\.py|
+              src/equilibria/templates/pep_constraint_jacobian\.py|
+              src/equilibria/templates/pep_cri_calibration\.py|
+              src/equilibria/templates/pep_cri_solver\.py|
+              src/equilibria/templates/pep_cri_transform\.py|
+              src/equilibria/templates/pep_dynamic_sets\.py|
+              src/equilibria/templates/pep_model_solver\.py|
+              src/equilibria/templates/pep_model_solver_ipopt\.py|
+              src/equilibria/templates/pep_pyomo/pep_pyomo_equations\.py|
+              src/equilibria/templates/pep_pyomo/pep_pyomo_solver\.py|
+              src/equilibria/templates/pep_scenario_parity\.py|
+              src/equilibria/templates/pep_val_par_loader\.py|
+              src/equilibria/templates/simple_open_constraint_jacobian\.py|
+              tests/babel/gdx/test_multidim_sets\.py|
+              tests/babel/gdx/test_symbols\.py|
+              tests/babel/gdx/test_writer\.py|
+              tests/babel/har/test_reader\.py|
+              tests/backends/test_pyomo_backend\.py|
+              tests/blocks/test_block_equations\.py|
+              tests/parity/test_cascade_classify\.py|
+              tests/parity/test_cascade_config\.py|
+              tests/parity/test_cascade_kkt\.py|
+              tests/parity/test_cascade_layers\.py|
+              tests/parity/test_cascade_report\.py|
+              tests/parity/test_cascade_run\.py|
+              tests/parity/test_correlate_region\.py|
+              tests/parity/test_detection_prescription\.py|
+              tests/parity/test_diff_mcp_pairing\.py|
+              tests/parity/test_probe\.py|
+              tests/qa/test_gams_nlp_reference_manifest\.py|
+              tests/sam_tools/test_models\.py|
+              tests/sam_tools/test_parsers\.py|
+              tests/simulations/test_mapping_runtimes\.py|
+              tests/simulations/test_multi_model_adapters\.py|
+              tests/simulations/test_pep_adapter_shocks\.py|
+              tests/simulations/test_simulator\.py|
+              tests/solver/test_constraint_jacobian_base\.py|
+              tests/templates/gtap/test_altertax\.py|
+              tests/templates/gtap/test_altertax_multiperiod_parity\.py|
+              tests/templates/gtap/test_coverage_matrix\.py|
+              tests/templates/gtap/test_diff_core_key_lookup\.py|
+              tests/templates/gtap/test_gtap7_mcp_parity\.py|
+              tests/templates/gtap/test_gtap7_nl_parity\.py|
+              tests/templates/gtap/test_gtap7_nlp_parity\.py|
+              tests/templates/gtap/test_gtap_multiperiod_parity\.py|
+              tests/templates/gtap/test_gtap_parity_pipeline\.py|
+              tests/templates/gtap/test_gtap_structure\.py|
+              tests/templates/gtap/test_multiperiod_equations\.py|
+              tests/templates/gtap/test_multiperiod_sets\.py|
+              tests/templates/gtap/test_multiperiod_vars\.py|
+              tests/templates/gtap/test_nl_compare_check_phase\.py|
+              tests/templates/gtap/test_nus333_landshock_parity\.py|
+              tests/templates/gtap/test_nus333_neos_parity\.py|
+              tests/templates/gtap/test_welfare_shadow\.py|
+              tests/templates/pep_pyomo/test_pep_coverage_matrix\.py|
+              tests/templates/test_init_strategies\.py|
+              tests/templates/test_pep_ipopt_cns_constraints\.py|
+              tests/templates/test_pep_parity_pipeline\.py|
+              tests/templates/test_pep_sam\.py|
+              tests/templates/test_simple_open_constraint_jacobian\.py
+            )$

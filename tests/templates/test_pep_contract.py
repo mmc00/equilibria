@@ -9,7 +9,10 @@ from equilibria.templates.pep_contract import (
     build_pep_closure_config,
     build_pep_contract,
 )
-from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
+from equilibria.templates.pep_runtime_config import (
+    PEPRuntimeConfig,
+    build_pep_runtime_config,
+)
 
 
 def test_build_pep_contract_default_name() -> None:
@@ -170,4 +173,6 @@ def test_validate_pep_closure_structure_flags_unsupported_symbols() -> None:
     assert report.unsupported_fixed_symbols == ("LEON",)
     assert report.unsupported_endogenous_symbols == ("LEON",)
     assert any("Unsupported fixed closure symbols" in msg for msg in report.messages)
-    assert any("Unsupported endogenous closure symbols" in msg for msg in report.messages)
+    assert any(
+        "Unsupported endogenous closure symbols" in msg for msg in report.messages
+    )

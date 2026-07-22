@@ -16,13 +16,10 @@ over N intermediate steps (Gragg-style), driving residual to < 0.01%.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Tuple
 
 from equilibria.templates.gtap.gtap_parameters import (
-    GTAP_GOVERNMENT_AGENT,
-    GTAP_HOUSEHOLD_AGENT,
-    GTAP_INVESTMENT_AGENT,
     GTAPParameters,
 )
 
@@ -31,18 +28,18 @@ Snapshot = Mapping[str, Mapping[str, float]]
 
 
 # 11-bucket allocative breakdown matches RunGTAP WELVIEW.har convention.
-ALLOC_BUCKETS: Tuple[str, ...] = (
-    "ptax",     # output tax (rto · Δvom)
-    "imptx",    # import tariff (rtms · Δvmsb)
-    "exptx",    # export tax/subsidy (rtxs · Δvxsb)
-    "dftax",    # factor tax domestic (rtfd · Δevfb)
-    "mftax",    # factor tax imported (rtfi · Δevfb)  [merged into dftax for std closure]
-    "dctax",    # private consumption tax domestic (vdpp-vdpb wedge · Δvdpb)
-    "mctax",    # private consumption tax imported
-    "dgtax",    # gov consumption tax domestic
-    "mgtax",    # gov consumption tax imported
-    "ditx",     # investment tax domestic
-    "mitx",     # investment tax imported
+ALLOC_BUCKETS: tuple[str, ...] = (
+    "ptax",  # output tax (rto · Δvom)
+    "imptx",  # import tariff (rtms · Δvmsb)
+    "exptx",  # export tax/subsidy (rtxs · Δvxsb)
+    "dftax",  # factor tax domestic (rtfd · Δevfb)
+    "mftax",  # factor tax imported (rtfi · Δevfb)  [merged into dftax for std closure]
+    "dctax",  # private consumption tax domestic (vdpp-vdpb wedge · Δvdpb)
+    "mctax",  # private consumption tax imported
+    "dgtax",  # gov consumption tax domestic
+    "mgtax",  # gov consumption tax imported
+    "ditx",  # investment tax domestic
+    "mitx",  # investment tax imported
 )
 
 
@@ -50,15 +47,17 @@ ALLOC_BUCKETS: Tuple[str, ...] = (
 class WelfareComponents:
     """Per-region Huff welfare decomposition (USD millions, baseline prices)."""
 
-    A: Dict[str, float] = field(default_factory=lambda: {b: 0.0 for b in ALLOC_BUCKETS})
-    T: float = 0.0              # Terms of trade (pnum-deflated)
-    IS: float = 0.0             # Investment-Saving (pnum-deflated)
-    ENDW: float = 0.0           # Endowment change
-    TECH: float = 0.0           # Technical change
-    EV: float = 0.0             # Equivalent variation in USD millions (sum of three pieces below)
-    EV_priv: float = 0.0        # yc_base · Δuh — private-consumption contribution to EV
-    EV_gov: float = 0.0         # yg_base · Δug — government-consumption contribution to EV
-    EV_save: float = 0.0        # rsav_base · Δus — savings contribution to EV
+    A: dict[str, float] = field(
+        default_factory=lambda: dict.fromkeys(ALLOC_BUCKETS, 0.0)
+    )
+    T: float = 0.0  # Terms of trade (pnum-deflated)
+    IS: float = 0.0  # Investment-Saving (pnum-deflated)
+    ENDW: float = 0.0  # Endowment change
+    TECH: float = 0.0  # Technical change
+    EV: float = 0.0  # Equivalent variation in USD millions (sum of three pieces below)
+    EV_priv: float = 0.0  # yc_base · Δuh — private-consumption contribution to EV
+    EV_gov: float = 0.0  # yg_base · Δug — government-consumption contribution to EV
+    EV_save: float = 0.0  # rsav_base · Δus — savings contribution to EV
 
     @property
     def A_total(self) -> float:
@@ -72,26 +71,30 @@ class WelfareComponents:
     def residual(self) -> float:
         return self.EV - self.total
 
-    def as_dict(self) -> Dict[str, float]:
+    def as_dict(self) -> dict[str, float]:
         out = {f"A_{k}": v for k, v in self.A.items()}
-        out.update({
-            "A_total": self.A_total,
-            "T": self.T,
-            "IS": self.IS,
-            "ENDW": self.ENDW,
-            "TECH": self.TECH,
-            "total": self.total,
-            "EV": self.EV,
-            "EV_priv": self.EV_priv,
-            "EV_gov": self.EV_gov,
-            "EV_save": self.EV_save,
-            "residual": self.residual,
-            "residual_pct_of_EV": (100.0 * self.residual / self.EV) if abs(self.EV) > 1e-9 else 0.0,
-        })
+        out.update(
+            {
+                "A_total": self.A_total,
+                "T": self.T,
+                "IS": self.IS,
+                "ENDW": self.ENDW,
+                "TECH": self.TECH,
+                "total": self.total,
+                "EV": self.EV,
+                "EV_priv": self.EV_priv,
+                "EV_gov": self.EV_gov,
+                "EV_save": self.EV_save,
+                "residual": self.residual,
+                "residual_pct_of_EV": (100.0 * self.residual / self.EV)
+                if abs(self.EV) > 1e-9
+                else 0.0,
+            }
+        )
         return out
 
 
-def _get(snap: Snapshot, bucket: str, key: Tuple[str, ...]) -> float:
+def _get(snap: Snapshot, bucket: str, key: tuple[str, ...]) -> float:
     bdict = snap.get(bucket)
     if not bdict:
         return 0.0
@@ -124,10 +127,10 @@ def compute_welfare_decomposition(
     shock_params: GTAPParameters,
     base_levels: Snapshot,
     shock_levels: Snapshot,
-) -> Dict[Region, WelfareComponents]:
+) -> dict[Region, WelfareComponents]:
     """Single-step Huff decomposition. Expected residual 1-3% for 10% shocks."""
     regions = list(base_params.sets.r)
-    out: Dict[Region, WelfareComponents] = {r: WelfareComponents() for r in regions}
+    out: dict[Region, WelfareComponents] = {r: WelfareComponents() for r in regions}
 
     _accumulate_allocative(out, base_params, shock_params)
     _accumulate_terms_of_trade(out, base_params, base_levels, shock_levels)
@@ -145,9 +148,9 @@ def compute_welfare_decomposition(
 
 
 def compute_welfare_decomposition_homotopy(
-    step_params: List[GTAPParameters],
-    step_levels: List[Snapshot],
-) -> Dict[Region, WelfareComponents]:
+    step_params: list[GTAPParameters],
+    step_levels: list[Snapshot],
+) -> dict[Region, WelfareComponents]:
     """Sum Huff contributions across N+1 homotopy snapshots.
 
     Args:
@@ -165,7 +168,7 @@ def compute_welfare_decomposition_homotopy(
         raise ValueError("need at least two snapshots (base + shock) to decompose")
 
     regions = list(step_params[0].sets.r)
-    out: Dict[Region, WelfareComponents] = {r: WelfareComponents() for r in regions}
+    out: dict[Region, WelfareComponents] = {r: WelfareComponents() for r in regions}
 
     for k in range(len(step_params) - 1):
         partial = compute_welfare_decomposition(
@@ -189,9 +192,9 @@ def compute_welfare_decomposition_homotopy(
             # curvature is picked up on each segment instead of being
             # ignored by a single endpoint evaluation.
             tgt.EV_priv += comp.EV_priv
-            tgt.EV_gov  += comp.EV_gov
+            tgt.EV_gov += comp.EV_gov
             tgt.EV_save += comp.EV_save
-            tgt.EV      += comp.EV
+            tgt.EV += comp.EV
 
     return out
 
@@ -202,7 +205,7 @@ def compute_welfare_decomposition_homotopy(
 
 
 def _accumulate_allocative(
-    out: Dict[Region, WelfareComponents],
+    out: dict[Region, WelfareComponents],
     base: GTAPParameters,
     shock: GTAPParameters,
 ) -> None:
@@ -263,10 +266,10 @@ def _accumulate_allocative(
 
 
 def _accumulate_agent_consumption_tax(
-    out: Dict[Region, WelfareComponents],
-    basic_base: Dict[Tuple, float],
-    basic_shock: Dict[Tuple, float],
-    purch_base: Dict[Tuple, float],
+    out: dict[Region, WelfareComponents],
+    basic_base: dict[tuple, float],
+    basic_shock: dict[tuple, float],
+    purch_base: dict[tuple, float],
     bucket: str,
 ) -> None:
     """rate = (purchaser - basic) / basic at baseline; Δq proxied by Δbasic_value."""
@@ -285,7 +288,7 @@ def _accumulate_agent_consumption_tax(
 
 
 def _accumulate_terms_of_trade(
-    out: Dict[Region, WelfareComponents],
+    out: dict[Region, WelfareComponents],
     base_params: GTAPParameters,
     base_levels: Snapshot,
     shock_levels: Snapshot,
@@ -314,7 +317,7 @@ def _accumulate_terms_of_trade(
 
 
 def _accumulate_investment_saving(
-    out: Dict[Region, WelfareComponents],
+    out: dict[Region, WelfareComponents],
     base_levels: Snapshot,
     shock_levels: Snapshot,
 ) -> None:
@@ -330,7 +333,7 @@ def _accumulate_investment_saving(
 
 
 def _accumulate_endowment(
-    out: Dict[Region, WelfareComponents],
+    out: dict[Region, WelfareComponents],
     base_params: GTAPParameters,
     base_levels: Snapshot,
     shock_levels: Snapshot,
@@ -347,7 +350,7 @@ def _accumulate_endowment(
 
 
 def _accumulate_tech(
-    out: Dict[Region, WelfareComponents],
+    out: dict[Region, WelfareComponents],
     base_params: GTAPParameters,
     base_levels: Snapshot,
     shock_levels: Snapshot,
@@ -357,7 +360,7 @@ def _accumulate_tech(
 
 
 def _attach_ev(
-    out: Dict[Region, WelfareComponents],
+    out: dict[Region, WelfareComponents],
     base_params: GTAPParameters,
     base_levels: Snapshot,
     shock_levels: Snapshot,

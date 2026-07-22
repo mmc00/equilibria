@@ -55,11 +55,15 @@ def _sam_balance_stats(sam: Sam) -> dict[str, float]:
     col_sums = df.sum(axis=0)
     return {
         "total": float(df.to_numpy().sum()),
-        "max_row_col_abs_diff": float(np.max(np.abs(row_sums - col_sums))) if not df.empty else 0.0,
+        "max_row_col_abs_diff": float(np.max(np.abs(row_sums - col_sums)))
+        if not df.empty
+        else 0.0,
     }
 
 
-def _convert_exports_to_x_fixed_on_sam(sam: Sam, *, tol: float = 1e-12) -> dict[str, float]:
+def _convert_exports_to_x_fixed_on_sam(
+    sam: Sam, *, tol: float = 1e-12
+) -> dict[str, float]:
     df = sam.to_dataframe()
     ag_row_col = ("AG", "row") if ("AG", "row") in df.columns else None
     if ag_row_col is None:
@@ -85,8 +89,12 @@ def _convert_exports_to_x_fixed_on_sam(sam: Sam, *, tol: float = 1e-12) -> dict[
         if i_key in df.index and abs(i_to_row) > tol:
             df.loc[i_key, ag_row_col] = 0.0
 
-        current_exo = sum(float(df.loc[("J", j), x_key]) for j in activities if ("J", j) in df.index)
-        if abs(current_exo - export_total) <= tol * max(1.0, abs(export_total), abs(current_exo)):
+        current_exo = sum(
+            float(df.loc[("J", j), x_key]) for j in activities if ("J", j) in df.index
+        )
+        if abs(current_exo - export_total) <= tol * max(
+            1.0, abs(export_total), abs(current_exo)
+        ):
             converted += 1
             total_export += export_total
             continue
@@ -201,7 +209,9 @@ def _rebucket_inputs_to_activity_columns_preserve_balance_on_sam(
 
             moved_total += value
             cells_moved += 1
-            moved_by_bridge[bridge_label] = moved_by_bridge.get(bridge_label, 0.0) + value
+            moved_by_bridge[bridge_label] = (
+                moved_by_bridge.get(bridge_label, 0.0) + value
+            )
 
     sam.replace_dataframe(df)
     return {
@@ -220,8 +230,7 @@ def _move_row_factor_inflows_to_owning_agents_preserve_balance_on_sam(
 ) -> dict[str, Any]:
     cfg = op or {}
     factor_categories = {
-        _norm_lower(item)
-        for item in cfg.get("factor_categories", ["K", "L"])
+        _norm_lower(item) for item in cfg.get("factor_categories", ["K", "L"])
     }
     source_agent = _norm_lower(cfg.get("source_agent", "row"))
     source_col = ("AG", source_agent)
@@ -320,7 +329,10 @@ def transform_sam_to_pep_compatible(
     record("create_x_block", create_x_block_on_sam(sam))
     record("convert_exports", _convert_exports_to_x_fixed_on_sam(sam))
     record("align_ti", _align_ti_to_gvt_j_preserve_balance_on_sam(sam))
-    record("clear_self_transfers", clear_agent_self_transfers_on_sam(sam, {"agents": ["gvt", "row"]}))
+    record(
+        "clear_self_transfers",
+        clear_agent_self_transfers_on_sam(sam, {"agents": ["gvt", "row"]}),
+    )
     record(
         "move_k",
         _rebucket_inputs_to_activity_columns_preserve_balance_on_sam(

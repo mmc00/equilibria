@@ -79,6 +79,14 @@ def test_validate_initialization_production_accounting_zero_residuals() -> None:
         parameters=params,
         variables=vars_map,
     )
-    assert set(residuals.keys()) == {"EQ2_s1", "EQ9_c1_s1", "EQ9_c2_s1", "EQ67_s1", "EQ65_s1", "EQ56_c1", "EQ56_c2"}
+    assert set(residuals.keys()) == {
+        "EQ2_s1",
+        "EQ9_c1_s1",
+        "EQ9_c2_s1",
+        "EQ67_s1",
+        "EQ65_s1",
+        "EQ56_c1",
+        "EQ56_c2",
+    }
     for _, value in residuals.items():
         assert abs(value) < 1e-12

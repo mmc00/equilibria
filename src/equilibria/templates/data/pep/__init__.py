@@ -232,7 +232,7 @@ def get_sam_indices_mapping(filepath: Path | str | None = None) -> dict[str, lis
 
 def get_default_pep_data_dir() -> Path:
     """Get default PEP data directory.
-    
+
     Returns:
         Path to default PEP data directory
     """

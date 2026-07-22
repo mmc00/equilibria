@@ -111,7 +111,9 @@ class PepCO2Adapter(PepCRIAdapter):
         op = shock.op.strip().lower()
         if var == "tco2scal":
             block = get_state_co2_block(state)
-            block["tco2scal"] = self._apply_scalar_op(block.get("tco2scal", 1.0), op, shock.values)
+            block["tco2scal"] = self._apply_scalar_op(
+                block.get("tco2scal", 1.0), op, shock.values
+            )
             return
 
         if var in {"tco2b", "co2_intensity"}:
@@ -182,7 +184,9 @@ class PepCO2Adapter(PepCRIAdapter):
         indicators = pep_key_indicators(vars_obj)
         indicators.update(
             {
-                "co2_total_emissions": float(getattr(vars_obj, "co2_total_emissions", 0.0)),
+                "co2_total_emissions": float(
+                    getattr(vars_obj, "co2_total_emissions", 0.0)
+                ),
                 "co2_total_tax": float(getattr(vars_obj, "co2_total_tax", 0.0)),
                 "tco2scal": float(getattr(vars_obj, "tco2scal", 1.0)),
             }

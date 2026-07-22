@@ -4,32 +4,33 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 from equilibria.templates.gtap.gtap_parameters import (
-    GAMSCalibrationDump,
-    GTAPParameters,
     GTAP_GOVERNMENT_AGENT,
     GTAP_HOUSEHOLD_AGENT,
     GTAP_INVESTMENT_AGENT,
     GTAP_MARGIN_AGENT,
+    GAMSCalibrationDump,
+    GTAPParameters,
 )
 
 
-def _as_tuple_key(raw: Any) -> Tuple[str, ...]:
+def _as_tuple_key(raw: Any) -> tuple[str, ...]:
     if isinstance(raw, tuple):
         return tuple(str(x) for x in raw)
     return (str(raw),)
 
 
-def _key_to_text(key: Tuple[str, ...]) -> str:
+def _key_to_text(key: tuple[str, ...]) -> str:
     return "(" + ", ".join(str(part) for part in key) + ")"
 
 
-def _normalize_numeric_map(data: Dict[Any, Any]) -> Dict[Tuple[str, ...], float]:
-    normalized: Dict[Tuple[str, ...], float] = {}
+def _normalize_numeric_map(data: dict[Any, Any]) -> dict[tuple[str, ...], float]:
+    normalized: dict[tuple[str, ...], float] = {}
     for key, value in data.items():
         try:
             normalized[_as_tuple_key(key)] = float(value)
@@ -39,10 +40,10 @@ def _normalize_numeric_map(data: Dict[Any, Any]) -> Dict[Tuple[str, ...], float]
 
 
 def _swap_import_source_order(
-    data: Dict[Tuple[str, ...], float],
-) -> Dict[Tuple[str, ...], float]:
+    data: dict[tuple[str, ...], float],
+) -> dict[tuple[str, ...], float]:
     """Convert (importer,i,exporter) -> (exporter,i,importer) for GAMS parity."""
-    swapped: Dict[Tuple[str, ...], float] = {}
+    swapped: dict[tuple[str, ...], float] = {}
     for key, value in data.items():
         if len(key) != 3:
             continue
@@ -51,7 +52,7 @@ def _swap_import_source_order(
     return swapped
 
 
-def _iter_gtap_agents(params: GTAPParameters) -> List[str]:
+def _iter_gtap_agents(params: GTAPParameters) -> list[str]:
     return list(params.sets.a) + [
         GTAP_HOUSEHOLD_AGENT,
         GTAP_GOVERNMENT_AGENT,
@@ -65,7 +66,7 @@ def _raw_agent_domestic_import(
     region: str,
     commodity: str,
     agent: str,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     benchmark = params.benchmark
     sets = params.sets
 
@@ -73,33 +74,48 @@ def _raw_agent_domestic_import(
         raw_domestic = float(benchmark.vdfb.get((region, commodity, agent), 0.0) or 0.0)
         raw_import = float(benchmark.vmfb.get((region, commodity, agent), 0.0) or 0.0)
         if raw_domestic + raw_import <= 0.0:
-            raw_domestic = float(benchmark.vdfm.get((region, commodity, agent), 0.0) or 0.0)
-            raw_import = float(benchmark.vifm.get((region, commodity, agent), 0.0) or 0.0)
+            raw_domestic = float(
+                benchmark.vdfm.get((region, commodity, agent), 0.0) or 0.0
+            )
+            raw_import = float(
+                benchmark.vifm.get((region, commodity, agent), 0.0) or 0.0
+            )
         return raw_domestic, raw_import
 
     if agent == GTAP_HOUSEHOLD_AGENT:
         raw_domestic = float(benchmark.vdpb.get((region, commodity), 0.0) or 0.0)
         raw_import = float(benchmark.vmpb.get((region, commodity), 0.0) or 0.0)
         if raw_domestic + raw_import <= 0.0:
-            _, raw_domestic, raw_import = benchmark.get_private_demand(region, commodity)
+            _, raw_domestic, raw_import = benchmark.get_private_demand(
+                region, commodity
+            )
         return float(raw_domestic), float(raw_import)
 
     if agent == GTAP_GOVERNMENT_AGENT:
         raw_domestic = float(benchmark.vdgb.get((region, commodity), 0.0) or 0.0)
         raw_import = float(benchmark.vmgb.get((region, commodity), 0.0) or 0.0)
         if raw_domestic + raw_import <= 0.0:
-            _, raw_domestic, raw_import = benchmark.get_government_demand(region, commodity)
+            _, raw_domestic, raw_import = benchmark.get_government_demand(
+                region, commodity
+            )
         return float(raw_domestic), float(raw_import)
 
     if agent == GTAP_INVESTMENT_AGENT:
         raw_domestic = float(benchmark.vdib.get((region, commodity), 0.0) or 0.0)
         raw_import = float(benchmark.vmib.get((region, commodity), 0.0) or 0.0)
         if raw_domestic + raw_import <= 0.0:
-            _, raw_domestic, raw_import = benchmark.get_investment_demand(region, commodity)
+            _, raw_domestic, raw_import = benchmark.get_investment_demand(
+                region, commodity
+            )
         return float(raw_domestic), float(raw_import)
 
     if agent == GTAP_MARGIN_AGENT:
-        vst_val = float(benchmark.vst.get((region, commodity), benchmark.vst.get((commodity, region), 0.0)) or 0.0)
+        vst_val = float(
+            benchmark.vst.get(
+                (region, commodity), benchmark.vst.get((commodity, region), 0.0)
+            )
+            or 0.0
+        )
         return vst_val, 0.0
 
     return 0.0, 0.0
@@ -107,19 +123,21 @@ def _raw_agent_domestic_import(
 
 def _compute_agent_trade_levels(
     params: GTAPParameters,
-) -> Dict[Tuple[str, str, str], Tuple[float, float]]:
+) -> dict[tuple[str, str, str], tuple[float, float]]:
     """Mirror GTAPModelEquations benchmark trade-cache construction."""
     benchmark = params.benchmark
     sets = params.sets
-    cache: Dict[Tuple[str, str, str], Tuple[float, float]] = {}
+    cache: dict[tuple[str, str, str], tuple[float, float]] = {}
     agents = _iter_gtap_agents(params)
 
     for region in sets.r:
         for commodity in sets.i:
-            raw_levels: Dict[str, Tuple[float, float]] = {}
+            raw_levels: dict[str, tuple[float, float]] = {}
             total_raw_import = 0.0
             for agent in agents:
-                raw_domestic, raw_import = _raw_agent_domestic_import(params, region, commodity, agent)
+                raw_domestic, raw_import = _raw_agent_domestic_import(
+                    params, region, commodity, agent
+                )
                 domestic = max(float(raw_domestic), 0.0)
                 imported = max(float(raw_import), 0.0)
                 raw_levels[agent] = (domestic, imported)
@@ -129,7 +147,11 @@ def _compute_agent_trade_levels(
                 float(benchmark.vmsb.get((source, commodity, region), 0.0) or 0.0)
                 for source in sets.r
             )
-            import_scale = (target_import_total / total_raw_import) if total_raw_import > 0.0 else 1.0
+            import_scale = (
+                (target_import_total / total_raw_import)
+                if total_raw_import > 0.0
+                else 1.0
+            )
 
             for agent, (domestic, imported) in raw_levels.items():
                 cache[(region, commodity, agent)] = (domestic, imported * import_scale)
@@ -137,7 +159,7 @@ def _compute_agent_trade_levels(
     return cache
 
 
-def _two_key_value(raw_map: Dict[Any, Any], region: str, commodity: str) -> float:
+def _two_key_value(raw_map: dict[Any, Any], region: str, commodity: str) -> float:
     val = raw_map.get((region, commodity), None)
     if val is None:
         val = raw_map.get((commodity, region), 0.0)
@@ -146,13 +168,13 @@ def _two_key_value(raw_map: Dict[Any, Any], region: str, commodity: str) -> floa
 
 def _compute_alphaa_3d(
     params: GTAPParameters,
-    python_levels: Dict[str, Dict[Tuple[str, ...], float]],
-) -> Dict[Tuple[str, ...], float]:
+    python_levels: dict[str, dict[tuple[str, ...], float]],
+) -> dict[tuple[str, ...], float]:
     xaa_levels = _normalize_numeric_map(python_levels.get("xaa", {}))
     pa_levels = _normalize_numeric_map(python_levels.get("pa", {}))
     yc_levels = _normalize_numeric_map(python_levels.get("yc", {}))
     uh_levels = _normalize_numeric_map(python_levels.get("uh", {}))
-    alphaa: Dict[Tuple[str, ...], float] = {}
+    alphaa: dict[tuple[str, ...], float] = {}
 
     def _pop_value(region: str) -> float:
         raw = params.benchmark.pop
@@ -162,9 +184,18 @@ def _compute_alphaa_3d(
         return float(val or 1.0)
 
     for region in params.sets.r:
-        private_total = sum(float(params.benchmark.get_private_demand(region, commodity)[0] or 0.0) for commodity in params.sets.i)
-        government_total = sum(float(params.benchmark.get_government_demand(region, commodity)[0] or 0.0) for commodity in params.sets.i)
-        investment_total = sum(float(params.benchmark.get_investment_demand(region, commodity)[0] or 0.0) for commodity in params.sets.i)
+        private_total = sum(
+            float(params.benchmark.get_private_demand(region, commodity)[0] or 0.0)
+            for commodity in params.sets.i
+        )
+        government_total = sum(
+            float(params.benchmark.get_government_demand(region, commodity)[0] or 0.0)
+            for commodity in params.sets.i
+        )
+        investment_total = sum(
+            float(params.benchmark.get_investment_demand(region, commodity)[0] or 0.0)
+            for commodity in params.sets.i
+        )
         pop = max(_pop_value(region), 1e-12)
         yc = max(float(yc_levels.get((region,), private_total) or private_total), 1e-12)
         yc_pc = max(yc / pop, 1e-12)
@@ -186,16 +217,22 @@ def _compute_alphaa_3d(
         for commodity in params.sets.i:
             key_hhd = (region, commodity, GTAP_HOUSEHOLD_AGENT)
             if key_hhd in xaa_levels:
-                bh = float(params.elasticities.subpar.get((region, commodity), 1.0) or 1.0)
+                bh = float(
+                    params.elasticities.subpar.get((region, commodity), 1.0) or 1.0
+                )
                 if abs(bh) < 1e-12:
                     bh = 1.0
-                eh = float(params.elasticities.incpar.get((region, commodity), 1.0) or 1.0)
+                eh = float(
+                    params.elasticities.incpar.get((region, commodity), 1.0) or 1.0
+                )
                 pa = max(float(pa_levels.get(key_hhd, 1.0) or 1.0), 1e-12)
                 xa_hhd = float(xaa_levels.get(key_hhd, 0.0) or 0.0)
                 xcshr = (pa * xa_hhd) / yc if xa_hhd > 0.0 else 0.0
                 if xcshr > 0.0 and cde_alpha_den > 0.0:
                     # GAMS CDE formula: alphaa(r,i,h) = ((xcshr/bh) * (((yc_pc/pa)**bh)) * (uh**(-eh*bh))) / denominator
-                    alphaa[key_hhd] = ((xcshr / bh) * (((yc_pc / pa) ** bh)) * (uh ** (-eh * bh))) / cde_alpha_den
+                    alphaa[key_hhd] = (
+                        (xcshr / bh) * ((yc_pc / pa) ** bh) * (uh ** (-eh * bh))
+                    ) / cde_alpha_den
 
             key_gov = (region, commodity, GTAP_GOVERNMENT_AGENT)
             if key_gov in xaa_levels and government_total > 0.0:
@@ -204,7 +241,9 @@ def _compute_alphaa_3d(
                     sigma_g = 1.01
                 pa = max(float(pa_levels.get(key_gov, 1.0) or 1.0), 1e-12)
                 pg = 1.0
-                alphaa[key_gov] = (float(xaa_levels[key_gov]) / government_total) * ((pa / pg) ** sigma_g)
+                alphaa[key_gov] = (float(xaa_levels[key_gov]) / government_total) * (
+                    (pa / pg) ** sigma_g
+                )
 
             key_inv = (region, commodity, GTAP_INVESTMENT_AGENT)
             if key_inv in xaa_levels and investment_total > 0.0:
@@ -213,7 +252,9 @@ def _compute_alphaa_3d(
                     sigma_i = 1.01
                 pa = max(float(pa_levels.get(key_inv, 1.0) or 1.0), 1e-12)
                 pi = 1.0
-                alphaa[key_inv] = (float(xaa_levels[key_inv]) / investment_total) * ((pa / pi) ** sigma_i)
+                alphaa[key_inv] = (float(xaa_levels[key_inv]) / investment_total) * (
+                    (pa / pi) ** sigma_i
+                )
 
     for commodity in params.sets.i:
         xtmg = sum(
@@ -234,11 +275,11 @@ def _compute_alphaa_3d(
 
 def _compute_armington_shares_3d(
     params: GTAPParameters,
-    python_levels: Dict[str, Dict[Tuple[str, ...], float]],
-) -> Tuple[Dict[Tuple[str, ...], float], Dict[Tuple[str, ...], float]]:
+    python_levels: dict[str, dict[tuple[str, ...], float]],
+) -> tuple[dict[tuple[str, ...], float], dict[tuple[str, ...], float]]:
     """Compute alphad/alpham(r,i,aa) with GAMS calibration formulas."""
-    alphad: Dict[Tuple[str, ...], float] = {}
-    alpham: Dict[Tuple[str, ...], float] = {}
+    alphad: dict[tuple[str, ...], float] = {}
+    alpham: dict[tuple[str, ...], float] = {}
 
     xda_levels = _normalize_numeric_map(python_levels.get("xda", {}))
     xma_levels = _normalize_numeric_map(python_levels.get("xma", {}))
@@ -262,12 +303,26 @@ def _compute_armington_shares_3d(
         if agent in params.sets.a:
             dintx = (
                 float(params.benchmark.vdfp.get((region, commodity, agent), 0.0) or 0.0)
-                - float(params.benchmark.vdfb.get((region, commodity, agent), 0.0) or 0.0)
-            ) / max(float(params.benchmark.vdfb.get((region, commodity, agent), 0.0) or 0.0), 1e-12)
+                - float(
+                    params.benchmark.vdfb.get((region, commodity, agent), 0.0) or 0.0
+                )
+            ) / max(
+                float(
+                    params.benchmark.vdfb.get((region, commodity, agent), 0.0) or 0.0
+                ),
+                1e-12,
+            )
             mintx = (
                 float(params.benchmark.vmfp.get((region, commodity, agent), 0.0) or 0.0)
-                - float(params.benchmark.vmfb.get((region, commodity, agent), 0.0) or 0.0)
-            ) / max(float(params.benchmark.vmfb.get((region, commodity, agent), 0.0) or 0.0), 1e-12)
+                - float(
+                    params.benchmark.vmfb.get((region, commodity, agent), 0.0) or 0.0
+                )
+            ) / max(
+                float(
+                    params.benchmark.vmfb.get((region, commodity, agent), 0.0) or 0.0
+                ),
+                1e-12,
+            )
         elif agent == GTAP_HOUSEHOLD_AGENT:
             dintx = (
                 _two_key_value(params.benchmark.vdpp, region, commodity)
@@ -311,13 +366,13 @@ def _compute_armington_shares_3d(
     return alphad, alpham
 
 
-def _compute_gf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
+def _compute_gf_from_python(params: GTAPParameters) -> dict[tuple[str, ...], float]:
     """Rebuild gf(r,f,a) with GAMS-consistent mobile/sluggish-factor semantics."""
     benchmark = params.benchmark
     taxes = params.taxes
     sets = params.sets
 
-    gf_data: Dict[Tuple[str, ...], float] = {}
+    gf_data: dict[tuple[str, ...], float] = {}
 
     def _is_land_factor(name: str) -> bool:
         low = str(name).lower()
@@ -329,16 +384,21 @@ def _compute_gf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], flo
 
     for region in sets.r:
         for factor in sets.mf:
-            xf_by_activity: Dict[str, float] = {}
+            xf_by_activity: dict[str, float] = {}
             total_xf = 0.0
             for activity in sets.a:
                 factor_flow = float(
-                    benchmark.evfb.get((region, factor, activity), benchmark.vfm.get((region, factor, activity), 0.0))
+                    benchmark.evfb.get(
+                        (region, factor, activity),
+                        benchmark.vfm.get((region, factor, activity), 0.0),
+                    )
                     or 0.0
                 )
                 if factor_flow <= 0.0:
                     continue
-                kappa = float(taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
+                kappa = float(
+                    taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0
+                )
                 if kappa == 0.0:
                     kappa = float(taxes.kappaf.get((region, factor), 0.0) or 0.0)
                 pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
@@ -357,7 +417,10 @@ def _compute_gf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], flo
         for factor in sets.sf:
             for activity in sets.a:
                 factor_flow = float(
-                    benchmark.evfb.get((region, factor, activity), benchmark.vfm.get((region, factor, activity), 0.0))
+                    benchmark.evfb.get(
+                        (region, factor, activity),
+                        benchmark.vfm.get((region, factor, activity), 0.0),
+                    )
                     or 0.0
                 )
                 if factor_flow <= 0.0:
@@ -365,7 +428,9 @@ def _compute_gf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], flo
                 if _is_land_factor(factor):
                     gf_data[(region, factor, activity)] = 1.0
                     continue
-                kappa = float(taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
+                kappa = float(
+                    taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0
+                )
                 if kappa == 0.0:
                     kappa = float(taxes.kappaf.get((region, factor), 0.0) or 0.0)
                 pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
@@ -376,21 +441,31 @@ def _compute_gf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], flo
     return gf_data
 
 
-def _compute_lambdam_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
+def _compute_lambdam_from_python(
+    params: GTAPParameters,
+) -> dict[tuple[str, ...], float]:
     sets = params.sets
     return {(r, i, rp): 1.0 for r in sets.r for i in sets.i for rp in sets.r}
 
 
-def _compute_lambdamg_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
+def _compute_lambdamg_from_python(
+    params: GTAPParameters,
+) -> dict[tuple[str, ...], float]:
     sets = params.sets
     modes = list(getattr(sets, "m", []) or sets.i)
-    return {(m, r, i, rp): 1.0 for m in modes for r in sets.r for i in sets.i for rp in sets.r}
+    return {
+        (m, r, i, rp): 1.0
+        for m in modes
+        for r in sets.r
+        for i in sets.i
+        for rp in sets.r
+    }
 
 
-def _compute_kappaf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
+def _compute_kappaf_from_python(params: GTAPParameters) -> dict[tuple[str, ...], float]:
     benchmark = params.benchmark
     sets = params.sets
-    kappaf: Dict[Tuple[str, ...], float] = {}
+    kappaf: dict[tuple[str, ...], float] = {}
     for region in sets.r:
         for factor in sets.f:
             for activity in sets.a:
@@ -404,10 +479,10 @@ def _compute_kappaf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...],
     return kappaf
 
 
-def _compute_omegaf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
+def _compute_omegaf_from_python(params: GTAPParameters) -> dict[tuple[str, ...], float]:
     sets = params.sets
     elasticities = params.elasticities
-    omegaf: Dict[Tuple[str, ...], float] = {}
+    omegaf: dict[tuple[str, ...], float] = {}
 
     def _is_natres_factor(name: str) -> bool:
         low = str(name).lower()
@@ -443,11 +518,11 @@ def _compute_omegaf_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...],
     return omegaf
 
 
-def _compute_aft_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
+def _compute_aft_from_python(params: GTAPParameters) -> dict[tuple[str, ...], float]:
     benchmark = params.benchmark
     taxes = params.taxes
     sets = params.sets
-    aft: Dict[Tuple[str, ...], float] = {}
+    aft: dict[tuple[str, ...], float] = {}
 
     def _is_natres_factor(name: str) -> bool:
         low = str(name).lower()
@@ -458,12 +533,17 @@ def _compute_aft_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], fl
             total_xf = 0.0
             for activity in sets.a:
                 factor_flow = float(
-                    benchmark.evfb.get((region, factor, activity), benchmark.vfm.get((region, factor, activity), 0.0))
+                    benchmark.evfb.get(
+                        (region, factor, activity),
+                        benchmark.vfm.get((region, factor, activity), 0.0),
+                    )
                     or 0.0
                 )
                 if factor_flow <= 0.0:
                     continue
-                kappa = float(taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
+                kappa = float(
+                    taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0
+                )
                 if kappa == 0.0:
                     kappa = float(taxes.kappaf.get((region, factor), 0.0) or 0.0)
                 pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
@@ -477,12 +557,17 @@ def _compute_aft_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], fl
             total_xf = 0.0
             for activity in sets.a:
                 factor_flow = float(
-                    benchmark.evfb.get((region, factor, activity), benchmark.vfm.get((region, factor, activity), 0.0))
+                    benchmark.evfb.get(
+                        (region, factor, activity),
+                        benchmark.vfm.get((region, factor, activity), 0.0),
+                    )
                     or 0.0
                 )
                 if factor_flow <= 0.0:
                     continue
-                kappa = float(taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0)
+                kappa = float(
+                    taxes.kappaf_activity.get((region, factor, activity), 0.0) or 0.0
+                )
                 if kappa == 0.0:
                     kappa = float(taxes.kappaf.get((region, factor), 0.0) or 0.0)
                 pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
@@ -492,20 +577,24 @@ def _compute_aft_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], fl
     return aft
 
 
-def _compute_axp_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
-    return {(region, activity): 1.0 for region in params.sets.r for activity in params.sets.a}
+def _compute_axp_from_python(params: GTAPParameters) -> dict[tuple[str, ...], float]:
+    return {
+        (region, activity): 1.0
+        for region in params.sets.r
+        for activity in params.sets.a
+    }
 
 
 def _align_python_level_symbols(
-    python_levels: Dict[str, Dict[Tuple[str, ...], float]],
-) -> Dict[str, Dict[Tuple[str, ...], float]]:
+    python_levels: dict[str, dict[tuple[str, ...], float]],
+) -> dict[str, dict[tuple[str, ...], float]]:
     """Align Python-only symbol names to their GAMS counterparts."""
     alias = {
         "xaa": "xa",
         "xda": "xd",
         "xma": "xm",
     }
-    aligned: Dict[str, Dict[Tuple[str, ...], float]] = {}
+    aligned: dict[str, dict[tuple[str, ...], float]] = {}
     has_disaggregated = {
         "xa": "xaa" in python_levels,
         "xd": "xda" in python_levels,
@@ -529,8 +618,8 @@ def _align_python_level_symbols(
     return aligned
 
 
-def _compute_tmarg_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
-    tmarg_data: Dict[Tuple[str, ...], float] = {}
+def _compute_tmarg_from_python(params: GTAPParameters) -> dict[tuple[str, ...], float]:
+    tmarg_data: dict[tuple[str, ...], float] = {}
     benchmark = params.benchmark
     sets = params.sets
     for r in sets.r:
@@ -539,20 +628,30 @@ def _compute_tmarg_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], 
                 xw_bench = float(benchmark.vxsb.get((r, i, rp), 0.0) or 0.0)
                 vcif = float(benchmark.vcif.get((r, i, rp), 0.0) or 0.0)
                 vfob = float(benchmark.vfob.get((r, i, rp), 0.0) or 0.0)
-                tmarg_data[(r, i, rp)] = max(vcif - vfob, 0.0) / max(xw_bench, 1e-12) if xw_bench > 0.0 else 0.0
+                tmarg_data[(r, i, rp)] = (
+                    max(vcif - vfob, 0.0) / max(xw_bench, 1e-12)
+                    if xw_bench > 0.0
+                    else 0.0
+                )
     return tmarg_data
 
 
-def _compute_chipm_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], float]:
-    chipm_data: Dict[Tuple[str, ...], float] = {}
+def _compute_chipm_from_python(params: GTAPParameters) -> dict[tuple[str, ...], float]:
+    chipm_data: dict[tuple[str, ...], float] = {}
     benchmark = params.benchmark
     sets = params.sets
     for exporter in sets.r:
         for commodity in sets.i:
             for importer in sets.r:
-                vxmd = float(benchmark.vxmd.get((exporter, commodity, importer), 0.0) or 0.0)
-                vxsb = float(benchmark.vxsb.get((exporter, commodity, importer), 0.0) or 0.0)
-                vcif = float(benchmark.vcif.get((exporter, commodity, importer), 0.0) or 0.0)
+                vxmd = float(
+                    benchmark.vxmd.get((exporter, commodity, importer), 0.0) or 0.0
+                )
+                vxsb = float(
+                    benchmark.vxsb.get((exporter, commodity, importer), 0.0) or 0.0
+                )
+                vcif = float(
+                    benchmark.vcif.get((exporter, commodity, importer), 0.0) or 0.0
+                )
                 if vxmd <= 0.0 and vxsb <= 0.0 and vcif <= 0.0:
                     continue
                 chipm_data[(exporter, commodity, importer)] = 1.0
@@ -561,8 +660,8 @@ def _compute_chipm_from_python(params: GTAPParameters) -> Dict[Tuple[str, ...], 
 
 def collect_python_calibration_maps(
     params: GTAPParameters,
-    python_levels: Optional[Dict[str, Dict[Tuple[str, ...], float]]] = None,
-) -> Dict[str, Dict[Tuple[str, ...], float]]:
+    python_levels: dict[str, dict[tuple[str, ...], float]] | None = None,
+) -> dict[str, dict[tuple[str, ...], float]]:
     """Collect Python-side calibration objects using GAMS-like symbol names."""
     python_levels = python_levels or collect_python_benchmark_levels(params)
     alphaa_3d = _compute_alphaa_3d(params, python_levels)
@@ -570,7 +669,7 @@ def collect_python_calibration_maps(
     etax_zeros = {(r, i): 0.0 for r in params.sets.r for i in params.sets.i}
     mtax_zeros = {(r, i): 0.0 for r in params.sets.r for i in params.sets.i}
 
-    maps: Dict[str, Dict[Tuple[str, ...], float]] = {
+    maps: dict[str, dict[tuple[str, ...], float]] = {
         "and": _normalize_numeric_map(params.calibrated.and_param),
         "ava": _normalize_numeric_map(params.calibrated.ava_param),
         "io": _normalize_numeric_map(params.calibrated.io_param),
@@ -609,26 +708,28 @@ def collect_python_calibration_maps(
 def collect_python_benchmark_levels(
     params: GTAPParameters,
     *,
-    level_symbols: Optional[Sequence[str]] = None,
-) -> Dict[str, Dict[Tuple[str, ...], float]]:
+    level_symbols: Sequence[str] | None = None,
+) -> dict[str, dict[tuple[str, ...], float]]:
     """Build the Pyomo model and collect initial `.value` levels for key variables."""
     from pyomo.environ import value
 
     from equilibria.templates.gtap.gtap_contract import build_gtap_closure_config
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
-    closure = build_gtap_closure_config({"name": "gtap_standard", "calibration_source": "python", "if_sub": False})
+    closure = build_gtap_closure_config(
+        {"name": "gtap_standard", "calibration_source": "python", "if_sub": False}
+    )
     equations = GTAPModelEquations(params.sets, params, closure)
     model = equations.build_model()
 
     level_names = tuple(level_symbols or GAMSCalibrationDump.DEFAULT_LEVEL_SYMBOLS)
-    levels: Dict[str, Dict[Tuple[str, ...], float]] = {}
+    levels: dict[str, dict[tuple[str, ...], float]] = {}
 
     for symbol in level_names:
         if not hasattr(model, symbol):
             continue
         component = getattr(model, symbol)
-        symbol_levels: Dict[Tuple[str, ...], float] = {}
+        symbol_levels: dict[tuple[str, ...], float] = {}
 
         if hasattr(component, "is_indexed") and component.is_indexed():
             for idx in component:
@@ -640,7 +741,7 @@ def collect_python_benchmark_levels(
         else:
             component_value = value(component, exception=False)
             if component_value is not None:
-                symbol_levels[tuple()] = float(component_value)
+                symbol_levels[()] = float(component_value)
 
         if symbol_levels:
             levels[symbol.lower()] = symbol_levels
@@ -658,22 +759,22 @@ class SymbolDiff:
     n_mismatch: int
     max_abs_diff: float
     max_rel_diff: float
-    top_offenders: List[Dict[str, Any]] = field(default_factory=list)
+    top_offenders: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class CalibrationDiff:
     tol_abs: float
     tol_rel: float
-    parameter_diffs: List[SymbolDiff] = field(default_factory=list)
-    level_diffs: List[SymbolDiff] = field(default_factory=list)
+    parameter_diffs: list[SymbolDiff] = field(default_factory=list)
+    level_diffs: list[SymbolDiff] = field(default_factory=list)
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         by_category = {
             "parameters": self.parameter_diffs,
             "levels": self.level_diffs,
         }
-        summary: Dict[str, Any] = {
+        summary: dict[str, Any] = {
             "tol_abs": self.tol_abs,
             "tol_rel": self.tol_rel,
             "categories": {},
@@ -698,8 +799,8 @@ class CalibrationDiff:
             summary["totals"]["mismatches"] += mismatch_count
         return summary
 
-    def _rows(self) -> List[Dict[str, Any]]:
-        rows: List[Dict[str, Any]] = []
+    def _rows(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
         for group in (self.parameter_diffs, self.level_diffs):
             for entry in group:
                 rows.append(
@@ -712,7 +813,9 @@ class CalibrationDiff:
                         "n_mismatch": entry.n_mismatch,
                         "max_abs_diff": entry.max_abs_diff,
                         "max_rel_diff": entry.max_rel_diff,
-                        "top5_offenders": json.dumps(entry.top_offenders, ensure_ascii=True),
+                        "top5_offenders": json.dumps(
+                            entry.top_offenders, ensure_ascii=True
+                        ),
                     }
                 )
         return rows
@@ -753,8 +856,8 @@ def _compare_symbol(
     *,
     category: str,
     name: str,
-    python_map: Dict[Tuple[str, ...], float],
-    gams_map: Dict[Tuple[str, ...], float],
+    python_map: dict[tuple[str, ...], float],
+    gams_map: dict[tuple[str, ...], float],
     tol_abs: float,
     tol_rel: float,
     precision_floor_abs: float = 0.0,
@@ -763,7 +866,7 @@ def _compare_symbol(
     n_mismatch = 0
     max_abs = 0.0
     max_rel = 0.0
-    offenders: List[Dict[str, Any]] = []
+    offenders: list[dict[str, Any]] = []
 
     for key in keys:
         p_val = python_map.get(key)
@@ -785,7 +888,9 @@ def _compare_symbol(
                     "gams": g_val,
                     "abs_diff": None,
                     "rel_diff": None,
-                    "reason": "missing_in_python" if p_val is None else "missing_in_gams",
+                    "reason": "missing_in_python"
+                    if p_val is None
+                    else "missing_in_gams",
                 }
             )
             continue
@@ -843,18 +948,20 @@ def compare_calibration(
     tol_rel: float = 1e-6,
     precision_floor_abs: float = 2e-3,
     *,
-    python_levels: Optional[Dict[str, Dict[Tuple[str, ...], float]]] = None,
+    python_levels: dict[str, dict[tuple[str, ...], float]] | None = None,
 ) -> CalibrationDiff:
     """Compare Python GTAP calibration objects against a GAMS dump."""
     if python_levels is None:
         python_levels = collect_python_benchmark_levels(python_params)
-    python_param_maps = collect_python_calibration_maps(python_params, python_levels=python_levels)
+    python_param_maps = collect_python_calibration_maps(
+        python_params, python_levels=python_levels
+    )
     python_level_maps = _align_python_level_symbols(python_levels)
 
     parameter_symbols = sorted(set(python_param_maps) | set(gams_dump.derived_params))
     level_symbols = sorted(set(python_level_maps) | set(gams_dump.benchmark_levels))
 
-    parameter_diffs: List[SymbolDiff] = []
+    parameter_diffs: list[SymbolDiff] = []
     for symbol in parameter_symbols:
         parameter_diffs.append(
             _compare_symbol(
@@ -868,7 +975,7 @@ def compare_calibration(
             )
         )
 
-    level_diffs: List[SymbolDiff] = []
+    level_diffs: list[SymbolDiff] = []
     for symbol in level_symbols:
         level_diffs.append(
             _compare_symbol(

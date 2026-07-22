@@ -10,18 +10,16 @@ Tests cover:
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from equilibria.sam_tools.balancing import (
     MIPBalanceResult,
-    gras_balance,
-    ras_balance,
+    balance_mip_entropy,
     balance_mip_gras,
     balance_mip_ras,
     balance_mip_sut_ras,
-    balance_mip_entropy,
+    gras_balance,
+    ras_balance,
 )
-
 
 # =============================================================================
 # Fixtures

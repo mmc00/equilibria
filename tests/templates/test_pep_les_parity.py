@@ -16,7 +16,6 @@ from equilibria.templates.pep_calibration_unified_dynamic import (
 from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
 from equilibria.templates.pep_val_par_loader import load_val_par
 
-
 ROOT = Path(__file__).resolve().parents[2]
 PEP2 = ROOT / "src/equilibria/templates/reference/pep2"
 PEP2_DATA = PEP2 / "data"
@@ -104,7 +103,9 @@ def test_val_par_loader_reads_original_les_layout() -> None:
         _build_dynamic_sam_gdx,
     ],
 )
-@pytest.mark.skipif(not PEP2_RESULTS.exists(), reason="Results_ipopt.gdx baseline not available")
+@pytest.mark.skipif(
+    not PEP2_RESULTS.exists(), reason="Results_ipopt.gdx baseline not available"
+)
 def test_les_parity_cmin_and_frisch(state_builder) -> None:
     state = state_builder()
     les = state.les_parameters

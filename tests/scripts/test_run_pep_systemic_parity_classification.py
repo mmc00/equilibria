@@ -44,7 +44,9 @@ def test_systemic_parity_fails_fast_on_invalid_val_par(tmp_path: Path) -> None:
     assert report.exists() is False
 
 
-def test_systemic_parity_report_classifies_cri_data_contract_failure(tmp_path: Path) -> None:
+def test_systemic_parity_report_classifies_cri_data_contract_failure(
+    tmp_path: Path,
+) -> None:
     report = tmp_path / "cri_contract_report.json"
     sam_file = ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams.xlsx"
     assert sam_file.exists()
@@ -137,8 +139,12 @@ def test_systemic_parity_cri_fixed_classifies_solver_dynamics_after_init_pass(
     tmp_path: Path,
 ) -> None:
     report = tmp_path / "cri_solver_dynamics_report.json"
-    sam_file = ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx"
-    val_par_file = ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx"
+    sam_file = (
+        ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx"
+    )
+    val_par_file = (
+        ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx"
+    )
     assert sam_file.exists()
     assert val_par_file.exists()
 
@@ -176,8 +182,12 @@ def test_systemic_parity_cri_fixed_classifies_solver_dynamics_after_init_pass(
 
 def test_systemic_parity_cri_fixed_passes_qa_and_macro_closure(tmp_path: Path) -> None:
     report = tmp_path / "cri_fixed_pass_report.json"
-    sam_file = ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx"
-    val_par_file = ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx"
+    sam_file = (
+        ROOT / "src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx"
+    )
+    val_par_file = (
+        ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx"
+    )
     assert sam_file.exists()
     assert val_par_file.exists()
 

@@ -31,7 +31,9 @@ def pep2_state():
 def test_baseline_manifest_roundtrip(tmp_path: Path, pep2_state) -> None:
     sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-V2_0.xls")
     val_file = Path("src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx")
-    results_gdx = Path("src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx")
+    results_gdx = Path(
+        "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+    )
     parameters_gdx = tmp_path / "Parameters.gdx"
     parameters_gdx.write_bytes(b"dummy-parameters")
 
@@ -63,7 +65,9 @@ def test_strict_baseline_compatibility_passes_with_matching_manifest(
 ) -> None:
     sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-V2_0.xls")
     val_file = Path("src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx")
-    results_gdx = Path("src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx")
+    results_gdx = Path(
+        "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+    )
     manifest_path = tmp_path / "strict_manifest.json"
     build_baseline_manifest(
         state=pep2_state,
@@ -92,7 +96,9 @@ def test_strict_baseline_compatibility_detects_slice_mismatch(
 ) -> None:
     sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-V2_0.xls")
     val_file = Path("src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx")
-    results_gdx = Path("src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx")
+    results_gdx = Path(
+        "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+    )
     manifest_path = tmp_path / "strict_manifest.json"
     build_baseline_manifest(
         state=pep2_state,
@@ -123,7 +129,9 @@ def test_strict_baseline_compatibility_allows_base_manifest_for_sim1(
 ) -> None:
     sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-V2_0.xls")
     val_file = Path("src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx")
-    results_gdx = Path("src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx")
+    results_gdx = Path(
+        "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+    )
     manifest_path = tmp_path / "strict_manifest_base.json"
     build_baseline_manifest(
         state=pep2_state,
@@ -148,8 +156,12 @@ def test_strict_baseline_compatibility_allows_base_manifest_for_sim1(
 
 def test_gams_solver_gate_raises_on_incompatible_baseline() -> None:
     sam_file = Path("src/equilibria/templates/reference/pep2/data/SAM-CRI-gams.xlsx")
-    val_file = Path("src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx")
-    results_gdx = Path("src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx")
+    val_file = Path(
+        "src/equilibria/templates/reference/pep2/data/VAL_PAR-CRI-gams.xlsx"
+    )
+    results_gdx = Path(
+        "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+    )
     calibrator = PEPModelCalibratorExcel(sam_file=sam_file, val_par_file=val_file)
     state = calibrator.calibrate()
 
@@ -172,7 +184,9 @@ def test_strict_baseline_compatibility_passes_with_matching_parameters_gdx(
     pep2_state,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    results_gdx = Path("src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx")
+    results_gdx = Path(
+        "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+    )
     parameters_gdx = tmp_path / "Parameters.gdx"
     parameters_gdx.write_bytes(b"dummy")
 
@@ -208,7 +222,9 @@ def test_strict_baseline_compatibility_detects_parameters_gdx_mismatch(
     pep2_state,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    results_gdx = Path("src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx")
+    results_gdx = Path(
+        "src/equilibria/templates/reference/pep2/scripts/Results_ipopt_excel_reference.gdx"
+    )
     parameters_gdx = tmp_path / "Parameters.gdx"
     parameters_gdx.write_bytes(b"dummy")
 

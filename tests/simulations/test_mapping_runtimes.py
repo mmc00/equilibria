@@ -60,7 +60,9 @@ def test_register_mapping_runtime_autoloads_hooks_for_ieem() -> None:
 
     sim = IEEMSimulator(base_state={"x": 5.0}).fit()
     report = sim.run_scenarios(
-        scenarios=[Scenario(name="plus", shocks=[Shock(var="x", op="add", values=2.0)])],
+        scenarios=[
+            Scenario(name="plus", shocks=[Shock(var="x", op="add", values=2.0)])
+        ],
         include_base=True,
     )
 
@@ -86,7 +88,9 @@ def test_no_mapping_runtime_registered_by_default_for_non_pep_models() -> None:
 
     for sim in (ieem, gtap, icio):
         report = sim.run_scenarios(
-            scenarios=[Scenario(name="s", shocks=[Shock(var="x", op="add", values=1.0)])],
+            scenarios=[
+                Scenario(name="s", shocks=[Shock(var="x", op="add", values=1.0)])
+            ],
             include_base=True,
         )
         assert report["capabilities"]["has_solver"] is False

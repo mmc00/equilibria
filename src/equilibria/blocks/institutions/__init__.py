@@ -9,18 +9,18 @@ This module provides institution-related equation blocks including:
 from __future__ import annotations
 
 import typing
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
+from equilibria.core.parameters import Parameter
+from equilibria.core.sets import SetManager
 from equilibria.core.symbolic_equations import (
     SymbolicEquation,
 )
-from equilibria.core.parameters import Parameter
-from equilibria.core.sets import SetManager
 from equilibria.core.variables import Variable
 
 if TYPE_CHECKING:
@@ -142,15 +142,15 @@ class Household(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for household income."""
-                YH = getattr(pyomo_model, "YH")
-                WF = getattr(pyomo_model, "WF")
-                FSUP = getattr(pyomo_model, "FSUP")
-                shry = getattr(pyomo_model, "shry")
+                YH = pyomo_model.YH
+                WF = pyomo_model.WF
+                FSUP = pyomo_model.FSUP
+                shry = pyomo_model.shry
 
                 F_set = pyomo_model.F
                 income = sum(shry[f] * WF[f] * FSUP[f] for f in F_set)
 
-                return YH == income
+                return income == YH
 
         equations.append(HouseholdIncomeEq())
 
@@ -194,15 +194,12 @@ class Household(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "WF0" in calibrated:
-            if "WF" in var_manager:
-                var_manager.get("WF").value = calibrated["WF0"].copy()
-        if "FSUP0" in calibrated:
-            if "FSUP" in var_manager:
-                var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
-        if "YH0" in calibrated:
-            if "YH" in var_manager:
-                var_manager.get("YH").value = np.array([calibrated["YH0"]])
+        if "WF0" in calibrated and "WF" in var_manager:
+            var_manager.get("WF").value = calibrated["WF0"].copy()
+        if "FSUP0" in calibrated and "FSUP" in var_manager:
+            var_manager.get("FSUP").value = calibrated["FSUP0"].copy()
+        if "YH0" in calibrated and "YH" in var_manager:
+            var_manager.get("YH").value = np.array([calibrated["YH0"]])
 
 
 class Government(Block):
@@ -318,15 +315,15 @@ class Government(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for government revenue."""
-                YG = getattr(pyomo_model, "YG")
-                tau_m = getattr(pyomo_model, "tau_m")
-                PM = getattr(pyomo_model, "PM")
-                QM = getattr(pyomo_model, "QM")
+                YG = pyomo_model.YG
+                tau_m = pyomo_model.tau_m
+                PM = pyomo_model.PM
+                QM = pyomo_model.QM
 
                 I_set = pyomo_model.I
                 revenue = sum(tau_m[i] * PM[i] * QM[i] for i in I_set)
 
-                return YG == revenue
+                return revenue == YG
 
         # Government budget: YG = sum_i PA[i] * XG[i]
         class GovernmentBudgetEq(SymbolicEquation):
@@ -336,14 +333,14 @@ class Government(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for government budget."""
-                YG = getattr(pyomo_model, "YG")
-                PA = getattr(pyomo_model, "PA")
-                XG = getattr(pyomo_model, "XG")
+                YG = pyomo_model.YG
+                PA = pyomo_model.PA
+                XG = pyomo_model.XG
 
                 I_set = pyomo_model.I
                 expenditure = sum(PA[i] * XG[i] for i in I_set)
 
-                return YG == expenditure
+                return expenditure == YG
 
         equations.append(GovernmentRevenueEq())
         equations.append(GovernmentBudgetEq())
@@ -366,10 +363,7 @@ class Government(Block):
                 QM0 = trade_params["QM0"]
                 # Get prices - try LES blocks or default to 1.0
                 les_params = data.get_block_params("LES_hrp")
-                if "PA0" in les_params:
-                    PA0 = les_params["PA0"]
-                else:
-                    PA0 = np.ones(n_comm)
+                PA0 = les_params["PA0"] if "PA0" in les_params else np.ones(n_comm)
 
                 # Extract government consumption from SAM
                 # Government pays to commodities (AGR, IND, AGR_2, etc.)
@@ -437,12 +431,10 @@ class Government(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "XG0" in calibrated:
-            if "XG" in var_manager:
-                var_manager.get("XG").value = _ensure_positive_array(calibrated["XG0"])
-        if "YG0" in calibrated:
-            if "YG" in var_manager:
-                var_manager.get("YG").value = np.array([calibrated["YG0"]])
+        if "XG0" in calibrated and "XG" in var_manager:
+            var_manager.get("XG").value = _ensure_positive_array(calibrated["XG0"])
+        if "YG0" in calibrated and "YG" in var_manager:
+            var_manager.get("YG").value = np.array([calibrated["YG0"]])
 
 
 class RestOfWorld(Block):
@@ -562,16 +554,16 @@ class RestOfWorld(Block):
 
             def build_expression(self, pyomo_model, indices):
                 """Build Pyomo expression for trade balance."""
-                FSAV = getattr(pyomo_model, "FSAV")
-                pwe = getattr(pyomo_model, "pwe")
-                pwm = getattr(pyomo_model, "pwm")
-                QE = getattr(pyomo_model, "QE")
-                QM = getattr(pyomo_model, "QM")
+                FSAV = pyomo_model.FSAV
+                pwe = pyomo_model.pwe
+                pwm = pyomo_model.pwm
+                QE = pyomo_model.QE
+                QM = pyomo_model.QM
 
                 I_set = pyomo_model.I
                 balance = sum(pwe[i] * QE[i] - pwm[i] * QM[i] for i in I_set)
 
-                return FSAV == balance
+                return balance == FSAV
 
         equations.append(TradeBalanceEq())
 
@@ -596,10 +588,7 @@ class RestOfWorld(Block):
             else:
                 QM0 = np.zeros(n_comm)
 
-            if "XE0" in cet_params:
-                QE0 = cet_params["XE0"]
-            else:
-                QE0 = np.zeros(n_comm)
+            QE0 = cet_params["XE0"] if "XE0" in cet_params else np.zeros(n_comm)
 
             # World prices (normalized to 1)
             pwm = np.ones(n_comm)
@@ -624,12 +613,13 @@ class RestOfWorld(Block):
 
     def _initialize_variables(self, calibrated, set_manager, var_manager):
         """Initialize variables from calibrated parameters."""
-        if "QM0" in calibrated:
-            if "QM" in var_manager:
-                var_manager.get("QM").value = _ensure_positive_array(calibrated["QM0"].copy())
-        if "QE0" in calibrated:
-            if "QE" in var_manager:
-                var_manager.get("QE").value = _ensure_positive_array(calibrated["QE0"].copy())
-        if "FSAV0" in calibrated:
-            if "FSAV" in var_manager:
-                var_manager.get("FSAV").value = np.array([calibrated["FSAV0"]])
+        if "QM0" in calibrated and "QM" in var_manager:
+            var_manager.get("QM").value = _ensure_positive_array(
+                calibrated["QM0"].copy()
+            )
+        if "QE0" in calibrated and "QE" in var_manager:
+            var_manager.get("QE").value = _ensure_positive_array(
+                calibrated["QE0"].copy()
+            )
+        if "FSAV0" in calibrated and "FSAV" in var_manager:
+            var_manager.get("FSAV").value = np.array([calibrated["FSAV0"]])

@@ -15,8 +15,6 @@ from equilibria.sam_tools.mip_to_sam_transforms import (
     disaggregate_va_to_factors,
     normalize_mip_accounts,
 )
-from equilibria.sam_tools.models import Sam
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SIMPLE_MIP = FIXTURES_DIR / "simple_mip.xlsx"

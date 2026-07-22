@@ -6,10 +6,10 @@ scipy.optimize.root or similar methods to solve the system of nonlinear equation
 
 Usage:
     from equilibria.templates.pep_model_solver import PEPModelSolver
-    
+
     solver = PEPModelSolver(calibrated_state)
     solution = solver.solve()
-    
+
     if solution.converged:
         print(f"Solution found: GDP = {solution.variables.GDP_BP}")
 """
@@ -19,18 +19,23 @@ from __future__ import annotations
 import copy
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 import numpy as np
 
-from equilibria.solver.guards import rebuild_tax_detail_from_rates
 from equilibria.solver.transforms import pep_array_to_variables, pep_variables_to_array
 from equilibria.templates.init_strategies import normalize_init_mode
 from equilibria.templates.pep_contract import PEPContract, build_pep_contract
-from equilibria.templates.pep_runtime_config import PEPRuntimeConfig, build_pep_runtime_config
-from equilibria.templates.pep_model_equations import PEPModelEquations, PEPModelVariables, SolverResult
+from equilibria.templates.pep_model_equations import (
+    PEPModelEquations,
+    PEPModelVariables,
+    SolverResult,
+)
+from equilibria.templates.pep_runtime_config import (
+    PEPRuntimeConfig,
+    build_pep_runtime_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +43,8 @@ DEBUG_SIMPLE_ITERATION_METHOD = "__debug_simple_iteration"
 
 # Import IPOPT solver if available
 try:
-    from equilibria.templates.pep_model_solver_ipopt import IPOPTSolver
-    from equilibria.templates.pep_model_solver_ipopt import IPOPT_AVAILABLE
+    from equilibria.templates.pep_model_solver_ipopt import IPOPT_AVAILABLE, IPOPTSolver
+
     logger.info(f"IPOPT import successful, IPOPT_AVAILABLE={IPOPT_AVAILABLE}")
 except ImportError as e:
     IPOPT_AVAILABLE = False
@@ -48,7 +53,7 @@ except ImportError as e:
 
 class PEPModelSolver:
     """Solver for the PEP CGE model."""
-    
+
     def __init__(
         self,
         calibrated_state: Any,
@@ -73,7 +78,7 @@ class PEPModelSolver:
         initial_vars: PEPModelVariables | None = None,
     ):
         """Initialize the solver with calibrated model state.
-        
+
         Args:
             calibrated_state: PEPModelState from calibration
             tolerance: Convergence tolerance for residuals
@@ -85,38 +90,52 @@ class PEPModelSolver:
         self.state = calibrated_state
         self.contract = build_pep_contract(contract)
         self.runtime_config = build_pep_runtime_config(config)
-        self.tolerance = float(self.runtime_config.tolerance if tolerance is None else tolerance)
-        self.max_iterations = int(self.runtime_config.max_iterations if max_iterations is None else max_iterations)
+        self.tolerance = float(
+            self.runtime_config.tolerance if tolerance is None else tolerance
+        )
+        self.max_iterations = int(
+            self.runtime_config.max_iterations
+            if max_iterations is None
+            else max_iterations
+        )
         requested_init_mode = str(init_mode).strip().lower()
         self.init_mode = normalize_init_mode(init_mode)
         self.blockwise_commodity_alpha = blockwise_commodity_alpha
         self.blockwise_trade_market_alpha = blockwise_trade_market_alpha
         self.blockwise_macro_alpha = blockwise_macro_alpha
-        self.gams_results_gdx = Path(gams_results_gdx) if gams_results_gdx is not None else None
-        self.gams_parameters_gdx = Path(gams_parameters_gdx) if gams_parameters_gdx is not None else None
+        self.gams_results_gdx = (
+            Path(gams_results_gdx) if gams_results_gdx is not None else None
+        )
+        self.gams_parameters_gdx = (
+            Path(gams_parameters_gdx) if gams_parameters_gdx is not None else None
+        )
         self.gams_results_slice = gams_results_slice.lower()
-        self.baseline_manifest = Path(baseline_manifest) if baseline_manifest is not None else None
+        self.baseline_manifest = (
+            Path(baseline_manifest) if baseline_manifest is not None else None
+        )
         self.require_baseline_manifest = require_baseline_manifest
         self.baseline_compatibility_rel_tol = baseline_compatibility_rel_tol
         self.enforce_strict_gams_baseline = enforce_strict_gams_baseline
         self.sam_file = Path(sam_file) if sam_file is not None else None
         self.val_par_file = Path(val_par_file) if val_par_file is not None else None
         self.gdxdump_bin = gdxdump_bin
-        self.initial_vars = copy.deepcopy(initial_vars) if initial_vars is not None else None
+        self.initial_vars = (
+            copy.deepcopy(initial_vars) if initial_vars is not None else None
+        )
         self.last_closure_validation_report: dict[str, Any] | None = None
-        
+
         # Extract sets and parameters from calibrated state
         self.sets = calibrated_state.sets
         self.params = self._extract_parameters(calibrated_state)
-        
+
         # Initialize equations
         self.equations = PEPModelEquations(
             self.sets,
             self.params,
             activation_masks=self.contract.equations.activation_masks,
         )
-        
-        logger.info(f"Initialized PEP Model Solver")
+
+        logger.info("Initialized PEP Model Solver")
         logger.info(f"  Sets: {len(self.sets)} categories")
         logger.info(f"  Tolerance: {self.tolerance}")
         logger.info(f"  Max iterations: {self.max_iterations}")
@@ -136,76 +155,84 @@ class PEPModelSolver:
             logger.info(f"  GAMS parameters: {self.gams_parameters_gdx}")
         if self.baseline_manifest is not None:
             logger.info(f"  Baseline manifest: {self.baseline_manifest}")
-    
+
     def _extract_parameters(self, state: Any) -> dict[str, Any]:
         """Extract all calibrated parameters from model state."""
         params = {}
-        
+
         # Income parameters
-        params.update({
-            "lambda_RK": state.income.get("lambda_RK", {}),
-            "lambda_WL": state.income.get("lambda_WL", {}),
-            "lambda_TR_households": state.income.get("lambda_TR_households", {}),
-            "lambda_TR_firms": state.income.get("lambda_TR_firms", {}),
-            "sh1": state.income.get("sh1O", {}),
-            "tr1": state.income.get("tr1O", {}),
-        })
-        
+        params.update(
+            {
+                "lambda_RK": state.income.get("lambda_RK", {}),
+                "lambda_WL": state.income.get("lambda_WL", {}),
+                "lambda_TR_households": state.income.get("lambda_TR_households", {}),
+                "lambda_TR_firms": state.income.get("lambda_TR_firms", {}),
+                "sh1": state.income.get("sh1O", {}),
+                "tr1": state.income.get("tr1O", {}),
+            }
+        )
+
         # Production parameters
-        params.update({
-            "io": state.production.get("io", {}),
-            "v": state.production.get("v", {}),
-            "aij": state.production.get("aij", {}),
-            "rho_KD": state.production.get("rho_KD", {}),
-            "beta_KD": state.production.get("beta_KD", {}),
-            "B_KD": state.production.get("B_KD", {}),
-            "sigma_KD": state.production.get("sigma_KD", {}),
-            "rho_LD": state.production.get("rho_LD", {}),
-            "beta_LD": state.production.get("beta_LD", {}),
-            "B_LD": state.production.get("B_LD", {}),
-            "sigma_LD": state.production.get("sigma_LD", {}),
-            "ttiw": state.production.get("ttiwO", {}),
-            "ttik": state.production.get("ttikO", {}),
-            "ttip": state.production.get("ttipO", {}),
-            "LS": state.production.get("LSO", {}),
-            "KS": state.production.get("KSO", {}),
-            "KDO0": state.production.get("KDO", {}),
-            "LDO0": state.production.get("LDO", {}),
-            # Value added CES parameters
-            "rho_VA": state.production.get("rho_VA", {}),
-            "beta_VA": state.production.get("beta_VA", {}),
-            "B_VA": state.production.get("B_VA", {}),
-            "sigma_VA": state.production.get("sigma_VA", {}),
-        })
-        
+        params.update(
+            {
+                "io": state.production.get("io", {}),
+                "v": state.production.get("v", {}),
+                "aij": state.production.get("aij", {}),
+                "rho_KD": state.production.get("rho_KD", {}),
+                "beta_KD": state.production.get("beta_KD", {}),
+                "B_KD": state.production.get("B_KD", {}),
+                "sigma_KD": state.production.get("sigma_KD", {}),
+                "rho_LD": state.production.get("rho_LD", {}),
+                "beta_LD": state.production.get("beta_LD", {}),
+                "B_LD": state.production.get("B_LD", {}),
+                "sigma_LD": state.production.get("sigma_LD", {}),
+                "ttiw": state.production.get("ttiwO", {}),
+                "ttik": state.production.get("ttikO", {}),
+                "ttip": state.production.get("ttipO", {}),
+                "LS": state.production.get("LSO", {}),
+                "KS": state.production.get("KSO", {}),
+                "KDO0": state.production.get("KDO", {}),
+                "LDO0": state.production.get("LDO", {}),
+                # Value added CES parameters
+                "rho_VA": state.production.get("rho_VA", {}),
+                "beta_VA": state.production.get("beta_VA", {}),
+                "B_VA": state.production.get("B_VA", {}),
+                "sigma_VA": state.production.get("sigma_VA", {}),
+            }
+        )
+
         # Trade parameters
-        params.update({
-            "rho_XT": state.trade.get("rho_XT", {}),
-            "beta_XT": state.trade.get("beta_XT", {}),
-            "B_XT": state.trade.get("B_XT", {}),
-            "rho_X": state.trade.get("rho_X", {}),
-            "beta_X": state.trade.get("beta_X", {}),
-            "B_X": state.trade.get("B_X", {}),
-            "rho_M": state.trade.get("rho_M", {}),
-            "beta_M": state.trade.get("beta_M", {}),
-            "B_M": state.trade.get("B_M", {}),
-            "sigma_XD": {i: 2.0 for i in state.sets.get("I", [])},  # Default
-            "ttic": state.trade.get("tticO", {}),
-            "ttim": state.trade.get("ttimO", {}),
-            "ttix": state.trade.get("ttixO", {}),
-            "tmrg": state.trade.get("tmrg", {}),
-            "tmrg_X": state.trade.get("tmrg_X", {}),
-            "EXDO": state.trade.get("EXDO", {}),
-            "PWX": state.trade.get("PWXO", {}),
-        })
-        
+        params.update(
+            {
+                "rho_XT": state.trade.get("rho_XT", {}),
+                "beta_XT": state.trade.get("beta_XT", {}),
+                "B_XT": state.trade.get("B_XT", {}),
+                "rho_X": state.trade.get("rho_X", {}),
+                "beta_X": state.trade.get("beta_X", {}),
+                "B_X": state.trade.get("B_X", {}),
+                "rho_M": state.trade.get("rho_M", {}),
+                "beta_M": state.trade.get("beta_M", {}),
+                "B_M": state.trade.get("B_M", {}),
+                "sigma_XD": dict.fromkeys(state.sets.get("I", []), 2.0),  # Default
+                "ttic": state.trade.get("tticO", {}),
+                "ttim": state.trade.get("ttimO", {}),
+                "ttix": state.trade.get("ttixO", {}),
+                "tmrg": state.trade.get("tmrg", {}),
+                "tmrg_X": state.trade.get("tmrg_X", {}),
+                "EXDO": state.trade.get("EXDO", {}),
+                "PWX": state.trade.get("PWXO", {}),
+            }
+        )
+
         # LES parameters
-        params.update({
-            "gamma_LES": state.les_parameters.get("gamma_LES", {}),
-            "sigma_Y": state.les_parameters.get("sigma_Y", {}),
-            "frisch": state.les_parameters.get("frisch", {}),
-        })
-        
+        params.update(
+            {
+                "gamma_LES": state.les_parameters.get("gamma_LES", {}),
+                "sigma_Y": state.les_parameters.get("sigma_Y", {}),
+                "frisch": state.les_parameters.get("frisch", {}),
+            }
+        )
+
         # Additional parameters
         inferred_sh0 = {}
         sh1_base = state.income.get("sh1O", {})
@@ -222,7 +249,7 @@ class PEPModelSolver:
 
         # In PEP benchmark data, transfer intercept is typically zero and TR is driven
         # by tr1*YH at benchmark prices.
-        inferred_tr0 = {h: 0.0 for h in state.sets.get("H", [])}
+        inferred_tr0 = dict.fromkeys(state.sets.get("H", []), 0.0)
         tr0_base = state.income.get("tr0O", {})
         tr1_base = state.income.get("tr1O", {})
         yh_base = state.income.get("YHO", {})
@@ -246,24 +273,27 @@ class PEPModelSolver:
             tdf_f = max(yfo_base.get(f, 0) - ydfo_base.get(f, 0), 0)
             inferred_ttdf1[f] = (tdf_f / yfk_f) if abs(yfk_f) > 1e-12 else 0.0
 
-        params.update({
-            "eta": 1,  # Matches GAMS scalar eta
-            "sh0": (
-                state.income.get("sh0O", {})
-                if isinstance(state.income.get("sh0O", {}), dict) and state.income.get("sh0O", {})
-                else inferred_sh0
-            ),
-            "tr0": (
-                tr0_base
-                if isinstance(tr0_base, dict) and tr0_base
-                else inferred_tr0
-            ),
-            "ttdh0": ttdh0_base,
-            "ttdh1": inferred_ttdh1,
-            "ttdf0": {},
-            "ttdf1": inferred_ttdf1,
-            "TRO": state.income.get("TRO", {}),
-        })
+        params.update(
+            {
+                "eta": 1,  # Matches GAMS scalar eta
+                "sh0": (
+                    state.income.get("sh0O", {})
+                    if isinstance(state.income.get("sh0O", {}), dict)
+                    and state.income.get("sh0O", {})
+                    else inferred_sh0
+                ),
+                "tr0": (
+                    tr0_base
+                    if isinstance(tr0_base, dict) and tr0_base
+                    else inferred_tr0
+                ),
+                "ttdh0": ttdh0_base,
+                "ttdh1": inferred_ttdh1,
+                "ttdf0": {},
+                "ttdf1": inferred_ttdf1,
+                "TRO": state.income.get("TRO", {}),
+            }
+        )
 
         # Derive sigma parameters after rho parameters have been loaded
         def _safe_sigma_plus_one(rho_val: float, fallback: float = 1.0) -> float:
@@ -274,12 +304,16 @@ class PEPModelSolver:
 
         rho_kd = params.get("rho_KD", {})
         sigma_kd_from_val_par = dict(params.get("sigma_KD", {}))
-        sigma_kd_from_rho = {j: _safe_sigma_plus_one(rho_kd.get(j, 0), 1.0) for j in rho_kd}
+        sigma_kd_from_rho = {
+            j: _safe_sigma_plus_one(rho_kd.get(j, 0), 1.0) for j in rho_kd
+        }
         params["sigma_KD"] = {**sigma_kd_from_rho, **sigma_kd_from_val_par}
 
         rho_ld = params.get("rho_LD", {})
         sigma_ld_from_val_par = dict(params.get("sigma_LD", {}))
-        sigma_ld_from_rho = {j: _safe_sigma_plus_one(rho_ld.get(j, 0), 1.0) for j in rho_ld}
+        sigma_ld_from_rho = {
+            j: _safe_sigma_plus_one(rho_ld.get(j, 0), 1.0) for j in rho_ld
+        }
         params["sigma_LD"] = {**sigma_ld_from_rho, **sigma_ld_from_val_par}
 
         rho_va = params.get("rho_VA", {})
@@ -302,12 +336,16 @@ class PEPModelSolver:
 
         rho_x = params.get("rho_X", {})
         params["sigma_X"] = {
-            (j, i): (1 / (rho_x.get((j, i), 1) - 1) if rho_x.get((j, i), 1) != 1 else 2.0)
+            (j, i): (
+                1 / (rho_x.get((j, i), 1) - 1) if rho_x.get((j, i), 1) != 1 else 2.0
+            )
             for (j, i) in rho_x
         }
 
         rho_m = params.get("rho_M", {})
-        params["sigma_M"] = {i: _safe_sigma_plus_one(rho_m.get(i, -0.5), 2.0) for i in rho_m}
+        params["sigma_M"] = {
+            i: _safe_sigma_plus_one(rho_m.get(i, -0.5), 2.0) for i in rho_m
+        }
 
         # Recompute LES budget shares from calibrated base values for consistency.
         c_base = state.consumption.get("CO", {})
@@ -316,12 +354,17 @@ class PEPModelSolver:
         pc_base = state.trade.get("PCO", {})
         gamma_base = {}
         for h in state.sets.get("H", []):
-            cmin_val = sum(pc_base.get(i, 1.0) * cmin_base.get((i, h), 0) for i in state.sets.get("I", []))
+            cmin_val = sum(
+                pc_base.get(i, 1.0) * cmin_base.get((i, h), 0)
+                for i in state.sets.get("I", [])
+            )
             denom = cth_base.get(h, 0) - cmin_val
             if abs(denom) < 1e-12:
                 continue
             for i in state.sets.get("I", []):
-                numer = pc_base.get(i, 1.0) * (c_base.get((i, h), 0) - cmin_base.get((i, h), 0))
+                numer = pc_base.get(i, 1.0) * (
+                    c_base.get((i, h), 0) - cmin_base.get((i, h), 0)
+                )
                 gamma_base[(i, h)] = numer / denom
         if gamma_base:
             params["gamma_LES"] = gamma_base
@@ -356,7 +399,10 @@ class PEPModelSolver:
 
         inv_base = state.consumption.get("INVO", {})
         pc_base2 = state.trade.get("PCO", {})
-        inv_nom = {i: inv_base.get(i, 0.0) * pc_base2.get(i, 1.0) for i in state.sets.get("I", [])}
+        inv_nom = {
+            i: inv_base.get(i, 0.0) * pc_base2.get(i, 1.0)
+            for i in state.sets.get("I", [])
+        }
         inv_total = sum(inv_nom.values())
         params["gamma_INV"] = {
             i: (inv_nom.get(i, 0.0) / inv_total if abs(inv_total) > 1e-12 else 0.0)
@@ -364,7 +410,10 @@ class PEPModelSolver:
         }
 
         cg_base = state.consumption.get("CGO", {})
-        cg_nom = {i: cg_base.get(i, 0.0) * pc_base2.get(i, 1.0) for i in state.sets.get("I", [])}
+        cg_nom = {
+            i: cg_base.get(i, 0.0) * pc_base2.get(i, 1.0)
+            for i in state.sets.get("I", [])
+        }
         cg_total = sum(cg_nom.values())
         params["gamma_GVT"] = {
             i: (cg_nom.get(i, 0.0) / cg_total if abs(cg_total) > 1e-12 else 0.0)
@@ -399,14 +448,12 @@ class PEPModelSolver:
             for i in I
         }
         params["io"] = {
-            j: (ci_q[j] / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0)
-            for j in J
+            j: (ci_q[j] / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0) for j in J
         }
         params["v"] = {
-            j: (vao.get(j, 0.0) / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0)
-            for j in J
+            j: (vao.get(j, 0.0) / xst_q[j] if abs(xst_q[j]) > 1e-12 else 0.0) for j in J
         }
-        
+
         return params
 
     def _build_ipopt_shadow_solver(self) -> IPOPTSolver:
@@ -440,7 +487,7 @@ class PEPModelSolver:
         report_dict = report.model_dump(mode="python")
         self.last_closure_validation_report = report_dict
         return report_dict
-    
+
     def _create_initial_guess(self) -> PEPModelVariables:
         """Create initial guess for variables from calibrated values."""
         if self.initial_vars is not None:
@@ -474,7 +521,9 @@ class PEPModelSolver:
             vars_ipopt = ipopt_solver._create_initial_guess()
             self.params = ipopt_solver.params
             self.equations = ipopt_solver.equations
-            self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
+            self.last_closure_validation_report = (
+                ipopt_solver.last_closure_validation_report
+            )
             return vars_ipopt
         except Exception as e:
             if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
@@ -483,9 +532,9 @@ class PEPModelSolver:
 
         vars = PEPModelVariables()
         state = self.state
-        
+
         # Initialize from calibrated state (using "O" suffix values as starting point)
-        
+
         # Production variables
         for j in self.sets.get("J", []):
             vars.VA[j] = state.production.get("VAO", {}).get(j, 0)
@@ -499,23 +548,23 @@ class PEPModelSolver:
             vars.PCI[j] = state.production.get("PCIO", {}).get(j, 1.0)
             vars.WC[j] = state.production.get("WCO", {}).get(j, 1.0)
             vars.RC[j] = state.production.get("RCO", {}).get(j, 1.0)
-            
+
             for l in self.sets.get("L", []):
                 vars.LD[(l, j)] = state.production.get("LDO", {}).get((l, j), 0)
                 vars.WTI[(l, j)] = state.production.get("WTIO", {}).get((l, j), 1.0)
-            
+
             for k in self.sets.get("K", []):
                 vars.KD[(k, j)] = state.production.get("KDO", {}).get((k, j), 0)
                 vars.RTI[(k, j)] = state.production.get("RTIO", {}).get((k, j), 1.0)
                 vars.R[(k, j)] = 1.0  # Base price
-            
+
             for i in self.sets.get("I", []):
                 vars.DI[(i, j)] = state.production.get("DIO", {}).get((i, j), 0)
                 vars.XS[(j, i)] = state.trade.get("XSO", {}).get((j, i), 0)
                 vars.DS[(j, i)] = state.trade.get("DSO", {}).get((j, i), 0)
                 vars.EX[(j, i)] = state.trade.get("EXO", {}).get((j, i), 0)
                 vars.P[(j, i)] = state.trade.get("PO", {}).get((j, i), 1.0)
-        
+
         # Initialize wages
         for l in self.sets.get("L", []):
             vars.W[l] = 1.0  # Numeraire
@@ -523,7 +572,7 @@ class PEPModelSolver:
         for k in self.sets.get("K", []):
             vars.RK[k] = 1.0
             vars.KS[k] = state.production.get("KSO", {}).get(k, 0.0)
-        
+
         # Initialize tax-payment matrices from rate equations (TIWO/TIKO may be absent
         # in calibration output depending on phase configuration).
         for l in self.sets.get("L", []):
@@ -531,13 +580,13 @@ class PEPModelSolver:
                 key = (l, j)
                 ttiw = self.params.get("ttiw", {}).get(key, 0.0)
                 vars.TIW[key] = ttiw * vars.W.get(l, 1.0) * vars.LD.get(key, 0.0)
-        
+
         for k in self.sets.get("K", []):
             for j in self.sets.get("J", []):
                 key = (k, j)
                 ttik = self.params.get("ttik", {}).get(key, 0.0)
                 vars.TIK[key] = ttik * vars.R.get(key, 1.0) * vars.KD.get(key, 0.0)
-        
+
         # Income variables
         tro = self.params.get("TRO", {})
         for ag in self.sets.get("AG", []):
@@ -553,10 +602,10 @@ class PEPModelSolver:
             # SH = YDH - CTH (savings = disposable income - consumption)
             vars.SH[h] = vars.YDH[h] - vars.CTH[h]
             vars.TDH[h] = vars.YH[h] - vars.YDH[h] - vars.TR.get(("gvt", h), 0.0)
-            
+
             for ag in self.sets.get("AG", []):
                 vars.TR[(h, ag)] = tro.get((h, ag), vars.TR.get((h, ag), 0))
-        
+
         for f in self.sets.get("F", []):
             vars.YF[f] = state.income.get("YFO", {}).get(f, 0)
             vars.YFK[f] = state.income.get("YFKO", {}).get(f, 0)
@@ -565,10 +614,10 @@ class PEPModelSolver:
             # Firm savings = disposable income (no consumption)
             vars.SF[f] = vars.YDF[f]
             vars.TDF[f] = vars.YF[f] - vars.YDF[f]
-            
+
             for ag in self.sets.get("AG", []):
                 vars.TR[(f, ag)] = tro.get((f, ag), vars.TR.get((f, ag), 0))
-        
+
         # Government variables
         vars.YG = state.income.get("YGO", 0)
         vars.YGK = state.income.get("YGKO", 0)
@@ -616,7 +665,7 @@ class PEPModelSolver:
         for j in self.sets.get("J", []):
             ttip = self.params.get("ttip", {}).get(j, 0)
             vars.TIP[j] = ttip * vars.PP.get(j, 0) * vars.XST.get(j, 0)
-        
+
         # Consumption variables
         for h in self.sets.get("H", []):
             for i in self.sets.get("I", []):
@@ -636,24 +685,30 @@ class PEPModelSolver:
 
         # Recompute savings variables from accounting identities using calibrated TR.
         for h in self.sets.get("H", []):
-            tr_out_h = sum(vars.TR.get((agng, h), 0.0) for agng in self.sets.get("AGNG", []))
+            tr_out_h = sum(
+                vars.TR.get((agng, h), 0.0) for agng in self.sets.get("AGNG", [])
+            )
             vars.SH[h] = vars.YDH.get(h, 0.0) - vars.CTH.get(h, 0.0) - tr_out_h
 
         for f in self.sets.get("F", []):
             tr_out_f = sum(vars.TR.get((ag, f), 0.0) for ag in self.sets.get("AG", []))
             vars.SF[f] = vars.YDF.get(f, 0.0) - tr_out_f
 
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", []))
+        tr_to_govt = sum(
+            vars.TR.get((agng, "gvt"), 0.0) for agng in self.sets.get("AGNG", [])
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
-        
+
         # ROW variables (benchmark levels)
         vars.YROW = state.income.get("YROWO", 0)
         vars.SROW = -state.income.get("CABO", 0)
         vars.CAB = state.income.get("CABO", 0)
-        
+
         # Keep investment aggregates at calibrated benchmark levels.
         vars.IT = state.income.get("ITO", 0)
-        stock_value = sum(vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", []))
+        stock_value = sum(
+            vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", [])
+        )
         vars.GFCF = vars.IT - stock_value
 
         # Aggregate tax and transfer totals consistent with initialized detail.
@@ -665,12 +720,16 @@ class PEPModelSolver:
         vars.TICT = sum(vars.TIC.values())
         vars.TIMT = sum(vars.TIM.values())
         vars.TIXT = sum(vars.TIX.values())
-        vars.YGTR = sum(vars.TR.get(("gvt", agng), 0.0) for agng in self.sets.get("AGNG", []))
+        vars.YGTR = sum(
+            vars.TR.get(("gvt", agng), 0.0) for agng in self.sets.get("AGNG", [])
+        )
         vars.TPRODN = vars.TIWT + vars.TIKT + vars.TIPT
         vars.TPRCTS = vars.TICT + vars.TIMT + vars.TIXT
-        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        vars.YG = (
+            vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
-        
+
         # GDP variables
         vars.GDP_BP = state.gdp.get("GDP_BPO", 0)
         vars.GDP_MP = state.gdp.get("GDP_MPO", 0)
@@ -679,25 +738,30 @@ class PEPModelSolver:
         for i in self.sets.get("I", []):
             cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
             gdp_fd += vars.PC.get(i, 0.0) * (
-                cons_i + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0)
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
             )
             gdp_fd += vars.PE_FOB.get(i, 0.0) * vars.EXD.get(i, 0.0)
             gdp_fd -= vars.PWM.get(i, 0.0) * vars.e * vars.IM.get(i, 0.0)
         vars.GDP_FD = gdp_fd
-        
+
         # Price indices
         vars.PIXCON = state.real_variables.get("PIXCONO", 1.0)
         vars.PIXGDP = state.real_variables.get("PIXGDPO", 1.0)
         vars.PIXGVT = state.real_variables.get("PIXGVTO", 1.0)
         vars.PIXINV = state.real_variables.get("PIXINVO", 1.0)
-        
+
         # Real variables
         for h in self.sets.get("H", []):
             vars.CTH_REAL[h] = state.real_variables.get("CTH_REALO", {}).get(h, 0)
         vars.G_REAL = state.real_variables.get("G_REALO", 0)
         vars.GDP_BP_REAL = state.real_variables.get("GDP_BP_REALO", 0)
-        vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
-        
+        vars.GDP_MP_REAL = (
+            vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        )
+
         # Exchange rate
         vars.e = state.trade.get("eO", 1.0)
 
@@ -717,13 +781,18 @@ class PEPModelSolver:
         for i in self.sets.get("I", []):
             cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
             gdp_fd += vars.PC.get(i, 0.0) * (
-                cons_i + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0)
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
             )
             gdp_fd += vars.PE_FOB.get(i, 0.0) * vars.EXD.get(i, 0.0)
             gdp_fd -= vars.PWM.get(i, 0.0) * vars.e * vars.IM.get(i, 0.0)
         vars.GDP_FD = gdp_fd
-        vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
-        
+        vars.GDP_MP_REAL = (
+            vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        )
+
         return vars
 
     def _apply_equation_consistent_adjustments(self, vars: PEPModelVariables) -> None:
@@ -737,7 +806,9 @@ class PEPModelSolver:
         for k in self.sets.get("K", []):
             for j in self.sets.get("J", []):
                 ttik = self.params.get("ttik", {}).get((k, j), 0.0)
-                vars.TIK[(k, j)] = ttik * vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0.0)
+                vars.TIK[(k, j)] = (
+                    ttik * vars.R.get((k, j), 1.0) * vars.KD.get((k, j), 0.0)
+                )
 
         vars.TIWT = sum(vars.TIW.values())
         vars.TIKT = sum(vars.TIK.values())
@@ -750,10 +821,14 @@ class PEPModelSolver:
 
         vars.TIXT = sum(vars.TIX.values())
         vars.TPRCTS = vars.TICT + vars.TIMT + vars.TIXT
-        vars.YG = vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        vars.YG = (
+            vars.YGK + vars.TDHT + vars.TDFT + vars.TPRODN + vars.TPRCTS + vars.YGTR
+        )
 
         # Keep SG and IT consistent with closure
-        tr_to_govt = sum(vars.TR.get((agng, "gvt"), 0) for agng in self.sets.get("AGNG", []))
+        tr_to_govt = sum(
+            vars.TR.get((agng, "gvt"), 0) for agng in self.sets.get("AGNG", [])
+        )
         vars.SG = vars.YG - tr_to_govt - vars.G
 
         # Match GAMS closure where CAB is fixed at benchmark.
@@ -765,7 +840,9 @@ class PEPModelSolver:
 
         # Keep benchmark investment level (do not force savings closure in init mode).
         vars.IT = self.state.income.get("ITO", vars.IT)
-        stock_value = sum(vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", []))
+        stock_value = sum(
+            vars.PC.get(i, 1.0) * vars.VSTK.get(i, 0.0) for i in self.sets.get("I", [])
+        )
         vars.GFCF = vars.IT - stock_value
 
         # Income-side GDP identity
@@ -779,34 +856,41 @@ class PEPModelSolver:
         gdp_ib += vars.TPRODN + vars.TPRCTS
         vars.GDP_IB = gdp_ib
         vars.GDP_MP = vars.GDP_BP + vars.TPRCTS
-        vars.GDP_MP_REAL = vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        vars.GDP_MP_REAL = (
+            vars.GDP_MP / vars.PIXCON if abs(vars.PIXCON) > 1e-12 else 0.0
+        )
 
         gdp_fd = 0.0
         for i in self.sets.get("I", []):
             cons_i = sum(vars.C.get((i, h), 0.0) for h in self.sets.get("H", []))
             gdp_fd += vars.PC.get(i, 0.0) * (
-                cons_i + vars.CG.get(i, 0.0) + vars.INV.get(i, 0.0) + vars.VSTK.get(i, 0.0)
+                cons_i
+                + vars.CG.get(i, 0.0)
+                + vars.INV.get(i, 0.0)
+                + vars.VSTK.get(i, 0.0)
             )
             gdp_fd += vars.PE_FOB.get(i, 0.0) * vars.EXD.get(i, 0.0)
             gdp_fd -= vars.PWM.get(i, 0.0) * vars.e * vars.IM.get(i, 0.0)
         vars.GDP_FD = gdp_fd
-    
+
     def _variables_to_array(self, vars: PEPModelVariables) -> np.ndarray:
         """Convert variables to flat array for solver."""
         return pep_variables_to_array(vars, self.sets)
-    
-    def _array_to_variables(self, array: np.ndarray, template: PEPModelVariables) -> PEPModelVariables:
+
+    def _array_to_variables(
+        self, array: np.ndarray, template: PEPModelVariables
+    ) -> PEPModelVariables:
         """Convert array back to variables."""
         _ = template  # retained for backward-compatible signature
         return pep_array_to_variables(np.asarray(array, dtype=float), self.sets)
-    
+
     def solve(self, method: str = "auto") -> SolverResult:
         """Solve the PEP model.
-        
+
         Args:
             method: Solution method ("auto", "ipopt", or internal debug)
                    Use method="ipopt" for production runs.
-            
+
         Returns:
             SolverResult with solution status and variables
         """
@@ -837,6 +921,7 @@ class PEPModelSolver:
                 )
             try:
                 from equilibria.templates.pep_model_solver_ipopt import IPOPTSolver
+
                 ipopt_solver = IPOPTSolver(
                     self.state,
                     self.tolerance,
@@ -860,7 +945,9 @@ class PEPModelSolver:
                     initial_vars=self.initial_vars,
                 )
                 result = ipopt_solver.solve_ipopt()
-                self.last_closure_validation_report = ipopt_solver.last_closure_validation_report
+                self.last_closure_validation_report = (
+                    ipopt_solver.last_closure_validation_report
+                )
                 return result
             except Exception as e:
                 if self.init_mode == "gams" and self.enforce_strict_gams_baseline:
@@ -877,7 +964,7 @@ class PEPModelSolver:
             f"Unknown solve method '{method}'. Supported methods: auto, ipopt, "
             f"{DEBUG_SIMPLE_ITERATION_METHOD} (internal debug only)."
         )
-    
+
     def _solve_simple_iteration(self, vars: PEPModelVariables) -> SolverResult:
         """Solve using simple iteration (Gauss-Seidel style)."""
         result = SolverResult()
@@ -885,25 +972,27 @@ class PEPModelSolver:
         result.effective_contract = self.contract.model_dump(mode="python")
         result.effective_config = self.runtime_config.model_dump(mode="python")
         result.closure_validation = self.build_closure_validation_report()
-        
+
         logger.info("Using simple iteration method")
-        
+
         # Initialize variables for final result
-        rms_residual = float('inf')
+        rms_residual = float("inf")
         residuals = {}
-        
+
         for iteration in range(self.max_iterations):
             # Calculate all residuals
             residuals = self.equations.calculate_all_residuals(vars)
-            
+
             # Calculate RMS residual
             residual_values = list(residuals.values())
             rms_residual = np.sqrt(np.mean([r**2 for r in residual_values]))
             max_residual = max(abs(r) for r in residual_values)
-            
+
             if iteration % 10 == 0:
-                logger.info(f"Iteration {iteration}: RMS residual = {rms_residual:.2e}, Max = {max_residual:.2e}")
-            
+                logger.info(
+                    f"Iteration {iteration}: RMS residual = {rms_residual:.2e}, Max = {max_residual:.2e}"
+                )
+
             # Check convergence
             if rms_residual < self.tolerance:
                 result.converged = True
@@ -913,43 +1002,50 @@ class PEPModelSolver:
                 result.message = f"Converged after {iteration} iterations"
                 logger.info(f"✓ Converged after {iteration} iterations")
                 return result
-            
+
             # Simple update: adjust prices to reduce residuals
             # This is a very simplified approach - real CGE solvers are more sophisticated
             damping = 0.1  # Damping factor to avoid oscillation
-            
+
             for j in self.sets.get("J", []):
                 # Adjust wage and rental rates
                 eq4_resid = residuals.get(f"EQ4_{j}", 0)
                 if abs(eq4_resid) > 1e-6:
-                    vars.WC[j] *= (1 + damping * eq4_resid / max(abs(vars.WC[j]), 1))
+                    vars.WC[j] *= 1 + damping * eq4_resid / max(abs(vars.WC[j]), 1)
                     vars.WC[j] = max(1e-6, min(10.0, vars.WC[j]))  # Keep bounded
-        
+
         # Did not converge
         result.iterations = self.max_iterations
         result.final_residual = rms_residual
         result.residuals = residuals
         result.message = f"Did not converge after {self.max_iterations} iterations"
         logger.warning(f"✗ Did not converge after {self.max_iterations} iterations")
-        
+
         return result
-    
+
     def validate_solution(self, result: SolverResult) -> dict[str, Any]:
         """Validate solution quality."""
         validation = {
             "converged": result.converged,
             "rms_residual": result.final_residual,
-            "max_residual": max(abs(r) for r in result.residuals.values()) if result.residuals else float('inf'),
+            "max_residual": max(abs(r) for r in result.residuals.values())
+            if result.residuals
+            else float("inf"),
             "checks": {},
-            "effective_contract": result.effective_contract or self.contract.model_dump(mode="python"),
-            "effective_config": result.effective_config or self.runtime_config.model_dump(mode="python"),
-            "closure_validation": result.closure_validation or self.build_closure_validation_report(),
+            "effective_contract": result.effective_contract
+            or self.contract.model_dump(mode="python"),
+            "effective_config": result.effective_config
+            or self.runtime_config.model_dump(mode="python"),
+            "closure_validation": result.closure_validation
+            or self.build_closure_validation_report(),
         }
-        
+
         vars = result.variables
-        
+
         # Check Walras' Law (savings = investment)
-        total_savings = sum(vars.SH.values()) + sum(vars.SF.values()) + vars.SG + vars.SROW
+        total_savings = (
+            sum(vars.SH.values()) + sum(vars.SF.values()) + vars.SG + vars.SROW
+        )
         walras_error = abs(vars.IT - total_savings)
         validation["checks"]["walras_law"] = {
             "passed": walras_error < self.tolerance * 100,  # More lenient
@@ -957,7 +1053,7 @@ class PEPModelSolver:
             "investment": vars.IT,
             "savings": total_savings,
         }
-        
+
         # Check GDP consistency
         gdp_diff = abs(vars.GDP_BP - vars.GDP_FD)
         validation["checks"]["gdp_consistency"] = {
@@ -966,7 +1062,7 @@ class PEPModelSolver:
             "gdp_bp": vars.GDP_BP,
             "gdp_fd": vars.GDP_FD,
         }
-        
+
         # Check market clearing
         for i in self.sets.get("I", []):
             supply = sum(vars.DS.get((j, i), 0) for j in self.sets.get("J", []))
@@ -980,5 +1076,5 @@ class PEPModelSolver:
                         "supply": supply,
                         "demand": demand,
                     }
-        
+
         return validation

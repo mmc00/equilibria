@@ -381,7 +381,11 @@ def __getattr__(name: str) -> Any:
         "SolverResult",
         "SolverStatus",
     }:
-        from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult, SolverStatus
+        from equilibria.templates.gtap.gtap_solver import (
+            GTAPSolver,
+            SolverResult,
+            SolverStatus,
+        )
 
         return {
             "GTAPSolver": GTAPSolver,
@@ -399,9 +403,9 @@ def __getattr__(name: str) -> Any:
         "run_gtap_parity_test",
     }:
         from equilibria.templates.gtap.gtap_parity_pipeline import (
+            GTAPGAMSReference,
             GTAPParityComparison,
             GTAPParityRunner,
-            GTAPGAMSReference,
             GTAPVariableSnapshot,
             compare_gtap_gams_parity,
             load_gtap_gams_reference,

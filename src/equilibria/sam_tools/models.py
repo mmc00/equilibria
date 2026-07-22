@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from equilibria.sam_tools.aggregation import aggregate_dataframe, load_mapping
-from equilibria.sam_tools.balancing import RASBalanceResult, RASBalancer
+from equilibria.sam_tools.balancing import RASBalancer, RASBalanceResult
 from equilibria.sam_tools.enums import SAMFormat
 
 
@@ -121,8 +122,12 @@ class Sam(BaseModel):
         df = self.to_dataframe()
         aggregated = aggregate_dataframe(df, mapping, ordered)
         category = self.row_keys[0][0] if self.row_keys else "RAW"
-        multi_index = pd.MultiIndex.from_tuples([(category, label) for label in aggregated.index])
-        new_df = pd.DataFrame(aggregated.to_numpy(dtype=float), index=multi_index, columns=multi_index)
+        multi_index = pd.MultiIndex.from_tuples(
+            [(category, label) for label in aggregated.index]
+        )
+        new_df = pd.DataFrame(
+            aggregated.to_numpy(dtype=float), index=multi_index, columns=multi_index
+        )
         self.replace_dataframe(new_df)
         return self
 

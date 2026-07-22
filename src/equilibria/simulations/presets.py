@@ -35,7 +35,9 @@ def import_price(
     return Scenario(
         name=scenario_name,
         reference_slice=reference_slice,
-        shocks=[Shock(var="PWM", op="scale", values={commodity_key: float(multiplier)})],
+        shocks=[
+            Shock(var="PWM", op="scale", values={commodity_key: float(multiplier)})
+        ],
     )
 
 

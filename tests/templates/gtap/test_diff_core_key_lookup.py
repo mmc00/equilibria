@@ -9,6 +9,7 @@ The fix MUST be strictly monotonic: a raw key that already resolved must keep
 resolving to the same value (an existing match can never flip to a miss/diff).
 These tests are solver-free and run in milliseconds.
 """
+
 import sys
 from pathlib import Path
 
@@ -64,16 +65,20 @@ def test_value_or_zero_strips_gams_prefix():
     xda = _FakeVar({("USA", "Food", "Food"): 0.5423549999})
     m = _FakeModel(xda=xda)
     # GAMS-style key resolves via the prefix-stripped fallback.
-    assert _value_or_zero(m, "xda", ("USA", "c_Food", "a_Food")) == pytest.approx(0.5423549999)
+    assert _value_or_zero(m, "xda", ("USA", "c_Food", "a_Food")) == pytest.approx(
+        0.5423549999
+    )
 
 
 def test_value_or_zero_raw_key_tried_first_monotonic():
     # If the raw (already-correct) key exists, it must be returned unchanged even
     # when a stripped variant would also exist — proves monotonicity.
-    xda = _FakeVar({
-        ("USA", "c_Food", "a_Food"): 111.0,   # raw GAMS-style key present
-        ("USA", "Food", "Food"): 999.0,       # stripped variant present too
-    })
+    xda = _FakeVar(
+        {
+            ("USA", "c_Food", "a_Food"): 111.0,  # raw GAMS-style key present
+            ("USA", "Food", "Food"): 999.0,  # stripped variant present too
+        }
+    )
     m = _FakeModel(xda=xda)
     assert _value_or_zero(m, "xda", ("USA", "c_Food", "a_Food")) == 111.0
 
@@ -87,7 +92,9 @@ def test_get_py_var_value_drops_hhd_and_strips_prefix():
     # GAMS xcshr(r, c_Food, hhd) -> Python xcshr(r, Food): drop hhd + strip c_.
     xcshr = _FakeVar({("USA", "Food"): 0.0594829340})
     m = _FakeModel(xcshr=xcshr)
-    assert get_py_var_value(xcshr, ("USA", "c_Food", "hhd")) == pytest.approx(0.0594829340)
+    assert get_py_var_value(xcshr, ("USA", "c_Food", "hhd")) == pytest.approx(
+        0.0594829340
+    )
 
 
 def test_get_py_var_value_exact_key_unchanged():

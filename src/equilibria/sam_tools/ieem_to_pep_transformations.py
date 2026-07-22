@@ -149,4 +149,3 @@ def apply_pep_structural_moves(sam: Sam, op: dict[str, Any]) -> dict[str, Any]:
         },
         "moved_total_abs": moved_total_abs,
     }
-

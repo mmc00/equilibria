@@ -273,7 +273,7 @@ python -m pytest tests/templates/gtap/ --cov=equilibria.templates.gtap
 
 ### Model Files
 - **Main**: `comp.gms` - Simulation driver
-- **Model**: `model.gms` - Equation definitions  
+- **Model**: `model.gms` - Equation definitions
 - **Data**: `getData.gms` - Data loading
 - **Calibration**: `cal.gms` - Parameter calibration
 

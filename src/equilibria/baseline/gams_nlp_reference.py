@@ -116,10 +116,7 @@ class GAMSNLPReferenceManifest(BaseModel):
     def _normalize_model_types(cls, value: Any) -> tuple[str, ...]:
         if value is None:
             raise ValueError("script_model_types must be non-empty.")
-        if isinstance(value, str):
-            items = [value]
-        else:
-            items = list(value)
+        items = [value] if isinstance(value, str) else list(value)
 
         seen: set[str] = set()
         ordered: list[str] = []
@@ -150,22 +147,31 @@ class GAMSNLPReferenceManifest(BaseModel):
         return normalized
 
     @model_validator(mode="after")
-    def _check_consistency(self) -> "GAMSNLPReferenceManifest":
+    def _check_consistency(self) -> GAMSNLPReferenceManifest:
         if "nlp" not in self.script_model_types:
-            raise ValueError("Reference manifest requires a GAMS script that solves USING NLP.")
+            raise ValueError(
+                "Reference manifest requires a GAMS script that solves USING NLP."
+            )
         if self.scenario_references:
             if "base" not in self.scenario_references:
-                raise ValueError("Reference manifest must include a 'base' scenario reference.")
+                raise ValueError(
+                    "Reference manifest must include a 'base' scenario reference."
+                )
             expected_slices = {
-                name: reference.slice for name, reference in self.scenario_references.items()
+                name: reference.slice
+                for name, reference in self.scenario_references.items()
             }
             if self.scenario_slices != expected_slices:
                 raise ValueError("scenario_slices must match scenario_references.")
         else:
             if self.results_gdx is None:
-                raise ValueError("Reference manifest requires results_gdx when scenario_references are absent.")
+                raise ValueError(
+                    "Reference manifest requires results_gdx when scenario_references are absent."
+                )
             if "base" not in self.scenario_slices:
-                raise ValueError("Reference manifest must include a 'base' scenario slice.")
+                raise ValueError(
+                    "Reference manifest must include a 'base' scenario slice."
+                )
         return self
 
     def to_dict(self) -> dict[str, Any]:
@@ -189,7 +195,9 @@ def _artifact_from_path(path: Path | str | None) -> GAMSReferenceArtifact | None
     artifact_path = Path(path)
     if not artifact_path.exists():
         raise FileNotFoundError(f"Reference artifact not found: {artifact_path}")
-    return GAMSReferenceArtifact(path=str(artifact_path), sha256=file_sha256(artifact_path))
+    return GAMSReferenceArtifact(
+        path=str(artifact_path), sha256=file_sha256(artifact_path)
+    )
 
 
 def build_gams_nlp_reference_manifest(
@@ -201,7 +209,8 @@ def build_gams_nlp_reference_manifest(
     val_par_file: Path | str | None = None,
     parameters_gdx: Path | str | None = None,
     presolve_levels_gdx: Path | str | None = None,
-    scenario_references: dict[str, GAMSScenarioReference | dict[str, Any]] | None = None,
+    scenario_references: dict[str, GAMSScenarioReference | dict[str, Any]]
+    | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> GAMSNLPReferenceManifest:
     """Build the canonical manifest for one GAMS + IPOPT + NLP reference run."""
@@ -219,9 +228,13 @@ def build_gams_nlp_reference_manifest(
             if isinstance(raw_value, GAMSScenarioReference):
                 scenario_reference_models[name] = raw_value
             elif isinstance(raw_value, dict):
-                scenario_reference_models[name] = GAMSScenarioReference.model_validate(raw_value)
+                scenario_reference_models[name] = GAMSScenarioReference.model_validate(
+                    raw_value
+                )
             else:
-                raise TypeError("scenario_references values must be mappings or GAMSScenarioReference.")
+                raise TypeError(
+                    "scenario_references values must be mappings or GAMSScenarioReference."
+                )
         scenario_slices = {
             name: entry.slice for name, entry in scenario_reference_models.items()
         }
@@ -232,12 +245,18 @@ def build_gams_nlp_reference_manifest(
         gms_script=_artifact_from_path(script_path),
         sam_file=_artifact_from_path(sam_file),
         val_par_file=_artifact_from_path(val_par_file),
-        results_gdx=_artifact_from_path(results_gdx) if scenario_reference_models is None else None,
+        results_gdx=_artifact_from_path(results_gdx)
+        if scenario_reference_models is None
+        else None,
         parameters_gdx=(
-            _artifact_from_path(parameters_gdx) if scenario_reference_models is None else None
+            _artifact_from_path(parameters_gdx)
+            if scenario_reference_models is None
+            else None
         ),
         presolve_levels_gdx=(
-            _artifact_from_path(presolve_levels_gdx) if scenario_reference_models is None else None
+            _artifact_from_path(presolve_levels_gdx)
+            if scenario_reference_models is None
+            else None
         ),
         scenario_slices=scenario_slices,
         scenario_references=scenario_reference_models,

@@ -32,7 +32,9 @@ class SimpleOpenRuntimeConfig(ModelRuntimeConfig):
     max_iterations: int = 1
     require_solver_success: bool = False
     accept_square_feasible: bool = False
-    reference: SimpleOpenReferenceConfig = Field(default_factory=SimpleOpenReferenceConfig)
+    reference: SimpleOpenReferenceConfig = Field(
+        default_factory=SimpleOpenReferenceConfig
+    )
 
 
 def default_simple_open_runtime_config() -> SimpleOpenRuntimeConfig:

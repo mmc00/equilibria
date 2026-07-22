@@ -5,14 +5,13 @@ a full working GAMS model or equilibria solver.
 """
 
 import numpy as np
-from pathlib import Path
 
 from equilibria.backends.base import Solution
 from equilibria.templates.gams_comparison import (
-    GAMSComparisonResult,
     GAMSComparisonReport,
-    SolutionComparator,
+    GAMSComparisonResult,
     PEPGAMSComparator,
+    SolutionComparator,
 )
 
 

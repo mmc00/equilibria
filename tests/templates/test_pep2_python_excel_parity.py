@@ -14,17 +14,19 @@ from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
 from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
 from equilibria.templates.pep_model_solver import PEPModelSolver
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PEP2_ROOT = PROJECT_ROOT / "src/equilibria/templates/reference/pep2"
 PEP2_SCRIPTS = PEP2_ROOT / "scripts"
 DEFAULT_GAMS_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams")
-DEFAULT_GDXDUMP_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
+DEFAULT_GDXDUMP_BIN = Path(
+    "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+)
 
 
 def _gams_license_ok(gams_bin: Path) -> bool:
     """Return False if GAMS exits with a licensing error on a trivial run."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmp:
         gms = Path(tmp) / "probe.gms"
         gms.write_text("scalar x; x = 1;\n")
@@ -43,7 +45,9 @@ def _rms(values: list[float]) -> float:
     return math.sqrt(sum(v * v for v in values) / len(values))
 
 
-def _gdxdump_value(gdxdump_bin: Path, gdx_file: Path, symbol: str, label: str = "BASE") -> float | None:
+def _gdxdump_value(
+    gdxdump_bin: Path, gdx_file: Path, symbol: str, label: str = "BASE"
+) -> float | None:
     out = subprocess.check_output(
         [str(gdxdump_bin), str(gdx_file), f"symb={symbol}"],
         text=True,
@@ -54,7 +58,9 @@ def _gdxdump_value(gdxdump_bin: Path, gdx_file: Path, symbol: str, label: str = 
     return values.get(label)
 
 
-def test_pep_gdx_loader_normalizes_mixed_case_sam_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pep_gdx_loader_normalizes_mixed_case_sam_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """GDX-backed calibration should uppercase SAM account labels once at load time."""
     fake_sam_data = {
         "symbols": [
@@ -76,8 +82,12 @@ def test_pep_gdx_loader_normalizes_mixed_case_sam_keys(monkeypatch: pytest.Monke
 
     calibrator = PEPModelCalibrator(sam_file=Path("dummy.gdx"))
 
-    assert calibrator.sam_data["sam_matrix"][("AG", "GVT", "AG", "HRP")] == pytest.approx(2.0)
-    assert calibrator.sam_data["sam_matrix"][("OTH", "INV", "AG", "GVT")] == pytest.approx(2.0)
+    assert calibrator.sam_data["sam_matrix"][
+        ("AG", "GVT", "AG", "HRP")
+    ] == pytest.approx(2.0)
+    assert calibrator.sam_data["sam_matrix"][
+        ("OTH", "INV", "AG", "GVT")
+    ] == pytest.approx(2.0)
 
 
 @pytest.mark.integration
@@ -88,7 +98,9 @@ def test_pep2_python_gdx_vs_excel_gams_base() -> None:
     val_par = PEP2_ROOT / "data" / "VAL_PAR.xlsx"
 
     state_gdx = PEPModelCalibrator(sam_file=sam_gdx, val_par_file=val_par).calibrate()
-    state_xls = PEPModelCalibratorExcel(sam_file=sam_xls, val_par_file=val_par).calibrate()
+    state_xls = PEPModelCalibratorExcel(
+        sam_file=sam_xls, val_par_file=val_par
+    ).calibrate()
 
     results_gdx = PEP2_SCRIPTS / "Results.gdx"
     solver_gdx = PEPModelSolver(
@@ -162,8 +174,7 @@ def test_pep2_gams_excel_vs_python_excel_key_scalars() -> None:
         [str(gams_bin), model_file.name, "lo=0"],
         cwd=PEP2_SCRIPTS,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -172,7 +183,9 @@ def test_pep2_gams_excel_vs_python_excel_key_scalars() -> None:
 
     sam_xls = PEP2_ROOT / "data" / "SAM-V2_0.xls"
     val_par = PEP2_ROOT / "data" / "VAL_PAR.xlsx"
-    state_xls = PEPModelCalibratorExcel(sam_file=sam_xls, val_par_file=val_par).calibrate()
+    state_xls = PEPModelCalibratorExcel(
+        sam_file=sam_xls, val_par_file=val_par
+    ).calibrate()
     solver_xls = PEPModelSolver(
         calibrated_state=state_xls,
         init_mode="gams",

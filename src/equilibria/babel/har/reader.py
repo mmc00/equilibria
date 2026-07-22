@@ -21,6 +21,7 @@ GEMPACK source distribution. The format-level constants used here (record
 framing, type tokens, set-descriptor layout, etc.) are the wire format itself
 — not copyrightable expression. Distributed under MIT (see top-level NOTICE).
 """
+
 from __future__ import annotations
 
 import struct
@@ -30,12 +31,22 @@ import numpy as np
 
 from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har.wire import (
-    PAD as _PAD,
     INT as _INT,
-    iter_records as _iter_records,
+)
+from equilibria.babel.har.wire import (
+    PAD as _PAD,
+)
+from equilibria.babel.har.wire import (
     decode_str_block as _decode_str_block,
-    read_set_element_record as _read_set_element_record,
+)
+from equilibria.babel.har.wire import (
+    iter_records as _iter_records,
+)
+from equilibria.babel.har.wire import (
     parse_set_descriptor as _parse_set_descriptor,
+)
+from equilibria.babel.har.wire import (
+    read_set_element_record as _read_set_element_record,
 )
 
 
@@ -69,7 +80,9 @@ def _read_header(records: list[bytes], i: int) -> tuple[HeaderArray | None, int]
     )
 
 
-def _read_1cfull(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+def _read_1cfull(
+    name: str, long_name: str, records: list[bytes], i: int
+) -> tuple[HeaderArray, int]:
     """1CFULL: a 1-D character set.
 
     The meta record (length 92) ends with two trailing ints (n_elements, width).
@@ -84,7 +97,7 @@ def _read_1cfull(name: str, long_name: str, records: list[bytes], i: int) -> tup
     while len(elems) < n_total:
         rec = records[j]
         n_here = _INT.unpack_from(rec, 12)[0]
-        elems.extend(_decode_str_block(rec[16:16 + width * n_here], width=width))
+        elems.extend(_decode_str_block(rec[16 : 16 + width * n_here], width=width))
         j += 1
     arr = np.array(elems[:n_total], dtype=object)
     return (
@@ -100,7 +113,9 @@ def _read_1cfull(name: str, long_name: str, records: list[bytes], i: int) -> tup
     )
 
 
-def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+def _read_refull(
+    name: str, long_name: str, records: list[bytes], i: int
+) -> tuple[HeaderArray, int]:
     """REFULL: a real dense N-dimensional array.
 
     The descriptor reports ndim (one slot per dimension, with repeats when
@@ -139,7 +154,11 @@ def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tup
         raw += rec[8:] if extra > 0 else rec
         extra += 1
     floats = struct.unpack_from(f"<{n}f", raw, 8)
-    arr = np.array(floats, dtype=np.float32).reshape(shape, order="F") if shape else np.array(floats, dtype=np.float32)
+    arr = (
+        np.array(floats, dtype=np.float32).reshape(shape, order="F")
+        if shape
+        else np.array(floats, dtype=np.float32)
+    )
     return (
         HeaderArray(
             name=name,
@@ -153,7 +172,9 @@ def _read_refull(name: str, long_name: str, records: list[bytes], i: int) -> tup
     )
 
 
-def _read_respse(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+def _read_respse(
+    name: str, long_name: str, records: list[bytes], i: int
+) -> tuple[HeaderArray, int]:
     """RESPSE: a real sparse N-dimensional array.
 
     Layout (after meta at index i):
@@ -199,7 +220,7 @@ def _read_respse(name: str, long_name: str, records: list[bytes], i: int) -> tup
         if counter == 1:  # last chunk
             break
     flat = np.zeros(int(np.prod(shape)) if shape else 1, dtype=np.float32)
-    for k, v in zip(all_idx, all_val):
+    for k, v in zip(all_idx, all_val, strict=False):
         flat[k - 1] = v
     arr = flat.reshape(shape, order="F") if shape else flat
     return (
@@ -215,7 +236,9 @@ def _read_respse(name: str, long_name: str, records: list[bytes], i: int) -> tup
     )
 
 
-def _read_2ifull(name: str, long_name: str, records: list[bytes], i: int) -> tuple[HeaderArray, int]:
+def _read_2ifull(
+    name: str, long_name: str, records: list[bytes], i: int
+) -> tuple[HeaderArray, int]:
     """2IFULL: a 2-D integer dense array. The meta record's trailing ints hold
     (rows, cols, width); the next record is the data record with pad(4) +
     1 int + rows*cols 4-byte ints."""

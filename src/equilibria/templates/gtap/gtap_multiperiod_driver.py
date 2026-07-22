@@ -22,13 +22,15 @@ freeze_inactive_periods(m, active_period)
     Freezes all var cells NOT belonging to active_period, leaving only
     active_period cells free (subject to PATH solve).
 """
+
 from __future__ import annotations
 
+import contextlib
 import copy
 import importlib.util as _iu
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Root of the repository (four levels up from this file):
 #   src/equilibria/templates/gtap/ → src/equilibria/templates/ → src/equilibria/ →
@@ -111,7 +113,8 @@ def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> in
 
     Returns the count of (r,a) cells rebuilt (nd+va combined).
     """
-    from pyomo.environ import Constraint, value as _V
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as _V
 
     eq_nd = getattr(m, "eq_nd", None)
     eq_va = getattr(m, "eq_va", None)
@@ -148,8 +151,16 @@ def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> in
             continue
 
         sigmap = float(sigmap_map.get((r, a), 1.0))
-        and_new = (nd_prior / xp_prior) * (pnd_prior / px_prior) ** sigmap if pnd_prior > 0 else 0.0
-        ava_new = (va_prior / xp_prior) * (pva_prior / px_prior) ** sigmap if pva_prior > 0 else 0.0
+        and_new = (
+            (nd_prior / xp_prior) * (pnd_prior / px_prior) ** sigmap
+            if pnd_prior > 0
+            else 0.0
+        )
+        ava_new = (
+            (va_prior / xp_prior) * (pva_prior / px_prior) ** sigmap
+            if pva_prior > 0
+            else 0.0
+        )
 
         axp_shift = float(axp_map.get((r, a), 1.0))
         lambdand = float(lambdand_map.get((r, a), 1.0))
@@ -161,8 +172,10 @@ def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> in
             ratio_nd = px[idx] / pnd[idx]
             m.add_component(
                 f"_eq_nd_recal_{r}_{a}_{active_period}",
-                Constraint(expr=nd[idx] == and_new * xp[idx] * ratio_nd ** sigmap
-                           * nd_shift ** (sigmap - 1.0)),
+                Constraint(
+                    expr=nd[idx]
+                    == and_new * xp[idx] * ratio_nd**sigmap * nd_shift ** (sigmap - 1.0)
+                ),
             )
             n_rebuilt += 1
         if ava_new > 0.0 and eq_va[idx].active:
@@ -171,8 +184,10 @@ def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> in
             ratio_va = px[idx] / pva[idx]
             m.add_component(
                 f"_eq_va_recal_{r}_{a}_{active_period}",
-                Constraint(expr=va[idx] == ava_new * xp[idx] * ratio_va ** sigmap
-                           * va_shift ** (sigmap - 1.0)),
+                Constraint(
+                    expr=va[idx]
+                    == ava_new * xp[idx] * ratio_va**sigmap * va_shift ** (sigmap - 1.0)
+                ),
             )
             n_rebuilt += 1
     return n_rebuilt
@@ -193,7 +208,8 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
 
     Returns the count of cells rebuilt (io+af combined).
     """
-    from pyomo.environ import Constraint, value as _V
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as _V
 
     eq_xaa = getattr(m, "eq_xaa_activity", None)
     xaa = getattr(m, "xaa", None)
@@ -228,14 +244,17 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
         except Exception:
             _if_sub = True
     _bm = getattr(params, "benchmark", None)
+
     def _wedge(r, f, a):
         if _bm is None:
             return 0.0
         evfb = float(_bm.evfb.get((r, f, a), 0.0) or 0.0)
         if evfb <= 0.0:
             return 0.0
-        return (float(_bm.ftrv.get((r, f, a), 0.0) or 0.0)
-                - float(_bm.fbep.get((r, f, a), 0.0) or 0.0)) / evfb
+        return (
+            float(_bm.ftrv.get((r, f, a), 0.0) or 0.0)
+            - float(_bm.fbep.get((r, f, a), 0.0) or 0.0)
+        ) / evfb
 
     n_rebuilt = 0
 
@@ -260,7 +279,9 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
             if io_new <= 0.0 or not eq_xaa[idx].active:
                 continue
             eq_xaa[idx].deactivate()
-            lio = max(float(_V(lambdaio[idx[:-1]])) if idx[:-1] in lambdaio else 1.0, 1e-8)
+            lio = max(
+                float(_V(lambdaio[idx[:-1]])) if idx[:-1] in lambdaio else 1.0, 1e-8
+            )
             nd_idx = (r, a, active_period)
             if abs(sigmand) < 1e-12:
                 m.add_component(
@@ -270,8 +291,13 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
             else:
                 m.add_component(
                     f"_eq_xaa_recal_{r}_{i}_{a}_{active_period}",
-                    Constraint(expr=xaa[idx] == io_new * nd[nd_idx]
-                               * (pnd[nd_idx] / pa[idx]) ** sigmand * (lio ** (sigmand - 1.0))),
+                    Constraint(
+                        expr=xaa[idx]
+                        == io_new
+                        * nd[nd_idx]
+                        * (pnd[nd_idx] / pa[idx]) ** sigmand
+                        * (lio ** (sigmand - 1.0))
+                    ),
                 )
             n_rebuilt += 1
 
@@ -308,8 +334,13 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
                 _m_pfa_live = pfa[idx]
             m.add_component(
                 f"_eq_xfeq_recal_{r}_{f}_{a}_{active_period}",
-                Constraint(expr=xf[idx] == af_new * va[va_idx]
-                           * (pva[va_idx] / _m_pfa_live) ** sigmav * (lf ** (sigmav - 1.0))),
+                Constraint(
+                    expr=xf[idx]
+                    == af_new
+                    * va[va_idx]
+                    * (pva[va_idx] / _m_pfa_live) ** sigmav
+                    * (lf ** (sigmav - 1.0))
+                ),
             )
             n_rebuilt += 1
 
@@ -331,7 +362,8 @@ def _recalibrate_gx_ax(m, params, active_period: str, prior_period: str) -> int:
 
     Returns the count of cells rebuilt (gx+ax combined).
     """
-    from pyomo.environ import Constraint, value as _V
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as _V
 
     eq_x = getattr(m, "eq_x", None)
     x = getattr(m, "x", None)
@@ -379,8 +411,12 @@ def _recalibrate_gx_ax(m, params, active_period: str, prior_period: str) -> int:
             xs_val = xscale[xp_idx] if xp_idx in xscale else xscale.get((r, a), 1.0)
             m.add_component(
                 f"_eq_x_recal_{r}_{a}_{i}_{active_period}",
-                Constraint(expr=x[idx] == gx_new * (xp[xp_idx] / xs_val)
-                           * (p_rai[idx] / px[xp_idx]) ** omega),
+                Constraint(
+                    expr=x[idx]
+                    == gx_new
+                    * (xp[xp_idx] / xs_val)
+                    * (p_rai[idx] / px[xp_idx]) ** omega
+                ),
             )
             n_rebuilt += 1
 
@@ -398,7 +434,9 @@ def _recalibrate_gx_ax(m, params, active_period: str, prior_period: str) -> int:
                 x_prior = float(_V(x[prior_idx]))
                 xs_prior = float(_V(xs[xs_prior_idx]))
                 ps_prior = float(_V(ps[xs_prior_idx]))
-                prdtx_prior = float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+                prdtx_prior = (
+                    float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+                )
                 p_rai_prior = float(_V(p_rai[prior_idx]))
             except (KeyError, Exception):
                 continue
@@ -412,11 +450,17 @@ def _recalibrate_gx_ax(m, params, active_period: str, prior_period: str) -> int:
                 continue
             eq_peq[idx].deactivate()
             xs_idx = (r, i, active_period)
-            prdtx_val = float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+            prdtx_val = (
+                float(_V(prdtx_rai[(r, a, i)])) if (r, a, i) in prdtx_rai else 0.0
+            )
             m.add_component(
                 f"_eq_peq_recal_{r}_{a}_{i}_{active_period}",
-                Constraint(expr=x[idx] == ax_new * xs[xs_idx]
-                           * (ps[xs_idx] / ((1.0 + prdtx_val) * p_rai[idx])) ** sigma),
+                Constraint(
+                    expr=x[idx]
+                    == ax_new
+                    * xs[xs_idx]
+                    * (ps[xs_idx] / ((1.0 + prdtx_val) * p_rai[idx])) ** sigma
+                ),
             )
             n_rebuilt += 1
 
@@ -447,7 +491,8 @@ def _recalibrate_alphad_alpham(m, params, active_period: str, prior_period: str)
     Recompute pdp/pmp directly from their own live Vars (pd, pmt, dintx,
     mintx) instead of relying on a component that doesn't exist on `m`.
     """
-    from pyomo.environ import Constraint, value as _V
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as _V
 
     eq_paa = getattr(m, "eq_paa", None)
     xda = getattr(m, "xda", None)
@@ -495,8 +540,16 @@ def _recalibrate_alphad_alpham(m, params, active_period: str, prior_period: str)
         pmp_prior = (1.0 + mintx_prior) * pmt_prior
 
         sigmam = float(esubd_map.get((r, i), 2.0))
-        alphad_new = (xda_prior / xaa_prior) * (pdp_prior / pa_prior) ** sigmam if pdp_prior > 0 else 0.0
-        alpham_new = (xma_prior / xaa_prior) * (pmp_prior / pa_prior) ** sigmam if pmp_prior > 0 else 0.0
+        alphad_new = (
+            (xda_prior / xaa_prior) * (pdp_prior / pa_prior) ** sigmam
+            if pdp_prior > 0
+            else 0.0
+        )
+        alpham_new = (
+            (xma_prior / xaa_prior) * (pmp_prior / pa_prior) ** sigmam
+            if pmp_prior > 0
+            else 0.0
+        )
         if alphad_new <= 0.0 and alpham_new <= 0.0:
             continue
         if not eq_paa[idx].active:
@@ -509,13 +562,15 @@ def _recalibrate_alphad_alpham(m, params, active_period: str, prior_period: str)
         if abs(expo) < 1e-8:
             m.add_component(
                 f"_eq_paa_recal_{r}_{i}_{aa}_{active_period}",
-                Constraint(expr=pa[idx] == pdp_expr ** alphad_new * pmp_expr ** alpham_new),
+                Constraint(expr=pa[idx] == pdp_expr**alphad_new * pmp_expr**alpham_new),
             )
         else:
             m.add_component(
                 f"_eq_paa_recal_{r}_{i}_{aa}_{active_period}",
-                Constraint(expr=pa[idx] ** expo == alphad_new * pdp_expr ** expo
-                           + alpham_new * pmp_expr ** expo),
+                Constraint(
+                    expr=pa[idx] ** expo
+                    == alphad_new * pdp_expr**expo + alpham_new * pmp_expr**expo
+                ),
             )
         n_rebuilt += 1
     return n_rebuilt
@@ -529,13 +584,16 @@ def _recalibrate_alphad_alpham(m, params, active_period: str, prior_period: str)
 #   alphaa(r,i,inv,t) = (xa.l(r,i,inv,t)/xi.l(r,t))*(pa.l(r,i,inv,t)/pi.l(r,t))**sigmai(r)
 # every period. Python's g_share/i_share are also benchmark-frozen constants.
 # Rebuilds eq_xg+eq_pg (gov) and eq_xi (inv) for the active period.
-def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str) -> int:
+def _recalibrate_alphaa_gov_inv(
+    m, params, active_period: str, prior_period: str
+) -> int:
     """Rebuild eq_xg/eq_pg (government) and eq_xi (investment) for active_period
     using alphaa recomputed from prior_period's own solved xaa/xg/xi/pa/pg/pi.
 
     Returns the count of cells rebuilt (gov+inv combined).
     """
-    from pyomo.environ import Constraint, value as _V
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as _V
 
     xaa = getattr(m, "xaa", None)
     pa = getattr(m, "pa", None)
@@ -592,14 +650,26 @@ def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str
             r, i, _t = idx
             share = alphaa_gov_new.get((r, i))
             sigmag = sigmag_by_r.get(r)
-            if share is None or sigmag is None or xg_agg is None or not eq_xg[idx].active:
+            if (
+                share is None
+                or sigmag is None
+                or xg_agg is None
+                or not eq_xg[idx].active
+            ):
                 continue
             eq_xg[idx].deactivate()
             m.add_component(
                 f"_eq_xg_recal_{r}_{i}_{active_period}",
-                Constraint(expr=xg[idx] == share * xg_agg[(r, active_period)]
-                           * (pg[(r, active_period)]
-                              / (pa[(r, i, "gov", active_period)] + 1e-12)) ** sigmag),
+                Constraint(
+                    expr=xg[idx]
+                    == share
+                    * xg_agg[(r, active_period)]
+                    * (
+                        pg[(r, active_period)]
+                        / (pa[(r, i, "gov", active_period)] + 1e-12)
+                    )
+                    ** sigmag
+                ),
             )
             n_rebuilt += 1
 
@@ -613,7 +683,8 @@ def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str
             expo = 1.0 - sigmag
             terms = [
                 alphaa_gov_new[(r, i)] * pa[(r, i, "gov", active_period)] ** expo
-                for i in m.i if (r, i) in alphaa_gov_new
+                for i in m.i
+                if (r, i) in alphaa_gov_new
             ]
             if not terms:
                 continue
@@ -653,9 +724,16 @@ def _recalibrate_alphaa_gov_inv(m, params, active_period: str, prior_period: str
             eq_xi[idx].deactivate()
             m.add_component(
                 f"_eq_xi_recal_{r}_{i}_{active_period}",
-                Constraint(expr=xi[idx] == alphaa_new * xiagg[(r, active_period)]
-                           * (pi_[(r, active_period)]
-                              / (pa[(r, i, "inv", active_period)] + 1e-12)) ** sigmai_raw),
+                Constraint(
+                    expr=xi[idx]
+                    == alphaa_new
+                    * xiagg[(r, active_period)]
+                    * (
+                        pi_[(r, active_period)]
+                        / (pa[(r, i, "inv", active_period)] + 1e-12)
+                    )
+                    ** sigmai_raw
+                ),
             )
             n_rebuilt += 1
 
@@ -689,7 +767,8 @@ def _recalibrate_alphaa_hhd(m, params, active_period: str, prior_period: str) ->
     gtap_model_equations.py itself reads from when building eh_data/bh_data/
     pop_data — see build_model lines ~1912-2069).
     """
-    from pyomo.environ import Constraint, value as _V
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as _V
 
     eq_zcons = getattr(m, "eq_zcons", None)
     xcshr = getattr(m, "xcshr", None)
@@ -734,8 +813,11 @@ def _recalibrate_alphaa_hhd(m, params, active_period: str, prior_period: str) ->
         pop_val = _pop(r)
         if bh_val <= 0.0 or pa_prior <= 0.0 or pop_val <= 0.0:
             continue
-        term = (xcshr_prior / bh_val) * ((yc_prior / pop_val) / pa_prior) ** bh_val \
+        term = (
+            (xcshr_prior / bh_val)
+            * ((yc_prior / pop_val) / pa_prior) ** bh_val
             * uh_prior ** (-eh_val * bh_val)
+        )
         numer[(r, i)] = term
 
     denom_by_r = {}
@@ -759,12 +841,16 @@ def _recalibrate_alphaa_hhd(m, params, active_period: str, prior_period: str) ->
         pop_val = _pop(r)
         m.add_component(
             f"_eq_zcons_recal_{r}_{i}_{active_period}",
-            Constraint(expr=m.zcons[idx] == (
-                alphaa_new * bh_val
-                * (pa[(r, i, "hhd", active_period)] ** bh_val)
-                * (uh[(r, active_period)] ** (eh_val * bh_val))
-                * ((yc[(r, active_period)] / pop_val) ** (-bh_val))
-            )),
+            Constraint(
+                expr=m.zcons[idx]
+                == (
+                    alphaa_new
+                    * bh_val
+                    * (pa[(r, i, "hhd", active_period)] ** bh_val)
+                    * (uh[(r, active_period)] ** (eh_val * bh_val))
+                    * ((yc[(r, active_period)] / pop_val) ** (-bh_val))
+                )
+            ),
         )
         n_rebuilt += 1
     return n_rebuilt
@@ -790,7 +876,7 @@ def freeze_inactive_periods(m, active_period: str) -> int:
 
     Returns count of VarData entries frozen.
     """
-    from pyomo.environ import Var, Constraint
+    from pyomo.environ import Constraint, Var
 
     # 1. Fix vars for inactive periods; unfix active period vars.
     n_fixed = 0
@@ -801,10 +887,8 @@ def freeze_inactive_periods(m, active_period: str) -> int:
                 # Unfix active period vars so PATH can move them.
                 vd = v[idx]
                 if vd.fixed:
-                    try:
+                    with contextlib.suppress(Exception):
                         vd.unfix()
-                    except Exception:
-                        pass
                 continue
             vd = v[idx]
             if vd.fixed:
@@ -1029,8 +1113,11 @@ def _collapse_pft_pfteq(m, period: str) -> int:
                     try:
                         _xftvd = _xft[(_r, _f, period)]
                         if not _xftvd.fixed:
-                            _xval = (float(_xftvd.value)
-                                     if _xftvd.value not in (None,) else 0.0)
+                            _xval = (
+                                float(_xftvd.value)
+                                if _xftvd.value not in (None,)
+                                else 0.0
+                            )
                             _xftvd.fix(_xval)
                             _n += 1
                     except KeyError:
@@ -1055,8 +1142,7 @@ def _collapse_pft_pfteq(m, period: str) -> int:
                             _xfvd = _xf[(_r, _f, _a, period)]
                         except KeyError:
                             continue
-                        _xfval = (float(_xfvd.value)
-                                  if _xfvd.value is not None else 0.0)
+                        _xfval = float(_xfvd.value) if _xfvd.value is not None else 0.0
                         if abs(_xfval) < 1e-12:
                             continue
                         if not _xfvd.fixed:
@@ -1138,7 +1224,7 @@ def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
 
     gtap-mode ONLY (caller gates).  Returns the count of cells rebuilt.
     """
-    from pyomo.environ import Constraint, Set, value as _V
+    from pyomo.environ import Constraint, Set
     from pyomo.repn import generate_standard_repn
 
     eq = getattr(m, "eq_pmeq", None)
@@ -1171,7 +1257,7 @@ def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
         pm_vd = pm[idx]
         c_pmcif = None
         c_pm = None
-        for v, c in zip(repn.linear_vars, repn.linear_coefs):
+        for v, c in zip(repn.linear_vars, repn.linear_coefs, strict=False):
             if v is pmcif_vd:
                 c_pmcif = float(c)
             elif v is pm_vd:
@@ -1192,11 +1278,9 @@ def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
         return 0
 
     # Deactivate the original shock cells we are replacing.
-    for (rp, i, r) in rebuilt:
-        try:
+    for rp, i, r in rebuilt:
+        with contextlib.suppress(KeyError, AttributeError):
             eq[(rp, i, r, "shock")].deactivate()
-        except (KeyError, AttributeError):
-            pass
 
     # Add a single indexed replacement Constraint over the rebuilt cells.  Use a
     # fresh attribute name; if a prior call already added it (idempotent re-solve),
@@ -1209,7 +1293,9 @@ def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
     m.eq_pmeq_shock_idx = Set(initialize=sorted(coef.keys()), dimen=3)
 
     def _rule(_m, rp, i, r):
-        return _m.pm[rp, i, r, "shock"] == coef[(rp, i, r)] * _m.pmcif[rp, i, r, "shock"]
+        return (
+            _m.pm[rp, i, r, "shock"] == coef[(rp, i, r)] * _m.pmcif[rp, i, r, "shock"]
+        )
 
     m.eq_pmeq_shock_rebuilt = Constraint(m.eq_pmeq_shock_idx, rule=_rule)
     return len(coef)
@@ -1257,7 +1343,8 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
     _rebuild_eq_pmeq_shock.  gtap-mode ONLY (caller gates).  Returns the count of
     cells rebuilt.
     """
-    from pyomo.environ import Constraint, Set, value as _V
+    from pyomo.environ import Constraint, Set
+    from pyomo.environ import value as _V
 
     eq = getattr(m, "eq_ytax", None)
     ytax = getattr(m, "ytax", None)
@@ -1363,10 +1450,8 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
 
     # Deactivate the original shock cells we are replacing.
     for r in rebuilt_r:
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             eq[(r, "mt", "shock")].deactivate()
-        except (KeyError, AttributeError):
-            pass
 
     if hasattr(m, "eq_ytax_mt_shock_rebuilt"):
         m.del_component(m.eq_ytax_mt_shock_rebuilt)
@@ -1376,11 +1461,13 @@ def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
 
     def _rule(_m, r):
         total = 0.0
-        for (i, exp, imptx_shocked) in terms_by_r[r]:
+        for i, exp, imptx_shocked in terms_by_r[r]:
             _cif = _pmcif_live(exp, i, r)
             if _cif is None:
                 _cif = _m.pmcif[exp, i, r, "shock"]  # fallback (non-ifSUB path)
-            total += (imptx_shocked + _mtax_val(r, i)) * _cif * _m.xw[exp, i, r, "shock"]
+            total += (
+                (imptx_shocked + _mtax_val(r, i)) * _cif * _m.xw[exp, i, r, "shock"]
+            )
         return _m.ytax[r, "mt", "shock"] == total
 
     m.eq_ytax_mt_shock_rebuilt = Constraint(m.eq_ytax_mt_shock_idx, rule=_rule)
@@ -1420,7 +1507,8 @@ def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
 
     Returns the count of (eq_xweq + eq_pmteq) shock cells rebuilt.
     """
-    from pyomo.environ import Constraint, Set, value as _V
+    from pyomo.environ import Constraint, Set
+    from pyomo.environ import value as _V
 
     _pe_guard = getattr(m, "pe", None)
     pmt = getattr(m, "pmt", None)
@@ -1459,7 +1547,9 @@ def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
         return 1.0
 
     def _amw(r, i, rp):
-        return float(params.shares.normalized.import_source_share.get((r, i, rp), 0.0) or 0.0)
+        return float(
+            params.shares.normalized.import_source_share.get((r, i, rp), 0.0) or 0.0
+        )
 
     def _esubm(r, i):
         return float(params.elasticities.esubm.get((r, i), 5.0))
@@ -1610,9 +1700,9 @@ def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
     if not xweq_cells and not pmteq_cells:
         return 0
 
-    for (rp, i, r) in xweq_cells:
+    for rp, i, r in xweq_cells:
         eq_xweq[(rp, i, r, "shock")].deactivate()
-    for (r, i) in pmteq_cells:
+    for r, i in pmteq_cells:
         eq_pmteq[(r, i, "shock")].deactivate()
 
     if hasattr(m, "eq_xweq_shock_ifsub_idx"):
@@ -1631,9 +1721,12 @@ def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
             lambdam = _lambdam_val(rp, i, r)
             pm_s = _pm_shocked(rp, i, r)
             return _m.xw[rp, i, r, "shock"] == (
-                amw * _m.xmt[r, i, "shock"]
+                amw
+                * _m.xmt[r, i, "shock"]
                 * (_m.pmt[r, i, "shock"] / pm_s) ** esubm
-                * (lambdam ** (esubm - 1.0)))
+                * (lambdam ** (esubm - 1.0))
+            )
+
         m.eq_xweq_shock_ifsub = Constraint(m.eq_xweq_shock_ifsub_idx, rule=_xw_rule)
 
     if pmteq_cells:
@@ -1651,6 +1744,7 @@ def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
                 pm_s = _pm_shocked(rp, i, r)
                 terms.append(amw * (pm_s / lambdam) ** expo)
             return _m.pmt[r, i, "shock"] ** expo == sum(terms)
+
         m.eq_pmteq_shock_ifsub = Constraint(m.eq_pmteq_shock_ifsub_idx, rule=_pmt_rule)
 
     return len(xweq_cells) + len(pmteq_cells)
@@ -1781,8 +1875,12 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
 # code=1 res 2.9e-11 once muted.  (uh is NOT muted — it feeds eq_zcons = real CDE
 # demand, so it has genuine blast radius.)
 _WELFARE_LEAVES = (
-    ("eq_cv", "cv"), ("eq_ev", "ev"), ("eq_walras", "walras"),
-    ("eq_u", "u"), ("eq_ug", "ug"), ("eq_us", "us"),
+    ("eq_cv", "cv"),
+    ("eq_ev", "ev"),
+    ("eq_walras", "walras"),
+    ("eq_u", "u"),
+    ("eq_ug", "ug"),
+    ("eq_us", "us"),
 )
 
 
@@ -1861,34 +1959,37 @@ def _complete_derived_seed(m, period: str) -> int:
                 v = getattr(m, vn, None)
                 if v is None:
                     continue
-                try:
+                with contextlib.suppress(Exception):
                     n += _set(v, (r, i, period), _pv(m.xaa[r, i, agent, period]))
-                except Exception:
-                    pass
             try:
-                s = sum(float(_pv(m.xda[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
-                        for aa in m.aa)
+                s = sum(
+                    float(_pv(m.xda[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
+                    for aa in m.aa
+                )
                 n += _set(m.xd, (r, i, period), s)
             except Exception:
                 pass
             try:
-                s = sum(float(_pv(m.xma[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
-                        for aa in m.aa)
+                s = sum(
+                    float(_pv(m.xma[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
+                    for aa in m.aa
+                )
                 n += _set(m.xmt, (r, i, period), s)
             except Exception:
                 pass
-        try:
-            n += _set(m.xiagg, (r, period), sum(float(_pv(m.xi[r, i, period])) for i in m.i))
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            n += _set(
+                m.xiagg, (r, period), sum(float(_pv(m.xi[r, i, period])) for i in m.i)
+            )
     return n
 
 
 # ---------------------------------------------------------------------------
 # _recompute_pm_pmt — post-solve fix of the bilateral/aggregate import prices
 # ---------------------------------------------------------------------------
-def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
-                      if_sub: bool = False) -> int:
+def _recompute_pm_pmt(
+    m, base_params, period: str, shock_factor: float = 0.0, if_sub: bool = False
+) -> int:
     """Recompute pm[e,i,imp] (bilateral) and pmt[imp,i] (aggregate) import prices.
 
     BUG this fixes (shared by ifSUB=0 AND ifSUB=1): eq_pmeq defines
@@ -1953,6 +2054,7 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
     #        eq_pmteq (gtap_model_equations.py:4787). Verified vs GDX:
     #        pmt[JPN,Rice] = 1.0654 = GAMS exactly.
     from pyomo.environ import value as _PV
+
     pmt = getattr(m, "pmt", None)
     eq = getattr(m, "eq_pmteq", None)
     shares = None
@@ -2006,7 +2108,7 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
                                 pass
                     continue
                 try:
-                    pv.set_value(1.0)            # → body = 1**expo - Σ = 1 - Σ
+                    pv.set_value(1.0)  # → body = 1**expo - Σ = 1 - Σ
                     body = float(_PV(cd.body))
                     sigma = 1.0 - body
                     if sigma > 0.0:
@@ -2015,10 +2117,8 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
                     else:
                         pv.set_value(old)
                 except Exception:
-                    try:
+                    with contextlib.suppress(Exception):
                         pv.set_value(old)
-                    except Exception:
-                        pass
 
     # 3. pa aggregate — pmp is an Expression = pmt*(1+mintx), so the corrected pmt
     #    flows into eq_paa automatically. pa is a solved Var that used the OLD pmt, so
@@ -2039,7 +2139,9 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
                     except (KeyError, TypeError):
                         continue
                     try:
-                        sigma_m = float(base_params.elasticities.esubd.get((imp, i), 1.0))
+                        sigma_m = float(
+                            base_params.elasticities.esubd.get((imp, i), 1.0)
+                        )
                     except Exception:
                         sigma_m = 1.0
                     expo = 1.0 - sigma_m
@@ -2053,7 +2155,7 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
                                 pv.set_value(prod)
                                 n += 1
                         else:
-                            pv.set_value(1.0)        # body = 1 - Σ
+                            pv.set_value(1.0)  # body = 1 - Σ
                             body = float(_PV(cd.body))
                             sigma = 1.0 - body
                             if sigma > 0.0:
@@ -2062,18 +2164,17 @@ def _recompute_pm_pmt(m, base_params, period: str, shock_factor: float = 0.0,
                             else:
                                 pv.set_value(old)
                     except Exception:
-                        try:
+                        with contextlib.suppress(Exception):
                             pv.set_value(old)
-                        except Exception:
-                            pass
     return n
 
 
 # ---------------------------------------------------------------------------
 # _recompute_ytax_mt — post-solve fix of the import-tax revenue stream
 # ---------------------------------------------------------------------------
-def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0,
-                       gtap_mode: bool = False) -> int:
+def _recompute_ytax_mt(
+    m, base_params, period: str, shock_factor: float = 0.0, gtap_mode: bool = False
+) -> int:
     """Recompute ytax[r,'mt'] (import-tax revenue) and ytaxshr[r,'mt'] for `period`.
 
     BUG this fixes (shared by ifSUB=0 AND ifSUB=1, ~8.8% low): eq_ytax for gy='mt'
@@ -2191,7 +2292,9 @@ def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0,
 # ---------------------------------------------------------------------------
 # _recompute_ifsub_report_vars — post-solve fill of the ifSUB report variables
 # ---------------------------------------------------------------------------
-def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0.0) -> int:
+def _recompute_ifsub_report_vars(
+    m, params, period: str, shock_factor: float = 0.0
+) -> int:
     """Under ifSUB the margin/price report vars (pfa/pfy/pp/pwmg/pefob/pmcif/pm)
     are NOT solved — their defining equations are deactivated and the model uses
     the algebraic macros _m_* directly inside the real equations.  The Var objects
@@ -2262,26 +2365,32 @@ def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0
         evfb = float(_bmk.evfb.get((r, f, a), 0.0) or 0.0)
         if evfb <= 0.0:
             return 0.0
-        return (float(_bmk.ftrv.get((r, f, a), 0.0) or 0.0)
-                - float(_bmk.fbep.get((r, f, a), 0.0) or 0.0)) / evfb
+        return (
+            float(_bmk.ftrv.get((r, f, a), 0.0) or 0.0)
+            - float(_bmk.fbep.get((r, f, a), 0.0) or 0.0)
+        ) / evfb
 
     # --- factor prices: pfa, pfy ---
     for r in R:
         for f in F:
             for a in A:
-                pf = _pv("pf", (r, f, a, period), None) if getattr(m, "pf", None) is not None else None
+                pf = (
+                    _pv("pf", (r, f, a, period), None)
+                    if getattr(m, "pf", None) is not None
+                    else None
+                )
                 if pf is None:
                     continue
                 kappaf = _pv("kappaf", (r, f, a, period))
-                for vn, val in (("pfa", pf * (1.0 + _pfa_wedge(r, f, a))),
-                                ("pfy", pf * (1.0 - kappaf))):
+                for vn, val in (
+                    ("pfa", pf * (1.0 + _pfa_wedge(r, f, a))),
+                    ("pfy", pf * (1.0 - kappaf)),
+                ):
                     v = getattr(m, vn, None)
                     if v is None:
                         continue
-                    try:
+                    with contextlib.suppress(Exception):
                         _force(v[r, f, a, period], val)
-                    except Exception:
-                        pass
 
     # --- producer price: pp_rai ---
     # GAMS report var pp(r,a,i) maps to Python pp_rai(r,a,i) (m.pp is the 2-idx
@@ -2296,29 +2405,43 @@ def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0
     for r in R:
         for a in A:
             for i in I:
-                p_rai = _pv("p_rai", (r, a, i, period), None) if getattr(m, "p_rai", None) is not None else None
+                p_rai = (
+                    _pv("p_rai", (r, a, i, period), None)
+                    if getattr(m, "p_rai", None) is not None
+                    else None
+                )
                 if p_rai is None or pp_rai is None:
                     continue
-                try:
+                with contextlib.suppress(Exception):
                     _force(pp_rai[r, a, i, period], p_rai)
-                except Exception:
-                    pass
 
     # --- trade prices: pwmg, pefob, pmcif, pm ---
-    for r in R:           # exporter
+    for r in R:  # exporter
         for i in I:
-            for rp in R:   # importer
-                pe = _pv("pe", (r, i, rp, period), None) if getattr(m, "pe", None) is not None else None
+            for rp in R:  # importer
+                pe = (
+                    _pv("pe", (r, i, rp, period), None)
+                    if getattr(m, "pe", None) is not None
+                    else None
+                )
                 if pe is None:
                     continue
                 # pwmg = Σ_m amgm*ptmg/lambdamg
                 pwmg_val = 0.0
                 for mm in M:
-                    amgm = _param(params.benchmark.amgm, (mm, r, i, rp)) if hasattr(params.benchmark, "amgm") else _pv("amgm", (mm, r, i, rp))
+                    amgm = (
+                        _param(params.benchmark.amgm, (mm, r, i, rp))
+                        if hasattr(params.benchmark, "amgm")
+                        else _pv("amgm", (mm, r, i, rp))
+                    )
                     ptmg = _pv("ptmg", (mm, period))
                     lam = _pv("lambdamg", (mm, r, i, rp, period), 1.0) or 1.0
                     pwmg_val += amgm * ptmg / (lam + 1e-12)
-                rtxs = _param(params.taxes.rtxs, (r, i, rp)) if hasattr(params.taxes, "rtxs") else 0.0
+                rtxs = (
+                    _param(params.taxes.rtxs, (r, i, rp))
+                    if hasattr(params.taxes, "rtxs")
+                    else 0.0
+                )
                 etax = _pv("etax", (r, i, period))
                 pefob_val = (1.0 + rtxs + etax) * pe
                 # tmarg is dim-3 (no period axis); imptx/mtax/chipm come from params
@@ -2327,25 +2450,39 @@ def _recompute_ifsub_report_vars(m, params, period: str, shock_factor: float = 0
                 if not tmarg:
                     tmarg = _pv("tmarg", (r, i, rp, period))
                 pmcif_val = pefob_val + pwmg_val * tmarg
-                imptx_pow = _param(params.taxes.imptx, (r, i, rp)) if hasattr(params.taxes, "imptx") else 0.0
+                imptx_pow = (
+                    _param(params.taxes.imptx, (r, i, rp))
+                    if hasattr(params.taxes, "imptx")
+                    else 0.0
+                )
                 # Reference shocks the tariff RATE; params holds the POWER. Recover
                 # the rate for shocked (non-diagonal, nonzero) cells. Diagonal/zero
                 # cells are untouched by the shock so imptx_pow already == the rate.
                 if shock_factor and imptx_pow and r != rp:
-                    imptx = imptx_pow - shock_factor   # = imptx_base*(1+factor)
+                    imptx = imptx_pow - shock_factor  # = imptx_base*(1+factor)
                 else:
                     imptx = imptx_pow
-                mtax = _param(params.taxes.mtax, (rp, i)) if hasattr(params.taxes, "mtax") else 0.0
-                chipm = _param(params.benchmark.chipm, (r, i, rp), 1.0) if hasattr(params.benchmark, "chipm") else 1.0
+                mtax = (
+                    _param(params.taxes.mtax, (rp, i))
+                    if hasattr(params.taxes, "mtax")
+                    else 0.0
+                )
+                chipm = (
+                    _param(params.benchmark.chipm, (r, i, rp), 1.0)
+                    if hasattr(params.benchmark, "chipm")
+                    else 1.0
+                )
                 chipm = chipm or 1.0
                 pm_val = (1.0 + imptx + mtax) * pmcif_val / (chipm + 1e-12)
                 # All four are indexed (exporter, commodity, importer) = (r, i, rp),
                 # matching the GAMS report convention pm(r,i,rp). (An earlier (rp,i,r)
                 # key for pm transposed the route → wrong cell.)
-                for vn, val, key in (("pwmg", pwmg_val, (r, i, rp, period)),
-                                     ("pefob", pefob_val, (r, i, rp, period)),
-                                     ("pmcif", pmcif_val, (r, i, rp, period)),
-                                     ("pm", pm_val, (r, i, rp, period))):
+                for vn, val, key in (
+                    ("pwmg", pwmg_val, (r, i, rp, period)),
+                    ("pefob", pefob_val, (r, i, rp, period)),
+                    ("pmcif", pmcif_val, (r, i, rp, period)),
+                    ("pm", pm_val, (r, i, rp, period)),
+                ):
                     v = getattr(m, vn, None)
                     if v is None:
                         continue
@@ -2436,8 +2573,8 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
     fset = getattr(params, "sets", None)
     if fset is None:
         return 0
-    mf_set = set(str(f) for f in getattr(fset, "mf", []))
-    sf_set = set(str(f) for f in getattr(fset, "sf", []))
+    mf_set = {str(f) for f in getattr(fset, "mf", [])}
+    sf_set = {str(f) for f in getattr(fset, "sf", [])}
     etaff = getattr(getattr(params, "elasticities", None), "etaff", {}) or {}
     _bm = getattr(params, "benchmark", None)
 
@@ -2475,7 +2612,6 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
             vd.fix(float(vd.value))
             hf += 1
     return hf
-
 
 
 def solve_multiperiod(
@@ -2534,15 +2670,15 @@ def solve_multiperiod(
     -------
     dict mapping "base" | "check" | "shock" → {"code": int, "residual": float}
     """
+    from equilibria.templates.gtap import GTAPModelEquations
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap import GTAPModelEquations
 
     run_gtap = _load_run_gtap()
 
     if mode not in ("altertax", "gtap"):
         raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
-    _gtap_mode = (mode == "gtap")
+    _gtap_mode = mode == "gtap"
 
     # PATH options default = the options the reference bundles for THIS mode were
     # solved with (an existing PATH_CAPI_OPTIONS — user or harness — always wins):
@@ -2558,6 +2694,7 @@ def solve_multiperiod(
     # re-derive per its own mode (env vars are sticky; without this, an
     # altertax solve would leak the tight set into a subsequent pure solve).
     import os
+
     _OPT_SENTINEL = "* per-mode default set by solve_multiperiod\n"
     _cur_opts = os.environ.get("PATH_CAPI_OPTIONS")
     if _cur_opts is not None and _cur_opts.startswith(_OPT_SENTINEL):
@@ -2565,8 +2702,7 @@ def solve_multiperiod(
         _cur_opts = None
     if not _gtap_mode and not _cur_opts:
         os.environ["PATH_CAPI_OPTIONS"] = (
-            _OPT_SENTINEL +
-            "convergence_tolerance 1e-10\n"
+            _OPT_SENTINEL + "convergence_tolerance 1e-10\n"
             "major_iteration_limit 5000\n"
             "minor_iteration_limit 100000\n"
             "cumulative_iteration_limit 500000\n"
@@ -2585,22 +2721,34 @@ def solve_multiperiod(
     # Apply altertax elasticities (mirrors diff_altertax [1/3] betaCal setup).
     # gtap mode does NOT recalibrate: use params verbatim. altertax applies
     # the betaCal elasticity overrides (diff_altertax [1/3]).
-    p_alt = params if _gtap_mode else apply_altertax_elasticities(params, in_place=False)
+    p_alt = (
+        params if _gtap_mode else apply_altertax_elasticities(params, in_place=False)
+    )
 
     # Build closures.
     _if_sub = getattr(closure, "if_sub", False) if closure is not None else False
-    _numeraire = getattr(closure, "numeraire", "pnum") if closure is not None else "pnum"
+    _numeraire = (
+        getattr(closure, "numeraire", "pnum") if closure is not None else "pnum"
+    )
 
     base_closure = GTAPClosureConfig(
-        name="base", closure_type="MCP",
-        capital_mobility="sluggish", fix_endowments=False,
-        fix_taxes=False, fix_technology=False, if_sub=_if_sub,
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=_if_sub,
         numeraire=_numeraire,
     )
     alt_closure = GTAPClosureConfig(
-        name="altertax", closure_type="MCP",
-        capital_mobility="mobile", fix_endowments=False,
-        fix_taxes=True, fix_technology=True, if_sub=_if_sub,
+        name="altertax",
+        closure_type="MCP",
+        capital_mobility="mobile",
+        fix_endowments=False,
+        fix_taxes=True,
+        fix_technology=True,
+        if_sub=_if_sub,
         numeraire=_numeraire,
     )
 
@@ -2665,7 +2813,8 @@ def solve_multiperiod(
         results["base"] = {"code": 1, "residual": 0.0, "skipped_solve": True}
     else:
         r_base = run_gtap._run_path_capi_nonlinear_full(
-            m, p_alt,
+            m,
+            p_alt,
             enforce_post_checks=False,
             strict_path_capi=False,
             closure_config=base_closure,
@@ -2777,6 +2926,7 @@ def solve_multiperiod(
                     _n_xft_deact_chk += 1
         if _n_xft_deact_chk:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
                 "check period: deactivated eq_xft for %d (r,f) pairs "
                 "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
@@ -2789,6 +2939,7 @@ def solve_multiperiod(
         _n_pft_chk = _collapse_pft_pfteq(m, "check")
         if _n_pft_chk:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
                 "check period: collapsed pft/eq_pfteq for %d (r,f) pairs "
                 "(gtap-mode factor-price squaring)",
@@ -2805,15 +2956,20 @@ def solve_multiperiod(
             _n_xp_chk = _holdfix_activity_scale(m, "check")
             if _n_xp_chk:
                 import logging as _logging
+
                 _logging.getLogger(__name__).info(
                     "check period: holdfixed xp at base for %d (r,a) (gtap-mode "
-                    "activity-scale anchor)", _n_xp_chk,
+                    "activity-scale anchor)",
+                    _n_xp_chk,
                 )
 
     # Replicate single-period structural fixing for check period.
     _chk_closure = base_closure if _gtap_mode else alt_closure
     _sp_ref_chk = GTAPModelEquations(
-        p_alt.sets, p_alt, _chk_closure, residual_region=res_region,
+        p_alt.sets,
+        p_alt,
+        _chk_closure,
+        residual_region=res_region,
     ).build_model()
     _replicate_sp_fixing(m, _sp_ref_chk, "check")
     _replicate_sp_bounds(m, _sp_ref_chk, "check")
@@ -2823,11 +2979,16 @@ def solve_multiperiod(
     # _mute_welfare_tail). Decisive once the base is exact (skip_base_solve):
     # check goes code=2 res 1.1e-2 → code=1 res 2.9e-11.
     if mute_welfare:
-        _n_mute = _mute_welfare_tail(m, "check", list(p_alt.sets.r), gtap_mode=_gtap_mode)
+        _n_mute = _mute_welfare_tail(
+            m, "check", list(p_alt.sets.r), gtap_mode=_gtap_mode
+        )
         if _n_mute:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "check period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
+                "check period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)",
+                _n_mute,
+            )
 
     # Seed the Python-only derived demand-volume vars (xc/xg/xi/xd/xmt/xiagg) from
     # the GAMS-seeded primals so the GAMS point is a true fixed point — else
@@ -2837,8 +2998,10 @@ def solve_multiperiod(
         _n_der = _complete_derived_seed(m, "check")
         if _n_der:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "check period: seeded %d derived demand-volume cells", _n_der)
+                "check period: seeded %d derived demand-volume cells", _n_der
+            )
 
     # Holdfix the CD-degenerate VA/ND nest (pva/pnd) at the GAMS-seeded values,
     # replicating GAMS gtap.holdfixed=1 in the check period.  Without this PATH
@@ -2847,8 +3010,10 @@ def solve_multiperiod(
         _n_hf = _holdfix_cd_nest(m, "check")
         if _n_hf:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "check period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
+                "check period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf
+            )
 
     # Holdfix pf for sector-specific (fnm) factors with etaff=0 (e.g. NatRes),
     # replicating GAMS pf.fx(r,fp,a,tsim-1)=pf.l(...) every period. Without
@@ -2857,32 +3022,51 @@ def solve_multiperiod(
     _n_hf_pf = _holdfix_fnm_pf(m, p_alt, "check")
     if _n_hf_pf:
         import logging as _logging
+
         _logging.getLogger(__name__).info(
-            "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
+            "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf
+        )
 
     # TEMP DEBUG PROBE (session-local): report the seed state of a target factor
     # price + its paired equation residuals right before PATH solves check.
     import os as _os_probe
+
     _probe_pf = _os_probe.environ.get("EQUILIBRIA_DEBUG_PROBE_PF_CHECK")
     if _probe_pf:
         import sys as _sys_probe
-        from pyomo.environ import value as _Vp, Constraint as _Cp
+
+        from pyomo.environ import Constraint as _Cp
+        from pyomo.environ import value as _Vp
+
         _rr_p, _ff_p = _probe_pf.split(",")[0], _probe_pf.split(",")[1]
-        print(f"[probe-pf] --- {_rr_p},{_ff_p} check seed state ---", file=_sys_probe.stderr)
+        print(
+            f"[probe-pf] --- {_rr_p},{_ff_p} check seed state ---",
+            file=_sys_probe.stderr,
+        )
         for _idx in getattr(m, "pf", []):
             if _idx[0] == _rr_p and _idx[1] == _ff_p and _idx[-1] == "check":
                 _vd = m.pf[_idx]
-                print(f"[probe-pf]   pf{_idx} = {_Vp(_vd):.6f}  fixed={_vd.fixed}", file=_sys_probe.stderr)
+                print(
+                    f"[probe-pf]   pf{_idx} = {_Vp(_vd):.6f}  fixed={_vd.fixed}",
+                    file=_sys_probe.stderr,
+                )
         for _nm in ("pft", "xf", "xft"):
             _comp = getattr(m, _nm, None)
             if _comp is None:
                 continue
             for _idx in _comp:
-                if _idx[0] == _rr_p and _rr_p and len(_idx) >= 2 and _idx[1] == _ff_p and _idx[-1] == "check":
-                    try:
-                        print(f"[probe-pf]   {_nm}{_idx} = {_Vp(_comp[_idx]):.6f}  fixed={_comp[_idx].fixed}", file=_sys_probe.stderr)
-                    except Exception:
-                        pass
+                if (
+                    _idx[0] == _rr_p
+                    and _rr_p
+                    and len(_idx) >= 2
+                    and _idx[1] == _ff_p
+                    and _idx[-1] == "check"
+                ):
+                    with contextlib.suppress(Exception):
+                        print(
+                            f"[probe-pf]   {_nm}{_idx} = {_Vp(_comp[_idx]):.6f}  fixed={_comp[_idx].fixed}",
+                            file=_sys_probe.stderr,
+                        )
         # residuals of any active constraint touching this factor
         _rows = []
         for _c in m.component_objects(_Cp, active=True):
@@ -2918,7 +3102,10 @@ def solve_multiperiod(
                 continue
             for _idx in _eqc:
                 if _rr_p in str(_idx) and _ff_p in str(_idx) and "check" in str(_idx):
-                    print(f"[probe-pf]   {_eqn}{_idx} active={_eqc[_idx].active}", file=_sys_probe.stderr)
+                    print(
+                        f"[probe-pf]   {_eqn}{_idx} active={_eqc[_idx].active}",
+                        file=_sys_probe.stderr,
+                    )
 
     # TEMP DEBUG HOOK (session-local, remove before commit): export the fully
     # recalibrated, fully-unfixed check-period model to .nl right before PATH
@@ -2926,11 +3113,19 @@ def solve_multiperiod(
     # Controlled by an env var so it's a no-op normally.
     import os as _os_dbg
     import sys as _sys_dbg
+
     _nl_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK")
     if _nl_export_path:
-        m.write(_nl_export_path, format="nl", io_options={"symbolic_solver_labels": True})
-        print(f"[export] wrote check-period .nl to {_nl_export_path}", file=_sys_dbg.stderr)
-        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check")
+        m.write(
+            _nl_export_path, format="nl", io_options={"symbolic_solver_labels": True}
+        )
+        print(
+            f"[export] wrote check-period .nl to {_nl_export_path}",
+            file=_sys_dbg.stderr,
+        )
+        raise RuntimeError(
+            "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check"
+        )
 
     # TEMP DEBUG HOOK (session-local): export the fully-prepared check-period
     # Pyomo model to a GAMS .gms (Pyomo's gams_writer, flat/scalar form) right
@@ -2943,11 +3138,17 @@ def solve_multiperiod(
         # GAMS writer needs exactly one objective; the CNS/MCP model has none.
         # Mirror the NLP formulation (maximize walras): deactivate eq_walras[check]
         # and expose walras[check] as the Objective — same as GAMS's ifMCP=0 branch.
-        from pyomo.environ import Objective as _PyoObjGms, maximize as _pyo_max_gms
+        from pyomo.environ import Objective as _PyoObjGms
+        from pyomo.environ import maximize as _pyo_max_gms
+
         _ew_gms = getattr(m, "eq_walras", None)
         if _ew_gms is not None:
             for _idx in list(_ew_gms):
-                _match = (_idx and _idx[-1] == "check") if isinstance(_idx, tuple) else (_idx == "check")
+                _match = (
+                    (_idx and _idx[-1] == "check")
+                    if isinstance(_idx, tuple)
+                    else (_idx == "check")
+                )
                 if _match and _ew_gms[_idx].active:
                     _ew_gms[_idx].deactivate()
         _wv_gms = getattr(m, "walras", None)
@@ -2958,10 +3159,16 @@ def solve_multiperiod(
         if _wvd_gms is not None and _wvd_gms.fixed:
             _wvd_gms.unfix()
         m._nlp_walras_objective_gms = _PyoObjGms(expr=_wvd_gms, sense=_pyo_max_gms)
-        m.write(_gms_export_path, format="gams",
-                io_options={"symbolic_solver_labels": True})
-        print(f"[export] wrote check-period .gms to {_gms_export_path}", file=_sys_dbg.stderr)
-        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK: stopping right before PATH solves check")
+        m.write(
+            _gms_export_path, format="gams", io_options={"symbolic_solver_labels": True}
+        )
+        print(
+            f"[export] wrote check-period .gms to {_gms_export_path}",
+            file=_sys_dbg.stderr,
+        )
+        raise RuntimeError(
+            "EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK: stopping right before PATH solves check"
+        )
 
     # TEMP DEBUG HOOK (session-local, remove before commit): same export, but
     # reformulated as an NLP (maximize walras) instead of a CNS (min 0 s.t.
@@ -2974,7 +3181,9 @@ def solve_multiperiod(
     # free-row/objective-row instead of a paired equality under ifMCP=0.
     _nl_export_nlp_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP")
     if _nl_export_nlp_path:
-        from pyomo.environ import Objective as _PyoObjective, maximize as _pyo_maximize
+        from pyomo.environ import Objective as _PyoObjective
+        from pyomo.environ import maximize as _pyo_maximize
+
         _eq_walras_chk = getattr(m, "eq_walras", None)
         if _eq_walras_chk is not None:
             for _idx in list(_eq_walras_chk):
@@ -2985,7 +3194,9 @@ def solve_multiperiod(
                     _eq_walras_chk[_idx].deactivate()
         _walras_var = getattr(m, "walras", None)
         if _walras_var is None:
-            raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: model has no `walras` Var")
+            raise RuntimeError(
+                "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: model has no `walras` Var"
+            )
         try:
             _walras_vd = _walras_var["check"]
         except Exception:
@@ -3001,9 +3212,18 @@ def solve_multiperiod(
         # objective=0.0 throughout every IPOPT iteration).
         _walras_vd.unfix()
         m._nlp_walras_objective = _PyoObjective(expr=_walras_vd, sense=_pyo_maximize)
-        m.write(_nl_export_nlp_path, format="nl", io_options={"symbolic_solver_labels": True})
-        print(f"[export] wrote check-period NLP(maximize walras) .nl to {_nl_export_nlp_path}", file=_sys_dbg.stderr)
-        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: stopping right before PATH solves check")
+        m.write(
+            _nl_export_nlp_path,
+            format="nl",
+            io_options={"symbolic_solver_labels": True},
+        )
+        print(
+            f"[export] wrote check-period NLP(maximize walras) .nl to {_nl_export_nlp_path}",
+            file=_sys_dbg.stderr,
+        )
+        raise RuntimeError(
+            "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: stopping right before PATH solves check"
+        )
 
     # TEMP DEBUG HOOK (session-local, remove before commit): SAME NLP
     # reformulation as above, but SOLVES in-process via Pyomo's IPOPT
@@ -3011,13 +3231,28 @@ def solve_multiperiod(
     # post-solve residual per Constraint is readable directly — diagnoses
     # WHICH equation IPOPT's "locally infeasible" verdict is actually citing,
     # rather than just the aggregate constraint-violation scalar.
-    _solve_nlp_report_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT")
+    _solve_nlp_report_path = _os_dbg.environ.get(
+        "EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT"
+    )
     if _solve_nlp_report_path:
-        from pyomo.environ import (
-            Objective as _PyoObjective2, maximize as _pyo_maximize2,
-            SolverFactory as _PyoSolverFactory, value as _pyo_value2, Constraint as _PyoConstraint2,
-        )
         import json as _json_dbg
+
+        from pyomo.environ import (
+            Constraint as _PyoConstraint2,
+        )
+        from pyomo.environ import (
+            Objective as _PyoObjective2,
+        )
+        from pyomo.environ import (
+            SolverFactory as _PyoSolverFactory,
+        )
+        from pyomo.environ import (
+            maximize as _pyo_maximize2,
+        )
+        from pyomo.environ import (
+            value as _pyo_value2,
+        )
+
         _eq_walras_chk2 = getattr(m, "eq_walras", None)
         if _eq_walras_chk2 is not None:
             for _idx in list(_eq_walras_chk2):
@@ -3079,15 +3314,20 @@ def solve_multiperiod(
             "solver_status": str(res.solver.status),
             "termination_condition": str(res.solver.termination_condition),
             "walras_value": _pyo_value2(_walras_vd2),
-            "top_residuals": [{"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]],
+            "top_residuals": [
+                {"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]
+            ],
         }
         Path(_solve_nlp_report_path).write_text(_json_dbg.dumps(report, indent=2))
         print(f"[report] wrote {_solve_nlp_report_path}", file=_sys_dbg.stderr)
-        raise RuntimeError("EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT: stopping after in-process NLP solve+report")
+        raise RuntimeError(
+            "EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT: stopping after in-process NLP solve+report"
+        )
 
     # Solve check on m.
     r_chk = run_gtap._run_path_capi_nonlinear_full(
-        m, p_alt,
+        m,
+        p_alt,
         enforce_post_checks=False,
         strict_path_capi=False,
         closure_config=_chk_closure,
@@ -3160,10 +3400,8 @@ def solve_multiperiod(
     # Restore the SHOCK GAMS pva/pnd seed that the prior-seed just clobbered.
     if holdfix_cd and not _gtap_mode:
         for (_vn, _idx), _val in _pva_pnd_shock_seed.items():
-            try:
+            with contextlib.suppress(Exception):
                 getattr(m, _vn)[_idx].set_value(_val)
-            except Exception:
-                pass
 
     # Unfix regy[r,'shock'] (same as check period).
     for _r in params_shock.sets.r:
@@ -3209,6 +3447,7 @@ def solve_multiperiod(
                     _n_xft_deact_shk += 1
         if _n_xft_deact_shk:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
                 "shock period: deactivated eq_xft for %d (r,f) pairs "
                 "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
@@ -3221,6 +3460,7 @@ def solve_multiperiod(
         _n_pft_shk = _collapse_pft_pfteq(m, "shock")
         if _n_pft_shk:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
                 "shock period: collapsed pft/eq_pfteq for %d (r,f) pairs "
                 "(gtap-mode factor-price squaring)",
@@ -3232,15 +3472,20 @@ def solve_multiperiod(
             _n_xp_shk = _holdfix_activity_scale(m, "shock")
             if _n_xp_shk:
                 import logging as _logging
+
                 _logging.getLogger(__name__).info(
                     "shock period: holdfixed xp at check for %d (r,a) (gtap-mode "
-                    "activity-scale anchor)", _n_xp_shk,
+                    "activity-scale anchor)",
+                    _n_xp_shk,
                 )
 
     # Replicate single-period structural fixing for shock period.
     _shk_closure = base_closure if _gtap_mode else alt_closure
     _sp_ref_shk = GTAPModelEquations(
-        params_shock.sets, params_shock, _shk_closure, residual_region=res_region,
+        params_shock.sets,
+        params_shock,
+        _shk_closure,
+        residual_region=res_region,
     ).build_model()
     _replicate_sp_fixing(m, _sp_ref_shk, "shock")
     _replicate_sp_bounds(m, _sp_ref_shk, "shock")
@@ -3248,35 +3493,46 @@ def solve_multiperiod(
 
     # Mute the inert welfare-report tail for shock (same as check).
     if mute_welfare:
-        _n_mute = _mute_welfare_tail(m, "shock", list(params_shock.sets.r), gtap_mode=_gtap_mode)
+        _n_mute = _mute_welfare_tail(
+            m, "shock", list(params_shock.sets.r), gtap_mode=_gtap_mode
+        )
         if _n_mute:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "shock period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)", _n_mute)
+                "shock period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)",
+                _n_mute,
+            )
 
     # Seed derived demand-volume vars for shock (same as check).
     if holdfix_cd and not _gtap_mode:
         _n_der = _complete_derived_seed(m, "shock")
         if _n_der:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "shock period: seeded %d derived demand-volume cells", _n_der)
+                "shock period: seeded %d derived demand-volume cells", _n_der
+            )
 
     # Holdfix the CD-degenerate VA/ND nest for shock (same as check).
     if holdfix_cd and not _gtap_mode:
         _n_hf = _holdfix_cd_nest(m, "shock")
         if _n_hf:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "shock period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf)
+                "shock period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf
+            )
 
     # Holdfix pf for sector-specific (fnm) factors with etaff=0, shock period
     # (same rationale as check — see _holdfix_fnm_pf docstring).
     _n_hf_pf = _holdfix_fnm_pf(m, params_shock, "shock")
     if _n_hf_pf:
         import logging as _logging
+
         _logging.getLogger(__name__).info(
-            "shock period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf)
+            "shock period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf
+        )
 
     # gtap-mode: inject the tariff shock INTO the solved eq_pmeq[*,*,*,'shock']
     # cells (shock-in-equations) instead of relying on the post-solve cosmetic pm
@@ -3300,9 +3556,12 @@ def solve_multiperiod(
         if _n_pmeq:
             _eq_pmeq_shock_rebuilt = True
             import logging as _logging
+
             _logging.getLogger(__name__).info(
                 "shock period: rebuilt %d eq_pmeq cells with the tm_pct shock "
-                "power (shock-in-equations, gtap-mode)", _n_pmeq)
+                "power (shock-in-equations, gtap-mode)",
+                _n_pmeq,
+            )
         else:
             # ifSUB=1: eq_pmeq is deactivated (the import price is the inlined macro
             # _m_pm baked into eq_xweq/eq_pmteq at build with BASE imptx). Inject the
@@ -3312,9 +3571,12 @@ def solve_multiperiod(
             if _n_imp:
                 _eq_pmeq_shock_rebuilt = True
                 import logging as _logging
+
                 _logging.getLogger(__name__).info(
                     "shock period: rebuilt %d eq_xweq/eq_pmteq cells with the shocked "
-                    "imptx (ifSUB import-price leak fix, gtap-mode)", _n_imp)
+                    "imptx (ifSUB import-price leak fix, gtap-mode)",
+                    _n_imp,
+                )
 
         # gtap-mode: inject the tariff shock INTO the solved eq_ytax[*,'mt','shock']
         # cells too. eq_ytax[mt] bakes the BASE imptx coefficient at build; with the
@@ -3326,9 +3588,12 @@ def solve_multiperiod(
         _n_ymt = _rebuild_eq_ytax_mt_shock(m, params_shock)
         if _n_ymt:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
                 "shock period: rebuilt %d eq_ytax[mt] cells with the shocked "
-                "imptx (income-leak fix, shock-in-equations, gtap-mode)", _n_ymt)
+                "imptx (income-leak fix, shock-in-equations, gtap-mode)",
+                _n_ymt,
+            )
 
     # TEMP DEBUG HOOK (session-local): export the fully-prepared SHOCK-period Pyomo
     # model to a GAMS .gms (walras as maximize objective) right before PATH solves
@@ -3336,13 +3601,20 @@ def solve_multiperiod(
     # bundle. No-op unless the env var is set.
     import os as _os_shk
     import sys as _sys_shk
+
     _gms_shk_path = _os_shk.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK")
     if _gms_shk_path:
-        from pyomo.environ import Objective as _PyoObjShk, maximize as _pyo_max_shk
+        from pyomo.environ import Objective as _PyoObjShk
+        from pyomo.environ import maximize as _pyo_max_shk
+
         _ew_shk = getattr(m, "eq_walras", None)
         if _ew_shk is not None:
             for _idx in list(_ew_shk):
-                _match = (_idx and _idx[-1] == "shock") if isinstance(_idx, tuple) else (_idx == "shock")
+                _match = (
+                    (_idx and _idx[-1] == "shock")
+                    if isinstance(_idx, tuple)
+                    else (_idx == "shock")
+                )
                 if _match and _ew_shk[_idx].active:
                     _ew_shk[_idx].deactivate()
         _wv_shk = getattr(m, "walras", None)
@@ -3353,13 +3625,20 @@ def solve_multiperiod(
         if _wvd_shk is not None and _wvd_shk.fixed:
             _wvd_shk.unfix()
         m._nlp_walras_objective_shk = _PyoObjShk(expr=_wvd_shk, sense=_pyo_max_shk)
-        m.write(_gms_shk_path, format="gams", io_options={"symbolic_solver_labels": True})
-        print(f"[export] wrote shock-period .gms to {_gms_shk_path}", file=_sys_shk.stderr)
-        raise RuntimeError("EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK: stopping right before PATH solves shock")
+        m.write(
+            _gms_shk_path, format="gams", io_options={"symbolic_solver_labels": True}
+        )
+        print(
+            f"[export] wrote shock-period .gms to {_gms_shk_path}", file=_sys_shk.stderr
+        )
+        raise RuntimeError(
+            "EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK: stopping right before PATH solves shock"
+        )
 
     # Solve shock on m with shocked params.
     r_shk = run_gtap._run_path_capi_nonlinear_full(
-        m, params_shock,
+        m,
+        params_shock,
         enforce_post_checks=False,
         strict_path_capi=False,
         closure_config=_shk_closure,
@@ -3382,12 +3661,15 @@ def solve_multiperiod(
     # (1+shock_factor); reads pmcif/xw, order vs pm free).
     if not _gtap_mode:
         _recompute_params = p_alt
-        _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10,
-                                   gtap_mode=_gtap_mode)
+        _n_mt = _recompute_ytax_mt(
+            m, _recompute_params, "shock", shock_factor=0.10, gtap_mode=_gtap_mode
+        )
         if _n_mt:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "shock period: recomputed %d ytax[mt]/ytaxshr[mt] cells", _n_mt)
+                "shock period: recomputed %d ytax[mt]/ytaxshr[mt] cells", _n_mt
+            )
 
     # Under ifSUB, recompute the report-only margin/price vars post-solve (GAMS
     # postsim). They are not solved (their eqs are deactivated, the real eqs use the
@@ -3395,12 +3677,16 @@ def solve_multiperiod(
     # sets pm — so the pm/pmt/pa recompute below MUST run AFTER it so pmt/pa derive
     # from the final pm (otherwise ifSUB=1 leaves pm/pmt/pa mutually inconsistent).
     if _if_sub:
-        _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock", shock_factor=0.10)
+        _n_rep = _recompute_ifsub_report_vars(
+            m, params_shock, "shock", shock_factor=0.10
+        )
         if _n_rep:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
                 "shock period: recomputed %d ifSUB report-var cells (pfa/pfy/pp/pwmg/pefob/pmcif/pm)",
-                _n_rep)
+                _n_rep,
+            )
 
     # Recompute pm[e,i,imp] (bilateral) and pmt[imp,i] (aggregate) import prices, then
     # cascade to pa. eq_pmeq bakes the BASE imptx (model.imptx absent in MP → falls back
@@ -3415,11 +3701,15 @@ def solve_multiperiod(
     # from pmcif/xw (NOT pm) with its own power rate, so it stays correct and is NOT
     # gated — verified vs GAMS ytax[USA,mt] (see _recompute_ytax_mt above).
     if not _eq_pmeq_shock_rebuilt:
-        _n_pm = _recompute_pm_pmt(m, _recompute_params, "shock", shock_factor=0.10, if_sub=_if_sub)
+        _n_pm = _recompute_pm_pmt(
+            m, _recompute_params, "shock", shock_factor=0.10, if_sub=_if_sub
+        )
         if _n_pm:
             import logging as _logging
+
             _logging.getLogger(__name__).info(
-                "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm)
+                "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm
+            )
 
     # Freeze shock as well (for completeness / report purposes).
     freeze_period(m, "shock")

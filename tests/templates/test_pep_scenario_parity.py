@@ -37,7 +37,9 @@ def test_export_tax_shock_scales_ttix_and_aggregates() -> None:
         },
     )
 
-    shocked = PEPScenarioParityRunner._clone_with_export_tax_shock(state, multiplier=0.75)
+    shocked = PEPScenarioParityRunner._clone_with_export_tax_shock(
+        state, multiplier=0.75
+    )
 
     assert shocked.trade["ttixO"]["agr"] == pytest.approx(0.15)
     assert shocked.trade["ttixO"]["ser"] == pytest.approx(0.075)

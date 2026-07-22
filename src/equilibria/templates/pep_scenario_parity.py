@@ -21,9 +21,15 @@ from equilibria.templates.pep_model_equations import PEPModelVariables
 from equilibria.templates.pep_model_solver import IPOPT_AVAILABLE, PEPModelSolver
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_SAM_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
-DEFAULT_VAL_PAR_FILE = REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
-DEFAULT_RESULTS_GDX = REPO_ROOT / "src/equilibria/templates/reference/pep2/scripts/Results.gdx"
+DEFAULT_SAM_FILE = (
+    REPO_ROOT / "src/equilibria/templates/reference/pep2/data/SAM-V2_0.gdx"
+)
+DEFAULT_VAL_PAR_FILE = (
+    REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
+)
+DEFAULT_RESULTS_GDX = (
+    REPO_ROOT / "src/equilibria/templates/reference/pep2/scripts/Results.gdx"
+)
 DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
 
 
@@ -50,6 +56,7 @@ class ScenarioSolveReport:
     import_price_commodity: str | None = None
     import_price_multiplier: float | None = None
     government_spending_multiplier: float | None = None
+
 
 class PEPScenarioParityRunner:
     """Run BASE and EXPORT_TAX scenarios and compare both with GAMS results."""
@@ -136,7 +143,9 @@ class PEPScenarioParityRunner:
                 "reason": "residual_below_tolerance_but_status_nonzero",
                 "attempts": 1,
             }
-        elif self._should_use_export_tax_homotopy() and not bool(export_solution.converged):
+        elif self._should_use_export_tax_homotopy() and not bool(
+            export_solution.converged
+        ):
             (
                 export_solver,
                 export_solution,
@@ -268,7 +277,9 @@ class PEPScenarioParityRunner:
         last_validation: dict[str, Any] | None = None
 
         for multiplier in self._build_export_tax_homotopy_path():
-            step_state = self._clone_with_export_tax_shock(base_state, multiplier=multiplier)
+            step_state = self._clone_with_export_tax_shock(
+                base_state, multiplier=multiplier
+            )
             solver, solution, validation = self._solve_state(
                 step_state,
                 initial_vars=prev_vars,
@@ -303,19 +314,29 @@ class PEPScenarioParityRunner:
         return _pep_compare.key_indicators(vars_obj)
 
     @staticmethod
-    def _clone_with_export_tax_shock(state: PEPModelState, *, multiplier: float) -> PEPModelState:
+    def _clone_with_export_tax_shock(
+        state: PEPModelState, *, multiplier: float
+    ) -> PEPModelState:
         """Clone state and apply `ttix := ttix * multiplier` export-tax shock."""
         shocked = copy.deepcopy(state)
         ttix = shocked.trade.get("ttixO", {})
-        shocked.trade["ttixO"] = {i: float(v) * float(multiplier) for i, v in ttix.items()}
+        shocked.trade["ttixO"] = {
+            i: float(v) * float(multiplier) for i, v in ttix.items()
+        }
 
         tixo = shocked.trade.get("TIXO", {})
         if isinstance(tixo, dict):
-            shocked.trade["TIXO"] = {i: float(v) * float(multiplier) for i, v in tixo.items()}
+            shocked.trade["TIXO"] = {
+                i: float(v) * float(multiplier) for i, v in tixo.items()
+            }
 
         if isinstance(shocked.income, dict):
-            if "TIXTO" in shocked.income and isinstance(shocked.trade.get("TIXO"), dict):
-                shocked.income["TIXTO"] = float(sum(shocked.trade.get("TIXO", {}).values()))
+            if "TIXTO" in shocked.income and isinstance(
+                shocked.trade.get("TIXO"), dict
+            ):
+                shocked.income["TIXTO"] = float(
+                    sum(shocked.trade.get("TIXO", {}).values())
+                )
             if {"TICTO", "TIMTO", "TIXTO"}.issubset(set(shocked.income.keys())):
                 shocked.income["TPRCTSO"] = (
                     float(shocked.income.get("TICTO", 0.0))

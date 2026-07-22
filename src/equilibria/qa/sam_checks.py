@@ -108,7 +108,9 @@ def _eq_delta(lhs: float, rhs: float) -> tuple[float, float]:
     return abs_delta, rel_delta
 
 
-def _eq_pass(lhs: float, rhs: float, abs_tol: float, rel_tol: float) -> tuple[bool, float, float]:
+def _eq_pass(
+    lhs: float, rhs: float, abs_tol: float, rel_tol: float
+) -> tuple[bool, float, float]:
     abs_delta, rel_delta = _eq_delta(lhs, rhs)
     return (abs_delta <= abs_tol) or (rel_delta <= rel_tol), abs_delta, rel_delta
 
@@ -122,11 +124,17 @@ def _build_check_result(
 ) -> SAMQACheckResult:
     top_failures = sorted(
         failures,
-        key=lambda row: max(abs(float(row.get("abs_delta", 0.0))), abs(float(row.get("rel_delta", 0.0)))),
+        key=lambda row: max(
+            abs(float(row.get("abs_delta", 0.0))), abs(float(row.get("rel_delta", 0.0)))
+        ),
         reverse=True,
     )[:max_samples]
-    max_abs_delta = max((float(row.get("abs_delta", 0.0)) for row in failures), default=0.0)
-    max_rel_delta = max((float(row.get("rel_delta", 0.0)) for row in failures), default=0.0)
+    max_abs_delta = max(
+        (float(row.get("abs_delta", 0.0)) for row in failures), default=0.0
+    )
+    max_rel_delta = max(
+        (float(row.get("rel_delta", 0.0)) for row in failures), default=0.0
+    )
     return SAMQACheckResult(
         code=spec.code,
         title=spec.title,
@@ -180,7 +188,9 @@ def _check_no_active_entries(
             continue
         evaluated += 1
         failures.append(_structural_failure(key, value, reason=reason))
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_unsupported_commodity_inflows(
@@ -206,7 +216,9 @@ def _check_unsupported_commodity_inflows(
                     reason="unsupported_inflow_on_commodity_column",
                 )
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_unsupported_factor_inflows(
@@ -235,7 +247,9 @@ def _check_unsupported_factor_inflows(
                 reason="factor_row_receives_from_non_activity_column",
             )
         )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_residual_i_to_i_support(
@@ -264,7 +278,9 @@ def _check_residual_i_to_i_support(
                 reason="non_margin_commodity_found_on_i_to_i_support",
             )
         )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_residual_i_to_x_support(
@@ -293,7 +309,9 @@ def _check_residual_i_to_x_support(
                 reason="non_margin_commodity_found_on_i_to_x_support",
             )
         )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_export_value_balance(
@@ -326,7 +344,9 @@ def _check_export_value_balance(
                     "rel_delta": rel_delta,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_commodity_account_balance(
@@ -341,11 +361,13 @@ def _check_commodity_account_balance(
     for i in i_set:
         i_upper = _to_upper(i)
         lhs_row_total = sum(
-            value for (row_cat, row_elem, _col_cat, _col_elem), value in matrix.items()
+            value
+            for (row_cat, row_elem, _col_cat, _col_elem), value in matrix.items()
             if row_cat == "I" and row_elem == i_upper
         )
         rhs_col_total = sum(
-            value for (_row_cat, _row_elem, col_cat, col_elem), value in matrix.items()
+            value
+            for (_row_cat, _row_elem, col_cat, col_elem), value in matrix.items()
             if col_cat == "I" and col_elem == i_upper
         )
         evaluated += 1
@@ -365,7 +387,9 @@ def _check_commodity_account_balance(
                     "rel_delta": rel_delta,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_margin_domestic_denominator(
@@ -399,7 +423,9 @@ def _check_margin_domestic_denominator(
                     "rel_delta": 1.0,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_margin_export_denominator(
@@ -419,7 +445,9 @@ def _check_margin_export_denominator(
         )
         if abs(raw_margin_x_total) <= spec.abs_tol:
             continue
-        sum_exo = sum(_sam_value(matrix, "J", _to_upper(j), "X", ij_upper) for j in j_set)
+        sum_exo = sum(
+            _sam_value(matrix, "J", _to_upper(j), "X", ij_upper) for j in j_set
+        )
         evaluated += 1
         if sum_exo <= spec.abs_tol:
             failures.append(
@@ -431,7 +459,9 @@ def _check_margin_export_denominator(
                     "rel_delta": 1.0,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_tax_import_base(
@@ -460,7 +490,9 @@ def _check_tax_import_base(
                     "rel_delta": 1.0,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_tax_export_base(
@@ -489,7 +521,9 @@ def _check_tax_export_base(
                     "rel_delta": 1.0,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_tax_commodity_base(
@@ -509,7 +543,9 @@ def _check_tax_commodity_base(
             continue
         ddo = sum(_sam_value(matrix, "J", _to_upper(j), "I", i_upper) for j in j_set)
         imo = _sam_value(matrix, "AG", "ROW", "I", i_upper)
-        margin_sum = sum(_sam_value(matrix, "I", _to_upper(ij), "I", i_upper) for ij in i_set)
+        margin_sum = sum(
+            _sam_value(matrix, "I", _to_upper(ij), "I", i_upper) for ij in i_set
+        )
         timo = _sam_value(matrix, "AG", "TM", "I", i_upper)
         base = (1.0 + margin_sum) * (ddo + imo) + timo
         evaluated += 1
@@ -527,7 +563,9 @@ def _check_tax_commodity_base(
                     "rel_delta": 1.0,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_tax_production_base(
@@ -548,11 +586,8 @@ def _check_tax_production_base(
         if abs(tax) <= spec.abs_tol:
             continue
         vao_proxy = sum(
-            _sam_value(matrix, "L", _to_upper(labor), "J", j_upper)
-            for labor in l_set
-        ) + sum(
-            _sam_value(matrix, "K", _to_upper(k), "J", j_upper) for k in k_set
-        )
+            _sam_value(matrix, "L", _to_upper(labor), "J", j_upper) for labor in l_set
+        ) + sum(_sam_value(matrix, "K", _to_upper(k), "J", j_upper) for k in k_set)
         cio = sum(_sam_value(matrix, "I", _to_upper(i), "J", j_upper) for i in i_set)
         base = vao_proxy + cio
         evaluated += 1
@@ -568,7 +603,9 @@ def _check_tax_production_base(
                     "rel_delta": 1.0,
                 }
             )
-    return _build_check_result(spec, evaluated=evaluated, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=evaluated, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_macro_savings_investment_balance(
@@ -579,7 +616,9 @@ def _check_macro_savings_investment_balance(
 ) -> SAMQACheckResult:
     i_set = sets.get("I", [])
     ag_set = sets.get("AG", [])
-    savings_total = sum(_sam_value(matrix, "OTH", "INV", "AG", _to_upper(ag)) for ag in ag_set)
+    savings_total = sum(
+        _sam_value(matrix, "OTH", "INV", "AG", _to_upper(ag)) for ag in ag_set
+    )
     investment_total = sum(
         _sam_value(matrix, "I", _to_upper(i), "OTH", "INV")
         + _sam_value(matrix, "I", _to_upper(i), "OTH", "VSTK")
@@ -601,7 +640,9 @@ def _check_macro_savings_investment_balance(
                 "rel_delta": rel_delta,
             }
         )
-    return _build_check_result(spec, evaluated=1, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=1, failures=failures, max_samples=max_samples
+    )
 
 
 def _check_macro_gdp_proxy_closure(
@@ -664,7 +705,9 @@ def _check_macro_gdp_proxy_closure(
                 "rel_delta": rel_delta,
             }
         )
-    return _build_check_result(spec, evaluated=1, failures=failures, max_samples=max_samples)
+    return _build_check_result(
+        spec, evaluated=1, failures=failures, max_samples=max_samples
+    )
 
 
 def run_sam_data_contracts(
@@ -689,8 +732,7 @@ def run_sam_data_contracts(
         gdp_rel_tol=gdp_rel_tol,
     )
     resolved_margin_commodities = {
-        _to_upper(item)
-        for item in (allowed_margin_commodities or ["ser"])
+        _to_upper(item) for item in (allowed_margin_commodities or ["ser"])
     }
     resolved_allowed_factor_source_columns = {
         (_to_upper(cat), _to_upper(elem))
@@ -705,7 +747,8 @@ def run_sam_data_contracts(
                     matrix,
                     specs["STR001"],
                     max_samples,
-                    predicate=lambda key: ("MARG", "MARG") in {
+                    predicate=lambda key: ("MARG", "MARG")
+                    in {
                         (key[0], key[1]),
                         (key[2], key[3]),
                     },
@@ -715,13 +758,16 @@ def run_sam_data_contracts(
                     matrix,
                     specs["STR002"],
                     max_samples,
-                    predicate=lambda key: ("AG", "TX") in {
+                    predicate=lambda key: ("AG", "TX")
+                    in {
                         (key[0], key[1]),
                         (key[2], key[3]),
                     },
                     reason="explicit_ag_tx_account_is_active",
                 ),
-                _check_unsupported_commodity_inflows(matrix, specs["STR003"], max_samples),
+                _check_unsupported_commodity_inflows(
+                    matrix, specs["STR003"], max_samples
+                ),
                 _check_unsupported_factor_inflows(
                     matrix,
                     specs["STR004"],
@@ -745,22 +791,42 @@ def run_sam_data_contracts(
 
     checks.extend(
         [
-            _check_export_value_balance(matrix, resolved_sets, specs["EXP001"], max_samples),
-            _check_commodity_account_balance(matrix, resolved_sets, specs["DSP001"], max_samples),
-            _check_margin_domestic_denominator(matrix, resolved_sets, specs["MRG001"], max_samples),
-            _check_margin_export_denominator(matrix, resolved_sets, specs["MRG002"], max_samples),
+            _check_export_value_balance(
+                matrix, resolved_sets, specs["EXP001"], max_samples
+            ),
+            _check_commodity_account_balance(
+                matrix, resolved_sets, specs["DSP001"], max_samples
+            ),
+            _check_margin_domestic_denominator(
+                matrix, resolved_sets, specs["MRG001"], max_samples
+            ),
+            _check_margin_export_denominator(
+                matrix, resolved_sets, specs["MRG002"], max_samples
+            ),
             _check_tax_import_base(matrix, resolved_sets, specs["TAX001"], max_samples),
             _check_tax_export_base(matrix, resolved_sets, specs["TAX002"], max_samples),
-            _check_tax_commodity_base(matrix, resolved_sets, specs["TAX003"], max_samples),
-            _check_tax_production_base(matrix, resolved_sets, specs["TAX004"], max_samples),
-            _check_macro_savings_investment_balance(matrix, resolved_sets, specs["MAC001"], max_samples),
-            _check_macro_gdp_proxy_closure(matrix, resolved_sets, specs["MAC002"], max_samples),
+            _check_tax_commodity_base(
+                matrix, resolved_sets, specs["TAX003"], max_samples
+            ),
+            _check_tax_production_base(
+                matrix, resolved_sets, specs["TAX004"], max_samples
+            ),
+            _check_macro_savings_investment_balance(
+                matrix, resolved_sets, specs["MAC001"], max_samples
+            ),
+            _check_macro_gdp_proxy_closure(
+                matrix, resolved_sets, specs["MAC002"], max_samples
+            ),
         ]
     )
 
     failed_checks = [check for check in checks if not check.passed]
-    failed_error_checks = [check for check in failed_checks if check.severity == "error"]
-    failed_warning_checks = [check for check in failed_checks if check.severity == "warning"]
+    failed_error_checks = [
+        check for check in failed_checks if check.severity == "error"
+    ]
+    failed_warning_checks = [
+        check for check in failed_checks if check.severity == "warning"
+    ]
     metadata = {
         "records": len(matrix),
         "set_sizes": {name: len(values) for name, values in resolved_sets.items()},
