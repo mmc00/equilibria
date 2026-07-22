@@ -1,0 +1,27 @@
+"""GTAP7 GEMPACK reference path — HAR reader/mapper unit tests.
+
+Exercises the updated.har → Var-cells chain end-to-end against a tiny SYNTHETIC
+fixture, so the whole GEMPACK path is testable without a Windows-produced ref.
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tests/fixtures/gtap7_gempack"))
+
+
+def test_synthetic_updated_har_roundtrips(tmp_path):
+    from make_synthetic_updated_har import build_synthetic_updated_har
+
+    from equilibria.babel.har.reader import get_header_names, read_har
+
+    out = tmp_path / "updated_synthetic.har"
+    build_synthetic_updated_har(str(out))
+    names = get_header_names(str(out))
+    assert "VDFB" in names, f"expected VDFB header, got {names}"
+    headers = read_har(str(out))
+    vdfb = headers["VDFB"]
+    assert vdfb.array.shape == (2, 2), f"expected 2x2, got {vdfb.shape}"
+    assert vdfb.set_elements[0] == ["USA", "ROW"]
