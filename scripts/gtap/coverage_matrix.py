@@ -215,14 +215,16 @@ _MCP_ROWS: list[Row] = [
         "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_10x7", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
-    # 15x10 pure measured 100/100/100 (both ifSUB). ifSUB=1 shock lands the CORRECT point
-    # (100% cell match) but PATH returns code=2 (a near-miss on the tight convergence
-    # threshold, NOT a wrong root) — allowed here ONLY via code2_ok, floor stays high.
+    # 15x10 pure measured 100/100/100 (both ifSUB), code=1 on EVERY stage. The
+    # ifSUB=1 shock's former code=2 was the SAME fabricated-corner class PR #31 fixed
+    # for 5x5: the NonNegativeReals boxes on xw/xet let PATH stall near a spurious MCP
+    # corner. Freeing those domains to Reals (29e6be2) closed it — the shock now
+    # converges deterministically to code=1 (resid 4.26e-10, major=13, 4/4 identical
+    # runs) at 100% cell match. The stale code2_ok exception was removed 2026-07-22.
     Row("gtap7_15x10", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_gtap_shock_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
-        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure",
-        code2_ok=("shock",)),
+        "out_gtap_shock_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     # --- altertax CD (ref out_altertax_ifsub{N}.gdx) ---
     Row("gtap7_3x3", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
