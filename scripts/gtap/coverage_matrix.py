@@ -278,6 +278,19 @@ def mcp_rows() -> list[Row]:
     return [r for r in ROWS if r.kind == "mcp"]
 
 
+def rows_for(model: str, reference: str, kind: str | None = None) -> list[Row]:
+    """Rows for one (model, reference) grid cell, optionally narrowed to a kind.
+
+    Used by the doc generators to emit one page per (model × reference)."""
+    return [
+        r
+        for r in ROWS
+        if r.model == model
+        and r.reference == reference
+        and (kind is None or r.kind == kind)
+    ]
+
+
 def _validate() -> None:
     """Import-time schema invariants — fail fast on a malformed matrix."""
     for r in ROWS:

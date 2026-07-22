@@ -102,3 +102,17 @@ def test_new_axes_default_and_validate():
             cm._validate()
     finally:
         cm.ROWS = saved
+
+
+def test_rows_for_filters_by_model_and_reference():
+    from coverage_matrix import mcp_rows, rows_for
+
+    # all current mcp rows are gtap7/gams
+    gams_mcp = rows_for("gtap7", "gams", kind="mcp")
+    assert gams_mcp == mcp_rows(), (
+        "rows_for(gtap7,gams,mcp) must equal today's mcp_rows()"
+    )
+    # no gempack rows exist yet → empty, not an error
+    assert rows_for("gtap7", "gempack") == []
+    # no gtap6 rows yet → empty
+    assert rows_for("gtap6", "gams") == []
