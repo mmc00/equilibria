@@ -25,3 +25,21 @@ def test_synthetic_updated_har_roundtrips(tmp_path):
     vdfb = headers["VDFB"]
     assert vdfb.array.shape == (2, 2), f"expected 2x2, got {vdfb.shape}"
     assert vdfb.set_elements[0] == ["USA", "ROW"]
+
+
+def test_gempack_levels_maps_var_to_cells(tmp_path):
+    from make_synthetic_updated_har import build_synthetic_updated_har
+
+    sys.path.insert(0, str(ROOT / "scripts/gtap"))
+    import pytest as _pt
+    from gempack_reference import gempack_levels
+
+    out = tmp_path / "u.har"
+    build_synthetic_updated_har(str(out))
+    # 'qfd' (firm domestic demand) maps to the VDFB header in the synthetic ref
+    cells = gempack_levels(str(out), "qfd")
+    assert cells[("USA", "Food")] == 10.0
+    assert cells[("ROW", "Mnfcs")] == 40.0
+    # an aggregate-only var raises (no cell-by-cell header)
+    with _pt.raises(KeyError):
+        gempack_levels(str(out), "walras")
