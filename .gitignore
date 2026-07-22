@@ -279,6 +279,7 @@ scripts/gtap/*
 !scripts/gtap/gen_coverage_doc.py
 !scripts/gtap/gen_nlp_matrix_page.py
 !scripts/gtap/gempack_reference.py
+!scripts/gtap/inspect_updated_har.py
 # Phase-2 cascade orchestrator modules
 !scripts/gtap/cascade_config.py
 !scripts/gtap/cascade_layers.py
