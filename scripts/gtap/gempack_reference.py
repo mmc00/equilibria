@@ -138,6 +138,20 @@ def sl4_levels(har_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
 # relative tol reject good 0.4pp agreements. GEMPACK is Gragg-linearized, Python is
 # levels; the residual (concentrated in diagonal c==a and a few cells) is that
 # structural gap, identical Python-vs-GAMS.
+#
+# WHY %-changes and not levels — Horridge & Pearson, "Solution Software for CGE
+# Modeling" (COPS General Paper G-214, 2011), §4.1/4.2: GAMS uses a LEVELS strategy
+# (solve for Y directly, merit FᵀF<1e-6), GEMPACK a CHANGE strategy where "most of
+# the change variables are expressed as percentage changes" (§4.2.1) via multi-step
+# Euler + Richardson extrapolation. §6.5 "All three give the same results": the same
+# model in GEMPACK/GAMS/MPSGE yields the same numbers. But §6 (p.28) shows the
+# linearized decomposition (−1.824) is "not exactly equal" to the levels result
+# (−2.214) because "the linearized equations ... are not satisfied exactly by the
+# accurate results" — that IS our structural pp-residual, per GEMPACK's own author.
+# So comparing GEMPACK↔Python in %-change (the form both share) is the correct
+# apples-to-apples; a levels comparison reduces to (1+%chg) after benchmark
+# normalization (verified identical to 8 decimals) — there is no distinct
+# "levels-vs-levels" GEMPACK comparison.
 Q_TO_VAR: dict[str, dict] = {
     "qfd": {"var": "xd", "reorder": lambda k: (k[2], k[0], k[1])},   # (c,a,r)->(r,c,a)
     "qxs": {"var": "xw", "reorder": lambda k: (k[1], k[0], k[2])},   # (c,src,dst)->(src,c,dst)

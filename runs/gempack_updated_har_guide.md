@@ -294,6 +294,31 @@ a finer solve.
 against-GEMPACK flow while the quantity SL4 path is built out — or the quantity
 path can supersede it. That is the open design choice for the next session.
 
+### 8c. Why %-change is the right comparison — Horridge & Pearson (G-214)
+
+The design rests on GEMPACK's own authors. Horridge & Pearson, *"Solution Software
+for CGE Modeling"* (COPS General Paper **G-214**, 2011):
+
+- **§4.1 — GAMS = LEVELS strategy**: solve for the level `Y` directly; a solution is
+  declared when the merit `FᵀF < 1e-6`. Python is the same (a levels MCP).
+- **§4.2 — GEMPACK = CHANGE strategy**: start from a solution and impose the shock
+  as a *linearized* system, made accurate by multi-step **Euler + Richardson
+  extrapolation**; **§4.2.1**: "most of the change variables are expressed as
+  **percentage changes**." So GEMPACK's native output is %-change, not a level.
+- **§6.5 "All three give the same results"**: the same model in GEMPACK/GAMS/MPSGE
+  yields the same numbers — mirroring our Python≡GAMS finding.
+- **§6 (p.28)**: the linearized decomposition (−1.824) is *"not exactly equal"* to
+  the levels result (−2.214) because *"the linearized equations … are not satisfied
+  exactly by the accurate results."* **That is precisely our per-cell pp-residual**,
+  named by GEMPACK's own author — structural, not a defect.
+
+Consequence: comparing GEMPACK↔Python in **%-change / percentage points** (the form
+both share) is the correct apples-to-apples. A "levels-vs-levels" GEMPACK comparison
+does not exist as a distinct thing: GEMPACK levels are $millions, Python is a
+benchmark-normalized index, and normalizing GEMPACK to its benchmark gives exactly
+`1 + %change` (verified identical to 8 decimals). GAMS levels ARE directly
+comparable to Python only because both share the same levels normalization.
+
 ---
 
 ## What this closes
