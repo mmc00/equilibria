@@ -231,19 +231,23 @@ uv run python scripts\gtap\run_gempack_matrix.py --sltoht C:\GP\sltoht.exe
 If `sltoht.exe` is elsewhere, pass its path; if omitted/not found, the SL4 export
 is skipped and only the values `updated.har` is produced (backward compatible).
 
-**Reading it in Python:** the SL4-as-HAR is readable by the existing `read_har`,
-BUT its headers are keyed by **numeric variable index** (e.g. `"0094"`), not by
-name — so two small maps must be authored (they do NOT exist yet):
+**Reading it in Python:** the SL4-as-HAR is readable by the existing `read_har`.
+Its headers ARE numbered (`"0002"`, …), BUT `sltoht` preserves each variable's
+GEMPACK name in the header `long_name` (`"qfd # demand for domestic commodity … #"`).
+So map #1 below is **already solved by the file itself** — only the modeling map
+(#2) remains hand-authored:
 
-1. **GEMPACK q-name → SL4 numeric header id** — extend the `VARS_TO_EXTRACT`
-   pattern in `trajectory_runner.py` (which today only covers scalar welfare vars)
-   to the multi-dim quantity variables. Read the id list from a real
-   `sl4dump_<ds>_tm10.har` with `inspect_updated_har.py`.
-2. **GEMPACK q-name → Python Var** (the modeling map): roughly `qfd`→`xf`/`xd`
-   (firm domestic), `qxs`→`xw` (bilateral exports), `qpd`/`qpm`→`xaa` (private
-   agent), `qgd`/`qgm`→`xaa` (gov agent), `qo`→activity output. **Author against a
-   real header inventory — do NOT guess.** GTAPv7 splits domestic/imported
-   (`qfd`/`qfm`) where Python may hold a composite; verify per variable.
+1. **GEMPACK q-name → SL4 numeric header id — SOLVED.** `gempack_reference.sl4_index()`
+   parses `long_name` to build the name→id map (100% of headers, 256 unique vars
+   on 3x3); `gempack_reference.sl4_levels(path, "qfd")` returns the %-change cells
+   keyed by set elements. `inspect_updated_har.py` now prints the `long_name`
+   column so numbered headers are legible at a glance. No hand-authored id table.
+2. **GEMPACK q-name → Python Var** (the modeling map, still TODO): roughly
+   `qfd`→`xf`/`xd` (firm domestic), `qxs`→`xw` (bilateral exports), `qpd`/`qpm`→`xaa`
+   (private agent), `qgd`/`qgm`→`xaa` (gov agent), `qo`→activity output. **Author
+   against the real inventory (now visible via the long_name column) — do NOT
+   guess.** GTAPv7 splits domestic/imported (`qfd`/`qfm`) where Python may hold a
+   composite; verify per variable.
 
 Then the `against-GEMPACK` gate compares quantity-vs-quantity at 1% tol and the
 per-page floor reflects the (smaller) structural residual.

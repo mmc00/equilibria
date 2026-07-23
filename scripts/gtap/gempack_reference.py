@@ -17,11 +17,19 @@ FINDINGS (2026-07-23, empirical, on gtap7_3x3 — see the guide §8):
   * That 33% gap is STRUCTURAL (Gragg-linearized vs levels), NOT a Python defect:
     GAMS-levels reconstructed identically gives the SAME 66.67% on the SAME cells.
   * A cleaner comparison is QUANTITY-vs-QUANTITY (GEMPACK `qfd` from the SL4
-    solution vs Python `xd`) — folds the gap in once, not twice. That needs the
-    SL4→HAR export (guide §8) plus a q-name→Var map, both TODO.
+    solution vs Python `xd`) — folds the gap in once, not twice.
 
-Wiring the real value/quantity comparison into the gate is the next-session work;
-today this module only carries the verified mechanism + the synthetic-fixture map.
+SL4 QUANTITY PATH (2026-07-23): the `sltoht`-exported SL4 dump
+(`sl4dump_<ds>_tm10.har`) carries the solution %-changes for every model variable
+(qfd/qxs/qo/...). Its headers are numbered `0001..` but EACH preserves the GEMPACK
+variable name in its `long_name` (`"qfd # demand for domestic commodity ... #"`).
+So the q-name→SL4-id map is recovered from the file itself (`sl4_index` /
+`sl4_levels` below) — NOT hand-authored. 100% of headers (256 unique vars on 3x3)
+parse cleanly. The ONE remaining piece is the q-name→Python-Var modeling map
+(e.g. GEMPACK `qfd`→Python `xd`), still authored deliberately, never guessed.
+
+Wiring the quantity comparison into the gate is the next step; this module carries
+the verified value mechanism, the synthetic-fixture map, and the SL4 name reader.
 """
 
 from __future__ import annotations
@@ -63,3 +71,51 @@ def gempack_levels(har_path: str, var_basename: str) -> dict[tuple[str, ...], fl
         key = tuple(dims[d][i] for d, i in enumerate(idx))
         out[key] = float(ha.array[idx])
     return out
+
+
+def _cells(ha) -> dict[tuple[str, ...], float]:
+    dims = [list(e) for e in ha.set_elements]
+    out: dict[tuple[str, ...], float] = {}
+    for idx in np.ndindex(*ha.array.shape):
+        key = tuple(dims[d][i] for d, i in enumerate(idx))
+        out[key] = float(ha.array[idx])
+    return out
+
+
+def sl4_index(har_path: str) -> dict[str, str]:
+    """Map GEMPACK variable name -> numeric SL4 header id (`"0002"`), parsed from
+    each header's `long_name` (`"<name> # description #"`).
+
+    sltoht numbers the SL4 solution headers `0001..` but preserves the variable
+    name in `long_name`, so the name->id map is recovered from the file itself —
+    no hand-authored q-name→id table (the guide §8 TODO #1 is dissolved).
+    """
+    idx: dict[str, str] = {}
+    for hid, ha in read_har(har_path).items():
+        long_name = (ha.long_name or "").strip()
+        if not long_name:
+            continue
+        name = long_name.split("#", 1)[0].strip()
+        if name:
+            idx.setdefault(name, hid)
+    return idx
+
+
+def sl4_levels(har_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
+    """Return {(set_elem, ...): pct_change} cells for a GEMPACK variable, read
+    from an `sltoht`-exported SL4 dump (`sl4dump_<ds>_tm10.har`).
+
+    The SL4 holds solution %-changes — the quantity vars (qfd/qxs/qo/...) the
+    values-only updated.har does not carry. The numeric header is resolved by
+    variable name via `sl4_index`. Raises KeyError if the variable is absent.
+    """
+    headers = read_har(har_path)
+    name_to_id = {
+        (ha.long_name or "").split("#", 1)[0].strip(): hid
+        for hid, ha in headers.items()
+        if (ha.long_name or "").strip()
+    }
+    hid = name_to_id.get(gempack_var)
+    if hid is None:
+        raise KeyError(f"{gempack_var!r} not found in SL4 dump {har_path}")
+    return _cells(headers[hid])
