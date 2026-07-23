@@ -1,0 +1,50 @@
+! gtap7_3x3 uniform 10% shock to import tariff power (tm) - GEMPACK / GTAPv7
+! capFix closure mirroring equilibria's Python gate (residual = last region = "ROW",
+! rr=list(sets.r)[-1]); swap dpsave(r)=del_tbalry(r) for every NON-residual region.
+Auxiliary files = C:\runGTAP375\gtapv7 ;
+
+file GTAPSETS = sets.har ;
+file GTAPDATA = basedata.har ;
+file GTAPPARM = default.prm ;
+file GTAPSUM  = summary.har ;
+file WELVIEW  = decomp.har ;
+file GTAPVOL  = volume.har ;
+Updated file GTAPDATA = updated.har ;
+
+Method = Gragg ;
+Steps  = 8 16 32 ;
+Automatic accuracy = no ;
+Subintervals = 1 ;
+
+Verbal Description =
+gtap7_3x3 uniform 10pct shock to import tariff power (tm), capFix closure ;
+
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc
+          tpreg tm tms tx txs
+          qe
+          qesf ;
+Rest Endogenous ;
+
+! capFix closure: pin del_tbalry for all NON-RESIDUAL regions; "ROW"
+! absorbs the capital-account identity. Releases dpsave(r) for each non-residual region.
+swap dpsave("USA") = del_tbalry("USA") ;
+swap dpsave("EU_28") = del_tbalry("EU_28") ;
+
+Shock tm = uniform 10 ;
+
+CPU = yes ;
+NDS = yes ;
+log file = yes ;
+Extrapolation accuracy file = NO ;

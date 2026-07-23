@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 CI_STATUSES = {"ci", "local", "blocked"}
 KINDS = {"gtap", "altertax", "gtap_solve", "nlp", "mcp"}
 _PERSTAGE_KINDS = {"nlp", "mcp"}  # kinds that carry per-stage stage_floors + mode
+MODELS = {"gtap6", "gtap7"}          # model axis (F0-resto)
+REFERENCES = {"gams", "gempack"}     # comparison-reference axis (F0-resto)
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,10 @@ class Row:
     # correct (100% cell match). The test allows code in {1,2} ONLY for the stages listed
     # here; every other stage stays code==1 (non-negotiable). A tuple of stage names.
     code2_ok: tuple = ()
+    # Model + comparison-reference axes (F0-resto). Default to the historical
+    # implicit values so every existing row migrates non-destructively.
+    model: str = "gtap7"       # "gtap7" | "gtap6"
+    reference: str = "gams"    # comparison reference: "gams" | "gempack"
 
 
 ROWS: list[Row] = [
@@ -248,6 +254,29 @@ _MCP_ROWS: list[Row] = [
         "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    # --- against GEMPACK (RunGTAP), QUANTITY-vs-quantity (F5) ---
+    # Python post-shock quantity %-changes vs the GEMPACK SL4 solution (qfd→xd,
+    # qxs→xw, qo→xp — verified Q_TO_VAR map). Metric = fraction of cells within 1
+    # PERCENTAGE POINT (NOT the GAMS 1% rel tol — %-changes need a pp metric). The
+    # floor is the MEASURED within-1pp fraction minus a ~5pp margin; it DECAYS with
+    # dataset size (75%→45%) as the Gragg-linearized↔levels gap accumulates over more
+    # cells — that residual is structural (identical Python↔GAMS), not infidelity.
+    # phases=("shock",): GEMPACK is a single-shock solve, only the shock stage maps.
+    Row("gtap7_3x3", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 70.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_3x4", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_5x5", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 61.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_10x7", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 53.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_15x10", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 39.0),), mode="pure",
+        reference="gempack"),
 ]
 ROWS.extend(_MCP_ROWS)
 
@@ -272,6 +301,19 @@ def mcp_rows() -> list[Row]:
     return [r for r in ROWS if r.kind == "mcp"]
 
 
+def rows_for(model: str, reference: str, kind: str | None = None) -> list[Row]:
+    """Rows for one (model, reference) grid cell, optionally narrowed to a kind.
+
+    Used by the doc generators to emit one page per (model × reference)."""
+    return [
+        r
+        for r in ROWS
+        if r.model == model
+        and r.reference == reference
+        and (kind is None or r.kind == kind)
+    ]
+
+
 def _validate() -> None:
     """Import-time schema invariants — fail fast on a malformed matrix."""
     for r in ROWS:
@@ -280,6 +322,8 @@ def _validate() -> None:
         assert r.kind in KINDS, f"bad kind: {r}"
         assert r.ci_status in CI_STATUSES, f"bad ci_status: {r}"
         assert r.phases, f"empty phases: {r}"
+        assert r.model in MODELS, f"bad model: {r}"
+        assert r.reference in REFERENCES, f"bad reference: {r}"
         if r.kind in _PERSTAGE_KINDS:
             # Per-stage rows (nlp/mcp) carry `stage_floors` (contract floor per phase)
             # + `mode`; row-level gap_min is None (floor lives per stage; match is

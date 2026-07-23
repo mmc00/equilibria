@@ -76,6 +76,7 @@ guide/path_capi
 
 guide/benchmarks
 guide/gtap7_coverage_matrix
+guide/gtap7_coverage_matrix_gempack
 guide/pep_coverage_matrix
 ```
 

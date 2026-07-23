@@ -42,11 +42,13 @@ GATE_TESTS = [
     "tests/templates/gtap/test_gtap7_mcp_parity.py",
     "tests/templates/gtap/test_gtap7_nlp_parity.py",
     "tests/templates/gtap/test_gtap7_nl_parity.py",
+    "tests/templates/gtap/test_gtap7_gempack_parity.py",
     "tests/templates/gtap/test_coverage_matrix.py",
 ]
 
 REGEN_CMDS = [
     ["scripts/gtap/gen_coverage_doc.py"],
+    ["scripts/gtap/gen_gempack_doc.py"],
     ["scripts/gtap/gen_nlp_matrix_page.py", "--gate", "mcp"],
     ["scripts/gtap/gen_nlp_matrix_page.py", "--gate", "nlp"],
 ]

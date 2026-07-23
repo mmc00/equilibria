@@ -73,3 +73,55 @@ def test_coverage_doc_in_sync():
         "docs/site/guide/gtap7_coverage_matrix.md is stale — run "
         "`uv run python scripts/gtap/gen_coverage_doc.py` and commit."
     )
+
+
+def test_gempack_doc_in_sync():
+    """The committed against-GEMPACK doc must equal render() — regen + commit on drift."""
+    import gen_gempack_doc
+
+    committed = gen_gempack_doc.DOC_PATH.read_text(encoding="utf-8")
+    assert committed == gen_gempack_doc.render(), (
+        "docs/site/guide/gtap7_coverage_matrix_gempack.md is stale — run "
+        "`uv run python scripts/gtap/gen_gempack_doc.py` and commit."
+    )
+
+
+def test_new_axes_default_and_validate():
+    from coverage_matrix import MODELS, REFERENCES, ROWS
+
+    # all rows are gtap7 today; reference is gams (default) or gempack (F5 rows)
+    assert all(r.model == "gtap7" for r in ROWS), "all rows must be model=gtap7 today"
+    assert all(r.reference in REFERENCES for r in ROWS), (
+        "reference must be in REFERENCES"
+    )
+    assert any(r.reference == "gams" for r in ROWS), "gams rows must exist"
+    # the invariant sets exist and contain the axis values
+    assert "gtap6" in MODELS and "gtap7" in MODELS
+    assert "gams" in REFERENCES and "gempack" in REFERENCES
+    # _validate rejects an out-of-domain model/reference
+    import dataclasses
+
+    import coverage_matrix as cm
+    import pytest as _pt
+
+    bad = dataclasses.replace(ROWS[0], model="gtap9")
+    saved = cm.ROWS
+    try:
+        cm.ROWS = [*saved, bad]
+        with _pt.raises(AssertionError):
+            cm._validate()
+    finally:
+        cm.ROWS = saved
+
+
+def test_rows_for_filters_by_model_and_reference():
+    from coverage_matrix import mcp_rows, rows_for
+
+    # mcp_rows() is gams + gempack; rows_for narrows to one reference
+    gams_mcp = rows_for("gtap7", "gams", kind="mcp")
+    gempack_mcp = rows_for("gtap7", "gempack", kind="mcp")
+    assert set(gams_mcp) | set(gempack_mcp) == set(mcp_rows())
+    assert all(r.reference == "gams" for r in gams_mcp)
+    assert gempack_mcp and all(r.reference == "gempack" for r in gempack_mcp)
+    # no gtap6 rows yet → empty
+    assert rows_for("gtap6", "gams") == []
