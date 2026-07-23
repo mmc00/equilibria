@@ -101,6 +101,19 @@ def render() -> str:
         "solvers), so it is not a fidelity defect. The floor **decays with dataset "
         "size** as that gap accumulates over more cells.",
         "",
+        "**Why a residual is expected — two structural reasons.** (a) *Method*: "
+        "GEMPACK is linearized, Python/GAMS are levels (above). (b) *Model scope*: "
+        "van der Mensbrugghe (*The GTAP model in GAMS*, JGEA 3(1), 2018) reports the "
+        "GAMS GTAP results match GEMPACK's *\"to within standard numerical precision "
+        "(4–5 significant digits)\"* — **but only under the standard specification and "
+        "a limited aggregation**. The GAMS/Python model is a **superset** of GEMPACK: "
+        "it adds a double-nested CET for domestic output allocation (GEMPACK assumes "
+        "perfect transformation), **factor supply curves** (GEMPACK holds factor "
+        "supplies exogenous — supply elasticities implicitly zero), and extra capital-"
+        "account closures. So cells touching those extensions (endowments `qe`→`xft`, "
+        "output allocation) carry a genuine model-scope difference on top of the "
+        "linearization gap — not a Python bug.",
+        "",
         mx.raw(_LEGEND),
         "",
         "## Variables compared (15)",
@@ -124,6 +137,19 @@ def render() -> str:
         "quantities don't depend on the subsidy convention), so both are shown.",
         "",
         _table(rows),
+        "",
+        "### Scope",
+        "",
+        "This cell-by-cell page covers the five **gtap7_\\*** datasets, which the "
+        "multi-period gate solves. **nus333** and **9x10** are *not* here: they are "
+        "solved by a separate single-period apparatus (`compare_nus333_vs_neos._solve` "
+        "with homotopy + capFix closure), and they already have GEMPACK/RunGTAP "
+        "coverage in the **welfare/macro track** they were built for "
+        "(`compare_nus333_rungtap.py` / `compare_9x10_rungtap.py`, validated to "
+        "~0.01–0.3pp on `u` and ~0.3–1.7% on EV — see "
+        "`docs/findings/rungtap_welfare_parity_2026-05-15`). Wiring them into the "
+        "cell-by-cell gate would duplicate that coverage through a second, fragile "
+        "solve path, so it is deliberately out of scope.",
         "",
     ]
     return "\n".join(parts) + "\n"
