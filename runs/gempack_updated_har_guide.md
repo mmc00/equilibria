@@ -252,6 +252,43 @@ So map #1 below is **already solved by the file itself** — only the modeling m
 Then the `against-GEMPACK` gate compares quantity-vs-quantity at 1% tol and the
 per-page floor reflects the (smaller) structural residual.
 
+### 8a. Post-sim LEVELS are available — but only via sltoht's TEXT modes
+
+`sltoht`'s HAR/VAI export writes **only** the cumulative %-change column (that is
+what `sl4dump_<ds>_tm10.har` holds; `SHL` and `SEP` do not change it — the log
+still says *"Writing ONLY CUMULATIVE TOTALS"*). The pre-/post-simulation LEVELS
+(solution headers `LEVB`/`LEVA`) are exposed **only in the TEXT modes** under
+option `SHL`, where every variable prints four solution columns:
+
+```
+[ %-change , pre-sim level , post-sim level , change ]
+qo, component 1:  -1.5210288   1579235.5   1555214.9   -24020.625
+```
+
+`scripts/gtap/export_sl4_levels.py` drives `sltoht -SHL -SIC`, parses the
+POST-SIM LEVEL column and writes it back as `sl4levels_<ds>_tm10.har`:
+
+```powershell
+uv run python scripts\gtap\export_sl4_levels.py --sltoht C:\GP\sltoht.exe
+```
+
+Shapes / set-elements / numeric ids / long_names come from the matching
+`sl4dump`, and every variable is CROSS-CHECKED (the text's %-change column must
+equal the sl4dump values) before its level array is kept — 252/252 variables on
+gtap7_3x3, 0 mismatches. **Component order is FORTRAN (column-major)**: verified
+across all 252 variables (C-order agrees only for rank-1). Read either fixture
+with `gempack_reference.sl4_levels(path, "qo")`.
+
+### 8b. More Gragg steps do NOT close the gap (measured)
+
+Re-solving gtap7_3x3 with `Subintervals = 10` instead of `1` (same
+`Steps = 8 16 32`) changes `updated.har` by a **max relative 2.6e-6**. GEMPACK's
+Gragg + Richardson extrapolation is ALREADY at levels accuracy, so raising the
+step/subinterval count cannot move the ~66.67% value-vs-value match. That gap
+lives in the value RECONSTRUCTION (`VDFB = pd·xd` folding the gap into price and
+quantity), which is exactly why the quantity/levels path above is the fix — not
+a finer solve.
+
 **Status of the value path:** the `VDFB = pd·xd` value mapping is already verified
 (66.67% @ 1% on gtap7_3x3, gap proven structural). It can ship as the FIRST
 against-GEMPACK flow while the quantity SL4 path is built out — or the quantity

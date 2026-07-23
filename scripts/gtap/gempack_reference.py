@@ -102,12 +102,17 @@ def sl4_index(har_path: str) -> dict[str, str]:
 
 
 def sl4_levels(har_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
-    """Return {(set_elem, ...): pct_change} cells for a GEMPACK variable, read
-    from an `sltoht`-exported SL4 dump (`sl4dump_<ds>_tm10.har`).
+    """Return {(set_elem, ...): value} cells for a GEMPACK variable, read from an
+    `sltoht`-exported SL4 HAR. Works on BOTH SL4 fixture kinds:
 
-    The SL4 holds solution %-changes — the quantity vars (qfd/qxs/qo/...) the
-    values-only updated.har does not carry. The numeric header is resolved by
-    variable name via `sl4_index`. Raises KeyError if the variable is absent.
+      * `sl4dump_<ds>_tm10.har`   -> cumulative %-CHANGES (sltoht's HAR/VAI mode
+        only ever writes this column)
+      * `sl4levels_<ds>_tm10.har` -> absolute POST-SIM LEVELS, produced by
+        `export_sl4_levels.py` (sltoht exposes levels only in its TEXT modes
+        under option SHL; see that script)
+
+    Either way the numeric header is resolved by variable name via `sl4_index`.
+    Raises KeyError if the variable is absent.
     """
     headers = read_har(har_path)
     name_to_id = {
