@@ -41,7 +41,8 @@ def _gate_config(gate):
     if gate == "mcp":
         from test_gtap7_mcp_parity import _solve_and_measure, _fixture_gdx
         return {
-            "rows": mcp_rows(),
+            # against-GAMS page: exclude reference="gempack" rows (sibling page).
+            "rows": [r for r in mcp_rows() if r.reference == "gams"],
             "gdx": lambda r: _fixture_gdx(r.dataset, r.ifsub, r.mode),
             "measure": lambda r, gdx: _solve_and_measure(r.dataset, r.ifsub, r.mode, gdx),
             "eyebrow": "GTAP Standard 7 · Python vs GAMS · PATH/MCP both sides",

@@ -254,6 +254,29 @@ _MCP_ROWS: list[Row] = [
         "out_altertax_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
+    # --- against GEMPACK (RunGTAP), QUANTITY-vs-quantity (F5) ---
+    # Python post-shock quantity %-changes vs the GEMPACK SL4 solution (qfd→xd,
+    # qxs→xw, qo→xp — verified Q_TO_VAR map). Metric = fraction of cells within 1
+    # PERCENTAGE POINT (NOT the GAMS 1% rel tol — %-changes need a pp metric). The
+    # floor is the MEASURED within-1pp fraction minus a ~5pp margin; it DECAYS with
+    # dataset size (75%→45%) as the Gragg-linearized↔levels gap accumulates over more
+    # cells — that residual is structural (identical Python↔GAMS), not infidelity.
+    # phases=("shock",): GEMPACK is a single-shock solve, only the shock stage maps.
+    Row("gtap7_3x3", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 70.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_3x4", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_5x5", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 61.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_10x7", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 53.0),), mode="pure",
+        reference="gempack"),
+    Row("gtap7_15x10", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 39.0),), mode="pure",
+        reference="gempack"),
 ]
 ROWS.extend(_MCP_ROWS)
 

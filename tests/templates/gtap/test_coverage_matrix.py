@@ -78,13 +78,12 @@ def test_coverage_doc_in_sync():
 def test_new_axes_default_and_validate():
     from coverage_matrix import MODELS, REFERENCES, ROWS
 
-    # every existing row defaults to gtap7 / gams (non-destructive migration)
-    assert all(r.model == "gtap7" for r in ROWS), (
-        "existing rows must default model=gtap7"
+    # all rows are gtap7 today; reference is gams (default) or gempack (F5 rows)
+    assert all(r.model == "gtap7" for r in ROWS), "all rows must be model=gtap7 today"
+    assert all(r.reference in REFERENCES for r in ROWS), (
+        "reference must be in REFERENCES"
     )
-    assert all(r.reference == "gams" for r in ROWS), (
-        "existing rows must default reference=gams"
-    )
+    assert any(r.reference == "gams" for r in ROWS), "gams rows must exist"
     # the invariant sets exist and contain the axis values
     assert "gtap6" in MODELS and "gtap7" in MODELS
     assert "gams" in REFERENCES and "gempack" in REFERENCES
@@ -107,12 +106,11 @@ def test_new_axes_default_and_validate():
 def test_rows_for_filters_by_model_and_reference():
     from coverage_matrix import mcp_rows, rows_for
 
-    # all current mcp rows are gtap7/gams
+    # mcp_rows() is gams + gempack; rows_for narrows to one reference
     gams_mcp = rows_for("gtap7", "gams", kind="mcp")
-    assert gams_mcp == mcp_rows(), (
-        "rows_for(gtap7,gams,mcp) must equal today's mcp_rows()"
-    )
-    # no gempack rows exist yet → empty, not an error
-    assert rows_for("gtap7", "gempack") == []
+    gempack_mcp = rows_for("gtap7", "gempack", kind="mcp")
+    assert set(gams_mcp) | set(gempack_mcp) == set(mcp_rows())
+    assert all(r.reference == "gams" for r in gams_mcp)
+    assert gempack_mcp and all(r.reference == "gempack" for r in gempack_mcp)
     # no gtap6 rows yet → empty
     assert rows_for("gtap6", "gams") == []

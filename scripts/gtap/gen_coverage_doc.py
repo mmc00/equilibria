@@ -65,8 +65,10 @@ def _gate_table(rows) -> str:
 
 
 def render() -> str:
-    nlp = list(nlp_rows())
-    mcp = list(mcp_rows())
+    # This is the "against GAMS" page — only reference="gams" rows belong here.
+    # reference="gempack" rows are a sibling page (different fixtures + pp metric).
+    nlp = [r for r in nlp_rows() if r.reference == "gams"]
+    mcp = [r for r in mcp_rows() if r.reference == "gams"]
     parts = [
         "# GTAP 7 Parity Coverage Matrix — against GAMS",
         "",
