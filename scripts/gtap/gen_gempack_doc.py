@@ -60,6 +60,27 @@ def _table(rows) -> str:
     return mx.tablecard(headers, body)
 
 
+def _var_list() -> str:
+    """The verified GEMPACK-quantity → Python-Var comparison map, from Q_TO_VAR."""
+    import gempack_reference as gr
+
+    desc = {
+        "qfd": "firm domestic demand", "qfm": "firm imported demand",
+        "qfa": "firm Armington demand", "qxs": "bilateral exports",
+        "qxw": "aggregate exports", "qms": "aggregate imports",
+        "qds": "domestic sales", "qpa": "private demand",
+        "qga": "government demand", "qc": "total commodity supply",
+        "qe": "endowment supply", "qtm": "global margin usage",
+        "qinv": "investment demand", "qva": "value added",
+        "qgdp": "real GDP index",
+    }
+    rows_b = [
+        [f"`{gv}`", f"`{spec['var']}`", desc.get(gv, "")]
+        for gv, spec in gr.Q_TO_VAR.items()
+    ]
+    return mx.tablecard(["GEMPACK var", "Python Var", "flow"], rows_b)
+
+
 def render() -> str:
     rows = rows_for("gtap7", "gempack", kind="mcp")
     parts = [
@@ -73,20 +94,34 @@ def render() -> str:
         "extrapolation), so its native output is **percentage changes**, not levels "
         "(Horridge & Pearson, *Solution Software for CGE Modeling*, COPS G-214, 2011, "
         "§4.1/4.2). The comparison is therefore **quantity-vs-quantity in percentage "
-        "points**: the gate solves Python, reads GEMPACK's SL4 quantity %-changes "
-        "(`qfd`→`xd`, `qxs`→`xw`, `qo`→`xp`), and measures the fraction of cells whose "
-        "**|Δ| ≤ 1 percentage point**. The median |Δ| is ~0.4–1.2pp; the residual is "
-        "the structural linearized↔levels gap — **identical Python↔GAMS** (both are "
-        "levels solvers), so it is not a fidelity defect. The floor **decays with "
-        "dataset size** as that gap accumulates over more cells.",
+        "points**: the gate solves Python and, for each of the 15 mapped quantity "
+        "variables below, measures the fraction of cells whose **|Δ| ≤ 1 percentage "
+        "point** vs GEMPACK. The median |Δ| is ~0.4–1.2pp; the residual is the "
+        "structural linearized↔levels gap — **identical Python↔GAMS** (both are levels "
+        "solvers), so it is not a fidelity defect. The floor **decays with dataset "
+        "size** as that gap accumulates over more cells.",
         "",
         mx.raw(_LEGEND),
         "",
-        "## Quantity-vs-quantity (percentage points)",
+        "## Variables compared (15)",
         "",
-        "Python post-shock quantity %-change vs the GEMPACK SL4 solution, cell-by-cell "
-        "(`qfd`/`qxs`/`qo` across commodity × activity × region). Single-shock solve — "
-        "only the shock stage maps.",
+        "GEMPACK reports one solution %-change per model variable; these 15 quantity "
+        "variables have a verified 1:1 correspondence to a Python Var (established by "
+        "an exhaustive discovery pass, then filtered by economic meaning — a small Δ "
+        "alone is not proof since tariff-shock quantities co-move). **Prices**, the "
+        "**tariff shock itself** (`tm` = +10% uniform, the identical input to both "
+        "engines), and **welfare** (`u`/`EV`) are out of scope here — welfare is "
+        "sign-flipping and second-order and lives in the separate EV track "
+        "(`docs/findings/gempack_welfare_not_cellwise`).",
+        "",
+        _var_list(),
+        "",
+        "## Quantity-vs-quantity match (percentage points)",
+        "",
+        "Fraction of cells within 1 pp, over the 15 variables × commodity × activity × "
+        "region. Single-shock solve — only the shock stage maps. GEMPACK ran one tariff "
+        "shock and is **ifSUB-agnostic**: ifSUB 0 and 1 measure identically (the "
+        "quantities don't depend on the subsidy convention), so both are shown.",
         "",
         _table(rows),
         "",
