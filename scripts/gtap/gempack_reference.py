@@ -124,3 +124,39 @@ def sl4_levels(har_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
     if hid is None:
         raise KeyError(f"{gempack_var!r} not found in SL4 dump {har_path}")
     return _cells(headers[hid])
+
+
+# ── Quantity comparison: verified GEMPACK-q → Python-Var map (2026-07-23) ──
+# Derived from each variable's GEMPACK long_name description AND numerically
+# confirmed vs GAMS on gtap7_3x3 (median |Δpp| ~0.4). `reorder` maps the GEMPACK
+# header key (set elems in header order) to the Python Var index tuple.
+#   qfd [COMM,ACTS,REG] "demand for domestic commodity by activity" -> xd  [r,c,a]
+#   qxs [COMM,src,dst]  "export sales from source"                  -> xw  [r_src,c,r_dst]
+#   qo  [ACTS,REG]      "output of activity"                        -> xp  [r,a]
+# The SL4 %-changes are in PERCENT; the natural comparison metric is ABSOLUTE
+# percentage points (|Δpp|), NOT relative tolerance — small %-changes make a
+# relative tol reject good 0.4pp agreements. GEMPACK is Gragg-linearized, Python is
+# levels; the residual (concentrated in diagonal c==a and a few cells) is that
+# structural gap, identical Python-vs-GAMS.
+Q_TO_VAR: dict[str, dict] = {
+    "qfd": {"var": "xd", "reorder": lambda k: (k[2], k[0], k[1])},   # (c,a,r)->(r,c,a)
+    "qxs": {"var": "xw", "reorder": lambda k: (k[1], k[0], k[2])},   # (c,src,dst)->(src,c,dst)
+    "qo": {"var": "xp", "reorder": lambda k: (k[1], k[0])},          # (a,r)->(r,a)
+}
+
+
+def gempack_qty_pct(sl4dump_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
+    """GEMPACK %-change of a quantity variable, as a FRACTION (0.05 = 5%), keyed by
+    the Python Var index order (via Q_TO_VAR[gempack_var]['reorder']).
+
+    Read from a `sl4dump_<ds>_tm10.har` (cumulative %-changes). Raises KeyError if
+    the variable is not in the verified quantity map or not in the dump.
+    """
+    spec = Q_TO_VAR.get(gempack_var)
+    if spec is None:
+        raise KeyError(f"{gempack_var!r} not in the verified GEMPACK-q→Var map")
+    reorder = spec["reorder"]
+    return {
+        reorder(k): v / 100.0
+        for k, v in sl4_levels(sl4dump_path, gempack_var).items()
+    }
