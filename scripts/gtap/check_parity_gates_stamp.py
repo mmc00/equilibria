@@ -36,6 +36,7 @@ INPUT_TREES = [
 # Generated docs that must be committed in sync with a gate run.
 GENERATED_DOCS = [
     "docs/site/guide/gtap7_coverage_matrix.md",
+    "docs/site/guide/gtap7_coverage_matrix_gempack.md",
     "docs/site/_static/gtap7_mcp_matrix.html",
     "docs/site/_static/gtap7_nlp_matrix.html",
 ]

@@ -48,6 +48,7 @@ GATE_TESTS = [
 
 REGEN_CMDS = [
     ["scripts/gtap/gen_coverage_doc.py"],
+    ["scripts/gtap/gen_gempack_doc.py"],
     ["scripts/gtap/gen_nlp_matrix_page.py", "--gate", "mcp"],
     ["scripts/gtap/gen_nlp_matrix_page.py", "--gate", "nlp"],
 ]

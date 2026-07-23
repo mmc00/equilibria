@@ -1,0 +1,17 @@
+# GTAP 7 Parity Coverage Matrix — against GEMPACK
+
+<!-- GENERATED FROM scripts/gtap/coverage_matrix.py — do not edit by hand.
+     Regenerate: uv run python scripts/gtap/gen_gempack_doc.py -->
+
+This is the **GEMPACK reference** of the GTAP 7 model — the sibling of the [against-GAMS page](gtap7_coverage_matrix.md). GEMPACK (RunGTAP) solves the same model with a **Gragg-linearized** method (Euler + Richardson extrapolation), so its native output is **percentage changes**, not levels (Horridge & Pearson, *Solution Software for CGE Modeling*, COPS G-214, 2011, §4.1/4.2). The comparison is therefore **quantity-vs-quantity in percentage points**: the gate solves Python, reads GEMPACK's SL4 quantity %-changes (`qfd`→`xd`, `qxs`→`xw`, `qo`→`xp`), and measures the fraction of cells whose **|Δ| ≤ 1 percentage point**. The median |Δ| is ~0.4–1.2pp; the residual is the structural linearized↔levels gap — **identical Python↔GAMS** (both are levels solvers), so it is not a fidelity defect. The floor **decays with dataset size** as that gap accumulates over more cells.
+
+```{raw} html
+<div class="mx-legend"><span class="mx-li">Each cell is the <b>floor the pytest gate asserts</b>: the min fraction of quantity cells whose |Δ| ≤ <b>1 percentage point</b> vs GEMPACK (measured @ runtime, set ~5pp below the observed value):<span class="mx-swatch" style="background:var(--mx-good);margin-left:4px"></span>≥65<span class="mx-swatch" style="background:var(--mx-warn)"></span>45–65<span class="mx-swatch" style="background:var(--mx-bad)"></span>&lt;45</span><span class="mx-li"><span class="mx-chip mx-neutral">local</span> needs PATH/IPOPT + the RunGTAP SL4 dump — run by hand, not in CI</span></div>
+```
+
+## Quantity-vs-quantity (percentage points)
+
+Python post-shock quantity %-change vs the GEMPACK SL4 solution, cell-by-cell (`qfd`/`qxs`/`qo` across commodity × activity × region). Single-shock solve — only the shock stage maps.
+
+<div class="mx-card"><div class="mx-scroll"><table class="mx-table"><thead><tr><th class="mx-lbl">Dataset · ifSUB</th><th>Within 1pp (floor)</th><th>GEMPACK ref</th></tr></thead><tbody><tr><td class="mx-lbl"><span class="mx-ds">gtap7_3x3</span><span class="mx-sub">ifSUB=1</span></td><td><div class="mx-cell"><span class="mx-num mx-good">≥ 70%</span></div></td><td><span class="mx-ref">sl4dump_gtap7_3x3_tm10.har</span></td></tr><tr><td class="mx-lbl"><span class="mx-ds">gtap7_3x4</span><span class="mx-sub">ifSUB=1</span></td><td><div class="mx-cell"><span class="mx-num mx-good">≥ 68%</span></div></td><td><span class="mx-ref">sl4dump_gtap7_3x4_tm10.har</span></td></tr><tr><td class="mx-lbl"><span class="mx-ds">gtap7_5x5</span><span class="mx-sub">ifSUB=1</span></td><td><div class="mx-cell"><span class="mx-num mx-warn">≥ 61%</span></div></td><td><span class="mx-ref">sl4dump_gtap7_5x5_tm10.har</span></td></tr><tr><td class="mx-lbl"><span class="mx-ds">gtap7_10x7</span><span class="mx-sub">ifSUB=1</span></td><td><div class="mx-cell"><span class="mx-num mx-warn">≥ 53%</span></div></td><td><span class="mx-ref">sl4dump_gtap7_10x7_tm10.har</span></td></tr><tr><td class="mx-lbl"><span class="mx-ds">gtap7_15x10</span><span class="mx-sub">ifSUB=1</span></td><td><div class="mx-cell"><span class="mx-num mx-bad">≥ 39%</span></div></td><td><span class="mx-ref">sl4dump_gtap7_15x10_tm10.har</span></td></tr></tbody></table></div></div>
+

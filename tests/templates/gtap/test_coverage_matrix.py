@@ -75,6 +75,17 @@ def test_coverage_doc_in_sync():
     )
 
 
+def test_gempack_doc_in_sync():
+    """The committed against-GEMPACK doc must equal render() — regen + commit on drift."""
+    import gen_gempack_doc
+
+    committed = gen_gempack_doc.DOC_PATH.read_text(encoding="utf-8")
+    assert committed == gen_gempack_doc.render(), (
+        "docs/site/guide/gtap7_coverage_matrix_gempack.md is stale — run "
+        "`uv run python scripts/gtap/gen_gempack_doc.py` and commit."
+    )
+
+
 def test_new_axes_default_and_validate():
     from coverage_matrix import MODELS, REFERENCES, ROWS
 

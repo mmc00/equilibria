@@ -277,6 +277,7 @@ scripts/gtap/*
 !scripts/gtap/build_v7_processed_from_raw.py
 !scripts/gtap/coverage_matrix.py
 !scripts/gtap/gen_coverage_doc.py
+!scripts/gtap/gen_gempack_doc.py
 !scripts/gtap/gen_nlp_matrix_page.py
 !scripts/gtap/gempack_reference.py
 !scripts/gtap/inspect_updated_har.py
