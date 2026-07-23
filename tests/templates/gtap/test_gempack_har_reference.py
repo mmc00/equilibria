@@ -57,7 +57,7 @@ def test_gempack_qty_pct_reorders_to_python_index():
     if not sl4.exists():
         _pt.skip(f"sl4dump fixture missing: {sl4}")
 
-    # qfd [COMM,ACTS,REG] -> xd key order (r,c,a); values are fractions (~±0.25)
+    # qfd [COMM,ACTS,REG] -> xda key order (r,c,a); values are fractions (~±0.25)
     qfd = gempack_qty_pct(str(sl4), "qfd")
     assert len(qfd) == 27, f"3x3 qfd should have 27 cells, got {len(qfd)}"
     # a representative cell key must be in Python (r,c,a) order
@@ -65,9 +65,9 @@ def test_gempack_qty_pct_reorders_to_python_index():
     assert all(abs(v) < 2.0 for v in qfd.values()), (
         "%-changes should be fractions, not percents"
     )
-    # qxs and qo are in the verified map
+    # qxs (bilateral trade) and qgdp (macro GDP) are in the expanded map
     assert len(gempack_qty_pct(str(sl4), "qxs")) == 27
-    assert len(gempack_qty_pct(str(sl4), "qo")) == 9
-    # an unmapped quantity raises (never fabricated)
+    assert len(gempack_qty_pct(str(sl4), "qgdp")) == 3
+    # qo was dropped from the map (no clean 1:1 Python Var) -> KeyError, not fabricated
     with _pt.raises(KeyError):
-        gempack_qty_pct(str(sl4), "qgdp")
+        gempack_qty_pct(str(sl4), "qo")

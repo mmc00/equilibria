@@ -255,28 +255,38 @@ _MCP_ROWS: list[Row] = [
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
     # --- against GEMPACK (RunGTAP), QUANTITY-vs-quantity (F5) ---
-    # Python post-shock quantity %-changes vs the GEMPACK SL4 solution (qfd→xd,
-    # qxs→xw, qo→xp — verified Q_TO_VAR map). Metric = fraction of cells within 1
-    # PERCENTAGE POINT (NOT the GAMS 1% rel tol — %-changes need a pp metric). The
-    # floor is the MEASURED within-1pp fraction minus a ~5pp margin; it DECAYS with
-    # dataset size (75%→45%) as the Gragg-linearized↔levels gap accumulates over more
-    # cells — that residual is structural (identical Python↔GAMS), not infidelity.
-    # phases=("shock",): GEMPACK is a single-shock solve, only the shock stage maps.
+    # Python post-shock quantity %-changes vs the GEMPACK SL4 solution, cell-by-cell
+    # over 15 verified quantity vars (qfd→xda, qfm→xma, qfa→xaa, qxs→xw, qxw→xet,
+    # qms→xmt, qds→xd, qpa→xc, qga→xg, qc→xs, qe→xft, qtm→xtmg, qinv→xiagg, qva→xp,
+    # qgdp→rgdpmp — see gempack_reference.Q_TO_VAR). Metric = fraction of cells within
+    # 1 PERCENTAGE POINT (NOT the GAMS 1% rel tol — %-changes need a pp metric).
+    # Floor = MEASURED within-1pp minus a ~5pp margin; it DECAYS with dataset size
+    # (76%→52%) as the Gragg-linearized↔levels gap accumulates — structural (identical
+    # Python↔GAMS), not infidelity. phases=("shock",): single-shock solve. GEMPACK ran
+    # ONE tariff shock and is ifSUB-agnostic — ifSUB 0 and 1 measure identically (the
+    # quantities don't depend on the subsidy convention), so both are listed with the
+    # same floor. Welfare (u/EV) is NOT here — it is sign-flipping/second-order and
+    # lives in the separate EV track (see docs/findings/gempack_welfare_not_cellwise).
+    Row("gtap7_3x3", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 70.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x3", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 70.0),), mode="pure",
-        reference="gempack"),
+        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 70.0),), mode="pure", reference="gempack"),
+    Row("gtap7_3x4", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x4", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure",
-        reference="gempack"),
+        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure", reference="gempack"),
+    Row("gtap7_5x5", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 67.0),), mode="pure", reference="gempack"),
     Row("gtap7_5x5", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 61.0),), mode="pure",
-        reference="gempack"),
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 67.0),), mode="pure", reference="gempack"),
+    Row("gtap7_10x7", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 58.0),), mode="pure", reference="gempack"),
     Row("gtap7_10x7", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 53.0),), mode="pure",
-        reference="gempack"),
+        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 58.0),), mode="pure", reference="gempack"),
+    Row("gtap7_15x10", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 46.0),), mode="pure", reference="gempack"),
     Row("gtap7_15x10", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 39.0),), mode="pure",
-        reference="gempack"),
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 46.0),), mode="pure", reference="gempack"),
 ]
 ROWS.extend(_MCP_ROWS)
 
