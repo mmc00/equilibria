@@ -152,10 +152,40 @@ def sl4_levels(har_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
 # apples-to-apples; a levels comparison reduces to (1+%chg) after benchmark
 # normalization (verified identical to 8 decimals) — there is no distinct
 # "levels-vs-levels" GEMPACK comparison.
+# 13 GEMPACK quantity vars mapped to Python Vars, established 2026-07-23 by an
+# EXHAUSTIVE discovery pass (discover_qty_map.py): for each GEMPACK q* and each
+# Python quantity Var of matching rank, the index permutation minimizing median
+# |Δpp| was found, then filtered to (a) UNIQUE 1↔1 matches and (b) collisions
+# resolved by ECONOMIC meaning (GEMPACK long_name description), NOT by lowest Δ —
+# in a tariff shock many quantities co-move, so a small Δ alone is not proof.
+# Each entry's median |Δpp| on gtap7_3x3 is shown; all are structural (Python≡GAMS).
+#
+# Collisions resolved by meaning: xmt(imports agg)→qms not qgm/qim/qpm (per-agent);
+# xs(supply)→qc(total supply) not qo/qva/qint; xaa(Armington)→qfa(demand) not
+# qca(make); xiagg(invest agg)→qinv not qgdp(GDP index). Dropped the old qo→xp
+# (suboptimal: qo=activity output has no clean 1:1 Python Var under joint production;
+# it best-matched xs=total supply, which qc already owns).
 Q_TO_VAR: dict[str, dict] = {
-    "qfd": {"var": "xd", "reorder": lambda k: (k[2], k[0], k[1])},   # (c,a,r)->(r,c,a)
-    "qxs": {"var": "xw", "reorder": lambda k: (k[1], k[0], k[2])},   # (c,src,dst)->(src,c,dst)
-    "qo": {"var": "xp", "reorder": lambda k: (k[1], k[0])},          # (a,r)->(r,a)
+    # firm (activity) demands, dims (COMM,ACTS,REG) -> Python (r,c,a)
+    "qfd": {"var": "xda", "reorder": lambda k: (k[2], k[0], k[1])},  # domestic  0.43pp
+    "qfm": {"var": "xma", "reorder": lambda k: (k[2], k[0], k[1])},  # imported  0.37pp
+    "qfa": {"var": "xaa", "reorder": lambda k: (k[2], k[0], k[1])},  # Armington 0.38pp
+    # bilateral / aggregate trade, dims (COMM,src,dst) or (COMM,REG)
+    "qxs": {"var": "xw", "reorder": lambda k: (k[1], k[0], k[2])},   # exports bilat 0.38pp
+    "qxw": {"var": "xet", "reorder": lambda k: (k[1], k[0])},        # exports agg  0.61pp
+    "qms": {"var": "xmt", "reorder": lambda k: (k[1], k[0])},        # imports agg  0.22pp
+    # domestic sales + final demands, dims (COMM,REG) -> (r,c)
+    "qds": {"var": "xd", "reorder": lambda k: (k[1], k[0])},         # dom sales   0.40pp
+    "qpa": {"var": "xc", "reorder": lambda k: (k[1], k[0])},         # priv demand 0.43pp
+    "qga": {"var": "xg", "reorder": lambda k: (k[1], k[0])},         # gov demand  0.47pp
+    "qc": {"var": "xs", "reorder": lambda k: (k[1], k[0])},          # total supply 0.38pp
+    # endowments + margins + investment
+    "qe": {"var": "xft", "reorder": lambda k: (k[1], k[0])},         # endow supply 0.00pp
+    "qtm": {"var": "xtmg", "reorder": lambda k: k},                  # margin usage 0.05pp
+    "qinv": {"var": "xiagg", "reorder": lambda k: k},               # invest agg  1.24pp
+    # activity value added + macro GDP index
+    "qva": {"var": "xp", "reorder": lambda k: (k[1], k[0])},         # value added 0.38pp
+    "qgdp": {"var": "rgdpmp", "reorder": lambda k: k},               # real GDP    0.34pp
 }
 
 
