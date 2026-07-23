@@ -52,6 +52,7 @@ DATA_DIR = ROOT / "datasets"
 RUN_ROOT = ROOT / "runs/gempack_matrix"
 FIXTURES = ROOT / "tests/fixtures/gtap7_gempack"
 DEFAULT_GTAPV7 = Path(r"C:\runGTAP375\gtapv7.exe")
+DEFAULT_SLTOHT = Path(r"C:\GP\sltoht.exe")  # GEMPACK SL4→HAR converter
 INPUT_FILES = ("sets.har", "basedata.har", "default.prm")
 
 EXOG_BLOCK = """Exogenous
@@ -148,10 +149,37 @@ def solve(run_dir: Path, gtapv7: Path) -> tuple[bool, str]:
     return ok, res
 
 
+def convert_sl4(run_dir: Path, sltoht: Path) -> Path | None:
+    """Convert the auto-written GEMPACK solution `tm10.sl4` (per-variable %-changes,
+    the QUANTITY vars qfd/qxs/qo/... the values-only updated.har does not carry) into
+    a plain HAR readable by `read_har`, mirroring trajectory_runner.py's sltoht chain.
+
+    The .sti drives sltoht in batch:
+        <cmf stem> / c / n / har / <out.har> / e
+    Returns the produced HAR path, or None if the .sl4 is absent (older solve).
+    """
+    sl4 = run_dir / "tm10.sl4"
+    if not sl4.exists():
+        return None
+    out = run_dir / "sl4dump.har"
+    sti = run_dir / "sl4dump.sti"
+    sti.write_text("\ntm10\nc\nn\nhar\nsl4dump.har\ne\n", encoding="ascii")
+    console = run_dir / "sltoht_console.txt"
+    with console.open("w", encoding="utf-8", errors="replace") as fh:
+        subprocess.run(
+            [str(sltoht), "-sti", "sl4dump.sti"],
+            cwd=run_dir, stdout=fh, stderr=subprocess.STDOUT, check=False,
+        )
+    return out if out.exists() else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gtapv7", type=Path, default=DEFAULT_GTAPV7,
                     help=f"path to gtapv7.exe (default {DEFAULT_GTAPV7})")
+    ap.add_argument("--sltoht", type=Path, default=DEFAULT_SLTOHT,
+                    help=f"path to sltoht.exe for SL4→HAR quantity export "
+                         f"(default {DEFAULT_SLTOHT}); skipped if not found")
     ap.add_argument("--no-solve", action="store_true",
                     help="only (re)generate the .cmf + input copies, do not solve")
     ap.add_argument("--datasets", nargs="*", default=DATASETS,
@@ -172,16 +200,32 @@ def main() -> int:
 
     print(f"\n[2/3] solving with {args.gtapv7}")
     results: dict[str, tuple[bool, str]] = {}
+    have_sltoht = args.sltoht.exists()
+    if not have_sltoht:
+        print(f"  note: sltoht not at {args.sltoht} — SL4 quantity export skipped "
+              f"(pass --sltoht PATH to enable)")
     for name, run_dir in run_dirs.items():
-        for stale in ("updated.har", "summary.har", "decomp.har", "volume.har"):
+        for stale in ("updated.har", "summary.har", "decomp.har", "volume.har",
+                      "tm10.sl4", "sl4dump.har"):
             (run_dir / stale).unlink(missing_ok=True)
         ok, res = solve(run_dir, args.gtapv7)
         results[name] = (ok, res)
         upd = run_dir / "updated.har"
         sz = upd.stat().st_size if upd.exists() else 0
-        print(f"  {name:14s} {'OK ' if ok else 'FAIL'}  {res or '(no residual line)'}  updated.har={sz}B")
+        note = ""
         if ok and sz > 0:
             shutil.copy2(upd, FIXTURES / f"updated_{name}_tm10.har")
+            # Second pass: SL4 → HAR quantity %-changes (qfd/qxs/qo/...) that the
+            # values-only updated.har lacks. Committed as a separate fixture.
+            if have_sltoht:
+                dump = convert_sl4(run_dir, args.sltoht)
+                if dump and dump.stat().st_size > 0:
+                    shutil.copy2(dump, FIXTURES / f"sl4dump_{name}_tm10.har")
+                    note = f"  sl4dump={dump.stat().st_size}B"
+                else:
+                    note = "  sl4dump=FAILED"
+        print(f"  {name:14s} {'OK ' if ok else 'FAIL'}  {res or '(no residual line)'}  "
+              f"updated.har={sz}B{note}")
 
     print("\n[3/3] summary")
     good = [n for n, (ok, _) in results.items() if ok]

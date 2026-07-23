@@ -206,11 +206,61 @@ git push
 
 ---
 
+## 8. Second pass — QUANTITY %-changes via the SL4 solution (recommended)
+
+**Why:** `updated.har` holds VALUES only ($ SAM flows: `VDFB`, `VMSB`, …). A
+value like `VDFB = pd·xd` folds the linearized↔levels structural gap into BOTH
+price and quantity, so a value-vs-value cell match caps around ~66% at 1% tol
+(measured on gtap7_3x3; **confirmed structural** — GAMS-levels vs GEMPACK gives
+the SAME 66.67% on the identical cells, so it is not a Python defect, it is the
+Gragg-linearized vs levels difference for a finite 10% shock). Comparing PURE
+QUANTITIES (GEMPACK `qfd` vs Python `xd`) folds the gap in only once and is the
+cleaner comparison. The quantity %-changes live in GEMPACK's **solution file**
+`tm10.sl4`, which `updated.har` does not carry.
+
+**No new `.cmf` directive needed** — the `Gragg` solve auto-writes `tm10.sl4`.
+The runner now (a) keeps the `.sl4` instead of deleting it and (b) converts it to
+a plain HAR with GEMPACK's `sltoht.exe` (same chain as
+`runs/nus333_compare/rungtap/trajectory_runner.py`), committing it as a separate
+fixture `tests/fixtures/gtap7_gempack/sl4dump_<ds>_tm10.har`:
+
+```powershell
+uv run python scripts\gtap\run_gempack_matrix.py --sltoht C:\GP\sltoht.exe
+```
+
+If `sltoht.exe` is elsewhere, pass its path; if omitted/not found, the SL4 export
+is skipped and only the values `updated.har` is produced (backward compatible).
+
+**Reading it in Python:** the SL4-as-HAR is readable by the existing `read_har`,
+BUT its headers are keyed by **numeric variable index** (e.g. `"0094"`), not by
+name — so two small maps must be authored (they do NOT exist yet):
+
+1. **GEMPACK q-name → SL4 numeric header id** — extend the `VARS_TO_EXTRACT`
+   pattern in `trajectory_runner.py` (which today only covers scalar welfare vars)
+   to the multi-dim quantity variables. Read the id list from a real
+   `sl4dump_<ds>_tm10.har` with `inspect_updated_har.py`.
+2. **GEMPACK q-name → Python Var** (the modeling map): roughly `qfd`→`xf`/`xd`
+   (firm domestic), `qxs`→`xw` (bilateral exports), `qpd`/`qpm`→`xaa` (private
+   agent), `qgd`/`qgm`→`xaa` (gov agent), `qo`→activity output. **Author against a
+   real header inventory — do NOT guess.** GTAPv7 splits domestic/imported
+   (`qfd`/`qfm`) where Python may hold a composite; verify per variable.
+
+Then the `against-GEMPACK` gate compares quantity-vs-quantity at 1% tol and the
+per-page floor reflects the (smaller) structural residual.
+
+**Status of the value path:** the `VDFB = pd·xd` value mapping is already verified
+(66.67% @ 1% on gtap7_3x3, gap proven structural). It can ship as the FIRST
+against-GEMPACK flow while the quantity SL4 path is built out — or the quantity
+path can supersede it. That is the open design choice for the next session.
+
+---
+
 ## What this closes
 
 - The "against GEMPACK" page fills with **real cell-by-cell** data for 7 datasets.
 - The gate stops SKIPping for those rows (measures at 1% tol, floor-gated).
-- One `run_gempack_matrix.py` invocation reproduces every solvable dataset.
+- One `run_gempack_matrix.py` invocation reproduces every solvable dataset
+  (add `--sltoht` for the quantity SL4 export).
 
 ## Fidelity reminders
 
