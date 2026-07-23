@@ -1,24 +1,42 @@
 # Generating the RunGTAP `updated.har` refs on Windows (F5)
 
 This guide takes the `gtap/validation-parity-pages` branch to a Windows machine
-with RunGTAP, produces the real post-shock `updated.har` for each dataset, drops
-it where the parity gate expects it, and completes the `VAR_TO_HEADER` map so the
-"against GEMPACK" cell-by-cell page fills with real data.
+with RunGTAP, produces the real post-shock `updated.har` for each matrix dataset,
+drops it where the parity gate expects it, and completes the `VAR_TO_HEADER` map
+so the "against GEMPACK" cell-by-cell page fills with real data.
 
 The Python side (reader → `gempack_levels` → SKIP-if-missing gate) already exists
-and is unit-tested against a synthetic fixture (PR #34). This guide is the missing
-Windows half.
+and is unit-tested against a synthetic fixture. This guide is the Windows half,
+and it is now **scripted** — one command produces every solvable dataset.
+
+**Status (2026-07-22 run):** 7 of 8 matrix datasets produced a converged
+`updated.har` and are committed under `tests/fixtures/gtap7_gempack/`:
+
+| dataset | residual | max residual ratio | fixture |
+|---|---|---|---|
+| `nus333` | ROW | 1.07e-07 | `updated_nus333_tm10.har` |
+| `9x10` | NAmerica | 1.19e-07 | `updated_9x10_tm10.har` |
+| `gtap7_3x3` | ROW | 9.32e-08 | `updated_gtap7_3x3_tm10.har` |
+| `gtap7_3x4` | ROW | 1.25e-07 | `updated_gtap7_3x4_tm10.har` |
+| `gtap7_5x5` | ROW | 8.89e-08 | `updated_gtap7_5x5_tm10.har` |
+| `gtap7_10x7` | ROW | 9.87e-08 | `updated_gtap7_10x7_tm10.har` |
+| `gtap7_15x10` | ROW | 9.85e-08 | `updated_gtap7_15x10_tm10.har` |
+| `gtap7_20x41` | — | — | **blocked** (see §2c) |
+
+The shock and closure are identical across all datasets — `Shock tm = uniform 10`
+on the tariff power (the welfare-parity-validated GEMPACK mirror of the Python
+gate's uniform +10% `imptx` shock), GTAPv7 condensed closure, capFix
+`swap dpsave(r)=del_tbalry(r)` for every NON-residual region.
 
 ---
 
 ## 0. Prerequisites (Windows machine)
 
 - **RunGTAP** installed (the `.cmf` header points at `C:\runGTAP375\gtapv7`; adjust
-  `Auxiliary files = ...` if your install path differs).
-- **GEMPACK** (ships with RunGTAP) so `gtapv7.exe` / the `.cmf` can solve.
+  the `Auxiliary files = ...` line / `--gtapv7` flag if your install path differs).
+- **GEMPACK** (ships with RunGTAP) so `gtapv7.exe` can solve.
 - **Git** for Windows.
-- **Python 3.11+** with `uv` (or the repo's `.venv`) to run the header-inspector
-  and the parity gate.
+- **Python 3.11+** with `uv` (or the repo's `.venv`).
 
 ---
 
@@ -29,80 +47,77 @@ git clone https://github.com/mmc00/equilibria.git
 cd equilibria
 git fetch origin
 git checkout gtap/validation-parity-pages
-```
-
-(That branch is PR #34 — it has the GEMPACK reader/mapper/gate but no real
-`updated.har` yet.)
-
-Set up the Python env (once):
-
-```powershell
 uv sync --dev
 ```
 
 ---
 
-## 2. Produce `updated.har` — one dataset at a time
+## 2. Produce `updated.har`
 
-The `.cmf` files ALREADY export the post-shock database — the line
-`Updated file GTAPDATA = updated.har ;` in each `.cmf` writes it automatically.
-**No `.cmf` edit is needed** to get `updated.har`.
+### 2a. The gtap7_* matrix datasets — one command
 
-The two ready `.cmf` files and their datasets:
-
-| dataset | `.cmf` | input `.har` (identical to equilibria's) |
-|---|---|---|
-| `nus333` | `runs/nus333_compare/rungtap/tm10.cmf` | `src/equilibria/templates/reference/gtap/data/nus333/` |
-| `9x10`   | `runs/9x10_compare/rungtap/tm10.cmf`   | `src/equilibria/templates/reference/gtap/data/9x10/` |
-
-### 2a. Copy the input `.har` next to the `.cmf`
-
-Each `.cmf` reads `sets.har` / `basedata.har` / `default.prm` from its own folder.
-Copy the dataset's inputs there (RunGTAP resolves relative to the `.cmf`):
+`scripts/gtap/run_gempack_matrix.py` generates a per-dataset `tm10.cmf`
+(residual = last region = `ROW`, matching the Python gate's
+`rr = list(sets.r)[-1]`), copies the dataset inputs into an isolated run folder,
+solves with `gtapv7.exe`, and copies each converged `updated.har` into
+`tests/fixtures/gtap7_gempack/`:
 
 ```powershell
-# nus333
-copy src\equilibria\templates\reference\gtap\data\nus333\sets.har     runs\nus333_compare\rungtap\
-copy src\equilibria\templates\reference\gtap\data\nus333\basedata.har  runs\nus333_compare\rungtap\
-copy src\equilibria\templates\reference\gtap\data\nus333\default.prm   runs\nus333_compare\rungtap\
+uv run python scripts\gtap\run_gempack_matrix.py
+# or, to (re)generate the .cmf without solving (e.g. on a non-Windows box):
+uv run python scripts\gtap\run_gempack_matrix.py --no-solve
+# custom solver path:
+uv run python scripts\gtap\run_gempack_matrix.py --gtapv7 C:\path\to\gtapv7.exe
 ```
 
-(Confirm the input filenames match the dataset folder; if the parm file is named
-differently there, rename the copy to `default.prm` to match the `.cmf`.)
+The generated `.cmf` are committed under `runs/gempack_matrix/<ds>/tm10.cmf`
+(the experiment definitions); the solver artefacts and input copies in those
+folders are git-ignored.
 
-### 2b. Run the `.cmf`
+### 2b. nus333 & 9x10 — their committed `.cmf`
 
-Open **RunGTAP** → load `runs\nus333_compare\rungtap\tm10.cmf` → **Solve**.
-Or from the command line (GEMPACK):
+These two keep hand-tuned `.cmf` under `runs/<ds>_compare/rungtap/tm10.cmf`
+(9x10 deliberately uses residual = **NAmerica**, not the last region — mirroring
+`compare_9x10_rungtap.py`). Copy the inputs next to each `.cmf` and solve:
 
 ```powershell
-cd runs\nus333_compare\rungtap
-gtapv7 -cmf tm10.cmf
+copy src\equilibria\templates\reference\gtap\data\nus333\*.har  runs\nus333_compare\rungtap\
+copy src\equilibria\templates\reference\gtap\data\nus333\default.prm runs\nus333_compare\rungtap\
+cd runs\nus333_compare\rungtap ; gtapv7 -cmf tm10.cmf ; cd ..\..\..
+copy runs\nus333_compare\rungtap\updated.har tests\fixtures\gtap7_gempack\updated_nus333_tm10.har
 ```
 
-On success the folder now contains `updated.har` (plus `summary.har`,
-`decomp.har`, `volume.har`, `<name>.log`). The one we need is **`updated.har`**.
+**9x10 needs one fix first.** Its reference `default.prm` was missing the
+`EFLG` (`ENDOWFLAG(ENDW,ENDWT)`) header GTAPv7 requires, so the solve aborts with
+*"no header EFLG"*. `scripts/gtap/reconstruct_9x10_eflg.py` rebuilds it
+deterministically from 9x10's own `ENDM/ENDS/ENDF` mobility subsets (and asserts
+the result is cell-identical to `gtap7_5x5`'s standard EFLG), appending it
+byte-exact to the parm's header records:
+
+```powershell
+uv run python scripts\gtap\reconstruct_9x10_eflg.py          # patches the reference default.prm in place
+uv run python scripts\gtap\reconstruct_9x10_eflg.py --check  # verify EFLG present (exit 1 if not)
+```
+
+The reference `default.prm` fix is already committed on this branch; run the
+script only if you're regenerating from a clean checkout that predates it.
 
 ### 2c. Sanity-check the solve
 
-Open `tm10.log` — confirm it converged (Gragg 8/16/32 steps, no closure errors).
-This mirrors the `capFix` closure equilibria uses; the welfare parity was already
+Each run's `tm10.log` should report a max residual ratio ~1e-7 and *"completed
+without error"* (Gragg 8/16/32, no closure errors). The welfare parity was
 validated in `docs/findings/rungtap_welfare_parity_2026-05-15.md`.
 
-Repeat 2a–2c for `9x10` using `runs\9x10_compare\rungtap\tm10.cmf`.
+**`gtap7_20x41` does not solve in GEMPACK:** it aborts with a `loge`-of-negative
+arithmetic error in equation `E_u` (utility) for region `Caribbean` — the same
+unsound base the coverage matrix already marks `blocked` (its GAMS reference
+violates 37 of its own equations). No fixture is emitted for it.
 
 ---
 
-## 3. Drop the `updated.har` where the gate looks
+## 3. The fixtures
 
-The gate reads `tests/fixtures/gtap7_gempack/<row.ref>` (see
-`tests/templates/gtap/test_gtap7_gempack_parity.py`). Use a per-dataset name so
-both datasets coexist:
-
-```powershell
-copy runs\nus333_compare\rungtap\updated.har  tests\fixtures\gtap7_gempack\updated_nus333_tm10.har
-copy runs\9x10_compare\rungtap\updated.har    tests\fixtures\gtap7_gempack\updated_9x10_tm10.har
-```
+Converged `updated.har` land in `tests/fixtures/gtap7_gempack/updated_<ds>_tm10.har`.
 
 > These are the ONLY new binary artifacts. Do NOT overwrite
 > `updated_synthetic.har` — that stays as the unit-test fixture.
@@ -116,14 +131,14 @@ This is the spec's open-risk step: the `VAR_TO_HEADER` map in
 NOT guess the rest — read the real header inventory and map only what genuinely
 corresponds cell-by-cell.
 
-Run the inspector helper (added by this branch):
-
 ```powershell
 uv run python scripts\gtap\inspect_updated_har.py tests\fixtures\gtap7_gempack\updated_nus333_tm10.har
 ```
 
-It prints every header: name, rank, shape, and set names. Cross-reference against
-GTAP Standard 7's HAR conventions (the loading map in
+It prints every header: name, rank, shape, and set names (the updated.har carries
+the standard GTAP value flows — `VDFB`, `VMFB`, `VDGB`, … — which are **values**,
+so mapping to a Python Var level is a modelling judgment, not a rename). Cross-
+reference against GTAP Standard 7's HAR conventions (the loading map in
 `src/equilibria/templates/gtap/gtap_std7_mapping.py` is the starting point) and add
 entries to `VAR_TO_HEADER`, e.g.:
 
@@ -181,6 +196,7 @@ uv run python scripts/gtap/run_parity_gates.py     # must be GREEN + writes stam
 
 ```powershell
 git add tests/fixtures/gtap7_gempack/updated_*_tm10.har `
+        runs/gempack_matrix/*/tm10.cmf `
         scripts/gtap/gempack_reference.py `
         scripts/gtap/coverage_matrix.py `
         docs/site/guide/
@@ -192,12 +208,15 @@ git push
 
 ## What this closes
 
-- The "against GEMPACK" page fills with **real cell-by-cell** data for nus333 + 9x10.
+- The "against GEMPACK" page fills with **real cell-by-cell** data for 7 datasets.
 - The gate stops SKIPping for those rows (measures at 1% tol, floor-gated).
-- Remaining datasets follow the same recipe; each is one more `.cmf` run + one row.
+- One `run_gempack_matrix.py` invocation reproduces every solvable dataset.
 
 ## Fidelity reminders
 
 - Same 1% tolerance for GAMS and GEMPACK — the gap goes in the per-page floor.
 - `VAR_TO_HEADER` grows ONLY from the real header inventory (step 4), never guesses.
 - No fabricated cells: aggregate-only vars raise `KeyError` and are excluded.
+- 9x10's EFLG is reconstructed from its OWN mobility subsets and cross-checked
+  against a sibling dataset — a deterministic derivation, not invented data.
+- `gtap7_20x41` stays blocked on both the GAMS and GEMPACK sides — not forced.
