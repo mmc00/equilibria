@@ -65,13 +65,18 @@ def _gate_table(rows) -> str:
 
 
 def render() -> str:
-    nlp = list(nlp_rows())
-    mcp = list(mcp_rows())
+    # This is the "against GAMS" page — only reference="gams" rows belong here.
+    # reference="gempack" rows are a sibling page (different fixtures + pp metric).
+    nlp = [r for r in nlp_rows() if r.reference == "gams"]
+    mcp = [r for r in mcp_rows() if r.reference == "gams"]
     parts = [
-        "# GTAP 7 Parity Coverage Matrix",
+        "# GTAP 7 Parity Coverage Matrix — against GAMS",
         "",
         _BANNER,
         "",
+        "This page is the **GAMS reference** of the GTAP 7 model; sibling pages "
+        "under \"Validation & parity\" hold the same matrix against other "
+        "references (e.g. GEMPACK/RunGTAP) as those references and rows land. "
         "Same-engine parity between the Python `equilibria` GTAP Standard 7 "
         "implementation and GAMS: **NLP vs NLP** (IPOPT both sides) and "
         "**MCP vs MCP** (PATH both sides), so the solver's equality tolerance "

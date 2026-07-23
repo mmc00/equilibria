@@ -71,9 +71,12 @@ ALIAS = {
 }
 TOL = 1e-2
 
+# GAMS-reference rows only; the reference="gempack" rows are driven by the separate
+# test_gtap7_gempack_parity.py (quantity-vs-quantity, different fixtures + metric).
+_GAMS_MCP_ROWS = [r for r in mcp_rows() if r.reference == "gams"]
 _MCP_CASES = [
     (r.dataset, r.ifsub, r.mode, dict(r.stage_floors), r.ci_status, r.code2_ok)
-    for r in mcp_rows()
+    for r in _GAMS_MCP_ROWS
 ]
 
 
@@ -221,7 +224,7 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
 @pytest.mark.parametrize(
     "dataset,ifsub,mode,floors,ci_status,code2_ok",
     _MCP_CASES,
-    ids=[f"{r.dataset}-{r.mode}-ifsub{r.ifsub}" for r in mcp_rows()],
+    ids=[f"{r.dataset}-{r.mode}-ifsub{r.ifsub}" for r in _GAMS_MCP_ROWS],
 )
 def test_gtap7_mcp_parity(dataset, ifsub, mode, floors, ci_status, code2_ok):
     if ci_status == "blocked":
