@@ -46,7 +46,26 @@ G2C = {
     "pfac": "CH_PFAC",
 }
 
-GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gdxdump"
+import shutil
+
+
+def _find_gdxdump() -> str:
+    """Locate gdxdump across platforms (PATH, then common GAMS install dirs)."""
+    hit = shutil.which("gdxdump") or shutil.which("gdxdump.exe")
+    if hit:
+        return hit
+    candidates = [
+        "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gdxdump",
+    ]
+    candidates += [str(p / "gdxdump.exe") for p in sorted(
+        Path(r"C:/GAMS").glob("*"), reverse=True) if p.is_dir()]
+    for c in candidates:
+        if Path(c).exists():
+            return c
+    return "gdxdump"  # last resort: rely on PATH at call time
+
+
+GDXDUMP = _find_gdxdump()
 
 
 def read_gams_ch(gdx: Path, sym: str) -> dict[tuple[str, ...], float]:
@@ -67,7 +86,8 @@ def read_gams_ch(gdx: Path, sym: str) -> dict[tuple[str, ...], float]:
 
 def read_gempack_ch(har: Path, gvar: str) -> dict[tuple[str, ...], float]:
     """Read a variable's %-change cells from an sltoht SL4 HAR, by name."""
-    sys.path.insert(0, str(Path("/Users/marmol/proyectos2/equilibria/src")))
+    # repo src, relative to this script (runs/horridge_simple/…): parents[2] == root
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
     from equilibria.babel.har.reader import read_har
 
     headers = read_har(str(har))
@@ -111,6 +131,12 @@ def main() -> int:
     ap.add_argument("--nlp", type=Path, help="ResultsNLP.gdx (GAMS levels, optional)")
     ap.add_argument("--tol-pp", type=float, default=1.0)
     args = ap.parse_args()
+
+    # Windows consoles default to cp1252 and choke on the Δ in the output; force UTF-8.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 
     print(f"SIMPLE model — GAMS(levels) vs GEMPACK(linearized), tol {args.tol_pp}pp\n")
 
