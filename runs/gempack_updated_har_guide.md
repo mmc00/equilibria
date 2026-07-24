@@ -367,6 +367,58 @@ other check (Python≡GAMS, Table 4 mapping, factor `qe`=0.00pp) says it will.
 
 ---
 
+## 10. Linearization study — the full grid (5 datasets × shock sweep × Gragg)
+
+§9 is the single-shock version; this is the systematic study. It measures the match
+along **two independent axes** — a shock-size sweep and a Gragg-refinement sweep —
+over all five matrix datasets, so "why only 52%?" becomes a quantitative
+convergence curve. Design + acceptance floors:
+`docs/findings/gempack_linearization_study_spec_2026-07-24.md`.
+
+**One-time, on either OS — lay out the grid + the Windows driver:**
+
+```bat
+uv run python scripts\gtap\run_gempack_matrix.py --grid --no-solve --emit-bat
+```
+
+This writes, per dataset, 10 config-tagged `.cmf` files — the shock sweep
+(`tm10/tm3/tm1/tm0p3/tm0p1_s8-16-32`) and the Gragg sweep (`tm10_s4/s8/s16/s32/s64`)
+— plus `runs\gempack_matrix\run_study_windows.bat` driving every one. Both are
+gitignored (regenerable from the script).
+
+**On Windows (RunGTAP + GEMPACK) — solve the whole grid:**
+
+```bat
+cd runs\gempack_matrix
+REM edit GTAPV7 / SLTOHT at the top of the .bat if your install differs
+run_study_windows.bat
+```
+
+The `.bat` runs `gtapv7 -cmf <tag>.cmf` for each config, exports the SL4 quantity
+dump via `sltoht`, and copies `updated_<ds>_<tag>.har` / `sl4dump_<ds>_<tag>.har` /
+`decomp_<ds>_<tag>.har` into `tests\fixtures\gtap7_gempack\` where the page
+generator reads them. ~50 solves (10 configs × 5 datasets); all small, all fast in
+GEMPACK (no PATH 1000-row cap).
+
+**On either OS — build the study page from the returned fixtures:**
+
+```bat
+uv run python scripts\gtap\gen_linearization_study.py
+```
+
+This regenerates `docs/site/guide/gtap7_gempack_linearization_study.md`: the
+shock-sweep table (match% → 100% as the shock shrinks), the Gragg-convergence
+table (match% rising with Steps at fixed 10%), the measured non-linearity column,
+and the welfare diagnostic from `decomp.har`. Cells with no fixture read "—".
+
+**Expected:** the shock-sweep row for each dataset climbs from its 10% value
+(3x3 76% … 15x10 52%) toward ~100% at 0.1%, and the Gragg row rises with Steps —
+both isolating the linearization/method gap, not the model. The mac-side fidelity
+gate (`verify_ifsub_equivalence.py`) already confirmed ifSUB is faithful; this
+grid confirms the residual's *source*.
+
+---
+
 ## What this closes
 
 - The "against GEMPACK" page fills with **real cell-by-cell** data for 7 datasets.
