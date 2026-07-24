@@ -79,12 +79,13 @@ def regions(ds_dir: Path) -> list[str]:
     return [str(x).strip() for x in h["REG"].array.tolist()]
 
 
-def make_cmf(name: str, regs: list[str]) -> str:
+def make_cmf(name: str, regs: list[str], shock_pct: float = 10.0) -> str:
     residual = regs[-1]
     swaps = "\n".join(
         f'swap dpsave("{r}") = del_tbalry("{r}") ;' for r in regs[:-1]
     )
-    return f"""! {name} uniform 10% shock to import tariff power (tm) - GEMPACK / GTAPv7
+    pct = f"{shock_pct:g}"
+    return f"""! {name} uniform {pct}% shock to import tariff power (tm) - GEMPACK / GTAPv7
 ! capFix closure mirroring equilibria's Python gate (residual = last region = "{residual}",
 ! rr=list(sets.r)[-1]); swap dpsave(r)=del_tbalry(r) for every NON-residual region.
 Auxiliary files = C:\\runGTAP375\\gtapv7 ;
@@ -103,7 +104,7 @@ Automatic accuracy = no ;
 Subintervals = 1 ;
 
 Verbal Description =
-{name} uniform 10pct shock to import tariff power (tm), capFix closure ;
+{name} uniform {pct}pct shock to import tariff power (tm), capFix closure ;
 
 {EXOG_BLOCK}
 
@@ -111,7 +112,7 @@ Verbal Description =
 ! absorbs the capital-account identity. Releases dpsave(r) for each non-residual region.
 {swaps}
 
-Shock tm = uniform 10 ;
+Shock tm = uniform {pct} ;
 
 CPU = yes ;
 NDS = yes ;
@@ -120,15 +121,20 @@ Extrapolation accuracy file = NO ;
 """
 
 
-def prepare(name: str) -> Path:
+def prepare(name: str, shock_pct: float = 10.0) -> Path:
     ds_dir = DATA_DIR / name
     regs = regions(ds_dir)
     run_dir = RUN_ROOT / name
     run_dir.mkdir(parents=True, exist_ok=True)
     for f in INPUT_FILES:
         shutil.copy2(ds_dir / f, run_dir / f)
-    (run_dir / "tm10.cmf").write_text(make_cmf(name, regs), encoding="ascii")
-    print(f"  {name:14s} residual={regs[-1]:<12s} regions={len(regs):2d}  -> {run_dir}")
+    # The .cmf is always named tm10.cmf (the runner's fixed handle); shock_pct only
+    # changes the Shock magnitude inside it. Use --shock-pct 1 to generate the
+    # linearization-check run (guide §9): a small shock should push the against-GEMPACK
+    # match toward the "4-5 significant digits" of van der Mensbrugghe (2018).
+    (run_dir / "tm10.cmf").write_text(make_cmf(name, regs, shock_pct), encoding="ascii")
+    print(f"  {name:14s} residual={regs[-1]:<12s} regions={len(regs):2d}  "
+          f"shock={shock_pct:g}%  -> {run_dir}")
     return run_dir
 
 
@@ -180,6 +186,9 @@ def main() -> int:
     ap.add_argument("--sltoht", type=Path, default=DEFAULT_SLTOHT,
                     help=f"path to sltoht.exe for SL4→HAR quantity export "
                          f"(default {DEFAULT_SLTOHT}); skipped if not found")
+    ap.add_argument("--shock-pct", type=float, default=10.0,
+                    help="uniform tm shock magnitude in %% (default 10; use 1 for the "
+                         "linearization check, guide §9)")
     ap.add_argument("--no-solve", action="store_true",
                     help="only (re)generate the .cmf + input copies, do not solve")
     ap.add_argument("--datasets", nargs="*", default=DATASETS,
@@ -188,7 +197,7 @@ def main() -> int:
 
     FIXTURES.mkdir(parents=True, exist_ok=True)
     print(f"[1/3] generating .cmf + copying inputs into {RUN_ROOT}")
-    run_dirs = {name: prepare(name) for name in args.datasets}
+    run_dirs = {name: prepare(name, args.shock_pct) for name in args.datasets}
 
     if args.no_solve:
         print("--no-solve: stopping after generation.")
