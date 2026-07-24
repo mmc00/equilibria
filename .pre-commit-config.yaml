@@ -157,6 +157,8 @@ repos:
               tests/templates/gtap/test_coverage_matrix\.py|
               tests/templates/gtap/test_diff_core_key_lookup\.py|
               tests/templates/gtap/test_gempack_har_reference\.py|
+              tests/templates/gtap/test_gempack_runner_grid\.py|
+              tests/templates/gtap/test_gempack_welfare_reader\.py|
               tests/templates/gtap/test_gtap7_gempack_parity\.py|
               tests/templates/gtap/test_gtap7_mcp_parity\.py|
               tests/templates/gtap/test_gtap7_nl_parity\.py|
@@ -164,6 +166,8 @@ repos:
               tests/templates/gtap/test_gtap_multiperiod_parity\.py|
               tests/templates/gtap/test_gtap_parity_pipeline\.py|
               tests/templates/gtap/test_gtap_structure\.py|
+              tests/templates/gtap/test_ifsub_equivalence\.py|
+              tests/templates/gtap/test_linearization_study_gen\.py|
               tests/templates/gtap/test_multiperiod_equations\.py|
               tests/templates/gtap/test_multiperiod_sets\.py|
               tests/templates/gtap/test_multiperiod_vars\.py|

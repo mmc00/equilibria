@@ -82,6 +82,59 @@ def _cells(ha) -> dict[tuple[str, ...], float]:
     return out
 
 
+# Candidate WELVIEW header names for the regional EV decomposition, most specific
+# first. RunGTAP versions differ; read by name and fall back gracefully.
+_EV_HEADERS = ("A", "EV", "WEV", "CNTeqEV", "TOTe")
+# component-name → canonical branch. Match on lowercase prefix.
+_BRANCH_ALIASES = {
+    "alloc": ("alloc", "allocative", "alle"),
+    "tot": ("tot", "terms", "termsoftrade", "tote"),
+    "invsav": ("invsav", "savinv", "is", "cgds"),
+}
+
+
+def gempack_welfare_ev(decomp_har_path: str) -> dict[str, dict[str, float]]:
+    """Read the regional EV decomposition ($) from a decomp.har (WELVIEW).
+
+    Returns {region: {"alloc": .., "tot": .., "invsav": .., "total": ..}} where
+    total = alloc + tot + invsav. Empty dict if the file or a recognizable EV
+    header is absent (diagnostic use only — welfare is deliberately NOT a floor
+    gate; see docs/findings/gempack_welfare_not_cellwise_2026-07-23).
+
+    Defensive by design: locates the EV header by NAME (RunGTAP versions differ),
+    a 2-D regions × components array; components are summed into the three
+    canonical branches by name prefix.
+    """
+    if not Path(decomp_har_path).exists():
+        return {}
+    try:
+        headers = read_har(decomp_har_path)
+    except Exception:
+        return {}
+    ha = next((headers[k] for k in _EV_HEADERS if k in headers), None)
+    if ha is None or ha.array.ndim != 2 or len(ha.set_elements) != 2:
+        return {}
+    regions = [str(x).strip() for x in ha.set_elements[0]]
+    comps = [str(x).strip().lower() for x in ha.set_elements[1]]
+
+    def _branch_of(comp: str) -> str | None:
+        for br, aliases in _BRANCH_ALIASES.items():
+            if any(comp.startswith(a) for a in aliases):
+                return br
+        return None
+
+    out: dict[str, dict[str, float]] = {}
+    for ri, reg in enumerate(regions):
+        d = {"alloc": 0.0, "tot": 0.0, "invsav": 0.0}
+        for ci, comp in enumerate(comps):
+            br = _branch_of(comp)
+            if br is not None:
+                d[br] += float(ha.array[ri, ci])
+        d["total"] = d["alloc"] + d["tot"] + d["invsav"]
+        out[reg] = d
+    return out
+
+
 def sl4_index(har_path: str) -> dict[str, str]:
     """Map GEMPACK variable name -> numeric SL4 header id (`"0002"`), parsed from
     each header's `long_name` (`"<name> # description #"`).

@@ -21,7 +21,8 @@ template and its parity status; then per-template guides:
 **Validation & parity** — [benchmarks](benchmarks.md) and the coverage
 matrices, one page per (model × reference): GTAP 7 —
 [against GAMS](gtap7_coverage_matrix.md) ·
-[against GEMPACK](gtap7_coverage_matrix_gempack.md); PEP-1-1
+[against GEMPACK](gtap7_coverage_matrix_gempack.md) ·
+[linearization study](gtap7_gempack_linearization_study.md); PEP-1-1
 [coverage](pep_coverage_matrix.md). (The GTAP 6 pages appear as those
 rows land.)
 

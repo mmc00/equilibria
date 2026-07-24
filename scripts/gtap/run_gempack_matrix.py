@@ -79,7 +79,19 @@ def regions(ds_dir: Path) -> list[str]:
     return [str(x).strip() for x in h["REG"].array.tolist()]
 
 
-def make_cmf(name: str, regs: list[str], shock_pct: float = 10.0) -> str:
+def config_tag(shock_pct: float, steps: str) -> str:
+    """Stable, filesystem-safe tag for a (shock, steps) config.
+
+    e.g. (10, "8 16 32") -> "tm10_s8-16-32"; (0.1, ...) -> "tm0p1_s..." — no dots
+    or spaces, so it is safe as a .cmf / .har basename in the study grid.
+    """
+    s = f"{shock_pct:g}".replace(".", "p")
+    st = steps.replace(" ", "-")
+    return f"tm{s}_s{st}"
+
+
+def make_cmf(name: str, regs: list[str], shock_pct: float = 10.0,
+             steps: str = "8 16 32", updated_name: str = "updated.har") -> str:
     residual = regs[-1]
     swaps = "\n".join(
         f'swap dpsave("{r}") = del_tbalry("{r}") ;' for r in regs[:-1]
@@ -96,10 +108,10 @@ file GTAPPARM = default.prm ;
 file GTAPSUM  = summary.har ;
 file WELVIEW  = decomp.har ;
 file GTAPVOL  = volume.har ;
-Updated file GTAPDATA = updated.har ;
+Updated file GTAPDATA = {updated_name} ;
 
 Method = Gragg ;
-Steps  = 8 16 32 ;
+Steps  = {steps} ;
 Automatic accuracy = no ;
 Subintervals = 1 ;
 
@@ -121,28 +133,30 @@ Extrapolation accuracy file = NO ;
 """
 
 
-def prepare(name: str, shock_pct: float = 10.0) -> Path:
+def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32") -> tuple[Path, str]:
+    """Write a config-tagged .cmf for (name, shock_pct, steps); return (run_dir, tag).
+
+    The .cmf is named <tag>.cmf (not the fixed tm10.cmf) so the linearization-study
+    grid — same dataset, many (shock, steps) configs — does not overwrite itself.
+    """
     ds_dir = DATA_DIR / name
     regs = regions(ds_dir)
     run_dir = RUN_ROOT / name
     run_dir.mkdir(parents=True, exist_ok=True)
     for f in INPUT_FILES:
         shutil.copy2(ds_dir / f, run_dir / f)
-    # The .cmf is always named tm10.cmf (the runner's fixed handle); shock_pct only
-    # changes the Shock magnitude inside it. Use --shock-pct 1 to generate the
-    # linearization-check run (guide §9): a small shock should push the against-GEMPACK
-    # match toward the "4-5 significant digits" of van der Mensbrugghe (2018).
-    (run_dir / "tm10.cmf").write_text(make_cmf(name, regs, shock_pct), encoding="ascii")
-    print(f"  {name:14s} residual={regs[-1]:<12s} regions={len(regs):2d}  "
-          f"shock={shock_pct:g}%  -> {run_dir}")
-    return run_dir
+    tag = config_tag(shock_pct, steps)
+    cmf = make_cmf(name, regs, shock_pct, steps, updated_name=f"updated_{tag}.har")
+    (run_dir / f"{tag}.cmf").write_text(cmf, encoding="ascii")
+    print(f"  {name:14s} {tag:22s} residual={regs[-1]:<10s} regions={len(regs):2d}")
+    return run_dir, tag
 
 
-def solve(run_dir: Path, gtapv7: Path) -> tuple[bool, str]:
-    console = run_dir / "solve_console.txt"
+def solve(run_dir: Path, gtapv7: Path, tag: str) -> tuple[bool, str]:
+    console = run_dir / f"solve_console_{tag}.txt"
     with console.open("w", encoding="utf-8", errors="replace") as fh:
         subprocess.run(
-            [str(gtapv7), "-cmf", "tm10.cmf"],
+            [str(gtapv7), "-cmf", f"{tag}.cmf"],
             cwd=run_dir, stdout=fh, stderr=subprocess.STDOUT, check=False,
         )
     text = console.read_text(encoding="utf-8", errors="replace")
@@ -155,8 +169,8 @@ def solve(run_dir: Path, gtapv7: Path) -> tuple[bool, str]:
     return ok, res
 
 
-def convert_sl4(run_dir: Path, sltoht: Path) -> Path | None:
-    """Convert the auto-written GEMPACK solution `tm10.sl4` (per-variable %-changes,
+def convert_sl4(run_dir: Path, sltoht: Path, tag: str) -> Path | None:
+    """Convert the auto-written GEMPACK solution `<tag>.sl4` (per-variable %-changes,
     the QUANTITY vars qfd/qxs/qo/... the values-only updated.har does not carry) into
     a plain HAR readable by `read_har`, mirroring trajectory_runner.py's sltoht chain.
 
@@ -164,19 +178,83 @@ def convert_sl4(run_dir: Path, sltoht: Path) -> Path | None:
         <cmf stem> / c / n / har / <out.har> / e
     Returns the produced HAR path, or None if the .sl4 is absent (older solve).
     """
-    sl4 = run_dir / "tm10.sl4"
+    sl4 = run_dir / f"{tag}.sl4"
     if not sl4.exists():
         return None
-    out = run_dir / "sl4dump.har"
-    sti = run_dir / "sl4dump.sti"
-    sti.write_text("\ntm10\nc\nn\nhar\nsl4dump.har\ne\n", encoding="ascii")
-    console = run_dir / "sltoht_console.txt"
+    out = run_dir / f"sl4dump_{tag}.har"
+    sti = run_dir / f"sl4dump_{tag}.sti"
+    sti.write_text(f"\n{tag}\nc\nn\nhar\nsl4dump_{tag}.har\ne\n", encoding="ascii")
+    console = run_dir / f"sltoht_console_{tag}.txt"
     with console.open("w", encoding="utf-8", errors="replace") as fh:
         subprocess.run(
-            [str(sltoht), "-sti", "sl4dump.sti"],
+            [str(sltoht), "-sti", f"sl4dump_{tag}.sti"],
             cwd=run_dir, stdout=fh, stderr=subprocess.STDOUT, check=False,
         )
     return out if out.exists() else None
+
+
+# Linearization-study grid axes (see docs/findings/gempack_linearization_study_spec).
+SWEEP_SHOCKS = [10.0, 3.0, 1.0, 0.3, 0.1]   # shock-size sweep at default steps
+GRAGG_STEPS = ["4", "8", "16", "32", "64"]  # Gragg refinement at 10% shock
+
+
+def _grid_configs() -> list[tuple[float, str]]:
+    """The study grid: shock sweep (default steps) + Gragg sweep (10% shock),
+    de-duplicated on the (10.0, '8 16 32') overlap."""
+    configs = [(s, "8 16 32") for s in SWEEP_SHOCKS]
+    configs += [(10.0, st) for st in GRAGG_STEPS]
+    return list(dict.fromkeys(configs))
+
+
+def emit_bat(jobs: list[tuple[str, Path, str, float, str]], out_bat: Path) -> None:
+    """Write a Windows .bat that solves every (dataset, tag) job: gtapv7 -cmf,
+    sltoht SL4→HAR, and copy updated/decomp/sl4dump into the fixtures dir.
+
+    Uses %GTAPV7% / %SLTOHT% (with C:\\ defaults) so the operator only edits the
+    two paths at the top. Paths are REPO-RELATIVE (the .bat lives in
+    runs/gempack_matrix/ and is run from there on the Windows clone), so it does
+    NOT hard-code the mac worktree it was generated on. Idempotent per job; a
+    failed solve leaves "—" downstream.
+    """
+    # The .bat sits in runs/gempack_matrix/; fixtures are ../../tests/fixtures/...
+    fixtures_rel = "..\\..\\tests\\fixtures\\gtap7_gempack"
+    lines = [
+        "@echo off",
+        "REM Auto-generated by run_gempack_matrix.py --grid --emit-bat.",
+        "REM Runs the whole linearization-study grid on Windows (RunGTAP + GEMPACK).",
+        "REM Run this .bat from its own folder (runs\\gempack_matrix). Edit the two",
+        "REM tool paths below if your install differs.",
+        'if "%GTAPV7%"=="" set GTAPV7=C:\\runGTAP375\\gtapv7.exe',
+        'if "%SLTOHT%"=="" set SLTOHT=C:\\GP\\sltoht.exe',
+        'set HERE=%~dp0',
+        f'set FIXTURES=%HERE%{fixtures_rel}',
+        "",
+    ]
+    for name, _run_dir, tag, _shock, _steps in jobs:
+        lines += [
+            f"echo === {name} {tag} ===",
+            f"cd /d %HERE%{name}",
+            f'"%GTAPV7%" -cmf {tag}.cmf',
+            # SL4 -> HAR quantity dump via sltoht (.sti batch script)
+            f'( echo.& echo {tag}& echo c& echo n& echo har& '
+            f'echo sl4dump_{tag}.har& echo e ) > sl4dump_{tag}.sti',
+            f'"%SLTOHT%" -sti sl4dump_{tag}.sti',
+            # collect fixtures (named as gen_linearization_study expects)
+            f'if exist updated_{tag}.har copy /y updated_{tag}.har '
+            f'"%FIXTURES%\\updated_{name}_{tag}.har"',
+            f'if exist sl4dump_{tag}.har copy /y sl4dump_{tag}.har '
+            f'"%FIXTURES%\\sl4dump_{name}_{tag}.har"',
+            f'if exist decomp.har copy /y decomp.har '
+            f'"%FIXTURES%\\decomp_{name}_{tag}.har"',
+            "",
+        ]
+    lines += [
+        "echo === grid complete ===",
+        "echo Fixtures copied to %FIXTURES%",
+        "echo Now run:  uv run python scripts/gtap/gen_linearization_study.py",
+    ]
+    out_bat.write_text("\r\n".join(lines), encoding="ascii")
+    print(f"  emitted {out_bat}  ({len(jobs)} jobs)")
 
 
 def main() -> int:
@@ -189,56 +267,81 @@ def main() -> int:
     ap.add_argument("--shock-pct", type=float, default=10.0,
                     help="uniform tm shock magnitude in %% (default 10; use 1 for the "
                          "linearization check, guide §9)")
+    ap.add_argument("--steps", type=str, default="8 16 32",
+                    help="Gragg Steps line for a single-config run (default '8 16 32')")
+    ap.add_argument("--grid", action="store_true",
+                    help="emit the full linearization-study grid: shock sweep "
+                         "(10/3/1/0.3/0.1%% at default steps) + Gragg sweep (steps "
+                         "4/8/16/32/64 at 10%%). Overrides --shock-pct/--steps.")
     ap.add_argument("--no-solve", action="store_true",
                     help="only (re)generate the .cmf + input copies, do not solve")
+    ap.add_argument("--emit-bat", action="store_true",
+                    help="with --grid, also write run_study_windows.bat driving "
+                         "every config (solve + sltoht + copy to fixtures)")
     ap.add_argument("--datasets", nargs="*", default=DATASETS,
                     help="subset of datasets to run")
     args = ap.parse_args()
 
+    configs = _grid_configs() if args.grid else [(args.shock_pct, args.steps)]
+
     FIXTURES.mkdir(parents=True, exist_ok=True)
-    print(f"[1/3] generating .cmf + copying inputs into {RUN_ROOT}")
-    run_dirs = {name: prepare(name, args.shock_pct) for name in args.datasets}
+    print(f"[1/3] generating {len(configs)} config(s) × {len(args.datasets)} dataset(s) "
+          f"into {RUN_ROOT}")
+    # jobs: (name, run_dir, tag, shock_pct, steps)
+    jobs: list[tuple[str, Path, str, float, str]] = []
+    for name in args.datasets:
+        for shock_pct, steps in configs:
+            run_dir, tag = prepare(name, shock_pct, steps)
+            jobs.append((name, run_dir, tag, shock_pct, steps))
+
+    if args.emit_bat:
+        emit_bat(jobs, RUN_ROOT / "run_study_windows.bat")
 
     if args.no_solve:
-        print("--no-solve: stopping after generation.")
+        print(f"--no-solve: stopping after generating {len(jobs)} .cmf file(s).")
         return 0
 
     if not args.gtapv7.exists():
         print(f"ERROR: gtapv7 not found at {args.gtapv7} — pass --gtapv7 PATH", file=sys.stderr)
         return 2
 
-    print(f"\n[2/3] solving with {args.gtapv7}")
+    print(f"\n[2/3] solving {len(jobs)} job(s) with {args.gtapv7}")
     results: dict[str, tuple[bool, str]] = {}
     have_sltoht = args.sltoht.exists()
     if not have_sltoht:
         print(f"  note: sltoht not at {args.sltoht} — SL4 quantity export skipped "
               f"(pass --sltoht PATH to enable)")
-    for name, run_dir in run_dirs.items():
-        for stale in ("updated.har", "summary.har", "decomp.har", "volume.har",
-                      "tm10.sl4", "sl4dump.har"):
+    for name, run_dir, tag, _shock, _steps in jobs:
+        for stale in (f"updated_{tag}.har", "summary.har", "decomp.har",
+                      "volume.har", f"{tag}.sl4", f"sl4dump_{tag}.har"):
             (run_dir / stale).unlink(missing_ok=True)
-        ok, res = solve(run_dir, args.gtapv7)
-        results[name] = (ok, res)
-        upd = run_dir / "updated.har"
+        ok, res = solve(run_dir, args.gtapv7, tag)
+        results[f"{name}/{tag}"] = (ok, res)
+        upd = run_dir / f"updated_{tag}.har"
         sz = upd.stat().st_size if upd.exists() else 0
         note = ""
         if ok and sz > 0:
-            shutil.copy2(upd, FIXTURES / f"updated_{name}_tm10.har")
+            shutil.copy2(upd, FIXTURES / f"updated_{name}_{tag}.har")
+            # decomp.har (WELVIEW) carries the welfare EV decomposition — collect it
+            # per config so the study's welfare section can read it.
+            decomp = run_dir / "decomp.har"
+            if decomp.exists() and decomp.stat().st_size > 0:
+                shutil.copy2(decomp, FIXTURES / f"decomp_{name}_{tag}.har")
             # Second pass: SL4 → HAR quantity %-changes (qfd/qxs/qo/...) that the
             # values-only updated.har lacks. Committed as a separate fixture.
             if have_sltoht:
-                dump = convert_sl4(run_dir, args.sltoht)
+                dump = convert_sl4(run_dir, args.sltoht, tag)
                 if dump and dump.stat().st_size > 0:
-                    shutil.copy2(dump, FIXTURES / f"sl4dump_{name}_tm10.har")
+                    shutil.copy2(dump, FIXTURES / f"sl4dump_{name}_{tag}.har")
                     note = f"  sl4dump={dump.stat().st_size}B"
                 else:
                     note = "  sl4dump=FAILED"
-        print(f"  {name:14s} {'OK ' if ok else 'FAIL'}  {res or '(no residual line)'}  "
-              f"updated.har={sz}B{note}")
+        print(f"  {name:14s} {tag:22s} {'OK ' if ok else 'FAIL'}  "
+              f"{res or '(no residual line)'}  updated={sz}B{note}")
 
     print("\n[3/3] summary")
-    good = [n for n, (ok, _) in results.items() if ok]
-    bad = [n for n, (ok, _) in results.items() if not ok]
+    good = [k for k, (ok, _) in results.items() if ok]
+    bad = [k for k, (ok, _) in results.items() if not ok]
     print(f"  solved  ({len(good)}): {', '.join(good) or '-'}")
     print(f"  blocked ({len(bad)}): {', '.join(bad) or '-'}")
     print(f"  fixtures written to {FIXTURES}")
