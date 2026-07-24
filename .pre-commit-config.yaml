@@ -158,6 +158,7 @@ repos:
               tests/templates/gtap/test_diff_core_key_lookup\.py|
               tests/templates/gtap/test_gempack_har_reference\.py|
               tests/templates/gtap/test_gempack_runner_grid\.py|
+              tests/templates/gtap/test_gempack_welfare_reader\.py|
               tests/templates/gtap/test_gtap7_gempack_parity\.py|
               tests/templates/gtap/test_gtap7_mcp_parity\.py|
               tests/templates/gtap/test_gtap7_nl_parity\.py|
