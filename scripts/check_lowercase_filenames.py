@@ -44,6 +44,10 @@ ALLOWED_PREFIXES: tuple[str, ...] = (
     "src/equilibria/templates/reference/pep2/data/",
     "src/equilibria/templates/reference/pep2/scripts/",
     "src/equilibria/templates/reference/gtap/",
+    # Horridge's SIMPLE distribution (tpmh0103): simpleMCP.gms / simpleNLP.gms
+    # keep the author's upstream CamelCase — renaming would break fidelity to
+    # the published sources and the references in dogams.bat / the README.
+    "runs/horridge_simple/",
 )
 
 

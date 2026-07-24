@@ -383,6 +383,23 @@ runs/gempack_matrix/*/default.prm
 runs/gempack_matrix/*/har
 runs/gempack_matrix/*/sl4_levels*.txt
 
+# Horridge SIMPLE run outputs (the tpmh0103 sources + compare_gams_vs_gempack.py
+# are tracked; everything the GEMPACK/GAMS run generates is not).
+runs/horridge_simple/*.sl4
+runs/horridge_simple/*.slc
+runs/horridge_simple/*.UPD
+runs/horridge_simple/*.gss
+runs/horridge_simple/*.gst
+runs/horridge_simple/*.inf
+runs/horridge_simple/*.min
+runs/horridge_simple/*.GEN
+runs/horridge_simple/*.lst
+runs/horridge_simple/*_console.txt
+runs/horridge_simple/sl4dump.har
+runs/horridge_simple/sl4dump.sti
+runs/horridge_simple/sl4map.txt
+runs/horridge_simple/Results*.gdx
+
 examples/gtap/
 docs/GTAP_*.md
 docs/findings/gams_formulation_analysis.md
