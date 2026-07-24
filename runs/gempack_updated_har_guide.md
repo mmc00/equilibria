@@ -319,6 +319,52 @@ benchmark-normalized index, and normalizing GEMPACK to its benchmark gives exact
 `1 + %change` (verified identical to 8 decimals). GAMS levels ARE directly
 comparable to Python only because both share the same levels normalization.
 
+### 8d. Horridge's own comparison uses the SAME %-change formula (tpmh0103)
+
+The archive `tpmh0103` (the SIMPLE-model example from Horridge & Pearson G-214)
+implements the identical model in GEMPACK, GAMS/MCP, GAMS/NLP and MPSGE, expressly
+"to compare implementations". Its GAMS code computes the change variables **exactly
+as our gate does** — e.g. `simpleMCP.gms`:
+
+```
+CH_XFAC(f,i) = (xfac.l(f,i)/xfac0(f,i)-1)*100;   ! (shock/base − 1)·100
+CH_Z(i)      = (z.l(i)/z0(i)-1)*100;
+```
+
+So percent-change vs GEMPACK is not our shortcut — it is how the model's own authors
+compare a levels GAMS solve against GEMPACK. Confirms §8c.
+
+---
+
+## 9. Linearization check — a small shock should raise the match (Windows)
+
+**Why the against-GEMPACK match is ~52–76% (not "4–5 significant digits").** The
+GAMS≡GEMPACK "4–5 digits" figure (van der Mensbrugghe 2018; Horridge G-214) is
+established with a **small, localized shock** — Horridge's SIMPLE example shocks one
+sector's labour productivity by −10% in a one-country model (`fixcap.cmf`:
+`shock afac("Labor","Srv") = -10`). Our matrix shock is **+10% tariff power on every
+bilateral route, globally** — far more non-linear. GEMPACK is Gragg-*linearized*, so
+its error vs a levels solve grows with the shock's size and reach. The ~0.4pp median
+residual is that linearization signature at a large shock, **not** a model defect
+(§8, and `docs/findings/gempack_residual_is_linearization`).
+
+**The decisive test (runs on Windows).** Regenerate the RunGTAP solution at a *small*
+shock and re-measure; the match should climb toward ~99% within 1pp:
+
+```powershell
+# generate the 1% .cmf (works anywhere; --no-solve skips the solver)
+uv run python scripts\gtap\run_gempack_matrix.py --shock-pct 1 --datasets gtap7_3x3
+```
+
+`--shock-pct` sets the `Shock tm = uniform <pct>` magnitude (default 10). Solve as in
+§2/§8, export the SL4 (§8), and point a throwaway `sl4dump_gtap7_3x3_tm1.har` fixture
+at a temporary `reference="gempack"` row (or just run the measurement by hand). A 1%
+shock is ~10× smaller and the quadratic linearization error ~100× smaller, so the
+within-1pp fraction should approach the paper's figure — turning "why only 52%?" into
+a demonstration that the residual is the shock-size-dependent linearization gap. If it
+does NOT climb, that would be the signal to look harder at the mapping — but every
+other check (Python≡GAMS, Table 4 mapping, factor `qe`=0.00pp) says it will.
+
 ---
 
 ## What this closes
