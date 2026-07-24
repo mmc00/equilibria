@@ -283,6 +283,7 @@ scripts/gtap/*
 !scripts/gtap/inspect_updated_har.py
 !scripts/gtap/run_gempack_matrix.py
 !scripts/gtap/reconstruct_9x10_eflg.py
+!scripts/gtap/verify_ifsub_equivalence.py
 !scripts/gtap/export_sl4_levels.py
 # Phase-2 cascade orchestrator modules
 !scripts/gtap/cascade_config.py

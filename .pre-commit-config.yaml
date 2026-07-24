@@ -164,6 +164,7 @@ repos:
               tests/templates/gtap/test_gtap_multiperiod_parity\.py|
               tests/templates/gtap/test_gtap_parity_pipeline\.py|
               tests/templates/gtap/test_gtap_structure\.py|
+              tests/templates/gtap/test_ifsub_equivalence\.py|
               tests/templates/gtap/test_multiperiod_equations\.py|
               tests/templates/gtap/test_multiperiod_sets\.py|
               tests/templates/gtap/test_multiperiod_vars\.py|
