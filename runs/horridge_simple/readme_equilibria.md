@@ -56,12 +56,34 @@ Ran the full chain below on Windows (RunGTAP/GEMPACK `C:\GP`, GAMS `C:\GAMS\53`)
 | **OVERALL** | **100.0%** | — |
 
 The GAMS/MCP-vs-NLP sanity block also reproduced 100% within 1pp (median |Δ| ~1e-8 pp).
-This is the reference number: on Horridge's SMALL, localized shock the levels(GAMS)↔
-linearized(GEMPACK) match is **100% within 1pp** — so the against-GEMPACK matrix
-page's ~52% at a +10% GLOBAL bilateral tariff is the shock-size linearization gap,
-not a defect. (The GEMPACK Gragg solve is 4/6/8-step + extrapolation; NLP CONOPT
+On Horridge's SMALL, localized shock the levels(GAMS)↔linearized(GEMPACK) match is
+**100% within 1pp**. (The GEMPACK Gragg solve is 4/6/8-step + extrapolation; NLP CONOPT
 under the GAMS demo license flags a spurious "locally infeasible" status but still
 returns the correct levels — the MCP/NLP agreement to 8 digits confirms it.)
+
+## Global 10% tariff-equivalent shock (2026-07-24) — the size story is NOT just "10% global"
+
+To test the against-GEMPACK page's framing ("~52% because the matrix shock is +10% on
+every route, globally"), we re-ran the SAME model with a **global +10% import-price
+shock** — the SIMPLE-native analog of a uniform tariff: `pfimp` (foreign import price,
+already exogenous) shocked `uniform 10` in GEMPACK (`tariff10.cmf`), and
+`pfimp.fx(i)=pfimp0(i)*1.10` in GAMS (`simpleMCP_tariff.gms` / `simpleNLP_tariff.gms`,
+derived from Horridge's by that one line). Import price `p(i,"imp") = pfimp(i)*phi`, so
+this raises every import price 10% — a global border wedge.
+
+**Result: still 100% within 1pp (median |Δ| = 0.00pp)** — and the responses are real,
+not negligible: CH_Z mnf +0.91% / srv −0.46%, CH_XFAC Labor·mnf +1.70%, CH_PFAC
+Capital·mnf **+3.14%**, real GDP −0.29%.
+
+So a **10% GLOBAL shock with ~1–3% responses linearizes essentially perfectly** on this
+textbook model. The ~52% on the GTAP matrix is therefore **not** explained by "10% +
+global" alone — SIMPLE proves that combination can match 100%. The GTAP gap comes from
+what is *specific to GTAP*: much higher trade (Armington) elasticities → far larger
+%-change responses, where a fixed **absolute** 1pp tolerance bites; many more CES nests
+and bilateral routes; and the quantity-reconstruction the GTAP comparator does (already
+known to cap at 66.67% value-vs-value). Consistent with the earlier measurement that
+GTAP's `updated.har` is already near-exact levels (Subint=1 vs 10 differ 2.6e-6) — the
+gap is not GEMPACK's solve accuracy.
 
 ## To reproduce on Windows (needs GEMPACK + GAMS)
 
@@ -76,9 +98,23 @@ uv run python compare_gams_vs_gempack.py --gempack sl4dump.har --mcp ResultsMCP.
 The comparator auto-detects `gdxdump` (PATH, then `C:\GAMS\*`); pass a custom GAMS
 install if it lives elsewhere.
 
+For the **global tariff** variant instead of the productivity shock:
+
+```bat
+gemsim -cmf tariff10.cmf                                :: -> tariff10.sl4
+::   sltoht tariff10.sl4 -> sl4dump_tariff10.har (same chain, stem "tariff10")
+gams simpleMCP_tariff  Logoption=2 & ren results.gdx ResultsMCP_tariff.gdx
+gams simpleNLP_tariff  Logoption=2 & ren results.gdx ResultsNLP_tariff.gdx
+uv run python compare_gams_vs_gempack.py --gempack sl4dump_tariff10.har ^
+    --mcp ResultsMCP_tariff.gdx --nlp ResultsNLP_tariff.gdx
+```
+
 ## Provenance
 
-Source files (`simple.tab`, `*.gms`, `*.cmf`, `input.gdx`, `simdata.har`, `*.bat`,
-`readme.txt`) are Horridge & Pearson's, from the TPMH0103 archive linked in G-214
-(https://www.copsmodels.com/archivep.htm). Only `compare_gams_vs_gempack.py` and this
-readme are ours.
+Horridge & Pearson's original source files (`simple.tab`, `simpleMCP.gms`,
+`simpleNLP.gms`, `mpsgevh.gms`, `fixcap.cmf`, `mobcap.cmf`, `input.gdx`, `simdata.har`,
+`*.bat`, `readme.txt`) are from the TPMH0103 archive linked in G-214
+(https://www.copsmodels.com/archivep.htm). Ours: `compare_gams_vs_gempack.py`, this
+readme, and the global-tariff variant (`tariff10.cmf`, `simpleMCP_tariff.gms`,
+`simpleNLP_tariff.gms` — the last two are Horridge's files with the single shock line
+changed to `pfimp.fx(i)=pfimp0(i)*1.10`).

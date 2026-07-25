@@ -400,8 +400,10 @@ runs/horridge_simple/*.min
 runs/horridge_simple/*.GEN
 runs/horridge_simple/*.lst
 runs/horridge_simple/*_console.txt
-runs/horridge_simple/sl4dump.har
-runs/horridge_simple/sl4dump.sti
+runs/horridge_simple/sl4dump*.har
+runs/horridge_simple/sl4dump*.sti
+runs/horridge_simple/sltoht*.txt
+runs/horridge_simple/*_map.txt
 runs/horridge_simple/sl4map.txt
 runs/horridge_simple/Results*.gdx
 
