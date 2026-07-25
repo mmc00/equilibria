@@ -615,11 +615,25 @@ class GTAPMultiPeriodModel:
         Only unfixed VarData entries are seeded (fixed vars keep their value).
         """
         import csv as _csv
+        import shutil as _shutil
         import subprocess
         from pathlib import Path as _Path
 
         gdx_path = _Path(gdx_path)
-        GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+
+        def _find_gdxdump() -> str:
+            hit = _shutil.which("gdxdump") or _shutil.which("gdxdump.exe")
+            if hit:
+                return hit
+            cands = [
+                "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gdxdump",
+                "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+            ]
+            cands += [str(p / "gdxdump.exe") for p in sorted(
+                _Path(r"C:/GAMS").glob("*"), reverse=True) if p.is_dir()]
+            return next((c for c in cands if _Path(c).exists()), "gdxdump")
+
+        GDXDUMP = _find_gdxdump()
         T_LABELS = {"base", "check", "shock"}
 
         # GAMS symbol → Python Var name on m
