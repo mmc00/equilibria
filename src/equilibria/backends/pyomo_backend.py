@@ -231,6 +231,14 @@ class PyomoBackend(Backend):
                 indices_list = eq.get_indices(model.set_manager)
 
                 if not indices_list:
+                    # Legitimate in GTAP: an equation domained over an empty
+                    # set contributes zero scalar constraints. Do not raise —
+                    # but make the drop visible instead of silent.
+                    logger.warning(
+                        "Equation %s domained over an empty set — resolved to "
+                        "zero index combinations; contributing no constraints",
+                        eq_name,
+                    )
                     continue
 
                 # Create constraint dictionary
@@ -300,6 +308,15 @@ class PyomoBackend(Backend):
                             ),
                         )
                         constraint_count += 1
+                else:
+                    # Had index combinations but every build_expression
+                    # returned None — a true invisible drop of the whole
+                    # equation. Fail loudly.
+                    raise BridgeTranslationError(
+                        f"equation {eq_name} produced no constraints despite "
+                        f"having {len(indices_list)} index combination(s) — "
+                        "all build_expression calls returned None"
+                    )
             else:
                 # Legacy closure-based equations cannot be translated to Pyomo.
                 raise BridgeTranslationError(
