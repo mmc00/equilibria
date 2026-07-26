@@ -35,6 +35,16 @@ if TYPE_CHECKING:
     from equilibria.model import Model as EquilibriaModel
 
 
+class BridgeTranslationError(RuntimeError):
+    """Raised when the Pyomo bridge cannot faithfully translate a model.
+
+    The bridge must fail loudly rather than silently dropping an equation
+    that fails to build or stubbing a trivially-feasible constraint when no
+    constraints survive — a dropped equation is invisible and fatal for
+    parity with the GAMS reference.
+    """
+
+
 class PyomoBackend(Backend):
     """Pyomo-based solver backend.
 
@@ -231,11 +241,12 @@ class PyomoBackend(Backend):
                         if expr is not None:
                             constraint_dict[indices] = expr
                     except (ValueError, KeyError, AttributeError, TypeError) as e:
-                        # Skip constraints that fail to build
                         logger.warning(
                             "Could not build constraint %s%s: %s", eq_name, indices, e
                         )
-                        continue
+                        raise BridgeTranslationError(
+                            f"equation {eq_name}{indices} failed to build"
+                        ) from e
 
                 if constraint_dict:
                     if eq.domains:
@@ -290,11 +301,15 @@ class PyomoBackend(Backend):
                         )
                         constraint_count += 1
             else:
-                # Legacy equation handling - skip for now
-                # These equations use closures and won't work with Pyomo
-                pass
+                # Legacy closure-based equations cannot be translated to Pyomo.
+                raise BridgeTranslationError(
+                    f"equation {eq_name} has no build_expression "
+                    "(legacy closure form not supported)"
+                )
         if constraint_count == 0:
-            self.pyomo_model.dummy_constraint = Constraint(expr=1 == 1)
+            raise BridgeTranslationError(
+                "no constraints were built — model would be trivially feasible"
+            )
 
     def solve(self, options: dict[str, Any] | None = None) -> Solution:
         """Solve the Pyomo model.
