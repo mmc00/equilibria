@@ -1,114 +1,141 @@
-# F3 — GTAP Blocks Extraction — Design Spec
+# F3 — GTAP to Symbolic Blocks (with framework repair) — Design Spec
 
-**Date:** 2026-07-25
+**Date:** 2026-07-25 (revised same day after an Explore pass on the symbolic framework)
 **Status:** Design (approved for planning)
 **Roadmap:** F3 (modularization to blocks), prerequisite of F3.5 (no-check variant), F5 (GEMPACK), F7 (GTAP6), F9 (PEP blocks).
 
 ## Goal
 
-Extract the GTAP model monolith `src/equilibria/templates/gtap/gtap_model_equations.py`
-(8076 lines) into `src/equilibria/blocks/gtap/` — one block at a time, each a
-declarative `Block` subclass with its variables and equations — maintaining
-**0-diff parity vs GAMS** at every step. This makes GTAP composable (needed for
-F3.5's calibrated-base variant, F7's GTAP6 on shared blocks, F8's block swapping).
+Move the GTAP model from the 8076-line imperative monolith
+(`gtap_model_equations.py`) onto the repo's **symbolic Block framework**
+(`equilibria.blocks` / `SymbolicEquation`), so the model is composable and
+multi-backend, with the success gate being **GTAP 3x3 solving through the symbolic
+framework and matching GAMS** (NLP + MCP). This is the ambitious path — chosen over
+the pragmatic "copy the PEP imperative-Pyomo pattern (C)" — because the user
+prioritizes the clean multi-backend architecture for the long run.
 
-## Background — what the dependency map found
+## Critical background — the symbolic framework is a never-solved prototype
 
-An Explore pass over the monolith (2026-07-25) established:
+An Explore pass (2026-07-25) over `core/symbolic_equations.py`,
+`blocks/base.py`, `backends/pyomo_backend.py`, `model.py`, and the only user
+(`templates/simple_open.py`) found the framework (option "B") is **half-built and
+has never solved a Pyomo model**:
 
-1. **All 105 `Var` declarations live in ONE central block (lines 3509–5106), BEFORE
-   any equation block.** The banner-delimited blocks (5574+) contain only
-   `Constraint` definitions. Coupling is measured by which var each block's
-   equations *determine* (LHS/complementary var) vs which it *reads* from others.
-2. **~10 banner blocks collapse to 7 extraction units** because of **5 circular
-   dependencies** — those pairs must be extracted as one bundle:
-   - PRODUCTION ↔ SUPPLY (irreducible CES make/supply nest)
-   - TRADE_ARMINGTON ↔ BILATERAL_TRADE (import-sourcing loop: xw ↔ pwmg/xda/xmt)
-   - FACTOR ↔ INCOME (FACTOR reads pabs; INCOME reads kstock/xf)
-   - UTILITY_SAVINGS ↔ INCOME (util reads regy/rsav/yg; income reads phip/pi/savf/uh)
-   - DEMAND ↔ UTILITY_SAVINGS (DEMAND is a 4-eq shell fused to UTILITY)
-3. **Several cross-block edges come from DEACTIVATED legacy constraints**
-   (`.deactivate()`) that are not in the active MCP — these must be filtered when
-   measuring dependencies (most notably TRADE_CET's pe/xw edges are all legacy).
+1. **Two incompatible `build_expression` APIs.** The ABC declares
+   `build_expression(set_manager, variables, parameters, indices) -> residual
+   callable`; the real blocks override it as `build_expression(pyomo_model,
+   indices) -> Pyomo expr`. The `ResidualEquation` + `var/param/power` DSL is
+   **dead code** — nothing consumes it.
+2. **The Pyomo bridge silently drops equations.** `pyomo_backend._build_constraints`
+   wraps each build in `except (ValueError, KeyError, AttributeError, TypeError):
+   … continue` and, if zero constraints survive, injects
+   `dummy_constraint = Constraint(expr=1==1)`. **A model that fails to translate
+   still "builds" as a trivial feasible problem** — fatal for GAMS parity (a
+   dropped equation is invisible).
+3. **No solve, ever.** No test calls `.solve()` and asserts a feasible/optimal
+   status for a symbolic-block model. `simple_open`'s "solution" is analytic
+   benchmark residuals, not a Pyomo solve; its block equations are **log-linear
+   Cobb-Douglas approximations valid only at σ=1**, so they would not match GAMS
+   even if solved; and it omits its own trade blocks to avoid name conflicts.
+
+**Consequence:** the multi-backend / introspection advantages of B are, today,
+aspirational — the DSL that would provide them is dead code, and the solve path
+does not work. The user accepted this and chose to **repair the framework fully**
+and prove it on real GTAP, rather than adopt the working imperative pattern.
 
 ## Design decisions (all user-approved 2026-07-25)
 
-### Form: declarative `Block` subclasses (option B), with vars distributed to their owning block
-Each extracted block is a subclass of `equilibria.blocks.base.Block`
-(pydantic, `VariableSpec`/`EquationSpec`, `setup`/`get_calibration_phases`/
-`_extract_calibration`). Variables are **moved to their owning block** (px/pva/nd →
-ProductionBlock, xw/pe → BilateralBlock, …), not left in a shared central block.
-This is the fully-modular form and gives F3.5 the calibration hooks natively. The
-risk (moving 105 var declarations with their domains/bounds — where a mis-set
-`Reals` vs `NonNegativeReals` fabricates a spurious complementarity corner, cf.
-project_gtap7_5x5_ifsub1_fabricated_corner) is controlled by the per-block gate below.
+### Target: the symbolic Block framework (B), repaired
+GTAP blocks become `Block` subclasses producing symbolic equations that the
+(repaired) Pyomo bridge emits to real `Constraint`s, solved by PATH/IPOPT.
 
-### Strategy: one block at a time, green gate between each, closure last
-Extract in dependency order (leaf → coupled). Each block is a small, bisectable PR.
-If parity breaks, the failing block and the failing gate layer are immediately known.
+### Success gate (north star): GTAP 3x3 via B matches GAMS
+The framework is "repaired" when **gtap7_3x3 solves through the symbolic framework
+and matches GAMS** on both NLP-vs-NLP and MCP-vs-MCP, under the 4-layer gate below.
+Not a toy model, not analytic simple_open — the real parity target.
 
-### Extraction order (from the dependency map)
-1. **TRADE_CET** (5903–6008) — the safe leaf: ZERO active outbound edges (all pe/xw
-   uses are in deactivated legacy constraints); reads only xs/ps/pd/pet + params.
-2. **PRODUCTION + SUPPLY** (5574–5902) — one merged module (PROD↔SUPPLY cycle).
-3. **FACTOR** (6633–6919) — single clean inbound from PROD; one back-edge (pabs) to
-   INCOME handled via a forward-declared interface.
-4. **ARMINGTON + BILATERAL** (6009–6632) — one merged trade module (sourcing cycle).
-5. **DEMAND + UTILITY_SAVINGS** (6920–7314) — one merged household module.
-6. **INCOME** (7315–7740) — highest fan-out (aggregates 6 blocks); near-last.
-7. **CLOSURE / EQUILIBRIUM** (7741–8079) — last (pre-decided): market clearing,
-   numeraire, Walras, pfact/pwfact — the most delicate (MCP pairing, NLP numeraire,
-   multi-period holdfix, per-mode PATH options).
+### Approach: fused, repair guided by real GTAP
+Do NOT repair B in the abstract against hypothetical cases. Bring real GTAP blocks
+onto B and fix the framework by exactly what that path demands (bridge, DSL, solve,
+true CES/CET equations), until 3x3-via-B is green. Lower risk of fixing the wrong
+things.
 
-### Per-block fidelity gate (all four, cheap → expensive; ALL must be green to accept)
-1. **Equation-form diff** (`scripts/gtap/diff_equation_form.py`, cascade tool 5):
-   the expanded Pyomo expression of the new declarative block == the monolith's,
-   cell-by-cell. Catches any form drift BEFORE a solve. Instant.
-2. **Var domain+bounds diff**: each moved Var keeps EXACTLY its `domain`
-   (Reals/NonNegativeReals) and bounds — a direct var-by-var check, no solver.
-   This is where the spurious-corner risk lives (xw/xet → Reals).
-3. **Canary (gtap7_3x3)**: a single small dataset solved first — if it breaks, no
-   need to spend the full sweep. Seconds.
-4. **Full NLP-vs-NLP + MCP-vs-MCP sweep** (`scripts/gtap/run_parity_gates.py`) vs
-   native GAMS. The roadmap's real gate. ~12min. Refreshes the parity stamp.
+### Repair scope (complete)
+1. **Pyomo bridge** (`backends/pyomo_backend.py`, 420 lines): remove the
+   equation-swallowing `except` and the `dummy_constraint` stub — translation
+   failures must raise loudly. This is what makes parity trustworthy.
+2. **Symbolic API** (`core/symbolic_equations.py`, 241 lines): resolve the two
+   `build_expression` contracts — either revive the DSL as the single contract or
+   retire the dead `ResidualEquation`/combinator code and standardize on the
+   `(pyomo_model, indices) -> expr` form the real blocks use.
+3. **The GTAP blocks on B** — the 7 extraction units (see order below) as `Block`
+   subclasses with **true CES/CET equations** (not log-linear), variables
+   distributed to their owning block. The existing ~4500 lines of generic blocks
+   (production/trade/demand/institutions/equilibrium) are saned/replaced as needed.
+4. **A real solve+parity test suite** — the framework's first tests that actually
+   `.solve()` and assert feasible status + GAMS parity (none exist today).
+
+### Order of work: all blocks at once, then solve (user's explicit choice)
+Migrate all 7 GTAP blocks onto B (fixing bridge/DSL along the way), THEN attempt the
+first 3x3 solve. The user accepted the higher bisect risk of this over an
+incremental one-block-at-a-time cutover.
+
+**Mandatory risk mitigation (because B has never solved anything):** before the
+first solve, the plan must stand up **diagnostic tooling** so a failed solve is
+debugged directed, not blind:
+- per-equation residual report at a seeded point (which equation is violated),
+- per-block equation-form diff vs the monolith (`diff_equation_form.py`, tool 5),
+- per-variable domain+bounds check vs the monolith,
+- the bridge must, by then, raise on any un-translated equation (no silent drop).
+
+### Dependency structure (from the earlier dependency map)
+~10 banner blocks collapse to **7 units** due to 5 circular dependencies (extracted
+as bundles): TRADE_CET (leaf) · PRODUCTION+SUPPLY · FACTOR · ARMINGTON+BILATERAL ·
+DEMAND+UTILITY · INCOME · CLOSURE (last). All 105 vars currently live in one central
+block (3509–5106); they get distributed to their owning block, and the domain/bounds
+gate guards against spurious-corner regressions (xw/xet → Reals).
+
+## Per-solve fidelity gate (4 layers, cheap → expensive; ALL green to accept)
+1. **Equation-form diff** — expanded Pyomo expr of each B-block == the monolith's,
+   cell-by-cell. Catches form drift before solving.
+2. **Var domain+bounds diff** — each var keeps EXACTLY its domain/bounds.
+3. **Canary (gtap7_3x3)** — solves first; seconds; no full sweep if it breaks.
+4. **Full NLP+MCP sweep** (`run_parity_gates.py`) vs native GAMS; refreshes stamp.
 
 ## Architecture
+- `src/equilibria/blocks/gtap/` — the GTAP blocks as `Block` subclasses.
+- A composer assembles them via `BlockRegistry` into a model the (repaired) bridge
+  emits to Pyomo, solved by the existing PATH/IPOPT path.
+- The monolith `gtap_model_equations.py` stays intact as the **parity oracle**
+  throughout F3 (B is compared against it AND against GAMS). It is not removed until
+  3x3-via-B is fully green.
 
-- `src/equilibria/blocks/gtap/` — new package, one module per extraction unit.
-- Each module: a `Block` subclass declaring its `VariableSpec`s + `EquationSpec`s,
-  with a `setup(model, params, ...)` that builds them on the Pyomo model.
-- A `gtap_block_model.py` (or extension of `gtap_model_multiperiod.py`) composes the
-  blocks via the `BlockRegistry`, replacing the monolith's `build_equations_*` calls
-  block by block as each is extracted. Until a block is extracted, the monolith path
-  is still used for it (incremental cutover — the model always builds and solves).
-- The monolith `gtap_model_equations.py` shrinks block by block; it is NOT deleted
-  until the last block (closure) is extracted and green.
-
-## Acceptance gates (parity floors, per the roadmap convention)
-
-- **Per block:** all four gate layers green (form-diff clean, var domain/bounds
-  identical, canary 3x3 code=1 + measured match unchanged, full sweep green + stamp).
-- **Global (F3 done):** the full monolith is extracted; `gtap_model_equations.py`
-  no longer builds equations (or is a thin shim); the coverage matrix is unchanged
-  (0-diff) on every dataset × kind; parity stamp fresh.
-- **Non-regression:** at no intermediate commit may the matrix drop below its
-  current measured values on any cell.
+## Acceptance gates (parity floors)
+- **F3a (framework repaired):** the bridge raises on untranslated equations (no
+  silent drop / no dummy_constraint); a real test solves a symbolic-block model and
+  asserts feasible status.
+- **F3 done (north star):** gtap7_3x3 solves via B and matches GAMS on NLP + MCP
+  under all 4 gate layers; then the remaining datasets (3x4…15x10) pass the full
+  sweep via B; the coverage matrix is unchanged (0-diff) vs the monolith.
+- **Non-regression:** no intermediate commit drops any matrix cell below its current
+  measured value; the monolith remains the oracle until the end.
 
 ## Non-goals / YAGNI
-
-- No behavior change — F3 is a pure refactor. Any result change is a bug, not F3.
-- No F3.5 work here (the calibrated-base variant is a separate phase; F3 only
-  ensures the block form gives it the calibration hooks).
-- No new solver/closure logic — the closure block moves as-is, last.
+- No F3.5 work here (calibrated-base variant is a later phase; F3 only ensures the
+  block form exposes the calibration hooks — `CalibrationMixin` is the one sound
+  part of B already).
+- No new solver/closure logic — the closure block is translated last, as-is.
 - No GTAP6/PEP block work (F7/F9 reuse these blocks later).
+- No behavior change in the model's economics — any result change is a bug.
 
-## Risks
-
-- **Var domain/bounds drift** on the moved 105 declarations → spurious corners.
-  Mitigation: gate layer 2 (var domain+bounds diff) is mandatory per block.
-- **Circular-dependency bundles** can't be split → extracted as merged modules
-  (5 bundles identified). Attempting to split them would break the build.
-- **Legacy deactivated constraints** create phantom edges → filtered in the
-  dependency measurement; the form-diff gate compares only active constraints.
-- **Closure block** is the highest-risk (solver/period/mode-parameterized) →
-  extracted LAST, with both gates, per the roadmap.
+## Risks (and mitigations)
+- **B never solved → first 3x3 solve likely fails** (user accepted the all-at-once
+  bisect risk). Mitigation: diagnostic tooling stood up BEFORE the first solve;
+  bridge raises loudly; monolith as oracle for form/residual diffs.
+- **Silent-drop bridge** hides missing equations → **removed first** (repair item 1).
+- **Log-linear block equations** would pass a solve but fail GAMS parity → replaced
+  with true CES/CET; the form-diff gate catches any residual approximation.
+- **Var domain/bounds drift** → spurious corners → domain+bounds gate per var.
+- **Circular-dependency bundles** can't be split → migrated as merged modules.
+- **Scope is large** (~5000 lines saned before/while GTAP lands) → the fused,
+  GTAP-guided approach avoids repairing framework code GTAP doesn't exercise.
