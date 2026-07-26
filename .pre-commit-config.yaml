@@ -154,6 +154,7 @@ repos:
               tests/solver/test_constraint_jacobian_base\.py|
               tests/templates/gtap/test_altertax\.py|
               tests/templates/gtap/test_altertax_multiperiod_parity\.py|
+              tests/templates/gtap/test_blocks_diag\.py|
               tests/templates/gtap/test_coverage_matrix\.py|
               tests/templates/gtap/test_diff_core_key_lookup\.py|
               tests/templates/gtap/test_gempack_har_reference\.py|

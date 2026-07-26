@@ -296,6 +296,7 @@ scripts/gtap/*
 !scripts/gtap/measure_nlp_vs_nlp.py
 !scripts/gtap/measure_nlp_vs_nlp_altertax.py
 !scripts/gtap/regen_altertax_reference.py
+!scripts/gtap/blocks_diag.py
 
 # NUS333 head-to-head workspace: keep scripts + small JSON/MD reports,
 # ignore generated solver artefacts (RunGTAP/GEMPACK + Python caches).
