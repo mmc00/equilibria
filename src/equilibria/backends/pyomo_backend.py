@@ -7,6 +7,7 @@ IPOPT, CONOPT, or other Pyomo-compatible solvers.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -144,18 +145,25 @@ class PyomoBackend(Backend):
                 # Get Pyomo sets for indexing
                 index_sets = [getattr(self.pyomo_model, d) for d in param.domains]
 
-                # Create dictionary of values
+                # Create dictionary of values (arity-generic: any n >= 1).
+                # itertools.product iterates the leftmost domain slowest and the
+                # rightmost fastest, in lockstep with np.ndindex over the value
+                # array's shape (first axis slowest, last axis fastest), so the
+                # label tuple and the numpy index always refer to the same cell.
+                # For a 1-D param the label tuple is (elem,); Pyomo indexes a
+                # 1-D Param with the bare element, so unwrap the singleton.
+                elems = [
+                    list(model.set_manager.get(d).iter_elements())
+                    for d in param.domains
+                ]
                 values_dict = {}
-                if len(param.domains) == 1:
-                    set_obj = model.set_manager.get(param.domains[0])
-                    for i, elem in enumerate(set_obj.iter_elements()):
-                        values_dict[elem] = float(param.value[i])
-                elif len(param.domains) == 2:
-                    set1 = model.set_manager.get(param.domains[0])
-                    set2 = model.set_manager.get(param.domains[1])
-                    for i, e1 in enumerate(set1.iter_elements()):
-                        for j, e2 in enumerate(set2.iter_elements()):
-                            values_dict[(e1, e2)] = float(param.value[i, j])
+                for label_tuple, np_index in zip(
+                    itertools.product(*elems),
+                    np.ndindex(param.value.shape),
+                    strict=True,
+                ):
+                    key = label_tuple[0] if len(label_tuple) == 1 else label_tuple
+                    values_dict[key] = float(param.value[np_index])
 
                 setattr(
                     self.pyomo_model,
@@ -191,18 +199,23 @@ class PyomoBackend(Backend):
                 # Get Pyomo sets for indexing
                 index_sets = [getattr(self.pyomo_model, d) for d in var.domains]
 
-                # Create initialization dictionary
+                # Create initialization dictionary (arity-generic: any n >= 1).
+                # itertools.product runs in lockstep with np.ndindex over the
+                # value array's shape (leftmost domain / first axis slowest,
+                # rightmost / last axis fastest), so the label tuple and the
+                # numpy index name the same cell. A 1-D Var is indexed by the
+                # bare element in Pyomo, so unwrap the singleton tuple.
+                elems = [
+                    list(model.set_manager.get(d).iter_elements()) for d in var.domains
+                ]
                 init_dict = {}
-                if len(var.domains) == 1:
-                    set_obj = model.set_manager.get(var.domains[0])
-                    for i, elem in enumerate(set_obj.iter_elements()):
-                        init_dict[elem] = float(var.value[i])
-                elif len(var.domains) == 2:
-                    set1 = model.set_manager.get(var.domains[0])
-                    set2 = model.set_manager.get(var.domains[1])
-                    for i, e1 in enumerate(set1.iter_elements()):
-                        for j, e2 in enumerate(set2.iter_elements()):
-                            init_dict[(e1, e2)] = float(var.value[i, j])
+                for label_tuple, np_index in zip(
+                    itertools.product(*elems),
+                    np.ndindex(var.value.shape),
+                    strict=True,
+                ):
+                    key = label_tuple[0] if len(label_tuple) == 1 else label_tuple
+                    init_dict[key] = float(var.value[np_index])
 
                 setattr(
                     self.pyomo_model,
@@ -376,31 +389,28 @@ class PyomoBackend(Backend):
             if not var.domains:
                 # Scalar
                 var_values[var_name] = np.array([value(pyomo_var)])
-            elif len(var.domains) == 1:
-                # 1D variable
-                set_obj = self._model.set_manager.get(var.domains[0])
-                values_list = []
-                for elem in set_obj:
-                    val = value(pyomo_var[elem])
-                    values_list.append(val)
-                var_values[var_name] = np.array(values_list)
-            elif len(var.domains) == 2:
-                # 2D variable (e.g., FD[F, J])
-                set_obj_0 = self._model.set_manager.get(var.domains[0])
-                set_obj_1 = self._model.set_manager.get(var.domains[1])
-                values_matrix = []
-                for elem0 in set_obj_0:
-                    row = []
-                    for elem1 in set_obj_1:
-                        val = value(pyomo_var[elem0, elem1])
-                        row.append(val)
-                    values_matrix.append(row)
-                var_values[var_name] = np.array(values_matrix)
             else:
-                # 3D+ variables not yet supported
-                raise NotImplementedError(
-                    f"Solution extraction for {len(var.domains)}D variable '{var_name}' not yet implemented"
-                )
+                # Indexed variable of any arity n >= 1. Allocate the array with
+                # the shape implied by the domain set sizes, then fill it by
+                # zipping itertools.product over the element labels with
+                # np.ndindex over the array shape. Both iterate the leftmost
+                # domain / first axis slowest and the rightmost / last axis
+                # fastest, so each label tuple lands in the matching numpy cell
+                # (a transposed fill would corrupt every N-D component). A 1-D
+                # Var is indexed by the bare element, so unwrap the singleton.
+                elems = [
+                    list(self._model.set_manager.get(d).iter_elements())
+                    for d in var.domains
+                ]
+                arr = np.empty(tuple(len(e) for e in elems))
+                for label_tuple, np_index in zip(
+                    itertools.product(*elems),
+                    np.ndindex(arr.shape),
+                    strict=True,
+                ):
+                    key = label_tuple[0] if len(label_tuple) == 1 else label_tuple
+                    arr[np_index] = value(pyomo_var[key])
+                var_values[var_name] = arr
 
         # Create solution object
         solution = Solution(
