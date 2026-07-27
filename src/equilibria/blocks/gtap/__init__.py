@@ -56,6 +56,7 @@ oracle); everything MODE- or SCALING-dependent below is the composer's.
    in tests/templates/gtap/test_gtap_blocks_form.py:_DOMAIN_CARRY_VARS.)
 """
 
+from equilibria.blocks.gtap.demand_utility import DemandUtilityBlock
 from equilibria.blocks.gtap.factor import FactorBlock
 from equilibria.blocks.gtap.production_supply import ProductionSupplyBlock
 from equilibria.blocks.gtap.trade_armington_bilateral import ArmingtonBilateralBlock
@@ -67,10 +68,12 @@ GTAP_BLOCK_ORDER = [
     ProductionSupplyBlock,
     FactorBlock,
     ArmingtonBilateralBlock,
+    DemandUtilityBlock,
 ]
 
 __all__ = [
     "ArmingtonBilateralBlock",
+    "DemandUtilityBlock",
     "FactorBlock",
     "GTAP_BLOCK_ORDER",
     "ProductionSupplyBlock",

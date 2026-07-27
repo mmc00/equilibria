@@ -57,6 +57,12 @@ _MIGRATED: list[tuple[str, list[str]]] = [
             "pnum",
         ],
     ),
+    (
+        "DemandUtilityBlock",
+        # references but does not own: pa (ARMINGTON), pf/xf/kstock/kapEnd/arent/
+        # rorc/rore (FACTOR — dedup), income vars yc/yg/yi/regy/rsav (INCOME).
+        ["pa", "yc", "yg", "yi", "regy", "rsav"],
+    ),
 ]
 
 # Upstream shared vars a leaf unit references but a later unit owns — stubbed so
@@ -79,6 +85,12 @@ _STUBS: dict[str, tuple[tuple[str, ...], str]] = {
     "pet": (("r", "i"), "NonNegativeReals"),
     "xet": (("r", "i"), "Reals"),
     "pnum": ((), "NonNegativeReals"),
+    # INCOME vars (unit 6) — Reals FREE (monolith 4722-4749).
+    "yc": (("r",), "Reals"),
+    "yg": (("r",), "Reals"),
+    "yi": (("r",), "Reals"),
+    "regy": (("r",), "Reals"),
+    "rsav": (("r",), "Reals"),
 }
 
 # Per-unit domain-gate exceptions: owned-var cells whose bound differs ONLY by a
@@ -101,6 +113,15 @@ _DOMAIN_CARRY_VARS: dict[str, str] = {
     "pm": "post-apply_production_scaling price re-value floor (composer carry)",
     "pmcif": "post-apply_production_scaling price re-value floor (composer carry)",
     "pefob": "post-apply_production_scaling price re-value floor (composer carry)",
+    # DEMAND+UTILITY: xigbl/rorg floors (1e-3*init) reflect the monolith's POST-
+    # apply_production_scaling re-value. xigbl = sum_r net-investment is re-valued
+    # by _align_xi_xaa_post_scaling (xiagg->income-side) so its floor drifts ~2e-8
+    # relative from the block's benchmark seed. rorg is seeded 1.0 (floor 1e-3)
+    # then re-valued to ~3.9 by the kapEnd/rore rate-of-return chain (floor
+    # 1e-3*3.9=0.0039 > block 1e-3). Same post-scaling snapshot family (composer
+    # re-values + re-floors, checklist item 7). Form is clean; structure identical.
+    "xigbl": "post-apply_production_scaling xiagg re-value floor (composer carry)",
+    "rorg": "post-apply_production_scaling rate-of-return re-value floor (composer carry)",
 }
 
 # Per-unit FORM-gate carry: (unit, eq) pairs whose per-cell diff is ONLY a
@@ -137,6 +158,21 @@ def _params_sets():
     return p, p.sets
 
 
+# The gtap7_3x3 comp-stat oracle (_build_compstat_har) sets residual_region to
+# the LAST region (list(p.sets.r)[-1] == "ROW"). Units 5-7 gate the residual-
+# region Skip masks (eq_savf/eq_yi/eq_walras) and savf_bar rebalance against it,
+# so they must be built with the same residual region as the oracle.
+_RESIDUAL_REGION = "ROW"
+
+
+def _mk_unit(cls, sets, params):
+    """Construct a block, threading residual_region for the demand/income/closure
+    units (whose Skip masks depend on it). Other units ignore the kwarg."""
+    if "residual_region" in getattr(cls, "model_fields", {}):
+        return cls(sets=sets, params=params, residual_region=_RESIDUAL_REGION)
+    return cls(sets=sets, params=params)
+
+
 def _set_elems(sets: Any) -> dict[str, list[str]]:
     agents = ["hhd", "gov", "inv", "tmg"]
     return {
@@ -150,6 +186,7 @@ def _set_elems(sets: Any) -> dict[str, list[str]]:
         "marg": list(sets.marg),
         "aa": list(sets.a) + agents,
         "rp": list(sets.r),
+        "gy": ["pt", "fc", "pc", "gc", "ic", "dt", "mt", "et", "ft", "fs"],
     }
 
 
@@ -215,7 +252,7 @@ def _build_block_model(block_classes, p, sets, stub_names):
     for name, elems in setmap.items():
         model.add_set(ESet(name=name, elements=elems))
     for cls in block_classes:
-        model.add_block(cls(sets=sets, params=p))
+        model.add_block(_mk_unit(cls, sets, p))
     for n in stub_names:
         if n in model.variable_manager:
             continue
@@ -259,7 +296,7 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
     _p, _sets, oracle, bm, _model, gtap_blocks = _fixtures
     unit = getattr(gtap_blocks, unit_name)
     # discover the equations this unit contributes (its build_expression names)
-    eqs = unit(sets=_sets, params=_p).setup(_ScratchSM(_sets), {}, {})
+    eqs = _mk_unit(unit, _sets, _p).setup(_ScratchSM(_sets), {}, {})
     eq_names = {e.name for e in eqs}
 
     bm_cons = {c.name: c for c in bm.component_objects(Constraint, active=True)}
@@ -317,7 +354,7 @@ def test_gtap_block_domain_matches_monolith(_fixtures, unit_name, sub):
     _p, _sets, oracle, bm, _model, gtap_blocks = _fixtures
     unit = getattr(gtap_blocks, unit_name)
     owned: dict[str, Any] = {}
-    unit(sets=_sets, params=_p).setup(_ScratchSM(_sets), {}, owned)
+    _mk_unit(unit, _sets, _p).setup(_ScratchSM(_sets), {}, owned)
     owned_names = set(owned)
 
     owned_diffs = [d for d in domain_bounds_diff(bm, oracle) if d[0] in owned_names]

@@ -766,3 +766,398 @@ def prdtx_rai_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
                 else:
                     out[(r, a, i)] = _f(params.taxes.rto.get((r, a), 0.0))
     return out
+
+
+# ----------------------------------------------------------------------------
+# DEMAND + UTILITY + INCOME shared calibration loop (monolith 2258-2785, ~350 lines)
+# ----------------------------------------------------------------------------
+#
+# This is the income/demand/beta benchmark-calibration block the monolith runs
+# in a single pass in ``_add_parameters`` (2258-2785). Units 5 (DEMAND+UTILITY)
+# and 6 (INCOME) read the Params it produces. It is CALIBRATION DATA (a
+# deterministic function of the calibrated GTAPParameters + closure), NOT
+# equation form — the blocks only READ it. Transcribed VERBATIM: same benchmark
+# headers, same guards, same cross-region invwgt/savwgt normalization, same
+# residual-region savf_bar rebalance, same chif calibration ordering.
+#
+# TWO pieces of the monolith loop are DELIBERATELY not reproduced here because
+# they compute from model/dump state a block does not have — both are Task-5
+# COMPOSER CARRIES (documented in blocks/gtap/__init__.py, checklist item 7):
+#   (a) the ``gams_calibration_dump`` alphaa(r,i,'inv') override (2638-2653) —
+#       only active when a GAMS cal_dump is supplied; None for the gate oracle.
+#   (b) the ``t0_snapshot`` recompute of i_share/g_share at converged baseline
+#       values (2660-2725) and the betap/betag/betas snapshot inheritance
+#       (2750-2760) — only active when a base-solved model is passed; None for
+#       the base build the gate compares against.
+# For the base build (t0_snapshot is None, gams_calibration_dump is None) — the
+# Task-4 gate oracle — neither branch runs, so this transcription is byte-exact
+# to the oracle's Param values there.
+
+
+def _compute_ytax_ind_bench(params: Any, sets: Any, region: str) -> float:
+    """Indirect tax revenue at benchmark for a region — monolith 1361-1435.
+
+    GAMS yTaxInd = yTaxTot - ytax('dt'): all streams except 'dt'. Streams
+    pt, fc, gc, pc, ic, et, mt, ft, fs (ft+fs = decomposed net ftrv-fbep).
+    """
+    bm = params.benchmark
+    taxes = params.taxes
+    total = 0.0
+    # pt — production output taxes (makb at basic minus maks at supply prices)
+    for a in sets.a:
+        outputs = sets.activity_commodities.get(a, list(sets.i))
+        for i in outputs:
+            total += _f(bm.makb.get((region, a, i), 0.0)) - _f(
+                bm.maks.get((region, a, i), 0.0)
+            )
+    # fc — firm intermediate commodity taxes (rtpd/rtpi on vdfb/vmfb)
+    for (rr, i, a), rtpd in taxes.rtpd.items():
+        if rr == region:
+            total += float(rtpd) * _f(bm.vdfb.get((region, i, a), 0.0))
+    for (rr, i, a), rtpi in taxes.rtpi.items():
+        if rr == region:
+            total += float(rtpi) * _f(bm.vmfb.get((region, i, a), 0.0))
+    # gc — government consumption taxes (rtgd/rtgi on vdgb/vmgb)
+    for (rr, i), rtgd in taxes.rtgd.items():
+        if rr == region:
+            total += float(rtgd) * _f(bm.vdgb.get((region, i), 0.0))
+    for (rr, i), rtgi in taxes.rtgi.items():
+        if rr == region:
+            total += float(rtgi) * _f(bm.vmgb.get((region, i), 0.0))
+    # pc + ic — private/investment consumption taxes (purchaser minus basic)
+    for i in sets.i:
+        total += _f(bm.vdpp.get((region, i), 0.0)) - _f(bm.vdpb.get((region, i), 0.0))
+        total += _f(bm.vmpp.get((region, i), 0.0)) - _f(bm.vmpb.get((region, i), 0.0))
+        total += _f(bm.vdip.get((region, i), 0.0)) - _f(bm.vdib.get((region, i), 0.0))
+        total += _f(bm.vmip.get((region, i), 0.0)) - _f(bm.vmib.get((region, i), 0.0))
+    # et — export taxes (rtxs on vxsb)
+    for (rr, i, rp), rtxs in taxes.rtxs.items():
+        if rr == region:
+            total += float(rtxs) * _f(bm.vxsb.get((region, i, rp), 0.0))
+    # mt — import taxes: imptx * VCIF (the CIF import value)
+    for (exporter, i, importer), rate in taxes.imptx.items():
+        if importer == region:
+            total += float(rate) * _f(bm.vcif.get((exporter, i, region), 0.0))
+    # ft + fs — factor tax + factor subsidy: ftrv - fbep over evfb keys
+    for rr, f, a in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
+        ftrv_val = _f(bm.ftrv.get((region, f, a), 0.0))
+        fbep_val = _f(bm.fbep.get((region, f, a), 0.0))
+        total += ftrv_val - fbep_val
+    return total
+
+
+def _vst_income(params: Any, region: str, commodity: str) -> float:
+    """VST(region,commodity) with (r,i)/(i,r) tolerance — monolith 97-106."""
+    val = params.benchmark.vst.get((region, commodity))
+    if val is None:
+        val = params.benchmark.vst.get((commodity, region), 0.0)
+    return float(val or 0.0)
+
+
+def demand_income_params(
+    params: Any,
+    sets: Any,
+    residual_region: str = "NAmerica",
+) -> dict[str, dict]:
+    """Income/demand/beta calibration loop — monolith 2258-2785, VERBATIM.
+
+    Returns a dict of ``{param_name: {index_tuple: float}}`` for every Param the
+    monolith's single calibration pass produces (2726-2785), keyed by the SAME
+    monolith Param name. Units 5 and 6 both read from this (one pass, shared).
+
+    ``residual_region`` mirrors ``self.residual_region`` (used ONLY in the
+    savf_bar residual-region capital-account rebalance, 2612-2620). Defaults to
+    the monolith's default (``NAmerica``); the composer passes the real residual
+    region in Task 5. On gtap7_3x3 the savf balance gap is applied to whichever
+    region is the residual (see the rebalance below).
+
+    The ``t0_snapshot`` (i_share/g_share/betap recompute) and
+    ``gams_calibration_dump`` (alphaa override) branches are OMITTED — they are
+    base-None on the gate oracle and are Task-5 composer carries.
+    """
+    from equilibria.templates.gtap.gtap_parameters import (
+        GTAP_INVESTMENT_AGENT,
+    )
+
+    _ = GTAP_INVESTMENT_AGENT  # referenced only in the omitted t0_snapshot branch
+
+    bm = params.benchmark
+    el = params.elasticities
+
+    regional_income_share_data: dict[tuple, float] = {}
+    regional_government_share_data: dict[tuple, float] = {}
+    regional_investment_share_data: dict[tuple, float] = {}
+    private_share_data: dict[tuple, float] = {}
+    government_share_data: dict[tuple, float] = {}
+    investment_share_data: dict[tuple, float] = {}
+    axi_data: dict[tuple, float] = {}
+    invwgt_data: dict[tuple, float] = {}
+    savwgt_data: dict[tuple, float] = {}
+    auh_data: dict[tuple, float] = {}
+    aug_data: dict[tuple, float] = {}
+    aus_data: dict[tuple, float] = {}
+    au_data: dict[tuple, float] = {}
+    regional_savings_data: dict[tuple, float] = {}
+    regy_bench_data: dict[tuple, float] = {}
+    savf_bar_data: dict[tuple, float] = {}
+    betap_data: dict[tuple, float] = {}
+    betag_data: dict[tuple, float] = {}
+    betas_data: dict[tuple, float] = {}
+    phip_data: dict[tuple, float] = {}
+    phi_data: dict[tuple, float] = {}
+    chif_data: dict[tuple, float] = {}
+    eh_data: dict[tuple, float] = {}
+    bh_data: dict[tuple, float] = {}
+    alphaa_hhd_data: dict[tuple, float] = {}
+    zcons_init_data: dict[tuple, float] = {}
+    fdepr_data: dict[tuple, float] = {}
+    depr_data: dict[tuple, float] = {}
+    rorflex_data: dict[tuple, float] = {}
+    pop_data: dict[tuple, float] = {}
+
+    def _private_total(region: str, commodity: str) -> float:
+        total, _, _ = bm.get_private_demand(region, commodity)
+        return float(total or 0.0)
+
+    def _government_total(region: str, commodity: str) -> float:
+        total, _, _ = bm.get_government_demand(region, commodity)
+        return float(total or 0.0)
+
+    def _investment_total(region: str, commodity: str) -> float:
+        total, _, _ = bm.get_investment_demand(region, commodity)
+        return float(total or 0.0)
+
+    def _pop_value(region: str) -> float:
+        raw = bm.pop
+        val = raw.get(region)
+        if val is None:
+            val = raw.get((region,), 1.0)
+        return float(val or 1.0)
+
+    for region in sets.r:
+        # evfb-based factor income (matches xf_model = (evfb/pf)*xscale init)
+        factor_income = sum(
+            _f(
+                bm.evfb.get(
+                    (region, factor, activity),
+                    bm.vfm.get((region, factor, activity), 0.0),
+                )
+            )
+            for factor in sets.f
+            for activity in sets.a
+        )
+        private_total = sum(_private_total(region, c) for c in sets.i)
+        government_total = sum(_government_total(region, c) for c in sets.i)
+        investment_total = sum(_investment_total(region, c) for c in sets.i)
+        _save_raw = bm.save.get(region, None)
+        _save_present = _save_raw is not None
+        raw_savings_total = float(_save_raw or 0.0)
+
+        vkb = float(bm.vkb.get(region, 0.0))
+        vdep = float(bm.vdep.get(region, 0.0))
+        fdepr = (vdep / vkb) if vkb > 0.0 else 0.0
+        fdepr_data[(region,)] = fdepr
+        depr_data[(region,)] = fdepr
+        rorflex_data[(region,)] = float(el.rorflex.get(region, 10.0))
+        pop_data[(region,)] = _pop_value(region)
+
+        facty_bench = max(factor_income - vdep, 0.0)
+        ytax_ind_bench = _compute_ytax_ind_bench(params, sets, region)
+        regy_income = max(facty_bench + ytax_ind_bench, 1e-8)
+        # Use benchmark save DIRECTLY when present (incl. negative). Fallback only
+        # for SAMs where save is ABSENT.
+        if _save_present:
+            savings_total = raw_savings_total
+        else:
+            savings_total = max(
+                regy_income - private_total - government_total,
+                0.0,
+            )
+        regional_savings_data[(region,)] = savings_total
+        regy_bench = max(private_total + government_total + savings_total, 1e-8)
+        regy_bench_data[(region,)] = regy_bench
+
+        # savfBar = VCIF - VFOB - VST (current account) at benchmark prices=1.
+        vcif_r = sum(
+            _f(bm.vcif.get((rp, i, region), 0.0)) for rp in sets.r for i in sets.i
+        )
+        vfob_r = sum(
+            _f(bm.vfob.get((region, i, rp), 0.0)) for i in sets.i for rp in sets.r
+        )
+        vst_r = sum(_vst_income(params, region, i) for i in sets.i)
+        savf_bar_data[(region,)] = vcif_r - vfob_r - vst_r
+
+        # betaCal: betaP/betaG/betaS from the INCOME-SIDE regY (facty+ytaxInd).
+        regy_income_for_beta = regy_income
+        phip = 1.0
+        betap = (
+            private_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
+        )
+        betag = (
+            government_total / regy_income_for_beta
+            if regy_income_for_beta > 0.0
+            else 0.0
+        )
+        betas = (
+            savings_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
+        )
+        phi = (
+            1.0 / (betap / phip + betag + betas)
+            if (betap / phip + betag + betas) > 0.0
+            else 1.0
+        )
+        regy_base = regy_bench
+        regional_income_share_data[(region,)] = (
+            private_total / regy_base if regy_base > 0.0 else 0.0
+        )
+        regional_government_share_data[(region,)] = (
+            government_total / regy_base if regy_base > 0.0 else 0.0
+        )
+        regional_investment_share_data[(region,)] = (
+            investment_total / regy_base if regy_base > 0.0 else 0.0
+        )
+
+        betap_data[(region,)] = betap
+        betag_data[(region,)] = betag
+        betas_data[(region,)] = betas
+        phip_data[(region,)] = phip
+        phi_data[(region,)] = phi
+        yc_bench = betap * (phi / max(phip, 1e-12)) * regy_bench
+
+        private_den = max(private_total, 1e-12)
+        government_den = max(government_total, 1e-12)
+        investment_den = max(investment_total, 1e-12)
+        cde_alpha_den = 0.0
+        for commodity in sets.i:
+            private_val = _private_total(region, commodity)
+            government_val = _government_total(region, commodity)
+            investment_val = _investment_total(region, commodity)
+            private_share_data[(region, commodity)] = (
+                private_val / private_den if private_total > 0.0 else 0.0
+            )
+            government_share_data[(region, commodity)] = (
+                government_val / government_den if government_total > 0.0 else 0.0
+            )
+            investment_share_data[(region, commodity)] = (
+                investment_val / investment_den if investment_total > 0.0 else 0.0
+            )
+            eh_val = float(el.incpar.get((region, commodity), 1.0) or 1.0)
+            bh_val = float(el.subpar.get((region, commodity), 1.0) or 1.0)
+            if abs(bh_val) < 1e-12:
+                bh_val = 1.0
+            eh_data[(region, commodity)] = eh_val
+            bh_data[(region, commodity)] = bh_val
+            xcshr_val = private_val / max(yc_bench, 1e-12) if private_val > 0.0 else 0.0
+            if xcshr_val > 0.0:
+                cde_alpha_den += xcshr_val / bh_val
+
+        yc_pc = yc_bench / max(pop_data[(region,)], 1e-12) if yc_bench > 0.0 else 0.0
+        yc_pc = max(yc_pc, 1e-12)
+        for commodity in sets.i:
+            private_val = _private_total(region, commodity)
+            xcshr_val = private_val / max(yc_bench, 1e-12) if private_val > 0.0 else 0.0
+            bh_val = bh_data[(region, commodity)]
+            eh_val = eh_data[(region, commodity)]
+            pa_val = 1.0  # GAMS numerario initialization
+            uh_val = 1.0  # GAMS benchmark utility initialization
+            if yc_bench > 0.0 and xcshr_val > 0.0 and cde_alpha_den > 0.0:
+                alphaa_hhd_data[(region, commodity)] = (
+                    (xcshr_val / bh_val)
+                    * ((yc_pc / pa_val) ** bh_val)
+                    * (uh_val ** (-eh_val * bh_val))
+                ) / cde_alpha_den
+                zcons_init_data[(region, commodity)] = xcshr_val / cde_alpha_den
+            else:
+                alphaa_hhd_data[(region, commodity)] = 0.0
+                zcons_init_data[(region, commodity)] = 0.0
+
+        if private_total > 0.0:
+            prod_term = 1.0
+            for commodity in sets.i:
+                share = private_share_data[(region, commodity)]
+                if share <= 0.0:
+                    continue
+                level = max(bm.get_private_demand(region, commodity)[0], 1e-12)
+                prod_term *= level**share
+            auh_data[(region,)] = 1.0 / max(prod_term, 1e-12)
+        else:
+            auh_data[(region,)] = 1.0
+
+        aug_data[(region,)] = pop_data[(region,)] / max(government_total, 1e-12)
+        aus_data[(region,)] = pop_data[(region,)] / max(savings_total, 1e-12)
+        au_data[(region,)] = 1.0
+        axi_data[(region,)] = 1.0
+        _ = (private_den, government_den, investment_den)  # (monolith locals)
+
+    # cross-region invwgt/savwgt normalization (monolith 2584-2609)
+    inv_weight_den = 0.0
+    sav_weight_den = 0.0
+    net_inv_by_region: dict[str, float] = {}
+    for region in sets.r:
+        investment_total = sum(bm.vim.get((region, c), 0.0) for c in sets.i)
+        vkb = float(bm.vkb.get(region, 0.0))
+        vdep = float(bm.vdep.get(region, 0.0))
+        depr = (vdep / vkb) if vkb > 0.0 else 0.0
+        net_inv = max(investment_total - depr * vkb, 0.0)
+        net_inv_by_region[region] = net_inv
+        inv_weight_den += net_inv
+        sav_weight_den += max(regional_savings_data[(region,)], 0.0)
+
+    for region in sets.r:
+        invwgt_data[(region,)] = (
+            net_inv_by_region[region] / inv_weight_den if inv_weight_den > 0.0 else 0.0
+        )
+        save_level = max(regional_savings_data[(region,)], 0.0)
+        savwgt_data[(region,)] = (
+            save_level / sav_weight_den if sav_weight_den > 0.0 else 0.0
+        )
+
+    # savf_bar residual-region capital-account rebalance (monolith 2611-2620)
+    savf_balance_gap = sum(savf_bar_data.values())
+    if abs(savf_balance_gap) > 1e-10 and sets.r:
+        anchor_region = (
+            residual_region if residual_region in sets.r else next(iter(sets.r))
+        )
+        savf_bar_data[(anchor_region,)] = (
+            savf_bar_data.get((anchor_region,), 0.0) - savf_balance_gap
+        )
+
+    # chif calibrated AFTER the residual rebalance (monolith 2622-2631)
+    for region in sets.r:
+        regy_bench = max(regy_bench_data.get((region,), 0.0), 1e-8)
+        chif_data[(region,)] = (
+            savf_bar_data[(region,)] / regy_bench if abs(regy_bench) > 1e-12 else 0.0
+        )
+
+    return {
+        # monolith Param name -> {index: value} (create_indexed_param 2726-2785)
+        "yc_share_reg": regional_income_share_data,
+        "yg_share_reg": regional_government_share_data,
+        "yi_share_reg": regional_investment_share_data,
+        "c_share": private_share_data,
+        "g_share": government_share_data,  # mutable
+        "i_share": investment_share_data,  # mutable
+        "axi": axi_data,
+        "invwgt": invwgt_data,
+        "savwgt": savwgt_data,
+        "auh": auh_data,
+        "aug": aug_data,
+        "aus": aus_data,  # mutable
+        "au": au_data,
+        "betap": betap_data,  # mutable
+        "betag": betag_data,  # mutable
+        "betas": betas_data,  # mutable
+        "phip0": phip_data,
+        "phi0": phi_data,
+        "chif0": chif_data,
+        "eh": eh_data,
+        "bh": bh_data,
+        "alphaa_hhd": alphaa_hhd_data,  # mutable
+        "fdepr": fdepr_data,
+        "depr": depr_data,
+        "rorflex": rorflex_data,
+        "pop": pop_data,
+        "savf_bar": savf_bar_data,
+        "zcons_init": zcons_init_data,  # var init, not a Param
+        "regy_bench": regy_bench_data,  # var init helper, not a Param
+    }
