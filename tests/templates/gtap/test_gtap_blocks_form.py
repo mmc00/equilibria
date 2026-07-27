@@ -70,6 +70,12 @@ _MIGRATED: list[tuple[str, list[str]]] = [
         # pmt/pe/xw/pmcif/pefob/pa/xaa/xda/xma (ARMINGTON). No new stubs needed.
         [],
     ),
+    (
+        "ClosureBlock",
+        # references but does not own — all owned by migrated units:
+        # pf/xf (FACTOR), pfact (FACTOR), yi/rsav (INCOME), pi/savf/kstock (DEMAND).
+        [],
+    ),
 ]
 
 # Upstream shared vars a leaf unit references but a later unit owns — stubbed so
@@ -148,6 +154,32 @@ _FORM_CARRY_EQS: dict[tuple[str, str], str] = {
     ("IncomeBlock", "eq_pabs"): "Fisher base_xaa post-align seed drift",
 }
 _SHARE_DRIFT_RTOL = 1e-6
+
+# Per-unit STRUCTURAL-carry: (unit, eq) pairs whose folded coefficient is a
+# COMPOSER-owned post-scaling snapshot the block cannot reproduce (pf0/xf0/
+# mqfactr_bb, computed from the SCALED model's xf.l — __init__.py checklist item
+# 3). The block builds the eq against benchmark-seeded pf0/xf0 Params; the
+# coefficient differs from the oracle by the xscale factor (up to ~10x on the
+# rescaled Mnfcs/Svces cells) — NOT a tiny drift. The check here is that the
+# expression SKELETON is byte-identical (same vars/ops/term structure, numeric
+# literals stripped) — a real port bug (wrong var/op/missing term) changes the
+# skeleton and STILL fails; only the composer-supplied magnitude is exempt.
+_STRUCT_CARRY_EQS: dict[tuple[str, str], str] = {
+    ("ClosureBlock", "eq_pfact"): "pf0/xf0/mqfactr_bb post-scaling snapshot (composer)",
+    (
+        "ClosureBlock",
+        "eq_pwfact",
+    ): "pf0/xf0/mqfactw_bb post-scaling snapshot (composer)",
+}
+
+
+def _skeleton_identical(block_str: str, mono_str: str) -> bool:
+    """True if two expr strings are identical after stripping numeric literals.
+
+    Same non-numeric token stream (vars, operators, term structure) — the folded
+    numeric coefficient may differ arbitrarily (the composer owns it). A genuine
+    algebraic re-shape changes the skeleton -> False (fails, as it should)."""
+    return _NUM_RE.sub("#", block_str) == _NUM_RE.sub("#", mono_str)
 
 
 def _oracle():
@@ -338,6 +370,7 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
         )
         diffs = form_diff(bc, oc)
         carry_reason = _FORM_CARRY_EQS.get((unit_name, eq))
+        struct_reason = _STRUCT_CARRY_EQS.get((unit_name, eq))
         if carry_reason is not None:
             # Blocker-C share-drift carry: every diff on this eq must be a
             # coefficient-only difference within tolerance (structure identical).
@@ -351,6 +384,17 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
             assert non_drift == [], (
                 f"{unit_name} {eq}: NON-share-drift form diff (structural or "
                 f">rtol): {non_drift[0]}"
+            )
+        elif struct_reason is not None:
+            # Composer post-scaling-snapshot carry (pf0/xf0/mqfactr_bb): the folded
+            # coefficient is the composer's SCALED xf.l snapshot the block cannot
+            # know, so the magnitude may differ arbitrarily — but the expression
+            # SKELETON must be byte-identical. A wrong var/op/missing term changes
+            # the skeleton and STILL fails, so this cannot mask a real port bug.
+            non_struct = [d for d in diffs if not _skeleton_identical(d[1], d[2])]
+            assert non_struct == [], (
+                f"{unit_name} {eq}: NON-structural form diff (skeleton differs): "
+                f"{non_struct[0]}"
             )
         else:
             assert diffs == [], (
