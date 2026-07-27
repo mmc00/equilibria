@@ -450,6 +450,305 @@ def fctts_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
     return out
 
 
+# ----------------------------------------------------------------------------
+# ARMINGTON + BILATERAL unit (monolith 2167-2252, 6038-6631, 2993-3145)
+# ----------------------------------------------------------------------------
+
+# GTAP aggregate-agent labels (monolith imports these from gtap_parameters).
+_HHD, _GOV, _INV, _TMG = "hhd", "gov", "inv", "tmg"
+
+
+def _two_key(raw_map: Any, region: str, commodity: str) -> float:
+    """(region,commodity) then (commodity,region) fallback — monolith _two_key."""
+    val = raw_map.get((region, commodity), None)
+    if val is None:
+        val = raw_map.get((commodity, region), 0.0)
+    return float(val or 0.0)
+
+
+def _vst_value(params: Any, region: str, commodity: str) -> float:
+    """VST(region,commodity) with (r,i)/(i,r) tolerance — monolith 97-106."""
+    val = params.benchmark.vst.get((region, commodity))
+    if val is None:
+        val = params.benchmark.vst.get((commodity, region), 0.0)
+    return float(val or 0.0)
+
+
+def tmarg_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
+    """tmarg(r,i,rp) = max(vcif-vfob,0)/xw_bench — monolith 2168-2188."""
+    bm = params.benchmark
+    out: dict[tuple[str, str, str], float] = {}
+    for r in sets.r:
+        for i in sets.i:
+            for rp in sets.r:
+                xw_bench = _f(bm.vxsb.get((r, i, rp), 0.0))
+                vcif = _f(bm.vcif.get((r, i, rp), 0.0))
+                vfob = _f(bm.vfob.get((r, i, rp), 0.0))
+                out[(r, i, rp)] = (
+                    max(vcif - vfob, 0.0) / max(xw_bench, 1e-12)
+                    if xw_bench > 0.0
+                    else 0.0
+                )
+    return out
+
+
+def amgm_data(params: Any, sets: Any) -> dict[tuple[str, str, str, str], float]:
+    """amgm(m,r,i,rp) = vtwr(m)/sum_m vtwr — monolith 2190-2193."""
+    bm = params.benchmark
+    out: dict[tuple[str, str, str, str], float] = {}
+    for r in sets.r:
+        for i in sets.i:
+            for rp in sets.r:
+                margin_flow = sum(_f(bm.vtwr.get((r, i, rp, m), 0.0)) for m in sets.m)
+                for m in sets.m:
+                    flow = _f(bm.vtwr.get((r, i, rp, m), 0.0))
+                    out[(m, r, i, rp)] = (
+                        flow / margin_flow if margin_flow > 0.0 else 0.0
+                    )
+    return out
+
+
+def lambdamg_data(params: Any, sets: Any) -> dict[tuple[str, str, str, str], float]:
+    """lambdamg(m,r,i,rp) = 1.0 — monolith 2194."""
+    out: dict[tuple[str, str, str, str], float] = {}
+    for r in sets.r:
+        for i in sets.i:
+            for rp in sets.r:
+                for m in sets.m:
+                    out[(m, r, i, rp)] = 1.0
+    return out
+
+
+def xw_flag_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
+    """xw_flag(r,i,rp) = 1 if vxsb>0 — monolith 2009-2016."""
+    bm = params.benchmark
+    out: dict[tuple[str, str, str], float] = {}
+    for r in sets.r:
+        for i in sets.i:
+            for rp in sets.r:
+                out[(r, i, rp)] = 1.0 if _f(bm.vxsb.get((r, i, rp), 0.0)) > 0.0 else 0.0
+    return out
+
+
+def xet_flag_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
+    """xet_flag(r,i) = 1.0 for every (r,i) — monolith 2018-2024."""
+    return {(r, i): 1.0 for r in sets.r for i in sets.i}
+
+
+def gw_share_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
+    """gw_share(r,i,rp) — seed from params.shares.p_gw (monolith 2006-2007). CARRY."""
+    return dict(params.shares.p_gw)
+
+
+def imptx_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
+    """imptx(r,i,rp) = (vmsb-vcif)/vcif else raw imptx — monolith 5003-5008.
+
+    Mutable in the monolith (5017-5024) and referenced UNWRAPPED in eq_pmeq via
+    _imptx_rate_importer (5419: return model.imptx[...]), so it must stay symbolic.
+    """
+    imptx_p = getattr(params.taxes, "imptx", {}) or {}
+    bm = params.benchmark
+    vcif_p = getattr(bm, "vcif", {})
+    vmsb_p = getattr(bm, "vmsb", {})
+    out: dict[tuple[str, str, str], float] = {}
+    for r in sets.r:
+        for i in sets.i:
+            for rp in sets.r:
+                vcif = _f(vcif_p.get((r, i, rp), 0.0))
+                vmsb = _f(vmsb_p.get((r, i, rp), 0.0))
+                if vcif > 1e-12 and (r, i, rp) not in imptx_p:
+                    out[(r, i, rp)] = (vmsb - vcif) / vcif
+                else:
+                    out[(r, i, rp)] = _f(imptx_p.get((r, i, rp), 0.0))
+    return out
+
+
+def _dintx_target(params: Any, sets: Any, r: str, i: str, aa: str) -> float:
+    """get_dintx_init body (benchmark branch) — monolith 3021-3058."""
+    bm = params.benchmark
+    if aa in sets.a:
+        numerator = _f(bm.vdfp.get((r, i, aa), 0.0)) - _f(bm.vdfb.get((r, i, aa), 0.0))
+        denom = max(_f(bm.vdfb.get((r, i, aa), 0.0)), 0.0)
+    elif aa == _HHD:
+        numerator = _two_key(bm.vdpp, r, i) - _two_key(bm.vdpb, r, i)
+        denom = max(_two_key(bm.vdpb, r, i), 0.0)
+    elif aa == _GOV:
+        numerator = _two_key(bm.vdgp, r, i) - _two_key(bm.vdgb, r, i)
+        denom = max(_two_key(bm.vdgb, r, i), 0.0)
+    elif aa == _INV:
+        numerator = _two_key(bm.vdip, r, i) - _two_key(bm.vdib, r, i)
+        denom = max(_two_key(bm.vdib, r, i), 0.0)
+    elif aa == _TMG:
+        return 0.0
+    else:
+        numerator = 0.0
+        denom = 0.0
+    if denom > 0.0:
+        return numerator / denom
+    return _f(params.taxes.dintx0.get((r, i, aa), 0.0))
+
+
+def _mintx_target(params: Any, sets: Any, r: str, i: str, aa: str) -> float:
+    """get_mintx_init body (benchmark branch) — monolith 3060-3097."""
+    bm = params.benchmark
+    if aa in sets.a:
+        numerator = _f(bm.vmfp.get((r, i, aa), 0.0)) - _f(bm.vmfb.get((r, i, aa), 0.0))
+        denom = max(_f(bm.vmfb.get((r, i, aa), 0.0)), 0.0)
+    elif aa == _HHD:
+        numerator = _two_key(bm.vmpp, r, i) - _two_key(bm.vmpb, r, i)
+        denom = max(_two_key(bm.vmpb, r, i), 0.0)
+    elif aa == _GOV:
+        numerator = _two_key(bm.vmgp, r, i) - _two_key(bm.vmgb, r, i)
+        denom = max(_two_key(bm.vmgb, r, i), 0.0)
+    elif aa == _INV:
+        numerator = _two_key(bm.vmip, r, i) - _two_key(bm.vmib, r, i)
+        denom = max(_two_key(bm.vmib, r, i), 0.0)
+    elif aa == _TMG:
+        return 0.0
+    else:
+        numerator = 0.0
+        denom = 0.0
+    if denom > 0.0:
+        return numerator / denom
+    return _f(params.taxes.mintx0.get((r, i, aa), 0.0))
+
+
+def _raw_agent_dom_imp(params: Any, sets: Any, r: str, i: str, aa: str):
+    """_raw_agent_domestic_import_eq body — monolith 6086-6120."""
+    bm = params.benchmark
+    if aa in sets.a:
+        raw_domestic = bm.vdfb.get((r, i, aa), 0.0)
+        raw_import = bm.vmfb.get((r, i, aa), 0.0)
+        if raw_domestic + raw_import <= 0.0:
+            raw_domestic = bm.vdfm.get((r, i, aa), 0.0)
+            raw_import = bm.vifm.get((r, i, aa), 0.0)
+    elif aa == _HHD:
+        raw_domestic = bm.vdpb.get((r, i), 0.0)
+        raw_import = bm.vmpb.get((r, i), 0.0)
+        if raw_domestic + raw_import <= 0.0:
+            _, raw_domestic, raw_import = bm.get_private_demand(r, i)
+    elif aa == _GOV:
+        raw_domestic = bm.vdgb.get((r, i), 0.0)
+        raw_import = bm.vmgb.get((r, i), 0.0)
+        if raw_domestic + raw_import <= 0.0:
+            _, raw_domestic, raw_import = bm.get_government_demand(r, i)
+    elif aa == _INV:
+        raw_domestic = bm.vdib.get((r, i), 0.0)
+        raw_import = bm.vmib.get((r, i), 0.0)
+        if raw_domestic + raw_import <= 0.0:
+            _, raw_domestic, raw_import = bm.get_investment_demand(r, i)
+    elif aa == _TMG:
+        raw_domestic = _vst_value(params, str(r), str(i))
+        raw_import = 0.0
+    else:
+        raw_domestic = 0.0
+        raw_import = 0.0
+    return max(float(raw_domestic or 0.0), 0.0), max(float(raw_import or 0.0), 0.0)
+
+
+def _agent_list(sets: Any) -> list[str]:
+    return list(sets.a) + [_HHD, _GOV, _INV, _TMG]
+
+
+def armington_shares(
+    params: Any, sets: Any
+) -> dict[tuple[str, str, str], tuple[float, float]]:
+    """(alphad, alpham) per (r,i,aa) — monolith 6122-6229, BENCHMARK-seed variant.
+
+    CARRY (Blocker C / unit-4 pre-adjudicated): the monolith computes these from
+    ``t0_arm`` = the model's POST-apply_production_scaling Var levels
+    (value(model.xaa/xda/xma/pdp/pmp/pa)). A block cannot read those, so this
+    reproduces the SAME algebra from the benchmark SEED (pa=1, pdp=1+dintx0,
+    pmp=1+mintx0, xda/xma from the agent-trade cache, xaa = purchaser value).
+    On active CES cells the alphad/alpham coefficient therefore DRIFTS from the
+    oracle's post-scaling value; the composer re-runs this with the scaled model
+    (same family as gd/ge/gw). The equation STRUCTURE and Skip mask are identical.
+    """
+    esubd = params.elasticities.esubd
+    # agent-trade cache (import-scaled domestic/import levels), monolith 6122-6157.
+    # get_xda_init = domestic/pd (pd=1); get_xma_init = imported (both from cache).
+    trade = _agent_trade_cache(params, sets)
+    out: dict[tuple[str, str, str], tuple[float, float]] = {}
+    for r in sets.r:
+        for i in sets.i:
+            for aa in _agent_list(sets):
+                dom, imp = trade.get((r, i, aa), (0.0, 0.0))
+                xda_bench = max(dom, 0.0)  # /pd_bench=1
+                xma_bench = max(imp, 0.0)
+                xaa_bench = _xaa_purchaser_value(params, sets, r, i, aa)
+                if xaa_bench <= 0.0 or (xda_bench <= 0.0 and xma_bench <= 0.0):
+                    out[(r, i, aa)] = (0.0, 0.0)
+                    continue
+                sigma_m = float(esubd.get((r, i), 2.0))
+                pdp_bench = max(1.0 + _dintx_target(params, sets, r, i, aa), 1e-8)
+                pmp_bench = max(1.0 + _mintx_target(params, sets, r, i, aa), 1e-8)
+                pa_bench = 1.0
+                # SURGICAL xaa consistency fix (monolith 6207-6214)
+                _xaa_consistent = (
+                    pdp_bench * xda_bench + pmp_bench * xma_bench
+                ) / pa_bench
+                if (
+                    _xaa_consistent > 0.0
+                    and abs(_xaa_consistent / xaa_bench - 1.0) > 0.01
+                ):
+                    xaa_bench = _xaa_consistent
+                alphad = (
+                    (xda_bench / xaa_bench) * (pdp_bench / pa_bench) ** sigma_m
+                    if xda_bench > 0.0
+                    else 0.0
+                )
+                alpham = (
+                    (xma_bench / xaa_bench) * (pmp_bench / pa_bench) ** sigma_m
+                    if xma_bench > 0.0
+                    else 0.0
+                )
+                out[(r, i, aa)] = (alphad, alpham)
+    return out
+
+
+def _agent_trade_cache(
+    params: Any, sets: Any
+) -> dict[tuple[str, str, str], tuple[float, float]]:
+    """domestic/import agent-trade levels with import scaling — monolith 6122-6157."""
+    bm = params.benchmark
+    out: dict[tuple[str, str, str], tuple[float, float]] = {}
+    for r in sets.r:
+        for i in sets.i:
+            raw_levels: dict[str, tuple[float, float]] = {}
+            total_raw_import = 0.0
+            for aa in _agent_list(sets):
+                dom, imp = _raw_agent_dom_imp(params, sets, r, i, aa)
+                raw_levels[aa] = (dom, imp)
+                total_raw_import += imp
+            target_import_total = sum(_f(bm.vmsb.get((rp, i, r), 0.0)) for rp in sets.r)
+            import_scale = (
+                (target_import_total / total_raw_import)
+                if total_raw_import > 0.0
+                else 1.0
+            )
+            for aa, (dom, imp) in raw_levels.items():
+                out[(r, i, aa)] = (dom, imp * import_scale)
+    return out
+
+
+def _xaa_purchaser_value(params: Any, sets: Any, r: str, i: str, aa: str) -> float:
+    """get_xaa_purchaser_value_init — monolith 3103-3136."""
+    bm = params.benchmark
+    if aa in sets.a:
+        return max(
+            _f(bm.vdfp.get((r, i, aa), 0.0)) + _f(bm.vmfp.get((r, i, aa), 0.0)), 0.0
+        )
+    if aa == _HHD:
+        return max(_two_key(bm.vdpp, r, i) + _two_key(bm.vmpp, r, i), 0.0)
+    if aa == _GOV:
+        return max(_two_key(bm.vdgp, r, i) + _two_key(bm.vmgp, r, i), 0.0)
+    if aa == _INV:
+        return max(_two_key(bm.vdip, r, i) + _two_key(bm.vmip, r, i), 0.0)
+    if aa == _TMG:
+        return max(_vst_value(params, str(r), str(i)), 0.0)
+    return 0.0
+
+
 def prdtx_rai_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
     """prdtx_rai(r,a,i) = makb/maks - 1 (else rto) — monolith 2146-2165."""
     bm = params.benchmark

@@ -20,6 +20,7 @@ on gtap7_3x3 (all omegax=inf, so gd/ge never enter an active Leontief body).
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,25 @@ _MIGRATED: list[tuple[str, list[str]]] = [
     ("TradeCETBlock", ["xds", "xs", "pd", "ps"]),
     ("ProductionSupplyBlock", ["pd", "ps", "pa", "pfa"]),
     ("FactorBlock", ["pd", "ps", "pa", "pva", "va", "pabs"]),
+    (
+        "ArmingtonBilateralBlock",
+        [
+            "pd",
+            "ps",
+            "pva",
+            "va",
+            "pabs",
+            "nd",
+            "pnd",
+            "xc",
+            "xg",
+            "xi",
+            "pet",
+            "xet",
+            "xds",
+            "pnum",
+        ],
+    ),
 ]
 
 # Upstream shared vars a leaf unit references but a later unit owns — stubbed so
@@ -51,6 +71,14 @@ _STUBS: dict[str, tuple[tuple[str, ...], str]] = {
     "pva": (("r", "a"), "NonNegativeReals"),
     "va": (("r", "a"), "NonNegativeReals"),
     "pabs": (("r",), "NonNegativeReals"),
+    "nd": (("r", "a"), "NonNegativeReals"),
+    "pnd": (("r", "a"), "NonNegativeReals"),
+    "xc": (("r", "i"), "NonNegativeReals"),
+    "xg": (("r", "i"), "NonNegativeReals"),
+    "xi": (("r", "i"), "NonNegativeReals"),
+    "pet": (("r", "i"), "NonNegativeReals"),
+    "xet": (("r", "i"), "Reals"),
+    "pnum": ((), "NonNegativeReals"),
 }
 
 # Per-unit domain-gate exceptions: owned-var cells whose bound differs ONLY by a
@@ -65,7 +93,27 @@ _DOMAIN_CARRY_VARS: dict[str, str] = {
     # kapEnd cells. The composer re-values + re-floors kapEnd in Task 5 (same
     # snapshot family as pf0/xf0/mqfactr_bb). Form is 0/243 clean.
     "kapEnd": "post-apply_production_scaling xiagg=yi/pi re-value (composer carry)",
+    # ARMINGTON+BILATERAL: pm/pmcif/pefob price floors (1e-3*init) reflect the
+    # monolith's POST-apply_production_scaling re-value of the bilateral price vars
+    # (pm≈1.05, pmcif/pefob≈1.001..1.07), gtap_model_equations.py:5383-5385. Block
+    # seeds these =1.0 -> floor 1e-3. Same post-scaling snapshot family (composer
+    # re-floors). Structure (index-set equality) is clean.
+    "pm": "post-apply_production_scaling price re-value floor (composer carry)",
+    "pmcif": "post-apply_production_scaling price re-value floor (composer carry)",
+    "pefob": "post-apply_production_scaling price re-value floor (composer carry)",
 }
+
+# Per-unit FORM-gate carry: (unit, eq) pairs whose per-cell diff is ONLY a
+# coefficient-value difference at the share-seed vs post-scaling boundary
+# (Blocker C, pre-adjudicated). The cell's EXPRESSION STRUCTURE must be identical
+# (verified below by stripping numeric literals) and every numeric-literal pair
+# must agree within _SHARE_DRIFT_RTOL — a structural re-shape would still fail.
+_FORM_CARRY_EQS: dict[tuple[str, str], str] = {
+    ("ArmingtonBilateralBlock", "eq_paa"): "top-Armington alphad/alpham seed drift",
+    ("ArmingtonBilateralBlock", "eq_xda"): "top-Armington alphad seed drift",
+    ("ArmingtonBilateralBlock", "eq_xma"): "top-Armington alpham seed drift",
+}
+_SHARE_DRIFT_RTOL = 1e-6
 
 
 def _oracle():
@@ -101,7 +149,59 @@ def _set_elems(sets: Any) -> dict[str, list[str]]:
         "m": list(sets.m),
         "marg": list(sets.marg),
         "aa": list(sets.a) + agents,
+        "rp": list(sets.r),
     }
+
+
+_NUM_RE = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
+
+
+def _is_coefficient_only_drift(block_str: str, mono_str: str, rtol: float) -> bool:
+    """True if two expr strings differ ONLY in numeric literals within ``rtol``.
+
+    Strips every numeric literal to a placeholder and requires the remaining
+    (structural) token stream to be IDENTICAL, then checks each numeric-literal
+    pair agrees to a relative tolerance. A genuine algebraic RE-SHAPE changes the
+    non-numeric skeleton -> not a coefficient-only drift (fails, as it should).
+    """
+    if _NUM_RE.sub("#", block_str) != _NUM_RE.sub("#", mono_str):
+        return False
+    b_nums = [float(x) for x in _NUM_RE.findall(block_str)]
+    m_nums = [float(x) for x in _NUM_RE.findall(mono_str)]
+    if len(b_nums) != len(m_nums):
+        return False
+    for b, m in zip(b_nums, m_nums, strict=True):
+        denom = max(abs(b), abs(m), 1e-12)
+        if abs(b - m) / denom > rtol:
+            return False
+    return True
+
+
+def _is_post_scaling_floor_carry(a_dom, b_dom, a_bnd, b_bnd) -> bool:
+    """True if a domain diff is ONLY a post-scaling floor/level re-value.
+
+    Two admissible shapes, both from the composer's post-apply_production_scaling
+    re-value of a price/level var (block seeds the benchmark, floors 1e-3*seed):
+      * a RAISED floor  — oracle lower >= block lower (price vars pm/pmcif/pefob,
+        whose post-scaling level > 1 lifts the 1e-3*level floor above 1e-3); or
+      * a tiny two-way re-VALUE drift within 1e-6 relative (kapEnd = (1-depr)*
+        kstock + xiagg with xiagg=yi/pi vs the benchmark xi_bench).
+    Requires same domain label and same upper bound throughout — a dropped/
+    loosened bound, a domain-label change, or a large floor mismatch is a real
+    port bug and still fails.
+    """
+    if a_dom != b_dom:
+        return False
+    a_lo, a_hi = a_bnd
+    b_lo, b_hi = b_bnd
+    if a_hi != b_hi:
+        return False
+    if a_lo is None or b_lo is None:
+        return False
+    if b_lo >= a_lo:
+        return True
+    denom = max(abs(a_lo), abs(b_lo), 1e-12)
+    return abs(a_lo - b_lo) / denom <= 1e-6
 
 
 def _build_block_model(block_classes, p, sets, stub_names):
@@ -121,13 +221,16 @@ def _build_block_model(block_classes, p, sets, stub_names):
             continue
         doms, dlabel = _STUBS[n]
         shape = tuple(len(setmap[d]) for d in doms)
+        # A scalar stub (empty domains) needs a length-1 array (the bridge's
+        # scalar path calls len(var.value)); a 0-D np.ones(()) would break it.
+        val = np.ones(shape) if shape else np.array([1.0])
         model.add_variable(
             Variable(
                 name=n,
-                value=np.ones(shape),
+                value=val,
                 domains=doms,
                 domain=dlabel,
-                lower=1e-3,
+                lower=1e-3 if dlabel == "NonNegativeReals" else float("-inf"),
                 upper=float("inf"),
             )
         )
@@ -184,9 +287,25 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
             f"cell(s) the oracle skips; sample {sorted(only_block)[:3]}"
         )
         diffs = form_diff(bc, oc)
-        assert diffs == [], (
-            f"{unit_name} {eq}: {len(diffs)} form diff(s); first: {diffs[0]}"
-        )
+        carry_reason = _FORM_CARRY_EQS.get((unit_name, eq))
+        if carry_reason is not None:
+            # Blocker-C share-drift carry: every diff on this eq must be a
+            # coefficient-only difference within tolerance (structure identical).
+            # A structural re-shape would NOT satisfy _is_coefficient_only_drift
+            # and would fail here — so the exception cannot mask a real port bug.
+            non_drift = [
+                d
+                for d in diffs
+                if not _is_coefficient_only_drift(d[1], d[2], _SHARE_DRIFT_RTOL)
+            ]
+            assert non_drift == [], (
+                f"{unit_name} {eq}: NON-share-drift form diff (structural or "
+                f">rtol): {non_drift[0]}"
+            )
+        else:
+            assert diffs == [], (
+                f"{unit_name} {eq}: {len(diffs)} form diff(s); first: {diffs[0]}"
+            )
         checked += 1
     assert checked == len(eq_names)
 
@@ -201,14 +320,16 @@ def test_gtap_block_domain_matches_monolith(_fixtures, unit_name, sub):
     unit(sets=_sets, params=_p).setup(_ScratchSM(_sets), {}, owned)
     owned_names = set(owned)
 
-    diffs = [
-        d
-        for d in domain_bounds_diff(bm, oracle)
-        if d[0] in owned_names and d[0] not in _DOMAIN_CARRY_VARS
-    ]
-    assert diffs == [], (
-        f"{unit_name}: domain/bounds mismatch on owned vars: {diffs[:3]}"
-    )
+    owned_diffs = [d for d in domain_bounds_diff(bm, oracle) if d[0] in owned_names]
+    real: list[Any] = []
+    for d in owned_diffs:
+        name, _idx, a_dom, b_dom, a_bnd, b_bnd = d
+        if name in _DOMAIN_CARRY_VARS and _is_post_scaling_floor_carry(
+            a_dom, b_dom, a_bnd, b_bnd
+        ):
+            continue  # documented post-scaling floor/level carry (composer owns)
+        real.append(d)
+    assert real == [], f"{unit_name}: domain/bounds mismatch on owned vars: {real[:3]}"
 
 
 class _ScratchSM:
