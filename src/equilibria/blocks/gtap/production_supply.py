@@ -77,11 +77,12 @@ class ProductionSupplyBlock(Block):
         # Parameters (monolith _add_parameters recipes) — same names/values so
         # every model.<param>[...] reference and inlined value matches the oracle.
         # ------------------------------------------------------------------
-        def _param(name, data, doms, default=0.0):
+        def _param(name, data, doms, default=0.0, mutable=False):
             parameters[name] = Parameter(
                 name=name,
                 value=dp.to_array(data, [_byname[d] for d in doms], default),
                 domains=tuple(doms),
+                mutable=mutable,
             )
 
         _param("and_param", dp.and_param_data(p, s), ("r", "a"))
@@ -98,8 +99,11 @@ class ProductionSupplyBlock(Block):
         _param("xflag", dp.xflag_data(p, s), ("r", "a", "i"))
         # gd_share/ge_share shared with TRADE_CET (dedup by name — first wins);
         # declared here too so a standalone build resolves them. CARRY: drift.
-        _param("gd_share", dp.gd_share_data(p, s), ("r", "i"))
-        _param("ge_share", dp.ge_share_data(p, s), ("r", "i"))
+        # mutable=True: the monolith (2001-2005) declares these mutable and references
+        # them unwrapped, so they stay symbolic (not folded to a literal) — matches
+        # the oracle under finite-omegax and survives the composer's share recompute.
+        _param("gd_share", dp.gd_share_data(p, s), ("r", "i"), mutable=True)
+        _param("ge_share", dp.ge_share_data(p, s), ("r", "i"), mutable=True)
 
         # ------------------------------------------------------------------
         # Variables OWNED by this unit (monolith 3509-3579). Prices carry the

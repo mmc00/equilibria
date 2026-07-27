@@ -84,14 +84,19 @@ class TradeCETBlock(Block):
             for ci, i in enumerate(comms):
                 gd[ri, ci] = float(p.shares.p_gd.get((r, i), 0.0) or 0.0)
                 ge[ri, ci] = float(p.shares.p_ge.get((r, i), 0.0) or 0.0)
+        # gd_share/ge_share/xet_flag are mutable in the monolith (2001-2024) and are
+        # referenced UNWRAPPED (model.gd_share[r,i] etc.) inside the rule bodies, so
+        # they must stay SYMBOLIC (mutable) rather than fold to a literal. Inert on
+        # gtap7_3x3 (omegax=inf, Leontief branch) but load-bearing under finite-omegax
+        # and for the composer's apply_production_scaling recompute / xet_flag.set_value.
         parameters["gd_share"] = Parameter(
-            name="gd_share", value=gd, domains=("r", "i")
+            name="gd_share", value=gd, domains=("r", "i"), mutable=True
         )
         parameters["ge_share"] = Parameter(
-            name="ge_share", value=ge, domains=("r", "i")
+            name="ge_share", value=ge, domains=("r", "i"), mutable=True
         )
         parameters["xet_flag"] = Parameter(
-            name="xet_flag", value=xetflag, domains=("r", "i")
+            name="xet_flag", value=xetflag, domains=("r", "i"), mutable=True
         )
 
         # Closure captures for the inline-python omega branch.
