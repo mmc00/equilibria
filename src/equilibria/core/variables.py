@@ -27,6 +27,11 @@ class Variable(BaseModel):
         lower: Lower bound (default: 0 for non-negative variables)
         upper: Upper bound (default: inf)
         description: Human-readable description
+        domain: Pyomo domain name mapped to ``within=`` by the bridge. Valid
+            values are Pyomo domain names — GTAP uses ``Reals`` (the FREE vars
+            xet/xw) and ``NonNegativeReals`` (the 78 price/quantity vars).
+            Defaults to ``"Reals"`` so every existing caller (PEP blocks,
+            simple_open, task-3.5 tests) is byte-for-byte unchanged.
         initial_value: Starting value for solver
 
     Example:
@@ -47,6 +52,10 @@ class Variable(BaseModel):
     lower: float | np.ndarray = Field(default=0.0, description="Lower bound")
     upper: float | np.ndarray = Field(default=float("inf"), description="Upper bound")
     description: str = Field(default="", description="Human-readable description")
+    domain: str = Field(
+        default="Reals",
+        description="Pyomo domain name (e.g. NonNegativeReals); mapped to within= by the bridge",
+    )
 
     model_config = {"arbitrary_types_allowed": True, "frozen": False}
 

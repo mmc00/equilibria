@@ -100,3 +100,52 @@ def test_form_diff_synthetic_expressions():
     idx_diffed = {d[0] for d in diffs}
     assert "different" in idx_diffed
     assert "same" not in idx_diffed
+
+
+def test_form_diff_cross_model_identical_reports_equal():
+    """Cross-model widening: same algebra on TWO ConcreteModels → NO diff.
+
+    The Task-4 form gate compares a block-built model against a separately-built
+    monolith model. ``compare_expressions`` matches leaf components by object
+    identity, so a structurally identical expression built on a DIFFERENT
+    ConcreteModel returns False (no exception) — the string fallback in the old
+    ``_exprs_equal`` never ran, and every cell of a byte-perfect port flagged a
+    false diff. This test builds the SAME expression on two separate models and
+    asserts ``form_diff`` reports them equal.
+    """
+    from blocks_diag import form_diff
+    from pyomo.environ import ConcreteModel, Set, Var
+
+    def _build():
+        m = ConcreteModel()
+        m.I = Set(initialize=[1, 2])
+        m.x = Var(m.I, initialize=1.0)
+        return {"cell": m.x[1] + 2 * m.x[2] == 0}
+
+    block = _build()
+    monolith = _build()  # a DIFFERENT ConcreteModel, identical algebra
+
+    diffs = form_diff(block, monolith)
+    assert diffs == []
+
+
+def test_form_diff_same_model_different_coefficient_reports_diff():
+    """Caveat guard: widening must NOT blind the tool.
+
+    A genuine structural difference on the SAME model (``2*x`` vs ``3*x``) must
+    STILL report a diff — the strings differ, so string-equality flags it. We
+    widened "equal" to cross the model-identity boundary, not to swallow real
+    algebraic re-shapes.
+    """
+    from blocks_diag import form_diff
+    from pyomo.environ import ConcreteModel, Set, Var
+
+    m = ConcreteModel()
+    m.I = Set(initialize=["c"])
+    m.x = Var(m.I, initialize=1.0)
+
+    block = {"c": 2 * m.x["c"] == 0}
+    monolith = {"c": 3 * m.x["c"] == 0}
+
+    diffs = form_diff(block, monolith)
+    assert {d[0] for d in diffs} == {"c"}

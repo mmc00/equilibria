@@ -140,16 +140,24 @@ def _exprs_equal(expr_a, expr_b) -> bool:
     """True if two Pyomo expressions are structurally equal.
 
     Prefers ``pyomo.core.expr.compare.compare_expressions`` (walks the
-    expression tree, insensitive to incidental Python object identity); falls
-    back to a string compare if that helper is unavailable in the installed
-    Pyomo version.
+    expression tree), then falls back to a canonical string compare.
+
+    ``compare_expressions`` matches leaf components by **object identity**, so
+    two structurally identical expressions built on **different** ``ConcreteModel``
+    instances (a block-built model vs a separately-built monolith — exactly the
+    Task-4 form gate) return ``False`` with no exception. When that happens we
+    fall back to the string compare: string-equal ⇒ structurally identical
+    regardless of which model the leaf objects belong to. The fallback also
+    covers a Pyomo version where the helper is unavailable (the ``except`` arm).
     """
     try:
         from pyomo.core.expr.compare import compare_expressions
 
-        return bool(compare_expressions(expr_a, expr_b))
+        if compare_expressions(expr_a, expr_b):
+            return True
     except Exception:
-        return _expr_to_str(expr_a) == _expr_to_str(expr_b)
+        pass
+    return _expr_to_str(expr_a) == _expr_to_str(expr_b)
 
 
 def form_diff(block, monolith_model) -> list[tuple[Any, str, str]]:
@@ -165,13 +173,19 @@ def form_diff(block, monolith_model) -> list[tuple[Any, str, str]]:
     this reports MISMATCHES, not coverage gaps (use a set-diff of indices for
     that separately).
 
-    NOTE for Task 4: ``compare_expressions`` compares expression TREES, not
+    NOTE for Task 4: equality is treated as **string-equal after a
+    canonical-form compare** (see ``_exprs_equal``). ``compare_expressions``
+    matches leaf components by object identity, so a block built on its own
+    ``ConcreteModel`` compared against the monolith's model would false-diff on
+    every cell; the string fallback makes the cross-model block-vs-oracle
+    comparison work (textually identical after a verbatim port ⇒ equal).
+    ``compare_expressions`` still short-circuits the same-model case where two
+    exprs are structurally different. This compares expression TREES/text, not
     numeric equivalence — two algebraically-equal-but-differently-shaped forms
-    (e.g. ``a * (b + c)`` vs ``a * b + a * c``) will show up as a "diff" even
-    though they evaluate identically. That's intentional for this tool's job
-    (surface a structural rewrite the .nl coefficient diff would miss), but it
-    means a real B-block extraction that legitimately re-derives an equation's
-    algebraic form will need eyeball confirmation here, not just a green check.
+    (e.g. ``a * (b + c)`` vs ``a * b + a * c``) still show up as a "diff"
+    because their strings differ, which is what we WANT: it forces eyeball /
+    re-transcription of a legitimate algebraic re-derivation instead of a
+    silent green check.
     """
 
     def _cells(source):

@@ -133,6 +133,7 @@ repos:
               tests/babel/gdx/test_writer\.py|
               tests/babel/har/test_reader\.py|
               tests/backends/test_pyomo_backend\.py|
+              tests/backends/test_pyomo_backend_domain\.py|
               tests/backends/test_pyomo_backend_ndim\.py|
               tests/blocks/test_block_equations\.py|
               tests/parity/test_cascade_classify\.py|

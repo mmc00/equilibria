@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 try:
     from pyomo.environ import (
         ConcreteModel,
+        NonNegativeReals,
         Param,
+        Reals,
         Set,
         SolverFactory,
         Var,
@@ -29,8 +31,14 @@ try:
     )
 
     PYOMO_AVAILABLE = True
+
+    # String → Pyomo domain object. The core Variable carries a plain string
+    # (no pyomo import in core/), the bridge maps it here. GTAP uses only these
+    # two — Reals (FREE vars xet/xw) and NonNegativeReals (78 price/qty vars).
+    _DOMAINS = {"Reals": Reals, "NonNegativeReals": NonNegativeReals}
 except ImportError:
     PYOMO_AVAILABLE = False
+    _DOMAINS = {}
 
 if TYPE_CHECKING:
     from equilibria.model import Model as EquilibriaModel
@@ -180,6 +188,22 @@ class PyomoBackend(Backend):
             lower = var.lower
             upper = var.upper
 
+            # Map the Variable's domain string to a Pyomo domain object. The
+            # core Variable defaults to "Reals" so existing callers are
+            # unchanged. An unrecognized name is made VISIBLE (logger.warning)
+            # and falls back to Reals — a typo must not silently pass, but it
+            # must not crash a solve either. Domain and bounds coexist: Pyomo
+            # intersects within= with bounds=, matching the monolith which sets
+            # both within and .setlb on its NonNegativeReals vars.
+            within = _DOMAINS.get(var.domain)
+            if within is None:
+                logger.warning(
+                    "Variable %s: unknown domain %r — falling back to Reals",
+                    var_name,
+                    var.domain,
+                )
+                within = Reals
+
             if not var.domains:
                 # Scalar variable - extract scalar value from array if needed
                 if hasattr(var.value, "__len__") and len(var.value) == 1:
@@ -191,6 +215,7 @@ class PyomoBackend(Backend):
                     var_name,
                     Var(
                         bounds=(lower, upper),
+                        within=within,
                         initialize=init_val,
                     ),
                 )
@@ -223,6 +248,7 @@ class PyomoBackend(Backend):
                     Var(
                         *index_sets,
                         bounds=(lower, upper),
+                        within=within,
                         initialize=init_dict,
                     ),
                 )
