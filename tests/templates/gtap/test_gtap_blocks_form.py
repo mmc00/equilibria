@@ -63,6 +63,13 @@ _MIGRATED: list[tuple[str, list[str]]] = [
         # rorc/rore (FACTOR — dedup), income vars yc/yg/yi/regy/rsav (INCOME).
         ["pa", "yc", "yg", "yi", "regy", "rsav"],
     ),
+    (
+        "IncomeBlock",
+        # references but does not own — all owned by migrated units 1-5:
+        # pf/xf/kstock (FACTOR), pi/phi/phip/uh/savf (DEMAND), p_rai/x/pd (PROD),
+        # pmt/pe/xw/pmcif/pefob/pa/xaa/xda/xma (ARMINGTON). No new stubs needed.
+        [],
+    ),
 ]
 
 # Upstream shared vars a leaf unit references but a later unit owns — stubbed so
@@ -133,6 +140,12 @@ _FORM_CARRY_EQS: dict[tuple[str, str], str] = {
     ("ArmingtonBilateralBlock", "eq_paa"): "top-Armington alphad/alpham seed drift",
     ("ArmingtonBilateralBlock", "eq_xda"): "top-Armington alphad seed drift",
     ("ArmingtonBilateralBlock", "eq_xma"): "top-Armington alpham seed drift",
+    # INCOME eq_pabs folds base_xaa (the Fisher base-period absorption quantity).
+    # The 6 inv-agent xaa cells that _align_xi_xaa_post_scaling nudges (~1e-7)
+    # make the base_pa*base_xaa coefficient drift from the block's benchmark seed
+    # by <1e-6 relative — same Blocker-C composer-carry family (composer
+    # re-snapshots base_xaa post-scaling). Structure is byte-identical.
+    ("IncomeBlock", "eq_pabs"): "Fisher base_xaa post-align seed drift",
 }
 _SHARE_DRIFT_RTOL = 1e-6
 

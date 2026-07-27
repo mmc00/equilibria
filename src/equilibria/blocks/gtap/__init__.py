@@ -58,6 +58,7 @@ oracle); everything MODE- or SCALING-dependent below is the composer's.
 
 from equilibria.blocks.gtap.demand_utility import DemandUtilityBlock
 from equilibria.blocks.gtap.factor import FactorBlock
+from equilibria.blocks.gtap.income import IncomeBlock
 from equilibria.blocks.gtap.production_supply import ProductionSupplyBlock
 from equilibria.blocks.gtap.trade_armington_bilateral import ArmingtonBilateralBlock
 from equilibria.blocks.gtap.trade_cet import TradeCETBlock
@@ -69,6 +70,7 @@ GTAP_BLOCK_ORDER = [
     FactorBlock,
     ArmingtonBilateralBlock,
     DemandUtilityBlock,
+    IncomeBlock,
 ]
 
 __all__ = [
@@ -76,6 +78,7 @@ __all__ = [
     "DemandUtilityBlock",
     "FactorBlock",
     "GTAP_BLOCK_ORDER",
+    "IncomeBlock",
     "ProductionSupplyBlock",
     "TradeCETBlock",
 ]
