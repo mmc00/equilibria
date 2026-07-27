@@ -139,7 +139,10 @@ class PyomoBackend(Backend):
                     setattr(
                         self.pyomo_model,
                         param_name,
-                        Param(initialize=float(param.value.flatten()[0])),
+                        Param(
+                            initialize=float(param.value.flatten()[0]),
+                            mutable=getattr(param, "mutable", False),
+                        ),
                     )
                 else:
                     # Multi-dimensional parameter without domain info (e.g., FD0)
@@ -176,7 +179,11 @@ class PyomoBackend(Backend):
                 setattr(
                     self.pyomo_model,
                     param_name,
-                    Param(*index_sets, initialize=values_dict),
+                    Param(
+                        *index_sets,
+                        initialize=values_dict,
+                        mutable=getattr(param, "mutable", False),
+                    ),
                 )
 
     def _build_variables(self, model: EquilibriaModel) -> None:

@@ -244,6 +244,212 @@ def ge_share_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
     return dict(params.shares.p_ge)
 
 
+# ----------------------------------------------------------------------------
+# FACTOR unit (monolith 1801-2135, 2280-2401, 5065-5094)
+# ----------------------------------------------------------------------------
+
+
+def xfflag_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
+    """xfflag(r,f,a) = 1 if |evfb (else vfm)|>1e-12 — monolith 1810-1820."""
+    bm = params.benchmark
+    out: dict[tuple[str, str, str], float] = {}
+    for r in sets.r:
+        for f in sets.f:
+            for a in sets.a:
+                val = bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0))
+                out[(r, f, a)] = 1.0 if abs(_f(val)) > 1e-12 else 0.0
+    return out
+
+
+def xftflag_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
+    """xftflag(r,f) = 1 if any (r,f,a) flow and f in mf|sf — monolith 1810-1825."""
+    bm = params.benchmark
+    mfsf = set(sets.mf) | set(sets.sf)
+    out: dict[tuple[str, str], float] = {}
+    for r in sets.r:
+        for f in sets.f:
+            any_flow = False
+            for a in sets.a:
+                val = bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0))
+                if abs(_f(val)) > 1e-12:
+                    any_flow = True
+            out[(r, f)] = 1.0 if (any_flow and f in mfsf) else 0.0
+    return out
+
+
+def _kappaf(params: Any, r: str, f: str, a: str) -> float:
+    """kappaf lookup (activity then factor) — monolith 2059-2065 pattern."""
+    kappa = _f(params.taxes.kappaf_activity.get((r, f, a), 0.0))
+    if kappa == 0.0:
+        kappa = _f(params.taxes.kappaf.get((r, f), 0.0))
+    return kappa
+
+
+def gf_share_data(
+    params: Any, sets: Any, use_p_gf_directly: bool = False
+) -> dict[tuple[str, str, str], float]:
+    """gf_share(r,f,a) — monolith 2033-2135. CARRY (Blocker C family).
+
+    ``use_p_gf_directly`` mirrors the monolith's ``self.t0_snapshot is not None``
+    switch (2040): for a counterfactual period the composer sets True to trust
+    the recalibrated ``p_gf``; for the base build (the gate oracle) it is False
+    and mf/sf shares are (re)normalized from the benchmark SAM here.
+    """
+    bm = params.benchmark
+    out: dict[tuple[str, str, str], float] = dict(params.shares.p_gf)
+    for r in sets.r:
+        for f in sets.mf:
+            if use_p_gf_directly:
+                pass
+            else:
+                xf_by_activity: dict[str, float] = {}
+                total_xf = 0.0
+                for a in sets.a:
+                    factor_flow = _f(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)))
+                    if factor_flow <= 0.0:
+                        continue
+                    kappa = _kappaf(params, r, f, a)
+                    pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                    xf_val = max(factor_flow / pf_val, 0.0)
+                    if xf_val <= 0.0:
+                        continue
+                    xf_by_activity[a] = xf_val
+                    total_xf += xf_val
+                if total_xf <= 0.0:
+                    continue
+                for a in sets.a:
+                    out[(r, f, a)] = xf_by_activity.get(a, 0.0) / total_xf
+        for f in sets.sf:
+            xf_by_activity_sf: dict[str, float] = {}
+            total_xf_sf = 0.0
+            for a in sets.a:
+                factor_flow = _f(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)))
+                if factor_flow <= 0.0:
+                    continue
+                kappa = _kappaf(params, r, f, a)
+                pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                xf_val = max(factor_flow / pf_val, 0.0)
+                if xf_val <= 0.0:
+                    continue
+                xf_by_activity_sf[a] = xf_val
+                total_xf_sf += xf_val
+            if total_xf_sf <= 0.0:
+                continue
+            for a in sets.a:
+                out[(r, f, a)] = xf_by_activity_sf.get(a, 0.0) / total_xf_sf
+        fnm_factors = [f for f in sets.f if f not in sets.mf and f not in sets.sf]
+        for f in fnm_factors:
+            for a in sets.a:
+                factor_flow = _f(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)))
+                if factor_flow <= 0.0:
+                    out[(r, f, a)] = 0.0
+                    continue
+                kappa = _kappaf(params, r, f, a)
+                pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                xf_val = max(factor_flow / pf_val, 0.0)
+                out[(r, f, a)] = xf_val
+    return out
+
+
+def _lookup_etrae(params: Any, region: str, factor: str) -> float:
+    """etrae lookup by (f,r)/(r,f)/f — monolith 2292-2311."""
+    raw = params.elasticities.etrae
+    for key in ((factor, region), (region, factor), factor):
+        try:
+            val = raw.get(key)
+        except Exception:
+            val = None
+        if val is not None:
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                continue
+    return 0.0
+
+
+def _aft_etaf(params: Any, sets: Any, closure_name: str = "gtap_standard"):
+    """aft(r,f)/etaf(r,f) — monolith 2360-2401.
+
+    ``closure_name`` mirrors ``self.closure.name`` (2394): only ``"altertax"``
+    keeps the ``-etrae`` supply elasticity; every other closure (incl. the gate
+    oracle's default ``gtap_standard``) sets etaf=0 for all fm/sf. The composer
+    passes the real closure name in Task 5.
+    """
+    bm = params.benchmark
+    aft: dict[tuple[str, str], float] = {}
+    etaf: dict[tuple[str, str], float] = {}
+    for region in sets.r:
+        for factor in sets.f:
+            if factor in sets.mf or factor in sets.sf:
+                benchmark_xft = 0.0
+                for activity in sets.a:
+                    factor_flow = _f(
+                        bm.evfb.get(
+                            (region, factor, activity),
+                            bm.vfm.get((region, factor, activity), 0.0),
+                        )
+                    )
+                    if factor_flow <= 0.0:
+                        continue
+                    kappa = _kappaf(params, region, factor, activity)
+                    pf_val = max(1.0 / max(1.0 - kappa, 1e-8), 1e-8)
+                    benchmark_xft += factor_flow / pf_val
+                aft[(region, factor)] = benchmark_xft
+                if factor in sets.mf:
+                    etaf[(region, factor)] = 0.0
+                elif str(closure_name) != "altertax":
+                    # gtap-mode: GAMS uses etaf=0 for ALL fm incl sluggish Land
+                    # (getData.gms:367-380); etrae belongs only in omegaf (the CET
+                    # nest), NOT in the eq_xfteq supply elasticity. Altertax keeps
+                    # the -etrae form (byte-identical). Monolith 2394-2401.
+                    etaf[(region, factor)] = 0.0
+                else:
+                    etaf[(region, factor)] = _lookup_etrae(params, region, factor)
+    return aft, etaf
+
+
+def aft_data(
+    params: Any, sets: Any, closure_name: str = "gtap_standard"
+) -> dict[tuple[str, str], float]:
+    return _aft_etaf(params, sets, closure_name)[0]
+
+
+def etaf_data(
+    params: Any, sets: Any, closure_name: str = "gtap_standard"
+) -> dict[tuple[str, str], float]:
+    return _aft_etaf(params, sets, closure_name)[1]
+
+
+def fcttx_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
+    """fcttx(r,f,a) = ftrv/evfb (0 if evfb<=0) — monolith 5065-5069."""
+    bm = params.benchmark
+    out: dict[tuple[str, str, str], float] = {}
+    for r in sets.r:
+        for f in sets.f:
+            for a in sets.a:
+                evfb_val = _f(bm.evfb.get((r, f, a), 0.0))
+                if evfb_val <= 0.0:
+                    out[(r, f, a)] = 0.0
+                else:
+                    out[(r, f, a)] = _f(bm.ftrv.get((r, f, a), 0.0)) / evfb_val
+    return out
+
+
+def fctts_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
+    """fctts(r,f,a) = -fbep/evfb (0 if evfb<=0) — monolith 5071-5075."""
+    bm = params.benchmark
+    out: dict[tuple[str, str, str], float] = {}
+    for r in sets.r:
+        for f in sets.f:
+            for a in sets.a:
+                evfb_val = _f(bm.evfb.get((r, f, a), 0.0))
+                if evfb_val <= 0.0:
+                    out[(r, f, a)] = 0.0
+                else:
+                    out[(r, f, a)] = -_f(bm.fbep.get((r, f, a), 0.0)) / evfb_val
+    return out
+
+
 def prdtx_rai_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
     """prdtx_rai(r,a,i) = makb/maks - 1 (else rto) — monolith 2146-2165."""
     bm = params.benchmark
