@@ -141,3 +141,45 @@ def test_domain_bounds_diff_agrees_for_matching_domains() -> None:
 
     diffs = domain_bounds_diff(_build(), _build())
     assert diffs == []
+
+
+def test_per_index_array_bounds_emit_percell_floors() -> None:
+    """An ndarray lower bound emits the exact per-cell lower bound (F3 task 4).
+
+    GTAP applies a runtime relative price floor ``setlb(1e-3*init)`` to price
+    vars whose benchmark init differs per cell (``p_rai``/``pf``/``pfa``). The
+    exact per-cell floor is not expressible via Pyomo's scalar ``bounds=`` tuple,
+    so the bridge builds a bounds RULE when ``lower``/``upper`` is an ndarray.
+    A scalar side is broadcast. This is what makes the Step-C domain gate
+    reachable for those vars.
+    """
+    from equilibria import Model, Set, Variable
+    from equilibria.backends import PyomoBackend
+    from equilibria.core.symbolic_equations import SymbolicEquation
+
+    class _Eq(SymbolicEquation):
+        name: str = "e"
+        domains: tuple = ("I",)
+
+        def build_expression(self, pm: Any, indices: tuple) -> Any:
+            (i,) = indices
+            return pm.p[i] >= 0
+
+    m = Model(name="t")
+    m.add_set(Set(name="I", elements=["a", "b", "c"]))
+    m.add_variable(
+        Variable(
+            name="p",
+            value=np.array([1.0, 2.0, 3.0]),
+            domains=("I",),
+            domain="NonNegativeReals",
+            lower=np.array([0.1, 0.2, 0.3]),
+            upper=float("inf"),
+        )
+    )
+    m.add_equation(_Eq())
+    b = PyomoBackend()
+    b.build(m)
+    assert b.pyomo_model.p["a"].bounds == (0.1, None)
+    assert b.pyomo_model.p["b"].bounds == (0.2, None)
+    assert b.pyomo_model.p["c"].bounds == (0.3, None)

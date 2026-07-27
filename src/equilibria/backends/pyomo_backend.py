@@ -234,6 +234,12 @@ class PyomoBackend(Backend):
                     list(model.set_manager.get(d).iter_elements()) for d in var.domains
                 ]
                 init_dict = {}
+                lower_dict: dict[Any, float] | None = (
+                    {} if isinstance(lower, np.ndarray) and lower.ndim > 0 else None
+                )
+                upper_dict: dict[Any, float] | None = (
+                    {} if isinstance(upper, np.ndarray) and upper.ndim > 0 else None
+                )
                 for label_tuple, np_index in zip(
                     itertools.product(*elems),
                     np.ndindex(var.value.shape),
@@ -241,13 +247,36 @@ class PyomoBackend(Backend):
                 ):
                     key = label_tuple[0] if len(label_tuple) == 1 else label_tuple
                     init_dict[key] = float(var.value[np_index])
+                    if lower_dict is not None:
+                        lower_dict[key] = float(lower[np_index])
+                    if upper_dict is not None:
+                        upper_dict[key] = float(upper[np_index])
+
+                if lower_dict is None and upper_dict is None:
+                    # Scalar bounds (the common case) — pass the tuple directly.
+                    bounds_arg: Any = (lower, upper)
+                else:
+                    # Per-index bounds: a var with a per-cell runtime price floor
+                    # (GTAP setlb(1e-3*init) on p_rai/pf/pfa) needs the exact bound
+                    # per cell. Pyomo's bounds= tuple is scalar-only, so build a
+                    # bounds RULE that looks up the per-cell (lo, hi). A scalar side
+                    # is broadcast to every index.
+                    def _bounds_rule(
+                        _m, *idx, _lo=lower_dict, _hi=upper_dict, _slo=lower, _shi=upper
+                    ):
+                        key = idx[0] if len(idx) == 1 else tuple(idx)
+                        lo = _lo[key] if _lo is not None else _slo
+                        hi = _hi[key] if _hi is not None else _shi
+                        return (lo, hi)
+
+                    bounds_arg = _bounds_rule
 
                 setattr(
                     self.pyomo_model,
                     var_name,
                     Var(
                         *index_sets,
-                        bounds=(lower, upper),
+                        bounds=bounds_arg,
                         within=within,
                         initialize=init_dict,
                     ),
