@@ -688,10 +688,17 @@ class IncomeBlock(Block):
         return np.array(out)
 
     def _yi_init(self, regions):
+        # get_benchmark_yi = Σ_i get_vim_init(r,i), and get_vim_init =
+        # max(get_investment_demand(r,i)[0], 1e-8) — the RESOLVED investment
+        # Armington demand (_resolve_final_demand_split of vim/vdip/vmip), NOT the
+        # raw vim matrix. Reading raw vim left yi ~16% low (the yi→xiagg→xi→xd
+        # cascade), so mirror the monolith exactly.
         bm = self.params.benchmark
         out = []
         for r in regions:
-            out.append(sum(bm.vim.get((r, i), 0.0) for i in self.sets.i))
+            out.append(
+                sum(max(bm.get_investment_demand(r, i)[0], 1e-8) for i in self.sets.i)
+            )
         return np.array(out)
 
     def _xw_init(self, r, i, rp):

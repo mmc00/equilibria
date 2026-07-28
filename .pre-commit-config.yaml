@@ -101,6 +101,7 @@ repos:
               src/equilibria/templates/gtap/altertax/parameter_overrides\.py|
               src/equilibria/templates/gtap/altertax/postmodel\.py|
               src/equilibria/templates/gtap/calibration_compare\.py|
+              src/equilibria/templates/gtap/gtap_block_model\.py|
               src/equilibria/templates/gtap/gtap_contract\.py|
               src/equilibria/templates/gtap/gtap_model_equations\.py|
               src/equilibria/templates/gtap/gtap_model_multiperiod\.py|
@@ -167,6 +168,7 @@ repos:
               tests/templates/gtap/test_gtap7_nl_parity\.py|
               tests/templates/gtap/test_gtap7_nlp_parity\.py|
               tests/templates/gtap/test_gtap_blocks_form\.py|
+              tests/templates/gtap/test_gtap_blocks_solve\.py|
               tests/templates/gtap/test_gtap_multiperiod_parity\.py|
               tests/templates/gtap/test_gtap_parity_pipeline\.py|
               tests/templates/gtap/test_gtap_structure\.py|

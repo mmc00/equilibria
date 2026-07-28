@@ -156,13 +156,23 @@ class DemandUtilityBlock(Block):
         _price("u", ("r",), ones_r)
         _price("psave", ("r",), ones_r)
         # xcshr/zcons/phip/phi/xg_agg: NonNeg, NO floor (not in any floor list).
-        _q("xcshr", ("r", "i"), ones_ri)
+        _q("xcshr", ("r", "i"), self._xcshr_init(regions, comms))
         _q("zcons", ("r", "i"), self._zcons_init(regions, comms, calib))
         _q("phip", ("r",), self._phip_init(regions, calib))
         _q("phi", ("r",), self._phi_init(regions, calib))
         _q("xg_agg", ("r",), ones_r)
         # savf/chif: within=Reals FREE (4928-4936).
-        _q("savf", ("r",), np.zeros(nr), lower=float("-inf"), dom="Reals")
+        # savf init = savf_bar (get_savf_init, capFix closure). Left at zeros this
+        # broke the yi = pi·depr·kstock + rsav + savf identity (_refresh_macro_
+        # initial_state), cascading yi→xiagg→xi→xd ~16% low. The GAMS GDX does not
+        # seed savf at benchmark, so the calibration init must be correct here.
+        _q(
+            "savf",
+            ("r",),
+            self._savf_init(regions, calib),
+            lower=float("-inf"),
+            dom="Reals",
+        )
         _q(
             "chif",
             ("r",),
@@ -671,6 +681,30 @@ class DemandUtilityBlock(Block):
                 for r in regions
             ]
         )
+
+    def _savf_init(self, regions, calib):
+        """Foreign savings at benchmark = savf_bar (get_savf_init, capFix closure —
+        the comp-stat default). savf_bar is the calibrated capital-account residual
+        (Σ vcif − vfob − vst, with the residual-region rebalance) from the shared
+        calibration loop."""
+        sb = calib["savf_bar"]
+        return np.array([sb.get((r,), 0.0) for r in regions])
+
+    def _xcshr_init(self, regions, comms):
+        """Household budget share xcshr[r,i] = private_demand(r,i) / Σ_j private
+        _demand(r,j), from the SAM benchmark (mirrors the monolith's
+        get_xcshr_init — a calibration seed the GAMS GDX does not fill because its
+        xcshr symbol is 4-key (r,i,hhd,t) vs this 3-key (r,i,t) var, so the init
+        must be correct here rather than left at a placeholder)."""
+        bm = self.params.benchmark
+        out = np.empty((len(regions), len(comms)))
+        for ri, r in enumerate(regions):
+            total = sum(bm.get_private_demand(r, j)[0] for j in comms)
+            for ci, i in enumerate(comms):
+                out[ri, ci] = (
+                    (bm.get_private_demand(r, i)[0] / total) if total > 0.0 else 0.0
+                )
+        return out
 
     def _vgm_init(self, regions, comms):
         bm = self.params.benchmark

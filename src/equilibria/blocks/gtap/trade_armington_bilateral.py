@@ -225,7 +225,27 @@ class ArmingtonBilateralBlock(Block):
         _q("xaa", ("r", "i", "aa"), xaa_init)
         # xe/xw/pe (r,i,rp). xw is FREE (within=Reals, NO lb) — fabricated-corner
         # lesson (3847-3854). xe NonNeg. pe price floor.
-        _q("xe", ("r", "i", "rp"), np.zeros((nr, ni, nrp)))
+        # xe init = max(vxsb, 0) (get_xe_init: xe = xw and the cal source is the
+        # vxsb bilateral flow; pe=1 at benchmark). Left at zeros the seed skips it
+        # (GDX stores xw not xe), so eq_peeq/eq_xe cascade off ~the full export flow.
+        xe_init = np.array(
+            [
+                [
+                    [
+                        max(
+                            float(
+                                self.params.benchmark.vxsb.get((r, i, rp), 0.0) or 0.0
+                            ),
+                            0.0,
+                        )
+                        for rp in rp_list
+                    ]
+                    for i in comms
+                ]
+                for r in regions
+            ]
+        )
+        _q("xe", ("r", "i", "rp"), xe_init)
         xw_init = np.array(
             [
                 [[max(self._xw_init(r, i, rp), 0.0) for rp in rp_list] for i in comms]
