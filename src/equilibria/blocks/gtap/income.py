@@ -38,6 +38,7 @@ from pyomo.environ import sqrt, value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
+from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -65,6 +66,10 @@ class IncomeBlock(Block):
     sets: Any = None
     params: Any = None
     residual_region: str = "NAmerica"
+    # ifSUB toggle: under if_sub, eq_ytax[mt] reads model.imptx (live, so the tariff
+    # shock enters the SOLVED revenue) + M_PMCIF inline (pmcif is a frozen report var
+    # under ifSUB); eq_gdpmp uses M_PEFOB/M_PMCIF inline for the same reason.
+    if_sub: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["r", "gy"]
@@ -223,6 +228,7 @@ class IncomeBlock(Block):
 
         # -------- inline-python accessors (read exactly as the monolith) --------
         taxes = p.taxes
+        if_sub = self.if_sub
         acts_comm = s.activity_commodities
         residual_region = self.residual_region
         residual_regions = tuple(r for r in regions if str(r) == residual_region)
@@ -347,10 +353,20 @@ class IncomeBlock(Block):
                         if importer != r:
                             continue
                         mtax = _mtax_value(r, i, exporter)
+                        # GAMS ytaxeq (8686): (imptx + mtax)·M_PMCIF·xw. Under ifSUB
+                        # read imptx LIVE (model.imptx) so the tariff shock enters the
+                        # solved revenue, and M_PMCIF inline (pmcif is a frozen report
+                        # var). if_sub=False keeps the baked float + plain pmcif var.
+                        imptx_term = (
+                            model.imptx[exporter, i, r] if if_sub else float(imptx)
+                        )
+                        pmcif_term = (
+                            mac.m_pmcif(model, p, exporter, i, r)
+                            if if_sub
+                            else model.pmcif[exporter, i, r]
+                        )
                         total += (
-                            (float(imptx) + mtax)
-                            * model.pmcif[exporter, i, r]
-                            * model.xw[exporter, i, r]
+                            (imptx_term + mtax) * pmcif_term * model.xw[exporter, i, r]
                         )
                     return model.ytax[r, gy] == total
 
@@ -502,23 +518,24 @@ class IncomeBlock(Block):
             return total
 
         def _mqtrade(model, region, *, price_base, quantity_base):
-            # if_sub=False: _m_pefob -> model.pefob, _m_pmcif -> model.pmcif.
+            # M_PEFOB/M_PMCIF (GAMS balance 9308): plain pefob/pmcif report vars under
+            # if_sub=False; under if_sub=True inline (frozen report vars) so the
+            # export/import price wedge feeds the trade balance / GDP correctly.
             # base_pefob/base_pmcif/base_xw = 1.0/1.0/xw-init at benchmark; only the
             # eq_rgdpmp counterfactual uses price_base/quantity_base=True (base build
             # returns rgdpmp==gdpmp), so eq_gdpmp only ever hits the all-live branch.
             total = 0.0
             for i in comms_list:
                 for rp in model.rp:
-                    pexp = (
-                        base_pefob[(region, i, rp)]
-                        if price_base
-                        else model.pefob[region, i, rp]
-                    )
-                    pimp = (
-                        base_pmcif[(rp, i, region)]
-                        if price_base
-                        else model.pmcif[rp, i, region]
-                    )
+                    if price_base:
+                        pexp = base_pefob[(region, i, rp)]
+                        pimp = base_pmcif[(rp, i, region)]
+                    elif if_sub:
+                        pexp = mac.m_pefob(model, p, region, i, rp)
+                        pimp = mac.m_pmcif(model, p, rp, i, region)
+                    else:
+                        pexp = model.pefob[region, i, rp]
+                        pimp = model.pmcif[rp, i, region]
                     xexp = (
                         base_xw[(region, i, rp)]
                         if quantity_base

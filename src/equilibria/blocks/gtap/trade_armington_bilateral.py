@@ -70,6 +70,10 @@ class ArmingtonBilateralBlock(Block):
     description: str = "GTAP top Armington CES nest + bilateral trade (CES/CET)"
     sets: Any = None
     params: Any = None
+    # ifSUB toggle (GAMS $setGlobal ifSUB). When True the equations substitute the
+    # M_* macros INLINE (the tariff/margin wedge enters the SOLVED equation, so a
+    # shock on imptx propagates) instead of referencing the plain report vars.
+    if_sub: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["r", "i", "aa", "rp", "m"]
@@ -347,6 +351,69 @@ class ArmingtonBilateralBlock(Block):
         def _etax_value(exporter, commodity, importer):
             return float(_safe(p, "etax", (exporter, commodity), 0.0))
 
+        if_sub = self.if_sub
+        _rtxs = p.taxes.rtxs
+
+        # GAMS $macro chain M_PWMG/M_PEFOB/M_PMCIF/M_PM (gtap_model_equations.py
+        # 5519-5567). Under ifSUB=1 each expands the tariff/margin wedge INLINE down
+        # to the LIVE pe/ptmg Vars (NOT the pmcif/pefob report Vars, which under
+        # ifSUB are free orphans — see _rebuild_import_demand_shock_ifsub LINK 2), so
+        # an imptx shock reaches the SOLVED import-demand eqs. if_sub=False → plain
+        # report Var (the Task-4 comp-stat form). Args are (exporter, commodity,
+        # importer) = (rp, i, r), matching the monolith macro signatures.
+        def _m_pwmg(model, e, c, imp):
+            if if_sub:
+                return sum(
+                    model.amgm[mm, e, c, imp]
+                    * model.ptmg[mm]
+                    / (model.lambdamg[mm, e, c, imp] + 1e-12)
+                    for mm in model.m
+                )
+            return model.pwmg[e, c, imp]
+
+        def _m_pefob(model, e, c, imp):
+            if if_sub:
+                export_tax = float(_rtxs.get((e, c, imp), 0.0) or 0.0)
+                etax = _etax_value(e, c, imp)
+                return (1.0 + export_tax + etax) * model.pe[e, c, imp]
+            return model.pefob[e, c, imp]
+
+        def _m_pmcif(model, e, c, imp):
+            if if_sub:
+                return (
+                    _m_pefob(model, e, c, imp)
+                    + _m_pwmg(model, e, c, imp) * model.tmarg[e, c, imp]
+                )
+            return model.pmcif[e, c, imp]
+
+        def _m_pm(model, e, c, imp):
+            """M_PM = (1+imptx+mtax)·M_PMCIF/chipm under ifSUB (imptx live so the
+            shock propagates), else the plain report var pm."""
+            if if_sub:
+                mtax = _mtax_value(imp, c, e)
+                chipm = _chipm_value(e, c, imp)
+                return (
+                    (1.0 + model.imptx[e, c, imp] + mtax) * _m_pmcif(model, e, c, imp)
+                ) / chipm
+            return model.pm[e, c, imp]
+
+        def _m_xwmg(model, e, c, imp):
+            """GAMS $macro M_XWMG (8016): tmarg·xw inline under ifSUB, else xwmg."""
+            if if_sub:
+                return model.tmarg[e, c, imp] * model.xw[e, c, imp]
+            return model.xwmg[e, c, imp]
+
+        def _m_xmgm(model, mode, e, c, imp):
+            """GAMS $macro M_XMGM (8017): amgm·M_XWMG/lambdamg inline under ifSUB,
+            else xmgm."""
+            if if_sub:
+                return (
+                    model.amgm[mode, e, c, imp]
+                    * _m_xwmg(model, e, c, imp)
+                    / (model.lambdamg[mode, e, c, imp] + 1e-12)
+                )
+            return model.xmgm[mode, e, c, imp]
+
         equations: list[SymbolicEquation] = []
 
         # ---------------- eq_xaa_activity (monolith 6014) ----------------
@@ -593,8 +660,8 @@ class ArmingtonBilateralBlock(Block):
                 share = value(model.amgm[m, r, i, rp])
                 if share <= 0.0:
                     return None
-                # if_sub=False: _m_xwmg(r,i,rp) -> model.xwmg[r,i,rp]
-                return model.xmgm[m, r, i, rp] == share * model.xwmg[r, i, rp] / (
+                # M_XWMG inline under if_sub=True (xwmg coupled to tmarg·xw here).
+                return model.xmgm[m, r, i, rp] == share * _m_xwmg(model, r, i, rp) / (
                     model.lambdamg[m, r, i, rp] + 1e-12
                 )
 
@@ -627,9 +694,9 @@ class ArmingtonBilateralBlock(Block):
             def build_expression(self, pyomo_model, indices):
                 model = pyomo_model
                 (m,) = indices
-                # if_sub=False: _m_xmgm(m,r,i,rp) -> model.xmgm[m,r,i,rp]
+                # M_XMGM inline under if_sub=True (xmgm coupled here).
                 return model.xtmg[m] == sum(
-                    model.xmgm[m, r, i, rp]
+                    _m_xmgm(model, m, r, i, rp)
                     for r in model.r
                     for i in model.i
                     for rp in model.rp
@@ -677,11 +744,12 @@ class ArmingtonBilateralBlock(Block):
                     return None
                 esubm = el.esubm.get((r, i), 5.0)
                 lambdam = _lambdam_value(rp, i, r)
-                # if_sub=False: _m_pm(rp,i,r) -> model.pm[rp,i,r]
+                # M_PM: plain var pm under if_sub=False; tariff-inclusive formula
+                # inline under if_sub=True (so an imptx shock reaches xw here).
                 return model.xw[rp, i, r] == (
                     amw
                     * model.xmt[r, i]
-                    * (model.pmt[r, i] / model.pm[rp, i, r]) ** esubm
+                    * (model.pmt[r, i] / _m_pm(model, rp, i, r)) ** esubm
                     * (lambdam ** (esubm - 1.0))
                 )
 
@@ -708,8 +776,8 @@ class ArmingtonBilateralBlock(Block):
                     if amw <= 0.0:
                         continue
                     lambdam = _lambdam_value(rp, i, r)
-                    # if_sub=False: _m_pm(rp,i,r) -> model.pm[rp,i,r]
-                    terms.append(amw * (model.pm[rp, i, r] / lambdam) ** expo)
+                    # M_PM inline under if_sub=True (imptx shock reaches pmt here).
+                    terms.append(amw * (_m_pm(model, rp, i, r) / lambdam) ** expo)
                 if not terms:
                     return model.pmt[r, i] == 1.0
                 return model.pmt[r, i] ** expo == sum(terms)

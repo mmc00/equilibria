@@ -57,6 +57,10 @@ class FactorBlock(Block):
     description: str = "GTAP factor supply/demand CET nest + factor prices + capital"
     sets: Any = None
     params: Any = None
+    # ifSUB toggle: under if_sub the factor report eqs (eq_pfaeq/eq_pfyeq) are
+    # deactivated by the composer and the M_PFA/M_PFY wedges are substituted INLINE
+    # in the consuming eqs (eq_xfeq/eq_pfeq), so pfa/pfy stay coupled to pf.
+    if_sub: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["r", "f", "a"]
@@ -253,6 +257,29 @@ class FactorBlock(Block):
             return float(el.etaff.get((region, factor, activity), 0.0))
 
         vkb = bm.vkb
+        if_sub = self.if_sub
+
+        def _kappaf(r, f, a):
+            kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+            if kappa == 0.0:
+                kappa = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
+            return kappa
+
+        def _m_pfa(model, r, f, a):
+            """GAMS $macro M_PFA (8022): pf·(1+fctts+fcttx) inline under ifSUB (so
+            pfa stays coupled to pf when eq_pfaeq is deactivated), else the plain
+            report var pfa. Mirrors this block's own eq_pfaeq body."""
+            if if_sub:
+                return model.pf[r, f, a] * (
+                    1.0 + model.fctts[r, f, a] + model.fcttx[r, f, a]
+                )
+            return model.pfa[r, f, a]
+
+        def _m_pfy(model, r, f, a):
+            """GAMS $macro M_PFY (8023): pf·(1-kappaf) inline under ifSUB, else pfy."""
+            if if_sub:
+                return model.pf[r, f, a] * (1.0 - _kappaf(r, f, a))
+            return model.pfy[r, f, a]
 
         equations: list[SymbolicEquation] = []
 
@@ -289,8 +316,9 @@ class FactorBlock(Block):
                     return None
                 if value(model.xfflag[r, f, a]) <= 0.0:
                     return None
-                # if_sub=False: _m_pfa(r,f,a) -> model.pfa[r,f,a]
-                ratio = model.pva[r, a] / model.pfa[r, f, a]
+                # M_PFA: plain pfa under if_sub=False; pf·(1+fctts+fcttx) inline
+                # under if_sub=True (pfa coupled to pf when eq_pfaeq is deactivated).
+                ratio = model.pva[r, a] / _m_pfa(model, r, f, a)
                 sigmav = _get_sigmav(r, a)
                 lambdaf = _lambdaf(r, f, a)
                 return model.xf[r, f, a] == af_val * model.va[
@@ -334,8 +362,9 @@ class FactorBlock(Block):
                 gf = float(value(model.gf_share[r, f, a]))
                 if gf <= 0.0:
                     return None
-                # if_sub=False: _m_pfy(r,f,a) -> model.pfy[r,f,a]
-                pfy = model.pfy[r, f, a]
+                # M_PFY: plain pfy under if_sub=False; pf·(1-kappaf) inline under
+                # if_sub=True (pfy coupled to pf when eq_pfyeq is deactivated).
+                pfy = _m_pfy(model, r, f, a)
                 if f in mf:
                     omegaf = _omegaf(r, f)
                     if omegaf == float("inf"):
@@ -393,9 +422,9 @@ class FactorBlock(Block):
                 expo = 1.0 + omegaf_val
                 if abs(expo) < 1e-10:
                     return None
-                # if_sub=False: _m_pfy(r,f,a) -> model.pfy[r,f,a]
+                # M_PFY inline under if_sub=True (pfy coupled to pf; eq_pfyeq off).
                 pfy_sum = sum(
-                    model.gf_share[r, f, a] * model.pfy[r, f, a] ** expo
+                    model.gf_share[r, f, a] * _m_pfy(model, r, f, a) ** expo
                     for a in model.a
                     if value(model.xfflag[r, f, a]) > 0.0
                     and float(value(model.gf_share[r, f, a])) > 0.0

@@ -37,6 +37,7 @@ from pyomo.environ import exp, log, value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp  # noqa: F401 (submodule)
+from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -59,6 +60,10 @@ class ProductionSupplyBlock(Block):
     description: str = "GTAP production CES nest + domestic supply CES/CET"
     sets: Any = None
     params: Any = None
+    # ifSUB toggle: under if_sub the eq_pp_rai report eq is deactivated by the
+    # composer and M_PP (pp_rai = p_rai·(1+prdtx)) is substituted INLINE in the
+    # consuming supply/cost eqs (eq_xseq/eq_pxeq), so pp_rai stays coupled to p_rai.
+    if_sub: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["r", "a", "i"]
@@ -139,16 +144,25 @@ class ProductionSupplyBlock(Block):
         xp_init = np.array(
             [[max(self._vom_init(r, a), _FLOOR) for a in acts] for r in regions]
         )
+        # x/xs use the monolith get_make_init (make-CET allocation for finite
+        # omegas), NOT raw makb — see _make_init. xds stays the makb-based domestic
+        # supply (the scaling re-settles it); xs = Σ_a make.
         x_init = np.array(
             [
-                [
-                    [max(float(bm.makb.get((r, a, i), 0.0) or 0.0), 0.0) for i in comms]
-                    for a in acts
-                ]
+                [[max(self._make_init(r, a, i), 0.0) for i in comms] for a in acts]
                 for r in regions
             ]
         )
         xs_init = np.array(
+            [
+                [
+                    max(sum(self._make_init(r, a, i) for a in acts), _FLOOR)
+                    for i in comms
+                ]
+                for r in regions
+            ]
+        )
+        xds_init = np.array(
             [
                 [
                     max(
@@ -160,7 +174,6 @@ class ProductionSupplyBlock(Block):
                 for r in regions
             ]
         )
-        xds_init = xs_init.copy()
         p_rai_init = np.array(
             [
                 [[self._p_rai_init(r, a, i) for i in comms] for a in acts]
@@ -246,6 +259,15 @@ class ProductionSupplyBlock(Block):
         shifts = sh
         pshifts_axp = sh.axp
         pshifts_lambdaio = sh.lambdaio
+        if_sub = self.if_sub
+
+        def _m_pp(model, r, a, i):
+            """GAMS $macro M_PP (8013): p_rai·(1+prdtx_rai) inline under ifSUB (so
+            pp_rai stays coupled to p_rai when eq_pp_rai is deactivated), else the
+            plain report var pp_rai. Mirrors this block's own eq_pp_rai body."""
+            if if_sub:
+                return (1.0 + model.prdtx_rai[r, a, i]) * model.p_rai[r, a, i]
+            return model.pp_rai[r, a, i]
 
         equations: list[SymbolicEquation] = []
 
@@ -410,8 +432,9 @@ class ProductionSupplyBlock(Block):
                     if af_val <= 0.0:
                         continue
                     lambdaf = max(_lambdaf(r, f, a), 1e-8)
-                    # if_sub=False: _m_pfa(r,f,a) -> model.pfa[r,f,a]
-                    terms.append(af_val * (m.pfa[r, f, a] / lambdaf) ** expo)
+                    # M_PFA inline under if_sub=True (pfa coupled to pf; eq_pfaeq off).
+                    pfa_t = mac.m_pfa(m, p, r, f, a) if if_sub else m.pfa[r, f, a]
+                    terms.append(af_val * (pfa_t / lambdaf) ** expo)
                 if not terms:
                     return None
                 return m.pva[r, a] ** expo == sum(terms)
@@ -522,12 +545,12 @@ class ProductionSupplyBlock(Block):
                 if share <= 0.0 and make_base <= 0.0 and ax_val <= 0.0:
                     return None
                 sigma = _get_sigmas(r, i)
-                # if_sub=False: _m_pp(r,a,i) -> model.pp_rai[r,a,i]
+                # M_PP inline under if_sub=True (pp_rai coupled to p_rai here).
                 if sigma == float("inf"):
-                    return m.pp_rai[r, a, i] == m.ps[r, i]
+                    return _m_pp(m, r, a, i) == m.ps[r, i]
                 return (
                     m.x[r, a, i]
-                    == ax_val * m.xs[r, i] * (m.ps[r, i] / m.pp_rai[r, a, i]) ** sigma
+                    == ax_val * m.xs[r, i] * (m.ps[r, i] / _m_pp(m, r, a, i)) ** sigma
                 )
 
         equations.append(EqPeq())
@@ -555,9 +578,9 @@ class ProductionSupplyBlock(Block):
                 exponent = 1.0 - sigma
                 if abs(exponent) < 1e-8:
                     return None
-                # if_sub=False: _m_pp(r,a,i) -> model.pp_rai[r,a,i]
+                # M_PP inline under if_sub=True (pp_rai coupled to p_rai here).
                 return m.ps[r, i] ** exponent == sum(
-                    value(m.p_ax[r, a, i]) * m.pp_rai[r, a, i] ** exponent
+                    value(m.p_ax[r, a, i]) * _m_pp(m, r, a, i) ** exponent
                     for a in active_activities
                 )
 
@@ -598,3 +621,31 @@ class ProductionSupplyBlock(Block):
         """p_rai init = 1/(1+prdtx), floored 1e-8 (monolith get_p_rai_init 3486)."""
         prdtx = self._prdtx(r, a, i)
         return max(1.0 / max(1.0 + prdtx, 1e-12), _FLOOR)
+
+    def _make_init(self, r: str, a: str, i: str) -> float:
+        """Output by activity-commodity = monolith get_make_init (3147-3174).
+
+        omega=inf → raw makb; FINITE omegas → the make-CET allocation
+        gx·xp·(p_rai)^omega (px=1 at benchmark). The raw-makb shortcut was correct
+        only for omega=inf commodities; for finite omegas (e.g. Food omegas=5) it
+        overstated xs, drifting the post-scaling gd_share/ge_share recompute and the
+        ifSUB CET quantities (found via the xmodel-parity cascade). Restrict to the
+        activity's output commodities."""
+        p = self.params
+        outputs = self.sets.activity_commodities.get(a, [])
+        if outputs and i not in outputs:
+            return 0.0
+        gx_val = float(p.calibrated.gx_param.get((r, a, i), 0.0) or 0.0)
+        if gx_val <= 0.0:
+            return 0.0
+        omega = p.elasticities.omegas.get((r, a), float("inf"))
+        makb = float(p.benchmark.makb.get((r, a, i), 0.0) or 0.0)
+        if omega == float("inf"):
+            return (
+                max(makb, 1e-8)
+                if makb > 0
+                else max(gx_val * self._vom_init(r, a), 1e-8)
+            )
+        xp_phys = self._vom_init(r, a)
+        p_rai_v = self._p_rai_init(r, a, i)
+        return max(gx_val * xp_phys * (p_rai_v**omega), 1e-8)

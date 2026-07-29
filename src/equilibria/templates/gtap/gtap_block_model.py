@@ -32,6 +32,7 @@ scaling + the seed.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 from equilibria.backends.pyomo_backend import PyomoBackend
@@ -86,11 +87,18 @@ def _set_elems(sets: Any) -> dict[str, list[str]]:
     }
 
 
-def _mk_unit(cls: type, sets: Any, params: Any, residual_region: str) -> Any:
-    """Instantiate a block, threading residual_region for the units that need it."""
-    if "residual_region" in getattr(cls, "model_fields", {}):
-        return cls(sets=sets, params=params, residual_region=residual_region)
-    return cls(sets=sets, params=params)
+def _mk_unit(
+    cls: type, sets: Any, params: Any, residual_region: str, if_sub: bool = False
+) -> Any:
+    """Instantiate a block, threading residual_region + if_sub for the units that
+    declare those fields (others ignore the kwargs)."""
+    fields = getattr(cls, "model_fields", {})
+    kwargs: dict[str, Any] = {"sets": sets, "params": params}
+    if "residual_region" in fields:
+        kwargs["residual_region"] = residual_region
+    if "if_sub" in fields:
+        kwargs["if_sub"] = if_sub
+    return cls(**kwargs)
 
 
 def _strip_con_suffix(pm: ConcreteModel) -> None:
@@ -109,6 +117,78 @@ def _strip_con_suffix(pm: ConcreteModel) -> None:
             pm.add_component(base, c)
 
 
+# The 9 ifSUB report equations the monolith deactivates under ifSUB (post-block
+# gtap_model_equations.py:7970-7983). Their vars (pfa/pfy/pp_rai/pm/pmcif/pefob/
+# pwmg/xwmg/xmgm) become report-only — the tariff/margin wedge is substituted INLINE
+# via the M_* macros in the real equations (eq_xweq/eq_pmteq etc., which the blocks
+# carry under if_sub=True). Deactivating them here — BEFORE this single-period model
+# is used as the reflection source — makes ``build_equations_intra`` (which reflects
+# only active constraints) skip them, so the multi-period block model is square
+# exactly like the monolith MP (which never reflects them either).
+_IFSUB_REPORT_EQS = (
+    "eq_pp_rai",
+    "eq_xwmg",
+    "eq_xmgm",
+    "eq_pwmg",
+    "eq_pefobeq",
+    "eq_pmcifeq",
+    "eq_pmeq",
+    "eq_pfaeq",
+    "eq_pfyeq",
+)
+
+
+# The report VARS the 9 deactivated report eqs used to determine. Under ifSUB the
+# monolith substitutes their M_* macro INLINE in the consuming eqs (which the blocks
+# do too) AND FIXES these vars (post-block 7985-8035) — otherwise they are orphan
+# free columns (no defining eq, absent from every consuming eq) that add spurious DOF
+# to the .nl. (Confirmed via .nl column diff: without this the block had 117 extra
+# pfa/pfy free columns vs the monolith → non-square shock.)
+_IFSUB_REPORT_VARS = (
+    "pp_rai",
+    "xwmg",
+    "xmgm",
+    "pwmg",
+    "pefob",
+    "pmcif",
+    "pm",
+    "pfa",
+    "pfy",
+)
+
+
+def _apply_ifsub_closure(pm: ConcreteModel) -> int:
+    """The ifSUB closure: deactivate the 9 report equations AND fix their report
+    vars (to their current/benchmark value) — mirrors the monolith's post-block.
+    Deactivating alone left pfa/pfy as orphan free columns (the macros are inline in
+    the consuming eqs, so nothing determines them) → non-square. Fixing them removes
+    that spurious DOF. Makes the reflected multi-period block model square like the
+    monolith MP."""
+    from pyomo.environ import value
+
+    n = 0
+    for eq_name in _IFSUB_REPORT_EQS:
+        comp = pm.component(eq_name)
+        if comp is None:
+            continue
+        # Deactivate the COMPONENT (not only its data cells): the reflection filter
+        # ``component_objects(Constraint, active=True)`` tests the component flag, so
+        # a component with all-deactivated cells but still component-active would
+        # otherwise be reflected. Deactivating the component makes it skipped.
+        n += sum(1 for idx in comp if comp[idx].active)
+        comp.deactivate()
+    for var_name in _IFSUB_REPORT_VARS:
+        v = pm.component(var_name)
+        if v is None:
+            continue
+        for k in v:
+            vd = v[k]
+            if not vd.fixed:
+                with contextlib.suppress(Exception):
+                    vd.fix(float(value(vd)))
+    return n
+
+
 def build_block_single_period(
     params: Any,
     sets: Any,
@@ -123,12 +203,15 @@ def build_block_single_period(
     and (default) apply the monolith's benchmark scaling so the warm-start matches
     GAMS. Returns the Pyomo ``ConcreteModel``.
     """
+    if_sub = bool(getattr(closure, "if_sub", False))
     setmap = _set_elems(sets)
     model = Model(name="gtap_blocks_sp")
     for name, elems in setmap.items():
         model.add_set(ESet(name=name, elements=elems))
     for cls in _block_classes():
-        model.add_block(_mk_unit(cls, sets, params, residual_region or "ROW"))
+        model.add_block(
+            _mk_unit(cls, sets, params, residual_region or "ROW", if_sub=if_sub)
+        )
 
     backend = PyomoBackend()
     backend.build(model)
@@ -145,6 +228,9 @@ def build_block_single_period(
         )
         shim.apply_production_scaling(pm)
         shim._align_xi_xaa_post_scaling(pm)
+
+    if if_sub:
+        _apply_ifsub_closure(pm)
 
     pm._residual_region = residual_region
     return pm
