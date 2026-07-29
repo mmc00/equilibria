@@ -629,8 +629,11 @@ class GTAPMultiPeriodModel:
                 "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gdxdump",
                 "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
             ]
-            cands += [str(p / "gdxdump.exe") for p in sorted(
-                _Path(r"C:/GAMS").glob("*"), reverse=True) if p.is_dir()]
+            cands += [
+                str(p / "gdxdump.exe")
+                for p in sorted(_Path(r"C:/GAMS").glob("*"), reverse=True)
+                if p.is_dir()
+            ]
             return next((c for c in cands if _Path(c).exists()), "gdxdump")
 
         GDXDUMP = _find_gdxdump()
