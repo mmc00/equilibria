@@ -43,6 +43,16 @@ class Parameter(BaseModel):
         default_factory=tuple, description="Dimension set names"
     )
     description: str = Field(default="", description="Human-readable description")
+    mutable: bool = Field(
+        default=False,
+        description=(
+            "Emit the backend Param as mutable (Pyomo mutable=True). A mutable "
+            "Param stays SYMBOLIC in an expression (prints as name[idx]) instead "
+            "of being folded to its literal value — required to match a monolith "
+            "that declares the Param mutable and references it unwrapped (not via "
+            "value())."
+        ),
+    )
 
     model_config = {"arbitrary_types_allowed": True, "frozen": False}
 

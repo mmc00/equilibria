@@ -6,7 +6,10 @@ Provides solver backends for translating and solving CGE models.
 from equilibria.backends.base import Backend, Solution
 
 try:
-    from equilibria.backends.pyomo_backend import PyomoBackend
+    from equilibria.backends.pyomo_backend import (
+        BridgeTranslationError,
+        PyomoBackend,
+    )
 
     PYOMO_AVAILABLE = True
 except ImportError:
@@ -18,4 +21,5 @@ __all__ = [
 ]
 
 if PYOMO_AVAILABLE:
+    __all__.append("BridgeTranslationError")
     __all__.append("PyomoBackend")
