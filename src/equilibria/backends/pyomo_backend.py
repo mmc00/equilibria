@@ -7,6 +7,7 @@ IPOPT, CONOPT, or other Pyomo-compatible solvers.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -20,7 +21,9 @@ logger = logging.getLogger(__name__)
 try:
     from pyomo.environ import (
         ConcreteModel,
+        NonNegativeReals,
         Param,
+        Reals,
         Set,
         SolverFactory,
         Var,
@@ -28,11 +31,27 @@ try:
     )
 
     PYOMO_AVAILABLE = True
+
+    # String → Pyomo domain object. The core Variable carries a plain string
+    # (no pyomo import in core/), the bridge maps it here. GTAP uses only these
+    # two — Reals (FREE vars xet/xw) and NonNegativeReals (78 price/qty vars).
+    _DOMAINS = {"Reals": Reals, "NonNegativeReals": NonNegativeReals}
 except ImportError:
     PYOMO_AVAILABLE = False
+    _DOMAINS = {}
 
 if TYPE_CHECKING:
     from equilibria.model import Model as EquilibriaModel
+
+
+class BridgeTranslationError(RuntimeError):
+    """Raised when the Pyomo bridge cannot faithfully translate a model.
+
+    The bridge must fail loudly rather than silently dropping an equation
+    that fails to build or stubbing a trivially-feasible constraint when no
+    constraints survive — a dropped equation is invisible and fatal for
+    parity with the GAMS reference.
+    """
 
 
 class PyomoBackend(Backend):
@@ -120,7 +139,10 @@ class PyomoBackend(Backend):
                     setattr(
                         self.pyomo_model,
                         param_name,
-                        Param(initialize=float(param.value.flatten()[0])),
+                        Param(
+                            initialize=float(param.value.flatten()[0]),
+                            mutable=getattr(param, "mutable", False),
+                        ),
                     )
                 else:
                     # Multi-dimensional parameter without domain info (e.g., FD0)
@@ -134,23 +156,34 @@ class PyomoBackend(Backend):
                 # Get Pyomo sets for indexing
                 index_sets = [getattr(self.pyomo_model, d) for d in param.domains]
 
-                # Create dictionary of values
+                # Create dictionary of values (arity-generic: any n >= 1).
+                # itertools.product iterates the leftmost domain slowest and the
+                # rightmost fastest, in lockstep with np.ndindex over the value
+                # array's shape (first axis slowest, last axis fastest), so the
+                # label tuple and the numpy index always refer to the same cell.
+                # For a 1-D param the label tuple is (elem,); Pyomo indexes a
+                # 1-D Param with the bare element, so unwrap the singleton.
+                elems = [
+                    list(model.set_manager.get(d).iter_elements())
+                    for d in param.domains
+                ]
                 values_dict = {}
-                if len(param.domains) == 1:
-                    set_obj = model.set_manager.get(param.domains[0])
-                    for i, elem in enumerate(set_obj.iter_elements()):
-                        values_dict[elem] = float(param.value[i])
-                elif len(param.domains) == 2:
-                    set1 = model.set_manager.get(param.domains[0])
-                    set2 = model.set_manager.get(param.domains[1])
-                    for i, e1 in enumerate(set1.iter_elements()):
-                        for j, e2 in enumerate(set2.iter_elements()):
-                            values_dict[(e1, e2)] = float(param.value[i, j])
+                for label_tuple, np_index in zip(
+                    itertools.product(*elems),
+                    np.ndindex(param.value.shape),
+                    strict=True,
+                ):
+                    key = label_tuple[0] if len(label_tuple) == 1 else label_tuple
+                    values_dict[key] = float(param.value[np_index])
 
                 setattr(
                     self.pyomo_model,
                     param_name,
-                    Param(*index_sets, initialize=values_dict),
+                    Param(
+                        *index_sets,
+                        initialize=values_dict,
+                        mutable=getattr(param, "mutable", False),
+                    ),
                 )
 
     def _build_variables(self, model: EquilibriaModel) -> None:
@@ -161,6 +194,22 @@ class PyomoBackend(Backend):
             # Determine bounds
             lower = var.lower
             upper = var.upper
+
+            # Map the Variable's domain string to a Pyomo domain object. The
+            # core Variable defaults to "Reals" so existing callers are
+            # unchanged. An unrecognized name is made VISIBLE (logger.warning)
+            # and falls back to Reals — a typo must not silently pass, but it
+            # must not crash a solve either. Domain and bounds coexist: Pyomo
+            # intersects within= with bounds=, matching the monolith which sets
+            # both within and .setlb on its NonNegativeReals vars.
+            within = _DOMAINS.get(var.domain)
+            if within is None:
+                logger.warning(
+                    "Variable %s: unknown domain %r — falling back to Reals",
+                    var_name,
+                    var.domain,
+                )
+                within = Reals
 
             if not var.domains:
                 # Scalar variable - extract scalar value from array if needed
@@ -173,6 +222,7 @@ class PyomoBackend(Backend):
                     var_name,
                     Var(
                         bounds=(lower, upper),
+                        within=within,
                         initialize=init_val,
                     ),
                 )
@@ -181,25 +231,60 @@ class PyomoBackend(Backend):
                 # Get Pyomo sets for indexing
                 index_sets = [getattr(self.pyomo_model, d) for d in var.domains]
 
-                # Create initialization dictionary
+                # Create initialization dictionary (arity-generic: any n >= 1).
+                # itertools.product runs in lockstep with np.ndindex over the
+                # value array's shape (leftmost domain / first axis slowest,
+                # rightmost / last axis fastest), so the label tuple and the
+                # numpy index name the same cell. A 1-D Var is indexed by the
+                # bare element in Pyomo, so unwrap the singleton tuple.
+                elems = [
+                    list(model.set_manager.get(d).iter_elements()) for d in var.domains
+                ]
                 init_dict = {}
-                if len(var.domains) == 1:
-                    set_obj = model.set_manager.get(var.domains[0])
-                    for i, elem in enumerate(set_obj.iter_elements()):
-                        init_dict[elem] = float(var.value[i])
-                elif len(var.domains) == 2:
-                    set1 = model.set_manager.get(var.domains[0])
-                    set2 = model.set_manager.get(var.domains[1])
-                    for i, e1 in enumerate(set1.iter_elements()):
-                        for j, e2 in enumerate(set2.iter_elements()):
-                            init_dict[(e1, e2)] = float(var.value[i, j])
+                lower_dict: dict[Any, float] | None = (
+                    {} if isinstance(lower, np.ndarray) and lower.ndim > 0 else None
+                )
+                upper_dict: dict[Any, float] | None = (
+                    {} if isinstance(upper, np.ndarray) and upper.ndim > 0 else None
+                )
+                for label_tuple, np_index in zip(
+                    itertools.product(*elems),
+                    np.ndindex(var.value.shape),
+                    strict=True,
+                ):
+                    key = label_tuple[0] if len(label_tuple) == 1 else label_tuple
+                    init_dict[key] = float(var.value[np_index])
+                    if lower_dict is not None:
+                        lower_dict[key] = float(lower[np_index])
+                    if upper_dict is not None:
+                        upper_dict[key] = float(upper[np_index])
+
+                if lower_dict is None and upper_dict is None:
+                    # Scalar bounds (the common case) — pass the tuple directly.
+                    bounds_arg: Any = (lower, upper)
+                else:
+                    # Per-index bounds: a var with a per-cell runtime price floor
+                    # (GTAP setlb(1e-3*init) on p_rai/pf/pfa) needs the exact bound
+                    # per cell. Pyomo's bounds= tuple is scalar-only, so build a
+                    # bounds RULE that looks up the per-cell (lo, hi). A scalar side
+                    # is broadcast to every index.
+                    def _bounds_rule(
+                        _m, *idx, _lo=lower_dict, _hi=upper_dict, _slo=lower, _shi=upper
+                    ):
+                        key = idx[0] if len(idx) == 1 else tuple(idx)
+                        lo = _lo[key] if _lo is not None else _slo
+                        hi = _hi[key] if _hi is not None else _shi
+                        return (lo, hi)
+
+                    bounds_arg = _bounds_rule
 
                 setattr(
                     self.pyomo_model,
                     var_name,
                     Var(
                         *index_sets,
-                        bounds=(lower, upper),
+                        bounds=bounds_arg,
+                        within=within,
                         initialize=init_dict,
                     ),
                 )
@@ -221,6 +306,14 @@ class PyomoBackend(Backend):
                 indices_list = eq.get_indices(model.set_manager)
 
                 if not indices_list:
+                    # Legitimate in GTAP: an equation domained over an empty
+                    # set contributes zero scalar constraints. Do not raise —
+                    # but make the drop visible instead of silent.
+                    logger.warning(
+                        "Equation %s domained over an empty set — resolved to "
+                        "zero index combinations; contributing no constraints",
+                        eq_name,
+                    )
                     continue
 
                 # Create constraint dictionary
@@ -231,11 +324,12 @@ class PyomoBackend(Backend):
                         if expr is not None:
                             constraint_dict[indices] = expr
                     except (ValueError, KeyError, AttributeError, TypeError) as e:
-                        # Skip constraints that fail to build
                         logger.warning(
                             "Could not build constraint %s%s: %s", eq_name, indices, e
                         )
-                        continue
+                        raise BridgeTranslationError(
+                            f"equation {eq_name}{indices} failed to build"
+                        ) from e
 
                 if constraint_dict:
                     if eq.domains:
@@ -289,12 +383,25 @@ class PyomoBackend(Backend):
                             ),
                         )
                         constraint_count += 1
+                else:
+                    # Had index combinations but every build_expression
+                    # returned None — a true invisible drop of the whole
+                    # equation. Fail loudly.
+                    raise BridgeTranslationError(
+                        f"equation {eq_name} produced no constraints despite "
+                        f"having {len(indices_list)} index combination(s) — "
+                        "all build_expression calls returned None"
+                    )
             else:
-                # Legacy equation handling - skip for now
-                # These equations use closures and won't work with Pyomo
-                pass
+                # Legacy closure-based equations cannot be translated to Pyomo.
+                raise BridgeTranslationError(
+                    f"equation {eq_name} has no build_expression "
+                    "(legacy closure form not supported)"
+                )
         if constraint_count == 0:
-            self.pyomo_model.dummy_constraint = Constraint(expr=1 == 1)
+            raise BridgeTranslationError(
+                "no constraints were built — model would be trivially feasible"
+            )
 
     def solve(self, options: dict[str, Any] | None = None) -> Solution:
         """Solve the Pyomo model.
@@ -344,31 +451,28 @@ class PyomoBackend(Backend):
             if not var.domains:
                 # Scalar
                 var_values[var_name] = np.array([value(pyomo_var)])
-            elif len(var.domains) == 1:
-                # 1D variable
-                set_obj = self._model.set_manager.get(var.domains[0])
-                values_list = []
-                for elem in set_obj:
-                    val = value(pyomo_var[elem])
-                    values_list.append(val)
-                var_values[var_name] = np.array(values_list)
-            elif len(var.domains) == 2:
-                # 2D variable (e.g., FD[F, J])
-                set_obj_0 = self._model.set_manager.get(var.domains[0])
-                set_obj_1 = self._model.set_manager.get(var.domains[1])
-                values_matrix = []
-                for elem0 in set_obj_0:
-                    row = []
-                    for elem1 in set_obj_1:
-                        val = value(pyomo_var[elem0, elem1])
-                        row.append(val)
-                    values_matrix.append(row)
-                var_values[var_name] = np.array(values_matrix)
             else:
-                # 3D+ variables not yet supported
-                raise NotImplementedError(
-                    f"Solution extraction for {len(var.domains)}D variable '{var_name}' not yet implemented"
-                )
+                # Indexed variable of any arity n >= 1. Allocate the array with
+                # the shape implied by the domain set sizes, then fill it by
+                # zipping itertools.product over the element labels with
+                # np.ndindex over the array shape. Both iterate the leftmost
+                # domain / first axis slowest and the rightmost / last axis
+                # fastest, so each label tuple lands in the matching numpy cell
+                # (a transposed fill would corrupt every N-D component). A 1-D
+                # Var is indexed by the bare element, so unwrap the singleton.
+                elems = [
+                    list(self._model.set_manager.get(d).iter_elements())
+                    for d in var.domains
+                ]
+                arr = np.empty(tuple(len(e) for e in elems))
+                for label_tuple, np_index in zip(
+                    itertools.product(*elems),
+                    np.ndindex(arr.shape),
+                    strict=True,
+                ):
+                    key = label_tuple[0] if len(label_tuple) == 1 else label_tuple
+                    arr[np_index] = value(pyomo_var[key])
+                var_values[var_name] = arr
 
         # Create solution object
         solution = Solution(
