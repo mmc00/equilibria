@@ -143,29 +143,44 @@ price index, held at 0%); ours is `pnum`. But our own world factor price index m
 only −0.0004% under the shock (≈GEMPACK's 0%), so re-normalizing our prices to GEMPACK's
 numeraire shifts them by <0.001pp — the gaps are unchanged.
 
-### What the residual actually is (as far as pinned)
+### What the residual actually is — the full gap map (traced)
 
-The gap is **systematic across ALL factors**, not just Land — measured at Food/EU_28:
+Measured the median |gap| vs GEMPACK for every mapped quantity variable (190 cells,
+`Q_TO_VAR`). The gap is **NOT uniform** — it has a clear structure:
 
-| Factor | ours | GEMPACK | gap |
-|---|---|---|---|
-| Land (sluggish) | −3.033% | −2.681% | −0.352pp |
-| UnSkLab (mobile) | −3.471% | −3.422% | −0.049pp |
-| SkLab (mobile) | −3.424% | −3.362% | −0.062pp |
-| Capital (mobile) | −3.426% | −3.364% | −0.062pp |
+| Group | Vars (median gap) |
+|---|---|
+| ~zero | `qe` factor supply 0.000, `qgdp` real GDP 0.004, `qtm` margins 0.077 |
+| low (~0.1pp) | `qfa` Armington 0.11, `qva` VA 0.11, `qfd` 0.09, `qc` supply 0.11 |
+| medium (~0.2pp) | `qds` dom sales 0.25, `qxs` exports 0.25, `qms` imports 0.06 |
+| **high (~0.45pp)** | **`qpa` private demand 0.43, `qga` gov demand 0.47, `qxw` export-agg 0.43** |
+| **outlier** | **`qinv` investment 1.24** |
 
-A common ~0.05pp on every factor (same sign) + an extra ~0.30pp on Land. This is NOT
-the specific-factor equation alone (that would leave mobile factors at 0 gap). The
-remaining candidate is the factor-demand / value-added nest (`E_pfe`/`E_pva` vs our
-`eq_pfeq`/`eq_pvaeq`) or another small structural difference in how each engine prices
-factor demand — **not yet pinned to the exact equation** (open; a follow-up trace).
+Two decisive facts: (1) **real GDP matches to 0.004pp and factor quantity to 0.000pp**
+— the model's anchor quantities agree, which REFUTES a uniform "systemic method
+residual" (that would move GDP too). (2) The gap **concentrates on FINAL DEMAND** —
+private (`qpa`), government (`qga`), and especially investment/savings (`qinv` 1.24pp,
+`qsave` swings USA +2.7%, EU_28 −10%, ROW −1.2%) — while production, factors, trade,
+and GDP agree well (~0–0.1pp).
 
-**Correction of an earlier claim:** an earlier draft attributed the whole 0.35pp to
-"exact power-CET vs GEMPACK linearized" for the specific factor. That is wrong for
-single-sector Land (both aggregations coincide, shown above) and cannot explain the gap
-on the mobile factors. The residual is a small structural GAMS↔GEMPACK difference whose
-exact locus is still open — but it is NOT linearization (steps), NOT the CET aggregation,
-and NOT the numeraire.
+**The locus:** GEMPACK's private demand is **CDE** (Constant Difference of Elasticities,
+a non-homothetic minimum-expenditure function with `INCPAR`/`SUBPAR`, `gtapv7.tab`
+910–1621), and the savings/investment allocation. The CDE is strongly non-linear, so
+levels-exact (ours/GAMS) vs linearized-multistep (GEMPACK) differs most there — exactly
+where the gap lives. Production/factor/trade nests (Leontief, CES, Armington) agree to
+~0.1pp; the specific-factor equation is NOT the source.
+
+**Corrections of earlier claims (both wrong, found by pursuing the user's skepticism):**
+- NOT "exact power-CET vs GEMPACK linearized for the specific factor": single-sector Land
+  makes both aggregations identical (`pft=pes_Food`), and the gap is on ALL factors.
+- NOT a uniform systemic method residual: real GDP and factor quantities match to
+  <0.01pp. The gap is **concentrated in final demand (CDE + savings/investment)**, a
+  genuinely non-linear nest where the two engines' solution methods diverge — consistent
+  with F5's "structural GAMS↔GEMPACK difference", now pinned to the demand side.
+
+Ruled out with evidence along the way: linearization/steps (GEMPACK flat s4→s64),
+CET aggregation, numeraire (world factor index moves −0.0004%), technical shifters
+(afe/ava=0), output tax (to=0), top-nest elasticity (ESUBT=sigmap=0, Leontief).
 
 ## What shipped
 
