@@ -117,3 +117,31 @@ def test_composer_stamps_settled_seed():
     assert m_cal._settled_seed["pft"][("EU_28", "Land")] == pytest.approx(
         0.84476, abs=5e-3
     )
+
+
+@pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+def test_base_calibrated_shock_response_is_clean():
+    """End-to-end: base-calibrated → base seeded to settled ~0.845, shock land
+    response ~-3% (near GEMPACK), NOT -18%, all solved code=1, no check phase."""
+    from pyomo.environ import value as V
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
+    p = _load_params()
+    rr = list(p.sets.r)[-1]
+    gc = _base_closure(p)
+    m, mp = build_block_model(p, p.sets, gc, rr, base_calibrated=True)
+    # skip_base_solve=True: the settled point IS the given base (already an
+    # equilibrium from the settle solve), like the faithful-to-GAMS base.
+    res = solve_multiperiod(
+        m, p, gc, ref_gdx=REF_GDX, skip_base_solve=True, mode="gtap"
+    )
+    assert res["base"]["code"] == 1
+    assert res["shock"]["code"] == 1
+    assert res.get("check") is None
+    base = float(V(m.pft["EU_28", "Land", "base"]))
+    shock = float(V(m.pft["EU_28", "Land", "shock"]))
+    assert base == pytest.approx(0.84476, abs=1e-2), f"base not settled: {base}"
+    resp = 100.0 * (shock - base) / base
+    assert -8.0 < resp < 0.0, f"land response not clean: {resp:.2f}%"

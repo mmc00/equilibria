@@ -2764,6 +2764,26 @@ def solve_multiperiod(
     # luck).  altertax does NOT set this → its matching is byte-unchanged.
     m._gtap_mode = bool(_gtap_mode)
 
+    # ── F3.5 base-calibrated mode ────────────────────────────────────────────
+    # When the composer built the model with base_calibrated=True, the settled
+    # (check-period) equilibrium is stamped on m._settled_seed.  Seed the BASE
+    # period from it so the base already sits at the re-settled point, skip the
+    # CHECK phase entirely, and seed the SHOCK from base.  The shock response then
+    # matches GEMPACK (~-3%) instead of the check-contaminated GAMS path (~-18%).
+    # Default (base_calibrated=False) leaves this untouched → faithful to GAMS.
+    _base_calibrated = bool(getattr(m, "_base_calibrated", False))
+    if _base_calibrated and getattr(m, "_settled_seed", None):
+        for _vn, _cells in m._settled_seed.items():
+            _vobj = getattr(m, _vn, None)
+            if _vobj is None:
+                continue
+            for _body, _val in _cells.items():
+                _key = (*_body, "base") if isinstance(_body, tuple) else (_body, "base")
+                try:
+                    _vobj[_key].set_value(float(_val))
+                except (KeyError, TypeError, ValueError):
+                    pass
+
     # ── Phase 1: BASE period ─────────────────────────────────────────────────
     # Freeze check and shock periods; leave base free.
     freeze_inactive_periods(m, "base")
@@ -2836,508 +2856,544 @@ def solve_multiperiod(
         except (KeyError, AttributeError):
             pass
 
-    # ── Phase 2: CHECK period ────────────────────────────────────────────────
-    # Freeze base and shock; leave check free.
-    freeze_inactive_periods(m, "check")
+    # F3.5: skip the CHECK phase entirely when base-calibrated (the base is
+    # already at the settled point).  Copy base→check so any check-period read
+    # downstream sees valid values, and do NOT record results["check"].
+    if _base_calibrated:
+        from pyomo.environ import Var as _VarF35
 
-    # Must come AFTER freeze_inactive_periods unfixes check's VarData (same
-    # ordering lesson as the price-floor experiment) — this rebuilds the
-    # CONSTRAINT itself using base's already-solved (seeded, gtap-mode)
-    # nd/va/xp/pnd/pva/px.
-    # GAMS pure-gtap real-CES calibrates the share params ONCE at base (loop(t0))
-    # and holds them CONSTANT across periods — the reference GDX proves af/and/ava/
-    # gx/alphad/alpham/alphaa/gd/ge/gw are byte-identical base=check=shock. So in
-    # gtap-mode we must NOT re-recalibrate per period (doing so, e.g. af[EU_28,Land,
-    # Food]=0.1106 vs GAMS 0.1001, over-prices the sluggish factor: pf[Land] 19%
-    # high in the shock → shock capped ~95%). Altertax DOES recalibrate per period
-    # (GAMS iterloop for altertax) so it keeps the recal. Gated on _gtap_mode.
-    if not _gtap_mode:
-        _recalibrate_and_ava(m, p_alt, "check", "base")
-        # NOTE: _recalibrate_io_af is NOT called — GAMS holds io AND af CONSTANT
-        # across periods (iterloop.gms has ZERO `af(`/`io(` assignments; the GDX
-        # proves af[EU_28,Land,Food]=0.11716 and io[EU_28,Food,Food]=0.51534 are
-        # byte-identical base=check=shock). Re-recalibrating af per period from the
-        # prior period's pfa (which itself drifts) over-weighted the subsidized
-        # sluggish Land factor → af 0.1287 vs 0.1172 → pf[Land] shock 1.06 vs GAMS
-        # 0.96 → pft[Land] re-slid to ≈1.0 (the sluggish-Land free-DOF). Dropping
-        # this recal + the af_param subsidy-wedge calibration fix (parameter_
-        # overrides._recalibrate_af_shares) closed pft[Land] to 0.9109 = GAMS and
-        # lifted the shock gate 98.21% → 99.93%. Faithful: af is calibrated ONCE.
-        _recalibrate_gx_ax(m, p_alt, "check", "base")
-        _recalibrate_alphad_alpham(m, p_alt, "check", "base")
-        _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
-        _recalibrate_alphaa_hhd(m, p_alt, "check", "base")  # altertax only
-
-    # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
-    # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
-    # (2026-06-22): _seed_period_from_prior(base→check) clobbered the GAMS check seed
-    # (pd[USA,Mnfcs] 0.983→1.0), sending PATH to a branch that collapses USA's whole
-    # price level (pgdpmp[USA] 0.99→0.67).  Keeping the GAMS seed + holdfix_cd below
-    # is the faithful recipe (project_gtap7_10x7_check_holdfix).
-    if seed_from_prior:
-        _seed_period_from_prior(m, "base", "check")
-
-    # phiP[check] = pcons[base] = 1.0 (GAMS convention).
-    for _r in p_alt.sets.r:
-        try:
-            if hasattr(p_alt, "calibration") and hasattr(p_alt.calibration, "phip"):
-                p_alt.calibration.phip[(_r,)] = 1.0
-        except Exception:
-            pass
-
-    # Unfix regy[r,'check'] (GAMS regYeq.regY endogenous in compStat).
-    for _r in p_alt.sets.r:
-        try:
-            if hasattr(m, "regy") and m.regy[_r, "check"].fixed:
-                m.regy[_r, "check"].unfix()
-        except Exception:
-            pass
-
-    # FIX B (B2): deactivate eq_xft[r,f,'check'] where eq_xfteq[r,f,'check'] is active.
-    # Same logic as FIX B (B1) for base: the single-period altertax gate in
-    # _run_path_capi_nonlinear_full fires only for 2-index eq_xft (model.eq_xft[r,f]),
-    # but in the multi-period model the index is (r,f,period) — so KeyError silently
-    # skips the deactivation, leaving BOTH eq_xft AND eq_xfteq active for the same
-    # xft var → over-determined system (code=2, residual~3e-4).
-    # gtap-mode: do NOT blanket-deactivate eq_xft.  This block kills all 15
-    # eq_xft[r,f,'check'] whenever eq_xfteq is active, but the sluggish base
-    # keeps 6 via Hopcroft-Karp.  The wrapper's apply_squareness_patches trims
-    # eq_xft for gtap-mode exactly as for the SP sluggish base, so we skip the
-    # blanket deactivation here and let the wrapper do it.  Altertax keeps the
-    # blanket deactivation (byte-identical to before).
-    _eq_xft_mp = getattr(m, "eq_xft", None)
-    _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
-    if not _gtap_mode and _eq_xft_mp is not None and _eq_xfteq_mp is not None:
-        _n_xft_deact_chk = 0
-        for _r in m.r:
-            for _f in m.f:
+        for _v in m.component_objects(_VarF35, active=True):
+            for _idx in _v:
+                if not (
+                    isinstance(_idx, tuple) and len(_idx) >= 1 and _idx[-1] == "check"
+                ):
+                    continue
+                _bkey = (*_idx[:-1], "base")
                 try:
-                    _xfteq_cd = _eq_xfteq_mp[(_r, _f, "check")]
-                except KeyError:
-                    continue
-                if not _xfteq_cd.active:
-                    continue
-                try:
-                    _xft_cd = _eq_xft_mp[(_r, _f, "check")]
-                except KeyError:
-                    continue
-                if _xft_cd.active:
-                    _xft_cd.deactivate()
-                    _n_xft_deact_chk += 1
-        if _n_xft_deact_chk:
-            import logging as _logging
+                    _bv = m.component(_v.name)[_bkey].value
+                    if _bv is not None:
+                        _v[_idx].set_value(float(_bv))
+                except (KeyError, TypeError, ValueError):
+                    pass
+    else:
+        # ── Phase 2: CHECK period ────────────────────────────────────────────────
+        # Freeze base and shock; leave check free.
+        freeze_inactive_periods(m, "check")
 
-            _logging.getLogger(__name__).info(
-                "check period: deactivated eq_xft for %d (r,f) pairs "
-                "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
-                _n_xft_deact_chk,
-            )
+        # Must come AFTER freeze_inactive_periods unfixes check's VarData (same
+        # ordering lesson as the price-floor experiment) — this rebuilds the
+        # CONSTRAINT itself using base's already-solved (seeded, gtap-mode)
+        # nd/va/xp/pnd/pva/px.
+        # GAMS pure-gtap real-CES calibrates the share params ONCE at base (loop(t0))
+        # and holds them CONSTANT across periods — the reference GDX proves af/and/ava/
+        # gx/alphad/alpham/alphaa/gd/ge/gw are byte-identical base=check=shock. So in
+        # gtap-mode we must NOT re-recalibrate per period (doing so, e.g. af[EU_28,Land,
+        # Food]=0.1106 vs GAMS 0.1001, over-prices the sluggish factor: pf[Land] 19%
+        # high in the shock → shock capped ~95%). Altertax DOES recalibrate per period
+        # (GAMS iterloop for altertax) so it keeps the recal. Gated on _gtap_mode.
+        if not _gtap_mode:
+            _recalibrate_and_ava(m, p_alt, "check", "base")
+            # NOTE: _recalibrate_io_af is NOT called — GAMS holds io AND af CONSTANT
+            # across periods (iterloop.gms has ZERO `af(`/`io(` assignments; the GDX
+            # proves af[EU_28,Land,Food]=0.11716 and io[EU_28,Food,Food]=0.51534 are
+            # byte-identical base=check=shock). Re-recalibrating af per period from the
+            # prior period's pfa (which itself drifts) over-weighted the subsidized
+            # sluggish Land factor → af 0.1287 vs 0.1172 → pf[Land] shock 1.06 vs GAMS
+            # 0.96 → pft[Land] re-slid to ≈1.0 (the sluggish-Land free-DOF). Dropping
+            # this recal + the af_param subsidy-wedge calibration fix (parameter_
+            # overrides._recalibrate_af_shares) closed pft[Land] to 0.9109 = GAMS and
+            # lifted the shock gate 98.21% → 99.93%. Faithful: af is calibrated ONCE.
+            _recalibrate_gx_ax(m, p_alt, "check", "base")
+            _recalibrate_alphad_alpham(m, p_alt, "check", "base")
+            _recalibrate_alphaa_gov_inv(m, p_alt, "check", "base")
+            _recalibrate_alphaa_hhd(m, p_alt, "check", "base")  # altertax only
 
-    # gtap-mode: collapse pft/eq_pfteq for the active period (squares the
-    # factor-price block; the SP-base squaring no-ops on the MP (r,f,t) index).
-    if _gtap_mode:
-        _n_pft_chk = _collapse_pft_pfteq(m, "check")
-        if _n_pft_chk:
-            import logging as _logging
+        # Warm-start check.  By DEFAULT (seed_from_prior=False) keep the GAMS check seed
+        # that seed_all_periods loaded — do NOT overwrite it with base values.  MEASURED
+        # (2026-06-22): _seed_period_from_prior(base→check) clobbered the GAMS check seed
+        # (pd[USA,Mnfcs] 0.983→1.0), sending PATH to a branch that collapses USA's whole
+        # price level (pgdpmp[USA] 0.99→0.67).  Keeping the GAMS seed + holdfix_cd below
+        # is the faithful recipe (project_gtap7_10x7_check_holdfix).
+        if seed_from_prior:
+            _seed_period_from_prior(m, "base", "check")
 
-            _logging.getLogger(__name__).info(
-                "check period: collapsed pft/eq_pfteq for %d (r,f) pairs "
-                "(gtap-mode factor-price squaring)",
-                _n_pft_chk,
-            )
-        # xp activity-scale holdfix: MEASURED OFF (2026-06-24).  It was added as a
-        # patch compensating for the OLD pinned-pft bug (the scale slid because the
-        # factor block was mis-anchored).  Now that pft is FREED correctly
-        # (_collapse_pft_pfteq leaves real-factor pft free), the xp holdfix forces
-        # the WRONG factor-block root: with it ON, CHECK=64.0%/SHOCK=61.3%; with it
-        # OFF, CHECK=99.4%/SHOCK=66.9% (both code=1).  So we disable it for
-        # gtap-mode (the freed pft self-anchors xp via the live eq_pfteq/eq_xfteq).
-        if _HOLDFIX_ACTIVITY_SCALE_GTAP:
-            _n_xp_chk = _holdfix_activity_scale(m, "check")
-            if _n_xp_chk:
+        # phiP[check] = pcons[base] = 1.0 (GAMS convention).
+        for _r in p_alt.sets.r:
+            try:
+                if hasattr(p_alt, "calibration") and hasattr(p_alt.calibration, "phip"):
+                    p_alt.calibration.phip[(_r,)] = 1.0
+            except Exception:
+                pass
+
+        # Unfix regy[r,'check'] (GAMS regYeq.regY endogenous in compStat).
+        for _r in p_alt.sets.r:
+            try:
+                if hasattr(m, "regy") and m.regy[_r, "check"].fixed:
+                    m.regy[_r, "check"].unfix()
+            except Exception:
+                pass
+
+        # FIX B (B2): deactivate eq_xft[r,f,'check'] where eq_xfteq[r,f,'check'] is active.
+        # Same logic as FIX B (B1) for base: the single-period altertax gate in
+        # _run_path_capi_nonlinear_full fires only for 2-index eq_xft (model.eq_xft[r,f]),
+        # but in the multi-period model the index is (r,f,period) — so KeyError silently
+        # skips the deactivation, leaving BOTH eq_xft AND eq_xfteq active for the same
+        # xft var → over-determined system (code=2, residual~3e-4).
+        # gtap-mode: do NOT blanket-deactivate eq_xft.  This block kills all 15
+        # eq_xft[r,f,'check'] whenever eq_xfteq is active, but the sluggish base
+        # keeps 6 via Hopcroft-Karp.  The wrapper's apply_squareness_patches trims
+        # eq_xft for gtap-mode exactly as for the SP sluggish base, so we skip the
+        # blanket deactivation here and let the wrapper do it.  Altertax keeps the
+        # blanket deactivation (byte-identical to before).
+        _eq_xft_mp = getattr(m, "eq_xft", None)
+        _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
+        if not _gtap_mode and _eq_xft_mp is not None and _eq_xfteq_mp is not None:
+            _n_xft_deact_chk = 0
+            for _r in m.r:
+                for _f in m.f:
+                    try:
+                        _xfteq_cd = _eq_xfteq_mp[(_r, _f, "check")]
+                    except KeyError:
+                        continue
+                    if not _xfteq_cd.active:
+                        continue
+                    try:
+                        _xft_cd = _eq_xft_mp[(_r, _f, "check")]
+                    except KeyError:
+                        continue
+                    if _xft_cd.active:
+                        _xft_cd.deactivate()
+                        _n_xft_deact_chk += 1
+            if _n_xft_deact_chk:
                 import logging as _logging
 
                 _logging.getLogger(__name__).info(
-                    "check period: holdfixed xp at base for %d (r,a) (gtap-mode "
-                    "activity-scale anchor)",
-                    _n_xp_chk,
+                    "check period: deactivated eq_xft for %d (r,f) pairs "
+                    "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
+                    _n_xft_deact_chk,
                 )
 
-    # Replicate single-period structural fixing for check period.
-    _chk_closure = base_closure if _gtap_mode else alt_closure
-    _sp_ref_chk = GTAPModelEquations(
-        p_alt.sets,
-        p_alt,
-        _chk_closure,
-        residual_region=res_region,
-    ).build_model()
-    _replicate_sp_fixing(m, _sp_ref_chk, "check")
-    _replicate_sp_bounds(m, _sp_ref_chk, "check")
-    del _sp_ref_chk
+        # gtap-mode: collapse pft/eq_pfteq for the active period (squares the
+        # factor-price block; the SP-base squaring no-ops on the MP (r,f,t) index).
+        if _gtap_mode:
+            _n_pft_chk = _collapse_pft_pfteq(m, "check")
+            if _n_pft_chk:
+                import logging as _logging
 
-    # Mute the inert welfare-report tail so PATH can certify code=1 (see
-    # _mute_welfare_tail). Decisive once the base is exact (skip_base_solve):
-    # check goes code=2 res 1.1e-2 → code=1 res 2.9e-11.
-    if mute_welfare:
-        _n_mute = _mute_welfare_tail(
-            m, "check", list(p_alt.sets.r), gtap_mode=_gtap_mode
-        )
-        if _n_mute:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "check period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)",
-                _n_mute,
-            )
-
-    # Seed the Python-only derived demand-volume vars (xc/xg/xi/xd/xmt/xiagg) from
-    # the GAMS-seeded primals so the GAMS point is a true fixed point — else
-    # eq_xc/eq_xg/eq_xd carry residual that pulls PATH off the basin.  Part of the
-    # 3-piece faithful check recipe (project_gtap7_10x7_check_holdfix).
-    if holdfix_cd and not _gtap_mode:
-        _n_der = _complete_derived_seed(m, "check")
-        if _n_der:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "check period: seeded %d derived demand-volume cells", _n_der
-            )
-
-    # Holdfix the CD-degenerate VA/ND nest (pva/pnd) at the GAMS-seeded values,
-    # replicating GAMS gtap.holdfixed=1 in the check period.  Without this PATH
-    # slides pva/pnd (free DOFs under CD) and collapses a region's price level.
-    if holdfix_cd and not _gtap_mode:
-        _n_hf = _holdfix_cd_nest(m, "check")
-        if _n_hf:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "check period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf
-            )
-
-    # Holdfix pf for sector-specific (fnm) factors with etaff=0 (e.g. NatRes),
-    # replicating GAMS pf.fx(r,fp,a,tsim-1)=pf.l(...) every period. Without
-    # this, pf is a genuinely free DOF (fnmeq degenerates to an xf-only
-    # identity when etaff=0) and PATH's line search lets it explode.
-    _n_hf_pf = _holdfix_fnm_pf(m, p_alt, "check")
-    if _n_hf_pf:
-        import logging as _logging
-
-        _logging.getLogger(__name__).info(
-            "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf
-        )
-
-    # TEMP DEBUG PROBE (session-local): report the seed state of a target factor
-    # price + its paired equation residuals right before PATH solves check.
-    import os as _os_probe
-
-    _probe_pf = _os_probe.environ.get("EQUILIBRIA_DEBUG_PROBE_PF_CHECK")
-    if _probe_pf:
-        import sys as _sys_probe
-
-        from pyomo.environ import Constraint as _Cp
-        from pyomo.environ import value as _Vp
-
-        _rr_p, _ff_p = _probe_pf.split(",")[0], _probe_pf.split(",")[1]
-        print(
-            f"[probe-pf] --- {_rr_p},{_ff_p} check seed state ---",
-            file=_sys_probe.stderr,
-        )
-        for _idx in getattr(m, "pf", []):
-            if _idx[0] == _rr_p and _idx[1] == _ff_p and _idx[-1] == "check":
-                _vd = m.pf[_idx]
-                print(
-                    f"[probe-pf]   pf{_idx} = {_Vp(_vd):.6f}  fixed={_vd.fixed}",
-                    file=_sys_probe.stderr,
+                _logging.getLogger(__name__).info(
+                    "check period: collapsed pft/eq_pfteq for %d (r,f) pairs "
+                    "(gtap-mode factor-price squaring)",
+                    _n_pft_chk,
                 )
-        for _nm in ("pft", "xf", "xft"):
-            _comp = getattr(m, _nm, None)
-            if _comp is None:
-                continue
-            for _idx in _comp:
-                if (
-                    _idx[0] == _rr_p
-                    and _rr_p
-                    and len(_idx) >= 2
-                    and _idx[1] == _ff_p
-                    and _idx[-1] == "check"
-                ):
-                    with contextlib.suppress(Exception):
-                        print(
-                            f"[probe-pf]   {_nm}{_idx} = {_Vp(_comp[_idx]):.6f}  fixed={_comp[_idx].fixed}",
-                            file=_sys_probe.stderr,
-                        )
-        # residuals of any active constraint touching this factor
-        _rows = []
-        for _c in m.component_objects(_Cp, active=True):
-            _nml = _c.name.lower()
-            if not any(k in _nml for k in ("pf", "xf", "fnm", "endw", "fact")):
-                continue
-            for _idx in _c:
-                _cd = _c[_idx]
-                if not _cd.active:
-                    continue
-                _si = str(_idx)
-                if _rr_p not in _si or _ff_p not in _si or "check" not in _si:
-                    continue
-                try:
-                    _b = _Vp(_cd.body)
-                    _lo = _Vp(_cd.lower) if _cd.lower is not None else None
-                    _up = _Vp(_cd.upper) if _cd.upper is not None else None
-                    _res = 0.0
-                    if _lo is not None:
-                        _res = max(_res, abs(_b - _lo))
-                    if _up is not None:
-                        _res = max(_res, abs(_b - _up))
-                    _rows.append((_res, _c.name, _si))
-                except Exception:
-                    pass
-        _rows.sort(reverse=True)
-        for _res, _n, _i in _rows[:12]:
-            print(f"[probe-pf]   resid {_res:.6e}  {_n}{_i}", file=_sys_probe.stderr)
-        # is eq_pfteq / eq_xfteq active for this (r,f)?
-        for _eqn in ("eq_pfteq", "eq_xfteq", "eq_fnm", "eq_pfeq"):
-            _eqc = getattr(m, _eqn, None)
-            if _eqc is None:
-                continue
-            for _idx in _eqc:
-                if _rr_p in str(_idx) and _ff_p in str(_idx) and "check" in str(_idx):
-                    print(
-                        f"[probe-pf]   {_eqn}{_idx} active={_eqc[_idx].active}",
-                        file=_sys_probe.stderr,
+            # xp activity-scale holdfix: MEASURED OFF (2026-06-24).  It was added as a
+            # patch compensating for the OLD pinned-pft bug (the scale slid because the
+            # factor block was mis-anchored).  Now that pft is FREED correctly
+            # (_collapse_pft_pfteq leaves real-factor pft free), the xp holdfix forces
+            # the WRONG factor-block root: with it ON, CHECK=64.0%/SHOCK=61.3%; with it
+            # OFF, CHECK=99.4%/SHOCK=66.9% (both code=1).  So we disable it for
+            # gtap-mode (the freed pft self-anchors xp via the live eq_pfteq/eq_xfteq).
+            if _HOLDFIX_ACTIVITY_SCALE_GTAP:
+                _n_xp_chk = _holdfix_activity_scale(m, "check")
+                if _n_xp_chk:
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).info(
+                        "check period: holdfixed xp at base for %d (r,a) (gtap-mode "
+                        "activity-scale anchor)",
+                        _n_xp_chk,
                     )
 
-    # TEMP DEBUG HOOK (session-local, remove before commit): export the fully
-    # recalibrated, fully-unfixed check-period model to .nl right before PATH
-    # would solve it — for a CONVERT/GAMS comparison and a NEOS submission.
-    # Controlled by an env var so it's a no-op normally.
-    import os as _os_dbg
-    import sys as _sys_dbg
+        # Replicate single-period structural fixing for check period.
+        _chk_closure = base_closure if _gtap_mode else alt_closure
+        _sp_ref_chk = GTAPModelEquations(
+            p_alt.sets,
+            p_alt,
+            _chk_closure,
+            residual_region=res_region,
+        ).build_model()
+        _replicate_sp_fixing(m, _sp_ref_chk, "check")
+        _replicate_sp_bounds(m, _sp_ref_chk, "check")
+        del _sp_ref_chk
 
-    _nl_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK")
-    if _nl_export_path:
-        m.write(
-            _nl_export_path, format="nl", io_options={"symbolic_solver_labels": True}
-        )
-        print(
-            f"[export] wrote check-period .nl to {_nl_export_path}",
-            file=_sys_dbg.stderr,
-        )
-        raise RuntimeError(
-            "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check"
-        )
-
-    # TEMP DEBUG HOOK (session-local): export the fully-prepared check-period
-    # Pyomo model to a GAMS .gms (Pyomo's gams_writer, flat/scalar form) right
-    # before PATH would solve it — so it can be diffed equation-by-equation
-    # against the GAMS bundle's own .gms (both now in GAMS syntax). Accepts a
-    # period suffix via EQUILIBRIA_DEBUG_EXPORT_GMS_PERIOD (default: this call's
-    # active period is check). No-op unless the env var is set.
-    _gms_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK")
-    if _gms_export_path:
-        # GAMS writer needs exactly one objective; the CNS/MCP model has none.
-        # Mirror the NLP formulation (maximize walras): deactivate eq_walras[check]
-        # and expose walras[check] as the Objective — same as GAMS's ifMCP=0 branch.
-        from pyomo.environ import Objective as _PyoObjGms
-        from pyomo.environ import maximize as _pyo_max_gms
-
-        _ew_gms = getattr(m, "eq_walras", None)
-        if _ew_gms is not None:
-            for _idx in list(_ew_gms):
-                _match = (
-                    (_idx and _idx[-1] == "check")
-                    if isinstance(_idx, tuple)
-                    else (_idx == "check")
-                )
-                if _match and _ew_gms[_idx].active:
-                    _ew_gms[_idx].deactivate()
-        _wv_gms = getattr(m, "walras", None)
-        try:
-            _wvd_gms = _wv_gms["check"]
-        except Exception:
-            _wvd_gms = _wv_gms
-        if _wvd_gms is not None and _wvd_gms.fixed:
-            _wvd_gms.unfix()
-        m._nlp_walras_objective_gms = _PyoObjGms(expr=_wvd_gms, sense=_pyo_max_gms)
-        m.write(
-            _gms_export_path, format="gams", io_options={"symbolic_solver_labels": True}
-        )
-        print(
-            f"[export] wrote check-period .gms to {_gms_export_path}",
-            file=_sys_dbg.stderr,
-        )
-        raise RuntimeError(
-            "EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK: stopping right before PATH solves check"
-        )
-
-    # TEMP DEBUG HOOK (session-local, remove before commit): same export, but
-    # reformulated as an NLP (maximize walras) instead of a CNS (min 0 s.t.
-    # equalities) — mirrors GAMS's ifMCP=0 branch (`solve gtap using nlp
-    # maximizing walras`), which gives IPOPT a real objective gradient to
-    # follow instead of leaving it to satisfy a pure equality system with no
-    # slack. eq_walras[..., "check"] is deactivated (it would otherwise
-    # doubly constrain `walras` on top of the Objective) and `walras` is
-    # exposed as the Objective directly, exactly like GAMS's walraseq being a
-    # free-row/objective-row instead of a paired equality under ifMCP=0.
-    _nl_export_nlp_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP")
-    if _nl_export_nlp_path:
-        from pyomo.environ import Objective as _PyoObjective
-        from pyomo.environ import maximize as _pyo_maximize
-
-        _eq_walras_chk = getattr(m, "eq_walras", None)
-        if _eq_walras_chk is not None:
-            for _idx in list(_eq_walras_chk):
-                if isinstance(_idx, tuple):
-                    if _idx and _idx[-1] == "check":
-                        _eq_walras_chk[_idx].deactivate()
-                elif _idx == "check":
-                    _eq_walras_chk[_idx].deactivate()
-        _walras_var = getattr(m, "walras", None)
-        if _walras_var is None:
-            raise RuntimeError(
-                "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: model has no `walras` Var"
+        # Mute the inert welfare-report tail so PATH can certify code=1 (see
+        # _mute_welfare_tail). Decisive once the base is exact (skip_base_solve):
+        # check goes code=2 res 1.1e-2 → code=1 res 2.9e-11.
+        if mute_welfare:
+            _n_mute = _mute_welfare_tail(
+                m, "check", list(p_alt.sets.r), gtap_mode=_gtap_mode
             )
-        try:
-            _walras_vd = _walras_var["check"]
-        except Exception:
-            _walras_vd = _walras_var
-        # gtap_mode's _mute_welfare_tail (above) FIXES walras=0 (Walras law,
-        # correct for the MCP/CNS formulation where eq_walras pins yi[rres]
-        # instead). Under NLP (maximize walras), walras must be the FREE
-        # objective variable instead — GAMS's ifMCP=0 branch does not fix it
-        # either (walraseq is the objective row, not a constraint pinning
-        # yi[rres]). Without unfixing here the objective is a constant 0 with
-        # no gradient, which is exactly what made the first NLP export
-        # indistinguishable from the plain CNS export (both showed a flat
-        # objective=0.0 throughout every IPOPT iteration).
-        _walras_vd.unfix()
-        m._nlp_walras_objective = _PyoObjective(expr=_walras_vd, sense=_pyo_maximize)
-        m.write(
-            _nl_export_nlp_path,
-            format="nl",
-            io_options={"symbolic_solver_labels": True},
-        )
-        print(
-            f"[export] wrote check-period NLP(maximize walras) .nl to {_nl_export_nlp_path}",
-            file=_sys_dbg.stderr,
-        )
-        raise RuntimeError(
-            "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: stopping right before PATH solves check"
-        )
+            if _n_mute:
+                import logging as _logging
 
-    # TEMP DEBUG HOOK (session-local, remove before commit): SAME NLP
-    # reformulation as above, but SOLVES in-process via Pyomo's IPOPT
-    # interface (instead of exporting + a standalone `ipopt` CLI run) so the
-    # post-solve residual per Constraint is readable directly — diagnoses
-    # WHICH equation IPOPT's "locally infeasible" verdict is actually citing,
-    # rather than just the aggregate constraint-violation scalar.
-    _solve_nlp_report_path = _os_dbg.environ.get(
-        "EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT"
-    )
-    if _solve_nlp_report_path:
-        import json as _json_dbg
+                _logging.getLogger(__name__).info(
+                    "check period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)",
+                    _n_mute,
+                )
 
-        from pyomo.environ import (
-            Constraint as _PyoConstraint2,
-        )
-        from pyomo.environ import (
-            Objective as _PyoObjective2,
-        )
-        from pyomo.environ import (
-            SolverFactory as _PyoSolverFactory,
-        )
-        from pyomo.environ import (
-            maximize as _pyo_maximize2,
-        )
-        from pyomo.environ import (
-            value as _pyo_value2,
-        )
+        # Seed the Python-only derived demand-volume vars (xc/xg/xi/xd/xmt/xiagg) from
+        # the GAMS-seeded primals so the GAMS point is a true fixed point — else
+        # eq_xc/eq_xg/eq_xd carry residual that pulls PATH off the basin.  Part of the
+        # 3-piece faithful check recipe (project_gtap7_10x7_check_holdfix).
+        if holdfix_cd and not _gtap_mode:
+            _n_der = _complete_derived_seed(m, "check")
+            if _n_der:
+                import logging as _logging
 
-        _eq_walras_chk2 = getattr(m, "eq_walras", None)
-        if _eq_walras_chk2 is not None:
-            for _idx in list(_eq_walras_chk2):
-                if isinstance(_idx, tuple):
-                    if _idx and _idx[-1] == "check":
-                        _eq_walras_chk2[_idx].deactivate()
-                elif _idx == "check":
-                    _eq_walras_chk2[_idx].deactivate()
-        _walras_var2 = getattr(m, "walras", None)
-        try:
-            _walras_vd2 = _walras_var2["check"]
-        except Exception:
-            _walras_vd2 = _walras_var2
-        _walras_vd2.unfix()
-        m._nlp_walras_objective = _PyoObjective2(expr=_walras_vd2, sense=_pyo_maximize2)
-        opt = _PyoSolverFactory("ipopt")
-        opt.options["max_iter"] = 1000
-        # Numerical-scaling tuning aimed at near-zero SAM cells (e.g.
-        # xd[CHN,Rice,MachEq]~1.1e-6 against sigma_m=3.87 — a tiny base value
-        # raised to a steep exponent amplifies ordinary Newton-step price
-        # noise into an outsized absolute residual). gradient-based scaling
-        # rescales each row/col by its Jacobian's own magnitude instead of
-        # leaving IPOPT's default (unit) scaling to treat a 1e-6 row the same
-        # as an O(1) row. mu_strategy=adaptive + bound_relax_factor=0 mirror
-        # what a hand-tuned barrier path does for exactly this shape of
-        # problem (many O(1) blocks, a few O(1e-6) blocks) instead of using
-        # a fixed global barrier schedule that serves the O(1) rows and
-        # starves the O(1e-6) rows of resolution.
-        opt.options["nlp_scaling_method"] = "gradient-based"
-        opt.options["bound_relax_factor"] = 0
-        opt.options["mu_strategy"] = "adaptive"
-        opt.options["tol"] = 1e-7
-        res = opt.solve(m, tee=True)
-        rows = []
-        for c in m.component_objects(_PyoConstraint2, active=True):
-            for idx in c:
-                cd = c[idx]
-                if not cd.active:
+                _logging.getLogger(__name__).info(
+                    "check period: seeded %d derived demand-volume cells", _n_der
+                )
+
+        # Holdfix the CD-degenerate VA/ND nest (pva/pnd) at the GAMS-seeded values,
+        # replicating GAMS gtap.holdfixed=1 in the check period.  Without this PATH
+        # slides pva/pnd (free DOFs under CD) and collapses a region's price level.
+        if holdfix_cd and not _gtap_mode:
+            _n_hf = _holdfix_cd_nest(m, "check")
+            if _n_hf:
+                import logging as _logging
+
+                _logging.getLogger(__name__).info(
+                    "check period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf
+                )
+
+        # Holdfix pf for sector-specific (fnm) factors with etaff=0 (e.g. NatRes),
+        # replicating GAMS pf.fx(r,fp,a,tsim-1)=pf.l(...) every period. Without
+        # this, pf is a genuinely free DOF (fnmeq degenerates to an xf-only
+        # identity when etaff=0) and PATH's line search lets it explode.
+        _n_hf_pf = _holdfix_fnm_pf(m, p_alt, "check")
+        if _n_hf_pf:
+            import logging as _logging
+
+            _logging.getLogger(__name__).info(
+                "check period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf
+            )
+
+        # TEMP DEBUG PROBE (session-local): report the seed state of a target factor
+        # price + its paired equation residuals right before PATH solves check.
+        import os as _os_probe
+
+        _probe_pf = _os_probe.environ.get("EQUILIBRIA_DEBUG_PROBE_PF_CHECK")
+        if _probe_pf:
+            import sys as _sys_probe
+
+            from pyomo.environ import Constraint as _Cp
+            from pyomo.environ import value as _Vp
+
+            _rr_p, _ff_p = _probe_pf.split(",")[0], _probe_pf.split(",")[1]
+            print(
+                f"[probe-pf] --- {_rr_p},{_ff_p} check seed state ---",
+                file=_sys_probe.stderr,
+            )
+            for _idx in getattr(m, "pf", []):
+                if _idx[0] == _rr_p and _idx[1] == _ff_p and _idx[-1] == "check":
+                    _vd = m.pf[_idx]
+                    print(
+                        f"[probe-pf]   pf{_idx} = {_Vp(_vd):.6f}  fixed={_vd.fixed}",
+                        file=_sys_probe.stderr,
+                    )
+            for _nm in ("pft", "xf", "xft"):
+                _comp = getattr(m, _nm, None)
+                if _comp is None:
                     continue
-                if isinstance(idx, tuple):
-                    if not idx or idx[-1] != "check":
+                for _idx in _comp:
+                    if (
+                        _idx[0] == _rr_p
+                        and _rr_p
+                        and len(_idx) >= 2
+                        and _idx[1] == _ff_p
+                        and _idx[-1] == "check"
+                    ):
+                        with contextlib.suppress(Exception):
+                            print(
+                                f"[probe-pf]   {_nm}{_idx} = {_Vp(_comp[_idx]):.6f}  fixed={_comp[_idx].fixed}",
+                                file=_sys_probe.stderr,
+                            )
+            # residuals of any active constraint touching this factor
+            _rows = []
+            for _c in m.component_objects(_Cp, active=True):
+                _nml = _c.name.lower()
+                if not any(k in _nml for k in ("pf", "xf", "fnm", "endw", "fact")):
+                    continue
+                for _idx in _c:
+                    _cd = _c[_idx]
+                    if not _cd.active:
                         continue
-                elif idx != "check":
+                    _si = str(_idx)
+                    if _rr_p not in _si or _ff_p not in _si or "check" not in _si:
+                        continue
+                    try:
+                        _b = _Vp(_cd.body)
+                        _lo = _Vp(_cd.lower) if _cd.lower is not None else None
+                        _up = _Vp(_cd.upper) if _cd.upper is not None else None
+                        _res = 0.0
+                        if _lo is not None:
+                            _res = max(_res, abs(_b - _lo))
+                        if _up is not None:
+                            _res = max(_res, abs(_b - _up))
+                        _rows.append((_res, _c.name, _si))
+                    except Exception:
+                        pass
+            _rows.sort(reverse=True)
+            for _res, _n, _i in _rows[:12]:
+                print(
+                    f"[probe-pf]   resid {_res:.6e}  {_n}{_i}", file=_sys_probe.stderr
+                )
+            # is eq_pfteq / eq_xfteq active for this (r,f)?
+            for _eqn in ("eq_pfteq", "eq_xfteq", "eq_fnm", "eq_pfeq"):
+                _eqc = getattr(m, _eqn, None)
+                if _eqc is None:
                     continue
-                try:
-                    b = _pyo_value2(cd.body)
-                    lo = _pyo_value2(cd.lower) if cd.lower is not None else None
-                    up = _pyo_value2(cd.upper) if cd.upper is not None else None
-                    r = 0.0
-                    if lo is not None:
-                        r = max(r, abs(b - lo))
-                    if up is not None:
-                        r = max(r, abs(b - up))
-                    rows.append((r, c.name, str(idx)))
-                except Exception:
-                    pass
-        rows.sort(reverse=True)
-        report = {
-            "solver_status": str(res.solver.status),
-            "termination_condition": str(res.solver.termination_condition),
-            "walras_value": _pyo_value2(_walras_vd2),
-            "top_residuals": [
-                {"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]
-            ],
-        }
-        Path(_solve_nlp_report_path).write_text(_json_dbg.dumps(report, indent=2))
-        print(f"[report] wrote {_solve_nlp_report_path}", file=_sys_dbg.stderr)
-        raise RuntimeError(
-            "EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT: stopping after in-process NLP solve+report"
-        )
+                for _idx in _eqc:
+                    if (
+                        _rr_p in str(_idx)
+                        and _ff_p in str(_idx)
+                        and "check" in str(_idx)
+                    ):
+                        print(
+                            f"[probe-pf]   {_eqn}{_idx} active={_eqc[_idx].active}",
+                            file=_sys_probe.stderr,
+                        )
 
-    # Solve check on m.
-    r_chk = run_gtap._run_path_capi_nonlinear_full(
-        m,
-        p_alt,
-        enforce_post_checks=False,
-        strict_path_capi=False,
-        closure_config=_chk_closure,
-        equation_scaling=True,
-        solver_output=bool(_os_dbg.environ.get("EQUILIBRIA_DEBUG_PATH_VERBOSE")),
-        solution_hint=None,
-    )
-    code_chk = int(r_chk.get("termination_code") or 0)
-    res_chk = float(r_chk.get("residual") or float("inf"))
-    results["check"] = {"code": code_chk, "residual": res_chk}
+        # TEMP DEBUG HOOK (session-local, remove before commit): export the fully
+        # recalibrated, fully-unfixed check-period model to .nl right before PATH
+        # would solve it — for a CONVERT/GAMS comparison and a NEOS submission.
+        # Controlled by an env var so it's a no-op normally.
+        import os as _os_dbg
+        import sys as _sys_dbg
+
+        _nl_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK")
+        if _nl_export_path:
+            m.write(
+                _nl_export_path,
+                format="nl",
+                io_options={"symbolic_solver_labels": True},
+            )
+            print(
+                f"[export] wrote check-period .nl to {_nl_export_path}",
+                file=_sys_dbg.stderr,
+            )
+            raise RuntimeError(
+                "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK: stopping right before PATH solves check"
+            )
+
+        # TEMP DEBUG HOOK (session-local): export the fully-prepared check-period
+        # Pyomo model to a GAMS .gms (Pyomo's gams_writer, flat/scalar form) right
+        # before PATH would solve it — so it can be diffed equation-by-equation
+        # against the GAMS bundle's own .gms (both now in GAMS syntax). Accepts a
+        # period suffix via EQUILIBRIA_DEBUG_EXPORT_GMS_PERIOD (default: this call's
+        # active period is check). No-op unless the env var is set.
+        _gms_export_path = _os_dbg.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK")
+        if _gms_export_path:
+            # GAMS writer needs exactly one objective; the CNS/MCP model has none.
+            # Mirror the NLP formulation (maximize walras): deactivate eq_walras[check]
+            # and expose walras[check] as the Objective — same as GAMS's ifMCP=0 branch.
+            from pyomo.environ import Objective as _PyoObjGms
+            from pyomo.environ import maximize as _pyo_max_gms
+
+            _ew_gms = getattr(m, "eq_walras", None)
+            if _ew_gms is not None:
+                for _idx in list(_ew_gms):
+                    _match = (
+                        (_idx and _idx[-1] == "check")
+                        if isinstance(_idx, tuple)
+                        else (_idx == "check")
+                    )
+                    if _match and _ew_gms[_idx].active:
+                        _ew_gms[_idx].deactivate()
+            _wv_gms = getattr(m, "walras", None)
+            try:
+                _wvd_gms = _wv_gms["check"]
+            except Exception:
+                _wvd_gms = _wv_gms
+            if _wvd_gms is not None and _wvd_gms.fixed:
+                _wvd_gms.unfix()
+            m._nlp_walras_objective_gms = _PyoObjGms(expr=_wvd_gms, sense=_pyo_max_gms)
+            m.write(
+                _gms_export_path,
+                format="gams",
+                io_options={"symbolic_solver_labels": True},
+            )
+            print(
+                f"[export] wrote check-period .gms to {_gms_export_path}",
+                file=_sys_dbg.stderr,
+            )
+            raise RuntimeError(
+                "EQUILIBRIA_DEBUG_EXPORT_GMS_CHECK: stopping right before PATH solves check"
+            )
+
+        # TEMP DEBUG HOOK (session-local, remove before commit): same export, but
+        # reformulated as an NLP (maximize walras) instead of a CNS (min 0 s.t.
+        # equalities) — mirrors GAMS's ifMCP=0 branch (`solve gtap using nlp
+        # maximizing walras`), which gives IPOPT a real objective gradient to
+        # follow instead of leaving it to satisfy a pure equality system with no
+        # slack. eq_walras[..., "check"] is deactivated (it would otherwise
+        # doubly constrain `walras` on top of the Objective) and `walras` is
+        # exposed as the Objective directly, exactly like GAMS's walraseq being a
+        # free-row/objective-row instead of a paired equality under ifMCP=0.
+        _nl_export_nlp_path = _os_dbg.environ.get(
+            "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP"
+        )
+        if _nl_export_nlp_path:
+            from pyomo.environ import Objective as _PyoObjective
+            from pyomo.environ import maximize as _pyo_maximize
+
+            _eq_walras_chk = getattr(m, "eq_walras", None)
+            if _eq_walras_chk is not None:
+                for _idx in list(_eq_walras_chk):
+                    if isinstance(_idx, tuple):
+                        if _idx and _idx[-1] == "check":
+                            _eq_walras_chk[_idx].deactivate()
+                    elif _idx == "check":
+                        _eq_walras_chk[_idx].deactivate()
+            _walras_var = getattr(m, "walras", None)
+            if _walras_var is None:
+                raise RuntimeError(
+                    "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: model has no `walras` Var"
+                )
+            try:
+                _walras_vd = _walras_var["check"]
+            except Exception:
+                _walras_vd = _walras_var
+            # gtap_mode's _mute_welfare_tail (above) FIXES walras=0 (Walras law,
+            # correct for the MCP/CNS formulation where eq_walras pins yi[rres]
+            # instead). Under NLP (maximize walras), walras must be the FREE
+            # objective variable instead — GAMS's ifMCP=0 branch does not fix it
+            # either (walraseq is the objective row, not a constraint pinning
+            # yi[rres]). Without unfixing here the objective is a constant 0 with
+            # no gradient, which is exactly what made the first NLP export
+            # indistinguishable from the plain CNS export (both showed a flat
+            # objective=0.0 throughout every IPOPT iteration).
+            _walras_vd.unfix()
+            m._nlp_walras_objective = _PyoObjective(
+                expr=_walras_vd, sense=_pyo_maximize
+            )
+            m.write(
+                _nl_export_nlp_path,
+                format="nl",
+                io_options={"symbolic_solver_labels": True},
+            )
+            print(
+                f"[export] wrote check-period NLP(maximize walras) .nl to {_nl_export_nlp_path}",
+                file=_sys_dbg.stderr,
+            )
+            raise RuntimeError(
+                "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK_NLP: stopping right before PATH solves check"
+            )
+
+        # TEMP DEBUG HOOK (session-local, remove before commit): SAME NLP
+        # reformulation as above, but SOLVES in-process via Pyomo's IPOPT
+        # interface (instead of exporting + a standalone `ipopt` CLI run) so the
+        # post-solve residual per Constraint is readable directly — diagnoses
+        # WHICH equation IPOPT's "locally infeasible" verdict is actually citing,
+        # rather than just the aggregate constraint-violation scalar.
+        _solve_nlp_report_path = _os_dbg.environ.get(
+            "EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT"
+        )
+        if _solve_nlp_report_path:
+            import json as _json_dbg
+
+            from pyomo.environ import (
+                Constraint as _PyoConstraint2,
+            )
+            from pyomo.environ import (
+                Objective as _PyoObjective2,
+            )
+            from pyomo.environ import (
+                SolverFactory as _PyoSolverFactory,
+            )
+            from pyomo.environ import (
+                maximize as _pyo_maximize2,
+            )
+            from pyomo.environ import (
+                value as _pyo_value2,
+            )
+
+            _eq_walras_chk2 = getattr(m, "eq_walras", None)
+            if _eq_walras_chk2 is not None:
+                for _idx in list(_eq_walras_chk2):
+                    if isinstance(_idx, tuple):
+                        if _idx and _idx[-1] == "check":
+                            _eq_walras_chk2[_idx].deactivate()
+                    elif _idx == "check":
+                        _eq_walras_chk2[_idx].deactivate()
+            _walras_var2 = getattr(m, "walras", None)
+            try:
+                _walras_vd2 = _walras_var2["check"]
+            except Exception:
+                _walras_vd2 = _walras_var2
+            _walras_vd2.unfix()
+            m._nlp_walras_objective = _PyoObjective2(
+                expr=_walras_vd2, sense=_pyo_maximize2
+            )
+            opt = _PyoSolverFactory("ipopt")
+            opt.options["max_iter"] = 1000
+            # Numerical-scaling tuning aimed at near-zero SAM cells (e.g.
+            # xd[CHN,Rice,MachEq]~1.1e-6 against sigma_m=3.87 — a tiny base value
+            # raised to a steep exponent amplifies ordinary Newton-step price
+            # noise into an outsized absolute residual). gradient-based scaling
+            # rescales each row/col by its Jacobian's own magnitude instead of
+            # leaving IPOPT's default (unit) scaling to treat a 1e-6 row the same
+            # as an O(1) row. mu_strategy=adaptive + bound_relax_factor=0 mirror
+            # what a hand-tuned barrier path does for exactly this shape of
+            # problem (many O(1) blocks, a few O(1e-6) blocks) instead of using
+            # a fixed global barrier schedule that serves the O(1) rows and
+            # starves the O(1e-6) rows of resolution.
+            opt.options["nlp_scaling_method"] = "gradient-based"
+            opt.options["bound_relax_factor"] = 0
+            opt.options["mu_strategy"] = "adaptive"
+            opt.options["tol"] = 1e-7
+            res = opt.solve(m, tee=True)
+            rows = []
+            for c in m.component_objects(_PyoConstraint2, active=True):
+                for idx in c:
+                    cd = c[idx]
+                    if not cd.active:
+                        continue
+                    if isinstance(idx, tuple):
+                        if not idx or idx[-1] != "check":
+                            continue
+                    elif idx != "check":
+                        continue
+                    try:
+                        b = _pyo_value2(cd.body)
+                        lo = _pyo_value2(cd.lower) if cd.lower is not None else None
+                        up = _pyo_value2(cd.upper) if cd.upper is not None else None
+                        r = 0.0
+                        if lo is not None:
+                            r = max(r, abs(b - lo))
+                        if up is not None:
+                            r = max(r, abs(b - up))
+                        rows.append((r, c.name, str(idx)))
+                    except Exception:
+                        pass
+            rows.sort(reverse=True)
+            report = {
+                "solver_status": str(res.solver.status),
+                "termination_condition": str(res.solver.termination_condition),
+                "walras_value": _pyo_value2(_walras_vd2),
+                "top_residuals": [
+                    {"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]
+                ],
+            }
+            Path(_solve_nlp_report_path).write_text(_json_dbg.dumps(report, indent=2))
+            print(f"[report] wrote {_solve_nlp_report_path}", file=_sys_dbg.stderr)
+            raise RuntimeError(
+                "EQUILIBRIA_DEBUG_SOLVE_NLP_CHECK_REPORT: stopping after in-process NLP solve+report"
+            )
+
+        # Solve check on m.
+        r_chk = run_gtap._run_path_capi_nonlinear_full(
+            m,
+            p_alt,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=_chk_closure,
+            equation_scaling=True,
+            solver_output=bool(_os_dbg.environ.get("EQUILIBRIA_DEBUG_PATH_VERBOSE")),
+            solution_hint=None,
+        )
+        code_chk = int(r_chk.get("termination_code") or 0)
+        res_chk = float(r_chk.get("residual") or float("inf"))
+        results["check"] = {"code": code_chk, "residual": res_chk}
 
     # Freeze check period.
     freeze_period(m, "check")
@@ -3394,8 +3450,10 @@ def solve_multiperiod(
                 if _t == "shock" and _v[_idx].value is not None:
                     _pva_pnd_shock_seed[(_vn, _idx)] = float(_v[_idx].value)
 
-    # Warm-start shock from check solved values.
-    _seed_period_from_prior(m, "check", "shock")
+    # Warm-start shock from the prior period's solved values.  Normally "check";
+    # in F3.5 base-calibrated mode the check phase is skipped, so seed from "base".
+    _shock_prior = "base" if _base_calibrated else "check"
+    _seed_period_from_prior(m, _shock_prior, "shock")
 
     # Restore the SHOCK GAMS pva/pnd seed that the prior-seed just clobbered.
     if holdfix_cd and not _gtap_mode:
