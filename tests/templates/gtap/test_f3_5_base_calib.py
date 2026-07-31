@@ -189,3 +189,24 @@ def test_calibrated_land_response_beats_default_vs_gempack():
         f"calibrated response {cal_resp:.2f}% not near GEMPACK {gem}"
     )
     assert abs(cal_resp - gem) < abs(RAW_PATH - gem)
+
+
+@pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
+    """Not just the land price: base-calibrated lifts the OVERALL against-GEMPACK
+    quantity match (all Q_TO_VAR vars, ~190 cells) from ~76% to ~96% within 1pp,
+    matching the F3 'excluding check-movers' figure. Derived-demand vars (xg/xc/…)
+    are NOT re-based, so they re-derive consistently."""
+    sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
+    from measure_gempack_blocks import _quantity_match
+
+    gem = ROOT / "tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10.har"
+    if not gem.exists():
+        pytest.skip(f"GEMPACK fixture missing: {gem}")
+
+    default = _quantity_match("gtap7_3x3", False, REF_GDX, gem)
+    calib = _quantity_match("gtap7_3x3", True, REF_GDX, gem)
+    assert "within_1pp_pct" in default and "within_1pp_pct" in calib
+    # calibrated is a clear improvement over default on the whole quantity set
+    assert calib["within_1pp_pct"] >= 94.0, f"calibrated match too low: {calib}"
+    assert calib["within_1pp_pct"] > default["within_1pp_pct"] + 10.0

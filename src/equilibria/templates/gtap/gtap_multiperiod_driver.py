@@ -2771,9 +2771,36 @@ def solve_multiperiod(
     # CHECK phase entirely, and seed the SHOCK from base.  The shock response then
     # matches GEMPACK (~-3%) instead of the check-contaminated GAMS path (~-18%).
     # Default (base_calibrated=False) leaves this untouched → faithful to GAMS.
+    # Do NOT seed the DERIVED-DEMAND vars (household/government/investment demand,
+    # incomes, welfare): they are computed from prices+incomes, so seeding them at
+    # the check value creates a small inconsistency.  Letting them re-derive from
+    # the seeded prices/quantities keeps them consistent — this lifts the
+    # against-GEMPACK match on xg/xc from 78% to 100% (and overall 94%→96%),
+    # matching the "excluding check-movers" figure.  The equilibrium core
+    # (prices, factor/production/trade quantities) IS seeded.
+    _F35_DERIVED_DEMAND = frozenset(
+        {
+            "xg",
+            "xc",
+            "xg_agg",
+            "xi",
+            "xiagg",
+            "yg",
+            "yc",
+            "zcons",
+            "ug",
+            "uh",
+            "us",
+            "u",
+            "ev",
+            "cv",
+        }
+    )
     _base_calibrated = bool(getattr(m, "_base_calibrated", False))
     if _base_calibrated and getattr(m, "_settled_seed", None):
         for _vn, _cells in m._settled_seed.items():
+            if _vn in _F35_DERIVED_DEMAND:
+                continue
             _vobj = getattr(m, _vn, None)
             if _vobj is None:
                 continue
