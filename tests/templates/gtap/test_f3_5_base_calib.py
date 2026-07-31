@@ -145,3 +145,47 @@ def test_base_calibrated_shock_response_is_clean():
     assert base == pytest.approx(0.84476, abs=1e-2), f"base not settled: {base}"
     resp = 100.0 * (shock - base) / base
     assert -8.0 < resp < 0.0, f"land response not clean: {resp:.2f}%"
+
+
+@pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+def test_calibrated_land_response_beats_default_vs_gempack():
+    """The base-calibrated land response (~-3%) is far closer to GEMPACK's -2.68%
+    than the check-contaminated raw path (~-18%). GEMPACK number read from the
+    committed sl4dump fixture (pfe[Land,Food,EU_28])."""
+    # GEMPACK's own number from the committed fixture
+    from gempack_reference import sl4_levels
+    from pyomo.environ import value as V
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
+    sl4 = ROOT / "tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10.har"
+    if not sl4.exists():
+        pytest.skip(f"GEMPACK fixture missing: {sl4}")
+    gem = None
+    for _var in ("pfe", "pes"):
+        try:
+            for _k, _v in sl4_levels(str(sl4), _var).items():
+                if "Land" in _k and "Food" in _k and "EU_28" in _k:
+                    gem = _v
+                    break
+        except Exception:
+            continue
+        if gem is not None:
+            break
+    assert gem is not None and gem == pytest.approx(-2.681, abs=1e-2)
+
+    p = _load_params()
+    rr = list(p.sets.r)[-1]
+    gc = _base_closure(p)
+    m, _ = build_block_model(p, p.sets, gc, rr, base_calibrated=True)
+    solve_multiperiod(m, p, gc, ref_gdx=REF_GDX, skip_base_solve=True, mode="gtap")
+    b = float(V(m.pft["EU_28", "Land", "base"]))
+    s = float(V(m.pft["EU_28", "Land", "shock"]))
+    cal_resp = 100.0 * (s - b) / b
+
+    RAW_PATH = -18.09  # shock vs raw-1.0 base (the check-contaminated GAMS path)
+    assert abs(cal_resp - gem) < 6.0, (
+        f"calibrated response {cal_resp:.2f}% not near GEMPACK {gem}"
+    )
+    assert abs(cal_resp - gem) < abs(RAW_PATH - gem)
