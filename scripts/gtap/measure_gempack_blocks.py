@@ -93,6 +93,65 @@ def _gempack_land_pct(gempack_har: Path) -> float | None:
     return None
 
 
+def _quantity_match(dataset: str, base_calibrated: bool, ref_gdx: Path,
+                    gempack_har: Path) -> dict:
+    """Overall against-GEMPACK match across ALL mapped quantity vars (Q_TO_VAR),
+    shock vs base, within 1pp. Reuses F5's Q_TO_VAR + gempack_qty_pct."""
+    import statistics
+
+    from pyomo.environ import value as V
+
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from gempack_reference import Q_TO_VAR, gempack_qty_pct
+
+    d = DATASETS / dataset
+    p = GTAPParameters()
+    p.load_from_har(
+        basedata_path=d / "basedata.har", sets_path=d / "sets.har",
+        default_path=d / "default.prm", baserate_path=d / "baserate.har",
+    )
+    rr = list(p.sets.r)[-1]
+    gc = GTAPClosureConfig(
+        name="base", closure_type="MCP", capital_mobility="sluggish",
+        fix_endowments=False, fix_taxes=False, fix_technology=False,
+        if_sub=False, numeraire="pnum",
+    )
+    with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+        m, mp = build_block_model(p, p.sets, gc, rr, base_calibrated=base_calibrated)
+        if not base_calibrated:
+            mp.seed_all_periods(m, ref_gdx)
+        solve_multiperiod(m, p, gc, ref_gdx=ref_gdx, skip_base_solve=True, mode="gtap")
+
+    diffs = []
+    for gvar, spec in Q_TO_VAR.items():
+        pv = getattr(m, spec["var"], None)
+        if pv is None:
+            continue
+        try:
+            gem = gempack_qty_pct(str(gempack_har), gvar)
+        except Exception:
+            continue
+        for key, gfrac in gem.items():
+            try:
+                b = float(V(pv[(*key, "base")]))
+                s = float(V(pv[(*key, "shock")]))
+            except Exception:
+                continue
+            if abs(b) <= 1e-12:
+                continue
+            diffs.append(abs((s / b - 1.0) - gfrac))
+    if not diffs:
+        return {"status": "skipped", "reason": "no comparable quantity cells"}
+    return {
+        "n_cells": len(diffs),
+        "within_1pp_pct": round(100.0 * sum(x <= 0.01 for x in diffs) / len(diffs), 1),
+        "median_pp": round(100.0 * statistics.median(diffs), 3),
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="gtap7_3x3")
@@ -119,6 +178,10 @@ def main() -> None:
             out["gempack_land_pct"] = gem
             if out.get("land_resp_pct") is not None:
                 out["gap_vs_gempack_pp"] = round(out["land_resp_pct"] - gem, 3)
+        # overall quantity match across ALL Q_TO_VAR vars (not just land price)
+        out["quantity_match"] = _quantity_match(
+            a.dataset, a.base_calibrated, ref, Path(a.gempack_har)
+        )
     else:
         out["gempack"] = {"status": "skipped", "reason": "no --gempack-har given"}
 
