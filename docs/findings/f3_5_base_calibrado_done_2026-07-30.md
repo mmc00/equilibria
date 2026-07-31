@@ -182,6 +182,28 @@ Ruled out with evidence along the way: linearization/steps (GEMPACK flat s4→s6
 CET aggregation, numeraire (world factor index moves −0.0004%), technical shifters
 (afe/ava=0), output tax (to=0), top-nest elasticity (ESUBT=sigmap=0, Leontief).
 
+### The exact CDE difference (root cause, verified against both sources)
+
+Read both demand equations from source. GEMPACK `E_qpa` (`gtapv7.tab`): `qpa(c)-pop =
+Σ_k EP(c,k)·ppa(k) + EY(c)·[yp-pop]`, where the elasticities `EP`/`EY` are `Formula`
+coefficients computed **once** from `ALPHA=1-SUBPAR`, `INCPAR`, and the **base**
+consumption shares `CONSHR` — and held fixed. Ours `eq_zcons` is the CDE in **levels**:
+`zcons(i) = α·bh·pa^bh·uh^(eh·bh)·(yc/pop)^(−bh)`, with the consumption shares `xcshr`
+an **endogenous variable** re-solved under the shock.
+
+Decisive test: our `xcshr[EU_28,·]` MOVES under the +10% shock — Food +0.99%, Mnfcs
++1.76%, Svces −0.61%. So our CDE re-evaluates the effective demand elasticities at the
+post-shock shares (level-exact, non-homothetic), while GEMPACK evaluates its `EP`/`EY`
+at the base shares and freezes them. This is a genuine structural difference (not just
+levels-vs-linearized), and it explains all three observations: (1) the gap concentrates
+on final demand (`qpa`/`qga`/`qinv`) because the CDE is the strongly non-homothetic
+nest where shares move most; (2) it does NOT shrink with GEMPACK sub-steps because
+`EP`/`EY` are computed once, not re-evaluated per step; (3) production/factor/trade
+nests agree (~0.1pp) because they are homothetic or move little. Closing it would mean
+freezing our consumption shares at the base — which breaks `0-diff vs GAMS` (GAMS keeps
+them endogenous). This is the precise, sources-verified root of the against-GEMPACK
+residual.
+
 ## What shipped
 
 - `src/equilibria/blocks/gtap/factor.py` — `FactorBlock.calibrate_base()`
