@@ -282,6 +282,30 @@ would make us no longer exact to GAMS. F3.5 closes the *calibration-methodology*
 the against-GEMPACK gap (−18%→−3%); the remaining ~0.35pp is the equation-form half, an
 open item in van der Mensbrugghe's own GAMS↔GEMPACK reconciliation, not a defect here.
 
+### Would a "GEMPACK version" of the specific-factor equation close it? No — traced.
+
+Considered adding a selectable `specific_factor_form = 'vdm' | 'gempack'` block flag.
+Measured first (the right call). Two facts kill it: (1) for single-sector Land the CET
+aggregation is a **passthrough** — `pft`(agg)=`pfy`(sectoral)=−3.03% for us, and
+`pe`=`pes`=−2.68% for GEMPACK; the specific-factor equation changes nothing, so a
+linearized version of it would not move Land. (2) Tracing the chain that sets the factor
+price, the gap is **distributed upstream**, not in the factor nest:
+
+| chain link (EU_28/Food) | ours | GEMPACK | gap |
+|---|---|---|---|
+| output price (px/po) | +0.468 | +0.893 | −0.425pp |
+| intermediates (pnd/pint) | +2.724 | +2.957 | −0.234pp |
+| VA (pva) | −3.392 | −3.324 | −0.068pp |
+| factor Land (pf/pfe) | −3.033 | −2.681 | −0.352pp |
+
+The gap is already large at the OUTPUT price and the INTERMEDIATES (Armington), which
+feed the factor via zero-profit. No single upstream nest dominates — it is spread across
+output/intermediate/factor. So a "GEMPACK version" of one equation closes nothing; a
+full GEMPACK version = linearizing the entire system = rebuilding GEMPACK in Python
+(which already exists). We keep the one faithful-to-GAMS specific-factor equation (van
+der Mensbrugghe's exact `ENDW_PRICE`), plus the F3.5 base-calibrated calibration mode —
+that is the correct, bounded deliverable; a second full linearized model is out of scope.
+
 ## What shipped
 
 - `src/equilibria/blocks/gtap/factor.py` — `FactorBlock.calibrate_base()`
