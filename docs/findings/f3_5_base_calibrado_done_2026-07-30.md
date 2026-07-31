@@ -303,6 +303,53 @@ base −18%, check base −3.03%, frozen shares worse, linearized demand unchang
 factor eq identical). "Irreducible without adopting GEMPACK's equations" is therefore a
 proven fact, not an excuse.
 
+### Second-opinion (fable) + reading van der Mensbrugghe v7.1 directly — the real answer
+
+A fresh-model review (fable) rightly attacked the "irreducible" framing and produced two
+corrections that hold up:
+
+1. **Converged GEMPACK is NOT linearized.** Richardson-extrapolated multi-step GEMPACK
+   (Gragg, coefficients updated between steps) converges to the EXACT levels solution of
+   the TABLO model — CONSHR/EP/EY/REVSHR are re-evaluated each step. So the earlier
+   "levels-exact vs linearized" framing is wrong for a *converged* gap; my mimicry
+   experiments failed because they tested the solution METHOD, not the model.
+2. **Small-shock scaling test is decisive.** Ran both engines' land response per unit of
+   shock at 0.1% / 1% / 10%:
+
+   | shock | ours per-unit | GEMPACK per-unit |
+   |---|---|---|
+   | 0.1% | −0.3288 | −0.3075 |
+   | 1% | −0.3261 | −0.3034 |
+   | 10% | −0.3033 | −0.2681 |
+
+   The ~0.02 per-unit gap **persists at shock→0** (and is the same from raw vs check base).
+   So it is NOT large-shock curvature and NOT the base point — it is a difference in the
+   **local derivatives (Jacobian) at the base**, upstream of the (passthrough) factor
+   aggregation. That is a real, located difference, not a mystery.
+
+**Read v7.1 (van der Mensbrugghe 2019, TP #92, GTAP7Gams.pdf) directly.** It names the
+exact difference — Equation **(F-1)** for aggregate factor supply `XFT = Aft·(PFT/PABS)^ηft`:
+> "There is **no equivalent in the GEMPACK code, where the aggregate supply of all factors
+> is exogenous**. Setting the supply elasticity (ηft) to zero would have the same impact as
+> exogenizing total supply."
+
+So the GAMS↔GEMPACK factor-supply difference is documented by the model's own author. Two
+further v7.1 facts settle the "is it fixed in a newer version" question:
+- v7.1 **still has** `/ base, check, shock /` with the check period (paper line 503/518) —
+  normalization did NOT remove the specific-factor re-settlement.
+- v7.1's normalization "**brings the GAMS model somewhat closer to the GEMPACK version**"
+  and improves numerical convergence — explicitly "somewhat closer", NOT identical.
+
+**Net:** it is a documented GAMS↔GEMPACK implementation difference in specific-factor
+supply (F-1/F-2), persisting through v7.1, with the local-derivative signature confirmed
+by the small-shock test. Not our bug (GAMS-native = ours), not fixed by v7.1. Our `ηft`
+(etaf) is already 0 (aggregate supply exogenous, like GEMPACK), so the residual is the F-2
+CET-vs-linearized sluggish distribution — which for single-sector Land is passthrough, so
+the ~0.02 derivative gap propagates from the upstream VA/Armington nests' local slopes.
+**Closing it to GEMPACK's number requires GEMPACK's equation forms — still an open item in
+vdM's own GAMS↔GEMPACK reconciliation.** This is now a *characterized* difference (F-1/F-2,
+derivative-level), not "irreducible/mysterious".
+
 ### Would a "GEMPACK version" of the specific-factor equation close it? No — traced.
 
 Considered adding a selectable `specific_factor_form = 'vdm' | 'gempack'` block flag.
