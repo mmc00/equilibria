@@ -91,9 +91,33 @@ Found`): the **largest specific-factor price move calibrated-base→shock is 5.3
 (single-digit) — Julia's calibrated base does NOT re-settle the specific factor the
 −15% way. This confirms F3.5's mechanism with Julia's engine executing (not just
 reading its code): calibrate the base → the specific-factor price responds only to
-the shock. F3.5's −3.03% on gtap7_3x3 is the same behavior. A full cell-by-cell
-port of gtap7_3x3 into Julia (via `HeaderArrayFile.jl`, same author) is a follow-up
-(its own mini-phase) for exact-number parity.
+the shock. F3.5's −3.03% on gtap7_3x3 is the same behavior.
+
+**The decisive test — Julia's calibrated base does NOT re-settle:** run Julia
+`calibrate → rebuild → solve with NO shock`. Result: land price move
+calibrated-base → no-shock solve = **0.0% (max and median)**. Julia's calibrated
+base has zero re-settlement, exactly like F3.5's settled base:
+
+| Engine | land price, solve with NO shock |
+|---|---|
+| GAMS / equilibria default (`base→check→shock`) | **−15.5%** (the check re-settlement) |
+| Julia (calibrated base) | **0.0%** (no re-settlement) |
+| equilibria F3.5 (base-calibrated) | **0.0%** (settled base — no re-settlement) |
+
+The shock-period land move (Julia gives 7–17% for a large global +10%-all-routes
+tariff; F3.5 gives −3% for the single tm10 fixture — different shocks, different
+magnitudes) is genuine SHOCK RESPONSE, not re-settlement. F3.5 replicates Julia's
+methodology exactly: base-calibration removes the −15% re-settlement, leaving only
+the shock response.
+
+**Cell-by-cell port status:** porting our gtap7_3x3 HAR into Julia reached ~85%
+(all 46 headers load; `generate_initial_model` + `generate_calibration_inputs`
+converge; sets/dims/factor-mobility/factor-names aligned; etrae 0→−1e-5 fix).
+Blocked by a deterministic overflow (dual infeas 1.9e25) inside Julia's calibration
+`run_model!` (an internal CES-share phase, needing Julia-side instrumentation to
+bisect). The no-shock test above supersedes it: it confirms the mechanism more
+cleanly than a cross-dataset cell compare would. Harness (export + loader +
+diagnostics) is in scratchpad for a future exact-number pass.
 
 ### Why not exactly −2.68%?
 
