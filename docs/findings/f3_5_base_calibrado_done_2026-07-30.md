@@ -141,6 +141,24 @@ different equilibria, not two approximations of one. This matches F5's finding t
 the against-GEMPACK specific-factor residual is a structural GAMS↔GEMPACK modeling
 difference, not linearization.
 
+### Where exactly the 0.35pp lives (the "make it exogenous like GEMPACK" test)
+
+Drilling in: for Land in EU_28, F3.5 base-calibrated moves ONLY the price, not the
+quantity — `xft` (aggregate land) +0.000%, `xf[Food]` (land→Food) +0.000%, `pft`
+(price) −3.033%. And GEMPACK holds the same quantities fixed: `qe[Land,EU_28]=0.0%`,
+`qes[Land,Food,EU_28]=0.0%` (the −1.49% on `Land,Mnfcs` is noise on a zero cell —
+land isn't used there). So the aggregate factor supply is **already exogenous in
+BOTH engines** (in gtap-mode our `etaf=0` → `xft=aft` fixed). "Making it exogenous
+like GEMPACK" is already satisfied — it is not the source of the gap.
+
+With the quantity fully fixed, `pft` is a pure shadow price (the scarcity value of
+fixed land), and the only remaining difference is the equation that computes it:
+ours `pft^(1+ω)=Σ gf·pfy^(1+ω)` (exact levels power-CET) vs GEMPACK's linearized
+`qes=qe−ETRAE·(pes−pe)`. That is the entire 0.35pp. Closing it would mean replacing
+our price equation with GEMPACK's linearized form — which is exactly what breaks the
+`0-diff vs GAMS` fidelity. Two different shadow-price equations, each solved exactly
+(hence steps s4→s64 don't move GEMPACK's −2.681%).
+
 ### Why not exactly −2.68%?
 
 The residual 0.35pp is **irreducible formulation difference**, not a defect. GAMS/equilibria
