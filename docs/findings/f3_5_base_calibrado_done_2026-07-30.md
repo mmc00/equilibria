@@ -223,13 +223,22 @@ reproduces GEMPACK's qpa (Food −1.19% vs −1.14% actual) — so the elasticit
 inherited from the PRICES, which already differ. The consumption-price gap (ppa/pa) is
 0.049pp median across all cells; the demand equation merely inherits it. Every
 single-equation hypothesis was tested and refuted (specific-factor CET, numeraire,
-shifters, output tax, top-nest elasticity, demand shares, linearized demand). The
-residual is **systemic**: solving the whole non-linear system in exact levels
-(GAMS/us/Julia) vs linearized (GEMPACK) converges to two slightly different fixed points
-(~0.05pp in prices, amplified to ~0.4pp in demand quantities via the non-homothetic CDE).
-There is no equation to change — it is the solution method of the entire system.
-Irreducible without becoming GEMPACK (linearizing the whole system), which abandons
-fidelity to GAMS.
+shifters, output tax, top-nest elasticity, demand shares, linearized demand).
+
+**Precise formulation — it is NOT multi-equilibrium.** The GTAP system is uniquely
+solvable (PATH and IPOPT agree to 10 digits), so if both engines solved the SAME system
+they'd give the SAME number. They give −3.03% vs −2.68%, and it does NOT shrink with
+GEMPACK sub-steps (flat s4→s64). So GEMPACK is NOT computing a numerical approximation of
+our levels model — it solves a **structurally different model**: GEMPACK's equations are
+*defined* in linearized (percent-change) form (`E_qpa`, `E_pms`, … ARE the model, not an
+approximation of a levels model). The linearized GTAP model is a different equation set
+with its OWN unique exact solution (−2.68%); our/GAMS's levels GTAP model has its own
+unique exact solution (−3.03%). **Two different models, each with ONE equilibrium, each
+solved exactly — not one model with two fixed points.** The shock (uniform +10% power of
+tariff), elasticities (same GTAPPARM file), and closure (capFix) are identical; the only
+difference is the levels-vs-linearized model formulation itself. The residual is largest
+where the two formulations differ most (the non-homothetic CDE / final demand).
+Irreducible without adopting GEMPACK's linearized model, which abandons fidelity to GAMS.
 
 ## What shipped
 
