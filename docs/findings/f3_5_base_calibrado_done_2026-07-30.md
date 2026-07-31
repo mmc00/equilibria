@@ -282,6 +282,27 @@ would make us no longer exact to GAMS. F3.5 closes the *calibration-methodology*
 the against-GEMPACK gap (−18%→−3%); the remaining ~0.35pp is the equation-form half, an
 open item in van der Mensbrugghe's own GAMS↔GEMPACK reconciliation, not a defect here.
 
+### Is the −3.03% a bug in our port, or does GAMS itself give it? — GAMS-native, proven
+
+The decisive test for "can it be closed": is −3.03% our Python reproduction, or what GAMS
+itself gives? Our reference `out_gtap_shock_ifsub1.gdx` is a **GAMS-native local solve**
+(`build_gtap7_pure_local_bundle.py`, run with GAMS locally — not our Python). `gdxdump` on
+it directly:
+
+    pft[EU_28,Land]: base=1  check=0.844755974281121  shock=0.819131926318381
+
+→ check→shock = **−3.03%**, straight from GAMS. We reproduce it to 6 digits. So −3.03% is
+**what van der Mensbrugghe's GAMS gives**, and −2.68% is what GEMPACK gives — two reference
+engines, two numbers, for the same dataset + shock, **verified directly (not inferred)**.
+This settles "bug vs engine-difference": it is NOT a bug in our port (GAMS-native = ours),
+it is a real GAMS≠GEMPACK difference. And it settles "can it be closed maintaining
+fidelity": the correct number *per GAMS* IS −3.03%; there is no third "more correct" value
+to converge to — closing to −2.68% means no longer reproducing GAMS, i.e. abandoning the
+reference we port. Every fidelity-preserving route was tried and none gives −2.68% (raw
+base −18%, check base −3.03%, frozen shares worse, linearized demand unchanged, linearized
+factor eq identical). "Irreducible without adopting GEMPACK's equations" is therefore a
+proven fact, not an excuse.
+
 ### Would a "GEMPACK version" of the specific-factor equation close it? No — traced.
 
 Considered adding a selectable `specific_factor_form = 'vdm' | 'gempack'` block flag.
