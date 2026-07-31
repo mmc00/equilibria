@@ -225,20 +225,32 @@ inherited from the PRICES, which already differ. The consumption-price gap (ppa/
 single-equation hypothesis was tested and refuted (specific-factor CET, numeraire,
 shifters, output tax, top-nest elasticity, demand shares, linearized demand).
 
-**Precise formulation — it is NOT multi-equilibrium.** The GTAP system is uniquely
-solvable (PATH and IPOPT agree to 10 digits), so if both engines solved the SAME system
-they'd give the SAME number. They give −3.03% vs −2.68%, and it does NOT shrink with
-GEMPACK sub-steps (flat s4→s64). So GEMPACK is NOT computing a numerical approximation of
-our levels model — it solves a **structurally different model**: GEMPACK's equations are
-*defined* in linearized (percent-change) form (`E_qpa`, `E_pms`, … ARE the model, not an
-approximation of a levels model). The linearized GTAP model is a different equation set
-with its OWN unique exact solution (−2.68%); our/GAMS's levels GTAP model has its own
-unique exact solution (−3.03%). **Two different models, each with ONE equilibrium, each
-solved exactly — not one model with two fixed points.** The shock (uniform +10% power of
-tariff), elasticities (same GTAPPARM file), and closure (capFix) are identical; the only
-difference is the levels-vs-linearized model formulation itself. The residual is largest
-where the two formulations differ most (the non-homothetic CDE / final demand).
-Irreducible without adopting GEMPACK's linearized model, which abandons fidelity to GAMS.
+**Precise formulation — it is a documented GAMS↔GEMPACK IMPLEMENTATION difference, not
+multi-equilibrium and not our bug.** The GTAP system is uniquely solvable (PATH=IPOPT to
+10 digits). Key facts, checked: (a) our GAMS reference itself gives `pft[EU_28,Land]`
+shock/check = **−3.03%** — i.e. we reproduce GAMS exactly; (b) GEMPACK's extrapolated
+(Richardson) solution is −2.68% and equal to its raw steps s8/s16/s32/s64 (verified), so
+it is GEMPACK's accurate answer, not an unconverged step. So the −3.03% vs −2.68% is a
+**GAMS-vs-GEMPACK difference**, not equilibria-vs-GEMPACK.
+
+The literature resolves it. GEMPACK-for-GAMS-users material states GAMS and GEMPACK "give
+the same numerical solution", but the authoritative GTAP-in-GAMS papers (van der
+Mensbrugghe, *The Standard GTAP Model in GAMS*, JGEA; GTAP TP/19/01) state there are
+**"substantive differences between the GEMPACK and GAMS implementations"** and that an
+*exact* replication of the standard GTAP model in GAMS was an ongoing effort (van der
+Mensbrugghe 2016). The specific-factor / sluggish-endowment pricing is one such
+implementation difference. So: the two are the same model *conceptually* but the GAMS
+and GEMPACK *implementations* differ substantively in places — and the specific-factor
+price is one. We faithfully port the GAMS implementation (−3.03%); GAMS differs from
+GEMPACK there by 0.35pp; that is a known engine-implementation difference, not our defect
+and not multi-equilibrium. (Earlier drafts of this section were wrong twice — "exact CET
+vs linearized" and "two different models / systemic" — corrected by the user's insistence
+and by checking the literature + our own GAMS reference directly.)
+
+Sources: van der Mensbrugghe, *The Standard GTAP Model in GAMS, Version 7*
+(jgea.org/ojs/index.php/jgea/article/download/62/61/394); GTAP7Gams TP/19/01
+(mygeohub.org/groups/gtap/.../GTAP7Gams.pdf); Kohlhaas & Pearson, *Introduction to
+GEMPACK for GAMS Users* (copsmodels.com/ftp/gamsgp.pdf).
 
 ## What shipped
 
