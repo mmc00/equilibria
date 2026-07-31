@@ -119,6 +119,28 @@ bisect). The no-shock test above supersedes it: it confirms the mechanism more
 cleanly than a cross-dataset cell compare would. Harness (export + loader +
 diagnostics) is in scratchpad for a future exact-number pass.
 
+### Is the residual 0.35pp linearization (fixable with more steps)? NO — proven
+
+GEMPACK solves by linearization + sub-steps, so a natural hypothesis is "the 0.35pp
+residual is GEMPACK's linearization error, which shrinks with more sub-steps". Tested
+directly on the committed multi-step fixtures (same tm10 shock, `sl4dump_gtap7_3x3_tm10_s{4,8,16,32,64}.har`):
+
+| GEMPACK sub-steps | pfe[Land,Food,EU_28] |
+|---|---|
+| s4 | −2.6812% |
+| s8 | −2.6811% |
+| s16 | −2.6811% |
+| s32 | −2.6811% |
+| s64 | −2.6811% |
+
+**GEMPACK is already converged — flat at −2.681% from s4 to s64**, and it does NOT
+approach our −3.033%. More steps do not close the gap. So the 0.35pp is NOT
+linearization error — GEMPACK converges to ITS OWN answer (linearized specific-factor
+equation) and we converge to OURS (exact power-CET). Two different models' two
+different equilibria, not two approximations of one. This matches F5's finding that
+the against-GEMPACK specific-factor residual is a structural GAMS↔GEMPACK modeling
+difference, not linearization.
+
 ### Why not exactly −2.68%?
 
 The residual 0.35pp is **irreducible formulation difference**, not a defect. GAMS/equilibria
