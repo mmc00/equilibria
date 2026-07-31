@@ -83,8 +83,8 @@ only the equilibrium vars" narrowing flagged as a risk in the plan.
 
 Julia (mivanic/GlobalTradeAnalysisProjectModelV7.jl) uses the SAME base-calibrated
 methodology as F3.5 (an explicit `calibrate()` → `calibrated_data` → single shock
-solve, no check period) — so it is the natural oracle for the mechanism (unlike
-GEMPACK, it has no linearized-formulation difference). Running Julia's own sample
+solve, no check period) — so it is the natural oracle for the mechanism (it uses the
+same exact power-CET as GAMS/equilibria, and calibrates the base like F3.5). Running Julia's own sample
 data end-to-end (`calibrate → +10% tariff → run_model!`, `scratchpad/
 julia_mechanism_probe.jl`, Julia instantiated + Ipopt solve `Optimal Solution
 Found`): the **largest specific-factor price move calibrated-base→shock is 5.36%**
@@ -119,54 +119,53 @@ bisect). The no-shock test above supersedes it: it confirms the mechanism more
 cleanly than a cross-dataset cell compare would. Harness (export + loader +
 diagnostics) is in scratchpad for a future exact-number pass.
 
-### Is the residual 0.35pp linearization (fixable with more steps)? NO — proven
+### The residual against GEMPACK — what it is NOT (three hypotheses tested + refuted)
 
-GEMPACK solves by linearization + sub-steps, so a natural hypothesis is "the 0.35pp
-residual is GEMPACK's linearization error, which shrinks with more sub-steps". Tested
-directly on the committed multi-step fixtures (same tm10 shock, `sl4dump_gtap7_3x3_tm10_s{4,8,16,32,64}.har`):
+The land price is ours −3.033% vs GEMPACK −2.681% (0.35pp). Three natural explanations
+were each tested against the real sources and **refuted**:
 
-| GEMPACK sub-steps | pfe[Land,Food,EU_28] |
-|---|---|
-| s4 | −2.6812% |
-| s8 | −2.6811% |
-| s16 | −2.6811% |
-| s32 | −2.6811% |
-| s64 | −2.6811% |
+**(1) NOT linearization / sub-steps.** GEMPACK's land price is flat at −2.681% across
+`sl4dump_gtap7_3x3_tm10_s{4,8,16,32,64}` (all mobile factor prices flat too, e.g.
+UnSkLab −3.422% s4→s64). GEMPACK is fully converged; more steps do not move it toward
+ours. Structural, not numerical.
 
-**GEMPACK is already converged — flat at −2.681% from s4 to s64**, and it does NOT
-approach our −3.033%. More steps do not close the gap. So the 0.35pp is NOT
-linearization error — GEMPACK converges to ITS OWN answer (linearized specific-factor
-equation) and we converge to OURS (exact power-CET). Two different models' two
-different equilibria, not two approximations of one. This matches F5's finding that
-the against-GEMPACK specific-factor residual is a structural GAMS↔GEMPACK modeling
-difference, not linearization.
+**(2) NOT the specific-factor CET aggregation.** Read from both sources: GEMPACK
+`E_pe2` is `pe=Σ_a REVSHR·pes` (income-share-weighted, `REVSHR=EVOS/VES`); ours
+`eq_pfteq` is `pft=[Σ_a gf·pfy^(1+ω)]^(1/(1+ω))`. Linearizing our power-CET gives
+weight `w_a = θ_a·p_a^κ / Σ θ_b·p_b^κ`, which **is** the CET income share — i.e. GEMPACK's
+`E_pe2` IS the first-order linearization of our `eq_pfteq`, same `ETRAE`, same shares.
+BUT: Land in EU_28 is used in a **single** sector (Food), so `REVSHR=[1,0,0]` and our
+`w=[1,0,0]` — both collapse to `pft = pes_Food` **identically**, exponent κ irrelevant.
+So the aggregation formula CANNOT be the source for single-sector Land.
 
-### Where exactly the 0.35pp lives (the "make it exogenous like GEMPACK" test)
+**(3) NOT the numeraire.** GEMPACK's numeraire is `pfactwld` (world primary-factor
+price index, held at 0%); ours is `pnum`. But our own world factor price index moves
+only −0.0004% under the shock (≈GEMPACK's 0%), so re-normalizing our prices to GEMPACK's
+numeraire shifts them by <0.001pp — the gaps are unchanged.
 
-Drilling in: for Land in EU_28, F3.5 base-calibrated moves ONLY the price, not the
-quantity — `xft` (aggregate land) +0.000%, `xf[Food]` (land→Food) +0.000%, `pft`
-(price) −3.033%. And GEMPACK holds the same quantities fixed: `qe[Land,EU_28]=0.0%`,
-`qes[Land,Food,EU_28]=0.0%` (the −1.49% on `Land,Mnfcs` is noise on a zero cell —
-land isn't used there). So the aggregate factor supply is **already exogenous in
-BOTH engines** (in gtap-mode our `etaf=0` → `xft=aft` fixed). "Making it exogenous
-like GEMPACK" is already satisfied — it is not the source of the gap.
+### What the residual actually is (as far as pinned)
 
-With the quantity fully fixed, `pft` is a pure shadow price (the scarcity value of
-fixed land), and the only remaining difference is the equation that computes it:
-ours `pft^(1+ω)=Σ gf·pfy^(1+ω)` (exact levels power-CET) vs GEMPACK's linearized
-`qes=qe−ETRAE·(pes−pe)`. That is the entire 0.35pp. Closing it would mean replacing
-our price equation with GEMPACK's linearized form — which is exactly what breaks the
-`0-diff vs GAMS` fidelity. Two different shadow-price equations, each solved exactly
-(hence steps s4→s64 don't move GEMPACK's −2.681%).
+The gap is **systematic across ALL factors**, not just Land — measured at Food/EU_28:
 
-### Why not exactly −2.68%?
+| Factor | ours | GEMPACK | gap |
+|---|---|---|---|
+| Land (sluggish) | −3.033% | −2.681% | −0.352pp |
+| UnSkLab (mobile) | −3.471% | −3.422% | −0.049pp |
+| SkLab (mobile) | −3.424% | −3.362% | −0.062pp |
+| Capital (mobile) | −3.426% | −3.364% | −0.062pp |
 
-The residual 0.35pp is **irreducible formulation difference**, not a defect. GAMS/equilibria
-solve an exact power-CET (`pft^(1+ω)=Σ gf·pfy^(1+ω)`); GEMPACK solves its **linearized**
-form (`qes=qe−ETRAE·(pes−pe)`). Different equations give −3.03% vs −2.68% even at the same
-base and shock. Closing it would require adopting GEMPACK's linearized equation — which
-would break the default's `0-diff` vs GAMS. equilibria is faithful to GAMS; GAMS is faithful
-to its own CET; the residual is an engine-level tie, consistent with F3's finding.
+A common ~0.05pp on every factor (same sign) + an extra ~0.30pp on Land. This is NOT
+the specific-factor equation alone (that would leave mobile factors at 0 gap). The
+remaining candidate is the factor-demand / value-added nest (`E_pfe`/`E_pva` vs our
+`eq_pfeq`/`eq_pvaeq`) or another small structural difference in how each engine prices
+factor demand — **not yet pinned to the exact equation** (open; a follow-up trace).
+
+**Correction of an earlier claim:** an earlier draft attributed the whole 0.35pp to
+"exact power-CET vs GEMPACK linearized" for the specific factor. That is wrong for
+single-sector Land (both aggregations coincide, shown above) and cannot explain the gap
+on the mobile factors. The residual is a small structural GAMS↔GEMPACK difference whose
+exact locus is still open — but it is NOT linearization (steps), NOT the CET aggregation,
+and NOT the numeraire.
 
 ## What shipped
 
