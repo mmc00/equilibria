@@ -293,6 +293,7 @@ scripts/gtap/*
 !scripts/gtap/cascade_run.py
 !scripts/gtap/cascade_orchestrator.py
 !scripts/gtap/cascade_kkt.py
+!scripts/gtap/measure_gempack_blocks.py
 !scripts/gtap/measure_nlp_vs_nlp.py
 !scripts/gtap/measure_nlp_vs_nlp_altertax.py
 !scripts/gtap/regen_altertax_reference.py
