@@ -199,10 +199,18 @@ levels-vs-linearized), and it explains all three observations: (1) the gap conce
 on final demand (`qpa`/`qga`/`qinv`) because the CDE is the strongly non-homothetic
 nest where shares move most; (2) it does NOT shrink with GEMPACK sub-steps because
 `EP`/`EY` are computed once, not re-evaluated per step; (3) production/factor/trade
-nests agree (~0.1pp) because they are homothetic or move little. Closing it would mean
-freezing our consumption shares at the base — which breaks `0-diff vs GAMS` (GAMS keeps
-them endogenous). This is the precise, sources-verified root of the against-GEMPACK
-residual.
+nests agree (~0.1pp) because they are homothetic or move little. **Tested "do it like GEMPACK = freeze the shares":** froze our `xcshr` at its base value
+for the shock (deactivated `eq_xcshr[shock]`, pinned via a patched
+`freeze_inactive_periods`) — shares verified flat (Δ=0.0000%). Result: qpa gap vs GEMPACK
+went **0.429pp → 0.652pp — WORSE, not better.** So freezing the shares does NOT reproduce
+GEMPACK. Why: GEMPACK doesn't just "use base shares" — it uses a *consistent* first-order
+linearization where the elasticities `EP`/`EY` are derived analytically from the CDE at
+the base. Freezing our shares while keeping `eq_zcons` in exact levels makes an
+inconsistent hybrid (a third point, worse than either). Reproducing GEMPACK would require
+replacing our levels `eq_zcons` with GEMPACK's linearized `E_qpa` outright — i.e. changing
+the solution method to GEMPACK's, which breaks `0-diff vs GAMS`. The against-GEMPACK
+residual is a genuine levels-exact (GAMS/us/Julia) vs linearized-CDE (GEMPACK) difference
+concentrated in final demand — irreducible without abandoning fidelity to GAMS.
 
 ## What shipped
 
