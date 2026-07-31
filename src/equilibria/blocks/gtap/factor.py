@@ -499,6 +499,49 @@ class FactorBlock(Block):
         return equations
 
     # ------------------------------------------------------------------
+    # F3.5 base calibration — adopt the settled (check) point as base
+    # ------------------------------------------------------------------
+    def calibrate_base(self, params, sets, closure, residual_region, ref_gdx=None):
+        """Base calibration (F3.5): return the SETTLED check-period point.
+
+        Runs the settle solve ONCE (the base->check->shock stack the gates use,
+        reused as a calibration tool) and returns the CHECK-period point — the
+        settled equilibrium where the specific factors have re-settled. The
+        composer uses it as the base seed so the shock runs base->shock (no
+        check) and the specific-factor response matches GEMPACK. The GAMS-faithful
+        default never calls this.
+
+        Returns ``{var_name: {body: value}}`` for the check slice, where ``body``
+        is the index tuple without the trailing period (a bare scalar for 1-D).
+        """
+        from pyomo.environ import Var
+        from pyomo.environ import value as _V
+
+        from equilibria.templates.gtap.gtap_block_model import (
+            build_block_model,
+            solve_block_model,
+        )
+
+        m, mp = build_block_model(params, sets, closure, residual_region)
+        if ref_gdx is not None:
+            mp.seed_all_periods(m, ref_gdx)
+        solve_block_model(m, params, closure, ref_gdx, mode="gtap")
+
+        settled: dict[str, dict] = {}
+        for v in m.component_objects(Var, active=True):
+            for idx in v:
+                if not (isinstance(idx, tuple) and idx and idx[-1] == "check"):
+                    continue
+                try:
+                    val = float(_V(v[idx]))
+                except (TypeError, ValueError):
+                    continue
+                body = idx[:-1]
+                body = body[0] if len(body) == 1 else body
+                settled.setdefault(v.name, {})[body] = val
+        return settled
+
+    # ------------------------------------------------------------------
     # init helpers (monolith get_*_init logic — the price-floor-bearing ones)
     # ------------------------------------------------------------------
     def _pf_init(self, r: str, f: str, a: str) -> float:
