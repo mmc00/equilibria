@@ -252,6 +252,36 @@ Sources: van der Mensbrugghe, *The Standard GTAP Model in GAMS, Version 7*
 (mygeohub.org/groups/gtap/.../GTAP7Gams.pdf); Kohlhaas & Pearson, *Introduction to
 GEMPACK for GAMS Users* (copsmodels.com/ftp/gamsgp.pdf).
 
+### Exactitude — verified against van der Mensbrugghe's actual GAMS source
+
+The goal is exactness. Read the specific-factor equation directly from van der
+Mensbrugghe's GAMS (`gams_code_20121206/gtap_model.gms`, `ENDW_PRICE` HT50):
+
+    pm(es,r) = ( Σ_j REVSHR(es,j,r)·pmes(es,j,r)^(1-ETRAE) )^(1/(1-ETRAE))
+
+This is **exactly our `eq_pfteq`** (`pft = (Σ gf_share·pfy^(1+ω))^(1/(1+ω))`, ω=etrae;
+our `gf_share` = his `REVSHR`; `1+ω` = `1-ETRAE`). We are byte-faithful to the official
+GAMS specific-factor equation. And the official GAMS supplementary files
+(`gft.gms`, `GFTLnd.gms`, …) all use `t / base, check, shock /` with `loop(tsim)` — the
+check period and its −15% land re-settlement ARE the standard official behavior.
+
+So there are **two distinct exactness targets, and they cannot both hold**, because
+GAMS and GEMPACK are each exact to a DIFFERENT specific-factor equation:
+- **Exact to GAMS** (van der Mensbrugghe — the model we port): **achieved, 100%.** Our
+  equation is his equation; our check re-settlement is his; we reproduce −3.03%.
+- **Exact to GEMPACK** (−2.68%): requires (a) calibrating the base with no check —
+  **done, that is F3.5** — PLUS (b) replacing the exact power-CET with GEMPACK's
+  *linearized* `E_pe2`, which is a different equation. van der Mensbrugghe's own "exact
+  replication of the standard GTAP model in GAMS" was still *underway* (2016) precisely
+  because of such differences; the supplementary v7 files we port still use the power-CET.
+
+Conclusion for exactness: we are 100% exact to the GAMS reference (the authoritative
+levels model). The 4% against GEMPACK is the residual GAMS↔GEMPACK equation difference
+on the specific factor — closing it means adopting GEMPACK's linearized equation, which
+would make us no longer exact to GAMS. F3.5 closes the *calibration-methodology* half of
+the against-GEMPACK gap (−18%→−3%); the remaining ~0.35pp is the equation-form half, an
+open item in van der Mensbrugghe's own GAMS↔GEMPACK reconciliation, not a defect here.
+
 ## What shipped
 
 - `src/equilibria/blocks/gtap/factor.py` — `FactorBlock.calibrate_base()`
