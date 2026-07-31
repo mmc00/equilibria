@@ -212,6 +212,25 @@ the solution method to GEMPACK's, which breaks `0-diff vs GAMS`. The against-GEM
 residual is a genuine levels-exact (GAMS/us/Julia) vs linearized-CDE (GEMPACK) difference
 concentrated in final demand — irreducible without abandoning fidelity to GAMS.
 
+**Tested "use base-fixed elasticities like GEMPACK" (the linearized demand equation):**
+computed GEMPACK's own `EP`/`EY` from `ALPHA`/`INCPAR`/base `CONSHR`, and applied its
+linearized `qpa=Σ EP·ppa+EY·ŷ`. Two facts: (a) fed GEMPACK's OWN prices, the formula
+reproduces GEMPACK's qpa (Food −1.19% vs −1.14% actual) — so the elasticities are right;
+(b) fed OUR prices, it gives ~our qpa — median gap vs GEMPACK 0.429pp → 0.423pp,
+**essentially unchanged.** So swapping the demand equation does NOT close the gap either.
+
+**Final conclusion (by total elimination):** the gap is NOT the demand equation — it is
+inherited from the PRICES, which already differ. The consumption-price gap (ppa/pa) is
+0.049pp median across all cells; the demand equation merely inherits it. Every
+single-equation hypothesis was tested and refuted (specific-factor CET, numeraire,
+shifters, output tax, top-nest elasticity, demand shares, linearized demand). The
+residual is **systemic**: solving the whole non-linear system in exact levels
+(GAMS/us/Julia) vs linearized (GEMPACK) converges to two slightly different fixed points
+(~0.05pp in prices, amplified to ~0.4pp in demand quantities via the non-homothetic CDE).
+There is no equation to change — it is the solution method of the entire system.
+Irreducible without becoming GEMPACK (linearizing the whole system), which abandons
+fidelity to GAMS.
+
 ## What shipped
 
 - `src/equilibria/blocks/gtap/factor.py` — `FactorBlock.calibrate_base()`
