@@ -334,11 +334,19 @@ def build_block_model(
     sets: Any,
     closure: Any,
     residual_region: str,
+    base_calibrated: bool = False,
 ) -> tuple[ConcreteModel, GTAPBlockMultiPeriodModel]:
     """Build the full multi-period block-composed GTAP model (unseeded).
 
     Returns ``(pyomo_model, mp)``. Seed with ``mp.seed_all_periods(m, gdx)`` and
     solve with ``solve_block_model`` (or the monolith's ``solve_multiperiod``).
+
+    ``base_calibrated`` (F3.5, default ``False`` = faithful-to-GAMS): when ``True``,
+    run the settle solve once via ``FactorBlock.calibrate_base`` and stamp the
+    settled check-period point on ``m._settled_seed`` (and ``m._base_calibrated``),
+    so the driver seeds the base from it and solves ``base→shock`` (no check).
+    The default path is byte-unchanged; ``calibrate_base`` builds its own settle
+    model with ``base_calibrated=False`` (no recursion).
     """
     mp = GTAPBlockMultiPeriodModel(
         sets, params, closure, residual_region=residual_region
@@ -351,6 +359,15 @@ def build_block_model(
         mp.build_equations_intra(m, per)
     mp.build_equations_fisher(m)
     m._residual_region = residual_region
+    m._base_calibrated = base_calibrated
+    m._settled_seed = None
+    if base_calibrated:
+        from equilibria.blocks.gtap.factor import FactorBlock
+
+        _fb = FactorBlock(sets=sets, params=params)
+        m._settled_seed = _fb.calibrate_base(
+            params, sets, closure, residual_region, ref_gdx=None
+        )
     return m, mp
 
 
