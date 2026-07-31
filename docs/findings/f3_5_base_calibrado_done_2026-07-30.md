@@ -62,6 +62,38 @@ calibrated mode uses `skip_base_solve=True` — like the faithful-to-GAMS base.
 - **Against GEMPACK (gate #2):** base-calibrated `pft[EU_28,Land]` base=0.845 →
   shock=0.819 = **−3.03%**, all periods `code=1`, no check phase. GEMPACK: −2.68%.
   `measure_gempack_blocks.py` reports `gap_vs_gempack_pp = −0.352`.
+- **Against GEMPACK — the WHOLE quantity set (not just the land price):** across all
+  15 mapped `Q_TO_VAR` variables (190 cells), the overall match within 1pp rises
+  **75.8% (default) → 96.3% (base-calibrated)**, median error 0.38pp → 0.17pp — the
+  same figure F3 measured "excluding check-movers". The Food/Land-chain quantities
+  (`xp`/`xda`/`xaa`/`xma`/`xd`) go to 100%.
+
+### Don't re-base the derived-demand vars
+
+An early version seeded ALL 83 settled var families into the base; that regressed
+`xg`/`xc` (government/household demand) by ~1.3pp on the EU_28 cells (78% match).
+Those are DERIVED-demand vars (computed from prices+incomes), so seeding them at the
+check value is a small inconsistency. Skipping them from the base seed
+(`_F35_DERIVED_DEMAND` = xg/xc/xg_agg/xi/xiagg/yg/yc/zcons/u*/ev/cv) lets them
+re-derive consistently → `xg`/`xc` 78%→100%, overall 94%→96.3%. The equilibrium core
+(prices, factor/production/trade quantities) IS seeded. This is exactly the "seed
+only the equilibrium vars" narrowing flagged as a risk in the plan.
+
+### Cross-check against Julia (the same-methodology engine)
+
+Julia (mivanic/GlobalTradeAnalysisProjectModelV7.jl) uses the SAME base-calibrated
+methodology as F3.5 (an explicit `calibrate()` → `calibrated_data` → single shock
+solve, no check period) — so it is the natural oracle for the mechanism (unlike
+GEMPACK, it has no linearized-formulation difference). Running Julia's own sample
+data end-to-end (`calibrate → +10% tariff → run_model!`, `scratchpad/
+julia_mechanism_probe.jl`, Julia instantiated + Ipopt solve `Optimal Solution
+Found`): the **largest specific-factor price move calibrated-base→shock is 5.36%**
+(single-digit) — Julia's calibrated base does NOT re-settle the specific factor the
+−15% way. This confirms F3.5's mechanism with Julia's engine executing (not just
+reading its code): calibrate the base → the specific-factor price responds only to
+the shock. F3.5's −3.03% on gtap7_3x3 is the same behavior. A full cell-by-cell
+port of gtap7_3x3 into Julia (via `HeaderArrayFile.jl`, same author) is a follow-up
+(its own mini-phase) for exact-number parity.
 
 ### Why not exactly −2.68%?
 
