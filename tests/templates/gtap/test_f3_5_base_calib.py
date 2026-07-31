@@ -98,3 +98,22 @@ def test_calibrate_base_returns_settled_land_price():
     settled = fb.calibrate_base(p, p.sets, _base_closure(p), rr, ref_gdx=REF_GDX)
     pft = settled["pft"][("EU_28", "Land")]
     assert pft == pytest.approx(0.84476, abs=5e-3), f"settled Land price off: {pft}"
+
+
+@pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+def test_composer_stamps_settled_seed():
+    """build_block_model(base_calibrated=True) runs the settle and stamps the
+    settled point + the flag; base_calibrated=False leaves both empty (default)."""
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = _load_params()
+    rr = list(p.sets.r)[-1]
+    m_raw, _ = build_block_model(p, p.sets, _base_closure(p), rr, base_calibrated=False)
+    assert m_raw._base_calibrated is False
+    assert m_raw._settled_seed is None
+
+    m_cal, _ = build_block_model(p, p.sets, _base_closure(p), rr, base_calibrated=True)
+    assert m_cal._base_calibrated is True
+    assert m_cal._settled_seed["pft"][("EU_28", "Land")] == pytest.approx(
+        0.84476, abs=5e-3
+    )
