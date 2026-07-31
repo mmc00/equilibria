@@ -55,3 +55,46 @@ def test_settled_base_land_response_matches_gempack():
         f"expected clean settled response, got {settled_resp:.2f}%"
     )
     assert abs(settled_resp - (-2.68)) < abs(raw_resp - (-2.68))
+
+
+def _load_params(dataset="gtap7_3x3"):
+    from equilibria.templates.gtap import GTAPParameters
+
+    d = DATASETS / dataset
+    p = GTAPParameters()
+    p.load_from_har(
+        basedata_path=d / "basedata.har",
+        sets_path=d / "sets.har",
+        default_path=d / "default.prm",
+        baserate_path=d / "baserate.har",
+    )
+    return p
+
+
+def _base_closure(p):
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    return GTAPClosureConfig(
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=False,
+        numeraire="pnum",
+    )
+
+
+@pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+def test_calibrate_base_returns_settled_land_price():
+    """calibrate_base runs the settle solve and returns the CHECK-period point;
+    the Land price in it is the settled ~0.845, not the raw 1.0."""
+    from equilibria.blocks.gtap.factor import FactorBlock
+
+    p = _load_params()
+    rr = list(p.sets.r)[-1]
+    fb = FactorBlock(sets=p.sets, params=p)
+    settled = fb.calibrate_base(p, p.sets, _base_closure(p), rr, ref_gdx=REF_GDX)
+    pft = settled["pft"][("EU_28", "Land")]
+    assert pft == pytest.approx(0.84476, abs=5e-3), f"settled Land price off: {pft}"
