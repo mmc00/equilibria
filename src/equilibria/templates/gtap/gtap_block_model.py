@@ -88,16 +88,23 @@ def _set_elems(sets: Any) -> dict[str, list[str]]:
 
 
 def _mk_unit(
-    cls: type, sets: Any, params: Any, residual_region: str, if_sub: bool = False
+    cls: type,
+    sets: Any,
+    params: Any,
+    residual_region: str,
+    if_sub: bool = False,
+    savf_flag: str = "capFix",
 ) -> Any:
-    """Instantiate a block, threading residual_region + if_sub for the units that
-    declare those fields (others ignore the kwargs)."""
+    """Instantiate a block, threading residual_region + if_sub + savf_flag for the
+    units that declare those fields (others ignore the kwargs)."""
     fields = getattr(cls, "model_fields", {})
     kwargs: dict[str, Any] = {"sets": sets, "params": params}
     if "residual_region" in fields:
         kwargs["residual_region"] = residual_region
     if "if_sub" in fields:
         kwargs["if_sub"] = if_sub
+    if "savf_flag" in fields:
+        kwargs["savf_flag"] = savf_flag
     return cls(**kwargs)
 
 
@@ -204,13 +211,21 @@ def build_block_single_period(
     GAMS. Returns the Pyomo ``ConcreteModel``.
     """
     if_sub = bool(getattr(closure, "if_sub", False))
+    savf_flag = str(getattr(closure, "savf_flag", "capFix"))
     setmap = _set_elems(sets)
     model = Model(name="gtap_blocks_sp")
     for name, elems in setmap.items():
         model.add_set(ESet(name=name, elements=elems))
     for cls in _block_classes():
         model.add_block(
-            _mk_unit(cls, sets, params, residual_region or "ROW", if_sub=if_sub)
+            _mk_unit(
+                cls,
+                sets,
+                params,
+                residual_region or "ROW",
+                if_sub=if_sub,
+                savf_flag=savf_flag,
+            )
         )
 
     backend = PyomoBackend()

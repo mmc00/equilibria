@@ -67,6 +67,9 @@ class DemandUtilityBlock(Block):
     sets: Any = None
     params: Any = None
     residual_region: str = "NAmerica"
+    savf_flag: str = (
+        "capFix"  # capital-account closure (GAMS RoRFlag); capFlex = returns equalize
+    )
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["r", "i"]
@@ -114,6 +117,17 @@ class DemandUtilityBlock(Block):
         _param("rorflex", ("r",))
         _param("chif0", ("r",))
         _param("savf_bar", ("r",))
+
+        # risk[r] = rorg/rore at benchmark (GAMS cal.gms:676), used by the capFlex
+        # capital-account closure (savfeq: risk*rore == rorg). At the normalized
+        # benchmark rorg=rore=1 so risk=1; a base solve recalibrates it if needed.
+        if self.savf_flag == "capFlex":
+            parameters["risk"] = Parameter(
+                name="risk",
+                value=np.ones(nr),
+                domains=("r",),
+                mutable=True,
+            )
 
         # -------- Variables OWNED by this unit (monolith 4454-4969) -------------
         # Quantity vars (bounds (0,None) — init does not affect the gate).
@@ -193,7 +207,7 @@ class DemandUtilityBlock(Block):
         # -------- inline-python accessors (read exactly as the monolith) --------
         el = p.elasticities
         residual_region = self.residual_region
-        savf_flag = "capFix"  # comp-stat default closure (self.closure.savf_flag)
+        savf_flag = self.savf_flag  # capital-account closure (GAMS RoRFlag)
 
         equations: list[SymbolicEquation] = []
 
@@ -545,6 +559,10 @@ class DemandUtilityBlock(Block):
                 m = pyomo_model
                 (r,) = indices
                 is_residual = str(r) == residual_region
+                if savf_flag == "capFlex":
+                    # GAMS savfeq under capFlex (model.gms:1161-1163): returns equalize
+                    # across ALL regions (no residual skip) — risk[r]*rore[r] == rorg.
+                    return m.risk[r] * m.rore[r] == m.rorg
                 if savf_flag == "capFix":
                     if is_residual:
                         return None
@@ -665,7 +683,10 @@ class DemandUtilityBlock(Block):
                     denom += net_invest
                 return m.rorg == numer / (denom + 1e-12)
 
-        equations.append(EqRorg())
+        # capFlex (GAMS rorgeq $(RoRFlag ne capFlex)): rorgeq is INACTIVE — rorg is closed
+        # by capAcct (sum savf == 0) through the equalized returns. Don't register eq_rorg.
+        if savf_flag != "capFlex":
+            equations.append(EqRorg())
 
         _ = sqrt  # (imported for parity with the monolith's utility helpers)
         return equations
