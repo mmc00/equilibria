@@ -363,6 +363,19 @@ def build_block_model(
     The default path is byte-unchanged; ``calibrate_base`` builds its own settle
     model with ``base_calibrated=False`` (no recursion).
     """
+    # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
+    # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod
+    # substitutes every mutable ParamData by its value). Stash it on params so the
+    # DemandUtilityBlock reads it in setup(). Gated on _capflex_risk to avoid recursion
+    # (the capFix twin build must not re-enter this).
+    if (
+        str(getattr(closure, "savf_flag", "capFix")) == "capFlex"
+        and getattr(params, "_capflex_risk", None) is None
+    ):
+        params._capflex_risk = _calibrate_capflex_risk(
+            params, sets, closure, residual_region
+        )
+
     mp = GTAPBlockMultiPeriodModel(
         sets, params, closure, residual_region=residual_region
     )
@@ -384,6 +397,62 @@ def build_block_model(
             params, sets, closure, residual_region, ref_gdx=None
         )
     return m, mp
+
+
+def _calibrate_capflex_risk(params, sets, closure, residual_region) -> dict:
+    """Calibrate capFlex risk[r] = rorg/rore(r) at benchmark (GAMS cal.gms:676).
+
+    The equalization savfeq (risk*rore == rorg) must preserve the benchmark return spread:
+    at base, returns DIFFER by region (rore(r) != rorg), and risk[r] freezes that ratio so a
+    shock reallocates investment relative to the benchmark, not toward a spurious uniform rore.
+    Leaving risk=1 blows up qinv. We build+solve a capFix twin (where the benchmark rore/rorg
+    live) and return ``{region: rorg/rore(r)}`` for the DemandUtilityBlock to seed risk with.
+    Returns ``{}`` on any failure (block then falls back to risk=1)."""
+    import contextlib
+    import io
+
+    from pyomo.environ import value as _V
+
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    cfix = (
+        closure.model_copy(update={"savf_flag": "capFix"})
+        if hasattr(closure, "model_copy")
+        else GTAPClosureConfig(
+            name="base",
+            closure_type="MCP",
+            capital_mobility="sluggish",
+            if_sub=bool(getattr(closure, "if_sub", False)),
+            savf_flag="capFix",
+        )
+    )
+    try:
+        with (
+            contextlib.redirect_stderr(io.StringIO()),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            mt, _mpt = build_block_model(params, sets, cfix, residual_region)
+            solve_block_model(mt, params, cfix, None, mode="gtap")
+    except Exception:
+        return {}
+
+    def _base(v, *keys):
+        for k in keys:
+            try:
+                return float(_V(getattr(mt, v)[k]))
+            except Exception:
+                continue
+        return None
+
+    rorg_b = _base("rorg", "base", ("base",))
+    if rorg_b is None:
+        return {}
+    out: dict = {}
+    for r in _set_elems(sets).get("r", []):
+        rore_b = _base("rore", (r, "base"))
+        if rore_b and abs(rore_b) > 1e-12:
+            out[r] = rorg_b / rore_b
+    return out
 
 
 def solve_block_model(

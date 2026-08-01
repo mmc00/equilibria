@@ -119,12 +119,17 @@ class DemandUtilityBlock(Block):
         _param("savf_bar", ("r",))
 
         # risk[r] = rorg/rore at benchmark (GAMS cal.gms:676), used by the capFlex
-        # capital-account closure (savfeq: risk*rore == rorg). At the normalized
-        # benchmark rorg=rore=1 so risk=1; a base solve recalibrates it if needed.
+        # capital-account closure (savfeq: risk*rore == rorg). Calibrated from a capFix
+        # twin solve by build_block_model._calibrate_capflex_risk and stashed on
+        # params._capflex_risk; falls back to 1.0 (uncalibrated) if absent.
         if self.savf_flag == "capFlex":
+            _risk_cal = getattr(p, "_capflex_risk", None) or {}
+            risk_vals = np.array(
+                [float(_risk_cal.get(r, 1.0)) for r in regions], dtype=float
+            )
             parameters["risk"] = Parameter(
                 name="risk",
-                value=np.ones(nr),
+                value=risk_vals,
                 domains=("r",),
                 mutable=True,
             )
