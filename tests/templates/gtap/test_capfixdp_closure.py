@@ -58,3 +58,11 @@ def test_capfix_betas_not_a_variable():
     m = _build("capFix")
     b = getattr(m, "betas", None)
     assert b is None or not isinstance(b, Var), "capFix: betas stays a folded Param"
+
+
+def test_capfixdp_eq_phi_rsav_live_betas():
+    # eq_phi + eq_rsav must carry the endogenous betas Var symbolically (not a frozen number).
+    m = _build("capFixDp")
+    body = " ".join(str(m.eq_phi[k].body) for k in m.eq_phi)
+    body += " ".join(str(m.eq_rsav[k].body) for k in m.eq_rsav)
+    assert "betas" in body, "capFixDp: eq_phi/eq_rsav must reference the betas Var"
