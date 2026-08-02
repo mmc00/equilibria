@@ -110,7 +110,11 @@ class DemandUtilityBlock(Block):
         _param("au", ("r",))
         _param("betap", ("r",))
         _param("betag", ("r",))
-        _param("betas", ("r",))
+        # betas: folded Param in the standard closures; under capFixDp (dpsave endogenous)
+        # it becomes a free Variable (the saving DISTRIBUTION adjusts). Declared as a Var
+        # below in that case, seeded at the calibrated share (GAMS cal.gms:621).
+        if self.savf_flag != "capFixDp":
+            _param("betas", ("r",))
         _param("pop", ("r",))
         _param("depr", ("r",))
         _param("fdepr", ("r",))
@@ -155,6 +159,19 @@ class DemandUtilityBlock(Block):
                 domain="NonNegativeReals",
                 lower=lo,
                 upper=float("inf"),
+            )
+
+        # capFixDp: betas is a free Variable (dpsave endogenous), seeded at its calibrated
+        # benchmark share rsav/(phi·regY) (GAMS cal.gms:621), available as calib["betas"].
+        if self.savf_flag == "capFixDp":
+            _q(
+                "betas",
+                ("r",),
+                np.array(
+                    [float(calib["betas"].get((r,), 0.1)) for r in regions], dtype=float
+                ),
+                lower=float("-inf"),
+                dom="Reals",
             )
 
         ones_r = np.ones(nr)
