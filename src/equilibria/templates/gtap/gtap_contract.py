@@ -339,7 +339,9 @@ class GTAPClosureConfig(ModelClosureConfig):
     numeraire_mode: Literal["fixed_benchmark"] = "fixed_benchmark"
     closure_type: Literal["CNS", "MCP"] = "CNS"
     capital_mobility: Literal["mobile", "sluggish"] = "mobile"
-    savf_flag: Literal["capFix", "capSFix", "capShrFix", "capFlex"] = "capFix"
+    savf_flag: Literal["capFix", "capSFix", "capShrFix", "capFlex", "capFixDp"] = (
+        "capFix"
+    )
     if_sub: bool = True
     calibration_source: str = "python"
     calibration_dump: str | None = None
