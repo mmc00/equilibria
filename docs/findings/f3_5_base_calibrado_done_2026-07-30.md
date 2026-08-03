@@ -374,6 +374,38 @@ full GEMPACK version = linearizing the entire system = rebuilding GEMPACK in Pyt
 der Mensbrugghe's exact `ENDW_PRICE`), plus the F3.5 base-calibrated calibration mode —
 that is the correct, bounded deliverable; a second full linearized model is out of scope.
 
+### Would the investment closure (RORFLEX→RORDELTA=1) close the qinv gap? No — tested, refuted.
+
+Fable ranked the investment/return closure **#1 by leverage** (qinv is the single biggest
+gap, 1.24pp): GEMPACK's reference uses `RORDELTA=1` (rate-of-return equalization — `rore`
+uniform at −3.449 across regions), while ours/GAMS use `RORFLEX=10` (finite; `rore` differs
+by region). Hypothesis: swap our closure to RORDELTA and the qinv spread converges.
+
+Tested directly. `rorflex` is a folded param in `demand_utility.py` (`eq_rore`:
+`rore[r] = rorc[r]·(kstock/kapEnd)^rorflex[r]`); overrode it in `p.elasticities.rorflex`
+before build, and separately swapped `savf_flag` capFix→capSFix (endogenous foreign
+savings, the coupled half of the GEMPACK closure). Results (gtap7_3x3, +10% imptx, base-calib):
+
+| closure | qinv USA / EU_28 / ROW | rore USA / EU_28 / ROW |
+|---|---|---|
+| capFix, rflx=10 (**our default**) | −0.496 / −0.749 / −0.476 | −2.336 / −6.813 / −3.412 |
+| capFix, rflx=100 | **−0.496 / −0.749 / −0.476** (unchanged) | +1.991 / +1.664 / +2.907 |
+| capSFix (endog savf), rflx=10 | −0.436 / −0.580 / −0.543 | −2.357 / −6.972 / −3.342 |
+| capSFix, rflx=100 | −0.436 / −0.580 / −0.543 | +1.737 / −0.180 / +3.691 |
+| **GEMPACK** | **+0.742 / −5.796 / −0.673** | **−3.449 / −3.449 / −3.449** (uniform) |
+
+Two facts kill it. (1) Forcing `rorflex` high moves `rore` — but the **wrong way** (toward
++2%, not toward GEMPACK's uniform −3.449) — and `xiagg` (the actual investment quantity)
+**does not move at all**: qinv is pinned by the capital-account balance and savings mechanics,
+not the return exponent. (2) Even pulling **both** levers together (endogenous savf +
+RORDELTA-ish rflx) leaves qinv at −0.44/−0.58/−0.54 — nowhere near GEMPACK's +0.74/**−5.80**/
+−0.67. GAMS-native also sits at the small spread (its `rore` differs by region — GAMS uses
+RORFLEX, not RORDELTA). So GEMPACK's −5.8% EU qinv is the **outlier**, and no
+return/savings-closure knob in the levels system reaches it. The investment closure is **not**
+the lever — Fable's #1 hypothesis, measured and refuted. This is the same pattern as the
+specific-factor equation above: the gap is a distributed property of levels-vs-percent-change,
+not any single equation or closure flag.
+
 ## What shipped
 
 - `src/equilibria/blocks/gtap/factor.py` — `FactorBlock.calibrate_base()`

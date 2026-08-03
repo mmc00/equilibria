@@ -92,14 +92,24 @@ def config_tag(shock_pct: float, steps: str) -> str:
 
 def make_cmf(name: str, regs: list[str], shock_pct: float = 10.0,
              steps: str = "8 16 32", updated_name: str = "updated.har") -> str:
-    residual = regs[-1]
-    swaps = "\n".join(
-        f'swap dpsave("{r}") = del_tbalry("{r}") ;' for r in regs[:-1]
-    )
+    # STANDARD GTAP v7 closure (verbatim from GEMPACK's own gtapv7.cmf "Standard GTAP
+    # closure"): the saving DISTRIBUTION dpsave is EXOGENOUS (fixed share — in the Exogenous
+    # block below), cgdslack/psaveslack/tradslack exogenous, everything else endogenous, and
+    # NO swaps. This is the closure the Julia GTAPv7 model uses (it fixes σyp/σyg, the saving
+    # shares) and reproduces GEMPACK to 5 significant figures. It matches equilibria's
+    # savf_flag=capFix (betaS fixed).
+    #
+    # HISTORY: the previous version swapped `dpsave(r) = del_tbalry(r)` for non-residual
+    # regions, FREEING the saving distribution. That is a NON-STANDARD closure — savings
+    # redistribute (qsave EU -10%, returns equalize), which is neither capFix nor what Julia/
+    # GEMPACK-canonical do. It is why equilibria's capFix matched only ~96% against the old
+    # mislabeled fixture instead of ~99% like Julia. See the dev-tools attempts log
+    # (2026-07-31-gams-gempack-gap-attempts-log.md).
     pct = f"{shock_pct:g}"
     return f"""! {name} uniform {pct}% shock to import tariff power (tm) - GEMPACK / GTAPv7
-! capFix closure mirroring equilibria's Python gate (residual = last region = "{residual}",
-! rr=list(sets.r)[-1]); swap dpsave(r)=del_tbalry(r) for every NON-residual region.
+! STANDARD GTAP closure (verbatim from GEMPACK gtapv7.cmf): dpsave EXOGENOUS (fixed saving
+! share), cgdslack/psaveslack/tradslack exogenous, no swaps. Matches equilibria
+! savf_flag=capFix and the Julia GTAPv7 model (5-sig-fig GEMPACK reproduction).
 Auxiliary files = C:\\runGTAP375\\gtapv7 ;
 
 file GTAPSETS = sets.har ;
@@ -116,13 +126,9 @@ Automatic accuracy = no ;
 Subintervals = 1 ;
 
 Verbal Description =
-{name} uniform {pct}pct shock to import tariff power (tm), capFix closure ;
+{name} uniform {pct}pct shock to import tariff power (tm), standard GTAP closure ;
 
 {EXOG_BLOCK}
-
-! capFix closure: pin del_tbalry for all NON-RESIDUAL regions; "{residual}"
-! absorbs the capital-account identity. Releases dpsave(r) for each non-residual region.
-{swaps}
 
 Shock tm = uniform {pct} ;
 
