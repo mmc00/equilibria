@@ -267,18 +267,23 @@ _MCP_ROWS: list[Row] = [
     # quantities don't depend on the subsidy convention), so both are listed with the
     # same floor. Welfare (u/EV) is NOT here — it is sign-flipping/second-order and
     # lives in the separate EV track (see docs/findings/gempack_welfare_not_cellwise).
+    # capFlex closure vs the (RORDELTA=1) fixtures: measured 3x3=99.5% within 1pp
+    # (median 0.036pp). Floor 95 leaves margin for solver noise.
     Row("gtap7_3x3", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 70.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x3", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 70.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x4", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x4", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure", reference="gempack"),
+    # capFlex 5x5 = 97.1% within 1pp (median 0.035pp); the sub-1pp cells are qga[Agri] where
+    # GAMS/ours use gov CES sigma=1.01 vs GEMPACK Cobb-Douglas — a spec diff, not linearization.
+    # Floor 90 leaves margin.
     Row("gtap7_5x5", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 67.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
     Row("gtap7_5x5", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 67.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
     Row("gtap7_10x7", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 58.0),), mode="pure", reference="gempack"),
     Row("gtap7_10x7", "mcp", 1, ("shock",), None, "measured @ runtime", "local",

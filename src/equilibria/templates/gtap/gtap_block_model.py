@@ -350,6 +350,7 @@ def build_block_model(
     closure: Any,
     residual_region: str,
     base_calibrated: bool = False,
+    ref_gdx: Any = None,
 ) -> tuple[ConcreteModel, GTAPBlockMultiPeriodModel]:
     """Build the full multi-period block-composed GTAP model (unseeded).
 
@@ -373,7 +374,7 @@ def build_block_model(
         and getattr(params, "_capflex_risk", None) is None
     ):
         params._capflex_risk = _calibrate_capflex_risk(
-            params, sets, closure, residual_region
+            params, sets, closure, residual_region, ref_gdx=ref_gdx
         )
 
     mp = GTAPBlockMultiPeriodModel(
@@ -399,15 +400,56 @@ def build_block_model(
     return m, mp
 
 
-def _calibrate_capflex_risk(params, sets, closure, residual_region) -> dict:
+def _capflex_risk_from_gdx(ref_gdx, regions) -> dict:
+    """Fast path: read benchmark rore/rorg straight from the GAMS ref GDX (base period) and
+    return ``{region: rorg/rore(r)}``. GAMS already solved the benchmark, so we skip the
+    266s capFix twin-solve. Returns {} if the GDX lacks rore/rorg (falls back to the twin)."""
+    if ref_gdx is None:
+        return {}
+    try:
+        from pathlib import Path as _P
+
+        from _diff_core import gams_levels  # scripts/gtap on sys.path (parity env)
+
+        gp = _P(str(ref_gdx))
+        if not gp.exists():
+            return {}
+        rore = gams_levels(gp, "rore")
+        rorg = gams_levels(gp, "rorg")
+    except Exception:
+        return {}
+
+    def _pick(d, *cands):
+        for c in cands:
+            if c in d:
+                return float(d[c])
+        return None
+
+    rorg_b = _pick(rorg, ("base",), "base")
+    if rorg_b is None:
+        return {}
+    out: dict = {}
+    for r in regions:
+        rore_b = _pick(rore, (r, "base"), (str(r), "base"))
+        if rore_b and abs(rore_b) > 1e-12:
+            out[r] = rorg_b / rore_b
+    return out if len(out) == len(list(regions)) else {}
+
+
+def _calibrate_capflex_risk(
+    params, sets, closure, residual_region, ref_gdx=None
+) -> dict:
     """Calibrate capFlex risk[r] = rorg/rore(r) at benchmark (GAMS cal.gms:676).
 
     The equalization savfeq (risk*rore == rorg) must preserve the benchmark return spread:
     at base, returns DIFFER by region (rore(r) != rorg), and risk[r] freezes that ratio so a
     shock reallocates investment relative to the benchmark, not toward a spurious uniform rore.
-    Leaving risk=1 blows up qinv. We build+solve a capFix twin (where the benchmark rore/rorg
-    live) and return ``{region: rorg/rore(r)}`` for the DemandUtilityBlock to seed risk with.
-    Returns ``{}`` on any failure (block then falls back to risk=1)."""
+    Leaving risk=1 blows up qinv.
+
+    FAST PATH: read the benchmark rore/rorg from the GAMS ref GDX (GAMS already solved them) —
+    avoids a full capFix twin-solve (266s on 10x7). Only when no usable GDX is available do we
+    fall back to building+solving a capFix twin. Returns ``{}`` on any failure (block then
+    falls back to risk=1)."""
     import contextlib
     import io
 
@@ -415,6 +457,14 @@ def _calibrate_capflex_risk(params, sets, closure, residual_region) -> dict:
 
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
+    regions = _set_elems(sets).get("r", [])
+
+    # --- fast path: GAMS ref GDX carries the benchmark rore/rorg ---
+    fast = _capflex_risk_from_gdx(ref_gdx, regions)
+    if fast:
+        return fast
+
+    # --- fallback: capFix twin-solve (slow) ---
     cfix = (
         closure.model_copy(update={"savf_flag": "capFix"})
         if hasattr(closure, "model_copy")
@@ -448,7 +498,7 @@ def _calibrate_capflex_risk(params, sets, closure, residual_region) -> dict:
     if rorg_b is None:
         return {}
     out: dict = {}
-    for r in _set_elems(sets).get("r", []):
+    for r in regions:
         rore_b = _base("rore", (r, "base"))
         if rore_b and abs(rore_b) > 1e-12:
             out[r] = rorg_b / rore_b

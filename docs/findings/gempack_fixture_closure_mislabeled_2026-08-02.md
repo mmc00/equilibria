@@ -53,15 +53,34 @@ has been corrected to emit the standard closure.
   as a documented negative result.)
 - **capFix** (default): 96.3% global match — the best, and the correct standard closure.
 
-## The fix
+## The fix — and the RESULT (fixtures regenerated, match confirmed)
 
 `scripts/gtap/run_gempack_matrix.py:make_cmf` now emits the **standard GTAP closure** (dpsave
-exogenous, no `dpsave↔del_tbalry` swap), verbatim from GEMPACK's own `gtapv7.cmf`. Regenerated
-fixtures (pending a run in the GEMPACK/Windows environment) should let our capFix match GEMPACK
-like Julia does — near ~99%, not 96.3%.
+exogenous, no `dpsave↔del_tbalry` swap), verbatim from GEMPACK's own `gtapv7.cmf`. The fixtures
+were regenerated in the GEMPACK/Windows environment (commit e1b3c0a).
 
-**Our capFix is the correct closure.** The 3.7% "gap" was measuring the right closure against a
-fixture built with the wrong one.
+**RESULT (gtap7_3x3, +10% tariff, 190 quantity cells):**
+
+| closure | vs OLD (mislabeled) fixture | vs NEW (standard) fixture |
+|---|---|---|
+| capFix   | 96.3% | 73.2% |
+| **capFlex** | 71.1% | **99.5%** (median 0.036pp, 100% within 2pp) |
+
+The NEW fixture's signature: qsave MODERATE (EU −2.4%, not the old −10%) but rore still
+EQUALIZED (−3.873 all regions). So GEMPACK's *standard* RunGTAP closure equalizes returns —
+that is our **capFlex** closure (rore uniform), NOT capFix (differing returns). The fix
+corrected the savings side (removed the dpsave swap) but the standard closure still equalizes
+returns by construction.
+
+**Conclusion: capFlex is the GEMPACK-faithful closure**, and Equilibria's capFlex matches
+GEMPACK to **99.5%** (median 0.036pp) — on par with the Julia GTAPv7 model's 5-sig-fig match.
+The famous land number now agrees: capFlex land EU_28/Food −3.05 vs GEMPACK −3.62 (the old
+"−3.03 vs −2.68" was capFix vs the mislabeled fixture). The remaining ~0.5pp on a few EU cells
+is GEMPACK's residual Gragg linearization error on the most nonlinear variables.
+
+capFlex — implemented earlier as a "selectable closure" — was not an experiment that failed; it
+is THE answer. The GEMPACK parity gate now uses `savf_flag=capFlex` + base_calibrated on the
+block model.
 
 ## Files
 
