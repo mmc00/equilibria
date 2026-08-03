@@ -72,9 +72,15 @@ def _solve_shock(dataset: str, ifsub: int, savf_flag: str = "capFlex"):
         savf_flag=savf_flag,
         numeraire="pnum",
     )
-    gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
-    # Pass ref_gdx so capFlex reads benchmark rore/rorg from the GAMS solution (fast) instead
-    # of a full capFix twin-solve (266s on 10x7).
+    # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
+    # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
+    # absent (e.g. gtap7_3x4 ships no local GAMS ref — its shock is 2168 eqs > PATH's 1000-eq
+    # demo cap), the block SELF-SEEDS: base_calibrated stamps m._settled_seed, and the risk
+    # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1, 99.2% within 1pp
+    # vs the GEMPACK fixture (median 0.043pp) with ref_gdx=None. So pass the GDX only if it
+    # exists; on small datasets the twin-solve fallback is cheap enough.
+    _gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
+    gdx = _gdx if _gdx.exists() else None
     m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
     res = solve_multiperiod(
         m,
@@ -149,13 +155,13 @@ def _capfix_fixture_for(row) -> Path | None:
 def test_gtap7_gempack_parity(row):
     if not (DATASETS_DIR / row.dataset / "basedata.har").exists():
         pytest.skip(f"dataset HAR missing: {row.dataset}")
-    # The block model seeds the shock from the GAMS ifsub1 GDX; skip datasets that lack it
-    # (e.g. gtap7_3x4 ships no local GAMS ref) rather than erroring on a missing seed.
+    # The GAMS ref GDX is a speedup (fast rore/rorg + warm-start), NOT a requirement: the block
+    # SELF-SEEDS from base_calibrated's m._settled_seed + the risk twin-solve fallback. Its
+    # absence only matters on the LARGE datasets, where the twin-solve is 266s AND capFlex
+    # settle/shock is slow/code=2 — handled by the _CAPFLEX_SLOW_DATASETS skip below.
     gams_ref = (
         ROOT / f"tests/fixtures/gtap7/{row.dataset}/out_gtap_shock_ifsub{row.ifsub}.gdx"
     )
-    if not gams_ref.exists():
-        pytest.skip(f"GAMS ref GDX missing (needed to seed the shock): {gams_ref}")
 
     # Prefer the capFix fixture (fast + converges everywhere); fall back to the default
     # (capFlex) fixture. Skip large datasets only when no capFix fixture exists.
@@ -166,10 +172,13 @@ def test_gtap7_gempack_parity(row):
         sl4, savf_flag = FIXTURES / row.ref, "capFlex"
         if not sl4.exists():
             pytest.skip(f"sl4dump fixture missing: {sl4}")
-        if row.dataset in _CAPFLEX_SLOW_DATASETS:
+        # capFlex without a GAMS GDX pays the 266s risk twin-solve AND the slow/code=2 settle
+        # on the large datasets — skip those until a capFix fixture (or GAMS GDX) exists. Small
+        # datasets self-seed cheaply (3x4: code=1, 99.2% within 1pp with ref_gdx=None).
+        if row.dataset in _CAPFLEX_SLOW_DATASETS and not gams_ref.exists():
             pytest.skip(
                 f"{row.dataset}: capFlex settle/shock too slow / code=2 on large datasets "
-                f"and no capFix fixture yet — run run_gempack_matrix --rordelta 0"
+                f"and no capFix fixture nor GAMS GDX yet — run run_gempack_matrix --rordelta 0"
             )
 
     m, code = _solve_shock(row.dataset, row.ifsub, savf_flag=savf_flag)
