@@ -79,42 +79,61 @@ def regions(ds_dir: Path) -> list[str]:
     return [str(x).strip() for x in h["REG"].array.tolist()]
 
 
-def config_tag(shock_pct: float, steps: str) -> str:
-    """Stable, filesystem-safe tag for a (shock, steps) config.
+def config_tag(shock_pct: float, steps: str, rordelta: int | None = None) -> str:
+    """Stable, filesystem-safe tag for a (shock, steps[, rordelta]) config.
 
     e.g. (10, "8 16 32") -> "tm10_s8-16-32"; (0.1, ...) -> "tm0p1_s..." — no dots
     or spaces, so it is safe as a .cmf / .har basename in the study grid.
+
+    ``rordelta`` (the capital-account closure) appends the closure variant:
+      rordelta=0 -> "_capfix"  (returns DIFFER across regions),
+      rordelta=1 -> "_capflex" (returns EQUALIZE — rore uniform).
+    Omit it (None) for the legacy single-variant tag (backward compatible).
     """
     s = f"{shock_pct:g}".replace(".", "p")
     st = steps.replace(" ", "-")
-    return f"tm{s}_s{st}"
+    base = f"tm{s}_s{st}"
+    if rordelta is None:
+        return base
+    return f"{base}_{'capflex' if int(rordelta) == 1 else 'capfix'}"
 
 
 def make_cmf(name: str, regs: list[str], shock_pct: float = 10.0,
-             steps: str = "8 16 32", updated_name: str = "updated.har") -> str:
-    # STANDARD GTAP v7 closure (verbatim from GEMPACK's own gtapv7.cmf "Standard GTAP
-    # closure"): the saving DISTRIBUTION dpsave is EXOGENOUS (fixed share — in the Exogenous
-    # block below), cgdslack/psaveslack/tradslack exogenous, everything else endogenous, and
-    # NO swaps. This is the closure the Julia GTAPv7 model uses (it fixes σyp/σyg, the saving
-    # shares) and reproduces GEMPACK to 5 significant figures. It matches equilibria's
-    # savf_flag=capFix (betaS fixed).
-    #
-    # HISTORY: the previous version swapped `dpsave(r) = del_tbalry(r)` for non-residual
-    # regions, FREEING the saving distribution. That is a NON-STANDARD closure — savings
-    # redistribute (qsave EU -10%, returns equalize), which is neither capFix nor what Julia/
-    # GEMPACK-canonical do. It is why equilibria's capFix matched only ~96% against the old
-    # mislabeled fixture instead of ~99% like Julia. See the dev-tools attempts log
-    # (2026-07-31-gams-gempack-gap-attempts-log.md).
+             steps: str = "8 16 32", updated_name: str = "updated.har",
+             rordelta: int | None = None, prm_name: str = "default.prm") -> str:
+    """Write the .cmf for the STANDARD GTAP closure. ``rordelta`` selects the
+    capital-account variant (GTAPv7.tab RORDELTA, from GTAPPARM header RDLT):
+
+      * rordelta=1 -> capFlex: investment reallocated so expected returns EQUALIZE
+        (rore uniform). Matches equilibria savf_flag=capFlex.
+      * rordelta=0 -> capFix: investment by fixed capital shares, returns DIFFER by
+        region. Matches equilibria savf_flag=capFix.
+
+    The value is forced in the .cmf with ``xSet`` so we don't depend on the dataset's
+    RDLT header. ``rordelta=None`` (legacy) leaves RORDELTA at the dataset's RDLT value.
+
+    Both variants keep the STANDARD saving closure (dpsave EXOGENOUS — the Julia GTAPv7 /
+    GEMPACK-canonical closure); the earlier `swap dpsave=del_tbalry` (non-standard, savings
+    redistribute) is GONE. See the dev-tools attempts log
+    (2026-07-31-gams-gempack-gap-attempts-log.md).
+    """
     pct = f"{shock_pct:g}"
+    if rordelta is None:
+        variant = "dataset RDLT"
+    else:
+        variant = "capflex (RORDELTA=1)" if int(rordelta) == 1 else "capfix (RORDELTA=0)"
+    # RORDELTA is a GEMPACK Coefficient read from the GTAPPARM header RDLT — it is NOT
+    # settable in the .cmf (that is `xSet`, for sets only). `prepare` therefore writes the
+    # RDLT header of the run_dir's default.prm to the requested value (see _force_rdlt).
+    rline = ""
     return f"""! {name} uniform {pct}% shock to import tariff power (tm) - GEMPACK / GTAPv7
-! STANDARD GTAP closure (verbatim from GEMPACK gtapv7.cmf): dpsave EXOGENOUS (fixed saving
-! share), cgdslack/psaveslack/tradslack exogenous, no swaps. Matches equilibria
-! savf_flag=capFix and the Julia GTAPv7 model (5-sig-fig GEMPACK reproduction).
+! STANDARD GTAP closure (GEMPACK gtapv7.cmf): dpsave EXOGENOUS, no swaps. Capital-account
+! variant: {variant}. capFix (RORDELTA=0) returns differ; capFlex (RORDELTA=1) equalize.
 Auxiliary files = C:\\runGTAP375\\gtapv7 ;
 
 file GTAPSETS = sets.har ;
 file GTAPDATA = basedata.har ;
-file GTAPPARM = default.prm ;
+file GTAPPARM = {prm_name} ;
 file GTAPSUM  = summary.har ;
 file WELVIEW  = decomp.har ;
 file GTAPVOL  = volume.har ;
@@ -126,9 +145,9 @@ Automatic accuracy = no ;
 Subintervals = 1 ;
 
 Verbal Description =
-{name} uniform {pct}pct shock to import tariff power (tm), standard GTAP closure ;
+{name} uniform {pct}pct shock to import tariff power (tm), standard GTAP closure, {variant} ;
 
-{EXOG_BLOCK}
+{rline}{EXOG_BLOCK}
 
 Shock tm = uniform {pct} ;
 
@@ -139,11 +158,38 @@ Extrapolation accuracy file = NO ;
 """
 
 
-def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32") -> tuple[Path, str]:
-    """Write a config-tagged .cmf for (name, shock_pct, steps); return (run_dir, tag).
+def _force_rdlt(prm_path: Path, rordelta: int) -> None:
+    """Rewrite the GTAPPARM header RDLT (the RORDELTA coefficient) in-place to ``rordelta``.
 
-    The .cmf is named <tag>.cmf (not the fixed tm10.cmf) so the linearization-study
-    grid — same dataset, many (shock, steps) configs — does not overwrite itself.
+    RORDELTA selects the capital-account closure (GTAPv7.tab 2528: read from header RDLT):
+    0 = capFix (returns differ), 1 = capFlex (returns equalize). Editing the .prm header is
+    the robust way to force it — RORDELTA is a Coefficient, not settable from the .cmf.
+    """
+    import numpy as np
+
+    from equilibria.babel.har import write_har
+    from equilibria.babel.har.reader import read_har as _rd
+
+    hars = _rd(str(prm_path))
+    key = next((k for k in hars if str(k).upper() == "RDLT"), None)
+    if key is None:
+        return  # no RDLT header — leave the .prm as-is (dataset default)
+    ha = hars[key]
+    arr = np.asarray(ha.array, dtype=float)
+    arr[...] = float(rordelta)
+    ha.array = arr
+    write_har(str(prm_path), hars)
+
+
+def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32",
+            rordelta: int | None = None) -> tuple[Path, str]:
+    """Write a config-tagged .cmf for (name, shock_pct, steps[, rordelta]); return
+    (run_dir, tag).
+
+    The .cmf is named <tag>.cmf (not the fixed tm10.cmf) so the grid — same dataset, many
+    (shock, steps, closure) configs — does not overwrite itself. When ``rordelta`` is given
+    the tag/fixtures carry the ``_capfix`` / ``_capflex`` variant so BOTH capital-account
+    closures coexist in the fixtures dir.
     """
     ds_dir = DATA_DIR / name
     regs = regions(ds_dir)
@@ -151,10 +197,21 @@ def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32") -> tuple
     run_dir.mkdir(parents=True, exist_ok=True)
     for f in INPUT_FILES:
         shutil.copy2(ds_dir / f, run_dir / f)
-    tag = config_tag(shock_pct, steps)
-    cmf = make_cmf(name, regs, shock_pct, steps, updated_name=f"updated_{tag}.har")
+    tag = config_tag(shock_pct, steps, rordelta)
+    # Force the capital-account closure by writing RDLT into a VARIANT-SPECIFIC .prm
+    # (RORDELTA is a Coefficient, not settable from the .cmf). A per-variant .prm avoids the
+    # two closures overwriting a shared default.prm in the same run_dir. rordelta=None keeps
+    # the plain default.prm (dataset default).
+    if rordelta is not None:
+        prm_name = f"default_{tag}.prm"
+        shutil.copy2(ds_dir / "default.prm", run_dir / prm_name)
+        _force_rdlt(run_dir / prm_name, int(rordelta))
+    else:
+        prm_name = "default.prm"
+    cmf = make_cmf(name, regs, shock_pct, steps, updated_name=f"updated_{tag}.har",
+                   rordelta=rordelta, prm_name=prm_name)
     (run_dir / f"{tag}.cmf").write_text(cmf, encoding="ascii")
-    print(f"  {name:14s} {tag:22s} residual={regs[-1]:<10s} regions={len(regs):2d}")
+    print(f"  {name:14s} {tag:26s} residual={regs[-1]:<10s} regions={len(regs):2d}")
     return run_dir, tag
 
 
@@ -286,19 +343,29 @@ def main() -> int:
                          "every config (solve + sltoht + copy to fixtures)")
     ap.add_argument("--datasets", nargs="*", default=DATASETS,
                     help="subset of datasets to run")
+    ap.add_argument("--rordelta", type=int, choices=[0, 1], action="append",
+                    help="capital-account closure variant(s) to generate: 0=capFix "
+                         "(returns differ), 1=capFlex (returns equalize). Repeat for both "
+                         "(--rordelta 0 --rordelta 1). Default: both, so the fixtures dir "
+                         "carries _capfix and _capflex side by side. Omit-and-empty keeps "
+                         "the legacy single variant (dataset RDLT).")
     args = ap.parse_args()
 
     configs = _grid_configs() if args.grid else [(args.shock_pct, args.steps)]
+    # Default: generate BOTH closures so capFix (fast gate) and capFlex (GEMPACK-faithful)
+    # fixtures coexist. `--rordelta` can restrict to one.
+    rordeltas = args.rordelta if args.rordelta else [0, 1]
 
     FIXTURES.mkdir(parents=True, exist_ok=True)
     print(f"[1/3] generating {len(configs)} config(s) × {len(args.datasets)} dataset(s) "
-          f"into {RUN_ROOT}")
+          f"× {len(rordeltas)} closure(s) {rordeltas} into {RUN_ROOT}")
     # jobs: (name, run_dir, tag, shock_pct, steps)
     jobs: list[tuple[str, Path, str, float, str]] = []
     for name in args.datasets:
         for shock_pct, steps in configs:
-            run_dir, tag = prepare(name, shock_pct, steps)
-            jobs.append((name, run_dir, tag, shock_pct, steps))
+            for rd in rordeltas:
+                run_dir, tag = prepare(name, shock_pct, steps, rordelta=rd)
+                jobs.append((name, run_dir, tag, shock_pct, steps))
 
     if args.emit_bat:
         emit_bat(jobs, RUN_ROOT / "run_study_windows.bat")
