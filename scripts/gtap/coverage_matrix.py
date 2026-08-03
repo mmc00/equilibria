@@ -273,10 +273,13 @@ _MCP_ROWS: list[Row] = [
         "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x3", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
+    # 3x4 self-seeds capFlex (no local GAMS GDX — its shock is 2168 eqs > PATH's 1000-eq demo
+    # cap): base_calibrated + risk twin-solve fallback. ifsub=1 → 99.2% within 1pp (median
+    # 0.043pp), on par with 3x3. Floor 95 leaves solver-noise margin.
     Row("gtap7_3x4", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x4", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 68.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     # capFlex 5x5 = 97.1% within 1pp (median 0.035pp); the sub-1pp cells are qga[Agri] where
     # GAMS/ours use gov CES sigma=1.01 vs GEMPACK Cobb-Douglas — a spec diff, not linearization.
     # Floor 90 leaves margin.
