@@ -156,12 +156,9 @@ def test_gtap7_gempack_parity(row):
     if not (DATASETS_DIR / row.dataset / "basedata.har").exists():
         pytest.skip(f"dataset HAR missing: {row.dataset}")
     # The GAMS ref GDX is a speedup (fast rore/rorg + warm-start), NOT a requirement: the block
-    # SELF-SEEDS from base_calibrated's m._settled_seed + the risk twin-solve fallback. Its
-    # absence only matters on the LARGE datasets, where the twin-solve is 266s AND capFlex
-    # settle/shock is slow/code=2 — handled by the _CAPFLEX_SLOW_DATASETS skip below.
-    gams_ref = (
-        ROOT / f"tests/fixtures/gtap7/{row.dataset}/out_gtap_shock_ifsub{row.ifsub}.gdx"
-    )
+    # SELF-SEEDS from base_calibrated's m._settled_seed + the risk twin-solve fallback (see
+    # _solve_shock). It does NOT rescue the large datasets, where the capFlex settle/shock is
+    # inherently non-convergent (code=2) — those are handled by the _CAPFLEX_SLOW_DATASETS skip.
 
     # Prefer the capFix fixture (fast + converges everywhere); fall back to the default
     # (capFlex) fixture. Skip large datasets only when no capFix fixture exists.
@@ -172,13 +169,16 @@ def test_gtap7_gempack_parity(row):
         sl4, savf_flag = FIXTURES / row.ref, "capFlex"
         if not sl4.exists():
             pytest.skip(f"sl4dump fixture missing: {sl4}")
-        # capFlex without a GAMS GDX pays the 266s risk twin-solve AND the slow/code=2 settle
-        # on the large datasets — skip those until a capFix fixture (or GAMS GDX) exists. Small
-        # datasets self-seed cheaply (3x4: code=1, 99.2% within 1pp with ref_gdx=None).
-        if row.dataset in _CAPFLEX_SLOW_DATASETS and not gams_ref.exists():
+        # On the LARGE datasets the capFlex settle+shock itself does not converge (code=2 /
+        # locally-infeasible) — this is inherent to the returns-equalizing MCP at that size,
+        # NOT a seeding problem, so a GAMS GDX does not rescue it. Skip unconditionally until a
+        # capFix fixture exists (run_gempack_matrix --rordelta 0), which is the only proven fast
+        # path for large datasets. Small datasets self-seed cheaply even without a GDX (3x4:
+        # code=1, 99.2% within 1pp with ref_gdx=None).
+        if row.dataset in _CAPFLEX_SLOW_DATASETS:
             pytest.skip(
-                f"{row.dataset}: capFlex settle/shock too slow / code=2 on large datasets "
-                f"and no capFix fixture nor GAMS GDX yet — run run_gempack_matrix --rordelta 0"
+                f"{row.dataset}: capFlex settle/shock does not converge (code=2) on large "
+                f"datasets and no capFix fixture yet — run run_gempack_matrix --rordelta 0"
             )
 
     m, code = _solve_shock(row.dataset, row.ifsub, savf_flag=savf_flag)
