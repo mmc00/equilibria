@@ -82,6 +82,54 @@ capFlex — implemented earlier as a "selectable closure" — was not an experim
 is THE answer. The GEMPACK parity gate now uses `savf_flag=capFlex` + base_calibrated on the
 block model.
 
+## 3x4 activated WITHOUT NEOS (the GAMS GDX seed is a speedup, not a requirement)
+
+gtap7_3x4 ships a GEMPACK fixture (`sl4dump_gtap7_3x4_tm10.har`) but **no local GAMS ref GDX**:
+its shock is 2168 equations, over PATH's 1000-equation demo cap, so it can't be solved by the
+local community license (the base solves Optimal; the shock returns "Licensing Problem"). The
+initial plan was a NEOS round-trip to produce the seed GDX.
+
+That turned out to be unnecessary. The gate consumed the GDX for two things — (1) capFlex's
+benchmark `rore/rorg` (fast path) and (2) a shock warm-start — **both of which have fallbacks**:
+`base_calibrated=True` stamps a model-consistent `m._settled_seed` (the block SELF-SEEDS), and
+`_calibrate_capflex_risk` falls back to a capFix twin-solve when `ref_gdx=None`. Running the 3x4
+gate with `ref_gdx=None` gives **shock code=1, 99.2% within 1pp (median 0.043pp)** — on par with
+3x3's 99.5%. Both ifsub arms pass the 95 floor in ~14s.
+
+So the gate now passes the GAMS GDX **only if it exists** (`gdx = _gdx if _gdx.exists() else None`)
+and skips a dataset only when it is BOTH large (`_CAPFLEX_SLOW_DATASETS`, where the twin-solve is
+266s and capFlex settle/shock is slow/code=2) AND lacks a GAMS GDX. Small datasets self-seed
+cheaply. 3x4 floors raised 68 → 95.
+
+## 10x7 / 15x10 activated via NLP (their capFix MCP does not converge in PATH — NEOS NOT needed)
+
+Once the Windows-produced capFix fixtures landed (`run_gempack_matrix --rordelta 0` →
+`sl4dump_<ds>_tm10_s8-16-32_capfix.har`, commit f135338), activating the large datasets exposed a
+solver — NOT model — limit. The capFix **MCP** does not converge in PATH's in-process capi at that
+size (10x7: code=2 in ~6min; 15x10: spins ~48min at 97% CPU). But the SAME model **is feasible as
+an NLP**: with `EQUILIBRIA_GTAP_SOLVE_NLP=1` (maximize walras, IPOPT — read per-call inside
+`run_gtap._run_path_capi_nonlinear_full`, which `solve_multiperiod` lazy-loads), IPOPT closes it:
+
+| dataset | capFix MCP (PATH) | capFix NLP (IPOPT) | vs capFix fixture |
+|---|---|---|---|
+| 10x7  | code=2, ~6min ❌ | **code=1, 33s** ✅ | **97.0%** within 1pp (median 0.103pp) |
+| 15x10 | spins ~48min ❌ | **code=1, ~20min** ✅ | **91.5%** within 1pp (median 0.200pp) |
+
+So — as with the 3x4 — **NEOS turned out unnecessary**: the model was feasible, only the MCP solver
+(PATH) failed on the large systems; switching that solve to NLP (IPOPT), which the repo already
+supports, converges locally. The gate runs 10x7/15x10 with `solve_nlp=True`.
+
+Two subtleties fixed along the way:
+- **Fixture name glob.** The study grid emits `..._tm10_s8-16-32_capfix.har`; `_capfix_fixture_for`
+  now also globs `sl4dump_<ds>_*_capfix.har` so the step-tag is matched.
+- **Env var must cover the BUILD, not just the solve.** Setting `EQUILIBRIA_GTAP_SOLVE_NLP` only
+  around `solve_multiperiod` left the 10x7 build in a mismatched mode → nondeterministic code=2.
+  It is now set for the whole `_solve_shock` (build + solve), mirroring `test_gtap7_nlp_parity`.
+
+15x10 is `@pytest.mark.slow` (20min) — `run_parity_gates.py` runs `-m "not slow"`, so it is
+excluded from the mandatory pre-push sweep but runnable by hand
+(`pytest -m slow -k 15x10`). Floors: 10x7 → 95, 15x10 → 88.
+
 ## Files
 
 - `scripts/gtap/run_gempack_matrix.py` — `make_cmf` corrected (standard closure, no swap).

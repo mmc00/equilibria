@@ -77,7 +77,9 @@ def main() -> int:
                           capture_output=True, text=True).stdout.strip()
     print(f"Running mandatory GTAP parity gates at {head}")
 
-    rc = _run(repo, [sys.executable, "-m", "pytest", *GATE_TESTS, "-q"])
+    # Exclude @slow tests (e.g. the 15x10 GEMPACK NLP, ~20min) from the mandatory pre-push
+    # sweep — they are runnable by hand (`pytest -m slow`) and belong in a nightly job.
+    rc = _run(repo, [sys.executable, "-m", "pytest", *GATE_TESTS, "-q", "-m", "not slow"])
     if rc != 0:
         print("\nGATES RED — no stamp written. Fix the regression before pushing.")
         return rc

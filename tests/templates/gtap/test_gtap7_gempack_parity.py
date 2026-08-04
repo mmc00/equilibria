@@ -38,52 +38,86 @@ def test_no_gempack_rows_is_a_clean_skip():
         pytest.skip("no reference='gempack' rows yet — awaiting RunGTAP SL4 dump")
 
 
-def _solve_shock(dataset: str, ifsub: int):
-    """Build + seed + solve base→check→shock (gtap pure MCP) and return the model."""
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+def _solve_shock(
+    dataset: str, ifsub: int, savf_flag: str = "capFlex", solve_nlp: bool = False
+):
+    """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
-    d = DATASETS_DIR / dataset
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=d / "basedata.har",
-        sets_path=d / "sets.har",
-        default_path=d / "default.prm",
-        baserate_path=d / "baserate.har",
-    )
-    rr = list(p.sets.r)[-1]
-    # GEMPACK's RunGTAP standard closure EQUALIZES returns (rore uniform) — the capFlex
-    # capital-account closure — and its fixtures are base-calibrated. Measuring against the
-    # GEMPACK fixture therefore uses savf_flag=capFlex + base_calibrated on the block model
-    # (the monolith capFix closure, differing returns, does NOT match this reference).
-    ac = GTAPClosureConfig(
-        name="base",
-        closure_type="MCP",
-        capital_mobility="sluggish",
-        fix_endowments=False,
-        fix_taxes=False,
-        fix_technology=False,
-        if_sub=bool(ifsub),
-        savf_flag="capFlex",
-        numeraire="pnum",
-    )
-    gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
-    # Pass ref_gdx so capFlex reads benchmark rore/rorg from the GAMS solution (fast) instead
-    # of a full capFix twin-solve (266s on 10x7).
-    m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
-    res = solve_multiperiod(
-        m,
-        p,
-        ac,
-        ref_gdx=gdx,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        holdfix_cd=True,
-        mode="gtap",
-    )
+    ``savf_flag`` selects the capital-account closure to MATCH the GEMPACK fixture's:
+      * "capFlex" (RORDELTA=1): returns equalize — matches the `_capflex` / default fixtures.
+        Faithful but the returns-equalizing MCP is slow / non-convergent on large datasets.
+      * "capFix" (RORDELTA=0): returns differ — matches the `_capfix` fixtures.
+
+    ``solve_nlp`` runs the model as an NLP (maximize walras, IPOPT) instead of the PATH MCP.
+    On the LARGE datasets the capFix MCP does not converge in PATH's in-process capi (10x7:
+    code=2 in 6min; 15x10: spins for ~48min), but the SAME model is feasible as an NLP —
+    IPOPT closes it (10x7: code=1 in 33s @97.0%; 15x10: code=1 in ~20min @91.5% vs the capFix
+    fixture). NLP is faithful (tolerances cancel), so it is the gate path for large datasets.
+    """
+    import os as _os
+
+    # NLP mode (maximize walras, IPOPT — read per-call inside run_gtap._run_path_capi_
+    # nonlinear_full, which solve_multiperiod lazy-loads) is toggled by this env var. Set it
+    # for the WHOLE _solve_shock (build + solve), mirroring test_gtap7_nlp_parity, and restore
+    # it after — setting it only around the solve left the 10x7 build in a mismatched mode and
+    # gave a nondeterministic code=2.
+    _prev_nlp = _os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP")
+    if solve_nlp:
+        _os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"
+    else:
+        _os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
+    try:
+        from equilibria.templates.gtap import GTAPParameters
+        from equilibria.templates.gtap.gtap_block_model import build_block_model
+        from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+        from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
+        d = DATASETS_DIR / dataset
+        p = GTAPParameters()
+        p.load_from_har(
+            basedata_path=d / "basedata.har",
+            sets_path=d / "sets.har",
+            default_path=d / "default.prm",
+            baserate_path=d / "baserate.har",
+        )
+        rr = list(p.sets.r)[-1]
+        ac = GTAPClosureConfig(
+            name="base",
+            closure_type="MCP",
+            capital_mobility="sluggish",
+            fix_endowments=False,
+            fix_taxes=False,
+            fix_technology=False,
+            if_sub=bool(ifsub),
+            savf_flag=savf_flag,
+            numeraire="pnum",
+        )
+        # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
+        # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
+        # absent (e.g. gtap7_3x4 ships no local GAMS ref — its shock is 2168 eqs > PATH's 1000-eq
+        # demo cap), the block SELF-SEEDS: base_calibrated stamps m._settled_seed, and the risk
+        # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1, 99.2% within 1pp
+        # vs the GEMPACK fixture (median 0.043pp) with ref_gdx=None. So pass the GDX only if it
+        # exists; on small datasets the twin-solve fallback is cheap enough.
+        _gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
+        gdx = _gdx if _gdx.exists() else None
+        m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
+        res = solve_multiperiod(
+            m,
+            p,
+            ac,
+            ref_gdx=gdx,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            holdfix_cd=True,
+            mode="gtap",
+        )
+    finally:
+        if _prev_nlp is None:
+            _os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
+        else:
+            _os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = _prev_nlp
     return m, int(res["shock"]["code"])
 
 
@@ -118,39 +152,91 @@ def _measure_pp(m, sl4dump: Path):
     return within, statistics.median(diffs)
 
 
-# capFlex (the GEMPACK-faithful closure — the current fixtures equalize returns, RORDELTA=1)
-# does not scale to the large datasets: base-calibrated capFlex runs a full returns-equalizing
-# MCP settle + shock solve that is very slow and does not converge (code=2) on 10x7/15x10. The
-# gate therefore measures capFlex on the small datasets (3x3=99.5%, 5x5=97.1%). The large ones
-# are covered by the GAMS NLP/MCP parity gates already; once the capFix fixtures are generated
-# (run_gempack_matrix --rordelta 0), the gate can use the fast-converging capFix closure there.
+# The GEMPACK-faithful closure is capFlex (returns EQUALIZE, RORDELTA=1) — that is what the
+# default fixtures use. But base-calibrated capFlex runs a returns-equalizing MCP settle +
+# shock that is slow / non-convergent (code=2) on the large datasets. capFix (RORDELTA=0,
+# returns differ) solves fast + converges everywhere. So the gate PREFERS a capFix fixture
+# when one exists (run_gempack_matrix --rordelta 0), else falls back to the capFlex fixture,
+# and skips the large datasets only when neither works.
 _CAPFLEX_SLOW_DATASETS = {"gtap7_10x7", "gtap7_15x10", "gtap7_20x41"}
 
+# Large datasets whose capFix MCP does not converge in PATH's in-process capi but ARE feasible
+# as an NLP (maximize walras, IPOPT). The gate runs these via solve_nlp=True. Measured:
+#   10x7  -> code=1 in 33s,  97.0% within 1pp (median 0.103pp)
+#   15x10 -> code=1 in ~20m, 91.5% within 1pp (median 0.200pp)  — SLOW (see _SLOW_DATASETS)
+_NLP_MODE_DATASETS = {"gtap7_10x7", "gtap7_15x10"}
+# Datasets whose NLP solve is too slow for the normal sweep (~20min). Marked @slow so they are
+# excluded from run_parity_gates (which runs `-m "not slow"`) but still runnable by hand:
+#   uv run pytest tests/templates/gtap/test_gtap7_gempack_parity.py -m slow -k 15x10
+_SLOW_DATASETS = {"gtap7_15x10", "gtap7_20x41"}
 
-@pytest.mark.parametrize(
-    "row", GEMPACK_ROWS, ids=lambda r: f"{r.dataset}-ifsub{r.ifsub}"
-)
+
+def _gempack_params():
+    """GEMPACK rows as pytest params, tagging the slow (large-NLP) datasets with @slow."""
+    out = []
+    for r in GEMPACK_ROWS:
+        marks = [pytest.mark.slow] if r.dataset in _SLOW_DATASETS else []
+        out.append(pytest.param(r, marks=marks, id=f"{r.dataset}-ifsub{r.ifsub}"))
+    return out
+
+
+def _capfix_fixture_for(row) -> Path | None:
+    """Return the dataset's capFix GEMPACK fixture if one has been generated, else None.
+
+    run_gempack_matrix --rordelta 0 emits `sl4dump_<ds>_<tag>_capfix.har`, where <tag> carries
+    the shock+steps config (e.g. `tm10_s8-16-32`). We accept the exact row.ref-derived name, the
+    plain `tm10` form, or — as a fallback — ANY step-tagged capFix dump for the dataset (the
+    default study grid emits `tm10_s8-16-32_capfix`, which neither exact form matches)."""
+    stem = row.ref[: -len(".har")] if row.ref.endswith(".har") else row.ref
+    cands = [
+        FIXTURES / f"{stem}_capfix.har",
+        FIXTURES / f"sl4dump_{row.dataset}_tm10_capfix.har",
+    ]
+    # Fallback: match any step-tagged capFix dump for this dataset (sorted for determinism).
+    cands += sorted(FIXTURES.glob(f"sl4dump_{row.dataset}_*_capfix.har"))
+    return next((c for c in cands if c.exists()), None)
+
+
+@pytest.mark.parametrize("row", _gempack_params())
 def test_gtap7_gempack_parity(row):
-    sl4 = FIXTURES / row.ref
-    if not sl4.exists():
-        pytest.skip(f"sl4dump fixture missing: {sl4}")
     if not (DATASETS_DIR / row.dataset / "basedata.har").exists():
         pytest.skip(f"dataset HAR missing: {row.dataset}")
-    if row.dataset in _CAPFLEX_SLOW_DATASETS:
-        pytest.skip(
-            f"{row.dataset}: capFlex (returns-equalize) settle/shock is too slow / code=2 "
-            f"on large datasets — use the capFix fixture (RORDELTA=0) once generated"
-        )
-    # The block model seeds the shock from the GAMS ifsub1 GDX; skip datasets that lack
-    # it (e.g. gtap7_3x4 ships no local GAMS ref) rather than erroring on a missing seed.
-    gams_ref = (
-        ROOT / f"tests/fixtures/gtap7/{row.dataset}/out_gtap_shock_ifsub{row.ifsub}.gdx"
-    )
-    if not gams_ref.exists():
-        pytest.skip(f"GAMS ref GDX missing (needed to seed the shock): {gams_ref}")
+    # The GAMS ref GDX is a speedup (fast rore/rorg + warm-start), NOT a requirement: the block
+    # SELF-SEEDS from base_calibrated's m._settled_seed + the risk twin-solve fallback (see
+    # _solve_shock). It does NOT rescue the large datasets, where the capFlex settle/shock is
+    # inherently non-convergent (code=2) — those are handled by the _CAPFLEX_SLOW_DATASETS skip.
 
-    m, code = _solve_shock(row.dataset, row.ifsub)
-    assert code == 1, f"[{row.dataset}] Python shock did not converge (code={code})"
+    # Prefer the capFix fixture; fall back to the default (capFlex) fixture.
+    #   * Small datasets: capFlex MCP self-seeds and converges (3x3/3x4/5x5).
+    #   * Large datasets: the capFix MCP does NOT converge in PATH's capi, but the same model
+    #     IS feasible as an NLP — so with a capFix fixture present we run solve_nlp=True. Without
+    #     a capFix fixture there is no convergent path at all, so we skip.
+    capfix_sl4 = _capfix_fixture_for(row)
+    if capfix_sl4 is not None:
+        sl4, savf_flag = capfix_sl4, "capFix"
+    else:
+        sl4, savf_flag = FIXTURES / row.ref, "capFlex"
+        if not sl4.exists():
+            pytest.skip(f"sl4dump fixture missing: {sl4}")
+        # No capFix fixture: the large-dataset capFlex MCP is non-convergent (code=2) and there
+        # is no NLP fixture to compare against either — skip until a capFix fixture exists
+        # (run_gempack_matrix --rordelta 0). Small datasets fall through and run capFlex.
+        if row.dataset in _CAPFLEX_SLOW_DATASETS:
+            pytest.skip(
+                f"{row.dataset}: capFlex MCP does not converge (code=2) on large datasets and "
+                f"no capFix fixture yet — run run_gempack_matrix --rordelta 0"
+            )
+
+    # Large datasets run as an NLP (their capFix MCP does not converge in PATH); small ones
+    # keep the native MCP path.
+    solve_nlp = row.dataset in _NLP_MODE_DATASETS
+    m, code = _solve_shock(
+        row.dataset, row.ifsub, savf_flag=savf_flag, solve_nlp=solve_nlp
+    )
+    assert code == 1, (
+        f"[{row.dataset}/{savf_flag}/{'NLP' if solve_nlp else 'MCP'}] shock did not "
+        f"converge (code={code})"
+    )
 
     within, med = _measure_pp(m, sl4)
     assert within is not None, f"[{row.dataset}] no comparable quantity cells"
@@ -159,6 +245,6 @@ def test_gtap7_gempack_parity(row):
     # in stage_floors["shock"]); median |Δpp| must stay small.
     floor = dict(row.stage_floors)["shock"] / 100.0
     assert within >= floor, (
-        f"[{row.dataset}/gempack] {within * 100:.1f}% of quantity cells within 1pp "
-        f"< floor {floor * 100:.0f}% (median |Δ|={med * 100:.2f}pp) — regression"
+        f"[{row.dataset}/gempack/{savf_flag}] {within * 100:.1f}% of quantity cells within "
+        f"1pp < floor {floor * 100:.0f}% (median |Δ|={med * 100:.2f}pp) — regression"
     )
