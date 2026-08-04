@@ -287,14 +287,17 @@ _MCP_ROWS: list[Row] = [
         "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
     Row("gtap7_5x5", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
+    # Large datasets: capFix fixture (run_gempack_matrix --rordelta 0), solved as an NLP (their
+    # capFix MCP does not converge in PATH's capi). 10x7 -> 97.0% within 1pp in 33s; 15x10 ->
+    # 91.5% in ~20min (marked @slow in the gate, excluded from the normal parity sweep).
     Row("gtap7_10x7", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 58.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_10x7", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 58.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_15x10", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 46.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 88.0),), mode="pure", reference="gempack"),
     Row("gtap7_15x10", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 46.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 88.0),), mode="pure", reference="gempack"),
 ]
 ROWS.extend(_MCP_ROWS)
 
