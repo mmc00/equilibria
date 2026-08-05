@@ -76,6 +76,22 @@ def _add(model, name, rule_pairs):
     return name, con
 
 
+def _add_raw(model, name, rule_pairs):
+    """Attach a NON-log Constraint (lhs == rhs) per key. For eqs Julia writes
+    without log() (uepriv, uelas)."""
+    idxset = pyo.Set(initialize=[k for k, _, _ in rule_pairs])
+    model.add_component(f"_{name}_idx", idxset)
+    data = {tuple(k): (lhs, rhs) for k, lhs, rhs in rule_pairs}
+
+    def _rule(m, *key):
+        lhs, rhs = data[tuple(key)]
+        return lhs == rhs
+
+    con = pyo.Constraint(idxset, rule=_rule)
+    model.add_component(name, con)
+    return name, con
+
+
 def _production(model, sol):
     regs = sol["sets"]["reg"]
     acts = sol["sets"]["acts"]
@@ -941,11 +957,188 @@ def _final_demand(model, sol):
     return out
 
 
+def _income(model, sol):
+    regs = sol["sets"]["reg"]
+    acts = sol["sets"]["acts"]
+    comm = sol["sets"]["comm"]
+    endw = sol["sets"]["endw"]
+    out = []
+
+    def qfa(c, a, r):
+        return _has(sol, "α_qfa", (c, a, r))
+
+    def qga(c, r):
+        return _has(sol, "α_qga", (c, r))
+
+    def qia(c, r):
+        return _has(sol, "α_qia", (c, r))
+
+    def qxs(c, s, d):
+        return _has(sol, "α_qxs", (c, s, d))
+
+    def qca(c, a, r):
+        return _has(sol, "α_qca", (c, a, r))
+
+    def evfp(e, a, r):
+        return _has(sol, "α_qfe", (e, a, r))
+
+    def T(name, idx):
+        return _get(sol, name, idx)
+
+    # e_ppd / e_ppm: private consumer prices  ppd==pds·tpd, ppm==pms·tpm
+    pairs_d, pairs_m = [], []
+    for c in comm:
+        for r in regs:
+            pairs_d.append(
+                ((c, r), model.ppd[c, r], model.pds[c, r] * T("tpd", (c, r)))
+            )
+            pairs_m.append(
+                ((c, r), model.ppm[c, r], model.pms[c, r] * T("tpm", (c, r)))
+            )
+    out.append(_add(model, "e_ppd", pairs_d))
+    out.append(_add(model, "e_ppm", pairs_m))
+
+    # e_ppa: private value balance  qpa·ppa == ppd·qpd + ppm·qpm
+    pairs = []
+    for c in comm:
+        for r in regs:
+            pairs.append(
+                (
+                    (c, r),
+                    model.qpa[c, r] * model.ppa[c, r],
+                    model.ppd[c, r] * model.qpd[c, r]
+                    + model.ppm[c, r] * model.qpm[c, r],
+                )
+            )
+    out.append(_add(model, "e_ppa", pairs))
+
+    # e_fincome: factor income net of depreciation
+    pairs = []
+    for r in regs:
+        cells = [(e, a) for e in endw for a in acts if evfp(e, a, r)]
+        fac = sum(model.peb[e, a, r] * model.qes[e, a, r] for e, a in cells)
+        pairs.append(
+            ((r,), model.fincome[r], fac - T("δ", (r,)) * model.pinv[r] * model.kb[r])
+        )
+    out.append(_add(model, "e_fincome", pairs))
+
+    # e_y: regional income = fincome + Σ tax revenue (each instrument, power-1)
+    pairs = []
+    for r in regs:
+        rev = model.fincome[r]
+        for c in comm:
+            rev = rev + model.qpd[c, r] * model.pds[c, r] * (T("tpd", (c, r)) - 1)
+            rev = rev + model.qpm[c, r] * model.pms[c, r] * (T("tpm", (c, r)) - 1)
+            if qga(c, r):
+                rev = rev + model.qgd[c, r] * model.pds[c, r] * (T("tgd", (c, r)) - 1)
+                rev = rev + model.qgm[c, r] * model.pms[c, r] * (T("tgm", (c, r)) - 1)
+            if qia(c, r):
+                rev = rev + model.qid[c, r] * model.pds[c, r] * (T("tid", (c, r)) - 1)
+                rev = rev + model.qim[c, r] * model.pms[c, r] * (T("tim", (c, r)) - 1)
+        for c in comm:
+            for a in acts:
+                if qfa(c, a, r):
+                    rev = rev + model.qfd[c, a, r] * model.pfd[c, a, r] / T(
+                        "tfd", (c, a, r)
+                    ) * (T("tfd", (c, a, r)) - 1)
+                    rev = rev + model.qfm[c, a, r] * model.pfm[c, a, r] / T(
+                        "tfm", (c, a, r)
+                    ) * (T("tfm", (c, a, r)) - 1)
+                if qca(c, a, r):
+                    rev = rev + model.qca[c, a, r] * model.ps[c, a, r] * (
+                        T("to", (c, a, r)) - 1
+                    )
+        for e in endw:
+            for a in acts:
+                if evfp(e, a, r):
+                    rev = rev + model.qfe[e, a, r] * model.peb[e, a, r] * (
+                        T("tfe", (e, a, r)) - 1
+                    )
+        for c in comm:
+            for d in regs:
+                if qxs(c, r, d):  # exports from r: pfob/txs revenue
+                    rev = rev + model.qxs[c, r, d] * model.pfob[c, r, d] / T(
+                        "txs", (c, r, d)
+                    ) * (T("txs", (c, r, d)) - 1)
+            for s in regs:
+                if qxs(c, s, r):  # imports into r: pcif·(tms-1)
+                    rev = rev + model.qxs[c, s, r] * model.pcif[c, s, r] * (
+                        T("tms", (c, s, r)) - 1
+                    )
+        pairs.append(((r,), model.y[r], rev))
+    out.append(_add(model, "e_y", pairs))
+
+    # e_uepriv (non-log): uepriv = Σ qpa·ppa·incpar / yp
+    pairs = []
+    for r in regs:
+        num = sum(model.qpa[c, r] * model.ppa[c, r] * T("incpar", (c, r)) for c in comm)
+        pairs.append(((r,), model.uepriv[r], num / model.yp[r]))
+    out.append(_add_raw(model, "e_uepriv", pairs))
+
+    # e_uelas (non-log): uelas = 1 / (σyp/uepriv + σyg + (1-σyp-σyg))
+    pairs = []
+    for r in regs:
+        syp, syg = T("σyp", (r,)), T("σyg", (r,))
+        pairs.append(
+            (
+                (r,),
+                model.uelas[r],
+                1.0 / (syp / model.uepriv[r] + syg + (1.0 - syp - syg)),
+            )
+        )
+    out.append(_add_raw(model, "e_uelas", pairs))
+
+    # e_yp: household income  yp == y·σyp·uelas/uepriv
+    pairs = [
+        (
+            (r,),
+            model.yp[r],
+            model.y[r] * T("σyp", (r,)) * model.uelas[r] / model.uepriv[r],
+        )
+        for r in regs
+    ]
+    out.append(_add(model, "e_yp", pairs))
+
+    # e_yg: government income  yg == y·σyg·uelas
+    pairs = [
+        ((r,), model.yg[r], model.y[r] * T("σyg", (r,)) * model.uelas[r]) for r in regs
+    ]
+    out.append(_add(model, "e_yg", pairs))
+
+    # e_ug: gov utility  ug == yg/pop/pgov
+    pairs = [
+        ((r,), model.ug[r], model.yg[r] / T("pop", (r,)) / model.pgov[r]) for r in regs
+    ]
+    out.append(_add(model, "e_ug", pairs))
+
+    # e_p: consumer price index  p == ppriv·σyp + pgov·σyg + psave·(1-σyp-σyg)
+    pairs = []
+    for r in regs:
+        syp, syg = T("σyp", (r,)), T("σyg", (r,))
+        pairs.append(
+            (
+                (r,),
+                model.p[r],
+                model.ppriv[r] * syp
+                + model.pgov[r] * syg
+                + model.psave[r] * (1.0 - syp - syg),
+            )
+        )
+    out.append(_add(model, "e_p", pairs))
+
+    # e_u: regional utility  u == y/p/pop
+    pairs = [((r,), model.u[r], model.y[r] / model.p[r] / T("pop", (r,))) for r in regs]
+    out.append(_add(model, "e_u", pairs))
+
+    return out
+
+
 _GROUPS = {
     "production": _production,
     "factors": _factors,
     "trade": _trade,
     "final_demand": _final_demand,
+    "income": _income,
 }
 
 
