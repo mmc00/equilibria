@@ -52,16 +52,38 @@ def _fix_orphan_vars(m) -> None:
             v.fix(1.0 if val is None or val != val else val)
 
 
-def solve(sol: dict[str, Any], rordelta: int = 1, tee: bool = False) -> dict[str, Any]:
-    """Build + solve the base model with IPOPT. Returns {status, model}."""
-    m = build_model(sol, rordelta=rordelta)
+def _ipopt():
     opt = pyo.SolverFactory("ipopt")
+    # Julia's solve settings (solve_model.jl): constr_viol_tol=1e-8, bound_push=1e-15.
     opt.options["tol"] = 1e-8
     opt.options["constr_viol_tol"] = 1e-8
-    res = opt.solve(m, tee=tee, load_solutions=True)
+    opt.options["bound_push"] = 1e-15
+    return opt
+
+
+def solve(sol: dict[str, Any], rordelta: int = 1, tee: bool = False) -> dict[str, Any]:
+    """Build + solve the base model with IPOPT. Returns {status, ok, model}."""
+    m = build_model(sol, rordelta=rordelta)
+    res = _ipopt().solve(m, tee=tee, load_solutions=True)
     tc = str(res.solver.termination_condition)
-    return {
-        "status": tc,
-        "ok": tc in ("optimal", "locallyOptimal"),
-        "model": m,
-    }
+    return {"status": tc, "ok": tc in ("optimal", "locallyOptimal"), "model": m}
+
+
+def solve_shock(
+    sol: dict[str, Any],
+    tariff_power: float = 1.10,
+    rordelta: int = 1,
+    tee: bool = False,
+) -> dict[str, Any]:
+    """Solve base, then re-pin every bilateral tms to `tariff_power` and re-solve
+    from the base point (mirrors Julia setting mc.data["tms"]=power + run_model!).
+    """
+    m = build_model(sol, rordelta=rordelta)
+    _ipopt().solve(m, tee=False, load_solutions=True)  # base (warm start)
+    # apply the import-tariff shock: re-fix tms to the shocked power everywhere
+    tms = m.component("tms")
+    for idx in tms:
+        tms[idx].fix(tariff_power)
+    res = _ipopt().solve(m, tee=tee, load_solutions=True)
+    tc = str(res.solver.termination_condition)
+    return {"status": tc, "ok": tc in ("optimal", "locallyOptimal"), "model": m}

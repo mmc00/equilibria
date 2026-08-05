@@ -46,6 +46,38 @@ def dump_solution(
     return csv
 
 
+_SHOCK_SCRIPT = _HERE.parents[3] / "scripts" / "gtap_julia" / "dump_shock_solution.jl"
+
+
+def _dump_shock_solution(
+    dataset: str, tariff_power: float, out_dir: Path | str, timeout: int = 900
+) -> Path:
+    """Run Julia to the SHOCKED solution and dump all vars — the shock oracle."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    slug = "sample" if dataset == "sample" else Path(dataset).name
+    csv = out / f"julia_{slug}_shocksol.csv"
+    res = subprocess.run(
+        [
+            str(_JULIA),
+            f"--project={_PKG}",
+            str(_SHOCK_SCRIPT),
+            dataset,
+            str(tariff_power),
+            str(csv),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if res.returncode != 0 or ">>> DONE" not in res.stdout:
+        raise RuntimeError(
+            f"Julia shock dump failed (rc={res.returncode}).\n"
+            f"stdout tail:\n{res.stdout[-1500:]}\nstderr tail:\n{res.stderr[-1500:]}"
+        )
+    return csv
+
+
 def load_solution(csv: Path | str) -> dict[str, Any]:
     """Parse the dump into a structured dict.
 
