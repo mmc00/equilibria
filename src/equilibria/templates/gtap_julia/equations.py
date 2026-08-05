@@ -716,10 +716,236 @@ def _trade(model, sol):
     return out
 
 
+def _cde_share(alpha, beta, e, u, prices, income, i):
+    """Symbolic CDE demand for good i (Pyomo expression). Mirrors Julia cde() x[i].
+
+    x_i = w_i·(p_i/c)^(-α_i) / Σ_j w_j·(p_j/c)^(1-α_j),  w_j = β_j·u^(e_j(1-α_j))(1-α_j)
+    """
+    w = [
+        b * u ** (ej * (1.0 - a)) * (1.0 - a)
+        for a, b, ej in zip(alpha, beta, e, strict=True)
+    ]
+    denom = sum(
+        wj * (p / income) ** (1.0 - a)
+        for wj, p, a in zip(w, prices, alpha, strict=True)
+    )
+    return w[i] * (prices[i] / income) ** (-alpha[i]) / denom
+
+
+def _final_demand(model, sol):
+    regs = sol["sets"]["reg"]
+    comm = sol["sets"]["comm"]
+    out = []
+
+    def qga(c, r):
+        return _has(sol, "α_qga", (c, r))
+
+    def qia(c, r):
+        return _has(sol, "α_qia", (c, r))
+
+    # e_qpa: private demand (CDE) per good  qpa[c]/pop == cde(...)[c]
+    for c in comm:
+        pairs = []
+        for r in regs:
+            alpha = [1.0 - _get(sol, "subpar", (cc, r)) for cc in comm]
+            beta = [_get(sol, "β_qpa", (cc, r)) for cc in comm]
+            e = [_get(sol, "incpar", (cc, r)) for cc in comm]
+            prices = [model.ppa[cc, r] for cc in comm]
+            i = comm.index(c)
+            income = model.yp[r] / _get(sol, "pop", (r,))
+            lhs = model.qpa[c, r] / _get(sol, "pop", (r,))
+            rhs = _cde_share(alpha, beta, e, model.up[r], prices, income, i)
+            pairs.append(((c, r), lhs, rhs))
+        if pairs:
+            out.append(_add(model, f"e_qpa_{c}", pairs))
+
+    # e_qpdqpm: Armington split of qpa into {qpd, qpm}
+    pairs_d, pairs_m = [], []
+    for c in comm:
+        for r in regs:
+            prices = [model.ppd[c, r], model.ppm[c, r]]
+            alphas = [
+                _get(sol, "α_qpdqpm", ("dom", c, r)),
+                _get(sol, "α_qpdqpm", ("imp", c, r)),
+            ]
+            sigma = _get(sol, "esubd", (c, r))
+            gamma = _get(sol, "γ_qpdqpm", (c, r))
+            pairs_d.append(
+                (
+                    (c, r),
+                    model.qpd[c, r],
+                    _ces_input(model.qpa[c, r], prices, alphas, sigma, gamma, 0),
+                )
+            )
+            pairs_m.append(
+                (
+                    (c, r),
+                    model.qpm[c, r],
+                    _ces_input(model.qpa[c, r], prices, alphas, sigma, gamma, 1),
+                )
+            )
+    out.append(_add(model, "e_qpd", pairs_d))
+    out.append(_add(model, "e_qpm", pairs_m))
+
+    # e_ppa: private consumption price index  ppriv·Σqpa == Σ ppa·qpa
+    pairs = []
+    for r in regs:
+        qsum = sum(model.qpa[c, r] for c in comm)
+        vsum = sum(model.ppa[c, r] * model.qpa[c, r] for c in comm)
+        pairs.append(((r,), model.ppriv[r] * qsum, vsum))
+    out.append(_add(model, "e_ppriv", pairs))
+
+    # e_qga: government demand  pga·qga == yg·α_qga
+    pairs = []
+    for c in comm:
+        for r in regs:
+            if qga(c, r):
+                pairs.append(
+                    (
+                        (c, r),
+                        model.pga[c, r] * model.qga[c, r],
+                        model.yg[r] * _get(sol, "α_qga", (c, r)),
+                    )
+                )
+    out.append(_add(model, "e_qga", pairs))
+
+    # e_pgov: gov price index
+    pairs = []
+    for r in regs:
+        cells = [c for c in comm if qga(c, r)]
+        qsum = sum(model.qga[c, r] for c in cells)
+        vsum = sum(model.qga[c, r] * model.pga[c, r] for c in cells)
+        pairs.append(((r,), model.pgov[r] * qsum, vsum))
+    out.append(_add(model, "e_pgov", pairs))
+
+    # e_qgdqgm: Armington split of qga into {qgd, qgm}
+    pairs_d, pairs_m = [], []
+    for c in comm:
+        for r in regs:
+            if not qga(c, r):
+                continue
+            prices = [model.pgd[c, r], model.pgm[c, r]]
+            alphas = [
+                _get(sol, "α_qgdqgm", ("dom", c, r)),
+                _get(sol, "α_qgdqgm", ("imp", c, r)),
+            ]
+            sigma = _get(sol, "esubd", (c, r))
+            gamma = _get(sol, "γ_qgdqgm", (c, r))
+            pairs_d.append(
+                (
+                    (c, r),
+                    model.qgd[c, r],
+                    _ces_input(model.qga[c, r], prices, alphas, sigma, gamma, 0),
+                )
+            )
+            pairs_m.append(
+                (
+                    (c, r),
+                    model.qgm[c, r],
+                    _ces_input(model.qga[c, r], prices, alphas, sigma, gamma, 1),
+                )
+            )
+    out.append(_add(model, "e_qgd", pairs_d))
+    out.append(_add(model, "e_qgm", pairs_m))
+
+    # e_pga: gov value balance  qga·pga == qgd·pgd + qgm·pgm
+    pairs = []
+    for c in comm:
+        for r in regs:
+            if qga(c, r):
+                pairs.append(
+                    (
+                        (c, r),
+                        model.qga[c, r] * model.pga[c, r],
+                        model.pgd[c, r] * model.qgd[c, r]
+                        + model.pgm[c, r] * model.qgm[c, r],
+                    )
+                )
+    out.append(_add(model, "e_pga", pairs))
+
+    # e_qia: investment demand (Leontief, σ=0)  qia[c] == ces(qinv, ..., 0)
+    for c in comm:
+        pairs = []
+        for r in regs:
+            if not qia(c, r):
+                continue
+            members = [cc for cc in comm if qia(cc, r)]
+            prices = [model.pia[cc, r] for cc in members]
+            alphas = [_get(sol, "α_qia", (cc, r)) for cc in members]
+            i = members.index(c)
+            gamma = _get(sol, "γ_qia", (r,))
+            pairs.append(
+                (
+                    (c, r),
+                    model.qia[c, r],
+                    _ces_input(model.qinv[r], prices, alphas, 0.0, gamma, i),
+                )
+            )
+        if pairs:
+            out.append(_add(model, f"e_qia_{c}", pairs))
+
+    # e_pinv: investment price index
+    pairs = []
+    for r in regs:
+        cells = [c for c in comm if qia(c, r)]
+        qsum = sum(model.qia[c, r] for c in cells)
+        vsum = sum(model.pia[c, r] * model.qia[c, r] for c in cells)
+        pairs.append(((r,), model.pinv[r] * qsum, vsum))
+    out.append(_add(model, "e_pinv", pairs))
+
+    # e_qidqim: Armington split of qia into {qid, qim}
+    pairs_d, pairs_m = [], []
+    for c in comm:
+        for r in regs:
+            if not qia(c, r):
+                continue
+            prices = [model.pid[c, r], model.pim[c, r]]
+            alphas = [
+                _get(sol, "α_qidqim", ("dom", c, r)),
+                _get(sol, "α_qidqim", ("imp", c, r)),
+            ]
+            sigma = _get(sol, "esubd", (c, r))
+            gamma = _get(sol, "γ_qidqim", (c, r))
+            pairs_d.append(
+                (
+                    (c, r),
+                    model.qid[c, r],
+                    _ces_input(model.qia[c, r], prices, alphas, sigma, gamma, 0),
+                )
+            )
+            pairs_m.append(
+                (
+                    (c, r),
+                    model.qim[c, r],
+                    _ces_input(model.qia[c, r], prices, alphas, sigma, gamma, 1),
+                )
+            )
+    out.append(_add(model, "e_qid", pairs_d))
+    out.append(_add(model, "e_qim", pairs_m))
+
+    # e_pia: investment value balance  pia·qia == pid·qid + pim·qim
+    pairs = []
+    for c in comm:
+        for r in regs:
+            if qia(c, r):
+                pairs.append(
+                    (
+                        (c, r),
+                        model.pia[c, r] * model.qia[c, r],
+                        model.pid[c, r] * model.qid[c, r]
+                        + model.pim[c, r] * model.qim[c, r],
+                    )
+                )
+    out.append(_add(model, "e_pia", pairs))
+
+    return out
+
+
 _GROUPS = {
     "production": _production,
     "factors": _factors,
     "trade": _trade,
+    "final_demand": _final_demand,
 }
 
 
