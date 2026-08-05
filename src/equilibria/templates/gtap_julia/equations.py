@@ -1133,15 +1133,228 @@ def _income(model, sol):
     return out
 
 
+def _capital(model, sol, rordelta: int = 1):
+    """Capital-account closure. rordelta=1 → capFlex (returns equalize, rore==rorg);
+    rordelta=0 → the RORFLEX allocation closure."""
+    regs = sol["sets"]["reg"]
+    acts = sol["sets"]["acts"]
+    endwc = sol["sets"].get("endwc", [])
+    out = []
+
+    def T(name, idx):
+        return _get(sol, name, idx)
+
+    def evfp(e, a, r):
+        return _has(sol, "α_qfe", (e, a, r))
+
+    def kap_supply(r):
+        cells = [(e, a) for e in endwc for a in acts if evfp(e, a, r)]
+        return cells
+
+    # e_qsave: saving  y·uelas == σyp·y·uelas + σyg·y·uelas + psave·qsave
+    pairs = []
+    for r in regs:
+        syp, syg = T("σyp", (r,)), T("σyg", (r,))
+        pairs.append(
+            (
+                (r,),
+                model.y[r] * model.uelas[r],
+                syp * model.y[r] * model.uelas[r]
+                + syg * model.y[r] * model.uelas[r]
+                + model.psave[r] * model.qsave[r],
+            )
+        )
+    out.append(_add(model, "e_qsave", pairs))
+
+    # global net investment Σ_r (qinv - δ·kb)  and Σ_r pinv·net  (Julia sums globally)
+    net_global = sum(model.qinv[r] - T("δ", (r,)) * model.kb[r] for r in regs)
+    v_net_global = sum(
+        model.pinv[r] * (model.qinv[r] - T("δ", (r,)) * model.kb[r]) for r in regs
+    )
+
+    # e_psave: saving price (semi-log form from Julia; the sum is GLOBAL)
+    pairs = []
+    for r in regs:
+        rhs = (
+            Log(model.pinv[r])
+            + sum(
+                ((model.qinv[rr] - T("δ", (rr,)) * model.kb[rr]) - model.qsave[rr])
+                * Log(model.pinv[rr])
+                for rr in regs
+            )
+            / net_global
+        )
+        pairs.append(((r,), Log(model.psave[r]), rhs))
+    out.append(_add_raw(model, "e_psave", pairs))
+
+    # e_pcgdswld: world price of capital goods (scalar, global sums)
+    out.append(
+        _add(model, "e_pcgdswld", [((), model.pcgdswld * net_global, v_net_global)])
+    )
+
+    # e_walras_sup / e_walras_dem
+    out.append(
+        _add(
+            model,
+            "e_walras_sup",
+            [((), model.walras_sup, model.pcgdswld * model.globalcgds)],
+        )
+    )
+    out.append(
+        _add(
+            model,
+            "e_walras_dem",
+            [
+                (
+                    (),
+                    model.walras_dem,
+                    sum(model.psave[r] * model.qsave[r] for r in regs),
+                )
+            ],
+        )
+    )
+
+    # e_rorg: world factor price  pfactwld·Σqfe == Σ peb·qfe
+    allc = [
+        (e, a, r)
+        for e in sol["sets"]["endw"]
+        for a in acts
+        for r in regs
+        if evfp(e, a, r)
+    ]
+    out.append(
+        _add(
+            model,
+            "e_rorg",
+            [
+                (
+                    (),
+                    model.pfactwld * sum(model.qfe[e, a, r] for e, a, r in allc),
+                    sum(model.peb[e, a, r] * model.qfe[e, a, r] for e, a, r in allc),
+                )
+            ],
+        )
+    )
+
+    # e_kb: capital stock  ρ·kb == Σ qe[capital]
+    pairs = []
+    for r in regs:
+        rhs = sum(model.qe[e, r] for e in endwc)
+        pairs.append(((r,), T("ρ", (r,)) * model.kb[r], rhs))
+    out.append(_add(model, "e_kb", pairs))
+
+    # e_ke: end-of-period capital  ke == qinv + (1-δ)·kb
+    pairs = [
+        ((r,), model.ke[r], model.qinv[r] + (1.0 - T("δ", (r,))) * model.kb[r])
+        for r in regs
+    ]
+    out.append(_add(model, "e_ke", pairs))
+
+    # e_rore: expected return  α_qinv·rore == rorc / (ke/kb)^rorflex
+    pairs = []
+    for r in regs:
+        pairs.append(
+            (
+                (r,),
+                T("α_qinv", (r,)) * model.rore[r],
+                model.rorc[r] / (model.ke[r] / model.kb[r]) ** T("rorflex", (r,)),
+            )
+        )
+    out.append(_add(model, "e_rore", pairs))
+
+    # e_rorc: current return
+    pairs = []
+    for r in regs:
+        cells = kap_supply(r)
+        qsum = sum(model.qes[e, a, r] for e, a in cells)
+        pairs.append(
+            (
+                (r,),
+                model.rorc[r] * (qsum - T("δ", (r,)) * model.kb[r]),
+                qsum * (model.rental[r] / model.pinv[r]),
+            )
+        )
+    out.append(_add(model, "e_rorc", pairs))
+
+    # e_rental: capital rental price
+    pairs = []
+    for r in regs:
+        cells = kap_supply(r)
+        qsum = sum(model.qes[e, a, r] for e, a in cells)
+        vsum = sum(model.qes[e, a, r] * model.pes[e, a, r] for e, a in cells)
+        pairs.append(((r,), qsum * model.rental[r], vsum))
+    out.append(_add(model, "e_rental", pairs))
+
+    if rordelta == 1:
+        # capFlex: returns equalize  rore == rorg
+        out.append(
+            _add(model, "e_qinv", [((r,), model.rore[r], model.rorg) for r in regs])
+        )
+        # globalcgds == Σ net investment
+        out.append(
+            _add(
+                model,
+                "e_globalcgds",
+                [
+                    (
+                        (),
+                        model.globalcgds,
+                        sum(model.qinv[r] - T("δ", (r,)) * model.kb[r] for r in regs),
+                    )
+                ],
+            )
+        )
+    else:
+        # RORFLEX: investment allocated by share; rorg clears
+        out.append(
+            _add(
+                model,
+                "e_qinv",
+                [
+                    (
+                        (r,),
+                        model.qinv[r],
+                        T("α_qinv", (r,)) * model.globalcgds
+                        + T("δ", (r,)) * model.kb[r],
+                    )
+                    for r in regs
+                ],
+            )
+        )
+        out.append(
+            _add(
+                model,
+                "e_globalcgds",
+                [
+                    (
+                        (),
+                        model.rorg
+                        * sum(model.qinv[r] - T("δ", (r,)) * model.kb[r] for r in regs),
+                        sum(
+                            (model.qinv[r] - T("δ", (r,)) * model.kb[r]) * model.rore[r]
+                            for r in regs
+                        ),
+                    )
+                ],
+            )
+        )
+
+    return out
+
+
 _GROUPS = {
     "production": _production,
     "factors": _factors,
     "trade": _trade,
     "final_demand": _final_demand,
     "income": _income,
+    "capital": _capital,
 }
 
 
-def build_group(model, sol: dict[str, Any], group: str):
-    """Build one thematic equation group, return list of (name, Constraint)."""
-    return _GROUPS[group](model, sol)
+def build_group(model, sol: dict[str, Any], group: str, **kwargs):
+    """Build one thematic equation group, return list of (name, Constraint).
+
+    Extra kwargs pass through to the group builder (e.g. rordelta for capital).
+    """
+    return _GROUPS[group](model, sol, **kwargs)
