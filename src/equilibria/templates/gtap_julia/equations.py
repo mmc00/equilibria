@@ -331,6 +331,33 @@ def _production(model, sol):
     if pairs:
         out.append(_add(model, "e_qc", pairs))
 
+    # e_pca: make price aggregation. esubq==0 → pca == pds (per producing activity);
+    # esubq>0 → CES. This dataset (and GTAP standard) has esubq==0.
+    pairs = []
+    for c in comm:
+        for a in acts:
+            for r in regs:
+                if not _has(sol, "α_qca", (c, a, r)):
+                    continue
+                if _get(sol, "esubq", (c, r)) == 0:
+                    pairs.append(((c, a, r), model.pca[c, a, r], model.pds[c, r]))
+                else:
+                    members = [aa for aa in acts if _has(sol, "α_qca", (c, aa, r))]
+                    prices = [model.pca[c, aa, r] for aa in members]
+                    alphas = [_get(sol, "α_pca", (c, aa, r)) for aa in members]
+                    i = members.index(a)
+                    sigma = 1.0 / _get(sol, "esubq", (c, r))
+                    gamma = _get(sol, "γ_pca", (c, r))
+                    pairs.append(
+                        (
+                            (c, a, r),
+                            model.qca[c, a, r],
+                            _ces_input(model.qc[c, r], prices, alphas, sigma, gamma, i),
+                        )
+                    )
+    if pairs:
+        out.append(_add(model, "e_pca", pairs))
+
     return out
 
 
