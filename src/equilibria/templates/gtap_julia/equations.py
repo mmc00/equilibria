@@ -453,9 +453,273 @@ def _factors(model, sol):
     return out
 
 
+def _trade(model, sol):
+    regs = sol["sets"]["reg"]
+    acts = sol["sets"]["acts"]
+    comm = sol["sets"]["comm"]
+    marg = sol["sets"].get("marg", [])
+    out = []
+
+    def qfa(c, a, r):
+        return _has(sol, "α_qfa", (c, a, r))
+
+    def qga(c, r):
+        return _has(sol, "α_qga", (c, r))
+
+    def qia(c, r):
+        return _has(sol, "α_qia", (c, r))
+
+    def qxs(c, s, d):
+        return _has(sol, "α_qxs", (c, s, d))
+
+    def vtwr(m, c, s, d):
+        return _has(sol, "α_qtmfsd", (m, c, s, d))
+
+    def vtwr_sum(c, s, d):
+        return any(vtwr(m, c, s, d) for m in marg)
+
+    # e_qms: import aggregate = Σ firm imports + private + gov + invest imports
+    pairs = []
+    for c in comm:
+        for r in regs:
+            rhs = (
+                sum(model.qfm[c, a, r] for a in acts if qfa(c, a, r)) + model.qpm[c, r]
+            )
+            if qga(c, r):
+                rhs = rhs + model.qgm[c, r]
+            if qia(c, r):
+                rhs = rhs + model.qim[c, r]
+            pairs.append(((c, r), model.qms[c, r], rhs))
+    if pairs:
+        out.append(_add(model, "e_qms", pairs))
+
+    # e_qxs: CES sourcing of qms[c,d] across origins s (Armington, esubm)
+    for s in regs:
+        pairs = []
+        for c in comm:
+            for d in regs:
+                if not qxs(c, s, d):
+                    continue
+                origins = [ss for ss in regs if qxs(c, ss, d)]
+                prices = [model.pmds[c, ss, d] for ss in origins]
+                alphas = [_get(sol, "α_qxs", (c, ss, d)) for ss in origins]
+                i = origins.index(s)
+                sigma = _get(sol, "esubm", (c, d))
+                gamma = _get(sol, "γ_qxs", (c, d))
+                pairs.append(
+                    (
+                        (c, s, d),
+                        model.qxs[c, s, d],
+                        _ces_input(model.qms[c, d], prices, alphas, sigma, gamma, i),
+                    )
+                )
+        if pairs:
+            out.append(_add(model, f"e_qxs_{s}", pairs))
+
+    # e_pms: import value balance  pms·qms == Σ_s pmds·qxs
+    pairs = []
+    for c in comm:
+        for d in regs:
+            origins = [s for s in regs if qxs(c, s, d)]
+            if not origins:
+                continue
+            rhs = sum(model.pmds[c, s, d] * model.qxs[c, s, d] for s in origins)
+            pairs.append(((c, d), model.pms[c, d] * model.qms[c, d], rhs))
+    if pairs:
+        out.append(_add(model, "e_pms", pairs))
+
+    # e_pfob: FOB price  pfob == pds·tx·txs (export taxes, multiplicative)
+    pairs = []
+    for c in comm:
+        for s in regs:
+            for d in regs:
+                if qxs(c, s, d):
+                    pairs.append(
+                        (
+                            (c, s, d),
+                            model.pfob[c, s, d],
+                            model.pds[c, s]
+                            * _get(sol, "tx", (c, s))
+                            * _get(sol, "txs", (c, s, d)),
+                        )
+                    )
+    if pairs:
+        out.append(_add(model, "e_pfob", pairs))
+
+    # e_pcif: CIF value  pcif·qxs == pfob·qxs + margins
+    pairs = []
+    for c in comm:
+        for s in regs:
+            for d in regs:
+                if not qxs(c, s, d):
+                    continue
+                rhs = model.pfob[c, s, d] * model.qxs[c, s, d]
+                if vtwr_sum(c, s, d):
+                    rhs = rhs + model.ptrans[c, s, d] * sum(
+                        model.qtmfsd[m, c, s, d] for m in marg if vtwr(m, c, s, d)
+                    )
+                pairs.append(((c, s, d), model.pcif[c, s, d] * model.qxs[c, s, d], rhs))
+    if pairs:
+        out.append(_add(model, "e_pcif", pairs))
+
+    # e_pmds: delivered import price  pmds == pcif·tm·tms (import tariff — the shock)
+    pairs = []
+    for c in comm:
+        for s in regs:
+            for d in regs:
+                if qxs(c, s, d):
+                    pairs.append(
+                        (
+                            (c, s, d),
+                            model.pmds[c, s, d],
+                            model.pcif[c, s, d]
+                            * _get(sol, "tm", (c, d))
+                            * _get(sol, "tms", (c, s, d)),
+                        )
+                    )
+    if pairs:
+        out.append(_add(model, "e_pmds", pairs))
+
+    # e_qtmfsd: margin demand proportional to trade flow
+    pairs = []
+    for m in marg:
+        for c in comm:
+            for s in regs:
+                for d in regs:
+                    if vtwr(m, c, s, d):
+                        pairs.append(
+                            (
+                                (m, c, s, d),
+                                model.qtmfsd[m, c, s, d],
+                                _get(sol, "α_qtmfsd", (m, c, s, d))
+                                * model.qxs[c, s, d],
+                            )
+                        )
+    if pairs:
+        out.append(_add(model, "e_qtmfsd", pairs))
+
+    # e_ptrans: transport price index per route
+    pairs = []
+    for c in comm:
+        for s in regs:
+            for d in regs:
+                if not vtwr_sum(c, s, d):
+                    continue
+                ms = [m for m in marg if vtwr(m, c, s, d)]
+                qsum = sum(model.qtmfsd[m, c, s, d] for m in ms)
+                vsum = sum(model.qtmfsd[m, c, s, d] * model.pt[m] for m in ms)
+                pairs.append(((c, s, d), model.ptrans[c, s, d] * qsum, vsum))
+    if pairs:
+        out.append(_add(model, "e_ptrans", pairs))
+
+    # e_qtm: total margin m demand
+    pairs = []
+    for m in marg:
+        cells = [
+            (c, s, d) for c in comm for s in regs for d in regs if vtwr(m, c, s, d)
+        ]
+        rhs = sum(model.qtmfsd[m, c, s, d] for c, s, d in cells)
+        pairs.append(((m,), model.qtm[m], rhs))
+    if pairs:
+        out.append(_add(model, "e_qtm", pairs))
+
+    # e_qst: CES supply of margin m from regions (pds)
+    for r in regs:
+        pairs = []
+        for m in marg:
+            if not _has(sol, "α_qst", (m, r)):
+                continue
+            members = [rr for rr in regs if _has(sol, "α_qst", (m, rr))]
+            prices = [model.pds[m, rr] for rr in members]
+            alphas = [_get(sol, "α_qst", (m, rr)) for rr in members]
+            i = members.index(r)
+            sigma = _get(sol, "esubs", (m,))
+            gamma = _get(sol, "γ_qst", (m,))
+            pairs.append(
+                (
+                    (m, r),
+                    model.qst[m, r],
+                    _ces_input(model.qtm[m], prices, alphas, sigma, gamma, i),
+                )
+            )
+        if pairs:
+            out.append(_add(model, f"e_qst_{r}", pairs))
+
+    # e_pt: margin value balance  pt·qtm == Σ pds·qst
+    pairs = []
+    for m in marg:
+        members = [r for r in regs if _has(sol, "α_qst", (m, r))]
+        rhs = sum(model.pds[m, r] * model.qst[m, r] for r in members)
+        pairs.append(((m,), model.pt[m] * model.qtm[m], rhs))
+    if pairs:
+        out.append(_add(model, "e_pt", pairs))
+
+    # e_qds: domestic aggregate = Σ firm dom + private + gov + invest domestic
+    pairs = []
+    for c in comm:
+        for r in regs:
+            rhs = (
+                sum(model.qfd[c, a, r] for a in acts if qfa(c, a, r)) + model.qpd[c, r]
+            )
+            if qga(c, r):
+                rhs = rhs + model.qgd[c, r]
+            if qia(c, r):
+                rhs = rhs + model.qid[c, r]
+            pairs.append(((c, r), model.qds[c, r], rhs))
+    if pairs:
+        out.append(_add(model, "e_qds", pairs))
+
+    # e_pds: market clearing  qc == qds + exports + margin supply
+    pairs = []
+    for c in comm:
+        for r in regs:
+            rhs = model.qds[c, r] + sum(
+                model.qxs[c, r, d] for d in regs if qxs(c, r, d)
+            )
+            if c in marg:
+                rhs = rhs + model.qst[c, r]
+            pairs.append(((c, r), model.qc[c, r], rhs))
+    if pairs:
+        out.append(_add(model, "e_pds", pairs))
+
+    # tax links: pfd/pfm (firm), pgd/pgm (gov), pid/pim (invest) — multiplicative
+    def _taxlink(name, pvar, base, tax, mask):
+        pairs = []
+        for c in comm:
+            if name in ("e_pfd", "e_pfm"):
+                for a in acts:
+                    for r in regs:
+                        if qfa(c, a, r):
+                            pairs.append(
+                                (
+                                    (c, a, r),
+                                    pvar[c, a, r],
+                                    base(c, r) * _get(sol, tax, (c, a, r)),
+                                )
+                            )
+            else:
+                for r in regs:
+                    if mask(c, r):
+                        pairs.append(
+                            ((c, r), pvar[c, r], base(c, r) * _get(sol, tax, (c, r)))
+                        )
+        if pairs:
+            out.append(_add(model, name, pairs))
+
+    _taxlink("e_pfd", model.pfd, lambda c, r: model.pds[c, r], "tfd", qfa)
+    _taxlink("e_pfm", model.pfm, lambda c, r: model.pms[c, r], "tfm", qfa)
+    _taxlink("e_pgd", model.pgd, lambda c, r: model.pds[c, r], "tgd", qga)
+    _taxlink("e_pgm", model.pgm, lambda c, r: model.pms[c, r], "tgm", qga)
+    _taxlink("e_pid", model.pid, lambda c, r: model.pds[c, r], "tid", qia)
+    _taxlink("e_pim", model.pim, lambda c, r: model.pms[c, r], "tim", qia)
+
+    return out
+
+
 _GROUPS = {
     "production": _production,
     "factors": _factors,
+    "trade": _trade,
 }
 
 
