@@ -58,14 +58,17 @@ def _ces_input(y, prices, alphas, sigma, gamma, i):
 
 
 def _add(model, name, rule_pairs):
-    """Attach a scalar Constraint per (key, lhs, rhs) and return (name, comp)."""
+    """Attach a scalar Constraint per (key, lhs, rhs) and return (name, comp).
+
+    Keys are normalized so a 1-tuple ('r',) and Pyomo's bare-element indexing
+    ('r') resolve to the same entry.
+    """
     idxset = pyo.Set(initialize=[k for k, _, _ in rule_pairs])
     model.add_component(f"_{name}_idx", idxset)
-    data = {k: (lhs, rhs) for k, lhs, rhs in rule_pairs}
+    data = {tuple(k): (lhs, rhs) for k, lhs, rhs in rule_pairs}
 
     def _rule(m, *key):
-        k = key if len(key) > 1 else key[0]
-        lhs, rhs = data[k]
+        lhs, rhs = data[tuple(key)]
         return Log(lhs) == Log(rhs)
 
     con = pyo.Constraint(idxset, rule=_rule)
@@ -315,8 +318,144 @@ def _production(model, sol):
     return out
 
 
+def _factors(model, sol):
+    regs = sol["sets"]["reg"]
+    acts = sol["sets"]["acts"]
+    endw = sol["sets"]["endw"]
+    endwm = sol["sets"].get("endwm", [])
+    endws = sol["sets"].get("endws", [])
+    endwf = sol["sets"].get("endwf", [])
+    out = []
+
+    def evfp(e, a, r):
+        return _has(sol, "α_qfe", (e, a, r))
+
+    # e_peb: factor use == endowment supply  qfe == qes
+    pairs = []
+    for e in endw:
+        for a in acts:
+            for r in regs:
+                if evfp(e, a, r):
+                    pairs.append(((e, a, r), model.qfe[e, a, r], model.qes[e, a, r]))
+    if pairs:
+        out.append(_add(model, "e_peb", pairs))
+
+    # e_pfe: factor price w/ use tax  pfe == peb·tfe
+    pairs = []
+    for e in endw:
+        for a in acts:
+            for r in regs:
+                if evfp(e, a, r):
+                    pairs.append(
+                        (
+                            (e, a, r),
+                            model.pfe[e, a, r],
+                            model.peb[e, a, r] * _get(sol, "tfe", (e, a, r)),
+                        )
+                    )
+    if pairs:
+        out.append(_add(model, "e_pfe", pairs))
+
+    # e_pes: net-of-income-tax factor price  peb == pes·tinc
+    pairs = []
+    for e in endw:
+        for a in acts:
+            for r in regs:
+                if evfp(e, a, r):
+                    pairs.append(
+                        (
+                            (e, a, r),
+                            model.peb[e, a, r],
+                            model.pes[e, a, r] * _get(sol, "tinc", (e, a, r)),
+                        )
+                    )
+    if pairs:
+        out.append(_add(model, "e_pes", pairs))
+
+    # e_pfactor: regional factor price index
+    pairs = []
+    for r in regs:
+        cells = [(e, a) for e in endw for a in acts if evfp(e, a, r)]
+        qsum = sum(model.qfe[e, a, r] for e, a in cells)
+        vsum = sum(model.qfe[e, a, r] * model.peb[e, a, r] for e, a in cells)
+        pairs.append(((r,), model.pfactor[r] * qsum, vsum))
+    if pairs:
+        out.append(_add(model, "e_pfactor", pairs))
+
+    # e_pe1: mobile-factor market clearing  qe == Σ_a qfe
+    pairs = []
+    for e in endwm:
+        for r in regs:
+            cells = [a for a in acts if evfp(e, a, r)]
+            if not cells:
+                continue
+            pairs.append(
+                ((e, r), model.qe[e, r], sum(model.qfe[e, a, r] for a in cells))
+            )
+    if pairs:
+        out.append(_add(model, "e_pe1", pairs))
+
+    # e_qes1: mobile factor — one price  pes == pe
+    pairs = []
+    for e in endwm:
+        for a in acts:
+            for r in regs:
+                if evfp(e, a, r):
+                    pairs.append(((e, a, r), model.pes[e, a, r], model.pe[e, r]))
+    if pairs:
+        out.append(_add(model, "e_qes1", pairs))
+
+    # e_qes2: sluggish factor — CET supply across acts (etrae<0)
+    for a in acts:
+        pairs = []
+        for e in endws:
+            for r in regs:
+                if not evfp(e, a, r):
+                    continue
+                members = [aa for aa in acts if evfp(e, aa, r)]
+                prices = [model.pes[e, aa, r] for aa in members]
+                alphas = [_get(sol, "α_qes2", (e, aa, r)) for aa in members]
+                i = members.index(a)
+                sigma = _get(sol, "etrae", (e, r))
+                gamma = _get(sol, "γ_qes2", (e, r))
+                pairs.append(
+                    (
+                        (e, a, r),
+                        model.qes[e, a, r],
+                        _ces_input(model.qe[e, r], prices, alphas, sigma, gamma, i),
+                    )
+                )
+        if pairs:
+            out.append(_add(model, f"e_qes2_{a}", pairs))
+
+    # e_pe2: sluggish factor value balance  pe·qe == Σ pes·qes
+    pairs = []
+    for e in endws:
+        for r in regs:
+            cells = [a for a in acts if evfp(e, a, r)]
+            if not cells:
+                continue
+            rhs = sum(model.pes[e, a, r] * model.qes[e, a, r] for a in cells)
+            pairs.append(((e, r), model.pe[e, r] * model.qe[e, r], rhs))
+    if pairs:
+        out.append(_add(model, "e_pe2", pairs))
+
+    # e_qes3: fixed factor  qes == qesf
+    pairs = []
+    for e in endwf:
+        for a in acts:
+            for r in regs:
+                if evfp(e, a, r):
+                    pairs.append(((e, a, r), model.qes[e, a, r], model.qesf[e, a, r]))
+    if pairs:
+        out.append(_add(model, "e_qes3", pairs))
+
+    return out
+
+
 _GROUPS = {
     "production": _production,
+    "factors": _factors,
 }
 
 
