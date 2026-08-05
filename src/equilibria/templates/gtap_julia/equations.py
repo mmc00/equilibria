@@ -313,7 +313,7 @@ def _production(model, sol):
                     (
                         (c, a, r),
                         model.pca[c, a, r],
-                        model.ps[c, a, r] * _get(sol, "to", (c, a, r)),
+                        model.ps[c, a, r] * model.to[c, a, r],
                     )
                 )
     if pairs:
@@ -393,7 +393,7 @@ def _factors(model, sol):
                         (
                             (e, a, r),
                             model.pfe[e, a, r],
-                            model.peb[e, a, r] * _get(sol, "tfe", (e, a, r)),
+                            model.peb[e, a, r] * model.tfe[e, a, r],
                         )
                     )
     if pairs:
@@ -409,7 +409,7 @@ def _factors(model, sol):
                         (
                             (e, a, r),
                             model.peb[e, a, r],
-                            model.pes[e, a, r] * _get(sol, "tinc", (e, a, r)),
+                            model.pes[e, a, r] * model.tinc[e, a, r],
                         )
                     )
     if pairs:
@@ -581,9 +581,7 @@ def _trade(model, sol):
                         (
                             (c, s, d),
                             model.pfob[c, s, d],
-                            model.pds[c, s]
-                            * _get(sol, "tx", (c, s))
-                            * _get(sol, "txs", (c, s, d)),
+                            model.pds[c, s] * model.tx[c, s] * model.txs[c, s, d],
                         )
                     )
     if pairs:
@@ -615,9 +613,7 @@ def _trade(model, sol):
                         (
                             (c, s, d),
                             model.pmds[c, s, d],
-                            model.pcif[c, s, d]
-                            * _get(sol, "tm", (c, d))
-                            * _get(sol, "tms", (c, s, d)),
+                            model.pcif[c, s, d] * model.tm[c, d] * model.tms[c, s, d],
                         )
                     )
     if pairs:
@@ -726,7 +722,7 @@ def _trade(model, sol):
         out.append(_add(model, "e_pds", pairs))
 
     # tax links: pfd/pfm (firm), pgd/pgm (gov), pid/pim (invest) — multiplicative
-    def _taxlink(name, pvar, base, tax, mask):
+    def _taxlink(name, pvar, base, tvar, mask):
         pairs = []
         for c in comm:
             if name in ("e_pfd", "e_pfm"):
@@ -737,24 +733,22 @@ def _trade(model, sol):
                                 (
                                     (c, a, r),
                                     pvar[c, a, r],
-                                    base(c, r) * _get(sol, tax, (c, a, r)),
+                                    base(c, r) * tvar[c, a, r],
                                 )
                             )
             else:
                 for r in regs:
                     if mask(c, r):
-                        pairs.append(
-                            ((c, r), pvar[c, r], base(c, r) * _get(sol, tax, (c, r)))
-                        )
+                        pairs.append(((c, r), pvar[c, r], base(c, r) * tvar[c, r]))
         if pairs:
             out.append(_add(model, name, pairs))
 
-    _taxlink("e_pfd", model.pfd, lambda c, r: model.pds[c, r], "tfd", qfa)
-    _taxlink("e_pfm", model.pfm, lambda c, r: model.pms[c, r], "tfm", qfa)
-    _taxlink("e_pgd", model.pgd, lambda c, r: model.pds[c, r], "tgd", qga)
-    _taxlink("e_pgm", model.pgm, lambda c, r: model.pms[c, r], "tgm", qga)
-    _taxlink("e_pid", model.pid, lambda c, r: model.pds[c, r], "tid", qia)
-    _taxlink("e_pim", model.pim, lambda c, r: model.pms[c, r], "tim", qia)
+    _taxlink("e_pfd", model.pfd, lambda c, r: model.pds[c, r], model.tfd, qfa)
+    _taxlink("e_pfm", model.pfm, lambda c, r: model.pms[c, r], model.tfm, qfa)
+    _taxlink("e_pgd", model.pgd, lambda c, r: model.pds[c, r], model.tgd, qga)
+    _taxlink("e_pgm", model.pgm, lambda c, r: model.pms[c, r], model.tgm, qga)
+    _taxlink("e_pid", model.pid, lambda c, r: model.pds[c, r], model.tid, qia)
+    _taxlink("e_pim", model.pim, lambda c, r: model.pms[c, r], model.tim, qia)
 
     return out
 
@@ -773,6 +767,18 @@ def _cde_share(alpha, beta, e, u, prices, income, i):
         for wj, p, a in zip(w, prices, alpha, strict=True)
     )
     return w[i] * (prices[i] / income) ** (-alpha[i]) / denom
+
+
+def _cde_sum(alpha, beta, e, u, prices, income):
+    """The CDE 'sum of shares' term (Julia cde() last element `i`).
+
+    i = Σ_j β_j·u^((1-α_j)·e_j)·(p_j/c)^(1-α_j).  The CDE system closes with
+    i == 1, which is the equation that determines private utility u (up).
+    """
+    return sum(
+        b * u ** ((1.0 - a) * ej) * (p / income) ** (1.0 - a)
+        for a, b, ej, p in zip(alpha, beta, e, prices, strict=True)
+    )
 
 
 def _final_demand(model, sol):
@@ -801,6 +807,18 @@ def _final_demand(model, sol):
             pairs.append(((c, r), lhs, rhs))
         if pairs:
             out.append(_add(model, f"e_qpa_{c}", pairs))
+
+    # e_up: CDE system closure — the (N+1)th element of Julia's e_qpa vector is
+    # 1 == Σ shares. This determines private utility up[r] (the residual DOF).
+    pairs = []
+    for r in regs:
+        alpha = [1.0 - _get(sol, "subpar", (cc, r)) for cc in comm]
+        beta = [_get(sol, "β_qpa", (cc, r)) for cc in comm]
+        e = [_get(sol, "incpar", (cc, r)) for cc in comm]
+        prices = [model.ppa[cc, r] for cc in comm]
+        income = model.yp[r] / _get(sol, "pop", (r,))
+        pairs.append(((r,), 1.0, _cde_sum(alpha, beta, e, model.up[r], prices, income)))
+    out.append(_add(model, "e_up", pairs))
 
     # e_qpdqpm: Armington split of qpa into {qpd, qpm}
     pairs_d, pairs_m = [], []
@@ -1016,12 +1034,8 @@ def _income(model, sol):
     pairs_d, pairs_m = [], []
     for c in comm:
         for r in regs:
-            pairs_d.append(
-                ((c, r), model.ppd[c, r], model.pds[c, r] * T("tpd", (c, r)))
-            )
-            pairs_m.append(
-                ((c, r), model.ppm[c, r], model.pms[c, r] * T("tpm", (c, r)))
-            )
+            pairs_d.append(((c, r), model.ppd[c, r], model.pds[c, r] * model.tpd[c, r]))
+            pairs_m.append(((c, r), model.ppm[c, r], model.pms[c, r] * model.tpm[c, r]))
     out.append(_add(model, "e_ppd", pairs_d))
     out.append(_add(model, "e_ppm", pairs_m))
 
@@ -1054,43 +1068,43 @@ def _income(model, sol):
     for r in regs:
         rev = model.fincome[r]
         for c in comm:
-            rev = rev + model.qpd[c, r] * model.pds[c, r] * (T("tpd", (c, r)) - 1)
-            rev = rev + model.qpm[c, r] * model.pms[c, r] * (T("tpm", (c, r)) - 1)
+            rev = rev + model.qpd[c, r] * model.pds[c, r] * (model.tpd[c, r] - 1)
+            rev = rev + model.qpm[c, r] * model.pms[c, r] * (model.tpm[c, r] - 1)
             if qga(c, r):
-                rev = rev + model.qgd[c, r] * model.pds[c, r] * (T("tgd", (c, r)) - 1)
-                rev = rev + model.qgm[c, r] * model.pms[c, r] * (T("tgm", (c, r)) - 1)
+                rev = rev + model.qgd[c, r] * model.pds[c, r] * (model.tgd[c, r] - 1)
+                rev = rev + model.qgm[c, r] * model.pms[c, r] * (model.tgm[c, r] - 1)
             if qia(c, r):
-                rev = rev + model.qid[c, r] * model.pds[c, r] * (T("tid", (c, r)) - 1)
-                rev = rev + model.qim[c, r] * model.pms[c, r] * (T("tim", (c, r)) - 1)
+                rev = rev + model.qid[c, r] * model.pds[c, r] * (model.tid[c, r] - 1)
+                rev = rev + model.qim[c, r] * model.pms[c, r] * (model.tim[c, r] - 1)
         for c in comm:
             for a in acts:
                 if qfa(c, a, r):
-                    rev = rev + model.qfd[c, a, r] * model.pfd[c, a, r] / T(
-                        "tfd", (c, a, r)
-                    ) * (T("tfd", (c, a, r)) - 1)
-                    rev = rev + model.qfm[c, a, r] * model.pfm[c, a, r] / T(
-                        "tfm", (c, a, r)
-                    ) * (T("tfm", (c, a, r)) - 1)
+                    rev = rev + model.qfd[c, a, r] * model.pfd[c, a, r] / model.tfd[
+                        c, a, r
+                    ] * (model.tfd[c, a, r] - 1)
+                    rev = rev + model.qfm[c, a, r] * model.pfm[c, a, r] / model.tfm[
+                        c, a, r
+                    ] * (model.tfm[c, a, r] - 1)
                 if qca(c, a, r):
                     rev = rev + model.qca[c, a, r] * model.ps[c, a, r] * (
-                        T("to", (c, a, r)) - 1
+                        model.to[c, a, r] - 1
                     )
         for e in endw:
             for a in acts:
                 if evfp(e, a, r):
                     rev = rev + model.qfe[e, a, r] * model.peb[e, a, r] * (
-                        T("tfe", (e, a, r)) - 1
+                        model.tfe[e, a, r] - 1
                     )
         for c in comm:
             for d in regs:
                 if qxs(c, r, d):  # exports from r: pfob/txs revenue
-                    rev = rev + model.qxs[c, r, d] * model.pfob[c, r, d] / T(
-                        "txs", (c, r, d)
-                    ) * (T("txs", (c, r, d)) - 1)
+                    rev = rev + model.qxs[c, r, d] * model.pfob[c, r, d] / model.txs[
+                        c, r, d
+                    ] * (model.txs[c, r, d] - 1)
             for s in regs:
                 if qxs(c, s, r):  # imports into r: pcif·(tms-1)
                     rev = rev + model.qxs[c, s, r] * model.pcif[c, s, r] * (
-                        T("tms", (c, s, r)) - 1
+                        model.tms[c, s, r] - 1
                     )
         pairs.append(((r,), model.y[r], rev))
     out.append(_add(model, "e_y", pairs))

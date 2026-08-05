@@ -67,15 +67,5 @@ def apply_closure(model, sol) -> None:
         if val is not None:
             ppa[comm0, reg0].fix(val)
 
-    # Regional price-level anchor: fix pfactor[r] (one numeraire per region). The
-    # assembled system carries #regions residual degrees of freedom — a uniform
-    # per-region price-level indeterminacy (all prices+quantities drift ~10% in
-    # lockstep while real utility barely moves). Pinning pfactor[r] to its
-    # benchmark closes them; verified to reproduce Julia's base cell-by-cell to 0.
-    pfactor = getattr(model, "pfactor", None)
-    if pfactor is not None:
-        pf = allvals.get("pfactor", {})
-        for r in sol["sets"]["reg"]:
-            val = pf.get((str(r),))
-            if val is not None:
-                pfactor[r].fix(val)
+    # (No pfactor anchor needed: the CDE-closure equation e_up determines private
+    # utility per region, closing the #regions DOF natively — same as Julia.)
