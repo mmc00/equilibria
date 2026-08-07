@@ -75,15 +75,21 @@ def solve_shock(
     rordelta: int = 1,
     tee: bool = False,
 ) -> dict[str, Any]:
-    """Solve base, then re-pin every bilateral tms to `tariff_power` and re-solve
-    from the base point (mirrors Julia setting mc.data["tms"]=power + run_model!).
+    """Solve base, then scale every bilateral tms power by `tariff_power` and
+    re-solve from the base point. Julia applies the shock MULTIPLICATIVELY —
+    `mc.data["tms"][c,s,d] *= tariff_power` (verified: the Julia shock/base tms
+    ratio is exactly tariff_power on every route) — so a route whose base power is
+    1.0145 becomes 1.116, NOT a flat 1.10. Fixing tms to the absolute `tariff_power`
+    (the old behaviour) under-shocked routes with a positive base tariff and
+    over-shocked the tariff-free ones, biasing the Armington sourcing response.
     """
     m = build_model(sol, rordelta=rordelta)
     _ipopt().solve(m, tee=False, load_solutions=True)  # base (warm start)
-    # apply the import-tariff shock: re-fix tms to the shocked power everywhere
+    # apply the import-tariff shock: scale each tms power by tariff_power (× base).
     tms = m.component("tms")
     for idx in tms:
-        tms[idx].fix(tariff_power)
+        base_power = pyo.value(tms[idx])
+        tms[idx].fix(base_power * tariff_power)
     res = _ipopt().solve(m, tee=tee, load_solutions=True)
     tc = str(res.solver.termination_condition)
     return {"status": tc, "ok": tc in ("optimal", "locallyOptimal"), "model": m}
