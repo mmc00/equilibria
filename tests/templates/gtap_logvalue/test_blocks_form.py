@@ -39,3 +39,27 @@ def test_production_block_builds():
         assert any(
             n == fam or n.startswith(fam + "_con") or n.startswith(fam) for n in cons
         ), f"{fam} not built; got {sorted(cons)}"
+
+
+def test_factor_block_builds():
+    from equilibria.blocks.gtap_logvalue.factor import FactorLVBlock
+    from equilibria.blocks.gtap_logvalue.production_supply import (
+        ProductionSupplyLVBlock,
+    )
+
+    pm = build_one_block(FactorLVBlock, deps=(ProductionSupplyLVBlock,))
+    cons = _con_names(pm)
+    for fam in [
+        "e_peb",
+        "e_pfe",
+        "e_pes",
+        "e_pfactor",
+        "e_pe1",
+        "e_qes1",
+        "e_qes2",
+        "e_pe2",
+        "e_qes3",
+    ]:
+        assert any(n.startswith(fam) for n in cons), (
+            f"{fam} not built; got {sorted(cons)}"
+        )
