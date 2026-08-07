@@ -3,6 +3,7 @@ calibrated point (base) and matches the port monolith (shock), both seeded from 
 same Julia calibrated point. Since port ≡ Julia (jparity 100%), blocks ≡ Julia.
 """
 
+import pytest
 from pyomo.environ import value as V
 from tests.templates.gtap_logvalue._harness import load_sol
 
@@ -71,3 +72,51 @@ def test_blocks_shock_matches_port_monolith():
             assert statistics.median(diffs) < 1e-5, (
                 f"{var} blocks vs port median {statistics.median(diffs)}"
             )
+
+
+@pytest.mark.slow
+def test_capflex_converges_on_15x10():
+    """The motivation: the log-value block model converges capFlex on gtap7_15x10,
+    where the levels block model degenerates (code=2). Base reproduces calibration at
+    machine precision; the shock is optimal. Uses a cached 15x10 calibrated dump (4MB,
+    not versioned — regenerate via run_from_csv.jl if absent)."""
+    import statistics
+    from pathlib import Path
+
+    import tests.templates.gtap_logvalue._harness as H
+    from pyomo.environ import value as V
+
+    from equilibria.templates.gtap_logvalue.composer import solve, solve_shock
+
+    fix = Path(
+        "/private/tmp/claude-501/-Users-marmol--superset-worktrees-"
+        "b14cb643-ee65-449d-b3f0-be8003b60783-gray-carver/"
+        "45c8a8b5-8bb9-485a-8e5c-e498c5bb605d/scratchpad/wp15_b.csv"
+    )
+    if not fix.exists():
+        pytest.skip("15x10 calibrated dump absent (regenerate via run_from_csv.jl)")
+    old = H.FIX
+    H.FIX = fix
+    try:
+        sol = H.load_sol("gtap7_15x10")
+        resb = solve(sol, rordelta=1)
+        assert resb["ok"], f"15x10 base not optimal: {resb['status']}"
+        m = resb["model"]
+        for var in ("qxs", "pva", "y"):
+            comp = m.component(var)
+            seed = sol.get(var)
+            if comp is None or not isinstance(seed, dict):
+                continue
+            mv = []
+            for i in comp:
+                k = i if isinstance(i, tuple) else (i,)
+                s = seed.get(k)
+                if s is None or s != s or abs(s) < 1e-6:
+                    continue
+                mv.append(abs(V(comp[i]) / s - 1.0))
+            if mv:
+                assert statistics.median(mv) < 1e-4
+        ress = solve_shock(sol, 1.10, rordelta=1)
+        assert ress["ok"], f"15x10 capFlex shock not optimal: {ress['status']}"
+    finally:
+        H.FIX = old
