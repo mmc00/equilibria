@@ -44,6 +44,10 @@ GATE_TESTS = [
     "tests/templates/gtap/test_gtap7_nl_parity.py",
     "tests/templates/gtap/test_gtap7_gempack_parity.py",
     "tests/templates/gtap/test_coverage_matrix.py",
+    # log-value blocks: native calibration ≡ Julia, 7 blocks compose, and the
+    # transitive solve gate (blocks ≡ port monolith). The @slow 15x10 capFlex case
+    # is excluded from the sweep (`-m "not slow"`) and runnable by hand.
+    "tests/templates/gtap_logvalue/",
 ]
 
 REGEN_CMDS = [
