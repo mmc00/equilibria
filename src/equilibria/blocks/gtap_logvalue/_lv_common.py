@@ -42,6 +42,11 @@ def _ces_input(y, prices, alphas, sigma, gamma, i):
 
 def seed_array(sol: dict[str, Any], name: str, dims, setmap) -> np.ndarray:
     """np.ndarray seed for `name` over its (block-set) domain, from sol[name]."""
+    if not dims:
+        # scalar var: the backend expects a length-1 array it can unwrap
+        v = sol.get(name)
+        val = float(v) if isinstance(v, int | float) else 1.0
+        return np.asarray([val])
     axes = [setmap[d] for d in dims]
     arr = np.ones([len(ax) for ax in axes], dtype=float)
     d = sol.get(name, {})

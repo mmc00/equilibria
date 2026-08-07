@@ -63,3 +63,18 @@ def test_factor_block_builds():
         assert any(n.startswith(fam) for n in cons), (
             f"{fam} not built; got {sorted(cons)}"
         )
+
+
+def test_all_seven_blocks_compose():
+    """The 7 log-value blocks compose together: every referenced var resolves by
+    name (dedup first-wins), and every equation family builds. This is the coherence
+    gate; numeric identity vs the port is the Task-10 transitive solve gate."""
+    from tests.templates.gtap_logvalue._harness import build_all_blocks
+
+    pm = build_all_blocks()
+    cons = _con_names(pm)
+    # spot-check one family from each block is present
+    for fam in ["e_qo", "e_peb", "e_qxs", "e_qds", "e_qpa", "e_y", "e_rorg"]:
+        assert any(n.startswith(fam) for n in cons), (
+            f"{fam} missing; got {len(cons)} cons"
+        )

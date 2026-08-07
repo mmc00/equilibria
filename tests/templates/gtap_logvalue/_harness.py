@@ -50,9 +50,26 @@ def _block_sets(sol: dict[str, Any]) -> dict[str, list[str]]:
         "fs": list(s.get("endws", [])),
         "ff": list(s.get("endwf", [])),
         "fms": list(s.get("endwms", [])),
+        "fc": list(s.get("endwc", [])),
         "marg": list(s.get("marg", [])),
         "rp": list(s["reg"]),
     }
+
+
+def build_all_blocks(dataset: str = "gtap7_3x3"):
+    """Compose all 7 log-value blocks through PyomoBackend; return the ConcreteModel."""
+    from equilibria.blocks.gtap_logvalue import GTAP_LOGVALUE_BLOCK_ORDER
+
+    sol = load_sol(dataset)
+    setmap = _block_sets(sol)
+    model = Model(name="gtap_logvalue_all")
+    for name, elems in setmap.items():
+        model.add_set(ESet(name=name, elements=tuple(elems)))
+    for cls in GTAP_LOGVALUE_BLOCK_ORDER:
+        model.add_block(cls(sol=sol))
+    backend = PyomoBackend()
+    backend.build(model)
+    return backend.pyomo_model
 
 
 def build_one_block(block_cls, dataset: str = "gtap7_3x3", deps=()):
