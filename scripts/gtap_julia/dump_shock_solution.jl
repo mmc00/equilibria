@@ -34,8 +34,11 @@ rebuild_model!(mc)
 mc.fixed = deepcopy(fd)
 run_model!(mc)  # base
 
+# MULTIPLICATIVE tariff shock (× base power), matching GEMPACK, the levels block,
+# run_julia_oracle.jl and the Pyomo port. A flat `= tariff_power` under-shocks
+# positive-tariff routes and biases the Armington sourcing response.
 for c in hSets["comm"], s in hSets["reg"], d in hSets["reg"]
-    try; mc.data["tms"][c, s, d] = tariff_power; catch; end
+    try; mc.data["tms"][c, s, d] *= tariff_power; catch; end
 end
 run_model!(mc)  # shock
 

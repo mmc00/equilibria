@@ -68,9 +68,15 @@ open(out_base, "w") do io
     for v in VARS; dumpvar(io, v); end
 end
 
-println(">>> apply tariff shock (tms power = $tariff_power on all bilateral)"); flush(stdout)
+println(">>> apply tariff shock (tms power *= $tariff_power on all bilateral)"); flush(stdout)
+# MULTIPLICATIVE shock: scale each bilateral tms power by tariff_power, matching
+# GEMPACK's `Shock tm = uniform 10` (the power rises 10%) and the levels block
+# ((1+imptx)*1.10). A route with base power 1.0145 becomes 1.116, NOT a flat 1.10.
+# Setting tms = tariff_power (absolute) under-shocks positive-tariff routes and biases
+# the Armington sourcing response — it disagreed with run_from_csv.jl (×tariff) and
+# with the Pyomo port (model.solve_shock, now × base).
 for c in comms, s in regs, d in regs
-    try; mc.data["tms"][c, s, d] = tariff_power; catch; end
+    try; mc.data["tms"][c, s, d] *= tariff_power; catch; end
 end
 run_model!(mc)
 open(out_shock, "w") do io
