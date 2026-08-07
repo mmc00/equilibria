@@ -27,10 +27,14 @@ from pathlib import Path
 # Paths whose tracked content determines gate results.
 INPUT_TREES = [
     "src/equilibria/templates/gtap",
+    "src/equilibria/templates/gtap_logvalue",
+    "src/equilibria/blocks/gtap_logvalue",
     "scripts/gtap",
     "tests/templates/gtap",
+    "tests/templates/gtap_logvalue",
     "tests/fixtures/gtap7",
     "tests/fixtures/gtap7_altertax",
+    "tests/fixtures/gtap_logvalue",
 ]
 
 # Generated docs that must be committed in sync with a gate run.
