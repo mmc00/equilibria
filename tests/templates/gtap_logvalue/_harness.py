@@ -46,18 +46,26 @@ def _block_sets(sol: dict[str, Any]) -> dict[str, list[str]]:
         "i": list(s["comm"]),
         "a": list(s["acts"]),
         "f": list(s["endw"]),
+        "fm": list(s.get("endwm", [])),
+        "fs": list(s.get("endws", [])),
+        "ff": list(s.get("endwf", [])),
+        "fms": list(s.get("endwms", [])),
         "marg": list(s.get("marg", [])),
         "rp": list(s["reg"]),
     }
 
 
-def build_one_block(block_cls, dataset: str = "gtap7_3x3"):
-    """Compose a single block through PyomoBackend; return the Pyomo ConcreteModel."""
+def build_one_block(block_cls, dataset: str = "gtap7_3x3", deps=()):
+    """Compose a block (plus any dependency blocks that own vars it consumes) through
+    PyomoBackend; return the Pyomo ConcreteModel. A block that references a var owned
+    by an earlier block in GTAP_LOGVALUE_BLOCK_ORDER must pass those as `deps`."""
     sol = load_sol(dataset)
     setmap = _block_sets(sol)
     model = Model(name="gtap_logvalue_one")
     for name, elems in setmap.items():
         model.add_set(ESet(name=name, elements=tuple(elems)))
+    for dep_cls in deps:
+        model.add_block(dep_cls(sol=sol))
     model.add_block(block_cls(sol=sol))
     backend = PyomoBackend()
     backend.build(model)
