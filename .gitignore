@@ -282,6 +282,7 @@ scripts/gtap/*
 !scripts/gtap/gempack_reference.py
 !scripts/gtap/inspect_updated_har.py
 !scripts/gtap/run_gempack_matrix.py
+!scripts/gtap/GENERATE_MISSING_LEVELS_FIXTURES.md
 !scripts/gtap/reconstruct_9x10_eflg.py
 !scripts/gtap/verify_ifsub_equivalence.py
 !scripts/gtap/gen_linearization_study.py
