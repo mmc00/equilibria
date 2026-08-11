@@ -10,11 +10,17 @@ absolutos de valor** (~99.4%, la económicamente correcta). Esa métrica lee los
 `updated_<ds>_<closure>.har` de GEMPACK (la base de datos GTAP post-shock en niveles).
 
 Ya existen los `updated_*_capfix.har` de **10x7 y 15x10**, y los capFlex (default, sin
-sufijo) de todos. **Faltan los `_capfix` de 3x3, 3x4 y 5x5.** Este documento explica
-cómo generarlos.
+sufijo) de **todos los datasets, incluido 20x41**. **Faltan los `_capfix` de 3x3, 3x4,
+5x5 y (a intentar) 20x41.** Este documento explica cómo generarlos.
 
-- **20x41 se OMITE**: GEMPACK no resuelve ese dataset (loge-of-negative en E_u para el
-  Caribe) — es un límite del lado GEMPACK, no del nuestro.
+- **20x41 capFix es INCIERTO**: el 20x41 SÍ resuelve en GEMPACK bajo capFlex (su
+  `updated_gtap7_20x41_tm10_s8-16-32.har` existe), pero el capFix (RORDELTA=0) puede
+  fallar (loge-of-negative en E_u para el Caribe). Lo incluimos igual: si resuelve,
+  ganamos el fixture; si no, el script lo reporta `FAIL` y sigue sin romper nada.
+
+- **ifSUB NO aplica a GEMPACK**: ifSUB es una convención de NUESTRO modelo (subsidio al
+  margen); GEMPACK no lo modela — su solución es única e ifSUB-agnóstica (ifSUB 0 y 1 se
+  comparan contra la MISMA referencia GEMPACK). No hay ni puede haber fixtures ifSUB aquí.
 
 ## Requisitos en la máquina Windows
 
@@ -26,12 +32,12 @@ cómo generarlos.
 
 ## Comando a ejecutar
 
-Desde la raíz del repo, generar SOLO los capFix (rordelta=0) de los tres datasets que
-faltan:
+Desde la raíz del repo, generar los capFix (rordelta=0) de los datasets que faltan
+(incluye 20x41 a intentar — si falla, el script sigue):
 
 ```bat
 uv run python scripts\gtap\run_gempack_matrix.py ^
-    --datasets gtap7_3x3 gtap7_3x4 gtap7_5x5 ^
+    --datasets gtap7_3x3 gtap7_3x4 gtap7_5x5 gtap7_20x41 ^
     --rordelta 0 ^
     --gtapv7 C:\runGTAP375\gtapv7.exe
 ```
@@ -47,13 +53,15 @@ El script:
 
 ## Salida esperada
 
-Tres archivos nuevos en `tests/fixtures/gtap7_gempack/`:
+Archivos nuevos en `tests/fixtures/gtap7_gempack/` (los 3 chicos seguro, 20x41 quizá):
 - `updated_gtap7_3x3_tm10_s8-16-32_capfix.har`
 - `updated_gtap7_3x4_tm10_s8-16-32_capfix.har`
 - `updated_gtap7_5x5_tm10_s8-16-32_capfix.har`
+- `updated_gtap7_20x41_tm10_s8-16-32_capfix.har`  (SOLO si el 20x41 resuelve en capFix)
 
 El script imprime `OK` / `FAIL` por dataset y el tamaño del `updated=...B`. Un OK con
-tamaño > 0 = fixture buena.
+tamaño > 0 = fixture buena. Si 20x41 sale `FAIL` (loge-of-negative en E_u), es esperado
+— quédate con los 3 chicos.
 
 ## Después (de vuelta en el Mac / repo principal)
 
