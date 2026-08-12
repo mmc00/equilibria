@@ -169,8 +169,18 @@ class IncomeBlock(Block):
         )
         _q("yi", ("r",), self._yi_init(regions), lower=float("-inf"), dom="Reals")
         _q("rsav", ("r",), np.zeros(nr), lower=float("-inf"), dom="Reals")
-        # facty: NonNeg lb=0 (4750).
-        _q("facty", ("r",), np.array([self._facty_init(r) for r in regions]))
+        # facty: within=Reals FREE — GAMS declares factY under `Variables`, not
+        # `Positive Variables` (reference/gtap/scripts/model.gms:53). Factor income NET
+        # of depreciation is NEGATIVE for small capital-heavy regions in a period
+        # (13 regions in gtap7_20x41). Its income-account siblings (regy/yc/yg/yi/rsav)
+        # are all Reals; only facty had the default NonNeg lb=0, which fought eq_facty.
+        _q(
+            "facty",
+            ("r",),
+            np.array([self._facty_init(r) for r in regions]),
+            lower=float("-inf"),
+            dom="Reals",
+        )
         # ytax/ytaxTot/ytax_ind/ytaxshr: within=Reals FREE (4756-4782).
         ny = len(gy)
         _q("ytax", ("r", "gy"), np.zeros((nr, ny)), lower=float("-inf"), dom="Reals")
