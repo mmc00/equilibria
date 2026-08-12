@@ -14,7 +14,7 @@ from equilibria.templates.gtap.gtap_block_model import (
     _calibrate_capflex_risk,
 )
 
-from .composer import fix_padding_routes
+from .composer import fix_padding_routes, relax_dissaving_domain
 
 
 def build_sparse_model_mp(
@@ -51,6 +51,12 @@ def build_sparse_model_mp(
 
     # SPARSE layer: fix padding-route vars to ~0 + deactivate their constraints.
     fix_stats = fix_padding_routes(m, params, sets)
+
+    # DISSAVING fix: relax us domain to Reals for regions with negative benchmark
+    # savings (EGY in 20x41) — their us is genuinely negative (verified vs GEMPACK:
+    # SAVE[EGY]=-12635, u[EGY]=-0.28), and NonNegativeReals forces an overflow.
+    diss_stats = relax_dissaving_domain(m, params, sets)
+    fix_stats["dissaving"] = diss_stats
 
     if base_calibrated:
         from equilibria.blocks.gtap.factor import FactorBlock

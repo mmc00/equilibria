@@ -145,3 +145,34 @@ def fix_padding_routes(pm: Any, params: Any, sets: Any) -> dict:
         "vars_fixed": n_var_fixed,
         "cons_deactivated": n_con_off,
     }
+
+
+def relax_dissaving_domain(pm: Any, params: Any, sets: Any) -> dict:
+    """Relax the domain of the savings-utility var `us` from NonNegativeReals to Reals
+    for regions with NEGATIVE benchmark savings (gross dissaving / current-account
+    deficit — e.g. EGY in gtap7_20x41 has save=-0.0123). `us = aus*rsav/(psave*pop)`
+    inherits the sign of rsav, so for a dissaving region `us<0` — VERIFIED faithful:
+    GEMPACK's own 20x41 solution keeps SAVE[EGY]=-12635 and u[EGY]=-0.28 negative, and
+    GAMS keeps rsav negative (gtap_model_equations.py:2409). The NonNegativeReals domain
+    is therefore too strict: it forces us[EGY]≥0, the seed lands at a huge negative value
+    that violates the bound, and IPOPT overflows (resid 2.29e9 on 20x41). This is the ONLY
+    region-with-dissaving in the whole dataset family (3x3..15x10 have none), which is why
+    only 20x41 hits it. Mutating `.domain` (not setlb(None)) actually drops the ≥0 bound."""
+    from pyomo.environ import Reals
+
+    save = getattr(params.benchmark, "save", {}) or {}
+    diss = {(r[0] if isinstance(r, tuple) else r) for r, v in save.items() if v < 0.0}
+    n = 0
+    if not diss:
+        return {"dissaving_regions": [], "us_cells_relaxed": 0}
+    us = getattr(pm, "us", None)
+    if us is not None:
+        for idx in us:
+            # us is indexed by r or (r, period); relax the dissaving regions' cells.
+            r = idx[0] if isinstance(idx, tuple) else idx
+            if r in diss:
+                vd = us[idx]
+                if not vd.fixed and vd.domain is not Reals:
+                    vd.domain = Reals
+                    n += 1
+    return {"dissaving_regions": sorted(diss), "us_cells_relaxed": n}
