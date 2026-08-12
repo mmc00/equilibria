@@ -1107,8 +1107,12 @@ class GTAPModelEquations:
                         value(model.betas[r]) * value(model.phi[r]) * regy_raw
                     )
             # Recalibrate aus consistently with final rsav.
-            # GAMS identity: aus.l(r) = pop.l(r) / (psave.l(r) * rsav.l(r))
-            # This ensures eq_us: us = aus*rsav/(psave*pop) gives us=1 at benchmark.
+            # GAMS identity (cal.gms:800): aus.l(r) = us.l*pop.l/(rsav.l/psave.l)
+            #                                       = pop.l(r) * psave.l(r) / rsav.l(r)
+            # (psave in the NUMERATOR — from pop/(rsav/psave)). This ensures eq_us:
+            # us = aus*rsav/(psave*pop) gives us=1 at benchmark. rsav may be NEGATIVE
+            # for a dissaving region (EGY) → aus negative, us still +1; gate on
+            # abs(rsav)>1e-12 (NOT rsav>1e-12) so dissavers get the consistent recal too.
             if hasattr(model, "aus") and r in model.aus:
                 rsav_val = (
                     value(model.rsav[r])
@@ -1121,8 +1125,8 @@ class GTAPModelEquations:
                     if hasattr(model, "psave") and r in model.psave
                     else 1.0
                 )
-                if rsav_val > 1e-12 and pop_val > 1e-12:
-                    model.aus[r].set_value(pop_val / (psave_val * rsav_val))
+                if abs(rsav_val) > 1e-12 and pop_val > 1e-12:
+                    model.aus[r].set_value(pop_val * psave_val / rsav_val)
             # GAMS cal.gms:619 calibrates betaP from BENCHMARK yc/regY (line ~1787).
             # Re-calibrating from post-init perturbed yc/xaa biases betap away from
             # the GAMS calibration (USA: 0.7634 vs GAMS 0.7772, ROW: 0.6091 vs 0.6322).
@@ -2578,7 +2582,16 @@ class GTAPModelEquations:
                 auh_data[(region,)] = 1.0
 
             aug_data[(region,)] = pop_data[(region,)] / max(government_total, 1e-12)
-            aus_data[(region,)] = pop_data[(region,)] / max(savings_total, 1e-12)
+            # aus = us·pop/(rsav/psave) = pop·psave/rsav at us=psave=1 (cal.gms:800).
+            # A dissaving region (EGY in 20x41) has savings_total = save = rsav < 0, and
+            # GAMS keeps aus NEGATIVE (no clamp, no dissaver branch) so that eq_us gives
+            # us = aus·rsav/(psave·pop) = +1 at benchmark like every other region — the
+            # negative sign lives in the flow rsav, never in the utility index us. A
+            # `max(savings_total, 1e-12)` clamp would floor -0.0131 to 1e-12 → aus ≈ 1e10
+            # → us seed ≈ -1.3e10 → IPOPT overflow. Divide by the SIGNED savings_total,
+            # guarding only against an exact zero (which GAMS would divide-by-zero on too).
+            _sav_den = savings_total if abs(savings_total) > 1e-12 else 1e-12
+            aus_data[(region,)] = pop_data[(region,)] / _sav_den
             au_data[(region,)] = 1.0
 
         inv_weight_den = 0.0
@@ -4749,7 +4762,14 @@ class GTAPModelEquations:
         )
         model.facty = Var(
             model.r,
-            within=NonNegativeReals,
+            # GAMS declares factY under `Variables` (FREE), not `Positive Variables`
+            # (reference/gtap/scripts/model.gms:53) — factor income NET of depreciation
+            # can be NEGATIVE for a small capital-heavy region in a period (13 regions in
+            # gtap7_20x41: NZL/CHL/COL/PER/URY/PRY/CentralAmer/Caribbean/ARE/ISR/ZAF/EFTA/
+            # EasternEur, facty ~ -0.004..-0.017). eq_facty and the seed both already allow
+            # negative; only this domain was too strict (its income-account siblings regy/
+            # yc/yg/yi/rsav are all `Reals`). Positive-facty datasets are unaffected.
+            within=Reals,
             initialize=get_facty_init,
             doc="Factor income net of depreciation",
         )

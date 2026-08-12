@@ -148,31 +148,28 @@ def fix_padding_routes(pm: Any, params: Any, sets: Any) -> dict:
 
 
 def relax_dissaving_domain(pm: Any, params: Any, sets: Any) -> dict:
-    """Relax the domain of the savings-utility var `us` from NonNegativeReals to Reals
-    for regions with NEGATIVE benchmark savings (gross dissaving / current-account
-    deficit — e.g. EGY in gtap7_20x41 has save=-0.0123). `us = aus*rsav/(psave*pop)`
-    inherits the sign of rsav, so for a dissaving region `us<0` — VERIFIED faithful:
-    GEMPACK's own 20x41 solution keeps SAVE[EGY]=-12635 and u[EGY]=-0.28 negative, and
-    GAMS keeps rsav negative (gtap_model_equations.py:2409). The NonNegativeReals domain
-    is therefore too strict: it forces us[EGY]≥0, the seed lands at a huge negative value
-    that violates the bound, and IPOPT overflows (resid 2.29e9 on 20x41). This is the ONLY
-    region-with-dissaving in the whole dataset family (3x3..15x10 have none), which is why
-    only 20x41 hits it. Mutating `.domain` (not setlb(None)) actually drops the ≥0 bound."""
-    from pyomo.environ import Reals
+    """No-op retained for API/import stability.
 
+    The 20x41 dissaving blocker (EGY) was NOT a `us`-domain problem — it was a
+    calibration bug in `aus`. GTAP v7's `us` (savings utility index) is normalized to
+    +1 at the benchmark for EVERY region, dissaver or not (cal.gms:271 `us.l=1` with no
+    condition); the NEGATIVE sign of a dissaving region lives in the FLOW `rsav<0` and in
+    the shift/share params `aus`, `betaS` — never in the utility index `us`. GAMS
+    calibrates `aus.l = us.l*pop.l/(rsav.l/psave.l)` (cal.gms:800, no clamp, no dissaver
+    branch), so `rsav<0` → `aus<0` and `us = aus*rsav/(psave*pop) = +1`. Our earlier
+    `max(savings_total, 1e-12)` clamp in gtap_model_equations.py floored EGY's negative
+    savings to 1e-12 → aus≈1e10 → us seed ≈-1.3e10 → the "-13081451079 outside bounds
+    (0,None)" overflow. Removing the clamp (aus stays finite ≈-76, us seeds to +1) fixes
+    it at the ROOT; `us` never needs to leave NonNegativeReals (matching GAMS's implicit
+    log(us) requirement — us>0 at the interior root, GEMPACK gives u[EGY]=-0.28% ⇒
+    us≈0.997>0). This shim therefore does nothing now, kept only so the sparse
+    multiperiod builder's import/call site stays stable."""
     save = getattr(params.benchmark, "save", {}) or {}
-    diss = {(r[0] if isinstance(r, tuple) else r) for r, v in save.items() if v < 0.0}
-    n = 0
-    if not diss:
-        return {"dissaving_regions": [], "us_cells_relaxed": 0}
-    us = getattr(pm, "us", None)
-    if us is not None:
-        for idx in us:
-            # us is indexed by r or (r, period); relax the dissaving regions' cells.
-            r = idx[0] if isinstance(idx, tuple) else idx
-            if r in diss:
-                vd = us[idx]
-                if not vd.fixed and vd.domain is not Reals:
-                    vd.domain = Reals
-                    n += 1
-    return {"dissaving_regions": sorted(diss), "us_cells_relaxed": n}
+    diss = sorted(
+        {(r[0] if isinstance(r, tuple) else r) for r, v in save.items() if v < 0.0}
+    )
+    return {
+        "dissaving_regions": diss,
+        "us_cells_relaxed": 0,
+        "note": "aus-clamp-fixed-at-root",
+    }
