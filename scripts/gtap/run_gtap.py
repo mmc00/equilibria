@@ -1992,12 +1992,18 @@ def _run_path_capi_nonlinear_full(
     if path_license_string:
         os.environ["PATH_LICENSE_STRING"] = path_license_string
 
+    # In NLP-solve mode the solve goes through IPOPT and never touches PATHLoader /
+    # PyomoMCPAdapter / solve_nonlinear_mcp — so a missing path_capi_python (portable
+    # NLP runs, e.g. Colab where only IPOPT is installed) must NOT abort. Only require
+    # the native PATH bindings for the actual MCP/PATH path.
     try:
         from path_capi_python import PATHLoader, PyomoMCPAdapter, solve_nonlinear_mcp  # type: ignore
     except Exception as exc:
-        raise RuntimeError(
-            "Unable to import path_capi_python. Ensure /Users/marmol/proyectos/path-capi-python exists."
-        ) from exc
+        if not os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP"):
+            raise RuntimeError(
+                "Unable to import path_capi_python. Ensure /Users/marmol/proyectos/path-capi-python exists."
+            ) from exc
+        PATHLoader = PyomoMCPAdapter = solve_nonlinear_mcp = None  # type: ignore
 
     from pyomo.environ import Constraint
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
@@ -2269,15 +2275,25 @@ def _run_path_capi_nonlinear_full(
                 if _vd.lb is None or _vd.lb < _lb:
                     _vd.setlb(_lb)
 
-    adapter = PyomoMCPAdapter()
-    model_summary = adapter.summarize_model(model)
+    # In NLP-solve mode (EQUILIBRIA_GTAP_SOLVE_NLP) the actual solve goes through
+    # IPOPT further down and NEVER uses the PATH runtime, adapter summary, or the
+    # native PATH/LUSOL binaries. Loading them here is dead work AND it hard-requires
+    # the native libs — which breaks portable NLP runs (e.g. Colab, where only IPOPT
+    # is available). Skip the whole PATH-load block when solving as NLP; `constraints`
+    # / `free_variables` below are computed straight from the Pyomo model, not from
+    # `model_summary` / `runtime`.
+    _nlp_mode_early = bool(os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP"))
+    model_summary = runtime = version = None
+    if not _nlp_mode_early:
+        adapter = PyomoMCPAdapter()
+        model_summary = adapter.summarize_model(model)
 
-    path_lib = Path(os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))).expanduser()
-    lusol_lib = Path(os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))).expanduser()
+        path_lib = Path(os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))).expanduser()
+        lusol_lib = Path(os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))).expanduser()
 
-    loader = PATHLoader(path_lib=path_lib, lusol_lib=lusol_lib)
-    runtime = loader.load()
-    version = loader.version(runtime)
+        loader = PATHLoader(path_lib=path_lib, lusol_lib=lusol_lib)
+        runtime = loader.load()
+        version = loader.version(runtime)
 
     # Mirror GAMS numeraire chain: pnum.fx=1 + pnumeq(pnum=pwfact, free row) +
     # pwfacteq.pwfact (Tornqvist, MCP pair). Leave pwfact FREE and both eqs active.
@@ -2680,6 +2696,58 @@ def _run_path_capi_nonlinear_full(
 
         _scaled_nl_export_path = os.environ.get("EQUILIBRIA_DEBUG_EXPORT_SCALED_NL")
         if _scaled_nl_export_path:
+            # Insert the period into the filename so base/check/shock each get their own
+            # .nl. Detect the period from `constraints` (the squared system being solved
+            # NOW — already period-filtered), by their trailing index tag.
+            _pv_tag: dict = {"base": 0, "check": 0, "shock": 0}
+            for _cn in constraints:
+                _nm = getattr(_cn, "name", str(_cn))
+                for _pp in ("base", "check", "shock"):
+                    if _nm.endswith(f",{_pp}]") or _nm.endswith(f"[{_pp}]") or _nm.endswith(f"_{_pp}"):
+                        _pv_tag[_pp] += 1
+                        break
+            _p_tag = max(_pv_tag, key=_pv_tag.get) if any(_pv_tag.values()) else "unknown"
+            _sp = Path(_scaled_nl_export_path)
+            _scaled_nl_export_path = str(_sp.with_name(f"{_sp.stem}_{_p_tag}{_sp.suffix}"))
+            # Optional: seed the export point from a GDX (e.g. CONOPT's solved out.gdx)
+            # so the .nl's initial values ARE that solution — for the "does Uno converge
+            # from the true root?" oracle test. Overwrites var values by (name, index)
+            # with the c_/a_ prefix stripped, only for the current period t.
+            _seed_gdx = os.environ.get("EQUILIBRIA_SEED_FROM_GDX")
+            if _seed_gdx:
+                import sys as _sys_s
+                _sys_s.path.insert(0, str(Path(__file__).resolve().parent))
+                from _diff_core import gams_levels as _gl, list_populated_vars as _lpv, split_t as _st
+
+                def _strip_s(x):
+                    return x[2:] if (isinstance(x, str) and len(x) > 2 and x[1] == "_" and x[0] in "acfr") else x
+
+                _t_cur = getattr(_solve_target, "_period_tag", None) or "check"
+                _nseed = 0
+                for _vn in _lpv(_seed_gdx):
+                    _pv = getattr(_solve_target, _vn.lower(), None) or getattr(_solve_target, _vn, None)
+                    if _pv is None:
+                        continue
+                    try:
+                        _g = _gl(_seed_gdx, _vn)
+                    except Exception:
+                        continue
+                    for _fk, _val in _g.items():
+                        try:
+                            _body, _tt = _st(_fk)
+                        except Exception:
+                            continue
+                        if _tt not in (_t_cur, None):
+                            continue
+                        _stk = tuple(_strip_s(x) for x in _body) if isinstance(_body, tuple) else (_strip_s(_body),)
+                        for _key in (_stk, (*_stk, _t_cur), (_stk[0] if len(_stk) == 1 else _stk)):
+                            try:
+                                _pv[_key].set_value(_val)
+                                _nseed += 1
+                                break
+                            except Exception:
+                                pass
+                print(f"[nlp-square] SEEDED .nl export from {Path(_seed_gdx).name}: {_nseed} cells (period {_t_cur})", file=sys.stderr)
             _solve_target.write(_scaled_nl_export_path, format="nl",
                                  io_options={"symbolic_solver_labels": True})
             print(f"[nlp-square] wrote SCALED .nl to {_scaled_nl_export_path} "
@@ -2715,6 +2783,25 @@ def _run_path_capi_nonlinear_full(
             )
             print(f"[nlp-square] solved via GAMS/IPOPT: status={res.solver.status} "
                   f"term={res.solver.termination_condition}", file=sys.stderr)
+        elif os.environ.get("EQUILIBRIA_GTAP_SOLVE_NEOS"):
+            # DIAGNOSTIC HOOK (env-gated, session-local): solve the NLP-square via
+            # NEOS instead of local IPOPT — lifts the local ~20-min wall-clock cap
+            # for the largest datasets (20x41). Pyomo's SolverManagerFactory('neos')
+            # exports the model to .nl, submits to NEOS with the chosen solver
+            # (EQUILIBRIA_GTAP_SOLVE_NEOS = solver name, e.g. "ipopt"/"conopt"), and
+            # loads the solution back INTO the Pyomo Vars — so the post-solve level
+            # read (pd*xda+pmt*xma) is identical to the local path. Faithful: same
+            # model, same solver family, only the compute host differs.
+            from pyomo.opt import SolverManagerFactory as _PyoSMF3
+            _neos_solver = os.environ["EQUILIBRIA_GTAP_SOLVE_NEOS"]
+            if _neos_solver in ("1", "true", "yes"):
+                _neos_solver = "ipopt"
+            print(f"[nlp-square] solving via NEOS/{_neos_solver} (remote, no local "
+                  f"time cap)", file=sys.stderr)
+            _sm = _PyoSMF3("neos")
+            res = _sm.solve(_solve_target, opt=_neos_solver, tee=True)
+            print(f"[nlp-square] NEOS/{_neos_solver} done: status={res.solver.status} "
+                  f"term={res.solver.termination_condition}", file=sys.stderr)
         else:
             opt = _PyoSF3("ipopt")
             # ROOT CAUSE (confirmed via GAMS's own IPOPT solver manual,
@@ -2730,6 +2817,20 @@ def _run_path_capi_nonlinear_full(
             # none replicates GAMS under scaleopt=1: one scaling pass.
             opt.options["nlp_scaling_method"] = "none"
             opt.options["max_iter"] = 1000
+            # Experimental override (A/B the CONOPT-mimic recipe without editing this
+            # block): EQUILIBRIA_IPOPT_OPTS='{"nlp_scaling_method":"gradient-based",
+            # "nlp_scaling_max_gradient":100,"mu_strategy":"monotone", ...}'. Applied
+            # LAST so it wins over the faithful-to-GAMS scaling=none default above. The
+            # premise (Fable): scaling=none is exactly what makes IPOPT fail on the
+            # ill-conditioned (ke/kb)^rorflex=10 capital row where CONOPT (with its GRG
+            # row rescaling) succeeds — re-scaling that row is the lever. The SOLUTION
+            # (root) is unchanged; scaling is an internal solver transform, not a model change.
+            _ipopt_override = os.environ.get("EQUILIBRIA_IPOPT_OPTS")
+            if _ipopt_override:
+                import json as _json_ovr
+
+                for _k_ovr, _v_ovr in _json_ovr.loads(_ipopt_override).items():
+                    opt.options[_k_ovr] = _v_ovr
             # In SOLVE_NLP mode, tolerate a non-optimal IPOPT exit: load whatever
             # solution IPOPT reached (load_solutions=False avoids the hard
             # "bad status: error" raise) and propagate it so the period still

@@ -3368,6 +3368,16 @@ def solve_multiperiod(
             opt.options["bound_relax_factor"] = 0
             opt.options["mu_strategy"] = "adaptive"
             opt.options["tol"] = 1e-7
+            # Experimental override: EQUILIBRIA_IPOPT_OPTS='{"mu_strategy":"monotone",...}'
+            # lets us A/B IPOPT options (e.g. the CONOPT-mimic recipe: monotone barrier,
+            # no mehrotra, capped gradient scaling) WITHOUT editing this block. Values are
+            # applied last so they win. Only affects the NLP-square capFlex solve here.
+            _ipopt_override = os.environ.get("EQUILIBRIA_IPOPT_OPTS")
+            if _ipopt_override:
+                import json as _json
+
+                for _k, _v in _json.loads(_ipopt_override).items():
+                    opt.options[_k] = _v
             res = opt.solve(m, tee=True)
             rows = []
             for c in m.component_objects(_PyoConstraint2, active=True):
@@ -3721,15 +3731,75 @@ def solve_multiperiod(
         )
 
     # Solve shock on m with shocked params.
-    r_shk = run_gtap._run_path_capi_nonlinear_full(
-        m,
-        params_shock,
-        enforce_post_checks=False,
-        strict_path_capi=False,
-        closure_config=_shk_closure,
-        equation_scaling=True,
-        solution_hint=None,
-    )
+    # CONTINUATION HOOK (env-gated, EQUILIBRIA_GTAP_SHOCK_CONTINUATION="0.25,0.5,0.75,1.0"):
+    # instead of solving the full +10% shock in one Newton jump from the check point
+    # (which overflows CES x^(-rho) far from the root on the largest datasets, e.g.
+    # 20x41 inf_pr 2.29e9), walk the tariff up in sub-steps λ. This mirrors GEMPACK's
+    # Euler/Gragg path: each sub-solve starts from the previous λ's solution (the Vars
+    # retain their values → warm start), so Newton never leaves the well-conditioned
+    # neighbourhood of a root. The model is built ONCE; only _apply_imptx_shock (any
+    # factor) + _rebuild_eq_pmeq_shock/_rebuild_eq_ytax_mt_shock (idempotent, re-invoked
+    # per λ) are re-run. Produces OUR levels solution, not GEMPACK's.
+    _cont_env = os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION")
+    if _cont_env and _gtap_mode:
+        _lambdas = [float(x) for x in _cont_env.split(",") if x.strip()]
+        if not _lambdas or _lambdas[-1] != 1.0:
+            _lambdas.append(1.0)
+        import logging as _logc
+
+        _logc.getLogger(__name__).info(
+            "shock CONTINUATION: %d sub-steps λ=%s (tariff walked up gradually)",
+            len(_lambdas),
+            _lambdas,
+        )
+        r_shk = None
+        for _i_lam, _lam in enumerate(_lambdas):
+            _p_lam = copy.deepcopy(p_alt)
+            # interpolate on the tariff POWER (GEMPACK-consistent): (1+0.10)^λ - 1.
+            _f_lam = (1.0 + 0.10) ** _lam - 1.0
+            _apply_imptx_shock(_p_lam, factor=_f_lam, gtap_mode=_gtap_mode)
+            _rebuild_eq_pmeq_shock(m, _p_lam)
+            _rebuild_eq_ytax_mt_shock(m, _p_lam)
+            r_shk = run_gtap._run_path_capi_nonlinear_full(
+                m,
+                _p_lam,
+                enforce_post_checks=False,
+                strict_path_capi=False,
+                closure_config=_shk_closure,
+                equation_scaling=True,
+                solution_hint=None,
+            )
+            _c_lam = int(r_shk.get("termination_code") or 0)
+            _r_lam = float(r_shk.get("residual") or float("inf"))
+            _logc.getLogger(__name__).info(
+                "  continuation λ=%.4f (tariff %.2f%%): code=%d resid=%.2e",
+                _lam,
+                _f_lam * 100,
+                _c_lam,
+                _r_lam,
+            )
+            print(
+                f"[continuation] λ={_lam:.4f} tariff={_f_lam * 100:.2f}% "
+                f"code={_c_lam} resid={_r_lam:.2e}",
+                file=sys.stderr,
+            )
+            if _c_lam != 1:
+                print(
+                    f"[continuation] sub-step λ={_lam} did NOT converge (code={_c_lam}) "
+                    f"— aborting continuation",
+                    file=sys.stderr,
+                )
+                break
+    else:
+        r_shk = run_gtap._run_path_capi_nonlinear_full(
+            m,
+            params_shock,
+            enforce_post_checks=False,
+            strict_path_capi=False,
+            closure_config=_shk_closure,
+            equation_scaling=True,
+            solution_hint=None,
+        )
     code_shk = int(r_shk.get("termination_code") or 0)
     res_shk = float(r_shk.get("residual") or float("inf"))
     results["shock"] = {"code": code_shk, "residual": res_shk}
