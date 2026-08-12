@@ -189,6 +189,45 @@ def _and_ava_nd_pio(params: Any, sets: Any):
     return adjusted_and, adjusted_ava, adjusted_nd_share, adjusted_p_io
 
 
+def va_bench_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
+    """va.l seed (monolith get_va_init, gtap_model_equations.py:3380): value added at
+    purchaser value = sum_f(evfb + (ftrv - fbep)). NOT 1.0 — a flat 1.0 seed, once
+    apply_production_scaling multiplies it by xScale=10^-round(log10 xp), lands at ~1e5
+    for a near-zero-production cell (NZL/Rice: xp~5e-6 → xScale=1e5), making eq_va's body
+    ~1e5 (IPOPT internalSolverError on 20x41). Seeding the real benchmark va keeps it
+    consistent with xp under scaling (xScale cancels in va=ava·xp·...)."""
+    bm = params.benchmark
+    out: dict[tuple[str, str], float] = {}
+    for r in sets.r:
+        for a in sets.a:
+            va = 0.0
+            for f in sets.f:
+                evfb_val = _f(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)))
+                if evfb_val <= 0.0:
+                    continue
+                fbep_val = _f(bm.fbep.get((r, f, a), 0.0))
+                ftrv_val = _f(bm.ftrv.get((r, f, a), 0.0))
+                va += evfb_val + (ftrv_val - fbep_val)
+            out[(r, a)] = max(va, 1e-8)
+    return out
+
+
+def nd_bench_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
+    """nd.l seed (monolith get_nd_init, gtap_model_equations.py:3387): ND bundle at
+    purchaser value = sum_i(vdfp + vmfp). Same flat-1.0-vs-xScale bug as va (see
+    va_bench_data)."""
+    bm = params.benchmark
+    out: dict[tuple[str, str], float] = {}
+    for r in sets.r:
+        for a in sets.a:
+            nd = sum(
+                _f(bm.vdfp.get((r, i, a), 0.0)) + _f(bm.vmfp.get((r, i, a), 0.0))
+                for i in sets.i
+            )
+            out[(r, a)] = max(nd, 1e-8)
+    return out
+
+
 def and_param_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
     return _and_ava_nd_pio(params, sets)[0]
 
