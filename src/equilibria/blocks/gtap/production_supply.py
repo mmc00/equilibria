@@ -209,8 +209,17 @@ class ProductionSupplyBlock(Block):
         _price("ps", ("r", "i"), ones_ri)
         _price("pd", ("r", "i"), ones_ri)
         # va/nd/pva/pnd (production nest bundles) — monolith 3758-3794.
-        _q("va", ("r", "a"), ones_ra)
-        _q("nd", ("r", "a"), ones_ra)
+        # Seed va/nd at their BENCHMARK value (get_va_init/get_nd_init), NOT a flat 1.0:
+        # apply_production_scaling multiplies these by xScale=10^-round(log10 xp), so a
+        # flat 1.0 in a near-zero-production cell (xp~5e-6 → xScale=1e5) becomes va=1e5,
+        # inconsistent with the unscaled-here xp → eq_va body ~1e5 → IPOPT overflow on
+        # 20x41. The real va/nd carry the scaling consistently (xScale cancels in eq_va).
+        va_bench = dp.va_bench_data(p, s)
+        nd_bench = dp.nd_bench_data(p, s)
+        va_init = np.array([[float(va_bench[(r, a)]) for a in acts] for r in regions])
+        nd_init = np.array([[float(nd_bench[(r, a)]) for a in acts] for r in regions])
+        _q("va", ("r", "a"), va_init)
+        _q("nd", ("r", "a"), nd_init)
         pva0 = getattr(p.calibrated, "pva_bench", {})
         pnd0 = getattr(p.calibrated, "pnd_bench", {})
         pva_init = np.array(
