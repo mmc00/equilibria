@@ -296,8 +296,35 @@ class ArmingtonBilateralBlock(Block):
         _q("xtmg", ("m",), xtmg_init)
         _price("ptmg", ("m",), np.ones(nm))
         # pm/pmcif (rp,i,r) exporter-first; pefob (r,i,rp) — all price floors.
-        _price("pm", ("rp", "i", "r"), np.ones((nrp, ni, nr)))
-        _price("pmcif", ("rp", "i", "r"), np.ones((nrp, ni, nr)))
+        # SEED pm/pmcif tariff-INCLUSIVE (monolith get_pm_init/get_pmcif_init,
+        # gtap_model_equations.py:4265-4320), NOT a flat 1.0. Reason: amw is
+        # calibrated as (xw/xmt)·pm_cal^sigmaw with pm_cal = vmsb/xw (the
+        # tariff+margin-inclusive price, cal.gms:823+337), so pm_cal^sigmaw is baked
+        # into amw. eq_pmteq then evaluates amw·(pm/lambdam)^(1-sigmaw); the two
+        # powers cancel to (xw/xmt)·pm = vmsb/xmt (a proper O(1) source share) ONLY
+        # when the SEED pm equals pm_cal. Seeding pm=1.0 breaks the cancellation:
+        # amw·1^(1-sigmaw) = amw itself, which for a high-tariff tiny-flow route
+        # (e.g. TUR→EGY MeatProd: pm_cal=23.75, sigmaw=8.35 → amw≈1.4e9) makes
+        # eq_pmteq's body ≈ -2.3e9 and IPOPT overflow. pm_cal = vmsb/vxsb exactly
+        # equals (1+imptx)·pmcif = (1+(vmsb-vcif)/vcif)·(vcif/vxsb). Cells with
+        # vmsb=0 or vxsb=0 keep the 1.0 floor (nest inert there). Datasets with
+        # modest tariffs (3x3..15x10) already had pm≈1, so this is a no-op there.
+        pm_init = np.ones((nrp, ni, nr))
+        pmcif_init = np.ones((nrp, ni, nr))
+        for _je, _rp in enumerate(rp_list):
+            for _ji, _i in enumerate(comms):
+                for _jr, _r in enumerate(regions):
+                    _xw = float(bm.vxsb.get((_rp, _i, _r), 0.0) or 0.0)
+                    if _xw <= 0.0:
+                        continue
+                    _vcif = float(bm.vcif.get((_rp, _i, _r), 0.0) or 0.0)
+                    _vmsb = float(bm.vmsb.get((_rp, _i, _r), 0.0) or 0.0)
+                    if _vcif > 0.0:
+                        pmcif_init[_je, _ji, _jr] = max(_vcif / _xw, 1e-8)
+                    if _vmsb > 0.0:
+                        pm_init[_je, _ji, _jr] = max(_vmsb / _xw, 1e-8)
+        _price("pm", ("rp", "i", "r"), pm_init)
+        _price("pmcif", ("rp", "i", "r"), pmcif_init)
         _price("pefob", ("r", "i", "rp"), np.ones((nr, ni, nrp)))
 
         # ------------------------------------------------------------------
