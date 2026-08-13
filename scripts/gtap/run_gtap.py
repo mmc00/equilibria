@@ -2666,6 +2666,7 @@ def _run_path_capi_nonlinear_full(
         # the raw model won't converge on very large datasets (20x41: 393k vars, Hessian
         # 251M nz). Off by default — the small/mid datasets solve raw and stay faithful.
         _bench_scale = os.environ.get("EQUILIBRIA_GTAP_BENCH_SCALE") == "1"
+        _britz_user_scaling = False
         if _bench_scale:
             try:
                 from pyomo.core.expr.visitor import identify_variables as _idvars3
@@ -2696,11 +2697,17 @@ def _run_path_capi_nonlinear_full(
                     _m = max(1.0, abs(float(_vv))) if _vv is not None else 1.0
                     model.scaling_factor[_v3] = 1.0 / _m
                     _nvar += 1
-                _skip_jacscale = False  # take the scaled path below via user-scaling
-                _solve_target = _PyoTF3("core.scale_model").create_using(model)
-                print(f"[nlp-square] BRITZ benchmark scaling applied: {_nrow} eqs, {_nvar} "
-                      f"vars scaled by 1/max(1,|x_bench|)", file=sys.stderr)
-                # NOTE: we set _solve_target here and skip the try/except Jacobian block.
+                _skip_jacscale = False
+                # Pass the scale factors to IPOPT via the scaling_factor Suffix +
+                # nlp_scaling_method=user-scaling (set on opt below), instead of
+                # core.scale_model which DEEP-COPIES the whole model (prohibitive for the
+                # 393k-var 20x41 and adds pure overhead on small ones — measured 5x5 3x
+                # slower). user-scaling lets IPOPT apply the factors internally, no copy.
+                _solve_target = model
+                _britz_user_scaling = True
+                print(f"[nlp-square] BRITZ benchmark scaling (user-scaling, no copy): "
+                      f"{_nrow} eqs, {_nvar} vars scaled by 1/max(1,|x_bench|)",
+                      file=sys.stderr)
             except Exception as _be:
                 print(f"[nlp-square] Britz benchmark scaling FAILED ({_be}); raw model",
                       file=sys.stderr)
@@ -2878,7 +2885,11 @@ def _run_path_capi_nonlinear_full(
             # — stacking a SECOND scaling pass, hitting feasibility-
             # restoration mode by iteration ~7. Setting nlp_scaling_method=
             # none replicates GAMS under scaleopt=1: one scaling pass.
-            opt.options["nlp_scaling_method"] = "none"
+            # user-scaling makes IPOPT read the scaling_factor Suffix (Britz benchmark
+            # scaling, no model copy); else none = raw model (faithful to GAMS).
+            opt.options["nlp_scaling_method"] = (
+                "user-scaling" if _britz_user_scaling else "none"
+            )
             opt.options["max_iter"] = 1000
             # Experimental override (A/B the CONOPT-mimic recipe without editing this
             # block): EQUILIBRIA_IPOPT_OPTS='{"nlp_scaling_method":"gradient-based",
