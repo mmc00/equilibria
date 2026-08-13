@@ -2909,7 +2909,11 @@ def _run_path_capi_nonlinear_full(
             # solution IPOPT reached (load_solutions=False avoids the hard
             # "bad status: error" raise) and propagate it so the period still
             # reports and the driver proceeds to measure it.
-            _tee_nlp = not _nlp_solve_mode
+            # EQUILIBRIA_GTAP_IPOPT_TEE=1 forces tee=True even in NLP mode, so the IPOPT
+            # iteration table (inf_pr/inf_du per iter) streams to stdout live — needed to
+            # SEE whether a large solve is converging or stalling (Kaggle hides the
+            # output_file log until the kernel finishes). Off by default (keeps NLP quiet).
+            _tee_nlp = (not _nlp_solve_mode) or os.environ.get("EQUILIBRIA_GTAP_IPOPT_TEE") == "1"
             try:
                 res = opt.solve(_solve_target, tee=_tee_nlp)
             except Exception as _e_nlp:
