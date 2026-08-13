@@ -2654,9 +2654,64 @@ def _run_path_capi_nonlinear_full(
         # and 10x7 pure are UNCHANGED (100% either way). So skip the pre-scale for the
         # NLP path unconditionally (raw model + nlp_scaling_method=none = what GAMS does).
         _skip_jacscale = True
-        print("[nlp-square] skipping Jacobian pre-scale (faithful to GAMS: raw model, "
-              "nlp_scaling_method=none)", file=sys.stderr)
+        # BRITZ §3.2 BENCHMARK SCALING (env-gated EQUILIBRIA_GTAP_BENCH_SCALE=1):
+        # a DIFFERENT layer than the Jacobian pre-scale above. That one scales rows/cols
+        # by max|Jacobian entry| (dynamic, geometry-distorting → steered IPOPT into a
+        # wrong basin on 5x5/altertax, hence disabled). Britz (Discussion Paper 2025:1,
+        # §3.2) instead divides each definitional equation by max(1, |x_bench|) — the
+        # STATIC benchmark level of the variable the equation defines. This normalizes
+        # equation units (a 1e6-USD flow and a unit price both become O(1)) WITHOUT
+        # touching the Jacobian geometry, so it improves the condition number the way
+        # CONOPT's row-scaling does for CGEBox, without moving the root. Used only when
+        # the raw model won't converge on very large datasets (20x41: 393k vars, Hessian
+        # 251M nz). Off by default — the small/mid datasets solve raw and stay faithful.
+        _bench_scale = os.environ.get("EQUILIBRIA_GTAP_BENCH_SCALE") == "1"
+        if _bench_scale:
+            try:
+                from pyomo.core.expr.visitor import identify_variables as _idvars3
+                from pyomo.environ import value as _bval3
+                model.scaling_factor = _PyoSuffix3(direction=_PyoSuffix3.EXPORT)
+                _nrow = 0
+                for _c3 in constraints:
+                    # scale each equation by 1/max(1, |value of the vars it defines|).
+                    # Use the max |seed value| over the constraint's own variables as the
+                    # equation's characteristic magnitude (the defined variable dominates a
+                    # definitional eq); floor at 1 so naturally-unit eqs (prices) are left ~1.
+                    try:
+                        _mag = 1.0
+                        for _v3 in _idvars3(_c3.body, include_fixed=False):
+                            _vv = _bval3(_v3, exception=False)
+                            if _vv is not None:
+                                _mag = max(_mag, abs(float(_vv)))
+                        model.scaling_factor[_c3] = 1.0 / _mag
+                        _nrow += 1
+                    except Exception:
+                        pass
+                # variables: scale by 1/max(1, |seed|) so IPOPT sees an O(1) problem.
+                _nvar = 0
+                for _v3 in model.component_data_objects(Var, active=True):
+                    if _v3.fixed:
+                        continue
+                    _vv = _bval3(_v3, exception=False)
+                    _m = max(1.0, abs(float(_vv))) if _vv is not None else 1.0
+                    model.scaling_factor[_v3] = 1.0 / _m
+                    _nvar += 1
+                _skip_jacscale = False  # take the scaled path below via user-scaling
+                _solve_target = _PyoTF3("core.scale_model").create_using(model)
+                print(f"[nlp-square] BRITZ benchmark scaling applied: {_nrow} eqs, {_nvar} "
+                      f"vars scaled by 1/max(1,|x_bench|)", file=sys.stderr)
+                # NOTE: we set _solve_target here and skip the try/except Jacobian block.
+            except Exception as _be:
+                print(f"[nlp-square] Britz benchmark scaling FAILED ({_be}); raw model",
+                      file=sys.stderr)
+                _bench_scale = False
+                _solve_target = model
+        if not _bench_scale:
+            print("[nlp-square] skipping Jacobian pre-scale (faithful to GAMS: raw model, "
+                  "nlp_scaling_method=none)", file=sys.stderr)
         try:
+            if _bench_scale:
+                raise RuntimeError("britz-scaled")  # already built _solve_target above
             if _skip_jacscale:
                 print("[nlp-square] skipping Jacobian pre-scale (NO_JACSCALE); solving raw model",
                       file=sys.stderr)
@@ -2691,8 +2746,16 @@ def _run_path_capi_nonlinear_full(
             _scaled_model = _PyoTF3("core.scale_model").create_using(model)
             _solve_target = _scaled_model
         except Exception as _scale_exc3:
-            print(f"[nlp-square] Jacobian scaling FAILED ({_scale_exc3}), solving unscaled", file=sys.stderr)
-            _solve_target = model
+            if _bench_scale:
+                # Britz path already built _solve_target (the scaled model) above; the
+                # raise was just to bypass the Jacobian block. Keep the scaled target.
+                pass
+            elif str(_scale_exc3) == "skip-jacscale":
+                _solve_target = model
+            else:
+                print(f"[nlp-square] Jacobian scaling FAILED ({_scale_exc3}), solving unscaled",
+                      file=sys.stderr)
+                _solve_target = model
 
         _scaled_nl_export_path = os.environ.get("EQUILIBRIA_DEBUG_EXPORT_SCALED_NL")
         if _scaled_nl_export_path:
