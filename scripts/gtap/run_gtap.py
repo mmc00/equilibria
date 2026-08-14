@@ -3213,6 +3213,18 @@ def _run_path_capi_nonlinear_full(
                         print(f"[nlp-square] NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e} "
                               f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e} LUage={_lu_age_tr}",
                               file=sys.stderr, flush=True)
+                        # live progress file for remote (Kaggle) runs — see driver hook
+                        _pf_tr = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+                        if _pf_tr:
+                            try:
+                                with open(_pf_tr, "a") as _pfh_tr:
+                                    _pfh_tr.write(
+                                        f"  NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e} "
+                                        f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e} "
+                                        f"wall={__import__('time').perf_counter() - _t0_sr:.0f}s\n"
+                                    )
+                            except Exception:
+                                pass
 
                 class _SolTR:
                     x = _x_tr

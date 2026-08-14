@@ -3783,6 +3783,20 @@ def solve_multiperiod(
                 f"code={_c_lam} resid={_r_lam:.2e}",
                 file=sys.stderr,
             )
+            # PROGRESS FILE (env EQUILIBRIA_GTAP_PROGRESS_FILE): append a line per finished
+            # continuation sub-step so a remote run (Kaggle hides stderr until the kernel
+            # ends) can be watched live by reading/downloading the file mid-run.
+            _pf = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+            if _pf:
+                try:
+                    with open(_pf, "a") as _pfh:
+                        _pfh.write(
+                            f"CONT sub-step {_i_lam + 1}/{len(_lambdas)} "
+                            f"λ={_lam:.4f} tariff={_f_lam * 100:.2f}% "
+                            f"code={_c_lam} resid={_r_lam:.2e}\n"
+                        )
+                except Exception:
+                    pass
             if _c_lam != 1:
                 print(
                     f"[continuation] sub-step λ={_lam} did NOT converge (code={_c_lam}) "
