@@ -3152,11 +3152,48 @@ def _run_path_capi_nonlinear_full(
                 _jdump = os.environ.get("EQUILIBRIA_GTAP_JAC_DUMP")
                 if _jdump:
                     from scipy.sparse import save_npz as _save_npz_j
+                    from scipy.sparse.csgraph import (
+                        maximum_bipartite_matching as _mbm_j,
+                        connected_components as _cc_j)
+                    _pf_j = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+                    def _jl(_m):
+                        if _pf_j:
+                            try:
+                                with open(_pf_j, "a") as _fh:
+                                    _fh.write(f"  [jac-dump] {_m}\n")
+                            except Exception:
+                                pass
+                        print(f"[jac-dump] {_m}", file=sys.stderr, flush=True)
+                    # J at x0
                     _nlp_sr.set_primals(_x_tr)
                     _Jd = _nlp_sr.evaluate_jacobian_eq().tocsc()
                     _save_npz_j(_jdump, _Jd)
-                    print(f"[nlp-square] JAC DUMPED to {_jdump}: shape={_Jd.shape} "
-                          f"nnz={_Jd.nnz} — aborting", file=sys.stderr, flush=True)
+                    _jl(f"J(x0) shape={_Jd.shape} nnz={_Jd.nnz} nnz/row={_Jd.nnz/_n_sr:.2f}")
+                    # J at x0 + small random perturbation — compare nnz to detect numeric
+                    # (not structural) zeros that would understate the real pattern
+                    _rng_j = __import__("numpy").random.default_rng(0)
+                    _xp_j = _np_sr.clip(_x_tr + 1e-3 * _rng_j.standard_normal(_n_sr),
+                                        _lb_sr, _ub_sr)
+                    _nlp_sr.set_primals(_xp_j)
+                    _Jp_j = _nlp_sr.evaluate_jacobian_eq().tocsc()
+                    _jl(f"J(x0+pert) nnz={_Jp_j.nnz} "
+                        f"({'SAME pattern' if _Jp_j.nnz == _Jd.nnz else 'MORE nnz — x0 had numeric zeros'})")
+                    _save_npz_j(_jdump.replace('.npz', '_pert.npz'), _Jp_j)
+                    # BTF block sizes on the (denser) perturbed pattern — the real structure
+                    _Jbtf = _Jp_j if _Jp_j.nnz >= _Jd.nnz else _Jd
+                    _match_j = _mbm_j(_Jbtf.tocsr(), perm_type="column")
+                    if not _np_sr.any(_match_j < 0):
+                        _Jperm_j = _Jbtf[:, _match_j].tocsr()
+                        _ncc_j, _lab_j = _cc_j(_Jperm_j, directed=True, connection="strong")
+                        _, _cnt_j = _np_sr.unique(_lab_j, return_counts=True)
+                        _cnt_sorted = _np_sr.sort(_cnt_j)[::-1]
+                        __import__("numpy").save(_jdump.replace('.npz', '_blocks.npy'), _cnt_j)
+                        _jl(f"BTF: {_ncc_j} blocks, MAX={int(_cnt_sorted[0])} "
+                            f"({100*_cnt_sorted[0]/_n_sr:.1f}%), top5={_cnt_sorted[:5].tolist()}, "
+                            f"singletons={int((_cnt_j == 1).sum())}")
+                    else:
+                        _jl("matching NOT full — structurally rank-deficient")
+                    _jl(f"dumped {_jdump} (+_pert +_blocks) — aborting")
                     import sys as _sxj
                     _sxj.exit(0)
                 _conv_tr = False
