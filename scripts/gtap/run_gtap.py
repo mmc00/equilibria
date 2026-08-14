@@ -3140,6 +3140,19 @@ def _run_path_capi_nonlinear_full(
 
                 _F_tr = _Feval_tr(_x_tr)
                 _phi_tr = 0.5 * float(_F_tr @ _F_tr)  # merit = ½‖F‖²
+                # DIAGNOSTIC (env EQUILIBRIA_GTAP_JAC_DUMP=path.npz): dump the exact sparse
+                # Jacobian at the seed and abort — for offline structural analysis (Dulmage-
+                # Mendelsohn BTF, block sizes, direct-solver benchmarking à la GEMPACK/MA48).
+                _jdump = os.environ.get("EQUILIBRIA_GTAP_JAC_DUMP")
+                if _jdump:
+                    from scipy.sparse import save_npz as _save_npz_j
+                    _nlp_sr.set_primals(_x_tr)
+                    _Jd = _nlp_sr.evaluate_jacobian_eq().tocsc()
+                    _save_npz_j(_jdump, _Jd)
+                    print(f"[nlp-square] JAC DUMPED to {_jdump}: shape={_Jd.shape} "
+                          f"nnz={_Jd.nnz} — aborting", file=sys.stderr, flush=True)
+                    import sys as _sxj
+                    _sxj.exit(0)
                 _conv_tr = False
                 _k_tr = 0
                 _lu_tr = None
