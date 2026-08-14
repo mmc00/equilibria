@@ -3207,18 +3207,35 @@ def _run_path_capi_nonlinear_full(
                         # reused; only the numeric refactor happens each step (Shamanskii).
                         from scipy.sparse.csgraph import (
                             maximum_bipartite_matching as _mbm_tr)
+                        _pf_d = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+                        def _plog_d(_m):
+                            if _pf_d:
+                                try:
+                                    with open(_pf_d, "a") as _fh:
+                                        _fh.write(f"  [direct] {_m}\n")
+                                except Exception:
+                                    pass
+                            print(f"[nlp-square] [direct] {_m}", file=sys.stderr, flush=True)
                         if _colperm_tr is None:
+                            _t_d = __import__("time").perf_counter()
                             _colperm_tr = _mbm_tr(_J_tr.tocsr(), perm_type="column")
+                            _plog_d(f"matching done in {__import__('time').perf_counter()-_t_d:.1f}s "
+                                    f"(n={_n_sr})")
                             if _np_sr.any(_colperm_tr < 0):
                                 _colperm_tr = _np_sr.arange(_n_sr)  # rank-deficient fallback
                         _need_lu = (_lu_tr is None or _refresh_tr <= 1
                                     or _lu_age_tr >= _refresh_tr or _lu_age_tr < 0)
                         if _need_lu:
                             try:
+                                _t_d = __import__("time").perf_counter()
                                 _Jperm_tr = _J_tr[:, _colperm_tr].tocsc()
                                 _lu_tr = _splu_full_tr(_Jperm_tr, permc_spec="COLAMD")
+                                _plog_d(f"splu factor done in "
+                                        f"{__import__('time').perf_counter()-_t_d:.1f}s "
+                                        f"nnz(LU)={_lu_tr.L.nnz + _lu_tr.U.nnz}")
                                 _lu_age_tr = 0
-                            except Exception:
+                            except Exception as _e_d:
+                                _plog_d(f"splu FAILED: {_e_d}")
                                 _lu_tr = None
                         else:
                             _lu_age_tr += 1
