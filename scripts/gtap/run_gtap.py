@@ -3126,9 +3126,15 @@ def _run_path_capi_nonlinear_full(
                 # step is REJECTED (ρ≤0 → the stale LU is misleading the direction). 0/1 =
                 # refactor every iteration (old behaviour).
                 _refresh_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_LU_REFRESH", "5"))
-                # inner linear solve for the Newton step: "spilu" (factor, default) or "gmres"
-                # (matrix-free, no factorization — required for 20x41 where spilu is ~30min/iter)
-                _linsolve_tr = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "spilu").lower()
+                # inner linear solve for the Newton step:
+                #  "direct" (DEFAULT) — zero-free-diagonal column permutation + COMPLETE splu
+                #     (exact). ~560x faster than naive spilu on the zero-diagonal GTAP Jacobian
+                #     (MEASURED 15x10: 439s→0.78s). Scales to 20x41.
+                #  "spilu" — incomplete LU, NO permutation (legacy; catastrophic fill here).
+                #  "gmres" — matrix-free (stalls without a real preconditioner on this system).
+                from scipy.sparse.linalg import splu as _splu_full_tr
+                _linsolve_tr = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
+                _colperm_tr = None  # structural column permutation (computed once, reused)
                 _gmres_tol_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_TOL", "1e-3"))
                 _gmres_restart_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_RESTART", "50"))
                 _gmres_maxit_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_MAXIT", "200"))
@@ -3186,6 +3192,44 @@ def _run_path_capi_nonlinear_full(
                             _Jop_tr, -_F_tr, M=_Mdiag_tr, rtol=_gmres_tol_tr, atol=0.0,
                             restart=_gmres_restart_tr, maxiter=_gmres_maxit_tr)
                         if not _np_sr.all(_np_sr.isfinite(_pN_tr)):
+                            _pN_tr = -_g_tr
+                    elif _linsolve_tr == "direct":
+                        # DIRECT SOLVE with zero-free-diagonal permutation (GEMPACK/MA48/KLU
+                        # approach). The squared GTAP Jacobian has a ~100% ZERO diagonal
+                        # (structural: eq-i vs var-i by name), so a naive splu produces
+                        # catastrophic fill — MEASURED 15x10: raw splu factor=439s fill=1530x
+                        # (this is the ~30min/iter that killed 20x41). Permuting COLUMNS by a
+                        # maximum bipartite matching gives a zero-free diagonal → COMPLETE
+                        # (EXACT) splu on the permuted matrix: MEASURED 15x10 factor=0.78s
+                        # fill=37x — ~560x faster, and EXACT (no drop-tol approximation). The
+                        # column permutation is STRUCTURAL (depends only on the sparsity
+                        # pattern, unchanged across Newton steps) so it is computed ONCE and
+                        # reused; only the numeric refactor happens each step (Shamanskii).
+                        from scipy.sparse.csgraph import (
+                            maximum_bipartite_matching as _mbm_tr)
+                        if _colperm_tr is None:
+                            _colperm_tr = _mbm_tr(_J_tr.tocsr(), perm_type="column")
+                            if _np_sr.any(_colperm_tr < 0):
+                                _colperm_tr = _np_sr.arange(_n_sr)  # rank-deficient fallback
+                        _need_lu = (_lu_tr is None or _refresh_tr <= 1
+                                    or _lu_age_tr >= _refresh_tr or _lu_age_tr < 0)
+                        if _need_lu:
+                            try:
+                                _Jperm_tr = _J_tr[:, _colperm_tr].tocsc()
+                                _lu_tr = _splu_full_tr(_Jperm_tr, permc_spec="COLAMD")
+                                _lu_age_tr = 0
+                            except Exception:
+                                _lu_tr = None
+                        else:
+                            _lu_age_tr += 1
+                        try:
+                            if _lu_tr is not None:
+                                _y_tr = _lu_tr.solve(-_F_tr)      # solves (J P) y = -F
+                                _pN_tr = _np_sr.empty(_n_sr)
+                                _pN_tr[_colperm_tr] = _y_tr       # un-permute: p = P y
+                            else:
+                                _pN_tr = -_g_tr
+                        except Exception:
                             _pN_tr = -_g_tr
                     else:
                         # (re)factor spilu only when stale (first step / every N / after reject)
