@@ -2872,6 +2872,134 @@ def _run_path_capi_nonlinear_full(
             res = _sm.solve(_solve_target, opt=_neos_solver, tee=True)
             print(f"[nlp-square] NEOS/{_neos_solver} done: status={res.solver.status} "
                   f"term={res.solver.termination_condition}", file=sys.stderr)
+        elif os.environ.get("EQUILIBRIA_GTAP_SOLVER", "").startswith("scipy_"):
+            # MATRIX-FREE ROOT SOLVE (env EQUILIBRIA_GTAP_SOLVER=scipy_krylov | scipy_df-sane
+            # | scipy_anderson). The square system F(z)=0 is solved by scipy.optimize.root
+            # WITHOUT forming or factorizing the 400k-square Jacobian — 'krylov' is
+            # Jacobian-Free Newton-Krylov (Newton with GMRES inner solve, J·v via finite
+            # differences), 'df-sane' is spectral-gradient (no Jacobian at all), 'anderson'
+            # is Anderson-accelerated fixed point. Preserves the EXACT nonlinear model (the
+            # approximation lives only in the inner Krylov/preconditioner, never in the
+            # residual). Motivation: on 20x41 (393k vars) IPOPT's per-iteration sparse
+            # FACTORIZATION dominates; matrix-free avoids it entirely (CFD/power-flow scale
+            # this way). _solve_target here is already the squared, seeded, closed system.
+            import numpy as _np_sr
+            from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP as _PyNLP_sr
+            from scipy.optimize import root as _sp_root
+            _method = os.environ["EQUILIBRIA_GTAP_SOLVER"].split("scipy_", 1)[1] or "krylov"
+            _nlp_sr = _PyNLP_sr(_solve_target)
+            _n_sr, _ne_sr = _nlp_sr.n_primals(), _nlp_sr.n_eq_constraints()
+            print(f"[nlp-square] scipy.root({_method}): n_primals={_n_sr} "
+                  f"n_eq={_ne_sr} square={_n_sr == _ne_sr}", file=sys.stderr)
+            _z0_sr = _nlp_sr.get_primals().copy()
+            # variable bounds — matrix-free root solvers ignore them, so a step can land
+            # on a price≤0 / negative-power cell where the CES residual overflows (AMPL
+            # eval error). Clip z into [lb,ub] before evaluating, and on any eval failure
+            # return a large finite residual so the solver retreats instead of crashing.
+            _lb_sr = _nlp_sr.primals_lb().copy()
+            _ub_sr = _nlp_sr.primals_ub().copy()
+            _lb_sr[~_np_sr.isfinite(_lb_sr)] = -1e20
+            _ub_sr[~_np_sr.isfinite(_ub_sr)] = 1e20
+            _last_good_sr = [_nlp_sr.evaluate_eq_constraints().copy()]
+
+            def _F_sr(z):
+                zc = _np_sr.clip(z, _lb_sr, _ub_sr)
+                try:
+                    _nlp_sr.set_primals(zc)
+                    r = _nlp_sr.evaluate_eq_constraints()
+                    if not _np_sr.all(_np_sr.isfinite(r)):
+                        raise ValueError("non-finite residual")
+                    _last_good_sr[0] = r.copy()
+                    return r
+                except Exception:
+                    # push the solver back: return a big residual proportional to how far
+                    # z strayed past its bounds, plus the last good residual's scale.
+                    penalty = _np_sr.abs(z - zc).sum() + 1.0
+                    return _last_good_sr[0] * 0.0 + penalty
+
+            _maxit_sr = int(os.environ.get("EQUILIBRIA_GTAP_SCIPY_MAXITER", "300"))
+            # option name differs per method: krylov→maxiter, df-sane→maxfev, anderson→maxiter
+            _opts_sr = {"disp": True}
+            if _method == "df-sane":
+                _opts_sr.update({"maxfev": _maxit_sr, "fatol": 1e-7})
+            else:
+                _opts_sr.update({"maxiter": _maxit_sr, "fatol": 1e-7})
+
+            # PRECONDITIONER for JFNK (the decisive lever — JFNK stalls without one).
+            # The sparse Jacobian (1.6M nz) IS factorizable (unlike the 251M-nz Hessian);
+            # factor it ONCE with a sparse LU and reuse J⁻¹ as the inner-Krylov
+            # preconditioner (inner_M). Newton factorizes J every iter; this factorizes it
+            # once and reuses it as an approximate inverse, so GMRES converges in ~1-2 inner
+            # steps. The .update hook refactorizes every EQUILIBRIA_GTAP_PRECOND_REFRESH
+            # nonlinear steps to track curvature. Off unless method=krylov and precond=1.
+            if _method == "krylov" and os.environ.get("EQUILIBRIA_GTAP_PRECOND", "1") == "1":
+                from scipy.sparse.linalg import LinearOperator as _LinOp_sr, splu as _splu_sr
+                _refresh_sr = int(os.environ.get("EQUILIBRIA_GTAP_PRECOND_REFRESH", "5"))
+
+                class _JacPrecond(_LinOp_sr):
+                    def __init__(self):
+                        super().__init__(_z0_sr.dtype, (_n_sr, _n_sr))
+                        self._lu = None
+                        self._nstep = 0
+                        self._factor(_z0_sr)
+
+                    def _factor(self, z):
+                        try:
+                            _nlp_sr.set_primals(_np_sr.clip(z, _lb_sr, _ub_sr))
+                            J = _nlp_sr.evaluate_jacobian_eq().tocsc()
+                            # small diagonal shift to keep it non-singular
+                            from scipy.sparse import eye as _eye_sr
+                            self._lu = _splu_sr(J + 1e-10 * _eye_sr(_n_sr, format="csc"))
+                        except Exception as _pe:
+                            print(f"[nlp-square] precond factor failed ({_pe}); identity",
+                                  file=sys.stderr)
+                            self._lu = None
+
+                    def _matvec(self, v):
+                        if self._lu is None:
+                            return v
+                        try:
+                            return self._lu.solve(v)
+                        except Exception:
+                            return v
+
+                    def update(self, x, f):
+                        self._nstep += 1
+                        if self._nstep % _refresh_sr == 0:
+                            self._factor(x)
+
+                _precond_sr = _JacPrecond()
+                _opts_sr["jac_options"] = {"inner_M": _precond_sr, "method": "lgmres"}
+                print(f"[nlp-square] JFNK preconditioned with sparse-LU(J) "
+                      f"(refresh every {_refresh_sr} steps)", file=sys.stderr)
+
+            _t0_sr = __import__("time").perf_counter()
+            _sol_sr = _sp_root(_F_sr, _z0_sr, method=_method, options=_opts_sr)
+            _dt_sr = __import__("time").perf_counter() - _t0_sr
+            _nlp_sr.set_primals(_sol_sr.x)
+            _rf_sr = float(_np_sr.linalg.norm(_nlp_sr.evaluate_eq_constraints(), _np_sr.inf))
+            print(f"[nlp-square] scipy.root({_method}) done: success={_sol_sr.success} "
+                  f"nit={getattr(_sol_sr, 'nit', '?')} ||F||_inf={_rf_sr:.3e} wall={_dt_sr:.1f}s",
+                  file=sys.stderr)
+            # push the solution back into the Pyomo Vars (like load_solutions would)
+            for _v_sr, _val_sr in zip(_nlp_sr.get_pyomo_variables(), _sol_sr.x):
+                if not _v_sr.fixed:
+                    _v_sr.set_value(float(_val_sr))
+            # scipy has no Pyomo results object; build a shim so the downstream report
+            # (res.solver.status / termination_condition) works. Success = converged AND
+            # residual within tolerance (fatol was 1e-7; accept ||F||<1e-5).
+            _ok_sr = bool(_sol_sr.success) and _rf_sr < 1e-5
+
+            class _R:  # minimal Pyomo-results shim
+                class solver:
+                    status = "ok" if _ok_sr else "warning"
+                    termination_condition = "optimal" if _ok_sr else "other"
+            res = _R()
+            if _solve_target is not model:
+                try:
+                    _PyoTF3("core.scale_model").propagate_solution(_solve_target, model)
+                except Exception:
+                    pass
         else:
             opt = _PyoSF3("ipopt")
             # ROOT CAUSE (confirmed via GAMS's own IPOPT solver manual,
