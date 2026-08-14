@@ -3126,6 +3126,12 @@ def _run_path_capi_nonlinear_full(
                 # step is REJECTED (ρ≤0 → the stale LU is misleading the direction). 0/1 =
                 # refactor every iteration (old behaviour).
                 _refresh_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_LU_REFRESH", "5"))
+                # inner linear solve for the Newton step: "spilu" (factor, default) or "gmres"
+                # (matrix-free, no factorization — required for 20x41 where spilu is ~30min/iter)
+                _linsolve_tr = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "spilu").lower()
+                _gmres_tol_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_TOL", "1e-3"))
+                _gmres_restart_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_RESTART", "50"))
+                _gmres_maxit_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_MAXIT", "200"))
                 _x_tr = _np_sr.clip(_z0_sr.copy(), _lb_sr, _ub_sr)
 
                 def _Feval_tr(z):
@@ -3146,24 +3152,45 @@ def _run_path_capi_nonlinear_full(
                     _nlp_sr.set_primals(_x_tr)
                     _J_tr = _nlp_sr.evaluate_jacobian_eq().tocsc()
                     _g_tr = _J_tr.T @ _F_tr  # gradient of merit = JᵀF
-                    # (re)factor the spilu preconditioner only when stale: first step, every
-                    # _refresh_tr steps, or when the previous step was rejected (_lu_age_tr<0)
-                    _need_lu = (_lu_tr is None or _refresh_tr <= 1
-                                or _lu_age_tr >= _refresh_tr or _lu_age_tr < 0)
-                    if _need_lu:
-                        try:
-                            _lu_tr = _spilu_tr(_J_tr + 1e-10 * _eye_tr(_n_sr, format="csc"),
-                                               drop_tol=_drop_tr, fill_factor=_ff_tr)
-                            _lu_age_tr = 0
-                        except Exception:
-                            _lu_tr = None
+                    # NEWTON STEP: solve J·pN = -F. Two backends:
+                    #  spilu (default): factor J once, reuse (Shamanskii). FAST per-solve but
+                    #    the factorization DOESN'T SCALE — MEASURED ~30min/iter on 20x41 (393k).
+                    #  gmres (EQUILIBRIA_GTAP_TR_LINSOLVE=gmres): matrix-free — solve J·pN=-F by
+                    #    GMRES using ONLY exact sparse J·v products (J @ v, ~ms), NEVER factoring
+                    #    the 393k system. Jacobi (diagonal) preconditioner is cheap and helps.
+                    #    This is the JFNK inner solve BUT wrapped in the robust trust region and
+                    #    with the EXACT J (no finite-diff "zero vector"). The lever that makes
+                    #    20x41 tractable: kills the 30min factorization entirely.
+                    if _linsolve_tr == "gmres":
+                        from scipy.sparse.linalg import gmres as _gmres_tr, LinearOperator as _LO_tr
+                        _diag_tr = _J_tr.diagonal()
+                        _diag_tr = _np_sr.where(_np_sr.abs(_diag_tr) > 1e-12, _diag_tr, 1.0)
+                        _Mdiag_tr = _LO_tr((_n_sr, _n_sr), matvec=lambda v: v / _diag_tr,
+                                           dtype=_x_tr.dtype)
+                        _Jop_tr = _LO_tr((_n_sr, _n_sr), matvec=lambda v: _J_tr @ v,
+                                         dtype=_x_tr.dtype)
+                        _pN_tr, _info_tr = _gmres_tr(
+                            _Jop_tr, -_F_tr, M=_Mdiag_tr, rtol=_gmres_tol_tr, atol=0.0,
+                            restart=_gmres_restart_tr, maxiter=_gmres_maxit_tr)
+                        if not _np_sr.all(_np_sr.isfinite(_pN_tr)):
+                            _pN_tr = -_g_tr
                     else:
-                        _lu_age_tr += 1
-                    # Newton step via (reused) spilu (approx J⁻¹); Cauchy step along -g
-                    try:
-                        _pN_tr = _lu_tr.solve(-_F_tr) if _lu_tr is not None else -_g_tr
-                    except Exception:
-                        _pN_tr = -_g_tr  # fall back to gradient if LU solve fails
+                        # (re)factor spilu only when stale (first step / every N / after reject)
+                        _need_lu = (_lu_tr is None or _refresh_tr <= 1
+                                    or _lu_age_tr >= _refresh_tr or _lu_age_tr < 0)
+                        if _need_lu:
+                            try:
+                                _lu_tr = _spilu_tr(_J_tr + 1e-10 * _eye_tr(_n_sr, format="csc"),
+                                                   drop_tol=_drop_tr, fill_factor=_ff_tr)
+                                _lu_age_tr = 0
+                            except Exception:
+                                _lu_tr = None
+                        else:
+                            _lu_age_tr += 1
+                        try:
+                            _pN_tr = _lu_tr.solve(-_F_tr) if _lu_tr is not None else -_g_tr
+                        except Exception:
+                            _pN_tr = -_g_tr  # fall back to gradient if LU solve fails
                     _Jg_tr = _J_tr @ _g_tr
                     _gg_tr = float(_g_tr @ _g_tr)
                     _Jg2_tr = float(_Jg_tr @ _Jg_tr)
