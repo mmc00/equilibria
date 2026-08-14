@@ -2924,6 +2924,17 @@ def _run_path_capi_nonlinear_full(
                 _opts_sr.update({"maxfev": _maxit_sr, "fatol": 1e-7})
             else:
                 _opts_sr.update({"maxiter": _maxit_sr, "fatol": 1e-7})
+                # GLOBALIZATION (step damping): the raw JFNK Newton step can jump to a bad
+                # basin on larger, more nonlinear systems (MEASURED: 15x10 shock jumps
+                # |F|=1452→2e9 and the Jacobian goes singular there — the seed Jacobian is
+                # perfectly non-singular, so it's the STEP, not the system). scipy exposes
+                # line_search ('armijo' default | 'wolfe' more conservative | None = full
+                # step). 'wolfe' enforces the curvature condition, shrinking oversized steps.
+                _ls_sr = os.environ.get("EQUILIBRIA_GTAP_JFNK_LINESEARCH", "armijo")
+                if _ls_sr.lower() in ("none", "off", ""):
+                    _opts_sr["line_search"] = None
+                else:
+                    _opts_sr["line_search"] = _ls_sr
 
             # PRECONDITIONER for JFNK (the decisive lever — JFNK stalls without one).
             # The sparse Jacobian (1.6M nz) IS factorizable (unlike the 251M-nz Hessian);
@@ -2931,10 +2942,34 @@ def _run_path_capi_nonlinear_full(
             # preconditioner (inner_M). Newton factorizes J every iter; this factorizes it
             # once and reuses it as an approximate inverse, so GMRES converges in ~1-2 inner
             # steps. The .update hook refactorizes every EQUILIBRIA_GTAP_PRECOND_REFRESH
-            # nonlinear steps to track curvature. Off unless method=krylov and precond=1.
-            if _method == "krylov" and os.environ.get("EQUILIBRIA_GTAP_PRECOND", "1") == "1":
-                from scipy.sparse.linalg import LinearOperator as _LinOp_sr, splu as _splu_sr
+            # nonlinear steps to track curvature. Built for krylov (JFNK) AND ptc (pseudo-
+            # transient continuation reuses the same spilu(J) as its GMRES preconditioner).
+            if _method in ("krylov", "ptc") and os.environ.get("EQUILIBRIA_GTAP_PRECOND", "1") == "1":
+                from scipy.sparse.linalg import (
+                    LinearOperator as _LinOp_sr,
+                    splu as _splu_sr,
+                    spilu as _spilu_sr,
+                )
                 _refresh_sr = int(os.environ.get("EQUILIBRIA_GTAP_PRECOND_REFRESH", "5"))
+                # PRECONDITIONER FACTORIZATION MODE. A COMPLETE LU (splu) generates
+                # catastrophic fill-in on the large CGE Jacobian: MEASURED on 15x10 (n=34k)
+                # the LU factors blow up from 173k nonzeros to 213M (fill=1231x), and this
+                # grows super-linearly — on 20x41 (n=394k) splu needs ~35GB and OOM-kills the
+                # 32GB Kaggle kernel after 3.4h stuck in the very first factorization.
+                # spilu (INCOMPLETE LU) drops tiny fill entries and gives an approximate
+                # inverse — exactly what a GMRES preconditioner wants. drop_tol is the knob
+                # that trades preconditioner quality against fill/RAM. MEASURED on 10x7:
+                #   drop=1e-4 → shock DIVERGES (code=2, ||F||=3e5) — too coarse for the shock
+                #   drop=1e-5 → shock CONVERGES (code=1, ||F||=9.7e-9, 5 it, 0.1s) ← DEFAULT
+                #   drop=1e-6 → also converges but 40% more fill
+                # and on 15x10 (n=34k) drop=1e-5 gives fill=27.8x (4.8M nonzeros, 0.06GB) vs
+                # the COMPLETE splu's fill=1231x (213M nonzeros, 2.6GB) — the complete LU is
+                # what OOM-killed 20x41 on 32GB. Extrapolated to 20x41 (n=394k), drop=1e-5
+                # spilu is ~0.7GB. spilu is the DEFAULT; set EQUILIBRIA_GTAP_PRECOND_LU=
+                # complete to force the old splu (small datasets only, exact preconditioner).
+                _lu_mode = os.environ.get("EQUILIBRIA_GTAP_PRECOND_LU", "incomplete")
+                _ilu_drop = float(os.environ.get("EQUILIBRIA_GTAP_PRECOND_DROPTOL", "1e-5"))
+                _ilu_ff = float(os.environ.get("EQUILIBRIA_GTAP_PRECOND_FILLFACTOR", "40"))
 
                 class _JacPrecond(_LinOp_sr):
                     def __init__(self):
@@ -2949,7 +2984,13 @@ def _run_path_capi_nonlinear_full(
                             J = _nlp_sr.evaluate_jacobian_eq().tocsc()
                             # small diagonal shift to keep it non-singular
                             from scipy.sparse import eye as _eye_sr
-                            self._lu = _splu_sr(J + 1e-10 * _eye_sr(_n_sr, format="csc"))
+                            Js = J + 1e-10 * _eye_sr(_n_sr, format="csc")
+                            if _lu_mode == "complete":
+                                self._lu = _splu_sr(Js)
+                            else:
+                                self._lu = _spilu_sr(
+                                    Js, drop_tol=_ilu_drop, fill_factor=_ilu_ff
+                                )
                         except Exception as _pe:
                             print(f"[nlp-square] precond factor failed ({_pe}); identity",
                                   file=sys.stderr)
@@ -2969,12 +3010,193 @@ def _run_path_capi_nonlinear_full(
                             self._factor(x)
 
                 _precond_sr = _JacPrecond()
-                _opts_sr["jac_options"] = {"inner_M": _precond_sr, "method": "lgmres"}
-                print(f"[nlp-square] JFNK preconditioned with sparse-LU(J) "
-                      f"(refresh every {_refresh_sr} steps)", file=sys.stderr)
+                _jac_opts_sr = {"inner_M": _precond_sr, "method": "lgmres"}
+                # rdiff = finite-difference step for the numeric J·v product. scipy's auto
+                # choice can collapse to a zero J·v ("Jacobian inversion yielded zero vector")
+                # when variable scales span orders of magnitude (CGE: prices ~1, quantities
+                # ~1e5), which is what kills 15x10. An explicit rdiff sized to the model scale
+                # fixes the directional-derivative approximation. inner_maxiter bounds the
+                # inner GMRES work per Newton step.
+                _rdiff_sr = os.environ.get("EQUILIBRIA_GTAP_JFNK_RDIFF")
+                if _rdiff_sr:
+                    _jac_opts_sr["rdiff"] = float(_rdiff_sr)
+                _inner_it_sr = os.environ.get("EQUILIBRIA_GTAP_JFNK_INNER_MAXITER")
+                if _inner_it_sr:
+                    _jac_opts_sr["inner_maxiter"] = int(_inner_it_sr)
+                _opts_sr["jac_options"] = _jac_opts_sr
+                _lu_desc = ("complete-LU" if _lu_mode == "complete"
+                            else f"incomplete-LU(drop={_ilu_drop},ff={_ilu_ff})")
+                _nz_lu = (_precond_sr._lu.L.nnz + _precond_sr._lu.U.nnz
+                          if _precond_sr._lu is not None else 0)
+                print(f"[nlp-square] JFNK preconditioned with {_lu_desc}: "
+                      f"nnz(LU)={_nz_lu} (refresh every {_refresh_sr} steps)", file=sys.stderr)
 
             _t0_sr = __import__("time").perf_counter()
-            _sol_sr = _sp_root(_F_sr, _z0_sr, method=_method, options=_opts_sr)
+            if _method == "ptc":
+                # PSEUDO-TRANSIENT CONTINUATION (Kelley & Keyes, SIAM J. Numer. Anal. 1998;
+                # PETSc TSPSEUDO). Raw JFNK STALLS far from the solution (MEASURED: 15x10
+                # shock freezes at ||F||=9414 with 1e-102 steps) — the literature says line
+                # search does NOT fix JFNK robustness, but pseudo-transient continuation does.
+                # Each step solves the DAMPED Newton system
+                #     (I/Δt + J(xₙ)) · δ = -F(xₙ),   xₙ₊₁ = xₙ + δ
+                # The I/Δt term is an implicit-Euler mass term that shrinks the step when Δt
+                # is small (safe, far from solution) and vanishes as Δt→∞ (→ pure Newton,
+                # quadratic near the solution). SER rule grows Δt as the residual falls:
+                #     Δtₙ = Δtₙ₋₁ · ||F(xₙ₋₁)|| / ||F(xₙ)||.
+                # Solved matrix-free: J·v via finite differences, the shifted system via GMRES
+                # preconditioned by the same spilu(J) built above (reused as inner_M).
+                from scipy.sparse.linalg import LinearOperator as _LinOp_p, gmres as _gmres_p
+                _dt_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_DT0", "1e-2"))
+                _dt_max_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_DTMAX", "1e12"))
+                _ftol_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_FTOL", "1e-7"))
+                _rdiff_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_RDIFF", "1e-7"))
+                _inner_tol_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_INNERTOL", "1e-3"))
+                _pc_p = locals().get("_precond_sr", None)
+                _x_p = _np_sr.clip(_z0_sr.copy(), _lb_sr, _ub_sr)
+                _F0_p = _F_sr(_x_p)
+                _rprev_p = float(_np_sr.linalg.norm(_F0_p))
+                _r0_p = _rprev_p
+                _conv_p = False
+                for _k_p in range(_maxit_sr):
+                    _rc_p = float(_np_sr.linalg.norm(_np_sr.abs(_F_sr(_x_p)), _np_sr.inf))
+                    if _rc_p < _ftol_p:
+                        _conv_p = True
+                        break
+                    _Fx_p = _F_sr(_x_p)
+                    _nrm_x_p = _np_sr.linalg.norm(_x_p)
+                    # matrix-free J·v via forward finite differences (directional deriv)
+                    def _Jv_p(_v, _Fx_p=_Fx_p, _x_p=_x_p, _nrm_x_p=_nrm_x_p):
+                        _nv = _np_sr.linalg.norm(_v)
+                        if _nv == 0.0:
+                            return _np_sr.zeros_like(_v)
+                        _eps = _rdiff_p * (1.0 + _nrm_x_p) / _nv
+                        return (_F_sr(_x_p + _eps * _v) - _Fx_p) / _eps
+                    _shift_p = 1.0 / _dt_p
+                    _A_p = _LinOp_p(
+                        (_n_sr, _n_sr),
+                        matvec=lambda _v, _s=_shift_p: _s * _v + _Jv_p(_v),
+                        dtype=_x_p.dtype,
+                    )
+                    _delta_p, _info_p = _gmres_p(
+                        _A_p, -_Fx_p, M=_pc_p, rtol=_inner_tol_p, atol=0.0,
+                        maxiter=int(os.environ.get("EQUILIBRIA_GTAP_PTC_GMRES_MAXIT", "50")),
+                        restart=30,
+                    )
+                    _x_new_p = _np_sr.clip(_x_p + _delta_p, _lb_sr, _ub_sr)
+                    _rnew_p = float(_np_sr.linalg.norm(_F_sr(_x_new_p)))
+                    # SER: grow Δt when residual drops, shrink when it rises
+                    if _rnew_p < _rprev_p:
+                        _dt_p = min(_dt_p * (_rprev_p / max(_rnew_p, 1e-300)), _dt_max_p)
+                        _x_p = _x_new_p
+                        _rprev_p = _rnew_p
+                    else:
+                        _dt_p = max(_dt_p * 0.5, 1e-8)  # reject: shorten pseudo-step, retry
+                    if _k_p % 5 == 0 or _rc_p < _ftol_p * 10:
+                        print(f"[nlp-square] PTC it={_k_p} ||F||_inf={_rc_p:.3e} "
+                              f"||F||_2={_rprev_p:.3e} Δt={_dt_p:.2e}", file=sys.stderr, flush=True)
+
+                class _SolP:
+                    x = _x_p
+                    success = _conv_p
+                    nit = _k_p + 1
+                _sol_sr = _SolP()
+            elif _method == "newton_tr":
+                # SPARSE-NEWTON + DOGLEG TRUST REGION. The matrix-free JFNK failed on 15x10
+                # because it APPROXIMATED J·v by finite differences (→ "zero vector" / jumps
+                # to |F|=2e9). PyNumero gives the EXACT sparse Jacobian cheaply (MEASURED:
+                # eval_J=3ms on 15x10) and ONE exact Newton step already cuts ||F|| 2.12→0.066
+                # finite. This solver uses that exact J with a dogleg trust region: it blends
+                # the Newton step (accurate near the root) with the steepest-descent Cauchy
+                # step (safe far away), never accepts a step that increases ||F||² (ρ≤0 →
+                # reject + shrink Δ), and expands Δ when steps succeed. That is the robust
+                # globalization the literature says JFNK lacks — built on the exact J + spilu.
+                from scipy.sparse import eye as _eye_tr, identity as _id_tr  # noqa: F401
+                from scipy.sparse.linalg import spilu as _spilu_tr
+                _maxit_tr = _maxit_sr
+                _ftol_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_FTOL", "1e-7"))
+                _delta_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DELTA0", "1.0"))
+                _dmax_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DELTAMAX", "1e3"))
+                _drop_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DROPTOL", "1e-5"))
+                _ff_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_FILLFACTOR", "40"))
+                _x_tr = _np_sr.clip(_z0_sr.copy(), _lb_sr, _ub_sr)
+
+                def _Feval_tr(z):
+                    _nlp_sr.set_primals(_np_sr.clip(z, _lb_sr, _ub_sr))
+                    return _nlp_sr.evaluate_eq_constraints()
+
+                _F_tr = _Feval_tr(_x_tr)
+                _phi_tr = 0.5 * float(_F_tr @ _F_tr)  # merit = ½‖F‖²
+                _conv_tr = False
+                _k_tr = 0
+                for _k_tr in range(_maxit_tr):
+                    _rinf_tr = float(_np_sr.linalg.norm(_F_tr, _np_sr.inf))
+                    if _rinf_tr < _ftol_tr:
+                        _conv_tr = True
+                        break
+                    _nlp_sr.set_primals(_x_tr)
+                    _J_tr = _nlp_sr.evaluate_jacobian_eq().tocsc()
+                    _g_tr = _J_tr.T @ _F_tr  # gradient of merit = JᵀF
+                    # Newton step via spilu (approx J⁻¹); Cauchy step along -g
+                    try:
+                        _lu_tr = _spilu_tr(_J_tr + 1e-10 * _eye_tr(_n_sr, format="csc"),
+                                           drop_tol=_drop_tr, fill_factor=_ff_tr)
+                        _pN_tr = _lu_tr.solve(-_F_tr)
+                    except Exception:
+                        _pN_tr = -_g_tr  # fall back to gradient if LU fails
+                    _Jg_tr = _J_tr @ _g_tr
+                    _gg_tr = float(_g_tr @ _g_tr)
+                    _Jg2_tr = float(_Jg_tr @ _Jg_tr)
+                    _tau_tr = (_gg_tr / _Jg2_tr) if _Jg2_tr > 0 else 0.0
+                    _pC_tr = -_tau_tr * _g_tr  # Cauchy (steepest-descent) point
+                    # dogleg: pick step within trust radius Δ blending Cauchy→Newton
+                    _nN_tr = float(_np_sr.linalg.norm(_pN_tr))
+                    _nC_tr = float(_np_sr.linalg.norm(_pC_tr))
+                    if _nN_tr <= _delta_tr:
+                        _p_tr = _pN_tr
+                    elif _nC_tr >= _delta_tr:
+                        _p_tr = (_delta_tr / _nC_tr) * _pC_tr if _nC_tr > 0 else _pC_tr
+                    else:
+                        # solve ‖pC + β(pN-pC)‖ = Δ for β∈[0,1]
+                        _d_tr = _pN_tr - _pC_tr
+                        _a_tr = float(_d_tr @ _d_tr)
+                        _b_tr = 2.0 * float(_pC_tr @ _d_tr)
+                        _c_tr = _nC_tr * _nC_tr - _delta_tr * _delta_tr
+                        _disc_tr = max(_b_tr * _b_tr - 4 * _a_tr * _c_tr, 0.0)
+                        _beta_tr = (-_b_tr + _disc_tr ** 0.5) / (2 * _a_tr) if _a_tr > 0 else 0.0
+                        _p_tr = _pC_tr + _beta_tr * _d_tr
+                    # predicted reduction from linear model: ½‖F‖² - ½‖F + Jp‖²
+                    _Jp_tr = _J_tr @ _p_tr
+                    _pred_tr = _phi_tr - 0.5 * float((_F_tr + _Jp_tr) @ (_F_tr + _Jp_tr))
+                    _x_new_tr = _np_sr.clip(_x_tr + _p_tr, _lb_sr, _ub_sr)
+                    try:
+                        _Fnew_tr = _Feval_tr(_x_new_tr)
+                        if not _np_sr.all(_np_sr.isfinite(_Fnew_tr)):
+                            raise ValueError("non-finite")
+                        _phinew_tr = 0.5 * float(_Fnew_tr @ _Fnew_tr)
+                    except Exception:
+                        _phinew_tr = _np_sr.inf
+                        _Fnew_tr = _F_tr
+                    _ared_tr = _phi_tr - _phinew_tr  # actual reduction
+                    _rho_tr = (_ared_tr / _pred_tr) if _pred_tr > 1e-300 else -1.0
+                    if _rho_tr > 0.0:  # accept
+                        _x_tr = _x_new_tr
+                        _F_tr = _Fnew_tr
+                        _phi_tr = _phinew_tr
+                    if _rho_tr > 0.75:
+                        _delta_tr = min(2.0 * _delta_tr, _dmax_tr)  # expand
+                    elif _rho_tr < 0.25:
+                        _delta_tr = max(0.25 * _delta_tr, 1e-10)    # shrink
+                    if _k_tr % 5 == 0:
+                        print(f"[nlp-square] NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e} "
+                              f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e}", file=sys.stderr, flush=True)
+
+                class _SolTR:
+                    x = _x_tr
+                    success = _conv_tr
+                    nit = _k_tr + 1
+                _sol_sr = _SolTR()
+            else:
+                _sol_sr = _sp_root(_F_sr, _z0_sr, method=_method, options=_opts_sr)
             _dt_sr = __import__("time").perf_counter() - _t0_sr
             _nlp_sr.set_primals(_sol_sr.x)
             _rf_sr = float(_np_sr.linalg.norm(_nlp_sr.evaluate_eq_constraints(), _np_sr.inf))
