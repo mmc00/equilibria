@@ -3118,6 +3118,14 @@ def _run_path_capi_nonlinear_full(
                 _dmax_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DELTAMAX", "1e3"))
                 _drop_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DROPTOL", "1e-5"))
                 _ff_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_FILLFACTOR", "40"))
+                # spilu factorization is the per-iteration cost (MEASURED 6.6s on 15x10,
+                # much more on 20x41). Reuse it across REFRESH iterations (Shamanskii/chord
+                # Newton): the exact J is re-evaluated every step (cheap, 3ms) so the dogleg
+                # and ρ-gating stay accurate, but the spilu LU (only an approximate J⁻¹ for
+                # the Newton direction) is refactored only every REFRESH steps OR whenever a
+                # step is REJECTED (ρ≤0 → the stale LU is misleading the direction). 0/1 =
+                # refactor every iteration (old behaviour).
+                _refresh_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_LU_REFRESH", "5"))
                 _x_tr = _np_sr.clip(_z0_sr.copy(), _lb_sr, _ub_sr)
 
                 def _Feval_tr(z):
@@ -3128,6 +3136,8 @@ def _run_path_capi_nonlinear_full(
                 _phi_tr = 0.5 * float(_F_tr @ _F_tr)  # merit = ½‖F‖²
                 _conv_tr = False
                 _k_tr = 0
+                _lu_tr = None
+                _lu_age_tr = 0  # iterations since last refactor
                 for _k_tr in range(_maxit_tr):
                     _rinf_tr = float(_np_sr.linalg.norm(_F_tr, _np_sr.inf))
                     if _rinf_tr < _ftol_tr:
@@ -3136,13 +3146,24 @@ def _run_path_capi_nonlinear_full(
                     _nlp_sr.set_primals(_x_tr)
                     _J_tr = _nlp_sr.evaluate_jacobian_eq().tocsc()
                     _g_tr = _J_tr.T @ _F_tr  # gradient of merit = JᵀF
-                    # Newton step via spilu (approx J⁻¹); Cauchy step along -g
+                    # (re)factor the spilu preconditioner only when stale: first step, every
+                    # _refresh_tr steps, or when the previous step was rejected (_lu_age_tr<0)
+                    _need_lu = (_lu_tr is None or _refresh_tr <= 1
+                                or _lu_age_tr >= _refresh_tr or _lu_age_tr < 0)
+                    if _need_lu:
+                        try:
+                            _lu_tr = _spilu_tr(_J_tr + 1e-10 * _eye_tr(_n_sr, format="csc"),
+                                               drop_tol=_drop_tr, fill_factor=_ff_tr)
+                            _lu_age_tr = 0
+                        except Exception:
+                            _lu_tr = None
+                    else:
+                        _lu_age_tr += 1
+                    # Newton step via (reused) spilu (approx J⁻¹); Cauchy step along -g
                     try:
-                        _lu_tr = _spilu_tr(_J_tr + 1e-10 * _eye_tr(_n_sr, format="csc"),
-                                           drop_tol=_drop_tr, fill_factor=_ff_tr)
-                        _pN_tr = _lu_tr.solve(-_F_tr)
+                        _pN_tr = _lu_tr.solve(-_F_tr) if _lu_tr is not None else -_g_tr
                     except Exception:
-                        _pN_tr = -_g_tr  # fall back to gradient if LU fails
+                        _pN_tr = -_g_tr  # fall back to gradient if LU solve fails
                     _Jg_tr = _J_tr @ _g_tr
                     _gg_tr = float(_g_tr @ _g_tr)
                     _Jg2_tr = float(_Jg_tr @ _Jg_tr)
@@ -3182,13 +3203,16 @@ def _run_path_capi_nonlinear_full(
                         _x_tr = _x_new_tr
                         _F_tr = _Fnew_tr
                         _phi_tr = _phinew_tr
+                    else:  # reject: the reused LU is misleading the direction → force refactor
+                        _lu_age_tr = -1
                     if _rho_tr > 0.75:
                         _delta_tr = min(2.0 * _delta_tr, _dmax_tr)  # expand
                     elif _rho_tr < 0.25:
                         _delta_tr = max(0.25 * _delta_tr, 1e-10)    # shrink
                     if _k_tr % 5 == 0:
                         print(f"[nlp-square] NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e} "
-                              f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e}", file=sys.stderr, flush=True)
+                              f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e} LUage={_lu_age_tr}",
+                              file=sys.stderr, flush=True)
 
                 class _SolTR:
                     x = _x_tr
