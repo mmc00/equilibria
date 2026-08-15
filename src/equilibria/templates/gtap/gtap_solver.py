@@ -798,11 +798,27 @@ class GTAPSolver:
 
                     free_indices.sort(key=_abs_level)
 
+                # When we fix a variable that has a 1:1 defining equation, we MUST
+                # deactivate that equation too — otherwise the fixed var leaves an
+                # active row with no free column → an EMPTY Jacobian row →
+                # structural singularity (this is what produced 486→1599 empty
+                # eq_xda[...,tmg] rows on 20x41). xda↔eq_xda and xma↔eq_xma are
+                # indexed identically by (r,i,aa); xaa has multiple agent-specific
+                # defining equations, so we don't auto-deactivate it here.
+                _paired_eq = {"xda": "eq_xda", "xma": "eq_xma"}.get(var_name)
+                _eq_comp = getattr(self.model, _paired_eq, None) if _paired_eq else None
                 for idx in free_indices:
                     if max_to_fix is not None and count >= max_to_fix:
                         break
                     val = var[idx].value if var[idx].value is not None else default_val
                     var[idx].fix(float(val))
+                    if _eq_comp is not None:
+                        try:
+                            _row = _eq_comp[idx]
+                            if _row.active:
+                                _row.deactivate()
+                        except (KeyError, AttributeError):
+                            pass
                     count += 1
             return count
 
