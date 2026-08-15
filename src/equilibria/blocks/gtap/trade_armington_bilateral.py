@@ -333,7 +333,14 @@ class ArmingtonBilateralBlock(Block):
         el = p.elasticities
         taxes = p.taxes
         shifts_lambdaio = p.shifts.lambdaio
-        margin_commodities = {str(mm) for mm in s.m}
+        # The tmg (transport-margin) agent absorbs ONLY the real margin commodities
+        # (GAMS set `marg`, = {Services} in every GTAP7 aggregation), NOT all goods.
+        # `s.m` is `list(s.i)` (ALL commodities) — using it here makes eq_xaa_tmg get
+        # generated for every good, and the non-margin ones degenerate to xaa==0 rows
+        # the MCP squarer then orphans (486→779 empty eq_xaa_tmg rows on 20x41). Use
+        # `s.marg` (the data-driven active-margin set) so the equation is born only
+        # where GAMS generates it, exactly like `xatmgeq` in the reference model.
+        margin_commodities = {str(mm) for mm in (s.marg or s.m)}
 
         # alphaa_tmg (monolith 6060-6065)
         alphaa_tmg: dict[tuple[str, str], float] = {}
