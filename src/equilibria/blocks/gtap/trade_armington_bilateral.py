@@ -48,6 +48,7 @@ from pyomo.environ import value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
+from equilibria.blocks.gtap._squaring import skip_degenerate_cell
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -459,7 +460,7 @@ class ArmingtonBilateralBlock(Block):
                 if not shifts_lambdaio:
                     io_val = value(model.p_io[r, i, a])
                 if io_val <= 0.0:
-                    return model.xaa[r, i, a] == 0.0
+                    return skip_degenerate_cell(model, model.xaa, (r, i, a))
                 sigmand = _get_sigmand(r, a)
                 lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
                 if abs(sigmand) < 1e-12:
@@ -514,10 +515,10 @@ class ArmingtonBilateralBlock(Block):
                 r, i = indices
                 i_str = str(i)
                 if i_str not in margin_commodities:
-                    return model.xaa[r, i, _TMG] == 0.0
+                    return skip_degenerate_cell(model, model.xaa, (r, i, _TMG))
                 alpha = alphaa_tmg.get((str(r), i_str), 0.0)
                 if alpha <= 0.0:
-                    return model.xaa[r, i, _TMG] == 0.0
+                    return skip_degenerate_cell(model, model.xaa, (r, i, _TMG))
                 sigmamg = float(el.sigmam.get(i_str, 1.0))
                 if abs(sigmamg - 1.0) < 1e-8:
                     sigmamg = 1.01
@@ -564,7 +565,7 @@ class ArmingtonBilateralBlock(Block):
                 r, i, aa = indices
                 domestic_share, _ = _shares(r, i, aa)
                 if domestic_share <= 0.0:
-                    return model.xda[r, i, aa] == 0.0
+                    return skip_degenerate_cell(model, model.xda, (r, i, aa))
                 sigma_m = _top_sigma(r, i, aa)
                 if sigma_m == float("inf"):
                     return (1.0 + model.dintx[r, i, aa]) * model.pd[r, i] == model.pa[
@@ -591,7 +592,7 @@ class ArmingtonBilateralBlock(Block):
                 r, i, aa = indices
                 _, import_share = _shares(r, i, aa)
                 if import_share <= 0.0:
-                    return model.xma[r, i, aa] == 0.0
+                    return skip_degenerate_cell(model, model.xma, (r, i, aa))
                 sigma_m = _top_sigma(r, i, aa)
                 if sigma_m == float("inf"):
                     return (1.0 + model.mintx[r, i, aa]) * model.pmt[r, i] == model.pa[
