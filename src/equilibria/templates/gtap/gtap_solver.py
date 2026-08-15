@@ -801,23 +801,57 @@ class GTAPSolver:
                 # When we fix a variable that has a 1:1 defining equation, we MUST
                 # deactivate that equation too — otherwise the fixed var leaves an
                 # active row with no free column → an EMPTY Jacobian row →
-                # structural singularity (this is what produced 486→1599 empty
-                # eq_xda[...,tmg] rows on 20x41). xda↔eq_xda and xma↔eq_xma are
-                # indexed identically by (r,i,aa); xaa has multiple agent-specific
-                # defining equations, so we don't auto-deactivate it here.
-                _paired_eq = {"xda": "eq_xda", "xma": "eq_xma"}.get(var_name)
-                _eq_comp = getattr(self.model, _paired_eq, None) if _paired_eq else None
+                # structural singularity (this produced 486→1599 empty eq_xda/
+                # eq_xaa_tmg rows on 20x41). xda↔eq_xda and xma↔eq_xma are indexed
+                # identically by (r,i,aa). xaa's defining equation is agent-specific:
+                # for the tmg (transport-margins) agent it is eq_xaa_tmg[r,i] — the
+                # ONLY xaa cells the aggressive fixer touches in practice (their
+                # near-zero benchmark absorption sorts first). Handled below by a
+                # (var_name → eq name, index-mapper) table; other xaa agents are not
+                # auto-deactivated (they don't get fixed by this heuristic).
+                _paired_direct = {"xda": "eq_xda", "xma": "eq_xma"}.get(var_name)
+                _eq_direct = (
+                    getattr(self.model, _paired_direct, None)
+                    if _paired_direct
+                    else None
+                )
+                _eq_xaa_tmg = (
+                    getattr(self.model, "eq_xaa_tmg", None)
+                    if var_name == "xaa"
+                    else None
+                )
+
+                def _paired_row(idx):
+                    """Return the active 1:1 defining Constraint for var[idx], or None."""
+                    if _eq_direct is not None:
+                        try:
+                            return _eq_direct[idx]
+                        except (KeyError, AttributeError, TypeError):
+                            return None
+                    # xaa[r,i,"tmg"] → eq_xaa_tmg[r,i]
+                    if (
+                        _eq_xaa_tmg is not None
+                        and isinstance(idx, tuple)
+                        and len(idx) == 3
+                        and str(idx[2]) == "tmg"
+                    ):
+                        try:
+                            return _eq_xaa_tmg[(idx[0], idx[1])]
+                        except (KeyError, AttributeError, TypeError):
+                            return None
+                    return None
+
                 for idx in free_indices:
                     if max_to_fix is not None and count >= max_to_fix:
                         break
                     val = var[idx].value if var[idx].value is not None else default_val
                     var[idx].fix(float(val))
-                    if _eq_comp is not None:
+                    _row = _paired_row(idx)
+                    if _row is not None:
                         try:
-                            _row = _eq_comp[idx]
                             if _row.active:
                                 _row.deactivate()
-                        except (KeyError, AttributeError):
+                        except AttributeError:
                             pass
                     count += 1
             return count
