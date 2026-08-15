@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from equilibria.blocks.base import Block
+from equilibria.blocks.gtap._squaring import skip_degenerate_cell
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -114,7 +115,7 @@ class TradeCETBlock(Block):
                 omega = omegax.get((r, i), float("inf"))
                 gd_share = value(pyomo_model.gd_share[r, i])
                 if gd_share <= 0.0:
-                    return pyomo_model.xds[r, i] == 0.0
+                    return skip_degenerate_cell(pyomo_model, pyomo_model.xds, (r, i))
                 if omega == float("inf"):
                     return pyomo_model.pd[r, i] == pyomo_model.ps[r, i]
                 return (
@@ -138,7 +139,7 @@ class TradeCETBlock(Block):
                     return None
                 ge_share = value(pyomo_model.ge_share[r, i])
                 if ge_share <= 0.0:
-                    return pyomo_model.xet[r, i] == 0.0
+                    return skip_degenerate_cell(pyomo_model, pyomo_model.xet, (r, i))
                 if omega == float("inf"):
                     return pyomo_model.pet[r, i] == pyomo_model.ps[r, i]
                 return (
