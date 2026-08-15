@@ -3232,10 +3232,19 @@ def _run_path_capi_nonlinear_full(
                     _rpr_g = _np_sr.diff(_Jg0.indptr)
                     _emptyr_g = _np_sr.where(_rpr_g == 0)[0]
                     _Jg0c = _Jg0.tocsc()
-                    _emptyc_g = _np_sr.where(_np_sr.diff(_Jg0c.indptr) == 0)[0]
+                    _emptyc_all_g = _np_sr.where(_np_sr.diff(_Jg0c.indptr) == 0)[0]
+                    # An empty COLUMN whose variable is FIXED is square-neutral, not a
+                    # singularity: a fixed var carries no DOF, so it can be absent from every
+                    # equation harmlessly (this is exactly the paired var=0 + eq-Skip pattern).
+                    # PyomoNLP keeps fixed variables as Jacobian columns, so filter them out;
+                    # only a FREE variable in no equation is a real structural problem.
+                    _vars_g = _nlp_sr.get_pyomo_variables()
+                    _emptyc_g = _np_sr.array(
+                        [_j for _j in _emptyc_all_g if not _vars_g[_j].fixed],
+                        dtype=int,
+                    )
                     if len(_emptyr_g) or len(_emptyc_g):
                         _cons_g = _nlp_sr.get_pyomo_constraints()
-                        _vars_g = _nlp_sr.get_pyomo_variables()
                         _bad_eqs = [str(_cons_g[_i]) for _i in _emptyr_g[:15]]
                         _bad_vars = [str(_vars_g[_i]) for _i in _emptyc_g[:15]]
                         _msg_g = (
