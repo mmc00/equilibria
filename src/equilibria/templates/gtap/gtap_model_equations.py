@@ -6086,11 +6086,17 @@ class GTAPModelEquations:
 
         def eq_xaa_tmg_rule(model, r, i):
             i_str = str(i)
+            # Non-margin commodity or zero margin-share: the tmg agent has no
+            # absorption of this good. GAMS generates no equation (a $-condition);
+            # emitting `xaa==0` here instead leaves an active row whose near-zero
+            # variable the MCP squarer fixes → an EMPTY Jacobian row (structural
+            # singularity: eq_xaa_tmg[ARG,...] on 20x41). Skip the row AND fix the
+            # var to 0 below (paired, square-preserving) — same pattern as eq_xda.
             if i_str not in margin_commodities:
-                return model.xaa[r, i, GTAP_MARGIN_AGENT] == 0.0
+                return Constraint.Skip
             alpha = alphaa_tmg.get((str(r), i_str), 0.0)
             if alpha <= 0.0:
-                return model.xaa[r, i, GTAP_MARGIN_AGENT] == 0.0
+                return Constraint.Skip
             sigmamg = float(self.params.elasticities.sigmam.get(i_str, 1.0))
             if abs(sigmamg - 1.0) < 1e-8:
                 sigmamg = 1.01
@@ -6102,6 +6108,17 @@ class GTAPModelEquations:
             )
 
         model.eq_xaa_tmg = Constraint(model.r, model.i, rule=eq_xaa_tmg_rule)
+        # Pair the eq_xaa_tmg Skip with fixing xaa[r,i,tmg]=0 for the same no-tmg-
+        # absorption cells, so the removed row has a removed column (square-preserving
+        # and the MCP squarer never orphans these rows).
+        for r in model.r:
+            for i in model.i:
+                _i_str = str(i)
+                _skip = _i_str not in margin_commodities or (
+                    alphaa_tmg.get((str(r), _i_str), 0.0) <= 0.0
+                )
+                if _skip and not model.xaa[r, i, GTAP_MARGIN_AGENT].fixed:
+                    model.xaa[r, i, GTAP_MARGIN_AGENT].fix(0.0)
 
         def _raw_agent_domestic_import_eq(r, i, aa):
             if aa in self.sets.a:
