@@ -3193,6 +3193,27 @@ def _run_path_capi_nonlinear_full(
                             f"singletons={int((_cnt_j == 1).sum())}")
                     else:
                         _jl("matching NOT full — structurally rank-deficient")
+                    # NAME the empty rows (zero Jacobian rows = structurally-singular eqs) and
+                    # a few non-empty SIBLINGS in the same index band, to identify the family
+                    # and what index-tuple distinguishes a degenerate cell from a live one.
+                    _rpr_j = _np_sr.diff(_Jd.tocsr().indptr)
+                    _empty_j = _np_sr.where(_rpr_j == 0)[0]
+                    _jl(f"EMPTY ROWS: {len(_empty_j)} "
+                        f"(range {int(_empty_j.min()) if len(_empty_j) else -1}-"
+                        f"{int(_empty_j.max()) if len(_empty_j) else -1})")
+                    try:
+                        _cons_j = _nlp_sr.get_pyomo_constraints()
+                        _empty_names = [str(_cons_j[_i]) for _i in _empty_j[:20]]
+                        _jl(f"EMPTY eq names (first 20): {_empty_names}")
+                        # a non-empty sibling for contrast: same band, has nnz
+                        if len(_empty_j):
+                            _band_lo, _band_hi = int(_empty_j.min()), int(_empty_j.max())
+                            _sib = [_i for _i in range(_band_lo, _band_hi + 1)
+                                    if _rpr_j[_i] > 0][:10]
+                            _jl(f"LIVE siblings in band (first 10): "
+                                f"{[str(_cons_j[_i]) for _i in _sib]}")
+                    except Exception as _en:
+                        _jl(f"could not name eqs: {_en}")
                     _jl(f"dumped {_jdump} (+_pert +_blocks) — aborting")
                     import sys as _sxj
                     _sxj.exit(0)
