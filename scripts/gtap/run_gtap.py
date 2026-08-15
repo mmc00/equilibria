@@ -3217,6 +3217,39 @@ def _run_path_capi_nonlinear_full(
                     _jl(f"dumped {_jdump} (+_pert +_blocks) — aborting")
                     import sys as _sxj
                     _sxj.exit(0)
+
+                # STRUCTURAL PRE-SOLVE GATE (on by default; EQUILIBRIA_GTAP_TR_GATE=0 to skip).
+                # A zero Jacobian row (empty equation) or zero column (variable in no equation)
+                # makes the squared system STRUCTURALLY SINGULAR — no direct/Krylov solver can
+                # touch it and a naive splu burns ~30min of fill before giving up (MEASURED:
+                # 20x41 has 486 empty rows from zero-cell tuples the disaggregation exposes).
+                # The matching costs ~0.01s even at 393k, so verify up front and ABORT with the
+                # offending equation NAMES instead of hanging. Same spirit as the other hard
+                # gates: let the system tell you, don't discover it by hand three weeks later.
+                if os.environ.get("EQUILIBRIA_GTAP_TR_GATE", "1") == "1":
+                    _nlp_sr.set_primals(_x_tr)
+                    _Jg0 = _nlp_sr.evaluate_jacobian_eq().tocsr()
+                    _rpr_g = _np_sr.diff(_Jg0.indptr)
+                    _emptyr_g = _np_sr.where(_rpr_g == 0)[0]
+                    _Jg0c = _Jg0.tocsc()
+                    _emptyc_g = _np_sr.where(_np_sr.diff(_Jg0c.indptr) == 0)[0]
+                    if len(_emptyr_g) or len(_emptyc_g):
+                        _cons_g = _nlp_sr.get_pyomo_constraints()
+                        _vars_g = _nlp_sr.get_pyomo_variables()
+                        _bad_eqs = [str(_cons_g[_i]) for _i in _emptyr_g[:15]]
+                        _bad_vars = [str(_vars_g[_i]) for _i in _emptyc_g[:15]]
+                        _msg_g = (
+                            f"STRUCTURAL SINGULARITY: {len(_emptyr_g)} empty Jacobian rows "
+                            f"(zero-derivative equations) and {len(_emptyc_g)} empty columns "
+                            f"(variables in no equation). The squared system is not solvable. "
+                            f"First offending equations: {_bad_eqs}. "
+                            f"First offending variables: {_bad_vars}. "
+                            f"Fix the squaring (filter zero-cell tuples like GAMS $-conditions, "
+                            f"or fix the associated variable) — set EQUILIBRIA_GTAP_TR_GATE=0 "
+                            f"to bypass this check.")
+                        print(f"[nlp-square] {_msg_g}", file=sys.stderr, flush=True)
+                        raise RuntimeError(_msg_g)
+
                 _conv_tr = False
                 _k_tr = 0
                 _lu_tr = None
