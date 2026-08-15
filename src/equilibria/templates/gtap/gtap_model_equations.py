@@ -6345,7 +6345,13 @@ class GTAPModelEquations:
         def eq_xda_rule(model, r, i, aa):
             domestic_share, _ = get_benchmark_agent_armington_shares(r, i, aa)
             if domestic_share <= 0.0:
-                return model.xda[r, i, aa] == 0.0
+                # No domestic Armington demand for this cell. GAMS generates no
+                # equation here (a $-condition on the positive share); emitting
+                # `xda == 0` instead leaves an active row whose variable the MCP
+                # squarer then fixes → an EMPTY Jacobian row (structural
+                # singularity: 486 such rows on 20x41). Skip the row AND fix the
+                # var to 0 below (paired, square-preserving), like eq_paa's Skip.
+                return Constraint.Skip
             sigma_m = _top_armington_sigma(r, i, aa)
             if sigma_m == float("inf"):
                 return model.pdp[r, i, aa] == model.paa[r, i, aa]
@@ -6357,11 +6363,24 @@ class GTAPModelEquations:
             )
 
         model.eq_xda = Constraint(model.r, model.i, model.aa, rule=eq_xda_rule)
+        # Pair the eq_xda Skip with fixing xda=0 for the same zero-domestic-share
+        # cells, so the removed row has a removed column (system stays square and
+        # the MCP squarer never has to fix these near-zero vars and orphan a row).
+        for r in model.r:
+            for i in model.i:
+                for aa in model.aa:
+                    _dshare, _ = get_benchmark_agent_armington_shares(r, i, aa)
+                    if _dshare <= 0.0 and not model.xda[r, i, aa].fixed:
+                        model.xda[r, i, aa].fix(0.0)
 
         def eq_xma_rule(model, r, i, aa):
             _, import_share = get_benchmark_agent_armington_shares(r, i, aa)
             if import_share <= 0.0:
-                return model.xma[r, i, aa] == 0.0
+                # No imported Armington demand for this cell — same reasoning as
+                # eq_xda above: Skip the row and fix xma=0 (paired) instead of
+                # emitting `xma == 0`, which the MCP squarer turns into an empty
+                # Jacobian row.
+                return Constraint.Skip
             sigma_m = _top_armington_sigma(r, i, aa)
             if sigma_m == float("inf"):
                 return model.pmp[r, i, aa] == model.paa[r, i, aa]
@@ -6373,6 +6392,13 @@ class GTAPModelEquations:
             )
 
         model.eq_xma = Constraint(model.r, model.i, model.aa, rule=eq_xma_rule)
+        # Pair the eq_xma Skip with fixing xma=0 for zero-import-share cells.
+        for r in model.r:
+            for i in model.i:
+                for aa in model.aa:
+                    _, _ishare = get_benchmark_agent_armington_shares(r, i, aa)
+                    if _ishare <= 0.0 and not model.xma[r, i, aa].fixed:
+                        model.xma[r, i, aa].fix(0.0)
 
         # GAMS xmteq/xdseq: aggregate demands defined as sum over agents
         def eq_xd_agg_rule(model, r, i):
