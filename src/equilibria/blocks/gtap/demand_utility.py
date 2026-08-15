@@ -41,7 +41,6 @@ from pyomo.environ import sqrt, value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
-from equilibria.blocks.gtap._squaring import skip_degenerate_cell
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -244,7 +243,7 @@ class DemandUtilityBlock(Block):
                 r, i = indices
                 share = value(m.c_share[r, i])
                 if share <= 0.0:
-                    return skip_degenerate_cell(m, m.xc, (r, i))
+                    return m.xc[r, i] == 0.0
                 return m.pa[r, i, "hhd"] * m.xc[r, i] == m.xcshr[r, i] * m.yc[r]
 
         equations.append(EqXc())
@@ -259,7 +258,7 @@ class DemandUtilityBlock(Block):
                 r, i = indices
                 share = value(m.g_share[r, i])
                 if share <= 0.0:
-                    return skip_degenerate_cell(m, m.xg, (r, i))
+                    return m.xg[r, i] == 0.0
                 sigmag = float(el.esubg.get(r, 1.0))
                 if abs(sigmag - 1.0) < 1e-8:
                     sigmag = 1.01
@@ -282,7 +281,7 @@ class DemandUtilityBlock(Block):
                 r, i = indices
                 alphaa = value(m.i_share[r, i])
                 if alphaa <= 0.0:
-                    return skip_degenerate_cell(m, m.xi, (r, i))
+                    return m.xi[r, i] == 0.0
                 sigmai_raw = el.esubi.get((r,))
                 if sigmai_raw is None:
                     sigmai_raw = el.esubi.get(r, 0.0)
@@ -321,7 +320,7 @@ class DemandUtilityBlock(Block):
                 share = value(m.c_share[r, i])
                 alpha = value(m.alphaa_hhd[r, i])
                 if share <= 0.0 or alpha <= 0.0:
-                    return skip_degenerate_cell(m, m.zcons, (r, i))
+                    return m.zcons[r, i] == 0.0
                 return m.zcons[r, i] == (
                     m.alphaa_hhd[r, i]
                     * m.bh[r, i]
@@ -342,7 +341,7 @@ class DemandUtilityBlock(Block):
                 r, i = indices
                 share = value(m.c_share[r, i])
                 if share <= 0.0:
-                    return skip_degenerate_cell(m, m.xcshr, (r, i))
+                    return m.xcshr[r, i] == 0.0
                 return (
                     m.xcshr[r, i]
                     * sum(m.zcons[r, j] for j in m.i if value(m.c_share[r, j]) > 0.0)
@@ -649,7 +648,7 @@ class DemandUtilityBlock(Block):
                     f for f in m.f if str(f).lower() in ("capital", "cap", "k", "kap")
                 ]
                 if not capital_factors:
-                    return skip_degenerate_cell(m, m.arent, r)
+                    return m.arent[r] == 0.0
                 cap_return = 0.0
                 for f in capital_factors:
                     for a in m.a:
