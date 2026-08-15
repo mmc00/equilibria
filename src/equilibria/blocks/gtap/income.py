@@ -39,6 +39,7 @@ from pyomo.environ import sqrt, value
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
 from equilibria.blocks.gtap import _ifsub_macros as mac
+from equilibria.blocks.gtap._squaring import skip_degenerate_cell
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -397,7 +398,7 @@ class IncomeBlock(Block):
                             )
                     return model.ytax[r, gy] == total
 
-                return model.ytax[r, gy] == 0.0
+                return skip_degenerate_cell(model, model.ytax, (r, gy))
 
         equations.append(EqYtax())
 
