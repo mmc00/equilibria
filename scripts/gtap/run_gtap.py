@@ -2826,6 +2826,94 @@ def _run_path_capi_nonlinear_full(
             label="nonlinear-full",
         )
 
+    # BTF STRUCTURE PROBE (env EQUILIBRIA_GTAP_BTF_PROBE=1): compute the Dulmage-
+    # Mendelsohn block structure of the SQUARED (constraints, free_variables) system
+    # from pure-Pyomo adjacency (identify_variables) — NO PyNumero/ASL. Tells whether
+    # the 391k system is many small irreducible blocks (KLU/BTF factors cheap → the
+    # 32GB OOM is solvable, power-flow route) or one giant block (→ JFNK+ILU, CFD route).
+    # Reports and CONTINUES (does not abort) so the normal solve still runs after.
+    if os.environ.get("EQUILIBRIA_GTAP_BTF_PROBE") == "1":
+        import numpy as _np_btf
+        from pyomo.core.expr.visitor import identify_variables as _idv_btf
+        from scipy.sparse import csr_matrix as _csr_btf
+        from scipy.sparse.csgraph import (
+            connected_components as _cc_btf,
+            maximum_bipartite_matching as _mbm_btf,
+        )
+
+        _pf_btf = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+
+        def _plog_btf(_m):
+            if _pf_btf:
+                try:
+                    with open(_pf_btf, "a") as _fh:
+                        _fh.write(f"  [btf-probe] {_m}\n")
+                except Exception:
+                    pass
+            print(f"[nlp-square] [btf-probe] {_m}", file=sys.stderr, flush=True)
+
+        _col_btf = {id(_v): _j for _j, _v in enumerate(free_variables)}
+        _n_btf = len(free_variables)
+        _indptr_btf = [0]
+        _ind_btf = []
+        for _c in constraints:
+            _seen = set()
+            for _v in _idv_btf(_c.body, include_fixed=False):
+                _j = _col_btf.get(id(_v))
+                if _j is not None and _j not in _seen:
+                    _seen.add(_j)
+            _ind_btf.extend(sorted(_seen))
+            _indptr_btf.append(len(_ind_btf))
+        _A_btf = _csr_btf(
+            (
+                _np_btf.ones(len(_ind_btf)),
+                _np_btf.array(_ind_btf),
+                _np_btf.array(_indptr_btf),
+            ),
+            shape=(len(constraints), _n_btf),
+        )
+        _plog_btf(
+            f"squared system: {len(constraints)} eqs x {_n_btf} vars, "
+            f"incidence nnz={_A_btf.nnz} ({_A_btf.nnz / max(len(constraints), 1):.1f}/row)"
+        )
+        if len(constraints) == _n_btf:
+            _match_btf = _mbm_btf(_A_btf, perm_type="column")
+            if not _np_btf.any(_match_btf < 0):
+                _Ap_btf = _A_btf[:, _match_btf].tocsr()
+                _ncc_btf, _lab_btf = _cc_btf(
+                    _Ap_btf, directed=True, connection="strong"
+                )
+                _, _cnt_btf = _np_btf.unique(_lab_btf, return_counts=True)
+                _cs_btf = _np_btf.sort(_cnt_btf)[::-1]
+                _plog_btf(
+                    f"BTF: {_ncc_btf} blocks | MAX={int(_cs_btf[0])} "
+                    f"({100 * _cs_btf[0] / _n_btf:.2f}% of n) | "
+                    f"top10={_cs_btf[:10].tolist()} | "
+                    f"singletons={int((_cnt_btf == 1).sum())} "
+                    f"({100 * (_cnt_btf == 1).sum() / _ncc_btf:.1f}% of blocks)"
+                )
+                if _cs_btf[0] < 0.05 * _n_btf:
+                    _plog_btf(
+                        "VERDICT: many small blocks -> KLU/BTF factors cheap -> "
+                        "OOM SOLVABLE (power-flow route)"
+                    )
+                elif _cs_btf[0] > 0.5 * _n_btf:
+                    _plog_btf(
+                        f"VERDICT: one GIANT block ({100 * _cs_btf[0] / _n_btf:.0f}%) "
+                        "-> BTF won't help -> JFNK+ILU (CFD route)"
+                    )
+                else:
+                    _plog_btf(
+                        f"VERDICT: mixed (biggest {100 * _cs_btf[0] / _n_btf:.0f}%) "
+                        "-> factor the big block with ILU, BTF-peel the rest"
+                    )
+            else:
+                _plog_btf("matching NOT full on squared system (unexpected)")
+        else:
+            _plog_btf(
+                f"NOT square ({len(constraints)} != {_n_btf}) — squaring incomplete"
+            )
+
     # TEMP DEBUG HOOK (session-local, remove before commit): dump the exact
     # square (constraints, free_variables) pair PATH is about to solve, for a
     # Jacobian condition-number probe done OUTSIDE the solve call. No-op unless
