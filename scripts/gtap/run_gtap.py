@@ -3883,17 +3883,26 @@ def _run_path_capi_nonlinear_full(
                         if not _np_sr.all(_np_sr.isfinite(_pN_tr)):
                             _pN_tr = -_g_tr
                     elif _linsolve_tr == "mumps":
-                        # MUMPS SPARSE DIRECT (the CGE-scale route: this is the solver
-                        # IPOPT/GEMPACK use internally). A multifrontal Fortran solver
-                        # that does its OWN pivoting — it handles the ~100%-zero GTAP
-                        # diagonal natively (no column pre-permutation needed) and, unlike
-                        # scipy's COMPLETE splu (which needs ~35GB and OOM-kills the 32GB
-                        # Kaggle kernel on the 393k system), keeps the factor out-of-Python
-                        # and RAM-bounded. EXACT (no drop-tol). The symbolic factorization
-                        # (structure-only, reusable across Newton steps) is done ONCE; the
-                        # numeric refactor + back-solve run each REFRESH per Shamanskii.
+                        # MUMPS SPARSE DIRECT (the CGE-scale route: the solver IPOPT/GEMPACK
+                        # use internally). Multifrontal Fortran; unlike scipy's COMPLETE splu
+                        # (~35GB → OOM on the 32GB kernel at 393k) it keeps the factor
+                        # out-of-Python and RAM-bounded. EXACT (no drop-tol).
+                        #
+                        # CRITICAL: the squared GTAP Jacobian has a ~100% ZERO diagonal
+                        # (structural: eq-i vs var-i by name). Handed the raw matrix, MUMPS's
+                        # analysis declares it SINGULAR IN STRUCTURE (INFOG(1)=-6) even though
+                        # the transversal is full. Fix (same lesson as `direct`): column-
+                        # permute to a zero-free diagonal via maximum_bipartite_matching FIRST,
+                        # solve (J P) y = -F, then un-permute p[colperm]=y. Plus ICNTL(6)=5
+                        # (MUMPS's own scaling + zero-free-diagonal column permutation) as a
+                        # belt-and-suspenders. The permutation is STRUCTURAL (pattern-only,
+                        # unchanged across Newton steps) so it is computed ONCE and reused;
+                        # symbolic factor once + Shamanskii numeric refresh.
                         from pyomo.contrib.pynumero.linalg.mumps_interface import (
                             MumpsCentralizedAssembledLinearSolver as _Mumps_tr,
+                        )
+                        from scipy.sparse.csgraph import (
+                            maximum_bipartite_matching as _mbm_m,
                         )
 
                         _pf_m = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
@@ -3911,22 +3920,38 @@ def _run_path_capi_nonlinear_full(
                                 flush=True,
                             )
 
+                        # structural column permutation → zero-free diagonal (compute once)
+                        if _colperm_tr is None:
+                            _t_m = __import__("time").perf_counter()
+                            _colperm_tr = _mbm_m(_J_tr.tocsr(), perm_type="column")
+                            if _np_sr.any(_colperm_tr < 0):
+                                _plog_m(
+                                    "matching NOT full — using identity (rank-deficient)"
+                                )
+                                _colperm_tr = _np_sr.arange(_n_sr)
+                            else:
+                                _plog_m(
+                                    "col matching done in "
+                                    f"{__import__('time').perf_counter() - _t_m:.1f}s "
+                                    f"(n={_n_sr})"
+                                )
                         _need_lu = (
                             _lu_tr is None
                             or _refresh_tr <= 1
                             or _lu_age_tr >= _refresh_tr
                             or _lu_age_tr < 0
                         )
-                        _Jm_tr = _J_tr.tocsr()
+                        _Jm_tr = _J_tr[:, _colperm_tr].tocsr()
                         if _need_lu:
                             try:
                                 _t_m = __import__("time").perf_counter()
                                 if _lu_tr is None:
-                                    # sym=0 (unsymmetric F(z)=0 Jacobian). ICNTL(14) is the
-                                    # working-space %-increase; bump it so the numeric phase
-                                    # doesn't fail on a fill underestimate at 393k.
+                                    # sym=0 (unsymmetric). ICNTL(14): working-space %-increase
+                                    # (avoid fill-underestimate failures at 393k). ICNTL(6)=5:
+                                    # MUMPS scaling + zero-free-diagonal column permutation.
                                     _lu_tr = _Mumps_tr(sym=0)
-                                    _lu_tr.set_icntl(14, 50)
+                                    _lu_tr.set_icntl(14, 100)
+                                    _lu_tr.set_icntl(6, 5)
                                     _lu_tr.do_symbolic_factorization(_Jm_tr)
                                     _plog_m(
                                         "symbolic factorization done in "
@@ -3947,11 +3972,14 @@ def _run_path_capi_nonlinear_full(
                             _lu_age_tr += 1
                         try:
                             if _lu_tr is not None:
-                                _pN_tr, _ = _lu_tr.do_back_solve(-_F_tr)
-                                if _pN_tr is None or not _np_sr.all(
-                                    _np_sr.isfinite(_pN_tr)
+                                _y_m, _ = _lu_tr.do_back_solve(-_F_tr)  # (J P) y = -F
+                                if _y_m is None or not _np_sr.all(
+                                    _np_sr.isfinite(_y_m)
                                 ):
                                     _pN_tr = -_g_tr
+                                else:
+                                    _pN_tr = _np_sr.empty(_n_sr)
+                                    _pN_tr[_colperm_tr] = _y_m  # un-permute: p = P y
                             else:
                                 _pN_tr = -_g_tr
                         except Exception:
