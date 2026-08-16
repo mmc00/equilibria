@@ -54,15 +54,18 @@ from equilibria.templates.gtap.gtap_parameters import (
 
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 PATH_CAPI_SRC_DEFAULT = Path("/Users/marmol/proyectos/path-capi-python/src")
-PATH_CAPI_LIB_DEFAULT = Path("/Users/marmol/proyectos2/equilibria/.cache/path_capi/libpath50.silicon.dylib")
-PATH_CAPI_LUSOL_DEFAULT = Path("/Users/marmol/proyectos2/equilibria/.cache/path_capi/liblusol.silicon.dylib")
+PATH_CAPI_LIB_DEFAULT = Path(
+    "/Users/marmol/proyectos2/equilibria/.cache/path_capi/libpath50.silicon.dylib"
+)
+PATH_CAPI_LUSOL_DEFAULT = Path(
+    "/Users/marmol/proyectos2/equilibria/.cache/path_capi/liblusol.silicon.dylib"
+)
 
 REGION_ALIASES = {
     "usa": "NAmerica",
@@ -85,8 +88,14 @@ COMMODITY_ALIASES = {
     "services": "c_OthService",
 }
 
-COMP_GDX_REFERENCE = Path(__file__).resolve().parents[2] / "src/equilibria/templates/reference/gtap/output/COMP.gdx"
-COMP_CSV_REFERENCE = Path(__file__).resolve().parents[2] / "src/equilibria/templates/reference/gtap/comp/COMP_generated.csv"
+COMP_GDX_REFERENCE = (
+    Path(__file__).resolve().parents[2]
+    / "src/equilibria/templates/reference/gtap/output/COMP.gdx"
+)
+COMP_CSV_REFERENCE = (
+    Path(__file__).resolve().parents[2]
+    / "src/equilibria/templates/reference/gtap/comp/COMP_generated.csv"
+)
 GTAP_IN_SCALE = 1e-6
 _COMP_DELTA_CACHE: Optional[dict[str, dict[str, float]]] = None
 
@@ -129,7 +138,10 @@ def _load_comp_shock_deltas() -> dict[str, dict[str, float]]:
             else:
                 shock[key] = shock.get(key, 0.0) + float(val)
         if base or shock:
-            deltas[sym.lower()] = {k: shock.get(k, 0.0) - base.get(k, 0.0) for k in (set(base) | set(shock))}
+            deltas[sym.lower()] = {
+                k: shock.get(k, 0.0) - base.get(k, 0.0)
+                for k in (set(base) | set(shock))
+            }
 
     # Derived regional macro blocks for comparators when COMP exports only
     # component symbols.
@@ -141,7 +153,9 @@ def _load_comp_shock_deltas() -> dict[str, dict[str, float]]:
         regy_keys = set(yc) | set(yg) | set(rsav)
         if regy_keys:
             deltas["regy"] = {
-                k: float(yc.get(k, 0.0)) + float(yg.get(k, 0.0)) + float(rsav.get(k, 0.0))
+                k: float(yc.get(k, 0.0))
+                + float(yg.get(k, 0.0))
+                + float(rsav.get(k, 0.0))
                 for k in regy_keys
             }
 
@@ -178,7 +192,9 @@ def _load_comp_shock_deltas() -> dict[str, dict[str, float]]:
 
 def _ensure_gtap_reference_snapshot_env() -> bool:
     """Enable benchmark-aligned GTAP seeding when the COMP snapshot is available."""
-    snapshot_hint = os.environ.get("EQUILIBRIA_GTAP_REFERENCE_SNAPSHOT", "").strip().lower()
+    snapshot_hint = (
+        os.environ.get("EQUILIBRIA_GTAP_REFERENCE_SNAPSHOT", "").strip().lower()
+    )
     if snapshot_hint in {"off", "none", "false", "0"}:
         return False
     if snapshot_hint:
@@ -239,7 +255,9 @@ def _apply_shock_to_params(
     def _norm(s: str) -> str:
         return "".join(ch for ch in s.lower() if ch.isalnum())
 
-    def _resolve_token(token: str, candidates: list[str], alias_map: dict[str, str]) -> Optional[str]:
+    def _resolve_token(
+        token: str, candidates: list[str], alias_map: dict[str, str]
+    ) -> Optional[str]:
         if token in candidates:
             return token
 
@@ -261,7 +279,9 @@ def _apply_shock_to_params(
 
         return None
 
-    def _resolve_index(idx: tuple[str, ...], keys: list[tuple[Any, ...]]) -> Optional[tuple[Any, ...]]:
+    def _resolve_index(
+        idx: tuple[str, ...], keys: list[tuple[Any, ...]]
+    ) -> Optional[tuple[Any, ...]]:
         if not keys:
             return None
         if idx in keys:
@@ -279,7 +299,11 @@ def _apply_shock_to_params(
         resolved_parts: list[str] = []
         for pos, token in enumerate(idx):
             candidates = candidates_by_pos[pos]
-            alias_map = COMMODITY_ALIASES if any(v.startswith("c_") for v in candidates) else REGION_ALIASES
+            alias_map = (
+                COMMODITY_ALIASES
+                if any(v.startswith("c_") for v in candidates)
+                else REGION_ALIASES
+            )
             resolved = _resolve_token(str(token), candidates, alias_map)
             if resolved is None:
                 return None
@@ -461,7 +485,11 @@ def _collect_key_quantities(
             for i in model.i:
                 xa_ri = float(value(model.xa[r, i])) if hasattr(model, "xa") else 0.0
                 for aa in model.aa:
-                    xaa_val = float(value(model.xaa[r, i, aa])) if hasattr(model, "xaa") else 0.0
+                    xaa_val = (
+                        float(value(model.xaa[r, i, aa]))
+                        if hasattr(model, "xaa")
+                        else 0.0
+                    )
                     if xa_ri > 1e-14:
                         alphaa[f"{r}|{i}|{aa}"] = xaa_val / xa_ri
                     else:
@@ -491,11 +519,18 @@ def _collect_key_quantities(
     if hasattr(model, "i"):
         xtmg: dict[str, float] = {}
         for i in model.i:
-            if hasattr(model, "xw") and hasattr(model, "pwmg") and hasattr(model, "r") and hasattr(model, "rp"):
+            if (
+                hasattr(model, "xw")
+                and hasattr(model, "pwmg")
+                and hasattr(model, "r")
+                and hasattr(model, "rp")
+            ):
                 total = 0.0
                 for r in model.r:
                     for rp in model.rp:
-                        total += float(value(model.xw[r, i, rp])) * float(value(model.pwmg[r, i, rp]))
+                        total += float(value(model.xw[r, i, rp])) * float(
+                            value(model.pwmg[r, i, rp])
+                        )
                 xtmg[str(i)] = total
             elif hasattr(model, "ptmg"):
                 xtmg[str(i)] = float(value(model.ptmg[i]))
@@ -519,17 +554,33 @@ def _collect_key_quantities(
         u: dict[str, float] = {}
 
         def _pefob_ratio(exporter: str, commodity: str, importer: str) -> float:
-            vxsb = params.benchmark.vxsb.get((exporter, commodity, importer), 0.0) if params else 0.0
+            vxsb = (
+                params.benchmark.vxsb.get((exporter, commodity, importer), 0.0)
+                if params
+                else 0.0
+            )
             if vxsb <= 0.0:
                 return 1.0
-            vfob = params.benchmark.vfob.get((exporter, commodity, importer), 0.0) if params else 0.0
+            vfob = (
+                params.benchmark.vfob.get((exporter, commodity, importer), 0.0)
+                if params
+                else 0.0
+            )
             return float(vfob) / float(vxsb) if vfob > 0.0 else 1.0
 
         def _pmcif_ratio(exporter: str, commodity: str, importer: str) -> float:
-            vxsb = params.benchmark.vxsb.get((exporter, commodity, importer), 0.0) if params else 0.0
+            vxsb = (
+                params.benchmark.vxsb.get((exporter, commodity, importer), 0.0)
+                if params
+                else 0.0
+            )
             if vxsb <= 0.0:
                 return 1.0
-            vcif = params.benchmark.vcif.get((exporter, commodity, importer), 0.0) if params else 0.0
+            vcif = (
+                params.benchmark.vcif.get((exporter, commodity, importer), 0.0)
+                if params
+                else 0.0
+            )
             return float(vcif) / float(vxsb) if vcif > 0.0 else 1.0
 
         def _pefob_price(exporter: str, commodity: str, importer: str) -> float:
@@ -546,29 +597,51 @@ def _collect_key_quantities(
             yc_val = float(value(model.yc[r])) if hasattr(model, "yc") else 0.0
             yg_val = float(value(model.yg[r])) if hasattr(model, "yg") else 0.0
             yi_val = float(value(model.yi[r])) if hasattr(model, "yi") else 0.0
-            kstock_val = float(value(model.kstock[r])) if hasattr(model, "kstock") else 0.0
+            kstock_val = (
+                float(value(model.kstock[r])) if hasattr(model, "kstock") else 0.0
+            )
 
             gdp_val = 0.0
             if hasattr(model, "xaa") and hasattr(model, "pa"):
                 for i in model.i:
-                    for aa in (GTAP_HOUSEHOLD_AGENT, GTAP_GOVERNMENT_AGENT, GTAP_INVESTMENT_AGENT):
-                        gdp_val += float(value(model.pa[r, i, aa])) * float(value(model.xaa[r, i, aa]))
+                    for aa in (
+                        GTAP_HOUSEHOLD_AGENT,
+                        GTAP_GOVERNMENT_AGENT,
+                        GTAP_INVESTMENT_AGENT,
+                    ):
+                        gdp_val += float(value(model.pa[r, i, aa])) * float(
+                            value(model.xaa[r, i, aa])
+                        )
             if hasattr(model, "xw") and hasattr(model, "pe"):
                 for i in model.i:
                     for rp in model.rp:
                         if str(rp) == str(r):
                             continue
-                        gdp_val += _pefob_price(str(r), str(i), str(rp)) * float(value(model.xw[r, i, rp]))
-                        gdp_val -= _pmcif_price(str(rp), str(i), str(r)) * float(value(model.xw[rp, i, r]))
+                        gdp_val += _pefob_price(str(r), str(i), str(rp)) * float(
+                            value(model.xw[r, i, rp])
+                        )
+                        gdp_val -= _pmcif_price(str(rp), str(i), str(r)) * float(
+                            value(model.xw[rp, i, r])
+                        )
 
             gdpmp[str(r)] = gdp_val
             rgdpmp[str(r)] = gdp_val / pabs_val if abs(pabs_val) > 1e-14 else 0.0
-            rsav[str(r)] = float(value(model.rsav[r])) if hasattr(model, "rsav") else (regy_val - yc_val - yg_val)
+            rsav[str(r)] = (
+                float(value(model.rsav[r]))
+                if hasattr(model, "rsav")
+                else (regy_val - yc_val - yg_val)
+            )
             savf[str(r)] = yi_val
-            arent[str(r)] = float(value(model.pfact[r])) if hasattr(model, "pfact") else 0.0
+            arent[str(r)] = (
+                float(value(model.pfact[r])) if hasattr(model, "pfact") else 0.0
+            )
             kapend[str(r)] = kstock_val
-            rorc[str(r)] = float(value(model.pfact[r])) if hasattr(model, "pfact") else 0.0
-            rore[str(r)] = float(value(model.pwfact)) if hasattr(model, "pwfact") else 0.0
+            rorc[str(r)] = (
+                float(value(model.pfact[r])) if hasattr(model, "pfact") else 0.0
+            )
+            rore[str(r)] = (
+                float(value(model.pwfact)) if hasattr(model, "pwfact") else 0.0
+            )
             risk[str(r)] = rorc[str(r)] - rore[str(r)]
             pop[str(r)] = 1.0
             ug[str(r)] = yg_val
@@ -616,9 +689,15 @@ def _collect_key_quantities(
                     rto = float(params.taxes.rto.get((r_str, str(a)), 0.0))
                     if rto == 0.0:
                         continue
-                    outputs = params.sets.activity_commodities.get(str(a), list(params.sets.i))
+                    outputs = params.sets.activity_commodities.get(
+                        str(a), list(params.sets.i)
+                    )
                     for i in outputs:
-                        pt += rto * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
+                        pt += (
+                            rto
+                            * float(value(model.p_rai[r, a, i]))
+                            * float(value(model.x[r, a, i]))
+                        )
 
             # ft / fs: factor taxes (positive) and subsidies (negative rates) — GAMS splits
             # by sign of the rate stream; rtf carries the full schedule here.
@@ -629,7 +708,12 @@ def _collect_key_quantities(
                     rate = float(rtf)
                     if rate == 0.0:
                         continue
-                    term = rate * float(value(model.pf[r, f, a])) * float(value(model.xf[r, f, a])) / _xscale(r_str, str(a))
+                    term = (
+                        rate
+                        * float(value(model.pf[r, f, a]))
+                        * float(value(model.xf[r, f, a]))
+                        / _xscale(r_str, str(a))
+                    )
                     if rate >= 0.0:
                         ft += term
                     else:
@@ -640,48 +724,82 @@ def _collect_key_quantities(
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) not in activity_labels:
                         continue
-                    fc += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a])) / _xscale(r_str, str(a))
+                    fc += (
+                        float(rtpd)
+                        * float(value(model.pd[r, i]))
+                        * float(value(model.xda[r, i, a]))
+                        / _xscale(r_str, str(a))
+                    )
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) not in activity_labels:
                         continue
-                    fc += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a])) / _xscale(r_str, str(a))
+                    fc += (
+                        float(rtpi)
+                        * float(value(model.pmt[r, i]))
+                        * float(value(model.xma[r, i, a]))
+                        / _xscale(r_str, str(a))
+                    )
 
             # pc: private (household) consumption tax — rtpd/rtpi keyed at a=hhd
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
                         continue
-                    pc += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+                    pc += (
+                        float(rtpd)
+                        * float(value(model.pd[r, i]))
+                        * float(value(model.xda[r, i, a]))
+                    )
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) != GTAP_HOUSEHOLD_AGENT:
                         continue
-                    pc += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+                    pc += (
+                        float(rtpi)
+                        * float(value(model.pmt[r, i]))
+                        * float(value(model.xma[r, i, a]))
+                    )
 
             # gc: government consumption tax (rtgd*pd*xda + rtgi*pmt*xma keyed at a=gov)
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i), rtgd in params.taxes.rtgd.items():
                     if str(rr) != r_str:
                         continue
-                    gc += float(rtgd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                    gc += (
+                        float(rtgd)
+                        * float(value(model.pd[r, i]))
+                        * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                    )
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i), rtgi in params.taxes.rtgi.items():
                     if str(rr) != r_str:
                         continue
-                    gc += float(rtgi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                    gc += (
+                        float(rtgi)
+                        * float(value(model.pmt[r, i]))
+                        * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                    )
 
             # ic: investment consumption tax — rtpd/rtpi keyed at a=inv
             if hasattr(model, "pd") and hasattr(model, "xda"):
                 for (rr, i, a), rtpd in params.taxes.rtpd.items():
                     if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
                         continue
-                    ic += float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+                    ic += (
+                        float(rtpd)
+                        * float(value(model.pd[r, i]))
+                        * float(value(model.xda[r, i, a]))
+                    )
             if hasattr(model, "pmt") and hasattr(model, "xma"):
                 for (rr, i, a), rtpi in params.taxes.rtpi.items():
                     if str(rr) != r_str or str(a) != GTAP_INVESTMENT_AGENT:
                         continue
-                    ic += float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+                    ic += (
+                        float(rtpi)
+                        * float(value(model.pmt[r, i]))
+                        * float(value(model.xma[r, i, a]))
+                    )
 
             # et: export tax = rtxs * pefob * xw  (r is exporter)
             if hasattr(model, "xw"):
@@ -691,7 +809,11 @@ def _collect_key_quantities(
                     rate = float(rtxs)
                     if rate == 0.0:
                         continue
-                    et += rate * _pefob_price(r_str, str(i), str(importer)) * float(value(model.xw[r, i, importer]))
+                    et += (
+                        rate
+                        * _pefob_price(r_str, str(i), str(importer))
+                        * float(value(model.xw[r, i, importer]))
+                    )
 
             # mt: import tax = imptx * pmcif * xw  (r is importer)
             if hasattr(model, "xw"):
@@ -701,16 +823,29 @@ def _collect_key_quantities(
                     rate = float(imptx_rate)
                     if rate == 0.0:
                         continue
-                    mt += rate * _pmcif_price(str(exporter), str(i), r_str) * float(value(model.xw[exporter, i, r]))
+                    mt += (
+                        rate
+                        * _pmcif_price(str(exporter), str(i), r_str)
+                        * float(value(model.xw[exporter, i, r]))
+                    )
 
             # dt: direct tax = kappaf * pf * xf / xScale
             if hasattr(model, "pf") and hasattr(model, "xf"):
                 for f in model.f:
                     for a in model.a:
-                        kappa = float(params.taxes.kappaf_activity.get((r_str, str(f), str(a)), 0.0))
+                        kappa = float(
+                            params.taxes.kappaf_activity.get(
+                                (r_str, str(f), str(a)), 0.0
+                            )
+                        )
                         if kappa == 0.0:
                             continue
-                        dt += kappa * float(value(model.pf[r, f, a])) * float(value(model.xf[r, f, a])) / _xscale(r_str, str(a))
+                        dt += (
+                            kappa
+                            * float(value(model.pf[r, f, a]))
+                            * float(value(model.xf[r, f, a]))
+                            / _xscale(r_str, str(a))
+                        )
 
             ytax_by_gy[f"{r_str}|pt"] = pt
             ytax_by_gy[f"{r_str}|ft"] = ft
@@ -806,10 +941,35 @@ def _collect_key_quantities(
 
         # Quantities and income variables that GAMS reports scaled by inScale.
         in_scale_only = {
-            "x", "xs", "xds", "xet", "xe", "xw", "xwmg", "xmgm", "xtmg",
-            "xa", "xd", "xmt", "xft", "xc", "xg", "xi",
-            "regy", "yc", "yg", "yi", "rsav", "savf", "facty", "ytax", "ytax_ind",
-            "gdpmp", "rgdpmp", "kapend", "kstock",
+            "x",
+            "xs",
+            "xds",
+            "xet",
+            "xe",
+            "xw",
+            "xwmg",
+            "xmgm",
+            "xtmg",
+            "xa",
+            "xd",
+            "xmt",
+            "xft",
+            "xc",
+            "xg",
+            "xi",
+            "regy",
+            "yc",
+            "yg",
+            "yi",
+            "rsav",
+            "savf",
+            "facty",
+            "ytax",
+            "ytax_ind",
+            "gdpmp",
+            "rgdpmp",
+            "kapend",
+            "kstock",
         }
 
         for name in in_scale_only:
@@ -938,14 +1098,28 @@ def _build_path_capi_post_checks_inner(model, params: GTAPParameters) -> dict[st
                 )
                 if not params.shifts.lambdaio:
                     io_val = float(value(model.p_io[r, i, a]))
-                sigmand = float(params.elasticities.sigmand.get((str(r), str(a)), params.elasticities.esubd.get((str(r), str(i)), 2.0)))
-                lambdaio = float(value(model.lambdaio[r, i, a])) if hasattr(model, "lambdaio") else 1.0
+                sigmand = float(
+                    params.elasticities.sigmand.get(
+                        (str(r), str(a)),
+                        params.elasticities.esubd.get((str(r), str(i)), 2.0),
+                    )
+                )
+                lambdaio = (
+                    float(value(model.lambdaio[r, i, a]))
+                    if hasattr(model, "lambdaio")
+                    else 1.0
+                )
                 pa_safe = pa if pa > 1e-12 else 1e-12
                 lambdaio_safe = lambdaio if lambdaio > 1e-12 else 1e-12
                 if io_val <= 0.0:
                     rhs = 0.0
                 else:
-                    rhs = io_val * nd * (pnd / pa_safe) ** sigmand * (lambdaio_safe ** (sigmand - 1.0))
+                    rhs = (
+                        io_val
+                        * nd
+                        * (pnd / pa_safe) ** sigmand
+                        * (lambdaio_safe ** (sigmand - 1.0))
+                    )
                 commodity_residuals.append(
                     {
                         "source": "activity",
@@ -956,7 +1130,11 @@ def _build_path_capi_post_checks_inner(model, params: GTAPParameters) -> dict[st
                     }
                 )
 
-            if hasattr(model, "xc") and hasattr(model, "xcshr") and hasattr(model, "yc"):
+            if (
+                hasattr(model, "xc")
+                and hasattr(model, "xcshr")
+                and hasattr(model, "yc")
+            ):
                 xaa_hhd = float(value(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT]))
                 pa_hhd = float(value(model.pa[r, i, GTAP_HOUSEHOLD_AGENT]))
                 xcshr = float(value(model.xcshr[r, i]))
@@ -996,7 +1174,9 @@ def _build_path_capi_post_checks_inner(model, params: GTAPParameters) -> dict[st
                 )
 
             if commodity_residuals:
-                worst = max(commodity_residuals, key=lambda row: abs(float(row["residual"])))
+                worst = max(
+                    commodity_residuals, key=lambda row: abs(float(row["residual"]))
+                )
                 xa_residuals.append(float(worst["residual"]))
                 xa_case_residuals.append(
                     {
@@ -1009,11 +1189,17 @@ def _build_path_capi_post_checks_inner(model, params: GTAPParameters) -> dict[st
                 xa_residuals.append(0.0)
 
             xd_lhs = value(model.xd[r, i])
-            xd_rhs = sum(value(model.xda[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+            xd_rhs = sum(
+                value(model.xda[r, i, aa]) / value(model.xscale[r, aa])
+                for aa in model.aa
+            )
             xd_residuals.append(xd_lhs - xd_rhs)
 
             xmt_lhs = value(model.xmt[r, i])
-            xmt_rhs = sum(value(model.xma[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+            xmt_rhs = sum(
+                value(model.xma[r, i, aa]) / value(model.xscale[r, aa])
+                for aa in model.aa
+            )
             xmt_residuals.append(xmt_lhs - xmt_rhs)
 
     def _stats(residuals: list[float], tol: float = 1e-8) -> dict[str, Any]:
@@ -1090,7 +1276,9 @@ def _build_constraint_residual_diagnostics(
             return "(" + ", ".join(str(v) for v in index) + ")"
         return str(index)
 
-    for constraint in model.component_data_objects(Constraint, active=True, descend_into=True):
+    for constraint in model.component_data_objects(
+        Constraint, active=True, descend_into=True
+    ):
         total_constraints += 1
         equation_name = constraint.parent_component().name
         index_str = _index_to_str(constraint.index())
@@ -1113,7 +1301,9 @@ def _build_constraint_residual_diagnostics(
                 if constraint.upper is not None:
                     upper = float(value(constraint.upper))
                     upper_violation = body_val - upper
-                    if upper_violation > 0.0 and abs(upper_violation) > abs(signed_residual):
+                    if upper_violation > 0.0 and abs(upper_violation) > abs(
+                        signed_residual
+                    ):
                         signed_residual = upper_violation
 
             abs_residual = abs(signed_residual)
@@ -1156,9 +1346,13 @@ def _build_constraint_residual_diagnostics(
     by_equation_rows: list[dict[str, Any]] = []
     for stats in by_equation.values():
         count = int(stats["count"])
-        stats["mean_abs_residual"] = (float(stats["sum_abs_residual"]) / count) if count else 0.0
+        stats["mean_abs_residual"] = (
+            (float(stats["sum_abs_residual"]) / count) if count else 0.0
+        )
         by_equation_rows.append(stats)
-    by_equation_rows.sort(key=lambda row: abs(float(row["max_abs_residual"])), reverse=True)
+    by_equation_rows.sort(
+        key=lambda row: abs(float(row["max_abs_residual"])), reverse=True
+    )
 
     return {
         "total_constraints": total_constraints,
@@ -1205,11 +1399,7 @@ def _build_xi_block_diagnostics(
     yi_val = float(value(model.yi[region]))
     axi_val = float(value(model.axi[region])) if hasattr(model, "axi") else 1.0
 
-    xi_rhs = (
-        alphaa
-        * xiagg_val
-        * (pi_val / max(pa_inv, 1e-12)) ** sigmai
-    )
+    xi_rhs = alphaa * xiagg_val * (pi_val / max(pa_inv, 1e-12)) ** sigmai
 
     xiagg_lhs = pi_val * xiagg_val
     xiagg_rhs = yi_val
@@ -1223,7 +1413,7 @@ def _build_xi_block_diagnostics(
             if share <= 0.0:
                 continue
             pa_i = float(value(model.pa[region, i, "inv"]))
-            term = share * (pa_i ** expo)
+            term = share * (pa_i**expo)
             pi_terms.append(
                 {
                     "commodity": str(i),
@@ -1251,8 +1441,16 @@ def _build_xi_block_diagnostics(
     bench = params.benchmark
 
     # Purchaser-price benchmark (consistent with i_share calibration via get_investment_demand).
-    vdip_val = float(bench.vdip.get((region, commodity), 0.0)) if hasattr(bench, "vdip") else 0.0
-    vmip_val = float(bench.vmip.get((region, commodity), 0.0)) if hasattr(bench, "vmip") else 0.0
+    vdip_val = (
+        float(bench.vdip.get((region, commodity), 0.0))
+        if hasattr(bench, "vdip")
+        else 0.0
+    )
+    vmip_val = (
+        float(bench.vmip.get((region, commodity), 0.0))
+        if hasattr(bench, "vmip")
+        else 0.0
+    )
     xi_bench_purchaser = vdip_val + vmip_val  # purchaser-price benchmark for this (r,i)
 
     yi_bench_purchaser = 0.0
@@ -1263,17 +1461,31 @@ def _build_xi_block_diagnostics(
         # also basic prices for reference
         vdb = float(bench.vdib.get((region, i), 0.0)) if hasattr(bench, "vdib") else 0.0
         vmb = float(bench.vmib.get((region, i), 0.0)) if hasattr(bench, "vmib") else 0.0
-        xi_bench_by_commodity.append({
-            "commodity": str(i),
-            "vdip": vd, "vmip": vm, "xi_bench_purchaser": vd + vm,
-            "vdib": vdb, "vmib": vmb, "xi_bench_basic": vdb + vmb,
-        })
+        xi_bench_by_commodity.append(
+            {
+                "commodity": str(i),
+                "vdip": vd,
+                "vmip": vm,
+                "xi_bench_purchaser": vd + vm,
+                "vdib": vdb,
+                "vmib": vmb,
+                "xi_bench_basic": vdb + vmb,
+            }
+        )
         yi_bench_purchaser += vd + vm
     xi_bench_by_commodity.sort(key=lambda row: -row["xi_bench_purchaser"])
 
     # Basic-price reference (VDIB+VMIB) — for informational comparison only.
-    vdib_val = float(bench.vdib.get((region, commodity), 0.0)) if hasattr(bench, "vdib") else 0.0
-    vmib_val = float(bench.vmib.get((region, commodity), 0.0)) if hasattr(bench, "vmib") else 0.0
+    vdib_val = (
+        float(bench.vdib.get((region, commodity), 0.0))
+        if hasattr(bench, "vdib")
+        else 0.0
+    )
+    vmib_val = (
+        float(bench.vmib.get((region, commodity), 0.0))
+        if hasattr(bench, "vmib")
+        else 0.0
+    )
     xi_bench_basic = vdib_val + vmib_val
 
     # At benchmark: pi=1, pa_inv=1, xiagg_bench = yi_bench_purchaser (from eq_xiagg)
@@ -1283,12 +1495,18 @@ def _build_xi_block_diagnostics(
     # Model scale ratio (should be ~1 for good calibration; deviation means
     # yi moved away from benchmark in the solve).
     yi_scale = yi_val / max(yi_bench_purchaser, 1e-12)
-    xi_model_vs_bench = xi_val / max(xi_bench_purchaser, 1e-12) if xi_bench_purchaser > 0.0 else None
+    xi_model_vs_bench = (
+        xi_val / max(xi_bench_purchaser, 1e-12) if xi_bench_purchaser > 0.0 else None
+    )
 
     # CES consistency check: at benchmark (all prices=1), xi_rhs should equal xi_bench.
     # A large residual here means calibration inconsistency (alphaa uses different data).
     xi_rhs_benchmark_residual = xi_bench_purchaser - xi_rhs_bench
-    tax_premium = (xi_bench_purchaser / max(xi_bench_basic, 1e-12) - 1.0) if xi_bench_basic > 0.0 else None
+    tax_premium = (
+        (xi_bench_purchaser / max(xi_bench_basic, 1e-12) - 1.0)
+        if xi_bench_basic > 0.0
+        else None
+    )
 
     # Sensitivity: what eq_xi residual would be with sigmai_raw (before hack) vs 1.01
     sigma_sensitivity: dict[str, Any] = {}
@@ -1302,7 +1520,11 @@ def _build_xi_block_diagnostics(
             "residual_change": (xi_val - xi_rhs_raw) - (xi_val - xi_rhs),
         }
     else:
-        sigma_sensitivity = {"sigmai_raw": sigmai_raw, "sigmai_used": sigmai, "no_hack": True}
+        sigma_sensitivity = {
+            "sigmai_raw": sigmai_raw,
+            "sigmai_used": sigmai,
+            "no_hack": True,
+        }
 
     gap_decomposition: dict[str, Any] = {
         # Purchaser-price comparison (correct basis for i_share = VDIP+VMIP)
@@ -1400,8 +1622,12 @@ def _run_path_capi_linear_block(
 
     adapter = PyomoMCPAdapter()
 
-    path_lib = Path(os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))).expanduser()
-    lusol_lib = Path(os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))).expanduser()
+    path_lib = Path(
+        os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))
+    ).expanduser()
+    lusol_lib = Path(
+        os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))
+    ).expanduser()
 
     loader = PATHLoader(path_lib=path_lib, lusol_lib=lusol_lib)
     runtime = loader.load()
@@ -1423,7 +1649,9 @@ def _run_path_capi_linear_block(
                     seen.add(name)
         return selected
 
-    def _solve_block(block_name: str, constraints: list[Any], variables: list[Any], description: str) -> dict[str, Any]:
+    def _solve_block(
+        block_name: str, constraints: list[Any], variables: list[Any], description: str
+    ) -> dict[str, Any]:
         if len(constraints) != len(variables):
             return {
                 "name": block_name,
@@ -1463,7 +1691,11 @@ def _run_path_capi_linear_block(
         # code∈{1,2} guard still excludes genuine failures (residual O(1)). Verified not
         # to change the parity of datasets that already pass (their residual is <1e-8).
         residual_tol = 1e-6
-        success = bool(license_ok) and result.residual <= residual_tol and result.termination_code in {1, 2}
+        success = (
+            bool(license_ok)
+            and result.residual <= residual_tol
+            and result.termination_code in {1, 2}
+        )
 
         if success:
             for i, var in enumerate(variables):
@@ -1531,7 +1763,11 @@ def _run_path_capi_linear_block(
         # code∈{1,2} guard still excludes genuine failures (residual O(1)). Verified not
         # to change the parity of datasets that already pass (their residual is <1e-8).
         residual_tol = 1e-6
-        success = bool(license_ok) and result.residual <= residual_tol and result.termination_code in {1, 2}
+        success = (
+            bool(license_ok)
+            and result.residual <= residual_tol
+            and result.termination_code in {1, 2}
+        )
 
         if success:
             for i, var in enumerate(variables):
@@ -1635,7 +1871,9 @@ def _run_path_capi_linear_block(
             # from observed Armington prices and benchmark investment shares.
             pi0 = 0.0
             for i in model.i:
-                pi0 += float(value(model.i_share[r, i])) * float(value(model.pa[r, i, GTAP_INVESTMENT_AGENT]))
+                pi0 += float(value(model.i_share[r, i])) * float(
+                    value(model.pa[r, i, GTAP_INVESTMENT_AGENT])
+                )
             if pi0 <= 0.0:
                 pi0 = 1.0
 
@@ -1646,9 +1884,15 @@ def _run_path_capi_linear_block(
             ytax_total_const = 0.0
             for a in model.a:
                 rto = float(params.taxes.rto.get((str(r), str(a)), 0.0))
-                outputs = params.sets.activity_commodities.get(str(a), list(params.sets.i))
+                outputs = params.sets.activity_commodities.get(
+                    str(a), list(params.sets.i)
+                )
                 for i in outputs:
-                    ytax_total_const += rto * float(value(model.p_rai[r, a, i])) * float(value(model.x[r, a, i]))
+                    ytax_total_const += (
+                        rto
+                        * float(value(model.p_rai[r, a, i]))
+                        * float(value(model.x[r, a, i]))
+                    )
 
             for (rr, f, a), rtf in params.taxes.rtf.items():
                 if str(rr) != str(r):
@@ -1656,12 +1900,21 @@ def _run_path_capi_linear_block(
                 xscale_a = float(value(model.xscale[r, a]))
                 if xscale_a <= 0.0:
                     continue
-                ytax_total_const += float(rtf) * float(value(model.pf[r, f, a])) * float(value(model.xf[r, f, a])) / xscale_a
+                ytax_total_const += (
+                    float(rtf)
+                    * float(value(model.pf[r, f, a]))
+                    * float(value(model.xf[r, f, a]))
+                    / xscale_a
+                )
 
             for (rr, i, a), rtpd in params.taxes.rtpd.items():
                 if str(rr) != str(r):
                     continue
-                term = float(rtpd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, a]))
+                term = (
+                    float(rtpd)
+                    * float(value(model.pd[r, i]))
+                    * float(value(model.xda[r, i, a]))
+                )
                 if str(a) in activity_labels:
                     xscale_a = float(value(model.xscale[r, a]))
                     if xscale_a > 0.0:
@@ -1670,7 +1923,11 @@ def _run_path_capi_linear_block(
             for (rr, i, a), rtpi in params.taxes.rtpi.items():
                 if str(rr) != str(r):
                     continue
-                term = float(rtpi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, a]))
+                term = (
+                    float(rtpi)
+                    * float(value(model.pmt[r, i]))
+                    * float(value(model.xma[r, i, a]))
+                )
                 if str(a) in activity_labels:
                     xscale_a = float(value(model.xscale[r, a]))
                     if xscale_a > 0.0:
@@ -1680,26 +1937,44 @@ def _run_path_capi_linear_block(
             for (rr, i), rtgd in params.taxes.rtgd.items():
                 if str(rr) != str(r):
                     continue
-                ytax_total_const += float(rtgd) * float(value(model.pd[r, i])) * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                ytax_total_const += (
+                    float(rtgd)
+                    * float(value(model.pd[r, i]))
+                    * float(value(model.xda[r, i, GTAP_GOVERNMENT_AGENT]))
+                )
             for (rr, i), rtgi in params.taxes.rtgi.items():
                 if str(rr) != str(r):
                     continue
-                ytax_total_const += float(rtgi) * float(value(model.pmt[r, i])) * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                ytax_total_const += (
+                    float(rtgi)
+                    * float(value(model.pmt[r, i]))
+                    * float(value(model.xma[r, i, GTAP_GOVERNMENT_AGENT]))
+                )
 
             for (exporter, i, importer), rtxs in params.taxes.rtxs.items():
                 if str(exporter) != str(r):
                     continue
-                ytax_total_const += float(rtxs) * _pefob_price(str(r), str(i), str(importer)) * float(value(model.xw[r, i, importer]))
+                ytax_total_const += (
+                    float(rtxs)
+                    * _pefob_price(str(r), str(i), str(importer))
+                    * float(value(model.xw[r, i, importer]))
+                )
             for (exporter, i, importer), imptx in params.taxes.imptx.items():
                 if str(importer) != str(r):
                     continue
                 rate = float(imptx)
-                ytax_total_const += rate * _pmcif_price(str(exporter), str(i), str(r)) * float(value(model.xw[exporter, i, r]))
+                ytax_total_const += (
+                    rate
+                    * _pmcif_price(str(exporter), str(i), str(r))
+                    * float(value(model.xw[exporter, i, r]))
+                )
 
             direct_tax_const = 0.0
             for f in model.f:
                 for a in model.a:
-                    kappa = float(params.taxes.kappaf_activity.get((str(r), str(f), str(a)), 0.0))
+                    kappa = float(
+                        params.taxes.kappaf_activity.get((str(r), str(f), str(a)), 0.0)
+                    )
                     if kappa == 0.0:
                         continue
                     xscale_a = float(value(model.xscale[r, a]))
@@ -1724,11 +1999,18 @@ def _run_path_capi_linear_block(
             expressions.append(model.regy[r] - regy_const)
             variables.append(model.regy[r])
 
-            expressions.append(model.yc[r] - model.betap[r] * (model.phi[r] / model.phip[r]) * model.regy[r])
+            expressions.append(
+                model.yc[r]
+                - model.betap[r] * (model.phi[r] / model.phip[r]) * model.regy[r]
+            )
             variables.append(model.yc[r])
-            expressions.append(model.yg[r] - model.betag[r] * model.phi[r] * model.regy[r])
+            expressions.append(
+                model.yg[r] - model.betag[r] * model.phi[r] * model.regy[r]
+            )
             variables.append(model.yg[r])
-            expressions.append(model.rsav[r] - model.betas[r] * model.phi[r] * model.regy[r])
+            expressions.append(
+                model.rsav[r] - model.betas[r] * model.phi[r] * model.regy[r]
+            )
             variables.append(model.rsav[r])
             expressions.append(model.yi[r] - model.regy[r] * model.yi_share_reg[r])
             variables.append(model.yi[r])
@@ -1738,11 +2020,17 @@ def _run_path_capi_linear_block(
         expressions, variables = _build_final_demand_snapshot_block()
         for r in model.r:
             for i in model.i:
-                expressions.append(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT] - model.xc[r, i])
+                expressions.append(
+                    model.xaa[r, i, GTAP_HOUSEHOLD_AGENT] - model.xc[r, i]
+                )
                 variables.append(model.xaa[r, i, GTAP_HOUSEHOLD_AGENT])
-                expressions.append(model.xaa[r, i, GTAP_GOVERNMENT_AGENT] - model.xg[r, i])
+                expressions.append(
+                    model.xaa[r, i, GTAP_GOVERNMENT_AGENT] - model.xg[r, i]
+                )
                 variables.append(model.xaa[r, i, GTAP_GOVERNMENT_AGENT])
-                expressions.append(model.xaa[r, i, GTAP_INVESTMENT_AGENT] - model.xi[r, i])
+                expressions.append(
+                    model.xaa[r, i, GTAP_INVESTMENT_AGENT] - model.xi[r, i]
+                )
                 variables.append(model.xaa[r, i, GTAP_INVESTMENT_AGENT])
         return expressions, variables
 
@@ -1753,18 +2041,26 @@ def _run_path_capi_linear_block(
         variables: list[Any] = []
         for r in model.r:
             for i in model.i:
-                absorption_snapshot = sum(value(model.xaa[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+                absorption_snapshot = sum(
+                    value(model.xaa[r, i, aa]) / value(model.xscale[r, aa])
+                    for aa in model.aa
+                )
                 inventory = params.benchmark.vst.get((r, i), 0.0)
                 expressions.append(model.xa[r, i] - (absorption_snapshot + inventory))
                 variables.append(model.xa[r, i])
         return expressions, variables
 
-    def _build_trade_domestic_aggregation_snapshot_block() -> tuple[list[Any], list[Any]]:
+    def _build_trade_domestic_aggregation_snapshot_block() -> tuple[
+        list[Any], list[Any]
+    ]:
         expressions: list[Any] = []
         variables: list[Any] = []
         for r in model.r:
             for i in model.i:
-                domestic_snapshot = sum(value(model.xda[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+                domestic_snapshot = sum(
+                    value(model.xda[r, i, aa]) / value(model.xscale[r, aa])
+                    for aa in model.aa
+                )
                 expressions.append(model.xd[r, i] - domestic_snapshot)
                 variables.append(model.xd[r, i])
         return expressions, variables
@@ -1774,7 +2070,10 @@ def _run_path_capi_linear_block(
         variables: list[Any] = []
         for r in model.r:
             for i in model.i:
-                import_snapshot = sum(value(model.xma[r, i, aa]) / value(model.xscale[r, aa]) for aa in model.aa)
+                import_snapshot = sum(
+                    value(model.xma[r, i, aa]) / value(model.xscale[r, aa])
+                    for aa in model.aa
+                )
                 expressions.append(model.xmt[r, i] - import_snapshot)
                 variables.append(model.xmt[r, i])
         return expressions, variables
@@ -1801,7 +2100,9 @@ def _run_path_capi_linear_block(
         return expressions, variables
 
     block_results = []
-    import_price_expressions, import_price_variables = _build_import_price_snapshot_block()
+    import_price_expressions, import_price_variables = (
+        _build_import_price_snapshot_block()
+    )
     block_results.append(
         _solve_expression_block(
             block_name="linear-import-price-identities",
@@ -1840,7 +2141,9 @@ def _run_path_capi_linear_block(
         )
     )
 
-    market_clearing_expressions, market_clearing_variables = _build_market_clearing_snapshot_block()
+    market_clearing_expressions, market_clearing_variables = (
+        _build_market_clearing_snapshot_block()
+    )
     block_results.append(
         _solve_expression_block(
             block_name="linear-market-clearing-identities",
@@ -1850,7 +2153,9 @@ def _run_path_capi_linear_block(
         )
     )
 
-    trade_aggregation_expressions, trade_aggregation_variables = _build_trade_domestic_aggregation_snapshot_block()
+    trade_aggregation_expressions, trade_aggregation_variables = (
+        _build_trade_domestic_aggregation_snapshot_block()
+    )
     block_results.append(
         _solve_expression_block(
             block_name="linear-trade-aggregation-identities",
@@ -1860,7 +2165,9 @@ def _run_path_capi_linear_block(
         )
     )
 
-    import_aggregation_expressions, import_aggregation_variables = _build_trade_import_aggregation_snapshot_block()
+    import_aggregation_expressions, import_aggregation_variables = (
+        _build_trade_import_aggregation_snapshot_block()
+    )
     block_results.append(
         _solve_expression_block(
             block_name="linear-import-aggregation-identities",
@@ -1873,9 +2180,15 @@ def _run_path_capi_linear_block(
     post_checks = _build_path_capi_post_checks(model, params)
 
     block_success = all(block.get("success", False) for block in block_results)
-    max_residual = max((block.get("residual", 0.0) for block in block_results), default=0.0)
-    total_major_iterations = sum(int(block.get("major_iterations", 0)) for block in block_results)
-    total_minor_iterations = sum(int(block.get("minor_iterations", 0)) for block in block_results)
+    max_residual = max(
+        (block.get("residual", 0.0) for block in block_results), default=0.0
+    )
+    total_major_iterations = sum(
+        int(block.get("major_iterations", 0)) for block in block_results
+    )
+    total_minor_iterations = sum(
+        int(block.get("minor_iterations", 0)) for block in block_results
+    )
 
     post_check_gate_pass = bool(post_checks.get("overall_pass", False))
     residual_gate_pass = max_residual <= float(strict_residual_tol)
@@ -1901,7 +2214,9 @@ def _run_path_capi_linear_block(
             price_pass_result = price_solver.solve()
             price_pass_payload = {
                 "success": bool(price_pass_result.success),
-                "status": getattr(price_pass_result.status, "value", str(price_pass_result.status)),
+                "status": getattr(
+                    price_pass_result.status, "value", str(price_pass_result.status)
+                ),
                 "termination_condition": price_pass_result.termination_condition,
                 "iterations": price_pass_result.iterations,
                 "residual": price_pass_result.residual,
@@ -1910,7 +2225,17 @@ def _run_path_capi_linear_block(
             }
 
             if price_pass_result.success:
-                for name in ("pf", "xf", "pft", "pfact", "pva", "pnd", "px", "pa", "pmt"):
+                for name in (
+                    "pf",
+                    "xf",
+                    "pft",
+                    "pfact",
+                    "pva",
+                    "pnd",
+                    "px",
+                    "pa",
+                    "pmt",
+                ):
                     if not hasattr(model, name) or not hasattr(price_model, name):
                         continue
                     src = getattr(price_model, name)
@@ -2009,11 +2334,13 @@ def _run_path_capi_nonlinear_full(
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
     # Apply closure and conditional fixing based on SAM data
-    solver_helper = GTAPSolver(model, closure=closure_config, solver_name="path", params=params)
+    solver_helper = GTAPSolver(
+        model, closure=closure_config, solver_name="path", params=params
+    )
     if closure_config is not None:
         solver_helper.apply_closure(closure_config)
     solver_helper.apply_conditional_fixing()
-    
+
     # Make MCP square by fixing structural variables at their initialization values.
     # This must happen BEFORE the warm-start hint so that the 90 unmatched structural
     # vars are fixed at the shocked model's cold-init values (e.g. pmt initialized
@@ -2065,14 +2392,16 @@ def _run_path_capi_nonlinear_full(
         from _closure_patches import apply_squareness_patches  # type: ignore
     except ImportError:
         import sys as _sys
+
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _closure_patches import apply_squareness_patches  # type: ignore
     # pure-gtap mode (both ifSUB): keep eq_xseq (supply balance, a GAMS free-row)
     # active; the GAMS supply-block pairing is HARD-forced in structural_matching
     # below instead.  Gated on the driver's _gtap_mode flag (altertax unaffected).
     _gtap_mode = bool(getattr(model, "_gtap_mode", False))
-    apply_squareness_patches(model, params, label="nonlinear-full",
-                             protect_xseq=_gtap_mode)
+    apply_squareness_patches(
+        model, params, label="nonlinear-full", protect_xseq=_gtap_mode
+    )
 
     # Mirror GAMS holdfixed=1: yi[rres] has no MCP pair (yieq is skipped for
     # residual region). Without explicit fixing, yi[rres] floats freely in
@@ -2108,6 +2437,7 @@ def _run_path_capi_nonlinear_full(
             # Compute income identity: pi*depr*kstock + rsav + savf
             try:
                 from pyomo.environ import value as _pv
+
                 _pi = float(_pv(model.pi[_r]))
                 _depr = float(_pv(model.depr[_r]))
                 _kstock = float(_pv(model.kstock[_r]))
@@ -2119,7 +2449,8 @@ def _run_path_capi_nonlinear_full(
             _yi_data.fix(_yi_val)
             logger.info(
                 "Residual region fix: yi[%s]=%.6f (income identity; mirrors GAMS holdfixed=1)",
-                _r, _yi_val,
+                _r,
+                _yi_val,
             )
             # eq_walras is GAMS's free row (walraseq has no MCP pair in model.gms).
             # With yi[rres] now fixed, eq_walras would over-determine walras.
@@ -2203,21 +2534,33 @@ def _run_path_capi_nonlinear_full(
             _inv_diag.append(f"  {_vname}: {_n_free}/{_total} free  ({_n_fixed} fixed)")
         # xaa[inv] specifically
         if hasattr(model, "xaa"):
-            _n_free_inv = sum(1 for idx in model.xaa
-                             if not model.xaa[idx].fixed and str(idx[-1]) == "inv")
-            _n_fixed_inv = sum(1 for idx in model.xaa
-                              if model.xaa[idx].fixed and str(idx[-1]) == "inv")
-            _inv_diag.append(f"  xaa[inv]: {_n_free_inv}/{_n_free_inv+_n_fixed_inv} free  ({_n_fixed_inv} fixed)")
+            _n_free_inv = sum(
+                1
+                for idx in model.xaa
+                if not model.xaa[idx].fixed and str(idx[-1]) == "inv"
+            )
+            _n_fixed_inv = sum(
+                1 for idx in model.xaa if model.xaa[idx].fixed and str(idx[-1]) == "inv"
+            )
+            _inv_diag.append(
+                f"  xaa[inv]: {_n_free_inv}/{_n_free_inv + _n_fixed_inv} free  ({_n_fixed_inv} fixed)"
+            )
         # pa[inv] specifically
         if hasattr(model, "pa"):
-            _n_free_pa = sum(1 for idx in model.pa
-                            if not model.pa[idx].fixed and str(idx[-1]) == "inv")
-            _n_fixed_pa = sum(1 for idx in model.pa
-                             if model.pa[idx].fixed and str(idx[-1]) == "inv")
-            _inv_diag.append(f"  pa[inv]:  {_n_free_pa}/{_n_free_pa+_n_fixed_pa} free  ({_n_fixed_pa} fixed)")
+            _n_free_pa = sum(
+                1
+                for idx in model.pa
+                if not model.pa[idx].fixed and str(idx[-1]) == "inv"
+            )
+            _n_fixed_pa = sum(
+                1 for idx in model.pa if model.pa[idx].fixed and str(idx[-1]) == "inv"
+            )
+            _inv_diag.append(
+                f"  pa[inv]:  {_n_free_pa}/{_n_free_pa + _n_fixed_pa} free  ({_n_fixed_pa} fixed)"
+            )
         logger.info(
             "Investment variable fixing after apply_aggressive_fixing_for_mcp:\n%s",
-            "\n".join(_inv_diag) if _inv_diag else "  (none detected)"
+            "\n".join(_inv_diag) if _inv_diag else "  (none detected)",
         )
     except Exception as _diag_exc:
         logger.debug("Investment variable fixing diagnostic failed: %s", _diag_exc)
@@ -2226,7 +2569,12 @@ def _run_path_capi_nonlinear_full(
     # it can destabilize nonlinear PATH runs when the snapshot still carries
     # derived macro/final-demand variables that do not match the current closure.
     # Keep it opt-in for solver runs.
-    if os.environ.get("EQUILIBRIA_GTAP_WARM_START", "").strip().lower() in {"1", "true", "yes", "on"}:
+    if os.environ.get("EQUILIBRIA_GTAP_WARM_START", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         try:
             warm_start_snapshot = GTAPVariableSnapshot.from_standard_gtap_csv(
                 COMP_CSV_REFERENCE,
@@ -2288,8 +2636,12 @@ def _run_path_capi_nonlinear_full(
         adapter = PyomoMCPAdapter()
         model_summary = adapter.summarize_model(model)
 
-        path_lib = Path(os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))).expanduser()
-        lusol_lib = Path(os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))).expanduser()
+        path_lib = Path(
+            os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))
+        ).expanduser()
+        lusol_lib = Path(
+            os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))
+        ).expanduser()
 
         loader = PATHLoader(path_lib=path_lib, lusol_lib=lusol_lib)
         runtime = loader.load()
@@ -2305,11 +2657,15 @@ def _run_path_capi_nonlinear_full(
     _pnum_comp = model.find_component("pnum")
     _pwfact_comp = model.find_component("pwfact")
     if (
-        _pnum_comp is not None and not _pnum_comp.is_indexed() and _pnum_comp.fixed
-        and _pwfact_comp is not None and not _pwfact_comp.is_indexed()
+        _pnum_comp is not None
+        and not _pnum_comp.is_indexed()
+        and _pnum_comp.fixed
+        and _pwfact_comp is not None
+        and not _pwfact_comp.is_indexed()
         and not _pwfact_comp.fixed
     ):
         from pyomo.environ import value as _pyo_value
+
         logger.info(
             "Numeraire presolve: pnum=%.6f fixed, pwfact free; eq_pnum+eq_pwfact active "
             "(mirrors GAMS pnumeq free-row + pwfacteq.pwfact MCP pair)",
@@ -2324,7 +2680,11 @@ def _run_path_capi_nonlinear_full(
     from pyomo.environ import Var
 
     free_variables = sorted(
-        (var for var in model.component_data_objects(Var, active=True, descend_into=True) if not var.fixed),
+        (
+            var
+            for var in model.component_data_objects(Var, active=True, descend_into=True)
+            if not var.fixed
+        ),
         key=lambda v: v.name,
     )
 
@@ -2339,37 +2699,38 @@ def _run_path_capi_nonlinear_full(
             from _closure_patches import structural_matching  # type: ignore
         except ImportError:
             import sys as _sys
+
             _sys.path.insert(0, str(Path(__file__).resolve().parent))
             from _closure_patches import structural_matching  # type: ignore
 
         # Build forced pairs from GAMS model statement (eq_name ↔ var_name)
         _gams_pairs: list[tuple[str, str]] = []
         for _eq_comp, _var_comp in [
-            ("eq_pfeq",   "pf"),
-            ("eq_xfteq",  "xft"),
-            ("eq_pfaeq",  "pfa"),
-            ("eq_pfyeq",  "pfy"),
-            ("eq_xfeq",   "xf"),
-            ("eq_xpeq",   "xp"),
-            ("eq_ppeq",   "pp"),
-            ("eq_pdeq",   "pd"),
-            ("eq_ndeq",   "nd"),
-            ("eq_vaeq",   "va"),
-            ("eq_pxeq",   "px"),
-            ("eq_pvaeq",  "pva"),  # GAMS pvaeq.pva — value-added price (chain to ps)
-            ("eq_pfact",  "pfact"),  # GAMS pfacteq.pfact — per-region factor-price index
-            ("eq_xapeq",  "xaa"),
-            ("eq_xeq",    "x"),
-            ("eq_pseq",   "ps"),
-            ("eq_pmteq",  "pmt"),
-            ("eq_pmeq",   "pm"),
-            ("eq_xweq",   "xw"),   # GAMS xweq.xw — bilateral import demand ↔ xw
+            ("eq_pfeq", "pf"),
+            ("eq_xfteq", "xft"),
+            ("eq_pfaeq", "pfa"),
+            ("eq_pfyeq", "pfy"),
+            ("eq_xfeq", "xf"),
+            ("eq_xpeq", "xp"),
+            ("eq_ppeq", "pp"),
+            ("eq_pdeq", "pd"),
+            ("eq_ndeq", "nd"),
+            ("eq_vaeq", "va"),
+            ("eq_pxeq", "px"),
+            ("eq_pvaeq", "pva"),  # GAMS pvaeq.pva — value-added price (chain to ps)
+            ("eq_pfact", "pfact"),  # GAMS pfacteq.pfact — per-region factor-price index
+            ("eq_xapeq", "xaa"),
+            ("eq_xeq", "x"),
+            ("eq_pseq", "ps"),
+            ("eq_pmteq", "pmt"),
+            ("eq_pmeq", "pm"),
+            ("eq_xweq", "xw"),  # GAMS xweq.xw — bilateral import demand ↔ xw
             # gtap-mode + ifSUB=1 shocked trade rebuilds (only present then;
             # getattr→None otherwise).  They inline _m_pm on the LIVE pe/ptmg Vars
             # (GAMS has NO pm/pmcif Vars under ifSUB=1), so force them to xw/pmt to
             # mirror GAMS's declared xweq.xw / pmteq.pmt (model.gms:2617).
-            ("eq_xweq_shock_ifsub",    "xw"),
-            ("eq_pmteq_shock_ifsub",   "pmt"),
+            ("eq_xweq_shock_ifsub", "xw"),
+            ("eq_pmteq_shock_ifsub", "pmt"),
             ("eq_pwfact", "pwfact"),  # GAMS pwfacteq.pwfact — anchors price level
         ]:
             _eq_comp_obj = getattr(model, _eq_comp, None)
@@ -2380,7 +2741,8 @@ def _run_path_capi_nonlinear_full(
             # the trailing period (dimen 3/2), but the paired var carries it, so
             # append 'shock' when building the var key for those.
             _needs_period = _eq_comp in (
-                "eq_xweq_shock_ifsub", "eq_pmteq_shock_ifsub",
+                "eq_xweq_shock_ifsub",
+                "eq_pmteq_shock_ifsub",
             )
             try:
                 for _idx in _eq_comp_obj:
@@ -2420,16 +2782,19 @@ def _run_path_capi_nonlinear_full(
             if _eq_xseq is not None:
                 # GAMS eq (Python component) -> paired var basename
                 _supply_cycle = [
-                    ("eq_xs",    "ps"),    # pseq ↔ ps
-                    ("eq_xds",   "xds"),   # xdseq ↔ xds
-                    ("eq_pdeq",  "pd"),    # pdeq ↔ pd
-                    ("eq_xet",   "xet"),   # xeteq ↔ xet
-                    ("eq_peteq", "pet"),   # peteq ↔ pet
-                    ("eq_xseq",  "xs"),    # xseq (free-row) ↔ xs
+                    ("eq_xs", "ps"),  # pseq ↔ ps
+                    ("eq_xds", "xds"),  # xdseq ↔ xds
+                    ("eq_pdeq", "pd"),  # pdeq ↔ pd
+                    ("eq_xet", "xet"),  # xeteq ↔ xet
+                    ("eq_peteq", "pet"),  # peteq ↔ pet
+                    ("eq_xseq", "xs"),  # xseq (free-row) ↔ xs
                 ]
                 for _idx in _eq_xseq:
-                    if not (isinstance(_idx, tuple) and len(_idx) == 3
-                            and _idx[-1] in ("check", "shock")):
+                    if not (
+                        isinstance(_idx, tuple)
+                        and len(_idx) == 3
+                        and _idx[-1] in ("check", "shock")
+                    ):
                         continue
                     if not _eq_xseq[_idx].active:
                         continue
@@ -2447,10 +2812,16 @@ def _run_path_capi_nonlinear_full(
                         except (KeyError, TypeError):
                             continue
                         _gams_pairs.append(
-                            (f"{_eqn}[{_r},{_i},{_t}]", f"{_varn}[{_r},{_i},{_t}]", True))
+                            (
+                                f"{_eqn}[{_r},{_i},{_t}]",
+                                f"{_varn}[{_r},{_i},{_t}]",
+                                True,
+                            )
+                        )
 
         free_variables = structural_matching(
-            constraints, free_variables,
+            constraints,
+            free_variables,
             forced_pairs=_gams_pairs,
             label="nonlinear-full",
         )
@@ -2462,10 +2833,14 @@ def _run_path_capi_nonlinear_full(
     _dbg_dump_path = os.environ.get("EQUILIBRIA_DEBUG_DUMP_SQUARE_SYSTEM")
     if _dbg_dump_path:
         import pickle as _pickle
+
         def _detect_period(_name: str) -> str | None:
             for _p in ("base", "check", "shock"):
-                if (_name.endswith(f",{_p}]") or _name.endswith(f"[{_p}]")
-                        or _name.endswith(f"_{_p}")):
+                if (
+                    _name.endswith(f",{_p}]")
+                    or _name.endswith(f"[{_p}]")
+                    or _name.endswith(f"_{_p}")
+                ):
                     return _p
             return None
 
@@ -2474,15 +2849,23 @@ def _run_path_capi_nonlinear_full(
             _p = _detect_period(_c.name)
             if _p:
                 _period_votes[_p] = _period_votes.get(_p, 0) + 1
-        _period_suffix = max(_period_votes, key=_period_votes.get) if _period_votes else "unknown"
+        _period_suffix = (
+            max(_period_votes, key=_period_votes.get) if _period_votes else "unknown"
+        )
         _dump_path_per_period = f"{_dbg_dump_path}.{_period_suffix}"
         with open(_dump_path_per_period, "wb") as _f:
-            _pickle.dump({
-                "con_names": [c.name for c in constraints],
-                "var_names": [v.name for v in free_variables],
-            }, _f)
-        print(f"[debug] dumped {len(constraints)} con names / {len(free_variables)} var names "
-              f"to {_dump_path_per_period}", file=sys.stderr)
+            _pickle.dump(
+                {
+                    "con_names": [c.name for c in constraints],
+                    "var_names": [v.name for v in free_variables],
+                },
+                _f,
+            )
+        print(
+            f"[debug] dumped {len(constraints)} con names / {len(free_variables)} var names "
+            f"to {_dump_path_per_period}",
+            file=sys.stderr,
+        )
 
     # TEMP DEBUG HOOK (session-local, remove before commit): reformulate the
     # ALREADY-SQUARED (constraints, free_variables) pair from structural_matching
@@ -2515,18 +2898,27 @@ def _run_path_capi_nonlinear_full(
         _pv: dict[str, int] = {}
         for _c in constraints[:200]:
             for _p in ("base", "check", "shock"):
-                if _c.name.endswith(f",{_p}]") or _c.name.endswith(f"[{_p}]") or _c.name.endswith(f"_{_p}"):
+                if (
+                    _c.name.endswith(f",{_p}]")
+                    or _c.name.endswith(f"[{_p}]")
+                    or _c.name.endswith(f"_{_p}")
+                ):
                     _pv[_p] = _pv.get(_p, 0) + 1
         _this_period = max(_pv, key=_pv.get) if _pv else "unknown"
         if _this_period != _nlp_only_period:
             _nlp_solve_report_path = None  # skip hook this period; PATH solves it
     if _nlp_solve_report_path:
         from pyomo.environ import (
-            Objective as _PyoObj3, maximize as _pyo_max3, SolverFactory as _PyoSF3,
-            value as _pyo_val3, Constraint as _PyoCon3, Var as _PyoVar3,
+            Objective as _PyoObj3,
+            maximize as _pyo_max3,
+            SolverFactory as _PyoSF3,
+            value as _pyo_val3,
+            Constraint as _PyoCon3,
+            Var as _PyoVar3,
             TransformationFactory as _PyoTF3,
         )
         import json as _json3
+
         _con_set = set(id(c) for c in constraints)
         _var_set = set(id(v) for v in free_variables)
         _n_deact, _n_fixed = 0, 0
@@ -2542,13 +2934,17 @@ def _run_path_capi_nonlinear_full(
                 if not _vd.fixed and id(_vd) not in _var_set:
                     _vd.fix(_pyo_val3(_vd))
                     _n_fixed += 1
-        print(f"[nlp-square] deactivated {_n_deact} extra constraints, "
-              f"fixed {_n_fixed} extra vars (matching the real squared system)",
-              file=sys.stderr)
+        print(
+            f"[nlp-square] deactivated {_n_deact} extra constraints, "
+            f"fixed {_n_fixed} extra vars (matching the real squared system)",
+            file=sys.stderr,
+        )
         _eq_walras_sq = getattr(model, "eq_walras", None)
         _walras_var_sq = getattr(model, "walras", None)
         if _eq_walras_sq is None or _walras_var_sq is None:
-            raise RuntimeError("EQUILIBRIA_DEBUG_SQUARE_NLP_SOLVE_REPORT: no eq_walras/walras on model")
+            raise RuntimeError(
+                "EQUILIBRIA_DEBUG_SQUARE_NLP_SOLVE_REPORT: no eq_walras/walras on model"
+            )
         _period_for_walras = _period_suffix if _dbg_dump_path else None
         if _period_for_walras is None:
             # infer period from any constraint name if the dump hook wasn't set
@@ -2571,16 +2967,19 @@ def _run_path_capi_nonlinear_full(
         for _idx in list(_eq_walras_sq):
             _cd = _eq_walras_sq[_idx]
             _matches_period = (
-                (isinstance(_idx, tuple) and _idx and _idx[-1] == _period_for_walras)
-                or (_idx == _period_for_walras)
-            )
+                isinstance(_idx, tuple) and _idx and _idx[-1] == _period_for_walras
+            ) or (_idx == _period_for_walras)
             if _matches_period:
                 _walras_idx = _idx
                 if _cd.active and not _nlp_solve_mode:
                     _cd.deactivate()
                     _walras_deactivated_here = True
         try:
-            _walras_vd_sq = _walras_var_sq[_walras_idx] if _walras_idx is not None else _walras_var_sq[_period_for_walras]
+            _walras_vd_sq = (
+                _walras_var_sq[_walras_idx]
+                if _walras_idx is not None
+                else _walras_var_sq[_period_for_walras]
+            )
         except Exception:
             _walras_vd_sq = _walras_var_sq
         if _nlp_solve_mode:
@@ -2591,11 +2990,14 @@ def _run_path_capi_nonlinear_full(
             # active objective but the CNS system has none). Do NOT unfix walras
             # and maximize it — that adds a spurious DOF and lands walras=168.
             from pyomo.environ import Objective as _PyoObjConst
+
             model._nlp_walras_objective_sq = _PyoObjConst(expr=0.0, sense=_pyo_max3)
         else:
             if _walras_vd_sq.fixed:
                 _walras_vd_sq.unfix()
-            model._nlp_walras_objective_sq = _PyoObj3(expr=_walras_vd_sq, sense=_pyo_max3)
+            model._nlp_walras_objective_sq = _PyoObj3(
+                expr=_walras_vd_sq, sense=_pyo_max3
+            )
 
         # KEY FIX: GAMS runs this SAME IPOPT (3.14.19, verified same version,
         # zero user-set options — "List of user-set options:" is EMPTY in its
@@ -2621,6 +3023,7 @@ def _run_path_capi_nonlinear_full(
         # one. Not just an IPOPT-option tweak: this is the layer GAMS
         # actually uses that was missing from every attempt so far.
         from pyomo.environ import Suffix as _PyoSuffix3
+
         # EQUILIBRIA_GTAP_NLP_NO_JACSCALE=1 skips the Jacobian pre-scaling and
         # solves the RAW model with nlp_scaling_method=none — closer to what GAMS
         # does (model-level scaleopt only, no core.scale_model pre-pass). The
@@ -2671,6 +3074,7 @@ def _run_path_capi_nonlinear_full(
             try:
                 from pyomo.core.expr.visitor import identify_variables as _idvars3
                 from pyomo.environ import value as _bval3
+
                 model.scaling_factor = _PyoSuffix3(direction=_PyoSuffix3.EXPORT)
                 _nrow = 0
                 for _c3 in constraints:
@@ -2705,28 +3109,41 @@ def _run_path_capi_nonlinear_full(
                 # slower). user-scaling lets IPOPT apply the factors internally, no copy.
                 _solve_target = model
                 _britz_user_scaling = True
-                print(f"[nlp-square] BRITZ benchmark scaling (user-scaling, no copy): "
-                      f"{_nrow} eqs, {_nvar} vars scaled by 1/max(1,|x_bench|)",
-                      file=sys.stderr)
+                print(
+                    f"[nlp-square] BRITZ benchmark scaling (user-scaling, no copy): "
+                    f"{_nrow} eqs, {_nvar} vars scaled by 1/max(1,|x_bench|)",
+                    file=sys.stderr,
+                )
             except Exception as _be:
-                print(f"[nlp-square] Britz benchmark scaling FAILED ({_be}); raw model",
-                      file=sys.stderr)
+                print(
+                    f"[nlp-square] Britz benchmark scaling FAILED ({_be}); raw model",
+                    file=sys.stderr,
+                )
                 _bench_scale = False
                 _solve_target = model
         if not _bench_scale:
-            print("[nlp-square] skipping Jacobian pre-scale (faithful to GAMS: raw model, "
-                  "nlp_scaling_method=none)", file=sys.stderr)
+            print(
+                "[nlp-square] skipping Jacobian pre-scale (faithful to GAMS: raw model, "
+                "nlp_scaling_method=none)",
+                file=sys.stderr,
+            )
         try:
             if _bench_scale:
                 raise RuntimeError("britz-scaled")  # already built _solve_target above
             if _skip_jacscale:
-                print("[nlp-square] skipping Jacobian pre-scale (NO_JACSCALE); solving raw model",
-                      file=sys.stderr)
+                print(
+                    "[nlp-square] skipping Jacobian pre-scale (NO_JACSCALE); solving raw model",
+                    file=sys.stderr,
+                )
                 raise RuntimeError("skip-jacscale")
-            from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP as _PyomoNLP3
+            from pyomo.contrib.pynumero.interfaces.pyomo_nlp import (
+                PyomoNLP as _PyomoNLP3,
+            )
+
             _nlp_probe = _PyomoNLP3(model)
             _jac = _nlp_probe.evaluate_jacobian()
             import numpy as _np3
+
             _jac_csr = _jac.tocsr()
             _row_max = _np3.asarray(_jac_csr.max(axis=1).todense()).flatten()
             _row_min = _np3.asarray((-_jac_csr).max(axis=1).todense()).flatten()
@@ -2736,8 +3153,12 @@ def _run_path_capi_nonlinear_full(
             _col_min = _np3.asarray((-_jac_csc).max(axis=0).todense()).flatten()
             _col_absmax = _np3.maximum(_col_max, _col_min)
             _SCALE_CAP3 = 1.0e6
-            _row_scale = _np3.minimum(1.0 / _np3.maximum(_row_absmax, 1e-12), _SCALE_CAP3)
-            _col_scale = _np3.minimum(1.0 / _np3.maximum(_col_absmax, 1e-12), _SCALE_CAP3)
+            _row_scale = _np3.minimum(
+                1.0 / _np3.maximum(_row_absmax, 1e-12), _SCALE_CAP3
+            )
+            _col_scale = _np3.minimum(
+                1.0 / _np3.maximum(_col_absmax, 1e-12), _SCALE_CAP3
+            )
             model.scaling_factor = _PyoSuffix3(direction=_PyoSuffix3.EXPORT)
             _con_list = _nlp_probe.get_pyomo_constraints()
             _var_list = _nlp_probe.get_pyomo_variables()
@@ -2760,8 +3181,10 @@ def _run_path_capi_nonlinear_full(
             elif str(_scale_exc3) == "skip-jacscale":
                 _solve_target = model
             else:
-                print(f"[nlp-square] Jacobian scaling FAILED ({_scale_exc3}), solving unscaled",
-                      file=sys.stderr)
+                print(
+                    f"[nlp-square] Jacobian scaling FAILED ({_scale_exc3}), solving unscaled",
+                    file=sys.stderr,
+                )
                 _solve_target = model
 
         _scaled_nl_export_path = os.environ.get("EQUILIBRIA_DEBUG_EXPORT_SCALED_NL")
@@ -2773,12 +3196,20 @@ def _run_path_capi_nonlinear_full(
             for _cn in constraints:
                 _nm = getattr(_cn, "name", str(_cn))
                 for _pp in ("base", "check", "shock"):
-                    if _nm.endswith(f",{_pp}]") or _nm.endswith(f"[{_pp}]") or _nm.endswith(f"_{_pp}"):
+                    if (
+                        _nm.endswith(f",{_pp}]")
+                        or _nm.endswith(f"[{_pp}]")
+                        or _nm.endswith(f"_{_pp}")
+                    ):
                         _pv_tag[_pp] += 1
                         break
-            _p_tag = max(_pv_tag, key=_pv_tag.get) if any(_pv_tag.values()) else "unknown"
+            _p_tag = (
+                max(_pv_tag, key=_pv_tag.get) if any(_pv_tag.values()) else "unknown"
+            )
             _sp = Path(_scaled_nl_export_path)
-            _scaled_nl_export_path = str(_sp.with_name(f"{_sp.stem}_{_p_tag}{_sp.suffix}"))
+            _scaled_nl_export_path = str(
+                _sp.with_name(f"{_sp.stem}_{_p_tag}{_sp.suffix}")
+            )
             # Optional: seed the export point from a GDX (e.g. CONOPT's solved out.gdx)
             # so the .nl's initial values ARE that solution — for the "does Uno converge
             # from the true root?" oracle test. Overwrites var values by (name, index)
@@ -2786,16 +3217,32 @@ def _run_path_capi_nonlinear_full(
             _seed_gdx = os.environ.get("EQUILIBRIA_SEED_FROM_GDX")
             if _seed_gdx:
                 import sys as _sys_s
+
                 _sys_s.path.insert(0, str(Path(__file__).resolve().parent))
-                from _diff_core import gams_levels as _gl, list_populated_vars as _lpv, split_t as _st
+                from _diff_core import (
+                    gams_levels as _gl,
+                    list_populated_vars as _lpv,
+                    split_t as _st,
+                )
 
                 def _strip_s(x):
-                    return x[2:] if (isinstance(x, str) and len(x) > 2 and x[1] == "_" and x[0] in "acfr") else x
+                    return (
+                        x[2:]
+                        if (
+                            isinstance(x, str)
+                            and len(x) > 2
+                            and x[1] == "_"
+                            and x[0] in "acfr"
+                        )
+                        else x
+                    )
 
                 _t_cur = getattr(_solve_target, "_period_tag", None) or "check"
                 _nseed = 0
                 for _vn in _lpv(_seed_gdx):
-                    _pv = getattr(_solve_target, _vn.lower(), None) or getattr(_solve_target, _vn, None)
+                    _pv = getattr(_solve_target, _vn.lower(), None) or getattr(
+                        _solve_target, _vn, None
+                    )
                     if _pv is None:
                         continue
                     try:
@@ -2809,20 +3256,36 @@ def _run_path_capi_nonlinear_full(
                             continue
                         if _tt not in (_t_cur, None):
                             continue
-                        _stk = tuple(_strip_s(x) for x in _body) if isinstance(_body, tuple) else (_strip_s(_body),)
-                        for _key in (_stk, (*_stk, _t_cur), (_stk[0] if len(_stk) == 1 else _stk)):
+                        _stk = (
+                            tuple(_strip_s(x) for x in _body)
+                            if isinstance(_body, tuple)
+                            else (_strip_s(_body),)
+                        )
+                        for _key in (
+                            _stk,
+                            (*_stk, _t_cur),
+                            (_stk[0] if len(_stk) == 1 else _stk),
+                        ):
                             try:
                                 _pv[_key].set_value(_val)
                                 _nseed += 1
                                 break
                             except Exception:
                                 pass
-                print(f"[nlp-square] SEEDED .nl export from {Path(_seed_gdx).name}: {_nseed} cells (period {_t_cur})", file=sys.stderr)
-            _solve_target.write(_scaled_nl_export_path, format="nl",
-                                 io_options={"symbolic_solver_labels": True})
-            print(f"[nlp-square] wrote SCALED .nl to {_scaled_nl_export_path} "
-                  f"(run standalone: /opt/homebrew/bin/ipopt {_scaled_nl_export_path})",
-                  file=sys.stderr)
+                print(
+                    f"[nlp-square] SEEDED .nl export from {Path(_seed_gdx).name}: {_nseed} cells (period {_t_cur})",
+                    file=sys.stderr,
+                )
+            _solve_target.write(
+                _scaled_nl_export_path,
+                format="nl",
+                io_options={"symbolic_solver_labels": True},
+            )
+            print(
+                f"[nlp-square] wrote SCALED .nl to {_scaled_nl_export_path} "
+                f"(run standalone: /opt/homebrew/bin/ipopt {_scaled_nl_export_path})",
+                file=sys.stderr,
+            )
 
         # FAST PATH: solve the Pyomo model THROUGH GAMS's own engine
         # (SolverFactory('gams', solver='ipopt')) instead of a standalone
@@ -2851,8 +3314,11 @@ def _run_path_capi_nonlinear_full(
                 add_options=["option nlp=ipopt;"],
                 io_options={"symbolic_solver_labels": True},
             )
-            print(f"[nlp-square] solved via GAMS/IPOPT: status={res.solver.status} "
-                  f"term={res.solver.termination_condition}", file=sys.stderr)
+            print(
+                f"[nlp-square] solved via GAMS/IPOPT: status={res.solver.status} "
+                f"term={res.solver.termination_condition}",
+                file=sys.stderr,
+            )
         elif os.environ.get("EQUILIBRIA_GTAP_SOLVE_NEOS"):
             # DIAGNOSTIC HOOK (env-gated, session-local): solve the NLP-square via
             # NEOS instead of local IPOPT — lifts the local ~20-min wall-clock cap
@@ -2863,15 +3329,22 @@ def _run_path_capi_nonlinear_full(
             # read (pd*xda+pmt*xma) is identical to the local path. Faithful: same
             # model, same solver family, only the compute host differs.
             from pyomo.opt import SolverManagerFactory as _PyoSMF3
+
             _neos_solver = os.environ["EQUILIBRIA_GTAP_SOLVE_NEOS"]
             if _neos_solver in ("1", "true", "yes"):
                 _neos_solver = "ipopt"
-            print(f"[nlp-square] solving via NEOS/{_neos_solver} (remote, no local "
-                  f"time cap)", file=sys.stderr)
+            print(
+                f"[nlp-square] solving via NEOS/{_neos_solver} (remote, no local "
+                f"time cap)",
+                file=sys.stderr,
+            )
             _sm = _PyoSMF3("neos")
             res = _sm.solve(_solve_target, opt=_neos_solver, tee=True)
-            print(f"[nlp-square] NEOS/{_neos_solver} done: status={res.solver.status} "
-                  f"term={res.solver.termination_condition}", file=sys.stderr)
+            print(
+                f"[nlp-square] NEOS/{_neos_solver} done: status={res.solver.status} "
+                f"term={res.solver.termination_condition}",
+                file=sys.stderr,
+            )
         elif os.environ.get("EQUILIBRIA_GTAP_SOLVER", "").startswith("scipy_"):
             # MATRIX-FREE ROOT SOLVE (env EQUILIBRIA_GTAP_SOLVER=scipy_krylov | scipy_df-sane
             # | scipy_anderson). The square system F(z)=0 is solved by scipy.optimize.root
@@ -2884,13 +3357,21 @@ def _run_path_capi_nonlinear_full(
             # FACTORIZATION dominates; matrix-free avoids it entirely (CFD/power-flow scale
             # this way). _solve_target here is already the squared, seeded, closed system.
             import numpy as _np_sr
-            from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP as _PyNLP_sr
+            from pyomo.contrib.pynumero.interfaces.pyomo_nlp import (
+                PyomoNLP as _PyNLP_sr,
+            )
             from scipy.optimize import root as _sp_root
-            _method = os.environ["EQUILIBRIA_GTAP_SOLVER"].split("scipy_", 1)[1] or "krylov"
+
+            _method = (
+                os.environ["EQUILIBRIA_GTAP_SOLVER"].split("scipy_", 1)[1] or "krylov"
+            )
             _nlp_sr = _PyNLP_sr(_solve_target)
             _n_sr, _ne_sr = _nlp_sr.n_primals(), _nlp_sr.n_eq_constraints()
-            print(f"[nlp-square] scipy.root({_method}): n_primals={_n_sr} "
-                  f"n_eq={_ne_sr} square={_n_sr == _ne_sr}", file=sys.stderr)
+            print(
+                f"[nlp-square] scipy.root({_method}): n_primals={_n_sr} "
+                f"n_eq={_ne_sr} square={_n_sr == _ne_sr}",
+                file=sys.stderr,
+            )
             _z0_sr = _nlp_sr.get_primals().copy()
             # variable bounds — matrix-free root solvers ignore them, so a step can land
             # on a price≤0 / negative-power cell where the CES residual overflows (AMPL
@@ -2944,13 +3425,19 @@ def _run_path_capi_nonlinear_full(
             # steps. The .update hook refactorizes every EQUILIBRIA_GTAP_PRECOND_REFRESH
             # nonlinear steps to track curvature. Built for krylov (JFNK) AND ptc (pseudo-
             # transient continuation reuses the same spilu(J) as its GMRES preconditioner).
-            if _method in ("krylov", "ptc") and os.environ.get("EQUILIBRIA_GTAP_PRECOND", "1") == "1":
+            if (
+                _method in ("krylov", "ptc")
+                and os.environ.get("EQUILIBRIA_GTAP_PRECOND", "1") == "1"
+            ):
                 from scipy.sparse.linalg import (
                     LinearOperator as _LinOp_sr,
                     splu as _splu_sr,
                     spilu as _spilu_sr,
                 )
-                _refresh_sr = int(os.environ.get("EQUILIBRIA_GTAP_PRECOND_REFRESH", "5"))
+
+                _refresh_sr = int(
+                    os.environ.get("EQUILIBRIA_GTAP_PRECOND_REFRESH", "5")
+                )
                 # PRECONDITIONER FACTORIZATION MODE. A COMPLETE LU (splu) generates
                 # catastrophic fill-in on the large CGE Jacobian: MEASURED on 15x10 (n=34k)
                 # the LU factors blow up from 173k nonzeros to 213M (fill=1231x), and this
@@ -2968,8 +3455,12 @@ def _run_path_capi_nonlinear_full(
                 # spilu is ~0.7GB. spilu is the DEFAULT; set EQUILIBRIA_GTAP_PRECOND_LU=
                 # complete to force the old splu (small datasets only, exact preconditioner).
                 _lu_mode = os.environ.get("EQUILIBRIA_GTAP_PRECOND_LU", "incomplete")
-                _ilu_drop = float(os.environ.get("EQUILIBRIA_GTAP_PRECOND_DROPTOL", "1e-5"))
-                _ilu_ff = float(os.environ.get("EQUILIBRIA_GTAP_PRECOND_FILLFACTOR", "40"))
+                _ilu_drop = float(
+                    os.environ.get("EQUILIBRIA_GTAP_PRECOND_DROPTOL", "1e-5")
+                )
+                _ilu_ff = float(
+                    os.environ.get("EQUILIBRIA_GTAP_PRECOND_FILLFACTOR", "40")
+                )
 
                 class _JacPrecond(_LinOp_sr):
                     def __init__(self):
@@ -2984,6 +3475,7 @@ def _run_path_capi_nonlinear_full(
                             J = _nlp_sr.evaluate_jacobian_eq().tocsc()
                             # small diagonal shift to keep it non-singular
                             from scipy.sparse import eye as _eye_sr
+
                             Js = J + 1e-10 * _eye_sr(_n_sr, format="csc")
                             if _lu_mode == "complete":
                                 self._lu = _splu_sr(Js)
@@ -2992,8 +3484,10 @@ def _run_path_capi_nonlinear_full(
                                     Js, drop_tol=_ilu_drop, fill_factor=_ilu_ff
                                 )
                         except Exception as _pe:
-                            print(f"[nlp-square] precond factor failed ({_pe}); identity",
-                                  file=sys.stderr)
+                            print(
+                                f"[nlp-square] precond factor failed ({_pe}); identity",
+                                file=sys.stderr,
+                            )
                             self._lu = None
 
                     def _matvec(self, v):
@@ -3024,12 +3518,21 @@ def _run_path_capi_nonlinear_full(
                 if _inner_it_sr:
                     _jac_opts_sr["inner_maxiter"] = int(_inner_it_sr)
                 _opts_sr["jac_options"] = _jac_opts_sr
-                _lu_desc = ("complete-LU" if _lu_mode == "complete"
-                            else f"incomplete-LU(drop={_ilu_drop},ff={_ilu_ff})")
-                _nz_lu = (_precond_sr._lu.L.nnz + _precond_sr._lu.U.nnz
-                          if _precond_sr._lu is not None else 0)
-                print(f"[nlp-square] JFNK preconditioned with {_lu_desc}: "
-                      f"nnz(LU)={_nz_lu} (refresh every {_refresh_sr} steps)", file=sys.stderr)
+                _lu_desc = (
+                    "complete-LU"
+                    if _lu_mode == "complete"
+                    else f"incomplete-LU(drop={_ilu_drop},ff={_ilu_ff})"
+                )
+                _nz_lu = (
+                    _precond_sr._lu.L.nnz + _precond_sr._lu.U.nnz
+                    if _precond_sr._lu is not None
+                    else 0
+                )
+                print(
+                    f"[nlp-square] JFNK preconditioned with {_lu_desc}: "
+                    f"nnz(LU)={_nz_lu} (refresh every {_refresh_sr} steps)",
+                    file=sys.stderr,
+                )
 
             _t0_sr = __import__("time").perf_counter()
             if _method == "ptc":
@@ -3045,12 +3548,18 @@ def _run_path_capi_nonlinear_full(
                 #     Δtₙ = Δtₙ₋₁ · ||F(xₙ₋₁)|| / ||F(xₙ)||.
                 # Solved matrix-free: J·v via finite differences, the shifted system via GMRES
                 # preconditioned by the same spilu(J) built above (reused as inner_M).
-                from scipy.sparse.linalg import LinearOperator as _LinOp_p, gmres as _gmres_p
+                from scipy.sparse.linalg import (
+                    LinearOperator as _LinOp_p,
+                    gmres as _gmres_p,
+                )
+
                 _dt_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_DT0", "1e-2"))
                 _dt_max_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_DTMAX", "1e12"))
                 _ftol_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_FTOL", "1e-7"))
                 _rdiff_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_RDIFF", "1e-7"))
-                _inner_tol_p = float(os.environ.get("EQUILIBRIA_GTAP_PTC_INNERTOL", "1e-3"))
+                _inner_tol_p = float(
+                    os.environ.get("EQUILIBRIA_GTAP_PTC_INNERTOL", "1e-3")
+                )
                 _pc_p = locals().get("_precond_sr", None)
                 _x_p = _np_sr.clip(_z0_sr.copy(), _lb_sr, _ub_sr)
                 _F0_p = _F_sr(_x_p)
@@ -3058,12 +3567,15 @@ def _run_path_capi_nonlinear_full(
                 _r0_p = _rprev_p
                 _conv_p = False
                 for _k_p in range(_maxit_sr):
-                    _rc_p = float(_np_sr.linalg.norm(_np_sr.abs(_F_sr(_x_p)), _np_sr.inf))
+                    _rc_p = float(
+                        _np_sr.linalg.norm(_np_sr.abs(_F_sr(_x_p)), _np_sr.inf)
+                    )
                     if _rc_p < _ftol_p:
                         _conv_p = True
                         break
                     _Fx_p = _F_sr(_x_p)
                     _nrm_x_p = _np_sr.linalg.norm(_x_p)
+
                     # matrix-free J·v via forward finite differences (directional deriv)
                     def _Jv_p(_v, _Fx_p=_Fx_p, _x_p=_x_p, _nrm_x_p=_nrm_x_p):
                         _nv = _np_sr.linalg.norm(_v)
@@ -3071,6 +3583,7 @@ def _run_path_capi_nonlinear_full(
                             return _np_sr.zeros_like(_v)
                         _eps = _rdiff_p * (1.0 + _nrm_x_p) / _nv
                         return (_F_sr(_x_p + _eps * _v) - _Fx_p) / _eps
+
                     _shift_p = 1.0 / _dt_p
                     _A_p = _LinOp_p(
                         (_n_sr, _n_sr),
@@ -3078,27 +3591,42 @@ def _run_path_capi_nonlinear_full(
                         dtype=_x_p.dtype,
                     )
                     _delta_p, _info_p = _gmres_p(
-                        _A_p, -_Fx_p, M=_pc_p, rtol=_inner_tol_p, atol=0.0,
-                        maxiter=int(os.environ.get("EQUILIBRIA_GTAP_PTC_GMRES_MAXIT", "50")),
+                        _A_p,
+                        -_Fx_p,
+                        M=_pc_p,
+                        rtol=_inner_tol_p,
+                        atol=0.0,
+                        maxiter=int(
+                            os.environ.get("EQUILIBRIA_GTAP_PTC_GMRES_MAXIT", "50")
+                        ),
                         restart=30,
                     )
                     _x_new_p = _np_sr.clip(_x_p + _delta_p, _lb_sr, _ub_sr)
                     _rnew_p = float(_np_sr.linalg.norm(_F_sr(_x_new_p)))
                     # SER: grow Δt when residual drops, shrink when it rises
                     if _rnew_p < _rprev_p:
-                        _dt_p = min(_dt_p * (_rprev_p / max(_rnew_p, 1e-300)), _dt_max_p)
+                        _dt_p = min(
+                            _dt_p * (_rprev_p / max(_rnew_p, 1e-300)), _dt_max_p
+                        )
                         _x_p = _x_new_p
                         _rprev_p = _rnew_p
                     else:
-                        _dt_p = max(_dt_p * 0.5, 1e-8)  # reject: shorten pseudo-step, retry
+                        _dt_p = max(
+                            _dt_p * 0.5, 1e-8
+                        )  # reject: shorten pseudo-step, retry
                     if _k_p % 5 == 0 or _rc_p < _ftol_p * 10:
-                        print(f"[nlp-square] PTC it={_k_p} ||F||_inf={_rc_p:.3e} "
-                              f"||F||_2={_rprev_p:.3e} Δt={_dt_p:.2e}", file=sys.stderr, flush=True)
+                        print(
+                            f"[nlp-square] PTC it={_k_p} ||F||_inf={_rc_p:.3e} "
+                            f"||F||_2={_rprev_p:.3e} Δt={_dt_p:.2e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
 
                 class _SolP:
                     x = _x_p
                     success = _conv_p
                     nit = _k_p + 1
+
                 _sol_sr = _SolP()
             elif _method == "newton_tr":
                 # SPARSE-NEWTON + DOGLEG TRUST REGION. The matrix-free JFNK failed on 15x10
@@ -3112,6 +3640,7 @@ def _run_path_capi_nonlinear_full(
                 # globalization the literature says JFNK lacks — built on the exact J + spilu.
                 from scipy.sparse import eye as _eye_tr, identity as _id_tr  # noqa: F401
                 from scipy.sparse.linalg import spilu as _spilu_tr
+
                 _maxit_tr = _maxit_sr
                 _ftol_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_FTOL", "1e-7"))
                 _delta_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DELTA0", "1.0"))
@@ -3129,15 +3658,30 @@ def _run_path_capi_nonlinear_full(
                 # inner linear solve for the Newton step:
                 #  "direct" (DEFAULT) — zero-free-diagonal column permutation + COMPLETE splu
                 #     (exact). ~560x faster than naive spilu on the zero-diagonal GTAP Jacobian
-                #     (MEASURED 15x10: 439s→0.78s). Scales to 20x41.
+                #     (MEASURED 15x10: 439s→0.78s). EXACT but scipy's LU needs ~35GB at 393k →
+                #     OOM on a 32GB kernel; use "mumps" for 20x41.
+                #  "mumps" — MUMPS sparse-direct (Fortran multifrontal, own pivoting, EXACT,
+                #     RAM-bounded out-of-Python). The CGE-scale route (IPOPT/GEMPACK use it
+                #     internally). Symbolic factor once + Shamanskii numeric refresh. USE FOR 20x41.
                 #  "spilu" — incomplete LU, NO permutation (legacy; catastrophic fill here).
                 #  "gmres" — matrix-free (stalls without a real preconditioner on this system).
                 from scipy.sparse.linalg import splu as _splu_full_tr
-                _linsolve_tr = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
-                _colperm_tr = None  # structural column permutation (computed once, reused)
-                _gmres_tol_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_TOL", "1e-3"))
-                _gmres_restart_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_RESTART", "50"))
-                _gmres_maxit_tr = int(os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_MAXIT", "200"))
+
+                _linsolve_tr = os.environ.get(
+                    "EQUILIBRIA_GTAP_TR_LINSOLVE", "direct"
+                ).lower()
+                _colperm_tr = (
+                    None  # structural column permutation (computed once, reused)
+                )
+                _gmres_tol_tr = float(
+                    os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_TOL", "1e-3")
+                )
+                _gmres_restart_tr = int(
+                    os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_RESTART", "50")
+                )
+                _gmres_maxit_tr = int(
+                    os.environ.get("EQUILIBRIA_GTAP_TR_GMRES_MAXIT", "200")
+                )
                 _x_tr = _np_sr.clip(_z0_sr.copy(), _lb_sr, _ub_sr)
 
                 def _Feval_tr(z):
@@ -3154,8 +3698,11 @@ def _run_path_capi_nonlinear_full(
                     from scipy.sparse import save_npz as _save_npz_j
                     from scipy.sparse.csgraph import (
                         maximum_bipartite_matching as _mbm_j,
-                        connected_components as _cc_j)
+                        connected_components as _cc_j,
+                    )
+
                     _pf_j = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+
                     def _jl(_m):
                         if _pf_j:
                             try:
@@ -3164,33 +3711,45 @@ def _run_path_capi_nonlinear_full(
                             except Exception:
                                 pass
                         print(f"[jac-dump] {_m}", file=sys.stderr, flush=True)
+
                     # J at x0
                     _nlp_sr.set_primals(_x_tr)
                     _Jd = _nlp_sr.evaluate_jacobian_eq().tocsc()
                     _save_npz_j(_jdump, _Jd)
-                    _jl(f"J(x0) shape={_Jd.shape} nnz={_Jd.nnz} nnz/row={_Jd.nnz/_n_sr:.2f}")
+                    _jl(
+                        f"J(x0) shape={_Jd.shape} nnz={_Jd.nnz} nnz/row={_Jd.nnz / _n_sr:.2f}"
+                    )
                     # J at x0 + small random perturbation — compare nnz to detect numeric
                     # (not structural) zeros that would understate the real pattern
                     _rng_j = __import__("numpy").random.default_rng(0)
-                    _xp_j = _np_sr.clip(_x_tr + 1e-3 * _rng_j.standard_normal(_n_sr),
-                                        _lb_sr, _ub_sr)
+                    _xp_j = _np_sr.clip(
+                        _x_tr + 1e-3 * _rng_j.standard_normal(_n_sr), _lb_sr, _ub_sr
+                    )
                     _nlp_sr.set_primals(_xp_j)
                     _Jp_j = _nlp_sr.evaluate_jacobian_eq().tocsc()
-                    _jl(f"J(x0+pert) nnz={_Jp_j.nnz} "
-                        f"({'SAME pattern' if _Jp_j.nnz == _Jd.nnz else 'MORE nnz — x0 had numeric zeros'})")
-                    _save_npz_j(_jdump.replace('.npz', '_pert.npz'), _Jp_j)
+                    _jl(
+                        f"J(x0+pert) nnz={_Jp_j.nnz} "
+                        f"({'SAME pattern' if _Jp_j.nnz == _Jd.nnz else 'MORE nnz — x0 had numeric zeros'})"
+                    )
+                    _save_npz_j(_jdump.replace(".npz", "_pert.npz"), _Jp_j)
                     # BTF block sizes on the (denser) perturbed pattern — the real structure
                     _Jbtf = _Jp_j if _Jp_j.nnz >= _Jd.nnz else _Jd
                     _match_j = _mbm_j(_Jbtf.tocsr(), perm_type="column")
                     if not _np_sr.any(_match_j < 0):
                         _Jperm_j = _Jbtf[:, _match_j].tocsr()
-                        _ncc_j, _lab_j = _cc_j(_Jperm_j, directed=True, connection="strong")
+                        _ncc_j, _lab_j = _cc_j(
+                            _Jperm_j, directed=True, connection="strong"
+                        )
                         _, _cnt_j = _np_sr.unique(_lab_j, return_counts=True)
                         _cnt_sorted = _np_sr.sort(_cnt_j)[::-1]
-                        __import__("numpy").save(_jdump.replace('.npz', '_blocks.npy'), _cnt_j)
-                        _jl(f"BTF: {_ncc_j} blocks, MAX={int(_cnt_sorted[0])} "
-                            f"({100*_cnt_sorted[0]/_n_sr:.1f}%), top5={_cnt_sorted[:5].tolist()}, "
-                            f"singletons={int((_cnt_j == 1).sum())}")
+                        __import__("numpy").save(
+                            _jdump.replace(".npz", "_blocks.npy"), _cnt_j
+                        )
+                        _jl(
+                            f"BTF: {_ncc_j} blocks, MAX={int(_cnt_sorted[0])} "
+                            f"({100 * _cnt_sorted[0] / _n_sr:.1f}%), top5={_cnt_sorted[:5].tolist()}, "
+                            f"singletons={int((_cnt_j == 1).sum())}"
+                        )
                     else:
                         _jl("matching NOT full — structurally rank-deficient")
                     # NAME the empty rows (zero Jacobian rows = structurally-singular eqs) and
@@ -3198,24 +3757,35 @@ def _run_path_capi_nonlinear_full(
                     # and what index-tuple distinguishes a degenerate cell from a live one.
                     _rpr_j = _np_sr.diff(_Jd.tocsr().indptr)
                     _empty_j = _np_sr.where(_rpr_j == 0)[0]
-                    _jl(f"EMPTY ROWS: {len(_empty_j)} "
+                    _jl(
+                        f"EMPTY ROWS: {len(_empty_j)} "
                         f"(range {int(_empty_j.min()) if len(_empty_j) else -1}-"
-                        f"{int(_empty_j.max()) if len(_empty_j) else -1})")
+                        f"{int(_empty_j.max()) if len(_empty_j) else -1})"
+                    )
                     try:
                         _cons_j = _nlp_sr.get_pyomo_constraints()
                         _empty_names = [str(_cons_j[_i]) for _i in _empty_j[:20]]
                         _jl(f"EMPTY eq names (first 20): {_empty_names}")
                         # a non-empty sibling for contrast: same band, has nnz
                         if len(_empty_j):
-                            _band_lo, _band_hi = int(_empty_j.min()), int(_empty_j.max())
-                            _sib = [_i for _i in range(_band_lo, _band_hi + 1)
-                                    if _rpr_j[_i] > 0][:10]
-                            _jl(f"LIVE siblings in band (first 10): "
-                                f"{[str(_cons_j[_i]) for _i in _sib]}")
+                            _band_lo, _band_hi = (
+                                int(_empty_j.min()),
+                                int(_empty_j.max()),
+                            )
+                            _sib = [
+                                _i
+                                for _i in range(_band_lo, _band_hi + 1)
+                                if _rpr_j[_i] > 0
+                            ][:10]
+                            _jl(
+                                f"LIVE siblings in band (first 10): "
+                                f"{[str(_cons_j[_i]) for _i in _sib]}"
+                            )
                     except Exception as _en:
                         _jl(f"could not name eqs: {_en}")
                     _jl(f"dumped {_jdump} (+_pert +_blocks) — aborting")
                     import sys as _sxj
+
                     _sxj.exit(0)
 
                 # STRUCTURAL PRE-SOLVE GATE (on by default; EQUILIBRIA_GTAP_TR_GATE=0 to skip).
@@ -3255,7 +3825,8 @@ def _run_path_capi_nonlinear_full(
                             f"First offending variables: {_bad_vars}. "
                             f"Fix the squaring (filter zero-cell tuples like GAMS $-conditions, "
                             f"or fix the associated variable) — set EQUILIBRIA_GTAP_TR_GATE=0 "
-                            f"to bypass this check.")
+                            f"to bypass this check."
+                        )
                         print(f"[nlp-square] {_msg_g}", file=sys.stderr, flush=True)
                         raise RuntimeError(_msg_g)
 
@@ -3281,17 +3852,109 @@ def _run_path_capi_nonlinear_full(
                     #    with the EXACT J (no finite-diff "zero vector"). The lever that makes
                     #    20x41 tractable: kills the 30min factorization entirely.
                     if _linsolve_tr == "gmres":
-                        from scipy.sparse.linalg import gmres as _gmres_tr, LinearOperator as _LO_tr
+                        from scipy.sparse.linalg import (
+                            gmres as _gmres_tr,
+                            LinearOperator as _LO_tr,
+                        )
+
                         _diag_tr = _J_tr.diagonal()
-                        _diag_tr = _np_sr.where(_np_sr.abs(_diag_tr) > 1e-12, _diag_tr, 1.0)
-                        _Mdiag_tr = _LO_tr((_n_sr, _n_sr), matvec=lambda v: v / _diag_tr,
-                                           dtype=_x_tr.dtype)
-                        _Jop_tr = _LO_tr((_n_sr, _n_sr), matvec=lambda v: _J_tr @ v,
-                                         dtype=_x_tr.dtype)
+                        _diag_tr = _np_sr.where(
+                            _np_sr.abs(_diag_tr) > 1e-12, _diag_tr, 1.0
+                        )
+                        _Mdiag_tr = _LO_tr(
+                            (_n_sr, _n_sr),
+                            matvec=lambda v: v / _diag_tr,
+                            dtype=_x_tr.dtype,
+                        )
+                        _Jop_tr = _LO_tr(
+                            (_n_sr, _n_sr),
+                            matvec=lambda v: _J_tr @ v,
+                            dtype=_x_tr.dtype,
+                        )
                         _pN_tr, _info_tr = _gmres_tr(
-                            _Jop_tr, -_F_tr, M=_Mdiag_tr, rtol=_gmres_tol_tr, atol=0.0,
-                            restart=_gmres_restart_tr, maxiter=_gmres_maxit_tr)
+                            _Jop_tr,
+                            -_F_tr,
+                            M=_Mdiag_tr,
+                            rtol=_gmres_tol_tr,
+                            atol=0.0,
+                            restart=_gmres_restart_tr,
+                            maxiter=_gmres_maxit_tr,
+                        )
                         if not _np_sr.all(_np_sr.isfinite(_pN_tr)):
+                            _pN_tr = -_g_tr
+                    elif _linsolve_tr == "mumps":
+                        # MUMPS SPARSE DIRECT (the CGE-scale route: this is the solver
+                        # IPOPT/GEMPACK use internally). A multifrontal Fortran solver
+                        # that does its OWN pivoting — it handles the ~100%-zero GTAP
+                        # diagonal natively (no column pre-permutation needed) and, unlike
+                        # scipy's COMPLETE splu (which needs ~35GB and OOM-kills the 32GB
+                        # Kaggle kernel on the 393k system), keeps the factor out-of-Python
+                        # and RAM-bounded. EXACT (no drop-tol). The symbolic factorization
+                        # (structure-only, reusable across Newton steps) is done ONCE; the
+                        # numeric refactor + back-solve run each REFRESH per Shamanskii.
+                        from pyomo.contrib.pynumero.linalg.mumps_interface import (
+                            MumpsCentralizedAssembledLinearSolver as _Mumps_tr,
+                        )
+
+                        _pf_m = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+
+                        def _plog_m(_m):
+                            if _pf_m:
+                                try:
+                                    with open(_pf_m, "a") as _fh:
+                                        _fh.write(f"  [mumps] {_m}\n")
+                                except Exception:
+                                    pass
+                            print(
+                                f"[nlp-square] [mumps] {_m}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+
+                        _need_lu = (
+                            _lu_tr is None
+                            or _refresh_tr <= 1
+                            or _lu_age_tr >= _refresh_tr
+                            or _lu_age_tr < 0
+                        )
+                        _Jm_tr = _J_tr.tocsr()
+                        if _need_lu:
+                            try:
+                                _t_m = __import__("time").perf_counter()
+                                if _lu_tr is None:
+                                    # sym=0 (unsymmetric F(z)=0 Jacobian). ICNTL(14) is the
+                                    # working-space %-increase; bump it so the numeric phase
+                                    # doesn't fail on a fill underestimate at 393k.
+                                    _lu_tr = _Mumps_tr(sym=0)
+                                    _lu_tr.set_icntl(14, 50)
+                                    _lu_tr.do_symbolic_factorization(_Jm_tr)
+                                    _plog_m(
+                                        "symbolic factorization done in "
+                                        f"{__import__('time').perf_counter() - _t_m:.1f}s "
+                                        f"(n={_n_sr})"
+                                    )
+                                    _t_m = __import__("time").perf_counter()
+                                _lu_tr.do_numeric_factorization(_Jm_tr)
+                                _plog_m(
+                                    "numeric factorization done in "
+                                    f"{__import__('time').perf_counter() - _t_m:.1f}s"
+                                )
+                                _lu_age_tr = 0
+                            except Exception as _e_m:
+                                _plog_m(f"MUMPS FAILED: {_e_m}")
+                                _lu_tr = None
+                        else:
+                            _lu_age_tr += 1
+                        try:
+                            if _lu_tr is not None:
+                                _pN_tr, _ = _lu_tr.do_back_solve(-_F_tr)
+                                if _pN_tr is None or not _np_sr.all(
+                                    _np_sr.isfinite(_pN_tr)
+                                ):
+                                    _pN_tr = -_g_tr
+                            else:
+                                _pN_tr = -_g_tr
+                        except Exception:
                             _pN_tr = -_g_tr
                     elif _linsolve_tr == "direct":
                         # DIRECT SOLVE with zero-free-diagonal permutation (GEMPACK/MA48/KLU
@@ -3306,8 +3969,11 @@ def _run_path_capi_nonlinear_full(
                         # pattern, unchanged across Newton steps) so it is computed ONCE and
                         # reused; only the numeric refactor happens each step (Shamanskii).
                         from scipy.sparse.csgraph import (
-                            maximum_bipartite_matching as _mbm_tr)
+                            maximum_bipartite_matching as _mbm_tr,
+                        )
+
                         _pf_d = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+
                         def _plog_d(_m):
                             if _pf_d:
                                 try:
@@ -3315,24 +3981,39 @@ def _run_path_capi_nonlinear_full(
                                         _fh.write(f"  [direct] {_m}\n")
                                 except Exception:
                                     pass
-                            print(f"[nlp-square] [direct] {_m}", file=sys.stderr, flush=True)
+                            print(
+                                f"[nlp-square] [direct] {_m}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+
                         if _colperm_tr is None:
                             _t_d = __import__("time").perf_counter()
                             _colperm_tr = _mbm_tr(_J_tr.tocsr(), perm_type="column")
-                            _plog_d(f"matching done in {__import__('time').perf_counter()-_t_d:.1f}s "
-                                    f"(n={_n_sr})")
+                            _plog_d(
+                                f"matching done in {__import__('time').perf_counter() - _t_d:.1f}s "
+                                f"(n={_n_sr})"
+                            )
                             if _np_sr.any(_colperm_tr < 0):
-                                _colperm_tr = _np_sr.arange(_n_sr)  # rank-deficient fallback
-                        _need_lu = (_lu_tr is None or _refresh_tr <= 1
-                                    or _lu_age_tr >= _refresh_tr or _lu_age_tr < 0)
+                                _colperm_tr = _np_sr.arange(
+                                    _n_sr
+                                )  # rank-deficient fallback
+                        _need_lu = (
+                            _lu_tr is None
+                            or _refresh_tr <= 1
+                            or _lu_age_tr >= _refresh_tr
+                            or _lu_age_tr < 0
+                        )
                         if _need_lu:
                             try:
                                 _t_d = __import__("time").perf_counter()
                                 _Jperm_tr = _J_tr[:, _colperm_tr].tocsc()
                                 _lu_tr = _splu_full_tr(_Jperm_tr, permc_spec="COLAMD")
-                                _plog_d(f"splu factor done in "
-                                        f"{__import__('time').perf_counter()-_t_d:.1f}s "
-                                        f"nnz(LU)={_lu_tr.L.nnz + _lu_tr.U.nnz}")
+                                _plog_d(
+                                    f"splu factor done in "
+                                    f"{__import__('time').perf_counter() - _t_d:.1f}s "
+                                    f"nnz(LU)={_lu_tr.L.nnz + _lu_tr.U.nnz}"
+                                )
                                 _lu_age_tr = 0
                             except Exception as _e_d:
                                 _plog_d(f"splu FAILED: {_e_d}")
@@ -3341,28 +4022,37 @@ def _run_path_capi_nonlinear_full(
                             _lu_age_tr += 1
                         try:
                             if _lu_tr is not None:
-                                _y_tr = _lu_tr.solve(-_F_tr)      # solves (J P) y = -F
+                                _y_tr = _lu_tr.solve(-_F_tr)  # solves (J P) y = -F
                                 _pN_tr = _np_sr.empty(_n_sr)
-                                _pN_tr[_colperm_tr] = _y_tr       # un-permute: p = P y
+                                _pN_tr[_colperm_tr] = _y_tr  # un-permute: p = P y
                             else:
                                 _pN_tr = -_g_tr
                         except Exception:
                             _pN_tr = -_g_tr
                     else:
                         # (re)factor spilu only when stale (first step / every N / after reject)
-                        _need_lu = (_lu_tr is None or _refresh_tr <= 1
-                                    or _lu_age_tr >= _refresh_tr or _lu_age_tr < 0)
+                        _need_lu = (
+                            _lu_tr is None
+                            or _refresh_tr <= 1
+                            or _lu_age_tr >= _refresh_tr
+                            or _lu_age_tr < 0
+                        )
                         if _need_lu:
                             try:
-                                _lu_tr = _spilu_tr(_J_tr + 1e-10 * _eye_tr(_n_sr, format="csc"),
-                                                   drop_tol=_drop_tr, fill_factor=_ff_tr)
+                                _lu_tr = _spilu_tr(
+                                    _J_tr + 1e-10 * _eye_tr(_n_sr, format="csc"),
+                                    drop_tol=_drop_tr,
+                                    fill_factor=_ff_tr,
+                                )
                                 _lu_age_tr = 0
                             except Exception:
                                 _lu_tr = None
                         else:
                             _lu_age_tr += 1
                         try:
-                            _pN_tr = _lu_tr.solve(-_F_tr) if _lu_tr is not None else -_g_tr
+                            _pN_tr = (
+                                _lu_tr.solve(-_F_tr) if _lu_tr is not None else -_g_tr
+                            )
                         except Exception:
                             _pN_tr = -_g_tr  # fall back to gradient if LU solve fails
                     _Jg_tr = _J_tr @ _g_tr
@@ -3384,11 +4074,15 @@ def _run_path_capi_nonlinear_full(
                         _b_tr = 2.0 * float(_pC_tr @ _d_tr)
                         _c_tr = _nC_tr * _nC_tr - _delta_tr * _delta_tr
                         _disc_tr = max(_b_tr * _b_tr - 4 * _a_tr * _c_tr, 0.0)
-                        _beta_tr = (-_b_tr + _disc_tr ** 0.5) / (2 * _a_tr) if _a_tr > 0 else 0.0
+                        _beta_tr = (
+                            (-_b_tr + _disc_tr**0.5) / (2 * _a_tr) if _a_tr > 0 else 0.0
+                        )
                         _p_tr = _pC_tr + _beta_tr * _d_tr
                     # predicted reduction from linear model: ½‖F‖² - ½‖F + Jp‖²
                     _Jp_tr = _J_tr @ _p_tr
-                    _pred_tr = _phi_tr - 0.5 * float((_F_tr + _Jp_tr) @ (_F_tr + _Jp_tr))
+                    _pred_tr = _phi_tr - 0.5 * float(
+                        (_F_tr + _Jp_tr) @ (_F_tr + _Jp_tr)
+                    )
                     _x_new_tr = _np_sr.clip(_x_tr + _p_tr, _lb_sr, _ub_sr)
                     try:
                         _Fnew_tr = _Feval_tr(_x_new_tr)
@@ -3409,11 +4103,14 @@ def _run_path_capi_nonlinear_full(
                     if _rho_tr > 0.75:
                         _delta_tr = min(2.0 * _delta_tr, _dmax_tr)  # expand
                     elif _rho_tr < 0.25:
-                        _delta_tr = max(0.25 * _delta_tr, 1e-10)    # shrink
+                        _delta_tr = max(0.25 * _delta_tr, 1e-10)  # shrink
                     if _k_tr % 5 == 0:
-                        print(f"[nlp-square] NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e} "
-                              f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e} LUage={_lu_age_tr}",
-                              file=sys.stderr, flush=True)
+                        print(
+                            f"[nlp-square] NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e} "
+                            f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e} LUage={_lu_age_tr}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
                         # live progress file for remote (Kaggle) runs — see driver hook
                         _pf_tr = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
                         if _pf_tr:
@@ -3431,15 +4128,20 @@ def _run_path_capi_nonlinear_full(
                     x = _x_tr
                     success = _conv_tr
                     nit = _k_tr + 1
+
                 _sol_sr = _SolTR()
             else:
                 _sol_sr = _sp_root(_F_sr, _z0_sr, method=_method, options=_opts_sr)
             _dt_sr = __import__("time").perf_counter() - _t0_sr
             _nlp_sr.set_primals(_sol_sr.x)
-            _rf_sr = float(_np_sr.linalg.norm(_nlp_sr.evaluate_eq_constraints(), _np_sr.inf))
-            print(f"[nlp-square] scipy.root({_method}) done: success={_sol_sr.success} "
-                  f"nit={getattr(_sol_sr, 'nit', '?')} ||F||_inf={_rf_sr:.3e} wall={_dt_sr:.1f}s",
-                  file=sys.stderr)
+            _rf_sr = float(
+                _np_sr.linalg.norm(_nlp_sr.evaluate_eq_constraints(), _np_sr.inf)
+            )
+            print(
+                f"[nlp-square] scipy.root({_method}) done: success={_sol_sr.success} "
+                f"nit={getattr(_sol_sr, 'nit', '?')} ||F||_inf={_rf_sr:.3e} wall={_dt_sr:.1f}s",
+                file=sys.stderr,
+            )
             # push the solution back into the Pyomo Vars (like load_solutions would)
             for _v_sr, _val_sr in zip(_nlp_sr.get_pyomo_variables(), _sol_sr.x):
                 if not _v_sr.fixed:
@@ -3453,6 +4155,7 @@ def _run_path_capi_nonlinear_full(
                 class solver:
                     status = "ok" if _ok_sr else "warning"
                     termination_condition = "optimal" if _ok_sr else "other"
+
             res = _R()
             if _solve_target is not model:
                 try:
@@ -3500,14 +4203,19 @@ def _run_path_capi_nonlinear_full(
             # iteration table (inf_pr/inf_du per iter) streams to stdout live — needed to
             # SEE whether a large solve is converging or stalling (Kaggle hides the
             # output_file log until the kernel finishes). Off by default (keeps NLP quiet).
-            _tee_nlp = (not _nlp_solve_mode) or os.environ.get("EQUILIBRIA_GTAP_IPOPT_TEE") == "1"
+            _tee_nlp = (not _nlp_solve_mode) or os.environ.get(
+                "EQUILIBRIA_GTAP_IPOPT_TEE"
+            ) == "1"
             try:
                 res = opt.solve(_solve_target, tee=_tee_nlp)
             except Exception as _e_nlp:
                 if not _nlp_solve_mode:
                     raise
-                print(f"[nlp-square] IPOPT solve raised ({_e_nlp}); retrying with "
-                      f"load_solutions=False", file=sys.stderr)
+                print(
+                    f"[nlp-square] IPOPT solve raised ({_e_nlp}); retrying with "
+                    f"load_solutions=False",
+                    file=sys.stderr,
+                )
                 res = opt.solve(_solve_target, tee=False, load_solutions=False)
                 try:
                     if res.solution and len(res.solution) > 0:
@@ -3546,17 +4254,24 @@ def _run_path_capi_nonlinear_full(
             "solver_status": str(res.solver.status),
             "termination_condition": str(res.solver.termination_condition),
             "walras_value": _pyo_val3(_walras_vd_sq),
-            "top_residuals": [{"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]],
+            "top_residuals": [
+                {"resid": r_, "eq": n_, "idx": i_} for r_, n_, i_ in rows[:40]
+            ],
         }
         if _nlp_solve_mode:
             # NLP-vs-NLP solve mode: the IPOPT solve already wrote the solution
             # back onto the Pyomo Vars (in place). Return a PATH-compatible dict so
             # the multi-period driver treats this period as solved and proceeds.
             _nlp_resid = max((r_ for r_, _, _ in rows), default=0.0)
-            _nlp_ok = str(res.solver.termination_condition) in ("optimal", "locallyOptimal")
-            print(f"[nlp-square] SOLVE_NLP mode: term={res.solver.termination_condition} "
-                  f"worst_resid={_nlp_resid:.3e} walras={_pyo_val3(_walras_vd_sq):.3e}",
-                  file=sys.stderr)
+            _nlp_ok = str(res.solver.termination_condition) in (
+                "optimal",
+                "locallyOptimal",
+            )
+            print(
+                f"[nlp-square] SOLVE_NLP mode: term={res.solver.termination_condition} "
+                f"worst_resid={_nlp_resid:.3e} walras={_pyo_val3(_walras_vd_sq):.3e}",
+                file=sys.stderr,
+            )
             return {
                 "status": "converged" if _nlp_ok else "failed",
                 "success": bool(_nlp_ok),
@@ -3564,12 +4279,16 @@ def _run_path_capi_nonlinear_full(
                 "message": "Solved GTAP squared system as NLP (maximize walras) via IPOPT",
                 "termination_code": 1 if _nlp_ok else 2,
                 "residual": float(_nlp_resid),
-                "major_iterations": 0, "minor_iterations": 0,
-                "function_evaluations": 0, "jacobian_evaluations": 0,
+                "major_iterations": 0,
+                "minor_iterations": 0,
+                "function_evaluations": 0,
+                "jacobian_evaluations": 0,
             }
         Path(_nlp_solve_report_path).write_text(_json3.dumps(report, indent=2))
         print(f"[nlp-square] wrote {_nlp_solve_report_path}", file=sys.stderr)
-        raise RuntimeError("EQUILIBRIA_DEBUG_SQUARE_NLP_SOLVE_REPORT: stopping after in-process squared NLP solve+report")
+        raise RuntimeError(
+            "EQUILIBRIA_DEBUG_SQUARE_NLP_SOLVE_REPORT: stopping after in-process squared NLP solve+report"
+        )
 
     if len(constraints) != len(free_variables):
         return {
@@ -3654,7 +4373,9 @@ def _run_path_capi_nonlinear_full(
     _path_x0 = list(data.x0)
     _path_lb = list(data.lb)
     _path_ub = list(data.ub)
-    _scale_c: list[float] | None = None  # column scale factors, used to unscale after solve
+    _scale_c: list[float] | None = (
+        None  # column scale factors, used to unscale after solve
+    )
     if equation_scaling:
         _jac_at_x0 = data.callback_jac(list(data.x0))
         _row_indices = data.jacobian_structure.row_indices
@@ -3680,12 +4401,17 @@ def _run_path_capi_nonlinear_full(
         _scale_c = [min(1.0 / max(v, 1e-12), _SCALE_CAP) for v in col_max]
         logger.info(
             "Full model scaling: row [%.3e, %.3e], col [%.3e, %.3e]",
-            min(scale_r), max(scale_r), min(_scale_c), max(_scale_c),
+            min(scale_r),
+            max(scale_r),
+            min(_scale_c),
+            max(_scale_c),
         )
 
         # Scale x0, lb, ub: y[j] = scale_c[j] * x[j]
         _path_x0 = [_scale_c[j] * v for j, v in enumerate(data.x0)]
-        _path_lb = [_scale_c[j] * v if v > -1.0e19 else v for j, v in enumerate(data.lb)]
+        _path_lb = [
+            _scale_c[j] * v if v > -1.0e19 else v for j, v in enumerate(data.lb)
+        ]
         _path_ub = [_scale_c[j] * v if v < 1.0e19 else v for j, v in enumerate(data.ub)]
 
         _base_f = data.callback_f
@@ -3762,9 +4488,13 @@ def _run_path_capi_nonlinear_full(
 
         abs_res = [abs(float(v)) for v in residuals]
         inf_norm = max(abs_res) if abs_res else 0.0
-        l2_norm = (sum(float(v) * float(v) for v in residuals) ** 0.5) if residuals else 0.0
+        l2_norm = (
+            (sum(float(v) * float(v) for v in residuals) ** 0.5) if residuals else 0.0
+        )
 
-        sorted_idx = sorted(range(len(residuals)), key=lambda i: abs_res[i], reverse=True)
+        sorted_idx = sorted(
+            range(len(residuals)), key=lambda i: abs_res[i], reverse=True
+        )
         top_idx = sorted_idx[: max(1, int(residual_trace_top_n))]
         top_rows = [
             {
@@ -3787,7 +4517,9 @@ def _run_path_capi_nonlinear_full(
                             "signed_residual": float(residuals[i]),
                         }
                     )
-            focused_rows.sort(key=lambda row: abs(float(row["abs_residual"])), reverse=True)
+            focused_rows.sort(
+                key=lambda row: abs(float(row["abs_residual"])), reverse=True
+            )
 
         trace_rows.append(
             {
@@ -3819,7 +4551,11 @@ def _run_path_capi_nonlinear_full(
             os.environ["PATH_CAPI_OPTIONS"] = path_options_original
 
     residual_tol = float(path_capi_convergence_tol)
-    success = bool(license_ok) and result.residual <= residual_tol and result.termination_code in {1, 2}
+    success = (
+        bool(license_ok)
+        and result.residual <= residual_tol
+        and result.termination_code in {1, 2}
+    )
 
     # Unscale solution if column scaling was applied: x_orig[j] = y_sol[j] / scale_c[j]
     _solution_x = list(result.x)
@@ -3863,7 +4599,9 @@ def _run_path_capi_nonlinear_full(
 
     if residual_trace_enabled and residual_trace_file is not None:
         residual_trace_file.parent.mkdir(parents=True, exist_ok=True)
-        residual_trace_file.write_text(json.dumps(residual_trace, indent=2), encoding="utf-8")
+        residual_trace_file.write_text(
+            json.dumps(residual_trace, indent=2), encoding="utf-8"
+        )
 
     xi_block_diagnostics = {
         "enabled": False,
@@ -3994,12 +4732,17 @@ def _run_homotopy_shocked(
         step_params = GTAPParameters()
         step_params.load_from_gdx(gdx_path)
         _apply_shock_to_params(
-            step_params, shock_variable, shock_index, partial_value,
+            step_params,
+            shock_variable,
+            shock_index,
+            partial_value,
             shock_mode=shock_mode,
         )
 
         step_eq = GTAPModelEquations(
-            step_params.sets, step_params, contract.closure,
+            step_params.sets,
+            step_params,
+            contract.closure,
             is_counterfactual=True,
         )
         step_model = step_eq.build_model()
@@ -4009,7 +4752,9 @@ def _run_homotopy_shocked(
         # (pmt=1, pm=VMSB/VXSB). This mirrors GAMS's approach exactly.
         if calibrated_start and step == 1:
             prev_snapshot = None
-            click.echo("  Using calibrated initial values (no baseline warm-start) for step 1")
+            click.echo(
+                "  Using calibrated initial values (no baseline warm-start) for step 1"
+            )
         else:
             prev_snapshot = GTAPVariableSnapshot.from_python_model(prev_model)
 
@@ -4019,7 +4764,8 @@ def _run_homotopy_shocked(
         )
 
         result = _run_path_capi_nonlinear_full(
-            step_model, step_params,
+            step_model,
+            step_params,
             solver_output=solver_output,
             path_license_string=path_license_string,
             enforce_post_checks=False,
@@ -4052,37 +4798,37 @@ def _run_homotopy_shocked(
 
 
 @click.group()
-@click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.pass_context
 def cli(ctx, verbose):
     """GTAP CGE Model CLI - CGEBox Implementation"""
     ctx.ensure_object(dict)
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-    ctx.obj['logger'] = logging.getLogger(__name__)
+    ctx.obj["logger"] = logging.getLogger(__name__)
 
 
 @cli.command()
 @click.option(
-    '--gdx-file',
+    "--gdx-file",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help='Path to GTAP GDX file'
+    help="Path to GTAP GDX file",
 )
 @click.pass_context
 def info(ctx, gdx_file):
     """Display GTAP data information"""
-    logger = ctx.obj['logger']
+    logger = ctx.obj["logger"]
     logger.info(f"Loading GTAP data from {gdx_file}")
-    
+
     try:
         # Load sets
         sets = GTAPSets()
         sets.load_from_gdx(gdx_file)
-        
-        click.echo(f"\n{'='*60}")
+
+        click.echo(f"\n{'=' * 60}")
         click.echo(f"GTAP Data Information")
-        click.echo(f"{'='*60}")
+        click.echo(f"{'=' * 60}")
         click.echo(f"File: {gdx_file}")
         click.echo(f"Aggregation: {sets.aggregation_name}")
         click.echo(f"")
@@ -4096,7 +4842,7 @@ def info(ctx, gdx_file):
         click.echo(f"  Mobile:   {sets.n_mobile_factors} - {', '.join(sets.mf)}")
         click.echo(f"  Specific: {sets.n_specific_factors} - {', '.join(sets.sf)}")
         click.echo(f"")
-        
+
         # Validate
         is_valid, errors = sets.validate()
         if is_valid:
@@ -4105,16 +4851,22 @@ def info(ctx, gdx_file):
             click.echo(click.style("✗ Set validation errors:", fg="red"))
             for error in errors:
                 click.echo(f"  - {error}")
-        
+
         # Load parameters summary
         params = GTAPParameters()
         params.load_from_gdx(gdx_file)
-        
+
         click.echo(f"\nParameters:")
-        click.echo(f"  Elasticities:    {len(params.elasticities.esubva) + len(params.elasticities.esubm)} loaded")
-        click.echo(f"  Benchmark:       {len(params.benchmark.vom) + len(params.benchmark.vfm)} flows")
-        click.echo(f"  Tax rates:       {len(params.taxes.rto) + len(params.taxes.rtms)} rates")
-        
+        click.echo(
+            f"  Elasticities:    {len(params.elasticities.esubva) + len(params.elasticities.esubm)} loaded"
+        )
+        click.echo(
+            f"  Benchmark:       {len(params.benchmark.vom) + len(params.benchmark.vfm)} flows"
+        )
+        click.echo(
+            f"  Tax rates:       {len(params.taxes.rto) + len(params.taxes.rtms)} rates"
+        )
+
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         click.echo(click.style(f"✗ Error: {e}", fg="red"), err=True)
@@ -4123,148 +4875,142 @@ def info(ctx, gdx_file):
 
 @cli.command()
 @click.option(
-    '--gdx-file',
+    "--gdx-file",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help='Path to GTAP GDX file'
+    help="Path to GTAP GDX file",
 )
 @click.option(
-    '--elasticity-gdx',
+    "--elasticity-gdx",
     type=click.Path(exists=True, path_type=Path),
     default=None,
-    help='Optional GDX with base elasticities (default: default-9x10.gdx next to gdx-file)'
+    help="Optional GDX with base elasticities (default: default-9x10.gdx next to gdx-file)",
 )
 @click.option(
-    '--override-omegas-sigmas-gdx',
+    "--override-omegas-sigmas-gdx",
     type=click.Path(exists=True, path_type=Path),
     default=None,
-    help='Optional GDX used to override only omegas/sigmas (e.g., COMP.gdx)'
+    help="Optional GDX used to override only omegas/sigmas (e.g., COMP.gdx)",
 )
 @click.option(
-    '--closure',
-    default='gtap_standard7_9x10',
-    help='Closure type (currently: gtap_standard7_9x10)'
+    "--closure",
+    default="gtap_standard7_9x10",
+    help="Closure type (currently: gtap_standard7_9x10)",
 )
 @click.option(
-    '--solver',
-    type=click.Choice(['ipopt', 'path', 'conopt', 'path-capi']),
-    default='ipopt',
-    help='Solver to use'
+    "--solver",
+    type=click.Choice(["ipopt", "path", "conopt", "path-capi"]),
+    default="ipopt",
+    help="Solver to use",
 )
 @click.option(
-    '--output',
-    type=click.Path(path_type=Path),
-    help='Output file for results (JSON)'
+    "--output", type=click.Path(path_type=Path), help="Output file for results (JSON)"
 )
+@click.option("--tee/--no-tee", default=False, help="Show solver output while solving")
 @click.option(
-    '--tee/--no-tee',
-    default=False,
-    help='Show solver output while solving'
-)
-@click.option(
-    '--path-license-string',
+    "--path-license-string",
     default=None,
-    help='Optional PATH license string for path-capi runs (otherwise uses PATH_LICENSE_STRING env var)'
+    help="Optional PATH license string for path-capi runs (otherwise uses PATH_LICENSE_STRING env var)",
 )
 @click.option(
-    '--path-capi-mode',
-    type=click.Choice(['linear', 'nonlinear']),
-    default='linear',
+    "--path-capi-mode",
+    type=click.Choice(["linear", "nonlinear"]),
+    default="linear",
     show_default=True,
-    help='PATH C API mode: linear block snapshot or full nonlinear system'
+    help="PATH C API mode: linear block snapshot or full nonlinear system",
 )
 @click.option(
-    '--enforce-post-checks/--no-enforce-post-checks',
+    "--enforce-post-checks/--no-enforce-post-checks",
     default=True,
-    help='For path-capi runs, fail command if post_checks.overall_pass is false'
+    help="For path-capi runs, fail command if post_checks.overall_pass is false",
 )
 @click.option(
-    '--strict-path-capi/--no-strict-path-capi',
+    "--strict-path-capi/--no-strict-path-capi",
     default=False,
-    help='When enabled, also require global path-capi residual <= strict-residual-tol'
+    help="When enabled, also require global path-capi residual <= strict-residual-tol",
 )
 @click.option(
-    '--path-capi-convergence-tol',
+    "--path-capi-convergence-tol",
     type=float,
     default=1e-5,
     show_default=True,
-    help='Residual tolerance used to classify nonlinear path-capi solve success'
+    help="Residual tolerance used to classify nonlinear path-capi solve success",
 )
 @click.option(
-    '--strict-residual-tol',
+    "--strict-residual-tol",
     type=float,
     default=1e-5,
     show_default=True,
-    help='Global residual tolerance used by --strict-path-capi'
+    help="Global residual tolerance used by --strict-path-capi",
 )
 @click.option(
-    '--path-capi-trace-residuals/--no-path-capi-trace-residuals',
+    "--path-capi-trace-residuals/--no-path-capi-trace-residuals",
     default=False,
-    help='Capture per-function-call residual trace for nonlinear path-capi solves'
+    help="Capture per-function-call residual trace for nonlinear path-capi solves",
 )
 @click.option(
-    '--path-capi-trace-max-calls',
+    "--path-capi-trace-max-calls",
     type=int,
     default=120,
     show_default=True,
-    help='Maximum nonlinear function callback calls stored in residual trace'
+    help="Maximum nonlinear function callback calls stored in residual trace",
 )
 @click.option(
-    '--path-capi-trace-top-n',
+    "--path-capi-trace-top-n",
     type=int,
     default=12,
     show_default=True,
-    help='Top-N absolute residual equations saved per callback call'
+    help="Top-N absolute residual equations saved per callback call",
 )
 @click.option(
-    '--path-capi-trace-focus',
+    "--path-capi-trace-focus",
     multiple=True,
     default=("kstock", "arent", "kapEnd"),
     show_default=True,
-    help='Equation-name substring filters saved in focused residual trace (repeat option)'
+    help="Equation-name substring filters saved in focused residual trace (repeat option)",
 )
 @click.option(
-    '--path-capi-trace-file',
+    "--path-capi-trace-file",
     type=click.Path(path_type=Path),
     default=None,
-    help='Optional JSON output file for nonlinear residual trace'
+    help="Optional JSON output file for nonlinear residual trace",
 )
 @click.option(
-    '--path-capi-xi-diag/--no-path-capi-xi-diag',
+    "--path-capi-xi-diag/--no-path-capi-xi-diag",
     default=False,
-    help='Capture detailed runtime diagnostics for eq_xi/eq_pi/eq_xiagg at one region/commodity'
+    help="Capture detailed runtime diagnostics for eq_xi/eq_pi/eq_xiagg at one region/commodity",
 )
 @click.option(
-    '--path-capi-xi-diag-region',
-    default='EastAsia',
+    "--path-capi-xi-diag-region",
+    default="EastAsia",
     show_default=True,
-    help='Region for xi-block runtime diagnostics'
+    help="Region for xi-block runtime diagnostics",
 )
 @click.option(
-    '--path-capi-xi-diag-commodity',
-    default='c_Util_Cons',
+    "--path-capi-xi-diag-commodity",
+    default="c_Util_Cons",
     show_default=True,
-    help='Commodity for xi-block runtime diagnostics'
+    help="Commodity for xi-block runtime diagnostics",
 )
 @click.option(
-    '--compare-gams/--no-compare-gams',
+    "--compare-gams/--no-compare-gams",
     default=False,
-    help='After solving, compare solution values against GAMS COMP_generated.csv reference'
+    help="After solving, compare solution values against GAMS COMP_generated.csv reference",
 )
 @click.option(
-    '--compare-gams-tol',
+    "--compare-gams-tol",
     type=float,
     default=0.001,
     show_default=True,
-    help='Absolute tolerance used in --compare-gams comparison'
+    help="Absolute tolerance used in --compare-gams comparison",
 )
 @click.option(
-    '--strict-mirror/--no-strict-mirror',
+    "--strict-mirror/--no-strict-mirror",
     default=False,
     help=(
-        'Enforce mirror gates after solving: solver residual < 1e-4, '
-        '0 non-xd mismatches vs COMP_generated.csv (tol=5e-3). Exit code 2 on failure.'
-    )
+        "Enforce mirror gates after solving: solver residual < 1e-4, "
+        "0 non-xd mismatches vs COMP_generated.csv (tol=5e-3). Exit code 2 on failure."
+    ),
 )
 @click.pass_context
 def solve(
@@ -4295,9 +5041,9 @@ def solve(
     strict_mirror,
 ):
     """Solve the GTAP baseline model"""
-    logger = ctx.obj['logger']
+    logger = ctx.obj["logger"]
     logger.info(f"Solving GTAP model from {gdx_file}")
-    
+
     try:
         snapshot_enabled = _ensure_gtap_reference_snapshot_env()
         if snapshot_enabled:
@@ -4313,7 +5059,7 @@ def solve(
                 override_omegas_sigmas_gdx,
             )
         # Load data
-        with click.progressbar(length=3, label='Loading data') as bar:
+        with click.progressbar(length=3, label="Loading data") as bar:
             params = GTAPParameters()
             params.load_from_gdx(
                 gdx_file,
@@ -4321,21 +5067,23 @@ def solve(
                 elasticity_override_gdx=override_omegas_sigmas_gdx,
             )
             bar.update(1)
-            
+
             contract = _build_gtap_contract_with_calibration(closure)
             bar.update(1)
-            
+
             equations = GTAPModelEquations(params.sets, params, contract.closure)
             model = equations.build_model()
             bar.update(1)
 
         reference_rtms = dict(params.taxes.rtms)
-        
-        if solver in {'path-capi', 'path'}:
-            if path_capi_mode == 'nonlinear':
+
+        if solver in {"path-capi", "path"}:
+            if path_capi_mode == "nonlinear":
                 click.echo("\nSolving full GTAP system with PATH C API (nonlinear)...")
-                if solver == 'path':
-                    click.echo("Note: --solver path is mapped to PATH C API backend by default.")
+                if solver == "path":
+                    click.echo(
+                        "Note: --solver path is mapped to PATH C API backend by default."
+                    )
                 path_capi_result = _run_path_capi_nonlinear_full(
                     model,
                     params,
@@ -4357,8 +5105,10 @@ def solve(
                 )
             else:
                 click.echo("\nSolving linear GTAP subset with PATH C API...")
-                if solver == 'path':
-                    click.echo("Note: --solver path is mapped to PATH C API backend by default.")
+                if solver == "path":
+                    click.echo(
+                        "Note: --solver path is mapped to PATH C API backend by default."
+                    )
                 path_capi_result = _run_path_capi_linear_block(
                     model,
                     params,
@@ -4373,7 +5123,7 @@ def solve(
 
             path_capi_label = (
                 "PATH C API nonlinear full model"
-                if path_capi_mode == 'nonlinear'
+                if path_capi_mode == "nonlinear"
                 else "PATH C API linear block"
             )
             if path_capi_result["success"]:
@@ -4383,9 +5133,13 @@ def solve(
 
             click.echo(f"Status:       {path_capi_result['status']}")
             click.echo(f"Residual:     {path_capi_result['residual']:.2e}")
-            click.echo(f"Iterations:   {path_capi_result['major_iterations']} / {path_capi_result['minor_iterations']}")
-            if path_capi_mode == 'nonlinear':
-                click.echo(f"Jac mode:     {path_capi_result.get('jacobian_eval_mode', 'symbolic')}")
+            click.echo(
+                f"Iterations:   {path_capi_result['major_iterations']} / {path_capi_result['minor_iterations']}"
+            )
+            if path_capi_mode == "nonlinear":
+                click.echo(
+                    f"Jac mode:     {path_capi_result.get('jacobian_eval_mode', 'symbolic')}"
+                )
                 profile = path_capi_result.get("callback_profile", {})
                 click.echo(
                     "Callbacks:    "
@@ -4405,7 +5159,7 @@ def solve(
                 f"(enabled={path_capi_result['strict_path_capi']}, "
                 f"tol={path_capi_result['strict_residual_tol']:.1e})"
             )
-            if path_capi_mode == 'nonlinear':
+            if path_capi_mode == "nonlinear":
                 click.echo(
                     f"Conv tol:     {path_capi_result.get('path_capi_convergence_tol', path_capi_convergence_tol):.1e}"
                 )
@@ -4415,7 +5169,7 @@ def solve(
                     f"(res={block.get('residual', 0.0):.2e}, "
                     f"n={block.get('n_equations', 0)})"
                 )
-            if path_capi_mode == 'nonlinear':
+            if path_capi_mode == "nonlinear":
                 residual_diag = path_capi_result.get("constraint_residuals", {})
                 top = residual_diag.get("top", [])
                 if top:
@@ -4476,15 +5230,21 @@ def solve(
             if compare_gams:
                 try:
                     import csv as _csv_mod
-                    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
+                    from equilibria.templates.gtap.gtap_parity_pipeline import (
+                        GTAPVariableSnapshot,
+                    )
 
-                    click.echo("\nComparing solution against GAMS reference (COMP_generated.csv)...")
+                    click.echo(
+                        "\nComparing solution against GAMS reference (COMP_generated.csv)..."
+                    )
                     py_snapshot = GTAPVariableSnapshot.from_python_model(model)
 
                     # Load CSV directly without any scale factor; COMP_generated.csv stores
                     # values in the same normalized units as the Python model.
                     gams_raw: dict[str, dict] = {}
-                    with open(COMP_CSV_REFERENCE, newline="", encoding="utf-8") as _csvf:
+                    with open(
+                        COMP_CSV_REFERENCE, newline="", encoding="utf-8"
+                    ) as _csvf:
                         for _row in _csv_mod.DictReader(_csvf):
                             _yr = (_row.get("Year") or "").strip()
                             if _yr not in {"1", "1.0"}:
@@ -4521,7 +5281,9 @@ def solve(
                         _py_dict = getattr(py_snapshot, _attr, {})
                         if not isinstance(_py_dict, dict):
                             continue
-                        _gams_dict = gams_raw.get(_attr, gams_raw.get(_attr.lower(), {}))
+                        _gams_dict = gams_raw.get(
+                            _attr, gams_raw.get(_attr.lower(), {})
+                        )
                         if not _gams_dict:
                             continue
                         for _k, _pv in _py_dict.items():
@@ -4542,7 +5304,16 @@ def solve(
                             _max_abs = max(_max_abs, _ad)
                             if _ad > compare_gams_tol:
                                 _n_mm += 1
-                                _all_mm.append({"group": _attr, "key": _k, "python": _pv, "gams": _gv, "abs_diff": _ad, "rel_diff": _rd})
+                                _all_mm.append(
+                                    {
+                                        "group": _attr,
+                                        "key": _k,
+                                        "python": _pv,
+                                        "gams": _gv,
+                                        "abs_diff": _ad,
+                                        "rel_diff": _rd,
+                                    }
+                                )
 
                     _all_mm.sort(key=lambda _m: _m["abs_diff"], reverse=True)
                     click.echo(f"  Compared:  {_n_compared} variable entries")
@@ -4550,7 +5321,9 @@ def solve(
                     click.echo(f"  Max abs diff: {_max_abs:.4e}")
                     if _all_mm:
                         click.echo(f"\n  Top-20 mismatches (sorted by abs diff):")
-                        click.echo(f"  {'Group':8s}  {'Key':45s}  {'Python':>14s}  {'GAMS':>14s}  {'AbsDiff':>12s}  {'RelDiff':>10s}")
+                        click.echo(
+                            f"  {'Group':8s}  {'Key':45s}  {'Python':>14s}  {'GAMS':>14s}  {'AbsDiff':>12s}  {'RelDiff':>10s}"
+                        )
                         click.echo("  " + "-" * 120)
                         for _mm in _all_mm[:20]:
                             click.echo(
@@ -4589,10 +5362,15 @@ def solve(
                 if COMP_CSV_REFERENCE.exists():
                     try:
                         import csv as _csv_m
-                        from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot as _Snap
+                        from equilibria.templates.gtap.gtap_parity_pipeline import (
+                            GTAPVariableSnapshot as _Snap,
+                        )
+
                         _py_snap = _Snap.from_python_model(model)
                         _g_raw: dict[str, dict] = {}
-                        with open(COMP_CSV_REFERENCE, newline="", encoding="utf-8") as _f:
+                        with open(
+                            COMP_CSV_REFERENCE, newline="", encoding="utf-8"
+                        ) as _f:
                             for _r2 in _csv_m.DictReader(_f):
                                 if (_r2.get("Year") or "").strip() not in {"1", "1.0"}:
                                     continue
@@ -4645,21 +5423,24 @@ def solve(
                     except Exception as _me:
                         _mirror_failures.append(f"Mirror parity check error: {_me}")
                 else:
-                    click.echo("  [strict-mirror] COMP_generated.csv not found — skipping parity gate", err=True)
+                    click.echo(
+                        "  [strict-mirror] COMP_generated.csv not found — skipping parity gate",
+                        err=True,
+                    )
 
                 if _mirror_failures:
                     click.echo("\n[strict-mirror] FAILED:", err=True)
                     for _mf in _mirror_failures:
                         click.echo(f"  • {_mf}", err=True)
                     if output:
-                        with open(output, 'w') as f:
+                        with open(output, "w") as f:
                             json.dump(path_capi_result, f, indent=2)
                     sys.exit(2)
                 else:
                     click.echo("\n[strict-mirror] All gates passed.")
 
             if output:
-                with open(output, 'w') as f:
+                with open(output, "w") as f:
                     json.dump(path_capi_result, f, indent=2)
                 click.echo(f"\nResults saved to: {output}")
 
@@ -4667,31 +5448,33 @@ def solve(
 
         # Solve
         click.echo(f"\nSolving with {solver}...")
-        gtap_solver = GTAPSolver(model, contract.closure, solver_name=solver, params=params)
-        
-        solver_tee = tee or (solver == 'path')
-        with click.progressbar(length=1, label='Solving') as bar:
+        gtap_solver = GTAPSolver(
+            model, contract.closure, solver_name=solver, params=params
+        )
+
+        solver_tee = tee or (solver == "path")
+        with click.progressbar(length=1, label="Solving") as bar:
             result = gtap_solver.solve(tee=solver_tee)
             bar.update(1)
-        
+
         # Display results
-        click.echo(f"\n{'='*60}")
+        click.echo(f"\n{'=' * 60}")
         click.echo(f"Solution Results")
-        click.echo(f"{'='*60}")
-        
+        click.echo(f"{'=' * 60}")
+
         if result.success:
             click.echo(click.style(f"✓ Converged successfully", fg="green"))
         else:
             click.echo(click.style(f"✗ Did not converge", fg="red"))
-        
+
         click.echo(f"Status:       {result.status.value}")
         click.echo(f"Iterations:   {result.iterations}")
         click.echo(f"Solve time:   {result.solve_time:.2f}s")
         click.echo(f"Walras check: {result.walras_value:.2e}")
-        
+
         if result.objective_value is not None:
             click.echo(f"Objective:    {result.objective_value:.6f}")
-        
+
         # Save results
         if output:
             results_data = {
@@ -4702,13 +5485,13 @@ def solve(
                 "walras_value": result.walras_value,
                 "message": result.message,
             }
-            with open(output, 'w') as f:
+            with open(output, "w") as f:
                 json.dump(results_data, f, indent=2)
             click.echo(f"\nResults saved to: {output}")
-        
+
         # Exit with appropriate code
         sys.exit(0 if result.success else 1)
-        
+
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         click.echo(click.style(f"✗ Error: {e}", fg="red"), err=True)
@@ -4717,78 +5500,59 @@ def solve(
 
 @cli.command()
 @click.option(
-    '--gdx-file',
+    "--gdx-file",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help='Path to GTAP GDX file'
+    help="Path to GTAP GDX file",
 )
+@click.option("--variable", required=True, help="Variable to shock (e.g., rtms, rtxs)")
+@click.option("--index", required=True, help='Index tuple (e.g., "(USA,agr,EUR)")')
+@click.option("--value", type=float, required=True, help="New value for the shock")
 @click.option(
-    '--variable',
-    required=True,
-    help='Variable to shock (e.g., rtms, rtxs)'
-)
-@click.option(
-    '--index',
-    required=True,
-    help='Index tuple (e.g., "(USA,agr,EUR)")'
-)
-@click.option(
-    '--value',
-    type=float,
-    required=True,
-    help='New value for the shock'
-)
-@click.option(
-    '--shock-mode',
-    type=click.Choice(['set', 'pct', 'mult', 'tm_pct']),
-    default='set',
+    "--shock-mode",
+    type=click.Choice(["set", "pct", "mult", "tm_pct"]),
+    default="set",
     show_default=True,
-    help='Shock semantics: set=value, pct=old*(1+value), mult=old*value'
+    help="Shock semantics: set=value, pct=old*(1+value), mult=old*value",
 )
 @click.option(
-    '--solver',
-    type=click.Choice(['ipopt', 'path', 'conopt', 'path-capi']),
-    default='ipopt',
-    help='Solver to use'
+    "--solver",
+    type=click.Choice(["ipopt", "path", "conopt", "path-capi"]),
+    default="ipopt",
+    help="Solver to use",
 )
 @click.option(
-    '--output',
-    type=click.Path(path_type=Path),
-    help='Output file for results (JSON)'
+    "--output", type=click.Path(path_type=Path), help="Output file for results (JSON)"
 )
+@click.option("--tee/--no-tee", default=False, help="Show solver output while solving")
 @click.option(
-    '--tee/--no-tee',
-    default=False,
-    help='Show solver output while solving'
-)
-@click.option(
-    '--path-license-string',
+    "--path-license-string",
     default=None,
-    help='Optional PATH license string for path-capi runs (otherwise uses PATH_LICENSE_STRING env var)'
+    help="Optional PATH license string for path-capi runs (otherwise uses PATH_LICENSE_STRING env var)",
 )
 @click.option(
-    '--path-capi-mode',
-    type=click.Choice(['linear', 'nonlinear']),
-    default='linear',
+    "--path-capi-mode",
+    type=click.Choice(["linear", "nonlinear"]),
+    default="linear",
     show_default=True,
-    help='PATH C API mode: linear block snapshot or full nonlinear system'
+    help="PATH C API mode: linear block snapshot or full nonlinear system",
 )
 @click.option(
-    '--enforce-post-checks/--no-enforce-post-checks',
+    "--enforce-post-checks/--no-enforce-post-checks",
     default=True,
-    help='For path-capi runs, fail command if post_checks.overall_pass is false'
+    help="For path-capi runs, fail command if post_checks.overall_pass is false",
 )
 @click.option(
-    '--strict-path-capi/--no-strict-path-capi',
+    "--strict-path-capi/--no-strict-path-capi",
     default=False,
-    help='When enabled, also require global path-capi residual <= strict-residual-tol'
+    help="When enabled, also require global path-capi residual <= strict-residual-tol",
 )
 @click.option(
-    '--strict-residual-tol',
+    "--strict-residual-tol",
     type=float,
     default=1e-8,
     show_default=True,
-    help='Global residual tolerance used by --strict-path-capi'
+    help="Global residual tolerance used by --strict-path-capi",
 )
 @click.pass_context
 def shock(
@@ -4808,51 +5572,67 @@ def shock(
     strict_residual_tol,
 ):
     """Apply a shock and solve the model"""
-    logger = ctx.obj['logger']
+    logger = ctx.obj["logger"]
     logger.info(f"Applying shock: {variable}{index} = {value}")
-    
+
     try:
         # Parse index string, accepting CLI form like "(USA,agr,EUR)".
         idx = _parse_index(index)
         if not idx:
             raise ValueError(f"Invalid index format: {index}")
-        
+
         # Load and solve baseline
         params = GTAPParameters()
         params.load_from_gdx(gdx_file)
         reference_rtms = dict(params.taxes.rtms)
-        
+
         # Apply shock directly to the parameter object when available
         # (e.g., tariff rtms in params.taxes.rtms).
-        applied_to_params = _apply_shock_to_params(params, variable, idx, value, shock_mode=shock_mode)
+        applied_to_params = _apply_shock_to_params(
+            params, variable, idx, value, shock_mode=shock_mode
+        )
         if applied_to_params:
             logger.info(f"Applied parameter shock: {variable}{idx} = {value}")
 
         contract = _build_gtap_contract_with_calibration("gtap_standard7_9x10")
         equations = GTAPModelEquations(params.sets, params, contract.closure)
         model = equations.build_model()
-        
-        if solver in {'path-capi', 'path'}:
-            if path_capi_mode == 'linear' and not applied_to_params:
-                click.echo(click.style(
-                    "✗ path-capi linear shock currently supports parameter shocks only (e.g., rtms in params.taxes)",
-                    fg="red",
-                ))
+
+        if solver in {"path-capi", "path"}:
+            if path_capi_mode == "linear" and not applied_to_params:
+                click.echo(
+                    click.style(
+                        "✗ path-capi linear shock currently supports parameter shocks only (e.g., rtms in params.taxes)",
+                        fg="red",
+                    )
+                )
                 if output:
-                    with open(output, 'w') as f:
-                        json.dump({
-                            "shock": {"variable": variable, "index": idx, "value": value},
-                            "status": "failed",
-                            "success": False,
-                            "message": "path-capi linear shock supports parameter-level shocks only",
-                        }, f, indent=2)
+                    with open(output, "w") as f:
+                        json.dump(
+                            {
+                                "shock": {
+                                    "variable": variable,
+                                    "index": idx,
+                                    "value": value,
+                                },
+                                "status": "failed",
+                                "success": False,
+                                "message": "path-capi linear shock supports parameter-level shocks only",
+                            },
+                            f,
+                            indent=2,
+                        )
                     click.echo(f"\nResults saved to: {output}")
                 sys.exit(1)
 
-            if path_capi_mode == 'nonlinear':
-                click.echo("Solving shocked full GTAP system with PATH C API (nonlinear)...")
-                if solver == 'path':
-                    click.echo("Note: --solver path is mapped to PATH C API backend by default.")
+            if path_capi_mode == "nonlinear":
+                click.echo(
+                    "Solving shocked full GTAP system with PATH C API (nonlinear)..."
+                )
+                if solver == "path":
+                    click.echo(
+                        "Note: --solver path is mapped to PATH C API backend by default."
+                    )
                 path_capi_result = _run_path_capi_nonlinear_full(
                     model,
                     params,
@@ -4865,8 +5645,10 @@ def shock(
                 )
             else:
                 click.echo("Solving shocked linear GTAP subset with PATH C API...")
-                if solver == 'path':
-                    click.echo("Note: --solver path is mapped to PATH C API backend by default.")
+                if solver == "path":
+                    click.echo(
+                        "Note: --solver path is mapped to PATH C API backend by default."
+                    )
                 path_capi_result = _run_path_capi_linear_block(
                     model,
                     params,
@@ -4879,13 +5661,13 @@ def shock(
                     closure_config=contract.closure,
                 )
 
-            click.echo(f"\n{'='*60}")
+            click.echo(f"\n{'=' * 60}")
             click.echo(
                 "Shock Results (PATH C API Nonlinear Full Model)"
-                if path_capi_mode == 'nonlinear'
+                if path_capi_mode == "nonlinear"
                 else "Shock Results (PATH C API Linear Block)"
             )
-            click.echo(f"{'='*60}")
+            click.echo(f"{'=' * 60}")
             click.echo(f"Shock: {variable}{index} = {value}")
 
             if path_capi_result["success"]:
@@ -4895,8 +5677,10 @@ def shock(
 
             click.echo(f"Status:       {path_capi_result['status']}")
             click.echo(f"Residual:     {path_capi_result['residual']:.2e}")
-            if path_capi_mode == 'nonlinear':
-                click.echo(f"Jac mode:     {path_capi_result.get('jacobian_eval_mode', 'symbolic')}")
+            if path_capi_mode == "nonlinear":
+                click.echo(
+                    f"Jac mode:     {path_capi_result.get('jacobian_eval_mode', 'symbolic')}"
+                )
                 profile = path_capi_result.get("callback_profile", {})
                 click.echo(
                     "Callbacks:    "
@@ -4922,7 +5706,7 @@ def shock(
                     f"(res={block.get('residual', 0.0):.2e}, "
                     f"n={block.get('n_equations', 0)})"
                 )
-            if path_capi_mode == 'nonlinear':
+            if path_capi_mode == "nonlinear":
                 residual_diag = path_capi_result.get("constraint_residuals", {})
                 top = residual_diag.get("top", [])
                 if top:
@@ -4935,53 +5719,67 @@ def shock(
                     )
 
             if output:
-                with open(output, 'w') as f:
-                    json.dump({
-                        "shock": {"variable": variable, "index": idx, "value": value},
-                        **path_capi_result,
-                    }, f, indent=2)
+                with open(output, "w") as f:
+                    json.dump(
+                        {
+                            "shock": {
+                                "variable": variable,
+                                "index": idx,
+                                "value": value,
+                            },
+                            **path_capi_result,
+                        },
+                        f,
+                        indent=2,
+                    )
                 click.echo(f"\nResults saved to: {output}")
 
             sys.exit(0 if path_capi_result["success"] else 1)
 
-        gtap_solver = GTAPSolver(model, contract.closure, solver_name=solver, params=params)
-        
+        gtap_solver = GTAPSolver(
+            model, contract.closure, solver_name=solver, params=params
+        )
+
         # Apply at model-level only when not already handled in parameters.
         if not applied_to_params:
             shock_def = {"variable": variable, "index": idx, "value": value}
             gtap_solver.apply_shock(shock_def)
-        
+
         # Solve
         click.echo(f"Solving with shock...")
-        solver_tee = tee or (solver == 'path')
+        solver_tee = tee or (solver == "path")
         result = gtap_solver.solve(tee=solver_tee)
-        
+
         # Display results
-        click.echo(f"\n{'='*60}")
+        click.echo(f"\n{'=' * 60}")
         click.echo(f"Shock Results")
-        click.echo(f"{'='*60}")
+        click.echo(f"{'=' * 60}")
         click.echo(f"Shock: {variable}{index} = {value}")
-        
+
         if result.success:
             click.echo(click.style(f"✓ Converged successfully", fg="green"))
         else:
             click.echo(click.style(f"✗ Did not converge", fg="red"))
-        
+
         click.echo(f"Status:       {result.status.value}")
         click.echo(f"Walras check: {result.walras_value:.2e}")
-        
+
         if output:
-            with open(output, 'w') as f:
-                json.dump({
-                    "shock": {"variable": variable, "index": idx, "value": value},
-                    "status": result.status.value,
-                    "success": result.success,
-                    "walras_value": result.walras_value,
-                }, f, indent=2)
+            with open(output, "w") as f:
+                json.dump(
+                    {
+                        "shock": {"variable": variable, "index": idx, "value": value},
+                        "status": result.status.value,
+                        "success": result.success,
+                        "walras_value": result.walras_value,
+                    },
+                    f,
+                    indent=2,
+                )
             click.echo(f"\nResults saved to: {output}")
-        
+
         sys.exit(0 if result.success else 1)
-        
+
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         click.echo(click.style(f"✗ Error: {e}", fg="red"), err=True)
@@ -4990,55 +5788,62 @@ def shock(
 
 @cli.command()
 @click.option(
-    '--gdx-file',
+    "--gdx-file",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help='Path to GTAP GDX file'
+    help="Path to GTAP GDX file",
 )
 @click.option(
-    '--closure',
-    default='gtap_standard7_9x10',
-    help='Closure type (currently: gtap_standard7_9x10)'
+    "--closure",
+    default="gtap_standard7_9x10",
+    help="Closure type (currently: gtap_standard7_9x10)",
 )
 @click.option(
-    '--output',
+    "--output",
     type=click.Path(path_type=Path),
-    default=Path('output/gtap_validate_path_capi.json'),
+    default=Path("output/gtap_validate_path_capi.json"),
     show_default=True,
-    help='Output file for validation results (JSON)'
+    help="Output file for validation results (JSON)",
 )
 @click.option(
-    '--tee/--no-tee',
-    default=False,
-    help='Show solver output while validating'
+    "--tee/--no-tee", default=False, help="Show solver output while validating"
 )
 @click.option(
-    '--path-license-string',
+    "--path-license-string",
     default=None,
-    help='Optional PATH license string (otherwise uses PATH_LICENSE_STRING env var)'
+    help="Optional PATH license string (otherwise uses PATH_LICENSE_STRING env var)",
 )
 @click.option(
-    '--path-capi-mode',
-    type=click.Choice(['linear', 'nonlinear']),
-    default='linear',
+    "--path-capi-mode",
+    type=click.Choice(["linear", "nonlinear"]),
+    default="linear",
     show_default=True,
-    help='PATH C API mode: linear block snapshot or full nonlinear system'
+    help="PATH C API mode: linear block snapshot or full nonlinear system",
 )
 @click.option(
-    '--strict-residual-tol',
+    "--strict-residual-tol",
     type=float,
     default=1e-8,
     show_default=True,
-    help='Global residual tolerance for strict validation gate'
+    help="Global residual tolerance for strict validation gate",
 )
 @click.pass_context
-def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi_mode, strict_residual_tol):
+def validate(
+    ctx,
+    gdx_file,
+    closure,
+    output,
+    tee,
+    path_license_string,
+    path_capi_mode,
+    strict_residual_tol,
+):
     """Run strict path-capi baseline validation for CI pipelines."""
-    logger = ctx.obj['logger']
+    logger = ctx.obj["logger"]
     logger.info(f"Validating GTAP path-capi baseline from {gdx_file}")
 
     try:
-        with click.progressbar(length=3, label='Loading data') as bar:
+        with click.progressbar(length=3, label="Loading data") as bar:
             params = GTAPParameters()
             params.load_from_gdx(gdx_file)
             bar.update(1)
@@ -5051,7 +5856,7 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
             bar.update(1)
 
         click.echo("\nRunning strict path-capi validation...")
-        if path_capi_mode == 'nonlinear':
+        if path_capi_mode == "nonlinear":
             result = _run_path_capi_nonlinear_full(
                 model,
                 params,
@@ -5075,17 +5880,19 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
                 closure_config=contract.closure,
             )
 
-        click.echo(f"\n{'='*60}")
+        click.echo(f"\n{'=' * 60}")
         click.echo("Validation Results")
-        click.echo(f"{'='*60}")
+        click.echo(f"{'=' * 60}")
         click.echo(f"Status:       {result['status']}")
         click.echo(f"Residual:     {result['residual']:.2e}")
         click.echo(f"Blocks:       {result['n_blocks']}")
         click.echo(f"Block gate:   {result['block_success']}")
         click.echo(f"Post-checks:  {result['post_checks_gate_pass']}")
-        click.echo(f"Strict gate:  {result['residual_gate_pass']} (tol={result['strict_residual_tol']:.1e})")
+        click.echo(
+            f"Strict gate:  {result['residual_gate_pass']} (tol={result['strict_residual_tol']:.1e})"
+        )
 
-        for block in result.get('blocks', []):
+        for block in result.get("blocks", []):
             click.echo(
                 f"  - {block['name']}: {block['status']} "
                 f"(res={block.get('residual', 0.0):.2e}, n={block.get('n_equations', 0)})"
@@ -5093,11 +5900,11 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
 
         if output:
             output.parent.mkdir(parents=True, exist_ok=True)
-            with open(output, 'w') as f:
+            with open(output, "w") as f:
                 json.dump(result, f, indent=2)
             click.echo(f"\nValidation report saved to: {output}")
 
-        sys.exit(0 if result['success'] else 1)
+        sys.exit(0 if result["success"] else 1)
 
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
@@ -5105,109 +5912,96 @@ def validate(ctx, gdx_file, closure, output, tee, path_license_string, path_capi
         sys.exit(1)
 
 
-@cli.command(name='validate-shock')
+@cli.command(name="validate-shock")
 @click.option(
-    '--gdx-file',
+    "--gdx-file",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help='Path to GTAP GDX file'
+    help="Path to GTAP GDX file",
 )
 @click.option(
-    '--closure',
-    default='gtap_standard7_9x10',
-    help='Closure type (currently: gtap_standard7_9x10)'
+    "--closure",
+    default="gtap_standard7_9x10",
+    help="Closure type (currently: gtap_standard7_9x10)",
 )
+@click.option("--variable", required=True, help="Shock variable (e.g., rtms)")
 @click.option(
-    '--variable',
-    required=True,
-    help='Shock variable (e.g., rtms)'
+    "--index", required=True, help='Shock index tuple (e.g., "(CRI,agr,USA)")'
 )
+@click.option("--value", type=float, required=True, help="Shock value")
 @click.option(
-    '--index',
-    required=True,
-    help='Shock index tuple (e.g., "(CRI,agr,USA)")'
-)
-@click.option(
-    '--value',
-    type=float,
-    required=True,
-    help='Shock value'
-)
-@click.option(
-    '--shock-mode',
-    type=click.Choice(['set', 'pct', 'mult', 'tm_pct']),
-    default='pct',
+    "--shock-mode",
+    type=click.Choice(["set", "pct", "mult", "tm_pct"]),
+    default="pct",
     show_default=True,
-    help='Shock semantics: set=value, pct=old*(1+value), mult=old*value'
+    help="Shock semantics: set=value, pct=old*(1+value), mult=old*value",
 )
 @click.option(
-    '--output',
+    "--output",
     type=click.Path(path_type=Path),
-    default=Path('output/gtap_validate_shock_path_capi.json'),
+    default=Path("output/gtap_validate_shock_path_capi.json"),
     show_default=True,
-    help='Output file for validation + delta report (JSON)'
+    help="Output file for validation + delta report (JSON)",
 )
 @click.option(
-    '--tee/--no-tee',
-    default=False,
-    help='Show solver output while validating'
+    "--tee/--no-tee", default=False, help="Show solver output while validating"
 )
 @click.option(
-    '--path-license-string',
+    "--path-license-string",
     default=None,
-    help='Optional PATH license string (otherwise uses PATH_LICENSE_STRING env var)'
+    help="Optional PATH license string (otherwise uses PATH_LICENSE_STRING env var)",
 )
 @click.option(
-    '--path-capi-mode',
-    type=click.Choice(['linear', 'nonlinear']),
-    default='linear',
+    "--path-capi-mode",
+    type=click.Choice(["linear", "nonlinear"]),
+    default="linear",
     show_default=True,
-    help='PATH C API mode: linear block snapshot or full nonlinear system'
+    help="PATH C API mode: linear block snapshot or full nonlinear system",
 )
 @click.option(
-    '--strict-residual-tol',
+    "--strict-residual-tol",
     type=float,
     default=1e-8,
     show_default=True,
-    help='Global residual tolerance for strict validation gate'
+    help="Global residual tolerance for strict validation gate",
 )
 @click.option(
-    '--homotopy-steps',
+    "--homotopy-steps",
     default=1,
     show_default=True,
     type=int,
-    help='Apply shock in N equal increments for PATH continuation. Use 5-10 for large shocks.',
+    help="Apply shock in N equal increments for PATH continuation. Use 5-10 for large shocks.",
 )
 @click.option(
-    '--calibrated-start',
+    "--calibrated-start",
     is_flag=True,
     default=False,
     help=(
-        'Start shocked solve from calibrated initial values (pmt=1, pm=VMSB/VXSB) '
-        'instead of the solved baseline. Mirrors GAMS approach where the shocked '
-        'solve starts directly from the calibration equilibrium.'
+        "Start shocked solve from calibrated initial values (pmt=1, pm=VMSB/VXSB) "
+        "instead of the solved baseline. Mirrors GAMS approach where the shocked "
+        "solve starts directly from the calibration equilibrium."
     ),
 )
 @click.option(
-    '--if-sub/--no-if-sub',
+    "--if-sub/--no-if-sub",
     default=False,
     show_default=True,
     help=(
-        'Use GAMS ifSUB=1 mode (substitutes macro identities, fixes pm/pmcif/pefob). '
-        'Default False matches GAMS ifSUB=0 (full equation system active).'
+        "Use GAMS ifSUB=1 mode (substitutes macro identities, fixes pm/pmcif/pefob). "
+        "Default False matches GAMS ifSUB=0 (full equation system active)."
     ),
 )
 @click.option(
-    '--welfare-decomp',
+    "--welfare-decomp",
     is_flag=True,
     default=False,
-    help='Compute Huff/McDougall welfare decomposition (writes welfare_decomposition.csv).',
+    help="Compute Huff/McDougall welfare decomposition (writes welfare_decomposition.csv).",
 )
 @click.option(
-    '--welfare-har',
+    "--welfare-har",
     type=click.Path(path_type=Path),
     default=None,
-    help='Optional path for WELVIEW.har export (RunGTAP-compatible). Implies --welfare-decomp.',
+    help="Optional path for WELVIEW.har export (RunGTAP-compatible). Implies --welfare-decomp.",
 )
 @click.pass_context
 def validate_shock(
@@ -5230,7 +6024,7 @@ def validate_shock(
     welfare_har,
 ):
     """Run strict baseline + strict shocked path-capi validation for CI pipelines."""
-    logger = ctx.obj['logger']
+    logger = ctx.obj["logger"]
     logger.info(f"Validating GTAP baseline+shock path-capi from {gdx_file}")
 
     try:
@@ -5240,7 +6034,7 @@ def validate_shock(
             raise ValueError(f"Invalid index format: {index}")
 
         # Baseline run
-        with click.progressbar(length=3, label='Loading baseline') as bar:
+        with click.progressbar(length=3, label="Loading baseline") as bar:
             base_params = GTAPParameters()
             base_params.load_from_gdx(gdx_file)
             bar.update(1)
@@ -5253,13 +6047,15 @@ def validate_shock(
                 contract = build_gtap_contract(payload)
             bar.update(1)
 
-            base_equations = GTAPModelEquations(base_params.sets, base_params, contract.closure)
+            base_equations = GTAPModelEquations(
+                base_params.sets, base_params, contract.closure
+            )
             base_model = base_equations.build_model()
             # apply_production_scaling already called inside build_model()
             bar.update(1)
 
         click.echo("\nRunning strict baseline validation...")
-        if path_capi_mode == 'nonlinear':
+        if path_capi_mode == "nonlinear":
             baseline_result = _run_path_capi_nonlinear_full(
                 base_model,
                 base_params,
@@ -5285,7 +6081,7 @@ def validate_shock(
             )
 
         # Shocked run
-        with click.progressbar(length=2, label='Loading shock') as bar:
+        with click.progressbar(length=2, label="Loading shock") as bar:
             shock_params = GTAPParameters()
             shock_params.load_from_gdx(gdx_file)
             bar.update(1)
@@ -5303,13 +6099,18 @@ def validate_shock(
                     "(e.g., rtms in params.taxes)"
                 )
 
-            shock_equations = GTAPModelEquations(shock_params.sets, shock_params, contract.closure, is_counterfactual=True)
+            shock_equations = GTAPModelEquations(
+                shock_params.sets,
+                shock_params,
+                contract.closure,
+                is_counterfactual=True,
+            )
             shock_model = shock_equations.build_model()
             # apply_production_scaling already called inside build_model()
             bar.update(1)
 
         click.echo("Running strict shocked validation...")
-        if path_capi_mode == 'nonlinear':
+        if path_capi_mode == "nonlinear":
             if homotopy_steps > 1 or calibrated_start:
                 label = f"Running homotopy shocked validation ({homotopy_steps} steps"
                 if calibrated_start:
@@ -5357,8 +6158,12 @@ def validate_shock(
                 closure_config=contract.closure,
             )
 
-        baseline_quantities = _collect_key_quantities(base_model, base_params, scale_for_gams=True)
-        shocked_quantities = _collect_key_quantities(shock_model, shock_params, scale_for_gams=True)
+        baseline_quantities = _collect_key_quantities(
+            base_model, base_params, scale_for_gams=True
+        )
+        shocked_quantities = _collect_key_quantities(
+            shock_model, shock_params, scale_for_gams=True
+        )
         delta_summary = _build_delta_summary(baseline_quantities, shocked_quantities)
 
         if welfare_decomp or welfare_har:
@@ -5380,18 +6185,28 @@ def validate_shock(
             if homotopy_path:
                 step_levels = [baseline_quantities] + [
                     _collect_key_quantities(m, p, scale_for_gams=True)
-                    for m, p in zip(shocked_result["step_models"], shocked_result["step_params"])
+                    for m, p in zip(
+                        shocked_result["step_models"], shocked_result["step_params"]
+                    )
                 ]
                 step_params_full = [base_params] + list(shocked_result["step_params"])
                 welfare_results = compute_welfare_decomposition_homotopy(
-                    step_params_full, step_levels,
+                    step_params_full,
+                    step_levels,
                 )
-                click.echo(f"\nWelfare decomposition (Huff/RunGTAP, N={len(step_levels)-1} homotopy steps):")
+                click.echo(
+                    f"\nWelfare decomposition (Huff/RunGTAP, N={len(step_levels) - 1} homotopy steps):"
+                )
             else:
                 welfare_results = compute_welfare_decomposition(
-                    base_params, shock_params, baseline_quantities, shocked_quantities,
+                    base_params,
+                    shock_params,
+                    baseline_quantities,
+                    shocked_quantities,
                 )
-                click.echo("\nWelfare decomposition (Huff/RunGTAP, single-step — residual ~1-3% expected):")
+                click.echo(
+                    "\nWelfare decomposition (Huff/RunGTAP, single-step — residual ~1-3% expected):"
+                )
 
             csv_path = output_dir / "welfare_decomposition.csv"
             with csv_path.open("w") as fh:
@@ -5400,10 +6215,17 @@ def validate_shock(
                 fh.write(",".join(cols) + "\n")
                 for region in sorted(welfare_results):
                     row = welfare_results[region].as_dict()
-                    fh.write(region + "," + ",".join(f"{row[c]:.6f}" for c in cols[1:]) + "\n")
+                    fh.write(
+                        region
+                        + ","
+                        + ",".join(f"{row[c]:.6f}" for c in cols[1:])
+                        + "\n"
+                    )
             click.echo(f"  Wrote {csv_path}")
 
-            click.echo(f"  {'Region':<10} {'EV ($M)':>12} {'A':>10} {'T':>10} {'IS':>10} {'resid%':>8}")
+            click.echo(
+                f"  {'Region':<10} {'EV ($M)':>12} {'A':>10} {'T':>10} {'IS':>10} {'resid%':>8}"
+            )
             for region in sorted(welfare_results):
                 w = welfare_results[region]
                 resid_pct = (100.0 * w.residual / w.EV) if abs(w.EV) > 1e-9 else 0.0
@@ -5413,7 +6235,10 @@ def validate_shock(
                 )
 
             if welfare_har:
-                from equilibria.templates.gtap.welfare_decomp_har import write_welview_har
+                from equilibria.templates.gtap.welfare_decomp_har import (
+                    write_welview_har,
+                )
+
                 write_welview_har(Path(welfare_har), welfare_results)
                 click.echo(f"  Wrote {welfare_har}")
 
@@ -5444,7 +6269,11 @@ def validate_shock(
             for r in model.r:
                 regy = float(value(model.regy[r])) if hasattr(model, "regy") else 0.0
                 facty = float(value(model.facty[r])) if hasattr(model, "facty") else 0.0
-                ytax_ind = float(value(model.ytax_ind[r])) if hasattr(model, "ytax_ind") else 0.0
+                ytax_ind = (
+                    float(value(model.ytax_ind[r]))
+                    if hasattr(model, "ytax_ind")
+                    else 0.0
+                )
                 yc = float(value(model.yc[r])) if hasattr(model, "yc") else 0.0
                 yg = float(value(model.yg[r])) if hasattr(model, "yg") else 0.0
                 yi = float(value(model.yi[r])) if hasattr(model, "yi") else 0.0
@@ -5454,7 +6283,11 @@ def validate_shock(
                 betas = float(value(model.betas[r])) if hasattr(model, "betas") else 0.0
                 phi = float(value(model.phi[r])) if hasattr(model, "phi") else 1.0
                 phip = float(value(model.phip[r])) if hasattr(model, "phip") else 1.0
-                yi_share = float(value(model.yi_share_reg[r])) if hasattr(model, "yi_share_reg") else 0.0
+                yi_share = (
+                    float(value(model.yi_share_reg[r]))
+                    if hasattr(model, "yi_share_reg")
+                    else 0.0
+                )
 
                 per_region[str(r)] = {
                     "regy": regy,
@@ -5473,19 +6306,27 @@ def validate_shock(
                 }
 
                 residuals["regy_balance"][str(r)] = regy - (facty + ytax_ind)
-                residuals["yc_balance"][str(r)] = yc - betap * (phi / phip) * regy if phip != 0.0 else 0.0
+                residuals["yc_balance"][str(r)] = (
+                    yc - betap * (phi / phip) * regy if phip != 0.0 else 0.0
+                )
                 residuals["yg_balance"][str(r)] = yg - betag * phi * regy
                 residuals["rsav_balance"][str(r)] = rsav - betas * phi * regy
                 residuals["yi_balance"][str(r)] = yi - yi_share * regy
 
-            def _top_abs(entries: dict[str, float], top_n: int = 5) -> list[dict[str, float]]:
-                ordered = sorted(entries.items(), key=lambda kv: abs(kv[1]), reverse=True)
+            def _top_abs(
+                entries: dict[str, float], top_n: int = 5
+            ) -> list[dict[str, float]]:
+                ordered = sorted(
+                    entries.items(), key=lambda kv: abs(kv[1]), reverse=True
+                )
                 return [{"region": r, "residual": v} for r, v in ordered[:top_n]]
 
             max_abs: dict[str, dict[str, float]] = {}
             top_regions: dict[str, list[dict[str, float]]] = {}
             for name, entries in residuals.items():
-                max_abs[name] = {"max_abs": max((abs(v) for v in entries.values()), default=0.0)}
+                max_abs[name] = {
+                    "max_abs": max((abs(v) for v in entries.values()), default=0.0)
+                }
                 top_regions[name] = _top_abs(entries)
 
             return {
@@ -5500,38 +6341,44 @@ def validate_shock(
             "shock": _income_block_diagnostics(shock_model),
         }
 
-        success = bool(baseline_result.get('success', False)) and bool(shocked_result.get('success', False))
-        status = 'converged' if success else 'failed'
+        success = bool(baseline_result.get("success", False)) and bool(
+            shocked_result.get("success", False)
+        )
+        status = "converged" if success else "failed"
 
         report = {
-            'status': status,
-            'success': success,
-            'solver': 'path-capi',
-            'message': 'Strict baseline+shock validation via PATH C API',
-            'shock': {
-                'variable': variable,
-                'index': list(shock_index),
-                'value': value,
-                'mode': shock_mode,
+            "status": status,
+            "success": success,
+            "solver": "path-capi",
+            "message": "Strict baseline+shock validation via PATH C API",
+            "shock": {
+                "variable": variable,
+                "index": list(shock_index),
+                "value": value,
+                "mode": shock_mode,
             },
-            'baseline': baseline_result,
-            'shocked': shocked_result,
-            'delta_summary': delta_summary,
-            'income_block_maxima': income_block_maxima,
-            'income_block_diagnostics': income_block_diagnostics,
+            "baseline": baseline_result,
+            "shocked": shocked_result,
+            "delta_summary": delta_summary,
+            "income_block_maxima": income_block_maxima,
+            "income_block_diagnostics": income_block_diagnostics,
         }
 
-        click.echo(f"\n{'='*60}")
+        click.echo(f"\n{'=' * 60}")
         click.echo("Validation Shock Results")
-        click.echo(f"{'='*60}")
+        click.echo(f"{'=' * 60}")
         click.echo(f"Overall:      {status}")
-        click.echo(f"Baseline:     {baseline_result['status']} (res={baseline_result['residual']:.2e})")
-        click.echo(f"Shocked:      {shocked_result['status']} (res={shocked_result['residual']:.2e})")
+        click.echo(
+            f"Baseline:     {baseline_result['status']} (res={baseline_result['residual']:.2e})"
+        )
+        click.echo(
+            f"Shocked:      {shocked_result['status']} (res={shocked_result['residual']:.2e})"
+        )
         click.echo(f"Delta max|d|: {delta_summary['global']['max_abs_change']:.2e}")
 
         if output:
             output.parent.mkdir(parents=True, exist_ok=True)
-            with open(output, 'w') as f:
+            with open(output, "w") as f:
                 json.dump(report, f, indent=2)
             click.echo(f"\nValidation shock report saved to: {output}")
 
@@ -5543,26 +6390,52 @@ def validate_shock(
         sys.exit(1)
 
 
-@cli.command(name='altertax')
-@click.option('--gdx-file', type=click.Path(exists=True, path_type=Path), required=True,
-              help='Path to GTAP basedata GDX file')
-@click.option('--variable', default='rtms', show_default=True,
-              help='Tax variable to shock before rebalancing')
-@click.option('--index', default='all', show_default=True,
-              help='Shock index tuple, e.g. "(EastAsia,c_TextWapp,NAmerica)" or "all"')
-@click.option('--value', type=float, required=True,
-              help='Shock value (interpretation depends on --shock-mode)')
-@click.option('--shock-mode', type=click.Choice(['set', 'pct', 'mult', 'tm_pct']),
-              default='tm_pct', show_default=True,
-              help='Shock semantics. tm_pct mirrors GAMS tm.fx = tm.l*(1+v).')
-@click.option('--output', type=click.Path(path_type=Path), required=True,
-              help='Destination .har file for the rebalanced dataset')
-@click.option('--tee/--no-tee', default=False, help='Show solver output')
-@click.option('--path-license-string', default=None,
-              help='Optional PATH license string')
+@cli.command(name="altertax")
+@click.option(
+    "--gdx-file",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to GTAP basedata GDX file",
+)
+@click.option(
+    "--variable",
+    default="rtms",
+    show_default=True,
+    help="Tax variable to shock before rebalancing",
+)
+@click.option(
+    "--index",
+    default="all",
+    show_default=True,
+    help='Shock index tuple, e.g. "(EastAsia,c_TextWapp,NAmerica)" or "all"',
+)
+@click.option(
+    "--value",
+    type=float,
+    required=True,
+    help="Shock value (interpretation depends on --shock-mode)",
+)
+@click.option(
+    "--shock-mode",
+    type=click.Choice(["set", "pct", "mult", "tm_pct"]),
+    default="tm_pct",
+    show_default=True,
+    help="Shock semantics. tm_pct mirrors GAMS tm.fx = tm.l*(1+v).",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Destination .har file for the rebalanced dataset",
+)
+@click.option("--tee/--no-tee", default=False, help="Show solver output")
+@click.option(
+    "--path-license-string", default=None, help="Optional PATH license string"
+)
 @click.pass_context
-def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
-             tee, path_license_string):
+def altertax(
+    ctx, gdx_file, variable, index, value, shock_mode, output, tee, path_license_string
+):
     """Rebalance a GTAP dataset under altertax (Malcolm 1998 CD invariance).
 
     Applies altertax CD elasticity overrides + the user's tax shock,
@@ -5574,7 +6447,7 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
         rebalance_to_altertax_dataset,
     )
 
-    logger = ctx.obj['logger']
+    logger = ctx.obj["logger"]
     logger.info(f"Altertax rebalance: gdx={gdx_file} → {output}")
 
     try:
@@ -5583,18 +6456,26 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
         sets.load_from_gdx(gdx_file)
         base_params = GTAPParameters()
         base_params.load_from_gdx(gdx_file)
-        click.echo(f"      R={sets.n_regions} I={sets.n_commodities} "
-                   f"A={sets.n_activities} F={sets.n_factors}")
+        click.echo(
+            f"      R={sets.n_regions} I={sets.n_commodities} "
+            f"A={sets.n_activities} F={sets.n_factors}"
+        )
 
         click.echo("[2/4] Applying altertax CD elasticity overrides + shock")
         shock_params = apply_altertax_elasticities(base_params, in_place=False)
         shock_index = _parse_index(index)
         applied = _apply_shock_to_params(
-            shock_params, variable, shock_index, value, shock_mode=shock_mode,
+            shock_params,
+            variable,
+            shock_index,
+            value,
+            shock_mode=shock_mode,
         )
         if not applied:
             raise ValueError(f"Shock {variable}{shock_index}={value} did not apply.")
-        click.echo(f"      shock applied to {variable}{shock_index} (mode={shock_mode})")
+        click.echo(
+            f"      shock applied to {variable}{shock_index} (mode={shock_mode})"
+        )
 
         click.echo("[3/4] Building model + solving via PATH C API (nonlinear full)")
         contract = _build_gtap_contract_with_calibration({"closure": "altertax"})
@@ -5610,12 +6491,12 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
             closure_config=contract.closure,
             equation_scaling=True,
         )
-        status = solve_result.get('status')
-        residual = solve_result.get('residual', float('nan'))
+        status = solve_result.get("status")
+        residual = solve_result.get("residual", float("nan"))
         click.echo(f"      solve status={status} residual={residual:.2e}")
         # Guardrail: refuse to write a "rebalanced" SAM from a non-converged
         # solution — the values would be cold-init garbage, not equilibrium.
-        if status not in ('solved', 'success', 'optimal') or not (residual < 1e-3):
+        if status not in ("solved", "success", "optimal") or not (residual < 1e-3):
             raise RuntimeError(
                 f"PATH solve did not converge (status={status}, "
                 f"residual={residual:.2e}); refusing to write HAR. The "
@@ -5644,5 +6525,5 @@ def altertax(ctx, gdx_file, variable, index, value, shock_mode, output,
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()
