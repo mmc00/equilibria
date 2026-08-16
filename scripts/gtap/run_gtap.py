@@ -4410,9 +4410,25 @@ def _run_path_capi_nonlinear_full(
             # none replicates GAMS under scaleopt=1: one scaling pass.
             # user-scaling makes IPOPT read the scaling_factor Suffix (Britz benchmark
             # scaling, no model copy); else none = raw model (faithful to GAMS).
-            opt.options["nlp_scaling_method"] = (
-                "user-scaling" if _britz_user_scaling else "none"
+            # ROW_EQUIL static pre-equilibration (scaling_factor Suffix) gets IPOPT into
+            # the convergence zone (15x10 resid ~6 → 0.064) but a STATIC scale computed
+            # once at the seed goes stale as the point moves — CONOPT closes the same
+            # model because its GRG re-equilibrates EACH iteration. So when ROW_EQUIL is
+            # on, let IPOPT re-scale ADAPTIVELY (gradient-based) instead of applying our
+            # one-shot Suffix (user-scaling). gradient-based ignores the Suffix, so the
+            # pre-equilibration's value is only in the seed values it leaves — but the
+            # per-iteration re-scaling is what CONOPT does. Toggle via
+            # EQUILIBRIA_GTAP_ROW_EQUIL_ADAPT=1 (default on when ROW_EQUIL is set).
+            _re_adapt = (
+                os.environ.get("EQUILIBRIA_GTAP_ROW_EQUIL") == "1"
+                and os.environ.get("EQUILIBRIA_GTAP_ROW_EQUIL_ADAPT", "1") == "1"
             )
+            if _re_adapt:
+                opt.options["nlp_scaling_method"] = "gradient-based"
+            else:
+                opt.options["nlp_scaling_method"] = (
+                    "user-scaling" if _britz_user_scaling else "none"
+                )
             opt.options["max_iter"] = 1000
             # Experimental override (A/B the CONOPT-mimic recipe without editing this
             # block): EQUILIBRIA_IPOPT_OPTS='{"nlp_scaling_method":"gradient-based",
