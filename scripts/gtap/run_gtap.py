@@ -3070,7 +3070,31 @@ def _run_path_capi_nonlinear_full(
             )
         except Exception:
             _walras_vd_sq = _walras_var_sq
-        if _nlp_solve_mode:
+        # CONOPT (unlike IPOPT) refuses a CONSTANT objective — it reports the NLP as
+        # "Unbounded, objective 0" and stops at the first feasible-ish point (resid ~6
+        # on 3x3). It DOES need a real objective. But MAXIMIZING a freed walras lands a
+        # SPURIOUS point (3x3: walras=15.59, i.e. the residual region carries non-zero
+        # excess income → NOT the market-clearing equilibrium, even at resid 1e-9).
+        # The faithful objective is MINIMIZE walras² : walras is the Walras-law slack
+        # (= Σ excess income over the residual region), 0 exactly at equilibrium, so its
+        # squared-minimum drives CONOPT to the SAME market-clearing point IPOPT reaches
+        # with the constant-0 form (walras=0). walras stays FREE + eq_walras stays ACTIVE
+        # (it defines walras); the objective — not a fix — pins it to 0.
+        _neos_conopt = (
+            os.environ.get("EQUILIBRIA_GTAP_SOLVE_NEOS", "").lower() == "conopt"
+        )
+        if _nlp_solve_mode and _neos_conopt:
+            from pyomo.environ import (
+                Objective as _PyoObjW2,
+                minimize as _pyo_min_w2,
+            )
+
+            if _walras_vd_sq.fixed:
+                _walras_vd_sq.unfix()
+            model._nlp_walras_objective_sq = _PyoObjW2(
+                expr=_walras_vd_sq * _walras_vd_sq, sense=_pyo_min_w2
+            )
+        elif _nlp_solve_mode:
             # Keep the MCP closure EXACTLY: walras stays fixed=0 (Walras law),
             # eq_walras stays active pinning yi[rres] — this is the true
             # equilibrium GAMS's NLP also reaches (walras=0 there too). Solve the
