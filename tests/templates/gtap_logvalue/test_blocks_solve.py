@@ -40,6 +40,7 @@ def test_blocks_shock_matches_port_monolith():
     """Transitive gate: blocks-logvalue shock ≡ port monolith shock, both seeded from
     the same calibrated point. Difference is only equation FORM → must be ~0."""
     import statistics
+    from pathlib import Path
 
     from equilibria.templates.gtap_julia.model import solve_shock as port_shock
     from equilibria.templates.gtap_julia.solution import load_solution
@@ -48,9 +49,16 @@ def test_blocks_shock_matches_port_monolith():
     sol = load_sol("gtap7_3x3")
     mb = blk_shock(sol, 1.10, rordelta=1)
     assert mb["ok"], f"blocks shock not optimal: {mb['status']}"
-    psol = load_solution(
-        "/private/tmp/claude-501/-Users-marmol--superset-worktrees-b14cb643-ee65-449d-b3f0-be8003b60783-gray-carver/45c8a8b5-8bb9-485a-8e5c-e498c5bb605d/scratchpad/wp3x3_b.csv"
+    # Port-monolith base seed (Julia dump). Cached per-session, not versioned —
+    # skip if absent (same guard the @slow 15x10 sibling below already uses).
+    wp3x3_b = Path(
+        "/private/tmp/claude-501/-Users-marmol--superset-worktrees-"
+        "b14cb643-ee65-449d-b3f0-be8003b60783-gray-carver/"
+        "45c8a8b5-8bb9-485a-8e5c-e498c5bb605d/scratchpad/wp3x3_b.csv"
     )
+    if not wp3x3_b.exists():
+        pytest.skip("3x3 port-monolith dump absent (regenerate via run_from_csv.jl)")
+    psol = load_solution(str(wp3x3_b))
     mp = port_shock(psol, 1.10, rordelta=1)["model"]
     b = mb["model"]
     for var in ("qxs", "pva", "qva", "y", "pfe", "qfe", "pmds", "qms"):
