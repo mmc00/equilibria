@@ -3451,7 +3451,36 @@ def _run_path_capi_nonlinear_full(
                 file=sys.stderr,
             )
             _sm = _PyoSMF3("neos")
-            res = _sm.solve(_solve_target, opt=_neos_solver, tee=True)
+            # NEOS caps job input (gzip+base64 XML) at 16 MB. Writing the FULL multi-
+            # period model `_solve_target` includes every OTHER-period var (fixed, but
+            # still referenced as warm-start constants by the active period's rows), so
+            # on 20x41 the .nl blows past 16 MB even gzipped. Build a COMPACT subsystem
+            # holding ONLY the squared (constraints, free_variables) of the active
+            # period plus the objective — the other-period vars become input constants,
+            # not problem rows. This is exactly the system CONOPT/IPOPT would factor.
+            from pyomo.util.subsystems import (
+                create_subsystem_block as _mk_subsys3,
+            )
+
+            _obj3 = getattr(model, "_nlp_walras_objective_sq", None)
+            _sub3 = _mk_subsys3(constraints, free_variables, include_fixed=False)
+            # attach the objective (create_subsystem_block only copies constraints/vars)
+            if _obj3 is not None:
+                model.del_component(_obj3)
+                _sub3.add_component("_nlp_walras_objective_sq", _obj3)
+            print(
+                f"[nlp-square] NEOS subsystem: {len(constraints)} eqs + "
+                f"{len(free_variables)} free vars (vs full model) — avoids the 16MB cap",
+                file=sys.stderr,
+            )
+            # symbolic_solver_labels=False → index-only .nl (smaller); Pyomo loads the
+            # solution back by variable ORDER, so correctness is unaffected.
+            res = _sm.solve(
+                _sub3,
+                opt=_neos_solver,
+                tee=True,
+                symbolic_solver_labels=False,
+            )
             print(
                 f"[nlp-square] NEOS/{_neos_solver} done: status={res.solver.status} "
                 f"term={res.solver.termination_condition}",
