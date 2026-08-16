@@ -3181,8 +3181,72 @@ def _run_path_capi_nonlinear_full(
         # the raw model won't converge on very large datasets (20x41: 393k vars, Hessian
         # 251M nz). Off by default — the small/mid datasets solve raw and stay faithful.
         _bench_scale = os.environ.get("EQUILIBRIA_GTAP_BENCH_SCALE") == "1"
+        # ROW-EQUILIBRATION (env EQUILIBRIA_GTAP_ROW_EQUIL=1): the BRITZ scaling below
+        # divides each row by max|VAR VALUE|, which MISSES rows whose ill-conditioning
+        # lives in the DERIVATIVES, not the var levels. Measured on 20x41: eq_pfeq[*,Land,*]
+        # has body `0.987*pf*(679.34*xft) - pft*xf` with xft≈2e-4 (Land endowment of a
+        # near-desert region like ARE) and the compensating coefficient 679 → ∂/∂xft ≈ 679,
+        # a Jacobian row-norm ~680 while all its vars are O(1). That row dominates the
+        # Jacobian and stalls IPOPT (inf_du~1e9), exactly the ill-conditioned row the
+        # 15x10 hit (aug~4400). The circuit/power-flow fix is per-unit / row EQUILIBRATION:
+        # scale each row by 1/max|Jacobian entry in that row| so every row's largest
+        # coefficient is O(1). It's an EXACT solver transform (multiplying an =0 row by a
+        # positive constant doesn't move the root) — the same thing CONOPT's GRG does
+        # internally (why CONOPT converges where IPOPT stalls). Needs one sparse Jacobian
+        # eval (PyomoNLP/ASL). Falls back to the var-value BRITZ scaling if ASL is absent.
+        _row_equil = os.environ.get("EQUILIBRIA_GTAP_ROW_EQUIL") == "1"
         _britz_user_scaling = False
-        if _bench_scale:
+        if _bench_scale and _row_equil:
+            try:
+                import numpy as _np_re
+                from pyomo.contrib.pynumero.interfaces.pyomo_nlp import (
+                    PyomoNLP as _PyNLP_re,
+                )
+
+                model.scaling_factor = _PyoSuffix3(direction=_PyoSuffix3.EXPORT)
+                # PyomoNLP needs an objective; the squared-NLP objective is added on
+                # `model` just above, so build the NLP on `model` (not _solve_target,
+                # which isn't assigned in this branch yet — it defaults to `model`).
+                _nlp_re = _PyNLP_re(model)
+                _J_re = _nlp_re.evaluate_jacobian_eq().tocsr()
+                _cons_re = _nlp_re.get_pyomo_constraints()
+                _vars_re = _nlp_re.get_pyomo_variables()
+                # row ∞-norm (max |entry| per row)
+                _rowmax = _np_re.maximum.reduceat(
+                    _np_re.abs(_J_re.data), _J_re.indptr[:-1]
+                ) if _J_re.nnz else _np_re.ones(_J_re.shape[0])
+                # reduceat mis-handles empty rows; recompute robustly per row
+                _absJ = _np_re.abs(_J_re)
+                _rowmax = _np_re.asarray(_absJ.max(axis=1).todense()).flatten()
+                _nrow = 0
+                _worst = 0.0
+                for _i_re, _c3 in enumerate(_cons_re):
+                    _rm = float(_rowmax[_i_re]) if _i_re < len(_rowmax) else 1.0
+                    _worst = max(_worst, _rm)
+                    model.scaling_factor[_c3] = 1.0 / max(1.0, _rm)
+                    _nrow += 1
+                # columns: 1/max(1,|col ∞-norm|) so IPOPT sees an O(1) problem both ways
+                _colmax = _np_re.asarray(_absJ.max(axis=0).todense()).flatten()
+                _nvar = 0
+                for _j_re, _v3 in enumerate(_vars_re):
+                    _cm = float(_colmax[_j_re]) if _j_re < len(_colmax) else 1.0
+                    model.scaling_factor[_v3] = 1.0 / max(1.0, _cm)
+                    _nvar += 1
+                _skip_jacscale = False
+                _solve_target = model
+                _britz_user_scaling = True
+                print(
+                    f"[nlp-square] ROW-EQUILIBRATION (Jacobian ∞-norm): {_nrow} rows, "
+                    f"{_nvar} cols; worst row-norm was {_worst:.1f} → scaled to O(1)",
+                    file=sys.stderr,
+                )
+            except Exception as _re_exc:
+                print(
+                    f"[nlp-square] ROW_EQUIL failed ({_re_exc}); falling back to BRITZ",
+                    file=sys.stderr,
+                )
+                _row_equil = False
+        if _bench_scale and not _row_equil:
             try:
                 from pyomo.core.expr.visitor import identify_variables as _idvars3
                 from pyomo.environ import value as _bval3
