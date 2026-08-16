@@ -6075,8 +6075,12 @@ class GTAPModelEquations:
         model.eq_xaa_inv = Constraint(model.r, model.i, rule=eq_xaa_inv_rule)
 
         # GAMS xatmgeq (model.gms:1016): xa(r,i,tmg) = alphaa(r,i,tmg)*xtmg(i)*(ptmg(i)/pa(r,i,tmg))^sigmamg(i)
-        # Only i ∈ margin-commodity set m has nonzero flow. alphaa_tmg(r,i) = vst(i,r) / sum_r' vst(i,r').
-        margin_commodities = {str(mm) for mm in self.sets.m}
+        # Only i ∈ the REAL margin set (self.sets.marg = {Services}) has nonzero flow.
+        # self.sets.m is list(self.sets.i) (ALL commodities) — using it makes eq_xaa_tmg
+        # get generated for every good; the non-margin ones degenerate. Use the
+        # data-driven active-margin set, exactly like GAMS xatmgeq.
+        # alphaa_tmg(r,i) = vst(i,r) / sum_r' vst(i,r').
+        margin_commodities = {str(mm) for mm in (self.sets.marg or self.sets.m)}
         alphaa_tmg = {}
         for i_m in margin_commodities:
             denom = sum(self._vst_value(str(rp), i_m) for rp in self.sets.r)
