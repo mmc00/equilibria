@@ -335,11 +335,11 @@ class ArmingtonBilateralBlock(Block):
         shifts_lambdaio = p.shifts.lambdaio
         # The tmg (transport-margin) agent absorbs ONLY the real margin commodities
         # (GAMS set `marg`, = {Services} in every GTAP7 aggregation), NOT all goods.
-        # `s.m` is `list(s.i)` (ALL commodities) — using it here makes eq_xaa_tmg get
-        # generated for every good, and the non-margin ones degenerate to xaa==0 rows
-        # the MCP squarer then orphans (486→779 empty eq_xaa_tmg rows on 20x41). Use
-        # `s.marg` (the data-driven active-margin set) so the equation is born only
-        # where GAMS generates it, exactly like `xatmgeq` in the reference model.
+        # `s.m` is `list(s.i)` (ALL commodities). The active-margin set below gates the
+        # equation BODY; the row for non-margin cells is dropped entirely (build_expr
+        # returns None), matching GAMS's $-condition on xatmgeq and the monolith's
+        # Constraint.Skip. See EqXaaTmg below for why emitting `xaa==0` here instead
+        # fabricated the 779 empty eq_xaa_tmg[check] rows on 20x41.
         margin_commodities = {str(mm) for mm in (s.marg or s.m)}
 
         # alphaa_tmg (monolith 6060-6065)
@@ -520,11 +520,23 @@ class ArmingtonBilateralBlock(Block):
                 model = pyomo_model
                 r, i = indices
                 i_str = str(i)
+                # Non-margin commodity or zero margin-share: the tmg agent has no
+                # absorption of this good.  GAMS emits NO equation (a $-condition on
+                # xatmgeq) and the monolith returns Constraint.Skip (6099-6103), while
+                # ALSO fixing xaa[r,i,tmg]=0 (6118-6125) — that fix is replicated onto
+                # the multi-period model by _replicate_sp_fixing (base + check + shock).
+                # Emitting `xaa==0` here instead leaves an ACTIVE row whose only var is
+                # then fixed by that replication → an EMPTY Jacobian row.  On 20x41 that
+                # fabricates (|i|-|marg|)*|r| = 19*41 = 779 empty eq_xaa_tmg[check] rows
+                # that abort the direct solve.  Return None (the bridge skips the row,
+                # exactly like Constraint.Skip) so the removed row pairs the removed
+                # (fixed) column and the system stays square — matching GAMS and the
+                # monolith.
                 if i_str not in margin_commodities:
-                    return model.xaa[r, i, _TMG] == 0.0
+                    return None
                 alpha = alphaa_tmg.get((str(r), i_str), 0.0)
                 if alpha <= 0.0:
-                    return model.xaa[r, i, _TMG] == 0.0
+                    return None
                 sigmamg = float(el.sigmam.get(i_str, 1.0))
                 if abs(sigmamg - 1.0) < 1e-8:
                     sigmamg = 1.01
