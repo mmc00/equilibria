@@ -4242,11 +4242,26 @@ def _run_path_capi_nonlinear_full(
                                 _t_m = __import__("time").perf_counter()
                                 if _lu_tr is None:
                                     # sym=0 (unsymmetric). ICNTL(14): working-space %-increase
-                                    # (avoid fill-underestimate failures at 393k). ICNTL(6)=5:
-                                    # MUMPS scaling + zero-free-diagonal column permutation.
+                                    # (avoid fill-underestimate failures at 393k).
+                                    # ICNTL(6): column permutation / scaling strategy. We ALREADY
+                                    # give MUMPS a zero-free-diagonal matrix (_Jm_tr = J·P with P
+                                    # from the GAMS pairing). ICNTL(6)=5 makes MUMPS compute ITS
+                                    # OWN max-transversal permutation ON TOP, which discards our
+                                    # (correct) P and re-introduced the structural singularity →
+                                    # error -6 even after the paired colperm made the diagonal
+                                    # full (measured: kernel n2, "paired colperm 391839/391839"
+                                    # then "MUMPS error -6"). With our own P applied, default to
+                                    # ICNTL(6)=0 (no MUMPS permutation). Overridable to A/B other
+                                    # strategies (0/7) via EQUILIBRIA_GTAP_MUMPS_ICNTL6.
+                                    _icntl6 = int(
+                                        os.environ.get(
+                                            "EQUILIBRIA_GTAP_MUMPS_ICNTL6", "0"
+                                        )
+                                    )
                                     _lu_tr = _Mumps_tr(sym=0)
                                     _lu_tr.set_icntl(14, 100)
-                                    _lu_tr.set_icntl(6, 5)
+                                    _lu_tr.set_icntl(6, _icntl6)
+                                    _plog_m(f"ICNTL(6)={_icntl6} (0=no MUMPS perm; our P applied)")
                                     _lu_tr.do_symbolic_factorization(_Jm_tr)
                                     _plog_m(
                                         "symbolic factorization done in "
@@ -4261,7 +4276,19 @@ def _run_path_capi_nonlinear_full(
                                 )
                                 _lu_age_tr = 0
                             except Exception as _e_m:
-                                _plog_m(f"MUMPS FAILED: {_e_m}")
+                                # Log INFOG(1)/INFOG(2) so the failure is diagnosable from the
+                                # log instead of guessed: -6/-10 = structurally/numerically
+                                # singular (INFOG(2)=offending pivot), -9/-8 = workspace too
+                                # small (bump ICNTL(14)), etc.
+                                _infog = ""
+                                try:
+                                    _infog = (
+                                        f" INFOG(1)={_lu_tr.get_infog(1)} "
+                                        f"INFOG(2)={_lu_tr.get_infog(2)}"
+                                    )
+                                except Exception:
+                                    pass
+                                _plog_m(f"MUMPS FAILED: {_e_m}{_infog}")
                                 _lu_tr = None
                         else:
                             _lu_age_tr += 1
