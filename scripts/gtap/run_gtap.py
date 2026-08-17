@@ -4312,6 +4312,21 @@ def _run_path_capi_nonlinear_full(
                             or _lu_age_tr < 0
                         )
                         _Jm_tr = _J_tr[:, _colperm_tr].tocsr()
+                        # GMIN REGULARIZATION (SPICE's floating-node fix). The degenerate CET
+                        # cells (omegax=inf zero-share) leave xds/xet/... indeterminate → a
+                        # null pivot on those rows of J·P, exactly like a floating node in a
+                        # circuit. Circuit simulators add a tiny conductance to ground (GMIN)
+                        # to every node: (J·P + ε·I). ε is small enough not to move the root
+                        # (like GMIN→0) but removes the singularity so the direct factorization
+                        # completes and the Newton step is well-defined on those DOF. This is
+                        # the STANDARD floating-node remedy, applied globally — no per-family
+                        # patching. Env EQUILIBRIA_GTAP_GMIN (default 0 = off).
+                        _gmin = float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0)
+                        if _gmin > 0.0:
+                            from scipy.sparse import eye as _eye_gmin
+                            _Jm_tr = (
+                                _Jm_tr + _gmin * _eye_gmin(_n_sr, format="csr")
+                            ).tocsr()
                         if _need_lu:
                             try:
                                 _t_m = __import__("time").perf_counter()
