@@ -4333,9 +4333,22 @@ def _run_path_capi_nonlinear_full(
                                             "EQUILIBRIA_GTAP_MUMPS_NAME_NULLPIV"
                                         ) == "1":
                                             try:
-                                                _pnl = list(
-                                                    _lu_tr._mumps.id.pivnul_list
-                                                )
+                                                # ROBUST namer (no MUMPS ctypes internals — the
+                                                # pivnul_list pointer isn't portably iterable
+                                                # across PyMUMPS builds). A null pivot ≈ a row
+                                                # whose diagonal entry in J·P is ~0 relative to
+                                                # the row's magnitude. _Jm_tr = J[:, colperm], so
+                                                # its diagonal IS the paired-pivot value for each
+                                                # row. Rank-deficient rows = |diag| / rowmax tiny.
+                                                _JmC = _Jm_tr.tocsr()
+                                                _diagv = _JmC.diagonal()
+                                                _absJ = abs(_JmC)
+                                                _rowmax = _np_sr.asarray(
+                                                    _absJ.max(axis=1).todense()
+                                                ).flatten()
+                                                _rowmax[_rowmax <= 0] = 1.0
+                                                _ratio = _np_sr.abs(_diagv) / _rowmax
+                                                _bad = _np_sr.where(_ratio < 1e-10)[0]
                                                 _cons_nlp2 = (
                                                     _nlp_sr.get_pyomo_constraints()
                                                 )
@@ -4345,13 +4358,11 @@ def _run_path_capi_nonlinear_full(
                                                 from collections import Counter as _Ctr
                                                 _famc = _Ctr()
                                                 _examples = []
-                                                for _pi in _pnl:
-                                                    _ri = int(_pi) - 1  # 1-based → 0-based
+                                                for _ri in _bad.tolist():
                                                     if 0 <= _ri < len(_cons_nlp2):
                                                         _cn = str(_cons_nlp2[_ri])
                                                         _fam = _cn.split("[")[0]
                                                         _famc[_fam] += 1
-                                                        # the paired var on that row's diagonal
                                                         _cj = (
                                                             int(_colperm_tr[_ri])
                                                             if _ri < len(_colperm_tr)
@@ -4367,7 +4378,8 @@ def _run_path_capi_nonlinear_full(
                                                                 f"{_cn}⊥{_vn}"
                                                             )
                                                 _plog_m(
-                                                    "NULLPIV families: "
+                                                    f"NULLPIV rows(|diag|/rowmax<1e-10)="
+                                                    f"{len(_bad)} families: "
                                                     + ", ".join(
                                                         f"{_f}={_c}"
                                                         for _f, _c in _famc.most_common()
