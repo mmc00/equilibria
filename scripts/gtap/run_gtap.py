@@ -2780,15 +2780,36 @@ def _run_path_capi_nonlinear_full(
             _omegax = getattr(getattr(params, "elasticities", None), "omegax", {}) or {}
             _eq_xseq = getattr(model, "eq_xseq", None)
             if _eq_xseq is not None:
-                # GAMS eq (Python component) -> paired var basename
-                _supply_cycle = [
-                    ("eq_xs", "ps"),  # pseq ↔ ps
-                    ("eq_xds", "xds"),  # xdseq ↔ xds
-                    ("eq_pdeq", "pd"),  # pdeq ↔ pd
-                    ("eq_xet", "xet"),  # xeteq ↔ xet
-                    ("eq_peteq", "pet"),  # peteq ↔ pet
-                    ("eq_xseq", "xs"),  # xseq (free-row) ↔ xs
-                ]
+                # GAMS eq (Python component) -> paired var basename.
+                # Two pairings for the degenerate CET (omegax=inf):
+                #  PATH-style (default): eq_xds↔xds, eq_pdeq↔pd, eq_xet↔xet, eq_peteq↔pet.
+                #    PATH tolerates the paired var NOT appearing in the row body (it's the
+                #    MCP complementarity), so this works for the PATH arm.
+                #  ADJACENCY-style (EQUILIBRIA_GTAP_CET_DIRECT_PAIRING=1, for the DIRECT
+                #    Newton+MUMPS solver): under omegax=inf the model collapses to
+                #    eq_xds="pd==ps" (NO xds in the body) and eq_pdeq="xds==Σxda" (xds IS in
+                #    the body). A direct factorization needs the paired var to be IN the row,
+                #    so pair by real adjacency — CROSSED: eq_xds↔pd, eq_pdeq↔xds, eq_xet↔pet,
+                #    eq_peteq↔xet. Otherwise xds/xet get a null pivot (measured 20x41: ~283
+                #    null pivots, all the eq_pdeq/eq_xet/eq_peteq/eq_xds[*,shock] family).
+                if os.environ.get("EQUILIBRIA_GTAP_CET_DIRECT_PAIRING") == "1":
+                    _supply_cycle = [
+                        ("eq_xs", "ps"),  # pseq ↔ ps
+                        ("eq_xds", "pd"),  # eq_xds is pd==ps → pairs pd
+                        ("eq_pdeq", "xds"),  # eq_pdeq is xds==Σxda → pairs xds
+                        ("eq_xet", "pet"),  # eq_xet is pet==ps → pairs pet
+                        ("eq_peteq", "xet"),  # eq_peteq → pairs xet
+                        ("eq_xseq", "xs"),  # xseq (free-row) ↔ xs
+                    ]
+                else:
+                    _supply_cycle = [
+                        ("eq_xs", "ps"),  # pseq ↔ ps
+                        ("eq_xds", "xds"),  # xdseq ↔ xds
+                        ("eq_pdeq", "pd"),  # pdeq ↔ pd
+                        ("eq_xet", "xet"),  # xeteq ↔ xet
+                        ("eq_peteq", "pet"),  # peteq ↔ pet
+                        ("eq_xseq", "xs"),  # xseq (free-row) ↔ xs
+                    ]
                 for _idx in _eq_xseq:
                     if not (
                         isinstance(_idx, tuple)
