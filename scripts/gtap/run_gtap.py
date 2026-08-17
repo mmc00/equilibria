@@ -3993,6 +3993,47 @@ def _run_path_capi_nonlinear_full(
 
                 _F_tr = _Feval_tr(_x_tr)
                 _phi_tr = 0.5 * float(_F_tr @ _F_tr)  # merit = ½‖F‖²
+                # RELATIVE-RESIDUAL convergence (env EQUILIBRIA_GTAP_TR_RELTOL). The raw ‖F‖_inf
+                # is in ABSOLUTE flow units, so a huge-flow cell (e.g. eq_xma[KOR,Sugar]: Sugar
+                # imports into Korea = 31,945) can hold a residual of ~25 that is only 0.08%
+                # relative — the cell IS solved (GEMPACK confirms it barely moves, -0.76%), but
+                # ‖F‖_inf never drops below ~25 and the absolute ftol=1e-7 is unreachable. GAMS
+                # converges on the SCALED residual (scaleopt). Compute a per-equation
+                # characteristic magnitude from the seed (max |value| of the eq's own vars,
+                # floored at 1 — same rule as BENCH_SCALE) and, when TR_RELTOL is set, declare
+                # convergence on ‖F / fscale‖_inf < reltol instead of the raw absolute norm.
+                _reltol_tr = float(
+                    os.environ.get("EQUILIBRIA_GTAP_TR_RELTOL", "0") or 0.0
+                )
+                _fscale_tr = None
+                if _reltol_tr > 0.0:
+                    try:
+                        from pyomo.core.expr.visitor import (
+                            identify_variables as _idv_fs,
+                        )
+                        from pyomo.environ import value as _val_fs
+                        _cons_fs = _nlp_sr.get_pyomo_constraints()
+                        _fscale_tr = _np_sr.ones(len(_cons_fs))
+                        for _ii, _c_fs in enumerate(_cons_fs):
+                            _mag = 1.0
+                            for _v_fs in _idv_fs(_c_fs.body, include_fixed=False):
+                                _vv = _val_fs(_v_fs, exception=False)
+                                if _vv is not None:
+                                    _mag = max(_mag, abs(float(_vv)))
+                            _fscale_tr[_ii] = _mag
+                        print(
+                            f"[nlp-square] REL-RESID convergence ON: reltol={_reltol_tr:.1e}, "
+                            f"fscale range [{_fscale_tr.min():.1e}, {_fscale_tr.max():.1e}]",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    except Exception as _fse:
+                        print(
+                            f"[nlp-square] fscale build failed ({_fse}); abs residual only",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        _fscale_tr = None
                 # DIAGNOSTIC (env EQUILIBRIA_GTAP_JAC_DUMP=path.npz): dump the exact sparse
                 # Jacobian at the seed and abort — for offline structural analysis (Dulmage-
                 # Mendelsohn BTF, block sizes, direct-solver benchmarking à la GEMPACK/MA48).
@@ -4186,6 +4227,24 @@ def _run_path_capi_nonlinear_full(
                 _lu_age_tr = 0  # iterations since last refactor
                 for _k_tr in range(_maxit_tr):
                     _rinf_tr = float(_np_sr.linalg.norm(_F_tr, _np_sr.inf))
+                    # absolute-tol convergence (default) OR relative-tol (TR_RELTOL): the
+                    # per-equation scaled residual ‖F/fscale‖_inf, so huge-flow cells with a
+                    # small RELATIVE residual don't block convergence (see fscale note above).
+                    if _fscale_tr is not None:
+                        _rrel_tr = float(
+                            _np_sr.linalg.norm(_F_tr / _fscale_tr, _np_sr.inf)
+                        )
+                        if _rrel_tr < _reltol_tr:
+                            _conv_tr = True
+                            if _k_tr % 10 == 0 or _rrel_tr < _reltol_tr:
+                                print(
+                                    f"[nlp-square] CONVERGED (relative): "
+                                    f"‖F/scale‖_inf={_rrel_tr:.2e} < {_reltol_tr:.1e} "
+                                    f"(‖F‖_inf abs={_rinf_tr:.2e})",
+                                    file=sys.stderr,
+                                    flush=True,
+                                )
+                            break
                     if _rinf_tr < _ftol_tr:
                         _conv_tr = True
                         break
