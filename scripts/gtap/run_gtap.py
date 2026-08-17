@@ -4787,9 +4787,14 @@ def _run_path_capi_nonlinear_full(
                     elif _rho_tr < 0.25:
                         _delta_tr = max(0.25 * _delta_tr, 1e-10)  # shrink
                     if _k_tr % 5 == 0:
+                        _relstr = ""
+                        if _fscale_tr is not None:
+                            _relstr = (
+                                f" ||F/scale||={float(_np_sr.linalg.norm(_F_tr / _fscale_tr, _np_sr.inf)):.3e}"
+                            )
                         print(
-                            f"[nlp-square] NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e} "
-                            f"ρ={_rho_tr:.2f} Δ={_delta_tr:.2e} LUage={_lu_age_tr}",
+                            f"[nlp-square] NEWTON-TR it={_k_tr} ||F||_inf={_rinf_tr:.3e}"
+                            f"{_relstr} ρ={_rho_tr:.2f} Δ={_delta_tr:.2e} LUage={_lu_age_tr}",
                             file=sys.stderr,
                             flush=True,
                         )
