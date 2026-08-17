@@ -2845,21 +2845,40 @@ def _run_path_capi_nonlinear_full(
                     for _v in _idv_dg(_c.body, include_fixed=False)
                     if not _v.fixed
                 ]
-                # a trivial `var == 0` degeneracy row: exactly ONE free var and the row is
-                # that var pinned to a constant (GAMS would have .fx'd it and skipped the eq).
+                # a trivial `var == 0` degeneracy row: exactly ONE free var AND the row
+                # evaluates to (var - const) with the var's coefficient ±1 and const ~0,
+                # i.e. it literally pins `var == 0` (GAMS would .fx it and skip the eq).
+                # ONLY the zero-share QUANTITY families whose rama-1 is `q == 0` qualify:
+                # xds/xet/xi/xft. NOT nd/xs — eq_nd is a real demand row and eq_xs a balance;
+                # fixing those cascades other rows to 0==0 (measured n7: fixing nd emptied 84
+                # eq_nd rows). Verify the row is truly `var==0` before fixing.
                 if len(_body_vars) == 1:
                     _v = _body_vars[0]
-                    # only treat the known zero-share degeneracy families (be conservative:
-                    # don't fix genuine 1-var definitional rows elsewhere).
                     _vb = _v.name.split("[")[0]
-                    if _vb in ("xds", "xet", "xi", "xft", "xs", "nd"):
+                    if _vb in ("xds", "xet", "xi", "xft"):
+                        # confirm the row is `1*var == 0`: body value at var=0 must be ~0
+                        # and at var=1 must be ~±1 (so it's a pure pin, not a scaled defn).
+                        _is_trivial_zero = False
                         try:
-                            _v.fix(0.0)
-                            _drop_cons.add(id(_c))
-                            _drop_vars.add(id(_v))
-                            _n_fixed_dg += 1
+                            from pyomo.environ import value as _dgval
+                            _v0 = _v.value
+                            _v.set_value(0.0)
+                            _b0 = float(_dgval(_c.body))
+                            _v.set_value(1.0)
+                            _b1 = float(_dgval(_c.body))
+                            _v.set_value(_v0)
+                            if abs(_b0) < 1e-9 and abs(abs(_b1 - _b0) - 1.0) < 1e-6:
+                                _is_trivial_zero = True
                         except Exception:
-                            pass
+                            _is_trivial_zero = False
+                        if _is_trivial_zero:
+                            try:
+                                _v.fix(0.0)
+                                _drop_cons.add(id(_c))
+                                _drop_vars.add(id(_v))
+                                _n_fixed_dg += 1
+                            except Exception:
+                                pass
             if _drop_cons:
                 constraints = [
                     c for c in constraints if id(c) not in _drop_cons
