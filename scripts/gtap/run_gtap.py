@@ -4058,6 +4058,53 @@ def _run_path_capi_nonlinear_full(
                         print(f"[nlp-square] {_msg_g}", file=sys.stderr, flush=True)
                         raise RuntimeError(_msg_g)
 
+                # PAIRED zero-free-diagonal column permutation (fixes MUMPS/splu error -6 on
+                # 20x41). The direct/mumps solvers need a column permutation P so that (J P)
+                # has a zero-free diagonal (the raw GTAP Jacobian has a ~100% ZERO diagonal:
+                # eq-i vs var-i by name). The OLD code computed P via
+                # maximum_bipartite_matching(J) on the NUMERIC Jacobian — but the MCP forced
+                # pairs (eq_pdeq⊥pd, eq_pfeq⊥pf...) have their paired var in ANOTHER row (the
+                # complementarity, not adjacency), and on 20x41 several such entries are also
+                # numerically ~0 at the seed, so the adjacency matching is NOT full → it fell
+                # back to IDENTITY → zero diagonal → MUMPS error -6 every step, ‖F‖ frozen.
+                #
+                # The correct pairing already exists: structural_matching(forced_pairs=
+                # _gams_pairs) reordered `free_variables` so that free_variables[i] is the
+                # variable GAMS pairs with constraints[i] (INCLUDING the hard MCP pairs whose
+                # var is not in the row body). Build P from THAT positional pairing, mapped to
+                # the PyomoNLP's own row/column index order. This yields a full transversal
+                # where the numeric matching could not. Computed once (structural, reused).
+                def _paired_colperm():
+                    try:
+                        _cons_nlp = _nlp_sr.get_pyomo_constraints()
+                        _vars_nlp = _nlp_sr.get_pyomo_variables()
+                        # NLP index of each constraint/variable object (identity keyed)
+                        _row_of = {id(_c): _i for _i, _c in enumerate(_cons_nlp)}
+                        _col_of = {id(_v): _j for _j, _v in enumerate(_vars_nlp)}
+                        # structural_matching guarantees constraints[k] ↔ free_variables[k].
+                        # perm[row_i] = col_j means "column j sits on the diagonal of row i".
+                        _perm = _np_sr.full(_n_sr, -1, dtype=int)
+                        _matched = 0
+                        for _c_obj, _v_obj in zip(constraints, free_variables):
+                            _ri = _row_of.get(id(_c_obj))
+                            _cj = _col_of.get(id(_v_obj))
+                            if _ri is None or _cj is None:
+                                continue
+                            _perm[_ri] = _cj
+                            _matched += 1
+                        # Fill any rows the pairing missed with leftover columns (keeps P a
+                        # valid permutation even if a handful of pairs didn't resolve).
+                        _used = set(int(x) for x in _perm if x >= 0)
+                        _free_cols = [j for j in range(_n_sr) if j not in _used]
+                        _fi = 0
+                        for _i in range(_n_sr):
+                            if _perm[_i] < 0:
+                                _perm[_i] = _free_cols[_fi]
+                                _fi += 1
+                        return _perm, _matched
+                    except Exception:
+                        return None, 0
+
                 _conv_tr = False
                 _k_tr = 0
                 _lu_tr = None
@@ -4151,18 +4198,38 @@ def _run_path_capi_nonlinear_full(
                         # structural column permutation → zero-free diagonal (compute once)
                         if _colperm_tr is None:
                             _t_m = __import__("time").perf_counter()
-                            _colperm_tr = _mbm_m(_J_tr.tocsr(), perm_type="column")
-                            if _np_sr.any(_colperm_tr < 0):
+                            # PREFER the GAMS pairing (structural_matching), which resolves
+                            # the MCP forced pairs the numeric matching cannot (see
+                            # _paired_colperm above). Fall back to numeric matching, then
+                            # identity, only if the pairing is unavailable/incomplete.
+                            _pp_m, _pm_matched = _paired_colperm()
+                            if _pp_m is not None and _pm_matched >= _n_sr:
+                                _colperm_tr = _pp_m
                                 _plog_m(
-                                    "matching NOT full — using identity (rank-deficient)"
+                                    "paired colperm (GAMS structural_matching) "
+                                    f"{_pm_matched}/{_n_sr} in "
+                                    f"{__import__('time').perf_counter() - _t_m:.1f}s"
                                 )
-                                _colperm_tr = _np_sr.arange(_n_sr)
                             else:
-                                _plog_m(
-                                    "col matching done in "
-                                    f"{__import__('time').perf_counter() - _t_m:.1f}s "
-                                    f"(n={_n_sr})"
-                                )
+                                _colperm_tr = _mbm_m(_J_tr.tocsr(), perm_type="column")
+                                if _np_sr.any(_colperm_tr < 0):
+                                    if _pp_m is not None:
+                                        _colperm_tr = _pp_m
+                                        _plog_m(
+                                            "numeric matching NOT full — using PAIRED "
+                                            f"colperm ({_pm_matched}/{_n_sr} matched)"
+                                        )
+                                    else:
+                                        _plog_m(
+                                            "matching NOT full — using identity (rank-deficient)"
+                                        )
+                                        _colperm_tr = _np_sr.arange(_n_sr)
+                                else:
+                                    _plog_m(
+                                        "col matching done in "
+                                        f"{__import__('time').perf_counter() - _t_m:.1f}s "
+                                        f"(n={_n_sr})"
+                                    )
                         _need_lu = (
                             _lu_tr is None
                             or _refresh_tr <= 1
@@ -4245,15 +4312,33 @@ def _run_path_capi_nonlinear_full(
 
                         if _colperm_tr is None:
                             _t_d = __import__("time").perf_counter()
-                            _colperm_tr = _mbm_tr(_J_tr.tocsr(), perm_type="column")
-                            _plog_d(
-                                f"matching done in {__import__('time').perf_counter() - _t_d:.1f}s "
-                                f"(n={_n_sr})"
-                            )
-                            if _np_sr.any(_colperm_tr < 0):
-                                _colperm_tr = _np_sr.arange(
-                                    _n_sr
-                                )  # rank-deficient fallback
+                            # PREFER the GAMS pairing (resolves MCP forced pairs the numeric
+                            # matching misses); fall back to numeric matching, then identity.
+                            _pp_d, _pd_matched = _paired_colperm()
+                            if _pp_d is not None and _pd_matched >= _n_sr:
+                                _colperm_tr = _pp_d
+                                _plog_d(
+                                    "paired colperm (GAMS structural_matching) "
+                                    f"{_pd_matched}/{_n_sr} in "
+                                    f"{__import__('time').perf_counter() - _t_d:.1f}s"
+                                )
+                            else:
+                                _colperm_tr = _mbm_tr(_J_tr.tocsr(), perm_type="column")
+                                _plog_d(
+                                    f"matching done in {__import__('time').perf_counter() - _t_d:.1f}s "
+                                    f"(n={_n_sr})"
+                                )
+                                if _np_sr.any(_colperm_tr < 0):
+                                    if _pp_d is not None:
+                                        _colperm_tr = _pp_d  # paired fallback
+                                        _plog_d(
+                                            "numeric matching NOT full — using PAIRED "
+                                            f"colperm ({_pd_matched}/{_n_sr} matched)"
+                                        )
+                                    else:
+                                        _colperm_tr = _np_sr.arange(
+                                            _n_sr
+                                        )  # rank-deficient fallback
                         _need_lu = (
                             _lu_tr is None
                             or _refresh_tr <= 1
