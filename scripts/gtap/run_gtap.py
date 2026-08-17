@@ -4265,10 +4265,26 @@ def _run_path_capi_nonlinear_full(
                                 for _i in _topk
                             )
                             print(
-                                f"[nlp-square] WORST-RESID it={_k_tr}: {_wr}",
+                                f"[nlp-square] WORST-RESID(abs) it={_k_tr}: {_wr}",
                                 file=sys.stderr,
                                 flush=True,
                             )
+                            # RELATIVE worst — the cell that actually blocks rel-tol
+                            # convergence (|F|/fscale). This is the one that matters once
+                            # abs residual is dominated by huge-flow-but-solved cells.
+                            if _fscale_tr is not None:
+                                _relF = _absF / _fscale_tr
+                                _topr = _np_sr.argsort(_relF)[::-1][:8]
+                                _wrr = "; ".join(
+                                    f"{str(_cons_wr[int(_i)])}={_relF[int(_i)]:.2e}"
+                                    f"(abs={_absF[int(_i)]:.1e})"
+                                    for _i in _topr
+                                )
+                                print(
+                                    f"[nlp-square] WORST-RESID(rel) it={_k_tr}: {_wrr}",
+                                    file=sys.stderr,
+                                    flush=True,
+                                )
                         except Exception as _wre:
                             print(
                                 f"[nlp-square] worst-resid namer failed: {_wre}",
