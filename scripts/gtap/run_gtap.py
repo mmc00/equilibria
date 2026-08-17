@@ -4323,6 +4323,64 @@ def _run_path_capi_nonlinear_full(
                                     _nnull = _lu_tr.get_infog(28)
                                     if _nnull:
                                         _plog_m(f"null pivots detected: {_nnull}")
+                                        # NAME the null-pivot rows (env EQUILIBRIA_GTAP_MUMPS_
+                                        # NAME_NULLPIV=1). MUMPS fills id.pivnul_list with the
+                                        # 1-based indices of the null pivots. In the permuted
+                                        # matrix _Jm_tr, position i corresponds to constraints[i]
+                                        # (rows are NOT permuted; only columns via _colperm_tr).
+                                        # So pivnul index → constraint name → equation FAMILY.
+                                        if os.environ.get(
+                                            "EQUILIBRIA_GTAP_MUMPS_NAME_NULLPIV"
+                                        ) == "1":
+                                            try:
+                                                _pnl = list(
+                                                    _lu_tr._mumps.id.pivnul_list
+                                                )
+                                                _cons_nlp2 = (
+                                                    _nlp_sr.get_pyomo_constraints()
+                                                )
+                                                _vars_nlp2 = (
+                                                    _nlp_sr.get_pyomo_variables()
+                                                )
+                                                from collections import Counter as _Ctr
+                                                _famc = _Ctr()
+                                                _examples = []
+                                                for _pi in _pnl:
+                                                    _ri = int(_pi) - 1  # 1-based → 0-based
+                                                    if 0 <= _ri < len(_cons_nlp2):
+                                                        _cn = str(_cons_nlp2[_ri])
+                                                        _fam = _cn.split("[")[0]
+                                                        _famc[_fam] += 1
+                                                        # the paired var on that row's diagonal
+                                                        _cj = (
+                                                            int(_colperm_tr[_ri])
+                                                            if _ri < len(_colperm_tr)
+                                                            else -1
+                                                        )
+                                                        _vn = (
+                                                            str(_vars_nlp2[_cj])
+                                                            if 0 <= _cj < len(_vars_nlp2)
+                                                            else "?"
+                                                        )
+                                                        if len(_examples) < 20:
+                                                            _examples.append(
+                                                                f"{_cn}⊥{_vn}"
+                                                            )
+                                                _plog_m(
+                                                    "NULLPIV families: "
+                                                    + ", ".join(
+                                                        f"{_f}={_c}"
+                                                        for _f, _c in _famc.most_common()
+                                                    )
+                                                )
+                                                _plog_m(
+                                                    "NULLPIV examples: "
+                                                    + "; ".join(_examples)
+                                                )
+                                            except Exception as _ne:
+                                                _plog_m(
+                                                    f"nullpiv naming failed: {_ne}"
+                                                )
                                 except Exception:
                                     pass
                                 _plog_m(
