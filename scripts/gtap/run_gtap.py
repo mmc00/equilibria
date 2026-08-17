@@ -4323,11 +4323,24 @@ def _run_path_capi_nonlinear_full(
                         # patching. Env EQUILIBRIA_GTAP_GMIN (default 0 = off).
                         _gmin = float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0)
                         if _gmin > 0.0:
-                            from scipy.sparse import eye as _eye_gmin
-                            _Jm_tr = (
-                                _Jm_tr + _gmin * _eye_gmin(_n_sr, format="csr")
-                            ).tocsr()
-                        if _need_lu:
+                            # Add ε to EVERY diagonal, materialized as an explicit stored entry
+                            # (setdiag on lil forces the slot to exist even where J·P had a 0).
+                            # This keeps the nonzero PATTERN fixed across Newton steps — MUMPS
+                            # analyzes the symbol once and reuses it, and aborts "nonzeros
+                            # changed between symbolic and numeric" if the degenerate diagonals
+                            # flip in/out (measured n9). Also FORCE re-symbolization each factor
+                            # when GMIN is on (below) so the analyzed pattern always matches.
+                            _Jm_lil = _Jm_tr.tolil()
+                            _Jm_lil.setdiag(_Jm_lil.diagonal() + _gmin)
+                            _Jm_tr = _Jm_lil.tocsr()
+                            # Force a FRESH symbolic+numeric factorization every step under
+                            # GMIN (don't reuse the analyzed pattern): the ~30 degenerate
+                            # diagonals can still change stored-nnz between steps despite
+                            # setdiag (explicit-zero handling varies), and re-analyzing is
+                            # cheap (~8s) next to a stalled solve. Guarantees symbolic pattern
+                            # == numeric pattern.
+                            _lu_tr = None
+                        if _need_lu or _gmin > 0.0:
                             try:
                                 _t_m = __import__("time").perf_counter()
                                 if _lu_tr is None:
