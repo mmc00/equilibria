@@ -2780,36 +2780,17 @@ def _run_path_capi_nonlinear_full(
             _omegax = getattr(getattr(params, "elasticities", None), "omegax", {}) or {}
             _eq_xseq = getattr(model, "eq_xseq", None)
             if _eq_xseq is not None:
-                # GAMS eq (Python component) -> paired var basename.
-                # Two pairings for the degenerate CET (omegax=inf):
-                #  PATH-style (default): eq_xds↔xds, eq_pdeq↔pd, eq_xet↔xet, eq_peteq↔pet.
-                #    PATH tolerates the paired var NOT appearing in the row body (it's the
-                #    MCP complementarity), so this works for the PATH arm.
-                #  ADJACENCY-style (EQUILIBRIA_GTAP_CET_DIRECT_PAIRING=1, for the DIRECT
-                #    Newton+MUMPS solver): under omegax=inf the model collapses to
-                #    eq_xds="pd==ps" (NO xds in the body) and eq_pdeq="xds==Σxda" (xds IS in
-                #    the body). A direct factorization needs the paired var to be IN the row,
-                #    so pair by real adjacency — CROSSED: eq_xds↔pd, eq_pdeq↔xds, eq_xet↔pet,
-                #    eq_peteq↔xet. Otherwise xds/xet get a null pivot (measured 20x41: ~283
-                #    null pivots, all the eq_pdeq/eq_xet/eq_peteq/eq_xds[*,shock] family).
-                if os.environ.get("EQUILIBRIA_GTAP_CET_DIRECT_PAIRING") == "1":
-                    _supply_cycle = [
-                        ("eq_xs", "ps"),  # pseq ↔ ps
-                        ("eq_xds", "pd"),  # eq_xds is pd==ps → pairs pd
-                        ("eq_pdeq", "xds"),  # eq_pdeq is xds==Σxda → pairs xds
-                        ("eq_xet", "pet"),  # eq_xet is pet==ps → pairs pet
-                        ("eq_peteq", "xet"),  # eq_peteq → pairs xet
-                        ("eq_xseq", "xs"),  # xseq (free-row) ↔ xs
-                    ]
-                else:
-                    _supply_cycle = [
-                        ("eq_xs", "ps"),  # pseq ↔ ps
-                        ("eq_xds", "xds"),  # xdseq ↔ xds
-                        ("eq_pdeq", "pd"),  # pdeq ↔ pd
-                        ("eq_xet", "xet"),  # xeteq ↔ xet
-                        ("eq_peteq", "pet"),  # peteq ↔ pet
-                        ("eq_xseq", "xs"),  # xseq (free-row) ↔ xs
-                    ]
+                # GAMS pairing (model.gms:1409-1411): xdseq.xds, xeteq.xet, xseq(free),
+                # peteq.pet, pdeq.pd. This is GAMS-FAITHFUL and unchanged (my earlier
+                # CET_DIRECT_PAIRING cross-pairing was WRONG — GAMS uses eq_xds↔xds).
+                _supply_cycle = [
+                    ("eq_xs", "ps"),  # pseq ↔ ps
+                    ("eq_xds", "xds"),  # xdseq ↔ xds
+                    ("eq_pdeq", "pd"),  # pdeq ↔ pd
+                    ("eq_xet", "xet"),  # xeteq ↔ xet
+                    ("eq_peteq", "pet"),  # peteq ↔ pet
+                    ("eq_xseq", "xs"),  # xseq (free-row) ↔ xs
+                ]
                 for _idx in _eq_xseq:
                     if not (
                         isinstance(_idx, tuple)
@@ -2839,6 +2820,60 @@ def _run_path_capi_nonlinear_full(
                                 True,
                             )
                         )
+
+        # DIRECT-SOLVER DEGENERACY FIX (EQUILIBRIA_GTAP_DIRECT_DEGEN_FIX=1). GAMS handles
+        # zero-share / flag-off cells by NOT generating the equation ($flag condition) and
+        # FIXING the quantity to 0 (iterloop.gms:112-146: xds.fx$(not xdFlag)=0,
+        # xet.fx$(not xetFlag)=0, xft.fx$(not xftFlag)=0, ...). Python instead emits a
+        # trivial `var == 0` row (eq_xds/eq_xi rama-1) or Skips the eq but leaves the var
+        # FREE (eq_xfteq) — either way the DIRECT factorization gets a null pivot (measured
+        # 20x41: 214 null pivots = eq_xds/eq_xi/eq_xfteq[*,shock] zero-share cells). PATH
+        # tolerates this (complementarity var≥0 ⊥ triv-row); a direct solver cannot.
+        # Faithful fix: for those cells, fix the var to 0 (= GAMS .fx=0) and drop the
+        # redundant row+col from the squared system so the diagonal stays pivotable.
+        if os.environ.get("EQUILIBRIA_GTAP_DIRECT_DEGEN_FIX") == "1":
+            from pyomo.core.expr.visitor import (
+                identify_variables as _idv_dg,
+            )
+            _cons_set = set(id(c) for c in constraints)
+            _drop_cons = set()
+            _drop_vars = set()
+            _n_fixed_dg = 0
+            for _c in list(constraints):
+                _body_vars = [
+                    _v
+                    for _v in _idv_dg(_c.body, include_fixed=False)
+                    if not _v.fixed
+                ]
+                # a trivial `var == 0` degeneracy row: exactly ONE free var and the row is
+                # that var pinned to a constant (GAMS would have .fx'd it and skipped the eq).
+                if len(_body_vars) == 1:
+                    _v = _body_vars[0]
+                    # only treat the known zero-share degeneracy families (be conservative:
+                    # don't fix genuine 1-var definitional rows elsewhere).
+                    _vb = _v.name.split("[")[0]
+                    if _vb in ("xds", "xet", "xi", "xft", "xs", "nd"):
+                        try:
+                            _v.fix(0.0)
+                            _drop_cons.add(id(_c))
+                            _drop_vars.add(id(_v))
+                            _n_fixed_dg += 1
+                        except Exception:
+                            pass
+            if _drop_cons:
+                constraints = [
+                    c for c in constraints if id(c) not in _drop_cons
+                ]
+                free_variables = [
+                    v for v in free_variables if id(v) not in _drop_vars
+                ]
+                print(
+                    f"[nlp-square] DIRECT_DEGEN_FIX: fixed {_n_fixed_dg} zero-share "
+                    f"quantities to 0 and dropped their trivial rows "
+                    f"(system now {len(constraints)}x{len(free_variables)})",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
         free_variables = structural_matching(
             constraints,
