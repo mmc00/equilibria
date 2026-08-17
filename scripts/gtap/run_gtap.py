@@ -4189,6 +4189,33 @@ def _run_path_capi_nonlinear_full(
                     if _rinf_tr < _ftol_tr:
                         _conv_tr = True
                         break
+                    # WORST-RESIDUAL NAMER (env EQUILIBRIA_GTAP_NAME_WORST_RESID=1): which
+                    # equations hold the largest |F|? Tells whether the stuck residual lives
+                    # in the GMIN-touched degenerate rows (→ ε is the lever) or in normal rows
+                    # (→ it's the step/TR). Report the top-8 by |F| every 10 iters.
+                    if (
+                        os.environ.get("EQUILIBRIA_GTAP_NAME_WORST_RESID") == "1"
+                        and _k_tr % 10 == 0
+                    ):
+                        try:
+                            _cons_wr = _nlp_sr.get_pyomo_constraints()
+                            _absF = _np_sr.abs(_F_tr)
+                            _topk = _np_sr.argsort(_absF)[::-1][:8]
+                            _wr = "; ".join(
+                                f"{str(_cons_wr[int(_i)])}={_absF[int(_i)]:.2e}"
+                                for _i in _topk
+                            )
+                            print(
+                                f"[nlp-square] WORST-RESID it={_k_tr}: {_wr}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                        except Exception as _wre:
+                            print(
+                                f"[nlp-square] worst-resid namer failed: {_wre}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
                     _nlp_sr.set_primals(_x_tr)
                     _J_tr = _nlp_sr.evaluate_jacobian_eq().tocsc()
                     _g_tr = _J_tr.T @ _F_tr  # gradient of merit = JᵀF
