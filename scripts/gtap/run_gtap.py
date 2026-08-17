@@ -4258,10 +4258,56 @@ def _run_path_capi_nonlinear_full(
                                             "EQUILIBRIA_GTAP_MUMPS_ICNTL6", "0"
                                         )
                                     )
+                                    # ICNTL(7): fill-reducing ordering. Default PORD SEGFAULTED
+                                    # in libpord (findIndMultisecs) on the 393k GTAP pattern
+                                    # (measured n3). METIS (5) is robust at this scale — switch
+                                    # away from PORD. ICNTL(8): row/col SCALING. =8 is MUMPS's
+                                    # iterative row/col equilibration (Ruiz-like) — the numeric
+                                    # fix for error -10 (numerically singular pivot 391545 = the
+                                    # ill-conditioned eq_pfeq[Land] row, coef ~680 vs xft~2e-4).
+                                    # ICNTL(24)=1: detect+handle null pivots instead of aborting
+                                    # -10; CNTL(3) sets the null-pivot threshold (small relative).
+                                    # Default AMD (0): universally available (unlike METIS/5,
+                                    # which needs MUMPS compiled --with-metis — not guaranteed
+                                    # on Kaggle's libmumps) and NOT PORD, so it avoids the
+                                    # libpord segfault. Override to 5 (METIS) if the build has it.
+                                    _icntl7 = int(
+                                        os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL7", "0")
+                                    )  # 0=AMD (safe, avoids PORD segfault)
+                                    _icntl8 = int(
+                                        os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL8", "8")
+                                    )  # 8=iterative row/col scaling (MUMPS Ruiz)
+                                    _icntl24 = int(
+                                        os.environ.get(
+                                            "EQUILIBRIA_GTAP_MUMPS_ICNTL24", "1"
+                                        )
+                                    )  # 1=null-pivot detection
                                     _lu_tr = _Mumps_tr(sym=0)
                                     _lu_tr.set_icntl(14, 100)
                                     _lu_tr.set_icntl(6, _icntl6)
-                                    _plog_m(f"ICNTL(6)={_icntl6} (0=no MUMPS perm; our P applied)")
+                                    _lu_tr.set_icntl(7, _icntl7)
+                                    _lu_tr.set_icntl(8, _icntl8)
+                                    _lu_tr.set_icntl(24, _icntl24)
+                                    # CNTL(3): null-pivot threshold (used when ICNTL(24)=1).
+                                    # Small relative value so only genuinely ~0 pivots are
+                                    # treated as null (not the merely small-but-valid ones).
+                                    if _icntl24:
+                                        try:
+                                            _lu_tr.set_cntl(
+                                                3,
+                                                float(
+                                                    os.environ.get(
+                                                        "EQUILIBRIA_GTAP_MUMPS_CNTL3",
+                                                        "-1e-8",
+                                                    )
+                                                ),
+                                            )
+                                        except Exception:
+                                            pass
+                                    _plog_m(
+                                        f"ICNTL 6={_icntl6}(perm) 7={_icntl7}(order) "
+                                        f"8={_icntl8}(scale) 24={_icntl24}(nullpiv)"
+                                    )
                                     _lu_tr.do_symbolic_factorization(_Jm_tr)
                                     _plog_m(
                                         "symbolic factorization done in "
@@ -4270,6 +4316,15 @@ def _run_path_capi_nonlinear_full(
                                     )
                                     _t_m = __import__("time").perf_counter()
                                 _lu_tr.do_numeric_factorization(_Jm_tr)
+                                # INFOG(28) = number of null pivots detected (ICNTL(24)=1). A
+                                # handful is fine (the TR rejects a bad step); many means the
+                                # scaling didn't rescue the ill-conditioned rows.
+                                try:
+                                    _nnull = _lu_tr.get_infog(28)
+                                    if _nnull:
+                                        _plog_m(f"null pivots detected: {_nnull}")
+                                except Exception:
+                                    pass
                                 _plog_m(
                                     "numeric factorization done in "
                                     f"{__import__('time').perf_counter() - _t_m:.1f}s"
