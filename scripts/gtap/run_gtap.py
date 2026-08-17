@@ -3203,6 +3203,8 @@ def _run_path_capi_nonlinear_full(
                     PyomoNLP as _PyNLP_re,
                 )
 
+                from scipy.sparse import diags as _diags_re
+
                 model.scaling_factor = _PyoSuffix3(direction=_PyoSuffix3.EXPORT)
                 # PyomoNLP needs an objective; the squared-NLP objective is added on
                 # `model` just above, so build the NLP on `model` (not _solve_target,
@@ -3211,33 +3213,54 @@ def _run_path_capi_nonlinear_full(
                 _J_re = _nlp_re.evaluate_jacobian_eq().tocsr()
                 _cons_re = _nlp_re.get_pyomo_constraints()
                 _vars_re = _nlp_re.get_pyomo_variables()
-                # row ∞-norm (max |entry| per row)
-                _rowmax = _np_re.maximum.reduceat(
-                    _np_re.abs(_J_re.data), _J_re.indptr[:-1]
-                ) if _J_re.nnz else _np_re.ones(_J_re.shape[0])
-                # reduceat mis-handles empty rows; recompute robustly per row
-                _absJ = _np_re.abs(_J_re)
-                _rowmax = _np_re.asarray(_absJ.max(axis=1).todense()).flatten()
-                _nrow = 0
-                _worst = 0.0
+                _m_re, _n_re = _J_re.shape
+                # RUIZ ITERATIVE EQUILIBRATION (the power-flow / circuit-solver method).
+                # A ONE-PASS row-then-col scaling leaves a residual scale spread when the
+                # matrix is badly conditioned in BOTH dimensions at once — 20x41's spread is
+                # ~1e7 (coef 679/2461 next to var xft≈2e-4) vs 15x10's ~1e2, so one pass
+                # converges 15x10 but not 20x41 (inf_du~5e14). Ruiz alternates row and
+                # column ∞-norm scaling with a SQUARE-ROOT step (D_i ← D_i/sqrt(max|row_i|),
+                # E_j ← E_j/sqrt(max|col_j|)) and iterates until every row/col ∞-norm ≈ 1 —
+                # the same equilibration solvers use to make million-node grids tractable.
+                # Accumulated factors R (rows) and C (cols) are what we hand IPOPT.
+                _R = _np_re.ones(_m_re)
+                _C = _np_re.ones(_n_re)
+                _Jw = _J_re.copy()
+                _RUIZ_ITERS = int(os.environ.get("EQUILIBRIA_GTAP_RUIZ_ITERS", "20"))
+                _spread0 = 0.0
+                _spread = 0.0
+                for _it_re in range(_RUIZ_ITERS):
+                    _aJ = abs(_Jw).tocsr()
+                    _rn = _np_re.asarray(_aJ.max(axis=1).todense()).flatten()
+                    _cn = _np_re.asarray(_aJ.max(axis=0).todense()).flatten()
+                    _rn[_rn <= 0.0] = 1.0
+                    _cn[_cn <= 0.0] = 1.0
+                    _alln = _np_re.concatenate([_rn, _cn])
+                    _sp = float(_alln.max() / _alln.min())
+                    if _it_re == 0:
+                        _spread0 = _sp
+                    _spread = _sp
+                    if _sp < 1.5:  # equilibrated (all norms within [1/1.5, 1.5])
+                        break
+                    _dr = 1.0 / _np_re.sqrt(_rn)
+                    _dc = 1.0 / _np_re.sqrt(_cn)
+                    _R *= _dr
+                    _C *= _dc
+                    _Jw = (_diags_re(_dr) @ _Jw @ _diags_re(_dc)).tocsr()
+                # clamp the accumulated factors to a sane band (avoid amplifying ~0 cols)
+                _R = _np_re.clip(_R, 1e-8, 1e8)
+                _C = _np_re.clip(_C, 1e-8, 1e8)
                 for _i_re, _c3 in enumerate(_cons_re):
-                    _rm = float(_rowmax[_i_re]) if _i_re < len(_rowmax) else 1.0
-                    _worst = max(_worst, _rm)
-                    model.scaling_factor[_c3] = 1.0 / max(1.0, _rm)
-                    _nrow += 1
-                # columns: 1/max(1,|col ∞-norm|) so IPOPT sees an O(1) problem both ways
-                _colmax = _np_re.asarray(_absJ.max(axis=0).todense()).flatten()
-                _nvar = 0
+                    model.scaling_factor[_c3] = float(_R[_i_re])
                 for _j_re, _v3 in enumerate(_vars_re):
-                    _cm = float(_colmax[_j_re]) if _j_re < len(_colmax) else 1.0
-                    model.scaling_factor[_v3] = 1.0 / max(1.0, _cm)
-                    _nvar += 1
+                    model.scaling_factor[_v3] = float(_C[_j_re])
+                _nrow, _nvar = _m_re, _n_re
                 _skip_jacscale = False
                 _solve_target = model
                 _britz_user_scaling = True
                 print(
-                    f"[nlp-square] ROW-EQUILIBRATION (Jacobian ∞-norm): {_nrow} rows, "
-                    f"{_nvar} cols; worst row-norm was {_worst:.1f} → scaled to O(1)",
+                    f"[nlp-square] RUIZ EQUILIBRATION: {_nrow} rows, {_nvar} cols; "
+                    f"scale spread {_spread0:.1e} → {_spread:.1e} in {_it_re + 1} iters",
                     file=sys.stderr,
                 )
             except Exception as _re_exc:
