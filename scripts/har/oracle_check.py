@@ -36,6 +36,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA = REPO_ROOT / "src/equilibria/templates/reference/gtap/data"
+DATASETS = REPO_ROOT / "datasets"
 GOLDEN = REPO_ROOT / "tests/babel/har/golden"
 
 FIXTURES = [
@@ -45,6 +46,9 @@ FIXTURES = [
     DATA / "nus333/default.prm",
     DATA / "9x10/sets.har",
     DATA / "9x10/basedata.har",
+    # 20x41 is the smallest fixture whose arrays exceed one GEMPACK data record
+    # (7,560 float32), so it is the only one that exercises multi-record REFULL.
+    DATASETS / "gtap6_20x41/basedata.har",
 ]
 
 

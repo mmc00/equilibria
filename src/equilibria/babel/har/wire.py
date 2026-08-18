@@ -23,6 +23,7 @@ NAME_WIDTH = 4  # header name field
 LONG_NAME_WIDTH = 70  # long-name field inside the meta record
 SET_NAME_WIDTH = 12  # per-element + per-set-name width
 META_RECORD_MIN_LEN = 80  # pad(4) + type(6) + long(70)
+BLOCK_HEADER_LEN = 64  # per-block header preceding each REFULL data block
 
 # Type tokens — exactly 6 ASCII bytes, fixed
 TOKEN_1CFULL = "1CFULL"
