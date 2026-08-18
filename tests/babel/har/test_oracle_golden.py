@@ -20,6 +20,7 @@ from equilibria.babel.har import read_har, write_har
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DATA = REPO_ROOT / "src/equilibria/templates/reference/gtap/data"
+DATASETS = REPO_ROOT / "datasets"
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
 
@@ -34,6 +35,11 @@ FIXTURES = [
     DATA / "nus333/default.prm",
     DATA / "9x10/sets.har",
     DATA / "9x10/basedata.har",
+    # Multi-record REFULL regression: every array here is bigger than one
+    # GEMPACK data record, so each data block carries its own 64-byte block
+    # header. Folding those headers into the payload shifts the array and is
+    # exactly the bug this fixture guards against.
+    DATASETS / "gtap6_20x41/basedata.har",
 ]
 
 
