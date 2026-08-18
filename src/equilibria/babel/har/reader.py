@@ -31,6 +31,9 @@ import numpy as np
 
 from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har.wire import (
+    BLOCK_HEADER_LEN as _BLOCK_HEADER_LEN,
+)
+from equilibria.babel.har.wire import (
     INT as _INT,
 )
 from equilibria.babel.har.wire import (
@@ -145,14 +148,26 @@ def _read_refull(
     shape = tuple(len(s) for s in set_elements)
     n = int(np.prod(shape)) if shape else 1
     # GEMPACK splits large arrays across multiple records when the data exceeds
-    # one record's capacity (~32 KB). Concatenate until we have n float32 values.
+    # one record's capacity (~32 KB). Every data block after the first is preceded
+    # by its own 64-byte block-header record, which is not payload:
+    #
+    #     len=   64   block header
+    #     len=30248   data (pad(8) + 7560 float32)
+    #     len=   64   block header
+    #     len=30248   data
+    #
+    # Skipping those headers is what keeps the blocks aligned; folding them into
+    # the payload injects 14 junk float32 per block and shifts the rest of the
+    # array (+14, +28, +42, ... cumulative).
     data_start = i + 4 + n_unique
     raw = b""
     extra = 0
     while len(raw) < 8 + n * 4:
         rec = records[data_start + extra]
-        raw += rec[8:] if extra > 0 else rec
         extra += 1
+        if raw and len(rec) == _BLOCK_HEADER_LEN:
+            continue
+        raw += rec[8:] if raw else rec
     floats = struct.unpack_from(f"<{n}f", raw, 8)
     arr = (
         np.array(floats, dtype=np.float32).reshape(shape, order="F")
