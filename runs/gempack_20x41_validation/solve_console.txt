@@ -1,0 +1,2759 @@
+ 
+ <gtapv7.for 09-SEP-2020 (a TABLO-generated program)>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 12.1.003   January 2020>
+  
+ Licence file: C:\GP\licen.gem
+  
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+ 
+ 
+     << COPYRIGHT 1987-2018: CoPS/Impact and KPSOFT >>
+ 
+  Current directory is: C:\Documentos\proyectos\equilibria\runs\gempack_20x41_validation
+  
+ 
+  Full path name of running EXE is: C:\runGTAP375\gtapv7.exe
+  Fortran compiler = GF64   version 6.4.0 64 bit
+  BLAS library: OpenBlas
+  OPENMP number of threads: 10
+  Gempack source corresponds to revision 1156.
+"wmic" no se reconoce como un comando interno o externo,
+programa o archivo por lotes ejecutable.
+  Operating System is Unknwon/ Error retrieving info
+ 
+ 
+  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 
+ 
+                    TABLO-GENERATED PROGRAM OPTIONS
+               ( --> indicates those in effect )
+ 
+       BAT Run in batch              STI Take inputs from a Stored-input file
+       BPR Brief prompts             SIF Store inputs on a file
+       LOG Output to log file        ASI Add to incomplete Stored-input file
+                                     CMF Take inputs from a Command file
+       EAA Echo all activity           SVX Select variables on XAC file (later)
+   --> CPU Report CPU times            RQF Required figures agreement (extrap)
+       NRP Don't reuse pivots        NIR Don't do solution iterative refinement
+                                 --> IZ1 Ignore zero coefficients in step 1
+                                     KZ2 Keep zero coefficients in steps 2,3 etc
+       NEQ Do no equations           NWE Don't warn how well equations solved
+       NDS Do no displays            SSI Several subintervals; extrap after each
+       NWR Do no writes              M28 Use MA28 routines (rather than MA48)
+       NAS Do no assertions          SUI Save updated formula(initial) data
+       NUD Do no final updates              Extra Options Screen
+       NSM Don't do simulation              --------------------
+       NWT Use Newton's method      DTO Display, Terminal/Text write Options
+       CR  Check-on-read options
+ 
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+  
+ (Opened, as text, existing file 'tm10.cmf'.)
+  (Taking inputs from a command file.)
+ (Opened, as text, existing file 'tm10.cmf'.)
+ 
+  !  (There is no CREATION information on this file.)
+  
+ 
+  --> Reading the Command file.
+  
+ ! gtap7_20x41 uniform 10% shock to import tariff power (tm) - GEMPACK / GTAPv7
+ ! capFix closure mirroring equilibria's Python gate (residual = last region = "ROW",
+ ! rr=list(sets.r)[-1]); swap dpsave(r)=del_tbalry(r) for every NON-residual region.
+ Auxiliary files = C:\runGTAP375\gtapv7 ;
+ 
+ file GTAPSETS = sets.har ;
+ file GTAPDATA = basedata.har ;
+ file GTAPPARM = default.prm ;
+ file GTAPSUM  = summary.har ;
+ file WELVIEW  = decomp.har ;
+ file GTAPVOL  = volume.har ;
+ Updated file GTAPDATA = updated_tm10_s8-16-32.har ;
+ 
+ Method = Gragg ;
+ Steps  = 8 16 32 ;
+ Automatic accuracy = no ;
+ Subintervals = 1 ;
+ 
+ Verbal Description =
+ gtap7_20x41 uniform 10pct shock to import tariff power (tm), capFix closure ;
+ 
+ Exogenous
+           pop
+           psaveslack pfactwld
+           profitslack incomeslack endwslack
+           cgdslack
+           tradslack
+           ams atm atf ats atd
+           aosec aoreg avasec avareg
+           aintsec aintreg aintall
+           afcom afsec afreg afecom afesec afereg
+           aoall afall afeall
+           au dppriv dpgov dpsave
+           to tinc
+           tpreg tm tms tx txs
+           qe
+           qesf ;
+ Rest Endogenous ;
+ 
+ ! capFix closure: pin del_tbalry for all NON-RESIDUAL regions; "ROW"
+ ! absorbs the capital-account identity. Releases dpsave(r) for each non-residual region.
+ swap dpsave("USA") = del_tbalry("USA") ;
+ swap dpsave("CAN") = del_tbalry("CAN") ;
+ swap dpsave("MEX") = del_tbalry("MEX") ;
+ swap dpsave("EU_28") = del_tbalry("EU_28") ;
+ swap dpsave("GBR") = del_tbalry("GBR") ;
+ swap dpsave("CHE") = del_tbalry("CHE") ;
+ swap dpsave("RUS") = del_tbalry("RUS") ;
+ swap dpsave("TUR") = del_tbalry("TUR") ;
+ swap dpsave("CHN") = del_tbalry("CHN") ;
+ swap dpsave("JPN") = del_tbalry("JPN") ;
+ swap dpsave("KOR") = del_tbalry("KOR") ;
+ swap dpsave("IND") = del_tbalry("IND") ;
+ swap dpsave("IDN") = del_tbalry("IDN") ;
+ swap dpsave("THA") = del_tbalry("THA") ;
+ swap dpsave("VNM") = del_tbalry("VNM") ;
+ swap dpsave("AUS") = del_tbalry("AUS") ;
+ swap dpsave("NZL") = del_tbalry("NZL") ;
+ swap dpsave("ARG") = del_tbalry("ARG") ;
+ swap dpsave("BRA") = del_tbalry("BRA") ;
+ swap dpsave("CHL") = del_tbalry("CHL") ;
+ swap dpsave("COL") = del_tbalry("COL") ;
+ swap dpsave("PER") = del_tbalry("PER") ;
+ swap dpsave("URY") = del_tbalry("URY") ;
+ swap dpsave("PRY") = del_tbalry("PRY") ;
+ swap dpsave("SEAsia") = del_tbalry("SEAsia") ;
+ swap dpsave("EastAsia") = del_tbalry("EastAsia") ;
+ swap dpsave("SouthAsia") = del_tbalry("SouthAsia") ;
+ swap dpsave("CentralAmer") = del_tbalry("CentralAmer") ;
+ swap dpsave("Caribbean") = del_tbalry("Caribbean") ;
+ swap dpsave("SAU") = del_tbalry("SAU") ;
+ swap dpsave("ARE") = del_tbalry("ARE") ;
+ swap dpsave("ISR") = del_tbalry("ISR") ;
+ swap dpsave("EGY") = del_tbalry("EGY") ;
+ swap dpsave("MENA") = del_tbalry("MENA") ;
+ swap dpsave("ZAF") = del_tbalry("ZAF") ;
+ swap dpsave("NGA") = del_tbalry("NGA") ;
+ swap dpsave("SSA") = del_tbalry("SSA") ;
+ swap dpsave("EFTA") = del_tbalry("EFTA") ;
+ swap dpsave("EasternEur") = del_tbalry("EasternEur") ;
+ swap dpsave("CentralAsia") = del_tbalry("CentralAsia") ;
+ 
+ Shock tm = uniform 10 ;
+ 
+ CPU = yes ;
+ NDS = yes ;
+ log file = yes ;
+ Extrapolation accuracy file = NO ;
+ 
+  (Finished reading the command file.)
+ 
+  Auxiliary Statement File
+  ---------------------
+ (Opened, as binary, existing file 'C:\runGTAP375\gtapv7.axs'.)
+ 
+  Auxiliary Table File
+  -----------------
+ (Opened, as header, existing file 'C:\runGTAP375\gtapv7.axt'.)
+ 
+  !  This file was created at 13:49:08 on 09-SEP-2020 by the program
+  !    <TABLO  Version 7.0   August 2018>
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+ Auxiliary Table File was created by TABLO at 13:49:09 on 09-SEP-2020
+ [TABLO file used here is "gtapv7.tab".]
+ [No TABLO STI file used when TABLO was run.]
+ 
+  (Writing output to log file, and also to the terminal.)
+ (Opened new text file 'tm10.log'.)
+  [Reporting CPU times]
+ 
+  (Doing no displays.)
+ 
+  Using Gempack optimized version of LU decompositions
+  With this option active several old options are obsolete.
+  These options concern: Markowitz pivots, and those starting with pivots, MA48 and MA28.
+ 
+  Search depth for LU is set to 32
+  Column Filter threshold is set to 5.0000001E-02
+  Harwell paramter for reuse is set to -1.000000
+ 
+ [This TG-program was created by TABLO at 13:49:09 on 09-SEP-2020.]
+ When TABLO was run, GPDIR="C:\GP"
+ 
+  [Starting to check "extra" statements on the Command file.]
+  
+ 
+  [Finished checking "extra" statements on the Command file.]
+  
+ 
+ ++++++++++++++++++++++++++++++++++++++++++++++++++
+  This program was written by the GEMPACK program TABLO 
+  as described in the Information file
+  'gtapv7.inf
+ 
+  This run of the TABLO-generated program
+      o can create the Equations file (for the condensed system)
+      o can carry out 61 WRITEs
+      o can check 11 ASSERTIONs
+      o can carry out multi-step simulations
+ 
+ ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 
+  (Automatic accuracy testing will not be done.)
+ (Range test of updated or extrapolated values will produce warnings.)
+ 
+  (Method is gragg.)
+  (Extrapolating from 8, 16 and 32-step solutions.)
+ 
+  (Number of subintervals is 1.)
+ (Range test of initial values will produce warnings.)
+  (Model is ''.   Version number is 1.)
+ (Opened new header file 'tm10.sl4'.)
+ (Solution file is 'tm10.sl4'.)
+ (Opened new header file 'tm10.slc'.)
+ (Opened, as text, existing file 'tm10.cmf'.)
+ 
+  !  (There is no CREATION information on this file.)
+  
+ 
+  (Data file with logical name 'GTAPSETS')
+ (Opened, as header, existing file 'sets.har'.)
+ 
+  !  This file was created at 17:25:59 on 22-MAY-2026 by the program
+  !    <aggpar.for 07-MAY-2023> [aggpar.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+ 
+  (Data file with logical name 'GTAPDATA')
+ (Opened, as header, existing file 'basedata.har'.)
+ 
+  !  This file was created at 17:25:58 on 22-MAY-2026 by the program
+  !    <aggdat.for 07-MAY-2023> [aggdat.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+ 
+  (Data file with logical name 'GTAPPARM')
+ (Opened, as header, existing file 'default.prm'.)
+ 
+  !  This file was created at 17:25:59 on 22-MAY-2026 by the program
+  !    <aggpar.for 07-MAY-2023> [aggpar.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+ 
+  (Data file with logical name 'GTAPSUM')
+ (Opened new header file 'summary.har'.)
+ 
+  (Data file with logical name 'WELVIEW')
+ (Opened new header file 'decomp.har'.)
+ 
+  (Data file with logical name 'GTAPVOL')
+ (Opened new header file 'volume.har'.)
+ 
+  UPDATED VERSION OF DATA FILE WITH LOGICAL NAME 'GTAPDATA
+  ---------------------------------------------------------
+ (Opened new header file 'updated_tm10_s8-16-32.har'.)
+ 
+  --->  Beginning the preliminary pass (aimed at sets and subsets).
+ Set 'REG'
+ (Opened, as header, existing file 'sets.har'.)
+   [Set has size 41.]
+ Set 'COMM'
+   [Set has size 20.]
+ Set 'MARG'
+   [Set has size 1.]
+ 'MARG' as a subset of 'COMM'
+ Set 'NMRG'
+   [Set has size 19.]
+ 'NMRG' as a subset of 'COMM'
+ Set 'ACTS'
+   [Set has size 20.]
+ Set 'ENDW'
+   [Set has size 5.]
+ Set 'ENDWC'
+   [Set has size 1.]
+ 'ENDWC' as a subset of 'ENDW'
+ Set 'ENDWT'
+   [Set has size 3.]
+ (Opened, as header, existing file 'default.prm'.)
+ Reading ENDOWFLAG(ENDW,ENDWT)
+ (Read real array, size 5x3, header "EFLG".)
+  Assertion "checking just 1 non-zero in each factor row"
+  Formula for set 'ENDWM'
+ Set 'ENDWM'
+   [Set has size 3.]
+ 'ENDWM' as a subset of 'ENDW'
+ 'ENDWM' as a subset of 'ENDW'
+  Formula for set 'ENDWS'
+ Set 'ENDWS'
+   [Set has size 1.]
+ 'ENDWS' as a subset of 'ENDW'
+ 'ENDWS' as a subset of 'ENDW'
+ Set 'ENDWMS'
+   [Set has size 4.]
+ 'ENDWM' as a subset of 'ENDWMS'
+ 'ENDWS' as a subset of 'ENDWMS'
+ 'ENDWMS' as a subset of 'ENDW'
+ 'ENDWC' as a subset of 'ENDWMS'
+ Set 'ENDWF'
+   [Set has size 1.]
+ 'ENDWF' as a subset of 'ENDW'
+ Set 'DEMD'
+   [Set has size 25.]
+ 'ENDW' as a subset of 'DEMD'
+ 'COMM' as a subset of 'DEMD'
+ 'ENDWC' as a subset of 'DEMD'
+ 'ENDWM' as a subset of 'DEMD'
+ 'ENDWS' as a subset of 'DEMD'
+ 'ENDWMS' as a subset of 'DEMD'
+ 'ENDWF' as a subset of 'DEMD'
+ 'MARG' as a subset of 'DEMD'
+ 'NMRG' as a subset of 'DEMD'
+ Set 'GDPEX'
+   [Set has size 6.]
+ Set 'DIR'
+   [Set has size 2.]
+ Set 'CTAX'
+   [Set has size 9.]
+ Set 'TECHTYPE'
+   [Set has size 7.]
+ Set 'COLUMN'
+   [Set has size 7.]
+ Set 'COSTS'
+   [Set has size 8.]
+ 'ENDW' as a subset of 'COSTS'
+ 'ENDWC' as a subset of 'COSTS'
+ 'ENDWM' as a subset of 'COSTS'
+ 'ENDWS' as a subset of 'COSTS'
+ 'ENDWMS' as a subset of 'COSTS'
+ 'ENDWF' as a subset of 'COSTS'
+ Set 'GDPIN'
+   [Set has size 6.]
+ 'ENDW' as a subset of 'GDPIN'
+ 'ENDWC' as a subset of 'GDPIN'
+ 'ENDWM' as a subset of 'GDPIN'
+ 'ENDWS' as a subset of 'GDPIN'
+ 'ENDWMS' as a subset of 'GDPIN'
+ 'ENDWF' as a subset of 'GDPIN'
+ Set 'SALES'
+   [Set has size 6.]
+ Set 'S@IntDom'
+   [Set has size 1.]
+ 'S@IntDom' as a subset of 'COSTS'
+ Set 'S@IntImp'
+   [Set has size 1.]
+ 'S@IntImp' as a subset of 'COSTS'
+ Set 'S@PTAX'
+   [Set has size 1.]
+ 'S@PTAX' as a subset of 'COSTS'
+ Set 'S@IndTaxes'
+   [Set has size 1.]
+ 'S@IndTaxes' as a subset of 'GDPIN'
+ [CPU for reads, formulas etc is 0.02 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
+ 
+  ------- MODEL REPORT ------
+  The un-condensed model contains:
+      263 variables comprising 920173 components
+  and 213 equation blocks comprising 695122 separate equations.
+ 
+      71 variables (comprising 622995 components) will be backsolved for.
+      0 variables (comprising 0 components) were substituted out.
+      11 variables (comprising 76260 components) were omitted.
+ 
+  So the condensed model contains:
+      181 variables comprising 220918 components
+  and 142 equation blocks comprising 72127 separate equations.
+  ------- END OF MODEL REPORT ------
+  
+ Licence file: C:\GP\licen.gem
+  
+   (1 character strings, each of length 1 read. Header "SVFM")
+ 
+  Total memory currently used for all arrays is approximately 56.84 megabytes.
+  [This does NOT include memory related to MMNZ, MMNZ1 and MMNZ2. The
+   associated arrays are not allocated.]
+  [Add about 5-10 megabytes for the memory used by the code.]
+  [Total memory currently allocated for Coefficients and Updated
+   Coefficients is about        6.6 and        0.0 MB respectively.]
+ 
+  --->  Beginning pass number 1 of 9-pass calculation.
+ (Opened, as header, existing file 'basedata.har'.)
+ Reading VERNUM
+ (Read real array, size 1, header "DVER".)
+ (Opened, as header, existing file 'default.prm'.)
+ Reading ENDOWFLAG(ENDW,ENDWT)
+ (Read real array, size 5x3, header "EFLG".)
+  Assertion "checking just 1 non-zero in each factor row"
+ (Opened, as header, existing file 'basedata.har'.)
+ Reading VDFB(COMM,ACTS,REG)
+ (Read real array, size 20x20x41, header "VDFB".)
+ Reading VMFB(COMM,ACTS,REG)
+ (Read real array, size 20x20x41, header "VMFB".)
+ Reading VDFP(COMM,ACTS,REG)
+ (Read real array, size 20x20x41, header "VDFP".)
+ Reading VMFP(COMM,ACTS,REG)
+ (Read real array, size 20x20x41, header "VMFP".)
+ Reading EVOS(ENDW,ACTS,REG)
+ (Read real array, size 5x20x41, header "EVOS".)
+ Reading EVFB(ENDW,ACTS,REG)
+ (Read real array, size 5x20x41, header "EVFB".)
+ Reading EVFP(ENDW,ACTS,REG)
+ (Read real array, size 5x20x41, header "EVFP".)
+ Reading MAKES(COMM,ACTS,REG)
+ (Read real array, size 20x20x41, header "MAKS".)
+ Reading MAKEB(COMM,ACTS,REG)
+ (Read real array, size 20x20x41, header "MAKB".)
+ Reading VDGB(COMM,REG)
+ (Read real array, size 20x41, header "VDGB".)
+ Reading VMGB(COMM,REG)
+ (Read real array, size 20x41, header "VMGB".)
+ Reading VDGP(COMM,REG)
+ (Read real array, size 20x41, header "VDGP".)
+ Reading VMGP(COMM,REG)
+ (Read real array, size 20x41, header "VMGP".)
+ Reading VDPB(COMM,REG)
+ (Read real array, size 20x41, header "VDPB".)
+ Reading VMPB(COMM,REG)
+ (Read real array, size 20x41, header "VMPB".)
+ Reading VDPP(COMM,REG)
+ (Read real array, size 20x41, header "VDPP".)
+ Reading VMPP(COMM,REG)
+ (Read real array, size 20x41, header "VMPP".)
+ Reading VDIB(COMM,REG)
+ (Read real array, size 20x41, header "VDIB".)
+ Reading VMIB(COMM,REG)
+ (Read real array, size 20x41, header "VMIB".)
+ Reading VDIP(COMM,REG)
+ (Read real array, size 20x41, header "VDIP".)
+ Reading VMIP(COMM,REG)
+ (Read real array, size 20x41, header "VMIP".)
+ Reading SAVE(REG)
+ (Read real array, size 41, header "SAVE".)
+ Reading VDEP(REG)
+ (Read real array, size 41, header "VDEP".)
+ Reading VXSB(COMM,REG,REG)
+ (Read real array, size 20x41x41, header "VXSB".)
+ Reading VFOB(COMM,REG,REG)
+ (Read real array, size 20x41x41, header "VFOB".)
+ Reading VCIF(COMM,REG,REG)
+ (Read real array, size 20x41x41, header "VCIF".)
+ Reading VMSB(COMM,REG,REG)
+ (Read real array, size 20x41x41, header "VMSB".)
+ Reading VST(MARG,REG)
+ (Read real array, size 1x41, header "VST".)
+  Formula for 'VFP'
+  Formula for 'VFP'
+  Formula for 'VOS'
+  Formula for 'VES'
+  Formula for 'MAKEBACT'
+  Formula for 'MAKEBCOM'
+  Formula for 'VDB'
+  Formula for 'VCB'
+  Formula for 'VGP'
+  Formula for 'GOVEXP'
+  Formula for 'VPP'
+  Formula for 'PRIVEXP'
+  Formula for 'VIP'
+  Formula for 'INCOME'
+  Formula for 'PTAX'
+  Formula for 'TAXROUT'
+  Formula for 'DGTAX'
+  Formula for 'MGTAX'
+  Formula for 'TAXRGC'
+  Formula for 'DPTAX'
+  Formula for 'MPTAX'
+  Formula for 'TAXRPC'
+  Formula for 'DITAX'
+  Formula for 'MITAX'
+  Formula for 'TAXRIC'
+  Formula for 'DFTAX'
+  Formula for 'MFTAX'
+  Formula for 'TAXRIU'
+  Formula for 'ETAX'
+  Formula for 'TAXRFU'
+  Formula for 'INCTAX'
+  Formula for 'XTAXD'
+  Formula for 'TAXREXP'
+  Formula for 'MTAX'
+  Formula for 'TAXRIMP'
+  Formula for 'REGINV'
+  Formula for 'NETINV'
+  Formula for 'GLOBINV'
+  Formula for 'CONSHR'
+ (Opened, as header, existing file 'default.prm'.)
+ Reading INCPAR(COMM,REG)
+ (Read real array, size 20x41, header "INCP".)
+  Formula for 'UELASPRIV'
+ Reading ESUBD(COMM,REG)
+ (Read real array, size 20x41, header "ESBD".)
+  Assertion at line number 875
+ Reading ESUBT(ACTS,REG)
+ (Read real array, size 20x41, header "ESBT".)
+  Assertion at line number 1003
+  Formula for 'STC'
+ Reading ESUBC(ACTS,REG)
+ (Read real array, size 20x41, header "ESBC".)
+  Assertion at line number 1072
+  Formula for 'TINTCOM'
+  Formula for 'INTSHR'
+ Reading ESUBVA(ACTS,REG)
+ (Read real array, size 20x41, header "ESBV".)
+  Assertion at line number 1106
+  Formula for 'VVA'
+  Formula for 'DEFAULTVASHR'
+  Formula for 'VASHR'
+  Formula for 'VASHR'
+  Formula for 'FMSHR'
+ Reading ETRAQ(ACTS,REG)
+ (Read real array, size 20x41, header "ETRQ".)
+  Assertion at line number 1261
+  Formula for 'MAKESCOM'
+  Formula for 'MAKESACTSHR'
+  Formula for 'MAKEBACTSHR'
+  Formula for 'ESUBQ'
+ Reading ESUBQ(COMM,REG)
+ (Read real array, size 20x41, header "ESBQ".)
+  Assertion at line number 1319
+  Formula for 'MAKEBCOMSHR'
+  Formula for 'FY'
+  Formula for 'INDTAX'
+  Formula for 'XSHRPRIV'
+  Formula for 'XSHRGOV'
+  Formula for 'XSHRSAVE'
+ (Opened, as header, existing file 'basedata.har'.)
+ Reading DPARSUM(REG)
+ (Read real array, size 41, header "DPSM".)
+  Formula for 'UTILELAS'
+  Formula for 'DPARPRIV'
+  Formula for 'DPARGOV'
+  Formula for 'DPARSAVE'
+  Formula for 'UTILPRIV'
+  Formula for 'UTILGOV'
+  Formula for 'UTILSAVE'
+ (Opened, as header, existing file 'default.prm'.)
+ Reading SUBPAR(COMM,REG)
+ (Read real array, size 20x41, header "SUBP".)
+  Formula for 'ALPHA'
+  Formula for 'APE'
+  Formula for 'APE'
+  Formula for 'EY'
+  Formula for 'EP'
+  Formula for 'EP'
+  Formula for 'XWCONSHR'
+  Formula for 'PMSHR'
+ Reading ESUBG(REG)
+ (Read real array, size 41, header "ESBG".)
+  Assertion at line number 1664
+  Formula for 'GMSHR'
+  Formula for 'IMSHR'
+  Formula for 'VMB'
+  Formula for 'FMCSHR'
+  Formula for 'PMCSHR'
+  Formula for 'GMCSHR'
+  Formula for 'IMCSHR'
+ Reading ESUBM(COMM,REG)
+ (Read real array, size 20x41, header "ESBM".)
+  Assertion at line number 1804
+  Formula for 'IMPBASIC'
+  Formula for 'MSHRS'
+ (Opened, as header, existing file 'basedata.har'.)
+ Reading VTMFSD(MARG,COMM,REG,REG)
+ (Read real array, size 1x20x41x41, header "VTWR".)
+  Formula for 'VTFSD'
+  Formula for 'VTUSE'
+  Formula for 'VTMUSE'
+  Formula for 'VTFSD_MSH'
+  Formula for 'VTFSD_MSH'
+  Formula for 'VTMPROV'
+  Formula for 'VTRPROV'
+  Formula for 'VT'
+  Formula for 'VTMUSESHR'
+  Formula for 'VTMUSESHR'
+ (Opened, as header, existing file 'default.prm'.)
+ Reading ESUBS(MARG)
+ (Read real array, size 1, header "ESBS".)
+  Assertion at line number 1957
+  Formula for 'VTSUPPSHR'
+  Formula for 'VTSUPPSHR'
+  Formula for 'VCIFCOST'
+  Formula for 'FOBSHR'
+  Formula for 'TRNSHR'
+  Formula for 'FDCSHR'
+  Formula for 'PDCSHR'
+  Formula for 'GDCSHR'
+  Formula for 'IDCSHR'
+  Formula for 'DSSHR'
+  Formula for 'STSHR'
+  Formula for 'XSSHR'
+  Formula for 'LevTPD'
+  Formula for 'ENDWMSHR'
+ Reading ETRAE(ENDW,REG)
+ (Read real array, size 5x41, header "ETRE".)
+  Assertion at line number 2306
+  Formula for 'REVSHR'
+ (Opened, as header, existing file 'basedata.har'.)
+ Reading VKB(REG)
+ (Read real array, size 41, header "VKB".)
+  Formula for 'INVKERATIO'
+  Formula for 'GROSSCAP'
+  Formula for 'GRNETRATIO'
+ (Opened, as header, existing file 'default.prm'.)
+ Reading RORFLEX(REG)
+ (Read real array, size 41, header "RFLX".)
+ Reading RORDELTA
+ (Read integer array, size 1, header "RDLT".)
+  Formula for 'TAXRINC'
+  Formula for 'VENDWREG'
+  Formula for 'VENDWWLD'
+  Formula for 'VXDFOB'
+  Formula for 'VXW'
+  Formula for 'VXWREGION'
+  Formula for 'VMCIF'
+  Formula for 'VMWREGION'
+  Formula for 'VENDWMS'
+  Formula for 'ENDWMSSHR'
+  Formula for 'GDPEXP'
+  Formula for 'GDPEXP'
+  Formula for 'GDPEXP'
+  Formula for 'GDPEXP'
+  Formula for 'GDPEXP'
+  Formula for 'GDPEXP'
+ (Opened, for writing, header file 'summary.har'.)
+ Writing GDPEXP(REG,GDPEX)
+ (Written real array, size 41x6, header "GDPE".)
+  Formula for 'GDP'
+  Formula for 'VXWCOMMOD'
+  Formula for 'VXWLD'
+  Formula for 'VMWCOMMOD'
+  Formula for 'VXDXSB'
+  Formula for 'PW_PM'
+  Formula for 'VOW'
+  Formula for 'VWOW'
+  Formula for 'VWOU'
+  Formula for 'INCOMEWLD'
+  Formula for 'TBAL'
+  Formula for 'SX_CR'
+  Formula for 'SX_CR'
+  Formula for 'VTMCOMM'
+  Formula for 'VMWDCRALL'
+  Formula for 'VMWDATOT'
+  Formula for 'SM_CR'
+  Formula for 'SM_CRS'
+  Formula for 'SMT_CR'
+  Formula for 'INCOMEEV'
+  Formula for 'UTILPRIVEV'
+  Formula for 'UTILGOVEV'
+  Formula for 'UTILSAVEEV'
+  Formula for 'VPPEV'
+  Formula for 'VPPREGEV'
+  Formula for 'CONSHREV'
+  Formula for 'EYEV'
+  Formula for 'UELASPRIVEV'
+  Formula for 'XWCONSHREV'
+  Formula for 'PRIVEXPEV'
+  Formula for 'GOVEXPEV'
+  Formula for 'SAVEEV'
+  Formula for 'XSHRPRIVEV'
+  Formula for 'XSHRGOVEV'
+  Formula for 'XSHRSAVEEV'
+  Formula for 'UTILELASEV'
+  Formula for 'EVSCALFACT'
+  Formula for 'VTMD'
+  Formula for 'BEVFP'
+  Formula for 'BVMFP'
+  Formula for 'BVDFP'
+  Formula for 'BVOS'
+  Formula for 'BVXSB'
+  Formula for 'BVDPB'
+  Formula for 'BVDGB'
+  Formula for 'BVDFB'
+  Formula for 'BEVFB'
+  Formula for 'BVDB'
+  Formula for 'BVST'
+  Formula for 'BVCB'
+  Formula for 'BVCB'
+  Formula for 'BVEB'
+  Formula for 'BMAKEB'
+  Formula for 'BOUTAX'
+  (Number of ZERO DIVIDED BY ZERO operations was 15580.)
+    ( Default value used was 0.000000. )
+  Formula for 'BEVOS'
+  Formula for 'BINCTAX'
+  (Number of ZERO DIVIDED BY ZERO operations was 1312.)
+    ( Default value used was 0.000000. )
+  Formula for 'BVMFB'
+  Formula for 'BVMPB'
+  Formula for 'BVMPP'
+  Formula for 'BVDPP'
+  Formula for 'BVMGB'
+  Formula for 'BVMGP'
+  Formula for 'BVDGP'
+  Formula for 'BVMIB'
+  Formula for 'BVMIP'
+  Formula for 'BVDIP'
+  Formula for 'BVDIB'
+  Formula for 'BVMSB'
+  Formula for 'BVCIF'
+  Formula for 'BMTAX'
+  Formula for 'BVFOB'
+  Formula for 'BXTAX'
+  Formula for 'BETAX'
+  (Number of ZERO DIVIDED BY ZERO operations was 1312.)
+    ( Default value used was 0.000000. )
+  Formula for 'BSAVE'
+  Formula for 'ISBAL'
+  Formula for 'COSTSUM'
+  Formula for 'COSTSUM'
+  Formula for 'COSTSUM'
+  Formula for 'COSTSUM'
+  Formula for 'COSTSUM'
+  Formula for 'COSTSUM'
+ Writing COSTSUM(ACTS,REG,COSTS)
+ (Written real array, size 20x41x8, header "COST".)
+  Formula for 'GDPINC'
+  Formula for 'GDPINC'
+ Writing GDPINC(REG,GDPIN)
+ (Written real array, size 41x6, header "GDPI".)
+  Formula for 'SALESUM'
+  Formula for 'SALESUM'
+  Formula for 'SALESUM'
+  Formula for 'SALESUM'
+  Formula for 'SALESUM'
+  Formula for 'SALESUM'
+  Formula for 'SALESUM'
+ Writing SALESUM(COMM,REG,SALES)
+ (Written real array, size 20x41x6, header "SALE".)
+  Formula for 'VDBCHK'
+ Writing VDBCHK(COMM,REG)
+ (Written real array, size 20x41, header "VMCK".)
+  Formula for 'VDBCHK'
+ Writing VDBCHK(COMM,REG)
+ (Written real array, size 20x41, header "VMCP".)
+  Formula for 'TRDCHK'
+ Writing TRDCHK(COMM,REG,REG)
+ (Written real array, size 20x41x41, header "TRCK".)
+  Formula for 'TRDCHK'
+ Writing TRDCHK(COMM,REG,REG)
+ (Written real array, size 20x41x41, header "TRCP".)
+  Formula for 'VTMCHK'
+ Writing VTMCHK(MARG)
+ (Written real array, size 1, header "VTCK".)
+  Formula for 'VTMCHK'
+ Writing VTMCHK(MARG)
+ (Written real array, size 1, header "VTCP".)
+  Formula for 'CHKMKClIMP'
+ Writing CHKMKClIMP(COMM,REG)
+ (Written real array, size 20x41, header "MPCK".)
+  Formula for 'CHKMKClIMP'
+ Writing CHKMKClIMP(COMM,REG)
+ (Written real array, size 20x41, header "MPCP".)
+  Formula for 'VOSCHK'
+ Writing VOSCHK(COMM,ACTS,REG)
+ (Written real array, size 20x20x41, header "VOCK".)
+  Formula for 'VOSCHK'
+  (Number of ZERO DIVIDED BY ZERO operations was 15580.)
+    ( Default value used was 0.000000. )
+ Writing VOSCHK(COMM,ACTS,REG)
+ (Written real array, size 20x20x41, header "VOCS".)
+ 
+  CHOICE OF ECONOMIC ENVIRONMENT
+  (All components of 'pop' chosen to be exogenous.)
+  (All components of 'psaveslack' chosen to be exogenous.)
+  (All components of 'pfactwld' chosen to be exogenous.)
+  (All components of 'profitslack' chosen to be exogenous.)
+  (All components of 'incomeslack' chosen to be exogenous.)
+  (All components of 'endwslack' chosen to be exogenous.)
+  (All components of 'cgdslack' chosen to be exogenous.)
+  (All components of 'tradslack' chosen to be exogenous.)
+  (All components of 'ams' chosen to be exogenous.)
+  (All components of 'atm' chosen to be exogenous.)
+  (All components of 'atf' chosen to be exogenous.)
+  (All components of 'ats' chosen to be exogenous.)
+  (All components of 'atd' chosen to be exogenous.)
+  (All components of 'aosec' chosen to be exogenous.)
+  (All components of 'aoreg' chosen to be exogenous.)
+  (All components of 'avasec' chosen to be exogenous.)
+  (All components of 'avareg' chosen to be exogenous.)
+  (All components of 'aintsec' chosen to be exogenous.)
+  (All components of 'aintreg' chosen to be exogenous.)
+  (All components of 'aintall' chosen to be exogenous.)
+  (All components of 'afcom' chosen to be exogenous.)
+  (All components of 'afsec' chosen to be exogenous.)
+  (All components of 'afreg' chosen to be exogenous.)
+  (All components of 'afecom' chosen to be exogenous.)
+  (All components of 'afesec' chosen to be exogenous.)
+  (All components of 'afereg' chosen to be exogenous.)
+  (All components of 'aoall' chosen to be exogenous.)
+  (All components of 'afall' chosen to be exogenous.)
+  (All components of 'afeall' chosen to be exogenous.)
+  (All components of 'au' chosen to be exogenous.)
+  (All components of 'dppriv' chosen to be exogenous.)
+  (All components of 'dpgov' chosen to be exogenous.)
+  (All components of 'dpsave' chosen to be exogenous.)
+  (All components of 'to' chosen to be exogenous.)
+  (All components of 'tinc' chosen to be exogenous.)
+  (All components of 'tpreg' chosen to be exogenous.)
+  (All components of 'tm' chosen to be exogenous.)
+  (All components of 'tms' chosen to be exogenous.)
+  (All components of 'tx' chosen to be exogenous.)
+  (All components of 'txs' chosen to be exogenous.)
+  (All components of 'qe' chosen to be exogenous.)
+  (All components of 'qesf' chosen to be exogenous.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+  (Swapped 1 component(s) of 'dpsave' and 'del_tbalry'.)
+ (Finished specifying closure.)
+ 
+  [ Current closure is valid, namely,
+    there are 148791 exogenous and 72127 endogenous.]
+ 
+ 
+ (Completed specifying a closure.)
+ 
+  (Value of Harwell parameter U to be used is  0.1000000.)
+ 
+  SHOCKS
+  ------
+  
+  (All components of 'tm' chosen to be shocked.)
+   All 820 are equal to 10.00000.
+ 
+ (Total number of nonzero shocks is 820.)
+  (Checking that values of 'VDFB' are in the required range.)
+  (Checking that values of 'VMFB' are in the required range.)
+  (Checking that values of 'VDFP' are in the required range.)
+  (Checking that values of 'VMFP' are in the required range.)
+  (Checking that values of 'EVFB' are in the required range.)
+  (Checking that values of 'EVFP' are in the required range.)
+  (Checking that values of 'VDGB' are in the required range.)
+  (Checking that values of 'VMGB' are in the required range.)
+  (Checking that values of 'VDGP' are in the required range.)
+  (Checking that values of 'VMGP' are in the required range.)
+  (Checking that values of 'VDPB' are in the required range.)
+  (Checking that values of 'VMPB' are in the required range.)
+  (Checking that values of 'VDPP' are in the required range.)
+  (Checking that values of 'VMPP' are in the required range.)
+  (Checking that values of 'VDIB' are in the required range.)
+  (Checking that values of 'VMIB' are in the required range.)
+  (Checking that values of 'VDIP' are in the required range.)
+  (Checking that values of 'VMIP' are in the required range.)
+  (Checking that values of 'VDEP' are in the required range.)
+  (Checking that values of 'VXSB' are in the required range.)
+  (Checking that values of 'VFOB' are in the required range.)
+  (Checking that values of 'VCIF' are in the required range.)
+  (Checking that values of 'VMSB' are in the required range.)
+  (Checking that values of 'VST' are in the required range.)
+  (Checking that values of 'VTMFSD' are in the required range.)
+  (Checking that values of 'VKB' are in the required range.)
+  Formula for 'C00283'
+  Formula for 'C00284'
+  Formula for 'C00285'
+  Formula for 'C00286'
+  Formula for 'C00287'
+  Formula for 'C00288'
+  Formula for 'C00289'
+  Formula for 'C00290'
+  Formula for 'C00291'
+  Formula for 'C00292'
+  Formula for 'C00293'
+  Formula for 'C00294'
+  Formula for 'C00295'
+  Formula for 'C00296'
+  Formula for 'C00297'
+  Formula for 'C00298'
+  Formula for 'C00299'
+  Formula for 'C00300'
+  Formula for 'C00301'
+  Formula for 'C00302'
+  Formula for 'C00303'
+  Formula for 'C00304'
+  Formula for 'C00305'
+  Formula for 'C00306'
+  Formula for 'C00307'
+  Formula for 'C00308'
+  Formula for 'C00309'
+  Formula for 'C00310'
+  Formula for 'C00311'
+  Formula for 'C00312'
+  Formula for 'C00313'
+  Formula for 'C00314'
+  Formula for 'C00315'
+  Formula for 'C00316'
+  Formula for 'C00317'
+  Formula for 'C00318'
+  Formula for 'C00319'
+  Formula for 'C00320'
+  Formula for 'C00321'
+  Formula for 'C00322'
+  Formula for 'C00323'
+  Formula for 'C00324'
+  Formula for 'C00325'
+  Formula for 'C00326'
+  Formula for 'C00327'
+  Formula for 'C00328'
+  Formula for 'C00329'
+  Formula for 'C00330'
+  Formula for 'C00331'
+  Formula for 'C00332'
+  Formula for 'C00333'
+  Formula for 'C00334'
+  Formula for 'C00335'
+  Formula for 'C00336'
+  Formula for 'C00337'
+  Formula for 'C00338'
+  Formula for 'C00339'
+  Formula for 'C00340'
+  Formula for 'C00341'
+  Formula for 'C00342'
+  Formula for 'C00343'
+  Formula for 'C00344'
+  Formula for 'C00345'
+  Formula for 'C00346'
+  Formula for 'C00347'
+  Formula for 'C00348'
+  Formula for 'C00349'
+  Formula for 'C00350'
+  Formula for 'C00351'
+  Formula for 'C00352'
+  Formula for 'C00353'
+  Formula for 'C00354'
+  Formula for 'C00355'
+  Formula for 'C00356'
+  Formula for 'C00357'
+  Formula for 'C00358'
+  Formula for 'C00359'
+  Formula for 'C00360'
+  Formula for 'C00361'
+  Formula for 'C00362'
+  Formula for 'C00363'
+  Formula for 'C00364'
+  Formula for 'C00365'
+  Formula for 'C00366'
+  Formula for 'C00367'
+  Formula for 'C00368'
+  Formula for 'C00369'
+  Formula for 'C00370'
+  Formula for 'C00371'
+  Formula for 'C00372'
+  Formula for 'C00373'
+  Formula for 'C00374'
+  Formula for 'C00375'
+  Formula for 'C00376'
+  Formula for 'C00377'
+  Formula for 'C00378'
+  Formula for 'C00379'
+  Formula for 'C00380'
+  Formula for 'C00381'
+  Formula for 'C00382'
+  Formula for 'C00383'
+  Formula for 'C00384'
+  Formula for 'C00385'
+  Formula for 'C00386'
+  Formula for 'C00387'
+  Formula for 'C00388'
+  Formula for 'C00389'
+  Formula for 'C00390'
+  Formula for 'C00391'
+  Formula for 'C00392'
+  Formula for 'C00393'
+  Formula for 'C00394'
+  Formula for 'C00395'
+  Formula for 'C00396'
+  Formula for 'C00397'
+  Formula for 'C00398'
+  Formula for 'C00399'
+  Formula for 'C00400'
+  Formula for 'C00401'
+  Formula for 'C00402'
+  Formula for 'C00403'
+  Formula for 'C00404'
+  Formula for 'C00405'
+  Formula for 'C00406'
+  Formula for 'C00407'
+  Formula for 'C00408'
+  Formula for 'C00409'
+  Formula for 'C00410'
+  Formula for 'C00411'
+  Formula for 'C00412'
+  Formula for 'C00413'
+  Formula for 'C00414'
+  Formula for 'C00415'
+  Formula for 'C00416'
+  Formula for 'C00417'
+  Formula for 'C00418'
+  Formula for 'C00419'
+  Formula for 'C00420'
+  Formula for 'C00421'
+  Formula for 'C00422'
+  Formula for 'C00423'
+  Formula for 'C00424'
+  Formula for 'C00425'
+  Formula for 'C00426'
+  Formula for 'C00427'
+  Formula for 'C00428'
+  Formula for 'C00429'
+  Formula for 'C00430'
+  Formula for 'C00431'
+  Formula for 'C00432'
+  Formula for 'C00433'
+  Formula for 'C00434'
+  Formula for 'C00435'
+  Formula for 'C00436'
+  Formula for 'C00437'
+  Formula for 'C00438'
+  Formula for 'C00439'
+  Formula for 'C00440'
+  Formula for 'C00441'
+  Formula for 'C00442'
+  Formula for 'C00443'
+  Formula for 'C00444'
+  Formula for 'C00445'
+  Formula for 'C00446'
+  Formula for 'C00447'
+  Formula for 'C00448'
+  Formula for 'C00449'
+  Formula for 'C00450'
+  Formula for 'C00451'
+  Formula for 'C00452'
+  Formula for 'C00453'
+  Formula for 'C00454'
+  Formula for 'C00455'
+  Formula for 'C00456'
+  Formula for 'C00457'
+  Formula for 'C00458'
+  Formula for 'C00459'
+  Formula for 'C00460'
+  Formula for 'C00461'
+  Formula for 'C00462'
+  Formula for 'C00463'
+  Formula for 'C00464'
+  Formula for 'C00465'
+  Formula for 'C00466'
+  Formula for 'C00467'
+  Formula for 'C00468'
+  Formula for 'C00469'
+  Formula for 'C00470'
+  Formula for 'C00471'
+  Formula for 'C00472'
+  Formula for 'C00473'
+  Formula for 'C00474'
+  Formula for 'C00475'
+  Formula for 'C00476'
+  Formula for 'C00477'
+  Formula for 'C00478'
+  Formula for 'C00479'
+  Formula for 'C00480'
+  Formula for 'C00481'
+  Formula for 'C00482'
+  Formula for 'C00483'
+  Formula for 'C00484'
+  Formula for 'C00485'
+  Formula for 'C00486'
+  Formula for 'C00487'
+  Formula for 'C00488'
+  Formula for 'C00489'
+ [CPU for reads, formulas etc is 0.12 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
+ 
+  (Writing the Solution Coefficients (SLC) file.)
+ 
+  Total memory currently used for all arrays is approximately 57.41 megabytes.
+  [This includes memory relating to current values:    MMNZ=50000, MMNZ1=50000 and MMNZ2=50000.]
+  [Add about 5-10 megabytes for the memory used by the code.]
+  [Total memory currently allocated for Coefficients and Updated
+   Coefficients is about        6.6 and        1.1 MB respectively.]
+ 
+  [Starting TGCSM2W submatrices]
+ 
+  Equation 'E_qo'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_ao'
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_ava'
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_po'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 0.)
+ 
+  Equation 'E_pb'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'pb'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 0.)
+ 
+  Equation 'E_qc'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_fincome'
+     Submatrix for variable 'qes'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'fincome'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_y'
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'fincome'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_indtaxr'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qsave'
+     Submatrix for variable 'psave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qsave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'uelas'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 40, all on the LHS.)
+ 
+  Equation 'E_yg'
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'uelas'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_yp'
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yp'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'uepriv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'uelas'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_uelas'
+     Submatrix for variable 'uepriv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'uelas'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'dpav'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_dpav'
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 40, all on the LHS.)
+     Submatrix for variable 'dpav'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_p'
+     Submatrix for variable 'psave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pgov'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ppriv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'p'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_u'
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'p'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'u'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_dpsum'
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 40, all on the LHS.)
+     Submatrix for variable 'dpsum'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qpa'
+     Submatrix for variable 'yp'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_uepriv'
+     Submatrix for variable 'yp'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'uepriv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_ppriv'
+     Submatrix for variable 'ppriv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_up'
+     Submatrix for variable 'ppriv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yp'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'up'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_ppa'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'tpd'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'tpm'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_qga'
+     Submatrix for variable 'pgov'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'yg'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pgov'
+     Submatrix for variable 'pgov'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_ug'
+     Submatrix for variable 'pgov'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ug'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_pga'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pinv'
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pia'
+     Submatrix for variable 'pid'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pim'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_qms'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pim'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'tpm'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_qxs'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qms'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 26139, all on the LHS.)
+     Submatrix for variable 'tm'
+     (Number of nonzeros is 33620, all corresponding to shocks.)
+ 
+  Equation 'E_pms'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 779, all on the LHS.)
+     Submatrix for variable 'tm'
+     (Number of nonzeros is 820, all corresponding to shocks.)
+ 
+  Equation 'E_qtm'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 26139, all on the LHS.)
+     Submatrix for variable 'qtm'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_qst'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qst'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qtm'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_pt'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_pr'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pr'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_qds'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pid'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'tpd'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pds'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qst'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qds'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pid'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pid'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pim'
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pim'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_tpd'
+     Submatrix for variable 'tpd'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_tpm'
+     Submatrix for variable 'tpm'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pe1'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 8364, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 2460, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 2460, all on the LHS.)
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 2460, all on the LHS.)
+ 
+  Equation 'E_qes1'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2460, all on the LHS.)
+     Submatrix for variable 'pe'
+     (Number of nonzeros is 2460, all on the LHS.)
+ 
+  Equation 'E_qes2'
+     Submatrix for variable 'qes'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pe'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pe2'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 205, all on the LHS.)
+     Submatrix for variable 'pe'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qes3'
+     Submatrix for variable 'qes'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_peb'
+     Submatrix for variable 'qes'
+     (Number of nonzeros is 4100, all on the LHS.)
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 15252, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 4100, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 4100, all on the LHS.)
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 4100, all on the LHS.)
+ 
+  Equation 'E_ke'
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ke'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_rental'
+     Submatrix for variable 'pe'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'rental'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_rorc'
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'rorc'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'rental'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_kb'
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_rore'
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ke'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'rore'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'rorc'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qinv'
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'globalcgds'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'rore'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'rorg'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_expand'
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'expand'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_globalcgds'
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'globalcgds'
+     (Number of nonzeros is 1, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'rore'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'rorg'
+     (Number of nonzeros is 0.)
+ 
+  Equation 'E_psave'
+     Submatrix for variable 'psave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 1681, all on the LHS.)
+ 
+  Equation 'E_pcgdswld'
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pcgdswld'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_del_taxrout'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'del_taxrout'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxrfu'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'del_taxrfu'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxriu'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 818, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 818, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'del_taxriu'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxrpc'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 733, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 772, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 815, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 815, all on the LHS.)
+     Submatrix for variable 'tpd'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'tpm'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'del_taxrpc'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxrgc'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 291, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 282, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 35, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 340, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 340, all on the LHS.)
+     Submatrix for variable 'del_taxrgc'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxric'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 413, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 389, all on the LHS.)
+     Submatrix for variable 'pid'
+     (Number of nonzeros is 413, all on the LHS.)
+     Submatrix for variable 'pim'
+     (Number of nonzeros is 389, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 471, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxric'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxrexp'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 382, all on the LHS.)
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 14436, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrexp'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxrimp'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 22016, all on the LHS.)
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 22016, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'tm'
+     (Number of nonzeros is 820, all corresponding to shocks.)
+     Submatrix for variable 'del_taxrimp'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_taxrinc'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'del_taxrinc'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_indtaxr'
+     Submatrix for variable 'del_indtaxr'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrout'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrfu'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxriu'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrpc'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrgc'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxric'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrexp'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrimp'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_del_ttaxr'
+     Submatrix for variable 'del_indtaxr'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_taxrinc'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_ttaxr'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_pfactor'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'pfactor'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_rorg'
+     Submatrix for variable 'pfactor'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_walras_sup'
+     Submatrix for variable 'globalcgds'
+     (Number of nonzeros is 1, all on the LHS.)
+     Submatrix for variable 'pcgdswld'
+     (Number of nonzeros is 1, all on the LHS.)
+     Submatrix for variable 'walras_sup'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_walras_dem'
+     Submatrix for variable 'psave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qsave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'walras_dem'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_walraslack'
+     Submatrix for variable 'walras_sup'
+     (Number of nonzeros is 1, all on the LHS.)
+     Submatrix for variable 'walras_dem'
+     (Number of nonzeros is 1, all on the LHS.)
+     Submatrix for variable 'walraslack'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_pebfactreal'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2665, all on the LHS.)
+     Submatrix for variable 'ppriv'
+     (Number of nonzeros is 164, all on the LHS.)
+     Submatrix for variable 'pebfactreal'
+     (Number of nonzeros is 164, all on the LHS.)
+ 
+  Equation 'E_pefactreal'
+     Submatrix for variable 'ppriv'
+     (Number of nonzeros is 164, all on the LHS.)
+     Submatrix for variable 'pe'
+     (Number of nonzeros is 164, all on the LHS.)
+     Submatrix for variable 'pefactreal'
+     (Number of nonzeros is 164, all on the LHS.)
+ 
+  Equation 'E_psw'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'psw'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_pdw'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pdw'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_tot'
+     Submatrix for variable 'psw'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pdw'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'tot'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_vgdp'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 65842, all on the LHS.)
+     Submatrix for variable 'qst'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'vgdp'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_pgdp'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pgdp'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qgdp'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 65842, all on the LHS.)
+     Submatrix for variable 'qst'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qgdp'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_vxwfob'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qst'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'vxwfob'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_vxwreg'
+     Submatrix for variable 'vxwfob'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'vxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_vxwcom'
+     Submatrix for variable 'vxwfob'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'vxwcom'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_vxwwld'
+     Submatrix for variable 'vxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'vxwwld'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_vmwcif'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 779, all on the LHS.)
+     Submatrix for variable 'vmwcif'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_vmwreg'
+     Submatrix for variable 'vmwcif'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'vmwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_vmwcom'
+     Submatrix for variable 'vmwcif'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'vmwcom'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_valuew'
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pxw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'valuew'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_valuewu'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'valuewu'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_pxw'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pxw'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pxwreg'
+     Submatrix for variable 'pxw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_pxwcom'
+     Submatrix for variable 'pxw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pxwcom'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_pxwwld'
+     Submatrix for variable 'pxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pxwwld'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_pmw'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 779, all on the LHS.)
+     Submatrix for variable 'pmw'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_pmwreg'
+     Submatrix for variable 'pmw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pmwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_pmwcom'
+     Submatrix for variable 'pmw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pmwcom'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_pw'
+     Submatrix for variable 'pxw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pw'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_pwu'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pwu'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_qxw'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qst'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qxw'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_qxwreg'
+     Submatrix for variable 'qxw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qxwcom'
+     Submatrix for variable 'qxw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qxwcom'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_qxwwld'
+     Submatrix for variable 'qxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qxwwld'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_qmwreg'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qmwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qmwcom'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'qmwcom'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_qow'
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qow'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_qowu'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 16400, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qowu'
+     (Number of nonzeros is 20, all on the LHS.)
+ 
+  Equation 'E_del_tbalc'
+     Submatrix for variable 'vxwfob'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'vmwcif'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'del_tbalc'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_del_tbal'
+     Submatrix for variable 'vxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'vmwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_tbal'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_ywld'
+     Submatrix for variable 'y'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ywld'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_del_tbalry'
+     Submatrix for variable 'vxwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'vmwreg'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ywld'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'del_tbalry'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_pm_cr'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pm_cr'
+     (Number of nonzeros is 820, all on the LHS.)
+ 
+  Equation 'E_c1_r'
+     Submatrix for variable 'pxwcom'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pxwwld'
+     (Number of nonzeros is 40, all on the LHS.)
+     Submatrix for variable 'c1_r'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_c2_r'
+     Submatrix for variable 'pxw'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pxwcom'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'c2_r'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_c3_r'
+     Submatrix for variable 'pxwcom'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'pm_cr'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'c3_r'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_tot2'
+     Submatrix for variable 'c1_r'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'c2_r'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'c3_r'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'tot2'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_ugev'
+     Submatrix for variable 'ugev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ygev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_upev'
+     Submatrix for variable 'upev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ypev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_ueprivev'
+     Submatrix for variable 'ueprivev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ypev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_dpavev'
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 40, all on the LHS.)
+     Submatrix for variable 'dpavev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_uelasev'
+     Submatrix for variable 'uelasev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ueprivev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'dpavev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_ypev'
+     Submatrix for variable 'uelasev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ueprivev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ypev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_ygev'
+     Submatrix for variable 'uelasev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ygev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_ysaveev'
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 40, all on the LHS.)
+     Submatrix for variable 'uelasev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ysaveev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_qsaveev'
+     Submatrix for variable 'qsaveev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'ysaveev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_yev'
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'u'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'yev'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_EV'
+     Submatrix for variable 'yev'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'EV'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_WEV'
+     Submatrix for variable 'EV'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'WEV'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_EV_ALT'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'qes'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2786, all on the LHS.)
+     Submatrix for variable 'pid'
+     (Number of nonzeros is 413, all on the LHS.)
+     Submatrix for variable 'pim'
+     (Number of nonzeros is 389, all on the LHS.)
+     Submatrix for variable 'psave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 36338, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 815, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 815, all on the LHS.)
+     Submatrix for variable 'pga'
+     (Number of nonzeros is 340, all on the LHS.)
+     Submatrix for variable 'qga'
+     (Number of nonzeros is 340, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 471, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'tpd'
+     (Number of nonzeros is 733, all on the LHS.)
+     Submatrix for variable 'tpm'
+     (Number of nonzeros is 772, all on the LHS.)
+     Submatrix for variable 'EV_ALT'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_WEV_ALT'
+     Submatrix for variable 'EV_ALT'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'WEV_ALT'
+     (Number of nonzeros is 1, all on the LHS.)
+ 
+  Equation 'E_CNTdpar'
+     Submatrix for variable 'dpsave'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'CNTdpar'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTpop'
+     Submatrix for variable 'CNTpop'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTqor'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 819, all on the LHS.)
+     Submatrix for variable 'qc'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'CNTqor'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTqea'
+     Submatrix for variable 'qes'
+     (Number of nonzeros is 2740, all on the LHS.)
+     Submatrix for variable 'CNTqea'
+     (Number of nonzeros is 4100, all on the LHS.)
+ 
+  Equation 'E_CNTqfer'
+     Submatrix for variable 'peb'
+     (Number of nonzeros is 2786, all on the LHS.)
+     Submatrix for variable 'po'
+     (Number of nonzeros is 0.)
+     Submatrix for variable 'qo'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ao'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'ava'
+     (Number of nonzeros is 820, all on the LHS.)
+     Submatrix for variable 'CNTqfer'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTqpr'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 733, all on the LHS.)
+     Submatrix for variable 'pms'
+     (Number of nonzeros is 772, all on the LHS.)
+     Submatrix for variable 'ppa'
+     (Number of nonzeros is 1505, all on the LHS.)
+     Submatrix for variable 'qpa'
+     (Number of nonzeros is 1505, all on the LHS.)
+     Submatrix for variable 'tpd'
+     (Number of nonzeros is 733, all on the LHS.)
+     Submatrix for variable 'tpm'
+     (Number of nonzeros is 772, all on the LHS.)
+     Submatrix for variable 'CNTqpr'
+     (Number of nonzeros is 82, all on the LHS.)
+ 
+  Equation 'E_CNTqia'
+     Submatrix for variable 'pid'
+     (Number of nonzeros is 413, all on the LHS.)
+     Submatrix for variable 'pim'
+     (Number of nonzeros is 389, all on the LHS.)
+     Submatrix for variable 'pia'
+     (Number of nonzeros is 802, all on the LHS.)
+     Submatrix for variable 'qinv'
+     (Number of nonzeros is 79, all on the LHS.)
+     Submatrix for variable 'CNTqia'
+     (Number of nonzeros is 82, all on the LHS.)
+ 
+  Equation 'E_CNTqxsr'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 14436, all on the LHS.)
+     Submatrix for variable 'CNTqxsr'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTqmsr'
+     Submatrix for variable 'qxs'
+     (Number of nonzeros is 22016, all on the LHS.)
+     Submatrix for variable 'CNTqmsr'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTtotr'
+     Submatrix for variable 'pds'
+     (Number of nonzeros is 33620, all on the LHS.)
+     Submatrix for variable 'pt'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pxwwld'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'CNTtotr'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTpinv'
+     Submatrix for variable 'psave'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pinv'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'pxwwld'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'CNTpinv'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTendwr'
+     Submatrix for variable 'qes'
+     (Number of nonzeros is 2788, all on the LHS.)
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'CNTendwr'
+     (Number of nonzeros is 41, all on the LHS.)
+ 
+  Equation 'E_CNTkb'
+     Submatrix for variable 'kb'
+     (Number of nonzeros is 41, all on the LHS.)
+     Submatrix for variable 'CNTkb'
+     (Number of nonzeros is 41, all on the LHS.)
+ [CPU for equations is 0.94 seconds.]
+ Elapsed time for equations is:  1 seconds.
+ [CPU for formulas and equations is 1.16 seconds.]
+ Elapsed time for formulas and equations is:  1 seconds.
+ 
+  CUMULATIVELY-RETAINED ENDOGENOUS
+  --------------------------------
+  
+ 
+   Total number (of components) chosen to
+    be cumulatively-retained endogenous is 695122.
+  
+ 
+  VERBAL DESCRIPTION IS AS FOLLOWS:
+  
+ gtap7_20x41 uniform 10pct shock to import tariff power (tm), capFix closure
+ [Solution method is gragg. Steps = 8,16,32.]
+ [CMF file: tm10.cmf]
+ 
+   Total number (of components) chosen to
+    be XAC-retained is 695122.
+  
+ (Opened new binary file 'tm10.cdk'.)
+   [Organising LHS into memory - are 1382137 nonzeros.]
+ 
+  Total memory currently used for all arrays is approximately 92.54 megabytes.
+  [This includes memory relating to current values:    MMNZ=3120041, MMNZ1=3120041 and MMNZ2=3120041.]
+  [Add about 5-10 megabytes for the memory used by the code.]
+  [Total memory currently allocated for Coefficients and Updated
+   Coefficients is about        6.6 and        1.1 MB respectively.]
+ 
+  (Beginning simulation for pass number 1 of a 9-pass simulation.)
+ 
+   (Total number of endogenous variables is 72127.)
+   (Total number of nonzero entries 
+    in the left hand side matrix is 1382137.)
+  [KSTEPA=1, NPASSA=9]
+ 
+  (Calculating the LU decomposition.)
+  Karp-Sipser Initialization matched 71433 rows corresponding to 99.04%
+   [CPU time for GPLU analysis is 1.34 seconds.]
+   Elapsed time for  GPLU analysis is:  1 seconds.
+  [Calling MA48BG.]
+ 
+  Total memory currently used for all arrays is approximately 154.12 megabytes.
+  [This includes memory relating to current values:    MMNZ=11191794, MMNZ1=11191794 and MMNZ2=3120041.]
+  [Add about 5-10 megabytes for the memory used by the code.]
+  [Total memory currently allocated for Coefficients and Updated
+   Coefficients is about        6.6 and        1.1 MB respectively.]
+   [CPU time for MA48B is 5.83 seconds.]
+   Elapsed time for MA48B is:  4 seconds.
+  (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 9087706.)
+  [CPU time for LU decomposition is 7.17 seconds.]
+  Elapsed time for LU decomposition is:  5 seconds.
+  [CPU time for MA48C/MA28I is 0.08 seconds.]
+  [CPU time for solution accuracy check is 0.02 seconds.]
+  (Cumulative solution obtained.)
+  [CPU time for MA48C/MA28I is 0.11 seconds.]
+  [CPU time for solution accuracy check is 0.00 seconds.]
+  (Second cumulative solution obtained.)
+  [CPU time for MA48C/MA28I is 0.11 seconds.]
+  [CPU time for solution accuracy check is 0.02 seconds.]
+  (Third cumulative solution obtained.)
+ [CPU for simulation is 7.95 seconds.]
+ Elapsed time for simulation is:  7 seconds.
+ Elapsed time to do up to first solve (this subinterval) is  8 seconds.
+ 
+  (Beginning the backsolve after pass 1 of this 9-pass calculation.)
+  Backsolving for variable 'aint using equation 'E_aint'
+  Backsolving for variable 'qpev using equation 'E_qpev'
+  Backsolving for variable 'CNTqxs using equation 'E_CNTqxs'
+  Backsolving for variable 'pgm using equation 'E_pgm'
+  Backsolving for variable 'ppd using equation 'E_ppd'
+  Backsolving for variable 'CNTqgm using equation 'E_CNTqgm'
+  Backsolving for variable 'CNTtech_atmfsd using equation 'E_CNTtech_atmfsd'
+  Backsolving for variable 'CNTqo using equation 'E_CNTqo'
+  Backsolving for variable 'qgm using equation 'E_qgm'
+  Backsolving for variable 'pva using equation 'E_pva'
+  Backsolving for variable 'qid using equation 'E_qid'
+  Backsolving for variable 'afe using equation 'E_afe'
+  Backsolving for variable 'CNTtech_afe using equation 'E_CNTtech_afe'
+  Backsolving for variable 'CNTtech_aint using equation 'E_CNTtech_aint'
+  Backsolving for variable 'CNTtech_af using equation 'E_CNTtech_af'
+  Backsolving for variable 'CNTalleffcr using equation 'E_CNTalleffcr'
+  Backsolving for variable 'pfe using equation 'E_pfe'
+  Backsolving for variable 'pint using equation 'E_pint'
+  Backsolving for variable 'pfob using equation 'E_pfob'
+  Backsolving for variable 'qva using equation 'E_qva'
+  Backsolving for variable 'pfm using equation 'E_pfm'
+  Backsolving for variable 'CNTqgd using equation 'E_CNTqgd'
+  Backsolving for variable 'CNTtech_ams using equation 'E_CNTtech_ams'
+  Backsolving for variable 'qpm using equation 'E_qpm'
+  Backsolving for variable 'ppm using equation 'E_ppm'
+  Backsolving for variable 'qmw using equation 'E_qmw'
+  Backsolving for variable 'CNTqfeer using equation 'E_CNTqfeer'
+  Backsolving for variable 'c1_cr using equation 'E_c1_cr'
+  Backsolving for variable 'CNTqca using equation 'E_CNTqca'
+  Backsolving for variable 'CNTtech_ao using equation 'E_CNTtech_ao'
+  Backsolving for variable 'qim using equation 'E_qim'
+  Backsolving for variable 'CNTqms using equation 'E_CNTqms'
+  Backsolving for variable 'c3_cr using equation 'E_c3_cr'
+  Backsolving for variable 'CNTqid using equation 'E_CNTqid'
+  Backsolving for variable 'CNTqpd using equation 'E_CNTqpd'
+  Backsolving for variable 'qpd using equation 'E_qpd'
+  Backsolving for variable 'pcif using equation 'E_pcif'
+  Backsolving for variable 'pmds using equation 'E_pmds'
+  Backsolving for variable 'CNTqe using equation 'E_CNTqe'
+  Backsolving for variable 'qint using equation 'E_qint'
+  Backsolving for variable 'CNTendw using equation 'E_CNTendw'
+  Backsolving for variable 'CNTtech_ava using equation 'E_CNTtech_ava'
+  Backsolving for variable 'ps using equation 'E_ps'
+  Backsolving for variable 'pgd using equation 'E_pgd'
+  Backsolving for variable 'pes using equation 'E_pes'
+  Backsolving for variable 'pfa using equation 'E_pfa'
+  Backsolving for variable 'qgd using equation 'E_qgd'
+  Backsolving for variable 'compvalad using equation 'E_compvalad'
+  Backsolving for variable 'qfm using equation 'E_qfm'
+  Backsolving for variable 'pca using equation 'E_pca'
+  Backsolving for variable 'qfa using equation 'E_qfa'
+  Backsolving for variable 'qca using equation 'E_qca'
+  Backsolving for variable 'afa using equation 'E_afa'
+  Backsolving for variable 'atmfsd using equation 'E_atmfsd'
+  Backsolving for variable 'ptrans using equation 'E_ptrans'
+  Backsolving for variable 'c2_cr using equation 'E_c2_cr'
+  Backsolving for variable 'CNTqgr using equation 'E_CNTqgr'
+  Backsolving for variable 'CNTqfe using equation 'E_CNTqfe'
+  Backsolving for variable 'qfd using equation 'E_qfd'
+  Backsolving for variable 'qtmfsd using equation 'E_qtmfsd'
+  Backsolving for variable 'qia using equation 'E_qia'
+  Backsolving for variable 'pfd using equation 'E_pfd'
+  Backsolving for variable 'CNTqim using equation 'E_CNTqim'
+  Backsolving for variable 'CNTalleffr using equation 'E_CNTalleffr'
+  Backsolving for variable 'qfe using equation 'E_qfe'
+  Backsolving for variable 'CNTqfm using equation 'E_CNTqfm'
+  Backsolving for variable 'CNTtechr using equation 'E_CNTtechr'
+  Backsolving for variable 'CNTqfr using equation 'E_CNTqfr'
+  Backsolving for variable 'CNTqfd using equation 'E_CNTqfd'
+  Backsolving for variable 'CNTqpm using equation 'E_CNTqpm'
+  Backsolving for variable 'pfactreal using equation 'E_pfactreal'
+  [CPU for backsolve is 0.02 seconds.]
+  Elapsed time for backsolve is: less than one second.
+ 
+  (Beginning the update after pass 1 of this 9-pass calculation.)
+ Update of "VERNUM"
+ Update of "VDFB"
+ Update of "VMFB"
+ Update of "VDFP"
+ Update of "VMFP"
+ Update of "EVOS"
+ Update of "EVFB"
+ Update of "EVFP"
+ Update of "MAKES"
+ Update of "MAKEB"
+ Update of "VDGB"
+ Update of "VMGB"
+ Update of "VDGP"
+ Update of "VMGP"
+ Update of "VDPB"
+ Update of "VMPB"
+ Update of "VDPP"
+ Update of "VMPP"
+ Update of "VDIB"
+ Update of "VMIB"
+ Update of "VDIP"
+ Update of "VMIP"
+ Update of "SAVE"
+ Update of "VDEP"
+ Update of "VXSB"
+ Update of "VFOB"
+ Update of "VCIF"
+ Update of "VMSB"
+ Update of "VST"
+ Update of "DPARSUM"
+ Update of "UTILPRIV"
+ Update of "UTILGOV"
+ Update of "UTILSAVE"
+ Update of "VTMFSD"
+ Update of "VKB"
+ Update of "INCOMEEV"
+ Update of "UTILPRIVEV"
+ Update of "UTILGOVEV"
+ Update of "UTILSAVEEV"
+ Update of "VPPEV"
+ Update of "PRIVEXPEV"
+ Update of "GOVEXPEV"
+ Update of "SAVEEV"
+ Update of "UTILELASEV"
+ 
+  (Writing the Data Work file.)
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 1 is 9.14 seconds.]
+  Elapsed time for update is: less than one second.
+  Elapsed time for step 1 is:  8 seconds.
+ 
+  --->  Beginning pass number 2 of 9-pass calculation.
+  [Copying all updated values for use in this pass.]
+ [CPU for reads, formulas etc is 0.00 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
+ 
+  [Starting TGCSM2W submatrices]
+ [CPU for equations is 0.05 seconds.]
+ Elapsed time for equations is: less than one second.
+ [CPU for formulas and equations is 0.05 seconds.]
+ Elapsed time for formulas and equations is: less than one second.
+  (There are now 1428661 nonzeros in those parts of
+      the equations calculated for this step.)
+  
+ 
+  (Beginning simulation for pass number 2 of a 9-pass simulation.)
+   (Total number of nonzero entries 
+    in the left hand side matrix is 1428661.)
+  [KSTEPA=2, NPASSA=9]
+  [Have been 2 extra reallocations of MMNZ,MMNZ1. This may be
+    slowing down this sim considerably. A suitable
+    "start with MMNZ = <value> ;" statement
+     may speed things up.]
+   [See Section 32.3 of the GEMPACK Manual, "MMNZ: Allocating memory for the LU
+    decomposition".][TopicID:gpd3.13.3]
+ 
+  (Calculating the LU decomposition.)
+  Reusing permutations for zero free diagonal
+  Failed reusing strong connect permutation: recomputing pivot structure
+   [CPU time for GPLU analysis is 1.58 seconds.]
+   Elapsed time for  GPLU analysis is:  1 seconds.
+  [Calling MA48BG.]
+ 
+  Total memory currently used for all arrays is approximately 236.05 megabytes.
+  [This includes memory relating to current values:    MMNZ=21929536, MMNZ1=21929536 and MMNZ2=3120041.]
+  [Add about 5-10 megabytes for the memory used by the code.]
+  [Total memory currently allocated for Coefficients and Updated
+   Coefficients is about        6.6 and        1.1 MB respectively.]
+   [CPU time for MA48B is 9.44 seconds.]
+   Elapsed time for MA48B is:  7 seconds.
+  (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 16540050.)
+  [CPU time for LU decomposition is 11.02 seconds.]
+  Elapsed time for LU decomposition is:  8 seconds.
+  [CPU time for MA48C/MA28I is 0.20 seconds.]
+  [CPU time for solution accuracy check is 0.00 seconds.]
+  (Cumulative solution obtained.)
+ [CPU for simulation is 11.27 seconds.]
+ Elapsed time for simulation is:  8 seconds.
+ 
+  (Beginning the backsolve after pass 2 of this 9-pass calculation.)
+  [CPU for backsolve is 0.08 seconds.]
+  Elapsed time for backsolve is: less than one second.
+ 
+  (Beginning the update after pass 2 of this 9-pass calculation.)
+  [CPU for update is 0.06 seconds.]
+  [CPU for step 2 is 11.45 seconds.]
+  Elapsed time for update is: less than one second.
+  Elapsed time for step 2 is:  8 seconds.
+ 
+  --->  Beginning pass number 3 of 9-pass calculation.
+  [Copying all updated values for use in this pass.]
+ [CPU for reads, formulas etc is 0.02 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
+ 
+  [Starting TGCSM2W submatrices]
+ 
+     Arithmetic error report
+     -----------------------
+ 
+  %% Error doing submatrix for variable "dpsave",
+      in equation "E_u".
+ 
+     Attempt to take LOGE of zero or of a negative number.
+     This occurred first when:
+  
+     value of LOGE argument is -0.2668599
+     (There is 1 active index)
+     index "r" from set "REG", value "Caribbean" (element 29)
+ 
+     Expression being evaluated is:
+  
+       (ALL,r,REG) -DPARSAVE(r) * LOGE{UTILSAVE(r)} * dpsave(r)
+  
+  [Have written Coefficient values to headers "0001" to "0002"
+   of file "tm10-assert-arith-fail.har".]
+ 
+     This occurred doing submatrix for variable "dpsave",
+      in equation "E_u".
+   [See Section 34.3 of the GEMPACK Manual, "Reporting arithmetic errors".]
+   [TopicID:gpd9.7.4]
+ 
+     If you have a log file search for "Arithmetic error report" to locate the
+     start of the report.
+ 
+     End of arithmetic error report
+     ------------------------------
+ 
+ (ERROR RETURN FROM ROUTINE:TGIER )
+ (E-loge of zero or of a negative number)
+ 
+  (The program terminated with an error.)
+  (The program has completed without warnings.)
+  
+  Total elapsed time is: 16 seconds.
+ (Output has also been written to log file 'tm10.log'.)
