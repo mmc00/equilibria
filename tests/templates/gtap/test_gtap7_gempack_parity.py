@@ -165,6 +165,13 @@ _CAPFLEX_SLOW_DATASETS = {"gtap7_10x7", "gtap7_15x10", "gtap7_20x41"}
 #   10x7  -> code=1 in 33s,  97.0% within 1pp (median 0.103pp)
 #   15x10 -> code=1 in ~20m, 91.5% within 1pp (median 0.200pp)  — SLOW (see _SLOW_DATASETS)
 _NLP_MODE_DATASETS = {"gtap7_10x7", "gtap7_15x10"}
+# 20x41: too large for IPOPT (247M-nnz Hessian → OOM >32GB), so it is NOT in _NLP_MODE_DATASETS
+# and this gate skips it. It WAS validated out-of-band with the FREE solver (Newton-TR + MUMPS,
+# no Hessian) on Kaggle, capFix + base_calibrated=True (Kaggle kernel gtap-20x41-n20):
+#   20x41 -> code=1 resid=1.4e-8, 94.7% within 1pp (median 0.15pp) / 98.5% in levels (median 0.10%)
+# base_calibrated=True is REQUIRED: with =False (raw seed → check rebase) the match collapses to
+# 61% (verified: 15x10 too drops 91.9%→54.6% with =False). See
+# docs/findings/gempack_residual_is_linearization_2026-07-24.md (UPDATE 2026-08-19).
 # Datasets whose NLP solve is too slow for the normal sweep (~20min). Marked @slow so they are
 # excluded from run_parity_gates (which runs `-m "not slow"`) but still runnable by hand:
 #   uv run pytest tests/templates/gtap/test_gtap7_gempack_parity.py -m slow -k 15x10
