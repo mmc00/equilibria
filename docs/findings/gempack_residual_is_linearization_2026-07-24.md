@@ -4,6 +4,32 @@
 quantity match is ~52–76% within 1pp (median |Δ| ~0.4pp) rather than the "4–5
 significant digits" GAMS↔GEMPACK agreement reported in the literature.
 
+> ## ⚠️ UPDATE 2026-08-19 — the "linearization" label is WRONG (the seed was the cause)
+>
+> The §Conclusion below attributes the residual to *finite-step Gragg linearization*
+> ("our single committed RunGTAP solve is a finite-step Gragg result"). **The Gragg
+> step-grid refutes this directly.** GEMPACK ships fixtures at s∈{4,8,16,32,64}; measuring
+> GEMPACK's *own* internal convergence (same closure, VDFB %-change, s vs s64):
+>
+> | dataset | s4 vs s64 median | within 1pp |
+> |---|---|---|
+> | 3x3   | 0.0016pp | 100% |
+> | 15x10 | 0.0016pp | 100% |
+> | 20x41 | 0.0023pp | 100% |
+>
+> GEMPACK is **already at the levels limit by s8** — the error from finite steps is ~0.002pp,
+> 200× smaller than the ~0.4pp residual. **More Gragg steps do NOT close the gap**, so the gap
+> is not linearization. (The §"factors/omegas are not the cause" part below is still valid.)
+>
+> **What the residual actually was (20x41):** the SEED. Solving with `base_calibrated=False`
+> (raw seed → check-period rebase) gives 61% within 1pp; with **`base_calibrated=True`**
+> (`FactorBlock.calibrate_base` → model-consistent settled seed) the SAME solver gives **94.7%
+> within 1pp (median 0.15pp) / 98.5% in levels** on the 20x41 — matching the "4–5 significant
+> digits" literature figure. Confirmed by an isolation test: 15x10 with `base_calibrated=False`
+> collapses from 91.9% to 54.6% (same dataset, only the seed changed), so it is the seed, not
+> the dataset size or the solution method. See `docs/findings/` sibling note and the free-solver
+> pipeline. **Rule: large datasets must be solved with `base_calibrated=True` for GEMPACK fidelity.**
+
 ## The reference
 
 van der Mensbrugghe, **"The Standard GTAP Model in GAMS, Version 7"** (*Journal of
