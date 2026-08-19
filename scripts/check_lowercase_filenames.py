@@ -33,6 +33,12 @@ ALLOWED_EXACT: set[str] = {
     #     examples directory; the name is hard-coded by the extension.
     "docs/site/Makefile",
     "docs/site/examples_src/README.rst",
+    # GEMPACK 20x41 validation package: README/RESULTADO are human-facing docs
+    # (Spanish RESULTADO, uppercase by convention) written alongside the .cmf
+    # re-attempt bundle; GENERATE_* is a fixture-generation how-to. Deliberate names.
+    "runs/gempack_20x41_validation/README.md",
+    "runs/gempack_20x41_validation/RESULTADO.md",
+    "scripts/gtap/GENERATE_MISSING_LEVELS_FIXTURES.md",
 }
 
 # Directories where source/reference artifacts must keep upstream naming.
