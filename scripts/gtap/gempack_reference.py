@@ -201,10 +201,21 @@ def sl4_levels(har_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
 # linearized decomposition (−1.824) is "not exactly equal" to the levels result
 # (−2.214) because "the linearized equations ... are not satisfied exactly by the
 # accurate results" — that IS our structural pp-residual, per GEMPACK's own author.
-# So comparing GEMPACK↔Python in %-change (the form both share) is the correct
-# apples-to-apples; a levels comparison reduces to (1+%chg) after benchmark
-# normalization (verified identical to 8 decimals) — there is no distinct
-# "levels-vs-levels" GEMPACK comparison.
+# So comparing GEMPACK↔Python in %-change (the form both share) is one valid
+# apples-to-apples metric.
+#
+# CORRECTION 2026-08-19: an earlier version claimed "a levels comparison reduces to
+# (1+%chg) ... there is no distinct levels-vs-levels comparison." That is WRONG in
+# general. %-change divides the error by the CHANGE (small); a levels comparison
+# divides by the LEVEL (large). For a cell that barely moves, a 0.5pp change-error is
+# a large relative %-change error but a tiny level error — so the two metrics give
+# DIFFERENT match fractions. Measured on 20x41 (base_calibrated=True, free solver):
+#   %-change within 1pp        = 94.7% (median 0.15pp)
+#   level-relative within 1%   = 98.5% (median 0.10%)   <- the "~99% levels" figure
+# They are NOT the same test. Report both; the level-relative one is the "4-5
+# significant digits" GAMS↔GEMPACK agreement from the literature. (The finite-step
+# Gragg residual is negligible — GEMPACK converges to ~0.002pp across its s4..s64
+# step-grid; see docs/findings/gempack_residual_is_linearization_2026-07-24.md UPDATE.)
 # 13 GEMPACK quantity vars mapped to Python Vars, established 2026-07-23 by an
 # EXHAUSTIVE discovery pass (discover_qty_map.py): for each GEMPACK q* and each
 # Python quantity Var of matching rank, the index permutation minimizing median
