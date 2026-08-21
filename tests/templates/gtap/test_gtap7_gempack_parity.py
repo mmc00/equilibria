@@ -112,6 +112,12 @@ def _solve_shock(
             seed_from_prior=False,
             holdfix_cd=True,
             mode="gtap",
+            # Solve the CHECK period so %-changes can be measured shock/check —
+            # the denominator RunGTAP/GEMPACK uses.  base_calibrated's base is the
+            # RAW benchmark, and base→check re-settles income ~+0.8%; on near-zero
+            # gov-demand cells the tariff on top is ±1%, so shock/base overstates
+            # the move (qga 66.7% within-1pp) while shock/check matches (100%).
+            solve_check=True,
         )
     finally:
         if _prev_nlp is None:
@@ -137,14 +143,26 @@ def _measure_pp(m, sl4dump: Path):
         if pv is None:
             continue
         for key, gfrac in gem.items():
+            # Denominator = CHECK (the re-settled baseline), matching RunGTAP's
+            # shock/check %-change.  _solve_shock runs solve_check=True so the check
+            # period is solved; if a cell has no check value (older un-checked run)
+            # fall back to base so the metric still computes.
             try:
-                b = float(V(pv[(*key, "base")]))
                 s = float(V(pv[(*key, "shock")]))
             except (KeyError, ValueError):
                 continue
-            if abs(b) <= 1e-12:
+            den = None
+            for _period in ("check", "base"):
+                try:
+                    _d = float(V(pv[(*key, _period)]))
+                except (KeyError, ValueError):
+                    continue
+                if abs(_d) > 1e-12:
+                    den = _d
+                    break
+            if den is None:
                 continue
-            py = s / b - 1.0
+            py = s / den - 1.0
             diffs.append(abs(py - gfrac))
     if not diffs:
         return None, None

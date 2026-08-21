@@ -280,24 +280,26 @@ _MCP_ROWS: list[Row] = [
         "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x4", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
-    # capFlex 5x5 = 97.1% within 1pp (median 0.035pp); the sub-1pp cells are qga[Agri] where
-    # GAMS/ours use gov CES sigma=1.01 vs GEMPACK Cobb-Douglas — a spec diff, not linearization.
-    # Floor 90 leaves margin.
+    # capFlex 5x5 = 98.7% within 1pp (median 0.027pp) with the shock/CHECK denominator
+    # (solve_check=True). RunGTAP reports %-changes relative to the re-settled check, not
+    # the raw base; measuring shock/base understated qga on near-zero-share gov cells
+    # (base→check moves income ~+0.8%, tariff on top ±1%). Floor 95 leaves margin.
     Row("gtap7_5x5", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_5x5", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
-    # Large datasets: capFix fixture (run_gempack_matrix --rordelta 0), solved as an NLP (their
-    # capFix MCP does not converge in PATH's capi). 10x7 -> 97.0% within 1pp in 33s; 15x10 ->
-    # 91.5% in ~20min (marked @slow in the gate, excluded from the normal parity sweep).
+        "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
+    # Large datasets, shock/CHECK denominator (solve_check=True). Measured within 1pp:
+    # 10x7 -> 98.4% (median 0.028pp); 15x10 -> 93.1% (median 0.081pp), qga now 96.4% (was
+    # 58.6% under shock/base — the gain is the correct re-settled-check denominator, not a
+    # model change). 15x10 @slow (excluded from the normal parity sweep). Floors leave margin.
     Row("gtap7_10x7", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_10x7", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 95.0),), mode="pure", reference="gempack"),
     Row("gtap7_15x10", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 88.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
     Row("gtap7_15x10", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
-        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 88.0),), mode="pure", reference="gempack"),
+        "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 90.0),), mode="pure", reference="gempack"),
 ]
 ROWS.extend(_MCP_ROWS)
 
