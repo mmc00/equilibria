@@ -2625,6 +2625,7 @@ def solve_multiperiod(
     seed_from_prior: bool = False,
     holdfix_cd: bool = True,
     mode: str = "altertax",
+    solve_check: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -2886,7 +2887,15 @@ def solve_multiperiod(
     # F3.5: skip the CHECK phase entirely when base-calibrated (the base is
     # already at the settled point).  Copy base→check so any check-period read
     # downstream sees valid values, and do NOT record results["check"].
-    if _base_calibrated:
+    #
+    # solve_check=True OVERRIDES this: it forces the check period to solve even
+    # under base_calibrated.  Needed for a faithful GEMPACK %-change comparison —
+    # RunGTAP/GAMS report shock RELATIVE TO the re-settled check (base→check moves
+    # income ~+0.8%, and on near-zero-share gov cells the tariff effect on top is
+    # only ±1%, so shock/base overstates the move: qga 66.7% within-1pp vs 100%
+    # when measured shock/check).  The block's base is the RAW benchmark (= GAMS
+    # base), not the settled point, so it must actually re-settle the check.
+    if _base_calibrated and not solve_check:
         from pyomo.environ import Var as _VarF35
 
         for _v in m.component_objects(_VarF35, active=True):
@@ -3488,8 +3497,11 @@ def solve_multiperiod(
                     _pva_pnd_shock_seed[(_vn, _idx)] = float(_v[_idx].value)
 
     # Warm-start shock from the prior period's solved values.  Normally "check";
-    # in F3.5 base-calibrated mode the check phase is skipped, so seed from "base".
-    _shock_prior = "base" if _base_calibrated else "check"
+    # in F3.5 base-calibrated mode the check phase is skipped, so seed from "base"
+    # — UNLESS solve_check forced the check to solve, in which case the shock
+    # anchors on the re-settled check (matching GAMS loop(tsim) and the GEMPACK
+    # shock/check %-change).
+    _shock_prior = "base" if (_base_calibrated and not solve_check) else "check"
     _seed_period_from_prior(m, _shock_prior, "shock")
 
     # Restore the SHOCK GAMS pva/pnd seed that the prior-seed just clobbered.
