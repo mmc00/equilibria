@@ -34,3 +34,36 @@ class FilterConfig:
     max_seed_cost_share: float = 1.0
     exc_secs: tuple[str, ...] = ()
     exc_regs: tuple[str, ...] = ()
+
+
+def flag_small_flows(bench, sets, rel_tol, abs_tol, field_map):
+    """Flag benchmark cells whose value is economically insignificant.
+
+    A cell is flagged when ``abs(value) < max(abs_tol, rel_tol * sector_total)``,
+    where ``sector_total`` is computed per-cell by ``field_map[field_name](bench, key)``
+    (mirrors CGEBox filter.gms:579-610 relative + absolute thresholds). Pure: does
+    NOT mutate ``bench``.
+
+    Args:
+        bench: GTAPBenchmarkValues (or stand-in) holding the flow dicts.
+        sets: GTAPSets (unused here; kept for signature symmetry with callers).
+        rel_tol: relative tolerance (fraction of the sector total).
+        abs_tol: absolute floor.
+        field_map: dict {field_name: sector_total_fn(bench, key) -> float} listing
+            which benchmark fields to scan and how to size each cell's sector.
+
+    Returns:
+        dict {field_name: set[key]} of cells flagged for removal.
+    """
+    flagged: dict[str, set[tuple]] = {}
+    for field_name, sector_total_fn in field_map.items():
+        d = getattr(bench, field_name, None)
+        if not d:
+            continue
+        marked: set[tuple] = set()
+        for key, val in d.items():
+            cut = max(abs_tol, rel_tol * sector_total_fn(bench, key))
+            if abs(val) < cut:
+                marked.add(key)
+        flagged[field_name] = marked
+    return flagged
