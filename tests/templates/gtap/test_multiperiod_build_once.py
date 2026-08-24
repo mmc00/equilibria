@@ -71,6 +71,14 @@ def _build_current(mp):
     return m
 
 
+def _build_new(mp):
+    m = mp.build_sets()
+    mp.build_vars(m)
+    mp.build_equations_all_periods(m)
+    mp.build_equations_fisher(m)
+    return m
+
+
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
 def test_current_path_matches_baseline():
     p = _load_params()
@@ -80,4 +88,15 @@ def test_current_path_matches_baseline():
     assert (count, h) == (BASELINE_COUNT, BASELINE_HASH), (
         f"baseline drifted: got ({count}, {h}); "
         "if this fails on unchanged code, the equivalence gate constant is stale"
+    )
+
+
+@pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
+def test_new_path_byte_identical_to_current():
+    p = _load_params()
+    cur = model_signature(_build_current(_make_mp(p)))
+    new = model_signature(_build_new(_make_mp(p)))
+    assert new == cur, (
+        f"HARD GATE FAILED: new path {new} != current {cur}. "
+        "The build-once refactor changed the model. STOP."
     )
