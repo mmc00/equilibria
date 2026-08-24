@@ -153,3 +153,28 @@ def test_load_from_har_default_off_unchanged():
     p2 = GTAPParameters()
     p2.load_from_har(filter_config=None, **kw)
     assert dict(p2.benchmark.vxsb) == dict(p1.benchmark.vxsb)
+
+
+def test_protect_nonempty_markets_keeps_largest_per_import_market():
+    """Filtering must not empty an import market (all sources into (i,r) removed);
+    the largest source is retained so pmt[r,i] stays well-defined."""
+    from equilibria.templates.gtap.gtap_sam_filter import protect_nonempty_markets
+
+    # Two tiny sources into (Energy, IND): both flagged. Each exporter also has a
+    # LARGE non-flagged export elsewhere, so only the IND import market would be
+    # emptied — its largest source (USA) must be retained.
+    flagged = {"vxsb": {("USA", "Energy", "IND"), ("EU_28", "Energy", "IND")}}
+
+    class _B:
+        vxsb = {
+            ("USA", "Energy", "IND"): 3e-8,
+            ("EU_28", "Energy", "IND"): 1e-8,
+            # large non-flagged exports keep the USA/EU export markets non-empty
+            ("USA", "Energy", "JPN"): 5.0,
+            ("EU_28", "Energy", "JPN"): 4.0,
+        }
+
+    kept = protect_nonempty_markets(_B(), flagged)
+    # the larger source into IND/Energy is un-flagged (retained)
+    assert ("USA", "Energy", "IND") not in kept["vxsb"]
+    assert ("EU_28", "Energy", "IND") in kept["vxsb"]

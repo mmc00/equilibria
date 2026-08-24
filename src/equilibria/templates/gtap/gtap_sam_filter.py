@@ -153,9 +153,34 @@ def rebalance_region(bench, sets, region, flagged, config, solver_name="ipopt"):
     opt = SolverFactory(solver_name)
     opt.solve(m, tee=False)
 
-    out: dict[str, dict[tuple, float]] = {"vxsb": {}}
+    out: dict[str, dict[tuple, float]] = {f: {} for f in _TRADE_FIELDS}
+    out["vtwr"] = {}
     for k, n in idx.items():
-        out["vxsb"][k] = float(value(m.vxsb[n]))
+        new_val = float(value(m.vxsb[n]))
+        out["vxsb"][k] = new_val
+        # Keep the trade-price chain consistent: when a bilateral flow is zeroed,
+        # zero its vfob/vcif/vmsb/vtwr companions too (else calibration of amw =
+        # (xw/xmt)*pm^sigmaw hits pmcif=vcif/xw -> overflow on a near-zero xw).
+        # When only re-scaled, scale the companions by the same ratio so unit
+        # prices (vcif/xw etc.) are preserved.
+        orig = bench.vxsb.get(k, 0.0)
+        if new_val <= 1e-12:
+            for f in ("vfob", "vcif", "vmsb"):
+                if k in getattr(bench, f, {}):
+                    out[f][k] = 0.0
+            # vtwr is keyed (margin, comm, exporter, importer): zero all margins
+            for tk in getattr(bench, "vtwr", {}):
+                if len(tk) == 4 and (tk[1], tk[2], tk[3]) == k:
+                    out["vtwr"][tk] = 0.0
+        elif orig > 1e-12 and abs(new_val - orig) > 1e-12:
+            ratio = new_val / orig
+            for f in ("vfob", "vcif", "vmsb"):
+                fv = getattr(bench, f, {}).get(k)
+                if fv is not None:
+                    out[f][k] = fv * ratio
+            for tk, tv in getattr(bench, "vtwr", {}).items():
+                if len(tk) == 4 and (tk[1], tk[2], tk[3]) == k:
+                    out["vtwr"][tk] = tv * ratio
     return out
 
 
@@ -174,6 +199,47 @@ def _trade_sector_total(bench, key):
     return sum(
         v for (e, c, _d), v in bench.vxsb.items() if e == exporter and c == commodity
     )
+
+
+def protect_nonempty_markets(bench, flagged):
+    """Un-flag the largest source/destination so no trade market is fully emptied.
+
+    Filtering every bilateral flow into an import market (i, importer) — or out of
+    an export market (exporter, i) — would leave the aggregate import price
+    pmt[importer,i] (or export pet) with an empty base, producing a degenerate
+    near-zero price that breaks the model's price floor and convergence. This keeps
+    the single largest cell of any market that filtering would otherwise empty.
+
+    Args:
+        bench: benchmark holding ``vxsb`` (keyed (exporter, commodity, importer)).
+        flagged: dict {"vxsb": set[key], ...} from flag_small_flows.
+
+    Returns:
+        a new flagged dict with the protective retentions applied.
+    """
+    out = {k: set(v) for k, v in flagged.items()}
+    vxsb_flagged = out.get("vxsb", set())
+    if not vxsb_flagged:
+        return out
+
+    # Group current (post-flag) surviving mass by import market (comm, importer)
+    # and export market (exporter, comm).
+    def _retain_largest(market_key_fn):
+        # markets that would be emptied: all their nonzero cells are flagged
+        markets: dict[tuple, list[tuple]] = {}
+        for key, val in bench.vxsb.items():
+            if abs(val) <= 1e-12:
+                continue
+            markets.setdefault(market_key_fn(key), []).append(key)
+        for _mkey, cells in markets.items():
+            if all(c in vxsb_flagged for c in cells):
+                largest = max(cells, key=lambda c: abs(bench.vxsb[c]))
+                vxsb_flagged.discard(largest)
+
+    _retain_largest(lambda k: (k[1], k[2]))  # import market (commodity, importer)
+    _retain_largest(lambda k: (k[0], k[1]))  # export market (exporter, commodity)
+    out["vxsb"] = vxsb_flagged
+    return out
 
 
 def _make_field_map(bench, sets):
@@ -204,6 +270,7 @@ def filter_sam(bench, sets, elasticities, taxes, config, solver_name="ipopt"):
         cur_abs = config.abs_tol * mult
         field_map = _make_field_map(out, sets)
         flagged = flag_small_flows(out, sets, cur_rel, cur_abs, field_map)
+        flagged = protect_nonempty_markets(out, flagged)
         for region in sets.r:
             reb = rebalance_region(out, sets, region, flagged, config, solver_name)
             for field_name, cells in reb.items():
