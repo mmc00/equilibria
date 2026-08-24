@@ -100,3 +100,18 @@ def test_new_path_byte_identical_to_current():
         f"HARD GATE FAILED: new path {new} != current {cur}. "
         "The build-once refactor changed the model. STOP."
     )
+
+
+def _make_block_mp(p):
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+
+    rr = list(p.sets.r)[-1]
+    return GTAPBlockMultiPeriodModel(p.sets, p, _closure(p), residual_region=rr)
+
+
+@pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
+def test_block_path_byte_identical():
+    p = _load_params()
+    cur = model_signature(_build_current(_make_block_mp(p)))
+    new = model_signature(_build_new(_make_block_mp(p)))
+    assert new == cur, f"HARD GATE (block): new {new} != current {cur}. STOP."
