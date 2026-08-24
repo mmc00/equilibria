@@ -115,3 +115,64 @@ def test_block_path_byte_identical():
     cur = model_signature(_build_current(_make_block_mp(p)))
     new = model_signature(_build_new(_make_block_mp(p)))
     assert new == cur, f"HARD GATE (block): new {new} != current {cur}. STOP."
+
+
+# --- Solve parity: build both ways, seed + solve, compare Python solutions --- #
+
+_ROOT = Path(__file__).resolve().parents[3]
+_GDX_10x7 = _ROOT / "tests/fixtures/gtap7/gtap7_10x7/out_gtap_shock_ifsub0.gdx"
+
+
+def _seed_and_solve(build_fn):
+    """Build the monolith 10x7 model via build_fn(mp), seed from the pure-gtap
+    reference GDX, solve base->check->shock, return {name+index: value}."""
+    import sys
+
+    sys.path.insert(0, str(_ROOT / "scripts/gtap"))
+    from pyomo.environ import Var
+    from pyomo.environ import value as V
+
+    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
+    p = _load_params()
+    mp = _make_mp(p)
+    m = build_fn(mp)
+    rr = list(p.sets.r)[-1]
+    m._residual_region = rr
+    mp.seed_all_periods(m, str(_GDX_10x7))
+    solve_multiperiod(
+        m,
+        p,
+        _closure(p),
+        ref_gdx=str(_GDX_10x7),
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=False,
+        holdfix_cd=True,
+        mode="gtap",
+    )
+    out = {}
+    for v in m.component_objects(Var, active=True):
+        for idx in v:
+            try:
+                out[f"{v.name}{idx}"] = float(V(v[idx]))
+            except Exception:
+                pass
+    return out
+
+
+@pytest.mark.skipif(
+    not (_GDX_10x7.exists() and DATA.exists()),
+    reason="gtap7_10x7 dataset or reference GDX not present",
+)
+def test_solve_parity_10x7():
+    sol_cur = _seed_and_solve(_build_current)
+    sol_new = _seed_and_solve(_build_new)
+    shared = set(sol_cur) & set(sol_new)
+    assert shared, "no shared var keys — build paths produced different var names"
+    worst_rel, worst_key = 0.0, None
+    for k in shared:
+        rel = abs(sol_new[k] - sol_cur[k]) / (abs(sol_cur[k]) + 1e-12)
+        if rel > worst_rel:
+            worst_rel, worst_key = rel, k
+    assert worst_rel < 1e-8, f"solve diverged at {worst_key}: rel={worst_rel:.2e}"
