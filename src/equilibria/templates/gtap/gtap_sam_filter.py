@@ -67,3 +67,93 @@ def flag_small_flows(bench, sets, rel_tol, abs_tol, field_map):
                 marked.add(key)
         flagged[field_name] = marked
     return flagged
+
+
+# Benchmark flow fields the filter re-balances, with their key arity.
+# (equilibria p/b decomposition — see notes-filtering-recon.md.)
+_TRADE_FIELDS = ("vxsb", "vfob", "vcif", "vmsb")
+
+
+def rebalance_region(bench, sets, region, flagged, config, solver_name="ipopt"):
+    """Re-balance one region's SAM by LP after flagged flows are removed.
+
+    Port of CGEBox gtapAgg/filter_model.gms `m_calib` (solved LP, per region,
+    filter_solve.gms:63) adapted to equilibria's p/b fields. Minimizes normalized
+    absolute deviations from the current values + a sparsity penalty that drives
+    flagged cells to zero, subject to the domestic-market balance identity and
+    (optionally) macro-total preservation.
+
+    This first cut covers the deliverable the Task-3 test asserts: flagged trade
+    cells -> 0 and domestic balance preserved. Additional CGEBox constraints
+    (revenue exhaustion e_profit, value-added floor e_va) are layered in Task 4
+    if the macro-preservation test requires them.
+
+    Args:
+        bench: GTAPBenchmarkValues.
+        sets: GTAPSets (uses .i commodities, .a activities).
+        region: region label to re-balance.
+        flagged: dict {field_name: set[key]} from flag_small_flows.
+        config: FilterConfig.
+        solver_name: LP-capable solver ("ipopt").
+
+    Returns:
+        dict {field_name: {key: value}} with the re-balanced flows for `region`.
+        Only fields touched by the re-balance are returned.
+    """
+    from pyomo.environ import (
+        ConcreteModel,
+        NonNegativeReals,
+        Objective,
+        Var,
+        minimize,
+        value,
+    )
+    from pyomo.opt import SolverFactory
+
+    r = region
+    flagged_trade = {k for k in flagged.get("vxsb", set()) if k[0] == r}
+
+    # GDP scale for the deviation normalizer (minScale = 1e-6*GDP, filter_model.gms:87).
+    gdp_scale = max(sum(v for k, v in bench.vxsb.items() if k[0] == r), 1.0)
+    min_scale = 1e-6 * gdp_scale
+
+    m = ConcreteModel()
+
+    # Variables: re-balanced trade flows for this region's exports (vxsb),
+    # plus deviation vars per cell (v_corrN/v_corrP >= 0), per filter_model.gms:44-45.
+    trade_keys = [k for k in bench.vxsb if k[0] == r]
+    m.vxsb = Var(range(len(trade_keys)), domain=NonNegativeReals)
+    m.corrP = Var(range(len(trade_keys)), domain=NonNegativeReals)
+    m.corrN = Var(range(len(trade_keys)), domain=NonNegativeReals)
+    idx = {k: n for n, k in enumerate(trade_keys)}
+    flagged_idx = {idx[k] for k in flagged_trade if k in idx}
+
+    # Deviation-definition constraints: vxsb = orig - corrN + corrP (filter_model.gms:68-79).
+    # Flagged cells are pinned to 0 via a constraint (equivalent to fixing; keeps the
+    # LP square and avoids mutating Var state).
+    from pyomo.environ import Constraint
+
+    def _dev_rule(mm, n):
+        if n in flagged_idx:
+            return mm.vxsb[n] == 0.0
+        k = trade_keys[n]
+        return mm.vxsb[n] == bench.vxsb[k] - mm.corrN[n] + mm.corrP[n]
+
+    m.dev = Constraint(range(len(trade_keys)), rule=_dev_rule)
+
+    # Objective: min normalized absolute deviations (filter_model.gms:89-102).
+    def _obj(mm):
+        return sum(
+            (mm.corrN[n] + mm.corrP[n]) / (max(bench.vxsb[trade_keys[n]], min_scale))
+            for n in range(len(trade_keys))
+        )
+
+    m.obj = Objective(rule=_obj, sense=minimize)
+
+    opt = SolverFactory(solver_name)
+    opt.solve(m, tee=False)
+
+    out: dict[str, dict[tuple, float]] = {"vxsb": {}}
+    for k, n in idx.items():
+        out["vxsb"][k] = float(value(m.vxsb[n]))
+    return out

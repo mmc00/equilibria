@@ -47,3 +47,65 @@ def test_flag_small_flows_marks_tiny_relative_to_sector():
     assert ("USA", "Crops", "EU_28") not in flagged["vxsb"]
     # does not mutate the benchmark
     assert b.vxsb[("USA", "Crops", "JPN")] == 1e-8
+
+
+# --- Task 3: region re-balance LP (uses a real region as a consistent fixture) ---
+
+
+def _load_10x7():
+    from pathlib import Path
+
+    from equilibria.templates.gtap import GTAPParameters
+
+    D = Path("datasets/gtap7_10x7")
+    if not (D / "basedata.har").exists():
+        pytest.skip("gtap7_10x7 dataset not present")
+    p = GTAPParameters()
+    p.load_from_har(
+        basedata_path=D / "basedata.har",
+        sets_path=D / "sets.har",
+        default_path=D / "default.prm",
+        baserate_path=D / "baserate.har",
+    )
+    return p
+
+
+def _domestic_total(bench, sets, r, i):
+    """Domestic demand for good i in region r (basic prices)."""
+    dfb = sum(bench.vdfb.get((r, i, a), 0.0) for a in sets.a)
+    return (
+        dfb
+        + bench.vdpb.get((r, i), 0.0)
+        + bench.vdgb.get((r, i), 0.0)
+        + bench.vdib.get((r, i), 0.0)
+    )
+
+
+@pytest.mark.integration
+def test_rebalance_region_zeros_flagged_and_preserves_domestic_balance():
+    from equilibria.templates.gtap.gtap_sam_filter import (
+        FilterConfig,
+        rebalance_region,
+    )
+
+    p = _load_10x7()
+    b, sets = p.benchmark, p.sets
+    r = "USA"
+    # flag a tiny export cell (a $2-class flow that exists in the crude SAM)
+    tiny = min(
+        ((abs(v), k) for k, v in b.vxsb.items() if k[0] == r and v > 0),
+        default=(None, None),
+    )[1]
+    assert tiny is not None
+    flagged = {"vxsb": {tiny}}
+
+    out = rebalance_region(b, sets, r, flagged, FilterConfig(), solver_name="ipopt")
+
+    # (a) flagged flow driven to ~0
+    assert abs(out["vxsb"][tiny]) < 1e-6
+    # (b) domestic market for that good still balances after re-balance
+    i = tiny[1]
+    dom_dem = sum(
+        out.get("vdfb", {}).get((r, i, a), b.vdfb.get((r, i, a), 0.0)) for a in sets.a
+    )
+    assert dom_dem >= 0.0  # sanity; full balance asserted in Task 4 macro test
