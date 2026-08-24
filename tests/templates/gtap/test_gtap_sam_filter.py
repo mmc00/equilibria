@@ -130,3 +130,26 @@ def test_filter_sam_shrinks_trade_and_preserves_trade_total():
     assert abs(trade1 - trade0) < 1e-3 * trade0  # aggregate trade preserved
     # returns a NEW benchmark, does not mutate the input
     assert sum(1 for v in b.vxsb.values() if abs(v) > 1e-12) == nnz0
+
+
+def test_load_from_har_default_off_unchanged():
+    """filter_config=None (default) must leave the benchmark byte-identical."""
+    from pathlib import Path
+
+    from equilibria.templates.gtap import GTAPParameters
+
+    D = Path("datasets/gtap7_3x3")
+    if not (D / "basedata.har").exists():
+        pytest.skip("gtap7_3x3 dataset not present")
+
+    kw = {
+        "basedata_path": D / "basedata.har",
+        "sets_path": D / "sets.har",
+        "default_path": D / "default.prm",
+        "baserate_path": D / "baserate.har",
+    }
+    p1 = GTAPParameters()
+    p1.load_from_har(**kw)
+    p2 = GTAPParameters()
+    p2.load_from_har(filter_config=None, **kw)
+    assert dict(p2.benchmark.vxsb) == dict(p1.benchmark.vxsb)
