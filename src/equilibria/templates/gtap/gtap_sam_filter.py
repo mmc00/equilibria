@@ -157,3 +157,63 @@ def rebalance_region(bench, sets, region, flagged, config, solver_name="ipopt"):
     for k, n in idx.items():
         out["vxsb"][k] = float(value(m.vxsb[n]))
     return out
+
+
+def _tol_multiplier(k: int, n_steps: int) -> float:
+    """Tolerance ramp 10%->100% across n_steps rounds (filter.gms:455-466)."""
+    half = n_steps // 2
+    if k <= half:
+        exp = ((n_steps + 1) // 2) - k
+        return 10.0 ** (-exp)
+    return 0.1 + 0.9 * (k - half) / (n_steps - half)
+
+
+def _trade_sector_total(bench, key):
+    """Total exports of (exporter, commodity) — the sector size for a vxsb cell."""
+    exporter, commodity, _importer = key
+    return sum(
+        v for (e, c, _d), v in bench.vxsb.items() if e == exporter and c == commodity
+    )
+
+
+def _make_field_map(bench, sets):
+    """Which benchmark fields to scan + how to size each cell's sector.
+
+    First cut: bilateral trade (vxsb), the field whose tiny cells drive the qxs
+    residual. Extended to the p/b intermediate/final flows when the LP grows to
+    re-balance them (see notes-filtering-recon.md field map).
+    """
+    return {"vxsb": _trade_sector_total}
+
+
+def filter_sam(bench, sets, elasticities, taxes, config, solver_name="ipopt"):
+    """Iteratively filter small flows and re-balance the SAM (per region).
+
+    Returns a NEW GTAPBenchmarkValues; does not mutate the input. Runs up to
+    ``config.n_steps`` rounds ramping the tolerance 10%->100%; each round flags
+    small flows and re-balances every region, stopping early once the flagged
+    count stabilizes (filter.gms:519). Port of the CGEBox filter loop.
+    """
+    import copy
+
+    out = copy.deepcopy(bench)
+    prev_nnz = None
+    for k in range(1, config.n_steps + 1):
+        mult = _tol_multiplier(k, config.n_steps)
+        cur_rel = config.rel_tol * mult
+        cur_abs = config.abs_tol * mult
+        field_map = _make_field_map(out, sets)
+        flagged = flag_small_flows(out, sets, cur_rel, cur_abs, field_map)
+        for region in sets.r:
+            reb = rebalance_region(out, sets, region, flagged, config, solver_name)
+            for field_name, cells in reb.items():
+                target = getattr(out, field_name, None)
+                if target is None:
+                    continue
+                for cell_key, cell_val in cells.items():
+                    target[cell_key] = cell_val
+        nnz = sum(1 for v in out.vxsb.values() if abs(v) > 1e-12)
+        if prev_nnz is not None and abs(prev_nnz - nnz) <= 0.005 * max(prev_nnz, 1):
+            break
+        prev_nnz = nnz
+    return out

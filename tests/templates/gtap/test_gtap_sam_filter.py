@@ -109,3 +109,24 @@ def test_rebalance_region_zeros_flagged_and_preserves_domestic_balance():
         out.get("vdfb", {}).get((r, i, a), b.vdfb.get((r, i, a), 0.0)) for a in sets.a
     )
     assert dom_dem >= 0.0  # sanity; full balance asserted in Task 4 macro test
+
+
+@pytest.mark.integration
+def test_filter_sam_shrinks_trade_and_preserves_trade_total():
+    from equilibria.templates.gtap.gtap_sam_filter import FilterConfig, filter_sam
+
+    p = _load_10x7()
+    b, sets = p.benchmark, p.sets
+    nnz0 = sum(1 for v in b.vxsb.values() if abs(v) > 1e-12)
+    trade0 = sum(b.vxsb.values())
+
+    out = filter_sam(
+        b, sets, p.elasticities, p.taxes, FilterConfig(n_steps=3), solver_name="ipopt"
+    )
+
+    nnz1 = sum(1 for v in out.vxsb.values() if abs(v) > 1e-12)
+    trade1 = sum(out.vxsb.values())
+    assert nnz1 < nnz0  # removed at least one tiny trade flow
+    assert abs(trade1 - trade0) < 1e-3 * trade0  # aggregate trade preserved
+    # returns a NEW benchmark, does not mutate the input
+    assert sum(1 for v in b.vxsb.values() if abs(v) > 1e-12) == nnz0
