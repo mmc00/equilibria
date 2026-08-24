@@ -157,6 +157,11 @@ def rebalance_region(bench, sets, region, flagged, config, solver_name="ipopt"):
     out["vtwr"] = {}
     for k, n in idx.items():
         new_val = float(value(m.vxsb[n]))
+        # Snap tiny solver residuals to exact zero — a value like 2.8e-42 left by
+        # the LP is treated as "present" downstream (pmcif = vcif/xw etc.) and
+        # produces garbage prices. Anything below the abs floor is a removed flow.
+        if new_val <= 1e-12:
+            new_val = 0.0
         out["vxsb"][k] = new_val
         # Keep the trade-price chain consistent: when a bilateral flow is zeroed,
         # zero its vfob/vcif/vmsb/vtwr companions too (else calibration of amw =
