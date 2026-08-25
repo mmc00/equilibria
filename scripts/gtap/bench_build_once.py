@@ -48,29 +48,39 @@ def _mp(p):
     return GTAPMultiPeriodModel(p.sets, p, gc, residual_region=rr)
 
 
-def _time_build(p, use_all):
+def _time_build(p, use_all, full=False):
+    """Time the equations build. If full=True, time the WHOLE model build
+    (build_sets + build_vars + equations + fisher) — the end-to-end wall-clock."""
     mp = _mp(p)
+    t0 = time.perf_counter()
     m = mp.build_sets()
     mp.build_vars(m)
-    t0 = time.perf_counter()
+    t_eq0 = time.perf_counter()
     if use_all:
         mp.build_equations_all_periods(m)
     else:
         for per in PERIODS:
             mp.build_equations_intra(m, per)
-    return time.perf_counter() - t0
+    t_eq1 = time.perf_counter()
+    mp.build_equations_fisher(m)
+    t1 = time.perf_counter()
+    if full:
+        return t1 - t0  # whole model build
+    return t_eq1 - t_eq0  # equations phase only
 
 
 def main():
     dataset = sys.argv[1] if len(sys.argv) > 1 else "gtap7_15x10"
+    full = "--full" in sys.argv
     p = _load(dataset)
-    old = _time_build(p, use_all=False)
-    new = _time_build(p, use_all=True)
+    old = _time_build(p, use_all=False, full=full)
+    new = _time_build(p, use_all=True, full=full)
     ratio = (1.0 - new / old) * 100.0 if old else 0.0
-    print(f"dataset={dataset}")
-    print(f"  build_equations_intra x3 : {old:7.2f} s")
-    print(f"  build_equations_all      : {new:7.2f} s")
-    print(f"  saved                    : {ratio:6.1f}%  ({old / max(new, 1e-9):.2f}x)")
+    scope = "WHOLE model build" if full else "equations phase only"
+    print(f"dataset={dataset}  ({scope})")
+    print(f"  per-period intra x3 : {old:7.2f} s")
+    print(f"  all-periods (once)  : {new:7.2f} s")
+    print(f"  saved               : {ratio:6.1f}%  ({old / max(new, 1e-9):.2f}x)")
 
 
 if __name__ == "__main__":
