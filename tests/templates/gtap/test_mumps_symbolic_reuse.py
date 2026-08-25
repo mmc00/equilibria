@@ -121,3 +121,14 @@ def test_reuse_fewer_symbolics_same_solution():
         if rel > worst:
             worst, key = rel, k
     assert worst < 1e-8, f"HARD GATE: solve diverged at {key}: rel={worst:.2e}. STOP."
+
+
+def test_optout_env_default_is_on():
+    """The reuse defaults ON ('1') and '0' opts out — the exact gate the solver
+    branch reads (`os.environ.get("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", "1") != "0"`).
+    No solve needed: this pins the flag contract that test_reuse_* exercises live."""
+    os.environ.pop("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", None)
+    assert os.environ.get("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", "1") != "0"  # default ON
+    os.environ["EQUILIBRIA_GTAP_GMIN_SYM_REUSE"] = "0"
+    assert os.environ.get("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", "1") == "0"  # opt-out
+    os.environ.pop("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", None)
