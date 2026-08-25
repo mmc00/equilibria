@@ -87,3 +87,16 @@ def test_settle_only_skips_shock():
     res = _solve_multiperiod_result(settle_only=True)
     assert "check" in res, "settle_only must still solve the check phase"
     assert "shock" not in res, "settle_only must NOT solve the shock phase"
+
+
+@pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
+def test_settle_only_seed_identical_to_full():
+    os.environ["EQUILIBRIA_SEED_CACHE_DISABLE"] = "1"
+    # calibrate_base's seed must equal the full-settle baseline (Task 0 constants).
+    # Before Step 3 this is trivially true (calibrate_base is still full-settle);
+    # after Step 3 (calibrate_base uses settle_only) it is the byte-identical gate.
+    sig = _seed_signature(_calibrate())
+    assert sig == (BASELINE_COUNT, BASELINE_SIG), (
+        f"HARD GATE: calibrate_base seed {sig} != full-settle baseline "
+        f"({BASELINE_COUNT}, {BASELINE_SIG}). The cut changed the seed. STOP."
+    )

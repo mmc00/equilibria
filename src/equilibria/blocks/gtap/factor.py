@@ -525,7 +525,7 @@ class FactorBlock(Block):
         m, mp = build_block_model(params, sets, closure, residual_region)
         if ref_gdx is not None:
             mp.seed_all_periods(m, ref_gdx)
-        solve_block_model(m, params, closure, ref_gdx, mode="gtap")
+        solve_block_model(m, params, closure, ref_gdx, mode="gtap", settle_only=True)
 
         settled: dict[str, dict] = {}
         for v in m.component_objects(Var, active=True):
