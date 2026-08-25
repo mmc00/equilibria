@@ -66,3 +66,24 @@ def test_full_settle_baseline():
     count, h = _seed_signature(seed)
     assert count > 0, "settle produced an empty seed"
     print(f"BASELINE settled_seed: {count} cells, sig={h}")
+
+
+def _solve_multiperiod_result(settle_only):
+    """Build the block model + solve, return the results dict (base/check/[shock])."""
+    from equilibria.templates.gtap.gtap_block_model import (
+        build_block_model,
+        solve_block_model,
+    )
+
+    p = _load_params()
+    rr = list(p.sets.r)[-1]
+    m, mp = build_block_model(p, p.sets, _closure(p), rr)
+    return solve_block_model(m, p, _closure(p), None, mode="gtap", settle_only=settle_only)
+
+
+@pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
+def test_settle_only_skips_shock():
+    os.environ["EQUILIBRIA_SEED_CACHE_DISABLE"] = "1"
+    res = _solve_multiperiod_result(settle_only=True)
+    assert "check" in res, "settle_only must still solve the check phase"
+    assert "shock" not in res, "settle_only must NOT solve the shock phase"
