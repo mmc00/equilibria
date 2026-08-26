@@ -517,15 +517,29 @@ class FactorBlock(Block):
         from pyomo.environ import Var
         from pyomo.environ import value as _V
 
+        from equilibria.blocks.gtap import seed_cache
         from equilibria.templates.gtap.gtap_block_model import (
             build_block_model,
             solve_block_model,
         )
 
+        # Disk cache: the settled_seed is a pure function of the settle inputs
+        # (dataset + closure + benchmark params), so re-runs of the same input skip
+        # the whole settle. The benchmark-param digest in the key identifies the
+        # dataset; the |i|x|r| label is just for a readable filename.
+        try:
+            _label = f"gtap-{len(list(sets.i))}x{len(list(sets.r))}"
+        except Exception:
+            _label = "gtap"
+        key = seed_cache.cache_key(_label, closure, str(residual_region), params)
+        cached = seed_cache.load(key)
+        if cached is not None:
+            return cached
+
         m, mp = build_block_model(params, sets, closure, residual_region)
         if ref_gdx is not None:
             mp.seed_all_periods(m, ref_gdx)
-        solve_block_model(m, params, closure, ref_gdx, mode="gtap")
+        solve_block_model(m, params, closure, ref_gdx, mode="gtap", settle_only=True)
 
         settled: dict[str, dict] = {}
         for v in m.component_objects(Var, active=True):
@@ -539,6 +553,7 @@ class FactorBlock(Block):
                 body = idx[:-1]
                 body = body[0] if len(body) == 1 else body
                 settled.setdefault(v.name, {})[body] = val
+        seed_cache.save(key, settled)
         return settled
 
     # ------------------------------------------------------------------

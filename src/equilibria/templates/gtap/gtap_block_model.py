@@ -512,11 +512,15 @@ def solve_block_model(
     ref_gdx: Any,
     *,
     mode: str = "gtap",
+    settle_only: bool = False,
 ) -> Any:
     """Seed + solve the composed multi-period block model via the monolith driver.
 
     Thin wrapper over ``solve_multiperiod`` — the block model is a drop-in for the
     monolith's multi-period model, so the existing NLP/MCP solve path applies.
+
+    ``settle_only`` (lever A) returns after the check phase (no shock), for
+    calibrate_base which only needs the settled check point.
     """
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
@@ -530,4 +534,5 @@ def solve_block_model(
         seed_from_prior=False,
         holdfix_cd=False,
         mode=mode,
+        settle_only=settle_only,
     )
