@@ -4636,6 +4636,91 @@ def _run_path_capi_nonlinear_full(
                                 _pN_tr = -_g_tr
                         except Exception:
                             _pN_tr = -_g_tr
+                    elif _linsolve_tr == "cudss":
+                        # cuDSS GPU DIRECT (NVIDIA multifrontal). Same operator as the mumps
+                        # route — the colperm-paired, GMIN-applied J·P (zero-free diagonal) —
+                        # solved on the GPU. Proven on the real 20x41 (kernel cudss-config v11):
+                        # rel_res 5.25e-16 (BEATS MUMPS 1.37e-13) at 3.82s vs 50.6s = 13.3x. The
+                        # lever is matching_algorithm=AUTO (MUMPS ICNTL(6) analogue) + iterative
+                        # refinement (ir_num_steps=2), both applied inside cudss_solve. OPT-IN;
+                        # any GPU/binding failure falls back cleanly to the gradient step (the TR
+                        # then rejects/retries), so a missing GPU never crashes the solve.
+                        import importlib.util as _ilu_c
+                        from scipy.sparse.csgraph import (
+                            maximum_bipartite_matching as _mbm_c,
+                        )
+
+                        _pf_c = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+
+                        def _plog_c(_m):
+                            if _pf_c:
+                                try:
+                                    with open(_pf_c, "a") as _fh:
+                                        _fh.write(f"  [cudss] {_m}\n")
+                                except Exception:
+                                    pass
+                            print(
+                                f"[nlp-square] [cudss] {_m}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+
+                        # structural column permutation → zero-free diagonal (compute once),
+                        # identical policy to the mumps branch (GAMS pairing, then numeric).
+                        if _colperm_tr is None:
+                            _pp_c, _pc_matched = _paired_colperm()
+                            if _pp_c is not None and _pc_matched >= _n_sr:
+                                _colperm_tr = _pp_c
+                                _plog_c(
+                                    "paired colperm (GAMS structural_matching) "
+                                    f"{_pc_matched}/{_n_sr}"
+                                )
+                            else:
+                                _colperm_tr = _mbm_c(
+                                    _J_tr.tocsr(), perm_type="column"
+                                )
+                                if _np_sr.any(_colperm_tr < 0):
+                                    if _pp_c is not None:
+                                        _colperm_tr = _pp_c
+                                    else:
+                                        _colperm_tr = _np_sr.arange(_n_sr)
+
+                        _Jm_tr = _J_tr[:, _colperm_tr].tocsr()
+                        _gmin_c = float(
+                            os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0
+                        )
+                        if _gmin_c > 0.0:
+                            _Jm_lil_c = _Jm_tr.tolil()
+                            _Jm_lil_c.setdiag(_Jm_lil_c.diagonal() + _gmin_c)
+                            _Jm_tr = _Jm_lil_c.tocsr()
+
+                        # load the helper by path (scripts/gtap is not a package)
+                        try:
+                            _cud_path = os.path.join(
+                                os.path.dirname(os.path.abspath(__file__)),
+                                "_cudss_linsolve.py",
+                            )
+                            _cud_spec = _ilu_c.spec_from_file_location(
+                                "_cudss_linsolve", _cud_path
+                            )
+                            _cud = _ilu_c.module_from_spec(_cud_spec)
+                            _cud_spec.loader.exec_module(_cud)
+                            _x_c, _info_c = _cud.cudss_solve(_Jm_tr, -_F_tr)
+                        except Exception as _e_c:
+                            _x_c, _info_c = None, {"ok": False, "err": str(_e_c)}
+
+                        if _x_c is not None and _info_c.get("ok"):
+                            _plog_c(
+                                f"solve ok rel_res={_info_c.get('rel_res'):.2e}"
+                            )
+                            _pN_tr = _np_sr.empty(_n_sr)
+                            _pN_tr[_colperm_tr] = _x_c  # un-permute: p = P y
+                        else:
+                            _plog_c(
+                                f"solve FAILED ({_info_c.get('err')}), "
+                                "falling back to gradient step"
+                            )
+                            _pN_tr = -_g_tr
                     elif _linsolve_tr == "direct":
                         # DIRECT SOLVE with zero-free-diagonal permutation (GEMPACK/MA48/KLU
                         # approach). The squared GTAP Jacobian has a ~100% ZERO diagonal
