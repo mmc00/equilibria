@@ -40,10 +40,7 @@ def build_sparse_model_mp(
     )
     m = mp.build_sets()
     mp.build_vars(m)
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
+    mp.build_equations_all_periods(m)
     mp.build_equations_fisher(m)
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated
