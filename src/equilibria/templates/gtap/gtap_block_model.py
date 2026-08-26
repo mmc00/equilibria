@@ -383,6 +383,13 @@ def build_block_model(
     The default path is byte-unchanged; ``calibrate_base`` builds its own settle
     model with ``base_calibrated=False`` (no recursion).
     """
+    # Propagate the value-added subsidy basis from the closure onto params, so
+    # the pure derivation recipes (_va_wedge in _derived_params) and the driver's
+    # per-period recalibration read it without threading closure through their
+    # signatures. Default "gams" leaves the faithful-to-GAMS path byte-unchanged;
+    # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis).
+    params.va_subsidy_basis = getattr(closure, "va_subsidy_basis", "gams")
+
     # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod
     # substitutes every mutable ParamData by its value). Stash it on params so the
