@@ -372,6 +372,102 @@ class GTAPMultiPeriodModel:
                         ),
                     )
 
+    def build_equations_all_periods(
+        self, m: ConcreteModel, periods: tuple[str, ...] = PERIODS
+    ) -> None:
+        """Build all intra-period Constraint families for ALL periods in one pass.
+
+        Equivalent to calling build_equations_intra(m, period) for each period,
+        but builds the single-period reference model ONCE (was: once per period)
+        and creates each Constraint family ONCE over the full (orig_key..., period)
+        index — no del_component / re-merge. Produces a byte-identical model (same
+        active constraints, same bodies) at a fraction of the build cost.
+        """
+        from pyomo.core.expr.visitor import ExpressionReplacementVisitor
+        from pyomo.environ import Constraint, Param, Var
+        from pyomo.environ import value as _pyo_value
+
+        # Reference single-period model — built ONCE (was: once per period).
+        sp = GTAPModelEquations(
+            self.sets,
+            self.params,
+            self.closure,
+            residual_region=self.residual_region,
+        ).build_model()
+
+        # Per-period substitute dicts: id(sp_var[k]) -> m_var[(*k, period)].
+        # Mutable Params are replaced by their float value (see build_equations_intra
+        # for why: otherwise they dangle to the throwaway sp model once it is GC'd).
+        substitutes: dict = {}
+        for period in periods:
+            sub: dict = {}
+            for v in sp.component_objects(Var, active=True):
+                mp_var = getattr(m, v.name)
+                if v.is_indexed():
+                    for k in v.index_set():
+                        sub[id(v[k])] = mp_var[(*_astuple(k), period)]
+                else:
+                    sub[id(v[None])] = mp_var[(period,)]
+            for prm in sp.component_objects(Param, active=True):
+                if not prm.mutable:
+                    continue
+                for k in prm:
+                    with contextlib.suppress(Exception):
+                        sub[id(prm[k])] = float(_pyo_value(prm[k]))
+            substitutes[period] = sub
+
+        def _emit(body, lb, ub):
+            if lb is not None and ub is not None and lb == ub:
+                return body == lb
+            if lb is not None and ub is not None:
+                return (lb, body, ub)
+            if lb is not None:
+                return body >= lb
+            if ub is not None:
+                return body <= ub
+            return Constraint.Skip
+
+        for con in sp.component_objects(Constraint, active=True):
+            cname = con.name
+            data: dict = {}
+            index: list = []
+            if con.is_indexed():
+                for period in periods:
+                    visitor = ExpressionReplacementVisitor(
+                        substitute=substitutes[period]
+                    )
+                    for k in con:
+                        cd = con[k]
+                        full_key = (*_astuple(k), period)
+                        data[full_key] = (
+                            visitor.walk_expression(cd.body),
+                            cd.lower,
+                            cd.upper,
+                        )
+                        index.append(full_key)
+            else:
+                cd = con[None]
+                for period in periods:
+                    visitor = ExpressionReplacementVisitor(
+                        substitute=substitutes[period]
+                    )
+                    full_key = (period,)
+                    data[full_key] = (
+                        visitor.walk_expression(cd.body),
+                        cd.lower,
+                        cd.upper,
+                    )
+                    index.append(full_key)
+
+            def _make_rule(d):
+                def _rule(_m, *key):
+                    body, lb, ub = d[key if len(key) > 1 else (key[0],)]
+                    return _emit(body, lb, ub)
+
+                return _rule
+
+            setattr(m, cname, Constraint(index, rule=_make_rule(data)))
+
     def build_equations_fisher(self, m: ConcreteModel) -> None:
         """Inter-temporal Fisher GDP index as Jacobian rows.
 

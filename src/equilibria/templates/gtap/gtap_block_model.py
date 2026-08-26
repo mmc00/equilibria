@@ -343,6 +343,25 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         finally:
             GTAPModelEquations.build_model = orig
 
+    def build_equations_all_periods(self, m: ConcreteModel, periods=None) -> None:
+        """Block-composed build-once path.
+
+        Same scoped ``build_model`` swap as ``build_equations_intra`` (make the
+        parent reflect the block SP instead of the monolith SP), delegating to the
+        parent's single-pass ``build_equations_all_periods``.
+        """
+        from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
+
+        if periods is None:
+            periods = PERIODS
+        block_sp = self._block_sp()
+        orig = GTAPModelEquations.build_model
+        GTAPModelEquations.build_model = lambda _self: block_sp
+        try:
+            super().build_equations_all_periods(m, periods)
+        finally:
+            GTAPModelEquations.build_model = orig
+
 
 def build_block_model(
     params: Any,
@@ -382,10 +401,7 @@ def build_block_model(
     )
     m = mp.build_sets()
     mp.build_vars(m)
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
+    mp.build_equations_all_periods(m)
     mp.build_equations_fisher(m)
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated
