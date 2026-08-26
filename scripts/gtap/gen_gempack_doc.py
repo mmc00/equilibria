@@ -195,15 +195,19 @@ def render() -> str:
         "",
         "| base-flow threshold | cells kept | within-1pp |",
         "| --- | --- | --- |",
-        "| $0 (all cells) | 490 | 96.5% |",
-        "| ≥ $0.01m | 156 | 98.1% |",
+        "| $0 (all cells) | 490 | 92.9% |",
+        "| ≥ $0.01m | 157 | 98.1% |",
         "| ≥ $0.05m | 70 | **100.0%** |",
         "",
         "**On flows with economic substance (≥ $0.05m) the match is 100%** — the "
-        "~3.5% residual at the flat count lives entirely in the sub-$0.05m tail "
-        "(13 of 17 failing cells are near-zero agricultural flows). This is measured, "
-        "not assumed; the gate keeps the conservative flat count so the number is "
-        "never inflated by exclusion.",
+        "flat-count residual lives entirely in the sub-$0.05m tail (all 35 failing "
+        "cells have base flow between −$0.00m and $0.03m, median $0.00m). This is "
+        "measured, not assumed; the gate keeps the conservative flat count so the "
+        "number is never inflated by exclusion. The flat count is solve-path "
+        "sensitive — the perf stack (settle_only / MUMPS-reuse / cuDSS) nudged a few "
+        "ghost cells across the ±1pp line (96.5%→92.9% flat), but the ≥$0.05m "
+        "substantive match is unchanged at 100%, confirming those levers touch no "
+        "cell with real trade.",
         "",
         "### The `gtap7_gempack` closure (subsidy-basis variant)",
         "",
@@ -215,7 +219,7 @@ def render() -> str:
         "`\"gams\"`, off) re-anchors the VA valuation to GEMPACK's basis. It is "
         "byte-identical on the default path (the `.nl` coefficient gate is unchanged), "
         "and lifts the flat `qxs` off-diagonal match — **3x3 92.6→100%, 3x4 "
-        "93.8→100%, 5x5 93.6→95.2%, 10x7 84.5→96.5%**. The gain concentrates in the "
+        "93.8→100%, 5x5 93.6→95.2%, 10x7 84.5→92.9%**. The gain concentrates in the "
         "small-agricultural-flow tail (where the subsidy sign moves the price most); "
         "on the ≥$0.05m substantive flows both bases already reach 100%. The gate and "
         "this matrix run the **default (`gams`) basis**, so the numbers above are the "
