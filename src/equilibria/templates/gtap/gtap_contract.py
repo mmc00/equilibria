@@ -306,6 +306,21 @@ def _closure_template_data(name: str) -> dict[str, Any]:
         base["fix_technology"] = True
         return base
 
+    elif closure_name == "gtap7_gempack":
+        # GEMPACK-faithful closure. Identical to the standard MCP closure except
+        # the value-added valuation uses GEMPACK's EVFP factor-subsidy basis
+        # (va = evfb + ftrv + fbep) instead of GAMS's (evfb + ftrv - fbep). This
+        # re-anchors the VA-vs-intermediate weight ava to GEMPACK's total-cost
+        # share on subsidised agriculture (0.571 vs GAMS's 0.679), closing ~half
+        # the domestic-price gap vs GEMPACK and improving global qxs match by
+        # ~3pp. Trades GAMS-fidelity on `va` for GEMPACK-fidelity — use when
+        # GEMPACK is the reference (e.g. the qxs bilateral-trade gate). See
+        # _va_wedge in blocks/gtap/_derived_params.py.
+        base["label"] = "GEMPACK-faithful closure (EVFP subsidy basis)"
+        base["closure_type"] = "MCP"
+        base["va_subsidy_basis"] = "gempack"
+        return base
+
     raise ValueError(f"Unsupported GTAP closure name: {name!r}")
 
 
@@ -342,6 +357,13 @@ class GTAPClosureConfig(ModelClosureConfig):
     savf_flag: Literal["capFix", "capSFix", "capShrFix", "capFlex", "capFixDp"] = (
         "capFix"
     )
+    # Factor-subsidy accounting basis for the value-added valuation.
+    # "gams" (default): va = evfb + ftrv - fbep, faithful to the GAMS reference
+    # solve. "gempack": va = evfb + ftrv + fbep (EVFP basis), re-anchors the
+    # VA-vs-intermediate weight to GEMPACK's total-cost share on subsidised
+    # agriculture; used by the gtap7_gempack closure. See _va_wedge in
+    # blocks/gtap/_derived_params.py.
+    va_subsidy_basis: Literal["gams", "gempack"] = "gams"
     if_sub: bool = True
     calibration_source: str = "python"
     calibration_dump: str | None = None

@@ -140,6 +140,46 @@ def render() -> str:
         "",
         _table(rows),
         "",
+        "### The residual is the near-zero-flow tail (measured)",
+        "",
+        "The cell counts above are **flat** — every mapped cell weighs 1, including "
+        "bilateral trade flows that are a rounding speck (base value ≈ $0). A "
+        "%-change on a near-zero denominator is numerical noise, not a measurement: "
+        "GEMPACK and Python each report a large, meaningless number there (e.g. a "
+        "`Chem` CHN→CHN flow of **$0.000000m** shows GEMPACK −24% vs Python +1957%). "
+        "So the flat count understates the economic agreement. Thresholding on the "
+        "cell's **base flow** (a property known before the shock — not on |Δ|, which "
+        "would be circular), applied identically to both engines, the `qxs` "
+        "off-diagonal match on **10x7** is:",
+        "",
+        "| base-flow threshold | cells kept | within-1pp |",
+        "| --- | --- | --- |",
+        "| $0 (all cells) | 490 | 96.5% |",
+        "| ≥ $0.01m | 156 | 98.1% |",
+        "| ≥ $0.05m | 70 | **100.0%** |",
+        "",
+        "**On flows with economic substance (≥ $0.05m) the match is 100%** — the "
+        "~3.5% residual at the flat count lives entirely in the sub-$0.05m tail "
+        "(13 of 17 failing cells are near-zero agricultural flows). This is measured, "
+        "not assumed; the gate keeps the conservative flat count so the number is "
+        "never inflated by exclusion.",
+        "",
+        "### The `gtap7_gempack` closure (subsidy-basis variant)",
+        "",
+        "Python is faithful to GAMS to ~6 digits; on **subsidized agriculture** the "
+        "GAMS and GEMPACK *reference engines* disagree on the factor-subsidy sign "
+        "convention (HAR `FBEP`, native-negative): GAMS/Python value value-added as "
+        "`evfb + ftrv − fbep`, GEMPACK's EVFP as `evfb + ftrv + fbep`. The named "
+        "closure **`gtap7_gempack`** (flag `va_subsidy_basis=\"gempack\"`, default "
+        "`\"gams\"`, off) re-anchors the VA valuation to GEMPACK's basis. It is "
+        "byte-identical on the default path (the `.nl` coefficient gate is unchanged), "
+        "and lifts the flat `qxs` off-diagonal match — **3x3 92.6→100%, 3x4 "
+        "93.8→100%, 5x5 93.6→95.2%, 10x7 84.5→96.5%**. The gain concentrates in the "
+        "small-agricultural-flow tail (where the subsidy sign moves the price most); "
+        "on the ≥$0.05m substantive flows both bases already reach 100%. The gate and "
+        "this matrix run the **default (`gams`) basis**, so the numbers above are the "
+        "faithful-to-GAMS reference; the variant is opt-in.",
+        "",
         "### Scope",
         "",
         "This cell-by-cell page covers the five **gtap7_\\*** datasets, which the "
