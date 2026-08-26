@@ -6,10 +6,12 @@ committed file equals render() (CI fails on drift).
 
 This is the "against GEMPACK" sibling of the against-GAMS coverage page. GEMPACK
 (RunGTAP) is a Gragg-LINEARIZED solver, so — unlike the levels-vs-levels GAMS page —
-the comparison is QUANTITY-vs-quantity in PERCENTAGE POINTS: for each dataset the
-gate solves Python, reads GEMPACK's SL4 quantity %-changes (qfd→xd, qxs→xw, qo→xp),
-and measures the fraction of cells whose |Δ| ≤ 1 percentage point. The cell shows
-the conservative floor that fraction must clear (measured @ runtime, not stored).
+the comparison is QUANTITY-vs-quantity in PERCENTAGE POINTS: solve Python, read
+GEMPACK's SL4 quantity %-changes (qfd→xd, qxs→xw, qo→xp), and count the fraction of
+cells within 1 percentage point. The page focuses on `qxs`, shown per dataset for
+both closures (gams / gtap7_gempack) and both metrics (all cells / flows ≥ $0.05m).
+The measured numbers in _MEASURED are cell-by-cell runtime measurements, not stored
+gate floors; re-measure and update them when the model or fixtures change.
 """
 
 from __future__ import annotations
@@ -21,7 +23,6 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "docs/site/_scripts"))
 
-from coverage_matrix import rows_for  # noqa: E402
 import matrix_html as mx  # noqa: E402
 
 DOC_PATH = ROOT / "docs/site/guide/gtap7_coverage_matrix_gempack.md"
@@ -32,51 +33,50 @@ _BANNER = (
 )
 
 _LEGEND = mx.legend(
-    '<span class="mx-li"><b>Measured</b> is the fraction of quantity cells whose '
-    "|Δ| ≤ <b>1 percentage point</b> vs GEMPACK (capFlex, verified 2026-08-19); "
-    "<b>Floor</b> is the conservative threshold the pytest gate asserts (~5pp under "
-    "measured, for solver-noise margin):"
-    '<span class="mx-swatch" style="background:var(--mx-good);margin-left:4px"></span>≥65'
-    '<span class="mx-swatch" style="background:var(--mx-warn)"></span>45–65'
-    '<span class="mx-swatch" style="background:var(--mx-bad)"></span>&lt;45</span>'
-    '<span class="mx-li">' + mx.chip("local", "neutral")
+    '<span class="mx-li"><b>All cells</b> counts every mapped `qxs` cell flat; '
+    "<b>flows ≥ $0.05m</b> drops bilateral trade that is a rounding speck "
+    "(near-zero base value, where a %-change is ÷0 noise). Green ≥95, amber 80–95, "
+    "red &lt;80:"
+    '<span class="mx-swatch" style="background:var(--mx-good);margin-left:4px"></span>≥95'
+    '<span class="mx-swatch" style="background:var(--mx-warn)"></span>80–95'
+    '<span class="mx-swatch" style="background:var(--mx-bad)"></span>&lt;80</span>'
+    '<span class="mx-li">'
+    + mx.chip("local", "neutral")
     + " needs PATH/IPOPT + the RunGTAP SL4 dump — run by hand, not in CI</span>"
 )
 
 
 def _tone(f: float) -> str:
-    return "good" if f >= 65 else ("warn" if f >= 45 else "bad")
+    return "good" if f >= 95 else ("warn" if f >= 80 else "bad")
 
 
-# Measured within-1pp @ capFlex vs the default sl4dump fixtures (verified 2026-08-19,
-# base_calibrated=True; median |Δpp| in parens). The FLOOR column is this minus a
-# ~5pp solver-noise margin. Keep in sync with the gate's own measured comments in
-# test_gtap7_gempack_parity.py.
+# Measured qxs off-diagonal within-1pp vs the capFix sl4dump fixtures, on main
+# (base_calibrated=True, capFix/NLP for 10x7). Per (dataset): (all-cells%, ≥$0.05m%).
+# Two bases: "gams" (default, faithful to GAMS) and "gempack" (the gtap7_gempack
+# closure). 15x10 is @slow (NLP ~20min) and measured separately — left None here.
 _MEASURED = {
-    "gtap7_3x3": (99.5, 0.036),
-    "gtap7_3x4": (99.2, 0.043),
-    "gtap7_5x5": (97.1, 0.035),
-    "gtap7_10x7": (97.5, 0.032),
-    "gtap7_15x10": (92.3, 0.085),
+    "gtap7_3x3": {"gams": (92.6, 95.5), "gempack": (100.0, 100.0)},
+    "gtap7_3x4": {"gams": (93.8, 95.5), "gempack": (100.0, 100.0)},
+    "gtap7_5x5": {"gams": (93.6, 100.0), "gempack": (95.2, 100.0)},
+    "gtap7_10x7": {"gams": (84.5, 100.0), "gempack": (92.9, 100.0)},
 }
 
 
-def _table(rows) -> str:
-    headers = ["Dataset · ifSUB", "Measured within 1pp", "Floor (gate asserts)", "GEMPACK ref"]
+def _match_table(basis: str) -> str:
+    """qxs within-1pp per dataset for one basis: all-cells and flows ≥ $0.05m."""
+    headers = [
+        "Dataset",
+        "Within 1pp · all cells",
+        "Within 1pp · flows ≥ $0.05m",
+    ]
     body = []
-    for r in rows:
-        meas = _MEASURED.get(r.dataset)
-        meas_cell = (
-            mx.cell(mx.num(f"{meas[0]:g}% (med {meas[1]:g}pp)", _tone(meas[0])))
-            if meas
-            else mx.cell("—")
-        )
+    for ds in ("gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7"):
+        m = _MEASURED[ds][basis]
         body.append(
             [
-                mx.label(r.dataset, f"ifSUB={r.ifsub}"),
-                meas_cell,
-                mx.cell(mx.num(f"≥ {dict(r.stage_floors)['shock']:g}%", _tone(dict(r.stage_floors)["shock"]))),
-                mx.ref(r.ref),
+                mx.label(ds),
+                mx.cell(mx.num(f"{m[0]:g}%", _tone(m[0]))),
+                mx.cell(mx.num(f"{m[1]:g}%", _tone(m[1]))),
             ]
         )
     return mx.tablecard(headers, body)
@@ -87,13 +87,20 @@ def _var_list() -> str:
     import gempack_reference as gr
 
     desc = {
-        "qfd": "firm domestic demand", "qfm": "firm imported demand",
-        "qfa": "firm Armington demand", "qxs": "bilateral exports",
-        "qxw": "aggregate exports", "qms": "aggregate imports",
-        "qds": "domestic sales", "qpa": "private demand",
-        "qga": "government demand", "qc": "total commodity supply",
-        "qe": "endowment supply", "qtm": "global margin usage",
-        "qinv": "investment demand", "qva": "value added",
+        "qfd": "firm domestic demand",
+        "qfm": "firm imported demand",
+        "qfa": "firm Armington demand",
+        "qxs": "bilateral exports",
+        "qxw": "aggregate exports",
+        "qms": "aggregate imports",
+        "qds": "domestic sales",
+        "qpa": "private demand",
+        "qga": "government demand",
+        "qc": "total commodity supply",
+        "qe": "endowment supply",
+        "qtm": "global margin usage",
+        "qinv": "investment demand",
+        "qva": "value added",
         "qgdp": "real GDP index",
     }
     rows_b = [
@@ -104,139 +111,142 @@ def _var_list() -> str:
 
 
 def render() -> str:
-    rows = rows_for("gtap7", "gempack", kind="mcp")
     parts = [
         "# GTAP 7 Parity Coverage Matrix — against GEMPACK",
         "",
         _BANNER,
         "",
-        "This is the **GEMPACK reference** of the GTAP 7 model — the sibling of the "
+        # --- 1. What this page is -------------------------------------------
+        "The **GEMPACK reference** of the GTAP 7 model — the sibling of the "
         "[against-GAMS page](gtap7_coverage_matrix.md). GEMPACK (RunGTAP) solves the "
-        "same model with a **Gragg-linearized** method (Euler + Richardson "
-        "extrapolation), so its native output is **percentage changes**, not levels "
-        "(Horridge & Pearson, *Solution Software for CGE Modeling*, COPS G-214, 2011, "
-        "§4.1/4.2). The comparison is therefore **quantity-vs-quantity in percentage "
-        "points**: the gate solves Python and, for each of the 15 mapped quantity "
-        "variables below, measures the fraction of cells whose **|Δ| ≤ 1 percentage "
-        "point** vs GEMPACK. The measured match is **92–99.5% within 1pp** (median "
-        "|Δ| ~0.03–0.2pp) across the five datasets with the gate's default **capFlex** "
-        "closure; the per-dataset numbers below are the **conservative floors** the "
-        "pytest gate asserts (set ~5pp under the measured value to absorb solver "
-        "noise), not the match itself. The small residual is **identical "
-        "Python↔GAMS** (both are levels solvers), so it is not a Python fidelity "
-        "defect — see the ⚠️ note below for what it is (and is not).",
+        "same model with a **Gragg-linearized** method, so its native output is "
+        "**percentage changes**, not levels. The comparison is therefore "
+        "**quantity-vs-quantity in percentage points**: solve Python, read GEMPACK's "
+        "SL4 quantity %-changes, and count the fraction of cells within **1 "
+        "percentage point**. This page focuses on **`qxs`** (bilateral exports), the "
+        "variable where the two engines differ most.",
         "",
-        "> **⚠️ The residual is NOT linearization, and the closure is capFlex, not "
-        "capFix.** Two claims in the paragraph below were corrected (2026-08-19): "
-        "(1) The gate's default closure is **capFlex** (RORDELTA=1, returns equalize), "
-        "which matches the default `sl4dump_*_tm10.har` fixtures — measured 3x3 99.5%, "
-        "5x5 97.1%, 10x7 97.5%, 15x10 92.3% within 1pp. The `capFix` closure (and its "
-        "`_capfix` fixtures) is the *other* option, selected via `savf_flag`. Comparing "
-        "a capFix solve against a capFlex fixture (or vice versa) crosses closures and "
-        "drops the match to ~70–80% — a measurement error, not a model defect. "
-        "(2) The residual is **not** the Gragg-linearization gap: GEMPACK's own "
-        "step-grid (`sl4dump_*_tm10_s{4,8,16,32,64}.har`) converges internally to "
-        "**~0.002pp** (s4 vs s64), ~300× smaller than any observed gap, so "
-        "linearization cannot explain it. Details: "
-        "`docs/findings/gempack_residual_is_linearization_2026-07-24` (corrected).",
+        # --- 2. The match table (both closures, both metrics) ---------------
+        "## The match",
         "",
-        "**The residual is not model scope — extensions and factor elasticities ruled "
-        "out.** "
-        "van der Mensbrugghe (*The Standard GTAP Model in GAMS, v7*, JGEA 3(1), 2018) "
-        "reports GAMS≡GEMPACK *\"to within 4–5 significant digits\"* under the standard "
-        "spec, and its **Table 4** confirms our mapping (`VDFB → PD·XD`, `VMSB → PM·XW`, "
-        "…). The GAMS/Python model does add extensions (CET output allocation, factor "
-        "supply curves, extra closures — §6/Table 5), so we tested whether those cause "
-        "the residual. **They do not:** the gate's capFlex capital closure matches the "
-        "RunGTAP `.cmf` (the capFix option matches the RunGTAP swap `dpsave=del_tbalry`), "
-        "and factor quantities (`qe` endowments) match GEMPACK to "
-        "**0.00pp at every factor-supply elasticity** — sweeping `omegas` only makes the "
-        "*overall* match worse, never better. So the small residual is **not** a "
-        "model-scope or configuration difference — and Python≡GAMS on these cells, so "
-        "not a Python defect. What it **is** (a base-seed/denominator effect, not "
-        "linearization) is covered in the ⚠️ note above and in "
-        "`docs/findings/gempack_residual_is_linearization_2026-07-24` (corrected).",
+        "Fraction of `qxs` off-diagonal cells within 1pp of GEMPACK, per dataset. "
+        "Two columns: **all cells** (flat count) and **flows ≥ $0.05m** (dropping "
+        "bilateral trade that is a rounding speck, where a %-change on a near-zero "
+        "base is ÷0 noise). Shown for both the default GAMS-faithful closure and the "
+        "GEMPACK-faithful `gtap7_gempack` closure.",
         "",
         mx.raw(_LEGEND),
         "",
+        "**Default closure — `gams` basis** (faithful to GAMS; what the CI gate runs):",
+        "",
+        _match_table("gams"),
+        "",
+        "**`gtap7_gempack` closure — `gempack` basis** (re-anchored to GEMPACK):",
+        "",
+        _match_table("gempack"),
+        "",
+        "The story both tables tell: **on flows with economic substance (≥ $0.05m) "
+        "the match reaches ~95–100% under either closure**, and 100% under "
+        "`gtap7_gempack`. The lower *all-cells* number is the near-zero-flow tail "
+        "(next section), not a real disagreement. (`15x10` is `@slow` — NLP ~20min — "
+        "and validated by hand, not shown here.)",
+        "",
+        # --- 3. How to invoke each closure ----------------------------------
+        "## Choosing a closure",
+        "",
+        "Both closures are built through the same factory; pass the name to "
+        "`_closure_template_data` and validate:",
+        "",
+        "```python",
+        "from equilibria.templates.gtap.gtap_contract import (",
+        "    GTAPClosureConfig, _closure_template_data,",
+        ")",
+        "",
+        "# Default — faithful to GAMS (va_subsidy_basis='gams'). The standard closure.",
+        "closure = GTAPClosureConfig.model_validate(",
+        '    _closure_template_data("gtap_standard")',
+        ")",
+        "",
+        "# GEMPACK-faithful — re-anchors VA valuation to GEMPACK's EVFP subsidy basis",
+        "# (va_subsidy_basis='gempack'). Use when GEMPACK is the reference.",
+        "closure = GTAPClosureConfig.model_validate(",
+        '    _closure_template_data("gtap7_gempack")',
+        ")",
+        "```",
+        "",
+        "Equivalently, set the flag directly: "
+        '`GTAPClosureConfig(..., va_subsidy_basis="gempack")`. The default is '
+        '`"gams"`, so an unqualified closure is always the GAMS-faithful one.',
+        "",
+        # --- 4. Why the all-cells number is lower (the tail) ----------------
+        "## Why the *all-cells* number is lower: the near-zero-flow tail",
+        "",
+        "The flat count weighs every cell equally, including bilateral flows that are "
+        "a rounding speck (base value ≈ $0). A %-change on a near-zero denominator is "
+        "numerical noise, not a measurement — e.g. a `Chem` CHN→CHN flow of "
+        "**$0.000000m** shows GEMPACK −24% vs Python +1957%, both meaningless. "
+        "Thresholding on the cell's **base flow** (a property known before the shock, "
+        "not on |Δ| — which would be circular) removes them. On **10x7** (`gams` "
+        "basis):",
+        "",
+        "| base-flow threshold | cells kept | within-1pp |",
+        "| --- | --- | --- |",
+        "| $0 (all cells) | 490 | 84.5% |",
+        "| ≥ $0.01m | 157 | ~98% |",
+        "| ≥ $0.05m | 70 | **100.0%** |",
+        "",
+        "All the failing cells are sub-$0.05m ghost flows (median base $0.00m). The "
+        "gate keeps the conservative all-cells count so the number is never inflated "
+        "by exclusion; this section is what that count is *made of*. Note the flat "
+        "count is mildly solve-path sensitive (the perf stack — settle_only / "
+        "MUMPS-reuse / cuDSS — can nudge a ghost cell across the ±1pp line) while the "
+        "≥$0.05m match stays put.",
+        "",
+        # --- 5. What the residual is (and is not) ---------------------------
+        "## What the residual is — and is not",
+        "",
+        "Python is faithful to GAMS to ~6 digits; van der Mensbrugghe "
+        "(*The Standard GTAP Model in GAMS, v7*, JGEA 3(1), 2018) reports "
+        'GAMS≡GEMPACK *"to within 4–5 significant digits"*. So the residual is a '
+        "**GAMS-vs-GEMPACK** difference, not a Python defect. It is **not**:",
+        "",
+        "- **linearization** — GEMPACK's own step-grid converges internally to "
+        "~0.002pp (s4 vs s64), ~300× smaller than any observed gap;",
+        "- **model scope** — factor quantities (`qe`) match GEMPACK to 0.00pp at "
+        "every factor-supply elasticity; sweeping `omegas` never improves the match;",
+        "- **a closure mismatch** — the gate's `capFix` solve is compared only "
+        "against `_capfix` fixtures (crossing capFix/capFlex would be a measurement "
+        "error, not a model defect).",
+        "",
+        "What it **is**: on **subsidized agriculture**, GAMS and GEMPACK disagree on "
+        "the factor-subsidy sign convention (HAR `FBEP`, native-negative). GAMS/Python "
+        "value value-added as `evfb + ftrv − fbep`; GEMPACK's EVFP as "
+        "`evfb + ftrv + fbep`. That shifts the VA-vs-intermediate weight on "
+        "subsidized crops, moving the domestic price and — through the import nest — "
+        "`qxs`. The `gtap7_gempack` closure adopts GEMPACK's convention, which is why "
+        "its column above is higher on the small agricultural flows. Details: "
+        "`docs/findings/gempack_residual_is_linearization_2026-07-24`.",
+        "",
+        # --- 6. The variable map --------------------------------------------
         "## Variables compared (15)",
         "",
-        "GEMPACK reports one solution %-change per model variable; these 15 quantity "
-        "variables have a verified 1:1 correspondence to a Python Var (established by "
-        "an exhaustive discovery pass, then filtered by economic meaning — a small Δ "
-        "alone is not proof since tariff-shock quantities co-move). **Prices**, the "
-        "**tariff shock itself** (`tm` = +10% uniform, the identical input to both "
-        "engines), and **welfare** (`u`/`EV`) are out of scope here — welfare is "
-        "sign-flipping and second-order and lives in the separate EV track "
+        "`qxs` is the focus above, but the gate maps 15 quantity variables (verified "
+        "1:1 GEMPACK→Python correspondence). **Prices**, the **tariff shock** itself "
+        "(`tm` = +10% uniform), and **welfare** (`u`/`EV`) are out of scope here — "
+        "welfare lives in the separate EV track "
         "(`docs/findings/gempack_welfare_not_cellwise`).",
         "",
         _var_list(),
         "",
-        "## Quantity-vs-quantity match (percentage points)",
+        # --- 7. Scope -------------------------------------------------------
+        "## Scope",
         "",
-        "Fraction of cells within 1 pp, over the 15 variables × commodity × activity × "
-        "region. Single-shock solve — only the shock stage maps. GEMPACK ran one tariff "
-        "shock and is **ifSUB-agnostic**: ifSUB 0 and 1 measure identically (the "
-        "quantities don't depend on the subsidy convention), so both are shown.",
-        "",
-        _table(rows),
-        "",
-        "### The residual is the near-zero-flow tail (measured)",
-        "",
-        "The cell counts above are **flat** — every mapped cell weighs 1, including "
-        "bilateral trade flows that are a rounding speck (base value ≈ $0). A "
-        "%-change on a near-zero denominator is numerical noise, not a measurement: "
-        "GEMPACK and Python each report a large, meaningless number there (e.g. a "
-        "`Chem` CHN→CHN flow of **$0.000000m** shows GEMPACK −24% vs Python +1957%). "
-        "So the flat count understates the economic agreement. Thresholding on the "
-        "cell's **base flow** (a property known before the shock — not on |Δ|, which "
-        "would be circular), applied identically to both engines, the `qxs` "
-        "off-diagonal match on **10x7** is:",
-        "",
-        "| base-flow threshold | cells kept | within-1pp |",
-        "| --- | --- | --- |",
-        "| $0 (all cells) | 490 | 92.9% |",
-        "| ≥ $0.01m | 157 | 98.1% |",
-        "| ≥ $0.05m | 70 | **100.0%** |",
-        "",
-        "**On flows with economic substance (≥ $0.05m) the match is 100%** — the "
-        "flat-count residual lives entirely in the sub-$0.05m tail (all 35 failing "
-        "cells have base flow between −$0.00m and $0.03m, median $0.00m). This is "
-        "measured, not assumed; the gate keeps the conservative flat count so the "
-        "number is never inflated by exclusion. The flat count is solve-path "
-        "sensitive — the perf stack (settle_only / MUMPS-reuse / cuDSS) nudged a few "
-        "ghost cells across the ±1pp line (96.5%→92.9% flat), but the ≥$0.05m "
-        "substantive match is unchanged at 100%, confirming those levers touch no "
-        "cell with real trade.",
-        "",
-        "### The `gtap7_gempack` closure (subsidy-basis variant)",
-        "",
-        "Python is faithful to GAMS to ~6 digits; on **subsidized agriculture** the "
-        "GAMS and GEMPACK *reference engines* disagree on the factor-subsidy sign "
-        "convention (HAR `FBEP`, native-negative): GAMS/Python value value-added as "
-        "`evfb + ftrv − fbep`, GEMPACK's EVFP as `evfb + ftrv + fbep`. The named "
-        "closure **`gtap7_gempack`** (flag `va_subsidy_basis=\"gempack\"`, default "
-        "`\"gams\"`, off) re-anchors the VA valuation to GEMPACK's basis. It is "
-        "byte-identical on the default path (the `.nl` coefficient gate is unchanged), "
-        "and lifts the flat `qxs` off-diagonal match — **3x3 92.6→100%, 3x4 "
-        "93.8→100%, 5x5 93.6→95.2%, 10x7 84.5→92.9%**. The gain concentrates in the "
-        "small-agricultural-flow tail (where the subsidy sign moves the price most); "
-        "on the ≥$0.05m substantive flows both bases already reach 100%. The gate and "
-        "this matrix run the **default (`gams`) basis**, so the numbers above are the "
-        "faithful-to-GAMS reference; the variant is opt-in.",
-        "",
-        "### Scope",
-        "",
-        "This cell-by-cell page covers the five **gtap7_\\*** datasets, which the "
-        "multi-period gate solves. **nus333** and **9x10** are *not* here: they are "
-        "solved by a separate single-period apparatus (`compare_nus333_vs_neos._solve` "
-        "with homotopy + capFix closure), and they already have GEMPACK/RunGTAP "
-        "coverage in the **welfare/macro track** they were built for "
-        "(`compare_nus333_rungtap.py` / `compare_9x10_rungtap.py`, validated to "
-        "~0.01–0.3pp on `u` and ~0.3–1.7% on EV — see "
-        "`docs/findings/rungtap_welfare_parity_2026-05-15`). Wiring them into the "
-        "cell-by-cell gate would duplicate that coverage through a second, fragile "
-        "solve path, so it is deliberately out of scope.",
+        "This page covers the five **gtap7_\\*** datasets the multi-period gate "
+        "solves. **nus333** and **9x10** are elsewhere: they use a separate "
+        "single-period apparatus and already have GEMPACK/RunGTAP coverage in the "
+        "welfare/macro track they were built for (`compare_nus333_rungtap.py` / "
+        "`compare_9x10_rungtap.py`, ~0.01–0.3pp on `u` — see "
+        "`docs/findings/rungtap_welfare_parity_2026-05-15`).",
         "",
     ]
     return "\n".join(parts) + "\n"
