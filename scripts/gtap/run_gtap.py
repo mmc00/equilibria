@@ -58,6 +58,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Lever B2 observability: count MUMPS symbolic factorizations in the Newton-TR
+# solve. Reset by callers/tests before a solve; incremented at each
+# do_symbolic_factorization. Proves symbolic reuse fires (fewer with reuse on).
+_SYMBOLIC_FACT_COUNT = 0
+
 
 PATH_CAPI_SRC_DEFAULT = Path("/Users/marmol/proyectos/path-capi-python/src")
 PATH_CAPI_LIB_DEFAULT = Path(
@@ -4225,6 +4230,8 @@ def _run_path_capi_nonlinear_full(
                 _k_tr = 0
                 _lu_tr = None
                 _lu_age_tr = 0  # iterations since last refactor
+                _cudss_solver_tr = None  # persists cuDSS plan across Newton steps (reuse)
+                _gmin_pattern_sig = None  # (nnz, hash) of the last gmin-applied pattern
                 for _k_tr in range(_maxit_tr):
                     _rinf_tr = float(_np_sr.linalg.norm(_F_tr, _np_sr.inf))
                     # absolute-tol convergence (default) OR relative-tol (TR_RELTOL): the
@@ -4435,13 +4442,33 @@ def _run_path_capi_nonlinear_full(
                             _Jm_lil = _Jm_tr.tolil()
                             _Jm_lil.setdiag(_Jm_lil.diagonal() + _gmin)
                             _Jm_tr = _Jm_lil.tocsr()
-                            # Force a FRESH symbolic+numeric factorization every step under
-                            # GMIN (don't reuse the analyzed pattern): the ~30 degenerate
-                            # diagonals can still change stored-nnz between steps despite
-                            # setdiag (explicit-zero handling varies), and re-analyzing is
-                            # cheap (~8s) next to a stalled solve. Guarantees symbolic pattern
-                            # == numeric pattern.
-                            _lu_tr = None
+                            # Symbolic reuse (lever B2): the symbolic factorization depends only
+                            # on the PATTERN (nnz + indices/indptr), not the values. Under GMIN
+                            # the ~30 degenerate diagonals CAN change the stored-nnz between
+                            # steps, so we cannot reuse blindly — but the spike showed the
+                            # pattern changes RARELY (3 distinct patterns in 28 steps), so
+                            # re-analyzing every step is mostly wasted. Detect a pattern change
+                            # by signature and force re-analysis ONLY on a change; otherwise let
+                            # the existing _need_lu/_lu_age_tr reuse machinery run. Reusing only
+                            # on a byte-identical pattern makes the MUMPS "nonzeros changed"
+                            # abort impossible. EQUILIBRIA_GTAP_GMIN_SYM_REUSE=0 restores the
+                            # old unconditional re-analyze.
+                            if os.environ.get("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", "1") != "0":
+                                import hashlib as _hl_sr
+
+                                _sig = (
+                                    _Jm_tr.nnz,
+                                    _hl_sr.sha256(
+                                        _Jm_tr.indices.tobytes()
+                                        + _Jm_tr.indptr.tobytes()
+                                    ).hexdigest(),
+                                )
+                                if _sig != _gmin_pattern_sig:
+                                    _lu_tr = None  # pattern changed → re-analyze
+                                    _gmin_pattern_sig = _sig
+                                # else: pattern unchanged → keep _lu_tr, reuse the symbolic
+                            else:
+                                _lu_tr = None  # opt-out: old unconditional re-analyze
                         if _need_lu or _gmin > 0.0:
                             try:
                                 _t_m = __import__("time").perf_counter()
@@ -4513,6 +4540,7 @@ def _run_path_capi_nonlinear_full(
                                         f"ICNTL 6={_icntl6}(perm) 7={_icntl7}(order) "
                                         f"8={_icntl8}(scale) 24={_icntl24}(nullpiv)"
                                     )
+                                    globals()["_SYMBOLIC_FACT_COUNT"] += 1
                                     _lu_tr.do_symbolic_factorization(_Jm_tr)
                                     _plog_m(
                                         "symbolic factorization done in "
@@ -4635,6 +4663,99 @@ def _run_path_capi_nonlinear_full(
                             else:
                                 _pN_tr = -_g_tr
                         except Exception:
+                            _pN_tr = -_g_tr
+                    elif _linsolve_tr == "cudss":
+                        # cuDSS GPU DIRECT (NVIDIA multifrontal). Same operator as the mumps
+                        # route — the colperm-paired, GMIN-applied J·P (zero-free diagonal) —
+                        # solved on the GPU. Proven on the real 20x41 (kernel cudss-config v11):
+                        # rel_res 5.25e-16 (BEATS MUMPS 1.37e-13) at 3.82s vs 50.6s = 13.3x. The
+                        # lever is matching_algorithm=AUTO (MUMPS ICNTL(6) analogue) + iterative
+                        # refinement (ir_num_steps=2), both applied inside cudss_solve. OPT-IN;
+                        # any GPU/binding failure falls back cleanly to the gradient step (the TR
+                        # then rejects/retries), so a missing GPU never crashes the solve.
+                        import importlib.util as _ilu_c
+                        from scipy.sparse.csgraph import (
+                            maximum_bipartite_matching as _mbm_c,
+                        )
+
+                        _pf_c = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
+
+                        def _plog_c(_m):
+                            if _pf_c:
+                                try:
+                                    with open(_pf_c, "a") as _fh:
+                                        _fh.write(f"  [cudss] {_m}\n")
+                                except Exception:
+                                    pass
+                            print(
+                                f"[nlp-square] [cudss] {_m}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+
+                        # structural column permutation → zero-free diagonal (compute once),
+                        # identical policy to the mumps branch (GAMS pairing, then numeric).
+                        if _colperm_tr is None:
+                            _pp_c, _pc_matched = _paired_colperm()
+                            if _pp_c is not None and _pc_matched >= _n_sr:
+                                _colperm_tr = _pp_c
+                                _plog_c(
+                                    "paired colperm (GAMS structural_matching) "
+                                    f"{_pc_matched}/{_n_sr}"
+                                )
+                            else:
+                                _colperm_tr = _mbm_c(
+                                    _J_tr.tocsr(), perm_type="column"
+                                )
+                                if _np_sr.any(_colperm_tr < 0):
+                                    if _pp_c is not None:
+                                        _colperm_tr = _pp_c
+                                    else:
+                                        _colperm_tr = _np_sr.arange(_n_sr)
+
+                        _Jm_tr = _J_tr[:, _colperm_tr].tocsr()
+                        _gmin_c = float(
+                            os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0
+                        )
+                        if _gmin_c > 0.0:
+                            _Jm_lil_c = _Jm_tr.tolil()
+                            _Jm_lil_c.setdiag(_Jm_lil_c.diagonal() + _gmin_c)
+                            _Jm_tr = _Jm_lil_c.tocsr()
+
+                        # load the helper by path (scripts/gtap is not a package) and use the
+                        # PERSISTENT reusable solver: it caches the cuDSS plan (symbolic analysis)
+                        # across Newton steps and only re-factorizes when the values change (or
+                        # re-plans if the pattern changes) — the symbolic-reuse win (lever B2's
+                        # analogue) that turns the per-factor 13x into an end-to-end gain.
+                        try:
+                            _cud_path = os.path.join(
+                                os.path.dirname(os.path.abspath(__file__)),
+                                "_cudss_linsolve.py",
+                            )
+                            _cud_spec = _ilu_c.spec_from_file_location(
+                                "_cudss_linsolve", _cud_path
+                            )
+                            _cud = _ilu_c.module_from_spec(_cud_spec)
+                            _cud_spec.loader.exec_module(_cud)
+                            if _cudss_solver_tr is None:
+                                _cudss_solver_tr = _cud.CudssReusableSolver()
+                            _x_c, _info_c = _cudss_solver_tr.solve(_Jm_tr, -_F_tr)
+                        except Exception as _e_c:
+                            _x_c, _info_c = None, {"ok": False, "err": str(_e_c)}
+
+                        if _x_c is not None and _info_c.get("ok"):
+                            _nplans_c = getattr(_cudss_solver_tr, "n_plans", "?")
+                            _plog_c(
+                                f"solve ok rel_res={_info_c.get('rel_res'):.2e} "
+                                f"plans={_nplans_c}"
+                            )
+                            _pN_tr = _np_sr.empty(_n_sr)
+                            _pN_tr[_colperm_tr] = _x_c  # un-permute: p = P y
+                        else:
+                            _plog_c(
+                                f"solve FAILED ({_info_c.get('err')}), "
+                                "falling back to gradient step"
+                            )
                             _pN_tr = -_g_tr
                     elif _linsolve_tr == "direct":
                         # DIRECT SOLVE with zero-free-diagonal permutation (GEMPACK/MA48/KLU
