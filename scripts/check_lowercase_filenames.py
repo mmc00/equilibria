@@ -25,6 +25,7 @@ ALLOWED_EXACT: set[str] = {
     "src/equilibria/babel/gdx/README.md",
     "src/equilibria/babel/har/README.md",
     "src/equilibria/templates/gtap/README.md",
+    "runs/gempack_20x41_validation/README.md",
     "tests/babel/gdx/fixtures/SAM-V2_0.gdx",
     # Sphinx documentation site:
     #   - Makefile is the GNU Make / Sphinx convention; renaming would
