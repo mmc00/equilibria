@@ -40,8 +40,10 @@ def _load_params():
 
     p = GTAPParameters()
     p.load_from_har(
-        basedata_path=DATA / "basedata.har", sets_path=DATA / "sets.har",
-        default_path=DATA / "default.prm", baserate_path=DATA / "baserate.har",
+        basedata_path=DATA / "basedata.har",
+        sets_path=DATA / "sets.har",
+        default_path=DATA / "default.prm",
+        baserate_path=DATA / "baserate.har",
     )
     return p
 
@@ -50,9 +52,15 @@ def _closure():
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     return GTAPClosureConfig(
-        name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=False, savf_flag="capFix", numeraire="pnum",
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=False,
+        savf_flag="capFix",
+        numeraire="pnum",
     )
 
 

@@ -8,6 +8,7 @@ with a \\x1f separator).
 ``EQUILIBRIA_SEED_CACHE_DISABLE=1`` bypasses read+write. Cache dir defaults to
 ``~/.cache/equilibria/settled_seed`` or ``$EQUILIBRIA_SEED_CACHE``.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -31,7 +32,8 @@ def _cache_dir() -> Path:
 
 def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
     fields = [
-        dataset_id, residual_region,
+        dataset_id,
+        residual_region,
         str(getattr(closure, "closure_type", "")),
         str(getattr(closure, "savf_flag", "")),
         str(bool(getattr(closure, "if_sub", False))),
@@ -41,9 +43,13 @@ def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
     # Digest of the benchmark inputs the settle depends on (evfb/vfm/vkb + tax rates).
     bm = getattr(params, "benchmark", None)
     tx = getattr(params, "taxes", None)
-    for src in (getattr(bm, "evfb", None), getattr(bm, "vfm", None),
-                getattr(bm, "vkb", None), getattr(tx, "rtf", None),
-                getattr(tx, "kappaf_activity", None)):
+    for src in (
+        getattr(bm, "evfb", None),
+        getattr(bm, "vfm", None),
+        getattr(bm, "vkb", None),
+        getattr(tx, "rtf", None),
+        getattr(tx, "kappaf_activity", None),
+    ):
         if src is None:
             fields.append("none")
             continue
@@ -67,13 +73,17 @@ def load(key: str):
     if not f.exists():
         return None
     raw = json.loads(f.read_text())
-    return {name: {_dec_key(k): float(v) for k, v in cells.items()}
-            for name, cells in raw.items()}
+    return {
+        name: {_dec_key(k): float(v) for k, v in cells.items()}
+        for name, cells in raw.items()
+    }
 
 
 def save(key: str, seed: dict) -> None:
     if disabled():
         return
-    enc = {name: {_enc_key(k): float(v) for k, v in cells.items()}
-           for name, cells in seed.items()}
+    enc = {
+        name: {_enc_key(k): float(v) for k, v in cells.items()}
+        for name, cells in seed.items()
+    }
     (_cache_dir() / f"{key}.json").write_text(json.dumps(enc))

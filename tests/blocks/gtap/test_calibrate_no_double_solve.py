@@ -37,9 +37,15 @@ def _load_params():
 
 def _closure(p):
     return GTAPClosureConfig(
-        name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=False, savf_flag="capFix", numeraire="pnum",
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=False,
+        savf_flag="capFix",
+        numeraire="pnum",
     )
 
 
@@ -79,7 +85,9 @@ def _solve_multiperiod_result(settle_only):
     p = _load_params()
     rr = list(p.sets.r)[-1]
     m, mp = build_block_model(p, p.sets, _closure(p), rr)
-    return solve_block_model(m, p, _closure(p), None, mode="gtap", settle_only=settle_only)
+    return solve_block_model(
+        m, p, _closure(p), None, mode="gtap", settle_only=settle_only
+    )
 
 
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
@@ -135,10 +143,19 @@ def _sparse_solution(force_full_settle):
 
         patch.enter_context(_monkey(_bm, "solve_block_model", _full))
     with patch:
-        m, mp, _ = build_sparse_model_mp(p, p.sets, _closure(p), rr, base_calibrated=True)
+        m, mp, _ = build_sparse_model_mp(
+            p, p.sets, _closure(p), rr, base_calibrated=True
+        )
         solve_multiperiod(
-            m, p, _closure(p), ref_gdx=None, skip_base_solve=True, mute_welfare=True,
-            seed_from_prior=False, holdfix_cd=True, mode="gtap",
+            m,
+            p,
+            _closure(p),
+            ref_gdx=None,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            holdfix_cd=True,
+            mode="gtap",
         )
     out = {}
     for v in m.component_objects(Var, active=True):
@@ -171,8 +188,10 @@ def test_seed_cache_roundtrip(tmp_path, monkeypatch):
     monkeypatch.delenv("EQUILIBRIA_SEED_CACHE_DISABLE", raising=False)
     from equilibria.blocks.gtap import seed_cache
 
-    seed = {"pf": {("USA", "Land", "Food"): 1.25, ("EU", "Land", "Food"): 0.9},
-            "kstock": {"USA": 42.0}}
+    seed = {
+        "pf": {("USA", "Land", "Food"): 1.25, ("EU", "Land", "Food"): 0.9},
+        "kstock": {"USA": 42.0},
+    }
     key = "k-abc123"
     assert seed_cache.load(key) is None
     seed_cache.save(key, seed)
@@ -185,12 +204,28 @@ def test_seed_cache_key_changes_with_input():
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
-    c1 = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish",
-                           fix_endowments=False, fix_taxes=False, fix_technology=False,
-                           if_sub=False, savf_flag="capFix", numeraire="pnum")
-    c2 = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish",
-                           fix_endowments=False, fix_taxes=False, fix_technology=False,
-                           if_sub=True, savf_flag="capFix", numeraire="pnum")  # if_sub differs
+    c1 = GTAPClosureConfig(
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=False,
+        savf_flag="capFix",
+        numeraire="pnum",
+    )
+    c2 = GTAPClosureConfig(
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=True,
+        savf_flag="capFix",
+        numeraire="pnum",
+    )  # if_sub differs
     k1 = seed_cache.cache_key("gtap7_10x7", c1, rr, p)
     k2 = seed_cache.cache_key("gtap7_10x7", c2, rr, p)
     assert k1 != k2, "cache key must change when a settle-affecting input changes"
@@ -202,7 +237,7 @@ def test_seed_cache_disabled_is_noop(tmp_path, monkeypatch):
     from equilibria.blocks.gtap import seed_cache
 
     assert seed_cache.disabled() is True
-    seed_cache.save("k-x", {"pf": {("USA",): 1.0}})       # must write nothing
+    seed_cache.save("k-x", {"pf": {("USA",): 1.0}})  # must write nothing
     assert list(tmp_path.iterdir()) == [], "disabled cache still wrote a file"
     assert seed_cache.load("k-x") is None, "disabled cache still read"
 
@@ -211,10 +246,11 @@ def test_seed_cache_disabled_is_noop(tmp_path, monkeypatch):
 def test_cache_hit_skips_settle(tmp_path, monkeypatch):
     monkeypatch.setenv("EQUILIBRIA_SEED_CACHE", str(tmp_path))
     monkeypatch.delenv("EQUILIBRIA_SEED_CACHE_DISABLE", raising=False)
-    seed1 = _calibrate()                 # miss → computes + writes
+    seed1 = _calibrate()  # miss → computes + writes
     # calibrate_base imports build_block_model LOCALLY from gtap_block_model, so
     # spy at the source module (patching factor would never see the call).
     import equilibria.templates.gtap.gtap_block_model as _bm
+
     called = {"n": 0}
     orig = _bm.build_block_model
 
@@ -223,6 +259,6 @@ def test_cache_hit_skips_settle(tmp_path, monkeypatch):
         return orig(*a, **k)
 
     monkeypatch.setattr(_bm, "build_block_model", _spy)
-    seed2 = _calibrate()                 # hit → must NOT build/solve
+    seed2 = _calibrate()  # hit → must NOT build/solve
     assert called["n"] == 0, "cache hit still built the model"
     assert _seed_signature(seed1) == _seed_signature(seed2), "cached seed differs"
