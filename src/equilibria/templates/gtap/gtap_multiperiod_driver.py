@@ -245,16 +245,20 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
             _if_sub = True
     _bm = getattr(params, "benchmark", None)
 
+    _va_basis = getattr(params, "va_subsidy_basis", "gams")
+
     def _wedge(r, f, a):
         if _bm is None:
             return 0.0
         evfb = float(_bm.evfb.get((r, f, a), 0.0) or 0.0)
         if evfb <= 0.0:
             return 0.0
-        return (
-            float(_bm.ftrv.get((r, f, a), 0.0) or 0.0)
-            - float(_bm.fbep.get((r, f, a), 0.0) or 0.0)
-        ) / evfb
+        ftrv = float(_bm.ftrv.get((r, f, a), 0.0) or 0.0)
+        fbep = float(_bm.fbep.get((r, f, a), 0.0) or 0.0)
+        # GEMPACK EVFP basis flips the subsidy sign (see _va_wedge in
+        # blocks/gtap/_derived_params.py); default "gams" keeps ftrv-fbep.
+        wedge = ftrv + fbep if _va_basis == "gempack" else ftrv - fbep
+        return wedge / evfb
 
     n_rebuilt = 0
 
@@ -2359,16 +2363,18 @@ def _recompute_ifsub_report_vars(
     # _recalibrate_io_af._wedge does. (Same subsidy-wedge omission class as the af fix.)
     _bmk = getattr(params, "benchmark", None)
 
+    _va_basis_pfa = getattr(params, "va_subsidy_basis", "gams")
+
     def _pfa_wedge(r, f, a):
         if _bmk is None:
             return 0.0
         evfb = float(_bmk.evfb.get((r, f, a), 0.0) or 0.0)
         if evfb <= 0.0:
             return 0.0
-        return (
-            float(_bmk.ftrv.get((r, f, a), 0.0) or 0.0)
-            - float(_bmk.fbep.get((r, f, a), 0.0) or 0.0)
-        ) / evfb
+        ftrv = float(_bmk.ftrv.get((r, f, a), 0.0) or 0.0)
+        fbep = float(_bmk.fbep.get((r, f, a), 0.0) or 0.0)
+        wedge = ftrv + fbep if _va_basis_pfa == "gempack" else ftrv - fbep
+        return wedge / evfb
 
     # --- factor prices: pfa, pfy ---
     for r in R:

@@ -35,6 +35,28 @@ def _f(x: Any) -> float:
     return float(x or 0.0)
 
 
+def _va_wedge(params: Any, bm: Any, r: str, f: str, a: str) -> float:
+    """Factor tax/subsidy wedge added to evfb in the VA valuation.
+
+    GAMS/default basis (``va_subsidy_basis="gams"``): ``ftrv - fbep`` — the
+    factor subsidy (FBEP, stored native-negative) RAISES the firm factor price
+    pfa, so va = evfb + ftrv - fbep. This is faithful to the GAMS reference
+    solve (va.l/xp.l), validated to 6 figures.
+
+    GEMPACK basis (``va_subsidy_basis="gempack"``): ``ftrv + fbep`` — GEMPACK's
+    EVFP header ("primary factor purchases at purchasers' prices") treats the
+    subsidy as LOWERING purchaser cost, so the VA-vs-intermediate weight ava
+    matches GEMPACK's STC total-cost share (0.571 vs GAMS's 0.679 on subsidised
+    agriculture). Re-anchors VA valuation from GAMS to GEMPACK on the ~177
+    subsidised ag cells; closes ~half the qxs gap vs GEMPACK. Selected by the
+    ``gtap7_gempack`` closure. See project_gtap_qxs_bilateral_trade_residual.
+    """
+    ftrv = _f(bm.ftrv.get((r, f, a), 0.0))
+    fbep = _f(bm.fbep.get((r, f, a), 0.0))
+    basis = getattr(params, "va_subsidy_basis", "gams")
+    return ftrv + fbep if basis == "gempack" else ftrv - fbep
+
+
 def to_array(data: dict, elem_lists: list[list[str]], default: float = 0.0):
     """Fill a numpy array from a {index_tuple: value} dict.
 
@@ -110,9 +132,7 @@ def xscale_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
                 evfb_val = _f(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)))
                 if evfb_val <= 0.0:
                     continue
-                fbep_val = _f(bm.fbep.get((r, f, a), 0.0))
-                ftrv_val = _f(bm.ftrv.get((r, f, a), 0.0))
-                va_level += evfb_val + (ftrv_val - fbep_val)
+                va_level += evfb_val + _va_wedge(params, bm, r, f, a)
             xp_level = nd_level + va_level
             if xp_level <= 0.0:
                 xp_level = _f(bm.vom.get((r, a), 0.0))
@@ -167,9 +187,7 @@ def _and_ava_nd_pio(params: Any, sets: Any):
                 evfb_val = _f(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)))
                 if evfb_val <= 0.0:
                     continue
-                fbep_val = _f(bm.fbep.get((r, f, a), 0.0))
-                ftrv_val = _f(bm.ftrv.get((r, f, a), 0.0))
-                va_p += evfb_val + (ftrv_val - fbep_val)
+                va_p += evfb_val + _va_wedge(params, bm, r, f, a)
             xp_model_equiv = nd_p + va_p
             adjusted_and[(r, a)] = (
                 nd_p / xp_model_equiv if xp_model_equiv > 0.0 else 0.0
@@ -205,9 +223,7 @@ def va_bench_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
                 evfb_val = _f(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)))
                 if evfb_val <= 0.0:
                     continue
-                fbep_val = _f(bm.fbep.get((r, f, a), 0.0))
-                ftrv_val = _f(bm.ftrv.get((r, f, a), 0.0))
-                va += evfb_val + (ftrv_val - fbep_val)
+                va += evfb_val + _va_wedge(params, bm, r, f, a)
             out[(r, a)] = max(va, 1e-8)
     return out
 
