@@ -4225,6 +4225,7 @@ def _run_path_capi_nonlinear_full(
                 _k_tr = 0
                 _lu_tr = None
                 _lu_age_tr = 0  # iterations since last refactor
+                _cudss_solver_tr = None  # persists cuDSS plan across Newton steps (reuse)
                 for _k_tr in range(_maxit_tr):
                     _rinf_tr = float(_np_sr.linalg.norm(_F_tr, _np_sr.inf))
                     # absolute-tol convergence (default) OR relative-tol (TR_RELTOL): the
@@ -4694,7 +4695,11 @@ def _run_path_capi_nonlinear_full(
                             _Jm_lil_c.setdiag(_Jm_lil_c.diagonal() + _gmin_c)
                             _Jm_tr = _Jm_lil_c.tocsr()
 
-                        # load the helper by path (scripts/gtap is not a package)
+                        # load the helper by path (scripts/gtap is not a package) and use the
+                        # PERSISTENT reusable solver: it caches the cuDSS plan (symbolic analysis)
+                        # across Newton steps and only re-factorizes when the values change (or
+                        # re-plans if the pattern changes) — the symbolic-reuse win (lever B2's
+                        # analogue) that turns the per-factor 13x into an end-to-end gain.
                         try:
                             _cud_path = os.path.join(
                                 os.path.dirname(os.path.abspath(__file__)),
@@ -4705,13 +4710,17 @@ def _run_path_capi_nonlinear_full(
                             )
                             _cud = _ilu_c.module_from_spec(_cud_spec)
                             _cud_spec.loader.exec_module(_cud)
-                            _x_c, _info_c = _cud.cudss_solve(_Jm_tr, -_F_tr)
+                            if _cudss_solver_tr is None:
+                                _cudss_solver_tr = _cud.CudssReusableSolver()
+                            _x_c, _info_c = _cudss_solver_tr.solve(_Jm_tr, -_F_tr)
                         except Exception as _e_c:
                             _x_c, _info_c = None, {"ok": False, "err": str(_e_c)}
 
                         if _x_c is not None and _info_c.get("ok"):
+                            _nplans_c = getattr(_cudss_solver_tr, "n_plans", "?")
                             _plog_c(
-                                f"solve ok rel_res={_info_c.get('rel_res'):.2e}"
+                                f"solve ok rel_res={_info_c.get('rel_res'):.2e} "
+                                f"plans={_nplans_c}"
                             )
                             _pN_tr = _np_sr.empty(_n_sr)
                             _pN_tr[_colperm_tr] = _x_c  # un-permute: p = P y
