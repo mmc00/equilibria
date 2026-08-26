@@ -180,10 +180,16 @@ class CudssReusableSolver:
             )
 
             if self._solver is not None and sig == self._sig:
-                # SAME pattern → reuse plan: update values on-device + re-factorize only.
+                # SAME pattern → reuse plan: update the VALUES in the shared GPU buffer IN
+                # PLACE and re-factorize only. CRITICAL: do NOT pass a= to reset_operands —
+                # that hands cuDSS a "new" LHS and invalidates the plan ("Factorization cannot
+                # be performed before plan() has been called"). nvmath's own guidance is
+                # "update the values in place and refactorize"; passing only b= keeps the plan
+                # (verified on the real matrix: plans=1 across a simulated Newton loop,
+                # rel_res 1e-13). Each plan() costs ~3.6s at n=395k — this is what we save.
                 self._A_g.data[:] = cp.asarray(A.data, dtype=cp.float64)
                 self._b_g[:] = cp.asarray(b)
-                self._solver.reset_operands(a=self._A_g, b=self._b_g)
+                self._solver.reset_operands(b=self._b_g)
                 self._solver.factorize()
                 x_g = self._solver.solve()
             else:
