@@ -4970,6 +4970,25 @@ def _run_path_capi_nonlinear_full(
             for _v_sr, _val_sr in zip(_nlp_sr.get_pyomo_variables(), _sol_sr.x):
                 if not _v_sr.fixed:
                     _v_sr.set_value(float(_val_sr))
+            # FREE the heavy PyomoNLP (~10-15GB of ASL symbolic Jacobian at n=395k) now that
+            # the solution is back in the Pyomo Vars. Each phase (check, then shock) builds its
+            # OWN _nlp_sr; at 20x41 two live NLPs (~30GB) exceed the 33GB kernel and OOM the
+            # shock phase (MEASURED: proc_rss 29.5GB, sys_avail 2.5GB, phase=solve). Dropping the
+            # reference + gc lets the check NLP die before the shock builds its own. Opt-out via
+            # EQUILIBRIA_GTAP_NO_FREE_NLP=1. The solution already lives in the Vars, so nothing
+            # downstream needs _nlp_sr.
+            if os.environ.get("EQUILIBRIA_GTAP_NO_FREE_NLP") != "1":
+                try:
+                    import gc as _gc_sr
+                    _nlp_sr = None
+                    del _nlp_sr
+                    _n_freed = _gc_sr.collect()
+                    print(
+                        f"[nlp-square] freed PyomoNLP after solve (gc reclaimed {_n_freed} objs)",
+                        file=sys.stderr, flush=True,
+                    )
+                except Exception:
+                    pass
             # scipy has no Pyomo results object; build a shim so the downstream report
             # (res.solver.status / termination_condition) works. Success = converged AND
             # residual within tolerance (fatol was 1e-7; accept ||F||<1e-5).
