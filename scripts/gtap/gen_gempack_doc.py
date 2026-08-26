@@ -230,13 +230,37 @@ def render() -> str:
         # --- 6. The variable map --------------------------------------------
         "## Variables compared (15)",
         "",
-        "`qxs` is the focus above, but the gate maps 15 quantity variables (verified "
-        "1:1 GEMPACK→Python correspondence). **Prices**, the **tariff shock** itself "
-        "(`tm` = +10% uniform), and **welfare** (`u`/`EV`) are out of scope here — "
-        "welfare lives in the separate EV track "
-        "(`docs/findings/gempack_welfare_not_cellwise`).",
+        "`qxs` is the focus above, but the gate maps **15 quantity variables** — a "
+        "deliberate subset of the ~30 quantities the "
+        "[standard GTAP model](https://www.gtap.agecon.purdue.edu/models/setsvariables.asp) "
+        "defines, chosen because each has a **unique, verified 1:1 GEMPACK→Python "
+        "correspondence** confirmed by economic meaning (a small Δ alone is not proof "
+        "— under a tariff shock many quantities co-move). The map was built by an "
+        "exhaustive discovery pass (`discover_qty_map.py`), not by hand.",
         "",
         _var_list(),
+        "",
+        "**What is deliberately *not* compared, and why** — this is a curated subset, "
+        "not the model's full variable list:",
+        "",
+        "- **Prices** (the ~45 `p*` variables: `pms`, `pfe`, `pva`, …) — GEMPACK and "
+        "GAMS can anchor the numéraire differently, so a cell-by-cell price compare "
+        "is not apples-to-apples without normalising first. Out of scope here.",
+        "- **Per-agent final demands** (`QPD`/`QPM` household, `QGD`/`QGM` government "
+        "domestic-vs-imported splits) — the gate compares the *aggregate* (`qms`→`xmt`) "
+        "instead of the per-agent breakdown, which is redundant for this check.",
+        "- **`QO` (activity output)** — dropped: under joint production it has no clean "
+        "1:1 Python Var (it best-matched total supply `xs`, which `qc` already owns).",
+        "- **Welfare** (`u` / `EV`) and the **tariff shock** itself (`tm` = +10% "
+        "uniform, the identical input to both engines) — welfare is second-order and "
+        "sign-flipping; it lives in the separate EV track "
+        "(`docs/findings/gempack_welfare_not_cellwise`).",
+        "- **Capital dynamics / macro** (`KB`, `KE`, `QSAVE`, `POP`, `TOT`) — not "
+        "mapped; outside the single-shock trade-quantity scope of this page.",
+        "",
+        "So more variables *could* be added (per-agent demands, prices with a "
+        "numéraire normalisation); the 15 are the ones with a clean, proven mapping "
+        "today.",
         "",
         # --- 7. Scope -------------------------------------------------------
         "## Scope",
