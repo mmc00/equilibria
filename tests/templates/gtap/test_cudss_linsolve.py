@@ -11,6 +11,7 @@ These tests pin the CONTRACT that run_gtap.py's cudss branch depends on:
     (rel_res < 1e-12) on an unsymmetric, zero-free-diagonal matrix like J·P
   - the returned info dict reports success/failure so the caller can fall back cleanly
 """
+
 import importlib.util
 import os
 import sys
@@ -25,6 +26,7 @@ _HELPER = os.path.join(
 )
 _HELPER = os.path.abspath(_HELPER)
 _spec = importlib.util.spec_from_file_location("_cudss_linsolve", _HELPER)
+assert _spec is not None and _spec.loader is not None
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
