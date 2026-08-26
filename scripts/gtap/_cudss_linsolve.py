@@ -110,3 +110,116 @@ def cudss_solve(Jm_csr, rhs):
     except Exception as e:  # noqa: BLE001 — any GPU/binding failure -> clean fallback
         info["err"] = f"{type(e).__name__}: {e}"
         return None, info
+
+
+def _pattern_sig(Jm_csr):
+    """A cheap, exact signature of the sparsity PATTERN (not the values) of a CSR matrix.
+
+    Two matrices with the same nnz + identical indices/indptr have the same signature, so
+    the cuDSS plan (symbolic analysis, pattern-only) can be reused. Any pattern change flips
+    the signature and forces a re-plan. Mirrors lever B2's MUMPS symbolic-reuse guard.
+    """
+    import hashlib
+
+    A = Jm_csr.tocsr()
+    h = hashlib.sha256()
+    h.update(A.indices.tobytes())
+    h.update(A.indptr.tobytes())
+    return (A.shape, int(A.nnz), h.hexdigest())
+
+
+class CudssReusableSolver:
+    """Stateful cuDSS solver that REUSES the plan (symbolic analysis) across Newton steps.
+
+    The per-factorization win (13x vs MUMPS on the 20x41) only translates end-to-end if the
+    expensive plan() (analysis/reordering, pattern-only) is done ONCE and reused — otherwise
+    every Newton step re-analyzes, exactly the waste lever B2 fixed for MUMPS. This class holds
+    a live DirectSolver + the GPU CSR buffers; on a same-pattern call it updates the values in
+    place and re-factorizes (skips plan()); on a pattern change it rebuilds and re-plans.
+
+    ``n_plans`` counts how many times plan() actually ran — the reuse assertion in the tests.
+    Any GPU/binding failure returns ``(None, {"ok": False, ...})`` and resets state, so the
+    caller falls back cleanly (never raises).
+    """
+
+    def __init__(self):
+        self.n_plans = 0
+        self._sig = None
+        self._solver = None
+        self._A_g = None  # cupy CSR (values updated in place across reuse)
+        self._b_g = None
+        self._cp = None
+
+    def _reset(self):
+        if self._solver is not None:
+            try:
+                self._solver.free()
+            except Exception:
+                pass
+        self._solver = None
+        self._A_g = None
+        self._b_g = None
+        self._sig = None
+
+    def solve(self, Jm_csr, rhs):
+        import numpy as np
+
+        info: dict = {"ok": False}
+        try:
+            import cupy as cp
+            import cupyx.scipy.sparse as csp
+            from nvmath.bindings import cudss as cb
+            from nvmath.sparse.advanced import DirectSolver
+
+            self._cp = cp
+            A = Jm_csr.tocsr().astype(np.float64)
+            b = np.asarray(rhs, dtype=np.float64)
+            sig = _pattern_sig(A)
+            matching = getattr(
+                cb.MatchingAlg, _MATCHING_DEFAULT, cb.MatchingAlg.AUTO
+            )
+
+            if self._solver is not None and sig == self._sig:
+                # SAME pattern → reuse plan: update values on-device + re-factorize only.
+                self._A_g.data[:] = cp.asarray(A.data, dtype=cp.float64)
+                self._b_g[:] = cp.asarray(b)
+                self._solver.reset_operands(a=self._A_g, b=self._b_g)
+                self._solver.factorize()
+                x_g = self._solver.solve()
+            else:
+                # NEW/changed pattern → (re)build the solver and plan once.
+                self._reset()
+                self._A_g = csp.csr_matrix(
+                    (
+                        cp.asarray(A.data, dtype=cp.float64),
+                        cp.asarray(A.indices, dtype=cp.int32),
+                        cp.asarray(A.indptr, dtype=cp.int32),
+                    ),
+                    shape=A.shape,
+                )
+                self._b_g = cp.asarray(b)
+                self._solver = DirectSolver(self._A_g, self._b_g)
+                self._solver.plan_config.matching_algorithm = matching
+                if _IR_STEPS_DEFAULT > 0:
+                    self._solver.solution_config.ir_num_steps = _IR_STEPS_DEFAULT
+                self._solver.plan()
+                self.n_plans += 1
+                self._sig = sig
+                self._solver.factorize()
+                x_g = self._solver.solve()
+
+            cp.cuda.Device().synchronize()
+            x = cp.asnumpy(x_g).reshape(-1)
+            if not np.all(np.isfinite(x)):
+                info["err"] = "non-finite solution"
+                self._reset()
+                return None, info
+            rel_res = float(
+                np.linalg.norm(A @ x - b) / max(1.0, float(np.linalg.norm(b)))
+            )
+            info.update(ok=True, rel_res=rel_res)
+            return x, info
+        except Exception as e:  # noqa: BLE001
+            info["err"] = f"{type(e).__name__}: {e}"
+            self._reset()
+            return None, info

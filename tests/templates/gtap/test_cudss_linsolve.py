@@ -83,6 +83,65 @@ def test_cudss_solve_parity_on_unsym():
     assert np.max(np.abs(x - x_true)) < 1e-8
 
 
+def test_pattern_signature_detects_change():
+    """The reuse guard must (a) call same patterns equal and (b) different patterns unequal.
+    Pure-numpy, runs without a GPU. This is what decides plan-reuse vs re-plan."""
+    A, _, _ = _tiny_unsym()
+    B = A.copy()
+    # same pattern, different values -> SAME signature (reuse plan)
+    B.data = B.data * 2.0 + 1.0
+    assert _mod._pattern_sig(A) == _mod._pattern_sig(B)
+    # different pattern (drop a stored entry) -> DIFFERENT signature (re-plan)
+    C = A.tolil()
+    C[0, 4] = 0.0  # was 2.0
+    C = C.tocsr()
+    C.eliminate_zeros()
+    assert _mod._pattern_sig(A) != _mod._pattern_sig(C)
+
+
+def test_reusable_solver_exists():
+    """run_gtap's cudss branch caches a CudssReusableSolver across Newton steps."""
+    assert hasattr(_mod, "CudssReusableSolver")
+
+
+@pytest.mark.skipif(not _gpu_present(), reason="no CUDA GPU / cupy / nvmath available")
+def test_reusable_solver_skips_plan_on_same_pattern():
+    """Reusing across same-pattern matrices must SKIP plan() the 2nd time (the whole point:
+    that's the symbolic-reuse win, mirror of MUMPS lever B2) while staying correct."""
+    A, b, x_true = _tiny_unsym()
+    solver = _mod.CudssReusableSolver()
+    x1, i1 = solver.solve(A, b)
+    assert i1.get("ok")
+    assert np.max(np.abs(x1 - x_true)) < 1e-8
+    plans_after_first = solver.n_plans
+    # same pattern, new values -> new consistent RHS
+    A2 = A.copy()
+    A2.data = A2.data * 1.5
+    b2 = A2 @ x_true
+    x2, i2 = solver.solve(A2, b2)
+    assert i2.get("ok")
+    assert np.max(np.abs(x2 - x_true)) < 1e-8
+    assert solver.n_plans == plans_after_first, "plan() must NOT re-run on same pattern"
+
+
+@pytest.mark.skipif(not _gpu_present(), reason="no CUDA GPU / cupy / nvmath available")
+def test_reusable_solver_replans_on_pattern_change():
+    """A changed sparsity pattern MUST trigger a re-plan (safety: reusing a stale plan on a
+    different pattern would corrupt the factorization)."""
+    A, b, x_true = _tiny_unsym()
+    solver = _mod.CudssReusableSolver()
+    solver.solve(A, b)
+    p0 = solver.n_plans
+    C = A.tolil()
+    C[1, 4] = 7.0  # add a stored entry -> pattern changes
+    C = C.tocsr()
+    xt = np.ones(C.shape[0])
+    x, info = solver.solve(C, C @ xt)
+    assert info.get("ok")
+    assert np.max(np.abs(x - xt)) < 1e-8
+    assert solver.n_plans == p0 + 1, "pattern change must re-plan"
+
+
 @pytest.mark.skipif(not _gpu_present(), reason="no CUDA GPU / cupy / nvmath available")
 def test_cudss_solve_uses_matching_and_ir():
     """The winning config (matching=AUTO + IR) must be what actually runs: verify a
