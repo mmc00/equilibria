@@ -4441,6 +4441,14 @@ def _run_path_capi_nonlinear_full(
                             _Jm_lil = _Jm_tr.tolil()
                             _Jm_lil.setdiag(_Jm_lil.diagonal() + _gmin)
                             _Jm_tr = _Jm_lil.tocsr()
+                            # SPIKE: dump the real gmin-applied Jacobian (what MUMPS factorizes)
+                            # once, for the GPU-vs-MUMPS bench on the REAL matrix, then abort.
+                            _dumpp = os.environ.get("EQUILIBRIA_DUMP_JAC")
+                            if _dumpp:
+                                import scipy.sparse as _spd
+                                _spd.save_npz(_dumpp, _Jm_tr)
+                                print(f"[DUMP_JAC] wrote {_dumpp} n={_Jm_tr.shape[0]} nnz={_Jm_tr.nnz}", flush=True)
+                                raise SystemExit(0)
                             # Symbolic reuse (lever B2): the symbolic factorization depends only
                             # on the PATTERN (nnz + indices/indptr), not the values. Under GMIN
                             # the ~30 degenerate diagonals CAN change the stored-nnz between
