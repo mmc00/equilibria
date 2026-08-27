@@ -182,6 +182,7 @@ repos:
               tests/templates/gtap/test_nus333_landshock_parity\.py|
               tests/templates/gtap/test_nus333_neos_parity\.py|
               tests/templates/gtap/test_welfare_shadow\.py|
+              tests/templates/gtap6/test_gtap6_contract\.py|
               tests/templates/pep_pyomo/test_pep_coverage_matrix\.py|
               tests/templates/test_init_strategies\.py|
               tests/templates/test_pep_ipopt_cns_constraints\.py|
