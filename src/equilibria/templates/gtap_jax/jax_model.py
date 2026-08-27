@@ -101,7 +101,8 @@ class _NLPAlignedJaxEval:
         self._pyomo_rows = np.asarray(getattr(self._F, "pyomo_rows", []), dtype=np.int64)
 
     def F(self, z):
-        f = np.asarray(self._F(jnp.asarray(z, dtype=float)))
+        # np.asarray of a JAX result is READ-ONLY; copy so the hybrid overwrite is allowed.
+        f = np.array(self._F(jnp.asarray(z, dtype=float)), dtype=float)
         if len(self._pyomo_rows):
             self._nlp.set_primals(np.asarray(z, dtype=float))
             fp = self._nlp.evaluate_eq_constraints()
