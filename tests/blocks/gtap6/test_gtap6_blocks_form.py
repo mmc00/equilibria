@@ -37,7 +37,7 @@ for _p in (ROOT / "src", ROOT / "scripts"):
 
 DATASET = ROOT / "datasets" / "gtap6_3x3"
 
-_MIGRATED: list[str] = ["TradeArmingtonBlock", "ProductionBlock"]
+_MIGRATED: list[str] = ["TradeArmingtonBlock", "ProductionBlock", "FactorBlock"]
 
 # Oracle Constraint name -> block equation name, for the 14 equations that
 # exist as an active Constraint in the oracle. e_qds/e_qtmfsd have no
@@ -491,3 +491,276 @@ def test_production_block_matches_oracle_numerically(_production_fixtures):
         f"{len(_ORACLE_CONSTRAINT_FOR_PRODUCTION)} equations; max |diff| = "
         f"{max_abs_diff:.3e} at {worst_cell}"
     )
+
+
+# ======================================================================
+# FactorBlock (F7 Task 8)
+# ======================================================================
+
+# Only the MOBILE branch (e_qe/e_pe_endw) has a live oracle Constraint to
+# diff against: the oracle's own _add_factor_markets applies
+# eq_factor_clear/eq_qoes_fixed UNIFORMLY to every factor (no mf/sf split
+# exists in the oracle at all — see factor.py's module docstring). The
+# SLUGGISH branch (e_qoes/e_pmes/e_pm_endw) has no oracle Constraint
+# anywhere (grep confirms no eq_qoes/eq_pmes/eq_pm_endw method exists) and
+# is checked separately below via the oracle's own benchmark identity.
+_ORACLE_CONSTRAINT_FOR_FACTOR = {
+    "e_qe": "eq_factor_clear",
+    "e_pe_endw": "eq_qoes_fixed",
+}
+
+
+def _build_oracle_factor():
+    """Build the oracle model with the alias FactorBlock's mobile branch needs.
+
+    FactorBlock's e_qe/e_pe_endw are written against ``m.qe[f,r]`` (a Var
+    name distinct from ProductionBlock's own vars, chosen to match the
+    contract's ``qe`` variable name). The oracle has no ``qe`` Var — its
+    uniform (mobile-only, in effect) factor-market closure uses ``qoes``
+    for this exact role for every factor, sluggish and mobile alike (see
+    module docstring). Alias ``oracle.qe = oracle.qoes`` (read-only,
+    same ``object.__setattr__`` technique as ``_build_oracle_production``)
+    so the block's build_expression resolves against the oracle's own live
+    Var without re-deriving a second model. This is a rename, not a new
+    economic claim: for f in mf, the oracle's qoes IS what the contract
+    calls qe (a supply level pinned to evom, cleared against qfe demand).
+    """
+    oracle = _build_oracle()
+    object.__setattr__(oracle, "qe", oracle.qoes)
+    return oracle
+
+
+def _attach_factor_components(oracle, sets, params, derived):
+    """Attach FactorBlock's own new Pyomo components onto the oracle.
+
+    ``gf_share``/``omegaf``/``pmes``/``pmagg`` are genuinely NEW
+    quantities this block introduces (the oracle has no CET sluggish
+    allocation at all — see factor.py's module docstring) — unlike the
+    ``qfa``/``pfa``/``qva`` aliases the Task 6/7 helpers attach (which
+    rename an EXISTING oracle Var), these have no oracle counterpart to
+    alias, so they are added as real new Pyomo components, the same
+    technique the module-level ``_build_oracle`` uses for ``qtmfsd``.
+    Seeded at the benchmark point (pmes=pmagg=1.0) so the sluggish-branch
+    identity test below evaluates the CET equations at calibration.
+    """
+    from pyomo.environ import NonNegativeReals, Param, Var
+
+    gf_share = {}
+    for f in sets.f:
+        for j in sets.prod_comm:
+            for r in sets.r:
+                evom = derived.evom.get((f, r), 0.0) or 0.0
+                vfm = params.benchmark.vfm.get((f, j, r), 0.0) or 0.0
+                gf_share[(f, j, r)] = vfm / evom if evom > 1e-8 else 0.0
+    oracle.gf_share = Param(
+        oracle.f, oracle.j, oracle.r, initialize=gf_share, mutable=True
+    )
+
+    omegaf = {f: -float(params.elasticities.etrae.get(f, 0.0)) for f in sets.f}
+    oracle.omegaf = Param(oracle.f, initialize=omegaf, mutable=True)
+
+    oracle.pmes = Var(
+        oracle.f, oracle.j, oracle.r, within=NonNegativeReals, initialize=1.0
+    )
+    oracle.pmagg = Var(oracle.f, oracle.r, within=NonNegativeReals, initialize=1.0)
+    return oracle
+
+
+def _build_factor_block():
+    from equilibria.blocks.gtap6.factor import FactorBlock
+
+    sets, params, derived = _build_calibration()
+    block = FactorBlock(sets=sets, params=params, derived=derived)
+    return block, sets, params, derived
+
+
+@pytest.fixture(scope="module")
+def _factor_fixtures():
+    block, sets, params, derived = _build_factor_block()
+    set_manager = _build_set_manager(sets)
+    variables: dict = {}
+    parameters: dict = {}
+    equations = block.setup(set_manager, parameters, variables)
+    oracle = _build_oracle_factor()
+    _attach_factor_components(oracle, sets, params, derived)
+    return block, sets, params, derived, set_manager, equations, variables, oracle
+
+
+def test_factor_block_setup_returns_all_contract_equations(_factor_fixtures):
+    from equilibria.templates.gtap6.gtap6_contract import _GTAP6_FACTOR_MARKETS
+
+    _block, _sets, _params, _derived, _sm, equations, _vars, _oracle = _factor_fixtures
+    eq_names = {eq.name for eq in equations}
+
+    expected = set(_GTAP6_FACTOR_MARKETS)
+    missing = expected - eq_names
+    extra = eq_names - expected
+    assert not missing, f"FactorBlock did not produce: {missing}"
+    assert not extra, f"FactorBlock produced unexpected equations: {extra}"
+    assert len(eq_names) == 5, f"expected 5 unique equation names, got {len(eq_names)}"
+
+
+def test_factor_block_mobile_matches_oracle_numerically(_factor_fixtures):
+    """Load-bearing numeric form-diff for the MOBILE branch (e_qe/e_pe_endw).
+
+    Restricted to f in sets.mf: the oracle's own eq_factor_clear/
+    eq_qoes_fixed are the byte-identical source for these two equations
+    (see factor.py's module docstring — the oracle applies them uniformly
+    because it has not yet split mobile/sluggish; this block scopes the
+    SAME algebra to the mf subset the contract's e_qe/e_pe_endw IDs own).
+    """
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as pyo_value
+
+    block, sets, _params, _derived, _sm, equations, _vars, oracle = _factor_fixtures
+    eq_by_name = {eq.name: eq for eq in equations}
+    mobile = set(sets.mf)
+
+    oracle_cons = {c.name: c for c in oracle.component_objects(Constraint, active=True)}
+
+    total_checked = 0
+    max_abs_diff = 0.0
+    worst_cell: tuple[str, object] | None = None
+
+    for block_name, oracle_name in _ORACLE_CONSTRAINT_FOR_FACTOR.items():
+        eq = eq_by_name[block_name]
+        con = oracle_cons[oracle_name]
+        oracle_active_idx = {idx for idx, c in con.items() if c.active}
+
+        checked_this_eq = 0
+        for idx in _index_combos(oracle, eq.domains):
+            f = idx[0]
+            block_expr = eq.build_expression(oracle, idx)
+            key = idx if len(idx) > 1 else idx[0]
+            oracle_is_active = key in oracle_active_idx
+
+            if f not in mobile:
+                # Sluggish factors are Skipped by design (owned by
+                # e_qoes/e_pmes/e_pm_endw instead) — the oracle itself has
+                # no mf/sf split, so it IS active there; that is expected
+                # and not a mismatch to assert against.
+                assert block_expr is None
+                continue
+
+            if block_expr is None:
+                assert not oracle_is_active, (
+                    f"{block_name} Skips {idx} but oracle {oracle_name} is active there"
+                )
+                continue
+
+            assert oracle_is_active, (
+                f"{block_name} builds {idx} but oracle {oracle_name} Skips it"
+            )
+            oracle_con = con[key]
+
+            block_con = block_expr
+            b_body = pyo_value(block_con.args[0]) - pyo_value(block_con.args[1])
+            o_body = pyo_value(oracle_con.body) - pyo_value(oracle_con.lower)
+            diff = abs(b_body - o_body)
+            if diff > max_abs_diff:
+                max_abs_diff = diff
+                worst_cell = (block_name, idx)
+            assert diff < _TOL, (
+                f"{block_name}{idx}: block residual {b_body} vs oracle "
+                f"residual {o_body} (diff {diff} >= {_TOL})"
+            )
+            checked_this_eq += 1
+            total_checked += 1
+
+        assert checked_this_eq > 0, f"{block_name}: no active mobile cells checked"
+
+    assert total_checked > 0
+    print(
+        f"\n[gtap6 factor mobile form-diff] {total_checked} cells checked across "
+        f"{len(_ORACLE_CONSTRAINT_FOR_FACTOR)} equations; max |diff| = "
+        f"{max_abs_diff:.3e} at {worst_cell}"
+    )
+
+
+def test_factor_block_sluggish_matches_benchmark_identity(_factor_fixtures):
+    """e_qoes/e_pmes/e_pm_endw have no oracle Constraint; verify against the
+    oracle's OWN benchmark-seeded values instead (all prices == 1.0 at the
+    calibration point, so the CET reduces to a share/revenue identity).
+
+    e_qoes and e_pmes are satisfied EXACTLY at the seed (gf_share is
+    defined as vfm/evom, so gf*qoes == qfe collapses to an algebraic
+    identity, and pmes == pfe holds since both are seeded to 1.0).
+    e_pm_endw carries the genuine ~2-9% agent-vs-market-price benchmark
+    wedge the oracle's own docstring documents for eq_market (vfm/evom
+    summed across sectors is not exactly 1.0) — checked with a relative
+    tolerance wide enough to accommodate that documented wedge rather than
+    a bug tolerance.
+    """
+    from pyomo.environ import value as pyo_value
+
+    block, sets, params, derived, _sm, equations, _vars, oracle = _factor_fixtures
+    eq_by_name = {eq.name: eq for eq in equations}
+    sluggish = set(sets.sf)
+
+    eq_qoes = eq_by_name["e_qoes"]
+    eq_pmes = eq_by_name["e_pmes"]
+    eq_pm_endw = eq_by_name["e_pm_endw"]
+
+    checked_qoes = 0
+    max_diff_qoes = 0.0
+    checked_pmes = 0
+    max_diff_pmes = 0.0
+    for f in sluggish:
+        for r in sets.r:
+            evom = derived.evom.get((f, r), 0.0) or 0.0
+            if evom <= 1e-8:
+                continue
+            for j in sets.prod_comm:
+                vfm = params.benchmark.vfm.get((f, j, r), 0.0) or 0.0
+                gf = vfm / evom if evom > 0 else 0.0
+
+                expr = eq_qoes.build_expression(oracle, (f, j, r))
+                if gf <= 0.0:
+                    assert expr is None
+                    continue
+                assert expr is not None
+                lhs = pyo_value(expr.args[0])
+                rhs = pyo_value(expr.args[1])
+                diff = abs(lhs - rhs)
+                max_diff_qoes = max(max_diff_qoes, diff)
+                assert diff < 1e-6, (f, j, r, lhs, rhs, diff)
+                checked_qoes += 1
+
+                expr_p = eq_pmes.build_expression(oracle, (f, j, r))
+                assert expr_p is not None
+                lhs_p = pyo_value(expr_p.args[0])
+                rhs_p = pyo_value(expr_p.args[1])
+                diff_p = abs(lhs_p - rhs_p)
+                max_diff_pmes = max(max_diff_pmes, diff_p)
+                assert diff_p < 1e-9, (f, j, r, lhs_p, rhs_p, diff_p)
+                checked_pmes += 1
+
+    assert checked_qoes > 0
+    assert checked_pmes > 0
+    print(f"\n[gtap6 e_qoes benchmark identity] max |diff| = {max_diff_qoes:.3e}")
+    print(f"[gtap6 e_pmes benchmark identity] max |diff| = {max_diff_pmes:.3e}")
+
+    checked_endw = 0
+    max_rel_endw = 0.0
+    for f in sluggish:
+        for r in sets.r:
+            evom = derived.evom.get((f, r), 0.0) or 0.0
+            if evom <= 1e-8:
+                continue
+            expr = eq_pm_endw.build_expression(oracle, (f, r))
+            assert expr is not None
+            lhs = pyo_value(expr.args[0])
+            rhs = pyo_value(expr.args[1])
+            rel = abs(lhs - rhs) / max(abs(rhs), 1e-12)
+            max_rel_endw = max(max_rel_endw, rel)
+            # Documented benchmark wedge: sum_j (vfm/evom) is ~1.04-1.09 on
+            # gtap6_3x3 (agent-vs-market price residual), not exactly 1.0 —
+            # this is the same class of benchmark residual the oracle's own
+            # docstring documents for eq_market (~2-9%), not a structural
+            # mismatch. A generous relative tolerance distinguishes "known
+            # SAM wedge" from "block algebra is wrong".
+            assert rel < 0.15, (f, r, lhs, rhs, rel)
+            checked_endw += 1
+
+    assert checked_endw > 0
+    print(f"[gtap6 e_pm_endw benchmark identity] max |rel diff| = {max_rel_endw:.3e}")
