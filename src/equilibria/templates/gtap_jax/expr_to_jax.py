@@ -85,6 +85,28 @@ def translate(expr: Any, var_index: dict[int, int]) -> Callable[[Any], Any]:
     return visit(expr)
 
 
+def collect_var_slots(expr: Any, var_index: dict[int, int]) -> set[int]:
+    """Return the set of free-variable slots that `expr` depends on (its Jacobian columns).
+
+    Walks the tree gathering `var_index[id(VarData)]` for every non-fixed VarData leaf. This IS
+    the structural sparsity of the row (which columns are nonzero), matching Pyomo's
+    identify_variables. Fixed vars / Params are excluded (they're not free columns)."""
+    slots: set[int] = set()
+
+    def walk(e: Any) -> None:
+        if isinstance(e, VarData):
+            s = var_index.get(id(e))
+            if s is not None:
+                slots.add(s)
+            return
+        if hasattr(e, "args") and not isinstance(e, (int, float)):
+            for a in e.args:
+                walk(a)
+
+    walk(expr)
+    return slots
+
+
 def translate_parametric(expr: Any, var_index: dict[int, int], extract_only: bool = False):
     """Split a cell's expression into (structure, constants, var-slots) so a whole family —
     all cells sharing the same tree SHAPE — can be evaluated with one vmapped function over
