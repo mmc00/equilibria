@@ -71,6 +71,38 @@ def test_F_matches_pyomo_elementwise(ds):
     assert diff < 1e-9, f"max elementwise diff {diff:.2e} on {ds}"
 
 
+@pytest.mark.parametrize("ds", ["gtap7_3x3", "gtap7_10x7"])
+def test_vmap_F_matches_pyomo(ds):
+    """F built the vmap way (vectorize=True) must still match Pyomo elementwise <1e-9."""
+    if not _available(ds):
+        pytest.skip(f"dataset {ds} not available")
+    from pyomo.environ import value
+
+    m = _build_model(ds)
+    F, var_index, cons_order = build_F(m, vectorize=True)
+    z = _z_in_index_order(m, var_index)
+    f_jax = np.asarray(F(z))
+    f_pyo = np.array([value(c.body) for c in cons_order])
+    assert f_jax.shape == f_pyo.shape
+    diff = np.max(np.abs(f_jax - f_pyo))
+    assert diff < 1e-9, f"vmap F max diff {diff:.2e} on {ds}"
+
+
+@pytest.mark.parametrize("ds", ["gtap7_10x7"])
+def test_vmap_F_second_eval_is_fast(ds):
+    """After compile, a second eval is fast — proves it's jitted, not re-tracing 12k fns."""
+    if not _available(ds):
+        pytest.skip(f"dataset {ds} not available")
+    import time
+    m = _build_model(ds)
+    F, var_index, cons_order = build_F(m, vectorize=True)
+    z = _z_in_index_order(m, var_index)
+    F(z).block_until_ready()  # compile
+    t = time.perf_counter()
+    F(z).block_until_ready()
+    assert time.perf_counter() - t < 0.5, "second eval too slow — not properly jitted/vmapped"
+
+
 @pytest.mark.parametrize("ds", ["gtap7_3x3"])
 def test_F_is_jittable_and_differentiable(ds):
     if not _available(ds):

@@ -83,3 +83,72 @@ def translate(expr: Any, var_index: dict[int, int]) -> Callable[[Any], Any]:
         raise TypeError(f"unsupported expression node: {type(e).__name__}")
 
     return visit(expr)
+
+
+def translate_parametric(expr: Any, var_index: dict[int, int], extract_only: bool = False):
+    """Split a cell's expression into (structure, constants, var-slots) so a whole family —
+    all cells sharing the same tree SHAPE — can be evaluated with one vmapped function over
+    per-cell data.
+
+    Walks the tree in a fixed pre-order. Each numeric leaf → `consts[k]`; each free-var leaf →
+    `z[slots[j]]` where the SLOT is per-cell data (cells of a family touch DIFFERENT variables,
+    so slots must be batched, not baked). A fixed var freezes to a constant. Returns:
+      - default: `(cell_fn, packing)` where cell_fn(z, cst, slots) -> scalar, and
+        packing=(n_consts, n_slots).
+      - extract_only=True: `(consts_list, slots_list)` — this cell's constants and var-slots in
+        walk order, used to check shape-compatibility and to stack the family's data.
+    """
+    consts: list[float] = []
+    slots: list[int] = []
+
+    def build(e: Any):
+        # leaves
+        if isinstance(e, VarData):
+            slot = var_index.get(id(e))
+            if slot is None:
+                k = len(consts); consts.append(float(e.value))
+                return ("const", k)
+            j = len(slots); slots.append(int(slot))
+            return ("var", j)
+        if isinstance(e, (int, float)) or not hasattr(e, "args"):
+            k = len(consts); consts.append(float(e))
+            return ("const", k)
+        # internal
+        return ("op", e, [build(a) for a in e.args])
+
+    tree = build(expr)
+
+    if extract_only:
+        return consts, slots
+
+    n_consts = len(consts)
+    n_slots = len(slots)
+
+    def cell_fn(z, cst, sl):
+        def ev(node):
+            tag = node[0]
+            if tag == "var":
+                return z[sl[node[1]]]
+            if tag == "const":
+                return cst[node[1]]
+            e = node[1]; kids = [ev(c) for c in node[2]]
+            if isinstance(e, (ne.SumExpression, ne.LinearExpression)):
+                return sum(kids)
+            if isinstance(e, ne.NegationExpression):
+                return -kids[0]
+            if isinstance(e, (ne.ProductExpression, ne.MonomialTermExpression)):
+                return kids[0] * kids[1]
+            if isinstance(e, ne.DivisionExpression):
+                return kids[0] / kids[1]
+            if isinstance(e, ne.PowExpression):
+                return kids[0] ** kids[1]
+            if isinstance(e, ne.UnaryFunctionExpression):
+                jfn = {"exp": jnp.exp, "log": jnp.log, "sqrt": jnp.sqrt}[e.getname()]
+                return jfn(kids[0])
+            if isinstance(e, ne.AbsExpression):
+                return jnp.abs(kids[0])
+            raise TypeError(f"unsupported node in parametric: {type(e).__name__}")
+
+        return ev(tree)
+
+    return cell_fn, (n_consts, n_slots)
