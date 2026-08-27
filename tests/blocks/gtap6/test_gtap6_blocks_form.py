@@ -37,7 +37,7 @@ for _p in (ROOT / "src", ROOT / "scripts"):
 
 DATASET = ROOT / "datasets" / "gtap6_3x3"
 
-_MIGRATED: list[str] = ["TradeArmingtonBlock"]
+_MIGRATED: list[str] = ["TradeArmingtonBlock", "ProductionBlock"]
 
 # Oracle Constraint name -> block equation name, for the 14 equations that
 # exist as an active Constraint in the oracle. e_qds/e_qtmfsd have no
@@ -332,3 +332,162 @@ def test_qtmfsd_matches_oracle_qtm_summand(_fixtures):
         checked += 1
     assert checked > 0
     print(f"\n[gtap6 e_qtmfsd summand] max |diff| = {max_diff:.3e}")
+
+
+# ======================================================================
+# ProductionBlock (F7 Task 7)
+# ======================================================================
+
+# Oracle Constraint name -> block equation name for the 8 equations in
+# _GTAP6_PRODUCTION. e_qo maps to the oracle's MARKET-CLEARING Constraint
+# (_add_market_clearing's eq_market, "qo = activity output identity" per
+# the contract's own comment), NOT the oracle's Constraint literally named
+# eq_qo (which pins ps via the zero-profit condition and is the source for
+# e_ps instead) — see production.py's module docstring for the full
+# rename rationale, mirroring how Task 6 renamed eq_qf/eq_pf_int to
+# e_qfa/e_pfa.
+_ORACLE_CONSTRAINT_FOR_PRODUCTION = {
+    "e_qo": "eq_market",
+    "e_ps": "eq_qo",
+    "e_qf": "eq_qf",
+    "e_pf": "eq_pf_int",
+    "e_qva": "eq_va",
+    "e_pva": "eq_pva",
+    "e_qfe": "eq_qfe",
+    "e_pfe": "eq_pfe",
+}
+
+
+def _build_oracle_production():
+    """Build the oracle model with the aliases ProductionBlock needs.
+
+    Same technique as Task 6's ``_build_oracle``: attach read-only Python
+    attribute aliases (via ``object.__setattr__``, bypassing Pyomo's
+    component-reparenting guard) onto the SAME live oracle
+    Vars/Constraints, so ``ProductionBlock``'s ``build_expression`` (which
+    is written against ``qva``/``pf``/``pfactor``) resolves against the
+    oracle's own ``va``/``pf_int``/``pf`` objects without re-deriving a
+    second model.
+
+    Three renames are needed here (one more than Task 6's two, because
+    ProductionBlock reads a THIRD oracle symbol under a new name to avoid
+    colliding with its own ``pf``):
+
+      oracle.qva      = oracle.va       (VA quantity: contract wants qva)
+      oracle.pf       = oracle.pf_int   (Armington composite price, HERE
+                                          under the production-nest name;
+                                          Task 6 already aliased the SAME
+                                          oracle.pf_int as oracle.pfa for
+                                          its own e_pfa — both aliases can
+                                          coexist, they just point at the
+                                          same underlying Pyomo Var)
+      oracle.pfactor  = oracle.pf       (regional factor wage (f,r) — the
+                                          oracle's own ``pf`` Var, renamed
+                                          so ProductionBlock's e_pf (i,j,r)
+                                          and e_pfe's read of the factor
+                                          wage don't collide under the
+                                          same Python attribute name)
+    """
+    oracle = _build_oracle()
+    object.__setattr__(oracle, "qva", oracle.va)
+    object.__setattr__(oracle, "pfactor", oracle.pf)
+    object.__setattr__(oracle, "pf", oracle.pf_int)
+    return oracle
+
+
+def _build_production_block():
+    from equilibria.blocks.gtap6.production import ProductionBlock
+
+    sets, params, derived = _build_calibration()
+    block = ProductionBlock(sets=sets, params=params, derived=derived)
+    return block, sets, params, derived
+
+
+@pytest.fixture(scope="module")
+def _production_fixtures():
+    block, sets, params, derived = _build_production_block()
+    set_manager = _build_set_manager(sets)
+    variables: dict = {}
+    parameters: dict = {}
+    equations = block.setup(set_manager, parameters, variables)
+    oracle = _build_oracle_production()
+    return block, sets, params, derived, set_manager, equations, variables, oracle
+
+
+def test_production_block_setup_returns_all_contract_equations(_production_fixtures):
+    from equilibria.templates.gtap6.gtap6_contract import _GTAP6_PRODUCTION
+
+    _block, _sets, _params, _derived, _sm, equations, _vars, _oracle = (
+        _production_fixtures
+    )
+    eq_names = {eq.name for eq in equations}
+
+    expected = set(_GTAP6_PRODUCTION)
+    missing = expected - eq_names
+    extra = eq_names - expected
+    assert not missing, f"ProductionBlock did not produce: {missing}"
+    assert not extra, f"ProductionBlock produced unexpected equations: {extra}"
+    assert len(eq_names) == 8, f"expected 8 unique equation names, got {len(eq_names)}"
+
+
+def test_production_block_matches_oracle_numerically(_production_fixtures):
+    """Load-bearing numeric form-diff: block algebra vs the oracle, per-cell."""
+    from pyomo.environ import value as pyo_value
+
+    block, _sets, _params, _derived, _sm, equations, _vars, oracle = (
+        _production_fixtures
+    )
+    eq_by_name = {eq.name: eq for eq in equations}
+
+    from pyomo.environ import Constraint
+
+    oracle_cons = {c.name: c for c in oracle.component_objects(Constraint, active=True)}
+
+    total_checked = 0
+    max_abs_diff = 0.0
+    worst_cell: tuple[str, object] | None = None
+
+    for block_name, oracle_name in _ORACLE_CONSTRAINT_FOR_PRODUCTION.items():
+        eq = eq_by_name[block_name]
+        con = oracle_cons[oracle_name]
+        oracle_active_idx = {idx for idx, c in con.items() if c.active}
+
+        checked_this_eq = 0
+        for idx in _index_combos(oracle, eq.domains):
+            block_expr = eq.build_expression(oracle, idx)
+            key = idx if len(idx) > 1 else idx[0]
+            oracle_is_active = key in oracle_active_idx
+
+            if block_expr is None:
+                assert not oracle_is_active, (
+                    f"{block_name} Skips {idx} but oracle {oracle_name} is active there"
+                )
+                continue
+
+            assert oracle_is_active, (
+                f"{block_name} builds {idx} but oracle {oracle_name} Skips it"
+            )
+            oracle_con = con[key]
+
+            block_con = block_expr
+            b_body = pyo_value(block_con.args[0]) - pyo_value(block_con.args[1])
+            o_body = pyo_value(oracle_con.body) - pyo_value(oracle_con.lower)
+            diff = abs(b_body - o_body)
+            if diff > max_abs_diff:
+                max_abs_diff = diff
+                worst_cell = (block_name, idx)
+            assert diff < _TOL, (
+                f"{block_name}{idx}: block residual {b_body} vs oracle "
+                f"residual {o_body} (diff {diff} >= {_TOL})"
+            )
+            checked_this_eq += 1
+            total_checked += 1
+
+        assert checked_this_eq > 0, f"{block_name}: no active cells checked"
+
+    assert total_checked > 0
+    print(
+        f"\n[gtap6 production form-diff] {total_checked} cells checked across "
+        f"{len(_ORACLE_CONSTRAINT_FOR_PRODUCTION)} equations; max |diff| = "
+        f"{max_abs_diff:.3e} at {worst_cell}"
+    )
