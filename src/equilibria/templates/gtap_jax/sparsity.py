@@ -60,21 +60,38 @@ def build_jacobian_fn(F, cons_order, var_index):
         fam_cols.setdefault(fam, set()).update(collect_var_slots(c.body, var_index))
         fam_rowlist.setdefault(fam, []).append(i)
 
+    import sparsejac
+    from jax.experimental import sparse as jsparse
+
     fam_names = list(fam_rowlist.keys())
     for (pos, fam_fn), fam in zip(per_family, fam_names):
-        cols = np.array(sorted(fam_cols[fam]), dtype=np.int64)
         rows = np.asarray(pos, dtype=np.int64)
-        jfn = jax.jit(jax.jacrev(fam_fn))  # small: n_cells_fam × n, but only `cols` are nonzero
-        fam_specs.append((rows, cols, jfn))
+        n_cells = len(rows)
+        # Build the family's OWN sparsity pattern (n_cells × n_var), then use sparsejac so the
+        # family jacobian is computed SPARSELY — never the huge dense n_cells×n_var block that
+        # jax.jacrev would materialize (e.g. eq_xda: 2940×11277 = 33M floats at 10x7 → ~31GB at
+        # 20x41). sparsejac gives only the structurally-nonzero entries.
+        prow, pcol = [], []
+        for local_i, gi in enumerate(rows.tolist()):
+            for j in sorted(collect_var_slots(cons_order[gi].body, var_index)):
+                prow.append(local_i); pcol.append(j)
+        if not prow:  # a family with no free-var deps (all constants) — empty jacobian block
+            fam_specs.append((rows, None, None))
+            continue
+        idx = jnp.asarray(np.stack([np.asarray(prow, np.int32), np.asarray(pcol, np.int32)], 1))
+        sub_pat = jsparse.BCOO((jnp.ones(len(prow)), idx), shape=(n_cells, n_var))
+        jfn = jax.jit(sparsejac.jacrev(fam_fn, sparsity=sub_pat))
+        fam_specs.append((rows, jfn, None))
 
     def _fn(z):
         zj = jnp.asarray(z, dtype=float)
         all_r, all_c, all_v = [], [], []
-        for rows, cols, jfn in fam_specs:
-            Jb = np.asarray(jfn(zj))  # (n_cells_fam, n_var) dense block for this family
-            sub = Jb[:, cols]         # keep only structurally-nonzero columns
-            rr, cc = np.nonzero(np.abs(sub) > 0)
-            all_r.append(rows[rr]); all_c.append(cols[cc]); all_v.append(sub[rr, cc])
+        for rows, jfn, _ in fam_specs:
+            if jfn is None:
+                continue
+            Jb = jfn(zj)  # BCOO (n_cells_fam × n_var), sparse
+            bidx = np.asarray(Jb.indices); bdat = np.asarray(Jb.data)
+            all_r.append(rows[bidx[:, 0]]); all_c.append(bidx[:, 1]); all_v.append(bdat)
         R = np.concatenate(all_r); C = np.concatenate(all_c); V = np.concatenate(all_v)
         return sp.csr_matrix((V, (R, C)), shape=(n_eq, n_var))
 
