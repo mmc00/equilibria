@@ -85,6 +85,27 @@ def translate(expr: Any, var_index: dict[int, int]) -> Callable[[Any], Any]:
     return visit(expr)
 
 
+def translate_constraint(con: Any, var_index: dict[int, int]) -> Callable[[Any], Any]:
+    """Translate a Pyomo equality CONSTRAINT to its residual f(z) = body - rhs.
+
+    pynumero's evaluate_eq_constraints returns `body - rhs`; `body` alone omits a nonzero RHS
+    (e.g. `sum(terms) == 1.0`), which shows up as a constant-1.0 mismatch. This wraps
+    `translate(con.body)` and subtracts the constant RHS so the residual matches pynumero."""
+    from pyomo.environ import value as _value
+
+    body_fn = translate(con.body, var_index)
+    rhs = 0.0
+    if con.equality or (con.lower is not None and con.lower is con.upper):
+        rhs = float(_value(con.lower))
+    elif con.upper is not None:
+        rhs = float(_value(con.upper))
+    elif con.lower is not None:
+        rhs = float(_value(con.lower))
+    if rhs == 0.0:
+        return body_fn
+    return lambda z: body_fn(z) - rhs
+
+
 def collect_var_slots(expr: Any, var_index: dict[int, int]) -> set[int]:
     """Return the set of free-variable slots that `expr` depends on (its Jacobian columns).
 

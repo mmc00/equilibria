@@ -3675,6 +3675,45 @@ def _run_path_capi_nonlinear_full(
                 f"n_eq={_ne_sr} square={_n_sr == _ne_sr}",
                 file=sys.stderr,
             )
+
+            # ── JAX EVALUATION opt-in (EQUILIBRIA_GTAP_EVAL=jax) ──────────────────────────
+            # Replace Pyomo/ASL F and Jacobian evaluation with a JAX (autodiff + sparsejac)
+            # model built from the SAME squared _solve_target. The variable/constraint ORDER
+            # must match the PyomoNLP so the colperm/cuDSS path downstream is unchanged, so we
+            # build the JaxGTAPModel over the NLP's own var/constraint objects. A parity check
+            # at the seed point gates it: if F_jax != F_pyomo, fall back to Pyomo (never solve
+            # a different system). Correctness-identical; the win is eval speed at scale.
+            _jax_eval = None
+            if os.environ.get("EQUILIBRIA_GTAP_EVAL") == "jax":
+                try:
+                    from equilibria.templates.gtap_jax.jax_model import (
+                        build_jax_eval_from_nlp,
+                    )
+                    _jax_eval = build_jax_eval_from_nlp(_nlp_sr)
+                    # parity gate at the current primals
+                    _x_probe = _nlp_sr.get_primals()
+                    _nlp_sr.set_primals(_x_probe)
+                    _Fp = _nlp_sr.evaluate_eq_constraints()
+                    _Fj = _jax_eval.F(_x_probe)
+                    _dmax = float(_np_sr.max(_np_sr.abs(_Fp - _Fj)))
+                    if _dmax < 1e-7:
+                        print(
+                            f"[nlp-square] JAX EVAL enabled (F parity {_dmax:.2e} at seed)",
+                            file=sys.stderr, flush=True,
+                        )
+                    else:
+                        print(
+                            f"[nlp-square] JAX EVAL parity FAILED ({_dmax:.2e}) — "
+                            "falling back to Pyomo eval",
+                            file=sys.stderr, flush=True,
+                        )
+                        _jax_eval = None
+                except Exception as _e_jx:
+                    print(
+                        f"[nlp-square] JAX EVAL setup failed ({_e_jx}) — Pyomo eval",
+                        file=sys.stderr, flush=True,
+                    )
+                    _jax_eval = None
             _z0_sr = _nlp_sr.get_primals().copy()
             # variable bounds — matrix-free root solvers ignore them, so a step can land
             # on a price≤0 / negative-power cell where the CES residual overflows (AMPL
@@ -3988,7 +4027,10 @@ def _run_path_capi_nonlinear_full(
                 _x_tr = _np_sr.clip(_z0_sr.copy(), _lb_sr, _ub_sr)
 
                 def _Feval_tr(z):
-                    _nlp_sr.set_primals(_np_sr.clip(z, _lb_sr, _ub_sr))
+                    _zc = _np_sr.clip(z, _lb_sr, _ub_sr)
+                    if _jax_eval is not None:
+                        return _jax_eval.F(_zc)
+                    _nlp_sr.set_primals(_zc)
                     return _nlp_sr.evaluate_eq_constraints()
 
                 _F_tr = _Feval_tr(_x_tr)
@@ -4291,8 +4333,11 @@ def _run_path_capi_nonlinear_full(
                                 file=sys.stderr,
                                 flush=True,
                             )
-                    _nlp_sr.set_primals(_x_tr)
-                    _J_tr = _nlp_sr.evaluate_jacobian_eq().tocsc()
+                    if _jax_eval is not None:
+                        _J_tr = _jax_eval.jacobian(_x_tr).tocsc()
+                    else:
+                        _nlp_sr.set_primals(_x_tr)
+                        _J_tr = _nlp_sr.evaluate_jacobian_eq().tocsc()
                     _g_tr = _J_tr.T @ _F_tr  # gradient of merit = JᵀF
                     # NEWTON STEP: solve J·pN = -F. Two backends:
                     #  spilu (default): factor J once, reuse (Shamanskii). FAST per-solve but
