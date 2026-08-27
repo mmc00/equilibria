@@ -73,11 +73,6 @@ repos:
               src/equilibria/backends/pyomo_backend\.py|
               src/equilibria/baseline/gams_nlp_reference\.py|
               src/equilibria/baseline/simple_open_gams_reference\.py|
-              src/equilibria/blocks/demand/__init__\.py|
-              src/equilibria/blocks/equilibrium/__init__\.py|
-              src/equilibria/blocks/institutions/__init__\.py|
-              src/equilibria/blocks/production/__init__\.py|
-              src/equilibria/blocks/trade/__init__\.py|
               src/equilibria/core/calibration_data\.py|
               src/equilibria/core/calibration_mixin\.py|
               src/equilibria/core/calibration_phase\.py|
@@ -113,6 +108,7 @@ repos:
               src/equilibria/templates/gtap/parity_adapter\.py|
               src/equilibria/templates/gtap/shocks\.py|
               src/equilibria/templates/gtap/welfare_shadow\.py|
+              src/equilibria/templates/gtap_logvalue/composer\.py|
               src/equilibria/templates/init_strategies/base\.py|
               src/equilibria/templates/pep_calibration_unified\.py|
               src/equilibria/templates/pep_calibration_unified_excel\.py|
@@ -136,6 +132,7 @@ repos:
               tests/backends/test_pyomo_backend\.py|
               tests/backends/test_pyomo_backend_domain\.py|
               tests/backends/test_pyomo_backend_ndim\.py|
+              tests/blocks/gtap6/test_gtap6_blocks_form\.py|
               tests/blocks/test_block_equations\.py|
               tests/parity/test_cascade_classify\.py|
               tests/parity/test_cascade_config\.py|
