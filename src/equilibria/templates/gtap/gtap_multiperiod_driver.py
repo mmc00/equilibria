@@ -2626,6 +2626,7 @@ def solve_multiperiod(
     holdfix_cd: bool = True,
     mode: str = "altertax",
     solve_check: bool = False,
+    settle_only: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -3450,6 +3451,13 @@ def solve_multiperiod(
                 pabs_cd.fix(float(pabs_cd.value or 1.0))
         except (KeyError, AttributeError):
             pass
+
+    # settle_only (lever A): calibrate_base only extracts the CHECK point, so the
+    # entire shock phase (8-step PATH continuation + MUMPS) is throwaway. Return
+    # here — check is solved and frozen, and shock is seeded FROM check (never the
+    # reverse), so cutting cannot change the check point.
+    if settle_only:
+        return results
 
     # ── Phase 3: SHOCK period ────────────────────────────────────────────────
     # Apply +10% imptx shock to params (tm_pct mode).  gtap-mode shocks the
