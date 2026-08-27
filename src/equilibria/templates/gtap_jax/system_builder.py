@@ -54,21 +54,27 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
 
         return jax.jit(F), var_index, cons_order
 
-    # --- vectorized: group by family, vmap each family's shared tree over its cells ---
-    # family order preserved; within a family, cells keep their cons_order positions.
-    fam_cells: "OrderedDict[str, list]" = OrderedDict()
-    fam_pos: "OrderedDict[str, list]" = OrderedDict()
-    for i, c in enumerate(cons_order):
-        fam = str(c.name).split("[")[0]
-        fam_cells.setdefault(fam, []).append(c)
-        fam_pos.setdefault(fam, []).append(i)
-
-    # For each family, translate ONE representative cell into a parametric function
-    #   cell_fn(z, consts) -> scalar
-    # where `consts` is the vector of numeric leaves for that cell (in tree order), and z is
-    # the global variable vector (var slots are baked structurally, shared across cells because
-    # the family shares the tree shape). Then vmap cell_fn over the stacked consts of all cells.
+    # --- vectorized: group by EXACT SHAPE-KEY (tree structure + n_consts + n_slots), NOT by
+    # family. Many GTAP families are NON-uniform (variable-length sums → cells touch different
+    # #vars): grouping by family breaks vmap (inhomogeneous shapes). Grouping by shape-key makes
+    # every group uniform by construction → one small vmap(cell_fn) graph per shape. 152 shape
+    # groups but top-12 cover 91% of cells; each graph is tiny (one shape), so compiles fast and
+    # never OOMs (unlike sparsejac-per-family). Cells keep their cons_order positions.
     from pyomo.environ import value as _value
+    import pyomo.core.expr.numeric_expr as _ne
+    from pyomo.core.base.var import VarData as _VarData
+
+    def _shape_sig(e):
+        if isinstance(e, _VarData):
+            # CRITICAL: a FIXED var is translated as a CONSTANT (not a var-slot), so it must
+            # get a DIFFERENT shape symbol than a free var — otherwise two cells with the same
+            # tree but different fixed/free patterns collide in one group with incompatible
+            # structure (the cell_fn bakes the representative's var/const positions), producing
+            # NaN (an exponent used as a base, etc.). Match translate_parametric's var/const split.
+            return "C" if (e.fixed or var_index.get(id(e)) is None) else "V"
+        if isinstance(e, (int, float)) or not hasattr(e, "args"):
+            return "C"
+        return type(e).__name__ + "(" + ",".join(_shape_sig(a) for a in e.args) + ")"
 
     def _rhs(c):
         if c.equality or (c.lower is not None and c.lower is c.upper):
@@ -79,13 +85,19 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
             return float(_value(c.lower))
         return 0.0
 
+    grp_cells: "OrderedDict[Any, list]" = OrderedDict()
+    grp_pos: "OrderedDict[Any, list]" = OrderedDict()
+    for i, c in enumerate(cons_order):
+        k, s = translate_parametric(c.body, var_index, extract_only=True)
+        key = (_shape_sig(c.body), len(k), len(s))
+        grp_cells.setdefault(key, []).append(c)
+        grp_pos.setdefault(key, []).append(i)
+
     n = len(cons_order)
     per_family = []  # (pos, cell_fn|None, consts, slots, rhs) or (pos, None, row_fns, None, None)
-    for fam, cells in fam_cells.items():
-        # cell_fn(z, consts, slots) from the representative; consts AND var-slots differ per
-        # cell but the tree STRUCTURE is shared across the family (verified: 1 shape/family),
-        # so one cell_fn works for all cells — vmap over the stacked per-cell (consts, slots).
-        # The per-cell RHS (nonzero for `sum==1.0`-style eqs) is subtracted to get the residual.
+    for key, cells in grp_cells.items():
+        # every cell in this group has IDENTICAL shape + n_consts + n_slots (by construction),
+        # so one cell_fn vmaps over the group's stacked (consts, slots) with no padding.
         cell_fn, (n_consts, n_slots) = translate_parametric(cells[0].body, var_index)
         consts_list, slots_list, rhs_list = [], [], []
         ok = True
@@ -97,7 +109,7 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
             consts_list.append(k)
             slots_list.append(s)
             rhs_list.append(_rhs(c))
-        pos = jnp.asarray(fam_pos[fam])
+        pos = jnp.asarray(grp_pos[key])
         if ok:
             consts_stack = (jnp.asarray(consts_list, dtype=float) if n_consts > 0
                             else jnp.zeros((len(cells), 0)))
@@ -114,7 +126,10 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
                 def fam_fn(z):
                     return jax.vmap(lambda c, s: cf(z, c, s))(cs, ss) - rs
                 return fam_fn
-            per_family.append((pos, _mk_fam_fn(cell_fn, consts_stack, slots_stack, rhs_stack)))
+            # keep cell_fn + per-cell consts/slots so the JACOBIAN can be computed the SAME
+            # shape-grouped way (vmap(jacrev(cell_fn)) over the group), consistent with F.
+            meta = {"cell_fn": cell_fn, "consts": consts_stack, "slots": slots_stack}
+            per_family.append((pos, _mk_fam_fn(cell_fn, consts_stack, slots_stack, rhs_stack), meta))
         else:
             row_fns = [translate_constraint(c, var_index) for c in cells]
             def _mk_rows_fn(fns):
@@ -122,13 +137,13 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
                 def rows_fn(z):
                     return jnp.stack([f(z) for f in fns])
                 return rows_fn
-            per_family.append((pos, _mk_rows_fn(row_fns)))
+            per_family.append((pos, _mk_rows_fn(row_fns), None))
 
     def F(z):
-        # assemble the full residual by scattering each family's (separately-jitted) block.
+        # assemble the full residual by scattering each group's (separately-jitted) block.
         # Not jitted at the top level — that is the whole point: no single 395k-output graph.
         out = jnp.zeros(n)
-        for pos, fam_fn in per_family:
+        for pos, fam_fn, _meta in per_family:
             out = out.at[pos].set(fam_fn(z))
         return out
 

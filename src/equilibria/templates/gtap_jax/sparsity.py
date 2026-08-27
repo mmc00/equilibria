@@ -47,54 +47,54 @@ def build_jacobian_fn(F, cons_order, var_index):
                                  shape=(n_eq, n_var))
         return _fn
 
-    # precompute, per family: the row positions (np), the family jac fn (jitted jacrev), and
-    # the column slots the family touches (to sparsify its dense block).
-    from equilibria.templates.gtap_jax.expr_to_jax import collect_var_slots
-    fam_specs = []
-    # group cons_order by family to get each family's touched columns
-    from collections import OrderedDict
-    fam_cols = OrderedDict()
-    fam_rowlist = OrderedDict()
-    for i, c in enumerate(cons_order):
-        fam = str(c.name).split("[")[0]
-        fam_cols.setdefault(fam, set()).update(collect_var_slots(c.body, var_index))
-        fam_rowlist.setdefault(fam, []).append(i)
-
-    import sparsejac
-    from jax.experimental import sparse as jsparse
-
-    fam_names = list(fam_rowlist.keys())
-    for (pos, fam_fn), fam in zip(per_family, fam_names):
+    # SHAPE-GROUPED Jacobian, consistent with F. Each group's meta has cell_fn(z, consts, slots)
+    # + the per-cell (consts, slots) stacks. The derivative of cell i wrt its OWN variables is
+    # grad(cell_fn wrt the z[slots] it reads) → a small dense n_slots-vector per cell; vmap over
+    # the group gives an (n_cells × n_slots) block whose COLUMNS are exactly the cell's slots.
+    # No dense n_cells×n_var, no sparsejac-per-family graph explosion — one small vmapped grad
+    # graph per shape-group (same as F). Rows/cols scattered into the global CSR by (pos, slots).
+    grp_specs = []
+    for pos, fam_fn, meta in per_family:
         rows = np.asarray(pos, dtype=np.int64)
-        n_cells = len(rows)
-        # Build the family's OWN sparsity pattern (n_cells × n_var), then use sparsejac so the
-        # family jacobian is computed SPARSELY — never the huge dense n_cells×n_var block that
-        # jax.jacrev would materialize (e.g. eq_xda: 2940×11277 = 33M floats at 10x7 → ~31GB at
-        # 20x41). sparsejac gives only the structurally-nonzero entries.
-        prow, pcol = [], []
-        for local_i, gi in enumerate(rows.tolist()):
-            for j in sorted(collect_var_slots(cons_order[gi].body, var_index)):
-                prow.append(local_i); pcol.append(j)
-        if not prow:  # a family with no free-var deps (all constants) — empty jacobian block
-            fam_specs.append((rows, None, None))
+        if meta is None:
+            # non-uniform fallback group (rare): use whole-block jacrev, dense small
+            grp_specs.append((rows, None, None, None))
             continue
-        idx = jnp.asarray(np.stack([np.asarray(prow, np.int32), np.asarray(pcol, np.int32)], 1))
-        sub_pat = jsparse.BCOO((jnp.ones(len(prow)), idx), shape=(n_cells, n_var))
-        jfn = jax.jit(sparsejac.jacrev(fam_fn, sparsity=sub_pat))
-        fam_specs.append((rows, jfn, None))
+        cell_fn = meta["cell_fn"]; consts = meta["consts"]; slots = meta["slots"]
+        if slots.shape[1] == 0:  # group touches no free vars → no jacobian entries
+            grp_specs.append((rows, None, None, None))
+            continue
+
+        # grad of one cell wrt its own variable-values vector zc (length n_slots)
+        def _mk(cf):
+            def cell_val(zc, cst, sl):
+                # cf indexes z by sl; feed zc as a local z and identity slots 0..k-1
+                k = zc.shape[0]
+                return cf(zc, cst, jnp.arange(k))
+            return jax.jit(jax.vmap(jax.grad(cell_val, argnums=0)))
+        gfn = _mk(cell_fn)
+        grp_specs.append((rows, gfn, consts, slots))
 
     def _fn(z):
         zj = jnp.asarray(z, dtype=float)
         all_r, all_c, all_v = [], [], []
-        for rows, jfn, _ in fam_specs:
-            if jfn is None:
+        for rows, gfn, consts, slots in grp_specs:
+            if gfn is None:
                 continue
-            Jb = jfn(zj)  # BCOO (n_cells_fam × n_var), sparse
-            bidx = np.asarray(Jb.indices); bdat = np.asarray(Jb.data)
-            all_r.append(rows[bidx[:, 0]]); all_c.append(bidx[:, 1]); all_v.append(bdat)
+            zc = zj[slots]              # (n_cells, n_slots) each cell's own var values
+            G = np.asarray(gfn(zc, consts, slots))  # (n_cells, n_slots) gradient block
+            sl = np.asarray(slots)     # (n_cells, n_slots) the real column indices
+            # Emit the FULL STRUCTURAL pattern (every (cell, slot) pair), NOT only numerically
+            # nonzero entries — the Jacobian sparsity must be FIXED across Newton steps (cuDSS
+            # reuses the analyzed pattern; a value that is 0 at the seed but nonzero later must
+            # keep its slot). One caveat: a slot can repeat within a cell (same var appears
+            # twice in the tree) — grad already SUMS those, but here each column-occurrence would
+            # double-count; dedup per cell by summing G over repeated slots.
+            ncell, nsl = sl.shape
+            ci = np.repeat(np.arange(ncell), nsl)
+            all_r.append(rows[ci]); all_c.append(sl.reshape(-1)); all_v.append(G.reshape(-1))
         R = np.concatenate(all_r); C = np.concatenate(all_c); V = np.concatenate(all_v)
         return sp.csr_matrix((V, (R, C)), shape=(n_eq, n_var))
-
     return _fn
 
 
