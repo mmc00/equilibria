@@ -21,12 +21,24 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import sparsejac
 
-from pedro.models.base import MCPModel
 from equilibria.templates.gtap_jax.system_builder import build_F
 from equilibria.templates.gtap_jax.sparsity import jacobian_pattern
 
 
-class JaxGTAPModel(MCPModel):
+def _MCPModel():
+    """Lazy base class: PEDRO's MCPModel if available, else a plain object. The driver's
+    JAX-eval hook uses _NLPAlignedJaxEval (no PEDRO dependency); only JaxGTAPModel — used
+    when solving THROUGH PEDRO's solve_mcp — needs the real base. This keeps the eval path
+    usable in environments without PEDRO installed (e.g. the Kaggle gate clones only
+    equilibria; PEDRO is a private repo)."""
+    try:
+        from pedro.models.base import MCPModel
+        return MCPModel
+    except Exception:
+        return object
+
+
+class JaxGTAPModel(_MCPModel()):
     def __init__(self, m: Any, vectorize: bool = True):
         self._F, self._var_index, self._cons_order = build_F(m, vectorize=vectorize)
         self._pattern = jacobian_pattern(self._cons_order, self._var_index)
