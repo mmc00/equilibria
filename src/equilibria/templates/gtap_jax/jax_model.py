@@ -95,12 +95,35 @@ class _NLPAlignedJaxEval:
         )
         # family-by-family Jacobian (small graphs) — NOT one 395k-output sparsejac.jacrev
         self._jac = build_jacobian_fn(self._F, cons_ordered, self._var_index)
+        # HYBRID: a few macro-closure rows have huge trees that dominate the JAX compile — they
+        # are evaluated with Pyomo instead. build_F reports which global rows to Pyomo-eval.
+        self._nlp = nlp
+        self._pyomo_rows = np.asarray(getattr(self._F, "pyomo_rows", []), dtype=np.int64)
 
     def F(self, z):
-        return np.asarray(self._F(jnp.asarray(z, dtype=float)))
+        f = np.asarray(self._F(jnp.asarray(z, dtype=float)))
+        if len(self._pyomo_rows):
+            self._nlp.set_primals(np.asarray(z, dtype=float))
+            fp = self._nlp.evaluate_eq_constraints()
+            f[self._pyomo_rows] = fp[self._pyomo_rows]  # overwrite the JAX-skipped rows
+        return f
 
     def jacobian(self, z):
-        return self._jac(z)  # scipy.sparse.csr_matrix
+        import scipy.sparse as sp
+        J = self._jac(z).tocsr()  # JAX rows (Pyomo rows are empty in it)
+        if len(self._pyomo_rows):
+            self._nlp.set_primals(np.asarray(z, dtype=float))
+            Jp = self._nlp.evaluate_jacobian_eq().tocsr()
+            # replace the Pyomo rows: zero them in J, add Pyomo's rows
+            mask = np.ones(J.shape[0], dtype=bool); mask[self._pyomo_rows] = False
+            Jkeep = J.multiply(mask[:, None]).tocsr()
+            Prows = sp.csr_matrix((J.shape), dtype=float)
+            sel = sp.csr_matrix((np.ones(len(self._pyomo_rows)),
+                                 (self._pyomo_rows, self._pyomo_rows)),
+                                shape=(J.shape[0], J.shape[0]))
+            Prows = sel @ Jp
+            J = (Jkeep + Prows).tocsr()
+        return J
 
 
 def build_jax_eval_from_nlp(nlp):

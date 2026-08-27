@@ -17,6 +17,7 @@ cons_order: the row order (row i of F == cons_order[i]).
 """
 from __future__ import annotations
 
+import os
 from collections import OrderedDict
 from typing import Any
 
@@ -95,10 +96,20 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
 
     n = len(cons_order)
     per_family = []  # (pos, cell_fn|None, consts, slots, rhs) or (pos, None, row_fns, None, None)
+    # HYBRID: a handful of macro-closure equations (eq_pwfact/eq_walras) have HUGE expression
+    # trees (thousands of leaves) whose XLA compile dominates (top-10 slow groups = 54% of the
+    # compile, each ~2 cells / thousands of slots). These are FEW ROWS — evaluate them with
+    # Pyomo (cheap for a scalar eq) instead of JAX. Rows whose group exceeds the slot threshold
+    # go to `pyomo_rows`; the caller (the driver hook) evaluates those with the NLP.
+    _maxslots = int(os.environ.get("EQUILIBRIA_GTAP_JAX_MAXSLOTS", "512"))
+    pyomo_rows = []  # global row indices to evaluate with Pyomo, not JAX
     for key, cells in grp_cells.items():
         # every cell in this group has IDENTICAL shape + n_consts + n_slots (by construction),
         # so one cell_fn vmaps over the group's stacked (consts, slots) with no padding.
         cell_fn, (n_consts, n_slots) = translate_parametric(cells[0].body, var_index)
+        if n_slots > _maxslots or n_consts > _maxslots:
+            pyomo_rows.extend(grp_pos[key])  # too big to compile in JAX → Pyomo evaluates it
+            continue
         consts_list, slots_list, rhs_list = [], [], []
         ok = True
         for c in cells:
@@ -152,4 +163,5 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
     # the XLA compile at 20x41 scale). Each entry: (row_positions, family_fn).
     F.per_family = per_family
     F.n_eq = n
+    F.pyomo_rows = pyomo_rows  # rows the caller must fill via Pyomo (macro-closure, too big for JAX)
     return F, var_index, cons_order

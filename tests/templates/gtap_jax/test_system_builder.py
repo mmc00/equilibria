@@ -98,8 +98,12 @@ def test_vmap_F_matches_pyomo(ds):
     f_jax = np.asarray(F(z))
     f_pyo = _pyomo_residual(cons_order)
     assert f_jax.shape == f_pyo.shape
-    diff = np.max(np.abs(f_jax - f_pyo))
-    assert diff < 1e-9, f"vmap F max diff {diff:.2e} on {ds}"
+    # HYBRID: build_F leaves the macro-closure rows (pyomo_rows — huge trees, evaluated by
+    # Pyomo downstream) as 0; exclude them from the JAX-only parity check.
+    mask = np.ones(len(cons_order), dtype=bool)
+    mask[np.asarray(getattr(F, "pyomo_rows", []), dtype=int)] = False
+    diff = np.max(np.abs(f_jax[mask] - f_pyo[mask])) if mask.any() else 0.0
+    assert diff < 1e-9, f"vmap F (JAX rows) max diff {diff:.2e} on {ds}"
 
 
 @pytest.mark.parametrize("ds", ["gtap7_10x7"])

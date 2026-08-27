@@ -51,6 +51,10 @@ def translate(expr: Any, var_index: dict[int, int]) -> Callable[[Any], Any]:
         children = [visit(a) for a in e.args]
 
         if isinstance(e, ne.SumExpression) or isinstance(e, ne.LinearExpression):
+            # large sums → jnp.sum reduction (O(1) compile) not a 1000-deep add tree; see the
+            # parametric path for why (macro-closure eqs sum thousands of terms).
+            if len(children) > 8:
+                return lambda z: jnp.sum(jnp.stack([c(z) for c in children]))
             return lambda z: sum(c(z) for c in children)
         if isinstance(e, ne.NegationExpression):
             (c0,) = children
@@ -176,6 +180,14 @@ def translate_parametric(expr: Any, var_index: dict[int, int], extract_only: boo
                 return cst[node[1]]
             e = node[1]; kids = [ev(c) for c in node[2]]
             if isinstance(e, (ne.SumExpression, ne.LinearExpression)):
+                # CRITICAL for compile speed: a sum with THOUSANDS of terms (macro-closure eqs
+                # like eq_walras/eq_pwfact sum over all r×i×f — up to 8401 terms) must lower to a
+                # single jnp.sum REDUCTION, not a left-folded tree of 8400 adds. The tree makes
+                # XLA compile a graph with one node per term → 100s per such equation. A stacked
+                # reduction compiles in O(1). (Small sums: python sum is fine and avoids stack
+                # overhead.) Threshold 8 keeps tiny sums cheap.
+                if len(kids) > 8:
+                    return jnp.sum(jnp.stack(kids))
                 return sum(kids)
             if isinstance(e, ne.NegationExpression):
                 return -kids[0]
