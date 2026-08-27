@@ -104,21 +104,37 @@ def build_F(m: Any, vectorize: bool = False, var_index=None, cons_order=None):
             slots_stack = (jnp.asarray(slots_list, dtype=int) if n_slots > 0
                            else jnp.zeros((len(cells), 0), dtype=int))
             rhs_stack = jnp.asarray(rhs_list, dtype=float)
-            per_family.append((pos, cell_fn, consts_stack, slots_stack, rhs_stack))
+            # jit ONE small graph PER FAMILY (vmap over the family's cells), NOT one giant jit
+            # over all 96 families. A single jax.jit(F) fuses everything into one XLA graph of
+            # ~395k outputs → the compile blows RAM at 20x41 scale (measured: OOM in solve while
+            # model+jax = 5.6GB). Per-family jit keeps each graph small (one family's cells);
+            # the assembly (scatter into the full vector) is done in Python, outside jit.
+            def _mk_fam_fn(cf, cs, ss, rs):
+                @jax.jit
+                def fam_fn(z):
+                    return jax.vmap(lambda c, s: cf(z, c, s))(cs, ss) - rs
+                return fam_fn
+            per_family.append((pos, _mk_fam_fn(cell_fn, consts_stack, slots_stack, rhs_stack)))
         else:
-            per_family.append(
-                (pos, None, [translate_constraint(c, var_index) for c in cells], None, None)
-            )
+            row_fns = [translate_constraint(c, var_index) for c in cells]
+            def _mk_rows_fn(fns):
+                @jax.jit
+                def rows_fn(z):
+                    return jnp.stack([f(z) for f in fns])
+                return rows_fn
+            per_family.append((pos, _mk_rows_fn(row_fns)))
 
     def F(z):
+        # assemble the full residual by scattering each family's (separately-jitted) block.
+        # Not jitted at the top level — that is the whole point: no single 395k-output graph.
         out = jnp.zeros(n)
-        for pos, cell_fn, payload, slots_stack, rhs_stack in per_family:
-            if cell_fn is not None:
-                vals = jax.vmap(lambda cst, sl: cell_fn(z, cst, sl))(payload, slots_stack)
-                vals = vals - rhs_stack
-            else:
-                vals = jnp.stack([f(z) for f in payload])
-            out = out.at[pos].set(vals)
+        for pos, fam_fn in per_family:
+            out = out.at[pos].set(fam_fn(z))
         return out
 
-    return jax.jit(F), var_index, cons_order
+    # expose the per-family blocks so the Jacobian can be computed family-by-family (small
+    # graphs) instead of one giant sparsejac.jacrev over the whole 395k-output F (which OOMs
+    # the XLA compile at 20x41 scale). Each entry: (row_positions, family_fn).
+    F.per_family = per_family
+    F.n_eq = n
+    return F, var_index, cons_order

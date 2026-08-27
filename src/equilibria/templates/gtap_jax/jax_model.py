@@ -40,9 +40,9 @@ def _MCPModel():
 
 class JaxGTAPModel(_MCPModel()):
     def __init__(self, m: Any, vectorize: bool = True):
+        from equilibria.templates.gtap_jax.sparsity import build_jacobian_fn
         self._F, self._var_index, self._cons_order = build_F(m, vectorize=vectorize)
-        self._pattern = jacobian_pattern(self._cons_order, self._var_index)
-        self._jac = jax.jit(sparsejac.jacrev(self._F, sparsity=self._pattern))
+        self._jac = build_jacobian_fn(self._F, self._cons_order, self._var_index)
         self.n = len(self._var_index)
         self._n_eq = len(self._cons_order)
         assert self.n == self._n_eq, f"not square: {self.n} vars vs {self._n_eq} eqs"
@@ -66,12 +66,7 @@ class JaxGTAPModel(_MCPModel()):
         return np.asarray(self._F(jnp.asarray(z, dtype=float)))
 
     def jacobian(self, z: np.ndarray):
-        J = self._jac(jnp.asarray(z, dtype=float))  # BCOO
-        idx = np.asarray(J.indices)
-        data = np.asarray(J.data)
-        return sp.csr_matrix(
-            (data, (idx[:, 0], idx[:, 1])), shape=(self._n_eq, self.n)
-        )
+        return self._jac(z)  # already a scipy.sparse.csr_matrix (family-by-family)
 
 
 class _NLPAlignedJaxEval:
@@ -85,7 +80,7 @@ class _NLPAlignedJaxEval:
 
     def __init__(self, nlp):
         from equilibria.templates.gtap_jax.system_builder import build_F
-        from equilibria.templates.gtap_jax.sparsity import jacobian_pattern
+        from equilibria.templates.gtap_jax.sparsity import build_jacobian_fn
 
         vars_ordered = list(nlp.get_pyomo_variables())
         cons_ordered = list(nlp.get_pyomo_constraints())
@@ -94,21 +89,18 @@ class _NLPAlignedJaxEval:
         self.n = len(vars_ordered)
         self._n_eq = len(cons_ordered)
 
-        # per-family vmap (fast at scale) aligned to the NLP's exact var/constraint order
+        # per-family vmap (fast + memory-bounded at scale) aligned to the NLP's exact order
         self._F, _, _ = build_F(
             None, vectorize=True, var_index=self._var_index, cons_order=cons_ordered
         )
-        self._pattern = jacobian_pattern(cons_ordered, self._var_index)
-        self._jac = jax.jit(sparsejac.jacrev(self._F, sparsity=self._pattern))
+        # family-by-family Jacobian (small graphs) — NOT one 395k-output sparsejac.jacrev
+        self._jac = build_jacobian_fn(self._F, cons_ordered, self._var_index)
 
     def F(self, z):
         return np.asarray(self._F(jnp.asarray(z, dtype=float)))
 
     def jacobian(self, z):
-        J = self._jac(jnp.asarray(z, dtype=float))
-        idx = np.asarray(J.indices)
-        data = np.asarray(J.data)
-        return sp.csr_matrix((data, (idx[:, 0], idx[:, 1])), shape=(self._n_eq, self.n))
+        return self._jac(z)  # scipy.sparse.csr_matrix
 
 
 def build_jax_eval_from_nlp(nlp):

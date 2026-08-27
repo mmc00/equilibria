@@ -54,6 +54,20 @@ def _z_in_index_order(m, var_index):
     return jnp.asarray(z)
 
 
+
+def _pyomo_residual(cons_order):
+    """Pyomo residual = body - rhs (what pynumero's evaluate_eq_constraints returns), matching
+    translate_constraint. body alone omits a nonzero RHS (e.g. sum==1.0)."""
+    from pyomo.environ import value
+    import numpy as np
+    out = []
+    for c in cons_order:
+        rhs = 0.0
+        if c.lower is not None: rhs = float(value(c.lower))
+        elif c.upper is not None: rhs = float(value(c.upper))
+        out.append(value(c.body) - rhs)
+    return np.array(out)
+
 @pytest.mark.parametrize("ds", ["gtap7_3x3", "gtap7_10x7"])
 def test_F_matches_pyomo_elementwise(ds):
     if not _available(ds):
@@ -65,7 +79,7 @@ def test_F_matches_pyomo_elementwise(ds):
     z = _z_in_index_order(m, var_index)
 
     f_jax = np.asarray(F(z))
-    f_pyo = np.array([value(c.body) for c in cons_order])
+    f_pyo = _pyomo_residual(cons_order)
     assert f_jax.shape == f_pyo.shape, f"shape {f_jax.shape} vs {f_pyo.shape}"
     diff = np.max(np.abs(f_jax - f_pyo))
     assert diff < 1e-9, f"max elementwise diff {diff:.2e} on {ds}"
@@ -82,7 +96,7 @@ def test_vmap_F_matches_pyomo(ds):
     F, var_index, cons_order = build_F(m, vectorize=True)
     z = _z_in_index_order(m, var_index)
     f_jax = np.asarray(F(z))
-    f_pyo = np.array([value(c.body) for c in cons_order])
+    f_pyo = _pyomo_residual(cons_order)
     assert f_jax.shape == f_pyo.shape
     diff = np.max(np.abs(f_jax - f_pyo))
     assert diff < 1e-9, f"vmap F max diff {diff:.2e} on {ds}"
