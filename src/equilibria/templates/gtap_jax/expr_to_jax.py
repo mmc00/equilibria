@@ -29,7 +29,12 @@ def translate(expr: Any, var_index: dict[int, int]) -> Callable[[Any], Any]:
     def visit(e: Any) -> Callable[[Any], Any]:
         # --- leaves ---
         if isinstance(e, VarData):
-            slot = var_index[id(e)]
+            slot = var_index.get(id(e))
+            if slot is None:
+                # a FIXED variable (not a free column): freeze its current value as a constant,
+                # exactly as the squared system treats it (fixed vars are data, not unknowns).
+                c = float(e.value)
+                return lambda z: c
             return lambda z: z[slot]
         if isinstance(e, (int, float)):
             c = float(e)
