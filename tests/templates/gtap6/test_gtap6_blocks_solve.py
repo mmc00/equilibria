@@ -19,12 +19,18 @@ INITIAL (benchmark-seeded) variable values BEFORE any solve attempt —
      in ``GTAP6_BLOCK_ORDER`` but needs those 3 vars as inputs to its own
      equations) — fixed in the composer via
      ``_reseed_shadowed_production_stubs``.
-  2. A one-character index bug in ``gtap6_calibration.py``'s ``alpha_dom``/
-     ``alpha_imp`` CES-share derivation: ``out.to.get((i, r), ...)`` used
-     the COMMODITY index where the OUTPUT-TAX parameter ``to`` is actually
-     keyed by the PRODUCING SECTOR ``(j, r)`` (confirmed against its own
-     construction loop and against ``ProductionBlock``'s correct usage) —
-     fixed directly in ``gtap6_calibration.py``.
+  2. A one-character index bug in ``blocks/gtap6/production.py``'s
+     ``pfd_init`` seed construction: the ``to`` (output-tax) parameter is
+     keyed by the INPUT COMMODITY ``(i, r)`` — confirmed against the
+     orphan branch's own equation chain (``gtap_v62_model_equations.py``'s
+     ``eq_pds_rule``/``eq_pfd_rule``: ``pfd[i,j,r] == ps[i,r]*(1+to[i,r])*
+     (1+tfd[i,j,r])``) and its own calibration
+     (``gtap_v62_calibration.py:802``) — but ``pfd_init`` looked it up by
+     the BUYER SECTOR ``to_arr[prod_secs.index(j), ...]`` instead. An
+     earlier round of this fix mistakenly "corrected" the direction in
+     ``gtap6_calibration.py`` (which was already right) rather than in
+     ``production.py`` (the actual bug); that has since been reverted and
+     the real fix applied in ``production.py``'s ``pfd_init``.
   3. ``sav``'s seed used ``save_0`` directly instead of ``save_0 -
      savf_0`` (the value consistent with ``IncomeClosureBlock``'s OWN
      ``e_ysav`` identity ``sav == y - yp - yg``, confirmed exactly against
@@ -37,19 +43,27 @@ imbalance, ``sum_r savf_0[r]`` — legitimately nonzero at the seed since
 closing it is exactly the solver's job, not a seed defect), ``e_qe`` at
 ~1.0e6 (a genuine, documented benchmark tax wedge between factor purchase
 cost ``vfm`` and factor sales ``evom`` — see ``factor.py``'s own test
-docstring), and every OTHER equation family at true numerical noise
-(~1e-9 to ~1e-16).
+docstring), a handful of ``e_qfd_arm``/``e_qfd_cgds`` cells at the
+2e5-1e6 scale (the ``i != j`` Armington-demand cells, now driven by the
+correctly-signed ``pfd`` seed rather than numerical noise — still well
+below the pre-fix ~5.2e7 shadowing-bug scale), and every OTHER equation
+family at true numerical noise (~1e-9 to ~1e-16).
 
 The canary solve itself (``test_gtap6_3x3_block_model_solves_nlp``) still
-does NOT reach ``optimal``/``locallyOptimal`` with IPOPT's default options
-within 3000-8000 iterations: constraint violation plateaus at a REPRODUCIBLE
-0.1238 (not a divergence — a stuck point) concentrated in ``e_pva`` (the
-value-added CES price aggregator, ``ProductionBlock``) and a cluster of
-``e_pfe``/``e_up``/``e_pwmg``/``e_pmcif`` cells at the 0.01-0.05 scale,
-while every equation that was large AT THE SEED (``e_qo``, ``e_qfd_arm``,
-``e_qva`` etc.) has fully resolved by that point. This points to a
-mid-search CES-domain/bounds excursion in the VA nest (``pfe**(1-sigma)``
-for a possibly near-zero or badly-scaled ``pfe``) rather than a benchmark
+does NOT reach ``optimal``/``locallyOptimal``: post-fix, IPOPT now fails at
+iteration 1161 with an ``internalSolverError`` ("Restoration Phase Failed",
+unscaled constraint violation ~1.008 at the last iterate) rather than the
+pre-fix (wrong-direction ``to`` lookup) behavior of plateauing at a
+reproducible constraint violation of ~0.1238 across 3000-8000 iterations.
+Both are non-convergence, just via different search trajectories — moving
+the fix to the correct file/direction changed the seed enough to send
+IPOPT down a different (still unsuccessful) path, concentrated in
+``e_pva`` (the value-added CES price aggregator, ``ProductionBlock``) and
+a cluster of ``e_pfe``/``e_up``/``e_pwmg``/``e_pmcif`` cells, while every
+equation that was large AT THE SEED (``e_qo``, ``e_qfd_arm``, ``e_qva``
+etc.) has fully resolved by that point. This points to a mid-search
+CES-domain/bounds excursion in the VA nest (``pfe**(1-sigma)`` for a
+possibly near-zero or badly-scaled ``pfe``) rather than a benchmark
 calibration defect — a DIFFERENT class of problem from the 3 seed bugs
 above, and one the task's own diagnostic-first discipline says not to
 guess-fix by editing equation bodies without further evidence. Marked
@@ -172,18 +186,23 @@ def test_gtap6_seed_residuals_are_small():
 @pytest.mark.skipif(not DATASET.exists(), reason="gtap6_3x3 dataset not present")
 @pytest.mark.skipif(not _has_ipopt(), reason="IPOPT not available in this environment")
 @pytest.mark.xfail(
-    reason="Canary solve does not yet reach optimal/locallyOptimal: IPOPT "
-    "plateaus at a REPRODUCIBLE constraint violation of ~0.1238 across "
-    "3000-8000 iterations (not a divergence -- a stuck point), concentrated "
-    "in e_pva (ProductionBlock's value-added CES price aggregator) and a "
-    "cluster of e_pfe/e_up/e_pwmg/e_pmcif cells at the 0.01-0.05 scale. "
-    "Every equation family that was large AT THE SEED (e_qo, e_qfd_arm, "
-    "e_qva, etc. -- fixed by this task's 3 composer/calibration bugfixes, "
-    "see module docstring) has fully resolved by this point; the remaining "
-    "gap looks like a mid-search CES-domain/bounds excursion in the VA "
-    "nest, a different class of problem from the seed bugs this task "
-    "diagnosed and fixed. See test_gtap6_seed_residuals_are_small for the "
-    "seed-point regression gate that DOES pass.",
+    reason="Canary solve does not yet reach optimal/locallyOptimal: with the "
+    "3 seed/calibration bugfixes applied in the correct file/direction "
+    "(see module docstring), IPOPT now fails at iteration 1161 with an "
+    "internalSolverError ('Restoration Phase Failed', unscaled constraint "
+    "violation ~1.008 at the last iterate) rather than the previous "
+    "wrong-direction-fix behavior of plateauing at a reproducible "
+    "constraint violation of ~0.1238 across 3000-8000 iterations. Both are "
+    "non-convergence via different search trajectories, concentrated in "
+    "e_pva (ProductionBlock's value-added CES price aggregator) and a "
+    "cluster of e_pfe/e_up/e_pwmg/e_pmcif cells. Every equation family "
+    "that was large AT THE SEED (e_qo, e_qfd_arm, e_qva, etc. -- fixed by "
+    "this task's 3 composer/calibration bugfixes, see module docstring) "
+    "has fully resolved by this point; the remaining gap looks like a "
+    "mid-search CES-domain/bounds excursion in the VA nest, a different "
+    "class of problem from the seed bugs this task diagnosed and fixed. "
+    "See test_gtap6_seed_residuals_are_small for the seed-point regression "
+    "gate that DOES pass.",
     strict=True,
 )
 def test_gtap6_3x3_block_model_solves_nlp():

@@ -811,23 +811,18 @@ def derive_calibration(
                 # where pim_0 is the composite import benchmark price
                 # (precomputed above; defaults to 1 if no import flow).
                 #
-                # NOTE (F7 Task 10 diagnostic finding): `to` is the OUTPUT
-                # tax on the PRODUCING SECTOR's own output — its dict keys
-                # are `(j, r)` (see the `out.to[key] = ...` assignment
-                # above, built from `out.vop.items()`, itself keyed by `j`
-                # from `for j in sets.prod_comm`), never `(i, r)`, despite
-                # the field's own stale type-hint comment. Looking it up by
-                # the COMMODITY `i` (the intermediate input being used, not
-                # the sector using it) silently reads an unrelated sector's
-                # output-tax rate whenever `i != j`, which desynchronizes
-                # `alpha_dom`/`alpha_imp` from the `pfd`/`pfm` seed
-                # `blocks/gtap6/production.py` actually uses (it correctly
-                # looks up `to` by `j`) — found via the Task 10 canary-solve
-                # residual diagnostic: `e_qfd_arm`/`e_qfd_cgds` showed ~1e6
-                # residuals at the benchmark seed for every `(i, j, r)` with
-                # `i != j`, collapsing to ~1e-9 once this lookup uses `j`.
+                # `to` here is keyed by the INPUT COMMODITY `(i, r)`, not
+                # the buyer sector `(j, r)` — confirmed against the orphan
+                # branch's own equation chain (gtap_v62_model_equations.py:
+                # eq_pds_rule gives `pds[i,r] == ps[i,r]*(1+to[i,r])`, and
+                # eq_pfd_rule gives `pfd[i,j,r] == pds[i,r]*(1+tfd[i,j,r])`,
+                # so fully expanded `pfd[i,j,r] = ps[i,r]*(1+to[i,r])*
+                # (1+tfd[i,j,r])` — `to` is ALWAYS looked up by the
+                # commodity being priced, `i`, never the sector using it,
+                # `j`). This matches the orphan's own calibration
+                # (gtap_v62_calibration.py:802) byte-for-byte.
                 pim0_ir = out.pim_0.get((i, r), 1.0)
-                pfd0 = (1.0 + out.to.get((j, r), 0.0)) * (
+                pfd0 = (1.0 + out.to.get((i, r), 0.0)) * (
                     1.0 + out.tfd.get((i, j, r), 0.0)
                 )
                 pfm0 = pim0_ir * (1.0 + out.tfi.get((i, j, r), 0.0))

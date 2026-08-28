@@ -374,7 +374,7 @@ class ProductionBlock(Block):
                 [
                     [
                         max(
-                            (1.0 + float(to_arr[prod_secs.index(j), regions.index(r)]))
+                            (1.0 + float(to_arr[comms.index(i), regions.index(r)]))
                             * (1.0 + float(tfd_map.get((i, j, r), 0.0) or 0.0)),
                             _LB,
                         )
