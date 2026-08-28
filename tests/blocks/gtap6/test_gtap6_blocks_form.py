@@ -764,3 +764,151 @@ def test_factor_block_sluggish_matches_benchmark_identity(_factor_fixtures):
 
     assert checked_endw > 0
     print(f"[gtap6 e_pm_endw benchmark identity] max |rel diff| = {max_rel_endw:.3e}")
+
+
+def test_factor_block_sluggish_cet_curvature_matches_omega_sign(_factor_fixtures):
+    """Exponent/curvature check for the sluggish CET branch (e_qoes/e_pm_endw).
+
+    The benchmark-identity test above evaluates everything AT pmes ==
+    pmagg == 1.0, where ``x**omega == 1`` for ANY omega — it cannot tell a
+    correct CET exponent from a wrong-signed one or a different functional
+    form entirely (e.g. Leontief or Cobb-Douglas would also pass a
+    benchmark-only check). This test perturbs pmes away from 1.0 (holding
+    qoes/pmagg/qfe fixed at their seed levels) and numerically
+    differentiates each equation's residual/RHS with respect to pmes,
+    confirming the SIGN of the slope matches the sign of the exponent that
+    actually appears in the equation body — the same check GTAP7's
+    ``EqPfeq``/``EqPfteq`` sf-branch (the cross-reference this block's
+    algebra was transcribed from) would have to satisfy.
+
+    e_qoes uses exponent ``omega`` directly:
+      R(pmes) = pmes**omega * gf * qoes - pmagg**omega * qfe
+      dR/dpmes has the SAME SIGN as omega (verified analytically: dR/dpmes
+      = omega * gf * qoes * pmes**(omega-1), and gf/qoes/pmes are all > 0
+      at any point of interest here).
+    e_pm_endw uses exponent ``1+omega`` (the CET aggregator power):
+      RHS(pmes) = sum_j gf_share * pmes**(1+omega)
+      d(RHS)/dpmes has the SAME SIGN as (1+omega) for the SAME reason.
+
+    On gtap6_3x3: Land has omega = -etrae['Land'] = 1.0 (a genuine,
+    non-degenerate positive CET elasticity — a real economic case, not a
+    synthetic one) and Capital has omega = -etrae['Capital'] = -(-0.0) ==
+    0.0 (a real degenerate case where the CET collapses to a flat
+    response). Both are exercised directly against real dataset values,
+    not mocked factors.
+    """
+    from pyomo.environ import value as pyo_value
+
+    block, sets, params, derived, _sm, equations, _vars, oracle = _factor_fixtures
+    eq_by_name = {eq.name: eq for eq in equations}
+    eq_qoes = eq_by_name["e_qoes"]
+    eq_pm_endw = eq_by_name["e_pm_endw"]
+
+    etrae = params.elasticities.etrae
+    _BUMP = 0.05
+
+    def _omega(f):
+        return -float(etrae.get(f, 0.0))
+
+    checked_qoes_slope = 0
+    checked_endw_slope = 0
+
+    for f in sets.sf:
+        omega = _omega(f)
+        for r in sets.r:
+            evom = derived.evom.get((f, r), 0.0) or 0.0
+            if evom <= 1e-8:
+                continue
+
+            # ---- e_qoes: perturb pmes[f, j, r] for one active sector j,
+            # holding pmagg[f, r] fixed at its seed value (1.0), and
+            # numerically differentiate the equation's residual.
+            for j in sets.prod_comm:
+                vfm = params.benchmark.vfm.get((f, j, r), 0.0) or 0.0
+                gf = vfm / evom if evom > 0 else 0.0
+                if gf <= 0.0:
+                    continue
+
+                seed_pmes = float(pyo_value(oracle.pmes[f, j, r]))
+                seed_pmagg = float(pyo_value(oracle.pmagg[f, r]))
+                assert seed_pmes == 1.0 and seed_pmagg == 1.0, (
+                    "test assumes the fixture's benchmark seed (1.0); if this "
+                    "ever changes, the finite-difference bump below must be "
+                    "re-derived around the new seed point"
+                )
+
+                def _residual(pmes_val, f=f, j=j, r=r):
+                    oracle.pmes[f, j, r].set_value(pmes_val)
+                    try:
+                        expr = eq_qoes.build_expression(oracle, (f, j, r))
+                        assert expr is not None
+                        return pyo_value(expr.args[0]) - pyo_value(expr.args[1])
+                    finally:
+                        oracle.pmes[f, j, r].set_value(seed_pmes)
+
+                r0 = _residual(seed_pmes)
+                r1 = _residual(seed_pmes + _BUMP)
+                slope = (r1 - r0) / _BUMP
+
+                if abs(omega) < 1e-8:
+                    # Degenerate CET (omega == 0, e.g. Capital on
+                    # gtap6_3x3): pmes**0 == 1 regardless of pmes, so the
+                    # residual must be FLAT — a nonzero slope here would
+                    # mean the block silently used a different exponent
+                    # than omegaf (e.g. a stray +1).
+                    assert abs(slope) < 1e-6, (f, j, r, omega, slope)
+                else:
+                    # sign(dR/dpmes) must match sign(omega) — this is what
+                    # a benchmark-only (pmes==1) check can never catch,
+                    # since x**omega == 1 there for any omega.
+                    assert slope * omega > 0, (
+                        f"e_qoes({f},{j},{r}): omega={omega} but perturbing "
+                        f"pmes gives slope={slope} (wrong sign or flat)"
+                    )
+                checked_qoes_slope += 1
+
+            # ---- e_pm_endw: perturb pmes[f, j, r] for one active sector,
+            # numerically differentiate the RHS w.r.t. that pmes. The
+            # governing exponent here is (1+omega), not omega directly.
+            active_j = [
+                j
+                for j in sets.prod_comm
+                if (params.benchmark.vfm.get((f, j, r), 0.0) or 0.0) > 0.0
+            ]
+            if not active_j:
+                continue
+            j0 = active_j[0]
+            expo = 1.0 + omega
+
+            def _endw_rhs(pmes_val, f=f, j0=j0, r=r):
+                oracle.pmes[f, j0, r].set_value(pmes_val)
+                try:
+                    expr = eq_pm_endw.build_expression(oracle, (f, r))
+                    assert expr is not None
+                    return pyo_value(expr.args[1])
+                finally:
+                    oracle.pmes[f, j0, r].set_value(1.0)
+
+            e0 = _endw_rhs(1.0)
+            e1 = _endw_rhs(1.0 + _BUMP)
+            endw_slope = (e1 - e0) / _BUMP
+
+            if abs(expo) < 1e-8:
+                assert abs(endw_slope) < 1e-6, (f, r, expo, endw_slope)
+            else:
+                assert endw_slope * expo > 0, (
+                    f"e_pm_endw({f},{r}): (1+omega)={expo} but perturbing "
+                    f"pmes gives slope={endw_slope} (wrong sign or flat)"
+                )
+            checked_endw_slope += 1
+
+    assert checked_qoes_slope > 0
+    assert checked_endw_slope > 0
+    print(
+        f"\n[gtap6 e_qoes CET curvature] {checked_qoes_slope} (f,j,r) cells "
+        "sign-checked against omega"
+    )
+    print(
+        f"[gtap6 e_pm_endw CET curvature] {checked_endw_slope} (f,r) cells "
+        "sign-checked against (1+omega)"
+    )
