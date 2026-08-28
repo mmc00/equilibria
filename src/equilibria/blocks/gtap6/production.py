@@ -261,6 +261,21 @@ class ProductionBlock(Block):
         # (oracle monolith 826-833).
         _price("ps", ("j", "r"), np.ones((nj, nr)))
 
+        # pds (j,r) — domestic supply price, output-tax-inclusive
+        # (oracle eq_pds: pds = ps*(1+to)). Genuinely OWNED here (not a
+        # stub) -- this block declares e_pds below. Read by
+        # demand_utility.py/income_closure.py's own guarded pds stubs
+        # (first-registration-wins dedup: this real declaration, since
+        # ProductionBlock runs first in GTAP6_BLOCK_ORDER, wins over
+        # their placeholder ones(...) stub).
+        pds_init = np.array(
+            [
+                [max(1.0 * (1.0 + float(to_arr[ji, ri])), _LB) for ri in range(nr)]
+                for ji in range(nj)
+            ]
+        )
+        _price("pds", ("j", "r"), pds_init)
+
         # va (=contract's qva) (j,r) — value-added aggregate quantity,
         # seeded from va_total (oracle monolith 856-862).
         va_total_map = _to_dict(d.va_total)
@@ -540,6 +555,34 @@ class ProductionBlock(Block):
 
         equations.append(EqPs())
 
+        # ---------------- e_pds (oracle eq_pds, monolith 1553) ------------
+        # pds(j,r) = ps(j,r) * (1 + to(j,r)) -- domestic supply (output-tax
+        # -inclusive) price. NOTE: this equation was missing entirely from
+        # the block port (Task 10b diagnostic) -- `pds` is declared as a
+        # stub in demand_utility.py/income_closure.py (read by e_ppd/e_pgd/
+        # e_pfd's own tax-revenue terms) but had ZERO defining equation
+        # anywhere in the composed model, leaving it, `pfd`, `pfm`, `ppd`,
+        # `ppm`, `pgd`, `pgm` as ~139 genuinely free variables (confirmed
+        # via a Pyomo variable-constraint incidence/bipartite-matching
+        # check: DOF == 269, matching the missing-equation cell count).
+        # This is the root cause of the canary solve's non-convergence
+        # (both the maxIterations plateau and the later restoration-phase
+        # failure) -- not a bounds/scaling issue as originally hypothesized.
+        class EqPds(SymbolicEquation):
+            name: str = "e_pds"
+            domains: tuple = ("j", "r")
+
+            def build_expression(self, pyomo_model, indices):
+                from pyomo.environ import value as pyo_value
+
+                m = pyomo_model
+                j, r = indices
+                if float(pyo_value(m.vom[j, r])) <= 1e-8:
+                    return None
+                return m.pds[j, r] == m.ps[j, r] * (1.0 + m.to[j, r])
+
+        equations.append(EqPds())
+
         # ---------------- e_qf (oracle eq_qf, monolith 1583) --------------
         class EqQf(SymbolicEquation):
             name: str = "e_qf"
@@ -584,6 +627,50 @@ class ProductionBlock(Block):
                 )
 
         equations.append(EqPf())
+
+        # ---------------- e_pfd (oracle eq_pfd, monolith 1715) ------------
+        # pfd(i,j,r) = pds(i,r) * (1 + tfd(i,j,r)) -- domestic intermediate
+        # agent price. Guarded on alpha_dom>0 (the oracle guards on
+        # share_dom>0, a param never ported to this block; alpha_dom is the
+        # same nonzero-share signal already used as EqPf's own guard).
+        # MISSING from the original block port (see module docstring /
+        # Task 10b diagnostic) -- pfd was a fully free variable.
+        class EqPfd(SymbolicEquation):
+            name: str = "e_pfd"
+            domains: tuple = ("i", "j", "r")
+
+            def build_expression(self, pyomo_model, indices):
+                from pyomo.environ import value as pyo_value
+
+                m = pyomo_model
+                i, j, r = indices
+                ad = float(pyo_value(m.alpha_dom[i, j, r]))
+                if ad <= 0.0:
+                    return None
+                return m.pfd[i, j, r] == m.pds[i, r] * (1.0 + m.tfd[i, j, r])
+
+        equations.append(EqPfd())
+
+        # ---------------- e_pfm (oracle eq_pfm, monolith 1726) ------------
+        # pfm(i,j,r) = pim(i,r) * (1 + tfi(i,j,r)) -- imported intermediate
+        # agent price. Guarded on alpha_imp>0 (see e_pfd comment above for
+        # the share_imp/alpha_imp substitution rationale). MISSING from the
+        # original block port -- pfm was a fully free variable.
+        class EqPfm(SymbolicEquation):
+            name: str = "e_pfm"
+            domains: tuple = ("i", "j", "r")
+
+            def build_expression(self, pyomo_model, indices):
+                from pyomo.environ import value as pyo_value
+
+                m = pyomo_model
+                i, j, r = indices
+                ai = float(pyo_value(m.alpha_imp[i, j, r]))
+                if ai <= 0.0:
+                    return None
+                return m.pfm[i, j, r] == m.pim[i, r] * (1.0 + m.tfi[i, j, r])
+
+        equations.append(EqPfm())
 
         # ---------------- e_qva (oracle eq_va, monolith 1565) -------------
         class EqQva(SymbolicEquation):

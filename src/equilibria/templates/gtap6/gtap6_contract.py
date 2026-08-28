@@ -47,8 +47,11 @@ _GTAP6_PRODUCTION = (
     # default σ_top = 0 → Leontief in v6.2)
     "e_qo",  # qo = activity output identity
     "e_ps",  # ps = unit cost of production (zero-profit)
+    "e_pds",  # pds(j,r) domestic supply price (output-tax-inclusive)
     "e_qf",  # qf(i,j,r) firm intermediate demand (Leontief)
     "e_pf",  # pf(i,j,r) firm intermediate composite price
+    "e_pfd",  # pfd(i,j,r) domestic intermediate agent price
+    "e_pfm",  # pfm(i,j,r) imported intermediate agent price
     "e_qva",  # qva(j,r) value-added demand
     "e_pva",  # pva(j,r) VA composite price
     "e_qfe",  # qfe(f,j,r) factor demand within VA (CES, σ=esubva)
@@ -61,6 +64,8 @@ _GTAP6_FINAL_DEMAND = (
     "e_qpm",  # qpm(i,r) household import demand
     "e_qp",  # qp(i,r) Armington composite
     "e_pp",  # pp(i,r) Armington composite price
+    "e_ppd",  # ppd(i,r) household domestic agent price
+    "e_ppm",  # ppm(i,r) household imported agent price
     "e_pq",  # pq(i,r) CDE price aggregator
     "e_up",  # up(r)   private utility (CDE)
     "e_yp",  # yp(r)   household income
@@ -69,6 +74,8 @@ _GTAP6_FINAL_DEMAND = (
     "e_qgm",  # qgm(i,r) gov import demand
     "e_qg",  # qg(i,r)  gov Armington composite
     "e_pg",  # pg(i,r)  Armington composite gov price
+    "e_pgd",  # pgd(i,r) gov domestic agent price
+    "e_pgm",  # pgm(i,r) gov imported agent price
     "e_pgov",  # pgov(r)  gov price index (CD)
     "e_ug",  # ug(r)    gov utility
     "e_yg",  # yg(r)    gov income

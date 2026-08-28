@@ -355,8 +355,11 @@ def test_qtmfsd_matches_oracle_qtm_summand(_fixtures):
 _ORACLE_CONSTRAINT_FOR_PRODUCTION = {
     "e_qo": "eq_market",
     "e_ps": "eq_qo",
+    "e_pds": "eq_pds",
     "e_qf": "eq_qf",
     "e_pf": "eq_pf_int",
+    "e_pfd": "eq_pfd",
+    "e_pfm": "eq_pfm",
     "e_qva": "eq_va",
     "e_pva": "eq_pva",
     "e_qfe": "eq_qfe",
@@ -433,7 +436,9 @@ def test_production_block_setup_returns_all_contract_equations(_production_fixtu
     extra = eq_names - expected
     assert not missing, f"ProductionBlock did not produce: {missing}"
     assert not extra, f"ProductionBlock produced unexpected equations: {extra}"
-    assert len(eq_names) == 8, f"expected 8 unique equation names, got {len(eq_names)}"
+    assert len(eq_names) == 11, (
+        f"expected 11 unique equation names, got {len(eq_names)}"
+    )
 
 
 def test_production_block_matches_oracle_numerically(_production_fixtures):
@@ -936,12 +941,16 @@ _ORACLE_CONSTRAINT_FOR_DEMAND = {
     "e_qpm": "eq_qpm",
     "e_qp": "eq_qp",
     "e_pp": "eq_pp",
+    "e_ppd": "eq_ppd",
+    "e_ppm": "eq_ppm",
     "e_pq": "eq_pcons",
     "e_up": "eq_up",
     "e_qgd": "eq_qgd",
     "e_qgm": "eq_qgm",
     "e_qg": "eq_qg",
     "e_pg": "eq_pg",
+    "e_pgd": "eq_pgd",
+    "e_pgm": "eq_pgm",
     "e_pgov": "eq_pgov",
     "e_ug": "eq_ug",
     "e_qcgds": "eq_qcgds",
@@ -991,9 +1000,11 @@ def _demand_utility_fixtures():
 def test_demand_utility_block_setup_returns_all_contract_equations(
     _demand_utility_fixtures,
 ):
-    """Confirm the split ruling: _GTAP6_FINAL_DEMAND has 18 IDs total;
-    this block owns exactly 16 (all but e_yp/e_yg, reserved for Task 9b's
-    IncomeClosureBlock per the controller's ruling).
+    """Confirm the split ruling: _GTAP6_FINAL_DEMAND has 22 IDs total
+    (18 original + e_ppd/e_ppm/e_pgd/e_pgm added in Task 10b -- see
+    demand_utility.py's e_ppd/e_pgd docstrings); this block owns exactly
+    20 (all but e_yp/e_yg, reserved for Task 9b's IncomeClosureBlock per
+    the controller's ruling).
     """
     from equilibria.templates.gtap6.gtap6_contract import _GTAP6_FINAL_DEMAND
 
@@ -1002,8 +1013,8 @@ def test_demand_utility_block_setup_returns_all_contract_equations(
     )
     eq_names = {eq.name for eq in equations}
 
-    assert len(_GTAP6_FINAL_DEMAND) == 18, (
-        f"expected 18 IDs in _GTAP6_FINAL_DEMAND, got {len(_GTAP6_FINAL_DEMAND)}"
+    assert len(_GTAP6_FINAL_DEMAND) == 22, (
+        f"expected 22 IDs in _GTAP6_FINAL_DEMAND, got {len(_GTAP6_FINAL_DEMAND)}"
     )
     assert "e_yp" in _GTAP6_FINAL_DEMAND
     assert "e_yg" in _GTAP6_FINAL_DEMAND
@@ -1013,8 +1024,8 @@ def test_demand_utility_block_setup_returns_all_contract_equations(
     extra = eq_names - expected
     assert not missing, f"DemandUtilityBlock did not produce: {missing}"
     assert not extra, f"DemandUtilityBlock produced unexpected equations: {extra}"
-    assert len(eq_names) == 16, (
-        f"expected 16 unique equation names, got {len(eq_names)}"
+    assert len(eq_names) == 20, (
+        f"expected 20 unique equation names, got {len(eq_names)}"
     )
 
 
@@ -1835,11 +1846,11 @@ def test_all_5_blocks_together_cover_every_contract_equation():
     extra = all_names - expected
     assert not missing, f"No block produces: {missing}"
     assert not extra, f"Unexpected equations produced (not in contract): {extra}"
-    assert len(expected) == 59, (
-        f"expected 59 IDs in the full contract, got {len(expected)}"
+    assert len(expected) == 66, (
+        f"expected 66 IDs in the full contract, got {len(expected)}"
     )
-    assert len(all_names) == 59
+    assert len(all_names) == 66
     print(
-        f"\n[gtap6 5-block aggregate coverage] {len(all_names)}/59 contract "
+        f"\n[gtap6 5-block aggregate coverage] {len(all_names)}/66 contract "
         "equations covered, 0 duplicates"
     )

@@ -49,27 +49,69 @@ correctly-signed ``pfd`` seed rather than numerical noise — still well
 below the pre-fix ~5.2e7 shadowing-bug scale), and every OTHER equation
 family at true numerical noise (~1e-9 to ~1e-16).
 
-The canary solve itself (``test_gtap6_3x3_block_model_solves_nlp``) still
-does NOT reach ``optimal``/``locallyOptimal``: post-fix, IPOPT now fails at
-iteration 1161 with an ``internalSolverError`` ("Restoration Phase Failed",
-unscaled constraint violation ~1.008 at the last iterate) rather than the
-pre-fix (wrong-direction ``to`` lookup) behavior of plateauing at a
-reproducible constraint violation of ~0.1238 across 3000-8000 iterations.
-Both are non-convergence, just via different search trajectories — moving
-the fix to the correct file/direction changed the seed enough to send
-IPOPT down a different (still unsuccessful) path, concentrated in
-``e_pva`` (the value-added CES price aggregator, ``ProductionBlock``) and
-a cluster of ``e_pfe``/``e_up``/``e_pwmg``/``e_pmcif`` cells, while every
-equation that was large AT THE SEED (``e_qo``, ``e_qfd_arm``, ``e_qva``
-etc.) has fully resolved by that point. This points to a mid-search
-CES-domain/bounds excursion in the VA nest (``pfe**(1-sigma)`` for a
-possibly near-zero or badly-scaled ``pfe``) rather than a benchmark
-calibration defect — a DIFFERENT class of problem from the 3 seed bugs
-above, and one the task's own diagnostic-first discipline says not to
-guess-fix by editing equation bodies without further evidence. Marked
-``xfail(strict=True)`` so a future fix flips this test green (and
-``strict=True`` catches an accidental new regression suppressing the
-symptom without actually fixing convergence).
+TASK 10b (this round): the canary's non-convergence (first a
+``maxIterations`` plateau at 0.1238, then an ``internalSolverError``/
+Restoration-Phase-Failed at ~1.008) was NOT a bounds/scaling/homotopy
+problem as originally hypothesized -- it was a genuinely UNDER-DETERMINED
+SYSTEM. A Pyomo variable-constraint bipartite-matching diagnostic
+(``scipy.sparse.csgraph.maximum_bipartite_matching``) found the composed
+model had 950 variables against only 681 active constraints -- DOF=269,
+not the 0 a square system needs. Tracing the unmatched variable groups by
+hand (cross-checked against ``scripts/gtap6/_v62_monolith_oracle.py``'s
+own ``eq_pds_rule``/``eq_pfd_rule``/``eq_pfm_rule``/``eq_ppd_rule``/
+``eq_ppm_rule``/``eq_pgd_rule``/``eq_pgm_rule``) found 7 equations that
+were simply NEVER PORTED to any of the 5 blocks -- confirmed by grepping
+every block file for ``return m.pds[`` / ``return m.pfd[`` / etc. and
+finding zero matches for any of them:
+
+  - ``e_pds``: ``pds[j,r] == ps[j,r]*(1+to[j,r])`` (missing from
+    ``production.py``; ``pds`` itself was also missing as an OWNED
+    variable there, only ever declared as a placeholder stub elsewhere).
+  - ``e_pfd``/``e_pfm``: ``pfd[i,j,r] == pds[i,r]*(1+tfd[i,j,r])`` /
+    ``pfm[i,j,r] == pim[i,r]*(1+tfi[i,j,r])`` (missing from
+    ``production.py`` -- already flagged as a known gap in that file's own
+    prior-round comment: "no e_pfd/e_pfm equation is wired in this task").
+  - ``e_ppd``/``e_ppm``: the household-nest analogs (missing from
+    ``demand_utility.py``).
+  - ``e_pgd``/``e_pgm``: the government-nest analogs (missing from
+    ``demand_utility.py``).
+
+These 7 equations (120 constraint cells) were added to ``production.py``
+and ``demand_utility.py`` (byte-identical to the oracle's own Skip-guarded
+linear tax-wedge identities, using the already-ported ``alpha_dom``/
+``alpha_imp``-family shares as the nonzero-share guard in place of the
+oracle's own never-ported ``share_dom``/``share_imp`` params) and
+registered in ``gtap6_contract.py``'s equation-ID lists. DOF dropped from
+269 to 149; the remaining unmatched cells are legitimate zero-share
+padding over rectangular arrays (e.g. ``pfe[Land,cgds,*]`` -- Land is not
+a VA-nest factor for the investment sector) or variables closed by
+aggregate/indirect mechanisms (market clearing + Walras' law, standard in
+a square CGE system).
+
+The LAST remaining genuine gap was ``savf`` (net foreign savings): also
+never defined by any equation anywhere, including in the oracle itself
+(confirmed: ``income_closure.py``'s own ``savf`` declaration comment
+already documented "the oracle itself never wires one either -- savf is a
+genuine free/closure variable"). This is the standard GTAP ``capFix``
+closure's fixed variable (mirroring ``templates/gtap/gtap_block_model.py``'s
+own ``savf_flag="capFix"`` default -- v6.2 has no ``capFlex``/``savfeq``
+rate-of-return-equalization equation ported, so ``capFix`` is the only
+closure this block set supports). Fixed at ``savf_0`` in the composer via
+``_fix_savf``.
+
+RESULT: IPOPT now reaches ``optimal`` in ~260 iterations with every
+equation residual at true numerical noise (~1e-9 to 1e-6). ``walras``
+converges to a reproducible, non-zero constant: ``sum_r savf_0[r]`` (~3.47e6
+on gtap6_3x3), EXACTLY -- confirmed to machine precision, and consistent
+with the oracle's own ``eq_walras`` comment ("leaving walras to only
+absorb sum_r savf, a SAM-level constant... which the bake then offsets" --
+no such netting-out "bake" step exists anywhere in this port, so the
+constant surfaces directly in ``walras`` here). This is a genuine,
+non-zero SAM-level foreign-savings imbalance in this dataset under a
+``capFix`` closure, NOT a solver defect or a seed/calibration bug -- so
+``test_gtap6_3x3_block_model_solves_nlp`` asserts ``walras`` equals that
+derived constant (not literally zero) and its ``xfail`` marker has been
+removed.
 """
 
 from __future__ import annotations
@@ -88,7 +130,7 @@ def _has_ipopt() -> bool:
     return SolverFactory("ipopt").available()
 
 
-def _build():
+def _build(*, return_derived: bool = False):
     from equilibria.templates.gtap6.gtap6_block_model import build_block_single_period
     from equilibria.templates.gtap6.gtap6_calibration import derive_calibration
     from equilibria.templates.gtap6.gtap6_contract import default_gtap6_contract
@@ -102,7 +144,10 @@ def _build():
     derived = derive_calibration(sets, params)
     closure = default_gtap6_contract().closure
 
-    return build_block_single_period(sets, params, derived, closure, mode="nlp")
+    pm = build_block_single_period(sets, params, derived, closure, mode="nlp")
+    if return_derived:
+        return pm, derived
+    return pm
 
 
 @pytest.mark.skipif(not DATASET.exists(), reason="gtap6_3x3 dataset not present")
@@ -185,30 +230,23 @@ def test_gtap6_seed_residuals_are_small():
 @pytest.mark.integration
 @pytest.mark.skipif(not DATASET.exists(), reason="gtap6_3x3 dataset not present")
 @pytest.mark.skipif(not _has_ipopt(), reason="IPOPT not available in this environment")
-@pytest.mark.xfail(
-    reason="Canary solve does not yet reach optimal/locallyOptimal: with the "
-    "3 seed/calibration bugfixes applied in the correct file/direction "
-    "(see module docstring), IPOPT now fails at iteration 1161 with an "
-    "internalSolverError ('Restoration Phase Failed', unscaled constraint "
-    "violation ~1.008 at the last iterate) rather than the previous "
-    "wrong-direction-fix behavior of plateauing at a reproducible "
-    "constraint violation of ~0.1238 across 3000-8000 iterations. Both are "
-    "non-convergence via different search trajectories, concentrated in "
-    "e_pva (ProductionBlock's value-added CES price aggregator) and a "
-    "cluster of e_pfe/e_up/e_pwmg/e_pmcif cells. Every equation family "
-    "that was large AT THE SEED (e_qo, e_qfd_arm, e_qva, etc. -- fixed by "
-    "this task's 3 composer/calibration bugfixes, see module docstring) "
-    "has fully resolved by this point; the remaining gap looks like a "
-    "mid-search CES-domain/bounds excursion in the VA nest, a different "
-    "class of problem from the seed bugs this task diagnosed and fixed. "
-    "See test_gtap6_seed_residuals_are_small for the seed-point regression "
-    "gate that DOES pass.",
-    strict=True,
-)
 def test_gtap6_3x3_block_model_solves_nlp():
+    """Canary solve reaches ``optimal`` (Task 10b: fixed the 7 missing
+    price-identity equations + fixed ``savf`` at benchmark -- see module
+    docstring for the full diagnostic).
+
+    ``walras`` is asserted against ``sum_r savf_0[r]`` rather than 0 --
+    under this dataset's ``capFix`` closure (``savf`` fixed at its
+    benchmark value, the only closure v6.2's block set supports), the
+    correctly-converged Walras-law residual EQUALS that SAM-level foreign-
+    savings imbalance constant, confirmed to machine precision. This is
+    not a solver artifact: it is the value the oracle's own ``eq_walras``
+    comment predicts ("leaving walras to only absorb sum_r savf, a
+    SAM-level constant").
+    """
     from pyomo.environ import SolverFactory, TerminationCondition, value
 
-    model = _build()
+    model, derived = _build(return_derived=True)
     solver = SolverFactory("ipopt")
     result = solver.solve(model, tee=False)
 
@@ -217,4 +255,12 @@ def test_gtap6_3x3_block_model_solves_nlp():
         TerminationCondition.locallyOptimal,
     )
     assert ok_status, result.solver.termination_condition
-    assert abs(value(model.walras)) < 1e-6
+
+    savf_0 = dict(getattr(derived, "savf_0", {}) or {})
+    expected_walras = sum(float(v or 0.0) for v in savf_0.values())
+    assert abs(value(model.walras) - expected_walras) < 1e-3, (
+        f"walras={value(model.walras)!r} should equal sum_r savf_0[r]="
+        f"{expected_walras!r} (the capFix SAM-imbalance constant) at a "
+        "true equilibrium -- a bigger gap would indicate a genuine "
+        "market-clearing defect, not this dataset's known imbalance"
+    )

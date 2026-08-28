@@ -635,6 +635,49 @@ class DemandUtilityBlock(Block):
 
         equations.append(EqPp())
 
+        # ---------------- e_ppd (oracle eq_ppd, monolith 1866) ------------
+        # ppd(i,r) = pds(i,r) * (1 + tpd(i,r)) -- household domestic agent
+        # price. MISSING from the original block port (Task 10b
+        # diagnostic): `ppd`/`ppm` were declared as real (non-stub) owned
+        # variables here but with NO defining equation anywhere in the
+        # composed model -- genuinely free variables, part of the ~139-cell
+        # gap (alongside pfd/pfm/pgd/pgm/pds) that left the canary solve's
+        # IPOPT search with dozens of unconstrained directions.
+        class EqPpd(SymbolicEquation):
+            name: str = "e_ppd"
+            domains: tuple = ("i", "r")
+
+            def build_expression(self, pyomo_model, indices):
+                from pyomo.environ import value as pyo_value
+
+                m = pyomo_model
+                i, r = indices
+                ad = float(pyo_value(m.alpha_dom_hhd[i, r]))
+                if ad <= 0.0:
+                    return None
+                return m.ppd[i, r] == m.pds[i, r] * (1.0 + m.tpd[i, r])
+
+        equations.append(EqPpd())
+
+        # ---------------- e_ppm (oracle eq_ppm, monolith 1874) ------------
+        # ppm(i,r) = pim(i,r) * (1 + tpi(i,r)) -- household imported agent
+        # price. MISSING from the original block port (see e_ppd comment).
+        class EqPpm(SymbolicEquation):
+            name: str = "e_ppm"
+            domains: tuple = ("i", "r")
+
+            def build_expression(self, pyomo_model, indices):
+                from pyomo.environ import value as pyo_value
+
+                m = pyomo_model
+                i, r = indices
+                ai = float(pyo_value(m.alpha_imp_hhd[i, r]))
+                if ai <= 0.0:
+                    return None
+                return m.ppm[i, r] == m.pim[i, r] * (1.0 + m.tpi[i, r])
+
+        equations.append(EqPpm())
+
         # ---------------- e_qp (oracle eq_qp, monolith 1828) --------------
         class EqQp(SymbolicEquation):
             name: str = "e_qp"
@@ -755,6 +798,45 @@ class DemandUtilityBlock(Block):
                 )
 
         equations.append(EqPg())
+
+        # ---------------- e_pgd (oracle eq_pgd, monolith 1997) ------------
+        # pgd(i,r) = pds(i,r) * (1 + tgd(i,r)) -- government domestic agent
+        # price. MISSING from the original block port (see e_ppd comment
+        # above in the household nest -- same gap, government nest).
+        class EqPgd(SymbolicEquation):
+            name: str = "e_pgd"
+            domains: tuple = ("i", "r")
+
+            def build_expression(self, pyomo_model, indices):
+                from pyomo.environ import value as pyo_value
+
+                m = pyomo_model
+                i, r = indices
+                ad = float(pyo_value(m.alpha_dom_gov[i, r]))
+                if ad <= 0.0:
+                    return None
+                return m.pgd[i, r] == m.pds[i, r] * (1.0 + m.tgd[i, r])
+
+        equations.append(EqPgd())
+
+        # ---------------- e_pgm (oracle eq_pgm, monolith 2004) ------------
+        # pgm(i,r) = pim(i,r) * (1 + tgi(i,r)) -- government imported agent
+        # price. MISSING from the original block port.
+        class EqPgm(SymbolicEquation):
+            name: str = "e_pgm"
+            domains: tuple = ("i", "r")
+
+            def build_expression(self, pyomo_model, indices):
+                from pyomo.environ import value as pyo_value
+
+                m = pyomo_model
+                i, r = indices
+                ai = float(pyo_value(m.alpha_imp_gov[i, r]))
+                if ai <= 0.0:
+                    return None
+                return m.pgm[i, r] == m.pim[i, r] * (1.0 + m.tgi[i, r])
+
+        equations.append(EqPgm())
 
         # ---------------- e_qg (oracle eq_qg, monolith 1964) --------------
         class EqQg(SymbolicEquation):

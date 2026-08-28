@@ -205,6 +205,60 @@ def _reseed_sav(pm: ConcreteModel, sets: Any, derived: Any) -> None:
         pm.sav[r].set_value(float(save0) - float(savf0))
 
 
+def _fix_savf(pm: ConcreteModel, sets: Any, derived: Any) -> None:
+    """Fix ``savf`` (net foreign savings) at its benchmark value —
+    the standard GTAP ``capFix`` closure.
+
+    ROOT CAUSE (Task 10b canary non-convergence diagnostic): ``savf`` has
+    NO defining equation anywhere in the model — confirmed against the
+    oracle itself (``scripts/gtap6/_v62_monolith_oracle.py`` never wires an
+    ``eq_savf``/BoP-clearing Constraint either; ``income_closure.py``'s own
+    module comment on the ``savf`` declaration already documents this:
+    "the oracle itself never wires one either — savf is a genuine
+    free/closure variable"). Combined with 6 other genuinely-missing
+    equations (``e_pds``/``e_pfd``/``e_pfm``/``e_ppd``/``e_ppm``/``e_pgd``/
+    ``e_pgm``, fixed directly in ``production.py``/``demand_utility.py``
+    this same round), this left the composed model dozens of degrees of
+    freedom short of square (confirmed via a Pyomo variable-constraint
+    bipartite-matching diagnostic: DOF was 269 before the 7 missing
+    equations were added, 149 after — with every remaining unmatched
+    cell either a genuine zero-share padding cell over a rectangular
+    array, or (``savf``) closed by THIS fix) — the true mechanism behind
+    both non-convergence failure modes reported by the original Task 10
+    canary attempt (the ``maxIterations`` plateau at 0.1238 and the later
+    ``internalSolverError``/Restoration-Phase-Failed at ~1.008): IPOPT's
+    interior-point search had many unconstrained directions with no
+    first-order condition pulling them toward an economically sensible
+    region, which is exactly the failure signature both reports describe.
+
+    Fixing ``savf`` at ``savf_0`` (rather than leaving it "free," as
+    ``GTAP6BoundsConfig.free`` lists it, or requiring a global
+    ``sum_r savf == 0`` capital-account closure this dataset does not
+    define) mirrors GTAP7's own composer precedent exactly:
+    ``templates/gtap/gtap_block_model.py``'s ``savf_flag="capFix"`` fixes
+    foreign savings at benchmark by default (``capFlex`` is the
+    alternative, non-default closure that frees it instead and pins a
+    different variable, e.g. via rate-of-return equalization — v6.2 has
+    no such alternative equation wired, so only ``capFix`` is available
+    here). It is also the ONLY choice consistent with ``_reseed_sav``'s
+    own seed formula above (``sav_0 == save_0 - savf_0``, i.e. the seed
+    already assumes ``savf`` sits at its benchmark value).
+
+    Consequence for ``walras``: with ``savf`` fixed at benchmark, the
+    solved ``walras`` equals ``sum_r savf_0[r]`` (~3.47e6 on gtap6_3x3 —
+    a genuine, nonzero SAM-level foreign-savings imbalance in this
+    dataset, NOT a solver defect; see the oracle's own ``eq_walras``
+    comment: "leaving walras to only absorb sum_r savf, a SAM-level
+    constant... which the bake then offsets" — no such "bake" step is
+    implemented anywhere in this port, so the constant surfaces directly
+    in ``walras`` here rather than being netted out beforehand).
+    """
+    savf0_map = dict(getattr(derived, "savf_0", {}) or {})
+    for r in sets.r:
+        savf0 = float(savf0_map.get(r, 0.0) or 0.0)
+        pm.savf[r].fix(savf0)
+
+
 def _strip_con_suffix(pm: ConcreteModel) -> None:
     """Rename ``{eq}_con`` -> ``{eq}`` so constraint names match the
     contract's bare equation IDs (the bridge's ``_build_constraints`` always
@@ -268,4 +322,5 @@ def build_block_single_period(
     _strip_con_suffix(pm)
     _reseed_shadowed_production_stubs(pm, sets, derived)
     _reseed_sav(pm, sets, derived)
+    _fix_savf(pm, sets, derived)
     return pm
