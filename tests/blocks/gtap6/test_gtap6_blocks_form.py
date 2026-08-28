@@ -1355,3 +1355,491 @@ def test_all_4_migrated_blocks_have_no_duplicate_equation_names():
             seen[eq.name] = cls.__name__
 
     assert len(seen) > 0
+
+
+# ======================================================================
+# IncomeClosureBlock (F7 Task 9b) — closure unit, last in GTAP6_BLOCK_ORDER
+# ======================================================================
+
+# Oracle Constraint name -> block equation name for the 7 equations that
+# exist as an active Constraint in the oracle (income_closure.py's module
+# docstring has the full grep-verified mapping/line numbers). e_kb, e_ke,
+# e_rorg, e_psave, e_gdpmp, e_rgdpmp, e_pgdpmp have NO oracle Constraint
+# anywhere (grep confirms no eq_kb/eq_rorg/eq_psave/eq_gdpmp/eq_rgdpmp/
+# eq_pgdpmp method exists in the oracle OR anywhere in the orphan branch)
+# and are checked separately below via the oracle's own documented
+# benchmark values/comments.
+_ORACLE_CONSTRAINT_FOR_INCOME = {
+    "e_y": "eq_y",
+    "e_yp": "eq_yp",
+    "e_yg": "eq_yg",
+    "e_ysav": "eq_sav",
+    "e_taxrev": "eq_tax_revenue",
+    "e_pgdpwld": "eq_pgdpwld",
+    "e_walras": "eq_walras",
+}
+
+
+def _build_oracle_income():
+    """Build the oracle model with the aliases IncomeClosureBlock needs.
+
+    IncomeClosureBlock's e_y/e_taxrev are written against
+    ``m.pfactor[f,r]`` (the contract/FactorBlock/ProductionBlock name for
+    the regional factor wage) and ``m.taxrev[r]`` (the contract's ID for
+    the per-region tax-revenue aggregate). The oracle hosts these SAME
+    quantities under the Python attribute names ``pf`` (monolith
+    894-901, "pf(f,r) — regional factor price for f in r") and
+    ``tax_revenue`` (monolith 1294-1299, the real per-region aggregate —
+    NOT the oracle's own dangling per-stream ``taxrev(r,gy)`` Var, see
+    income_closure.py's module docstring for why). Alias both (read-only,
+    ``object.__setattr__``, same technique as
+    ``_build_oracle_production``/``_build_oracle_factor``/
+    ``_build_oracle_demand_utility``) so the block's build_expression
+    resolves against the oracle's own live Vars without re-deriving a
+    second model. ``e_yp``/``e_yg`` also read ``m.pq[r]``, already
+    aliased onto ``oracle.pcons`` by the demand-utility helper below.
+    """
+    oracle = _build_oracle()
+    object.__setattr__(oracle, "pfactor", oracle.pf)
+    object.__setattr__(oracle, "taxrev", oracle.tax_revenue)
+    object.__setattr__(oracle, "pq", oracle.pcons)
+    return oracle
+
+
+def _build_income_closure_block(mode="nlp"):
+    from equilibria.blocks.gtap6.income_closure import IncomeClosureBlock
+
+    sets, params, derived = _build_calibration()
+    block = IncomeClosureBlock(sets=sets, params=params, derived=derived, mode=mode)
+    return block, sets, params, derived
+
+
+@pytest.fixture(scope="module")
+def _income_closure_fixtures():
+    block, sets, params, derived = _build_income_closure_block(mode="nlp")
+    set_manager = _build_set_manager(sets)
+    variables: dict = {}
+    parameters: dict = {}
+    equations = block.setup(set_manager, parameters, variables)
+    oracle = _build_oracle_income()
+    return block, sets, params, derived, set_manager, equations, variables, oracle
+
+
+def test_income_closure_block_setup_returns_all_contract_equations(
+    _income_closure_fixtures,
+):
+    """Confirm the split ruling: this block owns all 12 IDs in
+    _GTAP6_INCOME_AND_CLOSURE plus e_yp/e_yg reserved from
+    _GTAP6_FINAL_DEMAND (demand_utility.py's module docstring) — 14
+    equations total.
+    """
+    from equilibria.templates.gtap6.gtap6_contract import (
+        _GTAP6_FINAL_DEMAND,
+        _GTAP6_INCOME_AND_CLOSURE,
+    )
+
+    _block, _sets, _params, _derived, _sm, equations, _vars, _oracle = (
+        _income_closure_fixtures
+    )
+    eq_names = {eq.name for eq in equations}
+
+    assert len(_GTAP6_INCOME_AND_CLOSURE) == 12, (
+        f"expected 12 IDs in _GTAP6_INCOME_AND_CLOSURE, got "
+        f"{len(_GTAP6_INCOME_AND_CLOSURE)}"
+    )
+    assert "e_yp" in _GTAP6_FINAL_DEMAND
+    assert "e_yg" in _GTAP6_FINAL_DEMAND
+
+    expected = set(_GTAP6_INCOME_AND_CLOSURE) | {"e_yp", "e_yg"}
+    missing = expected - eq_names
+    extra = eq_names - expected
+    assert not missing, f"IncomeClosureBlock did not produce: {missing}"
+    assert not extra, f"IncomeClosureBlock produced unexpected equations: {extra}"
+    assert len(eq_names) == 14, (
+        f"expected 14 unique equation names, got {len(eq_names)}"
+    )
+
+
+def test_income_closure_sav_is_a_variable_not_a_parameter(_income_closure_fixtures):
+    """THE load-bearing check for this block (Phase 3.38 fix — see the
+    module docstring's full diagnostic history). ``sav`` MUST be declared
+    as a Pyomo Var, never a Param: the original orphan branch held it as
+    a constant ``save_0`` Param through Phase 3.36/3.37, leaving the
+    regional budget identity ``y = yp + yg + sav`` unsatisfied under any
+    shock (the imbalance leaked into ``walras`` instead, corrupting VIWS
+    by ~16pp). This test confirms both (1) the block's OWN ``sav``
+    Variable object has an unbounded ``Reals`` domain (a Param would
+    never appear in the ``variables`` dict passed to ``setup()`` at all,
+    so its mere presence there — with the correct free-Var domain — is
+    the signature of a Var, never a Param), and (2) the oracle's live
+    Pyomo model exposes ``sav`` as a genuine ``pyomo.environ.Var``
+    component, not a ``Param``.
+    """
+    from pyomo.environ import Param, Var
+
+    _block, _sets, _params, _derived, _sm, _equations, variables, oracle = (
+        _income_closure_fixtures
+    )
+
+    # (1) The block's own Variable object.
+    sav_var = variables["sav"]
+    assert sav_var.domain == "Reals", (
+        f"sav must be domain='Reals' (unbounded, can be negative), got "
+        f"{sav_var.domain!r}"
+    )
+    assert sav_var.lower == float("-inf") and sav_var.upper == float("inf"), (
+        "sav must be unbounded (Phase 3.38: sav = y - yp - yg is a "
+        "residual that can be negative), got bounds "
+        f"({sav_var.lower}, {sav_var.upper})"
+    )
+
+    # (2) The oracle's live Pyomo component — confirm it is a Var, and
+    # explicitly confirm it is NOT a Param (the bug this test guards
+    # against: reintroducing `sav` as a constant Param out of habit).
+    sav_component = oracle.sav
+    assert isinstance(sav_component, Var), (
+        f"oracle.sav must be a pyomo Var, got {type(sav_component)}"
+    )
+    assert not isinstance(sav_component, Param), (
+        "oracle.sav must NOT be a Param — this is the exact Phase 3.36/"
+        "3.37 regression documented in "
+        "docs/findings/gtap_v62_phase338_sav_var_budget_identity.md"
+    )
+
+
+def test_income_closure_block_matches_oracle_numerically(_income_closure_fixtures):
+    """Load-bearing numeric form-diff: block algebra vs the oracle, per-cell.
+
+    Covers e_y, e_yp, e_yg, e_ysav (THE Phase 3.38 fix), e_taxrev,
+    e_pgdpwld, e_walras — the 7 equations with a live oracle Constraint.
+    """
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as pyo_value
+
+    block, _sets, _params, _derived, _sm, equations, _vars, oracle = (
+        _income_closure_fixtures
+    )
+    eq_by_name = {eq.name: eq for eq in equations}
+
+    oracle_cons = {c.name: c for c in oracle.component_objects(Constraint, active=True)}
+
+    total_checked = 0
+    max_abs_diff = 0.0
+    worst_cell: tuple[str, object] | None = None
+
+    for block_name, oracle_name in _ORACLE_CONSTRAINT_FOR_INCOME.items():
+        eq = eq_by_name[block_name]
+        con = oracle_cons[oracle_name]
+        oracle_active_idx = {idx for idx, c in con.items() if c.active}
+
+        checked_this_eq = 0
+        for idx in _index_combos(oracle, eq.domains):
+            block_expr = eq.build_expression(oracle, idx)
+            key = idx if len(idx) > 1 else (idx[0] if idx else None)
+            if key is None:
+                # Scalar equation (e_pgdpwld/e_walras): the oracle's own
+                # Constraint is indexed by `None` when built with no set.
+                oracle_is_active = con.active if hasattr(con, "active") else True
+                if block_expr is None:
+                    assert not oracle_is_active
+                    continue
+                assert oracle_is_active
+                oracle_con = con
+            else:
+                oracle_is_active = key in oracle_active_idx
+                if block_expr is None:
+                    assert not oracle_is_active, (
+                        f"{block_name} Skips {idx} but oracle {oracle_name} "
+                        "is active there"
+                    )
+                    continue
+                assert oracle_is_active, (
+                    f"{block_name} builds {idx} but oracle {oracle_name} Skips it"
+                )
+                oracle_con = con[key]
+
+            block_con = block_expr
+            b_body = pyo_value(block_con.args[0]) - pyo_value(block_con.args[1])
+            o_body = pyo_value(oracle_con.body) - pyo_value(oracle_con.lower)
+            diff = abs(b_body - o_body)
+            if diff > max_abs_diff:
+                max_abs_diff = diff
+                worst_cell = (block_name, idx)
+            assert diff < _TOL, (
+                f"{block_name}{idx}: block residual {b_body} vs oracle "
+                f"residual {o_body} (diff {diff} >= {_TOL})"
+            )
+            checked_this_eq += 1
+            total_checked += 1
+
+        assert checked_this_eq > 0, f"{block_name}: no active cells checked"
+
+    assert total_checked > 0
+    print(
+        f"\n[gtap6 income-closure form-diff] {total_checked} cells checked across "
+        f"{len(_ORACLE_CONSTRAINT_FOR_INCOME)} equations; max |diff| = "
+        f"{max_abs_diff:.3e} at {worst_cell}"
+    )
+
+
+def test_income_closure_walras_absent_in_mcp_mode(_income_closure_fixtures):
+    """MCP mode drops walras/e_walras entirely (Walras' law makes one
+    market-clearing eq redundant in equilibrium) — mirrors the oracle's
+    own ``if self.mode == "nlp":`` gate (Task 5's smoke test: 195 vs 193
+    components, a diff of exactly walras + eq_walras).
+    """
+    block, sets, params, derived = _build_income_closure_block(mode="mcp")
+    set_manager = _build_set_manager(sets)
+    variables: dict = {}
+    parameters: dict = {}
+    equations = block.setup(set_manager, parameters, variables)
+    eq_names = {eq.name for eq in equations}
+
+    assert "e_walras" not in eq_names
+    assert "walras" not in variables
+    assert len(eq_names) == 13, (
+        f"expected 13 equations in mcp mode, got {len(eq_names)}"
+    )
+
+
+def test_income_closure_no_oracle_equations_match_documented_benchmark(
+    _income_closure_fixtures,
+):
+    """e_kb/e_ke/e_rorg/e_psave/e_gdpmp/e_rgdpmp/e_pgdpmp have no oracle
+    Constraint (see module docstring — the oracle declares the Var but
+    never wires a defining equation for any of them, and neither does the
+    orphan branch anywhere). Verify each against the oracle's OWN
+    documented benchmark value/comment instead, the same identity-check
+    methodology used for e_qds/e_qtmfsd (Task 6) and the sluggish CET
+    branch (Task 8).
+    """
+    from pyomo.environ import value as pyo_value
+
+    block, sets, params, derived, _sm, equations, _vars, oracle = (
+        _income_closure_fixtures
+    )
+    eq_by_name = {eq.name: eq for eq in equations}
+
+    # e_kb: kb(r) == vkb(r) — the oracle's OWN benchmark seed for BOTH
+    # kb and ke (monolith 1349/1356: both initialize from b.vkb.get(r,1.0)).
+    eq_kb = eq_by_name["e_kb"]
+    checked_kb = 0
+    for r in sets.r:
+        vkb = float(params.benchmark.vkb.get(r, 0.0) or 0.0)
+        expr = eq_kb.build_expression(oracle, (r,))
+        if vkb <= 1e-12:
+            assert expr is None
+            continue
+        assert expr is not None
+        lhs = pyo_value(expr.args[0])
+        rhs = pyo_value(expr.args[1])
+        assert abs(lhs - rhs) < 1e-6, (r, lhs, rhs)
+        checked_kb += 1
+    assert checked_kb > 0
+    print(f"\n[gtap6 e_kb benchmark identity] {checked_kb} regions checked")
+
+    # e_ke: ke(r) == kb(r) — no accumulation in one comparative-static
+    # period; at the seed both are literally the same VKB value.
+    eq_ke = eq_by_name["e_ke"]
+    checked_ke = 0
+    for r in sets.r:
+        expr = eq_ke.build_expression(oracle, (r,))
+        assert expr is not None
+        lhs = pyo_value(expr.args[0])
+        rhs = pyo_value(expr.args[1])
+        assert abs(lhs - rhs) < 1e-9, (r, lhs, rhs)
+        checked_ke += 1
+    assert checked_ke > 0
+    print(f"[gtap6 e_ke benchmark identity] {checked_ke} regions checked")
+
+    # e_gdpmp: gdpmp(r) == y(r) — the oracle's own stated benchmark
+    # identity (monolith 1378-1381 comment: "gdpmp / rgdpmp to y_0 ...
+    # so the identity eq_gdpmp (gdpmp = y) holds at benchmark").
+    eq_gdpmp = eq_by_name["e_gdpmp"]
+    checked_gdpmp = 0
+    for r in sets.r:
+        expr = eq_gdpmp.build_expression(oracle, (r,))
+        assert expr is not None
+        lhs = pyo_value(expr.args[0])
+        rhs = pyo_value(expr.args[1])
+        assert abs(lhs - rhs) < 1e-6, (r, lhs, rhs)
+        checked_gdpmp += 1
+    assert checked_gdpmp > 0
+    print(f"[gtap6 e_gdpmp benchmark identity] {checked_gdpmp} regions checked")
+
+    # e_pgdpmp: pgdpmp(r) == pgdpwld — both are 1.0 at the benchmark.
+    eq_pgdpmp = eq_by_name["e_pgdpmp"]
+    checked_pgdpmp = 0
+    for r in sets.r:
+        expr = eq_pgdpmp.build_expression(oracle, (r,))
+        assert expr is not None
+        lhs = pyo_value(expr.args[0])
+        rhs = pyo_value(expr.args[1])
+        assert abs(lhs - rhs) < 1e-9, (r, lhs, rhs)
+        checked_pgdpmp += 1
+    assert checked_pgdpmp > 0
+    print(f"[gtap6 e_pgdpmp benchmark identity] {checked_pgdpmp} regions checked")
+
+    # e_rgdpmp: pgdpmp(r) * rgdpmp(r) == gdpmp(r) — exact identity at any
+    # point (not just the benchmark), since it is a pure definitional
+    # relationship among the three GDP Vars.
+    eq_rgdpmp = eq_by_name["e_rgdpmp"]
+    checked_rgdpmp = 0
+    for r in sets.r:
+        expr = eq_rgdpmp.build_expression(oracle, (r,))
+        assert expr is not None
+        lhs = pyo_value(expr.args[0])
+        rhs = pyo_value(expr.args[1])
+        assert abs(lhs - rhs) < 1e-9, (r, lhs, rhs)
+        checked_rgdpmp += 1
+    assert checked_rgdpmp > 0
+    print(f"[gtap6 e_rgdpmp benchmark identity] {checked_rgdpmp} regions checked")
+
+    # e_psave: psave(r) == pgdpwld — both 1.0 at the benchmark.
+    eq_psave = eq_by_name["e_psave"]
+    checked_psave = 0
+    for r in sets.r:
+        expr = eq_psave.build_expression(oracle, (r,))
+        assert expr is not None
+        lhs = pyo_value(expr.args[0])
+        rhs = pyo_value(expr.args[1])
+        assert abs(lhs - rhs) < 1e-9, (r, lhs, rhs)
+        checked_psave += 1
+    assert checked_psave > 0
+    print(f"[gtap6 e_psave benchmark identity] {checked_psave} regions checked")
+
+    # e_rorg: rorg * sum_r(kb) == sum_r(pfactor[Capital,r]*qoes[Capital,r]).
+    # The oracle's OWN `rorg` Var is seeded to a placeholder 1.0 (it never
+    # calibrates it — see module docstring: no eq_rorg exists anywhere
+    # upstream), so this equation does NOT hold at the oracle's raw seed
+    # value; that seed is not economically meaningful for rorg. Instead,
+    # verify the IDENTITY itself is well-formed: solving args[0]==args[1]
+    # for rorg (i.e. numer/denom, using the oracle's live pfactor/qoes/kb
+    # at their benchmark values) reproduces exactly the calibrated ratio
+    # sum_r(evom[Capital,r]) / sum_r(vkb[r]) this block's own `rorg`
+    # Variable is initialized to (income_closure.py's `rorg_init`) — i.e.
+    # the equation is the correct DEFINING relationship for rorg, not a
+    # tautology that would pass for any coefficient.
+    eq_rorg = eq_by_name["e_rorg"]
+    expr = eq_rorg.build_expression(oracle, ())
+    assert expr is not None
+    denom_val = pyo_value(expr.args[0]) / pyo_value(oracle.rorg)  # == sum_r(kb)
+    numer_val = pyo_value(expr.args[1])
+    implied_rorg = numer_val / denom_val
+    expected_rorg = sum(
+        derived.evom.get(("Capital", r), 0.0) or 0.0 for r in sets.r
+    ) / sum(params.benchmark.vkb.get(r, 0.0) or 0.0 for r in sets.r)
+    assert abs(implied_rorg - expected_rorg) < 1e-6, (implied_rorg, expected_rorg)
+    print(
+        f"[gtap6 e_rorg benchmark identity] implied rorg={implied_rorg:.6f} "
+        f"== calibrated {expected_rorg:.6f}"
+    )
+
+
+def test_income_closure_ysav_budget_identity_holds_off_benchmark(
+    _income_closure_fixtures,
+):
+    """Curvature/perturbation test for e_ysav (Task 9a's own proactive
+    precedent: verify a form that is degenerate-looking at the benchmark
+    seed is not secretly a tautology). e_ysav (sav = y - yp - yg) is
+    LINEAR, not degenerate, but the whole point of the Phase 3.38 fix is
+    that the identity must hold IDENTICALLY away from the benchmark too
+    (under any shock to y/yp/yg) — not just at the calibration point
+    where sav happens to equal save_0 by construction. Perturb y/yp/yg
+    away from their seed values and confirm the residual (defined here as
+    args[0] - args[1] = sav - (y - yp - yg)) tracks the perturbation
+    EXACTLY (slope -1 in y, +1 in yp, +1 in yg), which a Param-based
+    `sav` (the Phase 3.36/3.37 bug) could never do since a Param cannot
+    move to satisfy a live constraint.
+    """
+    from pyomo.environ import value as pyo_value
+
+    block, sets, _params, _derived, _sm, equations, _vars, oracle = (
+        _income_closure_fixtures
+    )
+    eq_ysav = {e.name: e for e in equations}["e_ysav"]
+
+    checked = 0
+    for r in sets.r:
+        seed_y = float(pyo_value(oracle.y[r]))
+        seed_yp = float(pyo_value(oracle.yp[r]))
+        seed_yg = float(pyo_value(oracle.yg[r]))
+
+        def _residual(y_val, yp_val, yg_val, r=r):
+            oracle.y[r].set_value(y_val)
+            oracle.yp[r].set_value(yp_val)
+            oracle.yg[r].set_value(yg_val)
+            try:
+                expr = eq_ysav.build_expression(oracle, (r,))
+                assert expr is not None
+                return pyo_value(expr.args[0]) - pyo_value(expr.args[1])
+            finally:
+                oracle.y[r].set_value(seed_y)
+                oracle.yp[r].set_value(seed_yp)
+                oracle.yg[r].set_value(seed_yg)
+
+        bump = max(abs(seed_y) * 0.02, 1e-3)
+        r0 = _residual(seed_y, seed_yp, seed_yg)
+        r_dy = _residual(seed_y + bump, seed_yp, seed_yg)
+        r_dyp = _residual(seed_y, seed_yp + bump, seed_yg)
+        r_dyg = _residual(seed_y, seed_yp, seed_yg + bump)
+
+        slope_y = (r_dy - r0) / bump
+        slope_yp = (r_dyp - r0) / bump
+        slope_yg = (r_dyg - r0) / bump
+
+        assert abs(slope_y - (-1.0)) < 1e-6, (r, "d(residual)/dy", slope_y)
+        assert abs(slope_yp - 1.0) < 1e-6, (r, "d(residual)/dyp", slope_yp)
+        assert abs(slope_yg - 1.0) < 1e-6, (r, "d(residual)/dyg", slope_yg)
+        checked += 1
+
+    assert checked > 0
+    print(
+        f"\n[gtap6 e_ysav budget-identity curvature] {checked} regions "
+        "slope-checked (exact -1/+1/+1 in y/yp/yg)"
+    )
+
+
+# ======================================================================
+# All 5 blocks together (F7 Task 9b Step 4) — final aggregate gate before
+# Task 10's composer.
+# ======================================================================
+
+
+def test_all_5_blocks_together_cover_every_contract_equation():
+    """The last checkpoint before Task 10's composer attempt: instantiate
+    all 5 GTAP6_BLOCK_ORDER blocks together (leaf-to-closure order) and
+    assert their combined equation-name set exactly equals the FULL
+    59-ID contract.
+    """
+    from equilibria.blocks.gtap6 import GTAP6_BLOCK_ORDER
+    from equilibria.templates.gtap6.gtap6_contract import _full_gtap6_equation_ids
+
+    sets, params, derived = _build_calibration()
+    set_manager = _build_set_manager(sets)
+
+    all_names: set[str] = set()
+    seen: dict[str, str] = {}
+    for cls in GTAP6_BLOCK_ORDER:
+        block = cls(sets=sets, params=params, derived=derived)
+        eqs = block.setup(set_manager, {}, {})
+        for eq in eqs:
+            assert eq.name not in seen, (
+                f"{eq.name} claimed by both {seen[eq.name]} and {cls.__name__}"
+            )
+            seen[eq.name] = cls.__name__
+        all_names |= {eq.name for eq in eqs}
+
+    expected = set(_full_gtap6_equation_ids())
+    missing = expected - all_names
+    extra = all_names - expected
+    assert not missing, f"No block produces: {missing}"
+    assert not extra, f"Unexpected equations produced (not in contract): {extra}"
+    assert len(expected) == 59, (
+        f"expected 59 IDs in the full contract, got {len(expected)}"
+    )
+    assert len(all_names) == 59
+    print(
+        f"\n[gtap6 5-block aggregate coverage] {len(all_names)}/59 contract "
+        "equations covered, 0 duplicates"
+    )
