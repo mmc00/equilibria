@@ -108,6 +108,7 @@ repos:
               src/equilibria/templates/gtap/parity_adapter\.py|
               src/equilibria/templates/gtap/shocks\.py|
               src/equilibria/templates/gtap/welfare_shadow\.py|
+              src/equilibria/templates/gtap6/gtap6_block_model\.py|
               src/equilibria/templates/gtap_logvalue/composer\.py|
               src/equilibria/templates/init_strategies/base\.py|
               src/equilibria/templates/pep_calibration_unified\.py|
@@ -179,6 +180,7 @@ repos:
               tests/templates/gtap/test_nus333_landshock_parity\.py|
               tests/templates/gtap/test_nus333_neos_parity\.py|
               tests/templates/gtap/test_welfare_shadow\.py|
+              tests/templates/gtap6/test_gtap6_blocks_solve\.py|
               tests/templates/gtap6/test_gtap6_contract\.py|
               tests/templates/pep_pyomo/test_pep_coverage_matrix\.py|
               tests/templates/test_init_strategies\.py|
