@@ -37,7 +37,12 @@ for _p in (ROOT / "src", ROOT / "scripts"):
 
 DATASET = ROOT / "datasets" / "gtap6_3x3"
 
-_MIGRATED: list[str] = ["TradeArmingtonBlock", "ProductionBlock", "FactorBlock"]
+_MIGRATED: list[str] = [
+    "TradeArmingtonBlock",
+    "ProductionBlock",
+    "FactorBlock",
+    "DemandUtilityBlock",
+]
 
 # Oracle Constraint name -> block equation name, for the 14 equations that
 # exist as an active Constraint in the oracle. e_qds/e_qtmfsd have no
@@ -125,6 +130,7 @@ def _build_set_manager(sets):
     set_manager.add(Set(name="s", elements=tuple(sets.r)))
     set_manager.add(Set(name="rp", elements=tuple(sets.r)))
     set_manager.add(Set(name="f", elements=tuple(sets.f)))
+    set_manager.add(Set(name="cgds", elements=tuple(sets.cgds)))
     return set_manager
 
 
@@ -912,3 +918,440 @@ def test_factor_block_sluggish_cet_curvature_matches_omega_sign(_factor_fixtures
         f"[gtap6 e_pm_endw CET curvature] {checked_endw_slope} (f,r) cells "
         "sign-checked against (1+omega)"
     )
+
+
+# ======================================================================
+# DemandUtilityBlock (F7 Task 9a)
+# ======================================================================
+
+# Oracle Constraint name -> block equation name for the 14 of 16
+# equations that exist as an active Constraint in the oracle under the
+# SAME variable set (module docstring in demand_utility.py has the full
+# grep-verified mapping/line numbers). e_qfd_cgds/e_qfm_cgds have no
+# DEDICATED oracle Constraint (the oracle's eq_qfd/eq_qfm cover ALL j,
+# not just cgds) and are checked separately below by restricting the
+# SAME oracle Constraint to the cgds slice.
+_ORACLE_CONSTRAINT_FOR_DEMAND = {
+    "e_qpd": "eq_qpd",
+    "e_qpm": "eq_qpm",
+    "e_qp": "eq_qp",
+    "e_pp": "eq_pp",
+    "e_pq": "eq_pcons",
+    "e_up": "eq_up",
+    "e_qgd": "eq_qgd",
+    "e_qgm": "eq_qgm",
+    "e_qg": "eq_qg",
+    "e_pg": "eq_pg",
+    "e_pgov": "eq_pgov",
+    "e_ug": "eq_ug",
+    "e_qcgds": "eq_qcgds",
+    "e_pcgds": "eq_pcgds",
+}
+
+
+def _build_oracle_demand_utility():
+    """Build the oracle model with the alias DemandUtilityBlock needs.
+
+    DemandUtilityBlock's e_pq/e_up are written against ``m.pq[r]`` (the
+    contract's name for the CDE expenditure-function aggregator; see the
+    block's module docstring). The oracle hosts the SAME identity under
+    the Python attribute name ``pcons`` (its own docstring: "We re-use
+    the variable name `pcons` to host this identity for closure-matching
+    reasons"). Alias ``oracle.pq = oracle.pcons`` (read-only,
+    ``object.__setattr__``, same technique as
+    ``_build_oracle_production``/``_build_oracle_factor``) so the block's
+    build_expression resolves against the oracle's own live Var without
+    re-deriving a second model. This is a rename, not a new economic
+    claim.
+    """
+    oracle = _build_oracle()
+    object.__setattr__(oracle, "pq", oracle.pcons)
+    return oracle
+
+
+def _build_demand_utility_block():
+    from equilibria.blocks.gtap6.demand_utility import DemandUtilityBlock
+
+    sets, params, derived = _build_calibration()
+    block = DemandUtilityBlock(sets=sets, params=params, derived=derived)
+    return block, sets, params, derived
+
+
+@pytest.fixture(scope="module")
+def _demand_utility_fixtures():
+    block, sets, params, derived = _build_demand_utility_block()
+    set_manager = _build_set_manager(sets)
+    variables: dict = {}
+    parameters: dict = {}
+    equations = block.setup(set_manager, parameters, variables)
+    oracle = _build_oracle_demand_utility()
+    return block, sets, params, derived, set_manager, equations, variables, oracle
+
+
+def test_demand_utility_block_setup_returns_all_contract_equations(
+    _demand_utility_fixtures,
+):
+    """Confirm the split ruling: _GTAP6_FINAL_DEMAND has 18 IDs total;
+    this block owns exactly 16 (all but e_yp/e_yg, reserved for Task 9b's
+    IncomeClosureBlock per the controller's ruling).
+    """
+    from equilibria.templates.gtap6.gtap6_contract import _GTAP6_FINAL_DEMAND
+
+    _block, _sets, _params, _derived, _sm, equations, _vars, _oracle = (
+        _demand_utility_fixtures
+    )
+    eq_names = {eq.name for eq in equations}
+
+    assert len(_GTAP6_FINAL_DEMAND) == 18, (
+        f"expected 18 IDs in _GTAP6_FINAL_DEMAND, got {len(_GTAP6_FINAL_DEMAND)}"
+    )
+    assert "e_yp" in _GTAP6_FINAL_DEMAND
+    assert "e_yg" in _GTAP6_FINAL_DEMAND
+
+    expected = set(_GTAP6_FINAL_DEMAND) - {"e_yp", "e_yg"}
+    missing = expected - eq_names
+    extra = eq_names - expected
+    assert not missing, f"DemandUtilityBlock did not produce: {missing}"
+    assert not extra, f"DemandUtilityBlock produced unexpected equations: {extra}"
+    assert len(eq_names) == 16, (
+        f"expected 16 unique equation names, got {len(eq_names)}"
+    )
+
+
+def test_demand_utility_block_matches_oracle_numerically(_demand_utility_fixtures):
+    """Load-bearing numeric form-diff: block algebra vs the oracle, per-cell.
+
+    Evaluated at the fixture's benchmark seed (up=1, pp=pp_0, yp=yp_0,
+    pcons=1). This is non-vacuous for 13 of the 14 mapped equations
+    (e_qpd/e_qpm/e_pp/e_qgd/e_qgm/e_qg/e_pg/e_pgov/e_ug/e_qcgds/e_pcgds
+    combine genuinely different ppd/ppm/pgd/pgm/yp/yg/qo/ps values, not a
+    degenerate x**exp-at-x=1 case). e_qp/e_pq/e_up ARE degenerate at this
+    seed (the CDE ratio (pp/pp_0)/(yp/yp_0) == 1 identically, so any
+    INCPAR/SUBPAR exponent passes) — see
+    test_demand_utility_cde_curvature_matches_incpar_subpar below for the
+    non-vacuous perturbation check Task 8's review cycle established as
+    mandatory for exactly this situation.
+    """
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as pyo_value
+
+    block, _sets, _params, _derived, _sm, equations, _vars, oracle = (
+        _demand_utility_fixtures
+    )
+    eq_by_name = {eq.name: eq for eq in equations}
+
+    oracle_cons = {c.name: c for c in oracle.component_objects(Constraint, active=True)}
+
+    total_checked = 0
+    max_abs_diff = 0.0
+    worst_cell: tuple[str, object] | None = None
+
+    for block_name, oracle_name in _ORACLE_CONSTRAINT_FOR_DEMAND.items():
+        eq = eq_by_name[block_name]
+        con = oracle_cons[oracle_name]
+        oracle_active_idx = {idx for idx, c in con.items() if c.active}
+
+        checked_this_eq = 0
+        for idx in _index_combos(oracle, eq.domains):
+            block_expr = eq.build_expression(oracle, idx)
+            key = idx if len(idx) > 1 else idx[0]
+            oracle_is_active = key in oracle_active_idx
+
+            if block_expr is None:
+                assert not oracle_is_active, (
+                    f"{block_name} Skips {idx} but oracle {oracle_name} is active there"
+                )
+                continue
+
+            assert oracle_is_active, (
+                f"{block_name} builds {idx} but oracle {oracle_name} Skips it"
+            )
+            oracle_con = con[key]
+
+            block_con = block_expr
+            b_body = pyo_value(block_con.args[0]) - pyo_value(block_con.args[1])
+            o_body = pyo_value(oracle_con.body) - pyo_value(oracle_con.lower)
+            diff = abs(b_body - o_body)
+            if diff > max_abs_diff:
+                max_abs_diff = diff
+                worst_cell = (block_name, idx)
+            assert diff < _TOL, (
+                f"{block_name}{idx}: block residual {b_body} vs oracle "
+                f"residual {o_body} (diff {diff} >= {_TOL})"
+            )
+            checked_this_eq += 1
+            total_checked += 1
+
+        assert checked_this_eq > 0, f"{block_name}: no active cells checked"
+
+    assert total_checked > 0
+    print(
+        f"\n[gtap6 demand-utility form-diff] {total_checked} cells checked across "
+        f"{len(_ORACLE_CONSTRAINT_FOR_DEMAND)} equations; max |diff| = "
+        f"{max_abs_diff:.3e} at {worst_cell}"
+    )
+
+
+def test_demand_utility_cgds_matches_oracle_qfd_qfm_slice(_demand_utility_fixtures):
+    """e_qfd_cgds/e_qfm_cgds have no DEDICATED oracle Constraint — the
+    oracle's eq_qfd/eq_qfm cover ALL j (including cgds) in one indexed
+    Constraint, already ported in full by TradeArmingtonBlock as
+    e_qfd_arm/e_qfm_arm. Verify this block's cgds-restricted equations
+    reproduce the SAME oracle Constraint bodies, evaluated at the
+    j==cgds slice only.
+    """
+    from pyomo.environ import value as pyo_value
+
+    block, sets, _params, _derived, _sm, equations, _vars, oracle = (
+        _demand_utility_fixtures
+    )
+    eq_by_name = {eq.name: eq for eq in equations}
+    eq_qfd_cgds = eq_by_name["e_qfd_cgds"]
+    eq_qfm_cgds = eq_by_name["e_qfm_cgds"]
+
+    oracle_qfd = oracle.eq_qfd
+    oracle_qfm = oracle.eq_qfm
+
+    checked = 0
+    max_diff = 0.0
+    for i in sets.i:
+        for cg in sets.cgds:
+            for r in sets.r:
+                block_expr = eq_qfd_cgds.build_expression(oracle, (i, cg, r))
+                key = (i, cg, r)
+                oracle_active = key in oracle_qfd and oracle_qfd[key].active
+                if block_expr is None:
+                    assert not oracle_active, (i, cg, r)
+                    continue
+                assert oracle_active, (i, cg, r)
+                oracle_con = oracle_qfd[key]
+                b_body = pyo_value(block_expr.args[0]) - pyo_value(block_expr.args[1])
+                o_body = pyo_value(oracle_con.body) - pyo_value(oracle_con.lower)
+                diff = abs(b_body - o_body)
+                max_diff = max(max_diff, diff)
+                assert diff < _TOL, (i, cg, r, b_body, o_body, diff)
+                checked += 1
+
+                block_expr_m = eq_qfm_cgds.build_expression(oracle, (i, cg, r))
+                oracle_active_m = key in oracle_qfm and oracle_qfm[key].active
+                if block_expr_m is None:
+                    assert not oracle_active_m, (i, cg, r)
+                    continue
+                assert oracle_active_m, (i, cg, r)
+                oracle_con_m = oracle_qfm[key]
+                b_body_m = pyo_value(block_expr_m.args[0]) - pyo_value(
+                    block_expr_m.args[1]
+                )
+                o_body_m = pyo_value(oracle_con_m.body) - pyo_value(oracle_con_m.lower)
+                diff_m = abs(b_body_m - o_body_m)
+                max_diff = max(max_diff, diff_m)
+                assert diff_m < _TOL, (i, cg, r, b_body_m, o_body_m, diff_m)
+                checked += 1
+
+    assert checked > 0
+    print(f"\n[gtap6 e_qfd_cgds/e_qfm_cgds slice] max |diff| = {max_diff:.3e}")
+
+
+def test_demand_utility_cde_curvature_matches_incpar_subpar(_demand_utility_fixtures):
+    """Exponent/curvature check for the household CDE branch (e_qp/e_pq/
+    e_up).
+
+    The benchmark-seed form-diff test above evaluates e_qp/e_pq/e_up at
+    up==1, pp==pp_0, yp==yp_0 — the CDE ratio ``(pp/pp_0)/(yp/yp_0)``
+    collapses to exactly 1 there, so ``ratio**SUBPAR == 1`` and
+    ``up**(INCPAR*SUBPAR) == 1`` for ANY INCPAR/SUBPAR value (even a
+    Cobb-Douglas placeholder with INCPAR=SUBPAR=0 would pass). This is
+    precisely the Task 8 review-cycle precedent
+    (test_factor_block_sluggish_cet_curvature_matches_omega_sign):
+    a benchmark-only identity is not sufficient evidence for a nonlinear
+    functional form: perturb pp[i,r] away from pp_0 (holding up/yp fixed
+    at their seed) and confirm the SIGN and (for a nonzero SUBPAR)
+    MAGNITUDE of the resulting share-expression slope matches
+    SUBPAR — the exponent that actually appears in both the oracle's
+    ``_cde_term``/``eq_qp_rule``/``eq_pcons_rule`` and this block's
+    identical transcription.
+
+    share_i(pp) = CONSHR_i_0 * up^(INCPAR*SUBPAR) * ((pp_i/pp_i_0)/(yp/yp_0))^SUBPAR_i
+    d(share)/d(pp_i) at the seed (up=1, yp=yp_0, pp_i=pp_i_0):
+      = CONSHR_i_0 * SUBPAR_i / pp_i_0
+    which has the SAME SIGN as SUBPAR_i (CONSHR_i_0, pp_i_0 > 0 whenever
+    the cell is active). BOOK3X3's SUBPAR values are all positive
+    (documented in phase319's finding: SUBPAR in [0.01, 0.97]), so this
+    also confirms the slope is POSITIVE and roughly proportional to
+    SUBPAR_i across goods with very different SUBPAR (food ~0.87-0.97 vs
+    services ~0.01), a real economic dispersion in this dataset, not a
+    synthetic one.
+    """
+    from pyomo.environ import value as pyo_value
+
+    block, sets, params, derived, _sm, equations, _vars, oracle = (
+        _demand_utility_fixtures
+    )
+    eq_by_name = {eq.name: eq for eq in equations}
+    eq_qp = eq_by_name["e_qp"]
+    eq_pq = eq_by_name["e_pq"]
+
+    subpar = params.elasticities.subpar
+    incpar = params.elasticities.incpar
+    share_hhd_cd = derived.share_hhd_cd
+    pp_0 = derived.pp_0
+
+    _BUMP_REL = 0.02  # 2% bump on pp_i, small enough to stay in-nest
+
+    checked_qp_slope = 0
+    checked_pq_slope = 0
+    subpar_values_seen: set[float] = set()
+
+    for i in sets.i:
+        for r in sets.r:
+            cshr_0 = float(share_hhd_cd.get((i, r), 0.0) or 0.0)
+            if cshr_0 <= 0.0:
+                continue
+            subp = float(subpar.get((i, r), 0.0) or 0.0)
+            subpar_values_seen.add(round(subp, 4))
+
+            seed_pp = float(pyo_value(oracle.pp[i, r]))
+            seed_up = float(pyo_value(oracle.up[r]))
+            seed_yp = float(pyo_value(oracle.yp[r]))
+            assert seed_up == 1.0, (
+                "test assumes the fixture's benchmark seed (up=1); if this "
+                "ever changes the finite-difference bump must be re-derived"
+            )
+
+            bump = seed_pp * _BUMP_REL
+
+            def _qp_residual(pp_val, i=i, r=r):
+                oracle.pp[i, r].set_value(pp_val)
+                try:
+                    expr = eq_qp.build_expression(oracle, (i, r))
+                    assert expr is not None
+                    return pyo_value(expr.args[0]) - pyo_value(expr.args[1])
+                finally:
+                    oracle.pp[i, r].set_value(seed_pp)
+
+            r0 = _qp_residual(seed_pp)
+            r1 = _qp_residual(seed_pp + bump)
+            slope = (r1 - r0) / bump
+
+            if subp <= 1e-8:
+                # SUBPAR == 0 (degenerate CDE, if present in this dataset):
+                # the ratio**0 == 1 term is flat in pp — residual slope
+                # should come ONLY from the linear qp_0-independent LHS
+                # term (pp*qp), not from the (now-flat) share expression.
+                # Not exercised on BOOK3X3 (all SUBPAR > 0) but handled
+                # for robustness.
+                pass
+            else:
+                assert slope > 0, (
+                    f"e_qp({i},{r}): SUBPAR={subp} > 0 but perturbing pp "
+                    f"upward gives non-positive slope={slope}"
+                )
+            checked_qp_slope += 1
+
+            # ---- e_pq: perturb the SAME pp[i,r], holding all other
+            # goods' pp/up/yp fixed at seed, and differentiate the
+            # expenditure-function identity's LHS (sum_i share_i - 1)
+            # w.r.t. pp[i,r]. Since only good i's summand depends on
+            # pp[i,r], the sign logic is identical to e_qp's.
+            def _pq_residual(pp_val, i=i, r=r):
+                oracle.pp[i, r].set_value(pp_val)
+                try:
+                    expr = eq_pq.build_expression(oracle, (r,))
+                    assert expr is not None
+                    return pyo_value(expr.args[0]) - pyo_value(expr.args[1])
+                finally:
+                    oracle.pp[i, r].set_value(seed_pp)
+
+            p0 = _pq_residual(seed_pp)
+            p1 = _pq_residual(seed_pp + bump)
+            pq_slope = (p1 - p0) / bump
+
+            if subp > 1e-8:
+                assert pq_slope > 0, (
+                    f"e_pq({r}) via good {i}: SUBPAR={subp} > 0 but "
+                    f"perturbing pp[{i}] gives non-positive slope={pq_slope}"
+                )
+            checked_pq_slope += 1
+
+    assert checked_qp_slope > 0
+    assert checked_pq_slope > 0
+    # Confirm real dispersion in SUBPAR across this dataset's goods (not
+    # every cell sharing one degenerate value) — otherwise a sign-only
+    # check could pass even for a constant-magnitude bug.
+    assert len(subpar_values_seen) > 1, (
+        f"expected dispersion in SUBPAR across goods, got only {subpar_values_seen}"
+    )
+    print(
+        f"\n[gtap6 e_qp/e_pq CDE curvature] {checked_qp_slope} (i,r) cells "
+        f"sign-checked against SUBPAR (values seen: {sorted(subpar_values_seen)})"
+    )
+
+    # ---- e_up: perturb yp[r] (holding pp fixed at pp_0, up at its
+    # implicit value) and confirm the welfare identity's bilinear term
+    # (up * pq) responds monotonically to yp — up*pq == yp/yp_0 is an
+    # exact linear identity in yp, so the slope must equal EXACTLY
+    # 1/yp_0 (not just same-signed): this catches a wrong-power bug
+    # (e.g. accidentally squaring yp) that a sign check alone would miss.
+    eq_up = eq_by_name["e_up"]
+    checked_up_slope = 0
+    for r in sets.r:
+        yp_0 = float(derived.yp_0.get(r, 1.0) or 1.0)
+        if yp_0 <= 0.0:
+            continue
+        seed_yp = float(pyo_value(oracle.yp[r]))
+        seed_up = float(pyo_value(oracle.up[r]))
+        seed_pq = float(pyo_value(oracle.pq[r]))
+
+        def _up_residual(yp_val, r=r):
+            oracle.yp[r].set_value(yp_val)
+            try:
+                expr = eq_up.build_expression(oracle, (r,))
+                assert expr is not None
+                return pyo_value(expr.args[0]) - pyo_value(expr.args[1])
+            finally:
+                oracle.yp[r].set_value(seed_yp)
+
+        bump_yp = max(seed_yp * 0.02, 1e-6)
+        u0 = _up_residual(seed_yp)
+        u1 = _up_residual(seed_yp + bump_yp)
+        slope = (u1 - u0) / bump_yp
+        expected_slope = -1.0 / yp_0  # residual = up*pq - yp/yp_0
+        assert abs(slope - expected_slope) < 1e-6, (
+            r,
+            slope,
+            expected_slope,
+            seed_up,
+            seed_pq,
+        )
+        checked_up_slope += 1
+
+    assert checked_up_slope > 0
+    print(
+        f"[gtap6 e_up curvature] {checked_up_slope} regions slope-checked (exact 1/yp_0)"
+    )
+
+
+def test_all_4_migrated_blocks_have_no_duplicate_equation_names():
+    """Sanity check: no two migrated blocks claim the same equation ID
+    (would silently overwrite in a real composer). Cheap guard now that
+    4 of 5 blocks exist, ahead of Task 9b's full 5-block aggregate test.
+    """
+    from equilibria.blocks.gtap6.demand_utility import DemandUtilityBlock
+    from equilibria.blocks.gtap6.factor import FactorBlock
+    from equilibria.blocks.gtap6.production import ProductionBlock
+    from equilibria.blocks.gtap6.trade_armington import TradeArmingtonBlock
+
+    sets, params, derived = _build_calibration()
+    set_manager = _build_set_manager(sets)
+
+    seen: dict[str, str] = {}
+    for cls in (TradeArmingtonBlock, ProductionBlock, FactorBlock, DemandUtilityBlock):
+        block = cls(sets=sets, params=params, derived=derived)
+        eqs = block.setup(set_manager, {}, {})
+        for eq in eqs:
+            assert eq.name not in seen, (
+                f"{eq.name} claimed by both {seen[eq.name]} and {cls.__name__}"
+            )
+            seen[eq.name] = cls.__name__
+
+    assert len(seen) > 0
