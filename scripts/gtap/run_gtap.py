@@ -3694,7 +3694,13 @@ def _run_path_capi_nonlinear_full(
                     from equilibria.templates.gtap_jax.jax_model import (
                         build_jax_eval_from_nlp,
                     )
+                    # Compiling F+J at 395k costs ~10GB transient RAM; on a 33GB box that plus
+                    # the ~19GB Pyomo model OOMs (measured gate v10: peak 29.5GB). gc first to
+                    # reclaim any dead build scaffolding before the XLA compile peak.
+                    import gc as _gc_jx
+                    _gc_jx.collect()
                     _jax_eval = build_jax_eval_from_nlp(_nlp_sr)
+                    _gc_jx.collect()
                     # parity gate at the current primals
                     _x_probe = _nlp_sr.get_primals()
                     _nlp_sr.set_primals(_x_probe)
