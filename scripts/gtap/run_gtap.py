@@ -2338,360 +2338,450 @@ def _run_path_capi_nonlinear_full(
     from pyomo.environ import Constraint
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
-    # Apply closure and conditional fixing based on SAM data
-    solver_helper = GTAPSolver(
-        model, closure=closure_config, solver_name="path", params=params
-    )
-    if closure_config is not None:
-        solver_helper.apply_closure(closure_config)
-    solver_helper.apply_conditional_fixing()
+    # ── STRUCTURAL CACHE (EQUILIBRIA_GTAP_STRUCT_CACHE=1), PHASE 1b ─────────────────
+    # The block below (apply_closure, apply_conditional_fixing, apply_aggressive_fixing_for_mcp,
+    # apply_squareness_patches, the yi[rres]/pft/pfteq mirrors, price-lb guards) mutates the
+    # model's active/fixed state and is re-run on EVERY phase call (9x on the 20x41). cProfile
+    # (gate v15) showed apply_conditional_fixing (596s) + apply_squareness_patches (297s) are
+    # 20% of a 22-min non-Newton wall — on top of the 10% structural_matching already caches
+    # (see below). Signature = the model's (active-constraint, fixed-var) state at ENTRY, BEFORE
+    # this block mutates anything — that entry-state is what freeze_inactive_periods set before
+    # this call, and this whole block is a deterministic function of it (apply_conditional_fixing
+    # is SAM-data-driven, phase-invariant — verified in gtap_solver.py; the rest depends only on
+    # which vars/eqs are already fixed/active). An identical entry-signature guarantees identical
+    # exit state, so on a hit we skip the ENTIRE block and replay its net effect (deactivated
+    # constraints + fixed vars) by name. A miss runs the block unchanged and captures the diff.
+    # Reuse fires ONLY on a byte-identical signature (same mechanism as lever B2's MUMPS-symbolic
+    # reuse and the structural_matching cache above); any name-set mismatch falls back to the full
+    # recompute. See docs/superpowers/specs/2026-08-28-structural-cache-design.md.
+    _struct1b_on = os.environ.get("EQUILIBRIA_GTAP_STRUCT_CACHE") == "1"
+    _struct1b_hit = None
+    if _struct1b_on:
+        try:
+            from _structural_cache import (  # type: ignore
+                StructuralCache as _Struct1bCacheCls,
+                signature as _struct1b_signature,
+                snapshot_active_fixed as _struct1b_snapshot,
+                apply_squareness_by_name as _struct1b_apply_sq,
+                apply_fixing_by_name as _struct1b_apply_fix,
+            )
+        except ImportError:
+            import sys as _sys
 
-    # Make MCP square by fixing structural variables at their initialization values.
-    # This must happen BEFORE the warm-start hint so that the 90 unmatched structural
-    # vars are fixed at the shocked model's cold-init values (e.g. pmt initialized
-    # near the shocked equilibrium price) rather than at baseline values.
-    solver_helper.apply_aggressive_fixing_for_mcp()
+            _sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from _structural_cache import (  # type: ignore
+                StructuralCache as _Struct1bCacheCls,
+                signature as _struct1b_signature,
+                snapshot_active_fixed as _struct1b_snapshot,
+                apply_squareness_by_name as _struct1b_apply_sq,
+                apply_fixing_by_name as _struct1b_apply_fix,
+            )
+        global _STRUCT_BLOCK_CACHE
+        if "_STRUCT_BLOCK_CACHE" not in globals():
+            _STRUCT_BLOCK_CACHE = _Struct1bCacheCls()
+        _entry_active, _entry_fixed = _struct1b_snapshot(model)
+        _struct1b_sig = _struct1b_signature(sorted(_entry_active), sorted(_entry_fixed))
+        _struct1b_hit = _STRUCT_BLOCK_CACHE.try_reuse(_struct1b_sig)
 
-    # For altertax closure (finite omegaf), deactivate eq_xft for mobile factors
-    # BEFORE apply_squareness_patches. The patches deactivate equations that have
-    # no unique variable — but eq_xfteq would be falsely flagged as over-determining
-    # when eq_xft is still active (both compete for xft). Remove eq_xft first.
-    #
-    # In GAMS altertax, factor market clearing is implicitly satisfied through the
-    # pfeq demand system + xfteq supply complementarity; there is NO separate clearing
-    # equation. Python's eq_xft mirrors GAMS pfteq for omegaf=inf (market clearing),
-    # but with finite omegaf that role belongs to eq_pfteq (CET price index). Having
-    # both eq_xft AND eq_xfteq active for xft over-determines the system.
-    _is_altertax_closure = (
-        closure_config is not None
-        and getattr(closure_config, "name", None) == "altertax"
-    )
-    if _is_altertax_closure and hasattr(model, "eq_xft"):
-        _mf_set = set(str(f) for f in model.mf) if hasattr(model, "mf") else set()
-        _xft_deact = 0
-        for _r in model.r:
-            for _f in model.f:
-                if str(_f) not in _mf_set:
+    if _struct1b_hit is not None:
+        # REUSE: skip the entire block below, replay its net effect by name.
+        _struct1b_apply_sq(model, _struct1b_hit["squareness"])
+        _struct1b_apply_fix(model, _struct1b_hit["fixing"])
+        solver_helper = GTAPSolver(
+            model, closure=closure_config, solver_name="path", params=params
+        )
+        print(
+            "[nlp-square] STRUCT_CACHE hit — reused closure+squareness+fixing block",
+            file=sys.stderr, flush=True,
+        )
+        from pyomo.environ import Var as _StructBlockVar
+
+        constraints = sorted(
+            model.component_data_objects(Constraint, active=True, descend_into=True),
+            key=lambda c: c.name,
+        )
+        free_variables = sorted(
+            (
+                var
+                for var in model.component_data_objects(
+                    _StructBlockVar, active=True, descend_into=True
+                )
+                if not var.fixed
+            ),
+            key=lambda v: v.name,
+        )
+    else:
+        if _struct1b_on:
+            _struct1b_before_active, _struct1b_before_fixed = _struct1b_snapshot(model)
+
+        # Apply closure and conditional fixing based on SAM data
+        solver_helper = GTAPSolver(
+            model, closure=closure_config, solver_name="path", params=params
+        )
+        if closure_config is not None:
+            solver_helper.apply_closure(closure_config)
+        solver_helper.apply_conditional_fixing()
+
+        # Make MCP square by fixing structural variables at their initialization values.
+        # This must happen BEFORE the warm-start hint so that the 90 unmatched structural
+        # vars are fixed at the shocked model's cold-init values (e.g. pmt initialized
+        # near the shocked equilibrium price) rather than at baseline values.
+        solver_helper.apply_aggressive_fixing_for_mcp()
+
+        # For altertax closure (finite omegaf), deactivate eq_xft for mobile factors
+        # BEFORE apply_squareness_patches. The patches deactivate equations that have
+        # no unique variable — but eq_xfteq would be falsely flagged as over-determining
+        # when eq_xft is still active (both compete for xft). Remove eq_xft first.
+        #
+        # In GAMS altertax, factor market clearing is implicitly satisfied through the
+        # pfeq demand system + xfteq supply complementarity; there is NO separate clearing
+        # equation. Python's eq_xft mirrors GAMS pfteq for omegaf=inf (market clearing),
+        # but with finite omegaf that role belongs to eq_pfteq (CET price index). Having
+        # both eq_xft AND eq_xfteq active for xft over-determines the system.
+        _is_altertax_closure = (
+            closure_config is not None
+            and getattr(closure_config, "name", None) == "altertax"
+        )
+        if _is_altertax_closure and hasattr(model, "eq_xft"):
+            _mf_set = set(str(f) for f in model.mf) if hasattr(model, "mf") else set()
+            _xft_deact = 0
+            for _r in model.r:
+                for _f in model.f:
+                    if str(_f) not in _mf_set:
+                        continue
+                    try:
+                        _eq_xft_vd = model.eq_xft[_r, _f]
+                    except KeyError:
+                        continue
+                    if not _eq_xft_vd.active:
+                        continue
+                    _eq_xft_vd.deactivate()
+                    _xft_deact += 1
+            if _xft_deact:
+                logger.info(
+                    "altertax: deactivated eq_xft for %d mobile (r,f) pairs "
+                    "(clearing implicit via xfteq supply + pfeq demand)",
+                    _xft_deact,
+                )
+
+        # When the closure leaves the system over-determined (gap <= 0), the helper
+        # above does nothing. The same patches NUS333 needs apply here:
+        #  1. fix sluggish pft (dangling — no eq references them)
+        #  2. deactivate eq_xfteq for mobile factors with xft fixed
+        #  3. Hopcroft-Karp → deactivate unmatched eq_xseq under omegax=inf
+        try:
+            from _closure_patches import apply_squareness_patches  # type: ignore
+        except ImportError:
+            import sys as _sys
+
+            _sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from _closure_patches import apply_squareness_patches  # type: ignore
+        # pure-gtap mode (both ifSUB): keep eq_xseq (supply balance, a GAMS free-row)
+        # active; the GAMS supply-block pairing is HARD-forced in structural_matching
+        # below instead.  Gated on the driver's _gtap_mode flag (altertax unaffected).
+        _gtap_mode = bool(getattr(model, "_gtap_mode", False))
+        apply_squareness_patches(
+            model, params, label="nonlinear-full", protect_xseq=_gtap_mode
+        )
+
+        # Mirror GAMS holdfixed=1: yi[rres] has no MCP pair (yieq is skipped for
+        # residual region). Without explicit fixing, yi[rres] floats freely in
+        # eq_xiagg[rres] (which has two free vars: yi and xiagg) and PATH can drive
+        # yi negative to satisfy xiagg>=0 complementarity. Fix yi[rres] at the
+        # income identity value so eq_xiagg determines xiagg = yi/pi > 0.
+        _residual_region = getattr(model, "_residual_region", None)
+        if _residual_region is None and params is not None:
+            _residual_region = getattr(params, "residual_region", None)
+        if _residual_region is None:
+            _residual_region = "NAmerica"
+        if hasattr(model, "yi") and hasattr(model, "eq_yi"):
+            for _r in model.r:
+                if str(_r) != _residual_region:
                     continue
                 try:
-                    _eq_xft_vd = model.eq_xft[_r, _f]
+                    _yi_data = model.yi[_r]
                 except KeyError:
+                    # Multi-period model: yi is indexed by (r, t); skip since
+                    # freeze_inactive_periods already handles period selectivity.
                     continue
-                if not _eq_xft_vd.active:
+                if _yi_data.fixed:
                     continue
-                _eq_xft_vd.deactivate()
-                _xft_deact += 1
-        if _xft_deact:
-            logger.info(
-                "altertax: deactivated eq_xft for %d mobile (r,f) pairs "
-                "(clearing implicit via xfteq supply + pfeq demand)",
-                _xft_deact,
-            )
-
-    # When the closure leaves the system over-determined (gap <= 0), the helper
-    # above does nothing. The same patches NUS333 needs apply here:
-    #  1. fix sluggish pft (dangling — no eq references them)
-    #  2. deactivate eq_xfteq for mobile factors with xft fixed
-    #  3. Hopcroft-Karp → deactivate unmatched eq_xseq under omegax=inf
-    try:
-        from _closure_patches import apply_squareness_patches  # type: ignore
-    except ImportError:
-        import sys as _sys
-
-        _sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from _closure_patches import apply_squareness_patches  # type: ignore
-    # pure-gtap mode (both ifSUB): keep eq_xseq (supply balance, a GAMS free-row)
-    # active; the GAMS supply-block pairing is HARD-forced in structural_matching
-    # below instead.  Gated on the driver's _gtap_mode flag (altertax unaffected).
-    _gtap_mode = bool(getattr(model, "_gtap_mode", False))
-    apply_squareness_patches(
-        model, params, label="nonlinear-full", protect_xseq=_gtap_mode
-    )
-
-    # Mirror GAMS holdfixed=1: yi[rres] has no MCP pair (yieq is skipped for
-    # residual region). Without explicit fixing, yi[rres] floats freely in
-    # eq_xiagg[rres] (which has two free vars: yi and xiagg) and PATH can drive
-    # yi negative to satisfy xiagg>=0 complementarity. Fix yi[rres] at the
-    # income identity value so eq_xiagg determines xiagg = yi/pi > 0.
-    _residual_region = getattr(model, "_residual_region", None)
-    if _residual_region is None and params is not None:
-        _residual_region = getattr(params, "residual_region", None)
-    if _residual_region is None:
-        _residual_region = "NAmerica"
-    if hasattr(model, "yi") and hasattr(model, "eq_yi"):
-        for _r in model.r:
-            if str(_r) != _residual_region:
-                continue
-            try:
-                _yi_data = model.yi[_r]
-            except KeyError:
-                # Multi-period model: yi is indexed by (r, t); skip since
-                # freeze_inactive_periods already handles period selectivity.
-                continue
-            if _yi_data.fixed:
-                continue
-            # eq_yi[rres] is skipped → no constraint → fix at income identity
-            _eq_yi_skipped = True
-            try:
-                _c = model.eq_yi[_r]
-                _eq_yi_skipped = not _c.active
-            except KeyError:
+                # eq_yi[rres] is skipped → no constraint → fix at income identity
                 _eq_yi_skipped = True
-            if not _eq_yi_skipped:
-                continue
-            # Compute income identity: pi*depr*kstock + rsav + savf
+                try:
+                    _c = model.eq_yi[_r]
+                    _eq_yi_skipped = not _c.active
+                except KeyError:
+                    _eq_yi_skipped = True
+                if not _eq_yi_skipped:
+                    continue
+                # Compute income identity: pi*depr*kstock + rsav + savf
+                try:
+                    from pyomo.environ import value as _pv
+
+                    _pi = float(_pv(model.pi[_r]))
+                    _depr = float(_pv(model.depr[_r]))
+                    _kstock = float(_pv(model.kstock[_r]))
+                    _rsav = float(_pv(model.rsav[_r])) if hasattr(model, "rsav") else 0.0
+                    _savf = float(_pv(model.savf[_r])) if hasattr(model, "savf") else 0.0
+                    _yi_val = _pi * _depr * _kstock + _rsav + _savf
+                except Exception:
+                    _yi_val = float(_yi_data.value or 0.0)
+                _yi_data.fix(_yi_val)
+                logger.info(
+                    "Residual region fix: yi[%s]=%.6f (income identity; mirrors GAMS holdfixed=1)",
+                    _r,
+                    _yi_val,
+                )
+                # eq_walras is GAMS's free row (walraseq has no MCP pair in model.gms).
+                # With yi[rres] now fixed, eq_walras would over-determine walras.
+                # Deactivate it and fix walras=0 (Walras law holds at equilibrium).
+                _eq_walras = model.find_component("eq_walras")
+                _walras_var = model.find_component("walras")
+                if _eq_walras is not None and _eq_walras.active:
+                    _eq_walras.deactivate()
+                    logger.info("Deactivated eq_walras (free row; yi[rres] fixed)")
+
+        # Mirror GAMS pfteq free-row + holdfixed=1 for pft:
+        # In GAMS standard GTAP, pfteq is a FREE ROW (no MCP pair) with holdfixed=1,
+        # pinning pft at its .l value (= 1.0). eq_xfteq determines xft, eq_pfeq
+        # determines pf (perfect mobility: pfy = pft).
+        #
+        # EXCEPTION — altertax closure (name="altertax"): pfteq is an ACTIVE equation
+        # that determines pft via the CET price index: pft^(1+omega) = sum gf*pfy^(1+omega).
+        # In GAMS comp_altertax.gms line 2656, pfteq appears as a free row (no MCP pair),
+        # but with holdfixed=0 (omegaf=1 finite CET), PATH actually treats the equation
+        # as active for non-benchmark periods. We leave pft free and eq_pfteq active.
+        # The base period of altertax uses a NON-altertax closure (name="base" or
+        # "gtap_standard"), so it still gets the standard pft-fix treatment.
+        _is_altertax_closure = (
+            closure_config is not None
+            and getattr(closure_config, "name", None) == "altertax"
+        )
+        if hasattr(model, "eq_pfteq") and hasattr(model, "pft"):
+            _pft_pfteq_fixed = 0
+            for _r in model.r:
+                for _f in model.f:
+                    try:
+                        _pft_vd = model.pft[_r, _f]
+                    except KeyError:
+                        # Multi-period model: pft indexed by (r,f,t); skip since
+                        # fix_sluggish_pft already handles this via idx iteration.
+                        continue
+                    if _pft_vd.fixed:
+                        continue
+                    try:
+                        _eq_pfteq_vd = model.eq_pfteq[_r, _f]
+                    except KeyError:
+                        continue
+                    if not _eq_pfteq_vd.active:
+                        continue
+                    if _is_altertax_closure:
+                        continue  # altertax: pfteq stays active, pft stays free (CET price eq)
+                    # Deactivate eq_pfteq (free row) and fix pft at initialization
+                    _eq_pfteq_vd.deactivate()
+                    _pft_val = float(_pft_vd.value) if _pft_vd.value is not None else 1.0
+                    if _pft_val <= 0:
+                        _pft_val = 1.0
+                    _pft_vd.fix(_pft_val)
+                    _pft_pfteq_fixed += 1
+            if _pft_pfteq_fixed:
+                logger.info(
+                    "pfteq free-row: deactivated eq_pfteq + fixed %d pft[r,f]=init "
+                    "(mirrors GAMS pfteq free-row + holdfixed=1 → pft.l=1)",
+                    _pft_pfteq_fixed,
+                )
+
+        # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
+        # already-fixed variables, so only the remaining FREE variables get warm-started
+        # from the baseline (or previous-step) solution.
+        if solution_hint is not None:
             try:
-                from pyomo.environ import value as _pv
+                solver_helper.apply_solution_hint(solution_hint)
+            except Exception as _hint_exc:
+                logger.warning("Unable to apply solution_hint warm-start: %s", _hint_exc)
 
-                _pi = float(_pv(model.pi[_r]))
-                _depr = float(_pv(model.depr[_r]))
-                _kstock = float(_pv(model.kstock[_r]))
-                _rsav = float(_pv(model.rsav[_r])) if hasattr(model, "rsav") else 0.0
-                _savf = float(_pv(model.savf[_r])) if hasattr(model, "savf") else 0.0
-                _yi_val = _pi * _depr * _kstock + _rsav + _savf
-            except Exception:
-                _yi_val = float(_yi_data.value or 0.0)
-            _yi_data.fix(_yi_val)
-            logger.info(
-                "Residual region fix: yi[%s]=%.6f (income identity; mirrors GAMS holdfixed=1)",
-                _r,
-                _yi_val,
-            )
-            # eq_walras is GAMS's free row (walraseq has no MCP pair in model.gms).
-            # With yi[rres] now fixed, eq_walras would over-determine walras.
-            # Deactivate it and fix walras=0 (Walras law holds at equilibrium).
-            _eq_walras = model.find_component("eq_walras")
-            _walras_var = model.find_component("walras")
-            if _eq_walras is not None and _eq_walras.active:
-                _eq_walras.deactivate()
-                logger.info("Deactivated eq_walras (free row; yi[rres] fixed)")
-
-    # Mirror GAMS pfteq free-row + holdfixed=1 for pft:
-    # In GAMS standard GTAP, pfteq is a FREE ROW (no MCP pair) with holdfixed=1,
-    # pinning pft at its .l value (= 1.0). eq_xfteq determines xft, eq_pfeq
-    # determines pf (perfect mobility: pfy = pft).
-    #
-    # EXCEPTION — altertax closure (name="altertax"): pfteq is an ACTIVE equation
-    # that determines pft via the CET price index: pft^(1+omega) = sum gf*pfy^(1+omega).
-    # In GAMS comp_altertax.gms line 2656, pfteq appears as a free row (no MCP pair),
-    # but with holdfixed=0 (omegaf=1 finite CET), PATH actually treats the equation
-    # as active for non-benchmark periods. We leave pft free and eq_pfteq active.
-    # The base period of altertax uses a NON-altertax closure (name="base" or
-    # "gtap_standard"), so it still gets the standard pft-fix treatment.
-    _is_altertax_closure = (
-        closure_config is not None
-        and getattr(closure_config, "name", None) == "altertax"
-    )
-    if hasattr(model, "eq_pfteq") and hasattr(model, "pft"):
-        _pft_pfteq_fixed = 0
-        for _r in model.r:
-            for _f in model.f:
-                try:
-                    _pft_vd = model.pft[_r, _f]
-                except KeyError:
-                    # Multi-period model: pft indexed by (r,f,t); skip since
-                    # fix_sluggish_pft already handles this via idx iteration.
-                    continue
-                if _pft_vd.fixed:
-                    continue
-                try:
-                    _eq_pfteq_vd = model.eq_pfteq[_r, _f]
-                except KeyError:
-                    continue
-                if not _eq_pfteq_vd.active:
-                    continue
-                if _is_altertax_closure:
-                    continue  # altertax: pfteq stays active, pft stays free (CET price eq)
-                # Deactivate eq_pfteq (free row) and fix pft at initialization
-                _eq_pfteq_vd.deactivate()
-                _pft_val = float(_pft_vd.value) if _pft_vd.value is not None else 1.0
-                if _pft_val <= 0:
-                    _pft_val = 1.0
-                _pft_vd.fix(_pft_val)
-                _pft_pfteq_fixed += 1
-        if _pft_pfteq_fixed:
-            logger.info(
-                "pfteq free-row: deactivated eq_pfteq + fixed %d pft[r,f]=init "
-                "(mirrors GAMS pfteq free-row + holdfixed=1 → pft.l=1)",
-                _pft_pfteq_fixed,
-            )
-
-    # Apply warm-start hint AFTER aggressive fixing.  apply_solution_hint now skips
-    # already-fixed variables, so only the remaining FREE variables get warm-started
-    # from the baseline (or previous-step) solution.
-    if solution_hint is not None:
+        # Diagnostic: report whether key investment variables are fixed or free.
+        # Helps diagnose why eq_xi may have persistent positive residuals.
         try:
-            solver_helper.apply_solution_hint(solution_hint)
-        except Exception as _hint_exc:
-            logger.warning("Unable to apply solution_hint warm-start: %s", _hint_exc)
+            _inv_diag: list[str] = []
+            for _vname, _filter in [("xi", None), ("xiagg", None), ("pi", None)]:
+                if not hasattr(model, _vname):
+                    continue
+                _var = getattr(model, _vname)
+                _n_free = sum(1 for idx in _var if not _var[idx].fixed)
+                _n_fixed = sum(1 for idx in _var if _var[idx].fixed)
+                _total = _n_free + _n_fixed
+                _inv_diag.append(f"  {_vname}: {_n_free}/{_total} free  ({_n_fixed} fixed)")
+            # xaa[inv] specifically
+            if hasattr(model, "xaa"):
+                _n_free_inv = sum(
+                    1
+                    for idx in model.xaa
+                    if not model.xaa[idx].fixed and str(idx[-1]) == "inv"
+                )
+                _n_fixed_inv = sum(
+                    1 for idx in model.xaa if model.xaa[idx].fixed and str(idx[-1]) == "inv"
+                )
+                _inv_diag.append(
+                    f"  xaa[inv]: {_n_free_inv}/{_n_free_inv + _n_fixed_inv} free  ({_n_fixed_inv} fixed)"
+                )
+            # pa[inv] specifically
+            if hasattr(model, "pa"):
+                _n_free_pa = sum(
+                    1
+                    for idx in model.pa
+                    if not model.pa[idx].fixed and str(idx[-1]) == "inv"
+                )
+                _n_fixed_pa = sum(
+                    1 for idx in model.pa if model.pa[idx].fixed and str(idx[-1]) == "inv"
+                )
+                _inv_diag.append(
+                    f"  pa[inv]:  {_n_free_pa}/{_n_free_pa + _n_fixed_pa} free  ({_n_fixed_pa} fixed)"
+                )
+            logger.info(
+                "Investment variable fixing after apply_aggressive_fixing_for_mcp:\n%s",
+                "\n".join(_inv_diag) if _inv_diag else "  (none detected)",
+            )
+        except Exception as _diag_exc:
+            logger.debug("Investment variable fixing diagnostic failed: %s", _diag_exc)
 
-    # Diagnostic: report whether key investment variables are fixed or free.
-    # Helps diagnose why eq_xi may have persistent positive residuals.
-    try:
-        _inv_diag: list[str] = []
-        for _vname, _filter in [("xi", None), ("xiagg", None), ("pi", None)]:
-            if not hasattr(model, _vname):
+        # Warm-starting from the CSV snapshot is useful for parity diagnostics, but
+        # it can destabilize nonlinear PATH runs when the snapshot still carries
+        # derived macro/final-demand variables that do not match the current closure.
+        # Keep it opt-in for solver runs.
+        if os.environ.get("EQUILIBRIA_GTAP_WARM_START", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            try:
+                warm_start_snapshot = GTAPVariableSnapshot.from_standard_gtap_csv(
+                    COMP_CSV_REFERENCE,
+                    params.sets,
+                    solution_year=1,
+                )
+                solver_helper.apply_solution_hint(warm_start_snapshot)
+            except Exception as exc:
+                logger.warning("Unable to apply GTAP warm-start snapshot: %s", exc)
+
+        # Mirror GAMS iterloop.gms: pmt.lo = 0.001*pmt.l, px.lo = 0.001*px.l.
+        # CES equations use price^(1-esubm) with esubm~5, so expo=-4.  Without a
+        # positive lower bound PATH's Newton steps can drive pmcif/pmt to ~0,
+        # causing pmcif^(-4) -> inf and catastrophic residual explosion.
+        _PRICE_LB_FACTOR = 1e-3
+        for _pvname in ("pmt", "pmcif", "pefob", "px", "pd", "pf", "pft", "pwmg"):
+            _pv = getattr(model, _pvname, None)
+            if _pv is None:
                 continue
-            _var = getattr(model, _vname)
-            _n_free = sum(1 for idx in _var if not _var[idx].fixed)
-            _n_fixed = sum(1 for idx in _var if _var[idx].fixed)
-            _total = _n_free + _n_fixed
-            _inv_diag.append(f"  {_vname}: {_n_free}/{_total} free  ({_n_fixed} fixed)")
-        # xaa[inv] specifically
-        if hasattr(model, "xaa"):
-            _n_free_inv = sum(
-                1
-                for idx in model.xaa
-                if not model.xaa[idx].fixed and str(idx[-1]) == "inv"
-            )
-            _n_fixed_inv = sum(
-                1 for idx in model.xaa if model.xaa[idx].fixed and str(idx[-1]) == "inv"
-            )
-            _inv_diag.append(
-                f"  xaa[inv]: {_n_free_inv}/{_n_free_inv + _n_fixed_inv} free  ({_n_fixed_inv} fixed)"
-            )
-        # pa[inv] specifically
-        if hasattr(model, "pa"):
-            _n_free_pa = sum(
-                1
-                for idx in model.pa
-                if not model.pa[idx].fixed and str(idx[-1]) == "inv"
-            )
-            _n_fixed_pa = sum(
-                1 for idx in model.pa if model.pa[idx].fixed and str(idx[-1]) == "inv"
-            )
-            _inv_diag.append(
-                f"  pa[inv]:  {_n_free_pa}/{_n_free_pa + _n_fixed_pa} free  ({_n_fixed_pa} fixed)"
-            )
-        logger.info(
-            "Investment variable fixing after apply_aggressive_fixing_for_mcp:\n%s",
-            "\n".join(_inv_diag) if _inv_diag else "  (none detected)",
-        )
-    except Exception as _diag_exc:
-        logger.debug("Investment variable fixing diagnostic failed: %s", _diag_exc)
+            for _pv_data in _pv.values():
+                if _pv_data.fixed:
+                    continue
+                _cur = _pv_data.value
+                if _cur is not None and _cur > 0:
+                    _lb = _PRICE_LB_FACTOR * _cur
+                    if _pv_data.lb is None or _pv_data.lb < _lb:
+                        _pv_data.setlb(_lb)
 
-    # Warm-starting from the CSV snapshot is useful for parity diagnostics, but
-    # it can destabilize nonlinear PATH runs when the snapshot still carries
-    # derived macro/final-demand variables that do not match the current closure.
-    # Keep it opt-in for solver runs.
-    if os.environ.get("EQUILIBRIA_GTAP_WARM_START", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        try:
-            warm_start_snapshot = GTAPVariableSnapshot.from_standard_gtap_csv(
-                COMP_CSV_REFERENCE,
-                params.sets,
-                solution_year=1,
-            )
-            solver_helper.apply_solution_hint(warm_start_snapshot)
-        except Exception as exc:
-            logger.warning("Unable to apply GTAP warm-start snapshot: %s", exc)
-
-    # Mirror GAMS iterloop.gms: pmt.lo = 0.001*pmt.l, px.lo = 0.001*px.l.
-    # CES equations use price^(1-esubm) with esubm~5, so expo=-4.  Without a
-    # positive lower bound PATH's Newton steps can drive pmcif/pmt to ~0,
-    # causing pmcif^(-4) -> inf and catastrophic residual explosion.
-    _PRICE_LB_FACTOR = 1e-3
-    for _pvname in ("pmt", "pmcif", "pefob", "px", "pd", "pf", "pft", "pwmg"):
-        _pv = getattr(model, _pvname, None)
-        if _pv is None:
-            continue
-        for _pv_data in _pv.values():
-            if _pv_data.fixed:
+        # Same protection for income/elasticity vars that appear in negative-power
+        # CDE terms (yc^(-bh)) or in divisions (phi/phip in eq_yc).  GAMS sets these
+        # to (-inf, +inf) after calibration but its PATH never overshoots into
+        # negative/zero territory thanks to warm-starting from a near-equilibrium
+        # baseline. Python's PATH on 9x10 takes wider Newton steps and crashes
+        # trying to evaluate (negative_yc)^(-0.9) or (0/0) in eq_yc.
+        _NLB_FACTOR = 1e-3
+        for _vname in ("yc", "phi", "phip", "regy", "uh", "ug", "us"):
+            _vv = getattr(model, _vname, None)
+            if _vv is None:
                 continue
-            _cur = _pv_data.value
-            if _cur is not None and _cur > 0:
-                _lb = _PRICE_LB_FACTOR * _cur
-                if _pv_data.lb is None or _pv_data.lb < _lb:
-                    _pv_data.setlb(_lb)
+            for _vd in _vv.values():
+                if _vd.fixed:
+                    continue
+                _cur = _vd.value
+                if _cur is not None and _cur > 0:
+                    _lb = _NLB_FACTOR * _cur
+                    if _vd.lb is None or _vd.lb < _lb:
+                        _vd.setlb(_lb)
 
-    # Same protection for income/elasticity vars that appear in negative-power
-    # CDE terms (yc^(-bh)) or in divisions (phi/phip in eq_yc).  GAMS sets these
-    # to (-inf, +inf) after calibration but its PATH never overshoots into
-    # negative/zero territory thanks to warm-starting from a near-equilibrium
-    # baseline. Python's PATH on 9x10 takes wider Newton steps and crashes
-    # trying to evaluate (negative_yc)^(-0.9) or (0/0) in eq_yc.
-    _NLB_FACTOR = 1e-3
-    for _vname in ("yc", "phi", "phip", "regy", "uh", "ug", "us"):
-        _vv = getattr(model, _vname, None)
-        if _vv is None:
-            continue
-        for _vd in _vv.values():
-            if _vd.fixed:
-                continue
-            _cur = _vd.value
-            if _cur is not None and _cur > 0:
-                _lb = _NLB_FACTOR * _cur
-                if _vd.lb is None or _vd.lb < _lb:
-                    _vd.setlb(_lb)
+        # In NLP-solve mode (EQUILIBRIA_GTAP_SOLVE_NLP) the actual solve goes through
+        # IPOPT further down and NEVER uses the PATH runtime, adapter summary, or the
+        # native PATH/LUSOL binaries. Loading them here is dead work AND it hard-requires
+        # the native libs — which breaks portable NLP runs (e.g. Colab, where only IPOPT
+        # is available). Skip the whole PATH-load block when solving as NLP; `constraints`
+        # / `free_variables` below are computed straight from the Pyomo model, not from
+        # `model_summary` / `runtime`.
+        _nlp_mode_early = bool(os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP"))
+        model_summary = runtime = version = None
+        if not _nlp_mode_early:
+            adapter = PyomoMCPAdapter()
+            model_summary = adapter.summarize_model(model)
 
-    # In NLP-solve mode (EQUILIBRIA_GTAP_SOLVE_NLP) the actual solve goes through
-    # IPOPT further down and NEVER uses the PATH runtime, adapter summary, or the
-    # native PATH/LUSOL binaries. Loading them here is dead work AND it hard-requires
-    # the native libs — which breaks portable NLP runs (e.g. Colab, where only IPOPT
-    # is available). Skip the whole PATH-load block when solving as NLP; `constraints`
-    # / `free_variables` below are computed straight from the Pyomo model, not from
-    # `model_summary` / `runtime`.
-    _nlp_mode_early = bool(os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP"))
-    model_summary = runtime = version = None
-    if not _nlp_mode_early:
-        adapter = PyomoMCPAdapter()
-        model_summary = adapter.summarize_model(model)
+            path_lib = Path(
+                os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))
+            ).expanduser()
+            lusol_lib = Path(
+                os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))
+            ).expanduser()
 
-        path_lib = Path(
-            os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))
-        ).expanduser()
-        lusol_lib = Path(
-            os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))
-        ).expanduser()
+            loader = PATHLoader(path_lib=path_lib, lusol_lib=lusol_lib)
+            runtime = loader.load()
+            version = loader.version(runtime)
 
-        loader = PATHLoader(path_lib=path_lib, lusol_lib=lusol_lib)
-        runtime = loader.load()
-        version = loader.version(runtime)
+        # Mirror GAMS numeraire chain: pnum.fx=1 + pnumeq(pnum=pwfact, free row) +
+        # pwfacteq.pwfact (Tornqvist, MCP pair). Leave pwfact FREE and both eqs active.
+        # pnumeq acts as a free equality row that forces pwfact=pnum=1.
+        # pwfacteq.pwfact (MCP pair, lb=-inf) then constrains Tornqvist(pf,xf)=pwfact=1,
+        # anchoring the nominal price level. System stays square: pwfact is the MCP pair
+        # variable for pwfacteq, and pnumeq is a free row that pins pwfact=1.
+        # Logging only — no model changes needed here.
+        _pnum_comp = model.find_component("pnum")
+        _pwfact_comp = model.find_component("pwfact")
+        if (
+            _pnum_comp is not None
+            and not _pnum_comp.is_indexed()
+            and _pnum_comp.fixed
+            and _pwfact_comp is not None
+            and not _pwfact_comp.is_indexed()
+            and not _pwfact_comp.fixed
+        ):
+            from pyomo.environ import value as _pyo_value
 
-    # Mirror GAMS numeraire chain: pnum.fx=1 + pnumeq(pnum=pwfact, free row) +
-    # pwfacteq.pwfact (Tornqvist, MCP pair). Leave pwfact FREE and both eqs active.
-    # pnumeq acts as a free equality row that forces pwfact=pnum=1.
-    # pwfacteq.pwfact (MCP pair, lb=-inf) then constrains Tornqvist(pf,xf)=pwfact=1,
-    # anchoring the nominal price level. System stays square: pwfact is the MCP pair
-    # variable for pwfacteq, and pnumeq is a free row that pins pwfact=1.
-    # Logging only — no model changes needed here.
-    _pnum_comp = model.find_component("pnum")
-    _pwfact_comp = model.find_component("pwfact")
-    if (
-        _pnum_comp is not None
-        and not _pnum_comp.is_indexed()
-        and _pnum_comp.fixed
-        and _pwfact_comp is not None
-        and not _pwfact_comp.is_indexed()
-        and not _pwfact_comp.fixed
-    ):
-        from pyomo.environ import value as _pyo_value
+            logger.info(
+                "Numeraire presolve: pnum=%.6f fixed, pwfact free; eq_pnum+eq_pwfact active "
+                "(mirrors GAMS pnumeq free-row + pwfacteq.pwfact MCP pair)",
+                float(_pyo_value(_pnum_comp)),
+            )
 
-        logger.info(
-            "Numeraire presolve: pnum=%.6f fixed, pwfact free; eq_pnum+eq_pwfact active "
-            "(mirrors GAMS pnumeq free-row + pwfacteq.pwfact MCP pair)",
-            float(_pyo_value(_pnum_comp)),
+        constraints = sorted(
+            model.component_data_objects(Constraint, active=True, descend_into=True),
+            key=lambda c: c.name,
         )
 
-    constraints = sorted(
-        model.component_data_objects(Constraint, active=True, descend_into=True),
-        key=lambda c: c.name,
-    )
+        from pyomo.environ import Var
 
-    from pyomo.environ import Var
+        free_variables = sorted(
+            (
+                var
+                for var in model.component_data_objects(Var, active=True, descend_into=True)
+                if not var.fixed
+            ),
+            key=lambda v: v.name,
+        )
 
-    free_variables = sorted(
-        (
-            var
-            for var in model.component_data_objects(Var, active=True, descend_into=True)
-            if not var.fixed
-        ),
-        key=lambda v: v.name,
-    )
+        if _struct1b_on:
+            _struct1b_after_active, _struct1b_after_fixed = _struct1b_snapshot(model)
+            _STRUCT_BLOCK_CACHE.store(
+                _struct1b_sig,
+                matched_var_names=[],
+                squareness={
+                    "deactivated": sorted(_struct1b_before_active - _struct1b_after_active),
+                    "fixed_zero": [],
+                },
+                fixing={
+                    "fixed": sorted(_struct1b_after_fixed - _struct1b_before_fixed),
+                },
+            )
 
     # Hopcroft-Karp structural matching (avoid alphabetical-sort pairing pitfall).
     # Mirror GAMS model statement pairings (comp_altertax.gms:2656):
