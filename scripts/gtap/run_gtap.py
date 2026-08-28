@@ -3689,6 +3689,57 @@ def _run_path_capi_nonlinear_full(
             # at the seed point gates it: if F_jax != F_pyomo, fall back to Pyomo (never solve
             # a different system). Correctness-identical; the win is eval speed at scale.
             _jax_eval = None
+            # ── PROFILE-ONLY: dump the group shape distribution, skip the compile ──────────
+            # EQUILIBRIA_GTAP_JAX_PROFILE=1 groups the squared NLP's constraints by shape-key
+            # (n_cells, n_slots, n_consts) and prints the distribution, WITHOUT compiling any
+            # JAX. Lets us read the real 20x41 compile-RAM lever (few-big-trees vs many-cells)
+            # off the actual squared object cheaply, before the OOM-prone F+J compile.
+            if os.environ.get("EQUILIBRIA_GTAP_JAX_PROFILE") == "1":
+                try:
+                    import collections as _coll_pf
+                    from pyomo.core.base.var import VarData as _VarData_pf
+                    from equilibria.templates.gtap_jax.expr_to_jax import (
+                        translate_parametric as _tp_pf,
+                    )
+                    _vars_pf = list(_nlp_sr.get_pyomo_variables())
+                    _cons_pf = list(_nlp_sr.get_pyomo_constraints())
+                    _vi_pf = {id(v): i for i, v in enumerate(_vars_pf)}
+
+                    def _sig_pf(e):
+                        if isinstance(e, _VarData_pf):
+                            return "C" if (e.fixed or _vi_pf.get(id(e)) is None) else "V"
+                        if isinstance(e, (int, float)) or not hasattr(e, "args"):
+                            return "C"
+                        return type(e).__name__ + "(" + ",".join(_sig_pf(a) for a in e.args) + ")"
+
+                    _grp_pf = _coll_pf.defaultdict(list)
+                    for _i_pf, _c_pf in enumerate(_cons_pf):
+                        try:
+                            _, (_nc_pf, _ns_pf) = _tp_pf(_c_pf.body, _vi_pf)
+                        except Exception:
+                            _nc_pf, _ns_pf = -1, -1
+                        _grp_pf[(_sig_pf(_c_pf.body), _nc_pf, _ns_pf)].append(_i_pf)
+                    _rows_pf = sorted(
+                        ((len(p), k[2], k[1]) for k, p in _grp_pf.items()), reverse=True
+                    )
+                    print(
+                        f"[jax-profile] n_vars={len(_vars_pf)} n_cons={len(_cons_pf)} "
+                        f"n_groups={len(_grp_pf)}", file=sys.stderr, flush=True,
+                    )
+                    print("[jax-profile] TOP 25 GROUPS (n_cells n_slots n_consts):",
+                          file=sys.stderr, flush=True)
+                    for _r_pf in _rows_pf[:25]:
+                        print(f"[jax-profile]   {_r_pf[0]:>7} {_r_pf[1]:>6} {_r_pf[2]:>6}",
+                              file=sys.stderr, flush=True)
+                    print("[jax-profile] MAXSLOTS partition (cells staying in JAX):",
+                          file=sys.stderr, flush=True)
+                    for _thr_pf in [8, 16, 32, 64, 128, 256, 512, 10**9]:
+                        _ng = sum(1 for r in _rows_pf if r[1] <= _thr_pf)
+                        _ncll = sum(r[0] for r in _rows_pf if r[1] <= _thr_pf)
+                        print(f"[jax-profile]   MAXSLOTS<={_thr_pf:>10}: {_ng:>4} groups / "
+                              f"{_ncll:>8} cells", file=sys.stderr, flush=True)
+                except Exception as _e_pf:
+                    print(f"[jax-profile] FAILED ({_e_pf})", file=sys.stderr, flush=True)
             if os.environ.get("EQUILIBRIA_GTAP_EVAL") == "jax":
                 try:
                     from equilibria.templates.gtap_jax.jax_model import (
