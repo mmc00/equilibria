@@ -2699,7 +2699,60 @@ def _run_path_capi_nonlinear_full(
     # Without these, HK may pair pfeq with an unrelated variable, and the
     # complementarity condition pf ≥ lb ⊥ pfeq fails to exclude the degenerate
     # equilibrium where pf collapses to its lower bound.
-    if len(constraints) == len(free_variables):
+    #
+    # ── STRUCTURAL CACHE (EQUILIBRIA_GTAP_STRUCT_CACHE=1) ──────────────────────────
+    # structural_matching does a Hopcroft-Karp bipartite match over `constraints` x
+    # `free_variables` — this calls identify_variables on every one of the (up to 395k)
+    # constraint trees to build the adjacency (cProfile gate v15: 434s cumtime, 9 calls,
+    # 10% of a 22-min non-Newton wall). `constraints`/`free_variables` here are the exact
+    # inputs to the match (sorted-by-name lists, assembled just above); if their NAME sets
+    # are byte-identical to a prior call, the bipartite graph is byte-identical, so the
+    # match result is byte-identical — reuse it by name instead of re-running Hopcroft-Karp.
+    # The 6 shock-continuation steps activate the same free/fixed partition each time (only
+    # the tariff value differs) → identical signature → cache hit. Reuse fires ONLY on a
+    # byte-identical signature (same mechanism as lever B2's MUMPS-symbolic reuse); a
+    # name-set mismatch falls back to a full recompute, never a silent partial match. See
+    # docs/superpowers/specs/2026-08-28-structural-cache-design.md.
+    _struct_cache_on = os.environ.get("EQUILIBRIA_GTAP_STRUCT_CACHE") == "1"
+    _struct_hit_vars = None
+    if _struct_cache_on:
+        try:
+            from _structural_cache import (  # type: ignore
+                StructuralCache as _StructCacheCls,
+                signature as _struct_signature,
+                reorder_by_name as _struct_reorder,
+            )
+        except ImportError:
+            import sys as _sys
+
+            _sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from _structural_cache import (  # type: ignore
+                StructuralCache as _StructCacheCls,
+                signature as _struct_signature,
+                reorder_by_name as _struct_reorder,
+            )
+        global _STRUCT_MATCH_CACHE
+        if "_STRUCT_MATCH_CACHE" not in globals():
+            _STRUCT_MATCH_CACHE = _StructCacheCls()
+        _struct_sig = _struct_signature(
+            [c.name for c in constraints], [v.name for v in free_variables]
+        )
+        _struct_hit = _STRUCT_MATCH_CACHE.try_reuse(_struct_sig)
+        if _struct_hit is not None:
+            _struct_hit_vars = _struct_reorder(
+                free_variables, _struct_hit["matched_var_names"]
+            )
+            if _struct_hit_vars is None:
+                _struct_hit = None  # name-set mismatch — fall back to recompute
+
+    if _struct_hit_vars is not None:
+        free_variables = _struct_hit_vars
+        print(
+            "[nlp-square] STRUCT_CACHE hit — reused structural_matching "
+            f"({len(free_variables)} vars)",
+            file=sys.stderr, flush=True,
+        )
+    elif len(constraints) == len(free_variables):
         try:
             from _closure_patches import structural_matching  # type: ignore
         except ImportError:
@@ -2905,6 +2958,13 @@ def _run_path_capi_nonlinear_full(
             forced_pairs=_gams_pairs,
             label="nonlinear-full",
         )
+        if _struct_cache_on:
+            _STRUCT_MATCH_CACHE.store(
+                _struct_sig,
+                matched_var_names=[v.name for v in free_variables],
+                squareness={"deactivated": [], "fixed_zero": []},
+                fixing={"fixed": []},
+            )
 
     # BTF STRUCTURE PROBE (env EQUILIBRIA_GTAP_BTF_PROBE=1): compute the Dulmage-
     # Mendelsohn block structure of the SQUARED (constraints, free_variables) system

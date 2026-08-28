@@ -2677,6 +2677,13 @@ def solve_multiperiod(
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     run_gtap = _load_run_gtap()
+    # Reset the structural_matching signature cache (run_gtap._STRUCT_MATCH_CACHE) at the
+    # start of each solve_multiperiod run — it is a single-entry (last-call) cache scoped to
+    # ONE run's phase sequence; a stale entry from a prior run must never leak across runs.
+    import contextlib as _cl_reset
+
+    with _cl_reset.suppress(Exception):
+        run_gtap._STRUCT_MATCH_CACHE.reset()
 
     if mode not in ("altertax", "gtap"):
         raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
