@@ -52,10 +52,16 @@ pytestmark = [
 ]
 
 
-def _run(cache_on: bool, continuation: str) -> dict:
+def _run(cache_on: bool, continuation: str, bench_scale: bool = True) -> dict:
     env = dict(os.environ)
     env["EQUILIBRIA_GTAP_STRUCT_CACHE"] = "1" if cache_on else "0"
     env["EQUILIBRIA_GTAP_SHOCK_CONTINUATION"] = continuation
+    # The real 20x41 gate runs with EQUILIBRIA_GTAP_BENCH_SCALE=1 (Britz benchmark
+    # scaling) — a real bug (UnboundLocalError on `Var`, gate v17) only surfaced under
+    # this flag, because it uses the module-level `Var` name the cache's reuse branch
+    # must keep bound. Default this test to the same config as the real gate.
+    if bench_scale:
+        env["EQUILIBRIA_GTAP_BENCH_SCALE"] = "1"
     r = subprocess.run(
         [sys.executable, str(_RUNNER)],
         capture_output=True, text=True, timeout=300, env=env,

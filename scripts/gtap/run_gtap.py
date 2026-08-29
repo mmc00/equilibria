@@ -2335,7 +2335,7 @@ def _run_path_capi_nonlinear_full(
             ) from exc
         PATHLoader = PyomoMCPAdapter = solve_nonlinear_mcp = None  # type: ignore
 
-    from pyomo.environ import Constraint
+    from pyomo.environ import Constraint, Var
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
     # ── STRUCTURAL CACHE (EQUILIBRIA_GTAP_STRUCT_CACHE=1), PHASE 1b ─────────────────
@@ -2394,8 +2394,6 @@ def _run_path_capi_nonlinear_full(
             "[nlp-square] STRUCT_CACHE hit — reused closure+squareness+fixing block",
             file=sys.stderr, flush=True,
         )
-        from pyomo.environ import Var as _StructBlockVar
-
         constraints = sorted(
             model.component_data_objects(Constraint, active=True, descend_into=True),
             key=lambda c: c.name,
@@ -2403,9 +2401,7 @@ def _run_path_capi_nonlinear_full(
         free_variables = sorted(
             (
                 var
-                for var in model.component_data_objects(
-                    _StructBlockVar, active=True, descend_into=True
-                )
+                for var in model.component_data_objects(Var, active=True, descend_into=True)
                 if not var.fixed
             ),
             key=lambda v: v.name,
