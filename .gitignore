@@ -250,6 +250,7 @@ scripts/gtap/*
 !scripts/gtap/diff_closure.py
 !scripts/gtap/_closure_patches.py
 !scripts/gtap/_structural_cache.py
+!scripts/gtap/_name_cache.py
 !scripts/gtap/build_9x10_altertax_neos_bundle.py
 !scripts/gtap/build_altertax_neos_bundle.py
 !scripts/gtap/build_gtap7_altertax_neos_bundle.py
