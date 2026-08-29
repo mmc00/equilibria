@@ -2338,23 +2338,40 @@ def _run_path_capi_nonlinear_full(
     from pyomo.environ import Constraint, Var
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
-    # ── STRUCTURAL CACHE (EQUILIBRIA_GTAP_STRUCT_CACHE=1), PHASE 1b ─────────────────
+    # Cache Pyomo's `.name` string by object identity — see _name_cache.py. The 9 phase
+    # calls each sort/index ~395k constraints+vars by name (Pyomo does NOT cache .name;
+    # it rebuilds the dotted/indexed string from scratch every call). cProfile on the real
+    # 20x41 (gate v19) measured 72M .name/getname calls = 8.4 REAL minutes across the 9
+    # phases. The underlying objects are identical across phases (the model is built once
+    # and only mutated in place), so caching by id(obj) is safe: the string never goes stale.
+    try:
+        from _name_cache import cached_name as _nm  # type: ignore
+    except ImportError:
+        import sys as _sys
+
+        _sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _name_cache import cached_name as _nm  # type: ignore
+
+    # ── STRUCTURAL CACHE, PHASE 1b — MEASURED NET LOSS, DISABLED ─────────────────────
     # The block below (apply_closure, apply_conditional_fixing, apply_aggressive_fixing_for_mcp,
     # apply_squareness_patches, the yi[rres]/pft/pfteq mirrors, price-lb guards) mutates the
-    # model's active/fixed state and is re-run on EVERY phase call (9x on the 20x41). cProfile
-    # (gate v15) showed apply_conditional_fixing (596s) + apply_squareness_patches (297s) are
-    # 20% of a 22-min non-Newton wall — on top of the 10% structural_matching already caches
-    # (see below). Signature = the model's (active-constraint, fixed-var) state at ENTRY, BEFORE
-    # this block mutates anything — that entry-state is what freeze_inactive_periods set before
-    # this call, and this whole block is a deterministic function of it (apply_conditional_fixing
-    # is SAM-data-driven, phase-invariant — verified in gtap_solver.py; the rest depends only on
-    # which vars/eqs are already fixed/active). An identical entry-signature guarantees identical
-    # exit state, so on a hit we skip the ENTIRE block and replay its net effect (deactivated
-    # constraints + fixed vars) by name. A miss runs the block unchanged and captures the diff.
-    # Reuse fires ONLY on a byte-identical signature (same mechanism as lever B2's MUMPS-symbolic
-    # reuse and the structural_matching cache above); any name-set mismatch falls back to the full
-    # recompute. See docs/superpowers/specs/2026-08-28-structural-cache-design.md.
-    _struct1b_on = os.environ.get("EQUILIBRIA_GTAP_STRUCT_CACHE") == "1"
+    # model's active/fixed state and is re-run on EVERY phase call (9x on the 20x41). The
+    # mechanism below (skip the block on a byte-identical entry-signature, replay its net
+    # effect by name) IS correct and byte-identical — verified on gtap7_3x3 and the real
+    # 20x41 (gates v17/v18: code=1, resid unchanged, 13 hits). BUT gate v18 measured it as a
+    # NET LOSS on the 20x41: 37.0min vs the 34.3min no-cache baseline (+162s), because
+    # `snapshot_active_fixed` scans ALL 395k constraints+vars (up to 3x per phase call) to
+    # compute the entry/before/after signatures, and that scan costs MORE than the ~15min it
+    # was designed to save (confirmed independently by gate v19's cProfile: snapshot_active_fixed
+    # alone = 6.6 real minutes over just 15 calls). A cheaper signature (e.g. "which period is
+    # active") is UNSAFE here: apply_aggressive_fixing_for_mcp's `sort_by_abs_value` fixes vars
+    # by their CURRENT VALUE, which can differ between continuation steps even with the same
+    # active period — so a value-independent shortcut would risk breaking byte-identity. Kept
+    # OFF by its own flag (EQUILIBRIA_GTAP_STRUCT_CACHE_1B, NOT the Phase-1a structural_matching
+    # flag EQUILIBRIA_GTAP_STRUCT_CACHE) pending a cheaper-and-safe signature; the code stays
+    # in place for that future work rather than being torn out. See
+    # docs/superpowers/specs/2026-08-28-structural-cache-design.md and the r6-wall memory.
+    _struct1b_on = os.environ.get("EQUILIBRIA_GTAP_STRUCT_CACHE_1B") == "1"
     _struct1b_hit = None
     if _struct1b_on:
         try:
@@ -2396,7 +2413,7 @@ def _run_path_capi_nonlinear_full(
         )
         constraints = sorted(
             model.component_data_objects(Constraint, active=True, descend_into=True),
-            key=lambda c: c.name,
+            key=_nm,
         )
         free_variables = sorted(
             (
@@ -2404,7 +2421,7 @@ def _run_path_capi_nonlinear_full(
                 for var in model.component_data_objects(Var, active=True, descend_into=True)
                 if not var.fixed
             ),
-            key=lambda v: v.name,
+            key=_nm,
         )
     else:
         if _struct1b_on:
@@ -2751,7 +2768,7 @@ def _run_path_capi_nonlinear_full(
 
         constraints = sorted(
             model.component_data_objects(Constraint, active=True, descend_into=True),
-            key=lambda c: c.name,
+            key=_nm,
         )
 
         from pyomo.environ import Var
@@ -2762,7 +2779,7 @@ def _run_path_capi_nonlinear_full(
                 for var in model.component_data_objects(Var, active=True, descend_into=True)
                 if not var.fixed
             ),
-            key=lambda v: v.name,
+            key=_nm,
         )
 
         if _struct1b_on:
@@ -2821,7 +2838,7 @@ def _run_path_capi_nonlinear_full(
         if "_STRUCT_MATCH_CACHE" not in globals():
             _STRUCT_MATCH_CACHE = _StructCacheCls()
         _struct_sig = _struct_signature(
-            [c.name for c in constraints], [v.name for v in free_variables]
+            [_nm(c) for c in constraints], [_nm(v) for v in free_variables]
         )
         _struct_hit = _STRUCT_MATCH_CACHE.try_reuse(_struct_sig)
         if _struct_hit is not None:
@@ -3047,7 +3064,7 @@ def _run_path_capi_nonlinear_full(
         if _struct_cache_on:
             _STRUCT_MATCH_CACHE.store(
                 _struct_sig,
-                matched_var_names=[v.name for v in free_variables],
+                matched_var_names=[_nm(v) for v in free_variables],
                 squareness={"deactivated": [], "fixed_zero": []},
                 fixing={"fixed": []},
             )

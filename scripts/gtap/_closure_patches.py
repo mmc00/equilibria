@@ -22,6 +22,15 @@ from typing import Any
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.environ import Constraint, Var, value
 
+try:
+    from _name_cache import cached_name as _nm  # type: ignore
+except ImportError:
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent))
+    from _name_cache import cached_name as _nm  # type: ignore
+
 
 def fix_sluggish_pft(model, params, *, label: str = "") -> int:
     """Fix `pft(r,f)` for factors that are dangling (no eq references them).
@@ -138,11 +147,11 @@ def deactivate_unmatched_xseq(model, params, *, label: str = "") -> int:
         return 0
 
     cons_snap = sorted(
-        model.component_data_objects(Constraint, active=True), key=lambda c: c.name
+        model.component_data_objects(Constraint, active=True), key=_nm
     )
     vars_snap = sorted(
         (v for v in model.component_data_objects(Var, active=True) if not v.fixed),
-        key=lambda v: v.name,
+        key=_nm,
     )
     id2col = {id(v): j for j, v in enumerate(vars_snap)}
     adj: list[list[int]] = []
@@ -297,11 +306,11 @@ def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
         "eq_pxeq",    # defines px[r,i] export price; dropped in omegax=inf leads to unconstrained px
     }
     cons_snap = sorted(
-        model.component_data_objects(Constraint, active=True), key=lambda c: c.name
+        model.component_data_objects(Constraint, active=True), key=_nm
     )
     vars_snap = sorted(
         (v for v in model.component_data_objects(Var, active=True) if not v.fixed),
-        key=lambda v: v.name,
+        key=_nm,
     )
     n = len(cons_snap)
     nv = len(vars_snap)
@@ -309,8 +318,8 @@ def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
         return 0
 
     id2col = {id(v): j for j, v in enumerate(vars_snap)}
-    var_name_to_col = {v.name: j for j, v in enumerate(vars_snap)}
-    con_name_to_row = {c.name: u for u, c in enumerate(cons_snap)}
+    var_name_to_col = {_nm(v): j for j, v in enumerate(vars_snap)}
+    con_name_to_row = {_nm(c): u for u, c in enumerate(cons_snap)}
     adj: list[list[int]] = []
     for c in cons_snap:
         cols: list[int] = []
@@ -481,8 +490,8 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
     distance = [0] * n
     INF = 10**9
 
-    eq_name_to_row = {c.name: i for i, c in enumerate(constraints)}
-    var_name_to_col = {v.name: j for j, v in enumerate(free_vars)}
+    eq_name_to_row = {_nm(c): i for i, c in enumerate(constraints)}
+    var_name_to_col = {_nm(v): j for j, v in enumerate(free_vars)}
     if forced_pairs:
         for _fp in forced_pairs:
             # A forced pair is (eq_name, var_name) or (eq_name, var_name, hard).

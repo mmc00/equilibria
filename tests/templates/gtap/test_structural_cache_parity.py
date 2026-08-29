@@ -91,17 +91,22 @@ def test_cache_on_matches_off_no_continuation():
 def test_cache_on_matches_off_with_continuation_and_actually_fires():
     """The real case: a 4-step continuation gives the cache repeated identical signatures.
 
-    Asserts BOTH that it fires (>=1 hit for EACH of the two independent cache layers —
-    the closure+squareness+fixing block and structural_matching — proving both mechanisms
-    engage, not a vacuous pass) AND that the solution stays byte-identical (the hard
+    Asserts BOTH that structural_matching's cache fires (>=1 hit, proving the mechanism
+    engages, not a vacuous pass) AND that the solution stays byte-identical (the hard
     correctness gate).
+
+    NOTE: the closure+squareness+conditional-fixing block cache ("Phase 1b") is a SEPARATE
+    mechanism gated by its own flag (EQUILIBRIA_GTAP_STRUCT_CACHE_1B), left OFF by default —
+    gate v18 measured it as a NET LOSS on the real 20x41 (its snapshot scan costs more than
+    it saves at 395k scale). EQUILIBRIA_GTAP_STRUCT_CACHE (this test's flag) only enables the
+    structural_matching cache (Phase 1a), which IS a net win (-53s on the 20x41).
     """
     off = _run(cache_on=False, continuation="0.25,0.5,0.75,1.0")
     on = _run(cache_on=True, continuation="0.25,0.5,0.75,1.0")
 
     block_hits = on["_stderr"].count("reused closure+squareness+fixing block")
     matching_hits = on["_stderr"].count("reused structural_matching")
-    assert block_hits >= 1, "closure+squareness+fixing cache never fired — test is vacuous"
+    assert block_hits == 0, "Phase 1b fired despite being gated off by its own flag"
     assert matching_hits >= 1, "structural_matching cache never fired — test is vacuous"
 
     assert off["result"] == on["result"], "phase code/residual diverged with cache ON"
