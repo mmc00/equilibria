@@ -2338,13 +2338,26 @@ def _run_path_capi_nonlinear_full(
     from pyomo.environ import Constraint
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
-    # Apply closure and conditional fixing based on SAM data
+    # Apply closure and conditional fixing based on SAM data.
+    #
+    # apply_closure() ALREADY calls apply_conditional_fixing() when the closure carries
+    # apply_flag_fixing (gtap_solver.py:389-390), so calling it again here ran the same
+    # idempotent pass twice. MEASURED on 20x41 (kernel gtap-scaffold-breakdown):
+    # apply_closure 17 calls / 190.2s vs apply_conditional_fixing 34 calls / 380.1s —
+    # exactly 2x, i.e. ~190s of pure duplicate work per full run, because the shock
+    # continuation calls this function once per lambda sub-step.
+    # Only call it here when apply_closure did NOT (no closure, or the flag is off).
     solver_helper = GTAPSolver(
         model, closure=closure_config, solver_name="path", params=params
     )
+    _cf_done_by_closure = False
     if closure_config is not None:
         solver_helper.apply_closure(closure_config)
-    solver_helper.apply_conditional_fixing()
+        _cf_done_by_closure = bool(
+            getattr(closure_config, "apply_flag_fixing", False)
+        )
+    if not _cf_done_by_closure:
+        solver_helper.apply_conditional_fixing()
 
     # Make MCP square by fixing structural variables at their initialization values.
     # This must happen BEFORE the warm-start hint so that the 90 unmatched structural

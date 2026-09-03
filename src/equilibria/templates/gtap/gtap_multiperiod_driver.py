@@ -3779,8 +3779,21 @@ def solve_multiperiod(
             _lambdas,
         )
         r_shk = None
+        # ONE deepcopy for the whole walk instead of one per λ. MEASURED on 20x41
+        # (Kaggle kernel gtap-scaffold-breakdown): 18 large deepcopies, 28.7s total.
+        # _apply_imptx_shock mutates ONLY params.taxes.imptx (in place), and each λ
+        # must start from the UNSHOCKED rates — otherwise the shock compounds. So we
+        # keep a pristine snapshot of just that dict and restore it per sub-step.
+        # This preserves the property the built equations rely on (see the comment at
+        # _rebuild_eq_pmeq_shock: the shock mutates a copy the equations don't
+        # reference) because _p_lam is still a deepcopy distinct from p_alt.
+        _p_lam = copy.deepcopy(p_alt)
+        _imptx_pristine = dict(_p_lam.taxes.imptx)
         for _i_lam, _lam in enumerate(_lambdas):
-            _p_lam = copy.deepcopy(p_alt)
+            # restore the unshocked tariffs so λ is applied to the base, not to the
+            # previous sub-step's already-shocked values
+            _p_lam.taxes.imptx.clear()
+            _p_lam.taxes.imptx.update(_imptx_pristine)
             # interpolate on the tariff POWER (GEMPACK-consistent): (1+0.10)^λ - 1.
             _f_lam = (1.0 + 0.10) ** _lam - 1.0
             _apply_imptx_shock(_p_lam, factor=_f_lam, gtap_mode=_gtap_mode)
