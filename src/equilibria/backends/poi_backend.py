@@ -32,19 +32,24 @@ class PoiBackend:
             Task 3 can be attributed rather than guessed at
     """
 
-    def __init__(self) -> None:
+    def __init__(self, jit: str = "LLVM") -> None:
         self.poi_model: Any = None
         self.adapter: PoiModelAdapter | None = None
         self.constraints: dict[str, Any] = {}
         self.skipped: dict[str, int] = {}
         self._model: Any = None
+        # POI ships two JIT engines. LLVM optimizes hard and is the default; TCC
+        # compiles far faster and is the lever when compile time dominates, but it
+        # crashes on macOS ARM64 (measured: the process dies with no traceback),
+        # so it is only usable on Linux x86_64.
+        self._jit = jit
 
     def build(self, model: Any) -> None:
         """Build the POI model, mirroring ``PyomoBackend.build``'s phases."""
         from pyoptinterface import ipopt
 
         self._model = model
-        self.poi_model = ipopt.Model()
+        self.poi_model = ipopt.Model(jit=self._jit)
 
         sets = {
             name: list(model.set_manager.get(name).elements)
