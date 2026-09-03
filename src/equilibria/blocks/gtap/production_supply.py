@@ -33,7 +33,9 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from pyomo.environ import exp, log, value
+from pyomo.environ import value
+
+from equilibria.blocks.gtap._backend_math import build_value, exp, log
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp  # noqa: F401 (submodule)
@@ -294,7 +296,11 @@ class ProductionSupplyBlock(Block):
                 sigmap = _get_sigmap(r, a)
                 px = m.px[r, a]
                 pnd = m.pnd[r, a]
-                if value(pnd) <= 0:
+                # Defensive guard against a non-positive price reaching the CES
+                # ratio below. Prices initialize to 1.0, so under Pyomo this never
+                # fires; a backend whose handles carry no build-time value gets
+                # that same 1.0 and takes the same branch.
+                if build_value(pnd, default=1.0) <= 0:
                     return None
                 ratio = px / pnd
                 shift = _axp_shift(r, a) * _lambdand(r, a)
@@ -318,7 +324,9 @@ class ProductionSupplyBlock(Block):
                 sigmap = _get_sigmap(r, a)
                 px = m.px[r, a]
                 pva = m.pva[r, a]
-                if value(pva) <= 0:
+                # Same defensive guard as eq_nd: pva initializes to 1.0, so this
+                # never fires under Pyomo either.
+                if build_value(pva, default=1.0) <= 0:
                     return None
                 ratio = px / pva
                 shift = _axp_shift(r, a) * _lambdava(r, a)

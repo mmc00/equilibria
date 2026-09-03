@@ -49,6 +49,8 @@ class PoiVarProxy:
         k = key if isinstance(key, tuple) else (key,)
         handle = self._cache.get(k)
         if handle is None:
+            # A scalar variable is cached under the empty key and keeps its bare
+            # name; an indexed one is labelled with its cell.
             label = f"{self._name}[{','.join(map(str, k))}]" if k else self._name
             handle = self._model.add_variable(name=label)
             self._cache[k] = handle
@@ -106,6 +108,11 @@ class PoiModelAdapter:
 
         var = d.get("_vars", {}).get(name)
         if var is not None:
+            # A scalar variable is used bare (``m.chiSave * m.pi[r]``), never
+            # indexed, so hand back the single handle rather than the proxy —
+            # matching Pyomo, where a non-indexed Var IS the variable.
+            if not var.domains:
+                return var[()]
             return var
 
         elems = d.get("_sets", {})
@@ -125,21 +132,35 @@ class PoiModelAdapter:
         )
 
     def add_constraint(self, name: str, expr: Any) -> Any:
-        """Attach one constraint, routing by the expression type POI produced.
+        """Attach one constraint, routing by what POI's ``==`` actually produced.
 
-        POI splits its constraint API by degree: products of two variables come
-        back as ``ScalarQuadraticFunction`` and have a dedicated entry point, while
-        anything transcendental (the CES powers and logs throughout GTAP) must go
-        through the nonlinear path. Dispatching on the type keeps each expression on
-        the cheapest route that can represent it exactly.
+        The block bodies all write ``lhs == rhs``, but POI answers that in two
+        different types depending on the operands (measured, POI 0.6.1):
+
+        * affine and quadratic comparisons -> ``ComparisonConstraint``, which
+          carries its own sense and bounds and goes to the linear/quadratic entry
+          points;
+        * anything transcendental — the CES powers and logs throughout GTAP —
+          -> ``ExpressionHandle``, where the comparison is folded into the graph
+          and ``add_nl_constraint`` unpacks it.
+
+        Routing each to the cheapest entry point that represents it exactly keeps
+        the linear rows out of the autodiff graph, which is where POI's compile
+        cost lives.
         """
         model = object.__getattribute__(self, "_model")
-        kind = type(expr).__name__
 
-        if kind in ("ScalarAffineFunction", "VariableIndex"):
-            con = model.add_linear_constraint(expr)
-        elif kind == "ScalarQuadraticFunction":
-            con = model.add_quadratic_constraint(expr)
+        from pyoptinterface._src.comparison_constraint import ComparisonConstraint
+
+        if isinstance(expr, ComparisonConstraint):
+            body = expr.lhs - expr.rhs
+            kind = type(body).__name__
+            if kind in ("ScalarAffineFunction", "VariableIndex"):
+                con = model.add_linear_constraint(body, expr.sense, 0.0)
+            elif kind == "ScalarQuadraticFunction":
+                con = model.add_quadratic_constraint(body, expr.sense, 0.0)
+            else:
+                con = model.add_nl_constraint(expr)
         else:
             con = model.add_nl_constraint(expr)
 

@@ -37,7 +37,9 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from pyomo.environ import sqrt, value
+from pyomo.environ import value
+
+from equilibria.blocks.gtap._backend_math import sqrt
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
