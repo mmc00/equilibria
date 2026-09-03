@@ -29,6 +29,30 @@ from __future__ import annotations
 from typing import Any
 
 
+def _affine_nnz(body: Any) -> int:
+    """Distinct variables in an affine expression — its Jacobian row's nonzeros."""
+    variables = getattr(body, "variables", None)
+    if variables is None:
+        # A bare VariableIndex is one variable, so one nonzero.
+        return 1
+    return len(set(variables))
+
+
+def _quadratic_nnz(body: Any) -> int:
+    """Distinct variables in a quadratic expression.
+
+    A product ``x*y`` differentiates to nonzeros in both x and y, so both factors
+    count, together with anything in the affine part.
+    """
+    seen: set[Any] = set()
+    seen.update(getattr(body, "variable_1s", ()) or ())
+    seen.update(getattr(body, "variable_2s", ()) or ())
+    affine = getattr(body, "affine_part", None)
+    if affine is not None:
+        seen.update(getattr(affine, "variables", ()) or ())
+    return len(seen)
+
+
 class PoiVarProxy:
     """One variable family: ``model.px`` here, ``model.px[r, i]`` a POI handle.
 
@@ -100,6 +124,10 @@ class PoiModelAdapter:
             },
         )
         object.__setattr__(self, "constraints", {})
+        # Structural nonzeros of the rows that never enter the autodiff graph.
+        # POI's own counters cover the nonlinear groups only, so without these the
+        # Jacobian total would omit every linear and quadratic row.
+        object.__setattr__(self, "linear_nnz", [])
 
     def __getattr__(self, name: str) -> Any:
         # Reached only when normal attribute lookup fails, so the instance
@@ -152,13 +180,17 @@ class PoiModelAdapter:
 
         from pyoptinterface._src.comparison_constraint import ComparisonConstraint
 
+        linear_nnz = object.__getattribute__(self, "linear_nnz")
+
         if isinstance(expr, ComparisonConstraint):
             body = expr.lhs - expr.rhs
             kind = type(body).__name__
             if kind in ("ScalarAffineFunction", "VariableIndex"):
                 con = model.add_linear_constraint(body, expr.sense, 0.0)
+                linear_nnz.append(_affine_nnz(body))
             elif kind == "ScalarQuadraticFunction":
                 con = model.add_quadratic_constraint(body, expr.sense, 0.0)
+                linear_nnz.append(_quadratic_nnz(body))
             else:
                 con = model.add_nl_constraint(expr)
         else:
