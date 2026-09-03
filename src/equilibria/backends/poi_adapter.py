@@ -38,6 +38,18 @@ def _affine_nnz(body: Any) -> int:
     return len(set(variables))
 
 
+def _nl_row_nnz(adapter: Any, expr: Any) -> int:
+    """Distinct variables in one nonlinear row.
+
+    POI hands back an opaque graph handle for a nonlinear constraint, and its own
+    counters describe deduplicated group representatives rather than rows. The
+    variables are instead taken from what the row's ``build_expression`` actually
+    read, which the adapter records as it hands out handles — the same quantity
+    Pyomo reports via ``identify_variables``.
+    """
+    return len(object.__getattribute__(adapter, "_touched"))
+
+
 def _quadratic_nnz(body: Any) -> int:
     """Distinct variables in a quadratic expression.
 
@@ -61,13 +73,22 @@ class PoiVarProxy:
     equation ever mentions.
     """
 
-    __slots__ = ("_model", "_name", "_domains", "_cache")
+    __slots__ = ("_model", "_name", "_domains", "_cache", "_touched")
 
-    def __init__(self, poi_model: Any, name: str, domains: tuple[str, ...]) -> None:
+    def __init__(
+        self,
+        poi_model: Any,
+        name: str,
+        domains: tuple[str, ...],
+        touched: set | None = None,
+    ) -> None:
         self._model = poi_model
         self._name = name
         self._domains = domains
         self._cache: dict[tuple[Any, ...], Any] = {}
+        # Shared with the adapter: every handle handed out is recorded so a row's
+        # variables can be attributed even when POI keeps the expression opaque.
+        self._touched = touched
 
     def __getitem__(self, key: Any) -> Any:
         k = key if isinstance(key, tuple) else (key,)
@@ -78,6 +99,8 @@ class PoiVarProxy:
             label = f"{self._name}[{','.join(map(str, k))}]" if k else self._name
             handle = self._model.add_variable(name=label)
             self._cache[k] = handle
+        if self._touched is not None:
+            self._touched.add((self._name, k))
         return handle
 
     def __iter__(self):
@@ -118,16 +141,31 @@ class PoiModelAdapter:
         object.__setattr__(
             self,
             "_vars",
+            {},
+        )
+        object.__setattr__(self, "constraints", {})
+        # Structural nonzeros per row, counted while building.
+        #
+        # POI's own counters cannot supply this: it deduplicates identical graphs
+        # and keeps ONE representative per group, so the published nnz covers the
+        # representatives rather than every row (measured: 409 nonlinear rows
+        # collapse to 32 representatives). Counting here, per row, matches how the
+        # Pyomo side is counted — distinct variables per constraint body — so the
+        # two totals describe the same matrix.
+        object.__setattr__(self, "linear_nnz", [])
+        object.__setattr__(self, "nl_nnz", [])
+        # Variable handles touched since the last reset, used to attribute the
+        # variables of a nonlinear row that POI exposes only as an opaque graph.
+        touched: set = set()
+        object.__setattr__(self, "_touched", touched)
+        object.__setattr__(
+            self,
+            "_vars",
             {
-                name: PoiVarProxy(poi_model, name, tuple(domains))
+                name: PoiVarProxy(poi_model, name, tuple(domains), touched)
                 for name, domains in (var_specs or {}).items()
             },
         )
-        object.__setattr__(self, "constraints", {})
-        # Structural nonzeros of the rows that never enter the autodiff graph.
-        # POI's own counters cover the nonlinear groups only, so without these the
-        # Jacobian total would omit every linear and quadratic row.
-        object.__setattr__(self, "linear_nnz", [])
 
     def __getattr__(self, name: str) -> Any:
         # Reached only when normal attribute lookup fails, so the instance
@@ -193,8 +231,10 @@ class PoiModelAdapter:
                 linear_nnz.append(_quadratic_nnz(body))
             else:
                 con = model.add_nl_constraint(expr)
+                object.__getattribute__(self, "nl_nnz").append(_nl_row_nnz(self, expr))
         else:
             con = model.add_nl_constraint(expr)
+            object.__getattribute__(self, "nl_nnz").append(_nl_row_nnz(self, expr))
 
         object.__getattribute__(self, "constraints")[name] = con
         return con

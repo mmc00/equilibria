@@ -62,15 +62,7 @@ class PoiBackend:
             var_specs=var_specs,
         )
 
-        # POI records nonlinear constraints into a thread-local ExpressionGraph and
-        # compiles everything sharing one graph into a single autodiff evaluator —
-        # the source of its speed, and the reason graph scope drives peak memory.
-        # One graph for the whole model is the arrangement Fase 0 measures;
-        # narrowing it is a Fase 1 question, once there are numbers to justify it.
-        from pyoptinterface import nl
-
-        with nl.graph():
-            self._build_constraints(model)
+        self._build_constraints(model)
 
     def _build_constraints(self, model: Any) -> None:
         """Walk every equation's index space, as the Pyomo backend does.
@@ -79,6 +71,7 @@ class PoiBackend:
         reimplementation, so both backends enumerate identical index tuples.
         """
         from pyomo.environ import Constraint
+        from pyoptinterface import nl
 
         for eq_name in model.equation_manager.list_equations():
             eq = model.equation_manager.get(eq_name)
@@ -93,20 +86,33 @@ class PoiBackend:
                 continue
 
             for indices in indices_list:
-                expr = eq.build_expression(self.adapter, indices)
+                # One graph per constraint rather than one for the whole model.
+                # POI compiles each graph into an autodiff evaluator, then
+                # deduplicates identical ones, so per-constraint graphs give it
+                # many small functions to share instead of one enormous vector
+                # function. Measured on the 3x3: 55.9s -> 3.67s to compile, same
+                # 1,110 rows, with 409 nonlinear rows collapsing to 32 compiled
+                # groups. This also confirms the earlier nl.graph()-scope finding
+                # in devtools, which reached the same conclusion from RAM.
+                with nl.graph():
+                    # Reset before each row so the handles recorded during
+                    # build_expression are exactly this row's variables.
+                    self.adapter._touched.clear()
+                    expr = eq.build_expression(self.adapter, indices)
 
-                # Pyomo drops a cell for None and for Constraint.Skip. POI has to
-                # drop exactly the same ones or Task 3's name parity is meaningless.
-                if expr is None or expr is Constraint.Skip:
-                    self.skipped[eq_name] = self.skipped.get(eq_name, 0) + 1
-                    continue
+                    # Pyomo drops a cell for None and for Constraint.Skip. POI has
+                    # to drop exactly the same ones or the name parity in
+                    # test_poi_blocks_parity is meaningless.
+                    if expr is None or expr is Constraint.Skip:
+                        self.skipped[eq_name] = self.skipped.get(eq_name, 0) + 1
+                        continue
 
-                key = (
-                    f"{eq_name}[{','.join(map(str, indices))}]"
-                    if indices
-                    else eq_name
-                )
-                self.constraints[key] = self.adapter.add_constraint(key, expr)
+                    key = (
+                        f"{eq_name}[{','.join(map(str, indices))}]"
+                        if indices
+                        else eq_name
+                    )
+                    self.constraints[key] = self.adapter.add_constraint(key, expr)
 
     def __repr__(self) -> str:  # pragma: no cover - diagnostics only
         return (
