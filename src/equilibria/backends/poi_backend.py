@@ -12,12 +12,47 @@ of the Pyomo ``ConcreteModel`` and produce POI expressions from the same source.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
 from equilibria.backends.poi_adapter import PoiModelAdapter
 
 logger = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def _llvm_opt_level(level: int | None):
+    """Build POI's LLVM JIT at ``level`` instead of the hardcoded maximum.
+
+    POI constructs its target machine with ``opt=3`` inside ``LLJITCompiler``,
+    exposing no way to choose. The class is swapped for the duration of the model's
+    construction — the only moment the compiler is created — and restored
+    afterwards, so nothing outside this call sees a patched POI.
+
+    ``level=None`` leaves POI's own default alone.
+    """
+    if level is None:
+        yield
+        return
+
+    from llvmlite import binding
+    from pyoptinterface._src import jit_llvm
+
+    original = jit_llvm.LLJITCompiler.__init__
+
+    def _init(self) -> None:
+        target = binding.Target.from_default_triple()
+        machine = target.create_target_machine(jit=True, opt=level)
+        self.lljit = binding.create_lljit_compiler(machine)
+        self.rts = []
+        self.source_codes = []
+
+    jit_llvm.LLJITCompiler.__init__ = _init
+    try:
+        yield
+    finally:
+        jit_llvm.LLJITCompiler.__init__ = original
 
 
 class PoiBackend:
@@ -32,24 +67,36 @@ class PoiBackend:
             Task 3 can be attributed rather than guessed at
     """
 
-    def __init__(self, jit: str = "LLVM") -> None:
+    def __init__(self, jit: str = "LLVM", opt_level: int | None = 0) -> None:
         self.poi_model: Any = None
         self.adapter: PoiModelAdapter | None = None
         self.constraints: dict[str, Any] = {}
         self.skipped: dict[str, int] = {}
         self._model: Any = None
-        # POI ships two JIT engines. LLVM optimizes hard and is the default; TCC
-        # compiles far faster and is the lever when compile time dominates, but it
-        # crashes on macOS ARM64 (measured: the process dies with no traceback),
-        # so it is only usable on Linux x86_64.
+        # POI ships two JIT engines. LLVM is the default; TCC compiles faster but
+        # dies on macOS ARM64 — a TinyCC bug, not a POI one: its ARM64 Mach-O
+        # backend emitted thread-local-storage relocations that Mach-O's linker
+        # never implemented, and POI's expression graph context is thread-local.
+        # Fixes reached the TinyCC mailing list in Aug 2026 but have not shipped in
+        # tccbox, so TCC stays Linux-only for now.
         self._jit = jit
+        # LLVM optimization level for the JIT. POI hardcodes 3 (maximum), which is
+        # what makes compilation dominate the build: measured on the 3x3, opt=3
+        # takes 4.25s against 0.49s at opt=0 (8.7x) for identical rows, and the
+        # 10x7 goes from not finishing in 10 minutes to 235s.
+        #
+        # Default 0 because these evaluators run inside a Newton solve where the
+        # wall clock is dominated by factorization, not by evaluation. Raise it if
+        # a measurement ever shows evaluation to be the bottleneck.
+        self._opt_level = opt_level
 
     def build(self, model: Any) -> None:
         """Build the POI model, mirroring ``PyomoBackend.build``'s phases."""
         from pyoptinterface import ipopt
 
         self._model = model
-        self.poi_model = ipopt.Model(jit=self._jit)
+        with _llvm_opt_level(self._opt_level):
+            self.poi_model = ipopt.Model(jit=self._jit)
 
         sets = {
             name: list(model.set_manager.get(name).elements)
