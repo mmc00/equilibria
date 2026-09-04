@@ -1,121 +1,170 @@
 # Backend POI — resultado de la Fase 0
 
-**Fecha:** 2026-09-04 · Rama `perf/poi-fase0` (7 commits, 35 tests verdes)
+**Fecha:** 2026-09-04 · Rama `perf/poi-fase0`
 **Spec:** `2026-09-03-poi-backend-design.md` · **Plan:** `2026-09-03-poi-backend-fase0.md`
 
 ## Veredicto
 
-**El supuesto central del spec se sostiene y su riesgo principal no existe. El
-proyecto no avanza por una razón distinta: ninguna forma de agrupar las funciones
-compiladas escala al 20×41.**
+**Las tres preguntas de la Fase 0 se responden a favor.** Los bloques corren sobre
+PyOptInterface sin reescribirse, el Jacobiano es idéntico al de Pyomo, y el 20×41 se
+construye en **21.8s con POI contra 24.80s de Pyomo**.
 
-## Las tres preguntas de la Fase 0
+El muro que bloqueaba el proyecto no era de la herramienta: eran **dos ecuaciones**
+anchas y no lineales. Partirlas con variables auxiliares lo elimina.
+
+Lo que esto **no** demuestra: que el wall de 43.6 min del 20×41 baje. Eso requiere el
+arnés completo (9 fases + solve) y no está medido. Ver "Lo que falta".
+
+---
+
+## Las tres preguntas
 
 | pregunta | respuesta | evidencia |
 |---|---|---|
-| ¿los bloques corren sobre POI sin reescribirse? | **Sí** | 1,106 de 1,108 celdas; 5 líneas tocadas de ~5,900 |
-| ¿el Jacobiano sale 44% más denso? | **No** | nnz **idéntico** en 3 datasets |
-| ¿POI construye más rápido? | **Declarar sí, compilar no** | 0.43s vs 0.74s declarando; compilar no escala |
+| ¿los bloques corren sin reescribirse? | **Sí** | 5 líneas tocadas de ~5,900 |
+| ¿el Jacobiano sale 44% más denso? | **No** | nnz **idéntico** en 5 datasets |
+| ¿POI construye más rápido? | **Sí** | 20×41: 21.8s vs 24.80s |
 
-### Paridad estructural (Gate 1) — CERRADA
-
-Ambos backends producen el **mismo conjunto de ecuaciones**, celda por celda:
+### Paridad estructural — CERRADA
 
 | dataset | filas | nnz Pyomo | nnz POI |
 |---|---|---|---|
 | 3×3 | 1,110 | 4,568 | **4,568** |
-| 10×7 | 12,502 | 60,393 | **60,393** |
-| 15×10 | 34,010 | 180,441 | **180,441** |
+| 10×7 | 12,505 | 60,393 | **60,393** |
+| 15×10 | 34,043 | 183,067 | **183,067** |
+| 20×41 | 395,929 | 2,766,728 | **2,766,728** |
 
-Tres coincidencias exactas, contadas por caminos independientes. El riesgo que
-gobernaba el spec (POI midió antes 2.58M vs 1.79M, 44% más denso) **no se
-materializa**: los dos backends construyen la misma matriz.
+Cinco coincidencias exactas por caminos independientes. El riesgo que gobernaba el
+spec (POI midió antes 2.58M vs 1.79M, 44% más denso) **no se materializa**.
 
-La paridad de nombres está verificada con prueba de mutación — quitar una sola
-celda dispara el assert, así que el test puede fallar.
+La paridad de nombres está verificada con prueba de mutación: quitar una sola celda
+dispara el assert.
 
-## Por qué no avanza
+---
 
-POI compila los evaluadores de autodiff generando texto LLVM IR. Ese paso no escala:
+## La causa real del muro: dos ecuaciones
 
-| dataset | filas | declarar | compilar |
+`eq_pwfact` (índice de Fisher mundial) y `eq_pfact` (su gemela regional) suman sobre
+todo `(r,f,a)` **dentro de una raíz cuadrada sobre un cociente**: 701 variables en una
+fila en el 10×7, 1,501 en el 15×10.
+
+El coste de la derivación simbólica es **superlineal en el ancho de UNA fila**:
+
+| variables en la fila | compilar |
+|---|---|
+| 21 | 0.08s |
+| 81 | 2.21s |
+| 161 | **66.35s** |
+| 701 | no termina |
+
+Las otras 12,502 filas del modelo se declaran en 0.15s **combinadas**. El problema
+nunca fue el número de ecuaciones.
+
+### Ancho NO implica coste
+
+De las 5 familias anchas detectadas, solo 2 costaban:
+
+| ecuación | vars (15×10) | tipo | ¿deriva simbólicamente? |
 |---|---|---|---|
-| 3×3 | 1,110 | 0.01s | 0.43s |
-| 10×7 | 12,502 | 0.15s | 235s |
-| 15×10 | 34,010 | 0.43s | **>3,881s (TIMEOUT)** |
-| 20×41 | 395,310 | — | 12× más grande que el 15×10 |
+| `eq_xtmg` | 1,501 | lineal | **No** |
+| `eq_gdpmp` | 706 | cuadrática | **No** |
+| `eq_ytax` | 481 | cuadrática | **No** |
+| `eq_pwfact` | 1,501 | **no lineal** | **Sí** → partida |
+| `eq_pfact` | 151 | **no lineal** | **Sí** → partida |
 
-**Referencia: Pyomo construye el 20×41 ENTERO en 17.7 min.** POI no compila el
-15×10 —doce veces más chico— en 65.
+Solo duele si es ancha **y** no lineal. `eq_xtmg` tiene 1,501 variables y es gratis
+porque es `constante × variable`.
 
-### Dónde está el coste (medido, 10×7)
+### El arreglo
 
-| | s | % |
+Nombrar cada suma con una variable auxiliar, sembrada al valor de benchmark. Las sumas
+pasan a ser filas lineales o cuadráticas (que no se derivan simbólicamente) y el índice
+queda sobre cuatro variables. **El álgebra es idéntica.**
+
+| dataset | compilar antes | compilar después |
 |---|---|---|
-| `_compile_evaluators` TOTAL | 208.0 | 100% |
-| LLVM `compile_module` | 53.9 | 26% |
-| **POI generando el IR** | **154.1** | **74%** |
+| 10×7 | 235s | **4.31s** |
+| 15×10 | **>3,881s (TIMEOUT)** | **1.16s** |
+| 20×41 | — | **2.65s** |
 
-El cuello no es LLVM optimizando: es POI **escribiendo** el IR en Python. Por eso
-bajar el nivel de optimización ayuda poco cuando el modelo crece — solo toca ese 26%.
+---
 
-### Las dos formas de agrupar, ambas medidas
+## Fidelidad
 
-POI compila una función por *grupo* de grafos similares. Hay dos extremos:
+Solve completo base→check→shock en el 10×7, `code=1` en las tres fases, con y sin los
+splits:
 
-| modo | compilar 3×3 | `max ny` | IR 3×3 |
-|---|---|---|---|
-| un grafo por **fila** | 4.29s | 1 | 2.10 MB |
-| un grafo por **ecuación** | 8.47s | 57 | 5.85 MB |
+| | |
+|---|---|
+| variables comparadas | **60,435** |
+| diferencia relativa **máxima** | **2.2e-10** |
+| celdas > 1e-3 (tolerancia de paridad) | **0** |
+| celdas > 1e-9 | **0** |
+| mediana | 1.1e-13 |
 
-- **Por fila**: cada celda compila su propia función. El 10×7 genera ~4,288
-  funciones y **80.7 MB** de IR.
-- **Por ecuación**: las filas comparten función (`ny=57` lo confirma), pero cada
-  función debe manejar 57 casos y sale más grande. **El IR crece 2.8× y compilar
-  tarda el doble.**
+El peor caso está en el décimo dígito de `xma[USA,Rice,Textiles,shock]`. Residuales en
+el punto base tras los splits: **1e-13**.
 
-Es un compromiso real, no un parámetro mal puesto: pocas funciones grandes o muchas
-chicas, y ninguna de las dos escala. La hipótesis de que compartir función reduciría
-el IR fue **refutada por la medición**.
+### El gate que falla
 
-## Lo que queda utilizable
+`test_settle_only_seed_identical_to_full` compara un **hash byte-exacto** de la semilla
+y falla. No detecta un error de modelo: detecta que Newton recorre otro camino al haber
+filas adicionales, lo que mueve el último dígito. El conteo de semilla no cambia
+(20,138) y las auxiliares no entran en ella.
 
-- `PoiBackend` funcional con paridad estructural probada y 35 tests
-- `PoiModelAdapter`: los bloques corren sin reescribirse
-- `_backend_math.py`: `exp`/`log`/`sqrt` neutrales al backend, y `build_value()`
-  para los guards que leen el valor de una variable en tiempo de construcción
-- `bench_poi_build.py`: mide build y nnz de ambos backends
+Ese gate se creó para atrapar un **atajo** en `calibrate_base` que alterara la semilla.
+Una reformulación algebraicamente equivalente no es ese riesgo, pero un hash exacto no
+puede distinguir los dos casos. **Decisión de diseño pendiente del usuario** — no se
+tocó.
 
-El camino Pyomo (el oráculo de paridad) quedó **intacto**: 66 tests verdes.
+---
 
-## Recomendación
+## Lo que falta
 
-**Cerrar la Fase 0 y no planificar las Fases 1-3 por ahora.**
+**Lo medido es construir el modelo una vez.** El wall real del 20×41 son 43.6 min
+(17.7 build + 25.9 solve), y esos 17.7 incluyen calibración, escalado y trabajo
+repartido a lo largo de las 9 fases:
 
-La palanca que POI atacaba —`nl_writer` + `PyomoNLP` ×9, ~7.7 min de los 17.7 del
-build— sigue disponible **dentro de Pyomo**, sin cambiar de framework: la interfaz
-NLP se reconstruye 9 veces, una por fase, serializando las 395,310 ecuaciones cada
-vez. Es la misma clase de redundancia que el andamiaje ya corregido (~219s), y no
-depende de que POI escale.
+| componente | ~min |
+|---|---|
+| `walk_expression` (13.8M llamadas) | ~8.8 |
+| `add_component` | ~7.3 |
+| `nl_writer` **×9** | ~3.9 |
+| `PyomoNLP.__init__` **×9** | ~3.8 |
 
-Si POI se retoma, el punto de partida es el diagnóstico de arriba: el problema es la
-**generación del IR** (74% del coste), no LLVM ni la densidad del Jacobiano.
+Los `×9` son la oportunidad: Pyomo reserializa las 395,310 ecuaciones una vez por
+fase. POI compila una sola vez. **Si eso se traduce en ahorro real es una hipótesis
+sin medir** — requiere correr POI en el arnés multi-período completo.
+
+El solve (25.9 min, 59%) POI no lo toca.
+
+---
 
 ## Notas de método
 
-Cuatro mediciones estuvieron a punto de reportarse mal. Quedan anotadas porque
-volverían a ocurrir:
+Cinco diagnósticos se reportaron mal antes de dar con la causa. Todos por **restar
+totales en vez de instrumentar la pieza**:
 
-1. **El build de POI debe incluir compilar.** Declarar solo registra en el grafo; la
-   compilación ocurre dentro de `optimize()`. Medir solo el declarar favorecía a POI
-   ~3000×.
-2. **`m_jacobian_nnz` es del GRUPO, no por fila.** Multiplicar por `ny` infló 1,978
-   en 809,002 y dio un **177× falso** de densidad.
-3. **Con grafos por fila, los contadores de POI subestiman**: deduplica 409 filas en
-   32 representantes. El nnz se cuenta fila por fila mientras se construye, igual que
-   `identify_variables` en Pyomo.
-4. **`signal.alarm` no interrumpe código nativo de LLVM** — un corte de 20 min saltó
-   a los 3,881s. Para acotar por tiempo hace falta un proceso aparte.
+| dicho | real |
+|---|---|
+| "el muro es LLVM `opt=3`" | LLVM es 27% |
+| "74% es generar el IR" | es 3% |
+| "es la Hessiana" | 3% del IR |
+| "el agrupamiento `ny=1`" | irrelevante |
+| "compilar no escala, es un compromiso real" | eran 2 ecuaciones |
 
-Y una trampa de entorno: **`pip install -q` devuelve rc=0 sin instalar**. Verificar
-siempre por `import`. POI importa `tccbox` incondicionalmente aunque no se use TCC.
+**La lección: instrumentar cada función del camino y exigir que "sin explicar" sea 0.**
+Fue lo que encontró la causa en un solo intento tras cuatro fallidos.
+
+Otras trampas medidas:
+
+1. **El build de POI debe incluir compilar.** Declarar solo registra en el grafo.
+   Medir solo el declarar favorecía a POI ~3000×.
+2. **`m_jacobian_nnz` es del GRUPO, no por fila.** Multiplicar por `ny` infló 1,978 en
+   809,002 y dio un **177× falso** de densidad.
+3. **`signal.alarm` no interrumpe código nativo de LLVM** — un corte de 20 min saltó a
+   los 3,881s. Hace falta un proceso aparte.
+4. **`pip install -q` devuelve rc=0 sin instalar.** Verificar por `import`. POI importa
+   `tccbox` incondicionalmente aunque no se use TCC.
+5. **El editable install** apunta al checkout principal: un worktree no prueba su
+   código sin `PYTHONPATH=<worktree>/src`.

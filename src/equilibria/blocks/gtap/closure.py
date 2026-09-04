@@ -164,6 +164,47 @@ class ClosureBlock(Block):
             lower=1e-3,
             upper=float("inf"),
         )
+        # Named aggregates for the world Fisher index (eq_pwfact).
+        #
+        # eq_pwfact sums over every (r, f, a) — 701 variables in one row at 10x7,
+        # 1,501 at 15x10 — and wraps the result in a division under a square root.
+        # Symbolic differentiation of that single row is superlinear in its width:
+        # measured in isolation, 161 variables take 66s and 701 never finish, while
+        # the model's other 12,502 rows declare in 0.15s combined.
+        #
+        # Naming each sum makes the wide part three separate rows, which are linear
+        # or quadratic and never reach the symbolic differentiator, leaving a
+        # four-variable nonlinear row. The arithmetic is unchanged.
+        # Seeded at the benchmark value of the sum they stand for, not at 1.0: the
+        # solve is warm-started from the benchmark, and an auxiliary left at 1.0
+        # would start its row ~3,000 away from feasible and move the solver off the
+        # seeded point. mqfactw is that same sum over the benchmark (computed above),
+        # which is what all three aggregates equal at the benchmark.
+        _agg_seed = float(mqfactw) if mqfactw > 0.0 else 1.0
+        for _agg in ("mfw_bs", "mfw_sb", "mfw_ss"):
+            variables[_agg] = Variable(
+                name=_agg,
+                value=np.array([_agg_seed]),
+                domains=(),
+                domain="Reals",
+                lower=-float("inf"),
+                upper=float("inf"),
+            )
+
+        # The same three aggregates per region, for eq_pfact — the regional twin of
+        # eq_pwfact, with the same square root over a ratio of wide sums.
+        _mqfactr_seed = np.array(
+            [float(mqfactr_bb_data.get((rr,), 1.0)) for rr in regions], dtype=float
+        )
+        for _agg in ("mfr_bs", "mfr_sb", "mfr_ss"):
+            variables[_agg] = Variable(
+                name=_agg,
+                value=_mqfactr_seed.copy(),
+                domains=("r",),
+                domain="Reals",
+                lower=-float("inf"),
+                upper=float("inf"),
+            )
         # pmuv: rmuv/imuv empty on the gate oracle -> a mutable Param frozen at 1.0
         # (monolith 5113-5118); eq_pmuv is NOT registered. The composer flips it to a
         # Var (bnd 0.001,None) + registers eq_pmuv under the rmuv&imuv switch.
@@ -173,7 +214,58 @@ class ClosureBlock(Block):
 
         equations: list[SymbolicEquation] = []
 
+        # The regional aggregates, one row each — wide but linear or quadratic, so
+        # they never reach the symbolic differentiator (same split as eq_pwfact).
+        class EqMfrBs(SymbolicEquation):
+            name: str = "eq_mfr_bs"
+            domains: tuple = ("r",)
+
+            def build_expression(self, pyomo_model, indices):
+                model = pyomo_model
+                (r,) = indices
+                return model.mfr_bs[r] == sum(
+                    model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                    for f in model.f
+                    for a in model.a
+                    if value(model.xscale[r, a]) > 1e-12
+                )
+
+        equations.append(EqMfrBs())
+
+        class EqMfrSb(SymbolicEquation):
+            name: str = "eq_mfr_sb"
+            domains: tuple = ("r",)
+
+            def build_expression(self, pyomo_model, indices):
+                model = pyomo_model
+                (r,) = indices
+                return model.mfr_sb[r] == sum(
+                    model.pf[r, f, a] * model.xf0[r, f, a] / model.xscale[r, a]
+                    for f in model.f
+                    for a in model.a
+                    if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
+                )
+
+        equations.append(EqMfrSb())
+
+        class EqMfrSs(SymbolicEquation):
+            name: str = "eq_mfr_ss"
+            domains: tuple = ("r",)
+
+            def build_expression(self, pyomo_model, indices):
+                model = pyomo_model
+                (r,) = indices
+                return model.mfr_ss[r] == sum(
+                    model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                    for f in model.f
+                    for a in model.a
+                    if value(model.xscale[r, a]) > 1e-12
+                )
+
+        equations.append(EqMfrSs())
+
         # ---------------- eq_pfact (monolith 7867; registered here per 7831) -----
+        # The Fisher index itself, now over four variables per region.
         class EqPfact(SymbolicEquation):
             name: str = "eq_pfact"
             domains: tuple = ("r",)
@@ -181,60 +273,75 @@ class ClosureBlock(Block):
             def build_expression(self, pyomo_model, indices):
                 model = pyomo_model
                 (r,) = indices
-                m_bs = sum(
-                    model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
-                    for f in model.f
-                    for a in model.a
-                    if value(model.xscale[r, a]) > 1e-12
-                )
-                m_sb = sum(
-                    model.pf[r, f, a] * model.xf0[r, f, a] / model.xscale[r, a]
-                    for f in model.f
-                    for a in model.a
-                    if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
-                )
-                m_ss = sum(
-                    model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
-                    for f in model.f
-                    for a in model.a
-                    if value(model.xscale[r, a]) > 1e-12
-                )
                 return model.pfact[r] == sqrt(
-                    (m_sb / model.mqfactr_bb[r]) * (m_ss / (m_bs + 1e-12))
+                    (model.mfr_sb[r] / model.mqfactr_bb[r])
+                    * (model.mfr_ss[r] / (model.mfr_bs[r] + 1e-12))
                 )
 
         equations.append(EqPfact())
 
         # ---------------- eq_pwfact (monolith 7834) ----------------
+        # The three aggregates, each its own row. Wide but linear or quadratic, so
+        # they never reach the symbolic differentiator.
+        class EqMfwBs(SymbolicEquation):
+            name: str = "eq_mfw_bs"
+            domains: tuple = ()
+
+            def build_expression(self, pyomo_model, indices):
+                model = pyomo_model
+                return model.mfw_bs == sum(
+                    model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                    for r in model.r
+                    for f in model.f
+                    for a in model.a
+                    if value(model.xscale[r, a]) > 1e-12
+                )
+
+        equations.append(EqMfwBs())
+
+        class EqMfwSb(SymbolicEquation):
+            name: str = "eq_mfw_sb"
+            domains: tuple = ()
+
+            def build_expression(self, pyomo_model, indices):
+                model = pyomo_model
+                return model.mfw_sb == sum(
+                    model.pf[r, f, a] * model.xf0[r, f, a] / model.xscale[r, a]
+                    for r in model.r
+                    for f in model.f
+                    for a in model.a
+                    if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
+                )
+
+        equations.append(EqMfwSb())
+
+        class EqMfwSs(SymbolicEquation):
+            name: str = "eq_mfw_ss"
+            domains: tuple = ()
+
+            def build_expression(self, pyomo_model, indices):
+                model = pyomo_model
+                return model.mfw_ss == sum(
+                    model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
+                    for r in model.r
+                    for f in model.f
+                    for a in model.a
+                    if value(model.xscale[r, a]) > 1e-12
+                )
+
+        equations.append(EqMfwSs())
+
+        # ---------------- eq_pwfact (monolith 7834) ----------------
+        # The Fisher index itself, now over four variables instead of 701.
         class EqPwfact(SymbolicEquation):
             name: str = "eq_pwfact"
             domains: tuple = ()
 
             def build_expression(self, pyomo_model, indices):
                 model = pyomo_model
-                m_bs = sum(
-                    model.pf0[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
-                    for r in model.r
-                    for f in model.f
-                    for a in model.a
-                    if value(model.xscale[r, a]) > 1e-12
-                )
-                m_sb = sum(
-                    model.pf[r, f, a] * model.xf0[r, f, a] / model.xscale[r, a]
-                    for r in model.r
-                    for f in model.f
-                    for a in model.a
-                    if value(model.xscale[r, a]) > 1e-12 and model.xf0[r, f, a] > 0.0
-                )
-                m_ss = sum(
-                    model.pf[r, f, a] * model.xf[r, f, a] / model.xscale[r, a]
-                    for r in model.r
-                    for f in model.f
-                    for a in model.a
-                    if value(model.xscale[r, a]) > 1e-12
-                )
                 return model.pwfact == sqrt(
-                    (m_sb / model.mqfactw_bb) * (m_ss / (m_bs + 1e-12))
+                    (model.mfw_sb / model.mqfactw_bb)
+                    * (model.mfw_ss / (model.mfw_bs + 1e-12))
                 )
 
         equations.append(EqPwfact())
