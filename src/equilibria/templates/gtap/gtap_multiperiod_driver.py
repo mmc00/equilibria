@@ -1856,6 +1856,18 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
                     n_set += 1
             except (KeyError, TypeError):
                 pass
+
+    # The named Fisher aggregates (build_equations_fisher's `_named`) are DEFINED
+    # sums of the vars just copied, not independent unknowns. Inheriting the prior
+    # period's value starts them at the wrong sum — measured: the shock stalls at
+    # PATH code=0 on every altertax dataset. Recompute them from the values this
+    # warm-start actually installed.
+    with contextlib.suppress(Exception):
+        from equilibria.templates.gtap.gtap_model_multiperiod import (
+            GTAPMultiPeriodModel as _MP,
+        )
+
+        _MP.refresh_fisher_aggregates(m)
     return n_set
 
 

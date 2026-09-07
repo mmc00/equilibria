@@ -108,7 +108,34 @@ def test_fisher_pabs_pfact_pwfact_are_cross_period_rows():
                 with contextlib.suppress(KeyError, AttributeError):
                     m.xf[r, f, a, "base"].set_value(pv(m.xf[r, f, a, "base"]) * SCALE)
 
-    # After perturbation: residuals must REACT (prove the constraint is live/cross-period)
+    # After perturbation: residuals must REACT (prove the constraint is live/cross-period).
+    #
+    # The wide cross-period sums are named by auxiliary variables (build_equations_fisher's
+    # `_named`, which keeps these rows' Hessian linear in their width instead of quadratic).
+    # So the Fisher row itself no longer reads pa/xaa/pf/xf — it reads the aggregate, and the
+    # aggregate's OWN row reads the base-period Vars. The coupling is intact but lives one row
+    # over, so the perturbation reaches the Fisher row only once the aggregates are recomputed.
+    #
+    # Both halves are asserted: the defining rows must break (they see the perturbation), and
+    # after refreshing, the Fisher rows must break too (they see the aggregates). A row frozen
+    # onto construction-time constants would fail both.
+    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+
+    _aggs = getattr(m, "_fisher_aggregates", {})
+    assert _aggs, "build_equations_fisher must expose its named aggregates on m"
+    _defining_worst = max(
+        abs(pv(_con[_idx].body))
+        for _n, (_var, _defs) in _aggs.items()
+        if (_con := getattr(m, "eq_" + _n, None)) is not None
+        for _idx in _defs
+        if _idx in _con
+    )
+    assert _defining_worst > 0.1, (
+        f"the aggregates' defining rows did NOT react to the base-period perturbation "
+        f"(worst={_defining_worst:.4e}): they are not reading live base-period Vars"
+    )
+    GTAPMultiPeriodModel.refresh_fisher_aggregates(m)
+
     pabs_worst = max(_resid_pabs(r) for r in regions)
     pfact_worst = max(_resid_pfact(r) for r in regions)
     pwfact_resid = _resid_pwfact()
