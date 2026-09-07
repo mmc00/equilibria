@@ -22,8 +22,13 @@ from equilibria.templates.gtap.gtap_model_multiperiod import (
 )
 
 DATA = Path("datasets/gtap7_10x7")
-BASELINE_COUNT = 37505
-BASELINE_HASH = "ec3e426d49a094cb"
+# Bumped from (37505, ec3e426d49a094cb) when build_equations_fisher started naming its
+# wide cross-period sums with auxiliary variables (+133 defining rows, and the four
+# Fisher rows now read those variables instead of the sums). The algebra is unchanged;
+# what this constant pins is that the two BUILD PATHS agree, which
+# test_new_path_byte_identical_to_current checks directly and independently of it.
+BASELINE_COUNT = 37638
+BASELINE_HASH = "a9b1a0e0f86e89be"
 
 
 def _load_params():

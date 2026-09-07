@@ -504,7 +504,7 @@ class GTAPMultiPeriodModel:
                                               * mqfactw(t,t)/(mqfactw(base,t)+ε) )
           with mqfactw(tp,tq) = Σ_{r,f,a} pf[r,f,a,tp] · xf[r,f,a,tq] / xscale[r,a]
         """
-        from pyomo.environ import Constraint
+        from pyomo.environ import Constraint, Reals, Var
         from pyomo.environ import sqrt as _pyo_sqrt
         from pyomo.environ import value as _pv
 
@@ -525,6 +525,78 @@ class GTAPMultiPeriodModel:
         )
 
         fd = (H, G, I, MG)
+
+        # ── Naming the wide cross-period sums ────────────────────────────────
+        # Each Fisher row below divides one wide sum by another and takes a square
+        # root. Inlined, that makes ONE row whose second derivative couples every
+        # variable of either sum with every other — the row's Hessian grows as the
+        # SQUARE of its width. Measured before this change: eq_pwfact carried 30,625
+        # nnz at 5x5 and 233,289 at 10x7 (40.6% of the entire Hessian in one row),
+        # against 462 for the same sum named by the block's own auxiliaries. At 20x41
+        # the Hessian reached 247,390,965 nnz and IPOPT died on 21 GB.
+        #
+        # Naming each sum with a variable and its defining row leaves the wide part
+        # bilinear (Hessian linear in width) and the square root over four scalars.
+        # This is the same split blocks/gtap/closure.py already applies to the
+        # intra-period rows — whose auxiliaries this method used to delete along with
+        # the rows that consumed them.
+        #
+        # Seeded at the value of the sum they stand for, NOT at 1.0: the solve is
+        # warm-started from the benchmark, and an auxiliary left at 1.0 would start
+        # its own row thousands away from feasible and drag the solver off the seeded
+        # point. Evaluation may fail while vars are uninitialized; 1.0 is the fallback.
+        # INDEXED BY PERIOD, not scalar. The driver solves one period at a time and
+        # selects rows and columns with `idx[-1] == active_period` (see
+        # gtap_multiperiod_driver). A scalar aggregate matches no period, so its
+        # defining row would never enter the system PATH solves — leaving the Fisher
+        # row reading a stale aggregate (measured: residual 157 on the defining row
+        # after a solve, and 0.16 on eq_rgdpmp).
+        #
+        # Each aggregate is created on demand as a Var indexed by (*labels, period),
+        # where the period of a cross sum is the non-base one: mqgdp(base,check)
+        # belongs to solving `check`. The three crosses that share a period —
+        # (t,base), (base,t), (t,t) — are distinguished by the `slot` suffix, and
+        # (base,base) is the base-period anchor.
+        _agg_vars: dict[str, Var] = {}
+        _agg_defs: dict[str, dict] = {}
+        # The non-period part of each aggregate's index: per-region for the
+        # GDP/absorption/regional-factor sums, empty for the world factor sum.
+        _regions = list(m.r)
+        _rest_keys = {
+            "gdp": [(r,) for r in _regions],
+            "abs": [(r,) for r in _regions],
+            "factr": [(r,) for r in _regions],
+            "factw": [()],
+        }
+
+        def _named(prefix: str, tp: str, tq: str, rest: tuple, expr):
+            """Return the entry of a period-indexed Var standing for `expr`."""
+            slot = ("b" if tp == "base" else "s") + ("b" if tq == "base" else "s")
+            name = f"mq_{prefix}_{slot}"
+            t_own = tp if tp != "base" else (tq if tq != "base" else "base")
+            idx = (*rest, t_own)
+            var = _agg_vars.get(name)
+            if var is None:
+                # Index over exactly the (rest..., period) entries this aggregate can
+                # take — never a superset. An entry without a defining row would be a
+                # free column, and fixing it does not help: the driver's
+                # freeze_inactive_periods UNFIXES everything in the period it is about
+                # to solve, so the orphan comes back as an unmatched free variable and
+                # PATH stalls (measured: 7 unmatched, shock code=0 on every altertax
+                # dataset). A (base,base) cross belongs to the base period only.
+                periods = ["base"] if slot == "bb" else [
+                    tt for tt in m.t if tt != "base"
+                ]
+                keys = [(*rr, tt) for rr in _rest_keys[prefix] for tt in periods]
+                var = Var(keys, domain=Reals, initialize=1.0)
+                setattr(m, name, var)
+                _agg_vars[name] = var
+            try:
+                var[idx].set_value(float(_pv(expr)))
+            except (ValueError, TypeError, AttributeError, KeyError):
+                pass
+            _agg_defs.setdefault(name, {})[idx] = expr
+            return var[idx]
 
         def _mqgdp(tp: str, tq: str, r: str):
             """Fisher cross-product of absorption + net exports."""
@@ -556,8 +628,8 @@ class GTAPMultiPeriodModel:
             # Smooth positive guard on the sqrt argument to keep PATH evaluable during
             # iterations where the trade balance might transiently go negative:
             #   arg_pos = (arg + √(arg²+ε))/2  →  ≈ arg for arg≫√ε, ≈ 0⁺ for arg≤0, C¹-smooth.
-            _mq_base_t = _mqgdp("base", t, r)  # price=base, qty=current
-            _mq_t_base = _mqgdp(t, "base", r)  # price=current, qty=base
+            _mq_base_t = _named("gdp", "base", t, (r,), _mqgdp("base", t, r))
+            _mq_t_base = _named("gdp", t, "base", (r,), _mqgdp(t, "base", r))
             _arg = (m.gdpmp[r, t] / m.gdpmp[r, "base"]) * (
                 _mq_base_t / (_mq_t_base + 1e-12)
             )
@@ -618,6 +690,7 @@ class GTAPMultiPeriodModel:
                 if xscale_floats.get((r, a), 0.0) > 1e-12
             )
 
+
         # Delete intra-period eq_pabs / eq_pfact / eq_pwfact.
         # (After 3 calls to build_equations_intra each overwrites the previous, so only
         # the 'shock' entries remain — but we delete them all to avoid any duplicate binding.)
@@ -658,10 +731,10 @@ class GTAPMultiPeriodModel:
             # Cross-period Fisher absorption price index:
             #   pabs[r,t] = pabs[r,base] · sqrt( (mqabs(t,base)/mqabs(base,base))
             #                                   · (mqabs(t,t)   /mqabs(base,t)) )
-            mq_bb = _mqabs_cross("base", "base", r)  # pq=base, qq=base (denom anchor)
-            mq_tb = _mqabs_cross(t, "base", r)  # price=current, qty=base
-            mq_tt = _mqabs_cross(t, t, r)  # price=current, qty=current
-            mq_bt = _mqabs_cross("base", t, r)  # price=base,    qty=current
+            mq_bb = _named("abs", "base", "base", (r,), _mqabs_cross("base", "base", r))
+            mq_tb = _named("abs", t, "base", (r,), _mqabs_cross(t, "base", r))
+            mq_tt = _named("abs", t, t, (r,), _mqabs_cross(t, t, r))
+            mq_bt = _named("abs", "base", t, (r,), _mqabs_cross("base", t, r))
             _arg = (mq_tb / (mq_bb + 1e-12)) * (mq_tt / (mq_bt + 1e-12))
             _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
             return m.pabs[r, t] == m.pabs[r, "base"] * _pyo_sqrt(_arg_pos + 1e-12)
@@ -675,10 +748,10 @@ class GTAPMultiPeriodModel:
             #                    · (mqfactr(t,t,r)   /mqfactr(base,t,r)) )
             # With pfact[r,base]=1 (benchmark normalization), same form as GAMS pfacteq
             # but with live base-period pf/xf Vars replacing the frozen pf0/xf0 Params.
-            m_bb = _mqfactr_cross("base", "base", r)
-            m_sb = _mqfactr_cross(t, "base", r)  # price=current, qty=base
-            m_ss = _mqfactr_cross(t, t, r)  # price=current, qty=current
-            m_bs = _mqfactr_cross("base", t, r)  # price=base,    qty=current
+            m_bb = _named("factr", "base", "base", (r,), _mqfactr_cross("base", "base", r))
+            m_sb = _named("factr", t, "base", (r,), _mqfactr_cross(t, "base", r))
+            m_ss = _named("factr", t, t, (r,), _mqfactr_cross(t, t, r))
+            m_bs = _named("factr", "base", t, (r,), _mqfactr_cross("base", t, r))
             _arg = (m_sb / (m_bb + 1e-12)) * (m_ss / (m_bs + 1e-12))
             _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
             return m.pfact[r, t] == _pyo_sqrt(_arg_pos + 1e-12)
@@ -689,16 +762,65 @@ class GTAPMultiPeriodModel:
             # Cross-period Fisher world factor price index:
             #   pwfact[t] = sqrt( (mqfactw(t,base)/mqfactw(base,base))
             #                   · (mqfactw(t,t)   /mqfactw(base,t)) )
-            m_bb = _mqfactw_cross("base", "base")
-            m_sb = _mqfactw_cross(t, "base")  # price=current, qty=base
-            m_ss = _mqfactw_cross(t, t)  # price=current, qty=current
-            m_bs = _mqfactw_cross("base", t)  # price=base,    qty=current
+            m_bb = _named("factw", "base", "base", (), _mqfactw_cross("base", "base"))
+            m_sb = _named("factw", t, "base", (), _mqfactw_cross(t, "base"))
+            m_ss = _named("factw", t, t, (), _mqfactw_cross(t, t))
+            m_bs = _named("factw", "base", t, (), _mqfactw_cross("base", t))
             _arg = (m_sb / (m_bb + 1e-12)) * (m_ss / (m_bs + 1e-12))
             _arg_pos = (_arg + _pyo_sqrt(_arg * _arg + 1e-8)) * 0.5
             return m.pwfact[t] == _pyo_sqrt(_arg_pos + 1e-12)
 
         non_base_t = [t for t in m.t if t != "base"]
         m.eq_pwfact = Constraint(non_base_t, rule=_pwfact_rule)
+
+        # Defining rows for the named aggregates, created once every Fisher rule above
+        # has registered the expression each entry stands for. Only the entries actually
+        # referenced get a row; the rest of the Var stays free and unconstrained, so it
+        # is fixed to keep the system square.
+        for _name, _defs in _agg_defs.items():
+            _var = _agg_vars[_name]
+
+            def _agg_rule(_m, *idx, _d=_defs, _v=_var):
+                return _v[tuple(idx)] == _d[tuple(idx)]
+
+            setattr(m, "eq_" + _name, Constraint(_var.index_set(), rule=_agg_rule))
+            # Every entry carries its own row — the system stays square with no fixing.
+            assert len(_defs) == len(_var), (
+                f"{_name}: {len(_var)} entries but {len(_defs)} defining rows; "
+                "an entry without a row is a free column the driver will unfix"
+            )
+
+        # Expose the aggregates so seeders can refresh them: they are DEFINED
+        # variables, not independent ones, so any code that moves pf/xf/pa/xaa/
+        # pefob/pmcif/xw must recompute them or the Fisher rows stop holding.
+        m._fisher_aggregates = {n: (_agg_vars[n], d) for n, d in _agg_defs.items()}
+
+    @staticmethod
+    def refresh_fisher_aggregates(m: ConcreteModel) -> int:
+        """Recompute the named Fisher aggregates from the vars they sum over.
+
+        ``build_equations_fisher`` names each wide cross-period sum with a variable
+        (see ``_named`` there) to keep the Fisher rows' Hessian linear in their width.
+        Those variables are DEFINED by their own rows, so seeding pf/xf/pa/xaa/pefob/
+        pmcif/xw without refreshing them leaves every Fisher row with a residual — the
+        aggregate still holds the value the sum had at CONSTRUCTION time.
+
+        Returns the number of aggregates refreshed.
+        """
+        from pyomo.environ import value as _v
+
+        aggs = getattr(m, "_fisher_aggregates", None)
+        if not aggs:
+            return 0
+        n = 0
+        for _name, (var, defs) in aggs.items():
+            for idx, expr in defs.items():
+                try:
+                    var[idx].set_value(float(_v(expr)))
+                    n += 1
+                except (ValueError, TypeError, AttributeError, KeyError):
+                    continue
+        return n
 
     def seed_all_periods(self, m: ConcreteModel, gdx_path) -> None:
         """Seed var[...,t] from a GAMS altertax GDX for t ∈ {base, check, shock}.
@@ -837,3 +959,9 @@ class GTAPMultiPeriodModel:
                         vd.set_value(float(gval))
                 except (KeyError, TypeError, ValueError):
                     pass
+
+        # The named Fisher aggregates are defined by the vars just seeded, and the
+        # seeding loop above only reaches indexed Vars with a time axis (they are
+        # scalars). Without this they keep their construction-time value and every
+        # Fisher row carries a residual at the GAMS point.
+        self.refresh_fisher_aggregates(m)
