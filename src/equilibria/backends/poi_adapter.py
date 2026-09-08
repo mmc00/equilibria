@@ -73,7 +73,7 @@ class PoiVarProxy:
     equation ever mentions.
     """
 
-    __slots__ = ("_model", "_name", "_domains", "_cache", "_touched")
+    __slots__ = ("_model", "_name", "_domains", "_cache", "_touched", "_var_init")
 
     def __init__(
         self,
@@ -81,11 +81,16 @@ class PoiVarProxy:
         name: str,
         domains: tuple[str, ...],
         touched: set | None = None,
+        var_init: Any | None = None,
     ) -> None:
         self._model = poi_model
         self._name = name
         self._domains = domains
         self._cache: dict[tuple[Any, ...], Any] = {}
+        # Start value and bounds for each cell, mirroring what the Pyomo backend
+        # passes at declaration. Without it POI starts every variable at its own
+        # default and leaves it unbounded.
+        self._var_init = var_init
         # Shared with the adapter: every handle handed out is recorded so a row's
         # variables can be attributed even when POI keeps the expression opaque.
         self._touched = touched
@@ -97,7 +102,19 @@ class PoiVarProxy:
             # A scalar variable is cached under the empty key and keeps its bare
             # name; an indexed one is labelled with its cell.
             label = f"{self._name}[{','.join(map(str, k))}]" if k else self._name
-            handle = self._model.add_variable(name=label)
+            spec = self._var_init.get(self._name, k) if self._var_init else None
+            if spec is None:
+                handle = self._model.add_variable(name=label)
+            else:
+                value, lb, ub = spec
+                kwargs: dict[str, Any] = {"name": label}
+                if value is not None:
+                    kwargs["start"] = value
+                if lb is not None:
+                    kwargs["lb"] = lb
+                if ub is not None:
+                    kwargs["ub"] = ub
+                handle = self._model.add_variable(**kwargs)
             self._cache[k] = handle
         if self._touched is not None:
             self._touched.add((self._name, k))
@@ -132,6 +149,7 @@ class PoiModelAdapter:
         sets: dict[str, list[str]],
         params: Any,
         var_specs: dict[str, tuple[str, ...]] | None = None,
+        var_init: Any | None = None,
     ) -> None:
         # Bypass __getattr__ during construction: these are real instance
         # attributes, and a partially built adapter must not recurse.
@@ -158,11 +176,18 @@ class PoiModelAdapter:
         # variables of a nonlinear row that POI exposes only as an opaque graph.
         touched: set = set()
         object.__setattr__(self, "_touched", touched)
+        # Cumulative union of every (name, key) that ended up inside a constraint
+        # that was actually created. `_touched` is cleared per row, so it cannot
+        # answer "is this variable mentioned anywhere"; pin_unconstrained needs
+        # exactly that, to pin the cells the blocks never wrote an equation for.
+        object.__setattr__(self, "_used_in_constraints", set())
         object.__setattr__(
             self,
             "_vars",
             {
-                name: PoiVarProxy(poi_model, name, tuple(domains), touched)
+                name: PoiVarProxy(
+                    poi_model, name, tuple(domains), touched, var_init
+                )
                 for name, domains in (var_specs or {}).items()
             },
         )

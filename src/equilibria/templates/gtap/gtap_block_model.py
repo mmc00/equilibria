@@ -244,6 +244,12 @@ def build_block_single_period(
         shim.apply_production_scaling(pm)
         shim._align_xi_xaa_post_scaling(pm)
 
+        # Composer carry (blocks/gtap/__init__.py item 3): the CLOSURE block seeds
+        # pf0/xf0/mqfact*_bb from the UN-scaled benchmark; the monolith snapshots
+        # them from the model AFTER scaling. Must run here, once the levels are
+        # final.
+        apply_fisher_snapshot_overwrite(pm)
+
     if if_sub:
         _apply_ifsub_closure(pm)
 
@@ -559,3 +565,145 @@ def solve_block_model(
         mode=mode,
         settle_only=settle_only,
     )
+
+
+def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
+    """Rebuild the factor-price Fisher rows against the POST-SCALING snapshot.
+
+    ``blocks/gtap/__init__.py`` item 3 states this is the composer's job::
+
+        The composer MUST snapshot pf0=pf.l, xf0=xf.l and recompute
+        mqfactr_bb=sum_{f,a} pf0*xf0/xscale (and mqfactw_bb globally) from the
+        SCALED model, OVERWRITE the CLOSURE block's pf0/xf0/mqfactr_bb/
+        mqfactw_bb Params
+
+    Nothing was doing it. The CLOSURE block seeds ``xf0`` from the UN-scaled
+    benchmark (``_vfm_init``), while the monolith snapshots ``xf.l`` after
+    ``apply_production_scaling``. Measured on gtap7_3x3: the two differ by exactly
+    ``xscale`` — 10.0 in 26 of 45 cells — and ``mqfactw_bb`` comes out 3020.22
+    against the monolith's 66.75, a factor of 45.2. ``pf0`` already matches.
+
+    The Params are immutable, so their values are already folded into the
+    constraint expressions and cannot be reassigned: the rows themselves are
+    rebuilt here from post-scaling ``xf``/``pf`` levels.
+
+    Both backends were carrying the un-scaled value, so this bias cancelled in any
+    POI-vs-Pyomo comparison and only shows against the monolith or GAMS.
+
+    Returns a summary of what was rebuilt.
+    """
+    from pyomo.environ import Constraint, sqrt as _sqrt, value as _value
+
+    regions = [str(r) for r in pm.r]
+    facs = [str(f) for f in pm.f]
+    acts = [str(a) for a in pm.a]
+
+    def _lvl(comp_name: str, key: tuple) -> float:
+        comp = pm.find_component(comp_name)
+        if comp is None:
+            return 0.0
+        try:
+            return float(_value(comp[key]))
+        except Exception:  # noqa: BLE001 - an absent cell contributes nothing
+            return 0.0
+
+    # The post-scaling snapshot: exactly what the monolith reads off the model.
+    pf0 = {(r, f, a): _lvl("pf", (r, f, a)) for r in regions for f in facs for a in acts}
+    xf0 = {(r, f, a): _lvl("xf", (r, f, a)) for r in regions for f in facs for a in acts}
+    xscale = {(r, a): _lvl("xscale", (r, a)) or 1.0 for r in regions for a in acts}
+
+    mqfactr_bb: dict[str, float] = {}
+    mqfactw_bb = 0.0
+    for r in regions:
+        s_reg = 0.0
+        for f in facs:
+            for a in acts:
+                xs = xscale[(r, a)]
+                if xs <= 1e-12:
+                    continue
+                s_reg += pf0[(r, f, a)] * xf0[(r, f, a)] / xs
+        mqfactr_bb[r] = s_reg if s_reg > 0.0 else 1.0
+        mqfactw_bb += s_reg
+    if mqfactw_bb <= 0.0:
+        mqfactw_bb = 1.0
+
+    def _agg(kind: str, region: str | None):
+        """One aggregate of the Fisher ratio, over the live pf/xf Vars."""
+        total = 0.0
+        for r in [region] if region else regions:
+            for f in facs:
+                for a in acts:
+                    xs = xscale[(r, a)]
+                    if xs <= 1e-12:
+                        continue
+                    if kind == "bs":
+                        total = total + pf0[(r, f, a)] * pm.xf[r, f, a] / xs
+                    elif kind == "ss":
+                        total = total + pm.pf[r, f, a] * pm.xf[r, f, a] / xs
+                    else:  # "sb"
+                        if xf0[(r, f, a)] <= 0.0:
+                            continue
+                        total = total + pm.pf[r, f, a] * xf0[(r, f, a)] / xs
+        return total
+
+    rebuilt: list[str] = []
+
+    # The aggregates keep their own rows (the Fase-0 split): wide but linear, so
+    # they never reach the symbolic differentiator.
+    for tag in ("bs", "sb", "ss"):
+        name = f"eq_mfw_{tag}"
+        if pm.find_component(name) is not None:
+            pm.del_component(name)
+            pm.add_component(
+                name,
+                Constraint(expr=getattr(pm, f"mfw_{tag}") == _agg(tag, None)),
+            )
+            rebuilt.append(name)
+
+        rname = f"eq_mfr_{tag}"
+        if pm.find_component(rname) is not None:
+            pm.del_component(rname)
+            pm.add_component(
+                rname,
+                Constraint(
+                    pm.r,
+                    rule=lambda _m, r, _t=tag: getattr(_m, f"mfr_{_t}")[r]
+                    == _agg(_t, r),
+                ),
+            )
+            rebuilt.append(rname)
+
+    # The Fisher indices themselves, now over the recomputed constants.
+    if pm.find_component("eq_pwfact") is not None:
+        pm.del_component("eq_pwfact")
+        pm.add_component(
+            "eq_pwfact",
+            Constraint(
+                expr=pm.pwfact
+                == _sqrt(
+                    (pm.mfw_sb / mqfactw_bb) * (pm.mfw_ss / (pm.mfw_bs + 1e-12))
+                )
+            ),
+        )
+        rebuilt.append("eq_pwfact")
+
+    if pm.find_component("eq_pfact") is not None:
+        pm.del_component("eq_pfact")
+        pm.add_component(
+            "eq_pfact",
+            Constraint(
+                pm.r,
+                rule=lambda _m, r: _m.pfact[r]
+                == _sqrt(
+                    (_m.mfr_sb[r] / mqfactr_bb[r])
+                    * (_m.mfr_ss[r] / (_m.mfr_bs[r] + 1e-12))
+                ),
+            ),
+        )
+        rebuilt.append("eq_pfact")
+
+    return {
+        "rebuilt": rebuilt,
+        "mqfactw_bb": mqfactw_bb,
+        "mqfactr_bb": mqfactr_bb,
+    }

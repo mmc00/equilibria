@@ -67,12 +67,25 @@ class PoiBackend:
             Task 3 can be attributed rather than guessed at
     """
 
-    def __init__(self, jit: str = "LLVM", opt_level: int | None = 0) -> None:
+    def __init__(
+        self,
+        jit: str = "LLVM",
+        opt_level: int | None = 0,
+        row_filter: Any = None,
+    ) -> None:
         self.poi_model: Any = None
         self.adapter: PoiModelAdapter | None = None
         self.constraints: dict[str, Any] = {}
         self.skipped: dict[str, int] = {}
         self._model: Any = None
+        # Optional predicate ``(eq_name, indices) -> bool`` deciding which rows to
+        # build. The GTAP closure deactivates individual CELLS rather than whole
+        # equations — a zero-flow trade route drops one row of eq_pfeq while its 30
+        # siblings stay — so a caller matching the harness must supply the row set
+        # rather than a rule. Rows rejected here are never handed to POI, which is
+        # what keeps the system square: building them and discarding the handle
+        # afterwards would leave them in the model.
+        self._row_filter = row_filter
         # POI ships two JIT engines. LLVM is the default; TCC compiles faster but
         # dies on macOS ARM64 — a TinyCC bug, not a POI one: its ARM64 Mach-O
         # backend emitted thread-local-storage relocations that Mach-O's linker
@@ -112,6 +125,7 @@ class PoiBackend:
             sets=sets,
             params=_ParameterView(model.parameter_manager, model.set_manager),
             var_specs=var_specs,
+            var_init=_VariableInit(model),
         )
 
         self._build_constraints(model)
@@ -138,6 +152,12 @@ class PoiBackend:
                 continue
 
             for indices in indices_list:
+                if self._row_filter is not None and not self._row_filter(
+                    eq_name, indices
+                ):
+                    self.skipped[eq_name] = self.skipped.get(eq_name, 0) + 1
+                    continue
+
                 # One graph per constraint rather than one for the whole model.
                 # POI compiles each graph into an autodiff evaluator, then
                 # deduplicates identical ones, so per-constraint graphs give it
@@ -165,12 +185,284 @@ class PoiBackend:
                         else eq_name
                     )
                     self.constraints[key] = self.adapter.add_constraint(key, expr)
+                    # Only a row that was really created counts as "mentioning"
+                    # its variables; a skipped cell must not anchor anything.
+                    object.__getattribute__(
+                        self.adapter, "_used_in_constraints"
+                    ).update(self.adapter._touched)
+
+    def seed_from_pyomo(self, pyomo_model: Any) -> int:
+        """Copy a Pyomo model's variable values in as POI start values.
+
+        The GTAP solve is warm-started from the benchmark, and starting anywhere
+        else lands on a different equilibrium — the basin trap documented in
+        equilibria-parity-debug. Returns how many variables were seeded.
+        """
+        from pyoptinterface import VariableAttribute
+        from pyomo.environ import Var, value as pyomo_value
+
+        adapter = self.adapter
+        seeded = 0
+        for var in pyomo_model.component_data_objects(Var):
+            base, _, rest = var.name.partition("[")
+            proxy = object.__getattribute__(adapter, "_vars").get(base)
+            if proxy is None:
+                continue
+            key: tuple = ()
+            if rest:
+                key = tuple(rest.rstrip("]").split(","))
+            try:
+                handle = proxy[key] if key else proxy[()]
+                val = float(pyomo_value(var))
+            except Exception:  # noqa: BLE001 - an unseeded cell keeps POI's default
+                continue
+            self.poi_model.set_variable_attribute(
+                handle, VariableAttribute.PrimalStart, val
+            )
+            seeded += 1
+        return seeded
+
+    def apply_closure_from_pyomo(
+        self, pyomo_model: Any, period: str | None = None
+    ) -> dict[str, int]:
+        """Mirror a closed Pyomo model's fixed variables onto the POI model.
+
+        The closure decides which variables are exogenous and which equations stay
+        active — ``apply_closure`` plus ``apply_conditional_fixing``, several
+        hundred lines that read benchmark flows to decide, for instance, that a
+        bilateral route with no trade in the data is fixed rather than solved.
+        Reimplementing that here would duplicate logic whose whole point is to
+        match GAMS, and any divergence would be invisible until a parity gate
+        caught it.
+
+        So the closure is applied once, by the code that owns it, to a Pyomo model;
+        this copies the outcome. A variable Pyomo fixed is bounded to its value in
+        POI, which is how POI expresses the same thing.
+
+        Constraints are NOT deactivated here: ``build`` already skips exactly the
+        cells Pyomo skips, so the two row sets already match.
+
+        ``period`` selects which period's cells to copy (the POI model is a single
+        period, while the Pyomo model carries base/check/shock). The period suffix
+        is stripped from the key, since POI's variables are not period-indexed.
+
+        Read ``var.fixed`` and nothing else. A variable can be BOTH fixed here and
+        listed as free by the square-system hook, because that list is captured
+        before the harness applies its fixings — ``pwfact`` and ``pnum`` are fixed
+        at 1.0 yet ``pwfact`` appears free. Trusting the free list instead of this
+        flag leaves the numeraire unanchored, and every price then comes out scaled
+        by a common factor (measured: 0.99968) while the quantities match.
+        """
+        from pyomo.environ import Var, value as pyomo_value
+
+        adapter = self.adapter
+        proxies = object.__getattribute__(adapter, "_vars")
+        fixed = missing = 0
+
+        for var in pyomo_model.component_data_objects(Var):
+            if not var.fixed:
+                continue
+            base, _, rest = var.name.partition("[")
+            proxy = proxies.get(base)
+            if proxy is None:
+                missing += 1
+                continue
+            key: tuple = tuple(rest.rstrip("]").split(",")) if rest else ()
+            if period is not None:
+                if not key or key[-1] != period:
+                    continue
+                key = key[:-1]
+            try:
+                handle = proxy[key] if key else proxy[()]
+                val = float(pyomo_value(var))
+            except Exception:  # noqa: BLE001 - a cell POI never built stays absent
+                missing += 1
+                continue
+            self.poi_model.set_variable_bounds(handle, val, val)
+            fixed += 1
+
+        return {"fixed": fixed, "not_in_poi": missing}
+
+    def pin_unconstrained(self) -> int:
+        """Pin every variable that no constraint mentions, at its start value.
+
+        The blocks skip a cell whose flag is off — ``xfflag[r,f,a] <= 0`` yields no
+        equation — so that variable enters the model with nothing to anchor it and
+        an optimizer is free to move it anywhere. Measured on the 3x3, that put
+        1.59 into `xf[ROW,NatRes,Svces]`, a natural-resources-in-services cell that
+        does not exist and that the harness holds at 0.
+
+        The harness fixes these; matching that is what makes the two comparable.
+        Returns how many variables were pinned.
+        """
+        from pyoptinterface import VariableAttribute
+
+        adapter = self.adapter
+        mentioned = {
+            (name, key)
+            for name, proxy in object.__getattribute__(adapter, "_vars").items()
+            for key in proxy._cache
+        }
+        used = object.__getattribute__(adapter, "_used_in_constraints")
+
+        pinned = 0
+        for name, key in mentioned - used:
+            proxy = object.__getattribute__(adapter, "_vars")[name]
+            handle = proxy._cache[key]
+            start = self.poi_model.get_variable_attribute(
+                handle, VariableAttribute.PrimalStart
+            )
+            val = 0.0 if start is None else float(start)
+            self.poi_model.set_variable_bounds(handle, val, val)
+            pinned += 1
+        return pinned
+
+    def solve_min_walras(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Solve by minimising the Walras residual.
+
+        GTAP is a square root-finding system, and POI solves optimization
+        problems. Minimising ``walras**2`` — the economy-wide imbalance, which is
+        zero at equilibrium — states the same problem in the form the solver
+        expects: the optimum is known in advance to be zero, so the objective
+        value is itself a check on whether the root was found.
+        """
+        import time
+
+        from pyoptinterface import ModelAttribute
+
+        walras = object.__getattribute__(self.adapter, "_vars").get("walras")
+        if walras is None:
+            raise RuntimeError("no 'walras' variable — cannot form the objective")
+
+        # GAMS states this as `solve gtap using nlp maximizing walras`, keeping
+        # eq_walras active: that equation DEFINES walras as the economy-wide excess
+        # income, whose largest feasible value is zero at equilibrium, so maximizing
+        # it drives the system to market clearing. Squaring and minimising instead
+        # leaves eq_walras active as well, which pins walras to its defined value
+        # and makes the objective a constant — the harness comment at
+        # run_gtap.py:5137 spells this out.
+        from pyoptinterface import ObjectiveSense
+
+        # POI's ipopt.Model only MINIMISES: its docs say a maximization must be
+        # negated by hand. Passing ObjectiveSense.Maximize is accepted and then
+        # silently ignored — measured on a one-liner, `max x` over x in [0,3]
+        # returned 0.0 instead of 3.0 — so the model would solve the OPPOSITE
+        # problem. Negating keeps GAMS's `maximizing walras` intact.
+        self.poi_model.set_objective(-walras[()], sense=ObjectiveSense.Minimize)
+
+        for key, val in (options or {}).items():
+            if isinstance(val, str):
+                self.poi_model.set_raw_option_string(key, val)
+            elif isinstance(val, int) and not isinstance(val, bool):
+                self.poi_model.set_raw_option_int(key, val)
+            else:
+                self.poi_model.set_raw_option_double(key, float(val))
+
+        t0 = time.perf_counter()
+        self.poi_model.optimize()
+        elapsed = time.perf_counter() - t0
+
+        return {
+            "wall_s": elapsed,
+            "status": str(self.poi_model.get_model_attribute(ModelAttribute.TerminationStatus)),
+            # get_obj_value() is the NEGATED objective we minimised; report walras.
+            "objective": -float(self.poi_model.get_obj_value()),
+            "walras": float(self.poi_model.get_value(walras[()])),
+        }
 
     def __repr__(self) -> str:  # pragma: no cover - diagnostics only
         return (
             f"PoiBackend(constraints={len(self.constraints)}, "
             f"skipped={sum(self.skipped.values())})"
         )
+
+
+class _VariableInit:
+    """Start values and bounds for a variable cell, keyed by set labels.
+
+    The Pyomo backend passes each variable's initial value and bounds to Pyomo when
+    it declares it. Without the same information POI starts every variable at its
+    own default and leaves it unbounded, which matters most for the cells the model
+    switches off: a cell whose flag is zero gets no equation from the blocks, so
+    nothing anchors it and the optimizer is free to move it anywhere. Measured on
+    the 3x3, that put 26.96 into `xf[ROW,NatRes,Svces]` — natural resources in
+    services, a combination that does not exist and that the harness keeps at 0.
+    """
+
+    __slots__ = ("_model", "_cache")
+
+    def __init__(self, model: Any) -> None:
+        self._model = model
+        self._cache: dict[str, Any] = {}
+
+    def _table(self, name: str):
+        """(values, lower, upper) tables for one variable, built once."""
+        import itertools
+
+        import numpy as np
+
+        hit = self._cache.get(name)
+        if hit is not None:
+            return hit
+
+        try:
+            var = self._model.variable_manager.get(name)
+        except (KeyError, AttributeError):
+            self._cache[name] = None
+            return None
+
+        domains = tuple(getattr(var, "domains", ()) or ())
+        values = np.asarray(var.value)
+        lower = np.asarray(var.lower) if var.lower is not None else None
+        upper = np.asarray(var.upper) if var.upper is not None else None
+
+        if not domains:
+            table = {(): (float(values.flatten()[0]), _scalar(lower), _scalar(upper))}
+        else:
+            elems = [
+                list(self._model.set_manager.get(d).iter_elements()) for d in domains
+            ]
+            table = {}
+            for labels, idx in zip(
+                itertools.product(*elems), np.ndindex(values.shape), strict=True
+            ):
+                table[labels] = (
+                    float(values[idx]),
+                    _cell(lower, idx),
+                    _cell(upper, idx),
+                )
+
+        self._cache[name] = table
+        return table
+
+    def get(self, name: str, key: tuple) -> tuple | None:
+        table = self._table(name)
+        if not table:
+            return None
+        return table.get(key)
+
+
+def _scalar(arr) -> float | None:
+    if arr is None:
+        return None
+    import numpy as np
+
+    flat = np.asarray(arr).flatten()
+    return float(flat[0]) if flat.size else None
+
+
+def _cell(arr, idx) -> float | None:
+    if arr is None:
+        return None
+    import numpy as np
+
+    a = np.asarray(arr)
+    if a.ndim == 0 or a.size == 1:
+        return float(a.flatten()[0])
+    try:
+        return float(a[idx])
+    except (IndexError, TypeError):
+        return None
 
 
 class _LabelIndexedParam:
@@ -330,4 +622,116 @@ def build_gtap_equilibria_model(
             )
         )
 
+    _overwrite_fisher_snapshot(model, params)
     return model
+
+
+def _overwrite_fisher_snapshot(model: Any, params: Any) -> dict[str, float]:
+    """The composer carry of ``blocks/gtap/__init__.py`` item 3, POI side.
+
+    The CLOSURE block seeds ``xf0`` from the UN-scaled benchmark (``_vfm_init``);
+    the monolith snapshots ``xf.l`` after ``apply_production_scaling``. The two are
+    related exactly by ``xf_scaled = xf0 * xscale`` (verified on all 45 cells of
+    gtap7_3x3), so the post-scaling snapshot is reachable here without building a
+    Pyomo model first — which matters because this function runs while the model is
+    still an ``EquilibriaModel``.
+
+    ``mqfactw_bb`` goes from 3020.22 to 66.75, matching the monolith. The Pyomo path
+    gets the same correction in ``build_block_single_period`` via
+    ``apply_fisher_snapshot_overwrite``; both must be fixed together or the two
+    backends disagree on these rows (measured: mfw_sb 66.75 vs 3021.19).
+
+    Unlike Pyomo's immutable Params, the values live in the ParameterManager and are
+    rewritten in place here, before any backend folds them into an expression.
+    """
+    from equilibria.templates.gtap.gtap_block_model import _set_elems
+
+    setmap = _set_elems(params.sets)
+    regions = list(setmap["r"])
+    facs = list(setmap["f"])
+    acts = list(setmap["a"])
+    agents = list(setmap["aa"])
+
+    xf0_p = model.get_parameter("xf0")
+    pf0_p = model.get_parameter("pf0")
+    xscale_p = model.get_parameter("xscale")
+    if xf0_p is None or pf0_p is None or xscale_p is None:
+        return {}
+
+    xf0 = xf0_p.value
+    pf0 = pf0_p.value
+    xscale = xscale_p.value
+
+    # xf0 -> the SCALED level the monolith would have snapshotted.
+    for i, _r in enumerate(regions):
+        for j, _f in enumerate(facs):
+            for k, a in enumerate(acts):
+                xf0[i, j, k] = xf0[i, j, k] * float(xscale[i, agents.index(a)])
+
+    mqfactr: list[float] = []
+    mqfactw = 0.0
+    for i, _r in enumerate(regions):
+        s_reg = 0.0
+        for j, _f in enumerate(facs):
+            for k, a in enumerate(acts):
+                xs = float(xscale[i, agents.index(a)])
+                if xs <= 1e-12:
+                    continue
+                s_reg += float(pf0[i, j, k]) * float(xf0[i, j, k]) / xs
+        mqfactr.append(s_reg if s_reg > 0.0 else 1.0)
+        mqfactw += s_reg
+
+    mqr = model.get_parameter("mqfactr_bb")
+    if mqr is not None:
+        for i, v in enumerate(mqfactr):
+            mqr.value[i] = v
+    mqw = model.get_parameter("mqfactw_bb")
+    if mqw is not None:
+        mqw.value[0] = mqfactw if mqfactw > 0.0 else 1.0
+
+    return {"mqfactw_bb": mqfactw, "mqfactr_bb": dict(zip(regions, mqfactr))}
+
+
+def _attach_feasibility_solver() -> None:
+    """Add PoiBackend.solve_feasibility — a pure root-find, no objective.
+
+    The harness fixes `walras` at 0 and keeps eq_walras active, so that row becomes
+    a constraint demanding market clearing rather than a definition with a free
+    variable to optimize. With every equation an equality and every exogenous cell
+    pinned, the problem is square: there is nothing to maximize, only residuals to
+    drive to zero.
+    """
+    import time as _time
+    from typing import Any as _Any
+
+    def solve_feasibility(self, options: dict | None = None) -> dict[str, _Any]:
+        from pyoptinterface import ModelAttribute
+
+        self.poi_model.set_objective(0.0)
+        for key, val in (options or {}).items():
+            if isinstance(val, str):
+                self.poi_model.set_raw_option_string(key, val)
+            elif isinstance(val, int) and not isinstance(val, bool):
+                self.poi_model.set_raw_option_int(key, val)
+            else:
+                self.poi_model.set_raw_option_double(key, float(val))
+
+        t0 = _time.perf_counter()
+        self.poi_model.optimize()
+        elapsed = _time.perf_counter() - t0
+
+        walras = object.__getattribute__(self.adapter, "_vars").get("walras")
+        return {
+            "wall_s": elapsed,
+            "status": str(
+                self.poi_model.get_model_attribute(ModelAttribute.TerminationStatus)
+            ),
+            "walras": (
+                float(self.poi_model.get_value(walras[()])) if walras else float("nan")
+            ),
+        }
+
+    PoiBackend.solve_feasibility = solve_feasibility
+
+
+_attach_feasibility_solver()
