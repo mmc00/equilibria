@@ -584,9 +584,9 @@ class GTAPMultiPeriodModel:
                 # to solve, so the orphan comes back as an unmatched free variable and
                 # PATH stalls (measured: 7 unmatched, shock code=0 on every altertax
                 # dataset). A (base,base) cross belongs to the base period only.
-                periods = ["base"] if slot == "bb" else [
-                    tt for tt in m.t if tt != "base"
-                ]
+                periods = (
+                    ["base"] if slot == "bb" else [tt for tt in m.t if tt != "base"]
+                )
                 keys = [(*rr, tt) for rr in _rest_keys[prefix] for tt in periods]
                 var = Var(keys, domain=Reals, initialize=1.0)
                 setattr(m, name, var)
@@ -690,7 +690,6 @@ class GTAPMultiPeriodModel:
                 if xscale_floats.get((r, a), 0.0) > 1e-12
             )
 
-
         # Delete intra-period eq_pabs / eq_pfact / eq_pwfact.
         # (After 3 calls to build_equations_intra each overwrites the previous, so only
         # the 'shock' entries remain — but we delete them all to avoid any duplicate binding.)
@@ -748,7 +747,9 @@ class GTAPMultiPeriodModel:
             #                    · (mqfactr(t,t,r)   /mqfactr(base,t,r)) )
             # With pfact[r,base]=1 (benchmark normalization), same form as GAMS pfacteq
             # but with live base-period pf/xf Vars replacing the frozen pf0/xf0 Params.
-            m_bb = _named("factr", "base", "base", (r,), _mqfactr_cross("base", "base", r))
+            m_bb = _named(
+                "factr", "base", "base", (r,), _mqfactr_cross("base", "base", r)
+            )
             m_sb = _named("factr", t, "base", (r,), _mqfactr_cross(t, "base", r))
             m_ss = _named("factr", t, t, (r,), _mqfactr_cross(t, t, r))
             m_bs = _named("factr", "base", t, (r,), _mqfactr_cross("base", t, r))
