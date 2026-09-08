@@ -2291,6 +2291,17 @@ def _run_path_capi_linear_block(
     }
 
 
+# Evaluador del Jacobiano para PATH. "reverse_numeric" deriva el arbol de
+# expresiones en Python en CADA llamada; "asl" delega en la AMPL Solver Library
+# via PyNumero (C). Medido en gtap7_20x41: 24.59s -> 0.216s por llamada (114x),
+# con los mismos valores (|dif|max 1.4e-14) y sin perder entradas.
+# Medido de punta a punta en gtap7_20x41: 28.8 min -> 11.7 min (2.5x), code=1
+# en ambos. EQUILIBRIA_GTAP_JAC_MODE=reverse_numeric vuelve a la via historica.
+_DEFAULT_JACOBIAN_EVAL_MODE = os.environ.get(
+    "EQUILIBRIA_GTAP_JAC_MODE", "asl"
+).strip().lower()
+
+
 def _run_path_capi_nonlinear_full(
     model,
     params: GTAPParameters,
@@ -2303,7 +2314,7 @@ def _run_path_capi_nonlinear_full(
     path_capi_convergence_tol: float = 1e-8,
     closure_config: Optional[GTAPClosureConfig] = None,
     x0_floor: Optional[float] = 1e-8,
-    jacobian_eval_mode: str = "reverse_numeric",
+    jacobian_eval_mode: str = _DEFAULT_JACOBIAN_EVAL_MODE,
     residual_trace_enabled: bool = False,
     residual_trace_max_calls: int = 120,
     residual_trace_top_n: int = 12,
