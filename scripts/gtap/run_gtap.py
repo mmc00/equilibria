@@ -2301,6 +2301,25 @@ _DEFAULT_JACOBIAN_EVAL_MODE = os.environ.get(
     "EQUILIBRIA_GTAP_JAC_MODE", "asl"
 ).strip().lower()
 
+# IPOPT sale de la fase de RESTAURACION cuando ha reducido la infactibilidad por
+# debajo de required_infeasibility_reduction (default 0.9). En el sistema CUADRADO
+# (objetivo constante f=0) el gradiente es cero, los multiplicadores quedan
+# INDETERMINADOS y `inf_du` no significa nada -- pero IPOPT la usa para decidir el
+# paso, asi que rebota dentro/fuera de restauracion sin avanzar. Subir el umbral a
+# 0.99 permite abandonar la restauracion antes y es la UNICA opcion medida que
+# esquiva ese criterio dual roto.
+# Medido en gtap7_20x41 (en solitario, caffeinate -dims, guard CPU/reloj):
+#   reloj      37.4 min -> 20.2 min
+#   iteraciones     838 -> 379   (en restauracion 832 = 99.3% -> 132 = 35%)
+#   residual P1/P2  5.242e-09 / 5.678e-09 -> 2.132e-13 / 3.847e-11
+#   walras            0.000e+00 en ambos (mismo equilibrio)
+# FIDELIDAD: gobierna cuando se puede ABANDONAR la restauracion, NO el criterio
+# sobre F(x)=0 -- el residual sale MEJOR, no peor. No es aflojar una tolerancia.
+# EQUILIBRIA_GTAP_IPOPT_REQ_INFEAS=0.9 vuelve al default de IPOPT.
+_DEFAULT_IPOPT_REQUIRED_INFEASIBILITY_REDUCTION = float(
+    os.environ.get("EQUILIBRIA_GTAP_IPOPT_REQ_INFEAS", "0.99")
+)
+
 
 def _run_path_capi_nonlinear_full(
     model,
@@ -5032,6 +5051,12 @@ def _run_path_capi_nonlinear_full(
                     "user-scaling" if _britz_user_scaling else "none"
                 )
             opt.options["max_iter"] = 1000
+            # Ver _DEFAULT_IPOPT_REQUIRED_INFEASIBILITY_REDUCTION: 20x41 37.4->20.2 min
+            # con residual 25.000x mejor. Se aplica ANTES del override de
+            # EQUILIBRIA_IPOPT_OPTS, que sigue ganando si lo especifica.
+            opt.options["required_infeasibility_reduction"] = (
+                _DEFAULT_IPOPT_REQUIRED_INFEASIBILITY_REDUCTION
+            )
             # Experimental override (A/B the CONOPT-mimic recipe without editing this
             # block): EQUILIBRIA_IPOPT_OPTS='{"nlp_scaling_method":"gradient-based",
             # "nlp_scaling_max_gradient":100,"mu_strategy":"monotone", ...}'. Applied
