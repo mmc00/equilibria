@@ -192,7 +192,7 @@ def _apply_ifsub_closure(pm: ConcreteModel) -> int:
             vd = v[k]
             if not vd.fixed:
                 with contextlib.suppress(Exception):
-                    vd.fix(float(value(vd)))
+                    vd.fix(float(value(vd)), skip_validation=True)
     return n
 
 

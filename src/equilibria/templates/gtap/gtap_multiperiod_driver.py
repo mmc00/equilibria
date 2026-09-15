@@ -75,7 +75,7 @@ def freeze_period(m, period: str) -> int:
             vd = v[idx]
             try:
                 val = float(vd.value) if vd.value is not None else 1.0
-                vd.fix(val)
+                vd.fix(val, skip_validation=True)
                 n_fixed += 1
             except Exception:
                 pass
@@ -899,7 +899,7 @@ def freeze_inactive_periods(m, active_period: str) -> int:
                 continue  # already frozen — idempotent
             try:
                 val = float(vd.value) if vd.value is not None else 1.0
-                vd.fix(val)
+                vd.fix(val, skip_validation=True)
                 n_fixed += 1
             except Exception:
                 pass
@@ -971,7 +971,7 @@ def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
                 mp_vd = mp_v[mp_idx]
                 if not mp_vd.fixed:
                     val = float(sp_vd.value) if sp_vd.value is not None else 0.0
-                    mp_vd.fix(val)
+                    mp_vd.fix(val, skip_validation=True)
                     n_fixed += 1
             except (KeyError, TypeError):
                 pass
@@ -1017,7 +1017,7 @@ def _holdfix_activity_scale(m, period: str) -> int:
             except (KeyError, TypeError):
                 continue
             if not cur.fixed and pv.value is not None:
-                cur.fix(float(pv.value))
+                cur.fix(float(pv.value), skip_validation=True)
                 n += 1
     return n
 
@@ -1931,10 +1931,10 @@ def _mute_welfare_tail(m, period: str, regions, *, gtap_mode: bool = False) -> i
                     # Fix walras=0 (Walras law) but leave eq_walras live so the
                     # matcher binds it to the free yi[rres].
                     vd.set_value(0.0)
-                    vd.fix(0.0)
+                    vd.fix(0.0, skip_validation=True)
                     break
                 if not vd.fixed and vd.value is not None:
-                    vd.fix(float(vd.value))
+                    vd.fix(float(vd.value), skip_validation=True)
                 try:
                     cd = eqc[cand]
                     if cd.active:
@@ -2548,7 +2548,7 @@ def _holdfix_cd_nest(m, period: str) -> int:
                     continue
                 vd = v[idx]
                 if vd.value is not None and not vd.fixed:
-                    vd.fix(float(vd.value))
+                    vd.fix(float(vd.value), skip_validation=True)
                     hf += 1
         e = getattr(m, eqn, None)
         if e is not None:
@@ -2627,7 +2627,7 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
             continue  # xfFlag=1: GAMS leaves pf LIVE (eq_pfeq anchors it); do not fix
         vd = pf[idx]
         if vd.value is not None and not vd.fixed:
-            vd.fix(float(vd.value))
+            vd.fix(float(vd.value), skip_validation=True)
             hf += 1
     return hf
 
