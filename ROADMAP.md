@@ -62,9 +62,27 @@ Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
 |---|---|
 | `test_gtap_blocks_form[ClosureBlock]` | Exige que toda ecuación de un bloque exista en el monolito, pero `eq_mfr_bs` sólo existe en bloques (es la descomposición de lo que el monolito inlinea en `eq_pfact`) |
 | `test_multiperiod_driver::test_solve_multiperiod_solves_m_not_slices` | Falla aislado y de forma reproducible |
-| `test_writer` (×2), `test_cascade_layers`, `test_cascade_run`, `test_probe` (×2) | Fallos preexistentes en babel/parity |
+| `test_cascade_layers`, `test_cascade_run`, `test_probe` (×2) | Fallos preexistentes en parity |
 
-Verificado: los 8 fallan igual en `a3490e4`, el commit anterior a la limpieza.
+Verificado: fallan igual en `a3490e4`, el commit anterior a la limpieza.
+
+Los 2 de `test_writer` pasaron a `xfail(strict=True)`: el escritor GDX declara
+soportar sólo `Set` y `Parameter`, así que exigirle `Variable`/`Equation` es pedir
+funcionalidad sin implementar. Cuando se implemente, el test avisará de que sobra la marca.
+
+### Solvers: qué hace falta para correr la suite entera
+
+`uv sync` no instala los solvers. Los tests que resuelven modelos se saltan sin ellos,
+y lo declaran con un marcador por pieza (ver `tests/conftest.py`):
+
+| Marcador | Necesita |
+|---|---|
+| `needs_mumps` | `pymumps` (`conda install -c conda-forge pymumps`) |
+| `needs_ipopt` | el ejecutable `ipopt`, o `cyipopt` |
+| `needs_path` | la librería PATH C-API + el checkout de path-capi-python |
+
+`EQUILIBRIA_REQUIRE_SOLVERS=1` desactiva los guards, para que en local un solver ausente
+se note en vez de esconderse tras un skip.
 
 ### Los tests GTAP no toleran paralelismo
 
