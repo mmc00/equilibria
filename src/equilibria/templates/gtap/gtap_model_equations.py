@@ -2782,8 +2782,8 @@ class GTAPModelEquations:
         # Stored init in phi0 Param; phi itself becomes a Var added with the other Vars.
         create_indexed_param("phi0", ["r"], phi_data, 1.0)
         create_indexed_param("chif0", ["r"], chif_data, 0.0)
-        # eh/bh are CDE ELASTICITIES (frozen Params by design — see CLAUDE.md
-        # "CDE/chiInv elasticities frozen como Param"), NOT recalibrated per
+        # eh/bh are CDE ELASTICITIES (frozen Params by design: the CDE/chiInv
+        # elasticities are structural, not calibrated), NOT recalibrated per
         # period by GAMS (only alphaa/zcons SHARES are, from cal.gms's
         # "Calibration of parameters" block). Only alphaa_hhd needs mutable=True.
         create_indexed_param("eh", ["r", "i"], eh_data, 1.0)

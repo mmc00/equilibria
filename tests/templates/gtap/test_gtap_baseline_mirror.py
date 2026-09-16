@@ -95,7 +95,7 @@ def _load_gams_csv(csv_path: Path) -> dict[tuple, float]:
 def _run_baseline_solve():
     """Build model, solve via GTAPSolver wrapper, and return (model, result_dict).
 
-    Mirrors the configuration documented in CLAUDE.md:
+    Mirrors the reference configuration:
       - PATH C-API nonlinear full mode (10,296 equations).
       - if_sub=False, equation_scaling=True.
     """

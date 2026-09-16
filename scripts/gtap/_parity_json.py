@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Shared JSON-output contract for the parity-debug cascade tools.
 
-PHASE 1 of the parity-orchestrator work (see CLAUDE.md "cascade de tools").
+PHASE 1 of the parity-orchestrator work (the parity tool cascade; see
+the equilibria-parity-debug skill and docs/guides/ for the sequence).
 The six cascade tools (probe, drift_test, nl_compare, diff_mcp_pairing,
 validate_reference, diff_calibration) all emit a SINGLE pure-JSON object to
 stdout — no text mode, no `--json` flag. The orchestrator (Phase 2) reads the

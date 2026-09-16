@@ -750,7 +750,7 @@ def _recalibrate_alphaa_gov_inv(
 # Same block. GAMS recomputes (CDE branch, comp.gms ~line 23648):
 #   alphaa(r,i,h,t) = ((xcshr.l/bh.l)*((yc.l/pop.l)/pa.l)**bh.l * uh.l**(-eh.l*bh.l))
 #                     / sum(j, xcshr.l(j)/bh.l(j))
-# every period. bh/eh are frozen CDE ELASTICITIES by design (CLAUDE.md — not
+# every period. bh/eh are frozen CDE ELASTICITIES by design (structural — not
 # recalibrated by GAMS either, only the SHARE alphaa_hhd is). pop is a static
 # (region-only, no time index) Param — no prior-period lookup needed for it.
 # Rebuilds eq_zcons for the active period (eq_xcshr/eq_phip consume zcons
