@@ -28,6 +28,10 @@ from typing import Any
 import numpy as np
 import pytest
 
+# La fixture de modulo importa compare_nus333_vs_neos, que necesita
+# path_capi_python: sin PATH esto es un error de setup, no un fallo de forma.
+pytestmark = pytest.mark.needs_path
+
 ROOT = Path(__file__).resolve().parents[3]
 for _p in (ROOT / "src", ROOT / "scripts" / "gtap"):
     if str(_p) not in sys.path:

@@ -17,6 +17,8 @@ from equilibria.blocks.gtap.factor import FactorBlock
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
+pytestmark = pytest.mark.needs_path
+
 DATA = Path("datasets/gtap7_10x7")
 # Full base->check->shock settle baseline (captured Task 0, gtap7_10x7).
 # settle_only must reproduce this EXACTLY.

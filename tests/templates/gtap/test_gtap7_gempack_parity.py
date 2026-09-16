@@ -222,6 +222,7 @@ def _capfix_fixture_for(row) -> Path | None:
     return next((c for c in cands if c.exists()), None)
 
 
+@pytest.mark.needs_path
 @pytest.mark.parametrize("row", _gempack_params())
 def test_gtap7_gempack_parity(row):
     if not (DATASETS_DIR / row.dataset / "basedata.har").exists():

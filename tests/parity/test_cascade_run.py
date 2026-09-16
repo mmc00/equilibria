@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+import pytest
 from cascade_run import sweep_period
 
 
@@ -21,6 +22,7 @@ def _fake_runner(script):
     return runner
 
 
+@pytest.mark.needs_path
 def test_stops_at_first_dirty():
     gdx = Path("/ref/out.gdx")
     script = {

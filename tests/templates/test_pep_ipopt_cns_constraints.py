@@ -328,6 +328,7 @@ def test_constraint_harness_numeric_mode_uses_finite_differences_for_eq66() -> N
     assert harness.finite_difference_eval_count > 0
 
 
+@pytest.mark.needs_path
 def test_ipopt_solver_reports_jacobian_stats() -> None:
     state = _build_base_gdx()
     solver = IPOPTSolver(

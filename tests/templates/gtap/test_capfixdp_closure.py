@@ -104,6 +104,7 @@ def _solve(sf):
     return m, max(r["code"] for r in res.values())
 
 
+@pytest.mark.needs_path
 def test_capfixdp_solves_code1():
     # capFixDp CONVERGES (the betaS-endogenous swap re-squares the MCP 1-for-1).
     _m, code = _solve("capFixDp")
