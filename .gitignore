@@ -446,3 +446,19 @@ datasets/*/metadata.har
 datasets/*/CMFSTART
 datasets/*.agg
 datasets/*/*.agg
+
+# Herramientas personales montadas por stow (dev-tools): viven fuera del repo,
+# asi que versionarlas dejaba symlinks rotos para quien clonara.
+superpowers
+cgebox
+parity_cascade
+gempack_*.py
+gtap-20x41-*.py
+solve_blocks_via_neos.py
+submit_nl_to_neos_path.py
+verify_gempack_levels*.py
+worst_rows_at_seed.py
+GTAP_VALIDATION_STATUS.md
+2026-*-*.md
+plan_*.md
+gtap7_status_sweep_*.md

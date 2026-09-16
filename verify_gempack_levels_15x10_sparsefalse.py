@@ -1,1 +1,0 @@
-../../../../proyectos/dev-tools/equilibria-tools/scripts/verify_gempack_levels_15x10_sparsefalse.py
