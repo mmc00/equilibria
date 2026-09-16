@@ -17,9 +17,8 @@ depende de él:
 
 | Sitio | Qué hace |
 |---|---|
-| `templates/gtap/gtap_block_model.py:42` | Importa `GTAPModelEquations` a nivel de módulo |
-| `:242-246` | Instancia un shim para reutilizar `apply_production_scaling()` y `_align_xi_xaa_post_scaling()` |
-| `:340-341`, `:359-360` | Monkey-patch de `GTAPModelEquations.build_model` para reaprovechar la reflexión multiperiodo |
+| `templates/gtap/gtap_block_model.py:53` | Importa `GTAPModelEquations` a nivel de módulo |
+| `:352-353`, `:371-372` | Monkey-patch de `GTAPModelEquations.build_model` para reaprovechar la reflexión multiperiodo |
 | `templates/gtap/__init__.py:58` | Cualquier `import equilibria.templates.gtap` carga el monolito |
 
 Borrar `gtap_model_equations.py` provoca *collection error* en ~34 archivos de test — **incluidos
@@ -70,13 +69,23 @@ El camino de bloques es el oráculo contra **GEMPACK**, y sólo él puede serlo:
 
 ## Deuda: cómo se retiraría
 
-El primer corte real es extraer `apply_production_scaling` y `_align_xi_xaa_post_scaling` de
-`GTAPModelEquations` a un módulo propio. Mientras esos dos métodos vivan ahí, el monolito es
-dependencia de runtime del camino de bloques y no puede retirarse, por más que su cobertura de
-ecuaciones ya esté replicada.
+**Primer corte — hecho (2026-09-16).** El escalado de benchmark vive ahora en
+`templates/gtap/gtap_benchmark_scaling.py`: cuatro funciones libres que reciben un
+`ScalingContext` en vez de `self`. El monolito las conserva como delegadores de una línea, así
+que su comportamiento no cambia y sigue siendo el oráculo. El composer ya no construye un
+`GTAPModelEquations` para tomarle prestados métodos privados.
 
-Después de ese corte quedaría por resolver el papel de oráculo contra GAMS: los 3 gates que hoy
-miden el monolito tendrían que medir bloques, y eso exige comprobar que los números no se mueven.
+Verificación de ese corte: los niveles post-escalado de ambos modelos en `gtap7_3x3` son
+idénticos bit a bit —3142 celdas, 0 diferencias— contra el commit anterior.
+
+**Lo que sigue atando el composer al monolito** es la reflexión multiperiodo: `build_vars` /
+`build_equations_intra` / `build_equations_all_periods` se heredan de `GTAPMultiPeriodModel`, que
+construye su modelo de período simple llamando a `GTAPModelEquations.build_model()`. El composer
+resuelve eso con un swap temporal de ese método (`:352-353`, `:371-372`). Retirarlo exige que la
+reflexión acepte un modelo SP inyectado en vez de construirlo ella misma.
+
+Y después quedaría el papel de oráculo contra GAMS: los 3 gates que hoy miden el monolito
+tendrían que medir bloques, y eso exige comprobar que los números no se mueven.
 
 Ver también: `ROADMAP.md` (registro de deuda técnica) y
 `docs/findings/repo_cleanup_spec_2026-09-16.md` (la medición que originó este documento).

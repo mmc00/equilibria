@@ -53,7 +53,7 @@ Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
 
 | Deuda | Detalle | Primer paso |
 |---|---|---|
-| `gtap_model_equations.py` no es retirable | `gtap_block_model.py` lo importa, le construye un shim de scaling y le hace monkey-patch de `build_model`; además es oráculo GAMS en 3 de 5 gates | Extraer `apply_production_scaling` y `_align_xi_xaa_post_scaling` a un módulo propio |
+| `gtap_model_equations.py` no es retirable | Sigue siendo oráculo GAMS en 3 de 5 gates, y `gtap_block_model.py` le hace monkey-patch de `build_model` para reusar la reflexión multiperiodo. El shim de scaling ya no existe: el escalado vive en `gtap_benchmark_scaling.py` (2026-09-16) | Que `GTAPMultiPeriodModel` acepte un modelo SP inyectado en vez de construirlo con `build_model()` |
 | `eq_pmuv` sin portar a bloques | Declarado en `blocks/gtap/__init__.py:47-53`, no implementado en el composer. Sólo muerde con `rmuv`/`imuv` no vacíos, que ningún dataset del gate usa | Voltear `pmuv` de Param a Var cuando el closure lo pida |
 
 ### Tests rotos en main (anteriores a la limpieza de 2026-09-16)
