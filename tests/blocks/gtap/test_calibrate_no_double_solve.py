@@ -199,6 +199,96 @@ def test_seed_cache_roundtrip(tmp_path, monkeypatch):
     assert got == seed, f"roundtrip mismatch: {got} != {seed}"
 
 
+def test_seed_cache_roundtrip_preserves_key_types():
+    """A cached key must come back as the SAME object it went in as.
+
+    The old encoder joined the tuple with \\x1f and split it back, which turned
+    every element into a str and collapsed a 1-tuple into a bare scalar.  The
+    consumer (gtap_multiperiod_driver, base-calibrated seeding) looks the key up
+    inside ``except (KeyError, TypeError, ValueError): pass`` — so a mistyped key
+    does not raise, it silently seeds NOTHING and the model solves from a
+    different starting point.  That is the failure this pins.
+    """
+    from equilibria.blocks.gtap import seed_cache
+
+    for key in [
+        ("USA", 2020),  # int element -> came back as "2020"
+        ("USA",),  # 1-tuple -> came back as the bare str "USA"
+        (2020,),
+        ("USA", "Land", "Food"),  # the all-str case that always worked
+        "USA",  # bare scalar stays a bare scalar
+        42,
+    ]:
+        enc = seed_cache._enc_key(key)
+        assert isinstance(enc, str), f"{key!r} must encode to a str, got {enc!r}"
+        got = seed_cache._dec_key(enc)
+        assert got == key, f"key round-trip lost information: {key!r} -> {got!r}"
+        assert type(got) is type(key), (
+            f"key round-trip changed the type: {key!r} ({type(key).__name__}) "
+            f"-> {got!r} ({type(got).__name__})"
+        )
+
+
+def test_seed_cache_roundtrip_through_disk_preserves_key_types(tmp_path, monkeypatch):
+    """End-to-end: save() then load() must hand back the identical key objects."""
+    monkeypatch.setenv("EQUILIBRIA_SEED_CACHE", str(tmp_path))
+    monkeypatch.delenv("EQUILIBRIA_SEED_CACHE_DISABLE", raising=False)
+    from equilibria.blocks.gtap import seed_cache
+
+    seed = {
+        "pf": {("USA", "Land", "Food"): 1.25, ("EU", "Land", "Food"): 0.9},
+        "kstock": {"USA": 42.0, ("EU",): 7.0},
+        "xp": {("USA", 2020): 3.5},
+    }
+    seed_cache.save("k-types", seed)
+    got = seed_cache.load("k-types")
+    assert got == seed, f"disk round-trip mismatch: {got} != {seed}"
+
+
+def test_seed_cache_reads_a_legacy_cache_file(tmp_path, monkeypatch):
+    """A cache written by the OLD \\x1f encoder must still load, not be dropped.
+
+    Users have these files sitting in ~/.cache already.  Their keys are all
+    strings -- the one case the old encoding round-tripped correctly -- so they
+    are still valid; refusing to read them would silently re-run every settle.
+    """
+    import json as _json
+
+    monkeypatch.setenv("EQUILIBRIA_SEED_CACHE", str(tmp_path))
+    monkeypatch.delenv("EQUILIBRIA_SEED_CACHE_DISABLE", raising=False)
+    from equilibria.blocks.gtap import seed_cache
+
+    legacy = {"pf": {"USA\x1fLand\x1fFood": 1.25, "USA": 42.0, "2020": 7.0}}
+    (tmp_path / "k-legacy.json").write_text(_json.dumps(legacy))
+
+    got = seed_cache.load("k-legacy")
+    assert got == {"pf": {("USA", "Land", "Food"): 1.25, "USA": 42.0, "2020": 7.0}}, got
+    # "2020" was written by an encoder that stringified everything, so it must come
+    # back as the STRING it was -- decoding it as int 2020 would be the same
+    # silent-mistype bug this module was fixed for.
+    assert "2020" in got["pf"], (
+        f"legacy numeric-looking key mistyped: {list(got['pf'])}"
+    )
+
+
+def test_seed_cache_file_is_versioned(tmp_path, monkeypatch):
+    """New files carry a format marker, so the reader never has to guess.
+
+    Without it, load() would have to sniff each key -- and a legacy "2020" is
+    valid JSON, so sniffing silently turns it into an int.
+    """
+    import json as _json
+
+    monkeypatch.setenv("EQUILIBRIA_SEED_CACHE", str(tmp_path))
+    monkeypatch.delenv("EQUILIBRIA_SEED_CACHE_DISABLE", raising=False)
+    from equilibria.blocks.gtap import seed_cache
+
+    seed_cache.save("k-ver", {"pf": {("USA", "Land"): 1.0}})
+    raw = _json.loads((tmp_path / "k-ver.json").read_text())
+    assert raw.get("_fmt") == 2, f"missing/!=2 format marker: {raw!r}"
+    assert seed_cache.load("k-ver") == {"pf": {("USA", "Land"): 1.0}}
+
+
 def test_seed_cache_key_changes_with_input():
     from equilibria.blocks.gtap import seed_cache
 
