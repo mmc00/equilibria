@@ -28,31 +28,31 @@ def _ensure_path_lib() -> None:
     if os.environ.get("PATH_CAPI_LIBPATH"):
         return
     for cand in (
-        "/Users/marmol/proyectos2/equilibria/.cache/path_capi/libpath50.silicon.dylib",
-        "/Users/marmol/proyectos/path-capi-python/notes/tmp/path_capi_artifacts/"
-        "aarch64-apple-darwin/libpath.dylib",
-        "/Library/Frameworks/GAMS.framework/Versions/53/Resources/libpath52.dylib",
+        Path.cwd() / ".cache" / "path_capi" / "libpath50.silicon.dylib",
+        Path(
+            "/Library/Frameworks/GAMS.framework/Versions/53/Resources/libpath52.dylib"
+        ),
     ):
-        if Path(cand).exists():
-            os.environ["PATH_CAPI_LIBPATH"] = cand
+        if cand.exists():
+            os.environ["PATH_CAPI_LIBPATH"] = str(cand)
             return
 
 
 def _ensure_path_module() -> None:
     """Make `import path_capi_python` work even when the package isn't pip-installed in the
     active interpreter (e.g. a fresh `uv run` subprocess launched by the parity skill).
-    Injects its known src dir onto sys.path — no-op if the module already imports. Mirrors
-    _ensure_path_lib's self-contained discovery of the dylib."""
+    Set EQUILIBRIA_PATH_CAPI_SRC to the path-capi-python checkout's src dir to opt in —
+    no-op if the module already imports or the variable is unset."""
     import importlib.util
+    import os
     import sys
     from pathlib import Path
 
     if importlib.util.find_spec("path_capi_python") is not None:
         return
-    for src in ("/Users/marmol/proyectos/path-capi-python/src",):
-        if (Path(src) / "path_capi_python").exists() and src not in sys.path:
-            sys.path.insert(0, src)
-            return
+    src = os.environ.get("EQUILIBRIA_PATH_CAPI_SRC")
+    if src and (Path(src) / "path_capi_python").exists() and src not in sys.path:
+        sys.path.insert(0, src)
 
 
 @dataclass
