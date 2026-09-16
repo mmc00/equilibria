@@ -52,8 +52,9 @@ from _parity_json import (  # noqa: E402
     make_violation, run_tool, make_detection, make_prescription, with_diagnosis,
 )
 import diff_altertax as DA  # noqa: E402
+from equilibria._local_refs import refs_dir
 
-DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+DEFAULT_REFS = str(refs_dir())
 
 # upstream candidate cause (bucket A): the root-selection cluster
 A_VARS = ["pft", "pf", "pfy", "pva"]

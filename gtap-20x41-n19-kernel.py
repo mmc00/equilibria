@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/scripts/gtap-20x41-n19-kernel.py

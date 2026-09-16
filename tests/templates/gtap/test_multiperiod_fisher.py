@@ -21,9 +21,9 @@ import contextlib
 from pyomo.environ import value as pv
 from test_multiperiod_sets import _load_3x3_params
 
-REF = pathlib.Path(
-    "/Users/marmol/proyectos2/equilibria_refs/gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"
-)
+from equilibria._local_refs import refs_dir
+
+REF = refs_dir() / "gtap7_3x3_altertax_cd" / "out_altertax_ifsub0.gdx"
 
 
 def _build_and_seed(p):

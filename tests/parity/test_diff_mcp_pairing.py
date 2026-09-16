@@ -20,13 +20,12 @@ from pathlib import Path
 
 import pytest
 
+from equilibria._local_refs import refs_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-GMS = Path(
-    "/Users/marmol/proyectos2/equilibria_refs/gtap7_3x3_altertax_cd/"
-    "model_altertax_ifsub0.gms"
-)
+GMS = refs_dir() / "gtap7_3x3_altertax_cd" / "model_altertax_ifsub0.gms"
 
 pytestmark = pytest.mark.skipif(
     not GMS.exists(), reason="local GAMS reference .gms not present"

@@ -51,6 +51,7 @@ from equilibria.templates.gtap.gtap_parameters import (
     GTAP_HOUSEHOLD_AGENT,
     GTAP_INVESTMENT_AGENT,
 )
+from equilibria._local_refs import path_capi_lib_dir, path_capi_src
 
 
 logging.basicConfig(
@@ -64,13 +65,10 @@ logger = logging.getLogger(__name__)
 _SYMBOLIC_FACT_COUNT = 0
 
 
-PATH_CAPI_SRC_DEFAULT = Path("/Users/marmol/proyectos/path-capi-python/src")
-PATH_CAPI_LIB_DEFAULT = Path(
-    "/Users/marmol/proyectos2/equilibria/.cache/path_capi/libpath50.silicon.dylib"
-)
-PATH_CAPI_LUSOL_DEFAULT = Path(
-    "/Users/marmol/proyectos2/equilibria/.cache/path_capi/liblusol.silicon.dylib"
-)
+PATH_CAPI_SRC_DEFAULT = Path(str(path_capi_src() or ""))
+_PATH_CAPI_CACHE = path_capi_lib_dir()
+PATH_CAPI_LIB_DEFAULT = _PATH_CAPI_CACHE / "libpath50.silicon.dylib"
+PATH_CAPI_LUSOL_DEFAULT = _PATH_CAPI_CACHE / "liblusol.silicon.dylib"
 
 REGION_ALIASES = {
     "usa": "NAmerica",
@@ -1622,7 +1620,7 @@ def _run_path_capi_linear_block(
         from path_capi_python import PATHLoader, PyomoMCPAdapter, solve_linear_mcp  # type: ignore
     except Exception as exc:
         raise RuntimeError(
-            "Unable to import path_capi_python. Ensure /Users/marmol/proyectos/path-capi-python exists."
+            "Unable to import path_capi_python. Set EQUILIBRIA_PATH_CAPI_SRC to the path-capi-python checkout src dir."
         ) from exc
 
     adapter = PyomoMCPAdapter()
@@ -2361,7 +2359,7 @@ def _run_path_capi_nonlinear_full(
     except Exception as exc:
         if not os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP"):
             raise RuntimeError(
-                "Unable to import path_capi_python. Ensure /Users/marmol/proyectos/path-capi-python exists."
+                "Unable to import path_capi_python. Set EQUILIBRIA_PATH_CAPI_SRC to the path-capi-python checkout src dir."
             ) from exc
         PATHLoader = PyomoMCPAdapter = solve_nonlinear_mcp = None  # type: ignore
 

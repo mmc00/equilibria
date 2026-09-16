@@ -41,6 +41,8 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 from coverage_matrix import altertax_rows  # noqa: E402
 
+from equilibria._local_refs import path_capi_src
+
 # (dataset, ifsub_int, gap_min, ci_status) per altertax matrix row
 _ALTERTAX_CASES = [
     (r.dataset, r.ifsub, r.gap_min, r.ci_status) for r in altertax_rows()
@@ -77,7 +79,7 @@ ALIAS = {
 # Local PATH solver lives outside the venv; add its src dir so find_spec can
 # locate it.  This does NOT affect CI (the dir won't exist there, find_spec
 # will still return None, and the 6 cases will SKIP as intended).
-_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI_SRC = path_capi_src()
 if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 

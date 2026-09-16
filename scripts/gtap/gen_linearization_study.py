@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from equilibria._local_refs import path_capi_src
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -95,7 +96,7 @@ def _measure_within_pp(dataset: str, sl4: Path) -> str:
     from pyomo.environ import value as V
 
     # path-capi bridge for the MCP solve
-    _pc = Path("/Users/marmol/proyectos/path-capi-python/src")
+    _pc = Path(str(path_capi_src() or ''))
     if _pc.exists() and str(_pc) not in sys.path:
         sys.path.insert(0, str(_pc))
     try:

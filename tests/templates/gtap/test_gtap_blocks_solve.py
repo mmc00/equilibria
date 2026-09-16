@@ -22,11 +22,13 @@ from pathlib import Path
 
 import pytest
 
+from equilibria._local_refs import path_capi_src
+
 ROOT = Path(__file__).resolve().parents[3]
 for _p in (ROOT / "src", ROOT / "scripts" / "gtap"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
-_PATH_CAPI = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 

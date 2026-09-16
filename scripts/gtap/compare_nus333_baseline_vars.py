@@ -1,6 +1,6 @@
 """Compare Python baseline (no shock) values vs GAMS NEOS baseline (t='base').
 
-Reads /Users/marmol/proyectos2/equilibria/output/nus333_neos/out.gdx via gdxdump
+Reads output/nus333_neos/out.gdx (relative to the repo root) via gdxdump
 and reports the largest absolute and relative discrepancies for the core
 endogenous variables. The baseline solve uses the same closure as the shock
 script, but tariff power shocks are NOT applied.
@@ -19,10 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from pyomo.environ import value  # noqa: E402
+from equilibria._local_refs import nus333_dir
 
 GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
 OUT_GDX = ROOT / "output" / "nus333_neos" / "out.gdx"
-NUS333 = Path("/Users/marmol/Downloads/10284")
+NUS333 = Path(str(nus333_dir()))
 
 CORE_VARS = [
     "gdpmp", "regY", "u", "pnum", "pwfact", "pgdpmp", "pop",

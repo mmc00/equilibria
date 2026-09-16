@@ -47,8 +47,9 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from _parity_json import (  # noqa: E402 — shared JSON contract
     make_violation, run_tool, make_detection, make_prescription, with_diagnosis,
 )
+from equilibria._local_refs import refs_dir
 
-DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+DEFAULT_REFS = str(refs_dir())
 
 # GAMS var name → Python Var attribute (same convention as diff_altertax.GAMS_TO_PY_NAME).
 _GAMS_TO_PY = {

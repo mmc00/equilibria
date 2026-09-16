@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import gams_levels, list_populated_vars  # type: ignore
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
+from equilibria._local_refs import refs_dir
 
 # GAMS camelCase / aggregate → Python Var-name map (same as the warm-start maps).
 # p_rai/pp_rai DO have GAMS counterparts (the make-matrix producer-price Vars p/pp);
@@ -238,7 +239,7 @@ def _work(args) -> dict:
         # compares against by default). Pass --gdx .../out_altertax_ifsub0.gdx for
         # the regenerated ifSUB=0 reference.
         gdx_path = Path(
-            f"/Users/marmol/proyectos2/equilibria_refs/{args.dataset}_altertax_cd/"
+            f"{refs_dir()}/{args.dataset}_altertax_cd/"
             f"out_altertax_ifsub1.gdx"
         )
     if not gdx_path.exists():

@@ -1,7 +1,7 @@
 """GTAP Parameters (Standard GTAP 7)
 
 This module defines all GTAP model parameters following the GTAP Standard 7 implementation.
-Reference: /Users/marmol/proyectos2/cge_babel/standard_gtap_7/model.gms
+Reference: GTAP 7 standard sources (EQUILIBRIA_CGE_BABEL_DIR), standard_gtap_7/model.gms
 
 Parameters include:
 - Elasticities (substitution, transformation)

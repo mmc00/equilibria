@@ -13,7 +13,7 @@ Slow (~3 min). Marked with @pytest.mark.slow. Skips when:
   - PATH C-API library is unavailable (path_capi_python)
 
 Run manually:
-    EQUILIBRIA_NUS333_DIR=/Users/marmol/Downloads/10284 \
+    EQUILIBRIA_NUS333_DIR=/ruta/al/dataset/10284 \
     uv run pytest tests/templates/gtap/test_nus333_neos_parity.py -v -s
 """
 
@@ -25,12 +25,12 @@ from pathlib import Path
 
 import pytest
 
+from equilibria._local_refs import nus333_dir, path_capi_src
+
 ROOT = Path(__file__).resolve().parents[3]
-NUS333_DIR = Path(
-    os.environ.get("EQUILIBRIA_NUS333_DIR", "/Users/marmol/Downloads/10284")
-)
+NUS333_DIR = Path(str(nus333_dir()))
 PATH_LIB = ROOT / ".cache/path_capi/libpath50.silicon.dylib"
-PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+PATH_CAPI_SRC = path_capi_src()
 
 # NEOS reference (job 18744693, comp_nus333.gms after tariff power shock).
 NEOS_REF = {

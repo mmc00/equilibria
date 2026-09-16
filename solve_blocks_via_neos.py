@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/scripts/solve_blocks_via_neos.py

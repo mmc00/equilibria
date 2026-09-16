@@ -9,10 +9,11 @@ import sys
 from itertools import product
 from pathlib import Path
 from typing import Any
+from equilibria._local_refs import path_capi_src
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+DEFAULT_PATH_CAPI_SRC = path_capi_src()
 
 
 def _solve_with_pathampl(

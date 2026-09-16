@@ -27,12 +27,13 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from equilibria._local_refs import refs_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+DEFAULT_REFS = str(refs_dir())
 
 
 def _gms(dataset: str, ifsub: int = 0) -> Path:

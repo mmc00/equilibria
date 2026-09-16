@@ -39,8 +39,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
+from equilibria._local_refs import path_capi_src  # noqa: E402
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
-_PATH_CAPI = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 

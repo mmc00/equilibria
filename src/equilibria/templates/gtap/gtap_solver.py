@@ -6,7 +6,7 @@ Supports multiple solvers:
 - PATH: Mixed Complementarity Problem solver (for MCP)
 - PATH-CAPI: Compatibility alias that routes through PATH backend in GTAPSolver
 
-Reference: /Users/marmol/proyectos2/cge_babel/standard_gtap_7/comp.gms
+Reference: GTAP 7 standard sources (EQUILIBRIA_CGE_BABEL_DIR), standard_gtap_7/comp.gms
 """
 
 from __future__ import annotations

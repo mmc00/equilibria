@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
 import importlib.util as _u
+from equilibria._local_refs import refs_dir
 _spec = _u.spec_from_file_location(
     "validate_reference", str(ROOT / "scripts" / "gtap" / "validate_reference.py")
 )
@@ -45,7 +46,7 @@ _vr = _u.module_from_spec(_spec)
 sys.modules["validate_reference"] = _vr
 _spec.loader.exec_module(_vr)
 
-DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+DEFAULT_REFS = str(refs_dir())
 
 # Explicit GAMS-equation -> Python-constraint pairing. The name heuristic below
 # (eq_<gams_eq>, eq_<stem>, ...) is FRAGILE: it silently resolves to a same-named

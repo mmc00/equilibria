@@ -37,6 +37,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 import importlib.util as _u
+from equilibria._local_refs import refs_dir
 _spec = _u.spec_from_file_location(
     "validate_reference", str(ROOT / "scripts" / "gtap" / "validate_reference.py")
 )
@@ -44,7 +45,7 @@ _vr = _u.module_from_spec(_spec)
 sys.modules["validate_reference"] = _vr
 _spec.loader.exec_module(_vr)
 
-DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+DEFAULT_REFS = str(refs_dir())
 
 
 def _default_gms(dataset: str, ifsub: int) -> Path:

@@ -24,6 +24,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from equilibria._local_refs import refs_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -106,7 +107,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--gdx", type=Path,
-                    default=Path("/Users/marmol/proyectos2/equilibria_refs/"
+                    default=Path(str(refs_dir()) + '/'
                                  "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"))
     ap.add_argument("--check-only", action="store_true", help="MCP square pre-check only, no solve")
     ap.add_argument("--reset", action="store_true", help="forget the snapshot and exit")

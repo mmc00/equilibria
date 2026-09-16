@@ -42,8 +42,9 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from _diff_core import gams_levels, list_populated_vars  # type: ignore
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 import diff_altertax as DA
+from equilibria._local_refs import refs_dir
 
-DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+DEFAULT_REFS = str(refs_dir())
 
 
 def _build_run_gtap():

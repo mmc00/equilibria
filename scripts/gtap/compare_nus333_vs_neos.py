@@ -11,7 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, "/Users/marmol/proyectos/path-capi-python/src")
+from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
+sys.path.insert(0, str(path_capi_src() or ''))
 sys.path.insert(0, str(Path(__file__).parent))
 
 import logging
@@ -25,7 +26,7 @@ from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from path_capi_python import PATHLoader, PyomoMCPAdapter, solve_nonlinear_mcp
 
 
-NUS333 = Path("/Users/marmol/Downloads/10284")
+NUS333 = Path(str(nus333_dir()))
 PATH_LIB = ROOT / ".cache/path_capi/libpath50.silicon.dylib"
 
 # NEOS reference (job 18744693, comp_nus333.gms after tariff power shock).

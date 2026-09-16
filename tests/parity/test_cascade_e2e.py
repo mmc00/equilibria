@@ -4,12 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from equilibria._local_refs import refs_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 PY = str(ROOT / ".venv" / "bin" / "python")
-REF = Path(
-    "/Users/marmol/proyectos2/equilibria_refs/"
-    "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"
-)
+REF = refs_dir() / "gtap7_3x3_altertax_cd" / "out_altertax_ifsub0.gdx"
 pytestmark = pytest.mark.skipif(not REF.exists(), reason="durable ref GDX absent")
 
 

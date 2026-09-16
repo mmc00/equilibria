@@ -16,15 +16,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, "/Users/marmol/proyectos/path-capi-python/src")
+sys.path.insert(0, str(path_capi_src() or ''))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import (
     list_populated_vars, gams_levels, find_py_var, compare_phase,
     diff_phase_rows, write_csv, git_short_sha, build_derived,
 )
+from equilibria._local_refs import nus333_dir, path_capi_src
 
-NUS333_HAR = Path("/Users/marmol/Downloads/10284")
+NUS333_HAR = Path(str(nus333_dir()))
 GAMS_OUT = ROOT / "output/nus333_neos/out.gdx"
 
 

@@ -1,0 +1,1 @@
+../../../../proyectos/dev-tools/equilibria-tools/scripts/gempack_qxs_diag.py

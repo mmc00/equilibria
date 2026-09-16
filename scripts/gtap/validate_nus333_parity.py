@@ -6,8 +6,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from equilibria.templates.gtap import GTAPParameters
+from equilibria._local_refs import nus333_dir
 
-NUS333 = Path("/Users/marmol/Downloads/10284")
+NUS333 = Path(str(nus333_dir()))
 
 params = GTAPParameters()
 params.load_from_har(

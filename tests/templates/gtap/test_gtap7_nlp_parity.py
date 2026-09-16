@@ -45,9 +45,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from coverage_matrix import nlp_rows  # noqa: E402
 
+from equilibria._local_refs import path_capi_src
+
 # Local PATH/NLP toolchain lives outside the venv; add its src so find_spec locates
 # it. Absent on CI → the cases SKIP.
-_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI_SRC = path_capi_src()
 if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 

@@ -49,12 +49,13 @@ import copy
 import statistics
 import sys
 from pathlib import Path
+from equilibria._local_refs import path_capi_src
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 sys.path.insert(0, str(ROOT / "tests" / "templates" / "gtap"))
-_PATH_CAPI = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 

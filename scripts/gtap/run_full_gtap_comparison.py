@@ -17,11 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, Optional, Tuple
+from equilibria._local_refs import cge_babel_dir
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 GAMS_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams"
-CGEBOX_DIR = Path("/Users/marmol/proyectos2/cge_babel/cgebox")
+CGEBOX_DIR = Path(str(cge_babel_dir() / "cgebox"))
 
 
 def run_full_gtap_gams(output_dir: Path) -> Tuple[bool, Optional[Path]]:

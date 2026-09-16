@@ -31,7 +31,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, "/Users/marmol/proyectos/path-capi-python/src")
+from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
+sys.path.insert(0, str(path_capi_src() or ''))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import (
@@ -39,7 +40,7 @@ from _diff_core import (
 )
 from diff_nus333_full import _nus333_key_remap
 
-NUS333_HAR = Path(os.environ.get("EQUILIBRIA_NUS333_DIR", "/Users/marmol/Downloads/10284"))
+NUS333_HAR = Path(str(nus333_dir()))
 NEOS_GDX = ROOT / "output/nus333_neos/out.gdx"
 GAMS = "/Library/Frameworks/GAMS.framework/Versions/53/Resources/gams"
 SCRIPTS_DIR = ROOT / "src/equilibria/templates/reference/gtap/scripts"

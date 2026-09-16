@@ -20,6 +20,8 @@ from typing import Any
 
 import pytest
 
+from equilibria._local_refs import cge_babel_dir, path_capi_src
+
 # ---------------------------------------------------------------------------
 # Skip condition: slow test and requires external GDX files + PATH C-API
 # ---------------------------------------------------------------------------
@@ -27,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[3]
 _GDX_FILE = Path(
     os.environ.get(
         "EQUILIBRIA_GTAP_GDX",
-        "/Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx",
+        str(cge_babel_dir() / "standard_gtap_7" / "basedata-9x10.gdx"),
     )
 )
 _CAL_DUMP = Path(
@@ -38,7 +40,7 @@ _CAL_DUMP = Path(
 )
 _COMP_CSV = Path("src/equilibria/templates/reference/gtap/comp/COMP_generated.csv")
 _PATH_LIB = ROOT / ".cache/path_capi/libpath50.silicon.dylib"
-_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI_SRC = path_capi_src()
 
 pytestmark = pytest.mark.slow
 
