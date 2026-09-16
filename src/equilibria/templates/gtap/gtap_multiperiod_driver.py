@@ -996,6 +996,35 @@ def freeze_inactive_periods(m, active_period: str) -> int:
 # ---------------------------------------------------------------------------
 # _replicate_sp_fixing — copy fixed-var state from single-period model to mp
 # ---------------------------------------------------------------------------
+def _sp_ref_reusable(prev_closure, closure) -> bool:
+    """True when a reference model built for ``prev_closure`` also serves ``closure``.
+
+    ``_replicate_sp_fixing``/``_replicate_sp_bounds`` read a COMPLETE single-period
+    model built only to be inspected and discarded — 3.4M vars on 20x41.  In gtap
+    mode the check period passes the same ``base_closure`` as the base period, so
+    that second build is byte-identical to the first: verified by hashing every
+    (name, index, value, lb, ub) of the built model, where base and check give the
+    same digest and only shock (shocked params) differs.  MEASURED: the three
+    reference builds cost 1.74 min of a 7.46 min 20x41 wall.
+
+    The reuse is CONDITIONAL on purpose.  Under altertax the check period uses
+    ``alt_closure``, which differs in name, capital_mobility, fix_taxes and
+    fix_technology; reusing there would replicate the wrong fixing pattern and
+    change the solution WITHOUT raising — the failure mode this codebase keeps
+    meeting.  So the predicate compares the whole config and refuses on any
+    difference, rather than special-casing the fields that look relevant today.
+    """
+    if prev_closure is None or closure is None:
+        return False
+    if prev_closure is closure:
+        return True
+    dump = getattr(prev_closure, "model_dump", None)
+    other = getattr(closure, "model_dump", None)
+    if dump is None or other is None:
+        return False
+    return dump() == other()
+
+
 def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
     """Copy the fixed-variable state from sp_model to m for active_period.
 
@@ -2925,6 +2954,8 @@ def _solve_multiperiod_inner(
     ).build_model()
     _replicate_sp_fixing(m, _sp_ref_base, "base")
     _replicate_sp_bounds(m, _sp_ref_base, "base")
+    # Kept for the check period, which in gtap mode builds this same model again.
+    _sp_ref_cached, _sp_ref_cached_closure = _sp_ref_base, base_closure
     del _sp_ref_base
 
     # Solve base on m via PATH — UNLESS skip_base_solve.
@@ -3121,15 +3152,23 @@ def _solve_multiperiod_inner(
 
         # Replicate single-period structural fixing for check period.
         _chk_closure = base_closure if _gtap_mode else alt_closure
-        _sp_ref_chk = GTAPModelEquations(
-            p_alt.sets,
-            p_alt,
-            _chk_closure,
-            residual_region=res_region,
-        ).build_model()
+        if _sp_ref_reusable(_sp_ref_cached_closure, _chk_closure):
+            # Same (sets, params, closure, residual_region) as the base period, so
+            # rebuilding produces an identical model. Reuse instead of paying for it.
+            _sp_ref_chk = _sp_ref_cached
+            _logging.getLogger(__name__).info(
+                "check period: reusing the base reference model (identical closure)"
+            )
+        else:
+            _sp_ref_chk = GTAPModelEquations(
+                p_alt.sets,
+                p_alt,
+                _chk_closure,
+                residual_region=res_region,
+            ).build_model()
         _replicate_sp_fixing(m, _sp_ref_chk, "check")
         _replicate_sp_bounds(m, _sp_ref_chk, "check")
-        del _sp_ref_chk
+        del _sp_ref_chk  # only the local name; _sp_ref_cached may still hold it
 
         # Mute the inert welfare-report tail so PATH can certify code=1 (see
         # _mute_welfare_tail). Decisive once the base is exact (skip_base_solve):
