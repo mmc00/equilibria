@@ -10,14 +10,20 @@ multi-period + PATH/IPOPT solve stack (``GTAPMultiPeriodModel`` /
 Design (mirrors the monolith's ``build_model`` ordering, gtap_model_equations.py:434):
 
   compose 7 blocks -> PyomoBackend.build -> strip ``_con`` suffix
-  -> apply_production_scaling -> _align_xi_xaa_post_scaling
+  -> apply_production_scaling -> align_xi_xaa_post_scaling
 
 The single-period block model produced by :func:`build_block_single_period` is
 form-identical to ``GTAPModelEquations.build_model()`` (Task 4: form+domain 0-diff,
 same 94 constraint families / 1116 cells / 1330 var cells). The scaling functions
-are the monolith's OWN methods, run against the block-composed pyomo model via a
-lightweight ``GTAPModelEquations`` shim — they mutate the model's VarData by name
+live in ``gtap_benchmark_scaling`` and are shared with the monolith, which keeps
+them as one-line delegators — they mutate the model's VarData by name
 (``hasattr``-guarded), so they operate correctly on the block model.
+
+Lo que TODAVIA ata este composer al monolito es distinto del escalado: la
+reflexion multi-periodo heredada de ``GTAPMultiPeriodModel`` construye su propio
+SP llamando a ``GTAPModelEquations.build_model()``, asi que
+``build_equations_intra`` / ``build_equations_all_periods`` le hacen un swap
+temporal de ese metodo. Ver ``docs/architecture/monolito_vs_bloques.md``.
 
 :class:`GTAPBlockMultiPeriodModel` subclasses ``GTAPMultiPeriodModel`` and swaps the
 single-period model source from ``GTAPModelEquations().build_model()`` to the
@@ -39,6 +45,11 @@ from equilibria.backends.pyomo_backend import PyomoBackend
 from equilibria.blocks.gtap import model_cache as _model_cache
 from equilibria.core.sets import Set as ESet
 from equilibria.model import Model
+from equilibria.templates.gtap.gtap_benchmark_scaling import (
+    ScalingContext,
+    align_xi_xaa_post_scaling,
+    apply_production_scaling,
+)
 from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
 
@@ -235,15 +246,16 @@ def build_block_single_period(
     _strip_con_suffix(pm)
 
     if apply_scaling:
-        # The monolith's own scaling methods, run against the block model. A shim
-        # GTAPModelEquations carries params/sets + the methods; they mutate the
-        # passed model's VarData by name (hasattr-guarded), so they work on the
-        # block-composed model exactly as on the monolith's build_model().
-        shim = GTAPModelEquations(
-            sets, params, closure=closure, residual_region=residual_region
+        # El escalado de benchmark vive en su propio modulo: muta los VarData del
+        # modelo por nombre (con guarda hasattr), asi que corre sobre el modelo
+        # compuesto por bloques igual que sobre el build_model() del monolito.
+        ctx = ScalingContext(
+            params=params,
+            sets=sets,
+            residual_region=residual_region or "NAmerica",
         )
-        shim.apply_production_scaling(pm)
-        shim._align_xi_xaa_post_scaling(pm)
+        apply_production_scaling(pm, ctx)
+        align_xi_xaa_post_scaling(pm, ctx)
 
     if if_sub:
         _apply_ifsub_closure(pm)
