@@ -2,7 +2,8 @@
 # quantities) after calibration, as the reference the port loads directly.
 # Args: <dataset> <out_csv>.  CSV rows: key,idx1,idx2,...,value  (scalars: key,value)
 
-const PKG = "/Users/marmol/proyectos/GlobalTradeAnalysisProjectModelV7.jl"
+const PKG = get(ENV, "EQUILIBRIA_JULIA_PKG",
+                joinpath(homedir(), "proyectos", "GlobalTradeAnalysisProjectModelV7.jl"))
 include(joinpath(PKG, "src/GlobalTradeAnalysisProjectModelV7.jl"))
 using Main.GlobalTradeAnalysisProjectModelV7
 using NamedArrays

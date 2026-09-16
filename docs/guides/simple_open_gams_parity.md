@@ -81,7 +81,7 @@ Cada closure debe cumplir:
 
 ## archivos clave
 
-- [run_simple_open_gams_parity.py](/Users/marmol/proyectos/equilibria/scripts/parity/run_simple_open_gams_parity.py)
-- [generate_simple_open_gams_reference.py](/Users/marmol/proyectos/equilibria/scripts/parity/generate_simple_open_gams_reference.py)
-- [simple_open_parity_pipeline.py](/Users/marmol/proyectos/equilibria/src/equilibria/templates/simple_open_parity_pipeline.py)
-- [simple_open_v1_benchmark.gms](/Users/marmol/proyectos/equilibria/src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms)
+- [run_simple_open_gams_parity.py](scripts/parity/run_simple_open_gams_parity.py)
+- [generate_simple_open_gams_reference.py](scripts/parity/generate_simple_open_gams_reference.py)
+- [simple_open_parity_pipeline.py](src/equilibria/templates/simple_open_parity_pipeline.py)
+- [simple_open_v1_benchmark.gms](src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms)

@@ -33,13 +33,14 @@ import pyomo.environ as pyo  # noqa: E402
 
 from equilibria.templates.gtap_julia.model import solve, solve_shock  # noqa: E402
 from equilibria.templates.gtap_julia.solution import (  # noqa: E402
+from equilibria._local_refs import julia_bin, julia_pkg_dir
     _dump_shock_solution,
     dump_solution,
     load_solution,
 )
 
-_JULIA = Path.home() / ".juliaup" / "bin" / "julia"
-_PKG = Path.home() / "proyectos" / "GlobalTradeAnalysisProjectModelV7.jl"
+_JULIA = julia_bin()
+_PKG = julia_pkg_dir()
 _VERIFY = _HERE / "verify_root.jl"
 
 _COMPARE_VARS = [

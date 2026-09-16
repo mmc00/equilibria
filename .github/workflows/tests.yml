@@ -49,14 +49,18 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Run tests (excluding GAMS-marked)
+      # La suite completa, no una lista blanca. Hasta 2026-09-16 este paso
+      # enumeraba 5 archivos de 172 (3,5 % de la suite), herencia de 2f5c128
+      # ("stabilize tests for linux runner"): se listo lo que pasaba entonces y
+      # el resto nunca se reconecto. Todo babel/ quedaba fuera, incluidos los
+      # lectores HAR/GDX donde vivia el bug REFULL del PR #46.
+      #
+      # NO anadir -n/--numprocesses: los tests GTAP compiten por la libreria
+      # PATH y por las caches de modelo, y en paralelo producen decenas de
+      # fallos espurios (40 medidos; 1 real al correrlos aislados).
+      - name: Run tests (excluding GAMS-marked and slow)
         run: |
-          uv run pytest -m "not gams" \
-            tests/qa/test_sam_qa.py \
-            tests/scripts/test_compare_path_solver_parity_cli.py \
-            tests/templates/test_pep_parity_pipeline.py \
-            tests/templates/test_pep_les_parity.py \
-            tests/templates/test_pep_dynamic_sets.py
+          uv run pytest -m "not gams and not slow" tests
 
   structural-gates:
     runs-on: ubuntu-latest

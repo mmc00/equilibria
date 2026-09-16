@@ -5,7 +5,8 @@
 # Args: <dataset_dir> <tariff_power> <out_base_csv> <out_shock_csv>
 #   dataset_dir holds basedata.har, default.prm, sets.har.
 
-const PKG = "/Users/marmol/proyectos/GlobalTradeAnalysisProjectModelV7.jl"
+const PKG = get(ENV, "EQUILIBRIA_JULIA_PKG",
+                joinpath(homedir(), "proyectos", "GlobalTradeAnalysisProjectModelV7.jl"))
 include(joinpath(PKG, "src/GlobalTradeAnalysisProjectModelV7.jl"))
 using Main.GlobalTradeAnalysisProjectModelV7
 using NamedArrays

@@ -1,14 +1,13 @@
 """Localizacion de referencias externas (GAMS, GEMPACK, PATH) por entorno.
 
 Estas rutas apuntan a material que NO se versiona: los .gdx/.har de referencia que
-produce GAMS, los datasets NUS333 y el checkout de path-capi-python. Antes estaban
-fijas al disco del autor, asi que en cualquier otra maquina los tests que dependen de
-ellas se saltaban sin explicar que faltaba.
+produce GAMS, los datasets NUS333, el checkout de path-capi-python y la instalacion de
+Julia. Antes estaban fijas al disco del autor, asi que en cualquier otra maquina los
+tests que dependen de ellas fallaban o se saltaban sin explicar que faltaba.
 
-Cada funcion devuelve ``None`` cuando la referencia no esta disponible; quien llama
-decide si eso es un skip o un error. El valor llega de la variable de entorno
-correspondiente, y si no esta definida se usa la convencion `~/proyectos2/...`, que es
-donde vive en la maquina de desarrollo original.
+Salvo :func:`ref_gdx`, todas devuelven un ``Path`` exista o no —nunca ``None``— porque
+quien llama suele encadenar ``.exists()`` a nivel de modulo. Comprobar la existencia y
+decidir entre saltar o fallar es responsabilidad de quien llama.
 
 Variables reconocidas:
 
@@ -20,18 +19,28 @@ Variables reconocidas:
 ``EQUILIBRIA_PATH_CAPI_SRC``
     Directorio ``src`` del checkout de path-capi-python (por defecto
     ``~/proyectos/path-capi-python/src``).
+``EQUILIBRIA_PATH_CAPI_LIB_DIR``
+    Directorio con libpath/liblusol (por defecto, la cache del proyecto).
 ``EQUILIBRIA_CGE_BABEL_DIR``
     Fuentes .gms del GTAP 7 estandar usadas como referencia (por defecto
     ``~/proyectos2/cge_babel``).
+``EQUILIBRIA_JULIA_BIN``
+    Binario de Julia (por defecto, el del PATH o el de juliaup).
+``EQUILIBRIA_JULIA_PKG``
+    Checkout de GlobalTradeAnalysisProjectModelV7.jl (por defecto
+    ``~/proyectos/GlobalTradeAnalysisProjectModelV7.jl``).
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 __all__ = [
     "cge_babel_dir",
+    "julia_bin",
+    "julia_pkg_dir",
     "nus333_dir",
     "path_capi_lib_dir",
     "path_capi_src",
@@ -74,6 +83,28 @@ def path_capi_src() -> Path:
 def cge_babel_dir() -> Path:
     """Fuentes .gms de referencia del GTAP 7 estandar. Puede no existir."""
     return _por_entorno("EQUILIBRIA_CGE_BABEL_DIR", "~/proyectos2/cge_babel")
+
+
+def julia_bin() -> Path:
+    """Binario de Julia. Puede no existir (p. ej. en CI).
+
+    Se busca en ``EQUILIBRIA_JULIA_BIN``, luego en el PATH, y por ultimo en la
+    instalacion de juliaup del usuario.
+    """
+    explicito = os.environ.get("EQUILIBRIA_JULIA_BIN")
+    if explicito:
+        return Path(explicito).expanduser()
+    en_path = shutil.which("julia")
+    if en_path:
+        return Path(en_path)
+    return Path("~/.juliaup/bin/julia").expanduser()
+
+
+def julia_pkg_dir() -> Path:
+    """Checkout de GlobalTradeAnalysisProjectModelV7.jl. Puede no existir."""
+    return _por_entorno(
+        "EQUILIBRIA_JULIA_PKG", "~/proyectos/GlobalTradeAnalysisProjectModelV7.jl"
+    )
 
 
 def path_capi_lib_dir() -> Path:

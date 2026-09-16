@@ -71,7 +71,7 @@ Criterio de cierre:
 
 Referencia GAMS:
 
-- el modelo `gtap` en [model.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/model.gms:1395) declara explícitamente el mapeo ecuación-variable del MCP
+- el modelo `gtap` en [model.gms](src/equilibria/templates/reference/gtap/scripts/model.gms:1395) declara explícitamente el mapeo ecuación-variable del MCP
 - el bloque central relevante incluye, entre otros:
   - `pdpeq.pdp`, `pmpeq.pmp`, `paeq.pa`, `xdeq.xd`, `xmeq.xm`
   - `xmteq.xmt`, `xweq.xw`, `pmteq.pmt`, `pmeq.pm`
@@ -300,7 +300,7 @@ Leyenda:
 | GAMS | Pyomo | Estado | Nota |
 |---|---|---|---|
 | `arenteq.arent` | `eq_arent` | `exact_match` | Presente |
-| `kapEndeq.kapEnd` | `eq_kapEnd` | `exact_match` | Presente en [gtap_model_equations.py](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/gtap/gtap_model_equations.py:2654) |
+| `kapEndeq.kapEnd` | `eq_kapEnd` | `exact_match` | Presente en [gtap_model_equations.py](src/equilibria/templates/gtap/gtap_model_equations.py:2654) |
 | `rorceq.rorc` | `eq_rorc` | `exact_match` | Presente |
 | `roreeq.rore` | `eq_rore` | `exact_match` | Presente |
 | `xieq.xi` | `eq_xi` | `exact_match` | Presente |
@@ -517,17 +517,17 @@ Leyenda:
 
 Evidencia base usada para esta clasificación:
 
-- la closure declarativa Pyomo fija por diseño `etax`, `mtax`, `lambdam`, `lambdamg`, `xft` y `tmarg` en [gtap_contract.py](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/gtap/gtap_contract.py:117)
+- la closure declarativa Pyomo fija por diseño `etax`, `mtax`, `lambdam`, `lambdamg`, `xft` y `tmarg` en [gtap_contract.py](src/equilibria/templates/gtap/gtap_contract.py:117)
 - GAMS fija en calibración:
-  - `etax.fx(r,i,t) = 0` en [cal.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/cal.gms:315)
-  - `mtax.fx(rp,i,t) = 0` en [cal.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/cal.gms:346)
-  - `lambdam.fx(rp,i,r,t) = 1` en [cal.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/cal.gms:347)
-  - `lambdamg.fx(m,r,i,rp,t) = 1` en [cal.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/cal.gms:382)
-  - `tmarg.fx(r,i,rp,t)$xwFlag(r,i,rp)` en [cal.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/cal.gms:322)
+  - `etax.fx(r,i,t) = 0` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:315)
+  - `mtax.fx(rp,i,t) = 0` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:346)
+  - `lambdam.fx(rp,i,r,t) = 1` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:347)
+  - `lambdamg.fx(m,r,i,rp,t) = 1` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:382)
+  - `tmarg.fx(r,i,rp,t)$xwFlag(r,i,rp)` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:322)
 - GAMS fija por cierre/iteración:
-  - `pnum.fx(t) = pnum.l(t)` en [iterloop.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/iterloop.gms:41)
-  - `xft.fx(r,fm,tsim)$(not xftFlag(r,fm)) = 0` en [iterloop.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/iterloop.gms:142)
-  - `chif.fx(r,t)$(not rres(r)) = chif.l(r,t)` en [iterloop.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/iterloop.gms:46)
+  - `pnum.fx(t) = pnum.l(t)` en [iterloop.gms](src/equilibria/templates/reference/gtap/scripts/iterloop.gms:41)
+  - `xft.fx(r,fm,tsim)$(not xftFlag(r,fm)) = 0` en [iterloop.gms](src/equilibria/templates/reference/gtap/scripts/iterloop.gms:142)
+  - `chif.fx(r,t)$(not rres(r)) = chif.l(r,t)` en [iterloop.gms](src/equilibria/templates/reference/gtap/scripts/iterloop.gms:46)
 
 #### Tabla `Pyomo fixed now -> parity assessment`
 
@@ -808,13 +808,13 @@ Siguiente paso real:
 
 Comparación estructural:
 
-- GAMS [model.gms](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/scripts/model.gms:587) define:
+- GAMS [model.gms](src/equilibria/templates/reference/gtap/scripts/model.gms:587) define:
   - `xeq(r,a,i)` sobre `xFlag(r,a,i)`
   - `xpeq(r,a)` sobre `xpFlag(r,a)`
   - `ppeq(r,a,i)` sobre `xFlag(r,a,i)`
   - `peq(r,a,i)` sobre `xFlag(r,a,i)`
   - `pseq(r,i)` sobre `xsFlag(r,i)`
-- Pyomo [gtap_model_equations.py](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/gtap/gtap_model_equations.py:1887) tiene:
+- Pyomo [gtap_model_equations.py](src/equilibria/templates/gtap/gtap_model_equations.py:1887) tiene:
   - `eq_x`
   - `eq_po`
   - `eq_pp_rai`
@@ -845,7 +845,7 @@ Conclusión práctica para Fase 2:
 
 #### Avance Ejecutado: `peq(r,a,i)` reintroducida en Pyomo
 
-Se añadió `eq_peq(r,a,i)` en [gtap_model_equations.py](/Users/marmol/proyectos2/equilibria/src/equilibria/templates/gtap/gtap_model_equations.py) como espejo de `peq(r,a,i)` de GAMS:
+Se añadió `eq_peq(r,a,i)` en [gtap_model_equations.py](src/equilibria/templates/gtap/gtap_model_equations.py) como espejo de `peq(r,a,i)` de GAMS:
 
 - soporte activo observado: `100`
 - `eq_peq = 100`

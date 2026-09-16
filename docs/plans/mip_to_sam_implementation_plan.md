@@ -140,7 +140,7 @@ run_mip_to_sam(
 
 ### 1. Parser MIP (`mip_raw_excel.py`)
 
-**Nuevo archivo**: `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/mip_raw_excel.py`
+**Nuevo archivo**: `src/equilibria/sam_tools/mip_raw_excel.py`
 
 Crear clase `MIPRawSAM` siguiendo patrón de `IEEMRawSAM`:
 
@@ -173,7 +173,7 @@ class MIPRawSAM(Sam):
 
 ### 2. Transformaciones MIP→SAM (`mip_to_sam_transforms.py`)
 
-**Nuevo archivo**: `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/mip_to_sam_transforms.py`
+**Nuevo archivo**: `src/equilibria/sam_tools/mip_to_sam_transforms.py`
 
 #### Transformación 1: `normalize_mip_accounts()`
 **Propósito**: Convertir RAW labels a estructura inicial PEP (J, I, VA, FD)
@@ -310,7 +310,7 @@ Ingreso_hogares = Consumo_hogares + Ahorro_hogares + Impuestos_directos
 
 ### 3. API Principal (`api.py`)
 
-**Modificar archivo existente**: `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/api.py`
+**Modificar archivo existente**: `src/equilibria/sam_tools/api.py`
 
 Agregar:
 
@@ -408,20 +408,20 @@ def run_mip_to_sam(...) -> MIPToSAMResult:
 ## Archivos Críticos a Modificar/Crear
 
 ### Nuevos archivos:
-1. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/mip_raw_excel.py` - Parser MIP
-2. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/mip_to_sam_transforms.py` - Transformaciones
-3. `/Users/marmol/proyectos/equilibria/tests/sam_tools/test_mip_to_sam.py` - Tests
-4. `/Users/marmol/proyectos/equilibria/docs/guides/mip_to_sam_guide_en.md` - Documentación
+1. `src/equilibria/sam_tools/mip_raw_excel.py` - Parser MIP
+2. `src/equilibria/sam_tools/mip_to_sam_transforms.py` - Transformaciones
+3. `tests/sam_tools/test_mip_to_sam.py` - Tests
+4. `docs/guides/mip_to_sam_guide_en.md` - Documentación
 
 ### Archivos a modificar:
-1. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/api.py` - Agregar `run_mip_to_sam()`
-2. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/__init__.py` - Exportar nueva API
+1. `src/equilibria/sam_tools/api.py` - Agregar `run_mip_to_sam()`
+2. `src/equilibria/sam_tools/__init__.py` - Exportar nueva API
 
 ### Archivos de referencia (no modificar, solo estudiar):
-1. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/ieem_to_pep_transformations.py` - Patrón
-2. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/ieem_raw_excel.py` - Patrón parser
-3. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/sam_transforms.py` - Utilidades reutilizables
-4. `/Users/marmol/proyectos/equilibria/src/equilibria/sam_tools/balancing.py` - RAS balancer
+1. `src/equilibria/sam_tools/ieem_to_pep_transformations.py` - Patrón
+2. `src/equilibria/sam_tools/ieem_raw_excel.py` - Patrón parser
+3. `src/equilibria/sam_tools/sam_transforms.py` - Utilidades reutilizables
+4. `src/equilibria/sam_tools/balancing.py` - RAS balancer
 
 ## Testing
 

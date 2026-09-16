@@ -7,7 +7,8 @@
 # Args: <dataset> <tariff_power> <seed_csv> <out_csv>
 #   seed_csv: rows "name,idx...,value" holding a full variable point to seed from.
 
-const PKG = "/Users/marmol/proyectos/GlobalTradeAnalysisProjectModelV7.jl"
+const PKG = get(ENV, "EQUILIBRIA_JULIA_PKG",
+                joinpath(homedir(), "proyectos", "GlobalTradeAnalysisProjectModelV7.jl"))
 include(joinpath(PKG, "src/GlobalTradeAnalysisProjectModelV7.jl"))
 using Main.GlobalTradeAnalysisProjectModelV7
 using NamedArrays

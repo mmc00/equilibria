@@ -130,7 +130,7 @@ Eso es intencional. El objetivo actual de la epica no es reproducir `stdcge` ent
 
 El primer artefacto GAMS que sale de esta ancla es:
 
-- [simple_open_v1_benchmark.gms](/Users/marmol/proyectos/equilibria/src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms)
+- [simple_open_v1_benchmark.gms](src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms)
 
 Ese script:
 
