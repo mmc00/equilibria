@@ -34,6 +34,8 @@ from pathlib import Path
 
 import pytest
 
+from equilibria._local_refs import path_capi_src
+
 ROOT = Path(__file__).resolve().parents[3]
 DATASETS_DIR = ROOT / "datasets"
 FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
@@ -43,7 +45,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 # Local PATH solver lives outside the venv; add its src dir so find_spec can
 # locate it.  This does NOT affect CI (the dir won't exist there, find_spec will
 # still return None, and the tests SKIP as intended).
-_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI_SRC = path_capi_src()
 if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 

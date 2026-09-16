@@ -21,13 +21,14 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from equilibria._local_refs import refs_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 DATASET_DIR = ROOT / "datasets" / "gtap7_3x3"
-REF = Path("/Users/marmol/proyectos2/equilibria_refs/gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx")
+REF = Path(str(refs_dir() / "gtap7_3x3_altertax_cd" / "out_altertax_ifsub0.gdx"))
 
 
 def _load_run_gtap():

@@ -33,9 +33,10 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from equilibria._local_refs import cge_babel_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-UPSTREAM = Path("/Users/marmol/proyectos2/cge_babel/standard_gtap_7")
+UPSTREAM = Path(str(cge_babel_dir() / "standard_gtap_7"))
 GAMS_SYS = "/Library/Frameworks/GAMS.framework/Versions/48/Resources"
 
 

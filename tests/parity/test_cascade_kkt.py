@@ -8,10 +8,9 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from cascade_kkt import KKT_READER, kkt_layer, read_marginals
 
-REF = Path(
-    "/Users/marmol/proyectos2/equilibria_refs/"
-    "gtap7_3x3_altertax_cd/out_altertax_ifsub0.gdx"
-)
+from equilibria._local_refs import refs_dir
+
+REF = refs_dir() / "gtap7_3x3_altertax_cd" / "out_altertax_ifsub0.gdx"
 pytestmark = pytest.mark.skipif(not REF.exists(), reason="durable ref GDX absent")
 
 

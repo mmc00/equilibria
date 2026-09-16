@@ -21,9 +21,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "tests/templates/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
+from equilibria._local_refs import path_capi_src  # noqa: E402
 # Local PATH/NLP toolchain lives outside the venv (absent on CI → falls back to
 # floors-only rendering).
-_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+_PATH_CAPI_SRC = path_capi_src()
 if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 

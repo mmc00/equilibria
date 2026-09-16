@@ -20,12 +20,13 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Tuple
+from equilibria._local_refs import cge_babel_dir
 
 # Add equilibria to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 GAMS_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams"
-CGEBOX_DIR = Path("/Users/marmol/proyectos2/cge_babel/cgebox")
+CGEBOX_DIR = Path(str(cge_babel_dir() / "cgebox"))
 
 
 def check_gams_installation() -> bool:
@@ -69,7 +70,7 @@ def check_gtap_data() -> Tuple[bool, Optional[Path]]:
         CGEBOX_DIR / "data" / "GTAPV12_STD",
         CGEBOX_DIR / "data" / "GTAPV11C_STD",
         CGEBOX_DIR / "data" / "GTAPV9_STD",
-        Path("/Users/marmol/proyectos2/cge_babel/gtap/data"),
+        Path(str(cge_babel_dir() / "gtap" / "data")),
     ]
     
     for data_dir in data_dirs:

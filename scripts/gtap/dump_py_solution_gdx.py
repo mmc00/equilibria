@@ -4,10 +4,11 @@ execute_unloads it to a GDX — GAMS writes the GDX (no solve, fast). Read both 
 with equilibria's reader afterwards to diff."""
 import sys, os
 from pathlib import Path
-ROOT = Path("/Users/marmol/.superset/worktrees/b14cb643-ee65-449d-b3f0-be8003b60783/scratched-stag")
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 sys.path.insert(0, str(ROOT / "src"))
-_PC = Path("/Users/marmol/proyectos/path-capi-python/src")
+from equilibria._local_refs import path_capi_src  # noqa: E402
+_PC = Path(str(path_capi_src() or ''))
 if _PC.exists(): sys.path.insert(0, str(_PC))
 os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"
 os.environ["EQUILIBRIA_GTAP_NLP_NO_JACSCALE"] = "1"

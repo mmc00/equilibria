@@ -55,6 +55,7 @@ from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON 
 
 # Reuse validate_reference's model builder so the closure/elasticities match exactly.
 import importlib.util as _u
+from equilibria._local_refs import refs_dir
 _spec = _u.spec_from_file_location(
     "validate_reference", str(ROOT / "scripts" / "gtap" / "validate_reference.py")
 )
@@ -62,7 +63,7 @@ _vr = _u.module_from_spec(_spec)
 sys.modules["validate_reference"] = _vr
 _spec.loader.exec_module(_vr)
 
-DEFAULT_REFS = "/Users/marmol/proyectos2/equilibria_refs"
+DEFAULT_REFS = str(refs_dir())
 
 # GAMS symbol → Python component name (calibration scalars, indexed by region).
 _SCALAR_MAP = {

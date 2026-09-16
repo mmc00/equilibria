@@ -10,7 +10,13 @@ import re
 from pathlib import Path
 from collections import defaultdict
 
-SRC = Path("/Users/marmol/Downloads/pep-1-1/GAMS_Code/PEP-1-1_v2_1.gms")
+import os
+SRC = Path(
+    os.environ.get(
+        "EQUILIBRIA_PEP_GMS",
+        str(Path.home() / "Downloads/pep-1-1/GAMS_Code/PEP-1-1_v2_1.gms"),
+    )
+)
 text = SRC.read_text()
 lines = text.splitlines()
 

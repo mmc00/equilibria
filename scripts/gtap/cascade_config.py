@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from equilibria._local_refs import refs_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-DURABLE_REFS = Path("/Users/marmol/proyectos2/equilibria_refs")
+DURABLE_REFS = Path(str(refs_dir()))
 # Pure-gtap (real-CES, non-altertax) solved refs live committed under the .nl
 # fixture tree, one per ifSUB mode (distinct from the altertax out_altertax_*).
 GTAP_PURE_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7"

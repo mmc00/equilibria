@@ -39,7 +39,9 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from coverage_matrix import mcp_rows  # noqa: E402
 
-_PATH_CAPI_SRC = Path("/Users/marmol/proyectos/path-capi-python/src")
+from equilibria._local_refs import path_capi_src
+
+_PATH_CAPI_SRC = path_capi_src()
 if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 

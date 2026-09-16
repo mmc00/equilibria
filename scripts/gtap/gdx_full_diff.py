@@ -3,7 +3,7 @@ GAMS reference GDX. Both written by GAMS; read via gdxdump. Python symbols are
 prefixed v_ (vars) / p_ (params); GAMS symbols are bare. Ranks by divergence."""
 import subprocess, csv, sys
 from pathlib import Path
-ROOT = Path("/Users/marmol/.superset/worktrees/b14cb643-ee65-449d-b3f0-be8003b60783/scratched-stag")
+ROOT = Path(__file__).resolve().parents[2]
 GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gdxdump"
 PY_GDX = ROOT / "output/pyshock_sol.gdx"
 REF_GDX = ROOT / "output/gtap7_3x3_pure_local_bundle/out_3x3_nlp.gdx"

@@ -1,7 +1,7 @@
 """GTAP Contract Models (Standard GTAP 7)
 
 This module defines canonical contract models for GTAP following Standard GTAP 7 implementation.
-Reference: /Users/marmol/proyectos2/cge_babel/standard_gtap_7/comp.gms
+Reference: GTAP 7 standard sources (EQUILIBRIA_CGE_BABEL_DIR), standard_gtap_7/comp.gms
 
 Closures determine which variables are fixed (exogenous) and which are endogenous.
 GTAP Standard 7 supports multiple closure types:

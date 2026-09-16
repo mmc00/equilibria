@@ -10,7 +10,7 @@ GTAP Standard 7 uses uppercase parameter names with specific conventions:
 - ***B = At Basic prices
 - ***P = At Purchaser prices
 
-Reference: /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx
+Reference: GTAP 7 standard sources (EQUILIBRIA_CGE_BABEL_DIR), standard_gtap_7/basedata-9x10.gdx
 """
 
 

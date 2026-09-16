@@ -28,6 +28,7 @@ from _diff_core import (
     diff_phase_rows, diff_params_rows, ALTERTAX_PARAM_NAMES,
     write_csv, git_short_sha, build_derived,
 )
+from equilibria._local_refs import refs_dir
 
 GDX_9X10 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
 DEFAULT_NEOS_GDX = ROOT / "output/9x10_altertax_neos_bundle/out.gdx"
@@ -54,7 +55,7 @@ def _convergence_gate(label: str, result, *, res_tol: float = 1e-6) -> bool:
 # Durable reference store (outside the gitignored output/, survives worktree
 # cleanups). Holds the regenerated PROPER altertax CD references — NOT the old
 # calibrated standard-GTAP runs that used to live in out_local.gdx.
-REFS_DIR = Path("/Users/marmol/proyectos2/equilibria_refs")
+REFS_DIR = Path(str(refs_dir()))
 
 # Dataset registry: name → (data_gdx_or_har_dir, neos_bundle_dir, loader, cd_ref)
 # cd_ref: durable altertax CD reference GDX (preferred over the bundle's out.gdx;

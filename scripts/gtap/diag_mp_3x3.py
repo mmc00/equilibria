@@ -10,6 +10,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from equilibria._local_refs import refs_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -18,7 +19,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-REFS_ROOT = Path("/Users/marmol/proyectos2/equilibria_refs")
+REFS_ROOT = Path(str(refs_dir()))
 
 PASS_CODE = 1
 PASS_RES = 1e-6
