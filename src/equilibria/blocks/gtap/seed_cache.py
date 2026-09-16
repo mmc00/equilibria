@@ -2,8 +2,8 @@
 
 Key = hash of everything that changes the settle: dataset id, closure fields,
 residual region, and a digest of the benchmark params the settle reads. Value =
-``{var_name: {index_tuple_or_scalar: float}}`` stored as JSON (tuple keys encoded
-with a \\x1f separator).
+``{var_name: {index_tuple_or_scalar: float}}`` stored as JSON (index keys encoded
+as JSON themselves, so their type survives the round trip -- see ``_enc_key``).
 
 ``EQUILIBRIA_SEED_CACHE_DISABLE=1`` bypasses read+write. Cache dir defaults to
 ``~/.cache/equilibria/settled_seed`` or ``$EQUILIBRIA_SEED_CACHE``.
@@ -16,7 +16,12 @@ import json
 import os
 from pathlib import Path
 
-_SEP = "\x1f"
+_SEP = "\x1f"  # legacy key separator (read-only, see _dec_key_legacy)
+
+# Bumped when the on-disk layout changes; an unversioned file is the original
+# \x1f-joined format and is still read.
+_VERSION_FIELD = "_fmt"
+_VERSION = 2
 
 
 def disabled() -> bool:
@@ -59,10 +64,38 @@ def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
 
 
 def _enc_key(k):
-    return _SEP.join(map(str, k)) if isinstance(k, tuple) else str(k)
+    """Encode an index key as JSON so its TYPE survives the round trip.
+
+    The previous encoding joined a tuple with ``\\x1f`` and split it back, which
+    silently rewrote ``("USA", 2020)`` as ``("USA", "2020")`` and collapsed the
+    1-tuple ``("USA",)`` to the bare string ``"USA"``.  That matters because the
+    consumer (``gtap_multiperiod_driver``, base-calibrated seeding) does the
+    lookup inside ``except (KeyError, TypeError, ValueError): pass`` -- a mistyped
+    key raises nothing, it just seeds NOTHING, and the model solves from a
+    different starting point with no diagnostic.
+
+    JSON round-trips str/int/float/bool exactly; a tuple becomes a list, which
+    ``_dec_key`` turns back into a tuple.  Today's GTAP index sets are all
+    strings, so this changes no current behaviour -- it removes the trap.
+    """
+    return json.dumps(list(k) if isinstance(k, tuple) else k)
 
 
 def _dec_key(s: str):
+    """Inverse of :func:`_enc_key`."""
+    dec = json.loads(s)
+    return tuple(dec) if isinstance(dec, list) else dec
+
+
+def _dec_key_legacy(s: str):
+    """Decode a key written by the pre-versioning ``\\x1f`` encoder.
+
+    Every key in such a file is a string (that encoder stringified everything),
+    so this never guesses a type -- which is exactly why the format is chosen by
+    the FILE's version marker and not sniffed per key.  Sniffing would decode a
+    legacy ``"2020"`` as the int ``2020`` and reintroduce the very bug being
+    fixed here.
+    """
     return tuple(s.split(_SEP)) if _SEP in s else s
 
 
@@ -73,8 +106,14 @@ def load(key: str):
     if not f.exists():
         return None
     raw = json.loads(f.read_text())
+    # A versioned file wraps the payload; anything else is a pre-versioning file
+    # whose keys must be read with the legacy decoder.
+    if isinstance(raw, dict) and raw.get(_VERSION_FIELD) == _VERSION:
+        raw, dec = raw["seed"], _dec_key
+    else:
+        dec = _dec_key_legacy
     return {
-        name: {_dec_key(k): float(v) for k, v in cells.items()}
+        name: {dec(k): float(v) for k, v in cells.items()}
         for name, cells in raw.items()
     }
 
@@ -86,4 +125,6 @@ def save(key: str, seed: dict) -> None:
         name: {_enc_key(k): float(v) for k, v in cells.items()}
         for name, cells in seed.items()
     }
-    (_cache_dir() / f"{key}.json").write_text(json.dumps(enc))
+    (_cache_dir() / f"{key}.json").write_text(
+        json.dumps({_VERSION_FIELD: _VERSION, "seed": enc})
+    )
