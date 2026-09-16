@@ -286,16 +286,3 @@ class IEEMRawSAM(Sam):
             source_path=source_path or Path("<memory>"),
             source_format=source_format,
         )
-
-
-def aggregate_table_with_mapping(table: SamTable, op: dict[str, Any]) -> dict[str, Any]:
-    mapping_path = op.get("mapping_path")
-    if not mapping_path:
-        raise ValueError("aggregate_mapping requires mapping_path")
-    before_shape = list(table.matrix.shape)
-    table.sam.aggregate(Path(mapping_path))
-    return {
-        "mapping_path": str(mapping_path),
-        "shape_before": before_shape,
-        "shape_after": list(table.matrix.shape),
-    }

@@ -55,7 +55,6 @@ Delta Encoding Scheme for Parameters (OFFICIAL IMPLEMENTATION):
 
 import logging
 import struct
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -228,81 +227,3 @@ def decode_parameter_delta(
             pass
 
     return values
-
-
-def validate_against_csv(
-    gdx_values: dict[tuple[str, ...], float], csv_path: str, tolerance: float = 0.01
-) -> tuple[bool, dict[str, Any]]:
-    """
-    Validate decoded GDX values against CSV ground truth.
-
-    Args:
-        gdx_values: Dictionary from decode_parameter_delta()
-        csv_path: Path to CSV file with ground truth
-        tolerance: Allowed difference for float comparison
-
-    Returns:
-        Tuple of (success, stats_dict)
-        - success: True if >95% match
-        - stats_dict: Detailed statistics
-    """
-    import csv
-
-    stats = {
-        "csv_total": 0,
-        "gdx_total": len(gdx_values),
-        "matched": 0,
-        "mismatched": 0,
-        "missing_in_gdx": 0,
-        "missing_in_csv": 0,
-        "mismatch_details": [],
-    }
-
-    # Read CSV
-    csv_values = {}
-    with open(csv_path) as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if len(row) >= 5:
-                key = (row[0], row[1], row[2], row[3])
-                try:
-                    csv_values[key] = float(row[4])
-                    stats["csv_total"] += 1
-                except ValueError:
-                    pass
-
-    # Compare
-    for key, csv_val in csv_values.items():
-        if key in gdx_values:
-            gdx_val = gdx_values[key]
-            if abs(csv_val - gdx_val) <= tolerance:
-                stats["matched"] += 1
-            else:
-                stats["mismatched"] += 1
-                if len(stats["mismatch_details"]) < 10:
-                    stats["mismatch_details"].append(
-                        {
-                            "key": key,
-                            "csv": csv_val,
-                            "gdx": gdx_val,
-                            "diff": abs(csv_val - gdx_val),
-                        }
-                    )
-        else:
-            stats["missing_in_gdx"] += 1
-            if stats["missing_in_gdx"] <= 5:
-                logger.warning("Missing in GDX: %s = %s", key, csv_val)
-
-    # Check for extra values in GDX
-    for key in gdx_values:
-        if key not in csv_values:
-            stats["missing_in_csv"] += 1
-
-    # Calculate success rate
-    match_rate = stats["matched"] / stats["csv_total"] if stats["csv_total"] > 0 else 0
-    success = match_rate >= 0.95
-
-    stats["match_rate"] = match_rate
-    stats["success"] = success
-
-    return success, stats

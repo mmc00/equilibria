@@ -397,19 +397,3 @@ class DummyCalibrationData(CalibrationData):
 
 
 # Convenience functions
-def create_calibration_data(
-    sam: SAM | None,
-    mode: str = "sam",
-    dummy_value: float = 1.0,
-) -> CalibrationData:
-    """Create CalibrationData instance.
-
-    Args:
-        sam: Social Accounting Matrix (None for dummy mode)
-        mode: "sam" or "dummy"
-        dummy_value: Default value for dummy mode
-
-    Returns:
-        CalibrationData instance
-    """
-    return CalibrationData(sam, mode, dummy_value)

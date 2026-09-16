@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pyomo.environ import Constraint, Var, value
+from pyomo.environ import value
 
 # Trade var families indexed by route. xw/xwmg/pe/pwmg/pmcif/pefob/pm are (r,i,rp)
 # = (exporter, commodity, importer). xmgm is (m,r,i,rp).
