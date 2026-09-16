@@ -194,7 +194,9 @@ def _solve(model, params, *, label: str, strict_dof: bool = True):
         jacobian_eval_mode="reverse_numeric",
     )
 
-    # Equation scaling (row + col), as required by CLAUDE.md.
+    # Equation scaling (row + col): GAMS solves the raw model, so the Python
+    # side must not stack its own pre-scaling on top (see
+    # docs/findings/ on the altertax NLP-scaling saga).
     jac_vals = data.callback_jac(list(data.x0))
     row_indices = data.jacobian_structure.row_indices
     col_for_nnz = []
