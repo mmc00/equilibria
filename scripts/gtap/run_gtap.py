@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 _SYMBOLIC_FACT_COUNT = 0
 
 
-PATH_CAPI_SRC_DEFAULT = Path(str(path_capi_src() or ""))
+PATH_CAPI_SRC_DEFAULT = Path(str(path_capi_src()))
 _PATH_CAPI_CACHE = path_capi_lib_dir()
 PATH_CAPI_LIB_DEFAULT = _PATH_CAPI_CACHE / "libpath50.silicon.dylib"
 PATH_CAPI_LUSOL_DEFAULT = _PATH_CAPI_CACHE / "liblusol.silicon.dylib"

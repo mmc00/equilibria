@@ -111,7 +111,7 @@ def test_nlp_mcp_mirror(state):
     is form-defining and excluded. Requires PATH for the MCP solve; skips cleanly otherwise."""
     import sys
 
-    src = str(path_capi_src() or "")
+    src = str(path_capi_src())
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
     if importlib.util.find_spec("path_capi_python") is None:
@@ -238,7 +238,7 @@ def test_mcp_matches_gams_native_mcp(state):
     if PATH or gdxdump is unavailable."""
     import sys
 
-    src = str(path_capi_src() or "")
+    src = str(path_capi_src())
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
     if importlib.util.find_spec("path_capi_python") is None:
@@ -278,7 +278,7 @@ def test_mcp_sim1_shock_matches_gams():
 
     from pyomo.environ import value
 
-    src = str(path_capi_src() or "")
+    src = str(path_capi_src())
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
     if importlib.util.find_spec("path_capi_python") is None:
@@ -358,7 +358,7 @@ def test_objdef_mcp_is_square_and_solves(state):
     variables'. Guards against that regression. Skips cleanly without PATH."""
     import sys
 
-    src = str(path_capi_src() or "")
+    src = str(path_capi_src())
     if Path(src).exists() and src not in sys.path:
         sys.path.insert(0, src)
     if importlib.util.find_spec("path_capi_python") is None:

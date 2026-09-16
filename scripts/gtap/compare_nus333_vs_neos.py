@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
-sys.path.insert(0, str(path_capi_src() or ''))
+sys.path.insert(0, str(path_capi_src()))
 sys.path.insert(0, str(Path(__file__).parent))
 
 import logging

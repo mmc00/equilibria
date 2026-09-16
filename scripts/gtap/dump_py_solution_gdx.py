@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria._local_refs import path_capi_src  # noqa: E402
-_PC = Path(str(path_capi_src() or ''))
+_PC = Path(str(path_capi_src()))
 if _PC.exists(): sys.path.insert(0, str(_PC))
 os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"
 os.environ["EQUILIBRIA_GTAP_NLP_NO_JACSCALE"] = "1"
