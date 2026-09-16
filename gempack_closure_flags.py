@@ -1,1 +1,0 @@
-../../../../proyectos/dev-tools/equilibria-tools/scripts/gempack_closure_flags.py
