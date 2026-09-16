@@ -3,9 +3,27 @@ calibrated point (base) and matches the port monolith (shock), both seeded from 
 same Julia calibrated point. Since port ≡ Julia (jparity 100%), blocks ≡ Julia.
 """
 
+import os
+from pathlib import Path
+
 import pytest
 from pyomo.environ import value as V
 from tests.templates.gtap_logvalue._harness import load_sol
+
+
+def _julia_dump(nombre: str) -> Path | None:
+    """Localiza un volcado del port Julia, o None si no esta disponible.
+
+    Los .csv no se versionan (los regenera run_from_csv.jl). La ruta llega por
+    EQUILIBRIA_JULIA_DUMP_DIR; antes estaba fija al scratchpad de una sesion ya
+    terminada, asi que estas comparaciones se saltaban SIEMPRE y el gate del
+    track log-value pasaba por vacio.
+    """
+    raiz = os.environ.get("EQUILIBRIA_JULIA_DUMP_DIR")
+    if not raiz:
+        return None
+    ruta = Path(raiz) / nombre
+    return ruta if ruta.exists() else None
 
 
 def test_blocks_base_solves_and_reproduces_calibration():
@@ -49,15 +67,15 @@ def test_blocks_shock_matches_port_monolith():
     sol = load_sol("gtap7_3x3")
     mb = blk_shock(sol, 1.10, rordelta=1)
     assert mb["ok"], f"blocks shock not optimal: {mb['status']}"
-    # Port-monolith base seed (Julia dump). Cached per-session, not versioned —
-    # skip if absent (same guard the @slow 15x10 sibling below already uses).
-    wp3x3_b = Path(
-        "/private/tmp/claude-501/-Users-marmol--superset-worktrees-"
-        "b14cb643-ee65-449d-b3f0-be8003b60783-gray-carver/"
-        "45c8a8b5-8bb9-485a-8e5c-e498c5bb605d/scratchpad/wp3x3_b.csv"
-    )
-    if not wp3x3_b.exists():
-        pytest.skip("3x3 port-monolith dump absent (regenerate via run_from_csv.jl)")
+    # Port-monolith base seed (Julia dump). Not versioned: point
+    # EQUILIBRIA_JULIA_DUMP_DIR at the directory holding wp3x3_b.csv / wp15_b.csv
+    # (regenerate them via run_from_csv.jl), otherwise the comparison is skipped.
+    wp3x3_b = _julia_dump("wp3x3_b.csv")
+    if wp3x3_b is None:
+        pytest.skip(
+            "3x3 port-monolith dump absent: set EQUILIBRIA_JULIA_DUMP_DIR "
+            "(regenerate via run_from_csv.jl)"
+        )
     psol = load_solution(str(wp3x3_b))
     mp = port_shock(psol, 1.10, rordelta=1)["model"]
     b = mb["model"]
@@ -96,13 +114,13 @@ def test_capflex_converges_on_15x10():
 
     from equilibria.templates.gtap_logvalue.composer import solve, solve_shock
 
-    fix = Path(
-        "/private/tmp/claude-501/-Users-marmol--superset-worktrees-"
-        "b14cb643-ee65-449d-b3f0-be8003b60783-gray-carver/"
-        "45c8a8b5-8bb9-485a-8e5c-e498c5bb605d/scratchpad/wp15_b.csv"
-    )
-    if not fix.exists():
-        pytest.skip("15x10 calibrated dump absent (regenerate via run_from_csv.jl)")
+    fix = _julia_dump("wp15_b.csv")
+    if fix is None:
+        pytest.skip(
+            "15x10 calibrated dump absent: set EQUILIBRIA_JULIA_DUMP_DIR "
+            "(regenerate via run_from_csv.jl)"
+        )
+    assert fix is not None  # pytest.skip corta, pero el verificador no lo sabe
     old = H.FIX
     H.FIX = fix
     try:
