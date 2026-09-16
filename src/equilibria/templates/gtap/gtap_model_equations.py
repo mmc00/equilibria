@@ -3822,7 +3822,7 @@ class GTAPModelEquations:
             )
 
         def get_xe_init(m, r, i, rp):
-            # eq_xe_xw: xe = xw, so seed xe from same source as xw.
+            # xe == xw by construction, so seed xe from the same source as xw.
             # GAMS cal dump stores xw (CIF-based), not xe separately.
             if self.reference_snapshot:
                 ref_xw = self.reference_snapshot.xw.get((r, i, rp))
@@ -5595,15 +5595,6 @@ class GTAPModelEquations:
         # PRODUCTION BLOCK
         # ========================================================================
 
-        # Legacy Pyomo-only profit identity. Keep the component for compatibility
-        # with existing tooling/tests, but leave it inactive because GAMS uses the
-        # explicit xpeq/pxeq make block instead of an extra px == pp equation.
-        def prf_y_rule(model, r, a):
-            return model.px[r, a] == model.pp[r, a]
-
-        model.prf_y = Constraint(model.r, model.a, rule=prf_y_rule)
-        model.prf_y.deactivate()
-
         # Value-added and intermediate nests (GAMS exact formulation)
         # GAMS: nd(r,a,t) =e= and(r,a,t)*xp(r,a,t)*(px(r,a,t)/pnd(r,a,t))**sigmap(r,a)
         #                      * (axp(r,a,t)*lambdand(r,a,t))**(sigmap(r,a)-1)
@@ -5912,14 +5903,6 @@ class GTAPModelEquations:
 
         model.eq_xs = Constraint(model.r, model.i, rule=eq_xs_rule)
 
-        # Legacy Pyomo simplification. The CET block should determine ps/pd/pet
-        # without an extra identity constraint.
-        def eq_ps_rule(model, r, i):
-            return model.ps[r, i] == model.pd[r, i]
-
-        model.eq_ps = Constraint(model.r, model.i, rule=eq_ps_rule)
-        model.eq_ps.deactivate()
-
         # ========================================================================
         # TRADE - CET DOMESTIC/EXPORT ALLOCATION
         # ========================================================================
@@ -5972,59 +5955,6 @@ class GTAPModelEquations:
             )
 
         model.eq_xseq = Constraint(model.r, model.i, rule=eq_xseq_rule)
-
-        # Legacy Pyomo simplification. Aggregate export price should be governed
-        # by peeq/peteq, not an extra pet == ps identity.
-        def eq_pe_rule(model, r, i):
-            return model.pet[r, i] == model.ps[r, i]
-
-        model.eq_pe = Constraint(model.r, model.i, rule=eq_pe_rule)
-        model.eq_pe.deactivate()
-
-        # Legacy Pyomo-only route price identity. Keep the component for
-        # compatibility with tooling, but leave it inactive because GAMS
-        # determines route prices through peeq/peteq instead.
-        def eq_pe_route_rule(model, r, i, rp):
-            if r == rp:
-                return Constraint.Skip
-            bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
-            mirror_imports = self.params.benchmark.viws.get((rp, i, r), 0.0)
-            if bilateral_exports <= 0.0 and mirror_imports <= 0.0:
-                return Constraint.Skip
-            return model.pe[r, i, rp] == model.pet[r, i]
-
-        model.eq_pe_route = Constraint(
-            model.r, model.i, model.rp, rule=eq_pe_route_rule
-        )
-        model.eq_pe_route.deactivate()
-
-        # Aggregate exports over bilateral flows. GAMS uses xw directly in the
-        # CET block, so keep the same aggregation object here.
-        def eq_xet_agg_rule(model, r, i):
-            active_partners = [
-                rp
-                for rp in model.rp
-                if rp != r and self.params.benchmark.vxmd.get((r, i, rp), 0.0) > 0.0
-            ]
-            if not active_partners:
-                return model.xet[r, i] == 0.0
-            return model.xet[r, i] == sum(model.xw[r, i, rp] for rp in active_partners)
-
-        model.eq_xet_agg = Constraint(model.r, model.i, rule=eq_xet_agg_rule)
-        model.eq_xet_agg.deactivate()
-
-        # Legacy Pyomo helper. Keep the component for compatibility with
-        # snapshots/reporting, but do not include it in the active MCP.
-        def eq_xe_xw_rule(model, r, i, rp):
-            if r == rp:
-                return Constraint.Skip
-            bilateral_exports = self.params.benchmark.vxmd.get((r, i, rp), 0.0)
-            if bilateral_exports <= 0.0:
-                return Constraint.Skip
-            return model.xe[r, i, rp] == model.xw[r, i, rp]
-
-        model.eq_xe_xw = Constraint(model.r, model.i, model.rp, rule=eq_xe_xw_rule)
-        model.eq_xe_xw.deactivate()
 
         # ========================================================================
         # TRADE - CES ARMINGTON DOMESTIC/IMPORT
