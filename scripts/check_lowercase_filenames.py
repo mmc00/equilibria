@@ -17,6 +17,9 @@ from pathlib import Path
 ALLOWED_EXACT: set[str] = {
     "CHANGELOG.md",
     "CONTRIBUTING.md",
+    # Mismo convenio de raiz que CHANGELOG/CONTRIBUTING: GitHub y los lectores
+    # esperan ROADMAP.md en mayusculas junto a README.md.
+    "ROADMAP.md",
     "Makefile",
     "NOTICE",
     "README.md",
