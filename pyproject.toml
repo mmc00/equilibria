@@ -66,6 +66,11 @@ excel = ["openpyxl>=3.1", "xlrd>=2.0"]
 # Visualization
 viz = ["matplotlib>=3.7", "plotly>=5.0"]
 
+# Built-model disk cache (EQUILIBRIA_GTAP_MODEL_CACHE=1).  stdlib pickle cannot
+# serialize the nested var-init closures, so without cloudpickle the cache is a
+# silent no-op: save() warns and writes nothing.
+modelcache = ["cloudpickle>=3.0"]
+
 # Development
 dev = [
     "pytest>=8.0",
