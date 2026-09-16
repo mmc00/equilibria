@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+import pytest
 from cascade_layers import LAYER_SPECS, build_cmd, layer_by_name
 
 GDX = Path("/ref/out.gdx")
@@ -13,6 +14,7 @@ def _argv(name, dataset, period, gdx=GDX):
     return build_cmd(layer_by_name(name), dataset, period, gdx)
 
 
+@pytest.mark.needs_path
 def test_subprocess_layers_in_diagnostic_order():
     names = [l.name for l in LAYER_SPECS]
     # anchor-missing layers (holdfixed/tautology) sit right after mcp_pairing so a

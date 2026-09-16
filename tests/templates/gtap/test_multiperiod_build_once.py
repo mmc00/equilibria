@@ -170,6 +170,7 @@ def _seed_and_solve(build_fn):
     not (_GDX_10x7.exists() and DATA.exists()),
     reason="gtap7_10x7 dataset or reference GDX not present",
 )
+@pytest.mark.needs_path
 def test_solve_parity_10x7():
     sol_cur = _seed_and_solve(_build_current)
     sol_new = _seed_and_solve(_build_new)

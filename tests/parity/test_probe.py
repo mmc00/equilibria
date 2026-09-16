@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "parity"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
@@ -46,6 +48,7 @@ def test_key_files_are_real_paths():
 from _probe_queries import extract_solution, inject_solution
 
 
+@pytest.mark.needs_path
 def test_extract_inject_roundtrip_with_real_model():
     import pytest
 
@@ -70,6 +73,7 @@ def test_extract_inject_roundtrip_with_real_model():
 from _probe_queries import query_residuals, query_show
 
 
+@pytest.mark.needs_path
 def test_query_show_filters_by_region():
     import pytest
 
@@ -86,6 +90,7 @@ def test_query_show_filters_by_region():
     assert len(rows) >= 1
 
 
+@pytest.mark.needs_path
 def test_query_residuals_sorted_desc():
     import pytest
 
@@ -128,6 +133,7 @@ def test_seed_gams_reports_coverage():
 import subprocess
 
 
+@pytest.mark.needs_path
 def test_cli_show_runs_and_caches(tmp_path):
     import pytest
 
@@ -160,6 +166,7 @@ def test_cli_show_runs_and_caches(tmp_path):
     assert "cache hit" in r2.stdout.lower()
 
 
+@pytest.mark.needs_path
 def test_compare_ref_runs_against_head_itself(tmp_path):
     import pytest
 
@@ -239,6 +246,7 @@ def test_seed_gams_coverage_is_vs_exported_not_all_free_vars(tmp_path):
 from _probe_params import ALIAS_MAP, extract_params, resolve_gams_symbol
 
 
+@pytest.mark.needs_path
 def test_extract_params_with_real_model():
     import pytest
 
@@ -286,9 +294,11 @@ def test_diff_params_vs_gams_three_groups():
     assert "kappaf" not in {r["param"] for r in result["diverge"]}
 
 
+import pytest
 from _probe_params import diff_param_builds
 
 
+@pytest.mark.needs_path
 def test_diff_param_builds_runs_and_is_well_formed():
     """diff_param_builds returns a sorted list of {param,cells,changed,max_rel,worst}.
 

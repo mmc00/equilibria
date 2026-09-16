@@ -4,12 +4,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+import pytest
 from cascade_config import (
     family,
     resolve_periods,
     resolve_ref_gdx,
     scenario_for,
 )
+
+pytestmark = pytest.mark.needs_path
 
 
 def test_family_split():

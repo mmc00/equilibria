@@ -102,6 +102,7 @@ def _solve_15x10(reuse):
     return sol, count, res.get("shock", {}).get("code")
 
 
+@pytest.mark.needs_mumps
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_15x10 dataset not present")
 def test_symbolic_counter_increments():
     _, count, code = _solve_15x10(reuse=False)
@@ -110,6 +111,7 @@ def test_symbolic_counter_increments():
     print(f"reuse-OFF symbolic count={count}")
 
 
+@pytest.mark.needs_mumps
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_15x10 dataset not present")
 def test_reuse_fewer_symbolics_same_solution():
     sol_off, count_off, code_off = _solve_15x10(reuse=False)

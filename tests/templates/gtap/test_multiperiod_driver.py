@@ -7,6 +7,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
+import pytest
 from test_multiperiod_sets import _load_3x3_params
 
 
@@ -31,6 +32,7 @@ def _build_mp_model(p):
     return m
 
 
+@pytest.mark.needs_path
 def test_driver_runs_three_periods():
     """Basic smoke test: driver returns codes for all 3 periods."""
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
@@ -42,6 +44,7 @@ def test_driver_runs_three_periods():
     assert all("code" in res[t] for t in res)
 
 
+@pytest.mark.needs_path
 def test_solve_multiperiod_solves_m_not_slices():
     """TDD contract: PATH must have solved `m` itself (not temp slice models).
 

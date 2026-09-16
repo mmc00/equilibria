@@ -28,6 +28,7 @@ DATASETS = ["gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"]
 FLOOR = 0.90
 
 
+@pytest.mark.needs_path
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_ifsub_primary_block_consistent(dataset):
     from verify_ifsub_equivalence import compare_primary_across_modes
