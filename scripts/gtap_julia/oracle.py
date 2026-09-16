@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from equilibria._local_refs import julia_bin, julia_pkg_dir
 
 _HERE = Path(__file__).resolve().parent
 _JL_SCRIPT = _HERE / "run_julia_oracle.jl"
-_JULIA = Path.home() / ".juliaup" / "bin" / "julia"
-_PKG = Path.home() / "proyectos" / "GlobalTradeAnalysisProjectModelV7.jl"
+_JULIA = julia_bin()
+_PKG = julia_pkg_dir()
 
 
 def run_oracle(

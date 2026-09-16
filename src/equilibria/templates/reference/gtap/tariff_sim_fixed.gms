@@ -7,7 +7,7 @@ $setGlobal ifCSV 0
 $setGlobal ifCSVAppend 0
 
 * Include the working COMP model that we know works on NEOS
-$include "/Users/marmol/proyectos2/cge_babel/standard_gtap_7/comp.gms"
+$include "%EQUILIBRIA_CGE_BABEL_DIR%/standard_gtap_7/comp.gms"
 
 * -------------------------------------------------------------------------
 *  Now add the tariff shock scenario

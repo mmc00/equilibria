@@ -1,9 +1,9 @@
 # GTAP Baseline Inventory (2026-04-07)
 
 ## Dataset
-- Sets: /Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/data/9x10Dat.gdx
-- Benchmark: /Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/data/9x10Dat.gdx
-- Elasticities: /Users/marmol/proyectos2/equilibria/src/equilibria/templates/reference/gtap/data/default-9x10.gdx
+- Sets: src/equilibria/templates/reference/gtap/data/9x10Dat.gdx
+- Benchmark: src/equilibria/templates/reference/gtap/data/9x10Dat.gdx
+- Elasticities: src/equilibria/templates/reference/gtap/data/default-9x10.gdx
 - Closure: gtap_standard
 
 ## Totals

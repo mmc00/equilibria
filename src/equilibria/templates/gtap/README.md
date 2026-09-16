@@ -43,19 +43,19 @@ print(f"Walras check: {result.walras_value:.2e}")
 
 ### Display Data Information
 ```bash
-python scripts/gtap/run_gtap.py info --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx
+python scripts/gtap/run_gtap.py info --gdx-file $EQUILIBRIA_CGE_BABEL_DIR/standard_gtap_7/basedata-9x10.gdx
 ```
 
 ### Solve Baseline
 ```bash
-python scripts/gtap/run_gtap.py solve --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx --solver ipopt
+python scripts/gtap/run_gtap.py solve --gdx-file $EQUILIBRIA_CGE_BABEL_DIR/standard_gtap_7/basedata-9x10.gdx --solver ipopt
 ```
 
 ### Apply Shock
 ```bash
 # 10% tariff on agricultural imports from EastAsia to Oceania
 python scripts/gtap/run_gtap.py shock \
-    --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx \
+    --gdx-file $EQUILIBRIA_CGE_BABEL_DIR/standard_gtap_7/basedata-9x10.gdx \
     --variable rtms \
     --index '(Oceania,c_Crops,EastAsia)' \
     --value 0.10 \
@@ -265,7 +265,7 @@ python -m pytest tests/templates/gtap/ --cov=equilibria.templates.gtap
 ## Data Sources and References
 
 ### GTAP Standard 7 (9×10 Database)
-- **Location**: `/Users/marmol/proyectos2/cge_babel/standard_gtap_7/`
+- **Location**: `$EQUILIBRIA_CGE_BABEL_DIR/standard_gtap_7/`
 - **Base Data**: `basedata-9x10.gdx` (167KB) - SAM and benchmark values
 - **Parameters**: `default-9x10.gdx` (9.2KB) - Elasticities (CES, CET, Armington)
 - **Sets**: `sets-9x10.gdx` - Regions, commodities, activities, factors
@@ -305,8 +305,8 @@ The template includes a complete parity testing system to validate Python result
 ```bash
 # Run parity check comparing Python vs GAMS using standard_gtap_7 results
 python scripts/gtap/run_gtap_parity.py \
-    --gdx-file /Users/marmol/proyectos2/cge_babel/standard_gtap_7/basedata-9x10.gdx \
-    --gams-results /Users/marmol/proyectos2/cge_babel/standard_gtap_7/COMP.gdx \
+    --gdx-file $EQUILIBRIA_CGE_BABEL_DIR/standard_gtap_7/basedata-9x10.gdx \
+    --gams-results $EQUILIBRIA_CGE_BABEL_DIR/standard_gtap_7/COMP.gdx \
     --tolerance 1e-6
 ```
 

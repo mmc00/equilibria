@@ -4,7 +4,8 @@
 # the largest residual is the equation equilibria's root violates — the exact bug.
 # Args: <tariff> <point_csv> <out_txt>
 
-const PKG = "/Users/marmol/proyectos/GlobalTradeAnalysisProjectModelV7.jl"
+const PKG = get(ENV, "EQUILIBRIA_JULIA_PKG",
+                joinpath(homedir(), "proyectos", "GlobalTradeAnalysisProjectModelV7.jl"))
 include(joinpath(PKG, "src/GlobalTradeAnalysisProjectModelV7.jl"))
 using Main.GlobalTradeAnalysisProjectModelV7
 using NamedArrays, JuMP

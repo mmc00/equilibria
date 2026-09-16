@@ -34,7 +34,7 @@ Y usa este orden canonico de variables:
 
 Ese orden ya esta formalizado en:
 
-- [simple_open_parity_spec.py](/Users/marmol/proyectos/equilibria/src/equilibria/templates/simple_open_parity_spec.py)
+- [simple_open_parity_spec.py](src/equilibria/templates/simple_open_parity_spec.py)
 
 ## closure canonica de baseline
 
@@ -91,11 +91,11 @@ Como `SimpleOpen` no viene de una SAM calibrada, el benchmark esta definido por 
 
 Los niveles benchmark derivados de esos parametros ya se construyen en:
 
-- [simple_open_parity_spec.py](/Users/marmol/proyectos/equilibria/src/equilibria/templates/simple_open_parity_spec.py)
+- [simple_open_parity_spec.py](src/equilibria/templates/simple_open_parity_spec.py)
 
 Y el harness del Jacobiano ya consume exactamente esa misma especificacion en:
 
-- [simple_open_constraint_jacobian.py](/Users/marmol/proyectos/equilibria/src/equilibria/templates/simple_open_constraint_jacobian.py)
+- [simple_open_constraint_jacobian.py](src/equilibria/templates/simple_open_constraint_jacobian.py)
 
 ## por que esta guia importa antes de GAMS
 

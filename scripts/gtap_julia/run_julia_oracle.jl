@@ -4,7 +4,8 @@
 #            gsdfdat.har / gsdfset.har / gsdfpar.har.
 # Emits CSV rows: var,idx1,idx2,...,value  for a fixed VAR list, base and shock.
 
-const PKG = "/Users/marmol/proyectos/GlobalTradeAnalysisProjectModelV7.jl"
+const PKG = get(ENV, "EQUILIBRIA_JULIA_PKG",
+                joinpath(homedir(), "proyectos", "GlobalTradeAnalysisProjectModelV7.jl"))
 include(joinpath(PKG, "src/GlobalTradeAnalysisProjectModelV7.jl"))
 using Main.GlobalTradeAnalysisProjectModelV7
 using NamedArrays
