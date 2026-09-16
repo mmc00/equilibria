@@ -8,7 +8,13 @@ root=Path('src/equilibria/templates/reference/pep2')
 st=PEPModelCalibrator(sam_file=root/'data/SAM-V2_0.gdx',val_par_file=root/'data/VAL_PAR.xlsx').calibrate()
 m=build_pep_model(st,variant='base',form='mcp')
 mine=Counter(cc.parent_component().name.upper() for cc in m.component_data_objects(Constraint,active=True))
-gams={k.upper():v for k,v in json.load(open("/private/tmp/claude-501/-Users-marmol--superset-worktrees-b14cb643-ee65-449d-b3f0-be8003b60783-scratched-stag/93588e4b-b814-4740-a289-a468ed3a55bc/scratchpad/gams_inst.json")).items()}
+if len(sys.argv) < 2:
+    raise SystemExit(
+        "uso: mcp_diff_eq_families.py <gams_inst.json>\n"
+        "  el JSON lleva {familia_de_ecuacion: cardinalidad} del modelo GAMS,\n"
+        "  tal como lo emite un `gams ... --instance` o gdxdump sobre el .lst"
+    )
+gams={k.upper():v for k,v in json.load(open(sys.argv[1])).items()}
 allk=set(mine)|set(gams)
 print("family | GAMS | mine | diff")
 for k in sorted(allk, key=lambda x:(x!='WALRAS', int(x[2:]) if x[2:].isdigit() else 0)):
