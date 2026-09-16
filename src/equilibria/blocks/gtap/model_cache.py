@@ -14,9 +14,14 @@ THE CACHE KEY IS THE WHOLE POINT. A stale model would solve silently against out
 data or outdated equations, which is the same class of failure as a stale name cache:
 no exception, just a wrong answer. So the key covers BOTH inputs and code:
 
-  * the dataset id and the mtime+size of every .har/.prm it reads
-  * every closure field that reaches the build
+  * a sha256 of the benchmark CONTENT the build reads (not file paths: a path
+    digest missed load_from_gdx, filter_config, and restored-mtime datasets)
+  * a sha256 of every closure field, from model_dump() rather than an allowlist
   * a sha256 of the SOURCE of every module that builds the model
+
+When any of those cannot be computed, ``cache_key`` returns ``None`` and the
+caller skips the cache. Refusing to cache is safe; a key that does not cover what
+it claims to cover is not.
 
 The code digest is what makes this safe to leave on: edit any equation, any block, or
 the composer, and the key changes, so the next run rebuilds instead of loading a model
@@ -57,6 +62,17 @@ _CODE_MODULES = (
     "blocks/gtap/production_supply.py",
     "blocks/gtap/trade_armington_bilateral.py",
     "blocks/gtap/trade_cet.py",
+    # The blocks above describe the model symbolically; these translate that
+    # description into Pyomo objects, so they decide the built model just as
+    # directly.  A bounds/domain policy change in pyomo_backend.py changes every
+    # Var in the model without touching a single block.
+    "backends/pyomo_backend.py",
+    "backends/pyomo_equations.py",
+    "blocks/base.py",
+    "core/symbolic_equations.py",
+    "core/parameters.py",
+    "core/variables.py",
+    "core/sets.py",
 )
 
 _DATA_FILES = ("basedata.har", "sets.har", "default.prm", "baserate.har")
@@ -93,60 +109,105 @@ def _code_digest() -> str:
     return h.hexdigest()[:24]
 
 
-def _data_digest(dataset_dir) -> str:
-    """mtime+size of each input file. Cheap, and enough to catch a regenerated dataset.
+def _params_digest(params) -> str | None:
+    """Digest the benchmark CONTENT the build reads -- not the file paths.
 
-    Hashing the .har contents would be stricter but costs seconds on every run; mtime
-    changes whenever the file is rewritten, which is how these datasets get updated.
+    Returns ``None`` when the content cannot be reached, which DISABLES the cache
+    for that call.  That fallback is the whole point: the earlier version digested
+    ``params._source_paths`` and defaulted to ``{}``, so any loader that did not
+    populate it (``load_from_gdx`` does not) produced the sha256 of the empty
+    string -- a perfectly valid, perfectly STABLE key with zero data coverage.
+    Two different datasets collided and the second silently solved against the
+    first one's model.  A degenerate-but-stable key is the one failure mode a
+    cache key must never have; refusing to cache is always safe.
 
-    Accepts either a directory holding the standard filenames, or a mapping of
-    ``{label: path}`` as recorded on ``params._source_paths`` by ``load_from_har``
-    (the datasets are not always laid out as one directory per model).
+    Content-addressing also closes two holes that path+mtime could not:
+    ``filter_config`` rewrites ``params.benchmark`` after load (same files, different
+    model), and a restored/rsync'd dataset keeps its mtime while changing content.
+    This mirrors ``seed_cache.cache_key``, which digests the same arrays.
     """
-    h = hashlib.sha256()
-    if isinstance(dataset_dir, dict):
-        items = [(k, dataset_dir.get(k)) for k in sorted(dataset_dir)]
-    else:
-        d = Path(dataset_dir)
-        items = [(n, d / n) for n in _DATA_FILES]
-    for name, f in items:
-        h.update(str(name).encode())
-        if f is None:
-            h.update(b"none")
+    bm = getattr(params, "benchmark", None)
+    tx = getattr(params, "taxes", None)
+    if bm is None and tx is None:
+        return None
+    parts = []
+    srcs = (
+        ("evfb", getattr(bm, "evfb", None)),
+        ("vfm", getattr(bm, "vfm", None)),
+        ("vkb", getattr(bm, "vkb", None)),
+        ("vdfb", getattr(bm, "vdfb", None)),
+        ("vmfb", getattr(bm, "vmfb", None)),
+        ("vst", getattr(bm, "vst", None)),
+        ("rtf", getattr(tx, "rtf", None)),
+        ("kappaf_activity", getattr(tx, "kappaf_activity", None)),
+    )
+    seen_any = False
+    for name, src in srcs:
+        parts.append(name)
+        if src is None:
+            parts.append("none")
             continue
         try:
-            st = Path(f).stat()
-            h.update(f"{st.st_mtime_ns}:{st.st_size}".encode())
-        except OSError:
-            h.update(b"missing")
-    return h.hexdigest()[:24]
+            items = sorted((str(k), round(float(v), 10)) for k, v in dict(src).items())
+        except (TypeError, ValueError):
+            return None  # unreadable -> do not cache rather than key on nothing
+        seen_any = True
+        parts.append(hashlib.sha256(repr(items).encode()).hexdigest()[:16])
+    if not seen_any:
+        return None
+    return hashlib.sha256(_SEP.join(parts).encode()).hexdigest()[:24]
+
+
+def _closure_digest(closure) -> str | None:
+    """Digest EVERY closure field, not a hand-kept allowlist.
+
+    ``GTAPClosureConfig`` is a frozen pydantic model with ``extra="forbid"``, so
+    ``model_dump()`` enumerates the fields exhaustively and a newly added field is
+    covered the day it appears.  The previous allowlist of 9 fields omitted
+    ``va_subsidy_basis``, which selects ``ftrv + fbep`` vs ``ftrv - fbep`` in
+    ``_derived_params._va_wedge`` and moves the VA-vs-intermediates weighting
+    (0.571 vs 0.679 on subsidised agriculture) -- two closures differing only in
+    that field shared a key.
+    """
+    dump = getattr(closure, "model_dump", None)
+    if dump is None:
+        return None
+    try:
+        data = dump()
+    except Exception:
+        return None
+    try:
+        return hashlib.sha256(
+            repr(sorted((str(k), repr(v)) for k, v in data.items())).encode()
+        ).hexdigest()[:24]
+    except Exception:
+        return None
 
 
 def cache_key(
-    dataset_id: str,
-    dataset_dir,
+    params,
     closure,
     residual_region: str,
     base_calibrated: bool,
     ref_gdx=None,
-) -> str:
-    """Key covering the inputs AND the code that turn into the built model."""
+) -> str | None:
+    """Key covering the inputs AND the code that turn into the built model.
+
+    Returns ``None`` when any component cannot be computed -- the caller must then
+    skip the cache entirely.  Every ``None`` path here is a case where a key could
+    still have been produced but would not have covered what it claims to cover.
+    """
+    pd = _params_digest(params)
+    cd = _closure_digest(closure)
+    if pd is None or cd is None:
+        return None
     fields = [
-        dataset_id,
         residual_region,
         str(bool(base_calibrated)),
         # The ref GDX only seeds; its presence still changes the built model's values.
         "gdx" if ref_gdx is not None else "nogdx",
-        str(getattr(closure, "name", "")),
-        str(getattr(closure, "closure_type", "")),
-        str(getattr(closure, "savf_flag", "")),
-        str(bool(getattr(closure, "if_sub", False))),
-        str(getattr(closure, "capital_mobility", "")),
-        str(getattr(closure, "numeraire", "")),
-        str(bool(getattr(closure, "fix_endowments", False))),
-        str(bool(getattr(closure, "fix_taxes", False))),
-        str(bool(getattr(closure, "fix_technology", False))),
-        _data_digest(dataset_dir),
+        cd,
+        pd,
         _code_digest(),
     ]
     return "model-" + hashlib.sha256(_SEP.join(fields).encode()).hexdigest()[:24]

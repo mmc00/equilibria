@@ -2784,17 +2784,6 @@ class GTAPParameters:
                 (`imptx = (VMSB-VCIF)/VCIF`, etc.); pass ``None`` (or omit)
                 in that case.
         """
-        # Remember where the data came from. The built-model disk cache
-        # (blocks/gtap/model_cache.py) keys on these files' mtime+size so a
-        # regenerated dataset can never be served from a stale cached model;
-        # build_block_model only receives `params`, so this is where the paths live.
-        self._source_paths = {
-            "basedata": basedata_path,
-            "sets": sets_path,
-            "default": default_path,
-            "baserate": baserate_path,
-        }
-
         self.sets.load_from_har(sets_path, default_path=default_path)
         self.elasticities.load_from_har(default_path, self.sets)
         self.benchmark.load_from_har(basedata_path, self.sets)

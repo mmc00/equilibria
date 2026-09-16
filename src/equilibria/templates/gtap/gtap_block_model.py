@@ -419,18 +419,16 @@ def build_block_model(
     _mc = None
     _mc_key = None
     if _model_cache.enabled():
-        _mc = _model_cache
-        _mc_key = _mc.cache_key(
-            str(getattr(sets, "dataset_id", "") or getattr(params, "dataset_id", "")),
-            getattr(params, "_source_paths", {}),
-            closure,
-            residual_region,
-            base_calibrated,
-            ref_gdx=ref_gdx,
+        # cache_key returns None when it cannot cover every input that shapes the
+        # model; that means SKIP the cache, never fall back to a partial key.
+        _mc_key = _model_cache.cache_key(
+            params, closure, residual_region, base_calibrated, ref_gdx=ref_gdx
         )
-        _cached = _mc.load(_mc_key)
-        if _cached is not None:
-            return _cached, mp
+        if _mc_key is not None:
+            _mc = _model_cache
+            _cached = _mc.load(_mc_key)
+            if _cached is not None:
+                return _cached, mp
 
     m = mp.build_sets()
     mp.build_vars(m)
