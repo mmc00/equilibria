@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
@@ -674,13 +673,3 @@ def evaluate_strict_gams_baseline_compatibility(
         state_anchors=state_anchors,
         results_anchors=results_anchors,
     )
-
-
-def save_baseline_compatibility_report(
-    report: BaselineCompatibilityReport,
-    path: Path | str,
-) -> None:
-    """Persist compatibility report as JSON."""
-    out_path = Path(path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(report.to_dict(), indent=2))

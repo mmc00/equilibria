@@ -113,13 +113,6 @@ def load_solution(csv: Path | str) -> dict[str, Any]:
     return {"all": var, "par": par, "sets": sets}
 
 
-def build_sets_on(model, sol: dict[str, Any]) -> dict[str, list[str]]:
-    """Attach Pyomo Sets from the dumped set members and return the members dict."""
-    sets = sol["sets"]
-    # Julia set names are lower-case already (reg, comm, acts, endw, marg, endws...)
-    return sets
-
-
 def seed_model(model, sol: dict[str, Any]) -> None:
     """Build variables and seed each cell to Julia's solved value."""
     sets = sol["sets"]

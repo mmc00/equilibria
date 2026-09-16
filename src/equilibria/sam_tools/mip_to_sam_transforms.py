@@ -37,24 +37,6 @@ def _get_va_aggregate_row(sam: Sam) -> tuple[str, str] | None:
     return None
 
 
-def _get_fd_columns(sam: Sam) -> list[tuple[str, str]]:
-    """Get final demand columns (those with FD category or specific labels)."""
-    fd_cols: list[tuple[str, str]] = []
-    for cat, elem in sam.col_keys:
-        cat_lower = norm_text_lower(cat)
-        elem_lower = norm_text_lower(elem)
-        if cat_lower == "fd" or elem_lower in {
-            "hh",
-            "gov",
-            "gvt",
-            "inv",
-            "exp",
-            "export",
-        }:
-            fd_cols.append((cat, elem))
-    return fd_cols
-
-
 def _get_sector_columns(sam: Sam) -> list[tuple[str, str]]:
     """Get sector (J) columns from SAM."""
     return [(cat, elem) for cat, elem in sam.col_keys if norm_text_lower(cat) == "j"]

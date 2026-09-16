@@ -65,7 +65,6 @@ def to_array(data: dict, elem_lists: list[list[str]], default: float = 0.0):
     bridge's itertools.product ordering). Missing cells get ``default`` — the
     same semantics as the monolith's create_indexed_param ``default=``.
     """
-    import itertools
 
     import numpy as np
 

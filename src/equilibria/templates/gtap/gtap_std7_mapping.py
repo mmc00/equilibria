@@ -289,18 +289,6 @@ GTAP_STD7_SET_NAMES = {
 }
 
 
-def get_set_name(internal_name: str) -> str:
-    """Map internal set name to GTAP Std 7 native name.
-
-    Args:
-        internal_name: Internal set name like 'r', 'i', 'a', 'f'
-
-    Returns:
-        GTAP Std 7 set name like 'REG', 'COMM', 'ACTS', 'ENDW'
-    """
-    return GTAP_STD7_SET_NAMES.get(internal_name.lower(), internal_name.upper())
-
-
 # =============================================================================
 # Index Mapping
 # =============================================================================
@@ -312,15 +300,3 @@ GTAP_STD7_SET_NAMES = {
     "f": "ENDW",  # Endowments (factors)
     "m": "MARG",  # Margins
 }
-
-
-def map_index_names(internal_sets: tuple[str, ...]) -> tuple[str, ...]:
-    """Map internal set names to GTAP Std 7 set names.
-
-    Args:
-        internal_sets: Tuple like ('r', 'a', 'i')
-
-    Returns:
-        GTAP Std 7 names like ('REG', 'ACTS', 'COMM')
-    """
-    return tuple(GTAP_STD7_SET_NAMES.get(s, s.upper()) for s in internal_sets)

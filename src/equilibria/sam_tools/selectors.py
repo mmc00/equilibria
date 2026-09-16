@@ -68,31 +68,3 @@ def matches_selector(key: tuple[str, str], selector: tuple[str, str]) -> bool:
     cat_ok = sel_cat == "*" or cat == sel_cat
     elem_ok = sel_elem == "*" or elem == sel_elem
     return cat_ok and elem_ok
-
-
-def indices_for_selector(
-    keys: list[tuple[str, str]],
-    selector_spec: Any,
-    axis_name: str,
-) -> list[int]:
-    """Return indices of keys selected by one wildcard expression."""
-    selector = parse_selector(selector_spec)
-    indices = [i for i, key in enumerate(keys) if matches_selector(key, selector)]
-    if not indices:
-        raise ValueError(f"Selector matched no {axis_name} keys: {selector_spec!r}")
-    return indices
-
-
-def index_for_key(
-    keys: list[tuple[str, str]],
-    key_spec: Any,
-    field_name: str,
-) -> int:
-    """Return index of one exact key specification."""
-    target = parse_key_spec(key_spec, field_name)
-    target_norm = (norm_text_lower(target[0]), norm_text_lower(target[1]))
-    for idx, key in enumerate(keys):
-        key_norm = (norm_text_lower(key[0]), norm_text_lower(key[1]))
-        if key_norm == target_norm:
-            return idx
-    raise ValueError(f"Key not found for {field_name}: {target}")

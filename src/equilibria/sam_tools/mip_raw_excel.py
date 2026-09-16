@@ -342,25 +342,3 @@ class MIPRawSAM(Sam):
             source_path=source_path or Path("<memory>"),
             source_format=source_format,
         )
-
-
-def load_mip_raw_excel_table(
-    input_path: Path,
-    *,
-    sheet_name: str = "MIP",
-    va_row_label: str | None = None,
-    import_row_label: str | None = None,
-) -> SamTable:
-    """Load a MIP raw workbook as ``SamTable``."""
-    kwargs: dict[str, Any] = {}
-    if va_row_label is not None:
-        kwargs["va_row_label"] = va_row_label
-    if import_row_label is not None:
-        kwargs["import_row_label"] = import_row_label
-
-    sam = MIPRawSAM.from_mip_excel(
-        path=input_path,
-        sheet_name=sheet_name,
-        **kwargs,
-    )
-    return sam.to_table(source_path=input_path, source_format="mip_raw_excel")

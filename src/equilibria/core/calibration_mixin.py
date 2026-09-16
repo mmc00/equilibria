@@ -274,21 +274,6 @@ class CalibrationMixin:
 # Helper functions for common calibration operations
 
 
-def compute_ces_shares(factor_payments, axis=0):
-    """Compute CES share parameters from factor payments.
-
-    Args:
-        factor_payments: Matrix of factor payments [factors, sectors]
-        axis: Axis along which to compute shares (0=factors, 1=sectors)
-
-    Returns:
-        Share parameters that sum to 1.0
-    """
-    total = factor_payments.sum(axis=axis, keepdims=True)
-    total = np.where(total < 1e-10, 1e-10, total)
-    return factor_payments / total
-
-
 def compute_io_coefficients(intermediate_inputs, total_output):
     """Compute input-output coefficients.
 
@@ -303,47 +288,3 @@ def compute_io_coefficients(intermediate_inputs, total_output):
     output_expanded = total_output[np.newaxis, :]
     output_expanded = np.where(output_expanded < 1e-10, 1e-10, output_expanded)
     return intermediate_inputs / output_expanded
-
-
-def compute_armington_shares(domestic_supply, imports):
-    """Compute Armington domestic and import shares.
-
-    Args:
-        domestic_supply: Vector [commodities]
-        imports: Vector [commodities]
-
-    Returns:
-        Tuple of (alpha_D, alpha_M) share vectors
-    """
-    total = domestic_supply + imports
-    total = np.where(total < 1e-10, 1e-10, total)
-    alpha_D = domestic_supply / total
-    alpha_M = imports / total
-    return alpha_D, alpha_M
-
-
-def compute_les_parameters(consumption, prices, income, subsistence_ratio=0.1):
-    """Compute LES parameters from consumption data.
-
-    Args:
-        consumption: Vector of consumption quantities [commodities]
-        prices: Vector of prices [commodities]
-        income: Total income
-        subsistence_ratio: Fraction of income for subsistence
-
-    Returns:
-        Tuple of (gamma, beta) - subsistence and marginal budget shares
-    """
-    # Subsistence consumption (minimum requirements)
-    total_subsistence = income * subsistence_ratio
-    gamma = consumption * 0.5  # Assume 50% is subsistence (simplified)
-
-    # Marginal budget shares
-    expenditure = consumption * prices
-    beta = (
-        (expenditure / expenditure.sum())
-        if expenditure.sum() > 0
-        else np.ones_like(expenditure) / len(expenditure)
-    )
-
-    return gamma, beta
