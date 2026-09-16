@@ -27,6 +27,7 @@ from pathlib import Path
 # Paths whose tracked content determines gate results.
 INPUT_TREES = [
     "src/equilibria/templates/gtap",
+    "src/equilibria/blocks/gtap",
     "src/equilibria/templates/gtap_logvalue",
     "src/equilibria/blocks/gtap_logvalue",
     "scripts/gtap",
