@@ -32,7 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
-sys.path.insert(0, str(path_capi_src() or ''))
+sys.path.insert(0, str(path_capi_src()))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import (

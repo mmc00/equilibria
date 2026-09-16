@@ -18,6 +18,7 @@
 [Installation](#installation) •
 [Quick Start](#quick-start) •
 [Documentation](https://equilibria.readthedocs.io/) •
+[Roadmap](ROADMAP.md) •
 [Examples](#examples) •
 [Contributing](#contributing)
 

@@ -61,10 +61,14 @@ def nus333_dir() -> Path:
     return _por_entorno("EQUILIBRIA_NUS333_DIR", "~/Downloads/10284")
 
 
-def path_capi_src() -> Path | None:
-    """``src`` del checkout de path-capi-python, o ``None`` si no esta."""
-    ruta = _por_entorno("EQUILIBRIA_PATH_CAPI_SRC", "~/proyectos/path-capi-python/src")
-    return ruta if ruta.exists() else None
+def path_capi_src() -> Path:
+    """``src`` del checkout de path-capi-python. Puede no existir.
+
+    Devuelve siempre un ``Path`` —nunca ``None``— porque quien llama suele
+    encadenar ``.exists()`` a nivel de modulo; devolver ``None`` rompia la
+    recoleccion de tests en una maquina sin el checkout.
+    """
+    return _por_entorno("EQUILIBRIA_PATH_CAPI_SRC", "~/proyectos/path-capi-python/src")
 
 
 def cge_babel_dir() -> Path:
