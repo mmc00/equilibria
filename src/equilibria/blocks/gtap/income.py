@@ -149,9 +149,29 @@ class IncomeBlock(Block):
                 upper=float("inf"),
             )
 
+        _xscale = dp.xscale_data(p, s)
+
+        def _xscale_at(r_, a_):
+            return _xscale.get((r_, a_), 1.0)
+
+        ytax_init = np.array(
+            [
+                [dp.ytax_stream_bench(p, s, r, str(g), xscale=_xscale_at) for g in gy]
+                for r in regions
+            ]
+        )
+        _gy_names = [str(g) for g in gy]
+        _dt = _gy_names.index("dt") if "dt" in _gy_names else None
+        # eq_ytax_ind (7459): ytax_ind = ytaxTot - ytax[dt].
+        ytax_ind_init = ytax_init.sum(axis=1) - (
+            ytax_init[:, _dt] if _dt is not None else np.zeros(nr)
+        )
+
         ones_r = np.ones(nr)
         # Income vars: within=Reals FREE (monolith 4722-4749).
-        regy_init = np.array([self._regy_init(r) for r in regions])
+        regy_init = np.array(
+            [self._regy_init(r, ytax_ind_init[k]) for k, r in enumerate(regions)]
+        )
         _q("regy", ("r",), regy_init, lower=float("-inf"), dom="Reals")
         _q(
             "yc",
@@ -183,9 +203,21 @@ class IncomeBlock(Block):
         )
         # ytax/ytaxTot/ytax_ind/ytaxshr: within=Reals FREE (4756-4782).
         ny = len(gy)
-        _q("ytax", ("r", "gy"), np.zeros((nr, ny)), lower=float("-inf"), dom="Reals")
-        _q("ytaxTot", ("r",), np.zeros(nr), lower=float("-inf"), dom="Reals")
-        _q("ytax_ind", ("r",), np.zeros(nr), lower=float("-inf"), dom="Reals")
+        # Las diez corrientes se siembran UNA POR UNA desde el benchmark (monolito
+        # get_ytax_stream_init, 3721). Sembrarlas en cero dejaba eq_ytax violada en
+        # el arranque para mt/et/fs --las tres que no salen de una diferencia de
+        # valores del SAM sino de una tasa por una base-- con residual hasta 0.32 en
+        # eq_ytax[ROW,mt]. Eso sesgaba ytax_ind = ytaxTot - ytax[dt] y, por la
+        # identidad eq_regy, sesgaba regy (2.1% en EGY, 0.5-1.2% en el resto).
+        _q("ytax", ("r", "gy"), ytax_init, lower=float("-inf"), dom="Reals")
+        _q(
+            "ytaxTot",
+            ("r",),
+            ytax_init.sum(axis=1),
+            lower=float("-inf"),
+            dom="Reals",
+        )
+        _q("ytax_ind", ("r",), ytax_ind_init, lower=float("-inf"), dom="Reals")
         _q("ytaxshr", ("r", "gy"), np.zeros((nr, ny)), lower=float("-inf"), dom="Reals")
         # gdpmp/rgdpmp: NonNeg lb=0 (4828-4838). pgdpmp: price floor 1e-3 (4840).
         gdp_init = np.array([self._gdpmp_init(r) for r in regions])
@@ -690,10 +722,18 @@ class IncomeBlock(Block):
         dep = float(bm.vdep.get(r, 0.0))
         return max(fi - dep, 0.0)
 
-    def _regy_init(self, r):
-        return self._facty_init(r) + dp._compute_ytax_ind_bench(
-            self.params, self.sets, r
-        )
+    def _regy_init(self, r, ytax_ind=None):
+        """``regy = facty + ytax_ind`` — la identidad de ``eq_regy`` (monolito 7465).
+
+        ``ytax_ind`` llega ya calculado como la suma de las corrientes sembradas
+        menos ``dt``, que es lo que ``eq_ytax_ind`` exige. La forma agregada de
+        :func:`dp._compute_ytax_ind_bench` suma los mismos conceptos pero por otra
+        via (``dt`` no entra dividido por ``xscale``), asi que difiere de la suma de
+        corrientes; usar aquella dejaba ``eq_regy`` sin cerrar en el seed.
+        """
+        if ytax_ind is None:
+            ytax_ind = dp._compute_ytax_ind_bench(self.params, self.sets, r)
+        return self._facty_init(r) + float(ytax_ind)
 
     def _yc_init_scalar(self, r, calib):
         betap = calib["betap"].get((r,), 0.0)
