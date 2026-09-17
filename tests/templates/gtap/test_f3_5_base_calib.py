@@ -30,8 +30,17 @@ def _ref_slice(period: str) -> dict[tuple[str, tuple], float]:
 
     out: dict[tuple[str, tuple], float] = {}
     for vn in ("pft", "xf", "xp", "va", "nd", "xda", "xma", "xaa"):
+        # Un simbolo ausente del GDX es legitimo (se salta); que NO se pueda
+        # leer el GDX no lo es. Sin esta distincion, un gdxdump ausente dejaba
+        # el dict vacio y el test moria con un KeyError opaco tres lineas mas
+        # abajo, en vez de decir que falta la herramienta.
         try:
             g = gams_levels(REF_GDX, vn)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"no se pudo leer {REF_GDX} ({exc}); gdxdump es imprescindible "
+                "para este test — marcalo con @pytest.mark.needs_gdxdump"
+            ) from exc
         except Exception:
             continue
         for fk, val in g.items():
@@ -41,6 +50,7 @@ def _ref_slice(period: str) -> dict[tuple[str, tuple], float]:
     return out
 
 
+@pytest.mark.needs_gdxdump
 def test_settled_base_land_response_matches_gempack():
     """The mechanism, on the reference: shock-vs-SETTLED-base land price is small
     (~-3%, near GEMPACK's -2.68%); shock-vs-RAW-base is the -18% contaminated path."""
