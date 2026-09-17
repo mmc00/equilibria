@@ -41,6 +41,67 @@ PERIODS = ("base", "check", "shock")
 
 
 # ---------------------------------------------------------------------------
+# Keep the built model out of the GC's reach during the solve
+# ---------------------------------------------------------------------------
+@contextlib.contextmanager
+def _gc_frozen_permanent_graph(enabled: bool = True):
+    """Move everything alive at entry to the GC's permanent generation.
+
+    By the time we solve, the Pyomo model is a huge, permanent object graph:
+    MEASURED on gtap7_20x41, 56.2M tracked objects. Every full (gen-2) pass
+    walks all of them, and CPython schedules those passes by ALLOCATION counts,
+    not by how much is actually collectable — so the solve's own allocation
+    churn keeps triggering full walks over a graph that never has garbage in it.
+
+    MEASURED cost of that on gtap7_20x41: gen-2 ran 42 times at ~3.4 s each =
+    2.43 min, which is 94% of all GC time and ~29% of the wall. gen-0 and gen-1
+    together cost 0.07 min over 243k collections — i.e. the generational
+    hypothesis is right, it is the FULL passes that hurt.
+
+    `gc.freeze()` moves the currently-tracked objects into a permanent set that
+    collections skip. It does NOT disable the GC: cyclic garbage created after
+    the freeze is still collected normally (verified: a frozen 4M-object graph
+    plus 600k fresh cyclic objects still reclaimed all 600k, at 32 ms instead of
+    130 ms). That is the property that makes this safe where `gc.disable()`
+    would not be — the solve does create cycles, and they still go away.
+
+    MEASURED end-to-end on gtap7_20x41, 3 interleaved repetitions, PATH:
+    wall 8.49 → 7.81 min median (-0.68, 8%), gen-2 2.43 → 1.89 min, with the
+    solution sha256 IDENTICAL across all 6 runs. Freezing changes what the GC
+    walks, never what the model computes.
+
+    Counter-intuitive but expected: gen-2 runs MORE often frozen (42 → 73) and
+    still costs less, because each pass no longer traverses the 40M permanent
+    objects. Total collections are unchanged (~243k), i.e. nothing stopped
+    being collected.
+
+    The unfreeze is in a finally: leaving objects frozen would silently leak
+    them for the rest of the process, which matters because callers solve
+    several models per session.
+
+    KNOWN LIMITATION: gc.unfreeze() is GLOBAL — CPython offers no way to release
+    only what this call froze, so if a CALLER had frozen objects of its own
+    before entering, those come back under the GC when we exit (verified: a
+    pre-existing frozen set of 6325 goes to 0 after our unfreeze). Nothing in
+    this repo calls gc.freeze(), so today the effect is nil; the consequence if
+    someone adds one is a slower GC, never a wrong answer.
+    """
+    if not enabled:
+        yield
+        return
+    import gc
+
+    # Promote what is alive NOW to gen-2 first; freeze() only moves the
+    # permanent generation, so without this the young survivors stay walkable.
+    gc.collect()
+    gc.freeze()
+    try:
+        yield
+    finally:
+        gc.unfreeze()
+
+
+# ---------------------------------------------------------------------------
 # Lazy-load run_gtap (mirrors how diff_altertax.py does it)
 # ---------------------------------------------------------------------------
 def _load_run_gtap():
@@ -2632,7 +2693,7 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
     return hf
 
 
-def solve_multiperiod(
+def _solve_multiperiod_inner(
     m,
     params,
     closure,
@@ -3922,3 +3983,51 @@ def solve_multiperiod(
     freeze_period(m, "shock")
 
     return results
+
+
+def solve_multiperiod(
+    m,
+    params,
+    closure,
+    *,
+    ref_gdx=None,
+    skip_base_solve: bool = False,
+    mute_welfare: bool = True,
+    seed_from_prior: bool = False,
+    holdfix_cd: bool = True,
+    mode: str = "altertax",
+    solve_check: bool = False,
+    settle_only: bool = False,
+) -> dict[str, dict[str, Any]]:
+    """Solve base → check → shock, with the built model hidden from the GC.
+
+    Thin wrapper over _solve_multiperiod_inner. The model handed to us is a
+    large PERMANENT object graph (56.2M tracked objects on gtap7_20x41) that the
+    GC otherwise re-walks on every full pass, costing ~29% of the wall for
+    nothing — it never contains garbage. See _gc_frozen_permanent_graph.
+
+    MEASURED, gtap7_20x41, 3 interleaved repetitions: wall 8.49 → 7.81 min
+    median (-0.68, 8%), identical solution sha256 in all 6 runs.
+
+    This is a wrapper and not a `with` inside the body so that the unfreeze is
+    guaranteed on EVERY exit — both returns and any exception — without
+    re-indenting ~1000 lines of solve logic.
+    """
+    import os
+
+    with _gc_frozen_permanent_graph(
+        os.environ.get("EQUILIBRIA_GTAP_GC_FREEZE", "1") != "0"
+    ):
+        return _solve_multiperiod_inner(
+            m,
+            params,
+            closure,
+            ref_gdx=ref_gdx,
+            skip_base_solve=skip_base_solve,
+            mute_welfare=mute_welfare,
+            seed_from_prior=seed_from_prior,
+            holdfix_cd=holdfix_cd,
+            mode=mode,
+            solve_check=solve_check,
+            settle_only=settle_only,
+        )
