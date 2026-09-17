@@ -651,12 +651,21 @@ def _refresh_macro_initial_state(model: ConcreteModel, ctx: ScalingContext) -> N
                     value(model.betag[r]) * value(model.phi[r]) * regy_raw
                 )
         if hasattr(model, "rsav") and r in model.rsav:
-            # Prefer SAM benchmark save directly so that eq_yi holds at init.
-            # Using betas*phi*regy_raw can drift if regy_raw ≠ regy_gams.
-            # GAMS cal.gms sets rsav.l(r) = save(r) (benchmark identity).
-            save_bench = float(ctx.params.benchmark.save.get(str(r), 0.0))
-            if save_bench > 0.0:
-                model.rsav[r].set_value(save_bench)
+            # GAMS cal.gms fija rsav.l(r) = save(r), sin condicion de signo, asi
+            # que se usa el save del benchmark SIEMPRE que exista --incluido cuando
+            # es NEGATIVO--. La rama de respaldo (betas*phi*regy_raw) deriva si
+            # regy_raw no coincide con el regY de GAMS, y solo vale cuando el SAM no
+            # trae `save`.
+            #
+            # El guard era `> 0.0`, asi que una region DISSAVER caia al respaldo: en
+            # gtap7_3x4, EGY (save=-0.0123) se sembraba en -0.01208, un 2.1% fuera de
+            # GAMS. En `pure` el solve lo absorbe, pero en `altertax` --donde los
+            # impuestos se mueven y regY se recalcula-- arrancar sesgado manda la
+            # region entera a otra rama: 15 celdas de EGY ~1% fuera, y el gate NLP de
+            # bloques cae de 99.8% a 98.3%.
+            save_bench = ctx.params.benchmark.save.get(str(r), None)
+            if save_bench is not None and abs(float(save_bench)) > 1e-12:
+                model.rsav[r].set_value(float(save_bench))
             else:
                 model.rsav[r].set_value(
                     value(model.betas[r]) * value(model.phi[r]) * regy_raw
