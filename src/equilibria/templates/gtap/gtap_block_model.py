@@ -19,15 +19,14 @@ live in ``gtap_benchmark_scaling`` and are shared with the monolith, which keeps
 them as one-line delegators — they mutate the model's VarData by name
 (``hasattr``-guarded), so they operate correctly on the block model.
 
-Lo que TODAVIA ata este composer al monolito es distinto del escalado: la
-reflexion multi-periodo heredada de ``GTAPMultiPeriodModel`` construye su propio
-SP llamando a ``GTAPModelEquations.build_model()``, asi que
-``build_equations_intra`` / ``build_equations_all_periods`` le hacen un swap
-temporal de ese metodo. Ver ``docs/architecture/monolito_vs_bloques.md``.
+Este modulo ya NO importa el monolito. La reflexion multi-periodo heredada de
+``GTAPMultiPeriodModel`` pide su modelo SP a ``_build_sp()``, que esta clase
+sobrescribe; antes habia que hacerle monkey-patch a
+``GTAPModelEquations.build_model``. Ver ``docs/architecture/monolito_vs_bloques.md``.
 
 :class:`GTAPBlockMultiPeriodModel` subclasses ``GTAPMultiPeriodModel`` and swaps the
-single-period model source from ``GTAPModelEquations().build_model()`` to the
-block-composed SP model, so ``build_vars`` / ``build_equations_intra`` /
+single-period model source to the block-composed SP model by overriding
+``_build_sp()``, so ``build_vars`` / ``build_equations_intra`` /
 ``build_equations_fisher`` / ``seed_all_periods`` and the whole ``solve_multiperiod``
 path are reused verbatim.
 
@@ -50,7 +49,6 @@ from equilibria.templates.gtap.gtap_benchmark_scaling import (
     align_xi_xaa_post_scaling,
     apply_production_scaling,
 )
-from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
 
 if TYPE_CHECKING:
@@ -277,9 +275,29 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
     """
 
     def _block_sp(self) -> ConcreteModel:
+        """El modelo SP compuesto por bloques.
+
+        Punto de extension de las SUBCLASES: ``GTAPLogLevelsMultiPeriodModel`` lo
+        sobrescribe para entregar el modelo log-envuelto. Mantener el nombre es lo
+        que hace que esa cadena siga funcionando.
+        """
         return build_block_single_period(
             self.params, self.sets, self.closure, self.residual_region
         )
+
+    def _build_sp(self) -> ConcreteModel:
+        """El modelo SP que la reflexion multiperiodo del padre va a leer.
+
+        Unico punto de divergencia con ``GTAPMultiPeriodModel``: el padre llama a
+        este metodo cada vez que necesita un SP, asi que sobrescribirlo basta para
+        que TODA su maquinaria --reflexion de Vars, sustitucion de Constraints,
+        filas Fisher-- opere sobre bloques. Antes esto se conseguia haciendole
+        monkey-patch a ``GTAPModelEquations.build_model``.
+
+        Delega en ``_block_sp`` para que las subclases sigan teniendo un unico
+        punto que sobrescribir.
+        """
+        return self._block_sp()
 
     def build_vars(self, m: ConcreteModel) -> None:
         """Reflect Var families from the block SP model (×3 periods).
@@ -337,43 +355,6 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
 
             doc = v.doc if hasattr(v, "doc") and v.doc else ""
             setattr(m, name, Var(new_index, within=domain, initialize=init_fn, doc=doc))
-
-    def build_equations_intra(self, m: ConcreteModel, period: str) -> None:
-        """Reflect Constraint families from the block SP model, indexed by period.
-
-        The parent's reflection builds its own fresh ``GTAPModelEquations`` SP
-        via ``build_model()`` internally, so to reuse its ~150-line
-        substitution/merge logic verbatim we make that ``build_model()`` return the
-        block-composed SP for the duration of this call. Done through ``setattr`` so
-        the swap is a scoped, restored override of one method — the block SP is
-        form-identical to the monolith SP (Task 4), so the reflection is identical.
-        """
-        block_sp = self._block_sp()
-        orig = GTAPModelEquations.build_model
-        GTAPModelEquations.build_model = lambda _self: block_sp
-        try:
-            super().build_equations_intra(m, period)
-        finally:
-            GTAPModelEquations.build_model = orig
-
-    def build_equations_all_periods(self, m: ConcreteModel, periods=None) -> None:
-        """Block-composed build-once path.
-
-        Same scoped ``build_model`` swap as ``build_equations_intra`` (make the
-        parent reflect the block SP instead of the monolith SP), delegating to the
-        parent's single-pass ``build_equations_all_periods``.
-        """
-        from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-
-        if periods is None:
-            periods = PERIODS
-        block_sp = self._block_sp()
-        orig = GTAPModelEquations.build_model
-        GTAPModelEquations.build_model = lambda _self: block_sp
-        try:
-            super().build_equations_all_periods(m, periods)
-        finally:
-            GTAPModelEquations.build_model = orig
 
 
 def build_block_model(

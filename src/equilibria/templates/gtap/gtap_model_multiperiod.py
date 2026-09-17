@@ -29,6 +29,26 @@ class GTAPMultiPeriodModel:
             sets, params, closure, residual_region=residual_region
         )
 
+    def _build_sp(self) -> ConcreteModel:
+        """Construye el modelo de periodo simple que la reflexion multiperiodo lee.
+
+        Punto de extension: toda la maquinaria de abajo --reflexion de Vars,
+        sustitucion de Constraints, filas Fisher-- necesita UN modelo SP y no le
+        importa quien lo construyo. ``GTAPBlockMultiPeriodModel`` lo sobrescribe
+        para entregar el modelo compuesto por bloques; antes lograba lo mismo
+        haciendole monkey-patch a ``GTAPModelEquations.build_model``.
+
+        Instancia fresca en cada llamada, como hacian los sitios que reemplaza:
+        ``build_model()`` muta el builder, asi que reusar uno solo acoplaria
+        llamadas que hoy son independientes.
+        """
+        return GTAPModelEquations(
+            self.sets,
+            self.params,
+            self.closure,
+            residual_region=self.residual_region,
+        ).build_model()
+
     def build_sets(self) -> ConcreteModel:
         from pyomo.environ import Param
 
@@ -125,12 +145,11 @@ class GTAPMultiPeriodModel:
         """
         from pyomo.environ import NonNegativeReals, Var
 
-        # Build a temporary single-period model to read Var families from.
-        # Reuse the builder stored in __init__ (same immutable sets/params);
-        # build_model() runs apply_production_scaling + _align_xi_xaa_post_scaling
-        # so the reflected init values are the benchmark-consistent post-scaling
-        # values the solver actually warm-starts from.
-        sp_model = self._sp.build_model()
+        # Modelo de periodo simple temporal del que leer las familias de Var.
+        # build_model() corre apply_production_scaling + align_xi_xaa_post_scaling,
+        # asi que los init reflejados son los valores post-escalado consistentes con
+        # el benchmark, que son los que el solver usa de warm-start.
+        sp_model = self._build_sp()
 
         periods = list(PERIODS)
 
@@ -202,12 +221,7 @@ class GTAPMultiPeriodModel:
         from pyomo.environ import value as _pyo_value
 
         # Build a fresh single-period model to get its Constraints and Vars.
-        sp = GTAPModelEquations(
-            self.sets,
-            self.params,
-            self.closure,
-            residual_region=self.residual_region,
-        ).build_model()
+        sp = self._build_sp()
 
         # Build substitute dict: id(sp_var[k]) -> m_var[(*k, period)]
         # for every VarData in the single-period model.
@@ -388,12 +402,7 @@ class GTAPMultiPeriodModel:
         from pyomo.environ import value as _pyo_value
 
         # Reference single-period model — built ONCE (was: once per period).
-        sp = GTAPModelEquations(
-            self.sets,
-            self.params,
-            self.closure,
-            residual_region=self.residual_region,
-        ).build_model()
+        sp = self._build_sp()
 
         # Per-period substitute dicts: id(sp_var[k]) -> m_var[(*k, period)].
         # Mutable Params are replaced by their float value (see build_equations_intra
@@ -519,9 +528,6 @@ class GTAPMultiPeriodModel:
         )
         from .gtap_model_equations import (
             GTAP_MARGIN_AGENT as MG,
-        )
-        from .gtap_model_equations import (
-            GTAPModelEquations,
         )
 
         fd = (H, G, I, MG)
@@ -649,9 +655,7 @@ class GTAPMultiPeriodModel:
         # Build a temporary single-period model to extract xscale values (floats).
         # xscale is a time-invariant Param (production scaling); it lives in the
         # single-period model and is NOT reflected as a Var in the multi-period model.
-        _sp_tmp = GTAPModelEquations(
-            self.sets, self.params, self.closure, residual_region=self.residual_region
-        ).build_model()
+        _sp_tmp = self._build_sp()
         xscale_floats: dict = {}
         for r in self.sets.r:
             for a in self.sets.a:
