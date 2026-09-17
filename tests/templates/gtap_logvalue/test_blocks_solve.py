@@ -26,6 +26,7 @@ def _julia_dump(nombre: str) -> Path | None:
     return ruta if ruta.exists() else None
 
 
+@pytest.mark.needs_ipopt
 def test_blocks_base_solves_and_reproduces_calibration():
     from equilibria.templates.gtap_logvalue.composer import solve
 
@@ -54,6 +55,7 @@ def test_blocks_base_solves_and_reproduces_calibration():
             )
 
 
+@pytest.mark.needs_ipopt
 def test_blocks_shock_matches_port_monolith():
     """Transitive gate: blocks-logvalue shock ≡ port monolith shock, both seeded from
     the same calibrated point. Difference is only equation FORM → must be ~0."""

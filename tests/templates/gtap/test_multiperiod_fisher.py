@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 import contextlib
 
+import pytest
 from pyomo.environ import value as pv
 from test_multiperiod_sets import _load_3x3_params
 
@@ -41,6 +42,7 @@ def _build_and_seed(p):
     return m, p.sets.r
 
 
+@pytest.mark.needs_gdxdump
 def test_fisher_rgdpmp_zero_at_gams_point():
     p = _load_3x3_params()
     m, regions = _build_and_seed(p)
@@ -52,6 +54,7 @@ def test_fisher_rgdpmp_zero_at_gams_point():
     assert worst < 1e-3, f"eq_rgdpmp shock residual {worst} > 1e-3"
 
 
+@pytest.mark.needs_gdxdump
 def test_fisher_pabs_pfact_pwfact_are_cross_period_rows():
     """eq_pabs/eq_pfact/eq_pwfact at shock must reference live base-period Vars.
 

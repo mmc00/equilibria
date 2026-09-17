@@ -11,6 +11,8 @@ paso tests que si podrian correr:
     @pytest.mark.needs_mumps     # pymumps (conda-forge)
     @pytest.mark.needs_ipopt     # ejecutable ipopt
     @pytest.mark.needs_path      # libreria PATH C-API + path-capi-python
+    @pytest.mark.needs_gdxdump   # ejecutable gdxdump (GAMS)
+    @pytest.mark.needs_asl       # interfaz PyNumero ASL (pynumero_ASL)
 
 Con `EQUILIBRIA_REQUIRE_SOLVERS=1` los guards se desactivan y todo corre: util
 en local para que un solver ausente se note en vez de esconderse tras un skip.
@@ -29,6 +31,8 @@ _MARCADORES = {
     "needs_mumps": "pymumps ausente (conda install -c conda-forge pymumps)",
     "needs_ipopt": "ipopt ausente en el PATH",
     "needs_path": "libreria PATH ausente (define EQUILIBRIA_PATH_CAPI_LIB_DIR)",
+    "needs_gdxdump": "gdxdump ausente en el PATH (viene con GAMS)",
+    "needs_asl": "interfaz PyNumero ASL ausente (pynumero_ASL)",
 }
 
 
@@ -40,6 +44,22 @@ def _ipopt_disponible() -> bool:
     if shutil.which("ipopt"):
         return True
     return importlib.util.find_spec("cyipopt") is not None
+
+
+def _gdxdump_disponible() -> bool:
+    return shutil.which("gdxdump") is not None
+
+
+def _asl_disponible() -> bool:
+    """La interfaz ASL se compila aparte de pyomo; `find_spec` no alcanza."""
+    try:
+        from pyomo.contrib.pynumero.asl import AmplInterface
+    except Exception:
+        return False
+    try:
+        return bool(AmplInterface.available())
+    except Exception:
+        return False
 
 
 def _path_disponible() -> bool:
@@ -61,6 +81,10 @@ def _ausentes() -> set[str]:
         faltan.add("needs_ipopt")
     if not _path_disponible():
         faltan.add("needs_path")
+    if not _gdxdump_disponible():
+        faltan.add("needs_gdxdump")
+    if not _asl_disponible():
+        faltan.add("needs_asl")
     return faltan
 
 

@@ -81,6 +81,7 @@ def _domestic_total(bench, sets, r, i):
     )
 
 
+@pytest.mark.needs_ipopt
 @pytest.mark.integration
 def test_rebalance_region_zeros_flagged_and_preserves_domestic_balance():
     from equilibria.templates.gtap.gtap_sam_filter import (
@@ -111,6 +112,7 @@ def test_rebalance_region_zeros_flagged_and_preserves_domestic_balance():
     assert dom_dem >= 0.0  # sanity; full balance asserted in Task 4 macro test
 
 
+@pytest.mark.needs_ipopt
 @pytest.mark.integration
 def test_filter_sam_shrinks_trade_and_preserves_trade_total():
     from equilibria.templates.gtap.gtap_sam_filter import FilterConfig, filter_sam
