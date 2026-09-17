@@ -53,14 +53,14 @@ Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
 
 | Deuda | Detalle | Primer paso |
 |---|---|---|
-| `gtap_model_equations.py` no es retirable | Sigue siendo oráculo GAMS en 3 de 5 gates, y `gtap_block_model.py` le hace monkey-patch de `build_model` para reusar la reflexión multiperiodo. El shim de scaling ya no existe: el escalado vive en `gtap_benchmark_scaling.py` (2026-09-16) | Que `GTAPMultiPeriodModel` acepte un modelo SP inyectado en vez de construirlo con `build_model()` |
+| `gtap_model_equations.py` no es retirable | Sólo por su papel de **oráculo GAMS en 3 de 5 gates**. Ya NO es dependencia de runtime del camino de bloques: el escalado se extrajo a `gtap_benchmark_scaling.py` y la reflexión multiperiodo pide su SP por método, así que `gtap_block_model.py` no lo importa (2026-09-16) | Migrar los 3 gates GAMS a medir bloques, comprobando que los números no se mueven |
 | `eq_pmuv` sin portar a bloques | Declarado en `blocks/gtap/__init__.py:47-53`, no implementado en el composer. Sólo muerde con `rmuv`/`imuv` no vacíos, que ningún dataset del gate usa | Voltear `pmuv` de Param a Var cuando el closure lo pida |
 
 ### Tests rotos en main (anteriores a la limpieza de 2026-09-16)
 
 | Test | Síntoma |
 |---|---|
-| `test_gtap_blocks_form[ClosureBlock]` | Exige que toda ecuación de un bloque exista en el monolito, pero `eq_mfr_bs` sólo existe en bloques (es la descomposición de lo que el monolito inlinea en `eq_pfact`) |
+| ~~`test_gtap_blocks_form[ClosureBlock]`~~ | **Resuelto 2026-09-16.** No era un defecto del test: el split de los agregados de Fisher condensó `eq_pfact`/`eq_pwfact` a 4 variables, así que su esqueleto no puede coincidir con el del monolito. `_SPLIT_AUX_EQS` las exenta de la comparación de forma —con conteo de exenciones— y la equivalencia se mide sobre los valores |
 | `test_multiperiod_driver::test_solve_multiperiod_solves_m_not_slices` | Falla aislado y de forma reproducible |
 | `test_cascade_layers`, `test_cascade_run`, `test_probe` (×2) | Fallos preexistentes en parity |
 
@@ -69,6 +69,20 @@ Verificado: fallan igual en `a3490e4`, el commit anterior a la limpieza.
 Los 2 de `test_writer` pasaron a `xfail(strict=True)`: el escritor GDX declara
 soportar sólo `Set` y `Parameter`, así que exigirle `Variable`/`Equation` es pedir
 funcionalidad sin implementar. Cuando se implemente, el test avisará de que sobra la marca.
+
+### Snapshot Fisher: arreglado, y el lado POI sigue archivado
+
+`blocks/gtap/__init__.py` item 3 exige que el composer sobrescriba `pf0`/`xf0`/`mqfactr_bb`/
+`mqfactw_bb` con el snapshot post-escalado. Nadie lo hacía: `xf0` quedaba desviado por
+exactamente `xscale` (10× en 26 de 45 celdas de `gtap7_3x3`). En el benchmark el sesgo se
+cancela, pero fuera de él `eq_pfact` divergía del monolito hasta **1,15 %**.
+
+Arreglado en el camino Pyomo (`apply_fisher_snapshot_overwrite`), portado desde
+`archive/poi/fase0-fixes`. Medido: divergencia 1,15 % → **0 exacto**; gates en verde.
+
+**El lado POI sigue sólo en el tag.** Si se retoma esa línea, hay que portarlo junto: con un solo
+lado arreglado, una comparación POI-vs-Pyomo pasa de tener un sesgo simétrico —que se cancelaba—
+a una asimetría real.
 
 ### Solvers: qué hace falta para correr la suite entera
 
