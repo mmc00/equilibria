@@ -104,6 +104,7 @@ def test_fisher_rows_exist(dataset):
         assert getattr(m, name, None) is not None, f"{name} missing from the MP model"
 
 
+@pytest.mark.needs_asl
 @pytest.mark.integration
 def test_fisher_hessian_grows_subquadratically():
     """3x3 → 5x5 widens the factor sums ~2.8x; a quadratic row would grow ~7.8x.

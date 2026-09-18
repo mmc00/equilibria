@@ -153,6 +153,7 @@ def _build_seed_solve(nlp: bool):
     return m, res
 
 
+@pytest.mark.needs_gdxdump
 @pytest.mark.skipif(not GDX.exists(), reason="gtap7_3x3 reference GDX missing")
 def test_3x3_nlp_via_blocks_matches_gams():
     """gtap7_3x3 solves via the composed 7-block framework (NLP/IPOPT) and matches

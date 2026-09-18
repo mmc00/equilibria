@@ -131,6 +131,7 @@ def test_build_4d_var_initializes_every_cell(built_backend: PyomoBackend) -> Non
                     assert got == pytest.approx(_VAR4D_INIT[r0, r1, r2, r3])
 
 
+@pytest.mark.needs_ipopt
 def test_extract_3d_var_roundtrips() -> None:
     """A real solve extracts the 3-D var as a (2,2,2) array matching the init.
 
