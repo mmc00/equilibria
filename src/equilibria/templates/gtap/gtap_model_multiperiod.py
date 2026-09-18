@@ -701,23 +701,25 @@ class GTAPMultiPeriodModel:
         # eq_mfr_*/eq_mfw_* son los agregados auxiliares con que el modelo de BLOQUES
         # parte la suma ancha de SU eq_pfact/eq_pwfact intra-periodo (closure.py:216-341;
         # el monolito inlinea esas sumas y no los declara, asi que aqui son None).
-        # Al borrar eq_pfact/eq_pwfact arriba, su UNICO consumidor desaparece: las filas
-        # cross-periodo que se declaran abajo usan mq_factr_*/mq_factw_*, no mfr_*/mfw_*.
-        # Dejarlas vivas mete 33 filas y 33 columnas sin consumidor —medido: 0— que no
-        # rompen la cuadratura (cada una se aparea con su propia Var) pero agregan 4153
-        # nonzeros de acoplamiento a pf/xf: cada eq_mfr_ss[r] toca ~750 celdas.
         #
-        # POR QUE ROMPE EN MCP Y NO EN NLP (medido, no deducido):
-        # La fila `mfr_ss[r] == sum pf*xf` es satisfacible GRATIS moviendo solo mfr_ss,
-        # que es libre y no la consume nadie. En la solucion de GAMS su residual es
-        # 0.409, y mover mfr_ss de 15.605 a 16.014 lo anula EXACTO sin tocar un solo
-        # pf/xf. IPOPT hace justo eso: ve la fila violada, ajusta la variable huerfana,
-        # sigue -> inerte. PATH no puede: no resuelve restricciones sino
-        # complementariedad EMPAREJADA, y mfr_ss no es un grado de libertad aislado sino
-        # una columna mas del Jacobiano acoplada a esas ~750 celdas. El ajuste se reparte
-        # por las derivadas y arrastra pf[USA,Land] hasta su floor 1e-3.
+        # Son DUPLICADOS EXACTOS de los mq_factr_*/mq_factw_* que declara la version
+        # cross-periodo de abajo: misma suma, mismo ancho (151 vars), mismo periodo.
+        # Medido en gtap7_15x10 shock: mq_factr_ss[USA]=16.014072 con residual 0, y
+        # mfr_ss[USA]=15.605181 con residual 0.409 -- el mismo agregado, uno bien
+        # sembrado y otro con el seed viejo. Bloques emitia 66 filas de agregados donde
+        # el monolito emite 33.
         #
-        # (El gate NLP ademas nunca midio gtap7_15x10: su matriz es 3x3/3x4/5x5/10x7.)
+        # POR QUE ROMPE (medido, no deducido): las 33 de mas dejan el sistema
+        # SOBREDETERMINADO, y `deactivate_zero_unique_var_eqs` lo cuadra desactivando una
+        # ecuacion REAL -- medido: `eq_xseq[USA,VegFruit]` en check y shock, el balance
+        # fisico de oferta xs == xds + xet. El propio _closure_patches.py:437 advierte
+        # que soltar eq_xseq "breaks the physical balance and lands a spurious root":
+        # es exactamente lo que pasaba (pf/pft[USA,*] al floor 1e-3).
+        #
+        # O sea: la definicion redundante NO mueve el equilibrio por si misma (no podria:
+        # define una variable que nadie consume). Lo mueve la ecuacion que el squaring
+        # SACRIFICA para compensarla. Sembrar los agregados de forma consistente no
+        # arregla nada -- se midio, pft sigue en 0.001.
         for cname in (
             "eq_pabs",
             "eq_pfact",

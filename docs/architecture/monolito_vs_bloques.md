@@ -142,36 +142,37 @@ consumidor — y nadie las borraba.
 Medido: **0 consumidores** de `mfr_*`/`mfw_*`, frente a `eq_pfact` (60) + `eq_pwfact` (6)
 para `mq_fact*`.
 
-No rompían la cuadratura —cada fila se apareaba con su propia Var— y por eso **todo** salía
-idéntico en las comparaciones habituales: ecuaciones, seed (`pft=0.6463`, el valor de GAMS),
-cotas, y el mapa de emparejamiento completo (24818 filas comunes, 0 apareadas distinto). El
-único rastro estaba en el Jacobiano:
+Y no son un agregado nuevo: son **duplicados exactos** de los `mq_factr_*`/`mq_factw_*` que
+declara la versión cross-período. Misma suma, mismo ancho (151 vars), mismo período. Medido en
+`gtap7_15x10` shock:
 
 ```
-monolito  148,696 nnz      bloques  152,849 nnz      delta +4,153
+mq_factr_ss[USA,shock] = 16.014072   residual 0        ← el agregado vivo, bien sembrado
+mfr_ss[USA,shock]      = 15.605181   residual 0.409    ← el duplicado, con el seed viejo
 ```
 
-y el desglose por familia los ubicaba enteros en las 33 filas Fisher. **El delta es 4153, no
-33**: cada fila no aporta *una* incógnita, aporta ~750 acoplamientos a `pf`/`xf`.
+Bloques emitía **66** filas de agregados donde el monolito emite **33**.
 
-### Por qué rompe en MCP y no en NLP
+### Por qué rompe: la ecuación sacrificada
 
-Medido, no deducido:
+Una definición redundante **no puede mover el equilibrio por sí misma** — define una variable
+que nadie consume. Lo que mueve el equilibrio es lo que el *squaring* hace para compensarla.
 
-La fila `mfr_ss[r] == Σ pf·xf` es **satisfacible gratis** moviendo sólo `mfr_ss`, que es libre
-y no la consume nadie. En la solución de GAMS su residual es **0.409**, y mover `mfr_ss` de
-`15.605` a `16.014` lo anula **exacto**, sin tocar un solo `pf`/`xf`.
+Las 33 filas de más dejan el sistema **sobredeterminado**, y
+`deactivate_zero_unique_var_eqs` lo cuadra **desactivando una ecuación real**. Medido:
 
-- **IPOPT** resuelve un problema con restricciones: ve la fila violada, ajusta la variable
-  huérfana, sigue. El punto de GAMS le queda intacto → **inerte**.
-- **PATH** no resuelve restricciones sino **complementariedad emparejada**. `mfr_ss` no es un
-  grado de libertad aislado que absorba el desbalance: es una columna más del Jacobiano,
-  acoplada a ~750 celdas. El ajuste se reparte por esas derivadas y arrastra `pf[USA,Land]`
-  hasta su floor `1e-3`.
+```
+[nonlinear-full] DEACTIVATED-ROW: eq_xseq[USA,VegFruit,check]
+[nonlinear-full] DEACTIVATED-ROW: eq_xseq[USA,VegFruit,shock]
+```
 
-Hay además una razón trivial que conviene no olvidar: **el gate NLP nunca midió
-`gtap7_15x10`** — su matriz es 3x3/3x4/5x5/10x7. El residual de ~0.43 en esas filas está en
-*todos* los datasets, así que el NLP venía pasando 14/14 con ellas dentro.
+`eq_xseq` es el balance físico de oferta `xs == xds + xet`. El propio `_closure_patches.py:437`
+advierte que soltarlo *"breaks the physical balance and lands a spurious root"* — que es
+exactamente lo que ocurría: `pf`/`pft[USA,*]` al floor `1e-3`.
+
+Comprobación que descarta la explicación alternativa: sembrar los agregados de forma
+**consistente** (residual 0 en las 33 filas) y resolver con las filas puestas → `pft` sigue en
+`0.001`. No era el valor del seed; era la ecuación perdida.
 
 **El fix** (`gtap_model_multiperiod.build_equations_fisher`): borrar también las seis
 familias auxiliares **y sus Vars**, ahí donde el código ya borraba
