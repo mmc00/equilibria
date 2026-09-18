@@ -697,10 +697,42 @@ class GTAPMultiPeriodModel:
         # Delete intra-period eq_pabs / eq_pfact / eq_pwfact.
         # (After 3 calls to build_equations_intra each overwrites the previous, so only
         # the 'shock' entries remain — but we delete them all to avoid any duplicate binding.)
-        for cname in ("eq_pabs", "eq_pfact", "eq_pwfact"):
+        #
+        # eq_mfr_*/eq_mfw_* son los agregados auxiliares con que el modelo de BLOQUES
+        # parte la suma ancha de SU eq_pfact/eq_pwfact intra-periodo (closure.py:216-341;
+        # el monolito inlinea esas sumas y no los declara, asi que aqui son None).
+        # Al borrar eq_pfact/eq_pwfact arriba, su UNICO consumidor desaparece: las filas
+        # cross-periodo que se declaran abajo usan mq_factr_*/mq_factw_*, no mfr_*/mfw_*.
+        # Dejarlas vivas mete 33 filas y 33 columnas MUERTAS —medido: 0 consumidores— que
+        # no rompen la cuadratura (cada una se aparea con su propia Var) pero si agregan
+        # 4153 nonzeros de acoplamiento a pf/xf en el Jacobiano (cada eq_mfr_ss[r] toca
+        # ~750 celdas), estructura que el monolito no tiene y que PATH recorre.
+        for cname in (
+            "eq_pabs",
+            "eq_pfact",
+            "eq_pwfact",
+            "eq_mfr_bs",
+            "eq_mfr_sb",
+            "eq_mfr_ss",
+            "eq_mfw_bs",
+            "eq_mfw_sb",
+            "eq_mfw_ss",
+        ):
             comp = getattr(m, cname, None)
             if comp is not None:
                 m.del_component(comp)
+
+        # Borrar la fila deja la Var sin ecuacion que la determine: una COLUMNA
+        # HUERFANA, que cambia el sistema igual que la fila (ver el caso de 2026-07 con
+        # pfa/pfy bajo ifSUB). Se BORRA la Var, no se fija: fijarla al valor del seed la
+        # congela en una suma obsoleta, y estos agregados son sumas DEFINIDAS --
+        # `refresh_fisher_aggregates` existe justo porque un valor rancio aqui deja
+        # residual en las filas Fisher (medido antes: la shock se estanca en PATH
+        # code=0). Como no las consume nadie, lo correcto es que desaparezcan.
+        for _vname in ("mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss"):
+            _vcomp = getattr(m, _vname, None)
+            if _vcomp is not None:
+                m.del_component(_vcomp)
 
         # ── Base-period anchors for price indices ────────────────────────────
         # At the benchmark (base period) all price indices equal 1.0 by construction.

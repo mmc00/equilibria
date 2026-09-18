@@ -110,11 +110,15 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     from pyomo.environ import value as V
 
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import (
-        PERIODS,
-        GTAPMultiPeriodModel,
+
+    # El gate mide el modelo de BLOQUES (la implementacion viva) contra GAMS.
+    # El monolito ya no se ejercita aqui: queda como referencia manual, ver
+    # docs/architecture/monolito_vs_bloques.md.
+    from equilibria.templates.gtap.gtap_block_model import (
+        GTAPBlockMultiPeriodModel,
     )
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     d = DATASETS_DIR / dataset
@@ -156,7 +160,7 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         )
         solve_mode = "gtap"
 
-    mp = GTAPMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
+    mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
     for per in PERIODS:

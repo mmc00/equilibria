@@ -1,7 +1,25 @@
-"""Complete GTAP Model Equations (Functional Implementation)
+"""GTAP model equations, monolithic implementation — REFERENCIA MANUAL.
 
-This module implements a fully functional GTAP CGE model.
-All equations are implemented to create a solvable square system.
+.. warning::
+
+   **Este modulo ya no es la implementacion viva.** El modelo que se ejercita y
+   se mide contra GAMS es el compuesto por bloques
+   (``gtap_block_model.GTAPBlockMultiPeriodModel``). Codigo nuevo debe usar ese.
+
+   El monolito se conserva como REFERENCIA LEGIBLE: es una transcripcion
+   directa de las ecuaciones de GAMS en un solo archivo, util para consultar
+   como esta escrita una ecuacion o para comparar a mano cuando bloques y GAMS
+   divergen. No lo importes en produccion, tests nuevos ni gates.
+
+   Los gates ``nlp`` (14/14) y ``mcp`` (18/18) construyen BLOQUES desde
+   2026-09-17. El unico gate que todavia mide este modulo es ``nl``, y es
+   deliberado: compara el ``.nl`` EMITIDO contra el de GAMS --una comparacion
+   estructural, no de solve-- y no tiene equivalente en bloques.
+
+   Contexto y decision: ``docs/architecture/monolito_vs_bloques.md``.
+
+Implementa el modelo GTAP CGE completo: todas las ecuaciones estan escritas
+para formar un sistema cuadrado resoluble.
 """
 
 from __future__ import annotations
