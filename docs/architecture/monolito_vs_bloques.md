@@ -151,9 +151,27 @@ cotas, y el mapa de emparejamiento completo (24818 filas comunes, 0 apareadas di
 monolito  148,696 nnz      bloques  152,849 nnz      delta +4,153
 ```
 
-y el desglose por familia los ubicaba enteros en las 33 filas Fisher (cada `eq_mfr_ss[r]`
-toca ~750 celdas de `pf`/`xf`). Acoplamiento espurio justo sobre el bloque de factores donde
-se hundía `pft[USA,Land]`.
+y el desglose por familia los ubicaba enteros en las 33 filas Fisher. **El delta es 4153, no
+33**: cada fila no aporta *una* incógnita, aporta ~750 acoplamientos a `pf`/`xf`.
+
+### Por qué rompe en MCP y no en NLP
+
+Medido, no deducido:
+
+La fila `mfr_ss[r] == Σ pf·xf` es **satisfacible gratis** moviendo sólo `mfr_ss`, que es libre
+y no la consume nadie. En la solución de GAMS su residual es **0.409**, y mover `mfr_ss` de
+`15.605` a `16.014` lo anula **exacto**, sin tocar un solo `pf`/`xf`.
+
+- **IPOPT** resuelve un problema con restricciones: ve la fila violada, ajusta la variable
+  huérfana, sigue. El punto de GAMS le queda intacto → **inerte**.
+- **PATH** no resuelve restricciones sino **complementariedad emparejada**. `mfr_ss` no es un
+  grado de libertad aislado que absorba el desbalance: es una columna más del Jacobiano,
+  acoplada a ~750 celdas. El ajuste se reparte por esas derivadas y arrastra `pf[USA,Land]`
+  hasta su floor `1e-3`.
+
+Hay además una razón trivial que conviene no olvidar: **el gate NLP nunca midió
+`gtap7_15x10`** — su matriz es 3x3/3x4/5x5/10x7. El residual de ~0.43 en esas filas está en
+*todos* los datasets, así que el NLP venía pasando 14/14 con ellas dentro.
 
 **El fix** (`gtap_model_multiperiod.build_equations_fisher`): borrar también las seis
 familias auxiliares **y sus Vars**, ahí donde el código ya borraba

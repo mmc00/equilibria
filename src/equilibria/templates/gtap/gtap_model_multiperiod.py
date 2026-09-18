@@ -703,10 +703,21 @@ class GTAPMultiPeriodModel:
         # el monolito inlinea esas sumas y no los declara, asi que aqui son None).
         # Al borrar eq_pfact/eq_pwfact arriba, su UNICO consumidor desaparece: las filas
         # cross-periodo que se declaran abajo usan mq_factr_*/mq_factw_*, no mfr_*/mfw_*.
-        # Dejarlas vivas mete 33 filas y 33 columnas MUERTAS —medido: 0 consumidores— que
-        # no rompen la cuadratura (cada una se aparea con su propia Var) pero si agregan
-        # 4153 nonzeros de acoplamiento a pf/xf en el Jacobiano (cada eq_mfr_ss[r] toca
-        # ~750 celdas), estructura que el monolito no tiene y que PATH recorre.
+        # Dejarlas vivas mete 33 filas y 33 columnas sin consumidor —medido: 0— que no
+        # rompen la cuadratura (cada una se aparea con su propia Var) pero agregan 4153
+        # nonzeros de acoplamiento a pf/xf: cada eq_mfr_ss[r] toca ~750 celdas.
+        #
+        # POR QUE ROMPE EN MCP Y NO EN NLP (medido, no deducido):
+        # La fila `mfr_ss[r] == sum pf*xf` es satisfacible GRATIS moviendo solo mfr_ss,
+        # que es libre y no la consume nadie. En la solucion de GAMS su residual es
+        # 0.409, y mover mfr_ss de 15.605 a 16.014 lo anula EXACTO sin tocar un solo
+        # pf/xf. IPOPT hace justo eso: ve la fila violada, ajusta la variable huerfana,
+        # sigue -> inerte. PATH no puede: no resuelve restricciones sino
+        # complementariedad EMPAREJADA, y mfr_ss no es un grado de libertad aislado sino
+        # una columna mas del Jacobiano acoplada a esas ~750 celdas. El ajuste se reparte
+        # por las derivadas y arrastra pf[USA,Land] hasta su floor 1e-3.
+        #
+        # (El gate NLP ademas nunca midio gtap7_15x10: su matriz es 3x3/3x4/5x5/10x7.)
         for cname in (
             "eq_pabs",
             "eq_pfact",
