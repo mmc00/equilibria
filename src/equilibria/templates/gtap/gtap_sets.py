@@ -616,3 +616,49 @@ class GTAPSets:
             f"{self.n_factors} factors, structure={self.structure}, "
             f"output_pairs={len(self.output_pairs)})"
         )
+
+
+# ---------------------------------------------------------------------------
+# declare_pyomo_sets — los Sets de Pyomo que comparten TODOS los modelos GTAP
+# ---------------------------------------------------------------------------
+def declare_pyomo_sets(model: Any, sets: Any) -> None:
+    """Declarar sobre ``model`` los Sets de Pyomo del modelo GTAP.
+
+    Extraido de ``GTAPModelEquations._add_sets`` (gtap_model_equations.py:751), que
+    era el ULTIMO uso en tiempo de ejecucion que el camino de BLOQUES le hacia al
+    monolito: ``GTAPMultiPeriodModel.__init__`` construia un ``GTAPModelEquations``
+    entero solo para llamarle este metodo desde ``build_sets``.
+
+    No hay nada del monolito aqui: la funcion lee ``sets`` y declara Sets. Vive en
+    este modulo, que es el de conjuntos, para que ambos modelos la compartan sin
+    que uno dependa del otro.
+    """
+    from pyomo.environ import Set
+
+    from equilibria.templates.gtap.gtap_parameters import (
+        GTAP_GOVERNMENT_AGENT,
+        GTAP_HOUSEHOLD_AGENT,
+        GTAP_INVESTMENT_AGENT,
+        GTAP_MARGIN_AGENT,
+    )
+
+    agent_labels = list(sets.a) + [
+        GTAP_HOUSEHOLD_AGENT,
+        GTAP_GOVERNMENT_AGENT,
+        GTAP_INVESTMENT_AGENT,
+        GTAP_MARGIN_AGENT,
+    ]
+    tax_streams = ["pt", "fc", "pc", "gc", "ic", "dt", "mt", "et", "ft", "fs"]
+
+    model.r = Set(initialize=sets.r, doc="Regions")
+    model.i = Set(initialize=sets.i, doc="Commodities")
+    model.a = Set(initialize=sets.a, doc="Activities")
+    model.f = Set(initialize=sets.f, doc="Factors")
+    model.mf = Set(initialize=sets.mf, doc="Mobile factors")
+    model.sf = Set(initialize=sets.sf, doc="Specific factors")
+    model.m = Set(initialize=sets.m, doc="Margin commodities")
+    model.aa = Set(initialize=agent_labels, doc="Absorption agents and activities")
+    model.gy = Set(initialize=tax_streams, doc="Government tax streams")
+
+    # Aliases for trade
+    model.rp = Set(initialize=sets.r, doc="Regions (alias)")

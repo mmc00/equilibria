@@ -749,29 +749,12 @@ class GTAPModelEquations:
         return {}
 
     def _add_sets(self, model: ConcreteModel) -> None:
-        """Add sets."""
-        from pyomo.environ import Set
+        """Add sets. Delega en ``gtap_sets.declare_pyomo_sets`` (misma declaracion,
+        funcion libre) para que el modelo multiperiodo no necesite instanciar este
+        builder solo para declarar Sets."""
+        from equilibria.templates.gtap.gtap_sets import declare_pyomo_sets
 
-        agent_labels = list(self.sets.a) + [
-            GTAP_HOUSEHOLD_AGENT,
-            GTAP_GOVERNMENT_AGENT,
-            GTAP_INVESTMENT_AGENT,
-            GTAP_MARGIN_AGENT,
-        ]
-        tax_streams = ["pt", "fc", "pc", "gc", "ic", "dt", "mt", "et", "ft", "fs"]
-
-        model.r = Set(initialize=self.sets.r, doc="Regions")
-        model.i = Set(initialize=self.sets.i, doc="Commodities")
-        model.a = Set(initialize=self.sets.a, doc="Activities")
-        model.f = Set(initialize=self.sets.f, doc="Factors")
-        model.mf = Set(initialize=self.sets.mf, doc="Mobile factors")
-        model.sf = Set(initialize=self.sets.sf, doc="Specific factors")
-        model.m = Set(initialize=self.sets.m, doc="Margin commodities")
-        model.aa = Set(initialize=agent_labels, doc="Absorption agents and activities")
-        model.gy = Set(initialize=tax_streams, doc="Government tax streams")
-
-        # Aliases for trade
-        model.rp = Set(initialize=self.sets.r, doc="Regions (alias)")
+        declare_pyomo_sets(model, self.sets)
 
     def _add_parameters(self, model: ConcreteModel) -> None:
         """Add all parameters."""

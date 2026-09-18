@@ -8,7 +8,7 @@ import contextlib
 
 from pyomo.environ import ConcreteModel, Set
 
-from .gtap_model_equations import GTAPModelEquations
+from .gtap_sets import declare_pyomo_sets
 
 PERIODS = ("base", "check", "shock")
 
@@ -24,10 +24,6 @@ class GTAPMultiPeriodModel:
         self.params = params
         self.closure = closure
         self.residual_region = residual_region
-        # builder single-period reusable para sets/vars/eqs base
-        self._sp = GTAPModelEquations(
-            sets, params, closure, residual_region=residual_region
-        )
 
     def _build_sp(self) -> ConcreteModel:
         """Construye el modelo de periodo simple que la reflexion multiperiodo lee.
@@ -41,7 +37,13 @@ class GTAPMultiPeriodModel:
         Instancia fresca en cada llamada, como hacian los sitios que reemplaza:
         ``build_model()`` muta el builder, asi que reusar uno solo acoplaria
         llamadas que hoy son independientes.
+
+        El import es LOCAL a proposito: el monolito es referencia manual, y el
+        camino de bloques sobrescribe este metodo, asi que no debe cargarlo solo
+        por construir un modelo multiperiodo.
         """
+        from .gtap_model_equations import GTAPModelEquations
+
         return GTAPModelEquations(
             self.sets,
             self.params,
@@ -53,7 +55,7 @@ class GTAPMultiPeriodModel:
         from pyomo.environ import Param
 
         m = ConcreteModel()
-        self._sp._add_sets(m)  # r,a,i,f,... actuales
+        declare_pyomo_sets(m, self.sets)  # r,a,i,f,... actuales
         m.t = Set(initialize=list(PERIODS), ordered=True)
         m.t0 = Set(initialize=["base"], ordered=True)
 
