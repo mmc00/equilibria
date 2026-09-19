@@ -80,6 +80,11 @@ SYMBOL_TYPE_NAMES: dict[int, str] = {
 _ZLIB_CMF_CANDIDATES: bytes = bytes([0x78])
 _ZLIB_FLG_CANDIDATES: bytes = bytes([0x9C, 0x01, 0xDA, 0x5E, 0x1D])
 
+# Tamano del bloque de compresion de GAMS: una seccion comprimida se parte en
+# bloques de 32768 bytes DESCOMPRIMIDOS, cada uno su propio stream zlib precedido
+# de 3 bytes de cabecera. Un bloque mas corto que esto es el ultimo de la seccion.
+_GDX_ZLIB_BLOCK: int = 32768
+
 
 def _decompress_gdx_sections(data: bytes) -> bytes:
     """
@@ -1787,14 +1792,38 @@ def _section_at_offset(raw_data: bytes, data_offset: int) -> bytes:
         )  # -1 drops the pascal-prefix byte
         return raw_data[start:end]
 
-    try:
-        decompressor = zlib.decompressobj()
-        out = decompressor.decompress(raw_data[data_offset + 3 :])
-    except zlib.error:
+    # Una seccion comprimida NO es un unico stream zlib: GAMS la parte en BLOQUES
+    # de 32768 bytes descomprimidos, cada uno su propio stream zlib precedido de 3
+    # bytes de cabecera. Descomprimir solo el primero TRUNCA la seccion en silencio
+    # y el decodificador devuelve un PREFIJO de los records -- medido en el GDX
+    # 10x7: pa 1264 de 2940 records (57% perdido), xw 996 de 1470 (32%), mientras
+    # pf/xf (29225 bytes, un solo bloque) salian completos. Los records leidos eran
+    # exactos (4.4e-15 vs gdxdump), asi que el truncamiento no dejaba rastro.
+    buf = raw_data[data_offset + 3 :]
+    chunks: list[bytes] = []
+    pos = 0
+    while True:
+        try:
+            decompressor = zlib.decompressobj()
+            out = decompressor.decompress(buf[pos:])
+        except zlib.error:
+            break
+        if not out:
+            break
+        chunks.append(out)
+        consumed = len(buf) - pos - len(decompressor.unused_data)
+        if consumed <= 0:
+            break
+        # Un bloque corto es el ultimo; si no, saltar sus 3 bytes de cabecera.
+        if len(out) < _GDX_ZLIB_BLOCK:
+            break
+        pos += consumed + 3
+    if not chunks:
         return b""
-    if out[:7] != b"\x06_DATA_":
+    expanded = b"".join(chunks)
+    if expanded[:7] != b"\x06_DATA_":
         return b""
-    return out[7:]
+    return expanded[7:]
 
 
 def read_variable_values(
