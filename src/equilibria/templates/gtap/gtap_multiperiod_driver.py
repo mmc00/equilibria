@@ -102,6 +102,75 @@ def _gc_frozen_permanent_graph(enabled: bool = True):
 
 
 # ---------------------------------------------------------------------------
+# Collect young garbage far less often during the solve
+# ---------------------------------------------------------------------------
+_GC_THRESHOLD0 = 50_000
+
+
+@contextlib.contextmanager
+def _gc_relaxed_threshold(threshold0: int = _GC_THRESHOLD0):
+    """Raise the gen-0 allocation threshold for the duration of the solve.
+
+    Companion to _gc_frozen_permanent_graph, and it attacks the SAME cost from
+    the other end. CPython triggers a gen-0 pass every `threshold0` net
+    container allocations (default 700); every 10th gen-0 pass promotes into
+    gen-1, and gen-1 feeds gen-2 — the expensive full pass. So the flood of
+    cheap gen-0 passes is what schedules the costly ones.
+
+    MEASURED on gtap7_20x41 (already with the freeze in place), 3 interleaved
+    repetitions, 700 vs 50000:
+
+        gen-0 passes   202,457 -> 2,772     (73x fewer)
+        gen-2 passes        45 -> 18
+        gen-2 time    1.92 min -> 1.42 min
+        wall          7.38 min -> 6.98 min  (-0.41, wins 3/3)
+
+    with the solution sha256 IDENTICAL across all 6 runs. This changes WHEN
+    Python collects garbage, never what the model computes.
+
+    COST: peak RSS 3.8 -> 4.8 GB (+1 GB), because garbage now lives longer
+    before being reclaimed. That is the real trade-off of this lever and the
+    reason it is overridable; on a memory-tight machine or a much larger
+    dataset, set EQUILIBRIA_GTAP_GC_THRESHOLD=0 to keep CPython's default.
+    (Neither of the write-ups this follows — Instagram's gc.freeze work and
+    Close's GC tuning — reports the memory side, so this number is ours.)
+
+    The threshold is restored on exit: it is process-global state, and leaving
+    it raised would silently change the GC behaviour of everything that runs
+    after us in the same process.
+    """
+    import gc
+
+    if threshold0 <= 0:
+        yield
+        return
+    prev = gc.get_threshold()
+    # Only gen-0 moves; gen-1/gen-2 multipliers stay as CPython set them.
+    gc.set_threshold(threshold0, prev[1], prev[2])
+    try:
+        yield
+    finally:
+        gc.set_threshold(*prev)
+
+
+def _gc_threshold_from_env() -> int:
+    """EQUILIBRIA_GTAP_GC_THRESHOLD: unset -> 50000, 0 -> off, N -> N.
+
+    A non-numeric value is treated as "unset" rather than raising: a typo in an
+    env var must not take down a 7-minute solve over a GC tuning knob.
+    """
+    import os
+
+    raw = os.environ.get("EQUILIBRIA_GTAP_GC_THRESHOLD")
+    if raw is None:
+        return _GC_THRESHOLD0
+    try:
+        return int(raw)
+    except ValueError:
+        return _GC_THRESHOLD0
+
+
+# ---------------------------------------------------------------------------
 # Lazy-load run_gtap (mirrors how diff_altertax.py does it)
 # ---------------------------------------------------------------------------
 def _load_run_gtap():
@@ -4046,7 +4115,8 @@ def solve_multiperiod(
     nothing — it never contains garbage. See _gc_frozen_permanent_graph.
 
     MEASURED, gtap7_20x41, 3 interleaved repetitions: wall 8.49 → 7.81 min
-    median (-0.68, 8%), identical solution sha256 in all 6 runs.
+    median (-0.68, 8%), identical solution sha256 in all 6 runs. The companion
+    _gc_relaxed_threshold then took 7.38 → 6.98 min on top of that.
 
     This is a wrapper and not a `with` inside the body so that the unfreeze is
     guaranteed on EVERY exit — both returns and any exception — without
@@ -4054,8 +4124,14 @@ def solve_multiperiod(
     """
     import os
 
-    with _gc_frozen_permanent_graph(
-        os.environ.get("EQUILIBRIA_GTAP_GC_FREEZE", "1") != "0"
+    # Two halves of the same lever: freeze() stops the GC from re-walking the
+    # built model, and the raised threshold stops it from scheduling those
+    # walks so often. Measured separately; see each context manager.
+    with (
+        _gc_frozen_permanent_graph(
+            os.environ.get("EQUILIBRIA_GTAP_GC_FREEZE", "1") != "0"
+        ),
+        _gc_relaxed_threshold(_gc_threshold_from_env()),
     ):
         return _solve_multiperiod_inner(
             m,

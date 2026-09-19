@@ -34,6 +34,21 @@ def _no_frozen_state():
 
 
 @pytest.fixture
+def spy_inner_threshold(monkeypatch):
+    """Records the gen-0 threshold as seen from INSIDE the solve."""
+    seen = {}
+
+    def _fake(m, params, closure, **kw):
+        seen["thr"] = gc.get_threshold()
+        if kw.get("mode") == "boom":
+            raise RuntimeError("solve exploded")
+        return {"base": {"code": 1}}
+
+    monkeypatch.setattr(driver, "_solve_multiperiod_inner", _fake)
+    return seen
+
+
+@pytest.fixture
 def spy_inner(monkeypatch):
     """Replace the solve body with a spy that records the freeze count."""
     seen = {}
@@ -148,3 +163,67 @@ def test_cyclic_garbage_is_still_collected_while_frozen(_no_frozen_state):
     finally:
         gc.unfreeze()
     assert permanent
+
+
+# --- The companion lever: gen-0 allocation threshold ----------------------- #
+
+
+@pytest.fixture
+def _restore_threshold():
+    """The threshold is process-global; put it back whatever the test does."""
+    prev = gc.get_threshold()
+    yield prev
+    gc.set_threshold(*prev)
+
+
+def test_threshold_is_raised_during_the_solve(spy_inner_threshold, _restore_threshold):
+    driver.solve_multiperiod(None, None, None)
+    assert spy_inner_threshold["thr"][0] == driver._GC_THRESHOLD0
+
+
+def test_threshold_is_restored_on_normal_return(
+    spy_inner_threshold, _restore_threshold
+):
+    before = gc.get_threshold()
+    driver.solve_multiperiod(None, None, None)
+    assert gc.get_threshold() == before
+
+
+def test_threshold_is_restored_when_the_solve_raises(
+    spy_inner_threshold, _restore_threshold
+):
+    """Leaving it raised would silently change the GC of everything after us."""
+    before = gc.get_threshold()
+    with pytest.raises(RuntimeError, match="solve exploded"):
+        driver.solve_multiperiod(None, None, None, mode="boom")
+    assert gc.get_threshold() == before
+
+
+def test_only_gen0_threshold_moves(spy_inner_threshold, _restore_threshold):
+    """gen-1/gen-2 multipliers are CPython's; this lever has no measurement
+    behind changing them, so it must not."""
+    before = gc.get_threshold()
+    driver.solve_multiperiod(None, None, None)
+    assert spy_inner_threshold["thr"][1:] == before[1:]
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        (None, 50_000),  # unset → the measured default
+        ("0", None),  # explicit off → CPython's own threshold
+        ("20000", 20_000),  # explicit value
+        ("no-soy-un-numero", 50_000),  # a typo must not kill a 7-minute solve
+    ],
+)
+def test_env_var_controls_the_threshold(
+    env, expected, spy_inner_threshold, monkeypatch, _restore_threshold
+):
+    if env is None:
+        monkeypatch.delenv("EQUILIBRIA_GTAP_GC_THRESHOLD", raising=False)
+    else:
+        monkeypatch.setenv("EQUILIBRIA_GTAP_GC_THRESHOLD", env)
+    default = gc.get_threshold()[0]
+    driver.solve_multiperiod(None, None, None)
+    got = spy_inner_threshold["thr"][0]
+    assert got == (default if expected is None else expected)
