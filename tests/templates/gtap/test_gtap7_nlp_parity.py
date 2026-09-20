@@ -88,6 +88,27 @@ _NLP_CASES = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _restore_solve_nlp_env():
+    """Devolver ``EQUILIBRIA_GTAP_SOLVE_NLP`` a su valor previo al salir.
+
+    ``_solve_and_measure`` la pone a "1" y no la limpiaba, asi que FUGABA al
+    resto de la sesion de pytest: cualquier test posterior en el mismo proceso
+    resolvia por IPOPT en vez de PATH. Medido en
+    ``tests/blocks/gtap/test_calibrate_no_double_solve.py::test_settle_only_seed_identical_to_full``,
+    que pasa solo y falla detras de este gate -- mismo conteo de celdas (20194)
+    pero firma distinta: b82d6f9b530a70bf (PATH) vs 8e830d1afdeb54b4 (NLP).
+    """
+    _prev = os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP")
+    try:
+        yield
+    finally:
+        if _prev is None:
+            os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
+        else:
+            os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = _prev
+
+
 def _has_solver() -> bool:
     return importlib.util.find_spec("path_capi_python") is not None
 
