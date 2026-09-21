@@ -51,7 +51,12 @@ from equilibria.templates.gtap.gtap_parameters import (
     GTAP_HOUSEHOLD_AGENT,
     GTAP_INVESTMENT_AGENT,
 )
-from equilibria._local_refs import path_capi_lib_dir, path_capi_src
+from equilibria._local_refs import (
+    path_capi_lib,
+    path_capi_lib_dir,
+    path_capi_lusol,
+    path_capi_src,
+)
 
 
 logging.basicConfig(
@@ -67,8 +72,11 @@ _SYMBOLIC_FACT_COUNT = 0
 
 PATH_CAPI_SRC_DEFAULT = Path(str(path_capi_src()))
 _PATH_CAPI_CACHE = path_capi_lib_dir()
-PATH_CAPI_LIB_DEFAULT = _PATH_CAPI_CACHE / "libpath50.silicon.dylib"
-PATH_CAPI_LUSOL_DEFAULT = _PATH_CAPI_CACHE / "liblusol.silicon.dylib"
+# Por plataforma: el .dylib de macOS ARM era el unico nombre contemplado, asi
+# que en Linux se apuntaba a un archivo inexistente aunque libpath50.so
+# estuviera en la misma carpeta.
+PATH_CAPI_LIB_DEFAULT = path_capi_lib()
+PATH_CAPI_LUSOL_DEFAULT = path_capi_lusol()
 
 REGION_ALIASES = {
     "usa": "NAmerica",

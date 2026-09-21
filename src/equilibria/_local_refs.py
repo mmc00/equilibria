@@ -148,3 +148,38 @@ def path_capi_lib_names() -> tuple[str, ...]:
     if sys.platform.startswith("win"):
         return ("path50.dll", "libpath50.dll")
     return ("libpath50.so", "libpath50.dylib")
+
+
+def path_capi_lusol_names() -> tuple[str, ...]:
+    """Nombres posibles de LUSOL, companera de la libreria PATH."""
+    import sys
+
+    if sys.platform == "darwin":
+        return ("liblusol.silicon.dylib", "liblusol.dylib")
+    if sys.platform.startswith("linux"):
+        return ("liblusol.so", "liblusol.silicon.so")
+    if sys.platform.startswith("win"):
+        return ("lusol.dll", "liblusol.dll")
+    return ("liblusol.so", "liblusol.dylib")
+
+
+def path_capi_lib() -> Path:
+    """Ruta a la libreria PATH de esta plataforma (exista o no).
+
+    Devuelve el primer nombre que exista; si ninguno, el primer candidato, para
+    que el mensaje de error apunte a lo que se esperaba encontrar.
+    """
+    d = path_capi_lib_dir()
+    for nombre in path_capi_lib_names():
+        if (d / nombre).exists():
+            return d / nombre
+    return d / path_capi_lib_names()[0]
+
+
+def path_capi_lusol() -> Path:
+    """Ruta a LUSOL de esta plataforma (exista o no)."""
+    d = path_capi_lib_dir()
+    for nombre in path_capi_lusol_names():
+        if (d / nombre).exists():
+            return d / nombre
+    return d / path_capi_lusol_names()[0]

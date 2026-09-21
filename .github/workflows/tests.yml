@@ -66,10 +66,15 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends coinor-libipopt-dev coinor-libipopt1v5
+          sudo apt-get install -y --no-install-recommends \
+            coinor-libipopt-dev coinor-libipopt1v5 pkg-config
           # Smoke test: que el .so este no prueba que se pueda cargar.
           python -c "import ctypes; ctypes.CDLL('libipopt.so')" || \
             python -c "import ctypes; ctypes.CDLL('libipopt.so.1')"
+          # cyipopt es el binding de Python: la libreria C sola no alcanza,
+          # varios tests hacen `import cyipopt` directamente.
+          uv pip install cyipopt
+          uv run python -c "import cyipopt; print('cyipopt', cyipopt.__version__)"
 
       - name: Install PATH solver library
         run: |
@@ -116,6 +121,11 @@ jobs:
         env:
           EQUILIBRIA_PATH_CAPI_LIB_DIR: ${{ github.workspace }}/.cache/path_capi
           EQUILIBRIA_PATH_CAPI_SRC: ${{ github.workspace }}/.path-capi-python/src
+          # El loader de path_capi_python pide la RUTA COMPLETA por estas dos
+          # variables; sin ellas aborta con "Missing required environment
+          # variable" aunque EQUILIBRIA_PATH_CAPI_LIB_DIR apunte bien.
+          PATH_CAPI_LIBPATH: ${{ github.workspace }}/.cache/path_capi/libpath50.so
+          PATH_CAPI_LIBLUSOL: ${{ github.workspace }}/.cache/path_capi/liblusol.so
           PATH_LICENSE_STRING: "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
         run: |
           uv run pytest -ra -m "not gams and not slow" tests
