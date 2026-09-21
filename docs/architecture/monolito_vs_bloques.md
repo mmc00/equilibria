@@ -228,3 +228,69 @@ fuera código vivo.
 
 Ver también: `ROADMAP.md` (registro de deuda técnica) y
 `docs/findings/repo_cleanup_spec_2026-09-16.md` (la medición que originó este documento).
+
+## Corrección (2026-09-21): el fix Fisher NO bajó el match de altertax
+
+El mensaje de `2602db2` y el PR #67 afirman que `faa911b` baja `gtap7_10x7 altertax
+shock` de **99.3% a 98.97%**, y argumentan por qué conservarlo igual (fidelidad sobre
+match%, GEMPACK byte-idéntica). **La caída no existe: no había nada que justificar.**
+
+Medido con el mismo probe en dos árboles que solo difieren en `faa911b` — al
+pre-Fisher `cbf060f` se le backporteó el fix del lector GDX (`8a501df`), para que
+Fisher fuera la única variable:
+
+```
+post-Fisher (main 2c53711)   10349 celdas, 107 fallos, 98.966%
+pre-Fisher  (cbf060f + gdx)  10349 celdas, 107 fallos, 98.966%
+
+celdas idénticas 107/107 · solo-post 0 · solo-pre 0
+peor dif_rel del valor Python entre árboles: 6.1e-10
+```
+
+El `99.3%` contra el que se comparó **no era una medición viva**: es el campo
+`gap_note` de `scripts/gtap/coverage_matrix.py`, texto escrito en `8dc561b`
+(2026-06-30) y medido contra el **monolito**. Y `faa911b` es justo el commit donde el
+gate MCP pasa a construir `GTAPBlockMultiPeriodModel` (visible en su diff del test).
+
+O sea: **se restó una nota de junio del monolito contra una medición de septiembre de
+bloques**. Es el mismo error de denominador que la sección "Por qué se pudo migrar" ya
+había documentado para el gate NLP (110 celdas, 15314 vs 10349) — sólo que allí se
+midió y aquí no. El floor real de esa fila es **98.0**, y 98.966 lo pasa con margen.
+
+### El "sesgo direccional 92.5%" es artefacto de conteo
+
+De las 107 celdas, 99 (92.5%) quedan por encima de GAMS, lo que se leyó como *un
+término que falta* (el residual `qxs` documentado es simétrico, ~49%). **No son 107
+errores: son 10**, uno por par `(región importadora, sector)`, repetido una vez por
+cada agente comprador y cada origen bilateral.
+
+La desviación estándar dentro de cada par es **0.03–0.23** contra medias de +1.1 a
++6.4: es un número repetido, no N errores independientes.
+
+```
+JPN,c_Rice   agentes(xm) +5.99 +6.22 +6.51 +6.55 +6.57
+             total (xmt)  +6.22
+             bilateral por DESTINO +6.21
+```
+
+`xw` agrupado por **destino** queda apretado; por **origen**, disperso → el error vive
+del lado del **importador**. Y `pa` (precio) se mueve al revés que la cantidad, que es
+lo que se espera de un desplazamiento de demanda, no de ruido entre motores.
+
+Los 10 pares: `JPN{Rice,Livestock,FoodProc,Crops}`, `IND{Crops,FoodProc}`,
+`CHN{Livestock,FoodProc}`, `SSA{Textiles}`, `USA{Textiles}`.
+
+**Lo que queda realmente abierto** es un residual de importaciones agrícolas ~1–6%
+sobre GAMS en esos 10 pares, **preexistente** a todo este trabajo, de la familia del
+residual `qxs` de 2026-08-21 — donde el culpable término-por-término resultó ser
+`pim`, un índice de precio de importación. Ese es el hilo, y es viejo.
+
+### Lección
+
+Un número en una nota **no es una medición**. Antes de llamar regresión a una caída,
+verificar que el número viejo y el nuevo midan **el mismo objeto**: aquí cambiaron el
+motor (monolito → bloques) y el denominador, con tres meses de diferencia.
+
+Y antes de explicar un sesgo direccional, agrupar por la unidad **estructural** (el par
+`r,i`) en vez de contar celdas: la multiplicidad de agentes fabrica sesgos que no
+existen.
