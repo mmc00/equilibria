@@ -63,11 +63,21 @@ def _asl_disponible() -> bool:
 
 
 def _path_disponible() -> bool:
-    from equilibria._local_refs import path_capi_lib_dir, path_capi_src
+    """La libreria PATH, por el nombre que tenga en ESTA plataforma.
 
-    return (
-        path_capi_lib_dir() / "libpath50.silicon.dylib"
-    ).exists() and path_capi_src().exists()
+    Comprobaba `libpath50.silicon.dylib` a secas, asi que en Linux daba False
+    con la libreria instalada al lado (upstream publica `libpath50.so`) y los
+    59 tests `needs_path` se saltaban en CI pasara lo que pasara.
+    """
+    from equilibria._local_refs import (
+        path_capi_lib_dir,
+        path_capi_lib_names,
+        path_capi_src,
+    )
+
+    lib_dir = path_capi_lib_dir()
+    tiene_lib = any((lib_dir / nombre).exists() for nombre in path_capi_lib_names())
+    return tiene_lib and path_capi_src().exists()
 
 
 def _ausentes() -> set[str]:
