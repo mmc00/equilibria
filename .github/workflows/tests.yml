@@ -463,6 +463,46 @@ jobs:
       - name: Build site (warnings are errors)
         run: uv run sphinx-build -W -b html docs/site docs/site/_build/html
 
+  # Vigila que el modelo se construya IGUAL en las tres plataformas. Existe
+  # porque el problema YA mordio: en e785deb el hash de la firma difería entre
+  # mac 3.11, mac 3.12 y linux, y 3.462 de 37.638 filas cambiaban por 1-2 ULP.
+  # Vienen de alphad = (xda/xaa)*(pdp/pa)**sigma_m: pow() con exponente
+  # fraccionario, que libm no redondea correctamente y varía legitimamente entre
+  # builds. Se parcheo redondeando los literales a 13 cifras significativas.
+  #
+  # Ese parche no tenia quien lo vigilara: CI era ubuntu-latest y una sola
+  # version de Python, o sea que la plataforma que lo rompio NO se probaba.
+  # Si 13 cifras dejan de alcanzar en algun runner, este job lo dice; sin el,
+  # la firma se rompe en silencio para quien no use linux.
+  #
+  # Barato a proposito: solo el archivo de la firma. No necesita solver (los
+  # tests con solver se saltan solos por sus guards) y el dataset gtap7_10x7
+  # esta commiteado (228K), asi que no descarga nada.
+  model-signature-cross-platform:
+    strategy:
+      fail-fast: false        # que un runner rojo no oculte el estado de los otros
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Model signature is identical across OS and interpreter
+        run: uv run pytest tests/templates/gtap/test_multiperiod_build_once.py -v
+
   gams-tests:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_gams }}
     runs-on: self-hosted
