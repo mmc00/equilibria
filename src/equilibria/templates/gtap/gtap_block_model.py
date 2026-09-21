@@ -41,6 +41,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 from equilibria.backends.pyomo_backend import PyomoBackend
+from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.blocks.gtap import model_cache as _model_cache
 from equilibria.core.sets import Set as ESet
 from equilibria.model import Model
@@ -174,13 +175,34 @@ _IFSUB_REPORT_VARS = (
 )
 
 
-def _apply_ifsub_closure(pm: ConcreteModel) -> int:
+def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     """The ifSUB closure: deactivate the 9 report equations AND fix their report
-    vars (to their current/benchmark value) — mirrors the monolith's post-block.
+    vars — mirrors the monolith's post-block.
+
     Deactivating alone left pfa/pfy as orphan free columns (the macros are inline in
     the consuming eqs, so nothing determines them) → non-square. Fixing them removes
     that spurious DOF. Makes the reflected multi-period block model square like the
-    monolith MP."""
+    monolith MP.
+
+    QUE valor se fija importa: sin ecuacion que los determine, el valor fijado ES el
+    definitivo. ``pfa``/``pfy`` se recalculan desde su MACRO (el monolito hace lo
+    mismo: ``_fix_component(model.pfa[r,f,a], value(_m_pfa(r,f,a)))``, 7156), no se
+    congela el seed. El seed de ``pfa`` es ``pf*(1+rtf)`` con ``rtf`` = wedge NETO,
+    que en un factor subsidiado tiene el signo cambiado: en ``gtap7_15x10``,
+    ``pfa[USA,Land,Grains]`` quedaba en 0.5652 en vez de 1.6240 (``rtf`` = -0.4578
+    frente al wedge descompuesto ``1 + ftrv/evfb - fbep/evfb`` = 1.5579).
+
+    ALCANCE MEDIDO: esto corrige el valor en el modelo de UN periodo. En
+    multiperiodo NO cambia ninguna celda medida, porque
+    ``gtap_multiperiod_driver._recompute_ifsub_report_vars`` reescribe pfa/pfy
+    post-solve desde los mismos macros (llamada en la linea 3887). Se aplica por
+    fidelidad --el valor fijado debe ser el correcto aunque nadie lo lea-- no
+    porque mueva el match. En particular NO es la causa del fallo del MCP con
+    bloques: eso son las 99 columnas Fisher de mas (ver el comentario en
+    tests/templates/gtap/test_gtap7_mcp_parity.py).
+
+    Los otros siete vars de reporte SI se congelan a su valor actual: sus macros
+    dependen de variables que el escalado ya dejo en su nivel correcto."""
     from pyomo.environ import value
 
     n = 0
@@ -194,15 +216,31 @@ def _apply_ifsub_closure(pm: ConcreteModel) -> int:
         # otherwise be reflected. Deactivating the component makes it skipped.
         n += sum(1 for idx in comp if comp[idx].active)
         comp.deactivate()
+    # pfa/pfy: recalcular desde el macro ANTES de fijar (ver docstring).
+    _macro = {"pfa": mac.m_pfa, "pfy": mac.m_pfy}
     for var_name in _IFSUB_REPORT_VARS:
         v = pm.component(var_name)
         if v is None:
             continue
+        fn = _macro.get(var_name) if params is not None else None
         for k in v:
             vd = v[k]
-            if not vd.fixed:
+            if vd.fixed:
+                continue
+            target = None
+            if fn is not None and isinstance(k, tuple) and len(k) == 3:
                 with contextlib.suppress(Exception):
-                    vd.fix(float(value(vd)))
+                    target = float(value(fn(pm, params, *k)))
+            if target is None:
+                target = float(value(vd))
+            # Respetar las cotas de la Var, como el monolito (_fix_component, 7116).
+            lb, ub = vd.lb, vd.ub
+            if lb is not None and target < float(lb):
+                target = float(lb)
+            if ub is not None and target > float(ub):
+                target = float(ub)
+            with contextlib.suppress(Exception):
+                vd.fix(target)
     return n
 
 
@@ -261,7 +299,7 @@ def build_block_single_period(
         apply_fisher_snapshot_overwrite(pm)
 
     if if_sub:
-        _apply_ifsub_closure(pm)
+        _apply_ifsub_closure(pm, params)
 
     pm._residual_region = residual_region
     return pm

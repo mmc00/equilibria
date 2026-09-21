@@ -900,6 +900,111 @@ def _compute_ytax_ind_bench(params: Any, sets: Any, region: str) -> float:
     return total
 
 
+def ytax_stream_bench(
+    params: Any, sets: Any, region: str, gy: str, xscale: Any = None
+) -> float:
+    """Valor de una corriente de ``ytax`` en el benchmark — monolito 3721-3856.
+
+    El benchmark es un equilibrio: ``eq_ytax[r,gy]`` debe cumplirse ya en el
+    punto de arranque. Sembrar la Var en cero deja diez filas violadas (residual
+    hasta 0.32 en ``mt``), lo que sesga ``ytax_ind`` y, por ``eq_regy``, ``regy``.
+
+    Las corrientes son las mismas que suma :func:`_compute_ytax_ind_bench`, aqui
+    desglosadas una por una. ``dt`` --el unico stream que ``ytax_ind`` excluye--
+    divide por ``xscale``, asi que necesita el modelo ya escalado; los demas se
+    calculan solo con el benchmark.
+    """
+    bm = params.benchmark
+    taxes = params.taxes
+    total = 0.0
+
+    if gy == "pt":
+        for a in sets.a:
+            for i in sets.activity_commodities.get(a, list(sets.i)):
+                total += _f(bm.makb.get((region, a, i), 0.0)) - _f(
+                    bm.maks.get((region, a, i), 0.0)
+                )
+        return total
+
+    if gy == "ft":
+        # Al benchmark pf*xf/xscale == evfb, asi que ft = Σ fcttx*evfb = Σ ftrv.
+        for rr, f, a in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
+            total += _f(bm.ftrv.get((region, f, a), 0.0))
+        return total
+
+    if gy == "fs":
+        # FBEP se guarda NEGATIVO en el HAR, asi que la corriente es positiva.
+        for rr, f, a in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
+            total += -_f(bm.fbep.get((region, f, a), 0.0))
+        return total
+
+    if gy == "fc":
+        for (rr, i, a), rtpd in taxes.rtpd.items():
+            if rr == region:
+                total += float(rtpd) * _f(bm.vdfb.get((region, i, a), 0.0))
+        for (rr, i, a), rtpi in taxes.rtpi.items():
+            if rr == region:
+                total += float(rtpi) * _f(bm.vmfb.get((region, i, a), 0.0))
+        return total
+
+    if gy == "pc":
+        for i in sets.i:
+            total += _f(bm.vdpp.get((region, i), 0.0)) - _f(
+                bm.vdpb.get((region, i), 0.0)
+            )
+            total += _f(bm.vmpp.get((region, i), 0.0)) - _f(
+                bm.vmpb.get((region, i), 0.0)
+            )
+        return total
+
+    if gy == "gc":
+        for (rr, i), rate in taxes.rtgd.items():
+            if rr == region:
+                total += float(rate) * _f(bm.vdgb.get((region, i), 0.0))
+        for (rr, i), rate in taxes.rtgi.items():
+            if rr == region:
+                total += float(rate) * _f(bm.vmgb.get((region, i), 0.0))
+        return total
+
+    if gy == "ic":
+        for i in sets.i:
+            total += _f(bm.vdip.get((region, i), 0.0)) - _f(
+                bm.vdib.get((region, i), 0.0)
+            )
+            total += _f(bm.vmip.get((region, i), 0.0)) - _f(
+                bm.vmib.get((region, i), 0.0)
+            )
+        return total
+
+    if gy == "et":
+        for (rr, i, rp), rtxs in taxes.rtxs.items():
+            if rr == region:
+                total += float(rtxs) * _f(bm.vxsb.get((region, i, rp), 0.0))
+        return total
+
+    if gy == "mt":
+        # GAMS ytax(r,'mt') = Σ imptx*pmcif*xw = imptx*VCIF (el valor CIF), NO
+        # imptx*vmsb: vmsb sobreestima por el margen CIF-vs-mercado.
+        for (exporter, i, importer), rate in taxes.imptx.items():
+            if importer == region:
+                total += float(rate) * _f(bm.vcif.get((exporter, i, region), 0.0))
+        return total
+
+    if gy == "dt":
+        for f in sets.f:
+            for a in sets.a:
+                kappa = float(taxes.kappaf_activity.get((region, f, a), 0.0))
+                if kappa == 0.0:
+                    kappa = float(taxes.kappaf.get((region, f), 0.0))
+                if kappa == 0.0:
+                    continue
+                scale = 1.0 if xscale is None else float(xscale(region, a))
+                total += kappa * _f(bm.vfm.get((region, f, a), 0.0)) / max(scale, 1e-12)
+        return total
+
+    return 0.0
+
+
 def _vst_income(params: Any, region: str, commodity: str) -> float:
     """VST(region,commodity) with (r,i)/(i,r) tolerance — monolith 97-106."""
     val = params.benchmark.vst.get((region, commodity))

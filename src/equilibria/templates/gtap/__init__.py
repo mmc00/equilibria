@@ -23,8 +23,7 @@ Example:
     >>> params.load_from_gdx("asa7x5.gdx")
     >>>
     >>> # Build and solve model
-    >>> from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-    >>> eq_builder = GTAPModelEquations(sets, params)
+    >>>     >>> eq_builder = GTAPModelEquations(sets, params)
     >>> model = eq_builder.build_model()
     >>>
     >>> # Solve
@@ -55,7 +54,6 @@ from equilibria.templates.gtap.gtap_contract import (
     build_gtap_contract,
     default_gtap_contract,
 )
-from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_parameters import (
     GAMSCalibrationDump,
     GTAPBenchmarkValues,
@@ -132,3 +130,23 @@ __all__ = [
     "apply_altertax_elasticities",
     "rebalance_to_altertax_dataset",
 ]
+
+
+def __getattr__(name: str):
+    """Carga perezosa del monolito.
+
+    ``gtap_model_equations`` es REFERENCIA MANUAL (ver su docstring): ningun gate
+    salvo ``nl`` lo mide, y el camino vivo es el compuesto por bloques. Importarlo
+    aqui de forma eager hacia que CUALQUIER ``import equilibria.templates.gtap``
+    --incluidos los tests que solo ejercitan bloques-- construyera ese modulo.
+
+    ``from equilibria.templates.gtap import GTAPModelEquations`` sigue funcionando;
+    solo que ahora paga el import quien de verdad lo usa.
+    """
+    if name == "GTAPModelEquations":
+        from equilibria.templates.gtap.gtap_model_equations import (
+            GTAPModelEquations as _GME,
+        )
+
+        return _GME
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

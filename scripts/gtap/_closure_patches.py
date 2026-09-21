@@ -16,6 +16,7 @@ Order matters:
 """
 from __future__ import annotations
 
+import sys
 from collections import deque
 from typing import Any
 
@@ -420,6 +421,19 @@ def deactivate_zero_unique_var_eqs(model, *, label: str = "") -> int:
             continue
         c.deactivate()
         deact += 1
+        # NOMBRAR la fila sacrificada, siempre. Desactivar una ecuacion para cuadrar
+        # puede tirar una restriccion fisica y dejar una raiz espuria que ADEMAS
+        # converge con code=1 -- un resultado malo y silencioso. Paso en
+        # gtap7_15x10-pure-ifsub1: 33 filas Fisher duplicadas sobredeterminaban el
+        # sistema y aqui caia eq_xseq[USA,VegFruit] (el balance xs==xds+xet), con
+        # pf/pft[USA,*] al floor 1e-3 y el gate en 87%. El contador agregado no
+        # alcanzaba: hubo que instrumentar esta linea a mano para verlo.
+        print(
+            f"[{label or 'squareness'}] DEACTIVATED-ROW {c.name} "
+            f"(over-determined; check whether something upstream is redundant)",
+            file=sys.stderr,
+            flush=True,
+        )
 
     if deact and label:
         print(f"[{label}] deactivated {deact} zero-unique-var over-determining eqs")

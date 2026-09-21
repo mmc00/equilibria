@@ -8,7 +8,7 @@ import contextlib
 
 from pyomo.environ import ConcreteModel, Set
 
-from .gtap_model_equations import GTAPModelEquations
+from .gtap_sets import declare_pyomo_sets
 
 PERIODS = ("base", "check", "shock")
 
@@ -24,10 +24,6 @@ class GTAPMultiPeriodModel:
         self.params = params
         self.closure = closure
         self.residual_region = residual_region
-        # builder single-period reusable para sets/vars/eqs base
-        self._sp = GTAPModelEquations(
-            sets, params, closure, residual_region=residual_region
-        )
 
     def _build_sp(self) -> ConcreteModel:
         """Construye el modelo de periodo simple que la reflexion multiperiodo lee.
@@ -41,7 +37,13 @@ class GTAPMultiPeriodModel:
         Instancia fresca en cada llamada, como hacian los sitios que reemplaza:
         ``build_model()`` muta el builder, asi que reusar uno solo acoplaria
         llamadas que hoy son independientes.
+
+        El import es LOCAL a proposito: el monolito es referencia manual, y el
+        camino de bloques sobrescribe este metodo, asi que no debe cargarlo solo
+        por construir un modelo multiperiodo.
         """
+        from .gtap_model_equations import GTAPModelEquations
+
         return GTAPModelEquations(
             self.sets,
             self.params,
@@ -53,7 +55,7 @@ class GTAPMultiPeriodModel:
         from pyomo.environ import Param
 
         m = ConcreteModel()
-        self._sp._add_sets(m)  # r,a,i,f,... actuales
+        declare_pyomo_sets(m, self.sets)  # r,a,i,f,... actuales
         m.t = Set(initialize=list(PERIODS), ordered=True)
         m.t0 = Set(initialize=["base"], ordered=True)
 
@@ -697,10 +699,55 @@ class GTAPMultiPeriodModel:
         # Delete intra-period eq_pabs / eq_pfact / eq_pwfact.
         # (After 3 calls to build_equations_intra each overwrites the previous, so only
         # the 'shock' entries remain — but we delete them all to avoid any duplicate binding.)
-        for cname in ("eq_pabs", "eq_pfact", "eq_pwfact"):
+        #
+        # eq_mfr_*/eq_mfw_* son los agregados auxiliares con que el modelo de BLOQUES
+        # parte la suma ancha de SU eq_pfact/eq_pwfact intra-periodo (closure.py:216-341;
+        # el monolito inlinea esas sumas y no los declara, asi que aqui son None).
+        #
+        # Son DUPLICADOS EXACTOS de los mq_factr_*/mq_factw_* que declara la version
+        # cross-periodo de abajo: misma suma, mismo ancho (151 vars), mismo periodo.
+        # Medido en gtap7_15x10 shock: mq_factr_ss[USA]=16.014072 con residual 0, y
+        # mfr_ss[USA]=15.605181 con residual 0.409 -- el mismo agregado, uno bien
+        # sembrado y otro con el seed viejo. Bloques emitia 66 filas de agregados donde
+        # el monolito emite 33.
+        #
+        # POR QUE ROMPE (medido, no deducido): las 33 de mas dejan el sistema
+        # SOBREDETERMINADO, y `deactivate_zero_unique_var_eqs` lo cuadra desactivando una
+        # ecuacion REAL -- medido: `eq_xseq[USA,VegFruit]` en check y shock, el balance
+        # fisico de oferta xs == xds + xet. El propio _closure_patches.py:437 advierte
+        # que soltar eq_xseq "breaks the physical balance and lands a spurious root":
+        # es exactamente lo que pasaba (pf/pft[USA,*] al floor 1e-3).
+        #
+        # O sea: la definicion redundante NO mueve el equilibrio por si misma (no podria:
+        # define una variable que nadie consume). Lo mueve la ecuacion que el squaring
+        # SACRIFICA para compensarla. Sembrar los agregados de forma consistente no
+        # arregla nada -- se midio, pft sigue en 0.001.
+        for cname in (
+            "eq_pabs",
+            "eq_pfact",
+            "eq_pwfact",
+            "eq_mfr_bs",
+            "eq_mfr_sb",
+            "eq_mfr_ss",
+            "eq_mfw_bs",
+            "eq_mfw_sb",
+            "eq_mfw_ss",
+        ):
             comp = getattr(m, cname, None)
             if comp is not None:
                 m.del_component(comp)
+
+        # Borrar la fila deja la Var sin ecuacion que la determine: una COLUMNA
+        # HUERFANA, que cambia el sistema igual que la fila (ver el caso de 2026-07 con
+        # pfa/pfy bajo ifSUB). Se BORRA la Var, no se fija: fijarla al valor del seed la
+        # congela en una suma obsoleta, y estos agregados son sumas DEFINIDAS --
+        # `refresh_fisher_aggregates` existe justo porque un valor rancio aqui deja
+        # residual en las filas Fisher (medido antes: la shock se estanca en PATH
+        # code=0). Como no las consume nadie, lo correcto es que desaparezcan.
+        for _vname in ("mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss"):
+            _vcomp = getattr(m, _vname, None)
+            if _vcomp is not None:
+                m.del_component(_vcomp)
 
         # ── Base-period anchors for price indices ────────────────────────────
         # At the benchmark (base period) all price indices equal 1.0 by construction.

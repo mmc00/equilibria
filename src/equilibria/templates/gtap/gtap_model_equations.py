@@ -1,7 +1,25 @@
-"""Complete GTAP Model Equations (Functional Implementation)
+"""GTAP model equations, monolithic implementation — REFERENCIA MANUAL.
 
-This module implements a fully functional GTAP CGE model.
-All equations are implemented to create a solvable square system.
+.. warning::
+
+   **Este modulo ya no es la implementacion viva.** El modelo que se ejercita y
+   se mide contra GAMS es el compuesto por bloques
+   (``gtap_block_model.GTAPBlockMultiPeriodModel``). Codigo nuevo debe usar ese.
+
+   El monolito se conserva como REFERENCIA LEGIBLE: es una transcripcion
+   directa de las ecuaciones de GAMS en un solo archivo, util para consultar
+   como esta escrita una ecuacion o para comparar a mano cuando bloques y GAMS
+   divergen. No lo importes en produccion, tests nuevos ni gates.
+
+   Los gates ``nlp`` (14/14) y ``mcp`` (18/18) construyen BLOQUES desde
+   2026-09-17. El unico gate que todavia mide este modulo es ``nl``, y es
+   deliberado: compara el ``.nl`` EMITIDO contra el de GAMS --una comparacion
+   estructural, no de solve-- y no tiene equivalente en bloques.
+
+   Contexto y decision: ``docs/architecture/monolito_vs_bloques.md``.
+
+Implementa el modelo GTAP CGE completo: todas las ecuaciones estan escritas
+para formar un sistema cuadrado resoluble.
 """
 
 from __future__ import annotations
@@ -731,29 +749,12 @@ class GTAPModelEquations:
         return {}
 
     def _add_sets(self, model: ConcreteModel) -> None:
-        """Add sets."""
-        from pyomo.environ import Set
+        """Add sets. Delega en ``gtap_sets.declare_pyomo_sets`` (misma declaracion,
+        funcion libre) para que el modelo multiperiodo no necesite instanciar este
+        builder solo para declarar Sets."""
+        from equilibria.templates.gtap.gtap_sets import declare_pyomo_sets
 
-        agent_labels = list(self.sets.a) + [
-            GTAP_HOUSEHOLD_AGENT,
-            GTAP_GOVERNMENT_AGENT,
-            GTAP_INVESTMENT_AGENT,
-            GTAP_MARGIN_AGENT,
-        ]
-        tax_streams = ["pt", "fc", "pc", "gc", "ic", "dt", "mt", "et", "ft", "fs"]
-
-        model.r = Set(initialize=self.sets.r, doc="Regions")
-        model.i = Set(initialize=self.sets.i, doc="Commodities")
-        model.a = Set(initialize=self.sets.a, doc="Activities")
-        model.f = Set(initialize=self.sets.f, doc="Factors")
-        model.mf = Set(initialize=self.sets.mf, doc="Mobile factors")
-        model.sf = Set(initialize=self.sets.sf, doc="Specific factors")
-        model.m = Set(initialize=self.sets.m, doc="Margin commodities")
-        model.aa = Set(initialize=agent_labels, doc="Absorption agents and activities")
-        model.gy = Set(initialize=tax_streams, doc="Government tax streams")
-
-        # Aliases for trade
-        model.rp = Set(initialize=self.sets.r, doc="Regions (alias)")
+        declare_pyomo_sets(model, self.sets)
 
     def _add_parameters(self, model: ConcreteModel) -> None:
         """Add all parameters."""

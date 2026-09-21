@@ -535,8 +535,12 @@ class TestGTAPParityRunner:
             "equilibria.templates.gtap.gtap_parity_pipeline._build_standard_gtap_params",
             mock_build_params,
         )
+        # El pipeline importa el monolito DENTRO del __init__ (no a nivel de
+        # modulo) para que importar el paquete no lo cargue en cadena. Por eso
+        # hay que parchear la clase en su modulo de origen: en
+        # gtap_parity_pipeline no existe como atributo.
         monkeypatch.setattr(
-            "equilibria.templates.gtap.gtap_parity_pipeline.GTAPModelEquations",
+            "equilibria.templates.gtap.gtap_model_equations.GTAPModelEquations",
             DummyEquations,
         )
 

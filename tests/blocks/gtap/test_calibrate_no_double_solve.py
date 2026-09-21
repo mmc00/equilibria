@@ -20,10 +20,22 @@ from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 pytestmark = pytest.mark.needs_path
 
 DATA = Path("datasets/gtap7_10x7")
-# Full base->check->shock settle baseline (captured Task 0, gtap7_10x7).
+# Full base->check->shock settle baseline (gtap7_10x7).
 # settle_only must reproduce this EXACTLY.
-BASELINE_COUNT = 20138
-BASELINE_SIG = "ded5651b6133f788"
+#
+# Recapturado 2026-09-18. El valor previo (20138, ded5651b6133f788) se tomo el
+# 2026-08-25 y caduco con `eacc53f` (2026-09-07), que NOMBRO los agregados Fisher
+# cruzados: dejaron de ser expresiones inline y pasaron a ser Vars (Hessiano 13.3x
+# mas disperso). El seed las incluye porque ahora SON variables.
+#
+# Medido celda a celda contra el ultimo commit que reproduce la firma vieja
+# (769bcf3): de las 20138 originales no desaparecio NINGUNA, la peor diferencia
+# relativa es 6.4e-11 (ruido de convergencia), y las 56 que se suman son
+# exactamente los agregados nuevos -- mq_abs_{bs,sb,ss}, mq_factr_{bs,sb,ss} y
+# mq_gdp_{bs,sb}, 7 regiones cada uno. El corte sigue sin mover el seed, que es
+# lo que este gate existe para vigilar.
+BASELINE_COUNT = 20194
+BASELINE_SIG = "b82d6f9b530a70bf"
 
 
 def _load_params():

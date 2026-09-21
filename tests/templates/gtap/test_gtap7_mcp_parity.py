@@ -105,11 +105,25 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     from pyomo.environ import value as V
 
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import (
-        PERIODS,
-        GTAPMultiPeriodModel,
+
+    # Este gate mide el modelo de BLOQUES (la implementacion viva), igual que el
+    # gate NLP. El monolito ya no se ejercita aqui.
+    #
+    # Hasta 2026-09-17 bloques daba 87.00% contra un floor de 99.0 en
+    # gtap7_15x10-pure-ifsub1, con pft[USA,Land] clavado en su floor 1e-3 y
+    # xf[USA,Land,*] 4-12x sobre GAMS. La causa NO eran las ecuaciones (identicas)
+    # sino 33 FILAS MUERTAS: el multiperiodo reemplaza eq_pfact/eq_pwfact por sus
+    # versiones cross-periodo sobre mq_factr_*/mq_factw_* y borra las intra-periodo,
+    # pero los agregados auxiliares eq_mfr_*/eq_mfw_* de bloques --que solo existian
+    # para alimentar ese eq_pfact intra ya borrado-- sobrevivian sin consumidor.
+    # Se autoapareaban (de ahi que el emparejamiento saliera identico) pero metian
+    # 4153 nonzeros de acoplamiento a pf/xf sobre el bloque de factores.
+    # Arreglado en gtap_model_multiperiod.build_equations_fisher.
+    from equilibria.templates.gtap.gtap_block_model import (
+        GTAPBlockMultiPeriodModel,
     )
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     d = DATASETS_DIR / dataset
@@ -151,7 +165,7 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         )
         solve_mode = "gtap"
 
-    mp = GTAPMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
+    mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
     for per in PERIODS:

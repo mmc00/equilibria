@@ -37,7 +37,6 @@ from equilibria.babel.gdx.reader import (
 # from the package would leave it partially initialized. Submodule-direct
 # imports also make the ordering isort-stable.
 from equilibria.templates.gtap.gtap_contract import build_gtap_contract
-from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_parameters import (
     GTAPBenchmarkValues,
     GTAPParameters,
@@ -1937,6 +1936,11 @@ class GTAPParityRunner:
             raise ValueError("Provide either gdx_file or sets_gdx")
 
         self.contract = build_gtap_contract({"closure": closure})
+        # Import local: el monolito es referencia manual y este pipeline se importa
+        # en cadena desde `templates.gtap.__init__` (via altertax), lo que hacia que
+        # CUALQUIER import del paquete lo cargara.
+        from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
         self.equations = GTAPModelEquations(
             self.sets, self.params, self.contract.closure
         )
