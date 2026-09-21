@@ -74,14 +74,29 @@ ROWS: list[Row] = [
     Row("gtap7_15x10", "gtap", None, ("base", "shock"), None, "0 diffs .nl", "ci", "gams_base/shock.nl"),
     Row("gtap7_3x4", "gtap", None, ("base", "shock"), None, "0 diffs .nl", "ci", "gams_base/shock.nl"),
     # --- altertax multi-period (solver gate, local-only), both ifSUB modes ---
-    # gap_note = freshly MEASURED shock match% @ tol1% (2026-06-30, all code=1/1/1).
-    # The tol0.5% strict band is lower where noted (eq_paa micro-cells; see sweep doc).
+    # gap_note = shock match% @ tol1% MEDIDO EN SU MOMENTO, con el motor de ESE
+    # momento. NO es una medicion viva y NO es el contrato: el contrato es `floor`,
+    # que el gate re-deriva en cada corrida.
+    #
+    # OJO AL COMPARAR: las notas fechadas 2026-06-30 se midieron contra el MONOLITO.
+    # El gate MCP pasa a construir bloques (GTAPBlockMultiPeriodModel) en faa911b
+    # (2026-09-17), asi que una nota de junio y una medicion de hoy NO miden el mismo
+    # objeto. Restarlas produce una "regresion" que no existe -- me paso el 2026-09-20
+    # con la fila 10x7/ifsub1 de aqui abajo (detalle en el commit que escribe esta nota).
+    #
+    # La tol0.5% strict band es mas baja donde se indica (celdas micro eq_paa; ver sweep doc).
     Row("gtap7_3x3", "altertax", 0, ("base", "check", "shock"), 98.0, "99.93% (98.88% @0.5%)", "local", "out_altertax_ifsub0.gdx"),
     Row("gtap7_3x3", "altertax", 1, ("base", "check", "shock"), 98.0, "99.78% (98.51% @0.5%)", "local", "out_altertax_ifsub1.gdx"),
     Row("gtap7_5x5", "altertax", 0, ("base", "check", "shock"), 99.5, "99.88% (98.53% @0.5%)", "local", "out_altertax_ifsub0.gdx"),
     Row("gtap7_5x5", "altertax", 1, ("base", "check", "shock"), 99.5, "99.81% (98.38% @0.5%)", "local", "out_altertax_ifsub1.gdx"),
-    Row("gtap7_10x7", "altertax", 0, ("base", "check", "shock"), 98.0, "99.33% (96.83% @0.5%)", "local", "out_altertax_ifsub0.gdx"),
-    Row("gtap7_10x7", "altertax", 1, ("base", "check", "shock"), 98.0, "99.31% (96.81% @0.5%)", "local", "out_altertax_ifsub1.gdx"),
+    Row("gtap7_10x7", "altertax", 0, ("base", "check", "shock"), 98.0, "99.33% (96.83% @0.5%) [monolito 2026-06-30]", "local", "out_altertax_ifsub0.gdx"),
+    # 98.97% MEDIDO sobre BLOQUES el 2026-09-21 (10349 celdas, 107 fallos, code=1/1/1).
+    # Identico en cbf060f (pre-Fisher, con el fix del lector GDX backporteado): las
+    # MISMAS 107 celdas, dif 6.1e-10 -- faa911b no movio esta fila. Los 107 fallos son
+    # 10 pares (region importadora, sector) repetidos por agente comprador, no 107
+    # errores: residual de importaciones agricolas, preexistente, de la familia del
+    # residual qxs de 2026-08-21.
+    Row("gtap7_10x7", "altertax", 1, ("base", "check", "shock"), 98.0, "98.97% (bloques 2026-09-21; era 99.31% en monolito 2026-06-30)", "local", "out_altertax_ifsub1.gdx"),
     # 15x10 refs REGENERATED via NEOS 2026-07-19: ONE-SHOT shock with tight path.opt
     # (convergence_tolerance 1e-10, inlined via $onecho), replacing the 2026-07-17
     # refs which VIOLATED THEIR OWN xfeq (xf[GBR,Capital,Rice,shock]=-0.0048 vs CES
