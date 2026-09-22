@@ -35,7 +35,10 @@ DATA = Path("datasets/gtap7_10x7")
 # mq_gdp_{bs,sb}, 7 regiones cada uno. El corte sigue sin mover el seed, que es
 # lo que este gate existe para vigilar.
 BASELINE_COUNT = 20194
-BASELINE_SIG = "b82d6f9b530a70bf"
+# Recalculada al pasar a %.13g (antes %.10e -> b82d6f9b530a70bf en macOS y
+# d29fceb45a79c2f2 en Linux, con el MISMO conteo: la diferencia era el ultimo
+# bit, no el seed). El conteo no cambia: 20194.
+BASELINE_SIG = "6e261fe5b8773a5c"
 
 
 def _load_params():
@@ -63,11 +66,26 @@ def _closure(p):
     )
 
 
+# Cifras significativas que se conservan de cada valor antes de hashear. Mismo
+# criterio (y mismo numero) que model_signature en test_multiperiod_build_once:
+# 13 es el valor mas estricto que resulta estable entre plataformas, y deja ~3
+# ordenes de margen sobre el ruido de 1-2 ULP que absorbe.
+#
+# Hacia falta aqui por lo mismo: el seed sale de sumas del benchmark que se
+# contraen distinto segun arquitectura (orden de operaciones y FMA), asi que en
+# Linux x86-64 el hash salia d29fceb45a79c2f2 y en macOS ARM b82d6f9b530a70bf
+# CON EL MISMO CONTEO (20194) — mismo seed, ultimo bit distinto.
+#
+# NO afloja el gate: `%.13g` conserva MAS precision que el `%.10e` anterior
+# (~11 cifras), y un cambio real del seed sigue moviendo el hash.
+_SIG_FIGS = 13
+
+
 def _seed_signature(seed):
     parts = []
     for name, cells in seed.items():
         for body, val in cells.items():
-            parts.append(f"{name}|{body}|{float(val):.10e}")
+            parts.append(f"{name}|{body}|{float(val):.{_SIG_FIGS}g}")
     parts.sort()
     h = hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
     return len(parts), h

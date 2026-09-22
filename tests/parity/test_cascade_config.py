@@ -39,7 +39,15 @@ def test_resolve_periods_drops_check_for_bundle():
 
 
 def test_resolve_ref_gdx_durable_present():
-    res = resolve_ref_gdx("gtap7_3x3")
+    # El GDX "durable" es una referencia de GAMS que NO se versiona (vive en
+    # EQUILIBRIA_REFS_DIR, por defecto ~/proyectos2/equilibria_refs). Sin el no
+    # hay nada que resolver, asi que esto es un skip, no un fallo: mismo guard
+    # que ya usa tests/parity/test_probe.py. El caso negativo lo cubre igual
+    # test_resolve_ref_gdx_missing_is_not_usable, que corre siempre.
+    probe = resolve_ref_gdx("gtap7_3x3")
+    if not probe.usable:
+        pytest.skip(f"reference GDX absent: {probe.note}")
+    res = probe
     assert res.usable is True
     assert res.source == "durable"
     assert res.path is not None and res.path.exists()
