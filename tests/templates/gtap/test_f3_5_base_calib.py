@@ -99,6 +99,7 @@ def _base_closure(p):
 
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+@pytest.mark.needs_gdxdump
 def test_calibrate_base_returns_settled_land_price():
     """calibrate_base runs the settle solve and returns the CHECK-period point;
     the Land price in it is the settled ~0.845, not the raw 1.0."""
@@ -204,6 +205,7 @@ def test_calibrated_land_response_beats_default_vs_gempack():
 
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+@pytest.mark.needs_gdxdump
 def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
     """Not just the land price: base-calibrated lifts the OVERALL against-GEMPACK
     quantity match (all Q_TO_VAR vars, ~190 cells) from ~76% to ~96% within 1pp,
