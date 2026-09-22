@@ -74,15 +74,20 @@ jobs:
           # Verificado en contenedor ubuntu:24.04 (la imagen de este runner):
           #   ipopt -> Ipopt 3.13.2, SolverFactory("ipopt").available() True
           #   ASL   -> AmplInterface.available() True
+          # Las dependencias van ANTES: el binario de IDAES enlaza contra
+          # lapack/blas/gfortran del sistema y sin ellas aborta con
+          # "error while loading shared libraries: liblapack.so.3".
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            coinor-libipopt-dev coinor-libipopt1v5 pkg-config \
+            liblapack3 libblas3 libgfortran5 libgomp1
           pip install --quiet idaes-pse
           idaes get-extensions --distro ubuntu2204
           echo "$HOME/.idaes/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.idaes/bin:$PATH"
           command -v ipopt
           ipopt -v 2>&1 | head -1
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            coinor-libipopt-dev coinor-libipopt1v5 pkg-config
+          python -c "import ctypes, os; ctypes.CDLL(os.path.expanduser('~/.idaes/bin/libpynumero_ASL.so'))"
           # Smoke test: que el .so este no prueba que se pueda cargar.
           python -c "import ctypes; ctypes.CDLL('libipopt.so')" || \
             python -c "import ctypes; ctypes.CDLL('libipopt.so.1')"
