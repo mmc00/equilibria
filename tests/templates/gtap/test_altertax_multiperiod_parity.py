@@ -33,6 +33,10 @@ from pathlib import Path
 
 import pytest
 
+# needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
+# binario fallaban con FileNotFoundError en vez de saltarse.
+pytestmark = pytest.mark.needs_gdxdump
+
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_altertax"
 DATASETS_DIR = ROOT / "datasets"
