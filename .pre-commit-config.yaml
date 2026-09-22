@@ -156,6 +156,7 @@ repos:
               tests/simulations/test_pep_adapter_shocks\.py|
               tests/simulations/test_simulator\.py|
               tests/solver/test_constraint_jacobian_base\.py|
+              tests/templates/gtap/test_blocks_nl_parity\.py|
               tests/templates/gtap/test_altertax\.py|
               tests/templates/gtap/test_altertax_multiperiod_parity\.py|
               tests/templates/gtap/test_blocks_diag\.py|
