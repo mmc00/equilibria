@@ -133,7 +133,6 @@ jobs:
           PATH_CAPI_LIBPATH: ${{ github.workspace }}/.cache/path_capi/libpath50.so
           PATH_CAPI_LIBLUSOL: ${{ github.workspace }}/.cache/path_capi/liblusol.so
           PATH_LICENSE_STRING: "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
-          EQUILIBRIA_DEBUG_SHOCK_RESULT: "1"
         run: |
           uv run pytest -ra -m "not gams and not slow" tests
 

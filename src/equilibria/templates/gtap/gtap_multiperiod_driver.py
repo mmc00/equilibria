@@ -4023,19 +4023,6 @@ def _solve_multiperiod_inner(
         )
     code_shk = int(r_shk.get("termination_code") or 0)
     res_shk = float(r_shk.get("residual") or float("inf"))
-    import os as _os_shk
-
-    if _os_shk.environ.get("EQUILIBRIA_DEBUG_SHOCK_RESULT"):
-        print(
-            f"[DBG-SHOCK] term={r_shk.get('termination_code')!r} "
-            f"resid={r_shk.get('residual')!r} status={r_shk.get('status')!r} "
-            f"license_ok={r_shk.get('license_ok')!r} path_version={r_shk.get('path_version')!r} "
-            f"major={r_shk.get('major_iterations')!r} minor={r_shk.get('minor_iterations')!r} "
-            f"fevals={r_shk.get('function_evaluations')!r} "
-            f"nvars={(r_shk.get('model_summary') or {}).get('n_variables')!r} "
-            f"MSG={str(r_shk.get('message'))[:400]!r}",
-            file=sys.stderr,
-        )
     results["shock"] = {"code": code_shk, "residual": res_shk}
 
     # Recompute ytax[mt]/ytaxshr[mt] (import-tax revenue) post-solve. eq_ytax for
