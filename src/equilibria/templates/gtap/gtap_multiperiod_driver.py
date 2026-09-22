@@ -4032,7 +4032,8 @@ def _solve_multiperiod_inner(
             f"license_ok={r_shk.get('license_ok')!r} path_version={r_shk.get('path_version')!r} "
             f"major={r_shk.get('major_iterations')!r} minor={r_shk.get('minor_iterations')!r} "
             f"fevals={r_shk.get('function_evaluations')!r} "
-            f"nvars={(r_shk.get('model_summary') or {}).get('n_variables')!r}",
+            f"nvars={(r_shk.get('model_summary') or {}).get('n_variables')!r} "
+            f"MSG={str(r_shk.get('message'))[:400]!r}",
             file=sys.stderr,
         )
     results["shock"] = {"code": code_shk, "residual": res_shk}
