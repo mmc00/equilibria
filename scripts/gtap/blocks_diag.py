@@ -98,15 +98,50 @@ def _domain_name(domain) -> str:
     return type(domain).__name__
 
 
+def _bounds_equal(a_bounds, b_bounds, rel_tol: float = 1e-12) -> bool:
+    """True if two Pyomo bounds tuples agree to ``rel_tol`` RELATIVE.
+
+    Comparar los bounds con ``!=`` exige igualdad BIT A BIT de dos float64, y
+    eso no sobrevive a un cambio de arquitectura: el mismo `1e-3 * init` da
+    0.009927450515625004 en Linux x86-64 y 0.009927450515625 en macOS ARM
+    —1,6 ULP, 3,5e-16 relativo— porque la suma del benchmark que alimenta
+    `init` se contrae distinto (orden y FMA). El gate se volvia rojo en un SO
+    y verde en el otro sin que el modelo cambiara.
+
+    NO es aflojar una tolerancia de fidelidad: un bound es una COTA DE ARRANQUE
+    del solver, no un resultado. A 1e-12 relativo (cuatro ordenes sobre el ruido
+    de float64 y seis por DEBAJO del 1e-6 que este mismo archivo ya admite en
+    `_is_post_scaling_floor_carry`) un bound realmente distinto sigue cayendo:
+    los floors del modelo difieren en ordenes de magnitud, no en el ultimo bit.
+    """
+    if a_bounds == b_bounds:
+        return True
+    if len(a_bounds) != len(b_bounds):
+        return False
+    for a, b in zip(a_bounds, b_bounds, strict=True):
+        if a is None or b is None:
+            if a is not b:
+                return False
+            continue
+        if a == b:
+            continue
+        denom = max(abs(a), abs(b))
+        if denom == 0.0 or abs(a - b) / denom > rel_tol:
+            return False
+    return True
+
+
 def domain_bounds_diff(
     model_a, model_b
 ) -> list[tuple[str, Any, str, str, tuple, tuple]]:
     """Compare Var domain + bounds between two models, matched by NAME.
 
     Returns ``[(var_name, index, a_domain, b_domain, a_bounds, b_bounds), ...]``
-    for every index where the domain label or the bounds tuple differs. Vars
-    present in only one model are skipped (nothing to compare) — this is a
-    mismatch diagnostic, not a coverage diagnostic.
+    for every index where the domain label differs or the bounds differ by more
+    than 1e-12 relative (ver :func:`_bounds_equal`: la igualdad exacta de float64
+    no es portable entre arquitecturas). Vars present in only one model are
+    skipped (nothing to compare) — this is a mismatch diagnostic, not a coverage
+    diagnostic.
     """
     from pyomo.environ import Var
 
@@ -125,7 +160,7 @@ def domain_bounds_diff(
             b_domain = _domain_name(vb.domain)
             a_bounds = va.bounds
             b_bounds = vb.bounds
-            if a_domain != b_domain or a_bounds != b_bounds:
+            if a_domain != b_domain or not _bounds_equal(a_bounds, b_bounds):
                 diffs.append((name, idx, a_domain, b_domain, a_bounds, b_bounds))
 
     return diffs

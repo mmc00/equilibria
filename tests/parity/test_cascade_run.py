@@ -35,6 +35,9 @@ def test_stops_at_first_dirty():
     # holdfixed/tautology default to clean here, so the sweep passes them and stops
     # at the first dirty (nl_compare). Later layers must NOT run.
     assert names == [
+        # seed_and_solve corre PRIMERO (9b9777c) y aqui sale clean por el
+        # default del _fake_runner, asi que el sweep sigue hasta el primer dirty.
+        "seed_and_solve",
         "mcp_pairing",
         "holdfixed",
         "tautology",

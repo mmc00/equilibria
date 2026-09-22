@@ -130,6 +130,7 @@ def test_seed_gams_reports_coverage():
     assert isinstance(result["below_threshold"], bool)
 
 
+import json
 import subprocess
 
 
@@ -163,7 +164,10 @@ def test_cli_show_runs_and_caches(tmp_path):
     assert "pi" in r1.stdout
     r2 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert r2.returncode == 0, r2.stderr
-    assert "cache hit" in r2.stdout.lower()
+    # probe.py es JSON-ONLY en stdout (ver su docstring, "PHASE 1"): todo el
+    # chatter de build/solve/cache va a stderr. El assert miraba stdout, donde
+    # ya no esta; se comprueba donde REALMENTE se emite, no se afloja.
+    assert "cache hit" in r2.stderr.lower()
 
 
 @pytest.mark.needs_path
@@ -198,7 +202,13 @@ def test_compare_ref_runs_against_head_itself(tmp_path):
     if "not available" in (out.stdout + out.stderr):
         pytest.skip("gtap7_3x3 not available")
     assert out.returncode == 0, out.stderr
-    assert "HEAD" in out.stdout and "Δ" in out.stdout
+    # Mismo motivo: stdout es un unico objeto JSON. La comparacion vive en
+    # meta.deltas/ref_values, no en un render de texto con "HEAD" y "delta".
+    payload = json.loads(out.stdout)
+    meta = payload.get("meta") or {}
+    assert meta.get("mode") == "compare_ref"
+    assert "deltas" in meta and "ref_values" in meta
+    assert payload["status"] == "clean"
     wl = subprocess.run(
         ["git", "worktree", "list"], cwd=ROOT, capture_output=True, text=True
     )

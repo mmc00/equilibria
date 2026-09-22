@@ -328,7 +328,13 @@ def test_constraint_harness_numeric_mode_uses_finite_differences_for_eq66() -> N
     assert harness.finite_difference_eval_count > 0
 
 
+# needs_cyipopt ademas de needs_path: lo que este test importa es cyipopt, no la
+# libreria PATH. Con solo needs_path se salteaba de rebote —por falta de PATH— y
+# en cuanto PATH estuvo disponible en CI llego hasta aqui y murio con
+# ImportError. needs_ipopt NO sirve: da True con solo el ejecutable en el PATH,
+# que es otra dependencia.
 @pytest.mark.needs_path
+@pytest.mark.needs_cyipopt
 def test_ipopt_solver_reports_jacobian_stats() -> None:
     state = _build_base_gdx()
     solver = IPOPTSolver(

@@ -171,6 +171,7 @@ def test_3x3_nlp_via_blocks_matches_gams():
 
 
 @pytest.mark.skipif(not GDX.exists(), reason="gtap7_3x3 reference GDX missing")
+@pytest.mark.needs_gdxdump
 def test_3x3_mcp_via_blocks_matches_gams():
     """gtap7_3x3 solves via the composed 7-block framework (MCP/PATH) and matches
     GAMS >= 99% on every period."""

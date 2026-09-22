@@ -27,14 +27,24 @@ def _ensure_path_lib() -> None:
 
     if os.environ.get("PATH_CAPI_LIBPATH"):
         return
-    for cand in (
+    from equilibria._local_refs import path_capi_lib, path_capi_lusol
+
+    # path_capi_lib() resuelve por plataforma (.dylib en macOS, .so en Linux);
+    # antes se buscaba el nombre de macOS ARM a secas y en Linux no encontraba
+    # nada aunque la libreria estuviera en la misma carpeta.
+    candidatos = [
+        path_capi_lib(),
         Path.cwd() / ".cache" / "path_capi" / "libpath50.silicon.dylib",
         Path(
             "/Library/Frameworks/GAMS.framework/Versions/53/Resources/libpath52.dylib"
         ),
-    ):
+    ]
+    for cand in candidatos:
         if cand.exists():
             os.environ["PATH_CAPI_LIBPATH"] = str(cand)
+            lusol = path_capi_lusol()
+            if lusol.exists() and not os.environ.get("PATH_CAPI_LIBLUSOL"):
+                os.environ["PATH_CAPI_LIBLUSOL"] = str(lusol)
             return
 
 

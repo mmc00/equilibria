@@ -49,6 +49,88 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
+      # --- solvers: sin esto, 64 de 1151 tests se SALTABAN en silencio -------
+      # Los guards de solver (tests/conftest.py) saltan needs_path/needs_ipopt
+      # cuando la herramienta falta, asi que CI salia VERDE con esos tests
+      # rotos: dos de ellos estuvieron rojos del 17 al 21 de septiembre sin que
+      # nada avisara. No era una limitacion de licencia —la creencia de que
+      # PATH no se podia instalar en CI resulto FALSA al ir a verificarla—:
+      #   * la licencia de cortesia es publica y en claro (pages.cs.wisc.edu,
+      #     HTTP 200 sin auth), sirve para cualquier tamano hasta 2035-12-31 y
+      #     por eso va aqui a la vista y no en un secret;
+      #   * el upstream publica libpath50.so (ELF x86-64) en el mismo sitio.
+      # Falla duro a proposito (`set -euo pipefail` + checksum + smoke test):
+      # si la descarga se cae, queremos rojo, no 64 skips que se ven igual que
+      # un verde legitimo.
+      - name: Install IPOPT + PyNumero ASL (binarios de IDAES)
+        run: |
+          set -euo pipefail
+          # `idaes get-extensions` trae de un golpe las DOS piezas que apt no da:
+          #   * el EJECUTABLE ipopt (apt solo publica la libreria C; ningun
+          #     paquete trae el binario, y Pyomo busca el ejecutable en el PATH),
+          #   * libpynumero_ASL.so, la interfaz ASL de PyNumero, que NO esta en
+          #     `pyomo download-extensions`, falla en `pyomo build-extensions`
+          #     (faltan las fuentes de ampl/asl) y no existe en PyPI.
+          # Verificado en contenedor ubuntu:24.04 (la imagen de este runner):
+          #   ipopt -> Ipopt 3.13.2, SolverFactory("ipopt").available() True
+          #   ASL   -> AmplInterface.available() True
+          # Las dependencias van ANTES: el binario de IDAES enlaza contra
+          # lapack/blas/gfortran del sistema y sin ellas aborta con
+          # "error while loading shared libraries: liblapack.so.3".
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            coinor-libipopt-dev coinor-libipopt1v5 pkg-config \
+            liblapack3 libblas3 libgfortran5 libgomp1
+          pip install --quiet idaes-pse
+          idaes get-extensions --distro ubuntu2204
+          echo "$HOME/.idaes/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.idaes/bin:$PATH"
+          command -v ipopt
+          ipopt -v 2>&1 | head -1
+          python -c "import ctypes, os; ctypes.CDLL(os.path.expanduser('~/.idaes/bin/libpynumero_ASL.so'))"
+          # Smoke test: que el .so este no prueba que se pueda cargar.
+          python -c "import ctypes; ctypes.CDLL('libipopt.so')" || \
+            python -c "import ctypes; ctypes.CDLL('libipopt.so.1')"
+          # cyipopt es el binding de Python (la libreria C sola no alcanza: hay
+          # tests que hacen `import cyipopt`). Se compila desde fuente y depende
+          # de headers/pkg-config, asi que NO se deja bloquear el paso: afecta a
+          # 1 test, y hacerlo obligatorio tiraba abajo la instalacion entera y
+          # con ella los 59 tests de PATH, que no tienen nada que ver.
+          # Si falla, ese test se salta por su marcador needs_ipopt, como antes.
+          uv pip install --python "$(uv run python -c 'import sys; print(sys.executable)')" cyipopt \
+            || echo "::warning::cyipopt no se pudo instalar; los tests que lo importan se saltaran"
+          uv run python -c "import cyipopt; print('cyipopt', cyipopt.__version__)" \
+            || echo "::warning::cyipopt no importa"
+
+      - name: Install PATH solver library
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/path_linux.zip \
+            "https://pages.cs.wisc.edu/~ferris/path/path_5.0.05_Linux64.zip"
+          mkdir -p "$GITHUB_WORKSPACE/.cache/path_capi"
+          unzip -q -j /tmp/path_linux.zip \
+            "path_5/pathlib/lib/libpath50.so" \
+            "path_5/pathlib/lib/liblusol.so" \
+            -d "$GITHUB_WORKSPACE/.cache/path_capi"
+          chmod +x "$GITHUB_WORKSPACE/.cache/path_capi"/*.so
+          # Smoke test: que cargue de verdad, no solo que el archivo exista.
+          python - <<'PY'
+          import ctypes, os
+          d = os.path.join(os.environ["GITHUB_WORKSPACE"], ".cache", "path_capi")
+          ctypes.CDLL(os.path.join(d, "liblusol.so"), mode=ctypes.RTLD_GLOBAL)
+          ctypes.CDLL(os.path.join(d, "libpath50.so"))
+          print("PATH library loads OK")
+          PY
+
+      # path-capi-python no esta publicado en PyPI; se clona por SHA para que
+      # el binding quede fijo y un push upstream no cambie lo que CI prueba.
+      - name: Checkout path-capi-python
+        uses: actions/checkout@v4
+        with:
+          repository: mmc00/path-capi-python
+          ref: 786110fdb4ed274dff5b747cd10f19ce5cb0295c
+          path: .path-capi-python
+
       # La suite completa, no una lista blanca. Hasta 2026-09-16 este paso
       # enumeraba 5 archivos de 172 (3,5 % de la suite), herencia de 2f5c128
       # ("stabilize tests for linux runner"): se listo lo que pasaba entonces y
@@ -58,9 +140,21 @@ jobs:
       # NO anadir -n/--numprocesses: los tests GTAP compiten por la libreria
       # PATH y por las caches de modelo, y en paralelo producen decenas de
       # fallos espurios (40 medidos; 1 real al correrlos aislados).
+      #
+      # `-ra` porque el default de pytest (-rfE) no reporta skips: los 64 que
+      # habia aqui no decian ni cuales eran ni por que.
       - name: Run tests (excluding GAMS-marked and slow)
+        env:
+          EQUILIBRIA_PATH_CAPI_LIB_DIR: ${{ github.workspace }}/.cache/path_capi
+          EQUILIBRIA_PATH_CAPI_SRC: ${{ github.workspace }}/.path-capi-python/src
+          # El loader de path_capi_python pide la RUTA COMPLETA por estas dos
+          # variables; sin ellas aborta con "Missing required environment
+          # variable" aunque EQUILIBRIA_PATH_CAPI_LIB_DIR apunte bien.
+          PATH_CAPI_LIBPATH: ${{ github.workspace }}/.cache/path_capi/libpath50.so
+          PATH_CAPI_LIBLUSOL: ${{ github.workspace }}/.cache/path_capi/liblusol.so
+          PATH_LICENSE_STRING: "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
         run: |
-          uv run pytest -m "not gams and not slow" tests
+          uv run pytest -ra -m "not gams and not slow" tests
 
   structural-gates:
     runs-on: ubuntu-latest

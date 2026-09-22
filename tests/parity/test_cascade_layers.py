@@ -20,6 +20,9 @@ def test_subprocess_layers_in_diagnostic_order():
     # anchor-missing layers (holdfixed/tautology) sit right after mcp_pairing so a
     # root-selection gap is flagged before the downstream symptom layers.
     assert names == [
+        # seed_and_solve va PRIMERO por diseno (9b9777c): responde la pregunta
+        # raiz —seleccion de equilibrio vs ecuacion que difiere— en UN solo solve.
+        "seed_and_solve",
         "mcp_pairing",
         "holdfixed",
         "tautology",

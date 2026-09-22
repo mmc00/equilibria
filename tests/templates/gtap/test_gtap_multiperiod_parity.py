@@ -36,6 +36,10 @@ import pytest
 
 from equilibria._local_refs import path_capi_src
 
+# needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
+# binario fallaban con FileNotFoundError en vez de saltarse.
+pytestmark = pytest.mark.needs_gdxdump
+
 ROOT = Path(__file__).resolve().parents[3]
 DATASETS_DIR = ROOT / "datasets"
 FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
