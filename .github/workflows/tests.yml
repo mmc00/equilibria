@@ -133,6 +133,23 @@ jobs:
           PATH_CAPI_LIBPATH: ${{ github.workspace }}/.cache/path_capi/libpath50.so
           PATH_CAPI_LIBLUSOL: ${{ github.workspace }}/.cache/path_capi/liblusol.so
           PATH_LICENSE_STRING: "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
+          # El Jacobiano por ASL (el default desde 9ef28cb) necesita la interfaz
+          # PyNumero ASL, que en Linux NO hay forma razonable de instalar: no viene
+          # en `pyomo download-extensions`, `pyomo build-extensions` da [FAIL]
+          # pynumero aun con cmake/g++/gfortran (faltan las fuentes de ampl/asl),
+          # y no existe wheel en PyPI — solo conda-forge, y aqui se usa uv.
+          #
+          # Sin ella el solve ABORTA antes de PATH ("Failed to build nonlinear
+          # callbacks: Cannot load the PyNumero ASL interface") y el test lo
+          # reportaba como "shock did not converge (code=0)", que engana: el code 0
+          # es el default de `int(... or 0)` cuando no hay termination_code, no un
+          # codigo de PATH. Asi fallaban los 8 tests de gempack_parity.
+          #
+          # reverse_numeric deriva el arbol de expresiones en Python: MISMO
+          # resultado (medido, |dif|max 1.4e-14), solo mas lento. El 2.5x de ASL
+          # esta medido en el 20x41, que este job ni corre; aqui el modelo mayor
+          # es 5x5 y tarda 4,7 s (3x3 con ASL: 2,9 s).
+          EQUILIBRIA_GTAP_JAC_MODE: reverse_numeric
         run: |
           uv run pytest -ra -m "not gams and not slow" tests
 
