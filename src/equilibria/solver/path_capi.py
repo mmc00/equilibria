@@ -13,6 +13,7 @@ The function bodies are unchanged — only the module-level names they read
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -42,6 +43,30 @@ COMP_CSV_REFERENCE = (
     Path(__file__).resolve().parents[2]
     / "equilibria/templates/reference/gtap/comp/COMP_generated.csv"
 )
+
+
+@contextlib.contextmanager
+def _env_override(**overrides: str | None):
+    """Set env vars for the duration of the block and restore them afterwards.
+
+    A library must not leave the caller's process environment modified. Each
+    name is restored to its previous value (or removed if it had none), also
+    when the block raises. ``None`` as a value means "remove while inside".
+    """
+    previous = {k: os.environ.get(k) for k in overrides}
+    try:
+        for k, v in overrides.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        yield
+    finally:
+        for k, old in previous.items():
+            if old is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = old
 
 
 def _default_jacobian_eval_mode() -> str:
@@ -1902,26 +1927,26 @@ def _run_path_capi_nonlinear_full(
         # core.scale_model — GAMS does its own scaling, and stacking ours on
         # top would re-introduce the double-scaling bug from the other branch.
         if os.environ.get("EQUILIBRIA_DEBUG_NLP_VIA_GAMS"):
-            os.environ["PATH"] = (
-                "/Library/Frameworks/GAMS.framework/Versions/Current/Resources:"
-                + os.environ.get("PATH", "")
-            )
-            opt = _PyoSF3("gams")
-            # Solve the UNSCALED model directly — GAMS applies its own
-            # scaleopt. add_options injects a .gms directive setting
-            # scaleopt=1 (row/col scaling) to match the real GAMS gtap run.
-            res = opt.solve(
-                model,
-                solver="ipopt",
-                tee=True,
-                add_options=["option nlp=ipopt;"],
-                io_options={"symbolic_solver_labels": True},
-            )
-            print(
-                f"[nlp-square] solved via GAMS/IPOPT: status={res.solver.status} "
-                f"term={res.solver.termination_condition}",
-                file=sys.stderr,
-            )
+            # Prepend GAMS to PATH only for this solve — restoring it after,
+            # so the library never leaves the caller's PATH modified.
+            _gams_bin = "/Library/Frameworks/GAMS.framework/Versions/Current/Resources"
+            with _env_override(PATH=_gams_bin + ":" + os.environ.get("PATH", "")):
+                opt = _PyoSF3("gams")
+                # Solve the UNSCALED model directly — GAMS applies its own
+                # scaleopt. add_options injects a .gms directive setting
+                # scaleopt=1 (row/col scaling) to match the real GAMS gtap run.
+                res = opt.solve(
+                    model,
+                    solver="ipopt",
+                    tee=True,
+                    add_options=["option nlp=ipopt;"],
+                    io_options={"symbolic_solver_labels": True},
+                )
+                print(
+                    f"[nlp-square] solved via GAMS/IPOPT: status={res.solver.status} "
+                    f"term={res.solver.termination_condition}",
+                    file=sys.stderr,
+                )
         elif os.environ.get("EQUILIBRIA_GTAP_SOLVE_NEOS"):
             # DIAGNOSTIC HOOK (env-gated, session-local): solve the NLP-square via
             # NEOS instead of local IPOPT — lifts the local ~20-min wall-clock cap
