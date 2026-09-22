@@ -27,15 +27,9 @@ from __future__ import annotations
 
 import contextlib
 import copy
-import importlib.util as _iu
 import sys
 from pathlib import Path
 from typing import Any
-
-# Root of the repository (four levels up from this file):
-#   src/equilibria/templates/gtap/ → src/equilibria/templates/ → src/equilibria/ →
-#   src/ → repository root
-ROOT = Path(__file__).resolve().parents[4]
 
 PERIODS = ("base", "check", "shock")
 
@@ -171,16 +165,14 @@ def _gc_threshold_from_env() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Lazy-load run_gtap (mirrors how diff_altertax.py does it)
+# The PATH C-API solve used to be loaded by path from scripts/gtap/run_gtap.py,
+# which is NOT part of the wheel: a pip-installed run raised FileNotFoundError
+# here on the first solve. It now lives in the package.
 # ---------------------------------------------------------------------------
 def _load_run_gtap():
-    spec = _iu.spec_from_file_location(
-        "run_gtap", str(ROOT / "scripts" / "gtap" / "run_gtap.py")
-    )
-    rg = _iu.module_from_spec(spec)
-    sys.modules["run_gtap"] = rg
-    spec.loader.exec_module(rg)
-    return rg
+    from equilibria.solver import path_capi
+
+    return path_capi
 
 
 # ---------------------------------------------------------------------------

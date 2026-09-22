@@ -95,6 +95,7 @@ repos:
               src/equilibria/simulations/simulator\.py|
               src/equilibria/solver/jacobians/base\.py|
               src/equilibria/solver/jacobians/reporting\.py|
+              src/equilibria/solver/path_capi\.py|
               src/equilibria/templates/data/pep/generate_sam_4d\.py|
               src/equilibria/templates/gtap/altertax/calibration_sequence\.py|
               src/equilibria/templates/gtap/altertax/outer_loop\.py|
