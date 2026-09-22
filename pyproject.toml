@@ -52,6 +52,11 @@ dependencies = [
     "certifi>=2026.1.4",
     "click>=8.4.1",
     "scipy>=1.15.3",
+    # Pyomo lo declara solo en su extra "optional", pero PyNumero (el motor del
+    # Jacobiano) no se puede ni importar sin el: sin packaging, `pip install
+    # equilibria` da un DeferredImportError al resolver. En el repo entraba de
+    # rebote por mypy, asi que el agujero solo se ve en un venv limpio.
+    "packaging>=23.0",
 ]
 
 [project.optional-dependencies]
