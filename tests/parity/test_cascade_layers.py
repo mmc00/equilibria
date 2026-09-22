@@ -17,9 +17,19 @@ def _argv(name, dataset, period, gdx=GDX):
 @pytest.mark.needs_path
 def test_subprocess_layers_in_diagnostic_order():
     names = [l.name for l in LAYER_SPECS]
-    # anchor-missing layers (holdfixed/tautology) sit right after mcp_pairing so a
-    # root-selection gap is flagged before the downstream symptom layers.
+    # seed_and_solve va PRIMERO: responde la pregunta raiz (seleccion de
+    # equilibrio vs ecuacion que difiere) antes que cualquier capa estatica.
+    # Lo fijo 9b9777c, cuyo mensaje lo deja escrito: "Wired into the orchestrator
+    # as the FIRST layer — the lesson that cost two false closures was running
+    # this LAST (8th), not first".  Este test se quedo con la lista de 9 previa
+    # a ese commit y no se actualizo; como lleva marca needs_path, CI se lo
+    # saltaba y el desajuste no salio hasta que se instalaron los solvers.
+    #
+    # Despues: las capas anchor-missing (holdfixed/tautology) van justo tras
+    # mcp_pairing, para que un fallo de seleccion de raiz se senale antes que
+    # las capas de sintoma que vienen detras.
     assert names == [
+        "seed_and_solve",
         "mcp_pairing",
         "holdfixed",
         "tautology",

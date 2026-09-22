@@ -383,15 +383,34 @@ def _apply_solver_closure(model, dataset, params):
     import os
     spec2 = _u.spec_from_file_location("run_gtap", str(ROOT / "scripts" / "gtap" / "run_gtap.py"))
     rg = _u.module_from_spec(spec2); sys.modules["run_gtap"] = rg; spec2.loader.exec_module(rg)
-    os.environ["PATH_CAPI_OPTIONS"] = "major_iteration_limit 0"
     # build the altertax closure the same way diff_altertax does
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     alt = GTAPClosureConfig(name="altertax", closure_type="MCP", capital_mobility="mobile",
                             fix_endowments=False, fix_taxes=True, fix_technology=True,
                             if_sub=False, numeraire="pnum")
-    rg._run_path_capi_nonlinear_full(model, params, enforce_post_checks=False,
-                                     strict_path_capi=False, equation_scaling=True,
-                                     closure_config=alt)
+    # `major_iteration_limit 0` es LO QUE ESTA HERRAMIENTA NECESITA (aplicar el
+    # closure sin resolver), pero PATH_CAPI_OPTIONS es del PROCESO: dejarla puesta
+    # le dice "no iteres" a cualquier solve posterior.  Como proceso suelto daba
+    # igual; dentro de pytest (tests/parity/test_diff_mcp_pairing.py) contaminaba
+    # el resto de la sesion.
+    #
+    # MEDIDO: con este test delante, 4 filas de test_gtap7_mcp_parity (10x7 y
+    # 15x10 altertax) caian bajo el floor — pasan solas y fallan detras de el.  El
+    # sintoma enganaba: "Setting Var pwmg[...] to 0.0 outside the bounds", que
+    # parece un seed corrupto y era un solve que nunca arranco.  El centinela de
+    # solve_multiperiod no cubre este caso a proposito: solo limpia el valor que
+    # escribe EL MISMO, y uno externo "siempre gana".
+    _prev_opts = os.environ.get("PATH_CAPI_OPTIONS")
+    os.environ["PATH_CAPI_OPTIONS"] = "major_iteration_limit 0"
+    try:
+        rg._run_path_capi_nonlinear_full(model, params, enforce_post_checks=False,
+                                         strict_path_capi=False, equation_scaling=True,
+                                         closure_config=alt)
+    finally:
+        if _prev_opts is None:
+            os.environ.pop("PATH_CAPI_OPTIONS", None)
+        else:
+            os.environ["PATH_CAPI_OPTIONS"] = _prev_opts
 
 
 if __name__ == "__main__":
