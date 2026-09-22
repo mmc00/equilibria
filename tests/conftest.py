@@ -10,6 +10,7 @@ paso tests que si podrian correr:
 
     @pytest.mark.needs_mumps     # pymumps (conda-forge)
     @pytest.mark.needs_ipopt     # ejecutable ipopt
+    @pytest.mark.needs_cyipopt   # binding de Python cyipopt (NO es lo mismo)
     @pytest.mark.needs_path      # libreria PATH C-API + path-capi-python
     @pytest.mark.needs_gdxdump   # ejecutable gdxdump (GAMS)
     @pytest.mark.needs_asl       # interfaz PyNumero ASL (pynumero_ASL)
@@ -30,6 +31,7 @@ import pytest
 _MARCADORES = {
     "needs_mumps": "pymumps ausente (conda install -c conda-forge pymumps)",
     "needs_ipopt": "ipopt ausente en el PATH",
+    "needs_cyipopt": "cyipopt ausente (pip install cyipopt)",
     "needs_path": "libreria PATH ausente (define EQUILIBRIA_PATH_CAPI_LIB_DIR)",
     "needs_gdxdump": "gdxdump ausente en el PATH (viene con GAMS)",
     "needs_asl": "interfaz PyNumero ASL ausente (pynumero_ASL)",
@@ -41,8 +43,22 @@ def _mumps_disponible() -> bool:
 
 
 def _ipopt_disponible() -> bool:
+    """Cualquiera de las dos vias a IPOPT: el ejecutable o el binding."""
     if shutil.which("ipopt"):
         return True
+    return _cyipopt_disponible()
+
+
+def _cyipopt_disponible() -> bool:
+    """SOLO el binding de Python.
+
+    `needs_ipopt` acepta el ejecutable O el binding, asi que no sirve para un
+    test que llama a `IPOPTSolver.solve_ipopt()`: ese metodo corta sobre
+    `IPOPT_AVAILABLE`, que en pep_model_solver_ipopt.py es literalmente
+    `import cyipopt`. Con el ejecutable presente y el binding ausente
+    —la combinacion por defecto de `brew install ipopt` + `uv sync`—
+    `needs_ipopt` dice "disponible" y el test revienta igual con ImportError.
+    """
     return importlib.util.find_spec("cyipopt") is not None
 
 
@@ -79,6 +95,8 @@ def _ausentes() -> set[str]:
         faltan.add("needs_mumps")
     if not _ipopt_disponible():
         faltan.add("needs_ipopt")
+    if not _cyipopt_disponible():
+        faltan.add("needs_cyipopt")
     if not _path_disponible():
         faltan.add("needs_path")
     if not _gdxdump_disponible():
