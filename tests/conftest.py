@@ -30,6 +30,7 @@ import pytest
 _MARCADORES = {
     "needs_mumps": "pymumps ausente (conda install -c conda-forge pymumps)",
     "needs_ipopt": "ipopt ausente en el PATH",
+    "needs_cyipopt": "cyipopt ausente (el binding de Python, no el ejecutable)",
     "needs_path": "libreria PATH ausente (define EQUILIBRIA_PATH_CAPI_LIB_DIR)",
     "needs_gdxdump": "gdxdump ausente en el PATH (viene con GAMS)",
     "needs_asl": "interfaz PyNumero ASL ausente (pynumero_ASL)",
@@ -43,6 +44,16 @@ def _mumps_disponible() -> bool:
 def _ipopt_disponible() -> bool:
     if shutil.which("ipopt"):
         return True
+    return importlib.util.find_spec("cyipopt") is not None
+
+
+def _cyipopt_disponible() -> bool:
+    """El BINDING de Python, no el ejecutable.
+
+    `_ipopt_disponible` da True con solo el ejecutable en el PATH, asi que un
+    test que hace `import cyipopt` pasaba el guard needs_ipopt y moria con
+    ImportError. Son dos dependencias distintas y necesitan marcadores distintos.
+    """
     return importlib.util.find_spec("cyipopt") is not None
 
 
@@ -91,6 +102,8 @@ def _ausentes() -> set[str]:
         faltan.add("needs_ipopt")
     if not _path_disponible():
         faltan.add("needs_path")
+    if not _cyipopt_disponible():
+        faltan.add("needs_cyipopt")
     if not _gdxdump_disponible():
         faltan.add("needs_gdxdump")
     if not _asl_disponible():

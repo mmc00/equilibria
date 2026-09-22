@@ -71,10 +71,16 @@ jobs:
           # Smoke test: que el .so este no prueba que se pueda cargar.
           python -c "import ctypes; ctypes.CDLL('libipopt.so')" || \
             python -c "import ctypes; ctypes.CDLL('libipopt.so.1')"
-          # cyipopt es el binding de Python: la libreria C sola no alcanza,
-          # varios tests hacen `import cyipopt` directamente.
-          uv pip install cyipopt
-          uv run python -c "import cyipopt; print('cyipopt', cyipopt.__version__)"
+          # cyipopt es el binding de Python (la libreria C sola no alcanza: hay
+          # tests que hacen `import cyipopt`). Se compila desde fuente y depende
+          # de headers/pkg-config, asi que NO se deja bloquear el paso: afecta a
+          # 1 test, y hacerlo obligatorio tiraba abajo la instalacion entera y
+          # con ella los 59 tests de PATH, que no tienen nada que ver.
+          # Si falla, ese test se salta por su marcador needs_ipopt, como antes.
+          uv pip install --python "$(uv run python -c 'import sys; print(sys.executable)')" cyipopt \
+            || echo "::warning::cyipopt no se pudo instalar; los tests que lo importan se saltaran"
+          uv run python -c "import cyipopt; print('cyipopt', cyipopt.__version__)" \
+            || echo "::warning::cyipopt no importa"
 
       - name: Install PATH solver library
         run: |
