@@ -38,7 +38,6 @@ from equilibria.blocks.gtap import _derived_params as dp
 from equilibria.blocks.gtap.floors import (
     declare_price_var,
     declare_quantity_var,
-    price_floor,
 )
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
@@ -174,14 +173,8 @@ class FactorBlock(Block):
             lower=1e-8,
             upper=float("inf"),
         )
-        variables["kapEnd"] = Variable(
-            name="kapEnd",
-            value=kapend_init,
-            domains=("r",),
-            domain="NonNegativeReals",
-            lower=np.vectorize(price_floor)(kapend_init),
-            upper=float("inf"),
-        )
+        # kapEnd es un precio: piso relativo celda a celda, como los demas.
+        declare_price_var(variables, "kapEnd", ("r",), kapend_init)
         variables["arent"] = Variable(
             name="arent",
             value=np.full(nr, 0.05),

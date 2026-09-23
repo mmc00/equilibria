@@ -45,7 +45,6 @@ from equilibria.blocks.gtap.floors import (
 )
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
-from equilibria.core.variables import Variable
 
 
 class ProductionSupplyBlock(Block):

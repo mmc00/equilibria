@@ -48,7 +48,6 @@ from equilibria.blocks.gtap.floors import (
 )
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
-from equilibria.core.variables import Variable
 
 # Mutable Params (monolith create_indexed_param mutable=True, 2734-2779).
 _MUTABLE = {"g_share", "i_share", "aus", "betap", "betag", "betas", "alphaa_hhd"}

@@ -60,14 +60,20 @@ def declare_price_var(variables: dict, name: str, doms, init) -> None:
 
     El `lower` sale de `price_floor` aplicado sobre el init, asi que cada celda
     lleva su propio piso. Era el mismo cuerpo de 8 lineas copiado en los cinco
-    bloques que declaran precios (38 llamadas).
+    bloques que declaran precios (38 llamadas), mas una copia suelta en kapEnd.
+
+    `otypes=[float]` NO es decorativo: sin el, `np.vectorize` levanta
+    `ValueError` sobre un array vacio, y `ptmg` se declara sobre el set de
+    margenes (`_price("ptmg", ("m",), np.ones(nm))`). Hoy ningun dataset tiene
+    ese set vacio (3, 5, 10 y 15 elementos en los cuatro), asi que era latente,
+    no un fallo vivo.
     """
     variables[name] = Variable(
         name=name,
         value=init,
         domains=tuple(doms),
         domain="NonNegativeReals",
-        lower=np.vectorize(price_floor)(init),
+        lower=np.vectorize(price_floor, otypes=[float])(init),
         upper=float("inf"),
     )
 

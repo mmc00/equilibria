@@ -52,7 +52,6 @@ from equilibria.blocks.gtap.floors import (
 )
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
-from equilibria.core.variables import Variable
 
 _HHD = GTAP_HOUSEHOLD_AGENT
 _GOV = GTAP_GOVERNMENT_AGENT

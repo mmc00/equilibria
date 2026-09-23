@@ -195,32 +195,51 @@ def test_declarar_cantidad_reproduce_las_tres_firmas_viejas():
     assert variables["libre"].lower == float("-inf")
 
 
-def test_ningun_bloque_reescribe_el_declarador_a_mano():
-    """El cuerpo de 8 lineas estaba copiado 10 veces (5 `_q` + 5 `_price`).
+def test_el_declarador_vive_en_un_solo_sitio():
+    """Invariante POSITIVO: el cuerpo del declarador existe una sola vez.
 
-    NO prohibe construir `Variable(...)`: hay vars con cota o dominio propios
-    que no encajan en ningun helper (dintx/mintx `lower=-0.999`, xw libre,
-    kstock con piso absoluto). Lo que prohibe es volver a declarar un HELPER
-    LOCAL `_q`/`_price` con cuerpo propio — que es lo que se duplico.
+    Los tres intentos anteriores de candado enumeraban EVASIONES (nombres
+    `_q`/`_price`, `def` no-async, llamada por nombre desnudo) y los tres
+    fallaron: dejaban pasar el cuerpo duplicado bajo otro nombre y encima
+    marcaban como infraccion una delegacion cualificada legitima
+    (`floors.declare_quantity_var(...)`).
+
+    Este no enumera nada: cuenta cuantas veces se construye un `Variable(...)`
+    con `upper=float("inf")` —la firma del declarador— y exige que los sitios
+    sean EXACTAMENTE los conocidos. Un helper nuevo, un lambda, un `async def`
+    o un rename suben el numero y el test cae, se llame como se llame.
     """
-    copias = []
+    # Vars con cota o dominio PROPIOS, que no encajan en ningun declarador.
+    # Cada una con su motivo: si desaparece o aparece otra, hay que mirarla.
+    ESPERADOS = {
+        # medido, no supuesto (mi primera estimacion fallo en dos ficheros)
+        "factor.py": 7,  # xft(Reals) pwfact pfact kstock arent rorc rore
+        "trade_armington_bilateral.py": 3,  # dintx/mintx(lower=-0.999) xw(libre)
+        "closure.py": 5,  # pnum walras pwfact + 2 con nombre calculado
+        "trade_cet.py": 2,  # xet pet
+    }
+    reales: dict[str, int] = {}
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
         if f.name == "floors.py":
             continue
-        arbol = ast.parse(f.read_text(encoding="utf-8"))
-        for n in ast.walk(arbol):
-            if not isinstance(n, ast.FunctionDef) or n.name not in ("_q", "_price"):
-                continue
-            # Delegar es lo correcto: un solo statement que llama al helper.
-            delega = any(
-                isinstance(st, ast.Expr)
-                and isinstance(st.value, ast.Call)
-                and getattr(st.value.func, "id", "").startswith("declare_")
-                for st in n.body
-            )
-            if not delega:
-                copias.append(f"{f.name}:{n.lineno} {n.name}() tiene cuerpo propio")
-    assert not copias, (
-        "el declarador vuelve a estar duplicado; delega en "
-        "declare_price_var/declare_quantity_var:\n  " + "\n  ".join(copias)
+        n_var = sum(
+            1
+            for n in ast.walk(ast.parse(f.read_text(encoding="utf-8")))
+            if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "Variable"
+        )
+        if n_var:
+            reales[f.name] = n_var
+    assert reales == ESPERADOS, (
+        "cambio el reparto de declaraciones a mano.\n"
+        f"  esperado: {ESPERADOS}\n  real    : {reales}\n"
+        "Si anadiste una var con cota propia, subela aqui con su motivo; "
+        "si reescribiste un declarador, usa declare_price_var/"
+        "declare_quantity_var."
     )
+
+
+def test_el_directorio_vigilado_existe():
+    """Si `GTAP_BLOCKS` deja de resolver, `rglob` no falla: devuelve vacio y los
+    candados pasan sin mirar nada. Esto convierte ese silencio en un fallo."""
+    assert GTAP_BLOCKS.is_dir(), f"no resuelve: {GTAP_BLOCKS}"
+    assert len(list(GTAP_BLOCKS.rglob("*.py"))) > 5
