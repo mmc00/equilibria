@@ -1094,6 +1094,50 @@ def _sp_ref_reusable(prev_closure, closure) -> bool:
     return dump() == other()
 
 
+# Agregados auxiliares con que el bloque CLOSURE parte la suma ancha de su
+# eq_pfact/eq_pwfact intra-periodo (blocks/gtap/closure.py:216-341). El monolito
+# inlinea esas sumas y no los declara.
+_DUP_FISHER_EQS = (
+    "eq_mfr_bs",
+    "eq_mfr_sb",
+    "eq_mfr_ss",
+    "eq_mfw_bs",
+    "eq_mfw_sb",
+    "eq_mfw_ss",
+)
+_DUP_FISHER_VARS = ("mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss")
+
+
+def _drop_duplicate_fisher_aggregates(sp) -> int:
+    """Quitar del SP de bloques los agregados Fisher duplicados.
+
+    Son duplicados EXACTOS de los `mq_factr_*`/`mq_factw_*` que declara la
+    version cross-periodo: misma suma, mismo ancho, mismo periodo.  La
+    maquinaria multiperiodo ya los borra —`gtap_model_multiperiod`
+    `build_equations_fisher`, con el diagnostico completo— pero el SP que pide
+    este modulo nunca pasa por ahi.
+
+    Sin esto el sistema queda SOBREDETERMINADO y
+    `_closure_patches.deactivate_zero_unique_var_eqs` lo cuadra desactivando
+    una ecuacion REAL: medido `eq_xseq[USA,VegFruit]` en check y shock —el
+    balance fisico xs == xds + xet—, con el gate MCP de gtap7_15x10 pure
+    ifSUB=1 en 87,00% contra un piso de 99%.
+
+    Se borra la Var ademas de la ecuacion: quitar la fila y dejar la columna
+    deja un HUERFANO, que altera el sistema igual que la fila.  Y se borra en
+    vez de fijarla porque son sumas DEFINIDAS — un valor rancio deja residual
+    en las filas Fisher (por eso existe `refresh_fisher_aggregates`).  Como no
+    las consume nadie, lo correcto es que desaparezcan.
+    """
+    n = 0
+    for name in (*_DUP_FISHER_EQS, *_DUP_FISHER_VARS):
+        comp = getattr(sp, name, None)
+        if comp is not None:
+            sp.del_component(comp)
+            n += 1
+    return n
+
+
 def _build_sp_reference(sets, params, closure, residual_region):
     """El modelo de periodo simple del que se leen `.fixed` / `lb` / `ub`.
 
@@ -1136,7 +1180,9 @@ def _build_sp_reference(sets, params, closure, residual_region):
             build_block_single_period,
         )
 
-        return build_block_single_period(params, sets, closure, residual_region)
+        sp = build_block_single_period(params, sets, closure, residual_region)
+        _drop_duplicate_fisher_aggregates(sp)
+        return sp
 
     from equilibria.templates.gtap import GTAPModelEquations
 
