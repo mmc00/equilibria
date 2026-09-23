@@ -7,10 +7,20 @@ dependency validation for ordered calibration of CGE models.
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
-if TYPE_CHECKING:
-    from equilibria.blocks.base import Block
+
+class _NamedBlock(Protocol):
+    """Lo unico que este modulo necesita de un bloque: su nombre.
+
+    Antes se anotaba con `blocks.base.Block` bajo TYPE_CHECKING, o sea `core/`
+    (capa baja) apuntando a `blocks/` (capa alta). Un Protocol estructural da
+    el mismo tipado sin la dependencia invertida, y de paso deja claro que aqui
+    no se usa nada mas del bloque.
+    """
+
+    @property
+    def name(self) -> str: ...
 
 
 class CalibrationPhase(Enum):
@@ -220,7 +230,7 @@ class DependencyValidator:
     def __init__(self):
         self._calibrated_blocks: dict[str, CalibrationPhase] = {}
 
-    def register_calibration(self, block: Block, phase: CalibrationPhase) -> None:
+    def register_calibration(self, block: _NamedBlock, phase: CalibrationPhase) -> None:
         """Register that a block has been calibrated in a phase.
 
         Args:
@@ -240,7 +250,7 @@ class DependencyValidator:
 
     def validate_access(
         self,
-        accessor_block: Block,
+        accessor_block: _NamedBlock,
         accessor_phase: CalibrationPhase,
         target_block_name: str,
     ) -> None:

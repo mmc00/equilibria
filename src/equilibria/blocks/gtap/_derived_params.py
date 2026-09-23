@@ -97,7 +97,7 @@ def xscale_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
     xpScale*10**(-round(log10(xp.l))) with xp = nd + va at purchaser value
     (VA includes the (ftrv-fbep)/evfb subsidy/tax wedge).
     """
-    from equilibria.templates.gtap.gtap_parameters import (
+    from equilibria.blocks.gtap.agents import (
         GTAP_GOVERNMENT_AGENT,
         GTAP_HOUSEHOLD_AGENT,
         GTAP_INVESTMENT_AGENT,
@@ -1034,9 +1034,7 @@ def demand_income_params(
     ``gams_calibration_dump`` (alphaa override) branches are OMITTED — they are
     base-None on the gate oracle and are Task-5 composer carries.
     """
-    from equilibria.templates.gtap.gtap_parameters import (
-        GTAP_INVESTMENT_AGENT,
-    )
+    from equilibria.blocks.gtap.agents import GTAP_INVESTMENT_AGENT
 
     _ = GTAP_INVESTMENT_AGENT  # referenced only in the omitted t0_snapshot branch
 
