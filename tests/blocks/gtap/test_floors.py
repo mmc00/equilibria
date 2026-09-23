@@ -14,6 +14,8 @@ import pytest
 from equilibria.blocks.gtap.floors import (
     PRICE_FLOOR_ABS,
     PRICE_FLOOR_REL,
+    declare_price_var,
+    declare_quantity_var,
     price_floor,
 )
 
@@ -154,4 +156,71 @@ def test_ningun_bloque_reescribe_la_regla_a_mano():
     assert not inline, (
         "la regla del piso esta escrita a mano; usa price_floor():\n  "
         + "\n  ".join(inline)
+    )
+
+
+def test_declarar_precio_aplica_el_piso_celda_a_celda():
+    """Cada celda lleva SU piso, no uno global: es lo que distingue precio de
+    cantidad y la razon de que el helper viva junto a la regla."""
+    import numpy as np
+
+    variables: dict = {}
+    init = np.array([1.0, 100.0, 0.0])
+    declare_price_var(variables, "p", ("r",), init)
+    v = variables["p"]
+    assert list(np.asarray(v.lower)) == [1e-3, 0.1, PRICE_FLOOR_ABS]
+    assert v.domain == "NonNegativeReals"
+
+
+def test_declarar_cantidad_reproduce_las_tres_firmas_viejas():
+    """Los 5 bloques tenian `_q` con TRES firmas; los defaults de aqui las
+    reproducen exactamente. Si un default cambia, un dominio cambia en silencio.
+    """
+    import numpy as np
+
+    init = np.array([1.0, 2.0])
+    variables: dict = {}
+
+    declare_quantity_var(variables, "sin_nada", ("r",), init)
+    assert variables["sin_nada"].lower == 0.0
+    assert variables["sin_nada"].domain == "NonNegativeReals"
+
+    declare_quantity_var(variables, "con_lower", ("r",), init, lower=1e-8)
+    assert variables["con_lower"].lower == 1e-8
+
+    declare_quantity_var(
+        variables, "libre", ("r",), init, lower=float("-inf"), dom="Reals"
+    )
+    assert variables["libre"].domain == "Reals"
+    assert variables["libre"].lower == float("-inf")
+
+
+def test_ningun_bloque_reescribe_el_declarador_a_mano():
+    """El cuerpo de 8 lineas estaba copiado 10 veces (5 `_q` + 5 `_price`).
+
+    NO prohibe construir `Variable(...)`: hay vars con cota o dominio propios
+    que no encajan en ningun helper (dintx/mintx `lower=-0.999`, xw libre,
+    kstock con piso absoluto). Lo que prohibe es volver a declarar un HELPER
+    LOCAL `_q`/`_price` con cuerpo propio — que es lo que se duplico.
+    """
+    copias = []
+    for f in sorted(GTAP_BLOCKS.rglob("*.py")):
+        if f.name == "floors.py":
+            continue
+        arbol = ast.parse(f.read_text(encoding="utf-8"))
+        for n in ast.walk(arbol):
+            if not isinstance(n, ast.FunctionDef) or n.name not in ("_q", "_price"):
+                continue
+            # Delegar es lo correcto: un solo statement que llama al helper.
+            delega = any(
+                isinstance(st, ast.Expr)
+                and isinstance(st.value, ast.Call)
+                and getattr(st.value.func, "id", "").startswith("declare_")
+                for st in n.body
+            )
+            if not delega:
+                copias.append(f"{f.name}:{n.lineno} {n.name}() tiene cuerpo propio")
+    assert not copias, (
+        "el declarador vuelve a estar duplicado; delega en "
+        "declare_price_var/declare_quantity_var:\n  " + "\n  ".join(copias)
     )

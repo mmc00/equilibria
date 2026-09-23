@@ -46,7 +46,10 @@ from equilibria.blocks.gtap.agents import (
     GTAP_INVESTMENT_AGENT,
     GTAP_MARGIN_AGENT,
 )
-from equilibria.blocks.gtap.floors import price_floor
+from equilibria.blocks.gtap.floors import (
+    declare_price_var,
+    declare_quantity_var,
+)
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -130,25 +133,10 @@ class IncomeBlock(Block):
 
         # -------- Variables OWNED by this unit (monolith 4722-4842) -------------
         def _q(name, doms, init, lower=0.0, dom="NonNegativeReals"):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain=dom,
-                lower=lower,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init, lower=lower, dom=dom)
 
         def _price(name, doms, init):
-            lo = np.vectorize(price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         _xscale = dp.xscale_data(p, s)
 

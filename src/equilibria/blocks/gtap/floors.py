@@ -25,6 +25,10 @@ bloques vectorizan sobre el array entero, asi que esas celdas reciben
 
 from __future__ import annotations
 
+import numpy as np
+
+from equilibria.core.variables import Variable
+
 #: Piso absoluto: ningun precio baja de aqui, ni siquiera con init<=0.
 PRICE_FLOOR_ABS = 1e-8
 
@@ -42,4 +46,51 @@ def price_floor(init: float | None) -> float:
     return max(PRICE_FLOOR_ABS, PRICE_FLOOR_REL * float(init))
 
 
-__all__ = ["PRICE_FLOOR_ABS", "PRICE_FLOOR_REL", "price_floor"]
+__all__ = [
+    "PRICE_FLOOR_ABS",
+    "PRICE_FLOOR_REL",
+    "declare_price_var",
+    "declare_quantity_var",
+    "price_floor",
+]
+
+
+def declare_price_var(variables: dict, name: str, doms, init) -> None:
+    """Declara una variable de PRECIO: piso relativo celda a celda.
+
+    El `lower` sale de `price_floor` aplicado sobre el init, asi que cada celda
+    lleva su propio piso. Era el mismo cuerpo de 8 lineas copiado en los cinco
+    bloques que declaran precios (38 llamadas).
+    """
+    variables[name] = Variable(
+        name=name,
+        value=init,
+        domains=tuple(doms),
+        domain="NonNegativeReals",
+        lower=np.vectorize(price_floor)(init),
+        upper=float("inf"),
+    )
+
+
+def declare_quantity_var(
+    variables: dict,
+    name: str,
+    doms,
+    init,
+    lower: float = 0.0,
+    dom: str = "NonNegativeReals",
+) -> None:
+    """Declara una variable de CANTIDAD/NIVEL: cota uniforme, sin piso relativo.
+
+    Los cinco bloques tenian este mismo cuerpo con TRES firmas distintas
+    (unos sin `lower`, otros sin `dom`); los defaults de aqui reproducen las
+    tres exactamente, asi que ningun llamador cambia de comportamiento.
+    """
+    variables[name] = Variable(
+        name=name,
+        value=init,
+        domains=tuple(doms),
+        domain=dom,
+        lower=lower,
+        upper=float("inf"),
+    )

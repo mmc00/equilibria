@@ -35,7 +35,11 @@ from pyomo.environ import value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
-from equilibria.blocks.gtap.floors import price_floor
+from equilibria.blocks.gtap.floors import (
+    declare_price_var,
+    declare_quantity_var,
+    price_floor,
+)
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -97,25 +101,10 @@ class FactorBlock(Block):
         # Variables OWNED by this unit (monolith 4349-4395, 4798-4826).
         # ------------------------------------------------------------------
         def _q(name, doms, init, lower=0.0):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lower,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init, lower=lower)
 
         def _price(name, doms, init):
-            lo = np.vectorize(price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         nr, nf, na = len(regions), len(facs), len(acts)
         # xft: bounds=(1e-8,None) declared (monolith 4349-4354), NOT in price list
