@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -58,9 +59,31 @@ REGEN_CMDS = [
 ]
 
 
-def _run(repo: Path, argv: list[str]) -> int:
+def _run(repo: Path, argv: list[str], env: dict[str, str] | None = None) -> int:
     print(f"\n=== {' '.join(argv)} ===", flush=True)
-    return subprocess.run(argv, cwd=repo).returncode
+    return subprocess.run(argv, cwd=repo, env=env).returncode
+
+
+def _gams_en_path() -> str | None:
+    """Primer directorio de GAMS con `gdxdump`, o None si no hay ninguno.
+
+    GAMS se instala como framework en macOS y no se exporta al PATH por
+    defecto, asi que el gate lo busca en vez de exigir que el usuario lo sepa.
+    """
+    import glob
+    import shutil
+
+    if shutil.which("gdxdump"):
+        return None  # ya esta en el PATH
+    patrones = [
+        "/Library/Frameworks/GAMS.framework/Versions/*/Resources",
+        "/opt/gams/*", "/usr/local/gams/*",
+    ]
+    candidatos = sorted(
+        (d for pat in patrones for d in glob.glob(pat) if Path(d, "gdxdump").exists()),
+        reverse=True,  # version mas alta primero
+    )
+    return candidatos[0] if candidatos else None
 
 
 def main() -> int:
@@ -83,9 +106,25 @@ def main() -> int:
 
     # Exclude @slow tests (e.g. the 15x10 GEMPACK NLP, ~20min) from the mandatory pre-push
     # sweep — they are runnable by hand (`pytest -m slow`) and belong in a nightly job.
-    rc = _run(repo, [sys.executable, "-m", "pytest", *GATE_TESTS, "-q", "-m", "not slow"])
+    # Los gates COMPARAN contra GAMS, asi que un solver ausente tiene que
+    # FALLAR, no esconderse tras un skip: sin esto pytest devuelve 0 con los 32
+    # casos del oraculo saltados y el stamp se escribia igual (medido
+    # 2026-09-23: 33 skips y "Gates GREEN" en una maquina sin gdxdump).
+    env = dict(os.environ)
+    env["EQUILIBRIA_REQUIRE_SOLVERS"] = "1"
+    if (gams := _gams_en_path()) is not None:
+        print(f"GAMS encontrado fuera del PATH, anadido para el sweep: {gams}")
+        env["PATH"] = gams + os.pathsep + env.get("PATH", "")
+
+    rc = _run(
+        repo,
+        [sys.executable, "-m", "pytest", *GATE_TESTS, "-q", "-m", "not slow"],
+        env=env,
+    )
     if rc != 0:
         print("\nGATES RED — no stamp written. Fix the regression before pushing.")
+        print("Si el fallo es un solver ausente (PATH/IPOPT/gdxdump), instalalo: "
+              "el sweep NO puede saltarselo, compara contra GAMS.")
         return rc
 
     if args.quick:
