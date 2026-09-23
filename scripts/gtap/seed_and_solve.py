@@ -322,9 +322,8 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     from pyomo.environ import value as V, Constraint
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import (
-        GTAPMultiPeriodModel, PERIODS,
-    )
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     data_dir = ROOT / "datasets" / dataset
@@ -345,7 +344,7 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
         p = _load_params()
         rr = list(p.sets.r)[-1]
         gc = _gc(p, if_sub)
-        mp = GTAPMultiPeriodModel(p.sets, p, gc, residual_region=rr)
+        mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
         m = mp.build_sets()
         mp.build_vars(m)
         for per in PERIODS:

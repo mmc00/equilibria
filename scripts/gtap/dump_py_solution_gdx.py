@@ -16,7 +16,8 @@ os.environ["EQUILIBRIA_GTAP_NLP_NO_JACSCALE"] = "1"
 from pyomo.environ import value as V, Var
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel, PERIODS
+from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
 from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
 DATASET = sys.argv[1] if len(sys.argv) > 1 else "gtap7_3x3"
@@ -27,7 +28,7 @@ p = GTAPParameters()
 p.load_from_har(basedata_path=d/"basedata.har", sets_path=d/"sets.har", default_path=d/"default.prm", baserate_path=d/"baserate.har")
 rr = list(p.sets.r)[-1]
 gc = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish", fix_endowments=False, fix_taxes=False, fix_technology=False, if_sub=True, numeraire="pnum")
-mp = GTAPMultiPeriodModel(p.sets, p, gc, residual_region=rr)
+mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
 m = mp.build_sets(); mp.build_vars(m)
 for per in PERIODS: mp.build_equations_intra(m, per)
 mp.build_equations_fisher(m); m._residual_region = rr
