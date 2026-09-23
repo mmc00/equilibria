@@ -35,10 +35,11 @@ from pyomo.environ import value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
-from equilibria.blocks.gtap.floors import (
+from equilibria.blocks.gtap.declarations import (
     declare_price_var,
     declare_quantity_var,
 )
+from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -165,24 +166,14 @@ class FactorBlock(Block):
         )
         kstock_init = np.array([max(self._kstock_init(r), 0.0) for r in regions])
         kapend_init = np.array([max(self._kapend_init(r), 0.0) for r in regions])
-        variables["kstock"] = Variable(
-            name="kstock",
-            value=kstock_init,
-            domains=("r",),
-            domain="NonNegativeReals",
-            lower=1e-8,
-            upper=float("inf"),
+        # kstock: cantidad con piso ABSOLUTO (no relativo — su init es ~45-123,
+        # aplicarle price_floor subiria la cota x4.5 millones).
+        declare_quantity_var(
+            variables, "kstock", ("r",), kstock_init, lower=PRICE_FLOOR_ABS
         )
         # kapEnd es un precio: piso relativo celda a celda, como los demas.
         declare_price_var(variables, "kapEnd", ("r",), kapend_init)
-        variables["arent"] = Variable(
-            name="arent",
-            value=np.full(nr, 0.05),
-            domains=("r",),
-            domain="NonNegativeReals",
-            lower=0.0,
-            upper=float("inf"),
-        )
+        declare_quantity_var(variables, "arent", ("r",), np.full(nr, 0.05))
         variables["rorc"] = Variable(
             name="rorc",
             value=np.full(nr, 0.05),

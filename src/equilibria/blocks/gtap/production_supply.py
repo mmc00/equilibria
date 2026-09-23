@@ -38,11 +38,11 @@ from pyomo.environ import exp, log, value
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp  # noqa: F401 (submodule)
 from equilibria.blocks.gtap import _ifsub_macros as mac
-from equilibria.blocks.gtap.floors import (
-    PRICE_FLOOR_ABS,
+from equilibria.blocks.gtap.declarations import (
     declare_price_var,
     declare_quantity_var,
 )
+from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 

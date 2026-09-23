@@ -46,7 +46,7 @@ from equilibria.blocks.gtap.agents import (
     GTAP_INVESTMENT_AGENT,
     GTAP_MARGIN_AGENT,
 )
-from equilibria.blocks.gtap.floors import (
+from equilibria.blocks.gtap.declarations import (
     declare_price_var,
     declare_quantity_var,
 )
