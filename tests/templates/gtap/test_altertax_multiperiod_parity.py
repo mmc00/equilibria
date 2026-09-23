@@ -107,11 +107,9 @@ def _solve_and_match(dataset: str, if_sub: bool):
 
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import (
-        PERIODS,
-        GTAPMultiPeriodModel,
-    )
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     ref = _fixture_gdx(dataset, if_sub)
@@ -135,7 +133,7 @@ def _solve_and_match(dataset: str, if_sub: bool):
         if_sub=if_sub,
         numeraire="pnum",
     )
-    mp = GTAPMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
+    mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
     for per in PERIODS:
