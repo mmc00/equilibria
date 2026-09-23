@@ -1094,6 +1094,57 @@ def _sp_ref_reusable(prev_closure, closure) -> bool:
     return dump() == other()
 
 
+def _build_sp_reference(sets, params, closure, residual_region):
+    """El modelo de periodo simple del que se leen `.fixed` / `lb` / `ub`.
+
+    F3: esto era `GTAPModelEquations(...).build_model()` — el MONOLITO — en
+    tres sitios (base, check, shock).  En 20x41 son 3,4M de celdas construidas
+    para leer tres atributos, y mientras ocurra el monolito es dependencia de
+    RUNTIME.
+
+    Bloques produce el mismo fixing.  Medido (closure altertax, tras d9e6d49),
+    SP del monolito vs `build_block_single_period`:
+
+        gtap7_3x3    1.330 celdas comunes, `.fixed` distinto = 0
+        gtap7_10x7  20.145 celdas comunes, `.fixed` distinto = 0
+
+    Las celdas que SOLO existen en el monolito (470 y 5.063) son los 30
+    shifters muertos (dtxshft, afeall, lambdaf, ...), que no aparecen en
+    ninguna ecuacion: no hay nada que replicar, y bloques no las declara.
+
+    BLOQUEADO — el default sigue siendo el MONOLITO.  `build_block_single_period`
+    emite 33 filas de mas (`eq_mfr_*` x30 + `eq_mfw_*` x3) que DUPLICAN lo que
+    ya calculan `mq_factr_*`/`mq_factw_*`.  Con bloques el sistema queda
+    sobredeterminado, `_closure_patches.py:439` desactiva filas para cuadrarlo,
+    y cae `eq_xseq[USA,VegFruit,{check,shock}]` — el balance fisico
+    xs == xds + xet.  Medido: `test_gtap7_mcp_parity[gtap7_15x10-pure-ifsub1]`
+    baja a 87,00% contra un piso de 99% (28.762 celdas).
+
+    Las 33 filas son PREEXISTENTES (viven en blocks/gtap/closure.py desde antes
+    de F3, verificado en 1fd4492) y ya estan diagnosticadas; lo que faltaba era
+    quitarlas.  Estaban latentes porque este helper construia el monolito.
+
+    Orden correcto: 1) quitar las duplicadas de closure.py, 2) medir que el
+    gate vuelve a >=99%, 3) cambiar este default a bloques.
+
+    `EQUILIBRIA_GTAP_REF_MODEL=blocks` usa bloques hoy (para medir el arreglo).
+    """
+    import os
+
+    if os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "blocks":
+        from equilibria.templates.gtap.gtap_block_model import (
+            build_block_single_period,
+        )
+
+        return build_block_single_period(params, sets, closure, residual_region)
+
+    from equilibria.templates.gtap import GTAPModelEquations
+
+    return GTAPModelEquations(
+        sets, params, closure, residual_region=residual_region
+    ).build_model()
+
+
 def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
     """Copy the fixed-variable state from sp_model to m for active_period.
 
@@ -3018,9 +3069,7 @@ def _solve_multiperiod_inner(
     # build_model internally fixes ~500+ structural zeros (afeall, p_rai, chiSave,
     # etc.) that apply_conditional_fixing doesn't cover. Without this, aggressive
     # structural matching fixes the wrong 639 vars, breaking PATH convergence.
-    _sp_ref_base = GTAPModelEquations(
-        p_alt.sets, p_alt, base_closure, residual_region=res_region
-    ).build_model()
+    _sp_ref_base = _build_sp_reference(p_alt.sets, p_alt, base_closure, res_region)
     _replicate_sp_fixing(m, _sp_ref_base, "base")
     _replicate_sp_bounds(m, _sp_ref_base, "base")
     # Kept for the check period, which in gtap mode builds this same model again.
@@ -3229,12 +3278,9 @@ def _solve_multiperiod_inner(
                 "check period: reusing the base reference model (identical closure)"
             )
         else:
-            _sp_ref_chk = GTAPModelEquations(
-                p_alt.sets,
-                p_alt,
-                _chk_closure,
-                residual_region=res_region,
-            ).build_model()
+            _sp_ref_chk = _build_sp_reference(
+                p_alt.sets, p_alt, _chk_closure, res_region
+            )
         _replicate_sp_fixing(m, _sp_ref_chk, "check")
         _replicate_sp_bounds(m, _sp_ref_chk, "check")
         del _sp_ref_chk  # only the local name; _sp_ref_cached may still hold it
@@ -3783,12 +3829,9 @@ def _solve_multiperiod_inner(
 
     # Replicate single-period structural fixing for shock period.
     _shk_closure = base_closure if _gtap_mode else alt_closure
-    _sp_ref_shk = GTAPModelEquations(
-        params_shock.sets,
-        params_shock,
-        _shk_closure,
-        residual_region=res_region,
-    ).build_model()
+    _sp_ref_shk = _build_sp_reference(
+        params_shock.sets, params_shock, _shk_closure, res_region
+    )
     _replicate_sp_fixing(m, _sp_ref_shk, "shock")
     _replicate_sp_bounds(m, _sp_ref_shk, "shock")
     del _sp_ref_shk
