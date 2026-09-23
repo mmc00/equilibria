@@ -244,6 +244,67 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     return n
 
 
+def _fix_no_demand_cells(pm: Any, params: Any, sets: Any) -> int:
+    """Fijar las celdas SIN DEMANDA, como hace el monolito.
+
+    Dos reglas, transcritas de gtap_model_equations:
+
+    - ``pa[r,i,aa] = 1.0`` cuando el agente no absorbe ni domestico ni
+      importado (monolito 2743-2750).  En GAMS estas combinaciones las filtran
+      los flags de dominio de las ecuaciones.
+    - ``xaa[r,i,tmg] = 0.0`` en las celdas sin absorcion de margen (monolito
+      5183-5190).  El bloque ya SALTA la fila ``eq_xaa_tmg`` en esas celdas
+      (``EqXaaTmg`` retorna ``None``, commit 65c628c) pero NO fijaba la
+      columna: fila quitada sin columna quitada deja el sistema no cuadrado,
+      que es justo lo que el comentario de ese bloque dice que hay que evitar.
+
+    La condicion de ``pa`` se LEE del modelo ya compuesto (``xda``/``xma``) en
+    vez de re-derivar la ``agent_trade_cache`` del monolito: esas dos Vars se
+    inicializan de los mismos valores de benchmark, y duplicar la cache seria
+    una segunda fuente de verdad que puede desincronizarse.  Verificado que
+    selecciona el MISMO conjunto de celdas que el monolito.
+
+    Devuelve cuantas celdas fijo.
+    """
+    from pyomo.environ import value as _V
+
+    from equilibria.templates.gtap.gtap_parameters import GTAP_MARGIN_AGENT
+
+    n = 0
+    pa = getattr(pm, "pa", None)
+    xda, xma = getattr(pm, "xda", None), getattr(pm, "xma", None)
+    if pa is not None and xda is not None and xma is not None:
+        for k in pa:
+            vd = pa[k]
+            if vd.fixed:
+                continue
+            try:
+                dom = float(_V(xda[k]))
+                imp = float(_V(xma[k]))
+            except Exception:
+                continue
+            if dom <= 0.0 and imp <= 0.0:
+                with contextlib.suppress(Exception):
+                    vd.fix(1.0)
+                    n += 1
+
+    xaa = getattr(pm, "xaa", None)
+    if xaa is not None:
+        for k in xaa:
+            if not (isinstance(k, tuple) and len(k) == 3):
+                continue
+            if str(k[2]) != str(GTAP_MARGIN_AGENT):
+                continue
+            vd = xaa[k]
+            if vd.fixed:
+                continue
+            if abs(float(_V(vd))) <= 0.0:
+                with contextlib.suppress(Exception):
+                    vd.fix(0.0)
+                    n += 1
+    return n
+
+
 def build_block_single_period(
     params: Any,
     sets: Any,
@@ -300,6 +361,8 @@ def build_block_single_period(
 
     if if_sub:
         _apply_ifsub_closure(pm, params)
+
+    _fix_no_demand_cells(pm, params, sets)
 
     pm._residual_region = residual_region
     return pm
