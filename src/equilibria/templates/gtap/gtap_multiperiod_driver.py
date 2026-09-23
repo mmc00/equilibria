@@ -1138,7 +1138,7 @@ def _drop_duplicate_fisher_aggregates(sp) -> int:
     return n
 
 
-def _build_sp_reference(sets, params, closure, residual_region):
+def _build_sp_reference(sets, params, closure, residual_region, model=None):
     """El modelo de periodo simple del que se leen `.fixed` / `lb` / `ub`.
 
     F3: esto era `GTAPModelEquations(...).build_model()` — el MONOLITO — en
@@ -1169,6 +1169,20 @@ def _build_sp_reference(sets, params, closure, residual_region):
       (f654f63).
     """
     import os
+
+    # La fuente TIENE que coincidir con la clase que construyo `model`: un
+    # modelo del monolito con un SP de bloques deja el fixing desalineado
+    # —medido en gtap7_3x3 pure ifSUB=1: codes {base:1, check:0, shock:0}, y
+    # test_ifsub_primary_block_consistent en frac_agree 0.00%—.  Siete scripts
+    # de scripts/gtap/ construyen con el monolito y resuelven con este driver,
+    # asi que se detecta aqui en vez de parchear cada uno.
+    _src = getattr(model, "_sp_source", None) if model is not None else None
+    if _src == "monolith" or (model is not None and _src is None):
+        from equilibria.templates.gtap import GTAPModelEquations
+
+        return GTAPModelEquations(
+            sets, params, closure, residual_region=residual_region
+        ).build_model()
 
     if os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith":
         from equilibria.templates.gtap import GTAPModelEquations
@@ -3108,7 +3122,9 @@ def _solve_multiperiod_inner(
     # build_model internally fixes ~500+ structural zeros (afeall, p_rai, chiSave,
     # etc.) that apply_conditional_fixing doesn't cover. Without this, aggressive
     # structural matching fixes the wrong 639 vars, breaking PATH convergence.
-    _sp_ref_base = _build_sp_reference(p_alt.sets, p_alt, base_closure, res_region)
+    _sp_ref_base = _build_sp_reference(
+        p_alt.sets, p_alt, base_closure, res_region, model=m
+    )
     _replicate_sp_fixing(m, _sp_ref_base, "base")
     _replicate_sp_bounds(m, _sp_ref_base, "base")
     # Kept for the check period, which in gtap mode builds this same model again.
@@ -3318,7 +3334,7 @@ def _solve_multiperiod_inner(
             )
         else:
             _sp_ref_chk = _build_sp_reference(
-                p_alt.sets, p_alt, _chk_closure, res_region
+                p_alt.sets, p_alt, _chk_closure, res_region, model=m
             )
         _replicate_sp_fixing(m, _sp_ref_chk, "check")
         _replicate_sp_bounds(m, _sp_ref_chk, "check")
@@ -3869,7 +3885,7 @@ def _solve_multiperiod_inner(
     # Replicate single-period structural fixing for shock period.
     _shk_closure = base_closure if _gtap_mode else alt_closure
     _sp_ref_shk = _build_sp_reference(
-        params_shock.sets, params_shock, _shk_closure, res_region
+        params_shock.sets, params_shock, _shk_closure, res_region, model=m
     )
     _replicate_sp_fixing(m, _sp_ref_shk, "shock")
     _replicate_sp_bounds(m, _sp_ref_shk, "shock")

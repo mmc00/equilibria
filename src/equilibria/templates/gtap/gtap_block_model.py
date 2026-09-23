@@ -411,6 +411,18 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
             self.params, self.sets, self.closure, self.residual_region
         )
 
+    def build_sets(self) -> ConcreteModel:
+        """Marca el modelo con su origen, ademas de construir los sets.
+
+        El driver replica `.fixed`/`lb`/`ub` desde un SP de referencia y la
+        fuente TIENE que ser la misma que construyo el modelo: mezclar un
+        modelo del monolito con un SP de bloques deja el fixing desalineado
+        —medido en gtap7_3x3 pure ifSUB=1: codes {base:1, check:0, shock:0}—.
+        """
+        m = super().build_sets()
+        m._sp_source = "blocks"
+        return m
+
     def _build_sp(self) -> ConcreteModel:
         """El modelo SP que la reflexion multiperiodo del padre va a leer.
 
