@@ -27,6 +27,18 @@ from equilibria.babel.gdx.gdxdump import (
     read_variable_levels_with_gdxdump,
 )
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+
+# Definidas en blocks/gtap/agents.py (la capa baja que tambien las usa) y
+# re-exportadas aqui, que es donde las buscan los consumidores existentes.
+# Antes vivian aqui y obligaban a blocks/gtap/_derived_params.py a importar
+# hacia arriba, blocks -> templates.
+from equilibria.blocks.gtap.agents import (  # noqa: F401
+    GTAP_FINAL_DEMAND_AGENTS,
+    GTAP_GOVERNMENT_AGENT,
+    GTAP_HOUSEHOLD_AGENT,
+    GTAP_INVESTMENT_AGENT,
+    GTAP_MARGIN_AGENT,
+)
 from equilibria.templates.gtap.gtap_equilibrium import GTAPEquilibriumSnapshot
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_std7_mapping import (
@@ -35,11 +47,6 @@ from equilibria.templates.gtap.gtap_std7_mapping import (
     get_tax_parameter_name,
     reorder_parameter_keys,
 )
-
-GTAP_HOUSEHOLD_AGENT = "hhd"
-GTAP_GOVERNMENT_AGENT = "gov"
-GTAP_INVESTMENT_AGENT = "inv"
-GTAP_MARGIN_AGENT = "tmg"
 
 
 @dataclass
