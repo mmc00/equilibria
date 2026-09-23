@@ -59,7 +59,7 @@ def test_ningun_bloque_vuelve_a_copiar_la_regla():
     `_FLOOR`/`_REL` ni redefiniendo `_price_floor` dentro del bloque.
     """
     copias = []
-    for f in sorted(GTAP_BLOCKS.glob("*.py")):
+    for f in sorted(GTAP_BLOCKS.rglob("*.py")):
         if f.name == "floors.py":
             continue
         arbol = ast.parse(f.read_text(encoding="utf-8"))
@@ -86,7 +86,7 @@ def test_los_bloques_que_aplican_piso_lo_importan():
         "demand_utility.py",
     }
     importan = set()
-    for f in sorted(GTAP_BLOCKS.glob("*.py")):
+    for f in sorted(GTAP_BLOCKS.rglob("*.py")):
         for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             if (
                 isinstance(n, ast.ImportFrom)
@@ -99,34 +99,56 @@ def test_los_bloques_que_aplican_piso_lo_importan():
 
 def test_ningun_bloque_reescribe_la_regla_a_mano():
     """El candado por NOMBRE no basta: `max(1e-8, 1e-3*x)` escrito a pelo lo
-    esquivaba (verificado). Este caza la FORMA, se llame como se llame.
+    esquivaba (verificado). Este caza la EXPRESION, se llame como se llame la
+    funcion que la envuelve.
+
+    ALCANCE, medido variante a variante: caza `max(...)` y `np.maximum(...)`
+    con los dos literales en cualquier orden, con la multiplicacion en
+    cualquier orden, y con cualquier notacion del numero (`1E-8`, `0.001`) —
+    compara VALORES de constantes, no texto. Se le escapan la regla partida en
+    dos sentencias y la que pasa por constantes locales con otro nombre; para
+    eso esta el candado por nombre de arriba. No persigue dataflow a proposito.
 
     Solo mira la expresion exacta de la regla, no cualquier 1e-8 suelto: en
-    `blocks/gtap/` hay ~80 literales de esos que son otros pisos legitimos.
+    `blocks/gtap/` hay ~100 literales de esos que son otros pisos legitimos.
     """
     inline = []
-    for f in sorted(GTAP_BLOCKS.glob("*.py")):
+    for f in sorted(GTAP_BLOCKS.rglob("*.py")):
         if f.name == "floors.py":
             continue
         for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
-            # max(<1e-8>, <1e-3> * <algo>) en cualquier orden de argumentos
-            if not (isinstance(n, ast.Call) and getattr(n.func, "id", None) == "max"):
+            # max/np.maximum(<1e-8>, <1e-3> * <algo>), argumentos en cualquier
+            # orden. `np.maximum` importa: los bloques vectorizan, asi que es la
+            # forma que escribiria alguien aqui (ya se usa en demand_utility).
+            if not isinstance(n, ast.Call):
                 continue
-            if len(n.args) != 2:
+            nombre = getattr(n.func, "id", None) or getattr(n.func, "attr", None)
+            if nombre not in ("max", "maximum", "fmax"):
+                continue
+            if len(n.args) < 2:
                 continue
             tiene_abs = any(
                 isinstance(a, ast.Constant) and a.value == PRICE_FLOOR_ABS
                 for a in n.args
             )
-            tiene_rel = any(
-                isinstance(a, ast.BinOp)
-                and isinstance(a.op, ast.Mult)
-                and any(
-                    isinstance(o, ast.Constant) and o.value == PRICE_FLOOR_REL
-                    for o in (a.left, a.right)
-                )
-                for a in n.args
-            )
+
+            # <algo> * 1e-3 (cualquier orden) o su equivalente <algo> / 1000
+            def _es_rel(a: ast.expr) -> bool:
+                if not isinstance(a, ast.BinOp):
+                    return False
+                if isinstance(a.op, ast.Mult):
+                    return any(
+                        isinstance(o, ast.Constant) and o.value == PRICE_FLOOR_REL
+                        for o in (a.left, a.right)
+                    )
+                if isinstance(a.op, ast.Div):
+                    return (
+                        isinstance(a.right, ast.Constant)
+                        and a.right.value == 1.0 / PRICE_FLOOR_REL
+                    )
+                return False
+
+            tiene_rel = any(_es_rel(a) for a in n.args)
             if tiene_abs and tiene_rel:
                 inline.append(f"{f.name}:{n.lineno} reescribe la regla a mano")
     assert not inline, (
