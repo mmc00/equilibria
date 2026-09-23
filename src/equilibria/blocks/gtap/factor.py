@@ -35,19 +35,10 @@ from pyomo.environ import value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
+from equilibria.blocks.gtap.floors import price_floor
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
-
-_FLOOR = 1e-8
-_REL = 1e-3
-
-
-def _price_floor(init: float) -> float:
-    """Monolith two-pass price floor: max(1e-8, 1e-3*init) for init>0 (5295-5356)."""
-    if init is None or init <= 0.0:
-        return _FLOOR
-    return max(_FLOOR, _REL * float(init))
 
 
 class FactorBlock(Block):
@@ -116,7 +107,7 @@ class FactorBlock(Block):
             )
 
         def _price(name, doms, init):
-            lo = np.vectorize(_price_floor)(init)
+            lo = np.vectorize(price_floor)(init)
             variables[name] = Variable(
                 name=name,
                 value=init,
@@ -199,7 +190,7 @@ class FactorBlock(Block):
             value=kapend_init,
             domains=("r",),
             domain="NonNegativeReals",
-            lower=np.vectorize(_price_floor)(kapend_init),
+            lower=np.vectorize(price_floor)(kapend_init),
             upper=float("inf"),
         )
         variables["arent"] = Variable(

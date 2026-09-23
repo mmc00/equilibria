@@ -74,7 +74,8 @@ oracle); everything MODE- or SCALING-dependent below is the composer's.
    level vars from scaled quantities (e.g. kapEnd = (1-depr)*kstock + xiagg with
    xiagg=yi/pi, monolith 1268; rorg from the rate-of-return chain; xigbl from
    _align_xi_xaa_post_scaling) and the runtime price/level floor sweep
-   (5298-5385) then sets each var's lb = max(1e-8, 1e-3*SCALED value). The blocks
+   (gtap_model_equations.py:4454-4458, _set_relative_positive_lower_bound) then
+   sets each var's lb = max(1e-8, 1e-3*SCALED value). The blocks
    seed levels from the benchmark and apply the same floor formula to that seed,
    so a re-valued var shows a BOUND difference vs the oracle (measured on
    gtap7_3x3: kapEnd (3 cells, ~1e-8), pm/pmcif/pefob (price re-value), xigbl

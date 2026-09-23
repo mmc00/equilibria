@@ -30,6 +30,13 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from equilibria.blocks.gtap.agents import (
+    GTAP_GOVERNMENT_AGENT,
+    GTAP_HOUSEHOLD_AGENT,
+    GTAP_INVESTMENT_AGENT,
+    GTAP_MARGIN_AGENT,
+)
+
 
 def _f(x: Any) -> float:
     return float(x or 0.0)
@@ -97,13 +104,6 @@ def xscale_data(params: Any, sets: Any) -> dict[tuple[str, str], float]:
     xpScale*10**(-round(log10(xp.l))) with xp = nd + va at purchaser value
     (VA includes the (ftrv-fbep)/evfb subsidy/tax wedge).
     """
-    from equilibria.blocks.gtap.agents import (
-        GTAP_GOVERNMENT_AGENT,
-        GTAP_HOUSEHOLD_AGENT,
-        GTAP_INVESTMENT_AGENT,
-        GTAP_MARGIN_AGENT,
-    )
-
     bm = params.benchmark
     out: dict[tuple[str, str], float] = {}
     for r in sets.r:
@@ -508,8 +508,12 @@ def fctts_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
 # ARMINGTON + BILATERAL unit (monolith 2167-2252, 6038-6631, 2993-3145)
 # ----------------------------------------------------------------------------
 
-# GTAP aggregate-agent labels (monolith imports these from gtap_parameters).
-_HHD, _GOV, _INV, _TMG = "hhd", "gov", "inv", "tmg"
+# Las etiquetas viven en `agents.py` (capa baja). Los alias cortos son solo
+# comodidad local para las cadenas de `elif aa == ...` de abajo.
+_HHD = GTAP_HOUSEHOLD_AGENT
+_GOV = GTAP_GOVERNMENT_AGENT
+_INV = GTAP_INVESTMENT_AGENT
+_TMG = GTAP_MARGIN_AGENT
 
 
 def _two_key(raw_map: Any, region: str, commodity: str) -> float:
@@ -1034,10 +1038,6 @@ def demand_income_params(
     ``gams_calibration_dump`` (alphaa override) branches are OMITTED — they are
     base-None on the gate oracle and are Task-5 composer carries.
     """
-    from equilibria.blocks.gtap.agents import GTAP_INVESTMENT_AGENT
-
-    _ = GTAP_INVESTMENT_AGENT  # referenced only in the omitted t0_snapshot branch
-
     bm = params.benchmark
     el = params.elasticities
 

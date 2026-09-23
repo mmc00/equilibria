@@ -48,19 +48,21 @@ from pyomo.environ import value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
+from equilibria.blocks.gtap.agents import (
+    GTAP_GOVERNMENT_AGENT,
+    GTAP_HOUSEHOLD_AGENT,
+    GTAP_INVESTMENT_AGENT,
+    GTAP_MARGIN_AGENT,
+)
+from equilibria.blocks.gtap.floors import price_floor
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
 
-_FLOOR = 1e-8
-_REL = 1e-3
-_HHD, _GOV, _INV, _TMG = "hhd", "gov", "inv", "tmg"
-
-
-def _price_floor(init: float) -> float:
-    if init is None or init <= 0.0:
-        return _FLOOR
-    return max(_FLOOR, _REL * float(init))
+_HHD = GTAP_HOUSEHOLD_AGENT
+_GOV = GTAP_GOVERNMENT_AGENT
+_INV = GTAP_INVESTMENT_AGENT
+_TMG = GTAP_MARGIN_AGENT
 
 
 class ArmingtonBilateralBlock(Block):
@@ -137,7 +139,7 @@ class ArmingtonBilateralBlock(Block):
             )
 
         def _price(name, doms, init):
-            lo = np.vectorize(_price_floor)(init)
+            lo = np.vectorize(price_floor)(init)
             variables[name] = Variable(
                 name=name,
                 value=init,
