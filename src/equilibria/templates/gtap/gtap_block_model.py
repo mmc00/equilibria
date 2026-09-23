@@ -216,8 +216,28 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
         # otherwise be reflected. Deactivating the component makes it skipped.
         n += sum(1 for idx in comp if comp[idx].active)
         comp.deactivate()
-    # pfa/pfy: recalcular desde el macro ANTES de fijar (ver docstring).
-    _macro = {"pfa": mac.m_pfa, "pfy": mac.m_pfy}
+    # Recalcular desde el MACRO antes de fijar — para los NUEVE, no solo
+    # pfa/pfy.  Congelar "el valor actual" hace que la diferencia de init entre
+    # las dos rutas (el monolito re-valua los precios tras el escalado, bloques
+    # siembra del benchmark) se vuelva DEFINITIVA: sin ecuacion que los
+    # determine, el valor fijado es el resultado.
+    #
+    # Medido en gtap7_15x10 pure ifSUB=1, valores congelados en el SP:
+    #   pp_rai 2100/2250 distintos (0.99180445 vs 1.0)
+    #   pefob   660/1500            (1.0000035  vs 1.0)
+    #   pwmg    352/1500            (0.001      vs 1.0)  <- factor 1000
+    # y 11.118 celdas realmente distintas en el modelo multiperiodo al resolver
+    # el shock (separando 52.455 de puro ruido de coma flotante).
+    _macro = {
+        "pfa": mac.m_pfa,
+        "pfy": mac.m_pfy,
+        "pp_rai": mac.m_pp,
+        "pwmg": mac.m_pwmg,
+        "pefob": mac.m_pefob,
+        "pmcif": mac.m_pmcif,
+        "pm": mac.m_pm,
+        "xwmg": mac.m_xwmg,
+    }
     for var_name in _IFSUB_REPORT_VARS:
         v = pm.component(var_name)
         if v is None:
