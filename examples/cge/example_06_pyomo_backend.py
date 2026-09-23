@@ -30,19 +30,24 @@ def main():
         description="Simple model for Pyomo backend demo",
     )
 
-    # Add sets (must match block requirements: J for sectors, I for factors)
+    # Add sets (must match block requirements: J for sectors, F for factors)
     sectors = Set(
         name="J",
         elements=("sec1", "sec2"),
         description="Sectors",
     )
     factors = Set(
-        name="I",
+        name="F",
         elements=("labor", "capital"),
         description="Factors",
     )
+    commodities = Set(
+        name="I",
+        elements=("sec1", "sec2"),
+        description="Commodities",
+    )
 
-    model.add_sets([sectors, factors])
+    model.add_sets([sectors, factors, commodities])
     print(f"\nCreated model with {len(sectors)} sectors and {len(factors)} factors")
     print(f"\nCreated model with {len(sectors)} sectors and {len(factors)} factors")
 

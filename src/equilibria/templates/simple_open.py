@@ -102,26 +102,26 @@ class SimpleOpenEconomy(ModelTemplate):
             description="Production sectors",
         )
 
+        # Convencion de los bloques (issue #15): F = factores, I = commodities.
+        # Antes este template llamaba "I" a los factores y "F" a un set de
+        # firmas de un solo elemento, de modo que CESValueAdded --que pide
+        # ["J", "F"]-- armaba el value-added sobre esa firma ficticia en vez de
+        # sobre LAB/CAP, y LeontiefIntermediate --que pide ["J", "I"]-- recibia
+        # los factores donde esperaba commodities.
         factors = Set(
-            name="I",
+            name="F",
             elements=tuple(factor_names),
             description="Factors of production",
         )
 
         # Use same set for commodities as sectors
         commodities = Set(
-            name="COMM",
+            name="I",
             elements=tuple(sector_names),
             description="Commodities",
         )
 
-        firms = Set(
-            name="F",
-            elements=("firm",),
-            description="Firm institutions",
-        )
-
-        model.add_sets([sectors, factors, commodities, firms])
+        model.add_sets([sectors, factors, commodities])
 
         # Add production blocks
         model.add_block(
