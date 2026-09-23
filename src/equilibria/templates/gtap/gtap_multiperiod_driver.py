@@ -1156,39 +1156,32 @@ def _build_sp_reference(sets, params, closure, residual_region):
     shifters muertos (dtxshft, afeall, lambdaf, ...), que no aparecen en
     ninguna ecuacion: no hay nada que replicar, y bloques no las declara.
 
-    BLOQUEADO — el default sigue siendo el MONOLITO.  `build_block_single_period`
-    emite 33 filas de mas (`eq_mfr_*` x30 + `eq_mfw_*` x3) que DUPLICAN lo que
-    ya calculan `mq_factr_*`/`mq_factw_*`.  Con bloques el sistema queda
-    sobredeterminado, `_closure_patches.py:439` desactiva filas para cuadrarlo,
-    y cae `eq_xseq[USA,VegFruit,{check,shock}]` — el balance fisico
-    xs == xds + xet.  Medido: `test_gtap7_mcp_parity[gtap7_15x10-pure-ifsub1]`
-    baja a 87,00% contra un piso de 99% (28.762 celdas).
+    `EQUILIBRIA_GTAP_REF_MODEL=monolith` vuelve al camino viejo.
 
-    Las 33 filas son PREEXISTENTES (viven en blocks/gtap/closure.py desde antes
-    de F3, verificado en 1fd4492) y ya estan diagnosticadas; lo que faltaba era
-    quitarlas.  Estaban latentes porque este helper construia el monolito.
+    El corte estuvo bloqueado por dos cosas, las dos ya arregladas:
 
-    Orden correcto: 1) quitar las duplicadas de closure.py, 2) medir que el
-    gate vuelve a >=99%, 3) cambiar este default a bloques.
-
-    `EQUILIBRIA_GTAP_REF_MODEL=blocks` usa bloques hoy (para medir el arreglo).
+    - 33 filas Fisher duplicadas que solo sobrevivian en esta ruta
+      (`_drop_duplicate_fisher_aggregates`, cf2c1b0).
+    - Los 9 vars de reporte ifSUB se congelaban a "su valor actual", lo que
+      volvia DEFINITIVA la diferencia de init entre las dos rutas — medido
+      `pwmg` en 0.001 (monolito) vs 1.0 (bloques), factor 1000, y el gate MCP
+      de gtap7_15x10 pure ifSUB=1 en 87%. Ahora se recalculan desde su macro
+      (f654f63).
     """
     import os
 
-    if os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "blocks":
-        from equilibria.templates.gtap.gtap_block_model import (
-            build_block_single_period,
-        )
+    if os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith":
+        from equilibria.templates.gtap import GTAPModelEquations
 
-        sp = build_block_single_period(params, sets, closure, residual_region)
-        _drop_duplicate_fisher_aggregates(sp)
-        return sp
+        return GTAPModelEquations(
+            sets, params, closure, residual_region=residual_region
+        ).build_model()
 
-    from equilibria.templates.gtap import GTAPModelEquations
+    from equilibria.templates.gtap.gtap_block_model import build_block_single_period
 
-    return GTAPModelEquations(
-        sets, params, closure, residual_region=residual_region
-    ).build_model()
+    sp = build_block_single_period(params, sets, closure, residual_region)
+    _drop_duplicate_fisher_aggregates(sp)
+    return sp
 
 
 def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:

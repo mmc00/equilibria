@@ -17,16 +17,14 @@ Medido (closure altertax) tras d9e6d49, comparando el SP del monolito contra
 Las celdas que solo existen en el monolito (470 y 5.063) son los 30 shifters
 muertos, que no aparecen en ninguna ecuacion: no hay nada que replicar.
 
-EL DEFAULT SIGUE SIENDO EL MONOLITO y por eso este test pide bloques
-explicitamente con `EQUILIBRIA_GTAP_REF_MODEL=blocks`: bloques emite 33 filas
-de mas (eq_mfr_* x30 + eq_mfw_* x3, duplicados de mq_factr_*/mq_factw_*) que
-sobredeterminan el sistema, tumban `eq_xseq[USA,VegFruit]` via
-_closure_patches.py:439 y bajan el gate MCP de 15x10 pure ifSUB=1 a 87%
-(piso 99%).  Esas filas son PREEXISTENTES (blocks/gtap/closure.py en 1fd4492).
+EL DEFAULT YA ES BLOQUES.  Estuvo bloqueado por dos cosas, las dos medidas y
+arregladas:
 
-Lo que este test fija HOY es que el camino de bloques existe y no toca el
-monolito.  Cuando se quiten las filas duplicadas, el default cambia y basta
-con borrar el monkeypatch de la variable.
+- 33 filas Fisher duplicadas que solo sobrevivian en la ruta del SP
+  (cf2c1b0).
+- Los 9 vars de reporte ifSUB se congelaban a "su valor actual", volviendo
+  DEFINITIVA la diferencia de init entre las rutas — `pwmg` en 0.001 vs 1.0,
+  factor 1000 — con el gate MCP de 15x10 pure ifSUB=1 en 87% (f654f63).
 """
 
 import pathlib
@@ -75,12 +73,11 @@ def test_solve_multiperiod_does_not_build_the_monolith(monkeypatch):
         built.append(1)
         return orig(self, *a, **k)
 
-    monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "blocks")
     monkeypatch.setattr(ME.GTAPModelEquations, "__init__", counting)
     solve_multiperiod(m, p_alt, gc, mode="altertax")
 
     assert built == [], (
-        f"solve_multiperiod construyo {len(built)} monolito(s) con "
-        "EQUILIBRIA_GTAP_REF_MODEL=blocks; el modelo de referencia debe salir "
-        "de bloques"
+        f"solve_multiperiod construyo {len(built)} monolito(s); el modelo de "
+        "referencia debe salir de bloques por defecto "
+        "(EQUILIBRIA_GTAP_REF_MODEL=monolith vuelve al camino viejo)"
     )
