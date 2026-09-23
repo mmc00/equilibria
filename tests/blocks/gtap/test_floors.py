@@ -95,3 +95,41 @@ def test_los_bloques_que_aplican_piso_lo_importan():
             ):
                 importan.add(f.name)
     assert esperados <= importan, f"dejaron de importar floors: {esperados - importan}"
+
+
+def test_ningun_bloque_reescribe_la_regla_a_mano():
+    """El candado por NOMBRE no basta: `max(1e-8, 1e-3*x)` escrito a pelo lo
+    esquivaba (verificado). Este caza la FORMA, se llame como se llame.
+
+    Solo mira la expresion exacta de la regla, no cualquier 1e-8 suelto: en
+    `blocks/gtap/` hay ~80 literales de esos que son otros pisos legitimos.
+    """
+    inline = []
+    for f in sorted(GTAP_BLOCKS.glob("*.py")):
+        if f.name == "floors.py":
+            continue
+        for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            # max(<1e-8>, <1e-3> * <algo>) en cualquier orden de argumentos
+            if not (isinstance(n, ast.Call) and getattr(n.func, "id", None) == "max"):
+                continue
+            if len(n.args) != 2:
+                continue
+            tiene_abs = any(
+                isinstance(a, ast.Constant) and a.value == PRICE_FLOOR_ABS
+                for a in n.args
+            )
+            tiene_rel = any(
+                isinstance(a, ast.BinOp)
+                and isinstance(a.op, ast.Mult)
+                and any(
+                    isinstance(o, ast.Constant) and o.value == PRICE_FLOOR_REL
+                    for o in (a.left, a.right)
+                )
+                for a in n.args
+            )
+            if tiene_abs and tiene_rel:
+                inline.append(f"{f.name}:{n.lineno} reescribe la regla a mano")
+    assert not inline, (
+        "la regla del piso esta escrita a mano; usa price_floor():\n  "
+        + "\n  ".join(inline)
+    )

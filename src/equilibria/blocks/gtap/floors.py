@@ -10,9 +10,17 @@ sola regla. Los cuerpos coincidian, pero los docstrings ya habian divergido en
 la procedencia — tres decian monolito 5295-5356 y tres 5298-5379 — que es como
 empieza a derivar una copia antes de que el numero cambie.
 
-La procedencia buena es la que cubre AMBOS rangos: el monolito aplica el piso
-en dos pasadas (declaracion de la variable y re-seed), y los dos rangos son las
-dos pasadas, no dos versiones de la regla.
+PROCEDENCIA (medida, no deducida): el piso del monolito es UN solo sitio,
+`templates/gtap/gtap_model_equations.py:4454-4458`, con sus constantes
+nombradas en 4450-4451 (`MIN_QUANTITY`, `GAMS_REL_LOWER_BOUND`). Los tres
+rangos que citaban las copias (5295-5356, 5298-5379 y el 5298-5385 de
+`blocks/gtap/__init__.py:77`) NO contienen el piso: esa zona es construccion de
+ecuaciones. Las tres referencias estaban caducadas.
+
+DIFERENCIA CONOCIDA con el monolito, anterior a este modulo y deliberada: el
+monolito hace `continue` cuando `init <= 0` y deja la variable SIN cota; los
+bloques vectorizan sobre el array entero, asi que esas celdas reciben
+`PRICE_FLOOR_ABS`. El gate de paridad corre verde con esa diferencia.
 """
 
 from __future__ import annotations
@@ -25,9 +33,9 @@ PRICE_FLOOR_REL = 1e-3
 
 
 def price_floor(init: float | None) -> float:
-    """Piso de dos pasadas del monolito: max(1e-8, 1e-3*init) para init>0.
+    """Piso del monolito: max(1e-8, 1e-3*init) para init>0.
 
-    Monolito 5295-5356 (declaracion) y 5298-5379 (re-seed).
+    `gtap_model_equations.py:4454-4458` (_set_relative_positive_lower_bound).
     """
     if init is None or init <= 0.0:
         return PRICE_FLOOR_ABS
