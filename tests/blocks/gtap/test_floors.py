@@ -11,6 +11,10 @@ import pathlib
 
 import pytest
 
+from equilibria.blocks.gtap.declarations import (
+    declare_price_var,
+    declare_quantity_var,
+)
 from equilibria.blocks.gtap.floors import (
     PRICE_FLOOR_ABS,
     PRICE_FLOOR_REL,
@@ -60,7 +64,7 @@ def test_ningun_bloque_vuelve_a_copiar_la_regla():
     """
     copias = []
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
-        if f.name == "floors.py":
+        if f.name in ("floors.py", "declarations.py"):
             continue
         arbol = ast.parse(f.read_text(encoding="utf-8"))
         for n in ast.walk(arbol):
@@ -76,8 +80,15 @@ def test_ningun_bloque_vuelve_a_copiar_la_regla():
     )
 
 
-def test_los_bloques_que_aplican_piso_lo_importan():
-    """Y lo hacen desde `floors`, no de otro bloque (evita re-exportar en cadena)."""
+def test_los_bloques_que_declaran_precios_pasan_por_el_declarador():
+    """Quien declara un precio lo hace via `declare_price_var`, que es el unico
+    sitio que aplica la regla.
+
+    Antes este test comprobaba que los bloques IMPORTABAN `floors`, y se
+    degrado: al mover los declaradores a `declarations.py`, `income` y
+    `trade_armington_bilateral` dejaron de nombrar el piso en ninguna parte y
+    el test seguia verde importando otra cosa. Ahora mira el uso real.
+    """
     esperados = {
         "factor.py",
         "income.py",
@@ -85,16 +96,16 @@ def test_los_bloques_que_aplican_piso_lo_importan():
         "production_supply.py",
         "demand_utility.py",
     }
-    importan = set()
+    usan = set()
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
+        if f.name == "declarations.py":
+            continue
         for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
-            if (
-                isinstance(n, ast.ImportFrom)
-                and n.module
-                and n.module.endswith("gtap.floors")
-            ):
-                importan.add(f.name)
-    assert esperados <= importan, f"dejaron de importar floors: {esperados - importan}"
+            if isinstance(n, ast.Name) and n.id == "declare_price_var":
+                usan.add(f.name)
+    assert esperados <= usan, (
+        f"dejaron de declarar precios via declare_price_var: {esperados - usan}"
+    )
 
 
 def test_ningun_bloque_reescribe_la_regla_a_mano():
@@ -114,7 +125,7 @@ def test_ningun_bloque_reescribe_la_regla_a_mano():
     """
     inline = []
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
-        if f.name == "floors.py":
+        if f.name in ("floors.py", "declarations.py"):
             continue
         for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             # max/np.maximum(<1e-8>, <1e-3> * <algo>), argumentos en cualquier
@@ -155,3 +166,111 @@ def test_ningun_bloque_reescribe_la_regla_a_mano():
         "la regla del piso esta escrita a mano; usa price_floor():\n  "
         + "\n  ".join(inline)
     )
+
+
+def test_declarar_precio_aplica_el_piso_celda_a_celda():
+    """Cada celda lleva SU piso, no uno global: es lo que distingue precio de
+    cantidad y la razon de que el helper viva junto a la regla."""
+    import numpy as np
+
+    variables: dict = {}
+    init = np.array([1.0, 100.0, 0.0])
+    declare_price_var(variables, "p", ("r",), init)
+    v = variables["p"]
+    assert list(np.asarray(v.lower)) == [1e-3, 0.1, PRICE_FLOOR_ABS]
+    assert v.domain == "NonNegativeReals"
+
+
+def test_declarar_cantidad_reproduce_las_tres_firmas_viejas():
+    """Los 5 bloques tenian `_q` con TRES firmas; los defaults de aqui las
+    reproducen exactamente. Si un default cambia, un dominio cambia en silencio.
+    """
+    import numpy as np
+
+    init = np.array([1.0, 2.0])
+    variables: dict = {}
+
+    declare_quantity_var(variables, "sin_nada", ("r",), init)
+    assert variables["sin_nada"].lower == 0.0
+    assert variables["sin_nada"].domain == "NonNegativeReals"
+
+    declare_quantity_var(variables, "con_lower", ("r",), init, lower=1e-8)
+    assert variables["con_lower"].lower == 1e-8
+
+    declare_quantity_var(
+        variables, "libre", ("r",), init, lower=float("-inf"), dom="Reals"
+    )
+    assert variables["libre"].domain == "Reals"
+    assert variables["libre"].lower == float("-inf")
+
+
+def test_el_declarador_vive_en_un_solo_sitio():
+    """Invariante: el cuerpo del declarador existe una sola vez.
+
+    Los tres candados anteriores enumeraban EVASIONES (nombres `_q`/`_price`,
+    `def` no-async, llamada por nombre desnudo) y los tres fallaron. Este no
+    enumera: lista QUE variables se declaran a mano, con su motivo. Cualquier
+    cuerpo nuevo —bajo otro nombre, en un lambda, en un `async def`— aparece
+    como un nombre que no esta en la lista y el test cae.
+
+    Un CONTEO no bastaba: sustituir una var legitima por otra dejaba el numero
+    igual y el candado pasaba (verificado). Por eso la lista es de nombres.
+    """
+    # Vars con cota o dominio PROPIOS, que no encajan en ningun declarador.
+    ESPERADOS = {
+        # xft es Reals con cota 1e-8; pwfact/pfact escalares con piso 1e-3
+        # (literal, ver #76); rorc/rore libres (Reals sin cota).
+        # kstock y arent SI encajaban en declare_quantity_var y se migraron:
+        # el comentario viejo decia "cota o dominio propios" y era falso.
+        "factor.py": {"pfact", "pwfact", "rorc", "rore", "xft"},
+        # dintx/mintx con lower=-0.999; xw totalmente libre.
+        "trade_armington_bilateral.py": {"dintx", "mintx", "xw"},
+        # pnum/pwfact piso 1e-3, walras libre, y los 6 agregados Fisher que se
+        # declaran en dos bucles (mfw_* y mfr_*, Reals sin cota).
+        "closure.py": {"pnum", "pwfact", "walras", "<bucle:173>", "<bucle:188>"},
+        # pet piso 1e-3 (init 1.0), xet cantidad.
+        "trade_cet.py": {"pet", "xet"},
+    }
+    reales: dict[str, set[str]] = {}
+    for f in sorted(GTAP_BLOCKS.rglob("*.py")):
+        if f.name in ("floors.py", "declarations.py"):
+            continue
+        arbol = ast.parse(f.read_text(encoding="utf-8"))
+        # Un alias de import (`Variable as _Var`) esquivaba el candado
+        # (verificado): resolvemos todos los nombres que apuntan a Variable.
+        alias = {"Variable"}
+        for n in ast.walk(arbol):
+            if isinstance(n, ast.ImportFrom):
+                alias.update(
+                    a.asname or a.name for a in n.names if a.name == "Variable"
+                )
+        nombres = set()
+        for n in ast.walk(arbol):
+            if not (isinstance(n, ast.Call) and getattr(n.func, "id", None) in alias):
+                continue
+            literal = next(
+                (
+                    k.value.value
+                    for k in n.keywords
+                    if k.arg == "name" and isinstance(k.value, ast.Constant)
+                ),
+                None,
+            )
+            nombres.add(literal if literal is not None else f"<bucle:{n.lineno}>")
+        if nombres:
+            reales[f.name] = nombres
+    assert reales == ESPERADOS, (
+        "cambio el reparto de declaraciones a mano.\n"
+        f"  sobran : { {k: sorted(v - ESPERADOS.get(k, set())) for k, v in reales.items() if v - ESPERADOS.get(k, set())} }\n"
+        f"  faltan : { {k: sorted(ESPERADOS[k] - reales.get(k, set())) for k in ESPERADOS if ESPERADOS[k] - reales.get(k, set())} }\n"
+        "Si anadiste una var con cota propia, subela aqui con su motivo; "
+        "si reescribiste un declarador, usa declare_price_var/"
+        "declare_quantity_var."
+    )
+
+
+def test_el_directorio_vigilado_existe():
+    """Si `GTAP_BLOCKS` deja de resolver, `rglob` no falla: devuelve vacio y los
+    candados pasan sin mirar nada. Esto convierte ese silencio en un fallo."""
+    assert GTAP_BLOCKS.is_dir(), f"no resuelve: {GTAP_BLOCKS}"
+    assert len(list(GTAP_BLOCKS.rglob("*.py"))) > 5

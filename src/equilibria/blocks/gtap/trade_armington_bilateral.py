@@ -54,7 +54,10 @@ from equilibria.blocks.gtap.agents import (
     GTAP_INVESTMENT_AGENT,
     GTAP_MARGIN_AGENT,
 )
-from equilibria.blocks.gtap.floors import price_floor
+from equilibria.blocks.gtap.declarations import (
+    declare_price_var,
+    declare_quantity_var,
+)
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
@@ -129,25 +132,10 @@ class ArmingtonBilateralBlock(Block):
         # Variables OWNED by this unit (monolith 3585-3922, 4323-4491).
         # ------------------------------------------------------------------
         def _q(name, doms, init):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=0.0,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init)
 
         def _price(name, doms, init):
-            lo = np.vectorize(price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         nr, ni, naa = len(regions), len(comms), len(aa_list)
         nrp, nm = len(rp_list), len(margins)

@@ -38,10 +38,13 @@ from pyomo.environ import exp, log, value
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp  # noqa: F401 (submodule)
 from equilibria.blocks.gtap import _ifsub_macros as mac
-from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS, price_floor
+from equilibria.blocks.gtap.declarations import (
+    declare_price_var,
+    declare_quantity_var,
+)
+from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
-from equilibria.core.variables import Variable
 
 
 class ProductionSupplyBlock(Block):
@@ -106,25 +109,10 @@ class ProductionSupplyBlock(Block):
         # runtime relative floor; quantities stay NonNegativeReals (0, None).
         # ------------------------------------------------------------------
         def _q(name, doms, init):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=0.0,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init)
 
         def _price(name, doms, init):
-            lo = np.vectorize(price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         na, ni, nr = len(acts), len(comms), len(regions)
         bm = p.benchmark

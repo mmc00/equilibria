@@ -41,10 +41,13 @@ from pyomo.environ import sqrt, value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
-from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS, price_floor
+from equilibria.blocks.gtap.declarations import (
+    declare_price_var,
+    declare_quantity_var,
+)
+from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
-from equilibria.core.variables import Variable
 
 # Mutable Params (monolith create_indexed_param mutable=True, 2734-2779).
 _MUTABLE = {"g_share", "i_share", "aus", "betap", "betag", "betas", "alphaa_hhd"}
@@ -132,25 +135,10 @@ class DemandUtilityBlock(Block):
         # -------- Variables OWNED by this unit (monolith 4454-4969) -------------
         # Quantity vars (bounds (0,None) — init does not affect the gate).
         def _q(name, doms, init, lower=0.0, dom="NonNegativeReals"):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain=dom,
-                lower=lower,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init, lower=lower, dom=dom)
 
         def _price(name, doms, init):
-            lo = np.vectorize(price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         # capFixDp: betas is a free Variable (dpsave endogenous), seeded at its calibrated
         # benchmark share rsav/(phi·regY) (GAMS cal.gms:621), available as calib["betas"].
