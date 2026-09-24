@@ -49,7 +49,6 @@ def main():
 
     model.add_sets([sectors, factors, commodities])
     print(f"\nCreated model with {len(sectors)} sectors and {len(factors)} factors")
-    print(f"\nCreated model with {len(sectors)} sectors and {len(factors)} factors")
 
     # Add blocks
     print("\n" + "-" * 70)

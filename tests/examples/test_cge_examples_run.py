@@ -5,9 +5,13 @@ notara: un usuario los reporto antes que el repo. Nada en la suite los
 ejecutaba, asi que un ValueError en la primera linea de la guia de
 entrada convivia con el CI en verde.
 
-Este gate corre cada ejemplo en un subproceso y exige exit 0. Marcado
-`slow` porque lanza un interprete por ejemplo (~0.5s cada uno, medido),
-bastante mas caro que un unit test aunque ninguno invoque un solver.
+Este gate corre cada ejemplo en un subproceso y exige exit 0.
+
+NO lleva `@pytest.mark.slow` a proposito: el CI corre
+`pytest -m "not gams and not slow"` (.github/workflows/tests.yml:157) y
+no hay ningun job que recupere los `slow`, asi que marcarlo lo dejaria
+fuera del CI -- justo el agujero que este gate existe para tapar.
+Medido: 0.24-0.46s por ejemplo, ~2.4s los ocho, presupuesto de unit test.
 """
 
 from __future__ import annotations
@@ -32,7 +36,6 @@ def test_examples_are_discovered() -> None:
     assert EXAMPLES, f"no se encontraron ejemplos en {EXAMPLES_DIR}"
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.stem)
 def test_example_runs(example: Path) -> None:
     proc = subprocess.run(
