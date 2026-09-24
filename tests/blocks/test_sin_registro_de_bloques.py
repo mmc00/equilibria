@@ -3,9 +3,12 @@
 # Candado de la decision documentada en
 # docs/architecture/registro_de_bloques.md: no hay registro de bloques.
 #
-# No enumera evasiones (un `getattr` dinamico se salta cualquier lista de
-# nombres); afirma el INVARIANTE POSITIVO: los bloques se componen por import
-# directo, asi que ningun nombre del registro vive en la superficie publica.
+# Son dos candados de distinta naturaleza y el segundo es el que aguanta:
+#   1. El de nombres es un recordatorio, no una barrera: una lista de simbolos
+#      via `hasattr`. Un `getattr` dinamico o un rename se lo salta.
+#   2. El INVARIANTE POSITIVO: los bloques se componen por import directo, y
+#      `_block_classes` los resuelve en orden de dependencia sin consultar
+#      ninguna tabla global. Ese es el mecanismo que sustituye al registro.
 import equilibria
 import equilibria.blocks
 import equilibria.blocks.base
@@ -40,3 +43,36 @@ def test_los_bloques_se_componen_por_import_directo():
     )
     for c in clases:
         assert isinstance(c, type), f"{c!r} no es una clase"
+
+
+def test_ningun_fichero_del_repo_menciona_el_registro():
+    """El candado que faltaba.
+
+    El borrado inicial dejo vivo `examples/cge/example_04_custom_blocks.py`
+    porque el grep cubrio `src/`, `tests/` y `scripts/` pero no `examples/`, y
+    los hooks de pre-commit estan acotados a `^(src|tests)/` a proposito. Nada
+    lo habria detectado: lo encontro el CI.
+
+    Este test barre TODO el arbol de codigo, sin lista de directorios.
+    """
+    import pathlib
+
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    permitidos = {
+        raiz / "tests" / "blocks" / "test_sin_registro_de_bloques.py",
+        raiz / "docs" / "architecture" / "registro_de_bloques.md",
+    }
+    infractores = []
+    for f in raiz.rglob("*.py"):
+        if any(p in f.parts for p in (".git", ".venv", "node_modules", "site")):
+            continue
+        if f in permitidos:
+            continue
+        texto = f.read_text(encoding="utf-8", errors="replace")
+        encontrados = [n for n in NOMBRES if n in texto]
+        if encontrados:
+            infractores.append(f"{f.relative_to(raiz)}: {', '.join(encontrados)}")
+
+    assert not infractores, "el registro de bloques sigue vivo en:\n  " + "\n  ".join(
+        infractores
+    )

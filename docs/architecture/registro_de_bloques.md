@@ -16,14 +16,23 @@ bloque = get_registry().create("IncomeBlock", sigma=0.8)
 
 ## Por que se fueron
 
-Nunca tuvieron un usuario. Medido antes de borrar:
+Su unico usuario era un ejemplo que lo demostraba a si mismo. Medido antes de
+borrar:
 
-- **33 subclases de `Block`** en el repo (GTAP, gtap_logvalue, PEP, trade,
+- **33 subclases de `Block`** en `src/` (GTAP, gtap_logvalue, PEP, trade,
   institutions, demand, production, equilibrium). **Ninguna** llevaba
   `@register_block`.
-- `get_registry()` no se llamaba desde ningun sitio. Las unicas menciones vivas
-  estaban dentro del propio codigo muerto (`register_block` llamandose a si
-  mismo) o en ejemplos `>>>` de docstring.
+- La unica excepcion estaba en `examples/`: `example_04_custom_blocks.py`
+  decoraba su `SimpleDemand`, imprimia `registry.list_blocks()` y dedicaba un
+  paso entero a `registry.create("SimpleDemand")`. Era un usuario REAL —el CI lo
+  ejecuta como test— pero de un tipo particular: el ejemplo existia para enseñar
+  el registro, no lo usaba para nada que necesitara. El bloque se instanciaba
+  directo (`SimpleDemand(name=...)`) y el propio texto decia
+  "Use @register_block decorator (optional)". Se reescribio en este mismo commit
+  para componer por import directo, que es lo que hace el resto del repo.
+- Fuera de ese ejemplo, `get_registry()` no se llamaba desde ningun sitio: las
+  demas menciones vivas estaban dentro del propio codigo muerto
+  (`register_block` llamandose a si mismo) o en ejemplos `>>>` de docstring.
 - El repo necesito un registro **tres veces** en otros sitios y las tres escribio
   un `dict` de modulo sin tocar este: `_ADAPTER_REGISTRY`
   (`simulations/simulator.py`), `_MAPPING_RUNTIME_REGISTRY`

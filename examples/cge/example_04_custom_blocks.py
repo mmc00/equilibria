@@ -4,7 +4,7 @@ This example demonstrates how to:
 1. Create a custom block by inheriting from Block
 2. Define required sets, parameters, and variables
 3. Implement the setup method
-4. Register and use the custom block
+4. Use the custom block in a model
 """
 
 from typing import Any
@@ -12,12 +12,11 @@ from typing import Any
 import numpy as np
 from pydantic import Field
 
-from equilibria.blocks import Block, ParameterSpec, VariableSpec, register_block
+from equilibria.blocks import Block, ParameterSpec, VariableSpec
 from equilibria.core import Equation, Parameter, Variable
 from equilibria.core.sets import SetManager
 
 
-@register_block
 class SimpleDemand(Block):
     """Simple demand block with Cobb-Douglas utility.
 
@@ -129,21 +128,10 @@ def main():
     print("Example 4: Creating Custom Blocks")
     print("=" * 70)
 
-    # Show the registered block
+    # Los bloques se componen por import directo: se importa la clase y se
+    # instancia. Ver docs/architecture/registro_de_bloques.md.
     print("\n" + "-" * 70)
-    print("Step 1: Block Registration")
-    print("-" * 70)
-
-    from equilibria.blocks import get_registry
-
-    registry = get_registry()
-    print("\nRegistered blocks:")
-    for block_name in registry.list_blocks():
-        print(f"  - {block_name}")
-
-    # Create instance of custom block
-    print("\n" + "-" * 70)
-    print("Step 2: Creating Custom Block Instance")
+    print("Step 1: Creating Custom Block Instance")
     print("-" * 70)
 
     demand_block = SimpleDemand(name="SimpleDemand")
@@ -153,7 +141,7 @@ def main():
 
     # Get block info
     print("\n" + "-" * 70)
-    print("Step 3: Block Metadata")
+    print("Step 2: Block Metadata")
     print("-" * 70)
 
     info = demand_block.get_info()
@@ -176,7 +164,7 @@ def main():
 
     # Use the block in a model
     print("\n" + "-" * 70)
-    print("Step 4: Using Custom Block in Model")
+    print("Step 3: Using Custom Block in Model")
     print("-" * 70)
 
     from equilibria import Model
@@ -200,7 +188,7 @@ def main():
 
     # Show model statistics
     print("\n" + "-" * 70)
-    print("Step 5: Model Statistics")
+    print("Step 4: Model Statistics")
     print("-" * 70)
 
     stats = model.statistics
@@ -219,15 +207,6 @@ def main():
         var = model.get_variable(var_name)
         print(f"  {var_name}: shape {var.shape()}")
 
-    # Create block using registry
-    print("\n" + "-" * 70)
-    print("Step 6: Creating Block from Registry")
-    print("-" * 70)
-
-    block_from_registry = registry.create("SimpleDemand")
-    print(f"\nCreated block from registry: {block_from_registry.name}")
-    print(f"  Same type: {type(block_from_registry) == type(demand_block)}")
-
     print("\n" + "=" * 70)
     print("Example completed successfully!")
     print("=" * 70)
@@ -235,7 +214,7 @@ def main():
     print("  1. Inherit from Block")
     print("  2. Define required_sets, parameters, variables")
     print("  3. Implement setup() method")
-    print("  4. Use @register_block decorator (optional)")
+    print("  4. Import it and add it to your model")
     print("=" * 70)
 
 
