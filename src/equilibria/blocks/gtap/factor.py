@@ -35,19 +35,14 @@ from pyomo.environ import value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
+from equilibria.blocks.gtap.declarations import (
+    declare_price_var,
+    declare_quantity_var,
+)
+from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
-
-_FLOOR = 1e-8
-_REL = 1e-3
-
-
-def _price_floor(init: float) -> float:
-    """Monolith two-pass price floor: max(1e-8, 1e-3*init) for init>0 (5295-5356)."""
-    if init is None or init <= 0.0:
-        return _FLOOR
-    return max(_FLOOR, _REL * float(init))
 
 
 class FactorBlock(Block):
@@ -106,25 +101,10 @@ class FactorBlock(Block):
         # Variables OWNED by this unit (monolith 4349-4395, 4798-4826).
         # ------------------------------------------------------------------
         def _q(name, doms, init, lower=0.0):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lower,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init, lower=lower)
 
         def _price(name, doms, init):
-            lo = np.vectorize(_price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         nr, nf, na = len(regions), len(facs), len(acts)
         # xft: bounds=(1e-8,None) declared (monolith 4349-4354), NOT in price list
@@ -186,30 +166,14 @@ class FactorBlock(Block):
         )
         kstock_init = np.array([max(self._kstock_init(r), 0.0) for r in regions])
         kapend_init = np.array([max(self._kapend_init(r), 0.0) for r in regions])
-        variables["kstock"] = Variable(
-            name="kstock",
-            value=kstock_init,
-            domains=("r",),
-            domain="NonNegativeReals",
-            lower=1e-8,
-            upper=float("inf"),
+        # kstock: cantidad con piso ABSOLUTO (no relativo — su init es ~45-123,
+        # aplicarle price_floor subiria la cota x4.5 millones).
+        declare_quantity_var(
+            variables, "kstock", ("r",), kstock_init, lower=PRICE_FLOOR_ABS
         )
-        variables["kapEnd"] = Variable(
-            name="kapEnd",
-            value=kapend_init,
-            domains=("r",),
-            domain="NonNegativeReals",
-            lower=np.vectorize(_price_floor)(kapend_init),
-            upper=float("inf"),
-        )
-        variables["arent"] = Variable(
-            name="arent",
-            value=np.full(nr, 0.05),
-            domains=("r",),
-            domain="NonNegativeReals",
-            lower=0.0,
-            upper=float("inf"),
-        )
+        # kapEnd es un precio: piso relativo celda a celda, como los demas.
+        declare_price_var(variables, "kapEnd", ("r",), kapend_init)
+        declare_quantity_var(variables, "arent", ("r",), np.full(nr, 0.05))
         variables["rorc"] = Variable(
             name="rorc",
             value=np.full(nr, 0.05),

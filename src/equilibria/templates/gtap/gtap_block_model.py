@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any
 from equilibria.backends.pyomo_backend import PyomoBackend
 from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.blocks.gtap import model_cache as _model_cache
+from equilibria.blocks.gtap.agents import GTAP_FINAL_DEMAND_AGENTS
 from equilibria.core.sets import Set as ESet
 from equilibria.model import Model
 from equilibria.templates.gtap.gtap_benchmark_scaling import (
@@ -57,7 +58,7 @@ if TYPE_CHECKING:
 
 # The aggregate-agent set (activities + the four final-demand agents) and the
 # tax-stream set gy — mirror the monolith's set construction.
-_AGENTS = ["hhd", "gov", "inv", "tmg"]
+_AGENTS = list(GTAP_FINAL_DEMAND_AGENTS)
 _GY = ["pt", "fc", "pc", "gc", "ic", "dt", "mt", "et", "ft", "fs"]
 
 

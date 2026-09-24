@@ -7,7 +7,9 @@ IDENTICAL to the full base->check->shock settle. Baseline captured on gtap7_10x7
 from __future__ import annotations
 
 import contextlib
+import gzip
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -35,7 +37,10 @@ DATA = Path("datasets/gtap7_10x7")
 # mq_gdp_{bs,sb}, 7 regiones cada uno. El corte sigue sin mover el seed, que es
 # lo que este gate existe para vigilar.
 BASELINE_COUNT = 20194
-BASELINE_SIG = "b82d6f9b530a70bf"
+# Recalculada al pasar a %.13g (antes %.10e -> b82d6f9b530a70bf en macOS y
+# d29fceb45a79c2f2 en Linux, con el MISMO conteo: la diferencia era el ultimo
+# bit, no el seed). El conteo no cambia: 20194.
+BASELINE_SIG = "6e261fe5b8773a5c"
 
 
 def _load_params():
@@ -63,14 +68,59 @@ def _closure(p):
     )
 
 
+# Tolerancia relativa del gate del seed. El ruido REAL aqui es de CONVERGENCIA
+# del solver, no de 1-2 ULP: la nota de BASELINE_COUNT lo midio celda a celda
+# contra 769bcf3 y la peor diferencia era 6.4e-11. 1e-9 deja ~2 ordenes de
+# margen sobre eso y sigue siendo ~7 ordenes mas estricto que cualquier cambio
+# real del seed (el que cazo eacc53f movio celdas enteras, no decimales).
+SEED_TOL = 1e-9
+BASELINE_SEED = (
+    Path(__file__).resolve().parents[2] / "fixtures/gtap7_10x7_settled_seed.json.gz"
+)
+
+
 def _seed_signature(seed):
-    parts = []
-    for name, cells in seed.items():
-        for body, val in cells.items():
-            parts.append(f"{name}|{body}|{float(val):.10e}")
+    """Firma de un seed. Solo para comparar DOS seeds de la MISMA corrida
+    (cache hit vs miss): ahi el bit-a-bit es exacto y es lo que se quiere.
+    El gate contra el baseline NO la usa —cruza plataformas— - ver _seed_diffs.
+    """
+    parts = [
+        f"{name}|{body}|{float(val):.13g}"
+        for name, cells in seed.items()
+        for body, val in cells.items()
+    ]
     parts.sort()
-    h = hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
-    return len(parts), h
+    return len(parts), hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+
+def _flat(seed):
+    return {
+        f"{name}|{body}": float(val)
+        for name, cells in seed.items()
+        for body, val in cells.items()
+    }
+
+
+def _load_baseline():
+    with gzip.open(BASELINE_SEED, "rt") as fh:
+        return json.load(fh)
+
+
+def _seed_diffs(actual: dict, baseline: dict, tol: float = SEED_TOL):
+    """Celdas que difieren mas de `tol` relativo, mas las que sobran/faltan."""
+    faltan = sorted(set(baseline) - set(actual))
+    sobran = sorted(set(actual) - set(baseline))
+    movidas = []
+    for k in set(actual) & set(baseline):
+        a, b = actual[k], baseline[k]
+        if a == b:
+            continue
+        denom = max(abs(a), abs(b))
+        rel = abs(a - b) / denom if denom else abs(a - b)
+        if rel > tol:
+            movidas.append((k, b, a, rel))
+    movidas.sort(key=lambda t: -t[3])
+    return faltan, sobran, movidas
 
 
 def _calibrate(**kw):
@@ -118,10 +168,26 @@ def test_settle_only_seed_identical_to_full():
     # calibrate_base's seed must equal the full-settle baseline (Task 0 constants).
     # Before Step 3 this is trivially true (calibrate_base is still full-settle);
     # after Step 3 (calibrate_base uses settle_only) it is the byte-identical gate.
-    sig = _seed_signature(_calibrate())
-    assert sig == (BASELINE_COUNT, BASELINE_SIG), (
-        f"HARD GATE: calibrate_base seed {sig} != full-settle baseline "
-        f"({BASELINE_COUNT}, {BASELINE_SIG}). The cut changed the seed. STOP."
+    actual = _flat(_calibrate())
+    baseline = _load_baseline()
+
+    # El conteo sigue siendo gate DURO: una celda de mas o de menos es un cambio
+    # estructural del seed, no ruido.
+    assert len(actual) == BASELINE_COUNT, (
+        f"HARD GATE: calibrate_base seed tiene {len(actual)} celdas, "
+        f"baseline {BASELINE_COUNT}. The cut changed the seed. STOP."
+    )
+
+    faltan, sobran, movidas = _seed_diffs(actual, baseline)
+    assert not faltan and not sobran, (
+        f"HARD GATE: el seed cambio de CLAVES. faltan={faltan[:5]} "
+        f"sobran={sobran[:5]}. The cut changed the seed. STOP."
+    )
+    assert not movidas, (
+        "HARD GATE: calibrate_base seed != full-settle baseline en "
+        f"{len(movidas)} celda(s) por encima de {SEED_TOL:g} relativo. "
+        f"Peores: {[(k, f'{b:.12g}->{a:.12g}', f'{r:.2e}') for k, b, a, r in movidas[:5]]}. "
+        "The cut changed the seed. STOP."
     )
 
 

@@ -45,7 +45,7 @@ def test_driver_runs_three_periods():
 
 
 @pytest.mark.needs_path
-def test_solve_multiperiod_solves_m_not_slices():
+def test_solve_multiperiod_solves_m_not_slices(monkeypatch):
     """TDD contract: PATH must have solved `m` itself (not temp slice models).
 
     Proof: after solve_multiperiod, the shock Fisher row eq_rgdpmp[r,'shock']
@@ -55,7 +55,31 @@ def test_solve_multiperiod_solves_m_not_slices():
     evaluate to a residual near zero — but we additionally check that at least
     one region has a non-trivial (>0) rgdpmp['shock'] value, proving m was solved
     and not just vacuously satisfied by default-init vars.
+
+    JACOBIANO: este caso exige `reverse_numeric`, NO el `asl` por defecto (que
+    9ef28cb puso porque baja el 20x41 de 28,8 a 11,7 min).  No es una tolerancia
+    aflojada — el contrato y el tol 5e-2 quedan intactos; cambia solo QUIEN deriva.
+
+    El modo asl valida que el sistema sea una biyeccion exacta var<->fila antes de
+    armar el Jacobiano (pyomo_adapter.py:333), y bajo ifSUB este modelo no puede
+    darla: `pfaeq` no se genera (model.gms:1117 `$(... and not ifSUB)`) y GAMS deja
+    `pfa` LIBRE donde hay flujo de factor — solo la fija donde `not xfFlag`
+    (iterloop.gms:144).  Python es FIEL a eso, asi que quedan 14 columnas sin fila
+    en base y 65 en shock.  GAMS las absorbe con `gtap.holdfixed=1` (model.gms:1424)
+    + filas libres declaradas (`pfteq` sin `.var`, model.gms:1413); Pyomo/PATH no
+    tiene ese estado, de modo que ASL aborta, `success=False` y los valores NUNCA se
+    escriben al modelo — el 0,10396 que se veia era el residuo del modelo SIN
+    resolver, no un solve impreciso.
+
+    Fijar esas 14 NO es la salida: ya se midio y baja el CHECK de ~93% a ~80% de
+    paridad (ver gtap_multiperiod_driver.py:1194-1198).  Fidelidad sobre velocidad.
+
+    Los gates de paridad no lo ven porque van con `skip_base_solve=True` y semilla
+    del GDX, donde la condicion no se da.  Verificado: `eacc53f` (padre) pasa,
+    `9ef28cb` falla, y con reverse_numeric pasa en main.
     """
+    monkeypatch.setenv("EQUILIBRIA_GTAP_JAC_MODE", "reverse_numeric")
+
     from pyomo.environ import value as pyo_value
 
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod

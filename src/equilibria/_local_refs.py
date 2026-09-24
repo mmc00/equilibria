@@ -125,6 +125,61 @@ def path_capi_lib_dir() -> Path:
         [local, Path("~/proyectos2/equilibria/.cache/path_capi").expanduser()]
     )
     for cand in candidatos:
-        if (cand / "libpath50.silicon.dylib").exists():
+        if any((cand / nombre).exists() for nombre in path_capi_lib_names()):
             return cand
     return local
+
+
+def path_capi_lib_names() -> tuple[str, ...]:
+    """Nombres posibles de la libreria PATH en esta plataforma.
+
+    El .dylib de macOS ARM era el unico nombre reconocido hasta 2026-09-21, asi
+    que en Linux la deteccion daba False aunque la libreria estuviera al lado:
+    el upstream publica `libpath50.so` (ELF x86-64) en path_5.0.05_Linux64.zip,
+    no un .dylib. Se listan varios porque el binario oficial y el que compila
+    uno mismo no coinciden en sufijo.
+    """
+    import sys
+
+    if sys.platform == "darwin":
+        return ("libpath50.silicon.dylib", "libpath50.dylib")
+    if sys.platform.startswith("linux"):
+        return ("libpath50.so", "libpath50.silicon.so")
+    if sys.platform.startswith("win"):
+        return ("path50.dll", "libpath50.dll")
+    return ("libpath50.so", "libpath50.dylib")
+
+
+def path_capi_lusol_names() -> tuple[str, ...]:
+    """Nombres posibles de LUSOL, companera de la libreria PATH."""
+    import sys
+
+    if sys.platform == "darwin":
+        return ("liblusol.silicon.dylib", "liblusol.dylib")
+    if sys.platform.startswith("linux"):
+        return ("liblusol.so", "liblusol.silicon.so")
+    if sys.platform.startswith("win"):
+        return ("lusol.dll", "liblusol.dll")
+    return ("liblusol.so", "liblusol.dylib")
+
+
+def path_capi_lib() -> Path:
+    """Ruta a la libreria PATH de esta plataforma (exista o no).
+
+    Devuelve el primer nombre que exista; si ninguno, el primer candidato, para
+    que el mensaje de error apunte a lo que se esperaba encontrar.
+    """
+    d = path_capi_lib_dir()
+    for nombre in path_capi_lib_names():
+        if (d / nombre).exists():
+            return d / nombre
+    return d / path_capi_lib_names()[0]
+
+
+def path_capi_lusol() -> Path:
+    """Ruta a LUSOL de esta plataforma (exista o no)."""
+    d = path_capi_lib_dir()
+    for nombre in path_capi_lusol_names():
+        if (d / nombre).exists():
+            return d / nombre
+    return d / path_capi_lusol_names()[0]

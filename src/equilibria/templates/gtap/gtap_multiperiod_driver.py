@@ -27,15 +27,9 @@ from __future__ import annotations
 
 import contextlib
 import copy
-import importlib.util as _iu
 import sys
 from pathlib import Path
 from typing import Any
-
-# Root of the repository (four levels up from this file):
-#   src/equilibria/templates/gtap/ → src/equilibria/templates/ → src/equilibria/ →
-#   src/ → repository root
-ROOT = Path(__file__).resolve().parents[4]
 
 PERIODS = ("base", "check", "shock")
 
@@ -170,17 +164,40 @@ def _gc_threshold_from_env() -> int:
         return _GC_THRESHOLD0
 
 
+@contextlib.contextmanager
+def _restored_path_capi_options():
+    """Restore PATH_CAPI_OPTIONS to its pre-call value on every exit.
+
+    The inner solve stamps its per-mode PATH defaults into this variable —
+    that is the channel the solver reads them from (path_capi.py) — but a
+    library must not leave the caller's process environment modified. Without
+    this, running a solve mutated the environment of whatever imported us.
+
+    The sentinel-based re-derivation inside the inner body stays as it is: it
+    still guards the case of a caller that sets the variable itself, and it is
+    what makes a second call in the same process re-derive per its own mode.
+    """
+    import os
+
+    previous = os.environ.get("PATH_CAPI_OPTIONS")
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("PATH_CAPI_OPTIONS", None)
+        else:
+            os.environ["PATH_CAPI_OPTIONS"] = previous
+
+
 # ---------------------------------------------------------------------------
-# Lazy-load run_gtap (mirrors how diff_altertax.py does it)
+# The PATH C-API solve used to be loaded by path from scripts/gtap/run_gtap.py,
+# which is NOT part of the wheel: a pip-installed run raised FileNotFoundError
+# here on the first solve. It now lives in the package.
 # ---------------------------------------------------------------------------
 def _load_run_gtap():
-    spec = _iu.spec_from_file_location(
-        "run_gtap", str(ROOT / "scripts" / "gtap" / "run_gtap.py")
-    )
-    rg = _iu.module_from_spec(spec)
-    sys.modules["run_gtap"] = rg
-    spec.loader.exec_module(rg)
-    return rg
+    from equilibria.solver import path_capi
+
+    return path_capi
 
 
 # ---------------------------------------------------------------------------
@@ -4225,11 +4242,18 @@ def solve_multiperiod(
     # Two halves of the same lever: freeze() stops the GC from re-walking the
     # built model, and the raised threshold stops it from scheduling those
     # walks so often. Measured separately; see each context manager.
+    #
+    # _restored_path_capi_options: the inner solve publishes its per-mode PATH
+    # defaults through PATH_CAPI_OPTIONS (that is how it reaches the solver),
+    # but a library must not leave the caller's environment modified. Restoring
+    # it here — same reason as the GC pair: guaranteed on every exit without
+    # re-indenting the inner body.
     with (
         _gc_frozen_permanent_graph(
             os.environ.get("EQUILIBRIA_GTAP_GC_FREEZE", "1") != "0"
         ),
         _gc_relaxed_threshold(_gc_threshold_from_env()),
+        _restored_path_capi_options(),
     ):
         return _solve_multiperiod_inner(
             m,

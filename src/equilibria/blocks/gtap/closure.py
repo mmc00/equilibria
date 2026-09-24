@@ -44,16 +44,6 @@ from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
 
-_FLOOR = 1e-8
-_REL = 1e-3
-
-
-def _price_floor(init: float) -> float:
-    """Monolith relative floor: max(1e-8, 1e-3*init) for init>0 (5298-5379)."""
-    if init is None or init <= 0.0:
-        return _FLOOR
-    return max(_FLOOR, _REL * float(init))
-
 
 class ClosureBlock(Block):
     """GTAP closure: factor-price Fisher index, numeraire, Walras check."""

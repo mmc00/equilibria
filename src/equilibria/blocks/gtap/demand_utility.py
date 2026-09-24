@@ -41,22 +41,16 @@ from pyomo.environ import sqrt, value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
+from equilibria.blocks.gtap.declarations import (
+    declare_price_var,
+    declare_quantity_var,
+)
+from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
-from equilibria.core.variables import Variable
-
-_FLOOR = 1e-8
-_REL = 1e-3
 
 # Mutable Params (monolith create_indexed_param mutable=True, 2734-2779).
 _MUTABLE = {"g_share", "i_share", "aus", "betap", "betag", "betas", "alphaa_hhd"}
-
-
-def _price_floor(init: float) -> float:
-    """Monolith relative floor: max(1e-8, 1e-3*init) for init>0 (5298-5379)."""
-    if init is None or init <= 0.0:
-        return _FLOOR
-    return max(_FLOOR, _REL * float(init))
 
 
 class DemandUtilityBlock(Block):
@@ -141,25 +135,10 @@ class DemandUtilityBlock(Block):
         # -------- Variables OWNED by this unit (monolith 4454-4969) -------------
         # Quantity vars (bounds (0,None) — init does not affect the gate).
         def _q(name, doms, init, lower=0.0, dom="NonNegativeReals"):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain=dom,
-                lower=lower,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init, lower=lower, dom=dom)
 
         def _price(name, doms, init):
-            lo = np.vectorize(_price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         # capFixDp: betas is a free Variable (dpsave endogenous), seeded at its calibrated
         # benchmark share rsav/(phi·regY) (GAMS cal.gms:621), available as calib["betas"].
@@ -181,7 +160,12 @@ class DemandUtilityBlock(Block):
         _q("xg", ("r", "i"), self._vgm_init(regions, comms))
         _q("xi", ("r", "i"), self._xi_init(regions, comms))
         # xiagg: strictly_positive floor 1e-8 (5333-5348, pass 1 only).
-        _q("xiagg", ("r",), np.maximum(self._xiagg_init(regions), _FLOOR), lower=_FLOOR)
+        _q(
+            "xiagg",
+            ("r",),
+            np.maximum(self._xiagg_init(regions), PRICE_FLOOR_ABS),
+            lower=PRICE_FLOOR_ABS,
+        )
         # Price/utility/level vars (relative floor 1e-3*init).
         _price("pcons", ("r",), ones_r)
         _price("pi", ("r",), self._pi_init(regions))

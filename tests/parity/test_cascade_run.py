@@ -32,11 +32,11 @@ def test_stops_at_first_dirty():
     }
     results = sweep_period("gtap7_3x3", "shock", gdx, runner=_fake_runner(script))
     names = [r.name for r in results]
-    # seed_and_solve abre la cascada (9b9777c la puso PRIMERA a proposito; ver la
-    # nota en test_cascade_layers).  Aqui el runner falso la deja en clean, igual
-    # que holdfixed/tautology, asi que el sweep las atraviesa y para en el primer
-    # dirty (nl_compare).  Las capas posteriores NO deben ejecutarse.
+    # holdfixed/tautology default to clean here, so the sweep passes them and stops
+    # at the first dirty (nl_compare). Later layers must NOT run.
     assert names == [
+        # seed_and_solve corre PRIMERO (9b9777c) y aqui sale clean por el
+        # default del _fake_runner, asi que el sweep sigue hasta el primer dirty.
         "seed_and_solve",
         "mcp_pairing",
         "holdfixed",

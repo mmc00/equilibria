@@ -38,19 +38,13 @@ from pyomo.environ import exp, log, value
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp  # noqa: F401 (submodule)
 from equilibria.blocks.gtap import _ifsub_macros as mac
+from equilibria.blocks.gtap.declarations import (
+    declare_price_var,
+    declare_quantity_var,
+)
+from equilibria.blocks.gtap.floors import PRICE_FLOOR_ABS
 from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
-from equilibria.core.variables import Variable
-
-_FLOOR = 1e-8
-_REL = 1e-3
-
-
-def _price_floor(init: float) -> float:
-    """Monolith two-pass price floor: max(1e-8, 1e-3*init) for init>0 (5295-5356)."""
-    if init is None or init <= 0.0:
-        return _FLOOR
-    return max(_FLOOR, _REL * float(init))
 
 
 class ProductionSupplyBlock(Block):
@@ -115,25 +109,10 @@ class ProductionSupplyBlock(Block):
         # runtime relative floor; quantities stay NonNegativeReals (0, None).
         # ------------------------------------------------------------------
         def _q(name, doms, init):
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=0.0,
-                upper=float("inf"),
-            )
+            declare_quantity_var(variables, name, doms, init)
 
         def _price(name, doms, init):
-            lo = np.vectorize(_price_floor)(init)
-            variables[name] = Variable(
-                name=name,
-                value=init,
-                domains=tuple(doms),
-                domain="NonNegativeReals",
-                lower=lo,
-                upper=float("inf"),
-            )
+            declare_price_var(variables, name, doms, init)
 
         na, ni, nr = len(acts), len(comms), len(regions)
         bm = p.benchmark
@@ -142,7 +121,10 @@ class ProductionSupplyBlock(Block):
         # a faithful benchmark seed is used (deep fallback chains omitted — they
         # only refine INIT LEVELS, which Task-5's composer re-settles).
         xp_init = np.array(
-            [[max(self._vom_init(r, a), _FLOOR) for a in acts] for r in regions]
+            [
+                [max(self._vom_init(r, a), PRICE_FLOOR_ABS) for a in acts]
+                for r in regions
+            ]
         )
         # x/xs use the monolith get_make_init (make-CET allocation for finite
         # omegas), NOT raw makb — see _make_init. xds stays the makb-based domestic
@@ -156,7 +138,7 @@ class ProductionSupplyBlock(Block):
         xs_init = np.array(
             [
                 [
-                    max(sum(self._make_init(r, a, i) for a in acts), _FLOOR)
+                    max(sum(self._make_init(r, a, i) for a in acts), PRICE_FLOOR_ABS)
                     for i in comms
                 ]
                 for r in regions
@@ -167,7 +149,7 @@ class ProductionSupplyBlock(Block):
                 [
                     max(
                         sum(float(bm.makb.get((r, a, i), 0.0) or 0.0) for a in acts),
-                        _FLOOR,
+                        PRICE_FLOOR_ABS,
                     )
                     for i in comms
                 ]
@@ -186,7 +168,7 @@ class ProductionSupplyBlock(Block):
                     [
                         max(
                             (1.0 + self._prdtx(r, a, i)) * self._p_rai_init(r, a, i),
-                            _FLOOR,
+                            PRICE_FLOOR_ABS,
                         )
                         for i in comms
                     ]
@@ -629,7 +611,7 @@ class ProductionSupplyBlock(Block):
     def _p_rai_init(self, r: str, a: str, i: str) -> float:
         """p_rai init = 1/(1+prdtx), floored 1e-8 (monolith get_p_rai_init 3486)."""
         prdtx = self._prdtx(r, a, i)
-        return max(1.0 / max(1.0 + prdtx, 1e-12), _FLOOR)
+        return max(1.0 / max(1.0 + prdtx, 1e-12), PRICE_FLOOR_ABS)
 
     def _make_init(self, r: str, a: str, i: str) -> float:
         """Output by activity-commodity = monolith get_make_init (3147-3174).

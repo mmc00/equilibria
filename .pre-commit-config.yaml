@@ -95,6 +95,7 @@ repos:
               src/equilibria/simulations/simulator\.py|
               src/equilibria/solver/jacobians/base\.py|
               src/equilibria/solver/jacobians/reporting\.py|
+              src/equilibria/solver/path_capi\.py|
               src/equilibria/templates/data/pep/generate_sam_4d\.py|
               src/equilibria/templates/gtap/altertax/calibration_sequence\.py|
               src/equilibria/templates/gtap/altertax/outer_loop\.py|
@@ -184,6 +185,7 @@ repos:
               tests/templates/gtap/test_nus333_landshock_parity\.py|
               tests/templates/gtap/test_nus333_neos_parity\.py|
               tests/templates/gtap/test_welfare_shadow\.py|
+              tests/templates/gtap/test_wheel_smoke\.py|
               tests/templates/pep_pyomo/test_pep_coverage_matrix\.py|
               tests/templates/test_init_strategies\.py|
               tests/templates/test_pep_ipopt_cns_constraints\.py|

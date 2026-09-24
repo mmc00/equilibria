@@ -41,19 +41,20 @@ def main():
     )
     print(f"\nSectors (J): {sectors}")
 
+    # Convencion de los bloques: F = factores, I = commodities.
     factors = Set(
-        name="I",
+        name="F",
         elements=("labor", "capital"),
         description="Factors of production",
     )
-    print(f"Factors (I): {factors}")
+    print(f"Factors (F): {factors}")
 
     commodities = Set(
-        name="COMM",
+        name="I",
         elements=("agr", "mfg", "svc"),
         description="Commodities",
     )
-    print(f"Commodities (COMM): {commodities}")
+    print(f"Commodities (I): {commodities}")
 
     # Add sets to model
     model.add_set(sectors)

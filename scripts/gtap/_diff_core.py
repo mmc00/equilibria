@@ -10,30 +10,76 @@ Includes the alias / derived-var / index-shape-tolerant lookup machinery
 needed for full var-by-var parity (e.g. GAMS xa(r,i,aa) ↔ Python xaa,
 GAMS pp(r,a,i) ↔ Python pp_rai, GAMS xi(r) = Python xiagg(r)).
 """
+
 from __future__ import annotations
+
 import csv
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
-GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+
+def _resolver_gdxdump() -> str:
+    """Donde esta `gdxdump`, el binario con el que se lee el ORACULO de GAMS.
+
+    Era una ruta absoluta a GAMS 48. Funcionaba en la maquina donde se escribio
+    y en ninguna otra, y ademas fijaba el oraculo a una version concreta
+    mientras el resto del repo usaba la instalada (hoy Current->53).
+
+    Orden: `EQUILIBRIA_GDXDUMP` (escape hatch explicito) -> PATH -> las rutas
+    de instalacion habituales. Si no aparece, se devuelve "gdxdump" a secas
+    para que el fallo sea un FileNotFoundError con nombre, no un silencio.
+    """
+    import glob
+    import os
+    import shutil
+
+    if explicito := os.environ.get("EQUILIBRIA_GDXDUMP"):
+        return explicito
+    if en_path := shutil.which("gdxdump"):
+        return en_path
+    patrones = [
+        "/Library/Frameworks/GAMS.framework/Versions/Current/Resources",
+        "/Library/Frameworks/GAMS.framework/Versions/*/Resources",
+        "/opt/gams/*",
+        "/usr/local/gams/*",
+    ]
+    for pat in patrones:
+        for d in sorted(glob.glob(pat), reverse=True):
+            cand = Path(d) / "gdxdump"
+            if cand.exists():
+                return str(cand)
+    return "gdxdump"
+
+
+GDXDUMP = _resolver_gdxdump()
 T_LABELS = {"base", "check", "shock"}
 _DROPPABLE_HHD = {"hhd"}
 
 CSV_FIELDS = [
-    "dataset", "phase", "var", "py_var",
-    "cells", "match", "diverge", "missing",
-    "max_abs_err", "max_rel_err",
-    "residual", "solve_seconds", "git_sha", "generated_at",
+    "dataset",
+    "phase",
+    "var",
+    "py_var",
+    "cells",
+    "match",
+    "diverge",
+    "missing",
+    "max_abs_err",
+    "max_rel_err",
+    "residual",
+    "solve_seconds",
+    "git_sha",
+    "generated_at",
 ]
 
 # GAMS → Python name aliases.
 _NAME_ALIAS = {
     "pp": "pp_rai",
     "xa": "xaa",
-    "xd": "xda",             # GAMS xd[r,i,aa] (bilateral) → Python xda
-    "xm": "xma",             # GAMS xm[r,i,aa] (bilateral) → Python xma
-    "ytaxind": "ytax_ind",   # GAMS camelCase ytaxInd → Python ytax_ind
+    "xd": "xda",  # GAMS xd[r,i,aa] (bilateral) → Python xda
+    "xm": "xma",  # GAMS xm[r,i,aa] (bilateral) → Python xma
+    "ytaxind": "ytax_ind",  # GAMS camelCase ytaxInd → Python ytax_ind
 }
 
 
@@ -78,7 +124,7 @@ def _strip_pfx_keepcase(s: str) -> str:
     members (e.g. GAMS 'c_Food'/'a_Food' → Python 'Food', not 'food')."""
     for pfx in ("a_", "c_", "f_", "r_"):
         if s.startswith(pfx):
-            return s[len(pfx):]
+            return s[len(pfx) :]
     return s
 
 
@@ -109,18 +155,21 @@ def build_derived(model) -> dict:
         if len(key) != 3:
             return None
         return _value_or_zero(model, "xda", key)
+
     out["xd"] = _DerivedVar("xd(=xda)", _xd)
 
     def _xm(key):
         if len(key) != 3:
             return None
         return _value_or_zero(model, "xma", key)
+
     out["xm"] = _DerivedVar("xm(=xma)", _xm)
 
     def _xi(key):
         if len(key) != 1:
             return None
         return _value_or_zero(model, "xiagg", key[0])
+
     out["xi"] = _DerivedVar("xi(=xiagg)", _xi)
 
     def _pg(r):
@@ -132,7 +181,7 @@ def build_derived(model) -> dict:
                 gs = _pyo_value(model.g_share[r, i])
                 if gs > 0.0:
                     pa = _pyo_value(model.pa[r, i, "gov"])
-                    terms += gs * pa ** expo
+                    terms += gs * pa**expo
             if terms <= 0.0:
                 return None
             return terms ** (1.0 / expo)
@@ -150,12 +199,14 @@ def build_derived(model) -> dict:
             return yg / pg
         except Exception:
             return None
+
     out["xg"] = _DerivedVar("xg(=yg/pg)", _xg)
 
     def _pg_outer(key):
         if len(key) != 1:
             return None
         return _pg(key[0])
+
     out["pg"] = _DerivedVar("pg(CES gov)", _pg_outer)
 
     # Expenditure-side regY = yc + yg + rsav. GAMS writes the BASE period from
@@ -167,10 +218,14 @@ def build_derived(model) -> dict:
             return None
         r = key[0]
         try:
-            return (_pyo_value(model.yc[r]) + _pyo_value(model.yg[r])
-                    + _pyo_value(model.rsav[r]))
+            return (
+                _pyo_value(model.yc[r])
+                + _pyo_value(model.yg[r])
+                + _pyo_value(model.rsav[r])
+            )
         except Exception:
             return None
+
     out["regy_betacal"] = _DerivedVar("regY(=yc+yg+rsav)", _regy_exp)
 
     return out
@@ -179,7 +234,9 @@ def build_derived(model) -> dict:
 def list_populated_vars(gdx_path: Path) -> list[str]:
     out = subprocess.run(
         [GDXDUMP, str(gdx_path), "Symbols"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     names = []
     for line in out.splitlines():
@@ -198,7 +255,9 @@ def list_populated_vars(gdx_path: Path) -> list[str]:
 def gams_levels(gdx_path: Path, symbol: str) -> dict:
     res = subprocess.run(
         [GDXDUMP, str(gdx_path), "Format=csv", f"Symb={symbol}"],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if res.returncode != 0 or not res.stdout.strip():
         return {}
@@ -225,6 +284,7 @@ def split_t(keys: tuple) -> tuple[tuple, str | None]:
 
 def _try_index(py_var, idx):
     from pyomo.core import value
+
     if isinstance(py_var, _DerivedVar):
         try:
             v = py_var._getter(idx)  # noqa: SLF001
@@ -238,7 +298,9 @@ def _try_index(py_var, idx):
         pass
     try:
         for kk in py_var:
-            if isinstance(kk, tuple) and tuple(str(x) for x in kk) == tuple(str(x) for x in idx):
+            if isinstance(kk, tuple) and tuple(str(x) for x in kk) == tuple(
+                str(x) for x in idx
+            ):
                 return float(value(py_var[kk]))
             if not isinstance(kk, tuple) and len(idx) == 1 and str(kk) == str(idx[0]):
                 return float(value(py_var[kk]))
@@ -252,7 +314,7 @@ def _strip_gtap_prefix(s: str) -> str:
     sl = s.lower()
     for pfx in ("a_", "c_", "f_"):
         if sl.startswith(pfx):
-            return sl[len(pfx):]
+            return sl[len(pfx) :]
     return sl
 
 
@@ -268,6 +330,7 @@ def get_py_var_value(py_var, key: tuple) -> float | None:
     GAMS 'a_Food' matches Python 'Food'.
     """
     from pyomo.core import value
+
     is_derived = isinstance(py_var, _DerivedVar)
     try:
         if not key:
@@ -297,7 +360,7 @@ def get_py_var_value(py_var, key: tuple) -> float | None:
                     return v
         for i, k in enumerate(key):
             if k in _DROPPABLE_HHD:
-                shrunk = key[:i] + key[i+1:]
+                shrunk = key[:i] + key[i + 1 :]
                 v = _try_index(py_var, shrunk)
                 if v is not None:
                     return v
@@ -343,14 +406,21 @@ def find_py_var(model, name: str, derived: dict | None = None):
         return v, name.lower()
     target = name.lower()
     from pyomo.environ import Var
+
     for comp in model.component_objects(Var, active=True):
         if comp.name.lower() == target:
             return comp, comp.name
     return None, None
 
 
-def compare_phase(model_py, gams_all: dict, t_label: str, tol_rel: float, tol_abs: float,
-                  key_remap=None):
+def compare_phase(
+    model_py,
+    gams_all: dict,
+    t_label: str,
+    tol_rel: float,
+    tol_abs: float,
+    key_remap=None,
+):
     n_total = n_match = n_diverge = n_missing = 0
     max_abs = max_rel = 0.0
     worst = None
@@ -364,6 +434,7 @@ def compare_phase(model_py, gams_all: dict, t_label: str, tol_rel: float, tol_ab
         if p_val is None and not body:
             try:
                 from pyomo.core import value
+
                 p_val = float(value(model_py))
             except Exception:
                 p_val = None
@@ -371,7 +442,11 @@ def compare_phase(model_py, gams_all: dict, t_label: str, tol_rel: float, tol_ab
             n_missing += 1
             continue
         d = p_val - g_val
-        rel = abs(d) / abs(g_val) if abs(g_val) > 1e-12 else (0.0 if abs(d) < tol_abs else float("inf"))
+        rel = (
+            abs(d) / abs(g_val)
+            if abs(g_val) > 1e-12
+            else (0.0 if abs(d) < tol_abs else float("inf"))
+        )
         if abs(d) <= tol_abs or rel <= tol_rel:
             n_match += 1
         else:
@@ -383,22 +458,43 @@ def compare_phase(model_py, gams_all: dict, t_label: str, tol_rel: float, tol_ab
         if worst is None or abs(d) > abs(worst[3]):
             worst = (full_key, p_val, g_val, d, rel)
     return {
-        "n_total": n_total, "n_match": n_match, "n_diverge": n_diverge,
-        "n_missing": n_missing, "max_abs": max_abs, "max_rel": max_rel,
+        "n_total": n_total,
+        "n_match": n_match,
+        "n_diverge": n_diverge,
+        "n_missing": n_missing,
+        "max_abs": max_abs,
+        "max_rel": max_rel,
         "worst": worst,
     }
 
 
 def diff_phase_rows(
-    *, dataset: str, phase: str, var_names: Iterable[str],
-    gdx_path: Path, model_py, tol_rel: float, tol_abs: float,
-    residual: float, git_sha: str, generated_at: str,
-    derived: dict | None = None, key_remap=None,
+    *,
+    dataset: str,
+    phase: str,
+    var_names: Iterable[str],
+    gdx_path: Path,
+    model_py,
+    tol_rel: float,
+    tol_abs: float,
+    residual: float,
+    git_sha: str,
+    generated_at: str,
+    derived: dict | None = None,
+    key_remap=None,
     solve_seconds: float = 0.0,
 ) -> tuple[list[dict], dict]:
     rows: list[dict] = []
-    agg = {"vars_total": 0, "vars_match_all": 0, "vars_partial": 0, "vars_no_py": 0,
-           "cells_total": 0, "cells_match": 0, "cells_diverge": 0, "cells_missing": 0}
+    agg = {
+        "vars_total": 0,
+        "vars_match_all": 0,
+        "vars_partial": 0,
+        "vars_no_py": 0,
+        "cells_total": 0,
+        "cells_match": 0,
+        "cells_diverge": 0,
+        "cells_missing": 0,
+    }
     for name in var_names:
         agg["vars_total"] += 1
         gams_all = gams_levels(gdx_path, name)
@@ -412,17 +508,33 @@ def diff_phase_rows(
             agg["vars_no_py"] += 1
             agg["cells_total"] += n_t
             agg["cells_missing"] += n_t
-            rows.append({
-                "dataset": dataset, "phase": phase, "var": name, "py_var": "",
-                "cells": n_t, "match": 0, "diverge": 0, "missing": n_t,
-                "max_abs_err": "", "max_rel_err": "",
-                "residual": f"{residual:.6e}",
-                "solve_seconds": f"{solve_seconds:.3f}",
-                "git_sha": git_sha, "generated_at": generated_at,
-            })
+            rows.append(
+                {
+                    "dataset": dataset,
+                    "phase": phase,
+                    "var": name,
+                    "py_var": "",
+                    "cells": n_t,
+                    "match": 0,
+                    "diverge": 0,
+                    "missing": n_t,
+                    "max_abs_err": "",
+                    "max_rel_err": "",
+                    "residual": f"{residual:.6e}",
+                    "solve_seconds": f"{solve_seconds:.3f}",
+                    "git_sha": git_sha,
+                    "generated_at": generated_at,
+                }
+            )
             continue
-        s = compare_phase(py_var, gams_all, phase, tol_rel=tol_rel, tol_abs=tol_abs,
-                          key_remap=key_remap)
+        s = compare_phase(
+            py_var,
+            gams_all,
+            phase,
+            tol_rel=tol_rel,
+            tol_abs=tol_abs,
+            key_remap=key_remap,
+        )
         agg["cells_total"] += s["n_total"]
         agg["cells_match"] += s["n_match"]
         agg["cells_diverge"] += s["n_diverge"]
@@ -433,24 +545,42 @@ def diff_phase_rows(
             agg["vars_match_all"] += 1
         else:
             agg["vars_partial"] += 1
-        rows.append({
-            "dataset": dataset, "phase": phase, "var": name, "py_var": py_name or "",
-            "cells": s["n_total"], "match": s["n_match"],
-            "diverge": s["n_diverge"], "missing": s["n_missing"],
-            "max_abs_err": f"{s['max_abs']:.6e}", "max_rel_err": f"{s['max_rel']:.6e}",
+        rows.append(
+            {
+                "dataset": dataset,
+                "phase": phase,
+                "var": name,
+                "py_var": py_name or "",
+                "cells": s["n_total"],
+                "match": s["n_match"],
+                "diverge": s["n_diverge"],
+                "missing": s["n_missing"],
+                "max_abs_err": f"{s['max_abs']:.6e}",
+                "max_rel_err": f"{s['max_rel']:.6e}",
+                "residual": f"{residual:.6e}",
+                "solve_seconds": f"{solve_seconds:.3f}",
+                "git_sha": git_sha,
+                "generated_at": generated_at,
+            }
+        )
+    rows.append(
+        {
+            "dataset": dataset,
+            "phase": phase,
+            "var": "__SUMMARY__",
+            "py_var": "",
+            "cells": agg["cells_total"],
+            "match": agg["cells_match"],
+            "diverge": agg["cells_diverge"],
+            "missing": agg["cells_missing"],
+            "max_abs_err": "",
+            "max_rel_err": "",
             "residual": f"{residual:.6e}",
             "solve_seconds": f"{solve_seconds:.3f}",
-            "git_sha": git_sha, "generated_at": generated_at,
-        })
-    rows.append({
-        "dataset": dataset, "phase": phase, "var": "__SUMMARY__", "py_var": "",
-        "cells": agg["cells_total"], "match": agg["cells_match"],
-        "diverge": agg["cells_diverge"], "missing": agg["cells_missing"],
-        "max_abs_err": "", "max_rel_err": "",
-        "residual": f"{residual:.6e}",
-        "solve_seconds": f"{solve_seconds:.3f}",
-        "git_sha": git_sha, "generated_at": generated_at,
-    })
+            "git_sha": git_sha,
+            "generated_at": generated_at,
+        }
+    )
     return rows, agg
 
 
@@ -458,7 +588,9 @@ def list_populated_params(gdx_path: Path) -> list[str]:
     """Return GAMS symbol names that are Parameters (not Variables) with records > 0."""
     out = subprocess.run(
         [GDXDUMP, str(gdx_path), "Symbols"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     names = []
     for line in out.splitlines():
@@ -477,6 +609,7 @@ def list_populated_params(gdx_path: Path) -> list[str]:
 def _find_py_param(model, name: str):
     """Locate a Pyomo Param by name (exact, lower, alias).  Returns (param, py_name) or (None, None)."""
     from pyomo.environ import Param
+
     # Exact
     v = getattr(model, name, None)
     if v is not None and hasattr(v, "__class__") and "Param" in type(v).__name__:
@@ -488,14 +621,14 @@ def _find_py_param(model, name: str):
     # Known aliases: GAMS alphaa → Python alphaa_hhd
     _PARAM_ALIAS = {
         "alphaa": "alphaa_hhd",
-        "auh":    "auh",
-        "betap":  "betap",
-        "betag":  "betag",
-        "betas":  "betas",
-        "io":     None,   # Python has io_param in calibrated, not in model
-        "af":     None,
-        "and":    None,
-        "ava":    None,
+        "auh": "auh",
+        "betap": "betap",
+        "betag": "betag",
+        "betas": "betas",
+        "io": None,  # Python has io_param in calibrated, not in model
+        "af": None,
+        "and": None,
+        "ava": None,
     }
     aliased = _PARAM_ALIAS.get(name.lower())
     if aliased is not None:
@@ -521,7 +654,7 @@ def _norm_key_elem(s: str) -> str:
     s = s.lower()
     for pfx in ("c_", "a_", "f_"):
         if s.startswith(pfx):
-            s = s[len(pfx):]
+            s = s[len(pfx) :]
             break
     return s
 
@@ -530,8 +663,10 @@ def _keys_match(gams_key: tuple, py_key: tuple) -> bool:
     """True if both tuples have the same length and each element normalizes equal."""
     if len(gams_key) != len(py_key):
         return False
-    return all(_norm_key_elem(str(g)) == _norm_key_elem(str(p))
-               for g, p in zip(gams_key, py_key))
+    return all(
+        _norm_key_elem(str(g)) == _norm_key_elem(str(p))
+        for g, p in zip(gams_key, py_key)
+    )
 
 
 def _get_py_param_value(py_param, key: tuple):
@@ -541,6 +676,7 @@ def _get_py_param_value(py_param, key: tuple):
     fuzzy key normalisation.
     """
     from pyomo.core import value
+
     try:
         if not key:
             return float(value(py_param))
@@ -568,7 +704,7 @@ def _get_py_param_value(py_param, key: tuple):
         # Drop 'hhd' dim then retry
         for i, k in enumerate(key):
             if k in _DROPPABLE_HHD:
-                shrunk = key[:i] + key[i+1:]
+                shrunk = key[:i] + key[i + 1 :]
                 v = _get_py_param_value(py_param, shrunk)
                 if v is not None:
                     return v
@@ -584,8 +720,14 @@ def _get_py_param_value(py_param, key: tuple):
         return None
 
 
-def compare_phase_param(py_param, gams_all: dict, t_label: str, tol_rel: float, tol_abs: float,
-                        filter_aa: str | None = None):
+def compare_phase_param(
+    py_param,
+    gams_all: dict,
+    t_label: str,
+    tol_rel: float,
+    tol_abs: float,
+    filter_aa: str | None = None,
+):
     """Like compare_phase but reads from a Pyomo Param instead of a Var.
 
     filter_aa: if set, only compare GAMS cells where the 'aa' dimension equals this value.
@@ -602,14 +744,20 @@ def compare_phase_param(py_param, gams_all: dict, t_label: str, tol_rel: float, 
         if filter_aa is not None and filter_aa not in body:
             continue
         # Drop the aa dimension from body before looking up in Python param
-        body_py = tuple(k for k in body if k != filter_aa) if filter_aa is not None else body
+        body_py = (
+            tuple(k for k in body if k != filter_aa) if filter_aa is not None else body
+        )
         n_total += 1
         p_val = _get_py_param_value(py_param, body_py)
         if p_val is None:
             n_missing += 1
             continue
         d = p_val - g_val
-        rel = abs(d) / abs(g_val) if abs(g_val) > 1e-12 else (0.0 if abs(d) < tol_abs else float("inf"))
+        rel = (
+            abs(d) / abs(g_val)
+            if abs(g_val) > 1e-12
+            else (0.0 if abs(d) < tol_abs else float("inf"))
+        )
         if abs(d) <= tol_abs or rel <= tol_rel:
             n_match += 1
         else:
@@ -621,8 +769,12 @@ def compare_phase_param(py_param, gams_all: dict, t_label: str, tol_rel: float, 
         if worst is None or abs(d) > abs(worst[3]):
             worst = (full_key, p_val, g_val, d, rel)
     return {
-        "n_total": n_total, "n_match": n_match, "n_diverge": n_diverge,
-        "n_missing": n_missing, "max_abs": max_abs, "max_rel": max_rel,
+        "n_total": n_total,
+        "n_match": n_match,
+        "n_diverge": n_diverge,
+        "n_missing": n_missing,
+        "max_abs": max_abs,
+        "max_rel": max_rel,
         "worst": worst,
     }
 
@@ -635,14 +787,22 @@ ALTERTAX_PARAM_NAMES = ["alphaa", "auh", "betap", "betag", "betas"]
 # e.g. GAMS alphaa(r,i,aa,t) → filter aa='hhd', Python alphaa_hhd(r,i)
 _PARAM_FILTER_AA = {
     "alphaa": "hhd",
-    "auh":    "hhd",
+    "auh": "hhd",
 }
 
 
 def diff_params_rows(
-    *, dataset: str, phase: str, param_names: list[str],
-    gdx_path: Path, model_py, tol_rel: float, tol_abs: float,
-    residual: float, git_sha: str, generated_at: str,
+    *,
+    dataset: str,
+    phase: str,
+    param_names: list[str],
+    gdx_path: Path,
+    model_py,
+    tol_rel: float,
+    tol_abs: float,
+    residual: float,
+    git_sha: str,
+    generated_at: str,
     solve_seconds: float = 0.0,
 ) -> tuple[list[dict], dict]:
     """Compare GAMS parameters (stored as Vars in GDX) against Python Params.
@@ -651,8 +811,16 @@ def diff_params_rows(
     two tables.  Rows have py_var prefixed with 'param:' to distinguish them.
     """
     rows: list[dict] = []
-    agg = {"vars_total": 0, "vars_match_all": 0, "vars_partial": 0, "vars_no_py": 0,
-           "cells_total": 0, "cells_match": 0, "cells_diverge": 0, "cells_missing": 0}
+    agg = {
+        "vars_total": 0,
+        "vars_match_all": 0,
+        "vars_partial": 0,
+        "vars_no_py": 0,
+        "cells_total": 0,
+        "cells_match": 0,
+        "cells_diverge": 0,
+        "cells_missing": 0,
+    }
     for name in param_names:
         agg["vars_total"] += 1
         gams_all = gams_levels(gdx_path, name)
@@ -660,11 +828,14 @@ def diff_params_rows(
             # Try as parameter symbol (gdxdump treats it differently)
             res = subprocess.run(
                 [GDXDUMP, str(gdx_path), "Format=csv", f"Symb={name}"],
-                capture_output=True, text=True, check=False,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             if res.returncode != 0 or not res.stdout.strip():
                 continue
             import csv as _csv
+
             reader = _csv.reader(res.stdout.splitlines())
             next(reader, None)
             for row in reader:
@@ -686,18 +857,34 @@ def diff_params_rows(
             agg["vars_no_py"] += 1
             agg["cells_total"] += n_t
             agg["cells_missing"] += n_t
-            rows.append({
-                "dataset": dataset, "phase": phase, "var": f"[par]{name}", "py_var": "",
-                "cells": n_t, "match": 0, "diverge": 0, "missing": n_t,
-                "max_abs_err": "", "max_rel_err": "",
-                "residual": f"{residual:.6e}",
-                "solve_seconds": f"{solve_seconds:.3f}",
-                "git_sha": git_sha, "generated_at": generated_at,
-            })
+            rows.append(
+                {
+                    "dataset": dataset,
+                    "phase": phase,
+                    "var": f"[par]{name}",
+                    "py_var": "",
+                    "cells": n_t,
+                    "match": 0,
+                    "diverge": 0,
+                    "missing": n_t,
+                    "max_abs_err": "",
+                    "max_rel_err": "",
+                    "residual": f"{residual:.6e}",
+                    "solve_seconds": f"{solve_seconds:.3f}",
+                    "git_sha": git_sha,
+                    "generated_at": generated_at,
+                }
+            )
             continue
         filter_aa = _PARAM_FILTER_AA.get(name.lower())
-        s = compare_phase_param(py_param, gams_all, phase, tol_rel=tol_rel, tol_abs=tol_abs,
-                                filter_aa=filter_aa)
+        s = compare_phase_param(
+            py_param,
+            gams_all,
+            phase,
+            tol_rel=tol_rel,
+            tol_abs=tol_abs,
+            filter_aa=filter_aa,
+        )
         agg["cells_total"] += s["n_total"]
         agg["cells_match"] += s["n_match"]
         agg["cells_diverge"] += s["n_diverge"]
@@ -708,15 +895,24 @@ def diff_params_rows(
             agg["vars_match_all"] += 1
         else:
             agg["vars_partial"] += 1
-        rows.append({
-            "dataset": dataset, "phase": phase, "var": f"[par]{name}", "py_var": f"param:{py_name}",
-            "cells": s["n_total"], "match": s["n_match"],
-            "diverge": s["n_diverge"], "missing": s["n_missing"],
-            "max_abs_err": f"{s['max_abs']:.6e}", "max_rel_err": f"{s['max_rel']:.6e}",
-            "residual": f"{residual:.6e}",
-            "solve_seconds": f"{solve_seconds:.3f}",
-            "git_sha": git_sha, "generated_at": generated_at,
-        })
+        rows.append(
+            {
+                "dataset": dataset,
+                "phase": phase,
+                "var": f"[par]{name}",
+                "py_var": f"param:{py_name}",
+                "cells": s["n_total"],
+                "match": s["n_match"],
+                "diverge": s["n_diverge"],
+                "missing": s["n_missing"],
+                "max_abs_err": f"{s['max_abs']:.6e}",
+                "max_rel_err": f"{s['max_rel']:.6e}",
+                "residual": f"{residual:.6e}",
+                "solve_seconds": f"{solve_seconds:.3f}",
+                "git_sha": git_sha,
+                "generated_at": generated_at,
+            }
+        )
     return rows, agg
 
 

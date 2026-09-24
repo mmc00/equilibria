@@ -99,6 +99,7 @@ def _base_closure(p):
 
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+@pytest.mark.needs_gdxdump
 def test_calibrate_base_returns_settled_land_price():
     """calibrate_base runs the settle solve and returns the CHECK-period point;
     the Land price in it is the settled ~0.845, not the raw 1.0."""
@@ -161,7 +162,7 @@ def test_base_calibrated_shock_response_is_clean():
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
 def test_calibrated_land_response_beats_default_vs_gempack():
-    """The base-calibrated land response (~-3%) is far closer to GEMPACK's -2.68%
+    """The base-calibrated land response is far closer to GEMPACK's number
     than the check-contaminated raw path (~-18%). GEMPACK number read from the
     committed sl4dump fixture (pfe[Land,Food,EU_28])."""
     # GEMPACK's own number from the committed fixture
@@ -185,7 +186,16 @@ def test_calibrated_land_response_beats_default_vs_gempack():
             continue
         if gem is not None:
             break
-    assert gem is not None and gem == pytest.approx(-2.681, abs=1e-2)
+    # -3.618 es lo que trae el fixture COMMITEADO para pfe[Land,Food,EU_28].
+    # El -2.681 anterior era del fixture VIEJO: 06dd878 (2026-08-02) regenero los
+    # sl4dump "with the standard closure (no dpsave swap)" y no actualizo este
+    # ancla, que se habia fijado 3 dias antes en a749f3f (2026-07-30).
+    # COMPROBADO leyendo la misma celda en el fixture anterior a esa regeneracion:
+    #   06dd878~1 -> pfe[Land,Food,EU_28] = -2.681145429611206  (el viejo)
+    #   HEAD      -> pfe[Land,Food,EU_28] = -3.6182825565338135 (el commiteado)
+    # No es un fallo del modelo ni del lector de .har: el numero esperado quedo
+    # huerfano de su fixture. Da identico en macOS y Linux.
+    assert gem is not None and gem == pytest.approx(-3.618, abs=1e-2)
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
@@ -204,6 +214,7 @@ def test_calibrated_land_response_beats_default_vs_gempack():
 
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
+@pytest.mark.needs_gdxdump
 def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
     """Not just the land price: base-calibrated lifts the OVERALL against-GEMPACK
     quantity match (all Q_TO_VAR vars, ~190 cells) from ~76% to ~96% within 1pp,

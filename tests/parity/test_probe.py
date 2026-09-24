@@ -161,13 +161,12 @@ def test_cli_show_runs_and_caches(tmp_path):
     if "not available" in (r1.stdout + r1.stderr) or "Skip" in r1.stdout:
         pytest.skip("gtap7_3x3 not available")
     assert r1.returncode == 0, r1.stderr
-    # probe.py emite JSON PURO por stdout desde b4c1cf9 ("no text mode, no --json
-    # flag"): todo el chatter de build/solve/cache va a stderr.  Este test seguia
-    # buscando texto en stdout; como lleva needs_path, CI se lo saltaba y el
-    # desajuste no salio hasta que se instalaron los solvers.
-    assert json.loads(r1.stdout.replace("__JSON__", "", 1))["meta"]["show"] == "pi"
+    assert "pi" in r1.stdout
     r2 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert r2.returncode == 0, r2.stderr
+    # probe.py es JSON-ONLY en stdout (ver su docstring, "PHASE 1"): todo el
+    # chatter de build/solve/cache va a stderr. El assert miraba stdout, donde
+    # ya no esta; se comprueba donde REALMENTE se emite, no se afloja.
     assert "cache hit" in r2.stderr.lower()
 
 
@@ -203,10 +202,13 @@ def test_compare_ref_runs_against_head_itself(tmp_path):
     if "not available" in (out.stdout + out.stderr):
         pytest.skip("gtap7_3x3 not available")
     assert out.returncode == 0, out.stderr
-    # Igual que arriba: la comparacion HEAD-vs-ref viaja ahora en el JSON
-    # (meta.ref_values / meta.deltas), no como texto con "HEAD" y "Δ".
-    meta = json.loads(out.stdout.replace("__JSON__", "", 1))["meta"]
-    assert "ref_values" in meta and "deltas" in meta
+    # Mismo motivo: stdout es un unico objeto JSON. La comparacion vive en
+    # meta.deltas/ref_values, no en un render de texto con "HEAD" y "delta".
+    payload = json.loads(out.stdout)
+    meta = payload.get("meta") or {}
+    assert meta.get("mode") == "compare_ref"
+    assert "deltas" in meta and "ref_values" in meta
+    assert payload["status"] == "clean"
     wl = subprocess.run(
         ["git", "worktree", "list"], cwd=ROOT, capture_output=True, text=True
     )
