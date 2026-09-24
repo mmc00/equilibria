@@ -176,6 +176,21 @@ _IFSUB_REPORT_VARS = (
 )
 
 
+def _aridad(fn) -> int:
+    """Cuantos INDICES toma un macro de ifSUB.
+
+    Los macros tienen forma ``fn(model, p, *indices)`` —salvo los que llevan
+    ``mode``, que es un indice mas—, asi que la aridad se lee de la firma en vez
+    de fijarla: ``len(k) == 3`` dejaba fuera a ``m_xmgm``, que toma cuatro
+    ``(mode, e, c, imp)``, y lo condenaba al init congelado aunque su macro
+    existiera.
+    """
+    import inspect
+
+    params_fn = list(inspect.signature(fn).parameters)
+    return len([p for p in params_fn if p not in ("model", "p")])
+
+
 def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     """The ifSUB closure: deactivate the 9 report equations AND fix their report
     vars — mirrors the monolith's post-block.
@@ -193,20 +208,23 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     ``pfa[USA,Land,Grains]`` quedaba en 0.5652 en vez de 1.6240 (``rtf`` = -0.4578
     frente al wedge descompuesto ``1 + ftrv/evfb - fbep/evfb`` = 1.5579).
 
-    ALCANCE MEDIDO: esto corrige el valor en el modelo de UN periodo. En
-    multiperiodo NO cambia ninguna celda medida, porque
-    ``gtap_multiperiod_driver._recompute_ifsub_report_vars`` reescribe pfa/pfy
-    post-solve desde los mismos macros (llamada en la linea 3887). Se aplica por
-    fidelidad --el valor fijado debe ser el correcto aunque nadie lo lea-- no
-    porque mueva el match. En particular NO es la causa del fallo del MCP con
-    bloques: eso son las 99 columnas Fisher de mas (ver el comentario en
-    tests/templates/gtap/test_gtap7_mcp_parity.py).
+    CORRECCION (F3, 2026-09-23): este docstring decia que congelar los otros
+    siete al init era inocuo y que esto "NO es la causa del fallo del MCP con
+    bloques". Las dos afirmaciones eran FALSAS, y medirlas es lo que cerro F3:
 
-    Los otros siete vars de reporte SI se congelan a su valor actual: sus macros
-    dependen de variables que el escalado ya dejo en su nivel correcto."""
+    - Congelar el init hace DEFINITIVA la diferencia entre rutas. Medido `pwmg`
+      en 0.001 (monolito) vs 1.0 (bloques), factor 1000, y 11.118 celdas
+      realmente distintas al resolver el shock.
+    - Extender el mapa de macros de 2 a 9 entradas llevo el gate MCP de
+      gtap7_15x10 pure ifSUB=1 del 87,00% a verde. Esto SI era la causa.
+
+    Los NUEVE se recalculan ahora desde su macro. Si un macro falla se LEVANTA:
+    degradar al init en silencio es justo el bug que este camino arregla."""
     from pyomo.environ import value
 
     n = 0
+    _macro_fallos: list[str] = []
+    _fix_fallos: list[str] = []
     for eq_name in _IFSUB_REPORT_EQS:
         comp = pm.component(eq_name)
         if comp is None:
@@ -238,6 +256,9 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
         "pmcif": mac.m_pmcif,
         "pm": mac.m_pm,
         "xwmg": mac.m_xwmg,
+        # xmgm toma CUATRO indices (mode, e, c, imp), no tres — por eso el
+        # guard de aridad de abajo se lee del macro y no esta fijado en 3.
+        "xmgm": mac.m_xmgm,
     }
     for var_name in _IFSUB_REPORT_VARS:
         v = pm.component(var_name)
@@ -249,9 +270,24 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
             if vd.fixed:
                 continue
             target = None
-            if fn is not None and isinstance(k, tuple) and len(k) == 3:
-                with contextlib.suppress(Exception):
+            # Un macro solo aplica si su aridad casa con la del indice: `xmgm`
+            # toma cuatro (mode, e, c, imp) y el resto tres.
+            usa_macro = (
+                fn is not None and isinstance(k, tuple) and len(k) == _aridad(fn)
+            )
+            if usa_macro:
+                try:
                     target = float(value(fn(pm, params, *k)))
+                except Exception as exc:  # noqa: BLE001 — se acumula y se re-lanza
+                    # NO se degrada al init en silencio: ese es exactamente el
+                    # bug que este camino arregla (congelar el init vuelve
+                    # DEFINITIVA la diferencia entre rutas — medido `pwmg` en
+                    # 0.001 vs 1.0, factor 1000).  Un macro que falla es un
+                    # defecto, no un caso a tolerar.
+                    _macro_fallos.append(f"{var_name}{k}: {type(exc).__name__} {exc}")
+                else:
+                    if target is None:
+                        _macro_fallos.append(f"{var_name}{k}: el macro devolvio None")
             if target is None:
                 target = float(value(vd))
             # Respetar las cotas de la Var, como el monolito (_fix_component, 7116).
@@ -260,12 +296,28 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
                 target = float(lb)
             if ub is not None and target > float(ub):
                 target = float(ub)
-            with contextlib.suppress(Exception):
+            try:
                 vd.fix(target)
+            except Exception as exc:  # noqa: BLE001 — se re-lanza abajo
+                # Una celda que no se fija deja una columna libre sin ecuacion
+                # que la determine: el sistema queda no cuadrado y el sintoma
+                # aparece lejos de aqui.  Se acumula y se levanta al final.
+                _fix_fallos.append(f"{var_name}{k}: {type(exc).__name__} {exc}")
+
+    if _macro_fallos or _fix_fallos:
+        raise RuntimeError(
+            "_apply_ifsub_closure no pudo fijar los vars de reporte ifSUB desde "
+            "su macro. Degradar al init en silencio es el bug que este camino "
+            "arregla, asi que se levanta.\n"
+            + "\n".join(
+                [f"  macro fallido: {m}" for m in _macro_fallos[:10]]
+                + [f"  fix fallido:   {m}" for m in _fix_fallos[:10]]
+            )
+        )
     return n
 
 
-def _fix_no_demand_cells(pm: Any, params: Any, sets: Any) -> int:
+def _fix_no_demand_cells(pm: Any) -> int:
     """Fijar las celdas SIN DEMANDA, como hace el monolito.
 
     Dos reglas, transcritas de gtap_model_equations:
@@ -383,7 +435,7 @@ def build_block_single_period(
     if if_sub:
         _apply_ifsub_closure(pm, params)
 
-    _fix_no_demand_cells(pm, params, sets)
+    _fix_no_demand_cells(pm)
 
     pm._residual_region = residual_region
     return pm

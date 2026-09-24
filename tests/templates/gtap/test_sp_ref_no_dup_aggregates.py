@@ -24,6 +24,11 @@ sys.path.insert(0, str(ROOT / "src"))
 import pytest
 
 DATASETS = ROOT / "datasets"
+# Esta lista se mantiene APARTE a proposito, sin importar FISHER_AUX_EQS de
+# blocks/gtap/closure.py: si el test importara la misma constante que usa el
+# codigo, comprobaria que el codigo es coherente consigo mismo (tautologia) y
+# un renombrado en bloque pasaria verde.  Escrita a mano, un renombrado rompe
+# el test, que es lo que se quiere.
 _DUP_EQS = (
     "eq_mfr_bs",
     "eq_mfr_sb",

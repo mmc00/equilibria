@@ -1111,20 +1111,6 @@ def _sp_ref_reusable(prev_closure, closure) -> bool:
     return dump() == other()
 
 
-# Agregados auxiliares con que el bloque CLOSURE parte la suma ancha de su
-# eq_pfact/eq_pwfact intra-periodo (blocks/gtap/closure.py:216-341). El monolito
-# inlinea esas sumas y no los declara.
-_DUP_FISHER_EQS = (
-    "eq_mfr_bs",
-    "eq_mfr_sb",
-    "eq_mfr_ss",
-    "eq_mfw_bs",
-    "eq_mfw_sb",
-    "eq_mfw_ss",
-)
-_DUP_FISHER_VARS = ("mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss")
-
-
 def _drop_duplicate_fisher_aggregates(sp) -> int:
     """Quitar del SP de bloques los agregados Fisher duplicados.
 
@@ -1146,12 +1132,37 @@ def _drop_duplicate_fisher_aggregates(sp) -> int:
     en las filas Fisher (por eso existe `refresh_fisher_aggregates`).  Como no
     las consume nadie, lo correcto es que desaparezcan.
     """
+    # Los nombres se IMPORTAN de donde se declaran (blocks/gtap/closure.py) en
+    # vez de recopiarlos: la lista vivia duplicada en cinco ficheros, asi que
+    # anadir un septimo agregado obligaba a acordarse de todos.  El import va
+    # DENTRO de la funcion porque este modulo no tiene imports de `equilibria`
+    # a primer nivel — todos son diferidos, para no reintroducir el ciclo que
+    # ya mordio en __init__.py.
+    from equilibria.blocks.gtap.closure import FISHER_AUX_EQS, FISHER_AUX_VARS
+
     n = 0
-    for name in (*_DUP_FISHER_EQS, *_DUP_FISHER_VARS):
+    faltan = []
+    for name in (*FISHER_AUX_EQS, *FISHER_AUX_VARS):
         comp = getattr(sp, name, None)
-        if comp is not None:
-            sp.del_component(comp)
-            n += 1
+        if comp is None:
+            faltan.append(name)
+            continue
+        sp.del_component(comp)
+        n += 1
+    if faltan:
+        # Un nombre que ya no aparece NO es benigno: si el agregado sigue vivo
+        # bajo otro nombre, el sistema vuelve a quedar sobredeterminado y
+        # `deactivate_zero_unique_var_eqs` cuadra sacrificando una ecuacion
+        # REAL —medido `eq_xseq[USA,VegFruit]`, el balance fisico xs==xds+xet,
+        # con el gate MCP de gtap7_15x10 en 87,00%—.  El sintoma aparece lejos
+        # de aqui, asi que se levanta en el sitio.
+        raise RuntimeError(
+            "_drop_duplicate_fisher_aggregates no encontro estos componentes en "
+            f"el SP de bloques: {faltan}. Si se renombraron, actualiza "
+            "FISHER_AUX_EQS/FISHER_AUX_VARS en blocks/gtap/closure.py; si "
+            "dejaron de emitirse, quita la "
+            "entrada. Dejarlo pasar reintroduce la sobredeterminacion."
+        )
     return n
 
 
@@ -1193,15 +1204,16 @@ def _build_sp_reference(sets, params, closure, residual_region, model=None):
     # test_ifsub_primary_block_consistent en frac_agree 0.00%—.  Siete scripts
     # de scripts/gtap/ construyen con el monolito y resuelven con este driver,
     # asi que se detecta aqui en vez de parchear cada uno.
+    # Un modelo SIN marcador se trata como monolito: es el comportamiento previo
+    # a F3, y lo conservador.  El unico que marca "blocks" es
+    # GTAPBlockMultiPeriodModel.
     _src = getattr(model, "_sp_source", None) if model is not None else None
-    if _src == "monolith" or (model is not None and _src is None):
-        from equilibria.templates.gtap import GTAPModelEquations
-
-        return GTAPModelEquations(
-            sets, params, closure, residual_region=residual_region
-        ).build_model()
-
-    if os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith":
+    _pide_monolito = (
+        _src == "monolith"
+        or (model is not None and _src is None)
+        or os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith"
+    )
+    if _pide_monolito:
         from equilibria.templates.gtap import GTAPModelEquations
 
         return GTAPModelEquations(
