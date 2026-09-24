@@ -39,7 +39,12 @@ def _closure(if_sub: bool = True):
     )
 
 
+# needs_gdxdump ademas de needs_path: `seed_all_periods` lee el GDX de
+# referencia con `gdxdump` (viene con GAMS).  Sin el marcador, en una maquina
+# con PATH pero sin GAMS —exactamente CI— el test no se salta: revienta con
+# FileNotFoundError, que es un fallo rojo donde correspondia un skip.
 @pytest.mark.needs_path
+@pytest.mark.needs_gdxdump
 def test_monolith_built_model_solves_with_a_monolith_reference():
     """Modelo del monolito + driver: los tres periodos deben converger.
 
