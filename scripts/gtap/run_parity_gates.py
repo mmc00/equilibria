@@ -26,16 +26,25 @@ Usage:
     uv run python scripts/gtap/run_parity_gates.py            # full (stamps)
     uv run python scripts/gtap/run_parity_gates.py --quick    # gates only, NO stamp
 """
+
 from __future__ import annotations
 
 import argparse
+import glob
+import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_parity_gates_stamp import (  # noqa: E402
-    GENERATED_DOCS, dirty_watched, input_hash, repo_root, stamp_path,
+    GENERATED_DOCS,
+    dirty_watched,
+    input_hash,
+    repo_root,
+    stamp_path,
 )
 
 GATE_TESTS = [
@@ -58,15 +67,57 @@ REGEN_CMDS = [
 ]
 
 
-def _run(repo: Path, argv: list[str]) -> int:
+def _run(repo: Path, argv: list[str], env: dict[str, str] | None = None) -> int:
     print(f"\n=== {' '.join(argv)} ===", flush=True)
-    return subprocess.run(argv, cwd=repo).returncode
+    return subprocess.run(argv, cwd=repo, env=env).returncode
+
+
+_PATRONES_GAMS = [
+    "/Library/Frameworks/GAMS.framework/Versions/*/Resources",  # macOS
+    "/opt/gams/*",
+    "/usr/local/gams/*",
+]
+
+
+def _gams_en_path() -> str | None:
+    """Primer directorio de GAMS con `gdxdump`, o None si no hay ninguno.
+
+    GAMS se instala como framework en macOS y no se exporta al PATH por
+    defecto, asi que el gate lo busca en vez de exigir que el usuario lo sepa.
+    """
+    if shutil.which("gdxdump"):
+        return None  # ya esta en el PATH
+    candidatos = [
+        d
+        for pat in _PATRONES_GAMS
+        for d in glob.glob(pat)
+        if Path(d, "gdxdump").exists()
+    ]
+    if not candidatos:
+        return None
+
+    def _orden(d: str) -> tuple[int, list[int]]:
+        # `Current` (el symlink del instalador) manda: es la version que el
+        # usuario considera activa. El resto por numero de version REAL y de
+        # mayor a menor — ordenar TEXTO ponia "9" por delante de "53" y
+        # "Current" por delante de todo, que es como estaba: acertaba de
+        # casualidad porque en esta maquina Current->53.
+        nombre = Path(d).parent.name
+        if nombre == "Current":
+            return (0, [])
+        # negativo = descendente, sin tener que invertir todo el sort
+        return (1, [-int(x) for x in re.findall(r"\d+", nombre)] or [0])
+
+    return sorted(candidatos, key=_orden)[0]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--quick", action="store_true",
-                    help="run the gate tests only; skip doc regen and do NOT stamp")
+    ap.add_argument(
+        "--quick",
+        action="store_true",
+        help="run the gate tests only; skip doc regen and do NOT stamp",
+    )
     args = ap.parse_args()
 
     repo = repo_root(Path(__file__).resolve().parent)
@@ -77,15 +128,37 @@ def main() -> int:
         print("  " + "\n  ".join(dirty[:15]))
         return 1
 
-    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo,
-                          capture_output=True, text=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     print(f"Running mandatory GTAP parity gates at {head}")
 
     # Exclude @slow tests (e.g. the 15x10 GEMPACK NLP, ~20min) from the mandatory pre-push
     # sweep — they are runnable by hand (`pytest -m slow`) and belong in a nightly job.
-    rc = _run(repo, [sys.executable, "-m", "pytest", *GATE_TESTS, "-q", "-m", "not slow"])
+    # Los gates COMPARAN contra GAMS, asi que un solver ausente tiene que
+    # FALLAR, no esconderse tras un skip: sin esto pytest devuelve 0 con los 32
+    # casos del oraculo saltados y el stamp se escribia igual (medido
+    # 2026-09-23: 33 skips y "Gates GREEN" en una maquina sin gdxdump).
+    env = dict(os.environ)
+    env["EQUILIBRIA_REQUIRE_SOLVERS"] = "1"
+    if (gams := _gams_en_path()) is not None:
+        print(f"GAMS encontrado fuera del PATH, anadido para el sweep: {gams}")
+        env["PATH"] = gams + os.pathsep + env.get("PATH", "")
+
+    rc = _run(
+        repo,
+        [sys.executable, "-m", "pytest", *GATE_TESTS, "-q", "-m", "not slow"],
+        env=env,
+    )
     if rc != 0:
         print("\nGATES RED — no stamp written. Fix the regression before pushing.")
+        print(
+            "Si el fallo es un solver ausente (PATH/IPOPT/gdxdump), instalalo: "
+            "el sweep NO puede saltarselo, compara contra GAMS."
+        )
         return rc
 
     if args.quick:
@@ -94,7 +167,7 @@ def main() -> int:
         return 0
 
     for cmd in REGEN_CMDS:
-        rc = _run(repo, [sys.executable, *cmd])
+        rc = _run(repo, [sys.executable, *cmd], env=env)
         if rc != 0:
             print(f"\nDoc regeneration failed: {' '.join(cmd)} — no stamp written.")
             return rc
@@ -103,8 +176,12 @@ def main() -> int:
     sp.write_text(input_hash(repo, "HEAD") + "\n")
     print(f"\nGates GREEN — stamp written to {sp}")
 
-    changed = subprocess.run(["git", "status", "--porcelain", "--", *GENERATED_DOCS],
-                             cwd=repo, capture_output=True, text=True).stdout.strip()
+    changed = subprocess.run(
+        ["git", "status", "--porcelain", "--", *GENERATED_DOCS],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     if changed:
         print("\nMeasured docs changed — COMMIT THEM (the stamp stays valid):")
         print("  " + changed.replace("\n", "\n  "))
