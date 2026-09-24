@@ -5,9 +5,9 @@ notara: un usuario los reporto antes que el repo. Nada en la suite los
 ejecutaba, asi que un ValueError en la primera linea de la guia de
 entrada convivia con el CI en verde.
 
-Este gate corre cada ejemplo en un subproceso y exige exit 0. Es lento
-comparado con un unit test, pero es la unica forma de que "el ejemplo
-anda" sea una afirmacion medida y no una suposicion.
+Este gate corre cada ejemplo en un subproceso y exige exit 0. Marcado
+`slow` porque lanza un interprete por ejemplo (~0.5s cada uno, medido),
+bastante mas caro que un unit test aunque ninguno invoque un solver.
 """
 
 from __future__ import annotations
@@ -21,18 +21,25 @@ import pytest
 EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "examples" / "cge"
 EXAMPLES = sorted(EXAMPLES_DIR.glob("example_*.py"))
 
-# Si el glob no encuentra nada, el test pasaria por vacuidad -- exactamente
-# el modo de fallo del issue #23. Que sea rojo.
-assert EXAMPLES, f"no se encontraron ejemplos en {EXAMPLES_DIR}"
+
+def test_examples_are_discovered() -> None:
+    """Sin esto el parametrize vacio pasaria por vacuidad (cf. issue #23).
+
+    Va como test y no como assert de modulo a proposito: un assert en la
+    importacion aborta la COLECCION del directorio entero en vez de dar
+    un fallo legible.
+    """
+    assert EXAMPLES, f"no se encontraron ejemplos en {EXAMPLES_DIR}"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.stem)
 def test_example_runs(example: Path) -> None:
     proc = subprocess.run(
         [sys.executable, str(example)],
         capture_output=True,
         text=True,
-        timeout=600,
+        timeout=120,
         cwd=example.parent,
     )
     assert proc.returncode == 0, (
