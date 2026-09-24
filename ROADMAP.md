@@ -3,7 +3,7 @@
 Estado real, medido, del proyecto — no aspiracional. Cada cifra que aparece aquí sale de una
 corrida registrada en `docs/findings/` o de un gate de `scripts/gtap/run_parity_gates.py`.
 
-Última actualización: 2026-09-16.
+Última actualización: 2026-09-24.
 
 ---
 
@@ -49,10 +49,25 @@ Los 5 gates de `run_parity_gates.py` cubren ambos caminos: el monolito es el or�
 
 Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
 
+### Validación contra la literatura — pendiente
+
+Los gates actuales miden a equilibria contra GAMS y contra GEMPACK: dos
+implementaciones de referencia del mismo modelo. Falta la tercera comprobación, la
+que no depende de ninguna de las dos: **reproducir los ejercicios publicados del
+libro de texto estándar** (Burfisher, *Introduction to Computable General
+Equilibrium Models*, 2ª ed.), cada uno como un test sobre la matriz.
+
+Criterio: cada ejercicio ≥99 % con `code=1`, o `N/A` con el motivo escrito.
+
+Estado: **sin empezar**. Va con la deuda abierta de `nus333` para gtap7, donde
+`gdpmp[USA]` mide −97,93 % contra el +4,58 % esperado. Está diagnosticada y no
+resuelta; la sospecha registrada apunta al nido CD (`phip`/`phi`/`betap`).
+
 ### Bloqueantes conocidos
 
 | Deuda | Detalle | Primer paso |
 |---|---|---|
+| Gate `.nl` pasa por vacuidad ([#23](https://github.com/mmc00/equilibria/issues/23)) | El emparejamiento es por nombre y las fixtures de GAMS no traen sus sidecars `.row`/`.col`, así que sus filas se parsean anónimas. **Medido 2026-09-24: los 5 datasets del gate comparan 0 constraints**, no sólo `gtap7_3x3` como decía el issue. Ningún `.row`/`.col` existió nunca en el repo | Regenerar las fixtures con sidecars: el `.gms` debe estar en forma NLP (CONVERT no escribe `.nl` desde un MCP) y la opción es `AmplNL <archivo>`. Probado local con GAMS v53, sin NEOS |
 | `gtap_model_equations.py` no es retirable | Sólo por su papel de **oráculo GAMS en 3 de 5 gates**. Ya NO es dependencia de runtime del camino de bloques: el escalado se extrajo a `gtap_benchmark_scaling.py` y la reflexión multiperiodo pide su SP por método, así que `gtap_block_model.py` no lo importa (2026-09-16) | Migrar los 3 gates GAMS a medir bloques, comprobando que los números no se mueven |
 | `eq_pmuv` sin portar a bloques | Declarado en `blocks/gtap/__init__.py:47-53`, no implementado en el composer. Sólo muerde con `rmuv`/`imuv` no vacíos, que ningún dataset del gate usa | Voltear `pmuv` de Param a Var cuando el closure lo pida |
 
