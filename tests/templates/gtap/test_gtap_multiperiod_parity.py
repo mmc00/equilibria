@@ -146,10 +146,8 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
     from pyomo.environ import value as V
 
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_model_multiperiod import (
-        PERIODS,
-        GTAPMultiPeriodModel,
-    )
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     ref = _fixture_gdx(dataset, if_sub)
@@ -163,7 +161,7 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
     )
     rr = list(p.sets.r)[-1]
     gc = _gtap_closure(if_sub)
-    mp = GTAPMultiPeriodModel(p.sets, p, gc, residual_region=rr)
+    mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
     for per in PERIODS:

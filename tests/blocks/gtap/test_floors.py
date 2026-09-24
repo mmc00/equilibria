@@ -227,7 +227,7 @@ def test_el_declarador_vive_en_un_solo_sitio():
         "trade_armington_bilateral.py": {"dintx", "mintx", "xw"},
         # pnum/pwfact piso 1e-3, walras libre, y los 6 agregados Fisher que se
         # declaran en dos bucles (mfw_* y mfr_*, Reals sin cota).
-        "closure.py": {"pnum", "pwfact", "walras", "<bucle:173>", "<bucle:188>"},
+        "closure.py": {"pnum", "pwfact", "walras", "<bucle:202>", "<bucle:217>"},
         # pet piso 1e-3 (init 1.0), xet cantidad.
         "trade_cet.py": {"pet", "xet"},
     }

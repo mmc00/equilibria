@@ -55,10 +55,8 @@ def _solve(dataset: str, ifsub: int):
     """Build + seed + solve base→check→shock (gtap pure MCP), return (model, code)."""
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import (
-        PERIODS,
-        GTAPMultiPeriodModel,
-    )
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     d = ROOT / "datasets" / dataset
@@ -81,7 +79,11 @@ def _solve(dataset: str, ifsub: int):
         numeraire="pnum",
     )
     gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
-    mp = GTAPMultiPeriodModel(p.sets, p, ac, residual_region=rr)
+    # Construir por BLOQUES: el driver replica el fixing desde un SP de bloques
+    # (F3, bd4d2fe). Construir el modelo con el MONOLITO y resolverlo con esa
+    # referencia desalinea modelo y fixing — medido: frac_agree 0.00% con
+    # SOLVE code=0 (el solve no arranca) en los 4 datasets.
+    mp = GTAPBlockMultiPeriodModel(p.sets, p, ac, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
     for per in PERIODS:

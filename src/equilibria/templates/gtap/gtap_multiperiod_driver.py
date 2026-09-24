@@ -1111,6 +1111,122 @@ def _sp_ref_reusable(prev_closure, closure) -> bool:
     return dump() == other()
 
 
+def _drop_duplicate_fisher_aggregates(sp) -> int:
+    """Quitar del SP de bloques los agregados Fisher duplicados.
+
+    Son duplicados EXACTOS de los `mq_factr_*`/`mq_factw_*` que declara la
+    version cross-periodo: misma suma, mismo ancho, mismo periodo.  La
+    maquinaria multiperiodo ya los borra —`gtap_model_multiperiod`
+    `build_equations_fisher`, con el diagnostico completo— pero el SP que pide
+    este modulo nunca pasa por ahi.
+
+    Sin esto el sistema queda SOBREDETERMINADO y
+    `_closure_patches.deactivate_zero_unique_var_eqs` lo cuadra desactivando
+    una ecuacion REAL: medido `eq_xseq[USA,VegFruit]` en check y shock —el
+    balance fisico xs == xds + xet—, con el gate MCP de gtap7_15x10 pure
+    ifSUB=1 en 87,00% contra un piso de 99%.
+
+    Se borra la Var ademas de la ecuacion: quitar la fila y dejar la columna
+    deja un HUERFANO, que altera el sistema igual que la fila.  Y se borra en
+    vez de fijarla porque son sumas DEFINIDAS — un valor rancio deja residual
+    en las filas Fisher (por eso existe `refresh_fisher_aggregates`).  Como no
+    las consume nadie, lo correcto es que desaparezcan.
+    """
+    # Los nombres se IMPORTAN de donde se declaran (blocks/gtap/closure.py) en
+    # vez de recopiarlos: la lista vivia duplicada en cinco ficheros, asi que
+    # anadir un septimo agregado obligaba a acordarse de todos.  El import va
+    # DENTRO de la funcion porque este modulo no tiene imports de `equilibria`
+    # a primer nivel — todos son diferidos, para no reintroducir el ciclo que
+    # ya mordio en __init__.py.
+    from equilibria.blocks.gtap.closure import FISHER_AUX_EQS, FISHER_AUX_VARS
+
+    n = 0
+    faltan = []
+    for name in (*FISHER_AUX_EQS, *FISHER_AUX_VARS):
+        comp = getattr(sp, name, None)
+        if comp is None:
+            faltan.append(name)
+            continue
+        sp.del_component(comp)
+        n += 1
+    if faltan:
+        # Un nombre que ya no aparece NO es benigno: si el agregado sigue vivo
+        # bajo otro nombre, el sistema vuelve a quedar sobredeterminado y
+        # `deactivate_zero_unique_var_eqs` cuadra sacrificando una ecuacion
+        # REAL —medido `eq_xseq[USA,VegFruit]`, el balance fisico xs==xds+xet,
+        # con el gate MCP de gtap7_15x10 en 87,00%—.  El sintoma aparece lejos
+        # de aqui, asi que se levanta en el sitio.
+        raise RuntimeError(
+            "_drop_duplicate_fisher_aggregates no encontro estos componentes en "
+            f"el SP de bloques: {faltan}. Si se renombraron, actualiza "
+            "FISHER_AUX_EQS/FISHER_AUX_VARS en blocks/gtap/closure.py; si "
+            "dejaron de emitirse, quita la "
+            "entrada. Dejarlo pasar reintroduce la sobredeterminacion."
+        )
+    return n
+
+
+def _build_sp_reference(sets, params, closure, residual_region, model=None):
+    """El modelo de periodo simple del que se leen `.fixed` / `lb` / `ub`.
+
+    F3: esto era `GTAPModelEquations(...).build_model()` — el MONOLITO — en
+    tres sitios (base, check, shock).  En 20x41 son 3,4M de celdas construidas
+    para leer tres atributos, y mientras ocurra el monolito es dependencia de
+    RUNTIME.
+
+    Bloques produce el mismo fixing.  Medido (closure altertax, tras d9e6d49),
+    SP del monolito vs `build_block_single_period`:
+
+        gtap7_3x3    1.330 celdas comunes, `.fixed` distinto = 0
+        gtap7_10x7  20.145 celdas comunes, `.fixed` distinto = 0
+
+    Las celdas que SOLO existen en el monolito (470 y 5.063) son los 30
+    shifters muertos (dtxshft, afeall, lambdaf, ...), que no aparecen en
+    ninguna ecuacion: no hay nada que replicar, y bloques no las declara.
+
+    `EQUILIBRIA_GTAP_REF_MODEL=monolith` vuelve al camino viejo.
+
+    El corte estuvo bloqueado por dos cosas, las dos ya arregladas:
+
+    - 33 filas Fisher duplicadas que solo sobrevivian en esta ruta
+      (`_drop_duplicate_fisher_aggregates`, cf2c1b0).
+    - Los 9 vars de reporte ifSUB se congelaban a "su valor actual", lo que
+      volvia DEFINITIVA la diferencia de init entre las dos rutas — medido
+      `pwmg` en 0.001 (monolito) vs 1.0 (bloques), factor 1000, y el gate MCP
+      de gtap7_15x10 pure ifSUB=1 en 87%. Ahora se recalculan desde su macro
+      (f654f63).
+    """
+    import os
+
+    # La fuente TIENE que coincidir con la clase que construyo `model`: un
+    # modelo del monolito con un SP de bloques deja el fixing desalineado
+    # —medido en gtap7_3x3 pure ifSUB=1: codes {base:1, check:0, shock:0}, y
+    # test_ifsub_primary_block_consistent en frac_agree 0.00%—.  Siete scripts
+    # de scripts/gtap/ construyen con el monolito y resuelven con este driver,
+    # asi que se detecta aqui en vez de parchear cada uno.
+    # Un modelo SIN marcador se trata como monolito: es el comportamiento previo
+    # a F3, y lo conservador.  El unico que marca "blocks" es
+    # GTAPBlockMultiPeriodModel.
+    _src = getattr(model, "_sp_source", None) if model is not None else None
+    _pide_monolito = (
+        _src == "monolith"
+        or (model is not None and _src is None)
+        or os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith"
+    )
+    if _pide_monolito:
+        from equilibria.templates.gtap import GTAPModelEquations
+
+        return GTAPModelEquations(
+            sets, params, closure, residual_region=residual_region
+        ).build_model()
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_single_period
+
+    sp = build_block_single_period(params, sets, closure, residual_region)
+    _drop_duplicate_fisher_aggregates(sp)
+    return sp
+
+
 def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
     """Copy the fixed-variable state from sp_model to m for active_period.
 
@@ -3035,9 +3151,9 @@ def _solve_multiperiod_inner(
     # build_model internally fixes ~500+ structural zeros (afeall, p_rai, chiSave,
     # etc.) that apply_conditional_fixing doesn't cover. Without this, aggressive
     # structural matching fixes the wrong 639 vars, breaking PATH convergence.
-    _sp_ref_base = GTAPModelEquations(
-        p_alt.sets, p_alt, base_closure, residual_region=res_region
-    ).build_model()
+    _sp_ref_base = _build_sp_reference(
+        p_alt.sets, p_alt, base_closure, res_region, model=m
+    )
     _replicate_sp_fixing(m, _sp_ref_base, "base")
     _replicate_sp_bounds(m, _sp_ref_base, "base")
     # Kept for the check period, which in gtap mode builds this same model again.
@@ -3246,12 +3362,9 @@ def _solve_multiperiod_inner(
                 "check period: reusing the base reference model (identical closure)"
             )
         else:
-            _sp_ref_chk = GTAPModelEquations(
-                p_alt.sets,
-                p_alt,
-                _chk_closure,
-                residual_region=res_region,
-            ).build_model()
+            _sp_ref_chk = _build_sp_reference(
+                p_alt.sets, p_alt, _chk_closure, res_region, model=m
+            )
         _replicate_sp_fixing(m, _sp_ref_chk, "check")
         _replicate_sp_bounds(m, _sp_ref_chk, "check")
         del _sp_ref_chk  # only the local name; _sp_ref_cached may still hold it
@@ -3800,12 +3913,9 @@ def _solve_multiperiod_inner(
 
     # Replicate single-period structural fixing for shock period.
     _shk_closure = base_closure if _gtap_mode else alt_closure
-    _sp_ref_shk = GTAPModelEquations(
-        params_shock.sets,
-        params_shock,
-        _shk_closure,
-        residual_region=res_region,
-    ).build_model()
+    _sp_ref_shk = _build_sp_reference(
+        params_shock.sets, params_shock, _shk_closure, res_region, model=m
+    )
     _replicate_sp_fixing(m, _sp_ref_shk, "shock")
     _replicate_sp_bounds(m, _sp_ref_shk, "shock")
     del _sp_ref_shk
