@@ -1419,6 +1419,9 @@ class GTAPModelEquations:
         chif_data: dict[tuple[str], float] = {}
         eh_data: dict[tuple[str, str], float] = {}
         bh_data: dict[tuple[str, str], float] = {}
+        # (r,i) que piden utilidad Cobb-Douglas via SUBPAR=0 y que la CDE
+        # no puede representar (divide por bh). Se avisa al final.
+        _cd_requested: set[tuple[str, str]] = set()
         alphaa_hhd_data: dict[tuple[str, str], float] = {}
         self._zcons_init_data: dict[tuple[str, str], float] = {}
         zcons_init_data = self._zcons_init_data
@@ -1658,14 +1661,23 @@ class GTAPModelEquations:
                 investment_share_data[(region, commodity)] = (
                     investment_val / investment_den if investment_total > 0.0 else 0.0
                 )
-                eh_val = float(
-                    self.params.elasticities.incpar.get((region, commodity), 1.0) or 1.0
-                )
-                bh_val = float(
-                    self.params.elasticities.subpar.get((region, commodity), 1.0) or 1.0
-                )
-                if abs(bh_val) < 1e-12:
+                _eh_raw = self.params.elasticities.incpar.get((region, commodity))
+                eh_val = 1.0 if _eh_raw is None else float(_eh_raw)
+                # SUBPAR ausente -> default 1.0. SUBPAR=0 es OTRA COSA: pide una
+                # utilidad Cobb-Douglas, que en GAMS es un MODO APARTE
+                # (`%utility% eq CD`, model.gms:765/795: zcons = alphaa, sin
+                # dividir por bh). La CDE con bh=0 es singular en los dos modelos
+                # por igual — model.gms:793 divide por bh(r,i,t) igual que aca.
+                # equilibria solo implementa la CDE, asi que no puede representar
+                # ese caso: se sustituye por 1.0 y SE AVISA, en vez de callarlo.
+                _bh_raw = self.params.elasticities.subpar.get((region, commodity))
+                if _bh_raw is None:
                     bh_val = 1.0
+                else:
+                    bh_val = float(_bh_raw)
+                    if abs(bh_val) < 1e-12:
+                        bh_val = 1.0
+                        _cd_requested.add((region, commodity))
                 eh_data[(region, commodity)] = eh_val
                 bh_data[(region, commodity)] = bh_val
                 xcshr_val = (
@@ -1698,6 +1710,21 @@ class GTAPModelEquations:
                 else:
                     alphaa_hhd_data[(region, commodity)] = 0.0
                     zcons_init_data[(region, commodity)] = 0.0
+
+            if _cd_requested and region == self.sets.r[-1]:
+                import warnings as _w
+
+                _w.warn(
+                    "SUBPAR=0 pide utilidad Cobb-Douglas en "
+                    f"{len(_cd_requested)} pares (r,i) "
+                    f"(p.ej. {sorted(_cd_requested)[:3]}), pero equilibria solo "
+                    "implementa la CDE, que es singular en bh=0 (divide por bh, "
+                    "igual que GAMS en model.gms:793). GAMS lo resuelve con un "
+                    "modo aparte `%utility% eq CD` que aca NO existe. Se usa "
+                    "bh=1.0 en su lugar: los resultados NO son Cobb-Douglas.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
             if private_total > 0.0:
                 prod_term = 1.0
