@@ -1204,14 +1204,17 @@ def _build_sp_reference(sets, params, closure, residual_region, model=None):
     # test_ifsub_primary_block_consistent en frac_agree 0.00%—.  Siete scripts
     # de scripts/gtap/ construyen con el monolito y resuelven con este driver,
     # asi que se detecta aqui en vez de parchear cada uno.
-    # Un modelo SIN marcador se trata como monolito: es el comportamiento previo
-    # a F3, y lo conservador.  El unico que marca "blocks" es
-    # GTAPBlockMultiPeriodModel.
+    # El monolito hay que PEDIRLO: o el modelo se declara "monolith"
+    # (GTAPMultiPeriodModel lo hace en build_sets), o se fuerza por entorno.
+    #
+    # Antes un modelo SIN marcador caia al monolito, que era lo conservador
+    # mientras las dos clases convivian sin declararse.  Ahora las dos declaran,
+    # asi que el default implicito solo servia para que un modelo nuevo heredara
+    # el monolito por olvido — lo contrario de lo que F3 persigue.  Sin marcador
+    # => BLOQUES.
     _src = getattr(model, "_sp_source", None) if model is not None else None
     _pide_monolito = (
-        _src == "monolith"
-        or (model is not None and _src is None)
-        or os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith"
+        _src == "monolith" or os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith"
     )
     if _pide_monolito:
         from equilibria.templates.gtap import GTAPModelEquations

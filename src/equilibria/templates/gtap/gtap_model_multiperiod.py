@@ -133,6 +133,17 @@ class GTAPMultiPeriodModel:
             doc="margin-good share in total margin demand",
         )
 
+        # Esta clase construye sus ecuaciones con el MONOLITO, asi que lo declara.
+        # El driver replica `.fixed`/`lb`/`ub` desde un SP de referencia y la
+        # fuente tiene que ser la misma que construyo el modelo: mezclarlas deja
+        # el fixing desalineado (medido en gtap7_3x3 pure ifSUB=1, codes
+        # {base:1, check:0, shock:0}).
+        #
+        # Se marca EXPLICITAMENTE en vez de dejar que el driver lo deduzca de la
+        # ausencia del atributo: un default implicito hace que cualquier modelo
+        # nuevo herede el monolito por olvido, que es justo lo que F3 retira.
+        m._sp_source = "monolith"
+
         return m
 
     def build_vars(self, m: ConcreteModel) -> None:
