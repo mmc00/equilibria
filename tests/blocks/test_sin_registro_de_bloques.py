@@ -46,30 +46,61 @@ def test_los_bloques_se_componen_por_import_directo():
 
 
 def test_ningun_fichero_del_repo_menciona_el_registro():
-    """El candado que faltaba.
+    """El candado que faltaba, y el unico que atrapa la regresion real.
 
     El borrado inicial dejo vivo `examples/cge/example_04_custom_blocks.py`
     porque el grep cubrio `src/`, `tests/` y `scripts/` pero no `examples/`, y
     los hooks de pre-commit estan acotados a `^(src|tests)/` a proposito. Nada
     lo habria detectado: lo encontro el CI.
 
-    Este test barre TODO el arbol de codigo, sin lista de directorios.
+    Barre TODO el arbol `.py` sin lista de directorios, y mira el AST —imports,
+    nombres, atributos y definiciones— en vez de subcadenas. La diferencia se
+    midio: una MENCION en comentario ("antes existia un `get_registry()`") es
+    justo lo que el ADR pide que la gente escriba, y con subcadenas ponia la
+    suite en rojo; por AST no. Y el uso REAL que rompio el CI si lo atrapa.
+
+    Techo medido de lo que este candado puede dar, reproducido y no deducido:
+    un registro con otro nombre (`BlockRegistryV2`), o este mismo montado
+    dinamicamente (`globals()["Block" + "Registry"] = _R`), pasa igualmente.
+    Un candado asi hace ruidoso el OLVIDO, no la intencion; la decision la
+    gobierna el ADR, no el test.
     """
+    import ast
     import pathlib
 
     raiz = pathlib.Path(__file__).resolve().parents[2]
-    permitidos = {
-        raiz / "tests" / "blocks" / "test_sin_registro_de_bloques.py",
-        raiz / "docs" / "architecture" / "registro_de_bloques.md",
-    }
+    # El unico fichero .py cuyo trabajo ES nombrar el registro borrado.
+    permitidos = {raiz / "tests" / "blocks" / "test_sin_registro_de_bloques.py"}
+    ignorados = {"node_modules", "site", "build", "dist"}
+
     infractores = []
-    for f in raiz.rglob("*.py"):
-        if any(p in f.parts for p in (".git", ".venv", "node_modules", "site")):
-            continue
+    for f in sorted(raiz.rglob("*.py")):
         if f in permitidos:
             continue
-        texto = f.read_text(encoding="utf-8", errors="replace")
-        encontrados = [n for n in NOMBRES if n in texto]
+        # Sobre la ruta RELATIVA: la absoluta del worktree puede contener un
+        # directorio oculto (`.superset`) y excluiria el repo entero.
+        partes = f.relative_to(raiz).parts
+        if any(p.startswith(".") or p in ignorados for p in partes):
+            continue
+        try:
+            arbol = ast.parse(f.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue  # ficheros de fixture que no son Python valido
+
+        usados = set()
+        for n in ast.walk(arbol):
+            if isinstance(n, ast.ImportFrom):
+                usados.update(a.name for a in n.names)
+            elif isinstance(n, ast.Import):
+                usados.update(a.name.split(".")[-1] for a in n.names)
+            elif isinstance(n, ast.Name):
+                usados.add(n.id)
+            elif isinstance(n, ast.Attribute):
+                usados.add(n.attr)
+            elif isinstance(n, ast.ClassDef | ast.FunctionDef):
+                usados.add(n.name)
+
+        encontrados = sorted(usados & set(NOMBRES))
         if encontrados:
             infractores.append(f"{f.relative_to(raiz)}: {', '.join(encontrados)}")
 
