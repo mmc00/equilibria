@@ -53,6 +53,7 @@ Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
 
 | Deuda | Detalle | Primer paso |
 |---|---|---|
+| El Jacobiano `asl` no resuelve la vía del **driver** | `asl` es el default desde `9ef28cb` y funciona en bloques, pero en la vía multiperiodo del driver **aborta**: `success=False`, los valores nunca se escriben y lo que se observa es el residuo del modelo SIN resolver — 607 de 845 restricciones violadas contra 8 con `reverse_numeric` (gtap7_3x3). Ningún gate lo mira: van con `skip_base_solve=True`. Hoy sobrevive como dos `monkeypatch.setenv` en tests. Medido en `docs/findings/gtap_asl_jacobian_driver_2026-09-24.md` | Usar `reverse_numeric` sólo en la vía del driver y **añadir un gate que mire los residuos de esa vía** |
 | `gtap_model_equations.py` no es retirable | Sólo por su papel de **oráculo GAMS en 3 de 5 gates**. Ya NO es dependencia de runtime del camino de bloques: el escalado se extrajo a `gtap_benchmark_scaling.py` y la reflexión multiperiodo pide su SP por método, así que `gtap_block_model.py` no lo importa (2026-09-16) | Migrar los 3 gates GAMS a medir bloques, comprobando que los números no se mueven |
 | `eq_pmuv` sin portar a bloques | Declarado en `blocks/gtap/__init__.py:47-53`, no implementado en el composer. Sólo muerde con `rmuv`/`imuv` no vacíos, que ningún dataset del gate usa | Voltear `pmuv` de Param a Var cuando el closure lo pida |
 
