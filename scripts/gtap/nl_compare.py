@@ -865,7 +865,25 @@ def _build_getdata_replacement_agg(gdx_path: Path, har_dir: Path | None = None) 
         gdx_path, renames={"POP": "pop0", "RORFLEX": "rorFlex0"},
     )
     if har_dir is not None and (har_dir / "default.prm").exists():
-        dump += "\n" + _prm_har_as_assignments(har_dir / "default.prm")
+        # use_prefix DEBE reflejar la convencion de ESTE dataset, no un default.
+        # Si/no llevan prefijo c_/a_ los elementos de comm/acts es dataset-
+        # specific (ver _PRM_SET_PREFIX): gtap7_5x5 declara `c_Agri`, gtap7_15x10
+        # declara `Rice` a pelo, y ambos son correctos.  El GDX de donde salen los
+        # sets es la fuente mas directa de esa convencion, asi que la leemos de
+        # ahi en vez de asumir.
+        #
+        # MEDIDO: sin esto, el default True inyectaba claves `c_Food` contra un
+        # set declarado `Food` en gtap7_3x4 y gtap7_15x10 -> las claves no casan,
+        # el denominador `sum(i0$mapi0, vdpp+vmpp)` suma 0 y GAMS aborta con
+        # "division by zero" en la calibracion CDE (eh0/bh0) y en sigmaq.  Los 2
+        # datasets que fallaban eran EXACTAMENTE los 2 sin prefijo; los 3 que
+        # funcionaban, los 3 con prefijo.  El docstring de
+        # _prm_har_as_assignments ya avisaba: "new callers should always pass it
+        # explicitly" — esta era la llamada que no lo hacia.
+        _use_prefix = bool(comm) and str(comm[0]).startswith("c_")
+        dump += "\n" + _prm_har_as_assignments(
+            har_dir / "default.prm", use_prefix=_use_prefix
+        )
     _seen: set[str] = set()
     is_elems = []
     for _e in acts + comm + endw + [
@@ -1735,7 +1753,68 @@ def _normalize_name(name: str) -> str:
             name = name[: -len(bare)]
             break
 
+    name = _strip_index_prefixes(name)
+    name = _strip_eq_suffix(name)
     return name
+
+
+def _strip_eq_suffix(name: str) -> str:
+    """``eq_xfeq[...]`` -> ``eq_xf[...]``.
+
+    GAMS nombra sus ecuaciones ``<var>eq`` (xfeq, pfeq) y _gams_to_python_name ya
+    las convierte a ``eq_<var>``.  Pero el lado Python nombra ALGUNAS de las suyas
+    ``eq_<var>eq`` —conservando el sufijo GAMS DENTRO del prefijo propio— asi que
+    ``eq_xfeq`` y ``eq_xf`` son la MISMA ecuacion y no casaban.
+
+    MEDIDO (gtap7_3x3/base): afectaba a eq_xfeq/eq_pfeq/eq_pfaeq/eq_pfyeq (36
+    filas cada una), eq_ytaxshreq (30), eq_xweq/eq_pmeq/eq_peeq (27)...  Solo se
+    toca el sufijo del NOMBRE; los indices ya los normalizo _strip_index_prefixes.
+    """
+    if not name.startswith("eq_"):
+        return name
+    bracket = name.find("[")
+    base = name[:bracket] if bracket != -1 else name
+    rest = name[bracket:] if bracket != -1 else ""
+    if base.endswith("eq") and len(base) > len("eq_") + 2:
+        return base[:-2] + rest
+    return name
+
+
+# Los indices de commodity/actividad llevan prefijo de dominio en unos datasets
+# (c_Food / a_Food) y no en otros (Food) — es DATASET-SPECIFIC, no universal
+# (ver _PRM_SET_PREFIX).  El .nl de GAMS conserva la convencion de SU dataset,
+# mientras que el modelo Python indexa siempre con el nombre desnudo, asi que
+# emparejar por nombre crudo falla en TODA fila indexada por commodity o
+# actividad — justo produccion, comercio y demanda Armington.
+#
+# MEDIDO (gtap7_3x3/base, antes de este despojado): de 797 filas GAMS solo 111
+# casaban, y las 32 familias comparadas eran TODAS de cierre macro (eq_gdpmp,
+# eq_yc, eq_rorg...).  Las familias con mas filas sueltas eran precisamente las
+# indexadas: eq_pa (57), eq_xd (57), eq_xm (54), eq_xf (36).  Un sabotaje
+# deliberado en eq_pp_rai pasaba INADVERTIDO porque esa familia no se comparaba.
+#
+# Normalizar a nombre desnudo en AMBOS lados hace la comparacion independiente
+# de la convencion del dataset.  Solo se tocan los segmentos DENTRO de los
+# corchetes: el nombre de la ecuacion nunca se toca (no hay familias c_*/a_*).
+_INDEX_PREFIXES = ("c_", "a_", "f_", "r_")
+
+
+def _strip_index_prefixes(name: str) -> str:
+    """Quita los prefijos de dominio c_/a_/f_/r_ de los INDICES de ``name``."""
+    start = name.find("[")
+    if start == -1 or not name.endswith("]"):
+        return name
+    head, idx = name[:start], name[start + 1 : -1]
+    if not idx:
+        return name
+    parts = []
+    for part in idx.split(","):
+        for pref in _INDEX_PREFIXES:
+            if part.startswith(pref) and len(part) > len(pref):
+                part = part[len(pref) :]
+                break
+        parts.append(part)
+    return f"{head}[{','.join(parts)}]"
 
 
 def _gams_to_python_name(name: str) -> str:

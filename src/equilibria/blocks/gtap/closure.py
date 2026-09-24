@@ -44,6 +44,35 @@ from equilibria.core.parameters import Parameter
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
 
+# Los agregados Fisher auxiliares que declara este bloque, en UN solo sitio.
+#
+# Existen en dos sabores que calculan LO MISMO: la version cross-periodo
+# (`mq_factr_*`/`mq_factw_*`, que emite `gtap_model_multiperiod`) y estos
+# auxiliares por periodo.  En el modelo multiperiodo conviven y el sistema queda
+# SOBREDETERMINADO: `deactivate_zero_unique_var_eqs` lo cuadra desactivando una
+# ecuacion REAL —medido `eq_xseq[USA,VegFruit]`, el balance fisico
+# xs == xds + xet, con el gate MCP de gtap7_15x10 pure ifSUB=1 en 87,00%—.
+#
+# Por eso el driver los borra del SP de referencia.  Los nombres vivian
+# copiados en cinco ficheros; se exportan aqui, donde se DECLARAN, para que
+# anadir un septimo agregado no obligue a recordar cinco listas sueltas.
+FISHER_AUX_EQS: tuple[str, ...] = (
+    "eq_mfr_bs",
+    "eq_mfr_sb",
+    "eq_mfr_ss",
+    "eq_mfw_bs",
+    "eq_mfw_sb",
+    "eq_mfw_ss",
+)
+FISHER_AUX_VARS: tuple[str, ...] = (
+    "mfr_bs",
+    "mfr_sb",
+    "mfr_ss",
+    "mfw_bs",
+    "mfw_sb",
+    "mfw_ss",
+)
+
 
 class ClosureBlock(Block):
     """GTAP closure: factor-price Fisher index, numeraire, Walras check."""

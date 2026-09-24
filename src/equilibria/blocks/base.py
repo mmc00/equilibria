@@ -112,7 +112,7 @@ class Block(BaseModel, CalibrationMixin, ABC):
         >>> class CESValueAdded(Block):
         ...     name: str = "CES_VA"
         ...     description: str = "CES value-added production"
-        ...     required_sets: list[str] = ["J", "I"]
+        ...     required_sets: list[str] = ["J", "F"]  # J=sectores, F=factores
         ...     sigma: float = Field(default=0.8, description="Elasticity")
         ...
         ...     def get_calibration_phases(self):

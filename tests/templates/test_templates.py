@@ -107,3 +107,44 @@ class TestSimpleOpenEconomy:
         assert "SimpleOpenEconomy" in repr_str
         assert "3 sectors" in repr_str
         assert "2 factors" in repr_str
+
+
+class TestSimpleOpenFactorSet:
+    """El value-added debe construirse sobre los factores reales (issue #15).
+
+    `CESValueAdded` declara `required_sets = ["J", "F"]`, donde F son los
+    FACTORES (beta_VA/FD indexados (F,J); WF indexado (F,)). El template
+    llamaba "F" al set de firmas -- un unico elemento -- y "I" al de
+    factores, de modo que el bloque se armaba sobre 1 factor ficticio:
+    FD (1,3) en vez de (2,3) y solo 3 de las 6 CES_FOC (`WF = PVA*dVA/dFD`)
+    llegaban a existir. Construia y corria; nadie lo veia porque el gate de
+    paridad compara 9 variables y ninguna es FD/WF.
+    """
+
+    def test_factor_set_F_holds_the_factors(self):
+        template = SimpleOpenEconomy(num_factors=2)
+        model = template.create_model()
+
+        assert tuple(model.set_manager.get("F")) == ("LAB", "CAP")
+
+    def test_value_added_spans_every_factor(self):
+        template = SimpleOpenEconomy(num_sectors=3, num_factors=2)
+        model = template.create_model()
+
+        fd = model.get_variable("FD")
+        wf = model.get_variable("WF")
+        beta = model.get_parameter("beta_VA")
+
+        assert fd.value.shape == (2, 3), "FD debe cubrir 2 factores x 3 sectores"
+        assert wf.value.shape == (2,), "WF debe tener un precio por factor"
+        assert beta.value.shape == (2, 3)
+
+    def test_one_foc_per_factor_and_sector(self):
+        """CES_FOC (WF = PVA*dVA/dFD) es una por (factor, sector)."""
+        template = SimpleOpenEconomy(num_sectors=3, num_factors=2)
+        model = template.create_model()
+
+        focs = model.equation_manager.summary()["equations"]["CES_FOC"]
+        assert focs["scalar_count"] == 6, (
+            f"esperadas 6 CES_FOC (2 factores x 3 sectores), hay {focs['scalar_count']}"
+        )

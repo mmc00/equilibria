@@ -176,6 +176,21 @@ _IFSUB_REPORT_VARS = (
 )
 
 
+def _aridad(fn) -> int:
+    """Cuantos INDICES toma un macro de ifSUB.
+
+    Los macros tienen forma ``fn(model, p, *indices)`` —salvo los que llevan
+    ``mode``, que es un indice mas—, asi que la aridad se lee de la firma en vez
+    de fijarla: ``len(k) == 3`` dejaba fuera a ``m_xmgm``, que toma cuatro
+    ``(mode, e, c, imp)``, y lo condenaba al init congelado aunque su macro
+    existiera.
+    """
+    import inspect
+
+    params_fn = list(inspect.signature(fn).parameters)
+    return len([p for p in params_fn if p not in ("model", "p")])
+
+
 def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     """The ifSUB closure: deactivate the 9 report equations AND fix their report
     vars — mirrors the monolith's post-block.
@@ -193,20 +208,23 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     ``pfa[USA,Land,Grains]`` quedaba en 0.5652 en vez de 1.6240 (``rtf`` = -0.4578
     frente al wedge descompuesto ``1 + ftrv/evfb - fbep/evfb`` = 1.5579).
 
-    ALCANCE MEDIDO: esto corrige el valor en el modelo de UN periodo. En
-    multiperiodo NO cambia ninguna celda medida, porque
-    ``gtap_multiperiod_driver._recompute_ifsub_report_vars`` reescribe pfa/pfy
-    post-solve desde los mismos macros (llamada en la linea 3887). Se aplica por
-    fidelidad --el valor fijado debe ser el correcto aunque nadie lo lea-- no
-    porque mueva el match. En particular NO es la causa del fallo del MCP con
-    bloques: eso son las 99 columnas Fisher de mas (ver el comentario en
-    tests/templates/gtap/test_gtap7_mcp_parity.py).
+    CORRECCION (F3, 2026-09-23): este docstring decia que congelar los otros
+    siete al init era inocuo y que esto "NO es la causa del fallo del MCP con
+    bloques". Las dos afirmaciones eran FALSAS, y medirlas es lo que cerro F3:
 
-    Los otros siete vars de reporte SI se congelan a su valor actual: sus macros
-    dependen de variables que el escalado ya dejo en su nivel correcto."""
+    - Congelar el init hace DEFINITIVA la diferencia entre rutas. Medido `pwmg`
+      en 0.001 (monolito) vs 1.0 (bloques), factor 1000, y 11.118 celdas
+      realmente distintas al resolver el shock.
+    - Extender el mapa de macros de 2 a 9 entradas llevo el gate MCP de
+      gtap7_15x10 pure ifSUB=1 del 87,00% a verde. Esto SI era la causa.
+
+    Los NUEVE se recalculan ahora desde su macro. Si un macro falla se LEVANTA:
+    degradar al init en silencio es justo el bug que este camino arregla."""
     from pyomo.environ import value
 
     n = 0
+    _macro_fallos: list[str] = []
+    _fix_fallos: list[str] = []
     for eq_name in _IFSUB_REPORT_EQS:
         comp = pm.component(eq_name)
         if comp is None:
@@ -217,8 +235,31 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
         # otherwise be reflected. Deactivating the component makes it skipped.
         n += sum(1 for idx in comp if comp[idx].active)
         comp.deactivate()
-    # pfa/pfy: recalcular desde el macro ANTES de fijar (ver docstring).
-    _macro = {"pfa": mac.m_pfa, "pfy": mac.m_pfy}
+    # Recalcular desde el MACRO antes de fijar — para los NUEVE, no solo
+    # pfa/pfy.  Congelar "el valor actual" hace que la diferencia de init entre
+    # las dos rutas (el monolito re-valua los precios tras el escalado, bloques
+    # siembra del benchmark) se vuelva DEFINITIVA: sin ecuacion que los
+    # determine, el valor fijado es el resultado.
+    #
+    # Medido en gtap7_15x10 pure ifSUB=1, valores congelados en el SP:
+    #   pp_rai 2100/2250 distintos (0.99180445 vs 1.0)
+    #   pefob   660/1500            (1.0000035  vs 1.0)
+    #   pwmg    352/1500            (0.001      vs 1.0)  <- factor 1000
+    # y 11.118 celdas realmente distintas en el modelo multiperiodo al resolver
+    # el shock (separando 52.455 de puro ruido de coma flotante).
+    _macro = {
+        "pfa": mac.m_pfa,
+        "pfy": mac.m_pfy,
+        "pp_rai": mac.m_pp,
+        "pwmg": mac.m_pwmg,
+        "pefob": mac.m_pefob,
+        "pmcif": mac.m_pmcif,
+        "pm": mac.m_pm,
+        "xwmg": mac.m_xwmg,
+        # xmgm toma CUATRO indices (mode, e, c, imp), no tres — por eso el
+        # guard de aridad de abajo se lee del macro y no esta fijado en 3.
+        "xmgm": mac.m_xmgm,
+    }
     for var_name in _IFSUB_REPORT_VARS:
         v = pm.component(var_name)
         if v is None:
@@ -229,9 +270,24 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
             if vd.fixed:
                 continue
             target = None
-            if fn is not None and isinstance(k, tuple) and len(k) == 3:
-                with contextlib.suppress(Exception):
+            # Un macro solo aplica si su aridad casa con la del indice: `xmgm`
+            # toma cuatro (mode, e, c, imp) y el resto tres.
+            usa_macro = (
+                fn is not None and isinstance(k, tuple) and len(k) == _aridad(fn)
+            )
+            if usa_macro:
+                try:
                     target = float(value(fn(pm, params, *k)))
+                except Exception as exc:  # noqa: BLE001 — se acumula y se re-lanza
+                    # NO se degrada al init en silencio: ese es exactamente el
+                    # bug que este camino arregla (congelar el init vuelve
+                    # DEFINITIVA la diferencia entre rutas — medido `pwmg` en
+                    # 0.001 vs 1.0, factor 1000).  Un macro que falla es un
+                    # defecto, no un caso a tolerar.
+                    _macro_fallos.append(f"{var_name}{k}: {type(exc).__name__} {exc}")
+                else:
+                    if target is None:
+                        _macro_fallos.append(f"{var_name}{k}: el macro devolvio None")
             if target is None:
                 target = float(value(vd))
             # Respetar las cotas de la Var, como el monolito (_fix_component, 7116).
@@ -240,8 +296,85 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
                 target = float(lb)
             if ub is not None and target > float(ub):
                 target = float(ub)
-            with contextlib.suppress(Exception):
+            try:
                 vd.fix(target)
+            except Exception as exc:  # noqa: BLE001 — se re-lanza abajo
+                # Una celda que no se fija deja una columna libre sin ecuacion
+                # que la determine: el sistema queda no cuadrado y el sintoma
+                # aparece lejos de aqui.  Se acumula y se levanta al final.
+                _fix_fallos.append(f"{var_name}{k}: {type(exc).__name__} {exc}")
+
+    if _macro_fallos or _fix_fallos:
+        raise RuntimeError(
+            "_apply_ifsub_closure no pudo fijar los vars de reporte ifSUB desde "
+            "su macro. Degradar al init en silencio es el bug que este camino "
+            "arregla, asi que se levanta.\n"
+            + "\n".join(
+                [f"  macro fallido: {m}" for m in _macro_fallos[:10]]
+                + [f"  fix fallido:   {m}" for m in _fix_fallos[:10]]
+            )
+        )
+    return n
+
+
+def _fix_no_demand_cells(pm: Any) -> int:
+    """Fijar las celdas SIN DEMANDA, como hace el monolito.
+
+    Dos reglas, transcritas de gtap_model_equations:
+
+    - ``pa[r,i,aa] = 1.0`` cuando el agente no absorbe ni domestico ni
+      importado (monolito 2743-2750).  En GAMS estas combinaciones las filtran
+      los flags de dominio de las ecuaciones.
+    - ``xaa[r,i,tmg] = 0.0`` en las celdas sin absorcion de margen (monolito
+      5183-5190).  El bloque ya SALTA la fila ``eq_xaa_tmg`` en esas celdas
+      (``EqXaaTmg`` retorna ``None``, commit 65c628c) pero NO fijaba la
+      columna: fila quitada sin columna quitada deja el sistema no cuadrado,
+      que es justo lo que el comentario de ese bloque dice que hay que evitar.
+
+    La condicion de ``pa`` se LEE del modelo ya compuesto (``xda``/``xma``) en
+    vez de re-derivar la ``agent_trade_cache`` del monolito: esas dos Vars se
+    inicializan de los mismos valores de benchmark, y duplicar la cache seria
+    una segunda fuente de verdad que puede desincronizarse.  Verificado que
+    selecciona el MISMO conjunto de celdas que el monolito.
+
+    Devuelve cuantas celdas fijo.
+    """
+    from pyomo.environ import value as _V
+
+    from equilibria.templates.gtap.gtap_parameters import GTAP_MARGIN_AGENT
+
+    n = 0
+    pa = getattr(pm, "pa", None)
+    xda, xma = getattr(pm, "xda", None), getattr(pm, "xma", None)
+    if pa is not None and xda is not None and xma is not None:
+        for k in pa:
+            vd = pa[k]
+            if vd.fixed:
+                continue
+            try:
+                dom = float(_V(xda[k]))
+                imp = float(_V(xma[k]))
+            except Exception:
+                continue
+            if dom <= 0.0 and imp <= 0.0:
+                with contextlib.suppress(Exception):
+                    vd.fix(1.0)
+                    n += 1
+
+    xaa = getattr(pm, "xaa", None)
+    if xaa is not None:
+        for k in xaa:
+            if not (isinstance(k, tuple) and len(k) == 3):
+                continue
+            if str(k[2]) != str(GTAP_MARGIN_AGENT):
+                continue
+            vd = xaa[k]
+            if vd.fixed:
+                continue
+            if abs(float(_V(vd))) <= 0.0:
+                with contextlib.suppress(Exception):
+                    vd.fix(0.0)
+                    n += 1
     return n
 
 
@@ -302,6 +435,8 @@ def build_block_single_period(
     if if_sub:
         _apply_ifsub_closure(pm, params)
 
+    _fix_no_demand_cells(pm)
+
     pm._residual_region = residual_region
     return pm
 
@@ -328,6 +463,18 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         return build_block_single_period(
             self.params, self.sets, self.closure, self.residual_region
         )
+
+    def build_sets(self) -> ConcreteModel:
+        """Marca el modelo con su origen, ademas de construir los sets.
+
+        El driver replica `.fixed`/`lb`/`ub` desde un SP de referencia y la
+        fuente TIENE que ser la misma que construyo el modelo: mezclar un
+        modelo del monolito con un SP de bloques deja el fixing desalineado
+        —medido en gtap7_3x3 pure ifSUB=1: codes {base:1, check:0, shock:0}—.
+        """
+        m = super().build_sets()
+        m._sp_source = "blocks"
+        return m
 
     def _build_sp(self) -> ConcreteModel:
         """El modelo SP que la reflexion multiperiodo del padre va a leer.

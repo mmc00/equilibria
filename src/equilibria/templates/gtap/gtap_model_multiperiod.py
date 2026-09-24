@@ -654,18 +654,27 @@ class GTAPMultiPeriodModel:
         m.eq_pgdpmp = Constraint(all_rt, rule=_pgdpmp_rule)
 
         # ── cross-period Fisher rows for pabs, pfact, pwfact ─────────────────────
-        # Build a temporary single-period model to extract xscale values (floats).
-        # xscale is a time-invariant Param (production scaling); it lives in the
-        # single-period model and is NOT reflected as a Var in the multi-period model.
-        _sp_tmp = self._build_sp()
+        # xscale es un Param invariante en el tiempo (escalado de produccion) que
+        # NO se refleja como Var en el modelo multiperiodo, asi que hay que
+        # leerlo aparte.
+        #
+        # Antes esto construia un modelo de periodo simple ENTERO y lo tiraba
+        # (`del _sp_tmp`) solo para leer este Param.  Por la via del monolito ese
+        # SP son 3,4M de celdas en 20x41 — y mientras se construya, el monolito es
+        # dependencia de runtime (F3).
+        #
+        # `xscale_data` lo deriva de los params, sin modelo.  Medido identico celda
+        # a celda: 104 celdas en gtap7_3x3 / 5x5 / 10x7, diferencia 0,0 exacta.
+        from equilibria.blocks.gtap._derived_params import xscale_data
+
+        _xs = xscale_data(self.params, self.sets)
         xscale_floats: dict = {}
         for r in self.sets.r:
             for a in self.sets.a:
                 try:
-                    xscale_floats[(r, a)] = max(float(_pv(_sp_tmp.xscale[r, a])), 1e-12)
-                except (KeyError, AttributeError):
+                    xscale_floats[(r, a)] = max(float(_xs[(r, a)]), 1e-12)
+                except (KeyError, TypeError, ValueError):
                     xscale_floats[(r, a)] = 1.0
-        del _sp_tmp  # free memory
         # Stash the (r,a) xscale floats on m so diagnostic seeders (seed_and_solve's
         # derived-var cascade) can recover the SAME scaling the baked equation bodies
         # use — the MP model has no `xscale` component (it's a literal in each body),

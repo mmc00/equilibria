@@ -36,6 +36,20 @@ def _cache_dir() -> Path:
 
 
 def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
+    # DEUDA CONOCIDA (2026-09-22): esta clave cubre los DATOS de entrada (dataset,
+    # closure, benchmark, tasas) pero NO el CODIGO que calcula el seed.  Editar el
+    # settle o cualquier ecuacion que lo alimenta no invalida la entrada, asi que
+    # un seed viejo se sigue sirviendo en silencio — y el cache vive fuera del
+    # repo (~/.cache/equilibria/settled_seed), asi que sobrevive a checkouts y
+    # ramas.  Medido: 12 entradas de agosto-septiembre en una maquina de trabajo.
+    #
+    # El cache de MODELOS hermano si lo cubre — ver blocks/gtap/model_cache.py:
+    # "La clave cubre los archivos de entrada Y el source de cada modulo que
+    # construye el modelo, asi que una ecuacion editada nunca puede recibir un
+    # modelo obsoleto".  Aqui falta ese mismo digest de fuentes.
+    #
+    # Mientras tanto: EQUILIBRIA_SEED_CACHE_DISABLE=1 lo desactiva, y conviene
+    # borrar el directorio al medir contra una referencia.
     fields = [
         dataset_id,
         residual_region,
