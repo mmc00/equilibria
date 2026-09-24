@@ -7,12 +7,9 @@ parameters, variables, and equations.
 
 from equilibria.blocks.base import (
     Block,
-    BlockRegistry,
     EquationSpec,
     ParameterSpec,
     VariableSpec,
-    get_registry,
-    register_block,
 )
 from equilibria.blocks.demand import CobbDouglasConsumer, LESConsumer
 from equilibria.blocks.equilibrium import (
@@ -39,12 +36,9 @@ from equilibria.blocks.trade import (
 
 __all__ = [
     "Block",
-    "BlockRegistry",
     "ParameterSpec",
     "VariableSpec",
     "EquationSpec",
-    "get_registry",
-    "register_block",
     # Production blocks
     "CESValueAdded",
     "LeontiefIntermediate",
