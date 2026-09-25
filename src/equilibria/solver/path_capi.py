@@ -84,6 +84,27 @@ def _default_jacobian_eval_mode() -> str:
     return os.environ.get("EQUILIBRIA_GTAP_JAC_MODE", "asl").strip().lower()
 
 
+def _resolver_gtap_mode(model, explicito: bool | None) -> bool:
+    """Decide el modo puro-GTAP: argumento explicito > marcador > default.
+
+    No es un flag cualquiera. Gobierna `protect_xseq` y, mas abajo, el
+    emparejamiento MCP HARD de `eq_xseq` — la fila de balance fisico que GAMS
+    declara free-row. Apagarlo por accidente no rompe nada de forma visible:
+    `deactivate_zero_unique_var_eqs` desactiva una ecuacion REAL para cuadrar el
+    sistema y el solve aterriza en otra raiz (ver
+    docs/architecture/, y el caso medido de eq_xseq[USA,VegFruit]).
+
+    Por eso el modo se PASA. El marcador `model._gtap_mode` que estampa el
+    driver sigue valiendo como respaldo —hay llamadores que no pueden pasar el
+    argumento todavia—, pero deja de ser el unico canal: un `getattr` con
+    default `False` hace que OLVIDAR la escritura sea indistinguible de
+    declarar altertax.
+    """
+    if explicito is not None:
+        return bool(explicito)
+    return bool(getattr(model, "_gtap_mode", False))
+
+
 def _default_ipopt_required_infeasibility_reduction() -> float:
     """Read EQUILIBRIA_GTAP_IPOPT_REQ_INFEAS at CALL time (see the note on
     _default_jacobian_eval_mode: an import-time constant silently freezes the
@@ -643,8 +664,14 @@ def _run_path_capi_nonlinear_full(
     xi_diag_commodity: str = "c_Util_Cons",
     equation_scaling: bool = False,
     solution_hint=None,
+    gtap_mode: bool | None = None,
 ) -> dict[str, Any]:
-    """Solve the full GTAP system through PATH C API nonlinear callbacks."""
+    """Solve the full GTAP system through PATH C API nonlinear callbacks.
+
+    ``gtap_mode`` decides the MCP pairing of ``eq_xseq`` (see
+    :func:`_resolver_gtap_mode`): pass it explicitly. Left as ``None`` it falls
+    back to the ``model._gtap_mode`` marker the driver stamps.
+    """
     if jacobian_eval_mode is None:
         jacobian_eval_mode = _default_jacobian_eval_mode()
 
@@ -734,8 +761,8 @@ def _run_path_capi_nonlinear_full(
 
     # pure-gtap mode (both ifSUB): keep eq_xseq (supply balance, a GAMS free-row)
     # active; the GAMS supply-block pairing is HARD-forced in structural_matching
-    # below instead.  Gated on the driver's _gtap_mode flag (altertax unaffected).
-    _gtap_mode = bool(getattr(model, "_gtap_mode", False))
+    # below instead.  (altertax unaffected.)
+    _gtap_mode = _resolver_gtap_mode(model, gtap_mode)
     apply_squareness_patches(
         model, params, label="nonlinear-full", protect_xseq=_gtap_mode
     )
@@ -1107,7 +1134,7 @@ def _run_path_capi_nonlinear_full(
         # contain the paired var in their body (the MCP complementarity does), so the
         # adjacency check must be skipped; PATH's positional pairing tolerates it as
         # long as the full Jacobian stays nonsingular.
-        if bool(getattr(model, "_gtap_mode", False)):
+        if _gtap_mode:  # ya resuelto arriba: mismo valor en los dos usos
             _omegax = getattr(getattr(params, "elasticities", None), "omegax", {}) or {}
             _eq_xseq = getattr(model, "eq_xseq", None)
             if _eq_xseq is not None:
