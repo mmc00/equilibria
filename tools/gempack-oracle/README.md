@@ -78,7 +78,46 @@ estándar; si alguno falla, quiero los otros 44.
 comparar sus niveles contra este base único no es válido — para esos hace falta
 un base por `.prm`. Está pendiente.
 
-## MEDIDO: el oráculo reproduce la tabla 4.5 al 100%
+## MEDIDO: el oráculo reproduce 84 de 84 celdas en 13 tablas del libro
+
+```bash
+python tools/gempack-oracle/cmp_libro.py          # todas
+python tools/gempack-oracle/cmp_libro.py 6.4      # una
+```
+
+| tabla | pág. | qué mide | celdas |
+|---|---|---|---|
+| 4.5 | 127 | +10% TFP servicios, 3 utilidades | 18 ✅ |
+| 4.6 | 130 | arancel 10% MFG, 3 Armington | 9 ✅ |
+| 5.4 | 159 | +5pp impuesto trabajo, 2 elasticidades | 4 ⚠️ |
+| 5.5 | 164 | +10% capital, demanda de insumos | 6 ✅ |
+| 6.2 | 183 | subsidio 5%, 3 movilidades de K | 9 ✅ |
+| 6.3 | 187 | +10% trabajo, sustitutos vs complementos | 4 ✅ |
+| 6.4 | 190 | +10% productividad del trabajo | 9 ✅ |
+| 6.5 | 193 | subsidio 10% MFG, 2 cierres laborales | 4 ✅ |
+| 6.6 | 195 | +2% trabajo, estructura productiva | 3 ✅ |
+| 6.7 | 197 | subsidio 5% servicios, precios de factores | 3 ✅ |
+| 7.5 | 224 | arancel 15%, 2 ESUBD | 4 ✅ |
+| 7.8 | 240 | Dutch Disease | 9 ✅ |
+| 7.9 | 242 | +10% productividad en márgenes | 2 ✅ |
+
+**82 exactas**, más **2 a un dígito del último decimal** en la única fila cuya
+fórmula el propio libro declara *"approximately"* (el ratio salario/renta de la
+5.4: 3,7658 vs 3,76 publicado). No se aflojó la tolerancia — se marcan `aprox`
+y se cuentan aparte, así la diferencia queda visible.
+
+La tolerancia es la precisión de la fuente: el libro publica 1 o 2 decimales,
+así que se compara el valor redondeado a esos decimales.
+
+### ⚠️ La letra del `.EXP` NO sigue el orden de filas del libro
+
+En la 5.4, `TBL54A` usa `esubvamfg1.2.prm` y `TBL54B` usa `esubvamfg.8.prm`,
+pero el libro lista σ=0,8 primero. Lo mismo en 6.2 (`TBL62B` es capital
+específico, `TBL62C` sluggish, y el libro los lista al revés), 6.3 y 6.5.
+**Emparejar por el `.prm` o el cierre que declara el `.EXP`, nunca por la
+letra.** Emparejado por letra, la 5.4 parece cruzada.
+
+## La tabla 4.5 en detalle
 
 Las **18 celdas** de la tabla 4.5 (pág. 127) —los tres bloques, CDE, CES y
 Cobb-Douglas— coinciden **exactamente** con GEMPACK/Johansen: diferencia
