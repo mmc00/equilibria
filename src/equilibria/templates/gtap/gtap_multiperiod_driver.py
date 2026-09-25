@@ -3180,6 +3180,7 @@ def _solve_multiperiod_inner(
             strict_path_capi=False,
             closure_config=base_closure,
             equation_scaling=True,
+            gtap_mode=_gtap_mode,
             solution_hint=None,
         )
         code_base = int(r_base.get("termination_code") or 0)
@@ -3752,6 +3753,7 @@ def _solve_multiperiod_inner(
             strict_path_capi=False,
             closure_config=_chk_closure,
             equation_scaling=True,
+            gtap_mode=_gtap_mode,
             solver_output=bool(_os_dbg.environ.get("EQUILIBRIA_DEBUG_PATH_VERBOSE")),
             solution_hint=None,
         )
@@ -4101,6 +4103,7 @@ def _solve_multiperiod_inner(
                 strict_path_capi=False,
                 closure_config=_shk_closure,
                 equation_scaling=True,
+                gtap_mode=_gtap_mode,
                 solution_hint=None,
             )
             _c_lam = int(r_shk.get("termination_code") or 0)
@@ -4146,6 +4149,7 @@ def _solve_multiperiod_inner(
             strict_path_capi=False,
             closure_config=_shk_closure,
             equation_scaling=True,
+            gtap_mode=_gtap_mode,
             solution_hint=None,
         )
     code_shk = int(r_shk.get("termination_code") or 0)
