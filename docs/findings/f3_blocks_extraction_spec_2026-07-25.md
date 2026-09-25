@@ -106,6 +106,10 @@ gate guards against spurious-corner regressions (xw/xet → Reals).
 - `src/equilibria/blocks/gtap/` — the GTAP blocks as `Block` subclasses.
 - A composer assembles them via `BlockRegistry` into a model the (repaired) bridge
   emits to Pyomo, solved by the existing PATH/IPOPT path.
+  > **Nota 2026-09-24:** el `BlockRegistry` nunca llego a usarse. El compositor
+  > real (`templates/gtap/gtap_block_model.py`) resuelve las clases por import
+  > directo y en orden de dependencia. El registro se borro antes del primer
+  > release; ver `docs/architecture/registro_de_bloques.md`.
 - The monolith `gtap_model_equations.py` stays intact as the **parity oracle**
   throughout F3 (B is compared against it AND against GAMS). It is not removed until
   3x3-via-B is fully green.
