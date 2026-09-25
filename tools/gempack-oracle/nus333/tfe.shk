@@ -1,0 +1,46 @@
+
+ ! This file was created at 13:10:22 on 27-NOV-2020 by the program
+ !  <SHOCKSv7.for 13-FEB-2020> [SHOCKSv7.tab,shocksv7.sti]
+ ! which accesses some of the routines in the GEMPACK software release
+ !  <GEMPACK Release 12.1.003   January 2020>
+ 
+ !     -------------------------------------------------------                
+ !    !            GEMPACK Software System Licence            !               
+ !    !  Source Code Licence for the GEMPACK Software System  !               
+ !    !                 Licence No.  GFM-0048                 !               
+ !    !          Licence for Release 12.0 of GEMPACK          !               
+ !    !           Center for Global Trade Analysis            !               
+ !    !         Department of Agricultural Economics          !               
+ !    !                   Krannert Building                   !               
+ !    !                   Purdue University                   !               
+ !     -------------------------------------------------------                
+    
+
+ !
+ ! Values of TFE_HAT(ENDW,ACTS,REG) - a real array of size 3x3x2
+ !---------------------------------
+ !
+
+! Coefficient TFE_HAT(ENDW,ACTS,REG)
+
+ ! (Entries are written one "row" at a time - maximum of 4 per line.)
+
+ 
+ 3 3 2  real row_order;
+ 
+! (This array is shown as 2 matrices - each of size 3x3.)
+ 
+! The matrix TFE_HAT(%1,%2,"USA")  with %1 in ENDW and %2 in ACTS. +++++++++++
+
+! %2=AGR             MFG             SER
+  4.2896190       0.0000000       0.0000000    ! %1=LAND
+ -7.5687323      -13.085938      -13.085938    ! %1=LABOR
+  3.2699599      -3.1535168      -3.1535168    ! %1=CAPITAL
+
+! The matrix TFE_HAT(%1,%2,"ROW")  with %1 in ENDW and %2 in ACTS. +++++++++++
+
+! %2=AGR             MFG             SER
+  19.688971       0.0000000       0.0000000    ! %1=LAND
+ -2.0792184      -17.746826      -17.961222    ! %1=LABOR
+  19.096401      -1.3595822      -1.7567266    ! %1=CAPITAL
+

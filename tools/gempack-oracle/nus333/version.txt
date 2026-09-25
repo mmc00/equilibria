@@ -1,0 +1,50 @@
+Model used in Burfisher, Intro to CGE Models, 3e (2021)
+November 2020
+
+********************************************************************************************************************************
+Version: NUS333
+Model: Standard GTAPv7 model (uncondensed)
+Data: GTAP Data Base version 8.1 (2007) (same as US3x3v8 in Intro to CGE models 2e, but data are compatible with GTAPv7 model)
+********************************************************************************************************************************
+
+I.   SUMMARY
+
+This GTAP model version has a 2-region, 3-activity, 3-commodity, 3-factor data aggregation.  It is used for demonstration in 
+Burfisher, Mary E.,  Introduction to Computable General Equilibrium Models, 3e. Cambridge University Press, 2021.
+
+II.   SETS
+
+The 2 regions are:
+USA	United States
+ROW	Rest of the World
+
+The 3 production activities are:
+AGR	food and agriculture
+MFG	resources and manufactures
+SER	all services
+
+The 3 commodities are:
+AGR	food and agriculture
+MFG	resources and manufactures
+SER	all services
+
+The 3 factors are:
+Land
+Labor
+Capital
+
+
+III.   EXPERIMENT FILES: SHOCKS, CLOSURES AND SOLUTION METHOD
+
+SHOCKS
+The experiments in this version:
+- Replicate the tables in the book (except Chapter 8)
+- Are used in selected modeling exercises
+ 
+CLOSURES
+Standard uncondensed GE closure for GTAPv7 model, except when noted in text
+
+SOLUTION METHODS
+The preferred solution method for policy analysis is Gragg 2-4-6 -- with automatic accuracy if large shocks are undertaken. 
+
+

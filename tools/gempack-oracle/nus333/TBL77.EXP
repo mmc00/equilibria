@@ -1,0 +1,42 @@
+file gtapPARM = esubva4allsects.prm;
+Verbal Description =
+Table 7.7 10% increase US land supply, all ESUBVA = 4;
+Method = Gragg;
+Steps = 2 4 6;
+automatic accuracy = no;
+subintervals = 1;
+! Standard GE closure for GTAPUv7: psave varies by region, pfactwld is numeraire
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack 
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc 
+          tpreg tm tms tx txs
+          qe
+          qesf
+          atall avaall tfe tfd tfm tgd tgm tpdall tpmall tid tim;
+Rest endogenous;
+
+ Shock qe("land","USA") = 10;
+
+!@ contents of CMFStart when this EXP file was last saved
+!@ below is a record only....not read by RunGTAP
+!@ RunGTAP reads from the actual CMFSTART file
+!@ ! If a version has no CMFSTART file of its own
+!@ ! RunGTAP creates one by copying the supplied file CMFSTART.DEF
+!@ CPU = yes;  ! log show simulation times
+!@ NDS = yes;  ! no displays
+!@ Extrapolation accuracy file = NO ; ! No XAC file
+!@ !servants=1; ! use 2 processors at once, if possible
+!@ file GTAPSUM = SUMMARY.har;
+!@ file WELVIEW = DECOMP.har;
+!@ file GTAPVOL = VOLUME.har;
+!@ end of CMFSTART part

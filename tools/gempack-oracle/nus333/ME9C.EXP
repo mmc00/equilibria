@@ -1,0 +1,68 @@
+file gtapPARM = climatechange.prm;
+Verbal Description =
+ME 9C- 2010-2050 with climate change effects on agriculture;
+Method = Gragg;
+Steps = 6 8 10;
+automatic accuracy = yes;
+accuracy figures = 4;
+accuracy percent = 80;
+minimum subinterval length =  1.0E-0003;
+minimum subinterval fails = stop;
+accuracy criterion = Data;
+subintervals = 2;
+! Standard GE closure for GTAPUv7: psave varies by region, pfactwld is numeraire
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack 
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc 
+          tpreg tm tms tx txs
+          qe
+          qesf
+          atall avaall tfe tfd tfm tgd tgm tpdall tpmall tid tim;
+Rest endogenous;
+! Climate change shock to agricultural land area and yields
+ Shock qe("LAND","USA") = 10.07;
+ Shock qe("LAND","ROW") = 15.4; 
+ Shock aoall("AGR",REG) = uniform -11;
+
+! Other baseline shocks
+
+ !Shock qgdp("USA") = 109.6;
+ !Shock qgdp("ROW") = 284.5;
+
+Shock aoreg("USA") = 31.94;
+Shock aoreg("ROW") = 42.31;
+
+ Shock pop("USA") = 32.3;
+ Shock pop("ROW") = 37.3;
+
+ Shock qe("LABOR","USA") = 24.1;
+ Shock qe("LABOR","ROW") = 38.4;
+
+ Shock qe("CAPITAL","USA") = 60.6;
+ Shock qe("CAPITAL","ROW") = 213.1;
+
+
+
+!@ contents of CMFStart when this EXP file was last saved
+!@ below is a record only....not read by RunGTAP
+!@ RunGTAP reads from the actual CMFSTART file
+!@ ! If a version has no CMFSTART file of its own
+!@ ! RunGTAP creates one by copying the supplied file CMFSTART.DEF
+!@ CPU = yes;  ! log show simulation times
+!@ NDS = yes;  ! no displays
+!@ Extrapolation accuracy file = NO ; ! No XAC file
+!@ !servants=1; ! use 2 processors at once, if possible
+!@ file GTAPSUM = SUMMARY.har;
+!@ file WELVIEW = DECOMP.har;
+!@ file GTAPVOL = GTAPVol.har;
+!@ end of CMFSTART part

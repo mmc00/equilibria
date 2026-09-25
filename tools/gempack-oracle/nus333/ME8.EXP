@@ -1,0 +1,56 @@
+file gtapPARM = ballard.prm;
+Verbal Description =
+ME8 - 1% change in taxes to replicate Ballard, Shoven and Whalley;
+Method = Gragg;
+Steps = 2 4 6;
+automatic accuracy = no;
+subintervals = 1;
+! Standard GE closure for GTAPUv7: psave varies by region, pfactwld is numeraire
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack 
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc 
+          tpreg tm tms tx txs
+          qe
+          qesf
+          atall avaall tfe tfd tfm tgd tgm tpdall tpmall tid tim;
+Rest endogenous;
+! MODEL EXERCISE 8 - The Marginal Welfare Burden of U.S. Taxes
+! SHOCK ALL US TAXES By 1%
+
+ Shock tfe(ENDW,ACTS,"USA") = rate% 1 from file tfe.shk;
+ Shock tfd(COMM,ACTS,"USA") = rate% 1 from file tfd.shk;
+ Shock tfm(COMM,ACTS,"USA") = rate% 1 from file tfm.shk;
+ Shock tgd(COMM,"USA") = rate% 1 from file tgd.shk;
+ Shock tgm(COMM,"USA") = rate% 1 from file tgm.shk;
+ Shock to(COMM,ACTS,"USA") = rate% 1 from file to.shk;
+ Shock tpdall(COMM,"USA") = rate% 1 from file tpdall.shk;
+ Shock tpmall(COMM,"USA") = rate% 1 from file tpmall.shk;
+ Shock tinc(ENDW,ACTS,"USA") = rate% 1 from file tinc.shk;
+ Shock tms(COMM,"ROW","USA") = rate% 1 from file tms.shk; 
+ Shock txs(COMM,"USA","ROW") = rate% 1 from file txs.shk;
+
+
+
+!@ contents of CMFStart when this EXP file was last saved
+!@ below is a record only....not read by RunGTAP
+!@ RunGTAP reads from the actual CMFSTART file
+!@ ! If a version has no CMFSTART file of its own
+!@ ! RunGTAP creates one by copying the supplied file CMFSTART.DEF
+!@ CPU = yes;  ! log show simulation times
+!@ NDS = yes;  ! no displays
+!@ Extrapolation accuracy file = NO ; ! No XAC file
+!@ !servants=1; ! use 2 processors at once, if possible
+!@ file GTAPSUM = SUMMARY.har;
+!@ file WELVIEW = DECOMP.har;
+!@ file GTAPVOL = GTAPVol.har;
+!@ end of CMFSTART part
