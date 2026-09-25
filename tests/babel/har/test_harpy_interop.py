@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har import HarWriter, read_har, write_har
+from equilibria.babel.har.symbols import HeaderArray
 
 harpy = pytest.importorskip(
     "harpy",
@@ -76,3 +77,36 @@ def test_harpy_reads_writer_roundtrip_gtap_basedata(tmp_path: Path):
     arr = np.asarray(ha["array"])
     assert arr.ndim == 2
     assert arr.size > 0
+
+
+def test_2ifull_is_readable_by_harpy(tmp_path: Path) -> None:
+    """2IFULL headers we emit must load in harpy3, at any 2-D shape.
+
+    Issue #86: the meta record's rank slot at byte 80 was written as 0 so that
+    rows/cols would land where our own reader looked. GEMPACK requires
+    84 + 4*rank == len(meta), so harpy rejected every 2IFULL we wrote with
+    "corrupted at dimensions in second Record" -- while our reader round-tripped
+    them happily. The data record's 7-int prefix was transposed for the same
+    reason: reader and writer agreed with each other and with nothing else.
+
+    Non-square shapes are the point. With cols == 1 a transposed prefix is
+    indistinguishable from a correct one, and every 2IFULL in the GEMPACK files
+    on hand is N x 1, so only harpy can tell the two apart.
+    """
+    for shape in [(3, 4), (1, 1), (5, 1), (2, 7)]:
+        arr = np.arange(1, int(np.prod(shape)) + 1, dtype=np.int32).reshape(shape)
+        ha = HeaderArray(
+            name="TEST",
+            coeff_name="TEST",
+            long_name=f"2IFULL {shape}",
+            array=arr,
+            set_names=[],
+            set_elements=[],
+        )
+        out = tmp_path / f"i{shape[0]}x{shape[1]}.har"
+        write_har(out, {"TEST": ha})
+
+        back = harpy.HarFileObj.loadFromDisk(str(out)).getHeaderArrayObj("TEST")
+        got = np.asarray(back["array"])
+        assert got.shape == arr.shape, f"{shape}: harpy leyo {got.shape}"
+        np.testing.assert_array_equal(got.astype(np.int32), arr)
