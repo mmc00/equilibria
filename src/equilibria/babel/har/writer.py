@@ -115,6 +115,16 @@ def _looks_like_1cfull(ha: HeaderArray) -> bool:
     )
 
 
+def _looks_like_2rfull(ha: HeaderArray) -> bool:
+    """True for the shape a 2RFULL comes back as: a 2-D array with no sets.
+
+    Callers reach this only inside the float branch, so dtype is not re-tested
+    here. See README limitation 3 for why the whole shape is refused instead
+    of guessing which on-disk type it came from.
+    """
+    return ha.array.ndim == 2 and not ha.set_names
+
+
 # ── Dispatch ─────────────────────────────────────────────────────────────────
 
 
@@ -132,6 +142,17 @@ def _emit_header(
     if ha.set_names:
         _validate_array_header(name, ha)
     if ha.array.dtype in (np.float32, np.float64):
+        # There is no _write_2rfull. Falling through would emit the header as
+        # REFULL -- a DIFFERENT on-disk type -- which our own reader accepts,
+        # so nothing downstream notices the substitution. Refuse instead of
+        # changing the type silently.
+        if _looks_like_2rfull(ha):
+            raise NotImplementedError(
+                f"{name!r}: writing 2RFULL (2-D dense real, "
+                f"shape={ha.array.shape}) is not implemented. Falling back to "
+                f"REFULL would change the header's on-disk type. Read-only "
+                f"support: see _read_2rfull in reader.py."
+            )
         if sparse:
             _write_respse(out, name, ha)
         else:
@@ -217,7 +238,17 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     Layout:
       name record (4 bytes)
       meta record (PAD + "2IFULL" + long_name(70) + filler + rows + cols)
-      data record (PAD + 1 + rows*cols * int32, Fortran order)
+      data record (PAD + 7 int32 of block geometry + rows*cols * int32,
+                   Fortran order)
+
+    The 7-int prefix carries the array bounds and the bounds of the block in
+    this record, for a single full block.
+
+
+    The (cols, rows, ...) order is NOT pinned down: every 2IFULL header in
+    the GEMPACK files on hand is N x 1, so it cannot be told apart from
+    (rows, cols, ...), and the one real 0 x 0 does not match this formula.
+    See issue #86 -- closing it needs harpy to accept our output.
     """
     if ha.array.dtype != np.int32:
         raise TypeError(
@@ -237,7 +268,8 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     flat = ha.array.flatten(order="F").astype("<i4")
     data = bytearray()
     data.extend(wire.PAD)
-    data.extend(wire.INT.pack(1))
+    for v in (cols, rows, 1, cols, rows, 1, 1):
+        data.extend(wire.INT.pack(v))
     data.extend(flat.tobytes())
     wire.write_record(out, bytes(data))
 

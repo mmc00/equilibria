@@ -21,7 +21,7 @@ from:
 imported by any `equilibria` source.
 
 The interoperability constants used here (Fortran unformatted record framing,
-the `1CFULL` / `REFULL` / `RESPSE` / `2IFULL` type tokens, etc.) are the wire
+the `1CFULL` / `REFULL` / `RESPSE` / `2IFULL` / `2RFULL` type tokens, etc.) are the wire
 format itself — not copyrightable expression.
 
 Distributed under the MIT License, same as the rest of `equilibria`. See the
@@ -35,6 +35,7 @@ top-level `NOTICE` file for the full statement.
 | `REFULL` | Real dense N-D array           | Repeated set names (e.g. REG×REG) OK     |
 | `RESPSE` | Real sparse N-D array          | 1-based Fortran flat indices             |
 | `2IFULL` | 2-D integer dense array        | Hard `TypeError` for non-`int32` dtype   |
+| `2RFULL` | 2-D real dense array           | Read-only; see limitation 3 below        |
 
 Reader validated header-by-header against `harpy3` on the full GTAP NUS333
 and 9×10 datasets (182 headers total, exact match).
@@ -131,6 +132,14 @@ read:
 2. **Sparse vs dense storage choice** — GEMPACK picks `RESPSE` vs
    `REFULL` via internal heuristics; `read_har` densifies on load, so
    the signal is gone by the time `write_har` sees the data.
+
+3. **Set-less 2-D float arrays cannot be written** — GEMPACK stores `.sl4`
+   payloads as `2RFULL` and benchmark scalars as `REFULL`, both as float
+   arrays with no sets (`UVAL` and `SHOC` are 1×1 `2RFULL`; `DVER` is
+   `REFULL`). The shape therefore says nothing about the on-disk type, and
+   `HeaderArray` does not carry the type it was read as, so the writer
+   refuses the whole shape rather than pick one and change the type
+   silently. Reading is unaffected.
 
 These divergences are documented as `xfail`s in
 `tests/babel/har/test_byte_exact.py` (one per fixture) with sibling
