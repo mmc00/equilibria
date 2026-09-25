@@ -27,7 +27,6 @@ BLOCK_HEADER_LEN = 64  # per-block header preceding each REFULL data block
 # 2-D dense data records (2IFULL and 2RFULL alike) prefix the payload with
 # pad(4) + 7 int32 of block geometry, so the values start at byte 32.
 DENSE_2D_DATA_OFFSET = 32
-DENSE_2D_PREFIX_INTS = 7
 
 # Type tokens — exactly 6 ASCII bytes, fixed
 TOKEN_1CFULL = "1CFULL"

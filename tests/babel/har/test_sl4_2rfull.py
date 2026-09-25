@@ -16,15 +16,15 @@ El oraculo es un .sl4 producido por GEMPACK 11.3 / sltoht 5.53.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from equilibria.babel.har import read_har
+from equilibria.babel.har import read_har, write_har
 
-SL4 = (
-    __import__("pathlib").Path(__file__).resolve().parents[3]
-    / "tools/gempack-oracle/out/TBL45A/TBL45A.sl4"
-)
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SL4 = REPO_ROOT / "tools/gempack-oracle/out/TBL45A/TBL45A.sl4"
 
 # Los tests que leen el .sl4 necesitan la corrida de GEMPACK, que no esta en
 # el repo. El round-trip del escritor NO la necesita y debe correr siempre:
@@ -101,17 +101,13 @@ def test_levels_and_percent_agree() -> None:
     np.testing.assert_allclose(pct, c[:n][nz], atol=1e-4)
 
 
-def test_2ifull_roundtrip_matches_gempack_prefix() -> None:
+def test_2ifull_roundtrip_matches_gempack_prefix(tmp_path: Path) -> None:
     """Escribir y releer un 2IFULL conserva los valores.
 
     Con el escritor emitiendo el prefijo corto y el lector leyendo desde 32
     esto se rompia, que es justo lo que hay que evitar: el par interno tiene
     que hablar el formato de GEMPACK, no uno propio.
     """
-    import tempfile
-    from pathlib import Path
-
-    from equilibria.babel.har import write_har
     from equilibria.babel.har.symbols import HeaderArray
 
     arr = np.arange(1, 13, dtype=np.int32).reshape((3, 4))
@@ -123,46 +119,66 @@ def test_2ifull_roundtrip_matches_gempack_prefix() -> None:
         set_names=[],
         set_elements=[],
     )
-    with tempfile.TemporaryDirectory() as td:
-        p = Path(td) / "t.har"
-        write_har(p, {"TEST": ha})
-        back = read_har(p)
-    np.testing.assert_array_equal(back["TEST"].array, arr)
+    p = tmp_path / "t.har"
+    write_har(p, {"TEST": ha})
+    np.testing.assert_array_equal(read_har(p)["TEST"].array, arr)
 
 
 @needs_sl4
-def test_writing_2rfull_raises_instead_of_losing_data() -> None:
+def test_writing_2rfull_raises_instead_of_losing_data(tmp_path: Path) -> None:
     """Re-escribir un .sl4 perdia 1211 de 1212 valores sin avisar.
 
     No hay _write_2rfull; el enrutador mandaba los float 2-D a _write_refull,
     cuyo data record guarda solo el primer valor. write_har devolvia OK.
     """
-    import tempfile
-    from pathlib import Path
-
-    from equilibria.babel.har import write_har
 
     d = read_har(SL4)
     assert np.asarray(d["CUMS"].array).size > 1000, "CUMS deberia traer >1000 valores"
-    with tempfile.TemporaryDirectory() as td:
-        with pytest.raises(NotImplementedError, match="2RFULL"):
-            write_har(Path(td) / "rt.har", d)
+    with pytest.raises(NotImplementedError, match="2RFULL"):
+        write_har(tmp_path / "rt.har", d)
+
+
+def test_set_less_float_roundtrips_at_every_rank(tmp_path: Path) -> None:
+    """Un REFULL sin sets debe releerse completo, cualquiera sea su rango.
+
+    _read_refull derivaba la cantidad de valores de los SETS: sin sets daba
+    n == 1, asi que devolvia el primer valor y descartaba el resto -- aunque
+    el escritor los habia puesto todos en disco. La forma real solo vive en
+    el dim-summary record, y de ahi se recupera.
+
+    No necesita la corrida de GEMPACK: arma los arrays a mano.
+    """
+    from equilibria.babel.har.symbols import HeaderArray
+
+    # 2-D sin sets queda afuera a proposito: esa forma es indistinguible de
+    # un 2RFULL, asi que el escritor la rechaza (ver el test siguiente).
+    for shape in [(5,), (2, 2, 2), (7,), (2, 3, 4)]:
+        arr = np.arange(1, int(np.prod(shape)) + 1, dtype=np.float32).reshape(shape)
+        ha = HeaderArray(
+            name="T",
+            coeff_name="T",
+            long_name=f"set-less float {shape}",
+            array=arr,
+            set_names=[],
+            set_elements=[],
+        )
+        out = tmp_path / f"r{len(shape)}_{arr.size}.har"
+        write_har(out, {"T": ha})
+        back = np.asarray(read_har(out)["T"].array)
+        assert back.shape == arr.shape, f"{shape}: releido como {back.shape}"
+        np.testing.assert_allclose(back, arr)
 
 
 @needs_sl4
-def test_float_scalar_still_writes_through_refull() -> None:
-    """El corte no debe alcanzar a los escalares: GEMPACK los guarda como REFULL."""
-    import tempfile
-    from pathlib import Path
+def test_writing_2rfull_would_change_the_on_disk_type(tmp_path: Path) -> None:
+    """UVAL es 2RFULL 1x1 en el .sl4; escribirlo como REFULL cambiaria el tipo.
 
-    from equilibria.babel.har import write_har
-
+    El corte no puede ser por tamano: GEMPACK guarda UVAL y SHOC (1x1) como
+    2RFULL y el escalar DVER de default.prm como REFULL, asi que la forma no
+    dice nada del tipo. Rechazar es lo unico honesto mientras no haya
+    _write_2rfull.
+    """
     d = read_har(SL4)
-    only_scalar = {"UVAL": d["UVAL"]}
-    with tempfile.TemporaryDirectory() as td:
-        out = Path(td) / "scalar.har"
-        write_har(out, only_scalar)
-        back = read_har(out)
-    assert float(np.asarray(back["UVAL"].array).ravel()[0]) == pytest.approx(
-        0.1, abs=1e-7
-    )
+    assert np.asarray(d["UVAL"].array).shape == (1, 1)
+    with pytest.raises(NotImplementedError, match="2RFULL"):
+        write_har(tmp_path / "uval.har", {"UVAL": d["UVAL"]})

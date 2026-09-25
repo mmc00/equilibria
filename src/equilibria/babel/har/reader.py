@@ -159,6 +159,23 @@ def _read_refull(
     }
     set_elements = [elems_by_name[sn] for sn in set_names]
     shape = tuple(len(s) for s in set_elements)
+    if not shape:
+        # A set-less REFULL carries its real shape only in the dim-summary
+        # record: pad(4) + ndim + rank slot + 7 dims. Deriving the count from
+        # the sets alone gives n == 1, which returned the first value of a
+        # longer array and silently discarded the rest.
+        #
+        # Only take over when the array really holds more than one value:
+        # GEMPACK declares genuine scalars with a rank of its own choosing
+        # (DVER in default.prm is ndim=3, dims (1,1,1)), and those have always
+        # been handed back as flat scalars. Reshaping them to (1,1,1) would
+        # change a shape the golden files pin down, for no gain.
+        summary = records[i + 2 + n_unique]
+        rank = _INT.unpack_from(summary, 4)[0]
+        if rank > 0:
+            dims = tuple(int(d) for d in struct.unpack_from(f"<{rank}i", summary, 12))
+            if int(np.prod(dims)) > 1:
+                shape = dims
     n = int(np.prod(shape)) if shape else 1
     # GEMPACK splits large arrays across multiple records when the data exceeds
     # one record's capacity (~32 KB). Every data block after the first is preceded

@@ -106,6 +106,24 @@ def _partition_sets_first(
     return sets, arrays
 
 
+def _looks_like_2rfull(ha: HeaderArray) -> bool:
+    """True for a header that read_har produced from a 2RFULL.
+
+    That reader always yields a 2-D float array with no sets (see
+    _read_2rfull), and GEMPACK uses the type for .sl4 payloads of every size
+    -- UVAL and SHOC are 1x1 2RFULL in a real .sl4, while the scalar DVER in
+    default.prm is REFULL. So the shape says nothing about the type: any
+    set-less 2-D float may have come from either, and only the source file
+    knows. HeaderArray does not carry the type it was read as.
+    """
+    return (
+        ha.array.dtype in (np.float32, np.float64)
+        and ha.array.ndim == 2
+        and not ha.set_names
+        and not ha.set_elements
+    )
+
+
 def _looks_like_1cfull(ha: HeaderArray) -> bool:
     return (
         ha.array.ndim == 1
@@ -132,19 +150,16 @@ def _emit_header(
     if ha.set_names:
         _validate_array_header(name, ha)
     if ha.array.dtype in (np.float32, np.float64):
-        # A 2-D float array with no set names is how read_har hands back a
-        # 2RFULL header (the type .sl4 solution files use). There is no
-        # _write_2rfull yet, and _write_refull would emit a DIFFERENT type
-        # whose data record keeps only the first value: reading a .sl4 and
-        # writing it back silently dropped 1211 of 1212 CUMS values. Fail
-        # loudly instead of degrading; scalars stay on the REFULL path,
-        # which is what GEMPACK uses for them (e.g. DVER).
-        if ha.array.ndim == 2 and not ha.set_names and ha.array.size > 1:
+        # There is no _write_2rfull. Falling through would emit the header as
+        # REFULL -- a DIFFERENT on-disk type -- which our own reader accepts,
+        # so nothing downstream notices the substitution. Refuse instead of
+        # changing the type silently.
+        if _looks_like_2rfull(ha):
             raise NotImplementedError(
                 f"{name!r}: writing 2RFULL (2-D dense real, "
-                f"shape={ha.array.shape}) is not implemented. Routing it to "
-                f"REFULL would keep only the first of {ha.array.size} values. "
-                f"Read-only support: see _read_2rfull in reader.py."
+                f"shape={ha.array.shape}) is not implemented. Falling back to "
+                f"REFULL would change the header's on-disk type. Read-only "
+                f"support: see _read_2rfull in reader.py."
             )
         if sparse:
             _write_respse(out, name, ha)
@@ -237,18 +252,11 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     The 7-int prefix carries the array bounds and the bounds of the block in
     this record, for a single full block.
 
-    CAVEAT on the (cols, rows, ...) order: every 2IFULL header in the GEMPACK
-    files on hand is N x 1 (1272 of them, across .prm/.har/.sl4), plus one
-    0 x 0 marker. With cols == 1 the order cannot be told apart from
-    (rows, cols, ...), so it is NOT pinned down by that evidence, and the
-    0 x 0 case does not match this formula (GEMPACK writes
-    (1, 0, 0, 1, 0, 1, 0)). Arrays with rows > 1 and cols > 1 may therefore
-    be written transposed. The round-trip test cannot catch it: reader and
-    writer would agree with each other either way. Pinning it down needs a
-    real GEMPACK file holding such a header, or harpy accepting our output --
-    which today it does not, for a separate preexisting reason (the meta
-    record's rank field at byte 80 is written as 0; GEMPACK requires
-    84 + 4*rank == len(meta)).
+
+    The (cols, rows, ...) order is NOT pinned down: every 2IFULL header in
+    the GEMPACK files on hand is N x 1, so it cannot be told apart from
+    (rows, cols, ...), and the one real 0 x 0 does not match this formula.
+    See issue #86 -- closing it needs harpy to accept our output.
     """
     if ha.array.dtype != np.int32:
         raise TypeError(
@@ -268,9 +276,7 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     flat = ha.array.flatten(order="F").astype("<i4")
     data = bytearray()
     data.extend(wire.PAD)
-    geometry = (cols, rows, 1, cols, rows, 1, 1)
-    assert len(geometry) == wire.DENSE_2D_PREFIX_INTS
-    for v in geometry:
+    for v in (cols, rows, 1, cols, rows, 1, 1):
         data.extend(wire.INT.pack(v))
     data.extend(flat.tobytes())
     wire.write_record(out, bytes(data))
