@@ -217,7 +217,14 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     Layout:
       name record (4 bytes)
       meta record (PAD + "2IFULL" + long_name(70) + filler + rows + cols)
-      data record (PAD + 1 + rows*cols * int32, Fortran order)
+      data record (PAD + 7 int32 of block geometry + rows*cols * int32,
+                   Fortran order)
+
+    The 7-int prefix is what GEMPACK itself writes: (cols, rows, 1, cols,
+    rows, 1, 1) — the array bounds and the bounds of the block in this
+    record, for a single full block. Verified against nus333/default.prm
+    (header RDLT, 1x1 -> all ones) and a GEMPACK 11.3 .sl4 (header VNCP,
+    263x1 -> 1,263,1,1,263,1,1).
     """
     if ha.array.dtype != np.int32:
         raise TypeError(
@@ -237,7 +244,8 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     flat = ha.array.flatten(order="F").astype("<i4")
     data = bytearray()
     data.extend(wire.PAD)
-    data.extend(wire.INT.pack(1))
+    for v in (cols, rows, 1, cols, rows, 1, 1):
+        data.extend(wire.INT.pack(v))
     data.extend(flat.tobytes())
     wire.write_record(out, bytes(data))
 

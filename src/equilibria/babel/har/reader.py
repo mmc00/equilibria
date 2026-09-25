@@ -52,6 +52,9 @@ from equilibria.babel.har.wire import (
     read_set_element_record as _read_set_element_record,
 )
 
+# 2RFULL data records prefix the reals with pad(4) + 7 int32 of dimensions.
+_2RFULL_DATA_OFFSET = 32
+
 
 def _read_header(records: list[bytes], i: int) -> tuple[HeaderArray | None, int]:
     """Parse one header block starting at `records[i]`. Returns (header, next_i)."""
@@ -77,6 +80,8 @@ def _read_header(records: list[bytes], i: int) -> tuple[HeaderArray | None, int]
         return _read_respse(name, long_name, records, i + 1)
     if type_token == "2IFULL":
         return _read_2ifull(name, long_name, records, i + 1)
+    if type_token == "2RFULL":
+        return _read_2rfull(name, long_name, records, i + 1)
 
     raise NotImplementedError(
         f"HAR header {name!r} uses unsupported type {type_token!r}"
@@ -262,8 +267,53 @@ def _read_2ifull(
     cols = _INT.unpack_from(meta, 88)[0]
     data_rec = records[i + 1]
     n = rows * cols
-    ints = struct.unpack_from(f"<{n}i", data_rec, 8)
+    # Same prefix as 2RFULL: pad(4) + 7 int32 of dimension bookkeeping, so the
+    # payload starts at offset 32, not 8. Reading from 8 silently prepends six
+    # dimension integers to the data and drops the last six values; verified
+    # against .sl4 pointer arrays (PCUM/VNCP/PLEV), whose GEMPACK-documented
+    # first entries are 1/6/1 and only decode correctly at offset 32.
+    ints = struct.unpack_from(f"<{n}i", data_rec, _2RFULL_DATA_OFFSET)
     arr = np.array(ints, dtype=np.int32).reshape((rows, cols), order="F")
+    return (
+        HeaderArray(
+            name=name,
+            coeff_name=name,
+            long_name=long_name,
+            array=arr,
+            set_names=[],
+            set_elements=[],
+        ),
+        i + 2,
+    )
+
+
+def _read_2rfull(
+    name: str, long_name: str, records: list[bytes], i: int
+) -> tuple[HeaderArray, int]:
+    """2RFULL: a 2-D real dense array, as written into .sl4 solution files.
+
+    Same meta layout as 2IFULL (trailing ints hold rows, cols), but the data
+    record carries 4-byte reals behind a longer prefix: pad(4) + 7 int32 of
+    dimension bookkeeping, so the payload starts at offset 32.
+
+    Verified against GEMPACK 11.3 .sl4 output (sltoht 5.53): header UVAL is
+    1x1 and its single value sits at offset 32 (0.1, the Harwell U parameter);
+    CUMS/LEVB/LEVA carry rows*cols floats with payload length exactly
+    4*rows*cols.
+    """
+    meta = records[i]
+    rows = _INT.unpack_from(meta, 84)[0]
+    cols = _INT.unpack_from(meta, 88)[0]
+    data_rec = records[i + 1]
+    n = rows * cols
+    payload = len(data_rec) - _2RFULL_DATA_OFFSET
+    if payload < 4 * n:
+        raise ValueError(
+            f"HAR header {name!r} (2RFULL): data record holds {payload} bytes, "
+            f"need {4 * n} for {rows}x{cols}"
+        )
+    reals = struct.unpack_from(f"<{n}f", data_rec, _2RFULL_DATA_OFFSET)
+    arr = np.array(reals, dtype=np.float32).reshape((rows, cols), order="F")
     return (
         HeaderArray(
             name=name,
