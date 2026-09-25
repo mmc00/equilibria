@@ -128,3 +128,41 @@ def test_2ifull_roundtrip_matches_gempack_prefix() -> None:
         write_har(p, {"TEST": ha})
         back = read_har(p)
     np.testing.assert_array_equal(back["TEST"].array, arr)
+
+
+@needs_sl4
+def test_writing_2rfull_raises_instead_of_losing_data() -> None:
+    """Re-escribir un .sl4 perdia 1211 de 1212 valores sin avisar.
+
+    No hay _write_2rfull; el enrutador mandaba los float 2-D a _write_refull,
+    cuyo data record guarda solo el primer valor. write_har devolvia OK.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from equilibria.babel.har import write_har
+
+    d = read_har(SL4)
+    assert np.asarray(d["CUMS"].array).size > 1000, "CUMS deberia traer >1000 valores"
+    with tempfile.TemporaryDirectory() as td:
+        with pytest.raises(NotImplementedError, match="2RFULL"):
+            write_har(Path(td) / "rt.har", d)
+
+
+@needs_sl4
+def test_float_scalar_still_writes_through_refull() -> None:
+    """El corte no debe alcanzar a los escalares: GEMPACK los guarda como REFULL."""
+    import tempfile
+    from pathlib import Path
+
+    from equilibria.babel.har import write_har
+
+    d = read_har(SL4)
+    only_scalar = {"UVAL": d["UVAL"]}
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td) / "scalar.har"
+        write_har(out, only_scalar)
+        back = read_har(out)
+    assert float(np.asarray(back["UVAL"].array).ravel()[0]) == pytest.approx(
+        0.1, abs=1e-7
+    )

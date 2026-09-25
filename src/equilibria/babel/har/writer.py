@@ -132,6 +132,20 @@ def _emit_header(
     if ha.set_names:
         _validate_array_header(name, ha)
     if ha.array.dtype in (np.float32, np.float64):
+        # A 2-D float array with no set names is how read_har hands back a
+        # 2RFULL header (the type .sl4 solution files use). There is no
+        # _write_2rfull yet, and _write_refull would emit a DIFFERENT type
+        # whose data record keeps only the first value: reading a .sl4 and
+        # writing it back silently dropped 1211 of 1212 CUMS values. Fail
+        # loudly instead of degrading; scalars stay on the REFULL path,
+        # which is what GEMPACK uses for them (e.g. DVER).
+        if ha.array.ndim == 2 and not ha.set_names and ha.array.size > 1:
+            raise NotImplementedError(
+                f"{name!r}: writing 2RFULL (2-D dense real, "
+                f"shape={ha.array.shape}) is not implemented. Routing it to "
+                f"REFULL would keep only the first of {ha.array.size} values. "
+                f"Read-only support: see _read_2rfull in reader.py."
+            )
         if sparse:
             _write_respse(out, name, ha)
         else:
@@ -220,11 +234,21 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
       data record (PAD + 7 int32 of block geometry + rows*cols * int32,
                    Fortran order)
 
-    The 7-int prefix is what GEMPACK itself writes: (cols, rows, 1, cols,
-    rows, 1, 1) — the array bounds and the bounds of the block in this
-    record, for a single full block. Verified against nus333/default.prm
-    (header RDLT, 1x1 -> all ones) and a GEMPACK 11.3 .sl4 (header VNCP,
-    263x1 -> 1,263,1,1,263,1,1).
+    The 7-int prefix carries the array bounds and the bounds of the block in
+    this record, for a single full block.
+
+    CAVEAT on the (cols, rows, ...) order: every 2IFULL header in the GEMPACK
+    files on hand is N x 1 (1272 of them, across .prm/.har/.sl4), plus one
+    0 x 0 marker. With cols == 1 the order cannot be told apart from
+    (rows, cols, ...), so it is NOT pinned down by that evidence, and the
+    0 x 0 case does not match this formula (GEMPACK writes
+    (1, 0, 0, 1, 0, 1, 0)). Arrays with rows > 1 and cols > 1 may therefore
+    be written transposed. The round-trip test cannot catch it: reader and
+    writer would agree with each other either way. Pinning it down needs a
+    real GEMPACK file holding such a header, or harpy accepting our output --
+    which today it does not, for a separate preexisting reason (the meta
+    record's rank field at byte 80 is written as 0; GEMPACK requires
+    84 + 4*rank == len(meta)).
     """
     if ha.array.dtype != np.int32:
         raise TypeError(
@@ -244,7 +268,9 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     flat = ha.array.flatten(order="F").astype("<i4")
     data = bytearray()
     data.extend(wire.PAD)
-    for v in (cols, rows, 1, cols, rows, 1, 1):
+    geometry = (cols, rows, 1, cols, rows, 1, 1)
+    assert len(geometry) == wire.DENSE_2D_PREFIX_INTS
+    for v in geometry:
         data.extend(wire.INT.pack(v))
     data.extend(flat.tobytes())
     wire.write_record(out, bytes(data))
