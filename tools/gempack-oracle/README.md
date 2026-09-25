@@ -78,7 +78,7 @@ estándar; si alguno falla, quiero los otros 44.
 comparar sus niveles contra este base único no es válido — para esos hace falta
 un base por `.prm`. Está pendiente.
 
-## MEDIDO: 84 celdas, 0 difieren
+## MEDIDO: 97 celdas en 15 tablas, 0 difieren
 
 ```bash
 python tools/gempack-oracle/cmp_libro.py          # todas
@@ -98,36 +98,59 @@ python tools/gempack-oracle/cmp_libro.py 6.4      # una
 | 6.6 | 3 | 3 | 0 | 0 | 0,0642 | 0,0319 |
 | 6.7 | 3 | 3 | 0 | 0 | 0,1102 | 0,0485 |
 | 7.5 | 4 | 4 | 0 | 0 | 0,0819 | 0,0465 |
+| 7.7 | 6 | 6 | 0 | 0 | 0,0172 | 0,0050 |
 | 7.8 | 9 | 9 | 0 | 0 | 0,2795 | 0,0497 |
 | 7.9 | 2 | 2 | 0 | 0 | 0,0063 | 0,0035 |
-| **TOTAL** | **84** | **82** | **2** | **0** | **1,5672** | **0,0497** |
+| 9.4 | 7 | 7 | 0 | 0 | 0,1493 | 0,0498 |
+| **TOTAL** | **97** | **95** | **2** | **0** | **1,7337** | **0,0498** |
 
-`|dif|` media **0,0187**. La suma de 1,5672 sobre 84 celdas **no es error del
-modelo**: el libro publica 1 o 2 decimales, así que hasta media unidad del
-último decimal es redondeo de la fuente. La **peor celda es 0,0497** — nunca
-llega a 0,05, el umbral de las tablas de 1 decimal.
+`|dif|` media **0,0179**. La suma de 1,7337 **no es error del modelo**: el libro
+publica 1 o 2 decimales, así que hasta media unidad del último decimal es
+redondeo de la fuente. La **peor celda es 0,0498** — nunca llega a 0,05, el
+umbral de las tablas de 1 decimal.
 
-Contra el umbral estricto de cada tabla (0,005 para las de 2 decimales), sólo
-**2 celdas lo exceden**: 0,0058 y 0,0069, y son el ratio salario/renta de la
-5.4, la única fila cuya fórmula el propio libro declara *"approximately"*. No
-se aflojó la tolerancia: se marcan `aprox` y se cuentan aparte.
+Contra el umbral estricto de cada tabla, sólo **2 celdas lo exceden**: 0,0058 y
+0,0069 contra 0,005, y son el ratio salario/renta de la 5.4, la única fila cuya
+fórmula el propio libro declara *"approximately"*. No se aflojó la tolerancia:
+se marcan `aprox` y se cuentan aparte.
 
-## Cobertura: qué del libro se mide y qué no
+## Cobertura: las 28 tablas de resultados del libro
 
-El libro tiene **73 tablas numeradas**, pero la mayoría no son resultados de
-simulación (son datos del SAM, parámetros, ejercicios de práctica, esquemas).
-De las que sí reportan un experimento:
+El libro tiene 73 tablas numeradas, pero la mayoría no son simulaciones (datos
+del SAM, parámetros, ejercicios de práctica, esquemas). De las **28 que
+reportan un experimento**:
 
-| | tablas |
+**15 medidas — todas coinciden.** 4.5, 4.6, 5.4, 5.5, 6.2, 6.3, 6.4, 6.5, 6.6,
+6.7, 7.5, 7.7, 7.8, 7.9, 9.4.
+
+**3 que este dataset no permite medir** — y esto es la conclusión, no un
+pendiente:
+
+| tabla | por qué |
 |---|---|
-| **Medidas, todas coinciden** | 13 — 4.5, 4.6, 5.4, 5.5, 6.2–6.7, 7.5, 7.8, 7.9 |
-| Con `.EXP` pero **sin medir** | 3 — 7.7, 9.3, 9.4 (columnas que no son % change: participaciones base, niveles en $, descomposición de bienestar; 7.7 además corre con ESUBVA=4) |
-| Con `.EXP` que **no corre** | 2 — 5.3, 8.13 (`TBL53`, `TBL813`: sintaxis de shock del GUI de RunGTAP) |
-| **Sin `.EXP` en el dataset** | 10 — 5.6, 8.2, 8.3, 8.5, 8.7, 8.9, 8.11, 8.12, 8.14, 8.15 (el capítulo 8 casi entero) |
+| **9.3** | Sus tres columnas son **tres modelos distintos**: el libro dice *"base version and two versions with updated tax rates"*. El dataset trae un solo `.EXP` (`TBL93`, shock `ams=2`) y su `qxs[MFG,ROW,USA]` da **2,0031** contra 1,67 / 3,18 / 3,98 de las tres columnas — no coincide con ninguna. Haría falta los `.prm`/`.har` con las tasas rebalanceadas. |
+| **5.3** | El `.EXP` **no corre**: usa `= target% 5 from file tfd.shk`, sintaxis que resuelve la GUI de RunGTAP, no el ejecutable. GEMPACK corta con *"Shock value input 'target%' not as expected"*. |
+| **8.13** | Igual, con `= rate% 1 from file tpdall.shk`: *"Semantic error in Command file statement 19"*. |
 
-O sea: **13 de las 28 tablas de resultados del libro** están medidas. Las 15
-restantes no fallan — no se han comparado, y 10 de ellas necesitarían un `.EXP`
-que el dataset no trae.
+**10 sin `.EXP` en el dataset** — 5.6, 8.2, 8.3, 8.5, 8.7, 8.9, 8.11, 8.12,
+8.14, 8.15. El capítulo 8 casi entero (impuestos y bienestar). No hay nada que
+correr: el experimento no viene con los datos.
+
+### Las 2 que no corren son ARREGLABLES
+
+Los `.shk` que necesitan **sí están** en `nus333/`, con los valores ya
+calculados. Por ejemplo `tpdall.shk`:
+
+```
+ 3 2  real row_order;
+ -4.2836466     -0.98050290    ! %1=AGR
+ -9.1956644      -14.864902    ! %1=MFG
+-0.64833277      -5.0825901    ! %1=SER
+```
+
+Así que el arreglo es reemplazar `= rate% 1 from file X.shk` por el valor
+directo del `.shk`. No falta el dato — falta traducir la sintaxis de la GUI.
+Con `ME8` son 3 experimentos.
 
 ### ⚠️ La letra del `.EXP` NO sigue el orden de filas del libro
 

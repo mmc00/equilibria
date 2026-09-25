@@ -197,6 +197,18 @@ TABLAS: dict[str, dict] = {
             ("TBL78", "qxw", "SER|USA", -30.2, 1),
         ],
     },
+    "7.7": {
+        "pag": 234,
+        "desc": "+10% oferta de tierra de USA (modelo con ESUBVA=4)",
+        "celdas": [
+            ("TBL77", "qo", "AGR|USA", 0.37, 2),
+            ("TBL77", "qo", "MFG|USA", 0.02, 2),
+            ("TBL77", "qxw", "AGR|USA", 1.40, 2),
+            ("TBL77", "qxw", "MFG|USA", -0.01, 2),
+            ("TBL77", "qmw", "AGR|USA", -0.69, 2),
+            ("TBL77", "qmw", "MFG|USA", 0.03, 2),
+        ],
+    },
     "7.9": {
         "pag": 242,
         "desc": "+10% productividad en margenes de comercio (atd)",
@@ -205,6 +217,33 @@ TABLAS: dict[str, dict] = {
             ("TBL79", "qmw", "MFG|USA", 0.79, 2),
         ],
     },
+    "9.4": {
+        "pag": 285,
+        "desc": "regulacion de una externalidad negativa en MFG de USA",
+        "nota": "el libro rotula la fila de importaciones 'qiw'; la variable es qmw",
+        "celdas": [
+            ("TBL94", "qc", "MFG|USA", -1.0, 1),
+            # ps va sobre (COMM, ACTS, REG), no (COMM, REG)
+            ("TBL94", "ps", "MFG|MFG|USA", -1.2, 1),
+            ("TBL94", "pds", "MFG|USA", 1.0, 1),
+            ("TBL94", "qxw", "MFG|USA", 0.8, 1),
+            ("TBL94", "qmw", "MFG|USA", -1.9, 1),
+            ("TBL94", "qc", "AGR|USA", 1.4, 1),
+            ("TBL94", "qc", "SER|USA", 0.2, 1),
+        ],
+    },
+}
+
+# La 9.3 NO se puede medir con este dataset, y esa es la conclusion, no un
+# pendiente. Sus tres columnas son TRES MODELOS distintos -- el libro lo dice:
+# "base version and two versions with updated tax rates". El dataset trae un
+# solo .EXP (TBL93, shock ams=2) y su qxs[MFG|ROW|USA] da 2,0031 contra 1,67
+# / 3,18 / 3,98 de las tres columnas: no coincide con ninguna. Reproducirla
+# necesitaria los .prm/.har con las tasas rebalanceadas, que no estan.
+NO_MEDIBLES = {
+    "9.3": "tres columnas = tres modelos con tasas rebalanceadas; el dataset trae uno",
+    "5.3": "el .EXP no corre: sintaxis 'target% N from file' de la GUI de RunGTAP",
+    "8.13": "el .EXP no corre: sintaxis 'rate% N from file' de la GUI de RunGTAP",
 }
 
 
@@ -305,6 +344,11 @@ def main() -> int:
     print("La |dif| cruda no es error del modelo: el libro publica 1 o 2 decimales,")
     print("asi que hasta media unidad del ultimo decimal es redondeo de la fuente y")
     print("no se puede distinguir de una coincidencia exacta.")
+    if not solo:
+        print()
+        print("Tablas de resultados que este dataset NO permite medir:")
+        for tid, por_que in NO_MEDIBLES.items():
+            print(f"  {tid:<5} {por_que}")
     if faltan:
         print(f"\nno medidas ({len(faltan)}):")
         for x in faltan:
