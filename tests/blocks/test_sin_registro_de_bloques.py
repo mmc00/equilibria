@@ -59,11 +59,16 @@ def test_ningun_fichero_del_repo_menciona_el_registro():
     justo lo que el ADR pide que la gente escriba, y con subcadenas ponia la
     suite en rojo; por AST no. Y el uso REAL que rompio el CI si lo atrapa.
 
-    Techo medido de lo que este candado puede dar, reproducido y no deducido:
-    un registro con otro nombre (`BlockRegistryV2`), o este mismo montado
-    dinamicamente (`globals()["Block" + "Registry"] = _R`), pasa igualmente.
-    Un candado asi hace ruidoso el OLVIDO, no la intencion; la decision la
-    gobierna el ADR, no el test.
+    Cubre, medido probando cada caso: import directo, import con alias
+    (`as rb`), decorador cualificado (`@blocks.register_block`), definicion, y
+    el nombre como string en un `__all__` — que es como estaba declarado el
+    registro cuando se borro.
+
+    Techo medido, reproducido y no deducido: se le escapan un registro con otro
+    nombre (`BlockRegistryV2`), este mismo montado dinamicamente
+    (`globals()["Block" + "Registry"] = _R`) y un `getattr(mod, "get_registry")`
+    con el nombre partido. Los tres exigen intencion. Un candado asi hace
+    ruidoso el OLVIDO, no la intencion; la decision la gobierna el ADR.
     """
     import ast
     import pathlib
@@ -72,8 +77,13 @@ def test_ningun_fichero_del_repo_menciona_el_registro():
     # El unico fichero .py cuyo trabajo ES nombrar el registro borrado.
     permitidos = {raiz / "tests" / "blocks" / "test_sin_registro_de_bloques.py"}
     ignorados = {"node_modules", "site", "build", "dist"}
+    # Como en `test_layering.py`: una excepcion que ya no apunta a nada es un
+    # permiso fantasma que tapa regresiones. Si el test se renombra, salta aqui.
+    fantasma = [p for p in permitidos if not p.exists()]
+    assert not fantasma, f"excepciones que ya no existen: {fantasma}"
 
     infractores = []
+    no_parsean: list[pathlib.Path] = []
     for f in sorted(raiz.rglob("*.py")):
         if f in permitidos:
             continue
@@ -85,7 +95,12 @@ def test_ningun_fichero_del_repo_menciona_el_registro():
         try:
             arbol = ast.parse(f.read_text(encoding="utf-8", errors="replace"))
         except SyntaxError:
-            continue  # ficheros de fixture que no son Python valido
+            # Hoy solo cae aqui `scripts/gtap_julia/jparity.py` (un import
+            # intercalado, roto de verdad). Si algun dia cae un fichero que SI
+            # deberia revisarse, este candado callaria sobre el: por eso se
+            # anota y no se ignora en silencio.
+            no_parsean.append(f.relative_to(raiz))
+            continue
 
         usados = set()
         for n in ast.walk(arbol):
@@ -99,6 +114,16 @@ def test_ningun_fichero_del_repo_menciona_el_registro():
                 usados.add(n.attr)
             elif isinstance(n, ast.ClassDef | ast.FunctionDef):
                 usados.add(n.name)
+            elif isinstance(n, ast.Constant) and isinstance(n.value, str):
+                # Un nombre entre comillas en `__all__` reexporta igual que un
+                # import, y asi estaba declarado el registro cuando se borro:
+                # sin esto, reañadirlo al `__all__` no lo detectaria nadie
+                # (medido: el barrido de nodos sin `Constant` no lo veia).
+                # La prosa no molesta porque el cruce de mas abajo es por
+                # IGUALDAD, no por subcadena: un docstring que diga "antes
+                # existia un register_block" es un Constant, pero su texto
+                # entero no es igual al nombre.
+                usados.add(n.value)
 
         encontrados = sorted(usados & set(NOMBRES))
         if encontrados:
@@ -106,4 +131,11 @@ def test_ningun_fichero_del_repo_menciona_el_registro():
 
     assert not infractores, "el registro de bloques sigue vivo en:\n  " + "\n  ".join(
         infractores
+    )
+
+    # El candado no puede revisar lo que no parsea. Se fija la lista conocida
+    # para que un fichero nuevo sin revisar no pase inadvertido.
+    assert [p.as_posix() for p in no_parsean] == ["scripts/gtap_julia/jparity.py"], (
+        "cambio el conjunto de ficheros que no parsean; el candado no los mira:\n  "
+        + "\n  ".join(p.as_posix() for p in no_parsean)
     )
