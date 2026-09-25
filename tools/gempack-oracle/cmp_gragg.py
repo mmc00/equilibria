@@ -1,16 +1,27 @@
 #!/usr/bin/env python3
 """Johansen vs Gragg 2-4-6 contra la tabla 4.5 del libro, celda por celda.
 
-LA PREGUNTA: con Johansen 1 paso, GEMPACK reproduce 4 de las 6 celdas de la
-tabla 4.5 al cuarto decimal, pero MFG no:
+MEDIDO (2026-09-25): con Johansen 1 paso GEMPACK reproduce las SEIS celdas de
+la tabla 4.5/CDE exactamente -- diferencia 0,00 en las seis al redondear a los
+2 decimales que imprime el libro. Y la tercera columna del libro (qpa+ppa)
+tambien sale de sumar las dos primeras. El libro dice al pie: "We use the
+Johansen solution method". Coincide.
 
-                   GEMPACK/Johansen   libro    equilibria
-    ppa[MFG,USA]        -0,1972       -0,79      -0,9871
-    qpa[MFG,USA]         5,4572        4,44       4,2154
+Correr Gragg 2-4-6 lo CONFIRMA por contraste: aleja las 6 celdas (qpa[AGR]
+0,0005 -> 0,1524, ppa[SER] 0,0020 -> 0,1696). Si el libro fuera multi-paso,
+Gragg tendria que acercar, no alejar.
 
-La hipotesis es que el libro uso un metodo multi-paso y la brecha en MFG es
-error de linealizacion. Este script la MIDE: si al pasar a Gragg 2-4-6 MFG se
-acerca al libro, la hipotesis se sostiene; si no se mueve, queda refutada.
+Este script queda como el gate que lo verifica. El caso de uso vivo es
+comprobar que una corrida nueva sigue reproduciendo el libro, y medir el costo
+de cambiar de metodo.
+
+ADVERTENCIA sobre la fuente: los valores del libro de abajo salen de la tabla
+4.5 (pag. 127), leida del PDF. Un par "-0,79 / 4,44" circulo en notas previas
+como si fuera de esta tabla: NO lo es. El 4,44 es qc("MFG","USA") de la Tabla
+ME 3.1 (pag. 318 y clave de respuestas pag. 411), OTRO experimento -- un
+subsidio del 10% a la produccion de manufacturas de USA, no el shock de TFP en
+servicios. Y "-0,79" no aparece en el libro. Verificar contra el PDF antes de
+agregar una fila aca.
 
 Uso:
     python cmp_gragg.py                # TBL45A
@@ -33,9 +44,20 @@ from read_sl4 import SL4  # noqa: E402
 # 2 decimales es TODA la precision que da el libro -- una diferencia por
 # debajo de 0,005 no es medible contra esta fuente.
 LIBRO = {
+    # Tabla 4.5, bloque CDE (pag. 127). Leido del PDF, no de notas.
     "TBL45A": {
-        "ppa": {("AGR", "USA"): 0.59, ("MFG", "USA"): -0.79, ("SER", "USA"): -5.07},
-        "qpa": {("AGR", "USA"): 1.96, ("MFG", "USA"): 4.44, ("SER", "USA"): 9.66},
+        "ppa": {("AGR", "USA"): 0.59, ("MFG", "USA"): -0.20, ("SER", "USA"): -5.07},
+        "qpa": {("AGR", "USA"): 1.96, ("MFG", "USA"): 5.46, ("SER", "USA"): 9.66},
+    },
+    # Bloque CES (3x3ces.prm).
+    "TBL45B": {
+        "ppa": {("AGR", "USA"): 0.91, ("MFG", "USA"): -0.24, ("SER", "USA"): -5.19},
+        "qpa": {("AGR", "USA"): 6.22, ("MFG", "USA"): 6.80, ("SER", "USA"): 9.27},
+    },
+    # Bloque Cobb-Douglas (3x3CobbDouglas.prm).
+    "TBL45C": {
+        "ppa": {("AGR", "USA"): 0.64, ("MFG", "USA"): -0.18, ("SER", "USA"): -5.05},
+        "qpa": {("AGR", "USA"): 4.10, ("MFG", "USA"): 4.92, ("SER", "USA"): 9.78},
     },
 }
 
@@ -98,7 +120,9 @@ def main() -> int:
             dj, dg = abs(j[k] - b), abs(g[k] - b)
             # El libro trae 2 decimales: por debajo de 0,005 la diferencia
             # no es distinguible del redondeo de la fuente.
-            if dg < 0.005:
+            if dj < 0.005 and dg >= 0.005:
+                v = "JOHANSEN coincide"
+            elif dg < 0.005:
                 v = "Gragg coincide con el libro"
             elif dg < dj - 0.005:
                 v = f"Gragg ACERCA ({dj:.4f} -> {dg:.4f})"
@@ -113,19 +137,26 @@ def main() -> int:
         print()
 
     print("--- que contesta esto ---")
+    n_joh = sum(1 for v in veredicto if v.endswith("JOHANSEN coincide"))
+    n_gra = sum(1 for v in veredicto if "Gragg coincide" in v)
+    n_tot = len(veredicto)
+    print(
+        f"contra el libro: Johansen coincide en {n_joh}/{n_tot} celdas, "
+        f"Gragg en {n_gra}/{n_tot}."
+    )
     if not algo_se_movio:
-        print("Gragg NO movio ninguna celda mas de 0,005. El metodo de solucion")
-        print("NO explica la brecha de MFG: la hipotesis queda REFUTADA y hay")
-        print("que buscar la causa en otro lado (datos, parametros, o cierre).")
+        print("Gragg no movio ninguna celda mas de 0,005: el .cmf probablemente")
+        print("corrio Johansen igual. Revisa que tenga UNA linea Method = Gragg.")
+    elif n_joh > n_gra:
+        print("Johansen reproduce el libro mejor que Gragg, y el libro lo dice al")
+        print("pie de la tabla 4.5: 'We use the Johansen solution method'. El")
+        print("metodo multi-paso ALEJA, asi que no hay brecha que explicar por")
+        print("linealizacion. Si una celda no cierra, la causa esta en los datos,")
+        print("los parametros o el cierre -- no en el metodo.")
     else:
-        mfg = [v for v in veredicto if "MFG" in v]
-        print("Gragg SI movio resultados. Sobre MFG, que es la celda en disputa:")
-        for v in mfg:
-            print(f"  {v}")
-        print()
-        print("Si MFG coincide o acerca: el error de linealizacion de Johansen")
-        print("explica la brecha. Si aleja o no se mueve: no la explica, aunque")
-        print("otras celdas si se hayan movido.")
+        print("Gragg reproduce el libro mejor que Johansen, lo que CONTRADICE la")
+        print("nota al pie de la tabla 4.5. Antes de concluir nada, verifica que")
+        print("ambas corridas usen el mismo .prm y el mismo shock.")
     return 0
 
 

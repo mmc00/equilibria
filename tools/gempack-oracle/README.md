@@ -78,47 +78,63 @@ estándar; si alguno falla, quiero los otros 44.
 comparar sus niveles contra este base único no es válido — para esos hace falta
 un base por `.prm`. Está pendiente.
 
-## Gragg 2-4-6: medir el error de linealización
+## MEDIDO: el oráculo reproduce la tabla 4.5 al 100%
 
-Con `Method = Johansen; Steps = 1` (lo que traen los `.EXP`), TBL45A reproduce
-**4 de las 6 celdas** de la tabla 4.5 dentro del redondeo del libro, que trae dos
-decimales:
+Las **18 celdas** de la tabla 4.5 (pág. 127) —los tres bloques, CDE, CES y
+Cobb-Douglas— coinciden **exactamente** con GEMPACK/Johansen: diferencia
+**0,00 en las 18** al redondear a los 2 decimales que imprime el libro. La
+tercera columna del libro (`qpa+ppa`) también sale de sumar las dos primeras.
 
-| celda | GEMPACK/Johansen | libro | \|dif\| |
-|---|---|---|---|
-| `ppa[AGR,USA]` | 0,5884 | 0,59 | 0,0016 |
-| `ppa[SER,USA]` | −5,0720 | −5,07 | 0,0020 |
-| `qpa[AGR,USA]` | 1,9595 | 1,96 | 0,0005 |
-| `qpa[SER,USA]` | 9,6636 | 9,66 | 0,0036 |
-| **`ppa[MFG,USA]`** | **−0,1972** | **−0,79** | **0,5928** |
-| **`qpa[MFG,USA]`** | **5,4572** | **4,44** | **1,0172** |
+| | `ppa` AGR / MFG / SER | `qpa` AGR / MFG / SER |
+|---|---|---|
+| TBL45A (CDE) | 0,59 / −0,20 / −5,07 | 1,96 / 5,46 / 9,66 |
+| TBL45B (CES) | 0,91 / −0,24 / −5,19 | 6,22 / 6,80 / 9,27 |
+| TBL45C (C-D) | 0,64 / −0,18 / −5,05 | 4,10 / 4,92 / 9,78 |
 
-O sea: el libro SÍ es este GEMPACK con estos datos — cuatro celdas coinciden al
-cuarto decimal. Lo que no cierra es MFG, y sólo MFG.
+Verificado con `cmp_gragg.py` y contra el PDF del libro, no contra notas.
 
-La **hipótesis** —no el hallazgo— es que el libro corrió con un método multi-paso
-y la brecha de MFG es error de linealización de Johansen. Para medirla:
+### El método NO es la explicación de nada — medido por contraste
+
+El libro dice al pie de la tabla: *"We use the Johansen solution method"*.
+Correr Gragg 2-4-6 lo confirma: **aleja las 6 celdas** de TBL45A.
+
+| celda | Johansen | Gragg | libro | \|J−lib\| | \|G−lib\| |
+|---|---|---|---|---|---|
+| `ppa[AGR]` | 0,5884 | 0,6152 | 0,59 | 0,0016 | 0,0252 |
+| `ppa[MFG]` | −0,1972 | −0,2539 | −0,20 | 0,0028 | 0,0539 |
+| `ppa[SER]` | −5,0720 | −4,9004 | −5,07 | 0,0020 | 0,1696 |
+| `qpa[AGR]` | 1,9595 | 1,8076 | 1,96 | 0,0005 | 0,1524 |
+| `qpa[MFG]` | 5,4572 | 5,1434 | 5,46 | 0,0028 | 0,3166 |
+| `qpa[SER]` | 9,6636 | 9,5506 | 9,66 | 0,0036 | 0,1094 |
+
+Johansen **6/6**, Gragg **0/6**. Los ratios Gragg/Johansen van de 0,75 a 1,57
+—dispersos, no un factor común— así que Gragg sí aplica corrección no lineal
+genuina; simplemente el libro no la usó.
 
 ```bat
-REM  en Windows, tras 00-check-env.bat
 03-gragg.bat TBL45A
 ```
-
-y después, donde estén las dos corridas:
-
 ```bash
 python tools/gempack-oracle/cmp_gragg.py TBL45A
 ```
 
-`03-gragg.bat` escribe a `out-gragg\` para no pisar la corrida Johansen de `out\`,
-que es la línea base. Copia el `.EXP` verbatim **menos** sus líneas `Method`/`Steps`
-(que traen Johansen 1), y verifica que el `.cmf` final tenga exactamente una línea
-`Method` — si quedaran dos, GEMPACK tomaría la última y la corrida sería un
-duplicado silencioso de la base.
+`03-gragg.bat` sale a `out-gragg\` para no pisar `out\`, copia el `.EXP`
+verbatim **menos** sus líneas `Method`/`Steps`, y verifica que el `.cmf` quede
+con **una sola** línea `Method` — con dos, GEMPACK toma la última (Johansen) y
+la corrida sería un duplicado silencioso de la base, que se vería como "Gragg
+no cambia nada". El guard se ejercitó en la corrida real: quedó una sola.
 
-`cmp_gragg.py` imprime Johansen y Gragg lado a lado contra el libro y dice si MFG
-se acerca, se aleja o no se mueve. **Si no se mueve, la hipótesis queda refutada**
-y la causa está en otro lado (datos, parámetros o cierre), no en el método.
+### ⚠️ Trampa de la fuente: −0,79 / 4,44 NO son de la tabla 4.5
+
+Ese par circuló en notas previas como si fuera el valor del libro para MFG, y
+motivó toda la persecución de Gragg. **No está en la tabla 4.5.** El `4,44` es
+`qc("MFG","USA")` de la **Tabla ME 3.1** (pág. 318, clave de respuestas pág.
+411): otro experimento —un **subsidio del 10% a la producción de manufacturas
+de USA**, no el shock de TFP en servicios. Y `−0,79` no aparece en el libro.
+
+La tabla 4.5 da para MFG/CDE **−0,20 y 5,46**, y GEMPACK da −0,1972 y 5,4572.
+Nunca hubo brecha. Verificar contra el PDF antes de tomar un valor por "del
+libro".
 
 ## Lo que esta rama NO resuelve
 
