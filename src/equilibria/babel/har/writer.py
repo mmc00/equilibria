@@ -106,24 +106,6 @@ def _partition_sets_first(
     return sets, arrays
 
 
-def _looks_like_2rfull(ha: HeaderArray) -> bool:
-    """True for a header that read_har produced from a 2RFULL.
-
-    That reader always yields a 2-D float array with no sets (see
-    _read_2rfull), and GEMPACK uses the type for .sl4 payloads of every size
-    -- UVAL and SHOC are 1x1 2RFULL in a real .sl4, while the scalar DVER in
-    default.prm is REFULL. So the shape says nothing about the type: any
-    set-less 2-D float may have come from either, and only the source file
-    knows. HeaderArray does not carry the type it was read as.
-    """
-    return (
-        ha.array.dtype in (np.float32, np.float64)
-        and ha.array.ndim == 2
-        and not ha.set_names
-        and not ha.set_elements
-    )
-
-
 def _looks_like_1cfull(ha: HeaderArray) -> bool:
     return (
         ha.array.ndim == 1
@@ -131,6 +113,16 @@ def _looks_like_1cfull(ha: HeaderArray) -> bool:
         and not ha.set_names
         and not ha.set_elements
     )
+
+
+def _looks_like_2rfull(ha: HeaderArray) -> bool:
+    """True for the shape a 2RFULL comes back as: a 2-D array with no sets.
+
+    Callers reach this only inside the float branch, so dtype is not re-tested
+    here. See README limitation 3 for why the whole shape is refused instead
+    of guessing which on-disk type it came from.
+    """
+    return ha.array.ndim == 2 and not ha.set_names
 
 
 # ── Dispatch ─────────────────────────────────────────────────────────────────

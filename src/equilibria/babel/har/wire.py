@@ -28,6 +28,12 @@ BLOCK_HEADER_LEN = 64  # per-block header preceding each REFULL data block
 # pad(4) + 7 int32 of block geometry, so the values start at byte 32.
 DENSE_2D_DATA_OFFSET = 32
 
+# Dim-summary record of a REFULL block: pad(4) + slot + rank slot + 7 dims.
+# NOTE the first slot is NOT a reliable rank in files GEMPACK wrote (it reads 1
+# regardless of the header's set count); see _read_refull and issue #86.
+SUMMARY_NDIM_OFFSET = 4
+SUMMARY_DIMS_OFFSET = 12
+
 # Type tokens — exactly 6 ASCII bytes, fixed
 TOKEN_1CFULL = "1CFULL"
 TOKEN_REFULL = "REFULL"

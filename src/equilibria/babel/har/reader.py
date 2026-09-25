@@ -10,7 +10,9 @@ Supported types: 1CFULL (1-D character set), REFULL (real dense), RESPSE
 (real sparse), 2IFULL (2-D integer dense), 2RFULL (2-D real dense). The
 first four cover everything used by the GTAP datasets shipped with
 equilibria; 2RFULL is what GEMPACK writes into .sl4 solution files and is
-read-only (the writer raises for it).
+read-only. Because a set-less 2-D float array is indistinguishable from a
+2RFULL once read (the shape says nothing about the on-disk type), the writer
+refuses that whole shape rather than guess -- see _looks_like_2rfull.
 
 CLEAN-ROOM REIMPLEMENTATION
 ---------------------------
@@ -43,6 +45,12 @@ from equilibria.babel.har.wire import (
 )
 from equilibria.babel.har.wire import (
     PAD as _PAD,
+)
+from equilibria.babel.har.wire import (
+    SUMMARY_DIMS_OFFSET as _SUMMARY_DIMS_OFFSET,
+)
+from equilibria.babel.har.wire import (
+    SUMMARY_NDIM_OFFSET as _SUMMARY_NDIM_OFFSET,
 )
 from equilibria.babel.har.wire import (
     TOKEN_2IFULL as _TOKEN_2IFULL,
@@ -160,21 +168,34 @@ def _read_refull(
     set_elements = [elems_by_name[sn] for sn in set_names]
     shape = tuple(len(s) for s in set_elements)
     if not shape:
-        # A set-less REFULL carries its real shape only in the dim-summary
-        # record: pad(4) + ndim + rank slot + 7 dims. Deriving the count from
-        # the sets alone gives n == 1, which returned the first value of a
-        # longer array and silently discarded the rest.
+        # With no sets there is nothing to derive the value count from, so the
+        # old `n = 1` returned the first value of a longer array and silently
+        # discarded the rest. The dim-summary record is the only other place
+        # the extent is recorded.
         #
-        # Only take over when the array really holds more than one value:
-        # GEMPACK declares genuine scalars with a rank of its own choosing
-        # (DVER in default.prm is ndim=3, dims (1,1,1)), and those have always
-        # been handed back as flat scalars. Reshaping them to (1,1,1) would
-        # change a shape the golden files pin down, for no gain.
+        # CAVEAT on the slot at byte 4: our own writer stores the true ndim
+        # there, and this branch decodes that convention. Real GEMPACK files
+        # do NOT -- across the 96 set-bearing REFULLs in the fixtures the slot
+        # is 1 regardless of how many sets the header has, so it is not a rank.
+        # The mismatch is invisible today because GEMPACK emits no set-less
+        # REFULL holding more than one value (1089 scanned, zero), which is
+        # why this branch is reachable only for headers we wrote ourselves.
+        # Same unresolved-format class as issue #86: do not treat the slot as
+        # a documented rank until that is settled.
         summary = records[i + 2 + n_unique]
-        rank = _INT.unpack_from(summary, 4)[0]
-        if rank > 0:
-            dims = tuple(int(d) for d in struct.unpack_from(f"<{rank}i", summary, 12))
-            if int(np.prod(dims)) > 1:
+        ndim_slot = _INT.unpack_from(summary, _SUMMARY_NDIM_OFFSET)[0]
+        if ndim_slot > 0:
+            dims = tuple(
+                int(d)
+                for d in struct.unpack_from(
+                    f"<{ndim_slot}i", summary, _SUMMARY_DIMS_OFFSET
+                )
+            )
+            # Genuine scalars keep the flat shape they have always had:
+            # GEMPACK declares them with a rank of its own choosing (DVER in
+            # default.prm is ndim=3, dims (1,1,1)) and the goldens pin that.
+            is_genuine_scalar = int(np.prod(dims)) == 1
+            if not is_genuine_scalar:
                 shape = dims
     n = int(np.prod(shape)) if shape else 1
     # GEMPACK splits large arrays across multiple records when the data exceeds
