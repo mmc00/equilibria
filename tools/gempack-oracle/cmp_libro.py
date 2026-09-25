@@ -225,10 +225,13 @@ def main() -> int:
     cache: dict[str, SL4] = {}
     tot = ok = n_aprox = 0
     faltan: list[str] = []
+    # por tabla: [celdas, ok, aprox, difieren, suma |dif|, peor |dif|]
+    resumen: dict[str, list] = {}
 
     for tid, t in TABLAS.items():
         if solo and tid != solo:
             continue
+        resumen[tid] = [0, 0, 0, 0, 0.0, 0.0]
         print(f"\n=== Tabla {tid} (pag. {t['pag']}) — {t['desc']}")
         if "nota" in t:
             print(f"    nota: {t['nota']}")
@@ -250,23 +253,58 @@ def main() -> int:
                 continue
             tot += 1
             d = abs(round(v, dec) - libro)
+            # |dif| cruda, sin redondear: es la que se suma. La comparacion usa
+            # el valor redondeado porque esa es la precision de la fuente, pero
+            # la suma tiene que reflejar la distancia real.
+            d_cruda = abs(v - libro)
+            r = resumen[tid]
+            r[0] += 1
+            r[4] += d_cruda
+            r[5] = max(r[5], d_cruda)
             bien = d < 10**-dec / 2
             if bien:
                 ok += 1
+                r[1] += 1
                 marca = "ok"
             elif aprox and d <= 10**-dec + 1e-12:
                 n_aprox += 1
+                r[2] += 1
                 marca = "aprox (formula del libro)"
             else:
+                r[3] += 1
                 marca = "DIFIERE"
             etiq = f"{exp} {var}[{clave.split('::')[0]}]"
             print(f"  {etiq:<42}{v:>10.4f}{libro:>9.{dec}f}{d:>8.{dec}f}  {marca}")
 
-    print(f"\n{'=' * 62}")
+    print(f"\n{'=' * 78}")
+    print(
+        f"{'tabla':<7}{'celdas':>7}{'ok':>5}{'aprox':>7}{'difieren':>10}"
+        f"{'suma |dif|':>12}{'peor |dif|':>12}"
+    )
+    s_tot = w_tot = 0.0
+    for tid, r in resumen.items():
+        n, n_ok, n_ap, n_df, suma, peor = r
+        if not n:
+            continue
+        s_tot += suma
+        w_tot = max(w_tot, peor)
+        print(f"{tid:<7}{n:>7}{n_ok:>5}{n_ap:>7}{n_df:>10}{suma:>12.4f}{peor:>12.4f}")
+    print(f"{'-' * 78}")
+    print(
+        f"{'TOTAL':<7}{tot:>7}{ok:>5}{n_aprox:>7}{tot - ok - n_aprox:>10}"
+        f"{s_tot:>12.4f}{w_tot:>12.4f}"
+    )
+    print()
     print(f"{ok} de {tot} celdas coinciden con el libro dentro de su propia precision.")
     if n_aprox:
         print(f"{n_aprox} mas quedan a 1 digito del ultimo decimal, en filas cuya")
         print("formula el propio libro declara aproximada (tabla 5.4).")
+    print(f"suma de |dif| cruda sobre las {tot} celdas: {s_tot:.4f}")
+    print(f"|dif| media: {s_tot / tot:.4f}   |   peor celda: {w_tot:.4f}")
+    print()
+    print("La |dif| cruda no es error del modelo: el libro publica 1 o 2 decimales,")
+    print("asi que hasta media unidad del ultimo decimal es redondeo de la fuente y")
+    print("no se puede distinguir de una coincidencia exacta.")
     if faltan:
         print(f"\nno medidas ({len(faltan)}):")
         for x in faltan:

@@ -78,36 +78,56 @@ estándar; si alguno falla, quiero los otros 44.
 comparar sus niveles contra este base único no es válido — para esos hace falta
 un base por `.prm`. Está pendiente.
 
-## MEDIDO: el oráculo reproduce 84 de 84 celdas en 13 tablas del libro
+## MEDIDO: 84 celdas, 0 difieren
 
 ```bash
 python tools/gempack-oracle/cmp_libro.py          # todas
 python tools/gempack-oracle/cmp_libro.py 6.4      # una
 ```
 
-| tabla | pág. | qué mide | celdas |
-|---|---|---|---|
-| 4.5 | 127 | +10% TFP servicios, 3 utilidades | 18 ✅ |
-| 4.6 | 130 | arancel 10% MFG, 3 Armington | 9 ✅ |
-| 5.4 | 159 | +5pp impuesto trabajo, 2 elasticidades | 4 ⚠️ |
-| 5.5 | 164 | +10% capital, demanda de insumos | 6 ✅ |
-| 6.2 | 183 | subsidio 5%, 3 movilidades de K | 9 ✅ |
-| 6.3 | 187 | +10% trabajo, sustitutos vs complementos | 4 ✅ |
-| 6.4 | 190 | +10% productividad del trabajo | 9 ✅ |
-| 6.5 | 193 | subsidio 10% MFG, 2 cierres laborales | 4 ✅ |
-| 6.6 | 195 | +2% trabajo, estructura productiva | 3 ✅ |
-| 6.7 | 197 | subsidio 5% servicios, precios de factores | 3 ✅ |
-| 7.5 | 224 | arancel 15%, 2 ESUBD | 4 ✅ |
-| 7.8 | 240 | Dutch Disease | 9 ✅ |
-| 7.9 | 242 | +10% productividad en márgenes | 2 ✅ |
+| tabla | celdas | ok | aprox | difieren | suma \|dif\| | peor \|dif\| |
+|---|---|---|---|---|---|---|
+| 4.5 | 18 | 18 | 0 | 0 | 0,0372 | 0,0042 |
+| 4.6 | 9 | 9 | 0 | 0 | 0,2623 | 0,0481 |
+| 5.4 | 4 | 2 | **2** | 0 | 0,0209 | 0,0069 |
+| 5.5 | 6 | 6 | 0 | 0 | 0,0809 | 0,0291 |
+| 6.2 | 9 | 9 | 0 | 0 | 0,0969 | 0,0474 |
+| 6.3 | 4 | 4 | 0 | 0 | 0,1314 | 0,0436 |
+| 6.4 | 9 | 9 | 0 | 0 | 0,2836 | 0,0482 |
+| 6.5 | 4 | 4 | 0 | 0 | 0,1119 | 0,0489 |
+| 6.6 | 3 | 3 | 0 | 0 | 0,0642 | 0,0319 |
+| 6.7 | 3 | 3 | 0 | 0 | 0,1102 | 0,0485 |
+| 7.5 | 4 | 4 | 0 | 0 | 0,0819 | 0,0465 |
+| 7.8 | 9 | 9 | 0 | 0 | 0,2795 | 0,0497 |
+| 7.9 | 2 | 2 | 0 | 0 | 0,0063 | 0,0035 |
+| **TOTAL** | **84** | **82** | **2** | **0** | **1,5672** | **0,0497** |
 
-**82 exactas**, más **2 a un dígito del último decimal** en la única fila cuya
-fórmula el propio libro declara *"approximately"* (el ratio salario/renta de la
-5.4: 3,7658 vs 3,76 publicado). No se aflojó la tolerancia — se marcan `aprox`
-y se cuentan aparte, así la diferencia queda visible.
+`|dif|` media **0,0187**. La suma de 1,5672 sobre 84 celdas **no es error del
+modelo**: el libro publica 1 o 2 decimales, así que hasta media unidad del
+último decimal es redondeo de la fuente. La **peor celda es 0,0497** — nunca
+llega a 0,05, el umbral de las tablas de 1 decimal.
 
-La tolerancia es la precisión de la fuente: el libro publica 1 o 2 decimales,
-así que se compara el valor redondeado a esos decimales.
+Contra el umbral estricto de cada tabla (0,005 para las de 2 decimales), sólo
+**2 celdas lo exceden**: 0,0058 y 0,0069, y son el ratio salario/renta de la
+5.4, la única fila cuya fórmula el propio libro declara *"approximately"*. No
+se aflojó la tolerancia: se marcan `aprox` y se cuentan aparte.
+
+## Cobertura: qué del libro se mide y qué no
+
+El libro tiene **73 tablas numeradas**, pero la mayoría no son resultados de
+simulación (son datos del SAM, parámetros, ejercicios de práctica, esquemas).
+De las que sí reportan un experimento:
+
+| | tablas |
+|---|---|
+| **Medidas, todas coinciden** | 13 — 4.5, 4.6, 5.4, 5.5, 6.2–6.7, 7.5, 7.8, 7.9 |
+| Con `.EXP` pero **sin medir** | 3 — 7.7, 9.3, 9.4 (columnas que no son % change: participaciones base, niveles en $, descomposición de bienestar; 7.7 además corre con ESUBVA=4) |
+| Con `.EXP` que **no corre** | 2 — 5.3, 8.13 (`TBL53`, `TBL813`: sintaxis de shock del GUI de RunGTAP) |
+| **Sin `.EXP` en el dataset** | 10 — 5.6, 8.2, 8.3, 8.5, 8.7, 8.9, 8.11, 8.12, 8.14, 8.15 (el capítulo 8 casi entero) |
+
+O sea: **13 de las 28 tablas de resultados del libro** están medidas. Las 15
+restantes no fallan — no se han comparado, y 10 de ellas necesitarían un `.EXP`
+que el dataset no trae.
 
 ### ⚠️ La letra del `.EXP` NO sigue el orden de filas del libro
 
