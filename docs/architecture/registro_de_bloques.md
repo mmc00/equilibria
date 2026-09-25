@@ -52,25 +52,41 @@ sin escribir Python. Se esbozo el fichero que querriamos poder escribir:
 
 ```yaml
 modelo: gtap7
-dataset: gtap7_10x7          # registry de datasets (ya existe)
+dataset: 9x10                # equilibria.datasets.dataset_path('gtap', ...)
 
-closure: gtap_standard       # _closure_template_data (ya existe)
+closure: gtap_standard       # _closure_template_data, en gtap_contract.py
   # savf_flag: capFlex       # ...o sobrescribir campos sueltos
   # if_sub: false
 
 region_residual: ROW
 base_calibrada: true
 
-shock:
-  tipo: arancel              # _REGISTRY de templates/gtap/shocks.py (ya existe)
-  destino: tm
-  valor: +10%
-  sobre: {region: USA, sector: VegFruit}
+shock:                       # -> apply_shock(params, target, value, **filtros)
+  target: taxes.imptx        # un target de list_shock_targets()
+  valor: 10.0
+  modo: pct
+  filtros:                   # las claves son los dim_names del target:
+    sources: [USA]           #   (sources, commodities, destinations)
+    commodities: [VegFruit]
 
 solver:
   motor: ipopt
   periodos: [base, check, shock]
 ```
+
+Los valores de arriba estan **medidos contra el repo**, no inventados: `9x10`
+es una de las dos claves reales de `dataset_path` (`['9x10', 'nus333']`) y
+`taxes.imptx` —el arancel de importacion, alias `taxes.rtms`— es uno de los diez
+targets que devuelve `list_shock_targets()`. La primera version de este boceto
+puso `dataset: gtap7_10x7` y `shock: {tipo: arancel, destino: tm}`: **ninguno de
+los dos lo acepta nada**, lo encontro el code-review. Importa porque este boceto
+es la guia del trabajo futuro, y una guia con valores plausibles pero falsos
+manda al siguiente al sitio equivocado.
+
+Y deja a la vista lo que de verdad falta para el YAML, que no es un registro de
+bloques: los datasets grandes (`gtap7_10x7`, `gtap7_15x10`...) viven como
+carpetas en `datasets/` y en listas a mano dentro de `scripts/`, fuera del
+registro de `equilibria.datasets`. Unificar eso es el primer paso real.
 
 **El boceto no tiene una lista de bloques, y ese es el hallazgo.** Un usuario de
 GTAP no elige bloques: los 7 *son* el modelo GTAP, y quitar uno no da otro modelo
