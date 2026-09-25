@@ -42,7 +42,7 @@ _DUP_VARS = ("mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss")
 
 @pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_15x10"])
 @pytest.mark.parametrize("if_sub", [False, True])
-def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub):
+def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub, monkeypatch):
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
@@ -67,13 +67,12 @@ def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub):
         numeraire="pnum",
     )
 
-    import os
-
-    os.environ["EQUILIBRIA_GTAP_REF_MODEL"] = "blocks"
-    try:
-        sp = _build_sp_reference(p.sets, p, gc, rr)
-    finally:
-        os.environ.pop("EQUILIBRIA_GTAP_REF_MODEL", None)
+    # `EQUILIBRIA_GTAP_REF_MODEL="blocks"` era un NO-OP: el driver solo comparaba
+    # `== "monolith"`, asi que este test pasaba por el default, no por lo que
+    # creia pedir (medido: con "BASURA_XYZ" pasaba igual).  Ahora el valor se
+    # valida y "blocks" significa bloques, asi que la intencion queda expresada.
+    monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "blocks")
+    sp = _build_sp_reference(p.sets, p, gc, rr)
 
     sobran = [n for n in _DUP_EQS if getattr(sp, n, None) is not None]
     assert not sobran, (

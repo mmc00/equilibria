@@ -1212,10 +1212,28 @@ def _build_sp_reference(sets, params, closure, residual_region, model=None):
     # asi que el default implicito solo servia para que un modelo nuevo heredara
     # el monolito por olvido — lo contrario de lo que F3 persigue.  Sin marcador
     # => BLOQUES.
-    _src = getattr(model, "_sp_source", None) if model is not None else None
-    _pide_monolito = (
-        _src == "monolith" or os.environ.get("EQUILIBRIA_GTAP_REF_MODEL") == "monolith"
-    )
+    # Los dos valores se VALIDAN.  Antes solo se comparaba `== "monolith"`, asi
+    # que cualquier otra cosa —incluido un typo como "monolit", o el "blocks"
+    # que un test creia que pedia bloques— caia al default en silencio.  Medido:
+    # poner "BASURA_XYZ" en la env var dejaba pasar el test igual.
+    _VALIDOS = ("monolith", "blocks")
+
+    _src = getattr(model, "_sp_source", None)
+    if _src is not None and _src not in _VALIDOS:
+        raise ValueError(
+            f"_sp_source={_src!r} no reconocido (esperado uno de {_VALIDOS}). "
+            "Un valor desconocido caia a bloques en silencio."
+        )
+
+    _env = os.environ.get("EQUILIBRIA_GTAP_REF_MODEL")
+    if _env is not None and _env not in _VALIDOS:
+        raise ValueError(
+            f"EQUILIBRIA_GTAP_REF_MODEL={_env!r} no reconocido (esperado uno de "
+            f"{_VALIDOS})."
+        )
+
+    # El monolito hay que pedirlo; la env var manda sobre el marcador del modelo.
+    _pide_monolito = _env == "monolith" or (_env is None and _src == "monolith")
     if _pide_monolito:
         from equilibria.templates.gtap import GTAPModelEquations
 

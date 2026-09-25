@@ -7,35 +7,18 @@ clase nueva que no marque nada para volver a construir 3,4M de celdas en 20x41.
 
 Ahora las DOS clases declaran su fuente (`GTAPMultiPeriodModel` -> "monolith",
 `GTAPBlockMultiPeriodModel` -> "blocks"), asi que el implicito ya no protege a
-nadie: solo esconde olvidos.  Estos tests fijan el contrato en las tres
-direcciones.
+nadie: solo esconde olvidos.  Estos tests fijan el contrato en las cuatro
+direcciones, incluida la validacion: un valor no reconocido LEVANTA en vez de
+caer al default en silencio.
 """
-
-from __future__ import annotations
 
 import pathlib
 import sys
 
-import pytest
-
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-DATASETS = ROOT / "datasets"
-
-
-def _params():
-    from equilibria.templates.gtap import GTAPParameters
-
-    d = DATASETS / "gtap7_3x3"
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=d / "basedata.har",
-        sets_path=d / "sets.har",
-        default_path=d / "default.prm",
-        baserate_path=d / "baserate.har",
-    )
-    return p
+sys.path.insert(0, str(ROOT / "src"))
+import pytest
+from test_multiperiod_sets import _load_3x3_params
 
 
 def _closure():
@@ -53,47 +36,47 @@ def _closure():
     )
 
 
-def _cuenta_monolitos(model) -> int:
-    """Construye el SP de referencia y cuenta cuantos monolitos se instancian."""
-    import equilibria.templates.gtap as T
+def _cuenta_monolitos(model, monkeypatch) -> int:
+    """Construye el SP de referencia y cuenta cuantos monolitos se instancian.
+
+    Cuenta con `monkeypatch.setattr` sobre `__init__`, como los dos vecinos que
+    miden lo mismo (`test_driver_ref_model_source`, `test_mp_builder_uses_blocks`).
+    """
+    from equilibria.templates.gtap import gtap_model_equations as ME
     from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
 
-    p, gc = _params(), _closure()
+    p, gc = _load_3x3_params(), _closure()
     rr = list(p.sets.r)[-1]
 
     n = {"v": 0}
-    original = T.GTAPModelEquations
+    original = ME.GTAPModelEquations.__init__
 
-    class Espia(original):  # type: ignore[misc, valid-type]
-        def __init__(self, *a, **k):
-            n["v"] += 1
-            super().__init__(*a, **k)
+    def contando(self, *a, **k):
+        n["v"] += 1
+        original(self, *a, **k)
 
-    T.GTAPModelEquations = Espia
-    try:
-        _build_sp_reference(p.sets, p, gc, rr, model=model)
-    finally:
-        T.GTAPModelEquations = original
+    monkeypatch.setattr(ME.GTAPModelEquations, "__init__", contando)
+    _build_sp_reference(p.sets, p, gc, rr, model=model)
     return n["v"]
 
 
-def test_sin_marcador_va_a_bloques():
+def test_sin_marcador_va_a_bloques(monkeypatch):
     """El caso que importa: una clase que no declara nada NO revive el monolito."""
 
     class ModeloSinMarcador:
         pass
 
-    assert _cuenta_monolitos(ModeloSinMarcador()) == 0
+    assert _cuenta_monolitos(ModeloSinMarcador(), monkeypatch) == 0
 
 
-def test_marcado_monolith_construye_el_monolito():
+def test_marcado_monolith_construye_el_monolito(monkeypatch):
     """Pedirlo explicitamente sigue funcionando — los 7 scripts de medicion
     contra GAMS dependen de ello."""
 
     class ModeloMonolito:
         _sp_source = "monolith"
 
-    assert _cuenta_monolitos(ModeloMonolito()) == 1
+    assert _cuenta_monolitos(ModeloMonolito(), monkeypatch) == 1
 
 
 def test_las_dos_clases_declaran_su_fuente():
@@ -101,7 +84,7 @@ def test_las_dos_clases_declaran_su_fuente():
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
 
-    p = _params()
+    p = _load_3x3_params()
     rr = list(p.sets.r)[-1]
     esperado = {
         GTAPMultiPeriodModel: "monolith",
@@ -121,4 +104,27 @@ def test_la_env_var_sigue_forzando_el_monolito(monkeypatch):
     class ModeloSinMarcador:
         pass
 
-    assert _cuenta_monolitos(ModeloSinMarcador()) == 1
+    assert _cuenta_monolitos(ModeloSinMarcador(), monkeypatch) == 1
+
+
+def test_un_valor_no_reconocido_LEVANTA(monkeypatch):
+    """Un typo no puede caer al default en silencio.
+
+    Antes el driver solo comparaba `== "monolith"`, asi que `"monolit"` —o el
+    `"blocks"` que un test creia que pedia bloques— se ignoraba sin avisar.
+    Medido: con `"BASURA_XYZ"` en la env var el test pasaba igual.
+    """
+
+    class ModeloConTypo:
+        _sp_source = "monolit"  # falta la 'h'
+
+    with pytest.raises(ValueError, match="no reconocido"):
+        _cuenta_monolitos(ModeloConTypo(), monkeypatch)
+
+    monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "BASURA_XYZ")
+
+    class ModeloSinMarcador:
+        pass
+
+    with pytest.raises(ValueError, match="no reconocido"):
+        _cuenta_monolitos(ModeloSinMarcador(), monkeypatch)
