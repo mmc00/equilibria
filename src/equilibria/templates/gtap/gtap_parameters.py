@@ -486,14 +486,22 @@ class GTAPElasticities:
 
         har = read_har(default_path)
 
-        def _h(header: str, set_order: list, reorder: tuple | None) -> dict:
-            # keep_zeros=True: en un .prm un cero es un valor con significado, no
-            # ausencia de dato. SUBPAR=0 es Cobb-Douglas (Burfisher 3e nota 5),
-            # y descartarlo hacia que subpar quedara VACIO y el modelo cayera al
-            # default 1.0 — o sea, el caso "Cobb-Douglas" corria con bh=1.0.
-            # (Mismo motivo por el que ETRE ya se cargaba aparte, ver abajo.)
+        def _h(
+            header: str,
+            set_order: list,
+            reorder: tuple | None,
+            *,
+            keep_zeros: bool = False,
+        ) -> dict:
+            # keep_zeros va por header, NO para todos. Prenderlo aca adentro lo
+            # aplicaba a los 12 y cambiaba el significado de "clave ausente" para
+            # los otros 11: ESBT/ESBQ/ESBI son todo ceros en nus333, asi que
+            # pasaban de ausentes a presentes-en-0.0, y los consumidores no usan
+            # el mismo default (path_capi.py:425 y calibration_compare.py:250
+            # ponen 1.0; gtap_model_equations.py:1640 pone 0.0) => 1.0 -> 0.0 en
+            # dos call sites. Medido. Solo SUBP necesita conservar el cero.
             return GTAPBenchmarkValues._har_to_dict(
-                har, header, sets, set_order, reorder, scale=1.0, keep_zeros=True
+                har, header, sets, set_order, reorder, scale=1.0, keep_zeros=keep_zeros
             )
 
         r10 = (1, 0)
@@ -505,7 +513,12 @@ class GTAPElasticities:
         self.etraq.update(_h("ETRQ", ["ACTS", "REG"], r10))
         self.esubq.update(_h("ESBQ", ["COMM", "REG"], r10))
         self.incpar.update(_h("INCP", ["COMM", "REG"], r10))
-        self.subpar.update(_h("SUBP", ["COMM", "REG"], r10))
+        # En un .prm un cero de SUBPAR es un valor con significado, no ausencia de
+        # dato: SUBPAR=0 es Cobb-Douglas (Burfisher 3e nota 5, pag. 126 — "all
+        # substitution parameters as zero"). Descartarlo dejaba subpar VACIO y el
+        # modelo caia al default 1.0, o sea el caso "Cobb-Douglas" corria con
+        # bh=1.0. INCP no lo necesita: no tiene un solo cero en ningun dataset.
+        self.subpar.update(_h("SUBP", ["COMM", "REG"], r10, keep_zeros=True))
         self.esubg.update(_h("ESBG", ["REG"], None))
         self.esubi.update(_h("ESBI", ["REG"], None))
         self.rorflex.update(_h("RFLX", ["REG"], None))
