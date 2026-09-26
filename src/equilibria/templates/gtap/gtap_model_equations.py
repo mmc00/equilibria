@@ -1419,9 +1419,14 @@ class GTAPModelEquations:
         chif_data: dict[tuple[str], float] = {}
         eh_data: dict[tuple[str, str], float] = {}
         bh_data: dict[tuple[str, str], float] = {}
-        # (r,i) que piden utilidad Cobb-Douglas via SUBPAR=0 y que la CDE
-        # no puede representar (divide por bh). Se avisa al final.
+        # (r,i) que piden utilidad Cobb-Douglas via SUBPAR=0. La CDE no puede
+        # representarlos (divide por bh); el modo CD si, y es el que GAMS
+        # selecciona con `%utility% eq CD`. Se llena abajo y decide el modo.
         _cd_requested: set[tuple[str, str]] = set()
+        # Regiones que terminan en modo CD. Lo consultan eq_zcons, eq_phip y
+        # eq_uh para elegir la forma funcional, como el $(%utility% eq CD) de
+        # GAMS. Vacio = todo CDE, que es el caso normal.
+        self._cd_regions: set[str] = set()
         alphaa_hhd_data: dict[tuple[str, str], float] = {}
         self._zcons_init_data: dict[tuple[str, str], float] = {}
         zcons_init_data = self._zcons_init_data
@@ -1676,20 +1681,61 @@ class GTAPModelEquations:
                 else:
                     bh_val = float(_bh_raw)
                     if abs(bh_val) < 1e-12:
-                        bh_val = 1.0
+                        # SUBPAR=0 no es un dato invalido: pide utilidad
+                        # Cobb-Douglas. Se registra y el modo CD (abajo) usa las
+                        # ecuaciones de model.gms:765/781/794, que NO dividen por
+                        # bh. bh queda en 0.0, que es su valor real.
                         _cd_requested.add((region, commodity))
                 eh_data[(region, commodity)] = eh_val
                 bh_data[(region, commodity)] = bh_val
                 xcshr_val = (
                     private_val / max(yc_bench, 1e-12) if private_val > 0.0 else 0.0
                 )
-                if xcshr_val > 0.0:
+                # El denominador de la CDE divide por bh; en modo CD no se usa,
+                # y bh puede ser 0. Se salta para no dividir por cero.
+                if xcshr_val > 0.0 and abs(bh_val) > 1e-12:
                     cde_alpha_den += xcshr_val / bh_val
+
+            # El modo lo decide el DATO, no una opcion: si los (r,i) de esta
+            # region piden CD via SUBPAR=0, la region va en CD. Es lo que hace
+            # GAMS al compilar con `%utility% eq CD` (cal.gms:758,
+            # model.gms:765/781/794), donde el modo es GLOBAL al modelo.
+            #
+            # Un .prm con SUBPAR mixto dentro de una region no tiene equivalente
+            # en GAMS: `%utility%` es una sola constante de compilacion. Aca se
+            # resuelve por region y se AVISA, porque elegir en silencio una de
+            # las dos formas para un dato que pide las dos daria un resultado
+            # que no corresponde a ninguna.
+            _cd_here = {i for rr, i in _cd_requested if rr == region}
+            _region_is_cd = bool(_cd_here)
+            if _region_is_cd and len(_cd_here) < len(self.sets.i):
+                import warnings as _w
+
+                _w.warn(
+                    f"{region}: SUBPAR=0 en {sorted(_cd_here)} pero no en "
+                    f"{sorted(set(self.sets.i) - _cd_here)}. GAMS no puede "
+                    "representar eso (`%utility%` es global); la region entera "
+                    "va en modo Cobb-Douglas. Revisa el .prm si no era la "
+                    "intencion.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
             yc_pc = (
                 yc_bench / max(pop_data[(region,)], 1e-12) if yc_bench > 0.0 else 0.0
             )
             yc_pc = max(yc_pc, 1e-12)
+            # cal.gms:762-766: alphaa = xcshr, normalizado a sumar 1 sobre i.
+            # xcshr = private_val/yc, asi que al normalizar el yc se cancela y
+            # queda private_val/private_total = private_share_data. Es la misma
+            # magnitud que ya usa la calibracion de auh (cal.gms:768 eleva xa a
+            # alphaa), asi que auh queda consistente sin tocarlo.
+            _cd_alpha_sum = 0.0
+            if _region_is_cd:
+                for commodity in self.sets.i:
+                    _pv = _private_total(region, commodity)
+                    if _pv > 0.0:
+                        _cd_alpha_sum += _pv / max(yc_bench, 1e-12)
             for commodity in self.sets.i:
                 private_val = _private_total(region, commodity)
                 xcshr_val = (
@@ -1699,7 +1745,13 @@ class GTAPModelEquations:
                 eh_val = eh_data[(region, commodity)]
                 pa_val = 1.0  # GAMS numerario initialization
                 uh_val = 1.0  # GAMS benchmark utility initialization
-                if yc_bench > 0.0 and xcshr_val > 0.0 and cde_alpha_den > 0.0:
+                if _region_is_cd:
+                    # cal.gms:762-767 — alphaa = xcshr, normalizado a sumar 1, y
+                    # zcons = alphaa. Nada de bh: en CD no aparece.
+                    _a = xcshr_val / _cd_alpha_sum if _cd_alpha_sum > 0.0 else 0.0
+                    alphaa_hhd_data[(region, commodity)] = _a
+                    zcons_init_data[(region, commodity)] = _a
+                elif yc_bench > 0.0 and xcshr_val > 0.0 and cde_alpha_den > 0.0:
                     alphaa_hhd_data[(region, commodity)] = (
                         (xcshr_val / bh_val)
                         * ((yc_pc / pa_val) ** bh_val)
@@ -1711,20 +1763,8 @@ class GTAPModelEquations:
                     alphaa_hhd_data[(region, commodity)] = 0.0
                     zcons_init_data[(region, commodity)] = 0.0
 
-            if _cd_requested and region == self.sets.r[-1]:
-                import warnings as _w
-
-                _w.warn(
-                    "SUBPAR=0 pide utilidad Cobb-Douglas en "
-                    f"{len(_cd_requested)} pares (r,i) "
-                    f"(p.ej. {sorted(_cd_requested)[:3]}), pero equilibria solo "
-                    "implementa la CDE, que es singular en bh=0 (divide por bh, "
-                    "igual que GAMS en model.gms:793). GAMS lo resuelve con un "
-                    "modo aparte `%utility% eq CD` que aca NO existe. Se usa "
-                    "bh=1.0 en su lugar: los resultados NO son Cobb-Douglas.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
+            if _region_is_cd:
+                self._cd_regions.add(region)
 
             if private_total > 0.0:
                 prod_term = 1.0
@@ -6130,13 +6170,18 @@ class GTAPModelEquations:
         # UTILITY AND SAVINGS BLOCK (GAMS phiPeq/uh/ug/us/ueq/psave)
         # ========================================================================
 
-        # CDE auxiliary factor (GAMS zconseq, model.gms:760-765)
-        # zcons = alphaa_hhd * bh * pa^bh * uh^(eh*bh) * (yc/pop)^(-bh)
+        # Factor auxiliar del consumo (GAMS zconseq, model.gms:760-765).
+        #   CDE: zcons = alphaa * bh * pa^bh * uh^(eh*bh) * (yc/pop)^(-bh)
+        #   CD:  zcons = alphaa                            <- model.gms:765
+        # GAMS elige con $(%utility% eq CDE) / $(%utility% eq CD); aca el modo
+        # sale del dato (SUBPAR=0 en el .prm) y vive en self._cd_regions.
         def eq_zcons_rule(model, r, i):
             share = value(model.c_share[r, i])
             alpha = value(model.alphaa_hhd[r, i])
             if share <= 0.0 or alpha <= 0.0:
                 return model.zcons[r, i] == 0.0
+            if r in self._cd_regions:
+                return model.zcons[r, i] == model.alphaa_hhd[r, i]
             return model.zcons[r, i] == (
                 model.alphaa_hhd[r, i]
                 * model.bh[r, i]
@@ -6165,9 +6210,17 @@ class GTAPModelEquations:
 
         model.eq_xcshr = Constraint(model.r, model.i, rule=eq_xcshr_rule)
 
-        # CDE elasticity of expenditure wrt utility (GAMS phiPeq, model.gms:780)
-        # phip = sum_i xcshr(r,i) * eh(r,i)
+        # Elasticidad del gasto respecto de la utilidad (GAMS phiPeq,
+        # model.gms:780-782).
+        #   CDE: phip = sum_i xcshr*eh
+        #   CD:  phip = sum_i xcshr        <- sin eh; en CD la elasticidad es 1
         def eq_phip_rule(model, r):
+            if r in self._cd_regions:
+                return model.phip[r] == sum(
+                    model.xcshr[r, i]
+                    for i in model.i
+                    if value(model.c_share[r, i]) > 0.0
+                )
             return model.phip[r] == sum(
                 model.xcshr[r, i] * model.eh[r, i]
                 for i in model.i
@@ -6218,12 +6271,29 @@ class GTAPModelEquations:
 
         model.eq_pi = Constraint(model.r, rule=eq_pi_rule)
 
-        # Private utility (GAMS uheq, CDE form, model.gms:792-795)
-        # 1 = sum_i zcons(r,i) / bh(r,i)
+        # Utilidad privada (GAMS uheq, model.gms:792-795)
+        #   CDE: 0 = 1 - sum_i zcons/bh
+        #   CD:  0 = uh - auh * prod_i xa^alphaa      <- la Cobb-Douglas misma
+        # En CD el divisor bh no aparece, que es justo por lo que la CDE no
+        # puede representar SUBPAR=0.
         # Substituting zcons from eq_zcons: zcons/bh = alphaa*pa^bh*uh^(eh*bh)*(yc/pop)^(-bh)
         # This form contains uh explicitly so PATH sees a non-zero ∂/∂uh Jacobian column.
         # Without substitution, eq_uh has zero ∂/∂uh and PATH leaves uh at its lower bound.
         def eq_uh_rule(model, r):
+            if r in self._cd_regions:
+                # prod_i xa^alphaa sobre los i con demanda. xa es xaa[r,i,'hhd'].
+                prod = 1.0
+                n_terms = 0
+                for i in model.i:
+                    if value(model.c_share[r, i]) <= 0.0:
+                        continue
+                    if value(model.alphaa_hhd[r, i]) <= 0.0:
+                        continue
+                    prod = prod * (model.xaa[r, i, "hhd"] ** model.alphaa_hhd[r, i])
+                    n_terms += 1
+                if n_terms == 0:
+                    return model.uh[r] == 1.0
+                return model.uh[r] == model.auh[r] * prod
             terms = []
             for i in model.i:
                 if value(model.c_share[r, i]) <= 0.0:
