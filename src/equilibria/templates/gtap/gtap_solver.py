@@ -367,8 +367,23 @@ class GTAPSolver:
                     getattr(self.model, con_name).deactivate()
             logger.debug("Fixed tax rates")
 
+        # Pairing de factores fiel a GAMS (model.gms:1413 "xfteq.xft, ..., pfteq,").
+        # xft queda LIBRE emparejada a eq_xfteq, y eq_pfteq pasa a fila libre: se
+        # cumple pero no determina ninguna variable, igual que en el MCP de GAMS.
+        # pft lo determina el resto del nido de factores (eq_pfeq).
+        if getattr(closure, "gams_factor_pairing", False):
+            if hasattr(self.model, "eq_pfteq"):
+                freed = 0
+                for idx in self.model.eq_pfteq:
+                    if self.model.eq_pfteq[idx].active:
+                        self.model.eq_pfteq[idx].deactivate()
+                        freed += 1
+                logger.debug("GAMS factor pairing: %d eq_pfteq como fila libre", freed)
+
         # Fix endowments
-        if closure.fix_endowments:
+        if closure.fix_endowments and not getattr(
+            closure, "gams_factor_pairing", False
+        ):
             if hasattr(self.model, "xft"):
                 sf_set = (
                     {str(f) for f in self.model.sf}

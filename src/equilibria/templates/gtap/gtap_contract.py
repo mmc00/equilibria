@@ -375,6 +375,18 @@ class GTAPClosureConfig(ModelClosureConfig):
     fix_technology: bool = True
     fix_endowments: bool = True
     fix_world_prices: bool = False
+    # Emular el pairing de factores de GAMS (model.gms:1413):
+    #   xfteq.xft   -> eq_xfteq determina xft (con etaf=0 es xft == aft)
+    #   pfteq       -> SIN .var: fila libre; pft lo determina el resto del nido
+    # Sin esto hay dos estados, y ninguno es el de GAMS:
+    #   fix_endowments=True  -> xft fija y eq_xfteq desactivada; pft se empareja
+    #                           contra eq_pfteq (el vaciado), que con xft fija es
+    #                           redundante.
+    #   fix_endowments=False -> xft y pft libres con eq_xfteq y eq_pfteq activas;
+    #                           pero eq_xfteq NO CONTIENE pft cuando etaf=0
+    #                           (d(body)/d(pft) = 0), asi que emparejar pft ahi lo
+    #                           deja sin ancla y su valor oscila con el cierre.
+    gams_factor_pairing: bool = False
 
     # Fixed and endogenous variables
     fixed: tuple[str, ...] = Field(

@@ -487,8 +487,13 @@ class GTAPElasticities:
         har = read_har(default_path)
 
         def _h(header: str, set_order: list, reorder: tuple | None) -> dict:
+            # keep_zeros=True: en un .prm un cero es un valor con significado, no
+            # ausencia de dato. SUBPAR=0 es Cobb-Douglas (Burfisher 3e nota 5),
+            # y descartarlo hacia que subpar quedara VACIO y el modelo cayera al
+            # default 1.0 — o sea, el caso "Cobb-Douglas" corria con bh=1.0.
+            # (Mismo motivo por el que ETRE ya se cargaba aparte, ver abajo.)
             return GTAPBenchmarkValues._har_to_dict(
-                har, header, sets, set_order, reorder, scale=1.0
+                har, header, sets, set_order, reorder, scale=1.0, keep_zeros=True
             )
 
         r10 = (1, 0)
@@ -1300,6 +1305,7 @@ class GTAPBenchmarkValues:
         set_order: list[str],
         reorder: tuple[int, ...] | None,
         scale: float = 1.0,
+        keep_zeros: bool = False,
     ) -> dict:
         """Convert a HAR header array to a Python dict with internal key order.
 
@@ -1310,6 +1316,11 @@ class GTAPBenchmarkValues:
             set_order: GEMPACK dimension names in HAR order, e.g. ['COMM','REG'].
             reorder: Index permutation from HAR order to internal key order, or None.
             scale: Scalar multiplier (use 1e-6 for monetary values).
+            keep_zeros: conservar las celdas con valor 0.0. Para valores
+                MONETARIOS un cero es ausencia de flujo y descartarlo ahorra
+                memoria, que es el default. Para ELASTICIDADES un cero es un
+                valor con significado —SUBPAR=0 es Cobb-Douglas— y descartarlo
+                hace que el modelo caiga a un default distinto sin avisar.
         """
         import itertools
 
@@ -1342,7 +1353,7 @@ class GTAPBenchmarkValues:
         result: dict = {}
         for indices in itertools.product(*[range(len(e)) for e in dim_elements]):
             val = float(arr[indices]) * scale
-            if val == 0.0:
+            if val == 0.0 and not keep_zeros:
                 continue
             raw_key = tuple(dim_elements[d][i] for d, i in enumerate(indices))
             if reorder is not None:
