@@ -53,7 +53,7 @@ Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
 
 | Deuda | Detalle | Primer paso |
 |---|---|---|
-| `gtap_model_equations.py` no es retirable | Sólo por su papel de **oráculo GAMS en 3 de 5 gates**. Ya NO es dependencia de runtime del camino de bloques: el escalado se extrajo a `gtap_benchmark_scaling.py` y la reflexión multiperiodo pide su SP por método, así que `gtap_block_model.py` no lo importa (2026-09-16) | Migrar los 3 gates GAMS a medir bloques, comprobando que los números no se mueven |
+| `gtap_model_equations.py` no es retirable | Sólo por su papel de **oráculo GAMS en el gate `nl`** — medido 2026-09-24: los otros cuatro (`mcp`, `nlp`, `gempack`, `coverage_matrix`) no lo leen, y `docs/architecture/monolito_vs_bloques.md:95` ya lo decía. Ya NO es dependencia de runtime del camino de bloques: el escalado se extrajo a `gtap_benchmark_scaling.py` y la reflexión multiperiodo pide su SP por método, así que `gtap_block_model.py` no lo importa (2026-09-16). Desde 2026-09-24 además hay que **pedirlo**: un modelo sin `_sp_source` va a bloques, y un valor no reconocido levanta | Migrar el gate `nl` a medir bloques, comprobando que los números no se mueven |
 | `eq_pmuv` sin portar a bloques | Declarado en `blocks/gtap/__init__.py:47-53`, no implementado en el composer. Sólo muerde con `rmuv`/`imuv` no vacíos, que ningún dataset del gate usa | Voltear `pmuv` de Param a Var cuando el closure lo pida |
 
 ### Tests rotos en main (anteriores a la limpieza de 2026-09-16)
