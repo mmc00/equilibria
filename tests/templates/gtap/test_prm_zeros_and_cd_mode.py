@@ -367,3 +367,133 @@ def test_modo_cd_mantiene_las_ecuaciones_de_utilidad(tmp_path):
     regiones = set(p.sets.r)
     activas = sum(1 for idx in zcons if idx[0] in regiones)
     assert activas > 0, "eq_zcons no tiene ninguna celda activa bajo CD (model.gms:765)"
+
+
+# --------------------------------------------------------------------------
+# 4. Los avisos: nada se elige en silencio
+# --------------------------------------------------------------------------
+
+
+def test_subpar_mixto_avisa(tmp_path):
+    """Un .prm con SUBPAR=0 en unos bienes y >0 en otros TIENE que avisar.
+
+    GAMS no puede representarlo (`%utility%` es una constante de compilacion),
+    asi que la region entera va en CD; elegir en silencio daria un resultado que
+    no corresponde a ninguna de las dos formas.
+
+    Ojo: la 2da ronda de review reporto este aviso como "falso positivo" por
+    comparar contra `len(sets.i)` en vez del equivalente de `$xaFlag`. MEDIDO que
+    NO lo es: `_cd_requested` se puebla recorriendo `self.sets.i` completo, sin
+    filtrar por demanda del hogar, asi que ambos lados del `<` cuentan lo mismo.
+    Este test fija ese comportamiento para que no se "arregle" lo que funciona.
+    """
+    import warnings
+
+    from equilibria.babel.har import read_har, write_har
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+    paths = _prm_paths()
+    har = read_har(paths["default_path"])
+    if "SUBP" not in har:
+        pytest.skip("default.prm sin header SUBP")
+    if har["SUBP"].array.shape[0] < 2:
+        pytest.skip("hace falta mas de un commodity para armar el caso mixto")
+
+    # SUBPAR=0 en el primer commodity de la primera region, el resto intacto.
+    har["SUBP"].array[0, 0] = 0.0
+    destino = tmp_path / "mixto.prm"
+    try:
+        write_har(destino, har)
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"write_har no pudo escribir este .prm: {type(e).__name__}: {e}")
+
+    p = GTAPParameters()
+    p.load_from_har(
+        basedata_path=paths["basedata_path"],
+        sets_path=paths["sets_path"],
+        default_path=destino,
+        baserate_path=paths["baserate_path"],
+    )
+    eqs = GTAPModelEquations(p.sets, p, residual_region="ROW")
+    with warnings.catch_warnings(record=True) as capturados:
+        warnings.simplefilter("always")
+        eqs.build_model()
+        avisos = [str(x.message) for x in capturados if "SUBPAR=0 en" in str(x.message)]
+
+    assert len(avisos) == 1, (
+        f"se esperaba 1 aviso de SUBPAR mixto, hubo {len(avisos)}: {avisos[:2]}"
+    )
+    # Y la region entera queda en CD, que es lo que el aviso anuncia.
+    assert len(eqs._cd_regions) == 1, (
+        f"el aviso dice que la region va entera en CD; _cd_regions={eqs._cd_regions}"
+    )
+
+
+def test_prm_sin_header_subp_avisa(tmp_path):
+    """Sin header SUBP, bh cae al default 1.0 (CDE) — y hay que avisarlo.
+
+    Un .prm sin SUBP es indistinguible de uno que pida SUBPAR=1 a proposito, asi
+    que un dataset Cobb-Douglas correria CDE sin que nadie se enterara: el mismo
+    bug que keep_zeros arregla un nivel mas abajo.
+    """
+    import warnings
+
+    from equilibria.babel.har import read_har, write_har
+    from equilibria.templates.gtap import GTAPParameters
+
+    paths = _prm_paths()
+    har = read_har(paths["default_path"])
+    if "SUBP" not in har:
+        pytest.skip("default.prm ya viene sin header SUBP")
+
+    sin_subp = {k: v for k, v in har.items() if k != "SUBP"}
+    destino = tmp_path / "sin_subp.prm"
+    try:
+        write_har(destino, sin_subp)
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"write_har no pudo escribir este .prm: {type(e).__name__}: {e}")
+
+    p = GTAPParameters()
+    with warnings.catch_warnings(record=True) as capturados:
+        warnings.simplefilter("always")
+        p.load_from_har(
+            basedata_path=paths["basedata_path"],
+            sets_path=paths["sets_path"],
+            default_path=destino,
+            baserate_path=paths["baserate_path"],
+        )
+        avisos = [str(x.message) for x in capturados if "header SUBP" in str(x.message)]
+
+    assert avisos, "sin header SUBP hay que avisar, no caer a CDE en silencio"
+    assert not p.elasticities.subpar, "se esperaba subpar vacio sin el header"
+
+
+def test_pairing_y_fix_endowments_juntos_avisan():
+    """Pedir los dos cierres es una contradiccion: gana el pairing, y se avisa.
+
+    El pairing deja xft LIBRE (emparejada a eq_xfteq, model.gms:1413) y
+    fix_endowments la FIJA. Resolverlo en silencio deja al usuario creyendo que
+    corrio el cierre que no corrio.
+    """
+    import warnings
+
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+    from equilibria.templates.gtap.gtap_solver import GTAPSolver
+
+    p = _load()
+    cl = GTAPClosureConfig(fix_endowments=True, gams_factor_pairing=True)
+    m = GTAPModelEquations(p.sets, p, residual_region="ROW", closure=cl).build_model()
+    h = GTAPSolver(m, solver_name="path", params=p)
+    with warnings.catch_warnings(record=True) as capturados:
+        warnings.simplefilter("always")
+        h.apply_closure(cl)
+        avisos = [
+            str(x.message) for x in capturados if "incompatibles" in str(x.message)
+        ]
+
+    assert avisos, (
+        "fix_endowments + gams_factor_pairing es contradictorio y se resolvia en "
+        "silencio a favor del pairing"
+    )

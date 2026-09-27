@@ -519,6 +519,21 @@ class GTAPElasticities:
         # modelo caia al default 1.0, o sea el caso "Cobb-Douglas" corria con
         # bh=1.0. INCP no lo necesita: no tiene un solo cero en ningun dataset.
         self.subpar.update(_h("SUBP", ["COMM", "REG"], r10, keep_zeros=True))
+        if "SUBP" not in har:
+            # Sin el header, subpar queda vacio y cada bh cae al default 1.0, que
+            # es CDE — indistinguible de un .prm que pida SUBPAR=1 a proposito.
+            # Un dataset Cobb-Douglas de verdad correria CDE en silencio, que es
+            # exactamente el bug que keep_zeros arregla un nivel mas abajo.
+            import warnings
+
+            warnings.warn(
+                f"{default_path.name} no trae el header SUBP: subpar queda vacio y "
+                "bh cae al default 1.0 (CDE) para todas las celdas. Si el dataset "
+                "era Cobb-Douglas (SUBPAR=0), va a correr la forma funcional "
+                "equivocada sin avisar de nuevo.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         self.esubg.update(_h("ESBG", ["REG"], None))
         self.esubi.update(_h("ESBI", ["REG"], None))
         self.rorflex.update(_h("RFLX", ["REG"], None))
