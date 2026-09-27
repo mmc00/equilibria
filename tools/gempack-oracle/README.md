@@ -245,3 +245,67 @@ libro".
 
 Esto es andamio de medición, no código de producto. Vive en su rama hasta que los
 datos estén traídos; después el comparador puede valer un PR y esto no.
+
+---
+
+## Viaje a Windows: los 2 `.EXP` que no corrian + los `.sl4` para el diagnostico
+
+Dos cosas en una sola pasada. Correr **en la maquina Windows**, en esta carpeta.
+
+### Paso 1 — los `.EXP` con sintaxis de GUI
+
+```bat
+04-exp-directos.bat
+```
+
+Genera los `*-DIR.EXP` traduciendo `rate% N from file X.shk` al valor directo, y
+los corre. Cubre **TBL813** (tabla 8.13) y **ME8** (11 shocks).
+
+**`mk_exp_directos.py` emite DOS variantes** por shock, porque se escribio en Mac
+y una no se pudo verificar sin GEMPACK:
+
+```
+! --- variante A (si GEMPACK lee el .shk) ---
+Shock tpdall("MFG","USA") = file tpdall.shk;
+! --- variante B (valor directo, sin depender de A) ---
+! Shock tpdall("MFG", "USA") = -9.1956644;
+```
+
+Si el `.bat` corta con error de sintaxis en el `Shock`, abrir el `*-DIR.EXP`,
+comentar la linea de la variante A y descomentar la B. El valor de B sale del
+`.shk` (verificado: `-9.1956644` es `tpdall("MFG","USA")`, que coincide con el
+que ya estaba documentado arriba).
+
+**La 5.3 NO se traduce, y no es un olvido.** Usa `= target% 5 from file tfd.shk`:
+`target%` no es un dato del `.shk` sino un OBJETIVO — "mover el instrumento hasta
+que el objetivo cambie 5%" —, y el factor de escala sale de resolver el modelo.
+Transcribir el `.shk` daria un shock distinto del que el libro aplico. Queda
+pendiente de verdad; se resuelve desde la GUI de RunGTAP, no desde el `.EXP`.
+
+### Paso 2 — los `.sl4` para la brecha de `pft`
+
+**No hace falta nada nuevo:** `01-run-all.bat` ya deja los `.sl4` en
+`out\<NOMBRE>\` y los vuelca a texto con `sltoht`. Solo falta traerlos:
+
+```bat
+01-run-all.bat        REM si out\ no existe o quedo viejo
+02-pack.bat           REM comprime out\ en nus333-gempack-oracle.zip
+```
+
+Y pasar el `.zip` a la Mac.
+
+**Para que:** el gasto privado de equilibria queda **-2,21 pp** corto contra el
+libro, identico en CDE / CES / Cobb-Douglas (o sea que NO es la forma
+funcional). Esta localizado en el nivel de `pft` — `eq_yc` es identica a GAMS y
+`betap`/`phi`/`phip` estan planos, asi que `yc% = regy% = facty%`. Lo que falta
+es comparar `pfe`/`pfa`/`pft` celda por celda contra el oraculo, y esas celdas
+estan en los `.sl4`. Detalle en
+`dev-tools/equilibria-tools/referencias/burfisher-3e/brecha-ingreso-privado.md`.
+
+### Que traer de vuelta
+
+| archivo | para que |
+|---|---|
+| `nus333-gempack-oracle.zip` | los `.sl4` (paso 2) — **el que desbloquea el diagnostico** |
+| `out\TBL813-DIR\*.sl4` + `out\ME8-DIR\*.sl4` | las tablas nuevas (paso 1) |
+| los `*.runlog` de lo que falle | para saber por que |
