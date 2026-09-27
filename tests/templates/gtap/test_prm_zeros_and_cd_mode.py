@@ -76,17 +76,81 @@ def test_har_to_dict_descarta_ceros_por_default():
     sin querer.
     """
     p = _load()
-    # ESBT/ESBQ/ESBI son todo ceros en los .prm de GTAP: sin keep_zeros el
-    # dict queda VACIO. Si alguna vez llegan con valores no-cero el test
-    # deja de ser informativo, asi que se afirma sobre los ceros, no sobre
-    # el vacio: ningun valor 0.0 puede haber quedado en el dict.
+    # ESBT/ESBQ/ESBI son todo ceros en los .prm de GTAP, asi que sin keep_zeros
+    # sus dicts quedan VACIOS: afirmar "no hay ceros" sobre un dict vacio es
+    # trivialmente cierto y no distingue "no conservo ceros" de "no cargo nada".
+    # Por eso se separa: los que tienen datos no deben traer ceros, y de los que
+    # son todo-ceros se afirma que estan vacios, que es justamente el efecto.
+    todo_ceros, con_datos = [], []
     for nombre in ("esubt", "esubq", "esubi", "esubd", "esubm", "esubva"):
         d = getattr(p.elasticities, nombre)
+        (todo_ceros if not d else con_datos).append((nombre, d))
+
+    assert con_datos, "ningun header cargo datos: el .prm o el lector cambiaron"
+    for nombre, d in con_datos:
         ceros = {k: v for k, v in d.items() if v == 0.0}
         assert not ceros, (
             f"{nombre} conserva ceros sin que se los pida: {list(ceros)[:5]}. "
             "Eso cambia el significado de 'clave ausente' para sus consumidores."
         )
+    # Los todo-ceros TIENEN que llegar vacios: si alguno trae claves, el
+    # keep_zeros se volvio a aplicar de mas y `.get(k, 1.0)` empezo a dar 0.0.
+    for nombre, d in todo_ceros:
+        assert not d, f"{nombre} deberia estar vacio, trae {len(d)} claves"
+
+
+def test_load_from_har_conserva_los_ceros_de_subpar():
+    """El CABLEADO, no sólo el lector: `load_from_har` tiene que pedir keep_zeros.
+
+    Este es el test que le faltaba a la primera version: los otros llaman a
+    `_har_to_dict` directo, asi que pasaban igual con el call site de produccion
+    revertido a `_h("SUBP", ...)` sin keep_zeros. Verificado por mutacion: sin
+    este test, borrar el arreglo dejaba los 4 en verde.
+
+    Hay que ESCRIBIR un .prm con SUBPAR=0 y cargarlo por el camino publico:
+    `default.prm` es CDE (SUBPAR>0), asi que con o sin keep_zeros da lo mismo y
+    la mutacion no se nota. El .prm Cobb-Douglas del libro vive fuera del repo,
+    de modo que se genera acá a partir del de datasets/.
+    """
+    import tempfile
+
+    from equilibria.babel.har import read_har, write_har
+    from equilibria.templates.gtap import GTAPParameters
+
+    paths = _prm_paths()
+    har = read_har(paths["default_path"])
+    if "SUBP" not in har:
+        pytest.skip("default.prm sin header SUBP")
+
+    n_celdas = int(har["SUBP"].array.size)
+    with tempfile.TemporaryDirectory() as td:
+        destino = pathlib.Path(td) / "cobbdouglas.prm"
+        har["SUBP"].array[...] = 0.0  # SUBPAR=0 en todas las celdas => CD
+        try:
+            write_har(destino, har)
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(
+                f"write_har no pudo escribir este .prm: {type(e).__name__}: {e}"
+            )
+
+        p = GTAPParameters()
+        p.load_from_har(
+            basedata_path=paths["basedata_path"],
+            sets_path=paths["sets_path"],
+            default_path=destino,
+            baserate_path=paths["baserate_path"],
+        )
+
+    subpar = p.elasticities.subpar
+    assert len(subpar) == n_celdas, (
+        f"load_from_har trajo {len(subpar)} de {n_celdas} celdas de SUBPAR: los "
+        "ceros se descartaron en el camino, o sea que el call site no esta "
+        "pidiendo keep_zeros=True. Con subpar incompleto el modelo cae al "
+        "default bh=1.0 y corre CDE creyendo que es Cobb-Douglas."
+    )
+    assert all(v == 0.0 for v in subpar.values()), (
+        f"se esperaban todos 0.0: {[(k, v) for k, v in subpar.items() if v][:5]}"
+    )
 
 
 def test_subpar_conserva_los_ceros():
@@ -196,3 +260,110 @@ def test_default_prm_no_activa_modo_cd():
         f"con SUBPAR>0 ninguna region deberia quedar en modo Cobb-Douglas, "
         f"quedaron: {eqs._cd_regions}"
     )
+
+
+# --------------------------------------------------------------------------
+# 3. El modelo CD se construye y respeta las guardas de GAMS
+# --------------------------------------------------------------------------
+
+
+def _params_cd(tmp_path):
+    """Un GTAPParameters cargado desde un .prm con SUBPAR=0 (Cobb-Douglas)."""
+    from equilibria.babel.har import read_har, write_har
+    from equilibria.templates.gtap import GTAPParameters
+
+    paths = _prm_paths()
+    har = read_har(paths["default_path"])
+    if "SUBP" not in har:
+        pytest.skip("default.prm sin header SUBP")
+    har["SUBP"].array[...] = 0.0
+    destino = tmp_path / "cobbdouglas.prm"
+    try:
+        write_har(destino, har)
+    except Exception as e:  # noqa: BLE001
+        pytest.skip(f"write_har no pudo escribir este .prm: {type(e).__name__}: {e}")
+
+    p = GTAPParameters()
+    p.load_from_har(
+        basedata_path=paths["basedata_path"],
+        sets_path=paths["sets_path"],
+        default_path=destino,
+        baserate_path=paths["baserate_path"],
+    )
+    return p
+
+
+def test_subpar_cero_activa_modo_cd_en_todas_las_regiones(tmp_path):
+    """El caso positivo: con SUBPAR=0 TODAS las regiones tienen que quedar en CD.
+
+    El otro test (`..._no_activa_modo_cd`) solo puede cazar un falso positivo.
+    Sin este, borrar la deteccion de CD entera dejaba la suite en verde
+    (verificado por mutacion: reemplazar el `_cd_requested.add(...)` por `pass`
+    no rompia nada).
+    """
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+    p = _params_cd(tmp_path)
+    eqs = GTAPModelEquations(p.sets, p, residual_region="ROW")
+    eqs.build_model()
+    assert eqs._cd_regions == set(p.sets.r), (
+        f"con SUBPAR=0 se esperaban todas las regiones en modo CD; "
+        f"quedaron {eqs._cd_regions} de {set(p.sets.r)}"
+    )
+
+
+def test_modo_cd_salta_las_ecuaciones_cde_only(tmp_path):
+    """`eveq`/`cveq` son CDE-only en GAMS (model.gms:1322 y :1328).
+
+    Bajo CD, con bh=0, degeneran a `sum_i alphaa == 1`: cierto para CUALQUIER
+    ev/cv, o sea que dejarlas activas convierte el bienestar en DOF libre. GAMS
+    no las tiene bajo CD y Python tampoco debe tenerlas.
+
+    Y como una fila que se salta necesita su variable fijada para no romper la
+    cuadratura del MCP, se verifica tambien que ev/cv queden fijadas.
+    """
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+    p = _params_cd(tmp_path)
+    m = GTAPModelEquations(p.sets, p, residual_region="ROW").build_model()
+
+    # dict(...) por el mismo motivo que en el test de abajo: el tipo de un
+    # atributo dinamico de Pyomo es `Component | Any` y el ratchet de `ty`
+    # rechaza `in` sobre eso.
+    for r in p.sets.r:
+        for nombre in ("eq_ev", "eq_cv"):
+            con = dict(getattr(m, nombre).items())
+            assert r not in con, (
+                f"{nombre}[{r}] sigue activa bajo Cobb-Douglas. Con bh=0 es una "
+                "tautologia (sum alphaa == 1) y deja el bienestar sin ancla."
+            )
+        for nombre in ("ev", "cv"):
+            var = getattr(m, nombre)[r]
+            assert var.fixed, (
+                f"{nombre}[{r}] quedo LIBRE con su ecuacion saltada: el MCP pierde "
+                "la cuadratura (una variable sin fila)."
+            )
+
+
+def test_modo_cd_mantiene_las_ecuaciones_de_utilidad(tmp_path):
+    """Las tres que SI existen bajo CD deben seguir activas: zcons, phip, uh.
+
+    Contraparte del test anterior: que el guard de CD no se lleve puesto lo que
+    la forma funcional necesita (model.gms:765, :781, :794).
+    """
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+    p = _params_cd(tmp_path)
+    m = GTAPModelEquations(p.sets, p, residual_region="ROW").build_model()
+
+    # Los componentes se leen con getattr porque el tipo de un atributo dinamico
+    # de Pyomo es `Component | Any`, y el ratchet de `ty` rechaza `in` sobre eso.
+    for nombre, ref in (("eq_phip", "model.gms:781"), ("eq_uh", "model.gms:794")):
+        con = dict(getattr(m, nombre).items())
+        for r in p.sets.r:
+            assert r in con, f"{nombre}[{r}] falta bajo CD ({ref})"
+
+    zcons = dict(m.eq_zcons.items())
+    regiones = set(p.sets.r)
+    activas = sum(1 for idx in zcons if idx[0] in regiones)
+    assert activas > 0, "eq_zcons no tiene ninguna celda activa bajo CD (model.gms:765)"

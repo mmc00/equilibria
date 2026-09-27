@@ -6887,7 +6887,17 @@ class GTAPModelEquations:
         model.eq_pgdpmp = Constraint(model.r, rule=eq_pgdpmp_rule)
 
         # Welfare measures (GAMS eveq / cveq) for the representative household.
+        #
+        # Ambas son CDE-only en GAMS: `$(... and (%utility% eq CDE))`
+        # (model.gms:1322 y :1328). Bajo CD no existen, y con razon: con bh=0 los
+        # dos factores exponenciales valen 1 y la ecuacion degenera a
+        # `sum_i alphaa == 1`, que es cierta para CUALQUIER ev/cv (medido: el
+        # residuo es 0.00e+00 con ev entre 0,5 y 1e6). O sea que dejarlas activas
+        # bajo CD no mide el bienestar: deja ev/cv como DOF libre y el solver las
+        # pone donde quiera. Se saltan, como en GAMS.
         def eq_ev_rule(model, r):
+            if r in self._cd_regions:
+                return Constraint.Skip
             terms = []
             for i in model.i:
                 alpha = value(model.alphaa_hhd[r, i])
@@ -6916,6 +6926,9 @@ class GTAPModelEquations:
         # GAMS keeps eveq active so welfare ev tracks shock state. Activate to match.
 
         def eq_cv_rule(model, r):
+            # CDE-only en GAMS (model.gms:1328); ver el comentario de eq_ev.
+            if r in self._cd_regions:
+                return Constraint.Skip
             terms = []
             for i in model.i:
                 alpha = value(model.alphaa_hhd[r, i])
@@ -6940,6 +6953,17 @@ class GTAPModelEquations:
 
         model.eq_cv = Constraint(model.r, rule=eq_cv_rule)
         # GAMS keeps cveq active so welfare cv tracks shock state. Activate to match.
+
+        # Cuadratura del MCP: eq_ev/eq_cv se saltan en las regiones CD (ver arriba),
+        # asi que hay que FIJAR ev/cv ahi — una variable fijada por cada fila que se
+        # salta. Sin esto quedan 2 vars sin ecuacion por region CD y el sistema deja
+        # de ser cuadrado. Es el mismo mecanismo que el `holdfixed` de GAMS.
+        # El valor es el de inicializacion (yc): bajo CD no hay ecuacion que defina
+        # el bienestar, asi que ev/cv NO son resultados que se puedan leer — quedan
+        # marcados como tales, no calculados a medias.
+        for _r_cd in self._cd_regions:
+            for _v in (model.ev[_r_cd], model.cv[_r_cd]):
+                _v.fix(value(_v))
 
         # ========================================================================
         # MARKET CLEARING
