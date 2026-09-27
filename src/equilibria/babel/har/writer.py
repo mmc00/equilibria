@@ -245,10 +245,10 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
     this record, for a single full block.
 
 
-    The (cols, rows, ...) order is NOT pinned down: every 2IFULL header in
-    the GEMPACK files on hand is N x 1, so it cannot be told apart from
-    (rows, cols, ...), and the one real 0 x 0 does not match this formula.
-    See issue #86 -- closing it needs harpy to accept our output.
+    The 7-int prefix is (1, rows, cols, 1, rows, 1, cols): a row/column extent
+    pair followed by the 1-based inclusive index ranges this block covers.
+    harpy3's validator pins the order down, and the formula reproduces every
+    real header byte-for-byte, the 0 x 0 marker included.
     """
     if ha.array.dtype != np.int32:
         raise TypeError(
@@ -261,14 +261,30 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
         )
     rows, cols = ha.array.shape
     _write_name_record(out, name)
-    # Filler at offset 80 so rows/cols land at 84/88 where the reader looks.
-    tail = wire.INT.pack(0) + wire.INT.pack(rows) + wire.INT.pack(cols)
+    # The slot at byte 80 is the RANK, and GEMPACK requires
+    # 84 + 4*rank == len(meta) -- harpy3 enforces it and rejects the header
+    # outright otherwise ("corrupted at dimensions in second Record"). A
+    # 2IFULL is rank 2, so: rank 2 then the two dims, giving a 92-byte meta
+    # record, byte-identical in layout to what GEMPACK writes (verified
+    # against header RDLT in nus333/default.prm). _write_refull does the same
+    # with its fixed rank of 7.
+    #
+    # This used to pack a 0 here purely so rows/cols landed at 84/88 where
+    # our own reader looks; every 2IFULL we emitted was unreadable by GEMPACK
+    # and by harpy (issue #86).
+    tail = wire.INT.pack(ha.array.ndim) + wire.INT.pack(rows) + wire.INT.pack(cols)
     _write_meta_record(out, wire.TOKEN_2IFULL, ha.long_name, tail)
 
     flat = ha.array.flatten(order="F").astype("<i4")
     data = bytearray()
     data.extend(wire.PAD)
-    for v in (cols, rows, 1, cols, rows, 1, 1):
+    # The 7-int prefix, as harpy3's read2D loop validates it (har_file_io.py:
+    # "=4siiiiiii" -> V[2]=rows, V[3]=cols, V[4]..V[5]=this block's row range
+    # 1-based inclusive, V[6]..V[7]=its column range). One full block, so the
+    # ranges span the whole array. Byte-identical to GEMPACK for every real
+    # header checked, the 0x0 marker LV61 included -- which is what the
+    # previous (cols, rows, ...) guess got wrong.
+    for v in (1, rows, cols, 1, rows, 1, cols):
         data.extend(wire.INT.pack(v))
     data.extend(flat.tobytes())
     wire.write_record(out, bytes(data))
