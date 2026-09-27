@@ -233,6 +233,18 @@ def main(carpeta: str) -> int:
 
         if emitidos:
             destino = exp.with_name(exp.stem + "-DIR.EXP")
+            # NO se pisa un -DIR.EXP que ya existe. El flujo real es "correr el
+            # .bat, y si la variante A corta, editar a mano y volver a correr";
+            # regenerar en cada corrida borraba esa edicion. Paso en Windows: el
+            # .bat volvio a poner la variante A, fallo, y dejo un .upd de 0 B y
+            # un .sl4 truncado ENCIMA del resultado bueno. Para regenerar de
+            # cero, borrar el -DIR.EXP a mano.
+            if destino.exists():
+                print(
+                    f"{exp.name}: {destino.name} ya existe, NO se toca "
+                    "(puede tener ediciones a mano). Borralo para regenerarlo."
+                )
+                continue
             destino.write_text("".join(salida))
             print(f"{exp.name} -> {destino.name}  ({emitidos} shocks traducidos)")
             total += 1

@@ -66,6 +66,13 @@ for %%E in (TBL813-DIR ME8-DIR) do (
     "%GTAP_MODEL_DIR%\%GTAP_MODEL_NAME%.EXE" -cmf "%%E.cmf" > "!D!\%%E.log" 2>&1
     if errorlevel 1 (
       echo     FALLO ^(ver !D!\%%E.log^)
+      REM  Una corrida fallida deja un .sl4 TRUNCADO y un .upd de 0 B encima del
+      REM  resultado bueno de una corrida anterior. Se borran: un .sl4 parcial
+      REM  se lee igual que uno bueno y entra silenciosamente en la comparacion.
+      if exist "!D!\%%E.sl4" del "!D!\%%E.sl4"
+      if exist "!D!\%%E.sl4.txt" del "!D!\%%E.sl4.txt"
+      if exist "!D!\%%E.upd" del "!D!\%%E.upd"
+      echo     ^(se borraron el .sl4/.upd parciales para que no se lean como validos^)
       REM La variante A (`= file X.shk;`) no se pudo verificar sin GEMPACK.
       REM Si es eso lo que corta, el .EXP trae la variante B comentada:
       REM comentar la linea `Shock ... = file ...;` y descomentar la de abajo.
