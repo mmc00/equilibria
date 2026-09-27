@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import platform
 import subprocess
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -367,8 +368,36 @@ class GTAPSolver:
                     getattr(self.model, con_name).deactivate()
             logger.debug("Fixed tax rates")
 
-        # Fix endowments
-        if closure.fix_endowments:
+        # Pairing de factores fiel a GAMS (model.gms:1413 "xfteq.xft, ..., pfteq,").
+        # xft queda LIBRE emparejada a eq_xfteq, y eq_pfteq pasa a fila libre: se
+        # cumple pero no determina ninguna variable, igual que en el MCP de GAMS.
+        # pft lo determina el resto del nido de factores (eq_pfeq).
+        if getattr(closure, "gams_factor_pairing", False):
+            if hasattr(self.model, "eq_pfteq"):
+                freed = 0
+                for idx in self.model.eq_pfteq:
+                    if self.model.eq_pfteq[idx].active:
+                        self.model.eq_pfteq[idx].deactivate()
+                        freed += 1
+                logger.debug("GAMS factor pairing: %d eq_pfteq como fila libre", freed)
+
+        # Fix endowments.
+        # Los dos cierres se pisan: el pairing deja xft LIBRE emparejada a
+        # eq_xfteq, y fix_endowments la FIJA. Son incompatibles, no acumulables,
+        # asi que pedir ambos es una contradiccion en la config — y resolverla en
+        # silencio a favor de uno deja al usuario creyendo que corrio el otro.
+        if closure.fix_endowments and getattr(closure, "gams_factor_pairing", False):
+            warnings.warn(
+                "closure pide fix_endowments=True Y gams_factor_pairing=True, que "
+                "son incompatibles: el pairing deja xft libre (emparejada a "
+                "eq_xfteq, model.gms:1413) y fix_endowments la fija. Gana el "
+                "pairing y fix_endowments se IGNORA. Elegi uno.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        if closure.fix_endowments and not getattr(
+            closure, "gams_factor_pairing", False
+        ):
             if hasattr(self.model, "xft"):
                 sf_set = (
                     {str(f) for f in self.model.sf}

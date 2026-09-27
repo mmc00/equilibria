@@ -486,9 +486,22 @@ class GTAPElasticities:
 
         har = read_har(default_path)
 
-        def _h(header: str, set_order: list, reorder: tuple | None) -> dict:
+        def _h(
+            header: str,
+            set_order: list,
+            reorder: tuple | None,
+            *,
+            keep_zeros: bool = False,
+        ) -> dict:
+            # keep_zeros va por header, NO para todos. Prenderlo aca adentro lo
+            # aplicaba a los 12 y cambiaba el significado de "clave ausente" para
+            # los otros 11: ESBT/ESBQ/ESBI son todo ceros en nus333, asi que
+            # pasaban de ausentes a presentes-en-0.0, y los consumidores no usan
+            # el mismo default (path_capi.py:425 y calibration_compare.py:250
+            # ponen 1.0; gtap_model_equations.py:1640 pone 0.0) => 1.0 -> 0.0 en
+            # dos call sites. Medido. Solo SUBP necesita conservar el cero.
             return GTAPBenchmarkValues._har_to_dict(
-                har, header, sets, set_order, reorder, scale=1.0
+                har, header, sets, set_order, reorder, scale=1.0, keep_zeros=keep_zeros
             )
 
         r10 = (1, 0)
@@ -500,7 +513,27 @@ class GTAPElasticities:
         self.etraq.update(_h("ETRQ", ["ACTS", "REG"], r10))
         self.esubq.update(_h("ESBQ", ["COMM", "REG"], r10))
         self.incpar.update(_h("INCP", ["COMM", "REG"], r10))
-        self.subpar.update(_h("SUBP", ["COMM", "REG"], r10))
+        # En un .prm un cero de SUBPAR es un valor con significado, no ausencia de
+        # dato: SUBPAR=0 es Cobb-Douglas (Burfisher 3e nota 5, pag. 126 — "all
+        # substitution parameters as zero"). Descartarlo dejaba subpar VACIO y el
+        # modelo caia al default 1.0, o sea el caso "Cobb-Douglas" corria con
+        # bh=1.0. INCP no lo necesita: no tiene un solo cero en ningun dataset.
+        self.subpar.update(_h("SUBP", ["COMM", "REG"], r10, keep_zeros=True))
+        if "SUBP" not in har:
+            # Sin el header, subpar queda vacio y cada bh cae al default 1.0, que
+            # es CDE — indistinguible de un .prm que pida SUBPAR=1 a proposito.
+            # Un dataset Cobb-Douglas de verdad correria CDE en silencio, que es
+            # exactamente el bug que keep_zeros arregla un nivel mas abajo.
+            import warnings
+
+            warnings.warn(
+                f"{default_path.name} no trae el header SUBP: subpar queda vacio y "
+                "bh cae al default 1.0 (CDE) para todas las celdas. Si el dataset "
+                "era Cobb-Douglas (SUBPAR=0), va a correr la forma funcional "
+                "equivocada sin avisar de nuevo.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         self.esubg.update(_h("ESBG", ["REG"], None))
         self.esubi.update(_h("ESBI", ["REG"], None))
         self.rorflex.update(_h("RFLX", ["REG"], None))
@@ -1300,6 +1333,7 @@ class GTAPBenchmarkValues:
         set_order: list[str],
         reorder: tuple[int, ...] | None,
         scale: float = 1.0,
+        keep_zeros: bool = False,
     ) -> dict:
         """Convert a HAR header array to a Python dict with internal key order.
 
@@ -1310,6 +1344,11 @@ class GTAPBenchmarkValues:
             set_order: GEMPACK dimension names in HAR order, e.g. ['COMM','REG'].
             reorder: Index permutation from HAR order to internal key order, or None.
             scale: Scalar multiplier (use 1e-6 for monetary values).
+            keep_zeros: conservar las celdas con valor 0.0. Para valores
+                MONETARIOS un cero es ausencia de flujo y descartarlo ahorra
+                memoria, que es el default. Para ELASTICIDADES un cero es un
+                valor con significado —SUBPAR=0 es Cobb-Douglas— y descartarlo
+                hace que el modelo caiga a un default distinto sin avisar.
         """
         import itertools
 
@@ -1342,7 +1381,7 @@ class GTAPBenchmarkValues:
         result: dict = {}
         for indices in itertools.product(*[range(len(e)) for e in dim_elements]):
             val = float(arr[indices]) * scale
-            if val == 0.0:
+            if val == 0.0 and not keep_zeros:
                 continue
             raw_key = tuple(dim_elements[d][i] for d, i in enumerate(indices))
             if reorder is not None:
