@@ -11,6 +11,12 @@ setlocal enabledelayedexpansion
 
 set HERE=%~dp0
 set DATA=%HERE%nus333
+set OUT=%HERE%out
+REM  Mismo criterio que 01-run-all.bat: estos .EXP declaran el cierre de
+REM  GTAPUv7 (tfe/tfd/tgd/tpdall/... no existen en el GTAPV7 condensado), y el
+REM  ejecutable NO esta en el PATH, hay que llamarlo por ruta completa.
+if not defined GTAP_MODEL_DIR set GTAP_MODEL_DIR=C:unGTAP375
+if not defined GTAP_MODEL_NAME set GTAP_MODEL_NAME=GTAPUV7
 
 if not exist "%DATA%\ME8.EXP" (
   echo ERROR: no encuentro %DATA%\ME8.EXP
@@ -34,6 +40,8 @@ for %%E in (TBL813-DIR ME8-DIR) do (
   if not exist "!EXP!" (
     echo   %%E: no se genero, se saltea.
   ) else (
+    set D=%OUT%\%%E
+    if not exist "!D!" mkdir "!D!"
     set CMF=%DATA%\%%E.cmf
     echo   --- %%E ---
 
@@ -41,18 +49,23 @@ for %%E in (TBL813-DIR ME8-DIR) do (
     REM aca se le agregan los archivos y el auxiliar. Se copia el .EXP SIN sus
     REM lineas de Method/Steps solo si hace falta forzarlas; aca se dejan como
     REM vienen, que es lo que el libro usa.
-    > "!CMF!" echo aux files = gtapv7;
+    REM  GTAPPARM NO se declara aca: el .EXP ya lo trae y declararlo dos veces
+    REM  da "E-Original file name specified twice". GTAPSUM/WELVIEW/GTAPVOL SI,
+    REM  o GEMPACK corta con "E-One data file not named".
+    > "!CMF!" echo aux files = %GTAP_MODEL_DIR%\%GTAP_MODEL_NAME%;
     >> "!CMF!" echo file GTAPSETS = sets.har;
     >> "!CMF!" echo file GTAPDATA = basedata.har;
-    >> "!CMF!" echo file GTAPPARM = default.prm;
-    >> "!CMF!" echo Updated file GTAPDATA = %%E.upd;
-    >> "!CMF!" echo Solution file = %%E;
+    >> "!CMF!" echo file GTAPSUM  = "!D!\SUMMARY.har";
+    >> "!CMF!" echo file WELVIEW  = "!D!\DECOMP.har";
+    >> "!CMF!" echo file GTAPVOL  = "!D!\GTAPVol.har";
+    >> "!CMF!" echo Updated file GTAPDATA = "!D!\%%E.upd";
+    >> "!CMF!" echo Solution file = "!D!\%%E";
     type "!EXP!" >> "!CMF!"
 
     pushd "%DATA%"
-    gtapv7 -cmf "%%E.cmf" > "%%E.runlog" 2>&1
+    "%GTAP_MODEL_DIR%\%GTAP_MODEL_NAME%.EXE" -cmf "%%E.cmf" > "!D!\%%E.log" 2>&1
     if errorlevel 1 (
-      echo     FALLO ^(ver %%E.runlog^)
+      echo     FALLO ^(ver !D!\%%E.log^)
       REM La variante A (`= file X.shk;`) no se pudo verificar sin GEMPACK.
       REM Si es eso lo que corta, el .EXP trae la variante B comentada:
       REM comentar la linea `Shock ... = file ...;` y descomentar la de abajo.
@@ -60,7 +73,8 @@ for %%E in (TBL813-DIR ME8-DIR) do (
       echo     trae una "variante B" comentada con el valor directo.
       set /a FAIL+=1
     ) else (
-      echo     ok -^> %%E.sl4
+      echo     ok -^> !D!\%%E.sl4
+      if exist "!D!\%%E.sl4" sltoht "!D!\%%E.sl4" "!D!\%%E.sl4.txt" ^>nul 2^>^&1
       set /a OK+=1
     )
     popd
