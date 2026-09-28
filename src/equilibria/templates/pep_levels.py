@@ -21,7 +21,10 @@ from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.simulations.pep_compare import get_solution_value
 from equilibria.templates.pep_model_equations import PEPModelVariables
 
-DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+#: `None` = resolver en tiempo de USO (`locate_gdxdump`). Era una ruta
+#: absoluta a GAMS 48: solo valida en el Mac del autor, y ademas la v48
+#: ya no pasa el servidor de licencias.
+DEFAULT_GDXDUMP_BIN: str | None = None
 _SCENARIOS = {"base", "sim1", "var"}
 _NUM_RE = re.compile(r"([-+]?\d+(?:\.\d+)?(?:[Ee][-+]?\d+)?)")
 _LAB_RE = re.compile(r"'([^']*)'")
@@ -92,7 +95,7 @@ class GAMSLevelsExtractor:
         results_gdx: Path | str,
         *,
         gams_slice: str = "base",
-        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
     ) -> None:
         self.results_gdx = Path(results_gdx)
         if not self.results_gdx.exists():
@@ -126,9 +129,14 @@ class GAMSLevelsExtractor:
         ]
 
     def _resolve_gdxdump_binary(self) -> Path | None:
-        raw = str(self.gdxdump_bin).strip()
+        raw = str(self.gdxdump_bin or "").strip()
         if not raw:
-            return None
+            # Sin ruta explicita se busca la instalacion; antes aqui habia una
+            # ruta fija a GAMS 48, valida solo en el Mac del autor.
+            from equilibria.babel.gdx.gdxdump import locate_gdxdump
+
+            ubicado = locate_gdxdump()
+            return Path(ubicado) if ubicado else None
 
         if "/" in raw or raw.startswith("."):
             p = Path(raw)

@@ -30,7 +30,10 @@ DEFAULT_VAL_PAR_FILE = (
 DEFAULT_RESULTS_GDX = (
     REPO_ROOT / "src/equilibria/templates/reference/pep2/scripts/Results.gdx"
 )
-DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+#: `None` = resolver en tiempo de USO (`locate_gdxdump`). Era una ruta
+#: absoluta a GAMS 48: solo valida en el Mac del autor, y ademas la v48
+#: ya no pasa el servidor de licencias.
+DEFAULT_GDXDUMP_BIN: str | None = None
 
 
 def get_solution_value(
@@ -66,7 +69,7 @@ class PEPScenarioParityRunner:
         sam_file: Path | str = DEFAULT_SAM_FILE,
         val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
         gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
-        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
         *,
         dynamic_sets: bool = True,
         init_mode: str = "excel",
@@ -403,7 +406,7 @@ class PEPScenarioParityRunner:
 
     def _resolve_gdxdump_binary(self) -> Path:
         """Resolve gdxdump path with robust fallbacks."""
-        raw = str(self.gdxdump_bin).strip()
+        raw = str(self.gdxdump_bin or "").strip()
         if raw:
             candidate = Path(raw)
             if candidate.exists():
@@ -412,9 +415,10 @@ class PEPScenarioParityRunner:
             if resolved:
                 return Path(resolved)
 
-        fallback = Path(DEFAULT_GDXDUMP_BIN)
-        if fallback.exists():
-            return fallback
+        from equilibria.babel.gdx.gdxdump import locate_gdxdump
+
+        if (ubicado := locate_gdxdump()) is not None:
+            return Path(ubicado)
 
         resolved = shutil.which("gdxdump")
         if resolved:
@@ -450,7 +454,7 @@ class PEPExportTaxParityRunner(PEPScenarioParityRunner):
         sam_file: Path | str = DEFAULT_SAM_FILE,
         val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
         gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
-        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
         *,
         dynamic_sets: bool = True,
         init_mode: str = "excel",
@@ -492,7 +496,7 @@ class PEPImportPriceParityRunner(PEPScenarioParityRunner):
         sam_file: Path | str = DEFAULT_SAM_FILE,
         val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
         gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
-        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
         *,
         dynamic_sets: bool = True,
         init_mode: str = "excel",
@@ -630,7 +634,7 @@ class PEPGovernmentSpendingParityRunner(PEPScenarioParityRunner):
         sam_file: Path | str = DEFAULT_SAM_FILE,
         val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
         gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
-        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
         *,
         dynamic_sets: bool = True,
         init_mode: str = "excel",
@@ -763,7 +767,7 @@ class PEPImportShockParityRunner(PEPScenarioParityRunner):
         sam_file: Path | str = DEFAULT_SAM_FILE,
         val_par_file: Path | str | None = DEFAULT_VAL_PAR_FILE,
         gams_results_gdx: Path | str = DEFAULT_RESULTS_GDX,
-        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
         *,
         dynamic_sets: bool = True,
         init_mode: str = "excel",

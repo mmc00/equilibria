@@ -12,7 +12,10 @@ from typing import Any
 from equilibria.babel.gdx.reader import read_gdx
 from equilibria.templates.pep_model_equations import PEPModelVariables
 
-DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+#: `None` = resolver en tiempo de USO (`locate_gdxdump`). Era una ruta
+#: absoluta a GAMS 48: solo valida en el Mac del autor, y ademas la v48
+#: ya no pasa el servidor de licencias.
+DEFAULT_GDXDUMP_BIN: str | None = None
 _NUM_RE = re.compile(r"([-+]?\d+(?:\.\d+)?(?:[Ee][-+]?\d+)?)")
 _LAB_RE = re.compile(r"'([^']*)'")
 _SCENARIOS = {"base", "sim1", "var"}
@@ -109,7 +112,7 @@ def compare_with_gams(
     gams_slice: str,
     abs_tol: float = 1e-6,
     rel_tol: float = 1e-6,
-    gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+    gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
 ) -> dict[str, Any]:
     """Compare one PEP solution against one GAMS results slice."""
     results_path = Path(gams_results_gdx)
@@ -171,8 +174,8 @@ def compare_with_gams(
     }
 
 
-def _resolve_gdxdump_binary(raw: str) -> Path:
-    token = str(raw).strip()
+def _resolve_gdxdump_binary(raw: str | None) -> Path:
+    token = str(raw or "").strip()
     if token:
         candidate = Path(token)
         if candidate.exists():
@@ -181,13 +184,10 @@ def _resolve_gdxdump_binary(raw: str) -> Path:
         if resolved:
             return Path(resolved)
 
-    fallback = Path(DEFAULT_GDXDUMP_BIN)
-    if fallback.exists():
-        return fallback
+    from equilibria.babel.gdx.gdxdump import locate_gdxdump
 
-    resolved = shutil.which("gdxdump")
-    if resolved:
-        return Path(resolved)
+    if (ubicado := locate_gdxdump()) is not None:
+        return Path(ubicado)
 
     raise FileNotFoundError(
         "gdxdump binary not found. Set --gdxdump-bin to your GAMS gdxdump path."

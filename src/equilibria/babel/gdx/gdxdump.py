@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import glob
+import os
 import re
 import shutil
 import subprocess
@@ -16,13 +18,50 @@ _VARIABLE_LEVEL_PATTERN = re.compile(
 )
 
 
+def _orden_de_version(directorio: str) -> tuple[int, tuple[int, ...]]:
+    """Clave de orden para los directorios de version de GAMS.
+
+    `Current` es el symlink a la instalacion activa y va primero. El resto se
+    ordena por version NUMERICA descendente: ordenarlos como texto pone "9"
+    por delante de "53" y de "48", que es justo lo que se quiere evitar.
+    """
+    nombre = Path(directorio).parent.name
+    if nombre == "Current":
+        return (0, ())
+    partes = tuple(-int(p) for p in re.findall(r"\d+", nombre)) or (0,)
+    return (1, partes)
+
+
 def locate_gdxdump() -> str | None:
-    path = shutil.which("gdxdump")
-    if path:
-        return path
-    fallback = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    if fallback.exists():
-        return str(fallback)
+    """Donde esta `gdxdump`, el binario que lee los .gdx de GAMS.
+
+    Era una ruta absoluta a GAMS 48 dentro del paquete PUBLICADO: funcionaba en
+    el Mac del autor y en ninguna otra maquina, y ademas el servidor de
+    licencias dejo de aceptar la v48 (HTTP 400, "Node ID for category 2 not
+    defined"), asi que tambien dejo de funcionar ahi.
+
+    Orden: `EQUILIBRIA_GDXDUMP` (escape hatch explicito) -> PATH -> las rutas de
+    instalacion habituales, `Current` primero y luego version numerica
+    descendente. `None` si no aparece: quien llama decide si saltar o fallar.
+    """
+    if explicito := os.environ.get("EQUILIBRIA_GDXDUMP"):
+        return explicito
+    if en_path := shutil.which("gdxdump"):
+        return en_path
+    patrones = (
+        "/Library/Frameworks/GAMS.framework/Versions/*/Resources",
+        "/opt/gams/*",
+        "/usr/local/gams/*",
+        "C:/GAMS/*/*",
+    )
+    candidatos: list[str] = []
+    for pat in patrones:
+        candidatos.extend(glob.glob(pat))
+    for d in sorted(candidatos, key=_orden_de_version):
+        for nombre in ("gdxdump", "gdxdump.exe"):
+            cand = Path(d) / nombre
+            if cand.exists():
+                return str(cand)
     return None
 
 
