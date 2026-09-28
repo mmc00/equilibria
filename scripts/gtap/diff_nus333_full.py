@@ -8,6 +8,20 @@ NEOS reference GDX (output/nus333_neos/out.gdx) to count match/diverge
 cells per phase (base, shock).
 
 Pass --csv PATH to emit benchmark rows in the same schema as the 9x10 diff.
+
+Resultado esperado (tol_rel=1e-3, tol_abs=1e-6): 100,00% en las dos fases —
+base 1304/1304 celdas, shock 1310/1310, sobre 139 variables.
+
+El GDX de referencia (`output/nus333_neos/out.gdx`) esta gitignoreado por la
+regla `output/` de .gitignore, asi que en un clon limpio NO existe y hay que
+generarlo antes de correr esto. Necesita GAMS instalado; la licencia demo
+alcanza, porque el modelo es 651x651.
+
+Los tres pasos (HAR -> GDX de entrada via
+`equilibria.babel.har_to_gdx.write_nus333_gdx_bundle(har_dir, out_dir)`,
+correr `comp_nus333.gms`, y copiar el `COMP.gdx` resultante a la ruta de
+arriba) ya estan automatizados en `bench_nus333_dual.py` — ver
+`build_bundle_once()` y `run_gams_local()`.
 """
 from __future__ import annotations
 import argparse, sys, time
