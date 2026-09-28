@@ -30,8 +30,9 @@ DATA_DIR = ROOT / "src/equilibria/templates/reference/gtap/data"
 
 def _closure_stack(model, params, label, closure):
     """Standard MCP closure stack (matches the solver pipeline)."""
-    from equilibria.templates.gtap.gtap_solver import GTAPSolver
     from _closure_patches import apply_squareness_patches
+
+    from equilibria.templates.gtap.gtap_solver import GTAPSolver
 
     helper = GTAPSolver(model, solver_name="path", params=params)
     helper.apply_closure(closure)
@@ -39,12 +40,46 @@ def _closure_stack(model, params, label, closure):
     helper.apply_aggressive_fixing_for_mcp()
 
 
-def _build_nus333(close: bool = True):
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+def nus333_closure():
+    """El cierre de nus333 fiel a GAMS. Fuente unica: hay 6 sitios que lo usan.
+
+    Los cuatro flags son obligatorios y ninguno es cosmetico:
+
+      if_sub=False              comp_nus333.gms usa ifSUB=0 (ecuaciones de
+                                precio explicitas, no las macros).
+      rmuv=("ROW",) / imuv      region/commodity del numerario.
+      fix_endowments=False      deja `xft` LIBRE con su ecuacion de oferta
+      gams_factor_pairing=True  (eq_xfteq) activa, que es el par MCP de GAMS.
+
+    Sin los dos ultimos se toman los defaults, y gtap_contract.py:377-389
+    documenta que ahi `pft` queda SIN ANCLA. `pft` es el precio del factor,
+    aguas arriba de todo el nivel de precios: el base salia con los precios
+    corridos 16-50% contra el 1,0 EXACTO del oraculo (que es el numerario del
+    benchmark), y el diff completo daba 56,44% de match en vez de 100%.
+
+    Esta funcion existe porque el literal estaba repetido —  y en dos de los
+    seis sitios estaba INCOMPLETO, incluido este archivo, que es el registro
+    que lee la cascada de paridad: el repo medía nus333 de dos formas. Compará
+    con `_build_compstat_har` abajo, que ya pasaba `fix_endowments=False` con su
+    propio comentario: la asimetria estaba a la vista dentro del archivo.
+    """
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    return GTAPClosureConfig(
+        if_sub=False,
+        rmuv=("ROW",),
+        imuv=("MFG",),
+        fix_endowments=False,
+        gams_factor_pairing=True,
+    )
+
+
+def _build_nus333(close: bool = True):
     from compare_nus333_vs_neos import _apply_tariff_shock, _copy_var_levels
     from diff_nus333_full import NUS333_HAR
+
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
     p = GTAPParameters()
     p.load_from_har(
@@ -53,7 +88,7 @@ def _build_nus333(close: bool = True):
         default_path=NUS333_HAR / "default.prm",
         baserate_path=NUS333_HAR / "baserate.har",
     )
-    cl = GTAPClosureConfig(if_sub=False, rmuv=("ROW",), imuv=("MFG",))
+    cl = nus333_closure()
     m_b = GTAPModelEquations(p.sets, p, residual_region="ROW", closure=cl).build_model()
     if close:
         _closure_stack(m_b, p, "base", cl)
@@ -75,10 +110,11 @@ def _build_compstat_har(har_dir: Path, close: bool = True):
     guaranteed square for arbitrary aggregations (it is hand-tuned for nus333);
     diff_closure reports the DOF gap so non-square datasets are visible.
     """
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from compare_nus333_vs_neos import _apply_tariff_shock, _copy_var_levels
+
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
     p = GTAPParameters()
     p.load_from_har(
@@ -107,8 +143,9 @@ def _build_compstat_har(har_dir: Path, close: bool = True):
 
 def _build_9x10(close: bool = True):
     """Faithful multi-period build via run_gtap.solve_sequential (SOLVES)."""
-    from equilibria.templates.gtap import GTAPParameters
     from run_gtap import _build_gtap_contract_with_calibration, solve_sequential
+
+    from equilibria.templates.gtap import GTAPParameters
 
     contract = _build_gtap_contract_with_calibration("gtap_standard7_9x10")
     cl = contract.closure.model_copy(update={"if_sub": False})

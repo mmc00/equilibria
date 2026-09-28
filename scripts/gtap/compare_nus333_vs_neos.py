@@ -151,24 +151,44 @@ def _structural_matching(constraints, free_vars, forced_pairs=None):
 def _solve(model, params, *, label: str, strict_dof: bool = True, closure=None):
     """Resuelve el MCP de nus333.
 
-    `closure` es el mismo objeto con que se construyo el modelo. Pasarlo NO es
-    opcional: `apply_closure()` sin argumento re-deriva un cierre por defecto y
-    DESCARTA el del llamador, asi que el modelo se armaba con un cierre y se
-    resolvia con otro. Con los defaults `pft` queda sin ancla
-    (gtap_contract.py:377-389) y el base salia con todo el nivel de precios
-    corrido — 56% de match contra el oraculo de GAMS en vez de 100%.
+    `closure` es el mismo objeto con que se construyo el modelo, y pasarlo NO es
+    opcional. El mecanismo exacto, leido de gtap_solver.py y no inferido:
+
+        __init__:119      self.closure = closure or GTAPClosureConfig()
+        apply_closure     closure = closure or self.closure
+
+    O sea que `apply_closure()` NO re-deriva nada: propaga `self.closure`. El
+    defecto estaba una linea antes, en la CONSTRUCCION —
+    `GTAPSolver(model, solver_name="path", params=params)` omitia `closure=`, asi
+    que `__init__` sustituia un `GTAPClosureConfig()` pelado. El modelo se armaba
+    con un cierre y se resolvia con OTRO, el de los defaults, donde `pft` queda
+    sin ancla (gtap_contract.py:377-389): el base salia con todo el nivel de
+    precios corrido y daba 56% de match contra el oraculo en vez de 100%.
 
     Queda con default `None` (= comportamiento viejo) para no romper llamadores
     externos, pero los tres del repo lo pasan.
     """
     from _closure_patches import apply_squareness_patches
 
-    solver_helper = GTAPSolver(model, solver_name="path", params=params)
+    # `closure=` al CONSTRUCTOR: ahi estaba el defecto (ver docstring).
+    solver_helper = GTAPSolver(
+        model, solver_name="path", params=params, closure=closure
+    )
     if closure is not None:
         # Este ORDEN es el medido, no uno equivalente: apply_closure(cl) ->
-        # squareness -> aggressive -> conditional. El camino viejo corria
-        # aggressive ANTES de squareness; invertirlo cambia que ecuaciones se
-        # desactivan por sobredeterminacion.
+        # squareness -> aggressive -> conditional.
+        #
+        # Dos diferencias contra el camino viejo, y no conviene confundirlas:
+        #   1. aggressive corria ANTES de squareness. Invertirlo cambia que
+        #      ecuaciones se desactivan: apply_aggressive_fixing_for_mcp calcula
+        #      `gap = free_vars - constraints` y no hace nada si gap <= 0, asi
+        #      que correrlo antes o despues de los patches que DESACTIVAN
+        #      constraints le da un gap distinto.
+        #   2. apply_conditional_fixing() es un paso NUEVO: no existia en el
+        #      camino viejo (0 ocurrencias en `main`).
+        #
+        # MEDIDO: este orden da 100% de match en base y shock. NO se verifico
+        # por separado cuanto aporta cada una de las dos diferencias.
         solver_helper.apply_closure(closure)
         apply_squareness_patches(model, params, label=label)
         solver_helper.apply_aggressive_fixing_for_mcp()
@@ -611,17 +631,11 @@ def main():
 
     # NUS333: residual region must be ROW (matches comp_nus333.gms `set rres /ROW/`).
     # comp_nus333.gms uses ifSUB=0 → use explicit price equations, not macros.
-    # El cierre completo: sin `fix_endowments=False` / `gams_factor_pairing=True`
-    # se toman los defaults, que gtap_contract.py:377-389 documenta como NO
-    # fieles a GAMS porque dejan `pft` sin ancla — y `pft` esta aguas arriba de
-    # todo el nivel de precios.
-    closure = GTAPClosureConfig(
-        if_sub=False,
-        rmuv=("ROW",),
-        imuv=("MFG",),
-        fix_endowments=False,
-        gams_factor_pairing=True,
-    )
+    # Cierre fiel a GAMS. Fuente unica en _parity_datasets.nus333_closure(), que
+    # documenta por que los cuatro flags son obligatorios.
+    from _parity_datasets import nus333_closure
+
+    closure = nus333_closure()
 
     # ---- BASE (t=base) ----
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)

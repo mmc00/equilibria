@@ -71,6 +71,7 @@ def nus333_results():
     sys.path.insert(0, str(PATH_CAPI_SRC))
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+    from _parity_datasets import nus333_closure
     from compare_nus333_vs_neos import (
         _apply_tariff_shock,
         _copy_var_levels,
@@ -80,7 +81,6 @@ def nus333_results():
 
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-    from equilibria.templates.gtap.gtap_solver import GTAPClosureConfig
 
     params = GTAPParameters()
     params.load_from_har(
@@ -95,13 +95,7 @@ def nus333_results():
     # ancla. Con ellos este test fallaba 6/6 y el shock ni resolvia bien
     # (yc[ROW] = -4,49, ingreso NEGATIVO; uh[ROW] pegado al bound 0,001), de
     # donde salian Δ% como regy[ROW] -1554,72% contra +1,52% del oraculo.
-    closure = GTAPClosureConfig(
-        if_sub=False,
-        rmuv=("ROW",),
-        imuv=("MFG",),
-        fix_endowments=False,
-        gams_factor_pairing=True,
-    )
+    closure = nus333_closure()
 
     builder_b = GTAPModelEquations(
         params.sets, params, residual_region="ROW", closure=closure

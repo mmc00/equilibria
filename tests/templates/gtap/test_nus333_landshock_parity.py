@@ -79,11 +79,11 @@ def landshock_results():
     sys.path.insert(0, str(PATH_CAPI_SRC))
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
+    from _parity_datasets import nus333_closure
     from compare_nus333_vs_neos import _copy_var_levels, _extract_key, _solve
 
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-    from equilibria.templates.gtap.gtap_solver import GTAPClosureConfig
 
     params = GTAPParameters()
     params.load_from_har(
@@ -92,13 +92,7 @@ def landshock_results():
         default_path=NUS333_DIR / "default.prm",
         baserate_path=NUS333_DIR / "baserate.har",
     )
-    closure = GTAPClosureConfig(
-        if_sub=False,
-        rmuv=("ROW",),
-        imuv=("MFG",),
-        fix_endowments=False,
-        gams_factor_pairing=True,
-    )
+    closure = nus333_closure()
 
     builder_b = GTAPModelEquations(
         params.sets, params, residual_region="ROW", closure=closure

@@ -32,11 +32,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
+
 sys.path.insert(0, str(path_capi_src()))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import (
-    list_populated_vars, diff_phase_rows, write_csv, git_short_sha, build_derived,
+    build_derived,
+    diff_phase_rows,
+    git_short_sha,
+    list_populated_vars,
+    write_csv,
 )
 from diff_nus333_full import _nus333_key_remap
 
@@ -102,10 +107,11 @@ def run_gams_local() -> tuple[Path, float]:
 
 def run_python_once() -> tuple[dict, float, float, float]:
     """Run Python NUS333 base + shock. Return (models, total_s, res_base, res_shock)."""
-    from compare_nus333_vs_neos import _solve, _apply_tariff_shock, _copy_var_levels
+    from compare_nus333_vs_neos import _apply_tariff_shock, _copy_var_levels, _solve
+
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
     params = GTAPParameters()
     params.load_from_har(
@@ -114,7 +120,12 @@ def run_python_once() -> tuple[dict, float, float, float]:
         default_path=NUS333_HAR / "default.prm",
         baserate_path=NUS333_HAR / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False, rmuv=("ROW",), imuv=("MFG",))
+    # Cierre fiel a GAMS, fuente unica en _parity_datasets (ver su docstring):
+    # sin fix_endowments=False / gams_factor_pairing=True, `pft` queda sin ancla
+    # y el benchmark mide un equilibrio distinto al del oraculo.
+    from _parity_datasets import nus333_closure
+
+    closure = nus333_closure()
 
     t0 = time.perf_counter()
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)

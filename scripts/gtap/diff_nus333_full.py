@@ -78,7 +78,7 @@ def main():
     from compare_nus333_vs_neos import _solve, _apply_tariff_shock, _copy_var_levels
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from _parity_datasets import nus333_closure
 
     params = GTAPParameters()
     params.load_from_har(
@@ -95,13 +95,7 @@ def main():
     # 1,2136 / pabs 1,1625) contra el 1,0 EXACTO del oraculo, que es el
     # numerario del benchmark. Eso daba 56,44% de match en base y 56,11% en
     # shock; con este cierre da 100% en las dos fases (1304/1304 y 1310/1310).
-    closure = GTAPClosureConfig(
-        if_sub=False,
-        rmuv=("ROW",),
-        imuv=("MFG",),
-        fix_endowments=False,
-        gams_factor_pairing=True,
-    )
+    closure = nus333_closure()
 
     print("=== Python baseline NUS333 ===")
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
