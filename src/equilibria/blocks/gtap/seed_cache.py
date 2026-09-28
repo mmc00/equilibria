@@ -74,7 +74,36 @@ def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
             continue
         items = sorted((str(k), round(float(v), 10)) for k, v in dict(src).items())
         fields.append(hashlib.sha256(repr(items).encode()).hexdigest()[:16])
+    # The settle bakes the elasticities and the technology shifters into its
+    # equations too, so they shape the seed: without them a lambdava-shocked
+    # settle, or another .prm, was served as this run's benchmark.
+    for group in (
+        getattr(params, "elasticities", None),
+        getattr(params, "shifts", None),
+    ):
+        fields.append(_digest_dict_fields(group))
     return "seed-" + hashlib.sha256(_SEP.join(fields).encode()).hexdigest()[:24]
+
+
+def _num(v) -> str:
+    try:
+        return repr(round(float(v), 10))
+    except (TypeError, ValueError):
+        return repr(v)
+
+
+def _digest_dict_fields(group) -> str:
+    """Digest every dict-valued attribute of a params group (name + sorted items)."""
+    if group is None:
+        return "none"
+    parts = []
+    for name in sorted(vars(group)):
+        val = getattr(group, name)
+        if not isinstance(val, dict):
+            continue
+        items = sorted((str(k), _num(v)) for k, v in val.items())
+        parts.append((name, items))
+    return hashlib.sha256(repr(parts).encode()).hexdigest()[:16]
 
 
 def _enc_key(k):

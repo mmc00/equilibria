@@ -432,3 +432,34 @@ def test_cache_hit_skips_settle(tmp_path, monkeypatch):
     seed2 = _calibrate()  # hit → must NOT build/solve
     assert called["n"] == 0, "cache hit still built the model"
     assert _seed_signature(seed1) == _seed_signature(seed2), "cached seed differs"
+
+
+def test_seed_cache_key_covers_shifts_and_elasticities():
+    """The settle solves the benchmark WITH ``params.shifts`` and the elasticities
+    baked into its equations, so both shape the cached seed.  The key used to
+    digest only evfb/vfm/vkb/rtf/kappaf: a run with ``lambdava[USA,SER]=1.10`` wrote
+    a SHOCKED seed that every later nus333 run was served as its base, and a
+    ``3x3CobbDouglas.prm`` run would be served the ``default.prm`` seed.
+    """
+    from equilibria.blocks.gtap import seed_cache
+    from equilibria.templates.gtap import GTAPParameters
+
+    def _key(p):
+        return seed_cache.cache_key("gtap-3x2", None, "ROW", p)
+
+    base = GTAPParameters()
+    base.elasticities.esubva[("USA", "SER")] = 1.26
+
+    shocked = GTAPParameters()
+    shocked.elasticities.esubva[("USA", "SER")] = 1.26
+    shocked.shifts.lambdava[("USA", "SER")] = 1.10
+
+    other_prm = GTAPParameters()
+    other_prm.elasticities.esubva[("USA", "SER")] = 1.0
+
+    same = GTAPParameters()
+    same.elasticities.esubva[("USA", "SER")] = 1.26
+
+    assert _key(base) == _key(same)
+    assert _key(base) != _key(shocked), "a shocked settle must not share the key"
+    assert _key(base) != _key(other_prm), "another .prm must not share the key"
