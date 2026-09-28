@@ -92,13 +92,19 @@ def landshock_results():
         default_path=NUS333_DIR / "default.prm",
         baserate_path=NUS333_DIR / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False)
+    closure = GTAPClosureConfig(
+        if_sub=False,
+        rmuv=("ROW",),
+        imuv=("MFG",),
+        fix_endowments=False,
+        gams_factor_pairing=True,
+    )
 
     builder_b = GTAPModelEquations(
         params.sets, params, residual_region="ROW", closure=closure
     )
     model_b = builder_b.build_model()
-    _solve(model_b, params, label="base")
+    _solve(model_b, params, label="base", closure=closure)
     base = _extract_key(model_b, params)
 
     builder_s = GTAPModelEquations(
@@ -111,7 +117,7 @@ def landshock_results():
     model_s = builder_s.build_model()
     _copy_var_levels(model_b, model_s)
     _apply_land_productivity_shock(model_s, region="ROW", factor=1.0 - LAND_CUT)
-    _solve(model_s, params, label="shock")
+    _solve(model_s, params, label="shock", closure=closure)
     shock = _extract_key(model_s, params)
 
     return base, shock

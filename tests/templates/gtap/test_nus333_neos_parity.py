@@ -89,13 +89,25 @@ def nus333_results():
         default_path=NUS333_DIR / "default.prm",
         baserate_path=NUS333_DIR / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False)
+    # El cierre completo. Con `GTAPClosureConfig(if_sub=False)` a secas se toman
+    # los defaults `fix_endowments=True` / `gams_factor_pairing=False`, que
+    # gtap_contract.py:377-389 documenta como NO fieles a GAMS: dejan `pft` sin
+    # ancla. Con ellos este test fallaba 6/6 y el shock ni resolvia bien
+    # (yc[ROW] = -4,49, ingreso NEGATIVO; uh[ROW] pegado al bound 0,001), de
+    # donde salian Δ% como regy[ROW] -1554,72% contra +1,52% del oraculo.
+    closure = GTAPClosureConfig(
+        if_sub=False,
+        rmuv=("ROW",),
+        imuv=("MFG",),
+        fix_endowments=False,
+        gams_factor_pairing=True,
+    )
 
     builder_b = GTAPModelEquations(
         params.sets, params, residual_region="ROW", closure=closure
     )
     model_b = builder_b.build_model()
-    _solve(model_b, params, label="base")
+    _solve(model_b, params, label="base", closure=closure)
     base = _extract_key(model_b, params)
 
     _apply_tariff_shock(params, factor=1.10)
@@ -108,7 +120,7 @@ def nus333_results():
     )
     model_s = builder_s.build_model()
     _copy_var_levels(model_b, model_s)
-    _solve(model_s, params, label="shock")
+    _solve(model_s, params, label="shock", closure=closure)
     shock = _extract_key(model_s, params)
 
     return base, shock

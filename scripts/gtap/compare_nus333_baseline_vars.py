@@ -86,10 +86,18 @@ def solve_python_baseline():
         default_path=NUS333 / "default.prm",
         baserate_path=NUS333 / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False)
+    # Cierre completo (ver gtap_contract.py:377-389): con los defaults `pft`
+    # queda sin ancla y el baseline sale con todo el nivel de precios corrido.
+    closure = GTAPClosureConfig(
+        if_sub=False,
+        rmuv=("ROW",),
+        imuv=("MFG",),
+        fix_endowments=False,
+        gams_factor_pairing=True,
+    )
     builder = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     model = builder.build_model()
-    _solve(model, params, label="baseline")
+    _solve(model, params, label="baseline", closure=closure)
     return model
 
 

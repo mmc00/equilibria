@@ -148,14 +148,35 @@ def _structural_matching(constraints, free_vars, forced_pairs=None):
     return [free_vars[c] for c in perm]
 
 
-def _solve(model, params, *, label: str, strict_dof: bool = True):
+def _solve(model, params, *, label: str, strict_dof: bool = True, closure=None):
+    """Resuelve el MCP de nus333.
+
+    `closure` es el mismo objeto con que se construyo el modelo. Pasarlo NO es
+    opcional: `apply_closure()` sin argumento re-deriva un cierre por defecto y
+    DESCARTA el del llamador, asi que el modelo se armaba con un cierre y se
+    resolvia con otro. Con los defaults `pft` queda sin ancla
+    (gtap_contract.py:377-389) y el base salia con todo el nivel de precios
+    corrido — 56% de match contra el oraculo de GAMS en vez de 100%.
+
+    Queda con default `None` (= comportamiento viejo) para no romper llamadores
+    externos, pero los tres del repo lo pasan.
+    """
     from _closure_patches import apply_squareness_patches
 
     solver_helper = GTAPSolver(model, solver_name="path", params=params)
-    solver_helper.apply_closure()
-    solver_helper.apply_aggressive_fixing_for_mcp()
-
-    apply_squareness_patches(model, params, label=label)
+    if closure is not None:
+        # Este ORDEN es el medido, no uno equivalente: apply_closure(cl) ->
+        # squareness -> aggressive -> conditional. El camino viejo corria
+        # aggressive ANTES de squareness; invertirlo cambia que ecuaciones se
+        # desactivan por sobredeterminacion.
+        solver_helper.apply_closure(closure)
+        apply_squareness_patches(model, params, label=label)
+        solver_helper.apply_aggressive_fixing_for_mcp()
+        solver_helper.apply_conditional_fixing()
+    else:
+        solver_helper.apply_closure()
+        solver_helper.apply_aggressive_fixing_for_mcp()
+        apply_squareness_patches(model, params, label=label)
 
     constraints = sorted(
         model.component_data_objects(Constraint, active=True), key=lambda c: c.name
@@ -590,12 +611,22 @@ def main():
 
     # NUS333: residual region must be ROW (matches comp_nus333.gms `set rres /ROW/`).
     # comp_nus333.gms uses ifSUB=0 → use explicit price equations, not macros.
-    closure = GTAPClosureConfig(if_sub=False)
+    # El cierre completo: sin `fix_endowments=False` / `gams_factor_pairing=True`
+    # se toman los defaults, que gtap_contract.py:377-389 documenta como NO
+    # fieles a GAMS porque dejan `pft` sin ancla — y `pft` esta aguas arriba de
+    # todo el nivel de precios.
+    closure = GTAPClosureConfig(
+        if_sub=False,
+        rmuv=("ROW",),
+        imuv=("MFG",),
+        fix_endowments=False,
+        gams_factor_pairing=True,
+    )
 
     # ---- BASE (t=base) ----
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     model_b = builder_b.build_model()
-    _solve(model_b, params, label="base")
+    _solve(model_b, params, label="base", closure=closure)
     _dump_diagnostics(model_b, "base")
     _dump_gdpmp_decomp(model_b, "base")
     _dump_facty_decomp(model_b, "base")
@@ -610,7 +641,7 @@ def main():
     model_c = builder_c.build_model()
     n_copied = _copy_var_levels(model_b, model_c)
     print(f"[check] warm-start: copied {n_copied} (var,index) levels from base")
-    _solve(model_c, params, label="check")
+    _solve(model_c, params, label="check", closure=closure)
     check = _extract_key(model_c, params)
 
     # ---- SHOCK (t=shock) — apply shock, warm-start from check ----
@@ -673,7 +704,7 @@ def main():
                 n_bumped += 1
         print(f"[shock] price-bump +{bump*100:.1f}%: nudged {n_bumped} price vars")
 
-    _solve(model_s, params, label="shock")
+    _solve(model_s, params, label="shock", closure=closure)
     _dump_diagnostics(model_s, "shock")
     _dump_price_chain(model_s, "shock")
     _dump_gdpmp_decomp(model_s, "shock")
