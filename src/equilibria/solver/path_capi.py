@@ -1938,7 +1938,7 @@ def _run_path_capi_nonlinear_full(
             )
             print(
                 f"[nlp-square] wrote SCALED .nl to {_scaled_nl_export_path} "
-                f"(run standalone: /opt/homebrew/bin/ipopt {_scaled_nl_export_path})",
+                f"(run standalone: ipopt {_scaled_nl_export_path})",
                 file=sys.stderr,
             )
 
