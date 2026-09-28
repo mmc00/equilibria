@@ -18,18 +18,34 @@ _VARIABLE_LEVEL_PATTERN = re.compile(
 )
 
 
+#: Cuantos componentes de version se comparan. Rellenar a una longitud fija
+#: evita que la tupla mas corta gane: sin esto `53.5` quedaba DETRAS de `53`,
+#: porque `(-53,)` < `(-53, -5)`.
+_COMPONENTES_VERSION = 4
+
+
 def _orden_de_version(directorio: str) -> tuple[int, tuple[int, ...]]:
-    """Clave de orden para los directorios de version de GAMS.
+    """Clave de orden para los directorios de instalacion de GAMS.
 
     `Current` es el symlink a la instalacion activa y va primero. El resto se
     ordena por version NUMERICA descendente: ordenarlos como texto pone "9"
     por delante de "53" y de "48", que es justo lo que se quiere evitar.
+
+    Los digitos se buscan en el nombre del directorio Y en el de su padre
+    porque las dos convenciones difieren: macOS pone la version en el padre
+    (`Versions/53/Resources`) y Linux en el propio nombre
+    (`/opt/gams/gams48.1_x64`). Mirar solo el padre dejaba a TODAS las
+    instalaciones de Linux empatadas en "sin version", con el orden entre
+    ellas al azar.
     """
-    nombre = Path(directorio).parent.name
-    if nombre == "Current":
+    p = Path(directorio)
+    if p.name == "Current" or p.parent.name == "Current":
         return (0, ())
-    partes = tuple(-int(p) for p in re.findall(r"\d+", nombre)) or (0,)
-    return (1, partes)
+    # El nombre propio manda (Linux); si no trae digitos, el del padre (macOS).
+    digitos = re.findall(r"\d+", p.name) or re.findall(r"\d+", p.parent.name)
+    partes = tuple(-int(d) for d in digitos[:_COMPONENTES_VERSION])
+    relleno = partes + (0,) * (_COMPONENTES_VERSION - len(partes))
+    return (1, relleno)
 
 
 def locate_gdxdump() -> str | None:

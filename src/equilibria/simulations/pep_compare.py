@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from equilibria.babel.gdx.gdxdump import locate_gdxdump
 from equilibria.babel.gdx.reader import read_gdx
 from equilibria.templates.pep_model_equations import PEPModelVariables
 
@@ -183,8 +184,6 @@ def _resolve_gdxdump_binary(raw: str | None) -> Path:
         resolved = shutil.which(token)
         if resolved:
             return Path(resolved)
-
-    from equilibria.babel.gdx.gdxdump import locate_gdxdump
 
     if (ubicado := locate_gdxdump()) is not None:
         return Path(ubicado)

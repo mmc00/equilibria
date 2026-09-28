@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from equilibria.babel.gdx.gdxdump import locate_gdxdump
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
 
@@ -270,8 +271,6 @@ def evaluate_eq29_eq39_against_gams(
     # Centinela: resolver en tiempo de USO, no de import. El default era
     # una ruta fija a GAMS 48, valida solo en el Mac del autor.
     if gdxdump_bin is None:
-        from equilibria.babel.gdx.gdxdump import locate_gdxdump
-
         gdxdump_bin = locate_gdxdump() or "gdxdump"
 
     gdx_path = Path(results_gdx)
@@ -430,8 +429,6 @@ def evaluate_eq79_eq84_against_gams(
     # Centinela: resolver en tiempo de USO, no de import. El default era
     # una ruta fija a GAMS 48, valida solo en el Mac del autor.
     if gdxdump_bin is None:
-        from equilibria.babel.gdx.gdxdump import locate_gdxdump
-
         gdxdump_bin = locate_gdxdump() or "gdxdump"
 
     gdx_path = Path(results_gdx)
@@ -564,8 +561,6 @@ def evaluate_levels_against_gams(
     # Centinela: resolver en tiempo de USO, no de import. El default era
     # una ruta fija a GAMS 48, valida solo en el Mac del autor.
     if gdxdump_bin is None:
-        from equilibria.babel.gdx.gdxdump import locate_gdxdump
-
         gdxdump_bin = locate_gdxdump() or "gdxdump"
 
     gdx_path = Path(results_gdx)
@@ -698,8 +693,6 @@ def evaluate_residual_parity_against_gams(
     # Centinela: resolver en tiempo de USO, no de import. El default era
     # una ruta fija a GAMS 48, valida solo en el Mac del autor.
     if gdxdump_bin is None:
-        from equilibria.babel.gdx.gdxdump import locate_gdxdump
-
         gdxdump_bin = locate_gdxdump() or "gdxdump"
 
     contracts = contracts or default_equation_contracts()
@@ -778,8 +771,6 @@ def evaluate_results_baseline_compatibility(
     # Centinela: resolver en tiempo de USO, no de import. El default era
     # una ruta fija a GAMS 48, valida solo en el Mac del autor.
     if gdxdump_bin is None:
-        from equilibria.babel.gdx.gdxdump import locate_gdxdump
-
         gdxdump_bin = locate_gdxdump() or "gdxdump"
 
     gdx_path = Path(results_gdx)

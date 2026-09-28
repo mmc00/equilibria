@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from equilibria.babel.gdx.gdxdump import locate_gdxdump
 from equilibria.simulations import pep_compare as _pep_compare
 from equilibria.templates.pep_calibration_unified import (
     PEPModelCalibrator,
@@ -414,8 +415,6 @@ class PEPScenarioParityRunner:
             resolved = shutil.which(raw)
             if resolved:
                 return Path(resolved)
-
-        from equilibria.babel.gdx.gdxdump import locate_gdxdump
 
         if (ubicado := locate_gdxdump()) is not None:
             return Path(ubicado)

@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from equilibria.babel.gdx.gdxdump import locate_gdxdump
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.simulations.pep_compare import get_solution_value
 from equilibria.templates.pep_model_equations import PEPModelVariables
@@ -133,8 +134,6 @@ class GAMSLevelsExtractor:
         if not raw:
             # Sin ruta explicita se busca la instalacion; antes aqui habia una
             # ruta fija a GAMS 48, valida solo en el Mac del autor.
-            from equilibria.babel.gdx.gdxdump import locate_gdxdump
-
             ubicado = locate_gdxdump()
             return Path(ubicado) if ubicado else None
 

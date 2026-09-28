@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from equilibria.babel.gdx.gdxdump import locate_gdxdump
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.baseline.manifest import (
     compute_state_anchors,
@@ -361,8 +362,6 @@ def evaluate_strict_gams_baseline_compatibility(
     require_manifest: bool = False,
 ) -> BaselineCompatibilityReport:
     """Evaluate whether strict-gams baseline is compatible with current state."""
-    from equilibria.babel.gdx.gdxdump import locate_gdxdump
-
     # Centinela: resolver en tiempo de USO, no de import. El default era una
     # ruta absoluta a GAMS 48 — valida solo en el Mac del autor.
     if gdxdump_bin is None:
