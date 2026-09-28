@@ -215,7 +215,20 @@ tests/fixtures/*.txt
 225b/
 
 # Local outputs / reports
-output/
+# Se excluye por CONTENIDO (`output/*`, no `output/`): con `output/` git no
+# desciende al directorio y cualquier negate de adentro es inalcanzable. Con
+# `output/*` si desciende, y se puede re-incluir el camino hasta un archivo.
+# Verificado con `git check-ignore -v` en los dos sentidos.
+output/*
+!output/nus333_neos/
+output/nus333_neos/*
+# El GDX de referencia de nus333 NO es una salida local: es el ORACULO de GAMS
+# contra el que se mide la paridad. `_parity_datasets.py:155` y
+# `docs/site/guide/benchmarks.md` apuntan a esta ruta, pero la regla `output/`
+# lo dejaba fuera del repo, asi que en un clon limpio no existia y
+# `diff_nus333_full.py` abortaba. Son 177KB y hacen que la paridad se pueda
+# replicar sin tener GAMS instalado.
+!output/nus333_neos/out.gdx
 results/*.pkl
 DifFile.gdx
 notes/
