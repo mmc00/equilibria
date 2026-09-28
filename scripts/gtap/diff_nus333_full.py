@@ -16,14 +16,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(path_capi_src()))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from _diff_core import (
+# path_capi_src() se usa para extender sys.path, asi que su import va ANTES del
+# primer uso: ea801a4 ("rutas externas por entorno") lo dejo debajo y el script
+# moria con NameError en la linea 19. No se detecto porque correrlo exige
+# output/nus333_neos/out.gdx, que no existia en el repo.
+from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
+
+sys.path.insert(0, str(path_capi_src()))
+
+from _diff_core import (  # noqa: E402
     list_populated_vars, gams_levels, find_py_var, compare_phase,
     diff_phase_rows, write_csv, git_short_sha, build_derived,
 )
-from equilibria._local_refs import nus333_dir, path_capi_src
 
 NUS333_HAR = Path(str(nus333_dir()))
 GAMS_OUT = ROOT / "output/nus333_neos/out.gdx"
