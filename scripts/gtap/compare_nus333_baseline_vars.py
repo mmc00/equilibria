@@ -6,6 +6,7 @@ endogenous variables. The baseline solve uses the same closure as the shock
 script, but tariff power shocks are NOT applied.
 """
 from __future__ import annotations
+
 import csv
 import io
 import math
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from pyomo.environ import value  # noqa: E402
+
 from equilibria._local_refs import nus333_dir
 
 GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
@@ -74,10 +76,11 @@ def load_gams_var(name: str) -> dict[tuple, float]:
 def solve_python_baseline():
     """Solve Python baseline (no shock applied) — replicates compare_nus333_vs_neos.main()."""
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
+    from _parity_datasets import nus333_closure
     from compare_nus333_vs_neos import _solve  # type: ignore
-    from equilibria.templates.gtap.gtap_parameters import GTAPParameters
+
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-    from equilibria.templates.gtap.gtap_solver import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_parameters import GTAPParameters
 
     params = GTAPParameters()
     params.load_from_har(
@@ -86,10 +89,12 @@ def solve_python_baseline():
         default_path=NUS333 / "default.prm",
         baserate_path=NUS333 / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False)
+    # Cierre completo (ver gtap_contract.py:377-389): con los defaults `pft`
+    # queda sin ancla y el baseline sale con todo el nivel de precios corrido.
+    closure = nus333_closure()
     builder = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     model = builder.build_model()
-    _solve(model, params, label="baseline")
+    _solve(model, params, label="baseline", closure=closure)
     return model
 
 

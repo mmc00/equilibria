@@ -8,6 +8,20 @@ NEOS reference GDX (output/nus333_neos/out.gdx) to count match/diverge
 cells per phase (base, shock).
 
 Pass --csv PATH to emit benchmark rows in the same schema as the 9x10 diff.
+
+Resultado esperado (tol_rel=1e-3, tol_abs=1e-6): 100,00% en las dos fases —
+base 1304/1304 celdas, shock 1310/1310, sobre 139 variables.
+
+El GDX de referencia (`output/nus333_neos/out.gdx`) esta VERSIONADO, asi que
+esto corre en un clon limpio sin necesidad de tener GAMS. Antes no: la regla
+`output/` de .gitignore lo dejaba afuera y el script abortaba.
+
+Para REGENERARLO (si cambia el modelo de referencia) hace falta GAMS — la
+licencia demo alcanza, porque el modelo es 651x651. Los tres pasos (HAR -> GDX
+de entrada via `equilibria.babel.har_to_gdx.write_nus333_gdx_bundle(har_dir,
+out_dir)`, correr `comp_nus333.gms`, y copiar el `COMP.gdx` resultante a la
+ruta de arriba) ya estan automatizados en `bench_nus333_dual.py` — ver
+`build_bundle_once()` y `run_gams_local()`.
 """
 from __future__ import annotations
 import argparse, sys, time
@@ -16,14 +30,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(path_capi_src()))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from _diff_core import (
+# path_capi_src() se usa para extender sys.path, asi que su import va ANTES del
+# primer uso: ea801a4 ("rutas externas por entorno") lo dejo debajo y el script
+# moria con NameError en la linea 19. No se detecto porque correrlo exige
+# output/nus333_neos/out.gdx, que no existia en el repo.
+from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
+
+sys.path.insert(0, str(path_capi_src()))
+
+from _diff_core import (  # noqa: E402
     list_populated_vars, gams_levels, find_py_var, compare_phase,
     diff_phase_rows, write_csv, git_short_sha, build_derived,
 )
-from equilibria._local_refs import nus333_dir, path_capi_src
 
 NUS333_HAR = Path(str(nus333_dir()))
 GAMS_OUT = ROOT / "output/nus333_neos/out.gdx"
@@ -58,7 +78,7 @@ def main():
     from compare_nus333_vs_neos import _solve, _apply_tariff_shock, _copy_var_levels
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from _parity_datasets import nus333_closure
 
     params = GTAPParameters()
     params.load_from_har(
@@ -67,13 +87,21 @@ def main():
         default_path=NUS333_HAR / "default.prm",
         baserate_path=NUS333_HAR / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False, rmuv=("ROW",), imuv=("MFG",))
+    # `gams_factor_pairing` y `fix_endowments=False` NO son opcionales aca: sin
+    # ellos se toman los defaults, que gtap_contract.py:377-389 documenta como
+    # NO fieles a GAMS porque dejan `pft` sin ancla. Y `pft` es el precio del
+    # factor, aguas arriba de todo el nivel de precios: con el cierre por
+    # defecto el BASE salia con los precios corridos 16-50% (pft 1,502 / pd
+    # 1,2136 / pabs 1,1625) contra el 1,0 EXACTO del oraculo, que es el
+    # numerario del benchmark. Eso daba 56,44% de match en base y 56,11% en
+    # shock; con este cierre da 100% en las dos fases (1304/1304 y 1310/1310).
+    closure = nus333_closure()
 
     print("=== Python baseline NUS333 ===")
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     m_b = builder_b.build_model()
     _t0 = time.perf_counter()
-    r_b = _solve(m_b, params, label="base")
+    r_b = _solve(m_b, params, label="base", closure=closure)
     sec_b = time.perf_counter() - _t0
     res_b = float(getattr(r_b, "residual", 0.0) or 0.0)
     print(f"  baseline solve={sec_b:.2f}s")
@@ -91,7 +119,7 @@ def main():
         m_s = builder_s.build_model()
         _copy_var_levels(m_b, m_s)
         _t0 = time.perf_counter()
-        r_s = _solve(m_s, params, label="shock")
+        r_s = _solve(m_s, params, label="shock", closure=closure)
         sec_s = time.perf_counter() - _t0
         res_s = float(getattr(r_s, "residual", 0.0) or 0.0)
         print(f"  shock solve={sec_s:.2f}s")
@@ -145,8 +173,14 @@ def main():
                 gams_all = gams_levels(GAMS_OUT, r["var"])
                 py_var, _ = find_py_var(m_py, r["var"], derived=build_derived(m_py))
                 if py_var is not None:
+                    # key_remap es obligatorio: sin el, las claves de GAMS
+                    # llegan con los prefijos `c_`/`a_` y NINGUNA resuelve
+                    # contra Pyomo, asi que la celda peor saldria vacia o
+                    # enganosa. El camino principal (diff_phase_rows) si lo
+                    # pasaba; este bloque de display lo omitia.
                     s = compare_phase(py_var, gams_all, phase,
-                                      tol_rel=args.tol_rel, tol_abs=args.tol_abs)
+                                      tol_rel=args.tol_rel, tol_abs=args.tol_abs,
+                                      key_remap=_nus333_key_remap)
                     if s["worst"]:
                         diverge_details.append((r["var"], r["py_var"], s))
 
