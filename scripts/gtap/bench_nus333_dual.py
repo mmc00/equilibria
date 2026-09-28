@@ -110,7 +110,6 @@ def run_python_once() -> tuple[dict, float, float, float]:
     from compare_nus333_vs_neos import _apply_tariff_shock, _copy_var_levels, _solve
 
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
     params = GTAPParameters()
@@ -130,7 +129,7 @@ def run_python_once() -> tuple[dict, float, float, float]:
     t0 = time.perf_counter()
     builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
     m_b = builder_b.build_model()
-    r_b = _solve(m_b, params, label="base")
+    r_b = _solve(m_b, params, label="base", closure=closure)
     res_b = float(getattr(r_b, "residual", 0.0) or 0.0)
 
     _apply_tariff_shock(params, factor=1.10)
@@ -139,7 +138,7 @@ def run_python_once() -> tuple[dict, float, float, float]:
     )
     m_s = builder_s.build_model()
     _copy_var_levels(m_b, m_s)
-    r_s = _solve(m_s, params, label="shock")
+    r_s = _solve(m_s, params, label="shock", closure=closure)
     res_s = float(getattr(r_s, "residual", 0.0) or 0.0)
     elapsed = time.perf_counter() - t0
     return {"base": m_b, "shock": m_s}, elapsed, res_b, res_s

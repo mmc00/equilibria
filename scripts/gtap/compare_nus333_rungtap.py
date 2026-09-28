@@ -110,6 +110,20 @@ def main() -> int:
     # non-residual regions; residual region (ROW) absorbs the capital-account
     # identity. RunGTAP side mirrors this via `swap psaveslack("USA") =
     # del_tbalry("USA")` so both engines run the same closure.
+    # OJO: este cierre NO es el de `_parity_datasets.nus333_closure()` y no debe
+    # serlo — `savf_flag="capFix"` es deliberado para espejar el swap de RunGTAP.
+    #
+    # PERO los `_solve(...)` de abajo NO le pasan `closure=`, asi que caen en la
+    # rama legacy de `_solve` y el cierre que se APLICA no es este: es el de los
+    # defaults (ver el docstring de `_solve`, donde `pft` queda sin ancla). O sea
+    # que esta comparacion contra GEMPACK probablemente mide un equilibrio
+    # distinto al que declara.
+    #
+    # No se arregla acá a proposito: pasar `closure=closure` cambiaria el cierre
+    # Y el orden efectivos de una comparacion contra RunGTAP/GEMPACK que no
+    # tengo forma de verificar en esta maquina (necesita gtapv7.exe y el .cmf de
+    # runs/nus333_compare/). Cambiar el resultado de un head-to-head sin poder
+    # re-medirlo seria peor que dejarlo anotado.
     closure = GTAPClosureConfig(if_sub=False, savf_flag="capFix")
 
     # Baseline
