@@ -1486,6 +1486,52 @@ def _collapse_pft_pfteq(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _rebuild_lambdava_shock — inject a VA-technology shock INTO the shock eqs only
+# ---------------------------------------------------------------------------
+def _rebuild_lambdava_shock(m, lambdava_shock) -> int:
+    """Put ``lambdava[r,a]`` into eq_va/eq_pxeq of the SHOCK period only.
+
+    GAMS (model.gms:539-547) carries the VA shifter as ``lambdava(r,a,t)``:
+        va  = ava*xp*(px/pva)**sigmap * (axp*lambdava)**(sigmap-1)
+        px**(1-sigmap) = axp**(sigmap-1) * (and*(pnd/lambdand)**(1-sigmap)
+                                            + ava*(pva/lambdava)**(1-sigmap))
+    The blocks bake ``params.shifts.lambdava`` as a literal at build, into ALL
+    periods — so setting it on ``params`` before the build shocks base and check
+    too. This rewrites only the ``'shock'`` cells, in effective VA units
+    (va_eff = va*lambdava, pva_eff = pva/lambdava), which is exactly the GAMS form
+    for any sigmap, including the Cobb-Douglas branch:
+        eq_va:   va -> va*lambdava,  pva -> pva/lambdava
+        eq_pxeq: pva -> pva/lambdava
+    NOT idempotent: call once per built model.
+    """
+    from pyomo.core.expr.visitor import ExpressionReplacementVisitor
+
+    eq_va = getattr(m, "eq_va", None)
+    eq_px = getattr(m, "eq_pxeq", None)
+    n = 0
+    for (r, a), lam in lambdava_shock.items():
+        lam = float(lam)
+        if not lam > 0.0:
+            raise ValueError(f"lambdava_shock[{r},{a}] = {lam}: must be > 0")
+        idx = (r, a, "shock")
+        pva = m.pva[idx]
+        va = m.va[idx]
+        for eq, sub in (
+            (eq_va, {id(pva): pva / lam, id(va): va * lam}),
+            (eq_px, {id(pva): pva / lam}),
+        ):
+            if eq is None or idx not in eq or not eq[idx].active:
+                raise ValueError(
+                    f"lambdava_shock[{r},{a}]: {getattr(eq, 'name', eq)}{idx} is not "
+                    "an active equation, the shock would not enter the model"
+                )
+            visitor = ExpressionReplacementVisitor(substitute=sub)
+            eq[idx].set_value(visitor.walk_expression(eq[idx].expr))
+            n += 1
+    return n
+
+
+# ---------------------------------------------------------------------------
 # _rebuild_eq_pmeq_shock — inject the tariff shock INTO the solved shock eqs
 # ---------------------------------------------------------------------------
 def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
@@ -2958,6 +3004,7 @@ def _solve_multiperiod_inner(
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
+    lambdava_shock: dict[tuple[str, str], float] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -2998,6 +3045,9 @@ def _solve_multiperiod_inner(
     params : GTAPParameters (used for altertax elasticities / imptx shock)
     closure : GTAPClosureConfig or None
     ref_gdx : path to GAMS reference GDX (optional, not yet used)
+    lambdava_shock : {(r, a): lambdava level} applied to the SHOCK period only
+        (GAMS ``avaall``: avaall=0.10 -> 1.10), INSTEAD of the default +10% tariff.
+        gtap-mode only. None keeps the tariff shock, unchanged.
 
     Returns
     -------
@@ -3012,6 +3062,9 @@ def _solve_multiperiod_inner(
     if mode not in ("altertax", "gtap"):
         raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
     _gtap_mode = mode == "gtap"
+    if lambdava_shock is not None and not _gtap_mode:
+        raise ValueError("lambdava_shock is only supported in mode='gtap'")
+    _tariff_shock = lambdava_shock is None
 
     # PATH options default = the options the reference bundles for THIS mode were
     # solved with (an existing PATH_CAPI_OPTIONS — user or harness — always wins):
@@ -3802,8 +3855,11 @@ def _solve_multiperiod_inner(
     # ── Phase 3: SHOCK period ────────────────────────────────────────────────
     # Apply +10% imptx shock to params (tm_pct mode).  gtap-mode shocks the
     # domestic diagonal too (GAMS shocks ALL routes); altertax skips it.
+    # With lambdava_shock the tariff is NOT applied: params_shock stays the
+    # benchmark and the technology shock lives only in the rebuilt shock eqs.
     params_shock = copy.deepcopy(p_alt)
-    _apply_imptx_shock(params_shock, factor=0.10, gtap_mode=_gtap_mode)
+    if _tariff_shock:
+        _apply_imptx_shock(params_shock, factor=0.10, gtap_mode=_gtap_mode)
 
     # Freeze base and check; leave shock free.
     freeze_inactive_periods(m, "shock")
@@ -4003,7 +4059,16 @@ def _solve_multiperiod_inner(
     # the recomputes apply shock_factor themselves) is defined in both modes.
     _recompute_params = p_alt
     _eq_pmeq_shock_rebuilt = False
-    if _gtap_mode:
+    if not _tariff_shock:
+        _n_lva = _rebuild_lambdava_shock(m, lambdava_shock)
+        import logging as _logging
+
+        _logging.getLogger(__name__).info(
+            "shock period: rebuilt %d eq_va/eq_pxeq cells with lambdava_shock "
+            "(no tariff shock)",
+            _n_lva,
+        )
+    elif _gtap_mode:
         _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
         if _n_pmeq:
             _eq_pmeq_shock_rebuilt = True
@@ -4098,6 +4163,11 @@ def _solve_multiperiod_inner(
     # factor) + _rebuild_eq_pmeq_shock/_rebuild_eq_ytax_mt_shock (idempotent, re-invoked
     # per λ) are re-run. Produces OUR levels solution, not GEMPACK's.
     _cont_env = os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION")
+    if _cont_env and not _tariff_shock:
+        raise ValueError(
+            "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does not "
+            "support lambdava_shock"
+        )
     if _cont_env and _gtap_mode:
         _lambdas = [float(x) for x in _cont_env.split(",") if x.strip()]
         if not _lambdas or _lambdas[-1] != 1.0:
@@ -4206,7 +4276,7 @@ def _solve_multiperiod_inner(
     # from the final pm (otherwise ifSUB=1 leaves pm/pmt/pa mutually inconsistent).
     if _if_sub:
         _n_rep = _recompute_ifsub_report_vars(
-            m, params_shock, "shock", shock_factor=0.10
+            m, params_shock, "shock", shock_factor=0.10 if _tariff_shock else 0.0
         )
         if _n_rep:
             import logging as _logging
@@ -4228,7 +4298,8 @@ def _solve_multiperiod_inner(
     # pm that already has it), corrupting the import prices. ytax[mt] is computed
     # from pmcif/xw (NOT pm) with its own power rate, so it stays correct and is NOT
     # gated — verified vs GAMS ytax[USA,mt] (see _recompute_ytax_mt above).
-    if not _eq_pmeq_shock_rebuilt:
+    # Without a tariff shock there is no wedge to patch into pm post-solve.
+    if _tariff_shock and not _eq_pmeq_shock_rebuilt:
         _n_pm = _recompute_pm_pmt(
             m, _recompute_params, "shock", shock_factor=0.10, if_sub=_if_sub
         )
@@ -4258,6 +4329,7 @@ def solve_multiperiod(
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
+    lambdava_shock: dict[tuple[str, str], float] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Solve base → check → shock, with the built model hidden from the GC.
 
@@ -4304,4 +4376,5 @@ def solve_multiperiod(
             mode=mode,
             solve_check=solve_check,
             settle_only=settle_only,
+            lambdava_shock=lambdava_shock,
         )

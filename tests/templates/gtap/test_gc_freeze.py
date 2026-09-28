@@ -127,6 +127,7 @@ def test_wrapper_forwards_every_argument(monkeypatch, _no_frozen_state):
         mode="gtap",
         solve_check=True,
         settle_only=True,
+        lambdava_shock={("USA", "SER"): 1.10},
     )
     assert got["positional"] == ("MODEL", "PARAMS", "CLOSURE")
     assert got == {
@@ -139,6 +140,7 @@ def test_wrapper_forwards_every_argument(monkeypatch, _no_frozen_state):
         "mode": "gtap",
         "solve_check": True,
         "settle_only": True,
+        "lambdava_shock": {("USA", "SER"): 1.10},
     }
 
 
