@@ -3130,7 +3130,7 @@ def _solve_multiperiod_inner(
     qe_shock : {(r, f): factor} on the aggregate endowment of a mobile factor, the
         SHOCK period only, INSTEAD of the default +10% tariff. It is the GEMPACK
         ``qe`` shock ``1 + qe/100`` (qe=10 -> 1.10), applied to GAMS ``aft``
-        (model.gms:1073). Combines with ``lambdava_shock``. gtap-mode only.
+        (model.gms:1073). One shock kind per run: not with ``lambdava_shock``. gtap-mode only.
 
     Returns
     -------
