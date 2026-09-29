@@ -39,3 +39,31 @@ def test_rejects_a_non_positive_factor(monkeypatch):
         driver.solve_multiperiod(
             None, None, None, mode="gtap", lambdava_shock={("USA", "SER"): 0.0}
         )
+
+
+# ``qe_shock`` (endowment, TBL55/63/66/77) shares the same up-front checks.
+
+
+def test_qe_rejected_in_altertax_mode(monkeypatch):
+    monkeypatch.setattr(driver, "_load_run_gtap", _explode)
+    with pytest.raises(ValueError, match="mode='gtap'"):
+        driver.solve_multiperiod(
+            None, None, None, mode="altertax", qe_shock={("USA", "CAPITAL"): 1.1}
+        )
+
+
+def test_qe_rejected_with_tariff_continuation(monkeypatch):
+    monkeypatch.setattr(driver, "_load_run_gtap", _explode)
+    monkeypatch.setenv("EQUILIBRIA_GTAP_SHOCK_CONTINUATION", "0.5,1.0")
+    with pytest.raises(ValueError, match="CONTINUATION"):
+        driver.solve_multiperiod(
+            None, None, None, mode="gtap", qe_shock={("USA", "CAPITAL"): 1.1}
+        )
+
+
+def test_qe_rejects_a_non_positive_factor(monkeypatch):
+    monkeypatch.setattr(driver, "_load_run_gtap", _explode)
+    with pytest.raises(ValueError, match="must be > 0"):
+        driver.solve_multiperiod(
+            None, None, None, mode="gtap", qe_shock={("USA", "CAPITAL"): -1.0}
+        )
