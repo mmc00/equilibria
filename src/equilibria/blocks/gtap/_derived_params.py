@@ -28,6 +28,7 @@ gtap7_3x3 all ``omegax=inf`` so gd/ge never enter an active (Leontief) body;
 from __future__ import annotations
 
 import math
+import warnings
 from typing import Any
 
 from equilibria.blocks.gtap.agents import (
@@ -1017,6 +1018,52 @@ def _vst_income(params: Any, region: str, commodity: str) -> float:
     return float(val or 0.0)
 
 
+def cd_regions(params: Any, sets: Any) -> frozenset[str]:
+    """Regiones con utilidad privada Cobb-Douglas: las que traen SUBPAR=0.
+
+    GAMS tiene dos formas funcionales y elige con ``%utility%`` al compilar
+    (model.gms:761-795): CD no es la CDE con bh=0 -- esa es singular, divide por
+    bh -- sino otra rama. Como en el monolito (PR #89), aca el modo lo decide el
+    DATO: un SUBPAR=0 (el cargador conserva esos ceros) pide Cobb-Douglas.
+    SUBPAR ausente es 1.0, o sea CDE.
+
+    ``%utility%`` es global en GAMS; un .prm con SUBPAR mixto dentro de una region,
+    o regiones CD junto a regiones CDE, no tiene equivalente: se construye igual
+    (la region con algun cero entera en CD) y se AVISA. Los avisos salen con
+    ``stacklevel=1`` para que Python los muestre una vez aunque la calibracion,
+    los bloques y el fijado de ev/cv llamen aca cada uno.
+    """
+    out = set()
+    comms = list(sets.i)
+    for r in sets.r:
+        cd_here = {
+            i
+            for i in comms
+            if (v := params.elasticities.subpar.get((r, i))) is not None
+            and abs(float(v)) < 1e-12
+        }
+        if not cd_here:
+            continue
+        if len(cd_here) < len(comms):
+            warnings.warn(
+                f"{r}: SUBPAR=0 en {sorted(cd_here)} pero no en "
+                f"{sorted(set(comms) - cd_here)}. GAMS no puede representar eso "
+                "(`%utility%` es global); la region entera va en modo Cobb-Douglas.",
+                RuntimeWarning,
+                stacklevel=1,
+            )
+        out.add(r)
+    if out and len(out) < len(list(sets.r)):
+        warnings.warn(
+            f"Regiones Cobb-Douglas {sorted(out)} junto a regiones CDE "
+            f"{sorted(set(sets.r) - out)}. GAMS no puede representar eso "
+            "(`%utility%` es global); cada region usa su forma.",
+            RuntimeWarning,
+            stacklevel=1,
+        )
+    return frozenset(out)
+
+
 def demand_income_params(
     params: Any,
     sets: Any,
@@ -1040,6 +1087,7 @@ def demand_income_params(
     """
     bm = params.benchmark
     el = params.elasticities
+    _cd = cd_regions(params, sets)
 
     regional_income_share_data: dict[tuple, float] = {}
     regional_government_share_data: dict[tuple, float] = {}
@@ -1199,17 +1247,35 @@ def demand_income_params(
                 investment_val / investment_den if investment_total > 0.0 else 0.0
             )
             eh_val = float(el.incpar.get((region, commodity), 1.0) or 1.0)
-            bh_val = float(el.subpar.get((region, commodity), 1.0) or 1.0)
-            if abs(bh_val) < 1e-12:
-                bh_val = 1.0
+            if region in _cd:
+                # Cobb-Douglas: bh queda en su valor real (0). Ninguna ecuacion CD
+                # lo usa, y la CDE, que divide por el, no se construye.
+                _bh = el.subpar.get((region, commodity), 1.0)
+                bh_val = 1.0 if _bh is None else float(_bh)
+            else:
+                bh_val = float(el.subpar.get((region, commodity), 1.0) or 1.0)
+                if abs(bh_val) < 1e-12:
+                    bh_val = 1.0
             eh_data[(region, commodity)] = eh_val
             bh_data[(region, commodity)] = bh_val
             xcshr_val = private_val / max(yc_bench, 1e-12) if private_val > 0.0 else 0.0
-            if xcshr_val > 0.0:
+            if xcshr_val > 0.0 and region not in _cd:
                 cde_alpha_den += xcshr_val / bh_val
 
         yc_pc = yc_bench / max(pop_data[(region,)], 1e-12) if yc_bench > 0.0 else 0.0
         yc_pc = max(yc_pc, 1e-12)
+        # cal.gms:762-767 bajo CD: alphaa = xcshr normalizado a sumar 1, zcons =
+        # alphaa. El yc de xcshr se cancela al normalizar: queda la share del gasto
+        # privado, la misma magnitud que auh (abajo) ya eleva en prod xa^share.
+        _cd_alpha_sum = (
+            sum(
+                v / max(yc_bench, 1e-12)
+                for i in sets.i
+                if (v := _private_total(region, i)) > 0.0
+            )
+            if region in _cd
+            else 0.0
+        )
         for commodity in sets.i:
             private_val = _private_total(region, commodity)
             xcshr_val = private_val / max(yc_bench, 1e-12) if private_val > 0.0 else 0.0
@@ -1217,7 +1283,11 @@ def demand_income_params(
             eh_val = eh_data[(region, commodity)]
             pa_val = 1.0  # GAMS numerario initialization
             uh_val = 1.0  # GAMS benchmark utility initialization
-            if yc_bench > 0.0 and xcshr_val > 0.0 and cde_alpha_den > 0.0:
+            if region in _cd:
+                alpha_cd = xcshr_val / _cd_alpha_sum if _cd_alpha_sum > 0.0 else 0.0
+                alphaa_hhd_data[(region, commodity)] = alpha_cd
+                zcons_init_data[(region, commodity)] = alpha_cd
+            elif yc_bench > 0.0 and xcshr_val > 0.0 and cde_alpha_den > 0.0:
                 alphaa_hhd_data[(region, commodity)] = (
                     (xcshr_val / bh_val)
                     * ((yc_pc / pa_val) ** bh_val)
