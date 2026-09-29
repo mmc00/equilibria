@@ -124,7 +124,7 @@ def _params_digest(params) -> str | None:
     Content-addressing also closes two holes that path+mtime could not:
     ``filter_config`` rewrites ``params.benchmark`` after load (same files, different
     model), and a restored/rsync'd dataset keeps its mtime while changing content.
-    This mirrors ``seed_cache.cache_key``, which digests the same arrays.
+    This mirrors ``seed_cache.cache_key``, which digests the same groups.
     """
     bm = getattr(params, "benchmark", None)
     tx = getattr(params, "taxes", None)
@@ -155,6 +155,25 @@ def _params_digest(params) -> str | None:
         parts.append(hashlib.sha256(repr(items).encode()).hexdigest()[:16])
     if not seen_any:
         return None
+    # The build also bakes the elasticities and params.shifts into every period's
+    # equations: a model built with lambdava[USA,SER]=1.10, or from another .prm,
+    # must not serve a clean run.
+    for name in ("elasticities", "shifts"):
+        parts.append(name)
+        group = getattr(params, name, None)
+        if group is None:
+            parts.append("none")
+            continue
+        try:
+            fields = sorted(
+                (attr, sorted((str(k), round(float(v), 10)) for k, v in val.items()))
+                if isinstance(val, dict)
+                else (attr, repr(val))
+                for attr, val in vars(group).items()
+            )
+        except (TypeError, ValueError):
+            return None  # unreadable -> do not cache rather than key on nothing
+        parts.append(hashlib.sha256(repr(fields).encode()).hexdigest()[:16])
     return hashlib.sha256(_SEP.join(parts).encode()).hexdigest()[:24]
 
 

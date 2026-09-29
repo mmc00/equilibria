@@ -72,8 +72,7 @@ def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
         if src is None:
             fields.append("none")
             continue
-        items = sorted((str(k), round(float(v), 10)) for k, v in dict(src).items())
-        fields.append(hashlib.sha256(repr(items).encode()).hexdigest()[:16])
+        fields.append(_sha16(_mapping_items(src)))
     # The settle bakes the elasticities and the technology shifters into its
     # equations too, so they shape the seed: without them a lambdava-shocked
     # settle, or another .prm, was served as this run's benchmark.
@@ -81,29 +80,38 @@ def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
         getattr(params, "elasticities", None),
         getattr(params, "shifts", None),
     ):
-        fields.append(_digest_dict_fields(group))
+        fields.append(_digest_group(group))
     return "seed-" + hashlib.sha256(_SEP.join(fields).encode()).hexdigest()[:24]
 
 
-def _num(v) -> str:
+def _hashable_num(v) -> str:
+    """Normalise a value for the key: numbers rounded to 10 digits, anything else by
+    repr, so a non-numeric entry changes the key instead of raising."""
     try:
         return repr(round(float(v), 10))
     except (TypeError, ValueError):
         return repr(v)
 
 
-def _digest_dict_fields(group) -> str:
-    """Digest every dict-valued attribute of a params group (name + sorted items)."""
+def _mapping_items(d) -> list:
+    return sorted((str(k), _hashable_num(v)) for k, v in dict(d).items())
+
+
+def _sha16(obj) -> str:
+    return hashlib.sha256(repr(obj).encode()).hexdigest()[:16]
+
+
+def _digest_group(group) -> str:
+    """Digest EVERY attribute of a params group: dicts by their items, anything
+    else by repr -- so a scalar added to the group later is covered too."""
     if group is None:
         return "none"
-    parts = []
-    for name in sorted(vars(group)):
-        val = getattr(group, name)
-        if not isinstance(val, dict):
-            continue
-        items = sorted((str(k), _num(v)) for k, v in val.items())
-        parts.append((name, items))
-    return hashlib.sha256(repr(parts).encode()).hexdigest()[:16]
+    return _sha16(
+        sorted(
+            (name, _mapping_items(val) if isinstance(val, dict) else repr(val))
+            for name, val in vars(group).items()
+        )
+    )
 
 
 def _enc_key(k):
