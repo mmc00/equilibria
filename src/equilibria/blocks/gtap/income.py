@@ -94,7 +94,7 @@ class IncomeBlock(Block):
         # eveq/cveq son CDE-only en GAMS (model.gms:1322/1328): bajo Cobb-Douglas,
         # con bh=0, degeneran a `sum alphaa == 1`, cierta para cualquier ev/cv.
         # Se saltan en esas regiones; gtap_block_model fija ev/cv ahi.
-        cd = dp.cd_regions(p, s)
+        cd_regs = dp.cd_regions(p, s)
 
         def _calib_param(name, doms):
             parameters[name] = Parameter(
@@ -657,7 +657,7 @@ class IncomeBlock(Block):
             def build_expression(self, pyomo_model, indices):
                 model = pyomo_model
                 (r,) = indices
-                if r in cd:
+                if r in cd_regs:
                     return None
                 terms = []
                 for i in model.i:
@@ -679,7 +679,7 @@ class IncomeBlock(Block):
 
         # Si TODAS las regiones son Cobb-Douglas no queda ninguna fila: la
         # ecuacion no se registra (el backend rechaza una ecuacion vacia).
-        if set(regions) - cd:
+        if set(regions) - cd_regs:
             equations.append(EqEv())
 
         # ---------------- eq_cv (monolith 7715) ----------------
@@ -690,7 +690,7 @@ class IncomeBlock(Block):
             def build_expression(self, pyomo_model, indices):
                 model = pyomo_model
                 (r,) = indices
-                if r in cd:
+                if r in cd_regs:
                     return None
                 terms = []
                 for i in model.i:
@@ -709,7 +709,7 @@ class IncomeBlock(Block):
 
         # Si TODAS las regiones son Cobb-Douglas no queda ninguna fila: la
         # ecuacion no se registra (el backend rechaza una ecuacion vacia).
-        if set(regions) - cd:
+        if set(regions) - cd_regs:
             equations.append(EqCv())
 
         return equations

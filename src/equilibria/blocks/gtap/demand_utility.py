@@ -80,7 +80,7 @@ class DemandUtilityBlock(Block):
         calib = dp.demand_income_params(p, s, residual_region=self.residual_region)
         # Regiones Cobb-Douglas (SUBPAR=0): eq_zcons, eq_phip y eq_uh toman la rama
         # `$(%utility% eq CD)` de model.gms:765/781/794. Vacio = todo CDE.
-        cd = dp.cd_regions(p, s)
+        cd_regs = dp.cd_regions(p, s)
 
         def _param(name, doms, calib_key=None):
             key = calib_key or name
@@ -107,7 +107,7 @@ class DemandUtilityBlock(Block):
         _param("au", ("r",))
         # auh solo lo usa eq_uh en su forma Cobb-Douglas (model.gms:794); se
         # registra solo entonces, asi el modelo CDE no cambia ni en su firma.
-        if cd:
+        if cd_regs:
             _param("auh", ("r",))
         _param("betap", ("r",))
         _param("betag", ("r",))
@@ -312,7 +312,7 @@ class DemandUtilityBlock(Block):
                 alpha = value(m.alphaa_hhd[r, i])
                 if share <= 0.0 or alpha <= 0.0:
                     return m.zcons[r, i] == 0.0
-                if r in cd:
+                if r in cd_regs:
                     return m.zcons[r, i] == m.alphaa_hhd[r, i]  # model.gms:765
                 return m.zcons[r, i] == (
                     m.alphaa_hhd[r, i]
@@ -351,7 +351,7 @@ class DemandUtilityBlock(Block):
             def build_expression(self, pyomo_model, indices):
                 m = pyomo_model
                 (r,) = indices
-                if r in cd:
+                if r in cd_regs:
                     # model.gms:781: en CD la elasticidad del gasto es 1, sin eh.
                     return m.phip[r] == sum(
                         m.xcshr[r, i] for i in m.i if value(m.c_share[r, i]) > 0.0
@@ -423,7 +423,7 @@ class DemandUtilityBlock(Block):
             def build_expression(self, pyomo_model, indices):
                 m = pyomo_model
                 (r,) = indices
-                if r in cd:
+                if r in cd_regs:
                     # model.gms:794: uh = auh * prod_i xa^alphaa, la Cobb-Douglas.
                     prod = 1.0
                     n_terms = 0
