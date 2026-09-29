@@ -35,7 +35,7 @@ def _paths():
     }
 
 
-def _params(tmp_path=None, cobb_douglas=False):
+def _params(tmp_path=None, cobb_douglas=False, solo_region=None):
     from equilibria.templates.gtap import GTAPParameters
 
     paths = _paths()
@@ -45,7 +45,11 @@ def _params(tmp_path=None, cobb_douglas=False):
         har = read_har(paths["default_path"])
         if "SUBP" not in har:
             pytest.skip("default.prm sin header SUBP")
-        har["SUBP"].array[...] = 0.0
+        if solo_region is None:
+            har["SUBP"].array[...] = 0.0
+        else:
+            col = har["SUBP"].set_elements[1].index(solo_region)
+            har["SUBP"].array[:, col] = 0.0
         assert tmp_path is not None
         destino = tmp_path / "cobbdouglas.prm"
         write_har(destino, har)
@@ -175,3 +179,45 @@ def test_cde_no_cambia(tmp_path):
     m.uh[r].set_value(float(value(m.uh[r])) * 1.5)
     assert abs(_resid(con) - antes) > 1e-9, "bajo CDE eq_zcons debe depender de uh"
     assert not m.ev[r].fixed
+    assert not hasattr(m, "auh"), "auh es CD-only: el modelo CDE no debe registrarlo"
+
+
+def test_auh_normaliza_la_utilidad_en_el_benchmark(tmp_path):
+    """cal.gms:768: auh = uh.l / prod xa.l^alphaa, con uh.l = 1 (cal.gms:243)."""
+    m = _model(_params(tmp_path, cobb_douglas=True))
+    from pyomo.environ import value
+
+    for r in m.r:
+        prod = 1.0
+        for i in m.i:
+            a = float(value(m.alphaa_hhd[r, i]))
+            if a > 0.0 and float(value(m.c_share[r, i])) > 0.0:
+                prod *= float(value(m.xaa[r, i, "hhd"])) ** a
+        assert float(value(m.auh[r])) * prod == pytest.approx(1.0, abs=1e-9), r
+
+
+def test_mezcla_cd_cde_entre_regiones_avisa(tmp_path):
+    """%utility% es global en GAMS: una region CD junto a otras CDE no tiene
+    equivalente. Se construye igual, pero AVISA una sola vez."""
+    import warnings
+
+    from equilibria.blocks.gtap import _derived_params as dp
+
+    p = _params(tmp_path, cobb_douglas=True, solo_region="USA")
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        assert dp.cd_regions(p, p.sets) == frozenset({"USA"})
+    assert sum("Cobb-Douglas" in str(x.message) for x in w) == 1, [
+        str(x.message) for x in w
+    ]
+
+
+def test_subpar_none_en_region_cd_no_rompe_la_calibracion(tmp_path):
+    from equilibria.blocks.gtap import _derived_params as dp
+
+    p = _params(tmp_path, cobb_douglas=True)
+    r = list(p.sets.r)[0]
+    i = list(p.sets.i)[0]
+    p.elasticities.subpar[(r, i)] = None
+    calib = dp.demand_income_params(p, p.sets, residual_region=list(p.sets.r)[-1])
+    assert calib["bh"][(r, i)] == 1.0

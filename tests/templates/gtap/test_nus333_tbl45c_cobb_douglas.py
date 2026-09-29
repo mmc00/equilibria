@@ -38,8 +38,10 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module")
-def solved():
+@pytest.fixture(scope="module", params=[True, False], ids=["mute", "sin_mute"])
+def solved(request):
+    """``mute_welfare=True`` fija ev/cv por su cuenta; ``False`` deja que las fije
+    ``_fix_cd_welfare`` (eq_ev/eq_cv no existen bajo CD), que es lo que se prueba."""
     from pyomo.environ import value
 
     from equilibria._local_refs import nus333_dir
@@ -81,9 +83,8 @@ def solved():
         ac,
         ref_gdx=None,
         skip_base_solve=True,
-        mute_welfare=True,
+        mute_welfare=request.param,
         seed_from_prior=False,
-        holdfix_cd=True,
         mode="gtap",
         solve_check=True,
         lambdava_shock={("USA", "SER"): 1.10},
@@ -109,3 +110,18 @@ def test_iguala_a_gams_cobb_douglas(solved, var, key):
     assert abs(got - want) <= TOL_PP, (
         f"{var}{key}: equilibria {got:+.6f} vs GAMS-CD {want:+.6f}"
     )
+
+
+@pytest.mark.parametrize("t", ["check", "shock"])
+def test_ev_cv_fijados_al_ingreso_de_calibracion(solved, t):
+    """Bajo CD GAMS no tiene eveq/cveq (model.gms:1322/1328): ev/cv quedan en
+    ``ev.l = cv.l = yc.l`` de la calibracion (cal.gms:245-246), en TODO periodo."""
+    m, value = solved
+    for r in m.r:
+        yc0 = float(value(m.yc[r, "base"]))
+        for nombre in ("ev", "cv"):
+            vd = getattr(m, nombre)[r, t]
+            assert vd.fixed, f"{nombre}[{r},{t}] libre sin su ecuacion"
+            assert float(value(vd)) == pytest.approx(yc0, rel=1e-9), (
+                f"{nombre}[{r},{t}]={float(value(vd))} vs yc base {yc0}"
+            )
