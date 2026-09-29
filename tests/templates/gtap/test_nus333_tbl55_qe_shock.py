@@ -103,11 +103,19 @@ def solved():
     return m, value
 
 
-def _pct(m, value, var, key):
+def _pct(m, value, var, key, num="shock", den="check"):
     comp = getattr(m, var)
     return 100.0 * (
-        float(value(comp[(*key, "shock")])) / float(value(comp[(*key, "check")])) - 1.0
+        float(value(comp[(*key, num)])) / float(value(comp[(*key, den)])) - 1.0
     )
+
+
+def test_el_shock_no_entra_al_check(solved):
+    """base y check deben ser el mismo benchmark: el shock va solo en 'shock'."""
+    m, value = solved
+    for var in ("xp", "xft", "kstock", "pft"):
+        for key in ORACLE[var]:
+            assert abs(_pct(m, value, var, key, "base", "check")) < 1e-6, (var, key)
 
 
 @pytest.mark.parametrize(
