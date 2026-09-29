@@ -1530,6 +1530,46 @@ def _rebuild_lambdava_shock(m, lambdava_shock) -> int:
     return n
 
 
+# Equations whose 'shock' cell each shock rewrites (see the _rebuild_* below).
+_SHOCK_EQS = {
+    "lambdava_shock": ("eq_va", "eq_pxeq"),
+    "qe_shock": ("eq_xfteq",),
+}
+
+
+def _check_shock_cells(m, name: str, shock) -> None:
+    """Fail BEFORE any solve if a shock key has no live 'shock' cell to rewrite.
+
+    A misspelt label (GEMPACK's TBL66 writes ``qe("labor","USA")``; the model has
+    ``LABOR``), a sector-specific factor (no eq_xfteq row), or an endowment fixed
+    in the shock period (the solver would deactivate eq_xfteq and drop the shock
+    with code=1) must fail in milliseconds and say why -- not after the base and
+    check solves, and never silently.
+    """
+    for key in shock:
+        r, x = key
+        idx = (r, x, "shock")
+        for eq_name in _SHOCK_EQS[name]:
+            eq = getattr(m, eq_name, None)
+            if eq is None or idx not in eq or not eq[idx].active:
+                valid = sorted(
+                    {
+                        k[1]
+                        for k in (eq.keys() if eq is not None else ())
+                        if k[0] == r and k[2] == "shock" and eq[k].active
+                    }
+                )
+                raise ValueError(
+                    f"{name}{key}: {eq_name}{idx} does not exist or is inactive, "
+                    f"the shock would not enter the model. Valid for {r}: {valid}"
+                )
+        if name == "qe_shock" and m.xft[idx].fixed:
+            raise ValueError(
+                f"qe_shock{key}: xft{idx} is fixed; the solver would deactivate "
+                "eq_xfteq and the shock would be lost"
+            )
+
+
 def _rebuild_qe_shock(m, qe_shock) -> int:
     """Multiply the factor ``qe_shock[r,f]`` into the endowment of the SHOCK period
     only.
@@ -1555,6 +1595,12 @@ def _rebuild_qe_shock(m, qe_shock) -> int:
                 "shock would not enter the model"
             )
         xft = m.xft[idx]
+        if xft.fixed:
+            # Checked up front too; re-checked here, after the driver's own fixing.
+            raise ValueError(
+                f"qe_shock[{r},{f}]: xft{idx} is fixed; the solver would deactivate "
+                "eq_xfteq and the shock would be lost"
+            )
         visitor = ExpressionReplacementVisitor(substitute={id(xft): xft / q})
         eq[idx].set_value(visitor.walk_expression(eq[idx].expr))
         n += 1
@@ -3107,6 +3153,12 @@ def _solve_multiperiod_inner(
         if sh is not None
     }
     _tariff_shock = not _shocks
+    if len(_shocks) > 1:
+        # No Burfisher exercise combines them and no test backs the combination.
+        raise ValueError(
+            f"one shock kind per run, got {sorted(_shocks)}; combining them is not "
+            "supported"
+        )
     for _name, _sh in _shocks.items():
         if not _gtap_mode:
             raise ValueError(f"{_name} is only supported in mode='gtap'")
@@ -3117,7 +3169,9 @@ def _solve_multiperiod_inner(
             )
         for _k, _fac in _sh.items():
             if not float(_fac) > 0.0:
-                raise ValueError(f"{_name}[{','.join(_k)}] = {_fac}: must be > 0")
+                raise ValueError(f"{_name}{_k} = {_fac}: must be > 0")
+        if m is not None:
+            _check_shock_cells(m, _name, _sh)
 
     run_gtap = _load_run_gtap()
 
@@ -3909,8 +3963,9 @@ def _solve_multiperiod_inner(
     # ── Phase 3: SHOCK period ────────────────────────────────────────────────
     # Apply +10% imptx shock to params (tm_pct mode).  gtap-mode shocks the
     # domestic diagonal too (GAMS shocks ALL routes); altertax skips it.
-    # With lambdava_shock or qe_shock the tariff is NOT applied: params_shock stays the
-    # benchmark and the technology shock lives only in the rebuilt shock eqs.
+    # With lambdava_shock or qe_shock the tariff is NOT applied: params_shock stays
+    # the benchmark and the shock (technology or endowment) lives only in the
+    # rebuilt shock eqs.
     params_shock = copy.deepcopy(p_alt)
     if _tariff_shock:
         _apply_imptx_shock(params_shock, factor=0.10, gtap_mode=_gtap_mode)
@@ -4117,16 +4172,18 @@ def _solve_multiperiod_inner(
         import logging as _logging
 
         if lambdava_shock is not None:
+            _n_lva = _rebuild_lambdava_shock(m, lambdava_shock)
             _logging.getLogger(__name__).info(
                 "shock period: rebuilt %d eq_va/eq_pxeq cells with lambdava_shock "
                 "(no tariff shock)",
-                _rebuild_lambdava_shock(m, lambdava_shock),
+                _n_lva,
             )
         if qe_shock is not None:
+            _n_qe = _rebuild_qe_shock(m, qe_shock)
             _logging.getLogger(__name__).info(
                 "shock period: rebuilt %d eq_xfteq cells with qe_shock "
                 "(no tariff shock)",
-                _rebuild_qe_shock(m, qe_shock),
+                _n_qe,
             )
     elif _gtap_mode:
         _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
@@ -4364,6 +4421,22 @@ def _solve_multiperiod_inner(
             _logging.getLogger(__name__).info(
                 "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm
             )
+
+    # The endowment shock must show up in the solution: a converged run whose xft
+    # did not move by the requested factor lost the shock somewhere (code=1 alone
+    # would not say so).
+    if qe_shock is not None and results["shock"]["code"] == 1:
+        from pyomo.environ import value as _qv
+
+        for (_r, _f), _q in qe_shock.items():
+            _got = float(_qv(m.xft[_r, _f, "shock"])) / float(
+                _qv(m.xft[_r, _f, "check"])
+            )
+            if abs(_got / float(_q) - 1.0) > 1e-6:
+                raise RuntimeError(
+                    f"qe_shock[{_r},{_f}] = {_q} but xft shock/check = {_got}: the "
+                    "shock did not enter the solution"
+                )
 
     # Freeze shock as well (for completeness / report purposes).
     freeze_period(m, "shock")
