@@ -38,7 +38,7 @@ class _Closure:
 class _Params:
     """Stand-in carrying the benchmark arrays the key digests."""
 
-    def __init__(self, evfb=None, rtf=None):
+    def __init__(self, evfb=None, rtf=None, elasticities=None, shifts=None):
         self.benchmark = SimpleNamespace(
             evfb=evfb if evfb is not None else {("USA", "Land", "Food"): 1.0},
             vfm={("USA", "Land", "Food"): 2.0},
@@ -51,6 +51,8 @@ class _Params:
             rtf=rtf if rtf is not None else {("USA", "Land", "Food"): 0.1},
             kappaf_activity={("USA", "Land", "Food"): 0.2},
         )
+        self.elasticities = elasticities
+        self.shifts = shifts
 
 
 @pytest.fixture
@@ -156,6 +158,25 @@ def test_closure_field_change_invalidates(params, field, value):
 def test_any_new_closure_field_invalidates(params):
     """The key digests model_dump(), so a field added later is covered on day one."""
     assert _key(params) != _key(params, _Closure(some_future_switch=True))
+
+
+def test_shift_change_invalidates(params):
+    """The blocks bake ``params.shifts`` into every period's equations at build, so
+    a model built with ``lambdava[USA,SER]=1.10`` must never serve a clean run."""
+    shocked = _Params(shifts=SimpleNamespace(lambdava={("USA", "SER"): 1.10}))
+    assert _key(params) != _key(shocked)
+
+
+def test_elasticity_change_invalidates(params):
+    """Another .prm (e.g. nus333 ``3x3CobbDouglas.prm``) builds another model."""
+    cd = _Params(elasticities=SimpleNamespace(esubva={("USA", "SER"): 1.0}))
+    ces = _Params(elasticities=SimpleNamespace(esubva={("USA", "SER"): 1.26}))
+    assert _key(cd) != _key(ces)
+
+
+def test_key_is_none_when_an_elasticity_is_unreadable(params):
+    bad = _Params(elasticities=SimpleNamespace(esubva={("USA", "SER"): "not-a-number"}))
+    assert _key(bad) is None
 
 
 def test_residual_region_change_invalidates(params):
