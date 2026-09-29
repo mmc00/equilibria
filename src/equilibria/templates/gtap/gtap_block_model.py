@@ -378,6 +378,32 @@ def _fix_no_demand_cells(pm: Any) -> int:
     return n
 
 
+def _fix_cd_welfare(pm: Any, params: Any, sets: Any) -> int:
+    """Fijar ev/cv en las regiones Cobb-Douglas.
+
+    ``eq_ev``/``eq_cv`` no existen bajo CD (CDE-only en GAMS, model.gms:1322/1328;
+    el bloque INCOME las salta). Una fila que se salta necesita su columna fijada o
+    el MCP pierde la cuadratura -- el ``holdfixed`` de GAMS. Se fijan en su valor de
+    inicializacion: bajo CD no hay ecuacion que defina el bienestar, asi que ev/cv
+    NO son resultados. Devuelve cuantas celdas fijo.
+    """
+    from pyomo.environ import value as _V
+
+    from equilibria.blocks.gtap import _derived_params as dp
+
+    n = 0
+    for r in dp.cd_regions(params, sets):
+        for name in ("ev", "cv"):
+            var = getattr(pm, name, None)
+            if var is None:
+                continue
+            vd = var[r]
+            if not vd.fixed:
+                vd.fix(float(_V(vd)))
+                n += 1
+    return n
+
+
 def build_block_single_period(
     params: Any,
     sets: Any,
@@ -436,6 +462,7 @@ def build_block_single_period(
         _apply_ifsub_closure(pm, params)
 
     _fix_no_demand_cells(pm)
+    _fix_cd_welfare(pm, params, sets)
 
     pm._residual_region = residual_region
     return pm
