@@ -1489,7 +1489,8 @@ def _collapse_pft_pfteq(m, period: str) -> int:
 # _rebuild_lambdava_shock — inject a VA-technology shock INTO the shock eqs only
 # ---------------------------------------------------------------------------
 def _rebuild_lambdava_shock(m, lambdava_shock) -> int:
-    """Put ``lambdava[r,a]`` into eq_va/eq_pxeq of the SHOCK period only.
+    """Multiply the factor ``lambdava_shock[r,a]`` into eq_va/eq_pxeq of the SHOCK
+    period only (on top of any lambdava already baked in at build).
 
     GAMS (model.gms:539-547) carries the VA shifter as ``lambdava(r,a,t)``:
         va  = ava*xp*(px/pva)**sigmap * (axp*lambdava)**(sigmap-1)
@@ -1510,9 +1511,7 @@ def _rebuild_lambdava_shock(m, lambdava_shock) -> int:
     eq_px = getattr(m, "eq_pxeq", None)
     n = 0
     for (r, a), lam in lambdava_shock.items():
-        lam = float(lam)
-        if not lam > 0.0:
-            raise ValueError(f"lambdava_shock[{r},{a}] = {lam}: must be > 0")
+        lam = float(lam)  # > 0, validated at the top of _solve_multiperiod_inner
         idx = (r, a, "shock")
         pva = m.pva[idx]
         va = m.va[idx]
@@ -3045,8 +3044,10 @@ def _solve_multiperiod_inner(
     params : GTAPParameters (used for altertax elasticities / imptx shock)
     closure : GTAPClosureConfig or None
     ref_gdx : path to GAMS reference GDX (optional, not yet used)
-    lambdava_shock : {(r, a): lambdava level} applied to the SHOCK period only
-        (GAMS ``avaall``: avaall=0.10 -> 1.10), INSTEAD of the default +10% tariff.
+    lambdava_shock : {(r, a): factor} applied to the SHOCK period only, INSTEAD of
+        the default +10% tariff. It is the GAMS ``lambdavaeq`` factor
+        ``1 + avaall`` (avaall=0.10 -> 1.10), MULTIPLIED onto whatever lambdava the
+        built model already carries -- a level only when params.shifts has none.
         gtap-mode only. None keeps the tariff shock, unchanged.
 
     Returns
@@ -3057,14 +3058,27 @@ def _solve_multiperiod_inner(
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    run_gtap = _load_run_gtap()
-
     if mode not in ("altertax", "gtap"):
         raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
     _gtap_mode = mode == "gtap"
-    if lambdava_shock is not None and not _gtap_mode:
-        raise ValueError("lambdava_shock is only supported in mode='gtap'")
+    # Validate lambdava_shock BEFORE any work: a run that cannot honour it must
+    # fail in milliseconds, not after the base/check solves.
+    import os
+
     _tariff_shock = lambdava_shock is None
+    if not _tariff_shock:
+        if not _gtap_mode:
+            raise ValueError("lambdava_shock is only supported in mode='gtap'")
+        if os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
+            raise ValueError(
+                "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does "
+                "not support lambdava_shock"
+            )
+        for (_r, _a), _lam in lambdava_shock.items():
+            if not float(_lam) > 0.0:
+                raise ValueError(f"lambdava_shock[{_r},{_a}] = {_lam}: must be > 0")
+
+    run_gtap = _load_run_gtap()
 
     # PATH options default = the options the reference bundles for THIS mode were
     # solved with (an existing PATH_CAPI_OPTIONS — user or harness — always wins):
@@ -3079,7 +3093,6 @@ def _solve_multiperiod_inner(
     # same process can tell "ours from a previous call" from "user-set" and
     # re-derive per its own mode (env vars are sticky; without this, an
     # altertax solve would leak the tight set into a subsequent pure solve).
-    import os
 
     _OPT_SENTINEL = "* per-mode default set by solve_multiperiod\n"
     _cur_opts = os.environ.get("PATH_CAPI_OPTIONS")
@@ -4163,11 +4176,6 @@ def _solve_multiperiod_inner(
     # factor) + _rebuild_eq_pmeq_shock/_rebuild_eq_ytax_mt_shock (idempotent, re-invoked
     # per λ) are re-run. Produces OUR levels solution, not GEMPACK's.
     _cont_env = os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION")
-    if _cont_env and not _tariff_shock:
-        raise ValueError(
-            "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does not "
-            "support lambdava_shock"
-        )
     if _cont_env and _gtap_mode:
         _lambdas = [float(x) for x in _cont_env.split(",") if x.strip()]
         if not _lambdas or _lambdas[-1] != 1.0:
