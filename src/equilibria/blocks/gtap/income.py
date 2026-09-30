@@ -356,9 +356,12 @@ class IncomeBlock(Block):
                     total = 0.0
                     for ag in agents:
                         for i in model.i:
-                            # GAMS ytaxeq lee dintx vivo (model.gms:645): un shock
-                            # al impuesto llega a la recaudacion.
-                            dintx = model.dintx[r, i, ag]
+                            # GAMS ytaxeq lee dintx (model.gms:645), fijo por
+                            # periodo: aca es el instrumento dintx_tgt, asi un shock
+                            # llega a la recaudacion. NO la Var dintx endogena: misma
+                            # solucion, pero acopla 2700 celdas mas en 15x10 y PATH
+                            # cae en otra raiz (pure ifSUB=1 shock 100% -> 88,34%).
+                            dintx = model.dintx_tgt[r, i, ag]
                             mintx = float(taxes.mintx0.get((r, i, ag), 0.0))
                             scale = model.xscale[r, ag] if ag in model.a else 1.0
                             total += (
