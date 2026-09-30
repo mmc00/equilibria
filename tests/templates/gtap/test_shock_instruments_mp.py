@@ -9,42 +9,10 @@ Sin solver: nus333.
 import pytest
 
 
-@pytest.fixture(scope="module")
-def built():
-    from equilibria._local_refs import nus333_dir
-
-    har = nus333_dir()
-    if not (har / "basedata.har").exists():
-        pytest.skip(f"nus333 no disponible en {har}")
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=har / "basedata.har",
-        sets_path=har / "sets.har",
-        default_path=har / "default.prm",
-        baserate_path=har / "baserate.har",
-    )
-    gc = GTAPClosureConfig(
-        name="base",
-        closure_type="MCP",
-        capital_mobility="sluggish",
-        fix_endowments=False,
-        fix_taxes=False,
-        fix_technology=False,
-        if_sub=False,
-        numeraire="pnum",
-    )
-    m, _ = build_block_model(p, p.sets, gc, "ROW")
-    return m
-
-
-def test_registro_y_fijado_antes_del_cache(built):
+def test_registro_y_fijado_antes_del_cache(nus333_mp_model):
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
 
-    m = built
+    m = nus333_mp_model
     assert m._exogenous_instruments == frozenset(SHOCK_INSTRUMENTS)
     for name in SHOCK_INSTRUMENTS:
         for idx, vd in getattr(m, name).items():
@@ -52,14 +20,14 @@ def test_registro_y_fijado_antes_del_cache(built):
 
 
 @pytest.mark.parametrize("period", ["base", "check", "shock"])
-def test_freeze_no_libera_instrumentos_en_ningun_periodo(built, period):
+def test_freeze_no_libera_instrumentos_en_ningun_periodo(nus333_mp_model, period):
     from pyomo.environ import value
 
     from equilibria.templates.gtap.gtap_multiperiod_driver import (
         freeze_inactive_periods,
     )
 
-    m = built
+    m = nus333_mp_model
     idx = ("USA", "CAPITAL", period)
     x0 = float(value(m.aft[idx]))
     m.aft[idx].fix(x0 * 1.1)
@@ -71,7 +39,7 @@ def test_freeze_no_libera_instrumentos_en_ningun_periodo(built, period):
         m.aft[idx].fix(x0)
 
 
-def test_seed_from_prior_no_pisa_un_instrumento(built):
+def test_seed_from_prior_no_pisa_un_instrumento(nus333_mp_model):
     """Aun liberado (lo que hacia freeze antes), el re-sembrado no lo toca."""
     from pyomo.environ import value
 
@@ -79,7 +47,7 @@ def test_seed_from_prior_no_pisa_un_instrumento(built):
         _seed_period_from_prior,
     )
 
-    m = built
+    m = nus333_mp_model
     idx = ("USA", "CAPITAL", "shock")
     x0 = float(value(m.aft[idx]))
     m.aft[idx].unfix()
