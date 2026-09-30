@@ -1,4 +1,4 @@
-"""Compose the 7 GTAP symbolic blocks into a solvable model (F3 Task 5).
+"""Compose the 8 GTAP symbolic blocks into a solvable model (F3 Task 5).
 
 This is the COMPOSER: it assembles the migrated ``equilibria.blocks.gtap`` block
 units onto a single ``equilibria.model.Model``, translates that to Pyomo via the

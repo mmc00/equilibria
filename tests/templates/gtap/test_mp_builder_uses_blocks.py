@@ -133,8 +133,18 @@ def test_blocks_and_monolith_build_the_same_system():
         nums = [float(x) for x in _NUM.findall(expr)]
         return _NUM.sub("#", expr), nums
 
+    # Filas que leen un instrumento del ShockBlock: en bloques el instrumento es
+    # una Var (p.ej. `*lambdava[...]**0.0`) y en el monolito, deprecado, no existe.
+    # Mismo criterio que `_INSTRUMENT_EQS` en test_gtap_blocks_form.py; la
+    # equivalencia de esas filas se mide contra GAMS.
+    instrumento = ("eq_va[", "eq_pxeq[", "eq_xfteq[")
+    exentas = [k for k in mono if k.startswith(instrumento)]
+    assert exentas, "la exencion de instrumentos no encontro filas: revisar nombres"
+
     distintas = []
     for k in mono:
+        if k.startswith(instrumento):
+            continue
         sa, na = split(mono[k])
         sb, nb = split(blk[k])
         if sa != sb or len(na) != len(nb):

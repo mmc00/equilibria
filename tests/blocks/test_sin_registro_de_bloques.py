@@ -31,13 +31,16 @@ def test_el_registro_no_esta_en_la_superficie_publica():
 def test_los_bloques_se_componen_por_import_directo():
     """El invariante que sustituye al registro.
 
-    `_block_classes` resuelve las 7 clases GTAP en orden de dependencia sin
+    `_block_classes` resuelve las 8 clases GTAP en orden de dependencia sin
     consultar ninguna tabla global: ese es el mecanismo real de composicion.
     """
     from equilibria.templates.gtap.gtap_block_model import _block_classes
 
     clases = _block_classes()
-    assert len(clases) == 7, f"esperadas 7 clases GTAP, hay {len(clases)}"
+    assert len(clases) == 8, f"esperadas 8 clases GTAP, hay {len(clases)}"
+    assert clases[0].__name__ == "ShockBlock", (
+        "shock va primero: los demas bloques leen sus instrumentos"
+    )
     assert clases[-1].__name__ == "ClosureBlock", (
         "closure va al final: depende de todo lo demas"
     )
