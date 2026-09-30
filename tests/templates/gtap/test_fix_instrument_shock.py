@@ -105,6 +105,5 @@ def test_solo_el_periodo_shock(nus333_mp_model):
     from equilibria.templates.gtap.instruments import fix_instrument_shock
 
     with pytest.raises(TypeError, match="period"):
-        fix_instrument_shock(  # ty: ignore[unknown-argument]
-            nus333_mp_model, "aft", ("USA", "CAPITAL"), factor=1.1, period="check"
-        )
+        kw: dict = {"factor": 1.1, "period": "check"}
+        fix_instrument_shock(nus333_mp_model, "aft", ("USA", "CAPITAL"), **kw)
