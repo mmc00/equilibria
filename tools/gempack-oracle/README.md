@@ -259,8 +259,10 @@ Dos cosas en una sola pasada. Correr **en la maquina Windows**, en esta carpeta.
 ```
 
 Genera los `*-DIR.EXP` traduciendo `rate% N from file X.shk` al valor directo, y
-los corre. Hoy cubre **TBL813** (tabla 8.13). **ME8** no se traduce todavia: sus
-shocks van sobre sets y falta desplegar una linea por celda.
+los corre. Cubre **TBL813** (tabla 8.13) y **ME8**. Los shocks de ME8 van sobre
+sets (`tfe(ENDW,ACTS,"USA")`): se despliegan en una linea por celda (63), con
+los nombres leidos del propio `.shk`. **Si en Windows queda un `ME8-DIR.EXP`
+viejo, hay que borrarlo** antes de correr: el script no pisa uno existente.
 
 **`rate% N` sube N% la TASA, y el `.shk` NO trae ese shock** (corregido 2026-09-30).
 El `.shk` trae el shock que ELIMINA cada impuesto, en % de la potencia: en

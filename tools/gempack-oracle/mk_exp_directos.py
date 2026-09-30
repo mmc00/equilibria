@@ -27,6 +27,11 @@ Los dos casos NO son lo mismo, y la diferencia importa:
 Asi que este script solo emite los `rate%` (TBL813 y ME8 = 3 experimentos de
 los 3 archivos). Para TBL53 se explica en el README por que queda afuera.
 
+Los indices con sets (`tfe(ENDW,ACTS,"USA")`) se despliegan en una linea por
+celda. Los nombres de cada celda salen del propio .shk (`! %1=LAND`, `! %2=AGR
+MFG SER`, `(%1,%2,"USA")`), no de un orden de sets supuesto, y se contrastan con
+la lectura sin etiquetas (mismos valores, mismo orden).
+
 Salida: un `.EXP` nuevo por cada uno, con sufijo `-DIR` (directo), al lado del
 original. No sobreescribe nada.
 
@@ -79,63 +84,77 @@ def leer_shk(path: Path) -> tuple[list[int], list[float]]:
     return dims, vals
 
 
-def _celdas_literales(
-    idx: str, dims: list[int], vals: list[float], escala: float
+def leer_shk_etiquetado(path: Path) -> dict[tuple[str, ...], float]:
+    """{(nombre eje 1, eje 2[, eje 3]): valor} de un .shk de SHOCKSv7.
+
+    Los NOMBRES salen del propio .shk, no de un orden supuesto: cada fila termina
+    en `! %1=LAND`, la cabecera de columnas es `! %2=AGR  MFG  SER`, y en 3
+    dimensiones cada matriz se abre con `(%1,%2,"USA")`. Se contrasta contra
+    ``leer_shk``: mismos valores, mismo orden, y una celda por combinacion.
+    """
+    dims, vals = leer_shk(path)
+    if len(dims) not in (2, 3):
+        raise ValueError(f"{path.name}: {len(dims)} dimensiones, se esperaban 2 o 3")
+    celdas: dict[tuple[str, ...], float] = {}
+    orden: list[float] = []
+    tercero: str | None = None
+    cols: list[str] | None = None
+    for linea in path.read_text().splitlines():
+        m = re.search(r'\(%1,%2,"(\w+)"\)', linea)
+        if m:
+            tercero = m.group(1)
+            continue
+        m = re.match(r"^\s*!\s*%2=(.*)$", linea)
+        if m:
+            cols = m.group(1).split()
+            continue
+        m = re.search(r"!\s*%1=(\w+)", linea)
+        if not (m and cols):
+            continue
+        datos = [float(t) for t in linea.split("!", 1)[0].split()]
+        if len(datos) != len(cols):
+            raise ValueError(f"{path.name}: fila con {len(datos)} valores y {len(cols)} columnas")
+        if len(dims) == 3 and tercero is None:
+            raise ValueError(f"{path.name}: fila antes de la cabecera (%1,%2,...)")
+        for c, v in zip(cols, datos):
+            clave = (m.group(1), c) + ((tercero,) if len(dims) == 3 else ())
+            if clave in celdas:
+                raise ValueError(f"{path.name}: celda {clave} repetida")
+            celdas[clave] = v
+            orden.append(v)
+    if orden != vals:
+        raise ValueError(
+            f"{path.name}: las etiquetas no cubren los {len(vals)} valores en orden "
+            f"(se etiquetaron {len(orden)}). NO se emite el .EXP."
+        )
+    return celdas
+
+
+def _celdas(
+    idx: str, celdas: dict[tuple[str, ...], float], escala: float
 ) -> list[tuple[str, float]] | None:
-    """El valor directo de un shock, solo cuando TODOS los indices son literales.
+    """[(indices literales, valor)] de cada celda del .shk que cubre ``idx``.
 
-    Devuelve [(indices, valor)] o None si hay que desplegar un set.
-
-    Por que solo el caso escalar: con un set (COMM, ACTS, ENDW) el orden de las
-    celdas del .shk lo fija su `row_order`, y mapear eso a nombres exige conocer
-    el orden de los elementos del set en el .har — que no es el orden
-    alfabetico ni necesariamente el del .EXP. Inventarlo produciria shocks
-    aplicados al sector equivocado, que es peor que no traducir: el modelo
-    correria y daria numeros plausibles y falsos.
+    Un indice entre comillas (`"USA"`) fija ese eje; uno sin comillas (`COMM`,
+    `ENDW`) es un set y se despliega a todas las celdas del .shk en ese eje. Los
+    nombres son los del .shk, asi que no hay un orden de sets supuesto. None si
+    el numero de indices no coincide con las dimensiones del .shk o si un literal
+    no aparece en el .shk.
     """
     partes = [p.strip() for p in idx.split(",")]
-    if not all(p.startswith('"') and p.endswith('"') for p in partes):
-        return None  # hay un set: no se puede resolver sin el orden del .har
-
-    # Escalar: el .shk tiene que traer exactamente una celda por combinacion, y
-    # sin el orden de los sets no se puede ubicar CUAL. Se resuelve solo si el
-    # .shk tiene tantas dimensiones como indices y se conoce el mapeo por
-    # posicion — que es el caso de tpdall(COMM,REG) con COMM/REG en row_order.
-    if len(partes) != len(dims):
+    n = len(next(iter(celdas)))
+    if len(partes) != n:
         return None
-    # Los indices del .EXP son literales, asi que la celda esta identificada por
-    # NOMBRE; lo que falta es su POSICION en el .shk, y eso pide el orden de cada
-    # set. Para COMM y REG el orden esta en el propio .shk, en los comentarios
-    # `! %1=AGR` / `! %2=USA`, que es de donde salen estos nombres.
-    orden = _orden_de_sets(dims)
-    if orden is None:
-        return None
-    pos = 0
-    paso = 1
-    for eje in reversed(range(len(dims))):
-        nombre = partes[eje].strip('"')
-        elementos = orden[eje]
-        if nombre not in elementos:
-            return None  # un set que no conocemos: mejor no adivinar
-        pos += elementos.index(nombre) * paso
-        paso *= dims[eje]
-    return [(", ".join(partes), vals[pos] * escala)]
-
-
-# El orden de COMM y REG en los .shk de nus333, leido de sus comentarios
-# (`! %1=AGR` ... / `! %2=USA  ROW`). Solo se usa para ubicar una celda cuyos
-# indices ya son literales — nunca para desplegar un set.
-_SETS_NUS333 = {3: ["AGR", "MFG", "SER"], 2: ["USA", "ROW"]}
-
-
-def _orden_de_sets(dims: list[int]) -> list[list[str]] | None:
-    """El orden de elementos de cada dimension, por su tamano. None si no consta."""
-    orden: list[list[str]] = []
-    for d in dims:
-        if d not in _SETS_NUS333:
+    fijo = [p.strip('"') if p.startswith('"') else None for p in partes]
+    for eje, nombre in enumerate(fijo):
+        if nombre is not None and nombre not in {k[eje] for k in celdas}:
             return None
-        orden.append(_SETS_NUS333[d])
-    return orden
+    out = []
+    for clave, v in celdas.items():
+        if all(f is None or f == c for f, c in zip(fijo, clave)):
+            # + 0.0: una celda en 0 escalada por -N/100 da -0.0; se emite 0.0.
+            out.append((", ".join(f'"{c}"' for c in clave), v * escala + 0.0))
+    return out
 
 
 def main(carpeta: str) -> int:
@@ -186,6 +205,7 @@ def main(carpeta: str) -> int:
                 continue
             try:
                 dims, vals = leer_shk(shk)
+                celdas = leer_shk_etiquetado(shk)
             except ValueError as e:
                 print(f"   {e}")
                 salida.append(linea)
@@ -205,15 +225,14 @@ def main(carpeta: str) -> int:
             # Solo valor directo. La forma `= file X.shk;` lee el .shk TAL CUAL, o
             # sea que aplica el shock de ELIMINAR el impuesto, no el `rate% N`: es
             # justo lo que dio TBL813-DIR (EV USA +13.202). Ya no se emite.
-            literales = _celdas_literales(idx, dims, vals, escala)
+            literales = _celdas(idx, celdas, escala)
             if literales is None:
-                # Indices con sets (COMM/ACTS/ENDW): haria falta una linea por
-                # celda con los nombres desplegados segun el row_order del .shk.
-                # Sin eso NO se traduce: un shock mal ubicado corre y da numeros
-                # plausibles y falsos.
+                # El .shk no tiene las dimensiones o los nombres del shock: NO se
+                # traduce. Un shock mal ubicado corre y da numeros plausibles y
+                # falsos.
                 print(
-                    f"   {exp.name}: {var}({idx}) tiene sets; no se traduce "
-                    "(falta desplegar celdas)."
+                    f"   {exp.name}: {var}({idx}) no calza con {m.group('shk')}; "
+                    "no se traduce."
                 )
                 salida.append(linea)
                 continue
