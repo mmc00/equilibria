@@ -20,12 +20,13 @@ from typing import Any
 import numpy as np
 
 from equilibria.blocks.base import Block
+from equilibria.blocks.gtap import _derived_params as dp
 from equilibria.core.symbolic_equations import SymbolicEquation
 from equilibria.core.variables import Variable
 
 # Nombres de componente de cada instrumento. Fuente unica para el compositor,
 # build_block_model y el driver.
-SHOCK_INSTRUMENTS: tuple[str, ...] = ("lambdava",)
+SHOCK_INSTRUMENTS: tuple[str, ...] = ("lambdava", "aft")
 
 
 class ShockBlock(Block):
@@ -50,6 +51,21 @@ class ShockBlock(Block):
                 [[float(lva.get((r, a), 1.0)) for a in acts] for r in regions]
             ),
             domains=("r", "a"),
+            domain="Reals",
+            lower=float("-inf"),
+            upper=float("inf"),
+        )
+        facs = list(set_manager.get("f"))
+        aft = dp.aft_data(self.params, self.sets)
+        # qe -> aft(r,fm,t): Parameter indexado por t en GAMS (model.gms:290),
+        # xft = aft*(pft/pabs)**etaf (model.gms:1073). Instrumento del shock de
+        # dotacion; el benchmark para calibrar es aft0 (FactorBlock).
+        variables["aft"] = Variable(
+            name="aft",
+            value=np.array(
+                [[float(aft.get((r, f), 0.0)) for f in facs] for r in regions]
+            ),
+            domains=("r", "f"),
             domain="Reals",
             lower=float("-inf"),
             upper=float("inf"),

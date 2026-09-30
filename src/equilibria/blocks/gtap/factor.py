@@ -86,7 +86,9 @@ class FactorBlock(Block):
         _param("gf_share", dp.gf_share_data(p, s), ("r", "f", "a"))
         _param("af_param", dp.af_param_data(p, s), ("r", "f", "a"))
         # aft/etaf: closure_name default gtap_standard -> etaf=0 (gate oracle).
-        _param("aft", dp.aft_data(p, s), ("r", "f"))
+        # aft0: la dotacion de benchmark (calibracion: guard de eq_xfteq, krat de
+        # eq_kstock). El instrumento del shock qe es la Var aft del ShockBlock.
+        _param("aft0", dp.aft_data(p, s), ("r", "f"))
         _param("etaf", dp.etaf_data(p, s), ("r", "f"))
         # fcttx/fctts: mutable in the monolith (5077-5094) and referenced UNWRAPPED
         # in eq_pfaeq (6835) -> they must stay symbolic (mutable) so the expression
@@ -301,7 +303,7 @@ class FactorBlock(Block):
                 r, f = indices
                 if value(model.xftflag[r, f]) <= 0.0:
                     return None
-                benchmark_supply = float(value(model.aft[r, f]))
+                benchmark_supply = float(value(model.aft0[r, f]))
                 if benchmark_supply <= 0:
                     return None
                 elasticity = float(value(model.etaf[r, f]))
@@ -445,7 +447,7 @@ class FactorBlock(Block):
                 if not capital_factors:
                     return None
                 xft_bench_total = sum(
-                    float(value(model.aft[r, f])) for f in capital_factors
+                    float(value(model.aft0[r, f])) for f in capital_factors
                 )
                 vkb_val = vkb.get(r)
                 if vkb_val is None:
@@ -505,8 +507,14 @@ class FactorBlock(Block):
             mp.seed_all_periods(m, ref_gdx)
         solve_block_model(m, params, closure, ref_gdx, mode="gtap", settle_only=True)
 
+        from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
+
         settled: dict[str, dict] = {}
         for v in m.component_objects(Var, active=True):
+            # Los instrumentos de shock son exogenos (fijos en su benchmark): no
+            # son parte del punto asentado y el driver no los re-siembra.
+            if v.name in SHOCK_INSTRUMENTS:
+                continue
             for idx in v:
                 if not (isinstance(idx, tuple) and idx and idx[-1] == "check"):
                     continue

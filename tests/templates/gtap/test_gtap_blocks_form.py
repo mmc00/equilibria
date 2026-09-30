@@ -217,6 +217,7 @@ _SPLIT_AUX_EQS: dict[tuple[str, str], str] = {
 _INSTRUMENT_EQS: dict[tuple[str, str], str] = {
     ("ProductionSupplyBlock", "eq_va"): "lambdava (avaall)",
     ("ProductionSupplyBlock", "eq_pxeq"): "lambdava (avaall)",
+    ("FactorBlock", "eq_xfteq"): "aft (qe)",
 }
 
 
