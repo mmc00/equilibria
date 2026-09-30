@@ -1,15 +1,15 @@
-"""nus333 / Burfisher Tabla 4.5A: shock de productividad del VA solo en el periodo shock.
+"""nus333 / Burfisher Tabla 4.5B: el shock de TBL45A con ``3x3CES.prm``.
 
-El experimento TBL45A (RunGTAP, ``nus333/TBL45A.EXP``) es ``avaall("SER","USA") = 10``
-bajo el cierre estandar de GTAPv7 (RORDELTA=1 -> ``savf_flag="capFlex"``). En niveles
-eso es ``lambdava[USA,SER] = 1.10`` aplicado SOLO en el periodo shock.
+``TBL45B.EXP``: ``avaall("SER","USA") = 10`` con ``3x3CES.prm`` (CDE, SUBPAR=0,5),
+cierre estandar GTAPv7 -> ``savf_flag="capFlex"``. Por el kwarg ``lambdava_shock``
+y por ``fix_instrument_shock`` directo: las dos vias tienen que dar lo mismo.
 
-Oraculo: la solucion Gragg de GEMPACK (``TBL45A.sl4``), copiada abajo a 6 decimales.
-GAMS (``comp_nus333.gms`` con ``avaall.fx('USA','a_SER','shock')=0.10``, capFlex) la
-reproduce a <=0.0002pp en estas celdas, asi que la tolerancia de 0.002pp deja 10x de
-margen sobre la diferencia Gragg-vs-niveles y no mas.
+Oraculo: GAMS en niveles (``comp_nus333.gms`` con ``avaall.fx('USA','a_SER',
+'shock')=0.10``, capFlex, ``3x3CES.prm``), % shock/check a 6 decimales. En TBL45A
+el mismo GAMS reproduce GEMPACK Gragg a <=0.0002pp (xi USA 10,851853 vs 10,851814);
+aca no hay Gragg (requiere Windows), asi que la tolerancia es la de TBL45A: 0.002pp.
 
-LOCAL-only: SKIP si el dataset nus333 no esta (ver ``equilibria._local_refs``).
+LOCAL-only: SKIP si falta nus333 o su ``3x3CES.prm``.
 """
 
 from __future__ import annotations
@@ -20,34 +20,33 @@ pytestmark = pytest.mark.integration
 
 TOL_PP = 0.002
 
-# GEMPACK Gragg, TBL45A.sl4 — % cambio shock/check.
+# GAMS CDE, 3x3CES.prm, capFlex — % cambio shock/check.
 ORACLE = {
     "xp": {
-        ("USA", "AGR"): 1.090831,
-        ("USA", "MFG"): 2.965437,
-        ("USA", "SER"): 9.305929,
-        ("ROW", "AGR"): 0.567111,
-        ("ROW", "MFG"): 0.892758,
-        ("ROW", "SER"): -0.375154,
+        ("USA", "AGR"): 1.829891,
+        ("USA", "MFG"): 3.596916,
+        ("USA", "SER"): 9.150424,
+        ("ROW", "AGR"): 0.569298,
+        ("ROW", "MFG"): 0.892446,
+        ("ROW", "SER"): -0.375221,
     },
-    "rore": {("USA",): 1.850056, ("ROW",): 1.850056},
-    "regy": {("USA",): 4.310648, ("ROW",): -1.270465},
-    "pi": {("USA",): -3.052336, ("ROW",): -1.267265},
-    "xiagg": {("USA",): 10.851814, ("ROW",): -2.242549},
+    "rore": {("USA",): 1.830253, ("ROW",): 1.830253},
+    "regy": {("USA",): 4.197924, ("ROW",): -1.225676},
+    "pi": {("USA",): -3.137535, ("ROW",): -1.228211},
+    "xiagg": {("USA",): 10.811101, ("ROW",): -2.211162},
 }
 
 
 @pytest.fixture(scope="module", params=["kwarg", "fix_instrument_shock"])
 def solved(request):
-    """Las dos vias dan lo mismo: el kwarg ``lambdava_shock`` y
-    ``fix_instrument_shock`` directo antes de ``solve_multiperiod`` (sin arancel)."""
     from pyomo.environ import value
 
     from equilibria._local_refs import nus333_dir
 
     har = nus333_dir()
-    if not (har / "basedata.har").exists():
-        pytest.skip(f"nus333 no disponible en {har}")
+    prm = har / "3x3CES.prm"
+    if not (har / "basedata.har").exists() or not prm.exists():
+        pytest.skip(f"nus333 o 3x3CES.prm no disponible en {har}")
 
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_model
@@ -58,7 +57,7 @@ def solved(request):
     p.load_from_har(
         basedata_path=har / "basedata.har",
         sets_path=har / "sets.har",
-        default_path=har / "default.prm",
+        default_path=prm,
         baserate_path=har / "baserate.har",
     )
     ac = GTAPClosureConfig(
@@ -87,7 +86,6 @@ def solved(request):
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
-        holdfix_cd=True,
         mode="gtap",
         solve_check=True,
         **shock_kw,
@@ -96,25 +94,20 @@ def solved(request):
     return m, value
 
 
-def _pct(m, value, var, key, a="check", b="shock"):
+def _pct(m, value, var, key):
     comp = getattr(m, var)
-    return 100.0 * (float(value(comp[(*key, b)])) / float(value(comp[(*key, a)])) - 1.0)
-
-
-def test_el_shock_no_entra_al_check(solved):
-    """base y check deben ser el mismo benchmark: el shock va solo en 'shock'."""
-    m, value = solved
-    for key in ORACLE["xp"]:
-        assert abs(_pct(m, value, "xp", key, "base", "check")) < 1e-6, key
+    return 100.0 * (
+        float(value(comp[(*key, "shock")])) / float(value(comp[(*key, "check")])) - 1.0
+    )
 
 
 @pytest.mark.parametrize(
     ("var", "key"), [(v, k) for v, cells in ORACLE.items() for k in cells]
 )
-def test_iguala_a_gempack_gragg(solved, var, key):
+def test_iguala_a_gams(solved, var, key):
     m, value = solved
     got = _pct(m, value, var, key)
     want = ORACLE[var][key]
     assert abs(got - want) <= TOL_PP, (
-        f"{var}{key}: equilibria {got:+.6f} vs GEMPACK {want:+.6f}"
+        f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}"
     )

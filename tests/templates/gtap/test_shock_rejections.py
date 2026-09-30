@@ -132,3 +132,35 @@ def test_rejects_a_fixed_endowment_in_the_shock_period(no_solver, built):
             )
     finally:
         m.xft[idx].unfix()
+
+
+# ── Shock aplicado directo con apply_shock (sin kwargs) ─────────────────────
+
+
+@pytest.fixture
+def direct_aft(built):
+    """aft[USA,CAPITAL,shock] x1.1 via fix_instrument_shock; se restaura al salir."""
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap.instruments import fix_instrument_shock
+
+    m, p, gc = built
+    idx = ("USA", "CAPITAL", "shock")
+    before = float(value(m.aft[idx]))
+    fix_instrument_shock(m, "aft", ("USA", "CAPITAL"), factor=1.1)
+    yield m, p, gc
+    m.aft[idx].fix(before)
+
+
+def test_direct_shock_plus_kwarg_is_rejected(no_solver, direct_aft):
+    m, p, gc = direct_aft
+    with pytest.raises(ValueError, match="one shock"):
+        driver.solve_multiperiod(
+            m, p, gc, mode="gtap", lambdava_shock={("USA", "SER"): 1.1}
+        )
+
+
+def test_direct_shock_rejected_in_altertax_mode(no_solver, direct_aft):
+    m, p, gc = direct_aft
+    with pytest.raises(ValueError, match="mode='gtap'"):
+        driver.solve_multiperiod(m, p, gc, mode="altertax")

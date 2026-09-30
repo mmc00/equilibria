@@ -1,4 +1,4 @@
-"""Compose the 7 GTAP symbolic blocks into a solvable model (F3 Task 5).
+"""Compose the 8 GTAP symbolic blocks into a solvable model (F3 Task 5).
 
 This is the COMPOSER: it assembles the migrated ``equilibria.blocks.gtap`` block
 units onto a single ``equilibria.model.Model``, translates that to Pyomo via the
@@ -404,6 +404,30 @@ def _fix_cd_welfare(pm: Any, params: Any, sets: Any) -> int:
     return n
 
 
+def _fix_instruments(pm: Any) -> int:
+    """Fijar los instrumentos de shock en su valor de benchmark y registrarlos.
+
+    Son exogenos (GAMS los fija por periodo): sin fila propia, una columna libre
+    romperia la cuadratura del MCP. ``_exogenous_instruments`` le dice al driver
+    que no los libere ni los re-siembre. Devuelve cuantas celdas fijo.
+    """
+    from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
+
+    n = 0
+    present = []
+    for name in SHOCK_INSTRUMENTS:
+        var = getattr(pm, name, None)
+        if var is None:
+            continue
+        present.append(name)
+        for vd in var.values():
+            if not vd.fixed:
+                vd.fix()
+                n += 1
+    pm._exogenous_instruments = frozenset(present)
+    return n
+
+
 def build_block_single_period(
     params: Any,
     sets: Any,
@@ -463,6 +487,7 @@ def build_block_single_period(
 
     _fix_no_demand_cells(pm)
     _fix_cd_welfare(pm, params, sets)
+    _fix_instruments(pm)
 
     pm._residual_region = residual_region
     return pm
@@ -645,6 +670,10 @@ def build_block_model(
     mp.build_vars(m)
     mp.build_equations_all_periods(m)
     mp.build_equations_fisher(m)
+    # Instrumentos de shock (ShockBlock): build_vars los copia por periodo pero no
+    # copia el .fixed; se fijan aca, en los 3 periodos, en su valor de benchmark,
+    # y el registro viaja con el modelo (y con el cache de modelos).
+    _fix_instruments(m)
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated
     m._settled_seed = None

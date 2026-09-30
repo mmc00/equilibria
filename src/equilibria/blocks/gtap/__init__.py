@@ -1,10 +1,11 @@
-"""GTAP symbolic Block units (F3 Task 4). All 7 units migrated.
+"""GTAP symbolic Block units (F3 Task 4). All 7 units migrated, plus ShockBlock.
 
 Dependency order (leaf → closure). ``GTAP_BLOCK_ORDER`` is the order the composer
 (Task 5) registers the blocks in; shared vars dedup by name (first registration
 wins), so a var owned by an earlier block is skipped in a later one.
 
-The 7 units: TradeCET, ProductionSupply, Factor, ArmingtonBilateral,
+ShockBlock goes first (it only declares the fixed policy instruments the others
+read). The 7 units: TradeCET, ProductionSupply, Factor, ArmingtonBilateral,
 DemandUtility, Income, Closure. Each is form+domain+index-set clean vs the
 gtap7_3x3 ``if_sub=False`` comp-stat oracle (tests/templates/gtap/
 test_gtap_blocks_form.py).
@@ -112,11 +113,14 @@ from equilibria.blocks.gtap.demand_utility import DemandUtilityBlock
 from equilibria.blocks.gtap.factor import FactorBlock
 from equilibria.blocks.gtap.income import IncomeBlock
 from equilibria.blocks.gtap.production_supply import ProductionSupplyBlock
+from equilibria.blocks.gtap.shock import ShockBlock
 from equilibria.blocks.gtap.trade_armington_bilateral import ArmingtonBilateralBlock
 from equilibria.blocks.gtap.trade_cet import TradeCETBlock
 
-# Dependency order (leaf first). All 7 units migrated.
+# Dependency order (leaf first). ShockBlock + the 7 migrated units.
 GTAP_BLOCK_ORDER = [
+    # Primero: declara los instrumentos que leen los demas (m.lambdava, ...).
+    ShockBlock,
     TradeCETBlock,
     ProductionSupplyBlock,
     FactorBlock,
@@ -134,5 +138,6 @@ __all__ = [
     "GTAP_BLOCK_ORDER",
     "IncomeBlock",
     "ProductionSupplyBlock",
+    "ShockBlock",
     "TradeCETBlock",
 ]

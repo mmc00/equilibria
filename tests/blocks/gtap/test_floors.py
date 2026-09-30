@@ -230,6 +230,9 @@ def test_el_declarador_vive_en_un_solo_sitio():
         "closure.py": {"pnum", "pwfact", "walras", "<bucle:202>", "<bucle:217>"},
         # pet piso 1e-3 (init 1.0), xet cantidad.
         "trade_cet.py": {"pet", "xet"},
+        # Instrumentos de shock: Vars FIJAS en su benchmark (GAMS x.fx por periodo),
+        # Reals sin cota; el valor lo fija el compositor, no una cota.
+        "shock.py": {"aft", "lambdava"},
     }
     reales: dict[str, set[str]] = {}
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
