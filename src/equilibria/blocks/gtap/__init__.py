@@ -112,11 +112,14 @@ from equilibria.blocks.gtap.demand_utility import DemandUtilityBlock
 from equilibria.blocks.gtap.factor import FactorBlock
 from equilibria.blocks.gtap.income import IncomeBlock
 from equilibria.blocks.gtap.production_supply import ProductionSupplyBlock
+from equilibria.blocks.gtap.shock import ShockBlock
 from equilibria.blocks.gtap.trade_armington_bilateral import ArmingtonBilateralBlock
 from equilibria.blocks.gtap.trade_cet import TradeCETBlock
 
 # Dependency order (leaf first). All 7 units migrated.
 GTAP_BLOCK_ORDER = [
+    # Primero: declara los instrumentos que leen los demas (m.lambdava, ...).
+    ShockBlock,
     TradeCETBlock,
     ProductionSupplyBlock,
     FactorBlock,
@@ -134,5 +137,6 @@ __all__ = [
     "GTAP_BLOCK_ORDER",
     "IncomeBlock",
     "ProductionSupplyBlock",
+    "ShockBlock",
     "TradeCETBlock",
 ]

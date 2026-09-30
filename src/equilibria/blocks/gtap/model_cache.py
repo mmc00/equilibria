@@ -60,6 +60,7 @@ _CODE_MODULES = (
     "blocks/gtap/factor.py",
     "blocks/gtap/income.py",
     "blocks/gtap/production_supply.py",
+    "blocks/gtap/shock.py",
     "blocks/gtap/trade_armington_bilateral.py",
     "blocks/gtap/trade_cet.py",
     # The blocks above describe the model symbolically; these translate that

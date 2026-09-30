@@ -404,6 +404,30 @@ def _fix_cd_welfare(pm: Any, params: Any, sets: Any) -> int:
     return n
 
 
+def _fix_instruments(pm: Any) -> int:
+    """Fijar los instrumentos de shock en su valor de benchmark y registrarlos.
+
+    Son exogenos (GAMS los fija por periodo): sin fila propia, una columna libre
+    romperia la cuadratura del MCP. ``_exogenous_instruments`` le dice al driver
+    que no los libere ni los re-siembre. Devuelve cuantas celdas fijo.
+    """
+    from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
+
+    n = 0
+    present = []
+    for name in SHOCK_INSTRUMENTS:
+        var = getattr(pm, name, None)
+        if var is None:
+            continue
+        present.append(name)
+        for vd in var.values():
+            if not vd.fixed:
+                vd.fix()
+                n += 1
+    pm._exogenous_instruments = frozenset(present)
+    return n
+
+
 def build_block_single_period(
     params: Any,
     sets: Any,
@@ -463,6 +487,7 @@ def build_block_single_period(
 
     _fix_no_demand_cells(pm)
     _fix_cd_welfare(pm, params, sets)
+    _fix_instruments(pm)
 
     pm._residual_region = residual_region
     return pm
