@@ -210,6 +210,16 @@ _SPLIT_AUX_EQS: dict[tuple[str, str], str] = {
 }
 
 
+# Ecuaciones cuyo cuerpo lee un instrumento de shock (Var fija del ShockBlock) donde
+# el monolito horneaba el float. El monolito esta deprecado: estas filas NO se
+# comparan contra el. Su equivalencia sin shock se verifica contra GAMS (gates de
+# paridad + los ejercicios de Burfisher), no aca.
+_INSTRUMENT_EQS: dict[tuple[str, str], str] = {
+    ("ProductionSupplyBlock", "eq_va"): "lambdava (avaall)",
+    ("ProductionSupplyBlock", "eq_pxeq"): "lambdava (avaall)",
+}
+
+
 def _skeleton_identical(block_str: str, mono_str: str) -> bool:
     """True if two expr strings are identical after stripping numeric literals.
 
@@ -364,7 +374,10 @@ def _fixtures():
 
     p, sets = _params_sets()
     oracle = _oracle()
-    classes = [getattr(gtap_blocks, name) for name, _ in _MIGRATED]
+    from equilibria.blocks.gtap.shock import ShockBlock
+
+    # Siempre presente: declara los instrumentos que leen los demas bloques.
+    classes = [ShockBlock] + [getattr(gtap_blocks, name) for name, _ in _MIGRATED]
     stubs = sorted({s for _, sub in _MIGRATED for s in sub})
     bm, model = _build_block_model(classes, p, sets, stubs)
     return p, sets, oracle, bm, model, gtap_blocks
@@ -397,6 +410,11 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
             # An aggregate has no oracle row at all; a condensed HEAD keeps its
             # oracle row (same variable, same meaning) but a different skeleton.
             # Either way there is no form comparison to make.
+            exempted += 1
+            continue
+        if (unit_name, eq) in _INSTRUMENT_EQS:
+            # Lee un instrumento del ShockBlock: sin comparacion contra el monolito
+            # (deprecado); la equivalencia se mide contra GAMS.
             exempted += 1
             continue
         assert eq in or_cons, f"{unit_name}: {eq} missing from oracle"
@@ -456,8 +474,12 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
         f"compared nor exempted"
     )
     assert exempted == len(
-        [k for k in _SPLIT_AUX_EQS if k[0] == unit_name and k[1] in eq_names]
-    ), f"{unit_name}: exemption count does not match _SPLIT_AUX_EQS"
+        [
+            k
+            for k in (*_SPLIT_AUX_EQS, *_INSTRUMENT_EQS)
+            if k[0] == unit_name and k[1] in eq_names
+        ]
+    ), f"{unit_name}: exemption count does not match _SPLIT_AUX_EQS + _INSTRUMENT_EQS"
 
 
 @pytest.mark.parametrize("unit_name, sub", _MIGRATED)

@@ -62,3 +62,19 @@ def test_lambdava_es_var_fija_en_su_benchmark():
         assert float(value(vd)) == pytest.approx(
             float(p.shifts.lambdava.get((r, a), 1.0)), abs=0.0
         )
+
+
+def test_eq_va_y_eq_pxeq_dependen_del_instrumento():
+    """Mover lambdava[r,a] tiene que mover el residuo de eq_va y eq_pxeq: si la
+    ecuacion horneara el literal, el shock no entraria."""
+    from pyomo.environ import value
+
+    m = _sp(_params())
+    for name in ("eq_va", "eq_pxeq"):
+        con = getattr(m, name)
+        (r, a), cd = next(iter(con.items()))
+        antes = float(value(cd.body))
+        m.lambdava[r, a].set_value(1.25)
+        despues = float(value(cd.body))
+        m.lambdava[r, a].set_value(1.0)
+        assert abs(despues - antes) > 1e-9, f"{name}[{r},{a}] no lee lambdava"
