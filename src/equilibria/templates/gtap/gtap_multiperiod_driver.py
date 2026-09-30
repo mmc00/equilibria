@@ -1490,52 +1490,9 @@ def _collapse_pft_pfteq(m, period: str) -> int:
     return _n
 
 
-# ---------------------------------------------------------------------------
-# _rebuild_lambdava_shock — inject a VA-technology shock INTO the shock eqs only
-# ---------------------------------------------------------------------------
-def _rebuild_lambdava_shock(m, lambdava_shock) -> int:
-    """Multiply the factor ``lambdava_shock[r,a]`` into eq_va/eq_pxeq of the SHOCK
-    period only (on top of any lambdava already baked in at build).
-
-    GAMS (model.gms:539-547) carries the VA shifter as ``lambdava(r,a,t)``:
-        va  = ava*xp*(px/pva)**sigmap * (axp*lambdava)**(sigmap-1)
-        px**(1-sigmap) = axp**(sigmap-1) * (and*(pnd/lambdand)**(1-sigmap)
-                                            + ava*(pva/lambdava)**(1-sigmap))
-    The blocks bake ``params.shifts.lambdava`` as a literal at build, into ALL
-    periods — so setting it on ``params`` before the build shocks base and check
-    too. This rewrites only the ``'shock'`` cells, in effective VA units
-    (va_eff = va*lambdava, pva_eff = pva/lambdava), which is exactly the GAMS form
-    for any sigmap, including the Cobb-Douglas branch:
-        eq_va:   va -> va*lambdava,  pva -> pva/lambdava
-        eq_pxeq: pva -> pva/lambdava
-    NOT idempotent: call once per built model.
-    """
-    from pyomo.core.expr.visitor import ExpressionReplacementVisitor
-
-    eq_va = getattr(m, "eq_va", None)
-    eq_px = getattr(m, "eq_pxeq", None)
-    n = 0
-    for (r, a), lam in lambdava_shock.items():
-        lam = float(lam)  # > 0, validated at the top of _solve_multiperiod_inner
-        idx = (r, a, "shock")
-        pva = m.pva[idx]
-        va = m.va[idx]
-        for eq, sub in (
-            (eq_va, {id(pva): pva / lam, id(va): va * lam}),
-            (eq_px, {id(pva): pva / lam}),
-        ):
-            if eq is None or idx not in eq or not eq[idx].active:
-                raise ValueError(
-                    f"lambdava_shock[{r},{a}]: {getattr(eq, 'name', eq)}{idx} is not "
-                    "an active equation, the shock would not enter the model"
-                )
-            visitor = ExpressionReplacementVisitor(substitute=sub)
-            eq[idx].set_value(visitor.walk_expression(eq[idx].expr))
-            n += 1
-    return n
-
-
-# Equations whose 'shock' cell each shock rewrites (see the _rebuild_* below).
+# Instrumento del ShockBlock que mueve cada shock, y las ecuaciones por las que
+# entra al modelo (su celda 'shock' tiene que estar viva para que el shock cuente).
+_SHOCK_INSTRUMENT = {"lambdava_shock": "lambdava", "qe_shock": "aft"}
 _SHOCK_EQS = {
     "lambdava_shock": ("eq_va", "eq_pxeq"),
     "qe_shock": ("eq_xfteq",),
@@ -1551,9 +1508,22 @@ def _check_shock_cells(m, name: str, shock) -> None:
     with code=1) must fail in milliseconds and say why -- not after the base and
     check solves, and never silently.
     """
+    instr = getattr(m, _SHOCK_INSTRUMENT[name], None)
     for key in shock:
         r, x = key
         idx = (r, x, "shock")
+        if instr is None or idx not in instr:
+            valid = sorted(
+                {
+                    k[1]
+                    for k in (instr.keys() if instr is not None else ())
+                    if k[0] == r and k[-1] == "shock"
+                }
+            )
+            raise ValueError(
+                f"{name}{key}: instrument {_SHOCK_INSTRUMENT[name]}{idx} does not "
+                f"exist in the built model. Valid for {r}: {valid}"
+            )
         for eq_name in _SHOCK_EQS[name]:
             eq = getattr(m, eq_name, None)
             if eq is None or idx not in eq or not eq[idx].active:
@@ -1573,43 +1543,6 @@ def _check_shock_cells(m, name: str, shock) -> None:
                 f"qe_shock{key}: xft{idx} is fixed; the solver would deactivate "
                 "eq_xfteq and the shock would be lost"
             )
-
-
-def _rebuild_qe_shock(m, qe_shock) -> int:
-    """Multiply the factor ``qe_shock[r,f]`` into the endowment of the SHOCK period
-    only.
-
-    GAMS (model.gms:1073) supplies a mobile factor as
-        xft = aft*(pft/pabs)**etaf
-    and a GEMPACK ``qe`` shock is a shock to ``aft`` (with ``etaf=0``, xft = aft).
-    The blocks bake ``aft`` as a literal into all periods, so this rewrites only
-    the ``'shock'`` cell of eq_xfteq, substituting xft -> xft/qe:
-        xft/qe = aft*(pft/pabs)**etaf   <=>   xft = (qe*aft)*(pft/pabs)**etaf
-    NOT idempotent: call once per built model.
-    """
-    from pyomo.core.expr.visitor import ExpressionReplacementVisitor
-
-    eq = getattr(m, "eq_xfteq", None)
-    n = 0
-    for (r, f), q in qe_shock.items():
-        q = float(q)  # > 0, validated at the top of _solve_multiperiod_inner
-        idx = (r, f, "shock")
-        if eq is None or idx not in eq or not eq[idx].active:
-            raise ValueError(
-                f"qe_shock[{r},{f}]: eq_xfteq{idx} is not an active equation, the "
-                "shock would not enter the model"
-            )
-        xft = m.xft[idx]
-        if xft.fixed:
-            # Checked up front too; re-checked here, after the driver's own fixing.
-            raise ValueError(
-                f"qe_shock[{r},{f}]: xft{idx} is fixed; the solver would deactivate "
-                "eq_xfteq and the shock would be lost"
-            )
-        visitor = ExpressionReplacementVisitor(substitute={id(xft): xft / q})
-        eq[idx].set_value(visitor.walk_expression(eq[idx].expr))
-        n += 1
-    return n
 
 
 # ---------------------------------------------------------------------------
@@ -4181,19 +4114,21 @@ def _solve_multiperiod_inner(
     if not _tariff_shock:
         import logging as _logging
 
-        if lambdava_shock is not None:
-            _n_lva = _rebuild_lambdava_shock(m, lambdava_shock)
+        from equilibria.templates.gtap.instruments import apply_shock
+
+        # El shock es fijar el instrumento del ShockBlock en la celda 'shock'
+        # (GAMS x.fx); las ecuaciones ya lo leen y el driver no lo pisa.
+        for _kind, _sh in (("lambdava_shock", lambdava_shock), ("qe_shock", qe_shock)):
+            if _sh is None:
+                continue
+            _name = _SHOCK_INSTRUMENT[_kind]
+            for _key, _fac in _sh.items():
+                apply_shock(m, _name, _key, factor=float(_fac))
             _logging.getLogger(__name__).info(
-                "shock period: rebuilt %d eq_va/eq_pxeq cells with lambdava_shock "
-                "(no tariff shock)",
-                _n_lva,
-            )
-        if qe_shock is not None:
-            _n_qe = _rebuild_qe_shock(m, qe_shock)
-            _logging.getLogger(__name__).info(
-                "shock period: rebuilt %d eq_xfteq cells with qe_shock "
-                "(no tariff shock)",
-                _n_qe,
+                "shock period: %s fijo %d celdas de %s (sin arancel)",
+                _kind,
+                len(_sh),
+                _name,
             )
     elif _gtap_mode:
         _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
