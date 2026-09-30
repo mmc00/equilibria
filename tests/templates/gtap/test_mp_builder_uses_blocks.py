@@ -148,6 +148,7 @@ def test_blocks_and_monolith_build_the_same_system():
             "eq_pfaeq",
             "eq_xfeq",
             "eq_dintxeq",
+            "eq_mintxeq",
             "eq_pmeq",
             "eq_xweq",
             "eq_pmteq",

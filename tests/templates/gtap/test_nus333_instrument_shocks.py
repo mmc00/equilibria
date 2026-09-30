@@ -6,13 +6,14 @@ fijado en el periodo shock (``gams_shock/comp_shock.gms`` + ``shocks/<EXP>.inc``
 
 GAMS se valido antes contra GEMPACK (``.sl4`` del .EXP), 32 celdas por ejercicio:
 TBL46A 0,0079pp, TBL65A 0,0287pp, TBL54A 0,0021pp, TBL62A 0,0054pp, TBL78 0,0464pp,
-TBL93 0,0042pp. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
+TBL93 0,0042pp, ME5 0,0004pp. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
 0,89pp a 10% son la linealizacion.
 
 Traduccion GEMPACK -> niveles:
 - ``tms``/``to``/``tpdall``: % de cambio en la potencia (1+t) ->
   ``t_shock = (1+t_check)*(1+x/100) - 1``.
+- ``tfd``/``tfm``: igual, sobre ``dintx_tgt``/``mintx_tgt`` del agente comprador.
 - ``tfe``: % de cambio en (1+fctts+fcttx) -> ``fcttx`` absorbe el cambio.
 - ``afeall``/``aoall``/``ams``: % directo del shifter -> ``factor = 1+x/100``.
 
@@ -49,6 +50,20 @@ SHOCKS = {
     ),
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
     "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
+    # ME5: tfe -> fcttx, tfd -> dintx_tgt, tfm -> mintx_tgt (agente: actividad AGR).
+    "ME5": (
+        "default.prm",
+        [
+            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", 4.2896),
+            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", 3.2700),
+            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 4.1161),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 0.5917),
+            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 4.2713),
+            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", 4.2910),
+            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", 1.9788),
+            ("mintx_tgt", ("USA", "SER", "AGR"), "power", 4.7064),
+        ],
+    ),
 }
 
 # GAMS capFlex con el shock del .EXP solo en 'shock' — % cambio shock/check.
@@ -150,6 +165,20 @@ ORACLES = {
         "regy": {("USA",): -0.025728, ("ROW",): 0.022367},
         "pi": {("USA",): -0.431929, ("ROW",): 0.004041},
         "xiagg": {("USA",): 0.613834, ("ROW",): -0.090248},
+    },
+    "ME5": {
+        "xp": {
+            ("USA", "AGR"): -1.416146,
+            ("USA", "MFG"): 0.055787,
+            ("USA", "SER"): 0.007262,
+            ("ROW", "AGR"): 0.141865,
+            ("ROW", "MFG"): -0.023271,
+            ("ROW", "SER"): -0.003176,
+        },
+        "rore": {("USA",): -0.035358, ("ROW",): -0.035358},
+        "regy": {("USA",): -0.053396, ("ROW",): 0.038195},
+        "pi": {("USA",): -0.037497, ("ROW",): 0.038001},
+        "xiagg": {("USA",): -0.09493, ("ROW",): 0.028993},
     },
 }
 
