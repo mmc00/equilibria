@@ -53,9 +53,9 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module", params=["kwarg", "apply_shock"])
+@pytest.fixture(scope="module", params=["kwarg", "fix_instrument_shock"])
 def solved(request):
-    """Las dos vias dan lo mismo: el kwarg ``qe_shock`` y ``apply_shock`` directo
+    """Las dos vias dan lo mismo: el kwarg ``qe_shock`` y ``fix_instrument_shock`` directo
     antes de ``solve_multiperiod`` (esta ultima NO debe sumar el arancel +10%)."""
     from pyomo.environ import value
 
@@ -90,10 +90,10 @@ def solved(request):
     )
     m, _mp = build_block_model(p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None)
     shock_kw: dict = {"qe_shock": {("USA", "CAPITAL"): 1.10}}
-    if request.param == "apply_shock":
-        from equilibria.templates.gtap.instruments import apply_shock
+    if request.param == "fix_instrument_shock":
+        from equilibria.templates.gtap.instruments import fix_instrument_shock
 
-        apply_shock(m, "aft", ("USA", "CAPITAL"), factor=1.10)
+        fix_instrument_shock(m, "aft", ("USA", "CAPITAL"), factor=1.10)
         shock_kw = {}
     res = solve_multiperiod(
         m,

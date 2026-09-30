@@ -37,8 +37,10 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module")
-def solved():
+@pytest.fixture(scope="module", params=["kwarg", "fix_instrument_shock"])
+def solved(request):
+    """Las dos vias dan lo mismo: el kwarg ``lambdava_shock`` y
+    ``fix_instrument_shock`` directo antes de ``solve_multiperiod`` (sin arancel)."""
     from pyomo.environ import value
 
     from equilibria._local_refs import nus333_dir
@@ -71,6 +73,12 @@ def solved():
         numeraire="pnum",
     )
     m, _mp = build_block_model(p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None)
+    shock_kw: dict = {"lambdava_shock": {("USA", "SER"): 1.10}}
+    if request.param == "fix_instrument_shock":
+        from equilibria.templates.gtap.instruments import fix_instrument_shock
+
+        fix_instrument_shock(m, "lambdava", ("USA", "SER"), factor=1.10)
+        shock_kw = {}
     res = solve_multiperiod(
         m,
         p,
@@ -82,7 +90,7 @@ def solved():
         holdfix_cd=True,
         mode="gtap",
         solve_check=True,
-        lambdava_shock={("USA", "SER"): 1.10},
+        **shock_kw,
     )
     assert int(res["shock"]["code"]) == 1, res["shock"]
     return m, value

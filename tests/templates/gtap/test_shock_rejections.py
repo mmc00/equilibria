@@ -139,15 +139,15 @@ def test_rejects_a_fixed_endowment_in_the_shock_period(no_solver, built):
 
 @pytest.fixture
 def direct_aft(built):
-    """aft[USA,CAPITAL,shock] x1.1 via apply_shock; se restaura al salir."""
+    """aft[USA,CAPITAL,shock] x1.1 via fix_instrument_shock; se restaura al salir."""
     from pyomo.environ import value
 
-    from equilibria.templates.gtap.instruments import apply_shock
+    from equilibria.templates.gtap.instruments import fix_instrument_shock
 
     m, p, gc = built
     idx = ("USA", "CAPITAL", "shock")
     before = float(value(m.aft[idx]))
-    apply_shock(m, "aft", ("USA", "CAPITAL"), factor=1.1)
+    fix_instrument_shock(m, "aft", ("USA", "CAPITAL"), factor=1.1)
     yield m, p, gc
     m.aft[idx].fix(before)
 
