@@ -23,6 +23,8 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "fcttx": ("eq_pfaeq",),
     "dintx_tgt": ("eq_dintxeq",),
     "mintx_tgt": ("eq_mintxeq",),
+    "kappaf": ("eq_pfyeq",),
+    "exptx": ("eq_pefobeq",),
     "lambdaf": ("eq_xfeq",),
     "axp": ("eq_pxeq",),
     "lambdam": ("eq_xweq",),
@@ -30,7 +32,12 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
 
 # Tasas de impuesto: la cota es la potencia 1+t > 0 (un subsidio, t<0, es valido).
 # El resto son shifters o dotaciones: valor > 0.
-TAX_INSTRUMENTS = frozenset({"imptx", "prdtx_rai", "fcttx", "dintx_tgt", "mintx_tgt"})
+TAX_INSTRUMENTS = frozenset(
+    {"imptx", "prdtx_rai", "fcttx", "dintx_tgt", "mintx_tgt", "exptx"}
+)
+# kappaf es la tasa sobre el ingreso: la potencia es 1/(1-kappaf), asi que la
+# cota es kappaf < 1 (kappaf<0, un subsidio, es valido).
+INCOME_TAX_INSTRUMENTS = frozenset({"kappaf"})
 
 # Solo el periodo shock: un shock en 'check'/'base' no lo detecta el driver (le
 # sumaria el arancel) y la copia base->check de F3.5 lo pisaria.
@@ -93,7 +100,7 @@ def fix_instrument_shock(
 
     Devuelve el valor fijado. ValueError si el nombre no es un instrumento
     registrado, si no se da exactamente uno de factor/value, si el resultado no es
-    > 0 (en un impuesto: si 1 + t no es > 0), o si la celda no puede llevar el shock (``check_instrument_cell``).
+    > 0 (en un impuesto: si 1 + t no es > 0; en kappaf: si 1 - kappaf no es > 0), o si la celda no puede llevar el shock (``check_instrument_cell``).
     """
     from pyomo.environ import value as _v
 
@@ -115,6 +122,9 @@ def fix_instrument_shock(
     if name in TAX_INSTRUMENTS:
         if not 1.0 + new > 0.0:
             raise ValueError(f"{name}{idx} = {new}: the tax power 1 + t must be > 0")
+    elif name in INCOME_TAX_INSTRUMENTS:
+        if not 1.0 - new > 0.0:
+            raise ValueError(f"{name}{idx} = {new}: 1 - kappaf must be > 0")
     elif not new > 0.0:
         raise ValueError(f"{name}{idx} = {new}: must be > 0")
     var[idx].fix(new)

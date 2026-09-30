@@ -11,6 +11,7 @@ Traduccion GEMPACK -> niveles (``kind``):
 - ``pct``: % directo del instrumento (avaall, qe, afeall, aoall, ams) -> x*(1+p/100).
 - ``power``: % de la potencia 1+t (tms, to, tpdall) -> (1+t)*(1+p/100)-1.
 - ``power_fct``: % de 1+fctts+fcttx (tfe) -> fcttx absorbe el cambio.
+- ``power_kappa``: % de la potencia 1/(1-kappaf) (tinc) -> 1-(1-k)/(1+p/100).
 
 Uso:
     .venv/bin/python scripts/gtap/run_burfisher.py --gams-dir <dir> [--only TBL46A,TBL78]
@@ -205,6 +206,8 @@ def level(m, p, name: str, idx: tuple, kind: str, pct: float) -> float:
         return chk * (1 + pct / 100)
     if kind == "power":
         return (1 + chk) * (1 + pct / 100) - 1
+    if kind == "power_kappa":
+        return 1 - (1 - chk) / (1 + pct / 100)
     if kind == "power_fct":
         from equilibria.blocks.gtap import _derived_params as dp
 

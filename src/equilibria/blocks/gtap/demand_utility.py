@@ -664,9 +664,9 @@ class DemandUtilityBlock(Block):
                 cap_return = 0.0
                 for f in capital_factors:
                     for a in m.a:
-                        kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0))
+                        # GAMS arenteq (model.gms:1145) lee kappaf(t): el instrumento.
                         cap_return += (
-                            (1.0 - kappa)
+                            (1.0 - m.kappaf[r, f, a])
                             * m.pf[r, f, a]
                             * m.xf[r, f, a]
                             / m.xscale[r, a]

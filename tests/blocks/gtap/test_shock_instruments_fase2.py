@@ -20,9 +20,10 @@ READERS = {
     "fcttx": ("eq_pfaeq", "eq_ytax"),
     "dintx_tgt": ("eq_dintxeq", "eq_ytax"),
     "mintx_tgt": ("eq_mintxeq", "eq_ytax"),
-    # tinc -> kappaf: pfy, recaudacion dt, arent (model.gms:1121/684/1145) y xf
-    # de los factores sluggish (pf*(1-kappaf) inline).
-    "kappaf": ("eq_pfyeq", "eq_ytax", "eq_arent", "eq_xfeq"),
+    # tinc -> kappaf: pfy, recaudacion dt y arent (model.gms:1121/684/1145).
+    # eq_pfeq lo lee inline (pf*(1-kappaf)) solo con omegaf finito; en gtap7_3x3
+    # default.prm todos los factores tienen omegaf infinito y pfeq usa pfy.
+    "kappaf": ("eq_pfyeq", "eq_ytax", "eq_arent"),
     # txs -> exptx: pefob y recaudacion et (model.gms:1034/676).
     "exptx": ("eq_pefobeq", "eq_ytax"),
     "lambdaf": ("eq_xfeq", "eq_pvaeq"),

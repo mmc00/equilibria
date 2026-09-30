@@ -864,11 +864,11 @@ class ArmingtonBilateralBlock(Block):
                 r, i, rp = indices
                 if value(model.xw_flag[r, i, rp]) <= 0.0:
                     return None
-                export_tax = float(taxes.rtxs.get((r, i, rp), 0.0))
+                # GAMS pefobeq (model.gms:1034) lee exptx(t): el instrumento (txs).
                 etax = _etax_value(r, i, rp)
                 return (
                     model.pefob[r, i, rp]
-                    == (1.0 + export_tax + etax) * model.pe[r, i, rp]
+                    == (1.0 + model.exptx[r, i, rp] + etax) * model.pe[r, i, rp]
                 )
 
         equations.append(EqPefobeq())
