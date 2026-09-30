@@ -507,13 +507,12 @@ class FactorBlock(Block):
             mp.seed_all_periods(m, ref_gdx)
         solve_block_model(m, params, closure, ref_gdx, mode="gtap", settle_only=True)
 
-        from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
-
+        instruments: frozenset[str] = getattr(m, "_exogenous_instruments", frozenset())
         settled: dict[str, dict] = {}
         for v in m.component_objects(Var, active=True):
             # Los instrumentos de shock son exogenos (fijos en su benchmark): no
             # son parte del punto asentado y el driver no los re-siembra.
-            if v.name in SHOCK_INSTRUMENTS:
+            if v.name in instruments:
                 continue
             for idx in v:
                 if not (isinstance(idx, tuple) and idx and idx[-1] == "check"):

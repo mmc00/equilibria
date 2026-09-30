@@ -61,7 +61,7 @@ closure: gtap_standard       # _closure_template_data, en gtap_contract.py
 region_residual: ROW
 base_calibrada: true
 
-shock:                       # -> apply_shock(params, target, value, **filtros)
+shock:                       # -> shocks.apply_shock(params, target, value, **filtros)
   target: taxes.imptx        # un target de list_shock_targets()
   valor: 10.0
   modo: pct
@@ -89,8 +89,8 @@ carpetas en `datasets/` y en listas a mano dentro de `scripts/`, fuera del
 registro de `equilibria.datasets`. Unificar eso es el primer paso real.
 
 **El boceto no tiene una lista de bloques, y ese es el hallazgo.** Un usuario de
-GTAP no elige bloques: los 7 *son* el modelo GTAP, y quitar uno no da otro modelo
-sino uno roto. Elige dataset, closure, shock y periodos — y las cuatro cosas ya
+GTAP no elige bloques: los 7 *son* el modelo GTAP (mas el `ShockBlock`, que solo
+declara los instrumentos fijos), y quitar uno no da otro modelo sino uno roto. Elige dataset, closure, shock y periodos — y las cuatro cosas ya
 tienen su registro. Ninguna es el de bloques.
 
 El camino YAML -> modelo es, casi entero, leer el fichero y llamar a
@@ -107,3 +107,8 @@ no controlamos.
 Si llega ese dia, el registro se disena a partir de `_block_classes` y `_mk_unit`
 en `gtap_block_model.py` — que ya son el registro real, escrito a mano y con el
 orden de dependencia que el borrado no modelaba — y no recuperando esta version.
+
+> Nota (2026-09-29): `shocks.apply_shock` modifica `params` antes de construir, asi
+> que el shock queda en los 3 periodos. Un shock SOLO en el periodo shock se fija en
+> el modelo construido con `instruments.fix_instrument_shock(m, instrumento, indice,
+> factor=...)` sobre un instrumento del `ShockBlock` (hoy `lambdava`, `aft`).

@@ -1515,7 +1515,29 @@ def _preset_instrument_shocks(m) -> list[str]:
     return out
 
 
-def _check_shock_cells(m, name: str, shock) -> None:
+def _copy_base_to_check(m) -> None:
+    """F3.5 (base_calibrated sin solve_check): el check ES el base asentado, asi que
+    se copia base->check en cada Var. Los instrumentos registrados son exogenos y
+    se saltan, igual que en freeze_inactive_periods y _seed_period_from_prior."""
+    from pyomo.environ import Var
+
+    instruments = getattr(m, "_exogenous_instruments", frozenset())
+    for v in m.component_objects(Var, active=True):
+        if v.name in instruments:
+            continue
+        for idx in v:
+            if not (isinstance(idx, tuple) and len(idx) >= 1 and idx[-1] == "check"):
+                continue
+            bkey = (*idx[:-1], "base")
+            try:
+                bv = v[bkey].value
+                if bv is not None:
+                    v[idx].set_value(float(bv))
+            except (KeyError, TypeError, ValueError):
+                pass
+
+
+def _check_shock_cells(m, kind: str, shock) -> None:
     """Fail BEFORE any solve if a shock key has no live 'shock' cell to fix.
 
     A misspelt label (GEMPACK's TBL66 writes ``qe("labor","USA")``; the model has
@@ -1528,9 +1550,9 @@ def _check_shock_cells(m, name: str, shock) -> None:
 
     for key in shock:
         try:
-            check_instrument_cell(m, _SHOCK_INSTRUMENT[name], key)
+            check_instrument_cell(m, _SHOCK_INSTRUMENT[kind], key)
         except ValueError as exc:
-            raise ValueError(f"{name}{key}: {exc}") from None
+            raise ValueError(f"{kind}{key}: {exc}") from None
 
 
 # ---------------------------------------------------------------------------
@@ -3053,8 +3075,8 @@ def _solve_multiperiod_inner(
     ref_gdx : path to GAMS reference GDX (optional, not yet used)
     lambdava_shock : {(r, a): factor} applied to the SHOCK period only, INSTEAD of
         the default +10% tariff. It is the GAMS ``lambdavaeq`` factor
-        ``1 + avaall`` (avaall=0.10 -> 1.10), MULTIPLIED onto whatever lambdava the
-        built model already carries -- a level only when params.shifts has none.
+        ``1 + avaall`` (avaall=0.10 -> 1.10), MULTIPLIED onto the 'check' value of
+        the ShockBlock instrument ``lambdava`` (``fix_instrument_shock``).
         gtap-mode only. None keeps the tariff shock, unchanged.
     qe_shock : {(r, f): factor} on the aggregate endowment of a mobile factor, the
         SHOCK period only, INSTEAD of the default +10% tariff. It is the GEMPACK
@@ -3340,21 +3362,7 @@ def _solve_multiperiod_inner(
     # when measured shock/check).  The block's base is the RAW benchmark (= GAMS
     # base), not the settled point, so it must actually re-settle the check.
     if _base_calibrated and not solve_check:
-        from pyomo.environ import Var as _VarF35
-
-        for _v in m.component_objects(_VarF35, active=True):
-            for _idx in _v:
-                if not (
-                    isinstance(_idx, tuple) and len(_idx) >= 1 and _idx[-1] == "check"
-                ):
-                    continue
-                _bkey = (*_idx[:-1], "base")
-                try:
-                    _bv = m.component(_v.name)[_bkey].value
-                    if _bv is not None:
-                        _v[_idx].set_value(float(_bv))
-                except (KeyError, TypeError, ValueError):
-                    pass
+        _copy_base_to_check(m)
     else:
         # ── Phase 2: CHECK period ────────────────────────────────────────────────
         # Freeze base and shock; leave check free.

@@ -1,4 +1,4 @@
-"""Fijar un shock en un instrumento registrado (ShockBlock), solo en un periodo.
+"""Fijar un shock en un instrumento registrado (ShockBlock), solo en el periodo shock.
 
 Equivale a GAMS `x.fx(..., 'shock') = v`: el instrumento es una Var fija en los
 3 periodos y el driver no la libera ni la re-siembra (``_exogenous_instruments``).
@@ -17,11 +17,26 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "aft": ("eq_xfteq",),
 }
 
+# Solo el periodo shock: un shock en 'check'/'base' no lo detecta el driver (le
+# sumaria el arancel) y la copia base->check de F3.5 lo pisaria.
+_PERIOD = "shock"
 
-def check_instrument_cell(
-    m: Any, name: str, index: tuple, period: str = "shock"
-) -> None:
-    """ValueError si la celda ``name[*index, period]`` no puede llevar un shock.
+
+def _labels(component: Any, region: str, *, live: bool = False) -> list:
+    """Segundo indice de las celdas 'shock' de ``region`` (solo activas si live)."""
+    if component is None:
+        return []
+    return sorted(
+        {
+            k[1]
+            for k in component
+            if k[0] == region and k[-1] == _PERIOD and (not live or component[k].active)
+        }
+    )
+
+
+def check_instrument_cell(m: Any, name: str, index: tuple) -> None:
+    """ValueError si la celda ``name[*index, 'shock']`` no puede llevar un shock.
 
     Falla si la celda no existe (nombrando los indices validos de esa region), si
     ninguna fila viva de ``INSTRUMENT_EQS`` la lee, o si es ``aft`` con ``xft``
@@ -29,33 +44,19 @@ def check_instrument_cell(
     perderia con code=1.
     """
     var = getattr(m, name, None)
-    idx = (*index, period)
+    idx = (*index, _PERIOD)
     if var is None or idx not in var:
-        valid = sorted(
-            {
-                k[1]
-                for k in (var if var is not None else ())
-                if k[0] == index[0] and k[-1] == period
-            }
+        raise ValueError(
+            f"{name}{idx} does not exist. Valid for {index[0]}: "
+            f"{_labels(var, index[0])}"
         )
-        raise ValueError(f"{name}{idx} does not exist. Valid for {index[0]}: {valid}")
     for eq_name in INSTRUMENT_EQS.get(name, ()):
         eq = getattr(m, eq_name, None)
         if eq is None or idx not in eq or not eq[idx].active:
-            live = (
-                []
-                if eq is None
-                else sorted(
-                    {
-                        k[1]
-                        for k in eq
-                        if k[0] == index[0] and k[-1] == period and eq[k].active
-                    }
-                )
-            )
             raise ValueError(
                 f"{name}{idx}: {eq_name}{idx} does not exist or is inactive, the "
-                f"shock would not enter the model. Live for {index[0]}: {live}"
+                "shock would not enter the model. Live for "
+                f"{index[0]}: {_labels(eq, index[0], live=True)}"
             )
     if name == "aft" and m.xft[idx].fixed:
         raise ValueError(
@@ -71,9 +72,8 @@ def fix_instrument_shock(
     *,
     factor: float | None = None,
     value: float | None = None,
-    period: str = "shock",
 ) -> float:
-    """Fijar ``name[*index, period]`` en ``value`` o en ``factor`` x su valor de
+    """Fijar ``name[*index, 'shock']`` en ``value`` o en ``factor`` x su valor de
     ``'check'`` (el benchmark: aplicar el mismo shock dos veces da lo mismo que una).
 
     Devuelve el valor fijado. ValueError si el nombre no es un instrumento
@@ -89,9 +89,9 @@ def fix_instrument_shock(
         )
     if (factor is None) == (value is None):
         raise ValueError("give exactly one of factor/value")
-    check_instrument_cell(m, name, index, period)
+    check_instrument_cell(m, name, index)
     var = getattr(m, name)
-    idx = (*index, period)
+    idx = (*index, _PERIOD)
     if value is not None:
         new = float(value)
     else:
