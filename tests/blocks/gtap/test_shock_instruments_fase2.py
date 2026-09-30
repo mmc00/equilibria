@@ -1,4 +1,4 @@
-"""ShockBlock, fase 2: imptx, prdtx_rai, fcttx, dintx_tgt, lambdaf, axp, lambdam.
+"""ShockBlock, fase 2: imptx, prdtx_rai, fcttx, dintx_tgt, mintx_tgt, lambdaf, axp, lambdam.
 
 Cada instrumento es una Var FIJA en su benchmark, registrada, y las ecuaciones que
 lo usan lo leen como Var: moverlo mueve su residuo. Si una ecuacion horneara el
@@ -18,6 +18,7 @@ READERS = {
     "prdtx_rai": ("eq_pp_rai", "eq_ytax"),
     "fcttx": ("eq_pfaeq", "eq_ytax"),
     "dintx_tgt": ("eq_dintxeq", "eq_ytax"),
+    "mintx_tgt": ("eq_mintxeq", "eq_ytax"),
     "lambdaf": ("eq_xfeq", "eq_pvaeq"),
     "axp": ("eq_nd", "eq_pxeq"),
     "lambdam": ("eq_xweq", "eq_pmteq"),
@@ -87,8 +88,9 @@ def test_la_ecuacion_lee_el_instrumento(sp, name, eq):
     assert cambian > 0, f"{eq} no lee {name}: el shock no entraria"
 
 
-def test_eq_ytax_no_acopla_el_dintx_endogeno(sp):
-    """eq_ytax lee la tasa del instrumento fijo (dintx_tgt), no la Var dintx.
+@pytest.mark.parametrize("endogena", ["dintx", "mintx"])
+def test_eq_ytax_no_acopla_la_tasa_endogena(sp, endogena):
+    """eq_ytax lee la tasa del instrumento fijo (dintx_tgt/mintx_tgt), no la Var.
 
     En GAMS dintx esta fijo por periodo: en ytaxeq es una constante. Leer la Var
     endogena da la misma solucion pero agrega 2700 acoples en 15x10 y PATH cae en
@@ -99,6 +101,9 @@ def test_eq_ytax_no_acopla_el_dintx_endogeno(sp):
     acoplan = [
         k
         for k, cd in sp.eq_ytax.items()
-        if any(v.parent_component() is sp.dintx for v in identify_variables(cd.body))
+        if any(
+            v.parent_component() is getattr(sp, endogena)
+            for v in identify_variables(cd.body)
+        )
     ]
     assert not acoplan, acoplan[:3]

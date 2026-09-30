@@ -104,6 +104,21 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
     # ams -> lambdam (origen, bien, destino)
     "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
+    # ME5: quitar los subsidios agricolas de USA. tfe -> fcttx, tfd -> dintx_tgt y
+    # tfm -> mintx_tgt, con la actividad AGR como agente comprador.
+    "ME5": (
+        "default.prm",
+        [
+            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", 4.2896),
+            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", 3.2700),
+            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 4.1161),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 0.5917),
+            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 4.2713),
+            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", 4.2910),
+            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", 1.9788),
+            ("mintx_tgt", ("USA", "SER", "AGR"), "power", 4.7064),
+        ],
+    ),
 }
 
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
