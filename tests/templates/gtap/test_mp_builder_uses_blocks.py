@@ -137,7 +137,23 @@ def test_blocks_and_monolith_build_the_same_system():
     # una Var (p.ej. `*lambdava[...]**0.0`) y en el monolito, deprecado, no existe.
     # Mismo criterio que `_INSTRUMENT_EQS` en test_gtap_blocks_form.py; la
     # equivalencia de esas filas se mide contra GAMS.
-    instrumento = ("eq_va[", "eq_pxeq[", "eq_xfteq[")
+    instrumento = tuple(
+        f"{e}["
+        for e in (
+            "eq_va",
+            "eq_pxeq",
+            "eq_xfteq",
+            "eq_nd",
+            "eq_pp_rai",
+            "eq_pfaeq",
+            "eq_xfeq",
+            "eq_dintxeq",
+            "eq_pmeq",
+            "eq_xweq",
+            "eq_pmteq",
+            "eq_ytax",
+        )
+    )
     exentas = [k for k in mono if k.startswith(instrumento)]
     assert exentas, "la exencion de instrumentos no encontro filas: revisar nombres"
 

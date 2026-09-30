@@ -107,3 +107,34 @@ def test_solo_el_periodo_shock(nus333_mp_model):
     with pytest.raises(TypeError, match="period"):
         kw: dict = {"factor": 1.1, "period": "check"}
         fix_instrument_shock(nus333_mp_model, "aft", ("USA", "CAPITAL"), **kw)
+
+
+@pytest.mark.parametrize("name", ["imptx", "prdtx_rai", "fcttx", "dintx_tgt"])
+def test_un_impuesto_acepta_subsidio_y_rechaza_potencia_no_positiva(
+    nus333_mp_model, name
+):
+    """En un impuesto la cota es la potencia 1+t > 0: un subsidio (t<0) es valido
+    (TBL65A: to=-10,9%), t<=-1 no. En un shifter (lambdaf, axp...) es valor > 0."""
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap.instruments import fix_instrument_shock
+
+    m = nus333_mp_model
+    var = getattr(m, name)
+    from equilibria.templates.gtap.instruments import check_instrument_cell
+
+    def _vivo(k):
+        try:
+            check_instrument_cell(m, name, k)
+        except ValueError:
+            return False
+        return True
+
+    idx = next(k[:-1] for k in var if k[-1] == "shock" and _vivo(k[:-1]))
+    before = float(value(var[(*idx, "shock")]))
+    try:
+        assert fix_instrument_shock(m, name, idx, value=-0.05) == -0.05
+        with pytest.raises(ValueError, match="1 \\+ t"):
+            fix_instrument_shock(m, name, idx, value=-1.0)
+    finally:
+        var[(*idx, "shock")].fix(before)
