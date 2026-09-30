@@ -15,7 +15,21 @@ from typing import Any
 INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "lambdava": ("eq_va", "eq_pxeq"),
     "aft": ("eq_xfteq",),
+    # Solo las filas con el MISMO indice que el instrumento. Bajo ifSUB eq_pmeq y
+    # eq_pfaeq se apagan (el impuesto entra por los macros M_*): la celda se
+    # rechaza con un error claro en vez de perderse.
+    "imptx": ("eq_pmeq",),
+    "prdtx_rai": ("eq_pp_rai",),
+    "fcttx": ("eq_pfaeq",),
+    "dintx_tgt": ("eq_dintxeq",),
+    "lambdaf": ("eq_xfeq",),
+    "axp": ("eq_pxeq",),
+    "lambdam": ("eq_xweq",),
 }
+
+# Tasas de impuesto: la cota es la potencia 1+t > 0 (un subsidio, t<0, es valido).
+# El resto son shifters o dotaciones: valor > 0.
+TAX_INSTRUMENTS = frozenset({"imptx", "prdtx_rai", "fcttx", "dintx_tgt"})
 
 # Solo el periodo shock: un shock en 'check'/'base' no lo detecta el driver (le
 # sumaria el arancel) y la copia base->check de F3.5 lo pisaria.
@@ -78,7 +92,7 @@ def fix_instrument_shock(
 
     Devuelve el valor fijado. ValueError si el nombre no es un instrumento
     registrado, si no se da exactamente uno de factor/value, si el resultado no es
-    > 0, o si la celda no puede llevar el shock (``check_instrument_cell``).
+    > 0 (en un impuesto: si 1 + t no es > 0), o si la celda no puede llevar el shock (``check_instrument_cell``).
     """
     from pyomo.environ import value as _v
 
@@ -97,7 +111,10 @@ def fix_instrument_shock(
     else:
         assert factor is not None  # exactly one of factor/value, checked above
         new = float(_v(var[(*index, "check")])) * float(factor)
-    if not new > 0.0:
+    if name in TAX_INSTRUMENTS:
+        if not 1.0 + new > 0.0:
+            raise ValueError(f"{name}{idx} = {new}: the tax power 1 + t must be > 0")
+    elif not new > 0.0:
         raise ValueError(f"{name}{idx} = {new}: must be > 0")
     var[idx].fix(new)
     return new
