@@ -238,9 +238,6 @@ class ProductionSupplyBlock(Block):
         def _lambdand(r, a):
             return sh.lambdand.get((r, a), 1.0)
 
-        def _lambdava(r, a):
-            return sh.lambdava.get((r, a), 1.0)
-
         def _lambdaf(r, f, a):
             return sh.lambdaf.get((r, f, a), 1.0)
 
@@ -303,7 +300,9 @@ class ProductionSupplyBlock(Block):
                 if value(pva) <= 0:
                     return None
                 ratio = px / pva
-                shift = _axp_shift(r, a) * _lambdava(r, a)
+                # lambdava es el instrumento (ShockBlock, Var fija): el shock de
+                # avaall entra solo en el periodo que lo fija (model.gms:540).
+                shift = _axp_shift(r, a) * m.lambdava[r, a]
                 return m.va[r, a] == ava_val * m.xp[r, a] * ratio**sigmap * shift ** (
                     sigmap - 1
                 )
@@ -334,14 +333,14 @@ class ProductionSupplyBlock(Block):
                         else 1.0
                     )
                     va_term = (
-                        (m.pva[r, a] / max(_lambdava(r, a), 1e-8)) ** ava_val
+                        (m.pva[r, a] / m.lambdava[r, a]) ** ava_val
                         if ava_val > 0.0
                         else 1.0
                     )
                     return m.px[r, a] == nd_term * va_term
                 shift = _axp_shift(r, a) ** (sigmap - 1.0)
                 lambdand = max(_lambdand(r, a), 1e-8)
-                lambdava = max(_lambdava(r, a), 1e-8)
+                lambdava = m.lambdava[r, a]
                 term_nd = (
                     and_val * (m.pnd[r, a] / lambdand) ** expo if and_val > 0.0 else 0.0
                 )
