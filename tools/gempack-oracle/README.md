@@ -259,22 +259,22 @@ Dos cosas en una sola pasada. Correr **en la maquina Windows**, en esta carpeta.
 ```
 
 Genera los `*-DIR.EXP` traduciendo `rate% N from file X.shk` al valor directo, y
-los corre. Cubre **TBL813** (tabla 8.13) y **ME8** (11 shocks).
+los corre. Hoy cubre **TBL813** (tabla 8.13). **ME8** no se traduce todavia: sus
+shocks van sobre sets y falta desplegar una linea por celda.
 
-**`mk_exp_directos.py` emite DOS variantes** por shock, porque se escribio en Mac
-y una no se pudo verificar sin GEMPACK:
+**`rate% N` sube N% la TASA, y el `.shk` NO trae ese shock** (corregido 2026-09-30).
+El `.shk` trae el shock que ELIMINA cada impuesto, en % de la potencia: en
+`tpdall.shk` las 6 celdas son `100*(1/(1+t0)-1)` a 4 decimales. Subir la tasa N%
+mueve la potencia `-N/100 x` ese valor, que es exacto. El `-DIR.EXP` queda asi:
 
 ```
-! --- variante A (si GEMPACK lee el .shk) ---
-Shock tpdall("MFG","USA") = file tpdall.shk;
-! --- variante B (valor directo, sin depender de A) ---
-! Shock tpdall("MFG", "USA") = -9.1956644;
+Shock tpdall("MFG", "USA") = 0.091956644;
 ```
 
-Si el `.bat` corta con error de sintaxis en el `Shock`, abrir el `*-DIR.EXP`,
-comentar la linea de la variante A y descomentar la B. El valor de B sale del
-`.shk` (verificado: `-9.1956644` es `tpdall("MFG","USA")`, que coincide con el
-que ya estaba documentado arriba).
+La version anterior aplicaba el `.shk` tal cual (`-9.1956644`, o `= file tpdall.shk`),
+o sea que ELIMINABA el impuesto: TBL813-DIR dio EV USA +13.202, y el libro
+(Tabla 8.12 de la 2a ed.) da -236,3 para +1%. **Si en Windows queda un
+`TBL813-DIR.EXP` viejo, hay que borrarlo:** el script no pisa uno existente.
 
 **La 5.3 NO se traduce, y no es un olvido.** Usa `= target% 5 from file tfd.shk`:
 `target%` no es un dato del `.shk` sino un OBJETIVO — "mover el instrumento hasta

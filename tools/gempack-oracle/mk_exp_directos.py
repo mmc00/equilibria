@@ -9,8 +9,15 @@ ejecutable de GEMPACK:
 
 Los dos casos NO son lo mismo, y la diferencia importa:
 
-* `rate% 1` escala el vector del `.shk` por 1, o sea que **los valores del
-  `.shk` SON los shocks**. Se puede traducir celda por celda sin mas.
+* `rate% N` sube N% la TASA del impuesto. El `.shk` NO trae ese shock: trae el
+  que ELIMINA cada impuesto, en % de la potencia (medido en tpdall.shk: 6/6
+  celdas = 100*(1/(1+t0)-1) a 4 decimales, t0 del basedata). Subir la tasa N%
+  mueve la potencia -N/100 x ese valor (exacto: (1+t0(1+N/100))/(1+t0)-1 =
+  N/100 * t0/(1+t0)). Se traduce celda por celda con escala -N/100.
+
+  CORREGIDO 2026-09-30: antes se escalaba por N ("los valores del .shk SON los
+  shocks"). TBL813-DIR corrio asi y dio EV USA +13.202 (eliminar el impuesto),
+  cuando el libro (Tabla 8.12, 2a ed.) da -236,3 para +1%.
 
 * `target% N` pide "mover el instrumento hasta que el objetivo cambie N%".
   Eso es un calculo que hace la GUI, no un dato que este en el `.shk`. El
@@ -137,7 +144,7 @@ def main(carpeta: str) -> int:
         print(f"ERROR: {base} no es una carpeta")
         return 1
 
-    # `rate% N`: el .shk trae los shocks, escalados por N.
+    # `rate% N`: +N% a la tasa; el .shk trae el shock de ELIMINAR el impuesto.
     # re.M es obligatorio: sin el, `^` ancla al inicio del ARCHIVO y ningun
     # `Shock` de la linea 29 matchea. Combinado con el CRLF de los .EXP, el
     # script emitia 0 shocks sin decir por que.
@@ -184,9 +191,9 @@ def main(carpeta: str) -> int:
                 salida.append(linea)
                 continue
 
-            escala = float(m.group("n"))
+            escala = -float(m.group("n")) / 100.0
             var, idx = m.group("var"), m.group("idx")
-            # `rate% 1` = el .shk tal cual. Con otra N, se escala.
+            # `rate% N` = -N/100 x el .shk (ver el docstring del modulo).
             # Se emite UNA linea por celda para no depender de que el
             # ejecutable acepte leer el .shk directo.
             salida.append(
@@ -195,27 +202,23 @@ def main(carpeta: str) -> int:
             )
             salida.append(f"! Original: {linea.strip()}\n")
 
-            # Dos variantes, porque `= file X.shk;` es sintaxis de GEMPACK que NO
-            # se pudo verificar sin GEMPACK (se desarrollo en Mac). La A es la
-            # limpia si el ejecutable la acepta; la B no depende de eso, pero solo
-            # se puede emitir cuando los indices son literales (un escalar).
-            # En Windows: probar A y, si corta, comentarla y descomentar B.
+            # Solo valor directo. La forma `= file X.shk;` lee el .shk TAL CUAL, o
+            # sea que aplica el shock de ELIMINAR el impuesto, no el `rate% N`: es
+            # justo lo que dio TBL813-DIR (EV USA +13.202). Ya no se emite.
             literales = _celdas_literales(idx, dims, vals, escala)
-            if literales is not None:
-                salida.append("! --- variante A (si GEMPACK lee el .shk) ---\n")
-                salida.append(f"Shock {var}({idx}) = file {m.group('shk')};\n")
-                salida.append(
-                    "! --- variante B (valor directo, sin depender de A) ---\n"
+            if literales is None:
+                # Indices con sets (COMM/ACTS/ENDW): haria falta una linea por
+                # celda con los nombres desplegados segun el row_order del .shk.
+                # Sin eso NO se traduce: un shock mal ubicado corre y da numeros
+                # plausibles y falsos.
+                print(
+                    f"   {exp.name}: {var}({idx}) tiene sets; no se traduce "
+                    "(falta desplegar celdas)."
                 )
-                for k, val in literales:
-                    salida.append(f"! Shock {var}({k}) = {val!r};\n")
-            else:
-                salida.append(
-                    "! Indices con sets (COMM/ACTS/ENDW): la variante de valor\n"
-                    "! directo necesitaria una linea por celda con los nombres\n"
-                    "! desplegados, y el orden depende del row_order del .shk.\n"
-                )
-                salida.append(f"Shock {var}({idx}) = file {m.group('shk')};\n")
+                salida.append(linea)
+                continue
+            for k, val in literales:
+                salida.append(f"Shock {var}({k}) = {val!r};\n")
             emitidos += 1
 
         # Cuantos `rate%` habia que traducir, contados aparte del loop: si el
