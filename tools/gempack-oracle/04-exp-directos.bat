@@ -81,7 +81,7 @@ for %%E in (TBL813-DIR ME8-DIR) do (
       set /a FAIL+=1
     ) else (
       echo     ok -^> !D!\%%E.sl4
-      if exist "!D!\%%E.sl4" sltoht "!D!\%%E.sl4" "!D!\%%E.sl4.txt" ^>nul 2^>^&1
+      if exist "!D!\%%E.sl4" sltoht "!D!\%%E.sl4" "!D!\%%E.sl4.txt" >nul 2>&1
       set /a OK+=1
     )
     popd
