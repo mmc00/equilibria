@@ -17,7 +17,7 @@ READERS = {
     "imptx": ("eq_pmeq", "eq_ytax"),
     "prdtx_rai": ("eq_pp_rai", "eq_ytax"),
     "fcttx": ("eq_pfaeq", "eq_ytax"),
-    "dintx_tgt": ("eq_dintxeq",),
+    "dintx_tgt": ("eq_dintxeq", "eq_ytax"),
     "lambdaf": ("eq_xfeq", "eq_pvaeq"),
     "axp": ("eq_nd", "eq_pxeq"),
     "lambdam": ("eq_xweq", "eq_pmteq"),
@@ -85,3 +85,20 @@ def test_la_ecuacion_lee_el_instrumento(sp, name, eq):
         for k, vd in var.items():
             vd.set_value(orig[k])
     assert cambian > 0, f"{eq} no lee {name}: el shock no entraria"
+
+
+def test_eq_ytax_no_acopla_el_dintx_endogeno(sp):
+    """eq_ytax lee la tasa del instrumento fijo (dintx_tgt), no la Var dintx.
+
+    En GAMS dintx esta fijo por periodo: en ytaxeq es una constante. Leer la Var
+    endogena da la misma solucion pero agrega 2700 acoples en 15x10 y PATH cae en
+    otra raiz (pure ifSUB=1 shock 100% -> 88,34%, pft[USA,Land] en su piso).
+    """
+    from pyomo.core.expr.visitor import identify_variables
+
+    acoplan = [
+        k
+        for k, cd in sp.eq_ytax.items()
+        if any(v.parent_component() is sp.dintx for v in identify_variables(cd.body))
+    ]
+    assert not acoplan, acoplan[:3]
