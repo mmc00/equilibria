@@ -1031,7 +1031,12 @@ def freeze_inactive_periods(m, active_period: str) -> int:
 
     # 1. Fix vars for inactive periods; unfix active period vars.
     n_fixed = 0
+    _instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
+        if v.name in _instruments:
+            # Exogeno en todo periodo (GAMS x.fx): ni se libera en el activo ni
+            # se toca en los inactivos; su valor por periodo es el shock.
+            continue
         for idx in v:
             t = idx[-1] if isinstance(idx, tuple) else idx
             if t == active_period:
@@ -2273,7 +2278,10 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
     from pyomo.environ import Var
 
     n_set = 0
+    _instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
+        if v.name in _instruments:
+            continue  # exogeno: su valor por periodo es el shock, no el previo
         for idx in v:
             t = idx[-1] if isinstance(idx, tuple) else idx
             if t != active_period:
@@ -3295,6 +3303,8 @@ def _solve_multiperiod_inner(
         for _vn, _cells in m._settled_seed.items():
             if _vn in _F35_DERIVED_DEMAND:
                 continue
+            if _vn in getattr(m, "_exogenous_instruments", frozenset()):
+                continue  # exogeno: queda en su valor fijado (benchmark o shock)
             _vobj = getattr(m, _vn, None)
             if _vobj is None:
                 continue
