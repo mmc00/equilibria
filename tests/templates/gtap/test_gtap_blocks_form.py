@@ -214,7 +214,7 @@ _SPLIT_AUX_EQS: dict[tuple[str, str], str] = {
 # el monolito horneaba el float. El monolito esta deprecado: estas filas NO se
 # comparan contra el. Su equivalencia sin shock se verifica contra GAMS (gates de
 # paridad + los ejercicios de Burfisher), no aca.
-_INSTRUMENT_EQS: dict[tuple[str, str], str] = {
+_FORM_EXEMPT_INSTRUMENT_EQS: dict[tuple[str, str], str] = {
     ("ProductionSupplyBlock", "eq_va"): "lambdava (avaall)",
     ("ProductionSupplyBlock", "eq_pxeq"): "lambdava (avaall)",
     ("FactorBlock", "eq_xfteq"): "aft (qe)",
@@ -413,7 +413,7 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
             # Either way there is no form comparison to make.
             exempted += 1
             continue
-        if (unit_name, eq) in _INSTRUMENT_EQS:
+        if (unit_name, eq) in _FORM_EXEMPT_INSTRUMENT_EQS:
             # Lee un instrumento del ShockBlock: sin comparacion contra el monolito
             # (deprecado); la equivalencia se mide contra GAMS.
             exempted += 1
@@ -477,10 +477,12 @@ def test_gtap_block_form_matches_monolith(_fixtures, unit_name):
     assert exempted == len(
         [
             k
-            for k in (*_SPLIT_AUX_EQS, *_INSTRUMENT_EQS)
+            for k in (*_SPLIT_AUX_EQS, *_FORM_EXEMPT_INSTRUMENT_EQS)
             if k[0] == unit_name and k[1] in eq_names
         ]
-    ), f"{unit_name}: exemption count does not match _SPLIT_AUX_EQS + _INSTRUMENT_EQS"
+    ), (
+        f"{unit_name}: exemption count does not match _SPLIT_AUX_EQS + _FORM_EXEMPT_INSTRUMENT_EQS"
+    )
 
 
 @pytest.mark.parametrize("unit_name, sub", _MIGRATED)

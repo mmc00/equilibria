@@ -7,7 +7,7 @@ instrumento es una Var que el compositor FIJA en su valor de benchmark y registr
 en ``_exogenous_instruments``. El constructor multiperiodo la copia por periodo
 como referencia viva (una Var fija no se pliega a literal, a diferencia de un
 Param), y el driver no libera ni re-siembra un instrumento registrado. Aplicar un
-shock es ``instruments.apply_shock(m, nombre, indice, factor=...)``.
+shock es ``instruments.fix_instrument_shock(m, nombre, indice, factor=...)``.
 
 Solo el CUERPO de las ecuaciones lee el instrumento; la calibracion (shares,
 semillas, krat de eq_kstock) sigue leyendo el benchmark.

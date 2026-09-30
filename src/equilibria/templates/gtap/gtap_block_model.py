@@ -673,18 +673,7 @@ def build_block_model(
     # Instrumentos de shock (ShockBlock): build_vars los copia por periodo pero no
     # copia el .fixed; se fijan aca, en los 3 periodos, en su valor de benchmark,
     # y el registro viaja con el modelo (y con el cache de modelos).
-    from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
-
-    _present = []
-    for _name in SHOCK_INSTRUMENTS:
-        _var = getattr(m, _name, None)
-        if _var is None:
-            continue
-        _present.append(_name)
-        for _vd in _var.values():
-            if not _vd.fixed:
-                _vd.fix()
-    m._exogenous_instruments = frozenset(_present)
+    _fix_instruments(m)
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated
     m._settled_seed = None
