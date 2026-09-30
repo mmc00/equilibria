@@ -57,3 +57,27 @@ def test_seed_from_prior_no_pisa_un_instrumento(nus333_mp_model):
         assert float(value(m.aft[idx])) == pytest.approx(x0 * 1.1)
     finally:
         m.aft[idx].fix(x0)
+
+
+def test_copia_base_a_check_no_pisa_instrumentos(nus333_mp_model):
+    """F3.5 (base_calibrated sin solve_check) copia base->check en TODA Var: tiene
+    que saltar los instrumentos, como freeze y seed_from_prior."""
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap import gtap_multiperiod_driver as driver
+
+    m = nus333_mp_model
+    ins = ("USA", "CAPITAL", "check")
+    otra = next(k for k in m.xft if k[-1] == "check")
+    antes_ins = float(value(m.aft[ins]))
+    antes_otra = float(value(m.xft[otra]))
+    m.aft[ins].fix(antes_ins * 1.1)
+    m.xft[otra].set_value(antes_otra * 3.0)
+    try:
+        driver._copy_base_to_check(m)
+        assert float(value(m.aft[ins])) == pytest.approx(antes_ins * 1.1)
+        base = (*otra[:-1], "base")
+        assert float(value(m.xft[otra])) == float(value(m.xft[base]))
+    finally:
+        m.aft[ins].fix(antes_ins)
+        m.xft[otra].set_value(antes_otra)

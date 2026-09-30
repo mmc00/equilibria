@@ -97,3 +97,14 @@ def test_factor_es_relativo_al_check_y_no_compone(nus333_mp_model):
         assert got == pytest.approx(chk * 1.10)
     finally:
         m.aft[(*k, "shock")].fix(before)
+
+
+def test_solo_el_periodo_shock(nus333_mp_model):
+    """Un shock en 'check' o 'base' no lo detecta el driver (sumaria el arancel) y
+    la copia base->check lo pisaria: la API solo fija la celda 'shock'."""
+    from equilibria.templates.gtap.instruments import fix_instrument_shock
+
+    with pytest.raises(TypeError, match="period"):
+        fix_instrument_shock(  # ty: ignore[unknown-argument]
+            nus333_mp_model, "aft", ("USA", "CAPITAL"), factor=1.1, period="check"
+        )
