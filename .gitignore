@@ -312,6 +312,7 @@ scripts/gtap/*
 !scripts/gtap/measure_nlp_vs_nlp_altertax.py
 !scripts/gtap/regen_altertax_reference.py
 !scripts/gtap/blocks_diag.py
+!scripts/gtap/run_burfisher.py
 
 # Salidas de corridas GEMPACK/GAMS: se ignora todo lo generado (binarios y
 # consolas) y se versiona a mano la evidencia de validacion (.md, .cmf, .py,

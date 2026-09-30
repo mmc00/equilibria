@@ -81,3 +81,48 @@ def test_copia_base_a_check_no_pisa_instrumentos(nus333_mp_model):
     finally:
         m.aft[ins].fix(antes_ins)
         m.xft[otra].set_value(antes_otra)
+
+
+def test_build_vars_fija_y_registra_sin_pasar_por_build_block_model():
+    """Los gates arman el modelo paso a paso (build_sets/build_vars/...), sin
+    build_block_model. Si solo este fijara los instrumentos, en los gates quedarian
+    libres y _replicate_sp_fixing los fijaria con el valor del SP del shock: el
+    arancel +10% entraria vivo en todas las ecuaciones (altertax 3x3: 100% -> 73,4%).
+    """
+    import pathlib
+
+    from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    d = pathlib.Path(__file__).resolve().parents[3] / "datasets" / "gtap7_3x3"
+    p = GTAPParameters()
+    p.load_from_har(
+        basedata_path=d / "basedata.har",
+        sets_path=d / "sets.har",
+        default_path=d / "default.prm",
+        baserate_path=d / "baserate.har",
+    )
+    gc = GTAPClosureConfig(
+        name="altertax",
+        closure_type="MCP",
+        capital_mobility="mobile",
+        fix_endowments=False,
+        fix_taxes=True,
+        fix_technology=True,
+        if_sub=False,
+        numeraire="pnum",
+    )
+    mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=list(p.sets.r)[-1])
+    m = mp.build_sets()
+    mp.build_vars(m)
+
+    assert m._exogenous_instruments == frozenset(SHOCK_INSTRUMENTS)
+    for name in SHOCK_INSTRUMENTS:
+        var = getattr(m, name)
+        libres = [k for k, vd in var.items() if not vd.fixed]
+        assert not libres, (name, libres[:3])
+        for k, vd in var.items():
+            if k[-1] != "base":
+                assert vd.value == var[(*k[:-1], "base")].value, (name, k)

@@ -17,8 +17,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
-
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
 from equilibria.core.symbolic_equations import SymbolicEquation
@@ -26,7 +24,17 @@ from equilibria.core.variables import Variable
 
 # Nombres de componente de cada instrumento. Fuente unica para el compositor,
 # build_block_model y el driver.
-SHOCK_INSTRUMENTS: tuple[str, ...] = ("lambdava", "aft")
+SHOCK_INSTRUMENTS: tuple[str, ...] = (
+    "lambdava",
+    "aft",
+    "imptx",
+    "prdtx_rai",
+    "fcttx",
+    "dintx_tgt",
+    "lambdaf",
+    "axp",
+    "lambdam",
+)
 
 
 class ShockBlock(Block):
@@ -38,36 +46,64 @@ class ShockBlock(Block):
     params: Any = None
 
     def model_post_init(self, __context: Any) -> None:
-        self.required_sets = ["r", "a", "f"]
+        self.required_sets = ["r", "a", "f", "i", "aa", "rp"]
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
-        regions = list(set_manager.get("r"))
-        acts = list(set_manager.get("a"))
-        lva = self.params.shifts.lambdava
+        p, s = self.params, self.sets
+        byname = {d: list(set_manager.get(d)) for d in ("r", "a", "f", "i", "aa", "rp")}
+
+        def _instrument(name: str, data: dict, doms: tuple, default: float) -> None:
+            variables[name] = Variable(
+                name=name,
+                value=dp.to_array(data, [byname[d] for d in doms], default),
+                domains=doms,
+                domain="Reals",
+                lower=float("-inf"),
+                upper=float("inf"),
+            )
+
+        sh = p.shifts
         # avaall -> lambdava(r,a,t) (model.gms:38, :540, :547).
-        variables["lambdava"] = Variable(
-            name="lambdava",
-            value=np.array(
-                [[float(lva.get((r, a), 1.0)) for a in acts] for r in regions]
-            ),
-            domains=("r", "a"),
-            domain="Reals",
-            lower=float("-inf"),
-            upper=float("inf"),
-        )
-        facs = list(set_manager.get("f"))
-        aft = dp.aft_data(self.params, self.sets)
+        _instrument("lambdava", dict(sh.lambdava), ("r", "a"), 1.0)
         # qe -> aft(r,fm,t): Parameter indexado por t en GAMS (model.gms:290),
-        # xft = aft*(pft/pabs)**etaf (model.gms:1073). Instrumento del shock de
-        # dotacion; el benchmark para calibrar es aft0 (FactorBlock).
-        variables["aft"] = Variable(
-            name="aft",
-            value=np.array(
-                [[float(aft.get((r, f), 0.0)) for f in facs] for r in regions]
-            ),
-            domains=("r", "f"),
-            domain="Reals",
-            lower=float("-inf"),
-            upper=float("inf"),
+        # xft = aft*(pft/pabs)**etaf (model.gms:1073). El benchmark para calibrar es
+        # aft0 (FactorBlock).
+        _instrument("aft", dp.aft_data(p, s), ("r", "f"), 0.0)
+        # tms -> imptx(r,i,rp,t) (exportador, bien, importador), cal.gms:333.
+        _instrument("imptx", dp.imptx_data(p, s), ("r", "i", "rp"), 0.0)
+        # to -> prdtx(r,a,i,t): tasa efectiva makb/maks - 1 (cal.gms:290-291).
+        _instrument("prdtx_rai", dp.prdtx_rai_data(p, s), ("r", "a", "i"), 0.0)
+        # tfe -> fcttx(r,fp,a,t) (cal.gms:163); fctts sigue siendo Param.
+        _instrument("fcttx", dp.fcttx_data(p, s), ("r", "f", "a"), 0.0)
+        # tpdall/tfd -> dintx(r,i,aa,t), que GAMS fija en iterloop.gms:32. Aca dintx
+        # es Var emparejada con eq_dintxeq; el instrumento es su objetivo.
+        _instrument(
+            "dintx_tgt",
+            {
+                (r, i, aa): dp._dintx_target(p, s, r, i, aa)
+                for r in byname["r"]
+                for i in byname["i"]
+                for aa in byname["aa"]
+            },
+            ("r", "i", "aa"),
+            0.0,
+        )
+        # afeall -> lambdaf(r,fp,a,t) (model.gms:1356).
+        _instrument("lambdaf", dict(sh.lambdaf), ("r", "f", "a"), 1.0)
+        # aoall -> axp(r,a,t) (model.gms:1341).
+        _instrument("axp", dict(sh.axp), ("r", "a"), 1.0)
+        # ams -> lambdam(rp,i,r,t) (origen, bien, destino), model.gms:941/947.
+        from equilibria.blocks.gtap.trade_armington_bilateral import _safe
+
+        _instrument(
+            "lambdam",
+            {
+                (e, i, d): max(_safe(p, "lambdam", (e, i, d), 1.0), 1e-12)
+                for e in byname["r"]
+                for i in byname["i"]
+                for d in byname["rp"]
+            },
+            ("r", "i", "rp"),
+            1.0,
         )
         return []

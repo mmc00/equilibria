@@ -94,7 +94,8 @@ class ProductionSupplyBlock(Block):
         _param("gx_param", dp.gx_param_data(p, s), ("r", "a", "i"))
         _param("xscale", dp.xscale_data(p, s), ("r", "aa"), default=1.0)
         _param("p_ax", dp.p_ax_data(p, s), ("r", "a", "i"))
-        _param("prdtx_rai", dp.prdtx_rai_data(p, s), ("r", "a", "i"))
+        # prdtx_rai es instrumento del ShockBlock (Var fija); la calibracion usa
+        # _prdtx (benchmark makb/maks).
         _param("xflag", dp.xflag_data(p, s), ("r", "a", "i"))
         # gd_share/ge_share shared with TRADE_CET (dedup by name — first wins);
         # declared here too so a standalone build resolves them. CARRY: drift.
@@ -232,14 +233,8 @@ class ProductionSupplyBlock(Block):
         def _get_sigmas(r, i):
             return el.sigmas.get((r, i), 2.0)
 
-        def _axp_shift(r, a):
-            return sh.axp.get((r, a), 1.0)
-
         def _lambdand(r, a):
             return sh.lambdand.get((r, a), 1.0)
-
-        def _lambdaf(r, f, a):
-            return sh.lambdaf.get((r, f, a), 1.0)
 
         acts_out = s.activity_commodities
         comm_acts = s.commodity_activities
@@ -276,7 +271,7 @@ class ProductionSupplyBlock(Block):
                 if value(pnd) <= 0:
                     return None
                 ratio = px / pnd
-                shift = _axp_shift(r, a) * _lambdand(r, a)
+                shift = m.axp[r, a] * _lambdand(r, a)
                 return m.nd[r, a] == and_val * m.xp[r, a] * ratio**sigmap * shift ** (
                     sigmap - 1
                 )
@@ -302,7 +297,7 @@ class ProductionSupplyBlock(Block):
                 ratio = px / pva
                 # lambdava es el instrumento (ShockBlock, Var fija): el shock de
                 # avaall entra solo en el periodo que lo fija (model.gms:540).
-                shift = _axp_shift(r, a) * m.lambdava[r, a]
+                shift = m.axp[r, a] * m.lambdava[r, a]
                 return m.va[r, a] == ava_val * m.xp[r, a] * ratio**sigmap * shift ** (
                     sigmap - 1
                 )
@@ -338,7 +333,7 @@ class ProductionSupplyBlock(Block):
                         else 1.0
                     )
                     return m.px[r, a] == nd_term * va_term
-                shift = _axp_shift(r, a) ** (sigmap - 1.0)
+                shift = m.axp[r, a] ** (sigmap - 1.0)
                 lambdand = max(_lambdand(r, a), 1e-8)
                 lambdava = m.lambdava[r, a]
                 term_nd = (
@@ -421,7 +416,7 @@ class ProductionSupplyBlock(Block):
                     )
                     if af_val <= 0.0:
                         continue
-                    lambdaf = max(_lambdaf(r, f, a), 1e-8)
+                    lambdaf = m.lambdaf[r, f, a]
                     # M_PFA inline under if_sub=True (pfa coupled to pf; eq_pfaeq off).
                     pfa_t = mac.m_pfa(m, p, r, f, a) if if_sub else m.pfa[r, f, a]
                     terms.append(af_val * (pfa_t / lambdaf) ** expo)
@@ -510,8 +505,7 @@ class ProductionSupplyBlock(Block):
                 if share <= 0.0 and make_base <= 0.0:
                     return None
                 return (
-                    m.pp_rai[r, a, i]
-                    == (1.0 + value(m.prdtx_rai[r, a, i])) * m.p_rai[r, a, i]
+                    m.pp_rai[r, a, i] == (1.0 + m.prdtx_rai[r, a, i]) * m.p_rai[r, a, i]
                 )
 
         equations.append(EqPpRai())

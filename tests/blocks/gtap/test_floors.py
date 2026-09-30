@@ -231,8 +231,9 @@ def test_el_declarador_vive_en_un_solo_sitio():
         # pet piso 1e-3 (init 1.0), xet cantidad.
         "trade_cet.py": {"pet", "xet"},
         # Instrumentos de shock: Vars FIJAS en su benchmark (GAMS x.fx por periodo),
-        # Reals sin cota; el valor lo fija el compositor, no una cota.
-        "shock.py": {"aft", "lambdava"},
+        # Reals sin cota; el valor lo fija el compositor, no una cota. Los 9 se
+        # declaran en un solo helper (_instrument).
+        "shock.py": {"<bucle:56>"},
     }
     reales: dict[str, set[str]] = {}
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):

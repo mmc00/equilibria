@@ -26,6 +26,7 @@ import zlib
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 GOLDEN = ROOT / "tests/fixtures/gtap7_3x3_residuos_sin_shock_3f3fe5f.json.gz"
 REL_TOL = 1e-9
+_PINNED = ("dintx", "mintx")
 
 
 def residuos() -> dict[str, float]:
@@ -56,7 +57,10 @@ def residuos() -> dict[str, float]:
     )
     m, _ = build_block_model(p, p.sets, gc, list(p.sets.r)[-1])
     for v in m.component_data_objects(Var):
-        if v.fixed or v.value is None:
+        # dintx/mintx estan clavadas a su objetivo de benchmark por su propia fila
+        # (eq_dintxeq/eq_mintxeq): fuera de ese objetivo la recaudacion (eq_ytax,
+        # que las lee vivas como GAMS) no significa nada. Se dejan en benchmark.
+        if v.fixed or v.value is None or v.parent_component().name in _PINNED:
             continue
         # +-1% segun el nombre: determinista y distinto por celda.
         v.set_value(

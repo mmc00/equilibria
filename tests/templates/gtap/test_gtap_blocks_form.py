@@ -218,6 +218,16 @@ _FORM_EXEMPT_INSTRUMENT_EQS: dict[tuple[str, str], str] = {
     ("ProductionSupplyBlock", "eq_va"): "lambdava (avaall)",
     ("ProductionSupplyBlock", "eq_pxeq"): "lambdava (avaall)",
     ("FactorBlock", "eq_xfteq"): "aft (qe)",
+    ("ProductionSupplyBlock", "eq_nd"): "axp (aoall)",
+    ("ProductionSupplyBlock", "eq_pp_rai"): "prdtx_rai (to)",
+    ("ProductionSupplyBlock", "eq_pvaeq"): "lambdaf (afeall)",
+    ("FactorBlock", "eq_pfaeq"): "fcttx (tfe)",
+    ("FactorBlock", "eq_xfeq"): "lambdaf (afeall)",
+    ("ArmingtonBilateralBlock", "eq_dintxeq"): "dintx_tgt (tpdall/tfd)",
+    ("ArmingtonBilateralBlock", "eq_pmeq"): "imptx (tms)",
+    ("ArmingtonBilateralBlock", "eq_xweq"): "lambdam (ams)",
+    ("ArmingtonBilateralBlock", "eq_pmteq"): "lambdam (ams)",
+    ("IncomeBlock", "eq_ytax"): "imptx/dintx (recaudacion)",
 }
 
 

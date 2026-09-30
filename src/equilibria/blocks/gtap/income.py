@@ -129,8 +129,7 @@ class IncomeBlock(Block):
         # them). fcttx/fctts mutable (monolith 5077-5094), referenced unwrapped.
         _shared_param("xfflag", dp.xfflag_data(p, s), ("r", "f", "a"))
         _shared_param("xflag", dp.xflag_data(p, s), ("r", "a", "i"))
-        _shared_param("prdtx_rai", dp.prdtx_rai_data(p, s), ("r", "a", "i"))
-        _shared_param("fcttx", dp.fcttx_data(p, s), ("r", "f", "a"), mutable=True)
+        # prdtx_rai/fcttx/imptx son instrumentos del ShockBlock (Vars fijas).
         _shared_param("fctts", dp.fctts_data(p, s), ("r", "f", "a"), mutable=True)
         _shared_param("xscale", dp.xscale_data(p, s), ("r", "aa"), default=1.0)
 
@@ -357,7 +356,12 @@ class IncomeBlock(Block):
                     total = 0.0
                     for ag in agents:
                         for i in model.i:
-                            dintx = float(taxes.dintx0.get((r, i, ag), 0.0))
+                            # GAMS ytaxeq lee dintx (model.gms:645), fijo por
+                            # periodo: aca es el instrumento dintx_tgt, asi un shock
+                            # llega a la recaudacion. NO la Var dintx endogena: misma
+                            # solucion, pero acopla 2700 celdas mas en 15x10 y PATH
+                            # cae en otra raiz (pure ifSUB=1 shock 100% -> 88,34%).
+                            dintx = model.dintx_tgt[r, i, ag]
                             mintx = float(taxes.mintx0.get((r, i, ag), 0.0))
                             scale = model.xscale[r, ag] if ag in model.a else 1.0
                             total += (
@@ -391,9 +395,7 @@ class IncomeBlock(Block):
                         # read imptx LIVE (model.imptx) so the tariff shock enters the
                         # solved revenue, and M_PMCIF inline (pmcif is a frozen report
                         # var). if_sub=False keeps the baked float + plain pmcif var.
-                        imptx_term = (
-                            model.imptx[exporter, i, r] if if_sub else float(imptx)
-                        )
+                        imptx_term = model.imptx[exporter, i, r]
                         pmcif_term = (
                             mac.m_pmcif(model, p, exporter, i, r)
                             if if_sub

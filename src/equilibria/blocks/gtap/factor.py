@@ -93,7 +93,7 @@ class FactorBlock(Block):
         # fcttx/fctts: mutable in the monolith (5077-5094) and referenced UNWRAPPED
         # in eq_pfaeq (6835) -> they must stay symbolic (mutable) so the expression
         # prints fctts[...]/fcttx[...] not the folded literal. See bridge mutable=.
-        _param("fcttx", dp.fcttx_data(p, s), ("r", "f", "a"), mutable=True)
+        # fcttx es instrumento del ShockBlock (Var fija); fctts sigue Param.
         _param("fctts", dp.fctts_data(p, s), ("r", "f", "a"), mutable=True)
         # xscale shared with PRODUCTION_SUPPLY (dedup by name); declared here so a
         # standalone factor build resolves model.xscale[r,a] in eq_xft/eq_pfeq.
@@ -205,9 +205,6 @@ class FactorBlock(Block):
         def _get_sigmav(r, a):
             return el.sigmav.get((r, a), 1.0)
 
-        def _lambdaf(r, f, a):
-            return p.shifts.lambdaf.get((r, f, a), 1.0)
-
         def _omegaf(region, factor):
             omega = el.omegaf.get((region, factor))
             if omega is not None:
@@ -286,7 +283,7 @@ class FactorBlock(Block):
                 # under if_sub=True (pfa coupled to pf when eq_pfaeq is deactivated).
                 ratio = model.pva[r, a] / _m_pfa(model, r, f, a)
                 sigmav = _get_sigmav(r, a)
-                lambdaf = _lambdaf(r, f, a)
+                lambdaf = model.lambdaf[r, f, a]
                 return model.xf[r, f, a] == af_val * model.va[
                     r, a
                 ] * ratio**sigmav * lambdaf ** (sigmav - 1)

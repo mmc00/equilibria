@@ -599,6 +599,14 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
             doc = v.doc if hasattr(v, "doc") and v.doc else ""
             setattr(m, name, Var(new_index, within=domain, initialize=init_fn, doc=doc))
 
+        # Instrumentos de shock (ShockBlock): la reflexion los copia por periodo pero
+        # no copia el .fixed. Se fijan aca, en los 3 periodos, en su valor de
+        # benchmark, para que TODO camino de construccion (build_block_model o los
+        # gates, que arman el modelo paso a paso) los tenga fijos y registrados. Si
+        # quedaran libres, _replicate_sp_fixing los fijaria con el valor del SP del
+        # shock y el arancel +10% entraria vivo en todas las ecuaciones.
+        _fix_instruments(m)
+
 
 def build_block_model(
     params: Any,
@@ -670,10 +678,8 @@ def build_block_model(
     mp.build_vars(m)
     mp.build_equations_all_periods(m)
     mp.build_equations_fisher(m)
-    # Instrumentos de shock (ShockBlock): build_vars los copia por periodo pero no
-    # copia el .fixed; se fijan aca, en los 3 periodos, en su valor de benchmark,
-    # y el registro viaja con el modelo (y con el cache de modelos).
-    _fix_instruments(m)
+    # Los instrumentos ya quedaron fijos y registrados en build_vars; el registro
+    # viaja con el modelo (y con el cache de modelos).
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated
     m._settled_seed = None

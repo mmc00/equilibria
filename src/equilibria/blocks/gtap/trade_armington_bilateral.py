@@ -120,7 +120,7 @@ class ArmingtonBilateralBlock(Block):
         _param("gw_share", dp.gw_share_data(p, s), ("r", "i", "rp"), mutable=True)
         # imptx: mutable in the monolith (5017), referenced UNWRAPPED in eq_pmeq
         # -> stays symbolic. Indexed (r,i,rp) = (exporter,commodity,importer).
-        _param("imptx", dp.imptx_data(p, s), ("r", "i", "rp"), mutable=True)
+        # imptx es instrumento del ShockBlock (Var fija), (exportador, bien, importador).
         # shared with PRODUCTION_SUPPLY / FACTOR (dedup by name); declared so a
         # standalone armington build resolves io_param/p_io/lambdaio/xscale.
         _param("io_param", dp.io_param_data(p, s), ("r", "i", "a"))
@@ -358,12 +358,6 @@ class ArmingtonBilateralBlock(Block):
         def _get_sigmand(r, a):
             return el.sigmand.get((r, a), 1.0)
 
-        def _lambdam_value(exporter, commodity, importer):
-            lm = el.esubm  # placeholder; lambdam read below
-            return max(
-                float(_safe(p, "lambdam", (exporter, commodity, importer), 1.0)), 1e-12
-            )
-
         def _chipm_value(exporter, commodity, importer):
             return max(
                 float(_safe(p, "chipm", (exporter, commodity, importer), 1.0)), 1e-12
@@ -545,8 +539,9 @@ class ArmingtonBilateralBlock(Block):
 
             def build_expression(self, pyomo_model, indices):
                 r, i, aa = indices
-                target = dp._dintx_target(p, s, r, i, aa)
-                return pyomo_model.dintx[r, i, aa] == target
+                # El objetivo es el instrumento dintx_tgt (ShockBlock): GAMS fija
+                # dintx por periodo (iterloop.gms:32).
+                return pyomo_model.dintx[r, i, aa] == pyomo_model.dintx_tgt[r, i, aa]
 
         equations.append(EqDintxeq())
 
@@ -779,7 +774,7 @@ class ArmingtonBilateralBlock(Block):
                 if amw <= 0.0:
                     return None
                 esubm = el.esubm.get((r, i), 5.0)
-                lambdam = _lambdam_value(rp, i, r)
+                lambdam = model.lambdam[rp, i, r]
                 # M_PM: plain var pm under if_sub=False; tariff-inclusive formula
                 # inline under if_sub=True (so an imptx shock reaches xw here).
                 return model.xw[rp, i, r] == (
@@ -811,7 +806,7 @@ class ArmingtonBilateralBlock(Block):
                     amw = _get_import_source_share(r, i, rp)
                     if amw <= 0.0:
                         continue
-                    lambdam = _lambdam_value(rp, i, r)
+                    lambdam = model.lambdam[rp, i, r]
                     # M_PM inline under if_sub=True (imptx shock reaches pmt here).
                     terms.append(amw * (_m_pm(model, rp, i, r) / lambdam) ** expo)
                 if not terms:
