@@ -362,7 +362,8 @@ class IncomeBlock(Block):
                             # solucion, pero acopla 2700 celdas mas en 15x10 y PATH
                             # cae en otra raiz (pure ifSUB=1 shock 100% -> 88,34%).
                             dintx = model.dintx_tgt[r, i, ag]
-                            mintx = float(taxes.mintx0.get((r, i, ag), 0.0))
+                            # Idem con mintx: el instrumento, no la Var endogena.
+                            mintx = model.mintx_tgt[r, i, ag]
                             scale = model.xscale[r, ag] if ag in model.a else 1.0
                             total += (
                                 dintx * model.pd[r, i] * model.xda[r, i, ag] / scale

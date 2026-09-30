@@ -551,8 +551,8 @@ class ArmingtonBilateralBlock(Block):
 
             def build_expression(self, pyomo_model, indices):
                 r, i, aa = indices
-                target = dp._mintx_target(p, s, r, i, aa)
-                return pyomo_model.mintx[r, i, aa] == target
+                # El objetivo es el instrumento mintx_tgt (ShockBlock), como dintx.
+                return pyomo_model.mintx[r, i, aa] == pyomo_model.mintx_tgt[r, i, aa]
 
         equations.append(EqMintxeq())
 

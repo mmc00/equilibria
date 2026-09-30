@@ -31,6 +31,7 @@ SHOCK_INSTRUMENTS: tuple[str, ...] = (
     "prdtx_rai",
     "fcttx",
     "dintx_tgt",
+    "mintx_tgt",
     "lambdaf",
     "axp",
     "lambdam",
@@ -81,6 +82,19 @@ class ShockBlock(Block):
             "dintx_tgt",
             {
                 (r, i, aa): dp._dintx_target(p, s, r, i, aa)
+                for r in byname["r"]
+                for i in byname["i"]
+                for aa in byname["aa"]
+            },
+            ("r", "i", "aa"),
+            0.0,
+        )
+        # tpmall/tfm -> mintx(r,i,aa,t), igual que dintx: Var emparejada con
+        # eq_mintxeq; el instrumento es su objetivo.
+        _instrument(
+            "mintx_tgt",
+            {
+                (r, i, aa): dp._mintx_target(p, s, r, i, aa)
                 for r in byname["r"]
                 for i in byname["i"]
                 for aa in byname["aa"]

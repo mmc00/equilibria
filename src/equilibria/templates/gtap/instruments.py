@@ -22,6 +22,7 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "prdtx_rai": ("eq_pp_rai",),
     "fcttx": ("eq_pfaeq",),
     "dintx_tgt": ("eq_dintxeq",),
+    "mintx_tgt": ("eq_mintxeq",),
     "lambdaf": ("eq_xfeq",),
     "axp": ("eq_pxeq",),
     "lambdam": ("eq_xweq",),
@@ -29,7 +30,7 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
 
 # Tasas de impuesto: la cota es la potencia 1+t > 0 (un subsidio, t<0, es valido).
 # El resto son shifters o dotaciones: valor > 0.
-TAX_INSTRUMENTS = frozenset({"imptx", "prdtx_rai", "fcttx", "dintx_tgt"})
+TAX_INSTRUMENTS = frozenset({"imptx", "prdtx_rai", "fcttx", "dintx_tgt", "mintx_tgt"})
 
 # Solo el periodo shock: un shock en 'check'/'base' no lo detecta el driver (le
 # sumaria el arancel) y la copia base->check de F3.5 lo pisaria.

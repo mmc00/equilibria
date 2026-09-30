@@ -224,6 +224,7 @@ _FORM_EXEMPT_INSTRUMENT_EQS: dict[tuple[str, str], str] = {
     ("FactorBlock", "eq_pfaeq"): "fcttx (tfe)",
     ("FactorBlock", "eq_xfeq"): "lambdaf (afeall)",
     ("ArmingtonBilateralBlock", "eq_dintxeq"): "dintx_tgt (tpdall/tfd)",
+    ("ArmingtonBilateralBlock", "eq_mintxeq"): "mintx_tgt (tpmall/tfm)",
     ("ArmingtonBilateralBlock", "eq_pmeq"): "imptx (tms)",
     ("ArmingtonBilateralBlock", "eq_xweq"): "lambdam (ams)",
     ("ArmingtonBilateralBlock", "eq_pmteq"): "lambdam (ams)",
