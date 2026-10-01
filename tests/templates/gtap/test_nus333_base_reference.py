@@ -89,7 +89,7 @@ def solved():
 
     p = _params()
     gc = _closure()
-    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=True, ref_gdx=None)
+    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
     res = solve_multiperiod(
         m,
         p,
@@ -185,4 +185,61 @@ def test_xg_agg_inicial_es_la_de_cal_gms():
         got = float(value(xg[r, "base"]))
         if abs(got / want - 1.0) > TOL_REL:
             malas.append(f"xg_agg[{r},base]: {got:.12g} vs GAMS {want:.12g}")
+    assert not malas, "\n".join(malas)
+
+
+# Base de GAMS (TBL45A, default.prm). xp = sum maks por cero ganancia
+# (cal.gms:167 con p = ps/(1+prdtx), x = makb, cal.gms:285-293); xs = sum makb
+# (:297); xet = ps*xs - pd*xds (:353). equilibria arrancaba xp en nd + evfb, sin
+# los impuestos sobre factores, y de ahi x/xs/xet/ytax/regy de la base.
+PROD_BASE_GAMS = {
+    "xp": {
+        ("USA", "AGR"): 0.324849266235352,
+        ("USA", "MFG"): 0.658756095703125,
+        ("USA", "SER"): 1.77014913666992,
+        ("ROW", "AGR"): 2.89882316796875,
+        ("ROW", "MFG"): 0.317027271875,
+        ("ROW", "SER"): 0.469364965332031,
+    },
+    "xs": {
+        ("USA", "AGR"): 0.32564159375,
+        ("USA", "MFG"): 6.6571925,
+        ("USA", "SER"): 18.212366,
+        ("ROW", "AGR"): 2.887836,
+        ("ROW", "MFG"): 32.599412,
+        ("ROW", "SER"): 47.523364,
+    },
+    "xet": {
+        ("USA", "AGR"): 0.0520464609770775,
+        ("USA", "MFG"): 0.96682808908081,
+        ("USA", "SER"): 0.344501796875001,
+        ("ROW", "AGR"): 0.267754408203125,
+        ("ROW", "MFG"): 10.650377859375,
+        ("ROW", "SER"): 2.346238125,
+    },
+}
+
+
+def test_produccion_inicial_es_la_de_cal_gms():
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = _params()
+    m = cast(
+        Any,
+        build_block_model(
+            p, p.sets, _closure(), "ROW", base_calibrated=False, ref_gdx=None
+        )[0],
+    )
+    malas = []
+    for var, cells in PROD_BASE_GAMS.items():
+        comp = getattr(m, var)
+        for key, want in cells.items():
+            got = float(value(comp[(*key, "base")]))
+            # xet se mide a 1e-5: GAMS lo obtiene por diferencia ps*xs - pd*xds
+            # (medido: 1,7e-6 relativo en ROW,SER con xp ya corregido).
+            tol = 1e-5 if var == "xet" else TOL_REL
+            if abs(got / want - 1.0) > tol:
+                malas.append(f"{var}{key}: equilibria {got:.12g} vs GAMS {want:.12g}")
     assert not malas, "\n".join(malas)
