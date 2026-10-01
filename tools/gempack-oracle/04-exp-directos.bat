@@ -35,7 +35,7 @@ echo == 2. corriendo ==
 set OK=0
 set FAIL=0
 
-for %%E in (TBL813-DIR ME8-DIR) do (
+for %%E in (TBL813-DIR ME8-DIR ME9B-S10) do (
   set EXP=%DATA%\%%E.EXP
   if not exist "!EXP!" (
     echo   %%E: no se genero, se saltea.
