@@ -187,7 +187,8 @@ class DemandUtilityBlock(Block):
         _q("zcons", ("r", "i"), self._zcons_init(regions, comms, calib))
         _q("phip", ("r",), self._phip_init(regions, calib))
         _q("phi", ("r",), self._phi_init(regions, calib))
-        _q("xg_agg", ("r",), ones_r)
+        # xg = yg/pg con yg = sum pa*xa(gov) y pa = pg = 1 en la base (cal.gms:257-258).
+        _q("xg_agg", ("r",), self._vgm_init(regions, comms).sum(axis=1))
         # savf/chif: within=Reals FREE (4928-4936).
         # savf init = savf_bar (get_savf_init, capFix closure). Left at zeros this
         # broke the yi = pi·depr·kstock + rsav + savf identity (_refresh_macro_
