@@ -86,6 +86,7 @@ def test_cotas_de_gams_en_el_periodo_resuelto():
 
     m = _nus333_model()
     pf_lb = {k: m.pf[k].lb for k in m.pf if k[-1] == "check"}
+    base_lb = {k: m.xf[k].lb for k in m.xf if k[-1] == "base"}
     _apply_gams_bounds(m, "check")
     # Libres en GAMS: sin cota, ni siquiera la del dominio.
     for v in (
@@ -99,7 +100,7 @@ def test_cotas_de_gams_en_el_periodo_resuelto():
     # Acotadas en GAMS: no se tocan.
     assert {k: m.pf[k].lb for k in pf_lb} == pf_lb
     # Otro periodo: no se toca.
-    assert m.xft["USA", "LAND", "base"].lb == 0.0
+    assert {k: m.xf[k].lb for k in base_lb} == base_lb
     assert "pft" not in GAMS_BOUNDED_VARS and "pf" in GAMS_BOUNDED_VARS
 
 
