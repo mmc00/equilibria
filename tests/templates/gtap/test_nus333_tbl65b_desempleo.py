@@ -155,14 +155,11 @@ def test_salario_real_fijo(solved):
     m, _, value, ow = solved
     got = _pct(m, value, "pft", ("USA", "LABOR"))
     assert abs(got - 7.691635) < TOL_PP
-    # Celda libre en el check: sin shock, el empleo queda en el de la base.
-    assert (
-        abs(
-            float(value(m.aft["USA", "LABOR", "check"]))
-            - float(value(m.aft["USA", "LABOR", "base"]))
-        )
-        < 1e-6
-    )
+    # Celda libre en el check: sin shock, el empleo queda en el de la base (a
+    # precision del solver, relativa; en GAMS base vs check difiere hasta 3e-6).
+    a_chk = float(value(m.aft["USA", "LABOR", "check"]))
+    a_base = float(value(m.aft["USA", "LABOR", "base"]))
+    assert abs(a_chk / a_base - 1) < 1e-6
 
 
 def test_iguala_a_gams(solved):
