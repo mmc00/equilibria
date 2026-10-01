@@ -6,7 +6,9 @@ fijado en el periodo shock (``gams_shock/comp_shock.gms`` + ``shocks/<EXP>.inc``
 
 GAMS se valido antes contra GEMPACK (``.sl4`` del .EXP), 32 celdas por ejercicio:
 TBL46A 0,0079pp, TBL65A 0,0287pp, TBL54A 0,0021pp, TBL62A 0,0054pp, TBL78 0,0464pp,
-TBL93 0,0042pp, ME5 0,0004pp, ME8 0,0004pp (ME8-DIR.sl4). TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
+TBL93 0,0042pp, ME5 0,0004pp, ME8 0,0004pp (ME8-DIR.sl4).
+ME9B/ME9C: GAMS vs GEMPACK hasta 0,85pp sobre cambios de ~215% (brecha en estudio,
+prueba de escala ME9B-S10 pendiente); aca se mide equilibria contra GAMS. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
 0,89pp a 10% son la linealizacion.
 
@@ -18,6 +20,7 @@ Traduccion GEMPACK -> niveles:
 - ``tinc``: % de cambio en la potencia 1/(1-kappaf) (cal.gms:143) ->
   ``kappaf_shock = 1 - (1-kappaf_check)/(1+x/100)``.
 - ``txs``: % de la potencia 1+exptx, como ``tms``.
+- ``pop``/``aoreg``: % directo -> ``factor = 1+x/100`` (aoreg en ``axp`` de cada actividad).
 - ``rate% N from file X.shk`` (ME8): el .shk trae el shock de ELIMINAR cada
   impuesto; subir la tasa N% es ``x = -N/100 x`` ese valor, celda por celda.
 - ``afeall``/``aoall``/``ams``: % directo del shifter -> ``factor = 1+x/100``.
@@ -113,6 +116,47 @@ SHOCKS = {
             ("imptx", ("ROW", "AGR", "USA"), "power", 0.015394439),
             ("imptx", ("ROW", "MFG", "USA"), "power", 0.012148236),
             ("exptx", ("USA", "MFG", "ROW"), "power", 0.0029257515),
+        ],
+    ),
+    # ME9B/ME9C (2010-2050, climatechange.prm): cierre estandar. aoreg -> axp de
+    # todas las actividades (en ME9C x 0,89 en AGR: aoall y aoreg se multiplican en
+    # niveles), pop -> pop, qe -> aft.
+    "ME9B": (
+        "climatechange.prm",
+        [
+            ("axp", ("USA", "AGR"), "pct", 31.94),
+            ("axp", ("USA", "MFG"), "pct", 31.94),
+            ("axp", ("USA", "SER"), "pct", 31.94),
+            ("axp", ("ROW", "AGR"), "pct", 42.31),
+            ("axp", ("ROW", "MFG"), "pct", 42.31),
+            ("axp", ("ROW", "SER"), "pct", 42.31),
+            ("pop", ("USA",), "pct", 32.3),
+            ("pop", ("ROW",), "pct", 37.3),
+            ("aft", ("USA", "LABOR"), "pct", 24.1),
+            ("aft", ("ROW", "LABOR"), "pct", 38.4),
+            ("aft", ("USA", "CAPITAL"), "pct", 60.6),
+            ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
+            ("aft", ("USA", "LAND"), "pct", -0.93),
+            ("aft", ("ROW", "LAND"), "pct", 4.4),
+        ],
+    ),
+    "ME9C": (
+        "climatechange.prm",
+        [
+            ("axp", ("USA", "AGR"), "pct", 17.4266),
+            ("axp", ("USA", "MFG"), "pct", 31.94),
+            ("axp", ("USA", "SER"), "pct", 31.94),
+            ("axp", ("ROW", "AGR"), "pct", 26.6559),
+            ("axp", ("ROW", "MFG"), "pct", 42.31),
+            ("axp", ("ROW", "SER"), "pct", 42.31),
+            ("pop", ("USA",), "pct", 32.3),
+            ("pop", ("ROW",), "pct", 37.3),
+            ("aft", ("USA", "LABOR"), "pct", 24.1),
+            ("aft", ("ROW", "LABOR"), "pct", 38.4),
+            ("aft", ("USA", "CAPITAL"), "pct", 60.6),
+            ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
+            ("aft", ("USA", "LAND"), "pct", 10.07),
+            ("aft", ("ROW", "LAND"), "pct", 15.4),
         ],
     ),
 }
@@ -244,6 +288,34 @@ ORACLES = {
         "regy": {("USA",): 0.032833, ("ROW",): 0.047464},
         "pi": {("USA",): 0.023267, ("ROW",): 0.045714},
         "xiagg": {("USA",): -0.266482, ("ROW",): 0.074028},
+    },
+    "ME9B": {
+        "xp": {
+            ("USA", "AGR"): 52.745462,
+            ("USA", "MFG"): 33.815545,
+            ("USA", "SER"): 85.158579,
+            ("ROW", "AGR"): 70.757195,
+            ("ROW", "MFG"): 158.560469,
+            ("ROW", "SER"): 212.715214,
+        },
+        "rore": {("USA",): 33.065987, ("ROW",): 33.065987},
+        "regy": {("USA",): 35.842836, ("ROW",): 109.819413},
+        "pi": {("USA",): -41.240148, ("ROW",): -47.064437},
+        "xiagg": {("USA",): 117.401573, ("ROW",): 267.970934},
+    },
+    "ME9C": {
+        "xp": {
+            ("USA", "AGR"): 53.063436,
+            ("USA", "MFG"): 33.270063,
+            ("USA", "SER"): 85.053661,
+            ("ROW", "AGR"): 70.237086,
+            ("ROW", "MFG"): 157.120398,
+            ("ROW", "SER"): 211.538958,
+        },
+        "rore": {("USA",): 32.351242, ("ROW",): 32.351242},
+        "regy": {("USA",): 36.466163, ("ROW",): 109.238355},
+        "pi": {("USA",): -40.88362, ("ROW",): -46.941339},
+        "xiagg": {("USA",): 117.972772, ("ROW",): 265.824712},
     },
 }
 
