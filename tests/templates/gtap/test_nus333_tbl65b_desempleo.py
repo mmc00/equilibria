@@ -22,18 +22,34 @@ difieren de GEMPACK por un factor uniforme de 1,0002 (el numerario). En GAMS la 
 igual al check (<=3e-6 en pft/pa/xa), asi que anclar a la base equivale al cierre
 del oraculo, que ancla al check.
 
+Todas las celdas: los niveles GAMS de check y shock de TBL65B y ME3C (cada uno
+con su GDX, gen_gams UNEMP) estan en ``tests/fixtures/nus333_desempleo_gams_levels.json.gz``,
+extraidos con ``_diff_core.gams_levels``, y se comparan con ``run_burfisher.compare``
+(la misma logica que los 35 ejercicios). ME3C es el mismo .EXP que TBL65B.
+
 LOCAL-only: SKIP si falta nus333.
 """
 
 from __future__ import annotations
 
+import gzip
 import importlib
+import json
+import sys
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from tests.templates.gtap._desempleo import (
+    closure,
+    nus333_params,
+    register_desempleo_hooks,
+)
 
 pytestmark = pytest.mark.integration
 
+ROOT = Path(__file__).resolve().parents[3]
+LEVELS = ROOT / "tests" / "fixtures" / "nus333_desempleo_gams_levels.json.gz"
 TOL_PP = 0.002
 
 # GAMS capFlex, % shock/check (oraculo de arriba).
@@ -61,57 +77,24 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module")
-def solved():
+def _gams_levels(exp: str) -> dict[str, dict[tuple, float]]:
+    raw = json.loads(gzip.decompress(LEVELS.read_bytes()))[exp]
+    return {vn: {tuple(k): v for k, v in cells} for vn, cells in raw.items()}
+
+
+@pytest.fixture(scope="module", params=["TBL65B", "ME3C"])
+def solved(request):
     from pyomo.environ import value
 
-    from equilibria._local_refs import nus333_dir
-
-    har = nus333_dir()
-    if not (har / "basedata.har").exists():
-        pytest.skip(f"nus333 no disponible en {har}")
-
-    from equilibria.blocks.gtap import ClosureBlock, ShockBlock
-    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.blocks.gtap import overwrite
     from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from equilibria.templates.gtap.instruments import fix_instrument_shock
 
-    ow = cast(Any, importlib.import_module("equilibria.blocks.gtap.overwrite"))
-
-    @ow.overwrite(ShockBlock)
-    def desempleo(b):
-        b.endogeno("aft", ("USA", "LABOR"))
-
-    @ow.overwrite(ClosureBlock)
-    def salario_real(b):
-        b.ecuacion(
-            "eq_wreal",
-            ("USA", "LABOR"),
-            lambda m, r, f: m.pft[r, f]
-            == value(m.pft[r, f]) * ow.ppriv_tornqvist(m, r),
-        )
-
+    p = nus333_params()
+    ac = closure()
+    register_desempleo_hooks()
     try:
-        p = GTAPParameters()
-        p.load_from_har(
-            basedata_path=har / "basedata.har",
-            sets_path=har / "sets.har",
-            default_path=har / "default.prm",
-            baserate_path=har / "baserate.har",
-        )
-        ac = GTAPClosureConfig(
-            name="base",
-            closure_type="MCP",
-            capital_mobility="sluggish",
-            fix_endowments=False,
-            fix_taxes=False,
-            fix_technology=False,
-            if_sub=False,
-            savf_flag="capFlex",
-            numeraire="pnum",
-        )
         m, _ = cast(
             Any,
             build_block_model(
@@ -132,9 +115,9 @@ def solved():
             mode="gtap",
             solve_check=True,
         )
-        yield m, res, value, ow
+        yield request.param, m, p, res, value
     finally:
-        ow.overwrite.clear()
+        overwrite.clear()
 
 
 def _pct(m, value, var, key):
@@ -145,14 +128,14 @@ def _pct(m, value, var, key):
 
 
 def test_resuelve(solved):
-    _, res, _, _ = solved
+    _, _, _, res, _ = solved
     for t in ("check", "shock"):
         assert int(res[t]["code"]) == 1, (t, res[t])
 
 
 def test_salario_real_fijo(solved):
-    """El Tornqvist de hogares sube lo mismo que pft[USA,LABOR] en el shock."""
-    m, _, value, ow = solved
+    """pft[USA,LABOR] sube lo mismo que el Tornqvist de hogares en el shock."""
+    _, m, _, _, value = solved
     got = _pct(m, value, "pft", ("USA", "LABOR"))
     assert abs(got - 7.691635) < TOL_PP
     # Celda libre en el check: sin shock, el empleo queda en el de la base (a
@@ -163,7 +146,7 @@ def test_salario_real_fijo(solved):
 
 
 def test_iguala_a_gams(solved):
-    m, _, value, _ = solved
+    exp, m, _, _, value = solved
     malas = []
     for var, cells in ORACLE.items():
         for key, want in cells.items():
@@ -172,5 +155,20 @@ def test_iguala_a_gams(solved):
                 malas.append(f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}")
     n = sum(len(c) for c in ORACLE.values())
     assert not malas, (
-        f"TBL65B: {len(malas)}/{n} celdas fuera de {TOL_PP}pp:\n" + "\n".join(malas)
+        f"{exp}: {len(malas)}/{n} celdas fuera de {TOL_PP}pp:\n" + "\n".join(malas)
     )
+
+
+def test_todas_las_celdas_contra_gams(solved):
+    """Check y shock, todas las celdas, contra los niveles de GAMS (tolerancia 0,1%)."""
+    exp, m, p, _, _ = solved
+    # scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
+    sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
+    run_burfisher = cast(Any, importlib.import_module("run_burfisher"))
+
+    r = run_burfisher.compare(m, p, _gams_levels(exp))
+    for period in ("check", "shock"):
+        got = r[period]
+        assert got["cells"] > 500, (exp, period, got["cells"])
+        assert got["match_pct"]["0.1%"] == 100.0, (exp, period, got["worst"])
+        assert got["instr_bad"] == [], (exp, period, got["instr_bad"])
