@@ -76,7 +76,9 @@ def solved(request):
         savf_flag="capFlex",
         numeraire="pnum",
     )
-    m, _mp = build_block_model(p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None)
+    m, _mp = build_block_model(
+        p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
+    )
     res = solve_multiperiod(
         m,
         p,

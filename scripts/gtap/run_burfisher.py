@@ -280,7 +280,9 @@ def solve_exercise(exp: str, har: Path):
         savf_flag="capFlex",
         numeraire="pnum",
     )
-    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=True, ref_gdx=None)
+    # GAMS compStat no resuelve la base: sus niveles (cal.gms) son la referencia de
+    # los indices de Fisher del check y del shock.
+    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
     for name, idx, kind, pct in shocks:
         fix_instrument_shock(m, name, idx, value=level(m, p, name, idx, kind, pct))
     res = solve_multiperiod(
