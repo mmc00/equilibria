@@ -508,6 +508,8 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
 
     eq_name_to_row = {c.name: i for i, c in enumerate(constraints)}
     var_name_to_col = {v.name: j for j, v in enumerate(free_vars)}
+    # Filas de parejas duras: ningun camino de aumento las reasigna.
+    locked: set[int] = set()
     if forced_pairs:
         for _fp in forced_pairs:
             # A forced pair is (eq_name, var_name) or (eq_name, var_name, hard).
@@ -535,6 +537,8 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
                 continue
             pair_left[r] = c
             pair_right[c] = r
+            if hard:
+                locked.add(r)
 
     def bfs() -> bool:
         q: deque[int] = deque()
@@ -549,6 +553,8 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
             u = q.popleft()
             for v in adjacency[u]:
                 m = pair_right[v]
+                if m in locked:
+                    continue
                 if m == -1:
                     found = True
                 elif distance[m] == INF:
@@ -559,6 +565,8 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
     def dfs(u: int) -> bool:
         for v in adjacency[u]:
             m = pair_right[v]
+            if m in locked:
+                continue
             if m == -1 or (distance[m] == distance[u] + 1 and dfs(m)):
                 pair_left[u] = v
                 pair_right[v] = u

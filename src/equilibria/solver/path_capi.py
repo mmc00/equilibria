@@ -641,6 +641,26 @@ def _build_xi_block_diagnostics(
     }
 
 
+# Parejas declaradas en el `model gtap` de GAMS que el emparejamiento no puede
+# reasignar (modo gtap): si Hopcroft-Karp mueve pf/pfy/pd a otra fila, un precio
+# en su piso vuelve desigualdad una fila que no es la suya (raiz espuria en
+# nus333 ME9C: pf en el piso con eq_pfyeq violada en 1,08).
+_GAMS_HARD_PAIR_EQS = ("eq_pfeq", "eq_pfyeq", "eq_pdeq")
+
+
+def _relative_floor_vars(*, gtap_mode: bool) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(precios, niveles) que reciben piso 0.001*valor antes de PATH.
+
+    En modo gtap solo los que acota GAMS: pft es libre (iterloop.gms:79
+    comentada) y yc/phi/phip/regy tambien (cal.gms:646-650)."""
+    if gtap_mode:
+        return ("pmt", "pmcif", "pefob", "px", "pd", "pf", "pwmg"), ("uh", "ug", "us")
+    return (
+        ("pmt", "pmcif", "pefob", "px", "pd", "pf", "pft", "pwmg"),
+        ("yc", "phi", "phip", "regy", "uh", "ug", "us"),
+    )
+
+
 def _run_path_capi_nonlinear_full(
     model,
     params: GTAPParameters,
@@ -954,7 +974,8 @@ def _run_path_capi_nonlinear_full(
     # positive lower bound PATH's Newton steps can drive pmcif/pmt to ~0,
     # causing pmcif^(-4) -> inf and catastrophic residual explosion.
     _PRICE_LB_FACTOR = 1e-3
-    for _pvname in ("pmt", "pmcif", "pefob", "px", "pd", "pf", "pft", "pwmg"):
+    _floor_prices, _floor_levels = _relative_floor_vars(gtap_mode=_gtap_mode)
+    for _pvname in _floor_prices:
         _pv = getattr(model, _pvname, None)
         if _pv is None:
             continue
@@ -974,7 +995,7 @@ def _run_path_capi_nonlinear_full(
     # baseline. Python's PATH on 9x10 takes wider Newton steps and crashes
     # trying to evaluate (negative_yc)^(-0.9) or (0/0) in eq_yc.
     _NLB_FACTOR = 1e-3
-    for _vname in ("yc", "phi", "phip", "regy", "uh", "ug", "us"):
+    for _vname in _floor_levels:
         _vv = getattr(model, _vname, None)
         if _vv is None:
             continue
@@ -1114,7 +1135,11 @@ def _run_path_capi_nonlinear_full(
                         _parts = _parts + ["shock"]
                     _idx_str = ",".join(str(x) for x in _parts)
                     _var_name = f"{_var_comp}[{_idx_str}]"
-                    _gams_pairs.append((_con.name, _var_name))
+                    _gams_pairs.append(
+                        (_con.name, _var_name, True)
+                        if _gtap_mode and _eq_comp in _GAMS_HARD_PAIR_EQS
+                        else (_con.name, _var_name)
+                    )
             except Exception:
                 pass
 
