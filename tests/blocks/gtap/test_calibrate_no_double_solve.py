@@ -40,7 +40,12 @@ BASELINE_COUNT = 20194
 # Recalculada al pasar a %.13g (antes %.10e -> b82d6f9b530a70bf en macOS y
 # d29fceb45a79c2f2 en Linux, con el MISMO conteo: la diferencia era el ultimo
 # bit, no el seed). El conteo no cambia: 20194.
-BASELINE_SIG = "6e261fe5b8773a5c"
+#
+# Recapturado 2026-10-01: pefob base = (1+exptx)*pe (cal.gms:319) mueve la base
+# de gdpmp. Medido contra el fixture anterior: mismas 20194 claves, 27 celdas
+# >1e-9 y TODAS agregados del PIB (rgdpmp, pgdpmp, mq_gdp_bs, mq_gdp_sb; peor
+# 5.4e-3 en IND, pgdpmp 1.0053 -> 0.9998); el resto es ruido <1e-9.
+BASELINE_SIG = "52d6e6b3a7e64812"
 
 
 def _load_params():

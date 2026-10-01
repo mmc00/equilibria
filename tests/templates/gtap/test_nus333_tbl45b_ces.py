@@ -71,7 +71,9 @@ def solved(request):
         savf_flag="capFlex",
         numeraire="pnum",
     )
-    m, _mp = build_block_model(p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None)
+    m, _mp = build_block_model(
+        p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
+    )
     shock_kw: dict = {"lambdava_shock": {("USA", "SER"): 1.10}}
     if request.param == "fix_instrument_shock":
         from equilibria.templates.gtap.instruments import fix_instrument_shock

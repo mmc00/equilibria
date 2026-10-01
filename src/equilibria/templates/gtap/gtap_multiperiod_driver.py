@@ -2187,6 +2187,47 @@ def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# _apply_gams_bounds — cotas de GAMS en un periodo resuelto (modo gtap)
+# ---------------------------------------------------------------------------
+# GAMS declara todas las variables libres (model.gms:35 `Variables`) y en el
+# periodo resuelto solo acota estos precios/utilidades (iterloop.gms:61-88, piso
+# 0.001*nivel; pft comentada en :79). p = p_rai; pdp/pmp no existen en equilibria.
+GAMS_BOUNDED_VARS = frozenset(
+    {
+        "px", "pva", "pnd", "p_rai", "ps", "pdp", "pmp", "pa", "pmt", "pe",
+        "pefob", "pmcif", "pm", "pet", "pd", "pwmg", "pf", "pfa",
+        "uh", "ug", "us", "u", "pcons", "pg", "pi", "ptmg",
+    }
+)  # fmt: skip
+
+
+def _apply_gams_bounds(m, period: str) -> int:
+    """Libera (dominio Reals, sin lb/ub) toda variable de `period` que GAMS no
+    acota. Con dominio NonNegativeReals `setlb(None)` no alcanza: Pyomo sigue
+    reportando lb=0 y una cantidad o un precio libre en GAMS queda con piso, lo
+    que vuelve desigualdad a su fila pareada (raices espurias en nus333 ME9B/C,
+    TBL62B). Los instrumentos del ShockBlock no se tocan. Devuelve las celdas."""
+    from pyomo.environ import Reals, Var
+
+    inst = getattr(m, "_exogenous_instruments", frozenset())
+    n = 0
+    for comp in m.component_objects(Var, descend_into=True):
+        name = comp.local_name
+        if name in GAMS_BOUNDED_VARS or name in inst:
+            continue
+        for idx in comp:
+            per = idx[-1] if isinstance(idx, tuple) else idx
+            if per != period:
+                continue
+            vd = comp[idx]
+            vd.domain = Reals
+            vd.setlb(None)
+            vd.setub(None)
+            n += 1
+    return n
+
+
+# ---------------------------------------------------------------------------
 # _apply_imptx_shock — multiply all imptx entries by (1+factor) tariff-power
 # ---------------------------------------------------------------------------
 def _apply_imptx_shock(params, factor: float = 0.10, gtap_mode: bool = False) -> None:
@@ -2295,10 +2336,11 @@ def _mute_welfare_tail(m, period: str, regions, *, gtap_mode: bool = False) -> i
     — `eq_walras` is the only live row carrying the residual-region investment
     identity `walras = Σ_rres(yi − (pi·depr·kstock+rsav+savf))`, and `eq_yi` is
     skipped for rres (faithful to GAMS `yieq$(not rres)`).  Muting it leaves
-    `yi[rres]` a free DOF that drifts (+50% on gtap7_3x3).  So in gtap_mode we
-    fix `walras=0` (equilibrium Walras law) but keep `eq_walras` ACTIVE; the
-    structural matcher then pairs `eq_walras ↔ yi[rres]`, pinning the residual
-    region's investment income.  Mirrors GAMS's free-row `walraseq` completion.
+    `yi[rres]` a free DOF that drifts (+50% on gtap7_3x3).  So in gtap_mode
+    `walras` stays FREE and `eq_walras` ACTIVE, as in GAMS (walras is a free
+    Variable; walraseq completes the system).  Fixing walras=0 left one row too
+    many and the squarer dropped a REAL row (eq_xseq[USA,SER] on nus333 ME9B),
+    sending PATH to a spurious root.
     Altertax-mode keeps the byte-identical legacy behavior (deactivate + fix)."""
     n = 0
     for eqn, vn in _WELFARE_LEAVES:
@@ -2314,10 +2356,8 @@ def _mute_welfare_tail(m, period: str, regions, *, gtap_mode: bool = False) -> i
                 except (KeyError, TypeError):
                     continue
                 if keep_row:
-                    # Fix walras=0 (Walras law) but leave eq_walras live so the
-                    # matcher binds it to the free yi[rres].
-                    vd.set_value(0.0)
-                    vd.fix(0.0)
+                    # walras libre (GAMS) con eq_walras viva.
+                    vd.unfix()
                     break
                 if not vd.fixed and vd.value is not None:
                     vd.fix(float(vd.value))
@@ -3506,6 +3546,8 @@ def _solve_multiperiod_inner(
             )
         _replicate_sp_fixing(m, _sp_ref_chk, "check")
         _replicate_sp_bounds(m, _sp_ref_chk, "check")
+        if _gtap_mode:
+            _apply_gams_bounds(m, "check")
         del _sp_ref_chk  # only the local name; _sp_ref_cached may still hold it
 
         # Mute the inert welfare-report tail so PATH can certify code=1 (see
@@ -4062,6 +4104,8 @@ def _solve_multiperiod_inner(
     )
     _replicate_sp_fixing(m, _sp_ref_shk, "shock")
     _replicate_sp_bounds(m, _sp_ref_shk, "shock")
+    if _gtap_mode:
+        _apply_gams_bounds(m, "shock")
     del _sp_ref_shk
 
     # Mute the inert welfare-report tail for shock (same as check).

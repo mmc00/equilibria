@@ -110,7 +110,7 @@ class IncomeBlock(Block):
         _calib_param("betas", ("r",))
         _calib_param("depr", ("r",))
         _calib_param("fdepr", ("r",))
-        _calib_param("pop", ("r",))
+        # pop es instrumento del ShockBlock (Var fija), no Param.
         _calib_param("c_share", ("r", "i"))
         _calib_param("alphaa_hhd", ("r", "i"))
         _calib_param("bh", ("r", "i"))

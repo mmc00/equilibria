@@ -32,6 +32,33 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 ACTS = ("AGR", "MFG", "SER")
 
+
+def _me9(land, ao_agr, afe):
+    """Shocks de ME9B/C/D. ``land``: qe LAND (USA, ROW); ``ao_agr``: aoall(AGR) %;
+    ``afe``: afeall LABOR (USA, ROW) en todas las actividades, o None."""
+    aoreg = {"USA": 31.94, "ROW": 42.31}
+    out: list[tuple[str, tuple, str, float]] = []
+    for r in ("USA", "ROW"):
+        for a in ACTS:
+            f = 1 + aoreg[r] / 100
+            if a == "AGR":
+                f *= 1 + ao_agr / 100
+            out.append(("axp", (r, a), "pct", round(100 * (f - 1), 10)))
+    out += [("pop", ("USA",), "pct", 32.3), ("pop", ("ROW",), "pct", 37.3)]
+    out += [
+        ("aft", ("USA", "LABOR"), "pct", 24.1),
+        ("aft", ("ROW", "LABOR"), "pct", 38.4),
+        ("aft", ("USA", "CAPITAL"), "pct", 60.6),
+        ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
+        ("aft", ("USA", "LAND"), "pct", land[0]),
+        ("aft", ("ROW", "LAND"), "pct", land[1]),
+    ]
+    if afe is not None:
+        for r, x in zip(("USA", "ROW"), afe, strict=True):
+            out += [("lambdaf", (r, "LABOR", a), "pct", x) for a in ACTS]
+    return out
+
+
 # EXP: (prm, [(instrumento, indice, kind, porcentaje)])
 EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
     # avaall -> lambdava
@@ -177,6 +204,16 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
             ("exptx", ("USA", "MFG", "ROW"), "power", 0.0029257515),
         ],
     ),
+    # ME9B-D (2010-2050, climatechange.prm): cierre ESTANDAR, solo instrumentos.
+    # aoreg -> axp de todas las actividades; pop -> pop; qe -> aft; afeall -> lambdaf.
+    # aoall(AGR) y aoreg se SUMAN en % en GEMPACK (ao = aoall + aosec + aoreg), o sea
+    # que en niveles se MULTIPLICAN: axp(AGR) = 1,3194 x 0,89 en USA.
+    "ME9B": ("climatechange.prm", _me9(land=(-0.93, 4.4), ao_agr=0.0, afe=None)),
+    "ME9C": ("climatechange.prm", _me9(land=(10.07, 15.4), ao_agr=-11.0, afe=None)),
+    "ME9D": (
+        "climatechange.prm",
+        _me9(land=(10.07, 15.4), ao_agr=-11.0, afe=(-0.73, -2.0)),
+    ),
 }
 
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
@@ -243,7 +280,9 @@ def solve_exercise(exp: str, har: Path):
         savf_flag="capFlex",
         numeraire="pnum",
     )
-    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=True, ref_gdx=None)
+    # GAMS compStat no resuelve la base: sus niveles (cal.gms) son la referencia de
+    # los indices de Fisher del check y del shock.
+    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
     for name, idx, kind, pct in shocks:
         fix_instrument_shock(m, name, idx, value=level(m, p, name, idx, kind, pct))
     res = solve_multiperiod(

@@ -8,7 +8,10 @@ igual: una ecuacion reescrita, un coeficiente movido o una fila de mas/de menos
 lo rompen.
 
 El punto se perturba (no se evalua en el benchmark) porque ahi casi todo residuo
-es ~0 y el test no distinguiria dos formulas distintas.
+es ~0 y el test no distinguiria dos formulas distintas. El punto de partida es el
+de la referencia (fixture PUNTO), no el valor inicial del modelo actual: corregir
+un nivel inicial (p.ej. pefob, xp o xg_agg contra cal.gms) movia el punto y hacia
+fallar el test sin que cambiara ninguna ecuacion.
 
 Regenerar SOLO si se cambia el modelo a proposito:
     python tests/templates/gtap/test_no_shock_identical_to_main.py <repo_root> <out>
@@ -25,6 +28,7 @@ import zlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 GOLDEN = ROOT / "tests/fixtures/gtap7_3x3_residuos_sin_shock_3f3fe5f.json.gz"
+PUNTO = ROOT / "tests/fixtures/gtap7_3x3_punto_sin_shock_3f3fe5f.json.gz"
 REL_TOL = 1e-9
 _PINNED = ("dintx", "mintx")
 
@@ -56,6 +60,10 @@ def residuos() -> dict[str, float]:
         numeraire="pnum",
     )
     m, _ = build_block_model(p, p.sets, gc, list(p.sets.r)[-1])
+    punto = json.loads(gzip.decompress(PUNTO.read_bytes())) if PUNTO.exists() else {}
+    for v in m.component_data_objects(Var):
+        if not v.fixed and v.name in punto:
+            v.set_value(punto[v.name], skip_validation=True)
     for v in m.component_data_objects(Var):
         # dintx/mintx estan clavadas a su objetivo de benchmark por su propia fila
         # (eq_dintxeq/eq_mintxeq): fuera de ese objetivo la recaudacion (eq_ytax,

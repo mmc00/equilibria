@@ -34,6 +34,7 @@ SHOCK_INSTRUMENTS: tuple[str, ...] = (
     "mintx_tgt",
     "kappaf",
     "exptx",
+    "pop",
     "lambdaf",
     "axp",
     "lambdam",
@@ -118,6 +119,8 @@ class ShockBlock(Block):
         )
         # txs -> exptx(r,i,rp,t) (exportador, bien, importador), cal.gms:316.
         _instrument("exptx", dict(p.taxes.rtxs), ("r", "i", "rp"), 0.0)
+        # pop -> pop(r,t), variable fija en GAMS (cal.gms:233).
+        _instrument("pop", {(r,): dp.pop_value(p, r) for r in byname["r"]}, ("r",), 1.0)
         # afeall -> lambdaf(r,fp,a,t) (model.gms:1356).
         _instrument("lambdaf", dict(sh.lambdaf), ("r", "f", "a"), 1.0)
         # aoall -> axp(r,a,t) (model.gms:1341).

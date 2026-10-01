@@ -315,7 +315,16 @@ class ArmingtonBilateralBlock(Block):
                         pm_init[_je, _ji, _jr] = max(_vmsb / _xw, 1e-8)
         _price("pm", ("rp", "i", "r"), pm_init)
         _price("pmcif", ("rp", "i", "r"), pmcif_init)
-        _price("pefob", ("r", "i", "rp"), np.ones((nr, ni, nrp)))
+        # pefob = (1+exptx)*pe (cal.gms:319), con pe=1 en la base. GAMS no resuelve
+        # el periodo base: este nivel es la referencia de Fisher de gdpmp/rgdpmp
+        # (mqgdp con t0). En 1 corria gdpmp base de ROW en sum (pefob-1)*xw.
+        pefob_init = np.ones((nr, ni, nrp))
+        for _jr, _r in enumerate(regions):
+            for _ji, _i in enumerate(comms):
+                for _je, _rp in enumerate(rp_list):
+                    _tx = float(p.taxes.rtxs.get((_r, _i, _rp), 0.0) or 0.0)
+                    pefob_init[_jr, _ji, _je] = 1.0 + _tx
+        _price("pefob", ("r", "i", "rp"), pefob_init)
 
         # ------------------------------------------------------------------
         # Inline-python accessors + caches (mirror the monolith rule reads).
