@@ -162,3 +162,27 @@ def test_pefob_inicial_es_la_de_cal_gms():
         if abs(got - want) > TOL_REL:
             malas.append(f"pefob[{r},{i},{rp},base]: {got:.12g} vs GAMS {want:.12g}")
     assert not malas, "\n".join(malas)
+
+
+# xg(r,'base') de GAMS = yg/pg (cal.gms:257-258).
+XG_BASE_GAMS = {"USA": 2.258359117001407, "ROW": 7.3369142964477545}
+
+
+def test_xg_agg_inicial_es_la_de_cal_gms():
+    """xg = yg/pg en la base (cal.gms:258). En 1 deja eq_xg_agg/eq_xg/eq_ug
+    inconsistentes en el punto de arranque y PATH cae en otra raiz (ME9B)."""
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = _params()
+    m, _ = build_block_model(
+        p, p.sets, _closure(), "ROW", base_calibrated=False, ref_gdx=None
+    )
+    xg = cast(Any, m.xg_agg)
+    malas = []
+    for r, want in XG_BASE_GAMS.items():
+        got = float(value(xg[r, "base"]))
+        if abs(got / want - 1.0) > TOL_REL:
+            malas.append(f"xg_agg[{r},base]: {got:.12g} vs GAMS {want:.12g}")
+    assert not malas, "\n".join(malas)
