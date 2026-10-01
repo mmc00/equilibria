@@ -32,6 +32,8 @@ SHOCK_INSTRUMENTS: tuple[str, ...] = (
     "fcttx",
     "dintx_tgt",
     "mintx_tgt",
+    "kappaf",
+    "exptx",
     "lambdaf",
     "axp",
     "lambdam",
@@ -102,6 +104,20 @@ class ShockBlock(Block):
             ("r", "i", "aa"),
             0.0,
         )
+        # tinc -> kappaf(r,fp,a,t) (cal.gms:143): potencia EVFB/EVOS = 1/(1-kappaf).
+        _instrument(
+            "kappaf",
+            {
+                (r, f, a): dp._kappaf(p, r, f, a)
+                for r in byname["r"]
+                for f in byname["f"]
+                for a in byname["a"]
+            },
+            ("r", "f", "a"),
+            0.0,
+        )
+        # txs -> exptx(r,i,rp,t) (exportador, bien, importador), cal.gms:316.
+        _instrument("exptx", dict(p.taxes.rtxs), ("r", "i", "rp"), 0.0)
         # afeall -> lambdaf(r,fp,a,t) (model.gms:1356).
         _instrument("lambdaf", dict(sh.lambdaf), ("r", "f", "a"), 1.0)
         # aoall -> axp(r,a,t) (model.gms:1341).

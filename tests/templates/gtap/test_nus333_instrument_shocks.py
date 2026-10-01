@@ -6,7 +6,7 @@ fijado en el periodo shock (``gams_shock/comp_shock.gms`` + ``shocks/<EXP>.inc``
 
 GAMS se valido antes contra GEMPACK (``.sl4`` del .EXP), 32 celdas por ejercicio:
 TBL46A 0,0079pp, TBL65A 0,0287pp, TBL54A 0,0021pp, TBL62A 0,0054pp, TBL78 0,0464pp,
-TBL93 0,0042pp, ME5 0,0004pp. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
+TBL93 0,0042pp, ME5 0,0004pp, ME8 0,0004pp (ME8-DIR.sl4). TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
 0,89pp a 10% son la linealizacion.
 
@@ -15,6 +15,11 @@ Traduccion GEMPACK -> niveles:
   ``t_shock = (1+t_check)*(1+x/100) - 1``.
 - ``tfd``/``tfm``: igual, sobre ``dintx_tgt``/``mintx_tgt`` del agente comprador.
 - ``tfe``: % de cambio en (1+fctts+fcttx) -> ``fcttx`` absorbe el cambio.
+- ``tinc``: % de cambio en la potencia 1/(1-kappaf) (cal.gms:143) ->
+  ``kappaf_shock = 1 - (1-kappaf_check)/(1+x/100)``.
+- ``txs``: % de la potencia 1+exptx, como ``tms``.
+- ``rate% N from file X.shk`` (ME8): el .shk trae el shock de ELIMINAR cada
+  impuesto; subir la tasa N% es ``x = -N/100 x`` ese valor, celda por celda.
 - ``afeall``/``aoall``/``ams``: % directo del shifter -> ``factor = 1+x/100``.
 
 LOCAL-only: SKIP si falta nus333 o el .prm.
@@ -62,6 +67,52 @@ SHOCKS = {
             ("mintx_tgt", ("USA", "AGR", "AGR"), "power", 4.2910),
             ("mintx_tgt", ("USA", "MFG", "AGR"), "power", 1.9788),
             ("mintx_tgt", ("USA", "SER", "AGR"), "power", 4.7064),
+        ],
+    ),
+    # ME8: +1% a todas las tasas de USA; las 39 celdas distintas de 0 de los 11
+    # .shk (tinc -> kappaf, txs -> exptx, el resto con los instrumentos de arriba).
+    "ME8": (
+        "ballard.prm",
+        [
+            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", -0.04289619),
+            ("fcttx", ("USA", "LABOR", "AGR"), "power_fct", 0.075687323),
+            ("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 0.13085938),
+            ("fcttx", ("USA", "LABOR", "SER"), "power_fct", 0.13085938),
+            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", -0.032699599),
+            ("fcttx", ("USA", "CAPITAL", "MFG"), "power_fct", 0.031535168),
+            ("fcttx", ("USA", "CAPITAL", "SER"), "power_fct", 0.031535168),
+            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", -0.041161242),
+            ("dintx_tgt", ("USA", "AGR", "SER"), "power", -1.192e-07),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", -0.0059173703),
+            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0053162163),
+            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 0.028774016),
+            ("dintx_tgt", ("USA", "SER", "AGR"), "power", -0.04271328),
+            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 0.0028086472),
+            ("dintx_tgt", ("USA", "SER", "SER"), "power", 0.0013261114),
+            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", -0.042909613),
+            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", -0.019788332),
+            ("mintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0043851116),
+            ("mintx_tgt", ("USA", "MFG", "SER"), "power", 0.022134778),
+            ("mintx_tgt", ("USA", "SER", "AGR"), "power", -0.047064238),
+            ("prdtx_rai", ("USA", "AGR", "AGR"), "power", 0.0024332063),
+            ("prdtx_rai", ("USA", "MFG", "MFG"), "power", 0.010459609),
+            ("prdtx_rai", ("USA", "SER", "SER"), "power", 0.028050888),
+            ("dintx_tgt", ("USA", "AGR", "hhd"), "power", 0.042836466),
+            ("dintx_tgt", ("USA", "MFG", "hhd"), "power", 0.091956644),
+            ("dintx_tgt", ("USA", "SER", "hhd"), "power", 0.0064833277),
+            ("mintx_tgt", ("USA", "AGR", "hhd"), "power", 0.058277063),
+            ("mintx_tgt", ("USA", "MFG", "hhd"), "power", 0.079622064),
+            ("mintx_tgt", ("USA", "SER", "hhd"), "power", 0.0001112099),
+            ("kappaf", ("USA", "LAND", "AGR"), "power_kappa", 0.082899618),
+            ("kappaf", ("USA", "LABOR", "AGR"), "power_kappa", 0.21230932),
+            ("kappaf", ("USA", "LABOR", "MFG"), "power_kappa", 0.21230932),
+            ("kappaf", ("USA", "LABOR", "SER"), "power_kappa", 0.21230932),
+            ("kappaf", ("USA", "CAPITAL", "AGR"), "power_kappa", 0.082899523),
+            ("kappaf", ("USA", "CAPITAL", "MFG"), "power_kappa", 0.082899523),
+            ("kappaf", ("USA", "CAPITAL", "SER"), "power_kappa", 0.082899618),
+            ("imptx", ("ROW", "AGR", "USA"), "power", 0.015394439),
+            ("imptx", ("ROW", "MFG", "USA"), "power", 0.012148236),
+            ("exptx", ("USA", "MFG", "ROW"), "power", 0.0029257515),
         ],
     ),
 }
@@ -180,6 +231,20 @@ ORACLES = {
         "pi": {("USA",): -0.037497, ("ROW",): 0.038001},
         "xiagg": {("USA",): -0.09493, ("ROW",): 0.028993},
     },
+    "ME8": {
+        "xp": {
+            ("USA", "AGR"): 0.19338,
+            ("USA", "MFG"): 0.045786,
+            ("USA", "SER"): -0.012117,
+            ("ROW", "AGR"): -0.024914,
+            ("ROW", "MFG"): -0.016303,
+            ("ROW", "SER"): 0.008051,
+        },
+        "rore": {("USA",): -0.059708, ("ROW",): -0.059708},
+        "regy": {("USA",): 0.032833, ("ROW",): 0.047464},
+        "pi": {("USA",): 0.023267, ("ROW",): 0.045714},
+        "xiagg": {("USA",): -0.266482, ("ROW",): 0.074028},
+    },
 }
 
 
@@ -192,6 +257,8 @@ def _level(m, p, name, idx, kind, x):
         return chk * (1 + x / 100)
     if kind == "power":
         return (1 + chk) * (1 + x / 100) - 1
+    if kind == "power_kappa":
+        return 1 - (1 - chk) / (1 + x / 100)
     assert kind == "power_fct"
     from equilibria.blocks.gtap import _derived_params as dp
 

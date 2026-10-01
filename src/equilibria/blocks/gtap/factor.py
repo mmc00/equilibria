@@ -332,9 +332,8 @@ class FactorBlock(Block):
                     omegaf = _omegaf(r, f)
                     if omegaf == float("inf"):
                         return pfy == model.pft[r, f]
-                    kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
-                    if kappa == 0.0:
-                        kappa = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
+                    # kappaf: el instrumento (tinc), no el literal de benchmark.
+                    kappa = model.kappaf[r, f, a]
                     denom = (
                         model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
                     )
@@ -345,9 +344,8 @@ class FactorBlock(Block):
                     omegaf = _omegaf(r, f)
                     if omegaf == float("inf"):
                         return pfy == model.pft[r, f]
-                    kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
-                    if kappa == 0.0:
-                        kappa = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
+                    # kappaf: el instrumento (tinc), no el literal de benchmark.
+                    kappa = model.kappaf[r, f, a]
                     denom = (
                         model.xscale[r, a] * model.gf_share[r, f, a] * model.xft[r, f]
                     )
@@ -421,10 +419,10 @@ class FactorBlock(Block):
                 r, f, a = indices
                 if value(model.xfflag[r, f, a]) <= 0.0:
                     return None
-                kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0))
-                if kappa == 0.0:
-                    kappa = float(taxes.kappaf.get((r, f), 0.0))
-                return model.pfy[r, f, a] == model.pf[r, f, a] * (1.0 - kappa)
+                # GAMS pfyeq (model.gms:1121) lee kappaf(t): el instrumento.
+                return model.pfy[r, f, a] == model.pf[r, f, a] * (
+                    1.0 - model.kappaf[r, f, a]
+                )
 
         equations.append(EqPfyeq())
 

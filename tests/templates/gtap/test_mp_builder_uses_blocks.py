@@ -152,6 +152,10 @@ def test_blocks_and_monolith_build_the_same_system():
             "eq_pmeq",
             "eq_xweq",
             "eq_pmteq",
+            "eq_pfeq",
+            "eq_pfyeq",
+            "eq_arent",
+            "eq_pefobeq",
             "eq_ytax",
         )
     )

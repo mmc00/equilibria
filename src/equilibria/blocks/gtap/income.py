@@ -375,12 +375,14 @@ class IncomeBlock(Block):
 
                 if gy == "et":
                     total = 0.0
-                    for (rr, i, rp), rtxs in taxes.rtxs.items():
+                    for rr, i, rp in taxes.rtxs:
                         if rr != r:
                             continue
                         etax = _etax_value(r, i, rp)
+                        # exptx: el instrumento (txs), no el literal de benchmark.
+                        # Mismas celdas que antes (las de rtxs): no agrega acoples.
                         total += (
-                            (float(rtxs) + etax)
+                            (model.exptx[r, i, rp] + etax)
                             * model.pe[r, i, rp]
                             * model.xw[r, i, rp]
                         )
@@ -414,10 +416,13 @@ class IncomeBlock(Block):
                             kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0))
                             if kappa == 0.0:
                                 kappa = float(taxes.kappaf.get((r, f), 0.0))
+                            # Las celdas con kappaf de benchmark 0 no entran (como
+                            # antes: no agrega acoples); las demas leen el
+                            # instrumento (tinc), no el literal.
                             if kappa == 0.0:
                                 continue
                             total += (
-                                kappa
+                                model.kappaf[r, f, a]
                                 * model.pf[r, f, a]
                                 * model.xf[r, f, a]
                                 / model.xscale[r, a]
