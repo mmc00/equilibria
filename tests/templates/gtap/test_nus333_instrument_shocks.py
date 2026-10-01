@@ -6,7 +6,7 @@ fijado en el periodo shock (``gams_shock/comp_shock.gms`` + ``shocks/<EXP>.inc``
 
 GAMS se valido antes contra GEMPACK (``.sl4`` del .EXP), 32 celdas por ejercicio:
 TBL46A 0,0079pp, TBL65A 0,0287pp, TBL54A 0,0021pp, TBL62A 0,0054pp, TBL78 0,0464pp,
-TBL93 0,0042pp, ME5 0,0004pp. ME8 (kappaf, exptx) espera el .sl4 de ME8-DIR. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
+TBL93 0,0042pp, ME5 0,0004pp, ME8 0,0004pp (ME8-DIR.sl4). TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
 0,89pp a 10% son la linealizacion.
 
