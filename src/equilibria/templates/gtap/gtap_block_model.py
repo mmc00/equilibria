@@ -414,10 +414,10 @@ def _fix_instruments(pm: Any) -> int:
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
     from equilibria.templates.gtap.instruments import instrument_cell
 
-    # Celdas que un hook @overwrite volvio endogenas: quedan libres (el SP las marca
-    # al construirse; el multiperiodo hereda la marca del SP en build_vars).
+    # Celdas que un hook @overwrite volvio endogenas: quedan libres. La marca la pone
+    # build_block_single_period al construir el SP, y build_vars la copia del SP al
+    # multiperiodo.
     endo = getattr(pm, "_endogenous_instrument_cells", None) or {}
-    pm._endogenous_instrument_cells = dict(endo)
     n = 0
     present = []
     for name in SHOCK_INSTRUMENTS:
@@ -427,7 +427,7 @@ def _fix_instruments(pm: Any) -> int:
         present.append(name)
         libres = endo.get(name, frozenset())
         for idx, vd in var.items():
-            if libres and instrument_cell(pm, idx) in libres:
+            if libres and instrument_cell(idx) in libres:
                 continue
             if not vd.fixed:
                 vd.fix()

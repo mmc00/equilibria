@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from equilibria.templates.gtap.instruments import is_exogenous
+from equilibria.templates.gtap.instruments import exogenous_test
 
 PERIODS = ("base", "check", "shock")
 
@@ -1033,11 +1033,10 @@ def freeze_inactive_periods(m, active_period: str) -> int:
 
     # 1. Fix vars for inactive periods; unfix active period vars.
     n_fixed = 0
-    _instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
-        _es_inst = v.name in _instruments
+        _exo = exogenous_test(m, v.name)
         for idx in v:
-            if _es_inst and is_exogenous(m, v.name, idx):
+            if _exo(idx):
                 # Exogeno en todo periodo (GAMS x.fx): ni se libera en el activo ni
                 # se toca en los inactivos; su valor por periodo es el shock. Una
                 # celda endogena (@overwrite) sigue como cualquier variable.
@@ -1244,7 +1243,10 @@ def _build_sp_reference(sets, params, closure, residual_region, model=None):
     # El monolito hay que pedirlo; la env var manda sobre el marcador del modelo.
     _pide_monolito = _env == "monolith" or (_env is None and _src == "monolith")
     if _pide_monolito:
+        from equilibria.blocks.gtap.overwrite import require_blocks
         from equilibria.templates.gtap import GTAPModelEquations
+
+        require_blocks("_build_sp_reference (monolito)")
 
         return GTAPModelEquations(
             sets, params, closure, residual_region=residual_region
@@ -1510,10 +1512,11 @@ def _preset_instrument_shocks(m) -> list[str]:
     out = []
     for name in sorted(getattr(m, "_exogenous_instruments", ())):
         var = getattr(m, name)
+        exo = exogenous_test(m, name)
         for k in var:
             if k[-1] != "shock":
                 continue
-            if not is_exogenous(m, name, k):
+            if not exo(k):
                 continue  # celda endogena (@overwrite): no es un shock
             ck = (*k[:-1], "check")
             if ck in var and float(_v(var[k])) != float(_v(var[ck])):
@@ -1527,11 +1530,10 @@ def _copy_base_to_check(m) -> None:
     se saltan, igual que en freeze_inactive_periods y _seed_period_from_prior."""
     from pyomo.environ import Var
 
-    instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
-        es_inst = v.name in instruments
+        exo = exogenous_test(m, v.name)
         for idx in v:
-            if es_inst and is_exogenous(m, v.name, idx):
+            if exo(idx):
                 continue
             if not (isinstance(idx, tuple) and len(idx) >= 1 and idx[-1] == "check"):
                 continue
@@ -2216,15 +2218,14 @@ def _apply_gams_bounds(m, period: str) -> int:
     TBL62B). Los instrumentos del ShockBlock no se tocan. Devuelve las celdas."""
     from pyomo.environ import Reals, Var
 
-    inst = getattr(m, "_exogenous_instruments", frozenset())
     n = 0
     for comp in m.component_objects(Var, descend_into=True):
         name = comp.local_name
         if name in GAMS_BOUNDED_VARS:
             continue
-        es_inst = name in inst
+        exo = exogenous_test(m, name)
         for idx in comp:
-            if es_inst and is_exogenous(m, name, idx):
+            if exo(idx):
                 continue
             per = idx[-1] if isinstance(idx, tuple) else idx
             if per != period:
@@ -2272,11 +2273,10 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
     from pyomo.environ import Var
 
     n_set = 0
-    _instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
-        _es_inst = v.name in _instruments
+        _exo = exogenous_test(m, v.name)
         for idx in v:
-            if _es_inst and is_exogenous(m, v.name, idx):
+            if _exo(idx):
                 continue  # exogeno: su valor por periodo es el shock, no el previo
             t = idx[-1] if isinstance(idx, tuple) else idx
             if t != active_period:
@@ -3314,13 +3314,13 @@ def _solve_multiperiod_inner(
         for _vn, _cells in m._settled_seed.items():
             if _vn in _F35_DERIVED_DEMAND:
                 continue
-            _es_inst = _vn in getattr(m, "_exogenous_instruments", frozenset())
+            _exo = exogenous_test(m, _vn)
             _vobj = getattr(m, _vn, None)
             if _vobj is None:
                 continue
             for _body, _val in _cells.items():
                 _key = (*_body, "base") if isinstance(_body, tuple) else (_body, "base")
-                if _es_inst and is_exogenous(m, _vn, _key):
+                if _exo(_key):
                     continue  # exogeno: queda en su valor fijado (benchmark o shock)
                 try:
                     _vobj[_key].set_value(float(_val))

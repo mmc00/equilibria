@@ -132,8 +132,6 @@ GTAP_BLOCK_ORDER = [
 ]
 
 __all__ = [
-    "overwrite",
-    "ppriv_tornqvist",
     "ArmingtonBilateralBlock",
     "ClosureBlock",
     "DemandUtilityBlock",
@@ -143,4 +141,6 @@ __all__ = [
     "ProductionSupplyBlock",
     "ShockBlock",
     "TradeCETBlock",
+    "overwrite",
+    "ppriv_tornqvist",
 ]

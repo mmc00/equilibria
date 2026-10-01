@@ -7,6 +7,7 @@ No confundir con ``shocks.apply_shock``, que modifica ``params`` (la API YAML).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 # Filas que leen cada instrumento. Su celda del periodo tiene que estar viva: si no,
@@ -45,28 +46,43 @@ INCOME_TAX_INSTRUMENTS = frozenset({"kappaf"})
 _PERIOD = "shock"
 
 
-_PERIODS = ("base", "check", "shock")
-
-
-def instrument_cell(m: Any, idx: Any) -> tuple:
+def instrument_cell(idx: Any) -> tuple:
     """La celda de un indice de instrumento, sin el periodo (SP o multiperiodo)."""
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
+
     k = idx if isinstance(idx, tuple) else (idx,)
-    if k and k[-1] in _PERIODS:
+    if k and k[-1] in PERIODS:
         k = k[:-1]
     return k
 
 
-def is_exogenous(m: Any, name: str, idx: Any) -> bool:
-    """True si la celda ``idx`` de ``name`` es un instrumento exogeno (fijo por periodo).
+def _never(_idx: Any) -> bool:
+    return False
 
-    Un instrumento registrado es exogeno salvo en las celdas que un hook ``@overwrite``
-    volvio endogenas (``m._endogenous_instrument_cells``); esas el driver las trata
-    como cualquier variable.
+
+def _always(_idx: Any) -> bool:
+    return True
+
+
+def exogenous_test(m: Any, name: str) -> Callable[[Any], bool]:
+    """Para la Var ``name`` de ``m``: una funcion ``idx -> es instrumento exogeno``.
+
+    Un instrumento registrado (``_exogenous_instruments``) es exogeno —fijo por
+    periodo, el driver no lo libera ni lo re-siembra— salvo en las celdas que un hook
+    ``@overwrite`` volvio endogenas (``_endogenous_instrument_cells``): esas son una
+    variable mas. Se resuelve una vez por Var, no por celda.
     """
     if name not in getattr(m, "_exogenous_instruments", frozenset()):
-        return False
+        return _never
     libres = (getattr(m, "_endogenous_instrument_cells", None) or {}).get(name)
-    return not libres or instrument_cell(m, idx) not in libres
+    if not libres:
+        return _always
+    return lambda idx: instrument_cell(idx) not in libres
+
+
+def is_exogenous(m: Any, name: str, idx: Any) -> bool:
+    """True si la celda ``idx`` de ``name`` es un instrumento exogeno."""
+    return exogenous_test(m, name)(idx)
 
 
 def _labels(component: Any, region: str, *, live: bool = False) -> list:
@@ -136,7 +152,7 @@ def fix_instrument_shock(
         )
     if not is_exogenous(m, name, (*index, _PERIOD)):
         raise ValueError(
-            f"{name}{tuple(index)} es endogena (@overwrite): no lleva shock"
+            f"{name}{tuple(index)} is endogenous (@overwrite): it cannot take a shock"
         )
     if (factor is None) == (value is None):
         raise ValueError("give exactly one of factor/value")

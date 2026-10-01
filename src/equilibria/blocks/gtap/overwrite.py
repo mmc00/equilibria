@@ -64,6 +64,16 @@ class _Overwrite:
 overwrite = _Overwrite()
 
 
+def require_blocks(where: str) -> None:
+    """Falla si hay hooks activos: ``where`` construye el modelo SIN bloques (el
+    monolito), asi que los ignoraria en silencio."""
+    if overwrite.active():
+        raise RuntimeError(
+            f"{where}: hay hooks @overwrite activos y el monolito no los aplica; "
+            "usar el camino de bloques (sin EQUILIBRIA_GTAP_REF_MODEL=monolith)"
+        )
+
+
 class BlockEdit:
     """Lo que un hook puede cambiar de un bloque ya armado por su ``setup``."""
 
