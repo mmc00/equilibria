@@ -117,7 +117,7 @@ class ProductionSupplyBlock(Block):
 
         na, ni, nr = len(acts), len(comms), len(regions)
         bm = p.benchmark
-        # xp init = get_vom_init (benchmark VA+ND); x = makb; xs/xds benchmark.
+        # xp init = sum maks (cal.gms:167, ver _vom_init); x = makb; xs/xds benchmark.
         # Quantity inits do not affect the form/domain gates (bounds are (0,None));
         # a faithful benchmark seed is used (deep fallback chains omitted — they
         # only refine INIT LEVELS, which Task-5's composer re-settles).
@@ -576,7 +576,9 @@ class ProductionSupplyBlock(Block):
     # init helpers (monolith get_*_init logic — the parts that set price floors)
     # ------------------------------------------------------------------
     def _vom_init(self, r: str, a: str) -> float:
-        """xp init = get_vom_init: ND (vdfp+vmfp) + VA (evfb) (monolith 2799-2830)."""
+        """xp init = sum_i maks (cal.gms:167 por cero ganancia: px*xp = sum p*x con
+        x = makb y p = ps/(1+prdtx), cal.gms:285-293). nd + evfb (el monolito,
+        2799-2830) deja afuera los impuestos sobre factores (pfa*xf = evfp)."""
         bm = self.params.benchmark
         nd = sum(
             float(bm.vdfp.get((r, i, a), 0.0) or 0.0)
@@ -587,7 +589,9 @@ class ProductionSupplyBlock(Block):
             float(bm.evfb.get((r, f, a), bm.vfm.get((r, f, a), 0.0)) or 0.0)
             for f in self.sets.f
         )
-        total = nd + va
+        total = sum(float(bm.maks.get((r, a, i), 0.0) or 0.0) for i in self.sets.i)
+        if total <= 0.0:
+            total = nd + va
         if total <= 0.0:
             total = float(bm.vom.get((r, a), 0.0) or 0.0)
         return total
