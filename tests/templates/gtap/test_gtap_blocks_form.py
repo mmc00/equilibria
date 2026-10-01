@@ -233,6 +233,12 @@ _FORM_EXEMPT_INSTRUMENT_EQS: dict[tuple[str, str], str] = {
     ("ArmingtonBilateralBlock", "eq_pmteq"): "lambdam (ams)",
     ("ArmingtonBilateralBlock", "eq_pefobeq"): "exptx (txs)",
     ("IncomeBlock", "eq_ytax"): "imptx/dintx/kappaf/exptx (recaudacion)",
+    ("DemandUtilityBlock", "eq_zcons"): "pop (pop)",
+    ("DemandUtilityBlock", "eq_uh"): "pop (pop)",
+    ("DemandUtilityBlock", "eq_ug"): "pop (pop)",
+    ("DemandUtilityBlock", "eq_us"): "pop (pop)",
+    ("IncomeBlock", "eq_ev"): "pop (pop)",
+    ("IncomeBlock", "eq_cv"): "pop (pop)",
 }
 
 

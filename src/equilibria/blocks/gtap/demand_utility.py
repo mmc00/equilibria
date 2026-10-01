@@ -116,7 +116,7 @@ class DemandUtilityBlock(Block):
         # below in that case, seeded at the calibrated share (GAMS cal.gms:621).
         if self.savf_flag != "capFixDp":
             _param("betas", ("r",))
-        _param("pop", ("r",))
+        # pop es instrumento del ShockBlock (Var fija), no Param.
         _param("depr", ("r",))
         _param("fdepr", ("r",))
         _param("rorflex", ("r",))

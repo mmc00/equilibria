@@ -1064,6 +1064,15 @@ def cd_regions(params: Any, sets: Any) -> frozenset[str]:
     return frozenset(out)
 
 
+def pop_value(params: Any, region: str) -> float:
+    """Poblacion de benchmark de ``region`` (1.0 si falta)."""
+    raw = params.benchmark.pop
+    val = raw.get(region)
+    if val is None:
+        val = raw.get((region,), 1.0)
+    return float(val or 1.0)
+
+
 def demand_income_params(
     params: Any,
     sets: Any,
@@ -1133,11 +1142,7 @@ def demand_income_params(
         return float(total or 0.0)
 
     def _pop_value(region: str) -> float:
-        raw = bm.pop
-        val = raw.get(region)
-        if val is None:
-            val = raw.get((region,), 1.0)
-        return float(val or 1.0)
+        return pop_value(params, region)
 
     for region in sets.r:
         # evfb-based factor income (matches xf_model = (evfb/pf)*xscale init)

@@ -157,6 +157,12 @@ def test_blocks_and_monolith_build_the_same_system():
             "eq_arent",
             "eq_pefobeq",
             "eq_ytax",
+            "eq_zcons",
+            "eq_uh",
+            "eq_ug",
+            "eq_us",
+            "eq_ev",
+            "eq_cv",
         )
     )
     exentas = [k for k in mono if k.startswith(instrumento)]

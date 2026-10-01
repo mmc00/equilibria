@@ -25,6 +25,7 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "mintx_tgt": ("eq_mintxeq",),
     "kappaf": ("eq_pfyeq",),
     "exptx": ("eq_pefobeq",),
+    "pop": ("eq_us", "eq_ug"),
     "lambdaf": ("eq_xfeq",),
     "axp": ("eq_pxeq",),
     "lambdam": ("eq_xweq",),
