@@ -31,6 +31,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from equilibria.templates.gtap.instruments import is_exogenous
+
 PERIODS = ("base", "check", "shock")
 
 
@@ -1033,11 +1035,13 @@ def freeze_inactive_periods(m, active_period: str) -> int:
     n_fixed = 0
     _instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
-        if v.name in _instruments:
-            # Exogeno en todo periodo (GAMS x.fx): ni se libera en el activo ni
-            # se toca en los inactivos; su valor por periodo es el shock.
-            continue
+        _es_inst = v.name in _instruments
         for idx in v:
+            if _es_inst and is_exogenous(m, v.name, idx):
+                # Exogeno en todo periodo (GAMS x.fx): ni se libera en el activo ni
+                # se toca en los inactivos; su valor por periodo es el shock. Una
+                # celda endogena (@overwrite) sigue como cualquier variable.
+                continue
             t = idx[-1] if isinstance(idx, tuple) else idx
             if t == active_period:
                 # Unfix active period vars so PATH can move them.
@@ -1509,6 +1513,8 @@ def _preset_instrument_shocks(m) -> list[str]:
         for k in var:
             if k[-1] != "shock":
                 continue
+            if not is_exogenous(m, name, k):
+                continue  # celda endogena (@overwrite): no es un shock
             ck = (*k[:-1], "check")
             if ck in var and float(_v(var[k])) != float(_v(var[ck])):
                 out.append(f"{name}{tuple(k[:-1])}")
@@ -1523,9 +1529,10 @@ def _copy_base_to_check(m) -> None:
 
     instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
-        if v.name in instruments:
-            continue
+        es_inst = v.name in instruments
         for idx in v:
+            if es_inst and is_exogenous(m, v.name, idx):
+                continue
             if not (isinstance(idx, tuple) and len(idx) >= 1 and idx[-1] == "check"):
                 continue
             bkey = (*idx[:-1], "base")
@@ -2213,9 +2220,12 @@ def _apply_gams_bounds(m, period: str) -> int:
     n = 0
     for comp in m.component_objects(Var, descend_into=True):
         name = comp.local_name
-        if name in GAMS_BOUNDED_VARS or name in inst:
+        if name in GAMS_BOUNDED_VARS:
             continue
+        es_inst = name in inst
         for idx in comp:
+            if es_inst and is_exogenous(m, name, idx):
+                continue
             per = idx[-1] if isinstance(idx, tuple) else idx
             if per != period:
                 continue
@@ -2264,9 +2274,10 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
     n_set = 0
     _instruments = getattr(m, "_exogenous_instruments", frozenset())
     for v in m.component_objects(Var, active=True):
-        if v.name in _instruments:
-            continue  # exogeno: su valor por periodo es el shock, no el previo
+        _es_inst = v.name in _instruments
         for idx in v:
+            if _es_inst and is_exogenous(m, v.name, idx):
+                continue  # exogeno: su valor por periodo es el shock, no el previo
             t = idx[-1] if isinstance(idx, tuple) else idx
             if t != active_period:
                 continue
@@ -3303,13 +3314,14 @@ def _solve_multiperiod_inner(
         for _vn, _cells in m._settled_seed.items():
             if _vn in _F35_DERIVED_DEMAND:
                 continue
-            if _vn in getattr(m, "_exogenous_instruments", frozenset()):
-                continue  # exogeno: queda en su valor fijado (benchmark o shock)
+            _es_inst = _vn in getattr(m, "_exogenous_instruments", frozenset())
             _vobj = getattr(m, _vn, None)
             if _vobj is None:
                 continue
             for _body, _val in _cells.items():
                 _key = (*_body, "base") if isinstance(_body, tuple) else (_body, "base")
+                if _es_inst and is_exogenous(m, _vn, _key):
+                    continue  # exogeno: queda en su valor fijado (benchmark o shock)
                 try:
                     _vobj[_key].set_value(float(_val))
                 except (KeyError, TypeError, ValueError):

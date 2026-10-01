@@ -217,6 +217,11 @@ def cache_key(
     skip the cache entirely.  Every ``None`` path here is a case where a key could
     still have been produced but would not have covered what it claims to cover.
     """
+    from equilibria.blocks.gtap.overwrite import overwrite
+
+    # Un hook @overwrite del notebook cambia el modelo y no esta en la clave.
+    if overwrite.active():
+        return None
     pd = _params_digest(params)
     cd = _closure_digest(closure)
     if pd is None or cd is None:

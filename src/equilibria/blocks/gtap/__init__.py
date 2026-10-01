@@ -112,6 +112,7 @@ from equilibria.blocks.gtap.closure import ClosureBlock
 from equilibria.blocks.gtap.demand_utility import DemandUtilityBlock
 from equilibria.blocks.gtap.factor import FactorBlock
 from equilibria.blocks.gtap.income import IncomeBlock
+from equilibria.blocks.gtap.overwrite import overwrite, ppriv_tornqvist
 from equilibria.blocks.gtap.production_supply import ProductionSupplyBlock
 from equilibria.blocks.gtap.shock import ShockBlock
 from equilibria.blocks.gtap.trade_armington_bilateral import ArmingtonBilateralBlock
@@ -131,6 +132,8 @@ GTAP_BLOCK_ORDER = [
 ]
 
 __all__ = [
+    "overwrite",
+    "ppriv_tornqvist",
     "ArmingtonBilateralBlock",
     "ClosureBlock",
     "DemandUtilityBlock",

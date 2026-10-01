@@ -45,6 +45,30 @@ INCOME_TAX_INSTRUMENTS = frozenset({"kappaf"})
 _PERIOD = "shock"
 
 
+_PERIODS = ("base", "check", "shock")
+
+
+def instrument_cell(m: Any, idx: Any) -> tuple:
+    """La celda de un indice de instrumento, sin el periodo (SP o multiperiodo)."""
+    k = idx if isinstance(idx, tuple) else (idx,)
+    if k and k[-1] in _PERIODS:
+        k = k[:-1]
+    return k
+
+
+def is_exogenous(m: Any, name: str, idx: Any) -> bool:
+    """True si la celda ``idx`` de ``name`` es un instrumento exogeno (fijo por periodo).
+
+    Un instrumento registrado es exogeno salvo en las celdas que un hook ``@overwrite``
+    volvio endogenas (``m._endogenous_instrument_cells``); esas el driver las trata
+    como cualquier variable.
+    """
+    if name not in getattr(m, "_exogenous_instruments", frozenset()):
+        return False
+    libres = (getattr(m, "_endogenous_instrument_cells", None) or {}).get(name)
+    return not libres or instrument_cell(m, idx) not in libres
+
+
 def _labels(component: Any, region: str, *, live: bool = False) -> list:
     """Segundo indice de las celdas 'shock' de ``region`` (solo activas si live)."""
     if component is None:
@@ -109,6 +133,10 @@ def fix_instrument_shock(
     if name not in registered:
         raise ValueError(
             f"{name!r} is not a registered instrument; registered: {sorted(registered)}"
+        )
+    if not is_exogenous(m, name, (*index, _PERIOD)):
+        raise ValueError(
+            f"{name}{tuple(index)} es endogena (@overwrite): no lleva shock"
         )
     if (factor is None) == (value is None):
         raise ValueError("give exactly one of factor/value")
