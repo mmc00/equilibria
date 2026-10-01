@@ -141,6 +141,22 @@ _DOMAIN_CARRY_VARS: dict[str, str] = {
     "rorg": "post-apply_production_scaling rate-of-return re-value floor (composer carry)",
 }
 
+# Vars cuyo nivel inicial del bloque sigue a cal.gms y el monolito no. El piso
+# relativo (1e-3*init) difiere solo por ese nivel; se admite unicamente si el piso
+# del bloque es EXACTAMENTE el de cal.gms.
+#   pefob = (1+exptx)*pe con pe=1 (cal.gms:319); el monolito la siembra en 1.
+_DOMAIN_CAL_GMS_VARS: dict[str, str] = {
+    "pefob": "cal.gms:319 pefob=(1+exptx)*pe; monolito siembra 1",
+}
+
+
+def _is_cal_gms_pefob_floor(p, idx, a_dom, b_dom, a_bnd, b_bnd) -> bool:
+    if a_dom != b_dom or a_bnd[1] != b_bnd[1] or a_bnd[0] is None:
+        return False
+    want = 1e-3 * (1.0 + float(p.taxes.rtxs.get(tuple(idx), 0.0) or 0.0))
+    return abs(a_bnd[0] - want) <= 1e-12 * max(1.0, want)
+
+
 # Per-unit FORM-gate carry: (unit, eq) pairs whose per-cell diff is ONLY a
 # coefficient-value difference at the share-seed vs post-scaling boundary
 # (Blocker C, pre-adjudicated). The cell's EXPRESSION STRUCTURE must be identical
@@ -524,6 +540,10 @@ def test_gtap_block_domain_matches_monolith(_fixtures, unit_name, sub):
             a_dom, b_dom, a_bnd, b_bnd
         ):
             continue  # documented post-scaling floor/level carry (composer owns)
+        if name in _DOMAIN_CAL_GMS_VARS and _is_cal_gms_pefob_floor(
+            _p, _idx, a_dom, b_dom, a_bnd, b_bnd
+        ):
+            continue  # nivel inicial de cal.gms (el monolito no lo sigue)
         real.append(d)
     assert real == [], f"{unit_name}: domain/bounds mismatch on owned vars: {real[:3]}"
 
