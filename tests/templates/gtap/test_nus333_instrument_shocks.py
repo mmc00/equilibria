@@ -7,6 +7,8 @@ fijado en el periodo shock (``gams_shock/comp_shock.gms`` + ``shocks/<EXP>.inc``
 GAMS se valido antes contra GEMPACK (``.sl4`` del .EXP), 32 celdas por ejercicio:
 TBL46A 0,0079pp, TBL65A 0,0287pp, TBL54A 0,0021pp, TBL62A 0,0054pp, TBL78 0,0464pp,
 TBL93 0,0042pp, ME5 0,0004pp, ME8 0,0004pp (ME8-DIR.sl4).
+TBL79: qxs/pcif/pfob de los 12 flujos y qst a <=0,003pp (qxw de SER difiere por
+definicion: GEMPACK suma la oferta de margenes qst, GAMS xet no).
 ME9B/ME9C: GAMS vs GEMPACK hasta 0,85pp sobre cambios de ~215% (brecha en estudio,
 prueba de escala ME9B-S10 pendiente); aca se mide equilibria contra GAMS. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
@@ -24,6 +26,9 @@ Traduccion GEMPACK -> niveles:
 - ``rate% N from file X.shk`` (ME8): el .shk trae el shock de ELIMINAR cada
   impuesto; subir la tasa N% es ``x = -N/100 x`` ese valor, celda por celda.
 - ``afeall``/``aoall``/``ams``: % directo del shifter -> ``factor = 1+x/100``.
+- ``atd`` (TBL79): % directo de la eficiencia del transporte hacia el destino ->
+  ``lambdamg(m,r,i,d)`` (model.gms:1000/1007) en las celdas con margen (GAMS declara
+  ``atd`` pero ninguna ecuacion lo usa).
 
 LOCAL-only: SKIP si falta nus333 o el .prm.
 """
@@ -58,6 +63,12 @@ SHOCKS = {
     ),
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
     "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
+    # atd("USA") = 10 -> lambdamg(margen, origen, bien, USA). En nus333 solo SER es
+    # margen y solo ROW->USA lleva margen (amgm); el resto de las celdas es inerte.
+    "TBL79": (
+        "default.prm",
+        [("lambdamg", ("SER", "ROW", i, "USA"), "pct", 10.0) for i in ("AGR", "MFG")],
+    ),
     # ME5: tfe -> fcttx, tfd -> dintx_tgt, tfm -> mintx_tgt (agente: actividad AGR).
     "ME5": (
         "default.prm",
@@ -274,6 +285,24 @@ ORACLES = {
         "regy": {("USA",): -0.053396, ("ROW",): 0.038195},
         "pi": {("USA",): -0.037497, ("ROW",): 0.038001},
         "xiagg": {("USA",): -0.09493, ("ROW",): 0.028993},
+    },
+    "TBL79": {
+        "xp": {
+            ("USA", "AGR"): -0.212697,
+            ("USA", "MFG"): -0.113089,
+            ("USA", "SER"): 0.026357,
+            ("ROW", "AGR"): 0.027396,
+            ("ROW", "MFG"): 0.036812,
+            ("ROW", "SER"): -0.015794,
+        },
+        "rore": {("USA",): 0.020113, ("ROW",): 0.020113},
+        "regy": {("USA",): -0.002613, ("ROW",): 0.003995},
+        "pi": {("USA",): -0.085911, ("ROW",): -0.001057},
+        "xiagg": {("USA",): 0.12907, ("ROW",): -0.019117},
+        # el canal del shock: precio cif y volumen ROW->USA, oferta de margenes
+        "pmcif": {("ROW", "AGR", "USA"): -1.471087, ("ROW", "MFG", "USA"): -0.391736},
+        "xw": {("ROW", "AGR", "USA"): 2.667191, ("ROW", "MFG", "USA"): 0.786517},
+        "xa": {("USA", "SER", "tmg"): -1.2606, ("ROW", "SER", "tmg"): -1.287219},
     },
     "ME8": {
         "xp": {
