@@ -40,160 +40,25 @@ LOCAL-only: SKIP si falta nus333 o el .prm.
 
 from __future__ import annotations
 
+import importlib
+import sys
+from pathlib import Path
+from typing import Any, cast
+
 import pytest
 
 pytestmark = pytest.mark.integration
 
 TOL_PP = 0.002
-ACTS = ("AGR", "MFG", "SER")
+ROOT = Path(__file__).resolve().parents[3]
 
-# EXP: (prm, [(instrumento, indice, tipo, x)])
-SHOCKS = {
-    "TBL46A": ("esubd0.8.prm", [("imptx", ("ROW", "MFG", "USA"), "power", 8.6637)]),
-    "TBL65A": (
-        "default.prm",
-        [("prdtx_rai", ("USA", "MFG", "MFG"), "power", -10.9414)],
-    ),
-    "TBL54A": (
-        "ESUBVAmfg1.2.prm",
-        [("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 4.2969)],
-    ),
-    "TBL62A": (
-        "default.prm",
-        [("dintx_tgt", ("USA", "MFG", "hhd"), "power", -13.7359)],
-    ),
-    "TBL64": (
-        "default.prm",
-        [("lambdaf", ("USA", "LABOR", a), "pct", 10.0) for a in ACTS],
-    ),
-    "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
-    "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
-    # TBL53: tfd(i,ACTS,"USA") = target% 5 (AGR) / 10 (MFG) / 2 (SER) -> dintx_tgt
-    # de cada actividad. Potencias desde nus333/tfd.shk (AGR->MFG: t0 = 0, x = 5).
-    "TBL53": (
-        "esubd4.prm",
-        [
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 9.3219304),
-            ("dintx_tgt", ("USA", "AGR", "MFG"), "power", 5.0),
-            ("dintx_tgt", ("USA", "AGR", "SER"), "power", 5.0000125),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 10.6509107),
-            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 9.4152162),
-            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 6.8348582),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 6.3567546),
-            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 1.7135180),
-            ("dintx_tgt", ("USA", "SER", "SER"), "power", 1.8647366),
-        ],
-    ),
-    # atd("USA") = 10 -> lambdamg(margen, origen, bien, USA). En nus333 solo SER es
-    # margen y solo ROW->USA lleva margen (amgm); el resto de las celdas es inerte.
-    "TBL79": (
-        "default.prm",
-        [("lambdamg", ("SER", "ROW", i, "USA"), "pct", 10.0) for i in ("AGR", "MFG")],
-    ),
-    # ME5: tfe -> fcttx, tfd -> dintx_tgt, tfm -> mintx_tgt (agente: actividad AGR).
-    "ME5": (
-        "default.prm",
-        [
-            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", 4.2896),
-            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", 3.2700),
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 4.1161),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 0.5917),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 4.2713),
-            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", 4.2910),
-            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", 1.9788),
-            ("mintx_tgt", ("USA", "SER", "AGR"), "power", 4.7064),
-        ],
-    ),
-    # ME8: +1% a todas las tasas de USA; las 39 celdas distintas de 0 de los 11
-    # .shk (tinc -> kappaf, txs -> exptx, el resto con los instrumentos de arriba).
-    "ME8": (
-        "ballard.prm",
-        [
-            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", -0.04289619),
-            ("fcttx", ("USA", "LABOR", "AGR"), "power_fct", 0.075687323),
-            ("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 0.13085938),
-            ("fcttx", ("USA", "LABOR", "SER"), "power_fct", 0.13085938),
-            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", -0.032699599),
-            ("fcttx", ("USA", "CAPITAL", "MFG"), "power_fct", 0.031535168),
-            ("fcttx", ("USA", "CAPITAL", "SER"), "power_fct", 0.031535168),
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", -0.041161242),
-            ("dintx_tgt", ("USA", "AGR", "SER"), "power", -1.192e-07),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", -0.0059173703),
-            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0053162163),
-            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 0.028774016),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", -0.04271328),
-            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 0.0028086472),
-            ("dintx_tgt", ("USA", "SER", "SER"), "power", 0.0013261114),
-            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", -0.042909613),
-            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", -0.019788332),
-            ("mintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0043851116),
-            ("mintx_tgt", ("USA", "MFG", "SER"), "power", 0.022134778),
-            ("mintx_tgt", ("USA", "SER", "AGR"), "power", -0.047064238),
-            ("prdtx_rai", ("USA", "AGR", "AGR"), "power", 0.0024332063),
-            ("prdtx_rai", ("USA", "MFG", "MFG"), "power", 0.010459609),
-            ("prdtx_rai", ("USA", "SER", "SER"), "power", 0.028050888),
-            ("dintx_tgt", ("USA", "AGR", "hhd"), "power", 0.042836466),
-            ("dintx_tgt", ("USA", "MFG", "hhd"), "power", 0.091956644),
-            ("dintx_tgt", ("USA", "SER", "hhd"), "power", 0.0064833277),
-            ("mintx_tgt", ("USA", "AGR", "hhd"), "power", 0.058277063),
-            ("mintx_tgt", ("USA", "MFG", "hhd"), "power", 0.079622064),
-            ("mintx_tgt", ("USA", "SER", "hhd"), "power", 0.0001112099),
-            ("kappaf", ("USA", "LAND", "AGR"), "power_kappa", 0.082899618),
-            ("kappaf", ("USA", "LABOR", "AGR"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "LABOR", "MFG"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "LABOR", "SER"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "CAPITAL", "AGR"), "power_kappa", 0.082899523),
-            ("kappaf", ("USA", "CAPITAL", "MFG"), "power_kappa", 0.082899523),
-            ("kappaf", ("USA", "CAPITAL", "SER"), "power_kappa", 0.082899618),
-            ("imptx", ("ROW", "AGR", "USA"), "power", 0.015394439),
-            ("imptx", ("ROW", "MFG", "USA"), "power", 0.012148236),
-            ("exptx", ("USA", "MFG", "ROW"), "power", 0.0029257515),
-        ],
-    ),
-    # ME9B/ME9C (2010-2050, climatechange.prm): cierre estandar. aoreg -> axp de
-    # todas las actividades (en ME9C x 0,89 en AGR: aoall y aoreg se multiplican en
-    # niveles), pop -> pop, qe -> aft.
-    "ME9B": (
-        "climatechange.prm",
-        [
-            ("axp", ("USA", "AGR"), "pct", 31.94),
-            ("axp", ("USA", "MFG"), "pct", 31.94),
-            ("axp", ("USA", "SER"), "pct", 31.94),
-            ("axp", ("ROW", "AGR"), "pct", 42.31),
-            ("axp", ("ROW", "MFG"), "pct", 42.31),
-            ("axp", ("ROW", "SER"), "pct", 42.31),
-            ("pop", ("USA",), "pct", 32.3),
-            ("pop", ("ROW",), "pct", 37.3),
-            ("aft", ("USA", "LABOR"), "pct", 24.1),
-            ("aft", ("ROW", "LABOR"), "pct", 38.4),
-            ("aft", ("USA", "CAPITAL"), "pct", 60.6),
-            ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
-            ("aft", ("USA", "LAND"), "pct", -0.93),
-            ("aft", ("ROW", "LAND"), "pct", 4.4),
-        ],
-    ),
-    "ME9C": (
-        "climatechange.prm",
-        [
-            ("axp", ("USA", "AGR"), "pct", 17.4266),
-            ("axp", ("USA", "MFG"), "pct", 31.94),
-            ("axp", ("USA", "SER"), "pct", 31.94),
-            ("axp", ("ROW", "AGR"), "pct", 26.6559),
-            ("axp", ("ROW", "MFG"), "pct", 42.31),
-            ("axp", ("ROW", "SER"), "pct", 42.31),
-            ("pop", ("USA",), "pct", 32.3),
-            ("pop", ("ROW",), "pct", 37.3),
-            ("aft", ("USA", "LABOR"), "pct", 24.1),
-            ("aft", ("ROW", "LABOR"), "pct", 38.4),
-            ("aft", ("USA", "CAPITAL"), "pct", 60.6),
-            ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
-            ("aft", ("USA", "LAND"), "pct", 10.07),
-            ("aft", ("ROW", "LAND"), "pct", 15.4),
-        ],
-    ),
-}
+# Los shocks salen de ``run_burfisher.EXERCISES``, la misma tabla de la que
+# gen_gams.py arma el oraculo GAMS (una sola copia). Los ORACLES de abajo son los
+# valores de GAMS escritos a mano.
+# scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
+sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
+EXERCISES = cast(Any, importlib.import_module("run_burfisher")).EXERCISES
 
-# GAMS capFlex con el shock del .EXP solo en 'shock' — % cambio shock/check.
 ORACLES = {
     "TBL46A": {
         "xp": {
@@ -389,6 +254,9 @@ ORACLES = {
     },
 }
 
+# EXP: (prm, [(instrumento, indice, tipo, x)])
+SHOCKS = {exp: EXERCISES[exp] for exp in ORACLES}
+
 
 def _level(m, p, name, idx, kind, x):
     """El valor en niveles de la celda 'shock' para el shock GEMPACK ``x``."""
@@ -484,19 +352,3 @@ def test_iguala_a_gams(solved):
     assert not malas, (
         f"{exp}: {len(malas)}/{n} celdas fuera de {TOL_PP}pp:\n" + "\n".join(malas)
     )
-
-
-def test_los_shocks_son_los_de_run_burfisher():
-    """SHOCKS es copia de ``run_burfisher.EXERCISES`` (de ahi sale el oraculo GAMS,
-    gen_gams.py): si una copia cambia y la otra no, el test y el oraculo miden
-    shocks distintos sin avisar."""
-    import importlib
-    import pathlib
-    import sys
-
-    root = pathlib.Path(__file__).resolve().parents[3]
-    # scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
-    sys.path.insert(0, str(root / "scripts" / "gtap"))
-    exercises = importlib.import_module("run_burfisher").EXERCISES
-    distintos = [k for k in SHOCKS if exercises.get(k) != SHOCKS[k]]
-    assert not distintos, f"SHOCKS distinto de run_burfisher.EXERCISES: {distintos}"
