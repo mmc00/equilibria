@@ -14,6 +14,16 @@ El hook corre despues del ``setup`` original del bloque y recibe un ``BlockEdit`
         b.equation("eq_wreal", ("USA", "LABOR"),
                    lambda m, r, f: m.pft[r, f] == value(m.pft[r, f]) * ppriv_tornqvist(m, r))
 
+Un objetivo por periodo (p.ej. TBL94: la produccion fija en -1% en el shock) se declara
+con ``b.target``: una Var nueva, registrada como instrumento y fija en
+``initial(m, *cell)``; el shock entra con ``fix_instrument_shock``, solo en 'shock'::
+
+    @overwrite(ShockBlock)
+    def regulation(b):
+        b.endogenous("prdtx_rai", ("USA", "MFG", "MFG"))
+        b.target("qca_target", ("USA", "MFG", "MFG"),
+                 initial=lambda m, r, a, i: value(m.x[r, a, i]), domains=("r", "a", "i"))
+
 La regla de ``equation`` se escribe sobre el modelo de UN periodo (sin ``t``): la
 reflexion multiperiodo la copia a base/check/shock. Al construirse, las Vars tienen sus
 niveles de base (cal.gms), asi que ``value(...)`` dentro de la regla es una constante
@@ -82,6 +92,8 @@ class BlockEdit:
         self.variables = variables
         self.equations = equations
         self._endogenous: dict[str, set[tuple]] = {}
+        # nombre -> (dominios, [(celda, initial)])
+        self._targets: dict[str, tuple[tuple[str, ...], list[tuple]]] = {}
 
     def endogenous(self, name: str, cell: tuple) -> None:
         """La celda ``cell`` del instrumento ``name`` deja de ser exogena."""
@@ -113,6 +125,25 @@ class BlockEdit:
 
         self.equations.append(_Eq(name=name, domains=doms))
 
+    def target(
+        self,
+        name: str,
+        cell: tuple,
+        initial: Callable[..., Any],
+        domains: tuple[str, ...] | None = None,
+    ) -> None:
+        """Declara el objetivo ``name``: una Var nueva, registrada como instrumento
+        (fija en los 3 periodos, el driver no la libera) y con la celda ``cell`` en
+        ``initial(m, *cell)``, evaluado con los niveles de base al construir el modelo.
+        Las demas celdas quedan fijas en 0 (ninguna fila las lee). La Var se agrega
+        al modelo despues de todos los bloques (``add_targets``)."""
+        cell = tuple(cell)
+        doms = tuple(domains) if domains is not None else self._domains(cell)
+        prev = self._targets.setdefault(name, (doms, []))
+        if prev[0] != doms:
+            raise ValueError(f"target {name!r}: dominios {doms} != {prev[0]}")
+        prev[1].append((cell, initial))
+
     def _domains(self, cell: tuple) -> tuple[str, ...]:
         doms = []
         for label in cell:
@@ -134,6 +165,7 @@ class _HookedBlock(Block):
     inner: Any = None
     hooks: list[Any] = []
     endogenous: dict[str, set[tuple]] = {}
+    targets: dict[str, Any] = {}
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
         equations = list(self.inner.setup(set_manager, parameters, variables))
@@ -142,6 +174,7 @@ class _HookedBlock(Block):
             fn(edit)
         for name, cells in edit._endogenous.items():
             self.endogenous.setdefault(name, set()).update(cells)
+        self.targets.update(edit._targets)
         return edit.equations
 
 
@@ -157,6 +190,7 @@ def with_overwrites(block: Any) -> Any:
         inner=block,
         hooks=hooks,
         endogenous={},
+        targets={},
     )
 
 
@@ -167,6 +201,44 @@ def endogenous_cells(blocks: list[Any]) -> dict[str, frozenset[tuple]]:
         for name, cells in getattr(b, "endogenous", {}).items():
             out.setdefault(name, set()).update(cells)
     return {k: frozenset(v) for k, v in out.items()}
+
+
+def target_cells(blocks: list[Any]) -> dict[str, tuple[tuple[str, ...], list[tuple]]]:
+    """Los objetivos que declararon los hooks: ``{nombre: (dominios, [(celda, initial)])}``."""
+    out: dict[str, tuple[tuple[str, ...], list[tuple]]] = {}
+    for b in blocks:
+        for name, (doms, cells) in getattr(b, "targets", {}).items():
+            prev = out.setdefault(name, (doms, []))
+            if prev[0] != doms:
+                raise ValueError(f"target {name!r}: dominios {doms} != {prev[0]}")
+            prev[1].extend(cells)
+    return out
+
+
+def add_targets(model: Any, targets: dict[str, tuple[tuple[str, ...], list]]) -> None:
+    """Agrega al ``equilibria.model.Model`` ya armado la Var de cada objetivo, en 0.
+
+    Va despues de todos los bloques: ``add_block`` descarta en silencio una Var cuyo
+    nombre ya existe (algunos bloques comparten ``ev``/``cv``/``pwfact`` a
+    proposito), asi que un objetivo con nombre ya usado tiene que fallar aca.
+    """
+    from equilibria.blocks.gtap import _derived_params as dp
+    from equilibria.core.variables import Variable
+
+    for name, (doms, _cells) in targets.items():
+        if name in model.variable_manager:
+            raise ValueError(f"target {name!r}: ya hay una variable con ese nombre")
+        elems = [list(model.set_manager.get(d)) for d in doms]
+        model.add_variable(
+            Variable(
+                name=name,
+                value=dp.to_array({}, elems, 0.0),
+                domains=doms,
+                domain="Reals",
+                lower=float("-inf"),
+                upper=float("inf"),
+            )
+        )
 
 
 def ppriv_tornqvist(m: Any, r: str) -> Any:
