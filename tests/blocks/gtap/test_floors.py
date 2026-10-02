@@ -236,7 +236,7 @@ def test_el_declarador_vive_en_un_solo_sitio():
         "shock.py": {"<bucle:63>"},
         # Objetivos de @overwrite (b.target): instrumentos como los del ShockBlock,
         # Reals sin cota y fijos; add_targets los declara despues de los bloques.
-        "overwrite.py": {"<bucle:262>"},
+        "overwrite.py": {"<bucle:320>"},
     }
     reales: dict[str, set[str]] = {}
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
