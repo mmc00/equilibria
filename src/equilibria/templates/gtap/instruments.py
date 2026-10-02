@@ -58,6 +58,18 @@ def instrument_cell(idx: Any) -> tuple:
     return k
 
 
+def is_free_cell(idx: Any, libres: frozenset | set) -> bool:
+    """True si la celda ``idx`` es una de las que un hook ``@overwrite`` libero y su
+    periodo es el shock (o no tiene periodo: el modelo de un periodo). En base y
+    check rige el cierre estandar: la celda sigue fija."""
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
+
+    k = idx if isinstance(idx, tuple) else (idx,)
+    if k and k[-1] in PERIODS and k[-1] != _PERIOD:
+        return False
+    return instrument_cell(idx) in libres
+
+
 def _never(_idx: Any) -> bool:
     return False
 
@@ -72,14 +84,15 @@ def exogenous_test(m: Any, name: str) -> Callable[[Any], bool]:
     Un instrumento registrado (``_exogenous_instruments``) es exogeno —fijo por
     periodo, el driver no lo libera ni lo re-siembra— salvo en las celdas que un hook
     ``@overwrite`` volvio endogenas (``_endogenous_instrument_cells``): esas son una
-    variable mas. Se resuelve una vez por Var, no por celda.
+    variable mas, solo en el shock (``is_free_cell``). Se resuelve una vez por Var,
+    no por celda.
     """
     if name not in getattr(m, "_exogenous_instruments", frozenset()):
         return _never
     libres = (getattr(m, "_endogenous_instrument_cells", None) or {}).get(name)
     if not libres:
         return _always
-    return lambda idx: instrument_cell(idx) not in libres
+    return lambda idx: not is_free_cell(idx, libres)
 
 
 def is_exogenous(m: Any, name: str, idx: Any) -> bool:

@@ -3,13 +3,12 @@
 ``nus333/TBL94.EXP``: ``swap qca("MFG","MFG","USA") = to("MFG","MFG","USA")`` y
 ``shock qca = -1``. La produccion de MFG por la actividad MFG de USA queda en -1% y el
 impuesto a la produccion ``to`` se vuelve endogeno: es el impuesto "sombra" de la
-regulacion (Tabla 9.4). En equilibria el cierre se arma con ``@overwrite``, igual que en
-el notebook del ejercicio:
+regulacion (Tabla 9.4). En equilibria el cierre se arma con ``@overwrite``, solo en el
+shock, igual que en el notebook del ejercicio:
 
 - ``ShockBlock``: ``prdtx_rai[USA,MFG,MFG]`` endogeno y el objetivo ``qca_target``
-  (``b.target``), fijo en la produccion de base;
-- ``ClosureBlock``: ``eq_qca``, ``x = qca_target``;
-- el shock: ``qca_target`` x 0,99 en el periodo shock (``fix_instrument_shock``).
+  (``b.target``): ``x[shock] = qca_target x x[check]``;
+- el shock: ``qca_target`` x 0,99 (``fix_instrument_shock``).
 
 Oraculo GAMS (gams_shock/gen_gams.py, QCA: fila ``qcaeq`` emparejada con ``prdtx``,
 ``x = x_check*0,99``) vs GEMPACK TBL94.sl4:
@@ -68,26 +67,15 @@ SHADOW_TAX_POWER = 2.249523
 
 def register_tbl94_hooks() -> None:
     """Los hooks del notebook ``burfisher_exec_tbl94.ipynb``."""
-    from pyomo.environ import value
+    from equilibria.blocks.gtap import ShockBlock, overwrite
 
-    from equilibria.blocks.gtap import ClosureBlock, ShockBlock, overwrite
-
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def regulation(b):
         b.endogenous("prdtx_rai", CELL)
         b.target(
             "qca_target",
             CELL,
-            initial=lambda m, r, a, i: value(m.x[r, a, i]),
-            domains=("r", "a", "i"),
-        )
-
-    @overwrite(ClosureBlock)
-    def qca_row(b):
-        b.equation(
-            "eq_qca",
-            CELL,
-            lambda m, r, a, i: m.x[r, a, i] == m.qca_target[r, a, i],
+            quantity=lambda m, r, a, i: m.x[r, a, i],
             domains=("r", "a", "i"),
         )
 
@@ -147,8 +135,10 @@ def test_resuelve(solved):
 
 
 def test_impuesto_sombra(solved):
-    """``to`` se ajusta para que la produccion baje 1%; en el check queda en su base."""
+    """``to`` se ajusta para que la produccion baje 1%; en el check queda fijo en su
+    base (el cierre de @overwrite rige solo en el shock)."""
     m, _, _, value = solved
+    assert m.prdtx_rai[(*CELL, "check")].fixed
     t = {p: float(value(m.prdtx_rai[(*CELL, p)])) for p in ("base", "check", "shock")}
     got = 100.0 * ((1 + t["shock"]) / (1 + t["check"]) - 1)
     assert abs(got - SHADOW_TAX_POWER) < TOL_PP
