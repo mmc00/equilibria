@@ -43,7 +43,7 @@ def mp_desempleo():
 
 
 def test_overwrite_registra_en_la_clase():
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def uno(b):
         pass
 
@@ -54,7 +54,7 @@ def test_reregistrar_la_misma_funcion_no_duplica():
     """Re-ejecutar la celda del notebook reemplaza el hook, no lo apila."""
     for _ in range(2):
 
-        @overwrite(ShockBlock)
+        @overwrite(ShockBlock, period="shock")
         def uno(b):
             pass
 
@@ -62,11 +62,11 @@ def test_reregistrar_la_misma_funcion_no_duplica():
 
 
 def test_clear_limpia_todo():
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def uno(b):
         pass
 
-    @overwrite(ClosureBlock)
+    @overwrite(ClosureBlock, period="shock")
     def dos(b):
         pass
 
@@ -89,12 +89,12 @@ def test_equation_repetida_suma_celdas_a_la_misma_fila():
 
     p = nus333_params()
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def libre(b):
         for a in ("MFG", "SER"):
             b.endogenous("axp", ("USA", a))
 
-    @overwrite(ClosureBlock)
+    @overwrite(ClosureBlock, period="shock")
     def parejo(b):
         for a in ("MFG", "SER"):
             b.equation(
@@ -113,7 +113,7 @@ def test_endogenous_de_algo_que_no_es_instrumento_falla():
 
     p = nus333_params()
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def mal(b):
         b.endogenous("pft", ("USA", "LABOR"))
 
@@ -261,7 +261,7 @@ def test_cotas_de_gams_sueltan_la_celda_endogena(mp_desempleo):
 def _register_qca_target() -> None:
     """``b.target``: objetivo de cantidad de TBL94, ``x[shock] = qca_target x x[check]``."""
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def qca_target(b):
         b.endogenous("prdtx_rai", ("USA", "MFG", "MFG"))
         b.target(
@@ -327,7 +327,7 @@ def test_target_con_nombre_de_variable_existente_falla():
 
     p = nus333_params()
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def mal(b):
         b.target("x", ("USA", "MFG", "MFG"), quantity=lambda m, *c: 1.0)
 
@@ -369,3 +369,23 @@ def test_target_con_dominios_distintos_falla():
         collect_targets([_B(("r",)), _B(("rp",))])
     got = collect_targets([_B(("r",)), _B(("r",))])
     assert got == {"t": Target(("r",), [(("USA",), ini), (("USA",), ini)])}
+
+
+def test_vista_de_periodo_traduce_vars_y_rechaza_lo_demas():
+    """``quantity`` de ``b.target`` se evalua en un periodo: ``v[k]`` es ``v[(*k, t)]``.
+    Un componente indexado que no es Var no se puede traducir: falla en voz alta."""
+    from pyomo.environ import ConcreteModel, Param, Var
+
+    from equilibria.blocks.gtap.overwrite import _AtPeriod
+
+    m = ConcreteModel()
+    keys = [("USA", t) for t in ("base", "check", "shock")]
+    m.x = Var(keys, initialize=1.0)
+    m.p = Param(keys, initialize=2.0, mutable=True)
+    m.k = Param(initialize=3.0)
+
+    view = _AtPeriod(m, "check")
+    assert view.x["USA"] is m.x["USA", "check"]
+    assert view.k is m.k
+    with pytest.raises(ValueError, match="p"):
+        _ = view.p
