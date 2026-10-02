@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from equilibria.blocks.gtap.periods import PERIODS, SHOCK
+
 # Filas que leen cada instrumento. Su celda del periodo tiene que estar viva: si no,
 # el shock no entra al modelo y el solve igual da code=1 (p.ej. ``aft`` de un
 # factor con ``xftflag<=0``, donde eq_xfteq no se genera).
@@ -45,13 +47,11 @@ INCOME_TAX_INSTRUMENTS = frozenset({"kappaf"})
 
 # Solo el periodo shock: un shock en 'check'/'base' no lo detecta el driver (le
 # sumaria el arancel) y la copia base->check de F3.5 lo pisaria.
-_PERIOD = "shock"
+_PERIOD = SHOCK
 
 
 def instrument_cell(idx: Any) -> tuple:
     """La celda de un indice de instrumento, sin el periodo (SP o multiperiodo)."""
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-
     k = idx if isinstance(idx, tuple) else (idx,)
     if k and k[-1] in PERIODS:
         k = k[:-1]
@@ -62,8 +62,6 @@ def is_free_cell(idx: Any, libres: frozenset | set) -> bool:
     """True si la celda ``idx`` es una de las que un hook ``@overwrite`` libero y su
     periodo es el shock (o no tiene periodo: el modelo de un periodo). En base y
     check rige el cierre estandar: la celda sigue fija."""
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-
     k = idx if isinstance(idx, tuple) else (idx,)
     if k and k[-1] in PERIODS and k[-1] != _PERIOD:
         return False

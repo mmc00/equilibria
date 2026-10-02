@@ -43,6 +43,7 @@ from collections.abc import Callable
 from typing import Any, NamedTuple
 
 from equilibria.blocks.base import Block
+from equilibria.blocks.gtap.periods import CHECK, SHOCK
 from equilibria.core.symbolic_equations import SymbolicEquation
 
 Hook = Callable[["BlockEdit"], None]
@@ -52,9 +53,6 @@ _HOOKS: dict[type, dict[str, Hook]] = {}
 
 # Orden en que se busca el set de cada etiqueta de una celda (``equation``).
 _SET_ORDER = ("r", "f", "a", "i", "aa", "rp")
-
-# El unico periodo en que rige el cierre de @overwrite.
-SHOCK = "shock"
 
 
 class Target(NamedTuple):
@@ -193,7 +191,7 @@ class BlockEdit:
         ``name`` es una Var nueva, registrada como instrumento y fija en 1 en los 3
         periodos (se agrega despues de todos los bloques, ``add_targets``). La fila
         ``eq_<name>`` vive solo en el shock: ``quantity[shock] = name[shock] x
-        quantity[check]`` (``anchor_targets``), como el ``swap`` de GEMPACK. En el
+        quantity[check]`` (``shock_only``), como el ``swap`` de GEMPACK. En el
         modelo de un periodo (sin check) ancla a la base: ``quantity = name x
         quantity_base``."""
         from pyomo.environ import value
@@ -288,7 +286,7 @@ def endogenous_cells(blocks: list[Any]) -> dict[str, frozenset[tuple]]:
     return {k: frozenset(v) for k, v in out.items()}
 
 
-def hook_rows(blocks: list[Any]) -> frozenset[str]:
+def shock_rows(blocks: list[Any]) -> frozenset[str]:
     """Los nombres de las filas que agregaron los hooks (rigen solo en el shock)."""
     return frozenset(n for b in blocks for n in getattr(b, "rows", ()))
 
@@ -328,11 +326,25 @@ def add_targets(model: Any, targets: dict[str, Target]) -> None:
         )
 
 
+class _PeriodIndex:
+    """``var[k]`` de un periodo: ``var[(*k, t)]`` del modelo multiperiodo."""
+
+    def __init__(self, var: Any, period: str) -> None:
+        self._var = var
+        self._t = period
+
+    def __getitem__(self, k: Any) -> Any:
+        key = k if isinstance(k, tuple) else (k,)
+        return self._var[(*key, self._t)]
+
+
 class _AtPeriod:
     """Vista de UN periodo del modelo multiperiodo: ``v[k]`` es ``v[(*k, t)]``.
 
     Deja evaluar una regla escrita para el modelo de un periodo (``quantity`` de
-    ``b.target``) sobre las Vars de cualquier periodo."""
+    ``b.target``) sobre las Vars de cualquier periodo. Solo traduce Vars: otro
+    componente indexado (un Param o una Expression por periodo) falla, en vez de
+    leerse sin el periodo."""
 
     def __init__(self, m: Any, period: str) -> None:
         self._m = m
@@ -342,16 +354,14 @@ class _AtPeriod:
         from pyomo.environ import Var
 
         comp = getattr(self._m, name)
-        if not isinstance(comp, Var) and getattr(comp, "ctype", None) is not Var:
-            return comp
-        t = self._t
-
-        class _Idx:
-            def __getitem__(self, k: Any) -> Any:
-                key = k if isinstance(k, tuple) else (k,)
-                return comp[(*key, t)]
-
-        return _Idx()
+        if getattr(comp, "ctype", None) is Var:
+            return _PeriodIndex(comp, self._t)
+        if callable(getattr(comp, "is_indexed", None)) and comp.is_indexed():
+            raise ValueError(
+                f"b.target: la regla quantity lee {name!r}, que esta indexado y no "
+                "es una Var; solo se pueden leer Vars (se traducen al periodo)"
+            )
+        return comp
 
 
 def shock_only(m: Any) -> None:
@@ -360,7 +370,7 @@ def shock_only(m: Any) -> None:
 
     Corre despues de reflejar las filas del modelo de un periodo (en todos los
     periodos o en uno, ``build_equations_intra``); es idempotente."""
-    rows = getattr(m, "_hook_rows", None) or frozenset()
+    rows = getattr(m, "_shock_rows", None) or frozenset()
     for name in rows:
         con = getattr(m, name, None)
         if con is None:
@@ -368,7 +378,7 @@ def shock_only(m: Any) -> None:
         for idx in [i for i in con if i[-1] != SHOCK]:
             del con[idx]
     targets: dict[str, Target] = getattr(m, "_targets", None) or {}
-    shock, check = _AtPeriod(m, SHOCK), _AtPeriod(m, "check")
+    shock, check = _AtPeriod(m, SHOCK), _AtPeriod(m, CHECK)
     for name, t in targets.items():
         con = getattr(m, target_row(name), None)
         if con is None:

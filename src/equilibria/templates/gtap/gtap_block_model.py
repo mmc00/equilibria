@@ -461,7 +461,7 @@ def build_block_single_period(
         add_targets,
         collect_targets,
         endogenous_cells,
-        hook_rows,
+        shock_rows,
         with_overwrites,
     )
 
@@ -490,7 +490,7 @@ def build_block_single_period(
     _strip_con_suffix(pm)
     pm._endogenous_instrument_cells = endogenous_cells(units)
     pm._targets = targets
-    pm._hook_rows = hook_rows(units)
+    pm._shock_rows = shock_rows(units)
 
     if apply_scaling:
         # El escalado de benchmark vive en su propio modulo: muta los VarData del
@@ -636,7 +636,7 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
             getattr(sp_model, "_endogenous_instrument_cells", {}) or {}
         )
         m._targets = dict(getattr(sp_model, "_targets", {}) or {})
-        m._hook_rows = frozenset(getattr(sp_model, "_hook_rows", ()) or ())
+        m._shock_rows = frozenset(getattr(sp_model, "_shock_rows", ()) or ())
         _fix_instruments(m)
 
     def build_equations_all_periods(self, m: ConcreteModel, *args, **kwargs) -> None:

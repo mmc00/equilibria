@@ -8,9 +8,11 @@ import contextlib
 
 from pyomo.environ import ConcreteModel, Set
 
+from equilibria.blocks.gtap.periods import PERIODS
+
 from .gtap_sets import declare_pyomo_sets
 
-PERIODS = ("base", "check", "shock")
+__all__ = ["PERIODS"]
 
 
 def _astuple(k):
