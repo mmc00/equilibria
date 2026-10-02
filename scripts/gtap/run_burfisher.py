@@ -132,6 +132,12 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
     # ams -> lambdam (origen, bien, destino)
     "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
+    # atd -> lambdamg (margen, origen, bien, destino): en nus333 solo SER es margen y
+    # solo ROW->USA lleva margen hacia USA; el resto de las celdas es inerte.
+    "TBL79": (
+        "default.prm",
+        [("lambdamg", ("SER", "ROW", i, "USA"), "pct", 10.0) for i in ("AGR", "MFG")],
+    ),
     # TBL813 (Tabla 8.13): +1% a la tasa del impuesto al consumo privado de MFG
     # domestico en USA. GEMPACK: `tpdall = rate% 1 from file tpdall.shk`, y el .shk
     # trae el shock que ELIMINA cada impuesto (-9.1956644 = 1/1.101269 - 1). Subir la
