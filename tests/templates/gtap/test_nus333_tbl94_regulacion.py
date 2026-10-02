@@ -83,7 +83,7 @@ def register_tbl94_hooks() -> None:
         )
 
     @overwrite(ClosureBlock)
-    def fix_qca(b):
+    def qca_row(b):
         b.equation(
             "eq_qca",
             CELL,

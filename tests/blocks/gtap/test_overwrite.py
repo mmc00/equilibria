@@ -285,3 +285,44 @@ def test_target_con_nombre_de_variable_existente_falla():
 
     with pytest.raises(ValueError, match="x"):
         build_block_single_period(p, p.sets, closure(), "ROW")
+
+
+def _overwrite_module() -> Any:
+    import importlib
+
+    return importlib.import_module("equilibria.blocks.gtap.overwrite")
+
+
+def test_block_edit_expone_lo_que_declararon_los_hooks():
+    """``_HookedBlock`` lee lo declarado por metodos publicos del ``BlockEdit``."""
+    ow = _overwrite_module()
+    BlockEdit, Target = ow.BlockEdit, ow.Target
+
+    def ini(m, r):
+        return 1.0
+
+    edit = BlockEdit(None, {}, [])
+    edit.endogenous("aft", ("USA", "LABOR"))
+    edit.target("t", ("USA",), initial=ini, domains=("r",))
+    assert edit.endogenized() == {"aft": {("USA", "LABOR")}}
+    assert edit.declared_targets() == {"t": Target(("r",), [(("USA",), ini)])}
+
+
+def test_target_con_dominios_distintos_falla():
+    """Mismo objetivo con otros dominios: falla en el mismo hook y entre bloques."""
+    ow = _overwrite_module()
+    BlockEdit, Target, collect_targets = ow.BlockEdit, ow.Target, ow.collect_targets
+
+    edit = BlockEdit(None, {}, [])
+    edit.target("t", ("USA",), initial=lambda m, r: 1.0, domains=("r",))
+    with pytest.raises(ValueError, match="dominios"):
+        edit.target("t", ("USA",), initial=lambda m, r: 1.0, domains=("rp",))
+
+    class _B:
+        def __init__(self, doms):
+            self.targets = {"t": Target(doms, [(("USA",), None)])}
+
+    with pytest.raises(ValueError, match="dominios"):
+        collect_targets([_B(("r",)), _B(("rp",))])
+    got = collect_targets([_B(("r",)), _B(("r",))])
+    assert got == {"t": Target(("r",), [(("USA",), None), (("USA",), None)])}
