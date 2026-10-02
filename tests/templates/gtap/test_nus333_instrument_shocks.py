@@ -484,3 +484,19 @@ def test_iguala_a_gams(solved):
     assert not malas, (
         f"{exp}: {len(malas)}/{n} celdas fuera de {TOL_PP}pp:\n" + "\n".join(malas)
     )
+
+
+def test_los_shocks_son_los_de_run_burfisher():
+    """SHOCKS es copia de ``run_burfisher.EXERCISES`` (de ahi sale el oraculo GAMS,
+    gen_gams.py): si una copia cambia y la otra no, el test y el oraculo miden
+    shocks distintos sin avisar."""
+    import importlib
+    import pathlib
+    import sys
+
+    root = pathlib.Path(__file__).resolve().parents[3]
+    # scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
+    sys.path.insert(0, str(root / "scripts" / "gtap"))
+    exercises = importlib.import_module("run_burfisher").EXERCISES
+    distintos = [k for k in SHOCKS if exercises.get(k) != SHOCKS[k]]
+    assert not distintos, f"SHOCKS distinto de run_burfisher.EXERCISES: {distintos}"
