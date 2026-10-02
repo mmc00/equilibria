@@ -459,8 +459,8 @@ def build_block_single_period(
         model.add_set(ESet(name=name, elements=elems))
     from equilibria.blocks.gtap.overwrite import (
         add_targets,
+        collect_targets,
         endogenous_cells,
-        target_cells,
         with_overwrites,
     )
 
@@ -481,7 +481,7 @@ def build_block_single_period(
         units.append(unit)
         model.add_block(unit)
 
-    targets = target_cells(units)
+    targets = collect_targets(units)
     add_targets(model, targets)
     backend = PyomoBackend()
     backend.build(model)
@@ -514,8 +514,8 @@ def build_block_single_period(
     _fix_cd_welfare(pm, params, sets)
     # Objetivos (b.target): su valor es initial(m, *celda) con los niveles de base ya
     # escalados; el multiperiodo lo copia a los 3 periodos.
-    for name, (_doms, cells) in targets.items():
-        for cell, initial in cells:
+    for name, t in targets.items():
+        for cell, initial in t.cells:
             getattr(pm, name)[cell].set_value(float(initial(pm, *cell)))
     _fix_instruments(pm)
 

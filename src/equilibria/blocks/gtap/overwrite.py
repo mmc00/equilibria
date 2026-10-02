@@ -35,7 +35,7 @@ Spec: dev-tools/equilibria-tools/plans/superpowers/specs/2026-10-01-overwrite-bl
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 from equilibria.blocks.base import Block
 from equilibria.core.symbolic_equations import SymbolicEquation
@@ -47,6 +47,26 @@ _HOOKS: dict[type, dict[str, Hook]] = {}
 
 # Orden en que se busca el set de cada etiqueta de una celda (``equation``).
 _SET_ORDER = ("r", "f", "a", "i", "aa", "rp")
+
+
+class Target(NamedTuple):
+    """Un objetivo de ``b.target``: sus dominios y sus celdas ``(celda, initial)``."""
+
+    domains: tuple[str, ...]
+    cells: list[tuple[tuple, Callable[..., Any]]]
+
+
+def _merge_target(
+    store: dict[str, Target],
+    name: str,
+    domains: tuple[str, ...],
+    cells: list[tuple[tuple, Callable[..., Any]]],
+) -> None:
+    """Suma ``cells`` al objetivo ``name`` de ``store``; falla si cambian los dominios."""
+    known = store.setdefault(name, Target(domains, []))
+    if known.domains != domains:
+        raise ValueError(f"target {name!r}: dominios {domains} != {known.domains}")
+    known.cells.extend(cells)
 
 
 class _Overwrite:
@@ -92,11 +112,17 @@ class BlockEdit:
         self.variables = variables
         self.equations = equations
         self._endogenous: dict[str, set[tuple]] = {}
-        # nombre -> (dominios, [(celda, initial)])
-        self._targets: dict[str, tuple[tuple[str, ...], list[tuple]]] = {}
+        self._targets: dict[str, Target] = {}
 
     def endogenous(self, name: str, cell: tuple) -> None:
-        """La celda ``cell`` del instrumento ``name`` deja de ser exogena."""
+        """La celda ``cell`` del instrumento ``name`` deja de ser exogena.
+
+        Queda libre en los 3 periodos, asi que la fila que la reemplaza (``equation``)
+        debe anclarse a la BASE: ``value(...)`` al construir lee los niveles de base.
+        GAMS (``compStat``) ancla al CHECK. Coinciden solo si el check reproduce la
+        base; en nus333 lo hace, y los tests de TBL65B y TBL94 lo verifican (el
+        instrumento liberado queda en el check igual que en la base, a 1e-6).
+        """
         from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
 
         if name not in SHOCK_INSTRUMENTS:
@@ -139,10 +165,15 @@ class BlockEdit:
         al modelo despues de todos los bloques (``add_targets``)."""
         cell = tuple(cell)
         doms = tuple(domains) if domains is not None else self._domains(cell)
-        prev = self._targets.setdefault(name, (doms, []))
-        if prev[0] != doms:
-            raise ValueError(f"target {name!r}: dominios {doms} != {prev[0]}")
-        prev[1].append((cell, initial))
+        _merge_target(self._targets, name, doms, [(cell, initial)])
+
+    def endogenized(self) -> dict[str, set[tuple]]:
+        """Las celdas que ``endogenous`` libero, por instrumento."""
+        return {k: set(v) for k, v in self._endogenous.items()}
+
+    def declared_targets(self) -> dict[str, Target]:
+        """Los objetivos que declaro ``target``."""
+        return {k: Target(t.domains, list(t.cells)) for k, t in self._targets.items()}
 
     def _domains(self, cell: tuple) -> tuple[str, ...]:
         doms = []
@@ -165,16 +196,17 @@ class _HookedBlock(Block):
     inner: Any = None
     hooks: list[Any] = []
     endogenous: dict[str, set[tuple]] = {}
-    targets: dict[str, Any] = {}
+    targets: dict[str, Target] = {}
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
         equations = list(self.inner.setup(set_manager, parameters, variables))
         edit = BlockEdit(set_manager, variables, equations)
         for fn in self.hooks:
             fn(edit)
-        for name, cells in edit._endogenous.items():
+        for name, cells in edit.endogenized().items():
             self.endogenous.setdefault(name, set()).update(cells)
-        self.targets.update(edit._targets)
+        for name, t in edit.declared_targets().items():
+            _merge_target(self.targets, name, t.domains, t.cells)
         return edit.equations
 
 
@@ -203,19 +235,16 @@ def endogenous_cells(blocks: list[Any]) -> dict[str, frozenset[tuple]]:
     return {k: frozenset(v) for k, v in out.items()}
 
 
-def target_cells(blocks: list[Any]) -> dict[str, tuple[tuple[str, ...], list[tuple]]]:
-    """Los objetivos que declararon los hooks: ``{nombre: (dominios, [(celda, initial)])}``."""
-    out: dict[str, tuple[tuple[str, ...], list[tuple]]] = {}
+def collect_targets(blocks: list[Any]) -> dict[str, Target]:
+    """Los objetivos que declararon los hooks de todos los bloques."""
+    out: dict[str, Target] = {}
     for b in blocks:
-        for name, (doms, cells) in getattr(b, "targets", {}).items():
-            prev = out.setdefault(name, (doms, []))
-            if prev[0] != doms:
-                raise ValueError(f"target {name!r}: dominios {doms} != {prev[0]}")
-            prev[1].extend(cells)
+        for name, t in getattr(b, "targets", {}).items():
+            _merge_target(out, name, t.domains, t.cells)
     return out
 
 
-def add_targets(model: Any, targets: dict[str, tuple[tuple[str, ...], list]]) -> None:
+def add_targets(model: Any, targets: dict[str, Target]) -> None:
     """Agrega al ``equilibria.model.Model`` ya armado la Var de cada objetivo, en 0.
 
     Va despues de todos los bloques: ``add_block`` descarta en silencio una Var cuyo
@@ -225,15 +254,15 @@ def add_targets(model: Any, targets: dict[str, tuple[tuple[str, ...], list]]) ->
     from equilibria.blocks.gtap import _derived_params as dp
     from equilibria.core.variables import Variable
 
-    for name, (doms, _cells) in targets.items():
+    for name, t in targets.items():
         if name in model.variable_manager:
             raise ValueError(f"target {name!r}: ya hay una variable con ese nombre")
-        elems = [list(model.set_manager.get(d)) for d in doms]
+        elems = [list(model.set_manager.get(d)) for d in t.domains]
         model.add_variable(
             Variable(
                 name=name,
                 value=dp.to_array({}, elems, 0.0),
-                domains=doms,
+                domains=t.domains,
                 domain="Reals",
                 lower=float("-inf"),
                 upper=float("inf"),
