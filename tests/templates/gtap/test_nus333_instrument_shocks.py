@@ -26,6 +26,11 @@ Traduccion GEMPACK -> niveles:
 - ``rate% N from file X.shk`` (ME8): el .shk trae el shock de ELIMINAR cada
   impuesto; subir la tasa N% es ``x = -N/100 x`` ese valor, celda por celda.
 - ``afeall``/``aoall``/``ams``: % directo del shifter -> ``factor = 1+x/100``.
+- ``target% N from file X.shk`` (TBL53): lleva la tasa ad valorem a N% (libro
+  p.155). El .shk trae e = % de la potencia que elimina el impuesto, 1+t0 =
+  1/(1+e/100) -> potencia ``x = 100*((1+N/100)*(1+e/100) - 1)``. gtap.exe no
+  entiende target% (lo traduce RunGTAP): no hay .sl4; GAMS calza con la Tabla 5.3
+  del libro (qint USA +1,04 / -0,12 / +0,01) a 2 decimales.
 - ``atd`` (TBL79): % directo de la eficiencia del transporte hacia el destino ->
   ``lambdamg(m,r,i,d)`` (model.gms:1000/1007) en las celdas con margen (GAMS declara
   ``atd`` pero ninguna ecuacion lo usa).
@@ -63,6 +68,22 @@ SHOCKS = {
     ),
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
     "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
+    # TBL53: tfd(i,ACTS,"USA") = target% 5 (AGR) / 10 (MFG) / 2 (SER) -> dintx_tgt
+    # de cada actividad. Potencias desde nus333/tfd.shk (AGR->MFG: t0 = 0, x = 5).
+    "TBL53": (
+        "esubd4.prm",
+        [
+            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 9.3219304),
+            ("dintx_tgt", ("USA", "AGR", "MFG"), "power", 5.0),
+            ("dintx_tgt", ("USA", "AGR", "SER"), "power", 5.0000125),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 10.6509107),
+            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 9.4152162),
+            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 6.8348582),
+            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 6.3567546),
+            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 1.7135180),
+            ("dintx_tgt", ("USA", "SER", "SER"), "power", 1.8647366),
+        ],
+    ),
     # atd("USA") = 10 -> lambdamg(margen, origen, bien, USA). En nus333 solo SER es
     # margen y solo ROW->USA lleva margen (amgm); el resto de las celdas es inerte.
     "TBL79": (
@@ -285,6 +306,26 @@ ORACLES = {
         "regy": {("USA",): -0.053396, ("ROW",): 0.038195},
         "pi": {("USA",): -0.037497, ("ROW",): 0.038001},
         "xiagg": {("USA",): -0.09493, ("ROW",): 0.028993},
+    },
+    "TBL53": {
+        "xp": {
+            ("USA", "AGR"): 1.040791,
+            ("USA", "MFG"): -0.1206,
+            ("USA", "SER"): 0.010949,
+            ("ROW", "AGR"): -0.240524,
+            ("ROW", "MFG"): -0.370481,
+            ("ROW", "SER"): 0.156015,
+        },
+        # qint de la Tabla 5.3 del libro: +1,04 / -0,12 / +0,01
+        "nd": {
+            ("USA", "AGR"): 1.040791,
+            ("USA", "MFG"): -0.1206,
+            ("USA", "SER"): 0.010949,
+        },
+        "rore": {("USA",): -1.926356, ("ROW",): -1.926356},
+        "regy": {("USA",): -5.241516, ("ROW",): 2.924634},
+        "pi": {("USA",): -3.018604, ("ROW",): 2.694196},
+        "xiagg": {("USA",): -8.853645, ("ROW",): 2.682595},
     },
     "TBL79": {
         "xp": {
