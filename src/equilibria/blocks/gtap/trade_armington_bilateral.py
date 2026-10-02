@@ -114,7 +114,7 @@ class ArmingtonBilateralBlock(Block):
 
         _param("tmarg", dp.tmarg_data(p, s), ("r", "i", "rp"))
         _param("amgm", dp.amgm_data(p, s), ("m", "r", "i", "rp"))
-        _param("lambdamg", dp.lambdamg_data(p, s), ("m", "r", "i", "rp"), default=1.0)
+        # lambdamg es instrumento del ShockBlock (Var fija), (margen, origen, bien, destino).
         _param("xw_flag", dp.xw_flag_data(p, s), ("r", "i", "rp"), mutable=True)
         _param("xet_flag", dp.xet_flag_data(p, s), ("r", "i"), mutable=True)
         _param("gw_share", dp.gw_share_data(p, s), ("r", "i", "rp"), mutable=True)
