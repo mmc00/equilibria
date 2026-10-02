@@ -156,7 +156,7 @@ def _seed_from_prior_keeping_cd_seed(c: _Ctx) -> None:
     if not c.prep.holdfix_cd:
         _seed_from_prior(c)
         return
-    m, kept = c.m, {}
+    m, cd_seed = c.m, {}
     for vn in _CD_SEED_PRICES:
         v = getattr(m, vn, None)
         if v is None:
@@ -164,9 +164,9 @@ def _seed_from_prior_keeping_cd_seed(c: _Ctx) -> None:
         for idx in v:
             t = idx[-1] if isinstance(idx, tuple) else idx
             if t == c.period and v[idx].value is not None:
-                kept[(vn, idx)] = float(v[idx].value)
+                cd_seed[(vn, idx)] = float(v[idx].value)
     _seed_from_prior(c)
-    for (vn, idx), val in kept.items():
+    for (vn, idx), val in cd_seed.items():
         with contextlib.suppress(Exception):
             getattr(m, vn)[idx].set_value(val)
 
@@ -182,7 +182,9 @@ def _unfix_regy(c: _Ctx) -> None:
             pass
 
 
-def _fix_numeraire(c: _Ctx) -> None:
+def _fix_shock_numeraire(c: _Ctx) -> None:
+    """Fija pnum del periodo en el ancla del shock (GAMS fija el numerario del
+    periodo que resuelve; sin ancla el nivel de precios queda libre)."""
     pnum = getattr(c.m, "pnum", None)
     if pnum is None:
         return
@@ -249,19 +251,17 @@ def _replicate_sp_reference(c: _Ctx) -> None:
     build_model fija ~500 ceros estructurales (afeall, p_rai, chiSave...) que
     apply_conditional_fixing no cubre; sin esto el matching fija las 639 vars
     equivocadas."""
-    d = _drv()
-    sp = c.prep._reference_model(c.m, c.params, c.closure, c.period)
-    d._replicate_sp_fixing(c.m, sp, c.period)
-    d._replicate_sp_bounds(c.m, sp, c.period)
+    _replicate(c, c.prep._reference_model(c.m, c.params, c.closure, c.period))
 
 
 def _replicate_fresh_sp_reference(c: _Ctx) -> None:
     """Como _replicate_sp_reference, pero con un modelo de referencia construido
     con los params de ESTE periodo (los del shock) y sin reutilizar el del base."""
+    _replicate(c, c.prep._build_reference_model(c.m, c.params, c.closure))
+
+
+def _replicate(c: _Ctx, sp) -> None:
     d = _drv()
-    sp = d._build_sp_reference(
-        c.params.sets, c.params, c.closure, c.prep.residual_region, model=c.m
-    )
     d._replicate_sp_fixing(c.m, sp, c.period)
     d._replicate_sp_bounds(c.m, sp, c.period)
 
@@ -373,7 +373,7 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
             _freeze_inactive,
             _seed_from_prior,
             _unfix_regy,
-            _fix_numeraire,
+            _fix_shock_numeraire,
             _collapse_pft,
             _replicate_fresh_sp_reference,
             _gams_bounds,
@@ -388,7 +388,7 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
             _recalibrate_shares,
             _seed_from_prior_keeping_cd_seed,
             _unfix_regy,
-            _fix_numeraire,
+            _fix_shock_numeraire,
             _deactivate_redundant_xft,
             _replicate_fresh_sp_reference,
             _mute_welfare_if_asked,
@@ -437,6 +437,11 @@ class PeriodPreparer:
         self._sp_ref = None
         self._sp_ref_closure = None
 
+    def _build_reference_model(self, m, params, closure):
+        return _drv()._build_sp_reference(
+            params.sets, params, closure, self.residual_region, model=m
+        )
+
     def _reference_model(self, m, params, closure, period: str):
         """Modelo de un periodo con ``closure``.  Se guarda el del base y se
         reutiliza mientras el cierre no cambie (el check gtap usa el mismo); uno
@@ -450,9 +455,7 @@ class PeriodPreparer:
                 period,
             )
             return self._sp_ref
-        sp = d._build_sp_reference(
-            params.sets, params, closure, self.residual_region, model=m
-        )
+        sp = self._build_reference_model(m, params, closure)
         if self._sp_ref is None:
             self._sp_ref, self._sp_ref_closure = sp, closure
         return sp
@@ -462,11 +465,15 @@ class PeriodPreparer:
         salvo en F3.5 sin solve_check: ahi el check no se resolvio y se usa el base
         asentado."""
         if period == "shock":
-            return "base" if self.base_calibrated and not self.solve_check else "check"
+            return "base" if self._check_copied() else "check"
         return "base"
 
+    def _check_copied(self) -> bool:
+        """F3.5 sin solve_check: el check no se resuelve, se copia del base."""
+        return self.base_calibrated and not self.solve_check
+
     def recipe(self, period: str) -> _Recipe:
-        if period == "check" and self.base_calibrated and not self.solve_check:
+        if period == "check" and self._check_copied():
             return _CHECK_COPIED
         try:
             return _RECIPES[(period, self.mode)]
