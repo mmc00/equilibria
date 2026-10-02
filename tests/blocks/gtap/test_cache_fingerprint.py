@@ -66,6 +66,48 @@ def test_every_benchmark_group_moves_the_key(group):
     assert _fp(_params(**{group: {("X",): 9.9}})) != _fp()
 
 
+@pytest.mark.parametrize(
+    "group,attr",
+    [
+        ("taxes", "rtms"),  # two runs differing only in tariffs shared a model
+        ("taxes", "rtxs"),
+        ("benchmark", "vom"),
+        ("benchmark", "makb"),
+        ("shares", "p_va"),
+        ("calibrated", "and_param"),
+    ],
+)
+def test_any_params_array_moves_the_key(group, attr):
+    """Every array on params counts, not a hand-picked list of 8."""
+    p = _params()
+    if getattr(p, group, None) is None:
+        setattr(p, group, SimpleNamespace())
+    setattr(getattr(p, group), attr, {("USA",): 0.5})
+    assert _fp(p) != _fp()
+
+
+def test_nested_objects_and_sets_are_covered():
+    p = _params()
+    p.shares = SimpleNamespace(normalized=SimpleNamespace(value_added_share={"x": 1.0}))
+    q = _params()
+    q.shares = SimpleNamespace(normalized=SimpleNamespace(value_added_share={"x": 2.0}))
+    assert _fp(p) != _fp(q)
+    p.sets = SimpleNamespace(r=["USA", "EU"], i_to_a={"Food": "Food"})
+    q2 = _params()
+    q2.shares = p.shares
+    q2.sets = SimpleNamespace(r=["USA", "ROW"], i_to_a={"Food": "Food"})
+    assert _fp(p) != _fp(q2), "string data outside the numeric groups is covered"
+
+
+def test_flags_written_onto_params_are_covered():
+    """build_block_model writes va_subsidy_basis / _capflex_risk onto params."""
+    p = _params()
+    p.va_subsidy_basis = "gams"
+    q = _params()
+    q.va_subsidy_basis = "gempack"
+    assert _fp(p) != _fp(q)
+
+
 def test_elasticities_and_shifts_move_the_key():
     p = _params()
     p.shifts.lambdava[("USA", "SER")] = 1.10
@@ -106,12 +148,24 @@ def test_uncoverable_inputs_give_none():
         is None
     )
     assert _fp(_params(evfb={("USA",): object()})) is None, "unreadable value"
+    assert _fp(_params(evfb={("USA",): "x"})) is None, "string in a numeric group"
+    empty = _params()
+    for name in vars(empty.benchmark):
+        setattr(empty.benchmark, name, {})
+    assert _fp(empty) is None, "an all-empty benchmark covers no data"
+    weird = _params()
+    weird.extra = object()  # default repr carries a memory address
+    assert _fp(weird) is None
 
 
 def test_code_folders_cover_build_and_solve():
     """The seed comes out of a full settle solve, so solver code shapes it too."""
     for rel in ("blocks/gtap", "templates/gtap", "solver", "backends", "core"):
         assert rel in fingerprint.CODE_FOLDERS
+    # Imported by the build from outside those folders (PR #101 review).
+    for rel in ("contracts", "babel/gdx"):
+        assert rel in fingerprint.CODE_FOLDERS
+    assert "model.py" in fingerprint.CODE_FILES
 
 
 def test_any_py_file_in_the_code_folders_moves_the_key(monkeypatch, tmp_path):
@@ -124,6 +178,8 @@ def test_any_py_file_in_the_code_folders_moves_the_key(monkeypatch, tmp_path):
         "backends/pyomo_backend.py",
         "core/variables.py",
         "blocks/base.py",
+        "model.py",
+        "contracts/base.py",
     ]
     for rel in files:
         p = root / rel
@@ -154,7 +210,8 @@ def test_non_python_files_do_not_move_the_key(monkeypatch, tmp_path):
     assert _fp() == before
 
 
-def test_real_tree_has_every_code_folder():
+def test_real_tree_has_every_code_path():
     root = fingerprint._package_root()
-    missing = [rel for rel in fingerprint.CODE_FOLDERS if not (root / rel).exists()]
+    paths = fingerprint.CODE_FOLDERS + fingerprint.CODE_FILES
+    missing = [rel for rel in paths if not (root / rel).exists()]
     assert not missing, f"CODE_FOLDERS lists absent paths: {missing}"

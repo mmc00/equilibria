@@ -8,13 +8,13 @@ after the model key had moved to ``model_dump()`` because that allowlist let
 
 The key covers:
 
-  * the benchmark CONTENT the build reads (every group in ``_PARAM_GROUPS``),
-    plus every attribute of ``params.elasticities`` and ``params.shifts``
+  * every attribute of ``params``: the data CONTENT, not file paths
   * every closure field, via ``model_dump()``
   * the residual region and the caller's flags
   * the source of every ``.py`` under ``CODE_FOLDERS`` (+ ``CODE_FILES``): the
     code that builds the model AND the code that solves it, because the settled
-    seed comes out of a full settle solve
+    seed comes out of a full settle solve.  Modules outside these paths that the
+    build imports must be added here.
 
 When any of that cannot be read, ``fingerprint`` returns ``None`` and the caller
 must skip the cache.  Refusing to cache is safe; a key that does not cover what
@@ -32,13 +32,35 @@ _SEP = "\x1f"
 # the built model or the settled seed.  Walked recursively, so a new module is
 # covered the day it appears -- the old hand list missed floors.py,
 # declarations.py, agents.py and the whole driver/solver.
-CODE_FOLDERS = ("blocks/gtap", "templates/gtap", "solver", "backends", "core")
-CODE_FILES = ("blocks/base.py",)
-
-_PARAM_GROUPS = (
-    ("benchmark", ("evfb", "vfm", "vkb", "vdfb", "vmfb", "vst")),
-    ("taxes", ("rtf", "kappaf_activity")),
+CODE_FOLDERS = (
+    "blocks/gtap",
+    "templates/gtap",
+    "solver",
+    "backends",
+    "core",
+    "contracts",  # gtap_contract builds on it
+    "babel/gdx",  # reads the ref GDX that seeds the model
 )
+CODE_FILES = ("blocks/base.py", "model.py")  # model.py: the block composer
+
+# Groups of numeric data on GTAPParameters.  Every attribute of every group is
+# digested (the old keys hashed 8 hand-picked arrays and missed rtms, rtxs, vom,
+# makb...: two runs differing only in tariffs shared a model).  A non-numeric
+# value inside these groups means a broken load: refuse to key it.
+_NUMERIC_GROUPS = (
+    "benchmark",
+    "taxes",
+    "elasticities",
+    "shifts",
+    "shares",
+    "calibrated",
+)
+
+_MAX_DEPTH = 12
+
+
+class _Uncoverable(Exception):
+    """A value the digest cannot cover deterministically."""
 
 
 def _package_root() -> Path:
@@ -50,51 +72,89 @@ def _sha(obj) -> str:
     return hashlib.sha256(repr(obj).encode()).hexdigest()[:16]
 
 
-def _items(d) -> list:
-    """Sorted (key, value) pairs, numbers rounded to 10 digits.  Raises on a
-    non-numeric value: the caller turns that into "do not cache"."""
-    return sorted((str(k), round(float(v), 10)) for k, v in dict(d).items())
+def _feed(h, obj, numeric: bool, depth: int = 0) -> None:
+    """Stream a deterministic encoding of ``obj`` into ``h``.
+
+    Dicts are walked in sorted-key order, objects by their sorted attributes,
+    floats rounded to 10 digits.  ``numeric`` is set inside ``_NUMERIC_GROUPS``,
+    where only numbers (or None) may sit at the leaves.  Raises ``_Uncoverable``
+    for anything whose encoding would not be deterministic (a default repr
+    carrying a memory address) or for a non-number inside a numeric group.
+    """
+    if depth > _MAX_DEPTH:
+        raise _Uncoverable("too deep")
+    if obj is None or isinstance(obj, bool):
+        h.update(repr(obj).encode())
+    elif isinstance(obj, (int, float)):
+        h.update(b"n" + repr(round(float(obj), 10)).encode())
+    elif hasattr(obj, "item") and hasattr(obj, "dtype") and not hasattr(obj, "__len__"):
+        _feed(h, obj.item(), numeric, depth + 1)  # numpy scalar
+    elif isinstance(obj, str):
+        if numeric:
+            raise _Uncoverable(f"non-numeric value {obj!r}")
+        h.update(b"s" + obj.encode())
+    elif isinstance(obj, dict):
+        h.update(b"{")
+        for k, v in sorted(obj.items(), key=lambda kv: repr(kv[0])):
+            h.update(repr(k).encode() + b":")
+            _feed(h, v, numeric, depth + 1)
+        h.update(b"}")
+    elif isinstance(obj, (list, tuple)):
+        h.update(b"[")
+        for v in obj:
+            _feed(h, v, numeric, depth + 1)
+        h.update(b"]")
+    elif isinstance(obj, (set, frozenset)):
+        h.update(b"<")
+        for v in sorted(obj, key=repr):
+            _feed(h, v, numeric, depth + 1)
+        h.update(b">")
+    elif isinstance(obj, Path):
+        h.update(b"p" + str(obj).encode())
+    elif hasattr(obj, "tolist"):
+        _feed(h, obj.tolist(), numeric, depth + 1)  # numpy array
+    elif hasattr(obj, "__dict__"):
+        h.update(type(obj).__name__.encode() + b"(")
+        for name, val in sorted(vars(obj).items()):
+            h.update(name.encode() + b"=")
+            _feed(h, val, numeric, depth + 1)
+        h.update(b")")
+    else:
+        r = repr(obj)
+        if " at 0x" in r:
+            raise _Uncoverable(r)
+        h.update(b"r" + r.encode())
+
+
+def _has_benchmark(params) -> bool:
+    bm = getattr(params, "benchmark", None)
+    if bm is None or not hasattr(bm, "__dict__"):
+        return False
+    return any(isinstance(v, dict) and v for v in vars(bm).values())
 
 
 def _params_digest(params) -> str | None:
-    parts = []
-    seen_any = False
-    for group_name, names in _PARAM_GROUPS:
-        group = getattr(params, group_name, None)
-        for name in names:
-            src = getattr(group, name, None)
-            parts.append(name)
-            if src is None:
-                parts.append("none")
-                continue
-            try:
-                parts.append(_sha(_items(src)))
-            except (TypeError, ValueError):
-                return None
-            seen_any = True
-    if not seen_any:
-        # No benchmark at all: a key here would be stable and cover nothing.
+    """Digest EVERY attribute of ``params``: the numeric groups strictly, the rest
+    (sets, closure-derived flags written by build_block_model...) generically."""
+    if not _has_benchmark(params):
+        # No benchmark content: a key here would be stable and cover nothing.
         return None
-    # The build and the settle bake the elasticities and the shifters into every
-    # equation; every attribute counts, so a field added later is covered too.
-    for group_name in ("elasticities", "shifts"):
-        group = getattr(params, group_name, None)
-        parts.append(group_name)
-        if group is None:
-            parts.append("none")
-            continue
-        try:
-            parts.append(
-                _sha(
-                    sorted(
-                        (attr, _items(val) if isinstance(val, dict) else repr(val))
-                        for attr, val in vars(group).items()
-                    )
-                )
-            )
-        except (TypeError, ValueError):
-            return None
-    return _sha(parts)
+    h = hashlib.sha256()
+    try:
+        for name, val in sorted(vars(params).items()):
+            h.update(name.encode() + b"=")
+            _feed(h, val, numeric=name in _NUMERIC_GROUPS)
+    except _Uncoverable:
+        return None
+    return h.hexdigest()[:24]
+
+
+def file_digest(path) -> str | None:
+    """Digest of a file's CONTENT (a ref GDX, say), or None when unreadable."""
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:24]
+    except (OSError, TypeError):
+        return None
 
 
 def _closure_digest(closure) -> str | None:

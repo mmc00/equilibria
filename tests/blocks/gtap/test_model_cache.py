@@ -187,8 +187,21 @@ def test_base_calibrated_change_invalidates(params):
     assert _key(params) != _key(params, base_calibrated=False)
 
 
-def test_ref_gdx_presence_invalidates(params):
-    assert _key(params) != _key(params, ref_gdx="/some/out.gdx")
+def test_ref_gdx_is_keyed_by_content(params, tmp_path):
+    """The ref GDX seeds the built model: its content, not its path, is the key."""
+    a = tmp_path / "a.gdx"
+    b = tmp_path / "b.gdx"
+    same_as_a = tmp_path / "copy.gdx"
+    a.write_bytes(b"gdx-a")
+    b.write_bytes(b"gdx-b")
+    same_as_a.write_bytes(b"gdx-a")
+    assert _key(params) != _key(params, ref_gdx=a)
+    assert _key(params, ref_gdx=a) != _key(params, ref_gdx=b)
+    assert _key(params, ref_gdx=a) == _key(params, ref_gdx=same_as_a)
+
+
+def test_key_is_none_when_the_ref_gdx_is_unreadable(params, tmp_path):
+    assert _key(params, ref_gdx=tmp_path / "missing.gdx") is None
 
 
 # ── Data invalidation is by CONTENT, which is what path+mtime could not do ──────

@@ -37,7 +37,7 @@ import os
 import pickle
 from pathlib import Path
 
-from equilibria.blocks.gtap.fingerprint import fingerprint
+from equilibria.blocks.gtap.fingerprint import file_digest, fingerprint
 
 _log = logging.getLogger(__name__)
 
@@ -66,14 +66,20 @@ def cache_key(
     Returns ``None`` when any component cannot be computed -- the caller must then
     skip the cache entirely.
     """
+    # The ref GDX only seeds, but its values land in the built model: key on its
+    # CONTENT (two different GDX at one path, or one GDX at two paths).
+    gdx = "nogdx"
+    if ref_gdx is not None:
+        gdx = file_digest(ref_gdx)
+        if gdx is None:
+            return None
     return fingerprint(
         "model",
         params=params,
         closure=closure,
         residual_region=residual_region,
         base_calibrated=bool(base_calibrated),
-        # The ref GDX only seeds; its presence still changes the built model's values.
-        ref_gdx=ref_gdx is not None,
+        ref_gdx=gdx,
     )
 
 

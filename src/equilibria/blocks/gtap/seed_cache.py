@@ -58,16 +58,19 @@ def cache_key(dataset_id: str, closure, residual_region: str, params) -> str | N
     )
 
 
-def prune_old_keys(max_age_days: float = _PRUNE_AGE_DAYS) -> list[str]:
-    """Delete old-key seed files (``seed-*.json``) untouched for ``max_age_days``.
+def prune_old_keys() -> list[str]:
+    """Delete old-key seed files (``seed-*.json``) not written for 30 days.
 
     The cache dir is shared by every worktree, and a branch still on the old key
     keeps writing ``seed-*.json``; a recent one may be live, so only abandoned
-    files go.  Returns the removed file names.  Never raises.
+    files go.  "Abandoned" is measured by the last WRITE (mtime): a read does not
+    touch the file, and old branches run the old ``load``, so a seed another
+    branch only reads is still pruned after 30 days -- that branch then
+    recomputes it once.  Returns the removed file names.  Never raises.
     """
     if disabled():
         return []
-    cutoff = time.time() - max_age_days * 86400
+    cutoff = time.time() - _PRUNE_AGE_DAYS * 86400
     removed = []
     for f in _cache_dir().glob(f"{_OLD_KEY_PREFIX}-*.json"):
         try:
