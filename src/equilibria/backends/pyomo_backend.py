@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from equilibria.backends.base import Backend, Solution
+from equilibria.solver import pyomo_results
 
 logger = logging.getLogger(__name__)
 
@@ -495,12 +496,15 @@ class PyomoBackend(Backend):
 
         results = self._solver_results
 
+        # iterations no existe en los resultados de Ipopt ni de PATH via AMPL, time
+        # falta en un .sol leido aparte (AttributeError), y message puede venir sin
+        # valor ("<undefined>").
         return {
             "status": str(results.solver.status),
             "termination": str(results.solver.termination_condition),
-            "message": str(results.solver.message),
-            "time": results.solver.time,
-            "iterations": results.solver.iterations,
+            "message": pyomo_results.solver_message(results),
+            "time": pyomo_results.solver_field(results, "time"),
+            "iterations": pyomo_results.solver_iterations(results),
         }
 
     def list_available_solvers(self) -> list[str]:
