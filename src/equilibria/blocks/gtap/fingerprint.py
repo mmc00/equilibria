@@ -24,6 +24,7 @@ it claims to cover is not.
 from __future__ import annotations
 
 import hashlib
+from enum import Enum
 from pathlib import Path
 
 _SEP = "\x1f"
@@ -68,23 +69,36 @@ def _package_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _sha(obj) -> str:
-    return hashlib.sha256(repr(obj).encode()).hexdigest()[:16]
+def _repr_key(obj) -> str:
+    """repr used for ordering/keys; refuses the default repr, whose memory
+    address would change the key from one process to the next."""
+    r = repr(obj)
+    if " at 0x" in r:
+        raise _Uncoverable(r)
+    return r
 
 
 def _feed(h, obj, numeric: bool, depth: int = 0) -> None:
     """Stream a deterministic encoding of ``obj`` into ``h``.
 
     Dicts are walked in sorted-key order, objects by their sorted attributes,
-    floats rounded to 10 digits.  ``numeric`` is set inside ``_NUMERIC_GROUPS``,
-    where only numbers (or None) may sit at the leaves.  Raises ``_Uncoverable``
-    for anything whose encoding would not be deterministic (a default repr
-    carrying a memory address) or for a non-number inside a numeric group.
+    numbers rounded to 10 decimals (so ``1`` and ``1.0`` match, as do a list and
+    a tuple with the same items).  A ``Path`` counts by the CONTENT of its file:
+    loaders store their source path on params, and the key must not change when
+    the same data is loaded from another location.  ``numeric`` is set inside
+    ``_NUMERIC_GROUPS``, where only numbers (or None) may sit at the leaves.
+
+    Raises ``_Uncoverable`` (= do not cache) for anything it cannot encode
+    deterministically: a non-number inside a numeric group, an unreadable path,
+    a callable or class, or a default repr carrying a memory address.
     """
     if depth > _MAX_DEPTH:
         raise _Uncoverable("too deep")
     if obj is None or isinstance(obj, bool):
         h.update(repr(obj).encode())
+    elif isinstance(obj, Enum):
+        h.update(b"e" + type(obj).__name__.encode() + b".")
+        _feed(h, obj.value, numeric, depth + 1)
     elif isinstance(obj, (int, float)):
         h.update(b"n" + repr(round(float(obj), 10)).encode())
     elif hasattr(obj, "item") and hasattr(obj, "dtype") and not hasattr(obj, "__len__"):
@@ -95,8 +109,8 @@ def _feed(h, obj, numeric: bool, depth: int = 0) -> None:
         h.update(b"s" + obj.encode())
     elif isinstance(obj, dict):
         h.update(b"{")
-        for k, v in sorted(obj.items(), key=lambda kv: repr(kv[0])):
-            h.update(repr(k).encode() + b":")
+        for k, v in sorted(obj.items(), key=lambda kv: _repr_key(kv[0])):
+            h.update(_repr_key(k).encode() + b":")
             _feed(h, v, numeric, depth + 1)
         h.update(b"}")
     elif isinstance(obj, (list, tuple)):
@@ -106,13 +120,21 @@ def _feed(h, obj, numeric: bool, depth: int = 0) -> None:
         h.update(b"]")
     elif isinstance(obj, (set, frozenset)):
         h.update(b"<")
-        for v in sorted(obj, key=repr):
+        for v in sorted(obj, key=_repr_key):
             _feed(h, v, numeric, depth + 1)
         h.update(b">")
     elif isinstance(obj, Path):
-        h.update(b"p" + str(obj).encode())
+        digest = file_digest(obj)
+        if digest is None:
+            raise _Uncoverable(f"unreadable path {obj}")
+        h.update(b"f" + digest.encode())
+    elif hasattr(obj, "index") and hasattr(obj, "to_dict"):
+        _feed(h, obj.to_dict(), numeric, depth + 1)  # pandas: keep the index
     elif hasattr(obj, "tolist"):
         _feed(h, obj.tolist(), numeric, depth + 1)  # numpy array
+    elif callable(obj) or isinstance(obj, type):
+        # vars() of a function is empty, so every callable would hash alike.
+        raise _Uncoverable(f"callable {obj!r}")
     elif hasattr(obj, "__dict__"):
         h.update(type(obj).__name__.encode() + b"(")
         for name, val in sorted(vars(obj).items()):
@@ -120,10 +142,7 @@ def _feed(h, obj, numeric: bool, depth: int = 0) -> None:
             _feed(h, val, numeric, depth + 1)
         h.update(b")")
     else:
-        r = repr(obj)
-        if " at 0x" in r:
-            raise _Uncoverable(r)
-        h.update(b"r" + r.encode())
+        h.update(b"r" + _repr_key(obj).encode())
 
 
 def _has_benchmark(params) -> bool:
@@ -161,10 +180,12 @@ def _closure_digest(closure) -> str | None:
     dump = getattr(closure, "model_dump", None)
     if dump is None:
         return None
+    h = hashlib.sha256()
     try:
-        return _sha(sorted((str(k), repr(v)) for k, v in dump().items()))
+        _feed(h, dump(), numeric=False)
     except Exception:
         return None
+    return h.hexdigest()[:24]
 
 
 def _code_files(root: Path) -> list[Path]:

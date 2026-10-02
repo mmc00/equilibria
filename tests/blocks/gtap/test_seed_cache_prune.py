@@ -73,3 +73,26 @@ def test_seed_key_uses_the_new_prefix():
     )
     key = seed_cache.cache_key("gtap-3x2", _C(), "ROW", p)
     assert key is not None and key.startswith(f"{seed_cache.KEY_PREFIX}-")
+
+
+def test_seed_key_covers_the_ref_gdx_content(tmp_path):
+    """calibrate_base seeds from and solves against ref_gdx: its content counts."""
+    from types import SimpleNamespace
+
+    class _C:
+        def model_dump(self):
+            return {"if_sub": False}
+
+    p = SimpleNamespace(benchmark=SimpleNamespace(evfb={("USA",): 1.0}))
+    a, b, a2 = tmp_path / "a.gdx", tmp_path / "b.gdx", tmp_path / "a2.gdx"
+    a.write_bytes(b"A")
+    b.write_bytes(b"B")
+    a2.write_bytes(b"A")
+
+    def key(gdx=None):
+        return seed_cache.cache_key("gtap-3x2", _C(), "ROW", p, ref_gdx=gdx)
+
+    assert key() != key(a)
+    assert key(a) != key(b)
+    assert key(a) == key(a2)
+    assert key(tmp_path / "missing.gdx") is None

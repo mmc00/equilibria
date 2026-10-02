@@ -492,7 +492,9 @@ class FactorBlock(Block):
             _label = f"gtap-{len(list(sets.i))}x{len(list(sets.r))}"
         except Exception:
             _label = "gtap"
-        key = seed_cache.cache_key(_label, closure, str(residual_region), params)
+        key = seed_cache.cache_key(
+            _label, closure, str(residual_region), params, ref_gdx=ref_gdx
+        )
         if key is not None:
             cached = seed_cache.load(key)
             if cached is not None:

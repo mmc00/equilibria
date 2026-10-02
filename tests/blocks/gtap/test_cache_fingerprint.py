@@ -215,3 +215,93 @@ def test_real_tree_has_every_code_path():
     paths = fingerprint.CODE_FOLDERS + fingerprint.CODE_FILES
     missing = [rel for rel in paths if not (root / rel).exists()]
     assert not missing, f"CODE_FOLDERS lists absent paths: {missing}"
+
+
+# ── Paths count by content; what cannot be encoded deterministically → no key ──
+
+
+def test_a_path_on_params_counts_by_file_content(tmp_path):
+    """load_from_gdx stores its source path on params: the same data loaded from
+    another location must share the key (PR #101 review)."""
+    a = tmp_path / "a" / "basedata.gdx"
+    b = tmp_path / "b" / "basedata.gdx"
+    c = tmp_path / "c" / "basedata.gdx"
+    for f, content in ((a, b"same"), (b, b"same"), (c, b"other")):
+        f.parent.mkdir()
+        f.write_bytes(content)
+
+    def with_source(path):
+        p = _params()
+        p._source_gdx_path = path
+        return p
+
+    assert _fp(with_source(a)) == _fp(with_source(b))
+    assert _fp(with_source(a)) != _fp(with_source(c))
+    assert _fp(with_source(tmp_path / "missing.gdx")) is None
+
+
+_GDX_9x10 = (
+    fingerprint._package_root() / "templates/reference/gtap/data/basedata-9x10.gdx"
+)
+
+
+@pytest.mark.skipif(not _GDX_9x10.exists(), reason="basedata-9x10.gdx not present")
+def test_a_real_gdx_loaded_from_two_places_shares_the_key(tmp_path):
+    """Copy the whole data folder: load_from_gdx also reads sibling files
+    (default-9x10.gdx), so a lone copy of basedata is genuinely other data."""
+    import shutil
+
+    from equilibria.templates.gtap.gtap_parameters import GTAPParameters
+
+    copy_dir = tmp_path / "data"
+    shutil.copytree(_GDX_9x10.parent, copy_dir)
+    a = GTAPParameters()
+    a.load_from_gdx(_GDX_9x10)
+    b = GTAPParameters()
+    b.load_from_gdx(copy_dir / _GDX_9x10.name)
+    assert _fp(a) is not None
+    assert _fp(a) == _fp(b)
+
+
+def test_enums_are_covered_by_value():
+    import enum
+
+    class Mode(enum.Enum):
+        A = "a"
+        B = "b"
+
+    p, q = _params(), _params()
+    p.mode, q.mode = Mode.A, Mode.B
+    assert _fp(p) is not None
+    assert _fp(p) != _fp(q)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        lambda x: x,  # every function used to hash alike
+        object,  # a class
+        {object(), object()},  # set ordered by memory address
+        {object(): 1.0},  # dict key with a memory-address repr
+    ],
+)
+def test_values_without_a_deterministic_encoding_give_none(value):
+    p = _params()
+    p.extra = value
+    assert _fp(p) is None
+
+
+def test_a_pandas_series_keeps_its_index():
+    pd = pytest.importorskip("pandas")
+    p, q = _params(), _params()
+    p.extra = pd.Series([1.0, 2.0], index=["USA", "EU"])
+    q.extra = pd.Series([1.0, 2.0], index=["USA", "ROW"])
+    assert _fp(p) != _fp(q)
+
+
+def test_closure_is_walked_like_params():
+    """A set-valued closure field must not change the key across processes."""
+    assert _fp(closure=_Closure(fixed=frozenset({"a", "b"}))) == _fp(
+        closure=_Closure(fixed=frozenset({"b", "a"}))
+    )
+    assert _fp(closure=_Closure(fixed=object())) is None

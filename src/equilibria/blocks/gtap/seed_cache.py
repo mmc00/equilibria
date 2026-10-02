@@ -11,13 +11,12 @@ as JSON themselves, so their type survives the round trip -- see ``_enc_key``).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import time
 from pathlib import Path
 
-from equilibria.blocks.gtap.fingerprint import fingerprint
+from equilibria.blocks.gtap.fingerprint import file_digest, fingerprint
 
 _SEP = "\x1f"  # legacy key separator (read-only, see _dec_key_legacy)
 
@@ -44,17 +43,27 @@ def _cache_dir() -> Path:
     return p
 
 
-def cache_key(dataset_id: str, closure, residual_region: str, params) -> str | None:
-    """Key over the settle's data, closure and code -- see blocks/gtap/fingerprint.py.
+def cache_key(
+    dataset_id: str, closure, residual_region: str, params, ref_gdx=None
+) -> str | None:
+    """Key over the settle's data, closure, ref GDX and code -- see
+    blocks/gtap/fingerprint.py.
 
     ``None`` means the inputs cannot be fully covered: skip the cache.
     """
+    # The settle seeds from and solves against the ref GDX: key on its CONTENT.
+    gdx = "nogdx"
+    if ref_gdx is not None:
+        gdx = file_digest(ref_gdx)
+        if gdx is None:
+            return None
     return fingerprint(
         KEY_PREFIX,
         params=params,
         closure=closure,
         residual_region=residual_region,
         dataset=dataset_id,
+        ref_gdx=gdx,
     )
 
 
