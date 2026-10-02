@@ -1,7 +1,7 @@
 """Disk cache for calibrate_base's settled_seed.
 
-Key = hash of everything that changes the settle: dataset id, closure fields,
-residual region, and a digest of the benchmark params the settle reads. Value =
+Key = blocks/gtap/fingerprint.py over the settle's benchmark data, every closure
+field, the residual region and the build+solve code.  Value =
 ``{var_name: {index_tuple_or_scalar: float}}`` stored as JSON (index keys encoded
 as JSON themselves, so their type survives the round trip -- see ``_enc_key``).
 
@@ -14,7 +14,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
+
+from equilibria.blocks.gtap.fingerprint import fingerprint
 
 _SEP = "\x1f"  # legacy key separator (read-only, see _dec_key_legacy)
 
@@ -22,6 +25,12 @@ _SEP = "\x1f"  # legacy key separator (read-only, see _dec_key_legacy)
 # \x1f-joined format and is still read.
 _VERSION_FIELD = "_fmt"
 _VERSION = 2
+
+# Keys from the shared fingerprint start with KEY_PREFIX; the hand-built key they
+# replaced started with "seed" and covered no code (see prune_old_keys).
+KEY_PREFIX = "seed2"
+_OLD_KEY_PREFIX = "seed"
+_PRUNE_AGE_DAYS = 30
 
 
 def disabled() -> bool:
@@ -35,83 +44,39 @@ def _cache_dir() -> Path:
     return p
 
 
-def cache_key(dataset_id: str, closure, residual_region: str, params) -> str:
-    # DEUDA CONOCIDA (2026-09-22): esta clave cubre los DATOS de entrada (dataset,
-    # closure, benchmark, tasas) pero NO el CODIGO que calcula el seed.  Editar el
-    # settle o cualquier ecuacion que lo alimenta no invalida la entrada, asi que
-    # un seed viejo se sigue sirviendo en silencio — y el cache vive fuera del
-    # repo (~/.cache/equilibria/settled_seed), asi que sobrevive a checkouts y
-    # ramas.  Medido: 12 entradas de agosto-septiembre en una maquina de trabajo.
-    #
-    # El cache de MODELOS hermano si lo cubre — ver blocks/gtap/model_cache.py:
-    # "La clave cubre los archivos de entrada Y el source de cada modulo que
-    # construye el modelo, asi que una ecuacion editada nunca puede recibir un
-    # modelo obsoleto".  Aqui falta ese mismo digest de fuentes.
-    #
-    # Mientras tanto: EQUILIBRIA_SEED_CACHE_DISABLE=1 lo desactiva, y conviene
-    # borrar el directorio al medir contra una referencia.
-    fields = [
-        dataset_id,
-        residual_region,
-        str(getattr(closure, "closure_type", "")),
-        str(getattr(closure, "savf_flag", "")),
-        str(bool(getattr(closure, "if_sub", False))),
-        str(getattr(closure, "capital_mobility", "")),
-        str(getattr(closure, "numeraire", "")),
-    ]
-    # Digest of the benchmark inputs the settle depends on (evfb/vfm/vkb + tax rates).
-    bm = getattr(params, "benchmark", None)
-    tx = getattr(params, "taxes", None)
-    for src in (
-        getattr(bm, "evfb", None),
-        getattr(bm, "vfm", None),
-        getattr(bm, "vkb", None),
-        getattr(tx, "rtf", None),
-        getattr(tx, "kappaf_activity", None),
-    ):
-        if src is None:
-            fields.append("none")
-            continue
-        fields.append(_sha16(_mapping_items(src)))
-    # The settle bakes the elasticities and the technology shifters into its
-    # equations too, so they shape the seed: without them a lambdava-shocked
-    # settle, or another .prm, was served as this run's benchmark.
-    for group in (
-        getattr(params, "elasticities", None),
-        getattr(params, "shifts", None),
-    ):
-        fields.append(_digest_group(group))
-    return "seed-" + hashlib.sha256(_SEP.join(fields).encode()).hexdigest()[:24]
+def cache_key(dataset_id: str, closure, residual_region: str, params) -> str | None:
+    """Key over the settle's data, closure and code -- see blocks/gtap/fingerprint.py.
 
-
-def _hashable_num(v) -> str:
-    """Normalise a value for the key: numbers rounded to 10 digits, anything else by
-    repr, so a non-numeric entry changes the key instead of raising."""
-    try:
-        return repr(round(float(v), 10))
-    except (TypeError, ValueError):
-        return repr(v)
-
-
-def _mapping_items(d) -> list:
-    return sorted((str(k), _hashable_num(v)) for k, v in dict(d).items())
-
-
-def _sha16(obj) -> str:
-    return hashlib.sha256(repr(obj).encode()).hexdigest()[:16]
-
-
-def _digest_group(group) -> str:
-    """Digest EVERY attribute of a params group: dicts by their items, anything
-    else by repr -- so a scalar added to the group later is covered too."""
-    if group is None:
-        return "none"
-    return _sha16(
-        sorted(
-            (name, _mapping_items(val) if isinstance(val, dict) else repr(val))
-            for name, val in vars(group).items()
-        )
+    ``None`` means the inputs cannot be fully covered: skip the cache.
+    """
+    return fingerprint(
+        KEY_PREFIX,
+        params=params,
+        closure=closure,
+        residual_region=residual_region,
+        dataset=dataset_id,
     )
+
+
+def prune_old_keys(max_age_days: float = _PRUNE_AGE_DAYS) -> list[str]:
+    """Delete old-key seed files (``seed-*.json``) untouched for ``max_age_days``.
+
+    The cache dir is shared by every worktree, and a branch still on the old key
+    keeps writing ``seed-*.json``; a recent one may be live, so only abandoned
+    files go.  Returns the removed file names.  Never raises.
+    """
+    if disabled():
+        return []
+    cutoff = time.time() - max_age_days * 86400
+    removed = []
+    for f in _cache_dir().glob(f"{_OLD_KEY_PREFIX}-*.json"):
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+                removed.append(f.name)
+        except OSError:
+            pass
+    return removed
 
 
 def _enc_key(k):
@@ -172,6 +137,7 @@ def load(key: str):
 def save(key: str, seed: dict) -> None:
     if disabled():
         return
+    prune_old_keys()
     enc = {
         name: {_enc_key(k): float(v) for k, v in cells.items()}
         for name, cells in seed.items()
