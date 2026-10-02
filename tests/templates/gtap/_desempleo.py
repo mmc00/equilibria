@@ -1,6 +1,6 @@
 """Lo comun de los tests del cierre de desempleo (TBL65B/ME3C) y de ``@overwrite``.
 
-Los dos hooks son los del notebook ``notebooks/gtap7/burfisher_exec_TBL65B.ipynb``.
+Los dos hooks son los del notebook ``notebooks/gtap7/burfisher_exec_tbl65b.ipynb``.
 """
 
 from __future__ import annotations
