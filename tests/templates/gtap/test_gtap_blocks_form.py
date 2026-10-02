@@ -247,6 +247,8 @@ _FORM_EXEMPT_INSTRUMENT_EQS: dict[tuple[str, str], str] = {
     ("ArmingtonBilateralBlock", "eq_pmeq"): "imptx (tms)",
     ("ArmingtonBilateralBlock", "eq_xweq"): "lambdam (ams)",
     ("ArmingtonBilateralBlock", "eq_pmteq"): "lambdam (ams)",
+    ("ArmingtonBilateralBlock", "eq_xmgm"): "lambdamg (atd/ats/atf/atm)",
+    ("ArmingtonBilateralBlock", "eq_pwmg"): "lambdamg (atd/ats/atf/atm)",
     ("ArmingtonBilateralBlock", "eq_pefobeq"): "exptx (txs)",
     ("IncomeBlock", "eq_ytax"): "imptx/dintx/kappaf/exptx (recaudacion)",
     ("DemandUtilityBlock", "eq_zcons"): "pop (pop)",
