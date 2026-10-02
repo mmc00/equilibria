@@ -23,6 +23,7 @@ asi un ``monkeypatch`` sobre el driver sigue funcionando.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -56,8 +57,16 @@ F35_DERIVED_DEMAND = frozenset(
     }
 )
 
-# Periodo del que se recalibra / siembra cada periodo activo.
-_PRIOR = {"check": "base"}
+# Periodo del que se recalibran las participaciones (altertax).  El shock
+# recalibra siempre desde el check, aun cuando se siembre desde el base (F3.5).
+_RECALIBRATE_FROM = {"check": "base", "shock": "check"}
+
+# Precios del nido CD que holdfix_cd fija en el shock: llegan con la semilla GAMS
+# del shock y sembrar desde el previo los pisaria (ROW/Mnfcs 1.0078 -> 0.7592).
+_CD_SEED_PRICES = ("pva", "pnd", "px")
+
+# Ancla del numerario en el shock (GAMS fija pnum en el periodo del shock).
+_SHOCK_PNUM = 1.5
 
 
 def _drv():
@@ -116,7 +125,7 @@ def _recalibrate_shares(c: _Ctx) -> None:
     Land subsidiada y deslizaba pft[Land]; quitarlo subio el gate de shock
     98.21% -> 99.93%.  gtap puro no recalibra nada: GAMS calibra UNA vez en t0.
     """
-    d, prior = _drv(), _PRIOR[c.period]
+    d, prior = _drv(), _RECALIBRATE_FROM[c.period]
     d._recalibrate_and_ava(c.m, c.params, c.period, prior)
     d._recalibrate_gx_ax(c.m, c.params, c.period, prior)
     d._recalibrate_alphad_alpham(c.m, c.params, c.period, prior)
@@ -129,7 +138,37 @@ def _seed_from_prior_if_asked(c: _Ctx) -> None:
     check: sembrar desde el base la pisaba (pd[USA,Mnfcs] 0.983->1.0) y PATH caia
     en una rama que colapsa el nivel de precios de USA (pgdpmp 0.99->0.67)."""
     if c.prep.seed_from_prior:
-        _drv()._seed_period_from_prior(c.m, _PRIOR[c.period], c.period)
+        _seed_from_prior(c)
+
+
+def _seed_from_prior(c: _Ctx) -> None:
+    """Arranque en caliente desde el periodo previo ya resuelto."""
+    _drv()._seed_period_from_prior(c.m, c.prep.seed_prior(c.period), c.period)
+
+
+def _seed_from_prior_keeping_cd_seed(c: _Ctx) -> None:
+    """altertax: como _seed_from_prior, pero con holdfix_cd conserva la semilla
+    GAMS de pva/pnd/px del periodo, porque _cd_nest_if_holdfix los fija ahi.
+
+    px entro a la familia con el hold de eq_pxeq: el primer intento fallo porque
+    px quedaba fijo en el valor del check (px[MEX,Rice] 1.0 vs 0.672 de la
+    referencia, gate 87.76 -> 86.09)."""
+    if not c.prep.holdfix_cd:
+        _seed_from_prior(c)
+        return
+    m, cd_seed = c.m, {}
+    for vn in _CD_SEED_PRICES:
+        v = getattr(m, vn, None)
+        if v is None:
+            continue
+        for idx in v:
+            t = idx[-1] if isinstance(idx, tuple) else idx
+            if t == c.period and v[idx].value is not None:
+                cd_seed[(vn, idx)] = float(v[idx].value)
+    _seed_from_prior(c)
+    for (vn, idx), val in cd_seed.items():
+        with contextlib.suppress(Exception):
+            getattr(m, vn)[idx].set_value(val)
 
 
 def _unfix_regy(c: _Ctx) -> None:
@@ -141,6 +180,20 @@ def _unfix_regy(c: _Ctx) -> None:
                 m.regy[r, c.period].unfix()
         except Exception:
             pass
+
+
+def _fix_shock_numeraire(c: _Ctx) -> None:
+    """Fija pnum del periodo en el ancla del shock (GAMS fija el numerario del
+    periodo que resuelve; sin ancla el nivel de precios queda libre)."""
+    pnum = getattr(c.m, "pnum", None)
+    if pnum is None:
+        return
+    try:
+        vd = pnum[c.period]
+    except (KeyError, TypeError):
+        return
+    if not vd.fixed:
+        vd.fix(_SHOCK_PNUM)
 
 
 def _deactivate_redundant_xft(c: _Ctx) -> None:
@@ -198,8 +251,17 @@ def _replicate_sp_reference(c: _Ctx) -> None:
     build_model fija ~500 ceros estructurales (afeall, p_rai, chiSave...) que
     apply_conditional_fixing no cubre; sin esto el matching fija las 639 vars
     equivocadas."""
+    _replicate(c, c.prep._reference_model(c.m, c.params, c.closure, c.period))
+
+
+def _replicate_fresh_sp_reference(c: _Ctx) -> None:
+    """Como _replicate_sp_reference, pero con un modelo de referencia construido
+    con los params de ESTE periodo (los del shock) y sin reutilizar el del base."""
+    _replicate(c, c.prep._build_reference_model(c.m, c.params, c.closure))
+
+
+def _replicate(c: _Ctx, sp) -> None:
     d = _drv()
-    sp = c.prep._reference_model(c.m, c.params, c.closure, c.period)
     d._replicate_sp_fixing(c.m, sp, c.period)
     d._replicate_sp_bounds(c.m, sp, c.period)
 
@@ -304,6 +366,38 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
         ),
         closure="altertax",
     ),
+    # El shock se prepara ANTES de aplicarlo: freeze_inactive_periods reactivaria
+    # filas que los rebuilds del arancel desactivan.
+    ("shock", "gtap"): _Recipe(
+        steps=(
+            _freeze_inactive,
+            _seed_from_prior,
+            _unfix_regy,
+            _fix_shock_numeraire,
+            _collapse_pft,
+            _replicate_fresh_sp_reference,
+            _gams_bounds,
+            _mute_welfare_if_asked,
+            _fnm_pf,
+        ),
+        closure="base",
+    ),
+    ("shock", "altertax"): _Recipe(
+        steps=(
+            _freeze_inactive,
+            _recalibrate_shares,
+            _seed_from_prior_keeping_cd_seed,
+            _unfix_regy,
+            _fix_shock_numeraire,
+            _deactivate_redundant_xft,
+            _replicate_fresh_sp_reference,
+            _mute_welfare_if_asked,
+            _derived_seed_if_holdfix,
+            _cd_nest_if_holdfix,
+            _fnm_pf,
+        ),
+        closure="altertax",
+    ),
 }
 
 _CHECK_COPIED = _Recipe(steps=(_copy_from_base,), closure=None)
@@ -343,6 +437,11 @@ class PeriodPreparer:
         self._sp_ref = None
         self._sp_ref_closure = None
 
+    def _build_reference_model(self, m, params, closure):
+        return _drv()._build_sp_reference(
+            params.sets, params, closure, self.residual_region, model=m
+        )
+
     def _reference_model(self, m, params, closure, period: str):
         """Modelo de un periodo con ``closure``.  Se guarda el del base y se
         reutiliza mientras el cierre no cambie (el check gtap usa el mismo); uno
@@ -356,15 +455,25 @@ class PeriodPreparer:
                 period,
             )
             return self._sp_ref
-        sp = d._build_sp_reference(
-            params.sets, params, closure, self.residual_region, model=m
-        )
+        sp = self._build_reference_model(m, params, closure)
         if self._sp_ref is None:
             self._sp_ref, self._sp_ref_closure = sp, closure
         return sp
 
+    def seed_prior(self, period: str) -> str:
+        """Periodo del que se siembra ``period``.  El shock se siembra del check,
+        salvo en F3.5 sin solve_check: ahi el check no se resolvio y se usa el base
+        asentado."""
+        if period == "shock":
+            return "base" if self._check_copied() else "check"
+        return "base"
+
+    def _check_copied(self) -> bool:
+        """F3.5 sin solve_check: el check no se resuelve, se copia del base."""
+        return self.base_calibrated and not self.solve_check
+
     def recipe(self, period: str) -> _Recipe:
-        if period == "check" and self.base_calibrated and not self.solve_check:
+        if period == "check" and self._check_copied():
             return _CHECK_COPIED
         try:
             return _RECIPES[(period, self.mode)]

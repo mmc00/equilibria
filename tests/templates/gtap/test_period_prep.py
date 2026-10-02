@@ -38,6 +38,8 @@ def test_unknown_period_is_rejected():
         ("altertax", "base", "base"),
         ("gtap", "check", "base"),  # gtap puro resuelve el check con el cierre base
         ("altertax", "check", "altertax"),
+        ("gtap", "shock", "base"),
+        ("altertax", "shock", "altertax"),
     ],
 )
 def test_each_period_and_mode_has_its_recipe(mode, period, closure):
@@ -56,12 +58,36 @@ def test_solve_check_overrides_the_f35_copy():
     )
 
 
+@pytest.mark.parametrize(
+    "base_calibrated,solve_check,prior",
+    [(False, False, "check"), (True, False, "base"), (True, True, "check")],
+)
+def test_shock_seeds_from_the_check_unless_it_was_copied(
+    base_calibrated, solve_check, prior
+):
+    """F3.5 sin solve_check: el check no se resolvio, el shock parte del base."""
+    p = _prep(base_calibrated=base_calibrated, solve_check=solve_check)
+    assert p.seed_prior("shock") == prior
+    assert p.seed_prior("check") == "base"
+
+
+def test_shock_always_builds_its_own_reference_model():
+    """El modelo de referencia del shock lleva los params del shock: no reusa el
+    del base (el check gtap si lo reusa)."""
+    for mode in ("gtap", "altertax"):
+        steps = _prep(mode=mode).recipe("shock").steps
+        assert period_prep._replicate_fresh_sp_reference in steps
+        assert period_prep._replicate_sp_reference not in steps
+
+
 def test_gtap_recipes_do_not_recalibrate_and_altertax_ones_do():
     """GAMS gtap puro calibra una sola vez (t0); altertax recalibra cada periodo."""
-    assert period_prep._recalibrate_shares not in _prep().recipe("check").steps
-    assert (
-        period_prep._recalibrate_shares in _prep(mode="altertax").recipe("check").steps
-    )
+    for period in ("check", "shock"):
+        assert period_prep._recalibrate_shares not in _prep().recipe(period).steps
+        assert (
+            period_prep._recalibrate_shares
+            in _prep(mode="altertax").recipe(period).steps
+        )
 
 
 # ── Depuracion antes del solve ─────────────────────────────────────────────
