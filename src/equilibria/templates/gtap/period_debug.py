@@ -17,9 +17,8 @@ Las exportaciones lanzan RuntimeError a proposito: paran la corrida justo antes
 del solve.  Los nombres para el check son los de siempre
 (EQUILIBRIA_DEBUG_EXPORT_NL_CHECK, ...).
 
-El driver llama a ``debug_before_solve`` antes de resolver el base y el check.
-El shock todavia tiene su propio hook (EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK) hasta
-que su preparacion pase a period_prep.
+El driver llama a ``debug_before_solve`` antes de resolver cada periodo; en el
+shock, despues de aplicar el arancel o el instrumento (ve lo que resuelve PATH).
 """
 
 from __future__ import annotations
