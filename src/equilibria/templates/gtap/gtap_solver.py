@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import platform
-import re
 import subprocess
 import warnings
 from dataclasses import dataclass, field
@@ -29,6 +28,7 @@ try:
 except ImportError:
     PYOMO_AVAILABLE = False
 
+from equilibria.solver import pyomo_results
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.gtap_parameters import GTAPParameters
 
@@ -75,25 +75,6 @@ class SolverResult:
     variables: dict[str, Any] = field(default_factory=dict)
     success: bool = False
     message: str = ""
-
-
-def _solver_field(results: Any, name: str) -> Any:
-    """Un campo de ``results.solver``, o None si el solver no lo dio.
-
-    ``results.solver`` es un ListContainer de Pyomo: ``.get()`` no delega al primer
-    elemento (devolvia siempre el default) y el atributo si, pero un campo sin valor
-    vuelve como ``UndefinedData``, que es verdadero.
-    """
-    from pyomo.opt.results.container import UndefinedData
-
-    val = getattr(results.solver, name, None)
-    return None if isinstance(val, UndefinedData) else val
-
-
-def _iterations_from_message(message: str) -> int | None:
-    """El conteo de un mensaje AMPL como "68 iterations (0 for crash); ..." (PATH)."""
-    match = re.search(r"(\d+) iterations", message)
-    return int(match.group(1)) if match else None
 
 
 class GTAPSolver:
@@ -1308,13 +1289,8 @@ class GTAPSolver:
 
         # Iteraciones y mensaje del solver. Si el solver no da el conteo, None:
         # desconocido, no 0.
-        solver_message = _solver_field(results, "message")
-        if solver_message is not None:
-            # El lector .sol de Pyomo escapa ":" como "\\x3a".
-            solver_message = str(solver_message).replace("\\x3a", ":")
-        iterations = _solver_field(results, "iterations")
-        if iterations is None and solver_message:
-            iterations = _iterations_from_message(solver_message)
+        solver_message = pyomo_results.solver_message(results)
+        iterations = pyomo_results.solver_iterations(results)
 
         # Extract variable values
         variables = self._extract_variable_values()
