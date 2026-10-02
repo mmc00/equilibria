@@ -7,6 +7,7 @@ No confundir con ``shocks.apply_shock``, que modifica ``params`` (la API YAML).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 # Filas que leen cada instrumento. Su celda del periodo tiene que estar viva: si no,
@@ -43,6 +44,45 @@ INCOME_TAX_INSTRUMENTS = frozenset({"kappaf"})
 # Solo el periodo shock: un shock en 'check'/'base' no lo detecta el driver (le
 # sumaria el arancel) y la copia base->check de F3.5 lo pisaria.
 _PERIOD = "shock"
+
+
+def instrument_cell(idx: Any) -> tuple:
+    """La celda de un indice de instrumento, sin el periodo (SP o multiperiodo)."""
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
+
+    k = idx if isinstance(idx, tuple) else (idx,)
+    if k and k[-1] in PERIODS:
+        k = k[:-1]
+    return k
+
+
+def _never(_idx: Any) -> bool:
+    return False
+
+
+def _always(_idx: Any) -> bool:
+    return True
+
+
+def exogenous_test(m: Any, name: str) -> Callable[[Any], bool]:
+    """Para la Var ``name`` de ``m``: una funcion ``idx -> es instrumento exogeno``.
+
+    Un instrumento registrado (``_exogenous_instruments``) es exogeno —fijo por
+    periodo, el driver no lo libera ni lo re-siembra— salvo en las celdas que un hook
+    ``@overwrite`` volvio endogenas (``_endogenous_instrument_cells``): esas son una
+    variable mas. Se resuelve una vez por Var, no por celda.
+    """
+    if name not in getattr(m, "_exogenous_instruments", frozenset()):
+        return _never
+    libres = (getattr(m, "_endogenous_instrument_cells", None) or {}).get(name)
+    if not libres:
+        return _always
+    return lambda idx: instrument_cell(idx) not in libres
+
+
+def is_exogenous(m: Any, name: str, idx: Any) -> bool:
+    """True si la celda ``idx`` de ``name`` es un instrumento exogeno."""
+    return exogenous_test(m, name)(idx)
 
 
 def _labels(component: Any, region: str, *, live: bool = False) -> list:
@@ -109,6 +149,10 @@ def fix_instrument_shock(
     if name not in registered:
         raise ValueError(
             f"{name!r} is not a registered instrument; registered: {sorted(registered)}"
+        )
+    if not is_exogenous(m, name, (*index, _PERIOD)):
+        raise ValueError(
+            f"{name}{tuple(index)} is endogenous (@overwrite): it cannot take a shock"
         )
     if (factor is None) == (value is None):
         raise ValueError("give exactly one of factor/value")

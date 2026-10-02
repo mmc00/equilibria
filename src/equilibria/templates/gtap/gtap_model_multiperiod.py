@@ -42,8 +42,11 @@ class GTAPMultiPeriodModel:
         camino de bloques sobrescribe este metodo, asi que no debe cargarlo solo
         por construir un modelo multiperiodo.
         """
+        from equilibria.blocks.gtap.overwrite import require_blocks
+
         from .gtap_model_equations import GTAPModelEquations
 
+        require_blocks("GTAPMultiPeriodModel (monolito)")
         return GTAPModelEquations(
             self.sets,
             self.params,
