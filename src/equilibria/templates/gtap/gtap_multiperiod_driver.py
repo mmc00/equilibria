@@ -3283,6 +3283,7 @@ def _solve_multiperiod_inner(
             closure_config=_base_closure_used,
             equation_scaling=True,
             gtap_mode=_gtap_mode,
+            solver_output=bool(os.environ.get("EQUILIBRIA_DEBUG_PATH_VERBOSE")),
             solution_hint=None,
         )
         code_base = int(r_base.get("termination_code") or 0)

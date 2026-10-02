@@ -57,7 +57,7 @@ F35_DERIVED_DEMAND = frozenset(
 )
 
 # Periodo del que se recalibra / siembra cada periodo activo.
-_PRIOR = {"check": "base", "shock": "check"}
+_PRIOR = {"check": "base"}
 
 
 def _drv():
@@ -132,18 +132,6 @@ def _seed_from_prior_if_asked(c: _Ctx) -> None:
         _drv()._seed_period_from_prior(c.m, _PRIOR[c.period], c.period)
 
 
-def _phip_one(c: _Ctx) -> None:
-    """phiP[t] = pcons[base] = 1.0 (convencion GAMS)."""
-    for r in c.params.sets.r:
-        try:
-            if hasattr(c.params, "calibration") and hasattr(
-                c.params.calibration, "phip"
-            ):
-                c.params.calibration.phip[(r,)] = 1.0
-        except Exception:
-            pass
-
-
 def _unfix_regy(c: _Ctx) -> None:
     """regY endogeno en compStat (GAMS regYeq)."""
     m = c.m
@@ -209,20 +197,9 @@ def _replicate_sp_reference(c: _Ctx) -> None:
     """Copia lo que fija y las cotas de un modelo de UN periodo con el mismo cierre:
     build_model fija ~500 ceros estructurales (afeall, p_rai, chiSave...) que
     apply_conditional_fixing no cubre; sin esto el matching fija las 639 vars
-    equivocadas.  El modelo de referencia se reutiliza mientras el cierre no
-    cambie (el check gtap usa el mismo que el base)."""
-    d, prep = _drv(), c.prep
-    if prep._sp_ref is not None and d._sp_ref_reusable(prep._sp_ref_closure, c.closure):
-        sp = prep._sp_ref
-        _log.info(
-            "%s period: reusing the base reference model (identical closure)",
-            c.period,
-        )
-    else:
-        sp = d._build_sp_reference(
-            c.params.sets, c.params, c.closure, prep.residual_region, model=c.m
-        )
-        prep._sp_ref, prep._sp_ref_closure = sp, c.closure
+    equivocadas."""
+    d = _drv()
+    sp = c.prep._reference_model(c.m, c.params, c.closure, c.period)
     d._replicate_sp_fixing(c.m, sp, c.period)
     d._replicate_sp_bounds(c.m, sp, c.period)
 
@@ -303,7 +280,6 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
         steps=(
             _freeze_inactive,
             _seed_from_prior_if_asked,
-            _phip_one,
             _unfix_regy,
             _collapse_pft,
             _replicate_sp_reference,
@@ -318,7 +294,6 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
             _freeze_inactive,
             _recalibrate_shares,
             _seed_from_prior_if_asked,
-            _phip_one,
             _unfix_regy,
             _deactivate_redundant_xft,
             _replicate_sp_reference,
@@ -367,6 +342,26 @@ class PeriodPreparer:
         self._closures = {"base": base_closure, "altertax": alt_closure}
         self._sp_ref = None
         self._sp_ref_closure = None
+
+    def _reference_model(self, m, params, closure, period: str):
+        """Modelo de un periodo con ``closure``.  Se guarda el del base y se
+        reutiliza mientras el cierre no cambie (el check gtap usa el mismo); uno
+        construido para otro cierre se usa y se descarta."""
+        d = _drv()
+        if self._sp_ref is not None and d._sp_ref_reusable(
+            self._sp_ref_closure, closure
+        ):
+            _log.info(
+                "%s period: reusing the base reference model (identical closure)",
+                period,
+            )
+            return self._sp_ref
+        sp = d._build_sp_reference(
+            params.sets, params, closure, self.residual_region, model=m
+        )
+        if self._sp_ref is None:
+            self._sp_ref, self._sp_ref_closure = sp, closure
+        return sp
 
     def recipe(self, period: str) -> _Recipe:
         if period == "check" and self.base_calibrated and not self.solve_check:

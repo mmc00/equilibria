@@ -16,6 +16,10 @@ Todas se activan con una variable de entorno que lleva el periodo en MAYUSCULAS
 Las exportaciones lanzan RuntimeError a proposito: paran la corrida justo antes
 del solve.  Los nombres para el check son los de siempre
 (EQUILIBRIA_DEBUG_EXPORT_NL_CHECK, ...).
+
+El driver llama a ``debug_before_solve`` antes de resolver el base y el check.
+El shock todavia tiene su propio hook (EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK) hasta
+que su preparacion pase a period_prep.
 """
 
 from __future__ import annotations

@@ -5,7 +5,11 @@ El driver (base -> check -> shock) prepara cada periodo con muchos pasos
 llamada al solver y al final de la corrida, el estado de cada componente:
 
   * Var: por celda, fixed / lb / ub / dominio / valor
-  * Constraint: por celda, si esta activa y su cuerpo
+  * Param: por celda, su valor (el cuerpo de una ecuacion solo nombra el Param)
+  * Constraint / Expression / Objective: si esta activa y su expresion, con los
+    numeros redondeados (un float recalibrado no debe depender de la plataforma)
+  * los atributos que el driver lee de ``m`` (_gtap_mode, _residual_region...)
+  * el objeto ``params`` que recibe el solver (p.ej. calibration.phip)
 
 Se reemplaza el solver por uno falso que solo toma la foto y devuelve code=1, asi
 que no hace falta PATH (unos 0,5 s por caso en gtap7_3x3).  La foto se guarda
@@ -21,10 +25,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
-from pyomo.environ import Constraint, Var
+from pyomo.environ import Constraint, Expression, Objective, Param, Var
 
 ROOT = Path(__file__).resolve().parents[3]
 DATASET = ROOT / "datasets" / "gtap7_3x3"
@@ -38,12 +43,17 @@ CASES: dict[str, tuple[str, bool, dict[str, Any], dict[str, Any]]] = {
     "gtap_ifsub0": ("gtap", False, {}, {}),
     "gtap_ifsub1": ("gtap", True, {}, {}),
     "altertax_ifsub0": ("altertax", False, {}, {}),
-    "altertax_ifsub1": ("altertax", True, {}, {"skip_base_solve": True}),
+    "altertax_ifsub1": ("altertax", True, {}, {}),
     "altertax_options_off": (
         "altertax",
         False,
         {},
-        {"holdfix_cd": False, "seed_from_prior": True, "mute_welfare": False},
+        {
+            "holdfix_cd": False,
+            "seed_from_prior": True,
+            "mute_welfare": False,
+            "skip_base_solve": True,
+        },
     ),
     "gtap_f35": ("gtap", False, {"base_calibrated": True}, {}),
     "gtap_f35_solve_check": (
@@ -65,6 +75,17 @@ def _num(x):
     return None if x is None else repr(round(float(x), 10))
 
 
+_FLOAT = re.compile(r"-?\d+\.\d+(?:[eE][-+]?\d+)?|-?\d+[eE][-+]?\d+")
+
+# Atributos que el driver y el solver leen del modelo.
+_M_ATTRS = ("_gtap_mode", "_residual_region", "_base_calibrated", "_sp_source")
+
+
+def _expr(e) -> str:
+    """Texto de una expresion con cada numero redondeado a 10 cifras."""
+    return _FLOAT.sub(lambda mt: f"{float(mt.group()):.10g}", str(e))
+
+
 def _component_hashes(m) -> dict[str, str]:
     out: dict[str, str] = {}
     for v in m.component_objects(Var, descend_into=True):
@@ -76,16 +97,46 @@ def _component_hashes(m) -> dict[str, str]:
                 f"{_num(vd.value)}\n".encode()
             )
         out[f"Var:{v.name}"] = h.hexdigest()[:16]
-    for c in m.component_objects(Constraint, descend_into=True):
+    for prm in m.component_objects(Param, descend_into=True):
         h = hashlib.sha256()
-        for idx in sorted(c, key=repr):
-            cd = c[idx]
-            h.update(f"{idx!r}|{cd.active}".encode())
-            if cd.active:
-                h.update(f"|{cd.body}|{_num(cd.lower)}|{_num(cd.upper)}".encode())
-            h.update(b"\n")
-        out[f"Con:{c.name}"] = h.hexdigest()[:16]
+        for idx in sorted(prm, key=repr):
+            try:
+                h.update(f"{idx!r}|{_num(prm[idx])}\n".encode())
+            except (TypeError, ValueError):
+                h.update(f"{idx!r}|{prm[idx]!r}\n".encode())
+        out[f"Param:{prm.name}"] = h.hexdigest()[:16]
+    for kind, ctype in (("Con", Constraint), ("Expr", Expression), ("Obj", Objective)):
+        for c in m.component_objects(ctype, descend_into=True):
+            h = hashlib.sha256()
+            for idx in sorted(c, key=repr):
+                cd = c[idx]
+                active = getattr(cd, "active", True)
+                h.update(f"{idx!r}|{active}".encode())
+                if active:
+                    if ctype is Constraint:
+                        h.update(
+                            f"|{_expr(cd.body)}|{_num(cd.lower)}|{_num(cd.upper)}".encode()
+                        )
+                    else:
+                        h.update(f"|{_expr(cd.expr)}".encode())
+                h.update(b"\n")
+            out[f"{kind}:{c.name}"] = h.hexdigest()[:16]
+    for a in _M_ATTRS:
+        out[f"Attr:{a}"] = repr(getattr(m, a, None))
     return out
+
+
+def _params_hash(params) -> str:
+    from equilibria.blocks.gtap.fingerprint import _feed, _Uncoverable
+
+    h = hashlib.sha256()
+    try:
+        for name, val in sorted(vars(params).items()):
+            h.update(name.encode() + b"=")
+            _feed(h, val, numeric=False)
+    except _Uncoverable as exc:
+        return f"uncoverable: {exc}"
+    return h.hexdigest()[:16]
 
 
 def _load_params():
@@ -113,12 +164,11 @@ def take(case: str, monkeypatch) -> list[dict]:
 
     class _FakeSolver:
         @staticmethod
-        def _run_path_capi_nonlinear_full(m, _params, **kw):
+        def _run_path_capi_nonlinear_full(m, params, **kw):
+            comps = _component_hashes(m)
+            comps["params"] = _params_hash(params)
             shots.append(
-                {
-                    "call": f"solve:{kw['closure_config'].name}",
-                    "components": _component_hashes(m),
-                }
+                {"call": f"solve:{kw['closure_config'].name}", "components": comps}
             )
             return {"termination_code": 1, "residual": 0.0}
 
