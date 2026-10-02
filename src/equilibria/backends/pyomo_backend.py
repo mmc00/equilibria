@@ -496,8 +496,9 @@ class PyomoBackend(Backend):
 
         results = self._solver_results
 
-        # iterations/time no existen en los resultados de Ipopt ni de PATH via
-        # AMPL (AttributeError) y message puede venir sin valor ("<undefined>").
+        # iterations no existe en los resultados de Ipopt ni de PATH via AMPL, time
+        # falta en un .sol leido aparte (AttributeError), y message puede venir sin
+        # valor ("<undefined>").
         return {
             "status": str(results.solver.status),
             "termination": str(results.solver.termination_condition),
