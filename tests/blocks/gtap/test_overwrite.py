@@ -76,14 +76,14 @@ def test_clear_limpia_todo():
     assert overwrite.registered(ShockBlock) == []
 
 
-def test_endogeno_de_algo_que_no_es_instrumento_falla():
+def test_endogenous_de_algo_que_no_es_instrumento_falla():
     from equilibria.templates.gtap.gtap_block_model import build_block_single_period
 
     p = nus333_params()
 
     @overwrite(ShockBlock)
     def mal(b):
-        b.endogeno("pft", ("USA", "LABOR"))
+        b.endogenous("pft", ("USA", "LABOR"))
 
     with pytest.raises(ValueError, match="pft"):
         build_block_single_period(p, p.sets, closure(), "ROW")
@@ -216,3 +216,108 @@ def test_cotas_de_gams_sueltan_la_celda_endogena(mp_desempleo):
     _apply_gams_bounds(m, "shock")
     assert m.aft["USA", "LABOR", "shock"].lb is None
     assert m.aft["ROW", "LABOR", "shock"].lb == 0.0
+
+
+# ------------------------------------------------------------------------ target
+
+
+def _register_qca_target() -> None:
+    """``b.target``: objetivo de cantidad de TBL94 (x[USA,MFG,MFG]), fijo en su base."""
+    from pyomo.environ import value
+
+    @overwrite(ShockBlock)
+    def qca_target(b):
+        b.target(
+            "qca_target",
+            ("USA", "MFG", "MFG"),
+            initial=lambda m, r, a, i: value(m.x[r, a, i]),
+            domains=("r", "a", "i"),
+        )
+
+
+def test_target_es_instrumento_fijo_en_su_valor_inicial():
+    """El objetivo es una Var nueva, registrada como instrumento y fija en
+    ``initial(m, *cell)``; las demas celdas tambien quedan fijas (sin fila)."""
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_single_period
+
+    p = nus333_params()
+    _register_qca_target()
+    sp = cast(Any, build_block_single_period(p, p.sets, closure(), "ROW"))
+
+    assert "qca_target" in sp._exogenous_instruments
+    assert all(vd.fixed for vd in sp.qca_target.values())
+    cell = ("USA", "MFG", "MFG")
+    assert float(value(sp.qca_target[cell])) == pytest.approx(
+        float(value(sp.x[cell])), rel=1e-12
+    )
+
+
+def test_target_multiperiodo_lleva_el_shock_solo_en_shock():
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from equilibria.templates.gtap.instruments import fix_instrument_shock
+
+    p = nus333_params()
+    _register_qca_target()
+    m, _ = cast(Any, build_block_model(p, p.sets, closure(), "ROW"))
+    cell = ("USA", "MFG", "MFG")
+    base = float(value(m.x[(*cell, "base")]))
+    for t in ("base", "check", "shock"):
+        assert m.qca_target[(*cell, t)].fixed, t
+        assert float(value(m.qca_target[(*cell, t)])) == pytest.approx(base), t
+
+    fix_instrument_shock(m, "qca_target", cell, factor=0.99)
+    assert float(value(m.qca_target[(*cell, "shock")])) == pytest.approx(0.99 * base)
+    assert float(value(m.qca_target[(*cell, "check")])) == pytest.approx(base)
+
+
+def test_target_con_nombre_de_variable_existente_falla():
+    from equilibria.templates.gtap.gtap_block_model import build_block_single_period
+
+    p = nus333_params()
+
+    @overwrite(ShockBlock)
+    def mal(b):
+        b.target("x", ("USA", "MFG", "MFG"), initial=lambda m, *c: 1.0)
+
+    with pytest.raises(ValueError, match="x"):
+        build_block_single_period(p, p.sets, closure(), "ROW")
+
+
+def test_block_edit_expone_lo_que_declararon_los_hooks():
+    """``_HookedBlock`` lee lo declarado por metodos publicos del ``BlockEdit``."""
+    from equilibria.blocks.gtap.overwrite import BlockEdit, Target
+
+    def ini(m, r):
+        return 1.0
+
+    edit = BlockEdit(None, {}, [])
+    edit.endogenous("aft", ("USA", "LABOR"))
+    edit.target("t", ("USA",), initial=ini, domains=("r",))
+    assert edit.endogenized() == {"aft": {("USA", "LABOR")}}
+    assert edit.declared_targets() == {"t": Target(("r",), [(("USA",), ini)])}
+
+
+def test_target_con_dominios_distintos_falla():
+    """Mismo objetivo con otros dominios: falla en el mismo hook y entre bloques."""
+    from equilibria.blocks.gtap.overwrite import BlockEdit, Target, collect_targets
+
+    edit = BlockEdit(None, {}, [])
+    edit.target("t", ("USA",), initial=lambda m, r: 1.0, domains=("r",))
+    with pytest.raises(ValueError, match="dominios"):
+        edit.target("t", ("USA",), initial=lambda m, r: 1.0, domains=("rp",))
+
+    def ini(m, r):
+        return 1.0
+
+    class _B:
+        def __init__(self, doms):
+            self.targets = {"t": Target(doms, [(("USA",), ini)])}
+
+    with pytest.raises(ValueError, match="dominios"):
+        collect_targets([_B(("r",)), _B(("rp",))])
+    got = collect_targets([_B(("r",)), _B(("r",))])
+    assert got == {"t": Target(("r",), [(("USA",), ini), (("USA",), ini)])}

@@ -38,6 +38,7 @@ SHOCK_INSTRUMENTS: tuple[str, ...] = (
     "lambdaf",
     "axp",
     "lambdam",
+    "lambdamg",
 )
 
 
@@ -50,11 +51,13 @@ class ShockBlock(Block):
     params: Any = None
 
     def model_post_init(self, __context: Any) -> None:
-        self.required_sets = ["r", "a", "f", "i", "aa", "rp"]
+        self.required_sets = ["r", "a", "f", "i", "aa", "rp", "m"]
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
         p, s = self.params, self.sets
-        byname = {d: list(set_manager.get(d)) for d in ("r", "a", "f", "i", "aa", "rp")}
+        byname = {
+            d: list(set_manager.get(d)) for d in ("r", "a", "f", "i", "aa", "rp", "m")
+        }
 
         def _instrument(name: str, data: dict, doms: tuple, default: float) -> None:
             variables[name] = Variable(
@@ -139,4 +142,9 @@ class ShockBlock(Block):
             ("r", "i", "rp"),
             1.0,
         )
+        # atd/ats/atf/atm -> lambdamg(m,r,i,rp,t) (margen, origen, bien, destino):
+        # eficiencia en el uso de margenes, xmgm = amgm*xwmg/lambdamg y
+        # pwmg = sum_m amgm*ptmg/lambdamg (model.gms:1000/1007). GAMS declara
+        # atd(r,t) (model.gms:206) pero ninguna ecuacion lo usa.
+        _instrument("lambdamg", dp.lambdamg_data(p, s), ("m", "r", "i", "rp"), 1.0)
         return []

@@ -1,5 +1,5 @@
 """ShockBlock, fase 2: imptx, prdtx_rai, fcttx, dintx_tgt, mintx_tgt, kappaf, exptx,
-pop, lambdaf, axp, lambdam.
+pop, lambdaf, axp, lambdam, lambdamg.
 
 Cada instrumento es una Var FIJA en su benchmark, registrada, y las ecuaciones que
 lo usan lo leen como Var: moverlo mueve su residuo. Si una ecuacion horneara el
@@ -32,6 +32,8 @@ READERS = {
     "lambdaf": ("eq_xfeq", "eq_pvaeq"),
     "axp": ("eq_nd", "eq_pxeq"),
     "lambdam": ("eq_xweq", "eq_pmteq"),
+    # atd -> lambdamg: demanda de margenes y su precio (model.gms:1000/1007).
+    "lambdamg": ("eq_xmgm", "eq_pwmg"),
 }
 
 

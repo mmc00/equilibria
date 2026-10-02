@@ -30,6 +30,8 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "lambdaf": ("eq_xfeq",),
     "axp": ("eq_pxeq",),
     "lambdam": ("eq_xweq",),
+    # Bajo ifSUB eq_xmgm se apaga (M_XMGM inline): la celda se rechaza.
+    "lambdamg": ("eq_xmgm",),
 }
 
 # Tasas de impuesto: la cota es la potencia 1+t > 0 (un subsidio, t<0, es valido).
