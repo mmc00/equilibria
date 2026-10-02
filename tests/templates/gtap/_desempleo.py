@@ -55,12 +55,12 @@ def register_desempleo_hooks() -> None:
     )
 
     @overwrite(ShockBlock)
-    def desempleo(b):
-        b.endogeno("aft", ("USA", "LABOR"))
+    def unemployment(b):
+        b.endogenous("aft", ("USA", "LABOR"))
 
     @overwrite(ClosureBlock)
-    def salario_real(b):
-        b.ecuacion(
+    def real_wage(b):
+        b.equation(
             "eq_wreal",
             ("USA", "LABOR"),
             lambda m, r, f: m.pft[r, f] == value(m.pft[r, f]) * ppriv_tornqvist(m, r),

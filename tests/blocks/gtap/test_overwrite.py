@@ -76,14 +76,14 @@ def test_clear_limpia_todo():
     assert overwrite.registered(ShockBlock) == []
 
 
-def test_endogeno_de_algo_que_no_es_instrumento_falla():
+def test_endogenous_de_algo_que_no_es_instrumento_falla():
     from equilibria.templates.gtap.gtap_block_model import build_block_single_period
 
     p = nus333_params()
 
     @overwrite(ShockBlock)
     def mal(b):
-        b.endogeno("pft", ("USA", "LABOR"))
+        b.endogenous("pft", ("USA", "LABOR"))
 
     with pytest.raises(ValueError, match="pft"):
         build_block_single_period(p, p.sets, closure(), "ROW")

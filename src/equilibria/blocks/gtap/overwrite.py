@@ -6,15 +6,15 @@ el modelo de un periodo que arma el driver (``_build_sp_reference``) y la calibr
 El hook corre despues del ``setup`` original del bloque y recibe un ``BlockEdit``::
 
     @overwrite(ShockBlock)
-    def desempleo(b):
-        b.endogeno("aft", ("USA", "LABOR"))
+    def unemployment(b):
+        b.endogenous("aft", ("USA", "LABOR"))
 
     @overwrite(ClosureBlock)
-    def salario_real(b):
-        b.ecuacion("eq_wreal", ("USA", "LABOR"),
+    def real_wage(b):
+        b.equation("eq_wreal", ("USA", "LABOR"),
                    lambda m, r, f: m.pft[r, f] == value(m.pft[r, f]) * ppriv_tornqvist(m, r))
 
-La regla de ``ecuacion`` se escribe sobre el modelo de UN periodo (sin ``t``): la
+La regla de ``equation`` se escribe sobre el modelo de UN periodo (sin ``t``): la
 reflexion multiperiodo la copia a base/check/shock. Al construirse, las Vars tienen sus
 niveles de base (cal.gms), asi que ``value(...)`` dentro de la regla es una constante
 de base.
@@ -35,7 +35,7 @@ Hook = Callable[["BlockEdit"], None]
 # clase del bloque -> {nombre de la funcion: hook}, en orden de registro.
 _HOOKS: dict[type, dict[str, Hook]] = {}
 
-# Orden en que se busca el set de cada etiqueta de una celda (``ecuacion``).
+# Orden en que se busca el set de cada etiqueta de una celda (``equation``).
 _SET_ORDER = ("r", "f", "a", "i", "aa", "rp")
 
 
@@ -81,9 +81,9 @@ class BlockEdit:
         self.set_manager = set_manager
         self.variables = variables
         self.equations = equations
-        self.endogenous: dict[str, set[tuple]] = {}
+        self._endogenous: dict[str, set[tuple]] = {}
 
-    def endogeno(self, name: str, cell: tuple) -> None:
+    def endogenous(self, name: str, cell: tuple) -> None:
         """La celda ``cell`` del instrumento ``name`` deja de ser exogena."""
         from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
 
@@ -92,28 +92,28 @@ class BlockEdit:
                 f"{name!r} no es un instrumento del ShockBlock; instrumentos: "
                 f"{sorted(SHOCK_INSTRUMENTS)}"
             )
-        self.endogenous.setdefault(name, set()).add(tuple(cell))
+        self._endogenous.setdefault(name, set()).add(tuple(cell))
 
-    def ecuacion(
+    def equation(
         self,
         name: str,
         cell: tuple,
-        regla: Callable[..., Any],
-        dominios: tuple[str, ...] | None = None,
+        rule: Callable[..., Any],
+        domains: tuple[str, ...] | None = None,
     ) -> None:
-        """Agrega la fila ``name`` sobre la celda ``cell``: ``regla(m, *cell)``."""
+        """Agrega la fila ``name`` sobre la celda ``cell``: ``rule(m, *cell)``."""
         cell = tuple(cell)
-        doms = dominios if dominios is not None else self._dominios(cell)
+        doms = domains if domains is not None else self._domains(cell)
 
         class _Eq(SymbolicEquation):
             def build_expression(self, pyomo_model, indices):
                 if tuple(indices) != cell:
                     return None
-                return regla(pyomo_model, *cell)
+                return rule(pyomo_model, *cell)
 
         self.equations.append(_Eq(name=name, domains=doms))
 
-    def _dominios(self, cell: tuple) -> tuple[str, ...]:
+    def _domains(self, cell: tuple) -> tuple[str, ...]:
         doms = []
         for label in cell:
             for s in _SET_ORDER:
@@ -123,7 +123,7 @@ class BlockEdit:
             else:
                 raise ValueError(
                     f"la etiqueta {label!r} no esta en ningun set {_SET_ORDER}; "
-                    "pasar dominios= explicitamente"
+                    "pasar domains= explicitamente"
                 )
         return tuple(doms)
 
@@ -140,7 +140,7 @@ class _HookedBlock(Block):
         edit = BlockEdit(set_manager, variables, equations)
         for fn in self.hooks:
             fn(edit)
-        for name, cells in edit.endogenous.items():
+        for name, cells in edit._endogenous.items():
             self.endogenous.setdefault(name, set()).update(cells)
         return edit.equations
 
