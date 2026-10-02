@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import re
 import subprocess
 import warnings
 from dataclasses import dataclass, field
@@ -56,7 +57,7 @@ class SolverResult:
         termination_condition: Pyomo termination condition
         objective_value: Final objective value (if applicable)
         solve_time: Time taken to solve (seconds)
-        iterations: Number of iterations
+        iterations: Number of iterations reported by the solver (None if unknown)
         residual: Final residual norm
         walras_value: Value of Walras check (should be ~0)
         variables: Dictionary of final variable values
@@ -68,12 +69,31 @@ class SolverResult:
     termination_condition: str | None = None
     objective_value: float | None = None
     solve_time: float = 0.0
-    iterations: int = 0
+    iterations: int | None = None
     residual: float = float("inf")
     walras_value: float = float("inf")
     variables: dict[str, Any] = field(default_factory=dict)
     success: bool = False
     message: str = ""
+
+
+def _solver_field(results: Any, name: str) -> Any:
+    """Un campo de ``results.solver``, o None si el solver no lo dio.
+
+    ``results.solver`` es un ListContainer de Pyomo: ``.get()`` no delega al primer
+    elemento (devolvia siempre el default) y el atributo si, pero un campo sin valor
+    vuelve como ``UndefinedData``, que es verdadero.
+    """
+    from pyomo.opt.results.container import UndefinedData
+
+    val = getattr(results.solver, name, None)
+    return None if isinstance(val, UndefinedData) else val
+
+
+def _iterations_from_message(message: str) -> int | None:
+    """El conteo de un mensaje AMPL como "68 iterations (0 for crash); ..." (PATH)."""
+    match = re.search(r"(\d+) iterations", message)
+    return int(match.group(1)) if match else None
 
 
 class GTAPSolver:
@@ -92,7 +112,7 @@ class GTAPSolver:
         >>> solver = GTAPSolver(model, closure, solver_name="ipopt")
         >>> result = solver.solve()
         >>> if result.success:
-        ...     print(f"Converged in {result.iterations} iterations")
+        ...     print(f"Converged in {result.iterations} iterations")  # None: no lo dio
     """
 
     def __init__(
@@ -1286,9 +1306,15 @@ class GTAPSolver:
         if hasattr(self.model, "walras"):
             walras_val = value(self.model.walras)
 
-        # Get iterations
-        iterations = results.solver.get("iterations", 0) or 0
-        solver_message = results.solver.get("message", None)
+        # Iteraciones y mensaje del solver. Si el solver no da el conteo, None:
+        # desconocido, no 0.
+        solver_message = _solver_field(results, "message")
+        if solver_message is not None:
+            # El lector .sol de Pyomo escapa ":" como "\\x3a".
+            solver_message = str(solver_message).replace("\\x3a", ":")
+        iterations = _solver_field(results, "iterations")
+        if iterations is None and solver_message:
+            iterations = _iterations_from_message(solver_message)
 
         # Extract variable values
         variables = self._extract_variable_values()
@@ -1296,7 +1322,12 @@ class GTAPSolver:
         # Build message
         message = f"Solver {solver_status}, Termination: {term_cond}"
         if success:
-            message = f"Converged in {iterations} iterations, Walras = {walras_val:.2e}"
+            if iterations is None:
+                message = f"Converged, Walras = {walras_val:.2e}"
+            else:
+                message = (
+                    f"Converged in {iterations} iterations, Walras = {walras_val:.2e}"
+                )
         if solver_message:
             message = f"{message}; {solver_message}"
 
