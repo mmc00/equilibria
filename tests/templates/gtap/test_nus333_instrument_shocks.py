@@ -302,7 +302,7 @@ ORACLES = {
         # el canal del shock: precio cif y volumen ROW->USA, oferta de margenes
         "pmcif": {("ROW", "AGR", "USA"): -1.471087, ("ROW", "MFG", "USA"): -0.391736},
         "xw": {("ROW", "AGR", "USA"): 2.667191, ("ROW", "MFG", "USA"): 0.786517},
-        "xa": {("USA", "SER", "tmg"): -1.2606, ("ROW", "SER", "tmg"): -1.287219},
+        "xaa": {("USA", "SER", "tmg"): -1.2606, ("ROW", "SER", "tmg"): -1.287219},
     },
     "ME8": {
         "xp": {
