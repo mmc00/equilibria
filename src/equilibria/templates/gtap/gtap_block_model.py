@@ -420,7 +420,8 @@ def _fix_instruments(pm: Any) -> int:
     endo = getattr(pm, "_endogenous_instrument_cells", None) or {}
     n = 0
     present = []
-    for name in SHOCK_INSTRUMENTS:
+    # Los objetivos de @overwrite (b.target) son instrumentos como los del ShockBlock.
+    for name in (*SHOCK_INSTRUMENTS, *(getattr(pm, "_targets", None) or {})):
         var = getattr(pm, name, None)
         if var is None:
             continue
@@ -456,7 +457,12 @@ def build_block_single_period(
     model = Model(name="gtap_blocks_sp")
     for name, elems in setmap.items():
         model.add_set(ESet(name=name, elements=elems))
-    from equilibria.blocks.gtap.overwrite import endogenous_cells, with_overwrites
+    from equilibria.blocks.gtap.overwrite import (
+        add_targets,
+        collect_targets,
+        endogenous_cells,
+        with_overwrites,
+    )
 
     units = []
     for cls in _block_classes():
@@ -475,11 +481,14 @@ def build_block_single_period(
         units.append(unit)
         model.add_block(unit)
 
+    targets = collect_targets(units)
+    add_targets(model, targets)
     backend = PyomoBackend()
     backend.build(model)
     pm = backend.pyomo_model
     _strip_con_suffix(pm)
     pm._endogenous_instrument_cells = endogenous_cells(units)
+    pm._targets = targets
 
     if apply_scaling:
         # El escalado de benchmark vive en su propio modulo: muta los VarData del
@@ -503,6 +512,11 @@ def build_block_single_period(
 
     _fix_no_demand_cells(pm)
     _fix_cd_welfare(pm, params, sets)
+    # Objetivos (b.target): su valor es initial(m, *celda) con los niveles de base ya
+    # escalados; el multiperiodo lo copia a los 3 periodos.
+    for name, t in targets.items():
+        for cell, initial in t.cells:
+            getattr(pm, name)[cell].set_value(float(initial(pm, *cell)))
     _fix_instruments(pm)
 
     pm._residual_region = residual_region
@@ -624,6 +638,7 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         m._endogenous_instrument_cells = dict(
             getattr(sp_model, "_endogenous_instrument_cells", {}) or {}
         )
+        m._targets = dict(getattr(sp_model, "_targets", {}) or {})
         _fix_instruments(m)
 
 

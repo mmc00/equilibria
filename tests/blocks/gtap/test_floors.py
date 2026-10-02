@@ -234,6 +234,9 @@ def test_el_declarador_vive_en_un_solo_sitio():
         # Reals sin cota; el valor lo fija el compositor, no una cota. Los 9 se
         # declaran en un solo helper (_instrument).
         "shock.py": {"<bucle:63>"},
+        # Objetivos de @overwrite (b.target): instrumentos como los del ShockBlock,
+        # Reals sin cota y fijos; add_targets los declara despues de los bloques.
+        "overwrite.py": {"<bucle:262>"},
     }
     reales: dict[str, set[str]] = {}
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
