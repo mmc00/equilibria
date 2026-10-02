@@ -30,6 +30,8 @@ def test_factor_multiplica_solo_la_celda_shock(nus333_mp_model):
         ("aft", ("USA", "CAPITAL"), {}, "exactly one of factor/value"),
         ("aft", ("USA", "CAPITAL"), {"factor": 1.1, "value": 2.0}, "exactly one"),
         ("aft", ("USA", "CAPITAL"), {"factor": 0.0}, "must be > 0"),
+        # USA->USA no lleva margen (amgm=0): eq_xmgm no existe, el shock se perderia
+        ("lambdamg", ("SER", "USA", "AGR", "USA"), {"factor": 1.1}, "would not enter"),
     ],
 )
 def test_rechaza_con_mensaje_claro(nus333_mp_model, name, index, kw, msg):

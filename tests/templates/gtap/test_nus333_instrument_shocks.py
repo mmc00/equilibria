@@ -7,6 +7,8 @@ fijado en el periodo shock (``gams_shock/comp_shock.gms`` + ``shocks/<EXP>.inc``
 GAMS se valido antes contra GEMPACK (``.sl4`` del .EXP), 32 celdas por ejercicio:
 TBL46A 0,0079pp, TBL65A 0,0287pp, TBL54A 0,0021pp, TBL62A 0,0054pp, TBL78 0,0464pp,
 TBL93 0,0042pp, ME5 0,0004pp, ME8 0,0004pp (ME8-DIR.sl4).
+TBL79: qxs/pcif/pfob de los 12 flujos y qst a <=0,003pp (qxw de SER difiere por
+definicion: GEMPACK suma la oferta de margenes qst, GAMS xet no).
 ME9B/ME9C: GAMS vs GEMPACK hasta 0,85pp sobre cambios de ~215% (brecha en estudio,
 prueba de escala ME9B-S10 pendiente); aca se mide equilibria contra GAMS. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
@@ -24,144 +26,39 @@ Traduccion GEMPACK -> niveles:
 - ``rate% N from file X.shk`` (ME8): el .shk trae el shock de ELIMINAR cada
   impuesto; subir la tasa N% es ``x = -N/100 x`` ese valor, celda por celda.
 - ``afeall``/``aoall``/``ams``: % directo del shifter -> ``factor = 1+x/100``.
+- ``target% N from file X.shk`` (TBL53): lleva la tasa ad valorem a N% (libro
+  p.155). El .shk trae e = % de la potencia que elimina el impuesto, 1+t0 =
+  1/(1+e/100) -> potencia ``x = 100*((1+N/100)*(1+e/100) - 1)``. gtap.exe no
+  entiende target% (lo traduce RunGTAP): no hay .sl4; GAMS calza con la Tabla 5.3
+  del libro (qint USA +1,04 / -0,12 / +0,01) a 2 decimales.
+- ``atd`` (TBL79): % directo de la eficiencia del transporte hacia el destino ->
+  ``lambdamg(m,r,i,d)`` (model.gms:1000/1007) en las celdas con margen (GAMS declara
+  ``atd`` pero ninguna ecuacion lo usa).
 
 LOCAL-only: SKIP si falta nus333 o el .prm.
 """
 
 from __future__ import annotations
 
+import importlib
+import sys
+from pathlib import Path
+from typing import Any, cast
+
 import pytest
 
 pytestmark = pytest.mark.integration
 
 TOL_PP = 0.002
-ACTS = ("AGR", "MFG", "SER")
+ROOT = Path(__file__).resolve().parents[3]
 
-# EXP: (prm, [(instrumento, indice, tipo, x)])
-SHOCKS = {
-    "TBL46A": ("esubd0.8.prm", [("imptx", ("ROW", "MFG", "USA"), "power", 8.6637)]),
-    "TBL65A": (
-        "default.prm",
-        [("prdtx_rai", ("USA", "MFG", "MFG"), "power", -10.9414)],
-    ),
-    "TBL54A": (
-        "ESUBVAmfg1.2.prm",
-        [("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 4.2969)],
-    ),
-    "TBL62A": (
-        "default.prm",
-        [("dintx_tgt", ("USA", "MFG", "hhd"), "power", -13.7359)],
-    ),
-    "TBL64": (
-        "default.prm",
-        [("lambdaf", ("USA", "LABOR", a), "pct", 10.0) for a in ACTS],
-    ),
-    "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
-    "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
-    # ME5: tfe -> fcttx, tfd -> dintx_tgt, tfm -> mintx_tgt (agente: actividad AGR).
-    "ME5": (
-        "default.prm",
-        [
-            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", 4.2896),
-            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", 3.2700),
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 4.1161),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 0.5917),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 4.2713),
-            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", 4.2910),
-            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", 1.9788),
-            ("mintx_tgt", ("USA", "SER", "AGR"), "power", 4.7064),
-        ],
-    ),
-    # ME8: +1% a todas las tasas de USA; las 39 celdas distintas de 0 de los 11
-    # .shk (tinc -> kappaf, txs -> exptx, el resto con los instrumentos de arriba).
-    "ME8": (
-        "ballard.prm",
-        [
-            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", -0.04289619),
-            ("fcttx", ("USA", "LABOR", "AGR"), "power_fct", 0.075687323),
-            ("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 0.13085938),
-            ("fcttx", ("USA", "LABOR", "SER"), "power_fct", 0.13085938),
-            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", -0.032699599),
-            ("fcttx", ("USA", "CAPITAL", "MFG"), "power_fct", 0.031535168),
-            ("fcttx", ("USA", "CAPITAL", "SER"), "power_fct", 0.031535168),
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", -0.041161242),
-            ("dintx_tgt", ("USA", "AGR", "SER"), "power", -1.192e-07),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", -0.0059173703),
-            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0053162163),
-            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 0.028774016),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", -0.04271328),
-            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 0.0028086472),
-            ("dintx_tgt", ("USA", "SER", "SER"), "power", 0.0013261114),
-            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", -0.042909613),
-            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", -0.019788332),
-            ("mintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0043851116),
-            ("mintx_tgt", ("USA", "MFG", "SER"), "power", 0.022134778),
-            ("mintx_tgt", ("USA", "SER", "AGR"), "power", -0.047064238),
-            ("prdtx_rai", ("USA", "AGR", "AGR"), "power", 0.0024332063),
-            ("prdtx_rai", ("USA", "MFG", "MFG"), "power", 0.010459609),
-            ("prdtx_rai", ("USA", "SER", "SER"), "power", 0.028050888),
-            ("dintx_tgt", ("USA", "AGR", "hhd"), "power", 0.042836466),
-            ("dintx_tgt", ("USA", "MFG", "hhd"), "power", 0.091956644),
-            ("dintx_tgt", ("USA", "SER", "hhd"), "power", 0.0064833277),
-            ("mintx_tgt", ("USA", "AGR", "hhd"), "power", 0.058277063),
-            ("mintx_tgt", ("USA", "MFG", "hhd"), "power", 0.079622064),
-            ("mintx_tgt", ("USA", "SER", "hhd"), "power", 0.0001112099),
-            ("kappaf", ("USA", "LAND", "AGR"), "power_kappa", 0.082899618),
-            ("kappaf", ("USA", "LABOR", "AGR"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "LABOR", "MFG"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "LABOR", "SER"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "CAPITAL", "AGR"), "power_kappa", 0.082899523),
-            ("kappaf", ("USA", "CAPITAL", "MFG"), "power_kappa", 0.082899523),
-            ("kappaf", ("USA", "CAPITAL", "SER"), "power_kappa", 0.082899618),
-            ("imptx", ("ROW", "AGR", "USA"), "power", 0.015394439),
-            ("imptx", ("ROW", "MFG", "USA"), "power", 0.012148236),
-            ("exptx", ("USA", "MFG", "ROW"), "power", 0.0029257515),
-        ],
-    ),
-    # ME9B/ME9C (2010-2050, climatechange.prm): cierre estandar. aoreg -> axp de
-    # todas las actividades (en ME9C x 0,89 en AGR: aoall y aoreg se multiplican en
-    # niveles), pop -> pop, qe -> aft.
-    "ME9B": (
-        "climatechange.prm",
-        [
-            ("axp", ("USA", "AGR"), "pct", 31.94),
-            ("axp", ("USA", "MFG"), "pct", 31.94),
-            ("axp", ("USA", "SER"), "pct", 31.94),
-            ("axp", ("ROW", "AGR"), "pct", 42.31),
-            ("axp", ("ROW", "MFG"), "pct", 42.31),
-            ("axp", ("ROW", "SER"), "pct", 42.31),
-            ("pop", ("USA",), "pct", 32.3),
-            ("pop", ("ROW",), "pct", 37.3),
-            ("aft", ("USA", "LABOR"), "pct", 24.1),
-            ("aft", ("ROW", "LABOR"), "pct", 38.4),
-            ("aft", ("USA", "CAPITAL"), "pct", 60.6),
-            ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
-            ("aft", ("USA", "LAND"), "pct", -0.93),
-            ("aft", ("ROW", "LAND"), "pct", 4.4),
-        ],
-    ),
-    "ME9C": (
-        "climatechange.prm",
-        [
-            ("axp", ("USA", "AGR"), "pct", 17.4266),
-            ("axp", ("USA", "MFG"), "pct", 31.94),
-            ("axp", ("USA", "SER"), "pct", 31.94),
-            ("axp", ("ROW", "AGR"), "pct", 26.6559),
-            ("axp", ("ROW", "MFG"), "pct", 42.31),
-            ("axp", ("ROW", "SER"), "pct", 42.31),
-            ("pop", ("USA",), "pct", 32.3),
-            ("pop", ("ROW",), "pct", 37.3),
-            ("aft", ("USA", "LABOR"), "pct", 24.1),
-            ("aft", ("ROW", "LABOR"), "pct", 38.4),
-            ("aft", ("USA", "CAPITAL"), "pct", 60.6),
-            ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
-            ("aft", ("USA", "LAND"), "pct", 10.07),
-            ("aft", ("ROW", "LAND"), "pct", 15.4),
-        ],
-    ),
-}
+# Los shocks salen de ``run_burfisher.EXERCISES``, la misma tabla de la que
+# gen_gams.py arma el oraculo GAMS (una sola copia). Los ORACLES de abajo son los
+# valores de GAMS escritos a mano.
+# scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
+sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
+EXERCISES = cast(Any, importlib.import_module("run_burfisher")).EXERCISES
 
-# GAMS capFlex con el shock del .EXP solo en 'shock' — % cambio shock/check.
 ORACLES = {
     "TBL46A": {
         "xp": {
@@ -275,6 +172,44 @@ ORACLES = {
         "pi": {("USA",): -0.037497, ("ROW",): 0.038001},
         "xiagg": {("USA",): -0.09493, ("ROW",): 0.028993},
     },
+    "TBL53": {
+        "xp": {
+            ("USA", "AGR"): 1.040791,
+            ("USA", "MFG"): -0.1206,
+            ("USA", "SER"): 0.010949,
+            ("ROW", "AGR"): -0.240524,
+            ("ROW", "MFG"): -0.370481,
+            ("ROW", "SER"): 0.156015,
+        },
+        # qint de la Tabla 5.3 del libro: +1,04 / -0,12 / +0,01
+        "nd": {
+            ("USA", "AGR"): 1.040791,
+            ("USA", "MFG"): -0.1206,
+            ("USA", "SER"): 0.010949,
+        },
+        "rore": {("USA",): -1.926356, ("ROW",): -1.926356},
+        "regy": {("USA",): -5.241516, ("ROW",): 2.924634},
+        "pi": {("USA",): -3.018604, ("ROW",): 2.694196},
+        "xiagg": {("USA",): -8.853645, ("ROW",): 2.682595},
+    },
+    "TBL79": {
+        "xp": {
+            ("USA", "AGR"): -0.212697,
+            ("USA", "MFG"): -0.113089,
+            ("USA", "SER"): 0.026357,
+            ("ROW", "AGR"): 0.027396,
+            ("ROW", "MFG"): 0.036812,
+            ("ROW", "SER"): -0.015794,
+        },
+        "rore": {("USA",): 0.020113, ("ROW",): 0.020113},
+        "regy": {("USA",): -0.002613, ("ROW",): 0.003995},
+        "pi": {("USA",): -0.085911, ("ROW",): -0.001057},
+        "xiagg": {("USA",): 0.12907, ("ROW",): -0.019117},
+        # el canal del shock: precio cif y volumen ROW->USA, oferta de margenes
+        "pmcif": {("ROW", "AGR", "USA"): -1.471087, ("ROW", "MFG", "USA"): -0.391736},
+        "xw": {("ROW", "AGR", "USA"): 2.667191, ("ROW", "MFG", "USA"): 0.786517},
+        "xaa": {("USA", "SER", "tmg"): -1.2606, ("ROW", "SER", "tmg"): -1.287219},
+    },
     "ME8": {
         "xp": {
             ("USA", "AGR"): 0.19338,
@@ -318,6 +253,9 @@ ORACLES = {
         "xiagg": {("USA",): 117.972772, ("ROW",): 265.824712},
     },
 }
+
+# EXP: (prm, [(instrumento, indice, tipo, x)])
+SHOCKS = {exp: EXERCISES[exp] for exp in ORACLES}
 
 
 def _level(m, p, name, idx, kind, x):

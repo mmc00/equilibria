@@ -132,6 +132,28 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
     # ams -> lambdam (origen, bien, destino)
     "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
+    # tfd = target% N from file tfd.shk -> dintx_tgt: la tasa pasa a N% (libro p.155);
+    # potencia x = 100*((1+N/100)*(1+e/100) - 1), e del .shk (elimina el impuesto).
+    "TBL53": (
+        "esubd4.prm",
+        [
+            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 9.3219304),
+            ("dintx_tgt", ("USA", "AGR", "MFG"), "power", 5.0),
+            ("dintx_tgt", ("USA", "AGR", "SER"), "power", 5.0000125),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 10.6509107),
+            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 9.4152162),
+            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 6.8348582),
+            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 6.3567546),
+            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 1.7135180),
+            ("dintx_tgt", ("USA", "SER", "SER"), "power", 1.8647366),
+        ],
+    ),
+    # atd -> lambdamg (margen, origen, bien, destino): en nus333 solo SER es margen y
+    # solo ROW->USA lleva margen hacia USA; el resto de las celdas es inerte.
+    "TBL79": (
+        "default.prm",
+        [("lambdamg", ("SER", "ROW", i, "USA"), "pct", 10.0) for i in ("AGR", "MFG")],
+    ),
     # TBL813 (Tabla 8.13): +1% a la tasa del impuesto al consumo privado de MFG
     # domestico en USA. GEMPACK: `tpdall = rate% 1 from file tpdall.shk`, y el .shk
     # trae el shock que ELIMINA cada impuesto (-9.1956644 = 1/1.101269 - 1). Subir la
