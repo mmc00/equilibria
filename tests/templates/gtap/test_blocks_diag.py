@@ -120,10 +120,14 @@ def test_form_diff_cross_model_identical_reports_equal():
         m = ConcreteModel()
         m.I = Set(initialize=[1, 2])
         m.x = Var(m.I, initialize=1.0)
-        return {"cell": m.x[1] + 2 * m.x[2] == 0}
+        return m, {"cell": m.x[1] + 2 * m.x[2] == 0}
 
-    block = _build()
-    monolith = _build()  # a DIFFERENT ConcreteModel, identical algebra
+    # Los modelos se mantienen vivos: si solo se guardara la expresion, un GC entre
+    # los dos builds desprende las Vars del primero ("[Unattached VarData]") y el
+    # diff sale distinto segun cuando corra el GC (medido: gc.collect() entre los
+    # dos _build() lo reproduce siempre).
+    _m_block, block = _build()
+    _m_mono, monolith = _build()  # a DIFFERENT ConcreteModel, identical algebra
 
     diffs = form_diff(block, monolith)
     assert diffs == []

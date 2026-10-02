@@ -66,6 +66,11 @@ def cache_key(
     Returns ``None`` when any component cannot be computed -- the caller must then
     skip the cache entirely.
     """
+    from equilibria.blocks.gtap.overwrite import overwrite
+
+    # Un hook @overwrite del notebook cambia el modelo y no esta en la clave.
+    if overwrite.active():
+        return None
     # The ref GDX only seeds, but its values land in the built model: key on its
     # CONTENT (two different GDX at one path, or one GDX at two paths).
     gdx = "nogdx"

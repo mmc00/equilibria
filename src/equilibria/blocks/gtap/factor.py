@@ -492,8 +492,16 @@ class FactorBlock(Block):
             _label = f"gtap-{len(list(sets.i))}x{len(list(sets.r))}"
         except Exception:
             _label = "gtap"
-        key = seed_cache.cache_key(
-            _label, closure, str(residual_region), params, ref_gdx=ref_gdx
+        from equilibria.blocks.gtap.overwrite import overwrite
+        from equilibria.templates.gtap.instruments import exogenous_test
+
+        # Un hook @overwrite cambia el settle y no esta en la clave: sin cache.
+        key = (
+            None
+            if overwrite.active()
+            else seed_cache.cache_key(
+                _label, closure, str(residual_region), params, ref_gdx=ref_gdx
+            )
         )
         if key is not None:
             cached = seed_cache.load(key)
@@ -505,14 +513,15 @@ class FactorBlock(Block):
             mp.seed_all_periods(m, ref_gdx)
         solve_block_model(m, params, closure, ref_gdx, mode="gtap", settle_only=True)
 
-        instruments: frozenset[str] = getattr(m, "_exogenous_instruments", frozenset())
         settled: dict[str, dict] = {}
         for v in m.component_objects(Var, active=True):
             # Los instrumentos de shock son exogenos (fijos en su benchmark): no
-            # son parte del punto asentado y el driver no los re-siembra.
-            if v.name in instruments:
-                continue
+            # son parte del punto asentado y el driver no los re-siembra. Salvo las
+            # celdas que un hook @overwrite volvio endogenas.
+            exo = exogenous_test(m, v.name)
             for idx in v:
+                if exo(idx):
+                    continue
                 if not (isinstance(idx, tuple) and idx and idx[-1] == "check"):
                     continue
                 try:

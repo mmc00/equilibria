@@ -412,7 +412,12 @@ def _fix_instruments(pm: Any) -> int:
     que no los libere ni los re-siembre. Devuelve cuantas celdas fijo.
     """
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
+    from equilibria.templates.gtap.instruments import instrument_cell
 
+    # Celdas que un hook @overwrite volvio endogenas: quedan libres. La marca la pone
+    # build_block_single_period al construir el SP, y build_vars la copia del SP al
+    # multiperiodo.
+    endo = getattr(pm, "_endogenous_instrument_cells", None) or {}
     n = 0
     present = []
     for name in SHOCK_INSTRUMENTS:
@@ -420,7 +425,10 @@ def _fix_instruments(pm: Any) -> int:
         if var is None:
             continue
         present.append(name)
-        for vd in var.values():
+        libres = endo.get(name, frozenset())
+        for idx, vd in var.items():
+            if libres and instrument_cell(idx) in libres:
+                continue
             if not vd.fixed:
                 vd.fix()
                 n += 1
@@ -448,8 +456,13 @@ def build_block_single_period(
     model = Model(name="gtap_blocks_sp")
     for name, elems in setmap.items():
         model.add_set(ESet(name=name, elements=elems))
+    from equilibria.blocks.gtap.overwrite import endogenous_cells, with_overwrites
+
+    units = []
     for cls in _block_classes():
-        model.add_block(
+        # Los hooks @overwrite del notebook (si los hay) se aplican aca, asi que los
+        # ve todo el que construye un SP: build_block_model, el driver y la calibracion.
+        unit = with_overwrites(
             _mk_unit(
                 cls,
                 sets,
@@ -459,11 +472,14 @@ def build_block_single_period(
                 savf_flag=savf_flag,
             )
         )
+        units.append(unit)
+        model.add_block(unit)
 
     backend = PyomoBackend()
     backend.build(model)
     pm = backend.pyomo_model
     _strip_con_suffix(pm)
+    pm._endogenous_instrument_cells = endogenous_cells(units)
 
     if apply_scaling:
         # El escalado de benchmark vive en su propio modulo: muta los VarData del
@@ -605,6 +621,9 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         # gates, que arman el modelo paso a paso) los tenga fijos y registrados. Si
         # quedaran libres, _replicate_sp_fixing los fijaria con el valor del SP del
         # shock y el arancel +10% entraria vivo en todas las ecuaciones.
+        m._endogenous_instrument_cells = dict(
+            getattr(sp_model, "_endogenous_instrument_cells", {}) or {}
+        )
         _fix_instruments(m)
 
 

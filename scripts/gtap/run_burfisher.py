@@ -307,16 +307,27 @@ def _strip(s):
     )
 
 
-def compare(m, p, gdx: Path) -> dict:
+def compare(m, p, gdx: Path | dict) -> dict:
     """Todas las celdas de check y shock contra GAMS (misma logica que los gates).
 
-    Los instrumentos del ShockBlock son datos de entrada, no resultados: no entran al %,
-    se cuentan aparte (instr_cells / instr_bad) para ver que el shock es el de GAMS.
+    ``gdx``: el GDX de GAMS, o los niveles ya leidos ``{var: {clave: nivel}}`` (las
+    claves como las da ``_diff_core.gams_levels``; asi lo usan los tests, sin gdxdump).
+
+    Los instrumentos exogenos del ShockBlock son datos de entrada, no resultados: no
+    entran al %, se cuentan aparte (instr_cells / instr_bad) para ver que el shock es
+    el de GAMS. Una celda que un hook @overwrite volvio endogena es un resultado mas.
     """
     from _diff_core import gams_levels, list_populated_vars, split_t
     from pyomo.environ import value
 
-    instruments = getattr(m, "_exogenous_instruments", frozenset())
+    from equilibria.templates.gtap.instruments import exogenous_test
+
+    if isinstance(gdx, dict):
+        levels: dict = gdx
+        names = list(levels)
+    else:
+        levels = {}
+        names = list_populated_vars(gdx)
     out = {}
     for period in ("check", "shock"):
         tot = 0
@@ -324,16 +335,21 @@ def compare(m, p, gdx: Path) -> dict:
         instr_bad = []
         match = dict.fromkeys(TOLS, 0)
         worst = []
-        for vn in list_populated_vars(gdx):
+        for vn in names:
             if vn.lower() in SKIP or vn.lower() in RF:
                 continue
-            try:
-                g = gams_levels(gdx, vn)
-            except Exception:
+            if vn not in levels:
+                try:
+                    levels[vn] = gams_levels(gdx, vn)
+                except Exception:
+                    levels[vn] = None
+            g = levels[vn]
+            if g is None:
                 continue
             pv = getattr(m, ALIAS.get(vn, vn), None) or getattr(m, vn.lower(), None)
             if pv is None:
                 continue
+            exo = exogenous_test(m, pv.local_name)
             for fk, gval in g.items():
                 body, t = split_t(fk)
                 if t != period:
@@ -352,7 +368,7 @@ def compare(m, p, gdx: Path) -> dict:
                     continue
                 d = abs(val - gval)
                 rel = d / abs(gval) if abs(gval) > 1e-12 else (0.0 if d < 1e-6 else 9e9)
-                if pv.local_name in instruments:
+                if exo((*st, period)):
                     instr_cells += 1
                     if d > 1e-6 and rel > TOLS[0]:
                         instr_bad.append((vn, list(st), val, gval))
