@@ -77,6 +77,25 @@ class SolverResult:
     message: str = ""
 
 
+def _solver_field(results: Any, name: str) -> Any:
+    """Un campo de ``results.solver``, o None si el solver no lo dio.
+
+    ``results.solver`` es un ListContainer de Pyomo: ``.get()`` no delega al primer
+    elemento (devolvia siempre el default) y el atributo si, pero un campo sin valor
+    vuelve como ``UndefinedData``, que es verdadero.
+    """
+    from pyomo.opt.results.container import UndefinedData
+
+    val = getattr(results.solver, name, None)
+    return None if isinstance(val, UndefinedData) else val
+
+
+def _iterations_from_message(message: str) -> int | None:
+    """El conteo de un mensaje AMPL como "68 iterations (0 for crash); ..." (PATH)."""
+    match = re.search(r"(\d+) iterations", message)
+    return int(match.group(1)) if match else None
+
+
 class GTAPSolver:
     """Solver for GTAP CGE models.
 
@@ -93,7 +112,7 @@ class GTAPSolver:
         >>> solver = GTAPSolver(model, closure, solver_name="ipopt")
         >>> result = solver.solve()
         >>> if result.success:
-        ...     print(f"Converged in {result.iterations} iterations")
+        ...     print(f"Converged in {result.iterations} iterations")  # None: no lo dio
     """
 
     def __init__(
@@ -1287,15 +1306,15 @@ class GTAPSolver:
         if hasattr(self.model, "walras"):
             walras_val = value(self.model.walras)
 
-        # Iteraciones y mensaje del solver. results.solver es un ListContainer:
-        # .get() no delega al primer elemento y devolvia siempre el default, asi
-        # que se reportaba "0 iterations" (PATH via AMPL hacia 50 en el 9x10). El
-        # atributo si delega. Si el solver no da el conteo, None: desconocido, no 0.
-        solver_message = getattr(results.solver, "message", None) or None
-        iterations = getattr(results.solver, "iterations", None)
+        # Iteraciones y mensaje del solver. Si el solver no da el conteo, None:
+        # desconocido, no 0.
+        solver_message = _solver_field(results, "message")
+        if solver_message is not None:
+            # El lector .sol de Pyomo escapa ":" como "\\x3a".
+            solver_message = str(solver_message).replace("\\x3a", ":")
+        iterations = _solver_field(results, "iterations")
         if iterations is None and solver_message:
-            m = re.search(r"(\d+) iterations", str(solver_message))
-            iterations = int(m.group(1)) if m else None
+            iterations = _iterations_from_message(solver_message)
 
         # Extract variable values
         variables = self._extract_variable_values()
