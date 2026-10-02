@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import re
 import subprocess
 import warnings
 from dataclasses import dataclass, field
@@ -56,7 +57,7 @@ class SolverResult:
         termination_condition: Pyomo termination condition
         objective_value: Final objective value (if applicable)
         solve_time: Time taken to solve (seconds)
-        iterations: Number of iterations
+        iterations: Number of iterations reported by the solver (None if unknown)
         residual: Final residual norm
         walras_value: Value of Walras check (should be ~0)
         variables: Dictionary of final variable values
@@ -68,7 +69,7 @@ class SolverResult:
     termination_condition: str | None = None
     objective_value: float | None = None
     solve_time: float = 0.0
-    iterations: int = 0
+    iterations: int | None = None
     residual: float = float("inf")
     walras_value: float = float("inf")
     variables: dict[str, Any] = field(default_factory=dict)
@@ -1286,9 +1287,15 @@ class GTAPSolver:
         if hasattr(self.model, "walras"):
             walras_val = value(self.model.walras)
 
-        # Get iterations
-        iterations = results.solver.get("iterations", 0) or 0
-        solver_message = results.solver.get("message", None)
+        # Iteraciones y mensaje del solver. results.solver es un ListContainer:
+        # .get() no delega al primer elemento y devolvia siempre el default, asi
+        # que se reportaba "0 iterations" (PATH via AMPL hacia 50 en el 9x10). El
+        # atributo si delega. Si el solver no da el conteo, None: desconocido, no 0.
+        solver_message = getattr(results.solver, "message", None) or None
+        iterations = getattr(results.solver, "iterations", None)
+        if iterations is None and solver_message:
+            m = re.search(r"(\d+) iterations", str(solver_message))
+            iterations = int(m.group(1)) if m else None
 
         # Extract variable values
         variables = self._extract_variable_values()
@@ -1296,7 +1303,12 @@ class GTAPSolver:
         # Build message
         message = f"Solver {solver_status}, Termination: {term_cond}"
         if success:
-            message = f"Converged in {iterations} iterations, Walras = {walras_val:.2e}"
+            if iterations is None:
+                message = f"Converged, Walras = {walras_val:.2e}"
+            else:
+                message = (
+                    f"Converged in {iterations} iterations, Walras = {walras_val:.2e}"
+                )
         if solver_message:
             message = f"{message}; {solver_message}"
 
