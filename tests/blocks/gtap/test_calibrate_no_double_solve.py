@@ -447,10 +447,18 @@ def test_seed_cache_key_covers_shifts_and_elasticities():
     ``3x3CobbDouglas.prm`` run would be served the ``default.prm`` seed.
     """
     from equilibria.blocks.gtap import seed_cache
-    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap import GTAPParameters as _GTAPParameters
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    closure = GTAPClosureConfig()
 
     def _key(p):
-        return seed_cache.cache_key("gtap-3x2", None, "ROW", p)
+        return seed_cache.cache_key("gtap-3x2", closure, "ROW", p)
+
+    def GTAPParameters():  # noqa: N802 -- con benchmark: sin datos no hay clave
+        p = _GTAPParameters()
+        p.benchmark.evfb[("USA", "Land", "SER")] = 1.0
+        return p
 
     base = GTAPParameters()
     base.elasticities.esubva[("USA", "SER")] = 1.26

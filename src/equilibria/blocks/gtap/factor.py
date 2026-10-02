@@ -485,9 +485,9 @@ class FactorBlock(Block):
         )
 
         # Disk cache: the settled_seed is a pure function of the settle inputs
-        # (dataset + closure + benchmark params), so re-runs of the same input skip
-        # the whole settle. The benchmark-param digest in the key identifies the
-        # dataset; the |i|x|r| label is just for a readable filename.
+        # (data + closure + build/solve code), so re-runs of the same input skip
+        # the whole settle. A None key means those inputs cannot be fully
+        # covered: skip the cache rather than risk a stale seed.
         try:
             _label = f"gtap-{len(list(sets.i))}x{len(list(sets.r))}"
         except Exception:
@@ -496,11 +496,17 @@ class FactorBlock(Block):
         from equilibria.templates.gtap.instruments import exogenous_test
 
         # Un hook @overwrite cambia el settle y no esta en la clave: sin cache.
-        usar_cache = not overwrite.active()
-        key = seed_cache.cache_key(_label, closure, str(residual_region), params)
-        cached = seed_cache.load(key) if usar_cache else None
-        if cached is not None:
-            return cached
+        key = (
+            None
+            if overwrite.active()
+            else seed_cache.cache_key(
+                _label, closure, str(residual_region), params, ref_gdx=ref_gdx
+            )
+        )
+        if key is not None:
+            cached = seed_cache.load(key)
+            if cached is not None:
+                return cached
 
         m, mp = build_block_model(params, sets, closure, residual_region)
         if ref_gdx is not None:
@@ -525,7 +531,7 @@ class FactorBlock(Block):
                 body = idx[:-1]
                 body = body[0] if len(body) == 1 else body
                 settled.setdefault(v.name, {})[body] = val
-        if usar_cache:
+        if key is not None:
             seed_cache.save(key, settled)
         return settled
 

@@ -676,9 +676,9 @@ def build_block_model(
     # with byte-identical parity from both paths (94.5% within-1pp, 0.1523pp, code=1).
     # Only `m` is cached: `mp` is the builder and is cheap to re-instantiate (the line
     # above), while `m` is the 631k-constraint object that costs the minutes.
-    # The key covers the input files AND the source of every module that builds the
-    # model, so an edited equation or a regenerated .har can never be served a stale
-    # model. See blocks/gtap/model_cache.py.
+    # The key covers the input data (content, not paths) AND the source of the code
+    # folders that build and solve the model, so an edited equation or a regenerated
+    # .har can never be served a stale model. See blocks/gtap/fingerprint.py.
     _mc = None
     _mc_key = None
     if _model_cache.enabled():

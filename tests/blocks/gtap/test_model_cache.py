@@ -187,8 +187,21 @@ def test_base_calibrated_change_invalidates(params):
     assert _key(params) != _key(params, base_calibrated=False)
 
 
-def test_ref_gdx_presence_invalidates(params):
-    assert _key(params) != _key(params, ref_gdx="/some/out.gdx")
+def test_ref_gdx_is_keyed_by_content(params, tmp_path):
+    """The ref GDX seeds the built model: its content, not its path, is the key."""
+    a = tmp_path / "a.gdx"
+    b = tmp_path / "b.gdx"
+    same_as_a = tmp_path / "copy.gdx"
+    a.write_bytes(b"gdx-a")
+    b.write_bytes(b"gdx-b")
+    same_as_a.write_bytes(b"gdx-a")
+    assert _key(params) != _key(params, ref_gdx=a)
+    assert _key(params, ref_gdx=a) != _key(params, ref_gdx=b)
+    assert _key(params, ref_gdx=a) == _key(params, ref_gdx=same_as_a)
+
+
+def test_key_is_none_when_the_ref_gdx_is_unreadable(params, tmp_path):
+    assert _key(params, ref_gdx=tmp_path / "missing.gdx") is None
 
 
 # ── Data invalidation is by CONTENT, which is what path+mtime could not do ──────
@@ -226,59 +239,21 @@ def test_two_datasets_do_not_collide():
 
 
 def test_code_change_invalidates(params, monkeypatch, tmp_path):
-    """Editing an equation module must invalidate — this is what makes it safe to leave on."""
+    """Editing an equation module must invalidate — this is what makes it safe to leave on.
+
+    Which files count is pinned in test_cache_fingerprint.py (the shared key).
+    """
+    from equilibria.blocks.gtap import fingerprint
+
     fake_root = tmp_path / "equilibria"
-    for rel in model_cache._CODE_MODULES:
-        p = fake_root / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("original\n")
-    monkeypatch.setattr(model_cache, "_package_root", lambda: fake_root)
+    edited = fake_root / "templates/gtap/gtap_model_equations.py"
+    edited.parent.mkdir(parents=True)
+    edited.write_text("original\n")
+    monkeypatch.setattr(fingerprint, "_package_root", lambda: fake_root)
 
     before = _key(params)
-    edited = fake_root / "templates/gtap/gtap_model_equations.py"
     edited.write_text("original\n# one changed equation\n")
     assert _key(params) != before, "a changed equation module must invalidate the key"
-
-
-def test_every_listed_code_module_is_covered(params, monkeypatch, tmp_path):
-    """Each module in _CODE_MODULES must actually move the key when edited."""
-    fake_root = tmp_path / "equilibria"
-    for rel in model_cache._CODE_MODULES:
-        p = fake_root / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("original\n")
-    monkeypatch.setattr(model_cache, "_package_root", lambda: fake_root)
-
-    for rel in model_cache._CODE_MODULES:
-        base = _key(params)
-        f = fake_root / rel
-        f.write_text("edited\n")
-        assert _key(params) != base, f"{rel} does not affect the key"
-        f.write_text("original\n")
-
-
-def test_listed_code_modules_exist_in_the_real_tree():
-    """Guard against a typo or a renamed module silently dropping out of the key."""
-    root = model_cache._package_root()
-    missing = [rel for rel in model_cache._CODE_MODULES if not (root / rel).exists()]
-    assert not missing, f"listed in _CODE_MODULES but absent: {missing}"
-
-
-def test_the_pyomo_translation_layer_is_in_the_key():
-    """These decide the built model as directly as the blocks do.
-
-    pyomo_backend.py sets every Var's bounds and domain; a policy change there
-    changes the whole model without touching a block.  It was absent from the
-    original list, so such a change served stale models in silence.
-    """
-    for rel in (
-        "backends/pyomo_backend.py",
-        "backends/pyomo_equations.py",
-        "blocks/base.py",
-        "core/symbolic_equations.py",
-        "core/variables.py",
-    ):
-        assert rel in model_cache._CODE_MODULES, f"{rel} missing from _CODE_MODULES"
 
 
 # ── Round-trip and failure modes ────────────────────────────────────────────────────
