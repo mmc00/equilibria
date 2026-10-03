@@ -612,8 +612,12 @@ class GTAPModelEquations:
         candidate_paths = self._raw_gdx_paths()
         import subprocess
 
-        gdxdump = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
-        if not Path(gdxdump).exists() or not candidate_paths:
+        from equilibria.babel.gdx.gdxdump import locate_gdxdump
+
+        # Era una ruta fija a GAMS 48: fuera de esa maquina el `.exists()`
+        # fallaba y esto devolvia {} EN SILENCIO, sin leer nada.
+        gdxdump = locate_gdxdump()
+        if gdxdump is None or not candidate_paths:
             return {}
         for variant in (name, name.lower(), name.upper()):
             for path in candidate_paths:
