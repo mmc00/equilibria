@@ -8,16 +8,14 @@ import contextlib
 
 from pyomo.environ import ConcreteModel, Set
 
-from equilibria.blocks.gtap.periods import PERIODS
+from equilibria.blocks.gtap.periods import PERIODS, as_key
 
 from .gtap_sets import declare_pyomo_sets
 
 __all__ = ["PERIODS"]
 
 
-def _astuple(k):
-    """Normalize an index key to a tuple (handles scalar keys)."""
-    return k if isinstance(k, tuple) else (k,)
+_astuple = as_key
 
 
 class GTAPMultiPeriodModel:

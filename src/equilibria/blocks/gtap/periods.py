@@ -11,3 +11,8 @@ BASE = "base"
 CHECK = "check"
 SHOCK = "shock"
 PERIODS = (BASE, CHECK, SHOCK)
+
+
+def as_key(k: object) -> tuple:
+    """Un indice como tupla (una clave escalar ``k`` es ``(k,)``)."""
+    return k if isinstance(k, tuple) else (k,)

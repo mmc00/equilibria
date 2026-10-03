@@ -43,7 +43,7 @@ from collections.abc import Callable
 from typing import Any, NamedTuple
 
 from equilibria.blocks.base import Block
-from equilibria.blocks.gtap.periods import CHECK, SHOCK
+from equilibria.blocks.gtap.periods import CHECK, SHOCK, as_key
 from equilibria.core.symbolic_equations import SymbolicEquation
 
 Hook = Callable[["BlockEdit"], None]
@@ -192,8 +192,9 @@ class BlockEdit:
         periodos (se agrega despues de todos los bloques, ``add_targets``). La fila
         ``eq_<name>`` vive solo en el shock: ``quantity[shock] = name[shock] x
         quantity[check]`` (``shock_only``), como el ``swap`` de GEMPACK. En el
-        modelo de un periodo (sin check) ancla a la base: ``quantity = name x
-        quantity_base``."""
+        modelo de un periodo (sin check) ancla a la base SIN escalar: la constante se
+        lee al construir la fila, antes de ``apply_production_scaling``; el
+        multiperiodo la reescribe."""
         from pyomo.environ import value
 
         cell = tuple(cell)
@@ -334,17 +335,17 @@ class _PeriodIndex:
         self._t = period
 
     def __getitem__(self, k: Any) -> Any:
-        key = k if isinstance(k, tuple) else (k,)
-        return self._var[(*key, self._t)]
+        return self._var[(*as_key(k), self._t)]
 
 
 class _AtPeriod:
     """Vista de UN periodo del modelo multiperiodo: ``v[k]`` es ``v[(*k, t)]``.
 
     Deja evaluar una regla escrita para el modelo de un periodo (``quantity`` de
-    ``b.target``) sobre las Vars de cualquier periodo. Solo traduce Vars: otro
-    componente indexado (un Param o una Expression por periodo) falla, en vez de
-    leerse sin el periodo."""
+    ``b.target``) sobre las Vars de cualquier periodo. Una Var escalar del modelo de
+    un periodo esta indexada solo por el periodo: se devuelve su celda. Solo traduce
+    Vars: otro componente indexado (un Param o una Expression por periodo) falla, en
+    vez de leerse sin el periodo."""
 
     def __init__(self, m: Any, period: str) -> None:
         self._m = m
@@ -355,6 +356,8 @@ class _AtPeriod:
 
         comp = getattr(self._m, name)
         if getattr(comp, "ctype", None) is Var:
+            if comp.dim() == 1:
+                return comp[self._t]
             return _PeriodIndex(comp, self._t)
         if callable(getattr(comp, "is_indexed", None)) and comp.is_indexed():
             raise ValueError(
