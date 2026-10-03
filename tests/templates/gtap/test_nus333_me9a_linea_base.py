@@ -8,7 +8,8 @@ que en el notebook del ejercicio:
 
 - ``ShockBlock``: ``axp[r,a]`` endogeno y el objetivo ``gdp_target`` (``b.target``):
   ``rgdpmp[shock] = gdp_target x rgdpmp[check]``;
-- ``ClosureBlock``: ``eq_aoreg``, ``axp[r,a] = axp[r,AGR]`` (un solo shifter por region);
+- ``ClosureBlock``: ``eq_aoreg``, ``axp[r,a]/axp0[r,a] = axp[r,AGR]/axp0[r,AGR]``: el
+  mismo % en las 3 actividades (un solo shifter por region, como ``aoreg``);
 - el shock: ``gdp_target`` x 2,096 / 3,845 (``fix_instrument_shock``).
 
 En ME9 el check NO reproduce la base (``rgdpmp`` ROW +0,030%), asi que el objetivo
@@ -79,6 +80,8 @@ ORACLE = {
 
 def register_me9a_hooks() -> None:
     """Los hooks del notebook ``burfisher_exec_me9a.ipynb``."""
+    from pyomo.environ import value
+
     from equilibria.blocks.gtap import ClosureBlock, ShockBlock, overwrite
 
     @overwrite(ShockBlock, period="shock")
@@ -92,12 +95,15 @@ def register_me9a_hooks() -> None:
 
     @overwrite(ClosureBlock, period="shock")
     def uniform_productivity(b):
+        # El mismo % que AGR: axp/axp0 parejo (axp0 = base; en el check axp queda
+        # fija en la base, asi que es el % de check a shock, como axpreg en GAMS).
         for r in REGS:
             for a in ("MFG", "SER"):
                 b.equation(
                     "eq_aoreg",
                     (r, a),
-                    lambda m, r, a: m.axp[r, a] == m.axp[r, "AGR"],
+                    lambda m, r, a: m.axp[r, a] / value(m.axp[r, a])
+                    == m.axp[r, "AGR"] / value(m.axp[r, "AGR"]),
                     domains=("r", "a"),
                 )
 

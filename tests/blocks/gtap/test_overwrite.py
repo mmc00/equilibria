@@ -383,9 +383,12 @@ def test_vista_de_periodo_traduce_vars_y_rechaza_lo_demas():
     m.x = Var(keys, initialize=1.0)
     m.p = Param(keys, initialize=2.0, mutable=True)
     m.k = Param(initialize=3.0)
+    # Una Var escalar del modelo de un periodo queda indexada solo por el periodo.
+    m.s = Var(["base", "check", "shock"], initialize=1.0)
 
     view = _AtPeriod(m, "check")
     assert view.x["USA"] is m.x["USA", "check"]
+    assert view.s is m.s["check"]
     assert view.k is m.k
     with pytest.raises(ValueError, match="p"):
         _ = view.p
