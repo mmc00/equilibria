@@ -147,7 +147,7 @@ loop(tsim,
 *     El shock del .EXP, traducido a niveles en un .inc por ejercicio (--shockInc).
 *     iterloop.gms ya fijo los instrumentos de tsim en su valor previo (el del check),
 *     asi que .l(...,tsim) es el valor de check.
-$include "%shockInc%" 
+$include "%shockInc%"
    ) ;
 
 $if not set iterLim $setglobal iterLim 1000

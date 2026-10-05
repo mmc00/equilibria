@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ def _load_module() -> Any:
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # el dataclass Run lo busca ahi
     spec.loader.exec_module(module)
     return module
 
@@ -90,3 +92,34 @@ def test_parches_aplican_sobre_las_fuentes_del_repo(gen: Any, tmp_path: Path) ->
 def test_deflactor_desconocido_falla(gen: Any, tmp_path: Path) -> None:
     with pytest.raises(KeyError):
         gen.shock_inc("TBL65B", tmp_path, defl="noexiste")
+
+
+@pytest.mark.parametrize("kind", ["pct", "power", "power_kappa", "power_fct"])
+def test_formula_gams_es_la_de_equilibria(gen: Any, kind: str) -> None:
+    """El texto GAMS evaluado da lo mismo que run_burfisher.shocked con numeros."""
+    f, chk, fs = 1.1, 0.13, 0.02
+    texto = str(gen.shocked(kind, gen.GamsExpr("C"), f, gen.GamsExpr("F")))
+    assert eval(texto, {"C": chk, "F": fs}) == pytest.approx(
+        gen.shocked(kind, chk, f, fs), rel=1e-15
+    )
+
+
+def test_tasa_con_kind_distinto_de_pct_falla(gen: Any) -> None:
+    with pytest.raises(ValueError, match="lambdava"):
+        gen.gams_line("lambdava", ("USA", "AGR"), "power", 1.0)
+
+
+def test_warm_vars_estan_en_model_gms(gen: Any) -> None:
+    """execute_loadpoint carga WARM_VARS: tienen que ser variables del modelo."""
+    import re
+
+    model = (GAMS_SRC / "model.gms").read_text()
+    faltan = [v for v in gen.WARM_VARS if not re.search(rf"\b{v}\(", model)]
+    assert faltan == []
+
+
+def test_faltantes_del_dataset(gen: Any, tmp_path: Path) -> None:
+    for f in ("basedata.har", "sets.har", "baserate.har", "default.prm"):
+        (tmp_path / f).touch()
+    faltan = gen.missing_inputs(tmp_path, ["TBL45A", "ME9A"])
+    assert faltan == [tmp_path / "climatechange.prm"]

@@ -4,7 +4,8 @@ Lee los shocks de la MISMA tabla que usa equilibria (``run_burfisher.EXERCISES``
 escribe ``<EXP>.inc`` (el shock en niveles, en la celda del periodo shock) y corre
 ``gams/comp_shock.gms`` (base/check/shock con model.gms + cal.gms del GTAP 7 de
 referencia). Salida: ``<out_dir>/<EXP>_capFlex.gdx``, la que lee
-``run_burfisher.py --gams-dir <out_dir>``.
+``run_burfisher.py --gams-dir <out_dir>``. El shock en niveles sale de la misma
+formula que usa equilibria (``run_burfisher.shocked``), escrita como expresion GAMS.
 
 Antes de correr, parchea una copia de las fuentes GAMS de referencia (nunca el repo):
 
@@ -30,20 +31,22 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from run_burfisher import EXERCISES, _me9  # noqa: E402
+from run_burfisher import EXERCISES, me9, shocked  # noqa: E402
 
 GAMS_SRC = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "scripts"
 COMP_SHOCK = Path(__file__).resolve().parent / "gams" / "comp_shock.gms"
 HAR_FILES = ("basedata.har", "sets.har", "baserate.har")
 
 
-def q(*labels: str) -> str:
+def gams_labels(*labels: str) -> str:
+    """Las etiquetas de un indice GAMS entre comillas: 'USA','LABOR'."""
     return ",".join(f"'{x}'" for x in labels)
 
 
@@ -59,12 +62,13 @@ UNEMP = {
 # Deflactor del salario real (GEMPACK ppriv, un Divisia): (expresion en la fila del
 # shock, su valor en check). Medido contra TBL65B.sl4 (qe LABOR USA +38,7830):
 # tornq +38,7809, cv +38,842, pabs +38,844, pcons +37,014. Default: tornq.
-DEFL = {
+UNEMP_DEFLATORS = {
     "pcons": ("pcons(r,t)", "pcons.l({r},'check')"),
     "cv": ("cv(r,'hhd',t)", "cv.l({r},'hhd','check')"),
     "pabs": ("pabs(r,t)", "pabs.l({r},'check')"),
     # Tornqvist del consumo de hogares contra check (= Divisia de ppriv en un paso):
     # ln P = sum_i 1/2 (s_i,check + s_i) ln(pa_i/pa_i,check), s_i = pa*xa/sum pa*xa.
+    # sck(r,i) y pack(r,i) son s_i y pa_i en check (los fija unemp_lines).
     "tornq": (
         "exp(sum(i$xaFlag(r,i,'hhd'), 0.5*(sck(r,i) + pa(r,i,'hhd',t)*xa(r,i,'hhd',t)"
         "/sum(j$xaFlag(r,j,'hhd'), pa(r,j,'hhd',t)*xa(r,j,'hhd',t)))"
@@ -91,7 +95,7 @@ GDP = {
     "ME9A": (
         "climatechange.prm",
         {"USA": 109.6, "ROW": 284.5},
-        [s for s in _me9(land=(-0.93, 4.4), ao_agr=0.0, afe=None) if s[0] != "axp"],
+        [s for s in me9(land=(-0.93, 4.4), ao_agr=0.0, afe=None) if s[0] != "axp"],
     ),
 }
 
@@ -100,85 +104,116 @@ GDP = {
 # otro ejercicio GAMS (homotopia, nada de equilibria). ME9D = ME9C + afeall LABOR:
 # desde el check PATH termina Locally Infeasible; desde el shock de ME9C, Optimal.
 # Las Vars son las endogenas del shock (sin instrumentos .fx: pop va fijo en el .inc).
-WARM_VARS = [
-    "arent",
-    "axp",
-    "chiSave",
-    "chif",
-    "dintx",
-    "factY",
-    "fcttx",
-    "gdpmp",
-    "kapEnd",
-    "kappaf",
-    "kstock",
-    "lambdaf",
-    "lambdam",
-    "lambdava",
-    "mintx",
-    "nd",
-    "p",
-    "pa",
-    "pabs",
-    "pcons",
-    "pd",
-    "pe",
-    "pet",
-    "pf",
-    "pfact",
-    "pft",
-    "pg",
-    "pgdpmp",
-    "phi",
-    "phiP",
-    "pi",
-    "pigbl",
-    "pmt",
-    "pnd",
-    "pnum",
-    "ps",
-    "psave",
-    "ptmg",
-    "pva",
-    "pwfact",
-    "px",
-    "regY",
-    "rgdpmp",
-    "rorc",
-    "rore",
-    "rorg",
-    "rsav",
-    "savf",
-    "va",
-    "x",
-    "xa",
-    "xd",
-    "xds",
-    "xet",
-    "xf",
-    "xft",
-    "xi",
-    "xigbl",
-    "xm",
-    "xmt",
-    "xp",
-    "xs",
-    "xtmg",
-    "xw",
-    "yc",
-    "yg",
-    "yi",
-    "ytax",
-    "ytaxInd",
-    "ytaxTot",
-    "ytaxshr",
-]
+WARM_VARS = (  # noqa: SIM905
+    "arent axp chiSave chif dintx factY fcttx gdpmp kapEnd kappaf kstock lambdaf "
+    "lambdam lambdava mintx nd p pa pabs pcons pd pe pet pf pfact pft pg pgdpmp phi "
+    "phiP pi pigbl pmt pnd pnum ps psave ptmg pva pwfact px regY rgdpmp rorc rore "
+    "rorg rsav savf va x xa xd xds xet xf xft xi xigbl xm xmt xp xs xtmg xw yc yg yi "
+    "ytax ytaxInd ytaxTot ytaxshr"
+).split()
 WARM = {"ME9D": "ME9C"}
 
 
 def all_exercises() -> list[str]:
     """Los 37 de EXERCISES (ME9C antes que ME9D) y los 4 de cierre propio."""
     return [*EXERCISES, *UNEMP, *QCA, *GDP]
+
+
+class GamsExpr:
+    """Una expresion GAMS en texto, para evaluar ``run_burfisher.shocked`` sobre ella.
+
+    Pone parentesis solo donde hacen falta: ``(1 + x)*1.1 - 1``.
+    """
+
+    def __init__(self, text: str, is_sum: bool = False) -> None:
+        self.text = text
+        self.is_sum = is_sum  # suma/resta al tope: necesita () dentro de * / -
+
+    @staticmethod
+    def _text(x: object, wrap_sum: bool = False) -> str:
+        if isinstance(x, GamsExpr):
+            return f"({x.text})" if wrap_sum and x.is_sum else x.text
+        return repr(x)
+
+    def _sum(self, a: object, op: str, b: object) -> GamsExpr:
+        right = self._text(b, wrap_sum=op == "-")
+        return GamsExpr(f"{self._text(a)} {op} {right}", is_sum=True)
+
+    def __add__(self, o: object) -> GamsExpr:
+        return self._sum(self, "+", o)
+
+    def __radd__(self, o: object) -> GamsExpr:
+        return self._sum(o, "+", self)
+
+    def __sub__(self, o: object) -> GamsExpr:
+        return self._sum(self, "-", o)
+
+    def __rsub__(self, o: object) -> GamsExpr:
+        return self._sum(o, "-", self)
+
+    def __mul__(self, o: object) -> GamsExpr:
+        return GamsExpr(f"{self._text(self, True)}*{self._text(o, True)}")
+
+    def __truediv__(self, o: object) -> GamsExpr:
+        return GamsExpr(f"{self._text(self, True)}/{self._text(o, True)}")
+
+    def __str__(self) -> str:
+        return self.text
+
+
+def _act(a: str) -> str:
+    return "a_" + a
+
+
+def _com(i: str) -> str:
+    return "c_" + i
+
+
+def _agent(aa: str) -> str:
+    return aa if aa in ("hhd", "gov", "inv") else _act(aa)
+
+
+# Instrumento de equilibria -> (variable GAMS, su indice desde el de equilibria).
+LEVEL_VARS = {
+    "aft": ("aft", lambda r, fa: (r, fa)),  # Parameter por t, sin .fx/.l
+    "imptx": ("imptx", lambda e, i, d: (e, _com(i), d)),
+    "exptx": ("exptx", lambda e, i, d: (e, _com(i), d)),
+    "lambdam": ("lambdam", lambda e, i, d: (e, _com(i), d)),
+    "prdtx_rai": ("prdtx", lambda r, a, i: (r, _act(a), _com(i))),
+    "fcttx": ("fcttx", lambda r, fa, a: (r, fa, _act(a))),
+    "kappaf": ("kappaf", lambda r, fa, a: (r, fa, _act(a))),
+    "dintx_tgt": ("dintx", lambda r, i, aa: (r, _com(i), _agent(aa))),
+    "mintx_tgt": ("mintx", lambda r, i, aa: (r, _com(i), _agent(aa))),
+    "pop": ("pop", lambda r: (r,)),
+    "lambdamg": ("lambdamg", lambda mg, e, i, d: (_com(mg), e, _com(i), d)),
+}
+# Instrumentos que en GAMS crecen por una tasa: x = x(t-1)*(1+tasa). Con kind "pct",
+# la tasa es pct/100 (model.gms: lambdava/avaall, lambdaf/afeall, axp/axpall).
+RATE_VARS = {
+    "lambdava": ("avaall", lambda r, a: (r, _act(a))),
+    "lambdaf": ("afeall", lambda r, fa, a: (r, fa, _act(a))),
+    "axp": ("axpall", lambda r, a: (r, _act(a))),
+}
+
+
+def gams_line(name: str, idx: tuple, kind: str, pct: float) -> str:
+    """Una sentencia GAMS por shock. .l(...,tsim) es el valor de check (iterloop)."""
+    if name in RATE_VARS:
+        if kind != "pct":
+            raise ValueError(f"{name}: kind {kind!r}, se esperaba 'pct'")
+        var, index = RATE_VARS[name]
+        return f"{var}.fx({gams_labels(*index(*idx))},tsim) = {pct / 100!r} ;"
+    if name not in LEVEL_VARS:
+        raise ValueError(f"instrumento sin traduccion a GAMS: {name!r}")
+    var, index = LEVEL_VARS[name]
+    k = gams_labels(*index(*idx))
+    if name == "aft":
+        lhs = chk = f"aft({k},tsim)"
+    else:
+        lhs, chk = f"{var}.fx({k},tsim)", f"{var}.l({k},tsim)"
+    fs = GamsExpr(f"fctts.l({k},tsim)")
+    value = shocked(kind, GamsExpr(chk), 1 + pct / 100, fs)
+    return f"{lhs} = {value} ;"
 
 
 def warm_lines(out: Path, src: str) -> list[str]:
@@ -193,7 +228,7 @@ def gdp_lines(targets: dict[str, float]) -> list[str]:
     """Libera axpreg de cada region en el shock y fija rgdpmp en su objetivo."""
     out = []
     for r, pct in targets.items():
-        k = q(r)
+        k = gams_labels(r)
         out.append(f"gdpFlag({k}) = 1 ;")
         out.append(f"gdpTgt({k}) = rgdpmp.l({k},'check')*{1 + pct / 100!r} ;")
         out.append(f"axpreg.lo({k},tsim) = -inf ; axpreg.up({k},tsim) = +inf ;")
@@ -204,7 +239,7 @@ def qca_lines(cells: list[tuple[str, str, str, float]]) -> list[str]:
     """Libera prdtx de cada celda en el shock y fija x en su objetivo."""
     out = []
     for r, a, i, pct in cells:
-        k = q(r, "a_" + a, "c_" + i)
+        k = gams_labels(r, _act(a), _com(i))
         out.append(f"qcaFlag({k}) = 1 ;")
         out.append(f"qcaTgt({k}) = x.l({k},'check')*{1 + pct / 100!r} ;")
         out.append(f"prdtx.lo({k},tsim) = -inf ; prdtx.up({k},tsim) = +inf ;")
@@ -213,12 +248,12 @@ def qca_lines(cells: list[tuple[str, str, str, float]]) -> list[str]:
 
 def unemp_lines(cells: list[tuple[str, str]], defl: str) -> list[str]:
     """Activa el salario real fijo en el shock, en su valor de check."""
+    check_value = UNEMP_DEFLATORS[defl][1]
     out = []
     for r, f in cells:
-        k = q(r, f)
-        rr = q(r)
+        k, rr = gams_labels(r, f), gams_labels(r)
         out.append(f"wrFlag({k}) = 1 ;")
-        out.append(f"wreal0({k}) = pft.l({k},'check')/{DEFL[defl][1].format(r=rr)} ;")
+        out.append(f"wreal0({k}) = pft.l({k},'check')/{check_value.format(r=rr)} ;")
         out.append(f"pack({rr},i) = pa.l({rr},i,'hhd','check') ;")
         out.append(
             f"sck({rr},i)$xaFlag({rr},i,'hhd') = "
@@ -229,82 +264,30 @@ def unemp_lines(cells: list[tuple[str, str]], defl: str) -> list[str]:
     return out
 
 
-def gams_line(name: str, idx: tuple, kind: str, pct: float) -> str:
-    """Una sentencia GAMS por shock. .l(...,tsim) es el valor de check (iterloop)."""
-    f = 1 + pct / 100
-    if name == "lambdava":  # lambdava = lambdava(t-1)*(1+avaall)
-        r, a = idx
-        return f"avaall.fx({q(r, 'a_' + a)},tsim) = {pct / 100!r} ;"
-    if name == "aft":  # xft = aft*(...)^etaf, aft Parameter por t
-        r, fa = idx
-        return f"aft({q(r, fa)},tsim) = aft({q(r, fa)},tsim)*{f!r} ;"
-    if name == "imptx":
-        e, i, d = idx
-        k = q(e, "c_" + i, d)
-        return f"imptx.fx({k},tsim) = (1 + imptx.l({k},tsim))*{f!r} - 1 ;"
-    if name == "prdtx_rai":
-        r, a, i = idx
-        k = q(r, "a_" + a, "c_" + i)
-        return f"prdtx.fx({k},tsim) = (1 + prdtx.l({k},tsim))*{f!r} - 1 ;"
-    if name == "fcttx":
-        r, fa, a = idx
-        k = q(r, fa, "a_" + a)
-        return (
-            f"fcttx.fx({k},tsim) = (1 + fctts.l({k},tsim) + fcttx.l({k},tsim))*{f!r}"
-            f" - 1 - fctts.l({k},tsim) ;"
-        )
-    if name in ("dintx_tgt", "mintx_tgt"):
-        var = name.removesuffix("_tgt")
-        r, i, aa = idx
-        k = q(r, "c_" + i, aa if aa in ("hhd", "gov", "inv") else "a_" + aa)
-        return f"{var}.fx({k},tsim) = (1 + {var}.l({k},tsim))*{f!r} - 1 ;"
-    if name == "kappaf":
-        # tinc = potencia EVFB/EVOS = 1/(1-kappaf) (cal.gms) -> 1-kappaf' = (1-kappaf)/f.
-        r, fa, a = idx
-        k = q(r, fa, "a_" + a)
-        return f"kappaf.fx({k},tsim) = 1 - (1 - kappaf.l({k},tsim))/{f!r} ;"
-    if name == "exptx":  # txs = potencia 1+exptx (cal.gms)
-        e, i, d = idx
-        k = q(e, "c_" + i, d)
-        return f"exptx.fx({k},tsim) = (1 + exptx.l({k},tsim))*{f!r} - 1 ;"
-    if name == "pop":  # pop(r,t) variable fija (cal.gms)
-        (r,) = idx
-        return f"pop.fx({q(r)},tsim) = pop.l({q(r)},tsim)*{f!r} ;"
-    if name == "lambdaf":  # lambdaf = lambdaf(t-1)*(1+afeall)
-        r, fa, a = idx
-        return f"afeall.fx({q(r, fa, 'a_' + a)},tsim) = {pct / 100!r} ;"
-    if name == "axp":  # axp = axp(t-1)*(1+axpall)
-        r, a = idx
-        return f"axpall.fx({q(r, 'a_' + a)},tsim) = {pct / 100!r} ;"
-    if name == "lambdamg":  # xmgm = amgm*xwmg/lambdamg (model.gms)
-        mg, e, i, d = idx
-        k = q("c_" + mg, e, "c_" + i, d)
-        return f"lambdamg.fx({k},tsim) = lambdamg.l({k},tsim)*{f!r} ;"
-    if name == "lambdam":
-        e, i, d = idx
-        k = q(e, "c_" + i, d)
-        return f"lambdam.fx({k},tsim) = lambdam.l({k},tsim)*{f!r} ;"
-    raise ValueError(name)
+def exercise_prm(exp: str) -> str:
+    """El .prm del libro que usa el ejercicio."""
+    if exp in GDP:
+        return GDP[exp][0]
+    if exp in QCA:
+        return QCA[exp][0]
+    return EXERCISES[UNEMP[exp][0] if exp in UNEMP else exp][0]
 
 
 def shock_inc(exp: str, out: Path, defl: str) -> tuple[str, str]:
     """(.prm del ejercicio, texto del .inc con su shock y su cierre)."""
     if exp in GDP:
-        prm, targets, shocks = GDP[exp]
+        _, targets, shocks = GDP[exp]
         extra = gdp_lines(targets)
     elif exp in QCA:
-        prm, cells = QCA[exp]
-        shocks = []
-        extra = qca_lines(cells)
+        shocks, extra = [], qca_lines(QCA[exp][1])
     elif exp in UNEMP:
         src, cells = UNEMP[exp]
-        prm, shocks = EXERCISES[src]
-        extra = unemp_lines(cells, defl)
+        shocks, extra = EXERCISES[src][1], unemp_lines(cells, defl)
     else:
-        prm, shocks = EXERCISES[exp]
-        extra = []
+        shocks, extra = EXERCISES[exp][1], []
     if exp in WARM:
         extra = [*extra, *warm_lines(out, WARM[exp])]
+    prm = exercise_prm(exp)
     lines = [*(gams_line(*s) for s in shocks), *extra]
     header = f"* {exp} ({prm}) -- generado por gen_burfisher_gams.py\n"
     return prm, header + "\n".join(lines) + "\n"
@@ -330,12 +313,13 @@ def patch_gams_sources(work: Path, defl: str) -> None:
         "xfteq(r,fm,t)$(rs(r) and ts(t) and xftFlag(r,fm))..\n"
         "   xft(r,fm,t) =e= aft(r,fm,t)*(pft(r,fm,t)/pabs(r,t))**etaf(r,fm) ;\n"
     )
+    deflator = UNEMP_DEFLATORS[defl][0]
     new = (
         "* [F-val] cierre de desempleo: salario real fijo en las celdas con wrFlag\n"
         "Parameter wrFlag(r,fp), wreal0(r,fp), sck(r,i), pack(r,i) ;\n"
         "wrFlag(r,fp) = 0 ; wreal0(r,fp) = 1 ; sck(r,i) = 0 ; pack(r,i) = 1 ;\n"
         "xfteq(r,fm,t)$(rs(r) and ts(t) and xftFlag(r,fm))..\n"
-        f"   xft(r,fm,t)$(not wrFlag(r,fm)) + (pft(r,fm,t)/{DEFL[defl][0]})$wrFlag(r,fm)\n"
+        f"   xft(r,fm,t)$(not wrFlag(r,fm)) + (pft(r,fm,t)/{deflator})$wrFlag(r,fm)\n"
         "   =e= (aft(r,fm,t)*(pft(r,fm,t)/pabs(r,t))**etaf(r,fm))$(not wrFlag(r,fm))\n"
         "     + wreal0(r,fm)$wrFlag(r,fm) ;\n"
     )
@@ -365,48 +349,76 @@ def patch_gams_sources(work: Path, defl: str) -> None:
     md.write_text(txt)
 
 
-def run_exercise(
-    exp: str, out: Path, work: Path, nus333: Path, gams: str, iterlim: int, defl: str
-) -> str:
-    """Genera el .inc, los GDX de entrada y corre GAMS. Devuelve el MODEL STATUS."""
+def missing_inputs(nus333: Path, exercises: list[str]) -> list[Path]:
+    """Los archivos del dataset que faltan para correr ``exercises``."""
+    names = {*HAR_FILES, *(exercise_prm(e) for e in exercises)}
+    return sorted(nus333 / n for n in names if not (nus333 / n).exists())
+
+
+@dataclass(frozen=True)
+class Run:
+    """Lo comun a todos los ejercicios de una corrida."""
+
+    out: Path  # donde quedan <EXP>_capFlex.gdx/.lst/.log
+    work: Path  # copia parcheada de las fuentes GAMS
+    nus333: Path
+    gams: str  # ruta absoluta (GAMS corre con cwd=work)
+    iterlim: int
+    defl: str
+
+
+def run_exercise(exp: str, run: Run) -> tuple[bool, str]:
+    """Genera el .inc, los GDX de entrada y corre GAMS. (ok, estado para imprimir)."""
     from equilibria.babel.har_to_gdx import write_nus333_gdx_bundle
 
-    prm, text = shock_inc(exp, out, defl)
-    inc = work / "shocks" / f"{exp}.inc"
+    prm, text = shock_inc(exp, run.out, run.defl)
+    inc = run.work / "shocks" / f"{exp}.inc"
     inc.parent.mkdir(exist_ok=True)
     inc.write_text(text)
 
-    har = work / f"har_{exp}"
+    har = run.work / f"har_{exp}"
     har.mkdir(exist_ok=True)
     for name, src in [*((f, f) for f in HAR_FILES), ("default.prm", prm)]:
         (har / name).unlink(missing_ok=True)
-        (har / name).symlink_to(nus333 / src)
-    gdx_in = work / f"gdx_{exp}"
+        (har / name).symlink_to(run.nus333 / src)
+    gdx_in = run.work / f"gdx_{exp}"
     write_nus333_gdx_bundle(har, gdx_in)
 
+    lst, log = run.out / f"{exp}.lst", run.out / f"{exp}.log"
+    for f in (lst, log, run.out / f"{exp}_capFlex.gdx"):
+        f.unlink(missing_ok=True)  # que un resultado viejo no pase por nuevo
     util = "CD" if "cobbdouglas" in prm.lower() else "cde"
-    subprocess.run(
+    proc = subprocess.run(
         [
-            gams,
+            run.gams,
             "comp_shock.gms",
             "--baseName=nus333",
             f"--inDir={gdx_in}",
-            f"--outDir={out}",
+            f"--outDir={run.out}",
             "--savfFlag=capFlex",
             f"--utility={util}",
             f"--shockInc={inc}",
             f"--simName={exp}_capFlex",
-            f"--iterLim={iterlim}",
-            f"o={out}/{exp}.lst",
+            f"--iterLim={run.iterlim}",
+            f"o={lst}",
             "lo=2",
-            f"lf={out}/{exp}.log",
+            f"lf={log}",
         ],
-        cwd=work,
+        cwd=run.work,
         capture_output=True,
+        text=True,
     )
-    lst = (out / f"{exp}.lst").read_text(errors="ignore")
-    status = sorted({ln.strip() for ln in lst.splitlines() if "MODEL STATUS" in ln})
-    return f"{prm} {util} {status}"
+    if proc.returncode != 0 or not lst.exists():
+        detail = (proc.stderr or proc.stdout).strip()[-500:]
+        return False, f"GAMS fallo (codigo {proc.returncode}, ver {log}) {detail}"
+    status = sorted(
+        {
+            ln.strip()
+            for ln in lst.read_text(errors="ignore").splitlines()
+            if "MODEL STATUS" in ln
+        }
+    )
+    return True, f"{prm} {util} {status}"
 
 
 def main() -> int:
@@ -415,39 +427,55 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("out_dir", type=Path, help="donde quedan <EXP>_capFlex.gdx")
     ap.add_argument("--only", default="", help="EXP separados por coma")
-    ap.add_argument("--gams", default=shutil.which("gams"), help="binario de GAMS")
+    ap.add_argument("--gams", default="gams", help="binario de GAMS (def. del PATH)")
     ap.add_argument(
-        "--work-dir", type=Path, help="copia parcheada de las fuentes (def. temporal)"
+        "--work-dir", type=Path, help="guardar aca la copia parcheada (def. temporal)"
     )
     ap.add_argument("--iterlim", type=int, default=1000, help="iteraciones de PATH")
     ap.add_argument(
         "--unemp-defl",
-        choices=sorted(DEFL),
+        choices=sorted(UNEMP_DEFLATORS),
         default="tornq",
         help="deflactor del salario real en el cierre de desempleo",
     )
     args = ap.parse_args()
-    if not args.gams:
-        ap.error("no se encontro gams en el PATH: usar --gams")
+
+    gams = shutil.which(args.gams)
+    if gams is None:
+        ap.error(f"no se encontro GAMS ({args.gams!r}): ponerlo en el PATH o --gams")
+    todo = [e for e in args.only.split(",") if e] or all_exercises()
+    unknown = [e for e in todo if e not in all_exercises()]
+    if unknown:
+        ap.error(f"ejercicios desconocidos: {', '.join(unknown)}")
     nus333 = nus333_dir()
-    if not (nus333 / "basedata.har").exists():
-        ap.error(f"no esta el dataset nus333 en {nus333} (EQUILIBRIA_NUS333_DIR)")
+    missing = missing_inputs(nus333, todo)
+    if missing:
+        ap.error(
+            "faltan archivos del dataset nus333 (EQUILIBRIA_NUS333_DIR): "
+            + ", ".join(str(m) for m in missing)
+        )
 
     out = args.out_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    work = args.work_dir or Path(tempfile.mkdtemp(prefix="burfisher_gams_"))
-    work = work.resolve()
-    work.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(GAMS_SRC, work, dirs_exist_ok=True)
-    shutil.copy(COMP_SHOCK, work)
-    patch_gams_sources(work, args.unemp_defl)
+    with tempfile.TemporaryDirectory(prefix="burfisher_gams_") as tmp:
+        work = (args.work_dir or Path(tmp)).resolve()
+        work.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(GAMS_SRC, work, dirs_exist_ok=True)
+        shutil.copy(COMP_SHOCK, work)
+        patch_gams_sources(work, args.unemp_defl)
 
-    todo = [e for e in args.only.split(",") if e] or all_exercises()
-    for exp in todo:
-        status = run_exercise(
-            exp, out, work, nus333, args.gams, args.iterlim, args.unemp_defl
+        run = Run(
+            out, work, nus333, str(Path(gams).resolve()), args.iterlim, args.unemp_defl
         )
-        print(exp, status, flush=True)
+        failed = []
+        for exp in todo:
+            ok, status = run_exercise(exp, run)
+            print(exp, status, flush=True)
+            if not ok:
+                failed.append(exp)
+    if failed:
+        print(f"GAMS fallo en: {', '.join(failed)}", file=sys.stderr)
+        return 1
     return 0
 
 
