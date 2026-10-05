@@ -17,6 +17,7 @@ Uso:
     .venv/bin/python scripts/gtap/run_burfisher.py --gams-dir <dir> [--only TBL46A,TBL78]
 
 Requiere el dataset nus333 (``EQUILIBRIA_NUS333_DIR``) y gdxdump en el PATH.
+Los GDX de GAMS los genera ``gen_burfisher_gams.py`` con la misma tabla EXERCISES.
 """
 
 from __future__ import annotations

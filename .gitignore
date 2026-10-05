@@ -298,6 +298,8 @@ scripts/gtap/*
 !scripts/gtap/GENERATE_MISSING_LEVELS_FIXTURES.md
 !scripts/gtap/reconstruct_9x10_eflg.py
 !scripts/gtap/verify_ifsub_equivalence.py
+!scripts/gtap/gen_burfisher_gams.py
+!scripts/gtap/gams/
 !scripts/gtap/gen_linearization_study.py
 !scripts/gtap/export_sl4_levels.py
 # Phase-2 cascade orchestrator modules
