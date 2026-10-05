@@ -22,6 +22,10 @@ Uso:
 
 Requiere GAMS (``gams`` en el PATH o ``--gams``) con PATH, y el dataset nus333 con
 los .prm del libro (``EQUILIBRIA_NUS333_DIR``).
+
+Codigo de salida: 0 si todos terminan en un optimo; 2 si alguno no (deja su GDX:
+ME4A/B terminan Intermediate Infeasible, asi que la corrida completa da 2); 1 si GAMS
+fallo en alguno (sin GDX).
 """
 
 from __future__ import annotations
@@ -122,22 +126,30 @@ def all_exercises() -> list[str]:
 class GamsExpr:
     """Una expresion GAMS en texto, para evaluar ``run_burfisher.shocked`` sobre ella.
 
-    Pone parentesis solo donde hacen falta: ``(1 + x)*1.1 - 1``.
+    Pone parentesis solo donde hacen falta: ``(1 + x)*1.1 - 1``, ``a/(b*c)``.
     """
 
-    def __init__(self, text: str, is_sum: bool = False) -> None:
+    ATOM, PRODUCT, SUM = 0, 1, 2  # operador al tope de la expresion
+
+    def __init__(self, text: str, top: int = 0) -> None:
         self.text = text
-        self.is_sum = is_sum  # suma/resta al tope: necesita () dentro de * / -
+        self.top = top
 
     @staticmethod
-    def _text(x: object, wrap_sum: bool = False) -> str:
+    def _text(x: object, wrap_from: int = 3) -> str:
+        """El texto de ``x``, entre parentesis si su operador al tope es >= wrap_from."""
         if isinstance(x, GamsExpr):
-            return f"({x.text})" if wrap_sum and x.is_sum else x.text
+            return f"({x.text})" if x.top >= wrap_from else x.text
         return repr(x)
 
     def _sum(self, a: object, op: str, b: object) -> GamsExpr:
-        right = self._text(b, wrap_sum=op == "-")
-        return GamsExpr(f"{self._text(a)} {op} {right}", is_sum=True)
+        right = self._text(b, wrap_from=self.SUM if op == "-" else 3)
+        return GamsExpr(f"{self._text(a)} {op} {right}", self.SUM)
+
+    def _product(self, a: object, op: str, b: object) -> GamsExpr:
+        # a/(b*c) y a/(b/c) necesitan parentesis; a*(b/c) = a*b/c no.
+        right = self._text(b, wrap_from=self.PRODUCT if op == "/" else self.SUM)
+        return GamsExpr(f"{self._text(a, wrap_from=self.SUM)}{op}{right}", self.PRODUCT)
 
     def __add__(self, o: object) -> GamsExpr:
         return self._sum(self, "+", o)
@@ -152,10 +164,10 @@ class GamsExpr:
         return self._sum(o, "-", self)
 
     def __mul__(self, o: object) -> GamsExpr:
-        return GamsExpr(f"{self._text(self, True)}*{self._text(o, True)}")
+        return self._product(self, "*", o)
 
     def __truediv__(self, o: object) -> GamsExpr:
-        return GamsExpr(f"{self._text(self, True)}/{self._text(o, True)}")
+        return self._product(self, "/", o)
 
     def __str__(self) -> str:
         return self.text
@@ -220,7 +232,7 @@ def warm_lines(out: Path, src: str) -> list[str]:
     """Carga los niveles de WARM_VARS del GDX de ``src`` antes del solve del shock."""
     gdx = out / f"{src}_capFlex.gdx"
     if not gdx.exists():
-        raise SystemExit(f"falta {gdx}: correr {src} antes (p.ej. --only {src},...)")
+        raise FileNotFoundError(f"falta {gdx}: correr {src} antes (--only {src},...)")
     return [f'execute_loadpoint "{gdx}", {", ".join(WARM_VARS)} ;']
 
 
@@ -246,9 +258,9 @@ def qca_lines(cells: list[tuple[str, str, str, float]]) -> list[str]:
     return out
 
 
-def unemp_lines(cells: list[tuple[str, str]], defl: str) -> list[str]:
+def unemp_lines(cells: list[tuple[str, str]], deflator: str) -> list[str]:
     """Activa el salario real fijo en el shock, en su valor de check."""
-    check_value = UNEMP_DEFLATORS[defl][1]
+    check_value = UNEMP_DEFLATORS[deflator][1]
     out = []
     for r, f in cells:
         k, rr = gams_labels(r, f), gams_labels(r)
@@ -273,7 +285,7 @@ def exercise_prm(exp: str) -> str:
     return EXERCISES[UNEMP[exp][0] if exp in UNEMP else exp][0]
 
 
-def shock_inc(exp: str, out: Path, defl: str) -> tuple[str, str]:
+def shock_inc(exp: str, out: Path, deflator: str) -> tuple[str, str]:
     """(.prm del ejercicio, texto del .inc con su shock y su cierre)."""
     if exp in GDP:
         _, targets, shocks = GDP[exp]
@@ -282,7 +294,7 @@ def shock_inc(exp: str, out: Path, defl: str) -> tuple[str, str]:
         shocks, extra = [], qca_lines(QCA[exp][1])
     elif exp in UNEMP:
         src, cells = UNEMP[exp]
-        shocks, extra = EXERCISES[src][1], unemp_lines(cells, defl)
+        shocks, extra = EXERCISES[src][1], unemp_lines(cells, deflator)
     else:
         shocks, extra = EXERCISES[exp][1], []
     if exp in WARM:
@@ -293,7 +305,7 @@ def shock_inc(exp: str, out: Path, defl: str) -> tuple[str, str]:
     return prm, header + "\n".join(lines) + "\n"
 
 
-def patch_gams_sources(work: Path, defl: str) -> None:
+def patch_gams_sources(work: Path, deflator: str) -> None:
     """Aplica los parches de movilidad y de cierres a la copia en ``work``."""
     gd = work / "getData.gms"
     txt = gd.read_text()
@@ -304,7 +316,8 @@ def patch_gams_sources(work: Path, defl: str) -> None:
         "   endws(endw) = yes ; endwm(endw) = no ;\n) ;\n"
     )
     if patch not in txt:
-        assert mark in txt, "getData.gms cambio: revisar el parche de movilidad"
+        if mark not in txt:
+            raise RuntimeError("getData.gms cambio: revisar el parche de movilidad")
         gd.write_text(txt.replace(mark, patch + mark, 1))
 
     md = work / "model.gms"
@@ -313,18 +326,19 @@ def patch_gams_sources(work: Path, defl: str) -> None:
         "xfteq(r,fm,t)$(rs(r) and ts(t) and xftFlag(r,fm))..\n"
         "   xft(r,fm,t) =e= aft(r,fm,t)*(pft(r,fm,t)/pabs(r,t))**etaf(r,fm) ;\n"
     )
-    deflator = UNEMP_DEFLATORS[defl][0]
+    deflator_expr = UNEMP_DEFLATORS[deflator][0]
     new = (
         "* [F-val] cierre de desempleo: salario real fijo en las celdas con wrFlag\n"
         "Parameter wrFlag(r,fp), wreal0(r,fp), sck(r,i), pack(r,i) ;\n"
         "wrFlag(r,fp) = 0 ; wreal0(r,fp) = 1 ; sck(r,i) = 0 ; pack(r,i) = 1 ;\n"
         "xfteq(r,fm,t)$(rs(r) and ts(t) and xftFlag(r,fm))..\n"
-        f"   xft(r,fm,t)$(not wrFlag(r,fm)) + (pft(r,fm,t)/{deflator})$wrFlag(r,fm)\n"
+        f"   xft(r,fm,t)$(not wrFlag(r,fm)) + (pft(r,fm,t)/{deflator_expr})$wrFlag(r,fm)\n"
         "   =e= (aft(r,fm,t)*(pft(r,fm,t)/pabs(r,t))**etaf(r,fm))$(not wrFlag(r,fm))\n"
         "     + wreal0(r,fm)$wrFlag(r,fm) ;\n"
     )
     if new not in txt:
-        assert old in txt, "model.gms cambio: revisar el parche de xfteq"
+        if old not in txt:
+            raise RuntimeError("model.gms cambio: revisar el parche de xfteq")
         txt = txt.replace(old, new, 1)
 
     old_m = "model gtap /\n"
@@ -344,7 +358,8 @@ def patch_gams_sources(work: Path, defl: str) -> None:
         "model gtap /\n   qcaeq.prdtx, gdpeq.axpreg,\n"
     )
     if new_m not in txt:
-        assert txt.count(old_m) == 1, "model.gms cambio: revisar el parche de qcaeq"
+        if txt.count(old_m) != 1:
+            raise RuntimeError("model.gms cambio: revisar el parche de qcaeq")
         txt = txt.replace(old_m, new_m, 1)
     md.write_text(txt)
 
@@ -355,8 +370,16 @@ def missing_inputs(nus333: Path, exercises: list[str]) -> list[Path]:
     return sorted(nus333 / n for n in names if not (nus333 / n).exists())
 
 
+OPTIMAL = ("1 Optimal", "2 Locally Optimal")
+
+
+def all_optimal(statuses: list[str]) -> bool:
+    """Si todos los solves del .lst (check y shock) terminaron en un optimo."""
+    return bool(statuses) and all(s.endswith(OPTIMAL) for s in statuses)
+
+
 @dataclass(frozen=True)
-class Run:
+class GamsRun:
     """Lo comun a todos los ejercicios de una corrida."""
 
     out: Path  # donde quedan <EXP>_capFlex.gdx/.lst/.log
@@ -364,14 +387,28 @@ class Run:
     nus333: Path
     gams: str  # ruta absoluta (GAMS corre con cwd=work)
     iterlim: int
-    defl: str
+    deflator: str
 
 
-def run_exercise(exp: str, run: Run) -> tuple[bool, str]:
-    """Genera el .inc, los GDX de entrada y corre GAMS. (ok, estado para imprimir)."""
+SOLVED, NOT_OPTIMAL, FAILED = "resuelto", "sin optimo", "fallo"
+
+
+def run_exercise(exp: str, run: GamsRun) -> tuple[str, str]:
+    """Genera el .inc, los GDX de entrada y corre GAMS.
+
+    (SOLVED | NOT_OPTIMAL | FAILED, linea para imprimir). NOT_OPTIMAL deja el GDX
+    (ME4A/B terminan asi y el paper los reporta como N/A); FAILED no deja nada.
+    """
     from equilibria.babel.har_to_gdx import write_nus333_gdx_bundle
 
-    prm, text = shock_inc(exp, run.out, run.defl)
+    for f in ("lst", "log"):
+        (run.out / f"{exp}.{f}").unlink(missing_ok=True)
+    gdx_out = run.out / f"{exp}_capFlex.gdx"
+    gdx_out.unlink(missing_ok=True)  # que un resultado viejo no pase por nuevo
+    try:
+        prm, text = shock_inc(exp, run.out, run.deflator)
+    except FileNotFoundError as e:  # el arranque de ME9D sin el GDX de ME9C
+        return FAILED, str(e)
     inc = run.work / "shocks" / f"{exp}.inc"
     inc.parent.mkdir(exist_ok=True)
     inc.write_text(text)
@@ -385,8 +422,6 @@ def run_exercise(exp: str, run: Run) -> tuple[bool, str]:
     write_nus333_gdx_bundle(har, gdx_in)
 
     lst, log = run.out / f"{exp}.lst", run.out / f"{exp}.log"
-    for f in (lst, log, run.out / f"{exp}_capFlex.gdx"):
-        f.unlink(missing_ok=True)  # que un resultado viejo no pase por nuevo
     util = "CD" if "cobbdouglas" in prm.lower() else "cde"
     proc = subprocess.run(
         [
@@ -410,7 +445,7 @@ def run_exercise(exp: str, run: Run) -> tuple[bool, str]:
     )
     if proc.returncode != 0 or not lst.exists():
         detail = (proc.stderr or proc.stdout).strip()[-500:]
-        return False, f"GAMS fallo (codigo {proc.returncode}, ver {log}) {detail}"
+        return FAILED, f"GAMS fallo (codigo {proc.returncode}, ver {log}) {detail}"
     status = sorted(
         {
             ln.strip()
@@ -418,7 +453,8 @@ def run_exercise(exp: str, run: Run) -> tuple[bool, str]:
             if "MODEL STATUS" in ln
         }
     )
-    return True, f"{prm} {util} {status}"
+    outcome = SOLVED if all_optimal(status) and gdx_out.exists() else NOT_OPTIMAL
+    return outcome, f"{prm} {util} {status}"
 
 
 def main() -> int:
@@ -443,8 +479,9 @@ def main() -> int:
     gams = shutil.which(args.gams)
     if gams is None:
         ap.error(f"no se encontro GAMS ({args.gams!r}): ponerlo en el PATH o --gams")
-    todo = [e for e in args.only.split(",") if e] or all_exercises()
-    unknown = [e for e in todo if e not in all_exercises()]
+    known = all_exercises()
+    todo = [e for e in args.only.split(",") if e] or known
+    unknown = [e for e in todo if e not in known]
     if unknown:
         ap.error(f"ejercicios desconocidos: {', '.join(unknown)}")
     nus333 = nus333_dir()
@@ -464,19 +501,23 @@ def main() -> int:
         shutil.copy(COMP_SHOCK, work)
         patch_gams_sources(work, args.unemp_defl)
 
-        run = Run(
-            out, work, nus333, str(Path(gams).resolve()), args.iterlim, args.unemp_defl
+        run = GamsRun(
+            out=out,
+            work=work,
+            nus333=nus333,
+            gams=str(Path(gams).resolve()),
+            iterlim=args.iterlim,
+            deflator=args.unemp_defl,
         )
-        failed = []
+        by_outcome: dict[str, list[str]] = {SOLVED: [], NOT_OPTIMAL: [], FAILED: []}
         for exp in todo:
-            ok, status = run_exercise(exp, run)
-            print(exp, status, flush=True)
-            if not ok:
-                failed.append(exp)
-    if failed:
-        print(f"GAMS fallo en: {', '.join(failed)}", file=sys.stderr)
-        return 1
-    return 0
+            outcome, line = run_exercise(exp, run)
+            print(exp, line, flush=True)
+            by_outcome[outcome].append(exp)
+    for outcome in (NOT_OPTIMAL, FAILED):
+        if by_outcome[outcome]:
+            print(f"{outcome}: {', '.join(by_outcome[outcome])}", file=sys.stderr)
+    return 1 if by_outcome[FAILED] else 2 if by_outcome[NOT_OPTIMAL] else 0
 
 
 if __name__ == "__main__":

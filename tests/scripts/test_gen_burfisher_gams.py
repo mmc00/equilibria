@@ -50,7 +50,7 @@ def test_cubre_los_41_ejercicios(gen: Any) -> None:
 def test_cada_ejercicio_produce_su_inc(gen: Any, tmp_path: Path) -> None:
     (tmp_path / "ME9C_capFlex.gdx").touch()  # el arranque de ME9D
     for exp in gen.all_exercises():
-        prm, texto = gen.shock_inc(exp, tmp_path, defl="tornq")
+        prm, texto = gen.shock_inc(exp, tmp_path, deflator="tornq")
         assert prm.endswith(".prm"), exp
         assert texto.startswith(f"* {exp} ({prm})"), exp
         assert texto.count("\n") >= 2, f"{exp}: sin sentencias de shock"
@@ -70,13 +70,14 @@ def test_instrumento_desconocido_falla(gen: Any) -> None:
 
 
 def test_me9d_sin_me9c_falla(gen: Any, tmp_path: Path) -> None:
-    with pytest.raises(SystemExit, match="ME9C"):
-        gen.shock_inc("ME9D", tmp_path, defl="tornq")
+    """FileNotFoundError, no SystemExit: run_exercise lo cuenta como un fallo mas."""
+    with pytest.raises(FileNotFoundError, match="ME9C"):
+        gen.shock_inc("ME9D", tmp_path, deflator="tornq")
 
 
 def test_parches_aplican_sobre_las_fuentes_del_repo(gen: Any, tmp_path: Path) -> None:
     shutil.copytree(GAMS_SRC, tmp_path, dirs_exist_ok=True)
-    gen.patch_gams_sources(tmp_path, defl="tornq")
+    gen.patch_gams_sources(tmp_path, deflator="tornq")
     getdata = (tmp_path / "getData.gms").read_text()
     model = (tmp_path / "model.gms").read_text()
     assert "[F-val] factor con ETRE != 0" in getdata
@@ -84,14 +85,14 @@ def test_parches_aplican_sobre_las_fuentes_del_repo(gen: Any, tmp_path: Path) ->
     assert "qcaeq.prdtx, gdpeq.axpreg" in model
 
     # Idempotente: correr dos veces en el mismo directorio no duplica nada.
-    gen.patch_gams_sources(tmp_path, defl="tornq")
+    gen.patch_gams_sources(tmp_path, deflator="tornq")
     assert (tmp_path / "getData.gms").read_text() == getdata
     assert (tmp_path / "model.gms").read_text() == model
 
 
 def test_deflactor_desconocido_falla(gen: Any, tmp_path: Path) -> None:
     with pytest.raises(KeyError):
-        gen.shock_inc("TBL65B", tmp_path, defl="noexiste")
+        gen.shock_inc("TBL65B", tmp_path, deflator="noexiste")
 
 
 @pytest.mark.parametrize("kind", ["pct", "power", "power_kappa", "power_fct"])
@@ -123,3 +124,39 @@ def test_faltantes_del_dataset(gen: Any, tmp_path: Path) -> None:
         (tmp_path / f).touch()
     faltan = gen.missing_inputs(tmp_path, ["TBL45A", "ME9A"])
     assert faltan == [tmp_path / "climatechange.prm"]
+
+
+def test_division_por_un_producto_lleva_parentesis(gen: Any) -> None:
+    a, b, c = (gen.GamsExpr(x) for x in "abc")
+    assert str(a / (b * c)) == "a/(b*c)"
+    assert str(a / (b / c)) == "a/(b/c)"
+    assert str(a * (b / c)) == "a*b/c"
+    assert str(a - (b - c)) == "a - (b - c)"
+
+
+@pytest.mark.parametrize(
+    ("estados", "esperado"),
+    [
+        (["**** MODEL STATUS      1 Optimal"], True),
+        (
+            [
+                "**** MODEL STATUS      1 Optimal",
+                "**** MODEL STATUS      2 Locally Optimal",
+            ],
+            True,
+        ),
+        (
+            [
+                "**** MODEL STATUS      1 Optimal",
+                "**** MODEL STATUS      6 Intermediate Infeasible",
+            ],
+            False,
+        ),
+        (["**** MODEL STATUS      5 Locally Infeasible"], False),
+        ([], False),
+    ],
+)
+def test_solo_optimo_cuenta_como_resuelto(
+    gen: Any, estados: list[str], esperado: bool
+) -> None:
+    assert gen.all_optimal(estados) is esperado
