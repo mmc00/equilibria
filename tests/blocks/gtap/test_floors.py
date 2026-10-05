@@ -227,16 +227,16 @@ def test_el_declarador_vive_en_un_solo_sitio():
         "trade_armington_bilateral.py": {"dintx", "mintx", "xw"},
         # pnum/pwfact piso 1e-3, walras libre, y los 6 agregados Fisher que se
         # declaran en dos bucles (mfw_* y mfr_*, Reals sin cota).
-        "closure.py": {"pnum", "pwfact", "walras", "<bucle:202>", "<bucle:217>"},
+        "closure.py": {"pnum", "pwfact", "walras", "<en:setup>", "<en:setup#2>"},
         # pet piso 1e-3 (init 1.0), xet cantidad.
         "trade_cet.py": {"pet", "xet"},
         # Instrumentos de shock: Vars FIJAS en su benchmark (GAMS x.fx por periodo),
         # Reals sin cota; el valor lo fija el compositor, no una cota. Los 9 se
         # declaran en un solo helper (_instrument).
-        "shock.py": {"<bucle:63>"},
+        "shock.py": {"<en:_instrument>"},
         # Objetivos de @overwrite (b.target): instrumentos como los del ShockBlock,
         # Reals sin cota y fijos; add_targets los declara despues de los bloques.
-        "overwrite.py": {"<bucle:319>"},
+        "overwrite.py": {"<en:add_targets>"},
     }
     reales: dict[str, set[str]] = {}
     for f in sorted(GTAP_BLOCKS.rglob("*.py")):
@@ -251,10 +251,29 @@ def test_el_declarador_vive_en_un_solo_sitio():
                 alias.update(
                     a.asname or a.name for a in n.names if a.name == "Variable"
                 )
+        # Una declaracion sin nombre literal (en un bucle o un helper) se identifica
+        # por la funcion que la contiene, no por su numero de linea: asi una edicion
+        # en otra parte del archivo no rompe el candado, y una declaracion nueva
+        # sigue apareciendo (otra funcion, o un #k mas en la misma).
+        padre = {h: n for n in ast.walk(arbol) for h in ast.iter_child_nodes(n)}
+
+        def _funcion(n):
+            while n in padre:
+                n = padre[n]
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    return n.name
+                if isinstance(n, ast.Lambda):
+                    return "<lambda>"
+            return "<modulo>"
+
         nombres = set()
-        for n in ast.walk(arbol):
-            if not (isinstance(n, ast.Call) and getattr(n.func, "id", None) in alias):
-                continue
+        sin_nombre: dict[str, int] = {}
+        llamadas = [
+            n
+            for n in ast.walk(arbol)
+            if isinstance(n, ast.Call) and getattr(n.func, "id", None) in alias
+        ]
+        for n in sorted(llamadas, key=lambda c: (c.lineno, c.col_offset)):
             literal = next(
                 (
                     k.value.value
@@ -263,7 +282,13 @@ def test_el_declarador_vive_en_un_solo_sitio():
                 ),
                 None,
             )
-            nombres.add(literal if literal is not None else f"<bucle:{n.lineno}>")
+            if literal is not None:
+                nombres.add(literal)
+                continue
+            fn = _funcion(n)
+            sin_nombre[fn] = sin_nombre.get(fn, 0) + 1
+            k = sin_nombre[fn]
+            nombres.add(f"<en:{fn}>" if k == 1 else f"<en:{fn}#{k}>")
         if nombres:
             reales[f.name] = nombres
     assert reales == ESPERADOS, (

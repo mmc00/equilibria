@@ -42,15 +42,14 @@ from __future__ import annotations
 
 import importlib
 import sys
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from tests.templates.gtap._nus333 import ROOT, closure, nus333_params, pct
 
 pytestmark = pytest.mark.integration
 
 TOL_PP = 0.002
-ROOT = Path(__file__).resolve().parents[3]
 
 # Los shocks salen de ``run_burfisher.EXERCISES``, la misma tabla de la que
 # gen_gams.py arma el oraculo GAMS (una sola copia). Los ORACLES de abajo son los
@@ -278,41 +277,14 @@ def _level(m, p, name, idx, kind, x):
 
 @pytest.fixture(scope="module", params=sorted(SHOCKS))
 def solved(request):
-    from pyomo.environ import value
-
-    from equilibria._local_refs import nus333_dir
-
     exp = request.param
     prm_name, shocks = SHOCKS[exp]
-    har = nus333_dir()
-    prm = har / prm_name
-    if not (har / "basedata.har").exists() or not prm.exists():
-        pytest.skip(f"nus333 o {prm_name} no disponible en {har}")
-
-    from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from equilibria.templates.gtap.instruments import fix_instrument_shock
 
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=har / "basedata.har",
-        sets_path=har / "sets.har",
-        default_path=prm,
-        baserate_path=har / "baserate.har",
-    )
-    ac = GTAPClosureConfig(
-        name="base",
-        closure_type="MCP",
-        capital_mobility="sluggish",
-        fix_endowments=False,
-        fix_taxes=False,
-        fix_technology=False,
-        if_sub=False,
-        savf_flag="capFlex",
-        numeraire="pnum",
-    )
+    p = nus333_params(prm_name)
+    ac = closure()
     m, _mp = build_block_model(
         p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
     )
@@ -330,22 +302,15 @@ def solved(request):
         solve_check=True,
     )
     assert int(res["shock"]["code"]) == 1, (exp, res["shock"])
-    return exp, m, value
-
-
-def _pct(m, value, var, key):
-    comp = getattr(m, var)
-    return 100.0 * (
-        float(value(comp[(*key, "shock")])) / float(value(comp[(*key, "check")])) - 1.0
-    )
+    return exp, m
 
 
 def test_iguala_a_gams(solved):
-    exp, m, value = solved
+    exp, m = solved
     malas = []
     for var, cells in ORACLES[exp].items():
         for key, want in cells.items():
-            got = _pct(m, value, var, key)
+            got = pct(m, var, key)
             if abs(got - want) > TOL_PP:
                 malas.append(f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}")
     n = sum(len(c) for c in ORACLES[exp].values())

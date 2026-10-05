@@ -13,10 +13,10 @@ from __future__ import annotations
 from typing import Any, cast
 
 import pytest
-from tests.templates.gtap._desempleo import (
+from tests.templates.gtap._desempleo import register_desempleo_hooks
+from tests.templates.gtap._nus333 import (
     closure,
     nus333_params,
-    register_desempleo_hooks,
 )
 
 from equilibria.blocks.gtap import ClosureBlock, ShockBlock, overwrite

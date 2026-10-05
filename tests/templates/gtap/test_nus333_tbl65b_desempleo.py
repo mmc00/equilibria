@@ -32,23 +32,22 @@ LOCAL-only: SKIP si falta nus333.
 
 from __future__ import annotations
 
-import gzip
-import importlib
-import json
-import sys
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from tests.templates.gtap._desempleo import (
+from tests.templates.gtap._desempleo import register_desempleo_hooks
+from tests.templates.gtap._nus333 import (
+    ROOT,
     closure,
+    gams_levels,
     nus333_params,
-    register_desempleo_hooks,
+    pct,
+    run_burfisher,
 )
 
 pytestmark = pytest.mark.integration
 
-ROOT = Path(__file__).resolve().parents[3]
 LEVELS = ROOT / "tests" / "fixtures" / "nus333_desempleo_gams_levels.json.gz"
 TOL_PP = 0.002
 
@@ -75,11 +74,6 @@ ORACLE = {
     "regy": {("USA",): 42.26937, ("ROW",): -6.482061},
     "pi": {("USA",): 4.499024, ("ROW",): -6.294348},
 }
-
-
-def _gams_levels(exp: str) -> dict[str, dict[tuple, float]]:
-    raw = json.loads(gzip.decompress(LEVELS.read_bytes()))[exp]
-    return {vn: {tuple(k): v for k, v in cells} for vn, cells in raw.items()}
 
 
 @pytest.fixture(scope="module", params=["TBL65B", "ME3C"])
@@ -120,13 +114,6 @@ def solved(request):
         overwrite.clear()
 
 
-def _pct(m, value, var, key):
-    comp = getattr(m, var)
-    return 100.0 * (
-        float(value(comp[(*key, "shock")])) / float(value(comp[(*key, "check")])) - 1.0
-    )
-
-
 def test_resuelve(solved):
     _, _, _, res, _ = solved
     for t in ("check", "shock"):
@@ -136,7 +123,7 @@ def test_resuelve(solved):
 def test_salario_real_fijo(solved):
     """pft[USA,LABOR] sube lo mismo que el Tornqvist de hogares en el shock."""
     _, m, _, _, value = solved
-    got = _pct(m, value, "pft", ("USA", "LABOR"))
+    got = pct(m, "pft", ("USA", "LABOR"))
     assert abs(got - 7.691635) < TOL_PP
     # Celda libre en el check: sin shock, el empleo queda en el de la base (a
     # precision del solver, relativa; en GAMS base vs check difiere hasta 3e-6).
@@ -150,7 +137,7 @@ def test_iguala_a_gams(solved):
     malas = []
     for var, cells in ORACLE.items():
         for key, want in cells.items():
-            got = _pct(m, value, var, key)
+            got = pct(m, var, key)
             if abs(got - want) > TOL_PP:
                 malas.append(f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}")
     n = sum(len(c) for c in ORACLE.values())
@@ -162,11 +149,7 @@ def test_iguala_a_gams(solved):
 def test_todas_las_celdas_contra_gams(solved):
     """Check y shock, todas las celdas, contra los niveles de GAMS (tolerancia 0,1%)."""
     exp, m, p, _, _ = solved
-    # scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
-    sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
-    run_burfisher = cast(Any, importlib.import_module("run_burfisher"))
-
-    r = run_burfisher.compare(m, p, _gams_levels(exp))
+    r = run_burfisher().compare(m, p, gams_levels(LEVELS, exp))
     for period in ("check", "shock"):
         got = r[period]
         assert got["cells"] > 500, (exp, period, got["cells"])
