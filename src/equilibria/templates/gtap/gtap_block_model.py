@@ -412,11 +412,11 @@ def _fix_instruments(pm: Any) -> int:
     que no los libere ni los re-siembre. Devuelve cuantas celdas fijo.
     """
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
-    from equilibria.templates.gtap.instruments import instrument_cell
+    from equilibria.templates.gtap.instruments import is_free_cell
 
-    # Celdas que un hook @overwrite volvio endogenas: quedan libres. La marca la pone
-    # build_block_single_period al construir el SP, y build_vars la copia del SP al
-    # multiperiodo.
+    # Celdas que un hook @overwrite volvio endogenas: quedan libres solo en el shock
+    # (y en el SP). La marca la pone build_block_single_period al construir el SP, y
+    # build_vars la copia del SP al multiperiodo.
     endo = getattr(pm, "_endogenous_instrument_cells", None) or {}
     n = 0
     present = []
@@ -428,7 +428,7 @@ def _fix_instruments(pm: Any) -> int:
         present.append(name)
         libres = endo.get(name, frozenset())
         for idx, vd in var.items():
-            if libres and instrument_cell(idx) in libres:
+            if libres and is_free_cell(idx, libres):
                 continue
             if not vd.fixed:
                 vd.fix()
@@ -461,6 +461,7 @@ def build_block_single_period(
         add_targets,
         collect_targets,
         endogenous_cells,
+        shock_rows,
         with_overwrites,
     )
 
@@ -489,6 +490,7 @@ def build_block_single_period(
     _strip_con_suffix(pm)
     pm._endogenous_instrument_cells = endogenous_cells(units)
     pm._targets = targets
+    pm._shock_rows = shock_rows(units)
 
     if apply_scaling:
         # El escalado de benchmark vive en su propio modulo: muta los VarData del
@@ -512,11 +514,6 @@ def build_block_single_period(
 
     _fix_no_demand_cells(pm)
     _fix_cd_welfare(pm, params, sets)
-    # Objetivos (b.target): su valor es initial(m, *celda) con los niveles de base ya
-    # escalados; el multiperiodo lo copia a los 3 periodos.
-    for name, t in targets.items():
-        for cell, initial in t.cells:
-            getattr(pm, name)[cell].set_value(float(initial(pm, *cell)))
     _fix_instruments(pm)
 
     pm._residual_region = residual_region
@@ -639,7 +636,23 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
             getattr(sp_model, "_endogenous_instrument_cells", {}) or {}
         )
         m._targets = dict(getattr(sp_model, "_targets", {}) or {})
+        m._shock_rows = frozenset(getattr(sp_model, "_shock_rows", ()) or ())
         _fix_instruments(m)
+
+    def build_equations_all_periods(self, m: ConcreteModel, *args, **kwargs) -> None:
+        """La reflexion del padre, y despues las filas de @overwrite solo en el shock
+        (``shock_only``)."""
+        from equilibria.blocks.gtap.overwrite import shock_only
+
+        super().build_equations_all_periods(m, *args, **kwargs)
+        shock_only(m)
+
+    def build_equations_intra(self, m: ConcreteModel, period: str) -> None:
+        """Igual que ``build_equations_all_periods``, un periodo por vez."""
+        from equilibria.blocks.gtap.overwrite import shock_only
+
+        super().build_equations_intra(m, period)
+        shock_only(m)
 
 
 def build_block_model(

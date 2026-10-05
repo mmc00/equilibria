@@ -54,11 +54,11 @@ def register_desempleo_hooks() -> None:
         ppriv_tornqvist,
     )
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def unemployment(b):
         b.endogenous("aft", ("USA", "LABOR"))
 
-    @overwrite(ClosureBlock)
+    @overwrite(ClosureBlock, period="shock")
     def real_wage(b):
         b.equation(
             "eq_wreal",

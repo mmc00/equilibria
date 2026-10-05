@@ -5,29 +5,34 @@ todo el proceso, asi que los ve todo lo que construye bloques: ``build_block_mod
 el modelo de un periodo que arma el driver (``_build_sp_reference``) y la calibracion.
 El hook corre despues del ``setup`` original del bloque y recibe un ``BlockEdit``::
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def unemployment(b):
         b.endogenous("aft", ("USA", "LABOR"))
 
-    @overwrite(ClosureBlock)
+    @overwrite(ClosureBlock, period="shock")
     def real_wage(b):
         b.equation("eq_wreal", ("USA", "LABOR"),
                    lambda m, r, f: m.pft[r, f] == value(m.pft[r, f]) * ppriv_tornqvist(m, r))
 
-Un objetivo por periodo (p.ej. TBL94: la produccion fija en -1% en el shock) se declara
-con ``b.target``: una Var nueva, registrada como instrumento y fija en
-``initial(m, *cell)``; el shock entra con ``fix_instrument_shock``, solo en 'shock'::
+El cierre cambia SOLO en el shock, como el ``swap`` de GEMPACK y el de GAMS (compStat):
+en base y check rige el cierre estandar (la celda fija, sin la fila nueva), asi que el
+check sigue replicando el benchmark. ``period`` solo acepta ``"shock"``.
 
-    @overwrite(ShockBlock)
+Un objetivo de cantidad (TBL94: la produccion -1%; ME9A: el PIB real) se declara con
+``b.target``: una Var nueva, registrada como instrumento y fija en 1, y la fila
+``quantity[shock] = target[shock] x quantity[check]``. El shock entra como factor con
+``fix_instrument_shock``::
+
+    @overwrite(ShockBlock, period="shock")
     def regulation(b):
         b.endogenous("prdtx_rai", ("USA", "MFG", "MFG"))
         b.target("qca_target", ("USA", "MFG", "MFG"),
-                 initial=lambda m, r, a, i: value(m.x[r, a, i]), domains=("r", "a", "i"))
+                 quantity=lambda m, r, a, i: m.x[r, a, i], domains=("r", "a", "i"))
 
-La regla de ``equation`` se escribe sobre el modelo de UN periodo (sin ``t``): la
-reflexion multiperiodo la copia a base/check/shock. Al construirse, las Vars tienen sus
-niveles de base (cal.gms), asi que ``value(...)`` dentro de la regla es una constante
-de base.
+La regla de ``equation`` (y ``quantity``) se escribe sobre el modelo de UN periodo
+(sin ``t``). Al construirse, las Vars tienen sus niveles de base (cal.gms), asi que
+``value(...)`` dentro de una regla de ``equation`` es una constante de BASE; para
+anclar al check (que en ME9 no reproduce la base) usar ``b.target``.
 
 Spec: dev-tools/equilibria-tools/plans/superpowers/specs/2026-10-01-overwrite-bloques-design.md
 """
@@ -38,6 +43,7 @@ from collections.abc import Callable
 from typing import Any, NamedTuple
 
 from equilibria.blocks.base import Block
+from equilibria.blocks.gtap.periods import CHECK, SHOCK, as_key
 from equilibria.core.symbolic_equations import SymbolicEquation
 
 Hook = Callable[["BlockEdit"], None]
@@ -50,7 +56,7 @@ _SET_ORDER = ("r", "f", "a", "i", "aa", "rp")
 
 
 class Target(NamedTuple):
-    """Un objetivo de ``b.target``: sus dominios y sus celdas ``(celda, initial)``."""
+    """Un objetivo de ``b.target``: sus dominios y sus celdas ``(celda, quantity)``."""
 
     domains: tuple[str, ...]
     cells: list[tuple[tuple, Callable[..., Any]]]
@@ -69,10 +75,38 @@ def _merge_target(
     known.cells.extend(cells)
 
 
+def target_row(name: str) -> str:
+    """El nombre de la fila de un objetivo de ``b.target``."""
+    return f"eq_{name}"
+
+
+class _Row(NamedTuple):
+    """Una familia de filas de ``b.equation``: sus dominios y ``{celda: regla}``."""
+
+    domains: tuple[str, ...]
+    rules: dict[tuple, Callable[..., Any]]
+
+    def symbolic(self, name: str) -> SymbolicEquation:
+        rules = self.rules
+
+        class _Eq(SymbolicEquation):
+            def build_expression(self, pyomo_model, indices):
+                rule = rules.get(tuple(indices))
+                return None if rule is None else rule(pyomo_model, *indices)
+
+        return _Eq(name=name, domains=self.domains)
+
+
 class _Overwrite:
     """El decorador, mas ``clear``/``registered``/``active`` (para tests y el cache)."""
 
-    def __call__(self, cls: type) -> Callable[[Hook], Hook]:
+    def __call__(self, cls: type, period: str = SHOCK) -> Callable[[Hook], Hook]:
+        if period != SHOCK:
+            raise ValueError(
+                f"@overwrite: period={period!r}; el cierre solo cambia en el "
+                f"{SHOCK!r} (en base y check rige el estandar)"
+            )
+
         def deco(fn: Hook) -> Hook:
             # Clave = nombre de la funcion: re-ejecutar la celda del notebook
             # reemplaza el hook en vez de apilarlo.
@@ -113,16 +147,11 @@ class BlockEdit:
         self.equations = equations
         self._endogenous: dict[str, set[tuple]] = {}
         self._targets: dict[str, Target] = {}
+        self._rows: dict[str, _Row] = {}
 
     def endogenous(self, name: str, cell: tuple) -> None:
-        """La celda ``cell`` del instrumento ``name`` deja de ser exogena.
-
-        Queda libre en los 3 periodos, asi que la fila que la reemplaza (``equation``)
-        debe anclarse a la BASE: ``value(...)`` al construir lee los niveles de base.
-        GAMS (``compStat``) ancla al CHECK. Coinciden solo si el check reproduce la
-        base; en nus333 lo hace, y los tests de TBL65B y TBL94 lo verifican (el
-        instrumento liberado queda en el check igual que en la base, a 1e-6).
-        """
+        """La celda ``cell`` del instrumento ``name`` deja de ser exogena, solo en el
+        shock: en base y check sigue fija en su benchmark."""
         from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
 
         if name not in SHOCK_INSTRUMENTS:
@@ -139,33 +168,45 @@ class BlockEdit:
         rule: Callable[..., Any],
         domains: tuple[str, ...] | None = None,
     ) -> None:
-        """Agrega la fila ``name`` sobre la celda ``cell``: ``rule(m, *cell)``."""
+        """Agrega la fila ``name`` sobre la celda ``cell``: ``rule(m, *cell)``, solo en
+        el shock. Llamarla otra vez con el mismo nombre suma otra celda a la familia."""
         cell = tuple(cell)
-        doms = domains if domains is not None else self._domains(cell)
-
-        class _Eq(SymbolicEquation):
-            def build_expression(self, pyomo_model, indices):
-                if tuple(indices) != cell:
-                    return None
-                return rule(pyomo_model, *cell)
-
-        self.equations.append(_Eq(name=name, domains=doms))
+        doms = tuple(domains) if domains is not None else self._domains(cell)
+        row = self._rows.setdefault(name, _Row(doms, {}))
+        if row.domains != doms:
+            raise ValueError(f"equation {name!r}: dominios {doms} != {row.domains}")
+        if cell in row.rules:
+            raise ValueError(f"equation {name!r}: la celda {cell} ya tiene fila")
+        row.rules[cell] = rule
 
     def target(
         self,
         name: str,
         cell: tuple,
-        initial: Callable[..., Any],
+        quantity: Callable[..., Any],
         domains: tuple[str, ...] | None = None,
     ) -> None:
-        """Declara el objetivo ``name``: una Var nueva, registrada como instrumento
-        (fija en los 3 periodos, el driver no la libera) y con la celda ``cell`` en
-        ``initial(m, *cell)``, evaluado con los niveles de base al construir el modelo.
-        Las demas celdas quedan fijas en 0 (ninguna fila las lee). La Var se agrega
-        al modelo despues de todos los bloques (``add_targets``)."""
+        """Declara el objetivo ``name`` sobre ``quantity(m, *cell)``.
+
+        ``name`` es una Var nueva, registrada como instrumento y fija en 1 en los 3
+        periodos (se agrega despues de todos los bloques, ``add_targets``). La fila
+        ``eq_<name>`` vive solo en el shock: ``quantity[shock] = name[shock] x
+        quantity[check]`` (``shock_only``), como el ``swap`` de GEMPACK. En el
+        modelo de un periodo (sin check) ancla a la base SIN escalar: la constante se
+        lee al construir la fila, antes de ``apply_production_scaling``; el
+        multiperiodo la reescribe."""
+        from pyomo.environ import value
+
         cell = tuple(cell)
         doms = tuple(domains) if domains is not None else self._domains(cell)
-        _merge_target(self._targets, name, doms, [(cell, initial)])
+        _merge_target(self._targets, name, doms, [(cell, quantity)])
+        self.equation(
+            target_row(name),
+            cell,
+            lambda m, *c: quantity(m, *c)
+            == getattr(m, name)[c] * float(value(quantity(m, *c))),
+            domains=doms,
+        )
 
     def endogenized(self) -> dict[str, set[tuple]]:
         """Las celdas que ``endogenous`` libero, por instrumento."""
@@ -174,6 +215,14 @@ class BlockEdit:
     def declared_targets(self) -> dict[str, Target]:
         """Los objetivos que declaro ``target``."""
         return {k: Target(t.domains, list(t.cells)) for k, t in self._targets.items()}
+
+    def row_names(self) -> set[str]:
+        """Los nombres de las filas que agregaron ``equation`` y ``target``."""
+        return set(self._rows)
+
+    def row_equations(self) -> list[SymbolicEquation]:
+        """Las filas de ``equation`` y ``target``, una familia por nombre."""
+        return [row.symbolic(name) for name, row in self._rows.items()]
 
     def _domains(self, cell: tuple) -> tuple[str, ...]:
         doms = []
@@ -197,6 +246,7 @@ class _HookedBlock(Block):
     hooks: list[Any] = []
     endogenous: dict[str, set[tuple]] = {}
     targets: dict[str, Target] = {}
+    rows: set[str] = set()
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
         equations = list(self.inner.setup(set_manager, parameters, variables))
@@ -207,7 +257,8 @@ class _HookedBlock(Block):
             self.endogenous.setdefault(name, set()).update(cells)
         for name, t in edit.declared_targets().items():
             _merge_target(self.targets, name, t.domains, t.cells)
-        return edit.equations
+        self.rows.update(edit.row_names())
+        return [*edit.equations, *edit.row_equations()]
 
 
 def with_overwrites(block: Any) -> Any:
@@ -223,6 +274,7 @@ def with_overwrites(block: Any) -> Any:
         hooks=hooks,
         endogenous={},
         targets={},
+        rows=set(),
     )
 
 
@@ -235,6 +287,11 @@ def endogenous_cells(blocks: list[Any]) -> dict[str, frozenset[tuple]]:
     return {k: frozenset(v) for k, v in out.items()}
 
 
+def shock_rows(blocks: list[Any]) -> frozenset[str]:
+    """Los nombres de las filas que agregaron los hooks (rigen solo en el shock)."""
+    return frozenset(n for b in blocks for n in getattr(b, "rows", ()))
+
+
 def collect_targets(blocks: list[Any]) -> dict[str, Target]:
     """Los objetivos que declararon los hooks de todos los bloques."""
     out: dict[str, Target] = {}
@@ -245,7 +302,7 @@ def collect_targets(blocks: list[Any]) -> dict[str, Target]:
 
 
 def add_targets(model: Any, targets: dict[str, Target]) -> None:
-    """Agrega al ``equilibria.model.Model`` ya armado la Var de cada objetivo, en 0.
+    """Agrega al ``equilibria.model.Model`` ya armado la Var de cada objetivo, en 1.
 
     Va despues de todos los bloques: ``add_block`` descarta en silencio una Var cuyo
     nombre ya existe (algunos bloques comparten ``ev``/``cv``/``pwfact`` a
@@ -261,13 +318,81 @@ def add_targets(model: Any, targets: dict[str, Target]) -> None:
         model.add_variable(
             Variable(
                 name=name,
-                value=dp.to_array({}, elems, 0.0),
+                value=dp.to_array({}, elems, 1.0),
                 domains=t.domains,
                 domain="Reals",
                 lower=float("-inf"),
                 upper=float("inf"),
             )
         )
+
+
+class _PeriodIndex:
+    """``var[k]`` de un periodo: ``var[(*k, t)]`` del modelo multiperiodo."""
+
+    def __init__(self, var: Any, period: str) -> None:
+        self._var = var
+        self._t = period
+
+    def __getitem__(self, k: Any) -> Any:
+        return self._var[(*as_key(k), self._t)]
+
+
+class _AtPeriod:
+    """Vista de UN periodo del modelo multiperiodo: ``v[k]`` es ``v[(*k, t)]``.
+
+    Deja evaluar una regla escrita para el modelo de un periodo (``quantity`` de
+    ``b.target``) sobre las Vars de cualquier periodo. Una Var escalar del modelo de
+    un periodo esta indexada solo por el periodo: se devuelve su celda. Solo traduce
+    Vars: otro componente indexado (un Param o una Expression por periodo) falla, en
+    vez de leerse sin el periodo."""
+
+    def __init__(self, m: Any, period: str) -> None:
+        self._m = m
+        self._t = period
+
+    def __getattr__(self, name: str) -> Any:
+        from pyomo.environ import Var
+
+        comp = getattr(self._m, name)
+        if getattr(comp, "ctype", None) is Var:
+            if comp.dim() == 1:
+                return comp[self._t]
+            return _PeriodIndex(comp, self._t)
+        if callable(getattr(comp, "is_indexed", None)) and comp.is_indexed():
+            raise ValueError(
+                f"b.target: la regla quantity lee {name!r}, que esta indexado y no "
+                "es una Var; solo se pueden leer Vars (se traducen al periodo)"
+            )
+        return comp
+
+
+def shock_only(m: Any) -> None:
+    """Deja las filas de los hooks solo en el shock y ancla las de ``b.target`` al
+    check: ``quantity[shock] = target[shock] x quantity[check]``.
+
+    Corre despues de reflejar las filas del modelo de un periodo (en todos los
+    periodos o en uno, ``build_equations_intra``); es idempotente."""
+    rows = getattr(m, "_shock_rows", None) or frozenset()
+    for name in rows:
+        con = getattr(m, name, None)
+        if con is None:
+            continue
+        for idx in [i for i in con if i[-1] != SHOCK]:
+            del con[idx]
+    targets: dict[str, Target] = getattr(m, "_targets", None) or {}
+    shock, check = _AtPeriod(m, SHOCK), _AtPeriod(m, CHECK)
+    for name, t in targets.items():
+        con = getattr(m, target_row(name), None)
+        if con is None:
+            continue
+        for cell, quantity in t.cells:
+            idx = (*cell, SHOCK)
+            if idx in con:
+                con[idx].set_value(
+                    quantity(shock, *cell)
+                    == getattr(m, name)[idx] * quantity(check, *cell)
+                )
 
 
 def ppriv_tornqvist(m: Any, r: str) -> Any:

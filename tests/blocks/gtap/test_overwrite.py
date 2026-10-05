@@ -43,7 +43,7 @@ def mp_desempleo():
 
 
 def test_overwrite_registra_en_la_clase():
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def uno(b):
         pass
 
@@ -54,7 +54,7 @@ def test_reregistrar_la_misma_funcion_no_duplica():
     """Re-ejecutar la celda del notebook reemplaza el hook, no lo apila."""
     for _ in range(2):
 
-        @overwrite(ShockBlock)
+        @overwrite(ShockBlock, period="shock")
         def uno(b):
             pass
 
@@ -62,11 +62,11 @@ def test_reregistrar_la_misma_funcion_no_duplica():
 
 
 def test_clear_limpia_todo():
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def uno(b):
         pass
 
-    @overwrite(ClosureBlock)
+    @overwrite(ClosureBlock, period="shock")
     def dos(b):
         pass
 
@@ -76,12 +76,44 @@ def test_clear_limpia_todo():
     assert overwrite.registered(ShockBlock) == []
 
 
+def test_period_distinto_de_shock_falla():
+    """El cierre de @overwrite rige solo en el shock (como el swap de GEMPACK y GAMS)."""
+    with pytest.raises(ValueError, match="shock"):
+        overwrite(ShockBlock, period="check")
+
+
+def test_equation_repetida_suma_celdas_a_la_misma_fila():
+    """Varias llamadas con el mismo nombre arman UNA familia de filas (ME9A: eq_aoreg
+    en MFG y SER de cada region)."""
+    from equilibria.templates.gtap.gtap_block_model import build_block_single_period
+
+    p = nus333_params()
+
+    @overwrite(ShockBlock, period="shock")
+    def libre(b):
+        for a in ("MFG", "SER"):
+            b.endogenous("axp", ("USA", a))
+
+    @overwrite(ClosureBlock, period="shock")
+    def parejo(b):
+        for a in ("MFG", "SER"):
+            b.equation(
+                "eq_parejo",
+                ("USA", a),
+                lambda m, r, a: m.axp[r, a] == m.axp[r, "AGR"],
+                domains=("r", "a"),
+            )
+
+    sp = cast(Any, build_block_single_period(p, p.sets, closure(), "ROW"))
+    assert set(sp.eq_parejo) == {("USA", "MFG"), ("USA", "SER")}
+
+
 def test_endogenous_de_algo_que_no_es_instrumento_falla():
     from equilibria.templates.gtap.gtap_block_model import build_block_single_period
 
     p = nus333_params()
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def mal(b):
         b.endogenous("pft", ("USA", "LABOR"))
 
@@ -129,18 +161,18 @@ def test_sp_de_referencia_del_driver_con_hooks():
     assert sp._endogenous_instrument_cells == {"aft": frozenset({("USA", "LABOR")})}
 
 
-def test_multiperiodo_con_hooks(mp_desempleo):
-    from pyomo.environ import value
-
+def test_multiperiodo_con_hooks_solo_en_el_shock(mp_desempleo):
+    """En base y check rige el cierre estandar: la celda fija y sin la fila nueva.
+    En el shock, la celda libre y la fila."""
     m = mp_desempleo
+    for t in ("base", "check"):
+        assert m.aft["USA", "LABOR", t].fixed, t
+        assert ("USA", "LABOR", t) not in m.eq_wreal, t
+    assert not m.aft["USA", "LABOR", "shock"].fixed
+    assert set(m.eq_wreal) == {("USA", "LABOR", "shock")}
     for t in ("base", "check", "shock"):
-        assert not m.aft["USA", "LABOR", t].fixed, t
         assert m.aft["ROW", "LABOR", t].fixed, t
-        assert ("USA", "LABOR", t) in m.eq_wreal, t
     assert m._endogenous_instrument_cells == {"aft": frozenset({("USA", "LABOR")})}
-    # En la base la fila se cumple: el Tornqvist vale 1 y pft es su valor de base.
-    row = m.eq_wreal["USA", "LABOR", "base"]
-    assert abs(value(row.body) - value(row.upper)) < 1e-12
 
 
 def test_sin_hooks_no_cambia_nada():
@@ -167,6 +199,8 @@ def test_is_exogenous_por_celda(mp_desempleo):
 
     m = mp_desempleo
     assert not is_exogenous(m, "aft", ("USA", "LABOR", "shock"))
+    assert is_exogenous(m, "aft", ("USA", "LABOR", "check"))
+    assert is_exogenous(m, "aft", ("USA", "LABOR", "base"))
     assert is_exogenous(m, "aft", ("ROW", "LABOR", "shock"))
     assert is_exogenous(m, "prdtx_rai", ("USA", "MFG", "MFG", "shock"))
     assert not is_exogenous(m, "pft", ("USA", "LABOR", "shock"))
@@ -189,6 +223,9 @@ def test_freeze_inactive_periods_libera_la_celda_endogena(mp_desempleo):
     assert m.aft["USA", "LABOR", "check"].fixed
     for t in ("base", "check", "shock"):
         assert m.aft["ROW", "LABOR", t].fixed, t
+    # Activo el check: la celda sigue fija (exogena fuera del shock).
+    freeze_inactive_periods(m, "check")
+    assert m.aft["USA", "LABOR", "check"].fixed
 
 
 def test_seed_desde_el_periodo_previo_incluye_la_celda_endogena(mp_desempleo):
@@ -222,22 +259,22 @@ def test_cotas_de_gams_sueltan_la_celda_endogena(mp_desempleo):
 
 
 def _register_qca_target() -> None:
-    """``b.target``: objetivo de cantidad de TBL94 (x[USA,MFG,MFG]), fijo en su base."""
-    from pyomo.environ import value
+    """``b.target``: objetivo de cantidad de TBL94, ``x[shock] = qca_target x x[check]``."""
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def qca_target(b):
+        b.endogenous("prdtx_rai", ("USA", "MFG", "MFG"))
         b.target(
             "qca_target",
             ("USA", "MFG", "MFG"),
-            initial=lambda m, r, a, i: value(m.x[r, a, i]),
+            quantity=lambda m, r, a, i: m.x[r, a, i],
             domains=("r", "a", "i"),
         )
 
 
-def test_target_es_instrumento_fijo_en_su_valor_inicial():
-    """El objetivo es una Var nueva, registrada como instrumento y fija en
-    ``initial(m, *cell)``; las demas celdas tambien quedan fijas (sin fila)."""
+def test_target_es_un_factor_fijo_en_1():
+    """El objetivo es una Var nueva, registrada como instrumento y fija en 1 (un
+    factor sobre el check). En el SP la fila es ``x = qca_target x x_base``."""
     from pyomo.environ import value
 
     from equilibria.templates.gtap.gtap_block_model import build_block_single_period
@@ -248,13 +285,17 @@ def test_target_es_instrumento_fijo_en_su_valor_inicial():
 
     assert "qca_target" in sp._exogenous_instruments
     assert all(vd.fixed for vd in sp.qca_target.values())
+    assert all(float(value(vd)) == 1.0 for vd in sp.qca_target.values())
     cell = ("USA", "MFG", "MFG")
-    assert float(value(sp.qca_target[cell])) == pytest.approx(
-        float(value(sp.x[cell])), rel=1e-12
-    )
+    assert set(sp.eq_qca_target) == {cell}
+    row = sp.eq_qca_target[cell]
+    assert abs(value(row.body) - value(row.upper)) < 1e-9
 
 
-def test_target_multiperiodo_lleva_el_shock_solo_en_shock():
+def test_target_multiperiodo_fila_solo_en_el_shock_contra_el_check():
+    """La fila vive solo en el shock y lee la cantidad del CHECK:
+    ``x[shock] = qca_target[shock] x x[check]``. El shock entra como factor."""
+    from pyomo.core.expr.visitor import identify_variables
     from pyomo.environ import value
 
     from equilibria.templates.gtap.gtap_block_model import build_block_model
@@ -264,14 +305,21 @@ def test_target_multiperiodo_lleva_el_shock_solo_en_shock():
     _register_qca_target()
     m, _ = cast(Any, build_block_model(p, p.sets, closure(), "ROW"))
     cell = ("USA", "MFG", "MFG")
-    base = float(value(m.x[(*cell, "base")]))
     for t in ("base", "check", "shock"):
         assert m.qca_target[(*cell, t)].fixed, t
-        assert float(value(m.qca_target[(*cell, t)])) == pytest.approx(base), t
+        assert float(value(m.qca_target[(*cell, t)])) == 1.0, t
+    assert set(m.eq_qca_target) == {(*cell, "shock")}
+    row = m.eq_qca_target[(*cell, "shock")]
+    names = {v.name for v in identify_variables(row.body)}
+    assert {
+        "x[USA,MFG,MFG,shock]",
+        "x[USA,MFG,MFG,check]",
+        "qca_target[USA,MFG,MFG,shock]",
+    } <= names
 
     fix_instrument_shock(m, "qca_target", cell, factor=0.99)
-    assert float(value(m.qca_target[(*cell, "shock")])) == pytest.approx(0.99 * base)
-    assert float(value(m.qca_target[(*cell, "check")])) == pytest.approx(base)
+    assert float(value(m.qca_target[(*cell, "shock")])) == pytest.approx(0.99)
+    assert float(value(m.qca_target[(*cell, "check")])) == 1.0
 
 
 def test_target_con_nombre_de_variable_existente_falla():
@@ -279,9 +327,9 @@ def test_target_con_nombre_de_variable_existente_falla():
 
     p = nus333_params()
 
-    @overwrite(ShockBlock)
+    @overwrite(ShockBlock, period="shock")
     def mal(b):
-        b.target("x", ("USA", "MFG", "MFG"), initial=lambda m, *c: 1.0)
+        b.target("x", ("USA", "MFG", "MFG"), quantity=lambda m, *c: 1.0)
 
     with pytest.raises(ValueError, match="x"):
         build_block_single_period(p, p.sets, closure(), "ROW")
@@ -296,7 +344,7 @@ def test_block_edit_expone_lo_que_declararon_los_hooks():
 
     edit = BlockEdit(None, {}, [])
     edit.endogenous("aft", ("USA", "LABOR"))
-    edit.target("t", ("USA",), initial=ini, domains=("r",))
+    edit.target("t", ("USA",), quantity=ini, domains=("r",))
     assert edit.endogenized() == {"aft": {("USA", "LABOR")}}
     assert edit.declared_targets() == {"t": Target(("r",), [(("USA",), ini)])}
 
@@ -306,9 +354,9 @@ def test_target_con_dominios_distintos_falla():
     from equilibria.blocks.gtap.overwrite import BlockEdit, Target, collect_targets
 
     edit = BlockEdit(None, {}, [])
-    edit.target("t", ("USA",), initial=lambda m, r: 1.0, domains=("r",))
+    edit.target("t", ("USA",), quantity=lambda m, r: 1.0, domains=("r",))
     with pytest.raises(ValueError, match="dominios"):
-        edit.target("t", ("USA",), initial=lambda m, r: 1.0, domains=("rp",))
+        edit.target("t", ("USA",), quantity=lambda m, r: 1.0, domains=("rp",))
 
     def ini(m, r):
         return 1.0
@@ -321,3 +369,26 @@ def test_target_con_dominios_distintos_falla():
         collect_targets([_B(("r",)), _B(("rp",))])
     got = collect_targets([_B(("r",)), _B(("r",))])
     assert got == {"t": Target(("r",), [(("USA",), ini), (("USA",), ini)])}
+
+
+def test_vista_de_periodo_traduce_vars_y_rechaza_lo_demas():
+    """``quantity`` de ``b.target`` se evalua en un periodo: ``v[k]`` es ``v[(*k, t)]``.
+    Un componente indexado que no es Var no se puede traducir: falla en voz alta."""
+    from pyomo.environ import ConcreteModel, Param, Var
+
+    from equilibria.blocks.gtap.overwrite import _AtPeriod
+
+    m = ConcreteModel()
+    keys = [("USA", t) for t in ("base", "check", "shock")]
+    m.x = Var(keys, initialize=1.0)
+    m.p = Param(keys, initialize=2.0, mutable=True)
+    m.k = Param(initialize=3.0)
+    # Una Var escalar del modelo de un periodo queda indexada solo por el periodo.
+    m.s = Var(["base", "check", "shock"], initialize=1.0)
+
+    view = _AtPeriod(m, "check")
+    assert view.x["USA"] is m.x["USA", "check"]
+    assert view.s is m.s["check"]
+    assert view.k is m.k
+    with pytest.raises(ValueError, match="p"):
+        _ = view.p
