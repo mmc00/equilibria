@@ -19,6 +19,13 @@ if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
 
 DATASETS = ROOT / "datasets"
 REF_GDX = ROOT / "tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub1.gdx"
+# GEMPACK con el MISMO cierre que estos tests (capFix = RORDELTA 0). El nombre sin
+# sufijo (sl4dump_gtap7_3x3_tm10.har) es capFlex (RORDELTA 1) desde 06dd878, que
+# regenero los fixtures con el cierre estandar: comparado contra capFix, el match de
+# cantidades cayo de 96,3% a 73,2% sin que cambiara el modelo (git bisect, 2026-10-04).
+GEMPACK_CAPFIX = (
+    ROOT / "tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10_s8-16-32_capfix.har"
+)
 
 
 def _has_solver():
@@ -172,7 +179,7 @@ def test_calibrated_land_response_beats_default_vs_gempack():
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    sl4 = ROOT / "tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10.har"
+    sl4 = GEMPACK_CAPFIX
     if not sl4.exists():
         pytest.skip(f"GEMPACK fixture missing: {sl4}")
     gem = None
@@ -186,16 +193,10 @@ def test_calibrated_land_response_beats_default_vs_gempack():
             continue
         if gem is not None:
             break
-    # -3.618 es lo que trae el fixture COMMITEADO para pfe[Land,Food,EU_28].
-    # El -2.681 anterior era del fixture VIEJO: 06dd878 (2026-08-02) regenero los
-    # sl4dump "with the standard closure (no dpsave swap)" y no actualizo este
-    # ancla, que se habia fijado 3 dias antes en a749f3f (2026-07-30).
-    # COMPROBADO leyendo la misma celda en el fixture anterior a esa regeneracion:
-    #   06dd878~1 -> pfe[Land,Food,EU_28] = -2.681145429611206  (el viejo)
-    #   HEAD      -> pfe[Land,Food,EU_28] = -3.6182825565338135 (el commiteado)
-    # No es un fallo del modelo ni del lector de .har: el numero esperado quedo
-    # huerfano de su fixture. Da identico en macOS y Linux.
-    assert gem is not None and gem == pytest.approx(-3.618, abs=1e-2)
+    # pfe[Land,Food,EU_28] del fixture capFix (el cierre de este test). El -2.681
+    # original era del fixture anterior a 06dd878 (cierre con el swap de dpsave); el
+    # capFlex sin sufijo da -3.618.
+    assert gem is not None and gem == pytest.approx(-3.6126, abs=1e-3)
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
@@ -223,7 +224,7 @@ def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
     from measure_gempack_blocks import _quantity_match
 
-    gem = ROOT / "tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10.har"
+    gem = GEMPACK_CAPFIX
     if not gem.exists():
         pytest.skip(f"GEMPACK fixture missing: {gem}")
 
