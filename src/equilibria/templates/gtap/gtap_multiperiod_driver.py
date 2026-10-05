@@ -2584,9 +2584,7 @@ def _recompute_pm_pmt(
 # ---------------------------------------------------------------------------
 # _recompute_ytax_mt — post-solve fix of the import-tax revenue stream
 # ---------------------------------------------------------------------------
-def _recompute_ytax_mt(
-    m, base_params, period: str, shock_factor: float = 0.0, gtap_mode: bool = False
-) -> int:
+def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0) -> int:
     """Recompute ytax[r,'mt'] (import-tax revenue) and ytaxshr[r,'mt'] for `period`.
 
     BUG this fixes (shared by ifSUB=0 AND ifSUB=1, ~8.8% low): eq_ytax for gy='mt'
@@ -2602,6 +2600,8 @@ def _recompute_ytax_mt(
     on the SOLVED pmcif/xw. Then ytaxshr[r,mt] = ytax[r,mt]/regY (regY already matches
     GAMS to <0.5%, and the mt delta is tiny vs ytaxTot, so the cascade is safe).
     shock_factor=0.0 for non-shock periods → recompute is a no-op (imptx unchanged).
+    altertax only: gtap-mode carries the shock IN the solved eq_ytax[mt]
+    (_rebuild_eq_ytax_mt_shock) and must not be overwritten post-solve.
     Returns the number of cells written.
     """
     from pyomo.environ import value as _V
@@ -2642,31 +2642,14 @@ def _recompute_ytax_mt(
 
     for r in m.r:
         total = 0.0
-        for key, imptx_b in imptx_map.items():
-            if gtap_mode:
-                # imptx/xw/pmcif are keyed (importer, good, exporter). Filter on
-                # the IMPORTER (col 0), and apply the tm_pct POWER rate
-                # (1+imptx)*f − 1 (GAMS tm.fx = tm.l*f shocks the tariff POWER),
-                # not the RATE form imptx*f which drops the flat +Δ increment.
-                imp, i, exp = key
-                if imp != r:
-                    continue
-                pmcif = _pmcif(imp, i, exp)
-                xw = _xw(imp, i, exp)
-                if pmcif is None or xw is None:
-                    continue
-                rate = (1.0 + float(imptx_b)) * f - 1.0
-                total += (rate + _mtax(imp, i)) * pmcif * xw
-            else:
-                # Altertax legacy path — byte-identical to before.
-                e, i, imp = key
-                if imp != r:
-                    continue
-                pmcif = _pmcif(e, i, imp)
-                xw = _xw(e, i, imp)
-                if pmcif is None or xw is None:
-                    continue
-                total += (float(imptx_b) * f + _mtax(imp, i)) * pmcif * xw
+        for (e, i, imp), imptx_b in imptx_map.items():
+            if imp != r:
+                continue
+            pmcif = _pmcif(e, i, imp)
+            xw = _xw(e, i, imp)
+            if pmcif is None or xw is None:
+                continue
+            total += (float(imptx_b) * f + _mtax(imp, i)) * pmcif * xw
         try:
             ytax[r, "mt", period].set_value(total)
             n += 1
@@ -3351,175 +3334,9 @@ def _solve_multiperiod_inner(
     if _tariff_shock:
         _apply_imptx_shock(params_shock, factor=0.10, gtap_mode=_gtap_mode)
 
-    # Freeze base and check; leave shock free.
-    freeze_inactive_periods(m, "shock")
-
-    # Must come AFTER freeze_inactive_periods (same ordering as the check recipe in period_prep).
-    # EXPERIMENT (env-gated): GAMS's pure-gtap real-CES run calibrates the share
-    # params (af/and/ava/io/gx/alpha*) ONCE at base (loop(t0)) and holds them
-    # CONSTANT across periods — the GDX proves af/and/ava[EU_28,Food] are byte-
-    # identical base=check=shock. Python re-recalibrates them every period, which
-    # for the shock yields af[EU_28,Land,Food]=0.1106 vs GAMS's constant 0.1001,
-    # over-pricing the sluggish factor (pf[Land] 19% high). Skip the recal to test.
-    # Same as the check recipe (period_prep): GAMS holds share params constant across periods in
-    # pure-gtap. Skip the per-period recal in gtap-mode (altertax keeps it).
-    if not _gtap_mode:
-        _recalibrate_and_ava(m, params_shock, "shock", "check")
-        # _recalibrate_io_af NOT called — see period_prep._recalibrate_shares: GAMS holds
-        # io/af constant across periods; re-recalibrating slid the sluggish-Land pft.
-        _recalibrate_gx_ax(m, params_shock, "shock", "check")
-        _recalibrate_alphad_alpham(m, params_shock, "shock", "check")
-        _recalibrate_alphaa_gov_inv(m, params_shock, "shock", "check")
-        _recalibrate_alphaa_hhd(m, params_shock, "shock", "check")
-
-    # Warm-start shock from check solved values (quantities) — this is the right
-    # warm start for convergence.  BUT it overwrites pva/pnd/px with the CHECK values;
-    # since holdfix_cd will PIN pva/pnd/px, they must be re-seeded from the SHOCK GAMS
-    # values (1.0078 for ROW/Mnfcs, not the check's 0.7592) or the pin is wrong.
-    # px joined the pinned family with the eq_pxeq hold: the FIRST px-hold attempt
-    # failed precisely because px was missing HERE and got pinned at CHECK values
-    # (px[MEX,Rice] froze at 1.0 vs the ref's 0.672 → gate 87.76→86.09, reverted).
-    _pva_pnd_shock_seed = {}
-    if holdfix_cd and not _gtap_mode:
-        for _vn in ("pva", "pnd", "px"):
-            _v = getattr(m, _vn, None)
-            if _v is None:
-                continue
-            for _idx in _v:
-                _t = _idx[-1] if isinstance(_idx, tuple) else _idx
-                if _t == "shock" and _v[_idx].value is not None:
-                    _pva_pnd_shock_seed[(_vn, _idx)] = float(_v[_idx].value)
-
-    # Warm-start shock from the prior period's solved values.  Normally "check";
-    # in F3.5 base-calibrated mode the check phase is skipped, so seed from "base"
-    # — UNLESS solve_check forced the check to solve, in which case the shock
-    # anchors on the re-settled check (matching GAMS loop(tsim) and the GEMPACK
-    # shock/check %-change).
-    _shock_prior = "base" if (_base_calibrated and not solve_check) else "check"
-    _seed_period_from_prior(m, _shock_prior, "shock")
-
-    # Restore the SHOCK GAMS pva/pnd seed that the prior-seed just clobbered.
-    if holdfix_cd and not _gtap_mode:
-        for (_vn, _idx), _val in _pva_pnd_shock_seed.items():
-            with contextlib.suppress(Exception):
-                getattr(m, _vn)[_idx].set_value(_val)
-
-    # Unfix regy[r,'shock'] (same as check period).
-    for _r in params_shock.sets.r:
-        try:
-            if hasattr(m, "regy") and m.regy[_r, "shock"].fixed:
-                m.regy[_r, "shock"].unfix()
-        except Exception:
-            pass
-
-    # Fix pnum for shock period (numeraire anchor).
-    try:
-        if hasattr(m, "pnum"):
-            # pnum is scalar in single-period; in multi-period it's indexed by t
-            pnum_shock = m.pnum["shock"]
-            if not pnum_shock.fixed:
-                pnum_shock.fix(1.5)
-    except (KeyError, AttributeError, TypeError):
-        pass
-
-    # FIX B (B3): deactivate eq_xft[r,f,'shock'] where eq_xfteq[r,f,'shock'] is active.
-    # Same logic as B1/B2 for base/check: the single-period altertax gate silently
-    # KeyErrors on multi-period (r,f,period) indices, leaving the system over-determined.
-    # gtap-mode: do NOT blanket-deactivate eq_xft (see period_prep._deactivate_redundant_xft).
-    # Altertax keeps the blanket deactivation (byte-identical to before).
-    _eq_xft_mp = getattr(m, "eq_xft", None)
-    _eq_xfteq_mp = getattr(m, "eq_xfteq", None)
-    if not _gtap_mode and _eq_xft_mp is not None and _eq_xfteq_mp is not None:
-        _n_xft_deact_shk = 0
-        for _r in m.r:
-            for _f in m.f:
-                try:
-                    _xfteq_cd = _eq_xfteq_mp[(_r, _f, "shock")]
-                except KeyError:
-                    continue
-                if not _xfteq_cd.active:
-                    continue
-                try:
-                    _xft_cd = _eq_xft_mp[(_r, _f, "shock")]
-                except KeyError:
-                    continue
-                if _xft_cd.active:
-                    _xft_cd.deactivate()
-                    _n_xft_deact_shk += 1
-        if _n_xft_deact_shk:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: deactivated eq_xft for %d (r,f) pairs "
-                "(eq_xfteq active → eq_xft redundant, multi-period index fix)",
-                _n_xft_deact_shk,
-            )
-
-    # gtap-mode: collapse pft/eq_pfteq for the active period (factor-price
-    # squaring; SP-base squaring no-ops on the MP (r,f,t) index).
-    if _gtap_mode:
-        _n_pft_shk = _collapse_pft_pfteq(m, "shock")
-        if _n_pft_shk:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: collapsed pft/eq_pfteq for %d (r,f) pairs "
-                "(gtap-mode factor-price squaring)",
-                _n_pft_shk,
-            )
-    # Replicate single-period structural fixing for shock period.
-    _shk_closure = base_closure if _gtap_mode else alt_closure
-    _sp_ref_shk = _build_sp_reference(
-        params_shock.sets, params_shock, _shk_closure, res_region, model=m
-    )
-    _replicate_sp_fixing(m, _sp_ref_shk, "shock")
-    _replicate_sp_bounds(m, _sp_ref_shk, "shock")
-    if _gtap_mode:
-        _apply_gams_bounds(m, "shock")
-    del _sp_ref_shk
-
-    # Mute the inert welfare-report tail for shock (same as check).
-    if mute_welfare:
-        _n_mute = _mute_welfare_tail(
-            m, "shock", list(params_shock.sets.r), gtap_mode=_gtap_mode
-        )
-        if _n_mute:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: muted %d welfare-leaf rows (cv/ev/walras/u/ug/us)",
-                _n_mute,
-            )
-
-    # Seed derived demand-volume vars for shock (same as check).
-    if holdfix_cd and not _gtap_mode:
-        _n_der = _complete_derived_seed(m, "shock")
-        if _n_der:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: seeded %d derived demand-volume cells", _n_der
-            )
-
-    # Holdfix the CD-degenerate VA/ND nest for shock (same as check).
-    if holdfix_cd and not _gtap_mode:
-        _n_hf = _holdfix_cd_nest(m, "shock")
-        if _n_hf:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: holdfixed %d CD-nest cells (pva/pnd)", _n_hf
-            )
-
-    # Holdfix pf for sector-specific (fnm) factors with etaff=0, shock period
-    # (same rationale as check — see _holdfix_fnm_pf docstring).
-    _n_hf_pf = _holdfix_fnm_pf(m, params_shock, "shock")
-    if _n_hf_pf:
-        import logging as _logging
-
-        _logging.getLogger(__name__).info(
-            "shock period: holdfixed %d fnm pf cells (etaff=0)", _n_hf_pf
-        )
+    # Preparar el shock (receta de period_prep) ANTES de aplicarlo: congelar
+    # base/check reactivaria filas que los rebuilds del arancel desactivan.
+    _shk_closure = preparer.prepare(m, "shock", params_shock)
 
     # gtap-mode: inject the tariff shock INTO the solved eq_pmeq[*,*,*,'shock']
     # cells (shock-in-equations) instead of relying on the post-solve cosmetic pm
@@ -3528,14 +3345,8 @@ def _solve_multiperiod_inner(
     # eq_pmeq shock cells (a whole-slice rebuild recalibrates Armington/CDE shares
     # on the counterfactual and regresses to ~61%). With the wedge now in-equation,
     # the post-solve pm recompute becomes a NO-OP for gtap-mode (see below).
-    # Params used by the post-solve recomputes below. Initialised here (not only
-    # inside the `if not _gtap_mode` ytax[mt] block at line ~1885) because the
-    # pm/pmt/pa recompute at the end (gated on `not _eq_pmeq_shock_rebuilt`) also
-    # reads it: in gtap-mode + ifSUB=1 the eq_pmeq shock rebuild rewrites 0 cells
-    # (the margin eqs are deactivated under ifSUB → eq_pmeq[*,*,*,shock] inactive),
-    # so `_eq_pmeq_shock_rebuilt` stays False and that recompute runs with
-    # `_recompute_params` otherwise-unbound. `p_alt` (the base-rate, no-shock params;
-    # the recomputes apply shock_factor themselves) is defined in both modes.
+    # Params of the post-solve recomputes (ytax[mt], pm/pmt/pa): the base-rate,
+    # no-shock `p_alt` — the recomputes apply shock_factor themselves.
     _recompute_params = p_alt
     _eq_pmeq_shock_rebuilt = False
     if not _tariff_shock:
@@ -3607,45 +3418,8 @@ def _solve_multiperiod_inner(
                 _n_ymt,
             )
 
-    # TEMP DEBUG HOOK (session-local): export the fully-prepared SHOCK-period Pyomo
-    # model to a GAMS .gms (walras as maximize objective) right before PATH solves
-    # it — for an equation-by-equation diff of the shock tariff rebuild vs the GAMS
-    # bundle. No-op unless the env var is set.
-    import os as _os_shk
-    import sys as _sys_shk
-
-    _gms_shk_path = _os_shk.environ.get("EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK")
-    if _gms_shk_path:
-        from pyomo.environ import Objective as _PyoObjShk
-        from pyomo.environ import maximize as _pyo_max_shk
-
-        _ew_shk = getattr(m, "eq_walras", None)
-        if _ew_shk is not None:
-            for _idx in list(_ew_shk):
-                _match = (
-                    (_idx and _idx[-1] == "shock")
-                    if isinstance(_idx, tuple)
-                    else (_idx == "shock")
-                )
-                if _match and _ew_shk[_idx].active:
-                    _ew_shk[_idx].deactivate()
-        _wv_shk = getattr(m, "walras", None)
-        try:
-            _wvd_shk = _wv_shk["shock"]
-        except Exception:
-            _wvd_shk = _wv_shk
-        if _wvd_shk is not None and _wvd_shk.fixed:
-            _wvd_shk.unfix()
-        m._nlp_walras_objective_shk = _PyoObjShk(expr=_wvd_shk, sense=_pyo_max_shk)
-        m.write(
-            _gms_shk_path, format="gams", io_options={"symbolic_solver_labels": True}
-        )
-        print(
-            f"[export] wrote shock-period .gms to {_gms_shk_path}", file=_sys_shk.stderr
-        )
-        raise RuntimeError(
-            "EQUILIBRIA_DEBUG_EXPORT_GMS_SHOCK: stopping right before PATH solves shock"
-        )
+    # Con el shock ya aplicado: la depuracion ve el modelo que resuelve PATH.
+    debug_before_solve(m, "shock")
 
     # Solve shock on m with shocked params.
     # CONTINUATION HOOK (env-gated, EQUILIBRIA_GTAP_SHOCK_CONTINUATION="0.25,0.5,0.75,1.0"):
@@ -3748,10 +3522,7 @@ def _solve_multiperiod_inner(
     # Altertax path is byte-identical to before (uses base imptx p_alt *
     # (1+shock_factor); reads pmcif/xw, order vs pm free).
     if not _gtap_mode:
-        _recompute_params = p_alt
-        _n_mt = _recompute_ytax_mt(
-            m, _recompute_params, "shock", shock_factor=0.10, gtap_mode=_gtap_mode
-        )
+        _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10)
         if _n_mt:
             import logging as _logging
 
