@@ -59,10 +59,23 @@ def _va_wedge(params: Any, bm: Any, r: str, f: str, a: str) -> float:
     subsidised ag cells; closes ~half the qxs gap vs GEMPACK. Selected by the
     ``gtap7_gempack`` closure. See project_gtap_qxs_bilateral_trade_residual.
     """
-    ftrv = _f(bm.ftrv.get((r, f, a), 0.0))
-    fbep = _f(bm.fbep.get((r, f, a), 0.0))
-    basis = getattr(params, "va_subsidy_basis", "gams")
-    return ftrv + fbep if basis == "gempack" else ftrv - fbep
+    evfb = _f(bm.evfb.get((r, f, a), 0.0))
+    fcttx, fctts = factor_wedge_rates(bm, r, f, a, _basis(params))
+    return evfb * (fcttx + fctts)
+
+
+def _basis(params: Any) -> str:
+    return getattr(params, "va_subsidy_basis", "gams")
+
+
+def factor_wedge_rates(bm: Any, r: str, f: str, a: str, basis: str):
+    """(fcttx, fctts): ver gtap_parameters.factor_wedge_rates (import diferido:
+    los bloques no importan templates al cargar)."""
+    from equilibria.templates.gtap.gtap_parameters import (
+        factor_wedge_rates as _rates,
+    )
+
+    return _rates(bm, r, f, a, basis)
 
 
 def to_array(data: dict, elem_lists: list[list[str]], default: float = 0.0):
@@ -491,18 +504,18 @@ def fcttx_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
 
 
 def fctts_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
-    """fctts(r,f,a) = -fbep/evfb (0 if evfb<=0) — monolith 5071-5075."""
+    """fctts(r,f,a) = -fbep/evfb (0 if evfb<=0) — monolith 5071-5075.
+
+    Bajo el cierre gtap7_gempack, +fbep/evfb (ver factor_wedge_rates).
+    """
     bm = params.benchmark
-    out: dict[tuple[str, str, str], float] = {}
-    for r in sets.r:
-        for f in sets.f:
-            for a in sets.a:
-                evfb_val = _f(bm.evfb.get((r, f, a), 0.0))
-                if evfb_val <= 0.0:
-                    out[(r, f, a)] = 0.0
-                else:
-                    out[(r, f, a)] = -_f(bm.fbep.get((r, f, a), 0.0)) / evfb_val
-    return out
+    basis = _basis(params)
+    return {
+        (r, f, a): factor_wedge_rates(bm, r, f, a, basis)[1]
+        for r in sets.r
+        for f in sets.f
+        for a in sets.a
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -897,11 +910,10 @@ def _compute_ytax_ind_bench(params: Any, sets: Any, region: str) -> float:
     for (exporter, i, importer), rate in taxes.imptx.items():
         if importer == region:
             total += float(rate) * _f(bm.vcif.get((exporter, i, region), 0.0))
-    # ft + fs — factor tax + factor subsidy: ftrv - fbep over evfb keys
+    # ft + fs — factor tax + factor subsidy over evfb keys (_va_wedge: ftrv - fbep
+    # under GAMS, ftrv + fbep under gtap7_gempack)
     for rr, f, a in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
-        ftrv_val = _f(bm.ftrv.get((region, f, a), 0.0))
-        fbep_val = _f(bm.fbep.get((region, f, a), 0.0))
-        total += ftrv_val - fbep_val
+        total += _va_wedge(params, bm, region, f, a)
     return total
 
 
@@ -938,9 +950,12 @@ def ytax_stream_bench(
         return total
 
     if gy == "fs":
-        # FBEP se guarda NEGATIVO en el HAR, asi que la corriente es positiva.
+        # Al benchmark fs = Σ fctts*evfb. FBEP se guarda NEGATIVO en el HAR: con el
+        # signo de GAMS la corriente es positiva; con gtap7_gempack, negativa.
+        basis = _basis(params)
         for rr, f, a in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
-            total += -_f(bm.fbep.get((region, f, a), 0.0))
+            fctts = factor_wedge_rates(bm, region, f, a, basis)[1]
+            total += fctts * _f(bm.evfb.get((region, f, a), 0.0))
         return total
 
     if gy == "fc":

@@ -679,8 +679,13 @@ def build_block_model(
     # the pure derivation recipes (_va_wedge in _derived_params) and the driver's
     # per-period recalibration read it without threading closure through their
     # signatures. Default "gams" leaves the faithful-to-GAMS path byte-unchanged;
-    # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis).
-    params.va_subsidy_basis = getattr(closure, "va_subsidy_basis", "gams")
+    # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis) and recalibrates
+    # gx/ava with the data's factor wedge (calibration ran at load, closure-blind).
+    _basis = getattr(closure, "va_subsidy_basis", "gams")
+    if hasattr(params, "set_va_subsidy_basis"):
+        params.set_va_subsidy_basis(_basis)
+    else:
+        params.va_subsidy_basis = _basis
 
     # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod

@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from equilibria.templates.gtap.gtap_parameters import factor_wedge_rates
 from equilibria.templates.gtap.instruments import exogenous_test
 from equilibria.templates.gtap.period_debug import debug_before_solve
 from equilibria.templates.gtap.period_prep import PeriodPreparer
@@ -401,15 +402,8 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
     def _wedge(r, f, a):
         if _bm is None:
             return 0.0
-        evfb = float(_bm.evfb.get((r, f, a), 0.0) or 0.0)
-        if evfb <= 0.0:
-            return 0.0
-        ftrv = float(_bm.ftrv.get((r, f, a), 0.0) or 0.0)
-        fbep = float(_bm.fbep.get((r, f, a), 0.0) or 0.0)
-        # GEMPACK EVFP basis flips the subsidy sign (see _va_wedge in
-        # blocks/gtap/_derived_params.py); default "gams" keeps ftrv-fbep.
-        wedge = ftrv + fbep if _va_basis == "gempack" else ftrv - fbep
-        return wedge / evfb
+        # fcttx + fctts; gtap7_gempack flips the subsidy sign (factor_wedge_rates).
+        return sum(factor_wedge_rates(_bm, r, f, a, _va_basis))
 
     n_rebuilt = 0
 
@@ -2759,13 +2753,7 @@ def _recompute_ifsub_report_vars(
     def _pfa_wedge(r, f, a):
         if _bmk is None:
             return 0.0
-        evfb = float(_bmk.evfb.get((r, f, a), 0.0) or 0.0)
-        if evfb <= 0.0:
-            return 0.0
-        ftrv = float(_bmk.ftrv.get((r, f, a), 0.0) or 0.0)
-        fbep = float(_bmk.fbep.get((r, f, a), 0.0) or 0.0)
-        wedge = ftrv + fbep if _va_basis_pfa == "gempack" else ftrv - fbep
-        return wedge / evfb
+        return sum(factor_wedge_rates(_bmk, r, f, a, _va_basis_pfa))
 
     # --- factor prices: pfa, pfy ---
     for r in R:
