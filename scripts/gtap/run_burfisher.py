@@ -17,6 +17,7 @@ Uso:
     .venv/bin/python scripts/gtap/run_burfisher.py --gams-dir <dir> [--only TBL46A,TBL78]
 
 Requiere el dataset nus333 (``EQUILIBRIA_NUS333_DIR``) y gdxdump en el PATH.
+Los GDX de GAMS los genera ``gen_burfisher_gams.py`` con la misma tabla EXERCISES.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 ACTS = ("AGR", "MFG", "SER")
 
 
-def _me9(land, ao_agr, afe):
+def me9(land, ao_agr, afe):
     """Shocks de ME9B/C/D. ``land``: qe LAND (USA, ROW); ``ao_agr``: aoall(AGR) %;
     ``afe``: afeall LABOR (USA, ROW) en todas las actividades, o None."""
     aoreg = {"USA": 31.94, "ROW": 42.31}
@@ -230,11 +231,11 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
     # aoreg -> axp de todas las actividades; pop -> pop; qe -> aft; afeall -> lambdaf.
     # aoall(AGR) y aoreg se SUMAN en % en GEMPACK (ao = aoall + aosec + aoreg), o sea
     # que en niveles se MULTIPLICAN: axp(AGR) = 1,3194 x 0,89 en USA.
-    "ME9B": ("climatechange.prm", _me9(land=(-0.93, 4.4), ao_agr=0.0, afe=None)),
-    "ME9C": ("climatechange.prm", _me9(land=(10.07, 15.4), ao_agr=-11.0, afe=None)),
+    "ME9B": ("climatechange.prm", me9(land=(-0.93, 4.4), ao_agr=0.0, afe=None)),
+    "ME9C": ("climatechange.prm", me9(land=(10.07, 15.4), ao_agr=-11.0, afe=None)),
     "ME9D": (
         "climatechange.prm",
-        _me9(land=(10.07, 15.4), ao_agr=-11.0, afe=(-0.73, -2.0)),
+        me9(land=(10.07, 15.4), ao_agr=-11.0, afe=(-0.73, -2.0)),
     ),
 }
 
@@ -261,17 +262,28 @@ def level(m, p, name: str, idx: tuple, kind: str, pct: float) -> float:
     from pyomo.environ import value
 
     chk = float(value(getattr(m, name)[(*idx, "check")]))
-    if kind == "pct":
-        return chk * (1 + pct / 100)
-    if kind == "power":
-        return (1 + chk) * (1 + pct / 100) - 1
-    if kind == "power_kappa":
-        return 1 - (1 - chk) / (1 + pct / 100)
+    fs = 0.0
     if kind == "power_fct":
         from equilibria.blocks.gtap import _derived_params as dp
 
         fs = dp.fctts_data(p, p.sets).get(idx, 0.0)
-        return (1 + fs + chk) * (1 + pct / 100) - 1 - fs
+    return shocked(kind, chk, 1 + pct / 100, fs)
+
+
+def shocked(kind: str, chk, f, fs=0.0):
+    """El valor shockeado desde el de check ``chk``, con el factor ``f`` = 1+pct/100.
+
+    Vale con numeros y con expresiones GAMS en texto (``gen_burfisher_gams.py`` la
+    usa para escribir el mismo shock en el oraculo). ``fs``: fctts de la celda.
+    """
+    if kind == "pct":
+        return chk * f
+    if kind == "power":
+        return (1 + chk) * f - 1
+    if kind == "power_kappa":
+        return 1 - (1 - chk) / f
+    if kind == "power_fct":
+        return (1 + fs + chk) * f - 1 - fs
     raise ValueError(f"kind desconocido: {kind!r}")
 
 
