@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import pytest
+from tests.templates.gtap._nus333 import closure, nus333_params
 
 pytestmark = pytest.mark.integration
 
@@ -46,39 +47,6 @@ GDPMP_BASE_GAMS = {"USA": 14.0617801139496, "ROW": 41.7695611026001}
 TOL_REL = 1e-6
 
 
-def _params():
-    from equilibria._local_refs import nus333_dir
-    from equilibria.templates.gtap import GTAPParameters
-
-    har = nus333_dir()
-    if not (har / "basedata.har").exists():
-        pytest.skip(f"nus333 no disponible en {har}")
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=har / "basedata.har",
-        sets_path=har / "sets.har",
-        default_path=har / "default.prm",
-        baserate_path=har / "baserate.har",
-    )
-    return p
-
-
-def _closure():
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-
-    return GTAPClosureConfig(
-        name="base",
-        closure_type="MCP",
-        capital_mobility="sluggish",
-        fix_endowments=False,
-        fix_taxes=False,
-        fix_technology=False,
-        if_sub=False,
-        savf_flag="capFlex",
-        numeraire="pnum",
-    )
-
-
 @pytest.fixture(scope="module")
 def solved():
     """Mismo armado que run_burfisher.solve_exercise, sin shock."""
@@ -87,8 +55,8 @@ def solved():
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    p = _params()
-    gc = _closure()
+    p = nus333_params()
+    gc = closure()
     m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
     res = solve_multiperiod(
         m,
@@ -151,9 +119,9 @@ def test_pefob_inicial_es_la_de_cal_gms():
 
     from equilibria.templates.gtap.gtap_block_model import build_block_model
 
-    p = _params()
+    p = nus333_params()
     m, _ = build_block_model(
-        p, p.sets, _closure(), "ROW", base_calibrated=False, ref_gdx=None
+        p, p.sets, closure(), "ROW", base_calibrated=False, ref_gdx=None
     )
     pefob = cast(Any, m.pefob)
     malas = []
@@ -175,9 +143,9 @@ def test_xg_agg_inicial_es_la_de_cal_gms():
 
     from equilibria.templates.gtap.gtap_block_model import build_block_model
 
-    p = _params()
+    p = nus333_params()
     m, _ = build_block_model(
-        p, p.sets, _closure(), "ROW", base_calibrated=False, ref_gdx=None
+        p, p.sets, closure(), "ROW", base_calibrated=False, ref_gdx=None
     )
     xg = cast(Any, m.xg_agg)
     malas = []
@@ -225,11 +193,11 @@ def test_produccion_inicial_es_la_de_cal_gms():
 
     from equilibria.templates.gtap.gtap_block_model import build_block_model
 
-    p = _params()
+    p = nus333_params()
     m = cast(
         Any,
         build_block_model(
-            p, p.sets, _closure(), "ROW", base_calibrated=False, ref_gdx=None
+            p, p.sets, closure(), "ROW", base_calibrated=False, ref_gdx=None
         )[0],
     )
     malas = []

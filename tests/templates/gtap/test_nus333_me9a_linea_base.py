@@ -33,15 +33,17 @@ LOCAL-only: SKIP si falta nus333.
 
 from __future__ import annotations
 
-import gzip
-import importlib
-import json
-import sys
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from tests.templates.gtap._desempleo import closure
+from tests.templates.gtap._nus333 import (
+    closure,
+    gams_levels,
+    nus333_params,
+    pct,
+    run_burfisher,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -108,34 +110,6 @@ def register_me9a_hooks() -> None:
                 )
 
 
-def _run_burfisher() -> Any:
-    # scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
-    sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
-    return cast(Any, importlib.import_module("run_burfisher"))
-
-
-def _params():
-    from equilibria._local_refs import nus333_dir
-    from equilibria.templates.gtap import GTAPParameters
-
-    har = nus333_dir()
-    if not (har / "basedata.har").exists():
-        pytest.skip(f"nus333 no disponible en {har}")
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=har / "basedata.har",
-        sets_path=har / "sets.har",
-        default_path=har / "climatechange.prm",
-        baserate_path=har / "baserate.har",
-    )
-    return p
-
-
-def _gams_levels() -> dict[str, dict[tuple, float]]:
-    raw = json.loads(gzip.decompress(LEVELS.read_bytes()))["ME9A"]
-    return {vn: {tuple(k): v for k, v in cells} for vn, cells in raw.items()}
-
-
 @pytest.fixture(scope="module")
 def solved():
     from pyomo.environ import value
@@ -145,8 +119,8 @@ def solved():
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from equilibria.templates.gtap.instruments import fix_instrument_shock
 
-    rb = _run_burfisher()
-    p = _params()
+    rb = run_burfisher()
+    p = nus333_params("climatechange.prm")
     ac = closure()
     register_me9a_hooks()
     try:
@@ -180,13 +154,6 @@ def solved():
         overwrite.clear()
 
 
-def _pct(m, value, var, key):
-    comp = getattr(m, var)
-    return 100.0 * (
-        float(value(comp[(*key, "shock")])) / float(value(comp[(*key, "check")])) - 1.0
-    )
-
-
 def test_resuelve(solved):
     _, _, res, _ = solved
     for t in ("check", "shock"):
@@ -210,7 +177,7 @@ def test_iguala_a_gams(solved):
     malas = []
     for var, cells in ORACLE.items():
         for key, want in cells.items():
-            got = _pct(m, value, var, key)
+            got = pct(m, var, key)
             if abs(got - want) > TOL_PP:
                 malas.append(f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}")
     n = sum(len(c) for c in ORACLE.values())
@@ -222,7 +189,7 @@ def test_iguala_a_gams(solved):
 def test_todas_las_celdas_contra_gams(solved):
     """Check y shock, todas las celdas, contra los niveles de GAMS (tolerancia 0,1%)."""
     m, p, _, _ = solved
-    r = _run_burfisher().compare(m, p, _gams_levels())
+    r = run_burfisher().compare(m, p, gams_levels(LEVELS, "ME9A"))
     for period in ("check", "shock"):
         got = r[period]
         assert got["cells"] > 500, (period, got["cells"])

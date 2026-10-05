@@ -15,6 +15,7 @@ LOCAL-only: SKIP si falta nus333 o su ``3x3CES.prm``.
 from __future__ import annotations
 
 import pytest
+from tests.templates.gtap._nus333 import closure, nus333_params, pct
 
 pytestmark = pytest.mark.integration
 
@@ -41,36 +42,11 @@ ORACLE = {
 def solved(request):
     from pyomo.environ import value
 
-    from equilibria._local_refs import nus333_dir
-
-    har = nus333_dir()
-    prm = har / "3x3CES.prm"
-    if not (har / "basedata.har").exists() or not prm.exists():
-        pytest.skip(f"nus333 o 3x3CES.prm no disponible en {har}")
-
-    from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=har / "basedata.har",
-        sets_path=har / "sets.har",
-        default_path=prm,
-        baserate_path=har / "baserate.har",
-    )
-    ac = GTAPClosureConfig(
-        name="base",
-        closure_type="MCP",
-        capital_mobility="sluggish",
-        fix_endowments=False,
-        fix_taxes=False,
-        fix_technology=False,
-        if_sub=False,
-        savf_flag="capFlex",
-        numeraire="pnum",
-    )
+    p = nus333_params("3x3CES.prm")
+    ac = closure()
     m, _mp = build_block_model(
         p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
     )
@@ -96,19 +72,12 @@ def solved(request):
     return m, value
 
 
-def _pct(m, value, var, key):
-    comp = getattr(m, var)
-    return 100.0 * (
-        float(value(comp[(*key, "shock")])) / float(value(comp[(*key, "check")])) - 1.0
-    )
-
-
 @pytest.mark.parametrize(
     ("var", "key"), [(v, k) for v, cells in ORACLE.items() for k in cells]
 )
 def test_iguala_a_gams(solved, var, key):
     m, value = solved
-    got = _pct(m, value, var, key)
+    got = pct(m, var, key)
     want = ORACLE[var][key]
     assert abs(got - want) <= TOL_PP, (
         f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}"

@@ -16,6 +16,7 @@ LOCAL-only: SKIP si falta nus333.
 from __future__ import annotations
 
 import pytest
+from tests.templates.gtap._nus333 import closure, nus333_params, pct
 
 pytestmark = pytest.mark.integration
 
@@ -59,35 +60,11 @@ def solved(request):
     antes de ``solve_multiperiod`` (esta ultima NO debe sumar el arancel +10%)."""
     from pyomo.environ import value
 
-    from equilibria._local_refs import nus333_dir
-
-    har = nus333_dir()
-    if not (har / "basedata.har").exists():
-        pytest.skip(f"nus333 no disponible en {har}")
-
-    from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=har / "basedata.har",
-        sets_path=har / "sets.har",
-        default_path=har / "default.prm",
-        baserate_path=har / "baserate.har",
-    )
-    ac = GTAPClosureConfig(
-        name="base",
-        closure_type="MCP",
-        capital_mobility="sluggish",
-        fix_endowments=False,
-        fix_taxes=False,
-        fix_technology=False,
-        if_sub=False,
-        savf_flag="capFlex",
-        numeraire="pnum",
-    )
+    p = nus333_params()
+    ac = closure()
     m, _mp = build_block_model(p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None)
     shock_kw: dict = {"qe_shock": {("USA", "CAPITAL"): 1.10}}
     if request.param == "fix_instrument_shock":
@@ -111,19 +88,12 @@ def solved(request):
     return m, value
 
 
-def _pct(m, value, var, key, num="shock", den="check"):
-    comp = getattr(m, var)
-    return 100.0 * (
-        float(value(comp[(*key, num)])) / float(value(comp[(*key, den)])) - 1.0
-    )
-
-
 def test_el_shock_no_entra_al_check(solved):
     """base y check deben ser el mismo benchmark: el shock va solo en 'shock'."""
     m, value = solved
     for var in ("xp", "xft", "kstock", "pft"):
         for key in ORACLE[var]:
-            assert abs(_pct(m, value, var, key, "base", "check")) < 1e-6, (var, key)
+            assert abs(pct(m, var, key, "base", "check")) < 1e-6, (var, key)
 
 
 @pytest.mark.parametrize(
@@ -131,7 +101,7 @@ def test_el_shock_no_entra_al_check(solved):
 )
 def test_iguala_a_gams(solved, var, key):
     m, value = solved
-    got = _pct(m, value, var, key)
+    got = pct(m, var, key)
     want = ORACLE[var][key]
     assert abs(got - want) <= TOL_PP, (
         f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}"
