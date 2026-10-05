@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.templates.gtap._nus333 import nus333_params
 
 from equilibria._local_refs import nus333_dir, path_capi_src
 
@@ -79,16 +80,9 @@ def nus333_results():
         _solve,
     )
 
-    from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
-    params = GTAPParameters()
-    params.load_from_har(
-        basedata_path=NUS333_DIR / "basedata.har",
-        sets_path=NUS333_DIR / "sets.har",
-        default_path=NUS333_DIR / "default.prm",
-        baserate_path=NUS333_DIR / "baserate.har",
-    )
+    params = nus333_params()
     # El cierre completo. Con `GTAPClosureConfig(if_sub=False)` a secas se toman
     # los defaults `fix_endowments=True` / `gams_factor_pairing=False`, que
     # gtap_contract.py:377-389 documenta como NO fieles a GAMS: dejan `pft` sin

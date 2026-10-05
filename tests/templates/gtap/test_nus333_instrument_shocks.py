@@ -46,12 +46,11 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from tests.templates.gtap._nus333 import closure, nus333_params, pct
+from tests.templates.gtap._nus333 import ROOT, closure, nus333_params, pct
 
 pytestmark = pytest.mark.integration
 
 TOL_PP = 0.002
-ROOT = Path(__file__).resolve().parents[3]
 
 # Los shocks salen de ``run_burfisher.EXERCISES``, la misma tabla de la que
 # gen_gams.py arma el oraculo GAMS (una sola copia). Los ORACLES de abajo son los
@@ -279,8 +278,6 @@ def _level(m, p, name, idx, kind, x):
 
 @pytest.fixture(scope="module", params=sorted(SHOCKS))
 def solved(request):
-    from pyomo.environ import value
-
     exp = request.param
     prm_name, shocks = SHOCKS[exp]
     from equilibria.templates.gtap.gtap_block_model import build_block_model
@@ -306,11 +303,11 @@ def solved(request):
         solve_check=True,
     )
     assert int(res["shock"]["code"]) == 1, (exp, res["shock"])
-    return exp, m, value
+    return exp, m
 
 
 def test_iguala_a_gams(solved):
-    exp, m, value = solved
+    exp, m = solved
     malas = []
     for var, cells in ORACLES[exp].items():
         for key, want in cells.items():

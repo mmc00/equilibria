@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.templates.gtap._nus333 import nus333_params
 
 from equilibria._local_refs import nus333_dir, path_capi_src
 
@@ -82,16 +83,9 @@ def landshock_results():
     from _parity_datasets import nus333_closure
     from compare_nus333_vs_neos import _copy_var_levels, _extract_key, _solve
 
-    from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
-    params = GTAPParameters()
-    params.load_from_har(
-        basedata_path=NUS333_DIR / "basedata.har",
-        sets_path=NUS333_DIR / "sets.har",
-        default_path=NUS333_DIR / "default.prm",
-        baserate_path=NUS333_DIR / "baserate.har",
-    )
+    params = nus333_params()
     closure = nus333_closure()
 
     builder_b = GTAPModelEquations(

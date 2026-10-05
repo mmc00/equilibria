@@ -11,14 +11,18 @@ import importlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pytest
+
+if TYPE_CHECKING:
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def nus333_params(prm: str = "default.prm") -> Any:
+def nus333_params(prm: str = "default.prm") -> GTAPParameters:
     """Parametros nus333 con el ``.prm`` del ejercicio; SKIP si falta algo."""
     from equilibria._local_refs import nus333_dir
     from equilibria.templates.gtap import GTAPParameters
@@ -38,10 +42,17 @@ def nus333_params(prm: str = "default.prm") -> Any:
 
 def closure(
     savf_flag: Literal["capFix", "capFlex"] = "capFlex",
-) -> Any:
-    """El cierre de los ejercicios de Burfisher (capFlex, CAPITAL sluggish).
+) -> GTAPClosureConfig:
+    """El cierre MCP de los tests nus333: CAPITAL sluggish, dotaciones, impuestos y
+    tecnologia libres, numerario ``pnum``.
 
-    ``savf_flag="capFix"`` es el cierre por defecto de ``GTAPClosureConfig``."""
+    - ``"capFlex"`` (por defecto): el de los ejercicios de Burfisher.
+    - ``"capFix"``: el de los tests que solo arman el modelo sin resolver el
+      ejercicio (``conftest.nus333_mp_model``, ``test_shock_rejections``); es el
+      ``savf_flag`` por defecto de ``GTAPClosureConfig``.
+
+    No es ``scripts/gtap/_parity_datasets.nus333_closure()``: ese es el cierre fiel
+    a GAMS de la cascada de paridad (``gams_factor_pairing``, ``rmuv``/``imuv``)."""
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     return GTAPClosureConfig(

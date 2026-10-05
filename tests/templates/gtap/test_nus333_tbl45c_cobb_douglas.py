@@ -43,8 +43,6 @@ ORACLE = {
 def solved(request):
     """``mute_welfare=True`` fija ev/cv por su cuenta; ``False`` deja que las fije
     ``_fix_cd_welfare`` (eq_ev/eq_cv no existen bajo CD), que es lo que se prueba."""
-    from pyomo.environ import value
-
     from equilibria.blocks.gtap import _derived_params as dp
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
@@ -68,14 +66,14 @@ def solved(request):
         lambdava_shock={("USA", "SER"): 1.10},
     )
     assert int(res["shock"]["code"]) == 1, res["shock"]
-    return m, value
+    return m
 
 
 @pytest.mark.parametrize(
     ("var", "key"), [(v, k) for v, cells in ORACLE.items() for k in cells]
 )
 def test_iguala_a_gams_cobb_douglas(solved, var, key):
-    m, _ = solved
+    m = solved
     got = pct(m, var, key)
     want = ORACLE[var][key]
     assert abs(got - want) <= TOL_PP, (
@@ -87,7 +85,9 @@ def test_iguala_a_gams_cobb_douglas(solved, var, key):
 def test_ev_cv_fijados_al_ingreso_de_calibracion(solved, t):
     """Bajo CD GAMS no tiene eveq/cveq (model.gms:1322/1328): ev/cv quedan en
     ``ev.l = cv.l = yc.l`` de la calibracion (cal.gms:245-246), en TODO periodo."""
-    m, value = solved
+    from pyomo.environ import value
+
+    m = solved
     for r in m.r:
         yc0 = float(value(m.yc[r, "base"]))
         for nombre in ("ev", "cv"):
