@@ -75,7 +75,7 @@ def solved(request):
     ("var", "key"), [(v, k) for v, cells in ORACLE.items() for k in cells]
 )
 def test_iguala_a_gams_cobb_douglas(solved, var, key):
-    m, value = solved
+    m, _ = solved
     got = pct(m, var, key)
     want = ORACLE[var][key]
     assert abs(got - want) <= TOL_PP, (

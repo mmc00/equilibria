@@ -38,6 +38,7 @@ from typing import Any, cast
 import pytest
 from tests.templates.gtap._desempleo import register_desempleo_hooks
 from tests.templates.gtap._nus333 import (
+    ROOT,
     closure,
     gams_levels,
     nus333_params,
@@ -47,7 +48,6 @@ from tests.templates.gtap._nus333 import (
 
 pytestmark = pytest.mark.integration
 
-ROOT = Path(__file__).resolve().parents[3]
 LEVELS = ROOT / "tests" / "fixtures" / "nus333_desempleo_gams_levels.json.gz"
 TOL_PP = 0.002
 

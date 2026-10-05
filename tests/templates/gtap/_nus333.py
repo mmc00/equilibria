@@ -11,14 +11,14 @@ import importlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def nus333_params(prm: str = "default.prm"):
+def nus333_params(prm: str = "default.prm") -> Any:
     """Parametros nus333 con el ``.prm`` del ejercicio; SKIP si falta algo."""
     from equilibria._local_refs import nus333_dir
     from equilibria.templates.gtap import GTAPParameters
@@ -36,8 +36,12 @@ def nus333_params(prm: str = "default.prm"):
     return p
 
 
-def closure():
-    """El cierre de los ejercicios de Burfisher (capFlex, CAPITAL sluggish)."""
+def closure(
+    savf_flag: Literal["capFix", "capFlex"] = "capFlex",
+) -> Any:
+    """El cierre de los ejercicios de Burfisher (capFlex, CAPITAL sluggish).
+
+    ``savf_flag="capFix"`` es el cierre por defecto de ``GTAPClosureConfig``."""
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     return GTAPClosureConfig(
@@ -48,7 +52,7 @@ def closure():
         fix_taxes=False,
         fix_technology=False,
         if_sub=False,
-        savf_flag="capFlex",
+        savf_flag=savf_flag,
         numeraire="pnum",
     )
 

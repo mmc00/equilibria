@@ -40,8 +40,6 @@ ORACLE = {
 
 @pytest.fixture(scope="module", params=["kwarg", "fix_instrument_shock"])
 def solved(request):
-    from pyomo.environ import value
-
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
@@ -69,14 +67,14 @@ def solved(request):
         **shock_kw,
     )
     assert int(res["shock"]["code"]) == 1, res["shock"]
-    return m, value
+    return m
 
 
 @pytest.mark.parametrize(
     ("var", "key"), [(v, k) for v, cells in ORACLE.items() for k in cells]
 )
 def test_iguala_a_gams(solved, var, key):
-    m, value = solved
+    m = solved
     got = pct(m, var, key)
     want = ORACLE[var][key]
     assert abs(got - want) <= TOL_PP, (

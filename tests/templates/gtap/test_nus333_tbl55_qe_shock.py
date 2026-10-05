@@ -58,8 +58,6 @@ ORACLE = {
 def solved(request):
     """Las dos vias dan lo mismo: el kwarg ``qe_shock`` y ``fix_instrument_shock`` directo
     antes de ``solve_multiperiod`` (esta ultima NO debe sumar el arancel +10%)."""
-    from pyomo.environ import value
-
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
@@ -85,22 +83,22 @@ def solved(request):
         **shock_kw,
     )
     assert int(res["shock"]["code"]) == 1, res["shock"]
-    return m, value
+    return m
 
 
 def test_el_shock_no_entra_al_check(solved):
     """base y check deben ser el mismo benchmark: el shock va solo en 'shock'."""
-    m, value = solved
+    m = solved
     for var in ("xp", "xft", "kstock", "pft"):
         for key in ORACLE[var]:
-            assert abs(pct(m, var, key, "base", "check")) < 1e-6, (var, key)
+            assert abs(pct(m, var, key, num="base", den="check")) < 1e-6, (var, key)
 
 
 @pytest.mark.parametrize(
     ("var", "key"), [(v, k) for v, cells in ORACLE.items() for k in cells]
 )
 def test_iguala_a_gams(solved, var, key):
-    m, value = solved
+    m = solved
     got = pct(m, var, key)
     want = ORACLE[var][key]
     assert abs(got - want) <= TOL_PP, (
