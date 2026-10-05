@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from equilibria.blocks.gtap.periods import PERIODS, SHOCK, as_key
+
 # Filas que leen cada instrumento. Su celda del periodo tiene que estar viva: si no,
 # el shock no entra al modelo y el solve igual da code=1 (p.ej. ``aft`` de un
 # factor con ``xftflag<=0``, donde eq_xfteq no se genera).
@@ -43,19 +45,26 @@ TAX_INSTRUMENTS = frozenset(
 # cota es kappaf < 1 (kappaf<0, un subsidio, es valido).
 INCOME_TAX_INSTRUMENTS = frozenset({"kappaf"})
 
-# Solo el periodo shock: un shock en 'check'/'base' no lo detecta el driver (le
-# sumaria el arancel) y la copia base->check de F3.5 lo pisaria.
-_PERIOD = "shock"
+# Los shocks van solo al periodo SHOCK: un shock en 'check'/'base' no lo detecta el
+# driver (le sumaria el arancel) y la copia base->check de F3.5 lo pisaria.
 
 
 def instrument_cell(idx: Any) -> tuple:
     """La celda de un indice de instrumento, sin el periodo (SP o multiperiodo)."""
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-
-    k = idx if isinstance(idx, tuple) else (idx,)
+    k = as_key(idx)
     if k and k[-1] in PERIODS:
         k = k[:-1]
     return k
+
+
+def is_free_cell(idx: Any, libres: frozenset | set) -> bool:
+    """True si la celda ``idx`` es una de las que un hook ``@overwrite`` libero y su
+    periodo es el shock (o no tiene periodo: el modelo de un periodo). En base y
+    check rige el cierre estandar: la celda sigue fija."""
+    k = as_key(idx)
+    if k and k[-1] in PERIODS and k[-1] != SHOCK:
+        return False
+    return instrument_cell(k) in libres
 
 
 def _never(_idx: Any) -> bool:
@@ -72,14 +81,15 @@ def exogenous_test(m: Any, name: str) -> Callable[[Any], bool]:
     Un instrumento registrado (``_exogenous_instruments``) es exogeno —fijo por
     periodo, el driver no lo libera ni lo re-siembra— salvo en las celdas que un hook
     ``@overwrite`` volvio endogenas (``_endogenous_instrument_cells``): esas son una
-    variable mas. Se resuelve una vez por Var, no por celda.
+    variable mas, solo en el shock (``is_free_cell``). Se resuelve una vez por Var,
+    no por celda.
     """
     if name not in getattr(m, "_exogenous_instruments", frozenset()):
         return _never
     libres = (getattr(m, "_endogenous_instrument_cells", None) or {}).get(name)
     if not libres:
         return _always
-    return lambda idx: instrument_cell(idx) not in libres
+    return lambda idx: not is_free_cell(idx, libres)
 
 
 def is_exogenous(m: Any, name: str, idx: Any) -> bool:
@@ -95,7 +105,7 @@ def _labels(component: Any, region: str, *, live: bool = False) -> list:
         {
             k[1]
             for k in component
-            if k[0] == region and k[-1] == _PERIOD and (not live or component[k].active)
+            if k[0] == region and k[-1] == SHOCK and (not live or component[k].active)
         }
     )
 
@@ -109,7 +119,7 @@ def check_instrument_cell(m: Any, name: str, index: tuple) -> None:
     perderia con code=1.
     """
     var = getattr(m, name, None)
-    idx = (*index, _PERIOD)
+    idx = (*index, SHOCK)
     if var is None or idx not in var:
         raise ValueError(
             f"{name}{idx} does not exist. Valid for {index[0]}: "
@@ -152,7 +162,7 @@ def fix_instrument_shock(
         raise ValueError(
             f"{name!r} is not a registered instrument; registered: {sorted(registered)}"
         )
-    if not is_exogenous(m, name, (*index, _PERIOD)):
+    if not is_exogenous(m, name, (*index, SHOCK)):
         raise ValueError(
             f"{name}{tuple(index)} is endogenous (@overwrite): it cannot take a shock"
         )
@@ -160,7 +170,7 @@ def fix_instrument_shock(
         raise ValueError("give exactly one of factor/value")
     check_instrument_cell(m, name, index)
     var = getattr(m, name)
-    idx = (*index, _PERIOD)
+    idx = (*index, SHOCK)
     if value is not None:
         new = float(value)
     else:
