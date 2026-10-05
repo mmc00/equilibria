@@ -254,7 +254,7 @@ def _replicate_sp_reference(c: _Ctx) -> None:
     _replicate(c, c.prep._reference_model(c.m, c.params, c.closure, c.period))
 
 
-def _replicate_fresh_sp_reference(c: _Ctx) -> None:
+def _replicate_own_sp_reference(c: _Ctx) -> None:
     """Como _replicate_sp_reference, pero con un modelo de referencia construido
     con los params de ESTE periodo (los del shock) y sin reutilizar el del base."""
     _replicate(c, c.prep._build_reference_model(c.m, c.params, c.closure))
@@ -375,7 +375,7 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
             _unfix_regy,
             _fix_shock_numeraire,
             _collapse_pft,
-            _replicate_fresh_sp_reference,
+            _replicate_own_sp_reference,
             _gams_bounds,
             _mute_welfare_if_asked,
             _fnm_pf,
@@ -390,7 +390,7 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
             _unfix_regy,
             _fix_shock_numeraire,
             _deactivate_redundant_xft,
-            _replicate_fresh_sp_reference,
+            _replicate_own_sp_reference,
             _mute_welfare_if_asked,
             _derived_seed_if_holdfix,
             _cd_nest_if_holdfix,

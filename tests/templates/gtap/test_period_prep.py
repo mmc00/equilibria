@@ -76,7 +76,7 @@ def test_shock_always_builds_its_own_reference_model():
     del base (el check gtap si lo reusa)."""
     for mode in ("gtap", "altertax"):
         steps = _prep(mode=mode).recipe("shock").steps
-        assert period_prep._replicate_fresh_sp_reference in steps
+        assert period_prep._replicate_own_sp_reference in steps
         assert period_prep._replicate_sp_reference not in steps
 
 
