@@ -38,8 +38,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup solvers
-        uses: ./.github/actions/setup-solvers
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
 
       # La suite completa, no una lista blanca. Hasta 2026-09-16 este paso
       # enumeraba 5 archivos de 172 (3,5 % de la suite), herencia de 2f5c128
@@ -53,16 +53,10 @@ jobs:
       #
       # `-ra` porque el default de pytest (-rfE) no reporta skips: los 64 que
       # habia aqui no decian ni cuales eran ni por que.
+      #
+      # `not needs_gdxdump` es la mitad de una particion: gdxdump-tests corre
+      # `needs_gdxdump and not gams and not slow`. Cambiar una exige la otra.
       - name: Run tests (excluding GAMS-marked and slow)
-        env:
-          EQUILIBRIA_PATH_CAPI_LIB_DIR: ${{ github.workspace }}/.cache/path_capi
-          EQUILIBRIA_PATH_CAPI_SRC: ${{ github.workspace }}/.path-capi-python/src
-          # El loader de path_capi_python pide la RUTA COMPLETA por estas dos
-          # variables; sin ellas aborta con "Missing required environment
-          # variable" aunque EQUILIBRIA_PATH_CAPI_LIB_DIR apunte bien.
-          PATH_CAPI_LIBPATH: ${{ github.workspace }}/.cache/path_capi/libpath50.so
-          PATH_CAPI_LIBLUSOL: ${{ github.workspace }}/.cache/path_capi/liblusol.so
-          PATH_LICENSE_STRING: "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
         run: |
           uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests
 
@@ -75,17 +69,18 @@ jobs:
   # `gdxdump` sale de la wheel `gamspy_base` de PyPI (sin licencia: leer un GDX
   # no resuelve nada). Su salida es IDENTICA a la de GAMS 48 en los 97 GDX del
   # repo (verificado 2026-10-05, macOS, v54.5.0 vs 48). Job aparte y en
-  # paralelo: son ~10 min en una Mac y doblarian python-tests.
+  # paralelo: son ~19 min en CI (10 en una Mac) y mas que doblarian
+  # python-tests (~10 min).
   gdxdump-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup solvers
-        uses: ./.github/actions/setup-solvers
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
 
-      # Falla duro a proposito: si gdxdump no esta, queremos rojo, no 56 skips.
+      # Falla duro a proposito: si gdxdump no esta, queremos rojo, no 58 skips.
       - name: Install gdxdump (gamspy_base)
         run: |
           set -euo pipefail
@@ -96,20 +91,18 @@ jobs:
           chmod +x "$HOME/gamspy_base/gdxdump"
           echo "$HOME/gamspy_base" >> "$GITHUB_PATH"
           # Smoke test: que vuelque un GDX del repo, no solo que exista.
-          # (a un archivo: `| head` con pipefail mataria el paso por SIGPIPE).
+          # La salida va a un archivo: `gdxdump | head` con pipefail mataria el
+          # paso por SIGPIPE.
           "$HOME/gamspy_base/gdxdump" "$(git ls-files '*.gdx' | head -n 1)" > /tmp/gdxdump_smoke.txt
           head -n 3 /tmp/gdxdump_smoke.txt
 
+      # Complemento exacto del `-m` de python-tests (ver alli).
       - name: Run needs_gdxdump tests
         env:
-          EQUILIBRIA_PATH_CAPI_LIB_DIR: ${{ github.workspace }}/.cache/path_capi
-          EQUILIBRIA_PATH_CAPI_SRC: ${{ github.workspace }}/.path-capi-python/src
-          # El loader de path_capi_python pide la RUTA COMPLETA por estas dos
-          # variables; sin ellas aborta con "Missing required environment
-          # variable" aunque EQUILIBRIA_PATH_CAPI_LIB_DIR apunte bien.
-          PATH_CAPI_LIBPATH: ${{ github.workspace }}/.cache/path_capi/libpath50.so
-          PATH_CAPI_LIBLUSOL: ${{ github.workspace }}/.cache/path_capi/liblusol.so
-          PATH_LICENSE_STRING: "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
+          # Sin guards: si gdxdump (o PATH) faltara, los tests FALLAN en vez de
+          # saltarse y dejar el job verde. Seguro aqui porque ninguno de estos
+          # tests usa cyipopt, lo unico que CI puede no lograr instalar.
+          EQUILIBRIA_REQUIRE_SOLVERS: "1"
         run: |
           uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests
 

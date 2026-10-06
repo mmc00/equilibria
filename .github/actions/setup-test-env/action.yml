@@ -1,7 +1,8 @@
-name: Setup solvers
+name: Setup test environment
 description: >-
-  uv + Python 3.11 + dependencias, IPOPT/PyNumero ASL, la libreria PATH y
-  path-capi-python. Lo comparten python-tests y gdxdump-tests.
+  Entorno de la suite: uv, Python 3.11 y dependencias, IPOPT/PyNumero ASL, la
+  libreria PATH y path-capi-python. Deja exportadas (GITHUB_ENV) las variables
+  que los tests necesitan para encontrar PATH.
 runs:
   using: composite
   steps:
@@ -101,3 +102,19 @@ runs:
         ref: 786110fdb4ed274dff5b747cd10f19ce5cb0295c
         path: .path-capi-python
 
+    # Las variables van aqui, junto a lo que instalan, y no repetidas en cada
+    # job: un cambio de ruta o de licencia se hace en un solo lugar.
+    - name: Export PATH solver environment
+      shell: bash
+      run: |
+        {
+          echo "EQUILIBRIA_PATH_CAPI_LIB_DIR=$GITHUB_WORKSPACE/.cache/path_capi"
+          echo "EQUILIBRIA_PATH_CAPI_SRC=$GITHUB_WORKSPACE/.path-capi-python/src"
+          # El loader de path_capi_python pide la RUTA COMPLETA por estas dos
+          # variables; sin ellas aborta con "Missing required environment
+          # variable" aunque EQUILIBRIA_PATH_CAPI_LIB_DIR apunte bien.
+          echo "PATH_CAPI_LIBPATH=$GITHUB_WORKSPACE/.cache/path_capi/libpath50.so"
+          echo "PATH_CAPI_LIBLUSOL=$GITHUB_WORKSPACE/.cache/path_capi/liblusol.so"
+          # Licencia de cortesia publica (pages.cs.wisc.edu), valida hasta 2035.
+          echo "PATH_LICENSE_STRING=1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
+        } >> "$GITHUB_ENV"
