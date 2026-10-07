@@ -6,6 +6,10 @@ ABSOLUTE PERCENTAGE POINTS (the natural metric for %-changes; a relative tol on
 small %-changes is misleading — see gempack_reference). GEMPACK is Gragg-linearized
 and Python is levels, so the per-page floor is stated in pp, not the GAMS 1% rel.
 
+Runs the ``gtap7_gempack`` closure (``va_subsidy_basis="gempack"``): the factor
+wedge of the data, as GEMPACK uses it. The default "gams" closure carries cal.gms's
+subsidy sign, which contradicts the data and is not what this gate compares.
+
 SKIPs when a row's sl4dump fixture is absent, so it never blocks the parity stamp
 on a machine without the Windows-produced solution.
 """
@@ -91,6 +95,9 @@ def _solve_shock(
             if_sub=bool(ifsub),
             savf_flag=savf_flag,
             numeraire="pnum",
+            # GEMPACK es la referencia: cierre gtap7_gempack (cuna de factores de los
+            # datos, EVFP = EVFB + FTRV + FBEP). Con el signo de GAMS 15x10 baja a 93,9%.
+            va_subsidy_basis="gempack",
         )
         # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
         # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
