@@ -275,43 +275,38 @@ _MCP_ROWS: list[Row] = [
     # qms→xmt, qds→xd, qpa→xc, qga→xg, qc→xs, qe→xft, qtm→xtmg, qinv→xiagg, qva→xp,
     # qgdp→rgdpmp — see gempack_reference.Q_TO_VAR). Metric = fraction of cells within
     # 1 PERCENTAGE POINT (NOT the GAMS 1% rel tol — %-changes need a pp metric).
-    # Floor = MEASURED within-1pp minus a margin; it DECAYED with dataset size
-    # (76%→52%) as the Gragg-linearized↔levels gap accumulates — structural (identical
-    # Python↔GAMS), not infidelity. phases=("shock",): single-shock solve. GEMPACK ran
+    # Floor = MEASURED within-1pp minus a margin. phases=("shock",): single-shock solve.
+    # GEMPACK ran
     # ONE tariff shock and is ifSUB-agnostic — ifSUB 0 and 1 measure identically (the
     # quantities don't depend on the subsidy convention), so both are listed with the
     # same floor. Welfare (u/EV) is NOT here — it is sign-flipping/second-order and
     # lives in the separate EV track (see docs/findings/gempack_welfare_not_cellwise).
-    # CLOSURE: the gate runs gtap7_gempack (va_subsidy_basis="gempack", the data's factor
-    # wedge). Measured within 1pp vs the capFix fixtures (2026-10-05, ifsub 0 = ifsub 1):
-    # 3x3 99.47, 3x4 99.62, 5x5 99.86, 10x7 99.97, 15x10 98.37 (the "gams" sign gave
-    # 98.42 / 98.49 / 98.72 / 98.07 / 93.90). Floors: 98 (97 on @slow 15x10). The older
-    # per-row notes below are the pre-fix measurements under the "gams" sign.
-    # capFlex closure vs the (RORDELTA=1) fixtures: measured 3x3=99.5% within 1pp
-    # (median 0.036pp). Floor 95 leaves margin for solver noise.
+    # SUBSIDY BASIS: the gate runs va_subsidy_basis="gempack" (the data's factor wedge,
+    # EVFP = EVFB + FTRV + FBEP — the gtap7_gempack basis). Measured within 1pp vs the
+    # capFix fixtures, shock/CHECK denominator (2026-10-05, ifsub 0 = ifsub 1; median pp):
+    #   3x3 99.47 (0.044)  3x4 99.62 (0.032)  5x5 99.86 (0.047)  10x7 99.97 (0.063)
+    #   15x10 98.37 (0.113)
+    # The "gams" sign gave 98.42 / 98.49 / 98.72 / 98.07 / 93.90. Floors: 98 (97 on the
+    # @slow 15x10, which runs as an IPOPT NLP). 3x3 has 190 cells: 98 tolerates 3 misses.
     Row("gtap7_3x3", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 98.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x3", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x3_tm10.har", stage_floors=(("shock", 98.0),), mode="pure", reference="gempack"),
-    # 3x4 self-seeds capFlex (no local GAMS GDX — its shock is 2168 eqs > PATH's 1000-eq demo
-    # cap): base_calibrated + risk twin-solve fallback. ifsub=1 → 99.2% within 1pp (median
-    # 0.043pp), on par with 3x3. Floor 95 leaves solver-noise margin.
+    # 3x4 ships no local GAMS GDX (its shock is 2168 eqs > PATH's 1000-eq demo cap): the
+    # block self-seeds from base_calibrated (and, under capFlex, the risk twin-solve).
     Row("gtap7_3x4", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 98.0),), mode="pure", reference="gempack"),
     Row("gtap7_3x4", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_3x4_tm10.har", stage_floors=(("shock", 98.0),), mode="pure", reference="gempack"),
-    # capFlex 5x5 = 98.7% within 1pp (median 0.027pp) with the shock/CHECK denominator
-    # (solve_check=True). RunGTAP reports %-changes relative to the re-settled check, not
-    # the raw base; measuring shock/base understated qga on near-zero-share gov cells
-    # (base→check moves income ~+0.8%, tariff on top ±1%). Floor 95 leaves margin.
+    # shock/CHECK denominator (solve_check=True): RunGTAP reports %-changes relative to the
+    # re-settled check, not the raw base; measuring shock/base understated qga on
+    # near-zero-share gov cells (base→check moves income ~+0.8%, tariff on top ±1%).
     Row("gtap7_5x5", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 98.0),), mode="pure", reference="gempack"),
     Row("gtap7_5x5", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_5x5_tm10.har", stage_floors=(("shock", 98.0),), mode="pure", reference="gempack"),
-    # Large datasets, shock/CHECK denominator (solve_check=True). Measured within 1pp:
-    # 10x7 -> 98.4% (median 0.028pp); 15x10 -> 93.1% (median 0.081pp), qga now 96.4% (was
-    # 58.6% under shock/base — the gain is the correct re-settled-check denominator, not a
-    # model change). 15x10 @slow (excluded from the normal parity sweep). Floors leave margin.
+    # Large datasets run as an IPOPT NLP (see _NLP_MODE_DATASETS in the test). 15x10 is
+    # @slow (excluded from the normal parity sweep; run by hand with -m slow -k 15x10).
     Row("gtap7_10x7", "mcp", 0, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_10x7_tm10.har", stage_floors=(("shock", 98.0),), mode="pure", reference="gempack"),
     Row("gtap7_10x7", "mcp", 1, ("shock",), None, "measured @ runtime", "local",

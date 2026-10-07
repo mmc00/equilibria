@@ -6,9 +6,10 @@ ABSOLUTE PERCENTAGE POINTS (the natural metric for %-changes; a relative tol on
 small %-changes is misleading — see gempack_reference). GEMPACK is Gragg-linearized
 and Python is levels, so the per-page floor is stated in pp, not the GAMS 1% rel.
 
-Runs the ``gtap7_gempack`` closure (``va_subsidy_basis="gempack"``): the factor
-wedge of the data, as GEMPACK uses it. The default "gams" closure carries cal.gms's
-subsidy sign, which contradicts the data and is not what this gate compares.
+Runs a sluggish-capital MCP closure with the ``gtap7_gempack`` subsidy basis
+(``va_subsidy_basis="gempack"``): the factor wedge of the data, as GEMPACK uses it.
+The default "gams" basis carries cal.gms's subsidy sign, which contradicts the data
+and is not what this gate compares.
 
 SKIPs when a row's sl4dump fixture is absent, so it never blocks the parity stamp
 on a machine without the Windows-produced solution.
@@ -55,8 +56,8 @@ def _solve_shock(
     ``solve_nlp`` runs the model as an NLP (maximize walras, IPOPT) instead of the PATH MCP.
     On the LARGE datasets the capFix MCP does not converge in PATH's in-process capi (10x7:
     code=2 in 6min; 15x10: spins for ~48min), but the SAME model is feasible as an NLP —
-    IPOPT closes it (10x7: code=1 in 33s @97.0%; 15x10: code=1 in ~20min @91.5% vs the capFix
-    fixture). NLP is faithful (tolerances cancel), so it is the gate path for large datasets.
+    IPOPT closes it (code=1 on both; within-1pp figures in coverage_matrix's gempack rows).
+    NLP is faithful (tolerances cancel), so it is the gate path for large datasets.
     """
     import os as _os
 
@@ -95,17 +96,17 @@ def _solve_shock(
             if_sub=bool(ifsub),
             savf_flag=savf_flag,
             numeraire="pnum",
-            # GEMPACK es la referencia: cierre gtap7_gempack (cuna de factores de los
-            # datos, EVFP = EVFB + FTRV + FBEP). Con el signo de GAMS 15x10 baja a 93,9%.
+            # GEMPACK is the reference: use the data's factor wedge (EVFP = EVFB +
+            # FTRV + FBEP), the gtap7_gempack basis. The GAMS sign drops 15x10 to 93.9%.
             va_subsidy_basis="gempack",
         )
         # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
         # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
         # absent (e.g. gtap7_3x4 ships no local GAMS ref — its shock is 2168 eqs > PATH's 1000-eq
         # demo cap), the block SELF-SEEDS: base_calibrated stamps m._settled_seed, and the risk
-        # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1, 99.2% within 1pp
-        # vs the GEMPACK fixture (median 0.043pp) with ref_gdx=None. So pass the GDX only if it
-        # exists; on small datasets the twin-solve fallback is cheap enough.
+        # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1 with
+        # ref_gdx=None. So pass the GDX only if it exists; on small datasets the twin-solve
+        # fallback is cheap enough.
         _gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
         gdx = _gdx if _gdx.exists() else None
         m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
@@ -186,9 +187,8 @@ def _measure_pp(m, sl4dump: Path):
 _CAPFLEX_SLOW_DATASETS = {"gtap7_10x7", "gtap7_15x10", "gtap7_20x41"}
 
 # Large datasets whose capFix MCP does not converge in PATH's in-process capi but ARE feasible
-# as an NLP (maximize walras, IPOPT). The gate runs these via solve_nlp=True. Measured:
-#   10x7  -> code=1 in 33s,  97.0% within 1pp (median 0.103pp)
-#   15x10 -> code=1 in ~20m, 91.5% within 1pp (median 0.200pp)  — SLOW (see _SLOW_DATASETS)
+# as an NLP (maximize walras, IPOPT). The gate runs these via solve_nlp=True; within-1pp
+# figures and floors live in coverage_matrix's gempack rows. 15x10 is @slow (_SLOW_DATASETS).
 _NLP_MODE_DATASETS = {"gtap7_10x7", "gtap7_15x10"}
 # 20x41: too large for IPOPT (247M-nnz Hessian → OOM >32GB), so it is NOT in _NLP_MODE_DATASETS
 # and this gate skips it. It WAS validated out-of-band with the FREE solver (Newton-TR + MUMPS,
