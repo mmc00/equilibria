@@ -39,6 +39,11 @@ from equilibria.blocks.gtap.agents import (  # noqa: F401
     GTAP_INVESTMENT_AGENT,
     GTAP_MARGIN_AGENT,
 )
+from equilibria.blocks.gtap.factor_wedge import (  # noqa: F401  (re-export)
+    VaSubsidyBasis,
+    check_basis,
+    factor_wedge_rates,
+)
 from equilibria.templates.gtap.gtap_equilibrium import GTAPEquilibriumSnapshot
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_std7_mapping import (
@@ -595,30 +600,6 @@ class GTAPElasticities:
                 self.omegaw[(r, i)] = self.omegaw.get((r, i), float("inf"))
 
 
-def factor_wedge_rates(
-    benchmark: Any, r: str, f: str, a: str, basis: str = "gams"
-) -> tuple[float, float]:
-    """(fcttx, fctts) del factor (r, f, a): pfa = pf*(1 + fcttx + fctts).
-
-    fcttx = FTRV/EVFB (impuesto). fctts depende de ``basis`` (va_subsidy_basis):
-
-    - "gams" (default): fctts = -FBEP/EVFB, como cal.gms. FBEP es <= 0, asi que
-      el subsidio SUBE pfa.
-    - "gempack": fctts = +FBEP/EVFB, la identidad de los datos EVFP = EVFB +
-      FTRV + FBEP (cierra a 3e-8 en gtap7_15x10; la de GAMS falla en 0,46%):
-      1 + fcttx + fctts = EVFP/EVFB, la cuna neta de GTAPv7.jl y GEMPACK.
-
-    (0, 0) si EVFB <= 0.
-    """
-    evfb = float(benchmark.evfb.get((r, f, a), 0.0) or 0.0)
-    if evfb <= 0.0:
-        return 0.0, 0.0
-    ftrv = float(benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
-    fbep = float(benchmark.fbep.get((r, f, a), 0.0) or 0.0)
-    sign = 1.0 if basis == "gempack" else -1.0
-    return ftrv / evfb, sign * fbep / evfb
-
-
 @dataclass
 class GTAPCalibratedShares:
     """GAMS-style calibrated share parameters.
@@ -670,7 +651,7 @@ class GTAPCalibratedShares:
         elasticities: GTAPElasticities,
         sets: GTAPSets,
         taxes: GTAPTaxRates | None = None,
-        va_subsidy_basis: str = "gams",
+        va_subsidy_basis: VaSubsidyBasis = "gams",
     ) -> None:
         """Calibrate all share parameters from benchmark data.
 
@@ -713,6 +694,7 @@ class GTAPCalibratedShares:
             # eq_po/eq_nd/eq_va/eq_xfeq residuals (~0.1-0.24 at the GAMS seed)
             # that made PATH/IPOPT diverge on gtap7_15x10. Verified: -fbep/evfb
             # reproduces GAMS's fctts (EU_28,Land,OtherCrops=0.510902) exactly.
+            # Con gtap7_gempack, fctts = +fbep/evfb (la cuna de los datos).
             fcttx, fctts = (
                 factor_wedge_rates(benchmark, r, f, a, va_subsidy_basis)
                 if benchmark is not None
@@ -756,7 +738,8 @@ class GTAPCalibratedShares:
                     )
                     if evfb_val <= 0.0:
                         continue
-                    # fctts = -fbep/evfb (subsidy), fcttx = ftrv/evfb (tax) —
+                    # fctts = -fbep/evfb con gams, +fbep/evfb con gtap7_gempack
+                    # (subsidy), fcttx = ftrv/evfb (tax) —
                     # the two faithful factor-wedge sources (HAR FBEP/FTRV),
                     # NOT rtf=evfp/evfb-1 (which conflates them into a wrong net).
                     fcttx, fctts = factor_wedge_rates(
@@ -2783,6 +2766,10 @@ class GTAPParameters:
         default_factory=GTAPCalibratedShares
     )  # GAMS-style calibrated shares
     shifts: GTAPShiftParameters = field(default_factory=GTAPShiftParameters)
+    # Signo del subsidio a los factores del cierre (build_block_model lo fija) y
+    # el signo con que se calibro de verdad (set_va_subsidy_basis los compara)
+    va_subsidy_basis: VaSubsidyBasis = "gams"
+    _calibrated_basis: VaSubsidyBasis = field(default="gams", repr=False)
 
     def load_from_gdx(
         self,
@@ -2826,9 +2813,7 @@ class GTAPParameters:
         self.shares.calibrate(self.benchmark, self.elasticities, self.sets, self.taxes)
 
         # Calibrate GAMS-style shares (and, ava, io, af, gx) from benchmark
-        self.calibrated.calibrate_from_benchmark(
-            self.benchmark, self.elasticities, self.sets, self.taxes
-        )
+        self._calibrate()
 
     def load_from_har(
         self,
@@ -2873,28 +2858,30 @@ class GTAPParameters:
         else:
             self.taxes.derive_from_benchmark(self.benchmark, self.sets)
         self.shares.calibrate(self.benchmark, self.elasticities, self.sets, self.taxes)
-        self.calibrated.calibrate_from_benchmark(
-            self.benchmark, self.elasticities, self.sets, self.taxes
-        )
+        self._calibrate()
 
-    def set_va_subsidy_basis(self, basis: str) -> None:
-        """Fija el signo del subsidio a los factores y recalibra si cambio.
+    def set_va_subsidy_basis(self, basis: VaSubsidyBasis) -> None:
+        """Fija el signo del subsidio a los factores y recalibra si hace falta.
 
-        La calibracion corre en ``load_from_har``, antes de saber el cierre; el
-        cierre gtap7_gempack la rehace con la cuna de los datos (ver
-        :func:`factor_wedge_rates`). Volver a "gams" la deja como al cargar.
+        La calibracion corre al cargar, antes de saber el cierre; el cierre
+        gtap7_gempack la rehace con la cuna de los datos (ver
+        :func:`factor_wedge_rates`). Se compara contra el signo con que se calibro
+        de verdad (``_calibrated_basis``), no contra el atributo.
         """
-        if getattr(self, "va_subsidy_basis", "gams") == basis:
-            self.va_subsidy_basis = basis
-            return
-        self.va_subsidy_basis = basis
+        self.va_subsidy_basis = check_basis(basis)
+        if self._calibrated_basis != basis:
+            self._calibrate()
+
+    def _calibrate(self) -> None:
+        """Calibra (and, ava, io, af, gx) con el signo actual y lo anota."""
         self.calibrated.calibrate_from_benchmark(
             self.benchmark,
             self.elasticities,
             self.sets,
             self.taxes,
-            va_subsidy_basis=basis,
+            va_subsidy_basis=self.va_subsidy_basis,
         )
+        self._calibrated_basis = self.va_subsidy_basis
 
     def apply_equilibrium_snapshot(self, snapshot: GTAPEquilibriumSnapshot) -> None:
         """Override share parameters using an equilibrium CSV snapshot."""

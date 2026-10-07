@@ -681,11 +681,7 @@ def build_block_model(
     # signatures. Default "gams" leaves the faithful-to-GAMS path byte-unchanged;
     # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis) and recalibrates
     # gx/ava with the data's factor wedge (calibration ran at load, closure-blind).
-    _basis = getattr(closure, "va_subsidy_basis", "gams")
-    if hasattr(params, "set_va_subsidy_basis"):
-        params.set_va_subsidy_basis(_basis)
-    else:
-        params.va_subsidy_basis = _basis
+    params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
 
     # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod

@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from equilibria.templates.gtap.gtap_parameters import factor_wedge_rates
+from equilibria.blocks.gtap.factor_wedge import factor_wedge_rate, va_subsidy_basis
 from equilibria.templates.gtap.instruments import exogenous_test
 from equilibria.templates.gtap.period_debug import debug_before_solve
 from equilibria.templates.gtap.period_prep import PeriodPreparer
@@ -345,6 +345,17 @@ def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> in
     return n_rebuilt
 
 
+def _benchmark_factor_wedge(params):
+    """r, f, a -> fcttx + fctts del benchmark, con el signo del cierre (0 sin datos)."""
+    bm = getattr(params, "benchmark", None)
+    basis = va_subsidy_basis(params)
+
+    def wedge(r, f, a):
+        return 0.0 if bm is None else factor_wedge_rate(bm, r, f, a, basis)
+
+    return wedge
+
+
 # ---------------------------------------------------------------------------
 # _recalibrate_io_af — replicate GAMS iterloop's per-period io/af recalibration
 # ---------------------------------------------------------------------------
@@ -395,15 +406,7 @@ def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
             _if_sub = not any(_eq_pfaeq[_i].active for _i in _eq_pfaeq)
         except Exception:
             _if_sub = True
-    _bm = getattr(params, "benchmark", None)
-
-    _va_basis = getattr(params, "va_subsidy_basis", "gams")
-
-    def _wedge(r, f, a):
-        if _bm is None:
-            return 0.0
-        # fcttx + fctts; gtap7_gempack flips the subsidy sign (factor_wedge_rates).
-        return sum(factor_wedge_rates(_bm, r, f, a, _va_basis))
+    _wedge = _benchmark_factor_wedge(params)
 
     n_rebuilt = 0
 
@@ -2741,19 +2744,12 @@ def _recompute_ifsub_report_vars(
         except Exception:
             return False
 
-    # The factor tax/subsidy wedge fctts+fcttx = (ftrv-fbep)/evfb comes from the
+    # The factor tax/subsidy wedge fctts+fcttx (factor_wedge_rate) comes from the
     # benchmark HAR, NOT from model Vars/Params (m.fctts/m.fcttx are 0 under altertax).
     # Reading them off the model gave pfa=pf (missing the wedge) → pfa[EU_28,UnSkLab,
     # Food] 1.37 vs GAMS 2.26 (39% off). Compute it from the benchmark like
     # _recalibrate_io_af._wedge does. (Same subsidy-wedge omission class as the af fix.)
-    _bmk = getattr(params, "benchmark", None)
-
-    _va_basis_pfa = getattr(params, "va_subsidy_basis", "gams")
-
-    def _pfa_wedge(r, f, a):
-        if _bmk is None:
-            return 0.0
-        return sum(factor_wedge_rates(_bmk, r, f, a, _va_basis_pfa))
+    _pfa_wedge = _benchmark_factor_wedge(params)
 
     # --- factor prices: pfa, pfy ---
     for r in R:

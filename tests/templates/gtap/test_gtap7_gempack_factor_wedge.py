@@ -53,7 +53,7 @@ def _har(header: str) -> dict:
 
 def test_cuna_gempack_reproduce_evfp():
     """1 + fcttx + fctts = EVFP/EVFB en cada celda con EVFB > 0."""
-    from equilibria.templates.gtap.gtap_parameters import factor_wedge_rates
+    from equilibria.blocks.gtap.factor_wedge import factor_wedge_rates
 
     p = _params()
     bm, evfp, evfb_har = p.benchmark, _har("EVFP"), _har("EVFB")
@@ -70,7 +70,7 @@ def test_cuna_gempack_reproduce_evfp():
 
 def test_cuna_gams_sin_cambios():
     """El cierre por defecto sigue con el signo de GAMS: fctts = -FBEP/EVFB."""
-    from equilibria.templates.gtap.gtap_parameters import factor_wedge_rates
+    from equilibria.blocks.gtap.factor_wedge import factor_wedge_rates
 
     bm = _params().benchmark
     subsidiadas = [k for k, v in bm.fbep.items() if float(v or 0.0) != 0.0]
@@ -80,6 +80,97 @@ def test_cuna_gams_sin_cambios():
         fcttx, fctts = factor_wedge_rates(bm, r, f, a, "gams")
         assert fcttx == pytest.approx(float(bm.ftrv.get((r, f, a), 0.0)) / evfb)
         assert fctts == pytest.approx(-float(bm.fbep[(r, f, a)]) / evfb)
+
+
+def test_cuna_gams_identica_bit_a_bit_a_las_formulas_viejas():
+    """El cierre por defecto hace las mismas cuentas de punto flotante que antes."""
+    from equilibria.blocks.gtap._derived_params import _va_wedge
+    from equilibria.blocks.gtap.factor_wedge import (
+        factor_wedge_rate,
+        factor_wedge_rates,
+    )
+
+    p = _params()
+    bm = p.benchmark
+    for r, f, a in bm.evfb:
+        evfb = float(bm.evfb.get((r, f, a), 0.0) or 0.0)
+        ftrv = float(bm.ftrv.get((r, f, a), 0.0) or 0.0)
+        fbep = float(bm.fbep.get((r, f, a), 0.0) or 0.0)
+        assert _va_wedge(p, bm, r, f, a) == ftrv - fbep
+        if evfb <= 0.0:
+            continue
+        assert factor_wedge_rates(bm, r, f, a) == (ftrv / evfb, -fbep / evfb)
+        assert factor_wedge_rate(bm, r, f, a) == (ftrv - fbep) / evfb
+
+
+def test_signo_desconocido_falla():
+    from equilibria.blocks.gtap.factor_wedge import factor_wedge_rates
+
+    p = _params()
+    r, f, a = next(iter(p.benchmark.evfb))
+    with pytest.raises(ValueError, match="va_subsidy_basis"):
+        factor_wedge_rates(p.benchmark, r, f, a, "gempak")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="va_subsidy_basis"):
+        p.set_va_subsidy_basis("gempak")
+
+
+def _calibracion(p) -> dict:
+    c = p.calibrated
+    return {"ava": dict(c.ava_param), "af": dict(c.af_param), "gx": dict(c.gx_param)}
+
+
+def test_cambiar_el_signo_recalibra_y_volver_lo_deja_como_al_cargar():
+    p = _params()
+    gams = _calibracion(p)
+    p.set_va_subsidy_basis("gempack")
+    assert _calibracion(p) != gams
+    p.set_va_subsidy_basis("gams")
+    assert _calibracion(p) == gams
+
+
+def test_recargar_los_datos_conserva_el_signo():
+    """Antes: gempack -> recarga -> la calibracion volvia a gams y el setter no
+    la rehacia (comparaba contra el atributo, no contra la calibracion)."""
+    p = _params()
+    p.set_va_subsidy_basis("gempack")
+    gempack = _calibracion(p)
+    p.load_from_har(
+        basedata_path=DATA / "basedata.har",
+        sets_path=DATA / "sets.har",
+        default_path=DATA / "default.prm",
+        baserate_path=DATA / "baserate.har",
+    )
+    p.set_va_subsidy_basis("gempack")
+    assert _calibracion(p) == gempack
+
+
+def test_altertax_con_gempack_reparte_el_va_como_evfp():
+    """altertax recalcula af = pfa*xf/va; con gempack pfa*xf = EVFP."""
+    from equilibria.templates.gtap.altertax.parameter_overrides import (
+        apply_altertax_elasticities,
+    )
+
+    p = _params()
+    p.set_va_subsidy_basis("gempack")
+    alt = apply_altertax_elasticities(p, in_place=False)
+    evfp = _har("EVFP")
+    celdas = 0
+    for r in p.sets.r:
+        for a in p.sets.a:
+            datos = {
+                f: evfp.get((r, f, a), 0.0)
+                for f in p.sets.f
+                if float(p.benchmark.evfb.get((r, f, a), 0.0) or 0.0) > 0.0
+            }
+            total = sum(datos.values())
+            if total <= 0.0:
+                continue
+            for f, v in datos.items():
+                assert alt.calibrated.af_param[(r, f, a)] == pytest.approx(
+                    v / total, rel=1e-6
+                ), (r, f, a)
+                celdas += 1
+    assert celdas > 0
 
 
 @pytest.mark.integration
@@ -126,7 +217,7 @@ def test_check_gempack_reproduce_el_peso_de_los_factores():
     evfp = _har("EVFP")
     pfa = cast(Any, m.pfa)
     xf = cast(Any, m.xf)
-    peor = (0.0, None)
+    peor_dif, peor_celda = 0.0, None
     for r in p.sets.r:
         for a in p.sets.a:
             datos = {f: evfp.get((r, f, a), 0.0) for f in p.sets.f}
@@ -144,6 +235,6 @@ def test_check_gempack_reproduce_el_peso_de_los_factores():
             total_modelo = sum(modelo.values())
             for f in p.sets.f:
                 d = abs(modelo[f] / total_modelo - datos[f] / total_datos)
-                if d > peor[0]:
-                    peor = (d, (r, f, a))
-    assert peor[0] < 1e-4, f"peso de factor en el VA lejos de EVFP: {peor}"
+                if d > peor_dif:
+                    peor_dif, peor_celda = d, (r, f, a)
+    assert peor_dif < 1e-4, f"peso de factor en el VA lejos de EVFP: {peor_celda}"
