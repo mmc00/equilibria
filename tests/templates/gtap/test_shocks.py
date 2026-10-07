@@ -13,7 +13,7 @@ from equilibria.templates.gtap import shocks
 from equilibria.templates.gtap.shocks import (
     GEMPACK_KIND,
     apply_shock,
-    check_shock_entered,
+    check_endowment_shock_entered,
     shock_of,
 )
 
@@ -140,7 +140,7 @@ def test_levels_writes_the_value_as_given(m):
 
 
 def test_an_unshocked_aft_needs_no_check(m):
-    check_shock_entered(m)  # sin shock de aft: nada que revisar
+    check_endowment_shock_entered(m)  # sin shock de aft: nada que revisar
 
 
 def test_a_lost_aft_shock_is_caught(m):
@@ -152,6 +152,24 @@ def test_a_lost_aft_shock_is_caught(m):
     m.xft[k].set_value(value(m.xft[(*cell, "check")]))  # como si eq_xfteq no estuviera
     try:
         with pytest.raises(RuntimeError, match="did not enter"):
-            check_shock_entered(m)
+            check_endowment_shock_entered(m)
     finally:
         m.xft[k].set_value(xft_before)
+
+
+def test_all_or_nothing(m):
+    """Una celda invalida no deja escrita la anterior: el modelo no queda con
+    medio shock."""
+    cell = _cell(m, "lambdava")
+    before = value(m.lambdava[(*cell, "shock")])
+    with pytest.raises(ValueError, match="NOPE"):
+        apply_shock(m, {"lambdava": {cell: 10.0, ("NOPE", "NOPE"): 10.0}})
+    assert value(m.lambdava[(*cell, "shock")]) == before
+    assert shock_of(m) == []
+
+
+def test_kappaf_at_minus_100_is_a_clear_error(m):
+    """La potencia 1/(1-kappaf) no puede caer 100%: ValueError, no ZeroDivisionError."""
+    cell = ("X", "X", "X")
+    with pytest.raises(ValueError, match="-100"):
+        shocks._level(m, "kappaf", cell, -100.0)

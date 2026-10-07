@@ -34,7 +34,7 @@ from typing import Any
 from equilibria.templates.gtap.instruments import exogenous_test
 from equilibria.templates.gtap.period_debug import debug_before_solve
 from equilibria.templates.gtap.period_prep import PeriodPreparer
-from equilibria.templates.gtap.shocks import check_shock_entered, shock_of
+from equilibria.templates.gtap.shocks import check_endowment_shock_entered, shock_of
 
 PERIODS = ("base", "check", "shock")
 
@@ -3038,17 +3038,17 @@ def _solve_multiperiod_inner(
     # fail in milliseconds, not after the base/check solves.
     import os
 
-    _preset_shocks = shock_of(m) if m is not None else []
-    _tariff_shock = not _preset_shocks
-    if _preset_shocks and not _gtap_mode:
+    _shocked_cells = shock_of(m) if m is not None else []
+    _tariff_shock = not _shocked_cells
+    if _shocked_cells and not _gtap_mode:
         raise ValueError(
-            f"a shock in the ShockBlock ({_preset_shocks[:3]}) is only supported in "
+            f"a shock in the ShockBlock ({_shocked_cells[:3]}) is only supported in "
             "mode='gtap'"
         )
-    if _preset_shocks and os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
+    if _shocked_cells and os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
         raise ValueError(
             "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does not "
-            f"support a shock in the ShockBlock ({_preset_shocks[:3]})"
+            f"support a shock in the ShockBlock ({_shocked_cells[:3]})"
         )
 
     run_gtap = _load_run_gtap()
@@ -3270,12 +3270,12 @@ def _solve_multiperiod_inner(
     if not _tariff_shock:
         import logging as _logging
 
-        # El shock ya esta en el ShockBlock (shocks.apply_shock): las ecuaciones
-        # leen el instrumento y el driver no lo pisa.
+        # The shock is already in the ShockBlock (shocks.apply_shock): the
+        # equations read the instrument and the driver leaves it alone.
         _logging.getLogger(__name__).info(
-            "shock period: %d celdas del ShockBlock (sin arancel): %s",
-            len(_preset_shocks),
-            _preset_shocks[:5],
+            "shock period: %d ShockBlock cells (no tariff): %s",
+            len(_shocked_cells),
+            _shocked_cells[:5],
         )
     elif _gtap_mode:
         _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
@@ -3474,9 +3474,9 @@ def _solve_multiperiod_inner(
                 "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm
             )
 
-    # Un shock de dotacion tiene que llegar a la solucion: code=1 solo no lo dice.
+    # An endowment shock must reach the solution: code=1 alone does not say so.
     if not _tariff_shock and results["shock"]["code"] == 1:
-        check_shock_entered(m)
+        check_endowment_shock_entered(m)
 
     # Freeze shock as well (for completeness / report purposes).
     freeze_period(m, "shock")

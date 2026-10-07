@@ -37,14 +37,23 @@ def built():
 # ── apply_shock: la celda y el valor ────────────────────────────────────────
 
 
-@pytest.mark.parametrize(
-    "name,cell", [("lambdava", ("USA", "SER")), ("aft", ("USA", "CAPITAL"))]
-)
+NONPOS = [("lambdava", ("USA", "SER")), ("aft", ("USA", "CAPITAL"))]
+
+
+@pytest.mark.parametrize("name,cell", NONPOS)
 @pytest.mark.parametrize("pct", [-100.0, -200.0])
-def test_rejects_a_non_positive_level(built, name, cell, pct):
+def test_rejects_a_change_of_minus_100_or_less(built, name, cell, pct):
+    m, _, _ = built
+    with pytest.raises(ValueError, match=r"USA.*must be > -100%"):
+        apply_shock(m, {name: {cell: pct}})
+
+
+@pytest.mark.parametrize("name,cell", NONPOS)
+@pytest.mark.parametrize("level", [0.0, -1.0])
+def test_rejects_a_non_positive_level(built, name, cell, level):
     m, _, _ = built
     with pytest.raises(ValueError, match=r"USA.*must be > 0"):
-        apply_shock(m, {name: {cell: pct}})
+        apply_shock(m, {name: {cell: level}}, levels=True)
 
 
 @pytest.mark.parametrize(

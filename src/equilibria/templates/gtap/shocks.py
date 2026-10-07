@@ -22,14 +22,14 @@ mismo shock dos veces da lo mismo que una: la conversion parte del check.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
-from equilibria.blocks.gtap.periods import SHOCK
+from equilibria.blocks.gtap.periods import CHECK, SHOCK
 from equilibria.templates.gtap.instruments import (
-    check_instrument_cell,
+    check_shock_cell,
+    check_shock_value,
     exogenous_test,
-    fix_instrument_shock,
 )
 
 # Como se lee el % de GEMPACK de cada instrumento del ShockBlock.  Los objetivos
@@ -78,7 +78,10 @@ def _level(m: Any, name: str, cell: tuple, pct: float) -> float:
     """Valor en niveles de ``name[*cell, 'shock']`` para el % GEMPACK ``pct``."""
     from pyomo.environ import value
 
-    chk = float(value(getattr(m, name)[(*cell, "check")]))
+    g = 1.0 + float(pct) / 100.0
+    if not g > 0.0:
+        raise ValueError(f"{name}{cell}: {pct}% — a GEMPACK change must be > -100%")
+    chk = float(value(getattr(m, name)[(*cell, CHECK)]))
     kind = gempack_kind(name)
     fs = 0.0
     if kind == "power_fct":
@@ -89,7 +92,7 @@ def _level(m: Any, name: str, cell: tuple, pct: float) -> float:
                 f"{name}{cell}: the model carries no fctts (build_block_model)"
             )
         fs = float(fctts.get(cell, 0.0))
-    return float(shocked(kind, chk, 1.0 + float(pct) / 100.0, fs))
+    return float(shocked(kind, chk, g, fs))
 
 
 def apply_shock(
@@ -97,70 +100,74 @@ def apply_shock(
 ) -> dict[str, dict[tuple, float]]:
     """Escribe ``shock`` ({instrumento: {celda: %}}) en el periodo shock de ``m``.
 
-    Devuelve los valores en niveles fijados.  ValueError (de
-    ``fix_instrument_shock``) si un instrumento no esta registrado, si la celda no
-    existe o ninguna fila viva la lee, o si el valor sale de su dominio.
+    Todo o nada: valida y convierte TODAS las celdas antes de fijar ninguna, asi un
+    error no deja el modelo con medio shock.  Devuelve los valores en niveles
+    fijados.  ValueError si un instrumento no esta registrado, si una celda no
+    existe, es endogena o ninguna fila viva la lee, si un % no es > -100, o si un
+    valor sale del dominio del instrumento.
     """
     out: dict[str, dict[tuple, float]] = {}
-    registered = getattr(m, "_exogenous_instruments", frozenset())
     for name, cells in shock.items():
-        if name not in registered:
-            raise ValueError(
-                f"{name!r} is not a registered instrument; registered: "
-                f"{sorted(registered)}"
-            )
         for cell, x in cells.items():
             cell = tuple(cell)
-            check_instrument_cell(m, name, cell)  # antes de leer su check
+            check_shock_cell(m, name, cell)  # antes de leer su check
             v = float(x) if levels else _level(m, name, cell, x)
-            out.setdefault(name, {})[cell] = fix_instrument_shock(
-                m, name, cell, value=v
-            )
+            check_shock_value(name, cell, v)
+            out.setdefault(name, {})[cell] = v
+    for name, cells in out.items():
+        var = getattr(m, name)
+        for cell, v in cells.items():
+            var[(*cell, SHOCK)].fix(v)
     return out
+
+
+def _shocked_cells(m: Any, name: str) -> Iterator[tuple]:
+    """Indices 'shock' de ``name`` cuyo valor difiere del 'check' (sin las celdas
+    endogenas de @overwrite)."""
+    from pyomo.environ import value
+
+    var = getattr(m, name, None)
+    if var is None or name not in getattr(m, "_exogenous_instruments", ()):
+        return
+    exo = exogenous_test(m, name)
+    for k in var:
+        if k[-1] != SHOCK or not exo(k):
+            continue
+        ck = (*k[:-1], CHECK)
+        if ck in var and float(value(var[k])) != float(value(var[ck])):
+            yield k
 
 
 def shock_of(m: Any) -> list[str]:
-    """Celdas del bloque shock cuyo 'shock' difiere de su 'check': el shock del
-    modelo.  Vacia = sin shock (el driver aplica entonces el arancel +10%)."""
-    from pyomo.environ import value
-
-    out = []
-    for name in sorted(getattr(m, "_exogenous_instruments", ())):
-        var = getattr(m, name)
-        exo = exogenous_test(m, name)
-        for k in var:
-            if k[-1] != SHOCK or not exo(k):
-                continue  # otro periodo, o celda endogena (@overwrite): no es shock
-            ck = (*k[:-1], "check")
-            if ck in var and float(value(var[k])) != float(value(var[ck])):
-                out.append(f"{name}{tuple(k[:-1])}")
-    return out
+    """Etiquetas ``nombre(celda)`` de las celdas del bloque shock que difieren del
+    check: el shock del modelo.  Vacia = sin shock (el driver aplica entonces el
+    arancel +10%)."""
+    return [
+        f"{name}{tuple(k[:-1])}"
+        for name in sorted(getattr(m, "_exogenous_instruments", ()))
+        for k in _shocked_cells(m, name)
+    ]
 
 
-def check_shock_entered(m: Any) -> None:
-    """Tras un solve convergido: RuntimeError si un shock de ``aft`` no llego a la
-    solucion.  code=1 solo no lo garantiza: si eq_xfteq se hubiera apagado, xft
-    queda suelto y el solve igual converge.  Se evalua la fila
+def check_endowment_shock_entered(m: Any) -> None:
+    """Tras un solve convergido: RuntimeError si un shock de dotacion (``aft``) no
+    llego a la solucion.  code=1 solo no lo garantiza: si eq_xfteq se hubiera
+    apagado, xft queda suelto y el solve igual converge.  Se evalua la fila
     ``xft = aft*(pft/pabs)**etaf`` del shock (este activa o no) con el aft
     shockeado; con etaf=0 es exactamente "xft se movio el factor del shock"."""
     from pyomo.environ import value
 
-    aft = getattr(m, "aft", None)
     eq = getattr(m, "eq_xfteq", None)
-    if aft is None or eq is None:
+    if eq is None:
         return
-    exo = exogenous_test(m, "aft")
-    for k in aft:
-        if k[-1] != SHOCK or not exo(k):
-            continue
-        ck = (*k[:-1], "check")
-        if float(value(aft[k])) == float(value(aft[ck])) or k not in eq:
+    for k in _shocked_cells(m, "aft"):
+        if k not in eq:
             continue
         row = eq[k]
         resid = float(value(row.body)) - float(value(row.upper))
         xft = float(value(m.xft[k]))
         if abs(resid) > 1e-6 * max(1.0, abs(xft)):
             raise RuntimeError(
-                f"aft{tuple(k[:-1])} = {value(aft[k])} but eq_xfteq{k} is off by "
+                f"aft{tuple(k[:-1])} = {value(m.aft[k])} but eq_xfteq{k} is off by "
                 f"{resid:.3e} (xft = {xft}): the shock did not enter the solution"
             )
