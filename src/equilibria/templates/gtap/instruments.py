@@ -2,7 +2,7 @@
 
 Equivale a GAMS `x.fx(..., 'shock') = v`: el instrumento es una Var fija en los
 3 periodos y el driver no la libera ni la re-siembra (``_exogenous_instruments``).
-No confundir con ``shocks.apply_shock``, que modifica ``params`` (la API YAML).
+El shock en % de GEMPACK se escribe con ``shocks.apply_shock``, que llama a esta.
 """
 
 from __future__ import annotations

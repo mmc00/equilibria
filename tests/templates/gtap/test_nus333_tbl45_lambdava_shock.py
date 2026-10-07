@@ -38,22 +38,23 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module", params=["kwarg", "fix_instrument_shock"])
+@pytest.fixture(scope="module", params=["apply_shock", "fix_instrument_shock"])
 def solved(request):
-    """Las dos vias dan lo mismo: el kwarg ``lambdava_shock`` y
+    """Las dos vias dan lo mismo: ``apply_shock`` (el % de GEMPACK) y
     ``fix_instrument_shock`` directo antes de ``solve_multiperiod`` (sin arancel)."""
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from equilibria.templates.gtap.shocks import apply_shock
 
     p = nus333_params()
     ac = closure()
     m, _mp = build_block_model(p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None)
-    shock_kw: dict = {"lambdava_shock": {("USA", "SER"): 1.10}}
     if request.param == "fix_instrument_shock":
         from equilibria.templates.gtap.instruments import fix_instrument_shock
 
         fix_instrument_shock(m, "lambdava", ("USA", "SER"), factor=1.10)
-        shock_kw = {}
+    else:
+        apply_shock(m, {"lambdava": {("USA", "SER"): 10.0}})
     res = solve_multiperiod(
         m,
         p,
@@ -65,7 +66,6 @@ def solved(request):
         holdfix_cd=True,
         mode="gtap",
         solve_check=True,
-        **shock_kw,
     )
     assert int(res["shock"]["code"]) == 1, res["shock"]
     return m

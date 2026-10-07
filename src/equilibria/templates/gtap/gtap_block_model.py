@@ -730,6 +730,11 @@ def build_block_model(
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated
     m._settled_seed = None
+    # fctts no es componente del multiperiodo (se pliega a literal); shocks.apply_shock
+    # lo lee para pasar el % GEMPACK de tfe a niveles de fcttx.
+    from equilibria.blocks.gtap import _derived_params as _dp
+
+    m._fctts = _dp.fctts_data(params, sets)
     if base_calibrated:
         from equilibria.blocks.gtap.factor import FactorBlock
 

@@ -34,6 +34,7 @@ from typing import Any
 from equilibria.templates.gtap.instruments import exogenous_test
 from equilibria.templates.gtap.period_debug import debug_before_solve
 from equilibria.templates.gtap.period_prep import PeriodPreparer
+from equilibria.templates.gtap.shocks import check_shock_entered, shock_of
 
 PERIODS = ("base", "check", "shock")
 
@@ -1455,34 +1456,6 @@ def _collapse_pft_pfteq(m, period: str) -> int:
     return _n
 
 
-# Instrumento del ShockBlock que mueve cada shock, y las ecuaciones por las que
-# entra al modelo (su celda 'shock' tiene que estar viva para que el shock cuente).
-_SHOCK_INSTRUMENT = {"lambdava_shock": "lambdava", "qe_shock": "aft"}
-
-
-def _preset_instrument_shocks(m) -> list[str]:
-    """Celdas de instrumentos registrados cuyo 'shock' difiere de su 'check'.
-
-    Es el rastro de un ``fix_instrument_shock`` hecho antes de ``solve_multiperiod``: con
-    alguna, el run ya tiene su shock y no se le suma el arancel +10%.
-    """
-    from pyomo.environ import value as _v
-
-    out = []
-    for name in sorted(getattr(m, "_exogenous_instruments", ())):
-        var = getattr(m, name)
-        exo = exogenous_test(m, name)
-        for k in var:
-            if k[-1] != "shock":
-                continue
-            if not exo(k):
-                continue  # celda endogena (@overwrite): no es un shock
-            ck = (*k[:-1], "check")
-            if ck in var and float(_v(var[k])) != float(_v(var[ck])):
-                out.append(f"{name}{tuple(k[:-1])}")
-    return out
-
-
 def _copy_base_to_check(m) -> None:
     """F3.5 (base_calibrated sin solve_check): el check ES el base asentado, asi que
     se copia base->check en cada Var. Los instrumentos registrados son exogenos y
@@ -1503,24 +1476,6 @@ def _copy_base_to_check(m) -> None:
                     v[idx].set_value(float(bv))
             except (KeyError, TypeError, ValueError):
                 pass
-
-
-def _check_shock_cells(m, kind: str, shock) -> None:
-    """Fail BEFORE any solve if a shock key has no live 'shock' cell to fix.
-
-    A misspelt label (GEMPACK's TBL66 writes ``qe("labor","USA")``; the model has
-    ``LABOR``), a sector-specific factor (no eq_xfteq row), or an endowment fixed
-    in the shock period (the solver would deactivate eq_xfteq and drop the shock
-    with code=1) must fail in milliseconds and say why -- not after the base and
-    check solves, and never silently. Same check as ``fix_instrument_shock``.
-    """
-    from equilibria.templates.gtap.instruments import check_instrument_cell
-
-    for key in shock:
-        try:
-            check_instrument_cell(m, _SHOCK_INSTRUMENT[kind], key)
-        except ValueError as exc:
-            raise ValueError(f"{kind}{key}: {exc}") from None
 
 
 # ---------------------------------------------------------------------------
@@ -3024,8 +2979,6 @@ def _solve_multiperiod_inner(
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
-    lambdava_shock: dict[tuple[str, str], float] | None = None,
-    qe_shock: dict[tuple[str, str], float] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -3066,15 +3019,10 @@ def _solve_multiperiod_inner(
     params : GTAPParameters (used for altertax elasticities / imptx shock)
     closure : GTAPClosureConfig or None
     ref_gdx : path to GAMS reference GDX (optional, not yet used)
-    lambdava_shock : {(r, a): factor} applied to the SHOCK period only, INSTEAD of
-        the default +10% tariff. It is the GAMS ``lambdavaeq`` factor
-        ``1 + avaall`` (avaall=0.10 -> 1.10), MULTIPLIED onto the 'check' value of
-        the ShockBlock instrument ``lambdava`` (``fix_instrument_shock``).
-        gtap-mode only. None keeps the tariff shock, unchanged.
-    qe_shock : {(r, f): factor} on the aggregate endowment of a mobile factor, the
-        SHOCK period only, INSTEAD of the default +10% tariff. It is the GEMPACK
-        ``qe`` shock ``1 + qe/100`` (qe=10 -> 1.10), applied to GAMS ``aft``
-        (model.gms:1073). One shock kind per run: not with ``lambdava_shock``. gtap-mode only.
+
+    The shock lives in the model: the ShockBlock cells of the 'shock' period that
+    differ from 'check' (``shocks.apply_shock`` before calling, gtap-mode only).
+    With none, the default +10% import-tariff shock is applied.
 
     Returns
     -------
@@ -3090,48 +3038,18 @@ def _solve_multiperiod_inner(
     # fail in milliseconds, not after the base/check solves.
     import os
 
-    _shocks = {
-        name: sh
-        for name, sh in (("lambdava_shock", lambdava_shock), ("qe_shock", qe_shock))
-        if sh is not None
-    }
-    _preset_shocks = _preset_instrument_shocks(m) if m is not None else []
-    _tariff_shock = not _shocks and not _preset_shocks
-    if _preset_shocks and _shocks:
-        raise ValueError(
-            f"one shock kind per run: {_preset_shocks[:3]} already set with fix_instrument_shock and "
-            f"got {sorted(_shocks)} too (a second run on the same model would "
-            "compound the shock)"
-        )
+    _preset_shocks = shock_of(m) if m is not None else []
+    _tariff_shock = not _preset_shocks
     if _preset_shocks and not _gtap_mode:
         raise ValueError(
-            f"a shock set with fix_instrument_shock ({_preset_shocks[:3]}) is only supported in "
+            f"a shock in the ShockBlock ({_preset_shocks[:3]}) is only supported in "
             "mode='gtap'"
         )
     if _preset_shocks and os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
         raise ValueError(
             "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does not "
-            f"support a shock set with fix_instrument_shock ({_preset_shocks[:3]})"
+            f"support a shock in the ShockBlock ({_preset_shocks[:3]})"
         )
-    if len(_shocks) > 1:
-        # No Burfisher exercise combines them and no test backs the combination.
-        raise ValueError(
-            f"one shock kind per run, got {sorted(_shocks)}; combining them is not "
-            "supported"
-        )
-    for _name, _sh in _shocks.items():
-        if not _gtap_mode:
-            raise ValueError(f"{_name} is only supported in mode='gtap'")
-        if os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
-            raise ValueError(
-                "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does "
-                f"not support {_name}"
-            )
-        for _k, _fac in _sh.items():
-            if not float(_fac) > 0.0:
-                raise ValueError(f"{_name}{_k} = {_fac}: must be > 0")
-        if m is not None:
-            _check_shock_cells(m, _name, _sh)
 
     run_gtap = _load_run_gtap()
 
@@ -3327,9 +3245,9 @@ def _solve_multiperiod_inner(
     # ── Phase 3: SHOCK period ────────────────────────────────────────────────
     # Apply +10% imptx shock to params (tm_pct mode).  gtap-mode shocks the
     # domestic diagonal too (GAMS shocks ALL routes); altertax skips it.
-    # With lambdava_shock/qe_shock, or a shock already set with fix_instrument_shock, the
-    # tariff is NOT applied: params_shock stays the benchmark and the shock lives
-    # in the 'shock' cell of the ShockBlock instrument.
+    # With a shock in the ShockBlock (shocks.apply_shock) the tariff is NOT
+    # applied: params_shock stays the benchmark and the shock lives in the 'shock'
+    # cells of the instruments.
     params_shock = copy.deepcopy(p_alt)
     if _tariff_shock:
         _apply_imptx_shock(params_shock, factor=0.10, gtap_mode=_gtap_mode)
@@ -3352,28 +3270,13 @@ def _solve_multiperiod_inner(
     if not _tariff_shock:
         import logging as _logging
 
-        from equilibria.templates.gtap.instruments import fix_instrument_shock
-
-        # El shock es fijar el instrumento del ShockBlock en la celda 'shock'
-        # (GAMS x.fx); las ecuaciones ya lo leen y el driver no lo pisa.
-        if _preset_shocks:
-            _logging.getLogger(__name__).info(
-                "shock period: %d celdas ya fijadas con fix_instrument_shock (sin arancel): %s",
-                len(_preset_shocks),
-                _preset_shocks[:5],
-            )
-        for _kind, _sh in (("lambdava_shock", lambdava_shock), ("qe_shock", qe_shock)):
-            if _sh is None:
-                continue
-            _name = _SHOCK_INSTRUMENT[_kind]
-            for _key, _fac in _sh.items():
-                fix_instrument_shock(m, _name, _key, factor=float(_fac))
-            _logging.getLogger(__name__).info(
-                "shock period: %s fijo %d celdas de %s (sin arancel)",
-                _kind,
-                len(_sh),
-                _name,
-            )
+        # El shock ya esta en el ShockBlock (shocks.apply_shock): las ecuaciones
+        # leen el instrumento y el driver no lo pisa.
+        _logging.getLogger(__name__).info(
+            "shock period: %d celdas del ShockBlock (sin arancel): %s",
+            len(_preset_shocks),
+            _preset_shocks[:5],
+        )
     elif _gtap_mode:
         _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
         if _n_pmeq:
@@ -3571,21 +3474,9 @@ def _solve_multiperiod_inner(
                 "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm
             )
 
-    # The endowment shock must show up in the solution: a converged run whose xft
-    # did not move by the requested factor lost the shock somewhere (code=1 alone
-    # would not say so).
-    if qe_shock is not None and results["shock"]["code"] == 1:
-        from pyomo.environ import value as _qv
-
-        for (_r, _f), _q in qe_shock.items():
-            _got = float(_qv(m.xft[_r, _f, "shock"])) / float(
-                _qv(m.xft[_r, _f, "check"])
-            )
-            if abs(_got / float(_q) - 1.0) > 1e-6:
-                raise RuntimeError(
-                    f"qe_shock[{_r},{_f}] = {_q} but xft shock/check = {_got}: the "
-                    "shock did not enter the solution"
-                )
+    # Un shock de dotacion tiene que llegar a la solucion: code=1 solo no lo dice.
+    if not _tariff_shock and results["shock"]["code"] == 1:
+        check_shock_entered(m)
 
     # Freeze shock as well (for completeness / report purposes).
     freeze_period(m, "shock")
@@ -3606,8 +3497,6 @@ def solve_multiperiod(
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
-    lambdava_shock: dict[tuple[str, str], float] | None = None,
-    qe_shock: dict[tuple[str, str], float] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Solve base → check → shock, with the built model hidden from the GC.
 
@@ -3654,6 +3543,4 @@ def solve_multiperiod(
             mode=mode,
             solve_check=solve_check,
             settle_only=settle_only,
-            lambdava_shock=lambdava_shock,
-            qe_shock=qe_shock,
         )
