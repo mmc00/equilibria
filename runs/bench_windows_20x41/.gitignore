@@ -1,0 +1,4 @@
+# Trabajo de GAMS (el .gms descomprimido, .lst, .log, out.gdx): pesa y se regenera.
+gams_work/
+# Los resultados (json, md) SI se commitean; los logs completos de cada corrida no.
+results/*.log
