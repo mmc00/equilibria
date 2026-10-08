@@ -69,6 +69,42 @@ def _env_override(**overrides: str | None):
                 os.environ[k] = old
 
 
+def _make_stdio_encode_safe() -> None:
+    """Evita que un print decorativo aborte el solve en una consola no-UTF-8.
+
+    path_capi_python.pyomo_adapter imprime el progreso con emojis
+    ("🔍 Building Jacobian structure...").  En
+    una consola cp1252 -- Windows es-ES, por ejemplo -- ese print lanza
+    UnicodeEncodeError, la excepcion sube por
+    build_nonlinear_from_equality_constraints y la atrapa el except de mas
+    abajo, que la devuelve como status=failed / residual=inf SIN
+    termination_code.  El driver lo traduce a code=0 y queda un fallo que no
+    menciona ni el encoding ni el print: medido en gtap7_3x3, codes
+    {base:1, check:0, shock:0} con PATH sin llamarse una sola vez.
+
+    Se cambia solo el manejo de errores del stream, no su encoding, asi que la
+    consola sigue mostrando lo que puede y lo que no entra sale como caracter
+    de reemplazo en vez de voltear la corrida.  El adapter es un repo externo
+    con commit pinneado, asi que el arreglo va de este lado.
+    """
+    # Solo estos cuatro handlers sustituyen un caracter que el codec no tiene.
+    # "surrogateescape" NO alcanza, aunque suene tolerante: round-trip-ea
+    # surrogates sueltos y sigue tirando UnicodeEncodeError con un emoji -- y
+    # es justo el default de stdout en esta plataforma, asi que una guarda
+    # `!= "strict"` dejaba el stream sin tocar y el bug intacto.
+    _SEGUROS = ("replace", "backslashreplace", "xmlcharrefreplace", "ignore")
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        if (getattr(stream, "errors", None) or "") in _SEGUROS:
+            continue  # ya es tolerante
+        try:
+            reconfigure(errors="replace")
+        except (OSError, ValueError):
+            pass  # stream no reconfigurable; no es critico
+
+
 def _default_jacobian_eval_mode() -> str:
     """Read EQUILIBRIA_GTAP_JAC_MODE at CALL time, not at import time.
 
@@ -694,6 +730,8 @@ def _run_path_capi_nonlinear_full(
     """
     if jacobian_eval_mode is None:
         jacobian_eval_mode = _default_jacobian_eval_mode()
+
+    _make_stdio_encode_safe()
 
     if PATH_CAPI_SRC_DEFAULT.exists() and str(PATH_CAPI_SRC_DEFAULT) not in sys.path:
         sys.path.insert(0, str(PATH_CAPI_SRC_DEFAULT))
@@ -3603,6 +3641,14 @@ def _run_path_capi_nonlinear_full(
             jacobian_eval_mode=jacobian_eval_mode,
         )
     except Exception as exc:
+        # El mensaje viajaba solo dentro del dict y el driver reporta nada mas
+        # que code/residual, asi que el fallo real quedaba invisible.
+        print(
+            f"[nonlinear-full] FALLO armando los callbacks: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
         return {
             "status": "failed",
             "success": False,
