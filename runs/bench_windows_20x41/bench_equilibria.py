@@ -156,13 +156,26 @@ def main() -> int:
                 env=env,
                 capture_output=True,
                 text=True,
+                # Sin encoding explicito, text=True usa el codec de la locale:
+                # en un Windows es-ES es cp1252, que no decodifica el 0x8d que
+                # emite el solve. La excepcion ocurre en el reader thread, asi
+                # que stdout vuelve None y el .write_text de abajo explota con
+                # TypeError -- despues de haber corrido el solve entero.
+                encoding="utf-8",
+                errors="replace",
             )
             wall = time.perf_counter() - t0
         # El log completo de cada corrida queda en results/ (los .log no se
         # commitean): es lo que hace falta para diagnosticar un code != 1.
         log = HERE / "results" / f"equilibria_{args.mode}_rep{i + 1}.log"
         log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text(out.stdout + "\n--- stderr ---\n" + out.stderr, encoding="utf-8")
+        # `or ""`: si stdout/stderr vuelven None por cualquier motivo, perder
+        # el log de una corrida que ya tardo minutos (u horas, en cold) es el
+        # peor desenlace posible.
+        log.write_text(
+            (out.stdout or "") + "\n--- stderr ---\n" + (out.stderr or ""),
+            encoding="utf-8",
+        )
         line = next(
             (ln for ln in out.stdout.splitlines() if ln.startswith("BENCH_RESULT ")),
             None,
