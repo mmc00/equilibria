@@ -175,8 +175,16 @@ def _force_rdlt(prm_path: Path, rordelta: int) -> None:
     if key is None:
         return  # no RDLT header — leave the .prm as-is (dataset default)
     ha = hars[key]
-    arr = np.asarray(ha.array, dtype=float)
-    arr[...] = float(rordelta)
+    # Keep the header's ON-DISK dtype. RORDELTA is an INTEGER coefficient in
+    # GTAPv7.tab and the .prm stores RDLT as 2IFULL (int32); casting to float
+    # made the writer emit it as 2RFULL, which GEMPACK refuses to read:
+    #     (ERROR RETURN FROM ROUTINE:read_data_v1)
+    #     (E-incompatible data types on file and demanded by user)
+    # Verified on gtap7_20x41: written as 2IFULL the solve reproduces the
+    # committed capFix fixture (rore spread 15.2428, min/max -16.5047/-1.2619);
+    # written as 2RFULL it does not run at all.
+    arr = np.asarray(ha.array).copy()
+    arr[...] = rordelta
     ha.array = arr
     write_har(str(prm_path), hars)
 
