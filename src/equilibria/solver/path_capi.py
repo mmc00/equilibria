@@ -69,6 +69,16 @@ def _env_override(**overrides: str | None):
                 os.environ[k] = old
 
 
+# Contador de factorizaciones simbolicas de MUMPS. Lo incrementa el camino
+# newton_tr con EQUILIBRIA_GTAP_TR_LINSOLVE=mumps; lo leen
+# scripts/gtap/bench_symbolic_reuse.py y test_mumps_symbolic_reuse.py.
+# Vivia en scripts/gtap/run_gtap.py y quedo atras cuando c11ae22 (#72) movio el
+# solver aca: el `globals()["_SYMBOLIC_FACT_COUNT"] += 1` lanzaba KeyError, el
+# except lo reportaba como "MUMPS FAILED" con INFOG(1)=0 -- o sea, MUMPS en si
+# habia terminado bien -- y el trust-region caia a otro backend y se estancaba.
+_SYMBOLIC_FACT_COUNT = 0
+
+
 def _make_stdio_encode_safe() -> None:
     """Evita que un print decorativo aborte el solve en una consola no-UTF-8.
 
