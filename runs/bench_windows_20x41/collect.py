@@ -63,8 +63,11 @@ def _rows() -> list[str]:
 def main() -> int:
     env = _load("env")
     m = (env or {}).get("machine", {})
+    # El encabezado sigue al dataset realmente medido: con
+    # EQUILIBRIA_BENCH_DATASET el grid puede no ser el 20x41.
+    _ds_label = str(EXPERIMENT["dataset"]).removeprefix("gtap7_")
     lines = [
-        "# Benchmark GTAP 20x41 — misma maquina",
+        f"# Benchmark GTAP {_ds_label} — misma maquina",
         "",
         f"- Maquina: {m.get('cpu')} · {m.get('logical_cpus')} hilos logicos · "
         f"{m.get('ram_gb')} GB RAM · {m.get('os')}",
@@ -85,7 +88,8 @@ def main() -> int:
         "- **Periodos:** equilibria y GAMS resuelven check y shock; GEMPACK solo el",
         "  shock (parte del benchmark).",
         "- **Arranque:** `equilibria (warm)` siembra con una solucion previa del",
-        "  20x41 (como la medicion de ~7 min en la Mac); `cold`, GEMPACK y GAMS",
+        f"  {_ds_label} (en el 20x41 era la medicion de ~7 min en la Mac);"
+        "  `cold`, GEMPACK y GAMS",
         "  arrancan del benchmark. La comparacion justa es `cold`.",
         "- **Hilos:** GEMPACK usa OpenMP; equilibria, un hilo. Por eso GEMPACK se",
         "  mide tambien con `OMP_NUM_THREADS=1`.",

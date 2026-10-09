@@ -13,6 +13,11 @@ Antes de correr se sube ``iterlim = 1000`` a 1.000.000: con 1000, PATH corta
 por iteraciones y GAMS lo reporta como infactible (fue la causa del falso fallo
 de ME9D). Eso queda anotado en el resultado.
 
+OJO: el bundle .gms.gz es FIJO (20x41). Este script IGNORA
+EQUILIBRIA_BENCH_DATASET, asi que cuando el resto del grid mide otro
+agregado, la fila de GAMS no es del mismo experimento. Generar el bundle del
+dataset con build_gtap7_pure_local_bundle.py --dataset <ds> si se lo necesita.
+
 Nunca se ha resuelto el 20x41 en GAMS: con licencia demo/community no entra
 (~400.000 filas por periodo) y un intento en NEOS (ifSUB=0) termino "Locally
 Infeasible". Si falla, se registra el motivo en vez de abortar. Escribe

@@ -14,7 +14,10 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RESULTS = HERE / "results"
-DATASET = "gtap7_20x41"
+# El 20x41 no es medible en esta maquina: warm 1 rep = 2 h 1 min y el shock
+# igual corta en code=5 (tope de 1 h de PATH, residual 1.914). Con
+# EQUILIBRIA_BENCH_DATASET se mide un agregado que si cierra.
+DATASET = os.environ.get("EQUILIBRIA_BENCH_DATASET", "gtap7_20x41")
 
 # El experimento, igual para las tres herramientas.
 EXPERIMENT = {
