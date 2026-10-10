@@ -142,17 +142,13 @@ def _emit_header(
     if ha.set_names:
         _validate_array_header(name, ha)
     if ha.array.dtype in (np.float32, np.float64):
-        # There is no _write_2rfull. Falling through would emit the header as
-        # REFULL -- a DIFFERENT on-disk type -- which our own reader accepts,
-        # so nothing downstream notices the substitution. Refuse instead of
-        # changing the type silently.
+        # 2-D float with no set names is a 2RFULL: that is exactly the shape
+        # _read_2rfull returns, while a 2-D REFULL carries two set names.
+        # Emitting REFULL here would silently change the on-disk type -- our
+        # own reader accepts both, so nothing downstream would notice.
         if _looks_like_2rfull(ha):
-            raise NotImplementedError(
-                f"{name!r}: writing 2RFULL (2-D dense real, "
-                f"shape={ha.array.shape}) is not implemented. Falling back to "
-                f"REFULL would change the header's on-disk type. Read-only "
-                f"support: see _read_2rfull in reader.py."
-            )
+            _write_2rfull(out, name, ha)
+            return
         if sparse:
             _write_respse(out, name, ha)
         else:
@@ -259,23 +255,57 @@ def _write_2ifull(out: bytearray, name: str, ha: HeaderArray) -> None:
         raise ValueError(
             f"{name!r}: 2IFULL requires 2-D array; got ndim={ha.array.ndim}"
         )
+    _write_dense_2d(out, name, ha, token=wire.TOKEN_2IFULL, elem_dtype="<i4")
+
+
+def _write_2rfull(out: bytearray, name: str, ha: HeaderArray) -> None:
+    """Emit a 2RFULL header (2-D real dense), the write side of _read_2rfull.
+
+    Same block layout as 2IFULL -- wire.DENSE_2D_DATA_OFFSET is shared by both
+    -- with float32 elements instead of int32. The values GEMPACK itself
+    stores this way are single-cell parameters such as RDLT (RORDELTA) in a
+    GTAP default.prm, which `run_gempack_matrix._force_rdlt` has to rewrite to
+    switch the capital-account closure.
+    """
+    if ha.array.dtype not in (np.float32, np.float64):
+        raise TypeError(
+            f"{name!r}: 2RFULL requires float dtype; got {ha.array.dtype}."
+        )
+    if ha.array.ndim != 2:
+        raise ValueError(
+            f"{name!r}: 2RFULL requires 2-D array; got ndim={ha.array.ndim}"
+        )
+    _write_dense_2d(out, name, ha, token=wire.TOKEN_2RFULL, elem_dtype="<f4")
+
+
+def _write_dense_2d(
+    out: bytearray, name: str, ha: HeaderArray, *, token: str, elem_dtype: str
+) -> None:
+    """Shared block layout of the 2-D dense headers (2IFULL and 2RFULL).
+
+    Layout:
+      name record (4 bytes)
+      meta record (PAD + token + long_name(70) + filler + rank + rows + cols)
+      data record (PAD + 7 int32 of block geometry + rows*cols elements,
+                   Fortran order)
+    """
     rows, cols = ha.array.shape
     _write_name_record(out, name)
     # The slot at byte 80 is the RANK, and GEMPACK requires
     # 84 + 4*rank == len(meta) -- harpy3 enforces it and rejects the header
-    # outright otherwise ("corrupted at dimensions in second Record"). A
-    # 2IFULL is rank 2, so: rank 2 then the two dims, giving a 92-byte meta
-    # record, byte-identical in layout to what GEMPACK writes (verified
-    # against header RDLT in nus333/default.prm). _write_refull does the same
-    # with its fixed rank of 7.
+    # outright otherwise ("corrupted at dimensions in second Record"). These
+    # are rank 2, so: rank 2 then the two dims, giving a 92-byte meta record,
+    # byte-identical in layout to what GEMPACK writes (verified against header
+    # RDLT in nus333/default.prm). _write_refull does the same with its fixed
+    # rank of 7.
     #
     # This used to pack a 0 here purely so rows/cols landed at 84/88 where
     # our own reader looks; every 2IFULL we emitted was unreadable by GEMPACK
     # and by harpy (issue #86).
     tail = wire.INT.pack(ha.array.ndim) + wire.INT.pack(rows) + wire.INT.pack(cols)
-    _write_meta_record(out, wire.TOKEN_2IFULL, ha.long_name, tail)
+    _write_meta_record(out, token, ha.long_name, tail)
 
-    flat = ha.array.flatten(order="F").astype("<i4")
+    flat = ha.array.flatten(order="F").astype(elem_dtype)
     data = bytearray()
     data.extend(wire.PAD)
     # The 7-int prefix, as harpy3's read2D loop validates it (har_file_io.py:
