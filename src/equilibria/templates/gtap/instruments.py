@@ -2,7 +2,7 @@
 
 Equivale a GAMS `x.fx(..., 'shock') = v`: el instrumento es una Var fija en los
 3 periodos y el driver no la libera ni la re-siembra (``_exogenous_instruments``).
-No confundir con ``shocks.apply_shock``, que modifica ``params`` (la API YAML).
+El shock en % de GEMPACK se escribe con ``shocks.apply_shock``, que llama a esta.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from equilibria.blocks.gtap.periods import PERIODS, SHOCK, as_key
+from equilibria.blocks.gtap.periods import CHECK, PERIODS, SHOCK, as_key
 
 # Filas que leen cada instrumento. Su celda del periodo tiene que estar viva: si no,
 # el shock no entra al modelo y el solve igual da code=1 (p.ej. ``aft`` de un
@@ -140,6 +140,36 @@ def check_instrument_cell(m: Any, name: str, index: tuple) -> None:
         )
 
 
+def check_shock_cell(m: Any, name: str, index: tuple) -> None:
+    """ValueError si ``name[*index, 'shock']`` no puede llevar un shock: el nombre
+    no es un instrumento registrado, la celda es endogena (@overwrite) o no la lee
+    ninguna fila viva (``check_instrument_cell``)."""
+    registered = getattr(m, "_exogenous_instruments", frozenset())
+    if name not in registered:
+        raise ValueError(
+            f"{name!r} is not a registered instrument; registered: {sorted(registered)}"
+        )
+    if not is_exogenous(m, name, (*index, SHOCK)):
+        raise ValueError(
+            f"{name}{tuple(index)} is endogenous (@overwrite): it cannot take a shock"
+        )
+    check_instrument_cell(m, name, index)
+
+
+def check_shock_value(name: str, index: tuple, new: float) -> None:
+    """ValueError si ``new`` sale del dominio de ``name``: > 0; en un impuesto,
+    1 + t > 0; en kappaf, 1 - kappaf > 0."""
+    idx = (*index, SHOCK)
+    if name in TAX_INSTRUMENTS:
+        if not 1.0 + new > 0.0:
+            raise ValueError(f"{name}{idx} = {new}: the tax power 1 + t must be > 0")
+    elif name in INCOME_TAX_INSTRUMENTS:
+        if not 1.0 - new > 0.0:
+            raise ValueError(f"{name}{idx} = {new}: 1 - kappaf must be > 0")
+    elif not new > 0.0:
+        raise ValueError(f"{name}{idx} = {new}: must be > 0")
+
+
 def fix_instrument_shock(
     m: Any,
     name: str,
@@ -151,38 +181,20 @@ def fix_instrument_shock(
     """Fijar ``name[*index, 'shock']`` en ``value`` o en ``factor`` x su valor de
     ``'check'`` (el benchmark: aplicar el mismo shock dos veces da lo mismo que una).
 
-    Devuelve el valor fijado. ValueError si el nombre no es un instrumento
-    registrado, si no se da exactamente uno de factor/value, si el resultado no es
-    > 0 (en un impuesto: si 1 + t no es > 0; en kappaf: si 1 - kappaf no es > 0), o si la celda no puede llevar el shock (``check_instrument_cell``).
+    Devuelve el valor fijado. ValueError si no se da exactamente uno de
+    factor/value, o en los casos de ``check_shock_cell`` y ``check_shock_value``.
     """
     from pyomo.environ import value as _v
 
-    registered = getattr(m, "_exogenous_instruments", frozenset())
-    if name not in registered:
-        raise ValueError(
-            f"{name!r} is not a registered instrument; registered: {sorted(registered)}"
-        )
-    if not is_exogenous(m, name, (*index, SHOCK)):
-        raise ValueError(
-            f"{name}{tuple(index)} is endogenous (@overwrite): it cannot take a shock"
-        )
     if (factor is None) == (value is None):
         raise ValueError("give exactly one of factor/value")
-    check_instrument_cell(m, name, index)
+    check_shock_cell(m, name, index)
     var = getattr(m, name)
-    idx = (*index, SHOCK)
     if value is not None:
         new = float(value)
     else:
         assert factor is not None  # exactly one of factor/value, checked above
-        new = float(_v(var[(*index, "check")])) * float(factor)
-    if name in TAX_INSTRUMENTS:
-        if not 1.0 + new > 0.0:
-            raise ValueError(f"{name}{idx} = {new}: the tax power 1 + t must be > 0")
-    elif name in INCOME_TAX_INSTRUMENTS:
-        if not 1.0 - new > 0.0:
-            raise ValueError(f"{name}{idx} = {new}: 1 - kappaf must be > 0")
-    elif not new > 0.0:
-        raise ValueError(f"{name}{idx} = {new}: must be > 0")
-    var[idx].fix(new)
+        new = float(_v(var[(*index, CHECK)])) * float(factor)
+    check_shock_value(name, index, new)
+    var[(*index, SHOCK)].fix(new)
     return new

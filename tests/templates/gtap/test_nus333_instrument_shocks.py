@@ -1,6 +1,6 @@
 """nus333 / Burfisher: un ejercicio por instrumento del ShockBlock, contra GAMS.
 
-Cada ejercicio aplica su shock con ``fix_instrument_shock`` (solo la celda 'shock')
+Cada ejercicio aplica su shock con ``apply_shock`` (solo la celda 'shock')
 y se compara el % shock/check contra GAMS en niveles, capFlex, con el MISMO shock
 fijado en el periodo shock (``gams_shock/comp_shock.gms`` + ``shocks/<EXP>.inc``).
 
@@ -56,7 +56,8 @@ TOL_PP = 0.002
 # valores de GAMS escritos a mano.
 # scripts/gtap no es un paquete: se carga por ruta (como lo hace el script).
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
-EXERCISES = cast(Any, importlib.import_module("run_burfisher")).EXERCISES
+_burfisher = cast(Any, importlib.import_module("run_burfisher"))
+EXERCISES, AS_SHOCK = _burfisher.EXERCISES, _burfisher.as_shock
 
 ORACLES = {
     "TBL46A": {
@@ -253,26 +254,8 @@ ORACLES = {
     },
 }
 
-# EXP: (prm, [(instrumento, indice, tipo, x)])
+# EXP: (prm, [(instrumento, indice, % GEMPACK)])
 SHOCKS = {exp: EXERCISES[exp] for exp in ORACLES}
-
-
-def _level(m, p, name, idx, kind, x):
-    """El valor en niveles de la celda 'shock' para el shock GEMPACK ``x``."""
-    from pyomo.environ import value
-
-    chk = float(value(getattr(m, name)[(*idx, "check")]))
-    if kind == "pct":
-        return chk * (1 + x / 100)
-    if kind == "power":
-        return (1 + chk) * (1 + x / 100) - 1
-    if kind == "power_kappa":
-        return 1 - (1 - chk) / (1 + x / 100)
-    assert kind == "power_fct"
-    from equilibria.blocks.gtap import _derived_params as dp
-
-    fs = dp.fctts_data(p, p.sets).get(idx, 0.0)
-    return (1 + fs + chk) * (1 + x / 100) - 1 - fs
 
 
 @pytest.fixture(scope="module", params=sorted(SHOCKS))
@@ -281,15 +264,14 @@ def solved(request):
     prm_name, shocks = SHOCKS[exp]
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.instruments import fix_instrument_shock
+    from equilibria.templates.gtap.shocks import apply_shock
 
     p = nus333_params(prm_name)
     ac = closure()
     m, _mp = build_block_model(
         p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
     )
-    for name, idx, kind, x in shocks:
-        fix_instrument_shock(m, name, idx, value=_level(m, p, name, idx, kind, x))
+    apply_shock(m, AS_SHOCK(shocks))
     res = solve_multiperiod(
         m,
         p,

@@ -1,247 +1,173 @@
-"""High-level shock helpers for GTAP parameter containers.
+"""Aplicar un shock al modelo multiperiodo: escribirlo en el bloque shock.
 
-`apply_shock` is the generic parent: it can shock *any* registered
-container on a `GTAPParameters` instance — taxes, technical change,
-endowments, elasticities — using a uniform ``target`` / ``mode`` /
-``filters`` API.
+El shock vive en el ShockBlock: cada instrumento es una Var fija por periodo, y el
+shock es que su celda del periodo ``shock`` difiera de la del ``check`` (GAMS
+``x.fx(..., 'shock') = v``).  Se escribe ANTES de ``solve_multiperiod``; el driver
+no recibe el shock, lo lee del modelo (``shock_of``).
 
-`apply_tariff_shock` is a thin tariff-specific wrapper kept for backward
-compatibility and ergonomics; new tax types only need to be added to the
-`_REGISTRY` below.
+    apply_shock(m, {"imptx": {("ROW", "MFG", "USA"): 8.6637},
+                    "aft":   {("USA", "CAPITAL"): 10.0}})
+
+Cada numero es el % de GEMPACK y la conversion a niveles la decide el
+instrumento (``GEMPACK_KIND``), sobre su valor del check:
+
+  pct          % directo del instrumento (avaall, qe, afeall...)   x*(1+p)
+  power        % de la potencia 1+t (tms, to, tpdall)              (1+t)*(1+p)-1
+  power_kappa  % de la potencia 1/(1-kappaf) (tinc)                1-(1-k)/(1+p)
+  power_fct    % de 1+fctts+fcttx (tfe); fcttx absorbe el cambio
+
+Con ``levels=True`` cada numero es el valor en niveles de la celda.  Aplicar el
+mismo shock dos veces da lo mismo que una: la conversion parte del check.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from copy import deepcopy
-from dataclasses import dataclass, field
-from typing import Literal
+from collections.abc import Iterator, Mapping
+from typing import Any
 
-from equilibria.templates.gtap.gtap_parameters import GTAPParameters
+from equilibria.blocks.gtap.periods import CHECK, SHOCK
+from equilibria.templates.gtap.instruments import (
+    check_shock_cell,
+    check_shock_value,
+    exogenous_test,
+)
 
-ShockMode = Literal["pct", "power", "set", "add", "mul", "tm_pct"]
-
-
-@dataclass(frozen=True)
-class _ContainerSpec:
-    """Metadata describing how to locate and shock a parameter container.
-
-    ``path`` is a dotted path from `GTAPParameters` to the dict-like
-    container. ``dim_names`` labels each tuple-key axis with a filter
-    name (e.g. ``("sources", "commodities", "destinations")``); pass any
-    of these as keyword filters to `apply_shock`. ``skip_diagonal`` is a
-    pair of dim positions that must differ; ``aliases`` are sibling
-    container paths kept in sync after every write.
-    """
-
-    path: str
-    dim_names: tuple[str, ...]
-    skip_diagonal: tuple[int, int] | None = None
-    aliases: tuple[str, ...] = field(default_factory=tuple)
-
-
-_REGISTRY: dict[str, _ContainerSpec] = {
-    # Taxes -----------------------------------------------------------------
-    "taxes.imptx": _ContainerSpec(
-        path="taxes.imptx",
-        dim_names=("sources", "commodities", "destinations"),
-        skip_diagonal=(0, 2),
-        aliases=("taxes.rtms",),
-    ),
-    "taxes.rtxs": _ContainerSpec(
-        path="taxes.rtxs",
-        dim_names=("sources", "commodities", "destinations"),
-        skip_diagonal=(0, 2),
-    ),
-    "taxes.rto": _ContainerSpec(
-        path="taxes.rto",
-        dim_names=("regions", "sectors"),
-    ),
-    "taxes.rtf": _ContainerSpec(
-        path="taxes.rtf",
-        dim_names=("regions", "factors", "sectors"),
-    ),
-    "taxes.rtfd": _ContainerSpec(
-        path="taxes.rtfd",
-        dim_names=("regions", "commodities", "sectors"),
-    ),
-    "taxes.rtfi": _ContainerSpec(
-        path="taxes.rtfi",
-        dim_names=("regions", "commodities", "sectors"),
-    ),
-    "taxes.rtpd": _ContainerSpec(
-        path="taxes.rtpd",
-        dim_names=("regions", "commodities", "sectors"),
-    ),
-    "taxes.rtpi": _ContainerSpec(
-        path="taxes.rtpi",
-        dim_names=("regions", "commodities", "sectors"),
-    ),
-    "taxes.rtgd": _ContainerSpec(
-        path="taxes.rtgd",
-        dim_names=("regions", "commodities"),
-    ),
-    "taxes.rtgi": _ContainerSpec(
-        path="taxes.rtgi",
-        dim_names=("regions", "commodities"),
-    ),
-    # Add productivity / endowment targets here once the corresponding
-    # `GTAPParameters` containers are wired up — e.g. `calibrated.aoall`,
-    # `benchmark.evom`. The registry itself is the only thing to extend.
+# Como se lee el % de GEMPACK de cada instrumento del ShockBlock.  Los objetivos
+# de @overwrite (b.target) son factores sobre el check: "pct".
+GEMPACK_KIND: dict[str, str] = {
+    "lambdava": "pct",
+    "aft": "pct",
+    "imptx": "power",
+    "prdtx_rai": "power",
+    "fcttx": "power_fct",
+    "dintx_tgt": "power",
+    "mintx_tgt": "power",
+    "kappaf": "power_kappa",
+    "exptx": "power",
+    "pop": "pct",
+    "lambdaf": "pct",
+    "axp": "pct",
+    "lambdam": "pct",
+    "lambdamg": "pct",
 }
 
 
-def list_shock_targets() -> list[str]:
-    """Return every target name registered for `apply_shock`."""
-    return sorted(_REGISTRY)
+def gempack_kind(name: str) -> str:
+    """Como se lee el % de GEMPACK de ``name`` (ver ``GEMPACK_KIND``)."""
+    return GEMPACK_KIND.get(name, "pct")
 
 
-def _resolve_container(params: GTAPParameters, path: str):
-    obj = params
-    for part in path.split("."):
-        obj = getattr(obj, part)
-    return obj
+def shocked(kind: str, chk: Any, f: Any, fs: Any = 0.0) -> Any:
+    """El valor shockeado desde el de check ``chk``, con ``f`` = 1+pct/100.
+
+    Vale con numeros y con expresiones GAMS en texto (gen_burfisher_gams.py la usa
+    para escribir el mismo shock en el oraculo). ``fs``: fctts de la celda.
+    """
+    if kind == "pct":
+        return chk * f
+    if kind == "power":
+        return (1 + chk) * f - 1
+    if kind == "power_kappa":
+        return 1 - (1 - chk) / f
+    if kind == "power_fct":
+        return (1 + fs + chk) * f - 1 - fs
+    raise ValueError(f"unknown GEMPACK kind: {kind!r}")
 
 
-def _apply_op(current: float, value: float, mode: ShockMode) -> float:
-    if mode == "pct":
-        return current * (1.0 + value)
-    if mode == "power" or mode == "tm_pct":
-        return (1.0 + current) * (1.0 + value) - 1.0
-    if mode == "set":
-        return value
-    if mode == "add":
-        return current + value
-    if mode == "mul":
-        return current * value
-    raise ValueError(f"Unknown shock mode: {mode!r}")
+def _level(m: Any, name: str, cell: tuple, pct: float) -> float:
+    """Valor en niveles de ``name[*cell, 'shock']`` para el % GEMPACK ``pct``."""
+    from pyomo.environ import value
+
+    g = 1.0 + float(pct) / 100.0
+    if not g > 0.0:
+        raise ValueError(f"{name}{cell}: {pct}% — a GEMPACK change must be > -100%")
+    chk = float(value(getattr(m, name)[(*cell, CHECK)]))
+    kind = gempack_kind(name)
+    fs = 0.0
+    if kind == "power_fct":
+        # La potencia es 1+fctts+fcttx y fctts no se mueve.
+        fctts = getattr(m, "_fctts", None)
+        if fctts is None:
+            raise ValueError(
+                f"{name}{cell}: the model carries no fctts (build_block_model)"
+            )
+        fs = float(fctts.get(cell, 0.0))
+    return float(shocked(kind, chk, g, fs))
 
 
 def apply_shock(
-    params: GTAPParameters,
-    target: str,
-    value: float,
-    *,
-    mode: ShockMode = "pct",
-    inplace: bool = False,
-    predicate: Callable[[tuple], bool] | None = None,
-    **filters: Iterable[str] | None,
-) -> GTAPParameters:
-    """Apply a generic shock to any registered parameter container.
+    m: Any, shock: Mapping[str, Mapping[tuple, float]], *, levels: bool = False
+) -> dict[str, dict[tuple, float]]:
+    """Escribe ``shock`` ({instrumento: {celda: %}}) en el periodo shock de ``m``.
 
-    Args:
-        params: Calibrated `GTAPParameters` to shock.
-        target: Registered container name, e.g. ``"taxes.imptx"``,
-            ``"taxes.rtf"``, ``"calibrated.aoall"``. See
-            `list_shock_targets()` for the full list.
-        value: Shock magnitude. Interpretation depends on ``mode``.
-        mode: One of:
-
-            * ``"pct"`` — scale rate: ``new = old * (1 + value)``
-            * ``"power"`` — scale power: ``new = (1 + old) * (1 + value) - 1``
-              (canonical for tariff/tax shocks à la GAMS ``tm.fx = tm.l*1.1``)
-            * ``"set"`` — replace: ``new = value``
-            * ``"add"`` — add: ``new = old + value``
-            * ``"mul"`` — multiply: ``new = old * value``
-            * ``"tm_pct"`` — alias of ``"power"`` (legacy)
-        inplace: Mutate ``params`` instead of deep-copying.
-        predicate: Optional ``(key) -> bool`` used as a final filter
-            after the named dim filters resolve.
-        **filters: Per-dimension restrictions. Valid filter names depend
-            on the target's registered dim names — e.g. ``commodities=``
-            for any target with a commodity axis, ``sources=`` for trade
-            tax targets, ``regions=`` / ``factors=`` / ``sectors=`` for
-            others. Unknown filter names raise ``TypeError``.
-
-    Returns the (possibly new) `GTAPParameters`. Raises ``ValueError`` for
-    unknown ``target`` or ``mode``.
+    Todo o nada: valida y convierte TODAS las celdas antes de fijar ninguna, asi un
+    error no deja el modelo con medio shock.  Devuelve los valores en niveles
+    fijados.  ValueError si un instrumento no esta registrado, si una celda no
+    existe, es endogena o ninguna fila viva la lee, si un % no es > -100, o si un
+    valor sale del dominio del instrumento.
     """
-
-    if target not in _REGISTRY:
-        raise ValueError(
-            f"Unknown shock target: {target!r}. Available: {list_shock_targets()}"
-        )
-    spec = _REGISTRY[target]
-
-    unknown = set(filters) - set(spec.dim_names)
-    if unknown:
-        raise TypeError(
-            f"Unknown filter(s) for target {target!r}: {sorted(unknown)}. "
-            f"Valid filters: {list(spec.dim_names)}"
-        )
-
-    out = params if inplace else deepcopy(params)
-    container = _resolve_container(out, spec.path)
-    aliases = [_resolve_container(out, p) for p in spec.aliases]
-
-    resolved_filters: list[set | None] = [
-        set(filters[name]) if filters.get(name) is not None else None
-        for name in spec.dim_names
-    ]
-
-    for key in list(container.keys()):
-        if not isinstance(key, tuple) or len(key) != len(spec.dim_names):
-            continue
-        if spec.skip_diagonal is not None:
-            i, j = spec.skip_diagonal
-            if key[i] == key[j]:
-                continue
-        if any(
-            allowed is not None and component not in allowed
-            for component, allowed in zip(key, resolved_filters, strict=False)
-        ):
-            continue
-        if predicate is not None and not predicate(key):
-            continue
-
-        updated = _apply_op(float(container[key]), float(value), mode)
-        container[key] = updated
-        for alias in aliases:
-            if key in alias:
-                alias[key] = updated
-
+    out: dict[str, dict[tuple, float]] = {}
+    for name, cells in shock.items():
+        for cell, x in cells.items():
+            cell = tuple(cell)
+            check_shock_cell(m, name, cell)  # antes de leer su check
+            v = float(x) if levels else _level(m, name, cell, x)
+            check_shock_value(name, cell, v)
+            out.setdefault(name, {})[cell] = v
+    for name, cells in out.items():
+        var = getattr(m, name)
+        for cell, v in cells.items():
+            var[(*cell, SHOCK)].fix(v)
     return out
 
 
-def apply_tariff_shock(
-    params: GTAPParameters,
-    value: float,
-    *,
-    mode: ShockMode = "tm_pct",
-    commodities: Iterable[str] | None = None,
-    sources: Iterable[str] | None = None,
-    destinations: Iterable[str] | None = None,
-    inplace: bool = False,
-) -> GTAPParameters:
-    """Tariff-specific wrapper around `apply_shock` for ``taxes.imptx``.
+def _shocked_cells(m: Any, name: str) -> Iterator[tuple]:
+    """Indices 'shock' de ``name`` cuyo valor difiere del 'check' (sin las celdas
+    endogenas de @overwrite)."""
+    from pyomo.environ import value
 
-    Equivalent to::
-
-        apply_shock(params, "taxes.imptx", value, mode=mode,
-                    commodities=..., sources=..., destinations=...,
-                    inplace=inplace)
-
-    The default ``mode="tm_pct"`` matches GAMS ``tm.fx = tm.l * (1 + value)``
-    (power scaling). The diagonal `(r, i, r)` is skipped automatically and
-    the legacy alias `params.taxes.rtms` is kept in sync — both behaviours
-    are encoded in the registry entry for ``taxes.imptx``.
-    """
-
-    return apply_shock(
-        params,
-        "taxes.imptx",
-        value,
-        mode=mode,
-        inplace=inplace,
-        commodities=commodities,
-        sources=sources,
-        destinations=destinations,
-    )
+    var = getattr(m, name, None)
+    if var is None or name not in getattr(m, "_exogenous_instruments", ()):
+        return
+    exo = exogenous_test(m, name)
+    for k in var:
+        if k[-1] != SHOCK or not exo(k):
+            continue
+        ck = (*k[:-1], CHECK)
+        if ck in var and float(value(var[k])) != float(value(var[ck])):
+            yield k
 
 
-__all__ = [
-    "ShockMode",
-    "apply_shock",
-    "apply_tariff_shock",
-    "list_shock_targets",
-]
+def shock_of(m: Any) -> list[str]:
+    """Etiquetas ``nombre(celda)`` de las celdas del bloque shock que difieren del
+    check: el shock del modelo.  Vacia = sin shock (el driver aplica entonces el
+    arancel +10%)."""
+    return [
+        f"{name}{tuple(k[:-1])}"
+        for name in sorted(getattr(m, "_exogenous_instruments", ()))
+        for k in _shocked_cells(m, name)
+    ]
+
+
+def check_endowment_shock_entered(m: Any) -> None:
+    """Tras un solve convergido: RuntimeError si un shock de dotacion (``aft``) no
+    llego a la solucion.  code=1 solo no lo garantiza: si eq_xfteq se hubiera
+    apagado, xft queda suelto y el solve igual converge.  Se evalua la fila
+    ``xft = aft*(pft/pabs)**etaf`` del shock (este activa o no) con el aft
+    shockeado; con etaf=0 es exactamente "xft se movio el factor del shock"."""
+    from pyomo.environ import value
+
+    eq = getattr(m, "eq_xfteq", None)
+    if eq is None:
+        return
+    for k in _shocked_cells(m, "aft"):
+        if k not in eq:
+            continue
+        row = eq[k]
+        resid = float(value(row.body)) - float(value(row.upper))
+        xft = float(value(m.xft[k]))
+        if abs(resid) > 1e-6 * max(1.0, abs(xft)):
+            raise RuntimeError(
+                f"aft{tuple(k[:-1])} = {value(m.aft[k])} but eq_xfteq{k} is off by "
+                f"{resid:.3e} (xft = {xft}): the shock did not enter the solution"
+            )

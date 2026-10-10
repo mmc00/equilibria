@@ -46,6 +46,7 @@ def solved(request):
     from equilibria.blocks.gtap import _derived_params as dp
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from equilibria.templates.gtap.shocks import apply_shock
 
     p = nus333_params("3x3CobbDouglas.prm")
     assert dp.cd_regions(p, p.sets) == frozenset(p.sets.r)
@@ -53,6 +54,7 @@ def solved(request):
     m, _mp = build_block_model(
         p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
     )
+    apply_shock(m, {"lambdava": {("USA", "SER"): 10.0}})
     res = solve_multiperiod(
         m,
         p,
@@ -63,7 +65,6 @@ def solved(request):
         seed_from_prior=False,
         mode="gtap",
         solve_check=True,
-        lambdava_shock={("USA", "SER"): 1.10},
     )
     assert int(res["shock"]["code"]) == 1, res["shock"]
     return m

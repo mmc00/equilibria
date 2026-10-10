@@ -1,17 +1,12 @@
 """Burfisher 3e / nus333: corre cada ejercicio con equilibria y lo compara contra GAMS.
 
 Cada ejercicio es una fila de datos: el ``.prm`` y la lista de shocks del ``.EXP``
-traducidos a instrumentos del ShockBlock. El shock se aplica con
-``fix_instrument_shock`` (solo la celda 'shock'); base y check son el benchmark.
+traducidos a instrumentos del ShockBlock: (instrumento, indice, % GEMPACK). El
+shock se aplica con ``shocks.apply_shock`` (solo la celda 'shock'), que decide la
+conversion a niveles segun el instrumento; base y check son el benchmark.
 Despues se comparan TODAS las celdas de check y shock contra el GDX de GAMS del
 mismo ejercicio (``<gams-dir>/<EXP>_capFlex.gdx``), con las exclusiones de
 ``measure_gtap_pure_tols.py``.
-
-Traduccion GEMPACK -> niveles (``kind``):
-- ``pct``: % directo del instrumento (avaall, qe, afeall, aoall, ams) -> x*(1+p/100).
-- ``power``: % de la potencia 1+t (tms, to, tpdall) -> (1+t)*(1+p/100)-1.
-- ``power_fct``: % de 1+fctts+fcttx (tfe) -> fcttx absorbe el cambio.
-- ``power_kappa``: % de la potencia 1/(1-kappaf) (tinc) -> 1-(1-k)/(1+p/100).
 
 Uso:
     .venv/bin/python scripts/gtap/run_burfisher.py --gams-dir <dir> [--only TBL46A,TBL78]
@@ -38,122 +33,123 @@ def me9(land, ao_agr, afe):
     """Shocks de ME9B/C/D. ``land``: qe LAND (USA, ROW); ``ao_agr``: aoall(AGR) %;
     ``afe``: afeall LABOR (USA, ROW) en todas las actividades, o None."""
     aoreg = {"USA": 31.94, "ROW": 42.31}
-    out: list[tuple[str, tuple, str, float]] = []
+    out: list[tuple[str, tuple, float]] = []
     for r in ("USA", "ROW"):
         for a in ACTS:
             f = 1 + aoreg[r] / 100
             if a == "AGR":
                 f *= 1 + ao_agr / 100
-            out.append(("axp", (r, a), "pct", round(100 * (f - 1), 10)))
-    out += [("pop", ("USA",), "pct", 32.3), ("pop", ("ROW",), "pct", 37.3)]
+            out.append(("axp", (r, a), round(100 * (f - 1), 10)))
+    out += [("pop", ("USA",), 32.3), ("pop", ("ROW",), 37.3)]
     out += [
-        ("aft", ("USA", "LABOR"), "pct", 24.1),
-        ("aft", ("ROW", "LABOR"), "pct", 38.4),
-        ("aft", ("USA", "CAPITAL"), "pct", 60.6),
-        ("aft", ("ROW", "CAPITAL"), "pct", 213.1),
-        ("aft", ("USA", "LAND"), "pct", land[0]),
-        ("aft", ("ROW", "LAND"), "pct", land[1]),
+        ("aft", ("USA", "LABOR"), 24.1),
+        ("aft", ("ROW", "LABOR"), 38.4),
+        ("aft", ("USA", "CAPITAL"), 60.6),
+        ("aft", ("ROW", "CAPITAL"), 213.1),
+        ("aft", ("USA", "LAND"), land[0]),
+        ("aft", ("ROW", "LAND"), land[1]),
     ]
     if afe is not None:
         for r, x in zip(("USA", "ROW"), afe, strict=True):
-            out += [("lambdaf", (r, "LABOR", a), "pct", x) for a in ACTS]
+            out += [("lambdaf", (r, "LABOR", a), x) for a in ACTS]
     return out
 
 
-# EXP: (prm, [(instrumento, indice, kind, porcentaje)])
-EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
+# EXP: (prm, [(instrumento, indice, % GEMPACK)]); la conversion la decide el instrumento
+# (shocks.GEMPACK_KIND).
+EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     # avaall -> lambdava
-    "TBL45A": ("default.prm", [("lambdava", ("USA", "SER"), "pct", 10.0)]),
-    "TBL45B": ("3x3CES.prm", [("lambdava", ("USA", "SER"), "pct", 10.0)]),
-    "TBL45C": ("3x3CobbDouglas.prm", [("lambdava", ("USA", "SER"), "pct", 10.0)]),
+    "TBL45A": ("default.prm", [("lambdava", ("USA", "SER"), 10.0)]),
+    "TBL45B": ("3x3CES.prm", [("lambdava", ("USA", "SER"), 10.0)]),
+    "TBL45C": ("3x3CobbDouglas.prm", [("lambdava", ("USA", "SER"), 10.0)]),
     # qe -> aft
-    "TBL55": ("default.prm", [("aft", ("USA", "CAPITAL"), "pct", 10.0)]),
-    "TBL63A": ("default.prm", [("aft", ("USA", "LABOR"), "pct", 10.0)]),
-    "TBL63B": ("esubvaklassubstitutes.prm", [("aft", ("USA", "LABOR"), "pct", 10.0)]),
-    "TBL66": ("default.prm", [("aft", ("USA", "LABOR"), "pct", 2.0)]),
-    "TBL77": ("esubva4allsects.prm", [("aft", ("USA", "LAND"), "pct", 10.0)]),
+    "TBL55": ("default.prm", [("aft", ("USA", "CAPITAL"), 10.0)]),
+    "TBL63A": ("default.prm", [("aft", ("USA", "LABOR"), 10.0)]),
+    "TBL63B": ("esubvaklassubstitutes.prm", [("aft", ("USA", "LABOR"), 10.0)]),
+    "TBL66": ("default.prm", [("aft", ("USA", "LABOR"), 2.0)]),
+    "TBL77": ("esubva4allsects.prm", [("aft", ("USA", "LAND"), 10.0)]),
     # tms -> imptx (exportador, bien, importador)
-    "TBL46A": ("esubd0.8.prm", [("imptx", ("ROW", "MFG", "USA"), "power", 8.6637)]),
-    "TBL46B": ("esubd1.2.prm", [("imptx", ("ROW", "MFG", "USA"), "power", 8.6637)]),
-    "TBL46C": ("esubd4.prm", [("imptx", ("ROW", "MFG", "USA"), "power", 8.6637)]),
-    "TBL75A": ("usmfgesubm3.prm", [("imptx", ("ROW", "MFG", "USA"), "power", 13.6030)]),
+    "TBL46A": ("esubd0.8.prm", [("imptx", ("ROW", "MFG", "USA"), 8.6637)]),
+    "TBL46B": ("esubd1.2.prm", [("imptx", ("ROW", "MFG", "USA"), 8.6637)]),
+    "TBL46C": ("esubd4.prm", [("imptx", ("ROW", "MFG", "USA"), 8.6637)]),
+    "TBL75A": ("usmfgesubm3.prm", [("imptx", ("ROW", "MFG", "USA"), 13.6030)]),
     "TBL75B": (
         "usmfgesubm10.prm",
-        [("imptx", ("ROW", "MFG", "USA"), "power", 13.6030)],
+        [("imptx", ("ROW", "MFG", "USA"), 13.6030)],
     ),
-    "ME7A": ("default.prm", [("imptx", ("ROW", "MFG", "USA"), "power", 4.9395)]),
+    "ME7A": ("default.prm", [("imptx", ("ROW", "MFG", "USA"), 4.9395)]),
     "ME7B": (
         "default.prm",
         [
-            ("imptx", ("ROW", "MFG", "USA"), "power", 4.9395),
-            ("imptx", ("USA", "MFG", "ROW"), "power", 4.8637),
+            ("imptx", ("ROW", "MFG", "USA"), 4.9395),
+            ("imptx", ("USA", "MFG", "ROW"), 4.8637),
         ],
     ),
     # to -> prdtx_rai (region, actividad, bien)
     "TBL65A": (
         "default.prm",
-        [("prdtx_rai", ("USA", "MFG", "MFG"), "power", -10.9414)],
+        [("prdtx_rai", ("USA", "MFG", "MFG"), -10.9414)],
     ),
-    "TBL67": ("default.prm", [("prdtx_rai", ("USA", "SER", "SER"), "power", -7.6648)]),
-    "ME3A": ("default.prm", [("prdtx_rai", ("USA", "MFG", "MFG"), "power", -10.9414)]),
+    "TBL67": ("default.prm", [("prdtx_rai", ("USA", "SER", "SER"), -7.6648)]),
+    "ME3A": ("default.prm", [("prdtx_rai", ("USA", "MFG", "MFG"), -10.9414)]),
     "ME3B": (
         "esubva20mfg.prm",
-        [("prdtx_rai", ("USA", "MFG", "MFG"), "power", -10.9414)],
+        [("prdtx_rai", ("USA", "MFG", "MFG"), -10.9414)],
     ),
     # tfe -> fcttx (region, factor, actividad)
     "TBL54A": (
         "ESUBVAmfg1.2.prm",
-        [("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 4.2969)],
+        [("fcttx", ("USA", "LABOR", "MFG"), 4.2969)],
     ),
     "TBL54B": (
         "esubvamfg.8.prm",
-        [("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 4.2969)],
+        [("fcttx", ("USA", "LABOR", "MFG"), 4.2969)],
     ),
     # tpdall -> dintx_tgt (region, bien, agente)
     "TBL62A": (
         "default.prm",
-        [("dintx_tgt", ("USA", "MFG", "hhd"), "power", -13.7359)],
+        [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     "TBL62B": (
         "SectorspecificK.prm",
-        [("dintx_tgt", ("USA", "MFG", "hhd"), "power", -13.7359)],
+        [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     "TBL62C": (
         "SluggishK.prm",
-        [("dintx_tgt", ("USA", "MFG", "hhd"), "power", -13.7359)],
+        [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     # afeall -> lambdaf (region, factor, actividad)
     "TBL64": (
         "default.prm",
-        [("lambdaf", ("USA", "LABOR", a), "pct", 10.0) for a in ACTS],
+        [("lambdaf", ("USA", "LABOR", a), 10.0) for a in ACTS],
     ),
-    "ME4A": ("default.prm", [("lambdaf", ("ROW", "LAND", "AGR"), "pct", -81.0)]),
-    "ME4B": ("3x3CobbDouglas.prm", [("lambdaf", ("ROW", "LAND", "AGR"), "pct", -81.0)]),
+    "ME4A": ("default.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
+    "ME4B": ("3x3CobbDouglas.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
     # aoall -> axp (region, actividad)
-    "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), "pct", -6.0)]),
+    "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), -6.0)]),
     # ams -> lambdam (origen, bien, destino)
-    "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), "pct", 2.0)]),
+    "TBL93": ("default.prm", [("lambdam", ("ROW", "MFG", "USA"), 2.0)]),
     # tfd = target% N from file tfd.shk -> dintx_tgt: la tasa pasa a N% (libro p.155);
     # potencia x = 100*((1+N/100)*(1+e/100) - 1), e del .shk (elimina el impuesto).
     "TBL53": (
         "esubd4.prm",
         [
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 9.3219304),
-            ("dintx_tgt", ("USA", "AGR", "MFG"), "power", 5.0),
-            ("dintx_tgt", ("USA", "AGR", "SER"), "power", 5.0000125),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 10.6509107),
-            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 9.4152162),
-            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 6.8348582),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 6.3567546),
-            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 1.7135180),
-            ("dintx_tgt", ("USA", "SER", "SER"), "power", 1.8647366),
+            ("dintx_tgt", ("USA", "AGR", "AGR"), 9.3219304),
+            ("dintx_tgt", ("USA", "AGR", "MFG"), 5.0),
+            ("dintx_tgt", ("USA", "AGR", "SER"), 5.0000125),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), 10.6509107),
+            ("dintx_tgt", ("USA", "MFG", "MFG"), 9.4152162),
+            ("dintx_tgt", ("USA", "MFG", "SER"), 6.8348582),
+            ("dintx_tgt", ("USA", "SER", "AGR"), 6.3567546),
+            ("dintx_tgt", ("USA", "SER", "MFG"), 1.7135180),
+            ("dintx_tgt", ("USA", "SER", "SER"), 1.8647366),
         ],
     ),
     # atd -> lambdamg (margen, origen, bien, destino): en nus333 solo SER es margen y
     # solo ROW->USA lleva margen hacia USA; el resto de las celdas es inerte.
     "TBL79": (
         "default.prm",
-        [("lambdamg", ("SER", "ROW", i, "USA"), "pct", 10.0) for i in ("AGR", "MFG")],
+        [("lambdamg", ("SER", "ROW", i, "USA"), 10.0) for i in ("AGR", "MFG")],
     ),
     # TBL813 (Tabla 8.13): +1% a la tasa del impuesto al consumo privado de MFG
     # domestico en USA. GEMPACK: `tpdall = rate% 1 from file tpdall.shk`, y el .shk
@@ -161,21 +157,21 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
     # tasa 1% es -0.01 x ese valor sobre la potencia (exacto, no lineal en t).
     "TBL813": (
         "ballard.prm",
-        [("dintx_tgt", ("USA", "MFG", "hhd"), "power", 0.091956644)],
+        [("dintx_tgt", ("USA", "MFG", "hhd"), 0.091956644)],
     ),
     # ME5: quitar los subsidios agricolas de USA. tfe -> fcttx, tfd -> dintx_tgt y
     # tfm -> mintx_tgt, con la actividad AGR como agente comprador.
     "ME5": (
         "default.prm",
         [
-            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", 4.2896),
-            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", 3.2700),
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", 4.1161),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", 0.5917),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", 4.2713),
-            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", 4.2910),
-            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", 1.9788),
-            ("mintx_tgt", ("USA", "SER", "AGR"), "power", 4.7064),
+            ("fcttx", ("USA", "LAND", "AGR"), 4.2896),
+            ("fcttx", ("USA", "CAPITAL", "AGR"), 3.2700),
+            ("dintx_tgt", ("USA", "AGR", "AGR"), 4.1161),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), 0.5917),
+            ("dintx_tgt", ("USA", "SER", "AGR"), 4.2713),
+            ("mintx_tgt", ("USA", "AGR", "AGR"), 4.2910),
+            ("mintx_tgt", ("USA", "MFG", "AGR"), 1.9788),
+            ("mintx_tgt", ("USA", "SER", "AGR"), 4.7064),
         ],
     ),
     # ME8: +1% a TODAS las tasas de impuesto de USA (rate% 1 from file X.shk, 11
@@ -186,45 +182,45 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, str, float]]]] = {
     "ME8": (
         "ballard.prm",
         [
-            ("fcttx", ("USA", "LAND", "AGR"), "power_fct", -0.04289619),
-            ("fcttx", ("USA", "LABOR", "AGR"), "power_fct", 0.075687323),
-            ("fcttx", ("USA", "LABOR", "MFG"), "power_fct", 0.13085938),
-            ("fcttx", ("USA", "LABOR", "SER"), "power_fct", 0.13085938),
-            ("fcttx", ("USA", "CAPITAL", "AGR"), "power_fct", -0.032699599),
-            ("fcttx", ("USA", "CAPITAL", "MFG"), "power_fct", 0.031535168),
-            ("fcttx", ("USA", "CAPITAL", "SER"), "power_fct", 0.031535168),
-            ("dintx_tgt", ("USA", "AGR", "AGR"), "power", -0.041161242),
-            ("dintx_tgt", ("USA", "AGR", "SER"), "power", -1.192e-07),
-            ("dintx_tgt", ("USA", "MFG", "AGR"), "power", -0.0059173703),
-            ("dintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0053162163),
-            ("dintx_tgt", ("USA", "MFG", "SER"), "power", 0.028774016),
-            ("dintx_tgt", ("USA", "SER", "AGR"), "power", -0.04271328),
-            ("dintx_tgt", ("USA", "SER", "MFG"), "power", 0.0028086472),
-            ("dintx_tgt", ("USA", "SER", "SER"), "power", 0.0013261114),
-            ("mintx_tgt", ("USA", "AGR", "AGR"), "power", -0.042909613),
-            ("mintx_tgt", ("USA", "MFG", "AGR"), "power", -0.019788332),
-            ("mintx_tgt", ("USA", "MFG", "MFG"), "power", 0.0043851116),
-            ("mintx_tgt", ("USA", "MFG", "SER"), "power", 0.022134778),
-            ("mintx_tgt", ("USA", "SER", "AGR"), "power", -0.047064238),
-            ("prdtx_rai", ("USA", "AGR", "AGR"), "power", 0.0024332063),
-            ("prdtx_rai", ("USA", "MFG", "MFG"), "power", 0.010459609),
-            ("prdtx_rai", ("USA", "SER", "SER"), "power", 0.028050888),
-            ("dintx_tgt", ("USA", "AGR", "hhd"), "power", 0.042836466),
-            ("dintx_tgt", ("USA", "MFG", "hhd"), "power", 0.091956644),
-            ("dintx_tgt", ("USA", "SER", "hhd"), "power", 0.0064833277),
-            ("mintx_tgt", ("USA", "AGR", "hhd"), "power", 0.058277063),
-            ("mintx_tgt", ("USA", "MFG", "hhd"), "power", 0.079622064),
-            ("mintx_tgt", ("USA", "SER", "hhd"), "power", 0.0001112099),
-            ("kappaf", ("USA", "LAND", "AGR"), "power_kappa", 0.082899618),
-            ("kappaf", ("USA", "LABOR", "AGR"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "LABOR", "MFG"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "LABOR", "SER"), "power_kappa", 0.21230932),
-            ("kappaf", ("USA", "CAPITAL", "AGR"), "power_kappa", 0.082899523),
-            ("kappaf", ("USA", "CAPITAL", "MFG"), "power_kappa", 0.082899523),
-            ("kappaf", ("USA", "CAPITAL", "SER"), "power_kappa", 0.082899618),
-            ("imptx", ("ROW", "AGR", "USA"), "power", 0.015394439),
-            ("imptx", ("ROW", "MFG", "USA"), "power", 0.012148236),
-            ("exptx", ("USA", "MFG", "ROW"), "power", 0.0029257515),
+            ("fcttx", ("USA", "LAND", "AGR"), -0.04289619),
+            ("fcttx", ("USA", "LABOR", "AGR"), 0.075687323),
+            ("fcttx", ("USA", "LABOR", "MFG"), 0.13085938),
+            ("fcttx", ("USA", "LABOR", "SER"), 0.13085938),
+            ("fcttx", ("USA", "CAPITAL", "AGR"), -0.032699599),
+            ("fcttx", ("USA", "CAPITAL", "MFG"), 0.031535168),
+            ("fcttx", ("USA", "CAPITAL", "SER"), 0.031535168),
+            ("dintx_tgt", ("USA", "AGR", "AGR"), -0.041161242),
+            ("dintx_tgt", ("USA", "AGR", "SER"), -1.192e-07),
+            ("dintx_tgt", ("USA", "MFG", "AGR"), -0.0059173703),
+            ("dintx_tgt", ("USA", "MFG", "MFG"), 0.0053162163),
+            ("dintx_tgt", ("USA", "MFG", "SER"), 0.028774016),
+            ("dintx_tgt", ("USA", "SER", "AGR"), -0.04271328),
+            ("dintx_tgt", ("USA", "SER", "MFG"), 0.0028086472),
+            ("dintx_tgt", ("USA", "SER", "SER"), 0.0013261114),
+            ("mintx_tgt", ("USA", "AGR", "AGR"), -0.042909613),
+            ("mintx_tgt", ("USA", "MFG", "AGR"), -0.019788332),
+            ("mintx_tgt", ("USA", "MFG", "MFG"), 0.0043851116),
+            ("mintx_tgt", ("USA", "MFG", "SER"), 0.022134778),
+            ("mintx_tgt", ("USA", "SER", "AGR"), -0.047064238),
+            ("prdtx_rai", ("USA", "AGR", "AGR"), 0.0024332063),
+            ("prdtx_rai", ("USA", "MFG", "MFG"), 0.010459609),
+            ("prdtx_rai", ("USA", "SER", "SER"), 0.028050888),
+            ("dintx_tgt", ("USA", "AGR", "hhd"), 0.042836466),
+            ("dintx_tgt", ("USA", "MFG", "hhd"), 0.091956644),
+            ("dintx_tgt", ("USA", "SER", "hhd"), 0.0064833277),
+            ("mintx_tgt", ("USA", "AGR", "hhd"), 0.058277063),
+            ("mintx_tgt", ("USA", "MFG", "hhd"), 0.079622064),
+            ("mintx_tgt", ("USA", "SER", "hhd"), 0.0001112099),
+            ("kappaf", ("USA", "LAND", "AGR"), 0.082899618),
+            ("kappaf", ("USA", "LABOR", "AGR"), 0.21230932),
+            ("kappaf", ("USA", "LABOR", "MFG"), 0.21230932),
+            ("kappaf", ("USA", "LABOR", "SER"), 0.21230932),
+            ("kappaf", ("USA", "CAPITAL", "AGR"), 0.082899523),
+            ("kappaf", ("USA", "CAPITAL", "MFG"), 0.082899523),
+            ("kappaf", ("USA", "CAPITAL", "SER"), 0.082899618),
+            ("imptx", ("ROW", "AGR", "USA"), 0.015394439),
+            ("imptx", ("ROW", "MFG", "USA"), 0.012148236),
+            ("exptx", ("USA", "MFG", "ROW"), 0.0029257515),
         ],
     ),
     # ME9B-D (2010-2050, climatechange.prm): cierre ESTANDAR, solo instrumentos.
@@ -257,34 +253,15 @@ ALIAS = {
 TOLS = (1e-3, 5e-3, 1e-2)
 
 
-def level(m, p, name: str, idx: tuple, kind: str, pct: float) -> float:
-    """Valor en niveles de la celda 'shock' para el shock GEMPACK ``pct``."""
-    from pyomo.environ import value
-
-    chk = float(value(getattr(m, name)[(*idx, "check")]))
-    fs = 0.0
-    if kind == "power_fct":
-        from equilibria.blocks.gtap import _derived_params as dp
-
-        fs = dp.fctts_data(p, p.sets).get(idx, 0.0)
-    return shocked(kind, chk, 1 + pct / 100, fs)
-
-
-def shocked(kind: str, chk, f, fs=0.0):
-    """El valor shockeado desde el de check ``chk``, con el factor ``f`` = 1+pct/100.
-
-    Vale con numeros y con expresiones GAMS en texto (``gen_burfisher_gams.py`` la
-    usa para escribir el mismo shock en el oraculo). ``fs``: fctts de la celda.
-    """
-    if kind == "pct":
-        return chk * f
-    if kind == "power":
-        return (1 + chk) * f - 1
-    if kind == "power_kappa":
-        return 1 - (1 - chk) / f
-    if kind == "power_fct":
-        return (1 + fs + chk) * f - 1 - fs
-    raise ValueError(f"kind desconocido: {kind!r}")
+def as_shock(rows: list[tuple[str, tuple, float]]) -> dict[str, dict[tuple, float]]:
+    """Las filas (instrumento, indice, %) de un ejercicio como shock de apply_shock."""
+    out: dict[str, dict[tuple, float]] = {}
+    for name, idx, pct in rows:
+        cells = out.setdefault(name, {})
+        if idx in cells:
+            raise ValueError(f"{name}{idx}: shock repetido")
+        cells[idx] = pct
+    return out
 
 
 def solve_exercise(exp: str, har: Path):
@@ -293,7 +270,7 @@ def solve_exercise(exp: str, har: Path):
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.instruments import fix_instrument_shock
+    from equilibria.templates.gtap.shocks import apply_shock
 
     prm, shocks = EXERCISES[exp]
     p = GTAPParameters()
@@ -317,8 +294,7 @@ def solve_exercise(exp: str, har: Path):
     # GAMS compStat no resuelve la base: sus niveles (cal.gms) son la referencia de
     # los indices de Fisher del check y del shock.
     m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
-    for name, idx, kind, pct in shocks:
-        fix_instrument_shock(m, name, idx, value=level(m, p, name, idx, kind, pct))
+    apply_shock(m, as_shock(shocks))
     res = solve_multiperiod(
         m,
         p,
