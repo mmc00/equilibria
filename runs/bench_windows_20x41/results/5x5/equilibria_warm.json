@@ -1,0 +1,88 @@
+{
+  "when": "2026-10-09T20:44:48",
+  "machine": {
+    "hostname": "2023LE-2-77-17",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.13",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-1365U",
+    "logical_cpus": 10,
+    "ram_gb": 31.4,
+    "physical_cpus": 10
+  },
+  "experiment": {
+    "dataset": "gtap7_5x5",
+    "shock": "tm +10% uniforme (imptx_new = (1+imptx)*1.10 - 1)",
+    "closure": "capFix (RORDELTA=0), capital sluggish, residual = ROW",
+    "ifsub": 1
+  },
+  "tool": "equilibria",
+  "mode": "warm",
+  "runs": [
+    {
+      "codes": {
+        "base": 1,
+        "check": 1,
+        "shock": 1
+      },
+      "residuals": {
+        "base": 0.0,
+        "check": 2.5305986362693314e-10,
+        "shock": 6.545582515119e-14
+      },
+      "seconds": {
+        "import": 2.9864489000174217,
+        "load_har": 0.3315584000083618,
+        "build": 22.374273199995514,
+        "solve_check_shock": 2.557148599997163,
+        "total": 28.24942910001846
+      },
+      "ok": true,
+      "wall_process": 29.545880899997428,
+      "log": "equilibria_warm_rep1.log"
+    },
+    {
+      "codes": {
+        "base": 1,
+        "check": 1,
+        "shock": 1
+      },
+      "residuals": {
+        "base": 0.0,
+        "check": 2.5305986362693314e-10,
+        "shock": 6.545582515119e-14
+      },
+      "seconds": {
+        "import": 3.3622651000041515,
+        "load_har": 0.03593770001316443,
+        "build": 6.20155459997477,
+        "solve_check_shock": 2.5435260999947786,
+        "total": 12.143283499986865
+      },
+      "ok": true,
+      "wall_process": 13.889690699987113,
+      "log": "equilibria_warm_rep2.log"
+    },
+    {
+      "codes": {
+        "base": 1,
+        "check": 1,
+        "shock": 1
+      },
+      "residuals": {
+        "base": 0.0,
+        "check": 2.5305986362693314e-10,
+        "shock": 6.545582515119e-14
+      },
+      "seconds": {
+        "import": 2.6758034999947995,
+        "load_har": 0.04258539999136701,
+        "build": 6.143820199999027,
+        "solve_check_shock": 2.6019243000191636,
+        "total": 11.464133400004357
+      },
+      "ok": true,
+      "wall_process": 12.545855399977881,
+      "log": "equilibria_warm_rep3.log"
+    }
+  ]
+}

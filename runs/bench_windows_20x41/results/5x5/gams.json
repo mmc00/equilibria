@@ -1,0 +1,44 @@
+{
+  "when": "2026-10-08T11:08:55",
+  "machine": {
+    "hostname": "2023LE-2-77-17",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.13",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-1365U",
+    "logical_cpus": 10,
+    "ram_gb": null
+  },
+  "experiment": {
+    "dataset": "gtap7_5x5",
+    "shock": "tm +10% uniforme (imptx_new = (1+imptx)*1.10 - 1)",
+    "closure": "capFix (RORDELTA=0), capital sluggish, residual = ROW",
+    "ifsub": 1
+  },
+  "tool": "gams",
+  "iterlim": 1000000,
+  "runs": [
+    {
+      "solves": [
+        {
+          "solver_status": "1 Normal Completion",
+          "model_status": "1 Optimal",
+          "resource_s": "0.140",
+          "iterations": "0"
+        }
+      ],
+      "license_lines": [
+        "*** This solver runs with a demo license. No commercial use.",
+        "**** The model exceeds the demo license limits for nonlinear models of more than 1000 rows or columns",
+        "**** Terminated due to a licensing error",
+        "**** License file: C:\\Users\\MARLON~1.MOL\\AppData\\Local\\Temp\\claude\\c--Documentos-proyectos-equilibria\\97a14e3c-759a-4cd0-a9bd-2c4d35b168f4\\scratchpad\\aslenv\\.venv\\Lib\\site-packages\\gamspy_base\\gamslice.txt",
+        "**** Current license content:",
+        "GAMS_Demo,_for_EULA_and_demo_limitations_see___G260530+0003Cc-GEN",
+        "https://www.gams.com/latest/docs/UG%5FLicense.html_______________",
+        "DC0000____ac4c742e-6023-4f8e-b8da-35196a962dfc_O_DEMO____________"
+      ],
+      "gams_exit": 7,
+      "wall_process": 22.078587299998617,
+      "ok": false
+    }
+  ]
+}

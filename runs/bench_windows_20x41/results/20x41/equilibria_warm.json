@@ -1,0 +1,43 @@
+{
+  "when": "2026-10-09T17:27:54",
+  "machine": {
+    "hostname": "2023LE-2-77-17",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.15",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-1365U",
+    "logical_cpus": 10,
+    "ram_gb": null
+  },
+  "experiment": {
+    "dataset": "gtap7_20x41",
+    "shock": "tm +10% uniforme (imptx_new = (1+imptx)*1.10 - 1)",
+    "closure": "capFix (RORDELTA=0), capital sluggish, residual = ROW",
+    "ifsub": 1
+  },
+  "tool": "equilibria",
+  "mode": "warm",
+  "runs": [
+    {
+      "codes": {
+        "base": 1,
+        "check": 1,
+        "shock": 1
+      },
+      "residuals": {
+        "base": 0.0,
+        "check": 5.743388709067432e-09,
+        "shock": 4.934108165516315e-07
+      },
+      "seconds": {
+        "import": 4.876221299986355,
+        "load_har": 1.2822719999821857,
+        "build": 1771.2319414999802,
+        "solve_check_shock": 1836.6740061000455,
+        "total": 3614.064440899994
+      },
+      "ok": true,
+      "wall_process": 3671.100094399997,
+      "log": "equilibria_warm_rep1.log"
+    }
+  ]
+}

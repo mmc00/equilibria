@@ -1,0 +1,73 @@
+{
+  "when": "2026-10-08T11:05:16",
+  "machine": {
+    "hostname": "2023LE-2-77-17",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.13",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-1365U",
+    "logical_cpus": 10,
+    "ram_gb": null
+  },
+  "experiment": {
+    "dataset": "gtap7_5x5",
+    "shock": "tm +10% uniforme (imptx_new = (1+imptx)*1.10 - 1)",
+    "closure": "capFix (RORDELTA=0), capital sluggish, residual = ROW",
+    "ifsub": 1
+  },
+  "tool": "gempack",
+  "cmf": "tm10_s8-16-32_capfix.cmf",
+  "runs": {
+    "default_threads": [
+      {
+        "ok": true,
+        "openmp_threads": 10,
+        "max_residual_ratio": "Maximum residual ratio across whole simulation is 8.6715715E-08",
+        "gempack_total_elapsed_s": 2,
+        "wall_process": 6.036637199984398,
+        "console": "runs\\gempack_matrix\\gtap7_5x5\\bench_default_threads_1.txt"
+      },
+      {
+        "ok": true,
+        "openmp_threads": 10,
+        "max_residual_ratio": "Maximum residual ratio across whole simulation is 8.6715715E-08",
+        "gempack_total_elapsed_s": 2,
+        "wall_process": 1.881646100024227,
+        "console": "runs\\gempack_matrix\\gtap7_5x5\\bench_default_threads_2.txt"
+      },
+      {
+        "ok": true,
+        "openmp_threads": 10,
+        "max_residual_ratio": "Maximum residual ratio across whole simulation is 8.6715715E-08",
+        "gempack_total_elapsed_s": 2,
+        "wall_process": 1.930584199988516,
+        "console": "runs\\gempack_matrix\\gtap7_5x5\\bench_default_threads_3.txt"
+      }
+    ],
+    "one_thread": [
+      {
+        "ok": true,
+        "openmp_threads": 1,
+        "max_residual_ratio": "Maximum residual ratio across whole simulation is 8.6715715E-08",
+        "gempack_total_elapsed_s": 2,
+        "wall_process": 2.129122300015297,
+        "console": "runs\\gempack_matrix\\gtap7_5x5\\bench_one_thread_1.txt"
+      },
+      {
+        "ok": true,
+        "openmp_threads": 1,
+        "max_residual_ratio": "Maximum residual ratio across whole simulation is 8.6715715E-08",
+        "gempack_total_elapsed_s": 2,
+        "wall_process": 1.9218081000144593,
+        "console": "runs\\gempack_matrix\\gtap7_5x5\\bench_one_thread_2.txt"
+      },
+      {
+        "ok": true,
+        "openmp_threads": 1,
+        "max_residual_ratio": "Maximum residual ratio across whole simulation is 8.6715715E-08",
+        "gempack_total_elapsed_s": 1,
+        "wall_process": 1.7351864000083879,
+        "console": "runs\\gempack_matrix\\gtap7_5x5\\bench_one_thread_3.txt"
+      }
+    ]
+  }
+}
