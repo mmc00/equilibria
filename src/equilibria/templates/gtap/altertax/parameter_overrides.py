@@ -28,6 +28,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 
+from equilibria.blocks.gtap.factor_wedge import factor_wedge_rate, va_subsidy_basis
 from equilibria.templates.gtap.gtap_parameters import (
     GTAPElasticities,
     GTAPParameters,
@@ -270,15 +271,13 @@ def _recalibrate_af_shares(params: GTAPParameters) -> None:  # noqa: F821
     def _pf(r: str, f: str, a: str) -> float:
         return 1.0 / max(1.0 - _kappa(r, f, a), 1e-12)
 
+    basis = va_subsidy_basis(params)
+
     def _wedge(r: str, f: str, a: str) -> float:
-        # fctts + fcttx = (ftrv - fbep) / evfb  — the factor SUBSIDY+TAX wedge.
+        # fctts + fcttx = (ftrv - fbep) / evfb  — the factor SUBSIDY+TAX wedge
+        # ((ftrv + fbep) / evfb con gtap7_gempack; ver factor_wedge_rate).
         # NOT rtf (which conflates the two and mis-splits af → phantom ytax('ft')).
-        evfb = float(bench.evfb.get((r, f, a), 0.0) or 0.0)
-        if evfb <= 0.0:
-            return 0.0
-        ftrv = float(bench.ftrv.get((r, f, a), 0.0) or 0.0)
-        fbep = float(bench.fbep.get((r, f, a), 0.0) or 0.0)
-        return (ftrv - fbep) / evfb
+        return factor_wedge_rate(bench, r, f, a, basis)
 
     def _pfa(r: str, f: str, a: str) -> float:
         # pfa = pf*(1 + fctts + fcttx), the tax/subsidy-inclusive factor price GAMS
