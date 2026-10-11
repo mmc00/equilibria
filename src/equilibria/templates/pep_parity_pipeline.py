@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from equilibria.babel.gdx.gdxdump import locate_gdxdump
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 
 
@@ -256,7 +257,7 @@ def _read_symbol_records(
 def evaluate_eq29_eq39_against_gams(
     vars_obj: Any,
     results_gdx: Path | str,
-    gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+    gdxdump_bin: str | None = None,
     gams_slice: str = "base",
     tol: float = 1e-6,
 ) -> dict[str, Any]:
@@ -267,6 +268,11 @@ def evaluate_eq29_eq39_against_gams(
     EQ39_j: TIP(j) = ttip(j) * PP(j) * XST(j)
     EQ40_i: TIC(i) = [ttic(i)/(1+ttic(i))] * [PD(i)*DD(i) + PM(i)*IM(i)]
     """
+    # Centinela: resolver en tiempo de USO, no de import. El default era
+    # una ruta fija a GAMS 48, valida solo en el Mac del autor.
+    if gdxdump_bin is None:
+        gdxdump_bin = locate_gdxdump() or "gdxdump"
+
     gdx_path = Path(results_gdx)
 
     tip_rec = _read_symbol_records(gdxdump_bin, gdx_path, "valTIP", gams_slice)
@@ -410,7 +416,7 @@ def evaluate_eq29_eq39_against_gams(
 def evaluate_eq79_eq84_against_gams(
     vars_obj: Any,
     results_gdx: Path | str,
-    gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+    gdxdump_bin: str | None = None,
     gams_slice: str = "base",
     tol: float = 1e-6,
 ) -> dict[str, Any]:
@@ -420,6 +426,11 @@ def evaluate_eq79_eq84_against_gams(
     EQ79_i: PC(i)*Q(i) = PM(i)*IM(i) + PD(i)*DD(i)
     EQ84_i: Q(i) = sum_h C(i,h) + CG(i) + INV(i) + VSTK(i) + DIT(i) + MRGN(i)
     """
+    # Centinela: resolver en tiempo de USO, no de import. El default era
+    # una ruta fija a GAMS 48, valida solo en el Mac del autor.
+    if gdxdump_bin is None:
+        gdxdump_bin = locate_gdxdump() or "gdxdump"
+
     gdx_path = Path(results_gdx)
 
     pc_rec = _read_symbol_records(gdxdump_bin, gdx_path, "valPC", gams_slice)
@@ -538,7 +549,7 @@ def evaluate_eq79_eq84_against_gams(
 def evaluate_levels_against_gams(
     vars_obj: Any,
     results_gdx: Path | str,
-    gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+    gdxdump_bin: str | None = None,
     gams_slice: str = "base",
     tol: float = 1e-9,
 ) -> dict[str, Any]:
@@ -547,6 +558,11 @@ def evaluate_levels_against_gams(
 
     Only compares entries where Python has the corresponding field/key.
     """
+    # Centinela: resolver en tiempo de USO, no de import. El default era
+    # una ruta fija a GAMS 48, valida solo en el Mac del autor.
+    if gdxdump_bin is None:
+        gdxdump_bin = locate_gdxdump() or "gdxdump"
+
     gdx_path = Path(results_gdx)
     gdx = read_gdx(gdx_path)
     symbols = [
@@ -662,7 +678,7 @@ def evaluate_residual_parity_against_gams(
     vars_obj: Any,
     equations: Any,
     results_gdx: Path | str,
-    gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+    gdxdump_bin: str | None = None,
     gams_slice: str = "base",
     contracts: list[EquationContract] | None = None,
     max_abs_tol: float = 1e-6,
@@ -674,6 +690,11 @@ def evaluate_residual_parity_against_gams(
     Instead of requiring small absolute residuals, this checks whether Python
     reproduces the same residual pattern as the selected GAMS baseline.
     """
+    # Centinela: resolver en tiempo de USO, no de import. El default era
+    # una ruta fija a GAMS 48, valida solo en el Mac del autor.
+    if gdxdump_bin is None:
+        gdxdump_bin = locate_gdxdump() or "gdxdump"
+
     contracts = contracts or default_equation_contracts()
     gams_vars = _build_vars_from_gams_levels(
         vars_obj=vars_obj,
@@ -735,7 +756,7 @@ def evaluate_residual_parity_against_gams(
 def evaluate_results_baseline_compatibility(
     state: Any,
     results_gdx: Path | str,
-    gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+    gdxdump_bin: str | None = None,
     gams_slice: str = "base",
     rel_tol: float = 1e-4,
 ) -> dict[str, Any]:
@@ -747,6 +768,11 @@ def evaluate_results_baseline_compatibility(
     For scenario slices (SIM1, ...), anchor parity is checked against BASE and
     we also require the requested slice to be present in Results.gdx.
     """
+    # Centinela: resolver en tiempo de USO, no de import. El default era
+    # una ruta fija a GAMS 48, valida solo en el Mac del autor.
+    if gdxdump_bin is None:
+        gdxdump_bin = locate_gdxdump() or "gdxdump"
+
     gdx_path = Path(results_gdx)
     requested_slice = str(gams_slice).lower()
     anchor_slice = "base"

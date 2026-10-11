@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from equilibria.babel.gdx.gdxdump import locate_gdxdump
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 from equilibria.baseline.manifest import (
     compute_state_anchors,
@@ -357,10 +358,15 @@ def evaluate_strict_gams_baseline_compatibility(
     sam_file: Path | str | None = None,
     val_par_file: Path | str | None = None,
     rel_tol: float = 1e-4,
-    gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+    gdxdump_bin: str | None = None,
     require_manifest: bool = False,
 ) -> BaselineCompatibilityReport:
     """Evaluate whether strict-gams baseline is compatible with current state."""
+    # Centinela: resolver en tiempo de USO, no de import. El default era una
+    # ruta absoluta a GAMS 48 — valida solo en el Mac del autor.
+    if gdxdump_bin is None:
+        gdxdump_bin = locate_gdxdump() or "gdxdump"
+
     checks: list[BaselineCheckResult] = []
     results_path = Path(results_gdx)
     slice_name = str(gams_slice).lower()

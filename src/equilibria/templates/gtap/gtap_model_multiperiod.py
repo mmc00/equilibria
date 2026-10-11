@@ -914,22 +914,13 @@ class GTAPMultiPeriodModel:
 
         gdx_path = _Path(gdx_path)
 
-        def _find_gdxdump() -> str:
-            hit = _shutil.which("gdxdump") or _shutil.which("gdxdump.exe")
-            if hit:
-                return hit
-            cands = [
-                "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gdxdump",
-                "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
-            ]
-            cands += [
-                str(p / "gdxdump.exe")
-                for p in sorted(_Path(r"C:/GAMS").glob("*"), reverse=True)
-                if p.is_dir()
-            ]
-            return next((c for c in cands if _Path(c).exists()), "gdxdump")
+        # Era una busqueda propia con GAMS 48 y Current a mano, y ordenaba las
+        # versiones de Windows como TEXTO ("9" por delante de "53"). El
+        # resolutor compartido hace PATH -> instalaciones, Current primero y
+        # luego version numerica descendente.
+        from equilibria.babel.gdx.gdxdump import locate_gdxdump
 
-        GDXDUMP = _find_gdxdump()
+        GDXDUMP = locate_gdxdump() or "gdxdump"
         T_LABELS = {"base", "check", "shock"}
 
         # GAMS symbol → Python Var name on m
