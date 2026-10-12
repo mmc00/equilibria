@@ -265,9 +265,10 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
         if v is None:
             continue
         fn = _macro.get(var_name) if params is not None else None
-        # Una vez por variable: leer la firma por celda costaba 168.750 llamadas
-        # a inspect.signature (3,7 s en gtap7_15x10).
-        n_idx = _aridad(fn) if fn is not None else None
+        # Una vez por variable: leer la firma por celda eran 168.750 llamadas a
+        # inspect.signature en gtap7_15x10 (~1 s del build medido; el perfilador
+        # marcaba 3,7 s porque infla las llamadas chicas).
+        aridad = _aridad(fn) if fn is not None else None
         for k in v:
             vd = v[k]
             if vd.fixed:
@@ -275,7 +276,7 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
             target = None
             # Un macro solo aplica si su aridad casa con la del indice: `xmgm`
             # toma cuatro (mode, e, c, imp) y el resto tres.
-            usa_macro = fn is not None and isinstance(k, tuple) and len(k) == n_idx
+            usa_macro = fn is not None and isinstance(k, tuple) and len(k) == aridad
             if usa_macro:
                 try:
                     target = float(value(fn(pm, params, *k)))
