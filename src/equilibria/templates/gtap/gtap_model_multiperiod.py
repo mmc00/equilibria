@@ -18,6 +18,39 @@ __all__ = ["PERIODS"]
 _astuple = as_key
 
 
+class _SharedCopies(dict):
+    """Sustituciones de un periodo que copian las expresiones compartidas a pedido.
+
+    ``ExpressionReplacementVisitor`` pregunta ``id(hijo) in substitute`` por cada
+    nodo. Si el hijo es una instancia compartida del SP, se copia la primera vez
+    (con estas mismas sustituciones, asi lo anidado tambien se comparte) y las
+    filas siguientes reciben esa misma copia. Las claves son ids de objetos que el
+    SP mantiene vivos, asi que no se reciclan durante la copia.
+    """
+
+    def __init__(self, base: dict, shared: dict) -> None:
+        super().__init__(base)
+        self._shared = shared
+        self._copying: set = set()
+
+    def __contains__(self, key: object) -> bool:
+        if dict.__contains__(self, key):
+            return True
+        expr = self._shared.get(key)
+        # El visitor tambien consulta la raiz que se esta copiando: esa no.
+        if expr is None or key in self._copying:
+            return False
+        from pyomo.core.expr.visitor import ExpressionReplacementVisitor
+
+        self._copying.add(key)
+        try:
+            copia = ExpressionReplacementVisitor(substitute=self).walk_expression(expr)
+        finally:
+            self._copying.discard(key)
+        self[key] = copia
+        return True
+
+
 class GTAPMultiPeriodModel:
     def __init__(self, sets, params, closure=None, residual_region: str | None = None):
         self.sets = sets
@@ -420,6 +453,10 @@ class GTAPMultiPeriodModel:
         # Reference single-period model — built ONCE (was: once per period).
         sp = self._build_sp()
 
+        # Instancias de macro compartidas por varias filas del SP (ver
+        # build_block_single_period): se copian una vez por periodo, no por fila.
+        shared = getattr(sp, "_ifsub_shared", None) or {}
+
         # Per-period substitute dicts: id(sp_var[k]) -> m_var[(*k, period)].
         # Mutable Params are replaced by their float value (see build_equations_intra
         # for why: otherwise they dangle to the throwaway sp model once it is GC'd).
@@ -439,7 +476,7 @@ class GTAPMultiPeriodModel:
                 for k in prm:
                     with contextlib.suppress(Exception):
                         sub[id(prm[k])] = float(_pyo_value(prm[k]))
-            substitutes[period] = sub
+            substitutes[period] = _SharedCopies(sub, shared)
 
         def _emit(body, lb, ub):
             if lb is not None and ub is not None and lb == ub:

@@ -19,7 +19,39 @@ inline forms stay identical across every consumer (no per-block drift).
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Callable, Iterator
+from contextvars import ContextVar
 from typing import Any
+
+# Compartir cada instancia de macro (p.ej. M_PM[e,c,imp]) entre todas las filas que
+# la usan, en vez de construir una copia por fila. Solo dentro de ``sharing()``, que
+# abre ``build_block_single_period``: fuera (el driver reconstruye filas con params
+# ya cambiados) cada llamada arma su expresion, como antes.
+_SHARED: ContextVar[dict | None] = ContextVar("_ifsub_shared", default=None)
+
+
+@contextlib.contextmanager
+def sharing() -> Iterator[dict]:
+    """Abre el registro de instancias compartidas; lo devuelve para la copia."""
+    memo: dict = {}
+    token = _SHARED.set(memo)
+    try:
+        yield memo
+    finally:
+        _SHARED.reset(token)
+
+
+def shared(model: Any, name: str, idx: tuple, build: Callable[[], Any]) -> Any:
+    """La instancia ``name[idx]`` de ``model``: la misma expresion en cada uso."""
+    memo = _SHARED.get()
+    if memo is None:
+        return build()
+    key = (id(model), name, idx)
+    expr = memo.get(key)
+    if expr is None:
+        expr = memo[key] = build()
+    return expr
 
 
 def _safe(p: Any, dotted: str, key: tuple, default: float = 0.0) -> float:
@@ -74,6 +106,10 @@ def m_pp(model, p, r, a, i):
 
 # --- trade / margin side -----------------------------------------------------
 def m_pwmg(model, p, e, c, imp):
+    return shared(model, "mac.pwmg", (e, c, imp), lambda: _m_pwmg(model, p, e, c, imp))
+
+
+def _m_pwmg(model, p, e, c, imp):
     """M_PWMG = Σ_m amgm·ptmg/lambdamg."""
     return sum(
         model.amgm[mm, e, c, imp]
@@ -84,12 +120,24 @@ def m_pwmg(model, p, e, c, imp):
 
 
 def m_pefob(model, p, e, c, imp):
+    return shared(
+        model, "mac.pefob", (e, c, imp), lambda: _m_pefob(model, p, e, c, imp)
+    )
+
+
+def _m_pefob(model, p, e, c, imp):
     """M_PEFOB = (1 + rtxs + etax)·pe."""
     export_tax = _safe(p, "taxes.rtxs", (e, c, imp), 0.0)
     return (1.0 + export_tax + etax_value(p, e, c, imp)) * model.pe[e, c, imp]
 
 
 def m_pmcif(model, p, e, c, imp):
+    return shared(
+        model, "mac.pmcif", (e, c, imp), lambda: _m_pmcif(model, p, e, c, imp)
+    )
+
+
+def _m_pmcif(model, p, e, c, imp):
     """M_PMCIF = M_PEFOB + M_PWMG·tmarg."""
     return (
         m_pefob(model, p, e, c, imp)
@@ -98,6 +146,10 @@ def m_pmcif(model, p, e, c, imp):
 
 
 def m_pm(model, p, e, c, imp):
+    return shared(model, "mac.pm", (e, c, imp), lambda: _m_pm(model, p, e, c, imp))
+
+
+def _m_pm(model, p, e, c, imp):
     """M_PM = (1 + imptx + mtax)·M_PMCIF/chipm (imptx live → shock propagates)."""
     mtax = mtax_value(p, imp, c, e)
     chipm = chipm_value(p, e, c, imp)
@@ -107,6 +159,10 @@ def m_pm(model, p, e, c, imp):
 
 
 def m_xwmg(model, p, e, c, imp):
+    return shared(model, "mac.xwmg", (e, c, imp), lambda: _m_xwmg(model, p, e, c, imp))
+
+
+def _m_xwmg(model, p, e, c, imp):
     """M_XWMG = tmarg·xw."""
     return model.tmarg[e, c, imp] * model.xw[e, c, imp]
 
