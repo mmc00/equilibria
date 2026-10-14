@@ -52,6 +52,10 @@ from equilibria.templates.gtap.gtap_benchmark_scaling import (
     apply_production_scaling,
 )
 from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+from equilibria.templates.gtap.residual_region import (  # noqa: F401 — API publica
+    AUTO,
+    resolve_residual_region,
+)
 
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
@@ -453,6 +457,10 @@ def build_block_single_period(
     and (default) apply the monolith's benchmark scaling so the warm-start matches
     GAMS. Returns the Pyomo ``ConcreteModel``.
     """
+    if residual_region:
+        residual_region = resolve_residual_region(
+            params, sets, closure, residual_region
+        )
     if_sub = bool(getattr(closure, "if_sub", False))
     savf_flag = str(getattr(closure, "savf_flag", "capFix"))
     setmap = _set_elems(sets)
@@ -661,38 +669,6 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
 
         super().build_equations_intra(m, period)
         shock_only(m)
-
-
-def resolve_residual_region(
-    params: Any, sets: Any, closure: Any, residual_region: str
-) -> str:
-    """Return the residual region, choosing it when ``residual_region == "auto"``.
-
-    "auto" picks the region with the largest base investment. With walras free, the
-    Newton step at the start of the shock loads the Walras imbalance onto yi[rres]
-    (eq_yi is skipped there and eq_walras sums only rres). On gtap7_20x41 the usual
-    residual, ROW, is tiny (yi=0.086): the step asks it for +4.37, ROW goes negative
-    and PATH stalls; with "auto" (CHN, the largest) the shock converges in 0.5 min.
-
-    Only under capFix: there savf = pigbl·savf_bar outside rres and the savf_bar sum
-    to zero, so rres lands on pigbl·savf_bar[rres] too and the equilibrium does not
-    depend on the choice (tests/templates/gtap/test_residual_region_auto.py checks it
-    cell by cell). Other closures make rres absorb a different quantity.
-    """
-    if residual_region != "auto":
-        return residual_region
-    savf_flag = str(getattr(closure, "savf_flag", "capFix"))
-    if savf_flag != "capFix":
-        raise ValueError(
-            f'residual_region="auto" is only valid under capFix (got {savf_flag}): '
-            "elsewhere the residual region changes the equilibrium; declare it."
-        )
-    bm = params.benchmark
-    yi = {
-        str(r): sum(max(bm.get_investment_demand(r, i)[0], 1e-8) for i in sets.i)
-        for r in sets.r
-    }
-    return max(yi, key=yi.get)
 
 
 def build_block_model(
@@ -1030,8 +1006,9 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
                 rname,
                 Constraint(
                     pm.r,
-                    rule=lambda _m, r, _t=tag: getattr(_m, f"mfr_{_t}")[r]
-                    == _agg(_t, r),
+                    rule=lambda _m, r, _t=tag: (
+                        getattr(_m, f"mfr_{_t}")[r] == _agg(_t, r)
+                    ),
                 ),
             )
             rebuilt.append(rname)
@@ -1054,10 +1031,12 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
             "eq_pfact",
             Constraint(
                 pm.r,
-                rule=lambda _m, r: _m.pfact[r]
-                == _sqrt(
-                    (_m.mfr_sb[r] / mqfactr_bb[r])
-                    * (_m.mfr_ss[r] / (_m.mfr_bs[r] + 1e-12))
+                rule=lambda _m, r: (
+                    _m.pfact[r]
+                    == _sqrt(
+                        (_m.mfr_sb[r] / mqfactr_bb[r])
+                        * (_m.mfr_ss[r] / (_m.mfr_bs[r] + 1e-12))
+                    )
                 ),
             ),
         )

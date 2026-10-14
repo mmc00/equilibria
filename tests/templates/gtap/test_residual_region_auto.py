@@ -44,23 +44,14 @@ def _closure(sf):
     )
 
 
-def _base_investment(p):
-    bm = p.benchmark
-    return {
-        str(r): sum(max(bm.get_investment_demand(r, i)[0], 1e-8) for i in p.sets.i)
-        for r in p.sets.r
-    }
-
-
 def test_auto_picks_largest_base_investment():
     from equilibria.templates.gtap.gtap_block_model import resolve_residual_region
 
+    # 15x10: CHN tiene la mayor inversion base; la residual que declaran los
+    # arneses es la ultima region (ROW), asi que "auto" la cambia de verdad.
     p = _params("gtap7_15x10")
-    yi = _base_investment(p)
-    got = resolve_residual_region(p, p.sets, _closure("capFix"), "auto")
-    assert got == max(yi, key=yi.get)
-    # No vacuo: la elegida no es la última región, que es la que declaran los arneses.
-    assert got != str(list(p.sets.r)[-1])
+    assert str(list(p.sets.r)[-1]) == "ROW"
+    assert resolve_residual_region(p, p.sets, _closure("capFix"), "auto") == "CHN"
 
 
 def test_declared_region_passes_through():
@@ -121,23 +112,90 @@ def test_residual_choice_same_equilibrium(ds):
         contextlib.redirect_stderr(io.StringIO()),
         contextlib.redirect_stdout(io.StringIO()),
     ):
-        m_d, code_d = _solve_shock(ds, 1, "capFix", residual_region=declared)
-        a = _solution(m_d)
-        m_o, code_o = _solve_shock(
-            ds, 1, "capFix", residual_region="auto" if other == auto else other
+        m_declarada, code_declarada = _solve_shock(
+            ds, 1, "capFix", residual_region=declared
         )
-        b = _solution(m_o)
-    assert code_d == 1 and code_o == 1
-    assert m_o._residual_region == other != declared
-    assert a.keys() == b.keys()
+        sol_declarada = _solution(m_declarada)
+        # Si "auto" elige otra region, se pasa "auto" para probar el camino entero.
+        pedida = "auto" if other == auto else other
+        m_otra, code_otra = _solve_shock(ds, 1, "capFix", residual_region=pedida)
+        sol_otra = _solution(m_otra)
+    assert code_declarada == 1 and code_otra == 1
+    assert m_otra._residual_region == other != declared
+    assert sol_declarada.keys() == sol_otra.keys()
     # walras vale 0 en las dos; se compara en absoluto. El resto, relativo: 15x10
     # midió hasta 2,7e-6 (savf/chif de ROW), del orden de la tolerancia de PATH.
     malas = []
-    for k in a:
+    for k, x in sol_declarada.items():
+        y = sol_otra[k]
         if k[0] == "walras":
-            ok = abs(a[k] - b[k]) <= 1e-6
+            ok = abs(x - y) <= 1e-6
         else:
-            ok = abs(a[k] - b[k]) <= 1e-5 * max(1.0, abs(a[k]))
+            ok = abs(x - y) <= 1e-5 * max(1.0, abs(x))
         if not ok:
-            malas.append((k, a[k], b[k]))
+            malas.append((k, x, y))
     assert not malas, f"{len(malas)} celdas difieren, p.ej. {malas[:5]}"
+
+
+# Toda entrada que recibe una residual resuelve "auto". Un "auto" sin resolver no
+# casa con ninguna region: eq_walras sumaria todas y eq_yi no omitiria ninguna,
+# un modelo equivocado sin error (hallazgo de la review de #117).
+
+
+def test_multiperiod_model_resolves_auto():
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+
+    p = _params("gtap7_15x10")
+    mp = GTAPBlockMultiPeriodModel(
+        p.sets, p, _closure("capFix"), residual_region="auto"
+    )
+    assert mp.residual_region == "CHN"
+
+
+def test_monolith_resolves_and_rejects_auto():
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+    p = _params("gtap7_15x10")
+    eqs = GTAPModelEquations(p.sets, p, _closure("capFix"), residual_region="auto")
+    assert eqs.residual_region == "CHN"
+    with pytest.raises(ValueError, match="capFix"):
+        GTAPModelEquations(p.sets, p, _closure("capFlex"), residual_region="auto")
+
+
+def _sin_ruido(fn, *a, **k):
+    with (
+        contextlib.redirect_stderr(io.StringIO()),
+        contextlib.redirect_stdout(io.StringIO()),
+    ):
+        return fn(*a, **k)
+
+
+def test_single_period_skips_eq_yi_of_the_chosen_region():
+    from pyomo.environ import Constraint
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_single_period
+
+    p = _params("gtap7_15x10")
+    sp = _sin_ruido(build_block_single_period, p, p.sets, _closure("capFix"), "auto")
+    assert sp._residual_region == "CHN"
+    con = sp.component("eq_yi")
+    assert isinstance(con, Constraint)
+    con_yi = {str(k[0] if isinstance(k, tuple) else k) for k in con if con[k].active}
+    assert con_yi == {str(r) for r in p.sets.r} - {"CHN"}
+
+
+@pytest.mark.parametrize("variante", ["sparse", "loglevels"])
+def test_variant_builders_resolve_auto(variante):
+    if variante == "sparse":
+        from equilibria.templates.gtap_sparse.multiperiod import (
+            build_sparse_model_mp as build,
+        )
+    else:
+        from equilibria.templates.gtap_loglevels.multiperiod import (
+            build_loglevels_model_mp as build,
+        )
+
+    p = _params("gtap7_15x10")
+    out = _sin_ruido(build, p, p.sets, _closure("capFix"), "auto")
+    m, mp = out[0], out[1]
+    assert m._residual_region == mp.residual_region == "CHN"

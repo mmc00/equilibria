@@ -483,6 +483,12 @@ class FactorBlock(Block):
             build_block_model,
             solve_block_model,
         )
+        from equilibria.templates.gtap.residual_region import resolve_residual_region
+
+        # La clave del seed cache lleva la region, no "auto".
+        residual_region = resolve_residual_region(
+            params, sets, closure, residual_region
+        )
 
         # Disk cache: the settled_seed is a pure function of the settle inputs
         # (data + closure + build/solve code), so re-runs of the same input skip
