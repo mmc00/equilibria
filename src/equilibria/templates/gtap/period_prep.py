@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -260,10 +261,10 @@ def _replicate_own_sp_reference(c: _Ctx) -> None:
     _replicate(c, c.prep._build_reference_model(c.m, c.params, c.closure))
 
 
-def _replicate(c: _Ctx, sp) -> None:
+def _replicate(c: _Ctx, snap) -> None:
     d = _drv()
-    d._replicate_sp_fixing(c.m, sp, c.period)
-    d._replicate_sp_bounds(c.m, sp, c.period)
+    d._replicate_snapshot_fixing(c.m, snap, c.period)
+    d._replicate_snapshot_bounds(c.m, snap, c.period)
 
 
 def _gams_bounds(c: _Ctx) -> None:
@@ -403,6 +404,12 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
 _CHECK_COPIED = _Recipe(steps=(_copy_from_base,), closure=None)
 
 
+# Foto del modelo de referencia compartida entre las corridas de un mismo modelo
+# multi-periodo: m -> (clave, SPSnapshot).  Debil en ``m`` y fuera de sus atributos,
+# para que no viaje con el modelo (el cache del modelo lo serializa) ni lo sobreviva.
+_SHARED_SP_REF: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
 class PeriodPreparer:
     """Prepara los periodos de UNA corrida del driver.
 
@@ -438,14 +445,23 @@ class PeriodPreparer:
         self._sp_ref_closure = None
 
     def _build_reference_model(self, m, params, closure):
-        return _drv()._build_sp_reference(
-            params.sets, params, closure, self.residual_region, model=m
+        """Foto (``SPSnapshot``) del modelo de un periodo con ``closure``; el modelo
+        Pyomo se suelta apenas se lee."""
+        d = _drv()
+        return d._sp_snapshot(
+            d._build_sp_reference(
+                params.sets, params, closure, self.residual_region, model=m
+            )
         )
 
     def _reference_model(self, m, params, closure, period: str):
-        """Modelo de un periodo con ``closure``.  Se guarda el del base y se
-        reutiliza mientras el cierre no cambie (el check gtap usa el mismo); uno
-        construido para otro cierre se usa y se descarta."""
+        """Foto del modelo de un periodo con ``closure``.  Se guarda la del base y
+        se reutiliza mientras el cierre no cambie (el check gtap usa el mismo); una
+        construida para otro cierre se usa y se descarta.
+
+        Ademas se comparte entre las corridas del MISMO ``m``: ``calibrate_base``
+        y ``solve_multiperiod`` crean cada uno su ``PeriodPreparer`` y construian
+        dos veces la misma (~46 s cada una en 20x41; identicas, medido)."""
         d = _drv()
         if self._sp_ref is not None and d._sp_ref_reusable(
             self._sp_ref_closure, closure
@@ -455,10 +471,39 @@ class PeriodPreparer:
                 period,
             )
             return self._sp_ref
-        sp = self._build_reference_model(m, params, closure)
+        key = self._shared_key(params, closure)
+        shared = _SHARED_SP_REF.get(m)
+        if key is not None and shared is not None and shared[0] == key:
+            _log.info(
+                "%s period: reusing the reference model of a previous run (same key)",
+                period,
+            )
+            snap = shared[1]
+        else:
+            snap = self._build_reference_model(m, params, closure)
+            if key is not None:
+                _SHARED_SP_REF[m] = (key, snap)
         if self._sp_ref is None:
-            self._sp_ref, self._sp_ref_closure = sp, closure
-        return sp
+            self._sp_ref, self._sp_ref_closure = snap, closure
+        return snap
+
+    def _shared_key(self, params, closure) -> str | None:
+        """Clave por CONTENIDO de lo que entra al modelo de referencia (params,
+        cierre, region residual y codigo), o ``None`` si no se puede compartir.
+
+        Con un hook ``@overwrite`` activo no se comparte: cambia el modelo y no
+        esta en la clave (igual que el cache del modelo)."""
+        from equilibria.blocks.gtap.fingerprint import fingerprint
+        from equilibria.blocks.gtap.overwrite import overwrite
+
+        if overwrite.active():
+            return None
+        return fingerprint(
+            "sp_ref",
+            params=params,
+            closure=closure,
+            residual_region=self.residual_region,
+        )
 
     def seed_prior(self, period: str) -> str:
         """Periodo del que se siembra ``period``.  El shock se siembra del check,
