@@ -48,6 +48,7 @@ from pyomo.environ import value
 
 from equilibria.blocks.base import Block
 from equilibria.blocks.gtap import _derived_params as dp
+from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.blocks.gtap.agents import (
     GTAP_GOVERNMENT_AGENT,
     GTAP_HOUSEHOLD_AGENT,
@@ -379,7 +380,6 @@ class ArmingtonBilateralBlock(Block):
             return float(_safe(p, "etax", (exporter, commodity), 0.0))
 
         if_sub = self.if_sub
-        _rtxs = p.taxes.rtxs
 
         # GAMS $macro chain M_PWMG/M_PEFOB/M_PMCIF/M_PM (gtap_model_equations.py
         # 5519-5567). Under ifSUB=1 each expands the tariff/margin wedge INLINE down
@@ -388,46 +388,38 @@ class ArmingtonBilateralBlock(Block):
         # an imptx shock reaches the SOLVED import-demand eqs. if_sub=False → plain
         # report Var (the Task-4 comp-stat form). Args are (exporter, commodity,
         # importer) = (rp, i, r), matching the monolith macro signatures.
+        # Bajo ifSUB delegan en blocks/gtap/_ifsub_macros (la misma fuente que
+        # Income y ProductionSupply): asi cada instancia M_PM[e,c,imp] es UNA
+        # expresion compartida por xweq, pmteq, gdpmp e ytax, en vez de una copia
+        # por fila. Antes estas formulas estaban duplicadas aca; sus lookups de
+        # chipm/mtax/etax caen en el mismo default que los del modulo (ningun
+        # contenedor de params los define; verificado en los 6 gtap7_*).
         def _m_pwmg(model, e, c, imp):
             if if_sub:
-                return sum(
-                    model.amgm[mm, e, c, imp]
-                    * model.ptmg[mm]
-                    / (model.lambdamg[mm, e, c, imp] + 1e-12)
-                    for mm in model.m
-                )
+                return mac.m_pwmg(model, p, e, c, imp)
             return model.pwmg[e, c, imp]
 
         def _m_pefob(model, e, c, imp):
             if if_sub:
-                export_tax = float(_rtxs.get((e, c, imp), 0.0) or 0.0)
-                etax = _etax_value(e, c, imp)
-                return (1.0 + export_tax + etax) * model.pe[e, c, imp]
+                return mac.m_pefob(model, p, e, c, imp)
             return model.pefob[e, c, imp]
 
         def _m_pmcif(model, e, c, imp):
             if if_sub:
-                return (
-                    _m_pefob(model, e, c, imp)
-                    + _m_pwmg(model, e, c, imp) * model.tmarg[e, c, imp]
-                )
+                return mac.m_pmcif(model, p, e, c, imp)
             return model.pmcif[e, c, imp]
 
         def _m_pm(model, e, c, imp):
             """M_PM = (1+imptx+mtax)·M_PMCIF/chipm under ifSUB (imptx live so the
             shock propagates), else the plain report var pm."""
             if if_sub:
-                mtax = _mtax_value(imp, c, e)
-                chipm = _chipm_value(e, c, imp)
-                return (
-                    (1.0 + model.imptx[e, c, imp] + mtax) * _m_pmcif(model, e, c, imp)
-                ) / chipm
+                return mac.m_pm(model, p, e, c, imp)
             return model.pm[e, c, imp]
 
         def _m_xwmg(model, e, c, imp):
             """GAMS $macro M_XWMG (8016): tmarg·xw inline under ifSUB, else xwmg."""
             if if_sub:
-                return model.tmarg[e, c, imp] * model.xw[e, c, imp]
+                return mac.m_xwmg(model, p, e, c, imp)
             return model.xwmg[e, c, imp]
 
         def _m_xmgm(model, mode, e, c, imp):

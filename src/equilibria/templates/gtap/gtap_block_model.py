@@ -487,8 +487,14 @@ def build_block_single_period(
     targets = collect_targets(units)
     add_targets(model, targets)
     backend = PyomoBackend()
-    backend.build(model)
+    # Cada instancia de macro ifSUB (M_PM[e,c,imp], ...) se arma UNA vez y la
+    # comparten todas las filas que la usan; la copia multiperiodo
+    # (build_equations_all_periods) la copia una vez por periodo. En 20x41 las
+    # copias por fila eran ~2/3 de los nodos de expresion.
+    with mac.sharing() as _shared:
+        backend.build(model)
     pm = backend.pyomo_model
+    pm._ifsub_shared = {id(e): e for e in _shared.values()}
     _strip_con_suffix(pm)
     pm._endogenous_instrument_cells = endogenous_cells(units)
     pm._targets = targets
