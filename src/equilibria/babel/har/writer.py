@@ -268,9 +268,7 @@ def _write_2rfull(out: bytearray, name: str, ha: HeaderArray) -> None:
     switch the capital-account closure.
     """
     if ha.array.dtype not in (np.float32, np.float64):
-        raise TypeError(
-            f"{name!r}: 2RFULL requires float dtype; got {ha.array.dtype}."
-        )
+        raise TypeError(f"{name!r}: 2RFULL requires float dtype; got {ha.array.dtype}.")
     if ha.array.ndim != 2:
         raise ValueError(
             f"{name!r}: 2RFULL requires 2-D array; got ndim={ha.array.ndim}"
