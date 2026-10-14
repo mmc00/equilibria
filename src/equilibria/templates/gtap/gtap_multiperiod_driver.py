@@ -1258,6 +1258,93 @@ def _build_sp_reference(sets, params, closure, residual_region, model=None):
     return sp
 
 
+class SPSnapshot:
+    """Lo que ``_replicate_sp_fixing``/``_replicate_sp_bounds`` leen de un modelo de
+    referencia, sin el modelo: por variable, las celdas fijas con su valor y las
+    celdas con cota con ``(lb, ub)``.
+
+    El modelo de referencia (3,4M vars en 20x41) solo se construye para leerle esto;
+    guardar la foto en vez del modelo deja liberarlo apenas se construye y permite
+    reusarla entre corridas (ver ``PeriodPreparer._reference_model``)."""
+
+    __slots__ = ("fixed", "bounds")
+
+    def __init__(self, fixed: dict, bounds: dict) -> None:
+        # nombre -> (indexada?, [(indice, valor)]) / [(indice, lb, ub)]
+        self.fixed = fixed
+        self.bounds = bounds
+
+
+def _sp_snapshot(sp_model) -> SPSnapshot:
+    """La foto de ``sp_model`` que consumen las dos replicas."""
+    from pyomo.environ import Var
+
+    fixed: dict = {}
+    bounds: dict = {}
+    for sp_v in sp_model.component_objects(Var, active=True):
+        indexed = sp_v.is_indexed()
+        fx, bd = [], []
+        for sp_idx in sp_v.index_set():
+            sp_vd = sp_v[sp_idx]
+            if sp_vd.fixed:
+                fx.append(
+                    (sp_idx, float(sp_vd.value) if sp_vd.value is not None else 0.0)
+                )
+            if sp_vd.lb is not None or sp_vd.ub is not None:
+                bd.append((sp_idx, sp_vd.lb, sp_vd.ub))
+        fixed[sp_v.name] = (indexed, fx)
+        bounds[sp_v.name] = (indexed, bd)
+    return SPSnapshot(fixed, bounds)
+
+
+def _mp_index(indexed: bool, sp_idx, active_period: str):
+    """Indice multi-periodo de la celda ``sp_idx`` del modelo de un periodo."""
+    if not indexed:
+        return (active_period,)
+    if isinstance(sp_idx, tuple):
+        return (*sp_idx, active_period)
+    return (sp_idx, active_period)
+
+
+def _replicate_snapshot_fixing(m, snap: SPSnapshot, active_period: str) -> int:
+    """Fija en ``m`` (periodo ``active_period``) cada celda que la foto tiene fija,
+    con su valor; las que ``m`` ya tiene fijas no se pisan."""
+    n_fixed = 0
+    for vname, (indexed, cells) in snap.fixed.items():
+        mp_v = getattr(m, vname, None)
+        if mp_v is None:
+            continue
+        for sp_idx, val in cells:
+            try:
+                mp_vd = mp_v[_mp_index(indexed, sp_idx, active_period)]
+                if not mp_vd.fixed:
+                    mp_vd.fix(val)
+                    n_fixed += 1
+            except (KeyError, TypeError):
+                pass
+    return n_fixed
+
+
+def _replicate_snapshot_bounds(m, snap: SPSnapshot, active_period: str) -> int:
+    """Copia a ``m`` (periodo ``active_period``) las cotas de la foto."""
+    n_bounds = 0
+    for vname, (indexed, cells) in snap.bounds.items():
+        mp_v = getattr(m, vname, None)
+        if mp_v is None:
+            continue
+        for sp_idx, lb, ub in cells:
+            try:
+                mp_vd = mp_v[_mp_index(indexed, sp_idx, active_period)]
+                if lb is not None:
+                    mp_vd.setlb(lb)
+                if ub is not None:
+                    mp_vd.setub(ub)
+                n_bounds += 1
+            except (KeyError, TypeError):
+                pass
+    return n_bounds
+
+
 def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
     """Copy the fixed-variable state from sp_model to m for active_period.
 
@@ -1270,35 +1357,7 @@ def _replicate_sp_fixing(m, sp_model, active_period: str) -> int:
 
     Returns count of vars fixed.
     """
-    from pyomo.environ import Var
-
-    n_fixed = 0
-    for sp_v in sp_model.component_objects(Var, active=True):
-        vname = sp_v.name
-        mp_v = getattr(m, vname, None)
-        if mp_v is None:
-            continue
-        for sp_idx in sp_v.index_set():
-            sp_vd = sp_v[sp_idx]
-            if not sp_vd.fixed:
-                continue  # only replicate fixed vars
-            # Build multi-period index
-            if sp_v.is_indexed():
-                if isinstance(sp_idx, tuple):
-                    mp_idx = (*sp_idx, active_period)
-                else:
-                    mp_idx = (sp_idx, active_period)
-            else:
-                mp_idx = (active_period,)
-            try:
-                mp_vd = mp_v[mp_idx]
-                if not mp_vd.fixed:
-                    val = float(sp_vd.value) if sp_vd.value is not None else 0.0
-                    mp_vd.fix(val)
-                    n_fixed += 1
-            except (KeyError, TypeError):
-                pass
-    return n_fixed
+    return _replicate_snapshot_fixing(m, _sp_snapshot(sp_model), active_period)
 
 
 # ---------------------------------------------------------------------------
@@ -2119,36 +2178,7 @@ def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
 
     Returns count of bounds replicated.
     """
-    from pyomo.environ import Var
-
-    n_bounds = 0
-    for sp_v in sp_model.component_objects(Var, active=True):
-        vname = sp_v.name
-        mp_v = getattr(m, vname, None)
-        if mp_v is None:
-            continue
-        for sp_idx in sp_v.index_set():
-            sp_vd = sp_v[sp_idx]
-            if sp_vd.lb is None and sp_vd.ub is None:
-                continue  # no bounds to replicate
-            # Build multi-period index
-            if sp_v.is_indexed():
-                if isinstance(sp_idx, tuple):
-                    mp_idx = (*sp_idx, active_period)
-                else:
-                    mp_idx = (sp_idx, active_period)
-            else:
-                mp_idx = (active_period,)
-            try:
-                mp_vd = mp_v[mp_idx]
-                if sp_vd.lb is not None:
-                    mp_vd.setlb(sp_vd.lb)
-                if sp_vd.ub is not None:
-                    mp_vd.setub(sp_vd.ub)
-                n_bounds += 1
-            except (KeyError, TypeError):
-                pass
-    return n_bounds
+    return _replicate_snapshot_bounds(m, _sp_snapshot(sp_model), active_period)
 
 
 # ---------------------------------------------------------------------------
