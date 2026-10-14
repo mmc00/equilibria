@@ -657,6 +657,38 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         shock_only(m)
 
 
+def resolve_residual_region(
+    params: Any, sets: Any, closure: Any, residual_region: str
+) -> str:
+    """Return the residual region, choosing it when ``residual_region == "auto"``.
+
+    "auto" picks the region with the largest base investment. With walras free, the
+    Newton step at the start of the shock loads the Walras imbalance onto yi[rres]
+    (eq_yi is skipped there and eq_walras sums only rres). On gtap7_20x41 the usual
+    residual, ROW, is tiny (yi=0.086): the step asks it for +4.37, ROW goes negative
+    and PATH stalls; with "auto" (CHN, the largest) the shock converges in 0.5 min.
+
+    Only under capFix: there savf = pigbl·savf_bar outside rres and the savf_bar sum
+    to zero, so rres lands on pigbl·savf_bar[rres] too and the equilibrium does not
+    depend on the choice (tests/templates/gtap/test_residual_region_auto.py checks it
+    cell by cell). Other closures make rres absorb a different quantity.
+    """
+    if residual_region != "auto":
+        return residual_region
+    savf_flag = str(getattr(closure, "savf_flag", "capFix"))
+    if savf_flag != "capFix":
+        raise ValueError(
+            f'residual_region="auto" is only valid under capFix (got {savf_flag}): '
+            "elsewhere the residual region changes the equilibrium; declare it."
+        )
+    bm = params.benchmark
+    yi = {
+        str(r): sum(max(bm.get_investment_demand(r, i)[0], 1e-8) for i in sets.i)
+        for r in sets.r
+    }
+    return max(yi, key=yi.get)
+
+
 def build_block_model(
     params: Any,
     sets: Any,
@@ -676,7 +708,10 @@ def build_block_model(
     so the driver seeds the base from it and solves ``base→shock`` (no check).
     The default path is byte-unchanged; ``calibrate_base`` builds its own settle
     model with ``base_calibrated=False`` (no recursion).
+
+    ``residual_region="auto"`` (capFix only) picks it; see resolve_residual_region.
     """
+    residual_region = resolve_residual_region(params, sets, closure, residual_region)
     # Propagate the value-added subsidy basis from the closure onto params, so
     # the pure derivation recipes (_va_wedge in _derived_params) and the driver's
     # per-period recalibration read it without threading closure through their

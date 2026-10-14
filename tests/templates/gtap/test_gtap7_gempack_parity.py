@@ -44,7 +44,11 @@ def test_no_gempack_rows_is_a_clean_skip():
 
 
 def _solve_shock(
-    dataset: str, ifsub: int, savf_flag: str = "capFlex", solve_nlp: bool = False
+    dataset: str,
+    ifsub: int,
+    savf_flag: str = "capFlex",
+    solve_nlp: bool = False,
+    residual_region: str | None = None,
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -58,6 +62,9 @@ def _solve_shock(
     code=2 in 6min; 15x10: spins for ~48min), but the SAME model is feasible as an NLP —
     IPOPT closes it (code=1 on both; within-1pp figures in coverage_matrix's gempack rows).
     NLP is faithful (tolerances cancel), so it is the gate path for large datasets.
+
+    ``residual_region`` defaults to the last region; "auto" (capFix only) lets the model
+    pick the one with the largest base investment (see resolve_residual_region).
     """
     import os as _os
 
@@ -85,7 +92,8 @@ def _solve_shock(
             default_path=d / "default.prm",
             baserate_path=d / "baserate.har",
         )
-        rr = list(p.sets.r)[-1]
+        # None = the last region, the residual the GEMPACK fixtures declare.
+        rr = residual_region or list(p.sets.r)[-1]
         ac = GTAPClosureConfig(
             name="base",
             closure_type="MCP",
