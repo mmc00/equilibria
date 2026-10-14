@@ -754,8 +754,10 @@ def build_block_model(
         from equilibria.blocks.gtap.factor import FactorBlock
 
         _fb = FactorBlock(sets=sets, params=params)
+        # El settle corre sobre ESTE m y lo deja como estaba: antes armaba un
+        # segundo modelo identico (en 15x10, 8 de los 14,5 s de la calibracion).
         m._settled_seed = _fb.calibrate_base(
-            params, sets, closure, residual_region, ref_gdx=None
+            params, sets, closure, residual_region, ref_gdx=None, model=m
         )
     if _mc is not None:
         _mc.save(_mc_key, m)
