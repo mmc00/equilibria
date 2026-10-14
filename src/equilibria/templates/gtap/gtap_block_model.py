@@ -52,6 +52,10 @@ from equilibria.templates.gtap.gtap_benchmark_scaling import (
     apply_production_scaling,
 )
 from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+from equilibria.templates.gtap.residual_region import (  # noqa: F401 — API publica
+    AUTO,
+    resolve_residual_region,
+)
 
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
@@ -453,6 +457,10 @@ def build_block_single_period(
     and (default) apply the monolith's benchmark scaling so the warm-start matches
     GAMS. Returns the Pyomo ``ConcreteModel``.
     """
+    if residual_region:
+        residual_region = resolve_residual_region(
+            params, sets, closure, residual_region
+        )
     if_sub = bool(getattr(closure, "if_sub", False))
     savf_flag = str(getattr(closure, "savf_flag", "capFix"))
     setmap = _set_elems(sets)
@@ -682,7 +690,10 @@ def build_block_model(
     so the driver seeds the base from it and solves ``base→shock`` (no check).
     The default path is byte-unchanged; ``calibrate_base`` builds its own settle
     model with ``base_calibrated=False`` (no recursion).
+
+    ``residual_region="auto"`` (capFix only) picks it; see resolve_residual_region.
     """
+    residual_region = resolve_residual_region(params, sets, closure, residual_region)
     # Propagate the value-added subsidy basis from the closure onto params, so
     # the pure derivation recipes (_va_wedge in _derived_params) and the driver's
     # per-period recalibration read it without threading closure through their
@@ -995,8 +1006,9 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
                 rname,
                 Constraint(
                     pm.r,
-                    rule=lambda _m, r, _t=tag: getattr(_m, f"mfr_{_t}")[r]
-                    == _agg(_t, r),
+                    rule=lambda _m, r, _t=tag: (
+                        getattr(_m, f"mfr_{_t}")[r] == _agg(_t, r)
+                    ),
                 ),
             )
             rebuilt.append(rname)
@@ -1019,10 +1031,12 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
             "eq_pfact",
             Constraint(
                 pm.r,
-                rule=lambda _m, r: _m.pfact[r]
-                == _sqrt(
-                    (_m.mfr_sb[r] / mqfactr_bb[r])
-                    * (_m.mfr_ss[r] / (_m.mfr_bs[r] + 1e-12))
+                rule=lambda _m, r: (
+                    _m.pfact[r]
+                    == _sqrt(
+                        (_m.mfr_sb[r] / mqfactr_bb[r])
+                        * (_m.mfr_ss[r] / (_m.mfr_bs[r] + 1e-12))
+                    )
                 ),
             ),
         )

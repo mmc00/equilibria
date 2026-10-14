@@ -1111,6 +1111,17 @@ class GTAPBenchmarkValues:
             self.vmip.get((region, commodity), 0.0),
         )
 
+    def base_investment(self, region: str, commodities: Any) -> float:
+        """Inversion base yi[r] = Σ_i max(demanda de inversion resuelta, 1e-8).
+
+        Es el get_benchmark_yi del monolito (Σ_i get_vim_init): la demanda RESUELTA
+        (_resolve_final_demand_split de vim/vdip/vmip), no la matriz vim cruda. La
+        usan la semilla de yi (bloque Income) y residual_region="auto".
+        """
+        return sum(
+            max(self.get_investment_demand(region, i)[0], 1e-8) for i in commodities
+        )
+
     def load_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
         """Load benchmark values from GDX file using GTAP Standard 7 native parameter names."""
         gdx_data = read_gdx(gdx_path)

@@ -56,6 +56,14 @@ class GTAPMultiPeriodModel:
         self.sets = sets
         self.params = params
         self.closure = closure
+        if residual_region:
+            from equilibria.templates.gtap.residual_region import (
+                resolve_residual_region,
+            )
+
+            residual_region = resolve_residual_region(
+                params, sets, closure, residual_region
+            )
         self.residual_region = residual_region
 
     def _build_sp(self) -> ConcreteModel:
