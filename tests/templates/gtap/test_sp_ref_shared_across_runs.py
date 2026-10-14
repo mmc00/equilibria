@@ -7,8 +7,9 @@ salen IDENTICAS (medido en 15x10: 0 diferencias en fijadas, valores y cotas;
 mismo objeto ``params``).
 
 QUE SE FIJA AQUI.  La foto del modelo de referencia (fijadas + valor + cotas) se
-comparte entre los ``PeriodPreparer`` del MISMO modelo ``m``, con clave por
-CONTENIDO (``fingerprint``: params, cierre, region residual y codigo).  Cualquier
+comparte entre los ``PeriodPreparer`` que reciben el MISMO objeto ``params``
+(calibrate_base resuelve otro ``m``), con clave por CONTENIDO (``fingerprint``:
+params, cierre, region residual, fuente del modelo y codigo).  Cualquier
 diferencia en esa clave obliga a construir de nuevo; reusar con otra clave
 cambiaria la solucion sin lanzar nada.  Y replicar desde la foto deja ``m`` igual
 que replicar desde el modelo.
@@ -44,7 +45,11 @@ def _closure(name: str = "base", **kw) -> GTAPClosureConfig:
 
 
 class _Params:
-    """Lo minimo que ``fingerprint`` digiere: un benchmark con datos y un impuesto."""
+    """Lo minimo que ``fingerprint`` digiere: un benchmark con datos y un impuesto.
+
+    NO hasheable, como ``GTAPParameters`` (dataclass con igualdad)."""
+
+    __hash__ = None  # ty: ignore[invalid-assignment]
 
     def __init__(self, tax: float = 0.1) -> None:
         self.sets = None
@@ -170,9 +175,29 @@ def test_another_residual_region_builds_again(builds):
     assert builds == ["base", "base"]
 
 
-def test_another_model_builds_again(builds):
+def test_a_new_model_with_the_same_params_reuses_the_reference(builds):
+    """El flujo real: calibrate_base resuelve OTRO modelo (medido: otro id(m)) con
+    el MISMO objeto params que despues usa solve_multiperiod."""
     params, closure = _Params(), _closure()
     _prep(closure)._reference_model(_mp_model(), params, closure, "base")
+    _prep(closure)._reference_model(_mp_model(), params, closure, "base")
+    assert builds == ["base"]
+
+
+def test_another_reference_source_builds_again(builds):
+    """Lo unico de ``m`` que lee la construccion es su fuente (monolito o bloques)."""
+    params, closure = _Params(), _closure()
+    monolith = _mp_model()
+    monolith._sp_source = "monolith"
+    _prep(closure)._reference_model(_mp_model(), params, closure, "base")
+    _prep(closure)._reference_model(monolith, params, closure, "base")
+    assert builds == ["base", "base"]
+
+
+def test_the_env_override_of_the_source_builds_again(builds, monkeypatch):
+    params, closure = _Params(), _closure()
+    _prep(closure)._reference_model(_mp_model(), params, closure, "base")
+    monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "blocks")
     _prep(closure)._reference_model(_mp_model(), params, closure, "base")
     assert builds == ["base", "base"]
 
@@ -189,9 +214,26 @@ def test_an_active_overwrite_hook_disables_the_sharing(builds, monkeypatch):
     assert builds == ["base", "base"]
 
 
-def test_the_shared_reference_does_not_travel_with_the_model(builds):
-    """La foto no se guarda como atributo de ``m``: el cache del modelo lo pickle-a
-    y no debe llevarse una foto de un modelo de un periodo."""
+def test_the_shared_reference_does_not_travel_with_the_model_or_the_params(builds):
+    """La foto no se guarda como atributo de ``m`` ni de ``params``: el cache del
+    modelo los serializa, y la clave de ese cache digiere TODOS los atributos de
+    ``params``."""
     m, params, closure = _mp_model(), _Params(), _closure()
     _prep(closure)._reference_model(m, params, closure, "base")
     assert not [k for k in vars(m) if "sp_ref" in k or "snapshot" in k]
+    assert set(vars(params)) == {"sets", "benchmark", "taxes"}
+
+
+def test_the_shared_reference_dies_with_the_params(builds):
+    """No retiene memoria: muerto ``params``, su foto se libera."""
+    import gc
+
+    from equilibria.templates.gtap import period_prep
+
+    closure = _closure()
+    params = _Params()
+    _prep(closure)._reference_model(_mp_model(), params, closure, "base")
+    assert period_prep._SHARED_SP_REF
+    del params
+    gc.collect()
+    assert not period_prep._SHARED_SP_REF

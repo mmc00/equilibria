@@ -404,10 +404,28 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
 _CHECK_COPIED = _Recipe(steps=(_copy_from_base,), closure=None)
 
 
-# Foto del modelo de referencia compartida entre las corridas de un mismo modelo
-# multi-periodo: m -> (clave, SPSnapshot).  Debil en ``m`` y fuera de sus atributos,
-# para que no viaje con el modelo (el cache del modelo lo serializa) ni lo sobreviva.
-_SHARED_SP_REF: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+# Foto del modelo de referencia compartida entre las corridas que reciben el mismo
+# objeto ``params``: id(params) -> (ref debil a params, clave, SPSnapshot).  Por id
+# y no como clave debil porque ``GTAPParameters`` no es hasheable (dataclass con
+# igualdad); la ref debil confirma que el id sigue siendo de ese objeto y un
+# finalizador borra la entrada cuando ``params`` muere.  Fuera de los atributos de
+# ``params`` y de ``m``: el cache del modelo los serializa, y su clave digiere todos
+# los atributos de ``params``.
+_SHARED_SP_REF: dict[int, tuple[weakref.ref, str, Any]] = {}
+
+
+def _shared_get(params, key: str):
+    entry = _SHARED_SP_REF.get(id(params))
+    if entry is None or entry[0]() is not params or entry[1] != key:
+        return None
+    return entry[2]
+
+
+def _shared_put(params, key: str, snap) -> None:
+    pid = id(params)
+    if pid not in _SHARED_SP_REF:
+        weakref.finalize(params, _SHARED_SP_REF.pop, pid, None)
+    _SHARED_SP_REF[pid] = (weakref.ref(params), key, snap)
 
 
 class PeriodPreparer:
@@ -459,9 +477,10 @@ class PeriodPreparer:
         se reutiliza mientras el cierre no cambie (el check gtap usa el mismo); una
         construida para otro cierre se usa y se descarta.
 
-        Ademas se comparte entre las corridas del MISMO ``m``: ``calibrate_base``
-        y ``solve_multiperiod`` crean cada uno su ``PeriodPreparer`` y construian
-        dos veces la misma (~46 s cada una en 20x41; identicas, medido)."""
+        Ademas se comparte entre corridas con el MISMO objeto ``params``:
+        ``calibrate_base`` (sobre otro ``m``) y ``solve_multiperiod`` crean cada uno
+        su ``PeriodPreparer`` y construian dos veces la misma (~46 s cada una en
+        20x41; identicas, medido)."""
         d = _drv()
         if self._sp_ref is not None and d._sp_ref_reusable(
             self._sp_ref_closure, closure
@@ -471,28 +490,32 @@ class PeriodPreparer:
                 period,
             )
             return self._sp_ref
-        key = self._shared_key(params, closure)
-        shared = _SHARED_SP_REF.get(m)
-        if key is not None and shared is not None and shared[0] == key:
+        key = self._shared_key(m, params, closure)
+        snap = _shared_get(params, key) if key is not None else None
+        if snap is not None:
             _log.info(
                 "%s period: reusing the reference model of a previous run (same key)",
                 period,
             )
-            snap = shared[1]
         else:
             snap = self._build_reference_model(m, params, closure)
             if key is not None:
-                _SHARED_SP_REF[m] = (key, snap)
+                _shared_put(params, key, snap)
         if self._sp_ref is None:
             self._sp_ref, self._sp_ref_closure = snap, closure
         return snap
 
-    def _shared_key(self, params, closure) -> str | None:
-        """Clave por CONTENIDO de lo que entra al modelo de referencia (params,
-        cierre, region residual y codigo), o ``None`` si no se puede compartir.
+    def _shared_key(self, m, params, closure) -> str | None:
+        """Clave por CONTENIDO de todo lo que entra al modelo de referencia (params,
+        cierre, region residual, fuente del modelo y codigo), o ``None`` si no se
+        puede compartir.
 
-        Con un hook ``@overwrite`` activo no se comparte: cambia el modelo y no
-        esta en la clave (igual que el cache del modelo)."""
+        De ``m``, ``_build_sp_reference`` solo lee la fuente (``_sp_source``, que
+        ``EQUILIBRIA_GTAP_REF_MODEL`` pisa).  Con un hook ``@overwrite`` activo no
+        se comparte: cambia el modelo y no esta en la clave (igual que el cache
+        del modelo)."""
+        import os
+
         from equilibria.blocks.gtap.fingerprint import fingerprint
         from equilibria.blocks.gtap.overwrite import overwrite
 
@@ -503,6 +526,8 @@ class PeriodPreparer:
             params=params,
             closure=closure,
             residual_region=self.residual_region,
+            sp_source=getattr(m, "_sp_source", None),
+            ref_model_env=os.environ.get("EQUILIBRIA_GTAP_REF_MODEL"),
         )
 
     def seed_prior(self, period: str) -> str:
