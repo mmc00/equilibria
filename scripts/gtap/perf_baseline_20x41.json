@@ -1,6 +1,6 @@
 {
-  "wall_min": 8.02,
-  "peak_gb": 10.22,
-  "commit": "9dfedae (= main 1f3acd3)",
+  "wall_min": 7.37,
+  "peak_gb": 10.17,
+  "commit": "17bdca5 (perf/sp-once, = 939e34e tras rebase)",
   "maquina": "Mac M3 Pro 18 GB, macOS, sin swap (2026-10-14)"
 }
