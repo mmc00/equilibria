@@ -582,8 +582,16 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
 
         Delega en ``_block_sp`` para que las subclases sigan teniendo un unico
         punto que sobrescribir.
+
+        El primer pedido despues de ``build_vars`` recibe el SP que este ya armo
+        (solo lo leyo): asi las Var y las filas del multiperiodo salen del MISMO
+        SP y se arma uno menos (20x41: ~8 % del tiempo, perfil 2026-10-14). Se
+        entrega una sola vez y se suelta, para no retener el SP toda la vida del
+        modelo; los pedidos siguientes (``build_equations_intra``, uno por
+        periodo) arman el suyo como antes.
         """
-        return self._block_sp()
+        sp = self.__dict__.pop("_sp_de_build_vars", None)
+        return sp if sp is not None else self._block_sp()
 
     def build_vars(self, m: ConcreteModel) -> None:
         """Reflect Var families from the block SP model (×3 periods).
@@ -596,6 +604,7 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS, _astuple
 
         sp_model = self._block_sp()
+        self._sp_de_build_vars = sp_model  # lo reusa el proximo _build_sp
         periods = list(PERIODS)
 
         for v in sp_model.component_objects(Var, active=True):

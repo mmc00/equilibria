@@ -47,7 +47,12 @@ def _contar(monkeypatch, owner, nombre, cuenta, clave):
 def test_una_corrida_construye_cada_modelo_lo_justo(monkeypatch):
     """3x3, base calibrada (camino de los gates): el modelo multiperiodo se arma
     UNA vez (la calibracion resuelve sobre el mismo) y el modelo de referencia de
-    periodo simple DOS (base, compartido con la calibracion; y shock)."""
+    periodo simple DOS (base, compartido con la calibracion; y shock).
+
+    En total el SP de bloques se arma TRES veces: una para el multiperiodo (sus
+    Var y sus filas salen del mismo SP) y las dos referencias. build_vars armaba
+    uno propio solo para leer las Var (20x41: ~8 % del tiempo, perfil 2026-10-14).
+    """
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
     import equilibria.templates.gtap.gtap_block_model as gbm
@@ -56,7 +61,7 @@ def test_una_corrida_construye_cada_modelo_lo_justo(monkeypatch):
     # Con el seed cache, la calibracion no corre y el conteo no mide nada.
     monkeypatch.setenv("EQUILIBRIA_SEED_CACHE_DISABLE", "1")
     monkeypatch.delenv("EQUILIBRIA_GTAP_MODEL_CACHE", raising=False)
-    cuenta = {"multiperiodo": 0, "referencia": 0}
+    cuenta = {"multiperiodo": 0, "referencia": 0, "sp": 0}
     _contar(
         monkeypatch,
         gbm.GTAPBlockMultiPeriodModel,
@@ -65,11 +70,12 @@ def test_una_corrida_construye_cada_modelo_lo_justo(monkeypatch):
         "multiperiodo",
     )
     _contar(monkeypatch, drv, "_build_sp_reference", cuenta, "referencia")
+    _contar(monkeypatch, gbm, "build_block_single_period", cuenta, "sp")
 
     _, code = _quieto(_solve_shock, "gtap7_3x3", 1, "capFix", solve_nlp=True)
 
     assert code == 1
-    assert cuenta == {"multiperiodo": 1, "referencia": 2}
+    assert cuenta == {"multiperiodo": 1, "referencia": 2, "sp": 3}
 
 
 def _nodos_unicos(m) -> int:
