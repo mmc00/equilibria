@@ -273,6 +273,8 @@ scripts/gtap/*
 !scripts/gtap/diff_nus333_altertax.py
 !scripts/gtap/diff_altertax.py
 !scripts/gtap/run_parity_gates.py
+!scripts/gtap/perf_budget_20x41.py
+!scripts/gtap/perf_baseline_20x41.json
 !scripts/gtap/check_parity_gates_stamp.py
 !scripts/gtap/claude_hooks/
 !scripts/gtap/validate_reference.py
