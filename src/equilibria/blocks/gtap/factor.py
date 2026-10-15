@@ -50,6 +50,20 @@ class FactorBlock(Block):
 
     name: str = "GTAP_FACTOR"
     description: str = "GTAP factor supply/demand CET nest + factor prices + capital"
+    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
+    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
+    uses: list[str] = [
+        # ShockBlock
+        "aft",
+        "fcttx",
+        "kappaf",
+        "lambdaf",
+        # ProductionSupplyBlock
+        "pva",
+        "va",
+        # IncomeBlock
+        "pabs",
+    ]
     sets: Any = None
     params: Any = None
     # ifSUB toggle: under if_sub the factor report eqs (eq_pfaeq/eq_pfyeq) are

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+import numpy as np
+from pydantic import BaseModel, Field, PrivateAttr
 
 from equilibria.blocks.base import Block
 from equilibria.core.equations import Equation, EquationManager
@@ -84,6 +85,9 @@ class Model(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    # (kind, name) -> nombre del bloque que lo declaro primero.
+    _owner: dict[tuple[str, str], str] = PrivateAttr(default_factory=dict)
+
     def __init__(self, **data: Any) -> None:
         """Initialize model with proper manager linkage."""
         super().__init__(**data)
@@ -139,11 +143,19 @@ class Model(BaseModel):
         This validates that required sets exist, then calls the block's
         setup method to add parameters, variables, and equations.
 
+        Two blocks may declare the same parameter or variable only if both
+        declarations are identical (value, domains, bounds...): a second block
+        cannot silently change what the first one declared. An equation has one
+        owner. The block is checked whole before anything is registered, so a
+        rejected block leaves the model untouched.
+
         Args:
             block: Block to add
 
         Raises:
-            ValueError: If required sets are missing
+            ValueError: If required sets are missing, or if the block declares a
+                parameter or variable differently from an earlier block, or an
+                equation an earlier block already declared.
         """
         # Validate required sets exist
         block.validate_sets(self.set_manager)
@@ -155,21 +167,70 @@ class Model(BaseModel):
         # Call block setup to get equations and populate params/vars
         equations = block.setup(self.set_manager, block_params, block_vars)
 
-        # Add block's parameters, variables, and equations to model
-        for param in block_params.values():
-            if param.name not in self.parameter_manager:
-                self.add_parameter(param)
-
-        for var in block_vars.values():
-            if var.name not in self.variable_manager:
-                self.add_variable(var)
-
+        new_params = [
+            p
+            for p in block_params.values()
+            if not self._shared("parameter", p, self.parameter_manager, block)
+        ]
+        new_vars = [
+            v
+            for v in block_vars.values()
+            if not self._shared("variable", v, self.variable_manager, block)
+        ]
         for eq in equations:
-            if eq.name not in self.equation_manager:
-                self.add_equation(eq)
+            if eq.name in self.equation_manager:
+                raise ValueError(
+                    f"equation {eq.name} is declared by block "
+                    f"{self._owner.get(('equation', eq.name))!r} and again by "
+                    f"{block.name!r}: an equation has one owner"
+                )
+
+        for param in new_params:
+            self.add_parameter(param)
+            self._owner[("parameter", param.name)] = block.name
+        for var in new_vars:
+            self.add_variable(var)
+            self._owner[("variable", var.name)] = block.name
+        for eq in equations:
+            self.add_equation(eq)
+            self._owner[("equation", eq.name)] = block.name
 
         # Store the block
         self.blocks.append(block)
+
+    def _shared(self, kind: str, new: Any, manager: Any, block: Block) -> bool:
+        """True si ``new`` ya esta registrado con la misma declaracion; ValueError
+        si esta registrado distinto; False si es nuevo."""
+        if new.name not in manager:
+            return False
+        old = manager.get(new.name)
+        fields = (
+            ("value", "domains", "mutable")
+            if kind == "parameter"
+            else ("value", "domains", "domain", "lower", "upper")
+        )
+        for f in fields:
+            if not _same(getattr(old, f), getattr(new, f)):
+                raise ValueError(
+                    f"{kind} {new.name} is declared by block "
+                    f"{self._owner.get((kind, new.name))!r} and again by "
+                    f"{block.name!r} with a different {f}: one name, one declaration"
+                )
+        return True
+
+    def check_uses(self) -> None:
+        """ValueError si un bloque usa (``Block.uses``) una variable que ningun
+        bloque declara. Se llama con todos los bloques ya agregados: un bloque
+        puede usar lo que declara uno posterior."""
+        missing = [
+            f"block {b.name!r} uses {v}"
+            for b in self.blocks
+            for v in b.uses
+            if v not in self.variable_manager
+        ]
+        if missing:
+            them = "it" if len(missing) == 1 else "them"
+            raise ValueError("; ".join(missing) + f", but no block declares {them}")
 
     def add_blocks(self, blocks: list[Block]) -> None:
         """Add multiple blocks to the model.
@@ -267,3 +328,15 @@ class Model(BaseModel):
             f"DOF={stats.degrees_of_freedom}, "
             f"{stats.blocks} blocks"
         )
+
+
+def _same(a: Any, b: Any) -> bool:
+    """Igualdad de un campo de declaracion: arrays celda a celda (NaN == NaN)."""
+    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+        a, b = np.asarray(a), np.asarray(b)
+        if a.shape != b.shape:
+            return False
+        if a.dtype.kind in "fc" and b.dtype.kind in "fc":
+            return bool(np.array_equal(a, b, equal_nan=True))
+        return bool(np.array_equal(a, b))
+    return a == b

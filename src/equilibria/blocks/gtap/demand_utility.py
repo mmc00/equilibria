@@ -58,6 +58,29 @@ class DemandUtilityBlock(Block):
 
     name: str = "GTAP_DEMAND_UTILITY"
     description: str = "GTAP CDE final demand + utility/savings/rate-of-return"
+    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
+    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
+    uses: list[str] = [
+        # ShockBlock
+        "kappaf",
+        "pop",
+        # FactorBlock
+        "arent",
+        "kapEnd",
+        "kstock",
+        "pf",
+        "rorc",
+        "rore",
+        "xf",
+        # ArmingtonBilateralBlock
+        "pa",
+        # IncomeBlock
+        "regy",
+        "rsav",
+        "yc",
+        "yg",
+        "yi",
+    ]
     sets: Any = None
     params: Any = None
     residual_region: str = "NAmerica"

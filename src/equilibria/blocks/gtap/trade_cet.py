@@ -33,6 +33,15 @@ class TradeCETBlock(Block):
 
     name: str = "GTAP_TRADE_CET"
     description: str = "GTAP CET domestic/export allocation (eq_xds, eq_xet, eq_xseq)"
+    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
+    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
+    uses: list[str] = [
+        # ProductionSupplyBlock
+        "pd",
+        "ps",
+        "xds",
+        "xs",
+    ]
     sets: Any = None
     params: Any = None
 

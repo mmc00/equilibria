@@ -79,6 +79,21 @@ class ClosureBlock(Block):
 
     name: str = "GTAP_CLOSURE"
     description: str = "GTAP factor-price Fisher index (pfact/pwfact), pnum, walras"
+    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
+    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
+    uses: list[str] = [
+        # FactorBlock
+        "kstock",
+        "pf",
+        "pfact",
+        "xf",
+        # DemandUtilityBlock
+        "pi",
+        "savf",
+        # IncomeBlock
+        "rsav",
+        "yi",
+    ]
     sets: Any = None
     params: Any = None
     residual_region: str = "NAmerica"

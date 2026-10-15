@@ -66,6 +66,45 @@ class IncomeBlock(Block):
 
     name: str = "GTAP_INCOME"
     description: str = "GTAP regional income, tax streams, GDP and EV/CV welfare"
+    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
+    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
+    uses: list[str] = [
+        # ShockBlock
+        "dintx_tgt",
+        "exptx",
+        "fcttx",
+        "imptx",
+        "kappaf",
+        "lambdamg",
+        "mintx_tgt",
+        "pop",
+        "prdtx_rai",
+        # ProductionSupplyBlock
+        "p_rai",
+        "pd",
+        "x",
+        # FactorBlock
+        "kstock",
+        "pf",
+        "xf",
+        # ArmingtonBilateralBlock
+        "pa",
+        "pe",
+        "pefob",
+        "pmcif",
+        "pmt",
+        "ptmg",
+        "xaa",
+        "xda",
+        "xma",
+        "xw",
+        # DemandUtilityBlock
+        "phi",
+        "phip",
+        "pi",
+        "savf",
+        "uh",
+    ]
     sets: Any = None
     params: Any = None
     residual_region: str = "NAmerica"

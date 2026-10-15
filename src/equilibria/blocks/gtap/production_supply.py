@@ -52,6 +52,21 @@ class ProductionSupplyBlock(Block):
 
     name: str = "GTAP_PRODUCTION_SUPPLY"
     description: str = "GTAP production CES nest + domestic supply CES/CET"
+    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
+    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
+    uses: list[str] = [
+        # ShockBlock
+        "axp",
+        "fcttx",
+        "lambdaf",
+        "lambdava",
+        "prdtx_rai",
+        # FactorBlock
+        "pf",
+        "pfa",
+        # ArmingtonBilateralBlock
+        "pa",
+    ]
     sets: Any = None
     params: Any = None
     # ifSUB toggle: under if_sub the eq_pp_rai report eq is deactivated by the
