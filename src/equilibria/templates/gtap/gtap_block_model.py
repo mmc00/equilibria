@@ -585,11 +585,12 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         """
         return self._block_sp()
 
-    def build_vars(self, m: ConcreteModel) -> None:
+    def build_vars(self, m: ConcreteModel) -> ConcreteModel:
         """Reflect Var families from the block SP model (×3 periods).
 
         Copy of the parent's reflection with the SP source swapped to the block
-        model. Kept in lockstep with ``GTAPMultiPeriodModel.build_vars``.
+        model. Kept in lockstep with ``GTAPMultiPeriodModel.build_vars``: tambien
+        devuelve el SP que leyo, para ``build_equations_all_periods(m, sp=...)``.
         """
         from pyomo.environ import NonNegativeReals, Var
 
@@ -654,6 +655,7 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         m._targets = dict(getattr(sp_model, "_targets", {}) or {})
         m._shock_rows = frozenset(getattr(sp_model, "_shock_rows", ()) or ())
         _fix_instruments(m)
+        return sp_model
 
     def build_equations_all_periods(self, m: ConcreteModel, *args, **kwargs) -> None:
         """La reflexion del padre, y despues las filas de @overwrite solo en el shock
@@ -742,8 +744,9 @@ def build_block_model(
                 return _cached, mp
 
     m = mp.build_sets()
-    mp.build_vars(m)
-    mp.build_equations_all_periods(m)
+    sp = mp.build_vars(m)
+    mp.build_equations_all_periods(m, sp=sp)
+    del sp  # que no viva mas que el build
     mp.build_equations_fisher(m)
     # Los instrumentos ya quedaron fijos y registrados en build_vars; el registro
     # viaja con el modelo (y con el cache de modelos).

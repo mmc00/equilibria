@@ -41,8 +41,9 @@ def build_sparse_model_mp(
         sets, params, closure, residual_region=residual_region
     )
     m = mp.build_sets()
-    mp.build_vars(m)
-    mp.build_equations_all_periods(m)
+    sp = mp.build_vars(m)
+    mp.build_equations_all_periods(m, sp=sp)
+    del sp  # que no viva mas que el build
     mp.build_equations_fisher(m)
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated
