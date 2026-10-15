@@ -582,29 +582,21 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
 
         Delega en ``_block_sp`` para que las subclases sigan teniendo un unico
         punto que sobrescribir.
-
-        El primer pedido despues de ``build_vars`` recibe el SP que este ya armo
-        (solo lo leyo): asi las Var y las filas del multiperiodo salen del MISMO
-        SP y se arma uno menos (20x41: ~8 % del tiempo, perfil 2026-10-14). Se
-        entrega una sola vez y se suelta, para no retener el SP toda la vida del
-        modelo; los pedidos siguientes (``build_equations_intra``, uno por
-        periodo) arman el suyo como antes.
         """
-        sp = self.__dict__.pop("_sp_de_build_vars", None)
-        return sp if sp is not None else self._block_sp()
+        return self._block_sp()
 
-    def build_vars(self, m: ConcreteModel) -> None:
+    def build_vars(self, m: ConcreteModel) -> ConcreteModel:
         """Reflect Var families from the block SP model (×3 periods).
 
         Copy of the parent's reflection with the SP source swapped to the block
-        model. Kept in lockstep with ``GTAPMultiPeriodModel.build_vars``.
+        model. Kept in lockstep with ``GTAPMultiPeriodModel.build_vars``: tambien
+        devuelve el SP que leyo, para ``build_equations_all_periods(m, sp=...)``.
         """
         from pyomo.environ import NonNegativeReals, Var
 
         from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS, _astuple
 
         sp_model = self._block_sp()
-        self._sp_de_build_vars = sp_model  # lo reusa el proximo _build_sp
         periods = list(PERIODS)
 
         for v in sp_model.component_objects(Var, active=True):
@@ -663,6 +655,7 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         m._targets = dict(getattr(sp_model, "_targets", {}) or {})
         m._shock_rows = frozenset(getattr(sp_model, "_shock_rows", ()) or ())
         _fix_instruments(m)
+        return sp_model
 
     def build_equations_all_periods(self, m: ConcreteModel, *args, **kwargs) -> None:
         """La reflexion del padre, y despues las filas de @overwrite solo en el shock
@@ -751,8 +744,9 @@ def build_block_model(
                 return _cached, mp
 
     m = mp.build_sets()
-    mp.build_vars(m)
-    mp.build_equations_all_periods(m)
+    sp = mp.build_vars(m)
+    mp.build_equations_all_periods(m, sp=sp)
+    del sp  # que no viva mas que el build
     mp.build_equations_fisher(m)
     # Los instrumentos ya quedaron fijos y registrados en build_vars; el registro
     # viaja con el modelo (y con el cache de modelos).

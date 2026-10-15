@@ -50,8 +50,8 @@ def test_una_corrida_construye_cada_modelo_lo_justo(monkeypatch):
     periodo simple DOS (base, compartido con la calibracion; y shock).
 
     En total el SP de bloques se arma TRES veces: una para el multiperiodo (sus
-    Var y sus filas salen del mismo SP) y las dos referencias. build_vars armaba
-    uno propio solo para leer las Var (20x41: ~8 % del tiempo, perfil 2026-10-14).
+    Var y sus filas salen del mismo SP, que build_vars devuelve) y las dos
+    referencias.
     """
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
