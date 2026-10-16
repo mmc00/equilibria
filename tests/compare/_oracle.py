@@ -348,3 +348,94 @@ EX3_CSV_ROWS = [
     ("z", "shock", "EU", None, None, None, "missing_in_a"),
 ]
 EX1_CSV_INDEX = ["Food.Food", "Food.Mfg", "Mfg.Food", "Mfg.Mfg"]
+
+# ---------------------------------------------------------------------------
+# Ejemplo 9 — exclusiones por celda (decision del usuario, opcion B, review #126).
+#
+# GAMS omite del GDX tanto los ceros como las celdas que su modelo no define (p. ej.
+# pft(r, NatRes): GAMS define pft solo para factores moviles). La regla "ausente =
+# 0" no distingue: la segunda clase se declara en el mapeo, celda a celda, con su
+# motivo. Una celda excluida no se compara, no cuenta como pasa ni como sin pareja,
+# y se reporta con el ``why`` y el conteo de su exclusion.
+#
+# q(REG, FP), A y B dicts, tol rel 1e-3, piso 1e-6. Dos exclusiones, en este orden
+# (una celda que caen en las dos se cuenta en la PRIMERA):
+#   E1 where {FP: [NatRes]}                       why "NatRes no existe en A"
+#   E2 where {REG: [ROW], period: [shock]}        why "ROW en shock: a proposito"
+#
+#   periodo celda          A      B       sin exclusion          con exclusion
+#   check   USA.Lab        1.0    1.0     pareja d=0 pasa        pareja, pasa
+#   check   USA.NatRes     0.0    9.0     pareja d=1 falla       E1
+#   check   ROW.NatRes     5.0    5.0     pareja d=0 pasa        E1 (aunque pasaria)
+#   shock   USA.Lab        2.0    2.002   d=0.002/2.002 pasa     pareja, pasa
+#   shock   ROW.Lab        3.0    99.0    d=96/99 falla          E2
+#   shock   ROW.NatRes     7.0    —       sin pareja en B        E1 (E2 tambien; gana E1)
+#   shock   USA.NatRes     —      1.0     sin pareja en A        E1
+#
+# Comparadas: 2 celdas, las 2 pasan (pass_pct = 100). Sin pareja: ninguna.
+# Excluidas: E1 = 4 celdas, E2 = 1 celda; total 5. 2 + 5 = 7 = celdas de A u B.
+# ---------------------------------------------------------------------------
+EX9_A = {
+    "q": {
+        ("USA", "Lab", "check"): 1.0,
+        ("USA", "NatRes", "check"): 0.0,
+        ("ROW", "NatRes", "check"): 5.0,
+        ("USA", "Lab", "shock"): 2.0,
+        ("ROW", "Lab", "shock"): 3.0,
+        ("ROW", "NatRes", "shock"): 7.0,
+    }
+}
+EX9_B = {
+    "q": {
+        ("USA", "Lab", "check"): 1.0,
+        ("USA", "NatRes", "check"): 9.0,
+        ("ROW", "NatRes", "check"): 5.0,
+        ("USA", "Lab", "shock"): 2.002,
+        ("ROW", "Lab", "shock"): 99.0,
+        ("USA", "NatRes", "shock"): 1.0,
+    }
+}
+EX9_WHY_1 = "NatRes no existe en A"
+EX9_WHY_2 = "ROW en shock: a proposito"
+EX9_MAP = {
+    "variables": [
+        {
+            "name": "q",
+            "a": {"var": "q", "dims": ["REG", "FP"]},
+            "b": {"var": "q", "dims": ["REG", "FP"]},
+            "tol": {"rel": 1e-3, "abs_floor": 1e-6},
+        }
+    ],
+    "exclude": [
+        {"var": "q", "where": {"FP": ["NatRes"]}, "why": EX9_WHY_1},
+        {"var": "q", "where": {"REG": ["ROW"], "period": ["shock"]}, "why": EX9_WHY_2},
+    ],
+    "thresholds": [1e-3],
+}
+EX9_MATCHED = 2
+EX9_PASS_PCT = 100.0
+EX9_EXCLUSION_COUNTS = [(EX9_WHY_1, 4), (EX9_WHY_2, 1)]
+EX9_EXCLUDED_TOTAL = 5
+# filas de to_csv con status "excluded" (a/b vacios si la celda falta en ese lado;
+# d siempre vacio: no se mide). Se comparan como conjunto.
+EX9_CSV_EXCLUDED = {
+    ("q", "check", "USA.NatRes", 0.0, 9.0, None, "excluded"),
+    ("q", "check", "ROW.NatRes", 5.0, 5.0, None, "excluded"),
+    ("q", "shock", "ROW.Lab", 3.0, 99.0, None, "excluded"),
+    ("q", "shock", "ROW.NatRes", 7.0, None, None, "excluded"),
+    ("q", "shock", "USA.NatRes", None, 1.0, None, "excluded"),
+}
+
+# ---------------------------------------------------------------------------
+# Ejemplo 10 — exclusion por celda en el GTAP 3x3 real (GAMS vs equilibria resuelto).
+#
+# Conjuntos del 3x3 (gdxdump): REG = {USA, EU_28, ROW} (3), FP = {Land, SkLab,
+# UnSkLab, Capital, NatRes} (5), ACT = {Food, Mnfcs, Svces} (3); periodos del GDX
+# comparados: base, check, shock (3).
+# Exclusion: factor_price where {FP: [NatRes]} -> 3 reg x 1 factor x 3 periodos = 9.
+# factor_price comparadas: 3 x 5 x 3 = 45 celdas en total, menos 9 = 36, todas pasan.
+# output: 3 reg x 3 act x 3 periodos = 27 comparadas, todas pasan.
+# ---------------------------------------------------------------------------
+EX10_OUTPUT_CELLS = 27
+EX10_FACTOR_PRICE_CELLS = 36
+EX10_NATRES_EXCLUDED = 9
