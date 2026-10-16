@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -260,10 +261,10 @@ def _replicate_own_sp_reference(c: _Ctx) -> None:
     _replicate(c, c.prep._build_reference_model(c.m, c.params, c.closure))
 
 
-def _replicate(c: _Ctx, sp) -> None:
+def _replicate(c: _Ctx, snap) -> None:
     d = _drv()
-    d._replicate_sp_fixing(c.m, sp, c.period)
-    d._replicate_sp_bounds(c.m, sp, c.period)
+    d._replicate_snapshot_fixing(c.m, snap, c.period)
+    d._replicate_snapshot_bounds(c.m, snap, c.period)
 
 
 def _gams_bounds(c: _Ctx) -> None:
@@ -403,6 +404,30 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
 _CHECK_COPIED = _Recipe(steps=(_copy_from_base,), closure=None)
 
 
+# Foto del modelo de referencia compartida entre las corridas que reciben el mismo
+# objeto ``params``: id(params) -> (ref debil a params, clave, SPSnapshot).  Por id
+# y no como clave debil porque ``GTAPParameters`` no es hasheable (dataclass con
+# igualdad); la ref debil confirma que el id sigue siendo de ese objeto y un
+# finalizador borra la entrada cuando ``params`` muere.  Fuera de los atributos de
+# ``params`` y de ``m``: el cache del modelo los serializa, y su clave digiere todos
+# los atributos de ``params``.
+_SHARED_SP_REF: dict[int, tuple[weakref.ref, str, Any]] = {}
+
+
+def _shared_get(params, key: str):
+    entry = _SHARED_SP_REF.get(id(params))
+    if entry is None or entry[0]() is not params or entry[1] != key:
+        return None
+    return entry[2]
+
+
+def _shared_put(params, key: str, snap) -> None:
+    pid = id(params)
+    if pid not in _SHARED_SP_REF:
+        weakref.finalize(params, _SHARED_SP_REF.pop, pid, None)
+    _SHARED_SP_REF[pid] = (weakref.ref(params), key, snap)
+
+
 class PeriodPreparer:
     """Prepara los periodos de UNA corrida del driver.
 
@@ -438,14 +463,24 @@ class PeriodPreparer:
         self._sp_ref_closure = None
 
     def _build_reference_model(self, m, params, closure):
-        return _drv()._build_sp_reference(
-            params.sets, params, closure, self.residual_region, model=m
+        """Foto (``SPSnapshot``) del modelo de un periodo con ``closure``; el modelo
+        Pyomo se suelta apenas se lee."""
+        d = _drv()
+        return d._sp_snapshot(
+            d._build_sp_reference(
+                params.sets, params, closure, self.residual_region, model=m
+            )
         )
 
     def _reference_model(self, m, params, closure, period: str):
-        """Modelo de un periodo con ``closure``.  Se guarda el del base y se
-        reutiliza mientras el cierre no cambie (el check gtap usa el mismo); uno
-        construido para otro cierre se usa y se descarta."""
+        """Foto del modelo de un periodo con ``closure``.  Se guarda la del base y
+        se reutiliza mientras el cierre no cambie (el check gtap usa el mismo); una
+        construida para otro cierre se usa y se descarta.
+
+        Ademas se comparte entre corridas con el MISMO objeto ``params``:
+        ``calibrate_base`` (sobre otro ``m``) y ``solve_multiperiod`` crean cada uno
+        su ``PeriodPreparer`` y construian dos veces la misma (~46 s cada una en
+        20x41; identicas, medido)."""
         d = _drv()
         if self._sp_ref is not None and d._sp_ref_reusable(
             self._sp_ref_closure, closure
@@ -455,10 +490,45 @@ class PeriodPreparer:
                 period,
             )
             return self._sp_ref
-        sp = self._build_reference_model(m, params, closure)
+        key = self._shared_key(m, params, closure)
+        snap = _shared_get(params, key) if key is not None else None
+        if snap is not None:
+            _log.info(
+                "%s period: reusing the reference model of a previous run (same key)",
+                period,
+            )
+        else:
+            snap = self._build_reference_model(m, params, closure)
+            if key is not None:
+                _shared_put(params, key, snap)
         if self._sp_ref is None:
-            self._sp_ref, self._sp_ref_closure = sp, closure
-        return sp
+            self._sp_ref, self._sp_ref_closure = snap, closure
+        return snap
+
+    def _shared_key(self, m, params, closure) -> str | None:
+        """Clave por CONTENIDO de todo lo que entra al modelo de referencia (params,
+        cierre, region residual, fuente del modelo y codigo), o ``None`` si no se
+        puede compartir.
+
+        De ``m``, ``_build_sp_reference`` solo lee la fuente (``_sp_source``, que
+        ``EQUILIBRIA_GTAP_REF_MODEL`` pisa).  Con un hook ``@overwrite`` activo no
+        se comparte: cambia el modelo y no esta en la clave (igual que el cache
+        del modelo)."""
+        import os
+
+        from equilibria.blocks.gtap.fingerprint import fingerprint
+        from equilibria.blocks.gtap.overwrite import overwrite
+
+        if overwrite.active():
+            return None
+        return fingerprint(
+            "sp_ref",
+            params=params,
+            closure=closure,
+            residual_region=self.residual_region,
+            sp_source=getattr(m, "_sp_source", None),
+            ref_model_env=os.environ.get("EQUILIBRIA_GTAP_REF_MODEL"),
+        )
 
     def seed_prior(self, period: str) -> str:
         """Periodo del que se siembra ``period``.  El shock se siembra del check,

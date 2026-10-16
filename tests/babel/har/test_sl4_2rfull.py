@@ -125,17 +125,27 @@ def test_2ifull_roundtrip_matches_gempack_prefix(tmp_path: Path) -> None:
 
 
 @needs_sl4
-def test_writing_2rfull_raises_instead_of_losing_data(tmp_path: Path) -> None:
-    """Re-escribir un .sl4 perdia 1211 de 1212 valores sin avisar.
+def test_rewriting_a_sl4_keeps_every_value(tmp_path: Path) -> None:
+    """Re-escribir un .sl4 completo conserva todos los valores.
 
-    No hay _write_2rfull; el enrutador mandaba los float 2-D a _write_refull,
-    cuyo data record guarda solo el primer valor. write_har devolvia OK.
+    Historia: sin _write_2rfull el enrutador mandaba los float 2-D a
+    _write_refull, cuyo data record guarda solo el primer valor, y write_har
+    devolvia OK -- se perdian 1211 de 1212 valores de CUMS sin aviso. Despues
+    paso a lanzar NotImplementedError, que era honesto pero dejaba el .sl4
+    sin poder re-escribirse. Ahora el round-trip cierra de verdad.
     """
-
     d = read_har(SL4)
     assert np.asarray(d["CUMS"].array).size > 1000, "CUMS deberia traer >1000 valores"
-    with pytest.raises(NotImplementedError, match="2RFULL"):
-        write_har(tmp_path / "rt.har", d)
+    out = tmp_path / "rt.har"
+    write_har(out, d)
+    back = read_har(out)
+    assert len(back) == len(d)
+    for k in ("CUMS", "LEVB", "LEVA", "UVAL", "SHOC"):
+        a = np.asarray(d[k].array)
+        b = np.asarray(back[k].array)
+        assert b.shape == a.shape, f"{k}: {a.shape} -> {b.shape}"
+        assert b.dtype == a.dtype, f"{k}: dtype {a.dtype} -> {b.dtype}"
+        np.testing.assert_allclose(b, a, atol=1e-6)
 
 
 def test_set_less_float_roundtrips_at_every_rank(tmp_path: Path) -> None:
@@ -150,8 +160,8 @@ def test_set_less_float_roundtrips_at_every_rank(tmp_path: Path) -> None:
     """
     from equilibria.babel.har.symbols import HeaderArray
 
-    # 2-D sin sets queda afuera a proposito: esa forma es indistinguible de
-    # un 2RFULL, asi que el escritor la rechaza (ver el test siguiente).
+    # 2-D sin sets queda afuera a proposito: esa forma ES un 2RFULL para el
+    # escritor (ver el test siguiente), no un REFULL.
     for shape in [(5,), (2, 2, 2), (7,), (2, 3, 4)]:
         arr = np.arange(1, int(np.prod(shape)) + 1, dtype=np.float32).reshape(shape)
         ha = HeaderArray(
@@ -170,15 +180,52 @@ def test_set_less_float_roundtrips_at_every_rank(tmp_path: Path) -> None:
 
 
 @needs_sl4
-def test_writing_2rfull_would_change_the_on_disk_type(tmp_path: Path) -> None:
-    """UVAL es 2RFULL 1x1 en el .sl4; escribirlo como REFULL cambiaria el tipo.
+def test_2rfull_keeps_its_on_disk_type(tmp_path: Path) -> None:
+    """UVAL es 2RFULL 1x1 en el .sl4 y tiene que volver a disco como 2RFULL.
 
     El corte no puede ser por tamano: GEMPACK guarda UVAL y SHOC (1x1) como
     2RFULL y el escalar DVER de default.prm como REFULL, asi que la forma no
-    dice nada del tipo. Rechazar es lo unico honesto mientras no haya
-    _write_2rfull.
+    dice nada del tipo. Lo que lo decide es float + 2-D + sin sets.
     """
     d = read_har(SL4)
     assert np.asarray(d["UVAL"].array).shape == (1, 1)
-    with pytest.raises(NotImplementedError, match="2RFULL"):
-        write_har(tmp_path / "uval.har", {"UVAL": d["UVAL"]})
+    out = tmp_path / "uval.har"
+    write_har(out, {"UVAL": d["UVAL"]})
+    assert b"2RFULL" in out.read_bytes(), "se escribio con otro tipo"
+    assert b"REFULL" not in out.read_bytes().replace(b"2RFULL", b"")
+    np.testing.assert_allclose(
+        np.asarray(read_har(out)["UVAL"].array), np.asarray(d["UVAL"].array)
+    )
+
+
+def test_int_header_stays_2ifull_when_edited(tmp_path: Path) -> None:
+    """Editar un 2IFULL no lo puede convertir en 2RFULL.
+
+    Es la regresion que rompio `run_gempack_matrix --rordelta`: RDLT
+    (RORDELTA) es un coeficiente ENTERO de GTAPv7.tab guardado como 2IFULL, y
+    _force_rdlt lo casteaba a float, con lo cual pasaba a escribirse 2RFULL.
+    GEMPACK no lee eso -- "(E-incompatible data types on file and demanded by
+    user)" -- y el .prm resultante no corre. Medido en gtap7_20x41: como
+    2IFULL el solve reproduce la fixture capFix (rore spread 15.2428); como
+    2RFULL no arranca.
+    """
+    from equilibria.babel.har.symbols import HeaderArray
+
+    ha = HeaderArray(
+        name="RDLT",
+        coeff_name="RDLT",
+        long_name="RORDELTA, entero 1x1",
+        array=np.array([[1]], dtype=np.int32),
+        set_names=[],
+        set_elements=[],
+    )
+    p = tmp_path / "prm.har"
+    arr = np.asarray(ha.array).copy()
+    arr[...] = 0  # lo que hace _force_rdlt: preservar el dtype de disco
+    ha.array = arr
+    write_har(p, {"RDLT": ha})
+    assert b"2IFULL" in p.read_bytes(), "el header dejo de ser 2IFULL"
+    assert b"2RFULL" not in p.read_bytes()
+    back = read_har(p)["RDLT"]
+    assert back.array.dtype == np.int32
+    assert int(np.asarray(back.array).ravel()[0]) == 0

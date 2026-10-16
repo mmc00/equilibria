@@ -462,7 +462,9 @@ class FactorBlock(Block):
     # ------------------------------------------------------------------
     # F3.5 base calibration — adopt the settled (check) point as base
     # ------------------------------------------------------------------
-    def calibrate_base(self, params, sets, closure, residual_region, ref_gdx=None):
+    def calibrate_base(
+        self, params, sets, closure, residual_region, ref_gdx=None, model=None
+    ):
         """Base calibration (F3.5): return the SETTLED check-period point.
 
         Runs the settle solve ONCE (the base->check->shock stack the gates use,
@@ -474,14 +476,22 @@ class FactorBlock(Block):
 
         Returns ``{var_name: {body: value}}`` for the check slice, where ``body``
         is the index tuple without the trailing period (a bare scalar for 1-D).
-        """
-        from pyomo.environ import Var
-        from pyomo.environ import value as _V
 
+        ``model``: el modelo multiperiodo YA construido con estos mismos params,
+        cierre y residual (build_block_model lo pasa). El settle corre sobre el y
+        despues se restaura su estado (templates/gtap/model_state.py), en vez de
+        construir un segundo modelo identico.
+        """
         from equilibria.blocks.gtap import seed_cache
         from equilibria.templates.gtap.gtap_block_model import (
             build_block_model,
             solve_block_model,
+        )
+        from equilibria.templates.gtap.residual_region import resolve_residual_region
+
+        # La clave del seed cache lleva la region, no "auto".
+        residual_region = resolve_residual_region(
+            params, sets, closure, residual_region
         )
 
         # Disk cache: the settled_seed is a pure function of the settle inputs
@@ -493,7 +503,6 @@ class FactorBlock(Block):
         except Exception:
             _label = "gtap"
         from equilibria.blocks.gtap.overwrite import overwrite
-        from equilibria.templates.gtap.instruments import exogenous_test
 
         # Un hook @overwrite cambia el settle y no esta en la clave: sin cache.
         key = (
@@ -508,10 +517,39 @@ class FactorBlock(Block):
             if cached is not None:
                 return cached
 
-        m, mp = build_block_model(params, sets, closure, residual_region)
-        if ref_gdx is not None:
-            mp.seed_all_periods(m, ref_gdx)
-        solve_block_model(m, params, closure, ref_gdx, mode="gtap", settle_only=True)
+        estado = None
+        if model is not None and ref_gdx is None:
+            from equilibria.templates.gtap import model_state
+
+            m = model
+            estado = model_state.capture(m)
+            # El settle se hacia sobre un modelo armado con base_calibrated=False,
+            # y el driver lee el flag (period_prep): aca tambien. restore lo repone.
+            m._base_calibrated = False
+            m._settled_seed = None
+        else:
+            m, mp = build_block_model(params, sets, closure, residual_region)
+            if ref_gdx is not None:
+                mp.seed_all_periods(m, ref_gdx)
+        try:
+            solve_block_model(
+                m, params, closure, ref_gdx, mode="gtap", settle_only=True
+            )
+            settled = self._settled_check_point(m)
+        finally:
+            if estado is not None:
+                model_state.restore(m, estado)
+        if key is not None:
+            seed_cache.save(key, settled)
+        return settled
+
+    @staticmethod
+    def _settled_check_point(m) -> dict[str, dict]:
+        """El punto del check (sin instrumentos exogenos) como {var: {body: val}}."""
+        from pyomo.environ import Var
+        from pyomo.environ import value as _V
+
+        from equilibria.templates.gtap.instruments import exogenous_test
 
         settled: dict[str, dict] = {}
         for v in m.component_objects(Var, active=True):
@@ -531,8 +569,6 @@ class FactorBlock(Block):
                 body = idx[:-1]
                 body = body[0] if len(body) == 1 else body
                 settled.setdefault(v.name, {})[body] = val
-        if key is not None:
-            seed_cache.save(key, settled)
         return settled
 
     # ------------------------------------------------------------------

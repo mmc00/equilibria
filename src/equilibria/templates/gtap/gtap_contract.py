@@ -308,14 +308,11 @@ def _closure_template_data(name: str) -> dict[str, Any]:
 
     elif closure_name == "gtap7_gempack":
         # GEMPACK-faithful closure. Identical to the standard MCP closure except
-        # the value-added valuation uses GEMPACK's EVFP factor-subsidy basis
-        # (va = evfb + ftrv + fbep) instead of GAMS's (evfb + ftrv - fbep). This
-        # re-anchors the VA-vs-intermediate weight ava to GEMPACK's total-cost
-        # share on subsidised agriculture (0.571 vs GAMS's 0.679), closing ~half
-        # the domestic-price gap vs GEMPACK and improving global qxs match by
-        # ~3pp. Trades GAMS-fidelity on `va` for GEMPACK-fidelity — use when
-        # GEMPACK is the reference (e.g. the qxs bilateral-trade gate). See
-        # _va_wedge in blocks/gtap/_derived_params.py.
+        # the factor wedge is the data's (EVFP = EVFB + FTRV + FBEP, fctts =
+        # +FBEP/EVFB) instead of cal.gms's sign (fctts = -FBEP/EVFB), everywhere:
+        # factor price, calibration, tax revenue, VA valuation. Trades GAMS-fidelity
+        # for GEMPACK-fidelity — use when GEMPACK is the reference (e.g. the
+        # GEMPACK parity gate). See blocks/gtap/factor_wedge.py.
         base["label"] = "GEMPACK-faithful closure (EVFP subsidy basis)"
         base["closure_type"] = "MCP"
         base["va_subsidy_basis"] = "gempack"

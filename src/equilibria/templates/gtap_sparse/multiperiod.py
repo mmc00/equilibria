@@ -13,6 +13,7 @@ from equilibria.templates.gtap.gtap_block_model import (
     GTAPBlockMultiPeriodModel,
     _calibrate_capflex_risk,
 )
+from equilibria.templates.gtap.residual_region import resolve_residual_region
 
 from .composer import fix_padding_routes, relax_dissaving_domain
 
@@ -27,6 +28,7 @@ def build_sparse_model_mp(
 ):
     """Build the multi-period sparse-trade model (unseeded, padding fixed).
     Returns (pyomo_model, mp, fix_stats)."""
+    residual_region = resolve_residual_region(params, sets, closure, residual_region)
     if (
         str(getattr(closure, "savf_flag", "capFix")) == "capFlex"
         and getattr(params, "_capflex_risk", None) is None
@@ -39,8 +41,9 @@ def build_sparse_model_mp(
         sets, params, closure, residual_region=residual_region
     )
     m = mp.build_sets()
-    mp.build_vars(m)
-    mp.build_equations_all_periods(m)
+    sp = mp.build_vars(m)
+    mp.build_equations_all_periods(m, sp=sp)
+    del sp  # que no viva mas que el build
     mp.build_equations_fisher(m)
     m._residual_region = residual_region
     m._base_calibrated = base_calibrated

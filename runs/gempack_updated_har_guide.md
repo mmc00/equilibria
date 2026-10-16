@@ -265,12 +265,44 @@ option `SHL`, where every variable prints four solution columns:
 qo, component 1:  -1.5210288   1579235.5   1555214.9   -24020.625
 ```
 
-`scripts/gtap/export_sl4_levels.py` drives `sltoht -SHL -SIC`, parses the
-POST-SIM LEVEL column and writes it back as `sl4levels_<ds>_tm10.har`:
+`scripts/gtap/export_sl4_levels.py` drives `sltoht -SHL -SIC` on ANY `.sl4`, parses
+BOTH level columns (pre-sim LEVB and post-sim LEVA) and writes them back as
+`sl4levels_<suffix>.har` (default: beside the matching `--sl4dump`):
 
 ```powershell
-uv run python scripts\gtap\export_sl4_levels.py --sltoht C:\GP\sltoht.exe
+uv run python scripts\gtap\export_sl4_levels.py `
+    runs\gempack_matrix\gtap7_20x41\tm10_s8-16-32_capfix.sl4 `
+    --sl4dump tests\fixtures\gtap7_gempack\sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har `
+    --sltoht C:\GP\sltoht.exe
 ```
+
+> **Not yet verified against a real sltoht text.** The only text the tests parse,
+> `tests/fixtures/gtap7_gempack/sl4levels_sample_sic.txt`, is HAND-MADE: its layout
+> (`! Variable` header, `!%1=` rows, column order) was reconstructed from the row
+> quoted above, not captured. A real `sltoht -SHL -SIC` output must be captured on
+> the next Windows run and added as a fixture (issue #133).
+
+Off Windows, pass a saved copy of the sltoht text with `--from-text` instead of the
+`.sl4`. Layout of the output HAR (#127, read by the compare source #131):
+
+- **LEVA** (post-sim): header = the sl4dump numeric id (`0052`), `long_name` copied
+  (`qo # output of activity … #`) — identical to the historical LEVA-only fixtures.
+- **LEVB** (pre-sim): header = `B` + last 3 digits of the id (`B052`), `long_name`
+  = `LEVB ` + the sl4dump one (so `sl4_levels(path, "qo")` still returns LEVA).
+  Defined once, in `levb_header()` / `levb_long_name()` of the script.
+- **NOLV**: variables with NO level in the SL4 (GEMPACK's 1e10 sentinel in both
+  level columns, e.g. `psave`, every `del_*`) get **no** LEVA/LEVB header; their
+  names are listed in this 1-D character header (always written, empty if none),
+  so the sentinel can never be read as data.
+- A HAR without `B***`/`NOLV` headers is LEVA-only (fixtures made before #127) and
+  may still hold 1e10 arrays as if they were levels.
+
+The LEVELS are validated cell by cell, not only the %-change column: post − pre
+must equal sltoht's 4th (change) column, and 100·(post/pre − 1) must equal the
+%-change (percentage-change variables) or column 1 must equal column 4
+(ordinary-change variables, e.g. `del_tbal`; the kind is read off the 4th column,
+per variable). Tolerance `LEVEL_RTOL = 1e-6` relative, ~8x the rounding of the ~8
+significant digits sltoht prints. A contradiction aborts naming variable and cell.
 
 Shapes / set-elements / numeric ids / long_names come from the matching
 `sl4dump`, and every variable is CROSS-CHECKED (the text's %-change column must

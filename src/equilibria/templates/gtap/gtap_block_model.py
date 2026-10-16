@@ -52,6 +52,10 @@ from equilibria.templates.gtap.gtap_benchmark_scaling import (
     apply_production_scaling,
 )
 from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+from equilibria.templates.gtap.residual_region import (  # noqa: F401 — API publica
+    AUTO,
+    resolve_residual_region,
+)
 
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
@@ -265,6 +269,10 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
         if v is None:
             continue
         fn = _macro.get(var_name) if params is not None else None
+        # Una vez por variable: leer la firma por celda eran 168.750 llamadas a
+        # inspect.signature en gtap7_15x10 (~1 s del build medido; el perfilador
+        # marcaba 3,7 s porque infla las llamadas chicas).
+        aridad = _aridad(fn) if fn is not None else None
         for k in v:
             vd = v[k]
             if vd.fixed:
@@ -272,9 +280,7 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
             target = None
             # Un macro solo aplica si su aridad casa con la del indice: `xmgm`
             # toma cuatro (mode, e, c, imp) y el resto tres.
-            usa_macro = (
-                fn is not None and isinstance(k, tuple) and len(k) == _aridad(fn)
-            )
+            usa_macro = fn is not None and isinstance(k, tuple) and len(k) == aridad
             if usa_macro:
                 try:
                     target = float(value(fn(pm, params, *k)))
@@ -451,6 +457,10 @@ def build_block_single_period(
     and (default) apply the monolith's benchmark scaling so the warm-start matches
     GAMS. Returns the Pyomo ``ConcreteModel``.
     """
+    if residual_region:
+        residual_region = resolve_residual_region(
+            params, sets, closure, residual_region
+        )
     if_sub = bool(getattr(closure, "if_sub", False))
     savf_flag = str(getattr(closure, "savf_flag", "capFix"))
     setmap = _set_elems(sets)
@@ -485,8 +495,14 @@ def build_block_single_period(
     targets = collect_targets(units)
     add_targets(model, targets)
     backend = PyomoBackend()
-    backend.build(model)
+    # Cada instancia de macro ifSUB (M_PM[e,c,imp], ...) se arma UNA vez y la
+    # comparten todas las filas que la usan; la copia multiperiodo
+    # (build_equations_all_periods) la copia una vez por periodo. En 20x41 las
+    # copias por fila eran ~2/3 de los nodos de expresion.
+    with mac.sharing() as _shared:
+        backend.build(model)
     pm = backend.pyomo_model
+    pm._ifsub_shared = {id(e): e for e in _shared.values()}
     _strip_con_suffix(pm)
     pm._endogenous_instrument_cells = endogenous_cells(units)
     pm._targets = targets
@@ -569,11 +585,12 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         """
         return self._block_sp()
 
-    def build_vars(self, m: ConcreteModel) -> None:
+    def build_vars(self, m: ConcreteModel) -> ConcreteModel:
         """Reflect Var families from the block SP model (×3 periods).
 
         Copy of the parent's reflection with the SP source swapped to the block
-        model. Kept in lockstep with ``GTAPMultiPeriodModel.build_vars``.
+        model. Kept in lockstep with ``GTAPMultiPeriodModel.build_vars``: tambien
+        devuelve el SP que leyo, para ``build_equations_all_periods(m, sp=...)``.
         """
         from pyomo.environ import NonNegativeReals, Var
 
@@ -638,6 +655,7 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         m._targets = dict(getattr(sp_model, "_targets", {}) or {})
         m._shock_rows = frozenset(getattr(sp_model, "_shock_rows", ()) or ())
         _fix_instruments(m)
+        return sp_model
 
     def build_equations_all_periods(self, m: ConcreteModel, *args, **kwargs) -> None:
         """La reflexion del padre, y despues las filas de @overwrite solo en el shock
@@ -674,13 +692,17 @@ def build_block_model(
     so the driver seeds the base from it and solves ``base→shock`` (no check).
     The default path is byte-unchanged; ``calibrate_base`` builds its own settle
     model with ``base_calibrated=False`` (no recursion).
+
+    ``residual_region="auto"`` (capFix only) picks it; see resolve_residual_region.
     """
+    residual_region = resolve_residual_region(params, sets, closure, residual_region)
     # Propagate the value-added subsidy basis from the closure onto params, so
     # the pure derivation recipes (_va_wedge in _derived_params) and the driver's
     # per-period recalibration read it without threading closure through their
     # signatures. Default "gams" leaves the faithful-to-GAMS path byte-unchanged;
-    # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis).
-    params.va_subsidy_basis = getattr(closure, "va_subsidy_basis", "gams")
+    # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis) and recalibrates
+    # gx/ava with the data's factor wedge (calibration ran at load, closure-blind).
+    params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
 
     # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod
@@ -722,8 +744,9 @@ def build_block_model(
                 return _cached, mp
 
     m = mp.build_sets()
-    mp.build_vars(m)
-    mp.build_equations_all_periods(m)
+    sp = mp.build_vars(m)
+    mp.build_equations_all_periods(m, sp=sp)
+    del sp  # que no viva mas que el build
     mp.build_equations_fisher(m)
     # Los instrumentos ya quedaron fijos y registrados en build_vars; el registro
     # viaja con el modelo (y con el cache de modelos).
@@ -739,8 +762,10 @@ def build_block_model(
         from equilibria.blocks.gtap.factor import FactorBlock
 
         _fb = FactorBlock(sets=sets, params=params)
+        # El settle corre sobre ESTE m y lo deja como estaba: antes armaba un
+        # segundo modelo identico (en 15x10, 8 de los 14,5 s de la calibracion).
         m._settled_seed = _fb.calibrate_base(
-            params, sets, closure, residual_region, ref_gdx=None
+            params, sets, closure, residual_region, ref_gdx=None, model=m
         )
     if _mc is not None:
         _mc.save(_mc_key, m)
@@ -991,8 +1016,9 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
                 rname,
                 Constraint(
                     pm.r,
-                    rule=lambda _m, r, _t=tag: getattr(_m, f"mfr_{_t}")[r]
-                    == _agg(_t, r),
+                    rule=lambda _m, r, _t=tag: (
+                        getattr(_m, f"mfr_{_t}")[r] == _agg(_t, r)
+                    ),
                 ),
             )
             rebuilt.append(rname)
@@ -1015,10 +1041,12 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
             "eq_pfact",
             Constraint(
                 pm.r,
-                rule=lambda _m, r: _m.pfact[r]
-                == _sqrt(
-                    (_m.mfr_sb[r] / mqfactr_bb[r])
-                    * (_m.mfr_ss[r] / (_m.mfr_bs[r] + 1e-12))
+                rule=lambda _m, r: (
+                    _m.pfact[r]
+                    == _sqrt(
+                        (_m.mfr_sb[r] / mqfactr_bb[r])
+                        * (_m.mfr_ss[r] / (_m.mfr_bs[r] + 1e-12))
+                    )
                 ),
             ),
         )

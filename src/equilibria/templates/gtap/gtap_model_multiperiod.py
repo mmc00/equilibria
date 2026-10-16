@@ -18,11 +18,52 @@ __all__ = ["PERIODS"]
 _astuple = as_key
 
 
+class _SharedCopies(dict):
+    """Sustituciones de un periodo que copian las expresiones compartidas a pedido.
+
+    ``ExpressionReplacementVisitor`` pregunta ``id(hijo) in substitute`` por cada
+    nodo. Si el hijo es una instancia compartida del SP, se copia la primera vez
+    (con estas mismas sustituciones, asi lo anidado tambien se comparte) y las
+    filas siguientes reciben esa misma copia. Las claves son ids de objetos que el
+    SP mantiene vivos, asi que no se reciclan durante la copia.
+    """
+
+    def __init__(self, base: dict, shared: dict) -> None:
+        super().__init__(base)
+        self._shared = shared
+        self._copying: set = set()
+
+    def __contains__(self, key: object) -> bool:
+        if dict.__contains__(self, key):
+            return True
+        expr = self._shared.get(key)
+        # El visitor tambien consulta la raiz que se esta copiando: esa no.
+        if expr is None or key in self._copying:
+            return False
+        from pyomo.core.expr.visitor import ExpressionReplacementVisitor
+
+        self._copying.add(key)
+        try:
+            copia = ExpressionReplacementVisitor(substitute=self).walk_expression(expr)
+        finally:
+            self._copying.discard(key)
+        self[key] = copia
+        return True
+
+
 class GTAPMultiPeriodModel:
     def __init__(self, sets, params, closure=None, residual_region: str | None = None):
         self.sets = sets
         self.params = params
         self.closure = closure
+        if residual_region:
+            from equilibria.templates.gtap.residual_region import (
+                resolve_residual_region,
+            )
+
+            residual_region = resolve_residual_region(
+                params, sets, closure, residual_region
+            )
         self.residual_region = residual_region
 
     def _build_sp(self) -> ConcreteModel:
@@ -149,7 +190,7 @@ class GTAPMultiPeriodModel:
 
         return m
 
-    def build_vars(self, m: ConcreteModel) -> None:
+    def build_vars(self, m: ConcreteModel) -> ConcreteModel:
         """Reflect every Var family from the single-period model, adding a t dimension.
 
         For each Var v in the single-period model:
@@ -158,6 +199,9 @@ class GTAPMultiPeriodModel:
 
         Init: all periods get the single-period benchmark value (base=check=shock).
         The within/domain is preserved from the single-period VarData.
+
+        Devuelve el SP que leyo (sin modificarlo), para que el llamador se lo pase
+        a ``build_equations_all_periods(m, sp=...)`` y no se arme otro igual.
         """
         from pyomo.environ import NonNegativeReals, Var
 
@@ -219,6 +263,7 @@ class GTAPMultiPeriodModel:
 
             doc = v.doc if hasattr(v, "doc") and v.doc else ""
             setattr(m, name, Var(new_index, within=domain, initialize=init_fn, doc=doc))
+        return sp_model
 
     def build_equations_intra(self, m: ConcreteModel, period: str) -> None:
         """Replicate all single-period Constraint families onto m, indexed by (orig_key..., period).
@@ -403,7 +448,10 @@ class GTAPMultiPeriodModel:
                     )
 
     def build_equations_all_periods(
-        self, m: ConcreteModel, periods: tuple[str, ...] = PERIODS
+        self,
+        m: ConcreteModel,
+        periods: tuple[str, ...] = PERIODS,
+        sp: ConcreteModel | None = None,
     ) -> None:
         """Build all intra-period Constraint families for ALL periods in one pass.
 
@@ -412,13 +460,22 @@ class GTAPMultiPeriodModel:
         and creates each Constraint family ONCE over the full (orig_key..., period)
         index — no del_component / re-merge. Produces a byte-identical model (same
         active constraints, same bodies) at a fraction of the build cost.
+
+        ``sp``: el SP que devolvio ``build_vars``, si el llamador lo tiene. Asi las
+        Var y las filas salen del MISMO SP y se arma uno menos (20x41: ~8 % del
+        tiempo, perfil 2026-10-14). Sin el, se arma uno fresco como antes.
         """
         from pyomo.core.expr.visitor import ExpressionReplacementVisitor
         from pyomo.environ import Constraint, Param, Var
         from pyomo.environ import value as _pyo_value
 
         # Reference single-period model — built ONCE (was: once per period).
-        sp = self._build_sp()
+        if sp is None:
+            sp = self._build_sp()
+
+        # Instancias de macro compartidas por varias filas del SP (ver
+        # build_block_single_period): se copian una vez por periodo, no por fila.
+        shared = getattr(sp, "_ifsub_shared", None) or {}
 
         # Per-period substitute dicts: id(sp_var[k]) -> m_var[(*k, period)].
         # Mutable Params are replaced by their float value (see build_equations_intra
@@ -439,7 +496,7 @@ class GTAPMultiPeriodModel:
                 for k in prm:
                     with contextlib.suppress(Exception):
                         sub[id(prm[k])] = float(_pyo_value(prm[k]))
-            substitutes[period] = sub
+            substitutes[period] = _SharedCopies(sub, shared)
 
         def _emit(body, lb, ub):
             if lb is not None and ub is not None and lb == ub:

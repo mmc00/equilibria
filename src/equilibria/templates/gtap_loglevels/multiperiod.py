@@ -15,6 +15,7 @@ from equilibria.templates.gtap.gtap_block_model import (
     GTAPBlockMultiPeriodModel,
     _calibrate_capflex_risk,
 )
+from equilibria.templates.gtap.residual_region import resolve_residual_region
 
 from .composer import build_loglevels_model
 
@@ -42,6 +43,7 @@ def build_loglevels_model_mp(
     Mirror of build_block_model but with the log-levels MP driver. Seed with
     mp.seed_all_periods and solve with the monolith's solve_multiperiod (inherited).
     """
+    residual_region = resolve_residual_region(params, sets, closure, residual_region)
     if (
         str(getattr(closure, "savf_flag", "capFix")) == "capFlex"
         and getattr(params, "_capflex_risk", None) is None

@@ -771,12 +771,7 @@ class IncomeBlock(Block):
         # raw vim matrix. Reading raw vim left yi ~16% low (the yi→xiagg→xi→xd
         # cascade), so mirror the monolith exactly.
         bm = self.params.benchmark
-        out = []
-        for r in regions:
-            out.append(
-                sum(max(bm.get_investment_demand(r, i)[0], 1e-8) for i in self.sets.i)
-            )
-        return np.array(out)
+        return np.array([bm.base_investment(r, self.sets.i) for r in regions])
 
     def _xw_init(self, r, i, rp):
         """get_xw_init benchmark: vxsb/pe (pe=1) — for base_xw snapshot."""

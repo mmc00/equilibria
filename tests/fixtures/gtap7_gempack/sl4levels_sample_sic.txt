@@ -1,0 +1,33 @@
+! HANDMADE sample of `sltoht -SHL -SIC` text output (issue #127), NOT a real sltoht run.
+! Oracle for scripts/gtap/export_sl4_levels.py --from-text, committed before the parser change.
+! Matches tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10.har:
+!   * %-change column = the sl4dump values (8 significant digits).
+!   * post-sim level  = sl4levels_gtap7_3x3_tm10.har (real GEMPACK LEVA).
+!   * pre-sim level   = post / (1 + %/100), 8 significant digits. Component 1 of qo
+!     (1579235.5) equals the real sltoht row quoted in runs/gempack_updated_har_guide.md 8a.
+!   * change          = post - pre.
+!   * psave: variable with no levels -> GEMPACK sentinel 1.0E+10 in both level columns.
+!   * globalcgds: %-change DELIBERATELY WRONG (-1.9 vs sl4dump -1.3623582) -> must be rejected.
+! Columns: [ %-change , pre-sim level , post-sim level , change ]
+!
+! Variable qo # output of activity a in region r #
+! of size 3x3  (ACTS x REG), components in Fortran order
+  -1.7454301   1579235.5   1551671.0   -27564.5   !%1=     1
+  0.40062639   5737490.6   5760476.5    22985.9   !%1=     2
+-0.0019789706  24752234.   24751744.     -490.0   !%1=     3
+  0.35589191   1987133.7   1994205.8    7072.05   !%1=     4
+ -0.13062386   8537180.6   8526029.0   -11151.6   !%1=     5
+ 0.0058425628  23014475.   23015820.     1345.0   !%1=     6
+  0.41513962   9393134.4   9432129.0    38994.6   !%1=     7
+  0.30045405   30127092.   30217610.    90518.0   !%1=     8
+ -0.15727584   51690457.   51609160.   -81297.0   !%1=     9
+!
+! Variable psave # price of saving in region r #
+! of size 3  (REG)
+   5.1121645  1.0000000E+10  1.0000000E+10   5.1121645   !%1=     1
+   1.7827013  1.0000000E+10  1.0000000E+10   1.7827013   !%1=     2
+   3.3736281  1.0000000E+10  1.0000000E+10   3.3736281   !%1=     3
+!
+! Variable globalcgds # global supply of capital goods for NET investment #
+! of size 1
+  -1.9000000  1.0000000E+10  1.0000000E+10  -1.9000000   !%1=     1

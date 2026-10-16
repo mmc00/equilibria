@@ -120,8 +120,13 @@ class GTAPModelEquations:
         # Residual region for closure (mirrors GAMS rres set). Default NAmerica
         # for 9x10 dataset; override via env EQUILIBRIA_GTAP_RRES or arg for
         # other datasets (e.g. NUS333 → ROW).
-        self.residual_region: str = (
-            residual_region or os.environ.get("EQUILIBRIA_GTAP_RRES") or "NAmerica"
+        from equilibria.templates.gtap.residual_region import resolve_residual_region
+
+        self.residual_region: str = resolve_residual_region(
+            params,
+            sets,
+            closure,
+            residual_region or os.environ.get("EQUILIBRIA_GTAP_RRES") or "NAmerica",
         )
         self._configure_calibration_source()
 
@@ -3940,17 +3945,23 @@ class GTAPModelEquations:
         model.yc = Var(
             model.r,
             within=Reals,
-            initialize=lambda m, r: float(self.reference_snapshot.yc.get(r))
-            if self.reference_snapshot and self.reference_snapshot.yc.get(r) is not None
-            else get_benchmark_yc(r),
+            initialize=lambda m, r: (
+                float(self.reference_snapshot.yc.get(r))
+                if self.reference_snapshot
+                and self.reference_snapshot.yc.get(r) is not None
+                else get_benchmark_yc(r)
+            ),
             doc="Private income",
         )
         model.yg = Var(
             model.r,
             within=Reals,
-            initialize=lambda m, r: float(self.reference_snapshot.yg.get(r))
-            if self.reference_snapshot and self.reference_snapshot.yg.get(r) is not None
-            else get_benchmark_yg(r),
+            initialize=lambda m, r: (
+                float(self.reference_snapshot.yg.get(r))
+                if self.reference_snapshot
+                and self.reference_snapshot.yg.get(r) is not None
+                else get_benchmark_yg(r)
+            ),
             doc="Government income",
         )
         model.yi = Var(
@@ -3998,8 +4009,10 @@ class GTAPModelEquations:
             model.r,
             model.gy,
             within=Reals,
-            initialize=lambda m, r, gy: float(get_ytax_stream_init(m, r, gy))
-            / max(float(get_regy_init(m, r)), 1e-12),
+            initialize=lambda m, r, gy: (
+                float(get_ytax_stream_init(m, r, gy))
+                / max(float(get_regy_init(m, r)), 1e-12)
+            ),
             doc="Indirect tax revenues as share of regional income",
         )
 
