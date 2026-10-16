@@ -36,7 +36,7 @@ borrar:
 - El repo necesito un registro **tres veces** en otros sitios y las tres escribio
   un `dict` de modulo sin tocar este: `_ADAPTER_REGISTRY`
   (`simulations/simulator.py`), `_MAPPING_RUNTIME_REGISTRY`
-  (`simulations/runtimes.py`), `_REGISTRY` (`templates/gtap/shocks.py`).
+  (`simulations/runtimes.py`), `GEMPACK_KIND` (`templates/gtap/shocks.py`).
 
 Y su firma no modelaba el problema real. Los bloques no se crean con parametros
 sueltos: `_mk_unit` (`templates/gtap/gtap_block_model.py`) los instancia con
@@ -61,13 +61,9 @@ closure: gtap_standard       # _closure_template_data, en gtap_contract.py
 region_residual: ROW
 base_calibrada: true
 
-shock:                       # -> shocks.apply_shock(params, target, value, **filtros)
-  target: taxes.imptx        # un target de list_shock_targets()
-  valor: 10.0
-  modo: pct
-  filtros:                   # las claves son los dim_names del target:
-    sources: [USA]           #   (sources, commodities, destinations)
-    commodities: [VegFruit]
+shock:                       # -> shocks.apply_shock(m, shock), en el modelo construido
+  imptx:                     # un instrumento del ShockBlock (shocks.GEMPACK_KIND)
+    [USA, VegFruit, EU_28]: 10.0   # celda (exportador, bien, importador): % GEMPACK
 
 solver:
   motor: ipopt
@@ -75,9 +71,10 @@ solver:
 ```
 
 Los valores de arriba estan **medidos contra el repo**, no inventados: `9x10`
-es una de las dos claves reales de `dataset_path` (`['9x10', 'nus333']`) y
-`taxes.imptx` —el arancel de importacion, alias `taxes.rtms`— es uno de los diez
-targets que devuelve `list_shock_targets()`. La primera version de este boceto
+es una de las dos claves reales de `dataset_path` (`['9x10', 'nus333']`) e
+`imptx` —el arancel de importacion, `tms` de GEMPACK— es uno de los instrumentos
+del `ShockBlock`; el % se lee como en el `.EXP` y la conversion a niveles la
+decide el instrumento. La primera version de este boceto
 puso `dataset: gtap7_10x7` y `shock: {tipo: arancel, destino: tm}`: **ninguno de
 los dos lo acepta nada**, lo encontro el code-review. Importa porque este boceto
 es la guia del trabajo futuro, y una guia con valores plausibles pero falsos
@@ -108,7 +105,8 @@ Si llega ese dia, el registro se disena a partir de `_block_classes` y `_mk_unit
 en `gtap_block_model.py` — que ya son el registro real, escrito a mano y con el
 orden de dependencia que el borrado no modelaba — y no recuperando esta version.
 
-> Nota (2026-09-29): `shocks.apply_shock` modifica `params` antes de construir, asi
-> que el shock queda en los 3 periodos. Un shock SOLO en el periodo shock se fija en
-> el modelo construido con `instruments.fix_instrument_shock(m, instrumento, indice,
-> factor=...)` sobre un instrumento del `ShockBlock` (hoy `lambdava`, `aft`).
+> Nota (2026-10-05): el shock vive en el `ShockBlock` del modelo construido, solo
+> en el periodo shock: `shocks.apply_shock(m, {instrumento: {celda: %}})`. El driver
+> no recibe el shock; lo lee del modelo (`shocks.shock_of`). El viejo
+> `apply_shock(params)`, que cambiaba `params` y dejaba el shock en los 3 periodos,
+> se borro.

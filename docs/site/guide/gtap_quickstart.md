@@ -63,7 +63,7 @@ equilibria.setup_logging(level="INFO")
 params = load_bundled("gtap", "9x10")
 sets = params.sets
 
-contract = build_gtap_contract("standard")  # default closure
+contract = build_gtap_contract()  # default closure
 
 equations = GTAPModelEquations(sets, params)
 model = equations.build_model()
@@ -80,126 +80,81 @@ print(f"Status: {result.status}, residual: {result.residual:.2e}")
 
 ## Step 3 — Run a tariff shock
 
-The reference GAMS run shocks the *power* of import tariffs uniformly
-by 10 %: `tm_new = (1 + tm_old) * 1.1 − 1`. The `tm_pct` mode encodes
-exactly that formula. The shock is applied directly on the
-`GTAPParameters` containers *before* the model is built, so the
-calibration and model assembly only need to be done once per experiment.
+Shocks run on the **multi-period** model, which replicates the GAMS
+`loop(tsim)`: it solves `base → check → shock` in one model. The shock
+lives in the `ShockBlock`: every policy or technology instrument (`imptx`,
+`lambdava`, `aft`, ...) is a fixed variable per period, and a shock is its
+`shock`-period cell differing from the `check` one. You write the shock on the
+built model with `apply_shock` and the driver reads it from there.
+
+The example uses the `gtap7_3x3` dataset shipped in the repository
+(`datasets/gtap7_3x3`):
 
 ```python
-import equilibria
-from equilibria import load_bundled
-from equilibria.templates.gtap import (
-    GTAPSolver,
-    apply_tariff_shock,
-    build_gtap_contract,
+from pathlib import Path
+
+from pyomo.environ import value
+
+from equilibria.templates.gtap import GTAPParameters, apply_shock
+from equilibria.templates.gtap.gtap_block_model import build_block_model
+from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+
+data = Path("datasets/gtap7_3x3")
+params = GTAPParameters()
+params.load_from_har(
+    basedata_path=data / "basedata.har",
+    sets_path=data / "sets.har",
+    default_path=data / "default.prm",
+    baserate_path=data / "baserate.har",
 )
-from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-
-equilibria.setup_logging(level="INFO")
-
-# 1. Load base parameters once.
-base_params = load_bundled("gtap", "9x10")
-sets = base_params.sets
-contract = build_gtap_contract("standard")
-
-# 2. Solve the baseline.
-baseline_eq = GTAPModelEquations(sets, base_params)
-baseline_model = baseline_eq.build_model()
-baseline_solver = GTAPSolver(
-    baseline_model, closure=contract.closure, solver_name="path", params=base_params,
+closure = GTAPClosureConfig(
+    name="base",
+    closure_type="MCP",
+    capital_mobility="sluggish",
+    fix_endowments=False,
+    fix_taxes=False,
+    fix_technology=False,
+    if_sub=False,
+    numeraire="pnum",
 )
-baseline_result = baseline_solver.solve()
+m, _ = build_block_model(params, params.sets, closure, "RestofWorld")
 
-# 3. Apply a uniform 10% tariff shock (GAMS-equivalent power scaling).
-shocked_params = apply_tariff_shock(base_params, value=0.10, mode="tm_pct")
+# +10% on the tariff power (1 + tms) of one route, as in a GEMPACK .EXP:
+route = ("EU_28", "Mnfcs", "USA")  # (exporter, commodity, importer)
+apply_shock(m, {"imptx": {route: 10.0}})
 
-# 4. Solve the shocked model.
-shock_eq = GTAPModelEquations(sets, shocked_params)
-shock_model = shock_eq.build_model()
-shock_solver = GTAPSolver(
-    shock_model, closure=contract.closure, solver_name="path", params=shocked_params,
+# GAMS compStat does not solve the base: its levels are the benchmark.
+results = solve_multiperiod(
+    m, params, closure, mode="gtap", skip_base_solve=True, solve_check=True
 )
-shocked_result = shock_solver.solve()
-
-print(f"Baseline status:  {baseline_result.status}")
-print(f"Shocked status:   {shocked_result.status}")
+print(results["shock"])  # {'code': 1, 'residual': ...}
+for t in ("check", "shock"):
+    print(t, value(m.imptx[(*route, t)]), value(m.xw[(*route, t)]))
+# check 0.0145... 0.382...
+# shock 0.1160... 0.198...
 ```
 
-`apply_tariff_shock` deep-copies the parameters, applies the GAMS
-formula `tm_new = (1 + tm_old) * (1 + value) - 1` to every
-`imptx[source, commodity, dest]` entry (skipping the `source == dest`
-diagonal so domestic sales stay untaxed), and keeps the legacy `rtms`
-alias in sync. To restrict the shock to a subset, pass any combination
-of `commodities=`, `sources=`, `destinations=` — for example,
-`apply_tariff_shock(base_params, 0.10, commodities=["c_HeavyMnfc"], sources=["China"])`
-only shocks Chinese heavy-manufacturing exports.
+`apply_shock(m, {instrument: {cell: pct}})` takes each number as the GEMPACK
+percentage change and converts it to levels according to the instrument
+(`shocks.GEMPACK_KIND`), starting from the `check` value:
 
-### Shocking other parameters
+| Kind | Instruments | Level in the shock period |
+|------|-------------|---------------------------|
+| `pct` | `lambdava`, `aft`, `pop`, `lambdaf`, `axp`, `lambdam`, `lambdamg` | `x * (1 + p/100)` |
+| `power` | `imptx`, `exptx`, `prdtx_rai`, `dintx_tgt`, `mintx_tgt` | `(1 + t) * (1 + p/100) - 1` |
+| `power_kappa` | `kappaf` | `1 - (1 - k) / (1 + p/100)` |
+| `power_fct` | `fcttx` | `fcttx` absorbs the change of `1 + fctts + fcttx` |
 
-`apply_tariff_shock` is a thin wrapper around the generic
-`apply_shock`, which can shock any registered container — not just
-import tariffs. List the available targets at runtime:
+Several instruments and cells go in one call. To give the level directly,
+pass `levels=True`. Applying the same shock twice gives the same model as
+applying it once. A cell no live equation reads, a misspelt label or an
+out-of-domain value raises `ValueError` before any solve. With `if_sub=True`
+the `imptx` cells are rejected for now (the tariff enters through inlined
+macros).
 
-```python
-from equilibria.templates.gtap import apply_shock, list_shock_targets
-
-list_shock_targets()
-# ['taxes.imptx', 'taxes.rtf', 'taxes.rtfd', 'taxes.rtfi',
-#  'taxes.rtgd', 'taxes.rtgi', 'taxes.rto', 'taxes.rtpd',
-#  'taxes.rtpi', 'taxes.rtxs']
-```
-
-The signature is:
-
-```python
-apply_shock(
-    params,
-    target: str,           # e.g. "taxes.rto", "taxes.rtf"
-    value: float,
-    *,
-    mode: ShockMode = "pct",   # "pct" | "power" | "set" | "add" | "mul"
-    inplace: bool = False,
-    **filters,             # commodities=, sources=, regions=, sectors=, factors=, destinations=
-)
-```
-
-Each target advertises its own filter names (matching its tuple-key
-dimensions); passing an unknown filter raises ``TypeError``. Examples:
-
-```python
-# +5% to the output-tax rate in every (region, sector) cell
-apply_shock(base_params, "taxes.rto", 0.05, mode="pct")
-
-# Set the factor tax on Land in Crops to zero, USA only
-apply_shock(
-    base_params,
-    "taxes.rtf",
-    0.0,
-    mode="set",
-    regions=["USA"],
-    factors=["Land"],
-    sectors=["c_Crops"],
-)
-
-# Power scaling on import tariffs (equivalent to apply_tariff_shock)
-apply_shock(base_params, "taxes.imptx", 0.10, mode="power")
-```
-
-Modes:
-
-| Mode | Formula | Typical use |
-|------|---------|-------------|
-| `pct` | `new = old * (1 + value)` | Scale a rate by a percentage |
-| `power` | `new = (1 + old) * (1 + value) - 1` | GAMS-style tariff/tax shocks |
-| `set` | `new = value` | Replace the rate outright |
-| `add` | `new = old + value` | Additive perturbation |
-| `mul` | `new = old * value` | Direct multiplicative override |
-| `tm_pct` | alias of `power` | Legacy name, kept for `apply_tariff_shock` |
-
-The diagonal-skip rule and the `rtms ↔ imptx` alias-sync that matter
-for trade taxes are encoded in the registry, so they apply
-automatically whenever `target="taxes.imptx"` or `target="taxes.rtxs"`.
+Without any shock in the `ShockBlock`, `solve_multiperiod` applies the
+reference GAMS run's default: +10% on the power of every import tariff.
 
 ## Step 4 — GAMS parity check
 
@@ -290,9 +245,9 @@ A few conventions baked into the template are worth knowing up front:
 * **Solver mode** — for full Standard 7 (10,296 equations), always use
   PATH in *nonlinear full* mode; the linearised block is for diagnostics
   only.
-* **Shock formula** — for parity with GAMS reference runs, call
-  `apply_tariff_shock(..., mode="tm_pct")` (power scaling). The legacy
-  `pct` mode scales only the rate and produces a smaller effective shock.
+* **Shock formula** — `apply_shock` reads each number as the GEMPACK %
+  change and picks the conversion from the instrument: tax shocks act on
+  the power `1 + t`, as in GAMS (see Step 3).
 * **`equation_scaling=True`** — strongly recommended for both baseline
   and shocked runs; without it the baseline residual stalls at ~1e-6
   instead of ~1e-9.
@@ -303,5 +258,4 @@ A few conventions baked into the template are worth knowing up front:
 |---------|--------------------|
 | `PATH executable was not resolved by Pyomo` | PATH is not on `PATH`; install via `pip install -e ".[pyomo]"` and ensure `pyomo --solvers` lists `path`. |
 | Baseline residual ~1e-6 (expected ~1e-9) | `equation_scaling=True` was not passed to the PATH-CAPI helper. |
-| Shocked run shows wrong sign on tariff variables | The shock was applied with `mode="pct"` instead of `mode="tm_pct"` in `apply_tariff_shock`. |
 | GAMS parity comparison fails on `gdpmp` only | Known calibration trick in `cal.gms:652` overwrites `yi` deliberately; the Python template intentionally does not replicate it because doing so breaks convergence. See the parity status notes for context. |

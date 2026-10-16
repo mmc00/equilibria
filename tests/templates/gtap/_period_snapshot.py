@@ -35,7 +35,8 @@ ROOT = Path(__file__).resolve().parents[3]
 DATASET = ROOT / "datasets" / "gtap7_3x3"
 FIXTURE = ROOT / "tests" / "fixtures" / "period_prep_snapshot.json"
 
-# Cada caso: (nombre, mode, if_sub, opciones de build, opciones del driver).
+# Cada caso: (nombre, mode, if_sub, opciones de build, opciones del driver). La
+# opcion "shock" no va al driver: se escribe en el ShockBlock con apply_shock.
 # Cubren cada receta: base, check normal, check copiado del base (F3.5), shock,
 # en los dos modos, y las ramas de las opciones (holdfix_cd, seed_from_prior,
 # mute_welfare, skip_base_solve, solve_check, shock de instrumento).
@@ -66,7 +67,7 @@ CASES: dict[str, tuple[str, bool, dict[str, Any], dict[str, Any]]] = {
         "gtap",
         False,
         {},
-        {"lambdava_shock": {("USA", "Mnfcs"): 1.10}},
+        {"shock": {"lambdava": {("USA", "Mnfcs"): 10.0}}},
     ),
 }
 
@@ -158,6 +159,7 @@ def take(case: str, monkeypatch) -> list[dict]:
     from equilibria.templates.gtap import gtap_multiperiod_driver as drv
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.shocks import apply_shock
 
     mode, if_sub, build_kw, drive_kw = CASES[case]
     shots: list[dict] = []
@@ -189,6 +191,10 @@ def take(case: str, monkeypatch) -> list[dict]:
         numeraire="pnum",
     )
     m, _ = build_block_model(p, p.sets, closure, list(p.sets.r)[-1], **build_kw)
+    drive_kw = dict(drive_kw)
+    shock = drive_kw.pop("shock", None)
+    if shock is not None:
+        apply_shock(m, shock)
     drv.solve_multiperiod(m, p, closure, mode=mode, **drive_kw)
     shots.append({"call": "final", "components": _component_hashes(m)})
     return shots

@@ -5,7 +5,7 @@ escribe ``<EXP>.inc`` (el shock en niveles, en la celda del periodo shock) y cor
 ``gams/comp_shock.gms`` (base/check/shock con model.gms + cal.gms del GTAP 7 de
 referencia). Salida: ``<out_dir>/<EXP>_capFlex.gdx``, la que lee
 ``run_burfisher.py --gams-dir <out_dir>``. El shock en niveles sale de la misma
-formula que usa equilibria (``run_burfisher.shocked``), escrita como expresion GAMS.
+formula que usa equilibria (``shocks.shocked``), escrita como expresion GAMS.
 
 Antes de correr, parchea una copia de las fuentes GAMS de referencia (nunca el repo):
 
@@ -42,7 +42,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from run_burfisher import EXERCISES, me9, shocked  # noqa: E402
+from run_burfisher import EXERCISES, me9  # noqa: E402
+
+from equilibria.templates.gtap.shocks import gempack_kind, shocked  # noqa: E402
 
 GAMS_SRC = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "scripts"
 COMP_SHOCK = Path(__file__).resolve().parent / "gams" / "comp_shock.gms"
@@ -124,7 +126,7 @@ def all_exercises() -> list[str]:
 
 
 class GamsExpr:
-    """Una expresion GAMS en texto, para evaluar ``run_burfisher.shocked`` sobre ella.
+    """Una expresion GAMS en texto, para evaluar ``shocks.shocked`` sobre ella.
 
     Pone parentesis solo donde hacen falta: ``(1 + x)*1.1 - 1``, ``a/(b*c)``.
     """
@@ -208,8 +210,9 @@ RATE_VARS = {
 }
 
 
-def gams_line(name: str, idx: tuple, kind: str, pct: float) -> str:
+def gams_line(name: str, idx: tuple, pct: float) -> str:
     """Una sentencia GAMS por shock. .l(...,tsim) es el valor de check (iterloop)."""
+    kind = gempack_kind(name)
     if name in RATE_VARS:
         if kind != "pct":
             raise ValueError(f"{name}: kind {kind!r}, se esperaba 'pct'")
