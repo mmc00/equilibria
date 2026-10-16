@@ -132,3 +132,46 @@ def test_reporte_a_json():
     } in j["unmatched"]
     assert j["periods_only_in_a"] == ["base"]
     assert len(j["cells"]) == O.EX3_MATCHED
+
+
+def _csv_rows(text):
+    import csv
+    import io
+
+    rows = list(csv.reader(io.StringIO(text)))
+    header, body = rows[0], rows[1:]
+
+    def num(x):
+        return None if x == "" else float(x)
+
+    return header, [
+        (v, p, i, num(a), num(b), num(d), s) for v, p, i, a, b, d, s in body
+    ]
+
+
+def _assert_rows(got, want):
+    assert len(got) == len(want)
+    for g, w in zip(got, want, strict=True):
+        assert g[:3] == w[:3] and g[6] == w[6], (g, w)
+        for x, y in zip(g[3:6], w[3:6], strict=True):
+            assert (x is None and y is None) or x == pytest.approx(y, rel=1e-12), (g, w)
+
+
+def test_reporte_a_csv_una_fila_por_celda_con_pass_y_fail():
+    header, rows = _csv_rows(_run(O.EX2_A, O.EX2_B, O.EX2_MAP).to_csv())
+    assert header == O.CSV_HEADER
+    _assert_rows(rows, O.EX2_CSV_ROWS)
+
+
+def test_reporte_a_csv_incluye_las_celdas_sin_pareja(tmp_path):
+    f = tmp_path / "r.csv"
+    text = _run(O.EX3_A, O.EX3_B, O.EX3_MAP).to_csv(f)
+    assert f.read_text() == text
+    header, rows = _csv_rows(text)
+    assert header == O.CSV_HEADER
+    _assert_rows(rows, O.EX3_CSV_ROWS)
+
+
+def test_reporte_a_csv_une_los_indices_con_punto():
+    _, rows = _csv_rows(_run(O.EX1_A, O.EX1_B, O.EX1_MAP).to_csv())
+    assert [r[2] for r in rows] == O.EX1_CSV_INDEX

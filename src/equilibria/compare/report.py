@@ -7,6 +7,8 @@ lado (``periods_only_in_a``/``_b``).
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,6 +100,37 @@ class Report:
     def to_json(self, path: str | Path | None = None, *, indent: int | None = 2) -> str:
         """JSON del reporte; si se da ``path``, ademas lo escribe ahi."""
         text = json.dumps(self.to_dict(), indent=indent)
+        if path is not None:
+            Path(path).write_text(text)
+        return text
+
+    def to_csv(self, path: str | Path | None = None) -> str:
+        """CSV del reporte, una fila por celda; si se da ``path``, ademas lo escribe.
+
+        Columnas ``variable, period, index, a, b, d, status``. ``index`` une los
+        elementos con ``"."`` (como GAMS: ``USA.Food``). ``status`` es ``pass``,
+        ``fail``, ``missing_in_a`` o ``missing_in_b``; una celda sin pareja deja
+        ``a``, ``b`` y ``d`` vacios. Primero las parejas, luego las sin pareja.
+        """
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(["variable", "period", "index", "a", "b", "d", "status"])
+        for c in self.cells:
+            status = "pass" if c.passed else "fail"
+            w.writerow([c.variable, c.period, ".".join(c.index), c.a, c.b, c.d, status])
+        for u in self.unmatched:
+            w.writerow(
+                [
+                    u.variable,
+                    u.period,
+                    ".".join(u.index),
+                    "",
+                    "",
+                    "",
+                    f"missing_in_{u.missing_in}",
+                ]
+            )
+        text = buf.getvalue()
         if path is not None:
             Path(path).write_text(text)
         return text
