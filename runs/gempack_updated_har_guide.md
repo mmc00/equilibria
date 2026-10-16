@@ -265,12 +265,26 @@ option `SHL`, where every variable prints four solution columns:
 qo, component 1:  -1.5210288   1579235.5   1555214.9   -24020.625
 ```
 
-`scripts/gtap/export_sl4_levels.py` drives `sltoht -SHL -SIC`, parses the
-POST-SIM LEVEL column and writes it back as `sl4levels_<ds>_tm10.har`:
+`scripts/gtap/export_sl4_levels.py` drives `sltoht -SHL -SIC` on ANY `.sl4`, parses
+BOTH level columns (pre-sim LEVB and post-sim LEVA) and writes them back as
+`sl4levels_<suffix>.har` (default: beside the matching `--sl4dump`):
 
 ```powershell
-uv run python scripts\gtap\export_sl4_levels.py --sltoht C:\GP\sltoht.exe
+uv run python scripts\gtap\export_sl4_levels.py `
+    runs\gempack_matrix\gtap7_20x41\tm10_s8-16-32_capfix.sl4 `
+    --sl4dump tests\fixtures\gtap7_gempack\sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har `
+    --sltoht C:\GP\sltoht.exe
 ```
+
+Off Windows, pass a saved copy of the sltoht text with `--from-text` instead of the
+`.sl4`. Layout of the output HAR (#127, read by the compare source #131):
+
+- **LEVA** (post-sim): header = the sl4dump numeric id (`0052`), `long_name` copied
+  (`qo # output of activity … #`) — identical to the historical LEVA-only fixtures.
+- **LEVB** (pre-sim): header = `B` + last 3 digits of the id (`B052`), `long_name`
+  = `LEVB ` + the sl4dump one (so `sl4_levels(path, "qo")` still returns LEVA).
+- A HAR without `B***` headers is LEVA-only (fixtures made before #127). Variables
+  without a level keep GEMPACK's 1e10 sentinel in both.
 
 Shapes / set-elements / numeric ids / long_names come from the matching
 `sl4dump`, and every variable is CROSS-CHECKED (the text's %-change column must
