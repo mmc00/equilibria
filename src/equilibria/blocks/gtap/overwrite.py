@@ -304,9 +304,9 @@ def collect_targets(blocks: list[Any]) -> dict[str, Target]:
 def add_targets(model: Any, targets: dict[str, Target]) -> None:
     """Agrega al ``equilibria.model.Model`` ya armado la Var de cada objetivo, en 1.
 
-    Va despues de todos los bloques: ``add_block`` descarta en silencio una Var cuyo
-    nombre ya existe (algunos bloques comparten ``ev``/``cv``/``pwfact`` a
-    proposito), asi que un objetivo con nombre ya usado tiene que fallar aca.
+    Va despues de todos los bloques y no pasa por ``add_block`` (que acepta un
+    nombre compartido si la declaracion es identica: ``ev``/``cv``/``pwfact``), asi
+    que un objetivo con nombre ya usado tiene que fallar aca.
     """
     from equilibria.blocks.gtap import _derived_params as dp
     from equilibria.core.variables import Variable

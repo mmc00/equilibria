@@ -33,6 +33,7 @@ class TradeCETBlock(Block):
 
     name: str = "GTAP_TRADE_CET"
     description: str = "GTAP CET domestic/export allocation (eq_xds, eq_xet, eq_xseq)"
+    uses: list[str] = ["pd", "ps", "xds", "xs"]
     sets: Any = None
     params: Any = None
 

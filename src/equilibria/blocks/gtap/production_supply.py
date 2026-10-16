@@ -52,6 +52,16 @@ class ProductionSupplyBlock(Block):
 
     name: str = "GTAP_PRODUCTION_SUPPLY"
     description: str = "GTAP production CES nest + domestic supply CES/CET"
+    uses: list[str] = [
+        "axp",
+        "fcttx",
+        "lambdaf",
+        "lambdava",
+        "pa",
+        "pf",
+        "pfa",
+        "prdtx_rai",
+    ]
     sets: Any = None
     params: Any = None
     # ifSUB toggle: under if_sub the eq_pp_rai report eq is deactivated by the
@@ -97,7 +107,7 @@ class ProductionSupplyBlock(Block):
         # prdtx_rai es instrumento del ShockBlock (Var fija); la calibracion usa
         # _prdtx (benchmark makb/maks).
         _param("xflag", dp.xflag_data(p, s), ("r", "a", "i"))
-        # gd_share/ge_share shared with TRADE_CET (dedup by name — first wins);
+        # gd_share/ge_share shared with TRADE_CET (both declarations must be identical);
         # declared here too so a standalone build resolves them. CARRY: drift.
         # mutable=True: the monolith (2001-2005) declares these mutable and references
         # them unwrapped, so they stay symbolic (not folded to a literal) — matches

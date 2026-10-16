@@ -1,8 +1,9 @@
 """GTAP symbolic Block units (F3 Task 4). All 7 units migrated, plus ShockBlock.
 
 Dependency order (leaf → closure). ``GTAP_BLOCK_ORDER`` is the order the composer
-(Task 5) registers the blocks in; shared vars dedup by name (first registration
-wins), so a var owned by an earlier block is skipped in a later one.
+(Task 5) registers the blocks in. A name two blocks share must be declared
+identically in both (``Model.add_block`` rejects a difference), and a block
+lists in ``uses`` the variables it reads from another block.
 
 ShockBlock goes first (it only declares the fixed policy instruments the others
 read). The 7 units: TradeCET, ProductionSupply, Factor, ArmingtonBilateral,

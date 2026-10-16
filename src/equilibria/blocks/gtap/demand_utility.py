@@ -24,8 +24,8 @@ alphaa_hhd are mutable (referenced unwrapped -> stay symbolic), the rest fold.
 Owned vars carry the monolith's exact domains + the runtime relative price
 floor (1e-3*init) on the price/utility/level vars listed in the floor sweep
 (5305-5385). kapEnd/arent/rorc/rore are OWNED BY FACTOR (unit 3) — this unit
-only adds their EQUATIONS (dedup by name; FACTOR's Var wins). pabs/ev/cv are
-shared with INCOME (unit 6) — dedup by name.
+only adds their EQUATIONS (listed in ``uses``). ev/cv are shared with INCOME
+(unit 6): both declarations must be identical.
 
 residual_region: eq_savf (capFix) Skips the residual region; the composer
 passes the real residual region in Task 5. The gate oracle (gtap7_3x3
@@ -58,6 +58,23 @@ class DemandUtilityBlock(Block):
 
     name: str = "GTAP_DEMAND_UTILITY"
     description: str = "GTAP CDE final demand + utility/savings/rate-of-return"
+    uses: list[str] = [
+        "arent",
+        "kapEnd",
+        "kappaf",
+        "kstock",
+        "pa",
+        "pf",
+        "pop",
+        "regy",
+        "rorc",
+        "rore",
+        "rsav",
+        "xf",
+        "yc",
+        "yg",
+        "yi",
+    ]
     sets: Any = None
     params: Any = None
     residual_region: str = "NAmerica"

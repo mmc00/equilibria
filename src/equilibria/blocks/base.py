@@ -140,6 +140,10 @@ class Block(BaseModel, CalibrationMixin, ABC):
     equations: list[EquationSpec] = Field(
         default_factory=list, description="Equation specifications"
     )
+    uses: list[str] = Field(
+        default_factory=list,
+        description="Variables this block's equations read but another block declares",
+    )
 
     model_config = {"frozen": False, "arbitrary_types_allowed": True}
 
