@@ -86,20 +86,34 @@ def test_variable_con_cambio_pct_distinto_al_sl4dump_se_descarta(
 
 
 def _sic_text_from(sl4dump: Path, post_levels: Path | None) -> str:
-    """Texto SIC sintetico: %-cambio del sl4dump; LEVA del fixture sl4levels (o el
-    %-cambio si no hay fixture); LEVB = LEVA - 1. Solo para probar el armado del .har."""
+    """Texto SIC sintetico CONSISTENTE con el %-cambio del sl4dump, para que la
+    validacion de niveles pase por la razon correcta:
+      * con fixture sl4levels: post = LEVA real; pre = post / (1 + %/100);
+      * sin fixture: pre = 1 (indice de benchmark); post = 1 + %/100;
+      * change = post - pre. Variables sin nivel (LEVA = 1e10): centinela en ambas.
+    Prueba el armado del .har, no es un texto real de sltoht."""
     dump = read_har(str(sl4dump))
-    post = read_har(str(post_levels)) if post_levels else dump
+    post_har = read_har(str(post_levels)) if post_levels else None
     lines: list[str] = []
     for hid, ha in dump.items():
-        if hid not in post or "#" not in (ha.long_name or ""):
+        if "#" not in (ha.long_name or ""):
             continue  # cabeceras XX** de metadatos: no son variables
+        if post_har is not None and hid not in post_har:
+            continue
         lines.append(f"! Variable {ha.long_name.strip()}")
         pct = np.asarray(ha.array, dtype=np.float64).ravel(order="F")
-        lev = np.asarray(post[hid].array, dtype=np.float64).ravel(order="F")
-        for i, (p, q) in enumerate(zip(pct, lev, strict=True), 1):
+        if post_har is None:
+            pre = np.ones_like(pct)
+            post = 1.0 + pct / 100.0
+        else:
+            post = np.asarray(post_har[hid].array, dtype=np.float64).ravel(order="F")
+            pre = post / (1.0 + pct / 100.0)
+            no_level = post == np.float32(1e10)
+            pre[no_level] = post[no_level] = 1e10
+        for i, (p, a, b) in enumerate(zip(pct, pre, post, strict=True), 1):
+            chg = float(p) if b == 1e10 else float(b - a)
             lines.append(
-                f"  {float(p)!r} {float(q) - 1.0!r} {float(q)!r} 1.0  !%1= {i:6d}"
+                f"  {float(p)!r} {float(a)!r} {float(b)!r} {chg!r}  !%1= {i:6d}"
             )
     return "\n".join(lines) + "\n"
 
@@ -162,3 +176,85 @@ def test_cubre_la_solucion_20x41_capfix(tmp_path: Path) -> None:
     assert levb == ["B" + k[1:] for k in leva]
     # qfd [COMM, ACTS, REG] = 20x20x41
     assert got["B002"].array.shape == (20, 20, 41)
+
+
+def _swap_level_columns(text: str) -> str:
+    """Intercambia las columnas pre-sim y post-sim en cada fila de componente."""
+    out = []
+    for line in text.splitlines():
+        if "!%1=" in line:
+            data, tag = line.split("!", 1)
+            pct, pre, post, chg = data.split()
+            line = f"  {pct} {post} {pre} {chg}   !{tag}"
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def test_niveles_pre_y_post_intercambiados_se_rechazan_nombrando_variable_y_celda(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    text = tmp_path / "swapped.txt"
+    text.write_text(_swap_level_columns(SAMPLE.read_text()))
+    out = tmp_path / "o.har"
+
+    rc = _load_module().main(
+        [str(text), "--from-text", "--sl4dump", str(SL4DUMP_3X3), "--out", str(out)]
+    )
+
+    assert rc != 0
+    assert not out.exists()
+    err = capsys.readouterr().err
+    # primera celda de qo: componente 1 = (Food, USA)
+    assert "qo" in err
+    assert "(Food, USA)" in err
+
+
+def test_variable_de_cambio_ordinario_valida_post_menos_pre(tmp_path: Path) -> None:
+    # del_tbal (id 0186) es una variable de CAMBIO ordinario: su columna de solucion
+    # (= sl4dump) es post - pre en US$ millones, no un %. En GTAP no trae niveles en
+    # el SL4; aqui se le inventan (a mano, sintetico) para ejercer la rama de cambio.
+    text = tmp_path / "change.txt"
+    text.write_text(
+        "! Variable del_tbal # change in trade balance X - M, $ US million #\n"
+        "  -110822.77  1000000.0   889177.23  -110822.77  !%1=     1\n"
+        "   163810.19  -50000.0    113810.19   163810.19  !%1=     2\n"
+        "   -52987.58       0.0    -52987.58   -52987.58  !%1=     3\n"
+    )
+    out = tmp_path / "o.har"
+
+    rc = _load_module().main(
+        [str(text), "--from-text", "--sl4dump", str(SL4DUMP_3X3), "--out", str(out)]
+    )
+
+    assert rc == 0
+    har = read_har(str(out))
+    np.testing.assert_allclose(har["0186"].array, [889177.23, 113810.19, -52987.58])
+    np.testing.assert_allclose(har["B186"].array, [1000000.0, -50000.0, 0.0])
+
+
+def test_variable_de_cambio_ordinario_con_niveles_incoherentes_se_rechaza(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    text = tmp_path / "change_bad.txt"
+    text.write_text(
+        "! Variable del_tbal # change in trade balance X - M, $ US million #\n"
+        "  -110822.77  1000000.0   889177.23  -110822.77  !%1=     1\n"
+        "   163810.19  -50000.0    113810.19   163810.19  !%1=     2\n"
+        "   -52987.58       0.0    -52000.00   -52987.58  !%1=     3\n"
+    )
+
+    rc = _load_module().main(
+        [
+            str(text),
+            "--from-text",
+            "--sl4dump",
+            str(SL4DUMP_3X3),
+            "--out",
+            str(tmp_path / "o.har"),
+        ]
+    )
+
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "del_tbal" in err
+    assert "(ROW)" in err

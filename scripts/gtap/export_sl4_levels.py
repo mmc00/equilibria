@@ -12,7 +12,12 @@ Windows), parses BOTH level columns and writes them as a HAR.
 Component order in the text equals the variable's HAR flat order (FORTRAN /
 column-major), so shapes / set-elements / long-name / numeric id come from the
 matching `sl4dump` (`--sl4dump`); each variable is CROSS-CHECKED (the text's
-%-change column must equal the sl4dump values) before its levels are kept.
+%-change column must equal the sl4dump values) before its levels are kept, and its
+LEVELS are then VALIDATED cell by cell against the solution (`check_levels`):
+post - pre must equal the change column, and 100*(post/pre - 1) must equal the
+%-change (percentage-change variables) or the solution column must equal the
+change column (ordinary-change variables, `is_ordinary_change`), to LEVEL_RTOL.
+A contradiction aborts the export naming the variable and the cell.
 
 Output HAR layout (read by the compare source, #131):
   * LEVA (post-sim): header = the sl4dump numeric id (`"0052"`), long_name and
@@ -52,7 +57,17 @@ from equilibria.babel.har.symbols import HeaderArray  # noqa: E402
 from equilibria.babel.har.writer import write_har  # noqa: E402
 
 DEFAULT_SLTOHT = Path(r"C:\GP\sltoht.exe")
-PRE_COL, POST_COL = 1, 2  # 0-based: [%-change, PRE-level, POST-level, change]
+PCT_COL, PRE_COL, POST_COL, CHANGE_COL = 0, 1, 2, 3  # [%-change, PRE, POST, change]
+NO_LEVEL = 1.0e10  # GEMPACK's "this variable has no level" sentinel
+# Level-consistency tolerance. sltoht prints every solution column with ~8
+# significant digits (guide 8a: `-1.5210288 1579235.5 1555214.9 -24020.625`; the SL4
+# stores levels as REAL*4), i.e. each printed number carries a relative rounding of
+# at most ~6e-8. Propagated: post/pre is off by <=~1.2e-7 relative, so the
+# %-change implied by the levels, 100*(post/pre-1), is off by <=~1.2e-7*(100+|pct|)
+# pp; post-pre is off by <=~6e-8*(|pre|+|post|). LEVEL_RTOL = 1e-6 gives an ~8x
+# margin over that rounding and is still ~1e4x tighter than any real mistake
+# (a swapped or misaligned column moves these by percents).
+LEVEL_RTOL = 1e-6
 LEVB_PREFIX = "LEVB "
 LONG_NAME_WIDTH = 70
 _VAR_RE = re.compile(r"^\s*! Variable (\S+) #")
@@ -75,33 +90,93 @@ def run_sltoht_sic(sl4: Path, sltoht: Path) -> Path:
     return out
 
 
-def parse_levels(text_path: Path) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    """Parse the SIC text -> {var_name: (pct_change, pre_level, post_level)} in the
-    text's component order (= the HAR flat order)."""
-    out: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+Columns = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+
+
+def parse_levels(text_path: Path) -> dict[str, Columns]:
+    """Parse the SIC text -> {var_name: (pct_change, pre_level, post_level, change)}
+    in the text's component order (= the HAR flat order)."""
+    out: dict[str, Columns] = {}
     cur: str | None = None
-    pct: list[float] = []
-    pre: list[float] = []
-    post: list[float] = []
+    cols: list[list[float]] = [[], [], [], []]
 
     def flush() -> None:
-        if cur and pct:
-            out[cur] = tuple(np.array(v, dtype=np.float64) for v in (pct, pre, post))  # type: ignore[assignment]
+        if cur and cols[0]:
+            out[cur] = tuple(np.array(v, dtype=np.float64) for v in cols)  # type: ignore[assignment]
 
     for line in text_path.read_text(encoding="utf-8", errors="replace").splitlines():
         m = _VAR_RE.match(line)
         if m:
             flush()
-            cur, pct, pre, post = m.group(1), [], [], []
+            cur, cols = m.group(1), [[], [], [], []]
             continue
         if cur and _ROW_RE.search(line):
             vals = [float(x) for x in line.split("!", 1)[0].split()]
             if len(vals) >= 4:
-                pct.append(vals[0])
-                pre.append(vals[PRE_COL])
-                post.append(vals[POST_COL])
+                for k, col in enumerate((PCT_COL, PRE_COL, POST_COL, CHANGE_COL)):
+                    cols[k].append(vals[col])
     flush()
     return out
+
+
+class LevelMismatchError(ValueError):
+    """The level columns of a variable contradict its %-change / change columns."""
+
+
+def _cell_label(tmpl: HeaderArray, k: int) -> str:
+    """Flat FORTRAN-order component k (0-based) -> '(elem1, elem2, ...)'."""
+    if not tmpl.set_elements:
+        return f"(component {k + 1})"
+    idx = np.unravel_index(k, tmpl.array.shape, order="F")
+    return "(" + ", ".join(str(e[i]) for e, i in zip(tmpl.set_elements, idx, strict=True)) + ")"
+
+
+def is_ordinary_change(pct: np.ndarray, pre: np.ndarray, post: np.ndarray,
+                       change: np.ndarray) -> bool:
+    """True if the variable is a GEMPACK ordinary-CHANGE variable (TABLO `(change)`,
+    e.g. del_tbal) rather than a percentage-change one.
+
+    sltoht's -SHL text carries no explicit kind tag that we can rely on (the sl4dump
+    HAR has none either), but its 4th column does: it is the ordinary change in the
+    level, post - pre, for BOTH kinds. For a change variable the solution column IS
+    that ordinary change, so column 1 == column 4 on every cell; for a %-change
+    variable column 1 is 100*(post/pre-1) instead. The kind is decided per VARIABLE
+    (all cells with levels), never per cell. A variable whose two columns coincide
+    on every cell (e.g. an unshocked one, all zeros) is consistent with both readings
+    and is validated as a change variable, which still enforces post - pre == change.
+    """
+    real = (pre != NO_LEVEL) & (post != NO_LEVEL)
+    same = np.abs(pct - change) <= LEVEL_RTOL * (np.abs(pct) + np.abs(change))
+    return bool(np.all(same[real]))
+
+
+def check_levels(var: str, tmpl: HeaderArray, pct: np.ndarray, pre: np.ndarray,
+                 post: np.ndarray, change: np.ndarray) -> None:
+    """Raise LevelMismatchError naming `var` and the first bad cell unless, on every
+    cell with real levels (neither is the 1e10 sentinel):
+      * always:                 post - pre       == change (4th column);
+      * %-change variables:     100*(post/pre-1) == %-change (1st column; skipped
+                                where pre == 0, where the ratio is undefined);
+      * ordinary-change ones:   1st column == change (see is_ordinary_change);
+    all within LEVEL_RTOL (see its comment)."""
+    real = (pre != NO_LEVEL) & (post != NO_LEVEL)
+    diff_ok = np.abs((post - pre) - change) <= LEVEL_RTOL * (
+        np.abs(pre) + np.abs(post) + np.abs(change))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        implied = 100.0 * (post / pre - 1.0)
+    if is_ordinary_change(pct, pre, post, change):
+        pct_ok = np.ones_like(real)  # col1 == col4 already, and diff_ok checks col4
+    else:
+        pct_ok = (pre == 0.0) | (
+            np.abs(implied - pct) <= LEVEL_RTOL * (100.0 + np.abs(pct)))
+    bad = np.flatnonzero(real & ~(diff_ok & pct_ok))
+    if bad.size:
+        k = int(bad[0])
+        raise LevelMismatchError(
+            f"{var} {_cell_label(tmpl, k)}: levels contradict the solution columns — "
+            f"pre={pre[k]!r} post={post[k]!r} %-change={pct[k]!r} change={change[k]!r} "
+            f"(100*(post/pre-1)={implied[k]!r}, post-pre={post[k] - pre[k]!r}); "
+            f"{bad.size} bad cell(s)")
 
 
 def _levb_id(hid: str) -> str:
@@ -122,7 +197,7 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
     }
     headers: dict[str, HeaderArray] = {}
     kept = mismatched = 0
-    for var, (pct_vec, pre_vec, post_vec) in levels.items():
+    for var, (pct_vec, pre_vec, post_vec, chg_vec) in levels.items():
         hid = name_to_hid.get(var)
         if hid is None:
             continue
@@ -136,6 +211,7 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
         if not np.allclose(ref, pct_vec, atol=1e-3, rtol=1e-3):
             mismatched += 1
             continue
+        check_levels(var, tmpl, pct_vec, pre_vec, post_vec, chg_vec)
         for name, long_name, vec in (
             (hid, tmpl.long_name, post_vec),
             (_levb_id(hid), (LEVB_PREFIX + tmpl.long_name)[:LONG_NAME_WIDTH], pre_vec),
@@ -196,7 +272,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     out = args.out or default_out(args.sl4dump)
-    kept = build_levels_har(parse_levels(text), args.sl4dump, out)
+    try:
+        kept = build_levels_har(parse_levels(text), args.sl4dump, out)
+    except LevelMismatchError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
     return 0 if kept else 1
 
 
