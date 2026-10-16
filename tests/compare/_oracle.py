@@ -241,3 +241,108 @@ EX5_PCT_WITHIN = {1e-3: 1700.0 / 18, 1e-2: 100.0}
 EX5_MAX = 0.001996007984031936
 EX5_MAX_CELL = ("shock", ("USA", "Food"))
 EX5_PERIODS_ONLY_IN_A = ["base"]
+
+# ---------------------------------------------------------------------------
+# Ejemplo 6 — celdas ausentes de un GDX = nivel 0 (decision del usuario, review #126).
+#
+# GAMS no escribe un registro cuyos atributos estan todos en su default, o sea con
+# nivel 0. Regla: en una fuente GDX, una celda que el OTRO lado tiene y el GDX no,
+# vale 0 SI la variable del GDX tiene algun registro en ese periodo. Si la variable
+# no tiene ningun registro en ese periodo, la celda sigue "sin pareja". Una fuente
+# dict/Pyomo nunca rellena: lo que le falta queda "sin pareja".
+#
+# A = fuente tipo GDX (absent_is_zero), B = dict. w(REG), tol rel 1e-3, piso 1e-6.
+# v solo existe para que "base" sea un periodo comun.
+#
+#   periodo  celda  A (GDX)     B      resultado
+#   check    USA    2.0         2.0    pareja, d = 0
+#   check    ROW    — (=0)      0.0    pareja, A=0, d = 0/max(0, 1e-6) = 0
+#   shock    USA    4.0         —      sin pareja en B (B es dict: no rellena)
+#   shock    ROW    — (=0)      0.5    pareja, A=0, d = 0.5/0.5 = 1.0 (no pasa)
+#   base     USA    —           1.0    w no tiene registros en "base" en A: sin pareja en A
+# ---------------------------------------------------------------------------
+EX6_A_LEVELS = {
+    "w": {("check", ("USA",)): 2.0, ("shock", ("USA",)): 4.0},
+    "v": {("base", ("USA",)): 1.0},
+}
+EX6_A_NDIM = {"w": 1, "v": 1}
+EX6_B = {
+    "w": {
+        ("USA", "check"): 2.0,
+        ("ROW", "check"): 0.0,
+        ("ROW", "shock"): 0.5,
+        ("USA", "base"): 1.0,
+    },
+    "v": {("USA", "base"): 1.0},
+}
+EX6_MAP = {
+    "variables": [
+        {
+            "name": "w",
+            "a": {"var": "w", "dims": ["REG"]},
+            "b": {"var": "w", "dims": ["REG"]},
+            "tol": {"rel": 1e-3, "abs_floor": 1e-6},
+        }
+    ],
+    "thresholds": [1e-3],
+}
+# (periodo, indices) -> (A, B, d)
+EX6_PAIRS = {
+    ("check", ("USA",)): (2.0, 2.0, 0.0),
+    ("check", ("ROW",)): (0.0, 0.0, 0.0),
+    ("shock", ("ROW",)): (0.0, 0.5, 1.0),
+}
+EX6_MISSING_IN_B = [("w", "shock", ("USA",))]
+EX6_MISSING_IN_A = [("w", "base", ("USA",))]
+
+# ---------------------------------------------------------------------------
+# Ejemplo 7 — la misma regla sobre el GDX real de GTAP 3x3.
+#
+# gdxdump ... Symb=pft da 36 registros = 3 regiones x 4 factores moviles x 3
+# periodos: NatRes NO esta en el GDX (GAMS no lo escribe: nivel 0).
+# B = dict con dos celdas de pft:
+#   (USA, Land, base)   = 1.0   GDX 1.0 (gdxdump)  -> d = 0
+#   (USA, NatRes, shock) = 0.25  GDX ausente = 0    -> d = 0.25/0.25 = 1.0
+# Los otros 35 registros del GDX (36 - (USA, Land, base)) faltan en B (dict): sin
+# pareja en B. Ninguna celda falta en A.
+# ---------------------------------------------------------------------------
+EX7_B = {"pft": {("USA", "Land", "base"): 1.0, ("USA", "NatRes", "shock"): 0.25}}
+EX7_MAP = {
+    "variables": [
+        {
+            "name": "factor_price",
+            "a": {"var": "pft", "dims": ["REG", "FP"]},
+            "b": {"var": "pft", "dims": ["REG", "FP"]},
+            "tol": {"rel": 1e-3, "abs_floor": 1e-6},
+        }
+    ],
+    "thresholds": [1e-3],
+}
+EX7_PAIRS = {
+    ("base", ("USA", "Land")): (1.0, 1.0, 0.0),
+    ("shock", ("USA", "NatRes")): (0.0, 0.25, 1.0),
+}
+EX7_MISSING_IN_A = 0
+EX7_MISSING_IN_B = 35
+
+# ---------------------------------------------------------------------------
+# Ejemplo 8 — Report.to_csv() (spec 3.6): una fila por celda.
+#
+# Columnas: variable, period, index, a, b, d, status. ``index`` une los elementos
+# con "." (como GAMS: USA.Food). status: pass | fail | missing_in_a | missing_in_b;
+# una celda sin pareja deja a, b y d vacios. Primero las parejas, luego las sin pareja.
+# Valores: los del ejemplo 2 (ref B) y del ejemplo 3, a mano (ver arriba).
+# ---------------------------------------------------------------------------
+CSV_HEADER = ["variable", "period", "index", "a", "b", "d", "status"]
+EX2_CSV_ROWS = [
+    ("y", "t1", "USA", 1.0, 1.0, 0.0, "pass"),
+    ("y", "t1", "EU", 0.0005, 0.0, 0.5, "fail"),
+    ("y", "t1", "ROW", 100.5, 100.0, 0.005, "pass"),
+]
+EX3_CSV_ROWS = [
+    ("z", "check", "USA", 1.0, 1.0, 0.0, "pass"),
+    ("z", "shock", "USA", 5.0, 5.0, 0.0, "pass"),
+    ("z", "check", "ROW", None, None, None, "missing_in_b"),
+    ("z", "shock", "EU", None, None, None, "missing_in_a"),
+]
+EX1_CSV_INDEX = ["Food.Food", "Food.Mfg", "Mfg.Food", "Mfg.Mfg"]
