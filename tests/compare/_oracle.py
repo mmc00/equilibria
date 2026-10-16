@@ -303,8 +303,9 @@ EX6_MISSING_IN_A = [("w", "base", ("USA",))]
 # B = dict con dos celdas de pft:
 #   (USA, Land, base)   = 1.0   GDX 1.0 (gdxdump)  -> d = 0
 #   (USA, NatRes, shock) = 0.25  GDX ausente = 0    -> d = 0.25/0.25 = 1.0
-# Los otros 35 registros del GDX (36 - (USA, Land, base)) faltan en B (dict): sin
-# pareja en B. Ninguna celda falta en A.
+# B solo trae base y shock, asi que "check" es periodo solo en A y no se compara
+# (12 registros). De los 24 registros de base/shock, 1 se empareja (USA, Land,
+# base): los otros 23 faltan en B (dict), sin pareja en B. Ninguna falta en A.
 # ---------------------------------------------------------------------------
 EX7_B = {"pft": {("USA", "Land", "base"): 1.0, ("USA", "NatRes", "shock"): 0.25}}
 EX7_MAP = {
@@ -323,7 +324,8 @@ EX7_PAIRS = {
     ("shock", ("USA", "NatRes")): (0.0, 0.25, 1.0),
 }
 EX7_MISSING_IN_A = 0
-EX7_MISSING_IN_B = 35
+EX7_MISSING_IN_B = 23
+EX7_PERIODS_ONLY_IN_A = ["check"]
 
 # ---------------------------------------------------------------------------
 # Ejemplo 8 — Report.to_csv() (spec 3.6): una fila por celda.
