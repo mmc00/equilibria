@@ -99,8 +99,14 @@ def from_gdx(
     """Niveles (``.L``) de las variables de un ``.gdx`` de GAMS.
 
     Lee con :mod:`equilibria.babel.gdx` (sin GAMS). ``variables`` limita la lectura;
-    por defecto, todas. GAMS no escribe los registros con todos los atributos en su
-    default, asi que una celda con nivel 0 puede no estar: queda sin pareja.
+    por defecto, todas.
+
+    GAMS no escribe los registros con todos los atributos en su default, o sea con
+    nivel 0. Por eso la :class:`Solution` sale con ``absent_is_zero=True``: al
+    comparar, una celda que el otro lado tiene y el GDX no vale 0, siempre que la
+    variable tenga algun registro en ese periodo (el dominio lo dan las celdas del
+    otro lado, no los conjuntos del GDX). Sin ningun registro en el periodo, la
+    celda queda sin pareja.
     """
     from equilibria.babel.gdx.reader import (
         get_symbol,
@@ -139,7 +145,7 @@ def from_gdx(
             period,
             full_ndim=int(sym["dimension"]),
         )
-    return Solution(levels, ndim, str(path), skipped)
+    return Solution(levels, ndim, str(path), skipped, absent_is_zero=True)
 
 
 def from_pyomo(

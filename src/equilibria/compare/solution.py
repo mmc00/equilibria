@@ -22,12 +22,18 @@ class Solution:
     tenga celdas). ``origin`` describe la fuente, solo para los mensajes.
     ``skipped[var]`` dice por que una variable de la fuente no se pudo leer (p. ej.
     un escalar sin la dimension de periodo declarada); pedirla en un mapeo es error.
+
+    ``absent_is_zero`` (lo pone :func:`~equilibria.compare.sources.from_gdx`): la
+    fuente omite las celdas con nivel 0, como hace GAMS al escribir un ``.gdx``. Al
+    alinear, una celda que el otro lado tiene y esta fuente no vale 0 si la variable
+    tiene algun registro en ese periodo; si no tiene ninguno, sigue sin pareja.
     """
 
     levels: dict[str, dict[CellKey, float]]
     ndim: dict[str, int]
     origin: str = field(default="")
     skipped: dict[str, str] = field(default_factory=dict)
+    absent_is_zero: bool = False
 
     def periods(self) -> list[str]:
         """Periodos presentes, en el orden en que aparecen (sin ordenar)."""

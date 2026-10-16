@@ -72,3 +72,23 @@ def test_from_gdx_declara_las_variables_sin_dimension_de_periodo():
     assert "walras" in s.skipped and "walras" not in s.levels
     with pytest.raises(ValueError, match="walras"):
         from_gdx(O.GTAP3X3_GDX, period_dim=-1, variables=["walras"])
+
+
+@gdx
+def test_celda_ausente_del_gdx_real_vale_cero():
+    """pft(USA, NatRes, shock) no esta en el GDX (gdxdump: 36 registros, solo
+    factores moviles): GAMS no escribe niveles 0, asi que vale 0, no "sin pareja"."""
+    from equilibria.compare import Mapping, compare
+
+    r = compare(
+        from_gdx(O.GTAP3X3_GDX, period_dim=-1, variables=["pft"]),
+        from_dict(O.EX7_B, period_dim=-1),
+        Mapping.from_dict(O.EX7_MAP),
+    )
+    got = {(c.period, c.index): (c.a, c.b, c.d) for c in r.cells}
+    assert set(got) == set(O.EX7_PAIRS)
+    for cell, want in O.EX7_PAIRS.items():
+        assert got[cell] == pytest.approx(want, rel=1e-12, abs=1e-15), cell
+    assert r.summary["factor_price"]["missing_in_a"] == O.EX7_MISSING_IN_A
+    assert r.summary["factor_price"]["missing_in_b"] == O.EX7_MISSING_IN_B
+    assert r.periods_only_in_a == O.EX7_PERIODS_ONLY_IN_A

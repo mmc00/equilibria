@@ -175,3 +175,45 @@ def test_reporte_a_csv_incluye_las_celdas_sin_pareja(tmp_path):
 def test_reporte_a_csv_une_los_indices_con_punto():
     _, rows = _csv_rows(_run(O.EX1_A, O.EX1_B, O.EX1_MAP).to_csv())
     assert [r[2] for r in rows] == O.EX1_CSV_INDEX
+
+
+def _pairs(report, variable):
+    return {
+        (c.period, c.index): (c.a, c.b, c.d)
+        for c in report.cells
+        if c.variable == variable
+    }
+
+
+def _unmatched(report, side):
+    return [
+        (u.variable, u.period, u.index)
+        for u in report.unmatched
+        if u.missing_in == side
+    ]
+
+
+def test_celda_ausente_de_un_gdx_vale_cero_si_la_variable_tiene_ese_periodo():
+    """GAMS no escribe registros con nivel 0: en una fuente GDX (absent_is_zero) la
+    celda que el otro lado tiene vale 0. Si la variable no tiene registros en ese
+    periodo, o si la fuente que no la tiene es un dict, sigue sin pareja."""
+    from equilibria.compare import Solution
+
+    a = Solution(O.EX6_A_LEVELS, O.EX6_A_NDIM, "gdx a mano", absent_is_zero=True)
+    r = compare(a, from_dict(O.EX6_B, period_dim=-1), Mapping.from_dict(O.EX6_MAP))
+    got = _pairs(r, "w")
+    assert set(got) == set(O.EX6_PAIRS)
+    for cell, (wa, wb, wd) in O.EX6_PAIRS.items():
+        assert got[cell] == pytest.approx((wa, wb, wd), rel=1e-12, abs=1e-15), cell
+    assert _unmatched(r, "b") == O.EX6_MISSING_IN_B
+    assert _unmatched(r, "a") == O.EX6_MISSING_IN_A
+
+
+def test_un_dict_no_rellena_ceros():
+    """Una fuente dict no es GDX: lo que le falta queda sin pareja, nunca 0."""
+    a = from_dict(
+        {"w": {("USA", "check"): 2.0}, "v": {("USA", "base"): 1.0}}, period_dim=-1
+    )
+    r = compare(a, from_dict(O.EX6_B, period_dim=-1), Mapping.from_dict(O.EX6_MAP))
+    assert ("w", "check", ("ROW",)) in _unmatched(r, "a")
+    assert all(c.index != ("ROW",) for c in r.cells)

@@ -4,6 +4,14 @@ Por cada variable y cada periodo comun: renombra periodos y elementos (por
 conjunto y lado), reordena las dimensiones de B al orden de A segun ``dims`` y
 empareja por tupla EXACTA. Nunca ordena etiquetas: el orden de las dimensiones es
 el declarado, asi que dos conjuntos con elementos de igual nombre no se cruzan.
+
+Celdas ausentes de un GDX: GAMS no escribe los registros con nivel 0. En un lado con
+``Solution.absent_is_zero``, una celda que el otro lado tiene vale 0 si la variable
+de ese lado tiene algun registro en ese periodo. El dominio de la variable se toma,
+pues, de las celdas del OTRO lado (no de los conjuntos del GDX): no hace falta leer
+los conjuntos y no aparecen celdas fuera del modelo del otro lado. Si la variable no
+tiene ningun registro en el periodo, o el lado es un dict/Pyomo, la celda sigue sin
+pareja.
 """
 
 from __future__ import annotations
@@ -74,12 +82,29 @@ def _translate(
     return out
 
 
+def _fill_absent(
+    own: dict[CellKey, float], other: dict[CellKey, float], sol: Solution
+) -> dict[CellKey, float]:
+    """Celdas de ``other`` que ``own`` no tiene, a 0 si ``sol`` omite los ceros y
+    la variable tiene registros en ese periodo (ver el docstring del modulo)."""
+    if not sol.absent_is_zero:
+        return own
+    with_records = {period for period, _ in own}
+    filled = dict(own)
+    for key in other:
+        if key not in filled and key[0] in with_records:
+            filled[key] = 0.0
+    return filled
+
+
 def align(a: Solution, b: Solution, mapping: Mapping) -> list[Aligned]:
     periods = set(common_periods(a, b, mapping)[0])
     result = []
     for vm in mapping.variables:
-        ca = _translate(a, "a", vm, mapping, periods)
-        cb = _translate(b, "b", vm, mapping, periods)
+        ta = _translate(a, "a", vm, mapping, periods)
+        tb = _translate(b, "b", vm, mapping, periods)
+        ca = _fill_absent(ta, tb, a)
+        cb = _fill_absent(tb, ta, b)
         result.append(
             Aligned(
                 vm,

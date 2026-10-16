@@ -36,11 +36,12 @@ MAPA = O.ROOT / "tests" / "compare" / "fixtures" / "gtap3x3_minimo.yaml"
 @pytest.mark.needs_path
 def test_gams_contra_el_modelo_de_equilibria_resuelto():
     """El oraculo es el GDX de GAMS: xp y pft de equilibria (bloques, PATH) caen
-    dentro de 0,1% en todas las celdas de base, check y shock.
+    dentro de 0,1% en todas las celdas de base, check y shock que GAMS escribe.
 
-    GAMS define pft solo para los factores moviles (no hay NatRes en el GDX);
-    equilibria tambien tiene pft[r, NatRes]. Esas 9 celdas (3 reg x 3 periodos) se
-    declaran sin pareja (faltan en A), nunca como celdas que pasan."""
+    GAMS define pft solo para los factores moviles: pft(r, NatRes) no esta en el
+    GDX, o sea que su nivel es 0 (GAMS no escribe ceros). equilibria tambien tiene
+    pft[r, NatRes]; esas 9 celdas (3 reg x 3 periodos) se comparan con A = 0 y son
+    las unicas que no pasan, nunca celdas que pasan en silencio."""
     import sys
 
     from equilibria._local_refs import path_capi_src
@@ -87,9 +88,10 @@ def test_gams_contra_el_modelo_de_equilibria_resuelto():
         reference="a",
     )
     assert r.periods_compared == ["base", "check", "shock"]
-    assert sorted({u.index[1] for u in r.unmatched}) == ["NatRes"]
-    assert {(u.variable, u.missing_in) for u in r.unmatched} == {("factor_price", "a")}
-    assert len(r.unmatched) == 9
+    assert r.unmatched == []
     assert r.summary["output"]["cells"] == 27  # 3 reg x 3 act x 3 periodos
-    assert r.summary["factor_price"]["cells"] == 36  # 3 reg x 4 factores x 3
-    assert r.overall["pct_within"][1e-3] == 100.0, r.overall
+    assert r.summary["factor_price"]["cells"] == 45  # 3 reg x 5 factores x 3
+    natres = [c for c in r.cells if c.index[-1] == "NatRes"]
+    assert len(natres) == 9
+    assert all(c.a == 0.0 and not c.passed for c in natres)
+    assert all(c.passed for c in r.cells if c.index[-1] != "NatRes")
