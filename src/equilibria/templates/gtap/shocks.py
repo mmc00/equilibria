@@ -103,16 +103,20 @@ def apply_shock(
     Todo o nada: valida y convierte TODAS las celdas antes de fijar ninguna, asi un
     error no deja el modelo con medio shock.  Devuelve los valores en niveles
     fijados.  ValueError si un instrumento no esta registrado, si una celda no
-    existe, es endogena o ninguna fila viva la lee, si un % no es > -100, o si un
-    valor sale del dominio del instrumento.
+    existe, es endogena o ninguna fila viva la lee, si un % no es > -100, si un
+    valor sale del dominio del instrumento, o si deja la celda en su valor del
+    check (un 0%: el driver no veria shock y aplicaria su arancel +10%).
     """
+    from pyomo.environ import value
+
     out: dict[str, dict[tuple, float]] = {}
     for name, cells in shock.items():
         for cell, x in cells.items():
             cell = tuple(cell)
             check_shock_cell(m, name, cell)  # antes de leer su check
             v = float(x) if levels else _level(m, name, cell, x)
-            check_shock_value(name, cell, v)
+            chk = float(value(getattr(m, name)[(*cell, CHECK)]))
+            check_shock_value(name, cell, v, chk)
             out.setdefault(name, {})[cell] = v
     for name, cells in out.items():
         var = getattr(m, name)

@@ -22,6 +22,16 @@ commit log.
   carry no `path.opt` → PATH defaults; altertax bundles → the tight inlined
   set), which also keeps 15x10 pure ifSUB=0 at 100%.
 
+### Changed
+- **Breaking:** GTAP shocks are written into the ShockBlock of the
+  multi-period model with `apply_shock(m, {instrument: {cell: pct}})`, as a
+  GEMPACK % change converted per instrument (`GEMPACK_KIND`). The old
+  `apply_shock(params, ...)` helper, `apply_tariff_shock`,
+  `list_shock_targets` and `ShockMode` are removed, and
+  `solve_multiperiod` no longer takes `lambdava_shock` / `qe_shock`: it reads
+  the shock from the model. Without a shock it still applies the default
+  +10% tariff; a shock that leaves every cell at its check value is rejected.
+
 ### Added
 - F-docs: restructured documentation site (six sections), architecture
   overview, templates overview, artifact-style parity matrices

@@ -20,8 +20,8 @@ check sigue replicando el benchmark. ``period`` solo acepta ``"shock"``.
 
 Un objetivo de cantidad (TBL94: la produccion -1%; ME9A: el PIB real) se declara con
 ``b.target``: una Var nueva, registrada como instrumento y fija en 1, y la fila
-``quantity[shock] = target[shock] x quantity[check]``. El shock entra como factor con
-``fix_instrument_shock``::
+``quantity[shock] = target[shock] x quantity[check]``. El shock entra como % con
+``shocks.apply_shock`` (un objetivo es "pct": -1 es el factor 0.99)::
 
     @overwrite(ShockBlock, period="shock")
     def regulation(b):

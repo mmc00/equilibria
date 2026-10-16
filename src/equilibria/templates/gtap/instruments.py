@@ -156,10 +156,17 @@ def check_shock_cell(m: Any, name: str, index: tuple) -> None:
     check_instrument_cell(m, name, index)
 
 
-def check_shock_value(name: str, index: tuple, new: float) -> None:
-    """ValueError si ``new`` sale del dominio de ``name``: > 0; en un impuesto,
-    1 + t > 0; en kappaf, 1 - kappaf > 0."""
+def check_shock_value(name: str, index: tuple, new: float, check: float) -> None:
+    """ValueError si ``new`` sale del dominio de ``name`` (> 0; en un impuesto,
+    1 + t > 0; en kappaf, 1 - kappaf > 0) o si es igual al valor ``check`` de la
+    celda: un shock que no cambia nada no se ve (``shocks.shock_of``) y el driver
+    aplicaria en su lugar el arancel +10% por defecto."""
     idx = (*index, SHOCK)
+    if new == check:
+        raise ValueError(
+            f"{name}{idx} = {new} is its check value: no change, so the driver would "
+            "see no shock and apply its default +10% tariff instead"
+        )
     if name in TAX_INSTRUMENTS:
         if not 1.0 + new > 0.0:
             raise ValueError(f"{name}{idx} = {new}: the tax power 1 + t must be > 0")
@@ -190,11 +197,12 @@ def fix_instrument_shock(
         raise ValueError("give exactly one of factor/value")
     check_shock_cell(m, name, index)
     var = getattr(m, name)
+    check = float(_v(var[(*index, CHECK)]))
     if value is not None:
         new = float(value)
     else:
         assert factor is not None  # exactly one of factor/value, checked above
-        new = float(_v(var[(*index, CHECK)])) * float(factor)
-    check_shock_value(name, index, new)
+        new = check * float(factor)
+    check_shock_value(name, index, new, check)
     var[(*index, SHOCK)].fix(new)
     return new

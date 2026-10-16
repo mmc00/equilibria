@@ -3052,17 +3052,17 @@ def _solve_multiperiod_inner(
     # fail in milliseconds, not after the base/check solves.
     import os
 
-    _shocked_cells = shock_of(m) if m is not None else []
-    _tariff_shock = not _shocked_cells
-    if _shocked_cells and not _gtap_mode:
+    _shock_labels = shock_of(m) if m is not None else []
+    _tariff_shock = not _shock_labels
+    if _shock_labels and not _gtap_mode:
         raise ValueError(
-            f"a shock in the ShockBlock ({_shocked_cells[:3]}) is only supported in "
+            f"a shock in the ShockBlock ({_shock_labels[:3]}) is only supported in "
             "mode='gtap'"
         )
-    if _shocked_cells and os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
+    if _shock_labels and os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
         raise ValueError(
             "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does not "
-            f"support a shock in the ShockBlock ({_shocked_cells[:3]})"
+            f"support a shock in the ShockBlock ({_shock_labels[:3]})"
         )
 
     run_gtap = _load_run_gtap()
@@ -3288,8 +3288,8 @@ def _solve_multiperiod_inner(
         # equations read the instrument and the driver leaves it alone.
         _logging.getLogger(__name__).info(
             "shock period: %d ShockBlock cells (no tariff): %s",
-            len(_shocked_cells),
-            _shocked_cells[:5],
+            len(_shock_labels),
+            _shock_labels[:5],
         )
     elif _gtap_mode:
         _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)

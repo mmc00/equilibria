@@ -173,3 +173,14 @@ def test_kappaf_at_minus_100_is_a_clear_error(m):
     cell = ("X", "X", "X")
     with pytest.raises(ValueError, match="-100"):
         shocks._level(m, "kappaf", cell, -100.0)
+
+
+@pytest.mark.parametrize("shock,levels", [(0.0, False), (None, True)])
+def test_a_shock_that_moves_nothing_is_rejected(m, shock, levels):
+    """Sin cambio respecto del check el driver no ve shock y aplicaria su arancel
+    +10% por defecto: mejor un error que ese cambio silencioso."""
+    cell = _cell(m, "lambdava")
+    x = value(m.lambdava[(*cell, "check")]) if levels else shock
+    with pytest.raises(ValueError, match="no change"):
+        apply_shock(m, {"lambdava": {cell: x}}, levels=levels)
+    assert shock_of(m) == []

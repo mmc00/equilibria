@@ -140,3 +140,11 @@ def test_un_impuesto_acepta_subsidio_y_rechaza_potencia_no_positiva(
             fix_instrument_shock(m, name, idx, value=-1.0)
     finally:
         var[(*idx, "shock")].fix(before)
+
+
+def test_a_factor_of_one_is_rejected(nus333_mp_model):
+    """factor=1 deja la celda en su check: el driver no veria shock."""
+    from equilibria.templates.gtap.instruments import fix_instrument_shock
+
+    with pytest.raises(ValueError, match="no change"):
+        fix_instrument_shock(nus333_mp_model, "aft", ("USA", "CAPITAL"), factor=1.0)
