@@ -34,6 +34,7 @@ MAPA = O.ROOT / "tests" / "compare" / "fixtures" / "gtap3x3_minimo.yaml"
 
 @pytest.mark.integration
 @pytest.mark.needs_path
+@pytest.mark.needs_gdxdump  # seed_all_periods lee el GDX con gdxdump
 def test_gams_contra_el_modelo_de_equilibria_resuelto():
     """El oraculo es el GDX de GAMS: xp y pft de equilibria (bloques, PATH) caen
     dentro de 0,1% en todas las celdas de base, check y shock que GAMS define.
