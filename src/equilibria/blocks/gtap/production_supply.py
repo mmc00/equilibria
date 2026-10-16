@@ -52,20 +52,15 @@ class ProductionSupplyBlock(Block):
 
     name: str = "GTAP_PRODUCTION_SUPPLY"
     description: str = "GTAP production CES nest + domestic supply CES/CET"
-    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
-    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
     uses: list[str] = [
-        # ShockBlock
         "axp",
         "fcttx",
         "lambdaf",
         "lambdava",
-        "prdtx_rai",
-        # FactorBlock
+        "pa",
         "pf",
         "pfa",
-        # ArmingtonBilateralBlock
-        "pa",
+        "prdtx_rai",
     ]
     sets: Any = None
     params: Any = None
@@ -112,7 +107,7 @@ class ProductionSupplyBlock(Block):
         # prdtx_rai es instrumento del ShockBlock (Var fija); la calibracion usa
         # _prdtx (benchmark makb/maks).
         _param("xflag", dp.xflag_data(p, s), ("r", "a", "i"))
-        # gd_share/ge_share shared with TRADE_CET (dedup by name — first wins);
+        # gd_share/ge_share shared with TRADE_CET (both declarations must be identical);
         # declared here too so a standalone build resolves them. CARRY: drift.
         # mutable=True: the monolith (2001-2005) declares these mutable and references
         # them unwrapped, so they stay symbolic (not folded to a literal) — matches

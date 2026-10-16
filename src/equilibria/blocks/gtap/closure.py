@@ -27,7 +27,8 @@ a mutable Param frozen at 1.0 and eq_pmuv is NOT created. The block mirrors the
 gate-oracle form (pmuv = Param, no eq_pmuv); the composer flips it under the
 switch (__init__.py checklist item 4).
 
-pwfact is shared with FACTOR (unit 3) — dedup by name (FACTOR's Var wins).
+pwfact is shared with FACTOR (unit 3): both declarations must be identical
+(``Model.add_block`` rejects a shared name declared differently).
 The ifSUB post-block (7970-8036) is the COMPOSER's (__init__.py checklist item 1).
 """
 
@@ -79,21 +80,7 @@ class ClosureBlock(Block):
 
     name: str = "GTAP_CLOSURE"
     description: str = "GTAP factor-price Fisher index (pfact/pwfact), pnum, walras"
-    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
-    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
-    uses: list[str] = [
-        # FactorBlock
-        "kstock",
-        "pf",
-        "pfact",
-        "xf",
-        # DemandUtilityBlock
-        "pi",
-        "savf",
-        # IncomeBlock
-        "rsav",
-        "yi",
-    ]
+    uses: list[str] = ["kstock", "pf", "pfact", "pi", "rsav", "savf", "xf", "yi"]
     sets: Any = None
     params: Any = None
     residual_region: str = "NAmerica"
@@ -185,8 +172,8 @@ class ClosureBlock(Block):
             lower=float("-inf"),
             upper=float("inf"),
         )
-        # pwfact scalar shared with FACTOR (dedup by name — FACTOR's registration
-        # wins in the composed model). Declared here so a standalone closure build
+        # pwfact scalar shared with FACTOR: the two declarations must be identical
+        # (Model.add_block rejects a difference). Declared here so a standalone closure build
         # resolves model.pwfact; price floor 1e-3 (init 1.0), monolith 4395.
         variables["pwfact"] = Variable(
             name="pwfact",

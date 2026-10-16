@@ -54,7 +54,7 @@ def _foreign_reads(params, if_sub, savf_flag):
         mine = {
             v
             for v in self.variable_manager.list_vars()
-            if v not in before or self._owner.get(("variable", v)) == block.name
+            if v not in before or self.owner_of("variable", v) == block.name
         }
         # Las compartidas identicas tambien son suyas: las declara.
         bp, bv = {}, {}

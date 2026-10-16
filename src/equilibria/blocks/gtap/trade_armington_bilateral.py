@@ -74,29 +74,22 @@ class ArmingtonBilateralBlock(Block):
 
     name: str = "GTAP_ARMINGTON_BILATERAL"
     description: str = "GTAP top Armington CES nest + bilateral trade (CES/CET)"
-    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
-    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
     uses: list[str] = [
-        # ShockBlock
         "dintx_tgt",
         "exptx",
         "imptx",
         "lambdam",
         "lambdamg",
         "mintx_tgt",
-        # TradeCETBlock
-        "pet",
-        "xet",
-        # ProductionSupplyBlock
         "nd",
         "pd",
-        "xds",
-        # DemandUtilityBlock
+        "pet",
+        "pnum",
         "xc",
+        "xds",
+        "xet",
         "xg",
         "xi",
-        # ClosureBlock
-        "pnum",
     ]
     sets: Any = None
     params: Any = None

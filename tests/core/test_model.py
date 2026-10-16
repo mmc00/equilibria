@@ -5,8 +5,10 @@ import pytest
 
 from equilibria import Model
 from equilibria.blocks import CESValueAdded, LeontiefIntermediate
+from equilibria.blocks.base import Block
 from equilibria.core import Parameter, Set, Variable
 from equilibria.core.sets import SetManager
+from equilibria.core.symbolic_equations import SymbolicEquation
 
 # Mark test_missing_set_raises as expected to fail since we need a custom block
 # that requires a missing set to properly test this
@@ -226,10 +228,6 @@ class TestProductionBlocks:
 # ── Un nombre, un significado: declaraciones compartidas entre bloques ──────
 
 
-from equilibria.blocks.base import Block  # noqa: E402
-from equilibria.core.symbolic_equations import SymbolicEquation  # noqa: E402
-
-
 class _EqZ(SymbolicEquation):
     name: str = "eq_z"
     domains: tuple = ()
@@ -291,6 +289,12 @@ class TestSharedDeclarations:
         nan = Parameter(name="s", value=np.array([np.nan]))
         m.add_block(_Toy(name="a", decl_params=[nan]))
         m.add_block(_Toy(name="b", decl_params=[nan.model_copy()]))
+
+    def test_a_scalar_bound_equals_the_same_bound_per_cell(self):
+        """lower=0.0 y lower=[0.0] dicen lo mismo: no es una declaracion distinta."""
+        m = Model(name="m")
+        m.add_block(_Toy(name="a", decl_vars=[_var(lower=0.0)]))
+        m.add_block(_Toy(name="b", decl_vars=[_var(lower=np.array([0.0]))]))
 
     def test_an_equation_has_one_owner(self):
         """Dos bloques con la misma ecuacion: la segunda se perdia sin aviso."""

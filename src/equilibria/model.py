@@ -85,7 +85,7 @@ class Model(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    # (kind, name) -> nombre del bloque que lo declaro primero.
+    # (kind, name) -> name of the block that declared it first.
     _owner: dict[tuple[str, str], str] = PrivateAttr(default_factory=dict)
 
     def __init__(self, **data: Any) -> None:
@@ -170,58 +170,71 @@ class Model(BaseModel):
         new_params = [
             p
             for p in block_params.values()
-            if not self._shared("parameter", p, self.parameter_manager, block)
+            if not self._check_redeclaration("parameter", p, block)
         ]
         new_vars = [
             v
             for v in block_vars.values()
-            if not self._shared("variable", v, self.variable_manager, block)
+            if not self._check_redeclaration("variable", v, block)
         ]
         for eq in equations:
             if eq.name in self.equation_manager:
-                raise ValueError(
-                    f"equation {eq.name} is declared by block "
-                    f"{self._owner.get(('equation', eq.name))!r} and again by "
-                    f"{block.name!r}: an equation has one owner"
+                raise self._redeclared(
+                    "equation", eq.name, block, "an equation has one owner"
                 )
 
-        for param in new_params:
-            self.add_parameter(param)
-            self._owner[("parameter", param.name)] = block.name
-        for var in new_vars:
-            self.add_variable(var)
-            self._owner[("variable", var.name)] = block.name
-        for eq in equations:
-            self.add_equation(eq)
-            self._owner[("equation", eq.name)] = block.name
+        for kind, items in (
+            ("parameter", new_params),
+            ("variable", new_vars),
+            ("equation", equations),
+        ):
+            for item in items:
+                _MANAGERS[kind](self).add(item)
+                self._owner[(kind, item.name)] = block.name
 
         # Store the block
         self.blocks.append(block)
 
-    def _shared(self, kind: str, new: Any, manager: Any, block: Block) -> bool:
-        """True si ``new`` ya esta registrado con la misma declaracion; ValueError
-        si esta registrado distinto; False si es nuevo."""
+    def owner_of(self, kind: str, name: str) -> str | None:
+        """Name of the block that declared ``name`` first (``kind`` is
+        "parameter", "variable" or "equation"); None if no block did."""
+        return self._owner.get((kind, name))
+
+    def _check_redeclaration(self, kind: str, new: Any, block: Block) -> bool:
+        """Whether ``new`` is already registered with the same declaration.
+
+        Returns False if the name is new and True if an earlier block declared it
+        identically. Raises ValueError if an earlier block declared it differently.
+        """
+        manager = _MANAGERS[kind](self)
         if new.name not in manager:
             return False
         old = manager.get(new.name)
-        fields = (
-            ("value", "domains", "mutable")
-            if kind == "parameter"
-            else ("value", "domains", "domain", "lower", "upper")
-        )
-        for f in fields:
-            if not _same(getattr(old, f), getattr(new, f)):
-                raise ValueError(
-                    f"{kind} {new.name} is declared by block "
-                    f"{self._owner.get((kind, new.name))!r} and again by "
-                    f"{block.name!r} with a different {f}: one name, one declaration"
+        for field in _DECLARATION_FIELDS[kind]:
+            if not _same(getattr(old, field), getattr(new, field)):
+                raise self._redeclared(
+                    kind,
+                    new.name,
+                    block,
+                    f"with a different {field}: one name, one declaration",
                 )
         return True
 
+    def _redeclared(self, kind: str, name: str, block: Block, why: str) -> ValueError:
+        return ValueError(
+            f"{kind} {name} is declared by block {self.owner_of(kind, name)!r} "
+            f"and again by {block.name!r} {why}"
+        )
+
     def check_uses(self) -> None:
-        """ValueError si un bloque usa (``Block.uses``) una variable que ningun
-        bloque declara. Se llama con todos los bloques ya agregados: un bloque
-        puede usar lo que declara uno posterior."""
+        """Check that every variable a block uses (``Block.uses``) is declared.
+
+        Call it once every block is added: a block may use what a later block
+        declares.
+
+        Raises:
+            ValueError: If a used variable is declared by no block.
+        """
         missing = [
             f"block {b.name!r} uses {v}"
             for b in self.blocks
@@ -330,12 +343,30 @@ class Model(BaseModel):
         )
 
 
+# The fields that make up a declaration: two blocks sharing a name must agree on
+# all of them. Parameters have no bounds.
+_DECLARATION_FIELDS: dict[str, tuple[str, ...]] = {
+    "parameter": ("value", "domains", "mutable"),
+    "variable": ("value", "domains", "domain", "lower", "upper"),
+}
+
+_MANAGERS: dict[str, Any] = {
+    "parameter": lambda m: m.parameter_manager,
+    "variable": lambda m: m.variable_manager,
+    "equation": lambda m: m.equation_manager,
+}
+
+
 def _same(a: Any, b: Any) -> bool:
-    """Igualdad de un campo de declaracion: arrays celda a celda (NaN == NaN)."""
+    """Equality of a declaration field: arrays cell by cell (NaN == NaN), and a
+    scalar equals an array holding that value in every cell (``lower=0.0`` is
+    ``lower=np.zeros(n)``)."""
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
         a, b = np.asarray(a), np.asarray(b)
         if a.shape != b.shape:
-            return False
+            if a.ndim and b.ndim:
+                return False
+            a, b = np.broadcast_arrays(a, b)
         if a.dtype.kind in "fc" and b.dtype.kind in "fc":
             return bool(np.array_equal(a, b, equal_nan=True))
         return bool(np.array_equal(a, b))

@@ -11,8 +11,8 @@ VERBATIM from ``gtap_model_equations.py`` (7316-7739):
 
 Params come from ``_derived_params.demand_income_params`` (the SAME 2258-2785
 calibration loop pass unit 5 reads — dedup by name) + the shared FACTOR/
-PRODUCTION Params (xfflag/xflag/prdtx_rai/fcttx/fctts/xscale). pabs/ev/cv are
-shared with DEMAND+UTILITY (unit 5) — dedup by name (first registration wins).
+PRODUCTION Params (xfflag/xflag/prdtx_rai/fcttx/fctts/xscale). ev/cv are shared
+with DEMAND+UTILITY (unit 5): both declarations must be identical.
 
 BASE SNAPSHOTS (Fisher compStat): eq_pabs / eq_ev fold a base-period reference
 (base_pa, base_xaa, base_pabs). On the BASE build (t0_snapshot None,
@@ -66,44 +66,37 @@ class IncomeBlock(Block):
 
     name: str = "GTAP_INCOME"
     description: str = "GTAP regional income, tax streams, GDP and EV/CV welfare"
-    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
-    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
     uses: list[str] = [
-        # ShockBlock
         "dintx_tgt",
         "exptx",
         "fcttx",
         "imptx",
         "kappaf",
+        "kstock",
         "lambdamg",
         "mintx_tgt",
-        "pop",
-        "prdtx_rai",
-        # ProductionSupplyBlock
         "p_rai",
-        "pd",
-        "x",
-        # FactorBlock
-        "kstock",
-        "pf",
-        "xf",
-        # ArmingtonBilateralBlock
         "pa",
+        "pd",
         "pe",
         "pefob",
-        "pmcif",
-        "pmt",
-        "ptmg",
-        "xaa",
-        "xda",
-        "xma",
-        "xw",
-        # DemandUtilityBlock
+        "pf",
         "phi",
         "phip",
         "pi",
+        "pmcif",
+        "pmt",
+        "pop",
+        "prdtx_rai",
+        "ptmg",
         "savf",
         "uh",
+        "x",
+        "xaa",
+        "xda",
+        "xf",
+        "xma",
+        "xw",
     ]
     sets: Any = None
     params: Any = None

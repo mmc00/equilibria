@@ -50,20 +50,7 @@ class FactorBlock(Block):
 
     name: str = "GTAP_FACTOR"
     description: str = "GTAP factor supply/demand CET nest + factor prices + capital"
-    # Variables que sus ecuaciones leen y declara otro bloque (Model.check_uses;
-    # tests/blocks/gtap/test_block_uses.py mide que la lista sea exacta).
-    uses: list[str] = [
-        # ShockBlock
-        "aft",
-        "fcttx",
-        "kappaf",
-        "lambdaf",
-        # ProductionSupplyBlock
-        "pva",
-        "va",
-        # IncomeBlock
-        "pabs",
-    ]
+    uses: list[str] = ["aft", "fcttx", "kappaf", "lambdaf", "pabs", "pva", "va"]
     sets: Any = None
     params: Any = None
     # ifSUB toggle: under if_sub the factor report eqs (eq_pfaeq/eq_pfyeq) are
@@ -160,7 +147,7 @@ class FactorBlock(Block):
         _price("pfa", ("r", "f", "a"), pfa_init)
         _price("pfy", ("r", "f", "a"), pfy_init)
         # pwfact scalar (monolith 4395): price var, init 1.0 -> floor 1e-3. Shared
-        # with CLOSURE (eq_pwfact) — dedup by name, first (this) registration wins.
+        # with CLOSURE (eq_pwfact): both declarations must be identical.
         variables["pwfact"] = Variable(
             name="pwfact",
             value=np.array([1.0]),
