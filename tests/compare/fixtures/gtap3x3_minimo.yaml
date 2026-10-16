@@ -13,4 +13,10 @@ variables:
     a: {var: pft, dims: [REG, FP]}
     b: {var: pft, dims: [REG, FP]}
     tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+exclude:
+  # GAMS define pft solo para los factores moviles: pft(r, NatRes) no existe en su
+  # modelo ni en el GDX. Sin esta exclusion, "ausente = 0" lo compararia con A = 0.
+  - var: factor_price
+    where: {FP: [NatRes]}
+    why: "GAMS define pft solo para factores moviles"
 thresholds: [1.0e-3, 5.0e-3, 1.0e-2]

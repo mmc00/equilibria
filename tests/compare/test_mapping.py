@@ -71,3 +71,37 @@ def test_carga_desde_yaml(tmp_path):
     assert [v.name for v in m.variables] == ["z"]
     assert m.excluded == {"ppriv": "indice Divisia: sin forma en niveles"}
     assert m.thresholds == (1e-3,)
+
+
+def _con_exclusion(e: dict) -> dict:
+    d = cast(Any, copy.deepcopy(O.EX9_MAP))
+    d["exclude"] = [e]
+    return d
+
+
+def test_exclusion_por_celda_sin_motivo_es_error():
+    with pytest.raises(MappingError, match="why"):
+        Mapping.from_dict(_con_exclusion({"var": "q", "where": {"FP": ["NatRes"]}}))
+
+
+def test_exclusion_por_celda_con_dim_que_la_variable_no_tiene_es_error():
+    e = {"var": "q", "where": {"ACT": ["Food"]}, "why": "x"}
+    with pytest.raises(MappingError, match="ACT"):
+        Mapping.from_dict(_con_exclusion(e))
+
+
+def test_exclusion_por_celda_de_variable_que_no_esta_en_el_mapeo_es_error():
+    e = {"var": "no_mapeada", "where": {"FP": ["NatRes"]}, "why": "x"}
+    with pytest.raises(MappingError, match="no_mapeada"):
+        Mapping.from_dict(_con_exclusion(e))
+
+
+def test_exclusion_por_celda_con_where_vacio_es_error():
+    with pytest.raises(MappingError, match="where"):
+        Mapping.from_dict(_con_exclusion({"var": "q", "where": {}, "why": "x"}))
+
+
+def test_exclusion_por_celda_con_elementos_que_no_son_lista_es_error():
+    e = {"var": "q", "where": {"FP": "NatRes"}, "why": "x"}
+    with pytest.raises(MappingError, match="lista"):
+        Mapping.from_dict(_con_exclusion(e))

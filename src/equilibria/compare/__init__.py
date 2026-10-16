@@ -16,14 +16,24 @@ Las fuentes (GAMS ``.gdx``, un modelo Pyomo resuelto o un dict) producen una
 """
 
 from equilibria.compare.errors import CompareError, MappingError
-from equilibria.compare.mapping import Mapping, Tolerance
-from equilibria.compare.report import Cell, Report, Unmatched, compare
+from equilibria.compare.mapping import CellExclusion, Mapping, Tolerance
+from equilibria.compare.report import (
+    Cell,
+    ExcludedCell,
+    Exclusion,
+    Report,
+    Unmatched,
+    compare,
+)
 from equilibria.compare.solution import Solution
 from equilibria.compare.sources import from_dict, from_gdx, from_pyomo
 
 __all__ = [
     "Cell",
+    "CellExclusion",
     "CompareError",
+    "ExcludedCell",
+    "Exclusion",
     "Mapping",
     "MappingError",
     "Report",

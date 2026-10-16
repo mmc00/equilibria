@@ -29,8 +29,8 @@ class Aligned:
 
     var: VariableMap
     pairs: list[tuple[CellKey, float, float]]  # ((periodo, indices), A, B)
-    missing_in_a: list[CellKey]  # estan en B, faltan en A
-    missing_in_b: list[CellKey]  # estan en A, faltan en B
+    missing_in_a: dict[CellKey, float]  # estan en B (nivel de B), faltan en A
+    missing_in_b: dict[CellKey, float]  # estan en A (nivel de A), faltan en B
 
 
 def common_periods(
@@ -113,8 +113,8 @@ def align(
             Aligned(
                 vm,
                 [(k, va, cb[k]) for k, va in ca.items() if k in cb],
-                [k for k in cb if k not in ca],
-                [k for k in ca if k not in cb],
+                {k: v for k, v in cb.items() if k not in ca},
+                {k: v for k, v in ca.items() if k not in cb},
             )
         )
     return result

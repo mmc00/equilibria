@@ -227,3 +227,31 @@ def test_un_dict_no_rellena_ceros():
 
 def test_los_errores_del_modulo_son_una_sola_familia():
     assert issubclass(MappingError, CompareError)
+
+
+def test_celdas_excluidas_no_se_comparan_ni_quedan_sin_pareja():
+    """Ejemplo 9: las celdas excluidas salen de la comparacion (aunque fallarian o
+    pasarian) y de "sin pareja"; nunca cuentan como que pasan."""
+    r = _run(O.EX9_A, O.EX9_B, O.EX9_MAP)
+    s = r.summary["q"]
+    assert s["cells"] == O.EX9_MATCHED
+    assert s["pass_pct"] == pytest.approx(O.EX9_PASS_PCT)
+    assert s["excluded"] == O.EX9_EXCLUDED_TOTAL
+    assert r.overall["excluded"] == O.EX9_EXCLUDED_TOTAL
+    assert r.unmatched == []
+    assert [(e.why, e.cells) for e in r.exclusions] == O.EX9_EXCLUSION_COUNTS
+    assert len(r.excluded_cells) == O.EX9_EXCLUDED_TOTAL
+
+
+def test_exclusiones_por_celda_en_el_json():
+    j = json.loads(_run(O.EX9_A, O.EX9_B, O.EX9_MAP).to_json())
+    assert [(e["why"], e["cells"]) for e in j["exclusions"]] == O.EX9_EXCLUSION_COUNTS
+    assert j["exclusions"][0]["where"] == {"FP": ["NatRes"]}
+    assert len(j["excluded_cells"]) == O.EX9_EXCLUDED_TOTAL
+
+
+def test_reporte_a_csv_marca_las_celdas_excluidas():
+    _, rows = _csv_rows(_run(O.EX9_A, O.EX9_B, O.EX9_MAP).to_csv())
+    excl = {r for r in rows if r[6] == "excluded"}
+    assert excl == O.EX9_CSV_EXCLUDED
+    assert len(rows) == O.EX9_MATCHED + O.EX9_EXCLUDED_TOTAL
