@@ -1,0 +1,22 @@
+# Mapeo minimo GAMS (a) <-> equilibria (b) para GTAP 3x3: dos variables.
+# GAMS antepone a_ a las actividades; equilibria no. Los factores y regiones se
+# llaman igual. Los periodos (base, check, shock) se llaman igual en los dos lados.
+sets:
+  ACT:
+    a: {a_Food: Food, a_Mnfcs: Mnfcs, a_Svces: Svces}
+variables:
+  - name: output
+    a: {var: xp, dims: [REG, ACT]}
+    b: {var: xp, dims: [REG, ACT]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+  - name: factor_price
+    a: {var: pft, dims: [REG, FP]}
+    b: {var: pft, dims: [REG, FP]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+exclude:
+  # GAMS define pft solo para los factores moviles: pft(r, NatRes) no existe en su
+  # modelo ni en el GDX. Sin esta exclusion, "ausente = 0" lo compararia con A = 0.
+  - var: factor_price
+    where: {FP: [NatRes]}
+    why: "GAMS define pft solo para factores moviles"
+thresholds: [1.0e-3, 5.0e-3, 1.0e-2]
