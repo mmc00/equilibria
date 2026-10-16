@@ -9,7 +9,7 @@ Solo se leen niveles.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,8 @@ def _period_rule(period_dim: int | None, period: str | None) -> None:
 def _split(key: Index, period_dim: int | None, period: str | None) -> CellKey:
     if period is not None:
         return period, key
-    assert period_dim is not None
+    if period_dim is None:
+        raise CompareError("declara exactamente uno de 'period_dim' o 'period'")
     n = len(key)
     if not -n <= period_dim < n:
         raise CompareError(f"period_dim={period_dim} fuera del indice {key}")
@@ -74,6 +75,33 @@ def _add(
     levels[var] = out
 
 
+def _read_variables(
+    found: Iterable[tuple[str, int, Callable[[], Iterable[tuple[Any, Any]]]]],
+    period_dim: int | None,
+    period: str | None,
+    explicit: bool,
+    origin: str,
+) -> tuple[dict[str, dict[CellKey, float]], dict[str, int], dict[str, str]]:
+    """Lee ``(nombre, dimension, celdas)`` de una fuente con variables declaradas.
+
+    Una variable sin la dimension de periodo es error si se pidio a mano
+    (``explicit``); leyendo todo, queda en ``skipped`` con su motivo. ``celdas`` es
+    perezosa: solo se lee si la variable se acepta.
+    """
+    levels: dict[str, dict[CellKey, float]] = {}
+    ndim: dict[str, int] = {}
+    skipped: dict[str, str] = {}
+    for name, dimension, cells in found:
+        why = _no_period_dim(dimension, period_dim)
+        if why:
+            if explicit:
+                raise CompareError(f"{origin}: {name!r} {why}")
+            skipped[name] = why
+            continue
+        _add(levels, ndim, name, cells(), period_dim, period, full_ndim=dimension)
+    return levels, ndim, skipped
+
+
 def from_dict(
     data: Mapping[str, Mapping[Any, Any]],
     *,
@@ -110,7 +138,6 @@ def from_gdx(
     celda queda sin pareja.
     """
     from equilibria.babel.gdx.reader import (
-        get_symbol,
         get_variables,
         read_gdx,
         read_variable_values,
@@ -118,34 +145,24 @@ def from_gdx(
 
     _period_rule(period_dim, period)
     data = read_gdx(path)
-    names = (
-        [v["name"] for v in get_variables(data)]
-        if variables is None
-        else list(variables)
-    )
-    levels: dict[str, dict[CellKey, float]] = {}
-    ndim: dict[str, int] = {}
-    skipped: dict[str, str] = {}
+    gdx_vars = {v["name"]: v for v in get_variables(data)}
+    names = list(gdx_vars) if variables is None else list(variables)
     for name in names:
-        sym = get_symbol(data, name)
-        if sym is None or sym["type"] != 2:
+        if name not in gdx_vars:
             raise CompareError(f"{path}: no hay una variable {name!r}")
-        why = _no_period_dim(int(sym["dimension"]), period_dim)
-        if why:
-            if variables is not None:
-                raise CompareError(f"{path}: {name!r} {why}")
-            skipped[name] = why
-            continue
-        records = read_variable_values(data, name)
-        _add(
-            levels,
-            ndim,
-            name,
-            ((k, rec["level"]) for k, rec in records.items()),
-            period_dim,
-            period,
-            full_ndim=int(sym["dimension"]),
+
+    def cells(name: str) -> Callable[[], Iterable[tuple[Any, Any]]]:
+        return lambda: (
+            (k, rec["level"]) for k, rec in read_variable_values(data, name).items()
         )
+
+    levels, ndim, skipped = _read_variables(
+        ((n, int(gdx_vars[n]["dimension"]), cells(n)) for n in names),
+        period_dim,
+        period,
+        variables is not None,
+        str(path),
+    )
     return Solution(levels, ndim, str(path), skipped, absent_is_zero=True)
 
 
@@ -173,23 +190,11 @@ def from_pyomo(
             if c is None or c.ctype is not Var:
                 raise CompareError(f"el modelo no tiene una variable {name!r}")
             comps.append(c)
-    levels: dict[str, dict[CellKey, float]] = {}
-    ndim: dict[str, int] = {}
-    skipped: dict[str, str] = {}
-    for comp in comps:
-        why = _no_period_dim(comp.dim(), period_dim)
-        if why:
-            if variables is not None:
-                raise CompareError(f"{comp.name!r} {why}")
-            skipped[comp.name] = why
-            continue
-        _add(
-            levels,
-            ndim,
-            comp.name,
-            ((k, comp[k].value) for k in comp),
-            period_dim,
-            period,
-            full_ndim=comp.dim(),
-        )
+    levels, ndim, skipped = _read_variables(
+        ((c.name, c.dim(), lambda c=c: ((k, c[k].value) for k in c)) for c in comps),
+        period_dim,
+        period,
+        variables is not None,
+        "pyomo",
+    )
     return Solution(levels, ndim, "pyomo", skipped)

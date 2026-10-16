@@ -146,11 +146,11 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
     if reference not in ("a", "b"):
         raise CompareError(f"reference debe ser 'a' o 'b', no {reference!r}")
     th = mapping.thresholds
-    _, only_a, only_b = common_periods(a, b, mapping)
+    common, only_a, only_b = common_periods(a, b, mapping)
     cells: list[Cell] = []
     unmatched: list[Unmatched] = []
     summary: dict[str, dict[str, Any]] = {}
-    for al in align(a, b, mapping):
+    for al in align(a, b, mapping, set(common)):
         vm = al.var
         mine = []
         for (period, index), va, vb in al.pairs:
@@ -188,7 +188,7 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
         summary,
         overall,
         dict(mapping.excluded),
-        common_periods(a, b, mapping)[0],
+        common,
         only_a,
         only_b,
     )

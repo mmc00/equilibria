@@ -98,8 +98,11 @@ def _fill_absent(
     return filled
 
 
-def align(a: Solution, b: Solution, mapping: Mapping) -> list[Aligned]:
-    periods = set(common_periods(a, b, mapping)[0])
+def align(
+    a: Solution, b: Solution, mapping: Mapping, periods: set[str]
+) -> list[Aligned]:
+    """Alinea cada variable del mapeo en ``periods`` (los comunes, ya renombrados;
+    ver :func:`common_periods`)."""
     result = []
     for vm in mapping.variables:
         ta = _translate(a, "a", vm, mapping, periods)
