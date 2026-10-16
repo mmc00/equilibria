@@ -283,8 +283,20 @@ Off Windows, pass a saved copy of the sltoht text with `--from-text` instead of 
   (`qo # output of activity … #`) — identical to the historical LEVA-only fixtures.
 - **LEVB** (pre-sim): header = `B` + last 3 digits of the id (`B052`), `long_name`
   = `LEVB ` + the sl4dump one (so `sl4_levels(path, "qo")` still returns LEVA).
-- A HAR without `B***` headers is LEVA-only (fixtures made before #127). Variables
-  without a level keep GEMPACK's 1e10 sentinel in both.
+  Defined once, in `levb_header()` / `levb_long_name()` of the script.
+- **NOLV**: variables with NO level in the SL4 (GEMPACK's 1e10 sentinel in both
+  level columns, e.g. `psave`, every `del_*`) get **no** LEVA/LEVB header; their
+  names are listed in this 1-D character header (always written, empty if none),
+  so the sentinel can never be read as data.
+- A HAR without `B***`/`NOLV` headers is LEVA-only (fixtures made before #127) and
+  may still hold 1e10 arrays as if they were levels.
+
+The LEVELS are validated cell by cell, not only the %-change column: post − pre
+must equal sltoht's 4th (change) column, and 100·(post/pre − 1) must equal the
+%-change (percentage-change variables) or column 1 must equal column 4
+(ordinary-change variables, e.g. `del_tbal`; the kind is read off the 4th column,
+per variable). Tolerance `LEVEL_RTOL = 1e-6` relative, ~8x the rounding of the ~8
+significant digits sltoht prints. A contradiction aborts naming variable and cell.
 
 Shapes / set-elements / numeric ids / long_names come from the matching
 `sl4dump`, and every variable is CROSS-CHECKED (the text's %-change column must

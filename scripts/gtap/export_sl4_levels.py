@@ -27,8 +27,13 @@ Output HAR layout (read by the compare source, #131):
   * LEVB (pre-sim): header = `"B"` + the last 3 digits of that id (`"B052"`),
     long_name = `"LEVB "` + the sl4dump long_name (cut to the 70-byte HAR limit).
     The prefix keeps LEVB out of the name->id lookup of `sl4_levels`.
-  * A variable with no level in the SL4 keeps GEMPACK's sentinel (1e10) in both.
-  * A HAR without any `B***` header is LEVA-only (fixtures made before #127).
+  * A variable with NO level in the SL4 (GEMPACK's sentinel 1e10 in both level
+    columns) gets NO LEVA/LEVB header: the sentinel is never stored as a level.
+    Its name is listed instead in the 1-D character header `NOLV` (always written,
+    empty if every variable has levels). A sentinel on only some cells of a
+    variable is an error.
+  * A HAR without any `B***` / `NOLV` header is LEVA-only (fixtures made before
+    #127) and may still hold 1e10-sentinel arrays as if they were levels.
 
 Usage (from repo root, Windows; default --out = sl4levels_<suffix of the sl4dump>.har
 next to the sl4dump):
@@ -59,6 +64,12 @@ from equilibria.babel.har.writer import write_har  # noqa: E402
 DEFAULT_SLTOHT = Path(r"C:\GP\sltoht.exe")
 PCT_COL, PRE_COL, POST_COL, CHANGE_COL = 0, 1, 2, 3  # [%-change, PRE, POST, change]
 NO_LEVEL = 1.0e10  # GEMPACK's "this variable has no level" sentinel
+# Variables with NO level in the SL4 (both level columns = NO_LEVEL on every cell)
+# get NO LEVA/LEVB header; their names are listed, one per element, in this 1-D
+# character header instead (always written, possibly empty), so a reader can never
+# take the 1e10 sentinel for data. Presence of NOLV = file written with this rule.
+NO_LEVEL_HEADER = "NOLV"
+NO_LEVEL_LONG_NAME = "variables with NO level in the SL4 (sentinel 1e10): no LEVA/LEVB"
 # Level-consistency tolerance. sltoht prints every solution column with ~8
 # significant digits (guide 8a: `-1.5210288 1579235.5 1555214.9 -24020.625`; the SL4
 # stores levels as REAL*4), i.e. each printed number carries a relative rounding of
@@ -179,11 +190,20 @@ def check_levels(var: str, tmpl: HeaderArray, pct: np.ndarray, pre: np.ndarray,
             f"{bad.size} bad cell(s)")
 
 
-def _levb_id(hid: str) -> str:
+def levb_header(hid: str) -> str:
+    """LEVB (pre-sim) header for the LEVA header `hid`: "B" + id[1:] ("0052" -> "B052").
+    The ONE definition of the LEVB naming convention (script, tests and readers)."""
     if not _LEVA_ID_RE.match(hid):
         raise ValueError(f"sl4dump header {hid!r} is not a numeric id 0000-0999; "
                          f"cannot derive its LEVB header 'B'+id[1:]")
     return "B" + hid[1:]
+
+
+def levb_long_name(long_name: str) -> str:
+    """LEVB long_name for a LEVA/sl4dump long_name: LEVB_PREFIX + it, cut to the
+    70-byte HAR limit (trailing blanks dropped, as the HAR reader does). The prefix
+    keeps LEVB out of `sl4_levels`'s name lookup."""
+    return (LEVB_PREFIX + long_name)[:LONG_NAME_WIDTH].rstrip()
 
 
 def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
@@ -197,6 +217,7 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
     }
     headers: dict[str, HeaderArray] = {}
     kept = mismatched = 0
+    no_level: list[str] = []
     for var, (pct_vec, pre_vec, post_vec, chg_vec) in levels.items():
         hid = name_to_hid.get(var)
         if hid is None:
@@ -211,10 +232,20 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
         if not np.allclose(ref, pct_vec, atol=1e-3, rtol=1e-3):
             mismatched += 1
             continue
+        sentinel = (pre_vec == NO_LEVEL) | (post_vec == NO_LEVEL)
+        if sentinel.all():
+            no_level.append(var)
+            continue
+        if sentinel.any():
+            k = int(np.flatnonzero(sentinel)[0])
+            raise LevelMismatchError(
+                f"{var} {_cell_label(tmpl, k)}: no-level sentinel 1e10 on only some "
+                f"cells ({int(sentinel.sum())}/{sentinel.size}); GEMPACK levels are "
+                f"per variable, so this text is inconsistent")
         check_levels(var, tmpl, pct_vec, pre_vec, post_vec, chg_vec)
         for name, long_name, vec in (
             (hid, tmpl.long_name, post_vec),
-            (_levb_id(hid), (LEVB_PREFIX + tmpl.long_name)[:LONG_NAME_WIDTH], pre_vec),
+            (levb_header(hid), levb_long_name(tmpl.long_name), pre_vec),
         ):
             headers[name] = HeaderArray(
                 name=name, coeff_name=tmpl.coeff_name, long_name=long_name,
@@ -226,8 +257,13 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
     if not headers:
         print(f"  no levels parsed from {sl4dump.name} — nothing written")
         return 0
+    headers[NO_LEVEL_HEADER] = HeaderArray(
+        name=NO_LEVEL_HEADER, coeff_name=NO_LEVEL_HEADER, long_name=NO_LEVEL_LONG_NAME,
+        array=np.array(no_level, dtype=object), set_names=[], set_elements=[],
+    )
     write_har(str(out_har), headers)
-    print(f"  levels vars={kept} (LEVB+LEVA)  (xcheck-mismatch={mismatched})  -> {out_har}")
+    print(f"  levels vars={kept} (LEVB+LEVA)  no-level={len(no_level)} ({NO_LEVEL_HEADER})"
+          f"  (xcheck-mismatch={mismatched})  -> {out_har}")
     return kept
 
 

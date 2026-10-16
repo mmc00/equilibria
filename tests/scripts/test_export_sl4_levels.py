@@ -65,13 +65,16 @@ def test_from_text_exporta_niveles_antes_y_despues(tmp_path: Path) -> None:
     assert levb.array[1, 0] == pytest.approx(5737490.6)
 
 
-def test_variable_sin_nivel_conserva_el_centinela_en_ambos_periodos(
+def test_variable_sin_nivel_no_se_guarda_como_dato_y_queda_declarada_en_nolv(
     tmp_path: Path,
 ) -> None:
     har = _export_sample(tmp_path)
 
-    np.testing.assert_array_equal(har["0027"].array, np.full(3, 1e10, dtype=np.float32))
-    np.testing.assert_array_equal(har["B027"].array, np.full(3, 1e10, dtype=np.float32))
+    # psave (id 0027) trae el centinela 1e10 en ambas columnas de nivel: no hay
+    # LEVA/LEVB que confundir con datos; su nombre queda en la cabecera NOLV.
+    assert "0027" not in har
+    assert "B027" not in har
+    assert list(har["NOLV"].array) == ["psave"]
 
 
 def test_variable_con_cambio_pct_distinto_al_sl4dump_se_descarta(
@@ -82,7 +85,7 @@ def test_variable_con_cambio_pct_distinto_al_sl4dump_se_descarta(
     # globalcgds (id 0049) trae -1.9 en el texto vs -1.3623582 en el sl4dump.
     assert "0049" not in har
     assert "B049" not in har
-    assert sorted(har) == ["0027", "0052", "B027", "B052"]
+    assert sorted(har) == ["0052", "B052", "NOLV"]
 
 
 def _sic_text_from(sl4dump: Path, post_levels: Path | None) -> str:
@@ -125,6 +128,7 @@ LEVA_FIXTURES = sorted(FIXTURES.glob("sl4levels_*_tm10.har"))
 def test_los_fixtures_sl4levels_existentes_se_reproducen_igual(
     leva_fixture: Path, tmp_path: Path
 ) -> None:
+    mod = _load_module()
     sl4dump = leva_fixture.with_name(
         leva_fixture.name.replace("sl4levels_", "sl4dump_")
     )
@@ -132,16 +136,25 @@ def test_los_fixtures_sl4levels_existentes_se_reproducen_igual(
     text.write_text(_sic_text_from(sl4dump, leva_fixture))
     out = tmp_path / leva_fixture.name
 
-    rc = _load_module().main(
+    rc = mod.main(
         [str(text), "--from-text", "--sl4dump", str(sl4dump), "--out", str(out)]
     )
 
     assert rc == 0
     expected, got = read_har(str(leva_fixture)), read_har(str(out))
-    leva = {k: v for k, v in got.items() if not k.startswith("B")}
-    assert sorted(leva) == sorted(expected)
-    for hid, ha in expected.items():
-        g = leva[hid]
+    sentinel = np.float32(1e10)
+    with_level = {k: v for k, v in expected.items() if not np.all(v.array == sentinel)}
+    no_level = [
+        v.long_name.split("#", 1)[0].strip()
+        for v in expected.values()
+        if np.all(v.array == sentinel)
+    ]
+    assert sorted(got) == sorted(
+        [*with_level, *(mod.levb_header(k) for k in with_level), "NOLV"]
+    )
+    assert list(got["NOLV"].array) == no_level
+    for hid, ha in with_level.items():
+        g = got[hid]
         assert (g.long_name, g.coeff_name, g.set_names, g.set_elements) == (
             ha.long_name,
             ha.coeff_name,
@@ -150,14 +163,16 @@ def test_los_fixtures_sl4levels_existentes_se_reproducen_igual(
         ), hid
         assert g.array.dtype == ha.array.dtype, hid
         np.testing.assert_array_equal(g.array, ha.array, err_msg=hid)
+        assert got[mod.levb_header(hid)].long_name == mod.levb_long_name(ha.long_name)
 
 
 def test_cubre_la_solucion_20x41_capfix(tmp_path: Path) -> None:
+    mod = _load_module()
     sl4dump = FIXTURES / "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har"
     text = tmp_path / "levels.txt"
     text.write_text(_sic_text_from(sl4dump, None))
 
-    rc = _load_module().main(
+    rc = mod.main(
         [
             str(text),
             "--from-text",
@@ -170,12 +185,21 @@ def test_cubre_la_solucion_20x41_capfix(tmp_path: Path) -> None:
 
     assert rc == 0
     got = read_har(str(tmp_path / "o.har"))
-    leva = sorted(k for k in got if not k.startswith("B"))
-    levb = sorted(k for k in got if k.startswith("B"))
+    leva = sorted(k for k in got if k[0] == "0")
     assert len(leva) == 252  # las 257 cabeceras menos las 5 XX** de metadatos
-    assert levb == ["B" + k[1:] for k in leva]
-    # qfd [COMM, ACTS, REG] = 20x20x41
-    assert got["B002"].array.shape == (20, 20, 41)
+    assert sorted(k for k in got if k[0] == "B") == sorted(
+        mod.levb_header(k) for k in leva
+    )
+    assert list(got["NOLV"].array) == []
+    # qfd [COMM, ACTS, REG] = 20x20x41: pre = 1 (indice), post = 1 + %/100
+    dump = read_har(str(sl4dump))
+    qfd_pre = got[mod.levb_header("0002")]
+    assert qfd_pre.array.shape == (20, 20, 41)
+    assert qfd_pre.long_name == mod.levb_long_name(dump["0002"].long_name)
+    np.testing.assert_array_equal(qfd_pre.array, 1.0)
+    np.testing.assert_allclose(
+        got["0002"].array, 1.0 + dump["0002"].array / 100.0, rtol=1e-6
+    )
 
 
 def _swap_level_columns(text: str) -> str:
