@@ -8,7 +8,13 @@ from typing import Any, cast
 
 import pytest
 
-from equilibria.compare import Mapping, MappingError, compare, from_dict
+from equilibria.compare import (
+    CompareError,
+    Mapping,
+    MappingError,
+    compare,
+    from_dict,
+)
 from tests.compare import _oracle as O
 
 
@@ -60,7 +66,7 @@ def test_la_referencia_a_cambia_el_denominador():
 
 
 def test_referencia_invalida_es_error():
-    with pytest.raises(ValueError, match="reference"):
+    with pytest.raises(CompareError, match="reference"):
         _run(O.EX2_A, O.EX2_B, O.EX2_MAP, reference="c")
 
 
@@ -217,3 +223,7 @@ def test_un_dict_no_rellena_ceros():
     r = compare(a, from_dict(O.EX6_B, period_dim=-1), Mapping.from_dict(O.EX6_MAP))
     assert ("w", "check", ("ROW",)) in _unmatched(r, "a")
     assert all(c.index != ("ROW",) for c in r.cells)
+
+
+def test_los_errores_del_modulo_son_una_sola_familia():
+    assert issubclass(MappingError, CompareError)

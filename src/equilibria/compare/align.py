@@ -18,7 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from equilibria.compare.mapping import Mapping, MappingError, VariableMap
+from equilibria.compare.errors import MappingError
+from equilibria.compare.mapping import Mapping, VariableMap
 from equilibria.compare.solution import CellKey, Index, Solution
 
 

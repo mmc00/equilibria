@@ -13,12 +13,13 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from equilibria.compare.errors import CompareError
 from equilibria.compare.solution import CellKey, Index, Solution
 
 
 def _period_rule(period_dim: int | None, period: str | None) -> None:
     if (period_dim is None) == (period is None):
-        raise ValueError("declara exactamente uno de 'period_dim' o 'period'")
+        raise CompareError("declara exactamente uno de 'period_dim' o 'period'")
 
 
 def _split(key: Index, period_dim: int | None, period: str | None) -> CellKey:
@@ -27,7 +28,7 @@ def _split(key: Index, period_dim: int | None, period: str | None) -> CellKey:
     assert period_dim is not None
     n = len(key)
     if not -n <= period_dim < n:
-        raise ValueError(f"period_dim={period_dim} fuera del indice {key}")
+        raise CompareError(f"period_dim={period_dim} fuera del indice {key}")
     i = period_dim % n
     return key[i], key[:i] + key[i + 1 :]
 
@@ -64,9 +65,9 @@ def _add(
         key = _split(_as_index(raw_key), period_dim, period)
         n = len(key[1])
         if ndim.setdefault(var, n) != n:
-            raise ValueError(f"{var}: indices de distinto largo ({ndim[var]} y {n})")
+            raise CompareError(f"{var}: indices de distinto largo ({ndim[var]} y {n})")
         if key in out:
-            raise ValueError(f"{var}: celda repetida {key}")
+            raise CompareError(f"{var}: celda repetida {key}")
         out[key] = float(raw_val)
     if var not in ndim and full_ndim is not None:
         ndim[var] = full_ndim - (1 if period is None else 0)
@@ -128,11 +129,11 @@ def from_gdx(
     for name in names:
         sym = get_symbol(data, name)
         if sym is None or sym["type"] != 2:
-            raise KeyError(f"{path}: no hay una variable {name!r}")
+            raise CompareError(f"{path}: no hay una variable {name!r}")
         why = _no_period_dim(int(sym["dimension"]), period_dim)
         if why:
             if variables is not None:
-                raise ValueError(f"{path}: {name!r} {why}")
+                raise CompareError(f"{path}: {name!r} {why}")
             skipped[name] = why
             continue
         records = read_variable_values(data, name)
@@ -170,7 +171,7 @@ def from_pyomo(
         for name in variables:
             c = model.find_component(name)
             if c is None or c.ctype is not Var:
-                raise KeyError(f"el modelo no tiene una variable {name!r}")
+                raise CompareError(f"el modelo no tiene una variable {name!r}")
             comps.append(c)
     levels: dict[str, dict[CellKey, float]] = {}
     ndim: dict[str, int] = {}
@@ -179,7 +180,7 @@ def from_pyomo(
         why = _no_period_dim(comp.dim(), period_dim)
         if why:
             if variables is not None:
-                raise ValueError(f"{comp.name!r} {why}")
+                raise CompareError(f"{comp.name!r} {why}")
             skipped[comp.name] = why
             continue
         _add(

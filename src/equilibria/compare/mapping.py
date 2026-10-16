@@ -34,11 +34,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from equilibria.compare.errors import MappingError
+
 SIDES = ("a", "b")
-
-
-class MappingError(ValueError):
-    """El mapeo esta incompleto o es incoherente."""
 
 
 @dataclass(frozen=True)

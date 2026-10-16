@@ -15,13 +15,15 @@ Las fuentes (GAMS ``.gdx``, un modelo Pyomo resuelto o un dict) producen una
     print(report.summary)
 """
 
-from equilibria.compare.mapping import Mapping, MappingError, Tolerance
+from equilibria.compare.errors import CompareError, MappingError
+from equilibria.compare.mapping import Mapping, Tolerance
 from equilibria.compare.report import Cell, Report, Unmatched, compare
 from equilibria.compare.solution import Solution
 from equilibria.compare.sources import from_dict, from_gdx, from_pyomo
 
 __all__ = [
     "Cell",
+    "CompareError",
     "Mapping",
     "MappingError",
     "Report",

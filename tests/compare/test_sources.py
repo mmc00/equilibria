@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from equilibria.compare import from_dict, from_gdx, from_pyomo
+from equilibria.compare import CompareError, from_dict, from_gdx, from_pyomo
 from tests.compare import _oracle as O
 
 gdx = pytest.mark.skipif(not O.GTAP3X3_GDX.exists(), reason="falta el GDX de gtap7_3x3")
@@ -27,14 +27,14 @@ def test_from_gdx_lee_los_niveles_que_da_gdxdump():
 
 @gdx
 def test_from_gdx_variable_inexistente_es_error():
-    with pytest.raises(KeyError, match="no_existe"):
+    with pytest.raises(CompareError, match="no_existe"):
         from_gdx(O.GTAP3X3_GDX, period_dim=-1, variables=["no_existe"])
 
 
 def test_hay_que_declarar_el_periodo():
-    with pytest.raises(ValueError, match="period"):
+    with pytest.raises(CompareError, match="period"):
         from_dict({"x": {("a", "t"): 1.0}})
-    with pytest.raises(ValueError, match="period"):
+    with pytest.raises(CompareError, match="period"):
         from_dict({"x": {("a", "t"): 1.0}}, period_dim=-1, period="t")
 
 
@@ -70,7 +70,7 @@ def test_from_gdx_declara_las_variables_sin_dimension_de_periodo():
     pedida a mano, es error."""
     s = from_gdx(O.GTAP3X3_GDX, period_dim=-1)
     assert "walras" in s.skipped and "walras" not in s.levels
-    with pytest.raises(ValueError, match="walras"):
+    with pytest.raises(CompareError, match="walras"):
         from_gdx(O.GTAP3X3_GDX, period_dim=-1, variables=["walras"])
 
 
@@ -92,3 +92,16 @@ def test_celda_ausente_del_gdx_real_vale_cero():
     assert r.summary["factor_price"]["missing_in_a"] == O.EX7_MISSING_IN_A
     assert r.summary["factor_price"]["missing_in_b"] == O.EX7_MISSING_IN_B
     assert r.periods_only_in_a == O.EX7_PERIODS_ONLY_IN_A
+
+
+def test_variable_pyomo_inexistente_es_compare_error():
+    import pyomo.environ as pyo
+
+    m = pyo.ConcreteModel()
+    with pytest.raises(CompareError, match="no_existe"):
+        from_pyomo(m, period_dim=-1, variables=["no_existe"])
+
+
+def test_celda_repetida_en_un_dict_es_compare_error():
+    with pytest.raises(CompareError, match="repetida"):
+        from_dict({"x": {"a": 1.0, ("a",): 2.0}}, period="t")

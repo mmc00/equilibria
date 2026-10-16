@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from equilibria.compare.align import align, common_periods
+from equilibria.compare.errors import CompareError
 from equilibria.compare.mapping import Mapping
 from equilibria.compare.measure import rel_diff, summarize
 from equilibria.compare.solution import Index, Solution
@@ -143,7 +144,7 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
     Solo se comparan los periodos (ya renombrados) presentes en los dos lados.
     """
     if reference not in ("a", "b"):
-        raise ValueError(f"reference debe ser 'a' o 'b', no {reference!r}")
+        raise CompareError(f"reference debe ser 'a' o 'b', no {reference!r}")
     th = mapping.thresholds
     _, only_a, only_b = common_periods(a, b, mapping)
     cells: list[Cell] = []
