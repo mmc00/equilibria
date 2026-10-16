@@ -1,0 +1,191 @@
+name: Windows 20x41 diagnostic (manual)
+
+# DIAGNOSTICO, no gate de CI: solo se dispara a mano (workflow_dispatch). Nunca
+# en push ni en PR.
+#
+# Por que existe: en la laptop Windows del autor (i7-1365U, McAfee corporativo)
+# phase_times.py del 20x41 dio 2096,6 s (~35 min) contra 434 s en una Mac M3 Pro
+# (runs/phase_times_windows/ en la rama bench/phase-times-windows). Esta corrida
+# separa las dos hipotesis: si un runner Windows limpio de GitHub tambien tarda
+# ~4x, el problema es equilibria en Windows (p. ej. MUMPS sin un BLAS rapido);
+# si tarda cerca de la Mac, era la laptop (antivirus, CPU de bajo consumo).
+#
+# Receta = la que funciono en la laptop (README de esa rama), con dos cambios a
+# proposito para comparar con la Mac: Python 3.12 y Pyomo 6.10.1 fijo (la laptop
+# corrio 3.13 / 6.9.5).
+#
+# El tiempo de un runner compartido es ruidoso: sirve para el orden de magnitud
+# (~7 min vs ~35 min), no para citar segundos.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset:
+        description: "Dataset a medir despues del smoke test 10x7 (p. ej. gtap7_20x41, gtap7_10x7)"
+        required: false
+        default: gtap7_20x41
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  phase-times-windows:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        # -l para que setup-miniconda active el env `eq` en cada paso.
+        shell: bash -el {0}
+    env:
+      # El input entra por env y no interpolado en el script (inyeccion).
+      DATASET: ${{ inputs.dataset }}
+      PYTHONUNBUFFERED: "1"
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate dataset input
+        run: |
+          set -euo pipefail
+          if ! [[ "$DATASET" =~ ^gtap[0-9]+_[0-9]+x[0-9]+$ ]] || [ ! -d "datasets/$DATASET" ]; then
+            echo "::error::dataset invalido o inexistente: '$DATASET'"
+            exit 1
+          fi
+
+      - name: Runner hardware
+        shell: pwsh
+        run: |
+          Get-CimInstance Win32_Processor |
+            Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed |
+            Format-List
+          $cs = Get-CimInstance Win32_ComputerSystem
+          "RAM total: {0:N1} GB" -f ($cs.TotalPhysicalMemory / 1GB)
+          $os = Get-CimInstance Win32_OperatingSystem
+          "RAM libre: {0:N1} GB" -f ($os.FreePhysicalMemory * 1KB / 1GB)
+          "OS: $($os.Caption) $($os.Version)"
+          Get-CimInstance Win32_PageFileUsage | Select-Object Name, AllocatedBaseSize | Format-List
+          # Defender en el runner: dato para comparar con el McAfee de la laptop.
+          try { Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AntivirusEnabled | Format-List } catch { "Get-MpComputerStatus no disponible" }
+
+      # Env principal `eq`: python 3.12 + pymumps (mumps-seq) de conda-forge.
+      # PyPI solo trae el fuente de pymumps y pide un MUMPS del sistema.
+      - name: Setup conda env (eq)
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: eq
+          python-version: "3.12"
+          channels: conda-forge
+          conda-remove-defaults: "true"
+
+      - name: Install pymumps + equilibria
+        run: |
+          set -euo pipefail
+          conda install -y -c conda-forge pymumps mumps-seq
+          # [dev] porque phase_times.py importa un test que hace `import pytest`.
+          pip install -e ".[dev]"
+          # Pyomo fijo a la version de la medicion de la Mac (434 s).
+          pip install "pyomo==6.10.1"
+
+      # pynumero_ASL: conda-forge solo lo tiene para Python <= 3.8 y
+      # `pyomo download-extensions` ya no lo trae. Se toma de IDAES en un env
+      # APARTE (idaes-pse no se instala en `eq`).
+      - name: Get pynumero_ASL from IDAES (separate env)
+        run: |
+          set -euo pipefail
+          conda create -y -n idaesbin -c conda-forge python=3.11
+          conda run -n idaesbin pip install idaes-pse
+          conda run -n idaesbin idaes get-extensions
+
+      # Hay que copiar TODAS las lib*.dll: libpynumero_ASL.dll necesita las DLL
+      # del runtime MinGW al lado. Sin ellas AmplInterface.available() da True
+      # pero ctypes.CDLL falla con "(or one of its dependencies)".
+      - name: Copy IDAES DLLs into Pyomo lib dir
+        shell: pwsh
+        run: |
+          $src = Join-Path $env:LOCALAPPDATA "idaes\bin"
+          $dst = Join-Path $env:LOCALAPPDATA "Pyomo\lib"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item (Join-Path $src "lib*.dll") $dst -Force
+          Get-ChildItem $dst | Select-Object Name, Length | Format-Table -AutoSize
+          if (-not (Test-Path (Join-Path $dst "libpynumero_ASL.dll"))) {
+            Write-Error "libpynumero_ASL.dll no llego a $dst"; exit 1
+          }
+
+      - name: Verify pynumero_ASL actually loads
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import ctypes
+          from pyomo.common.fileutils import find_library
+          from pyomo.contrib.pynumero.asl import AmplInterface
+
+          path = find_library("pynumero_ASL")
+          print("find_library:", path)
+          if not path:
+              raise SystemExit("pynumero_ASL no encontrado")
+          ctypes.CDLL(path)  # que cargue de verdad, no solo que exista
+          print("ctypes.CDLL OK")
+          print("AmplInterface.available():", AmplInterface.available())
+          PY
+
+      - name: Versions and BLAS/LAPACK linkage
+        run: |
+          set -uo pipefail
+          python - <<'PY'
+          import platform, sys
+          import numpy, scipy, pyomo
+          print("python", sys.version)
+          print("platform", platform.platform())
+          print("pyomo", pyomo.version.version)
+          print("numpy", numpy.__version__)
+          print("scipy", scipy.__version__)
+          try:
+              import mumps
+              print("pymumps", getattr(mumps, "__version__", "?"), mumps.__file__)
+          except Exception as exc:
+              print("pymumps NO importa:", exc)
+          import equilibria
+          print("equilibria", getattr(equilibria, "__version__", "?"))
+          assert pyomo.version.version == "6.10.1", pyomo.version.version
+          print("\n--- numpy.show_config() ---")
+          numpy.show_config()
+          print("\n--- scipy.show_config() ---")
+          scipy.show_config()
+          PY
+          echo "--- conda list (mumps / blas / lapack / mkl / openblas) ---"
+          conda list | grep -iE "mumps|blas|lapack|mkl|openblas|metis|scotch" || true
+          echo "--- pip (pyomo / numpy / scipy) ---"
+          pip list 2>/dev/null | grep -iE "^(pyomo|numpy|scipy|pymumps) " || true
+
+      - name: Smoke test (gtap7_10x7)
+        run: |
+          set -euo pipefail
+          mkdir -p diag
+          python scripts/gtap/phase_times.py gtap7_10x7 --out diag/fases_gtap7_10x7.json \
+            2>&1 | tee diag/log_gtap7_10x7.txt
+
+      - name: Phase times (${{ inputs.dataset }})
+        run: |
+          set -euo pipefail
+          mkdir -p diag
+          python scripts/gtap/phase_times.py "$DATASET" --out "diag/fases_${DATASET}.json" \
+            2>&1 | tee "diag/log_${DATASET}.txt"
+
+      - name: Memory after run
+        if: always()
+        shell: pwsh
+        run: |
+          $os = Get-CimInstance Win32_OperatingSystem
+          "RAM libre: {0:N1} GB" -f ($os.FreePhysicalMemory * 1KB / 1GB)
+          Get-CimInstance Win32_PageFileUsage | Select-Object Name, CurrentUsage, PeakUsage | Format-List
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-times-windows-${{ inputs.dataset }}
+          path: diag/
+          if-no-files-found: warn
