@@ -1,0 +1,63 @@
+{
+  "dataset": "gtap7_20x41",
+  "code": 1,
+  "total_s": 2096.6,
+  "fases": {
+    "construir SP de bloques": {
+      "s": 496.2,
+      "pct": 23.7,
+      "llamadas": 3
+    },
+    "preparar solve (resto)": {
+      "s": 355.7,
+      "pct": 17.0,
+      "llamadas": 3
+    },
+    "Newton-TR + MUMPS": {
+      "s": 300.8,
+      "pct": 14.3,
+      "llamadas": 3
+    },
+    "reflejar filas a 3 periodos": {
+      "s": 277.1,
+      "pct": 13.2,
+      "llamadas": 1
+    },
+    "escribir .nl (PyomoNLP)": {
+      "s": 170.0,
+      "pct": 8.1,
+      "llamadas": 3
+    },
+    "preparar periodo": {
+      "s": 124.5,
+      "pct": 5.9,
+      "llamadas": 5
+    },
+    "emparejamiento estructural": {
+      "s": 117.7,
+      "pct": 5.6,
+      "llamadas": 3
+    },
+    "fuera de las fases": {
+      "s": 116.1,
+      "pct": 5.5,
+      "llamadas": 1
+    },
+    "reflejar Var a 3 periodos": {
+      "s": 51.8,
+      "pct": 2.5,
+      "llamadas": 1
+    },
+    "calibracion (resto)": {
+      "s": 46.5,
+      "pct": 2.2,
+      "llamadas": 1
+    },
+    "congelar periodo": {
+      "s": 40.4,
+      "pct": 1.9,
+      "llamadas": 5
+    }
+  },
+  "sin_enganchar": []
+}
