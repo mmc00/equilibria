@@ -276,6 +276,12 @@ uv run python scripts\gtap\export_sl4_levels.py `
     --sltoht C:\GP\sltoht.exe
 ```
 
+> **Not yet verified against a real sltoht text.** The only text the tests parse,
+> `tests/fixtures/gtap7_gempack/sl4levels_sample_sic.txt`, is HAND-MADE: its layout
+> (`! Variable` header, `!%1=` rows, column order) was reconstructed from the row
+> quoted above, not captured. A real `sltoht -SHL -SIC` output must be captured on
+> the next Windows run and added as a fixture (issue #133).
+
 Off Windows, pass a saved copy of the sltoht text with `--from-text` instead of the
 `.sl4`. Layout of the output HAR (#127, read by the compare source #131):
 

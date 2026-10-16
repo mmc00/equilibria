@@ -4,11 +4,19 @@ sltoht solo corre en Windows, asi que en Mac se prueba con ``--from-text`` sobre
 ``sl4levels_sample_sic.txt``, una muestra de texto ``sltoht -SHL -SIC`` hecha a mano
 y commiteada antes del parser (oraculo independiente).
 
-Convencion del .har de salida (la lee #131):
+AVISO — MUESTRA HECHA A MANO, NO ES SALIDA REAL DE SLTOHT: el formato (cabecera
+``! Variable``, filas ``!%1=``, orden de las 4 columnas) se reconstruyo de la guia
+8a, no se capturo. Falta capturar un texto REAL de ``sltoht -SHL -SIC`` en la
+proxima corrida en Windows (issue #133) y agregarlo como fixture/test; hasta
+entonces el parser no esta probado contra el formato real.
+
+Convencion del .har de salida (la lee #131; definida UNA vez en el script:
+``levb_header`` / ``levb_long_name`` / ``NO_LEVEL_HEADER``):
   * LEVA (post-sim): header = id numerico del sl4dump (``"0052"``), ``long_name`` el
     del sl4dump (``"qo # ... #"``) -> identico a los fixtures sl4levels_* de siempre.
   * LEVB (pre-sim): header = ``"B"`` + los 3 ultimos digitos del id (``"B052"``),
     ``long_name`` = ``"LEVB "`` + el del sl4dump.
+  * NOLV: nombres de las variables sin nivel (centinela 1e10); no tienen LEVA/LEVB.
 """
 
 from __future__ import annotations
