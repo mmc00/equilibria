@@ -111,7 +111,9 @@ jobs:
 
       - name: Install pymumps + equilibria
         run: |
-          set -euo pipefail
+          # Sin -u: el script de desactivacion de MKL de conda lee una variable
+          # no definida (CONDA_MKL_INTERFACE_LAYER_BACKUP) y aborta con -u.
+          set -eo pipefail
           if [ "$RUNNER_OS" = "Linux" ]; then
             # conda-forge en Linux trae OpenBLAS por defecto; Windows salio con
             # MKL. Se fuerza MKL para que el BLAS no sea un confusor.
