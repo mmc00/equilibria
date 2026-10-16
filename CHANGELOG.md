@@ -23,6 +23,13 @@ commit log.
   set), which also keeps 15x10 pure ifSUB=0 at 100%.
 
 ### Added
+- `equilibria.compare` (first cut, #126): compare two solutions of the same
+  model cell by cell, in levels. Sources `from_gdx` (GAMS), `from_pyomo` and
+  `from_dict` produce a common `Solution`; a user-declared `Mapping` (YAML or
+  dict) sets names, dimension order, element/period renames and a per-variable
+  tolerance (relative, with an absolute floor; no defaults). `compare(a, b,
+  mapping)` returns a `Report` with per-variable and global summaries,
+  exclusions and unmatched cells (`to_json()`).
 - F-docs: restructured documentation site (six sections), architecture
   overview, templates overview, artifact-style parity matrices
   (NLP vs NLP / MCP vs MCP for GTAP and PEP), expanded API reference,

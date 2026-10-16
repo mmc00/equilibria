@@ -1,0 +1,134 @@
+"""compare(a, b, mapping): alinear, medir y reportar, contra los ejemplos a mano."""
+
+from __future__ import annotations
+
+import copy
+import json
+from typing import Any, cast
+
+import pytest
+
+from equilibria.compare import Mapping, MappingError, compare, from_dict
+from tests.compare import _oracle as O
+
+
+def _d_by_cell(report, variable):
+    return {(c.period, c.index): c.d for c in report.cells if c.variable == variable}
+
+
+def _run(a, b, mapping, **kw):
+    return compare(
+        from_dict(a, period_dim=-1),
+        from_dict(b, period_dim=-1),
+        Mapping.from_dict(mapping),
+        **kw,
+    )
+
+
+def test_dos_conjuntos_con_elementos_de_igual_nombre_no_cruzan_celdas():
+    r = _run(O.EX1_A, O.EX1_B, O.EX1_MAP)
+    got = _d_by_cell(r, "x")
+    assert set(got) == set(O.EX1_D)
+    for cell, want in O.EX1_D.items():
+        assert got[cell] == pytest.approx(want, rel=1e-9, abs=1e-15), cell
+    assert r.unmatched == []
+
+
+def test_piso_absoluto_umbrales_mediana_y_maximo():
+    r = _run(O.EX2_A, O.EX2_B, O.EX2_MAP)
+    got = _d_by_cell(r, "y")
+    for cell, want in O.EX2_D_REF_B.items():
+        assert got[cell] == pytest.approx(want, rel=1e-12, abs=1e-15), cell
+    s = r.summary["y"]
+    assert s["cells"] == 3
+    for thr, pct in O.EX2_PCT_WITHIN_REF_B.items():
+        assert s["pct_within"][thr] == pytest.approx(pct)
+    assert s["pass_pct"] == pytest.approx(O.EX2_PASS_PCT_REF_B)
+    assert s["median"] == pytest.approx(O.EX2_MEDIAN_REF_B)
+    assert s["max"] == pytest.approx(O.EX2_MAX_REF_B)
+    assert s["max_cell"] == O.EX2_MAX_CELL_REF_B
+    # el global de una sola variable es el de esa variable
+    assert r.overall["pct_within"][0.01] == pytest.approx(O.EX2_PCT_WITHIN_REF_B[0.01])
+    assert r.overall["max_variable"] == "y"
+
+
+def test_la_referencia_a_cambia_el_denominador():
+    r = _run(O.EX2_A, O.EX2_B, O.EX2_MAP, reference="a")
+    got = _d_by_cell(r, "y")
+    for cell, want in O.EX2_D_REF_A.items():
+        assert got[cell] == pytest.approx(want, rel=1e-12, abs=1e-15), cell
+
+
+def test_referencia_invalida_es_error():
+    with pytest.raises(ValueError, match="reference"):
+        _run(O.EX2_A, O.EX2_B, O.EX2_MAP, reference="c")
+
+
+def test_periodos_renombrados_y_celdas_sin_pareja():
+    r = _run(O.EX3_A, O.EX3_B, O.EX3_MAP)
+    assert r.summary["z"]["cells"] == O.EX3_MATCHED
+    faltan_en_b = [
+        (u.variable, u.period, u.index) for u in r.unmatched if u.missing_in == "b"
+    ]
+    faltan_en_a = [
+        (u.variable, u.period, u.index) for u in r.unmatched if u.missing_in == "a"
+    ]
+    assert faltan_en_b == O.EX3_MISSING_IN_B
+    assert faltan_en_a == O.EX3_MISSING_IN_A
+    assert r.summary["z"]["missing_in_a"] == 1
+    assert r.summary["z"]["missing_in_b"] == 1
+    assert r.periods_only_in_a == O.EX3_PERIODS_ONLY_IN_A
+    assert r.periods_only_in_b == O.EX3_PERIODS_ONLY_IN_B
+    assert r.excluded == {"ppriv": "indice Divisia: sin forma en niveles"}
+
+
+def test_una_celda_sin_pareja_nunca_cuenta_como_que_pasa():
+    """El periodo "pre" (= check) existe en B (por otra variable), pero a z le faltan
+    todas sus celdas ahi: son "sin pareja", no celdas que pasan."""
+    b = {"z": {("USA", "post"): 5.0}, "w": {("USA", "pre"): 1.0}}
+    r = _run(O.EX3_A, b, O.EX3_MAP)
+    assert r.summary["z"]["cells"] == 1  # solo shock/USA
+    assert r.summary["z"]["missing_in_b"] == 2  # check/USA y check/ROW
+
+
+def test_un_periodo_que_falta_entero_en_un_lado_no_se_compara():
+    """Q18: solo se comparan los periodos presentes en los dos lados; el resto se
+    declara como periodo de un solo lado, no como miles de celdas sin pareja."""
+    b = {"z": {("USA", "post"): 5.0}}  # B no tiene "pre" (= check) en absoluto
+    r = _run(O.EX3_A, b, O.EX3_MAP)
+    assert r.periods_compared == ["shock"]
+    assert r.periods_only_in_a == ["base", "check"]
+    assert r.summary["z"]["missing_in_b"] == 0
+
+
+def test_variable_del_mapeo_que_no_existe_en_la_fuente_es_error():
+    m = cast(Any, copy.deepcopy(O.EX2_MAP))
+    m["variables"][0]["b"]["var"] = "no_existe"
+    with pytest.raises(MappingError, match="no_existe"):
+        _run(O.EX2_A, O.EX2_B, m)
+
+
+def test_dims_que_no_coinciden_con_la_fuente_es_error():
+    m = cast(Any, copy.deepcopy(O.EX2_MAP))
+    m["variables"][0]["a"]["dims"] = ["REG", "ACT"]
+    m["variables"][0]["b"]["dims"] = ["REG", "ACT"]
+    with pytest.raises(MappingError, match="dims"):
+        _run(O.EX2_A, O.EX2_B, m)
+
+
+def test_reporte_a_json():
+    r = _run(O.EX3_A, O.EX3_B, O.EX3_MAP)
+    j = json.loads(r.to_json())
+    assert j["reference"] == "b"
+    assert j["summary"]["z"]["cells"] == O.EX3_MATCHED
+    assert j["excluded"] == [
+        {"var": "ppriv", "why": "indice Divisia: sin forma en niveles"}
+    ]
+    assert {
+        "variable": "z",
+        "period": "check",
+        "index": ["ROW"],
+        "missing_in": "b",
+    } in j["unmatched"]
+    assert j["periods_only_in_a"] == ["base"]
+    assert len(j["cells"]) == O.EX3_MATCHED
