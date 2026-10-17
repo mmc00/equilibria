@@ -439,3 +439,24 @@ EX9_CSV_EXCLUDED = {
 EX10_OUTPUT_CELLS = 27
 EX10_FACTOR_PRICE_CELLS = 36
 EX10_NATRES_EXCLUDED = 9
+
+# ---------------------------------------------------------------------------
+# Ejemplo 11 — la CLI ``equilibria compare`` (issue #130), sobre los ejemplos 3 y 5.
+#
+# --fail-below PCT compara PCT con el % de celdas que PASAN sobre TODAS las celdas
+# que el mapeo pide comparar: parejas + sin pareja (una celda que falta nunca pasa,
+# spec Q5). Las excluidas por el mapeo no cuentan (no se miden).
+#
+# Ejemplo 5 (GDX de GAMS contra el dict B escrito como JSON): 18 parejas, 17 pasan
+# (tol 1e-3; la perturbada tiene d = 0.001996...), 0 sin pareja -> 17/18 = 94.444..%.
+#   --fail-below 94 -> sale 0;  --fail-below 95 -> sale 1.
+# Ejemplo 3 (dos JSON): 2 parejas que pasan (d = 0) + 1 sin pareja en A + 1 sin
+# pareja en B -> 2/4 = 50%. Sobre las parejas solas seria 100%: si la CLI ignorara
+# las sin pareja, --fail-below 60 saldria 0.
+#   --fail-below 50 -> sale 0;  --fail-below 60 -> sale 1.
+# Sin --fail-below la CLI sale 0 aunque haya celdas que fallan.
+# ---------------------------------------------------------------------------
+EX11_EX5_PASS_PCT_ALL = 1700.0 / 18
+EX11_EX5_PASS_PCT_TEXT = "94.44"  # como lo imprime la CLI (2 decimales)
+EX11_EX3_PASS_PCT_ALL = 50.0
+EX11_FAIL_EXIT = 1
