@@ -3,7 +3,7 @@
 Estado real, medido, del proyecto — no aspiracional. Cada cifra que aparece aquí sale de una
 corrida registrada en `docs/findings/` o de un gate de `scripts/gtap/run_parity_gates.py`.
 
-Última actualización: 2026-09-24.
+Última actualización: 2026-10-16.
 
 ---
 
@@ -48,6 +48,29 @@ Los 5 gates de `run_parity_gates.py` cubren ambos caminos: el monolito es el or�
 ## Deuda técnica
 
 Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
+
+### Rendimiento del 20x41 — `PERF-EVAL-1`
+
+Medido con `scripts/gtap/phase_times.py` (3 periodos, 3 solves, `code=1`, iteraciones 3/3/22):
+
+| Máquina | Total |
+|---|---|
+| macOS, M3 Pro | 7,2 min |
+| GitHub Actions, Linux (AMD EPYC 7763) | 14,5 min |
+| GitHub Actions, Windows (mismo EPYC) | 23,7 min |
+| Laptop Windows, i7-1365U | 34,9 min |
+| GEMPACK, mismo laptop | 4,3 min |
+
+- **Resolver es el 11 %** (Newton-TR + MUMPS). El 89 % es construir y preparar el modelo
+  Pyomo antes de cada solve.
+- **Windows es 1,64× más lento que Linux con el mismo hardware**, de forma pareja en todas las
+  fases: no es una fase concreta, es el trabajo de Python.
+- **Los dos intentos anteriores no escalaron**: el backend POI (`archive/perf/poi-fase0`) y
+  el traductor JAX (`archive/feat/pyomo-jax-translator`).
+
+Próximo paso: un **backend de evaluación alternativo** (`PERF-EVAL-1`), con Pyomo como oráculo
+de paridad. Antes de avanzar tiene que pasar un prototipo con dos gates: igualdad exacta con
+Pyomo y escala medida en 3x3, 10x7 y 15x10. Estado: **diseño, sin código**.
 
 ### Validación contra la literatura — pendiente
 
