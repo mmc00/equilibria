@@ -13,6 +13,11 @@ Las fuentes (GAMS ``.gdx``, un modelo Pyomo resuelto o un dict) producen una
         reference="a",
     )
     print(report.summary)
+
+Desde la terminal (ver :mod:`equilibria.compare.cli`)::
+
+    equilibria compare gams.gdx equilibria.json --map map.yaml --period-dim -1 \
+        --out reporte.json --fail-below 99
 """
 
 from equilibria.compare.errors import CompareError, MappingError

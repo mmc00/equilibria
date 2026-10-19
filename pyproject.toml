@@ -59,6 +59,9 @@ dependencies = [
     "packaging>=23.0",
 ]
 
+[project.scripts]
+equilibria = "equilibria.cli:main"
+
 [project.optional-dependencies]
 # Optimization backends
 pyomo = ["pyomo>=6.7"]

@@ -194,6 +194,13 @@ class Report:
         return text
 
 
+def _pass_pct_all(s: dict[str, Any]) -> float | None:
+    """% de celdas que pasan sobre parejas + sin pareja (una celda que falta nunca
+    pasa); ``None`` si no hay ninguna. Las excluidas no cuentan."""
+    total = s["cells"] + s["missing_in_a"] + s["missing_in_b"]
+    return None if total == 0 else 100.0 * s["passed"] / total
+
+
 def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") -> Report:
     """Compara ``a`` y ``b`` en niveles, celda por celda, segun ``mapping``.
 
@@ -245,6 +252,7 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
         )
         s["missing_in_a"] = len(miss_a)
         s["missing_in_b"] = len(miss_b)
+        s["pass_pct_all"] = _pass_pct_all(s)
         s["excluded"] = len(excluded_cells) - n_excluded_before
         s["tol"] = {"rel": vm.tol.rel, "abs_floor": vm.tol.abs_floor}
         summary[vm.name] = s
@@ -260,6 +268,7 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
     overall["missing_in_a"] = sum(u.missing_in == "a" for u in unmatched)
     overall["missing_in_b"] = sum(u.missing_in == "b" for u in unmatched)
     overall["excluded"] = len(excluded_cells)
+    overall["pass_pct_all"] = _pass_pct_all(overall)
     exclusions = [
         Exclusion(
             ce.variable,
