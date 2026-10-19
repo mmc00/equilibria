@@ -1,0 +1,753 @@
+
+    TTTTTTTTTT  AAAAAAAAAA   BBBBBBB      LLLL        OOOOOOOOOO
+    TTTTTTTTTT  AAA    AAA   BBBBBBBBB    LLLL        OOOOOOOOOO
+       TTT      AAA    AAA   BBB    BBB   LLLL        OOO    OOO
+       TTT      AAA    AAA   BBB  BBB     LLLL        OOO    OOO
+       TTT      AAAAAAAAAA   BBBBBBB      LLLL        OOO    OOO
+       TTT      AAAAAAAAAA   BBB  BBB     LLLL        OOO    OOO
+       TTT      AAA    AAA   BBB    BBB   LLLL        OOO    OOO
+       TTT      AAA    AAA   BBBBBBBBB    LLLLLLLLL   OOOOOOOOOO
+       TTT      AAA    AAA   BBBBBBB      LLLLLLLLL   OOOOOOOOOO
+
+ <TABLO  Version 6.4   April 2012>                                     
+
+
+
+
+
+                     GEMPACK SOFTWARE
+     << COPYRIGHT 1987-2010:  The Impact Project and KPSOFT >>
+   
+   
+
+    +++  INFORMATION ABOUT THIS PRINT FILE  +++
+   
+ 
+ ! This file was created at 14:07:40 on 19-OCT-2026 by the program
+ !  <TABLO  Version 6.4   April 2012>
+ ! which accesses some of the routines in the GEMPACK software release
+ !  <GEMPACK Release 11.3.004   January 2015>
+ 
+ !     -------------------------------------------------------                
+ !    !            GEMPACK Software System Licence            !               
+ !    !  Source Code Licence for the GEMPACK Software System  !               
+ !    !                 Licence No.  GFM-1415                 !               
+ !    !          Licence for Release 11.0 of GEMPACK          !               
+ !    !               Ministry of Foreign Trade               !               
+ !    !             PO Box 297-1007 Centro Colon,             !               
+ !    !                      Costa Rica                       !               
+ !     -------------------------------------------------------                
+    
+
+    +++  END OF INFORMATION ABOUT THIS PRINT FILE  +++
+
+ ======================================================
+           TABLO PORTABLE   
+ ++> TABLO OPTIONS   ( --> indicates those in effect )
+ ======================================================
+
+
+
+      -----------                   ----------
+  --> F1 CHECK                      L1 CHECK
+      F2 CONDENSATION               L2 CONDENSATION
+      F3 CODE GENERATION        --> L3 CODE GENERATION
+      Mode
+      ----
+      INTERACTIVE
+      BATCH
+  --> UNSPECIFIED
+
+
+ ==================================================
+ ++> TABLO Input file is 'simple.tab'
+ ++> This Information file is 'simple'
+ ==================================================
+
+
+
+ ******************************************************************************
+ -1-
+ -->                     Starting CHECK stage
+
+ ******************************************************************************
+
+
+      1   File INFILE # base data file #;
+      2   Set
+      3    COM # Commodities # read elements from file INFILE header "SEC";
+      4    IND # Industries #  read elements from file INFILE header "SEC";
+      5    FIN # Final users # (Hou,Gov,Inv,Exp);
+      6    LOCFIN # Local final users # (Hou,Gov,Inv);
+      7    USR # All users # = IND + FIN;
+      8    LOCUSR # Local users # = IND + LOCFIN;
+      9    SRC (dom,imp);
+     10    FAC (Capital,Labor);
+     11    SEC = COM intersect IND;
+     12   Subset LOCUSR is subset of USR;
+     13    
+     14   Coefficient ! data on file !
+     15   (all,c,COM)(all,s,SRC)(all,u,USR) USE(c,s,u) # Value of inputs #;
+     16   (all,f,FAC)(all,i,IND)           FACTOR(f,i) # Primary factor costs #;
+     17   (parameter)(all,c,COM)              SIGMA(c) # CES dom-imp elasticity #;
+     18   Read
+     19    USE    from file INFILE header "USE";
+     20    FACTOR from file INFILE header "FACT";
+     21    SIGMA  from file INFILE header "SIG";
+     22    
+     23   Coefficient ! calculated !
+     24   (all,c,COM)(all,u,USR) USE_S(c,u) # Value of import composites #;
+     25   (all,i,IND)             VALADD(i) # Factor costs #;
+     26   (all,u,USR)              COSTS(u) # Costs #;
+     27   (all,c,COM)(all,s,SRC) SALES(c,s) # Sales #;
+     28   (all,q,SEC)               DIFF(q) # Costs-Sales #;
+     29                                VGDP # GDP #;
+     30   Formula
+     31   (all,c,COM)(all,u,USR) USE_S(c,u) = sum{s,SRC, USE(c,s,u)};
+     32   (all,i,IND)             VALADD(i) = sum{f,FAC,FACTOR(f,i)};
+     33   (all,u,USR)              COSTS(u) = sum{c,COM, USE_S(c,u)};
+     34   (all,i,IND)              COSTS(i) = COSTS(i) + VALADD(i);
+     35   (all,c,COM)(all,s,SRC) SALES(c,s) = sum{u,USR, USE(c,s,u)};
+     36   (all,q,SEC)               DIFF(q) = COSTS(q) - SALES(q,"dom");
+     37                                VGDP = sum{i,IND,VALADD(i)};
+     38   Assertion # Check data balance # (all,q,SEC) ABS[DIFF(q)]<0.001;
+     39    
+     40   Variable
+     41                      (change) delB # (Nominal balance of trade)/{nominal GDP} #;
+     42                               xgdp # Real GDP #;
+     43                            wgdpinc # Nominal GDP from income side #;
+     44                            wgdpexp # Nominal GDP from expenditure side #;
+     45                                phi # Exchange rate (local$/foreign$) #;
+     46                (all,c,COM) xexp(c) # Export quantities #;
+     47               (all,c,COM) fqexp(c) # Right shift in export demand curve #;
+     48                   (all,i,IND) z(i) # Industry outputs #;
+     49               (all,c,COM) pfimp(c) # Imp goods prices, foreign $ #;
+     50             (all,l,LOCFIN) wtot(l) # Nominal expenditure by local final users #;
+     51             (all,l,LOCFIN) ftot(l) # wtot/GDP #;
+     52             (all,l,LOCFIN) xtot(l) # Real expenditure by local final users #;
+     53             (all,l,LOCFIN) ptot(l) # Price indices for local final users #;
+     54              (all,f,FAC) xfac_i(f) # Total value-weighted factor use #;
+     55              (all,f,FAC) ffac_i(f) # Factor wage shift #;
+     56   (all,c,COM)(all,s,SRC)    p(c,s) # Commodity prices #;
+     57   (all,c,COM)(all,s,SRC) xdem(c,s) # Total demand for goods #;
+     58   (all,f,FAC)(all,i,IND) pfac(f,i) # Factor prices #;
+     59   (all,i,IND)            pfac_f(i) # Factor composite prices #;
+     60   (all,f,FAC)(all,i,IND) xfac(f,i) # Factor use #;
+     61   (all,f,FAC)(all,i,IND) afac(f,i) # Factor-using technical change #;
+     62   (all,f,FAC)(all,i,IND) ffac(f,i) # Factor wage shift #;
+     63   (all,c,COM)(all,l,LOCUSR) pcomp(c,l) # Price dom/imp composites#;
+     64   (all,c,COM)(all,l,LOCUSR) xcomp(c,l) # Quantity dom/imp composites#;
+     65   (all,c,COM)(all,s,SRC)(all,l,LOCUSR) x(c,s,l) # Commodity demands #;
+     66    
+     67   Equation
+     68   ! Dom/imp CES BLOCK !
+     69   E_pcomp # Price: dom/imp composites # (all,c,COM)(all,u,LOCUSR)
+     70    ID01[USE_S(c,u)]*pcomp(c,u)=sum{s,SRC,USE(c,s,u)*p(c,s)};
+     71   E_x # Quant: final dom/imp composites# (all,c,COM)(all,s,SRC)(all,l,LOCUSR)
+     72    x(c,s,l) = xcomp(c,l) - SIGMA(c)*[p(c,s)-pcomp(c,l)];
+     73    
+     74   ! Industry demands !
+     75   E_pA  # Industry cost indices # (all,i,SEC)
+     76    ID01[COSTS(i)]*p(i,"dom")=sum{c,COM,USE_S(c,i)*pcomp(c,i)}+VALADD(i)*pfac_f(i);
+     77   E_pfac_f # Factor composite prices # (all,i,IND)
+     78    ID01[VALADD(i)]*pfac_f(i) = sum{f,FAC, FACTOR(f,i)*[pfac(f,i)+afac(f,i)]};
+     79   E_xfac # Factor demands (CES) # (all,f,FAC)(all,i,IND)
+     80    xfac(f,i) = z(i) + afac(f,i) - 0.5*[pfac(f,i)+afac(f,i)-pfac_f(i)];
+     81   E_xcompA # Intermediate demands (Leontief) # (all,c,COM)(all,i,IND)
+     82    xcomp(c,i) = z(i);
+     83    
+     84   ! Final demanders !
+     85   E_xcompB # Local final demands (Cobb-Douglas) # (all,c,COM)(all,l,LOCFIN)
+     86    xcomp(c,l) + pcomp(c,l) = wtot(l);
+     87   E_wtot  # Absorption # (all,l,LOCFIN) wtot(l) = ftot(l) + wgdpinc;
+     88   E_ptot  # Price indices for local final users # (all,l,LOCFIN)
+     89    ID01[COSTS(l)]*ptot(l) = sum{c,COM, USE_S(c,l)*pcomp(c,l)};
+     90   E_xtot  # Real expenditure by local final users # (all,l,LOCFIN)
+     91    xtot(l) + ptot(l) = wtot(l);
+     92   E_xexp  # Export demands #  (all,c,COM)
+     93    xexp(c) = fqexp(c) -5.0*[p(c,"dom")-phi];
+     94    
+     95   ! Total demands and market clearing !
+     96   E_ffac_i  # Total (value-weighted) factor use # (all,f,FAC)
+     97    sum{i,IND,FACTOR(f,i)*[xfac_i(f) - xfac(f,i)]} = 0;
+     98   E_xdem    # Total demand for goods # (all,c,COM)(all,s,SRC)
+     99    ID01[SALES(c,s)]*xdem(c,s) =
+    100       sum{l,LOCUSR,USE(c,s,l)*x(c,s,l)} + USE(c,s,"exp")*xexp(c);
+    101   E_z       # Market clearing # (all,i,SEC) z(i) = xdem(i,"dom");
+    102    
+    103   ! Miscellaneous !
+    104   E_pB      # Import prices # (all,i,SEC) p(i,"imp") = pfimp(i) + phi;
+    105   E_pfac    # Factor mobility/remuneration # (all,f,FAC)(all,i,IND)
+    106    pfac(f,i) = ptot("hou") + ffac(f,i) + ffac_i(f);
+    107   E_wgdpinc # Nominal GDP from income side #
+    108    VGDP*wgdpinc = sum{i,IND, sum{f,FAC, FACTOR(f,i)*[pfac(f,i)+xfac(f,i)]}};
+    109   E_xgdp    # Real GDP from income side #
+    110    VGDP*xgdp = sum{i,IND, sum{f,FAC, FACTOR(f,i)*[xfac(f,i)-afac(f,i)]}};
+    111   E_wgdpexp # Nominal GDP from expenditure side #
+    112    VGDP*wgdpexp= sum{c,COM, sum{l,LOCFIN, USE_S(c,l)*wtot(l)}
+    113     + USE(c,"dom","exp")*[p(c,"dom")+xexp(c)]
+    114     - SALES(c,"imp")*[p(c,"imp")+xdem(c,"imp")]};
+    115   E_delB    # (balance of trade)/GDP #
+    116     100*VGDP*delB = sum{c,COM,USE(c,"dom","exp")*[p(c,"dom")+xexp(c)-wgdpinc]}
+    117                   - sum{c,COM,SALES(c,"imp")*[p(c,"imp")+xdem(c,"imp")-wgdpinc]};
+    118    
+    119   Update
+    120   (all,i,IND)(all,f,FAC) FACTOR(f,i)=pfac(f,i)*xfac(f,i);
+    121   (all,c,COM)(all,s,SRC)(all,l,LOCUSR) USE(c,s,l) = p(c,s)*x(c,s,l);
+    122   (all,c,COM) USE(c,"dom","exp") = p(c,"dom")*xexp(c);
+    123   Backsolve x using E_x; pcomp using E_pcomp;
+    124    
+ 
+ %%INFORMATION. TABLO has created 1 new sets as follows:
+  S@exp # Set with one element exp, a subset of USR #
+ 
+
+
+
+
+ ========================
+ ++ INPUT STATEMENT TABLE
+ ========================
+
+          Starts   Syntax  Semantic
+  Number  at line  Error?   Error?            Description
+  ------------------------------------------------------------
+     1         1     no       no      FILE 'INFILE              '             
+     2         2     no       no      SET 'COM         '                      
+     3         4     no       no      SET 'IND         '                      
+     4         5     no       no      SET 'FIN         '                      
+     5         6     no       no      SET 'LOCFIN      '                      
+     6         7     no       no      SET 'USR         '                      
+     7         7     no       no      SUBSET 'IND         ' of 'USR         ' 
+     8         7     no       no      SUBSET 'FIN         ' of 'USR         ' 
+     9         8     no       no      SET 'LOCUSR      '                      
+    10         8     no       no      SUBSET 'IND         ' of 'LOCUSR      ' 
+    11         8     no       no      SUBSET 'LOCFIN      ' of 'LOCUSR      ' 
+    12         9     no       no      SET 'SRC         '                      
+    13        10     no       no      SET 'FAC         '                      
+    14        11     no       no      SET 'SEC         '                      
+    15        11     no       no      SUBSET 'SEC         ' of 'COM         ' 
+    16        11     no       no      SUBSET 'SEC         ' of 'IND         ' 
+    17        12     no       no      SUBSET 'LOCUSR      ' of 'USR         ' 
+    18        14     no       no      COEFFICIENT 'USE         '              
+    19        16     no       no      COEFFICIENT 'FACTOR      '              
+    20        17     no       no      COEFFICIENT 'SIGMA       '              
+    21        18     no       no      READ into 'USE         '                
+    22        20     no       no      READ into 'FACTOR      '                
+    23        21     no       no      READ into 'SIGMA       '                
+    24        23     no       no      COEFFICIENT 'USE_S       '              
+    25        25     no       no      COEFFICIENT 'VALADD      '              
+    26        26     no       no      COEFFICIENT 'COSTS       '              
+    27        27     no       no      COEFFICIENT 'SALES       '              
+    28        28     no       no      COEFFICIENT 'DIFF        '              
+    29        29     no       no      COEFFICIENT 'VGDP        '              
+    30        30     no       no      Formula for "USE_S"                     
+    31        32     no       no      Formula for "VALADD"                    
+    32        33     no       no      Formula for "COSTS"                     
+    33        34     no       no      Formula for "COSTS"                     
+    34        35     no       no      Formula for "SALES"                     
+    35        36     no       no      Formula for "DIFF"                      
+    36        37     no       no      Formula for "VGDP"                      
+    37        38     no       no      Assertion Check data balance            
+    38        40     no       no      VARIABLE 'delB           '              
+    39        42     no       no      VARIABLE 'xgdp           '              
+    40        43     no       no      VARIABLE 'wgdpinc        '              
+    41        44     no       no      VARIABLE 'wgdpexp        '              
+    42        45     no       no      VARIABLE 'phi            '              
+    43        46     no       no      VARIABLE 'xexp           '              
+    44        47     no       no      VARIABLE 'fqexp          '              
+    45        48     no       no      VARIABLE 'z              '              
+    46        49     no       no      VARIABLE 'pfimp          '              
+    47        50     no       no      VARIABLE 'wtot           '              
+    48        51     no       no      VARIABLE 'ftot           '              
+    49        52     no       no      VARIABLE 'xtot           '              
+    50        53     no       no      VARIABLE 'ptot           '              
+    51        54     no       no      VARIABLE 'xfac_i         '              
+    52        55     no       no      VARIABLE 'ffac_i         '              
+    53        56     no       no      VARIABLE 'p              '              
+    54        57     no       no      VARIABLE 'xdem           '              
+    55        58     no       no      VARIABLE 'pfac           '              
+    56        59     no       no      VARIABLE 'pfac_f         '              
+    57        60     no       no      VARIABLE 'xfac           '              
+    58        61     no       no      VARIABLE 'afac           '              
+    59        62     no       no      VARIABLE 'ffac           '              
+    60        63     no       no      VARIABLE 'pcomp          '              
+    61        64     no       no      VARIABLE 'xcomp          '              
+    62        65     no       no      VARIABLE 'x              '              
+    63        67     no       no      EQUATION 'E_pcomp             '         
+    64        71     no       no      EQUATION 'E_x                 '         
+    65        75     no       no      EQUATION 'E_pA                '         
+    66        77     no       no      EQUATION 'E_pfac_f            '         
+    67        79     no       no      EQUATION 'E_xfac              '         
+    68        81     no       no      EQUATION 'E_xcompA            '         
+    69        85     no       no      EQUATION 'E_xcompB            '         
+    70        87     no       no      EQUATION 'E_wtot              '         
+    71        88     no       no      EQUATION 'E_ptot              '         
+    72        90     no       no      EQUATION 'E_xtot              '         
+    73        92     no       no      EQUATION 'E_xexp              '         
+    74        96     no       no      EQUATION 'E_ffac_i            '         
+    75        98     no       no      SET 'S@exp       '                      
+    76        98     no       no      SUBSET 'S@exp       ' of 'USR         ' 
+    77        98     no       no      EQUATION 'E_xdem              '         
+    78       101     no       no      EQUATION 'E_z                 '         
+    79       104     no       no      EQUATION 'E_pB                '         
+    80       105     no       no      EQUATION 'E_pfac              '         
+    81       107     no       no      EQUATION 'E_wgdpinc           '         
+    82       109     no       no      EQUATION 'E_xgdp              '         
+    83       111     no       no      EQUATION 'E_wgdpexp           '         
+    84       115     no       no      EQUATION 'E_delB              '         
+    85       119     no       no      UPDATE of 'FACTOR      '                
+    86       121     no       no      UPDATE of 'USE         '                
+    87       122     no       no      UPDATE of 'USE         '                
+    88       123     no       no      BACKSOLVE for 'x              '         
+    89       123     no       no      BACKSOLVE for 'pcomp          '         
+
+
+
+
+ ============
+ ++ SET TABLE
+ ============
+
+                    Defined   [Max] Inter             Set numbers this
+  Number    Name    at line    Size temp? Elements    is subset of
+  ---------------------------------------------------------------------
+     1  COM             2 [       0]  no   read 
+     2  IND             4 [       0]  no   read      5     6
+     3  FIN             5         4   no   fixed     5
+     4  LOCFIN          6         3   no   fixed     6
+     5  USR             7 [       0]  no   other
+     6  LOCUSR          8 [       0]  no   other     5
+     7  SRC             9         2   no   fixed
+     8  FAC            10         2   no   fixed
+     9  SEC            11 [       0]  no   other     1     2
+    10  S@exp          98         1   no   fixed     5
+
+
+
+
+ ===============
+ ++ SUBSET TABLE
+ ===============
+ 
+SSNO=1. Set 2 "IND" is subset of set 5 "USR"
+SSNO=2. Set 3 "FIN" is subset of set 5 "USR"
+SSNO=3. Set 2 "IND" is subset of set 6 "LOCUSR"
+SSNO=4. Set 4 "LOCFIN" is subset of set 6 "LOCUSR"
+SSNO=5. Set 9 "SEC" is subset of set 1 "COM"
+SSNO=6. Set 9 "SEC" is subset of set 2 "IND"
+SSNO=7. Set 6 "LOCUSR" is subset of set 5 "USR"
+SSNO=8. Set 10 "S@exp" is subset of set 5 "USR"
+
+
+
+
+ =============
+ ++ FILE TABLE
+ =============
+
+         Logical            Defined  File  File
+  Number  Name              at line  Type  Form  Actual name (if given)
+  --------------------------------------------------------------------
+     1  INFILE                   1    old  head
+
+
+
+
+ =================
+ ++ VARIABLE TABLE
+ =================
+
+                        Defined  No            Arguments range
+  Number    Name        at line  Args Type     over sets numbered
+  ------------------------------------------------------------
+     1   delB               40     0  chng
+     2   xgdp               42     0  perc
+     3   wgdpinc            43     0  perc
+     4   wgdpexp            44     0  perc
+     5   phi                45     0  perc
+     6   xexp               46     1  perc       1
+     7   fqexp              47     1  perc       1
+     8   z                  48     1  perc       2
+     9   pfimp              49     1  perc       1
+    10   wtot               50     1  perc       4
+    11   ftot               51     1  perc       4
+    12   xtot               52     1  perc       4
+    13   ptot               53     1  perc       4
+    14   xfac_i             54     1  perc       8
+    15   ffac_i             55     1  perc       8
+    16   p                  56     2  perc       1     7
+    17   xdem               57     2  perc       1     7
+    18   pfac               58     2  perc       8     2
+    19   pfac_f             59     1  perc       2
+    20   xfac               60     2  perc       8     2
+    21   afac               61     2  perc       8     2
+    22   ffac               62     2  perc       8     2
+    23   pcomp              63     2  perc       1     6
+    24   xcomp              64     2  perc       1     6
+    25   x                  65     3  perc       1     7     6
+
+
+
+
+ ====================
+ ++ COEFFICIENT TABLE
+ ====================
+
+                        Defined  No            Arguments range
+  Number    Name        at line  Args Type     over sets numbered
+  ------------------------------------------------------------
+     1    USE               14     3  real       1     7     5
+     2    FACTOR            16     2  real       8     2
+     3    SIGMA             17     1  real       1
+     4    USE_S             23     2  real       1     5
+     5    VALADD            25     1  real       2
+     6    COSTS             26     1  real       5
+     7    SALES             27     2  real       1     7
+     8    DIFF              28     1  real       9
+     9    VGDP              29     0  real
+
+
+
+
+ =================
+ ++ EQUATION TABLE
+ =================
+
+           Defined     Semantic                        ALL quantifiers range
+  Number   at line      Error?   Equation name         over sets numbered
+  --------------------------------------------------------------------------
+     1          67       no      E_pcomp                    1     6
+     2          71       no      E_x                        1     7     6
+     3          75       no      E_pA                       9
+     4          77       no      E_pfac_f                   2
+     5          79       no      E_xfac                     8     2
+     6          81       no      E_xcompA                   1     2
+     7          85       no      E_xcompB                   1     4
+     8          87       no      E_wtot                     4
+     9          88       no      E_ptot                     4
+    10          90       no      E_xtot                     4
+    11          92       no      E_xexp                     1
+    12          96       no      E_ffac_i                   8
+    13          98       no      E_xdem                     1     7
+    14         101       no      E_z                        9
+    15         104       no      E_pB                       9
+    16         105       no      E_pfac                     8     2
+    17         107       no      E_wgdpinc           
+    18         109       no      E_xgdp              
+    19         111       no      E_wgdpexp           
+    20         115       no      E_delB              
+
+
+
+
+ ================
+ ++ FORMULA TABLE
+ ================
+
+           Defined   Semantic      LHS                RHS
+  Number   at line    Error?    coefficient       coefficient numbers
+  -------------------------------------------------------------------
+     1          30     no      USE_S              1
+     2          32     no      VALADD             2
+     3          33     no      COSTS              4
+     4          34     no      COSTS              6     5
+     5          35     no      SALES              1
+     6          36     no      DIFF               6     7
+     7          37     no      VGDP               5
+     8          38     no      Assertion          8
+
+
+
+
+ ===============
+ ++ UPDATE TABLE
+ ===============
+
+           Defined   Semantic    Updated         RHS coeff/var nos
+  Number   at line    Error?    coefficient       (vars are negative)
+  -------------------------------------------------------------------
+     1         119     no      FACTOR             2   -18   -20
+     2         121     no      USE                1   -16   -25
+     3         122     no      USE                1   -16    -6
+
+
+
+
+ =============
+ ++ READ TABLE
+ =============
+
+           Defined    Semantic  Coefficient   File number
+  Number   at line     Error?    read into     read from   Header
+  ---------------------------------------------------------------
+     1         18       no      USE                 1       USE 
+     2         20       no      FACTOR              1       FACT
+     3         21       no      SIGMA               1       SIG 
+
+
+   
+ ======================
+ ++ INPUT CHECK SUMMARY
+ ======================
+ 
+ Total number of statements is 89.
+ There are NO syntax errors or semantic problems.
+
+
+ ******************************************************************************
+ -3-
+ -->                     Starting CONDENSATION
+
+ ******************************************************************************
+
+
+
+ ==================================================
+ +1+
+ ++> Task   1 - Substituting out variable 'x'
+ ==================================================
+
+
+  >> Equation number   2 selected for substitution.
+     Equation name is 'E_x'
+
+     Coefficient of substituted variable in this equation is :
+     ---------------------------------------------------------
+
+          {1.0}
+
+     This substitution was made in the following equations :
+     -------------------------------------------------------
+
+     E_xdem (equation number  13)
+ 
+ To simplify the 'p' part of equation 'E_xdem', we will set
+ 
+          (ALL,c,COM) (ALL,s,SRC) C00010(c,s)
+
+  equal to the following expression:
+ 
+          -SUM(l,LOCUSR,-USE(c,s,l) * SIGMA(c))
+
+ 
+ This substitution was SUCCESSFUL
+  and constitutes CONDENSATION ACTION number 1.
+
+ ==================================================
+ +2+
+ ++> Task   2 - Substituting out variable 'pcomp'
+ ==================================================
+
+
+  >> Equation number   1 selected for substitution.
+     Equation name is 'E_pcomp'
+
+     Coefficient of substituted variable in this equation is :
+     ---------------------------------------------------------
+
+          {ID01[USE_S(c,u)]}
+
+ 
+ %W% Check above coefficient will never be zero.
+ 
+ (To simplify the rewritten equations, we will set
+ 
+          (ALL,c,COM) (ALL,u,LOCUSR) C00011(c,u)
+
+  equal to  -1.0  divided by the coefficient shown above.)
+ 
+     This substitution was made in the following equations :
+     -------------------------------------------------------
+
+     E_pA (equation number   3)
+     E_xcompB (equation number   7)
+     E_ptot (equation number   9)
+     E_xdem (equation number  13)
+ 
+ To simplify the 'p' part of equation 'E_xdem', we will set
+ 
+          (ALL,c,COM) (ALL,s,SRC) (ALL,XX01,SRC) C00012(c,s,XX01)
+
+  equal to the following expression:
+ 
+          SUM(l,LOCUSR,USE(c,s,l) * SIGMA(c) * C00011(c,l) * USE(c,XX01,l))
+
+ 
+ This substitution was SUCCESSFUL
+  and constitutes CONDENSATION ACTION number 2.
+
+ ==================================================
+ --> Summary of CONDENSATION
+ ==================================================
+
+
+
+     ============================
+     List of CONDENSATION actions
+     ============================
+
+     The following   2 condensation actions were performed : 
+
+     Action |  Brief description of action
+     -------|---------------------------------------------------
+            | 
+         1  |  BACKSOLVE
+            |  Variable 'x              ' (var. no.  25)
+            |  was made available for backsolving
+            |  using equation 'E_x                 ' (eq. no.   2)
+            | 
+         2  |  BACKSOLVE
+            |  Variable 'pcomp          ' (var. no.  23)
+            |  was made available for backsolving
+            |  using equation 'E_pcomp             ' (eq. no.   1)
+
+
+
+     =============================
+     Final status of all Equations
+     =============================
+
+  Number |      Equation        | Status of equation             |  Max   
+         |        name          |                                | number 
+ --------|----------------------|--------------------------------|--------
+         |                      |                                |        
+     1   | E_pcomp              | Used for BACKSOLVING           |[         0]
+     2   | E_x                  | Used for BACKSOLVING           |[         0]
+     3   | E_pA                 | In the condensed system        |         0
+     4   | E_pfac_f             | In the condensed system        |         0
+     5   | E_xfac               | In the condensed system        |         0
+     6   | E_xcompA             | In the condensed system        |         0
+     7   | E_xcompB             | In the condensed system        |         0
+     8   | E_wtot               | In the condensed system        |         3
+     9   | E_ptot               | In the condensed system        |         3
+    10   | E_xtot               | In the condensed system        |         3
+    11   | E_xexp               | In the condensed system        |         0
+    12   | E_ffac_i             | In the condensed system        |         2
+    13   | E_xdem               | In the condensed system        |         0
+    14   | E_z                  | In the condensed system        |         0
+    15   | E_pB                 | In the condensed system        |         0
+    16   | E_pfac               | In the condensed system        |         0
+    17   | E_wgdpinc            | In the condensed system        |         1
+    18   | E_xgdp               | In the condensed system        |         1
+    19   | E_wgdpexp            | In the condensed system        |         1
+    20   | E_delB               | In the condensed system        |         1
+ 
+ 
+ Maximum number of equations in condensed system is 15
+
+
+
+     =============================
+     Final status of all Variables
+     =============================
+
+  Number |    Variable     | Status of variable                  |   Max  
+         |      name       |                                     |  size  
+ --------|-----------------|-------------------------------------|--------
+         |                 |                                     |
+     1   | delB            | In the condensed system             |         1
+     2   | xgdp            | In the condensed system             |         1
+     3   | wgdpinc         | In the condensed system             |         1
+     4   | wgdpexp         | In the condensed system             |         1
+     5   | phi             | In the condensed system             |         1
+     6   | xexp            | In the condensed system             |         0
+     7   | fqexp           | In the condensed system             |         0
+     8   | z               | In the condensed system             |         0
+     9   | pfimp           | In the condensed system             |         0
+    10   | wtot            | In the condensed system             |         3
+    11   | ftot            | In the condensed system             |         3
+    12   | xtot            | In the condensed system             |         3
+    13   | ptot            | In the condensed system             |         3
+    14   | xfac_i          | In the condensed system             |         2
+    15   | ffac_i          | In the condensed system             |         2
+    16   | p               | In the condensed system             |         0
+    17   | xdem            | In the condensed system             |         0
+    18   | pfac            | In the condensed system             |         0
+    19   | pfac_f          | In the condensed system             |         0
+    20   | xfac            | In the condensed system             |         0
+    21   | afac            | In the condensed system             |         0
+    22   | ffac            | In the condensed system             |         0
+    23   | pcomp           | You can BACKSOLVE for its values    |         0B
+    24   | xcomp           | In the condensed system             |         0
+    25   | x               | You can BACKSOLVE for its values    |         0B
+ 
+ 
+ Maximum number of variables in condensed system is 21
+
+ 
+
+              Summary of model
+              ----------------
+ 
+ There are 18 equations left in the CONDENSED model.
+ 0 equations have been used to SUBSTITUTE out variables.
+ 2 equations have been used to BACKSOLVE for variables.
+ The entire model contains 20 equations.
+ 
+ There are 23 variables left in the CONDENSED model.
+ 0 variables have been SUBSTITUTED out.
+ 0 variables have been OMITTED.
+ You can BACKSOLVE for 2 variables.
+ The entire model contains 25 variables.
+
+
+ ******************************************************************************
+ -3-
+ -->                     Starting CODE GENERATION
+
+ ******************************************************************************
+
+
+
+  CODE OPTIONS CHOSEN
+  -------------------
+ 
+ 
+                         TABLO PORTABLE
+               CODE OPTIONS   ( --> indicates those in effect )
+ 
+      NEQ Do no equations       --> PGS Prepare output for GEMSIM
+      NDS Do no displays            WFP Write a Fortran Program
+      NWR Do no writes                    (i.e. a TABLO-generated program)
+                                --> FC5 Fast Compile TG-prog under LF95
+      ACC All comment lines in      NMS Don't allow simulations
+             code
+                                --> CIN Code file name same as
+                                          Information file name
+                                    CDM Old option. Has no effect.
+                                    NRZ No run-time reports re use of
+                                           ZERODIVIDE default values
+                                    NXS No "extra" statements allowed
+ 
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+
+  END OF CODE OPTIONS CHOSEN
+  --------------------------
+  
+ 
+ When used with GEMSIM, the GEMSIM Statement
+  and Table files produced in this run of TABLO
+     o can create the Equations file (for the condensed system)
+     o can check 1 ASSERTIONs
+     o can carry out multi-step simulations
+ 
+ MXGSRS = 10, MXGSIS = 10.
+ MXGSLG = 1, MXGSIC = 1.
+ 
+ MXGSOP = 42, MXGSIN = 73.
+ MXGSRC = 2, MXGSNS=1.
+ ! (Model Information file is 'simple.min'.)
+ 
+ *******************************************************************
+ Successful completion of TABLO.
+ 
+ When used with GEMSIM, the GEMSIM Statement
+  and Table files produced in this run of TABLO
+     o can create the Equations file (for the condensed system)
+     o can check 1 ASSERTIONs
+     o can carry out multi-step simulations
+ 
+ *******************************************************************

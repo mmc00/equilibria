@@ -1,0 +1,25 @@
+0001 delB                 1      1
+0002 xgdp                 1      1
+0003 wgdpinc              1      1
+0004 wgdpexp              1      1
+0005 phi                  1      1
+0006 xexp                 1      5
+0007 fqexp                1      5
+0008 z                    1      5
+0009 pfimp                1      5
+0010 wtot                 1      3
+0011 ftot                 1      3
+0012 xtot                 1      3
+0013 ptot                 1      3
+0014 xfac_i               1      2
+0015 ffac_i               1      2
+0016 p                    2      5      2
+0017 xdem                 2      5      2
+0018 pfac                 2      2      5
+0019 pfac_f               1      5
+0020 xfac                 2      2      5
+0021 afac                 2      2      5
+0022 ffac                 2      2      5
+0023 pcomp                2      5      8
+0024 xcomp                2      5      8
+0025 x                    3      5      2      8

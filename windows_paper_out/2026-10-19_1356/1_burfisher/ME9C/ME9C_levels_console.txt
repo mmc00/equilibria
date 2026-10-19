@@ -1,0 +1,424 @@
+  
+  (Processing command line options.)
+  
+  
+  (Opening Stored-input file 'ME9C_levels.sti')
+ (Opened, as text, existing file 'ME9C_levels.sti'.)
+ Taking inputs from a Stored-input file
+  
+  
+ <SLTOHT   Version 5.53  July 2013>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 11.3.004   January 2015>
+  
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+  
+  
+     << COPYRIGHT 1985-2013: CoPS/Impact and KPSOFT >>
+  
+  Current directory is:
+ C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\1_burfishe
+ r\ME9C
+  
+  
+  Full path name of running EXE is: C:\GP\sltoht.exe
+  Fortran compiler = GF64  4.8.1 (rev3, built by mingw-builds project):
+  Operating system is Windows 8
+  
+  
+  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  
+                    SLTOHT OPTIONS
+               ( --> indicates those in effect )
+  
+       BAT Run in batch          --> STI Take inputs from a Stored-input file
+       BPR Brief prompts             SIF Store inputs on a file
+       LOG Output to log file        ASI Add to incomplete Stored-input file
+                                     DES Write description file
+       LV  Which levels results      VAI Variable arguments ignored (har output)
+       SHL Show levels results       SIR Solutions in rows (text output)
+                                     SIC Solutions in columns (text output)
+       SSS Short SS output           SS  Spreadsheet (Sols in cols - text)
+       SHK Shock CMF output          SSE Spreadsheet with element labels
+       SES Short SSE output          NEL No element labels for SIR,SIC,SS,SSS
+                                     SEP Show solutions separately
+                                     HSS HA and SSS output in one run
+                                     PCL %-change for change var in lev results
+  
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+  
+ Your selection >
+  
+  
+ SHL
+  (Showing levels results, if available)
+  
+ Your selection >
+  
+  
+ SIC
+  (Solutions will be output in columns - text)
+  
+ Your selection >
+  
+  
+  
+  
+  SOLUTION FILE TO CONVERT
+  ------------------------
+  
+  Input the full name (excluding suffix) of this file.
+   (The suffix '.sl4' will be appended automatically to your input.)
+  
+  
+ ME9C
+ (Opened, as binary, existing file 'ME9C.sl4'.)
+  
+  !  This file was created at 17:11:13 on 24-SEP-2026 by the program
+  !    <gtapuv7.for 09-SEP-2020> [gtapuv7.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+  
+  THE UNDERLYING MODEL IS ' '.
+   VERSION NUMBER IS 1
+    IDENTIFIER IS ' '
+  
+  What follows is a verbal description of the old experiment.
+  
+  
+ ME 9C- 2010-2050 with climate change effects on agriculture
+ [Solution method is gragg. Steps = 6,8,10. Automatic accuracy.]
+ [CMF file: C:\Documentos\proyectos\equilibria\tools\gempack-oracle\out\ME9C\ME9
+ C.cmf]
+  
+  
+  
+  The value of U used in MA28A was 0.10000000.
+  
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   Contents of Solution File :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available.
+  
+  
+  There are also Levels results on this Solution file.
+   (263 character strings, each of length 1 read. Header 'LVOK')
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  Which solutions from this Solution file do you want :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  The levels results together with the Cumulative totals  . . .[C] (the default)
+  EXIT program now  . . . . . . . . . . . . . . . . . . . . . .[e]
+  
+  
+  
+ c
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available
+    in this SOLUTION file.
+  
+  
+  All cumulatively-retained endogenous variables kept.
+   (Real matrix with 1212 rows and 1 columns read. Header 'CUMS')
+   (Real matrix with 1212 rows and 1 columns read. Header 'CUMS')
+   (Real matrix with 253 rows and 1 columns read. Header 'LEVB')
+   (Real matrix with 253 rows and 1 columns read. Header 'LEVA')
+  
+  Output file to contain solutions
+  --------------------------------
+  
+  Input the full name (INCLUDING suffix) of this file.
+    Enter a CARRIAGE-RETURN to use the name    'ME9C.sic'.
+  
+  
+ ME9C_levels.txt
+ (Opened new print file 'ME9C_levels.txt'.)
+ (Writing ONLY CUMULATIVE TOTALS solution to file 'ME9C_levels.txt'.)
+  
+  ---------------------------------------------------
+     Variable      !     Array  Size      ! Undefined
+       Name        !                      !  values
+  ---------------------------------------------------
+   pds             !  6x4                 !      0
+   qfd             !  18x4                !      0
+   pms             !  6x4                 !      0
+   qfm             !  18x4                !      0
+   pfd             !  18x4                !     54
+   pfm             !  18x4                !     54
+   pes             !  18x4                !     54
+   qes             !  18x4                !      0
+   peb             !  18x4                !     54
+   qfe             !  18x4                !      0
+   pfe             !  18x4                !     54
+   ps              !  18x4                !     54
+   qca             !  18x4                !     54
+   pca             !  18x4                !     54
+   qgd             !  6x4                 !      0
+   qgm             !  6x4                 !      0
+   pgd             !  6x4                 !     18
+   pgm             !  6x4                 !     18
+   qpd             !  6x4                 !      0
+   qpm             !  6x4                 !      0
+   ppd             !  6x4                 !     18
+   ppm             !  6x4                 !     18
+   qid             !  6x4                 !      0
+   qim             !  6x4                 !      0
+   pid             !  6x4                 !     18
+   pim             !  6x4                 !     18
+   psave           !  2x4                 !      6
+   qsave           !  2x4                 !      6
+   pinv            !  2x4                 !      6
+   kb              !  2x4                 !      6
+   qxs             !  12x4                !      0
+   pfob            !  12x4                !     36
+   pcif            !  12x4                !     36
+   pmds            !  12x4                !     36
+   qst             !  2x4                 !      0
+   y               !  2x4                 !      6
+   pop             !  2x4                 !      6
+   pgov            !  2x4                 !      6
+   yg              !  2x4                 !      6
+   ug              !  2x4                 !      6
+   ppriv           !  2x4                 !      6
+   yp              !  2x4                 !      6
+   uepriv          !  2x4                 !      6
+   up              !  2x4                 !      6
+   to              !  18x4                !     54
+   tinc            !  18x4                !     54
+   endwslack       !  6x4                 !     18
+   qms             !  6x4                 !      0
+   globalcgds      !  1x4                 !      3
+   pcgdswld        !  1x4                 !      3
+   po              !  6x4                 !     18
+   qo              !  6x4                 !      0
+   ao              !  6x4                 !     18
+   pint            !  6x4                 !     18
+   qint            !  6x4                 !     18
+   aint            !  6x4                 !     18
+   pva             !  6x4                 !     18
+   qva             !  6x4                 !     18
+   ava             !  6x4                 !     18
+   pfa             !  18x4                !     54
+   qfa             !  18x4                !     54
+   afa             !  18x4                !     54
+   afe             !  18x4                !     54
+   profitslack     !  6x4                 !     18
+   aosec           !  3x4                 !      9
+   aoreg           !  2x4                 !      6
+   aoall           !  6x4                 !     18
+   afcom           !  3x4                 !      9
+   afsec           !  3x4                 !      9
+   afreg           !  2x4                 !      6
+   afall           !  18x4                !     54
+   avasec          !  3x4                 !      9
+   avareg          !  2x4                 !      6
+   avaall          !  6x4                 !     18
+   afecom          !  3x4                 !      9
+   afesec          !  3x4                 !      9
+   afereg          !  2x4                 !      6
+   afeall          !  18x4                !     54
+   aintsec         !  3x4                 !      9
+   aintreg         !  2x4                 !      6
+   aintall         !  6x4                 !     18
+   pb              !  6x4                 !     18
+   qc              !  6x4                 !      0
+   fincome         !  2x4                 !      6
+   incomeslack     !  2x4                 !      6
+   del_indtaxr     !  2x4                 !      6
+   uelas           !  2x4                 !      6
+   dpsave          !  2x4                 !      6
+   dpgov           !  2x4                 !      6
+   dppriv          !  2x4                 !      6
+   dpav            !  2x4                 !      6
+   p               !  2x4                 !      6
+   au              !  2x4                 !      6
+   dpsum           !  2x4                 !      6
+   u               !  2x4                 !      6
+   ppa             !  6x4                 !     18
+   qpa             !  6x4                 !     18
+   pga             !  6x4                 !     18
+   qga             !  6x4                 !     18
+   pia             !  6x4                 !     18
+   qia             !  6x4                 !     18
+   qinv            !  2x4                 !      6
+   ams             !  12x4                !     36
+   ptrans          !  12x4                !     36
+   qtmfsd          !  12x4                !     36
+   pt              !  1x4                 !      3
+   qtm             !  1x4                 !      3
+   atmfsd          !  12x4                !     36
+   atm             !  3x4                 !      9
+   atf             !  3x4                 !      9
+   ats             !  2x4                 !      6
+   atd             !  2x4                 !      6
+   atall           !  12x4                !     36
+   tx              !  6x4                 !     18
+   txs             !  12x4                !     36
+   tm              !  6x4                 !     18
+   tms             !  12x4                !     36
+   pr              !  6x4                 !      0
+   qds             !  6x4                 !      0
+   tradslack       !  6x4                 !     18
+   tfd             !  18x4                !     54
+   tfm             !  18x4                !     54
+   tpd             !  6x4                 !      0
+   tpm             !  6x4                 !     18
+   tgd             !  6x4                 !     18
+   tgm             !  6x4                 !     18
+   tid             !  6x4                 !     18
+   tim             !  6x4                 !     18
+   tpdall          !  6x4                 !     18
+   tpmall          !  6x4                 !     18
+   tpreg           !  2x4                 !      6
+   pe              !  6x4                 !     18
+   qe              !  6x4                 !     18
+   qesf            !  0x4                 !      0
+   tfe             !  18x4                !     54
+   ke              !  2x4                 !      6
+   rore            !  2x4                 !      6
+   rorc            !  2x4                 !      6
+   rental          !  2x4                 !      6
+   rorg            !  1x4                 !      3
+   cgdslack        !  2x4                 !      6
+   expand          !  2x4                 !      6
+   psaveslack      !  2x4                 !      6
+   del_taxrout     !  2x4                 !      6
+   del_taxrfu      !  2x4                 !      6
+   del_taxriu      !  2x4                 !      6
+   del_taxrpc      !  2x4                 !      6
+   del_taxrgc      !  2x4                 !      6
+   del_taxric      !  2x4                 !      6
+   del_taxrexp     !  2x4                 !      6
+   del_taxrimp     !  2x4                 !      6
+   del_taxrinc     !  2x4                 !      6
+   del_ttaxr       !  2x4                 !      6
+   pfactor         !  2x4                 !      0
+   pfactwld        !  1x4                 !      0
+   walras_sup      !  1x4                 !      3
+   walras_dem      !  1x4                 !      3
+   walraslack      !  1x4                 !      3
+   vxwfob          !  6x4                 !     18
+   vmwcif          !  6x4                 !     18
+   vxwreg          !  2x4                 !      6
+   vmwreg          !  2x4                 !      6
+   pfactreal       !  18x4                !      0
+   pebfactreal     !  6x4                 !      0
+   pefactreal      !  6x4                 !      0
+   psw             !  2x4                 !      0
+   pdw             !  2x4                 !      0
+   tot             !  2x4                 !      0
+   vgdp            !  2x4                 !      6
+   pgdp            !  2x4                 !      0
+   qgdp            !  2x4                 !      0
+   compvalad       !  6x4                 !     18
+   pxw             !  6x4                 !      0
+   vxwcom          !  3x4                 !      9
+   vxwwld          !  1x4                 !      3
+   vmwcom          !  3x4                 !      9
+   valuew          !  3x4                 !      9
+   valuewu         !  3x4                 !      9
+   pxwreg          !  2x4                 !      0
+   pxwcom          !  3x4                 !      0
+   pxwwld          !  1x4                 !      0
+   pmw             !  6x4                 !     18
+   pmwreg          !  2x4                 !      0
+   pmwcom          !  3x4                 !      0
+   pw              !  3x4                 !      9
+   pwu             !  3x4                 !      0
+   qxw             !  6x4                 !      0
+   qxwreg          !  2x4                 !      0
+   qxwcom          !  3x4                 !      0
+   qxwwld          !  1x4                 !      0
+   qmw             !  6x4                 !     18
+   qmwreg          !  2x4                 !      0
+   qmwcom          !  3x4                 !      0
+   qow             !  3x4                 !      9
+   qowu            !  3x4                 !      0
+   del_tbalc       !  6x4                 !     18
+   del_tbal        !  2x4                 !      6
+   ywld            !  1x4                 !      3
+   del_tbalry      !  2x4                 !      6
+   pm_cr           !  6x4                 !     18
+   c1_cr           !  6x4                 !     18
+   c2_cr           !  6x4                 !     18
+   c3_cr           !  6x4                 !     18
+   c1_r            !  2x4                 !      6
+   c2_r            !  2x4                 !      6
+   c3_r            !  2x4                 !      6
+   tot2            !  2x4                 !      6
+   uelasev         !  2x4                 !      6
+   ueprivev        !  2x4                 !      6
+   ugev            !  2x4                 !      6
+   upev            !  2x4                 !      6
+   qsaveev         !  2x4                 !      6
+   yev             !  2x4                 !      6
+   ypev            !  2x4                 !      6
+   ygev            !  2x4                 !      6
+   qpev            !  6x4                 !     18
+   ysaveev         !  2x4                 !      6
+   dpavev          !  2x4                 !      6
+   EV              !  2x4                 !      6
+   WEV             !  1x4                 !      3
+   EV_ALT          !  2x4                 !      6
+   WEV_ALT         !  1x4                 !      3
+   CNTdpar         !  2x4                 !      6
+   CNTpop          !  2x4                 !      6
+   CNTqor          !  2x4                 !      6
+   CNTqo           !  6x4                 !     18
+   CNTqca          !  18x4                !     54
+   CNTqe           !  6x4                 !     18
+   CNTqea          !  18x4                !     54
+   CNTqfer         !  2x4                 !      6
+   CNTqfeer        !  6x4                 !     18
+   CNTqfe          !  18x4                !     54
+   CNTqfr          !  4x4                 !     12
+   CNTqfm          !  18x4                !     54
+   CNTqfd          !  18x4                !     54
+   CNTqpm          !  6x4                 !     18
+   CNTqpd          !  6x4                 !     18
+   CNTqpr          !  4x4                 !     12
+   CNTqia          !  4x4                 !     12
+   CNTqim          !  6x4                 !     18
+   CNTqid          !  6x4                 !     18
+   CNTqgr          !  4x4                 !     12
+   CNTqgm          !  6x4                 !     18
+   CNTqgd          !  6x4                 !     18
+   CNTqxsr         !  2x4                 !      6
+   CNTqxs          !  12x4                !     36
+   CNTqmsr         !  2x4                 !      6
+   CNTqms          !  12x4                !     36
+   CNTalleffr      !  18x4                !     54
+   CNTalleffcr     !  6x4                 !     18
+   CNTtotr         !  2x4                 !      6
+   CNTpinv         !  2x4                 !      6
+   CNTendwr        !  2x4                 !      6
+   CNTendw         !  6x4                 !     18
+   CNTtechr        !  14x4                !     42
+   CNTtech_ao      !  6x4                 !     18
+   CNTtech_afe     !  18x4                !     54
+   CNTtech_ava     !  6x4                 !     18
+   CNTtech_aint    !  6x4                 !     18
+   CNTtech_af      !  18x4                !     54
+   CNTtech_atmfsd  !  12x4                !     36
+   CNTtech_ams     !  12x4                !     36
+   CNTkb           !  2x4                 !      6
+ (New Text file is 'ME9C_levels.txt'.)
+  
+  (The program has completed without error.)
+  Total elapsed time is:  1 seconds.
+  

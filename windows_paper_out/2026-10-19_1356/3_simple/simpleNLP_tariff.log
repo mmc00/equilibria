@@ -1,0 +1,112 @@
+--- Job simpleNLP_tariff.gms Start 07/24/26 22:14:25 53.1.0 6a03d3b9 WEX-WEI x86 64bit/MS Windows
+--- Applying:
+    C:\GAMS\53\gmsprmNT.txt
+--- GAMS Parameters defined
+    Input C:\Documentos\proyectos\equilibria\runs\horridge_simple\simpleNLP_tariff.gms
+    ScrDir C:\Documentos\proyectos\equilibria\runs\horridge_simple\225a\
+    SysDir C:\GAMS\53\
+    LogOption 2
+    LogFile C:\Documentos\proyectos\equilibria\runs\horridge_simple\simpleNLP_tariff.log
+    AppendLog 1
+Licensee: GAMS Demo, for EULA and demo limitations see   G260130+0003Cc-GEN
+          https://www.gams.com/latest/docs/UG%5FLicense.html         DC0000
+          C:\GAMS\53\gamslice.txt
+          47c482f4-6e50-4644
+          v:2                                                              
+          Demo license for demonstration and instructional purposes only
+System information: 10 physical cores and 32 Gb physical memory detected
+GAMS 53.1.0   Copyright (C) 1987-2026 GAMS Development. All rights reserved
+--- Starting compilation
+--- simpleNLP_tariff.gms(24) 3 Mb
+--- GDXin=C:\Documentos\proyectos\equilibria\runs\horridge_simple\input.gdx
+--- GDX File ($gdxIn) C:\Documentos\proyectos\equilibria\runs\horridge_simple\input.gdx
+--- simpleNLP_tariff.gms(362) 3 Mb
+--- Starting execution: elapsed 0:00:00.338
+--- simpleNLP_tariff.gms(305) 4 Mb
+--- Generating NLP model simple
+--- simpleNLP_tariff.gms(307) 6 Mb
+---   217 rows  217 columns  906 non-zeroes
+---   1,448 nl-code  616 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 1.000E+00, 2.330E+02] - Zero values observed as well
+--- Bound     [min, max] : [        NA,        NA]
+--- Matrix    [min, max] : [ 4.527E-13, 4.600E+02] - Zero values observed as well
+--- simpleNLP_tariff.gms(307) 4 Mb
+--- Executing CONOPT (Solvelink=2): elapsed 0:00:00.469
+
+CONOPT 4         53.1.0 6a03d3b9 Feb 16, 2026          WEI x86 64bit/MS Window
+
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 217 constraints and 217 variables
+    with 906 Jacobian elements, 616 of which are nonlinear.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       0   0          1.0001038886E-09 (Input point)
+ 
+ ** The iteration limit has been reached.
+ 
+--- Reading solution for model simple
+--- Executing after solve: elapsed 0:00:06.841
+--- simpleNLP_tariff.gms(326) 4 Mb
+--- Generating NLP model simple
+--- simpleNLP_tariff.gms(328) 6 Mb
+---   217 rows  217 columns  887 non-zeroes
+---   1,418 nl-code  591 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 1.000E+00, 2.330E+02] - Zero values observed as well
+--- Bound     [min, max] : [        NA,        NA]
+--- Matrix    [min, max] : [ 4.527E-13, 4.600E+02] - Zero values observed as well
+--- simpleNLP_tariff.gms(328) 4 Mb
+--- Executing CONOPT (Solvelink=2): elapsed 0:00:06.884
+
+CONOPT 4         53.1.0 6a03d3b9 Feb 16, 2026          WEI x86 64bit/MS Window
+
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 217 constraints and 217 variables
+    with 887 Jacobian elements, 591 of which are nonlinear.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       0   0          5.0000000100E-01 (Input point)
+ 
+    The pre-triangular part of the model has 39 constraints and variables.
+    The post-triangular part of the model has 1 constraints and variables.
+ 
+    Preprocessed model has 177 constraints and 177 variables
+    with 700 Jacobian elements, 451 of which are nonlinear.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+                      6.9379032269E+01 (Full preprocessed model)
+                      3.6695045510E+00 (After scaling)
+       5   0          1.4860351691E-06                 1.0E+00     0 T  T
+ 
+ ** Feasible solution. Value of objective =    1.00000000000
+ 
+    Iter Phase   Ninf     Objective     RGmax      NSB   Step  InItr MX OK
+       8   4          1.0000000000E+00 0.0E+00       0
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+ 
+--- Reading solution for model simple
+--- Executing after solve: elapsed 0:00:08.518
+--- simpleNLP_tariff.gms(361) 4 Mb
+--- GDX File (execute_unload) C:\Documentos\proyectos\equilibria\runs\horridge_simple\RESULTS.gdx
+*** Status: Normal completion
+--- Job simpleNLP_tariff.gms Stop 07/24/26 22:14:33 elapsed 0:00:08.541

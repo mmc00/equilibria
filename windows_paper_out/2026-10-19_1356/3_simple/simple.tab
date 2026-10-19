@@ -1,0 +1,124 @@
+File INFILE # base data file #;
+Set
+ COM # Commodities # read elements from file INFILE header "SEC";
+ IND # Industries #  read elements from file INFILE header "SEC";
+ FIN # Final users # (Hou,Gov,Inv,Exp);
+ LOCFIN # Local final users # (Hou,Gov,Inv);
+ USR # All users # = IND + FIN;
+ LOCUSR # Local users # = IND + LOCFIN;
+ SRC (dom,imp);
+ FAC (Capital,Labor);
+ SEC = COM intersect IND;
+Subset LOCUSR is subset of USR;
+
+Coefficient ! data on file !
+(all,c,COM)(all,s,SRC)(all,u,USR) USE(c,s,u) # Value of inputs #;
+(all,f,FAC)(all,i,IND)           FACTOR(f,i) # Primary factor costs #;
+(parameter)(all,c,COM)              SIGMA(c) # CES dom-imp elasticity #;
+Read
+ USE    from file INFILE header "USE";
+ FACTOR from file INFILE header "FACT";
+ SIGMA  from file INFILE header "SIG";
+
+Coefficient ! calculated !
+(all,c,COM)(all,u,USR) USE_S(c,u) # Value of import composites #;
+(all,i,IND)             VALADD(i) # Factor costs #;
+(all,u,USR)              COSTS(u) # Costs #;
+(all,c,COM)(all,s,SRC) SALES(c,s) # Sales #;
+(all,q,SEC)               DIFF(q) # Costs-Sales #;
+                             VGDP # GDP #;
+Formula
+(all,c,COM)(all,u,USR) USE_S(c,u) = sum{s,SRC, USE(c,s,u)};
+(all,i,IND)             VALADD(i) = sum{f,FAC,FACTOR(f,i)};
+(all,u,USR)              COSTS(u) = sum{c,COM, USE_S(c,u)};
+(all,i,IND)              COSTS(i) = COSTS(i) + VALADD(i);
+(all,c,COM)(all,s,SRC) SALES(c,s) = sum{u,USR, USE(c,s,u)};
+(all,q,SEC)               DIFF(q) = COSTS(q) - SALES(q,"dom");
+                             VGDP = sum{i,IND,VALADD(i)};
+Assertion # Check data balance # (all,q,SEC) ABS[DIFF(q)]<0.001;
+
+Variable
+                   (change) delB # (Nominal balance of trade)/{nominal GDP} #;
+                            xgdp # Real GDP #;
+                         wgdpinc # Nominal GDP from income side #;
+                         wgdpexp # Nominal GDP from expenditure side #;
+                             phi # Exchange rate (local$/foreign$) #;
+             (all,c,COM) xexp(c) # Export quantities #;
+            (all,c,COM) fqexp(c) # Right shift in export demand curve #;
+                (all,i,IND) z(i) # Industry outputs #;
+            (all,c,COM) pfimp(c) # Imp goods prices, foreign $ #;
+          (all,l,LOCFIN) wtot(l) # Nominal expenditure by local final users #;
+          (all,l,LOCFIN) ftot(l) # wtot/GDP #;
+          (all,l,LOCFIN) xtot(l) # Real expenditure by local final users #;
+          (all,l,LOCFIN) ptot(l) # Price indices for local final users #;
+           (all,f,FAC) xfac_i(f) # Total value-weighted factor use #;
+           (all,f,FAC) ffac_i(f) # Factor wage shift #;
+(all,c,COM)(all,s,SRC)    p(c,s) # Commodity prices #;
+(all,c,COM)(all,s,SRC) xdem(c,s) # Total demand for goods #;
+(all,f,FAC)(all,i,IND) pfac(f,i) # Factor prices #;
+(all,i,IND)            pfac_f(i) # Factor composite prices #;
+(all,f,FAC)(all,i,IND) xfac(f,i) # Factor use #;
+(all,f,FAC)(all,i,IND) afac(f,i) # Factor-using technical change #;
+(all,f,FAC)(all,i,IND) ffac(f,i) # Factor wage shift #;
+(all,c,COM)(all,l,LOCUSR) pcomp(c,l) # Price dom/imp composites#;
+(all,c,COM)(all,l,LOCUSR) xcomp(c,l) # Quantity dom/imp composites#;
+(all,c,COM)(all,s,SRC)(all,l,LOCUSR) x(c,s,l) # Commodity demands #;
+
+Equation
+! Dom/imp CES BLOCK !
+E_pcomp # Price: dom/imp composites # (all,c,COM)(all,u,LOCUSR)
+ ID01[USE_S(c,u)]*pcomp(c,u)=sum{s,SRC,USE(c,s,u)*p(c,s)};
+E_x # Quant: final dom/imp composites# (all,c,COM)(all,s,SRC)(all,l,LOCUSR)
+ x(c,s,l) = xcomp(c,l) - SIGMA(c)*[p(c,s)-pcomp(c,l)];
+
+! Industry demands !
+E_pA  # Industry cost indices # (all,i,SEC)
+ ID01[COSTS(i)]*p(i,"dom")=sum{c,COM,USE_S(c,i)*pcomp(c,i)}+VALADD(i)*pfac_f(i);
+E_pfac_f # Factor composite prices # (all,i,IND)
+ ID01[VALADD(i)]*pfac_f(i) = sum{f,FAC, FACTOR(f,i)*[pfac(f,i)+afac(f,i)]};
+E_xfac # Factor demands (CES) # (all,f,FAC)(all,i,IND)
+ xfac(f,i) = z(i) + afac(f,i) - 0.5*[pfac(f,i)+afac(f,i)-pfac_f(i)];
+E_xcompA # Intermediate demands (Leontief) # (all,c,COM)(all,i,IND)
+ xcomp(c,i) = z(i);
+
+! Final demanders !
+E_xcompB # Local final demands (Cobb-Douglas) # (all,c,COM)(all,l,LOCFIN)
+ xcomp(c,l) + pcomp(c,l) = wtot(l);
+E_wtot  # Absorption # (all,l,LOCFIN) wtot(l) = ftot(l) + wgdpinc;
+E_ptot  # Price indices for local final users # (all,l,LOCFIN)
+ ID01[COSTS(l)]*ptot(l) = sum{c,COM, USE_S(c,l)*pcomp(c,l)};
+E_xtot  # Real expenditure by local final users # (all,l,LOCFIN)
+ xtot(l) + ptot(l) = wtot(l);
+E_xexp  # Export demands #  (all,c,COM)
+ xexp(c) = fqexp(c) -5.0*[p(c,"dom")-phi];
+
+! Total demands and market clearing !
+E_ffac_i  # Total (value-weighted) factor use # (all,f,FAC)
+ sum{i,IND,FACTOR(f,i)*[xfac_i(f) - xfac(f,i)]} = 0;
+E_xdem    # Total demand for goods # (all,c,COM)(all,s,SRC)
+ ID01[SALES(c,s)]*xdem(c,s) =
+    sum{l,LOCUSR,USE(c,s,l)*x(c,s,l)} + USE(c,s,"exp")*xexp(c);
+E_z       # Market clearing # (all,i,SEC) z(i) = xdem(i,"dom");
+
+! Miscellaneous !
+E_pB      # Import prices # (all,i,SEC) p(i,"imp") = pfimp(i) + phi;
+E_pfac    # Factor mobility/remuneration # (all,f,FAC)(all,i,IND)
+ pfac(f,i) = ptot("hou") + ffac(f,i) + ffac_i(f);
+E_wgdpinc # Nominal GDP from income side #
+ VGDP*wgdpinc = sum{i,IND, sum{f,FAC, FACTOR(f,i)*[pfac(f,i)+xfac(f,i)]}};
+E_xgdp    # Real GDP from income side #
+ VGDP*xgdp = sum{i,IND, sum{f,FAC, FACTOR(f,i)*[xfac(f,i)-afac(f,i)]}};
+E_wgdpexp # Nominal GDP from expenditure side #
+ VGDP*wgdpexp= sum{c,COM, sum{l,LOCFIN, USE_S(c,l)*wtot(l)}
+  + USE(c,"dom","exp")*[p(c,"dom")+xexp(c)]
+  - SALES(c,"imp")*[p(c,"imp")+xdem(c,"imp")]};
+E_delB    # (balance of trade)/GDP # 
+  100*VGDP*delB = sum{c,COM,USE(c,"dom","exp")*[p(c,"dom")+xexp(c)-wgdpinc]}
+                - sum{c,COM,SALES(c,"imp")*[p(c,"imp")+xdem(c,"imp")-wgdpinc]};
+
+Update
+(all,i,IND)(all,f,FAC) FACTOR(f,i)=pfac(f,i)*xfac(f,i);
+(all,c,COM)(all,s,SRC)(all,l,LOCUSR) USE(c,s,l) = p(c,s)*x(c,s,l);
+(all,c,COM) USE(c,"dom","exp") = p(c,"dom")*xexp(c);
+Backsolve x using E_x; pcomp using E_pcomp;  
+

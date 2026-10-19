@@ -1,0 +1,3320 @@
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 1
+Simple Model
+C o m p i l a t i o n
+
+
+   5   
+   6  * Convention: variables (and initial values of variables) are in lowercase,
+   7  * other parameters are in upper case
+   8   
+   9  *======================== (1) Set Declaration ============================
+  10  * Declare and read Sets and Parameters stored in GDX
+  11  Set     ! on data file
+  12   USR      Users
+  13   FAC      Factors
+  14   LOCUSR(USR) Local users
+  15   COM(LOCUSR) Commodities
+  16   IND(COM) Industries
+  17   LOCFIN(LOCUSR) Local final users
+  18   SEC(IND)      Sectors
+  19   SRC      Sources / dom, imp / ;
+  20  Parameter    ! on data file
+  21   USE(COM,SRC,USR) Value of inputs
+  22   FACTOR(FAC,IND)  Primary factor costs
+  23   SIGMA(COM)       CES dom-imp elasticity   ;
+GDXIN   C:\Documentos\proyectos\equilibria\runs\horridge_simple\input.gdx
+--- LOAD  USR = 6:USR
+--- LOAD  FAC = 10:FAC
+--- LOAD  LOCUSR = 8:LOCUSR
+--- LOAD  COM = 2:COM
+--- LOAD  IND = 3:IND
+--- LOAD  LOCFIN = 9:LOCFIN
+--- LOAD  SEC = 4:SEC
+--- LOAD  FACTOR = 12:FACTOR
+--- LOAD  USE = 11:USE
+--- LOAD  SIGMA = 13:SIGMA
+  26   
+  27  Set     ! Additional Sets
+  28   FIN(USR)       Final users         / Hou, Gov, Inv, Exp /
+  29   EXP(USR)       Exports             / Exp / ;
+  30   
+  31  Alias (IND,i),(COM,c),(SRC,s),(USR,u),(FAC,f),(f,ff),(LOCFIN,lf),(LOCUSR,lu),(FIN,fu);
+  32   
+  33  *--- alter data to avoid problems
+  34  * USE(c,s,u) $(USE(c,s,u) eq 0) = 1E-9;  ! avoid zero problems
+  35   FACTOR(f,i)$(FACTOR(f,i)eq 0) = 1E-9;
+  36   SIGMA(c) $(SIGMA(c)eq 1)  = 1.0001;   !NOTE: CES sigma must not equal 1
+  37   
+  38  Parameter   ! addups of base data
+  39   VALADD0(i)       Factor costs
+  40   COSTS0(i)        Costs
+  41   SALES0(c,s)      Sales
+  42   DIFF(i)          Costs - sales ;
+  43   
+  44   VALADD0(i)   = SUM[f,FACTOR(f,i)];
+  45   COSTS0(i)    = VALADD0(i) + SUM((c,s), USE(c,s,i));
+  46   SALES0(c,s)  = SUM(u, USE(c,s,u));
+  47   DIFF(i)      = SALES0(i,"dom")- COSTS0(i);
+  48   
+  49  DISPLAY VALADD0, COSTS0, SALES0, DIFF, FACTOR;
+  50  ABORT$(ABS{SUM[i, DIFF(i)]} GT 0.01)"!!!DATA BALANCE PROBLEM!!!";
+  51  *======================= (2) Parameter declarations ======================
+  52  Parameter   ! initial values of variables (and variables) are in lower case
+  53   ffac0(f,i)       Factor wage shift
+  54   pfac0(f,i)       Factor prices
+  55   pfac_f0(i)       Factor composite prices
+  56   xfac0(f,i)       Factor use
+  57   xfac_i0(f)       Total value-weighted factor use
+  58   ffac_i0(f)       Factor wage shift
+  59   xfac_f0(i)       Total factor use by industry
+  60   z0(i)            Industry outputs
+  61   x0(c,s,lu)       Value of inputs
+  62   wtot0(lf)        Nominal expenditure by local final users
+  63   xtot0(lf)        Real expenditure by local final users
+  64   xdem0(c,s)       Total demand for goods
+  65   xcomp0(c,lu)     Quant: final dom-imp composites
+  66   ptot0(lf)        Price indices for local final users
+  67   p0(c,s)          Goods prices
+  68   pcomp0(c,lu)     Price: Intermediate dom-imp composites for local users
+  69   wgdpinc0         Nominal GDP from income side
+  70   wgdpexp0         Nominal GDP from expenditure side
+  71   delB0            Trade balance
+  72   phi0             Exchange rate
+  73   pfimp0(c)        Imported goods prices-foreign $
+  74   xexp0(c)         Export demand
+  75   ftot0(lf)        Absorption parameter
+  76   afac0(f,i)       Factor shifter
+  77   fqexp0(c)        Initial value of export shifter;
+  78   
+  79  *-- Assign initial values
+  80   pcomp0(c,lu) = 1;
+  81   p0(c,s)      = 1;
+  82   pfac_f0(i)   = 1;
+  83   pfac0(f,i)   = 1;
+  84   pfimp0(c)    = 1;
+  85   ptot0(lf)    = 1;
+  86   ffac0(f,i)   = 1;
+  87   ffac_i0(f)   = 1;
+  88   afac0(f,i)   = 1;
+  89   phi0         = 1;
+  90   
+  91  *use(c,s,lu)$(not round(use(c,s,lu),7)) = 0;
+  92   
+  93  *--- Volumes calculations
+  94   x0(c,s,lu)     = USE(c,s,lu)/p0(c,s);
+  95   xcomp0(c,lu)   = SUM[s,USE(c,s,lu)]/pcomp0(c,lu);
+  96   xexp0(c)       = USE(c,"dom","exp")/p0(c,"dom");
+  97   
+  98   
+  99   
+ 100  *--- Initial Data for use in calibration
+ 101   xfac0(f,i)  = FACTOR(f,i)/pfac0(f,i);
+ 102   xfac_f0(i)  = VALADD0(i)/pfac_f0(i);
+ 103   xfac_i0(f)  = SUM[i, FACTOR(f,i)/pfac0(f,i)];
+ 104   z0(i)       = COSTS0(i)/p0(i,"dom");
+ 105   wtot0(lf)   = SUM[(c,s), USE(c,s,lf)];
+ 106   xtot0(lf)   = wtot0(lf)/ptot0(lf);
+ 107   xdem0(c,s)  = SUM[lu, x0(c,s,lu)];
+ 108   xdem0(c,"dom") = xdem0(c,"dom") + xexp0(c);
+ 109   
+ 110  *--- Other initial values
+ 111   fqexp0(c)   = xexp0(c)*[p0(c,"dom")/phi0]**(5) ;
+ 112   wgdpinc0    = SUM{i, SUM[f,FACTOR(f,i)]};
+ 113   delB0       = SUM[c, USE(c,"dom","exp")] - SUM[(c,u), USE(c,"imp",u)];
+ 114   wgdpexp0    = SUM[(c,s,lf), USE(c,s,lf)] + delB0;
+ 115   delB0       = delB0 / wgdpinc0;
+ 116   ftot0(lf)   = wtot0(lf)/wgdpinc0;
+ 117   
+ 118  *======================== (3) Calibration  ===============================
+ 119  Parameter   ! Calibrate CES dom-imp
+ 120   A_ARM(c,s,lu) Armington shares ;
+ 121   A_ARM(c,s,lu)$xcomp0(c,lu)  = x0(c,s,lu)/xcomp0(c,lu)
+ 122                                  *[pcomp0(c,lu)/p0(c,s)]**SIGMA(c);
+ 123   
+ 124  Parameter   ! Calibrate CES primary factor
+ 125   SIGMA_FAC(i)     Elasticity in factor use
+ 126   ALPHA_F(f,i)     Share of factor in CES value added
+ 127   RHO_F(i)         Rho parameter in  CES value added
+ 128   A_F(i)           Technology parameter in CES value added;
+ 129   SIGMA_FAC(i)   = 0.5;
+ 130   RHO_F(i)       = (1-SIGMA_FAC(i))/SIGMA_FAC(i);
+ 131   ALPHA_F(f,i)   = pfac0(F,I)*xfac0(f,i)**(1+RHO_F(i))/
+ 132                     SUM{ff,pfac0(ff,I)*xfac0(ff,i)**[1+RHO_F(i)]};
+ 133   A_F(i)         = xfac_f0(i)/SUM[f,ALPHA_F(f,i)*xfac0(f,i)**(-RHO_F(i))]**(-1/RHO_F(i));
+ 134   
+ 135  Parameter   ! Calibrate Leontief coefficient
+ 136   VA_COEF(i)    Value added (Leontief) coefficient for industries
+ 137   INT_COEF(c,i) Intermediate (Leontief) coefficient for industries;
+ 138   VA_COEF(i)    = z0(i)/xfac_f0(i);
+ 139   INT_COEF(c,i) $xcomp0(c,i) = z0(i)/xcomp0(c,i);
+ 140   
+ 141  Parameter   ! Calibrate Cobb-Douglas for final users
+ 142   ALPHA_LF(c,lf) CD Shares of local final users
+ 143   A_LF(lf)       CD Shift parameter for local final users ;
+ 144   ALPHA_LF(c,lf) = [xcomp0(c,lf)*pcomp0(c,lf)]/wtot0(lf);
+ 145   A_LF(lf)       = xtot0(lf)/{PROD[c,xcomp0(c,lf)**ALPHA_LF(c,lf)]}
+ 146   
+ 147  *========================== (4) MODEL ====================================
+ 148  Variable
+ 149   pcomp(c,lu)      Price of Composite dom-imp commodity
+ 150   p(c,s)           Goods' prices
+ 151   pfac_f(i)        Composite factor prices
+ 152   pfac(f,i)        Price of Factors
+ 153   ptot(lf)         Price indices for local final users
+ 154   phi              Exchange rate
+ 155   pfimp(i)         Import prices
+ 156   xcomp(c,lu)      Composite commodity
+ 157   x(c,s,lu)        Intermediate demand
+ 158   xfac_f(i)        Total factor use
+ 159   xtot(lf)         Total output of local final user
+ 160   xfac(f,i)        Factor demand
+ 161   xfac_i(f)        Total factor use
+ 162   xtot(lf)         Real expenditure of local final users
+ 163   xexp(c)          Export demand
+ 164   xdem(c,s)        Total demand for goods
+ 165   z(i)             Output of industry
+ 166   wtot(lf)         Nominal expenditure by local final users
+ 167   wgdpinc          Nominal GDP - income side
+ 168   wgdpexp          Nominal GDP expenditure side
+ 169   delB             Trade Balance
+ 170   afac(f,i)        Factor using technical change
+ 171   ffac_i(f)        Factor wage shifter
+ 172   ffac(f,i)        Factor wage shifter
+ 173   ftot(lf)         Absorption parameter for local final users
+ 174   fqexp(c)         Export shifter
+ 175   OBJ              NLP objective function ;
+ 176   
+ 177  Equation   !  Dom-imp Block
+ 178   E_pcomp          Price of Composite dom-imp commodity
+ 179   E_xcomp1         Dom-imp Composite for industries (Leontief)
+ 180   E_xcomp2         Dom-imp Composite for local final users (Cobb-Douglas)
+ 181   E_x              Intermediate demand ;
+ 182   
+ 183   E_pcomp(c,lu)$xcomp0(c,lu)..  pcomp(c,lu)*xcomp(c,lu) =e= SUM[s, x(c,s,lu)*p(c,s)];
+ 184   
+ 185   E_xcomp1(c,i)$xcomp0(c,i)..  xcomp(c,i) =e= z(i)/INT_COEF(c,i);
+ 186   
+ 187   E_xcomp2(c,lf).. xcomp(c,lf)*pcomp(c,lf) =e= ALPHA_LF(c,lf)*wtot(lf);
+ 188   
+ 189   E_x(c,s,lu)..  x(c,s,lu)=e= A_ARM(c,s,lu)*xcomp(c,lu)*[pcomp(c,lu)/p(c,s)]**SIGMA(c);
+ 190   
+ 191  Equation   ! Industry demands
+ 192   E_pA             Industry cost indices
+ 193   E_pfac_f         Composite factor prices
+ 194   E_xfac           Demand for factors
+ 195   E_xfac_f         Composite factor CES  ;
+ 196   
+ 197   E_pA(i,"dom")..  p(i,"dom")*z(i) =e= SUM[c,xcomp(c,i)*pcomp(c,i)] + xfac_f(i)*pfac_f(i);
+ 198   
+ 199   E_pfac_f(i)..    pfac_f(i)*xfac_f(i) =e= SUM[f, xfac(f,i)*pfac(f,i)];
+ 200   
+ 201   E_xfac(f,i)..    xfac(f,i)/xfac_f(i) =e= [afac(f,i)*ALPHA_F(f,i)*pfac_f(i)/pfac(f,i)]
+ 202                        **SIGMA_FAC(i)*A_F(i)**(SIGMA_FAC(i)-1);
+ 203   
+ 204   E_xfac_f(i)..    xfac_f(i)*VA_COEF(i) =e= z(i);
+ 205   
+ 206  Equation   ! Final demanders
+ 207   E_wtot           Nominal expenditure by local final users
+ 208   E_ptot           Price indices for local final users
+ 209   E_xtot           Real expenditure by local final users
+ 210   E_xexp           Export demand  ;
+ 211   
+ 212   E_wtot(lf)..     wtot(lf) =e= ftot(lf)*wgdpinc;
+ 213   
+ 214   E_ptot(lf)..     ptot(lf) =e= [1/A_LF(lf)]*
+ 215                  PROD{c$ALPHA_LF(c,lf),[pcomp(c,lf)/ALPHA_LF(c,lf)]
+ 216                                  **ALPHA_LF(c,lf)};
+ 217   
+ 218   E_xtot(lf)..     xtot(lf)*ptot(lf) =e= wtot(lf);
+ 219   
+ 220   E_xexp(c)..      xexp(c) =e= fqexp(c)*[p(c,"dom")/phi]**(-5) ;
+ 221   
+ 222  Equation   !  Total demand and market clearing
+ 223   E_ffac_i         Total factor use
+ 224   E_xdemA          Total demand for dom goods
+ 225   E_xdemB          Total demand for imp goods
+ 226   E_z(i)           Market clearing ;
+ 227   
+ 228   E_ffac_i(f)..    xfac_i(f) =e= SUM[i, xfac(f,i)];
+ 229   
+ 230   E_xdemA(c)..     xdem(c,"dom") =e= SUM[lu, x(c,"dom",lu)] + xexp(c);
+ 231   
+ 232   E_xdemB(c)..     xdem(c,"imp") =e= SUM[lu, x(c,"imp",lu)];
+ 233   
+ 234   E_z(i)..         z(i) =e= xdem(i,"dom");
+ 235   
+ 236  Equation   ! Miscellaneous equations
+ 237   E_pB(i)          Import prices
+ 238   E_pfac(f,i)      Factor remuneration
+ 239   E_wgdpinc        Nominal GDP income
+ 240   E_wgdpexp        Nominal GDP expenditure
+ 241   E_delB           Trade Balance
+ 242   E_OBJ            NLP objective function      ;
+ 243   
+ 244   E_pB(i)..        p(i,"imp") =e= pfimp(i)*phi ;
+ 245   
+ 246   E_pfac(f,i)..    pfac(f,i) =e= ffac_I(f)*ffac(f,i)* ptot("hou");
+ 247   
+ 248   E_wgdpinc..      wgdpinc =e= SUM{i, SUM[f,xfac(f,i)*pfac(f,i)]};
+ 249   
+ 250   E_wgdpexp..      wgdpexp =e= SUM[(c,lf)$xcomp0(c,lf), xcomp(c,lf)*pcomp(c,lf)]
+ 251                             + SUM[c, xexp(c)*p(c,"dom") - xdem(c,"imp")*p(c,"imp")];
+ 252   
+ 253   E_delB..         delB*wgdpinc =e= SUM[c, xexp(c)*p(c,"dom") - xdem(c,"imp")*p(c,"imp")];
+ 254   
+ 255   E_OBJ..          OBJ =e= 1;
+ 256   
+ 257  *--- Initialize levels variables
+ 258   xfac_f.l(i)      = xfac_f0(i);
+ 259   xcomp.l(c,lu)    = xcomp0(c,lu);
+ 260   x.l(c,s,lu)      = x0(c,s,lu);
+ 261   xfac.l(f,i)      = xfac0(f,i);
+ 262   xtot.l(lf)       = xtot0(lf);
+ 263   xexp.l(c)        = xexp0(c);
+ 264   xfac_i.l(f)      = xfac_i0(f);
+ 265   xdem.l(c,s)      = xdem0(c,s);
+ 266   xtot.l(lf)       = xtot0(lf);
+ 267   z.l(i)           = z0(i);
+ 268   pcomp.l(c,lu)    = pcomp0(c,lu);
+ 269   pfac_f.l(i)      = pfac_f0(i);
+ 270   pfac.l(f,i)      = pfac0(f,i);
+ 271   p.l(c,s)         = p0(c,s);
+ 272   p.l(i,s)         = p0(i,s);
+ 273   ptot.l(lf)       = ptot0(lf);
+ 274   wtot.l(lf)       = wtot0(lf);
+ 275   wgdpinc.l        = wgdpinc0;
+ 276   wgdpexp.l        = wgdpexp0;
+ 277   delB.l           = delB0;
+ 278   pfimp.l(i)       = pfimp0(i);
+ 279   phi.l            = phi0;
+ 280   fqexp.l(c)       = fqexp0(c);
+ 281   ftot.l(lf)       = ftot0(lf);
+ 282   afac.l(f,i)      = afac0(f,i);
+ 283   ffac_I.l(f)      = ffac_I0(f);
+ 284   ffac.l(f,i)      = ffac0(f,i);
+ 285   OBJ.l            = 1;
+ 286   
+ 287  model simple /all/;
+ 288  *======================= (5) Simulation Closure and Shocks ================
+ 289  * Exogenous Variables in standard closure
+ 290   afac.fx(f,i)     = afac0(f,i);
+ 291   ffac.fx(f,i)     = ffac0(f,i);
+ 292   fqexp.fx(c)      = xexp0(c);
+ 293   ftot.fx(lf)      = ftot0(lf);
+ 294   pfimp.fx(i)      = pfimp0(i);
+ 295   phi.fx           = phi0;
+ 296   xfac_i.fx(f)     = xfac_i0(f);
+ 297   
+ 298  pcomp.fx(c,lu)$(xcomp0(c,lu)=0) = 1;
+ 299  xcomp.fx(c,lu)$(xcomp0(c,lu)=0) = 0;
+ 300   
+ 301  option sysout=on;
+ 302   
+ 303  simple.holdfixed=1;     ! assist check that n.equ = n.endogenous var
+ 304  simple.iterlim=0;       ! dummy simulation to test calibration
+ 305  simple.tolinfrep=1E-8;
+ 306  * solve simple using mcp; ! would abort if initial values not a solution
+ 307   solve simple maximizing obj using NLP;
+ 308   
+ 309  *--- Closure changes/Swaps
+ 310   xfac.fx("capital",i) = xfac0("capital",i);   ! fix industry capital stocks
+ 311   ffac.lo("capital",i) = -INF;
+ 312   ffac.up("capital",i) = +INF;
+ 313   ffac.l("capital",i)  = ffac0("capital",i);
+ 314   
+ 315   ffac_I.fx("capital") = ffac_I0("capital");   ! unfix total capital stock
+ 316   xfac_i.lo("capital") = -INF;
+ 317   xfac_i.up("capital") = +INF;
+ 318   xfac_i.l("capital")  = xfac_i0("capital");
+ 319   
+ 320  *--- SHOCKS
+ 321  pfimp.fx(i) = pfimp0(i)*1.10;  !Global 10pct import tariff-equivalent
+ 322   
+ 323  *--- Solve model
+ 324  simple.reslim=19000;
+ 325  simple.iterlim=200;
+ 326  simple.holdfixed=1;
+ 327  *solve simple using MCP;
+ 328   solve simple maximizing obj using NLP;
+ 329   
+ 330  *======================= (6) Simulation Results ==========================
+ 331  Parameter
+ 332   LGDP             Laspeyeres GDP quantity index
+ 333   PGDP             Paasche GDP quantity index
+ 334   CH_XGDPINC       Percentage change in Fisher (ideal) GDP quantity index
+ 335   CH_Z(i)          Percentage change in output of industries
+ 336   CH_X(c,s,lu)     Percentage change in intermediate demand
+ 337   CH_XFAC(f,i)     Percentage change in factor demand
+ 338   CH_PFAC(f,i)     Percentage change in price of factors
+ 339   CH_PFAC_F(i)     Percentage change in composite price of factors
+ 340   CH_P(c,s)        Percentage change in basic prices
+ 341   CH_WGDPINC       Percentage change in nominal GDP income side
+ 342   CH_WGDPEXP       Percentage change in nominal GDP expenditure side
+ 343   CH_DELB          Ordinary change in ratio nominal trade balance to GDP;
+ 344   
+ 345   LGDP = SUM[i,xfac_f.l(i)*pfac_f0(i)]  / SUM[i,xfac_f0(i)*pfac_f0(i)];
+ 346   PGDP = SUM[i,xfac_f.l(i)*pfac_f.l(i)] / SUM[i,xfac_f0(i)*pfac_f.l(i)];
+ 347   CH_XGDPINC = [SQRT(LGDP*PGDP)-1]*100;
+ 348   CH_Z(i)                  = (z.l(i)/z0(i)-1)*100;
+ 349   CH_X(c,s,lu) $x0(c,s,lu) = (x.l(c,s,lu)/x0(c,s,lu)-1)*100;
+ 350   CH_XFAC(f,i) $xfac0(f,i) = (xfac.l(f,i)/xfac0(f,i)-1)*100;
+ 351   CH_PFAC(f,i) $pfac0(f,i) = (pfac.l(f,i)/pfac0(f,i)-1)*100;
+ 352   CH_PFAC_F(i) $pfac_f0(i) = (pfac_f.l(i)/pfac_f0(i)-1)*100;
+ 353   CH_P(c,s)                = (p.l(c,s)/p0(c,s)-1)*100;
+ 354   CH_WGDPINC               = (wgdpinc.l/wgdpinc0-1)*100;
+ 355   CH_WGDPEXP               = (wgdpexp.l/wgdpexp0-1)*100;
+ 356   CH_DELB                  = (delB.l-delB0);
+ 357   
+ 358  Display CH_Z,CH_XFAC,CH_PFAC,CH_PFAC_F,CH_P,CH_WGDPINC,CH_XGDPINC,CH_WGDPEXP,CH_DELB;
+ 359   
+ 360  *---Export results to GDX
+ 361  EXECUTE_UNLOAD 'RESULTS', CH_Z,CH_XFAC, CH_PFAC, CH_PFAC_F,CH_P, CH_WGDPINC,
+ 362                            CH_XGDPINC, CH_WGDPEXP,  CH_DELB;
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 2
+Simple Model
+Include File Summary
+
+
+   SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
+
+     1        1 INPUT          0       0       0  C:\Documentos\proyectos\equilibria\runs\horridge_simple\simpleNLP_tariff.gms
+     2       24 GDXIN          1      24       0  C:\Documentos\proyectos\equilibria\runs\horridge_simple\input.gdx
+
+
+COMPILATION TIME     =        0.047 SECONDS      3 MB  53.1.0 6a03d3b9 WEX-WEI
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 3
+Simple Model
+E x e c u t i o n
+
+
+----     49 PARAMETER VALADD0  Factor costs
+
+agr  87.000,    min  88.000,    mnf 109.000,    rsd  47.000,    srv 123.000
+
+
+----     49 PARAMETER COSTS0  Costs
+
+agr 125.000,    min 136.000,    mnf 246.000,    rsd  60.000,    srv 163.000
+
+
+----     49 PARAMETER SALES0  Sales
+
+            dom         imp
+
+agr     125.000       6.000
+min     136.000      36.000
+mnf     246.000     133.000
+rsd      60.000
+srv     163.000      24.000
+
+
+----     49 PARAMETER DIFF  Costs - sales
+
+rsd -1.00000E-9
+
+
+----     49 PARAMETER FACTOR  Primary factor costs
+
+                agr         min         mnf         rsd         srv
+
+Capital      43.000      41.000      50.000      47.000      52.000
+Labor        44.000      47.000      59.000 1.000000E-9      71.000
+
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 4
+Simple Model
+Equation Listing    SOLVE simple Using NLP From line 307
+
+
+---- E_pcomp  =E=  Price of Composite dom-imp commodity
+
+E_pcomp(agr,agr)..  (9)*pcomp(agr,agr) - (8)*p(agr,dom) - (1)*p(agr,imp) + (1)*xcomp(agr,agr) - (1)*x(agr,dom,agr) - (1)*x(agr,imp,agr) =E= 0 ; (LHS = 0)
+     
+E_pcomp(agr,min)..  (1)*pcomp(agr,min) - (1)*p(agr,dom) + (0)*p(agr,imp) + (1)*xcomp(agr,min) - (1)*x(agr,dom,min) - (1)*x(agr,imp,min) =E= 0 ; (LHS = 0)
+     
+E_pcomp(agr,mnf)..  (50)*pcomp(agr,mnf) - (45)*p(agr,dom) - (5)*p(agr,imp) + (1)*xcomp(agr,mnf) - (1)*x(agr,dom,mnf) - (1)*x(agr,imp,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 28 ENTRIES SKIPPED
+
+
+---- E_xcomp1  =E=  Dom-imp Composite for industries (Leontief)
+
+E_xcomp1(agr,agr)..  xcomp(agr,agr) - 0.072*z(agr) =E= 0 ; (LHS = 0)
+     
+E_xcomp1(agr,min)..  xcomp(agr,min) - 0.00735294117647059*z(min) =E= 0 ; (LHS = 0)
+     
+E_xcomp1(agr,mnf)..  xcomp(agr,mnf) - 0.203252032520325*z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 16 ENTRIES SKIPPED
+
+
+---- E_xcomp2  =E=  Dom-imp Composite for local final users (Cobb-Douglas)
+
+E_xcomp2(agr,Gov)..  (1)*pcomp(agr,Gov) + (1)*xcomp(agr,Gov) - 0.0133333333333333*wtot(Gov) =E= 0 ; (LHS = 0)
+     
+E_xcomp2(min,Hou)..  (5)*pcomp(min,Hou) + (1)*xcomp(min,Hou) - 0.0294117647058824*wtot(Hou) =E= 0 ; (LHS = 0)
+     
+E_xcomp2(min,Gov)..  (1)*pcomp(min,Gov) + (1)*xcomp(min,Gov) - 0.0133333333333333*wtot(Gov) =E= 0 ; (LHS = 0)
+     
+REMAINING 9 ENTRIES SKIPPED
+
+
+---- E_x  =E=  Intermediate demand
+
+E_x(agr,dom,agr)..  - (16)*pcomp(agr,agr) + (16)*p(agr,dom) - (0.888888888888889)*xcomp(agr,agr) + x(agr,dom,agr) =E= 0 ; (LHS = 0)
+     
+E_x(agr,dom,min)..  - (2)*pcomp(agr,min) + (2)*p(agr,dom) - (1)*xcomp(agr,min) + x(agr,dom,min) =E= 0 ; (LHS = 0)
+     
+E_x(agr,dom,mnf)..  - (90)*pcomp(agr,mnf) + (90)*p(agr,dom) - (0.9)*xcomp(agr,mnf) + x(agr,dom,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 77 ENTRIES SKIPPED
+
+
+---- E_pA  =E=  Industry cost indices
+
+E_pA(agr,dom)..  - (9)*pcomp(agr,agr) - (4)*pcomp(min,agr) - (13)*pcomp(mnf,agr) - (1)*pcomp(rsd,agr) - (11)*pcomp(srv,agr) + (125)*p(agr,dom) - (87)*pfac_f(agr) - (1)*xcomp(agr,agr) - (1)*xcomp(min,agr) - (1)*xcomp(mnf,agr) - (1)*xcomp(rsd,agr) - (1)*xcomp(srv,agr) - (1)*xfac_f(agr) + (1)*z(agr) =E= 0 ; (LHS = 0)
+     
+E_pA(min,dom)..  - (1)*pcomp(agr,min) - (3)*pcomp(min,min) - (29)*pcomp(mnf,min) - (15)*pcomp(srv,min) + (136)*p(min,dom) - (88)*pfac_f(min) - (1)*xcomp(agr,min) - (1)*xcomp(min,min) - (1)*xcomp(mnf,min) - (1)*xcomp(srv,min) - (1)*xfac_f(min) + (1)*z(min) =E= 0 ; (LHS = 0)
+     
+E_pA(mnf,dom)..  - (50)*pcomp(agr,mnf) - (43)*pcomp(min,mnf) - (30)*pcomp(mnf,mnf) - (14)*pcomp(srv,mnf) + (246)*p(mnf,dom) - (109)*pfac_f(mnf) - (1)*xcomp(agr,mnf) - (1)*xcomp(min,mnf) - (1)*xcomp(mnf,mnf) - (1)*xcomp(srv,mnf) - (1)*xfac_f(mnf) + (1)*z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_pfac_f  =E=  Composite factor prices
+
+E_pfac_f(agr)..  (87)*pfac_f(agr) - (43)*pfac(Capital,agr) - (44)*pfac(Labor,agr) + (1)*xfac_f(agr) - (1)*xfac(Capital,agr) - (1)*xfac(Labor,agr) =E= 0 ; (LHS = 0)
+     
+E_pfac_f(min)..  (88)*pfac_f(min) - (41)*pfac(Capital,min) - (47)*pfac(Labor,min) + (1)*xfac_f(min) - (1)*xfac(Capital,min) - (1)*xfac(Labor,min) =E= 0 ; (LHS = 0)
+     
+E_pfac_f(mnf)..  (109)*pfac_f(mnf) - (50)*pfac(Capital,mnf) - (59)*pfac(Labor,mnf) + (1)*xfac_f(mnf) - (1)*xfac(Capital,mnf) - (1)*xfac(Labor,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_xfac  =E=  Demand for factors
+
+E_xfac(Capital,agr)..  - (0.247126436781609)*pfac_f(agr) + (0.247126436781609)*pfac(Capital,agr) - (0.0056810675122209)*xfac_f(agr) + (0.0114942528735632)*xfac(Capital,agr) =E= 0 ; (LHS = 0)
+     
+E_xfac(Capital,min)..  - (0.232954545454545)*pfac_f(min) + (0.232954545454545)*pfac(Capital,min) - (0.00529442148760331)*xfac_f(min) + (0.0113636363636364)*xfac(Capital,min) =E= 0 ; (LHS = 0)
+     
+E_xfac(Capital,mnf)..  - (0.229357798165138)*pfac_f(mnf) + (0.229357798165138)*pfac(Capital,mnf) - (0.0042083999663328)*xfac_f(mnf) + (0.00917431192660551)*xfac(Capital,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 7 ENTRIES SKIPPED
+
+
+---- E_xfac_f  =E=  Composite factor CES
+
+E_xfac_f(agr)..  1.4367816091954*xfac_f(agr) - z(agr) =E= 0 ; (LHS = 0)
+     
+E_xfac_f(min)..  1.54545454545455*xfac_f(min) - z(min) =E= 0 ; (LHS = 0)
+     
+E_xfac_f(mnf)..  2.25688073394495*xfac_f(mnf) - z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_wtot  =E=  Nominal expenditure by local final users
+
+E_wtot(Hou)..  wtot(Hou) - 0.374449339206224*wgdpinc =E= 0 ; (LHS = 0)
+     
+E_wtot(Gov)..  wtot(Gov) - 0.165198237885099*wgdpinc =E= 0 ; (LHS = 0)
+     
+E_wtot(Inv)..  wtot(Inv) - 0.480176211452687*wgdpinc =E= 0 ; (LHS = 0)
+     
+
+---- E_ptot  =E=  Price indices for local final users
+
+E_ptot(Hou)..  - (0.0294117647058823)*pcomp(min,Hou) - (0.470588235294118)*pcomp(mnf,Hou) - (0.317647058823529)*pcomp(rsd,Hou) - (0.182352941176471)*pcomp(srv,Hou) + ptot(Hou) =E= 0 ; (LHS = 0)
+     
+E_ptot(Gov)..  - (0.0133333333333333)*pcomp(agr,Gov) - (0.0133333333333333)*pcomp(min,Gov) - (0.44)*pcomp(mnf,Gov) - (0.04)*pcomp(rsd,Gov) - (0.493333333333333)*pcomp(srv,Gov) + ptot(Gov) =E= 0 ; (LHS = 0)
+     
+E_ptot(Inv)..  - (0.105504587155963)*pcomp(min,Inv) - (0.706422018348624)*pcomp(mnf,Inv) - (0.188073394495413)*pcomp(srv,Inv) + ptot(Inv) =E= 0 ; (LHS = 0)
+     
+
+---- E_xtot  =E=  Real expenditure by local final users
+
+E_xtot(Hou)..  (170)*ptot(Hou) + (1)*xtot(Hou) - wtot(Hou) =E= 0 ; (LHS = 0)
+     
+E_xtot(Gov)..  (75)*ptot(Gov) + (1)*xtot(Gov) - wtot(Gov) =E= 0 ; (LHS = 0)
+     
+E_xtot(Inv)..  (218)*ptot(Inv) + (1)*xtot(Inv) - wtot(Inv) =E= 0 ; (LHS = 0)
+     
+
+---- E_xexp  =E=  Export demand
+
+E_xexp(agr)..  (350)*p(agr,dom) + xexp(agr) =E= 0 ; (LHS = 0)
+     
+E_xexp(min)..  (460)*p(min,dom) + xexp(min) =E= 0 ; (LHS = 0)
+     
+E_xexp(mnf)..  (30)*p(mnf,dom) + xexp(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_ffac_i  =E=  Total factor use
+
+E_ffac_i(Capital)..  - xfac(Capital,agr) - xfac(Capital,min) - xfac(Capital,mnf) - xfac(Capital,rsd) - xfac(Capital,srv) =E= -233 ; (LHS = -233)
+     
+E_ffac_i(Labor)..  - xfac(Labor,agr) - xfac(Labor,min) - xfac(Labor,mnf) - xfac(Labor,rsd) - xfac(Labor,srv) =E= -221.000000001 ; (LHS = -221.000000001)
+     
+
+---- E_xdemA  =E=  Total demand for dom goods
+
+E_xdemA(agr)..  - x(agr,dom,agr) - x(agr,dom,min) - x(agr,dom,mnf) - x(agr,dom,rsd) - x(agr,dom,srv) - x(agr,dom,Hou) - x(agr,dom,Gov) - x(agr,dom,Inv) - xexp(agr) + xdem(agr,dom) =E= 0 ; (LHS = 0)
+     
+E_xdemA(min)..  - x(min,dom,agr) - x(min,dom,min) - x(min,dom,mnf) - x(min,dom,rsd) - x(min,dom,srv) - x(min,dom,Hou) - x(min,dom,Gov) - x(min,dom,Inv) - xexp(min) + xdem(min,dom) =E= 0 ; (LHS = 0)
+     
+E_xdemA(mnf)..  - x(mnf,dom,agr) - x(mnf,dom,min) - x(mnf,dom,mnf) - x(mnf,dom,rsd) - x(mnf,dom,srv) - x(mnf,dom,Hou) - x(mnf,dom,Gov) - x(mnf,dom,Inv) - xexp(mnf) + xdem(mnf,dom) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_xdemB  =E=  Total demand for imp goods
+
+E_xdemB(agr)..  - x(agr,imp,agr) - x(agr,imp,min) - x(agr,imp,mnf) - x(agr,imp,rsd) - x(agr,imp,srv) - x(agr,imp,Hou) - x(agr,imp,Gov) - x(agr,imp,Inv) + xdem(agr,imp) =E= 0 ; (LHS = 0)
+     
+E_xdemB(min)..  - x(min,imp,agr) - x(min,imp,min) - x(min,imp,mnf) - x(min,imp,rsd) - x(min,imp,srv) - x(min,imp,Hou) - x(min,imp,Gov) - x(min,imp,Inv) + xdem(min,imp) =E= 0 ; (LHS = 0)
+     
+E_xdemB(mnf)..  - x(mnf,imp,agr) - x(mnf,imp,min) - x(mnf,imp,mnf) - x(mnf,imp,rsd) - x(mnf,imp,srv) - x(mnf,imp,Hou) - x(mnf,imp,Gov) - x(mnf,imp,Inv) + xdem(mnf,imp) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_z  =E=  Market clearing
+
+E_z(agr)..  - xdem(agr,dom) + z(agr) =E= 0 ; (LHS = 0)
+     
+E_z(min)..  - xdem(min,dom) + z(min) =E= 0 ; (LHS = 0)
+     
+E_z(mnf)..  - xdem(mnf,dom) + z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_pB  =E=  Import prices
+
+E_pB(agr)..  p(agr,imp) =E= 1 ; (LHS = 1)
+     
+E_pB(min)..  p(min,imp) =E= 1 ; (LHS = 1)
+     
+E_pB(mnf)..  p(mnf,imp) =E= 1 ; (LHS = 1)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_pfac  =E=  Factor remuneration
+
+E_pfac(Capital,agr)..  pfac(Capital,agr) - (1)*ptot(Hou) - (1)*ffac_i(Capital) =E= 0 ; (LHS = 0)
+     
+E_pfac(Capital,min)..  pfac(Capital,min) - (1)*ptot(Hou) - (1)*ffac_i(Capital) =E= 0 ; (LHS = 0)
+     
+E_pfac(Capital,mnf)..  pfac(Capital,mnf) - (1)*ptot(Hou) - (1)*ffac_i(Capital) =E= 0 ; (LHS = 0)
+     
+REMAINING 7 ENTRIES SKIPPED
+
+
+---- E_wgdpinc  =E=  Nominal GDP income
+
+E_wgdpinc..  - (43)*pfac(Capital,agr) - (41)*pfac(Capital,min) - (50)*pfac(Capital,mnf) - (47)*pfac(Capital,rsd) - (52)*pfac(Capital,srv) - (44)*pfac(Labor,agr) - (47)*pfac(Labor,min) - (59)*pfac(Labor,mnf) - (1E-9)*pfac(Labor,rsd) - (71)*pfac(Labor,srv) - (1)*xfac(Capital,agr) - (1)*xfac(Capital,min) - (1)*xfac(Capital,mnf) - (1)*xfac(Capital,rsd) - (1)*xfac(Capital,srv) - (1)*xfac(Labor,agr) - (1)*xfac(Labor,min) - (1)*xfac(Labor,mnf) - (1)*xfac(Labor,rsd) - (1)*xfac(Labor,srv) + wgdpinc =E= 0 ; (LHS = 0)
+     
+
+---- E_wgdpexp  =E=  Nominal GDP expenditure
+
+E_wgdpexp..  - (1)*pcomp(agr,Gov) - (5)*pcomp(min,Hou) - (1)*pcomp(min,Gov) - (23)*pcomp(min,Inv) - (80)*pcomp(mnf,Hou) - (33)*pcomp(mnf,Gov) - (154)*pcomp(mnf,Inv) - (54)*pcomp(rsd,Hou) - (3)*pcomp(rsd,Gov) - (31)*pcomp(srv,Hou) - (37)*pcomp(srv,Gov) - (41)*pcomp(srv,Inv) - (70)*p(agr,dom) + (6)*p(agr,imp) - (92)*p(min,dom) + (36)*p(min,imp) - (6)*p(mnf,dom) + (133)*p(mnf,imp) + (0)*p(rsd,dom) + (0)*p(rsd,imp) - (22)*p(srv,dom) + (24)*p(srv,imp) - (1)*xcomp(agr,Gov) - (1)*xcomp(min,Hou) - (1)*xcomp(min,Gov) - (1)*xcomp(min,Inv) - (1)*xcomp(mnf,Hou) - (1)*xcomp(mnf,Gov) - (1)*xcomp(mnf,Inv) - (1)*xcomp(rsd,Hou) - (1)*xcomp(rsd,Gov) - (1)*xcomp(srv,Hou) - (1)*xcomp(srv,Gov) - (1)*xcomp(srv,Inv) - (1)*xexp(agr) - (1)*xexp(min) - (1)*xexp(mnf) - (1)*xexp(rsd) - (1)*xexp(srv) + (1)*xdem(agr,imp) + (1)*xdem(min,imp) + (1)*xdem(mnf,imp) + (1)*xdem(rsd,imp) + (1)*xdem(srv,imp) + wgdpexp =E= 0 ; (LHS = 0)
+     
+
+---- E_delB  =E=  Trade Balance
+
+E_delB..  - (70)*p(agr,dom) + (6)*p(agr,imp) - (92)*p(min,dom) + (36)*p(min,imp) - (6)*p(mnf,dom) + (133)*p(mnf,imp) + (0)*p(rsd,dom) + (0)*p(rsd,imp) - (22)*p(srv,dom) + (24)*p(srv,imp) - (1)*xexp(agr) - (1)*xexp(min) - (1)*xexp(mnf) - (1)*xexp(rsd) - (1)*xexp(srv) + (1)*xdem(agr,imp) + (1)*xdem(min,imp) + (1)*xdem(mnf,imp) + (1)*xdem(rsd,imp) + (1)*xdem(srv,imp) - (0.0198237885462118)*wgdpinc + (454.000000001)*delB =E= 0 ; (LHS = 0)
+     
+
+---- E_OBJ  =E=  NLP objective function
+
+E_OBJ..  OBJ =E= 1 ; (LHS = 1)
+     
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 5
+Simple Model
+Column Listing      SOLVE simple Using NLP From line 307
+
+
+---- pcomp  Price of Composite dom-imp commodity
+
+pcomp(agr,agr)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+       (9)      E_pcomp(agr,agr)
+     (-16)      E_x(agr,dom,agr)
+      (-2)      E_x(agr,imp,agr)
+      (-9)      E_pA(agr,dom)
+
+pcomp(agr,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+       (1)      E_pcomp(agr,min)
+      (-2)      E_x(agr,dom,min)
+      (-1)      E_pA(min,dom)
+
+pcomp(agr,mnf)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (50)      E_pcomp(agr,mnf)
+     (-90)      E_x(agr,dom,mnf)
+     (-10)      E_x(agr,imp,mnf)
+     (-50)      E_pA(mnf,dom)
+
+REMAINING 28 ENTRIES SKIPPED
+
+---- p  Goods' prices
+
+p(agr,dom)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-8)      E_pcomp(agr,agr)
+      (-1)      E_pcomp(agr,min)
+     (-45)      E_pcomp(agr,mnf)
+      (-1)      E_pcomp(agr,Gov)
+      (16)      E_x(agr,dom,agr)
+       (2)      E_x(agr,dom,min)
+      (90)      E_x(agr,dom,mnf)
+       (2)      E_x(agr,dom,Gov)
+     (125)      E_pA(agr,dom)
+     (350)      E_xexp(agr)
+     (-70)      E_wgdpexp
+     (-70)      E_delB
+
+p(agr,imp)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-1)      E_pcomp(agr,agr)
+       (0)      E_pcomp(agr,min)
+      (-5)      E_pcomp(agr,mnf)
+       (0)      E_pcomp(agr,Gov)
+       (2)      E_x(agr,imp,agr)
+      (10)      E_x(agr,imp,mnf)
+        1       E_pB(agr)
+       (6)      E_wgdpexp
+       (6)      E_delB
+
+p(min,dom)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-3)      E_pcomp(min,agr)
+      (-2)      E_pcomp(min,min)
+     (-33)      E_pcomp(min,mnf)
+      (-1)      E_pcomp(min,srv)
+      (-4)      E_pcomp(min,Hou)
+      (-1)      E_pcomp(min,Gov)
+       (0)      E_pcomp(min,Inv)
+       (3.0003) E_x(min,dom,agr)
+       (2.0002) E_x(min,dom,min)
+      (33.0033) E_x(min,dom,mnf)
+       (1.0001) E_x(min,dom,srv)
+       (4.0004) E_x(min,dom,Hou)
+       (1.0001) E_x(min,dom,Gov)
+     (136)      E_pA(min,dom)
+     (460)      E_xexp(min)
+     (-92)      E_wgdpexp
+     (-92)      E_delB
+
+REMAINING 7 ENTRIES SKIPPED
+
+---- pfac_f  Composite factor prices
+
+pfac_f(agr)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+     (-87)      E_pA(agr,dom)
+      (87)      E_pfac_f(agr)
+      (-0.2471) E_xfac(Capital,agr)
+      (-0.2529) E_xfac(Labor,agr)
+
+pfac_f(min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+     (-88)      E_pA(min,dom)
+      (88)      E_pfac_f(min)
+      (-0.233)  E_xfac(Capital,min)
+      (-0.267)  E_xfac(Labor,min)
+
+pfac_f(mnf)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+    (-109)      E_pA(mnf,dom)
+     (109)      E_pfac_f(mnf)
+      (-0.2294) E_xfac(Capital,mnf)
+      (-0.2706) E_xfac(Labor,mnf)
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- pfac  Price of Factors
+
+pfac(Capital,agr)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+     (-43)      E_pfac_f(agr)
+       (0.2471) E_xfac(Capital,agr)
+        1       E_pfac(Capital,agr)
+     (-43)      E_wgdpinc
+
+pfac(Capital,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+     (-41)      E_pfac_f(min)
+       (0.233)  E_xfac(Capital,min)
+        1       E_pfac(Capital,min)
+     (-41)      E_wgdpinc
+
+pfac(Capital,mnf)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+     (-50)      E_pfac_f(mnf)
+       (0.2294) E_xfac(Capital,mnf)
+        1       E_pfac(Capital,mnf)
+     (-50)      E_wgdpinc
+
+REMAINING 7 ENTRIES SKIPPED
+
+---- ptot  Price indices for local final users
+
+ptot(Hou)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+        1       E_ptot(Hou)
+     (170)      E_xtot(Hou)
+      (-1)      E_pfac(Capital,agr)
+      (-1)      E_pfac(Capital,min)
+      (-1)      E_pfac(Capital,mnf)
+      (-1)      E_pfac(Capital,rsd)
+      (-1)      E_pfac(Capital,srv)
+      (-1)      E_pfac(Labor,agr)
+      (-1)      E_pfac(Labor,min)
+      (-1)      E_pfac(Labor,mnf)
+      (-1)      E_pfac(Labor,rsd)
+      (-1)      E_pfac(Labor,srv)
+
+ptot(Gov)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+        1       E_ptot(Gov)
+      (75)      E_xtot(Gov)
+
+ptot(Inv)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+        1       E_ptot(Inv)
+     (218)      E_xtot(Inv)
+
+
+---- xcomp  Composite commodity
+
+xcomp(agr,agr)
+                (.LO, .L, .UP, .M = -INF, 9, +INF, 0)
+       (1)      E_pcomp(agr,agr)
+        1       E_xcomp1(agr,agr)
+      (-0.8889) E_x(agr,dom,agr)
+      (-0.1111) E_x(agr,imp,agr)
+      (-1)      E_pA(agr,dom)
+
+xcomp(agr,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+       (1)      E_pcomp(agr,min)
+        1       E_xcomp1(agr,min)
+      (-1)      E_x(agr,dom,min)
+      (-1)      E_pA(min,dom)
+
+xcomp(agr,mnf)
+                (.LO, .L, .UP, .M = -INF, 50, +INF, 0)
+       (1)      E_pcomp(agr,mnf)
+        1       E_xcomp1(agr,mnf)
+      (-0.9)    E_x(agr,dom,mnf)
+      (-0.1)    E_x(agr,imp,mnf)
+      (-1)      E_pA(mnf,dom)
+
+REMAINING 28 ENTRIES SKIPPED
+
+---- x  Intermediate demand
+
+x(agr,dom,agr)
+                (.LO, .L, .UP, .M = -INF, 8, +INF, 0)
+      (-1)      E_pcomp(agr,agr)
+        1       E_x(agr,dom,agr)
+       -1       E_xdemA(agr)
+
+x(agr,dom,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-1)      E_pcomp(agr,min)
+        1       E_x(agr,dom,min)
+       -1       E_xdemA(agr)
+
+x(agr,dom,mnf)
+                (.LO, .L, .UP, .M = -INF, 45, +INF, 0)
+      (-1)      E_pcomp(agr,mnf)
+        1       E_x(agr,dom,mnf)
+       -1       E_xdemA(agr)
+
+REMAINING 77 ENTRIES SKIPPED
+
+---- xfac_f  Total factor use
+
+xfac_f(agr)
+                (.LO, .L, .UP, .M = -INF, 87, +INF, 0)
+      (-1)      E_pA(agr,dom)
+       (1)      E_pfac_f(agr)
+      (-0.0057) E_xfac(Capital,agr)
+      (-0.0058) E_xfac(Labor,agr)
+        1.4368  E_xfac_f(agr)
+
+xfac_f(min)
+                (.LO, .L, .UP, .M = -INF, 88, +INF, 0)
+      (-1)      E_pA(min,dom)
+       (1)      E_pfac_f(min)
+      (-0.0053) E_xfac(Capital,min)
+      (-0.0061) E_xfac(Labor,min)
+        1.5455  E_xfac_f(min)
+
+xfac_f(mnf)
+                (.LO, .L, .UP, .M = -INF, 109, +INF, 0)
+      (-1)      E_pA(mnf,dom)
+       (1)      E_pfac_f(mnf)
+      (-0.0042) E_xfac(Capital,mnf)
+      (-0.005)  E_xfac(Labor,mnf)
+        2.2569  E_xfac_f(mnf)
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- xtot  Total output of local final user
+
+xtot(Hou)
+                (.LO, .L, .UP, .M = -INF, 170, +INF, 0)
+       (1)      E_xtot(Hou)
+
+xtot(Gov)
+                (.LO, .L, .UP, .M = -INF, 75, +INF, 0)
+       (1)      E_xtot(Gov)
+
+xtot(Inv)
+                (.LO, .L, .UP, .M = -INF, 218, +INF, 0)
+       (1)      E_xtot(Inv)
+
+
+---- xfac  Factor demand
+
+xfac(Capital,agr)
+                (.LO, .L, .UP, .M = -INF, 43, +INF, 0)
+      (-1)      E_pfac_f(agr)
+       (0.0115) E_xfac(Capital,agr)
+       -1       E_ffac_i(Capital)
+      (-1)      E_wgdpinc
+
+xfac(Capital,min)
+                (.LO, .L, .UP, .M = -INF, 41, +INF, 0)
+      (-1)      E_pfac_f(min)
+       (0.0114) E_xfac(Capital,min)
+       -1       E_ffac_i(Capital)
+      (-1)      E_wgdpinc
+
+xfac(Capital,mnf)
+                (.LO, .L, .UP, .M = -INF, 50, +INF, 0)
+      (-1)      E_pfac_f(mnf)
+       (0.0092) E_xfac(Capital,mnf)
+       -1       E_ffac_i(Capital)
+      (-1)      E_wgdpinc
+
+REMAINING 7 ENTRIES SKIPPED
+
+---- xexp  Export demand
+
+xexp(agr)
+                (.LO, .L, .UP, .M = -INF, 70, +INF, 0)
+        1       E_xexp(agr)
+       -1       E_xdemA(agr)
+      (-1)      E_wgdpexp
+      (-1)      E_delB
+
+xexp(min)
+                (.LO, .L, .UP, .M = -INF, 92, +INF, 0)
+        1       E_xexp(min)
+       -1       E_xdemA(min)
+      (-1)      E_wgdpexp
+      (-1)      E_delB
+
+xexp(mnf)
+                (.LO, .L, .UP, .M = -INF, 6, +INF, 0)
+        1       E_xexp(mnf)
+       -1       E_xdemA(mnf)
+      (-1)      E_wgdpexp
+      (-1)      E_delB
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- xdem  Total demand for goods
+
+xdem(agr,dom)
+                (.LO, .L, .UP, .M = -INF, 125, +INF, 0)
+        1       E_xdemA(agr)
+       -1       E_z(agr)
+
+xdem(agr,imp)
+                (.LO, .L, .UP, .M = -INF, 6, +INF, 0)
+        1       E_xdemB(agr)
+       (1)      E_wgdpexp
+       (1)      E_delB
+
+xdem(min,dom)
+                (.LO, .L, .UP, .M = -INF, 136, +INF, 0)
+        1       E_xdemA(min)
+       -1       E_z(min)
+
+REMAINING 7 ENTRIES SKIPPED
+
+---- z  Output of industry
+
+z(agr)
+                (.LO, .L, .UP, .M = -INF, 125, +INF, 0)
+       -0.072   E_xcomp1(agr,agr)
+       -0.032   E_xcomp1(min,agr)
+       -0.104   E_xcomp1(mnf,agr)
+       -0.008   E_xcomp1(rsd,agr)
+       -0.088   E_xcomp1(srv,agr)
+       (1)      E_pA(agr,dom)
+       -1       E_xfac_f(agr)
+        1       E_z(agr)
+
+z(min)
+                (.LO, .L, .UP, .M = -INF, 136, +INF, 0)
+       -0.0074  E_xcomp1(agr,min)
+       -0.0221  E_xcomp1(min,min)
+       -0.2132  E_xcomp1(mnf,min)
+       -0.1103  E_xcomp1(srv,min)
+       (1)      E_pA(min,dom)
+       -1       E_xfac_f(min)
+        1       E_z(min)
+
+z(mnf)
+                (.LO, .L, .UP, .M = -INF, 246, +INF, 0)
+       -0.2033  E_xcomp1(agr,mnf)
+       -0.1748  E_xcomp1(min,mnf)
+       -0.122   E_xcomp1(mnf,mnf)
+       -0.0569  E_xcomp1(srv,mnf)
+       (1)      E_pA(mnf,dom)
+       -1       E_xfac_f(mnf)
+        1       E_z(mnf)
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- wtot  Nominal expenditure by local final users
+
+wtot(Hou)
+                (.LO, .L, .UP, .M = -INF, 170, +INF, 0)
+       -0.0294  E_xcomp2(min,Hou)
+       -0.4706  E_xcomp2(mnf,Hou)
+       -0.3176  E_xcomp2(rsd,Hou)
+       -0.1824  E_xcomp2(srv,Hou)
+        1       E_wtot(Hou)
+       -1       E_xtot(Hou)
+
+wtot(Gov)
+                (.LO, .L, .UP, .M = -INF, 75, +INF, 0)
+       -0.0133  E_xcomp2(agr,Gov)
+       -0.0133  E_xcomp2(min,Gov)
+       -0.44    E_xcomp2(mnf,Gov)
+       -0.04    E_xcomp2(rsd,Gov)
+       -0.4933  E_xcomp2(srv,Gov)
+        1       E_wtot(Gov)
+       -1       E_xtot(Gov)
+
+wtot(Inv)
+                (.LO, .L, .UP, .M = -INF, 218, +INF, 0)
+       -0.1055  E_xcomp2(min,Inv)
+       -0.7064  E_xcomp2(mnf,Inv)
+       -0.1881  E_xcomp2(srv,Inv)
+        1       E_wtot(Inv)
+       -1       E_xtot(Inv)
+
+
+---- wgdpinc  Nominal GDP - income side
+
+wgdpinc
+                (.LO, .L, .UP, .M = -INF, 454.000000001, +INF, 0)
+       -0.3744  E_wtot(Hou)
+       -0.1652  E_wtot(Gov)
+       -0.4802  E_wtot(Inv)
+        1       E_wgdpinc
+      (-0.0198) E_delB
+
+
+---- wgdpexp  Nominal GDP expenditure side
+
+wgdpexp
+                (.LO, .L, .UP, .M = -INF, 454, +INF, 0)
+        1       E_wgdpexp
+
+
+---- delB  Trade Balance
+
+delB
+                (.LO, .L, .UP, .M = -INF, -0.0198237885462118, +INF, 0)
+     (454)      E_delB
+
+
+---- ffac_i  Factor wage shifter
+
+ffac_i(Capital)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-1)      E_pfac(Capital,agr)
+      (-1)      E_pfac(Capital,min)
+      (-1)      E_pfac(Capital,mnf)
+      (-1)      E_pfac(Capital,rsd)
+      (-1)      E_pfac(Capital,srv)
+
+ffac_i(Labor)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-1)      E_pfac(Labor,agr)
+      (-1)      E_pfac(Labor,min)
+      (-1)      E_pfac(Labor,mnf)
+      (-1)      E_pfac(Labor,rsd)
+      (-1)      E_pfac(Labor,srv)
+
+
+---- OBJ  NLP objective function
+
+OBJ
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+        1       E_OBJ
+
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 6
+Simple Model
+Range Statistics    SOLVE simple Using NLP From line 307
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [ 1.000E+00, 2.330E+02] - Zero values observed as well
+Bound     [min, max] : [        NA,        NA]
+Matrix    [min, max] : [ 4.527E-13, 4.600E+02] - Zero values observed as well
+
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 7
+Simple Model
+Model Statistics    SOLVE simple Using NLP From line 307
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS          22     SINGLE EQUATIONS          217
+BLOCKS OF VARIABLES          26     SINGLE VARIABLES          217
+NON ZERO ELEMENTS           906     NON LINEAR N-Z            616
+CODE LENGTH               1,448     CONSTANT POOL              93
+
+
+GENERATION TIME      =        0.125 SECONDS      4 MB  53.1.0 6a03d3b9 WEX-WEI
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 8
+Simple Model
+Solution Report     SOLVE simple Using NLP From line 307
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   simple              OBJECTIVE  OBJ
+     TYPE    NLP                 DIRECTION  MAXIMIZE
+     SOLVER  CONOPT              FROM LINE  307
+
+**** SOLVER STATUS     11 Internal Solver Failure
+**** MODEL STATUS      5 Locally Infeasible
+**** OBJECTIVE VALUE                1.0000
+
+ RESOURCE USAGE, LIMIT          3.438 10000000000.000
+ ITERATION COUNT, LIMIT         0             0
+ EVALUATION ERRORS              0             0
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 217 constraints and 217 variables
+    with 906 Jacobian elements, 616 of which are nonlinear.
+ 
+ CONOPT time Total                            0.003 seconds
+   of which: Function evaluations             0.000 =  0.0%
+             1st Derivative evaluations       0.000 =  0.0%
+ 
+
+---- EQU E_pcomp  Price of Composite dom-imp commodity
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr          .              .              .             EPS         
+agr.min          .              .              .             EPS         
+agr.mnf          .              .              .             EPS         
+agr.Gov          .              .              .             EPS         
+min.agr          .              .              .             EPS         
+min.min          .              .              .             EPS         
+min.mnf          .              .              .             EPS         
+min.srv          .              .              .             EPS         
+min.Hou          .              .              .             EPS         
+min.Gov          .              .              .             EPS         
+min.Inv          .              .              .             EPS         
+mnf.agr          .              .              .             EPS         
+mnf.min          .              .              .             EPS         
+mnf.mnf          .              .              .             EPS         
+mnf.rsd          .              .              .             EPS         
+mnf.srv          .              .              .             EPS         
+mnf.Hou          .              .              .             EPS         
+mnf.Gov          .              .              .             EPS         
+mnf.Inv          .              .              .             EPS         
+rsd.agr          .              .              .             EPS         
+rsd.srv          .              .              .             EPS         
+rsd.Hou          .              .              .             EPS         
+rsd.Gov          .              .              .             EPS         
+srv.agr          .              .              .             EPS         
+srv.min          .              .              .             EPS         
+srv.mnf          .              .              .             EPS         
+srv.rsd          .              .              .             EPS         
+srv.srv          .              .              .             EPS         
+srv.Hou          .              .              .             EPS         
+srv.Gov          .              .              .             EPS         
+srv.Inv          .              .              .             EPS         
+
+---- EQU E_xcomp1  Dom-imp Composite for industries (Leontief)
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr          .              .              .             EPS         
+agr.min          .              .              .             EPS         
+agr.mnf          .              .              .             EPS         
+min.agr          .              .              .             EPS         
+min.min          .              .              .             EPS         
+min.mnf          .              .              .             EPS         
+min.srv          .              .              .             EPS         
+mnf.agr          .              .              .             EPS         
+mnf.min          .              .              .             EPS         
+mnf.mnf          .              .              .             EPS         
+mnf.rsd          .              .              .             EPS         
+mnf.srv          .              .              .             EPS         
+rsd.agr          .              .              .             EPS         
+rsd.srv          .              .              .             EPS         
+srv.agr          .              .              .             EPS         
+srv.min          .              .              .             EPS         
+srv.mnf          .              .              .             EPS         
+srv.rsd          .              .              .             EPS         
+srv.srv          .              .              .             EPS         
+
+---- EQU E_xcomp2  Dom-imp Composite for local final users (Cobb-Douglas)
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.Gov          .              .              .             EPS         
+min.Hou          .              .              .             EPS         
+min.Gov          .              .              .             EPS         
+min.Inv          .              .              .             EPS         
+mnf.Hou          .              .              .             EPS         
+mnf.Gov          .              .              .             EPS         
+mnf.Inv          .              .              .             EPS         
+rsd.Hou          .              .              .             EPS         
+rsd.Gov          .              .              .             EPS         
+srv.Hou          .              .              .             EPS         
+srv.Gov          .              .              .             EPS         
+srv.Inv          .              .              .             EPS         
+
+---- EQU E_x  Intermediate demand
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom.agr          .              .              .             EPS         
+agr.dom.min          .              .              .             EPS         
+agr.dom.mnf          .              .              .             EPS         
+agr.dom.rsd          .              .              .             EPS         
+agr.dom.srv          .              .              .             EPS         
+agr.dom.Hou          .              .              .             EPS         
+agr.dom.Gov          .              .              .             EPS         
+agr.dom.Inv          .              .              .             EPS         
+agr.imp.agr          .              .              .             EPS         
+agr.imp.min          .              .              .             EPS         
+agr.imp.mnf          .              .              .             EPS         
+agr.imp.rsd          .              .              .             EPS         
+agr.imp.srv          .              .              .             EPS         
+agr.imp.Hou          .              .              .             EPS         
+agr.imp.Gov          .              .              .             EPS         
+agr.imp.Inv          .              .              .             EPS         
+min.dom.agr          .              .              .             EPS         
+min.dom.min          .              .              .             EPS         
+min.dom.mnf          .              .              .             EPS         
+min.dom.rsd          .              .              .             EPS         
+min.dom.srv          .              .              .             EPS         
+min.dom.Hou          .              .              .             EPS         
+min.dom.Gov          .              .              .             EPS         
+min.dom.Inv          .              .              .             EPS         
+min.imp.agr          .              .              .             EPS         
+min.imp.min          .              .              .             EPS         
+min.imp.mnf          .              .              .             EPS         
+min.imp.rsd          .              .              .             EPS         
+min.imp.srv          .              .              .             EPS         
+min.imp.Hou          .              .              .             EPS         
+min.imp.Gov          .              .              .             EPS         
+min.imp.Inv          .              .              .             EPS         
+mnf.dom.agr          .              .              .             EPS         
+mnf.dom.min          .              .              .             EPS         
+mnf.dom.mnf          .              .              .             EPS         
+mnf.dom.rsd          .              .              .             EPS         
+mnf.dom.srv          .              .              .             EPS         
+mnf.dom.Hou          .              .              .             EPS         
+mnf.dom.Gov          .              .              .             EPS         
+mnf.dom.Inv          .              .              .             EPS         
+mnf.imp.agr          .              .              .             EPS         
+mnf.imp.min          .              .              .             EPS         
+mnf.imp.mnf          .              .              .             EPS         
+mnf.imp.rsd          .              .              .             EPS         
+mnf.imp.srv          .              .              .             EPS         
+mnf.imp.Hou          .              .              .             EPS         
+mnf.imp.Gov          .              .              .             EPS         
+mnf.imp.Inv          .              .              .             EPS         
+rsd.dom.agr          .              .              .             EPS         
+rsd.dom.min          .              .              .             EPS         
+rsd.dom.mnf          .              .              .             EPS         
+rsd.dom.rsd          .              .              .             EPS         
+rsd.dom.srv          .              .              .             EPS         
+rsd.dom.Hou          .              .              .             EPS         
+rsd.dom.Gov          .              .              .             EPS         
+rsd.dom.Inv          .              .              .             EPS         
+rsd.imp.agr          .              .              .             EPS         
+rsd.imp.min          .              .              .             EPS         
+rsd.imp.mnf          .              .              .             EPS         
+rsd.imp.rsd          .              .              .             EPS         
+rsd.imp.srv          .              .              .             EPS         
+rsd.imp.Hou          .              .              .             EPS         
+rsd.imp.Gov          .              .              .             EPS         
+rsd.imp.Inv          .              .              .             EPS         
+srv.dom.agr          .              .              .             EPS         
+srv.dom.min          .              .              .             EPS         
+srv.dom.mnf          .              .              .             EPS         
+srv.dom.rsd          .              .              .             EPS         
+srv.dom.srv          .              .              .             EPS         
+srv.dom.Hou          .              .              .             EPS         
+srv.dom.Gov          .              .              .             EPS         
+srv.dom.Inv          .              .              .             EPS         
+srv.imp.agr          .              .              .             EPS         
+srv.imp.min          .              .              .             EPS         
+srv.imp.mnf          .              .              .             EPS         
+srv.imp.rsd          .              .              .             EPS         
+srv.imp.srv          .              .              .             EPS         
+srv.imp.Hou          .              .              .             EPS         
+srv.imp.Gov          .              .              .             EPS         
+srv.imp.Inv          .              .              .             EPS         
+
+---- EQU E_pA  Industry cost indices
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom          .              .              .             EPS         
+min.dom          .              .              .             EPS         
+mnf.dom          .              .              .             EPS         
+rsd.dom          .              .              .             EPS         
+srv.dom          .              .              .             EPS         
+
+---- EQU E_pfac_f  Composite factor prices
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_xfac  Demand for factors
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr          .              .              .             EPS         
+Capital.min          .              .              .             EPS         
+Capital.mnf          .              .              .             EPS         
+Capital.rsd          .              .              .             EPS         
+Capital.srv          .              .              .             EPS         
+Labor  .agr          .              .              .             EPS         
+Labor  .min          .              .              .             EPS         
+Labor  .mnf          .              .              .             EPS         
+Labor  .rsd          .              .              .             EPS         
+Labor  .srv          .              .              .             EPS         
+
+---- EQU E_xfac_f  Composite factor CES
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_wtot  Nominal expenditure by local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou          .              .              .             EPS         
+Gov          .              .              .             EPS         
+Inv          .              .              .             EPS         
+
+---- EQU E_ptot  Price indices for local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou          .              .              .             EPS         
+Gov          .              .              .             EPS         
+Inv          .              .              .             EPS         
+
+---- EQU E_xtot  Real expenditure by local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou          .              .              .             EPS         
+Gov          .              .              .             EPS         
+Inv          .              .              .             EPS         
+
+---- EQU E_xexp  Export demand
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_ffac_i  Total factor use
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+Capital      -233.0000      -233.0000      -233.0000         EPS         
+Labor        -221.0000      -221.0000      -221.0000         EPS         
+
+---- EQU E_xdemA  Total demand for dom goods
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_xdemB  Total demand for imp goods
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_z  Market clearing
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_pB  Import prices
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr         1.0000         1.0000         1.0000         EPS         
+min         1.0000         1.0000         1.0000         EPS         
+mnf         1.0000         1.0000         1.0000         EPS         
+rsd         1.0000         1.0000         1.0000         EPS         
+srv         1.0000         1.0000         1.0000         EPS         
+
+---- EQU E_pfac  Factor remuneration
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr          .              .              .             EPS         
+Capital.min          .              .              .             EPS         
+Capital.mnf          .              .              .             EPS         
+Capital.rsd          .              .              .             EPS         
+Capital.srv          .              .              .             EPS         
+Labor  .agr          .              .              .             EPS         
+Labor  .min          .              .              .             EPS         
+Labor  .mnf          .              .              .             EPS         
+Labor  .rsd          .              .              .             EPS         
+Labor  .srv          .              .              .             EPS         
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- EQU E_wgdpinc           .              .              .             EPS         
+---- EQU E_wgdpexp           .              .              .             EPS         
+---- EQU E_delB              .              .              .             EPS         
+---- EQU E_OBJ              1.0000         1.0000         1.0000         EPS         
+
+  E_wgdpinc  Nominal GDP income
+  E_wgdpexp  Nominal GDP expenditure
+  E_delB  Trade Balance
+  E_OBJ  NLP objective function
+
+---- VAR pcomp  Price of Composite dom-imp commodity
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr        -INF            1.0000        +INF            EPS         
+agr.min        -INF            1.0000        +INF            EPS         
+agr.mnf        -INF            1.0000        +INF            EPS         
+agr.Gov        -INF            1.0000        +INF            EPS         
+min.agr        -INF            1.0000        +INF            EPS         
+min.min        -INF            1.0000        +INF            EPS         
+min.mnf        -INF            1.0000        +INF            EPS         
+min.srv        -INF            1.0000        +INF            EPS         
+min.Hou        -INF            1.0000        +INF            EPS         
+min.Gov        -INF            1.0000        +INF            EPS         
+min.Inv        -INF            1.0000        +INF            EPS         
+mnf.agr        -INF            1.0000        +INF            EPS         
+mnf.min        -INF            1.0000        +INF            EPS         
+mnf.mnf        -INF            1.0000        +INF            EPS         
+mnf.rsd        -INF            1.0000        +INF            EPS         
+mnf.srv        -INF            1.0000        +INF            EPS         
+mnf.Hou        -INF            1.0000        +INF            EPS         
+mnf.Gov        -INF            1.0000        +INF            EPS         
+mnf.Inv        -INF            1.0000        +INF            EPS         
+rsd.agr        -INF            1.0000        +INF            EPS         
+rsd.srv        -INF            1.0000        +INF            EPS         
+rsd.Hou        -INF            1.0000        +INF            EPS         
+rsd.Gov        -INF            1.0000        +INF            EPS         
+srv.agr        -INF            1.0000        +INF            EPS         
+srv.min        -INF            1.0000        +INF            EPS         
+srv.mnf        -INF            1.0000        +INF            EPS         
+srv.rsd        -INF            1.0000        +INF            EPS         
+srv.srv        -INF            1.0000        +INF            EPS         
+srv.Hou        -INF            1.0000        +INF            EPS         
+srv.Gov        -INF            1.0000        +INF            EPS         
+srv.Inv        -INF            1.0000        +INF            EPS         
+
+---- VAR p  Goods' prices
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom        -INF            1.0000        +INF            EPS         
+agr.imp        -INF            1.0000        +INF            EPS         
+min.dom        -INF            1.0000        +INF            EPS         
+min.imp        -INF            1.0000        +INF            EPS         
+mnf.dom        -INF            1.0000        +INF            EPS         
+mnf.imp        -INF            1.0000        +INF            EPS         
+rsd.dom        -INF            1.0000        +INF            EPS         
+rsd.imp        -INF            1.0000        +INF            EPS         
+srv.dom        -INF            1.0000        +INF            EPS         
+srv.imp        -INF            1.0000        +INF            EPS         
+
+---- VAR pfac_f  Composite factor prices
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF            1.0000        +INF            EPS         
+min        -INF            1.0000        +INF            EPS         
+mnf        -INF            1.0000        +INF            EPS         
+rsd        -INF            1.0000        +INF            EPS         
+srv        -INF            1.0000        +INF            EPS         
+
+---- VAR pfac  Price of Factors
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr        -INF            1.0000        +INF            EPS         
+Capital.min        -INF            1.0000        +INF            EPS         
+Capital.mnf        -INF            1.0000        +INF            EPS         
+Capital.rsd        -INF            1.0000        +INF            EPS         
+Capital.srv        -INF            1.0000        +INF            EPS         
+Labor  .agr        -INF            1.0000        +INF            EPS         
+Labor  .min        -INF            1.0000        +INF            EPS         
+Labor  .mnf        -INF            1.0000        +INF            EPS         
+Labor  .rsd        -INF            1.0000        +INF            EPS         
+Labor  .srv        -INF            1.0000        +INF            EPS         
+
+---- VAR ptot  Price indices for local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou        -INF            1.0000        +INF            EPS         
+Gov        -INF            1.0000        +INF            EPS         
+Inv        -INF            1.0000        +INF            EPS         
+
+---- VAR xcomp  Composite commodity
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr        -INF            9.0000        +INF            EPS         
+agr.min        -INF            1.0000        +INF            EPS         
+agr.mnf        -INF           50.0000        +INF            EPS         
+agr.Gov        -INF            1.0000        +INF            EPS         
+min.agr        -INF            4.0000        +INF            EPS         
+min.min        -INF            3.0000        +INF            EPS         
+min.mnf        -INF           43.0000        +INF            EPS         
+min.srv        -INF            1.0000        +INF            EPS         
+min.Hou        -INF            5.0000        +INF            EPS         
+min.Gov        -INF            1.0000        +INF            EPS         
+min.Inv        -INF           23.0000        +INF            EPS         
+mnf.agr        -INF           13.0000        +INF            EPS         
+mnf.min        -INF           29.0000        +INF            EPS         
+mnf.mnf        -INF           30.0000        +INF            EPS         
+mnf.rsd        -INF            4.0000        +INF            EPS         
+mnf.srv        -INF           30.0000        +INF            EPS         
+mnf.Hou        -INF           80.0000        +INF            EPS         
+mnf.Gov        -INF           33.0000        +INF            EPS         
+mnf.Inv        -INF          154.0000        +INF            EPS         
+rsd.agr        -INF            1.0000        +INF            EPS         
+rsd.srv        -INF            2.0000        +INF            EPS         
+rsd.Hou        -INF           54.0000        +INF            EPS         
+rsd.Gov        -INF            3.0000        +INF            EPS         
+srv.agr        -INF           11.0000        +INF            EPS         
+srv.min        -INF           15.0000        +INF            EPS         
+srv.mnf        -INF           14.0000        +INF            EPS         
+srv.rsd        -INF            9.0000        +INF            EPS         
+srv.srv        -INF            7.0000        +INF            EPS         
+srv.Hou        -INF           31.0000        +INF            EPS         
+srv.Gov        -INF           37.0000        +INF            EPS         
+srv.Inv        -INF           41.0000        +INF            EPS         
+
+---- VAR x  Intermediate demand
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom.agr        -INF            8.0000        +INF            EPS         
+agr.dom.min        -INF            1.0000        +INF            EPS         
+agr.dom.mnf        -INF           45.0000        +INF            EPS         
+agr.dom.rsd        -INF             .            +INF            EPS         
+agr.dom.srv        -INF             .            +INF            EPS         
+agr.dom.Hou        -INF             .            +INF            EPS         
+agr.dom.Gov        -INF            1.0000        +INF            EPS         
+agr.dom.Inv        -INF             .            +INF            EPS         
+agr.imp.agr        -INF            1.0000        +INF            EPS         
+agr.imp.min        -INF             .            +INF            EPS         
+agr.imp.mnf        -INF            5.0000        +INF            EPS         
+agr.imp.rsd        -INF             .            +INF            EPS         
+agr.imp.srv        -INF             .            +INF            EPS         
+agr.imp.Hou        -INF             .            +INF            EPS         
+agr.imp.Gov        -INF             .            +INF            EPS         
+agr.imp.Inv        -INF             .            +INF            EPS         
+min.dom.agr        -INF            3.0000        +INF            EPS         
+min.dom.min        -INF            2.0000        +INF            EPS         
+min.dom.mnf        -INF           33.0000        +INF            EPS         
+min.dom.rsd        -INF             .            +INF            EPS         
+min.dom.srv        -INF            1.0000        +INF            EPS         
+min.dom.Hou        -INF            4.0000        +INF            EPS         
+min.dom.Gov        -INF            1.0000        +INF            EPS         
+min.dom.Inv        -INF             .            +INF            EPS         
+min.imp.agr        -INF            1.0000        +INF            EPS         
+min.imp.min        -INF            1.0000        +INF            EPS         
+min.imp.mnf        -INF           10.0000        +INF            EPS         
+min.imp.rsd        -INF             .            +INF            EPS         
+min.imp.srv        -INF             .            +INF            EPS         
+min.imp.Hou        -INF            1.0000        +INF            EPS         
+min.imp.Gov        -INF             .            +INF            EPS         
+min.imp.Inv        -INF           23.0000        +INF            EPS         
+mnf.dom.agr        -INF            9.0000        +INF            EPS         
+mnf.dom.min        -INF           25.0000        +INF            EPS         
+mnf.dom.mnf        -INF           12.0000        +INF            EPS         
+mnf.dom.rsd        -INF            4.0000        +INF            EPS         
+mnf.dom.srv        -INF           15.0000        +INF            EPS         
+mnf.dom.Hou        -INF           50.0000        +INF            EPS         
+mnf.dom.Gov        -INF           27.0000        +INF            EPS         
+mnf.dom.Inv        -INF           98.0000        +INF            EPS         
+mnf.imp.agr        -INF            4.0000        +INF            EPS         
+mnf.imp.min        -INF            4.0000        +INF            EPS         
+mnf.imp.mnf        -INF           18.0000        +INF            EPS         
+mnf.imp.rsd        -INF             .            +INF            EPS         
+mnf.imp.srv        -INF           15.0000        +INF            EPS         
+mnf.imp.Hou        -INF           30.0000        +INF            EPS         
+mnf.imp.Gov        -INF            6.0000        +INF            EPS         
+mnf.imp.Inv        -INF           56.0000        +INF            EPS         
+rsd.dom.agr        -INF            1.0000        +INF            EPS         
+rsd.dom.min        -INF             .            +INF            EPS         
+rsd.dom.mnf        -INF             .            +INF            EPS         
+rsd.dom.rsd        -INF             .            +INF            EPS         
+rsd.dom.srv        -INF            2.0000        +INF            EPS         
+rsd.dom.Hou        -INF           54.0000        +INF            EPS         
+rsd.dom.Gov        -INF            3.0000        +INF            EPS         
+rsd.dom.Inv        -INF             .            +INF            EPS         
+rsd.imp.agr        -INF             .            +INF            EPS         
+rsd.imp.min        -INF             .            +INF            EPS         
+rsd.imp.mnf        -INF             .            +INF            EPS         
+rsd.imp.rsd        -INF             .            +INF            EPS         
+rsd.imp.srv        -INF             .            +INF            EPS         
+rsd.imp.Hou        -INF             .            +INF            EPS         
+rsd.imp.Gov        -INF             .            +INF            EPS         
+rsd.imp.Inv        -INF             .            +INF            EPS         
+srv.dom.agr        -INF           11.0000        +INF            EPS         
+srv.dom.min        -INF           12.0000        +INF            EPS         
+srv.dom.mnf        -INF           11.0000        +INF            EPS         
+srv.dom.rsd        -INF            9.0000        +INF            EPS         
+srv.dom.srv        -INF            5.0000        +INF            EPS         
+srv.dom.Hou        -INF           30.0000        +INF            EPS         
+srv.dom.Gov        -INF           31.0000        +INF            EPS         
+srv.dom.Inv        -INF           32.0000        +INF            EPS         
+srv.imp.agr        -INF             .            +INF            EPS         
+srv.imp.min        -INF            3.0000        +INF            EPS         
+srv.imp.mnf        -INF            3.0000        +INF            EPS         
+srv.imp.rsd        -INF             .            +INF            EPS         
+srv.imp.srv        -INF            2.0000        +INF            EPS         
+srv.imp.Hou        -INF            1.0000        +INF            EPS         
+srv.imp.Gov        -INF            6.0000        +INF            EPS         
+srv.imp.Inv        -INF            9.0000        +INF            EPS         
+
+---- VAR xfac_f  Total factor use
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF           87.0000        +INF            EPS         
+min        -INF           88.0000        +INF            EPS         
+mnf        -INF          109.0000        +INF            EPS         
+rsd        -INF           47.0000        +INF            EPS         
+srv        -INF          123.0000        +INF            EPS         
+
+---- VAR xtot  Total output of local final user
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou        -INF          170.0000        +INF            EPS         
+Gov        -INF           75.0000        +INF            EPS         
+Inv        -INF          218.0000        +INF            EPS         
+
+---- VAR xfac  Factor demand
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr        -INF           43.0000        +INF            EPS         
+Capital.min        -INF           41.0000        +INF            EPS         
+Capital.mnf        -INF           50.0000        +INF            EPS         
+Capital.rsd        -INF           47.0000        +INF            EPS         
+Capital.srv        -INF           52.0000        +INF            EPS         
+Labor  .agr        -INF           44.0000        +INF            EPS         
+Labor  .min        -INF           47.0000        +INF            EPS         
+Labor  .mnf        -INF           59.0000        +INF            EPS         
+Labor  .rsd        -INF      1.0000000E-9        +INF            EPS         
+Labor  .srv        -INF           71.0000        +INF            EPS         
+
+---- VAR xexp  Export demand
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF           70.0000        +INF            EPS         
+min        -INF           92.0000        +INF            EPS         
+mnf        -INF            6.0000        +INF            EPS         
+rsd        -INF             .            +INF            EPS         
+srv        -INF           22.0000        +INF            EPS         
+
+---- VAR xdem  Total demand for goods
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom        -INF          125.0000        +INF            EPS         
+agr.imp        -INF            6.0000        +INF            EPS         
+min.dom        -INF          136.0000        +INF            EPS         
+min.imp        -INF           36.0000        +INF            EPS         
+mnf.dom        -INF          246.0000        +INF            EPS         
+mnf.imp        -INF          133.0000        +INF            EPS         
+rsd.dom        -INF           60.0000        +INF            EPS         
+rsd.imp        -INF             .            +INF            EPS         
+srv.dom        -INF          163.0000        +INF            EPS         
+srv.imp        -INF           24.0000        +INF            EPS         
+
+---- VAR z  Output of industry
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF          125.0000        +INF            EPS         
+min        -INF          136.0000        +INF            EPS         
+mnf        -INF          246.0000        +INF            EPS         
+rsd        -INF           60.0000        +INF            EPS         
+srv        -INF          163.0000        +INF            EPS         
+
+---- VAR wtot  Nominal expenditure by local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou        -INF          170.0000        +INF            EPS         
+Gov        -INF           75.0000        +INF            EPS         
+Inv        -INF          218.0000        +INF            EPS         
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- VAR wgdpinc           -INF          454.0000        +INF            EPS         
+---- VAR wgdpexp           -INF          454.0000        +INF            EPS         
+---- VAR delB              -INF           -0.0198        +INF            EPS         
+
+  wgdpinc  Nominal GDP - income side
+  wgdpexp  Nominal GDP expenditure side
+  delB  Trade Balance
+
+---- VAR ffac_i  Factor wage shifter
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+Capital        -INF            1.0000        +INF            EPS         
+Labor          -INF            1.0000        +INF            EPS         
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- VAR OBJ               -INF            1.0000        +INF            EPS         
+
+  OBJ  NLP objective function
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0     ERRORS
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 9
+Simple Model
+Solution Report     SOLVE simple Using NLP From line 307
+
+
+**** SOLVER STATUS FILE LISTED BELOW
+=1
+=2
+=0CONOPT 4         53.1.0 6a03d3b9 Feb 16, 2026          WEI x86 64bit/MS Window
+=1
+--- *** This solver runs with a demo license. No commercial use.
+=2
+=1
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+=2
+=1
+    Will use up to 4 threads.
+ 
+=2
+ 
+  ***  Line    0  SET       LFEERR =            0
+ 
+  ***  Line    0  SET       LFEERR =            0
+ 
+  ***  Line    0  SET       LFITER =            0
+ 
+  ***  Line    0  SET       RVTIME =     1.0000000000E+10
+=1
+ 
+    The user model has 217 constraints and 217 variables
+    with 906 Jacobian elements, 616 of which are nonlinear.
+=2
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       0   0          1.0001038886E-09 (Input point)
+ 
+ ** The iteration limit has been reached.
+ 
+=1
+ 
+ CONOPT time Total                            0.003 seconds
+   of which: Function evaluations             0.000 =  0.0%
+             1st Derivative evaluations       0.000 =  0.0%
+ 
+=2
+ 
+ Memory: Max used =      0.09 Mbytes
+  Total Allocated =      0.10 Mbytes
+ 
+**** SOLVER STATUS FILE LISTED ABOVE
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 10
+Simple Model
+Equation Listing    SOLVE simple Using NLP From line 328
+
+
+---- E_pcomp  =E=  Price of Composite dom-imp commodity
+
+E_pcomp(agr,agr)..  (9)*pcomp(agr,agr) - (8)*p(agr,dom) - (1)*p(agr,imp) + (1)*xcomp(agr,agr) - (1)*x(agr,dom,agr) - (1)*x(agr,imp,agr) =E= 0 ; (LHS = 0)
+     
+E_pcomp(agr,min)..  (1)*pcomp(agr,min) - (1)*p(agr,dom) + (0)*p(agr,imp) + (1)*xcomp(agr,min) - (1)*x(agr,dom,min) - (1)*x(agr,imp,min) =E= 0 ; (LHS = 0)
+     
+E_pcomp(agr,mnf)..  (50)*pcomp(agr,mnf) - (45)*p(agr,dom) - (5)*p(agr,imp) + (1)*xcomp(agr,mnf) - (1)*x(agr,dom,mnf) - (1)*x(agr,imp,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 28 ENTRIES SKIPPED
+
+
+---- E_xcomp1  =E=  Dom-imp Composite for industries (Leontief)
+
+E_xcomp1(agr,agr)..  xcomp(agr,agr) - 0.072*z(agr) =E= 0 ; (LHS = 0)
+     
+E_xcomp1(agr,min)..  xcomp(agr,min) - 0.00735294117647059*z(min) =E= 0 ; (LHS = 0)
+     
+E_xcomp1(agr,mnf)..  xcomp(agr,mnf) - 0.203252032520325*z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 16 ENTRIES SKIPPED
+
+
+---- E_xcomp2  =E=  Dom-imp Composite for local final users (Cobb-Douglas)
+
+E_xcomp2(agr,Gov)..  (1)*pcomp(agr,Gov) + (1)*xcomp(agr,Gov) - 0.0133333333333333*wtot(Gov) =E= 0 ; (LHS = 0)
+     
+E_xcomp2(min,Hou)..  (5)*pcomp(min,Hou) + (1)*xcomp(min,Hou) - 0.0294117647058824*wtot(Hou) =E= 0 ; (LHS = 0)
+     
+E_xcomp2(min,Gov)..  (1)*pcomp(min,Gov) + (1)*xcomp(min,Gov) - 0.0133333333333333*wtot(Gov) =E= 0 ; (LHS = 0)
+     
+REMAINING 9 ENTRIES SKIPPED
+
+
+---- E_x  =E=  Intermediate demand
+
+E_x(agr,dom,agr)..  - (16)*pcomp(agr,agr) + (16)*p(agr,dom) - (0.888888888888889)*xcomp(agr,agr) + x(agr,dom,agr) =E= 0 ; (LHS = 0)
+     
+E_x(agr,dom,min)..  - (2)*pcomp(agr,min) + (2)*p(agr,dom) - (1)*xcomp(agr,min) + x(agr,dom,min) =E= 0 ; (LHS = 0)
+     
+E_x(agr,dom,mnf)..  - (90)*pcomp(agr,mnf) + (90)*p(agr,dom) - (0.9)*xcomp(agr,mnf) + x(agr,dom,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 77 ENTRIES SKIPPED
+
+
+---- E_pA  =E=  Industry cost indices
+
+E_pA(agr,dom)..  - (9)*pcomp(agr,agr) - (4)*pcomp(min,agr) - (13)*pcomp(mnf,agr) - (1)*pcomp(rsd,agr) - (11)*pcomp(srv,agr) + (125)*p(agr,dom) - (87)*pfac_f(agr) - (1)*xcomp(agr,agr) - (1)*xcomp(min,agr) - (1)*xcomp(mnf,agr) - (1)*xcomp(rsd,agr) - (1)*xcomp(srv,agr) - (1)*xfac_f(agr) + (1)*z(agr) =E= 0 ; (LHS = 0)
+     
+E_pA(min,dom)..  - (1)*pcomp(agr,min) - (3)*pcomp(min,min) - (29)*pcomp(mnf,min) - (15)*pcomp(srv,min) + (136)*p(min,dom) - (88)*pfac_f(min) - (1)*xcomp(agr,min) - (1)*xcomp(min,min) - (1)*xcomp(mnf,min) - (1)*xcomp(srv,min) - (1)*xfac_f(min) + (1)*z(min) =E= 0 ; (LHS = 0)
+     
+E_pA(mnf,dom)..  - (50)*pcomp(agr,mnf) - (43)*pcomp(min,mnf) - (30)*pcomp(mnf,mnf) - (14)*pcomp(srv,mnf) + (246)*p(mnf,dom) - (109)*pfac_f(mnf) - (1)*xcomp(agr,mnf) - (1)*xcomp(min,mnf) - (1)*xcomp(mnf,mnf) - (1)*xcomp(srv,mnf) - (1)*xfac_f(mnf) + (1)*z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_pfac_f  =E=  Composite factor prices
+
+E_pfac_f(agr)..  (87)*pfac_f(agr) - 43*pfac(Capital,agr) - (44)*pfac(Labor,agr) + (1)*xfac_f(agr) - (1)*xfac(Labor,agr) =E= 0 ; (LHS = 0)
+     
+E_pfac_f(min)..  (88)*pfac_f(min) - 41*pfac(Capital,min) - (47)*pfac(Labor,min) + (1)*xfac_f(min) - (1)*xfac(Labor,min) =E= 0 ; (LHS = 0)
+     
+E_pfac_f(mnf)..  (109)*pfac_f(mnf) - 50*pfac(Capital,mnf) - (59)*pfac(Labor,mnf) + (1)*xfac_f(mnf) - (1)*xfac(Labor,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_xfac  =E=  Demand for factors
+
+E_xfac(Capital,agr)..  - (0.247126436781609)*pfac_f(agr) + (0.247126436781609)*pfac(Capital,agr) - (0.0056810675122209)*xfac_f(agr) =E= 0 ; (LHS = 0)
+     
+E_xfac(Capital,min)..  - (0.232954545454545)*pfac_f(min) + (0.232954545454545)*pfac(Capital,min) - (0.00529442148760331)*xfac_f(min) =E= 0 ; (LHS = 0)
+     
+E_xfac(Capital,mnf)..  - (0.229357798165138)*pfac_f(mnf) + (0.229357798165138)*pfac(Capital,mnf) - (0.0042083999663328)*xfac_f(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 7 ENTRIES SKIPPED
+
+
+---- E_xfac_f  =E=  Composite factor CES
+
+E_xfac_f(agr)..  1.4367816091954*xfac_f(agr) - z(agr) =E= 0 ; (LHS = 0)
+     
+E_xfac_f(min)..  1.54545454545455*xfac_f(min) - z(min) =E= 0 ; (LHS = 0)
+     
+E_xfac_f(mnf)..  2.25688073394495*xfac_f(mnf) - z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_wtot  =E=  Nominal expenditure by local final users
+
+E_wtot(Hou)..  wtot(Hou) - 0.374449339206224*wgdpinc =E= 0 ; (LHS = 0)
+     
+E_wtot(Gov)..  wtot(Gov) - 0.165198237885099*wgdpinc =E= 0 ; (LHS = 0)
+     
+E_wtot(Inv)..  wtot(Inv) - 0.480176211452687*wgdpinc =E= 0 ; (LHS = 0)
+     
+
+---- E_ptot  =E=  Price indices for local final users
+
+E_ptot(Hou)..  - (0.0294117647058823)*pcomp(min,Hou) - (0.470588235294118)*pcomp(mnf,Hou) - (0.317647058823529)*pcomp(rsd,Hou) - (0.182352941176471)*pcomp(srv,Hou) + ptot(Hou) =E= 0 ; (LHS = 0)
+     
+E_ptot(Gov)..  - (0.0133333333333333)*pcomp(agr,Gov) - (0.0133333333333333)*pcomp(min,Gov) - (0.44)*pcomp(mnf,Gov) - (0.04)*pcomp(rsd,Gov) - (0.493333333333333)*pcomp(srv,Gov) + ptot(Gov) =E= 0 ; (LHS = 0)
+     
+E_ptot(Inv)..  - (0.105504587155963)*pcomp(min,Inv) - (0.706422018348624)*pcomp(mnf,Inv) - (0.188073394495413)*pcomp(srv,Inv) + ptot(Inv) =E= 0 ; (LHS = 0)
+     
+
+---- E_xtot  =E=  Real expenditure by local final users
+
+E_xtot(Hou)..  (170)*ptot(Hou) + (1)*xtot(Hou) - wtot(Hou) =E= 0 ; (LHS = 0)
+     
+E_xtot(Gov)..  (75)*ptot(Gov) + (1)*xtot(Gov) - wtot(Gov) =E= 0 ; (LHS = 0)
+     
+E_xtot(Inv)..  (218)*ptot(Inv) + (1)*xtot(Inv) - wtot(Inv) =E= 0 ; (LHS = 0)
+     
+
+---- E_xexp  =E=  Export demand
+
+E_xexp(agr)..  (350)*p(agr,dom) + xexp(agr) =E= 0 ; (LHS = 0)
+     
+E_xexp(min)..  (460)*p(min,dom) + xexp(min) =E= 0 ; (LHS = 0)
+     
+E_xexp(mnf)..  (30)*p(mnf,dom) + xexp(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_ffac_i  =E=  Total factor use
+
+E_ffac_i(Capital)..  xfac_i(Capital) =E= 233 ; (LHS = 233)
+     
+E_ffac_i(Labor)..  - xfac(Labor,agr) - xfac(Labor,min) - xfac(Labor,mnf) - xfac(Labor,rsd) - xfac(Labor,srv) =E= -221.000000001 ; (LHS = -221.000000001)
+     
+
+---- E_xdemA  =E=  Total demand for dom goods
+
+E_xdemA(agr)..  - x(agr,dom,agr) - x(agr,dom,min) - x(agr,dom,mnf) - x(agr,dom,rsd) - x(agr,dom,srv) - x(agr,dom,Hou) - x(agr,dom,Gov) - x(agr,dom,Inv) - xexp(agr) + xdem(agr,dom) =E= 0 ; (LHS = 0)
+     
+E_xdemA(min)..  - x(min,dom,agr) - x(min,dom,min) - x(min,dom,mnf) - x(min,dom,rsd) - x(min,dom,srv) - x(min,dom,Hou) - x(min,dom,Gov) - x(min,dom,Inv) - xexp(min) + xdem(min,dom) =E= 0 ; (LHS = 0)
+     
+E_xdemA(mnf)..  - x(mnf,dom,agr) - x(mnf,dom,min) - x(mnf,dom,mnf) - x(mnf,dom,rsd) - x(mnf,dom,srv) - x(mnf,dom,Hou) - x(mnf,dom,Gov) - x(mnf,dom,Inv) - xexp(mnf) + xdem(mnf,dom) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_xdemB  =E=  Total demand for imp goods
+
+E_xdemB(agr)..  - x(agr,imp,agr) - x(agr,imp,min) - x(agr,imp,mnf) - x(agr,imp,rsd) - x(agr,imp,srv) - x(agr,imp,Hou) - x(agr,imp,Gov) - x(agr,imp,Inv) + xdem(agr,imp) =E= 0 ; (LHS = 0)
+     
+E_xdemB(min)..  - x(min,imp,agr) - x(min,imp,min) - x(min,imp,mnf) - x(min,imp,rsd) - x(min,imp,srv) - x(min,imp,Hou) - x(min,imp,Gov) - x(min,imp,Inv) + xdem(min,imp) =E= 0 ; (LHS = 0)
+     
+E_xdemB(mnf)..  - x(mnf,imp,agr) - x(mnf,imp,min) - x(mnf,imp,mnf) - x(mnf,imp,rsd) - x(mnf,imp,srv) - x(mnf,imp,Hou) - x(mnf,imp,Gov) - x(mnf,imp,Inv) + xdem(mnf,imp) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_z  =E=  Market clearing
+
+E_z(agr)..  - xdem(agr,dom) + z(agr) =E= 0 ; (LHS = 0)
+     
+E_z(min)..  - xdem(min,dom) + z(min) =E= 0 ; (LHS = 0)
+     
+E_z(mnf)..  - xdem(mnf,dom) + z(mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_pB  =E=  Import prices
+
+E_pB(agr)..  p(agr,imp) =E= 1.1 ; (LHS = 1, INFES = 0.1 ****)
+     
+E_pB(min)..  p(min,imp) =E= 1.1 ; (LHS = 1, INFES = 0.1 ****)
+     
+E_pB(mnf)..  p(mnf,imp) =E= 1.1 ; (LHS = 1, INFES = 0.1 ****)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- E_pfac  =E=  Factor remuneration
+
+E_pfac(Capital,agr)..  pfac(Capital,agr) - (1)*ptot(Hou) - (1)*ffac(Capital,agr) =E= 0 ; (LHS = 0)
+     
+E_pfac(Capital,min)..  pfac(Capital,min) - (1)*ptot(Hou) - (1)*ffac(Capital,min) =E= 0 ; (LHS = 0)
+     
+E_pfac(Capital,mnf)..  pfac(Capital,mnf) - (1)*ptot(Hou) - (1)*ffac(Capital,mnf) =E= 0 ; (LHS = 0)
+     
+REMAINING 7 ENTRIES SKIPPED
+
+
+---- E_wgdpinc  =E=  Nominal GDP income
+
+E_wgdpinc..  - 43*pfac(Capital,agr) - 41*pfac(Capital,min) - 50*pfac(Capital,mnf) - 47*pfac(Capital,rsd) - 52*pfac(Capital,srv) - (44)*pfac(Labor,agr) - (47)*pfac(Labor,min) - (59)*pfac(Labor,mnf) - (1E-9)*pfac(Labor,rsd) - (71)*pfac(Labor,srv) - (1)*xfac(Labor,agr) - (1)*xfac(Labor,min) - (1)*xfac(Labor,mnf) - (1)*xfac(Labor,rsd) - (1)*xfac(Labor,srv) + wgdpinc =E= 0 ; (LHS = 0)
+     
+
+---- E_wgdpexp  =E=  Nominal GDP expenditure
+
+E_wgdpexp..  - (1)*pcomp(agr,Gov) - (5)*pcomp(min,Hou) - (1)*pcomp(min,Gov) - (23)*pcomp(min,Inv) - (80)*pcomp(mnf,Hou) - (33)*pcomp(mnf,Gov) - (154)*pcomp(mnf,Inv) - (54)*pcomp(rsd,Hou) - (3)*pcomp(rsd,Gov) - (31)*pcomp(srv,Hou) - (37)*pcomp(srv,Gov) - (41)*pcomp(srv,Inv) - (70)*p(agr,dom) + (6)*p(agr,imp) - (92)*p(min,dom) + (36)*p(min,imp) - (6)*p(mnf,dom) + (133)*p(mnf,imp) + (0)*p(rsd,dom) + (0)*p(rsd,imp) - (22)*p(srv,dom) + (24)*p(srv,imp) - (1)*xcomp(agr,Gov) - (1)*xcomp(min,Hou) - (1)*xcomp(min,Gov) - (1)*xcomp(min,Inv) - (1)*xcomp(mnf,Hou) - (1)*xcomp(mnf,Gov) - (1)*xcomp(mnf,Inv) - (1)*xcomp(rsd,Hou) - (1)*xcomp(rsd,Gov) - (1)*xcomp(srv,Hou) - (1)*xcomp(srv,Gov) - (1)*xcomp(srv,Inv) - (1)*xexp(agr) - (1)*xexp(min) - (1)*xexp(mnf) - (1)*xexp(rsd) - (1)*xexp(srv) + (1)*xdem(agr,imp) + (1)*xdem(min,imp) + (1)*xdem(mnf,imp) + (1)*xdem(rsd,imp) + (1)*xdem(srv,imp) + wgdpexp =E= 0 ; (LHS = 0)
+     
+
+---- E_delB  =E=  Trade Balance
+
+E_delB..  - (70)*p(agr,dom) + (6)*p(agr,imp) - (92)*p(min,dom) + (36)*p(min,imp) - (6)*p(mnf,dom) + (133)*p(mnf,imp) + (0)*p(rsd,dom) + (0)*p(rsd,imp) - (22)*p(srv,dom) + (24)*p(srv,imp) - (1)*xexp(agr) - (1)*xexp(min) - (1)*xexp(mnf) - (1)*xexp(rsd) - (1)*xexp(srv) + (1)*xdem(agr,imp) + (1)*xdem(min,imp) + (1)*xdem(mnf,imp) + (1)*xdem(rsd,imp) + (1)*xdem(srv,imp) - (0.0198237885462118)*wgdpinc + (454.000000001)*delB =E= 0 ; (LHS = 0)
+     
+
+---- E_OBJ  =E=  NLP objective function
+
+E_OBJ..  OBJ =E= 1 ; (LHS = 1)
+     
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 11
+Simple Model
+Column Listing      SOLVE simple Using NLP From line 328
+
+
+---- pcomp  Price of Composite dom-imp commodity
+
+pcomp(agr,agr)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+       (9)      E_pcomp(agr,agr)
+     (-16)      E_x(agr,dom,agr)
+      (-2)      E_x(agr,imp,agr)
+      (-9)      E_pA(agr,dom)
+
+pcomp(agr,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+       (1)      E_pcomp(agr,min)
+      (-2)      E_x(agr,dom,min)
+      (-1)      E_pA(min,dom)
+
+pcomp(agr,mnf)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      (50)      E_pcomp(agr,mnf)
+     (-90)      E_x(agr,dom,mnf)
+     (-10)      E_x(agr,imp,mnf)
+     (-50)      E_pA(mnf,dom)
+
+REMAINING 28 ENTRIES SKIPPED
+
+---- p  Goods' prices
+
+p(agr,dom)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      (-8)      E_pcomp(agr,agr)
+      (-1)      E_pcomp(agr,min)
+     (-45)      E_pcomp(agr,mnf)
+      (-1)      E_pcomp(agr,Gov)
+      (16)      E_x(agr,dom,agr)
+       (2)      E_x(agr,dom,min)
+      (90)      E_x(agr,dom,mnf)
+       (2)      E_x(agr,dom,Gov)
+     (125)      E_pA(agr,dom)
+     (350)      E_xexp(agr)
+     (-70)      E_wgdpexp
+     (-70)      E_delB
+
+p(agr,imp)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      (-1)      E_pcomp(agr,agr)
+       (0)      E_pcomp(agr,min)
+      (-5)      E_pcomp(agr,mnf)
+       (0)      E_pcomp(agr,Gov)
+       (2)      E_x(agr,imp,agr)
+      (10)      E_x(agr,imp,mnf)
+        1       E_pB(agr)
+       (6)      E_wgdpexp
+       (6)      E_delB
+
+p(min,dom)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      (-3)      E_pcomp(min,agr)
+      (-2)      E_pcomp(min,min)
+     (-33)      E_pcomp(min,mnf)
+      (-1)      E_pcomp(min,srv)
+      (-4)      E_pcomp(min,Hou)
+      (-1)      E_pcomp(min,Gov)
+       (0)      E_pcomp(min,Inv)
+       (3.0003) E_x(min,dom,agr)
+       (2.0002) E_x(min,dom,min)
+      (33.0033) E_x(min,dom,mnf)
+       (1.0001) E_x(min,dom,srv)
+       (4.0004) E_x(min,dom,Hou)
+       (1.0001) E_x(min,dom,Gov)
+     (136)      E_pA(min,dom)
+     (460)      E_xexp(min)
+     (-92)      E_wgdpexp
+     (-92)      E_delB
+
+REMAINING 7 ENTRIES SKIPPED
+
+---- pfac_f  Composite factor prices
+
+pfac_f(agr)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+     (-87)      E_pA(agr,dom)
+      (87)      E_pfac_f(agr)
+      (-0.2471) E_xfac(Capital,agr)
+      (-0.2529) E_xfac(Labor,agr)
+
+pfac_f(min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+     (-88)      E_pA(min,dom)
+      (88)      E_pfac_f(min)
+      (-0.233)  E_xfac(Capital,min)
+      (-0.267)  E_xfac(Labor,min)
+
+pfac_f(mnf)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+    (-109)      E_pA(mnf,dom)
+     (109)      E_pfac_f(mnf)
+      (-0.2294) E_xfac(Capital,mnf)
+      (-0.2706) E_xfac(Labor,mnf)
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- pfac  Price of Factors
+
+pfac(Capital,agr)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      -43       E_pfac_f(agr)
+       (0.2471) E_xfac(Capital,agr)
+        1       E_pfac(Capital,agr)
+      -43       E_wgdpinc
+
+pfac(Capital,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      -41       E_pfac_f(min)
+       (0.233)  E_xfac(Capital,min)
+        1       E_pfac(Capital,min)
+      -41       E_wgdpinc
+
+pfac(Capital,mnf)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      -50       E_pfac_f(mnf)
+       (0.2294) E_xfac(Capital,mnf)
+        1       E_pfac(Capital,mnf)
+      -50       E_wgdpinc
+
+REMAINING 7 ENTRIES SKIPPED
+
+---- ptot  Price indices for local final users
+
+ptot(Hou)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+        1       E_ptot(Hou)
+     (170)      E_xtot(Hou)
+      (-1)      E_pfac(Capital,agr)
+      (-1)      E_pfac(Capital,min)
+      (-1)      E_pfac(Capital,mnf)
+      (-1)      E_pfac(Capital,rsd)
+      (-1)      E_pfac(Capital,srv)
+      (-1)      E_pfac(Labor,agr)
+      (-1)      E_pfac(Labor,min)
+      (-1)      E_pfac(Labor,mnf)
+      (-1)      E_pfac(Labor,rsd)
+      (-1)      E_pfac(Labor,srv)
+
+ptot(Gov)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+        1       E_ptot(Gov)
+      (75)      E_xtot(Gov)
+
+ptot(Inv)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+        1       E_ptot(Inv)
+     (218)      E_xtot(Inv)
+
+
+---- xcomp  Composite commodity
+
+xcomp(agr,agr)
+                (.LO, .L, .UP, .M = -INF, 9, +INF, EPS)
+       (1)      E_pcomp(agr,agr)
+        1       E_xcomp1(agr,agr)
+      (-0.8889) E_x(agr,dom,agr)
+      (-0.1111) E_x(agr,imp,agr)
+      (-1)      E_pA(agr,dom)
+
+xcomp(agr,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+       (1)      E_pcomp(agr,min)
+        1       E_xcomp1(agr,min)
+      (-1)      E_x(agr,dom,min)
+      (-1)      E_pA(min,dom)
+
+xcomp(agr,mnf)
+                (.LO, .L, .UP, .M = -INF, 50, +INF, EPS)
+       (1)      E_pcomp(agr,mnf)
+        1       E_xcomp1(agr,mnf)
+      (-0.9)    E_x(agr,dom,mnf)
+      (-0.1)    E_x(agr,imp,mnf)
+      (-1)      E_pA(mnf,dom)
+
+REMAINING 28 ENTRIES SKIPPED
+
+---- x  Intermediate demand
+
+x(agr,dom,agr)
+                (.LO, .L, .UP, .M = -INF, 8, +INF, EPS)
+      (-1)      E_pcomp(agr,agr)
+        1       E_x(agr,dom,agr)
+       -1       E_xdemA(agr)
+
+x(agr,dom,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      (-1)      E_pcomp(agr,min)
+        1       E_x(agr,dom,min)
+       -1       E_xdemA(agr)
+
+x(agr,dom,mnf)
+                (.LO, .L, .UP, .M = -INF, 45, +INF, EPS)
+      (-1)      E_pcomp(agr,mnf)
+        1       E_x(agr,dom,mnf)
+       -1       E_xdemA(agr)
+
+REMAINING 77 ENTRIES SKIPPED
+
+---- xfac_f  Total factor use
+
+xfac_f(agr)
+                (.LO, .L, .UP, .M = -INF, 87, +INF, EPS)
+      (-1)      E_pA(agr,dom)
+       (1)      E_pfac_f(agr)
+      (-0.0057) E_xfac(Capital,agr)
+      (-0.0058) E_xfac(Labor,agr)
+        1.4368  E_xfac_f(agr)
+
+xfac_f(min)
+                (.LO, .L, .UP, .M = -INF, 88, +INF, EPS)
+      (-1)      E_pA(min,dom)
+       (1)      E_pfac_f(min)
+      (-0.0053) E_xfac(Capital,min)
+      (-0.0061) E_xfac(Labor,min)
+        1.5455  E_xfac_f(min)
+
+xfac_f(mnf)
+                (.LO, .L, .UP, .M = -INF, 109, +INF, EPS)
+      (-1)      E_pA(mnf,dom)
+       (1)      E_pfac_f(mnf)
+      (-0.0042) E_xfac(Capital,mnf)
+      (-0.005)  E_xfac(Labor,mnf)
+        2.2569  E_xfac_f(mnf)
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- xtot  Total output of local final user
+
+xtot(Hou)
+                (.LO, .L, .UP, .M = -INF, 170, +INF, EPS)
+       (1)      E_xtot(Hou)
+
+xtot(Gov)
+                (.LO, .L, .UP, .M = -INF, 75, +INF, EPS)
+       (1)      E_xtot(Gov)
+
+xtot(Inv)
+                (.LO, .L, .UP, .M = -INF, 218, +INF, EPS)
+       (1)      E_xtot(Inv)
+
+
+---- xfac  Factor demand
+
+xfac(Labor,agr)
+                (.LO, .L, .UP, .M = -INF, 44, +INF, EPS)
+      (-1)      E_pfac_f(agr)
+       (0.0115) E_xfac(Labor,agr)
+       -1       E_ffac_i(Labor)
+      (-1)      E_wgdpinc
+
+xfac(Labor,min)
+                (.LO, .L, .UP, .M = -INF, 47, +INF, EPS)
+      (-1)      E_pfac_f(min)
+       (0.0114) E_xfac(Labor,min)
+       -1       E_ffac_i(Labor)
+      (-1)      E_wgdpinc
+
+xfac(Labor,mnf)
+                (.LO, .L, .UP, .M = -INF, 59, +INF, EPS)
+      (-1)      E_pfac_f(mnf)
+       (0.0092) E_xfac(Labor,mnf)
+       -1       E_ffac_i(Labor)
+      (-1)      E_wgdpinc
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- xfac_i  Total factor use
+
+xfac_i(Capital)
+                (.LO, .L, .UP, .M = -INF, 233, +INF, 0)
+        1       E_ffac_i(Capital)
+
+
+---- xexp  Export demand
+
+xexp(agr)
+                (.LO, .L, .UP, .M = -INF, 70, +INF, EPS)
+        1       E_xexp(agr)
+       -1       E_xdemA(agr)
+      (-1)      E_wgdpexp
+      (-1)      E_delB
+
+xexp(min)
+                (.LO, .L, .UP, .M = -INF, 92, +INF, EPS)
+        1       E_xexp(min)
+       -1       E_xdemA(min)
+      (-1)      E_wgdpexp
+      (-1)      E_delB
+
+xexp(mnf)
+                (.LO, .L, .UP, .M = -INF, 6, +INF, EPS)
+        1       E_xexp(mnf)
+       -1       E_xdemA(mnf)
+      (-1)      E_wgdpexp
+      (-1)      E_delB
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- xdem  Total demand for goods
+
+xdem(agr,dom)
+                (.LO, .L, .UP, .M = -INF, 125, +INF, EPS)
+        1       E_xdemA(agr)
+       -1       E_z(agr)
+
+xdem(agr,imp)
+                (.LO, .L, .UP, .M = -INF, 6, +INF, EPS)
+        1       E_xdemB(agr)
+       (1)      E_wgdpexp
+       (1)      E_delB
+
+xdem(min,dom)
+                (.LO, .L, .UP, .M = -INF, 136, +INF, EPS)
+        1       E_xdemA(min)
+       -1       E_z(min)
+
+REMAINING 7 ENTRIES SKIPPED
+
+---- z  Output of industry
+
+z(agr)
+                (.LO, .L, .UP, .M = -INF, 125, +INF, EPS)
+       -0.072   E_xcomp1(agr,agr)
+       -0.032   E_xcomp1(min,agr)
+       -0.104   E_xcomp1(mnf,agr)
+       -0.008   E_xcomp1(rsd,agr)
+       -0.088   E_xcomp1(srv,agr)
+       (1)      E_pA(agr,dom)
+       -1       E_xfac_f(agr)
+        1       E_z(agr)
+
+z(min)
+                (.LO, .L, .UP, .M = -INF, 136, +INF, EPS)
+       -0.0074  E_xcomp1(agr,min)
+       -0.0221  E_xcomp1(min,min)
+       -0.2132  E_xcomp1(mnf,min)
+       -0.1103  E_xcomp1(srv,min)
+       (1)      E_pA(min,dom)
+       -1       E_xfac_f(min)
+        1       E_z(min)
+
+z(mnf)
+                (.LO, .L, .UP, .M = -INF, 246, +INF, EPS)
+       -0.2033  E_xcomp1(agr,mnf)
+       -0.1748  E_xcomp1(min,mnf)
+       -0.122   E_xcomp1(mnf,mnf)
+       -0.0569  E_xcomp1(srv,mnf)
+       (1)      E_pA(mnf,dom)
+       -1       E_xfac_f(mnf)
+        1       E_z(mnf)
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- wtot  Nominal expenditure by local final users
+
+wtot(Hou)
+                (.LO, .L, .UP, .M = -INF, 170, +INF, EPS)
+       -0.0294  E_xcomp2(min,Hou)
+       -0.4706  E_xcomp2(mnf,Hou)
+       -0.3176  E_xcomp2(rsd,Hou)
+       -0.1824  E_xcomp2(srv,Hou)
+        1       E_wtot(Hou)
+       -1       E_xtot(Hou)
+
+wtot(Gov)
+                (.LO, .L, .UP, .M = -INF, 75, +INF, EPS)
+       -0.0133  E_xcomp2(agr,Gov)
+       -0.0133  E_xcomp2(min,Gov)
+       -0.44    E_xcomp2(mnf,Gov)
+       -0.04    E_xcomp2(rsd,Gov)
+       -0.4933  E_xcomp2(srv,Gov)
+        1       E_wtot(Gov)
+       -1       E_xtot(Gov)
+
+wtot(Inv)
+                (.LO, .L, .UP, .M = -INF, 218, +INF, EPS)
+       -0.1055  E_xcomp2(min,Inv)
+       -0.7064  E_xcomp2(mnf,Inv)
+       -0.1881  E_xcomp2(srv,Inv)
+        1       E_wtot(Inv)
+       -1       E_xtot(Inv)
+
+
+---- wgdpinc  Nominal GDP - income side
+
+wgdpinc
+                (.LO, .L, .UP, .M = -INF, 454.000000001, +INF, EPS)
+       -0.3744  E_wtot(Hou)
+       -0.1652  E_wtot(Gov)
+       -0.4802  E_wtot(Inv)
+        1       E_wgdpinc
+      (-0.0198) E_delB
+
+
+---- wgdpexp  Nominal GDP expenditure side
+
+wgdpexp
+                (.LO, .L, .UP, .M = -INF, 454, +INF, EPS)
+        1       E_wgdpexp
+
+
+---- delB  Trade Balance
+
+delB
+                (.LO, .L, .UP, .M = -INF, -0.0198237885462118, +INF, EPS)
+     (454)      E_delB
+
+
+---- ffac_i  Factor wage shifter
+
+ffac_i(Labor)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+      (-1)      E_pfac(Labor,agr)
+      (-1)      E_pfac(Labor,min)
+      (-1)      E_pfac(Labor,mnf)
+      (-1)      E_pfac(Labor,rsd)
+      (-1)      E_pfac(Labor,srv)
+
+
+---- ffac  Factor wage shifter
+
+ffac(Capital,agr)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-1)      E_pfac(Capital,agr)
+
+ffac(Capital,min)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-1)      E_pfac(Capital,min)
+
+ffac(Capital,mnf)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+      (-1)      E_pfac(Capital,mnf)
+
+REMAINING 2 ENTRIES SKIPPED
+
+---- OBJ  NLP objective function
+
+OBJ
+                (.LO, .L, .UP, .M = -INF, 1, +INF, EPS)
+        1       E_OBJ
+
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 12
+Simple Model
+Range Statistics    SOLVE simple Using NLP From line 328
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [ 1.000E+00, 2.330E+02] - Zero values observed as well
+Bound     [min, max] : [        NA,        NA]
+Matrix    [min, max] : [ 4.527E-13, 4.600E+02] - Zero values observed as well
+
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 13
+Simple Model
+Model Statistics    SOLVE simple Using NLP From line 328
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS          22     SINGLE EQUATIONS          217
+BLOCKS OF VARIABLES          26     SINGLE VARIABLES          217
+NON ZERO ELEMENTS           887     NON LINEAR N-Z            591
+CODE LENGTH               1,418     CONSTANT POOL              98
+
+
+GENERATION TIME      =        0.047 SECONDS      4 MB  53.1.0 6a03d3b9 WEX-WEI
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 14
+Simple Model
+Solution Report     SOLVE simple Using NLP From line 328
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   simple              OBJECTIVE  OBJ
+     TYPE    NLP                 DIRECTION  MAXIMIZE
+     SOLVER  CONOPT              FROM LINE  328
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      2 Locally Optimal
+**** OBJECTIVE VALUE                1.0000
+
+ RESOURCE USAGE, LIMIT          0.219     19000.000
+ ITERATION COUNT, LIMIT         8           200
+ EVALUATION ERRORS              0             0
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 217 constraints and 217 variables
+    with 887 Jacobian elements, 591 of which are nonlinear.
+ 
+    The pre-triangular part of the model has 39 constraints and variables.
+    The post-triangular part of the model has 1 constraints and variables.
+ 
+    Preprocessed model has 177 constraints and 177 variables
+    with 700 Jacobian elements, 451 of which are nonlinear.
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+ 
+ 
+ CONOPT time Total                            0.034 seconds
+   of which: Function evaluations             0.006 = 17.6%
+             1st Derivative evaluations       0.002 =  5.9%
+             Interval derivative evals        0.001 =  2.9%
+ 
+
+---- EQU E_pcomp  Price of Composite dom-imp commodity
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr          .              .              .             EPS         
+agr.min          .              .              .             EPS         
+agr.mnf          .              .              .             EPS         
+agr.Gov          .              .              .             EPS         
+min.agr          .              .              .             EPS         
+min.min          .              .              .             EPS         
+min.mnf          .              .              .             EPS         
+min.srv          .              .              .             EPS         
+min.Hou          .              .              .             EPS         
+min.Gov          .              .              .             EPS         
+min.Inv          .              .              .             EPS         
+mnf.agr          .              .              .             EPS         
+mnf.min          .              .              .             EPS         
+mnf.mnf          .              .              .             EPS         
+mnf.rsd          .              .              .             EPS         
+mnf.srv          .              .              .             EPS         
+mnf.Hou          .              .              .             EPS         
+mnf.Gov          .              .              .             EPS         
+mnf.Inv          .              .              .             EPS         
+rsd.agr          .              .              .             EPS         
+rsd.srv          .              .              .             EPS         
+rsd.Hou          .              .              .             EPS         
+rsd.Gov          .              .              .             EPS         
+srv.agr          .              .              .             EPS         
+srv.min          .              .              .             EPS         
+srv.mnf          .              .              .             EPS         
+srv.rsd          .              .              .             EPS         
+srv.srv          .              .              .             EPS         
+srv.Hou          .              .              .             EPS         
+srv.Gov          .              .              .             EPS         
+srv.Inv          .              .              .             EPS         
+
+---- EQU E_xcomp1  Dom-imp Composite for industries (Leontief)
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr          .              .              .             EPS         
+agr.min          .              .              .             EPS         
+agr.mnf          .              .              .             EPS         
+min.agr          .              .              .             EPS         
+min.min          .              .              .             EPS         
+min.mnf          .              .              .             EPS         
+min.srv          .              .              .             EPS         
+mnf.agr          .              .              .             EPS         
+mnf.min          .              .              .             EPS         
+mnf.mnf          .              .              .             EPS         
+mnf.rsd          .              .              .             EPS         
+mnf.srv          .              .              .             EPS         
+rsd.agr          .              .              .             EPS         
+rsd.srv          .              .              .             EPS         
+srv.agr          .              .              .             EPS         
+srv.min          .              .              .             EPS         
+srv.mnf          .              .              .             EPS         
+srv.rsd          .              .              .             EPS         
+srv.srv          .              .              .             EPS         
+
+---- EQU E_xcomp2  Dom-imp Composite for local final users (Cobb-Douglas)
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.Gov          .              .              .             EPS         
+min.Hou          .              .              .             EPS         
+min.Gov          .              .              .             EPS         
+min.Inv          .              .              .             EPS         
+mnf.Hou          .              .              .             EPS         
+mnf.Gov          .              .              .             EPS         
+mnf.Inv          .              .              .             EPS         
+rsd.Hou          .              .              .             EPS         
+rsd.Gov          .              .              .             EPS         
+srv.Hou          .              .              .             EPS         
+srv.Gov          .              .              .             EPS         
+srv.Inv          .              .              .             EPS         
+
+---- EQU E_x  Intermediate demand
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom.agr          .              .              .             EPS         
+agr.dom.min          .              .              .             EPS         
+agr.dom.mnf          .              .              .             EPS         
+agr.dom.rsd          .              .              .             EPS         
+agr.dom.srv          .              .              .             EPS         
+agr.dom.Hou          .              .              .             EPS         
+agr.dom.Gov          .              .              .             EPS         
+agr.dom.Inv          .              .              .             EPS         
+agr.imp.agr          .              .              .             EPS         
+agr.imp.min          .              .              .             EPS         
+agr.imp.mnf          .              .              .             EPS         
+agr.imp.rsd          .              .              .             EPS         
+agr.imp.srv          .              .              .             EPS         
+agr.imp.Hou          .              .              .             EPS         
+agr.imp.Gov          .              .              .             EPS         
+agr.imp.Inv          .              .              .             EPS         
+min.dom.agr          .              .              .             EPS         
+min.dom.min          .              .              .             EPS         
+min.dom.mnf          .              .              .             EPS         
+min.dom.rsd          .              .              .             EPS         
+min.dom.srv          .              .              .             EPS         
+min.dom.Hou          .              .              .             EPS         
+min.dom.Gov          .              .              .             EPS         
+min.dom.Inv          .              .              .             EPS         
+min.imp.agr          .              .              .             EPS         
+min.imp.min          .              .              .             EPS         
+min.imp.mnf          .              .              .             EPS         
+min.imp.rsd          .              .              .             EPS         
+min.imp.srv          .              .              .             EPS         
+min.imp.Hou          .              .              .             EPS         
+min.imp.Gov          .              .              .             EPS         
+min.imp.Inv          .              .              .             EPS         
+mnf.dom.agr          .              .              .             EPS         
+mnf.dom.min          .              .              .             EPS         
+mnf.dom.mnf          .              .              .             EPS         
+mnf.dom.rsd          .              .              .             EPS         
+mnf.dom.srv          .              .              .             EPS         
+mnf.dom.Hou          .              .              .             EPS         
+mnf.dom.Gov          .              .              .             EPS         
+mnf.dom.Inv          .              .              .             EPS         
+mnf.imp.agr          .              .              .             EPS         
+mnf.imp.min          .              .              .             EPS         
+mnf.imp.mnf          .              .              .             EPS         
+mnf.imp.rsd          .              .              .             EPS         
+mnf.imp.srv          .              .              .             EPS         
+mnf.imp.Hou          .              .              .             EPS         
+mnf.imp.Gov          .              .              .             EPS         
+mnf.imp.Inv          .              .              .             EPS         
+rsd.dom.agr          .              .              .             EPS         
+rsd.dom.min          .              .              .             EPS         
+rsd.dom.mnf          .              .              .             EPS         
+rsd.dom.rsd          .              .              .             EPS         
+rsd.dom.srv          .              .              .             EPS         
+rsd.dom.Hou          .              .              .             EPS         
+rsd.dom.Gov          .              .              .             EPS         
+rsd.dom.Inv          .              .              .             EPS         
+rsd.imp.agr          .              .              .             EPS         
+rsd.imp.min          .              .              .             EPS         
+rsd.imp.mnf          .              .              .             EPS         
+rsd.imp.rsd          .              .              .             EPS         
+rsd.imp.srv          .              .              .             EPS         
+rsd.imp.Hou          .              .              .             EPS         
+rsd.imp.Gov          .              .              .             EPS         
+rsd.imp.Inv          .              .              .             EPS         
+srv.dom.agr          .              .              .             EPS         
+srv.dom.min          .              .              .             EPS         
+srv.dom.mnf          .              .              .             EPS         
+srv.dom.rsd          .              .              .             EPS         
+srv.dom.srv          .              .              .             EPS         
+srv.dom.Hou          .              .              .             EPS         
+srv.dom.Gov          .              .              .             EPS         
+srv.dom.Inv          .              .              .             EPS         
+srv.imp.agr          .              .              .             EPS         
+srv.imp.min          .              .              .             EPS         
+srv.imp.mnf          .              .              .             EPS         
+srv.imp.rsd          .              .              .             EPS         
+srv.imp.srv          .              .              .             EPS         
+srv.imp.Hou          .              .              .             EPS         
+srv.imp.Gov          .              .              .             EPS         
+srv.imp.Inv          .              .              .             EPS         
+
+---- EQU E_pA  Industry cost indices
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom          .              .              .             EPS         
+min.dom          .              .              .             EPS         
+mnf.dom          .              .              .             EPS         
+rsd.dom          .              .              .             EPS         
+srv.dom          .              .              .             EPS         
+
+---- EQU E_pfac_f  Composite factor prices
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_xfac  Demand for factors
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr          .              .              .             EPS         
+Capital.min          .              .              .             EPS         
+Capital.mnf          .              .              .             EPS         
+Capital.rsd          .              .              .             EPS         
+Capital.srv          .              .              .             EPS         
+Labor  .agr          .              .              .             EPS         
+Labor  .min          .              .              .             EPS         
+Labor  .mnf          .              .              .             EPS         
+Labor  .rsd          .              .              .             EPS         
+Labor  .srv          .              .              .             EPS         
+
+---- EQU E_xfac_f  Composite factor CES
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_wtot  Nominal expenditure by local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou          .              .              .             EPS         
+Gov          .              .              .             EPS         
+Inv          .              .              .             EPS         
+
+---- EQU E_ptot  Price indices for local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou          .              .              .             EPS         
+Gov          .              .              .             EPS         
+Inv          .              .              .             EPS         
+
+---- EQU E_xtot  Real expenditure by local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou          .              .              .             EPS         
+Gov          .              .              .             EPS         
+Inv          .              .              .             EPS         
+
+---- EQU E_xexp  Export demand
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_ffac_i  Total factor use
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+Capital       233.0000       233.0000       233.0000         EPS         
+Labor        -221.0000      -221.0000      -221.0000         EPS         
+
+---- EQU E_xdemA  Total demand for dom goods
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_xdemB  Total demand for imp goods
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_z  Market clearing
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr          .              .              .             EPS         
+min          .              .              .             EPS         
+mnf          .              .              .             EPS         
+rsd          .              .              .             EPS         
+srv          .              .              .             EPS         
+
+---- EQU E_pB  Import prices
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr         1.1000         1.1000         1.1000         EPS         
+min         1.1000         1.1000         1.1000         EPS         
+mnf         1.1000         1.1000         1.1000         EPS         
+rsd         1.1000         1.1000         1.1000         EPS         
+srv         1.1000         1.1000         1.1000         EPS         
+
+---- EQU E_pfac  Factor remuneration
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr          .              .              .             EPS         
+Capital.min          .              .              .             EPS         
+Capital.mnf          .              .              .             EPS         
+Capital.rsd          .              .              .             EPS         
+Capital.srv          .              .              .             EPS         
+Labor  .agr          .              .              .             EPS         
+Labor  .min          .              .              .             EPS         
+Labor  .mnf          .              .              .             EPS         
+Labor  .rsd          .              .              .             EPS         
+Labor  .srv          .              .              .             EPS         
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- EQU E_wgdpinc           .              .              .             EPS         
+---- EQU E_wgdpexp           .              .              .             EPS         
+---- EQU E_delB              .              .              .             EPS         
+---- EQU E_OBJ              1.0000         1.0000         1.0000         1.0000      
+
+  E_wgdpinc  Nominal GDP income
+  E_wgdpexp  Nominal GDP expenditure
+  E_delB  Trade Balance
+  E_OBJ  NLP objective function
+
+---- VAR pcomp  Price of Composite dom-imp commodity
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr        -INF            1.0140        +INF             .          
+agr.min        -INF            1.0042        +INF             .          
+agr.mnf        -INF            1.0130        +INF             .          
+agr.Gov        -INF            1.0042        +INF             .          
+min.agr        -INF            1.0270        +INF             .          
+min.min        -INF            1.0348        +INF             .          
+min.mnf        -INF            1.0253        +INF             .          
+min.srv        -INF            1.0037        +INF             .          
+min.Hou        -INF            1.0223        +INF             .          
+min.Gov        -INF            1.0037        +INF             .          
+min.Inv        -INF            1.1000        +INF             .          
+mnf.agr        -INF            1.0451        +INF             .          
+mnf.min        -INF            1.0325        +INF             .          
+mnf.mnf        -INF            1.0676        +INF             .          
+mnf.rsd        -INF            1.0224        +INF             .          
+mnf.srv        -INF            1.0598        +INF             .          
+mnf.Hou        -INF            1.0502        +INF             .          
+mnf.Gov        -INF            1.0357        +INF             .          
+mnf.Inv        -INF            1.0493        +INF             .          
+rsd.agr        -INF            0.9969        +INF             .          
+rsd.srv        -INF            0.9969        +INF             .          
+rsd.Hou        -INF            0.9969        +INF             .          
+rsd.Gov        -INF            0.9969        +INF             .          
+srv.agr        -INF            1.0053        +INF             .          
+srv.min        -INF            1.0235        +INF             .          
+srv.mnf        -INF            1.0249        +INF             .          
+srv.rsd        -INF            1.0053        +INF             .          
+srv.srv        -INF            1.0315        +INF             .          
+srv.Hou        -INF            1.0082        +INF             .          
+srv.Gov        -INF            1.0201        +INF             .          
+srv.Inv        -INF            1.0253        +INF             .          
+
+---- VAR p  Goods' prices
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom        -INF            1.0042        +INF             .          
+agr.imp        -INF            1.1000        +INF             .          
+min.dom        -INF            1.0037        +INF             .          
+min.imp        -INF            1.1000        +INF             .          
+mnf.dom        -INF            1.0224        +INF             .          
+mnf.imp        -INF            1.1000        +INF             .          
+rsd.dom        -INF            0.9969        +INF             .          
+rsd.imp        -INF            1.1000        +INF             .          
+srv.dom        -INF            1.0053        +INF             .          
+srv.imp        -INF            1.1000        +INF             .          
+
+---- VAR pfac_f  Composite factor prices
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF            0.9959        +INF             .          
+min        -INF            0.9898        +INF             .          
+mnf        -INF            1.0129        +INF             .          
+rsd        -INF            0.9932        +INF             .          
+srv        -INF            0.9906        +INF             .          
+
+---- VAR pfac  Price of Factors
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr        -INF            0.9945        +INF             .          
+Capital.min        -INF            0.9812        +INF             .          
+Capital.mnf        -INF            1.0314        +INF             .          
+Capital.rsd        -INF            0.9932        +INF             .          
+Capital.srv        -INF            0.9816        +INF             .          
+Labor  .agr        -INF            0.9973        +INF             .          
+Labor  .min        -INF            0.9973        +INF             .          
+Labor  .mnf        -INF            0.9973        +INF             .          
+Labor  .rsd        -INF            0.9973        +INF             .          
+Labor  .srv        -INF            0.9973        +INF             .          
+
+---- VAR ptot  Price indices for local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou        -INF            1.0245        +INF             .          
+Gov        -INF            1.0255        +INF             .          
+Inv        -INF            1.0500        +INF             .          
+
+---- VAR xcomp  Composite commodity
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.agr        -INF            8.9937        +INF             .          
+agr.min        -INF            0.9957        +INF             .          
+agr.mnf        -INF           50.4560        +INF             .          
+agr.Gov        -INF            0.9930        +INF             .          
+min.agr        -INF            3.9972        +INF             .          
+min.min        -INF            2.9870        +INF             .          
+min.mnf        -INF           43.3921        +INF             .          
+min.srv        -INF            0.9954        +INF             .          
+min.Hou        -INF            4.8770        +INF             .          
+min.Gov        -INF            0.9934        +INF             .          
+min.Inv        -INF           20.8488        +INF             .          
+mnf.agr        -INF           12.9909        +INF             .          
+mnf.min        -INF           28.8743        +INF             .          
+mnf.mnf        -INF           30.2736        +INF             .          
+mnf.rsd        -INF            4.0000        +INF             .          
+mnf.srv        -INF           29.8627        +INF             .          
+mnf.Hou        -INF           75.9558        +INF             .          
+mnf.Gov        -INF           31.7702        +INF             .          
+mnf.Inv        -INF          146.3353        +INF             .          
+rsd.agr        -INF            0.9993        +INF             .          
+rsd.srv        -INF            1.9908        +INF             .          
+rsd.Hou        -INF           54.0093        +INF             .          
+rsd.Gov        -INF            3.0005        +INF             .          
+srv.agr        -INF           10.9923        +INF             .          
+srv.min        -INF           14.9350        +INF             .          
+srv.mnf        -INF           14.1277        +INF             .          
+srv.rsd        -INF            9.0000        +INF             .          
+srv.srv        -INF            6.9680        +INF             .          
+srv.Hou        -INF           30.6591        +INF             .          
+srv.Gov        -INF           36.1675        +INF             .          
+srv.Inv        -INF           39.8711        +INF             .          
+
+---- VAR x  Intermediate demand
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom.agr        -INF            8.1515        +INF             .          
+agr.dom.min        -INF            0.9957        +INF             .          
+agr.dom.mnf        -INF           46.2121        +INF             .          
+agr.dom.rsd        -INF             .            +INF             .          
+agr.dom.srv        -INF             .            +INF             .          
+agr.dom.Hou        -INF             .            +INF             .          
+agr.dom.Gov        -INF            0.9930        +INF             .          
+agr.dom.Inv        -INF             .            +INF             .          
+agr.imp.agr        -INF            0.8491        +INF             .          
+agr.imp.min        -INF             .            +INF             .          
+agr.imp.mnf        -INF            4.2790        +INF             .          
+agr.imp.rsd        -INF             .            +INF             .          
+agr.imp.srv        -INF             .            +INF             .          
+agr.imp.Hou        -INF             .            +INF             .          
+agr.imp.Gov        -INF             .            +INF             .          
+agr.imp.Inv        -INF             .            +INF             .          
+min.dom.agr        -INF            3.0674        +INF             .          
+min.dom.min        -INF            2.0531        +INF             .          
+min.dom.mnf        -INF           34.0180        +INF             .          
+min.dom.rsd        -INF             .            +INF             .          
+min.dom.srv        -INF            0.9954        +INF             .          
+min.dom.Hou        -INF            3.9737        +INF             .          
+min.dom.Gov        -INF            0.9934        +INF             .          
+min.dom.Inv        -INF             .            +INF             .          
+min.imp.agr        -INF            0.9329        +INF             .          
+min.imp.min        -INF            0.9367        +INF             .          
+min.imp.mnf        -INF            9.4061        +INF             .          
+min.imp.rsd        -INF             .            +INF             .          
+min.imp.srv        -INF             .            +INF             .          
+min.imp.Hou        -INF            0.9065        +INF             .          
+min.imp.Gov        -INF             .            +INF             .          
+min.imp.Inv        -INF           20.8488        +INF             .          
+mnf.dom.agr        -INF            9.3970        +INF             .          
+mnf.dom.min        -INF           25.3830        +INF             .          
+mnf.dom.mnf        -INF           13.2030        +INF             .          
+mnf.dom.rsd        -INF            4.0000        +INF             .          
+mnf.dom.srv        -INF           16.0426        +INF             .          
+mnf.dom.Hou        -INF           50.0862        +INF             .          
+mnf.dom.Gov        -INF           26.6733        +INF             .          
+mnf.dom.Inv        -INF           98.0882        +INF             .          
+mnf.imp.agr        -INF            3.6082        +INF             .          
+mnf.imp.min        -INF            3.5087        +INF             .          
+mnf.imp.mnf        -INF           17.1100        +INF             .          
+mnf.imp.rsd        -INF             .            +INF             .          
+mnf.imp.srv        -INF           13.8600        +INF             .          
+mnf.imp.Hou        -INF           25.9630        +INF             .          
+mnf.imp.Gov        -INF            5.1210        +INF             .          
+mnf.imp.Inv        -INF           48.4245        +INF             .          
+rsd.dom.agr        -INF            0.9993        +INF             .          
+rsd.dom.min        -INF             .            +INF             .          
+rsd.dom.mnf        -INF             .            +INF             .          
+rsd.dom.rsd        -INF             .            +INF             .          
+rsd.dom.srv        -INF            1.9908        +INF             .          
+rsd.dom.Hou        -INF           54.0093        +INF             .          
+rsd.dom.Gov        -INF            3.0005        +INF             .          
+rsd.dom.Inv        -INF             .            +INF             .          
+rsd.imp.agr        -INF             .            +INF             .          
+rsd.imp.min        -INF             .            +INF             .          
+rsd.imp.mnf        -INF             .            +INF             .          
+rsd.imp.rsd        -INF             .            +INF             .          
+rsd.imp.srv        -INF             .            +INF             .          
+rsd.imp.Hou        -INF             .            +INF             .          
+rsd.imp.Gov        -INF             .            +INF             .          
+rsd.imp.Inv        -INF             .            +INF             .          
+srv.dom.agr        -INF           10.9923        +INF             .          
+srv.dom.min        -INF           12.1651        +INF             .          
+srv.dom.mnf        -INF           11.3166        +INF             .          
+srv.dom.rsd        -INF            9.0000        +INF             .          
+srv.dom.srv        -INF            5.1068        +INF             .          
+srv.dom.Hou        -INF           29.7564        +INF             .          
+srv.dom.Gov        -INF           30.7483        +INF             .          
+srv.dom.Inv        -INF           31.7402        +INF             .          
+srv.imp.agr        -INF             .            +INF             .          
+srv.imp.min        -INF            2.7794        +INF             .          
+srv.imp.mnf        -INF            2.8206        +INF             .          
+srv.imp.rsd        -INF             .            +INF             .          
+srv.imp.srv        -INF            1.8668        +INF             .          
+srv.imp.Hou        -INF            0.9065        +INF             .          
+srv.imp.Gov        -INF            5.4388        +INF             .          
+srv.imp.Inv        -INF            8.1582        +INF             .          
+
+---- VAR xfac_f  Total factor use
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF           86.9391        +INF             .          
+min        -INF           87.6186        +INF             .          
+mnf        -INF          109.9940        +INF             .          
+rsd        -INF           47.0000        +INF             .          
+srv        -INF          122.4372        +INF             .          
+
+---- VAR xtot  Total output of local final user
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou        -INF          165.4539        +INF             .          
+Gov        -INF           72.9209        +INF             .          
+Inv        -INF          207.0209        +INF             .          
+
+---- VAR xfac  Factor demand
+
+                 LOWER          LEVEL          UPPER         MARGINAL
+
+Labor.agr        -INF           43.9391        +INF             .          
+Labor.min        -INF           46.6201        +INF             .          
+Labor.mnf        -INF           60.0017        +INF             .          
+Labor.rsd        -INF      9.979365E-10        +INF             .          
+Labor.srv        -INF           70.4391        +INF             .          
+
+---- VAR xfac_i  Total factor use
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+Capital        -INF          233.0000        +INF             .          
+
+---- VAR xexp  Export demand
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF           68.5603        +INF             .          
+min        -INF           90.3096        +INF             .          
+mnf        -INF            5.3700        +INF             .          
+rsd        -INF             .            +INF             .          
+srv        -INF           21.4284        +INF             .          
+
+---- VAR xdem  Total demand for goods
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+agr.dom        -INF          124.9125        +INF             .          
+agr.imp        -INF            5.1281        +INF             .          
+min.dom        -INF          135.4106        +INF             .          
+min.imp        -INF           33.0310        +INF             .          
+mnf.dom        -INF          248.2433        +INF             .          
+mnf.imp        -INF          117.5954        +INF             .          
+rsd.dom        -INF           60.0000        +INF             .          
+rsd.imp        -INF             .            +INF             .          
+srv.dom        -INF          162.2542        +INF             .          
+srv.imp        -INF           21.9701        +INF             .          
+
+---- VAR z  Output of industry
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+agr        -INF          124.9125        +INF             .          
+min        -INF          135.4106        +INF             .          
+mnf        -INF          248.2433        +INF             .          
+rsd        -INF           60.0000        +INF             .          
+srv        -INF          162.2542        +INF             .          
+
+---- VAR wtot  Nominal expenditure by local final users
+
+           LOWER          LEVEL          UPPER         MARGINAL
+
+Hou        -INF          169.5096        +INF             .          
+Gov        -INF           74.7837        +INF             .          
+Inv        -INF          217.3712        +INF             .          
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- VAR wgdpinc           -INF          452.6904        +INF             .          
+---- VAR wgdpexp           -INF          452.6904        +INF             .          
+---- VAR delB              -INF           -0.0198        +INF             .          
+
+  wgdpinc  Nominal GDP - income side
+  wgdpexp  Nominal GDP expenditure side
+  delB  Trade Balance
+
+---- VAR ffac_i  Factor wage shifter
+
+             LOWER          LEVEL          UPPER         MARGINAL
+
+Labor        -INF            0.9734        +INF             .          
+
+---- VAR ffac  Factor wage shifter
+
+                   LOWER          LEVEL          UPPER         MARGINAL
+
+Capital.agr        -INF            0.9707        +INF             .          
+Capital.min        -INF            0.9578        +INF             .          
+Capital.mnf        -INF            1.0068        +INF             .          
+Capital.rsd        -INF            0.9694        +INF             .          
+Capital.srv        -INF            0.9581        +INF             .          
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- VAR OBJ               -INF            1.0000        +INF             .          
+
+  OBJ  NLP objective function
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0     ERRORS
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 15
+Simple Model
+Solution Report     SOLVE simple Using NLP From line 328
+
+
+**** SOLVER STATUS FILE LISTED BELOW
+=1
+=2
+=0CONOPT 4         53.1.0 6a03d3b9 Feb 16, 2026          WEI x86 64bit/MS Window
+=1
+--- *** This solver runs with a demo license. No commercial use.
+=2
+=1
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+=2
+=1
+    Will use up to 4 threads.
+ 
+=2
+ 
+  ***  Line    0  SET       LFEERR =            0
+ 
+  ***  Line    0  SET       LFEERR =            0
+ 
+  ***  Line    0  SET       LFITER =          200
+ 
+  ***  Line    0  SET       RVTIME =      19000.00000
+=1
+ 
+    The user model has 217 constraints and 217 variables
+    with 887 Jacobian elements, 591 of which are nonlinear.
+=2
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       0   0          5.0000000100E-01 (Input point)
+=1
+ 
+    The pre-triangular part of the model has 39 constraints and variables.
+=2
+=1
+    The post-triangular part of the model has 1 constraints and variables.
+=2
+=1
+ 
+    Preprocessed model has 177 constraints and 177 variables
+    with 700 Jacobian elements, 451 of which are nonlinear.
+=2
+                      6.9379032269E+01 (Full preprocessed model)
+                      3.6695045510E+00 (After scaling)
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       1   0          1.1449923300E-01                 1.0E+00     0 T  T
+       2   0          1.4818006020E-02                 1.0E+00     0 T  T
+       3  S0          8.2573990172E-03                 1.0E+00     0 T  T
+       4   0          2.6129063481E-05                 1.0E+00     0 T  T
+       5   0          1.4860351691E-06                 1.0E+00     0 T  T
+       6   0          5.5532453358E-09                 1.0E+00     0 T  T
+       7   0          3.3286292472E-10                 1.0E+00     0 T  T
+ 
+ ** Feasible solution. Value of objective =    1.00000000000
+ 
+    Iter Phase   Ninf     Objective     RGmax      NSB   Step  InItr MX OK
+       8   4          1.0000000000E+00 0.0E+00       0
+=1
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+ 
+=2
+=1
+ 
+ CONOPT time Total                            0.034 seconds
+   of which: Function evaluations             0.006 = 17.6%
+             1st Derivative evaluations       0.002 =  5.9%
+             Interval derivative evals        0.001 =  2.9%
+ 
+=2
+ 
+ Memory: Max used =      0.53 Mbytes
+  Total Allocated =      0.65 Mbytes
+ 
+**** SOLVER STATUS FILE LISTED ABOVE
+GAMS 53.1.0  6a03d3b9 Feb 16, 2026          WEX-WEI x86 64bit/MS Windows - 07/24/26 22:14:25 Page 16
+Simple Model
+E x e c u t i o n
+
+
+----    358 PARAMETER CH_Z  Percentage change in output of industries
+
+agr      -0.070,    min      -0.433,    mnf       0.912,    rsd -4.3632E-12,    srv      -0.458
+
+
+----    358 PARAMETER CH_XFAC  Percentage change in factor demand
+
+              agr         min         mnf         rsd         srv
+
+Labor      -0.138      -0.808       1.698      -0.206      -0.790
+
+
+----    358 PARAMETER CH_PFAC  Percentage change in price of factors
+
+                agr         min         mnf         rsd         srv
+
+Capital      -0.547      -1.877       3.144      -0.682      -1.841
+Labor        -0.271      -0.271      -0.271      -0.271      -0.271
+
+
+----    358 PARAMETER CH_PFAC_F  Percentage change in composite price of factors
+
+agr -0.407,    min -1.021,    mnf  1.288,    rsd -0.682,    srv -0.936
+
+
+----    358 PARAMETER CH_P  Percentage change in basic prices
+
+            dom         imp
+
+agr       0.417      10.000
+min       0.372      10.000
+mnf       2.244      10.000
+rsd      -0.306      10.000
+srv       0.528      10.000
+
+
+----    358 PARAMETER CH_WGDPINC           =       -0.288  Percentage change in nominal GDP income side
+            PARAMETER CH_XGDPINC           =  5.563719E-6  Percentage change in Fisher (ideal) GDP quantity index
+            PARAMETER CH_WGDPEXP           =       -0.288  Percentage change in nominal GDP expenditure side
+            PARAMETER CH_DELB              =  2.20261E-12  Ordinary change in ratio nominal trade balance to GDP
+
+
+EXECUTION TIME       =        8.188 SECONDS      4 MB  53.1.0 6a03d3b9 WEX-WEI
+
+
+USER: GAMS Demo, for EULA and demo limitations see   G260130+0003Cc-GEN
+      https://www.gams.com/latest/docs/UG%5FLicense.html         DC0000
+
+
+**** FILE SUMMARY
+
+Input      C:\Documentos\proyectos\equilibria\runs\horridge_simple\simpleNLP_tariff.gms
+Output     C:\Documentos\proyectos\equilibria\runs\horridge_simple\simpleNLP_tariff.lst

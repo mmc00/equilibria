@@ -1,0 +1,15 @@
+--- Job simpleMCP.gms Start 10/19/26 14:08:12 53.1.0 6a03d3b9 WEX-WEI x86 64bit/MS Windows
+--- Applying:
+    C:\GAMS\53\gmsprmNT.txt
+--- GAMS Parameters defined
+    Input C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\3_simple\simpleMCP.gms
+    ScrDir C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\3_simple\225a\
+    SysDir C:\GAMS\53\
+    LogOption 2
+    LogFile C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\3_simple\simpleMCP.log
+    AppendLog 1
+*** Time-limited license expired 82 days ago
+*** Status: Terminated due to a licensing error
+***         License file: C:\GAMS\53\gamslice.txt
+***         Inspect listing file for more information.
+--- Job simpleMCP.gms Stop 10/19/26 14:08:12 elapsed 0:00:00.615

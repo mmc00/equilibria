@@ -1,0 +1,191 @@
+$OFFLISTING
+
+* MPS/GE MODEL GENERATOR FILE
+
+$OFFINLINE
+$INLINECOM { }
+PUT   MPS,'$MODEL:SIMPLE'/;
+
+{    4}  PUT /;
+ 
+{    4}  PUT'$SECTORS:'/;
+{    5}  LOOP((J),
+{    5}    PUT /,'Y''.'J.TL;
+{    5}  );
+{    7}  PUT /;
+ 
+{    7}  PUT'$COMMODITIES:'/;
+{    8}  LOOP((J),
+{    8}    PUT /,'P''.'J.TL;
+{    8}  );
+{    9}  PUT /,'PFX';
+{   13}  LOOP((F)$(ENDOW(F)),
+{   13}    PUT /,'W''.'F.TL;
+{   13}  );
+{   14}  PUT /,'PGNP';
+{   15}  LOOP((J)$(SSK(J)),
+{   15}    PUT /,'RK''.'J.TL;
+{   15}  );
+{   17}  PUT /;
+ 
+{   17}  PUT'$CONSUMERS:'/;
+{   18}  PUT /,'GNP';
+{   19}  LOOP((FD),
+{   19}    PUT /,'RA''.'FD.TL;
+{   19}  );
+{   21}  PUT /;
+ 
+{   21}  PUT'$AUXILIARY:'/;
+{   22}  LOOP((I),
+{   22}    PUT /,'X''.'I.TL;
+{   22}  );
+{   23}  PUT /,'VX';
+{   24}  PUT /,'GDP';
+ 
+{   26}  LOOP((J),
+{   26}    PUT /;
+{   26}    PUT /,'$PROD:Y''.'J.TL;
+{   26}    IF ((ABS(0) GT MPSEPS),PUT /,'+S:'0;  );
+{   26}    PUT /,'+VA:'SIGMAF(J);
+{   26}    LOOP((I),
+{   26}      PUT /,'+',I.TL,':'SIGMA(I);
+{   27}    );
+{   27}    IF(ABS(OUTPUT(J)) GT MPSEPS,
+{   27}      PUT /,'O:P''.'J.TL;
+{   27}      PUT /,'+Q:'OUTPUT(J);
+{   28}    );
+{   28}    LOOP((F),
+{   28}      IF(ABS((FACTOR(F,J)/PRD(F,J))) GT MPSEPS,
+{   28}        PUT /,'I:W''.'F.TL;
+{   28}        PUT /,'+Q:'(FACTOR(F,J)/PRD(F,J));
+{   28}        PUT /,'+P:'PRD(F,J);
+{   28}        PUT /,'+VA:' ;
+{   29}      );
+{   29}    );
+{   29}    IF(ABS(SSK(J)) GT MPSEPS,
+{   29}      PUT /,'I:RK''.'J.TL;
+{   29}      PUT /,'+Q:'SSK(J);
+{   29}      PUT /,'+VA:' ;
+{   30}    );
+{   30}    LOOP((I),
+{   30}      IF(ABS(USE(I,"IMP",J)) GT MPSEPS,
+{   30}        PUT /,'I:PFX';
+{   30}        PUT /,'+Q:'USE(I,"IMP",J);
+{   30}        PUT /,'+',I.TL,':';
+{   31}      );
+{   31}    );
+{   31}    LOOP((I),
+{   31}      IF(ABS(USE(I,"DOM",J)) GT MPSEPS,
+{   31}        PUT /,'I:P''.'I.TL;
+{   31}        PUT /,'+Q:'USE(I,"DOM",J);
+{   31}        PUT /,'+',I.TL,':';
+{   33}        PUT /;
+{   33}      );
+{   33}    );
+{   33}  );
+ 
+{   33}  IF (MPSREPORT,
+{   33}  PUT / '$REPORT:'/;
+{   34}  LOOP((F,J),
+{   34}    PUT /,'V:WD''.'F.TL'.'J.TL;
+{   34}    PUT '        ';
+{   34}    PUT'I:W''.'F.TL;
+{   34}    PUT '        ';
+{   34}    PUT'PROD:Y''.'J.TL;
+{   34}  );
+ 
+{   35}  LOOP((J),
+{   35}    PUT /,'V:VINTIMP''.'J.TL;
+{   35}    PUT '        ';
+{   35}    PUT'I:PFX';
+{   35}    PUT '        ';
+{   35}    PUT'PROD:Y''.'J.TL;
+{   35}  );
+ 
+{   37}  );
+ 
+{   37}  PUT /;
+{   37}  PUT /,'$DEMAND:GNP';
+{   39}  LOOP((F),
+{   39}    IF(ABS(ENDOW(F)) GT MPSEPS,
+{   39}      PUT /,'E:W''.'F.TL;
+{   39}      PUT /,'+Q:'ENDOW(F);
+{   40}    );
+{   40}  );
+{   40}  LOOP((J),
+{   40}    IF(ABS(SSK(J)) GT MPSEPS,
+{   40}      PUT /,'E:RK''.'J.TL;
+{   40}      PUT /,'+Q:'SSK(J);
+{   42}    );
+{   42}  );
+{   42}  LOOP((I),
+{   42}    IF(ABS((-1)) GT MPSEPS,
+{   42}      PUT /,'E:P''.'I.TL;
+{   42}      PUT /,'+Q:'(-1);
+{   42}      PUT /'+','R:X''.'I.TL;
+{   43}    );
+{   43}  );
+{   43}  IF(ABS(1) GT MPSEPS,
+{   43}    PUT /,'E:PFX';
+{   43}    PUT /,'+Q:'1;
+{   43}    PUT /'+','R:VX';
+{   45}  );
+{   45}  IF(ABS(BOPDEF) GT MPSEPS,
+{   45}    PUT /,'E:PFX';
+{   45}    PUT /,'+Q:'BOPDEF;
+{   45}    PUT /'+','R:GDP';
+{   46}  );
+{   48}  PUT /,'D:PGNP';
+ 
+{   48}  LOOP((FD),
+{   48}    PUT /;
+{   48}    PUT /,'$DEMAND:RA''.'FD.TL;
+{   48}    IF ((ABS(1) GT MPSEPS),PUT /,'+S:'1;  );
+{   48}    LOOP((I),
+{   48}      PUT /,'+',I.TL,':'SIGMA(I);
+{   50}    );
+{   50}    IF(ABS(EXPEND(FD)) GT MPSEPS,
+{   50}      PUT /,'E:PGNP';
+{   50}      PUT /,'+Q:'EXPEND(FD);
+{   53}    );
+{   53}    LOOP((I),
+{   53}      IF(ABS(USE(I,"DOM",FD)) GT MPSEPS,
+{   53}        PUT /,'D:P''.'I.TL;
+{   53}        PUT /,'+Q:'USE(I,"DOM",FD);
+{   53}        PUT /,'+',I.TL,':';
+{   54}      );
+{   54}    );
+{   54}    LOOP((I),
+{   54}      IF(ABS(USE(I,"IMP",FD)) GT MPSEPS,
+{   54}        PUT /,'D:PFX';
+{   54}        PUT /,'+Q:'USE(I,"IMP",FD);
+{   54}        PUT /,'+',I.TL,':';
+{   56}        PUT /;
+{   56}      );
+{   56}    );
+{   56}  );
+ 
+{   56}  IF (MPSREPORT,
+{   56}  PUT / '$REPORT:'/;
+{   57}  LOOP((FD),
+{   57}    PUT /,'V:VFINIMP''.'FD.TL;
+{   57}    PUT '        ';
+{   57}    PUT'D:PFX';
+{   57}    PUT '        ';
+{   57}    PUT'DEMAND:RA''.'FD.TL;
+{   57}  );
+ 
+{   59}  );
+ 
+ 
+ 
+ 
+OPTION LIMROW=0;
+OPTION LIMCOL=0;
+PUT / '$PEPS:1.E-6'/;
+PUT / '$SOLVE'/;
+PUTCLOSE   MPS;
+SIMPLE.INTEGER1 = SIMPLE.INTEGER1 + 1;
+$IF %SIMPLE%=="07/24/2610:22:38" $EXIT
+$error model.gen file is inconsistent
+$abort preprocessor must be reinvoked

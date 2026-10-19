@@ -1,0 +1,181 @@
+  
+  (Processing command line options.)
+  
+  
+  (Opening Stored-input file 'sl4dump.sti')
+ (Opened, as text, existing file 'sl4dump.sti'.)
+ Taking inputs from a Stored-input file
+  
+  
+ <SLTOHT   Version 5.53  July 2013>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 11.3.004   January 2015>
+  
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+  
+  
+     << COPYRIGHT 1985-2013: CoPS/Impact and KPSOFT >>
+  
+  Current directory is: C:\Documentos\proyectos\equilibria\runs\horridge_simple
+  
+  
+  Full path name of running EXE is: C:\GP\sltoht.exe
+  Fortran compiler = GF64  4.8.1 (rev3, built by mingw-builds project):
+  Operating system is Windows 8
+  
+  
+  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  
+                    SLTOHT OPTIONS
+               ( --> indicates those in effect )
+  
+       BAT Run in batch          --> STI Take inputs from a Stored-input file
+       BPR Brief prompts             SIF Store inputs on a file
+       LOG Output to log file        ASI Add to incomplete Stored-input file
+                                     DES Write description file
+       LV  Which levels results      VAI Variable arguments ignored (har output)
+       SHL Show levels results       SIR Solutions in rows (text output)
+                                     SIC Solutions in columns (text output)
+       SSS Short SS output           SS  Spreadsheet (Sols in cols - text)
+       SHK Shock CMF output          SSE Spreadsheet with element labels
+       SES Short SSE output          NEL No element labels for SIR,SIC,SS,SSS
+                                     SEP Show solutions separately
+                                     HSS HA and SSS output in one run
+                                     PCL %-change for change var in lev results
+  
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+  
+ Your selection >
+  
+  
+  
+  
+  SOLUTION FILE TO CONVERT
+  ------------------------
+  
+  Input the full name (excluding suffix) of this file.
+   (The suffix '.sl4' will be appended automatically to your input.)
+  
+  
+ fixcap
+ (Opened, as binary, existing file 'fixcap.sl4'.)
+  
+  !  This file was created at 10:20:54 on 24-JUL-2026 by the program
+  !    <GEMSIM v4.3 Apr 2012> [simple.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 11.3.004   January 2015>
+  !  [The program which created this file was compiled with GF64.]
+  
+  
+  THE UNDERLYING MODEL IS ' '.
+   VERSION NUMBER IS 1
+    IDENTIFIER IS ' '
+  
+  What follows is a verbal description of the old experiment.
+  
+  
+  Improvement in Service labor productivity
+ [Solution method is gragg. Steps = 4,6,8.]
+ [CMF file: fixcap.cmf]
+  
+  
+  
+  The value of U used in MA28A was 0.10000000.
+  
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   Contents of Solution File :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available.
+  
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  Which solutions from this Solution file do you want :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  The single column consisting of the Cumulative totals . . . .[C] (the default)
+  EXIT program now  . . . . . . . . . . . . . . . . . . . . . .[e]
+  
+  
+  
+ c
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available
+    in this SOLUTION file.
+  
+  
+  All cumulatively-retained endogenous variables kept.
+   (Real matrix with 230 rows and 1 columns read. Header 'CUMS')
+  
+  Do you want to use an existing HEADER MAPPING file
+  for mapping variables to headers ? [Y/n]
+  
+  
+ n
+  
+  NEW HEADER MAPPING TO BE CREATED
+ --------------------------------
+  
+  Input the full name (INCLUDING suffix) of this file.
+  
+  
+ sl4map.txt
+ (Opened new text file 'sl4map.txt'.)
+  
+  Header Array File to Hold Solutions
+  -----------------------------------
+  
+  Input the full name (INCLUDING suffix) of this file.
+    Enter a CARRIAGE-RETURN to use the name    'fixcap.sol'.
+  
+  
+ sl4dump.har
+ (Opened new header file 'sl4dump.har'.)
+ (Writing ONLY CUMULATIVE TOTALS solution to file 'sl4dump.har'.)
+  
+  ------------------------------------------------------------
+     Variable      ! Header !     Array  Size      ! Undefined
+       Name        !        !                      !  values
+  ------------------------------------------------------------
+   delB            !  0001  ! 1                    !      0
+   xgdp            !  0002  ! 1                    !      0
+   wgdpinc         !  0003  ! 1                    !      0
+   wgdpexp         !  0004  ! 1                    !      0
+   phi             !  0005  ! 1                    !      0
+   xexp            !  0006  ! 5                    !      0
+   fqexp           !  0007  ! 5                    !      0
+   z               !  0008  ! 5                    !      0
+   pfimp           !  0009  ! 5                    !      0
+   wtot            !  0010  ! 3                    !      0
+   ftot            !  0011  ! 3                    !      0
+   xtot            !  0012  ! 3                    !      0
+   ptot            !  0013  ! 3                    !      0
+   xfac_i          !  0014  ! 2                    !      0
+   ffac_i          !  0015  ! 2                    !      0
+   p               !  0016  ! 5x2                  !      0
+   xdem            !  0017  ! 5x2                  !      0
+   pfac            !  0018  ! 2x5                  !      0
+   pfac_f          !  0019  ! 5                    !      0
+   xfac            !  0020  ! 2x5                  !      0
+   afac            !  0021  ! 2x5                  !      0
+   ffac            !  0022  ! 2x5                  !      0
+   pcomp           !  0023  ! 5x8                  !      0
+   xcomp           !  0024  ! 5x8                  !      0
+   x               !  0025  ! 5x2x8                !      0
+ (New Header Array file is 'sl4dump.har'.)
+ (New Mapping file is 'sl4map.txt'.)
+  
+  (The program has completed without error.)
+  Total elapsed time is: less than one second.
+  

@@ -1,0 +1,11 @@
+OK    1 sltoht TBL45A  rc=0 texto_sltoht=True 382.2s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\1_burfisher\TBL45A)
+OK    1 sltoht ME9C  rc=0 texto_sltoht=True 41.5s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\1_burfisher\ME9C)
+OK    1 sltoht GTAPV7  rc=0 texto_sltoht=True 25.7s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\1_burfisher\GTAPV7)
+OK    2 sltoht gtap7_3x3 tm10  rc=0 texto_sltoht=True 29.2s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\2_matriz\gtap7_3x3_tm10)
+OK    2 sltoht gtap7_20x41 capfix  rc=0 texto_sltoht=True 152.3s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\2_matriz\gtap7_20x41_capfix)
+OK    3 SIMPLE tablo  rc=0
+OK    3 SIMPLE gemsim fixcap  rc=0 sl4=True
+OK    3 SIMPLE gemsim mobcap  rc=0 sl4=True
+FALLA 3 SIMPLE gams simpleNLP  rc=7 gdx=False
+FALLA 3 SIMPLE gams simpleMCP  rc=7 gdx=False
+FALLA 3 SIMPLE gams mpsgevh  rc=7 gdx=False

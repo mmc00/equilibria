@@ -1,0 +1,18 @@
+[13:56:41] repo      C:\Documentos\proyectos\equilibria
+[13:56:45] commit    2c736f10db34e6dde01f9c5ac59b83e003eed156
+[13:56:48] rama      windows/corridas-paper
+[13:56:48] maquina   2023LE-2-77-17  Microsoft Windows NT 10.0.26200.0
+[13:56:49] GEMPACK   C:\GP  (sltoht: True)
+[13:56:49] GAMS      C:\GAMS\53\gams.exe
+[13:56:49] salida    C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356
+[14:03:13] OK    1 sltoht TBL45A  rc=0 texto_sltoht=True 382.2s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\1_burfisher\TBL45A)
+[14:03:55] OK    1 sltoht ME9C  rc=0 texto_sltoht=True 41.5s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\1_burfisher\ME9C)
+[14:04:21] OK    1 sltoht GTAPV7  rc=0 texto_sltoht=True 25.7s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\1_burfisher\GTAPV7)
+[14:04:52] OK    2 sltoht gtap7_3x3 tm10  rc=0 texto_sltoht=True 29.2s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\2_matriz\gtap7_3x3_tm10)
+[14:07:25] OK    2 sltoht gtap7_20x41 capfix  rc=0 texto_sltoht=True 152.3s (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1356\2_matriz\gtap7_20x41_capfix)
+[14:07:41] OK    3 SIMPLE tablo  rc=0
+[14:07:49] OK    3 SIMPLE gemsim fixcap  rc=0 sl4=True
+[14:07:51] OK    3 SIMPLE gemsim mobcap  rc=0 sl4=True
+[14:08:10] FALLA 3 SIMPLE gams simpleNLP  rc=7 gdx=False
+[14:08:13] FALLA 3 SIMPLE gams simpleMCP  rc=7 gdx=False
+[14:08:15] FALLA 3 SIMPLE gams mpsgevh  rc=7 gdx=False
