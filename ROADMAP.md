@@ -3,7 +3,7 @@
 Estado real, medido, del proyecto — no aspiracional. Cada cifra que aparece aquí sale de una
 corrida registrada en `docs/findings/` o de un gate de `scripts/gtap/run_parity_gates.py`.
 
-Última actualización: 2026-10-16.
+Última actualización: 2026-10-18.
 
 ---
 
@@ -45,6 +45,40 @@ Los 5 gates de `run_parity_gates.py` cubren ambos caminos: el monolito es el or�
 
 ---
 
+## Plan de arquitectura
+
+Decisiones tomadas con el autor (octubre de 2026) y su estado. A diferencia del resto del
+documento, esta sección no lleva cifras: dice qué se va a hacer y en qué orden.
+
+### Hecho o en curso
+
+| Qué | Estado |
+|---|---|
+| Una sola clave de caché para el modelo y la semilla | Hecho (#101) |
+| Preparar cada periodo con una receta (`PeriodPreparer`) | Hecho (#103, #108) |
+| Un nombre, una declaración: `add_block` rechaza una variable, parámetro o ecuación declarada distinto por dos bloques, y cada bloque lista en `Block.uses` lo que lee de otros | Hecho (#139) |
+| Una sola forma de aplicar shocks: el shock vive en el `ShockBlock` y se escribe con `apply_shock` | PR 1 en revisión (#113). PR 2: el arancel +10 % por defecto pasa al `ShockBlock` y salen ~580 líneas de reconstrucción del driver |
+| Sacar el monolito del test de forma | Pendiente. Incluye generar desde `Block.uses` la lista de variables prestadas de `test_gtap_blocks_form.py` |
+| Leer GEMPACK en cualquier sistema: `read_sl4` (la solución `.sl4` sin `sltoht`) y el comando `equilibria har`/`equilibria sl4` | En revisión. Después: un visor tipo ViewHAR |
+
+### Siguiente, en este orden
+
+1. **Periodos como lista, con una receta de transición entre uno y otro.** Hoy los periodos
+   son fijos (`PERIODS = (base, check, shock)`) y el driver asume esa secuencia. Los bloques,
+   en cambio, ya no saben de periodos: escriben sus ecuaciones para uno solo y el índice de
+   tiempo lo agrega la copia del SP. Con la lista, un **modelo recursivo dinámico** es
+   resolver un año a la vez y, entre años, actualizar los stocks (capital, población,
+   productividad) con un bloque de dinámica.
+2. **Cada bloque calibra lo suyo desde una interfaz de datos común** (SAM o HAR). Hoy GTAP
+   calibra en un archivo central (`blocks/gtap/_derived_params.py`) a partir de la base GTAP,
+   y PEP calibra desde la SAM con código propio. `Block` ya trae `CalibrationMixin`, pero sólo
+   lo usan los bloques genéricos.
+3. **Un bloque ambiental (IEEM)** como primera prueba de que agregar un módulo es fácil:
+   emisiones y capital natural como bloque propio que declara lo que usa de producción.
+   `sam_tools` ya lee las SAM de IEEM, pero sólo su parte económica.
+
+---
+
 ## Deuda técnica
 
 Lo que sigue está medido y pendiente. Ninguna entrada es especulativa.
@@ -82,7 +116,11 @@ Equilibrium Models*, 2ª ed.), cada uno como un test sobre la matriz.
 
 Criterio: cada ejercicio ≥99 % con `code=1`, o `N/A` con el motivo escrito.
 
-Estado: **sin empezar**. Va con la deuda abierta de `nus333` para gtap7, donde
+Estado: **en curso**. `scripts/gtap/run_burfisher.py` corre 37 ejercicios de la 3ª
+edición (ME3–ME9, TBL45–TBL93) con el dataset `nus333` y compara cada celda de check y
+shock contra GAMS; TBL45A/B/C, TBL55, TBL65B, TBL94 y ME9A además son tests de la suite.
+Falta lo que pide este apartado: comparar contra las cifras **publicadas del libro**, no
+contra otra implementación. Va con la deuda abierta de `nus333` para gtap7, donde
 `gdpmp[USA]` mide −97,93 % contra el +4,58 % esperado. Está diagnosticada y no
 resuelta; la sospecha registrada apunta al nido CD (`phip`/`phi`/`betap`).
 
