@@ -66,8 +66,10 @@ def _translate(
     order = [
         s.dims.index(d) for d in vm.a.dims
     ]  # posicion en este lado de cada dim comun
+    scales = _scales(sol, side, vm)
     out: dict[CellKey, float] = {}
     for (period, idx), val in sol.levels[s.var].items():
+        val = val / scales(idx)
         p = mapping.period_name(side, period)
         if p not in periods:
             continue
@@ -81,6 +83,43 @@ def _translate(
             )
         out[key] = val
     return out
+
+
+def _scales(sol: Solution, side: str, vm: VariableMap):
+    """Funcion ``indices de la fuente -> producto de las escalas`` del ``divide_by``
+    de ``side``. Un parametro o una celda que falten son error: nunca valen 1."""
+    s = vm.side(side)
+    steps = []
+    for sc in s.divide_by:
+        if sc.param is None:
+            steps.append(lambda idx, v=sc.value: v)
+            continue
+        if sc.param not in sol.params:
+            raise MappingError(
+                f"variable {vm.name!r}: {side} ({sol.origin}) no trae el parametro "
+                f"{sc.param!r} del divide_by (pidelo con params=)"
+            )
+        table = sol.params[sc.param]
+        pos = [s.dims.index(d) for d in sc.dims]
+
+        def step(idx: Index, table=table, pos=pos, name=sc.param) -> float:
+            key = tuple(idx[i] for i in pos)
+            if key not in table:
+                raise MappingError(
+                    f"variable {vm.name!r}: el parametro {name!r} de {side} no "
+                    f"tiene la celda {key}"
+                )
+            return table[key]
+
+        steps.append(step)
+
+    def product(idx: Index) -> float:
+        out = 1.0
+        for f in steps:
+            out *= f(idx)
+        return out
+
+    return product
 
 
 def _fill_absent(

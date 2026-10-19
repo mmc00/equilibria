@@ -12,7 +12,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -211,6 +211,22 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
     """
     if reference not in ("a", "b"):
         raise CompareError(f"reference debe ser 'a' o 'b', no {reference!r}")
+    # Una variable sin nivel en una fuente (GEMPACK, NOLV) no se compara: queda
+    # excluida y declarada con su motivo, nunca omitida en silencio.
+    no_level: dict[str, str] = {}
+    for vm in mapping.variables:
+        for side, sol in (("a", a), ("b", b)):
+            why = sol.no_level.get(vm.side(side).var)
+            if why is not None and vm.name not in no_level:
+                no_level[vm.name] = f"{side}: {vm.side(side).var} {why}"
+    if no_level:
+        mapping = replace(
+            mapping,
+            variables=tuple(v for v in mapping.variables if v.name not in no_level),
+            cell_exclusions=tuple(
+                ce for ce in mapping.cell_exclusions if ce.variable not in no_level
+            ),
+        )
     th = mapping.thresholds
     common, only_a, only_b = common_periods(a, b, mapping)
     cells: list[Cell] = []
@@ -255,6 +271,10 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
         s["pass_pct_all"] = _pass_pct_all(s)
         s["excluded"] = len(excluded_cells) - n_excluded_before
         s["tol"] = {"rel": vm.tol.rel, "abs_floor": vm.tol.abs_floor}
+        s["divide_by"] = {
+            side: [sc.describe() for sc in vm.side(side).divide_by]
+            for side in ("a", "b")
+        }
         summary[vm.name] = s
     overall = summarize(
         [c.d for c in cells],
@@ -286,7 +306,7 @@ def compare(a: Solution, b: Solution, mapping: Mapping, reference: str = "b") ->
         unmatched,
         summary,
         overall,
-        dict(mapping.excluded),
+        dict(mapping.excluded) | no_level,
         common,
         only_a,
         only_b,

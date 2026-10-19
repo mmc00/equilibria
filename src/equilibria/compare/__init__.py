@@ -21,7 +21,7 @@ Desde la terminal (ver :mod:`equilibria.compare.cli`)::
 """
 
 from equilibria.compare.errors import CompareError, MappingError
-from equilibria.compare.mapping import CellExclusion, Mapping, Tolerance
+from equilibria.compare.mapping import CellExclusion, Mapping, Scale, Tolerance
 from equilibria.compare.report import (
     Cell,
     ExcludedCell,
@@ -31,7 +31,7 @@ from equilibria.compare.report import (
     compare,
 )
 from equilibria.compare.solution import Solution
-from equilibria.compare.sources import from_dict, from_gdx, from_pyomo
+from equilibria.compare.sources import from_dict, from_gdx, from_har, from_pyomo
 
 __all__ = [
     "Cell",
@@ -42,11 +42,13 @@ __all__ = [
     "Mapping",
     "MappingError",
     "Report",
+    "Scale",
     "Solution",
     "Tolerance",
     "Unmatched",
     "compare",
     "from_dict",
     "from_gdx",
+    "from_har",
     "from_pyomo",
 ]

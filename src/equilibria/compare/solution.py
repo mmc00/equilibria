@@ -27,6 +27,11 @@ class Solution:
     fuente omite las celdas con nivel 0, como hace GAMS al escribir un ``.gdx``. Al
     alinear, una celda que el otro lado tiene y esta fuente no vale 0 si la variable
     tiene algun registro en ese periodo; si no tiene ninguno, sigue sin pareja.
+
+    ``params[nombre][indices] = valor``: parametros de la MISMA fuente (p. ej. las
+    escalas ``xscale`` de GAMS/equilibria), sin periodo, para el ``divide_by`` del
+    mapeo. ``no_level[var]`` dice por que una variable de la fuente no tiene nivel
+    (GEMPACK, cabecera ``NOLV``): si el mapeo la pide, queda excluida y declarada.
     """
 
     levels: dict[str, dict[CellKey, float]]
@@ -34,6 +39,8 @@ class Solution:
     origin: str = field(default="")
     skipped: dict[str, str] = field(default_factory=dict)
     absent_is_zero: bool = False
+    params: dict[str, dict[Index, float]] = field(default_factory=dict)
+    no_level: dict[str, str] = field(default_factory=dict)
 
     def periods(self) -> list[str]:
         """Periodos presentes, en el orden en que aparecen (sin ordenar)."""
