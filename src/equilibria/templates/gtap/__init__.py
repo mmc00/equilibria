@@ -74,12 +74,7 @@ from equilibria.templates.gtap.gtap_parity_pipeline import (
 )
 from equilibria.templates.gtap.gtap_sets import GTAPSets
 from equilibria.templates.gtap.gtap_solver import GTAPSolver, SolverResult, SolverStatus
-from equilibria.templates.gtap.shocks import (
-    ShockMode,
-    apply_shock,
-    apply_tariff_shock,
-    list_shock_targets,
-)
+from equilibria.templates.gtap.shocks import apply_shock, shock_of
 
 __all__ = [
     # Sets
@@ -112,9 +107,7 @@ __all__ = [
     "SolverStatus",
     # Shocks
     "apply_shock",
-    "apply_tariff_shock",
-    "list_shock_targets",
-    "ShockMode",
+    "shock_of",
     # Parity
     "GTAPParityComparison",
     "GTAPParityRunner",

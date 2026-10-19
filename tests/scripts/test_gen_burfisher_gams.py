@@ -57,7 +57,7 @@ def test_cada_ejercicio_produce_su_inc(gen: Any, tmp_path: Path) -> None:
 
 
 def test_imptx_es_un_shock_a_la_potencia(gen: Any) -> None:
-    linea = gen.gams_line("imptx", ("ROW", "MFG", "USA"), "power", 10.0)
+    linea = gen.gams_line("imptx", ("ROW", "MFG", "USA"), 10.0)
     assert linea == (
         "imptx.fx('ROW','c_MFG','USA',tsim) = "
         "(1 + imptx.l('ROW','c_MFG','USA',tsim))*1.1 - 1 ;"
@@ -66,7 +66,7 @@ def test_imptx_es_un_shock_a_la_potencia(gen: Any) -> None:
 
 def test_instrumento_desconocido_falla(gen: Any) -> None:
     with pytest.raises(ValueError):
-        gen.gams_line("noexiste", ("USA",), "pct", 1.0)
+        gen.gams_line("noexiste", ("USA",), 1.0)
 
 
 def test_me9d_sin_me9c_falla(gen: Any, tmp_path: Path) -> None:
@@ -97,7 +97,7 @@ def test_deflactor_desconocido_falla(gen: Any, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("kind", ["pct", "power", "power_kappa", "power_fct"])
 def test_formula_gams_es_la_de_equilibria(gen: Any, kind: str) -> None:
-    """El texto GAMS evaluado da lo mismo que run_burfisher.shocked con numeros."""
+    """El texto GAMS evaluado da lo mismo que shocks.shocked con numeros."""
     f, chk, fs = 1.1, 0.13, 0.02
     texto = str(gen.shocked(kind, gen.GamsExpr("C"), f, gen.GamsExpr("F")))
     assert eval(texto, {"C": chk, "F": fs}) == pytest.approx(
@@ -105,9 +105,12 @@ def test_formula_gams_es_la_de_equilibria(gen: Any, kind: str) -> None:
     )
 
 
-def test_tasa_con_kind_distinto_de_pct_falla(gen: Any) -> None:
+def test_tasa_con_kind_distinto_de_pct_falla(gen: Any, monkeypatch) -> None:
+    from equilibria.templates.gtap import shocks
+
+    monkeypatch.setitem(shocks.GEMPACK_KIND, "lambdava", "power")
     with pytest.raises(ValueError, match="lambdava"):
-        gen.gams_line("lambdava", ("USA", "AGR"), "power", 1.0)
+        gen.gams_line("lambdava", ("USA", "AGR"), 1.0)
 
 
 def test_warm_vars_estan_en_model_gms(gen: Any) -> None:

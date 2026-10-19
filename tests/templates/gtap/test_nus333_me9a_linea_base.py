@@ -10,7 +10,7 @@ que en el notebook del ejercicio:
   ``rgdpmp[shock] = gdp_target x rgdpmp[check]``;
 - ``ClosureBlock``: ``eq_aoreg``, ``axp[r,a]/axp0[r,a] = axp[r,AGR]/axp0[r,AGR]``: el
   mismo % en las 3 actividades (un solo shifter por region, como ``aoreg``);
-- el shock: ``gdp_target`` x 2,096 / 3,845 (``fix_instrument_shock``).
+- el shock: ``gdp_target`` +109,6% / +284,5% (``apply_shock``).
 
 En ME9 el check NO reproduce la base (``rgdpmp`` ROW +0,030%), asi que el objetivo
 tiene que anclarse al check, como en GAMS.
@@ -117,7 +117,7 @@ def solved():
     from equilibria.blocks.gtap import overwrite
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.instruments import fix_instrument_shock
+    from equilibria.templates.gtap.shocks import apply_shock
 
     rb = run_burfisher()
     p = nus333_params("climatechange.prm")
@@ -130,14 +130,12 @@ def solved():
                 p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
             ),
         )
-        for r, pct in GDP.items():
-            fix_instrument_shock(m, "gdp_target", (r,), factor=1 + pct / 100)
-        # Los de ME9B salvo axp (que ahora es endogena).
-        for name, idx, kind, pct in rb.EXERCISES["ME9B"][1]:
-            if name != "axp":
-                fix_instrument_shock(
-                    m, name, idx, value=rb.level(m, p, name, idx, kind, pct)
-                )
+        # El PIB objetivo y los de ME9B salvo axp (que ahora es endogena).
+        me9b = [s for s in rb.EXERCISES["ME9B"][1] if s[0] != "axp"]
+        apply_shock(
+            m,
+            {"gdp_target": {(r,): pct for r, pct in GDP.items()}, **rb.as_shock(me9b)},
+        )
         res = solve_multiperiod(
             m,
             p,

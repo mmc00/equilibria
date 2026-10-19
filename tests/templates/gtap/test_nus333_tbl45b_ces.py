@@ -1,8 +1,8 @@
 """nus333 / Burfisher Tabla 4.5B: el shock de TBL45A con ``3x3CES.prm``.
 
 ``TBL45B.EXP``: ``avaall("SER","USA") = 10`` con ``3x3CES.prm`` (CDE, SUBPAR=0,5),
-cierre estandar GTAPv7 -> ``savf_flag="capFlex"``. Por el kwarg ``lambdava_shock``
-y por ``fix_instrument_shock`` directo: las dos vias tienen que dar lo mismo.
+cierre estandar GTAPv7 -> ``savf_flag="capFlex"``. Por ``apply_shock`` (el % de
+GEMPACK) y por ``fix_instrument_shock`` directo: las dos vias tienen que dar lo mismo.
 
 Oraculo: GAMS en niveles (``comp_nus333.gms`` con ``avaall.fx('USA','a_SER',
 'shock')=0.10``, capFlex, ``3x3CES.prm``), % shock/check a 6 decimales. En TBL45A
@@ -38,22 +38,23 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module", params=["kwarg", "fix_instrument_shock"])
+@pytest.fixture(scope="module", params=["apply_shock", "fix_instrument_shock"])
 def solved(request):
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from equilibria.templates.gtap.shocks import apply_shock
 
     p = nus333_params("3x3CES.prm")
     ac = closure()
     m, _mp = build_block_model(
         p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
     )
-    shock_kw: dict = {"lambdava_shock": {("USA", "SER"): 1.10}}
     if request.param == "fix_instrument_shock":
         from equilibria.templates.gtap.instruments import fix_instrument_shock
 
         fix_instrument_shock(m, "lambdava", ("USA", "SER"), factor=1.10)
-        shock_kw = {}
+    else:
+        apply_shock(m, {"lambdava": {("USA", "SER"): 10.0}})
     res = solve_multiperiod(
         m,
         p,
@@ -64,7 +65,6 @@ def solved(request):
         seed_from_prior=False,
         mode="gtap",
         solve_check=True,
-        **shock_kw,
     )
     assert int(res["shock"]["code"]) == 1, res["shock"]
     return m
