@@ -302,23 +302,70 @@ def _read_respse(
     )
 
 
-def _read_2ifull(
-    name: str, long_name: str, records: list[bytes], i: int
-) -> tuple[HeaderArray, int]:
-    """2IFULL: a 2-D integer dense array. The meta record's trailing ints hold
-    (rows, cols, width); the next record is the data record with pad(4) +
-    1 int + rows*cols 4-byte ints."""
+def _read_dense_2d(
+    name: str, records: list[bytes], i: int, code: str, dtype: type
+) -> tuple[np.ndarray, int]:
+    """Datos de una cabecera 2IFULL/2RFULL (``code`` "i" o "f"), que empiezan en el
+    registro ``i + 1``; devuelve (arreglo filas x columnas, indice del registro
+    siguiente).
+
+    La meta (registro ``i``) trae filas y columnas en sus enteros finales. Cada
+    registro de datos trae, desde el byte 4, 7 enteros: registros que quedan
+    (contando este), filas, columnas, fila inicial, fila final, columna inicial y
+    columna final (1-based); sus valores empiezan en wire.DENSE_2D_DATA_OFFSET.
+    Un arreglo vacio (OREL de 0x1) trae un rango vacio: fila final = inicial - 1.
+    Un arreglo grande viene partido en varios registros seguidos (CUMS del 20x41:
+    695122 reales en 174 registros de 3996), sin registros de cabecera entre ellos.
+    """
     meta = records[i]
     rows = _INT.unpack_from(meta, 84)[0]
     cols = _INT.unpack_from(meta, 88)[0]
-    data_rec = records[i + 1]
-    n = rows * cols
-    # Payload sits behind the 7-int block geometry, like 2RFULL. Reading from
-    # byte 8 instead prepends six dimension integers to the data and drops the
-    # last six values; verified against .sl4 pointer arrays (PCUM/VNCP/PLEV),
-    # which only decode coherently at wire.DENSE_2D_DATA_OFFSET.
-    ints = struct.unpack_from(f"<{n}i", data_rec, _DENSE_2D_DATA_OFFSET)
-    arr = np.array(ints, dtype=np.int32).reshape((rows, cols), order="F")
+    arr = np.zeros((rows, cols), dtype=dtype)
+    filled = 0
+    j = i + 1
+    while True:
+        rec = records[j]
+        j += 1
+        left, r_rows, r_cols, r0, r1, c0, c1 = struct.unpack_from("<7i", rec, 4)
+        nr, nc = r1 - r0 + 1, c1 - c0 + 1
+        if (r_rows, r_cols) != (rows, cols) or not (
+            1 <= r0 <= r1 + 1 <= rows + 1 and 1 <= c0 <= c1 + 1 <= cols + 1
+        ):
+            raise ValueError(
+                f"HAR header {name!r}: el registro {j - 1} dice {r_rows}x{r_cols}, "
+                f"filas {r0}-{r1}, columnas {c0}-{c1}; la cabecera es {rows}x{cols}"
+            )
+        need = _DENSE_2D_DATA_OFFSET + 4 * nr * nc
+        if len(rec) < need:
+            raise ValueError(
+                f"HAR header {name!r}: el registro {j - 1} trae {len(rec)} bytes, "
+                f"necesita {need} para {nr}x{nc}"
+            )
+        values = struct.unpack_from(f"<{nr * nc}{code}", rec, _DENSE_2D_DATA_OFFSET)
+        arr[r0 - 1 : r1, c0 - 1 : c1] = np.array(values, dtype=dtype).reshape(
+            (nr, nc), order="F"
+        )
+        filled += nr * nc
+        if left <= 1:
+            break
+    if filled != rows * cols:
+        raise ValueError(
+            f"HAR header {name!r}: sus registros cubren {filled} de {rows * cols} valores"
+        )
+    return arr, j
+
+
+def _read_2ifull(
+    name: str, long_name: str, records: list[bytes], i: int
+) -> tuple[HeaderArray, int]:
+    """2IFULL: a 2-D integer dense array (formato en :func:`_read_dense_2d`).
+
+    The payload sits behind the 7-int block geometry; reading from byte 8 instead
+    prepends six dimension integers to the data and drops the last six values.
+    Verified against .sl4 pointer arrays (PCUM/VNCP/PLEV), which only decode
+    coherently at wire.DENSE_2D_DATA_OFFSET.
+    """
+    arr, nxt = _read_dense_2d(name, records, i, "i", np.int32)
     return (
         HeaderArray(
             name=name,
@@ -328,36 +375,22 @@ def _read_2ifull(
             set_names=[],
             set_elements=[],
         ),
-        i + 2,
+        nxt,
     )
 
 
 def _read_2rfull(
     name: str, long_name: str, records: list[bytes], i: int
 ) -> tuple[HeaderArray, int]:
-    """2RFULL: a 2-D real dense array, as written into .sl4 solution files.
-
-    Same meta layout as 2IFULL (trailing ints hold rows, cols); the payload
-    sits at wire.DENSE_2D_DATA_OFFSET, behind the 7-int block geometry.
+    """2RFULL: a 2-D real dense array, as written into .sl4 solution files
+    (formato en :func:`_read_dense_2d`).
 
     Verified against GEMPACK 11.3 .sl4 output (sltoht 5.53): header UVAL is
-    1x1 and its single value sits at that offset (0.1, the Harwell U
-    parameter); CUMS/LEVB/LEVA carry rows*cols floats with payload length
-    exactly 4*rows*cols.
+    1x1 and its single value sits at the data offset (0.1, the Harwell U
+    parameter); CUMS/LEVB/LEVA carry rows*cols floats. On the 20x41 they come
+    split across several records.
     """
-    meta = records[i]
-    rows = _INT.unpack_from(meta, 84)[0]
-    cols = _INT.unpack_from(meta, 88)[0]
-    data_rec = records[i + 1]
-    n = rows * cols
-    payload = len(data_rec) - _DENSE_2D_DATA_OFFSET
-    if payload < 4 * n:
-        raise ValueError(
-            f"HAR header {name!r} (2RFULL): data record holds {payload} bytes, "
-            f"need {4 * n} for {rows}x{cols}"
-        )
-    reals = struct.unpack_from(f"<{n}f", data_rec, _DENSE_2D_DATA_OFFSET)
-    arr = np.array(reals, dtype=np.float32).reshape((rows, cols), order="F")
+    arr, nxt = _read_dense_2d(name, records, i, "f", np.float32)
     return (
         HeaderArray(
             name=name,
@@ -367,7 +400,7 @@ def _read_2rfull(
             set_names=[],
             set_elements=[],
         ),
-        i + 2,
+        nxt,
     )
 
 
