@@ -110,12 +110,18 @@ def test_fail_below_cuenta_las_celdas_sin_pareja_como_que_no_pasan(
     assert r.exit_code == exit_code, r.output
 
 
+def test_la_fila_total_muestra_el_mismo_pct_que_usa_fail_below(ex3):
+    r = _run(*ex3)
+    total = next(ln for ln in r.output.splitlines() if ln.split()[:1] == ["TOTAL"])
+    assert O.EX11_EX3_PASS_PCT_ALL_TEXT in total.split()
+
+
 def test_un_sl4_es_error_con_la_instruccion_de_conversion(ex3, tmp_path):
     sl4 = tmp_path / "sol.sl4"
     sl4.write_bytes(b"")
     args = [str(sl4), *ex3[1:]]
     r = _run(*args)
-    assert r.exit_code == 2
+    assert r.exit_code == O.EX11_ERROR_EXIT
     assert "sltoht" in r.output
 
 
@@ -124,7 +130,7 @@ def test_sin_periodo_declarado_es_error_no_se_adivina(tmp_path):
     b = _levels_json(tmp_path / "b.json", O.EX3_B)
     m = _yaml(tmp_path / "map.yaml", O.EX3_MAP)
     r = _run(str(a), str(b), "--map", str(m))
-    assert r.exit_code == 2
+    assert r.exit_code == O.EX11_ERROR_EXIT
     assert "period" in r.output
 
 

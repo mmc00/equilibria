@@ -25,7 +25,7 @@ from typing import Any
 
 import click
 
-from equilibria.compare.errors import CompareError, MappingError
+from equilibria.compare.errors import CompareError
 from equilibria.compare.mapping import Mapping
 from equilibria.compare.report import Report, compare
 from equilibria.compare.solution import Solution
@@ -80,13 +80,6 @@ def load_source(
     )
 
 
-def pass_pct_all(report: Report) -> float | None:
-    """% de celdas que pasan sobre parejas + sin pareja; ``None`` si no hay ninguna."""
-    o = report.overall
-    total = o["cells"] + o["missing_in_a"] + o["missing_in_b"]
-    return None if total == 0 else 100.0 * o["passed"] / total
-
-
 def _pct(x: float | None) -> str:
     return "-" if x is None else f"{x:.2f}"
 
@@ -95,7 +88,17 @@ def _sci(x: float | None) -> str:
     return "-" if x is None else f"{x:.3e}"
 
 
+def _cell(variable: str | None, cell: Any) -> str:
+    """``periodo:a.b`` (o ``variable:periodo:a.b``) de la celda del maximo."""
+    if cell is None:
+        return "-"
+    text = f"{cell[0]}:{'.'.join(cell[1])}"
+    return text if variable is None else f"{variable}:{text}"
+
+
 def format_summary(report: Report) -> str:
+    """El resumen como tabla: una fila por variable y la fila TOTAL. ``pasan%``
+    cuenta las celdas sin pareja como que no pasan: es el % de ``--fail-below``."""
     th = report.thresholds
     head = (
         ["variable", "celdas", "pasan%"]
@@ -105,7 +108,7 @@ def format_summary(report: Report) -> str:
 
     def row(name: str, s: dict[str, Any], cell: str) -> list[str]:
         return (
-            [name, str(s["cells"]), _pct(s["pass_pct"])]
+            [name, str(s["cells"]), _pct(s["pass_pct_all"])]
             + [_pct(s["pct_within"][t]) for t in th]
             + [
                 _sci(s["median"]),
@@ -119,12 +122,9 @@ def format_summary(report: Report) -> str:
 
     rows = [head]
     for name, s in report.summary.items():
-        mc = s["max_cell"]
-        rows.append(row(name, s, "-" if mc is None else f"{mc[0]}:{'.'.join(mc[1])}"))
+        rows.append(row(name, s, _cell(None, s["max_cell"])))
     o = report.overall
-    mc = o["max_cell"]
-    cell = "-" if mc is None else f"{o['max_variable']}:{mc[0]}:{'.'.join(mc[1])}"
-    rows.append(row("TOTAL", o, cell))
+    rows.append(row("TOTAL", o, _cell(o["max_variable"], o["max_cell"])))
     widths = [max(len(r[i]) for r in rows) for i in range(len(head))]
     lines = [
         "  ".join(c.ljust(w) for c, w in zip(r, widths, strict=True)).rstrip()
@@ -139,14 +139,14 @@ def format_summary(report: Report) -> str:
     if report.periods_only_in_b:
         lines.append(f"periodos solo en B: {', '.join(report.periods_only_in_b)}")
     lines.append(
-        f"pasan (contando sin pareja): {_pct(pass_pct_all(report))}% de "
-        f"{o['cells'] + o['missing_in_a'] + o['missing_in_b']} celdas"
+        f"pasan%: sobre parejas + sin pareja (una celda que falta nunca pasa); "
+        f"solo las parejas: {_pct(o['pass_pct'])}%"
     )
     for var, why in report.excluded.items():
-        lines.append(f"variable excluida: {var} — {why}")
+        lines.append(f"variable excluida: {var}: {why}")
     for e in report.exclusions:
         where = ", ".join(f"{k}={v}" for k, v in e.where.items())
-        lines.append(f"celdas excluidas: {e.variable} [{where}] {e.cells} — {e.why}")
+        lines.append(f"celdas excluidas: {e.variable} [{where}] {e.cells}: {e.why}")
     return "\n".join(lines)
 
 
@@ -231,7 +231,7 @@ def compare_command(
             variables=sorted({v.b.var for v in mapping.variables}),
         )
         report = compare(sol_a, sol_b, mapping, reference=reference)
-    except (CompareError, MappingError) as exc:
+    except CompareError as exc:  # MappingError es una CompareError
         raise _CompareFailed(str(exc)) from exc
 
     click.echo(format_summary(report))
@@ -239,7 +239,7 @@ def compare_command(
         report.to_json(out)
         click.echo(f"reporte: {out}")
     if fail_below is not None:
-        got = pass_pct_all(report)
+        got = report.overall["pass_pct_all"]
         if got is None or got < fail_below:
             click.echo(
                 f"FALLA: pasan {_pct(got)}% < --fail-below {fail_below:g}%", err=True

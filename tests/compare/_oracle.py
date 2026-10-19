@@ -460,3 +460,7 @@ EX11_EX5_PASS_PCT_ALL = 1700.0 / 18
 EX11_EX5_PASS_PCT_TEXT = "94.44"  # como lo imprime la CLI (2 decimales)
 EX11_EX3_PASS_PCT_ALL = 50.0
 EX11_FAIL_EXIT = 1
+EX11_ERROR_EXIT = 2  # error de uso o de datos (mapeo, fuente, periodo no declarado)
+EX11_EX3_PASS_PCT_ALL_TEXT = (
+    "50.00"  # la fila TOTAL muestra el mismo % que --fail-below
+)

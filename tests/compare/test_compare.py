@@ -97,6 +97,13 @@ def test_una_celda_sin_pareja_nunca_cuenta_como_que_pasa():
     assert r.summary["z"]["missing_in_b"] == 2  # check/USA y check/ROW
 
 
+def test_el_pct_que_cuenta_las_sin_pareja_esta_en_el_reporte():
+    """Ejemplo 3: 2 parejas que pasan + 2 sin pareja -> 50 % (oraculo 11)."""
+    r = _run(O.EX3_A, O.EX3_B, O.EX3_MAP)
+    assert r.overall["pass_pct_all"] == pytest.approx(O.EX11_EX3_PASS_PCT_ALL)
+    assert r.summary["z"]["pass_pct_all"] == pytest.approx(O.EX11_EX3_PASS_PCT_ALL)
+
+
 def test_un_periodo_que_falta_entero_en_un_lado_no_se_compara():
     """Q18: solo se comparan los periodos presentes en los dos lados; el resto se
     declara como periodo de un solo lado, no como miles de celdas sin pareja."""
