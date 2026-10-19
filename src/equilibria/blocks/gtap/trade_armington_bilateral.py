@@ -74,6 +74,23 @@ class ArmingtonBilateralBlock(Block):
 
     name: str = "GTAP_ARMINGTON_BILATERAL"
     description: str = "GTAP top Armington CES nest + bilateral trade (CES/CET)"
+    uses: list[str] = [
+        "dintx_tgt",
+        "exptx",
+        "imptx",
+        "lambdam",
+        "lambdamg",
+        "mintx_tgt",
+        "nd",
+        "pd",
+        "pet",
+        "pnum",
+        "xc",
+        "xds",
+        "xet",
+        "xg",
+        "xi",
+    ]
     sets: Any = None
     params: Any = None
     # ifSUB toggle (GAMS $setGlobal ifSUB). When True the equations substitute the

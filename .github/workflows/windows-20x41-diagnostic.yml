@@ -1,4 +1,4 @@
-name: Windows 20x41 diagnostic (manual)
+name: 20x41 phase-times diagnostic (manual, windows|linux)
 
 # DIAGNOSTICO, no gate de CI: solo se dispara a mano (workflow_dispatch). Nunca
 # en push ni en PR.
@@ -16,10 +16,25 @@ name: Windows 20x41 diagnostic (manual)
 #
 # El tiempo de un runner compartido es ruidoso: sirve para el orden de magnitud
 # (~7 min vs ~35 min), no para citar segundos.
+#
+# Input `os` (linux): windows-latest (run 38943391754, AMD EPYC 7763, 2 cores /
+# 4 hilos, 16 GB, Defender apagado, mumps-seq + MKL) tardo 1423,5 s, ~3,3x la
+# Mac y uniforme en todas las fases. La rama linux corre la MISMA receta en
+# ubuntu-latest para separar "hardware lento" de "lento en Windows". Para que el
+# BLAS no sea un confusor se fuerza MKL (libblas=*=*mkl), igual que en Windows.
+# El nombre del archivo se conserva para no romper `gh workflow run`.
 
 on:
   workflow_dispatch:
     inputs:
+      os:
+        description: "Runner: windows (windows-latest) o linux (ubuntu-latest)"
+        required: false
+        default: windows
+        type: choice
+        options:
+          - windows
+          - linux
       dataset:
         description: "Dataset a medir despues del smoke test 10x7 (p. ej. gtap7_20x41, gtap7_10x7)"
         required: false
@@ -30,8 +45,9 @@ permissions:
   contents: read
 
 jobs:
-  phase-times-windows:
-    runs-on: windows-latest
+  phase-times:
+    name: phase-times (${{ inputs.os }})
+    runs-on: ${{ inputs.os == 'linux' && 'ubuntu-latest' || 'windows-latest' }}
     timeout-minutes: 180
     defaults:
       run:
@@ -54,7 +70,8 @@ jobs:
             exit 1
           fi
 
-      - name: Runner hardware
+      - name: Runner hardware (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Get-CimInstance Win32_Processor |
@@ -69,6 +86,18 @@ jobs:
           # Defender en el runner: dato para comparar con el McAfee de la laptop.
           try { Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AntivirusEnabled | Format-List } catch { "Get-MpComputerStatus no disponible" }
 
+      - name: Runner hardware (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -uo pipefail
+          lscpu | grep -iE "^(Model name|CPU\(s\)|Thread\(s\) per core|Core\(s\) per socket|Socket\(s\)|CPU max MHz)" || lscpu
+          echo "nproc: $(nproc)"
+          free -g
+          echo "--- swap (antes) ---"
+          swapon --show || true
+          grep -E "^(PRETTY_NAME)=" /etc/os-release || true
+          uname -r
+
       # Env principal `eq`: python 3.12 + pymumps (mumps-seq) de conda-forge.
       # PyPI solo trae el fuente de pymumps y pide un MUMPS del sistema.
       - name: Setup conda env (eq)
@@ -82,8 +111,16 @@ jobs:
 
       - name: Install pymumps + equilibria
         run: |
-          set -euo pipefail
-          conda install -y -c conda-forge pymumps mumps-seq
+          # Sin -u: el script de desactivacion de MKL de conda lee una variable
+          # no definida (CONDA_MKL_INTERFACE_LAYER_BACKUP) y aborta con -u.
+          set -eo pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # conda-forge en Linux trae OpenBLAS por defecto; Windows salio con
+            # MKL. Se fuerza MKL para que el BLAS no sea un confusor.
+            conda install -y -c conda-forge pymumps mumps-seq "libblas=*=*mkl"
+          else
+            conda install -y -c conda-forge pymumps mumps-seq
+          fi
           # [dev] porque phase_times.py importa un test que hace `import pytest`.
           pip install -e ".[dev]"
           # Pyomo fijo a la version de la medicion de la Mac (434 s).
@@ -102,7 +139,8 @@ jobs:
       # Hay que copiar TODAS las lib*.dll: libpynumero_ASL.dll necesita las DLL
       # del runtime MinGW al lado. Sin ellas AmplInterface.available() da True
       # pero ctypes.CDLL falla con "(or one of its dependencies)".
-      - name: Copy IDAES DLLs into Pyomo lib dir
+      - name: Copy IDAES DLLs into Pyomo lib dir (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $src = Join-Path $env:LOCALAPPDATA "idaes\bin"
@@ -113,6 +151,22 @@ jobs:
           if (-not (Test-Path (Join-Path $dst "libpynumero_ASL.dll"))) {
             Write-Error "libpynumero_ASL.dll no llego a $dst"; exit 1
           }
+
+      # En Linux idaes deja los binarios en ~/.idaes/bin; Pyomo busca en
+      # PYOMO_CONFIG_DIR/lib (~/.pyomo/lib). Se copian todas las lib*.so* (las
+      # dependencias de runtime van al lado) y se agrega el dir a
+      # LD_LIBRARY_PATH por si el RPATH no es $ORIGIN.
+      - name: Copy IDAES .so into Pyomo lib dir (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          src="$HOME/.idaes/bin"
+          dst="$(python -c "from pyomo.common.envvar import PYOMO_CONFIG_DIR;print(PYOMO_CONFIG_DIR)")/lib"
+          mkdir -p "$dst"
+          cp -a "$src"/lib*.so* "$dst"/
+          ls -la "$dst"
+          test -e "$dst/libpynumero_ASL.so" || { echo "::error::libpynumero_ASL.so no llego a $dst"; exit 1; }
+          echo "LD_LIBRARY_PATH=$dst${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Verify pynumero_ASL actually loads
         run: |
@@ -157,6 +211,10 @@ jobs:
           PY
           echo "--- conda list (mumps / blas / lapack / mkl / openblas) ---"
           conda list | grep -iE "mumps|blas|lapack|mkl|openblas|metis|scotch" || true
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # Comparacion justa: el libblas del env debe ser el build MKL.
+            conda list "^libblas$" | grep -q mkl || { echo "::error::libblas no es MKL"; exit 1; }
+          fi
           echo "--- pip (pyomo / numpy / scipy) ---"
           pip list 2>/dev/null | grep -iE "^(pyomo|numpy|scipy|pymumps) " || true
 
@@ -174,18 +232,25 @@ jobs:
           python scripts/gtap/phase_times.py "$DATASET" --out "diag/fases_${DATASET}.json" \
             2>&1 | tee "diag/log_${DATASET}.txt"
 
-      - name: Memory after run
-        if: always()
+      - name: Memory after run (Windows)
+        if: always() && runner.os == 'Windows'
         shell: pwsh
         run: |
           $os = Get-CimInstance Win32_OperatingSystem
           "RAM libre: {0:N1} GB" -f ($os.FreePhysicalMemory * 1KB / 1GB)
           Get-CimInstance Win32_PageFileUsage | Select-Object Name, CurrentUsage, PeakUsage | Format-List
 
+      - name: Memory after run (Linux)
+        if: always() && runner.os == 'Linux'
+        run: |
+          free -g
+          echo "--- swap (despues) ---"
+          swapon --show || true
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase-times-windows-${{ inputs.dataset }}
+          name: phase-times-${{ inputs.os }}-${{ inputs.dataset }}
           path: diag/
           if-no-files-found: warn

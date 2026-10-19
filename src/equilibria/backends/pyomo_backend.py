@@ -95,7 +95,13 @@ class PyomoBackend(Backend):
 
         Args:
             model: equilibria Model instance
+
+        Raises:
+            ValueError: If a block uses a variable no block declares
+                (``Model.check_uses``): clearer than the AttributeError the
+                first equation reading it would raise.
         """
+        model.check_uses()
         self._model = model
         self.pyomo_model = ConcreteModel(name=model.name)
         self._pyomo_model = self.pyomo_model

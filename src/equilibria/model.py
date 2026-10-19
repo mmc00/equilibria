@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+import numpy as np
+from pydantic import BaseModel, Field, PrivateAttr
 
 from equilibria.blocks.base import Block
 from equilibria.core.equations import Equation, EquationManager
@@ -84,6 +85,9 @@ class Model(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    # (kind, name) -> name of the block that declared it first.
+    _owner: dict[tuple[str, str], str] = PrivateAttr(default_factory=dict)
+
     def __init__(self, **data: Any) -> None:
         """Initialize model with proper manager linkage."""
         super().__init__(**data)
@@ -139,11 +143,19 @@ class Model(BaseModel):
         This validates that required sets exist, then calls the block's
         setup method to add parameters, variables, and equations.
 
+        Two blocks may declare the same parameter or variable only if both
+        declarations are identical (value, domains, bounds...): a second block
+        cannot silently change what the first one declared. An equation has one
+        owner. The block is checked whole before anything is registered, so a
+        rejected block leaves the model untouched.
+
         Args:
             block: Block to add
 
         Raises:
-            ValueError: If required sets are missing
+            ValueError: If required sets are missing, or if the block declares a
+                parameter or variable differently from an earlier block, or an
+                equation an earlier block already declared.
         """
         # Validate required sets exist
         block.validate_sets(self.set_manager)
@@ -155,21 +167,83 @@ class Model(BaseModel):
         # Call block setup to get equations and populate params/vars
         equations = block.setup(self.set_manager, block_params, block_vars)
 
-        # Add block's parameters, variables, and equations to model
-        for param in block_params.values():
-            if param.name not in self.parameter_manager:
-                self.add_parameter(param)
-
-        for var in block_vars.values():
-            if var.name not in self.variable_manager:
-                self.add_variable(var)
-
+        new_params = [
+            p
+            for p in block_params.values()
+            if not self._check_redeclaration("parameter", p, block)
+        ]
+        new_vars = [
+            v
+            for v in block_vars.values()
+            if not self._check_redeclaration("variable", v, block)
+        ]
         for eq in equations:
-            if eq.name not in self.equation_manager:
-                self.add_equation(eq)
+            if eq.name in self.equation_manager:
+                raise self._redeclared(
+                    "equation", eq.name, block, "an equation has one owner"
+                )
+
+        for kind, items in (
+            ("parameter", new_params),
+            ("variable", new_vars),
+            ("equation", equations),
+        ):
+            for item in items:
+                _MANAGERS[kind](self).add(item)
+                self._owner[(kind, item.name)] = block.name
 
         # Store the block
         self.blocks.append(block)
+
+    def owner_of(self, kind: str, name: str) -> str | None:
+        """Name of the block that declared ``name`` first (``kind`` is
+        "parameter", "variable" or "equation"); None if no block did."""
+        return self._owner.get((kind, name))
+
+    def _check_redeclaration(self, kind: str, new: Any, block: Block) -> bool:
+        """Whether ``new`` is already registered with the same declaration.
+
+        Returns False if the name is new and True if an earlier block declared it
+        identically. Raises ValueError if an earlier block declared it differently.
+        """
+        manager = _MANAGERS[kind](self)
+        if new.name not in manager:
+            return False
+        old = manager.get(new.name)
+        for field in _DECLARATION_FIELDS[kind]:
+            if not _same(getattr(old, field), getattr(new, field)):
+                raise self._redeclared(
+                    kind,
+                    new.name,
+                    block,
+                    f"with a different {field}: one name, one declaration",
+                )
+        return True
+
+    def _redeclared(self, kind: str, name: str, block: Block, why: str) -> ValueError:
+        return ValueError(
+            f"{kind} {name} is declared by block {self.owner_of(kind, name)!r} "
+            f"and again by {block.name!r} {why}"
+        )
+
+    def check_uses(self) -> None:
+        """Check that every variable a block uses (``Block.uses``) is declared.
+
+        Call it once every block is added: a block may use what a later block
+        declares.
+
+        Raises:
+            ValueError: If a used variable is declared by no block.
+        """
+        missing = [
+            f"block {b.name!r} uses {v}"
+            for b in self.blocks
+            for v in b.uses
+            if v not in self.variable_manager
+        ]
+        if missing:
+            them = "it" if len(missing) == 1 else "them"
+            raise ValueError("; ".join(missing) + f", but no block declares {them}")
 
     def add_blocks(self, blocks: list[Block]) -> None:
         """Add multiple blocks to the model.
@@ -267,3 +341,33 @@ class Model(BaseModel):
             f"DOF={stats.degrees_of_freedom}, "
             f"{stats.blocks} blocks"
         )
+
+
+# The fields that make up a declaration: two blocks sharing a name must agree on
+# all of them. Parameters have no bounds.
+_DECLARATION_FIELDS: dict[str, tuple[str, ...]] = {
+    "parameter": ("value", "domains", "mutable"),
+    "variable": ("value", "domains", "domain", "lower", "upper"),
+}
+
+_MANAGERS: dict[str, Any] = {
+    "parameter": lambda m: m.parameter_manager,
+    "variable": lambda m: m.variable_manager,
+    "equation": lambda m: m.equation_manager,
+}
+
+
+def _same(a: Any, b: Any) -> bool:
+    """Equality of a declaration field: arrays cell by cell (NaN == NaN), and a
+    scalar equals an array holding that value in every cell (``lower=0.0`` is
+    ``lower=np.zeros(n)``)."""
+    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+        a, b = np.asarray(a), np.asarray(b)
+        if a.shape != b.shape:
+            if a.ndim and b.ndim:
+                return False
+            a, b = np.broadcast_arrays(a, b)
+        if a.dtype.kind in "fc" and b.dtype.kind in "fc":
+            return bool(np.array_equal(a, b, equal_nan=True))
+        return bool(np.array_equal(a, b))
+    return a == b
