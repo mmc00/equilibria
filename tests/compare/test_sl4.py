@@ -135,3 +135,20 @@ def test_un_sl4_ilegible_es_error(tmp_path):
     path.write_bytes(b"\0")
     with pytest.raises(CompareError, match="sol.sl4"):
         from_har(path)
+
+
+def test_un_sl4_grande_partido_en_registros_da_los_niveles_de_sltoht():
+    """El 20x41 (EX16): sus cabeceras grandes vienen en varios registros."""
+    got = from_har(O.EX16_SL4)
+    want = from_har(O.EX16_LEVELS_HAR)
+    assert len(want.levels) == O.EX16_N_WITH_LEVEL
+    assert len(want.no_level) == O.EX16_N_NO_LEVEL
+    assert set(got.levels) == set(want.levels)
+    assert set(got.no_level) == set(want.no_level)
+    for name, cells in want.levels.items():
+        assert got.levels[name].keys() == cells.keys(), name
+        for key, value in cells.items():
+            assert got.levels[name][key] == pytest.approx(value, rel=O.EX16_RTOL), (
+                name,
+                key,
+            )

@@ -603,3 +603,23 @@ EX15_QO_PRE = {
     ("SER", "ROW"): 46936497.20200284,
 }
 EX15_NO_LEVEL_WHY = "sin nivel en GEMPACK"
+
+# ---------------------------------------------------------------------------
+# Ejemplo 16 — un .sl4 GRANDE: gtap7_20x41 tm10 capFix (issues #148, #133).
+#
+# En el 20x41, GEMPACK parte las cabeceras 2RFULL/2IFULL grandes en varios registros
+# (CUMS: 695122 reales en 174 registros de 3996). Cada registro trae, antes de sus
+# datos, 7 enteros: registros que quedan, filas, columnas, fila inicial, fila
+# final, columna inicial, columna final.
+# Oraculo: sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har, escrito en Windows el
+# 2026-10-19 por scripts/gtap/export_sl4_levels.py desde el TEXTO de
+# `sltoht -SHL -SIC` del mismo .sl4. No pasa por el lector nuevo. El exportador
+# reporto 44 variables con nivel, 208 sin nivel (NOLV) y 0 discrepancias
+# contra el sl4dump (windows/corridas-paper, windows_paper_out/2026-10-19_1356).
+# El texto de sltoht trae ~8 cifras; el .sl4, REAL*4.
+# ---------------------------------------------------------------------------
+EX16_SL4 = _GEMPACK_FIXTURES / "sl4_gtap7_20x41_tm10_s8-16-32_capfix.sl4"
+EX16_LEVELS_HAR = _GEMPACK_FIXTURES / "sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har"
+EX16_N_WITH_LEVEL = 44
+EX16_N_NO_LEVEL = 208
+EX16_RTOL = 1e-6
