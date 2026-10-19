@@ -534,3 +534,30 @@ EX13_MAP = {
 EX13_A_UNSCALED = {("post", ("USA", "Food")): 2.0e6, ("post", ("USA", "Mnfcs")): 5.0e6}
 EX13_D_FOOD = 0.002 / 2.002
 EX13_PASS_PCT = 100.0
+
+# ---------------------------------------------------------------------------
+# Ejemplo 14 — GEMPACK <-> equilibria, GTAP 3x3 en NIVELES (issue #131).
+#
+# A = equilibria resuelto (bloques, PATH, el cierre de test_gtap7_gempack_parity:
+# _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels_gtap7_3x3_tm10.har (LEVA-only,
+# solo post). Periodos: A shock -> post. Cantidades de A deshechas a mano:
+#   output:   xp(r,a)  / (xscale[r,a] * 1e-6)  <->  qo(a,r)   (xscale de
+#             blocks.gtap._derived_params.xscale_data, NO de equilibria.compare)
+#   dom_sales: xd(r,c) / 1e-6                   <->  qds(c,r)
+# Calculado el 2026-10-18 con un script aparte (no importa equilibria.compare): lee
+# el HAR con babel.har.reader y los valores del modelo con pyomo.value.
+#   output:    9 celdas, max d = 2.51e-5, las 9 <= 1e-3
+#   dom_sales: 9 celdas, 7 <= 1e-3; Svces EU_28 d = 0.010465, Svces ROW d = 0.004060
+#   global: 18 celdas; <= 1e-3: 16; <= 5e-3: 17; <= 1e-2: 17;
+#           maximo 0.010465 en dom_sales post (EU_28, Svces)
+# Hallazgo (no del comparador): xd se aparta de qds hasta ~1 % en Svces.
+# ---------------------------------------------------------------------------
+EX14_HAR = (
+    ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels_gtap7_3x3_tm10.har"
+)
+EX14_CELLS = {"output": 9, "dom_sales": 9}
+EX14_WITHIN = {1e-3: 16, 5e-3: 17, 1e-2: 17}
+EX14_TOTAL = 18
+EX14_OUTPUT_MAX = 2.51e-5
+EX14_MAX = 0.010465
+EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
