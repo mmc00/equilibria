@@ -561,3 +561,44 @@ EX14_TOTAL = 18
 EX14_OUTPUT_MAX = 2.51e-5
 EX14_MAX = 0.010465
 EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
+
+# ---------------------------------------------------------------------------
+# Ejemplo 15 — niveles leidos DIRECTO del .sl4, sin sltoht (issue #148).
+#
+# Dos oraculos, ninguno sale del lector nuevo:
+# 1) Nivel PRE del nus333. Los fixtures de sltoht del nus333 (tm10) dan el post
+#    (sl4levels_nus333_tm10.har, LEVA) y el % (sl4dump_nus333_tm10.har); pre =
+#    post / (1 + %/100). El pre depende solo de los datos, que son los mismos en
+#    todo Burfisher, asi que es el pre de TBL45A. Las 44 variables con nivel del
+#    nus333 son de cambio %, ninguna de cambio ordinario.
+#    Variables sin nivel: las que el fixture trae con el centinela 1e10. El .sl4
+#    trae ademas 12 variables que el fixture no tiene (otra version del modelo).
+# 2) Cambio: 100*(post/pre - 1) de cada celda = el volcado de sltoht del mismo .sl4
+#    (burfisher_sl4/sl4dump_<EXP>.har). Una celda con pre = 0 no tiene %: GEMPACK
+#    escribe uno igual (qes/qfe, flujo cero), pero en niveles es 0 -> 0.
+# Precision: LEVB/LEVA del .sl4 son REAL*4 (~6e-8 relativo).
+# Medido el 2026-10-19 con un lector de exploracion (scratch, no commiteado): pre
+# rel max 4.8e-8 (qo); cambio max 1.04e-5 pp (TBL45A) y 3.05e-5 pp (ME9C).
+# ---------------------------------------------------------------------------
+EX15_DIR = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_sl4"
+EX15_SL4 = {e: EX15_DIR / f"{e}.sl4" for e in ("TBL45A", "ME9C")}
+EX15_DUMP = {e: EX15_DIR / f"sl4dump_{e}.har" for e in ("TBL45A", "ME9C")}
+EX15_NUS333_POST = (
+    ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels_nus333_tm10.har"
+)
+EX15_NUS333_PCT = (
+    ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4dump_nus333_tm10.har"
+)
+EX15_N_WITH_LEVEL = 44
+EX15_PRE_RTOL = 1e-6
+EX15_PCT_ATOL = 1e-4  # puntos porcentuales
+# qo pre (ACTS x REG), del oraculo 1, para leer a ojo:
+EX15_QO_PRE = {
+    ("AGR", "USA"): 324849.25648047,
+    ("MFG", "USA"): 6587561.07403989,
+    ("SER", "USA"): 17701492.85617938,
+    ("AGR", "ROW"): 2898823.33469239,
+    ("MFG", "ROW"): 31702725.67132671,
+    ("SER", "ROW"): 46936497.20200284,
+}
+EX15_NO_LEVEL_WHY = "sin nivel en GEMPACK"
