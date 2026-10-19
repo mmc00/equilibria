@@ -8,7 +8,9 @@ celdas excluidas por el mapeo no se miden y no cuentan.
 
 Fuentes por extension:
 
-- ``.gdx``: niveles de GAMS (:func:`~equilibria.compare.from_gdx`).
+- ``.gdx``: niveles de GAMS (:func:`~equilibria.compare.from_gdx`), mas los
+  parametros que pida el ``divide_by`` del mapeo.
+- ``.har``: niveles de GEMPACK, ``pre`` y ``post`` (:func:`~equilibria.compare.from_har`).
 - ``.json`` / ``.json.gz``: niveles como ``{var: [[[indices..., periodo], nivel], ...]}``
   (lo mismo que :func:`~equilibria.compare.from_dict`, en un archivo).
 
@@ -29,7 +31,7 @@ from equilibria.compare.errors import CompareError
 from equilibria.compare.mapping import Mapping
 from equilibria.compare.report import Report, compare
 from equilibria.compare.solution import Solution
-from equilibria.compare.sources import from_dict, from_gdx
+from equilibria.compare.sources import from_dict, from_gdx, from_har
 
 FAIL_BELOW_EXIT = 1
 ERROR_EXIT = 2
@@ -51,8 +53,11 @@ def load_source(
     period: str | None,
     *,
     variables: list[str],
+    params: list[str] | None = None,
 ) -> Solution:
-    """Lee ``path`` segun su extension; ``variables`` son las que pide el mapeo."""
+    """Lee ``path`` segun su extension. ``variables`` y ``params`` son las variables
+    y los parametros (del ``divide_by``) que pide el mapeo para ese lado. Un ``.har``
+    trae sus propios periodos (``pre``/``post``): ``period_dim``/``period`` no se usan."""
     name = path.name.lower()
     if name.endswith(".sl4"):
         raise CompareError(
@@ -60,11 +65,19 @@ def load_source(
             "niveles con `sltoht -SHL` (scripts/gtap/export_sl4_levels.py)."
         )
     if name.endswith(".har"):
-        raise CompareError(
-            f"{path}: la CLI todavia no lee .har de GEMPACK (issue #131)."
-        )
+        if params:
+            raise CompareError(
+                f"{path}: un .har de GEMPACK no trae parametros {params}"
+            )
+        return from_har(path, variables=variables)
     if name.endswith(".gdx"):
-        return from_gdx(path, period_dim=period_dim, period=period, variables=variables)
+        return from_gdx(
+            path,
+            period_dim=period_dim,
+            period=period,
+            variables=variables,
+            params=params,
+        )
     if name.endswith((".json", ".json.gz")):
         raw = _read_json(path)
         if not isinstance(raw, dict):
@@ -224,11 +237,13 @@ def compare_command(
             a,
             *side_rule(a_period_dim, a_period),
             variables=sorted({v.a.var for v in mapping.variables}),
+            params=mapping.params("a"),
         )
         sol_b = load_source(
             b,
             *side_rule(b_period_dim, b_period),
             variables=sorted({v.b.var for v in mapping.variables}),
+            params=mapping.params("b"),
         )
         report = compare(sol_a, sol_b, mapping, reference=reference)
     except CompareError as exc:  # MappingError es una CompareError
