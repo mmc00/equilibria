@@ -574,7 +574,7 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 #    Variables sin nivel: las que el fixture trae con el centinela 1e10. El .sl4
 #    trae ademas 12 variables que el fixture no tiene (otra version del modelo).
 # 2) Cambio: 100*(post/pre - 1) de cada celda = el volcado de sltoht del mismo .sl4
-#    (burfisher_sl4/sl4dump_<EXP>.har). Una celda con pre = 0 no tiene %: GEMPACK
+#    (burfisher_sl4/sl4dump_<exp>.har). Una celda con pre = 0 no tiene %: GEMPACK
 #    escribe uno igual (qes/qfe, flujo cero), pero en niveles es 0 -> 0.
 # Precision: LEVB/LEVA del .sl4 son REAL*4 (~6e-8 relativo).
 # Medido el 2026-10-19 con un lector de exploracion (scratch, no commiteado): pre
@@ -586,8 +586,8 @@ EX15_DIR = _GEMPACK_FIXTURES / "burfisher_sl4"
 # cubren las 252 de la solucion, VCSP/VCSN las 263 del modelo. En TBL45A y ME9C
 # las dos listas coinciden y no distinguen cual se usa.
 EX15_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
-EX15_SL4 = {e: EX15_DIR / f"{e}.sl4" for e in EX15_EXERCISES}
-EX15_DUMP = {e: EX15_DIR / f"sl4dump_{e}.har" for e in EX15_EXERCISES}
+EX15_SL4 = {e: EX15_DIR / f"{e.lower()}.sl4" for e in EX15_EXERCISES}
+EX15_DUMP = {e: EX15_DIR / f"sl4dump_{e.lower()}.har" for e in EX15_EXERCISES}
 EX15_NUS333_POST = _GEMPACK_FIXTURES / "sl4levels_nus333_tm10.har"
 EX15_NUS333_PCT = _GEMPACK_FIXTURES / "sl4dump_nus333_tm10.har"
 EX15_N_WITH_LEVEL = 44
