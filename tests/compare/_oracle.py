@@ -581,8 +581,12 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 # rel max 4.8e-8 (qo); cambio max 1.04e-5 pp (TBL45A) y 3.05e-5 pp (ME9C).
 # ---------------------------------------------------------------------------
 EX15_DIR = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_sl4"
-EX15_SL4 = {e: EX15_DIR / f"{e}.sl4" for e in ("TBL45A", "ME9C")}
-EX15_DUMP = {e: EX15_DIR / f"sl4dump_{e}.har" for e in ("TBL45A", "ME9C")}
+# GTAPV7 (gtapv7.for, mismo nus333) OMITE 11 variables: VARS/VCNA/VCAR/LVOK/PLEV
+# cubren las 252 de la solucion, VCSP/VCSN las 263 del modelo. En TBL45A y ME9C
+# las dos listas coinciden y no distinguen cual se usa.
+EX15_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
+EX15_SL4 = {e: EX15_DIR / f"{e}.sl4" for e in EX15_EXERCISES}
+EX15_DUMP = {e: EX15_DIR / f"sl4dump_{e}.har" for e in EX15_EXERCISES}
 EX15_NUS333_POST = (
     ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels_nus333_tm10.har"
 )
