@@ -114,8 +114,8 @@ def test_variables_limita_la_lectura():
 
 
 def test_una_variable_pedida_que_no_esta_es_error():
-    with pytest.raises(CompareError, match="qxs"):
-        from_har(O.EX15_SL4["TBL45A"], variables=["qxs"])
+    with pytest.raises(CompareError, match="no_existe"):
+        from_har(O.EX15_SL4["TBL45A"], variables=["no_existe"])
 
 
 def test_un_sl4_ilegible_es_error(tmp_path):

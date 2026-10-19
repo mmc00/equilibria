@@ -117,13 +117,13 @@ def test_la_fila_total_muestra_el_mismo_pct_que_usa_fail_below(ex3):
     assert O.EX11_EX3_PASS_PCT_ALL_TEXT in total.split()
 
 
-def test_un_sl4_es_error_con_la_instruccion_de_conversion(ex3, tmp_path):
+def test_un_sl4_ilegible_es_error_de_datos(ex3, tmp_path):
     sl4 = tmp_path / "sol.sl4"
     sl4.write_bytes(b"")
     args = [str(sl4), *ex3[1:]]
     r = _run(*args)
     assert r.exit_code == O.EX11_ERROR_EXIT
-    assert "sltoht" in r.output
+    assert "sol.sl4" in r.output
 
 
 def test_sin_periodo_declarado_es_error_no_se_adivina(tmp_path):
