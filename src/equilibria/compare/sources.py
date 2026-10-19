@@ -9,7 +9,7 @@ Solo se leen niveles.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -313,11 +313,7 @@ def from_har(
             )
         if not ha.set_elements:  # escalar: el HAR lo guarda como (1,) sin conjuntos
             return {(period, ()): float(arr.ravel()[0])}
-        out: dict[CellKey, float] = {}
-        for pos in np.ndindex(arr.shape):
-            index = tuple(str(ha.set_elements[d][i]) for d, i in enumerate(pos))
-            out[(period, index)] = float(arr[pos])
-        return out
+        return _cells_by_label(arr, ha.set_elements, period)
 
     leva: dict[str, tuple[str, Any]] = {}
     for hid, ha in headers.items():
@@ -369,32 +365,46 @@ def from_har(
 
 def _from_sl4(path: Path, variables: Iterable[str] | None) -> Solution:
     """:func:`from_har` para un ``.sl4``: los niveles se leen directo del archivo."""
-    import numpy as np
-
-    from equilibria.babel.har.sl4_levels import read_sl4_levels
+    from equilibria.babel.har.sl4 import read_sl4_levels
 
     try:
         found = read_sl4_levels(path)
-    except Exception as e:  # un .sl4 ilegible o incompleto
+    except (ValueError, OSError) as e:  # un .sl4 ilegible, truncado o incompleto
         raise CompareError(f"{path}: no se pudieron leer sus niveles ({e})") from e
     wanted = list(found) if variables is None else list(variables)
     unknown = [name for name in wanted if name not in found]
     if unknown:
         raise CompareError(f"{path}: no hay una variable {unknown[0]!r}")
 
+    # Como NOLV en el .har: toda variable sin nivel queda declarada, se pida o no.
+    no_level = {
+        name: f"sin nivel en GEMPACK (LVOK de {path.name})"
+        for name, var in found.items()
+        if var is None
+    }
     levels: dict[str, dict[CellKey, float]] = {}
     ndim: dict[str, int] = {}
-    no_level: dict[str, str] = {}
     for name in wanted:
         var = found[name]
         if var is None:
-            no_level[name] = f"sin nivel en GEMPACK (LVOK de {path.name})"
             continue
-        cells: dict[CellKey, float] = {}
-        for pos in np.ndindex(var.pre.shape):
-            index = tuple(var.set_elements[d][i] for d, i in enumerate(pos))
-            cells[("pre", index)] = float(var.pre[pos])
-            cells[("post", index)] = float(var.post[pos])
-        levels[name] = cells
+        levels[name] = {
+            **_cells_by_label(var.pre, var.set_elements, "pre"),
+            **_cells_by_label(var.post, var.set_elements, "post"),
+        }
         ndim[name] = len(var.set_elements)
     return Solution(levels, ndim, str(path), no_level=no_level)
+
+
+def _cells_by_label(
+    arr: Any, set_elements: Sequence[Sequence[Any]], period: str
+) -> dict[CellKey, float]:
+    """Las celdas de ``arr`` con su indice en etiquetas de ``set_elements``."""
+    import numpy as np
+
+    return {
+        (period, tuple(str(set_elements[d][i]) for d, i in enumerate(pos))): float(
+            arr[pos]
+        )
+        for pos in np.ndindex(arr.shape)
+    }

@@ -14,6 +14,8 @@ from equilibria.compare import CompareError, from_har
 from tests.compare import _oracle as O
 
 
+# _by_variable y _cells repiten a proposito lo que hace el lector: el oraculo no
+# puede depender del codigo que valida.
 def _by_variable(path) -> dict:
     """{variable: HeaderArray} de un HAR de sltoht, por el nombre del long_name."""
     out = {}
@@ -32,6 +34,11 @@ def _cells(ha) -> dict[tuple[str, ...], float]:
         tuple(str(ha.set_elements[d][i]) for d, i in enumerate(pos)): float(arr[pos])
         for pos in np.ndindex(arr.shape)
     }
+
+
+def _period(cells: dict, period: str) -> dict:
+    """{indice: nivel} de un periodo de ``Solution.levels[var]``."""
+    return {i: v for (p, i), v in cells.items() if p == period}
 
 
 def _oracle_pre() -> tuple[dict[str, dict], set[str]]:
@@ -54,9 +61,7 @@ def tbl45a():
 
 
 def test_qo_pre_es_el_del_oraculo(tbl45a):
-    got = {
-        idx: v for (period, idx), v in tbl45a.levels["qo"].items() if period == "pre"
-    }
+    got = _period(tbl45a.levels["qo"], "pre")
     assert got.keys() == O.EX15_QO_PRE.keys()
     for idx, want in O.EX15_QO_PRE.items():
         assert got[idx] == pytest.approx(want, rel=O.EX15_PRE_RTOL), idx
@@ -67,7 +72,7 @@ def test_el_pre_de_cada_variable_es_el_del_oraculo(tbl45a):
     assert len(pre) == O.EX15_N_WITH_LEVEL
     for name, cells in pre.items():
         assert name in tbl45a.levels, name
-        got = {i: v for (p, i), v in tbl45a.levels[name].items() if p == "pre"}
+        got = _period(tbl45a.levels[name], "pre")
         assert got.keys() == cells.keys(), name
         for idx, want in cells.items():
             assert got[idx] == pytest.approx(want, rel=O.EX15_PRE_RTOL), (name, idx)
@@ -93,8 +98,8 @@ def test_el_cambio_de_cada_celda_es_el_de_sltoht(exp):
     checked = 0
     for name, cells in sol.levels.items():
         pct = _cells(dump[name])
-        pre = {i: v for (p, i), v in cells.items() if p == "pre"}
-        post = {i: v for (p, i), v in cells.items() if p == "post"}
+        pre = _period(cells, "pre")
+        post = _period(cells, "post")
         assert pre.keys() == post.keys() == pct.keys(), name
         for idx, b in pre.items():
             if b == 0.0:  # flujo cero: sin %, en niveles 0 -> 0
@@ -111,6 +116,13 @@ def test_variables_limita_la_lectura():
     sol = from_har(O.EX15_SL4["TBL45A"], variables=["qo"])
     assert set(sol.levels) == {"qo"}
     assert sol.ndim["qo"] == 2
+
+
+def test_las_variables_sin_nivel_se_declaran_aunque_no_se_pidan():
+    """Como NOLV en el .har: no_level no depende de ``variables``."""
+    todas = from_har(O.EX15_SL4["TBL45A"])
+    solo_qo = from_har(O.EX15_SL4["TBL45A"], variables=["qo"])
+    assert solo_qo.no_level == todas.no_level
 
 
 def test_una_variable_pedida_que_no_esta_es_error():

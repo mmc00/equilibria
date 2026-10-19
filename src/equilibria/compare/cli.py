@@ -10,7 +10,8 @@ Fuentes por extension:
 
 - ``.gdx``: niveles de GAMS (:func:`~equilibria.compare.from_gdx`), mas los
   parametros que pida el ``divide_by`` del mapeo.
-- ``.har``: niveles de GEMPACK, ``pre`` y ``post`` (:func:`~equilibria.compare.from_har`).
+- ``.sl4`` / ``.har``: niveles de GEMPACK, ``pre`` y ``post``, del ``.sl4`` directo o de
+  su ``.har`` de niveles (:func:`~equilibria.compare.from_har`).
 - ``.json`` / ``.json.gz``: niveles como ``{var: [[[indices..., periodo], nivel], ...]}``
   (lo mismo que :func:`~equilibria.compare.from_dict`, en un archivo).
 
@@ -57,18 +58,19 @@ def load_source(
     own_period: bool = False,
 ) -> Solution:
     """Lee ``path`` segun su extension. ``variables`` y ``params`` son las variables
-    y los parametros (del ``divide_by``) que pide el mapeo para ese lado. Un ``.har``
-    trae sus propios periodos (``pre``/``post``): las opciones globales de periodo no
-    se le aplican, y las de su lado (``own_period``) son error."""
+    y los parametros (del ``divide_by``) que pide el mapeo para ese lado. Un ``.sl4``
+    o ``.har`` de GEMPACK trae sus propios periodos (``pre``/``post``): las opciones
+    globales de periodo no se le aplican, y las de su lado (``own_period``) son error."""
     name = path.name.lower()
     if name.endswith((".sl4", ".har")):
+        kind = path.suffix.lower()  # ".sl4" o ".har"
         if params:
             raise CompareError(
-                f"{path}: un .har de GEMPACK no trae parametros {params}"
+                f"{path}: un {kind} de GEMPACK no trae parametros {params}"
             )
         if own_period:
             raise CompareError(
-                f"{path}: un .har trae sus propios periodos (pre/post); no le pases "
+                f"{path}: un {kind} trae sus propios periodos (pre/post); no le pases "
                 "--a-period*/--b-period*"
             )
         return from_har(path, variables=variables)
@@ -91,7 +93,7 @@ def load_source(
             data[var] = {tuple(k): v for k, v in raw[var]}
         return from_dict(data, period_dim=period_dim, period=period, origin=str(path))
     raise CompareError(
-        f"{path}: extension no reconocida (se aceptan .gdx, .har, .json, .json.gz)"
+        f"{path}: extension no reconocida (se aceptan .gdx, .sl4, .har, .json, .json.gz)"
     )
 
 

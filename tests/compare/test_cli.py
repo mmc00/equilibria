@@ -228,3 +228,27 @@ def test_flags_de_periodo_para_un_har_son_error_no_se_ignoran(tmp_path):
     )
     assert r.exit_code == O.EX11_ERROR_EXIT
     assert ".har" in r.output
+
+
+def test_lee_un_sl4_de_gempack_directo(tmp_path):
+    """#148: la CLI acepta el .sl4 sin pasar por sltoht (el mismo .sl4 de los dos
+    lados: las 6 celdas de qo en pre y en post pasan todas)."""
+    sl4 = str(O.EX15_SL4["TBL45A"])
+    m = _yaml(
+        tmp_path / "map.yaml",
+        {
+            "variables": [
+                {
+                    "name": "output",
+                    "a": {"var": "qo", "dims": ["ACT", "REG"]},
+                    "b": {"var": "qo", "dims": ["ACT", "REG"]},
+                    "tol": {"rel": 1e-9, "abs_floor": 1e-6},
+                }
+            ],
+            "thresholds": [1e-9],
+        },
+    )
+    r = _run(sl4, sl4, "--map", str(m), "--fail-below", "100")
+    assert r.exit_code == 0, r.output
+    assert "output" in r.output
+    assert "100.00" in r.output
