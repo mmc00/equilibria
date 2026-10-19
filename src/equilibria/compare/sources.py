@@ -286,11 +286,14 @@ def from_har(
     if path.suffix.lower() == ".sl4":
         raise CompareError(f"{path}: un .sl4 no se lee directo. {_CONVERSION_HINT}")
     headers = read_har(str(path))
-    if all(h in headers for h in lv.PERCENT_CHANGE_HEADERS):
+    pct = [h for h in lv.PERCENT_CHANGE_HEADERS if h in headers]
+    if pct:  # basta una: un .har de cambios % nunca se lee como niveles
         raise CompareError(
-            f"{path}: es un .har de CAMBIOS % de sltoht (trae "
-            f"{'/'.join(lv.PERCENT_CHANGE_HEADERS)}), no de niveles. {_CONVERSION_HINT}"
+            f"{path}: es un .har de CAMBIOS % de sltoht (trae {'/'.join(pct)}), "
+            f"no de niveles. {_CONVERSION_HINT}"
         )
+    # Con NOLV el archivo sigue la regla de #127: cada LEVA tiene su LEVB.
+    with_levb = lv.NO_LEVEL_HEADER in headers
 
     no_level: dict[str, str] = {}
     if lv.NO_LEVEL_HEADER in headers:
@@ -315,11 +318,13 @@ def from_har(
             out[(period, index)] = float(arr[pos])
         return out
 
-    leva = {
-        lv.variable_name(ha.long_name): (hid, ha)
-        for hid, ha in headers.items()
-        if lv.is_leva_header(hid) and np.asarray(ha.array).dtype.kind in "fiu"
-    }
+    leva: dict[str, tuple[str, Any]] = {}
+    for hid, ha in headers.items():
+        if not lv.is_leva_header(hid):
+            continue
+        if np.asarray(ha.array).dtype.kind not in "fiu":
+            raise CompareError(f"{path}: la cabecera LEVA {hid} no es numerica")
+        leva[lv.variable_name(ha.long_name)] = (hid, ha)
     wanted = list(leva) if variables is None else list(variables)
     for name in wanted:
         if name not in leva and name not in no_level:
@@ -335,8 +340,27 @@ def from_har(
         if all(v == lv.NO_LEVEL for v in post.values()):
             no_level[name] = f"sin nivel en GEMPACK (centinela 1e10 en {path.name})"
             continue
-        levb = headers.get(lv.levb_header(hid))
-        pre = {} if levb is None else cells(name, levb, "pre")
+        bid = lv.levb_header(hid)
+        levb = headers.get(bid)
+        if levb is None:
+            if with_levb:
+                raise CompareError(
+                    f"{path}: {name!r} no tiene su LEVB {bid} (el archivo trae "
+                    f"{lv.NO_LEVEL_HEADER}, asi que debe tenerlo)"
+                )
+            pre = {}  # .har viejo, solo LEVA: solo post
+        else:
+            if levb.long_name != lv.levb_long_name(ha.long_name):
+                raise CompareError(
+                    f"{path}: el long_name de {bid} ({levb.long_name!r}) no es el "
+                    f"LEVB de {hid} ({lv.levb_long_name(ha.long_name)!r})"
+                )
+            pre = cells(name, levb, "pre")
+            if all(v == lv.NO_LEVEL for v in pre.values()):
+                raise CompareError(
+                    f"{path}: {name!r} trae el centinela 1e10 en todo su LEVB {bid} "
+                    "pero no en su LEVA: no se toma como nivel"
+                )
         levels[name] = {**pre, **post}
         ndim[name] = len(ha.set_elements)
     return Solution(levels, ndim, str(path), no_level=no_level)

@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import re
 
+from equilibria.babel.har.wire import LONG_NAME_WIDTH
+
 NO_LEVEL = 1.0e10  # centinela de GEMPACK: "esta variable no tiene nivel"
 NO_LEVEL_HEADER = "NOLV"
 NO_LEVEL_LONG_NAME = "variables with NO level in the SL4 (sentinel 1e10): no LEVA/LEVB"
 LEVB_PREFIX = "LEVB "
-LONG_NAME_WIDTH = 70
 PERCENT_CHANGE_HEADERS = ("XXCR", "XXCD", "XXCP", "XXTD", "XXTT")
 _LEVA_ID_RE = re.compile(r"^0\d{3}$")
 _LEVB_ID_RE = re.compile(r"^B\d{3}$")

@@ -282,6 +282,8 @@ def _scale(x: Any, dims: tuple[str, ...], where: str) -> Scale:
             )
         return Scale(param=str(x["param"]), dims=pdims)
     if "value" in x:
+        if set(x) - {"value", "why"}:
+            raise MappingError(f"{where}: claves desconocidas {sorted(set(x))}")
         why = x.get("why")
         if not isinstance(why, str) or not why.strip():
             raise MappingError(f"{where}: una constante necesita su motivo ('why')")

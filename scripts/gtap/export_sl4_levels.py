@@ -60,9 +60,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from equilibria.babel.har.reader import read_har  # noqa: E402
 
 # The LEVA/LEVB/NOLV convention lives in ONE place, shared with the compare reader.
-from equilibria.babel.har.sl4_levels import (  # noqa: E402,F401
-    LEVB_PREFIX,
-    LONG_NAME_WIDTH,
+from equilibria.babel.har.sl4_levels import (  # noqa: E402
     NO_LEVEL,
     NO_LEVEL_HEADER,
     NO_LEVEL_LONG_NAME,

@@ -544,8 +544,8 @@ EX13_PASS_PCT = 100.0
 #   output:   xp(r,a)  / (xscale[r,a] * 1e-6)  <->  qo(a,r)   (xscale de
 #             blocks.gtap._derived_params.xscale_data, NO de equilibria.compare)
 #   dom_sales: xd(r,c) / 1e-6                   <->  qds(c,r)
-# Calculado el 2026-10-18 con un script aparte (no importa equilibria.compare): lee
-# el HAR con babel.har.reader y los valores del modelo con pyomo.value.
+# Calculado el 2026-10-18 con tests/compare/oracles/gempack3x3_levels.py (no importa
+# equilibria.compare): lee el HAR con babel.har.reader y el modelo con pyomo.value.
 #   output:    9 celdas, max d = 2.51e-5, las 9 <= 1e-3
 #   dom_sales: 9 celdas, 7 <= 1e-3; Svces EU_28 d = 0.010465, Svces ROW d = 0.004060
 #   global: 18 celdas; <= 1e-3: 16; <= 5e-3: 17; <= 1e-2: 17;

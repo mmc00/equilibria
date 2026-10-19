@@ -214,3 +214,17 @@ def test_un_divide_by_con_parametro_en_una_fuente_json_es_error(tmp_path):
     r = _run(str(a), str(b), "--map", str(m), "--period-dim", "-1")
     assert r.exit_code == O.EX11_ERROR_EXIT
     assert "xscale" in r.output
+
+
+def test_flags_de_periodo_para_un_har_son_error_no_se_ignoran(tmp_path):
+    a = _levels_json(
+        tmp_path / "a.json",
+        {"qo": {(*idx, period): v for (period, idx), v in O.EX12_QO.items()}},
+    )
+    m = _yaml(tmp_path / "map.yaml", QO_MAP)
+    har = _levels_har(tmp_path)
+    r = _run(
+        str(a), str(har), "--map", str(m), "--a-period-dim", "-1", "--b-period", "x"
+    )
+    assert r.exit_code == O.EX11_ERROR_EXIT
+    assert ".har" in r.output

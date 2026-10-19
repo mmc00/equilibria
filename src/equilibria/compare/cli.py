@@ -54,20 +54,22 @@ def load_source(
     *,
     variables: list[str],
     params: list[str] | None = None,
+    own_period: bool = False,
 ) -> Solution:
     """Lee ``path`` segun su extension. ``variables`` y ``params`` son las variables
     y los parametros (del ``divide_by``) que pide el mapeo para ese lado. Un ``.har``
-    trae sus propios periodos (``pre``/``post``): ``period_dim``/``period`` no se usan."""
+    trae sus propios periodos (``pre``/``post``): las opciones globales de periodo no
+    se le aplican, y las de su lado (``own_period``) son error."""
     name = path.name.lower()
-    if name.endswith(".sl4"):
-        raise CompareError(
-            f"{path}: un .sl4 de GEMPACK no se lee directo. Conviertelo a .har de "
-            "niveles con `sltoht -SHL` (scripts/gtap/export_sl4_levels.py)."
-        )
-    if name.endswith(".har"):
+    if name.endswith((".sl4", ".har")):
         if params:
             raise CompareError(
                 f"{path}: un .har de GEMPACK no trae parametros {params}"
+            )
+        if own_period:
+            raise CompareError(
+                f"{path}: un .har trae sus propios periodos (pre/post); no le pases "
+                "--a-period*/--b-period*"
             )
         return from_har(path, variables=variables)
     if name.endswith(".gdx"):
@@ -89,7 +91,7 @@ def load_source(
             data[var] = {tuple(k): v for k, v in raw[var]}
         return from_dict(data, period_dim=period_dim, period=period, origin=str(path))
     raise CompareError(
-        f"{path}: extension no reconocida (se aceptan .gdx, .json, .json.gz)"
+        f"{path}: extension no reconocida (se aceptan .gdx, .har, .json, .json.gz)"
     )
 
 
@@ -236,12 +238,14 @@ def compare_command(
         sol_a = load_source(
             a,
             *side_rule(a_period_dim, a_period),
+            own_period=a_period_dim is not None or a_period is not None,
             variables=sorted({v.a.var for v in mapping.variables}),
             params=mapping.params("a"),
         )
         sol_b = load_source(
             b,
             *side_rule(b_period_dim, b_period),
+            own_period=b_period_dim is not None or b_period is not None,
             variables=sorted({v.b.var for v in mapping.variables}),
             params=mapping.params("b"),
         )

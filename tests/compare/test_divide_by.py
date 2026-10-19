@@ -74,3 +74,10 @@ def test_un_parametro_con_celdas_de_distinto_largo_es_error():
             period_dim=-1,
             params={"xscale": {("USA", "a_Food"): 1.0, ("USA",): 0.1}},
         )
+
+
+def test_una_constante_con_claves_desconocidas_es_error():
+    m = cast(Any, copy.deepcopy(O.EX13_MAP))
+    m["variables"][0]["a"]["divide_by"][1]["dims"] = ["REG"]
+    with pytest.raises(MappingError, match="dims"):
+        Mapping.from_dict(m)
