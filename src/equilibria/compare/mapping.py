@@ -16,6 +16,15 @@ Forma (YAML o dict)::
         a: {var: xp, dims: [REG, ACT]}
         b: {var: qo, dims: [ACT, REG]}
         tol: {rel: 0.001, abs_floor: 1.0e-6}
+      - name: output_level   # cantidades: deshacer las escalas de un lado
+        a:
+          var: xp
+          dims: [REG, ACT]
+          divide_by:         # nivel comparado = nivel / producto de las escalas
+            - {param: xscale, dims: [REG, ACT]}   # parametro de ESA fuente
+            - {value: 1.0e-6, why: "inScale: la fuente no lo guarda"}
+        b: {var: qo, dims: [ACT, REG]}
+        tol: {rel: 0.001, abs_floor: 1.0e-6}
     exclude:
       - {var: ppriv, why: "indice Divisia: sin forma en niveles"}
       - var: factor_price    # solo algunas celdas de una variable del mapeo
@@ -28,6 +37,12 @@ y B deben ser las mismas, en el orden que tenga cada fuente; el orden comun del
 reporte es el de A. Si una variable repite conjunto (p. ej. origen y destino),
 cada dimension necesita su propia etiqueta y su propio renombre.
 Un elemento o periodo sin renombre declarado conserva su nombre.
+
+``divide_by`` deshace las escalas con que una fuente guarda sus niveles (GAMS y
+equilibria multiplican las cantidades GTAP por ``inScale`` y ``xscale[r,a]``). Un
+``param`` se lee de la misma fuente (``params=`` al crearla; ``Mapping.params(lado)``
+los lista) y sus ``dims`` son dims de la variable; si falta el parametro o una celda,
+es error. Una constante (``value``) exige su ``why``.
 
 Una exclusion sin ``where`` saca una variable entera (que no puede estar en
 ``variables``). Con ``where`` saca solo algunas celdas de una variable DEL MAPEO
@@ -60,11 +75,31 @@ class Tolerance:
 
 
 @dataclass(frozen=True)
+class Scale:
+    """Una escala que se deshace en un lado: el nivel comparado es nivel / escala.
+
+    ``param`` + ``dims``: un parametro de la MISMA fuente, indexado por esas dims de
+    la variable (en ese orden). ``value`` + ``why``: una constante que la fuente no
+    guarda (p. ej. ``inScale``), siempre con su motivo."""
+
+    param: str | None = None
+    dims: tuple[str, ...] = ()
+    value: float | None = None
+    why: str = ""
+
+    def describe(self) -> str:
+        if self.param is not None:
+            return f"{self.param}[{', '.join(self.dims)}]"
+        return f"{self.value:g} ({self.why})"
+
+
+@dataclass(frozen=True)
 class Side:
     """Una variable tal como la nombra una fuente."""
 
     var: str
     dims: tuple[str, ...]
+    divide_by: tuple[Scale, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -108,6 +143,16 @@ class Mapping:
     sets: dict[str, dict[str, dict[str, str]]]
     excluded: dict[str, str]  # variables enteras -> why
     cell_exclusions: tuple[CellExclusion, ...] = ()
+
+    def params(self, side: str) -> list[str]:
+        """Parametros de ``side`` que pide el ``divide_by`` del mapeo (sin repetir)."""
+        names = (
+            sc.param
+            for v in self.variables
+            for sc in v.side(side).divide_by
+            if sc.param is not None
+        )
+        return list(dict.fromkeys(names))
 
     def period_name(self, side: str, period: str) -> str:
         return self.periods.get(side, {}).get(period, period)
@@ -222,6 +267,30 @@ def _cell_exclusion(
     return CellExclusion(var, sets, periods, why)
 
 
+def _scale(x: Any, dims: tuple[str, ...], where: str) -> Scale:
+    if not isinstance(x, AbcMapping):
+        raise MappingError(f"{where}: cada escala es {{param, dims}} o {{value, why}}")
+    if "param" in x:
+        if set(x) - {"param", "dims"}:
+            raise MappingError(f"{where}: claves desconocidas {sorted(set(x))}")
+        pdims = tuple(str(d) for d in x.get("dims") or [])
+        unknown = [d for d in pdims if d not in dims]
+        if unknown:
+            raise MappingError(
+                f"{where}: {x['param']!r} usa dims {unknown} que no son dims de la "
+                f"variable {list(dims)}"
+            )
+        return Scale(param=str(x["param"]), dims=pdims)
+    if "value" in x:
+        if set(x) - {"value", "why"}:
+            raise MappingError(f"{where}: claves desconocidas {sorted(set(x))}")
+        why = x.get("why")
+        if not isinstance(why, str) or not why.strip():
+            raise MappingError(f"{where}: una constante necesita su motivo ('why')")
+        return Scale(value=_positive(x["value"], where), why=why)
+    raise MappingError(f"{where}: cada escala es {{param, dims}} o {{value, why}}")
+
+
 def _variable(v: Any) -> VariableMap:
     name = str(_required(v, "name", "variables"))
     where = f"variable {name!r}"
@@ -231,7 +300,14 @@ def _variable(v: Any) -> VariableMap:
         dims = tuple(str(x) for x in _required(side, "dims", f"{where}.{s}"))
         if len(set(dims)) != len(dims):
             raise MappingError(f"{where}.{s}: dims repetidas {list(dims)}")
-        sides[s] = Side(str(_required(side, "var", f"{where}.{s}")), dims)
+        sides[s] = Side(
+            str(_required(side, "var", f"{where}.{s}")),
+            dims,
+            tuple(
+                _scale(x, dims, f"{where}.{s}.divide_by")
+                for x in side.get("divide_by") or []
+            ),
+        )
     if sorted(sides["a"].dims) != sorted(sides["b"].dims):
         raise MappingError(
             f"{where}: las dims de a {list(sides['a'].dims)} y b "

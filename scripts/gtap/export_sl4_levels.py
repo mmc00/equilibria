@@ -58,18 +58,20 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria.babel.har.reader import read_har  # noqa: E402
+
+# The LEVA/LEVB/NOLV convention lives in ONE place, shared with the compare reader.
+from equilibria.babel.har.sl4_levels import (  # noqa: E402
+    NO_LEVEL,
+    NO_LEVEL_HEADER,
+    NO_LEVEL_LONG_NAME,
+    levb_header,
+    levb_long_name,
+)
 from equilibria.babel.har.symbols import HeaderArray  # noqa: E402
 from equilibria.babel.har.writer import write_har  # noqa: E402
 
 DEFAULT_SLTOHT = Path(r"C:\GP\sltoht.exe")
 PCT_COL, PRE_COL, POST_COL, CHANGE_COL = 0, 1, 2, 3  # [%-change, PRE, POST, change]
-NO_LEVEL = 1.0e10  # GEMPACK's "this variable has no level" sentinel
-# Variables with NO level in the SL4 (both level columns = NO_LEVEL on every cell)
-# get NO LEVA/LEVB header; their names are listed, one per element, in this 1-D
-# character header instead (always written, possibly empty), so a reader can never
-# take the 1e10 sentinel for data. Presence of NOLV = file written with this rule.
-NO_LEVEL_HEADER = "NOLV"
-NO_LEVEL_LONG_NAME = "variables with NO level in the SL4 (sentinel 1e10): no LEVA/LEVB"
 # Level-consistency tolerance. sltoht prints every solution column with ~8
 # significant digits (guide 8a: `-1.5210288 1579235.5 1555214.9 -24020.625`; the SL4
 # stores levels as REAL*4), i.e. each printed number carries a relative rounding of
@@ -79,11 +81,8 @@ NO_LEVEL_LONG_NAME = "variables with NO level in the SL4 (sentinel 1e10): no LEV
 # margin over that rounding and is still ~1e4x tighter than any real mistake
 # (a swapped or misaligned column moves these by percents).
 LEVEL_RTOL = 1e-6
-LEVB_PREFIX = "LEVB "
-LONG_NAME_WIDTH = 70
 _VAR_RE = re.compile(r"^\s*! Variable (\S+) #")
 _ROW_RE = re.compile(r"!%1=\s*(\d+)\s*$")
-_LEVA_ID_RE = re.compile(r"^0\d{3}$")
 
 
 def run_sltoht_sic(sl4: Path, sltoht: Path) -> Path:
@@ -188,22 +187,6 @@ def check_levels(var: str, tmpl: HeaderArray, pct: np.ndarray, pre: np.ndarray,
             f"pre={pre[k]!r} post={post[k]!r} %-change={pct[k]!r} change={change[k]!r} "
             f"(100*(post/pre-1)={implied[k]!r}, post-pre={post[k] - pre[k]!r}); "
             f"{bad.size} bad cell(s)")
-
-
-def levb_header(hid: str) -> str:
-    """LEVB (pre-sim) header for the LEVA header `hid`: "B" + id[1:] ("0052" -> "B052").
-    The ONE definition of the LEVB naming convention (script, tests and readers)."""
-    if not _LEVA_ID_RE.match(hid):
-        raise ValueError(f"sl4dump header {hid!r} is not a numeric id 0000-0999; "
-                         f"cannot derive its LEVB header 'B'+id[1:]")
-    return "B" + hid[1:]
-
-
-def levb_long_name(long_name: str) -> str:
-    """LEVB long_name for a LEVA/sl4dump long_name: LEVB_PREFIX + it, cut to the
-    70-byte HAR limit (trailing blanks dropped, as the HAR reader does). The prefix
-    keeps LEVB out of `sl4_levels`'s name lookup."""
-    return (LEVB_PREFIX + long_name)[:LONG_NAME_WIDTH].rstrip()
 
 
 def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
