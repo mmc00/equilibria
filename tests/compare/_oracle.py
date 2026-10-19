@@ -464,3 +464,73 @@ EX11_ERROR_EXIT = 2  # error de uso o de datos (mapeo, fuente, periodo no declar
 EX11_EX3_PASS_PCT_ALL_TEXT = (
     "50.00"  # la fila TOTAL muestra el mismo % que --fail-below
 )
+
+# Ejemplo 12 — from_har: el .har de NIVELES de GEMPACK (issue #131).
+#
+# HAR escrito en el test con equilibria.babel.har.writer (formato, no numeros: los
+# valores esperados son los literales de abajo). Variable qo(ACTS, REG), ACTS =
+# {Food, Mnfcs}, REG = {USA}:
+#   LEVA "0001" (post) = [10.0, 20.0]   LEVB "B001" (pre) = [8.0, 16.0]
+# NOLV = ["psave"]: psave no tiene nivel.
+# Periodos: pre (LEVB) y post (LEVA), en ese orden.
+#   qo[pre,  (Food, USA)] = 8.0    qo[pre,  (Mnfcs, USA)] = 16.0
+#   qo[post, (Food, USA)] = 10.0   qo[post, (Mnfcs, USA)] = 20.0
+# Si el mapeo pide psave: no se compara; queda en Report.excluded con el motivo
+# EX12_NO_LEVEL_WHY. El mismo motivo para un .har VIEJO (sin B***/NOLV) cuya variable
+# trae 1e10 en todas sus celdas. 1e10 en solo ALGUNAS celdas: error.
+# Un .har con las cabeceras XXCR..XXTT (cambios % de sltoht) o un .sl4: error con la
+# instruccion de conversion (export_sl4_levels.py).
+# ---------------------------------------------------------------------------
+EX12_QO = {
+    ("pre", ("Food", "USA")): 8.0,
+    ("pre", ("Mnfcs", "USA")): 16.0,
+    ("post", ("Food", "USA")): 10.0,
+    ("post", ("Mnfcs", "USA")): 20.0,
+}
+EX12_PERIODS = ["pre", "post"]
+EX12_LEVA_ONLY_PERIODS = ["post"]
+EX12_NO_LEVEL_WHY = "sin nivel en GEMPACK"
+EX12_CONVERSION_HINT = "export_sl4_levels.py"
+
+# ---------------------------------------------------------------------------
+# Ejemplo 13 — divide_by: deshacer las escalas de una fuente (decision 2026-10-18).
+#
+# A (al estilo GAMS/equilibria) guarda xp(r, a, t) escalado por inScale * xscale[r,a]:
+#   xp[USA, a_Food,  shock] = 2.0    xscale[USA, a_Food]  = 1.0
+#   xp[USA, a_Mnfcs, shock] = 0.5    xscale[USA, a_Mnfcs] = 0.1
+#   divide_by: [{param: xscale, dims: [r, a]}, {value: 1e-6, why: "inScale"}]
+#   nivel comparado: 2.0 / (1.0 * 1e-6) = 2.0e6 ;  0.5 / (0.1 * 1e-6) = 5.0e6
+# B (al estilo GEMPACK) qo(a, r) en millones, periodo post:
+#   qo[Food, USA] = 2.002e6   qo[Mnfcs, USA] = 5.0e6
+# d (ref B): |2.0e6 - 2.002e6| / 2.002e6 = 0.002/2.002 = 9.99000999e-4 -> pasa (tol 1e-3)
+#            |5.0e6 - 5.0e6| / 5.0e6 = 0
+# Sin divide_by, Food daria d = |2 - 2.002e6|/2.002e6 ~ 0.999999: falla.
+# Sin el parametro xscale en A: error (nunca se asume 1).
+# ---------------------------------------------------------------------------
+EX13_A = {"xp": {("USA", "a_Food", "shock"): 2.0, ("USA", "a_Mnfcs", "shock"): 0.5}}
+EX13_A_PARAMS = {"xscale": {("USA", "a_Food"): 1.0, ("USA", "a_Mnfcs"): 0.1}}
+EX13_B = {"qo": {("Food", "USA", "post"): 2.002e6, ("Mnfcs", "USA", "post"): 5.0e6}}
+EX13_INSCALE_WHY = "inScale: el modelo no lo guarda como parametro"
+EX13_MAP = {
+    "periods": {"a": {"shock": "post"}, "b": {"post": "post"}},
+    "sets": {"ACT": {"a": {"a_Food": "Food", "a_Mnfcs": "Mnfcs"}, "b": {}}},
+    "variables": [
+        {
+            "name": "output",
+            "a": {
+                "var": "xp",
+                "dims": ["REG", "ACT"],
+                "divide_by": [
+                    {"param": "xscale", "dims": ["REG", "ACT"]},
+                    {"value": 1e-6, "why": EX13_INSCALE_WHY},
+                ],
+            },
+            "b": {"var": "qo", "dims": ["ACT", "REG"]},
+            "tol": {"rel": 1e-3, "abs_floor": 1e-6},
+        }
+    ],
+    "thresholds": [1e-3],
+}
+EX13_A_UNSCALED = {("post", ("USA", "Food")): 2.0e6, ("post", ("USA", "Mnfcs")): 5.0e6}
+EX13_D_FOOD = 0.002 / 2.002
+EX13_PASS_PCT = 100.0
