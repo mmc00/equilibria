@@ -46,23 +46,35 @@ import zlib
 from pathlib import Path
 from typing import Any, BinaryIO
 
-# Import delta decoder for parameters
-from equilibria.babel.gdx.decoder import decode_parameter_delta, get_integer_size
+from equilibria.babel.gdx.decoder import get_integer_size
 
 # var/equ _DATA_ record: 5 value fields in fixed order, each one token byte
 # (a parameter record has ONE). 0x0A = an 8-byte double follows; the others are
-# value codes. Only codes SEEN in a real GDX are mapped (gtap7 3x3/10x7 vs
-# gdxdump): 0x01 NA (mdtx0), 0x09 2.0 (years). An unmapped code is an error --
-# guessing it, or stopping there, would return a wrong or truncated symbol.
+# value codes. Only codes SEEN in a real GDX are mapped, each checked against
+# gdxdump (tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py): 0x01 NA (mdtx0),
+# 0x04 Eps (gtap7_nlp), 0x08 0.5 (pep2 beta_M), 0x09 2.0 (years). An unmapped code
+# is an error -- guessing it, or stopping there, would return a wrong or truncated
+# symbol. UNDF (0x00) has not been seen.
 _VALUE_FIELDS: tuple[str, ...] = ("level", "marginal", "lower", "upper", "scale")
 _VALUE_SPECIAL: dict[int, float] = {
     0x01: float("nan"),  # NA
     0x02: float("inf"),
     0x03: float("-inf"),
+    0x04: 0.0,  # Eps
     0x05: 0.0,
     0x06: 1.0,
     0x07: -1.0,
+    0x08: 0.5,
     0x09: 2.0,
+}
+
+# A SCALAR with default values has no record in the GDX; gdxdump prints the
+# default. Parameter: 0. Variable/equation: by the symbol's userinfo (var subtype,
+# or 53 + equation type). Only the types seen in a real GDX (pep/results.gdx):
+# another one is an error, not a guess.
+_SCALAR_DEFAULT: dict[int, tuple[float, ...]] = {
+    5: (0.0, 0.0, float("-inf"), float("inf"), 1.0),  # free variable
+    53: (0.0, 0.0, 0.0, 0.0, 1.0),  # =E= equation
 }
 
 # GDX format constants
@@ -776,17 +788,14 @@ def read_parameter_values(
     Extracts the actual numeric values for a parameter symbol.
     Uses the UEL (Unique Element List) to map indices to element names.
 
-    Note: GDX files may use data compression. This function reads
-    explicitly stored values; compressed/delta-encoded values may
-    not be fully decoded.
+    A scalar stored at its default has no record; it is returned as 0.0,
+    like gdxdump prints it.
 
     Args:
         gdx_data: Result from read_gdx().
         symbol_name: Name of the parameter to read.
-        domain_offsets: Optional list of UEL start offsets per dimension. When
-            provided, these override the auto-computed offsets from set symbols.
-            Use when the GDX has parameters but no set symbols (e.g. Results.gdx).
-            Example: [0, 17] means dim0 starts at UEL[0], dim1 at UEL[17].
+        domain_offsets: Ignored. Record keys are absolute UEL indices; kept so
+            callers that still pass it do not break.
 
     Returns:
         Dictionary mapping index tuples to values.
@@ -822,6 +831,8 @@ def read_parameter_values(
     section = _section_at_offset(raw_data, symbol["data_offset"])
     elements: list[str] = gdx_data.get("elements", [])
     records = _decode_records(section, elements, symbol["dimension"], 1, symbol_name)
+    if symbol["dimension"] == 0 and not records:
+        return {(): 0.0}
     return {key: vals[0] for key, vals in records.items()}
 
 
@@ -979,9 +990,12 @@ def read_variable_values(
     # Calculate domain offsets
     domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
 
-    return _decode_variable_section(
+    values = _decode_variable_section(
         section, elements, dimension, domain_offsets, symbol_name
     )
+    if dimension == 0 and not values:
+        return {(): _scalar_default(symbol)}
+    return values
 
 
 def read_equation_values(
@@ -1032,9 +1046,24 @@ def read_equation_values(
     # Calculate domain offsets
     domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
 
-    return _decode_variable_section(
+    values = _decode_variable_section(
         section, elements, dimension, domain_offsets, symbol_name
     )
+    if dimension == 0 and not values:
+        return {(): _scalar_default(symbol)}
+    return values
+
+
+def _scalar_default(symbol: dict[str, Any]) -> dict[str, float]:
+    """The 5 fields gdxdump prints for a var/equ scalar with no record."""
+    try:
+        vals = _SCALAR_DEFAULT[symbol["userinfo"]]
+    except KeyError:
+        raise ValueError(
+            f"GDX symbol '{symbol['name']}': scalar with no record and "
+            f"userinfo {symbol['userinfo']} (known: {sorted(_SCALAR_DEFAULT)})"
+        ) from None
+    return dict(zip(_VALUE_FIELDS, vals, strict=True))
 
 
 def _decode_variable_section(
@@ -1063,8 +1092,9 @@ def _decode_records(
     """Decode the records of a _DATA_ section (``nfields`` values per record:
     1 for a parameter, 5 for a variable or equation).
 
-    Format (checked against gdxdump on every Par/Var/Equ of the gtap7 3x3 and 10x7
-    GDX, tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py): after the 7-byte
+    Format (checked against gdxdump on every Par/Var/Equ of five GDX -- gtap7 3x3
+    ifsub0/ifsub1, gtap7_nlp, pep2 Parameters, pep results --
+    tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py): after the 7-byte
     ``\\x06_DATA_`` marker (stripped by ``_section_at_offset``), a header
     `dim u8 | -1 i32 | dim x (minElem i32, maxElem i32)` (no min/max for scalars),
     then per record a key-delta byte (same scheme as ``decode_parameter_delta``)
