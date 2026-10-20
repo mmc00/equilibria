@@ -158,3 +158,21 @@ def test_hand_edits_detects_change_without_delta() -> None:
     old, new = {"X": "1", "Y": "2"}, {"X": "9", "Y": "2"}
     assert m.hand_edits(old, new, []) == ["X"]
     assert m.hand_edits(old, new, [_deltas(m, modified={"X": "9"})]) == []
+
+
+def test_subheadings_and_code_fences_stay_in_body() -> None:
+    m = _load_module()
+    md = (
+        "### Requirement: A\nSource: x\n\ntext\n"
+        "#### Scenario: s\nmore\n```\n# c\n### Requirement: fake\n```\n"
+        "### Requirement: B\nSource: y\n"
+    )
+    reqs, warns = m.parse_requirements(md)
+    assert warns == []
+    assert list(reqs) == ["A", "B"]
+    for part in ("text", "#### Scenario: s", "more", "# c", "### Requirement: fake"):
+        assert part in reqs["A"]
+
+    d = m.parse_deltas("## ADDED Requirements\n\n" + md)
+    assert d.warnings == []
+    assert "# c" in d.added["A"] and "#### Scenario: s" in d.added["A"]
