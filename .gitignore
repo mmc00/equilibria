@@ -396,7 +396,6 @@ docs/superpowers/
 /GTAP_VALIDATION_STATUS.md
 /plan_*.md
 /skills/
-/notes
 
 # GTAP scratch artifacts (accidental `con` redirect, fixed-script experiments)
 src/equilibria/templates/reference/gtap/scripts/con
