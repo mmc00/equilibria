@@ -1,13 +1,20 @@
 """GEMPACK con gtapv7_levels.tab: y, qinv, rore, pinv, pva y pe ya tienen nivel.
 
 El .har sale del paso 4 de ``scripts/windows/corridas_paper.ps1`` (gemsim sobre el TAB
-parchado por ``make_levels_tab.py`` + ``export_sl4_levels.py``, que ya comprobo que los
-% de cambio son los de la corrida sin parche). Aqui se comprueba el nivel PRE contra el
-oraculo hecho a mano desde basedata.har, ``tests/compare/oracles/levb_six_vars.py``,
-commiteado antes que el parche.
+parchado por ``make_levels_tab.py`` + ``export_sl4_levels.py``). Dos comprobaciones:
 
-Tolerancia: el .sl4 guarda los niveles en REAL*4 y sltoht los imprime con ~8 cifras
-(ver LEVEL_RTOL en export_sl4_levels.py), asi que 1e-6 relativo.
+1. Nivel PRE contra el oraculo hecho a mano desde basedata.har,
+   ``tests/compare/oracles/levb_six_vars.py``, commiteado antes que el parche.
+2. El parche no cambia la solucion: el % de cambio que implican los niveles,
+   ``100*(post/pre - 1)``, es el del sl4dump de la corrida SIN parche, celda por celda.
+   Esto valida tambien el nivel POST, incluidos pinv/pva/pe (cuyo PRE = 1 lo fija el
+   propio parche). export_sl4_levels.py hace un cruce parecido pero solo descarta e
+   imprime; aqui es una puerta.
+
+Tolerancias: el .sl4 guarda los niveles en REAL*4 (~6e-8 relativo, ver LEVEL_RTOL en
+export_sl4_levels.py): 1e-6 relativo en el nivel; en el % implicito, dos niveles REAL*4
+dan <= ~1,2e-7*(100+|%|) pp, ~3e-5 pp para |%| <= 22 (el mayor de los fixtures).
+Medido el 2026-10-19: maximo 1,2e-5 pp (rore, 20x41). PCT_ATOL = 5e-5 pp.
 """
 
 from __future__ import annotations
@@ -16,8 +23,10 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
+from equilibria.babel.har.reader import read_har
 from equilibria.compare import from_har
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,8 +35,15 @@ CASES = {
     "gtap7_3x3": FIX / "sl4levels6_gtap7_3x3_tm10.har",
     "gtap7_20x41": FIX / "sl4levels6_gtap7_20x41_tm10_s8-16-32_capfix.har",
 }
+# sl4dump (% de cambio) de la corrida SIN parche, gtapv7.exe; el del 3x3 es identico
+# (252/252 cabeceras) al de la corrida tm10_s8-16-32 que se parcho.
+UNPATCHED = {
+    "gtap7_3x3": FIX / "sl4dump_gtap7_3x3_tm10.har",
+    "gtap7_20x41": FIX / "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har",
+}
 SIX = ("y", "qinv", "rore", "pinv", "pva", "pe")
 RTOL = 1e-6
+PCT_ATOL = 5e-5
 
 
 def _oracle() -> Any:
@@ -58,3 +74,22 @@ def test_levb_de_las_seis_variables(dataset: str) -> None:
         pre = [x for k, x in sol.levels[var].items() if k[0] == "pre"]
         assert pre, var
         assert all(x == pytest.approx(1.0, rel=RTOL) for x in pre), var
+
+
+@pytest.mark.parametrize("dataset", sorted(CASES))
+def test_el_parche_no_cambia_la_solucion(dataset: str) -> None:
+    har = CASES[dataset]
+    if not har.exists():
+        pytest.skip(f"falta {har.name} (paso 4 de corridas_paper.ps1, Windows)")
+    sol = from_har(har)
+    dump = read_har(str(UNPATCHED[dataset]))
+    by_name = {(h.long_name or "").split("#", 1)[0].strip(): h for h in dump.values()}
+    for var in SIX:
+        ref = by_name[var]
+        pct = np.asarray(ref.array, dtype=np.float64)
+        for idx in np.ndindex(pct.shape):
+            key = tuple(ref.set_elements[d][i] for d, i in enumerate(idx))
+            pre = sol.levels[var][("pre", key)]
+            post = sol.levels[var][("post", key)]
+            implied = 100.0 * (post / pre - 1.0)
+            assert abs(implied - pct[idx]) <= PCT_ATOL, (var, key, implied, pct[idx])

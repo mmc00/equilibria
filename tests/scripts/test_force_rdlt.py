@@ -6,7 +6,8 @@ rechaza (``E-UNEXPECTED LENGTH OF STRINGS``, luego ``E-NREC not as expected``). 
 cambia solo el int32 de RDLT, in situ.
 
 Oraculo: ``default_gtap7_20x41_rdlt0_windows.prm``, hecho a mano en Windows el
-2026-10-19 (``windows_paper_out/2026-10-19_1928/4_niveles/a_mano/patch_rdlt.py``) y
+2026-10-19 (``4_niveles/a_mano/patch_rdlt.py`` en la rama de datos
+windows/corridas-paper-2026-10-19_1928) y
 con el que GEMSIM 11.3 resolvio el 20x41 capFix (max residual ratio 1.05e-7).
 """
 

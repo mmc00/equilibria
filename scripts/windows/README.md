@@ -20,7 +20,7 @@
 Desde la raíz del repo:
 
 ```
-git fetch && git checkout feat/gempack-levels-6vars
+git fetch && git checkout main   # o la rama que traiga el paso que se quiere correr
 powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1
 ```
 
@@ -40,6 +40,6 @@ El script deja todo en `windows_paper_out\<fecha>\`:
 - `log.txt` y `resumen.txt`, con OK/FALLA por paso;
 - `manifest.txt`, con el SHA-256 de cada archivo.
 
-Un paso que falla no corta los demás. Al final imprime los comandos `git add -f / commit / push` para traer la carpeta a la Mac.
+Un paso que falla no corta los demás. Al final imprime los comandos para subir la carpeta a una **rama de datos** `windows/corridas-<fecha>`, que no se mergea: los archivos que necesitan los tests se copian después a `tests/fixtures/`. Al commitear solo se exime el hook de archivos grandes (`SKIP=check-added-large-files`), nunca `--no-verify`.
 
-**Estado:** escrito en macOS **sin PowerShell para probarlo**. La primera corrida es también su prueba: si un paso falla, el `*_console.txt` de su carpeta dice por qué.
+**Estado:** el paso 4 corrió el 2026-10-19 (rama de datos `windows/corridas-paper-2026-10-19_1928`): `make_levels_tab` y `tablo` bien; los dos `gemsim` fallaron y se rehicieron a mano. Este script ya trae esos arreglos (tag `tm10_s8-16-32` en el 3x3, `.prm` capFix con `_force_rdlt` byte a byte), pero no volvió a correr solo de punta a punta.

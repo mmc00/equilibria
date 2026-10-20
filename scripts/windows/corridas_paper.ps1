@@ -219,7 +219,14 @@ Write-Host "==== RESUMEN ===="
 $Summary | ForEach-Object { Write-Host $_ }
 $rel = $Out.Substring($Repo.Length + 1)
 Write-Host ""
-Write-Host "Para traer los resultados a la Mac:"
+# Las salidas crudas (.sl4, .har, consolas) van a una rama de DATOS que nunca se
+# mergea, no a la rama de trabajo: lo que necesitan los tests se copia despues a
+# tests/fixtures. Solo se exime el hook de archivos grandes (los .sl4 pesan MB);
+# los demas hooks corren.
+$leaf = Split-Path $Out -Leaf
+Write-Host "Para traer los resultados a la Mac (rama de datos, no se mergea):"
+Write-Host "  git switch -c windows/corridas-$leaf"
 Write-Host "  git add -f `"$rel`""
-Write-Host "  git commit --no-verify -m `"windows: corridas del paper $(Split-Path $Out -Leaf)`""
-Write-Host "  git push"
+Write-Host "  `$env:SKIP = 'check-added-large-files'; git commit -m `"data(windows): corridas del paper $leaf`"; Remove-Item Env:SKIP"
+Write-Host "  git push -u origin windows/corridas-$leaf"
+Write-Host "  git switch -"
