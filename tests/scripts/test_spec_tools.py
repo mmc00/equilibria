@@ -60,7 +60,7 @@ def test_real_areas_toml_maps_all_src() -> None:
         capture_output=True,
         text=True,
         check=True,
-    ).stdout.split()
+    ).stdout.splitlines()
     assert m.unmapped(out, areas) == []
 
 
@@ -276,12 +276,25 @@ def test_check_pr_warns_area_without_spec(
     toy: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     m = _load_module()
+    _write(toy, "specs/solver/specs/specs.md", REQ_V1)
+    _commit(toy, "spec")
+    _git(toy, "branch", "base")
     _write(toy, "src/equilibria/solver/x.py", "y = 2\n")
     _commit(toy, "code")
-    _git(toy, "branch", "base", "HEAD~1")
     assert _run(m, "check-pr", "--base", "base") == 0
     out = capsys.readouterr().out
-    assert "::warning::" in out and "solver" in out
+    assert "::warning::" in out and "has code changes but no spec change" in out
+
+
+def test_check_pr_no_spec_warning_before_area_has_baseline(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _git(toy, "branch", "base")
+    _write(toy, "src/equilibria/solver/x.py", "y = 2\n")
+    _commit(toy, "code")
+    assert _run(m, "check-pr", "--base", "base") == 0
+    assert "has code changes but no spec change" not in capsys.readouterr().out
 
 
 def _hand_edit_repo(toy: Path) -> None:
@@ -400,3 +413,154 @@ def test_real_docs_paths_exist() -> None:
         assert area in areas.areas, f"[docs] area {area!r} is not in [areas]"
         for pattern in patterns:
             assert list(ROOT.glob(pattern)), f"{area}: no file matches {pattern}"
+
+
+# --- realistic baselines and the full propose -> sync -> archive flow ---------
+
+R_NEWTON = "### Requirement: Newton\nSource: issue 1\n\nThe solver must use Newton.\n"
+R_DAMPED = (
+    "### Requirement: Newton\nSource: issue 1\n\nThe solver must use damped Newton.\n"
+)
+R_LOG = "### Requirement: Logging\nSource: issue 2\n\nIt must log each step.\n"
+R_TOL = "### Requirement: Tolerance\nSource: issue 4\n\nIt must stop at 1e-8.\n"
+R_MUMPS = "### Requirement: MUMPS\nSource: issue 3\n\nIt must factor with MUMPS.\n"
+FULL_DELTA = (
+    "## ADDED Requirements\n\n" + R_MUMPS + "\n"
+    "## MODIFIED Requirements\n\n"
+    "### Requirement: Newton\nBefore: The solver must use Newton.\n"
+    "Source: issue 1\n\nThe solver must use damped Newton.\n\n"
+    "## REMOVED Requirements\n\n"
+    "### Requirement: Logging\nReason: replaced by tracing\n"
+)
+SPEC = "specs/solver/specs/specs.md"
+CHANGE = "specs/solver/changes/mumps/specs/specs.md"
+
+
+def _baseline(reqs: list[str], synced: str = "2026-10-01") -> str:
+    """Baseline laid out like the pre-fix template: `Last synced:` at the end."""
+    head = "# Solver specification\n\n## Purpose\n\nSolves.\n\n## Requirements\n\n"
+    return head + "\n".join(reqs) + f"\nLast synced: {synced}\n"
+
+
+def _branch(repo: Path, name: str, start: str = "main") -> None:
+    _git(repo, "checkout", "-q", "-b", name, start)
+
+
+def _merge(repo: Path, name: str) -> None:
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--ff-only", name)
+
+
+def _proposed(toy: Path, m: Any) -> None:
+    """main has a baseline (Newton, Logging) and an open change `mumps`."""
+    _write(toy, SPEC, _baseline([R_NEWTON, R_LOG, R_TOL]))
+    _commit(toy, "bootstrap baseline")
+    _branch(toy, "propose")
+    _write(toy, CHANGE, FULL_DELTA)
+    _write(toy, "specs/solver/changes/mumps/proposal.md", "# Why\n")
+    _write(toy, "src/equilibria/solver/a.py", "x = 2\n")
+    _commit(toy, "propose")
+    assert _run(m, "check-pr", "--base", "main") == 0
+    _merge(toy, "propose")
+
+
+# Newton modified, Logging removed, Tolerance untouched, MUMPS appended at the end
+SYNCED = [R_DAMPED, R_TOL, R_MUMPS]
+
+
+def test_parse_requirements_drops_last_synced() -> None:
+    m = _load_module()
+    reqs, _ = m.parse_requirements(_baseline([R_NEWTON], "2026-10-20"))
+    assert reqs["Newton"] == "Source: issue 1\n\nThe solver must use Newton."
+
+
+def test_new_area_template_has_no_requirements_and_date_on_top() -> None:
+    m = _load_module()
+    text = (ROOT / "specs/_templates/new-area/specs/specs.md").read_text("utf-8")
+    assert m.parse_requirements(text) == ({}, [])
+    assert text.index("Last synced:") < text.index("## Requirements")
+
+
+def test_sync_mismatches() -> None:
+    m = _load_module()
+    d = m.parse_deltas(FULL_DELTA)
+    old = m.parse_requirements(_baseline([R_NEWTON, R_LOG, R_TOL]))[0]
+    good = m.parse_requirements(_baseline(SYNCED))[0]
+    assert m.hand_edits(old, good, [d]) == []
+    assert m.sync_mismatches(old, good, [d]) == []
+    bad_mumps = R_MUMPS.replace("MUMPS.", "anything.")
+    bad = m.parse_requirements(_baseline([R_DAMPED, R_TOL, bad_mumps]))[0]
+    assert m.sync_mismatches(old, bad, [d]) == ["MUMPS"]
+    # a REMOVED requirement must actually be gone
+    kept = m.parse_requirements(_baseline([R_DAMPED, R_LOG + "more\n", R_TOL]))[0]
+    assert m.sync_mismatches(old, kept, [d]) == ["Logging"]
+
+
+def test_check_pr_realistic_hand_edits(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _write(toy, SPEC, _baseline([R_NEWTON, R_LOG, R_TOL]))
+    _commit(toy, "bootstrap baseline")
+    _branch(toy, "edit")
+    _write(toy, SPEC, _baseline(SYNCED, "2026-10-20"))
+    _commit(toy, "edit without change")
+    assert _run(m, "check-pr", "--base", "main") == 1
+    out = capsys.readouterr().out
+    for name in ("Newton", "Logging", "MUMPS"):
+        assert f"requirement {name!r} edited by hand" in out
+
+
+def test_flow_sync_then_archive(toy: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    m = _load_module()
+    _proposed(toy, m)
+    # PR: sync only (and bump Last synced)
+    _branch(toy, "sync")
+    _write(toy, SPEC, _baseline(SYNCED, "2026-10-20"))
+    _commit(toy, "sync")
+    assert _run(m, "check-pr", "--base", "main") == 0, capsys.readouterr().out
+    _merge(toy, "sync")
+    # PR: archive only, after the sync landed
+    _branch(toy, "archive")
+    assert _run(m, "archive", "solver", "mumps") == 0
+    _commit(toy, "archive")
+    assert _run(m, "check-pr", "--base", "main") == 0, capsys.readouterr().out
+
+
+def test_flow_sync_and_archive_same_pr(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _proposed(toy, m)
+    _branch(toy, "last")
+    _write(toy, SPEC, _baseline(SYNCED, "2026-10-20"))
+    assert _run(m, "archive", "solver", "mumps") == 0
+    _commit(toy, "sync and archive")
+    assert _run(m, "check-pr", "--base", "main") == 0, capsys.readouterr().out
+
+
+def test_flow_archive_still_checks_sync_text(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _proposed(toy, m)
+    _branch(toy, "last")
+    _write(toy, SPEC, _baseline([R_DAMPED, R_TOL, R_MUMPS.replace("MUMPS.", "X.")]))
+    assert _run(m, "archive", "solver", "mumps") == 0
+    _commit(toy, "sync and archive")
+    assert _run(m, "check-pr", "--base", "main") == 1
+    assert "'MUMPS' does not match" in capsys.readouterr().out
+
+
+def test_flow_sync_text_differs_from_delta(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _proposed(toy, m)
+    _branch(toy, "sync")
+    _write(toy, SPEC, _baseline([R_DAMPED, R_TOL, R_MUMPS.replace("MUMPS.", "X.")]))
+    _commit(toy, "sync with other text")
+    assert _run(m, "check-pr", "--base", "main") == 1
+    out = capsys.readouterr().out
+    assert "'MUMPS' does not match" in out
+    assert "'Newton'" not in out and "'Tolerance'" not in out
