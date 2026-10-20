@@ -560,6 +560,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 docs = [
     { name = "furo" },
@@ -641,6 +642,7 @@ requires-dist = [
     { name = "sphinx-copybutton", marker = "extra == 'docs'", specifier = ">=0.5" },
     { name = "sphinx-design", marker = "extra == 'docs'", specifier = ">=0.5" },
     { name = "sphinx-gallery", marker = "extra == 'docs'", specifier = ">=0.15" },
+    { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
     { name = "xlrd", specifier = ">=2.0.2" },
     { name = "xlrd", marker = "extra == 'excel'", specifier = ">=2.0" },
 ]

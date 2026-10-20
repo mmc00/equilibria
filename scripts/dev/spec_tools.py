@@ -82,6 +82,9 @@ def areas_without_spec(changed: list[str], areas: Areas) -> list[str]:
 
 
 _HEADING = re.compile(r"^###\s+requirement:\s*(.*?)\s*$", re.IGNORECASE)
+_FENCE = re.compile(r"^\s*```")
+_BOUNDARY = re.compile(r"^#{1,3}\s")  # headings of level 1-3 end a block
+_LEVEL3 = re.compile(r"^###\s")
 _SECTION = re.compile(r"^##\s+(ADDED|MODIFIED|REMOVED)\s+Requirements\s*$", re.I)
 
 
@@ -107,15 +110,18 @@ def _parse_blocks(
         if name is not None:
             reqs[name] = _normalize(body)
 
+    in_fence = False
     for line in lines:
-        m = _HEADING.match(line)
+        if _FENCE.match(line):
+            in_fence = not in_fence
+        m = None if in_fence else _HEADING.match(line)
         if m:
             flush()
             name, body = re.sub(r"\s+", " ", m.group(1)), []
-        elif line.startswith("#"):
+        elif not in_fence and _BOUNDARY.match(line):
             flush()
             name, body = None, []
-            if line.startswith("###"):
+            if _LEVEL3.match(line):
                 warns.append(f"malformed requirement heading: {line.strip()!r}")
         elif name is not None:
             if drop_before and line.lstrip().startswith("Before:"):
@@ -132,11 +138,14 @@ def parse_requirements(md: str) -> tuple[dict[str, str], list[str]]:
 def parse_deltas(md: str) -> Deltas:
     sections: dict[str, list[str]] = {"ADDED": [], "MODIFIED": [], "REMOVED": []}
     current: str | None = None
+    in_fence = False
     for line in md.splitlines():
-        m = _SECTION.match(line)
+        if _FENCE.match(line):
+            in_fence = not in_fence
+        m = None if in_fence else _SECTION.match(line)
         if m:
             current = m.group(1).upper()
-        elif line.startswith("## "):
+        elif not in_fence and re.match(r"^#{1,2}\s", line):
             current = None
         elif current is not None:
             sections[current].append(line)
