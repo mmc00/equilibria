@@ -8,7 +8,7 @@ para Var/Equ: Level, Marginal, Lower, Upper, Scale), como texto: los especiales
 Uso (desde la raiz, con GAMS):
     uv run python tests/babel/gdx/oracles/gdxdump_snapshot.py \\
         tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub0.gdx
-escribe ``<gdx>.gdxdump.json.gz`` al lado.
+escribe ``<gdx>.gdxdump.json.gz`` al lado, o en la ruta del segundo argumento.
 """
 
 from __future__ import annotations
@@ -62,7 +62,11 @@ def main() -> None:
         name: {"type": kind, "dim": dim, "records": dump(gdx, name, kind, dim)}
         for name, kind, dim in symbols(gdx)
     }
-    out = gdx.with_name(gdx.name + ".gdxdump.json.gz")
+    out = (
+        Path(sys.argv[2])
+        if len(sys.argv) > 2
+        else gdx.with_name(gdx.name + ".gdxdump.json.gz")
+    )
     with gzip.open(out, "wt", encoding="utf-8") as fh:
         json.dump(snap, fh, sort_keys=True)
     n = {k: sum(1 for s in snap.values() if s["type"] == k) for k in TYPES.values()}
