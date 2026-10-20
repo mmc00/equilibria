@@ -107,6 +107,8 @@ _FENCE = re.compile(r"^\s*```")
 _BOUNDARY = re.compile(r"^#{1,3}\s")  # headings of level 1-3 end a block
 _LEVEL3 = re.compile(r"^###\s")
 _SECTION = re.compile(r"^##\s+(ADDED|MODIFIED|REMOVED)\s+Requirements\s*$", re.I)
+# File-level stamp, not part of any requirement (older baselines put it last).
+_LAST_SYNCED = re.compile(r"^\s*Last synced:", re.IGNORECASE)
 
 
 def _normalize(lines: list[str]) -> str:
@@ -146,6 +148,8 @@ def _parse_blocks(
                 warns.append(f"malformed requirement heading: {line.strip()!r}")
         elif name is not None:
             if drop_before and line.lstrip().startswith("Before:"):
+                continue
+            if _LAST_SYNCED.match(line):
                 continue
             body.append(line)
     flush()
@@ -196,6 +200,32 @@ def hand_edits(
         covered |= set(d.added) | set(d.modified) | set(d.removed)
     changed = [n for n in {*old, *new} if old.get(n) != new.get(n)]
     return sorted(n for n in changed if n not in covered)
+
+
+def sync_mismatches(
+    old: dict[str, str], new: dict[str, str], open_deltas: list[Deltas]
+) -> list[str]:
+    """Covered requirements whose new baseline text is not what a delta states.
+
+    A changed requirement named in a delta is synced only if some delta matches
+    it: ADDED/MODIFIED text equal to the new baseline text, or REMOVED with the
+    requirement gone. Uncovered names are left to ``hand_edits``.
+    """
+    bad: list[str] = []
+    for n in {*old, *new}:
+        if old.get(n) == new.get(n):
+            continue
+        named = [d for d in open_deltas if n in {*d.added, *d.modified, *d.removed}]
+        if not named:
+            continue
+        ok = any(
+            (n in new and new[n] in (d.added.get(n), d.modified.get(n)))
+            or (n not in new and n in d.removed)
+            for d in named
+        )
+        if not ok:
+            bad.append(n)
+    return sorted(bad)
 
 
 # --- CLI ---------------------------------------------------------------------
@@ -299,10 +329,37 @@ def _ignored(path: str) -> bool:
 def _baseline_reqs(area: str, rev: str) -> dict[str, str]:
     reqs: dict[str, str] = {}
     listing = _git("ls-tree", "--name-only", rev, f"specs/{area}/specs/").stdout
-    for path in listing.split():
+    for path in listing.splitlines():
         if path.endswith(".md"):
             reqs.update(parse_requirements(_show(rev, path))[0])
     return reqs
+
+
+def _has_baseline(area: str, rev: str) -> bool:
+    out = _git("ls-tree", "--name-only", rev, f"specs/{area}/specs/")
+    return out.returncode == 0 and bool(out.stdout.strip())
+
+
+def _archived_changes(
+    base: str, changed: list[str], areas: Areas
+) -> list[tuple[str, str, str, Deltas]]:
+    """Changes open at ``base`` that this PR moved into ``changes/archive/``."""
+    listing = _git("ls-tree", "-r", "--name-only", base, "specs/").stdout
+    found: list[tuple[str, str, str, Deltas]] = []
+    for rel in listing.splitlines():
+        m = OPEN_CHANGE.match(rel)
+        if not m or _ignored(rel) or not _spec_area(rel, areas):
+            continue
+        area, slug = m.group(1), m.group(2)
+        if _show("HEAD", rel):
+            continue  # still open at HEAD; read from there
+        moved = re.compile(
+            rf"^specs/{re.escape(area)}/changes/archive/"
+            rf"\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(slug)}/"
+        )
+        if any(moved.match(p) for p in changed):
+            found.append((area, slug, rel, parse_deltas(_show(base, rel))))
+    return found
 
 
 def _cmd_check_pr(args: argparse.Namespace) -> int:
@@ -316,7 +373,8 @@ def _cmd_check_pr(args: argparse.Namespace) -> int:
             f"{diff.stderr.strip()}",
             2,
         )
-    changed = [p for p in diff.stdout.splitlines() if p and not _ignored(p)]
+    all_changed = [p for p in diff.stdout.splitlines() if p]
+    changed = [p for p in all_changed if not _ignored(p)]
     labels = {x.strip() for x in args.labels.split(",") if x.strip()}
     skip = bool(labels & SKIP_LABELS)
     areas = load_areas(SPECS / "areas.toml")
@@ -325,6 +383,8 @@ def _cmd_check_pr(args: argparse.Namespace) -> int:
 
     if not skip:
         for a in areas_without_spec(changed, areas):
+            if not _has_baseline(a, "HEAD"):
+                continue  # area not specified yet; nothing to keep in sync
             warnings.append(f"area '{a}' has code changes but no spec change")
     for p in unmapped(changed, areas):
         warnings.append(f"path not mapped to any area in specs/areas.toml: {p}")
@@ -336,6 +396,10 @@ def _cmd_check_pr(args: argparse.Namespace) -> int:
         if m and not _ignored(rel) and _spec_area(rel, areas):
             deltas = parse_deltas(_show("HEAD", rel))
             open_changes.append((m.group(1), m.group(2), rel, deltas))
+
+    # Changes archived by this PR still justify the syncs it makes (the last PR
+    # of a change may sync and archive at once). Their deltas are read at base.
+    archived_here = _archived_changes(base, all_changed, areas)
 
     for area, slug, rel, deltas in open_changes:
         prefix = f"specs/{area}/changes/{slug}/"
@@ -354,12 +418,20 @@ def _cmd_check_pr(args: argparse.Namespace) -> int:
             area = m.group(1)
             old = parse_requirements(_show(base, path))[0]
             new = parse_requirements(_show("HEAD", path))[0]
-            deltas_in_area = [d for a, _, _, d in open_changes if a == area]
+            deltas_in_area = [
+                d for a, _, _, d in open_changes + archived_here if a == area
+            ]
             for name in hand_edits(old, new, deltas_in_area):
                 errors.append(
                     f"{path}: requirement {name!r} edited by hand; "
                     f"describe it in a change (specs/{area}/changes/<slug>/) "
                     "or label the PR no-delta"
+                )
+            for name in sync_mismatches(old, new, deltas_in_area):
+                errors.append(
+                    f"{path}: requirement {name!r} does not match its delta in "
+                    f"specs/{area}/changes/; sync the text exactly as the delta "
+                    "states it (ADDED/MODIFIED) or delete it (REMOVED)"
                 )
 
     if NO_DOCS_LABEL not in labels:
