@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "dev" / "spec_tools.py"
@@ -176,3 +179,153 @@ def test_subheadings_and_code_fences_stay_in_body() -> None:
     d = m.parse_deltas("## ADDED Requirements\n\n" + md)
     assert d.warnings == []
     assert "# c" in d.added["A"] and "#### Scenario: s" in d.added["A"]
+
+
+# --- CLI (toy git repo) -----------------------------------------------------
+
+REQ_V1 = "### Requirement: Solver converges\nSource: issue 1\n\nIt converges.\n"
+REQ_V2 = "### Requirement: Solver converges\nSource: issue 1\n\nIt converges fast.\n"
+TOY_AREAS = '[areas]\nsolver = ["src/equilibria/solver/"]\n'
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
+
+
+def _write(repo: Path, rel: str, text: str) -> None:
+    p = repo / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+
+
+def _commit(repo: Path, msg: str) -> None:
+    _git(repo, "add", "-A")
+    _git(
+        repo,
+        "-c", "user.name=t", "-c", "user.email=t@t",
+        "commit", "-q", "-m", msg,
+    )  # fmt: skip
+
+
+@pytest.fixture
+def toy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    shutil.copytree(ROOT / "specs" / "_templates", repo / "specs" / "_templates")
+    _write(repo, "specs/areas.toml", TOY_AREAS)
+    _write(repo, "src/equilibria/solver/a.py", "x = 1\n")
+    _commit(repo, "base")
+    monkeypatch.chdir(repo)
+    return repo
+
+
+def _run(m: Any, *argv: str) -> int:
+    return m.main(list(argv))
+
+
+def test_new_change_copies_template(toy: Path) -> None:
+    m = _load_module()
+    (toy / "specs" / "solver").mkdir()
+    assert _run(m, "new-change", "solver", "faster") == 0
+    base = toy / "specs" / "solver" / "changes" / "faster"
+    assert (base / "proposal.md").is_file()
+    assert (base / "design.md").is_file()
+    assert (base / "specs" / "specs.md").is_file()
+
+
+def test_new_change_refuses_existing(toy: Path) -> None:
+    m = _load_module()
+    (toy / "specs" / "solver").mkdir()
+    assert _run(m, "new-change", "solver", "faster") == 0
+    assert _run(m, "new-change", "solver", "faster") != 0
+    assert _run(m, "new-change", "nope", "faster") != 0
+
+
+def test_new_area_copies_and_refuses_existing(toy: Path) -> None:
+    m = _load_module()
+    assert _run(m, "new-area", "solver") == 0
+    assert (toy / "specs" / "solver" / "specs" / "specs.md").is_file()
+    assert (toy / "specs" / "solver" / "context.md").is_file()
+    assert _run(m, "new-area", "solver") != 0
+
+
+def test_new_adr_numbers_after_last(toy: Path) -> None:
+    m = _load_module()
+    _write(toy, "docs/adr/0008-x.md", "# x\n")
+    assert _run(m, "new-adr", "my-decision") == 0
+    assert (toy / "docs" / "adr" / "0009-my-decision.md").is_file()
+
+
+def test_archive_moves_change(toy: Path) -> None:
+    m = _load_module()
+    (toy / "specs" / "solver").mkdir()
+    _run(m, "new-change", "solver", "faster")
+    assert _run(m, "archive", "solver", "faster") == 0
+    assert not (toy / "specs/solver/changes/faster").exists()
+    archived = list((toy / "specs/solver/changes/archive").glob("*-faster"))
+    assert len(archived) == 1
+
+
+def test_check_pr_warns_area_without_spec(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _write(toy, "src/equilibria/solver/x.py", "y = 2\n")
+    _commit(toy, "code")
+    _git(toy, "branch", "base", "HEAD~1")
+    assert _run(m, "check-pr", "--base", "base") == 0
+    out = capsys.readouterr().out
+    assert "::warning::" in out and "solver" in out
+
+
+def _hand_edit_repo(toy: Path) -> None:
+    _write(toy, "specs/solver/specs/specs.md", REQ_V1)
+    _commit(toy, "spec")
+    _git(toy, "branch", "base")
+    _write(toy, "specs/solver/specs/specs.md", REQ_V2)
+    _commit(toy, "edit")
+
+
+def test_check_pr_errors_on_hand_edit(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _hand_edit_repo(toy)
+    assert _run(m, "check-pr", "--base", "base") == 1
+    assert "::error::" in capsys.readouterr().out
+
+
+def test_check_pr_no_delta_label_skips(toy: Path) -> None:
+    m = _load_module()
+    _hand_edit_repo(toy)
+    assert _run(m, "check-pr", "--base", "base", "--labels", "no-delta") == 0
+
+
+def test_check_pr_covered_by_open_change(toy: Path) -> None:
+    m = _load_module()
+    _write(toy, "specs/solver/specs/specs.md", REQ_V1)
+    _commit(toy, "spec")
+    _git(toy, "branch", "base")
+    _write(toy, "specs/solver/specs/specs.md", REQ_V2)
+    delta = "## MODIFIED Requirements\n\n" + REQ_V2
+    _write(toy, "specs/solver/changes/c1/specs/specs.md", delta)
+    _commit(toy, "edit with delta")
+    assert _run(m, "check-pr", "--base", "base") == 0
+
+
+def test_check_pr_ignores_templates_and_archive(toy: Path) -> None:
+    m = _load_module()
+    _git(toy, "branch", "base")
+    _write(toy, "specs/_templates/new-area/specs/specs.md", REQ_V1)
+    _write(toy, "specs/solver/changes/archive/2026-01-01-c/specs/specs.md", REQ_V1)
+    _commit(toy, "tpl")
+    assert _run(m, "check-pr", "--base", "base") == 0
+
+
+def test_check_pr_missing_base(toy: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    m = _load_module()
+    assert _run(m, "check-pr", "--base", "nope") == 2
+    assert "base ref not found: nope" in capsys.readouterr().out

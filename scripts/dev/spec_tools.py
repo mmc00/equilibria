@@ -1,12 +1,18 @@
-"""Parse specs and map repo code to architecture areas.
+"""Parse specs and map repo code to architecture areas, plus the spec-flow CLI.
 
-Pure-Python library behind the spec system (``specs/<area>/``). A CLI ``main()``
-is added on top of these functions elsewhere; keep the signatures stable.
+Library behind the spec system (``specs/<area>/``) with a ``main()`` that offers
+``new-area``, ``new-change``, ``new-adr``, ``archive`` and ``check-pr``.
+Run from the repository root.
 """
 
 # No `from __future__ import annotations`: dataclasses with string annotations break
 # when the module is loaded via spec_from_file_location without sys.modules entry.
+import argparse
+import datetime
 import re
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -175,3 +181,210 @@ def hand_edits(
         covered |= set(d.added) | set(d.modified) | set(d.removed)
     changed = [n for n in {*old, *new} if old.get(n) != new.get(n)]
     return sorted(n for n in changed if n not in covered)
+
+
+# --- CLI ---------------------------------------------------------------------
+
+SPECS = Path("specs")
+TEMPLATES = SPECS / "_templates"
+SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+AREA_KEY = re.compile(r"^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$")
+BASELINE = re.compile(r"^specs/(.+)/specs/[^/]+\.md$")
+OPEN_CHANGE = re.compile(r"^specs/(.+)/changes/([^/]+)/specs/[^/]+\.md$")
+SKIP_LABELS = {"no-delta", "bootstrap"}
+
+
+class _Fail(Exception):
+    def __init__(self, msg: str, code: int = 1) -> None:
+        super().__init__(msg)
+        self.code = code
+
+
+def _check_name(value: str, pattern: re.Pattern[str], what: str) -> None:
+    if not pattern.match(value):
+        raise _Fail(f"invalid {what}: {value!r}")
+
+
+def _copy_template(name: str, dest: Path) -> None:
+    src = TEMPLATES / name
+    if not src.is_dir():
+        raise _Fail(f"template not found: {src}")
+    shutil.copytree(src, dest)
+
+
+def _cmd_new_area(args: argparse.Namespace) -> int:
+    _check_name(args.area, AREA_KEY, "area")
+    dest = SPECS / args.area
+    if dest.exists():
+        raise _Fail(f"area already exists: {dest}")
+    _copy_template("new-area", dest)
+    print(f"created {dest}")
+    return 0
+
+
+def _cmd_new_change(args: argparse.Namespace) -> int:
+    _check_name(args.area, AREA_KEY, "area")
+    _check_name(args.slug, SLUG, "slug")
+    if not (SPECS / args.area).is_dir():
+        raise _Fail(f"area not found: {SPECS / args.area}")
+    dest = SPECS / args.area / "changes" / args.slug
+    if dest.exists():
+        raise _Fail(f"change already exists: {dest}")
+    _copy_template("new-change", dest)
+    print(f"created {dest}")
+    return 0
+
+
+def _cmd_new_adr(args: argparse.Namespace) -> int:
+    _check_name(args.slug, SLUG, "slug")
+    adr_dir = Path("docs") / "adr"
+    numbers = [
+        int(m.group(1))
+        for p in adr_dir.glob("*.md")
+        if (m := re.match(r"^(\d{4})-", p.name))
+    ]
+    dest = adr_dir / f"{max(numbers, default=0) + 1:04d}-{args.slug}.md"
+    adr_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(TEMPLATES / "adr.md", dest)
+    print(f"created {dest}")
+    return 0
+
+
+def _cmd_archive(args: argparse.Namespace) -> int:
+    _check_name(args.area, AREA_KEY, "area")
+    _check_name(args.slug, SLUG, "slug")
+    base = SPECS / args.area / "changes"
+    src = base / args.slug
+    if not src.is_dir():
+        raise _Fail(f"change not found: {src}")
+    dest = base / "archive" / f"{datetime.date.today().isoformat()}-{args.slug}"
+    if dest.exists():
+        raise _Fail(f"archive target already exists: {dest}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dest))
+    print(f"archived to {dest}")
+    return 0
+
+
+def _git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], capture_output=True, text=True)
+
+
+def _show(rev: str, path: str) -> str:
+    """File content at ``rev`` or empty string if it does not exist there."""
+    out = _git("show", f"{rev}:{path}")
+    return out.stdout if out.returncode == 0 else ""
+
+
+def _ignored(path: str) -> bool:
+    return path.startswith("specs/_templates/") or "/changes/archive/" in path
+
+
+def _baseline_reqs(area: str, rev: str) -> dict[str, str]:
+    reqs: dict[str, str] = {}
+    listing = _git("ls-tree", "--name-only", rev, f"specs/{area}/specs/").stdout
+    for path in listing.split():
+        if path.endswith(".md"):
+            reqs.update(parse_requirements(_show(rev, path))[0])
+    return reqs
+
+
+def _cmd_check_pr(args: argparse.Namespace) -> int:
+    base = args.base
+    if _git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").returncode:
+        raise _Fail(f"base ref not found: {base}", 2)
+    diff = _git("diff", "--name-only", f"{base}...HEAD")
+    if diff.returncode:
+        raise _Fail(
+            f"cannot diff {base}...HEAD (shallow clone or no merge base?): "
+            f"{diff.stderr.strip()}",
+            2,
+        )
+    changed = [p for p in diff.stdout.splitlines() if p and not _ignored(p)]
+    labels = {x.strip() for x in args.labels.split(",") if x.strip()}
+    skip = bool(labels & SKIP_LABELS)
+    areas = load_areas(SPECS / "areas.toml")
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if not skip:
+        for a in areas_without_spec(changed, areas):
+            warnings.append(f"area '{a}' has code changes but no spec change")
+    for p in unmapped(changed, areas):
+        warnings.append(f"path not mapped to any area in specs/areas.toml: {p}")
+
+    open_changes: list[tuple[str, str, str, Deltas]] = []
+    for path in sorted(Path(".").glob("specs/**/changes/*/specs/*.md")):
+        rel = path.as_posix()
+        m = OPEN_CHANGE.match(rel)
+        if m and not _ignored(rel) and _spec_area(rel, areas):
+            deltas = parse_deltas(_show("HEAD", rel))
+            open_changes.append((m.group(1), m.group(2), rel, deltas))
+
+    for area, slug, rel, deltas in open_changes:
+        prefix = f"specs/{area}/changes/{slug}/"
+        if not any(p.startswith(prefix) for p in changed):
+            continue
+        for w in deltas.warnings:
+            warnings.append(f"{rel}: {w}")
+        for e in check_delta(_baseline_reqs(area, "HEAD"), deltas):
+            errors.append(f"{rel}: {e}")
+
+    if not skip:
+        for path in changed:
+            m = BASELINE.match(path)
+            if not m or "/changes/" in path:
+                continue
+            area = m.group(1)
+            old = parse_requirements(_show(base, path))[0]
+            new = parse_requirements(_show("HEAD", path))[0]
+            deltas_in_area = [d for a, _, _, d in open_changes if a == area]
+            for name in hand_edits(old, new, deltas_in_area):
+                errors.append(
+                    f"{path}: requirement {name!r} edited by hand; "
+                    f"describe it in a change (specs/{area}/changes/<slug>/) "
+                    "or label the PR no-delta"
+                )
+
+    for w in warnings:
+        print(f"::warning::{w}")
+    for e in errors:
+        print(f"::error::{e}")
+    return 1 if errors else 0
+
+
+def _parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="spec_tools", description=__doc__)
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("new-area")
+    s.add_argument("area")
+    s.set_defaults(fn=_cmd_new_area)
+    s = sub.add_parser("new-change")
+    s.add_argument("area")
+    s.add_argument("slug")
+    s.set_defaults(fn=_cmd_new_change)
+    s = sub.add_parser("new-adr")
+    s.add_argument("slug")
+    s.set_defaults(fn=_cmd_new_adr)
+    s = sub.add_parser("archive")
+    s.add_argument("area")
+    s.add_argument("slug")
+    s.set_defaults(fn=_cmd_archive)
+    s = sub.add_parser("check-pr")
+    s.add_argument("--base", required=True)
+    s.add_argument("--labels", default="")
+    s.set_defaults(fn=_cmd_check_pr)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    try:
+        return args.fn(args)
+    except _Fail as exc:
+        print(f"::error::{exc}" if args.cmd == "check-pr" else f"error: {exc}")
+        return exc.code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
