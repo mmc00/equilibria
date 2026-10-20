@@ -13,15 +13,26 @@ una copia dentro de la carpeta de salida.
      runs\gempack_matrix. Copia ademas el .sl4 del 20x41 (#135).
   3. SIMPLE de Horridge (#134): GEMPACK (tablo + gemsim fixcap/mobcap) y GAMS
      (simpleNLP, simpleMCP, mpsgevh) sobre una copia de runs\horridge_simple.
+  4. Niveles de y, qinv, rore, pinv, pva y pe: make_levels_tab.py parcha el
+     gtapv7.tab de -GtapDir (orig_level en esas seis), tablo lo compila para
+     GEMSIM, y se re-corren con gemsim el 3x3 tm10 y el 20x41 capFix sobre una
+     copia de su carpeta de runs\gempack_matrix. export_sl4_levels.py exporta los
+     niveles y, con el sl4dump de la corrida SIN parche, comprueba que los %
+     de cambio no cambiaron (el parche no toca ecuaciones).
+
+-Pasos elige que pasos correr (por defecto todos): -Pasos 4
 
 Uso, desde la raiz del repo:
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -GP C:\GP -Gams "C:\GAMS\53\gams.exe"
+  powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4
 #>
 param(
     [string]$GP = "C:\GP",
     [string]$Gams = "",
-    [string]$Out = ""
+    [string]$Out = "",
+    [string]$GtapDir = "C:\runGTAP375",
+    [int[]]$Pasos = @(1, 2, 3, 4)
 )
 
 $ErrorActionPreference = "Continue"
@@ -56,6 +67,8 @@ Note "rama      $(git branch --show-current)"
 Note "maquina   $env:COMPUTERNAME  $([System.Environment]::OSVersion.VersionString)"
 Note "GEMPACK   $GP  (sltoht: $(Test-Path $Sltoht))"
 Note "GAMS      $Gams"
+Note "GTAP tab  $GtapDir"
+Note "pasos     $($Pasos -join ',')"
 Note "salida    $Out"
 $env:PATH = "$GP;$env:PATH"
 
@@ -80,19 +93,26 @@ function Export-Levels([string]$step, [string]$sl4, [string]$sl4dump, [string]$d
 
 # --- 1. Burfisher (#148, oraculo 3) ----------------------------------------
 $Fix = "tests\fixtures\gtap7_gempack"
+$Matrix = "runs\gempack_matrix"
+if ($Pasos -contains 1) {
 foreach ($e in @("TBL45A", "ME9C", "GTAPV7")) {
     Export-Levels "1 sltoht $e" "$Fix\burfisher_sl4\$e.sl4" "$Fix\burfisher_sl4\sl4dump_$e.har" (Join-Path $Out "1_burfisher\$e")
 }
 
+}
+
 # --- 2. gtap7_3x3 tm10 y gtap7_20x41 capFix (#133, #135) --------------------
-$Matrix = "runs\gempack_matrix"
+if ($Pasos -contains 2) {
 Export-Levels "2 sltoht gtap7_3x3 tm10" "$Matrix\gtap7_3x3\tm10.sl4" "$Fix\sl4dump_gtap7_3x3_tm10.har" (Join-Path $Out "2_matriz\gtap7_3x3_tm10")
 Export-Levels "2 sltoht gtap7_20x41 capfix" "$Matrix\gtap7_20x41\tm10_s8-16-32_capfix.sl4" "$Fix\sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har" (Join-Path $Out "2_matriz\gtap7_20x41_capfix")
 if (-not (Test-Path "$Matrix\gtap7_3x3\tm10.sl4")) {
     Note "  .sl4 que hay en $Matrix\gtap7_3x3: $((Get-ChildItem "$Matrix\gtap7_3x3" -Filter *.sl4 -ErrorAction SilentlyContinue | ForEach-Object Name) -join ', ')"
 }
 
+}
+
 # --- 3. SIMPLE de Horridge (#134) --------------------------------------------
+if ($Pasos -contains 3) {
 $Simple = Join-Path $Out "3_simple"
 Copy-Item "runs\horridge_simple" $Simple -Recurse -Force
 Push-Location $Simple
@@ -116,6 +136,62 @@ try {
     }
 } finally {
     Pop-Location
+}
+}
+
+# --- 4. niveles de y, qinv, rore, pinv, pva, pe (gtapv7_levels.tab) ----------
+if ($Pasos -contains 4) {
+$Lv = Join-Path $Out "4_niveles"
+$Tab = Join-Path $Lv "tab"
+New-Item -ItemType Directory -Force -Path $Tab | Out-Null
+& uv run python scripts\gtap\make_levels_tab.py (Join-Path $GtapDir "gtapv7.tab") --sti (Join-Path $GtapDir "gtapv7.sti") --out-dir $Tab *> (Join-Path $Tab "make_levels_tab_console.txt")
+$okTab = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $Tab "gtapv7_levels.tab"))
+Result "4 make_levels_tab" $okTab "rc=$LASTEXITCODE ($Tab)"
+if ($okTab) {
+    Push-Location $Tab
+    try {
+        & tablo -sti gtapv7_levels.sti *> tablo_console.txt
+        $okGss = (Test-Path gtapv7_levels.gss) -and (Test-Path gtapv7_levels.gst)
+        Result "4 tablo gtapv7_levels" $okGss "rc=$LASTEXITCODE gss/gst=$okGss"
+    } finally {
+        Pop-Location
+    }
+    if ($okGss) {
+        $Aux = Join-Path $Tab "gtapv7_levels"
+        foreach ($job in @(@("gtap7_3x3", "tm10", "sl4dump_gtap7_3x3_tm10.har"),
+                           @("gtap7_20x41", "tm10_s8-16-32_capfix", "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har"))) {
+            $ds, $tag, $dump = $job
+            $step = "4 gemsim $ds $tag"
+            $src = Join-Path $Matrix $ds
+            if (-not (Test-Path (Join-Path $src "$tag.cmf"))) { Result $step $false "no esta $src\$tag.cmf"; continue }
+            $dest = Join-Path $Lv "${ds}_$tag"
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            # la carpeta de la corrida sin sus salidas viejas: .cmf y entradas
+            Get-ChildItem $src -File | Where-Object { $_.Extension -in ".cmf", ".har", ".prm" -and $_.Name -notmatch "^(updated|sl4dump|sl4levels|summary|decomp|volume)" } |
+                Copy-Item -Destination $dest -Force
+            $cmf = Join-Path $dest "$tag.cmf"
+            $text = Get-Content $cmf -Raw
+            $new = [regex]::Replace($text, "(?im)^\s*Auxiliary files\s*=.*$", "Auxiliary files = $Aux ;")
+            if ($new -eq $text) { Result $step $false "el .cmf no tiene linea 'Auxiliary files'"; continue }
+            Set-Content -Path $cmf -Value $new -NoNewline
+            Push-Location $dest
+            $t0 = Get-Date
+            try {
+                & gemsim -cmf "$tag.cmf" *> "gemsim_console.txt"
+            } finally {
+                Pop-Location
+            }
+            $secs = [math]::Round(((Get-Date) - $t0).TotalSeconds, 1)
+            $sl4 = Join-Path $dest "$tag.sl4"
+            Result $step (Test-Path $sl4) "rc=$LASTEXITCODE sl4=$(Test-Path $sl4) ${secs}s"
+            if (Test-Path $sl4) {
+                # el sl4dump es el de la corrida SIN parche: export_sl4_levels compara sus
+                # % de cambio con los de esta corrida y aborta si no coinciden.
+                Export-Levels "4 niveles $ds $tag" $sl4 "$Fix\$dump" (Join-Path $dest "niveles")
+            }
+        }
+    }
+}
 }
 
 # --- manifiesto y resumen --------------------------------------------------
