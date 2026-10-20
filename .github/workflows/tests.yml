@@ -32,6 +32,26 @@ jobs:
             exit 1
           fi
 
+  spec-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check specs against the PR
+        run: >
+          python scripts/dev/spec_tools.py check-pr
+          --base origin/${{ github.base_ref }}
+          --labels "${{ join(github.event.pull_request.labels.*.name, ',') }}"
+
   python-tests:
     runs-on: ubuntu-latest
     steps:
