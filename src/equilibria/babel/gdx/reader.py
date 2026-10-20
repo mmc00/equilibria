@@ -46,17 +46,35 @@ import zlib
 from pathlib import Path
 from typing import Any, BinaryIO
 
-# Import delta decoder for parameters
-from equilibria.babel.gdx.decoder import decode_parameter_delta, get_integer_size
+from equilibria.babel.gdx.decoder import get_integer_size
 
-# var/equ _DATA_ record: 5 value fields in fixed order, each one token byte.
+# var/equ _DATA_ record: 5 value fields in fixed order, each one token byte
+# (a parameter record has ONE). 0x0A = an 8-byte double follows; the others are
+# value codes. Only codes SEEN in a real GDX are mapped, each checked against
+# gdxdump (tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py): 0x01 NA (mdtx0),
+# 0x04 Eps (gtap7_nlp), 0x08 0.5 (pep2 beta_M), 0x09 2.0 (years). An unmapped code
+# is an error -- guessing it, or stopping there, would return a wrong or truncated
+# symbol. UNDF (0x00) has not been seen.
 _VALUE_FIELDS: tuple[str, ...] = ("level", "marginal", "lower", "upper", "scale")
 _VALUE_SPECIAL: dict[int, float] = {
+    0x01: float("nan"),  # NA
+    0x02: float("inf"),
+    0x03: float("-inf"),
+    0x04: 0.0,  # Eps
     0x05: 0.0,
     0x06: 1.0,
     0x07: -1.0,
-    0x02: float("inf"),
-    0x03: float("-inf"),
+    0x08: 0.5,
+    0x09: 2.0,
+}
+
+# A SCALAR with default values has no record in the GDX; gdxdump prints the
+# default. Parameter: 0. Variable/equation: by the symbol's userinfo (var subtype,
+# or 53 + equation type). Only the types seen in a real GDX (pep/results.gdx):
+# another one is an error, not a guess.
+_SCALAR_DEFAULT: dict[int, tuple[float, ...]] = {
+    5: (0.0, 0.0, float("-inf"), float("inf"), 1.0),  # free variable
+    53: (0.0, 0.0, 0.0, 0.0, 1.0),  # =E= equation
 }
 
 # GDX format constants
@@ -140,12 +158,40 @@ def _decompress_gdx_sections(data: bytes) -> bytes:
     if not spans:
         return data
 
+    # Each zlib stream is one BLOCK of a section, preceded by a 3-byte header: flag
+    # (1 = zlib, 0 = stored) + on-disk length, u16 big-endian. A section larger
+    # than _GDX_ZLIB_BLOCK expanded bytes spans several blocks, and copying the
+    # bytes between streams verbatim left the next block's header INSIDE the
+    # section: in the gtap7 3x3 the symbol table's second block header (01 03 8a)
+    # landed in rorgeq's description and the parser stopped at 418 of 450 symbols
+    # (#137). So a verified header (its length equals the stream) is dropped, and
+    # a stored (flag 0) block that continues a full block is copied without it.
     out_buf = bytearray()
     cursor = 0
     for span_start, span_end, decompressed in spans:
-        out_buf += data[cursor:span_start]
+        head = span_start - 3
+        if (
+            head >= cursor
+            and data[head] == 1
+            and int.from_bytes(data[head + 1 : span_start], "big")
+            == span_end - span_start
+        ):
+            out_buf += data[cursor:head]
+        else:
+            out_buf += data[cursor:span_start]
         out_buf += decompressed
         cursor = span_end
+        last_len = len(decompressed)
+        while (
+            last_len == _GDX_ZLIB_BLOCK
+            and cursor + 3 <= len(data)
+            and data[cursor] == 0
+        ):
+            n = int.from_bytes(data[cursor + 1 : cursor + 3], "big")
+            stored = data[cursor + 3 : cursor + 3 + n]
+            out_buf += stored
+            cursor += 3 + n
+            last_len = len(stored)
     out_buf += data[cursor:]
     return bytes(out_buf)
 
@@ -742,17 +788,14 @@ def read_parameter_values(
     Extracts the actual numeric values for a parameter symbol.
     Uses the UEL (Unique Element List) to map indices to element names.
 
-    Note: GDX files may use data compression. This function reads
-    explicitly stored values; compressed/delta-encoded values may
-    not be fully decoded.
+    A scalar stored at its default has no record; it is returned as 0.0,
+    like gdxdump prints it.
 
     Args:
         gdx_data: Result from read_gdx().
         symbol_name: Name of the parameter to read.
-        domain_offsets: Optional list of UEL start offsets per dimension. When
-            provided, these override the auto-computed offsets from set symbols.
-            Use when the GDX has parameters but no set symbols (e.g. Results.gdx).
-            Example: [0, 17] means dim0 starts at UEL[0], dim1 at UEL[17].
+        domain_offsets: Ignored. Record keys are absolute UEL indices; kept so
+            callers that still pass it do not break.
 
     Returns:
         Dictionary mapping index tuples to values.
@@ -778,39 +821,19 @@ def read_parameter_values(
     if not filepath:
         raise ValueError("GDX data missing filepath - cannot read raw bytes")
 
-    # Read raw bytes (transparently decompressed if zlib-per-section)
+    # Same path as variables/equations: the symbol's own data_offset (positional
+    # lookup is wrong -- a compressed GDX has fewer _DATA_ sections than symbols,
+    # and every parameter past the last one came back EMPTY), then the record
+    # decoder with one value field. Keys are absolute UEL indices, so
+    # ``domain_offsets`` is not needed (kept for callers that still pass it).
+    del domain_offsets
     raw_data: bytes = _read_gdx_bytes(filepath)
-
-    # Parameters keep the positional section lookup: their decoder is tuned to the
-    # boundary read_data_sections produces. (The data_offset slice is used only by
-    # the var/equ readers, whose new 5-field decoder is bounded by record count.)
-    symbols: list[dict[str, Any]] = gdx_data["symbols"]
-    symbol_index: int = next(
-        (i for i, s in enumerate(symbols) if s["name"] == symbol_name), -1
-    )
-    if symbol_index == -1:
-        return {}
-    data_sections = read_data_sections(raw_data)
-    if symbol_index >= len(data_sections):
-        return {}
-    _, section = data_sections[symbol_index]
+    section = _section_at_offset(raw_data, symbol["data_offset"])
     elements: list[str] = gdx_data.get("elements", [])
-    dimension: int = symbol["dimension"]
-    expected_records: int = symbol.get("records", 0)
-
-    # Calculate domain offsets based on set definitions
-    # Each set in the GDX occupies a contiguous range in the UEL
-    if domain_offsets is not None:
-        # Caller-provided offsets override auto-computed ones.
-        # This handles GDX files that store only parameters (no set symbols),
-        # where _calculate_domain_offsets would return all zeros.
-        pass
-    else:
-        domain_offsets = _calculate_domain_offsets(gdx_data, dimension)
-
-    return _decode_parameter_section(
-        section, elements, dimension, domain_offsets, expected_records
-    )
+    records = _decode_records(section, elements, symbol["dimension"], 1, symbol_name)
+    if symbol["dimension"] == 0 and not records:
+        return {(): 0.0}
+    return {key: vals[0] for key, vals in records.items()}
 
 
 def _calculate_domain_offsets(
@@ -852,916 +875,6 @@ def _calculate_domain_offsets(
     return offsets
 
 
-def _decode_parameter_section(
-    section: bytes,
-    elements: list[str],
-    dimension: int,
-    domain_offsets: list[int] | None = None,
-    expected_records: int = 0,
-) -> dict[tuple[str, ...], float]:
-    """
-    Decode a _DATA_ section for a parameter.
-
-    Handles GDX compression where arithmetic sequences have values
-    compressed using interpolation/extrapolation patterns.
-
-    Args:
-        section: Raw bytes of the _DATA_ section.
-        elements: UEL elements list.
-        dimension: Parameter dimension.
-        domain_offsets: Offset in UEL for each dimension.
-        expected_records: Expected number of records (from symbol table).
-
-    Returns:
-        Dictionary mapping index tuples to values.
-    """
-    values: dict[tuple[str, ...], float] = {}
-
-    if len(section) < 20:
-        return values
-
-    if domain_offsets is None:
-        domain_offsets = [0] * dimension
-
-    if dimension == 1:
-        return _decode_1d_parameter(section, elements, domain_offsets, expected_records)
-    elif dimension == 2:
-        return _decode_2d_parameter(section, elements, domain_offsets, expected_records)
-    else:
-        # Fallback for higher dimensions
-        return _decode_simple_parameter(section, elements, dimension, domain_offsets)
-
-
-def _detect_sequence_type(values: list[tuple[int, float]]) -> tuple[str, float]:
-    """
-    Detect whether a sequence is arithmetic or geometric progression.
-
-    Args:
-        values: List of (index, value) tuples from the data stream.
-
-    Returns:
-        Tuple of (progression_type, parameter) where:
-        - progression_type is "arithmetic" or "geometric"
-        - parameter is the delta (arithmetic) or ratio (geometric)
-
-    This function uses heuristics since GDX format doesn't explicitly
-    encode the progression type.
-    """
-    import math
-
-    if len(values) < 2:
-        return ("arithmetic", 0.0)
-
-    # Extract first two values to calculate parameters
-    idx1, val1 = values[0]
-    idx2, val2 = values[1]
-    gap = idx2 - idx1
-
-    if gap == 0:
-        return ("arithmetic", 0.0)
-
-    # Calculate both parameters
-    delta = (val2 - val1) / gap
-
-    ratio = (val2 / val1) ** (1.0 / gap) if val1 != 0 and abs(val1) > 1e-10 else 1.0
-
-    # Case 1: Three or more values - use variance analysis
-    if len(values) >= 3:
-        # Test arithmetic: check if deltas are consistent
-        deltas = []
-        for i in range(len(values) - 1):
-            idx_a, val_a = values[i]
-            idx_b, val_b = values[i + 1]
-            gap_local = idx_b - idx_a
-            if gap_local > 0:
-                deltas.append((val_b - val_a) / gap_local)
-
-        # Test geometric: check if ratios are consistent
-        ratios = []
-        for i in range(len(values) - 1):
-            idx_a, val_a = values[i]
-            idx_b, val_b = values[i + 1]
-            gap_local = idx_b - idx_a
-            if val_a != 0 and abs(val_a) > 1e-10 and gap_local > 0:
-                ratios.append((val_b / val_a) ** (1.0 / gap_local))
-
-        if deltas and ratios:
-            # Calculate coefficient of variation for both
-            mean_delta = sum(deltas) / len(deltas)
-            variance_delta = sum((d - mean_delta) ** 2 for d in deltas) / len(deltas)
-            cv_delta = (
-                (variance_delta**0.5) / abs(mean_delta)
-                if mean_delta != 0
-                else float("inf")
-            )
-
-            mean_ratio = sum(ratios) / len(ratios)
-            variance_ratio = sum((r - mean_ratio) ** 2 for r in ratios) / len(ratios)
-            cv_ratio = (
-                (variance_ratio**0.5) / abs(mean_ratio)
-                if mean_ratio != 0
-                else float("inf")
-            )
-
-            # Lower CV indicates better fit
-            if cv_delta < cv_ratio * 0.5:  # Arithmetic is clearly better
-                return ("arithmetic", mean_delta)
-            elif cv_ratio < cv_delta * 0.5:  # Geometric is clearly better
-                return ("geometric", mean_ratio)
-            else:
-                # Both fit similarly, use ratio proximity to 1 as tie-breaker
-                if abs(mean_ratio - 1.0) < 0.1:
-                    return ("arithmetic", mean_delta)
-                else:
-                    return ("geometric", mean_ratio)
-
-    # Case 2: Only two values - use enhanced heuristics
-    if len(values) == 2:
-        # RULE 1: Exact powers of 2 → geometric
-        if abs(ratio - round(ratio)) < 0.01 and round(ratio) >= 2:
-            return ("geometric", ratio)
-
-        # RULE 2: Check if val2 = val1 * 2^n (exact power)
-        if val1 > 0 and val2 > 0:
-            try:
-                log_ratio = math.log2(val2 / val1)
-                if abs(log_ratio - round(log_ratio)) < 0.01:
-                    return ("geometric", ratio)
-            except (ValueError, ZeroDivisionError):
-                pass
-
-        # RULE 3: Large values with large delta → arithmetic
-        if abs(val1) >= 50:
-            avg_val = (abs(val1) + abs(val2)) / 2
-            if abs(delta) >= avg_val * 0.5:
-                return ("arithmetic", delta)
-
-        # RULE 4: Ratio near 1 → arithmetic
-        if 0.85 < ratio < 1.15:
-            return ("arithmetic", delta)
-
-        # RULE 5: Small values with significant ratio → geometric
-        if abs(val1) < 50 and (ratio > 1.3 or ratio < 0.77):
-            return ("geometric", ratio)
-
-        # RULE 6: Large total change but moderate ratio → arithmetic
-        rel_change_ratio = abs((val2 - val1) / val1) if val1 != 0 else 0
-        if rel_change_ratio > 1.0 and ratio < 1.6:
-            return ("arithmetic", delta)
-
-        # RULE 7: Significant ratio → geometric
-        if ratio > 1.2:
-            return ("geometric", ratio)
-
-    # Default fallback
-    return ("arithmetic", delta)
-
-
-def _decode_1d_parameter(
-    section: bytes,
-    elements: list[str],
-    domain_offsets: list[int],
-    expected_records: int,
-) -> dict[tuple[str, ...], float]:
-    """Decode a 1D parameter with compression support."""
-    values: dict[tuple[str, ...], float] = {}
-
-    if len(section) < 20:
-        return values
-
-    # Parse the byte stream to extract values and skip markers in order
-    stream: list[tuple[str, float | None]] = []
-
-    pos: int = 19  # Skip header
-
-    while pos < len(section) - 2:
-        byte: int = section[pos]
-
-        # Row start marker: 01 XX 00 00 00 (skip for 1D)
-        if (
-            byte == RECORD_ROW_START
-            and pos + 5 <= len(section)
-            and section[pos + 2] == 0x00
-            and section[pos + 3] == 0x00
-            and section[pos + 4] == 0x00
-        ):
-            pos += 5
-            continue
-
-        # Block size marker
-        if byte == 0x06 and pos + 1 < len(section):
-            pos += 1
-            continue
-
-        # Compression marker: 02 09 = ONE interpolated value
-        if byte == 0x02 and pos + 1 < len(section) and section[pos + 1] == 0x09:
-            stream.append(("skip", None))
-            pos += 2
-            continue
-
-        # Record type 02 followed by double marker 0a
-        if (
-            byte == 0x02
-            and pos + 10 <= len(section)
-            and section[pos + 1] == RECORD_DOUBLE
-        ):
-            try:
-                value: float = struct.unpack_from("<d", section, pos + 2)[0]
-                if -1e15 < value < 1e15 and value == value:
-                    stream.append(("value", value))
-            except struct.error:
-                pass
-            pos += 10
-            continue
-
-        # Standalone double marker 0a
-        if byte == RECORD_DOUBLE and pos + 9 <= len(section):
-            try:
-                value = struct.unpack_from("<d", section, pos + 1)[0]
-                if -1e15 < value < 1e15 and value == value:
-                    stream.append(("value", value))
-            except struct.error:
-                pass
-            pos += 9
-            continue
-
-        # Skip marker 03 (sparse)
-        if byte == RECORD_CONTINUE:
-            stream.append(("skip", None))
-            pos += 1
-            continue
-
-        pos += 1
-
-    # Count values and skips
-    stored_values: list[float] = [
-        v for t, v in stream if t == "value" and v is not None
-    ]
-    num_stored: int = len(stored_values)
-    num_skips_in_stream: int = sum(1 for t, _ in stream if t == "skip")
-
-    if expected_records == 0:
-        expected_records = num_stored + num_skips_in_stream
-
-    # Build logical-to-value mapping
-    all_values: dict[int, float] = {}
-
-    if num_skips_in_stream == 0 and num_stored == expected_records:
-        # No compression - direct mapping
-        for i, val in enumerate(stored_values):
-            all_values[i] = val
-    elif num_stored >= 2:
-        # Compression detected
-        stream_represents: int = num_stored + num_skips_in_stream
-        leading_missing: int = expected_records - stream_represents
-
-        logical_idx: int = leading_missing
-
-        for t, v in stream:
-            if t == "value" and v is not None:
-                all_values[logical_idx] = v
-            logical_idx += 1
-
-        # Detect progression type (arithmetic vs geometric) and calculate parameters
-        stored_logical_indices: list[int] = sorted(all_values.keys())
-        progression_type: str = "arithmetic"
-        delta: float = 0.0
-        ratio: float = 1.0
-
-        if len(stored_logical_indices) >= 2:
-            # Collect sample values for detection
-            sample_values: list[tuple[int, float]] = [
-                (idx, all_values[idx])
-                for idx in stored_logical_indices[: min(3, len(stored_logical_indices))]
-            ]
-
-            # Detect progression type using heuristics
-            progression_type, param = _detect_sequence_type(sample_values)
-
-            if progression_type == "arithmetic":
-                delta = param
-            else:  # geometric
-                ratio = param
-
-        # Fill missing values using detected interpolation method
-        for i in range(expected_records):
-            if i not in all_values:
-                prev_idx: int | None = None
-                next_idx: int | None = None
-                for k in stored_logical_indices:
-                    if k < i:
-                        prev_idx = k
-                    elif k > i and next_idx is None:
-                        next_idx = k
-                        break
-
-                if prev_idx is not None and next_idx is not None:
-                    prev_val: float = all_values[prev_idx]
-                    next_val: float = all_values[next_idx]
-                    gap: int = next_idx - prev_idx
-
-                    # Apply appropriate interpolation based on detected type
-                    if progression_type == "arithmetic":
-                        interp_delta: float = (next_val - prev_val) / gap
-                        all_values[i] = prev_val + (i - prev_idx) * interp_delta
-                    else:  # geometric
-                        if prev_val != 0 and abs(prev_val) > 1e-10:
-                            interp_ratio: float = (next_val / prev_val) ** (1.0 / gap)
-                            all_values[i] = prev_val * (interp_ratio ** (i - prev_idx))
-                        else:
-                            # Fallback to arithmetic if division by zero
-                            interp_delta = (next_val - prev_val) / gap
-                            all_values[i] = prev_val + (i - prev_idx) * interp_delta
-
-                elif prev_idx is not None:
-                    # Extrapolate forward
-                    if progression_type == "arithmetic":
-                        all_values[i] = all_values[prev_idx] + (i - prev_idx) * delta
-                    else:  # geometric
-                        all_values[i] = all_values[prev_idx] * (ratio ** (i - prev_idx))
-
-                elif next_idx is not None:
-                    # Extrapolate backward
-                    if progression_type == "arithmetic":
-                        all_values[i] = all_values[next_idx] - (next_idx - i) * delta
-                    else:  # geometric
-                        all_values[i] = all_values[next_idx] / (ratio ** (next_idx - i))
-    else:
-        for i, val in enumerate(stored_values):
-            all_values[i] = val
-
-    # Convert indices to element tuples
-    for idx, val in all_values.items():
-        if idx < 0 or idx >= expected_records:
-            continue
-
-        index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
-            [idx], elements, 1, domain_offsets
-        )
-        if index_tuple:
-            values[index_tuple] = val
-
-    return values
-
-
-def _decode_2d_parameter(
-    section: bytes,
-    elements: list[str],
-    domain_offsets: list[int],
-    expected_records: int,  # noqa: ARG001
-) -> dict[tuple[str, ...], float]:
-    """Decode a 2D parameter (row-major storage)."""
-    values: dict[tuple[str, ...], float] = {}
-
-    if len(section) < 20:
-        return values
-
-    pos: int = 19  # Skip header
-    current_row: int = 0
-    col_idx: int = 0
-
-    while pos < len(section) - 2:
-        byte: int = section[pos]
-
-        # Row start marker: 01 XX 00 00 00
-        if (
-            byte == RECORD_ROW_START
-            and pos + 5 <= len(section)
-            and section[pos + 2] == 0x00
-            and section[pos + 3] == 0x00
-            and section[pos + 4] == 0x00
-        ):
-            current_row = section[pos + 1] - 1  # 1-indexed
-            col_idx = 0
-            pos += 5
-            continue
-
-        # Skip 4-byte blocks
-        if (
-            byte in (0x04, 0x06, 0x08)
-            and pos + 4 <= len(section)
-            and section[pos + 1 : pos + 4] == b"\x00\x00\x00"
-        ):
-            pos += 4
-            continue
-
-        # Double value: 0a + 8 bytes
-        if byte == RECORD_DOUBLE and pos + 9 <= len(section):
-            try:
-                value: float = struct.unpack_from("<d", section, pos + 1)[0]
-                if -1e15 < value < 1e15 and value == value:
-                    index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
-                        [current_row, col_idx], elements, 2, domain_offsets
-                    )
-                    if index_tuple:
-                        values[index_tuple] = value
-                    col_idx += 1
-            except struct.error:
-                pass
-            pos += 9
-            continue
-
-        pos += 1
-
-    return values
-
-
-def _decode_simple_parameter(
-    section: bytes,
-    elements: list[str],
-    dimension: int,
-    domain_offsets: list[int],
-) -> dict[tuple[str, ...], float]:
-    """
-    Decoder for higher-dimensional parameters (3D, 4D, etc.).
-
-    Format for 3D+ parameters follows similar pattern to sets:
-    - First row marker: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> ... 0a <double>
-    - Continuation values in same "slice": 0a <double>
-    - New slice: 01 <dim1> 00 00 00 <dim2_int32> <dim3_int32> ... 0a <double>
-
-    The structure is essentially row-major where the last dimension varies fastest.
-
-    KNOWN ISSUE - Parameter Delta Encoding:
-    This decoder assumes parameters use the same delta encoding format as sets,
-    but real-world GDX files (e.g., SAM-V2_0.gdx) use a DIFFERENT compression
-    scheme for parameters. The current implementation fails to decode parameters
-    with complex delta compression.
-
-    WHAT WORKS:
-    - Sets (2D, 3D, 4D) with delta encoding: ✓ Fully working
-    - Simple parameters without compression: ✓ Working
-
-    WHAT DOESN'T WORK:
-    - Parameters with delta compression (like SAM-V2_0.gdx): ✗ Returns 0 values
-
-    INVESTIGATION NEEDED:
-    The SAM-V2_0.gdx file has 196 parameter records that should decode to tuples
-    like ('AG', 'USK', 'J', 'AGR') = 1500.0, but the decoder returns empty.
-
-    Root cause: The decoder expects pattern "01 XX 00 00 00" at position 11,
-    but actual data has different byte patterns (e.g., "01 00 00 00 1B...").
-
-    The actual format appears to be:
-    - Position 11: 01 (record start)
-    - Position 12: 00 (dim1 = 0, not AG=7 as expected)
-    - Positions 13+: Compressed/delta-encoded indices
-
-    The delta encoding for parameters is DIFFERENT from sets and requires
-    reverse-engineering the specific compression algorithm used by GAMS.
-
-    RECOMMENDED FIX:
-    1. Analyze the binary structure of SAM-V2_0.gdx more deeply
-    2. Identify the specific delta encoding pattern for parameters
-    3. Implement a separate decoder for parameter delta compression
-    4. Test against the CSV reference file (gdx_values.csv)
-
-    See GitHub issue for detailed binary analysis.
-    """
-    values: dict[tuple[str, ...], float] = {}
-
-    if len(section) < 20 or dimension < 3:
-        # Fallback to simple extraction for edge cases
-        return _decode_simple_parameter_fallback(section, elements, domain_offsets)
-
-    # Try the new delta decoder first
-    # This handles compressed parameters like SAM-V2_0.gdx
-    try:
-        values = decode_parameter_delta(section, elements, dimension)
-        if len(values) > 0:
-            return values
-    except Exception:
-        # If delta decoder fails, fall back to old method
-        pass
-
-    # Legacy decoder (for simple parameters without compression)
-    pos: int = 11  # Skip header: _DATA_ (6) + dimension (1) + record_count (4)
-    current_indices: list[int] = []  # Current tuple indices (0-based UEL indices)
-
-    while pos < len(section) - 1:
-        byte: int = section[pos]
-
-        # Pattern 1: Full tuple specification: 01 <dim1> 00 00 00 <int32>*N 0a <double>
-        if (
-            byte == RECORD_ROW_START
-            and pos + 4 < len(section)
-            and section[pos + 2] == 0x00
-            and section[pos + 3] == 0x00
-            and section[pos + 4] == 0x00
-        ):
-            dim1_idx = section[pos + 1]
-
-            if dim1_idx < 1 or dim1_idx > len(elements):
-                pos += 1
-                continue
-
-            # For 3D: read 2 int32s (dim2, dim3)
-            # For 4D: read 3 int32s (dim2, dim3, dim4)
-            # For ND: read (N-1) int32s
-            num_int32s = dimension - 1
-            header_size = 5 + (num_int32s * 4)  # 01 XX 00 00 00 + int32s
-
-            # Check if we have space for header + marker + double
-            if pos + header_size + 9 > len(section):
-                pos += 1
-                continue
-
-            try:
-                # Build UEL indices - ALL are 1-based and need conversion to 0-based
-                uel_indices = [dim1_idx - 1]
-
-                # Read int32 values for remaining dimensions
-                # These are also 1-based UEL indices (need to subtract 1)
-                for i in range(num_int32s):
-                    offset = pos + 5 + (i * 4)
-                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
-
-                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
-                        raise ValueError("Invalid UEL index")
-
-                    uel_indices.append(uel_idx_1based - 1)
-
-                # Check for double marker after indices
-                double_marker_pos = pos + header_size
-                if (
-                    double_marker_pos >= len(section)
-                    or section[double_marker_pos] != RECORD_DOUBLE
-                ):
-                    pos += 1
-                    continue
-
-                # Read the double value
-                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
-
-                # Build tuple directly from UEL indices
-                if all(0 <= idx < len(elements) for idx in uel_indices):
-                    index_tuple = tuple(elements[idx] for idx in uel_indices)
-                    values[index_tuple] = value
-                    current_indices = uel_indices
-                    pos += header_size + 9  # Skip header + 0a + double
-                    continue
-
-            except (struct.error, ValueError):
-                pass
-
-        # Pattern 2: Partial tuple update: 02 <new_dim2_byte> 00 00 00 <int32>*(N-2) 0a <double>
-        # This pattern updates dimension 2 (and possibly later dims) while keeping dim1 same
-        elif (
-            byte == 0x02
-            and len(current_indices) == dimension
-            and pos + 5 <= len(section)
-        ):
-            try:
-                # Read new value for dimension 2 (1-based byte)
-                new_dim2_1based = section[pos + 1]
-
-                if new_dim2_1based < 1 or new_dim2_1based > len(elements):
-                    pos += 1
-                    continue
-
-                # For 3D: need 1 more int32 (dim3)
-                # For 4D: need 2 more int32s (dim3, dim4)
-                num_additional_int32s = dimension - 2
-                partial_header_size = 5 + (
-                    num_additional_int32s * 4
-                )  # 02 XX 00 00 00 + int32s
-
-                if pos + partial_header_size + 9 > len(section):
-                    pos += 1
-                    continue
-
-                # Build new indices: keep dim1, update dim2 and remaining
-                new_indices = [current_indices[0], new_dim2_1based - 1]
-
-                # Read int32s for remaining dimensions
-                for i in range(num_additional_int32s):
-                    offset = pos + 5 + (i * 4)
-                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
-
-                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
-                        raise ValueError("Invalid UEL index")
-
-                    new_indices.append(uel_idx_1based - 1)
-
-                # Check for double marker
-                double_marker_pos = pos + partial_header_size
-                if (
-                    double_marker_pos >= len(section)
-                    or section[double_marker_pos] != RECORD_DOUBLE
-                ):
-                    pos += 1
-                    continue
-
-                # Read value
-                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
-
-                # Store value
-                if all(0 <= idx < len(elements) for idx in new_indices):
-                    index_tuple = tuple(elements[idx] for idx in new_indices)
-                    values[index_tuple] = value
-                    current_indices = new_indices
-                    pos += partial_header_size + 9
-                    continue
-
-            except (struct.error, ValueError):
-                pass
-
-        # Pattern 3: Update last N-2 dimensions: 03 <int32> <int32> ... 0a <double>
-        # Keep dim1 and dim2, update remaining dimensions
-        # For 4D: 03 <dim3_int32> <dim4_int32> 0a <double>
-        elif (
-            byte == 0x03
-            and len(current_indices) == dimension
-            and dimension >= 3
-            and pos + 1 <= len(section)
-        ):
-            try:
-                # For 4D: need 2 int32s (dim3, dim4)
-                # For 5D: need 3 int32s (dim3, dim4, dim5)
-                num_update_int32s = dimension - 2
-                pattern3_size = 1 + (num_update_int32s * 4)  # 03 + int32s
-
-                if pos + pattern3_size + 9 > len(section):
-                    pos += 1
-                    continue
-
-                # Build new indices: keep dim1 and dim2, update remaining
-                new_indices = current_indices[:2].copy()
-
-                # Read int32s for dimensions 3+
-                for i in range(num_update_int32s):
-                    offset = pos + 1 + (i * 4)
-                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
-
-                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
-                        raise ValueError("Invalid UEL index")
-
-                    new_indices.append(uel_idx_1based - 1)
-
-                # Check for double marker
-                double_marker_pos = pos + pattern3_size
-                if (
-                    double_marker_pos >= len(section)
-                    or section[double_marker_pos] != RECORD_DOUBLE
-                ):
-                    pos += 1
-                    continue
-
-                # Read value
-                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
-
-                # Store value
-                if all(0 <= idx < len(elements) for idx in new_indices):
-                    index_tuple = tuple(elements[idx] for idx in new_indices)
-                    values[index_tuple] = value
-                    current_indices = new_indices
-                    pos += pattern3_size + 9
-                    continue
-
-            except (struct.error, ValueError):
-                pass
-
-        # Pattern 4: Update last N-3 dimensions: 04 <int32> <int32> ... 0a <double>
-        # Keep dim1, dim2, and dim3, update remaining dimensions
-        # For 5D: 04 <dim4_int32> <dim5_int32> 0a <double>
-        # For 6D: 04 <dim4_int32> <dim5_int32> <dim6_int32> 0a <double>
-        elif (
-            byte == 0x04
-            and len(current_indices) == dimension
-            and dimension >= 4
-            and pos + 1 <= len(section)
-        ):
-            try:
-                # For 5D: need 2 int32s (dim4, dim5)
-                # For 6D: need 3 int32s (dim4, dim5, dim6)
-                num_update_int32s = dimension - 3
-                pattern4_size = 1 + (num_update_int32s * 4)  # 04 + int32s
-
-                if pos + pattern4_size + 9 > len(section):
-                    pos += 1
-                    continue
-
-                # Build new indices: keep dim1, dim2, dim3, update remaining
-                new_indices = current_indices[:3].copy()
-
-                # Read int32s for dimensions 4+
-                for i in range(num_update_int32s):
-                    offset = pos + 1 + (i * 4)
-                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
-
-                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
-                        raise ValueError("Invalid UEL index")
-
-                    new_indices.append(uel_idx_1based - 1)
-
-                # Check for double marker
-                double_marker_pos = pos + pattern4_size
-                if (
-                    double_marker_pos >= len(section)
-                    or section[double_marker_pos] != RECORD_DOUBLE
-                ):
-                    pos += 1
-                    continue
-
-                # Read value
-                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
-
-                # Store value
-                if all(0 <= idx < len(elements) for idx in new_indices):
-                    index_tuple = tuple(elements[idx] for idx in new_indices)
-                    values[index_tuple] = value
-                    current_indices = new_indices
-                    pos += pattern4_size + 9
-                    continue
-
-            except (struct.error, ValueError):
-                pass
-
-        # Pattern 5: Update last N-4 dimensions: 05 <int32> <int32> ... 0a <double>
-        # Keep dim1, dim2, dim3, and dim4, update remaining dimensions
-        # For 6D: 05 <dim5_int32> <dim6_int32> 0a <double>
-        # For 7D: 05 <dim5_int32> <dim6_int32> <dim7_int32> 0a <double>
-        elif (
-            byte == 0x05
-            and len(current_indices) == dimension
-            and dimension >= 5
-            and pos + 1 <= len(section)
-        ):
-            try:
-                # For 6D: need 2 int32s (dim5, dim6)
-                # For 7D: need 3 int32s (dim5, dim6, dim7)
-                num_update_int32s = dimension - 4
-                pattern5_size = 1 + (num_update_int32s * 4)  # 05 + int32s
-
-                if pos + pattern5_size + 9 > len(section):
-                    pos += 1
-                    continue
-
-                # Build new indices: keep dim1-4, update remaining
-                new_indices = current_indices[:4].copy()
-
-                # Read int32s for dimensions 5+
-                for i in range(num_update_int32s):
-                    offset = pos + 1 + (i * 4)
-                    uel_idx_1based = struct.unpack_from("<I", section, offset)[0]
-
-                    if uel_idx_1based < 1 or uel_idx_1based > len(elements):
-                        raise ValueError("Invalid UEL index")
-
-                    new_indices.append(uel_idx_1based - 1)
-
-                # Check for double marker
-                double_marker_pos = pos + pattern5_size
-                if (
-                    double_marker_pos >= len(section)
-                    or section[double_marker_pos] != RECORD_DOUBLE
-                ):
-                    pos += 1
-                    continue
-
-                # Read value
-                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
-
-                # Store value
-                if all(0 <= idx < len(elements) for idx in new_indices):
-                    index_tuple = tuple(elements[idx] for idx in new_indices)
-                    values[index_tuple] = value
-                    current_indices = new_indices
-                    pos += pattern5_size + 9
-                    continue
-
-            except (struct.error, ValueError):
-                pass
-
-                # Check for double marker after indices
-                double_marker_pos = pos + header_size
-                if (
-                    double_marker_pos >= len(section)
-                    or section[double_marker_pos] != RECORD_DOUBLE
-                ):
-                    pos += 1
-                    continue
-
-                # Read the double value
-                value = struct.unpack_from("<d", section, double_marker_pos + 1)[0]
-
-                # Build tuple directly from UEL indices
-                if all(0 <= idx < len(elements) for idx in uel_indices):
-                    index_tuple = tuple(elements[idx] for idx in uel_indices)
-                    values[index_tuple] = value
-                    current_indices = uel_indices
-                    pos += header_size + 9  # Skip header + 0a + double
-                    continue
-
-            except (struct.error, ValueError):
-                pass
-
-        # Look for continuation values: 0a <double> (increments last dimension)
-        elif (
-            len(current_indices) == dimension
-            and byte == RECORD_DOUBLE
-            and pos + 9 <= len(section)
-        ):
-            try:
-                value = struct.unpack_from("<d", section, pos + 1)[0]
-
-                # Create new tuple with incremented last dimension
-                new_uel_indices = current_indices.copy()
-                new_uel_indices[-1] += 1
-
-                if all(idx < len(elements) for idx in new_uel_indices):
-                    index_tuple = tuple(elements[idx] for idx in new_uel_indices)
-                    values[index_tuple] = value
-                    current_indices = new_uel_indices
-                    pos += 9
-                    continue
-
-            except struct.error:
-                pass
-
-        pos += 1
-
-    return values
-
-
-def _decode_simple_parameter_fallback(
-    section: bytes,
-    elements: list[str],
-    domain_offsets: list[int],
-) -> dict[tuple[str, ...], float]:
-    """Simple fallback decoder - extracts all doubles sequentially."""
-    values: dict[tuple[str, ...], float] = {}
-
-    if len(section) < 20:
-        return values
-
-    # Simple extraction of all double values
-    pos: int = 19
-    idx: int = 0
-
-    while pos < len(section) - 8:
-        if section[pos] == RECORD_DOUBLE:
-            try:
-                value: float = struct.unpack_from("<d", section, pos + 1)[0]
-                if -1e15 < value < 1e15 and value == value:
-                    # Simple linear index mapping
-                    rel_indices: list[int] = [idx]
-                    index_tuple: tuple[str, ...] = _build_index_tuple_with_offsets(
-                        rel_indices, elements, 1, domain_offsets
-                    )
-                    if index_tuple:
-                        values[index_tuple] = value
-                    idx += 1
-            except struct.error:
-                pass
-            pos += 9
-        else:
-            pos += 1
-
-    return values
-
-
-def _build_index_tuple_with_offsets(
-    rel_indices: list[int],
-    elements: list[str],
-    dimension: int,
-    domain_offsets: list[int],
-) -> tuple[str, ...]:
-    """
-    Build an index tuple from relative indices using domain offsets.
-
-    Args:
-        rel_indices: List of relative indices within each domain.
-        elements: UEL elements list.
-        dimension: Expected dimension.
-        domain_offsets: Offset in UEL for each dimension.
-
-    Returns:
-        Tuple of element names, or empty tuple if invalid.
-    """
-    if dimension == 0:
-        return ()
-
-    result: list[str] = []
-    for i in range(min(dimension, len(rel_indices))):
-        # Apply domain offset to get absolute UEL index
-        offset: int = domain_offsets[i] if i < len(domain_offsets) else 0
-        abs_idx: int = rel_indices[i] + offset
-
-        if 0 <= abs_idx < len(elements):
-            result.append(elements[abs_idx])
-        else:
-            # Invalid index
-            return ()
-
-    return tuple(result)
-
-
-# =============================================================================
-# Variable and Equation Reading Functions
-# =============================================================================
-
-
 def _section_at_offset(raw_data: bytes, data_offset: int) -> bytes:
     """Return the _DATA_ section bytes for the symbol at ``data_offset``.
 
@@ -1793,36 +906,37 @@ def _section_at_offset(raw_data: bytes, data_offset: int) -> bytes:
         return raw_data[start:end]
 
     # Una seccion comprimida NO es un unico stream zlib: GAMS la parte en BLOQUES
-    # de 32768 bytes descomprimidos, cada uno su propio stream zlib precedido de 3
-    # bytes de cabecera. Descomprimir solo el primero TRUNCA la seccion en silencio
-    # y el decodificador devuelve un PREFIJO de los records -- medido en el GDX
-    # 10x7: pa 1264 de 2940 records (57% perdido), xw 996 de 1470 (32%), mientras
-    # pf/xf (29225 bytes, un solo bloque) salian completos. Los records leidos eran
-    # exactos (4.4e-15 vs gdxdump), asi que el truncamiento no dejaba rastro.
-    buf = raw_data[data_offset + 3 :]
+    # de 32768 bytes descomprimidos (medido en el GDX 10x7: pa 1264 de 2940 records
+    # si se lee solo el primero). Cada bloque lleva 3 bytes de cabecera: un flag
+    # (1 = zlib, 0 = guardado SIN comprimir) y su largo en disco, u16 big-endian.
+    # El flag 0 aparece para secciones chicas dentro de un GDX comprimido (31 en el
+    # 3x3); tratarlas como zlib las devolvia VACIAS (rorgeq: 0 de 2 records).
+    # Verificado: en los 771 bloques zlib del 3x3 y 10x7 el largo es exactamente el
+    # del stream.
     chunks: list[bytes] = []
-    pos = 0
+    pos = data_offset
     while True:
-        try:
-            decompressor = zlib.decompressobj()
-            out = decompressor.decompress(buf[pos:])
-        except zlib.error:
-            break
-        if not out:
-            break
+        flag = raw_data[pos]
+        n = int.from_bytes(raw_data[pos + 1 : pos + 3], "big")
+        block = raw_data[pos + 3 : pos + 3 + n]
+        if flag == 1:
+            out = zlib.decompress(block)
+        elif flag == 0:
+            out = block
+        else:
+            raise ValueError(
+                f"GDX _DATA_ block at offset {pos}: unknown flag {flag} (expected 0 or 1)"
+            )
         chunks.append(out)
-        consumed = len(buf) - pos - len(decompressor.unused_data)
-        if consumed <= 0:
-            break
-        # Un bloque corto es el ultimo; si no, saltar sus 3 bytes de cabecera.
+        pos += 3 + n
+        # Un bloque corto es el ultimo de la seccion.
         if len(out) < _GDX_ZLIB_BLOCK:
             break
-        pos += consumed + 3
-    if not chunks:
-        return b""
     expanded = b"".join(chunks)
     if expanded[:7] != b"\x06_DATA_":
-        return b""
+        raise ValueError(
+            f"GDX _DATA_ section at offset {data_offset}: no _DATA_ marker"
+        )
     return expanded[7:]
 
 
@@ -1876,7 +990,12 @@ def read_variable_values(
     # Calculate domain offsets
     domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
 
-    return _decode_variable_section(section, elements, dimension, domain_offsets)
+    values = _decode_variable_section(
+        section, elements, dimension, domain_offsets, symbol_name
+    )
+    if dimension == 0 and not values:
+        return {(): _scalar_default(symbol)}
+    return values
 
 
 def read_equation_values(
@@ -1927,7 +1046,24 @@ def read_equation_values(
     # Calculate domain offsets
     domain_offsets: list[int] = _calculate_domain_offsets(gdx_data, dimension)
 
-    return _decode_variable_section(section, elements, dimension, domain_offsets)
+    values = _decode_variable_section(
+        section, elements, dimension, domain_offsets, symbol_name
+    )
+    if dimension == 0 and not values:
+        return {(): _scalar_default(symbol)}
+    return values
+
+
+def _scalar_default(symbol: dict[str, Any]) -> dict[str, float]:
+    """The 5 fields gdxdump prints for a var/equ scalar with no record."""
+    try:
+        vals = _SCALAR_DEFAULT[symbol["userinfo"]]
+    except KeyError:
+        raise ValueError(
+            f"GDX symbol '{symbol['name']}': scalar with no record and "
+            f"userinfo {symbol['userinfo']} (known: {sorted(_SCALAR_DEFAULT)})"
+        ) from None
+    return dict(zip(_VALUE_FIELDS, vals, strict=True))
 
 
 def _decode_variable_section(
@@ -1935,36 +1071,37 @@ def _decode_variable_section(
     elements: list[str],
     dimension: int,
     domain_offsets: list[int],
+    symbol_name: str = "",
 ) -> dict[tuple[str, ...], dict[str, float]]:
+    """Decode a variable/equation _DATA_ section: 5 fields per record
+    [level, marginal, lower, upper, scale]. See ``_decode_records``."""
+    records = _decode_records(section, elements, dimension, 5, symbol_name)
+    return {
+        key: dict(zip(_VALUE_FIELDS, vals, strict=True))
+        for key, vals in records.items()
+    }
+
+
+def _decode_records(
+    section: bytes,
+    elements: list[str],
+    dimension: int,
+    nfields: int,
+    symbol_name: str = "",
+) -> dict[tuple[str, ...], tuple[float, ...]]:
+    """Decode the records of a _DATA_ section (``nfields`` values per record:
+    1 for a parameter, 5 for a variable or equation).
+
+    Format (checked against gdxdump on every Par/Var/Equ of five GDX -- gtap7 3x3
+    ifsub0/ifsub1, gtap7_nlp, pep2 Parameters, pep results --
+    tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py): after the 7-byte
+    ``\\x06_DATA_`` marker (stripped by ``_section_at_offset``), a header
+    `dim u8 | -1 i32 | dim x (minElem i32, maxElem i32)` (no min/max for scalars),
+    then per record a key-delta byte (same scheme as ``decode_parameter_delta``)
+    and ``nfields`` value tokens (``_VALUE_SPECIAL``; 0x0A -> 8-byte double).
+    0xFF ends the section. An unknown value token is an error.
     """
-    Decode a _DATA_ section for a variable or equation.
-
-    Variables and equations store 5 values per record:
-    - level: Solution value
-    - marginal: Reduced cost (variables) or dual value (equations)
-    - lower: Lower bound
-    - upper: Upper bound
-    - scale: Scale factor
-
-    Args:
-        section: Raw bytes of the _DATA_ section.
-        elements: UEL elements list.
-        dimension: Symbol dimension.
-        domain_offsets: Offset in UEL for each dimension.
-
-    Returns:
-        Dictionary mapping index tuples to attribute dicts.
-
-    Format (verified byte-exact vs gdxdump over all 9087 var/equ records in the
-    gtap7_3x3 reference, 0 mismatches): after the 7-byte ``\\x06_DATA_`` marker
-    (already stripped by ``_section_at_offset``), a header `dim u8 | -1 i32 |
-    dim×(minElem i32, maxElem i32)` (the min/max block absent for scalars), then
-    per record a key-delta byte (same scheme as ``decode_parameter_delta``)
-    followed by EXACTLY 5 value fields [level, marginal, lower, upper, scale],
-    each one token byte: 0x0a → an 8-byte double follows; else a special code
-    (0x05→0.0, 0x06→1.0, 0x07→-1.0, 0x02→+inf, 0x03→-inf). 0xFF ends the section.
-    """
-    values: dict[tuple[str, ...], dict[str, float]] = {}
+    values: dict[tuple[str, ...], tuple[float, ...]] = {}
     if not section:
         return values
 
@@ -2011,21 +1148,25 @@ def _decode_variable_section(
             except IndexError:
                 break  # corrupt / over-run; stop decoding this section
 
-        # ---- 5 value fields [L, M, LO, UP, scale] ----
-        rec: dict[str, float] = {}
+        vals: list[float] = []
         try:
-            for field in _VALUE_FIELDS:
+            for _ in range(nfields):
                 tok = section[pos]
                 pos += 1
                 if tok == 0x0A:
-                    rec[field] = struct.unpack_from("<d", section, pos)[0]
+                    vals.append(struct.unpack_from("<d", section, pos)[0])
                     pos += 8
                 else:
-                    rec[field] = _VALUE_SPECIAL[tok]
-        except (IndexError, KeyError, struct.error):
-            break  # ran off the end or hit an unknown token; stop cleanly
+                    vals.append(_VALUE_SPECIAL[tok])
+        except KeyError:
+            raise ValueError(
+                f"GDX symbol {symbol_name!r}, record {key}: unknown value code "
+                f"0x{tok:02x} (known: 0x0a + {sorted(_VALUE_SPECIAL)})"
+            ) from None
+        except (IndexError, struct.error):
+            break  # ran off the end of an over-sliced section; stop cleanly
 
-        values[key] = rec
+        values[key] = tuple(vals)
 
     return values
 
