@@ -76,6 +76,9 @@ Labels that skip checks: `no-delta` (code change with no spec delta),
 `bootstrap` (initial baseline or editorial fix to a baseline) and `no-docs`
 (spec change that needs no user-doc update).
 
+Set labels before pushing: adding a label later does not re-run the check
+(re-push or re-run the job).
+
 The existing parity gates (`scripts/gtap/run_parity_gates.py`) are separate
 and unchanged.
 

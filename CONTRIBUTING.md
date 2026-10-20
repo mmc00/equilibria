@@ -68,4 +68,5 @@ uv run pytest -m gams                # GAMS parity (needs a local GAMS install)
 Behavior of each architecture area is specified under `specs/`, and larger
 changes are proposed there before code. See [`specs/readme.md`](specs/readme.md)
 for the flow, and fill in the [PR template](.github/pull_request_template.md):
-the `spec-check` CI job warns when code changes without a spec change.
+the `spec-check` CI job checks the PR against the specs (warnings for missing
+spec/docs updates; failures for inapplicable deltas or hand-edited baselines).
