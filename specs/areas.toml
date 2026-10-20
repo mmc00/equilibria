@@ -74,3 +74,36 @@ parity = [
   "scripts/gtap/run_parity_gates.py",
   "scripts/parity/",
 ]
+
+# User-doc pages of each area (globs allowed). `check-pr` warns when an area's
+# baseline changes and none of these change; label the PR `no-docs` to skip.
+[docs]
+"templates/gtap" = [
+  "docs/site/guide/gtap_quickstart.md",
+  "docs/site/api/templates_gtap.md",
+  "docs/site/guide/welfare_decomposition.md",
+  "docs/site/guide/gtap7_coverage_matrix.md",
+  "docs/site/guide/gtap7_coverage_matrix_gempack.md",
+]
+"templates/pep" = [
+  "docs/site/guide/pep_quickstart.md",
+  "docs/site/guide/pep_coverage_matrix.md",
+  "docs/site/api/templates_pep_pyomo.md",
+  "docs/guides/pep_*.md",
+]
+"templates/simple_open" = ["docs/guides/simple_open_*.md"]
+templates = ["docs/site/guide/templates.md", "docs/guides/simulations_api.md"]
+blocks = [
+  "docs/site/api/blocks.md",
+  "docs/site/api/core.md",
+  "docs/site/guide/architecture.md",
+]
+data = [
+  "docs/site/guide/har_io.md",
+  "docs/site/guide/mip_to_sam.md",
+  "docs/site/api/sam_tools.md",
+  "docs/guides/*mip*",
+  "docs/guides/bolivia_*",
+]
+solver = ["docs/site/guide/path_capi.md", "docs/guides/model_jacobian_harness.md"]
+parity = ["docs/site/guide/benchmarks.md"]

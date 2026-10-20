@@ -185,7 +185,10 @@ def test_subheadings_and_code_fences_stay_in_body() -> None:
 
 REQ_V1 = "### Requirement: Solver converges\nSource: issue 1\n\nIt converges.\n"
 REQ_V2 = "### Requirement: Solver converges\nSource: issue 1\n\nIt converges fast.\n"
-TOY_AREAS = '[areas]\nsolver = ["src/equilibria/solver/"]\n'
+TOY_AREAS = (
+    '[areas]\nsolver = ["src/equilibria/solver/"]\n'
+    '[docs]\nsolver = ["docs/site/guide/path_capi.md", "docs/guides/solver_*.md"]\n'
+)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -329,3 +332,71 @@ def test_check_pr_missing_base(toy: Path, capsys: pytest.CaptureFixture[str]) ->
     m = _load_module()
     assert _run(m, "check-pr", "--base", "nope") == 2
     assert "base ref not found: nope" in capsys.readouterr().out
+
+
+def test_load_areas_reads_docs_table(tmp_path: Path) -> None:
+    m = _load_module()
+    f = tmp_path / "areas.toml"
+    f.write_text(TOY_AREAS, encoding="utf-8")
+    a = m.load_areas(f)
+    assert a.docs == {
+        "solver": ("docs/site/guide/path_capi.md", "docs/guides/solver_*.md")
+    }
+    f.write_text('[areas]\nsolver = ["src/"]\n', encoding="utf-8")
+    assert m.load_areas(f).docs == {}
+
+
+def test_stale_docs_warns_when_baseline_changes_without_docs() -> None:
+    m = _load_module()
+    a = m.Areas(
+        areas={"solver": ("src/equilibria/solver/",)},
+        unowned=(),
+        docs={"solver": ("docs/site/guide/path_capi.md", "docs/guides/solver_*.md")},
+    )
+    spec = "specs/solver/specs/specs.md"
+    assert m.stale_docs([spec], a) == ["solver"]
+    assert m.stale_docs([spec, "docs/site/guide/path_capi.md"], a) == []
+    assert m.stale_docs([spec, "docs/guides/solver_notes.md"], a) == []
+    # a change proposal is not the baseline
+    assert m.stale_docs(["specs/solver/changes/c/specs/specs.md"], a) == []
+    # area without a [docs] entry is not flagged
+    assert m.stale_docs([spec], m.Areas(a.areas, ())) == []
+
+
+def _baseline_change_repo(toy: Path) -> None:
+    _write(toy, "specs/solver/specs/specs.md", REQ_V1)
+    _commit(toy, "spec")
+    _git(toy, "branch", "base")
+    _write(toy, "specs/solver/specs/specs.md", REQ_V2)
+    delta = "## MODIFIED Requirements\n\n" + REQ_V2
+    _write(toy, "specs/solver/changes/c1/specs/specs.md", delta)
+    _commit(toy, "edit with delta")
+
+
+def test_check_pr_warns_stale_docs(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _baseline_change_repo(toy)
+    assert _run(m, "check-pr", "--base", "base") == 0
+    out = capsys.readouterr().out
+    assert "::warning::" in out and "user docs" in out and "solver" in out
+
+
+def test_check_pr_no_docs_label_skips(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _baseline_change_repo(toy)
+    assert _run(m, "check-pr", "--base", "base", "--labels", "no-docs") == 0
+    assert "user docs" not in capsys.readouterr().out
+
+
+def test_real_docs_paths_exist() -> None:
+    m = _load_module()
+    areas = m.load_areas(ROOT / "specs" / "areas.toml")
+    assert areas.docs, "specs/areas.toml has no [docs] table"
+    for area, patterns in areas.docs.items():
+        assert area in areas.areas, f"[docs] area {area!r} is not in [areas]"
+        for pattern in patterns:
+            assert list(ROOT.glob(pattern)), f"{area}: no file matches {pattern}"
