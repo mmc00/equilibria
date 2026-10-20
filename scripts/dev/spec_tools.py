@@ -9,11 +9,12 @@ Run from the repository root.
 # when the module is loaded via spec_from_file_location without sys.modules entry.
 import argparse
 import datetime
+import fnmatch
 import re
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 try:
@@ -29,6 +30,7 @@ CODE_ROOTS = ("src/", "scripts/")
 class Areas:
     areas: dict[str, tuple[str, ...]]
     unowned: tuple[str, ...]
+    docs: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass
@@ -42,7 +44,8 @@ class Deltas:
 def load_areas(path: Path) -> Areas:
     data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     areas = {k: tuple(v) for k, v in data.get("areas", {}).items()}
-    return Areas(areas=areas, unowned=tuple(data.get("unowned", ())))
+    docs = {k: tuple(v) for k, v in data.get("docs", {}).items()}
+    return Areas(areas=areas, unowned=tuple(data.get("unowned", ())), docs=docs)
 
 
 def _match(path: str, areas: Areas) -> tuple[bool, str | None]:
@@ -85,6 +88,18 @@ def areas_without_spec(changed: list[str], areas: Areas) -> list[str]:
     code = {a for p in changed if (a := area_for(p, areas)) is not None}
     specs = {a for p in changed if (a := _spec_area(p, areas)) is not None}
     return sorted(code - specs)
+
+
+def stale_docs(changed: list[str], areas: Areas) -> list[str]:
+    """Areas whose baseline changed while none of their user-doc pages did."""
+    stale: list[str] = []
+    for area, patterns in areas.docs.items():
+        prefix = f"specs/{area}/specs/"
+        if not any(p.startswith(prefix) for p in changed):
+            continue
+        if not any(fnmatch.fnmatchcase(p, g) for p in changed for g in patterns):
+            stale.append(area)
+    return sorted(stale)
 
 
 _HEADING = re.compile(r"^###\s+requirement:\s*(.*?)\s*$", re.IGNORECASE)
@@ -192,6 +207,7 @@ AREA_KEY = re.compile(r"^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$")
 BASELINE = re.compile(r"^specs/(.+)/specs/[^/]+\.md$")
 OPEN_CHANGE = re.compile(r"^specs/(.+)/changes/([^/]+)/specs/[^/]+\.md$")
 SKIP_LABELS = {"no-delta", "bootstrap"}
+NO_DOCS_LABEL = "no-docs"
 
 
 class _Fail(Exception):
@@ -345,6 +361,14 @@ def _cmd_check_pr(args: argparse.Namespace) -> int:
                     f"describe it in a change (specs/{area}/changes/<slug>/) "
                     "or label the PR no-delta"
                 )
+
+    if NO_DOCS_LABEL not in labels:
+        for a in stale_docs(changed, areas):
+            warnings.append(
+                f"area '{a}' baseline changed but none of its user docs did "
+                f"(see [docs] in specs/areas.toml); update them or label the PR "
+                f"{NO_DOCS_LABEL}"
+            )
 
     for w in warnings:
         print(f"::warning::{w}")
