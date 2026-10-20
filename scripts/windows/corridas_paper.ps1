@@ -16,9 +16,12 @@ una copia dentro de la carpeta de salida.
   4. Niveles de y, qinv, rore, pinv, pva y pe: make_levels_tab.py parcha el
      gtapv7.tab de -GtapDir (orig_level en esas seis), tablo lo compila para
      GEMSIM, y se re-corren con gemsim el 3x3 tm10 y el 20x41 capFix sobre una
-     copia de su carpeta de runs\gempack_matrix. export_sl4_levels.py exporta los
-     niveles y, con el sl4dump de la corrida SIN parche, comprueba que los %
-     de cambio no cambiaron (el parche no toca ecuaciones).
+     copia de su carpeta de runs\gempack_matrix. El .prm capFix se rehace desde
+     datasets\<ds>\default.prm con _force_rdlt (cambia solo el int32 de RDLT: el
+     .prm que escribia write_har no lo lee GEMSIM 11.3). export_sl4_levels.py
+     exporta los niveles contra el sl4dump de la corrida SIN parche: una variable
+     cuyo % de cambio no coincide se descarta y queda nombrada en
+     export_console.txt ("xcheck-mismatch=N [...]").
 
 -Pasos elige que pasos correr (por defecto todos): -Pasos 4
 
@@ -158,9 +161,11 @@ if ($okTab) {
     }
     if ($okGss) {
         $Aux = Join-Path $Tab "gtapv7_levels"
-        foreach ($job in @(@("gtap7_3x3", "tm10", "sl4dump_gtap7_3x3_tm10.har"),
-                           @("gtap7_20x41", "tm10_s8-16-32_capfix", "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har"))) {
-            $ds, $tag, $dump = $job
+        # 3x3: tm10.cmf ya no existe (era el cierre viejo con swap dpsave);
+        # sl4dump_gtap7_3x3_tm10.har es identico (252/252) a la corrida tm10_s8-16-32.
+        foreach ($job in @(@("gtap7_3x3", "tm10_s8-16-32", "sl4dump_gtap7_3x3_tm10.har", -1),
+                           @("gtap7_20x41", "tm10_s8-16-32_capfix", "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har", 0))) {
+            $ds, $tag, $dump, $rdlt = $job
             $step = "4 gemsim $ds $tag"
             $src = Join-Path $Matrix $ds
             if (-not (Test-Path (Join-Path $src "$tag.cmf"))) { Result $step $false "no esta $src\$tag.cmf"; continue }
@@ -169,6 +174,12 @@ if ($okTab) {
             # la carpeta de la corrida sin sus salidas viejas: .cmf y entradas
             Get-ChildItem $src -File | Where-Object { $_.Extension -in ".cmf", ".har", ".prm" -and $_.Name -notmatch "^(updated|sl4dump|sl4levels|summary|decomp|volume)" } |
                 Copy-Item -Destination $dest -Force
+            if ($rdlt -ge 0) {
+                $prm = Join-Path $dest "default_$tag.prm"
+                Copy-Item "datasets\$ds\default.prm" $prm -Force
+                & uv run python -c "import sys; sys.path.insert(0, 'scripts/gtap'); from pathlib import Path; from run_gempack_matrix import _force_rdlt; _force_rdlt(Path(sys.argv[1]), int(sys.argv[2]))" $prm $rdlt *> (Join-Path $dest "force_rdlt_console.txt")
+                if ($LASTEXITCODE -ne 0) { Result $step $false "fallo _force_rdlt (ver force_rdlt_console.txt)"; continue }
+            }
             $cmf = Join-Path $dest "$tag.cmf"
             $text = Get-Content $cmf -Raw
             $new = [regex]::Replace($text, "(?im)^\s*Auxiliary files\s*=.*$", "Auxiliary files = $Aux ;")
@@ -186,7 +197,8 @@ if ($okTab) {
             Result $step (Test-Path $sl4) "rc=$LASTEXITCODE sl4=$(Test-Path $sl4) ${secs}s"
             if (Test-Path $sl4) {
                 # el sl4dump es el de la corrida SIN parche: export_sl4_levels compara sus
-                # % de cambio con los de esta corrida y aborta si no coinciden.
+                # % de cambio con los de esta corrida; las que no coinciden se descartan
+                # y se nombran en export_console.txt.
                 Export-Levels "4 niveles $ds $tag" $sl4 "$Fix\$dump" (Join-Path $dest "niveles")
             }
         }
