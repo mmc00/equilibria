@@ -53,7 +53,7 @@ CASES = {
     ),
     "pep2_parameters": (
         REF / "pep2" / "scripts" / "Parameters.gdx",
-        SNAP_DIR / "pep2_Parameters.gdx.gdxdump.json.gz",
+        SNAP_DIR / "pep2_parameters.gdx.gdxdump.json.gz",
     ),
     "pep_results": (
         REF / "pep" / "results.gdx",
