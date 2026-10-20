@@ -1,0 +1,237 @@
+ 
+ This GEMPACK log file was created at 19:28:55 on 19-OCT-2026 by the program
+  <GEMSIM  Version 4.3   April 2012>
+ which accesses some of the routines in the GEMPACK software release
+  <GEMPACK Release 11.3.004   January 2015>
+ 
+ 
+ <GEMSIM  Version 4.3   April 2012>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 11.3.004   January 2015>
+ 
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+ 
+ 
+     << COPYRIGHT 1993-2009: CoPS/Impact and KPSOFT >>
+ 
+  Current directory is:
+ C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1928\4_niveles\
+ gtap7_20x41_tm10_s8-16-32_capfix
+ 
+ 
+  Full path name of running EXE is: C:\GP\gemsim.exe
+  Fortran compiler = GF64  4.8.1 (rev3, built by mingw-builds project):
+  Operating system is Windows 8
+ 
+ 
+  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 
+ 
+                    GEMSIM OPTIONS
+               ( --> indicates those in effect )
+ 
+       BAT Run in batch              STI Take inputs from a Stored-input file
+       BPR Brief prompts             SIF Store inputs on a file
+       LOG Output to log file        ASI Add to incomplete Stored-input file
+                                     CMF Take inputs from a Command file
+       EAA Echo all activity           SVX Select variables on XAC file (later)
+   --> CPU Report CPU times            RQF Required figures agreement (extrap)
+       NRP Don't reuse pivots        NIR Don't do solution iterative refinement
+                                 --> IZ1 Ignore zero coefficients in step 1
+                                     KZ2 Keep zero coefficients in steps 2,3 etc
+       NEQ Do no equations           NWE Don't warn how well equations solved
+       NDS Do no displays            SSI Several subintervals; extrap after each
+       NWR Do no writes              M28 Use MA28 routines (rather than MA48)
+       NAS Do no assertions          SUI Save updated formula(initial) data
+       NUD Do no final updates              Extra Options Screen
+       NSM Don't do simulation              --------------------
+       NWT Use Newton's method      DTO Display, Terminal/Text write Options
+       CR  Check-on-read options
+ 
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+ 
+ (Opened, as text, existing file 'tm10_s8-16-32_capfix.cmf'.)
+  (Taking inputs from a command file.)
+ (Opened, as text, existing file 'tm10_s8-16-32_capfix.cmf'.)
+ 
+  !  (There is no CREATION information on this file.)
+ 
+ 
+  --> Reading the Command file.
+ 
+ ! gtap7_20x41 uniform 10% shock to import tariff power (tm) - GEMPACK / GTAPv7
+ ! STANDARD GTAP closure (GEMPACK gtapv7.cmf): dpsave EXOGENOUS, no swaps.
+ !Capital-account
+ ! variant: capfix (RORDELTA=0). capFix (RORDELTA=0) returns differ; capFlex
+ !(RORDELTA=1) equalize.
+ Auxiliary files = C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-
+ 19_1928\4_niveles\tab\gtapv7_levels ;
+ 
+ file GTAPSETS = sets.har ;
+ file GTAPDATA = basedata.har ;
+ file GTAPPARM = default_tm10_s8-16-32_capfix.prm ;
+ file GTAPSUM  = summary.har ;
+ file WELVIEW  = decomp.har ;
+ file GTAPVOL  = volume.har ;
+ Updated file GTAPDATA = updated_tm10_s8-16-32_capfix.har ;
+ 
+ Method = Gragg ;
+ Steps  = 8 16 32 ;
+ Automatic accuracy = no ;
+ Subintervals = 1 ;
+ 
+ Verbal Description =
+ gtap7_20x41 uniform 10pct shock to import tariff power (tm), standard GTAP
+ closure, capfix (RORDELTA=0) ;
+ 
+ Exogenous
+           pop
+           psaveslack pfactwld
+           profitslack incomeslack endwslack
+           cgdslack
+           tradslack
+           ams atm atf ats atd
+           aosec aoreg avasec avareg
+           aintsec aintreg aintall
+           afcom afsec afreg afecom afesec afereg
+           aoall afall afeall
+           au dppriv dpgov dpsave
+           to tinc
+           tpreg tm tms tx txs
+           qe
+           qesf ;
+ Rest Endogenous ;
+ 
+ Shock tm = uniform 10 ;
+ 
+ CPU = yes ;
+ NDS = yes ;
+ log file = yes ;
+ Extrapolation accuracy file = NO ;
+ 
+  (Finished reading the command file.)
+ 
+  GEMSIM Statement File
+  ---------------------
+ (Opened, as binary, existing file
+ 
+  'C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1928\4_nivele
+ s\tab\gtapv7_levels.gss'.)
+ 
+  GEMSIM Table File
+  -----------------
+ (Opened, as binary, existing file
+ 
+  'C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1928\4_nivele
+ s\tab\gtapv7_levels.gst'.)
+ 
+  !  This file was created at 19:28:47 on 19-OCT-2026 by the program
+  !    <TABLO  Version 6.4   April 2012>
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 11.3.004   January 2015>
+  !  [The program which created this file was compiled with GF64.]
+ 
+ [GEMSIM Table File was created by TABLO at 19:28:47 on 19-OCT-2026.]
+ [TABLO file used here is "gtapv7_levels.tab".]
+ [TABLO STI file used here is "gtapv7_levels.sti".]
+ 
+  (Writing output to log file, and also to the terminal.)
+ (Opened new text file 'tm10_s8-16-32_capfix.log'.)
+  
+  (Reporting CPU times.)
+  
+  (Doing no displays.)
+  
+  [Starting to check "extra" statements on the Command file.]
+  
+  
+  [Finished checking "extra" statements on the Command file.]
+  
+  
+ ++++++++++++++++++++++++++++++++++++++++++++++++++
+  The instructions for this run of GEMSIM were produced
+  from the run of TABLO described in the Information file
+  'gtapv7_levels.inf'
+  
+  This run of GEMSIM
+      o can create the Equations file (for the condensed system)
+      o can carry out 61 WRITEs
+      o can check 11 ASSERTIONs
+      o can carry out multi-step simulations
+  
+ ++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  (Automatic accuracy testing will not be done.)
+ (Range test of updated or extrapolated values will produce warnings.)
+  
+  (Method is gragg.)
+  (Extrapolating from 8, 16 and 32-step solutions.)
+  
+  (Number of subintervals is 1.)
+ (Range test of initial values will produce warnings.)
+  (Model is ' '.   Version number is 1.)
+ (Opened new binary file 'tm10_s8-16-32_capfix.sl4'.)
+ (Solution file is 'tm10_s8-16-32_capfix.sl4'.)
+ (Opened new binary file 'tm10_s8-16-32_capfix.slc'.)
+ (Opened, as text, existing file 'tm10_s8-16-32_capfix.cmf'.)
+  
+  !  (There is no CREATION information on this file.)
+  
+  
+  (Data file with logical name 'GTAPSETS')
+ (Opened, as header, existing file 'sets.har'.)
+  
+  !  This file was created at 17:25:59 on 22-MAY-2026 by the program
+  !    <aggpar.for 07-MAY-2023> [aggpar.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+  
+  (Data file with logical name 'GTAPDATA')
+ (Opened, as header, existing file 'basedata.har'.)
+  
+  !  This file was created at 17:25:58 on 22-MAY-2026 by the program
+  !    <aggdat.for 07-MAY-2023> [aggdat.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+  
+  (Data file with logical name 'GTAPPARM')
+ (Opened, as header, existing file 'default_tm10_s8-16-32_capfix.prm'.)
+  
+   ** Unable to read character data with header 'XXCR'.
+   The strings on the file have length 41 but
+    the length of the strings was specified as 70.
+  
+   (ERROR RETURN FROM ROUTINE: GETCVC)
+   (E-UNEXPECTED LENGTH OF STRINGS)
+   (ERROR RETURN FROM ROUTINE: RCREPW)
+  
+   %% WARNING. Problem in reading the Creation Information from this file..
+     (Is this file really a Header Array file?)
+  Despite that, continue executing the program.
+   (ERROR RETURN FROM ROUTINE: TGOADF)
+   (ERROR RETURN FROM ROUTINE: GEMSIM)
+  
+ Inputs have been taken from the Command file
+ tm10_s8-16-32_capfix.cmf
+  
+  (The program terminated with an error.)
+  (There were         1 warnings.)
+  (If you have a LOG file, search for '%%W' to see them.)
+  Total elapsed time is: less than one second.
+  
+  
+  This run ended at 19:28:55 on 19-OCT-2026

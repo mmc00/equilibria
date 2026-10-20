@@ -1,0 +1,4 @@
+OK    4 make_levels_tab  rc=0 (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1928\4_niveles\tab)
+OK    4 tablo gtapv7_levels  rc=0 gss/gst=True
+FALLA 4 gemsim gtap7_3x3 tm10  no esta runs\gempack_matrix\gtap7_3x3\tm10.cmf
+FALLA 4 gemsim gtap7_20x41 tm10_s8-16-32_capfix  rc=1 sl4=False 3.9s

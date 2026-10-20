@@ -1,0 +1,415 @@
+  
+  (Processing command line options.)
+  
+  
+  (Opening Stored-input file 'tm10_s8-16-32_capfix_levels.sti')
+ (Opened, as text, existing file 'tm10_s8-16-32_capfix_levels.sti'.)
+ Taking inputs from a Stored-input file
+  
+  
+ <SLTOHT   Version 5.53  July 2013>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 11.3.004   January 2015>
+  
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+  
+  
+     << COPYRIGHT 1985-2013: CoPS/Impact and KPSOFT >>
+  
+  Current directory is:
+ C:\Users\MARLON~1.MOL\AppData\Local\Temp\claude\c--Documentos-proyectos-equilib
+ ria\eeaee4f1-0ad8-4e47-af6b-70f1c08007ed\scratchpad\prmfix\run20x41_orig\nivele
+ s
+  
+  
+  Full path name of running EXE is: C:\GP\sltoht.exe
+  Fortran compiler = GF64  4.8.1 (rev3, built by mingw-builds project):
+  Operating system is Windows 8
+  
+  
+  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  
+                    SLTOHT OPTIONS
+               ( --> indicates those in effect )
+  
+       BAT Run in batch          --> STI Take inputs from a Stored-input file
+       BPR Brief prompts             SIF Store inputs on a file
+       LOG Output to log file        ASI Add to incomplete Stored-input file
+                                     DES Write description file
+       LV  Which levels results      VAI Variable arguments ignored (har output)
+       SHL Show levels results       SIR Solutions in rows (text output)
+                                     SIC Solutions in columns (text output)
+       SSS Short SS output           SS  Spreadsheet (Sols in cols - text)
+       SHK Shock CMF output          SSE Spreadsheet with element labels
+       SES Short SSE output          NEL No element labels for SIR,SIC,SS,SSS
+                                     SEP Show solutions separately
+                                     HSS HA and SSS output in one run
+                                     PCL %-change for change var in lev results
+  
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+  
+ Your selection >
+  
+  
+ SHL
+  (Showing levels results, if available)
+  
+ Your selection >
+  
+  
+ SIC
+  (Solutions will be output in columns - text)
+  
+ Your selection >
+  
+  
+  
+  
+  SOLUTION FILE TO CONVERT
+  ------------------------
+  
+  Input the full name (excluding suffix) of this file.
+   (The suffix '.sl4' will be appended automatically to your input.)
+  
+  
+ tm10_s8-16-32_capfix
+ (Opened, as binary, existing file 'tm10_s8-16-32_capfix.sl4'.)
+  
+  !  This file was created at 19:42:48 on 19-OCT-2026 by the program
+  !    <GEMSIM v4.3 Apr 2012> [gtapv7_levels.tab,gtapv7_levels.sti]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 11.3.004   January 2015>
+  !  [The program which created this file was compiled with GF64.]
+  
+  
+  THE UNDERLYING MODEL IS ' '.
+   VERSION NUMBER IS 1
+    IDENTIFIER IS ' '
+  
+  What follows is a verbal description of the old experiment.
+  
+  
+ gtap7_20x41 uniform 10pct shock to import tariff power (tm), standard GTAP
+ closure, capfix (RORDELTA=0)
+ [Solution method is gragg. Steps = 8,16,32.]
+ [CMF file: tm10_s8-16-32_capfix.cmf]
+  
+  
+  
+  The value of U used in MA28A was 0.10000000.
+  
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   Contents of Solution File :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available.
+  
+  
+  There are also Levels results on this Solution file.
+   (252 character strings, each of length 1 read. Header 'LVOK')
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  Which solutions from this Solution file do you want :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  The levels results together with the Cumulative totals  . . .[C] (the default)
+  EXIT program now  . . . . . . . . . . . . . . . . . . . . . .[e]
+  
+  
+  
+ c
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available
+    in this SOLUTION file.
+  
+  
+  All cumulatively-retained endogenous variables kept.
+   (Real matrix with 695122 rows and 1 columns read. Header 'CUMS')
+   (Real matrix with 695122 rows and 1 columns read. Header 'CUMS')
+   (Real matrix with 93890 rows and 1 columns read. Header 'LEVB')
+   (Real matrix with 93890 rows and 1 columns read. Header 'LEVA')
+  
+  Output file to contain solutions
+  --------------------------------
+  
+  Input the full name (INCLUDING suffix) of this file.
+    Enter a CARRIAGE-RETURN to use the name    'tm10_s8-16-32_capfix.sic'.
+  
+  
+ tm10_s8-16-32_capfix_levels.txt
+ (Opened new print file 'tm10_s8-16-32_capfix_levels.txt'.)
+ (Writing ONLY CUMULATIVE TOTALS solution to file
+   'tm10_s8-16-32_capfix_levels.txt'.)
+  
+  ---------------------------------------------------
+     Variable      !     Array  Size      ! Undefined
+       Name        !                      !  values
+  ---------------------------------------------------
+   pds             !  820x4               !      0
+   qfd             !  16400x4             !      0
+   pms             !  820x4               !      0
+   qfm             !  16400x4             !      0
+   pfd             !  16400x4             !  49200
+   pfm             !  16400x4             !  49200
+   pes             !  4100x4              !  12300
+   qes             !  4100x4              !      0
+   peb             !  4100x4              !  12300
+   qfe             !  4100x4              !      0
+   pfe             !  4100x4              !  12300
+   ps              !  16400x4             !  49200
+   qca             !  16400x4             !  49200
+   pca             !  16400x4             !  49200
+   qgd             !  820x4               !      0
+   qgm             !  820x4               !      0
+   pgd             !  820x4               !   2460
+   pgm             !  820x4               !   2460
+   qpd             !  820x4               !      0
+   qpm             !  820x4               !      0
+   ppd             !  820x4               !   2460
+   ppm             !  820x4               !   2460
+   qid             !  820x4               !      0
+   qim             !  820x4               !      0
+   pid             !  820x4               !   2460
+   pim             !  820x4               !   2460
+   psave           !  41x4                !    123
+   qsave           !  41x4                !    123
+   pinv            !  41x4                !      0
+   kb              !  41x4                !    123
+   qxs             !  33620x4             !      0
+   pfob            !  33620x4             ! 100860
+   pcif            !  33620x4             ! 100860
+   pmds            !  33620x4             ! 100860
+   qst             !  41x4                !      0
+   y               !  41x4                !      0
+   pop             !  41x4                !    123
+   pgov            !  41x4                !    123
+   yg              !  41x4                !    123
+   ug              !  41x4                !    123
+   ppriv           !  41x4                !    123
+   yp              !  41x4                !    123
+   uepriv          !  41x4                !    123
+   up              !  41x4                !    123
+   to              !  16400x4             !  49200
+   tinc            !  4100x4              !  12300
+   endwslack       !  205x4               !    615
+   qms             !  820x4               !      0
+   globalcgds      !  1x4                 !      3
+   pcgdswld        !  1x4                 !      3
+   po              !  820x4               !   2460
+   qo              !  820x4               !      0
+   ao              !  820x4               !   2460
+   pint            !  820x4               !   2460
+   qint            !  820x4               !   2460
+   aint            !  820x4               !   2460
+   pva             !  820x4               !      0
+   qva             !  820x4               !   2460
+   ava             !  820x4               !   2460
+   pfa             !  16400x4             !  49200
+   qfa             !  16400x4             !  49200
+   afa             !  16400x4             !  49200
+   afe             !  4100x4              !  12300
+   profitslack     !  820x4               !   2460
+   aosec           !  20x4                !     60
+   aoreg           !  41x4                !    123
+   aoall           !  820x4               !   2460
+   afcom           !  20x4                !     60
+   afsec           !  20x4                !     60
+   afreg           !  41x4                !    123
+   afall           !  16400x4             !  49200
+   avasec          !  20x4                !     60
+   avareg          !  41x4                !    123
+   afecom          !  5x4                 !     15
+   afesec          !  20x4                !     60
+   afereg          !  41x4                !    123
+   afeall          !  4100x4              !  12300
+   aintsec         !  20x4                !     60
+   aintreg         !  41x4                !    123
+   aintall         !  820x4               !   2460
+   pb              !  820x4               !   2460
+   qc              !  820x4               !      0
+   fincome         !  41x4                !    123
+   incomeslack     !  41x4                !    123
+   del_indtaxr     !  41x4                !    123
+   uelas           !  41x4                !    123
+   dpsave          !  41x4                !    123
+   dpgov           !  41x4                !    123
+   dppriv          !  41x4                !    123
+   dpav            !  41x4                !    123
+   p               !  41x4                !    123
+   au              !  41x4                !    123
+   dpsum           !  41x4                !    123
+   u               !  41x4                !    123
+   ppa             !  820x4               !   2460
+   qpa             !  820x4               !   2460
+   pga             !  820x4               !   2460
+   qga             !  820x4               !   2460
+   pia             !  820x4               !   2460
+   qia             !  820x4               !   2460
+   qinv            !  41x4                !      0
+   ams             !  33620x4             ! 100860
+   ptrans          !  33620x4             ! 100860
+   qtmfsd          !  33620x4             ! 100860
+   pt              !  1x4                 !      3
+   qtm             !  1x4                 !      3
+   atmfsd          !  33620x4             ! 100860
+   atm             !  20x4                !     60
+   atf             !  20x4                !     60
+   ats             !  41x4                !    123
+   atd             !  41x4                !    123
+   tx              !  820x4               !   2460
+   txs             !  33620x4             ! 100860
+   tm              !  820x4               !   2460
+   tms             !  33620x4             ! 100860
+   pr              !  820x4               !      0
+   qds             !  820x4               !      0
+   tradslack       !  820x4               !   2460
+   tpd             !  820x4               !      0
+   tpm             !  820x4               !   2460
+   tpreg           !  41x4                !    123
+   pe              !  164x4               !      0
+   qe              !  164x4               !    492
+   qesf            !  820x4               !   2460
+   ke              !  41x4                !    123
+   rore            !  41x4                !      0
+   rorc            !  41x4                !    123
+   rental          !  41x4                !    123
+   rorg            !  1x4                 !      3
+   cgdslack        !  41x4                !    123
+   expand          !  41x4                !    123
+   psaveslack      !  41x4                !    123
+   del_taxrout     !  41x4                !    123
+   del_taxrfu      !  41x4                !    123
+   del_taxriu      !  41x4                !    123
+   del_taxrpc      !  41x4                !    123
+   del_taxrgc      !  41x4                !    123
+   del_taxric      !  41x4                !    123
+   del_taxrexp     !  41x4                !    123
+   del_taxrimp     !  41x4                !    123
+   del_taxrinc     !  41x4                !    123
+   del_ttaxr       !  41x4                !    123
+   pfactor         !  41x4                !      0
+   pfactwld        !  1x4                 !      0
+   walras_sup      !  1x4                 !      3
+   walras_dem      !  1x4                 !      3
+   walraslack      !  1x4                 !      3
+   vxwfob          !  820x4               !   2460
+   vmwcif          !  820x4               !   2460
+   vxwreg          !  41x4                !    123
+   vmwreg          !  41x4                !    123
+   pfactreal       !  4100x4              !      0
+   pebfactreal     !  164x4               !      0
+   pefactreal      !  164x4               !      0
+   psw             !  41x4                !      0
+   pdw             !  41x4                !      0
+   tot             !  41x4                !      0
+   vgdp            !  41x4                !    123
+   pgdp            !  41x4                !      0
+   qgdp            !  41x4                !      0
+   compvalad       !  820x4               !   2460
+   pxw             !  820x4               !      0
+   vxwcom          !  20x4                !     60
+   vxwwld          !  1x4                 !      3
+   vmwcom          !  20x4                !     60
+   valuew          !  20x4                !     60
+   valuewu         !  20x4                !     60
+   pxwreg          !  41x4                !      0
+   pxwcom          !  20x4                !      0
+   pxwwld          !  1x4                 !      0
+   pmw             !  820x4               !   2460
+   pmwreg          !  41x4                !      0
+   pmwcom          !  20x4                !      0
+   pw              !  20x4                !     60
+   pwu             !  20x4                !      0
+   qxw             !  820x4               !      0
+   qxwreg          !  41x4                !      0
+   qxwcom          !  20x4                !      0
+   qxwwld          !  1x4                 !      0
+   qmw             !  820x4               !   2460
+   qmwreg          !  41x4                !      0
+   qmwcom          !  20x4                !      0
+   qow             !  20x4                !     60
+   qowu            !  20x4                !      0
+   del_tbalc       !  820x4               !   2460
+   del_tbal        !  41x4                !    123
+   ywld            !  1x4                 !      3
+   del_tbalry      !  41x4                !    123
+   pm_cr           !  820x4               !   2460
+   c1_cr           !  820x4               !   2460
+   c2_cr           !  820x4               !   2460
+   c3_cr           !  820x4               !   2460
+   c1_r            !  41x4                !    123
+   c2_r            !  41x4                !    123
+   c3_r            !  41x4                !    123
+   tot2            !  41x4                !    123
+   uelasev         !  41x4                !    123
+   ueprivev        !  41x4                !    123
+   ugev            !  41x4                !    123
+   upev            !  41x4                !    123
+   qsaveev         !  41x4                !    123
+   yev             !  41x4                !    123
+   ypev            !  41x4                !    123
+   ygev            !  41x4                !    123
+   qpev            !  820x4               !   2460
+   ysaveev         !  41x4                !    123
+   dpavev          !  41x4                !    123
+   EV              !  41x4                !    123
+   WEV             !  1x4                 !      3
+   EV_ALT          !  41x4                !    123
+   WEV_ALT         !  1x4                 !      3
+   CNTdpar         !  41x4                !    123
+   CNTpop          !  41x4                !    123
+   CNTqor          !  41x4                !    123
+   CNTqo           !  820x4               !   2460
+   CNTqca          !  16400x4             !  49200
+   CNTqe           !  205x4               !    615
+   CNTqea          !  4100x4              !  12300
+   CNTqfer         !  41x4                !    123
+   CNTqfeer        !  205x4               !    615
+   CNTqfe          !  4100x4              !  12300
+   CNTqfr          !  82x4                !    246
+   CNTqfm          !  16400x4             !  49200
+   CNTqfd          !  16400x4             !  49200
+   CNTqpm          !  820x4               !   2460
+   CNTqpd          !  820x4               !   2460
+   CNTqpr          !  82x4                !    246
+   CNTqia          !  82x4                !    246
+   CNTqim          !  820x4               !   2460
+   CNTqid          !  820x4               !   2460
+   CNTqgr          !  82x4                !    246
+   CNTqgm          !  820x4               !   2460
+   CNTqgd          !  820x4               !   2460
+   CNTqxsr         !  41x4                !    123
+   CNTqxs          !  33620x4             ! 100860
+   CNTqmsr         !  41x4                !    123
+   CNTqms          !  33620x4             ! 100860
+   CNTalleffr      !  369x4               !   1107
+   CNTalleffcr     !  820x4               !   2460
+   CNTtotr         !  41x4                !    123
+   CNTpinv         !  41x4                !    123
+   CNTendwr        !  41x4                !    123
+   CNTendw         !  205x4               !    615
+   CNTtechr        !  287x4               !    861
+   CNTtech_ao      !  820x4               !   2460
+   CNTtech_afe     !  4100x4              !  12300
+   CNTtech_ava     !  820x4               !   2460
+   CNTtech_aint    !  820x4               !   2460
+   CNTtech_af      !  16400x4             !  49200
+   CNTtech_atmfsd  !  33620x4             ! 100860
+   CNTtech_ams     !  33620x4             ! 100860
+   CNTkb           !  41x4                !    123
+ (New Text file is 'tm10_s8-16-32_capfix_levels.txt'.)
+  
+  (The program has completed without error.)
+  Total elapsed time is:  2 minutes, 13 seconds.
+  

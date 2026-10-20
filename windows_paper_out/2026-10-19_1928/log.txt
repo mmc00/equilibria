@@ -1,0 +1,13 @@
+[19:28:20] repo      C:\Documentos\proyectos\equilibria
+[19:28:21] commit    fbf46eb44a14b4b0829bea08c2872e97343324e6
+[19:28:22] rama      feat/gempack-levels-6vars
+[19:28:22] maquina   2023LE-2-77-17  Microsoft Windows NT 10.0.26200.0
+[19:28:22] GEMPACK   C:\GP  (sltoht: True)
+[19:28:22] GAMS      
+[19:28:22] GTAP tab  C:\runGTAP375
+[19:28:22] pasos     4
+[19:28:22] salida    C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1928
+[19:28:34] OK    4 make_levels_tab  rc=0 (C:\Documentos\proyectos\equilibria\windows_paper_out\2026-10-19_1928\4_niveles\tab)
+[19:28:48] OK    4 tablo gtapv7_levels  rc=0 gss/gst=True
+[19:28:49] FALLA 4 gemsim gtap7_3x3 tm10  no esta runs\gempack_matrix\gtap7_3x3\tm10.cmf
+[19:28:56] FALLA 4 gemsim gtap7_20x41 tm10_s8-16-32_capfix  rc=1 sl4=False 3.9s

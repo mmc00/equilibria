@@ -1,0 +1,1 @@
+﻿  levels vars=50 (LEVB+LEVA)  no-level=200 (NOLV)  (xcheck-mismatch=2)  -> C:\Users\MARLON~1.MOL\AppData\Local\Temp\claude\c--Documentos-proyectos-equilibria\eeaee4f1-0ad8-4e47-af6b-70f1c08007ed\scratchpad\prmfix\run20x41_orig\niveles\sl4levels6_tm10_s8-16-32_capfix.har
