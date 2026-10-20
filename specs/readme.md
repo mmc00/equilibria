@@ -33,8 +33,10 @@ immutable ADRs (`NNNN-<slug>.md`).
    deltas. Open one GitHub issue per task and list them in the proposal.
 2. **Implement and sync.** One task is one branch is one PR. Name the branch
    `<type>/<issue>-<slug>`, where `<slug>` is the change slug. In that PR,
-   sync to the baseline whatever the task leaves complete.
-3. **Archive.** The last PR of the change moves it to `changes/archive/`.
+   sync to the baseline whatever the task leaves complete, copying each
+   requirement exactly as its delta states it, and update `Last synced:`.
+3. **Archive.** The last PR of the change moves it to `changes/archive/`
+   (it may sync and archive in the same PR).
 
 ## When a change is needed
 
@@ -64,20 +66,25 @@ From cheapest to most expensive:
 
 1. The PR template (`.github/pull_request_template.md`): issue, change,
    deltas implemented, spec checkboxes, parity gates, and what was not done.
-2. The `spec-check` CI job runs `check-pr`. It **warns** when an area's code
-   changes without a spec change, when a path is not mapped to any area, and
-   when an area's baseline changes without touching its user-doc pages.
-   It **fails** when a delta does not match the baseline (`MODIFIED` or
-   `REMOVED` of a missing requirement, a conflicting `ADDED`) or when a
-   requirement is edited by hand outside a change.
+2. The `spec-check` CI workflow runs `check-pr`. It **warns** when the code
+   of an area that already has a baseline changes without a spec change, when
+   a path is not mapped to any area, and when an area's baseline changes
+   without touching its user-doc pages.
+   It **fails** when a delta does not apply to the baseline (a `MODIFIED` of a
+   missing requirement, an `ADDED` that conflicts with different text), when a
+   requirement is edited by hand outside a change, or when a synced
+   requirement does not match its delta (the baseline text must equal the
+   `ADDED`/`MODIFIED` text, and a `REMOVED` requirement must be gone). A
+   `REMOVED` of a requirement that is already missing counts as synced.
+   A change archived in the same PR still covers the syncs that PR makes.
 3. Review.
 
 Labels that skip checks: `no-delta` (code change with no spec delta),
 `bootstrap` (initial baseline or editorial fix to a baseline) and `no-docs`
 (spec change that needs no user-doc update).
 
-Set labels before pushing: adding a label later does not re-run the check
-(re-push or re-run the job).
+Adding or removing a label re-runs the check, so labeling an open PR is
+enough to clear it.
 
 The existing parity gates (`scripts/gtap/run_parity_gates.py`) are separate
 and unchanged.
