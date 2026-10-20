@@ -146,12 +146,40 @@ def _decompress_gdx_sections(data: bytes) -> bytes:
     if not spans:
         return data
 
+    # Each zlib stream is one BLOCK of a section, preceded by a 3-byte header: flag
+    # (1 = zlib, 0 = stored) + on-disk length, u16 big-endian. A section larger
+    # than _GDX_ZLIB_BLOCK expanded bytes spans several blocks, and copying the
+    # bytes between streams verbatim left the next block's header INSIDE the
+    # section: in the gtap7 3x3 the symbol table's second block header (01 03 8a)
+    # landed in rorgeq's description and the parser stopped at 418 of 450 symbols
+    # (#137). So a verified header (its length equals the stream) is dropped, and
+    # a stored (flag 0) block that continues a full block is copied without it.
     out_buf = bytearray()
     cursor = 0
     for span_start, span_end, decompressed in spans:
-        out_buf += data[cursor:span_start]
+        head = span_start - 3
+        if (
+            head >= cursor
+            and data[head] == 1
+            and int.from_bytes(data[head + 1 : span_start], "big")
+            == span_end - span_start
+        ):
+            out_buf += data[cursor:head]
+        else:
+            out_buf += data[cursor:span_start]
         out_buf += decompressed
         cursor = span_end
+        last_len = len(decompressed)
+        while (
+            last_len == _GDX_ZLIB_BLOCK
+            and cursor + 3 <= len(data)
+            and data[cursor] == 0
+        ):
+            n = int.from_bytes(data[cursor + 1 : cursor + 3], "big")
+            stored = data[cursor + 3 : cursor + 3 + n]
+            out_buf += stored
+            cursor += 3 + n
+            last_len = len(stored)
     out_buf += data[cursor:]
     return bytes(out_buf)
 

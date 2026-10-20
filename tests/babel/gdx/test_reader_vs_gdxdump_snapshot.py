@@ -127,10 +127,10 @@ def test_valores_especiales_y_seccion_sin_comprimir(data: dict) -> None:
     assert len(read_equation_values(data, "rorgeq")) == 2
 
 
-@pytest.mark.xfail(
-    strict=True, reason="#137: la tabla de simbolos lista 145/72 de 146/103"
-)
 def test_la_tabla_de_simbolos_lista_todo(data: dict, snap: dict) -> None:
+    """#137: la tabla de simbolos ocupa mas de un bloque de 32768 bytes; la
+    cabecera del segundo (01 + largo) quedaba metida en la descripcion de rorgeq
+    y el parser se detenia en 418 de 450 (faltaban sam y 31 ecuaciones)."""
     ours = {
         s["name"]
         for s in get_parameters(data) + get_variables(data) + get_equations(data)
