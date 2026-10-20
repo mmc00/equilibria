@@ -96,6 +96,17 @@ def test_variable_con_cambio_pct_distinto_al_sl4dump_se_descarta(
     assert sorted(har) == ["0052", "B052", "NOLV"]
 
 
+def test_la_variable_descartada_se_nombra_en_la_salida(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Descartarla sin decir cual dejaba una variable ni en LEVB ni en NOLV, sin
+    rastro: el 2026-10-19 en Windows fueron CNTendwr y CNTendw y solo se supo
+    porque el resumen decia xcheck-mismatch=2."""
+    _export_sample(tmp_path)
+    out = capsys.readouterr().out
+    assert "xcheck-mismatch=1 [globalcgds]" in out
+
+
 def _sic_text_from(sl4dump: Path, post_levels: Path | None) -> str:
     """Texto SIC sintetico CONSISTENTE con el %-cambio del sl4dump, para que la
     validacion de niveles pase por la razon correcta:
