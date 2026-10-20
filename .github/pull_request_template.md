@@ -19,7 +19,7 @@
 - **Change:** `specs/<area>/changes/<slug>/` <!-- or "none" -->
 - **Deltas implemented:** <!-- requirement names synced to the baseline -->
 
-- [ ] Change exists (`change`) or none is needed (`no-change`)
+- [ ] Change linked above, or none needed (label `no-delta`)
 - [ ] Baseline synced, or the PR is labeled `no-delta` / `bootstrap`
 - [ ] `context.md` updated if vocabulary, risky files or commands changed
 - [ ] ADR added if the decision is expensive to reverse
