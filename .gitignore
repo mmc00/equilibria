@@ -305,6 +305,7 @@ scripts/gtap/*
 !scripts/gtap/gams/
 !scripts/gtap/gen_linearization_study.py
 !scripts/gtap/export_sl4_levels.py
+!scripts/gtap/make_levels_tab.py
 # Phase-2 cascade orchestrator modules
 !scripts/gtap/cascade_config.py
 !scripts/gtap/cascade_layers.py
