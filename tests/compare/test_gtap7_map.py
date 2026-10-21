@@ -38,7 +38,8 @@ def _script() -> Any:
 
 
 def test_equilibria_contra_gempack_3x3_en_niveles() -> None:
-    r = _script().run(O.EX15_EQ, O.EX15_HAR, BASEDATA, UPDATED)
+    mod = _script()
+    r = mod.run(*mod.load_eq_json(O.EX15_EQ), O.EX15_HAR, BASEDATA, UPDATED)
     assert r.periods_compared == ["pre", "post"]
     assert {k: s["cells"] for k, s in r.summary.items()} == O.EX15_CELLS
     o = r.overall
@@ -51,7 +52,8 @@ def test_equilibria_contra_gempack_3x3_en_niveles() -> None:
 
 
 def test_cada_exclusion_sale_en_el_reporte_con_su_motivo() -> None:
-    r = _script().run(O.EX15_EQ, O.EX15_HAR, BASEDATA, UPDATED)
+    mod = _script()
+    r = mod.run(*mod.load_eq_json(O.EX15_EQ), O.EX15_HAR, BASEDATA, UPDATED)
     assert [(e.variable, e.where, e.cells) for e in r.exclusions] == [
         ("pe", {"ENDW": ["NatRes"]}, O.EX15_NATRES_EXCLUDED)
     ]
