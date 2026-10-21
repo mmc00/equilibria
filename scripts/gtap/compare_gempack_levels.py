@@ -1,12 +1,24 @@
-"""equilibria contra GEMPACK en NIVELES con el mapeo GTAP (``maps/gtap7.yaml``, #132).
+"""equilibria contra GEMPACK en NIVELES con el mapeo GTAP (``maps/gtap7.yaml``).
 
-Arma las dos variables que el mapeo pide y ninguna fuente trae tal cual:
+Arma las variables que el mapeo pide y ninguna fuente trae tal cual (formulas
+medidas contra GEMPACK en el 3x3: ejemplo 15 de ``tests/compare/_oracle.py``).
+Lado equilibria (``check`` es el periodo base del modelo):
 
-- lado equilibria: ``xds_net[r,c] = xds[r,c] - xda[r,c,'tmg']`` (``xds`` incluye la
-  oferta de margenes VST y ``qds`` de GEMPACK no) y ``vdfb[r,c,a] = pd[r,c] *
-  xda[r,c,a]`` para las actividades ``a`` (las de ``xp``);
-- lado GEMPACK: ``VDFB[c,a,r]`` de ``basedata.har`` (pre) y del ``.har`` actualizado
-  de la corrida (post).
+- ``xds_net[r,c] = xds[r,c] - xda[r,c,'tmg']``: ``xds`` incluye la oferta de
+  margenes (VST) y ``qds`` no;
+- ``xda_act``/``xma_act[r,c,a]``: ``xda``/``xma`` solo para las actividades (las de
+  ``xp``); ``xda_hhd``, ``xma_hhd``, ``xda_gov``, ``xma_gov``, ``xda_inv``,
+  ``xma_inv``, ``xda_tmg[r,c]``: el agente fijo (``qpd``, ``qgm``, ``qst``...);
+  ``xda_tmg`` solo donde hay oferta de margenes en la base (MARG);
+- ``xf_pf0[r,e,a] = xf * pf[check]``: GEMPACK mide ``qfe`` al precio del agente en
+  la base;
+- ``xw_fob[r,c] = sum_d xw[r,c,d] * pefob[r,c,d,check] + xda[r,c,'tmg']``: ``qxw``
+  (pesos FOB de la base, mas margenes);
+- ``tpd[r,c] = 1 + dintx[r,c,'hhd']``; ``pd_pmt[r,c] = pd / pmt`` (``pr``);
+- ``vdfb[r,c,a] = pd[r,c] * xda[r,c,a]`` para las actividades.
+
+Lado GEMPACK: ``VDFB[c,a,r]`` de ``basedata.har`` (pre) y del ``.har`` actualizado
+de la corrida (post).
 
 Uso (desde la raiz)::
 
@@ -36,22 +48,56 @@ from equilibria.compare import Mapping, Report, Solution, compare, from_dict, fr
 
 Levels = AbcMapping[str, AbcMapping[tuple[str, ...], float]]
 MARGIN_AGENT = "tmg"
+FINAL_AGENTS = ("hhd", "gov", "inv", "tmg")
+BASE = "check"  # el periodo base del modelo de equilibria (el pre de GEMPACK)
 
 
 def equilibria_side(levels: Levels, xscale: AbcMapping[Any, float]) -> Solution:
     """``levels[var][(indices..., periodo)] = nivel`` del modelo de equilibria, mas
-    ``xds_net`` y ``vdfb``. ``xscale[(r, a)]`` va como parametro de la fuente."""
-    xds, xda, pd = levels["xds"], levels["xda"], levels["pd"]
-    xds_net = {
+    las variables armadas (ver el docstring del modulo). ``xscale[(r, a)]`` va como
+    parametro de la fuente."""
+    xds, xda, xma, pd = levels["xds"], levels["xda"], levels["xma"], levels["pd"]
+    acts = {a for (_, a, _) in levels["xp"]}
+    regs = {r for (r, _) in levels["rore"]}
+    data: dict[str, AbcMapping[tuple[str, ...], float]] = dict(levels)
+    data["xds_net"] = {
         (r, c, t): x - xda.get((r, c, MARGIN_AGENT, t), 0.0)
         for (r, c, t), x in xds.items()
     }
-    # VDFB es solo de las actividades (las de xp); xda trae ademas hhd, gov, inv, tmg.
-    acts = {a for (_, a, _) in levels["xp"]}
-    vdfb = {
+    for var, table in (("xda", xda), ("xma", xma)):
+        data[f"{var}_act"] = {k: x for k, x in table.items() if k[2] in acts}
+        for agent in FINAL_AGENTS:
+            data[f"{var}_{agent}"] = {
+                (r, c, t): x for (r, c, a, t), x in table.items() if a == agent
+            }
+    # qst es solo de los productos de margenes (MARG): los que tienen oferta de
+    # margenes en la base; el modelo guarda un 0 para los demas.
+    data["xda_tmg"] = {
+        (r, c, t): x
+        for (r, c, t), x in data["xda_tmg"].items()
+        if xda[(r, c, MARGIN_AGENT, BASE)] != 0.0
+    }
+    data["xf_pf0"] = {
+        (r, e, a, t): x * levels["pf"][(r, e, a, BASE)]
+        for (r, e, a, t), x in levels["xf"].items()
+    }
+    xw, pefob = levels["xw"], levels["pefob"]
+    data["xw_fob"] = {
+        (r, c, t): sum(
+            xw[(r, c, d, t)] * pefob[(r, c, d, BASE)]
+            for d in regs
+            if (r, c, d, t) in xw
+        )
+        + xda.get((r, c, MARGIN_AGENT, t), 0.0)
+        for (r, c, t) in xds
+    }
+    data["tpd"] = {
+        (r, c, t): 1.0 + x for (r, c, a, t), x in levels["dintx"].items() if a == "hhd"
+    }
+    data["pd_pmt"] = {k: x / levels["pmt"][k] for k, x in pd.items()}
+    data["vdfb"] = {
         (r, c, a, t): pd[(r, c, t)] * q for (r, c, a, t), q in xda.items() if a in acts
     }
-    data = {**levels, "xds_net": xds_net, "vdfb": vdfb}
     return from_dict(
         data, period_dim=-1, origin="equilibria", params={"xscale": dict(xscale)}
     )
