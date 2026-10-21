@@ -15,7 +15,8 @@ una copia dentro de la carpeta de salida.
      (simpleNLP, simpleMCP, mpsgevh) sobre una copia de runs\horridge_simple.
   4. Niveles de y, qinv, rore, pinv, pva y pe: make_levels_tab.py parcha el
      gtapv7.tab de -GtapDir (orig_level en esas seis), tablo lo compila para
-     GEMSIM, y se re-corren con gemsim el 3x3 tm10 y el 20x41 capFix sobre una
+     GEMSIM, y se re-corren con gemsim el 3x3 tm10 y los 6 datasets capFix
+     (3x3, 3x4, 5x5, 10x7, 15x10, 20x41: las filas de la Tabla 2) sobre una
      copia de su carpeta de runs\gempack_matrix. El .prm capFix se rehace desde
      datasets\<ds>\default.prm con _force_rdlt (cambia solo el int32 de RDLT: el
      .prm que escribia write_har no lo lee GEMSIM 11.3). export_sl4_levels.py
@@ -163,7 +164,13 @@ if ($okTab) {
         $Aux = Join-Path $Tab "gtapv7_levels"
         # 3x3: tm10.cmf ya no existe (era el cierre viejo con swap dpsave);
         # sl4dump_gtap7_3x3_tm10.har es identico (252/252) a la corrida tm10_s8-16-32.
+        # capFix (RDLT 0): el cierre de la Tabla 2 del paper; todas las filas (#135).
         foreach ($job in @(@("gtap7_3x3", "tm10_s8-16-32", "sl4dump_gtap7_3x3_tm10.har", -1),
+                           @("gtap7_3x3", "tm10_s8-16-32_capfix", "sl4dump_gtap7_3x3_tm10_s8-16-32_capfix.har", 0),
+                           @("gtap7_3x4", "tm10_s8-16-32_capfix", "sl4dump_gtap7_3x4_tm10_s8-16-32_capfix.har", 0),
+                           @("gtap7_5x5", "tm10_s8-16-32_capfix", "sl4dump_gtap7_5x5_tm10_s8-16-32_capfix.har", 0),
+                           @("gtap7_10x7", "tm10_s8-16-32_capfix", "sl4dump_gtap7_10x7_tm10_s8-16-32_capfix.har", 0),
+                           @("gtap7_15x10", "tm10_s8-16-32_capfix", "sl4dump_gtap7_15x10_tm10_s8-16-32_capfix.har", 0),
                            @("gtap7_20x41", "tm10_s8-16-32_capfix", "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har", 0))) {
             $ds, $tag, $dump, $rdlt = $job
             $step = "4 gemsim $ds $tag"
