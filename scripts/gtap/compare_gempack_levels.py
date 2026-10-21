@@ -167,7 +167,14 @@ def model_levels(m: Any) -> dict[str, dict[tuple[str, ...], float]]:
     }
 
 
-def dataset_xscale(dataset: str) -> dict[tuple[str, ...], float]:
+def dataset_xscale(dataset: str, va_subsidy_basis: str = "gempack") -> dict:
+    """``xscale[(r, aa)]`` con que el modelo escala las cantidades por actividad.
+
+    Hay que calcularlo con la MISMA base de subsidios al valor agregado que usa el
+    modelo (``_solve_shock`` construye con ``va_subsidy_basis="gempack"`` y
+    ``build_block_model`` la fija en los parametros): cambia ``xp`` de la base y, en
+    sectores chicos, la potencia de 10 de la escala. Con la base por defecto el
+    20x41 salia 10 veces mayor en CHE CropsNe y MEX Restofagri."""
     from equilibria.blocks.gtap._derived_params import xscale_data
     from equilibria.templates.gtap import GTAPParameters
 
@@ -179,6 +186,7 @@ def dataset_xscale(dataset: str) -> dict[tuple[str, ...], float]:
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    p.set_va_subsidy_basis(va_subsidy_basis)
     return dict(xscale_data(p, p.sets))
 
 
