@@ -1,0 +1,95 @@
+# GTAP v7: equilibria (A) contra GEMPACK (B), en NIVELES. #132.
+#
+# A: el modelo de bloques de equilibria resuelto (base -> check -> shock), leido con
+#    from_pyomo o from_dict. B: un .har de niveles de GEMPACK (LEVB = pre, LEVA = post;
+#    scripts/gtap/export_sl4_levels.py) leido con from_har.
+# Dos variables no estan tal cual en ninguna fuente; las arma
+# scripts/gtap/compare_gempack_levels.py antes de comparar:
+#   A xds_net[r,c]   = xds[r,c] - xda[r,c,'tmg']   (xds incluye la oferta de margenes
+#                      VST; qds de GEMPACK no: la diferencia es VST, medida en el 3x3)
+#   A vdfb[r,c,a]    = pd[r,c] * xda[r,c,a]
+#   B VDFB[c,a,r]    = coeficiente VDFB de basedata.har (pre) y del .har actualizado (post)
+# Sin ellas, pedir este mapeo es error ("no hay una variable"), no exclusion.
+#
+# Escalas de A (las del modelo, #131): cantidades * inScale (1e-6), y las que van por
+# actividad ademas * xscale[r,a]. B esta en las unidades de los datos.
+# Oraculo: tests/compare/_oracle.py, ejemplo 15 (3x3: 156 celdas, todas <= 0,1 %).
+
+periods:
+  a: {check: pre, shock: post}
+
+variables:
+  - name: qo
+    a:
+      var: xp
+      dims: [REG, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qo, dims: [ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: rore
+    a: {var: rore, dims: [REG]}
+    b: {var: rore, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: y
+    a:
+      var: regy
+      dims: [REG]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: y, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pinv
+    a: {var: pi, dims: [REG]}
+    b: {var: pinv, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qinv
+    a:
+      var: xiagg
+      dims: [REG]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qinv, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pva
+    a: {var: pva, dims: [REG, ACT]}
+    b: {var: pva, dims: [ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qds
+    a:
+      var: xds_net
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qds, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pe
+    a: {var: pft, dims: [REG, ENDW]}
+    b: {var: pe, dims: [ENDW, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: vdfb
+    a:
+      var: vdfb
+      dims: [REG, COMM, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: VDFB, dims: [COMM, ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+exclude:
+  - var: pe
+    where: {ENDW: [NatRes]}
+    why: "GEMPACK define pe solo para factores moviles y lentos (ENDWMS); NatRes es especifico de un sector (ENDF)"
+  - {var: ppriv, why: "indice Divisia: sin forma en niveles"}
+
+thresholds: [0.001, 0.005, 0.01]
