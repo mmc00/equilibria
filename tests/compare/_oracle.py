@@ -561,3 +561,38 @@ EX14_TOTAL = 18
 EX14_OUTPUT_MAX = 2.51e-5
 EX14_MAX = 0.010465
 EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
+
+# ---------------------------------------------------------------------------
+# Ejemplo 15 — el mapeo GTAP (maps/gtap7.yaml, #132): equilibria <-> GEMPACK, GTAP 3x3,
+# en NIVELES, pre y post.
+#
+# A = tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz (make_eq_gtap7_levels.py:
+# _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels6_gtap7_3x3_tm10.har (LEVB/LEVA)
+# + VDFB de basedata.har (pre) y updated_gtap7_3x3_tm10.har (post). A: check -> pre,
+# shock -> post. Calculado el 2026-10-21 con tests/compare/oracles/gtap7_map_3x3.py (no
+# importa equilibria.compare): cantidades / (1e-6 * xscale), qds = xds - xda[.,.,tmg]
+# (xds incluye la oferta de margenes VST, qds no), VDFB = pd * xda.
+#   qo 18, rore 6, y 6, pinv 6, qinv 6, pva 18, qds 18, pe 24, vdfb 54 = 156 celdas,
+#   las 156 <= 1e-3; maximo 2.52186e-05 en qo post (EU_28, Mnfcs).
+#   pe: las 6 celdas NatRes (3 reg x pre/post) no estan en GEMPACK (factor ENDF).
+# ---------------------------------------------------------------------------
+EX15_EQ = ROOT / "tests" / "compare" / "fixtures" / "eq_gtap7_3x3_levels.json.gz"
+EX15_HAR = (
+    ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels6_gtap7_3x3_tm10.har"
+)
+EX15_CELLS = {
+    "qo": 18,
+    "rore": 6,
+    "y": 6,
+    "pinv": 6,
+    "qinv": 6,
+    "pva": 18,
+    "qds": 18,
+    "pe": 24,
+    "vdfb": 54,
+}
+EX15_TOTAL = 156
+EX15_WITHIN = {1e-3: 156, 5e-3: 156, 1e-2: 156}
+EX15_MAX = 2.52186e-05
+EX15_MAX_CELL = ("qo", ("post", ("EU_28", "Mnfcs")))
+EX15_NATRES_EXCLUDED = 6
