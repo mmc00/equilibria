@@ -161,6 +161,15 @@ class Mapping:
         return self.sets.get(set_name, {}).get(side, {}).get(element, element)
 
     @classmethod
+    def builtin(cls, name: str) -> Mapping:
+        """Un mapeo que viene con equilibria (``compare/maps/<name>.yaml``)."""
+        path = Path(__file__).with_name("maps") / f"{name}.yaml"
+        if not path.exists():
+            have = sorted(p.stem for p in path.parent.glob("*.yaml"))
+            raise MappingError(f"no hay un mapeo {name!r} (hay: {have})")
+        return cls.from_yaml(path)
+
+    @classmethod
     def from_yaml(cls, path: str | Path) -> Mapping:
         import yaml
 
