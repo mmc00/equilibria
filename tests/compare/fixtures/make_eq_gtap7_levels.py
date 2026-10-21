@@ -27,8 +27,34 @@ from equilibria._local_refs import path_capi_src  # noqa: E402
 from equilibria.blocks.gtap._derived_params import xscale_data  # noqa: E402
 from equilibria.templates.gtap import GTAPParameters  # noqa: E402
 
-# Lo que pide maps/gtap7.yaml, mas xda y pd (qds y VDFB se arman con ellos).
-VARS = ("xp", "rore", "regy", "pi", "xiagg", "pva", "xds", "xda", "pd", "pft")
+# Lo que pide maps/gtap7.yaml, mas lo que usa compare_gempack_levels.py para armar
+# qds, qfe, qxw, tpd, pr y VDFB.
+VARS = (
+    "xp",
+    "rore",
+    "regy",
+    "pi",
+    "xiagg",
+    "pva",
+    "xds",
+    "xda",
+    "pd",
+    "pft",
+    "pfact",
+    "pwfact",
+    "pgdpmp",
+    "pmt",
+    "pet",
+    "xs",
+    "xf",
+    "pf",
+    "xma",
+    "rgdpmp",
+    "xmt",
+    "xw",
+    "pefob",
+    "dintx",
+)
 
 
 def main(dataset: str) -> None:
@@ -48,7 +74,10 @@ def main(dataset: str) -> None:
     )
     out = {
         "vars": {
-            v: [[list(i), float(value(c))] for i, c in getattr(m, v).items()]
+            v: [
+                [list(i) if isinstance(i, tuple) else [i], float(value(c))]
+                for i, c in getattr(m, v).items()
+            ]
             for v in VARS
         },
         "params": {
