@@ -28,11 +28,16 @@ BLOCK_HEADER_LEN = 64  # per-block header preceding each REFULL data block
 # pad(4) + 7 int32 of block geometry, so the values start at byte 32.
 DENSE_2D_DATA_OFFSET = 32
 
-# Dim-summary record of a REFULL block: pad(4) + slot + rank slot + 7 dims.
-# NOTE the first slot is NOT a reliable rank in files GEMPACK wrote (it reads 1
-# regardless of the header's set count); see _read_refull and issue #86.
-SUMMARY_NDIM_OFFSET = 4
+# Dim-summary record of a REFULL block: pad(4) + record count + rank slot (7)
+# + 7 dims. The first slot is NOT the rank: it is the number of records left in
+# the data section, this one included -- summary + block header + data, so 3
+# for a single block and 2*nblocks + 1 in general. All 80 REFULL headers in the
+# reference fixtures carry 3; CRIio.har as saved by ViewHAR carries 5 for a
+# header split in two blocks. GEMPACK checks it on read ("E-NREC not as
+# expected"), so writing anything else makes the file unreadable to GEMPACK.
+SUMMARY_NREC_OFFSET = 4
 SUMMARY_DIMS_OFFSET = 12
+REFULL_SINGLE_BLOCK_RECORDS = 3
 
 # Type tokens — exactly 6 ASCII bytes, fixed
 TOKEN_1CFULL = "1CFULL"

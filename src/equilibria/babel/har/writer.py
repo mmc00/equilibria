@@ -408,12 +408,15 @@ def _write_refull(out: bytearray, name: str, ha: HeaderArray) -> None:
         rec = wire.write_set_element_record(elems, n_total=len(elems), flag=1)
         wire.write_record(out, rec)
 
-    # Dim-summary record (40 bytes): pad + ndim + 7 + shape padded to rank 7.
-    # GEMPACK fixes the on-disk rank slot to 7 (matches harpy3's expectation).
+    # Dim-summary record (40 bytes): pad + record count + 7 + shape padded to
+    # rank 7. The first slot counts the records left in the data section (see
+    # wire.SUMMARY_NREC_OFFSET): we always emit one block, so 3. It used to be
+    # arr.ndim, which GEMPACK rejects with "E-NREC not as expected" for every
+    # REFULL that is not 3-D.
     shape7 = list(arr.shape) + [1] * (7 - arr.ndim)
     summary = bytearray()
     summary.extend(wire.PAD)
-    summary.extend(wire.INT.pack(arr.ndim))
+    summary.extend(wire.INT.pack(wire.REFULL_SINGLE_BLOCK_RECORDS))
     summary.extend(wire.INT.pack(7))
     for dim in shape7:
         summary.extend(wire.INT.pack(dim))
