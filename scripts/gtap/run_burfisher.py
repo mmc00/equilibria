@@ -236,6 +236,11 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     ),
 }
 
+# Como GEMPACK (Gragg), el shock no se aplica de una vez: se sube en pasos y cada
+# solve arranca del anterior. Sin pasos, ME9B/C (capital ROW +213 %) a veces no
+# resuelven, con PATH o con Newton-TR.
+SHOCK_STEPS = (0.25, 0.5, 0.75, 1.0)
+
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
 RF = {
     "pfa", "pfy", "pm", "pmcif", "pefob", "pwmg", "pp", "pdp", "pmp", "xwmg", "xmgm",
@@ -306,6 +311,7 @@ def solve_exercise(exp: str, har: Path):
         seed_from_prior=False,
         mode="gtap",
         solve_check=True,
+        shock_steps=SHOCK_STEPS,
     )
     return m, p, {k: int(res[k]["code"]) for k in res}
 

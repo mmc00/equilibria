@@ -2980,6 +2980,53 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
     return hf
 
 
+def _solve_shock_in_steps(m, steps, solve) -> dict[str, Any]:
+    """Resuelve el shock del ShockBlock en pasos, como GEMPACK (Gragg).
+
+    Cada celda shockeada va de su valor del check a su valor del shock: en el paso
+    ``λ`` vale ``check·(shock/check)**λ`` (el cambio % compuesto, el camino de
+    GEMPACK), o ``check + λ·(shock − check)`` si alguno no es positivo. Cada solve
+    arranca del anterior (las Vars conservan su valor). El ultimo paso es 1: deja
+    las celdas exactamente en el shock. Se corta en el primer paso que no converge.
+    Con shocks grandes (ME9: capital ROW +213 %) PATH y Newton-TR arrancando del
+    check a veces se pierden; en pasos llegan a la raiz de GEMPACK.
+    """
+    from pyomo.environ import value
+
+    from equilibria.blocks.gtap.periods import CHECK
+    from equilibria.templates.gtap.shocks import _shocked_cells
+
+    lambdas = [float(x) for x in steps]
+    if not lambdas or lambdas[-1] != 1.0:
+        lambdas.append(1.0)
+    cells = []
+    for name in sorted(getattr(m, "_exogenous_instruments", ())):
+        var = getattr(m, name)
+        for k in list(_shocked_cells(m, name)):
+            chk = float(value(var[(*k[:-1], CHECK)]))
+            cells.append((var[k], chk, float(value(var[k]))))
+    r: dict[str, Any] = {}
+    for lam in lambdas:
+        for cell, chk, full in cells:
+            if lam == 1.0:
+                cell.fix(full)
+            elif chk > 0.0 and full > 0.0:
+                cell.fix(chk * (full / chk) ** lam)
+            else:
+                cell.fix(chk + lam * (full - chk))
+        r = solve()
+        code = int(r.get("termination_code") or 0)
+        print(
+            f"[shock steps] λ={lam:.3f} code={code} resid={r.get('residual')}",
+            file=sys.stderr,
+        )
+        if code != 1:
+            for cell, _, full in cells:
+                cell.fix(full)
+            break
+    return r
+
+
 def _solve_multiperiod_inner(
     m,
     params,
@@ -2993,6 +3040,7 @@ def _solve_multiperiod_inner(
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
+    shock_steps: tuple[float, ...] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -3037,6 +3085,8 @@ def _solve_multiperiod_inner(
     The shock lives in the model: the ShockBlock cells of the 'shock' period that
     differ from 'check' (``shocks.apply_shock`` before calling, gtap-mode only).
     With none, the default +10% import-tariff shock is applied.
+    ``shock_steps`` (fractions λ, e.g. (0.25, 0.5, 0.75, 1.0)): solve that
+    ShockBlock shock in steps, each from the previous one (_solve_shock_in_steps).
 
     Returns
     -------
@@ -3413,6 +3463,21 @@ def _solve_multiperiod_inner(
                     file=sys.stderr,
                 )
                 break
+    elif shock_steps and not _tariff_shock:
+        r_shk = _solve_shock_in_steps(
+            m,
+            shock_steps,
+            lambda: run_gtap._run_path_capi_nonlinear_full(
+                m,
+                params_shock,
+                enforce_post_checks=False,
+                strict_path_capi=False,
+                closure_config=_shk_closure,
+                equation_scaling=True,
+                gtap_mode=_gtap_mode,
+                solution_hint=None,
+            ),
+        )
     else:
         r_shk = run_gtap._run_path_capi_nonlinear_full(
             m,
@@ -3511,6 +3576,7 @@ def solve_multiperiod(
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
+    shock_steps: tuple[float, ...] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Solve base → check → shock, with the built model hidden from the GC.
 
@@ -3557,4 +3623,5 @@ def solve_multiperiod(
             mode=mode,
             solve_check=solve_check,
             settle_only=settle_only,
+            shock_steps=shock_steps,
         )
