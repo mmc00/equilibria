@@ -17,6 +17,11 @@ Convenciones del mapeo que estos ejemplos fijan (spec 2026-10-15, Q8/Q9/Q16/Q18)
 
 from __future__ import annotations
 
+import functools
+import gzip
+import shutil
+import tempfile
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -654,19 +659,49 @@ EX15_INDEX_EXCLUDED = (
 #    Variables sin nivel: las que el fixture trae con el centinela 1e10. El .sl4
 #    trae ademas 12 variables que el fixture no tiene (otra version del modelo).
 # 2) Cambio: 100*(post/pre - 1) de cada celda = el volcado de sltoht del mismo .sl4
-#    (burfisher_sl4/sl4dump_<exp>.har). Una celda con pre = 0 no tiene %: GEMPACK
+#    (burfisher/sl4dump_<exp>.har). Una celda con pre = 0 no tiene %: GEMPACK
 #    escribe uno igual (qes/qfe, flujo cero), pero en niveles es 0 -> 0.
 # Precision: LEVB/LEVA del .sl4 son REAL*4 (~6e-8 relativo).
 # Medido el 2026-10-19 con un lector de exploracion (scratch, no commiteado): pre
 # rel max 4.8e-8 (qo); cambio max 1.04e-5 pp (TBL45A) y 3.05e-5 pp (ME9C).
 # ---------------------------------------------------------------------------
 _GEMPACK_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
-EX16_DIR = _GEMPACK_FIXTURES / "burfisher_sl4"
+EX16_DIR = _GEMPACK_FIXTURES / "burfisher"
+
+
+@functools.cache
+def burfisher_sl4(exp: str) -> Path:
+    """El ``.sl4`` de un ejercicio de Burfisher (``burfisher/<exp>.sl4.gz``),
+    descomprimido una vez por proceso en un directorio temporal."""
+    dest = Path(tempfile.mkdtemp(prefix="burfisher_sl4_")) / f"{exp}.sl4"
+    with gzip.open(EX16_DIR / f"{exp}.sl4.gz", "rb") as src, dest.open("wb") as dst:
+        shutil.copyfileobj(src, dst)
+    return dest
+
+
+class _Sl4(Mapping[str, Path]):
+    """{ejercicio: .sl4 descomprimido}; descomprime al pedir la clave."""
+
+    def __init__(self, exercises: tuple[str, ...]) -> None:
+        self._exercises = exercises
+
+    def __getitem__(self, exp: str) -> Path:
+        if exp not in self._exercises:
+            raise KeyError(exp)
+        return burfisher_sl4(exp.lower())
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._exercises)
+
+    def __len__(self) -> int:
+        return len(self._exercises)
+
+
 # GTAPV7 (gtapv7.for, mismo nus333) OMITE 11 variables: VARS/VCNA/VCAR/LVOK/PLEV
 # cubren las 252 de la solucion, VCSP/VCSN las 263 del modelo. En TBL45A y ME9C
 # las dos listas coinciden y no distinguen cual se usa.
 EX16_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
-EX16_SL4 = {e: EX16_DIR / f"{e.lower()}.sl4" for e in EX16_EXERCISES}
+EX16_SL4 = _Sl4(EX16_EXERCISES)
 EX16_DUMP = {e: EX16_DIR / f"sl4dump_{e.lower()}.har" for e in EX16_EXERCISES}
 EX16_NUS333_POST = _GEMPACK_FIXTURES / "sl4levels_nus333_tm10.har"
 EX16_NUS333_PCT = _GEMPACK_FIXTURES / "sl4dump_nus333_tm10.har"

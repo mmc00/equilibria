@@ -18,7 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "gtap" / "mk_exp_directos.py"
-PKG = ROOT / "runs" / "burfisher_nus333"
+PKG = ROOT / "datasets" / "nus333"
 LOGS = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
 
 

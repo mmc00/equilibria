@@ -33,7 +33,7 @@ from equilibria.babel.har.reader import read_har
 
 FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
 EQ = ROOT / "tests" / "compare" / "fixtures"
-NUS333 = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "data"
+NUS333 = ROOT / "datasets"
 
 
 def sl4_levels(path: Path) -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:

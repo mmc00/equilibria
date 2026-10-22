@@ -7,7 +7,8 @@ corta los demas. Nada se borra ni se cambia en el repo: cada paso trabaja sobre
 una copia dentro de la carpeta de salida.
 
   1. sltoht real (#148, oraculo 3): export_sl4_levels.py sobre los .sl4 de
-     Burfisher de tests\fixtures\gtap7_gempack\burfisher_sl4. Deja el texto de
+     Burfisher de tests\fixtures\gtap7_gempack\burfisher (se descomprimen en la
+     carpeta de salida). Deja el texto de
      `sltoht -SHL -SIC` (<stem>_levels.txt) y el .har de niveles validado.
   2. sltoht real (#133): lo mismo sobre gtap7_3x3 tm10 y gtap7_20x41 capFix de
      runs\gempack_matrix. Copia ademas el .sl4 del 20x41 (#135).
@@ -27,7 +28,7 @@ una copia dentro de la carpeta de salida.
      make_levels_tab.py --uncondensed arma gtapuv7_levels (el gtapv7.tab
      parchado SIN condensar, como el GTAPUV7 de RunGTAP: los .exp fijan y
      shockean variables que la condensacion omite), tablo lo compila para
-     GEMSIM y gemsim corre cada .exp de runs\burfisher_nus333 (me8 y tbl813
+     GEMSIM y gemsim corre cada .exp de datasets\nus333 (me8 y tbl813
      con su -dir.exp). Los .exp de Johansen de 1 paso (TBL45A/B/C, TBL64,
      ME4A/B) pasan a Gragg 2-4-6. Deja .sl4, .upd y log por ejercicio en
      5_burfisher\out; los niveles se leen directo del .sl4 en la Mac.
@@ -108,8 +109,16 @@ function Export-Levels([string]$step, [string]$sl4, [string]$sl4dump, [string]$d
 $Fix = "tests\fixtures\gtap7_gempack"
 $Matrix = "runs\gempack_matrix"
 if ($Pasos -contains 1) {
-foreach ($e in @("TBL45A", "ME9C", "GTAPV7")) {
-    Export-Levels "1 sltoht $e" "$Fix\burfisher_sl4\$e.sl4" "$Fix\burfisher_sl4\sl4dump_$e.har" (Join-Path $Out "1_burfisher\$e")
+foreach ($e in @("tbl45a", "me9c", "gtapv7")) {
+    # se descomprime aparte: Export-Levels copia el .sl4 a $dest
+    $gzDir = Join-Path $Out "1_burfisher\_sl4"
+    New-Item -ItemType Directory -Force -Path $gzDir | Out-Null
+    $sl4 = Join-Path $gzDir "$e.sl4"
+    $in = [System.IO.File]::OpenRead((Resolve-Path "$Fix\burfisher\$e.sl4.gz").Path)
+    $gz = New-Object System.IO.Compression.GZipStream($in, [System.IO.Compression.CompressionMode]::Decompress)
+    $outFile = [System.IO.File]::Create($sl4)
+    try { $gz.CopyTo($outFile) } finally { $outFile.Close(); $gz.Close(); $in.Close() }
+    Export-Levels "1 sltoht $e" $sl4 "$Fix\burfisher\sl4dump_$e.har" (Join-Path $Out "1_burfisher\$e")
 }
 
 }
@@ -244,7 +253,7 @@ if ($okTab5) {
 if ($okGss5) {
     $Aux5 = Join-Path $Tab5 "gtapuv7_levels"
     $Pkg = Join-Path $Bf "nus333"
-    Copy-Item "runs\burfisher_nus333" $Pkg -Recurse -Force
+    Copy-Item "datasets\nus333" $Pkg -Recurse -Force
     # me8/tbl813: corren sus -dir.exp (rate% traducido); tbl53 usa target%, que solo
     # resuelve la GUI; gtapv7.exp declara el cierre del modelo CONDENSADO.
     $skip = @("me8", "tbl813", "tbl53", "gtapv7")
