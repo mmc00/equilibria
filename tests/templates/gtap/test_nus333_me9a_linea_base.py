@@ -12,21 +12,20 @@ que en el notebook del ejercicio:
   mismo % en las 3 actividades (un solo shifter por region, como ``aoreg``);
 - el shock: ``gdp_target`` +109,6% / +284,5% (``apply_shock``).
 
-En ME9 el check NO reproduce la base (``rgdpmp`` ROW +0,030%), asi que el objetivo
-tiene que anclarse al check, como en GAMS.
+El objetivo se ancla al check, como en GAMS. Con la calibracion de betaP de GTAP
+(``phiP = Σ xcshr·eh``, test_nus333_cde_betacal.py) el check es el dato.
 
-Oraculo GAMS (gams_shock/gen_gams.py, GDP: fila ``gdpeq`` emparejada con ``axpreg``,
-``rgdpmp = rgdpmp_check*(1+%)``) vs GEMPACK ME9A.sl4:
+Oraculo: GEMPACK ME9A (``tests/fixtures/gtap7_gempack/burfisher/me9a.sl4.gz``,
+``tools/gempack-oracle``), todas las celdas en niveles con
+``compare_burfisher_gempack``, y ``aoreg`` USA/ROW +31,9376 / +42,3080.
 
-    aoreg USA/ROW   GAMS +31,9496 / +42,4131   GEMPACK +31,9376 / +42,3080
-
-La diferencia es la de ME9 entre GAMS y GEMPACK, no del oraculo: con el MISMO aoreg
-(ME9B, 31,94 / 42,31) GAMS da rgdpmp +109,577 / +284,059 y GEMPACK qgdp +109,451 /
-+284,317. GAMS ME9A es coherente con GAMS ME9B (31,94 -> 109,577; 31,950 -> 109,6).
-
-Todas las celdas: los niveles GAMS de check y shock estan en
-``tests/fixtures/nus333_me9a_gams_levels.json.gz`` (``_diff_core.gams_levels``) y se
-comparan con ``run_burfisher.compare``.
+Ya no se compara contra GAMS: ``cal.gms`` calibra betaP solo en el periodo base y deja
+el check con las participaciones crudas, asi que con ``climatechange.prm`` su check se
+aparta del dato (qgd ROW 1,2 %). equilibria calibra como GTAP y se aparta de GAMS a
+proposito. Medido 2026-10-22 contra GEMPACK: antes pre 87 % / post 77 % de las celdas a
+0,5 %, max 1,7 %; ahora pre 100 % y post 100 % a 1 %, max 0,64 %. Los niveles de GAMS
+(``tests/fixtures/nus333_me9a_gams_levels.json.gz``) quedan solo como entrada del test
+de los comparadores.
 
 LOCAL-only: SKIP si falta nus333.
 """
@@ -49,35 +48,12 @@ from tests.templates.gtap._nus333 import (
 pytestmark = pytest.mark.integration
 
 LEVELS = ROOT / "tests" / "fixtures" / "nus333_me9a_gams_levels.json.gz"
-TOL_PP = 0.002
 REGS = ("USA", "ROW")
 ACTS = ("AGR", "MFG", "SER")
 GDP = {"USA": 109.6, "ROW": 284.5}
 
-# GAMS capFlex, % shock/check (oraculo de arriba).
-ORACLE = {
-    "rgdpmp": {("USA",): 109.6, ("ROW",): 284.5},
-    "axp": {
-        **{("USA", a): 31.949611 for a in ACTS},
-        **{("ROW", a): 42.413121 for a in ACTS},
-    },
-    "xp": {
-        ("USA", "AGR"): 52.712848,
-        ("USA", "MFG"): 33.8334,
-        ("USA", "SER"): 85.171157,
-        ("ROW", "AGR"): 70.770028,
-        ("ROW", "MFG"): 158.68932,
-        ("ROW", "SER"): 212.975998,
-    },
-    "pft": {
-        ("USA", "LABOR"): 5.472547,
-        ("USA", "CAPITAL"): -13.766864,
-        ("USA", "LAND"): 143.398993,
-        ("ROW", "LABOR"): 39.09969,
-        ("ROW", "CAPITAL"): -27.055608,
-        ("ROW", "LAND"): 155.230698,
-    },
-}
+# GEMPACK ME9A.sl4: aoreg, % de cambio.
+AOREG_GEMPACK = {"USA": 31.9376, "ROW": 42.3080}
 
 
 def register_me9a_hooks() -> None:
@@ -170,29 +146,36 @@ def test_productividad_fija_en_el_check(solved):
             )
 
 
-def test_iguala_a_gams(solved):
-    m, _, _, value = solved
-    malas = []
-    for var, cells in ORACLE.items():
-        for key, want in cells.items():
-            got = pct(m, var, key)
-            if abs(got - want) > TOL_PP:
-                malas.append(f"{var}{key}: equilibria {got:+.6f} vs GAMS {want:+.6f}")
-    n = sum(len(c) for c in ORACLE.values())
-    assert not malas, f"{len(malas)}/{n} celdas fuera de {TOL_PP}pp:\n" + "\n".join(
-        malas
-    )
+def _gempack(solved):
+    import importlib
+    import sys
 
-
-def test_todas_las_celdas_contra_gams(solved):
-    """Check y shock, todas las celdas, contra los niveles de GAMS (tolerancia 0,1%)."""
     m, p, _, _ = solved
-    r = run_burfisher().compare(m, p, gams_levels(LEVELS, "ME9A"))
-    for period in ("check", "shock"):
-        got = r[period]
-        assert got["cells"] > 500, (period, got["cells"])
-        assert got["match_pct"]["0.1%"] == 100.0, (period, got["worst"])
-        assert got["instr_bad"] == [], (period, got["instr_bad"])
+    sys.path[:0] = [str(ROOT / "scripts" / "gtap")]
+    cb: Any = importlib.import_module("compare_burfisher_gempack")
+    from equilibria.blocks.gtap._derived_params import xscale_data
+
+    return cb.run("ME9A", cb.cg.model_levels(m), dict(xscale_data(p, p.sets)))
+
+
+@pytest.mark.parametrize("r", REGS)
+def test_aoreg_iguala_a_gempack(solved, r):
+    """La productividad que alcanza el PIB objetivo, en niveles (1 + %/100)."""
+    m, _, _, _ = solved
+    got = 1 + pct(m, "axp", (r, "AGR")) / 100
+    want = 1 + AOREG_GEMPACK[r] / 100
+    assert got == pytest.approx(want, rel=1e-3)
+
+
+def test_todas_las_celdas_contra_gempack(solved):
+    """pre = dato (el check sin shock); post a menos de 1 % (max medido 0,64 %)."""
+    r = _gempack(solved)
+    for period, tol in (("pre", 1e-5), ("post", 1e-2)):
+        cells = [c for c in r.cells if c.period == period]
+        assert len(cells) == 207, period
+        worst = max(cells, key=lambda c: c.d)
+        assert worst.d < tol, (period, worst)
+    assert not r.unmatched
 
 
 def test_equilibria_compare_da_lo_mismo_que_el_comparador_del_gate(solved):

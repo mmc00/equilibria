@@ -9,8 +9,9 @@ TBL46A 0,0079pp, TBL65A 0,0287pp, TBL54A 0,0021pp, TBL62A 0,0054pp, TBL78 0,0464
 TBL93 0,0042pp, ME5 0,0004pp, ME8 0,0004pp (ME8-DIR.sl4).
 TBL79: qxs/pcif/pfob de los 12 flujos y qst a <=0,003pp (qxw de SER difiere por
 definicion: GEMPACK suma la oferta de margenes qst, GAMS xet no).
-ME9B/ME9C: GAMS vs GEMPACK hasta 0,85pp sobre cambios de ~215% (brecha en estudio,
-prueba de escala ME9B-S10 pendiente); aca se mide equilibria contra GAMS. TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
+ME9B/ME9C/ME9D no estan aca: con ``climatechange.prm`` GAMS deja el check sin
+calibrar betaP y se aparta del dato; equilibria calibra como GTAP y se compara contra
+GEMPACK (test_nus333_me9_pasos.py). TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
 0,89pp a 10% son la linealizacion.
 
@@ -224,49 +225,13 @@ ORACLES = {
         "pi": {("USA",): 0.023267, ("ROW",): 0.045714},
         "xiagg": {("USA",): -0.266482, ("ROW",): 0.074028},
     },
-    "ME9B": {
-        "xp": {
-            ("USA", "AGR"): 52.745462,
-            ("USA", "MFG"): 33.815545,
-            ("USA", "SER"): 85.158579,
-            ("ROW", "AGR"): 70.757195,
-            ("ROW", "MFG"): 158.560469,
-            ("ROW", "SER"): 212.715214,
-        },
-        "rore": {("USA",): 33.065987, ("ROW",): 33.065987},
-        "regy": {("USA",): 35.842836, ("ROW",): 109.819413},
-        "pi": {("USA",): -41.240148, ("ROW",): -47.064437},
-        "xiagg": {("USA",): 117.401573, ("ROW",): 267.970934},
-    },
-    "ME9C": {
-        "xp": {
-            ("USA", "AGR"): 53.063436,
-            ("USA", "MFG"): 33.270063,
-            ("USA", "SER"): 85.053661,
-            ("ROW", "AGR"): 70.237086,
-            ("ROW", "MFG"): 157.120398,
-            ("ROW", "SER"): 211.538958,
-        },
-        "rore": {("USA",): 32.351242, ("ROW",): 32.351242},
-        "regy": {("USA",): 36.466163, ("ROW",): 109.238355},
-        "pi": {("USA",): -40.88362, ("ROW",): -46.941339},
-        "xiagg": {("USA",): 117.972772, ("ROW",): 265.824712},
-    },
 }
 
 # EXP: (prm, [(instrumento, indice, % GEMPACK)])
 SHOCKS = {exp: EXERCISES[exp] for exp in ORACLES}
 
 
-# ME9B no converge con PATH en Linux (code 2); en macOS si (#157).
-_LINUX_PATH = pytest.mark.xfail(
-    sys.platform == "linux",
-    reason="#157: PATH no resuelve el shock de ME9B en Linux",
-    strict=True,
-)
-PARAMS = [
-    pytest.param(e, marks=_LINUX_PATH) if e == "ME9B" else e for e in sorted(SHOCKS)
-]
+PARAMS = sorted(SHOCKS)
 
 
 @pytest.fixture(scope="module", params=PARAMS)
