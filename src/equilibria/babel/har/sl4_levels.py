@@ -15,6 +15,9 @@ Lo escribe ``scripts/gtap/export_sl4_levels.py`` y lo lee
 * Un ``.har`` de CAMBIOS % (``sl4dump_*.har``, salida HAR de sltoht) trae las
   cabeceras ``PERCENT_CHANGE_HEADERS``; uno de niveles, ninguna (medido sobre los
   fixtures: 73 ``sl4dump_*`` las traen todas, 7 ``sl4levels_*`` ninguna).
+
+:func:`equilibria.babel.har.sl4.read_sl4_levels` lee los mismos niveles directo del
+``.sl4``, sin sltoht.
 """
 
 from __future__ import annotations

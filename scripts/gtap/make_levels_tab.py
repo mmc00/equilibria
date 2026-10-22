@@ -25,9 +25,14 @@ The expected LEVB values were fixed before this script, by hand from basedata.ha
 Also writes gtapv7_levels.sti: the same condensation, but GEMSIM output (``pgs``)
 instead of a Fortran program (``wfp``), so no Fortran compiler is needed.
 
+``--uncondensed`` writes gtapuv7_levels.tab/.sti instead: the STI without its
+condensation block (``c`` ... ``e``, omissions included). That is GTAPUV7, the
+model RunGTAP uses for Burfisher's experiments: their ``.EXP`` fix and shock
+variables (atall, tfd, tpdall...) that the condensation omits.
+
 Usage (any OS; compiling with tablo is Windows-only, see scripts/windows):
     uv run python scripts/gtap/make_levels_tab.py C:/runGTAP375/gtapv7.tab ^
-        --sti C:/runGTAP375/gtapv7.sti --out-dir out/
+        --sti C:/runGTAP375/gtapv7.sti --out-dir out/ [--uncondensed]
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ import sys
 from pathlib import Path
 
 NAME = "gtapv7_levels"
+NAME_UNCONDENSED = "gtapuv7_levels"
 ENCODING = "latin-1"  # TAB files are plain ASCII; latin-1 round-trips any byte
 
 # variable -> orig_level (a coefficient of the TAB or a constant)
@@ -113,9 +119,13 @@ def _replace_line(lines: list[str], marker: str, new: str) -> None:
     lines[hits[0]] = new
 
 
-def patch_sti(sti: str, name: str = NAME) -> str:
-    """The same stored input, pointed at ``name`` and generating GEMSIM output."""
+def patch_sti(sti: str, name: str = NAME, condense: bool = True) -> str:
+    """The same stored input, pointed at ``name`` and generating GEMSIM output.
+
+    ``condense=False`` drops the condensation block, from ``c`` to ``e``."""
     lines = sti.splitlines()
+    if not condense:
+        lines = _drop_condensation(lines)
     _replace_line(
         lines, "name of TABLO input file", f"{name} ! name of TABLO input file"
     )
@@ -134,6 +144,18 @@ def patch_sti(sti: str, name: str = NAME) -> str:
     return "\n".join(lines) + ("\n" if sti.endswith("\n") else "")
 
 
+def _drop_condensation(lines: list[str]) -> list[str]:
+    code = [ln.split("!")[0].strip().lower() for ln in lines]
+    starts = [i for i, c in enumerate(code) if c == "c"]
+    ends = [i for i, c in enumerate(code) if c == "e"]
+    if len(starts) != 1 or len(ends) != 1 or ends[0] < starts[0]:
+        raise TabPatchError(
+            "expected one condensation block ('c' ... 'e') in the STI, found "
+            f"{len(starts)} 'c' and {len(ends)} 'e'"
+        )
+    return lines[: starts[0]] + lines[ends[0] + 1 :]
+
+
 def _read(path: Path) -> tuple[str, str]:
     """Text with \n line ends, plus the line end the file used (TABs ship CRLF)."""
     raw = path.read_bytes().decode(ENCODING)
@@ -150,15 +172,23 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("tab", type=Path, help="gtapv7.tab to patch (left untouched)")
     ap.add_argument("--sti", type=Path, required=True, help="its gtapv7.sti")
     ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument(
+        "--uncondensed", action="store_true", help=f"write {NAME_UNCONDENSED} (GTAPUV7)"
+    )
     args = ap.parse_args(argv)
+    name = NAME_UNCONDENSED if args.uncondensed else NAME
 
     tab, tab_eol = _read(args.tab)
     sti, sti_eol = _read(args.sti)
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    _write(args.out_dir / f"{NAME}.tab", patch_tab(tab), tab_eol)
-    _write(args.out_dir / f"{NAME}.sti", patch_sti(sti, NAME), sti_eol)
+    _write(args.out_dir / f"{name}.tab", patch_tab(tab), tab_eol)
+    _write(
+        args.out_dir / f"{name}.sti",
+        patch_sti(sti, name, condense=not args.uncondensed),
+        sti_eol,
+    )
     print(
-        f"wrote {args.out_dir / NAME}.tab and .sti (orig_level on {', '.join(LEVELS)})"
+        f"wrote {args.out_dir / name}.tab and .sti (orig_level on {', '.join(LEVELS)})"
     )
     return 0
 

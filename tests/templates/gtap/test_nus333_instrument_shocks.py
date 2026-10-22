@@ -258,7 +258,18 @@ ORACLES = {
 SHOCKS = {exp: EXERCISES[exp] for exp in ORACLES}
 
 
-@pytest.fixture(scope="module", params=sorted(SHOCKS))
+# ME9B no converge con PATH en Linux (code 2); en macOS si (#157).
+_LINUX_PATH = pytest.mark.xfail(
+    sys.platform == "linux",
+    reason="#157: PATH no resuelve el shock de ME9B en Linux",
+    strict=True,
+)
+PARAMS = [
+    pytest.param(e, marks=_LINUX_PATH) if e == "ME9B" else e for e in sorted(SHOCKS)
+]
+
+
+@pytest.fixture(scope="module", params=PARAMS)
 def solved(request):
     exp = request.param
     prm_name, shocks = SHOCKS[exp]

@@ -1,0 +1,37 @@
+
+ ! This file was created at 13:10:22 on 27-NOV-2020 by the program
+ !  <SHOCKSv7.for 13-FEB-2020> [SHOCKSv7.tab,shocksv7.sti]
+ ! which accesses some of the routines in the GEMPACK software release
+ !  <GEMPACK Release 12.1.003   January 2020>
+ 
+ !     -------------------------------------------------------                
+ !    !            GEMPACK Software System Licence            !               
+ !    !  Source Code Licence for the GEMPACK Software System  !               
+ !    !                 Licence No.  GFM-0048                 !               
+ !    !          Licence for Release 12.0 of GEMPACK          !               
+ !    !           Center for Global Trade Analysis            !               
+ !    !         Department of Agricultural Economics          !               
+ !    !                   Krannert Building                   !               
+ !    !                   Purdue University                   !               
+ !     -------------------------------------------------------                
+    
+
+ !
+ ! Values of TPM_HAT(COMM,REG) - a real array of size 3x2
+ !----------------------------
+ !
+
+! Coefficient TPM_HAT(COMM,REG)
+
+ ! (Entries are written one "row" at a time - maximum of 4 per line.)
+
+ 
+ 3 2  real row_order;
+ 
+! The matrix TPM_HAT(%1,%2)  with %1 in COMM and %2 in REG. ++++++++++++++++++
+
+! %2=USA             ROW
+ -5.8277063      -1.6270928    ! %1=AGR
+ -7.9622064      -15.525735    ! %1=MFG
+-1.11209899E-02  -6.7103205    ! %1=SER
+

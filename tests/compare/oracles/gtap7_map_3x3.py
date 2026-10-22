@@ -79,7 +79,17 @@ GEMPACK_VARS = (
 
 def _gempack_levels() -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:
     """{var: {(periodo, indices): nivel}} desde las cabeceras LEVA/LEVB crudas."""
-    har = read_har(str(FIX / "sl4levels6_gtap7_3x3_tm10.har"))
+    out = _leva_levb(FIX / "sl4levels6_gtap7_3x3_tm10.har")
+    _add_vdfb(
+        out,
+        ROOT / "datasets/gtap7_3x3/basedata.har",
+        ROOT / "tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har",
+    )
+    return out
+
+
+def _leva_levb(path: Path) -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:
+    har = read_har(str(path))
     out: dict[str, dict] = {}
     for ha in har.values():
         name = (ha.long_name or "").split("#", 1)[0].strip()
@@ -97,25 +107,29 @@ def _gempack_levels() -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:
         for idx in np.ndindex(arr.shape):
             key = tuple(ha.set_elements[d][i] for d, i in enumerate(idx))
             cells[(period, key)] = float(arr[idx])
-    for period, f in (
-        ("pre", "datasets/gtap7_3x3/basedata.har"),
-        ("post", "tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har"),
-    ):
-        ha = read_har(str(ROOT / f))["VDFB"]
+    return out
+
+
+def _add_vdfb(out: dict, basedata: Path, updated: Path) -> None:
+    """VDFB[c, a, r] de basedata (pre) y del .har actualizado (post)."""
+    for period, f in (("pre", basedata), ("post", updated)):
+        ha = read_har(str(f))["VDFB"]
         arr = np.asarray(ha.array, dtype=float)
         for idx in np.ndindex(arr.shape):
             key = tuple(ha.set_elements[d][i] for d, i in enumerate(idx))
             out.setdefault("VDFB", {})[(period, key)] = float(arr[idx])
-    return out
 
 
-def main() -> None:
-    with gzip.open(EQ, "rt", encoding="utf-8") as fh:
+def load_eq(path: Path) -> tuple[dict, dict]:
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
         raw = json.load(fh)
     eq = {v: {tuple(k): x for k, x in rows} for v, rows in raw["vars"].items()}
     xs = {tuple(k): x for k, x in raw["params"]["xscale"]}
-    B = _gempack_levels()
+    return eq, xs
 
+
+def rows_of(eq: dict, xs: dict, B: dict) -> list[tuple]:
+    """(variable, periodo, indices en orden de A, d) de cada celda que B trae."""
     rows = []  # (variable, periodo, indices en orden de A, d)
 
     def add(name, period, a_idx, a, b):
@@ -205,7 +219,7 @@ def main() -> None:
 
     for period, t in PERIODS.items():
         for g, f in spec.items():
-            for (p, k), b in B[g].items():
+            for (p, k), b in B.get(g, {}).items():
                 if p != period:
                     continue
                 if g == "pe" and k[0] == "NatRes":
@@ -218,7 +232,10 @@ def main() -> None:
             if p == period:
                 v = eq["pd"][(r, c, t)] * eq["xda"][(r, c, a, t)]
                 add("vdfb", period, (r, c, a), v / X(r, a), b)
+    return rows
 
+
+def report(eq: dict, rows: list[tuple]) -> None:
     print(f"celdas={len(rows)}")
     for t in THRESHOLDS:
         print(f"  <= {t:g}: {sum(row[3] <= t for row in rows)}")
@@ -230,6 +247,11 @@ def main() -> None:
     print(f"  maximo: {worst}")
     natres = {(r, e) for r, e, _ in eq["pft"] if e == "NatRes"}
     print(f"  pft NatRes en A (pre+post): {2 * len(natres)} celdas sin pareja en B")
+
+
+def main() -> None:
+    eq, xs = load_eq(EQ)
+    report(eq, rows_of(eq, xs, _gempack_levels()))
 
 
 if __name__ == "__main__":

@@ -130,13 +130,6 @@ def test_un_har_de_cambios_pct_es_error_con_la_instruccion(tmp_path):
         from_har(path)
 
 
-def test_un_sl4_es_error_con_la_instruccion(tmp_path):
-    path = tmp_path / "sol.sl4"
-    path.write_bytes(b"\0")
-    with pytest.raises(CompareError, match=O.EX12_CONVERSION_HINT):
-        from_har(path)
-
-
 def test_una_variable_pedida_que_no_esta_es_error(levels_har):
     with pytest.raises(CompareError, match="qxs"):
         from_har(levels_har, variables=["qxs"])

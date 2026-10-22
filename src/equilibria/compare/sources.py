@@ -9,7 +9,7 @@ Solo se leen niveles.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -255,8 +255,8 @@ def from_pyomo(
 
 
 _CONVERSION_HINT = (
-    "Convierte la solucion a un .har de NIVELES (LEVB/LEVA) con "
-    "scripts/gtap/export_sl4_levels.py (usa `sltoht -SHL -SIC`)."
+    "Pasa el .sl4 de la solucion directo, o conviertela a un .har de NIVELES "
+    "(LEVB/LEVA) con scripts/gtap/export_sl4_levels.py (usa `sltoht -SHL -SIC`)."
 )
 
 
@@ -265,17 +265,18 @@ def from_har(
     *,
     variables: Iterable[str] | None = None,
 ) -> Solution:
-    """Niveles de una solucion GEMPACK desde su ``.har`` de NIVELES.
+    """Niveles de una solucion GEMPACK desde su ``.sl4`` o su ``.har`` de NIVELES.
 
-    Es la salida de ``scripts/gtap/export_sl4_levels.py``; la convencion vive en
-    :mod:`equilibria.babel.har.sl4_levels`. Periodos: ``pre`` (cabeceras LEVB) y
+    El ``.sl4`` se lee directo (:func:`equilibria.babel.har.sl4_levels.read_sl4_levels`).
+    El ``.har`` es la salida de ``scripts/gtap/export_sl4_levels.py``; la convencion
+    vive en :mod:`equilibria.babel.har.sl4_levels`. Periodos: ``pre`` (LEVB) y
     ``post`` (LEVA); un ``.har`` solo con LEVA trae solo ``post``.
 
     Una variable sin nivel (listada en ``NOLV``, o con el centinela 1e10 en TODAS sus
     celdas en un ``.har`` viejo) no aporta celdas: queda en ``Solution.no_level`` y,
     si el mapeo la pide, el reporte la declara excluida. El centinela en solo algunas
-    celdas es error. Un ``.sl4`` o un ``.har`` de cambios % tambien: dicen como
-    convertirlos. ``variables`` limita la lectura; por defecto, todas.
+    celdas es error. Un ``.har`` de cambios % tambien: dice como convertirlo.
+    ``variables`` limita la lectura; por defecto, todas.
     """
     import numpy as np
 
@@ -284,7 +285,7 @@ def from_har(
 
     path = Path(path)
     if path.suffix.lower() == ".sl4":
-        raise CompareError(f"{path}: un .sl4 no se lee directo. {_CONVERSION_HINT}")
+        return _from_sl4(path, variables)
     headers = read_har(str(path))
     pct = [h for h in lv.PERCENT_CHANGE_HEADERS if h in headers]
     if pct:  # basta una: un .har de cambios % nunca se lee como niveles
@@ -312,11 +313,7 @@ def from_har(
             )
         if not ha.set_elements:  # escalar: el HAR lo guarda como (1,) sin conjuntos
             return {(period, ()): float(arr.ravel()[0])}
-        out: dict[CellKey, float] = {}
-        for pos in np.ndindex(arr.shape):
-            index = tuple(str(ha.set_elements[d][i]) for d, i in enumerate(pos))
-            out[(period, index)] = float(arr[pos])
-        return out
+        return _cells_by_label(arr, ha.set_elements, period)
 
     leva: dict[str, tuple[str, Any]] = {}
     for hid, ha in headers.items():
@@ -364,3 +361,50 @@ def from_har(
         levels[name] = {**pre, **post}
         ndim[name] = len(ha.set_elements)
     return Solution(levels, ndim, str(path), no_level=no_level)
+
+
+def _from_sl4(path: Path, variables: Iterable[str] | None) -> Solution:
+    """:func:`from_har` para un ``.sl4``: los niveles se leen directo del archivo."""
+    from equilibria.babel.har.sl4 import read_sl4_levels
+
+    try:
+        found = read_sl4_levels(path)
+    except (ValueError, OSError) as e:  # un .sl4 ilegible, truncado o incompleto
+        raise CompareError(f"{path}: no se pudieron leer sus niveles ({e})") from e
+    wanted = list(found) if variables is None else list(variables)
+    unknown = [name for name in wanted if name not in found]
+    if unknown:
+        raise CompareError(f"{path}: no hay una variable {unknown[0]!r}")
+
+    # Como NOLV en el .har: toda variable sin nivel queda declarada, se pida o no.
+    no_level = {
+        name: f"sin nivel en GEMPACK (LVOK de {path.name})"
+        for name, var in found.items()
+        if var is None
+    }
+    levels: dict[str, dict[CellKey, float]] = {}
+    ndim: dict[str, int] = {}
+    for name in wanted:
+        var = found[name]
+        if var is None:
+            continue
+        levels[name] = {
+            **_cells_by_label(var.pre, var.set_elements, "pre"),
+            **_cells_by_label(var.post, var.set_elements, "post"),
+        }
+        ndim[name] = len(var.set_elements)
+    return Solution(levels, ndim, str(path), no_level=no_level)
+
+
+def _cells_by_label(
+    arr: Any, set_elements: Sequence[Sequence[Any]], period: str
+) -> dict[CellKey, float]:
+    """Las celdas de ``arr`` con su indice en etiquetas de ``set_elements``."""
+    import numpy as np
+
+    return {
+        (period, tuple(str(set_elements[d][i]) for d, i in enumerate(pos))): float(
+            arr[pos]
+        )
+        for pos in np.ndindex(arr.shape)
+    }

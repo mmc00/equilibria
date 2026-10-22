@@ -249,6 +249,7 @@ ipopt.out
 scripts/gtap/*
 !scripts/gtap/run_gtap.py
 !scripts/gtap/_diff_core.py
+!scripts/gtap/compare_burfisher_gempack.py
 !scripts/gtap/compare_gempack_levels.py
 !scripts/gtap/_parity_datasets.py
 !scripts/gtap/_parity_json.py
@@ -307,6 +308,7 @@ scripts/gtap/*
 !scripts/gtap/gen_linearization_study.py
 !scripts/gtap/export_sl4_levels.py
 !scripts/gtap/make_levels_tab.py
+!scripts/gtap/mk_exp_directos.py
 # Phase-2 cascade orchestrator modules
 !scripts/gtap/cascade_config.py
 !scripts/gtap/cascade_layers.py

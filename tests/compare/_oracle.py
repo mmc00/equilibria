@@ -17,6 +17,11 @@ Convenciones del mapeo que estos ejemplos fijan (spec 2026-10-15, Q8/Q9/Q16/Q18)
 
 from __future__ import annotations
 
+import functools
+import gzip
+import shutil
+import tempfile
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -641,3 +646,160 @@ EX15_INDEX_EXCLUDED = (
     "qxwwld",
     "tot",
 )
+
+# ---------------------------------------------------------------------------
+# Ejemplo 16 — niveles leidos DIRECTO del .sl4, sin sltoht (issue #148).
+#
+# Dos oraculos, ninguno sale del lector nuevo:
+# 1) Nivel PRE del nus333. Los fixtures de sltoht del nus333 (tm10) dan el post
+#    (sl4levels_nus333_tm10.har, LEVA) y el % (sl4dump_nus333_tm10.har); pre =
+#    post / (1 + %/100). El pre depende solo de los datos, que son los mismos en
+#    todo Burfisher, asi que es el pre de TBL45A. Las 44 variables con nivel del
+#    nus333 son de cambio %, ninguna de cambio ordinario.
+#    Variables sin nivel: las que el fixture trae con el centinela 1e10. El .sl4
+#    trae ademas 12 variables que el fixture no tiene (otra version del modelo).
+# 2) Cambio: 100*(post/pre - 1) de cada celda = el volcado de sltoht del mismo .sl4
+#    (burfisher/sl4dump_<exp>.har). Una celda con pre = 0 no tiene %: GEMPACK
+#    escribe uno igual (qes/qfe, flujo cero), pero en niveles es 0 -> 0.
+# Precision: LEVB/LEVA del .sl4 son REAL*4 (~6e-8 relativo).
+# Medido el 2026-10-19 con un lector de exploracion (scratch, no commiteado): pre
+# rel max 4.8e-8 (qo); cambio max 1.04e-5 pp (TBL45A) y 3.05e-5 pp (ME9C).
+# ---------------------------------------------------------------------------
+_GEMPACK_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
+EX16_DIR = _GEMPACK_FIXTURES / "burfisher"
+
+
+@functools.cache
+def burfisher_sl4(exp: str) -> Path:
+    """El ``.sl4`` de un ejercicio de Burfisher (``burfisher/<exp>.sl4.gz``),
+    descomprimido una vez por proceso en un directorio temporal."""
+    dest = Path(tempfile.mkdtemp(prefix="burfisher_sl4_")) / f"{exp}.sl4"
+    with gzip.open(EX16_DIR / f"{exp}.sl4.gz", "rb") as src, dest.open("wb") as dst:
+        shutil.copyfileobj(src, dst)
+    return dest
+
+
+class _Sl4(Mapping[str, Path]):
+    """{ejercicio: .sl4 descomprimido}; descomprime al pedir la clave."""
+
+    def __init__(self, exercises: tuple[str, ...]) -> None:
+        self._exercises = exercises
+
+    def __getitem__(self, exp: str) -> Path:
+        if exp not in self._exercises:
+            raise KeyError(exp)
+        return burfisher_sl4(exp.lower())
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._exercises)
+
+    def __len__(self) -> int:
+        return len(self._exercises)
+
+
+# GTAPV7 (gtapv7.for, mismo nus333) OMITE 11 variables: VARS/VCNA/VCAR/LVOK/PLEV
+# cubren las 252 de la solucion, VCSP/VCSN las 263 del modelo. En TBL45A y ME9C
+# las dos listas coinciden y no distinguen cual se usa.
+EX16_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
+EX16_SL4 = _Sl4(EX16_EXERCISES)
+EX16_DUMP = {e: EX16_DIR / f"sl4dump_{e.lower()}.har" for e in EX16_EXERCISES}
+EX16_NUS333_POST = _GEMPACK_FIXTURES / "sl4levels_nus333_tm10.har"
+EX16_NUS333_PCT = _GEMPACK_FIXTURES / "sl4dump_nus333_tm10.har"
+EX16_N_WITH_LEVEL = 44
+EX16_PRE_RTOL = 1e-6
+EX16_PCT_ATOL = 1e-4  # puntos porcentuales
+# qo pre (ACTS x REG), del oraculo 1, para leer a ojo:
+EX16_QO_PRE = {
+    ("AGR", "USA"): 324849.25648047,
+    ("MFG", "USA"): 6587561.07403989,
+    ("SER", "USA"): 17701492.85617938,
+    ("AGR", "ROW"): 2898823.33469239,
+    ("MFG", "ROW"): 31702725.67132671,
+    ("SER", "ROW"): 46936497.20200284,
+}
+EX16_NO_LEVEL_WHY = "sin nivel en GEMPACK"
+
+# ---------------------------------------------------------------------------
+# Ejemplo 17 — un .sl4 GRANDE: gtap7_20x41 tm10 capFix (issues #148, #133).
+#
+# En el 20x41, GEMPACK parte las cabeceras 2RFULL/2IFULL grandes en varios registros
+# (CUMS: 695122 reales en 174 registros de 3996). Cada registro trae, antes de sus
+# datos, 7 enteros: registros que quedan, filas, columnas, fila inicial, fila
+# final, columna inicial, columna final.
+# Oraculo: sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har, escrito en Windows el
+# 2026-10-19 por scripts/gtap/export_sl4_levels.py desde el TEXTO de
+# `sltoht -SHL -SIC` del mismo .sl4. No pasa por el lector nuevo. El exportador
+# reporto 44 variables con nivel, 208 sin nivel (NOLV) y 0 discrepancias
+# contra el sl4dump (windows/corridas-paper, windows_paper_out/2026-10-19_1356).
+# El texto de sltoht trae ~8 cifras; el .sl4, REAL*4.
+# ---------------------------------------------------------------------------
+EX17_SL4 = _GEMPACK_FIXTURES / "sl4_gtap7_20x41_tm10_s8-16-32_capfix.sl4"
+EX17_LEVELS_HAR = _GEMPACK_FIXTURES / "sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har"
+EX17_N_WITH_LEVEL = 44
+EX17_N_NO_LEVEL = 208
+EX17_RTOL = 1e-6
+
+# ---------------------------------------------------------------------------
+# Ejemplo 18 — los ejercicios de Burfisher (nus333): equilibria <-> GEMPACK en NIVELES,
+# pre y post, con el mapeo GTAP del ejemplo 15.
+#
+# A = tests/compare/fixtures/eq_burfisher_<exp>_levels.json.gz
+# (make_eq_burfisher_levels.py: run_burfisher.solve_exercise, el cierre de la Tabla 3);
+# B = el .sl4 de GEMPACK de tests/fixtures/gtap7_gempack/burfisher/ (corrida en Windows
+# el 2026-09-24 con tools/gempack-oracle, GTAPV7 sin parche) + VDFB de basedata.har
+# (pre) y del <exp>.upd (post). A: check -> pre, shock -> post. Calculado el 2026-10-22
+# con tests/compare/oracles/burfisher_levels.py (lee el .sl4 a mano, no importa
+# equilibria.compare).
+#   Las dos: 414 celdas, 26 variables + VDFB. rore, y, pinv, qinv, pva y pe no tienen
+#   nivel en estos .sl4 (PLEV = 0): GTAPV7 sin el parche de make_levels_tab.py.
+#   TBL46A (Gragg 2-4-6): las 414 <= 1e-3; maximo 1.4881e-04 en qst post (USA, SER).
+#   TBL45A (Johansen 1 paso, como el libro): 317 / 396 / 411 a 0,1 / 0,5 / 1 %;
+#   maximo 2.0767e-02 en qxw post (USA, MFG). Una solucion en niveles no reproduce
+#   una extrapolacion lineal.
+# ---------------------------------------------------------------------------
+EX18_FIX = _GEMPACK_FIXTURES / "burfisher"
+EX18_EQ = {
+    e: ROOT / "tests" / "compare" / "fixtures" / f"eq_burfisher_{e}_levels.json.gz"
+    for e in ("tbl46a", "tbl45a")
+}
+EX18_CELLS = {
+    "qo": 12,
+    "qds": 12,
+    "pds": 12,
+    "pfactor": 4,
+    "pfactwld": 2,
+    "pgdp": 4,
+    "pms": 12,
+    "pxw": 12,
+    "qc": 12,
+    "qes": 36,
+    "qfd": 36,
+    "qfm": 36,
+    "qgdp": 4,
+    "qms": 12,
+    "qxs": 24,
+    "qfe": 36,
+    "qxw": 12,
+    "tpd": 12,
+    "pr": 12,
+    "qpd": 12,
+    "qpm": 12,
+    "qgd": 12,
+    "qgm": 12,
+    "qid": 12,
+    "qim": 12,
+    "qst": 4,
+    "vdfb": 36,
+}
+EX18_TOTAL = 414
+EX18_NO_LEVEL = ("pe", "pinv", "pva", "qinv", "rore", "y")
+EX18_METHOD = {"tbl46a": "Gragg", "tbl45a": "Johansen"}
+EX18_WITHIN = {
+    "tbl46a": {1e-3: 414, 5e-3: 414, 1e-2: 414},
+    "tbl45a": {1e-3: 317, 5e-3: 396, 1e-2: 411},
+}
+EX18_MAX = {"tbl46a": 1.4881e-04, "tbl45a": 2.0767e-02}
+EX18_MAX_CELL = {
+    "tbl46a": ("qst", ("post", ("USA", "SER"))),
+    "tbl45a": ("qxw", ("post", ("USA", "MFG"))),
+}

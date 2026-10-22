@@ -117,13 +117,13 @@ def test_la_fila_total_muestra_el_mismo_pct_que_usa_fail_below(ex3):
     assert O.EX11_EX3_PASS_PCT_ALL_TEXT in total.split()
 
 
-def test_un_sl4_es_error_con_la_instruccion_de_conversion(ex3, tmp_path):
+def test_un_sl4_ilegible_es_error_de_datos(ex3, tmp_path):
     sl4 = tmp_path / "sol.sl4"
     sl4.write_bytes(b"")
     args = [str(sl4), *ex3[1:]]
     r = _run(*args)
     assert r.exit_code == O.EX11_ERROR_EXIT
-    assert "sltoht" in r.output
+    assert "sol.sl4" in r.output
 
 
 def test_sin_periodo_declarado_es_error_no_se_adivina(tmp_path):
@@ -228,3 +228,27 @@ def test_flags_de_periodo_para_un_har_son_error_no_se_ignoran(tmp_path):
     )
     assert r.exit_code == O.EX11_ERROR_EXIT
     assert ".har" in r.output
+
+
+def test_lee_un_sl4_de_gempack_directo(tmp_path):
+    """#148: la CLI acepta el .sl4 sin pasar por sltoht (el mismo .sl4 de los dos
+    lados: las 6 celdas de qo en pre y en post pasan todas)."""
+    sl4 = str(O.EX16_SL4["TBL45A"])
+    m = _yaml(
+        tmp_path / "map.yaml",
+        {
+            "variables": [
+                {
+                    "name": "output",
+                    "a": {"var": "qo", "dims": ["ACT", "REG"]},
+                    "b": {"var": "qo", "dims": ["ACT", "REG"]},
+                    "tol": {"rel": 1e-9, "abs_floor": 1e-6},
+                }
+            ],
+            "thresholds": [1e-9],
+        },
+    )
+    r = _run(sl4, sl4, "--map", str(m), "--fail-below", "100")
+    assert r.exit_code == 0, r.output
+    assert "output" in r.output
+    assert "100.00" in r.output
