@@ -228,3 +228,75 @@ def test_tab_real(mlt: Any) -> None:
     for var, level in mlt.LEVELS.items():
         assert f"(orig_level={level})" in out, var
     assert out.count(mlt.RORELEV_BLOCK) == 1
+
+
+# Sin condensar (GTAPUV7): los .EXP de Burfisher fijan y shockean variables que la
+# condensacion de gtapv7.sti omite (atall, tfd, tpdall...). RunGTAP arma GTAPUV7 con
+# el mismo gtapv7.tab sin el bloque de condensacion: de "c" a "e", inclusive (las
+# omisiones "o" tambien estan adentro). Escrito a mano antes del codigo.
+MINI_STI_UNCONDENSED = """\
+bat         ! Run in batch.
+
+gtapuv7_levels ! name of TABLO input file
+gtapuv7_levels ! name of information file
+a           ! Proceed to automatic code generation.
+pgs ! Prepare output for GEMSIM
+
+gtapuv7_levels ! name of GEMSIM Auxiliary files
+!
+"""
+
+
+def test_sti_sin_condensar_saca_el_bloque_de_condensacion(mlt: Any) -> None:
+    out = mlt.patch_sti(MINI_STI, "gtapuv7_levels", condense=False)
+    assert out == MINI_STI_UNCONDENSED
+
+
+def test_sti_sin_bloque_de_condensacion_es_error(mlt: Any) -> None:
+    sin = MINI_STI.replace("c           ! Perform condensation\n", "")
+    with pytest.raises(mlt.TabPatchError, match="condens"):
+        mlt.patch_sti(sin, "gtapuv7_levels", condense=False)
+
+
+def test_cli_uncondensed_escribe_gtapuv7_levels(mlt: Any, tmp_path: Path) -> None:
+    (tmp_path / "gtapv7.tab").write_text(MINI_TAB)
+    (tmp_path / "gtapv7.sti").write_text(MINI_STI)
+    out = tmp_path / "out"
+    rc = mlt.main(
+        [
+            str(tmp_path / "gtapv7.tab"),
+            "--sti",
+            str(tmp_path / "gtapv7.sti"),
+            "--out-dir",
+            str(out),
+            "--uncondensed",
+        ]
+    )
+    assert rc == 0
+    assert (out / "gtapuv7_levels.tab").read_bytes() == mlt.patch_tab(MINI_TAB).encode()
+    assert (out / "gtapuv7_levels.sti").read_text() == MINI_STI_UNCONDENSED
+    assert not (out / "gtapv7_levels.sti").exists()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("GTAPV7_STI"), reason="GTAPV7_STI no apunta a un gtapv7.sti real"
+)
+def test_sti_real_sin_condensar(mlt: Any) -> None:
+    sti = (
+        Path(os.environ["GTAPV7_STI"])
+        .read_bytes()
+        .decode("latin-1")
+        .replace("\r\n", "\n")
+    )
+    lines = mlt.patch_sti(sti, "gtapuv7_levels", condense=False).splitlines()
+    code = [ln.split("!")[0].strip() for ln in lines]
+    code = [c for c in code if c]
+    # bat, tab, info y en seguida la generacion de codigo: nada de c/o/b/e
+    assert code[:6] == [
+        "bat",
+        "gtapuv7_levels",
+        "gtapuv7_levels",
+        "a",
+        "pgs",
+        "gtapuv7_levels",
+    ]
