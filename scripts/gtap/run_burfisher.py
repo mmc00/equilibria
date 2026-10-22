@@ -402,6 +402,143 @@ def compare(m, p, gdx: Path | dict) -> dict:
     return out
 
 
+GAMS_PREFIXES = ["a_", "c_", "f_", "r_"]
+WHY_SKIP = (
+    "bienestar/Walras: GAMS no los resuelve en el MCP comparado (SKIP de los gates)"
+)
+WHY_RF = (
+    "fijada a su macro con ifSUB (RF de measure_gtap_pure_tols): reporte, no resultado"
+)
+
+
+def compare_module(m, p, gdx: Path | dict):
+    """Lo mismo que :func:`compare`, con ``equilibria.compare``: GAMS (A, referencia)
+    contra el modelo (B), en ``check`` y ``shock``.
+
+    El mapeo se arma por ejercicio: cada variable de GAMS con registros que el modelo
+    tiene (``ALIAS``), las mismas dims en el mismo orden, ``strip_prefix`` para los
+    prefijos de GAMS y SKIP/RF excluidas con su motivo. Antes de comparar se sacan,
+    de los dos lados, las celdas que :func:`compare` no cuenta como resultado: los
+    instrumentos exogenos del ShockBlock (se cuentan aparte) y ``p`` fuera de la
+    diagonal sin produccion (``makb = 0``). Devuelve ``(resumen, Report)``."""
+    from pyomo.environ import value
+
+    from equilibria.compare import Mapping, from_dict, from_gdx
+    from equilibria.compare import compare as cmp
+    from equilibria.templates.gtap.instruments import exogenous_test
+
+    if isinstance(gdx, dict):
+        gams = from_dict(gdx, period_dim=-1, origin="gams")
+    else:
+        gams = from_gdx(gdx, period_dim=-1)
+    variables, excluded, eq_cells = [], {}, {}
+    instr: dict[str, int] = {"check": 0, "shock": 0}
+    mk = p.benchmark.makb
+    for vn, cells in gams.levels.items():
+        if vn.lower() in SKIP:
+            excluded[vn] = WHY_SKIP
+            continue
+        if vn.lower() in RF:
+            excluded[vn] = WHY_RF
+            continue
+        if not cells:
+            continue
+        pv = getattr(m, ALIAS.get(vn, vn), None) or getattr(m, vn.lower(), None)
+        if pv is None:
+            continue
+        exo = exogenous_test(m, pv.local_name)
+        in_gams = {(*(_gams_strip(e) for e in idx), t) for (t, idx) in cells}
+        n = gams.ndim[vn]
+        dims = [f"D{i}" for i in range(n)]
+        mine = {}
+        for idx, c in pv.items():
+            key = idx if isinstance(idx, tuple) else (idx,)
+            t = key[-1]
+            if t not in ("check", "shock") or len(key) != n + 1:
+                continue
+            body = key[:-1]
+            if vn == "p" and len(body) == 3 and body[1] != body[2]:
+                if not float(
+                    mk.get(body, 0) or mk.get((body[2], body[1], body[0]), 0) or 0
+                ):
+                    continue
+            if exo(key):
+                instr[t] += key in in_gams  # como compare(): solo las que GAMS tiene
+                continue
+            try:
+                mine[key] = float(value(c))
+            except (ValueError, TypeError):
+                continue
+        if not mine:
+            continue
+        eq_cells[f"{vn}__eq"] = mine
+        variables.append(
+            {
+                "name": vn,
+                "a": {"var": vn, "dims": dims},
+                "b": {"var": f"{vn}__eq", "dims": dims},
+                "tol": {"rel": TOLS[0], "abs_floor": 1e-3},
+            }
+        )
+    mapping = Mapping.from_dict(
+        {
+            "sets": {
+                d: {"a": {"strip_prefix": GAMS_PREFIXES}}
+                for d in {d for v in variables for d in v["a"]["dims"]}
+            },
+            "variables": variables,
+            "exclude": [{"var": k, "why": w} for k, w in excluded.items()],
+            "thresholds": list(TOLS),
+        }
+    )
+    model = from_dict(eq_cells, period_dim=-1, origin="equilibria")
+    # GAMS sin base; y sin las celdas que el modelo no cuenta (instrumentos, p fuera
+    # de la diagonal): solo se miden las celdas de GAMS que tienen pareja en el modelo.
+    keep = {
+        v["name"]: {
+            (k[-1], tuple(_gams_strip(x) for x in k[:-1]))
+            for k in eq_cells[v["b"]["var"]]
+        }
+        for v in variables
+    }
+    gams_f = from_dict(
+        {
+            vn: {
+                (*idx, t): x
+                for (t, idx), x in cells.items()
+                if t in ("check", "shock")
+                and (t, tuple(_gams_strip(e) for e in idx)) in keep[vn]
+            }
+            for vn, cells in gams.levels.items()
+            if vn in keep
+        },
+        period_dim=-1,
+        origin="gams",
+    )
+    r = cmp(gams_f, model, mapping, reference="a")
+    out = {}
+    for t in ("check", "shock"):
+        ds = [c.d for c in r.cells if c.period == t]
+        out[t] = {
+            "cells": len(ds),
+            "match_pct": {
+                f"{thr:.1%}": round(
+                    100 * sum(d <= thr for d in ds) / max(len(ds), 1), 2
+                )
+                for thr in TOLS
+            },
+            "instr_cells": instr[t],
+        }
+    return out, r
+
+
+def _gams_strip(e: str) -> str:
+    for pre in GAMS_PREFIXES:
+        if e.startswith(pre):
+            return e[len(pre) :]
+    return e
+
+
 def main() -> int:
     from equilibria._local_refs import nus333_dir
 
@@ -421,6 +558,19 @@ def main() -> int:
             continue
         m, p, codes = solve_exercise(exp, har)
         r = {"codes": codes, **compare(m, p, gdx)}
+        # La cifra del paper sale de equilibria.compare (con el lector GDX nativo); el
+        # comparador de los gates (gdxdump) la verifica en la misma corrida.
+        mod, _ = compare_module(m, p, gdx)
+        r["module"] = mod
+        # Igualdad al 0,1 % (el criterio de la Tabla 3). A 0,5 % y 1 % pueden
+        # diferir en celdas casi nulas: el gate pasa |d| <= 1e-6; el modulo, d
+        # relativo con piso 1e-3 (5e-6 y 1e-5 absolutos). Medido: solo ME4A/B
+        # (shock code 2), p. ej. ME4A 30,97 vs 31,16 % a 0,5 %.
+        r["module_equals_gate"] = all(
+            mod[t]["cells"] == r[t]["cells"]
+            and mod[t]["match_pct"]["0.1%"] == r[t]["match_pct"]["0.1%"]
+            for t in ("check", "shock")
+        )
         results[exp] = r
         c, s = r["check"], r["shock"]
         print(
@@ -428,7 +578,8 @@ def main() -> int:
             f"check {c['cells']} {c['match_pct']['0.1%']}%  "
             f"shock {s['cells']} {s['match_pct']['0.1%']}% "
             f"({s['match_pct']['0.5%']}% a 0,5%)  peores {s['worst'][:3]}  "
-            f"instrumentos {s['instr_cells']} ({len(s['instr_bad'])} distintos de GAMS)",
+            f"instrumentos {s['instr_cells']} ({len(s['instr_bad'])} distintos de GAMS)  "
+            f"compare={'igual' if r['module_equals_gate'] else 'DISTINTO'}",
             flush=True,
         )
     if args.json:

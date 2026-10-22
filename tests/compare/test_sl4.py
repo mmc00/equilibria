@@ -1,6 +1,6 @@
 """from_har con un .sl4: los niveles se leen directo del .sl4 (issue #148).
 
-Oraculo: ejemplo 15. Los esperados salen de archivos que escribio sltoht, nunca del
+Oraculo: ejemplo 16. Los esperados salen de archivos que escribio sltoht, nunca del
 lector nuevo.
 """
 
@@ -43,7 +43,7 @@ def _period(cells: dict, period: str) -> dict:
 
 def _oracle_pre() -> tuple[dict[str, dict], set[str]]:
     """Oraculo 1: pre = post / (1 + %/100) de los fixtures de sltoht del nus333."""
-    post, pct = _by_variable(O.EX15_NUS333_POST), _by_variable(O.EX15_NUS333_PCT)
+    post, pct = _by_variable(O.EX16_NUS333_POST), _by_variable(O.EX16_NUS333_PCT)
     pre, sentinel = {}, set()
     for name, ha in post.items():
         cells = _cells(ha)
@@ -57,25 +57,25 @@ def _oracle_pre() -> tuple[dict[str, dict], set[str]]:
 
 @pytest.fixture(scope="module")
 def tbl45a():
-    return from_har(O.EX15_SL4["TBL45A"])
+    return from_har(O.EX16_SL4["TBL45A"])
 
 
 def test_qo_pre_es_el_del_oraculo(tbl45a):
     got = _period(tbl45a.levels["qo"], "pre")
-    assert got.keys() == O.EX15_QO_PRE.keys()
-    for idx, want in O.EX15_QO_PRE.items():
-        assert got[idx] == pytest.approx(want, rel=O.EX15_PRE_RTOL), idx
+    assert got.keys() == O.EX16_QO_PRE.keys()
+    for idx, want in O.EX16_QO_PRE.items():
+        assert got[idx] == pytest.approx(want, rel=O.EX16_PRE_RTOL), idx
 
 
 def test_el_pre_de_cada_variable_es_el_del_oraculo(tbl45a):
     pre, _ = _oracle_pre()
-    assert len(pre) == O.EX15_N_WITH_LEVEL
+    assert len(pre) == O.EX16_N_WITH_LEVEL
     for name, cells in pre.items():
         assert name in tbl45a.levels, name
         got = _period(tbl45a.levels[name], "pre")
         assert got.keys() == cells.keys(), name
         for idx, want in cells.items():
-            assert got[idx] == pytest.approx(want, rel=O.EX15_PRE_RTOL), (name, idx)
+            assert got[idx] == pytest.approx(want, rel=O.EX16_PRE_RTOL), (name, idx)
 
 
 def test_las_variables_con_nivel_son_las_del_oraculo(tbl45a):
@@ -88,13 +88,13 @@ def test_lo_que_sltoht_marca_sin_nivel_queda_declarado(tbl45a):
     assert sentinel
     for name in sentinel:
         assert name in tbl45a.no_level, name
-        assert O.EX15_NO_LEVEL_WHY in tbl45a.no_level[name]
+        assert O.EX16_NO_LEVEL_WHY in tbl45a.no_level[name]
 
 
-@pytest.mark.parametrize("exp", sorted(O.EX15_SL4))
+@pytest.mark.parametrize("exp", sorted(O.EX16_SL4))
 def test_el_cambio_de_cada_celda_es_el_de_sltoht(exp):
-    sol = from_har(O.EX15_SL4[exp])
-    dump = _by_variable(O.EX15_DUMP[exp])
+    sol = from_har(O.EX16_SL4[exp])
+    dump = _by_variable(O.EX16_DUMP[exp])
     checked = 0
     for name, cells in sol.levels.items():
         pct = _cells(dump[name])
@@ -106,28 +106,28 @@ def test_el_cambio_de_cada_celda_es_el_de_sltoht(exp):
                 assert post[idx] == 0.0, (name, idx)
                 continue
             assert 100 * (post[idx] / b - 1) == pytest.approx(
-                pct[idx], abs=O.EX15_PCT_ATOL
+                pct[idx], abs=O.EX16_PCT_ATOL
             ), (name, idx)
             checked += 1
     assert checked > 0
 
 
 def test_variables_limita_la_lectura():
-    sol = from_har(O.EX15_SL4["TBL45A"], variables=["qo"])
+    sol = from_har(O.EX16_SL4["TBL45A"], variables=["qo"])
     assert set(sol.levels) == {"qo"}
     assert sol.ndim["qo"] == 2
 
 
 def test_las_variables_sin_nivel_se_declaran_aunque_no_se_pidan():
     """Como NOLV en el .har: no_level no depende de ``variables``."""
-    todas = from_har(O.EX15_SL4["TBL45A"])
-    solo_qo = from_har(O.EX15_SL4["TBL45A"], variables=["qo"])
+    todas = from_har(O.EX16_SL4["TBL45A"])
+    solo_qo = from_har(O.EX16_SL4["TBL45A"], variables=["qo"])
     assert solo_qo.no_level == todas.no_level
 
 
 def test_una_variable_pedida_que_no_esta_es_error():
     with pytest.raises(CompareError, match="no_existe"):
-        from_har(O.EX15_SL4["TBL45A"], variables=["no_existe"])
+        from_har(O.EX16_SL4["TBL45A"], variables=["no_existe"])
 
 
 def test_un_sl4_ilegible_es_error(tmp_path):
@@ -138,17 +138,17 @@ def test_un_sl4_ilegible_es_error(tmp_path):
 
 
 def test_un_sl4_grande_partido_en_registros_da_los_niveles_de_sltoht():
-    """El 20x41 (EX16): sus cabeceras grandes vienen en varios registros."""
-    got = from_har(O.EX16_SL4)
-    want = from_har(O.EX16_LEVELS_HAR)
-    assert len(want.levels) == O.EX16_N_WITH_LEVEL
-    assert len(want.no_level) == O.EX16_N_NO_LEVEL
+    """El 20x41 (EX17): sus cabeceras grandes vienen en varios registros."""
+    got = from_har(O.EX17_SL4)
+    want = from_har(O.EX17_LEVELS_HAR)
+    assert len(want.levels) == O.EX17_N_WITH_LEVEL
+    assert len(want.no_level) == O.EX17_N_NO_LEVEL
     assert set(got.levels) == set(want.levels)
     assert set(got.no_level) == set(want.no_level)
     for name, cells in want.levels.items():
         assert got.levels[name].keys() == cells.keys(), name
         for key, value in cells.items():
-            assert got.levels[name][key] == pytest.approx(value, rel=O.EX16_RTOL), (
+            assert got.levels[name][key] == pytest.approx(value, rel=O.EX17_RTOL), (
                 name,
                 key,
             )

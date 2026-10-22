@@ -11,6 +11,7 @@ Forma (YAML o dict)::
       b: {pre: check, post: shock}
     sets:                    # opcional; renombre de elementos POR CONJUNTO y lado
       ACT: {a: {a_Food: Food}}
+      COMM: {a: {strip_prefix: [c_]}}   # regla: quita el prefijo (c_Food -> Food)
     variables:
       - name: output         # nombre comun en el reporte
         a: {var: xp, dims: [REG, ACT]}
@@ -36,7 +37,10 @@ Cada entrada de ``dims`` nombra el conjunto de esa dimension (sin periodo). Las 
 y B deben ser las mismas, en el orden que tenga cada fuente; el orden comun del
 reporte es el de A. Si una variable repite conjunto (p. ej. origen y destino),
 cada dimension necesita su propia etiqueta y su propio renombre.
-Un elemento o periodo sin renombre declarado conserva su nombre.
+Un elemento o periodo sin renombre declarado conserva su nombre. ``strip_prefix``
+(una lista de prefijos, por conjunto y lado) es una regla declarada para los
+prefijos con que GAMS distingue conjuntos (``a_``, ``c_``): quita el primero que
+coincida; un renombre explicito del mismo elemento tiene prioridad.
 
 ``divide_by`` deshace las escalas con que una fuente guarda sus niveles (GAMS y
 equilibria multiplican las cantidades GTAP por ``inScale`` y ``xscale[r,a]``). Un
@@ -56,7 +60,7 @@ no define (GAMS omite del GDX lo que su modelo no tiene, igual que los ceros). E
 from __future__ import annotations
 
 from collections.abc import Mapping as AbcMapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -143,6 +147,8 @@ class Mapping:
     sets: dict[str, dict[str, dict[str, str]]]
     excluded: dict[str, str]  # variables enteras -> why
     cell_exclusions: tuple[CellExclusion, ...] = ()
+    # conjunto -> lado -> prefijos que se quitan (strip_prefix)
+    prefixes: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
 
     def params(self, side: str) -> list[str]:
         """Parametros de ``side`` que pide el ``divide_by`` del mapeo (sin repetir)."""
@@ -158,7 +164,22 @@ class Mapping:
         return self.periods.get(side, {}).get(period, period)
 
     def element_name(self, side: str, set_name: str, element: str) -> str:
-        return self.sets.get(set_name, {}).get(side, {}).get(element, element)
+        explicit = self.sets.get(set_name, {}).get(side, {})
+        if element in explicit:
+            return explicit[element]
+        for prefix in self.prefixes.get(set_name, {}).get(side, ()):
+            if element.startswith(prefix):
+                return element[len(prefix) :]
+        return element
+
+    @classmethod
+    def builtin(cls, name: str) -> Mapping:
+        """Un mapeo que viene con equilibria (``compare/maps/<name>.yaml``)."""
+        path = Path(__file__).with_name("maps") / f"{name}.yaml"
+        if not path.exists():
+            have = sorted(p.stem for p in path.parent.glob("*.yaml"))
+            raise MappingError(f"no hay un mapeo {name!r} (hay: {have})")
+        return cls.from_yaml(path)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> Mapping:
@@ -205,15 +226,26 @@ class Mapping:
             s: {str(k): str(v) for k, v in m.items()}
             for s, m in _sided(data.get("periods") or {}, "periods").items()
         }
-        sets = {
-            str(name): {
-                s: {str(k): str(v) for k, v in m.items()}
-                for s, m in _sided(per_side or {}, f"sets.{name}").items()
-            }
-            for name, per_side in (data.get("sets") or {}).items()
-        }
+        sets: dict[str, dict[str, dict[str, str]]] = {}
+        prefixes: dict[str, dict[str, tuple[str, ...]]] = {}
+        for name, per_side in (data.get("sets") or {}).items():
+            for s, m in _sided(per_side or {}, f"sets.{name}").items():
+                rule = m.get("strip_prefix")
+                if "strip_prefix" in m:
+                    prefixes.setdefault(str(name), {})[s] = _prefixes(
+                        rule, f"sets.{name}.{s}.strip_prefix"
+                    )
+                sets.setdefault(str(name), {})[s] = {
+                    str(k): str(v) for k, v in m.items() if k != "strip_prefix"
+                }
         return cls(
-            variables, thresholds, periods, sets, excluded, tuple(cell_exclusions)
+            variables,
+            thresholds,
+            periods,
+            sets,
+            excluded,
+            tuple(cell_exclusions),
+            prefixes,
         )
 
 
@@ -221,6 +253,12 @@ def _required(d: Any, key: str, where: str) -> Any:
     if not isinstance(d, AbcMapping) or key not in d or d[key] is None:
         raise MappingError(f"{where}: falta {key!r}")
     return d[key]
+
+
+def _prefixes(x: Any, where: str) -> tuple[str, ...]:
+    if not isinstance(x, list) or not x or not all(isinstance(p, str) and p for p in x):
+        raise MappingError(f"{where}: debe ser una lista no vacia de prefijos (textos)")
+    return tuple(x)
 
 
 def _positive(x: Any, where: str) -> float:

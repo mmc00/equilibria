@@ -233,7 +233,7 @@ def test_flags_de_periodo_para_un_har_son_error_no_se_ignoran(tmp_path):
 def test_lee_un_sl4_de_gempack_directo(tmp_path):
     """#148: la CLI acepta el .sl4 sin pasar por sltoht (el mismo .sl4 de los dos
     lados: las 6 celdas de qo en pre y en post pasan todas)."""
-    sl4 = str(O.EX15_SL4["TBL45A"])
+    sl4 = str(O.EX16_SL4["TBL45A"])
     m = _yaml(
         tmp_path / "map.yaml",
         {

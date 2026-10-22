@@ -563,7 +563,87 @@ EX14_MAX = 0.010465
 EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 
 # ---------------------------------------------------------------------------
-# Ejemplo 15 — niveles leidos DIRECTO del .sl4, sin sltoht (issue #148).
+# Ejemplo 15 — el mapeo GTAP (maps/gtap7.yaml, #132/#135): equilibria <-> GEMPACK,
+# GTAP 3x3, en NIVELES, pre y post: las 32 variables del .har de niveles que tienen
+# forma en niveles, mas VDFB.
+#
+# A = tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz (make_eq_gtap7_levels.py:
+# _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels6_gtap7_3x3_tm10.har (LEVB/LEVA)
+# + VDFB de basedata.har (pre) y updated_gtap7_3x3_tm10.har (post). A: check -> pre,
+# shock -> post. Calculado el 2026-10-21 con tests/compare/oracles/gtap7_map_3x3.py (no
+# importa equilibria.compare); las formulas estan en su docstring.
+#   776 celdas, las 776 <= 1e-3; maximo 9.856e-04 en qgd post (EU_28, Mnfcs)
+#   (gasto del gobierno en Mnfcs: post, 3 regiones, 0,05-0,1 %; tambien qgm).
+#   pe: las 6 celdas NatRes (3 reg x pre/post) no estan en GEMPACK (factor ENDF).
+#   18 variables del .har no se miden: indices encadenados (ver el mapeo).
+# ---------------------------------------------------------------------------
+EX15_EQ = ROOT / "tests" / "compare" / "fixtures" / "eq_gtap7_3x3_levels.json.gz"
+EX15_HAR = (
+    ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels6_gtap7_3x3_tm10.har"
+)
+EX15_CELLS = {
+    "qo": 18,
+    "rore": 6,
+    "y": 6,
+    "pinv": 6,
+    "qinv": 6,
+    "pva": 18,
+    "qds": 18,
+    "pe": 24,
+    "pds": 18,
+    "pfactor": 6,
+    "pfactwld": 2,
+    "pgdp": 6,
+    "pms": 18,
+    "pxw": 18,
+    "qc": 18,
+    "qes": 90,
+    "qfd": 54,
+    "qfm": 54,
+    "qgdp": 6,
+    "qms": 18,
+    "qxs": 54,
+    "qfe": 90,
+    "qxw": 18,
+    "tpd": 18,
+    "pr": 18,
+    "qpd": 18,
+    "qpm": 18,
+    "qgd": 18,
+    "qgm": 18,
+    "qid": 18,
+    "qim": 18,
+    "qst": 6,
+    "vdfb": 54,
+}
+EX15_TOTAL = 776
+EX15_WITHIN = {1e-3: 776, 5e-3: 776, 1e-2: 776}
+EX15_MAX = 9.856e-04
+EX15_MAX_CELL = ("qgd", ("post", ("EU_28", "Mnfcs")))
+EX15_NATRES_EXCLUDED = 6
+EX15_INDEX_EXCLUDED = (
+    "pdw",
+    "pebfactreal",
+    "pefactreal",
+    "pfactreal",
+    "pmwcom",
+    "pmwreg",
+    "psw",
+    "pwu",
+    "pxwcom",
+    "pxwreg",
+    "pxwwld",
+    "qmwcom",
+    "qmwreg",
+    "qowu",
+    "qxwcom",
+    "qxwreg",
+    "qxwwld",
+    "tot",
+)
+
+# ---------------------------------------------------------------------------
+# Ejemplo 16 — niveles leidos DIRECTO del .sl4, sin sltoht (issue #148).
 #
 # Dos oraculos, ninguno sale del lector nuevo:
 # 1) Nivel PRE del nus333. Los fixtures de sltoht del nus333 (tm10) dan el post
@@ -581,20 +661,20 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 # rel max 4.8e-8 (qo); cambio max 1.04e-5 pp (TBL45A) y 3.05e-5 pp (ME9C).
 # ---------------------------------------------------------------------------
 _GEMPACK_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
-EX15_DIR = _GEMPACK_FIXTURES / "burfisher_sl4"
+EX16_DIR = _GEMPACK_FIXTURES / "burfisher_sl4"
 # GTAPV7 (gtapv7.for, mismo nus333) OMITE 11 variables: VARS/VCNA/VCAR/LVOK/PLEV
 # cubren las 252 de la solucion, VCSP/VCSN las 263 del modelo. En TBL45A y ME9C
 # las dos listas coinciden y no distinguen cual se usa.
-EX15_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
-EX15_SL4 = {e: EX15_DIR / f"{e.lower()}.sl4" for e in EX15_EXERCISES}
-EX15_DUMP = {e: EX15_DIR / f"sl4dump_{e.lower()}.har" for e in EX15_EXERCISES}
-EX15_NUS333_POST = _GEMPACK_FIXTURES / "sl4levels_nus333_tm10.har"
-EX15_NUS333_PCT = _GEMPACK_FIXTURES / "sl4dump_nus333_tm10.har"
-EX15_N_WITH_LEVEL = 44
-EX15_PRE_RTOL = 1e-6
-EX15_PCT_ATOL = 1e-4  # puntos porcentuales
+EX16_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
+EX16_SL4 = {e: EX16_DIR / f"{e.lower()}.sl4" for e in EX16_EXERCISES}
+EX16_DUMP = {e: EX16_DIR / f"sl4dump_{e.lower()}.har" for e in EX16_EXERCISES}
+EX16_NUS333_POST = _GEMPACK_FIXTURES / "sl4levels_nus333_tm10.har"
+EX16_NUS333_PCT = _GEMPACK_FIXTURES / "sl4dump_nus333_tm10.har"
+EX16_N_WITH_LEVEL = 44
+EX16_PRE_RTOL = 1e-6
+EX16_PCT_ATOL = 1e-4  # puntos porcentuales
 # qo pre (ACTS x REG), del oraculo 1, para leer a ojo:
-EX15_QO_PRE = {
+EX16_QO_PRE = {
     ("AGR", "USA"): 324849.25648047,
     ("MFG", "USA"): 6587561.07403989,
     ("SER", "USA"): 17701492.85617938,
@@ -602,10 +682,10 @@ EX15_QO_PRE = {
     ("MFG", "ROW"): 31702725.67132671,
     ("SER", "ROW"): 46936497.20200284,
 }
-EX15_NO_LEVEL_WHY = "sin nivel en GEMPACK"
+EX16_NO_LEVEL_WHY = "sin nivel en GEMPACK"
 
 # ---------------------------------------------------------------------------
-# Ejemplo 16 — un .sl4 GRANDE: gtap7_20x41 tm10 capFix (issues #148, #133).
+# Ejemplo 17 — un .sl4 GRANDE: gtap7_20x41 tm10 capFix (issues #148, #133).
 #
 # En el 20x41, GEMPACK parte las cabeceras 2RFULL/2IFULL grandes en varios registros
 # (CUMS: 695122 reales en 174 registros de 3996). Cada registro trae, antes de sus
@@ -618,8 +698,8 @@ EX15_NO_LEVEL_WHY = "sin nivel en GEMPACK"
 # contra el sl4dump (windows/corridas-paper, windows_paper_out/2026-10-19_1356).
 # El texto de sltoht trae ~8 cifras; el .sl4, REAL*4.
 # ---------------------------------------------------------------------------
-EX16_SL4 = _GEMPACK_FIXTURES / "sl4_gtap7_20x41_tm10_s8-16-32_capfix.sl4"
-EX16_LEVELS_HAR = _GEMPACK_FIXTURES / "sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har"
-EX16_N_WITH_LEVEL = 44
-EX16_N_NO_LEVEL = 208
-EX16_RTOL = 1e-6
+EX17_SL4 = _GEMPACK_FIXTURES / "sl4_gtap7_20x41_tm10_s8-16-32_capfix.sl4"
+EX17_LEVELS_HAR = _GEMPACK_FIXTURES / "sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har"
+EX17_N_WITH_LEVEL = 44
+EX17_N_NO_LEVEL = 208
+EX17_RTOL = 1e-6

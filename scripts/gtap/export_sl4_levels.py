@@ -12,7 +12,10 @@ Windows), parses BOTH level columns and writes them as a HAR.
 Component order in the text equals the variable's HAR flat order (FORTRAN /
 column-major), so shapes / set-elements / long-name / numeric id come from the
 matching `sl4dump` (`--sl4dump`); each variable is CROSS-CHECKED (the text's
-%-change column must equal the sl4dump values) before its levels are kept, and its
+%-change column must equal the sl4dump values, atol=rtol=1e-3) before its levels are
+kept -- a variable that fails is DROPPED (no LEVA/LEVB, not in NOLV) and named in the
+"xcheck-mismatch=N [names]" line, so a run against another solution's sl4dump says
+exactly which variables moved -- and its
 LEVELS are then VALIDATED cell by cell against the solution (`check_levels`):
 post - pre must equal the change column, and 100*(post/pre - 1) must equal the
 %-change (percentage-change variables) or the solution column must equal the
@@ -199,8 +202,9 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
         for hid, ha in src.items() if (ha.long_name or "").strip()
     }
     headers: dict[str, HeaderArray] = {}
-    kept = mismatched = 0
+    kept = 0
     no_level: list[str] = []
+    mismatched: list[str] = []
     for var, (pct_vec, pre_vec, post_vec, chg_vec) in levels.items():
         hid = name_to_hid.get(var)
         if hid is None:
@@ -213,7 +217,7 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
         # against all 252 gtap7_3x3 variables (C-order agrees only for rank-1).
         ref = np.asarray(tmpl.array, dtype=np.float64).ravel(order="F")
         if not np.allclose(ref, pct_vec, atol=1e-3, rtol=1e-3):
-            mismatched += 1
+            mismatched.append(var)
             continue
         sentinel = (pre_vec == NO_LEVEL) | (post_vec == NO_LEVEL)
         if sentinel.all():
@@ -246,7 +250,7 @@ def build_levels_har(levels: dict, sl4dump: Path, out_har: Path) -> int:
     )
     write_har(str(out_har), headers)
     print(f"  levels vars={kept} (LEVB+LEVA)  no-level={len(no_level)} ({NO_LEVEL_HEADER})"
-          f"  (xcheck-mismatch={mismatched})  -> {out_har}")
+          f"  (xcheck-mismatch={len(mismatched)} [{', '.join(mismatched)}])  -> {out_har}")
     return kept
 
 

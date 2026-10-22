@@ -159,34 +159,42 @@ Extrapolation accuracy file = NO ;
 
 
 def _force_rdlt(prm_path: Path, rordelta: int) -> None:
-    """Rewrite the GTAPPARM header RDLT (the RORDELTA coefficient) in-place to ``rordelta``.
+    """Set the GTAPPARM header RDLT (the RORDELTA coefficient) to ``rordelta``, in place.
 
     RORDELTA selects the capital-account closure (GTAPv7.tab 2528: read from header RDLT):
     0 = capFix (returns differ), 1 = capFlex (returns equalize). Editing the .prm header is
     the robust way to force it — RORDELTA is a Coefficient, not settable from the .cmf.
+
+    Only the int32 of RDLT changes; every other byte is kept. Rewriting the whole file
+    with ``write_har`` (what this did before) changes the 1CFULL widths (XXCR/XXCD 70 ->
+    41, XXCP 6 -> 12) and the record split, and GEMSIM 11.3 rejects it
+    (``E-UNEXPECTED LENGTH OF STRINGS``, then ``E-NREC not as expected``); gtapv7.exe of
+    GEMPACK 12.1 happened to tolerate it. The patched file is byte-identical to the one
+    GEMSIM 11.3 solved the 20x41 capFix with (tests/scripts/test_force_rdlt.py).
+
+    A .prm without a one-element 2IFULL RDLT is an error: leaving the dataset default
+    would label a run capFix/capFlex that is not.
     """
-    import numpy as np
+    import struct
 
-    from equilibria.babel.har import write_har
-    from equilibria.babel.har.reader import read_har as _rd
-
-    hars = _rd(str(prm_path))
-    key = next((k for k in hars if str(k).upper() == "RDLT"), None)
-    if key is None:
-        return  # no RDLT header — leave the .prm as-is (dataset default)
-    ha = hars[key]
-    # Keep the header's ON-DISK dtype. RORDELTA is an INTEGER coefficient in
-    # GTAPv7.tab and the .prm stores RDLT as 2IFULL (int32); casting to float
-    # made the writer emit it as 2RFULL, which GEMPACK refuses to read:
-    #     (ERROR RETURN FROM ROUTINE:read_data_v1)
-    #     (E-incompatible data types on file and demanded by user)
-    # Verified on gtap7_20x41: written as 2IFULL the solve reproduces the
-    # committed capFix fixture (rore spread 15.2428, min/max -16.5047/-1.2619);
-    # written as 2RFULL it does not run at all.
-    arr = np.asarray(ha.array).copy()
-    arr[...] = rordelta
-    ha.array = arr
-    write_har(str(prm_path), hars)
+    b = bytearray(prm_path.read_bytes())
+    # HAR = FORTRAN unformatted records: int32 length, payload, int32 length.
+    recs: list[tuple[int, int]] = []
+    p = 0
+    while p < len(b):
+        (n,) = struct.unpack_from("<i", b, p)
+        recs.append((p + 4, n))
+        p += 8 + n
+    hits = [i for i, (off, n) in enumerate(recs) if n == 4 and bytes(b[off:off + 4]) == b"RDLT"]
+    if len(hits) != 1 or hits[0] + 2 >= len(recs):
+        raise ValueError(f"{prm_path}: expected one RDLT header, found {len(hits)}")
+    moff, _ = recs[hits[0] + 1]
+    if bytes(b[moff + 4:moff + 10]) != b"2IFULL":
+        raise ValueError(f"{prm_path}: RDLT is not 2IFULL: {bytes(b[moff:moff + 16])!r}")
+    doff, dn = recs[hits[0] + 2]
+    # 2IFULL data record of one element: the value is its last int32.
+    struct.pack_into("<i", b, doff + dn - 4, int(rordelta))
+    prm_path.write_bytes(bytes(b))
 
 
 def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32",

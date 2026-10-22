@@ -1,0 +1,304 @@
+# GTAP v7: equilibria (A) contra GEMPACK (B), en NIVELES. #132.
+#
+# A: el modelo de bloques de equilibria resuelto (base -> check -> shock), leido con
+#    from_pyomo o from_dict. B: un .har de niveles de GEMPACK (LEVB = pre, LEVA = post;
+#    scripts/gtap/export_sl4_levels.py) leido con from_har.
+# Varias variables no estan tal cual en ninguna fuente; las arma
+# scripts/gtap/compare_gempack_levels.py antes de comparar (lista completa y
+# formulas en su docstring), p. ej.:
+#   A xds_net[r,c]   = xds[r,c] - xda[r,c,'tmg']   (xds incluye la oferta de margenes
+#                      VST; qds de GEMPACK no: la diferencia es VST, medida en el 3x3)
+#   A vdfb[r,c,a]    = pd[r,c] * xda[r,c,a]
+#   B VDFB[c,a,r]    = coeficiente VDFB de basedata.har (pre) y del .har actualizado (post)
+# Sin ellas, pedir este mapeo es error ("no hay una variable"), no exclusion.
+#
+# Escalas de A (las del modelo, #131): cantidades * inScale (1e-6), y las que van por
+# actividad ademas * xscale[r,a]. B esta en las unidades de los datos.
+# Cubre las 50 variables con nivel del .har de GEMPACK: 32 se comparan (mas VDFB)
+# y 18 quedan excluidas con su motivo (indices encadenados).
+# Oraculo: tests/compare/_oracle.py, ejemplo 15 (3x3: 776 celdas, todas <= 0,1 %).
+
+periods:
+  a: {check: pre, shock: post}
+
+variables:
+  - name: qo
+    a:
+      var: xp
+      dims: [REG, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qo, dims: [ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: rore
+    a: {var: rore, dims: [REG]}
+    b: {var: rore, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: y
+    a:
+      var: regy
+      dims: [REG]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: y, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pinv
+    a: {var: pi, dims: [REG]}
+    b: {var: pinv, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qinv
+    a:
+      var: xiagg
+      dims: [REG]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qinv, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pva
+    a: {var: pva, dims: [REG, ACT]}
+    b: {var: pva, dims: [ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qds
+    a:
+      var: xds_net
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qds, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pe
+    a: {var: pft, dims: [REG, ENDW]}
+    b: {var: pe, dims: [ENDW, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: vdfb
+    a:
+      var: vdfb
+      dims: [REG, COMM, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: VDFB, dims: [COMM, ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pds
+    a: {var: pd, dims: [REG, COMM]}
+    b: {var: pds, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pfactor
+    a: {var: pfact, dims: [REG]}
+    b: {var: pfactor, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pfactwld
+    a: {var: pwfact, dims: []}
+    b: {var: pfactwld, dims: []}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pgdp
+    a: {var: pgdpmp, dims: [REG]}
+    b: {var: pgdp, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pms
+    a: {var: pmt, dims: [REG, COMM]}
+    b: {var: pms, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pxw
+    a: {var: pet, dims: [REG, COMM]}
+    b: {var: pxw, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: pr
+    a: {var: pd_pmt, dims: [REG, COMM]}
+    b: {var: pr, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: tpd
+    a: {var: tpd, dims: [REG, COMM]}
+    b: {var: tpd, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qc
+    a:
+      var: xs
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qc, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qes
+    a:
+      var: xf
+      dims: [REG, ENDW, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qes, dims: [ENDW, ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qfe
+    a:
+      var: xf_pf0
+      dims: [REG, ENDW, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qfe, dims: [ENDW, ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qfd
+    a:
+      var: xda_act
+      dims: [REG, COMM, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qfd, dims: [COMM, ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qfm
+    a:
+      var: xma_act
+      dims: [REG, COMM, ACT]
+      divide_by:
+        - {param: xscale, dims: [REG, ACT]}
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qfm, dims: [COMM, ACT, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qpd
+    a:
+      var: xda_hhd
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qpd, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qpm
+    a:
+      var: xma_hhd
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qpm, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qgd
+    a:
+      var: xda_gov
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qgd, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qgm
+    a:
+      var: xma_gov
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qgm, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qid
+    a:
+      var: xda_inv
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qid, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qim
+    a:
+      var: xma_inv
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qim, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qst
+    a:
+      var: xda_tmg
+      dims: [REG, MARG]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qst, dims: [MARG, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qgdp
+    a:
+      var: rgdpmp
+      dims: [REG]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qgdp, dims: [REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qms
+    a:
+      var: xmt
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qms, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qxs
+    a:
+      var: xw
+      dims: [SRC, COMM, DST]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qxs, dims: [COMM, SRC, DST]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+  - name: qxw
+    a:
+      var: xw_fob
+      dims: [REG, COMM]
+      divide_by:
+        - {value: 1.0e-6, why: "inScale: el modelo no lo guarda como parametro"}
+    b: {var: qxw, dims: [COMM, REG]}
+    tol: {rel: 1.0e-3, abs_floor: 1.0e-6}
+
+exclude:
+  - var: pe
+    where: {ENDW: [NatRes]}
+    why: "GEMPACK define pe solo para factores moviles y lentos (ENDWMS); NatRes es especifico de un sector (ENDF)"
+  - {var: ppriv, why: "indice Divisia: sin forma en niveles"}
+
+  - {var: pdw, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: psw, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: pmwcom, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: pmwreg, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: pxwcom, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: pxwreg, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: pxwwld, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: pwu, why: "indice de precios encadenado de GEMPACK (1 en pre): sin forma en niveles"}
+  - {var: tot, why: "terminos de intercambio psw/pdw: cociente de dos indices encadenados"}
+  - {var: pfactreal, why: "precio real del factor: dividido por un indice de precios encadenado (CPI)"}
+  - {var: pefactreal, why: "precio real del factor: dividido por un indice de precios encadenado (CPI)"}
+  - {var: pebfactreal, why: "precio real del factor: dividido por un indice de precios encadenado (CPI)"}
+  - {var: qmwcom, why: "indice de volumen encadenado de GEMPACK: en post se separa de la suma de sus partes (qxwreg 0,01-0,03 % en el 3x3)"}
+  - {var: qmwreg, why: "indice de volumen encadenado de GEMPACK: en post se separa de la suma de sus partes (qxwreg 0,01-0,03 % en el 3x3)"}
+  - {var: qxwcom, why: "indice de volumen encadenado de GEMPACK: en post se separa de la suma de sus partes (qxwreg 0,01-0,03 % en el 3x3)"}
+  - {var: qxwreg, why: "indice de volumen encadenado de GEMPACK: en post se separa de la suma de sus partes (qxwreg 0,01-0,03 % en el 3x3)"}
+  - {var: qxwwld, why: "indice de volumen encadenado de GEMPACK: en post se separa de la suma de sus partes (qxwreg 0,01-0,03 % en el 3x3)"}
+  - {var: qowu, why: "indice de volumen encadenado de GEMPACK: en post se separa de la suma de sus partes (qxwreg 0,01-0,03 % en el 3x3)"}
+thresholds: [0.001, 0.005, 0.01]
