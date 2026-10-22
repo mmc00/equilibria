@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -1478,7 +1479,10 @@ class GTAPModelEquations:
 
         from equilibria.blocks.gtap._derived_params import calibrate_betas, cd_regions
 
-        _cd_regs = cd_regions(self.params, self.sets)
+        # Solo el conjunto: los avisos de SUBPAR mixto los da el modo CD de abajo.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            _cd_regs = cd_regions(self.params, self.sets)
         for region in self.sets.r:
             # Use evfb (buyer-price factor flows) to match model initialization:
             # xf_model = (evfb/pf) * xscale, so pf*xf/xscale = evfb (not vfm).
