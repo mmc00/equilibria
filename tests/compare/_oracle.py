@@ -703,3 +703,68 @@ EX17_LEVELS_HAR = _GEMPACK_FIXTURES / "sl4levels_gtap7_20x41_tm10_s8-16-32_capfi
 EX17_N_WITH_LEVEL = 44
 EX17_N_NO_LEVEL = 208
 EX17_RTOL = 1e-6
+
+# ---------------------------------------------------------------------------
+# Ejemplo 18 — los ejercicios de Burfisher (nus333): equilibria <-> GEMPACK en NIVELES,
+# pre y post, con el mapeo GTAP del ejemplo 15.
+#
+# A = tests/compare/fixtures/eq_burfisher_<exp>_levels.json.gz
+# (make_eq_burfisher_levels.py: run_burfisher.solve_exercise, el cierre de la Tabla 3);
+# B = el .sl4 de GEMPACK de tests/fixtures/gtap7_gempack/burfisher/ (corrida en Windows
+# el 2026-09-24 con tools/gempack-oracle, GTAPV7 sin parche) + VDFB de basedata.har
+# (pre) y del <exp>.upd (post). A: check -> pre, shock -> post. Calculado el 2026-10-22
+# con tests/compare/oracles/burfisher_levels.py (lee el .sl4 a mano, no importa
+# equilibria.compare).
+#   Las dos: 414 celdas, 26 variables + VDFB. rore, y, pinv, qinv, pva y pe no tienen
+#   nivel en estos .sl4 (PLEV = 0): GTAPV7 sin el parche de make_levels_tab.py.
+#   TBL46A (Gragg 2-4-6): las 414 <= 1e-3; maximo 1.4881e-04 en qst post (USA, SER).
+#   TBL45A (Johansen 1 paso, como el libro): 317 / 396 / 411 a 0,1 / 0,5 / 1 %;
+#   maximo 2.0767e-02 en qxw post (USA, MFG). Una solucion en niveles no reproduce
+#   una extrapolacion lineal.
+# ---------------------------------------------------------------------------
+EX18_FIX = _GEMPACK_FIXTURES / "burfisher"
+EX18_EQ = {
+    e: ROOT / "tests" / "compare" / "fixtures" / f"eq_burfisher_{e}_levels.json.gz"
+    for e in ("tbl46a", "tbl45a")
+}
+EX18_CELLS = {
+    "qo": 12,
+    "qds": 12,
+    "pds": 12,
+    "pfactor": 4,
+    "pfactwld": 2,
+    "pgdp": 4,
+    "pms": 12,
+    "pxw": 12,
+    "qc": 12,
+    "qes": 36,
+    "qfd": 36,
+    "qfm": 36,
+    "qgdp": 4,
+    "qms": 12,
+    "qxs": 24,
+    "qfe": 36,
+    "qxw": 12,
+    "tpd": 12,
+    "pr": 12,
+    "qpd": 12,
+    "qpm": 12,
+    "qgd": 12,
+    "qgm": 12,
+    "qid": 12,
+    "qim": 12,
+    "qst": 4,
+    "vdfb": 36,
+}
+EX18_TOTAL = 414
+EX18_NO_LEVEL = ("pe", "pinv", "pva", "qinv", "rore", "y")
+EX18_METHOD = {"tbl46a": "Gragg", "tbl45a": "Johansen"}
+EX18_WITHIN = {
+    "tbl46a": {1e-3: 414, 5e-3: 414, 1e-2: 414},
+    "tbl45a": {1e-3: 317, 5e-3: 396, 1e-2: 411},
+}
+EX18_MAX = {"tbl46a": 1.4881e-04, "tbl45a": 2.0767e-02}
+EX18_MAX_CELL = {
+    "tbl46a": ("qst", ("post", ("USA", "SER"))),
+    "tbl45a": ("qxw", ("post", ("USA", "MFG"))),
+}
