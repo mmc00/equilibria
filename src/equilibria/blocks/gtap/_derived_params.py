@@ -1198,18 +1198,34 @@ def demand_income_params(
 
         # betaCal: betaP/betaG/betaS from the INCOME-SIDE regY (facty+ytaxInd).
         regy_income_for_beta = regy_income
-        phip = 1.0
-        betap = (
-            private_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
-        )
-        betag = (
+        sp = private_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
+        sg = (
             government_total / regy_income_for_beta
             if regy_income_for_beta > 0.0
             else 0.0
         )
-        betas = (
-            savings_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
-        )
+        ss = savings_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
+        # phiP = sum xcshr*eh en el dato (eq_phip; en CD, sum xcshr = 1). Con el
+        # INCPAR estandar da 1; con uno editado (climatechange.prm, ME9) no. Las beta
+        # se calibran como GTAP (gtapv7.tab: UTILELAS, DPARPRIV/GOV/SAVE):
+        # phi = phiP*sp + sg + ss, betaP = phiP*sp/phi, betaG = sg/phi, betaS = ss/phi,
+        # escaladas para que sumen sp + sg + ss (con phiP = 1, las participaciones,
+        # como antes). GAMS (cal.gms) resuelve betaCal SOLO en el periodo base y deja
+        # el check con las participaciones: su check no reproduce el dato cuando
+        # phiP != 1.
+        phip = 1.0
+        if region not in _cd and private_total > 0.0:
+            phip = sum(
+                _private_total(region, c)
+                / private_total
+                * float(el.incpar.get((region, c), 1.0) or 1.0)
+                for c in sets.i
+                if _private_total(region, c) > 0.0
+            )
+        scale = (phip * sp + sg + ss) / (sp + sg + ss) if (sp + sg + ss) > 0.0 else 1.0
+        betap = phip * sp / scale
+        betag = sg / scale
+        betas = ss / scale
         phi = (
             1.0 / (betap / phip + betag + betas)
             if (betap / phip + betag + betas) > 0.0
