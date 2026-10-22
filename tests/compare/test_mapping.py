@@ -105,3 +105,54 @@ def test_exclusion_por_celda_con_elementos_que_no_son_lista_es_error():
     e = {"var": "q", "where": {"FP": "NatRes"}, "why": "x"}
     with pytest.raises(MappingError, match="lista"):
         Mapping.from_dict(_con_exclusion(e))
+
+
+# --- strip_prefix: regla declarada para los prefijos de GAMS (a_Food -> Food) ----
+
+
+def _con_prefijos(rule: Any) -> dict:
+    return {
+        "sets": {"ACT": {"a": rule}},
+        "variables": [
+            {
+                "name": "output",
+                "a": {"var": "xp", "dims": ["REG", "ACT"]},
+                "b": {"var": "xp", "dims": ["REG", "ACT"]},
+                "tol": {"rel": 1e-3, "abs_floor": 1e-6},
+            }
+        ],
+        "thresholds": [1e-3],
+    }
+
+
+def test_strip_prefix_quita_el_prefijo_declarado():
+    m = Mapping.from_dict(_con_prefijos({"strip_prefix": ["a_", "c_"]}))
+    assert m.element_name("a", "ACT", "a_Food") == "Food"
+    assert m.element_name("a", "ACT", "c_Food") == "Food"
+    assert m.element_name("a", "ACT", "Food") == "Food"  # sin prefijo: igual
+    assert m.element_name("b", "ACT", "a_Food") == "a_Food"  # solo el lado a
+    assert m.element_name("a", "REG", "a_USA") == "a_USA"  # solo ese conjunto
+
+
+def test_un_renombre_explicito_gana_a_strip_prefix():
+    m = Mapping.from_dict(
+        _con_prefijos({"strip_prefix": ["a_"], "a_Food": "Alimentos"})
+    )
+    assert m.element_name("a", "ACT", "a_Food") == "Alimentos"
+    assert m.element_name("a", "ACT", "a_Mnfcs") == "Mnfcs"
+
+
+@pytest.mark.parametrize("bad", ["a_", [], [""], [1]])
+def test_strip_prefix_debe_ser_una_lista_de_textos(bad):
+    with pytest.raises(MappingError, match="strip_prefix"):
+        Mapping.from_dict(_con_prefijos({"strip_prefix": bad}))
+
+
+def test_strip_prefix_de_punta_a_punta():
+    from equilibria.compare import compare, from_dict
+
+    gams = from_dict({"xp": {("USA", "a_Food", "shock"): 2.0}}, period_dim=-1)
+    eq = from_dict({"xp": {("USA", "Food", "shock"): 2.0}}, period_dim=-1)
+    r = compare(gams, eq, Mapping.from_dict(_con_prefijos({"strip_prefix": ["a_"]})))
+    assert r.unmatched == []
+    assert r.summary["output"]["cells"] == 1

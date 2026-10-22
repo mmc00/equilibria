@@ -38,7 +38,8 @@ def _script() -> Any:
 
 
 def test_equilibria_contra_gempack_3x3_en_niveles() -> None:
-    r = _script().run(O.EX15_EQ, O.EX15_HAR, BASEDATA, UPDATED)
+    mod = _script()
+    r = mod.run(*mod.load_eq_json(O.EX15_EQ), O.EX15_HAR, BASEDATA, UPDATED)
     assert r.periods_compared == ["pre", "post"]
     assert {k: s["cells"] for k, s in r.summary.items()} == O.EX15_CELLS
     o = r.overall
@@ -51,21 +52,35 @@ def test_equilibria_contra_gempack_3x3_en_niveles() -> None:
 
 
 def test_cada_exclusion_sale_en_el_reporte_con_su_motivo() -> None:
-    r = _script().run(O.EX15_EQ, O.EX15_HAR, BASEDATA, UPDATED)
+    mod = _script()
+    r = mod.run(*mod.load_eq_json(O.EX15_EQ), O.EX15_HAR, BASEDATA, UPDATED)
     assert [(e.variable, e.where, e.cells) for e in r.exclusions] == [
         ("pe", {"ENDW": ["NatRes"]}, O.EX15_NATRES_EXCLUDED)
     ]
     assert "ENDF" in r.exclusions[0].why
     assert {x.index[-1] for x in r.excluded_cells} == {"NatRes"}
-    assert r.excluded == {"ppriv": "indice Divisia: sin forma en niveles"}
+    assert set(r.excluded) == {"ppriv", *O.EX15_INDEX_EXCLUDED}
+    assert all(why.strip() for why in r.excluded.values())
+
+
+def test_cada_variable_con_nivel_de_gempack_se_compara_o_se_excluye() -> None:
+    """Las 50 del .har de niveles: ninguna queda fuera sin decirlo."""
+    from equilibria.compare import from_har
+
+    with_level = set(from_har(O.EX15_HAR).levels)
+    m = Mapping.builtin("gtap7")
+    compared = {v.b.var for v in m.variables}
+    assert with_level - compared - set(m.excluded) == set()
+    assert len(with_level) == 50
+    assert len(with_level & compared) == 32
 
 
 def test_sin_las_variables_armadas_es_error_no_exclusion() -> None:
-    """El modelo crudo no trae xds_net ni vdfb: pedirle el mapeo es error."""
+    """El modelo crudo no trae las variables armadas: pedirle el mapeo es error."""
     mod = _script()
     levels, xscale = mod.load_eq_json(O.EX15_EQ)
     raw = from_dict(levels, period_dim=-1, params={"xscale": xscale})
-    with pytest.raises(CompareError, match="xds_net|vdfb"):
+    with pytest.raises(MappingError, match="no existe en a"):
         compare(
             raw,
             mod.gempack_side(O.EX15_HAR, BASEDATA, UPDATED),

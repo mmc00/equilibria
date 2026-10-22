@@ -193,3 +193,20 @@ def test_todas_las_celdas_contra_gams(solved):
         assert got["cells"] > 500, (period, got["cells"])
         assert got["match_pct"]["0.1%"] == 100.0, (period, got["worst"])
         assert got["instr_bad"] == [], (period, got["instr_bad"])
+
+
+def test_equilibria_compare_da_lo_mismo_que_el_comparador_del_gate(solved):
+    """La Tabla 3 con equilibria.compare (run_burfisher.compare_module) cuenta las
+    mismas celdas y da los mismos % que el comparador de los gates, que se escribio
+    antes que el modulo y hace de oraculo (#135)."""
+    m, p, _, _ = solved
+    levels = gams_levels(LEVELS, "ME9A")
+    rb = run_burfisher()
+    old = rb.compare(m, p, levels)
+    new, report = rb.compare_module(m, p, levels)
+    for period in ("check", "shock"):
+        assert new[period]["cells"] == old[period]["cells"], period
+        assert new[period]["match_pct"] == old[period]["match_pct"], period
+        assert new[period]["instr_cells"] == old[period]["instr_cells"], period
+    assert report.excluded
+    assert all(v.lower() in rb.SKIP | rb.RF for v in report.excluded)

@@ -563,18 +563,19 @@ EX14_MAX = 0.010465
 EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 
 # ---------------------------------------------------------------------------
-# Ejemplo 15 — el mapeo GTAP (maps/gtap7.yaml, #132): equilibria <-> GEMPACK, GTAP 3x3,
-# en NIVELES, pre y post.
+# Ejemplo 15 — el mapeo GTAP (maps/gtap7.yaml, #132/#135): equilibria <-> GEMPACK,
+# GTAP 3x3, en NIVELES, pre y post: las 32 variables del .har de niveles que tienen
+# forma en niveles, mas VDFB.
 #
 # A = tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz (make_eq_gtap7_levels.py:
 # _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels6_gtap7_3x3_tm10.har (LEVB/LEVA)
 # + VDFB de basedata.har (pre) y updated_gtap7_3x3_tm10.har (post). A: check -> pre,
 # shock -> post. Calculado el 2026-10-21 con tests/compare/oracles/gtap7_map_3x3.py (no
-# importa equilibria.compare): cantidades / (1e-6 * xscale), qds = xds - xda[.,.,tmg]
-# (xds incluye la oferta de margenes VST, qds no), VDFB = pd * xda.
-#   qo 18, rore 6, y 6, pinv 6, qinv 6, pva 18, qds 18, pe 24, vdfb 54 = 156 celdas,
-#   las 156 <= 1e-3; maximo 2.52186e-05 en qo post (EU_28, Mnfcs).
+# importa equilibria.compare); las formulas estan en su docstring.
+#   776 celdas, las 776 <= 1e-3; maximo 9.856e-04 en qgd post (EU_28, Mnfcs)
+#   (gasto del gobierno en Mnfcs: post, 3 regiones, 0,05-0,1 %; tambien qgm).
 #   pe: las 6 celdas NatRes (3 reg x pre/post) no estan en GEMPACK (factor ENDF).
+#   18 variables del .har no se miden: indices encadenados (ver el mapeo).
 # ---------------------------------------------------------------------------
 EX15_EQ = ROOT / "tests" / "compare" / "fixtures" / "eq_gtap7_3x3_levels.json.gz"
 EX15_HAR = (
@@ -589,10 +590,54 @@ EX15_CELLS = {
     "pva": 18,
     "qds": 18,
     "pe": 24,
+    "pds": 18,
+    "pfactor": 6,
+    "pfactwld": 2,
+    "pgdp": 6,
+    "pms": 18,
+    "pxw": 18,
+    "qc": 18,
+    "qes": 90,
+    "qfd": 54,
+    "qfm": 54,
+    "qgdp": 6,
+    "qms": 18,
+    "qxs": 54,
+    "qfe": 90,
+    "qxw": 18,
+    "tpd": 18,
+    "pr": 18,
+    "qpd": 18,
+    "qpm": 18,
+    "qgd": 18,
+    "qgm": 18,
+    "qid": 18,
+    "qim": 18,
+    "qst": 6,
     "vdfb": 54,
 }
-EX15_TOTAL = 156
-EX15_WITHIN = {1e-3: 156, 5e-3: 156, 1e-2: 156}
-EX15_MAX = 2.52186e-05
-EX15_MAX_CELL = ("qo", ("post", ("EU_28", "Mnfcs")))
+EX15_TOTAL = 776
+EX15_WITHIN = {1e-3: 776, 5e-3: 776, 1e-2: 776}
+EX15_MAX = 9.856e-04
+EX15_MAX_CELL = ("qgd", ("post", ("EU_28", "Mnfcs")))
 EX15_NATRES_EXCLUDED = 6
+EX15_INDEX_EXCLUDED = (
+    "pdw",
+    "pebfactreal",
+    "pefactreal",
+    "pfactreal",
+    "pmwcom",
+    "pmwreg",
+    "psw",
+    "pwu",
+    "pxwcom",
+    "pxwreg",
+    "pxwwld",
+    "qmwcom",
+    "qmwreg",
+    "qowu",
+    "qxwcom",
+    "qxwreg",
+    "qxwwld",
+    "tot",
+)
