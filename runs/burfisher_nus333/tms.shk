@@ -1,0 +1,46 @@
+
+ ! This file was created at 13:10:22 on 27-NOV-2020 by the program
+ !  <SHOCKSv7.for 13-FEB-2020> [SHOCKSv7.tab,shocksv7.sti]
+ ! which accesses some of the routines in the GEMPACK software release
+ !  <GEMPACK Release 12.1.003   January 2020>
+ 
+ !     -------------------------------------------------------                
+ !    !            GEMPACK Software System Licence            !               
+ !    !  Source Code Licence for the GEMPACK Software System  !               
+ !    !                 Licence No.  GFM-0048                 !               
+ !    !          Licence for Release 12.0 of GEMPACK          !               
+ !    !           Center for Global Trade Analysis            !               
+ !    !         Department of Agricultural Economics          !               
+ !    !                   Krannert Building                   !               
+ !    !                   Purdue University                   !               
+ !     -------------------------------------------------------                
+    
+
+ !
+ ! Values of TMS_HAT(COMM,REG,REG) - a real array of size 3x2x2
+ !--------------------------------
+ !
+
+! Coefficient TMS_HAT(COMM,REG,REG)
+
+ ! (Entries are written one "row" at a time - maximum of 4 per line.)
+
+ 
+ 3 2 2  real row_order;
+ 
+! (This array is shown as 2 matrices - each of size 3x2.)
+ 
+! The matrix TMS_HAT(%1,%2,"USA")  with %1 in COMM and %2 in REG. ++++++++++++
+
+! %2=USA             ROW
+  0.0000000      -1.5394439    ! %1=AGR
+  0.0000000      -1.2148236    ! %1=MFG
+  0.0000000       0.0000000    ! %1=SER
+
+! The matrix TMS_HAT(%1,%2,"ROW")  with %1 in COMM and %2 in REG. ++++++++++++
+
+! %2=USA             ROW
+ -5.9784012      -4.6839423    ! %1=AGR
+ -2.7869883      -2.8192875    ! %1=MFG
+-2.38418525E-05 -2.34836782E-03! %1=SER
+

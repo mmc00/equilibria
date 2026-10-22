@@ -1,0 +1,60 @@
+file gtapPARM = default.prm;
+Verbal Description =
+ME5 - Food Fight, remove US AGR subsidies;
+Method = Gragg;
+Steps = 2 4 6;
+automatic accuracy = no;
+subintervals = 1;
+! Standard GE closure for GTAPUv7: psave varies by region, pfactwld is numeraire
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack 
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc 
+          tpreg tm tms tx txs
+          qe
+          qesf
+          atall avaall tfe tfd tfm tgd tgm tpdall tpmall tid tim;
+Rest endogenous;
+! Remove US AGR subsidies
+
+! Remove US subsidy on land use
+Shock tfe("LAND","AGR","USA") = 4.2896;
+Subtotal tfe("LAND","AGR","USA") = US AGR land subsidy ;
+
+! Remove US subsidy on capital use 
+Shock tfe("CAPITAL","AGR","USA") = 3.2700;
+Subtotal tfe("CAPITAL","AGR","USA") = US AGR capital subsidy ;
+
+! Remove U.S. subsidies on domestic and imported inputs used in AGR
+ Shock tfd("AGR","AGR","USA") = 4.1161;
+ Shock tfd("MFG","AGR","USA") = 0.5917;
+ Shock tfd("SER","AGR","USA") = 4.2713;
+ Shock tfm("AGR","AGR","USA") = 4.2910;
+ Shock tfm("MFG","AGR","USA") = 1.9788;
+ Shock tfm("SER","AGR","USA") = 4.7064;
+Subtotal tfd(COMM,"AGR","USA") tfm(COMM,"AGR","USA") =   US intermediate input subsidies in AGR ;
+
+
+
+!@ contents of CMFStart when this EXP file was last saved
+!@ below is a record only....not read by RunGTAP
+!@ RunGTAP reads from the actual CMFSTART file
+!@ ! If a version has no CMFSTART file of its own
+!@ ! RunGTAP creates one by copying the supplied file CMFSTART.DEF
+!@ CPU = yes;  ! log show simulation times
+!@ NDS = yes;  ! no displays
+!@ Extrapolation accuracy file = NO ; ! No XAC file
+!@ !servants=1; ! use 2 processors at once, if possible
+!@ file GTAPSUM = SUMMARY.har;
+!@ file WELVIEW = DECOMP.har;
+!@ file GTAPVOL = GTAPVol.har;
+!@ end of CMFSTART part

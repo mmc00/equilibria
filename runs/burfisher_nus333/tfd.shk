@@ -1,0 +1,46 @@
+
+ ! This file was created at 13:10:22 on 27-NOV-2020 by the program
+ !  <SHOCKSv7.for 13-FEB-2020> [SHOCKSv7.tab,shocksv7.sti]
+ ! which accesses some of the routines in the GEMPACK software release
+ !  <GEMPACK Release 12.1.003   January 2020>
+ 
+ !     -------------------------------------------------------                
+ !    !            GEMPACK Software System Licence            !               
+ !    !  Source Code Licence for the GEMPACK Software System  !               
+ !    !                 Licence No.  GFM-0048                 !               
+ !    !          Licence for Release 12.0 of GEMPACK          !               
+ !    !           Center for Global Trade Analysis            !               
+ !    !         Department of Agricultural Economics          !               
+ !    !                   Krannert Building                   !               
+ !    !                   Purdue University                   !               
+ !     -------------------------------------------------------                
+    
+
+ !
+ ! Values of TFD_HAT(COMM,ACTS,REG) - a real array of size 3x3x2
+ !---------------------------------
+ !
+
+! Coefficient TFD_HAT(COMM,ACTS,REG)
+
+ ! (Entries are written one "row" at a time - maximum of 4 per line.)
+
+ 
+ 3 3 2  real row_order;
+ 
+! (This array is shown as 2 matrices - each of size 3x3.)
+ 
+! The matrix TFD_HAT(%1,%2,"USA")  with %1 in COMM and %2 in ACTS. +++++++++++
+
+! %2=AGR             MFG             SER
+  4.1161242       0.0000000      1.19209308E-05! %1=AGR
+ 0.59173703     -0.53162163      -2.8774016    ! %1=MFG
+  4.2713280     -0.28086472     -0.13261114    ! %1=SER
+
+! The matrix TFD_HAT(%1,%2,"ROW")  with %1 in COMM and %2 in ACTS. +++++++++++
+
+! %2=AGR             MFG             SER
+  6.9665527     -1.19209271E-05   0.0000000    ! %1=AGR
+  4.2051454     -0.92262369      -4.7791977    ! %1=MFG
+  5.2546601     -0.74897856     -0.20859745    ! %1=SER
+

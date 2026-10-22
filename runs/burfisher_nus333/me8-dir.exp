@@ -1,0 +1,130 @@
+file gtapPARM = ballard.prm;
+Verbal Description =
+ME8 - 1% change in taxes to replicate Ballard, Shoven and Whalley;
+Method = Gragg;
+Steps = 2 4 6;
+automatic accuracy = no;
+subintervals = 1;
+! Standard GE closure for GTAPUv7: psave varies by region, pfactwld is numeraire
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack 
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc 
+          tpreg tm tms tx txs
+          qe
+          qesf
+          atall avaall tfe tfd tfm tgd tgm tpdall tpmall tid tim;
+Rest endogenous;
+! MODEL EXERCISE 8 - The Marginal Welfare Burden of U.S. Taxes
+! SHOCK ALL US TAXES By 1%
+
+! Traducido de `rate% 1 from file tfe.shk` (dims [3, 3, 2]); valores del .shk x-0.01.
+! Original: Shock tfe(ENDW,ACTS,"USA") = rate% 1 from file tfe.shk;
+Shock tfe("LAND", "AGR", "USA") = -0.04289619;
+Shock tfe("LAND", "MFG", "USA") = 0.0;
+Shock tfe("LAND", "SER", "USA") = 0.0;
+Shock tfe("LABOR", "AGR", "USA") = 0.075687323;
+Shock tfe("LABOR", "MFG", "USA") = 0.13085938;
+Shock tfe("LABOR", "SER", "USA") = 0.13085938;
+Shock tfe("CAPITAL", "AGR", "USA") = -0.032699599;
+Shock tfe("CAPITAL", "MFG", "USA") = 0.031535167999999995;
+Shock tfe("CAPITAL", "SER", "USA") = 0.031535167999999995;
+! Traducido de `rate% 1 from file tfd.shk` (dims [3, 3, 2]); valores del .shk x-0.01.
+! Original: Shock tfd(COMM,ACTS,"USA") = rate% 1 from file tfd.shk;
+Shock tfd("AGR", "AGR", "USA") = -0.041161242;
+Shock tfd("AGR", "MFG", "USA") = 0.0;
+Shock tfd("AGR", "SER", "USA") = -1.19209308e-07;
+Shock tfd("MFG", "AGR", "USA") = -0.0059173703000000005;
+Shock tfd("MFG", "MFG", "USA") = 0.0053162163;
+Shock tfd("MFG", "SER", "USA") = 0.028774016;
+Shock tfd("SER", "AGR", "USA") = -0.04271328;
+Shock tfd("SER", "MFG", "USA") = 0.0028086472;
+Shock tfd("SER", "SER", "USA") = 0.0013261114;
+! Traducido de `rate% 1 from file tfm.shk` (dims [3, 3, 2]); valores del .shk x-0.01.
+! Original: Shock tfm(COMM,ACTS,"USA") = rate% 1 from file tfm.shk;
+Shock tfm("AGR", "AGR", "USA") = -0.042909613000000006;
+Shock tfm("AGR", "MFG", "USA") = 0.0;
+Shock tfm("AGR", "SER", "USA") = 0.0;
+Shock tfm("MFG", "AGR", "USA") = -0.019788332;
+Shock tfm("MFG", "MFG", "USA") = 0.0043851116;
+Shock tfm("MFG", "SER", "USA") = 0.022134778;
+Shock tfm("SER", "AGR", "USA") = -0.047064237999999994;
+Shock tfm("SER", "MFG", "USA") = 0.0;
+Shock tfm("SER", "SER", "USA") = 0.0;
+! Traducido de `rate% 1 from file tgd.shk` (dims [3, 2]); valores del .shk x-0.01.
+! Original: Shock tgd(COMM,"USA") = rate% 1 from file tgd.shk;
+Shock tgd("AGR", "USA") = 0.0;
+Shock tgd("MFG", "USA") = 0.0;
+Shock tgd("SER", "USA") = 0.0;
+! Traducido de `rate% 1 from file tgm.shk` (dims [3, 2]); valores del .shk x-0.01.
+! Original: Shock tgm(COMM,"USA") = rate% 1 from file tgm.shk;
+Shock tgm("AGR", "USA") = 0.0;
+Shock tgm("MFG", "USA") = 0.0;
+Shock tgm("SER", "USA") = 0.0;
+! Traducido de `rate% 1 from file to.shk` (dims [3, 3, 2]); valores del .shk x-0.01.
+! Original: Shock to(COMM,ACTS,"USA") = rate% 1 from file to.shk;
+Shock to("AGR", "AGR", "USA") = 0.0024332063000000004;
+Shock to("AGR", "MFG", "USA") = 0.0;
+Shock to("AGR", "SER", "USA") = 0.0;
+Shock to("MFG", "AGR", "USA") = 0.0;
+Shock to("MFG", "MFG", "USA") = 0.010459609000000002;
+Shock to("MFG", "SER", "USA") = 0.0;
+Shock to("SER", "AGR", "USA") = 0.0;
+Shock to("SER", "MFG", "USA") = 0.0;
+Shock to("SER", "SER", "USA") = 0.028050888;
+! Traducido de `rate% 1 from file tpdall.shk` (dims [3, 2]); valores del .shk x-0.01.
+! Original: Shock tpdall(COMM,"USA") = rate% 1 from file tpdall.shk;
+Shock tpdall("AGR", "USA") = 0.042836466000000004;
+Shock tpdall("MFG", "USA") = 0.091956644;
+Shock tpdall("SER", "USA") = 0.0064833277;
+! Traducido de `rate% 1 from file tpmall.shk` (dims [3, 2]); valores del .shk x-0.01.
+! Original: Shock tpmall(COMM,"USA") = rate% 1 from file tpmall.shk;
+Shock tpmall("AGR", "USA") = 0.058277063000000004;
+Shock tpmall("MFG", "USA") = 0.079622064;
+Shock tpmall("SER", "USA") = 0.000111209899;
+! Traducido de `rate% 1 from file tinc.shk` (dims [3, 3, 2]); valores del .shk x-0.01.
+! Original: Shock tinc(ENDW,ACTS,"USA") = rate% 1 from file tinc.shk;
+Shock tinc("LAND", "AGR", "USA") = 0.08289961800000001;
+Shock tinc("LAND", "MFG", "USA") = 0.0;
+Shock tinc("LAND", "SER", "USA") = 0.0;
+Shock tinc("LABOR", "AGR", "USA") = 0.21230932;
+Shock tinc("LABOR", "MFG", "USA") = 0.21230932;
+Shock tinc("LABOR", "SER", "USA") = 0.21230932;
+Shock tinc("CAPITAL", "AGR", "USA") = 0.082899523;
+Shock tinc("CAPITAL", "MFG", "USA") = 0.082899523;
+Shock tinc("CAPITAL", "SER", "USA") = 0.08289961800000001;
+! Traducido de `rate% 1 from file tms.shk` (dims [3, 2, 2]); valores del .shk x-0.01.
+! Original: Shock tms(COMM,"ROW","USA") = rate% 1 from file tms.shk;
+Shock tms("AGR", "ROW", "USA") = 0.015394439;
+Shock tms("MFG", "ROW", "USA") = 0.012148236;
+Shock tms("SER", "ROW", "USA") = 0.0;
+! Traducido de `rate% 1 from file txs.shk` (dims [3, 2, 2]); valores del .shk x-0.01.
+! Original: Shock txs(COMM,"USA","ROW") = rate% 1 from file txs.shk;
+Shock txs("AGR", "USA", "ROW") = 0.0;
+Shock txs("MFG", "USA", "ROW") = 0.0029257515;
+Shock txs("SER", "USA", "ROW") = 0.0;
+
+
+
+!@ contents of CMFStart when this EXP file was last saved
+!@ below is a record only....not read by RunGTAP
+!@ RunGTAP reads from the actual CMFSTART file
+!@ ! If a version has no CMFSTART file of its own
+!@ ! RunGTAP creates one by copying the supplied file CMFSTART.DEF
+!@ CPU = yes;  ! log show simulation times
+!@ NDS = yes;  ! no displays
+!@ Extrapolation accuracy file = NO ; ! No XAC file
+!@ !servants=1; ! use 2 processors at once, if possible
+!@ file GTAPSUM = SUMMARY.har;
+!@ file WELVIEW = DECOMP.har;
+!@ file GTAPVOL = GTAPVol.har;
+!@ end of CMFSTART part
