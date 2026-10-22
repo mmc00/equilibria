@@ -50,9 +50,6 @@ from equilibria.babel.har.wire import (
     SUMMARY_DIMS_OFFSET as _SUMMARY_DIMS_OFFSET,
 )
 from equilibria.babel.har.wire import (
-    SUMMARY_NDIM_OFFSET as _SUMMARY_NDIM_OFFSET,
-)
-from equilibria.babel.har.wire import (
     TOKEN_2IFULL as _TOKEN_2IFULL,
 )
 from equilibria.babel.har.wire import (
@@ -173,30 +170,26 @@ def _read_refull(
         # discarded the rest. The dim-summary record is the only other place
         # the extent is recorded.
         #
-        # CAVEAT on the slot at byte 4: our own writer stores the true ndim
-        # there, and this branch decodes that convention. Real GEMPACK files
-        # do NOT -- across the 96 set-bearing REFULLs in the fixtures the slot
-        # is 1 regardless of how many sets the header has, so it is not a rank.
-        # The mismatch is invisible today because GEMPACK emits no set-less
-        # REFULL holding more than one value (1089 scanned, zero), which is
-        # why this branch is reachable only for headers we wrote ourselves.
-        # Same unresolved-format class as issue #86: do not treat the slot as
-        # a documented rank until that is settled.
+        # The slot at byte 4 of that record is NOT the rank: it counts the
+        # records left in the data section (see wire.SUMMARY_NREC_OFFSET), and
+        # is 3 for every single-block header GEMPACK writes. The extent is in
+        # the 7 dims that follow, padded with 1s to rank 7, so the rank is
+        # where the padding starts. A set-less array whose true shape ends in
+        # 1s, e.g. (5, 1), comes back as (5,): no field on disk keeps that
+        # trailing 1, and GEMPACK emits no set-less REFULL holding more than
+        # one value (1089 scanned, zero), so only headers we wrote can hit it.
         summary = records[i + 2 + n_unique]
-        ndim_slot = _INT.unpack_from(summary, _SUMMARY_NDIM_OFFSET)[0]
-        if ndim_slot > 0:
-            dims = tuple(
-                int(d)
-                for d in struct.unpack_from(
-                    f"<{ndim_slot}i", summary, _SUMMARY_DIMS_OFFSET
-                )
-            )
-            # Genuine scalars keep the flat shape they have always had:
-            # GEMPACK declares them with a rank of its own choosing (DVER in
-            # default.prm is ndim=3, dims (1,1,1)) and the goldens pin that.
-            is_genuine_scalar = int(np.prod(dims)) == 1
-            if not is_genuine_scalar:
-                shape = dims
+        dims7 = struct.unpack_from("<7i", summary, _SUMMARY_DIMS_OFFSET)
+        rank = 7
+        while rank > 0 and dims7[rank - 1] == 1:
+            rank -= 1
+        dims = tuple(int(d) for d in dims7[:rank])
+        # Genuine scalars keep the flat shape they have always had:
+        # GEMPACK declares them with a rank of its own choosing (DVER in
+        # default.prm is ndim=3, dims (1,1,1)) and the goldens pin that.
+        is_genuine_scalar = int(np.prod(dims)) == 1
+        if not is_genuine_scalar:
+            shape = dims
     n = int(np.prod(shape)) if shape else 1
     # GEMPACK splits large arrays across multiple records when the data exceeds
     # one record's capacity (~32 KB). Every data block after the first is preceded
