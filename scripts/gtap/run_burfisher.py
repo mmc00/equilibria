@@ -562,9 +562,13 @@ def main() -> int:
         # comparador de los gates (gdxdump) la verifica en la misma corrida.
         mod, _ = compare_module(m, p, gdx)
         r["module"] = mod
+        # Igualdad al 0,1 % (el criterio de la Tabla 3). A 0,5 % y 1 % pueden
+        # diferir en celdas casi nulas: el gate pasa |d| <= 1e-6; el modulo, d
+        # relativo con piso 1e-3 (5e-6 y 1e-5 absolutos). Medido: solo ME4A/B
+        # (shock code 2), p. ej. ME4A 30,97 vs 31,16 % a 0,5 %.
         r["module_equals_gate"] = all(
             mod[t]["cells"] == r[t]["cells"]
-            and mod[t]["match_pct"] == r[t]["match_pct"]
+            and mod[t]["match_pct"]["0.1%"] == r[t]["match_pct"]["0.1%"]
             for t in ("check", "shock")
         )
         results[exp] = r
