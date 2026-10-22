@@ -23,6 +23,14 @@ una copia dentro de la carpeta de salida.
      exporta los niveles contra el sl4dump de la corrida SIN parche: una variable
      cuyo % de cambio no coincide se descarta y queda nombrada en
      export_console.txt ("xcheck-mismatch=N [...]").
+  5. Los ejercicios de Burfisher con los niveles de esas seis variables:
+     make_levels_tab.py --uncondensed arma gtapuv7_levels (el gtapv7.tab
+     parchado SIN condensar, como el GTAPUV7 de RunGTAP: los .exp fijan y
+     shockean variables que la condensacion omite), tablo lo compila para
+     GEMSIM y gemsim corre cada .exp de runs\burfisher_nus333 (me8 y tbl813
+     con su -dir.exp). Los .exp de Johansen de 1 paso (TBL45A/B/C, TBL64,
+     ME4A/B) pasan a Gragg 2-4-6. Deja .sl4, .upd y log por ejercicio en
+     5_burfisher\out; los niveles se leen directo del .sl4 en la Mac.
 
 -Pasos elige que pasos correr (por defecto todos): -Pasos 4
 
@@ -30,13 +38,14 @@ Uso, desde la raiz del repo:
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -GP C:\GP -Gams "C:\GAMS\53\gams.exe"
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4
+  powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5
 #>
 param(
     [string]$GP = "C:\GP",
     [string]$Gams = "",
     [string]$Out = "",
     [string]$GtapDir = "C:\runGTAP375",
-    [int[]]$Pasos = @(1, 2, 3, 4)
+    [int[]]$Pasos = @(1, 2, 3, 4, 5)
 )
 
 $ErrorActionPreference = "Continue"
@@ -209,6 +218,81 @@ if ($okTab) {
                 Export-Levels "4 niveles $ds $tag" $sl4 "$Fix\$dump" (Join-Path $dest "niveles")
             }
         }
+    }
+}
+}
+
+# --- 5. Burfisher con los niveles de las 6 y Gragg (gtapuv7_levels) ----------
+if ($Pasos -contains 5) {
+$Bf = Join-Path $Out "5_burfisher"
+$Tab5 = Join-Path $Bf "tab"
+New-Item -ItemType Directory -Force -Path $Tab5 | Out-Null
+& uv run python scripts\gtap\make_levels_tab.py (Join-Path $GtapDir "gtapv7.tab") --sti (Join-Path $GtapDir "gtapv7.sti") --out-dir $Tab5 --uncondensed *> (Join-Path $Tab5 "make_levels_tab_console.txt")
+$okTab5 = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $Tab5 "gtapuv7_levels.tab"))
+Result "5 make_levels_tab --uncondensed" $okTab5 "rc=$LASTEXITCODE ($Tab5)"
+$okGss5 = $false
+if ($okTab5) {
+    Push-Location $Tab5
+    try {
+        & tablo -sti gtapuv7_levels.sti *> tablo_console.txt
+        $okGss5 = (Test-Path gtapuv7_levels.gss) -and (Test-Path gtapuv7_levels.gst)
+        Result "5 tablo gtapuv7_levels" $okGss5 "rc=$LASTEXITCODE gss/gst=$okGss5"
+    } finally {
+        Pop-Location
+    }
+}
+if ($okGss5) {
+    $Aux5 = Join-Path $Tab5 "gtapuv7_levels"
+    $Pkg = Join-Path $Bf "nus333"
+    Copy-Item "runs\burfisher_nus333" $Pkg -Recurse -Force
+    # me8/tbl813: corren sus -dir.exp (rate% traducido); tbl53 usa target%, que solo
+    # resuelve la GUI; gtapv7.exp declara el cierre del modelo CONDENSADO.
+    $skip = @("me8", "tbl813", "tbl53", "gtapv7")
+    foreach ($f in (Get-ChildItem $Pkg -Filter *.exp | Sort-Object Name)) {
+        $name = $f.BaseName
+        if ($skip -contains $name) { continue }
+        $step = "5 gemsim $name"
+        $d = Join-Path $Bf "out\$name"
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+        # El .exp va tal cual (trae GTAPPARM, cierre y shocks), salvo el metodo: los
+        # Johansen de 1 paso del libro pasan a Gragg 2-4-6, que es la solucion en
+        # niveles contra la que se compara equilibria.
+        $exp = Get-Content $f.FullName -Raw
+        $johansen = $exp -match "(?im)^\s*Method\s*=\s*Johansen\s*;"
+        if ($johansen) {
+            $exp = [regex]::Replace($exp, "(?im)^\s*Method\s*=\s*Johansen\s*;", "Method = Gragg;")
+            $exp = [regex]::Replace($exp, "(?im)^\s*Steps\s*=[^;]*;", "Steps = 2 4 6;")
+        }
+        $nMethod = ([regex]::Matches($exp, "(?im)^\s*Method\s*=")).Count
+        if ($nMethod -ne 1) { Result $step $false "el .exp queda con $nMethod lineas Method"; continue }
+        $head = @(
+            "auxiliary files = `"$Aux5`";",
+            "file GTAPSETS = sets.har;",
+            "file GTAPDATA = basedata.har;",
+            "file GTAPSUM = `"$d\SUMMARY.har`";",
+            "file WELVIEW = `"$d\DECOMP.har`";",
+            "file GTAPVOL = `"$d\GTAPVol.har`";",
+            "updated file GTAPDATA = `"$d\$name.upd`";",
+            "solution file = `"$d\$name`";",
+            "CPU = yes;",
+            "NDS = yes;",
+            ""
+        ) -join "`r`n"
+        $cmf = Join-Path $d "$name.cmf"
+        Set-Content -Path $cmf -Value ($head + $exp) -NoNewline
+        # el .exp nombra su .prm (y los .shk) sin ruta: se corre desde el paquete
+        Push-Location $Pkg
+        $t0 = Get-Date
+        try {
+            & gemsim -cmf $cmf *> (Join-Path $d "$name.log")
+        } finally {
+            Pop-Location
+        }
+        $secs = [math]::Round(((Get-Date) - $t0).TotalSeconds, 1)
+        $sl4 = Join-Path $d "$name.sl4"
+        $ok = (Test-Path $sl4) -and (Test-Path (Join-Path $d "$name.upd"))
+        $m = if ($johansen) { "Johansen->Gragg" } else { "como el .exp" }
+        Result $step $ok "rc=$LASTEXITCODE sl4=$(Test-Path $sl4) metodo=$m ${secs}s"
     }
 }
 }
