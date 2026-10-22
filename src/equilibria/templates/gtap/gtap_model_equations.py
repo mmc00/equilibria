@@ -1476,6 +1476,9 @@ class GTAPModelEquations:
                 val = raw.get((region,), 1.0)
             return float(val or 1.0)
 
+        from equilibria.blocks.gtap._derived_params import calibrate_betas, cd_regions
+
+        _cd_regs = cd_regions(self.params, self.sets)
         for region in self.sets.r:
             # Use evfb (buyer-price factor flows) to match model initialization:
             # xf_model = (evfb/pf) * xscale, so pf*xf/xscale = evfb (not vfm).
@@ -1598,38 +1601,22 @@ class GTAPModelEquations:
             vst_r = sum(self._vst_value(region, i) for i in self.sets.i)
             savf_bar_data[(region,)] = vcif_r - vfob_r - vst_r
 
-            # GAMS betaCal (cal.gms:3321-3337): betaP/betaG/betaS are initialised
-            # from the INCOME-SIDE regY = factY + yTaxInd (not expenditure-side).
-            # PATH then solves the degenerate betaCal MCP and stays near the initial
-            # point, so the final values equal the initial ones:
-            #   betaP = yc / regY_income,  betaG = yg / regY_income,  betaS = rsav / regY_income
-            #   phi   = 1 / (betaP/phiP + betaG + betaS)
-            # phiP ≈ 1 at benchmark (CDE collapses to CD weights), so phi < 1 when
-            # regY_income > yc+yg+rsav (which is the common SAM imbalance case).
+            # betaCal como GTAP (_derived_params.calibrate_betas): betaP/betaG/betaS
+            # sobre el regY del INGRESO (factY + yTaxInd), con phiP = Σ xcshr·eh.
             regy_income_for_beta = regy_income  # = facty_bench + ytax_ind_bench
-            regy_expenditure = max(
-                private_total + government_total + savings_total, 1e-8
-            )
-            phip = 1.0
-            betap = (
-                private_total / regy_income_for_beta
-                if regy_income_for_beta > 0.0
-                else 0.0
-            )
-            betag = (
-                government_total / regy_income_for_beta
-                if regy_income_for_beta > 0.0
-                else 0.0
-            )
-            betas = (
-                savings_total / regy_income_for_beta
-                if regy_income_for_beta > 0.0
-                else 0.0
-            )
-            phi = (
-                1.0 / (betap / phip + betag + betas)
-                if (betap / phip + betag + betas) > 0.0
-                else 1.0
+            phip, betap, betag, betas, phi = calibrate_betas(
+                {c: _private_total(region, c) for c in self.sets.i},
+                {
+                    c: float(
+                        self.params.elasticities.incpar.get((region, c), 1.0) or 1.0
+                    )
+                    for c in self.sets.i
+                },
+                region in _cd_regs,
+                private_total,
+                government_total,
+                savings_total,
+                regy_income_for_beta,
             )
             regy_base = regy_bench  # kept for downstream references below
             regional_income_share_data[(region,)] = (
