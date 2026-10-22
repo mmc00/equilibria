@@ -1,7 +1,7 @@
 """Localizacion de referencias externas (GAMS, GEMPACK, PATH) por entorno.
 
 Estas rutas apuntan a material que NO se versiona: los .gdx/.har de referencia que
-produce GAMS, los datasets NUS333, el checkout de path-capi-python y la instalacion de
+produce GAMS, el checkout de path-capi-python y la instalacion de
 Julia. Antes estaban fijas al disco del autor, asi que en cualquier otra maquina los
 tests que dependen de ellas fallaban o se saltaban sin explicar que faltaba.
 
@@ -15,7 +15,7 @@ Variables reconocidas:
     Raiz de los .gdx de referencia generados con GAMS (por defecto
     ``~/proyectos2/equilibria_refs``).
 ``EQUILIBRIA_NUS333_DIR``
-    Dataset NUS333 de GTAP (por defecto ``~/Downloads/10284``).
+    Paquete NUS333 de Burfisher (por defecto ``datasets/nus333`` del repo).
 ``EQUILIBRIA_PATH_CAPI_SRC``
     Directorio ``src`` del checkout de path-capi-python (por defecto
     ``~/proyectos/path-capi-python/src``).
@@ -65,9 +65,14 @@ def ref_gdx(*partes: str) -> Path | None:
     return ruta if ruta.exists() else None
 
 
+_REPO = Path(__file__).resolve().parents[2]
+
+
 def nus333_dir() -> Path:
-    """Directorio del dataset NUS333. Puede no existir."""
-    return _por_entorno("EQUILIBRIA_NUS333_DIR", "~/Downloads/10284")
+    """Paquete NUS333 de Burfisher: ``datasets/nus333`` del repo, salvo que
+    ``EQUILIBRIA_NUS333_DIR`` apunte a otra copia. Fuera del repo (equilibria
+    instalado) puede no existir."""
+    return _por_entorno("EQUILIBRIA_NUS333_DIR", str(_REPO / "datasets" / "nus333"))
 
 
 def path_capi_src() -> Path:
