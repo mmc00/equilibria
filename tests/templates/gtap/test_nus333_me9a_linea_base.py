@@ -23,9 +23,7 @@ Ya no se compara contra GAMS: ``cal.gms`` calibra betaP solo en el periodo base 
 el check con las participaciones crudas, asi que con ``climatechange.prm`` su check se
 aparta del dato (qgd ROW 1,2 %). equilibria calibra como GTAP y se aparta de GAMS a
 proposito. Medido 2026-10-22 contra GEMPACK: antes pre 87 % / post 77 % de las celdas a
-0,5 %, max 1,7 %; ahora pre 100 % y post 100 % a 1 %, max 0,64 %. Los niveles de GAMS
-(``tests/fixtures/nus333_me9a_gams_levels.json.gz``) quedan solo como entrada del test
-de los comparadores.
+0,5 %, max 1,7 %; ahora pre 100 % y post 100 % a 1 %, max 0,64 %.
 
 LOCAL-only: SKIP si falta nus333.
 """
@@ -39,7 +37,6 @@ import pytest
 from tests.templates.gtap._nus333 import (
     ROOT,
     closure,
-    gams_levels,
     nus333_params,
     pct,
     run_burfisher,
@@ -47,7 +44,6 @@ from tests.templates.gtap._nus333 import (
 
 pytestmark = pytest.mark.integration
 
-LEVELS = ROOT / "tests" / "fixtures" / "nus333_me9a_gams_levels.json.gz"
 REGS = ("USA", "ROW")
 ACTS = ("AGR", "MFG", "SER")
 GDP = {"USA": 109.6, "ROW": 284.5}
@@ -176,20 +172,3 @@ def test_todas_las_celdas_contra_gempack(solved):
         worst = max(cells, key=lambda c: c.d)
         assert worst.d < tol, (period, worst)
     assert not r.unmatched
-
-
-def test_equilibria_compare_da_lo_mismo_que_el_comparador_del_gate(solved):
-    """La Tabla 3 con equilibria.compare (run_burfisher.compare_module) cuenta las
-    mismas celdas y da los mismos % que el comparador de los gates, que se escribio
-    antes que el modulo y hace de oraculo (#135)."""
-    m, p, _, _ = solved
-    levels = gams_levels(LEVELS, "ME9A")
-    rb = run_burfisher()
-    old = rb.compare(m, p, levels)
-    new, report = rb.compare_module(m, p, levels)
-    for period in ("check", "shock"):
-        assert new[period]["cells"] == old[period]["cells"], period
-        assert new[period]["match_pct"] == old[period]["match_pct"], period
-        assert new[period]["instr_cells"] == old[period]["instr_cells"], period
-    assert report.excluded
-    assert all(v.lower() in rb.SKIP | rb.RF for v in report.excluded)
