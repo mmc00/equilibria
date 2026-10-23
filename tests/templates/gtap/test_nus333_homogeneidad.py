@@ -7,8 +7,9 @@ En equilibria el numerario es ``pnum`` y ``eq_pnum`` lo ata a ``pwfact`` (el
 
 Oraculo (teoria, no el codigo): el modelo es homogeneo de grado 0 en precios, asi que
 en el shock cada precio y cada valor es 1,10 veces el del check y cada cantidad,
-indice real y utilidad es igual. Y la solucion GEMPACK GTAPV7.sl4: con un shock
-homogeneo la linealizacion de Johansen es exacta, asi que coincide en niveles.
+indice real y utilidad es igual. Y las soluciones GEMPACK GTAPV7.sl4 (modelo condensado)
+y GTAPUV7.sl4 (sin condensar): con un shock homogeneo la linealizacion de Johansen es
+exacta, asi que coinciden en niveles.
 """
 
 from __future__ import annotations
@@ -127,12 +128,15 @@ def test_precios_y_valores_escalan_cantidades_no(solved):
         assert clases[v] == {"x1.00"}, v
 
 
-def test_coincide_con_gempack(solved):
+@pytest.mark.parametrize("exp", ["GTAPV7", "GTAPUV7"])
+def test_coincide_con_gempack(solved, exp):
+    # GTAPUV7: el mismo shock con el modelo sin condensar; sus impuestos exogenos
+    # extra ya son parametros en equilibria, asi que es la misma corrida.
     from equilibria.blocks.gtap._derived_params import xscale_data
 
     m, p, _ = solved
     cb = _cb()
-    r = cb.run("GTAPV7", cb.cg.model_levels(m), dict(xscale_data(p, p.sets)))
+    r = cb.run(exp, cb.cg.model_levels(m), dict(xscale_data(p, p.sets)))
     cells = [c for c in r.cells if c.period == "post"]
     assert len(cells) == 207
     worst = max(cells, key=lambda c: c.d)
