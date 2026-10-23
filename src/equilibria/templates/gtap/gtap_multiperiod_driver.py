@@ -2994,6 +2994,7 @@ def _solve_shock_in_steps(m, steps, solve) -> dict[str, Any]:
     from pyomo.environ import value
 
     from equilibria.blocks.gtap.periods import CHECK
+    from equilibria.templates.gtap.instruments import period_key
     from equilibria.templates.gtap.shocks import _shocked_cells
 
     lambdas = [float(x) for x in steps]
@@ -3003,7 +3004,8 @@ def _solve_shock_in_steps(m, steps, solve) -> dict[str, Any]:
     for name in sorted(getattr(m, "_exogenous_instruments", ())):
         var = getattr(m, name)
         for k in list(_shocked_cells(m, name)):
-            chk = float(value(var[(*k[:-1], CHECK)]))
+            kt = k if isinstance(k, tuple) else (k,)
+            chk = float(value(var[period_key(kt[:-1], CHECK)]))
             cells.append((var[k], chk, float(value(var[k]))))
     r: dict[str, Any] = {}
     for lam in lambdas:

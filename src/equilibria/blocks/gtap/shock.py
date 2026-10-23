@@ -39,6 +39,10 @@ SHOCK_INSTRUMENTS: tuple[str, ...] = (
     "axp",
     "lambdam",
     "lambdamg",
+    # El numerario. Lo declara y fija el ClosureBlock (pnum = 1 en cada periodo);
+    # registrarlo deja moverlo como shock: eq_pnum lo ata a pwfact (el pfactwld de
+    # GEMPACK) en el periodo del shock. GTAPV7/GTAPUV7 del libro: pnum +10 %.
+    "pnum",
 )
 
 

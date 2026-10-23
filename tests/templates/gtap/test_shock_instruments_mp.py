@@ -8,6 +8,8 @@ Sin solver: nus333.
 
 import pytest
 
+from equilibria.templates.gtap.instruments import period_key
+
 
 def test_registro_y_fijado_antes_del_cache(nus333_mp_model):
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
@@ -124,5 +126,6 @@ def test_build_vars_fija_y_registra_sin_pasar_por_build_block_model():
         libres = [k for k, vd in var.items() if not vd.fixed]
         assert not libres, (name, libres[:3])
         for k, vd in var.items():
-            if k[-1] != "base":
-                assert vd.value == var[(*k[:-1], "base")].value, (name, k)
+            kt = k if isinstance(k, tuple) else (k,)  # pnum: indexado solo por t
+            if kt[-1] != "base":
+                assert vd.value == var[period_key(kt[:-1], "base")].value, (name, k)

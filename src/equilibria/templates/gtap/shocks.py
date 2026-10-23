@@ -30,6 +30,7 @@ from equilibria.templates.gtap.instruments import (
     check_shock_cell,
     check_shock_value,
     exogenous_test,
+    period_key,
 )
 
 # Como se lee el % de GEMPACK de cada instrumento del ShockBlock.  Los objetivos
@@ -49,6 +50,7 @@ GEMPACK_KIND: dict[str, str] = {
     "axp": "pct",
     "lambdam": "pct",
     "lambdamg": "pct",
+    "pnum": "pct",
 }
 
 
@@ -81,7 +83,7 @@ def _level(m: Any, name: str, cell: tuple, pct: float) -> float:
     g = 1.0 + float(pct) / 100.0
     if not g > 0.0:
         raise ValueError(f"{name}{cell}: {pct}% — a GEMPACK change must be > -100%")
-    chk = float(value(getattr(m, name)[(*cell, CHECK)]))
+    chk = float(value(getattr(m, name)[period_key(cell, CHECK)]))
     kind = gempack_kind(name)
     fs = 0.0
     if kind == "power_fct":
@@ -115,13 +117,13 @@ def apply_shock(
             cell = tuple(cell)
             check_shock_cell(m, name, cell)  # antes de leer su check
             v = float(x) if levels else _level(m, name, cell, x)
-            chk = float(value(getattr(m, name)[(*cell, CHECK)]))
+            chk = float(value(getattr(m, name)[period_key(cell, CHECK)]))
             check_shock_value(name, cell, v, chk)
             out.setdefault(name, {})[cell] = v
     for name, cells in out.items():
         var = getattr(m, name)
         for cell, v in cells.items():
-            var[(*cell, SHOCK)].fix(v)
+            var[period_key(cell, SHOCK)].fix(v)
     return out
 
 
@@ -135,9 +137,10 @@ def _shocked_cells(m: Any, name: str) -> Iterator[tuple]:
         return
     exo = exogenous_test(m, name)
     for k in var:
-        if k[-1] != SHOCK or not exo(k):
+        kt = k if isinstance(k, tuple) else (k,)
+        if kt[-1] != SHOCK or not exo(k):
             continue
-        ck = (*k[:-1], CHECK)
+        ck = period_key(kt[:-1], CHECK)
         if ck in var and float(value(var[k])) != float(value(var[ck])):
             yield k
 
@@ -147,7 +150,7 @@ def shock_of(m: Any) -> list[str]:
     check: el shock del modelo.  Vacia = sin shock (el driver aplica entonces el
     arancel +10%)."""
     return [
-        f"{name}{tuple(k[:-1])}"
+        f"{name}{tuple(k[:-1]) if isinstance(k, tuple) else ()}"
         for name in sorted(getattr(m, "_exogenous_instruments", ()))
         for k in _shocked_cells(m, name)
     ]

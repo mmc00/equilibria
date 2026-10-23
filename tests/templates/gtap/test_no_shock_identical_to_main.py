@@ -16,6 +16,10 @@ fallar el test sin que cambiara ninguna ecuacion.
 Regenerado 2026-10-22 (betaP/betaG/betaS con phiP = Σ xcshr·eh): cambian 44 de
 3390 filas, todas eq_yc/eq_yg/eq_rsav/eq_u/eq_phi; el nombre del fixture conserva
 el commit de origen.
+Regenerado 2026-10-23 (pnum registrado como instrumento del ShockBlock): cambian 3
+filas, eq_pnum[shock] y eq_ptmg[*,shock], las que leen pnum: antes pnum[shock]
+llegaba libre a la evaluacion y la preparacion lo fijaba en 1,5 (_SHOCK_PNUM, que el
+solver real pisaba con 1,0); ahora queda fijo en 1,0.
 
 Regenerar SOLO si se cambia el modelo a proposito:
     python tests/templates/gtap/test_no_shock_identical_to_main.py <repo_root> <out>
