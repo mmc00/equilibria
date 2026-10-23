@@ -552,6 +552,53 @@ def test_flow_archive_still_checks_sync_text(
     assert "'MUMPS' does not match" in capsys.readouterr().out
 
 
+def _born_and_archived(toy: Path, m: Any, synced: list[str]) -> None:
+    """One PR proposes, syncs and archives `mumps` (the change was never open at
+    main): the first PR of the change is also its last."""
+    _write(toy, SPEC, _baseline([R_NEWTON, R_LOG, R_TOL]))
+    _commit(toy, "bootstrap baseline")
+    _branch(toy, "one")
+    _write(toy, CHANGE, FULL_DELTA)
+    _write(toy, "specs/solver/changes/mumps/proposal.md", "# Why\n")
+    _write(toy, SPEC, _baseline(synced, "2026-10-20"))
+    assert _run(m, "archive", "solver", "mumps") == 0
+    _commit(toy, "propose, sync and archive")
+
+
+def test_flow_propose_sync_archive_same_pr(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _born_and_archived(toy, m, SYNCED)
+    assert _run(m, "check-pr", "--base", "main") == 0, capsys.readouterr().out
+
+
+def test_flow_propose_sync_archive_same_pr_checks_sync_text(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    m = _load_module()
+    _born_and_archived(toy, m, [R_DAMPED, R_TOL, R_MUMPS.replace("MUMPS.", "X.")])
+    assert _run(m, "check-pr", "--base", "main") == 1
+    assert "'MUMPS' does not match" in capsys.readouterr().out
+
+
+def test_old_archive_does_not_cover_hand_edits(
+    toy: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An archive already at base is closed: it justifies nothing new."""
+    m = _load_module()
+    _write(toy, SPEC, _baseline([R_NEWTON, R_LOG, R_TOL]))
+    _write(
+        toy, "specs/solver/changes/archive/2026-01-01-mumps/specs/specs.md", FULL_DELTA
+    )
+    _commit(toy, "baseline and an old archive")
+    _branch(toy, "edit")
+    _write(toy, SPEC, _baseline(SYNCED, "2026-10-20"))
+    _commit(toy, "edit by hand")
+    assert _run(m, "check-pr", "--base", "main") == 1
+    assert "requirement 'MUMPS' edited by hand" in capsys.readouterr().out
+
+
 def test_flow_sync_text_differs_from_delta(
     toy: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
