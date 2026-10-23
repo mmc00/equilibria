@@ -236,6 +236,11 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     ),
 }
 
+# Como GEMPACK (Gragg), el shock no se aplica de una vez: se sube en pasos y cada
+# solve arranca del anterior. Sin pasos, ME9B/C (capital ROW +213 %) a veces no
+# resuelven, con PATH o con Newton-TR.
+SHOCK_STEPS = (0.25, 0.5, 0.75, 1.0)
+
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
 RF = {
     "pfa", "pfy", "pm", "pmcif", "pefob", "pwmg", "pp", "pdp", "pmp", "xwmg", "xmgm",
@@ -306,101 +311,9 @@ def solve_exercise(exp: str, har: Path):
         seed_from_prior=False,
         mode="gtap",
         solve_check=True,
+        shock_steps=SHOCK_STEPS,
     )
     return m, p, {k: int(res[k]["code"]) for k in res}
-
-
-def _strip(s):
-    return (
-        s[2:]
-        if isinstance(s, str) and len(s) > 2 and s[1] == "_" and s[0] in "acfr"
-        else s
-    )
-
-
-def compare(m, p, gdx: Path | dict) -> dict:
-    """Todas las celdas de check y shock contra GAMS (misma logica que los gates).
-
-    ``gdx``: el GDX de GAMS, o los niveles ya leidos ``{var: {clave: nivel}}`` (las
-    claves como las da ``_diff_core.gams_levels``; asi lo usan los tests, sin gdxdump).
-
-    Los instrumentos exogenos del ShockBlock son datos de entrada, no resultados: no
-    entran al %, se cuentan aparte (instr_cells / instr_bad) para ver que el shock es
-    el de GAMS. Una celda que un hook @overwrite volvio endogena es un resultado mas.
-    """
-    from _diff_core import gams_levels, list_populated_vars, split_t
-    from pyomo.environ import value
-
-    from equilibria.templates.gtap.instruments import exogenous_test
-
-    if isinstance(gdx, dict):
-        levels: dict = gdx
-        names = list(levels)
-    else:
-        levels = {}
-        names = list_populated_vars(gdx)
-    out = {}
-    for period in ("check", "shock"):
-        tot = 0
-        instr_cells = 0
-        instr_bad = []
-        match = dict.fromkeys(TOLS, 0)
-        worst = []
-        for vn in names:
-            if vn.lower() in SKIP or vn.lower() in RF:
-                continue
-            if vn not in levels:
-                try:
-                    levels[vn] = gams_levels(gdx, vn)
-                except Exception:
-                    levels[vn] = None
-            g = levels[vn]
-            if g is None:
-                continue
-            pv = getattr(m, ALIAS.get(vn, vn), None) or getattr(m, vn.lower(), None)
-            if pv is None:
-                continue
-            exo = exogenous_test(m, pv.local_name)
-            for fk, gval in g.items():
-                body, t = split_t(fk)
-                if t != period:
-                    continue
-                st = tuple(_strip(x) for x in body)
-                # p(r,a,i) fuera de la diagonal: makb=0, la celda no existe.
-                if vn == "p" and len(st) == 3 and st[1] != st[2]:
-                    mk = p.benchmark.makb
-                    if not float(
-                        mk.get(st, 0) or mk.get((st[2], st[1], st[0]), 0) or 0
-                    ):
-                        continue
-                try:
-                    val = float(value(pv[(*st, period) if st else (period,)]))
-                except Exception:
-                    continue
-                d = abs(val - gval)
-                rel = d / abs(gval) if abs(gval) > 1e-12 else (0.0 if d < 1e-6 else 9e9)
-                if exo((*st, period)):
-                    instr_cells += 1
-                    if d > 1e-6 and rel > TOLS[0]:
-                        instr_bad.append((vn, list(st), val, gval))
-                    continue
-                tot += 1
-                ok = [d <= 1e-6 or rel <= t for t in TOLS]
-                for t, o in zip(TOLS, ok, strict=True):
-                    match[t] += o
-                if not ok[0]:
-                    worst.append((round(100 * rel, 4), vn, list(st)))
-        worst.sort(reverse=True)
-        out[period] = {
-            "cells": tot,
-            "match_pct": {
-                f"{t:.1%}": round(100 * match[t] / max(tot, 1), 2) for t in TOLS
-            },
-            "worst": worst[:10],
-            "instr_cells": instr_cells,
-            "instr_bad": instr_bad,
-        }
-    return out
 
 
 GAMS_PREFIXES = ["a_", "c_", "f_", "r_"]
@@ -412,16 +325,25 @@ WHY_RF = (
 )
 
 
-def compare_module(m, p, gdx: Path | dict):
-    """Lo mismo que :func:`compare`, con ``equilibria.compare``: GAMS (A, referencia)
-    contra el modelo (B), en ``check`` y ``shock``.
+def compare(m, p, gdx: Path | dict) -> dict:
+    """Todas las celdas de check y shock contra GAMS, con ``equilibria.compare``: GAMS
+    (A, referencia) contra el modelo (B).
+
+    ``gdx``: el GDX de GAMS, o los niveles ya leidos ``{var: {clave: nivel}}`` (las
+    claves como las da ``_diff_core.gams_levels``; asi lo usan los tests, sin gdxdump).
+
+    Los instrumentos exogenos del ShockBlock son datos de entrada, no resultados: no
+    entran al %, se cuentan aparte (instr_cells / instr_bad) para ver que el shock es
+    el de GAMS. Una celda que un hook @overwrite volvio endogena es un resultado mas.
 
     El mapeo se arma por ejercicio: cada variable de GAMS con registros que el modelo
     tiene (``ALIAS``), las mismas dims en el mismo orden, ``strip_prefix`` para los
     prefijos de GAMS y SKIP/RF excluidas con su motivo. Antes de comparar se sacan,
     de los dos lados, las celdas que :func:`compare` no cuenta como resultado: los
     instrumentos exogenos del ShockBlock (se cuentan aparte) y ``p`` fuera de la
-    diagonal sin produccion (``makb = 0``). Devuelve ``(resumen, Report)``."""
+    diagonal sin produccion (``makb = 0``). Devuelve, por periodo, ``cells``,
+    ``match_pct``, ``worst`` (las 10 peores fuera del 0,1 %: (% , var, celda)),
+    ``instr_cells`` e ``instr_bad``."""
     from pyomo.environ import value
 
     from equilibria.compare import Mapping, from_dict, from_gdx
@@ -434,6 +356,7 @@ def compare_module(m, p, gdx: Path | dict):
         gams = from_gdx(gdx, period_dim=-1)
     variables, excluded, eq_cells = [], {}, {}
     instr: dict[str, int] = {"check": 0, "shock": 0}
+    instr_bad: dict[str, list] = {"check": [], "shock": []}
     mk = p.benchmark.makb
     for vn, cells in gams.levels.items():
         if vn.lower() in SKIP:
@@ -448,7 +371,10 @@ def compare_module(m, p, gdx: Path | dict):
         if pv is None:
             continue
         exo = exogenous_test(m, pv.local_name)
-        in_gams = {(*(_gams_strip(e) for e in idx), t) for (t, idx) in cells}
+        in_gams = {
+            (*(_gams_strip(e) for e in idx), t): float(x)
+            for (t, idx), x in cells.items()
+        }
         n = gams.ndim[vn]
         dims = [f"D{i}" for i in range(n)]
         mine = {}
@@ -464,7 +390,11 @@ def compare_module(m, p, gdx: Path | dict):
                 ):
                     continue
             if exo(key):
-                instr[t] += key in in_gams  # como compare(): solo las que GAMS tiene
+                if key in in_gams:  # solo las que GAMS tiene
+                    instr[t] += 1
+                    v, g = float(value(c)), in_gams[key]
+                    if abs(v - g) > 1e-6 and abs(v - g) > TOLS[0] * abs(g):
+                        instr_bad[t].append((vn, list(body), v, g))
                 continue
             try:
                 mine[key] = float(value(c))
@@ -519,7 +449,8 @@ def compare_module(m, p, gdx: Path | dict):
     r = cmp(gams_f, model, mapping, reference="a")
     out = {}
     for t in ("check", "shock"):
-        ds = [c.d for c in r.cells if c.period == t]
+        cs = [c for c in r.cells if c.period == t]
+        ds = [c.d for c in cs]
         out[t] = {
             "cells": len(ds),
             "match_pct": {
@@ -528,9 +459,18 @@ def compare_module(m, p, gdx: Path | dict):
                 )
                 for thr in TOLS
             },
+            "worst": sorted(
+                (
+                    (round(100 * c.d, 4), c.variable, list(c.index))
+                    for c in cs
+                    if c.d > TOLS[0]
+                ),
+                reverse=True,
+            )[:10],
             "instr_cells": instr[t],
+            "instr_bad": instr_bad[t],
         }
-    return out, r
+    return out
 
 
 def _gams_strip(e: str) -> str:
@@ -559,19 +499,6 @@ def main() -> int:
             continue
         m, p, codes = solve_exercise(exp, har)
         r = {"codes": codes, **compare(m, p, gdx)}
-        # La cifra del paper sale de equilibria.compare (con el lector GDX nativo); el
-        # comparador de los gates (gdxdump) la verifica en la misma corrida.
-        mod, _ = compare_module(m, p, gdx)
-        r["module"] = mod
-        # Igualdad al 0,1 % (el criterio de la Tabla 3). A 0,5 % y 1 % pueden
-        # diferir en celdas casi nulas: el gate pasa |d| <= 1e-6; el modulo, d
-        # relativo con piso 1e-3 (5e-6 y 1e-5 absolutos). Medido: solo ME4A/B
-        # (shock code 2), p. ej. ME4A 30,97 vs 31,16 % a 0,5 %.
-        r["module_equals_gate"] = all(
-            mod[t]["cells"] == r[t]["cells"]
-            and mod[t]["match_pct"]["0.1%"] == r[t]["match_pct"]["0.1%"]
-            for t in ("check", "shock")
-        )
         results[exp] = r
         c, s = r["check"], r["shock"]
         print(
@@ -579,8 +506,7 @@ def main() -> int:
             f"check {c['cells']} {c['match_pct']['0.1%']}%  "
             f"shock {s['cells']} {s['match_pct']['0.1%']}% "
             f"({s['match_pct']['0.5%']}% a 0,5%)  peores {s['worst'][:3]}  "
-            f"instrumentos {s['instr_cells']} ({len(s['instr_bad'])} distintos de GAMS)  "
-            f"compare={'igual' if r['module_equals_gate'] else 'DISTINTO'}",
+            f"instrumentos {s['instr_cells']} ({len(s['instr_bad'])} distintos de GAMS)",
             flush=True,
         )
     if args.json:

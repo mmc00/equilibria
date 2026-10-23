@@ -45,6 +45,12 @@ BASELINE_COUNT = 20194
 # de gdpmp. Medido contra el fixture anterior: mismas 20194 claves, 27 celdas
 # >1e-9 y TODAS agregados del PIB (rgdpmp, pgdpmp, mq_gdp_bs, mq_gdp_sb; peor
 # 5.4e-3 en IND, pgdpmp 1.0053 -> 0.9998); el resto es ruido <1e-9.
+#
+# Recapturado 2026-10-22: betaP/betaG/betaS con phiP = Σ xcshr·eh del dato
+# (_derived_params.calibrate_betas). En 10x7 phiP no es exactamente 1 (SSA
+# 1,0000063); antes se fijaba en 1 y el check quedaba corrido ese poco. Medido
+# contra el fixture anterior: mismas 20194 claves, 9221 celdas >1e-9, la peor
+# 5,32e-06 (xda SSA Rice gov), ninguna >1e-5.
 BASELINE_SIG = "52d6e6b3a7e64812"
 
 

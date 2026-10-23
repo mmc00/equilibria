@@ -1017,6 +1017,44 @@ def _vst_income(params: Any, region: str, commodity: str) -> float:
     return float(val or 0.0)
 
 
+def calibrate_betas(
+    private: dict[str, float],
+    eh: dict[str, float],
+    cd: bool,
+    private_total: float,
+    government_total: float,
+    savings_total: float,
+    regy: float,
+) -> tuple[float, float, float, float, float]:
+    """``(phiP, betaP, betaG, betaS, phi)`` de una region, como GTAP.
+
+    phiP = Σ xcshr·eh en el dato (eq_phip; en CD, Σ xcshr = 1). Con el INCPAR
+    estandar da 1 (a 1e-6); con uno editado (climatechange.prm, ME9) no. GTAP
+    (gtapv7.tab: UTILELAS, DPARPRIV/GOV/SAVE) calibra, con sp/sg/ss las
+    participaciones del ingreso ``regy``:
+    phi = phiP·sp + sg + ss, betaP = phiP·sp/phi, betaG = sg/phi, betaS = ss/phi,
+    escaladas para que sumen sp + sg + ss (con phiP = 1, las participaciones). Asi
+    yc = betaP·(phi/phiP)·regY = sp·regY: el check reproduce el dato. GAMS
+    (cal.gms) resuelve betaCal SOLO en el periodo base y deja el check con las
+    participaciones: su check no reproduce el dato cuando phiP != 1.
+    """
+    sp = private_total / regy if regy > 0.0 else 0.0
+    sg = government_total / regy if regy > 0.0 else 0.0
+    ss = savings_total / regy if regy > 0.0 else 0.0
+    phip = 1.0
+    if not cd and private_total > 0.0:
+        phip = sum(
+            x / private_total * eh.get(c, 1.0) for c, x in private.items() if x > 0.0
+        )
+    scale = (phip * sp + sg + ss) / (sp + sg + ss) if (sp + sg + ss) > 0.0 else 1.0
+    betap = phip * sp / scale
+    betag = sg / scale
+    betas = ss / scale
+    den = betap / phip + betag + betas
+    phi = 1.0 / den if den > 0.0 else 1.0
+    return phip, betap, betag, betas, phi
+
+
 def cd_regions(params: Any, sets: Any) -> frozenset[str]:
     """Regiones con utilidad privada Cobb-Douglas: las que traen SUBPAR=0.
 
@@ -1198,22 +1236,14 @@ def demand_income_params(
 
         # betaCal: betaP/betaG/betaS from the INCOME-SIDE regY (facty+ytaxInd).
         regy_income_for_beta = regy_income
-        phip = 1.0
-        betap = (
-            private_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
-        )
-        betag = (
-            government_total / regy_income_for_beta
-            if regy_income_for_beta > 0.0
-            else 0.0
-        )
-        betas = (
-            savings_total / regy_income_for_beta if regy_income_for_beta > 0.0 else 0.0
-        )
-        phi = (
-            1.0 / (betap / phip + betag + betas)
-            if (betap / phip + betag + betas) > 0.0
-            else 1.0
+        phip, betap, betag, betas, phi = calibrate_betas(
+            {c: _private_total(region, c) for c in sets.i},
+            {c: float(el.incpar.get((region, c), 1.0) or 1.0) for c in sets.i},
+            region in _cd,
+            private_total,
+            government_total,
+            savings_total,
+            regy_income_for_beta,
         )
         regy_base = regy_bench
         regional_income_share_data[(region,)] = (

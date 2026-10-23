@@ -45,7 +45,11 @@ BASELINE_COUNT = 37638
 # right on one build. Rounding to 13 significant figures is stable across all
 # of the above while still catching a 1e-12 relative change (verified), which
 # is ~4000x finer than the noise it absorbs.
-BASELINE_HASH = "e45fc91c742347f4"
+#
+# Bumped 2026-10-22 from e45fc91c742347f4: betaP/betaG/betaS with phiP = Σ xcshr·eh
+# of the data (_derived_params.calibrate_betas; 10x7 SSA phiP 1.0000063). Same
+# 37638 rows; only the beta-dependent rows (eq_yc/yg/rsav/u/phi) move.
+BASELINE_HASH = "ec229e7ce25b09b3"
 
 
 def _load_params():

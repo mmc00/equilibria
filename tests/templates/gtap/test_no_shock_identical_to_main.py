@@ -13,6 +13,10 @@ de la referencia (fixture PUNTO), no el valor inicial del modelo actual: corregi
 un nivel inicial (p.ej. pefob, xp o xg_agg contra cal.gms) movia el punto y hacia
 fallar el test sin que cambiara ninguna ecuacion.
 
+Regenerado 2026-10-22 (betaP/betaG/betaS con phiP = Σ xcshr·eh): cambian 44 de
+3390 filas, todas eq_yc/eq_yg/eq_rsav/eq_u/eq_phi; el nombre del fixture conserva
+el commit de origen.
+
 Regenerar SOLO si se cambia el modelo a proposito:
     python tests/templates/gtap/test_no_shock_identical_to_main.py <repo_root> <out>
 """
