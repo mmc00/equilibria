@@ -32,6 +32,12 @@ una copia dentro de la carpeta de salida.
      con su -dir.exp). Los .exp de Johansen de 1 paso (TBL45A/B/C, TBL64,
      ME4A/B) pasan a Gragg 2-4-6. Deja .sl4, .upd y log por ejercicio en
      5_burfisher\out; los niveles se leen directo del .sl4 en la Mac.
+  6. Los cambios (% y ordinarios, con EV y u) de cada ejercicio de Burfisher:
+     sltoht vuelca cada .sl4 a sl4dump_<exp>.har (el lector de la Mac solo lee
+     niveles, y EV no tiene nivel). Dos juegos: (a) las soluciones del libro de
+     tests\fixtures\gtap7_gempack\burfisher (Johansen donde el libro); (b) las
+     del paso 5 de esta misma corrida (Gragg en todos), si estan. Es el
+     oraculo GEMPACK del bienestar.
 
 -Pasos elige que pasos correr (por defecto todos): -Pasos 4
 
@@ -40,13 +46,14 @@ Uso, desde la raiz del repo:
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -GP C:\GP -Gams "C:\GAMS\53\gams.exe"
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5
+  powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5,6
 #>
 param(
     [string]$GP = "C:\GP",
     [string]$Gams = "",
     [string]$Out = "",
     [string]$GtapDir = "C:\runGTAP375",
-    [int[]]$Pasos = @(1, 2, 3, 4, 5)
+    [int[]]$Pasos = @(1, 2, 3, 4, 5, 6)
 )
 
 $ErrorActionPreference = "Continue"
@@ -303,6 +310,50 @@ if ($okGss5) {
         $m = if ($johansen) { "Johansen->Gragg" } else { "como el .exp" }
         Result $step $ok "rc=$LASTEXITCODE sl4=$(Test-Path $sl4) metodo=$m ${secs}s"
     }
+}
+}
+
+# --- 6. cambios de cada ejercicio de Burfisher: EV y u (sltoht) -------------
+# sltoht en batch: <solucion> / c / n / har / <salida> / e (run_gempack_matrix.convert_sl4).
+function Dump-Changes([string]$step, [string]$sl4, [string]$dest) {
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    $stem = [System.IO.Path]::GetFileNameWithoutExtension($sl4)
+    $copy = Join-Path $dest "$stem.sl4"
+    if ($sl4 -ne $copy) { Copy-Item $sl4 $copy -Force }
+    Set-Content -Path (Join-Path $dest "sl4dump_$stem.sti") -Value "`r`n$stem`r`nc`r`nn`r`nhar`r`nsl4dump_$stem.har`r`ne`r`n" -NoNewline -Encoding ascii
+    Push-Location $dest
+    try {
+        & $Sltoht -sti "sl4dump_$stem.sti" *> "sltoht_console_$stem.txt"
+        $rc = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    $har = Join-Path $dest "sl4dump_$stem.har"
+    Result $step (Test-Path $har) "rc=$rc har=$(Test-Path $har) ($dest)"
+}
+
+if ($Pasos -contains 6) {
+$D6 = Join-Path $Out "6_sl4dump"
+# (a) las soluciones del libro: el .sl4 va comprimido en los fixtures
+foreach ($gz in (Get-ChildItem "$Fix\burfisher" -Filter *.sl4.gz | Sort-Object Name)) {
+    $stem = $gz.Name -replace "\.sl4\.gz$", ""
+    $d = Join-Path $D6 "libro\$stem"
+    New-Item -ItemType Directory -Force -Path $d | Out-Null
+    $sl4 = Join-Path $d "$stem.sl4"
+    $in = [System.IO.File]::OpenRead($gz.FullName)
+    $zip = New-Object System.IO.Compression.GZipStream($in, [System.IO.Compression.CompressionMode]::Decompress)
+    $outFs = [System.IO.File]::Create($sl4)
+    try { $zip.CopyTo($outFs) } finally { $outFs.Close(); $zip.Close(); $in.Close() }
+    Dump-Changes "6 sltoht libro $stem" $sl4 $d
+}
+# (b) las del paso 5 (Gragg en todos), si corrio en esta misma salida
+$Out5 = Join-Path $Out "5_burfisher\out"
+if (Test-Path $Out5) {
+    foreach ($sl4 in (Get-ChildItem $Out5 -Recurse -Filter *.sl4 | Sort-Object Name)) {
+        Dump-Changes "6 sltoht gragg $($sl4.BaseName)" $sl4.FullName (Join-Path $D6 "gragg\$($sl4.BaseName)")
+    }
+} else {
+    Note "6: no hay $Out5 (el paso 5 no corrio en esta salida): solo las del libro"
 }
 }
 
