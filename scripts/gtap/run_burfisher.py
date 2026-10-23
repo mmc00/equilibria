@@ -228,6 +228,9 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     # aoreg -> axp de todas las actividades; pop -> pop; qe -> aft; afeall -> lambdaf.
     # aoall(AGR) y aoreg se SUMAN en % en GEMPACK (ao = aoall + aosec + aoreg), o sea
     # que en niveles se MULTIPLICAN: axp(AGR) = 1,3194 x 0,89 en USA.
+    # pfactwld -> pnum (eq_pnum: pnum = pwfact en el shock). GTAPUV7 es el mismo
+    # shock sobre el modelo sin condensar de GEMPACK: para equilibria, el mismo.
+    "GTAPV7": ("default.prm", [("pnum", (), 10.0)]),
     "ME9B": ("climatechange.prm", me9(land=(-0.93, 4.4), ao_agr=0.0, afe=None)),
     "ME9C": ("climatechange.prm", me9(land=(10.07, 15.4), ao_agr=-11.0, afe=None)),
     "ME9D": (

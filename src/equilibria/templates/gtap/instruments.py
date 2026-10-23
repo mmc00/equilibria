@@ -34,6 +34,7 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "lambdam": ("eq_xweq",),
     # Bajo ifSUB eq_xmgm se apaga (M_XMGM inline): la celda se rechaza.
     "lambdamg": ("eq_xmgm",),
+    "pnum": ("eq_pnum",),
 }
 
 # Tasas de impuesto: la cota es la potencia 1+t > 0 (un subsidio, t<0, es valido).
@@ -75,6 +76,13 @@ def _always(_idx: Any) -> bool:
     return True
 
 
+def period_key(index: tuple, period: str) -> Any:
+    """Clave de la celda ``index`` en ``period``: ``(*index, period)``, o ``period``
+    solo si el instrumento no tiene indices (``pnum``, indexado solo por t: Pyomo
+    no acepta la tupla de un elemento como clave)."""
+    return (*index, period) if index else period
+
+
 def exogenous_test(m: Any, name: str) -> Callable[[Any], bool]:
     """Para la Var ``name`` de ``m``: una funcion ``idx -> es instrumento exogeno``.
 
@@ -97,7 +105,7 @@ def is_exogenous(m: Any, name: str, idx: Any) -> bool:
     return exogenous_test(m, name)(idx)
 
 
-def _labels(component: Any, region: str, *, live: bool = False) -> list:
+def _labels(component: Any, region: str | None, *, live: bool = False) -> list:
     """Segundo indice de las celdas 'shock' de ``region`` (solo activas si live)."""
     if component is None:
         return []
@@ -119,11 +127,11 @@ def check_instrument_cell(m: Any, name: str, index: tuple) -> None:
     perderia con code=1.
     """
     var = getattr(m, name, None)
-    idx = (*index, SHOCK)
+    idx = period_key(index, SHOCK)
+    region = index[0] if index else None
     if var is None or idx not in var:
         raise ValueError(
-            f"{name}{idx} does not exist. Valid for {index[0]}: "
-            f"{_labels(var, index[0])}"
+            f"{name}{idx} does not exist. Valid for {region}: {_labels(var, region)}"
         )
     for eq_name in INSTRUMENT_EQS.get(name, ()):
         eq = getattr(m, eq_name, None)
@@ -131,7 +139,7 @@ def check_instrument_cell(m: Any, name: str, index: tuple) -> None:
             raise ValueError(
                 f"{name}{idx}: {eq_name}{idx} does not exist or is inactive, the "
                 "shock would not enter the model. Live for "
-                f"{index[0]}: {_labels(eq, index[0], live=True)}"
+                f"{region}: {_labels(eq, region, live=True)}"
             )
     if name == "aft" and m.xft[idx].fixed:
         raise ValueError(
@@ -149,7 +157,7 @@ def check_shock_cell(m: Any, name: str, index: tuple) -> None:
         raise ValueError(
             f"{name!r} is not a registered instrument; registered: {sorted(registered)}"
         )
-    if not is_exogenous(m, name, (*index, SHOCK)):
+    if not is_exogenous(m, name, period_key(index, SHOCK)):
         raise ValueError(
             f"{name}{tuple(index)} is endogenous (@overwrite): it cannot take a shock"
         )
@@ -161,7 +169,7 @@ def check_shock_value(name: str, index: tuple, new: float, check: float) -> None
     1 + t > 0; en kappaf, 1 - kappaf > 0) o si es igual al valor ``check`` de la
     celda: un shock que no cambia nada no se ve (``shocks.shock_of``) y el driver
     aplicaria en su lugar el arancel +10% por defecto."""
-    idx = (*index, SHOCK)
+    idx = period_key(index, SHOCK)
     if new == check:
         raise ValueError(
             f"{name}{idx} = {new} is its check value: no change, so the driver would "
@@ -197,12 +205,12 @@ def fix_instrument_shock(
         raise ValueError("give exactly one of factor/value")
     check_shock_cell(m, name, index)
     var = getattr(m, name)
-    check = float(_v(var[(*index, CHECK)]))
+    check = float(_v(var[period_key(index, CHECK)]))
     if value is not None:
         new = float(value)
     else:
         assert factor is not None  # exactly one of factor/value, checked above
         new = check * float(factor)
     check_shock_value(name, index, new, check)
-    var[(*index, SHOCK)].fix(new)
+    var[period_key(index, SHOCK)].fix(new)
     return new

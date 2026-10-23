@@ -200,6 +200,9 @@ LEVEL_VARS = {
     "mintx_tgt": ("mintx", lambda r, i, aa: (r, _com(i), _agent(aa))),
     "pop": ("pop", lambda r: (r,)),
     "lambdamg": ("lambdamg", lambda mg, e, i, d: (_com(mg), e, _com(i), d)),
+    # El numerario: pnum(t), fijo en cal.gms (pnum.fx(t) = pnum.l(t)); pnumeq lo
+    # ata a pwfact (GTAPV7/GTAPUV7: pfactwld +10 %).
+    "pnum": ("pnum", lambda: ()),
 }
 # Instrumentos que en GAMS crecen por una tasa: x = x(t-1)*(1+tasa). Con kind "pct",
 # la tasa es pct/100 (model.gms: lambdava/avaall, lambdaf/afeall, axp/axpall).
@@ -222,11 +225,12 @@ def gams_line(name: str, idx: tuple, pct: float) -> str:
         raise ValueError(f"instrumento sin traduccion a GAMS: {name!r}")
     var, index = LEVEL_VARS[name]
     k = gams_labels(*index(*idx))
+    at = f"{k},tsim" if k else "tsim"
     if name == "aft":
-        lhs = chk = f"aft({k},tsim)"
+        lhs = chk = f"aft({at})"
     else:
-        lhs, chk = f"{var}.fx({k},tsim)", f"{var}.l({k},tsim)"
-    fs = GamsExpr(f"fctts.l({k},tsim)")
+        lhs, chk = f"{var}.fx({at})", f"{var}.l({at})"
+    fs = GamsExpr(f"fctts.l({at})")
     value = shocked(kind, GamsExpr(chk), 1 + pct / 100, fs)
     return f"{lhs} = {value} ;"
 

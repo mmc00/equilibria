@@ -329,7 +329,14 @@ class GTAPSolver:
         if closure.numeraire and hasattr(self.model, closure.numeraire):
             var = getattr(self.model, closure.numeraire)
             if closure.numeraire_mode == "fixed_benchmark":
-                var.fix(1.0)
+                # Registrado en el ShockBlock (pnum), ya viene fijo por periodo y el
+                # del shock puede llevar un shock (GTAPV7: +10 %): no se pisa.
+                exo = closure.numeraire in getattr(
+                    self.model, "_exogenous_instruments", ()
+                )
+                for vd in var.values() if var.is_indexed() else (var,):
+                    if not (exo and vd.fixed):
+                        vd.fix(1.0)
                 fixed_count += 1
                 logger.debug(f"Fixed numeraire {closure.numeraire} = 1.0")
 

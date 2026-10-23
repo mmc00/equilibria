@@ -36,11 +36,13 @@ def gen() -> Any:
     return _load_module()
 
 
-def test_cubre_los_41_ejercicios(gen: Any) -> None:
-    """Los 37 de run_burfisher.EXERCISES y los 4 de cierre propio (desempleo, QCA, PIB)."""
+def test_cubre_los_42_ejercicios(gen: Any) -> None:
+    """Los 38 de run_burfisher.EXERCISES (con GTAPV7, el shock al numerario) y los 4
+    de cierre propio (desempleo, QCA, PIB)."""
     todos = gen.all_exercises()
-    assert len(todos) == 41
-    assert len(set(todos)) == 41
+    assert len(todos) == 42
+    assert len(set(todos)) == 42
+    assert "GTAPV7" in todos
     for exp in ("TBL65B", "ME3C", "TBL94", "ME9A"):
         assert exp in todos
     # ME9D arranca desde el shock de ME9C: tiene que ir despues.
@@ -62,6 +64,10 @@ def test_imptx_es_un_shock_a_la_potencia(gen: Any) -> None:
         "imptx.fx('ROW','c_MFG','USA',tsim) = "
         "(1 + imptx.l('ROW','c_MFG','USA',tsim))*1.1 - 1 ;"
     )
+
+
+def test_el_numerario_no_tiene_indices(gen: Any) -> None:
+    assert gen.gams_line("pnum", (), 10.0) == "pnum.fx(tsim) = pnum.l(tsim)*1.1 ;"
 
 
 def test_instrumento_desconocido_falla(gen: Any) -> None:

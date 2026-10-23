@@ -26,8 +26,8 @@ TOL = 1e-6
 # El residuo de Walras deberia ser 0 en los dos periodos: no escala.
 SIN_ESCALA = {"walras"}
 # Un par por clase, a mano: si el test clasificara al reves, fallan.
-NOMINALES = ("pa", "pd", "pf", "pft", "regy", "yc", "pwfact", "pnum")
-REALES = ("xa", "xd", "xf", "xp", "xw", "u")
+NOMINALES = ("pa", "pd", "pf", "pft", "regy", "yc", "pwfact")
+REALES = ("xaa", "xd", "xf", "xp", "xw", "rgdpmp", "rore")
 
 
 def _cb() -> Any:
@@ -40,9 +40,34 @@ def solved():
     nus333_params("default.prm")  # SKIP sin el dataset
     cb = _cb()
     from equilibria._local_refs import nus333_dir, path_capi_src
+    from equilibria.templates.gtap.gtap_multiperiod_driver import _load_run_gtap
 
     sys.path.insert(0, str(path_capi_src()))
-    m, p, codes = cb.rb.solve_exercise("GTAPV7", nus333_dir())
+    # Las celdas del shock que estan fijas cuando PATH lo resuelve no son resultados:
+    # el instrumento (pnum) y las que no existen en la economia (pa de margenes sin
+    # uso, pf de tierra fuera de AGR, p_rai sin produccion), que el modelo deja
+    # fijas. Despues del solve el driver fija todo el periodo: se miran ANTES.
+    run_gtap = _load_run_gtap()
+    orig = run_gtap._run_path_capi_nonlinear_full
+    fijas: set = set()
+
+    def espia(m, *a, **k):
+        from pyomo.environ import Var
+
+        fijas.clear()
+        for var in m.component_objects(Var):
+            for idx, vd in var.items():
+                last = idx[-1] if isinstance(idx, tuple) else idx
+                if last == "shock" and vd.fixed:
+                    fijas.add((var.local_name, idx))
+        return orig(m, *a, **k)
+
+    run_gtap._run_path_capi_nonlinear_full = espia
+    try:
+        m, p, codes = cb.rb.solve_exercise("GTAPV7", nus333_dir())
+    finally:
+        run_gtap._run_path_capi_nonlinear_full = orig
+    m._fijas_en_el_shock = frozenset(fijas)
     return m, p, codes
 
 
@@ -61,7 +86,7 @@ def _clases(m) -> dict[str, set[str]]:
                 continue
             chk = (*key[:-1], "check")
             ck = chk if len(chk) > 1 else chk[0]
-            if ck not in var:
+            if ck not in var or (name, idx) in m._fijas_en_el_shock:
                 continue
             a, b = value(var[ck], exception=False), value(var[idx], exception=False)
             if a is None or b is None or abs(a) < 1e-9:
