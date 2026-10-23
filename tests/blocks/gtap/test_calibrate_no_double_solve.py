@@ -51,7 +51,13 @@ BASELINE_COUNT = 20194
 # 1,0000063); antes se fijaba en 1 y el check quedaba corrido ese poco. Medido
 # contra el fixture anterior: mismas 20194 claves, 9221 celdas >1e-9, la peor
 # 5,32e-06 (xda SSA Rice gov), ninguna >1e-5.
-BASELINE_SIG = "52d6e6b3a7e64812"
+#
+# Recapturado 2026-10-23: el driver resuelve ev/cv/u/ug/us despues de cada periodo
+# (_solve_welfare_tail); antes quedaban en la semilla. Medido contra el fixture
+# anterior: mismas 20194 claves, 35 celdas >1e-9 y TODAS de bienestar (5 vars x 7
+# regiones, hasta 1 % de cambio); el resto identico. Las 35 nuevas = check de GAMS
+# (gtap7_10x7/out_gtap_shock_ifsub0.gdx) a <=1,4e-5 relativo. Solo se cambiaron esas.
+BASELINE_SIG = "bd8f2dd3d3c0f57e"
 
 
 def _load_params():

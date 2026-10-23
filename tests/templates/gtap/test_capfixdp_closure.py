@@ -111,6 +111,17 @@ def test_capfixdp_solves_code1():
     assert code == 1, f"capFixDp shock must converge (code=1), got {code}"
 
 
+@pytest.mark.needs_path
+def test_capfixdp_welfare_undefined_is_nan_not_the_seed():
+    # The runaway saving leaves us[EU_28,shock] < 0, so u = uh^a·ug^b·us^c has no
+    # real value: the driver reports NaN, not the seed 1.0 (and does not crash).
+    import math
+
+    m, _ = _solve("capFixDp")
+    assert m.us["EU_28", "shock"].value < 0
+    assert math.isnan(m.u["EU_28", "shock"].value)
+
+
 @pytest.mark.xfail(
     reason="capFixDp converges but the free betaS runs away (qsave USA -99%, EU -141%; "
     "match vs GEMPACK 34% << capFix 96.3%). Freeing the saving distribution alone does "

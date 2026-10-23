@@ -321,7 +321,8 @@ def solve_exercise(exp: str, har: Path):
 
 GAMS_PREFIXES = ["a_", "c_", "f_", "r_"]
 WHY_SKIP = (
-    "bienestar/Walras: GAMS no los resuelve en el MCP comparado (SKIP de los gates)"
+    "bienestar/Walras: fuera de la Tabla 3; el bienestar se compara aparte "
+    "(test_nus333_bienestar.py) y walras debe ser 0 en los dos"
 )
 WHY_RF = (
     "fijada a su macro con ifSUB (RF de measure_gtap_pure_tols): reporte, no resultado"
