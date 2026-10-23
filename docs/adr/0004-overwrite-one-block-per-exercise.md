@@ -1,5 +1,6 @@
 ---
 status: accepted
+date: 2026-10-02
 ---
 
 # An exercise changes one block with @overwrite and leaves the others alone

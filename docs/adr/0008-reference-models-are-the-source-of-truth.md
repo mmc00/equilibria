@@ -1,5 +1,6 @@
 ---
 status: accepted
+date: 2026-09-16
 ---
 
 # GAMS and GEMPACK are the source of truth; fidelity outranks match %
@@ -17,9 +18,9 @@ changed (exogenous shock variables that are right by construction). A later
 "drop" from 99.3 % to 98.97 % compared a June note against a September
 measurement. Chasing the number would have meant changing a correct model. So
 the parity gates (`scripts/gtap/run_parity_gates.py`) compare against the
-reference models, and a hook
-(`scripts/gtap/claude_hooks/block_push_without_gates.py`) blocks a push that
-touches GTAP until they have run.
+reference models, and a Claude Code hook
+(`scripts/gtap/claude_hooks/block_push_without_gates.py`) blocks an agent's push
+that touches GTAP until they have run (a plain terminal push is not blocked).
 
 ## Consequences
 

@@ -7,19 +7,21 @@ and GEMPACK. This glossary fixes the words the code, specs and ADRs use.
 ## Model structure
 
 **Block**:
-A self-contained piece of a model that declares its sets, parameters, variables
-and equations for a single period, and lists the variables it reads from other
-blocks.
+A self-contained piece of a model that requires its sets and declares its
+parameters, variables and equations for a single period, and lists the
+variables it reads from other blocks.
 _Avoid_: module, component
 
 **Template**:
-A complete model of a known type (GTAP, PEP, simple open economy) assembled from
-blocks, with its data, closures and solve path.
+A complete model of a known type (GTAP, PEP, simple open economy) with its data,
+closures and solve path. GTAP is assembled from blocks; PEP is still written as
+a monolith and a Pyomo rebuild.
 _Avoid_: model type, preset
 
 **Monolith**:
 A template's single-file implementation that writes every equation in one place;
-a starting point and parity oracle until the blocks replace it.
+a starting point, and what a parity gate may check against an oracle, until the
+blocks replace it.
 _Avoid_: legacy model, old model
 
 **SP**:
@@ -60,7 +62,7 @@ _Avoid_: experiment, perturbation
 **Exercise**:
 One simulation, usually one notebook, that may change one block with
 `@overwrite` for that exercise only.
-_Avoid_: scenario, run
+_Avoid_: run
 
 ## Periods and solving
 
@@ -74,13 +76,14 @@ The period that holds the calibrated benchmark levels.
 _Avoid_: benchmark period, t0
 
 **Check**:
-The period that must replicate the benchmark with the standard closure, proving
-the model is calibrated before the shock.
+The period between base and shock, solved with the standard closure; the shock
+is measured from it. It usually replicates the benchmark, but need not (a
+baseline path moves it), and with base calibrated it is not solved.
 _Avoid_: replication, validation period
 
 **Seed**:
 The starting values of the variables handed to the solver for a period.
-_Avoid_: initial guess, warm start
+_Avoid_: initial guess
 
 **Base calibrated**:
 The mode in which the base starts from a point the model itself has settled to,
@@ -96,15 +99,15 @@ _Avoid_: IO table, MIP (an input-output table is a different object that a SAM
 can be built from)
 
 **HAR**:
-GEMPACK's header array file format, which holds GTAP data, parameters and
-solutions.
+GEMPACK's header array file format, which holds GTAP data and parameters.
+GEMPACK solutions (`.sl4`) are a separate format with the same structure.
 _Avoid_: header file
 
 ## Validation
 
 **Oracle**:
-The reference result a model is compared against: GAMS or GEMPACK, or, for the
-`nl` gate, the GTAP monolith.
+The reference output a model is compared against: the output of GAMS or
+GEMPACK.
 _Avoid_: ground truth, golden file
 
 **Parity gate**:
@@ -117,7 +120,7 @@ _Avoid_: parity test, regression test
 **Baseline**:
 The description of what an architecture area does today, one requirement per
 behavior.
-_Avoid_: spec, current spec
+_Avoid_: current spec
 
 **Change**:
 A proposed modification to one area, with its proposal and its deltas, open until

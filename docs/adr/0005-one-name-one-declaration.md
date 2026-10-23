@@ -1,5 +1,6 @@
 ---
 status: accepted
+date: 2026-10-16
 ---
 
 # One name, one declaration; each block declares what it uses

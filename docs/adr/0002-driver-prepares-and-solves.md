@@ -1,5 +1,6 @@
 ---
 status: accepted
+date: 2026-10-02
 ---
 
 # The driver prepares and solves; it holds no model logic
@@ -30,7 +31,8 @@ pins a snapshot of the model before every solve.
 The driver is not there yet. It still applies the default +10 % tariff when the
 model carries no shock, and rebuilds shock equations to do it (the
 `_rebuild_*_shock` functions). Moving that tariff into the `ShockBlock` is the
-open change `tariff-to-shock-block` (see ADR-0003).
+open change `tariff-to-shock-block` (`ROADMAP.md` "Plan de arquitectura", the
+shocks row: PR 2 after #113; see ADR-0003).
 
 ## Sources
 

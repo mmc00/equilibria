@@ -1,5 +1,6 @@
 ---
 status: accepted
+date: 2026-10-19
 ---
 
 # The shock lives in the ShockBlock and is written as in GEMPACK
@@ -33,7 +34,8 @@ benchmark whatever the shock is.
 `apply_shock` is all or nothing and rejects a shock that changes nothing
 (`check_shock_value`): with no shock in the model the driver would silently
 apply its default +10 % tariff. That default still lives in the driver until
-the open change `tariff-to-shock-block` moves it here.
+the open change `tariff-to-shock-block` moves it here (`ROADMAP.md` "Plan de
+arquitectura", the shocks row: PR 2 after #113).
 
 ## Sources
 

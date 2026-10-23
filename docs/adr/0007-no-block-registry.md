@@ -1,12 +1,13 @@
 ---
 status: accepted
+date: 2026-09-24
 ---
 
 # No block registry
 
 There is no `name -> block class` registry. `BlockRegistry`, `get_registry` and
-`register_block` were removed from `blocks/base.py` and from the public
-`__all__` before the first PyPI release. A template composes its blocks by
+`register_block` were removed from `blocks/base.py` and from both public
+`__all__` lists (`equilibria` and `equilibria.blocks`) before the first PyPI release. A template composes its blocks by
 direct import; for GTAP, `_block_classes` and `_mk_unit` in
 `templates/gtap/gtap_block_model.py` are the real registry: they return the
 blocks in dependency order and build each one with its sets, parameters and the

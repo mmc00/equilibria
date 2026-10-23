@@ -1,5 +1,6 @@
 ---
 status: accepted
+date: 2026-10-18
 ---
 
 # Blocks do not know about periods; the SP copy adds the time index
@@ -16,7 +17,7 @@ are fixed (`PERIODS = (base, check, shock)` in `blocks/gtap/periods.py`) and the
 driver assumes that sequence; the next step on the roadmap is periods as a list
 with a transition recipe between them, so a recursive dynamic model is one year
 solved at a time with a dynamics block updating stocks between years. That step
-needs no change to any existing block precisely because blocks never saw `t`.
+needs no change to any block's equations, because they never saw `t`.
 
 ## Considered Options
 
@@ -29,6 +30,11 @@ needs no change to any existing block precisely because blocks never saw `t`.
 Anything period-specific lives outside the block's equations: the shock is the
 `shock` cell of an instrument (ADR-0003), and an `@overwrite` closure is pruned to
 the shock period after reflection (`overwrite.shock_only`, ADR-0004).
+
+The rule covers equations, not all block code. `blocks/gtap/periods.py` lives in
+`blocks/` so blocks can read the period names, and `FactorBlock.calibrate_base`
+(`blocks/gtap/factor.py`) runs the base, check and shock stack and reads the
+`check` period by name. Periods as a list must touch it.
 
 ## Sources
 
