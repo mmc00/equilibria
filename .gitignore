@@ -304,6 +304,7 @@ scripts/gtap/*
 !scripts/gtap/reconstruct_9x10_eflg.py
 !scripts/gtap/verify_ifsub_equivalence.py
 !scripts/gtap/gen_burfisher_gams.py
+!scripts/gtap/gams_welfare_fixture.py
 !scripts/gtap/gams/
 !scripts/gtap/gen_linearization_study.py
 !scripts/gtap/export_sl4_levels.py
