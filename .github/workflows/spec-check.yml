@@ -1,0 +1,30 @@
+name: Spec check
+
+# Separate from tests.yml so label changes re-run it: a re-run reuses the
+# original event payload, so a label added later would never be seen.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  spec-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check specs against the PR
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: >
+          python scripts/dev/spec_tools.py check-pr
+          --base "origin/$BASE_REF"
+          --labels "$PR_LABELS"
