@@ -47,16 +47,24 @@ Uso, desde la raiz del repo:
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5,6
+
+Con -File, "5,6" llega como UN texto; el script lo parte en la coma (antes, con
+[int[]], se volvia el entero 56 y no corria nada).
 #>
 param(
     [string]$GP = "C:\GP",
     [string]$Gams = "",
     [string]$Out = "",
     [string]$GtapDir = "C:\runGTAP375",
-    [int[]]$Pasos = @(1, 2, 3, 4, 5, 6)
+    [string[]]$Pasos = @("1", "2", "3", "4", "5", "6")
 )
 
 $ErrorActionPreference = "Continue"
+# "-Pasos 5,6" llega como "5,6" con -File y como @("5","6") con -Command: se parte en
+# la coma y se pasa a enteros, y un paso fuera de 1-6 corta antes de empezar.
+$Pasos = @($Pasos | ForEach-Object { $_ -split "," } | Where-Object { $_.Trim() } | ForEach-Object { [int]$_.Trim() })
+$malos = @($Pasos | Where-Object { $_ -lt 1 -or $_ -gt 6 })
+if ($malos.Count -gt 0) { Write-Error "pasos fuera de 1-6: $($malos -join ',')"; exit 2 }
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $Repo
 if (-not $Out) { $Out = Join-Path $Repo ("windows_paper_out\" + (Get-Date -Format "yyyy-MM-dd_HHmm")) }
@@ -301,14 +309,19 @@ if ($okGss5) {
         $t0 = Get-Date
         try {
             & gemsim -cmf $cmf *> (Join-Path $d "$name.log")
+            $rc = $LASTEXITCODE
         } finally {
             Pop-Location
         }
         $secs = [math]::Round(((Get-Date) - $t0).TotalSeconds, 1)
         $sl4 = Join-Path $d "$name.sl4"
-        $ok = (Test-Path $sl4) -and (Test-Path (Join-Path $d "$name.upd"))
+        # gemsim escribe el .sl4 aunque falle (ME4A/B: "Accuracy too low" con Gragg
+        # 2-4-6): OK exige rc=0 y el cierre normal del log, no solo el archivo.
+        $log = Join-Path $d "$name.log"
+        $fin = (Test-Path $log) -and (Select-String -Path $log -SimpleMatch "completed without error" -Quiet)
+        $ok = ($rc -eq 0) -and $fin -and (Test-Path $sl4) -and (Test-Path (Join-Path $d "$name.upd"))
         $m = if ($johansen) { "Johansen->Gragg" } else { "como el .exp" }
-        Result $step $ok "rc=$LASTEXITCODE sl4=$(Test-Path $sl4) metodo=$m ${secs}s"
+        Result $step $ok "rc=$rc fin_normal=$fin sl4=$(Test-Path $sl4) metodo=$m ${secs}s"
     }
 }
 }

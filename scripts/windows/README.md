@@ -44,6 +44,8 @@ El script deja todo en `windows_paper_out\<fecha>\`:
 
 Un paso que falla no corta los demás. Al final imprime los comandos para subir la carpeta a una **rama de datos** `windows/corridas-<fecha>`, que no se mergea: los archivos que necesitan los tests se copian después a `tests/fixtures/`. Al commitear solo se exime el hook de archivos grandes (`SKIP=check-added-large-files`), nunca `--no-verify`.
 
-**Para el paper (pendiente):** `-Pasos 5,6` en una sola corrida, así el paso 6 vuelca también las soluciones Gragg del paso 5.
+**Para el paper:** `-Pasos 5,6` en una sola corrida, así el paso 6 vuelca también las soluciones Gragg del paso 5. Corrió el 2026-10-23 desde `f173370` (salidas enviadas aparte, no en GitHub). Hallazgos de esa corrida, ya corregidos en el script:
+- `-Pasos 5,6` con `-File` llegaba como el texto "5,6" y `[int[]]` lo volvía 56: no corría nada. Ahora se parte en la coma (y un paso fuera de 1-6 corta). Con `-Command "& .\scripts\windows\corridas_paper.ps1 -Pasos 5,6"` también funciona.
+- ME4A y ME4B (Gragg 2-4-6) terminan en "Accuracy too low": el shock de tierra de −81 % pide más pasos o subintervalos. `gemsim` escribe el `.sl4` igual, y el resumen los marcaba OK; ahora OK exige `rc=0` y el cierre normal del log. Sus `.sl4`/`sl4dump` de esa corrida **no** sirven de oráculo.
 
 **Estado:** el paso 4 corrió el 2026-10-19 (rama de datos `windows/corridas-paper-2026-10-19_1928`): `make_levels_tab` y `tablo` bien; los dos `gemsim` fallaron y se rehicieron a mano. Este script ya trae esos arreglos (tag `tm10_s8-16-32` en el 3x3, `.prm` capFix con `_force_rdlt` byte a byte), pero no volvió a correr solo de punta a punta.
