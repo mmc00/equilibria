@@ -28,6 +28,7 @@ def _ensure_path_lib() -> None:
     if os.environ.get("PATH_CAPI_LIBPATH"):
         return
     from equilibria._local_refs import path_capi_lib, path_capi_lusol
+    from equilibria.babel.gdx.gdxdump import locate_gdxdump
 
     # path_capi_lib() resuelve por plataforma (.dylib en macOS, .so en Linux);
     # antes se buscaba el nombre de macOS ARM a secas y en Linux no encontraba
@@ -35,10 +36,13 @@ def _ensure_path_lib() -> None:
     candidatos = [
         path_capi_lib(),
         Path.cwd() / ".cache" / "path_capi" / "libpath50.silicon.dylib",
-        Path(
-            "/Library/Frameworks/GAMS.framework/Versions/53/Resources/libpath52.dylib"
-        ),
     ]
+    # La libpath que trae el propio GAMS, en la instalacion que haya: era una
+    # ruta fija a la v53 en macOS, asi que en Linux o con otra version no
+    # encontraba nada. `locate_gdxdump` da el directorio; los nombres varian
+    # por plataforma y version, asi que se prueban por patron.
+    if (_gd := locate_gdxdump()) is not None:
+        candidatos += sorted(Path(_gd).parent.glob("libpath*"), reverse=True)
     for cand in candidatos:
         if cand.exists():
             os.environ["PATH_CAPI_LIBPATH"] = str(cand)

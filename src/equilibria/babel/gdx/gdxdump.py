@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import glob
+import os
 import re
 import shutil
 import subprocess
@@ -16,13 +18,66 @@ _VARIABLE_LEVEL_PATTERN = re.compile(
 )
 
 
+#: Cuantos componentes de version se comparan. Rellenar a una longitud fija
+#: evita que la tupla mas corta gane: sin esto `53.5` quedaba DETRAS de `53`,
+#: porque `(-53,)` < `(-53, -5)`.
+_COMPONENTES_VERSION = 4
+
+
+def _orden_de_version(directorio: str) -> tuple[int, tuple[int, ...]]:
+    """Clave de orden para los directorios de instalacion de GAMS.
+
+    `Current` es el symlink a la instalacion activa y va primero. El resto se
+    ordena por version NUMERICA descendente: ordenarlos como texto pone "9"
+    por delante de "53" y de "48", que es justo lo que se quiere evitar.
+
+    Los digitos se buscan en el nombre del directorio Y en el de su padre
+    porque las dos convenciones difieren: macOS pone la version en el padre
+    (`Versions/53/Resources`) y Linux en el propio nombre
+    (`/opt/gams/gams48.1_x64`). Mirar solo el padre dejaba a TODAS las
+    instalaciones de Linux empatadas en "sin version", con el orden entre
+    ellas al azar.
+    """
+    p = Path(directorio)
+    if p.name == "Current" or p.parent.name == "Current":
+        return (0, ())
+    # El nombre propio manda (Linux); si no trae digitos, el del padre (macOS).
+    digitos = re.findall(r"\d+", p.name) or re.findall(r"\d+", p.parent.name)
+    partes = tuple(-int(d) for d in digitos[:_COMPONENTES_VERSION])
+    relleno = partes + (0,) * (_COMPONENTES_VERSION - len(partes))
+    return (1, relleno)
+
+
 def locate_gdxdump() -> str | None:
-    path = shutil.which("gdxdump")
-    if path:
-        return path
-    fallback = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    if fallback.exists():
-        return str(fallback)
+    """Donde esta `gdxdump`, el binario que lee los .gdx de GAMS.
+
+    Era una ruta absoluta a GAMS 48 dentro del paquete PUBLICADO: funcionaba en
+    el Mac del autor y en ninguna otra maquina, y ademas el servidor de
+    licencias dejo de aceptar la v48 (HTTP 400, "Node ID for category 2 not
+    defined"), asi que tambien dejo de funcionar ahi.
+
+    Orden: `EQUILIBRIA_GDXDUMP` (escape hatch explicito) -> PATH -> las rutas de
+    instalacion habituales, `Current` primero y luego version numerica
+    descendente. `None` si no aparece: quien llama decide si saltar o fallar.
+    """
+    if explicito := os.environ.get("EQUILIBRIA_GDXDUMP"):
+        return explicito
+    if en_path := shutil.which("gdxdump"):
+        return en_path
+    patrones = (
+        "/Library/Frameworks/GAMS.framework/Versions/*/Resources",
+        "/opt/gams/*",
+        "/usr/local/gams/*",
+        "C:/GAMS/*/*",
+    )
+    candidatos: list[str] = []
+    for pat in patrones:
+        candidatos.extend(glob.glob(pat))
+    for d in sorted(candidatos, key=_orden_de_version):
+        for nombre in ("gdxdump", "gdxdump.exe"):
+            cand = Path(d) / nombre
+            if cand.exists():
+                return str(cand)
     return None
 
 

@@ -74,7 +74,7 @@ class PEPModelSolver:
         enforce_strict_gams_baseline: bool = True,
         sam_file: Path | str | None = None,
         val_par_file: Path | str | None = None,
-        gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+        gdxdump_bin: str | None = None,
         initial_vars: PEPModelVariables | None = None,
     ):
         """Initialize the solver with calibrated model state.

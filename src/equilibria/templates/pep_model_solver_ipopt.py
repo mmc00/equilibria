@@ -248,7 +248,7 @@ class IPOPTSolver:
         enforce_strict_gams_baseline: bool = True,
         sam_file: Path | str | None = None,
         val_par_file: Path | str | None = None,
-        gdxdump_bin: str = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump",
+        gdxdump_bin: str | None = None,
         initial_vars: PEPModelVariables | None = None,
     ):
         """Initialize the solver with calibrated model state.
@@ -1695,11 +1695,10 @@ class IPOPTSolver:
             n_updates = 0
             # Prefer gdxdump for Results.gdx overlays; the lightweight reader can
             # miss records on some val* symbols in this file.
-            gdxdump_bin = (
-                shutil.which("gdxdump")
-                or "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
-            )
-            gdxdump_available = Path(gdxdump_bin).exists()
+            from equilibria.babel.gdx.gdxdump import locate_gdxdump
+
+            gdxdump_bin = locate_gdxdump() or ""
+            gdxdump_available = bool(gdxdump_bin) and Path(gdxdump_bin).exists()
 
             value_pattern = re.compile(
                 r"((?:'[^']*'(?:\.'[^']*')*))\s+([-+]?\d+(?:\.\d+)?(?:[Ee][-+]?\d+)?)"

@@ -43,7 +43,10 @@ DEFAULT_SAM_FILE = (
 DEFAULT_VAL_PAR_FILE = (
     REPO_ROOT / "src/equilibria/templates/reference/pep2/data/VAL_PAR.xlsx"
 )
-DEFAULT_GDXDUMP_BIN = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
+#: `None` = resolver en tiempo de USO (`locate_gdxdump`). Era una ruta
+#: absoluta a GAMS 48: solo valida en el Mac del autor, y ademas la v48
+#: ya no pasa el servidor de licencias.
+DEFAULT_GDXDUMP_BIN: str | None = None
 DEFAULT_CRI_ACCOUNTS = {
     "gvt": "gvt",
     "row": "row",
@@ -85,7 +88,7 @@ class PepAdapter(BaseModelAdapter):
         max_iterations: int | None = None,
         contract: str | dict[str, Any] | PEPContract | None = None,
         config: str | dict[str, Any] | PEPRuntimeConfig | None = None,
-        gdxdump_bin: str = DEFAULT_GDXDUMP_BIN,
+        gdxdump_bin: str | None = DEFAULT_GDXDUMP_BIN,
         accounts: dict[str, str] | None = None,
         sam_qa_mode: str = "off",
         sam_qa_report: Path | str | None = None,
@@ -116,7 +119,7 @@ class PepAdapter(BaseModelAdapter):
             if max_iterations is None
             else int(max_iterations)
         )
-        self.gdxdump_bin = str(gdxdump_bin)
+        self.gdxdump_bin = str(gdxdump_bin) if gdxdump_bin else None
         self.accounts = (
             dict(accounts) if accounts is not None else dict(DEFAULT_CRI_ACCOUNTS)
         )

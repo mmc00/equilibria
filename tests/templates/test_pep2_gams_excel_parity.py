@@ -13,10 +13,23 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PEP2_SCRIPTS = PROJECT_ROOT / "src/equilibria/templates/reference/pep2/scripts"
 COMPARE_SCRIPT = PEP2_SCRIPTS / "compare_ipopt_vs_excel.sh"
-DEFAULT_GAMS_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams")
-DEFAULT_GDXDIFF_BIN = Path(
-    "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdiff"
-)
+
+
+def _bin_de_gams(nombre: str) -> Path:
+    """El binario `nombre` del GAMS instalado, no de una version fija.
+
+    El default era GAMS 48: solo existia en el Mac del autor, y ademas la v48
+    ya no pasa el servidor de licencias (HTTP 400). `locate_gdxdump` resuelve
+    la instalacion; los demas binarios viven en su misma carpeta.
+    """
+    from equilibria.babel.gdx.gdxdump import locate_gdxdump
+
+    gd = locate_gdxdump()
+    return Path(gd).parent / nombre if gd else Path(nombre)
+
+
+DEFAULT_GAMS_BIN = _bin_de_gams("gams")
+DEFAULT_GDXDIFF_BIN = _bin_de_gams("gdxdiff")
 
 
 def _collect_diff_symbols(diff_txt: Path) -> set[str]:
