@@ -153,8 +153,13 @@ def test_todas_las_celdas_contra_gams(solved):
     """Check y shock, todas las celdas, contra los niveles de GAMS (tolerancia 0,1%)."""
     m, p, _, _ = solved
     r = run_burfisher().compare(m, p, gams_levels(LEVELS, "TBL94"))
+    # Todas las celdas: las 9 variables de precio, margen y comercio que antes se
+    # excluian (pm, pmcif, pefob, pfa, pfy, pp, pwmg, xwmg, xmgm) suman 150 por
+    # periodo; imptx, exptx y lambdamg entran como instrumentos (77 -> 137).
+    cells = {"check": 679, "shock": 682}
     for period in ("check", "shock"):
         got = r[period]
-        assert got["cells"] > 500, (period, got["cells"])
+        assert got["cells"] == cells[period], (period, got["cells"])
+        assert got["instr_cells"] == 137, (period, got["instr_cells"])
         assert got["match_pct"]["0.1%"] == 100.0, (period, got["worst"])
         assert got["instr_bad"] == [], (period, got["instr_bad"])
