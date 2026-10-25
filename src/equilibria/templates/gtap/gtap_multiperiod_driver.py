@@ -2263,9 +2263,10 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
 # real allocation — yet their defining equations carry huge residuals when the
 # warm-start is imperfect (eq_ug≈252, eq_cv≈31, eq_ev≈8), which poisons PATH's
 # global merit function and makes it report no_progress (code=2) even when every
-# REAL equation is satisfied to ~1e-3.  GAMS computes these post-solve (they are
-# report variables), not inside the simultaneous MCP.  Muting them (fix at seed +
-# deactivate the paired row, keeping the system square) lets PATH certify code=1.
+# REAL equation is satisfied to ~1e-3.  GAMS DOES solve them inside the MCP
+# (model.gms: eveq/cveq/ueq/ugeq/useq in `model gtap`); being leaves, solving them
+# after the period (_solve_welfare_tail) gives the same point.  Muting them (fix at
+# seed + deactivate the paired row, keeping the system square) lets PATH certify code=1.
 # DECISIVE with a CORRECT base: check from base-frozen goes code=2 res 1.1e-2 →
 # code=1 res 2.9e-11 once muted.  (uh is NOT muted — it feeds eq_zcons = real CDE
 # demand, so it has genuine blast radius.)
@@ -2321,6 +2322,61 @@ def _mute_welfare_tail(m, period: str, regions, *, gtap_mode: bool = False) -> i
                 except (KeyError, TypeError):
                     pass
                 break
+    return n
+
+
+# u depends on ug/us (and the live uh), so it goes last.
+_WELFARE_SOLVE_ORDER = (
+    ("eq_ug", "ug"),
+    ("eq_us", "us"),
+    ("eq_ev", "ev"),
+    ("eq_cv", "cv"),
+    ("eq_u", "u"),
+)
+
+
+def _solve_welfare_tail(m, period: str) -> int:
+    """Solve each row muted by `_mute_welfare_tail` for its own var, after the
+    period's solve, so the reported ev/cv/u/ug/us are the period's and not the seed.
+    The rows stay deactivated and the vars fixed (the solved system is unchanged).
+    A row with no real solution (e.g. u with us < 0 after negative saving) leaves
+    its var at NaN, with a warning: the welfare is undefined there, and the seed
+    would read as a result.  Returns the count of cells solved."""
+    import logging
+
+    from pyomo.common.errors import IterationLimitError
+    from pyomo.util.calc_var_value import calculate_variable_from_constraint
+
+    n = 0
+    undefined = []
+    for eqn, vn in _WELFARE_SOLVE_ORDER:
+        eqc = getattr(m, eqn, None)
+        vc = getattr(m, vn, None)
+        if eqc is None or vc is None:
+            continue
+        for idx in eqc:
+            t = idx[-1] if isinstance(idx, tuple) else idx
+            cd = eqc[idx]
+            if t != period or cd.active or idx not in vc:
+                continue
+            vd = vc[idx]
+            if not vd.fixed:
+                continue
+            vd.unfix()
+            try:
+                calculate_variable_from_constraint(vd, cd)
+                n += 1
+            except (ValueError, ArithmeticError, IterationLimitError):
+                vd.set_value(float("nan"), skip_validation=True)
+                undefined.append(vd.name)
+            finally:
+                vd.fix()
+    if undefined:
+        logging.getLogger(__name__).warning(
+            "%s period: welfare undefined (no real solution), set to NaN: %s",
+            period,
+            ", ".join(undefined),
+        )
     return n
 
 
@@ -3258,6 +3314,7 @@ def _solve_multiperiod_inner(
         results["base"] = {"code": code_base, "residual": res_base}
 
     # Freeze base period (holdfixed=1 for subsequent periods).
+    _solve_welfare_tail(m, "base")
     freeze_period(m, "base")
     # Ensure pabs[r,'base'] is pinned (GAMS iterloop pabs.fx=1 at base).
     for r in m.r:
@@ -3292,6 +3349,7 @@ def _solve_multiperiod_inner(
         results["check"] = {"code": code_chk, "residual": res_chk}
 
     # Freeze check period.
+    _solve_welfare_tail(m, "check")
     freeze_period(m, "check")
     for r in m.r:
         try:
@@ -3560,6 +3618,7 @@ def _solve_multiperiod_inner(
         check_endowment_shock_entered(m)
 
     # Freeze shock as well (for completeness / report purposes).
+    _solve_welfare_tail(m, "shock")
     freeze_period(m, "shock")
 
     return results
