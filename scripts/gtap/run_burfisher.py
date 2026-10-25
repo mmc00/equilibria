@@ -324,6 +324,14 @@ WHY_SKIP = (
     "bienestar/Walras: fuera de la Tabla 3; el bienestar se compara aparte "
     "(test_nus333_bienestar.py) y walras debe ser 0 en los dos"
 )
+# psave/chiSave siguen a GTAP v7 (gtapv7.tab), no a GAMS: GAMS aplica chiSave**2 en
+# psave, la mitad (en log) del ajuste de GTAP. Distintos de GAMS a proposito; el
+# oraculo es GEMPACK (test_nus333_psave_gtap.py).
+GTAPV7 = {"psave", "chisave"}
+WHY_GTAPV7 = (
+    "sigue a GTAP v7, no a GAMS (GAMS usa chiSave**2); se compara contra GEMPACK "
+    "en test_nus333_psave_gtap.py"
+)
 WHY_RF = (
     "fijada a su macro con ifSUB (RF de measure_gtap_pure_tols): reporte, no resultado"
 )
@@ -365,6 +373,9 @@ def compare(m, p, gdx: Path | dict) -> dict:
     for vn, cells in gams.levels.items():
         if vn.lower() in SKIP:
             excluded[vn] = WHY_SKIP
+            continue
+        if vn.lower() in GTAPV7:
+            excluded[vn] = WHY_GTAPV7
             continue
         if vn.lower() in RF:
             excluded[vn] = WHY_RF

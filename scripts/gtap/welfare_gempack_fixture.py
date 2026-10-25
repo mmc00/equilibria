@@ -2,7 +2,7 @@
 
 Lee los ``sl4dump_<exp>.har`` que escribe ``sltoht`` (paso 6 de
 ``scripts/windows/corridas_paper.ps1``) y guarda, por ejercicio, ``EV`` y ``WEV``
-(cambio ordinario, $ US millones), ``u`` e ``y`` (cambio %) en
+(cambio ordinario, $ US millones), ``u``, ``y``, ``psave`` y ``pinv`` (cambio %) en
 ``tests/fixtures/nus333_bienestar_gempack.json.gz``.
 
 Solo entran las corridas que terminaron bien: su log (paso 5) tiene que cerrar con
@@ -27,7 +27,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "tests" / "fixtures" / "nus333_bienestar_gempack.json.gz"
-VARS = ("EV", "WEV", "u", "y")
+VARS = ("EV", "WEV", "u", "y", "psave", "pinv")
 
 
 def _by_name(har: dict) -> dict[str, tuple[list[list[str]], np.ndarray]]:

@@ -571,9 +571,15 @@ class DemandUtilityBlock(Block):
 
             def build_expression(self, pyomo_model, indices):
                 m = pyomo_model
+                # GTAP v7 (E_psave): psave = chiSave*pi con chiSave = sum invwgt*pi /
+                # sum savwgt*pi, asi el ahorro mundial vale lo que la inversion
+                # mundial. La forma de GAMS (chiSaveeq) divide por psave, que ya
+                # lleva chiSave: chiSave**2, la mitad del ajuste en logaritmos.
+                # Pesos fijos del base: el modelo multiperiodo cambia esta fila en
+                # check/shock por un Tornqvist (build_equations_fisher).
                 numer = sum(m.invwgt[r] * m.pi[r] for r in m.r)
                 denom = sum(m.savwgt[r] * m.pi[r] for r in m.r)
-                return (m.chiSave**2) * denom == numer
+                return m.chiSave * denom == numer
 
         equations.append(EqChisave())
 

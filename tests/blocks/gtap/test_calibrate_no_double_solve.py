@@ -57,6 +57,15 @@ BASELINE_COUNT = 20194
 # anterior: mismas 20194 claves, 35 celdas >1e-9 y TODAS de bienestar (5 vars x 7
 # regiones, hasta 1 % de cambio); el resto identico. Las 35 nuevas = check de GAMS
 # (gtap7_10x7/out_gtap_shock_ifsub0.gdx) a <=1,4e-5 relativo. Solo se cambiaron esas.
+#
+# Recapturado 2026-10-24: psave sigue a GTAP v7 (ajuste chiSave, no el chiSave**2 de
+# GAMS). Medido contra el seed del commit anterior (identico al fixture viejo): mismas
+# 20194 claves, 21 celdas >1e-9 y TODAS psave/us/u (7 regiones cada una, peor
+# 6,45e-06); el resto identico. Solo se cambiaron esas.
+#
+# Recapturado 2026-10-24 (2): chiSave del check/shock como indice de Tornqvist contra
+# base (pesos NETINV/SAVE de los dos periodos). Mismas 20194 claves, 21 celdas >1e-9,
+# TODAS psave/us/u (peor 2,76e-08: en el check el reparto casi no se mueve).
 BASELINE_SIG = "bd8f2dd3d3c0f57e"
 
 
