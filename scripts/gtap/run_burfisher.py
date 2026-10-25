@@ -245,10 +245,6 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
 SHOCK_STEPS = (0.25, 0.5, 0.75, 1.0)
 
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
-RF = {
-    "pfa", "pfy", "pm", "pmcif", "pefob", "pwmg", "pp", "pdp", "pmp", "xwmg", "xmgm",
-    "lambdamg", "imptx", "exptx",
-}  # fmt: skip
 ALIAS = {
     "xa": "xaa",
     "xd": "xda",
@@ -332,9 +328,6 @@ WHY_GTAPV7 = (
     "sigue a GTAP v7, no a GAMS (GAMS usa chiSave**2); se compara contra GEMPACK "
     "en test_nus333_psave_gtap.py"
 )
-WHY_RF = (
-    "fijada a su macro con ifSUB (RF de measure_gtap_pure_tols): reporte, no resultado"
-)
 
 
 def compare(m, p, gdx: Path | dict) -> dict:
@@ -350,7 +343,7 @@ def compare(m, p, gdx: Path | dict) -> dict:
 
     El mapeo se arma por ejercicio: cada variable de GAMS con registros que el modelo
     tiene (``ALIAS``), las mismas dims en el mismo orden, ``strip_prefix`` para los
-    prefijos de GAMS y SKIP/RF excluidas con su motivo. Antes de comparar se sacan,
+    prefijos de GAMS y SKIP/GTAPV7 excluidas con su motivo. Antes de comparar se sacan,
     de los dos lados, las celdas que :func:`compare` no cuenta como resultado: los
     instrumentos exogenos del ShockBlock (se cuentan aparte) y ``p`` fuera de la
     diagonal sin produccion (``makb = 0``). Devuelve, por periodo, ``cells``,
@@ -376,9 +369,6 @@ def compare(m, p, gdx: Path | dict) -> dict:
             continue
         if vn.lower() in GTAPV7:
             excluded[vn] = WHY_GTAPV7
-            continue
-        if vn.lower() in RF:
-            excluded[vn] = WHY_RF
             continue
         if not cells:
             continue
