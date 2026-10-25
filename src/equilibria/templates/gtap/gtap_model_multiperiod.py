@@ -905,6 +905,58 @@ class GTAPMultiPeriodModel:
         non_base_t = [t for t in m.t if t != "base"]
         m.eq_pwfact = Constraint(non_base_t, rule=_pwfact_rule)
 
+        # ── chiSave as a Tornqvist index across periods ─────────────────────────
+        # gtapv7.tab E_psave: chiSave^ = sum_s [(NETINV(s) - SAVE(s))/GLOBINV]*pinv(s)^,
+        # with the weights of the UPDATED data (a Divisia index that Gragg integrates).
+        # The intra-period row (chiSave = sum invwgt*pi / sum savwgt*pi) keeps the base
+        # weights fixed and falls short when the shock moves the split of investment:
+        # TBL45A psave/pinv -0,218 % against GEMPACK's -0,250 %. Averaging the weights of
+        # base and t (Tornqvist) gives -0,249 %. The base row keeps the intra form.
+        from pyomo.environ import exp as _pyo_exp
+        from pyomo.environ import log as _pyo_log
+
+        from equilibria.blocks.gtap._derived_params import demand_income_params
+
+        _di = demand_income_params(
+            self.params, self.sets, residual_region=self.residual_region
+        )
+        _depr = {r: float(_di["depr"].get((r,), 0.0)) for r in _regions}
+        _invwgt = {r: float(_di["invwgt"].get((r,), 0.0)) for r in _regions}
+        _savwgt = {r: float(_di["savwgt"].get((r,), 0.0)) for r in _regions}
+
+        def _shares(t: str):
+            netinv = {
+                r: m.pi[r, t] * (m.xiagg[r, t] - _depr[r] * m.kstock[r, t])
+                for r in _regions
+            }
+            inv_tot = sum(netinv.values())
+            sav_tot = sum(m.rsav[r, t] for r in _regions)
+            return (
+                {r: netinv[r] / inv_tot for r in _regions},
+                {r: m.rsav[r, t] / sav_tot for r in _regions},
+            )
+
+        if getattr(m, "eq_chisave", None) is not None:
+            m.del_component(m.eq_chisave)
+
+        def _chisave_rule(_m, t):
+            if t == "base":
+                numer = sum(_invwgt[r] * m.pi[r, t] for r in _regions)
+                denom = sum(_savwgt[r] * m.pi[r, t] for r in _regions)
+                # Same row the reflection wrote (lhs - rhs == 0), byte for byte.
+                return m.chiSave[t] * denom - numer == 0
+            wi0, ws0 = _shares("base")
+            wi1, ws1 = _shares(t)
+            dlog = sum(
+                0.5
+                * (wi0[r] + wi1[r] - ws0[r] - ws1[r])
+                * _pyo_log(m.pi[r, t] / m.pi[r, "base"])
+                for r in _regions
+            )
+            return m.chiSave[t] == m.chiSave["base"] * _pyo_exp(dlog)
+
+        m.eq_chisave = Constraint(list(m.t), rule=_chisave_rule)
+
         # Defining rows for the named aggregates, created once every Fisher rule above
         # has registered the expression each entry stands for. Only the entries actually
         # referenced get a row; the rest of the Var stays free and unconstrained, so it

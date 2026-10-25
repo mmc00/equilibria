@@ -575,6 +575,8 @@ class DemandUtilityBlock(Block):
                 # sum savwgt*pi, asi el ahorro mundial vale lo que la inversion
                 # mundial. La forma de GAMS (chiSaveeq) divide por psave, que ya
                 # lleva chiSave: chiSave**2, la mitad del ajuste en logaritmos.
+                # Pesos fijos del base: el modelo multiperiodo cambia esta fila en
+                # check/shock por un Tornqvist (build_equations_fisher).
                 numer = sum(m.invwgt[r] * m.pi[r] for r in m.r)
                 denom = sum(m.savwgt[r] * m.pi[r] for r in m.r)
                 return m.chiSave * denom == numer

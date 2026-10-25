@@ -53,7 +53,11 @@ BASELINE_COUNT = 37638
 # Bumped 2026-10-24 from ec229e7ce25b09b3: eq_chisave follows GTAP v7 (psave adjusts
 # by chiSave, not GAMS' chiSave**2). Same 37638 rows; diffed row by row against the
 # previous commit: only the 3 eq_chisave rows (one per period) move.
-BASELINE_HASH = "43e3e111227ccd37"
+#
+# Bumped 2026-10-24 from 43e3e111227ccd37: eq_chisave[check|shock] is a Tornqvist
+# index against base (build_equations_fisher), weights NETINV/SAVE of both periods.
+# Same 37638 rows; diffed row by row: only eq_chisave[check] and [shock] move.
+BASELINE_HASH = "7ee7e4da8f99de13"
 
 
 def _load_params():

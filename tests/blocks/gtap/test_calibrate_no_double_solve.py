@@ -62,6 +62,10 @@ BASELINE_COUNT = 20194
 # GAMS). Medido contra el seed del commit anterior (identico al fixture viejo): mismas
 # 20194 claves, 21 celdas >1e-9 y TODAS psave/us/u (7 regiones cada una, peor
 # 6,45e-06); el resto identico. Solo se cambiaron esas.
+#
+# Recapturado 2026-10-24 (2): chiSave del check/shock como indice de Tornqvist contra
+# base (pesos NETINV/SAVE de los dos periodos). Mismas 20194 claves, 21 celdas >1e-9,
+# TODAS psave/us/u (peor 2,76e-08: en el check el reparto casi no se mueve).
 BASELINE_SIG = "bd8f2dd3d3c0f57e"
 
 

@@ -23,6 +23,8 @@ solver real pisaba con 1,0); ahora queda fijo en 1,0.
 Regenerado 2026-10-24 (psave como GTAP v7: chiSave, no el chiSave**2 de GAMS):
 cambian 2 filas, eq_chisave[base] y eq_chisave[shock]; el residuo queda a la mitad
 (el ajuste en log es la mitad del de antes).
+Regenerado 2026-10-24 (2) (chiSave del check/shock como Tornqvist contra base):
+cambian 2 filas, eq_chisave[check] y eq_chisave[shock].
 
 Regenerar SOLO si se cambia el modelo a proposito:
     python tests/templates/gtap/test_no_shock_identical_to_main.py <repo_root> <out>

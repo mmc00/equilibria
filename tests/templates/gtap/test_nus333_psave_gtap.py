@@ -2,7 +2,9 @@
 
 ``gtapv7.tab`` (E_psave): ``psave(r) = pinv(r) + sum_s [(NETINV(s)-SAVE(s))/GLOBINV]
 * pinv(s)``. El ajuste comun hace que ``sum_r SAVE(r)*psave(r) = sum_r NETINV(r)*pinv(r)``.
-En niveles: ``psave = chiSave * pi`` con ``chiSave = sum invwgt*pi / sum savwgt*pi``.
+En niveles: ``psave = chiSave * pi``; en el base ``chiSave = sum invwgt*pi / sum
+savwgt*pi`` y en el check/shock un indice de Tornqvist contra el base
+(``GTAPMultiPeriodModel.build_equations_fisher``).
 
 La forma de GAMS (``model.gms`` chiSaveeq) pone ``psave`` en el denominador, lo que da
 ``chiSave**2``: la mitad del ajuste en logaritmos. Contra GEMPACK eso movia la
