@@ -48,6 +48,12 @@ Uso, desde la raiz del repo:
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5,6
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4 -Cierre capflex
+  powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4,5,6,7 -Cierre capflex
+
+7. niveles de las corridas del paso 5 (Gragg, TAB de niveles): export_sl4_levels.py
+   con sltoht sobre cada .sl4, como el paso 4. El lector de la Mac necesita esos
+   niveles (el .sl4 solo no los trae). Usa los volcados del paso 6: 5, 6 y 7 van en
+   la misma corrida.
 
 -Cierre (paso 4): capfix = RDLT 0; capflex = el .prm por defecto (RDLT 1, el cierre
 por defecto de GEMPACK); todos = los dos.
@@ -60,7 +66,7 @@ param(
     [string]$Gams = "",
     [string]$Out = "",
     [string]$GtapDir = "C:\runGTAP375",
-    [string[]]$Pasos = @("1", "2", "3", "4", "5", "6"),
+    [string[]]$Pasos = @("1", "2", "3", "4", "5", "6", "7"),
     [ValidateSet("todos", "capfix", "capflex")]
     [string]$Cierre = "todos"
 )
@@ -382,6 +388,20 @@ if (Test-Path $Out5) {
     }
 } else {
     Note "6: no hay $Out5 (el paso 5 no corrio en esta salida): solo las del libro"
+}
+}
+
+# --- 7. niveles de las corridas del paso 5 ----------------------------------
+if ($Pasos -contains 7) {
+$Out5 = Join-Path $Out "5_burfisher\out"
+$D6g = Join-Path $Out "6_sl4dump\gragg"
+if ((Test-Path $Out5) -and (Test-Path $D6g)) {
+    foreach ($sl4 in (Get-ChildItem $Out5 -Recurse -Filter *.sl4 | Sort-Object Name)) {
+        $stem = $sl4.BaseName
+        Export-Levels "7 niveles gragg $stem" $sl4.FullName (Join-Path $D6g "$stem\sl4dump_$stem.har") (Join-Path $Out "7_niveles_gragg\$stem")
+    }
+} else {
+    Note "7: no hay $Out5 o $D6g (los pasos 5 y 6 tienen que correr en esta misma salida)"
 }
 }
 
