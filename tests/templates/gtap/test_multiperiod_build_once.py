@@ -49,7 +49,11 @@ BASELINE_COUNT = 37638
 # Bumped 2026-10-22 from e45fc91c742347f4: betaP/betaG/betaS with phiP = Σ xcshr·eh
 # of the data (_derived_params.calibrate_betas; 10x7 SSA phiP 1.0000063). Same
 # 37638 rows; only the beta-dependent rows (eq_yc/yg/rsav/u/phi) move.
-BASELINE_HASH = "ec229e7ce25b09b3"
+#
+# Bumped 2026-10-24 from ec229e7ce25b09b3: eq_chisave follows GTAP v7 (psave adjusts
+# by chiSave, not GAMS' chiSave**2). Same 37638 rows; diffed row by row against the
+# previous commit: only the 3 eq_chisave rows (one per period) move.
+BASELINE_HASH = "43e3e111227ccd37"
 
 
 def _load_params():

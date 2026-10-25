@@ -123,7 +123,8 @@ def nus333_results():
         ("regy", "USA"),
         ("regy", "ROW"),
         ("u", "USA"),
-        ("u", "ROW"),
+        # u[ROW] no: depende de psave, que sigue a GTAP v7 y no a GAMS (GAMS usa
+        # chiSave**2); su oraculo es GEMPACK (test_nus333_psave_gtap.py).
     ],
 )
 def test_nus333_neos_delta_parity(nus333_results, var, region):

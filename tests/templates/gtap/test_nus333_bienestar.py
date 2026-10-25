@@ -10,6 +10,9 @@ despues de cada periodo. Las dos cosas dan el mismo punto.
 Tres ejercicios de tipo distinto: arancel (TBL62A), tecnologia (TBL45A) y dotacion
 (TBL63A). Criterio: el de la Tabla 3, 0,1 % relativo.
 
+``us`` no entra: lo deflacta ``psave``, que sigue a GTAP v7 y no a GAMS (GAMS usa
+``chiSave**2``). Su oraculo es GEMPACK: ``test_nus333_psave_gtap.py`` (psave y u).
+
 LOCAL-only: SKIP si falta nus333.
 """
 
@@ -24,7 +27,7 @@ pytestmark = pytest.mark.integration
 
 FIXTURE = ROOT / "tests" / "fixtures" / "nus333_bienestar_gams_levels.json.gz"
 EXERCISES = ("TBL62A", "TBL45A", "TBL63A")
-VARS = ("ev", "cv", "u", "ug", "us", "uh")
+VARS = ("ev", "cv", "u", "ug", "uh")
 TOL = 1e-3
 
 

@@ -6398,11 +6398,12 @@ class GTAPModelEquations:
         # Savings price adjustment (GAMS chiSaveeq, compStat-style static form)
         def eq_chisave_rule(model):
             numer = sum(model.invwgt[r] * model.pi[r] for r in model.r)
-            # In static base-year form with psave0 = pi0 = 1 and
-            # psave(r) = chiSave * pi(r), GAMS chiSaveeq reduces to:
-            # chiSave^2 * sum_r savwgt(r) * pi(r) = sum_r invwgt(r) * pi(r)
+            # GTAP v7 (E_psave), the same as the block eq_chisave:
+            # chiSave * sum_r savwgt(r) * pi(r) = sum_r invwgt(r) * pi(r).
+            # GAMS chiSaveeq divides by psave (= chiSave * pi), giving chiSave^2:
+            # half the adjustment in logs.
             denom = sum(model.savwgt[r] * model.pi[r] for r in model.r)
-            return (model.chiSave**2) * denom == numer
+            return model.chiSave * denom == numer
 
         model.eq_chisave = Constraint(rule=eq_chisave_rule)
 
