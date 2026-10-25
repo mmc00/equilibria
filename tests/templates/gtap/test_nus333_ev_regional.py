@@ -23,7 +23,8 @@ from tests.templates.gtap._nus333 import ROOT, nus333_params, run_burfisher
 pytestmark = pytest.mark.integration
 
 FIXTURE = ROOT / "tests" / "fixtures" / "nus333_bienestar_gempack.json.gz"
-EXERCISES = ("TBL62A", "TBL45A", "TBL63A", "ME7A")
+# TBL45C: utilidad Cobb-Douglas (eq_uh usa las cantidades del hogar).
+EXERCISES = ("TBL62A", "TBL45A", "TBL45C", "TBL63A", "ME7A")
 IN_SCALE = 1e-6
 TOL = 1e-3
 
@@ -74,6 +75,26 @@ def test_ev_regional_igual_a_gempack(solved) -> None:
     wev = sum(ev.values()) / IN_SCALE
     world = sum(value(m.regy[r, "check"]) for r in m.r) / IN_SCALE
     assert abs(wev - g["WEV"]) <= TOL * world, (wev, g["WEV"])
+
+
+def test_ev_regional_es_cero_con_el_numerario() -> None:
+    """GTAPV7: todos los precios suben 10 % y u no cambia; a precios del check el
+    ingreso que da esa u es el del check, asi que el EV es 0 (sin oraculo)."""
+    import sys
+
+    from pyomo.environ import value
+
+    from equilibria.templates.gtap.welfare_regional import regional_ev
+
+    rb = run_burfisher()
+    nus333_params(rb.EXERCISES["GTAPV7"][0])
+    from equilibria._local_refs import nus333_dir, path_capi_src
+
+    sys.path.insert(0, str(path_capi_src()))
+    m, _, _ = rb.solve_exercise("GTAPV7", nus333_dir())
+    ev = regional_ev(m)
+    for r in m.r:
+        assert abs(ev[r]) <= 1e-7 * value(m.regy[r, "check"]), (r, ev[r])
 
 
 def test_ev_regional_no_cambia_el_modelo(solved) -> None:
