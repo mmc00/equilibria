@@ -16,7 +16,8 @@ TBL53 (`target%`, sólo la GUI de RunGTAP) y GTAPV7 (el paso 5 no la corrió), m
 
 | Archivo | Qué es |
 |---|---|
-| `<exp>.sl4.gz` | la solución (gzip); **sin `PLEV`**: los niveles no se leen en la Mac (llegan con el paso 7, vía sltoht) |
+| `<exp>.sl4.gz` | la solución (gzip); sin `PLEV`, así que sus niveles no se leen directo |
+| `sl4levels_<exp>.har` | los niveles pre y post de esa solución, exportados con sltoht (paso 7, Windows 2026-10-25); de aquí lee `compare_burfisher_gempack.py` |
 | `<exp>.upd` | los datos actualizados; de ahí sale `VDFB` post |
 | `<exp>.log.gz` | el log de GEMPACK (UTF-16, lo escribe gemsim en Windows), con el command file, el método y los pasos |
 

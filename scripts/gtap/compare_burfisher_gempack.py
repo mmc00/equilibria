@@ -59,7 +59,14 @@ def method(exp: str, fix: Path = FIX) -> str:
 
 
 def run(exp: str, levels: dict, xscale: dict, fix: Path = FIX) -> Report:
-    """equilibria (``levels``, ``xscale``) contra la solucion GEMPACK de ``exp``."""
+    """equilibria (``levels``, ``xscale``) contra la solucion GEMPACK de ``exp``.
+
+    Los niveles salen de ``sl4levels_<exp>.har`` (sltoht) si existe; si no, del
+    ``.sl4``, que tiene que traer ``PLEV``."""
+    upd = fix / f"{exp.lower()}.upd"
+    har = fix / f"sl4levels_{exp.lower()}.har"
+    if har.exists():
+        return cg.run(levels, xscale, har, BASEDATA, upd)
     with tempfile.TemporaryDirectory() as tmp:
         sl4 = Path(tmp) / f"{exp.lower()}.sl4"
         with (
@@ -67,7 +74,7 @@ def run(exp: str, levels: dict, xscale: dict, fix: Path = FIX) -> Report:
             sl4.open("wb") as dst,
         ):
             shutil.copyfileobj(src, dst)
-        return cg.run(levels, xscale, sl4, BASEDATA, fix / f"{exp.lower()}.upd")
+        return cg.run(levels, xscale, sl4, BASEDATA, upd)
 
 
 def solve(exp: str) -> tuple[dict, dict]:

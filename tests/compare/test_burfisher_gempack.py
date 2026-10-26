@@ -81,10 +81,6 @@ def test_con_dos_lineas_method_vale_la_ultima(tmp_path) -> None:
 
 
 GRAGG = O.ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_gragg"
-SIN_PLEV = pytest.mark.xfail(
-    strict=True,
-    reason="los .sl4 del paso 5 no traen PLEV; llegan con el paso 7 (sltoht)",
-)
 
 
 def test_las_corridas_del_paso_5_son_todas_gragg() -> None:
@@ -95,7 +91,6 @@ def test_las_corridas_del_paso_5_son_todas_gragg() -> None:
     assert {mod.method(e, GRAGG) for e in con} == {"Gragg"}
 
 
-@SIN_PLEV
 def test_con_el_tab_de_niveles_las_6_variables_se_comparan() -> None:
     mod = _script()
     r = mod.run("tbl46a", *mod.cg.load_eq_json(O.EX18_EQ["tbl46a"]), GRAGG)
@@ -104,7 +99,6 @@ def test_con_el_tab_de_niveles_las_6_variables_se_comparan() -> None:
         assert r.summary[var]["cells"] > 0, var
 
 
-@SIN_PLEV
 def test_gempack_dir_elige_las_corridas(tmp_path, monkeypatch) -> None:
     import json
 
