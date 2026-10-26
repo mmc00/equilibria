@@ -12,13 +12,13 @@ Las mismas corridas que `../burfisher/`, rehechas por el paso 5 de
   nivel en el `.sl4`.
 
 GEMPACK Release 11.3.004 (lo dice cada log). 43 corridas: las 41 de la Tabla 3 salvo
-TBL53 (`target%`, sólo la GUI de RunGTAP), más `gtapuv7`, `altax` y `closures`.
+TBL53 (`target%`, sólo la GUI de RunGTAP) y GTAPV7 (el paso 5 no la corrió), más `gtapuv7`, `altax` y `closures`.
 
 | Archivo | Qué es |
 |---|---|
-| `<exp>.sl4.gz` | la solución (gzip), con los niveles pre (`LEVB`) y post (`LEVA`) |
+| `<exp>.sl4.gz` | la solución (gzip); **sin `PLEV`**: los niveles no se leen en la Mac (llegan con el paso 7, vía sltoht) |
 | `<exp>.upd` | los datos actualizados; de ahí sale `VDFB` post |
-| `<exp>.log.gz` | el log de GEMPACK, con el command file, el método y los pasos |
+| `<exp>.log.gz` | el log de GEMPACK (UTF-16, lo escribe gemsim en Windows), con el command file, el método y los pasos |
 
 `me8` y `tbl813` vienen de sus `-dir.exp` (como en `../burfisher/`); aquí van con el
 nombre del ejercicio.

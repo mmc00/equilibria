@@ -78,3 +78,43 @@ def test_con_dos_lineas_method_vale_la_ultima(tmp_path) -> None:
     with gzip.open(tmp_path / "x.log.gz", "wt") as fh:
         fh.write(" Method = Gragg;\n Steps = 2 4 6;\n Method = Johansen;\n")
     assert _script().method("X", tmp_path) == "Johansen"
+
+
+GRAGG = O.ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_gragg"
+SIN_PLEV = pytest.mark.xfail(
+    strict=True,
+    reason="los .sl4 del paso 5 no traen PLEV; llegan con el paso 7 (sltoht)",
+)
+
+
+def test_las_corridas_del_paso_5_son_todas_gragg() -> None:
+    """burfisher_gragg/: Gragg tambien donde el libro usa Johansen (TBL45A, TBL64...)."""
+    mod = _script()
+    con = {e for e in mod.rb.EXERCISES if (GRAGG / f"{e.lower()}.sl4.gz").exists()}
+    assert set(mod.rb.EXERCISES) - con == {"TBL53", "GTAPV7"}
+    assert {mod.method(e, GRAGG) for e in con} == {"Gragg"}
+
+
+@SIN_PLEV
+def test_con_el_tab_de_niveles_las_6_variables_se_comparan() -> None:
+    mod = _script()
+    r = mod.run("tbl46a", *mod.cg.load_eq_json(O.EX18_EQ["tbl46a"]), GRAGG)
+    for var in O.EX18_NO_LEVEL:
+        assert var not in r.excluded, (var, r.excluded.get(var))
+        assert r.summary[var]["cells"] > 0, var
+
+
+@SIN_PLEV
+def test_gempack_dir_elige_las_corridas(tmp_path, monkeypatch) -> None:
+    import json
+
+    mod = _script()
+    out = tmp_path / "r.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["x", "--only", "TBL45A", "--eq-dir", str(O.EX18_EQ["tbl45a"].parent),
+         "--gempack-dir", str(GRAGG), "--json", str(out)],
+    )  # fmt: skip
+    assert mod.main() == 0
+    assert json.loads(out.read_text())["TBL45A"]["method"] == "Gragg"
