@@ -13,8 +13,8 @@ authors:
     given-names: "Marlon"
     email: "dracomarmol@gmail.com"
     orcid: "https://orcid.org/0000-0002-9452-9356"
-version: "0.1.0"
-date-released: "2026-01-28"
+version: "0.6.1"
+date-released: "2026-10-26"
 license: MIT
 repository-code: "https://github.com/mmc00/equilibria"
 url: "https://github.com/mmc00/equilibria"
