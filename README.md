@@ -10,6 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![PyPI version](https://img.shields.io/pypi/v/equilibria.svg)](https://pypi.org/project/equilibria/)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://equilibria.readthedocs.io/)
+[![DOI](https://zenodo.org/badge/1143895755.svg)](https://doi.org/10.5281/zenodo.23675339)
 
 *Build, calibrate, and solve CGE models with modular blocks — like LEGO for economists.*
 
