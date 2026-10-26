@@ -47,15 +47,26 @@ BASEDATA = ROOT / "datasets" / "nus333" / "basedata.har"
 
 def method(exp: str, fix: Path = FIX) -> str:
     """El metodo de la corrida GEMPACK: la ultima linea ``Method = X;`` del log."""
-    with gzip.open(fix / f"{exp.lower()}.log.gz", "rt", errors="replace") as fh:
-        found = re.findall(r"(?im)^\s*method\s*=\s*(\w+)\s*;", fh.read())
+    with gzip.open(fix / f"{exp.lower()}.log.gz", "rb") as fh:
+        raw = fh.read()
+    # gemsim en Windows escribe el log en UTF-16 (con BOM)
+    utf16 = raw[:2] in (b"\xff\xfe", b"\xfe\xff")
+    text = raw.decode("utf-16" if utf16 else "utf-8", errors="replace")
+    found = re.findall(r"(?im)^\s*method\s*=\s*(\w+)\s*;", text)
     if not found:
         raise ValueError(f"{exp}: el log no dice el metodo")
     return found[-1].capitalize()
 
 
 def run(exp: str, levels: dict, xscale: dict, fix: Path = FIX) -> Report:
-    """equilibria (``levels``, ``xscale``) contra la solucion GEMPACK de ``exp``."""
+    """equilibria (``levels``, ``xscale``) contra la solucion GEMPACK de ``exp``.
+
+    Los niveles salen de ``sl4levels_<exp>.har`` (sltoht) si existe; si no, del
+    ``.sl4``, que tiene que traer ``PLEV``."""
+    upd = fix / f"{exp.lower()}.upd"
+    har = fix / f"sl4levels_{exp.lower()}.har"
+    if har.exists():
+        return cg.run(levels, xscale, har, BASEDATA, upd)
     with tempfile.TemporaryDirectory() as tmp:
         sl4 = Path(tmp) / f"{exp.lower()}.sl4"
         with (
@@ -63,7 +74,7 @@ def run(exp: str, levels: dict, xscale: dict, fix: Path = FIX) -> Report:
             sl4.open("wb") as dst,
         ):
             shutil.copyfileobj(src, dst)
-        return cg.run(levels, xscale, sl4, BASEDATA, fix / f"{exp.lower()}.upd")
+        return cg.run(levels, xscale, sl4, BASEDATA, upd)
 
 
 def solve(exp: str) -> tuple[dict, dict]:
@@ -94,13 +105,16 @@ def main() -> int:
     ap.add_argument("--eq-dir", type=Path, help="niveles de equilibria ya guardados")
     ap.add_argument("--save-eq-dir", type=Path, help="guardar los niveles resueltos")
     ap.add_argument("--json", type=Path, help="guardar los resultados en JSON")
+    ap.add_argument(
+        "--gempack-dir", type=Path, default=FIX, help="carpeta con las corridas GEMPACK"
+    )
     a = ap.parse_args()
 
     todo = [e for e in a.only.split(",") if e] or list(rb.EXERCISES)
     results: dict[str, dict] = {}
     excluded: dict[str, str] = {}
     for exp in todo:
-        if not (FIX / f"{exp.lower()}.sl4.gz").exists():
+        if not (a.gempack_dir / f"{exp.lower()}.sl4.gz").exists():
             print(f"{exp:7s} sin solucion GEMPACK", flush=True)
             continue
         if a.eq_dir:
@@ -114,8 +128,8 @@ def main() -> int:
             if a.save_eq_dir:
                 path = a.save_eq_dir / f"eq_burfisher_{exp.lower()}_levels.json.gz"
                 cg.save_eq_json(path, levels, xscale)
-        meth = method(exp)
-        r = run(exp, levels, xscale)
+        meth = method(exp, a.gempack_dir)
+        r = run(exp, levels, xscale, a.gempack_dir)
         print(_line(exp, meth, r), flush=True)
         excluded = r.excluded
         results[exp] = {"method": meth, "report": json.loads(r.to_json())}
