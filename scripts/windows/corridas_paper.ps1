@@ -32,6 +32,12 @@ una copia dentro de la carpeta de salida.
      con su -dir.exp). Los .exp de Johansen de 1 paso (TBL45A/B/C, TBL64,
      ME4A/B) pasan a Gragg 2-4-6. Deja .sl4, .upd y log por ejercicio en
      5_burfisher\out; los niveles se leen directo del .sl4 en la Mac.
+  6. Los cambios (% y ordinarios, con EV y u) de cada ejercicio de Burfisher:
+     sltoht vuelca cada .sl4 a sl4dump_<exp>.har (el lector de la Mac solo lee
+     niveles, y EV no tiene nivel). Dos juegos: (a) las soluciones del libro de
+     tests\fixtures\gtap7_gempack\burfisher (Johansen donde el libro); (b) las
+     del paso 5 de esta misma corrida (Gragg en todos), si estan. Es el
+     oraculo GEMPACK del bienestar.
 
 -Pasos elige que pasos correr (por defecto todos): -Pasos 4
 
@@ -40,16 +46,37 @@ Uso, desde la raiz del repo:
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -GP C:\GP -Gams "C:\GAMS\53\gams.exe"
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4
   powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5
+  powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 5,6
+  powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4 -Cierre capflex
+  powershell -ExecutionPolicy Bypass -File scripts\windows\corridas_paper.ps1 -Pasos 4,5,6,7 -Cierre capflex
+
+7. niveles de las corridas del paso 5 (Gragg, TAB de niveles): export_sl4_levels.py
+   con sltoht sobre cada .sl4, como el paso 4. El lector de la Mac necesita esos
+   niveles (el .sl4 solo no los trae). Usa los volcados del paso 6: 5, 6 y 7 van en
+   la misma corrida.
+
+-Cierre (paso 4): capfix = RDLT 0; capflex = el .prm por defecto (RDLT 1, el cierre
+por defecto de GEMPACK); todos = los dos.
+
+Con -File, "5,6" llega como UN texto; el script lo parte en la coma (antes, con
+[int[]], se volvia el entero 56 y no corria nada).
 #>
 param(
     [string]$GP = "C:\GP",
     [string]$Gams = "",
     [string]$Out = "",
     [string]$GtapDir = "C:\runGTAP375",
-    [int[]]$Pasos = @(1, 2, 3, 4, 5)
+    [string[]]$Pasos = @("1", "2", "3", "4", "5", "6", "7"),
+    [ValidateSet("todos", "capfix", "capflex")]
+    [string]$Cierre = "todos"
 )
 
 $ErrorActionPreference = "Continue"
+# "-Pasos 5,6" llega como "5,6" con -File y como @("5","6") con -Command: se parte en
+# la coma y se pasa a enteros, y un paso fuera de 1-6 corta antes de empezar.
+$Pasos = @($Pasos | ForEach-Object { $_ -split "," } | Where-Object { $_.Trim() } | ForEach-Object { [int]$_.Trim() })
+$malos = @($Pasos | Where-Object { $_ -lt 1 -or $_ -gt 6 })
+if ($malos.Count -gt 0) { Write-Error "pasos fuera de 1-6: $($malos -join ',')"; exit 2 }
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $Repo
 if (-not $Out) { $Out = Join-Path $Repo ("windows_paper_out\" + (Get-Date -Format "yyyy-MM-dd_HHmm")) }
@@ -182,15 +209,24 @@ if ($okTab) {
         $Aux = Join-Path $Tab "gtapv7_levels"
         # 3x3: tm10.cmf ya no existe (era el cierre viejo con swap dpsave);
         # sl4dump_gtap7_3x3_tm10.har es identico (252/252) a la corrida tm10_s8-16-32.
-        # capFix (RDLT 0): el cierre de la Tabla 2 del paper; todas las filas (#135).
-        foreach ($job in @(@("gtap7_3x3", "tm10_s8-16-32", "sl4dump_gtap7_3x3_tm10.har", -1),
-                           @("gtap7_3x3", "tm10_s8-16-32_capfix", "sl4dump_gtap7_3x3_tm10_s8-16-32_capfix.har", 0),
-                           @("gtap7_3x4", "tm10_s8-16-32_capfix", "sl4dump_gtap7_3x4_tm10_s8-16-32_capfix.har", 0),
-                           @("gtap7_5x5", "tm10_s8-16-32_capfix", "sl4dump_gtap7_5x5_tm10_s8-16-32_capfix.har", 0),
-                           @("gtap7_10x7", "tm10_s8-16-32_capfix", "sl4dump_gtap7_10x7_tm10_s8-16-32_capfix.har", 0),
-                           @("gtap7_15x10", "tm10_s8-16-32_capfix", "sl4dump_gtap7_15x10_tm10_s8-16-32_capfix.har", 0),
-                           @("gtap7_20x41", "tm10_s8-16-32_capfix", "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har", 0))) {
+        # capFlex (rdlt -1 = .prm por defecto, RDLT 1): el cierre de la Tabla 2 del paper.
+        # capFix (RDLT 0): la Tabla 2 anterior (#135); equilibria capFix fija el ahorro
+        # externo y GEMPACK RDLT 0 la composicion del capital: no son el mismo cierre.
+        $jobs = @(@("gtap7_3x3", "tm10_s8-16-32", "sl4dump_gtap7_3x3_tm10.har", -1),
+                  @("gtap7_3x4", "tm10_s8-16-32", "sl4dump_gtap7_3x4_tm10_s8-16-32.har", -1),
+                  @("gtap7_5x5", "tm10_s8-16-32", "sl4dump_gtap7_5x5_tm10_s8-16-32.har", -1),
+                  @("gtap7_10x7", "tm10_s8-16-32", "sl4dump_gtap7_10x7_tm10_s8-16-32.har", -1),
+                  @("gtap7_15x10", "tm10_s8-16-32", "sl4dump_gtap7_15x10_tm10_s8-16-32.har", -1),
+                  @("gtap7_20x41", "tm10_s8-16-32", "sl4dump_gtap7_20x41_tm10_s8-16-32.har", -1),
+                  @("gtap7_3x3", "tm10_s8-16-32_capfix", "sl4dump_gtap7_3x3_tm10_s8-16-32_capfix.har", 0),
+                  @("gtap7_3x4", "tm10_s8-16-32_capfix", "sl4dump_gtap7_3x4_tm10_s8-16-32_capfix.har", 0),
+                  @("gtap7_5x5", "tm10_s8-16-32_capfix", "sl4dump_gtap7_5x5_tm10_s8-16-32_capfix.har", 0),
+                  @("gtap7_10x7", "tm10_s8-16-32_capfix", "sl4dump_gtap7_10x7_tm10_s8-16-32_capfix.har", 0),
+                  @("gtap7_15x10", "tm10_s8-16-32_capfix", "sl4dump_gtap7_15x10_tm10_s8-16-32_capfix.har", 0),
+                  @("gtap7_20x41", "tm10_s8-16-32_capfix", "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har", 0))
+        foreach ($job in $jobs) {
             $ds, $tag, $dump, $rdlt = $job
+            if (($Cierre -eq "capfix" -and $rdlt -lt 0) -or ($Cierre -eq "capflex" -and $rdlt -ge 0)) { continue }
             $step = "4 gemsim $ds $tag"
             $src = Join-Path $Matrix $ds
             if (-not (Test-Path (Join-Path $src "$tag.cmf"))) { Result $step $false "no esta $src\$tag.cmf"; continue }
@@ -294,15 +330,78 @@ if ($okGss5) {
         $t0 = Get-Date
         try {
             & gemsim -cmf $cmf *> (Join-Path $d "$name.log")
+            $rc = $LASTEXITCODE
         } finally {
             Pop-Location
         }
         $secs = [math]::Round(((Get-Date) - $t0).TotalSeconds, 1)
         $sl4 = Join-Path $d "$name.sl4"
-        $ok = (Test-Path $sl4) -and (Test-Path (Join-Path $d "$name.upd"))
+        # gemsim escribe el .sl4 aunque falle (ME4A/B: "Accuracy too low" con Gragg
+        # 2-4-6): OK exige rc=0 y el cierre normal del log, no solo el archivo.
+        $log = Join-Path $d "$name.log"
+        $fin = (Test-Path $log) -and (Select-String -Path $log -SimpleMatch "completed without error" -Quiet)
+        $ok = ($rc -eq 0) -and $fin -and (Test-Path $sl4) -and (Test-Path (Join-Path $d "$name.upd"))
         $m = if ($johansen) { "Johansen->Gragg" } else { "como el .exp" }
-        Result $step $ok "rc=$LASTEXITCODE sl4=$(Test-Path $sl4) metodo=$m ${secs}s"
+        Result $step $ok "rc=$rc fin_normal=$fin sl4=$(Test-Path $sl4) metodo=$m ${secs}s"
     }
+}
+}
+
+# --- 6. cambios de cada ejercicio de Burfisher: EV y u (sltoht) -------------
+# sltoht en batch: <solucion> / c / n / har / <salida> / e (run_gempack_matrix.convert_sl4).
+function Dump-Changes([string]$step, [string]$sl4, [string]$dest) {
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    $stem = [System.IO.Path]::GetFileNameWithoutExtension($sl4)
+    $copy = Join-Path $dest "$stem.sl4"
+    if ($sl4 -ne $copy) { Copy-Item $sl4 $copy -Force }
+    Set-Content -Path (Join-Path $dest "sl4dump_$stem.sti") -Value "`r`n$stem`r`nc`r`nn`r`nhar`r`nsl4dump_$stem.har`r`ne`r`n" -NoNewline -Encoding ascii
+    Push-Location $dest
+    try {
+        & $Sltoht -sti "sl4dump_$stem.sti" *> "sltoht_console_$stem.txt"
+        $rc = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    $har = Join-Path $dest "sl4dump_$stem.har"
+    Result $step (Test-Path $har) "rc=$rc har=$(Test-Path $har) ($dest)"
+}
+
+if ($Pasos -contains 6) {
+$D6 = Join-Path $Out "6_sl4dump"
+# (a) las soluciones del libro: el .sl4 va comprimido en los fixtures
+foreach ($gz in (Get-ChildItem "$Fix\burfisher" -Filter *.sl4.gz | Sort-Object Name)) {
+    $stem = $gz.Name -replace "\.sl4\.gz$", ""
+    $d = Join-Path $D6 "libro\$stem"
+    New-Item -ItemType Directory -Force -Path $d | Out-Null
+    $sl4 = Join-Path $d "$stem.sl4"
+    $in = [System.IO.File]::OpenRead($gz.FullName)
+    $zip = New-Object System.IO.Compression.GZipStream($in, [System.IO.Compression.CompressionMode]::Decompress)
+    $outFs = [System.IO.File]::Create($sl4)
+    try { $zip.CopyTo($outFs) } finally { $outFs.Close(); $zip.Close(); $in.Close() }
+    Dump-Changes "6 sltoht libro $stem" $sl4 $d
+}
+# (b) las del paso 5 (Gragg en todos), si corrio en esta misma salida
+$Out5 = Join-Path $Out "5_burfisher\out"
+if (Test-Path $Out5) {
+    foreach ($sl4 in (Get-ChildItem $Out5 -Recurse -Filter *.sl4 | Sort-Object Name)) {
+        Dump-Changes "6 sltoht gragg $($sl4.BaseName)" $sl4.FullName (Join-Path $D6 "gragg\$($sl4.BaseName)")
+    }
+} else {
+    Note "6: no hay $Out5 (el paso 5 no corrio en esta salida): solo las del libro"
+}
+}
+
+# --- 7. niveles de las corridas del paso 5 ----------------------------------
+if ($Pasos -contains 7) {
+$Out5 = Join-Path $Out "5_burfisher\out"
+$D6g = Join-Path $Out "6_sl4dump\gragg"
+if ((Test-Path $Out5) -and (Test-Path $D6g)) {
+    foreach ($sl4 in (Get-ChildItem $Out5 -Recurse -Filter *.sl4 | Sort-Object Name)) {
+        $stem = $sl4.BaseName
+        Export-Levels "7 niveles gragg $stem" $sl4.FullName (Join-Path $D6g "$stem\sl4dump_$stem.har") (Join-Path $Out "7_niveles_gragg\$stem")
+    }
+} else {
+    Note "7: no hay $Out5 o $D6g (los pasos 5 y 6 tienen que correr en esta misma salida)"
 }
 }
 
