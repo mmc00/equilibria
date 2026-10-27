@@ -236,6 +236,9 @@ SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 AREA_KEY = re.compile(r"^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$")
 BASELINE = re.compile(r"^specs/(.+)/specs/[^/]+\.md$")
 OPEN_CHANGE = re.compile(r"^specs/(.+)/changes/([^/]+)/specs/[^/]+\.md$")
+ARCHIVED_CHANGE = re.compile(
+    r"^specs/(.+)/changes/archive/\d{4}-\d{2}-\d{2}-([^/]+)/specs/[^/]+\.md$"
+)
 SKIP_LABELS = {"no-delta", "bootstrap"}
 NO_DOCS_LABEL = "no-docs"
 
@@ -343,7 +346,10 @@ def _has_baseline(area: str, rev: str) -> bool:
 def _archived_changes(
     base: str, changed: list[str], areas: Areas
 ) -> list[tuple[str, str, str, Deltas]]:
-    """Changes open at ``base`` that this PR moved into ``changes/archive/``."""
+    """Changes this PR archived: open at ``base`` and moved into
+    ``changes/archive/`` (deltas read at base), or born and archived here,
+    i.e. archive files absent at base (deltas read at HEAD). An archive already
+    at base is closed and covers nothing."""
     listing = _git("ls-tree", "-r", "--name-only", base, "specs/").stdout
     found: list[tuple[str, str, str, Deltas]] = []
     for rel in listing.splitlines():
@@ -359,6 +365,16 @@ def _archived_changes(
         )
         if any(moved.match(p) for p in changed):
             found.append((area, slug, rel, parse_deltas(_show(base, rel))))
+    seen = {(area, slug) for area, slug, _, _ in found}
+    for rel in changed:
+        m = ARCHIVED_CHANGE.match(rel)
+        if not m or not _spec_area(rel, areas) or (m.group(1), m.group(2)) in seen:
+            continue
+        if _show(base, rel):
+            continue  # already archived at base
+        text = _show("HEAD", rel)
+        if text:
+            found.append((m.group(1), m.group(2), rel, parse_deltas(text)))
     return found
 
 
@@ -398,7 +414,7 @@ def _cmd_check_pr(args: argparse.Namespace) -> int:
             open_changes.append((m.group(1), m.group(2), rel, deltas))
 
     # Changes archived by this PR still justify the syncs it makes (the last PR
-    # of a change may sync and archive at once). Their deltas are read at base.
+    # of a change may sync and archive at once, and may also be its first).
     archived_here = _archived_changes(base, all_changed, areas)
 
     for area, slug, rel, deltas in open_changes:
