@@ -305,3 +305,47 @@ def test_closure_is_walked_like_params():
         closure=_Closure(fixed=frozenset({"b", "a"}))
     )
     assert _fp(closure=_Closure(fixed=object())) is None
+
+
+# A seed settled under one numeric stack must not be served to another: on
+# 20x41 a seed written under Pyomo 6.9.5 / SciPy 1.17.1 was reused under
+# Pyomo 6.10.1 / SciPy 1.18.0 (same data, closure and code) and the shock died
+# on xaa[IND,Rice,gov,base] = -5.6e-7; with the cache off the same env matched
+# Table 1 exactly.
+
+
+@pytest.mark.parametrize("dist", ["pyomo", "numpy", "scipy", "pandas"])
+def test_a_numeric_dependency_version_moves_the_key(monkeypatch, dist):
+    import importlib.metadata as md
+
+    real = md.version
+    before = _fp()
+    monkeypatch.setattr(
+        md, "version", lambda name: "0.0.0-other" if name == dist else real(name)
+    )
+    assert _fp() != before, f"{dist} version does not affect the key"
+
+
+def test_python_version_moves_the_key(monkeypatch):
+    import sys
+
+    before = _fp()
+    monkeypatch.setattr(sys, "version", "3.99.0 (other build)")
+    assert _fp() != before
+
+
+def test_a_missing_dependency_still_gives_a_key(monkeypatch):
+    """pymumps is optional: absent is a state to key on, not a reason to skip."""
+    import importlib.metadata as md
+
+    real = md.version
+
+    def version(name):
+        if name == "pymumps":
+            raise md.PackageNotFoundError(name)
+        return real(name)
+
+    monkeypatch.setattr(md, "version", version)
+    key = _fp()
+    assert key is not None
+    assert key == _fp()
