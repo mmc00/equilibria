@@ -1,0 +1,352 @@
+# GTAP v7: nombres de GAMS (declaraciones de comp_*_ifsub{0,1}.gms) <-> equilibria
+# (modelo de bloques multiperiodo, ifSUB 0 y 1). ADR-0009.
+#
+# Una fila por familia, SIN regla por defecto: un nombre igual en los dos lados
+# tambien va aca. Cada pareja se leyo en las dos definiciones (la ecuacion del .gms
+# y el build_expression del bloque); que los indices cuadren lo verifica
+# tests/compare/test_gtap7_names.py, que tambien exige que no falte ninguna familia.
+#
+#   gams_fixed:        indices de GAMS fijados a un elemento (xaceq(r,i,'hhd',t)).
+#   equilibria_extra:  indices que solo tiene equilibria (walras va por periodo).
+#   why:               obligatorio en las filas de un solo lado.
+#
+# El orden de los indices puede diferir (lambdam(rp,i,r) en GAMS, (r,i,rp) en
+# equilibria): este diccionario empareja familias, no celdas.
+model: gtap7
+
+equations:
+  # --- produccion ---
+  - {gams: ndeq, equilibria: eq_nd}
+  - {gams: vaeq, equilibria: eq_va}
+  - {gams: pxeq, equilibria: eq_pxeq}
+  - {gams: pndeq, equilibria: eq_pndeq}
+  - {gams: xapeq, equilibria: eq_xaa_activity}
+  - {gams: xfeq, equilibria: eq_xfeq}
+  - {gams: pvaeq, equilibria: eq_pvaeq}
+  - {gams: xeq, equilibria: eq_x}
+  - {gams: xpeq, equilibria: eq_po}
+  - {gams: ppeq, equilibria: eq_pp_rai}
+  - {gams: peq, equilibria: eq_peq}
+  - {gams: pseq, equilibria: eq_xs}
+  # --- ingreso ---
+  - {gams: ytaxeq, equilibria: eq_ytax}
+  - {gams: ytaxToteq, equilibria: eq_ytax_tot}
+  - {gams: ytaxIndeq, equilibria: eq_ytax_ind}
+  - {gams: factYeq, equilibria: eq_facty}
+  - {gams: regYeq, equilibria: eq_regy}
+  - {gams: ytaxshreq, equilibria: eq_ytaxshreq}
+  - {gams: yceq, equilibria: eq_yc}
+  - {gams: ygeq, equilibria: eq_yg}
+  - {gams: yieq, equilibria: eq_yi}
+  - {gams: rsaveq, equilibria: eq_rsav}
+  # --- demanda final y utilidad ---
+  - {gams: phiPeq, equilibria: eq_phip}
+  - {gams: phieq, equilibria: eq_phi}
+  - {gams: uheq, equilibria: eq_uh, gams_fixed: {h: hhd}}
+  - {gams: ugeq, equilibria: eq_ug}
+  - {gams: useq, equilibria: eq_us}
+  - {gams: ueq, equilibria: eq_u}
+  - {gams: zconseq, equilibria: eq_zcons, gams_fixed: {h: hhd}}
+  - {gams: xcshreq, equilibria: eq_xcshr, gams_fixed: {h: hhd}}
+  - {gams: xaceq, equilibria: eq_xc, gams_fixed: {h: hhd}}
+  - {gams: pconseq, equilibria: eq_pcons}
+  - {gams: xageq, equilibria: eq_xg, gams_fixed: {gov: gov}}
+  - {gams: pgeq, equilibria: eq_pg}
+  - {gams: xgeq, equilibria: eq_xg_agg}
+  - {gams: xaieq, equilibria: eq_xi, gams_fixed: {inv: inv}}
+  - {gams: pieq, equilibria: eq_pi}
+  - {gams: xieq, equilibria: eq_xiagg}
+  - {gams: eveq, equilibria: eq_ev, gams_fixed: {h: hhd}}
+  - {gams: cveq, equilibria: eq_cv, gams_fixed: {h: hhd}}
+  # --- Armington y comercio ---
+  - {gams: paeq, equilibria: eq_paa}
+  - {gams: xdeq, equilibria: eq_xda}
+  - {gams: xmeq, equilibria: eq_xma}
+  - {gams: xmteq, equilibria: eq_xmt_agg}
+  - {gams: dintxeq, equilibria: eq_dintxeq}
+  - {gams: mintxeq, equilibria: eq_mintxeq}
+  - {gams: xweq, equilibria: eq_xweq}
+  - {gams: pmteq, equilibria: eq_pmteq}
+  - {gams: xdseq, equilibria: eq_xds}
+  - {gams: xeteq, equilibria: eq_xet}
+  - {gams: xseq, equilibria: eq_xseq}
+  - {gams: peeq, equilibria: eq_peeq}
+  - {gams: peteq, equilibria: eq_peteq}
+  - {gams: pdeq, equilibria: eq_pdeq}
+  - {gams: pefobeq, equilibria: eq_pefobeq}
+  - {gams: pmcifeq, equilibria: eq_pmcifeq}
+  - {gams: pmeq, equilibria: eq_pmeq}
+  # --- margenes ---
+  - {gams: xwmgeq, equilibria: eq_xwmg}
+  - {gams: xmgmeq, equilibria: eq_xmgm}
+  - {gams: pwmgeq, equilibria: eq_pwmg}
+  - {gams: xtmgeq, equilibria: eq_xtmg}
+  - {gams: ptmgeq, equilibria: eq_ptmg}
+  - {gams: xatmgeq, equilibria: eq_xaa_tmg, gams_fixed: {tmg: tmg}}
+  # --- factores ---
+  - {gams: xfteq, equilibria: eq_xfteq}
+  - {gams: pfeq, equilibria: eq_pfeq}
+  # pfteq tiene dos ramas: CET (omegaf finito) y agregacion de factores moviles
+  # (omegaf = inf). equilibria escribe la segunda tambien como fila propia.
+  - {gams: pfteq, equilibria: eq_pfteq}
+  - {gams: pfteq, equilibria: eq_xft}
+  - {gams: pfaeq, equilibria: eq_pfaeq}
+  - {gams: pfyeq, equilibria: eq_pfyeq}
+  - {gams: kstockeq, equilibria: eq_kstock}
+  # --- inversion y ahorro ---
+  - {gams: arenteq, equilibria: eq_arent}
+  - {gams: kapEndeq, equilibria: eq_kapEnd}
+  - {gams: rorceq, equilibria: eq_rorc}
+  - {gams: roreeq, equilibria: eq_rore}
+  - {gams: rorgeq, equilibria: eq_rorg}
+  - {gams: savfeq, equilibria: eq_savf}
+  - {gams: chifeq, equilibria: eq_chif}
+  - {gams: capAccteq, equilibria: eq_capAcct}
+  - {gams: chiSaveeq, equilibria: eq_chisave}
+  - {gams: psaveeq, equilibria: eq_psave}
+  - {gams: xigbleq, equilibria: eq_xigbl}
+  - {gams: pigbleq, equilibria: eq_pigbl}
+  # --- indices, numerario y Walras ---
+  - {gams: pabseq, equilibria: eq_pabs}
+  - {gams: pfacteq, equilibria: eq_pfact}
+  - {gams: pwfacteq, equilibria: eq_pwfact}
+  - {gams: pnumeq, equilibria: eq_pnum}
+  - {gams: walraseq, equilibria: eq_walras, equilibria_extra: [t]}
+  - {gams: gdpmpeq, equilibria: eq_gdpmp}
+  - {gams: rgdpmpeq, equilibria: eq_rgdpmp}
+  - {gams: pgdpmpeq, equilibria: eq_pgdpmp}
+
+  # --- solo GAMS ---
+  - gams: [pdpeq, pmpeq]
+    why: >-
+      pdp = pd*(1+dintx) y pmp = pmt*(1+mintx): equilibria las escribe en linea
+      (como la macro M_PDP/M_PMP de GAMS con ifSUB=1) en las dos formulaciones.
+  - gams: [axpeq, lambdandeq, lambdavaeq, lambdaioeq, lambdafeq]
+    why: >-
+      shifter(t) = shifter(t-1)*(1+crecimiento): equilibria fija el shifter en su
+      valor (instrumento del ShockBlock o parametro); misma matematica en estatica
+      comparada. Ojo para R-DYN.
+  - gams: pmuveq
+    why: "indice de valor unitario de manufacturas: equilibria no lo tiene (R-PMUV)"
+  - gams: [glcaleq, afealleq]
+    why: "solo del modelo dynCal (calibracion dinamica), no del modelo gtap"
+  - gams: [uedeq, incelaseq, cedeq, apeeq]
+    why: "elasticidades CDE de reporte, fuera del modelo gtap"
+
+  # --- solo equilibria ---
+  - equilibria: [eq_xaa_hhd, eq_xaa_gov, eq_xaa_inv]
+    why: >-
+      enlace xaa(r,i,h) = xc(r,i) (y gov, inv): equilibria guarda la demanda final
+      en xc/xg/xi(r,i); GAMS la escribe directo en xa(r,i,h).
+  - equilibria: eq_xd_agg
+    why: "agregado xd(r,i) = sum(aa, xda/xscale): GAMS no tiene esa variable"
+  - equilibria: [eq_pabs_base, eq_pfact_base]
+    why: "anclas pabs = pfact = 1 en base; GAMS las fija con .fx"
+  - equilibria:
+      - eq_mq_gdp_bs
+      - eq_mq_gdp_sb
+      - eq_mq_abs_bb
+      - eq_mq_abs_sb
+      - eq_mq_abs_ss
+      - eq_mq_abs_bs
+      - eq_mq_factr_bb
+      - eq_mq_factr_sb
+      - eq_mq_factr_ss
+      - eq_mq_factr_bs
+      - eq_mq_factw_bb
+      - eq_mq_factw_sb
+      - eq_mq_factw_ss
+      - eq_mq_factw_bs
+    why: >-
+      agregados de los indices de Fisher (rgdpmp, pabs, pfact, pwfact) entre dos
+      periodos, cada uno su fila; GAMS escribe la suma dentro de la ecuacion.
+
+variables:
+  # --- produccion ---
+  - {gams: axp, equilibria: axp}
+  - {gams: lambdava, equilibria: lambdava}
+  - {gams: lambdaf, equilibria: lambdaf}
+  - {gams: nd, equilibria: nd}
+  - {gams: va, equilibria: va}
+  - {gams: px, equilibria: px}
+  - {gams: pnd, equilibria: pnd}
+  - {gams: xf, equilibria: xf}
+  - {gams: pva, equilibria: pva}
+  - {gams: xp, equilibria: xp}
+  - {gams: x, equilibria: x}
+  - {gams: p, equilibria: p_rai}
+  - {gams: pp, equilibria: pp_rai}
+  - {gams: xs, equilibria: xs}
+  - {gams: ps, equilibria: ps}
+  # --- ingreso ---
+  - {gams: ytax, equilibria: ytax}
+  - {gams: ytaxTot, equilibria: ytaxTot}
+  - {gams: ytaxInd, equilibria: ytax_ind}
+  - {gams: ytaxshr, equilibria: ytaxshr}
+  - {gams: factY, equilibria: facty}
+  - {gams: regY, equilibria: regy}
+  - {gams: yc, equilibria: yc}
+  - {gams: yg, equilibria: yg}
+  - {gams: yi, equilibria: yi}
+  - {gams: rsav, equilibria: rsav}
+  # --- demanda final y utilidad ---
+  - {gams: phiP, equilibria: phip}
+  - {gams: phi, equilibria: phi}
+  - {gams: uh, equilibria: uh, gams_fixed: {h: hhd}}
+  - {gams: ug, equilibria: ug}
+  - {gams: us, equilibria: us}
+  - {gams: u, equilibria: u}
+  - {gams: zcons, equilibria: zcons, gams_fixed: {h: hhd}}
+  - {gams: xcshr, equilibria: xcshr, gams_fixed: {h: hhd}}
+  - {gams: pcons, equilibria: pcons}
+  - {gams: pg, equilibria: pg}
+  - {gams: xg, equilibria: xg_agg}
+  - {gams: pi, equilibria: pi}
+  - {gams: xi, equilibria: xiagg}
+  - {gams: ev, equilibria: ev, gams_fixed: {h: hhd}}
+  - {gams: cv, equilibria: cv, gams_fixed: {h: hhd}}
+  - {gams: pop, equilibria: pop}
+  # --- Armington y comercio ---
+  - {gams: xa, equilibria: xaa}
+  - {gams: xd, equilibria: xda}
+  - {gams: xm, equilibria: xma}
+  - {gams: pa, equilibria: pa}
+  - {gams: dintx, equilibria: dintx}
+  - {gams: mintx, equilibria: mintx}
+  - {gams: xmt, equilibria: xmt}
+  - {gams: pmt, equilibria: pmt}
+  - {gams: xw, equilibria: xw}
+  - {gams: xds, equilibria: xds}
+  - {gams: xet, equilibria: xet}
+  - {gams: pe, equilibria: pe}
+  - {gams: pet, equilibria: pet}
+  - {gams: pd, equilibria: pd}
+  - {gams: pefob, equilibria: pefob}
+  - {gams: pmcif, equilibria: pmcif}
+  - {gams: pm, equilibria: pm}
+  - {gams: lambdam, equilibria: lambdam}
+  # --- margenes ---
+  - {gams: xwmg, equilibria: xwmg}
+  - {gams: xmgm, equilibria: xmgm}
+  - {gams: pwmg, equilibria: pwmg}
+  - {gams: xtmg, equilibria: xtmg}
+  - {gams: ptmg, equilibria: ptmg}
+  - {gams: lambdamg, equilibria: lambdamg}
+  # --- factores ---
+  - {gams: xft, equilibria: xft}
+  - {gams: pf, equilibria: pf}
+  - {gams: pft, equilibria: pft}
+  - {gams: pfa, equilibria: pfa}
+  - {gams: pfy, equilibria: pfy}
+  - {gams: kstock, equilibria: kstock}
+  - {gams: arent, equilibria: arent}
+  - {gams: kapEnd, equilibria: kapEnd}
+  # --- inversion y ahorro ---
+  - {gams: rorc, equilibria: rorc}
+  - {gams: rore, equilibria: rore}
+  - {gams: rorg, equilibria: rorg}
+  - {gams: savf, equilibria: savf}
+  - {gams: chif, equilibria: chif}
+  - {gams: chiSave, equilibria: chiSave}
+  - {gams: psave, equilibria: psave}
+  - {gams: xigbl, equilibria: xigbl}
+  - {gams: pigbl, equilibria: pigbl}
+  # --- indices, numerario y Walras ---
+  - {gams: pabs, equilibria: pabs}
+  - {gams: pfact, equilibria: pfact}
+  - {gams: pwfact, equilibria: pwfact}
+  - {gams: pnum, equilibria: pnum}
+  - {gams: walras, equilibria: walras, equilibria_extra: [t]}
+  - {gams: gdpmp, equilibria: gdpmp}
+  - {gams: rgdpmp, equilibria: rgdpmp}
+  - {gams: pgdpmp, equilibria: pgdpmp}
+  # --- instrumentos ---
+  - {gams: fcttx, equilibria: fcttx}
+  - {gams: prdtx, equilibria: prdtx_rai}
+  - {gams: kappaf, equilibria: kappaf}
+  - {gams: exptx, equilibria: exptx}
+  - {gams: imptx, equilibria: imptx}
+
+  # --- solo GAMS ---
+  - gams: [pdp, pmp]
+    why: "equilibria las escribe en linea (ver pdpeq/pmpeq)"
+  - gams: [lambdand, lambdaio]
+    why: "shifters que equilibria lee como parametro (sh.lambdand, lambdaio), no como Var"
+  - gams: pmuv
+    why: "equilibria no tiene el indice de valor unitario de manufacturas (R-PMUV)"
+  - gams: chiInv
+    why: >-
+      solo entra en savfeq con capShrFix; el contrato acepta ese cierre pero los
+      bloques no tienen chiInv
+  - gams: [fctts, etax, mtax, tmarg]
+    why: "GAMS las declara Variable y las fija (.fx); equilibria las tiene como parametro"
+  - gams: lambdai
+    why: "GAMS lo fija en 1 (lambdai.fx = 1); los bloques lo omiten de xaieq"
+  - gams: [dtxshft, mtxshft, rtxshft, adtx, mdtx]
+    why: >-
+      shifters de impuestos que GAMS fija; equilibria mueve dintx/mintx con sus
+      objetivos (dintx_tgt, mintx_tgt)
+  - gams: [betap, betag, betas, aug, aus, au, bh, eh]
+    why: "parametros de utilidad que GAMS calibra (betaCal) o fija; en equilibria son parametros"
+  - gams: [ued, ced, ape, incelas]
+    why: "elasticidades CDE de reporte (uedeq...), fuera del modelo gtap"
+  - gams: [rgdppc, rgdppcgr, gl, ggdppc]
+    why: "variables del modelo dinamico (dynCal/dynGTAP)"
+  - gams: [emid, emim]
+    why: "emisiones: equilibria no modela CO2"
+  - gams:
+      - axpsec
+      - axpreg
+      - axpall
+      - andsec
+      - andreg
+      - andall
+      - avasec
+      - avareg
+      - avaall
+      - aiocom
+      - aiosec
+      - aioreg
+      - aioall
+      - afecom
+      - afesec
+      - afefac
+      - afeLab
+      - afereg
+      - afeall
+      - atm
+      - atf
+      - ats
+      - atd
+      - atall
+    why: >-
+      componentes de crecimiento de los shifters (axpeq, lambdafeq...); equilibria
+      fija los shifters directamente
+
+  # --- solo equilibria ---
+  - equilibria: [xc, xg, xi]
+    why: "demanda final por bien xa(r,i,h) de GAMS, guardada aparte (ver eq_xaa_hhd)"
+  - equilibria: xd
+    why: "agregado xd(r,i) = sum(aa, xda): GAMS no lo tiene"
+  - equilibria: [pp, xe]
+    why: "declaradas por el bloque (pp(r,a), xe(r,i,rp)) pero ninguna ecuacion las usa"
+  - equilibria: aft
+    why: "en GAMS aft es Parameter; equilibria lo hace instrumento del ShockBlock"
+  - equilibria: [dintx_tgt, mintx_tgt]
+    why: "objetivos de @overwrite para dintx/mintx; GAMS fija dintx en iterloop"
+  - equilibria:
+      - mq_gdp_bs
+      - mq_gdp_sb
+      - mq_abs_bb
+      - mq_abs_sb
+      - mq_abs_ss
+      - mq_abs_bs
+      - mq_factr_bb
+      - mq_factr_sb
+      - mq_factr_ss
+      - mq_factr_bs
+      - mq_factw_bb
+      - mq_factw_sb
+      - mq_factw_ss
+      - mq_factw_bs
+    why: "agregados de los indices de Fisher (ver eq_mq_*)"
