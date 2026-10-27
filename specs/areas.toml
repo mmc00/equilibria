@@ -1,0 +1,109 @@
+unowned = [
+  "src/equilibria/templates/gtap_loglevels/",
+  "src/equilibria/templates/gtap_logvalue/",
+  "src/equilibria/templates/gtap_sparse/",
+  "src/equilibria/templates/gtap_julia/",
+  "src/equilibria/templates/pep_cri_",
+  "src/equilibria/templates/pep_levels.py",
+  "src/equilibria/templates/pep_parity_pipeline.py",
+  "src/equilibria/templates/pep_scenario_parity.py",
+  "src/equilibria/blocks/gtap_loglevels/",
+  "src/equilibria/blocks/gtap_logvalue/",
+  "src/equilibria/templates/data/",
+  "src/equilibria/templates/reference/",
+]
+
+[areas]
+blocks = [
+  "src/equilibria/blocks/__init__.py",
+  "src/equilibria/blocks/base.py",
+  "src/equilibria/core/",
+  "src/equilibria/contracts/",
+  "src/equilibria/calibration/",
+]
+templates = [
+  "src/equilibria/__init__.py",
+  "src/equilibria/_local_refs.py",
+  "src/equilibria/_logging.py",
+  "src/equilibria/version.py",
+  "src/equilibria/py.typed",
+  "src/equilibria/model.py",
+  "src/equilibria/cli.py",
+  "src/equilibria/templates/__init__.py",
+  "src/equilibria/templates/base.py",
+  "src/equilibria/templates/init_strategies/",
+  "src/equilibria/simulations/__init__.py",
+  "src/equilibria/simulations/presets.py",
+  "src/equilibria/simulations/types.py",
+  "src/equilibria/simulations/simulator.py",
+  "src/equilibria/simulations/multi.py",
+  "src/equilibria/simulations/runtimes.py",
+  "src/equilibria/simulations/adapters/",
+]
+"templates/gtap" = [
+  "src/equilibria/templates/gtap/",
+  "src/equilibria/blocks/gtap/",
+]
+"templates/pep" = [
+  "src/equilibria/templates/pep_",
+  "src/equilibria/simulations/pep",
+]
+"templates/simple_open" = [
+  "src/equilibria/templates/simple_open",
+  "src/equilibria/baseline/simple_open_",
+  "src/equilibria/blocks/production/",
+  "src/equilibria/blocks/trade/",
+  "src/equilibria/blocks/demand/",
+  "src/equilibria/blocks/institutions/",
+  "src/equilibria/blocks/equilibrium/",
+]
+data = [
+  "src/equilibria/babel/",
+  "src/equilibria/sam_tools/",
+  "src/equilibria/qa/",
+  "src/equilibria/datasets.py",
+]
+solver = [
+  "src/equilibria/solver/",
+  "src/equilibria/backends/",
+]
+parity = [
+  "src/equilibria/compare/",
+  "src/equilibria/baseline/",
+  "src/equilibria/templates/gams_comparison.py",
+  "scripts/gtap/run_parity_gates.py",
+  "scripts/parity/",
+]
+
+# User-doc pages of each area (globs allowed). `check-pr` warns when an area's
+# baseline changes and none of these change; label the PR `no-docs` to skip.
+[docs]
+"templates/gtap" = [
+  "docs/site/guide/gtap_quickstart.md",
+  "docs/site/api/templates_gtap.md",
+  "docs/site/guide/welfare_decomposition.md",
+  "docs/site/guide/gtap7_coverage_matrix.md",
+  "docs/site/guide/gtap7_coverage_matrix_gempack.md",
+]
+"templates/pep" = [
+  "docs/site/guide/pep_quickstart.md",
+  "docs/site/guide/pep_coverage_matrix.md",
+  "docs/site/api/templates_pep_pyomo.md",
+  "docs/guides/pep_*.md",
+]
+"templates/simple_open" = ["docs/guides/simple_open_*.md"]
+templates = ["docs/site/guide/templates.md", "docs/guides/simulations_api.md"]
+blocks = [
+  "docs/site/api/blocks.md",
+  "docs/site/api/core.md",
+  "docs/site/guide/architecture.md",
+]
+data = [
+  "docs/site/guide/har_io.md",
+  "docs/site/guide/mip_to_sam.md",
+  "docs/site/api/sam_tools.md",
+  "docs/guides/*mip*",
+  "docs/guides/bolivia_*",
+]
+solver = ["docs/site/guide/path_capi.md", "docs/guides/model_jacobian_harness.md"]
+parity = ["docs/site/guide/benchmarks.md"]

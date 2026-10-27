@@ -20,6 +20,9 @@ ALLOWED_EXACT: set[str] = {
     # Mismo convenio de raiz que CHANGELOG/CONTRIBUTING: GitHub y los lectores
     # esperan ROADMAP.md en mayusculas junto a README.md.
     "ROADMAP.md",
+    # Root domain glossary: same root convention, and the domain-modeling format
+    # names it GLOSSARY.md.
+    "GLOSSARY.md",
     "Makefile",
     "NOTICE",
     "README.md",

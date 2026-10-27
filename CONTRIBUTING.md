@@ -62,3 +62,13 @@ require a local solver. Do not add solver/GAMS checks to `.pre-commit-config.yam
 uv run pytest -m "not gams"          # unit + integration (no GAMS)
 uv run pytest -m gams                # GAMS parity (needs a local GAMS install)
 ```
+
+## Specs and changes
+
+Behavior of each architecture area is specified under `specs/`, and larger
+changes are proposed there before code. See [`specs/readme.md`](specs/readme.md)
+for the flow, and fill in the [PR template](.github/pull_request_template.md):
+the `spec-check` CI workflow checks the PR against the specs (warnings for
+missing spec/docs updates; failures for inapplicable deltas, hand-edited
+baselines, or syncs that differ from their delta). Adding or removing a label
+re-runs it.
