@@ -132,6 +132,9 @@ def solved(request):
     return mode, gdx, m
 
 
+# lee el GDX de GAMS con gdxdump: corre en el job gdxdump-tests del CI
+@pytest.mark.needs_gdxdump
+@pytest.mark.needs_path
 def test_the_tariff_is_the_shock_cell_of_imptx(solved):
     """La tasa base viene del HAR en precision simple y la de GAMS en doble: ya en
     el check difieren (0.04866479293 vs 0.04866479313; en una tasa de 2e-6, 1e-4
@@ -156,6 +159,9 @@ def test_the_tariff_is_the_shock_cell_of_imptx(solved):
     assert checked, "ninguna celda de imptx comparada"
 
 
+# lee el GDX de GAMS con gdxdump: corre en el job gdxdump-tests del CI
+@pytest.mark.needs_gdxdump
+@pytest.mark.needs_path
 def test_altertax_moves_xw_as_gams_does(solved):
     from pyomo.environ import value
 
@@ -189,6 +195,7 @@ TABLE1_ORACLE = (
 GEMPACK = ROOT / "tests/fixtures/gtap7_gempack"
 
 
+@pytest.mark.needs_path
 def test_table1_3x3_keeps_its_solution():
     import gzip
     import json
@@ -216,6 +223,10 @@ def test_table1_3x3_keeps_its_solution():
         if c["a"] is not None
     }
     assert got.keys() == want.keys()
-    bad = [k for k in want if got[k] != pytest.approx(want[k], rel=1e-8, abs=1e-12)]
+    # rel 1e-6: ruido de plataforma medido 2026-10-27. En macOS arm64 el maximo es
+    # 1,2e-9; en Linux x86_64 (CI: PATH 5.0.05 Linux64, Py 3.11) 1,4e-7, con 303/776
+    # celdas sobre 1e-8 y ninguna sobre 1e-6 (mismo % contra GEMPACK). Un arancel
+    # 10,01 % en vez de 10 % ya mueve celdas sobre 1e-6 y este test falla.
+    bad = [k for k in want if got[k] != pytest.approx(want[k], rel=1e-6, abs=1e-12)]
     assert not bad, f"{len(bad)}/{len(want)} celdas cambian, p.ej. {bad[:3]}"
     assert r.overall["pct_within"][1e-3] == oracle["overall"]["pct_within"]["0.001"]
