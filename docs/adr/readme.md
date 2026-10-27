@@ -15,5 +15,6 @@ ADR supersedes the old one. Create one with
 | [0006](0006-blocks-do-not-know-periods.md) | Blocks do not know about periods; the SP copy adds the time index |
 | [0007](0007-no-block-registry.md) | No block registry |
 | [0008](0008-reference-models-are-the-source-of-truth.md) | GAMS and GEMPACK are the source of truth; fidelity outranks match % |
+| [0009](0009-one-name-dictionary-per-model.md) | One name dictionary per model, checked for completeness against both sides |
 
 Vocabulary: [`GLOSSARY.md`](../../GLOSSARY.md).
