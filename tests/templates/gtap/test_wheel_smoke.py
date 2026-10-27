@@ -78,11 +78,11 @@ def test_full_multiperiod_solve_end_to_end(monkeypatch):
     from test_multiperiod_sets import _load_3x3_params
 
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
-    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     p_alt = apply_altertax_elasticities(_load_3x3_params(), in_place=False)
-    mp = GTAPMultiPeriodModel(
+    mp = GTAPBlockMultiPeriodModel(
         p_alt.sets, p_alt, None, residual_region=list(p_alt.sets.r)[-1]
     )
     m = mp.build_sets()

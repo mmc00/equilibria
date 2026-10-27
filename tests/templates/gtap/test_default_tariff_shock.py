@@ -133,16 +133,24 @@ def solved(request):
 
 
 def test_the_tariff_is_the_shock_cell_of_imptx(solved):
+    """La tasa base viene del HAR en precision simple y la de GAMS en doble: ya en
+    el check difieren (0.04866479293 vs 0.04866479313; en una tasa de 2e-6, 1e-4
+    relativo).  El shock multiplica por 1,1 (la tasa o la potencia), asi que no
+    puede sumar error propio: |shock - GAMS| <= 1,1 |check - GAMS| (+1e-12)."""
     from pyomo.environ import value
 
     mode, gdx, m = solved
     gams = _gams(gdx, "imptx")
     checked = 0
     for k, want in gams.items():
-        if k[-1] != "shock" or k not in m.imptx:
+        ck = (*k[:-1], "check")
+        if k[-1] != "shock" or k not in m.imptx or ck not in gams:
             continue
-        assert value(m.imptx[k]) == pytest.approx(want, rel=1e-9, abs=1e-12), (
-            f"{mode}: imptx{k}"
+        data_err = abs(value(m.imptx[ck]) - gams[ck])
+        err = abs(value(m.imptx[k]) - want)
+        assert err <= 1.1 * data_err + 1e-12, (
+            f"{mode}: imptx{k} = {value(m.imptx[k])}, GAMS {want} "
+            f"(check: error de datos {data_err:.2e})"
         )
         checked += 1
     assert checked, "ninguna celda de imptx comparada"

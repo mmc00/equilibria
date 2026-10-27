@@ -205,8 +205,9 @@ _GDX_10x7 = _ROOT / "tests/fixtures/gtap7/gtap7_10x7/out_gtap_shock_ifsub0.gdx"
 
 
 def _seed_and_solve(build_fn):
-    """Build the monolith 10x7 model via build_fn(mp), seed from the pure-gtap
-    reference GDX, solve base->check->shock, return {name+index: value}."""
+    """Build the block 10x7 model via build_fn(mp), seed from the pure-gtap
+    reference GDX, solve base->check->shock, return {name+index: value}.
+    (Blocks, not the monolith: the driver needs the ShockBlock.)"""
     import sys
 
     sys.path.insert(0, str(_ROOT / "scripts/gtap"))
@@ -216,7 +217,7 @@ def _seed_and_solve(build_fn):
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     p = _load_params()
-    mp = _make_mp(p)
+    mp = _make_block_mp(p)
     m = build_fn(mp)
     rr = list(p.sets.r)[-1]
     m._residual_region = rr

@@ -35,7 +35,11 @@ from equilibria.blocks.gtap.factor_wedge import factor_wedge_rate, va_subsidy_ba
 from equilibria.templates.gtap.instruments import exogenous_test
 from equilibria.templates.gtap.period_debug import debug_before_solve
 from equilibria.templates.gtap.period_prep import PeriodPreparer
-from equilibria.templates.gtap.shocks import check_endowment_shock_entered, shock_of
+from equilibria.templates.gtap.shocks import (
+    apply_default_tariff,
+    check_endowment_shock_entered,
+    shock_of,
+)
 
 PERIODS = ("base", "check", "shock")
 
@@ -252,7 +256,8 @@ def freeze_period(m, period: str) -> int:
 # 10 sig figs) — a genuine, verified, ~5.5pp-magnitude bug, not a hypothesis.
 # This is SURGICAL (only eq_nd/eq_va's own and_param/ava_param coefficient),
 # NOT a whole-slice recalibration of Armington/CDE shares — a prior finding
-# (_rebuild_eq_pmeq_shock's docstring) already established that whole-slice
+# (the docstring of the old _rebuild_eq_pmeq_shock, removed in tariff-to-shock-
+# block) already established that whole-slice
 # recalibration on the SHOCK period regresses the match; this only touches
 # and/ava, verified independently faithful via CONVERT before implementing.
 #
@@ -1535,588 +1540,6 @@ def _copy_base_to_check(m) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _rebuild_eq_pmeq_shock — inject the tariff shock INTO the solved shock eqs
-# ---------------------------------------------------------------------------
-def _rebuild_eq_pmeq_shock(m, params_shock) -> int:
-    """Rebuild ONLY the eq_pmeq[*,*,*,'shock'] cells so the tariff shock enters
-    the SOLVED equation (not just a post-solve cosmetic pm patch).  gtap-mode only.
-
-    Why the rebuild is needed
-    -------------------------
-    The MP builder (gtap_model_multiperiod.py:189-206) substitutes every mutable
-    Param — and reads every report-Var (mtax) — by its NUMERIC value at build time,
-    so `m` has NO live `imptx` Param.  The shock-slice `eq_pmeq[*,*,*,'shock']`
-    therefore bakes the BASE imptx as a literal coefficient on pmcif:
-
-        body:  pm[rp,i,r,shock] - C_base * pmcif[rp,i,r,shock] == 0
-        with   C_base = (1 + imptx_base + mtax_init) / chipm   (the SP form,
-               gtap_model_equations.py:4824-4831; chipm==1 always, mtax baked at
-               its 0 init).
-
-    `_apply_imptx_shock` mutates a deepcopy the built eqs don't reference, so the
-    shock reaches outputs ONLY via the post-solve `_recompute_pm_pmt` (cosmetic;
-    pm/pmt/pa are in the parity RF-exclusion set, so the patch never feeds back
-    into the SOLVED quantities).  Net: shock import prices stay ~unshocked, import
-    quantities stay high.
-
-    Faithful, SURGICAL fix
-    ----------------------
-    For each shock cell, extract the baked coefficient C_base of pmcif from the
-    original body, then replace the constraint with the SHOCKED coefficient
-
-        C_shock = C_base + (imptx_shocked - imptx_base) / chipm
-                = C_base + (imptx_shocked - imptx_base)            (chipm == 1)
-
-    which is EXACTLY (1 + imptx_shocked + mtax_init)/chipm — only the imptx wedge
-    moves (mirrors GAMS tm.fx = tm.l*1.10; nothing else recalibrated).  We rebuild
-    ONLY eq_pmeq[*,*,*,'shock'] — NOT the whole shock slice — because a whole-slice
-    rebuild also recalibrates Armington/CDE shares on the counterfactual VMSB
-    (eq_paa/eq_xma/eq_yc jump ~26%), which GAMS does NOT do and which regresses the
-    shock match (~61%).
-
-    `params_shock.taxes.imptx[(rp,i,r)]` already holds the tm_pct POWER value
-    ((1+imptx_base)*1.10-1) — that IS imptx_shocked.  We read imptx_base from the
-    UNSHOCKED rate, recovered as ((1+imptx_shocked) - 1)/1.10 ... but simpler and
-    exact: the additive wedge delta equals (imptx_shocked - imptx_base), and since
-    _apply_imptx_shock did imptx_shocked = (1+imptx_base)*1.10 - 1, we have
-    imptx_base = (1 + imptx_shocked)/1.10 - 1, so the delta is closed-form per cell.
-    To avoid relying on the 0.10 factor here we instead recover imptx_base from the
-    baked coefficient itself: C_base - mtax_term encodes (1+imptx_base); but with
-    chipm==1 and the report-Var mtax baked at 0 init for these datasets, the clean
-    invariant is C_base == 1 + imptx_base, hence imptx_base = C_base - 1 and the
-    new coefficient is simply (1 + imptx_shocked).  We keep the additive-delta form
-    (C_base + (imptx_shocked - imptx_base)) so a nonzero baked mtax term still maps
-    correctly (the mtax part of C_base is preserved; only the imptx wedge shifts).
-
-    gtap-mode ONLY (caller gates).  Returns the count of cells rebuilt.
-    """
-    from pyomo.environ import Constraint, Set
-    from pyomo.repn import generate_standard_repn
-
-    eq = getattr(m, "eq_pmeq", None)
-    pm = getattr(m, "pm", None)
-    pmcif = getattr(m, "pmcif", None)
-    if eq is None or pm is None or pmcif is None:
-        return 0
-    imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
-
-    rebuilt: dict[tuple, tuple[float, float]] = {}  # (rp,i,r) -> (C_shock, )
-    for idx in list(eq):
-        if not (isinstance(idx, tuple) and len(idx) == 4 and idx[-1] == "shock"):
-            continue
-        cd = eq[idx]
-        if not cd.active:
-            continue
-        rp, i, r, _t = idx
-        imptx_shocked = imptx_map.get((rp, i, r))
-        if imptx_shocked is None:
-            continue
-        # Recover imptx_base from the tm_pct power inversion: imptx_shocked was
-        # set to (1+imptx_base)*1.10-1 by _apply_imptx_shock.  So imptx_base =
-        # (1+imptx_shocked)/1.10 - 1.  We derive the additive wedge delta from the
-        # baked coefficient instead, which is exact regardless of the shock factor:
-        # extract C_base (= 1+imptx_base+mtax over chipm) and set
-        # C_shock = C_base + (imptx_shocked - imptx_base) where imptx_base is read
-        # back from C_base under the chipm==1 / additive invariant.
-        repn = generate_standard_repn(cd.body)
-        pmcif_vd = pmcif[(rp, i, r, "shock")]
-        pm_vd = pm[idx]
-        c_pmcif = None
-        c_pm = None
-        for v, c in zip(repn.linear_vars, repn.linear_coefs, strict=False):
-            if v is pmcif_vd:
-                c_pmcif = float(c)
-            elif v is pm_vd:
-                c_pm = float(c)
-        if c_pmcif is None or c_pm is None or abs(c_pm) < 1e-12:
-            continue
-        # body == pm*c_pm - pmcif*|c_pmcif| (== 0) → normalize to pm == C_base*pmcif
-        c_base = -c_pmcif / c_pm
-        # imptx_base under the chipm==1 / mtax-baked invariant: C_base = 1+imptx_base
-        # (+ baked mtax, which we preserve by working with the ADDITIVE wedge).
-        imptx_base = c_base - 1.0
-        c_shock = c_base + (float(imptx_shocked) - imptx_base)
-        if abs(c_shock - c_base) < 1e-12:
-            continue  # no shock on this route (diagonal / zero tariff)
-        rebuilt[(rp, i, r)] = (c_shock,)
-
-    if not rebuilt:
-        return 0
-
-    # Deactivate the original shock cells we are replacing.
-    for rp, i, r in rebuilt:
-        with contextlib.suppress(KeyError, AttributeError):
-            eq[(rp, i, r, "shock")].deactivate()
-
-    # Add a single indexed replacement Constraint over the rebuilt cells.  Use a
-    # fresh attribute name; if a prior call already added it (idempotent re-solve),
-    # delete and recreate.
-    coef = {k: v[0] for k, v in rebuilt.items()}
-    if hasattr(m, "eq_pmeq_shock_rebuilt"):
-        m.del_component(m.eq_pmeq_shock_rebuilt)
-    if hasattr(m, "eq_pmeq_shock_idx"):
-        m.del_component(m.eq_pmeq_shock_idx)
-    m.eq_pmeq_shock_idx = Set(initialize=sorted(coef.keys()), dimen=3)
-
-    def _rule(_m, rp, i, r):
-        return (
-            _m.pm[rp, i, r, "shock"] == coef[(rp, i, r)] * _m.pmcif[rp, i, r, "shock"]
-        )
-
-    m.eq_pmeq_shock_rebuilt = Constraint(m.eq_pmeq_shock_idx, rule=_rule)
-    return len(coef)
-
-
-# ---------------------------------------------------------------------------
-# _rebuild_eq_ytax_mt_shock — inject the tariff shock INTO the solved ytax[mt] eq
-# ---------------------------------------------------------------------------
-def _rebuild_eq_ytax_mt_shock(m, params_shock) -> int:
-    """Rebuild ONLY the eq_ytax[*,'mt','shock'] cells so the import-tax revenue
-    stream carries the SHOCKED imptx IN the solved equation.  gtap-mode only.
-
-    Why the rebuild is needed (the dominant income leak)
-    ----------------------------------------------------
-    eq_ytax[r,'mt'] (gtap_model_equations.py:5474-5481) bakes the BASE imptx
-    coefficient at build time:
-
-        ytax[r,mt] == Σ_{(e,i,r): importer==r} (imptx_base + mtax_init)·pmcif·xw
-
-    With the diagonal shocked (Link 2), the in-solve mt revenue MISSES the entire
-    diagonal tariff stream on the large self-import flows → understates regY →
-    income/demand collapse → Armington overshoot.  This is the dominant link.
-    The post-solve `_recompute_ytax_mt` only patches the Var value AFTER the solve
-    (regY/demand already solved on the wrong mt), so it cannot heal the leak.
-
-    Faithful fix
-    ------------
-    Replace eq_ytax[*,'mt','shock'] with the SHOCKED form, IN the solved system,
-    mirroring the eq_ytax build (gtap_model_equations.py:5474-5481) AND GAMS
-    ytaxeq line 680 (`imptx(rp,i,r)·M_PMCIF(rp,i,r)·xw(rp,i,r)`):
-
-        ytax[r,mt,shock] == Σ_{(exp,i,imp): imp==r}
-            (imptx_shocked[(exp,i,imp)] + mtax)·pmcif[exp,i,imp,shock]·xw[exp,i,imp,shock]
-
-    The data convention is (exporter, good, importer) → col 2 is the IMPORTER, so
-    the importer-keyed filter is col 2 == r (verified against the GAMS GDX:
-    col2-filtered sum = 0.26003 = GAMS ytax[USA,mt] EXACT; the col0 filter gives
-    only 0.19892 — that is the latent bug in the post-solve _recompute_ytax_mt
-    gtap branch, which this in-equation rebuild now bypasses).  The shocked POWER
-    rate is already stored in params_shock.taxes.imptx by `_apply_imptx_shock`;
-    the bilinear pmcif·xw is on the live shock Vars; mtax is read at its current
-    Var value (≈0 init for these datasets), mirroring the eq_ytax build.
-
-    Idempotent on re-solve (del+recreate the replacement component), exactly like
-    _rebuild_eq_pmeq_shock.  gtap-mode ONLY (caller gates).  Returns the count of
-    cells rebuilt.
-    """
-    from pyomo.environ import Constraint, Set
-    from pyomo.environ import value as _V
-
-    eq = getattr(m, "eq_ytax", None)
-    ytax = getattr(m, "ytax", None)
-    pmcif = getattr(m, "pmcif", None)
-    xw = getattr(m, "xw", None)
-    if eq is None or ytax is None or pmcif is None or xw is None:
-        return 0
-    imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
-    # LIVE M_PMCIF chain (same as _rebuild_import_demand_shock_ifsub): under ifSUB=1
-    # the pmcif Var is a frozen orphan, so ytax[mt] = Σ imptx·pmcif·xw baked pmcif at
-    # its seed value → mt revenue stays at the pre-shock CIF price (mt ~2.5% low across
-    # all regions).  GAMS uses M_PMCIF = M_PEFOB + M_PWMG·tmarg live on pe/ptmg.
-    _pe = getattr(m, "pe", None)
-    _ptmg = getattr(m, "ptmg", None)
-    _tmarg = getattr(m, "tmarg", None)
-    _amgm = getattr(m, "amgm", None)
-    _lambdamg = getattr(m, "lambdamg", None)
-    _etax = getattr(m, "etax", None)
-    _modes = list(getattr(m, "m", []) or [])
-    _rtxs = getattr(getattr(params_shock, "taxes", None), "rtxs", {}) or {}
-
-    def _exptax(rp, i, r):
-        return float(_rtxs.get((rp, i, r), 0.0) or 0.0)
-
-    def _etaxv(rp, i):
-        if _etax is None:
-            return 0.0
-        for k in ((rp, i, "shock"), (rp, i)):
-            try:
-                return float(_V(_etax[k]))
-            except Exception:
-                pass
-        return 0.0
-
-    def _rd(comp, *ks):
-        if comp is None:
-            return None
-        for k in ks:
-            try:
-                return float(_V(comp[k]))
-            except Exception:
-                pass
-        return None
-
-    def _pmcif_live(rp, i, r):
-        # (1+rtxs+etax)·pe + Σ_m amgm·ptmg[m]/lambdamg · tmarg  — live on pe/ptmg.
-        if _pe is None:
-            return None
-        try:
-            pefob = (1.0 + _exptax(rp, i, r) + _etaxv(rp, i)) * _pe[rp, i, r, "shock"]
-        except (KeyError, TypeError):
-            return None
-        tmarg = _rd(_tmarg, (rp, i, r, "shock"), (rp, i, r)) or 0.0
-        pwmg = 0.0
-        if _ptmg is not None and _modes and tmarg:
-            for mode in _modes:
-                amgm = _rd(_amgm, (mode, rp, i, r, "shock"), (mode, rp, i, r)) or 0.0
-                if amgm == 0.0:
-                    continue
-                try:
-                    pt = _ptmg[mode, "shock"]
-                except (KeyError, TypeError):
-                    continue
-                lam = _rd(_lambdamg, (mode, rp, i, r, "shock"), (mode, rp, i, r)) or 1.0
-                pwmg = pwmg + amgm * pt / (lam if lam else 1.0)
-        return pefob + pwmg * tmarg
-
-    if not imptx_map:
-        return 0
-
-    _mtax = getattr(m, "mtax", None)
-
-    def _mtax_val(imp, i):
-        if _mtax is None:
-            return 0.0
-        try:
-            return float(_V(_mtax[(imp, i, "shock")]))
-        except Exception:
-            return 0.0
-
-    # Build the per-importer list of (good, exporter, imptx_shocked) terms, keyed
-    # by the IMPORTER = col 2 (data convention is (exporter, good, importer); GAMS
-    # ytaxeq line 680 sums imptx(rp,i,r) over the importer r = col 2).
-    terms_by_r: dict[str, list] = {}
-    for (exp, i, imp), imptx_shocked in imptx_map.items():
-        terms_by_r.setdefault(imp, []).append((i, exp, float(imptx_shocked)))
-
-    # Only rebuild cells whose shock eq exists and is active.
-    rebuilt_r: list[str] = []
-    for r in list(m.r):
-        try:
-            cd = eq[(r, "mt", "shock")]
-        except (KeyError, TypeError):
-            continue
-        if not getattr(cd, "active", False):
-            continue
-        if r not in terms_by_r:
-            continue
-        rebuilt_r.append(r)
-
-    if not rebuilt_r:
-        return 0
-
-    # Deactivate the original shock cells we are replacing.
-    for r in rebuilt_r:
-        with contextlib.suppress(KeyError, AttributeError):
-            eq[(r, "mt", "shock")].deactivate()
-
-    if hasattr(m, "eq_ytax_mt_shock_rebuilt"):
-        m.del_component(m.eq_ytax_mt_shock_rebuilt)
-    if hasattr(m, "eq_ytax_mt_shock_idx"):
-        m.del_component(m.eq_ytax_mt_shock_idx)
-    m.eq_ytax_mt_shock_idx = Set(initialize=sorted(rebuilt_r), dimen=1)
-
-    def _rule(_m, r):
-        total = 0.0
-        for i, exp, imptx_shocked in terms_by_r[r]:
-            _cif = _pmcif_live(exp, i, r)
-            if _cif is None:
-                _cif = _m.pmcif[exp, i, r, "shock"]  # fallback (non-ifSUB path)
-            total += (
-                (imptx_shocked + _mtax_val(r, i)) * _cif * _m.xw[exp, i, r, "shock"]
-            )
-        return _m.ytax[r, "mt", "shock"] == total
-
-    m.eq_ytax_mt_shock_rebuilt = Constraint(m.eq_ytax_mt_shock_idx, rule=_rule)
-    return len(rebuilt_r)
-
-
-# ---------------------------------------------------------------------------
-# _rebuild_import_demand_shock_ifsub — inject the tariff shock into eq_xweq/eq_pmteq
-# under ifSUB=1, where _rebuild_eq_pmeq_shock rewrites 0 cells.
-# ---------------------------------------------------------------------------
-def _rebuild_import_demand_shock_ifsub(m, params, params_shock) -> int:
-    """ifSUB=1 counterpart of _rebuild_eq_pmeq_shock.
-
-    Under ifSUB=1 the margin/price eqs are deactivated; the import price `pm` is the
-    inlined macro _m_pm = (1+imptx+mtax)/chipm · pmcif, BAKED into eq_xweq (bilateral
-    import demand) and eq_pmteq (aggregate import CES) at BUILD time with the BASE
-    imptx. So _rebuild_eq_pmeq_shock finds 0 active eq_pmeq cells and the +10% wedge
-    never enters the import equations → import quantities stay high (xm[USA] +150%,
-    SHOCK ~55%). This is the ifSUB=1 leg of the same income/price leak the active-eq
-    rebuilds fix for ifSUB=0.
-
-    Faithful, surgical fix: rebuild ONLY the shock-slice cells of eq_xweq and eq_pmteq,
-    replicating their exact CES rules but with a SHOCKED _m_pm — i.e. the imptx wedge
-    moves base→shocked (mtax/chipm/amw/esubm/lambdam all preserved). Mirrors GAMS
-    tm.fx = tm.l*1.10; nothing else recalibrated. gtap-mode + ifSUB only.
-
-    LINK 2 (export-side pairing): _m_pm must be inlined on the LIVE `pe` Var (via the
-    _m_pefob/_m_pmcif chain), NOT on the `pmcif` Var.  Under ifSUB=1 the MP model does
-    not replicate the single-period `.fix()` on pm/pmcif/pefob and their defining eqs
-    are deactivated, so pmcif is a FREE orphan Var.  Referencing it made the bipartite
-    matcher pair a rebuilt trade eq to pmcif instead of xw/pmt, leaving
-    eq_xweq_shock_ifsub / eq_pmteq_shock_ifsub as free-rows (xw +19%, pmt pinned 1.10,
-    SHOCK ~76%).  Inlining on pe (paired to eq_peeq/eq_peteq) restores the original
-    ifSUB=1 free-variable footprint (xw/xmt/pmt only) so the rebuilt eqs bind — see the
-    _pm_shocked pairing note.  Export prices (pe) then rise with the shock as in GAMS
-    (pe[USA,·,EU_28] base 1.0 → shock 1.02-1.03), which the frozen pmcif dropped.
-
-    Returns the count of (eq_xweq + eq_pmteq) shock cells rebuilt.
-    """
-    from pyomo.environ import Constraint, Set
-    from pyomo.environ import value as _V
-
-    _pe_guard = getattr(m, "pe", None)
-    pmt = getattr(m, "pmt", None)
-    xw = getattr(m, "xw", None)
-    xmt = getattr(m, "xmt", None)
-    eq_xweq = getattr(m, "eq_xweq", None)
-    eq_pmteq = getattr(m, "eq_pmteq", None)
-    if any(c is None for c in (_pe_guard, pmt, xw, xmt, eq_xweq, eq_pmteq)):
-        return 0
-    imptx_map = getattr(getattr(params_shock, "taxes", None), "imptx", {}) or {}
-    if not imptx_map:
-        return 0
-
-    _mtax = getattr(m, "mtax", None)
-    _chipm = getattr(m, "chipm", None)
-
-    def _mtax_val(imp, i):
-        if _mtax is None:
-            return 0.0
-        for key in ((imp, i, "shock"), (imp, i)):
-            try:
-                return float(_V(_mtax[key]))
-            except Exception:
-                pass
-        return 0.0
-
-    def _chipm_val(rp, i, r):
-        if _chipm is None:
-            return 1.0
-        for key in ((rp, i, r, "shock"), (rp, i, r)):
-            try:
-                v = float(_V(_chipm[key]))
-                return v if abs(v) > 1e-12 else 1.0
-            except Exception:
-                pass
-        return 1.0
-
-    def _amw(r, i, rp):
-        return float(
-            params.shares.normalized.import_source_share.get((r, i, rp), 0.0) or 0.0
-        )
-
-    def _esubm(r, i):
-        return float(params.elasticities.esubm.get((r, i), 5.0))
-
-    _lambdam = getattr(m, "lambdam", None)
-
-    def _lambdam_val(rp, i, r):
-        if _lambdam is None:
-            return 1.0
-        for key in ((rp, i, r, "shock"), (rp, i, r)):
-            try:
-                v = float(_V(_lambdam[key]))
-                return v if abs(v) > 1e-12 else 1.0
-            except Exception:
-                pass
-        return 1.0
-
-    # Export-price macro operands.  Under ifSUB=1 GAMS substitutes pm/pmcif/pefob
-    # OUT entirely — they are NOT solved variables (model.gms $macro 1222-1225 and
-    # the commented pmeq.pm/pmcifeq.pmcif/pefobeq.pefob in the model statement).
-    # _m_pm is the fully-inlined chain, verified against the CONVERT canonical Pyomo
-    # (conv_shock.py e544/e553):
-    #   _m_pefob(r,i,rp) = (1 + rtxs + etax)·pe[r,i,rp]
-    #   _m_pwmg(r,i,rp)  = Σ_m amgm[m,r,i,rp]·ptmg[m] / lambdamg[m,r,i,rp]   (ptmg LIVE)
-    #   _m_pmcif(r,i,rp) = _m_pefob + _m_pwmg·tmarg[r,i,rp]
-    #   _m_pm(r,i,rp)    = (1 + imptx_shocked + mtax)/chipm · _m_pmcif
-    # The ONLY live Vars in this chain are pe (paired to eq_peeq/eq_peteq) and ptmg
-    # (paired to eq_ptmg) — both already determined by their own equations, so the
-    # rebuilt trade eqs keep the correct free-variable footprint (xw/xmt/pmt) and pair
-    # to xw/pmt.  rtxs/etax/amgm/lambdamg/tmarg are exogenous (read at value); imptx
-    # carries the tm_pct shock.  pm/pmcif/pefob are NOT referenced (GAMS has no such
-    # variables under ifSUB=1) — a prior draft that referenced the orphan pmcif Var
-    # made the matcher steal a trade eq for it (free-rows, xw +19%).
-    pe = getattr(m, "pe", None)
-    ptmg = getattr(m, "ptmg", None)
-    _tmarg = getattr(m, "tmarg", None)
-    _amgm = getattr(m, "amgm", None)
-    _lambdamg = getattr(m, "lambdamg", None)
-    modes = list(getattr(m, "m", []) or [])
-
-    def _export_tax(rp, i, r):
-        rtxs = getattr(getattr(params, "taxes", None), "rtxs", {}) or {}
-        return float(rtxs.get((rp, i, r), 0.0) or 0.0)
-
-    _etax = getattr(m, "etax", None)
-
-    def _etax_val(rp, i):
-        # GAMS etax(r,i) indexed by exporter + commodity only.
-        if _etax is None:
-            return 0.0
-        for key in ((rp, i, "shock"), (rp, i)):
-            try:
-                return float(_V(_etax[key]))
-            except Exception:
-                pass
-        return 0.0
-
-    def _tmarg_val(rp, i, r):
-        if _tmarg is None:
-            return 0.0
-        for key in ((rp, i, r, "shock"), (rp, i, r)):
-            try:
-                return float(_V(_tmarg[key]))
-            except Exception:
-                pass
-        return 0.0
-
-    def _amgm_val(mode, rp, i, r):
-        if _amgm is None:
-            return 0.0
-        for key in ((mode, rp, i, r, "shock"), (mode, rp, i, r)):
-            try:
-                return float(_V(_amgm[key]))
-            except Exception:
-                pass
-        return 0.0
-
-    def _lambdamg_val(mode, rp, i, r):
-        if _lambdamg is None:
-            return 1.0
-        for key in ((mode, rp, i, r, "shock"), (mode, rp, i, r)):
-            try:
-                v = float(_V(_lambdamg[key]))
-                return v if abs(v) > 1e-12 else 1.0
-            except Exception:
-                pass
-        return 1.0
-
-    def _pwmg_expr(rp, i, r):
-        # _m_pwmg = Σ_m amgm·ptmg[m]/lambdamg  (ptmg = LIVE margin-price Var).
-        if ptmg is None or not modes:
-            return 0.0
-        terms = []
-        for mode in modes:
-            amgm = _amgm_val(mode, rp, i, r)
-            if amgm == 0.0:
-                continue
-            try:
-                pt = ptmg[mode, "shock"]
-            except (KeyError, TypeError):
-                continue
-            terms.append(amgm * pt / _lambdamg_val(mode, rp, i, r))
-        return sum(terms) if terms else 0.0
-
-    # SHOCKED _m_pm as a Pyomo expression on the LIVE pe (and ptmg) Vars:
-    #   _m_pefob = (1 + rtxs + etax)·pe[rp,i,r,shock]
-    #   _m_pmcif = _m_pefob + _m_pwmg·tmarg
-    #   _pm_shocked = (1 + imptx_shocked + mtax)/chipm · _m_pmcif
-    def _pm_shocked(rp, i, r):
-        imptx_s = imptx_map.get((rp, i, r))
-        if imptx_s is None or pe is None:
-            return None
-        mtax = _mtax_val(r, i)
-        chipm = _chipm_val(rp, i, r)
-        pefob = (1.0 + _export_tax(rp, i, r) + _etax_val(rp, i)) * pe[rp, i, r, "shock"]
-        pmcif = pefob + _pwmg_expr(rp, i, r) * _tmarg_val(rp, i, r)
-        return ((1.0 + float(imptx_s) + mtax) / chipm) * pmcif
-
-    # --- eq_xweq: xw = amw·xmt·(pmt/pm)^esubm·lambdam^(esubm-1) ---
-    xweq_cells = []
-    for idx in list(eq_xweq):
-        if not (isinstance(idx, tuple) and len(idx) == 4 and idx[-1] == "shock"):
-            continue
-        if not eq_xweq[idx].active:
-            continue
-        rp, i, r, _t = idx
-        if (rp, i, r) not in imptx_map:
-            continue
-        if _amw(r, i, rp) <= 0.0:
-            continue
-        xweq_cells.append((rp, i, r))
-
-    # --- eq_pmteq: pmt^(1-esubm) = sum_rp amw·(pm/lambdam)^(1-esubm) ---
-    pmteq_cells = []
-    for idx in list(eq_pmteq):
-        if not (isinstance(idx, tuple) and len(idx) == 3 and idx[-1] == "shock"):
-            continue
-        if not eq_pmteq[idx].active:
-            continue
-        r, i, _t = idx
-        expo = 1.0 - _esubm(r, i)
-        if abs(expo) < 1e-8:
-            continue
-        if not any(_amw(r, i, rp) > 0.0 and (rp, i, r) in imptx_map for rp in m.rp):
-            continue
-        pmteq_cells.append((r, i))
-
-    if not xweq_cells and not pmteq_cells:
-        return 0
-
-    for rp, i, r in xweq_cells:
-        eq_xweq[(rp, i, r, "shock")].deactivate()
-    for r, i in pmteq_cells:
-        eq_pmteq[(r, i, "shock")].deactivate()
-
-    if hasattr(m, "eq_xweq_shock_ifsub_idx"):
-        m.del_component(m.eq_xweq_shock_ifsub)
-        m.del_component(m.eq_xweq_shock_ifsub_idx)
-    if hasattr(m, "eq_pmteq_shock_ifsub_idx"):
-        m.del_component(m.eq_pmteq_shock_ifsub)
-        m.del_component(m.eq_pmteq_shock_ifsub_idx)
-
-    if xweq_cells:
-        m.eq_xweq_shock_ifsub_idx = Set(initialize=sorted(xweq_cells), dimen=3)
-
-        def _xw_rule(_m, rp, i, r):
-            amw = _amw(r, i, rp)
-            esubm = _esubm(r, i)
-            lambdam = _lambdam_val(rp, i, r)
-            pm_s = _pm_shocked(rp, i, r)
-            return _m.xw[rp, i, r, "shock"] == (
-                amw
-                * _m.xmt[r, i, "shock"]
-                * (_m.pmt[r, i, "shock"] / pm_s) ** esubm
-                * (lambdam ** (esubm - 1.0))
-            )
-
-        m.eq_xweq_shock_ifsub = Constraint(m.eq_xweq_shock_ifsub_idx, rule=_xw_rule)
-
-    if pmteq_cells:
-        m.eq_pmteq_shock_ifsub_idx = Set(initialize=sorted(pmteq_cells), dimen=2)
-
-        def _pmt_rule(_m, r, i):
-            esubm = _esubm(r, i)
-            expo = 1.0 - esubm
-            terms = []
-            for rp in _m.rp:
-                amw = _amw(r, i, rp)
-                if amw <= 0.0 or (rp, i, r) not in imptx_map:
-                    continue
-                lambdam = _lambdam_val(rp, i, r)
-                pm_s = _pm_shocked(rp, i, r)
-                terms.append(amw * (pm_s / lambdam) ** expo)
-            return _m.pmt[r, i, "shock"] ** expo == sum(terms)
-
-        m.eq_pmteq_shock_ifsub = Constraint(m.eq_pmteq_shock_ifsub_idx, rule=_pmt_rule)
-
-    return len(xweq_cells) + len(pmteq_cells)
-
-
-# ---------------------------------------------------------------------------
 # _replicate_sp_bounds — copy lower/upper bounds from single-period to mp
 # ---------------------------------------------------------------------------
 def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
@@ -2177,30 +1600,6 @@ def _apply_gams_bounds(m, period: str) -> int:
             vd.setub(None)
             n += 1
     return n
-
-
-# ---------------------------------------------------------------------------
-# _apply_imptx_shock — multiply all imptx entries by (1+factor) tariff-power
-# ---------------------------------------------------------------------------
-def _apply_imptx_shock(params, factor: float = 0.10, gtap_mode: bool = False) -> None:
-    """Apply tm_pct-mode shock to params.taxes.imptx in-place.
-
-    Mirrors GAMS: tm.fx = tm.l * (1+shock)
-      → imptx_new = (1 + imptx_old) * (1 + factor) - 1
-
-    gtap_mode: GAMS shocks ALL routes, INCLUDING the domestic diagonal r==rp
-    (GDX-confirmed: imptx[EU_28,Mnfcs,EU_28] 0→0.1, imptx[ROW,Mnfcs,ROW]
-    0.029→0.132 — these are intra-region imports in the aggregation, not zero
-    domestic tariffs).  In altertax-mode (default) the diagonal is skipped
-    (byte-identical to before).
-    """
-    for key in list(params.taxes.imptx.keys()):
-        # Skip diagonal (domestic sales, rp==r) — no tariff.  In gtap-mode GAMS
-        # shocks the diagonal too, so do NOT skip it there.
-        if not gtap_mode and len(key) == 3 and key[0] == key[2]:
-            continue
-        old = float(params.taxes.imptx[key] or 0.0)
-        params.taxes.imptx[key] = (1.0 + old) * (1.0 + factor) - 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -2435,299 +1834,9 @@ def _complete_derived_seed(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# _recompute_pm_pmt — post-solve fix of the bilateral/aggregate import prices
-# ---------------------------------------------------------------------------
-def _recompute_pm_pmt(
-    m, base_params, period: str, shock_factor: float = 0.0, if_sub: bool = False
-) -> int:
-    """Recompute pm[e,i,imp] (bilateral) and pmt[imp,i] (aggregate) import prices.
-
-    BUG this fixes (shared by ifSUB=0 AND ifSUB=1): eq_pmeq defines
-    pm = (1 + imptx + mtax)*pmcif/chipm via `_imptx_rate_importer`, which reads the
-    LIVE Param `model.imptx`. But the multi-period model does NOT build a `model.imptx`
-    component, so `_imptx_rate_importer` falls back to `self.params.taxes.imptx` — the
-    BASE rate. In the shock the solved pmcif is correct, but the imptx wedge stays at
-    base, so pm is low by the shock factor on high-tariff agro routes (e.g.
-    pm[USA,Rice,JPN] 3.36 vs GAMS 3.59). pmt aggregates the low pm via eq_pmteq, and
-    pa/ytaxInd inherit. Verified vs GDX: imptx_shock = imptx_base*(1+shock_factor)
-    reproduces GAMS pm EXACTLY (USA,Rice,JPN: (1+2.082*1.10)*1.0913 = 3.5906 = GAMS).
-
-    Recompute pm = (1 + imptx_base*(1+shock_factor) + mtax)*pmcif/chipm on the SOLVED
-    pmcif, then re-evaluate eq_pmteq on the corrected pm to get pmt (reuses the model's
-    own CES formula — no duplication). shock_factor=0 → no-op for non-shock periods.
-    Returns the number of cells written.
-    """
-    from pyomo.environ import value as _V
-
-    n = 0
-    pm = getattr(m, "pm", None)
-    if pm is None or not hasattr(base_params, "taxes"):
-        return 0
-    imptx_map = getattr(base_params.taxes, "imptx", {})
-    f = 1.0 + float(shock_factor)
-
-    def _comp(name, key, default=None):
-        c = getattr(m, name, None)
-        if c is None:
-            return default
-        try:
-            return float(_V(c[key]))
-        except Exception:
-            return default
-
-    # 1. pm bilateral
-    for (e, i, imp), imptx_b in imptx_map.items():
-        pmcif = _comp("pmcif", (e, i, imp, period))
-        if pmcif is None:
-            continue
-        mtax = _comp("mtax", (imp, i, period), 0.0) or 0.0
-        chipm = _comp("chipm", (e, i, imp, period), 1.0) or 1.0
-        val = (1.0 + float(imptx_b) * f + mtax) * pmcif / (chipm + 1e-12)
-        try:
-            pm[e, i, imp, period].set_value(val)
-            n += 1
-        except Exception:
-            pass
-
-    # 2. pmt aggregate — `pmt**expo == Σ_e amw*(pm/lambdam)**expo` (eq_pmteq).
-    #
-    #    Two paths depending on the ifSUB mode, because eq_pmteq's body uses the
-    #    `_m_pm` macro:
-    #      - ifSUB=0: `_m_pm` returns `model.pm` (the Var), which step 1 corrected.
-    #        The set-to-1 trick (set pmt=1 → body = 1 - Σ → Σ = 1 - body →
-    #        pmt = Σ**(1/expo)) re-evaluates the constraint on the CORRECTED pm.
-    #      - ifSUB=1: `_m_pm` is the ALGEBRAIC macro (reconstructs pm from pmcif with
-    #        the BASE imptx baked in), NOT `model.pm`. So the set-to-1 trick would read
-    #        the stale macro and ignore step 1's correction. Instead compute the CES
-    #        DIRECTLY from the corrected `model.pm`, reusing the model's OWN
-    #        amw (import_source_share) / lambdam / esubm — the exact coefficients of
-    #        eq_pmteq (gtap_model_equations.py:4787). Verified vs GDX:
-    #        pmt[JPN,Rice] = 1.0654 = GAMS exactly.
-    from pyomo.environ import value as _PV
-
-    pmt = getattr(m, "pmt", None)
-    eq = getattr(m, "eq_pmteq", None)
-    shares = None
-    try:
-        shares = base_params.shares.normalized.import_source_share
-    except Exception:
-        shares = None
-    if pmt is not None and eq is not None:
-        for imp in m.r:
-            for i in m.i:
-                idx = (imp, i, period)
-                try:
-                    cd = eq[idx]
-                    if not cd.active:
-                        continue
-                    pv = pmt[idx]
-                except (KeyError, TypeError):
-                    continue
-                try:
-                    esubm = float(base_params.elasticities.esubm.get((imp, i), 5.0))
-                except Exception:
-                    esubm = 5.0
-                expo = 1.0 - esubm
-                if abs(expo) < 1e-8:
-                    continue
-                old = pv.value
-                if if_sub and shares is not None:
-                    # Direct CES on the corrected model.pm
-                    terms = []
-                    ok = True
-                    for rp in m.r:
-                        try:
-                            amw = float(shares.get((imp, i, rp), 0.0) or 0.0)
-                        except Exception:
-                            amw = 0.0
-                        if amw <= 0.0:
-                            continue
-                        pmv = _comp("pm", (rp, i, imp, period))
-                        if pmv is None:
-                            continue
-                        lam = _comp("lambdam", (rp, i, imp, period), 1.0) or 1.0
-                        lam = max(lam, 1e-12)
-                        terms.append(amw * (pmv / lam) ** expo)
-                    if terms:
-                        sigma = sum(terms)
-                        if sigma > 0.0:
-                            try:
-                                pv.set_value(sigma ** (1.0 / expo))
-                                n += 1
-                            except Exception:
-                                pass
-                    continue
-                try:
-                    pv.set_value(1.0)  # → body = 1**expo - Σ = 1 - Σ
-                    body = float(_PV(cd.body))
-                    sigma = 1.0 - body
-                    if sigma > 0.0:
-                        pv.set_value(sigma ** (1.0 / expo))
-                        n += 1
-                    else:
-                        pv.set_value(old)
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        pv.set_value(old)
-
-    # 3. pa aggregate — pmp is an Expression = pmt*(1+mintx), so the corrected pmt
-    #    flows into eq_paa automatically. pa is a solved Var that used the OLD pmt, so
-    #    re-evaluate eq_paa for pa with the same set-to-1 trick (handles both CES and
-    #    CD forms: body = pa**expo - Σ for CES, or pa - prod for CD).
-    pa_var = getattr(m, "pa", None)
-    eqp = getattr(m, "eq_paa", None)
-    if pa_var is not None and eqp is not None:
-        for imp in m.r:
-            for i in m.i:
-                for aa in m.aa:
-                    idx = (imp, i, aa, period)
-                    try:
-                        cd = eqp[idx]
-                        if not cd.active:
-                            continue
-                        pv = pa_var[idx]
-                    except (KeyError, TypeError):
-                        continue
-                    try:
-                        sigma_m = float(
-                            base_params.elasticities.esubd.get((imp, i), 1.0)
-                        )
-                    except Exception:
-                        sigma_m = 1.0
-                    expo = 1.0 - sigma_m
-                    old = pv.value
-                    try:
-                        if abs(expo) < 1e-8:
-                            # CD: body = pa - prod  → pa = prod = pa_old - body|_{pa=old}
-                            base = float(_PV(cd.body)) - (old or 0.0)  # = -prod
-                            prod = -base
-                            if prod > 0.0:
-                                pv.set_value(prod)
-                                n += 1
-                        else:
-                            pv.set_value(1.0)  # body = 1 - Σ
-                            body = float(_PV(cd.body))
-                            sigma = 1.0 - body
-                            if sigma > 0.0:
-                                pv.set_value(sigma ** (1.0 / expo))
-                                n += 1
-                            else:
-                                pv.set_value(old)
-                    except Exception:
-                        with contextlib.suppress(Exception):
-                            pv.set_value(old)
-    return n
-
-
-# ---------------------------------------------------------------------------
-# _recompute_ytax_mt — post-solve fix of the import-tax revenue stream
-# ---------------------------------------------------------------------------
-def _recompute_ytax_mt(m, base_params, period: str, shock_factor: float = 0.0) -> int:
-    """Recompute ytax[r,'mt'] (import-tax revenue) and ytaxshr[r,'mt'] for `period`.
-
-    BUG this fixes (shared by ifSUB=0 AND ifSUB=1, ~8.8% low): eq_ytax for gy='mt'
-    bakes the BASE imptx coefficient (`self.params.taxes.imptx`) into the equation at
-    build time. In the shock period the solved xw/pmcif reflect the +10% tariff shock,
-    but the imptx coefficient stays at its base value, so ytax[mt] is low by the shock
-    factor. GAMS applies `tm.fx = tm.l*1.10` → imptx_shock = imptx_base*(1+shock_factor)
-    for EVERY route with imptx>0 (verified vs GDX: gams_shock/gams_base = 1.10 exact on
-    all routes, INCLUDING the e==importer diagonal — those are intra-region imports in
-    the aggregation, not zero domestic tariffs).
-
-    Recompute: ytax[r,mt] = Σ_{e,i: imp=r} (imptx_base*(1+shock_factor) + mtax)*pmcif*xw
-    on the SOLVED pmcif/xw. Then ytaxshr[r,mt] = ytax[r,mt]/regY (regY already matches
-    GAMS to <0.5%, and the mt delta is tiny vs ytaxTot, so the cascade is safe).
-    shock_factor=0.0 for non-shock periods → recompute is a no-op (imptx unchanged).
-    altertax only: gtap-mode carries the shock IN the solved eq_ytax[mt]
-    (_rebuild_eq_ytax_mt_shock) and must not be overwritten post-solve.
-    Returns the number of cells written.
-    """
-    from pyomo.environ import value as _V
-
-    n = 0
-    ytax = getattr(m, "ytax", None)
-    if ytax is None or not hasattr(base_params, "taxes"):
-        return 0
-    imptx_map = getattr(base_params.taxes, "imptx", {})
-    f = 1.0 + float(shock_factor)
-
-    def _mtax(imp, i):
-        c = getattr(m, "mtax", None)
-        if c is None:
-            return 0.0
-        try:
-            return float(_V(c[(imp, i, period)]))
-        except Exception:
-            return 0.0
-
-    def _pmcif(e, i, imp):
-        c = getattr(m, "pmcif", None)
-        if c is None:
-            return None
-        try:
-            return float(_V(c[(e, i, imp, period)]))
-        except Exception:
-            return None
-
-    def _xw(e, i, imp):
-        c = getattr(m, "xw", None)
-        if c is None:
-            return None
-        try:
-            return float(_V(c[(e, i, imp, period)]))
-        except Exception:
-            return None
-
-    for r in m.r:
-        total = 0.0
-        for (e, i, imp), imptx_b in imptx_map.items():
-            if imp != r:
-                continue
-            pmcif = _pmcif(e, i, imp)
-            xw = _xw(e, i, imp)
-            if pmcif is None or xw is None:
-                continue
-            total += (float(imptx_b) * f + _mtax(imp, i)) * pmcif * xw
-        try:
-            ytax[r, "mt", period].set_value(total)
-            n += 1
-        except Exception:
-            continue
-        # cascade to ytaxshr[r,mt] = ytax[r,mt] / regY
-        ys = getattr(m, "ytaxshr", None)
-        regy = getattr(m, "regy", None)
-        if ys is not None and regy is not None:
-            try:
-                ry = float(_V(regy[r, period]))
-                ys[r, "mt", period].set_value(total / (ry + 1e-12))
-                n += 1
-            except Exception:
-                pass
-
-        # cascade to ytaxTot = Σ_gy ytax[r,gy] and ytax_ind = ytaxTot − ytax[r,dt]
-        # (those Vars were solved with the OLD ytax[mt]; recompute on the corrected mt).
-        ytot = getattr(m, "ytaxTot", None)
-        yind = getattr(m, "ytax_ind", None)
-        if ytot is not None:
-            try:
-                s = sum(float(_V(ytax[r, gy, period])) for gy in m.gy)
-                ytot[r, period].set_value(s)
-                n += 1
-                if yind is not None:
-                    dt = float(_V(ytax[r, "dt", period]))
-                    yind[r, period].set_value(s - dt)
-                    n += 1
-            except Exception:
-                pass
-    return n
-
-
-# ---------------------------------------------------------------------------
 # _recompute_ifsub_report_vars — post-solve fill of the ifSUB report variables
 # ---------------------------------------------------------------------------
-def _recompute_ifsub_report_vars(
-    m, params, period: str, shock_factor: float = 0.0
-) -> int:
+def _recompute_ifsub_report_vars(m, params, period: str) -> int:
     """Under ifSUB the margin/price report vars (pfa/pfy/pp/pwmg/pefob/pmcif/pm)
     are NOT solved — their defining equations are deactivated and the model uses
     the algebraic macros _m_* directly inside the real equations.  The Var objects
@@ -2745,13 +1854,8 @@ def _recompute_ifsub_report_vars(
       pmcif  = pefob + pwmg*tmarg
       pm     = (1 + imptx + mtax)*pmcif/chipm
 
-    shock_factor: the tm_pct shock applied to params.taxes.imptx (e.g. 0.10).  The
-    reference shocks the tariff RATE (imptx_shock = imptx_base*(1+factor)), but
-    _apply_imptx_shock stores the tariff POWER ((1+imptx_base)*(1+factor)-1) in
-    params.  For the report-var pm we must use the RATE convention of the reference,
-    recovered as imptx_rate = (params_imptx - factor) for shocked cells (=
-    imptx_base*(1+factor)); equals params_imptx when factor==0 (check period).
-    Returns the count of report-var cells written.
+    imptx is the ShockBlock Var of ``period`` (the one the macro M_PM read in the
+    solve, shock included). Returns the count of report-var cells written.
     """
     from pyomo.environ import value as _V
 
@@ -2866,24 +1970,13 @@ def _recompute_ifsub_report_vars(
                 )
                 etax = _pv("etax", (r, i, period))
                 pefob_val = (1.0 + rtxs + etax) * pe
-                # tmarg is dim-3 (no period axis); imptx/mtax/chipm come from params
-                # (NOT model components — imptx isn't a model symbol here).
+                # tmarg is dim-3 (no period axis); mtax/chipm come from params.
                 tmarg = _pv("tmarg", (r, i, rp))
                 if not tmarg:
                     tmarg = _pv("tmarg", (r, i, rp, period))
                 pmcif_val = pefob_val + pwmg_val * tmarg
-                imptx_pow = (
-                    _param(params.taxes.imptx, (r, i, rp))
-                    if hasattr(params.taxes, "imptx")
-                    else 0.0
-                )
-                # Reference shocks the tariff RATE; params holds the POWER. Recover
-                # the rate for shocked (non-diagonal, nonzero) cells. Diagonal/zero
-                # cells are untouched by the shock so imptx_pow already == the rate.
-                if shock_factor and imptx_pow and r != rp:
-                    imptx = imptx_pow - shock_factor  # = imptx_base*(1+factor)
-                else:
-                    imptx = imptx_pow
+                # imptx: the ShockBlock Var of the period, as the solve read it.
+                imptx = _pv("imptx", (r, i, rp, period))
                 mtax = (
                     _param(params.taxes.mtax, (rp, i))
                     if hasattr(params.taxes, "mtax")
@@ -3141,8 +2234,8 @@ def _solve_multiperiod_inner(
     ref_gdx : path to GAMS reference GDX (optional, not yet used)
 
     The shock lives in the model: the ShockBlock cells of the 'shock' period that
-    differ from 'check' (``shocks.apply_shock`` before calling, gtap-mode only).
-    With none, the default +10% import-tariff shock is applied.
+    differ from 'check' (``shocks.apply_shock`` before calling). With none, the
+    default +10% import tariff is written there (``shocks.apply_default_tariff``).
     ``shock_steps`` (fractions λ, e.g. (0.25, 0.5, 0.75, 1.0)): solve that
     ShockBlock shock in steps, each from the previous one (_solve_shock_in_steps).
 
@@ -3160,18 +2253,17 @@ def _solve_multiperiod_inner(
     # fail in milliseconds, not after the base/check solves.
     import os
 
-    _shock_labels = shock_of(m) if m is not None else []
-    _tariff_shock = not _shock_labels
-    if _shock_labels and not _gtap_mode:
+    if not getattr(m, "_exogenous_instruments", None):
         raise ValueError(
-            f"a shock in the ShockBlock ({_shock_labels[:3]}) is only supported in "
-            "mode='gtap'"
+            "solve_multiperiod needs a model with the ShockBlock, where the shock "
+            "lives: build it with build_block_model or GTAPBlockMultiPeriodModel. "
+            "The monolith (GTAPMultiPeriodModel) has none."
         )
-    if _shock_labels and os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION"):
-        raise ValueError(
-            "EQUILIBRIA_GTAP_SHOCK_CONTINUATION walks the TARIFF shock; it does not "
-            f"support a shock in the ShockBlock ({_shock_labels[:3]})"
-        )
+    # EQUILIBRIA_GTAP_SHOCK_CONTINUATION="0.25,0.5,0.75,1.0": el viejo gancho que
+    # caminaba el arancel; ahora son los pasos de _solve_shock_in_steps.
+    _cont_env = os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION")
+    if _cont_env and not shock_steps:
+        shock_steps = tuple(float(x) for x in _cont_env.split(",") if x.strip())
 
     run_gtap = _load_run_gtap()
 
@@ -3367,179 +2459,32 @@ def _solve_multiperiod_inner(
         return results
 
     # ── Phase 3: SHOCK period ────────────────────────────────────────────────
-    # Apply +10% imptx shock to params (tm_pct mode).  gtap-mode shocks the
-    # domestic diagonal too (GAMS shocks ALL routes); altertax skips it.
-    # With a shock in the ShockBlock (shocks.apply_shock) the tariff is NOT
-    # applied: params_shock stays the benchmark and the shock lives in the 'shock'
-    # cells of the instruments.
+    # The shock lives in the 'shock' cells of the ShockBlock (the default tariff
+    # included, written above): params stay the benchmark, the equations read the
+    # instruments, and nothing is rebuilt or patched after the solve.
     params_shock = copy.deepcopy(p_alt)
-    if _tariff_shock:
-        _apply_imptx_shock(params_shock, factor=0.10, gtap_mode=_gtap_mode)
-
-    # Preparar el shock (receta de period_prep) ANTES de aplicarlo: congelar
-    # base/check reactivaria filas que los rebuilds del arancel desactivan.
     _shk_closure = preparer.prepare(m, "shock", params_shock)
+    # Sin shock en el modelo, el arancel +10 % por defecto se escribe en el
+    # ShockBlock como cualquier otro (shocks.apply_default_tariff). Recien aca:
+    # base y check (y el settle de calibrate_base, que corta antes) se resuelven
+    # sin shock, y las filas del shock que lo validan ya estan vivas.
+    _shock_labels = shock_of(m)
+    if not _shock_labels:
+        apply_default_tariff(m, gtap_mode=_gtap_mode)
+        _shock_labels = shock_of(m)
+    import logging as _logging
 
-    # gtap-mode: inject the tariff shock INTO the solved eq_pmeq[*,*,*,'shock']
-    # cells (shock-in-equations) instead of relying on the post-solve cosmetic pm
-    # patch. The MP builder bakes the BASE imptx as a literal coefficient, so the
-    # solved import prices stay ~unshocked otherwise. SURGICAL: rebuilds ONLY the
-    # eq_pmeq shock cells (a whole-slice rebuild recalibrates Armington/CDE shares
-    # on the counterfactual and regresses to ~61%). With the wedge now in-equation,
-    # the post-solve pm recompute becomes a NO-OP for gtap-mode (see below).
-    # Params of the post-solve recomputes (ytax[mt], pm/pmt/pa): the base-rate,
-    # no-shock `p_alt` — the recomputes apply shock_factor themselves.
-    _recompute_params = p_alt
-    _eq_pmeq_shock_rebuilt = False
-    if not _tariff_shock:
-        import logging as _logging
-
-        # The shock is already in the ShockBlock (shocks.apply_shock): the
-        # equations read the instrument and the driver leaves it alone.
-        _logging.getLogger(__name__).info(
-            "shock period: %d ShockBlock cells (no tariff): %s",
-            len(_shock_labels),
-            _shock_labels[:5],
-        )
-    elif _gtap_mode:
-        _n_pmeq = _rebuild_eq_pmeq_shock(m, params_shock)
-        if _n_pmeq:
-            _eq_pmeq_shock_rebuilt = True
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: rebuilt %d eq_pmeq cells with the tm_pct shock "
-                "power (shock-in-equations, gtap-mode)",
-                _n_pmeq,
-            )
-        else:
-            # ifSUB=1: eq_pmeq is deactivated (the import price is the inlined macro
-            # _m_pm baked into eq_xweq/eq_pmteq at build with BASE imptx). Inject the
-            # shock there instead, else the wedge never enters the import equations
-            # (xm[USA] +150%, SHOCK ~55%). gtap-mode + ifSUB leg of the same leak.
-            _n_imp = _rebuild_import_demand_shock_ifsub(m, params, params_shock)
-            if _n_imp:
-                _eq_pmeq_shock_rebuilt = True
-                import logging as _logging
-
-                _logging.getLogger(__name__).info(
-                    "shock period: rebuilt %d eq_xweq/eq_pmteq cells with the shocked "
-                    "imptx (ifSUB import-price leak fix, gtap-mode)",
-                    _n_imp,
-                )
-
-        # gtap-mode: inject the tariff shock INTO the solved eq_ytax[*,'mt','shock']
-        # cells too. eq_ytax[mt] bakes the BASE imptx coefficient at build; with the
-        # diagonal shocked (Link 2) the in-solve mt revenue otherwise misses the
-        # entire diagonal tariff stream → understates regY → demand collapse →
-        # Armington overshoot (the dominant income leak). The post-solve
-        # _recompute_ytax_mt only patches the Var AFTER the solve (too late: regY/
-        # demand already solved wrong), so it is no-op'd for gtap-mode below.
-        _n_ymt = _rebuild_eq_ytax_mt_shock(m, params_shock)
-        if _n_ymt:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: rebuilt %d eq_ytax[mt] cells with the shocked "
-                "imptx (income-leak fix, shock-in-equations, gtap-mode)",
-                _n_ymt,
-            )
+    _logging.getLogger(__name__).info(
+        "shock period: %d ShockBlock cells: %s",
+        len(_shock_labels),
+        _shock_labels[:5],
+    )
 
     # Con el shock ya aplicado: la depuracion ve el modelo que resuelve PATH.
     debug_before_solve(m, "shock")
 
-    # Solve shock on m with shocked params.
-    # CONTINUATION HOOK (env-gated, EQUILIBRIA_GTAP_SHOCK_CONTINUATION="0.25,0.5,0.75,1.0"):
-    # instead of solving the full +10% shock in one Newton jump from the check point
-    # (which overflows CES x^(-rho) far from the root on the largest datasets, e.g.
-    # 20x41 inf_pr 2.29e9), walk the tariff up in sub-steps λ. This mirrors GEMPACK's
-    # Euler/Gragg path: each sub-solve starts from the previous λ's solution (the Vars
-    # retain their values → warm start), so Newton never leaves the well-conditioned
-    # neighbourhood of a root. The model is built ONCE; only _apply_imptx_shock (any
-    # factor) + _rebuild_eq_pmeq_shock/_rebuild_eq_ytax_mt_shock (idempotent, re-invoked
-    # per λ) are re-run. Produces OUR levels solution, not GEMPACK's.
-    _cont_env = os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION")
-    if _cont_env and _gtap_mode:
-        _lambdas = [float(x) for x in _cont_env.split(",") if x.strip()]
-        if not _lambdas or _lambdas[-1] != 1.0:
-            _lambdas.append(1.0)
-        import logging as _logc
-
-        _logc.getLogger(__name__).info(
-            "shock CONTINUATION: %d sub-steps λ=%s (tariff walked up gradually)",
-            len(_lambdas),
-            _lambdas,
-        )
-        r_shk = None
-        for _i_lam, _lam in enumerate(_lambdas):
-            _p_lam = copy.deepcopy(p_alt)
-            # interpolate on the tariff POWER (GEMPACK-consistent): (1+0.10)^λ - 1.
-            _f_lam = (1.0 + 0.10) ** _lam - 1.0
-            _apply_imptx_shock(_p_lam, factor=_f_lam, gtap_mode=_gtap_mode)
-            _rebuild_eq_pmeq_shock(m, _p_lam)
-            _rebuild_eq_ytax_mt_shock(m, _p_lam)
-            r_shk = run_gtap._run_path_capi_nonlinear_full(
-                m,
-                _p_lam,
-                enforce_post_checks=False,
-                strict_path_capi=False,
-                closure_config=_shk_closure,
-                equation_scaling=True,
-                gtap_mode=_gtap_mode,
-                solution_hint=None,
-            )
-            _c_lam = int(r_shk.get("termination_code") or 0)
-            _r_lam = float(r_shk.get("residual") or float("inf"))
-            _logc.getLogger(__name__).info(
-                "  continuation λ=%.4f (tariff %.2f%%): code=%d resid=%.2e",
-                _lam,
-                _f_lam * 100,
-                _c_lam,
-                _r_lam,
-            )
-            print(
-                f"[continuation] λ={_lam:.4f} tariff={_f_lam * 100:.2f}% "
-                f"code={_c_lam} resid={_r_lam:.2e}",
-                file=sys.stderr,
-            )
-            # PROGRESS FILE (env EQUILIBRIA_GTAP_PROGRESS_FILE): append a line per finished
-            # continuation sub-step so a remote run (Kaggle hides stderr until the kernel
-            # ends) can be watched live by reading/downloading the file mid-run.
-            _pf = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
-            if _pf:
-                try:
-                    with open(_pf, "a") as _pfh:
-                        _pfh.write(
-                            f"CONT sub-step {_i_lam + 1}/{len(_lambdas)} "
-                            f"λ={_lam:.4f} tariff={_f_lam * 100:.2f}% "
-                            f"code={_c_lam} resid={_r_lam:.2e}\n"
-                        )
-                except Exception:
-                    pass
-            if _c_lam != 1:
-                print(
-                    f"[continuation] sub-step λ={_lam} did NOT converge (code={_c_lam}) "
-                    f"— aborting continuation",
-                    file=sys.stderr,
-                )
-                break
-    elif shock_steps and not _tariff_shock:
-        r_shk = _solve_shock_in_steps(
-            m,
-            shock_steps,
-            lambda: run_gtap._run_path_capi_nonlinear_full(
-                m,
-                params_shock,
-                enforce_post_checks=False,
-                strict_path_capi=False,
-                closure_config=_shk_closure,
-                equation_scaling=True,
-                gtap_mode=_gtap_mode,
-                solution_hint=None,
-            ),
-        )
-    else:
-        r_shk = run_gtap._run_path_capi_nonlinear_full(
+    def _solve_shock():
+        return run_gtap._run_path_capi_nonlinear_full(
             m,
             params_shock,
             enforce_post_checks=False,
@@ -3549,72 +2494,28 @@ def _solve_multiperiod_inner(
             gtap_mode=_gtap_mode,
             solution_hint=None,
         )
+
+    if shock_steps:
+        r_shk = _solve_shock_in_steps(m, shock_steps, _solve_shock)
+    else:
+        r_shk = _solve_shock()
     code_shk = int(r_shk.get("termination_code") or 0)
     res_shk = float(r_shk.get("residual") or float("inf"))
     results["shock"] = {"code": code_shk, "residual": res_shk}
 
-    # Recompute ytax[mt]/ytaxshr[mt] (import-tax revenue) post-solve. eq_ytax for
-    # gy='mt' bakes the BASE imptx coefficient; in the shock the solved xw/pmcif carry
-    # the +10% shock but the imptx coefficient does not, so ytax[mt] is ~8.8% low.
-    # ALTERTAX-ONLY now: in gtap-mode the shock is injected IN the solved
-    # eq_ytax[mt] (_rebuild_eq_ytax_mt_shock above) so regY/demand solve on the
-    # correct revenue. Re-running the post-solve recompute there OVERWRITES the
-    # correct in-solve value with a slightly-off one (toggle: ON=99.10%,
-    # OFF=99.70%), so it is gated to NOT gtap-mode.
-    # Altertax path is byte-identical to before (uses base imptx p_alt *
-    # (1+shock_factor); reads pmcif/xw, order vs pm free).
-    if not _gtap_mode:
-        _n_mt = _recompute_ytax_mt(m, _recompute_params, "shock", shock_factor=0.10)
-        if _n_mt:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: recomputed %d ytax[mt]/ytaxshr[mt] cells", _n_mt
-            )
-
-    # Under ifSUB, recompute the report-only margin/price vars post-solve (GAMS
-    # postsim). They are not solved (their eqs are deactivated, the real eqs use the
-    # _m_* macros), so the Var objects keep their init value and mis-report. This also
-    # sets pm — so the pm/pmt/pa recompute below MUST run AFTER it so pmt/pa derive
-    # from the final pm (otherwise ifSUB=1 leaves pm/pmt/pa mutually inconsistent).
+    # Under ifSUB the report-only margin/price vars are not solved (their eqs are
+    # deactivated, the real eqs use the _m_* macros): recompute them post-solve
+    # from the solved values, as GAMS postsim does.
     if _if_sub:
-        _n_rep = _recompute_ifsub_report_vars(
-            m, params_shock, "shock", shock_factor=0.10 if _tariff_shock else 0.0
-        )
+        _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock")
         if _n_rep:
-            import logging as _logging
-
             _logging.getLogger(__name__).info(
                 "shock period: recomputed %d ifSUB report-var cells (pfa/pfy/pp/pwmg/pefob/pmcif/pm)",
                 _n_rep,
             )
 
-    # Recompute pm[e,i,imp] (bilateral) and pmt[imp,i] (aggregate) import prices, then
-    # cascade to pa. eq_pmeq bakes the BASE imptx (model.imptx absent in MP → falls back
-    # to base), so pm is low by the shock factor on high-tariff agro routes; pmt/pa
-    # inherit. Shared by ifSUB=0 AND ifSUB=1 → NOT gated on _if_sub. Runs LAST so it
-    # overrides any pm the ifSUB report recompute set and derives pmt/pa consistently.
-    #
-    # NO-OP when the eq_pmeq shock rebuild ran (gtap-mode): the shock is now IN the
-    # solved eq_pmeq, so pm/pmt/pa already carry the +10% wedge. Re-applying the
-    # post-solve pm patch would DOUBLE-APPLY (pm = (1+imptx_shocked+mtax)*pmcif on a
-    # pm that already has it), corrupting the import prices. ytax[mt] is computed
-    # from pmcif/xw (NOT pm) with its own power rate, so it stays correct and is NOT
-    # gated — verified vs GAMS ytax[USA,mt] (see _recompute_ytax_mt above).
-    # Without a tariff shock there is no wedge to patch into pm post-solve.
-    if _tariff_shock and not _eq_pmeq_shock_rebuilt:
-        _n_pm = _recompute_pm_pmt(
-            m, _recompute_params, "shock", shock_factor=0.10, if_sub=_if_sub
-        )
-        if _n_pm:
-            import logging as _logging
-
-            _logging.getLogger(__name__).info(
-                "shock period: recomputed %d pm/pmt/pa import-price cells", _n_pm
-            )
-
     # An endowment shock must reach the solution: code=1 alone does not say so.
-    if not _tariff_shock and results["shock"]["code"] == 1:
+    if results["shock"]["code"] == 1:
         check_endowment_shock_entered(m)
 
     # Freeze shock as well (for completeness / report purposes).

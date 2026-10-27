@@ -19,11 +19,11 @@ def _build_mp_model(p):
     solve_multiperiod (which calls apply_altertax_elasticities first).
     """
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
-    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
 
     p_alt = apply_altertax_elasticities(p, in_place=False)
     rr = list(p_alt.sets.r)[-1]
-    mp = GTAPMultiPeriodModel(p_alt.sets, p_alt, None, residual_region=rr)
+    mp = GTAPBlockMultiPeriodModel(p_alt.sets, p_alt, None, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
     for t in ("base", "check", "shock"):

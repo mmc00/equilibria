@@ -17,6 +17,9 @@ below its 1% tolerance.
   with `apply_shock`, as GAMS does (`tm.fx`): in gtap +10% on the power 1+t,
   every route including the domestic diagonal; in altertax the rate times 1.1.
 - `mode="altertax"` accepts a ShockBlock shock.
+- A model without the ShockBlock (the monolith `GTAPMultiPeriodModel`) is
+  rejected with a clear error; its four tests move to the block model and the
+  seven diagnostic scripts that solve it stop until they are migrated.
 - An `imptx` cell whose `eq_pmeq` is off (ifSUB=1) is accepted when a live
   `eq_xweq` of the same cell reads the `imptx` Var (macro M_PM).
 - Removed: the equation rebuilds of the tariff (`_rebuild_eq_pmeq_shock`,

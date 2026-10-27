@@ -18,6 +18,9 @@ instrumento (``GEMPACK_KIND``), sobre su valor del check:
 
 Con ``levels=True`` cada numero es el valor en niveles de la celda.  Aplicar el
 mismo shock dos veces da lo mismo que una: la conversion parte del check.
+
+Sin shock en el modelo el driver aplica ``apply_default_tariff``: el arancel +10 %
+de la Tabla 1 del paper y de los gates contra GAMS, escrito igual que los demas.
 """
 
 from __future__ import annotations
@@ -127,6 +130,47 @@ def apply_shock(
     return out
 
 
+DEFAULT_TARIFF_PCT = 10.0
+
+
+def apply_default_tariff(m: Any, *, gtap_mode: bool) -> dict[str, dict[tuple, float]]:
+    """Escribe el arancel +10 % por defecto en ``imptx``, como GAMS fija ``tm``.
+
+    gtap: +10 % sobre la potencia 1+t (``GEMPACK_KIND``) en toda ruta que alguna
+    fila viva lee, la diagonal domestica incluida (0 -> 0,1).  altertax: la tasa por
+    1,1, asi que una tasa 0 queda en 0 y esa celda no se toca.  Las celdas que
+    ninguna fila lee (sin comercio) no llevan shock: no entrarian al modelo.
+    """
+    from pyomo.environ import value
+
+    g = 1.0 + DEFAULT_TARIFF_PCT / 100.0
+    cells: dict[tuple, float] = {}
+    for k in m.imptx:
+        if k[-1] != SHOCK:
+            continue
+        cell = tuple(k[:-1])
+        if not _can_take_shock(m, "imptx", cell):
+            continue
+        if gtap_mode:
+            cells[cell] = DEFAULT_TARIFF_PCT
+            continue
+        chk = float(value(m.imptx[period_key(cell, CHECK)]))
+        if chk != 0.0:
+            cells[cell] = chk * g
+    if not cells:
+        raise ValueError("no imptx cell can take the default tariff")
+    return apply_shock(m, {"imptx": cells}, levels=not gtap_mode)
+
+
+def _can_take_shock(m: Any, name: str, cell: tuple) -> bool:
+    """``check_shock_cell`` como predicado: solo su ValueError dice que no."""
+    try:
+        check_shock_cell(m, name, cell)
+    except ValueError:
+        return False
+    return True
+
+
 def _shocked_cells(m: Any, name: str) -> Iterator[tuple]:
     """Indices 'shock' de ``name`` cuyo valor difiere del 'check' (sin las celdas
     endogenas de @overwrite)."""
@@ -147,8 +191,8 @@ def _shocked_cells(m: Any, name: str) -> Iterator[tuple]:
 
 def shock_of(m: Any) -> list[str]:
     """Etiquetas ``nombre(celda)`` de las celdas del bloque shock que difieren del
-    check: el shock del modelo.  Vacia = sin shock (el driver aplica entonces el
-    arancel +10%)."""
+    check: el shock del modelo.  Vacia = sin shock (el driver aplica entonces
+    ``apply_default_tariff``)."""
     return [
         f"{name}{tuple(k[:-1]) if isinstance(k, tuple) else ()}"
         for name in sorted(getattr(m, "_exogenous_instruments", ()))

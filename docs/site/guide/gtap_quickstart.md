@@ -150,11 +150,14 @@ Several instruments and cells go in one call. To give the level directly,
 pass `levels=True`. Applying the same shock twice gives the same model as
 applying it once. A cell no live equation reads, a misspelt label or an
 out-of-domain value raises `ValueError` before any solve. With `if_sub=True`
-the `imptx` cells are rejected for now (the tariff enters through inlined
-macros).
+an `imptx` cell is read by `eq_xweq` (the tariff enters through the inlined
+import price), so it takes a shock as with `if_sub=False`.
 
-Without any shock in the `ShockBlock`, `solve_multiperiod` applies the
-reference GAMS run's default: +10% on the power of every import tariff.
+Without any shock in the `ShockBlock`, `solve_multiperiod` writes the reference
+GAMS run's default there (`shocks.apply_default_tariff`): in `mode="gtap"`,
++10% on the power of every import tariff, the domestic diagonal included; in
+`mode="altertax"`, every tariff rate times 1.1. It is a shock like any other:
+the equations are not rebuilt.
 
 ## Step 4 — GAMS parity check
 
