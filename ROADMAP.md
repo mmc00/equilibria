@@ -17,11 +17,12 @@ dos documentos no se separen.
 |---|---|---|---|
 | P1 | `R-PYPI` | Publicar en PyPI | Pendiente: el paquete **todavía no está en PyPI**; hoy se instala desde el repositorio |
 | P1 | `R-BOUND-WARN` | Avisar cuando un solve termina con `code=1` y un precio apoyado en su piso de 1e-3 | Pendiente (ver Deuda técnica) |
+| P1 | `R-DIAG` | Diagnóstico de solve: un reporte que diga por qué no resolvió (conteo/pareo MCP, error de dominio, precio en cota, estancamiento, semilla, cierre) y un `equilibria doctor` para solvers ausentes | Pendiente. Hoy hay herramientas de paridad contra GAMS (`scripts/parity/triage.py`), no un diagnóstico para el usuario |
 | P1 | `R-NL-GATE` | Que el gate `.nl` compare de verdad (#23) | Pendiente (ver Bloqueantes) |
 | P2 | `R-MONOLITH` | Retirar el monolito `gtap_model_equations.py` | Pendiente (ver Bloqueantes) |
 | P2 | `R-DRIVER` | Un driver que sólo orquesta períodos, con una receta por modelo, usable también por PEP | Pendiente |
 | P2 | `R-DYN` | Períodos como lista → GTAP recursivo dinámico | Pendiente (Siguiente 1) |
-| P2 | `R-CALIB` | Cada bloque calibra lo suyo desde una interfaz de datos común | Pendiente (Siguiente 2) |
+| P2 | `R-CALIB` | Cada bloque calibra lo suyo desde una interfaz de datos común, como MPSGE: el bloque declara a qué filas y columnas de la SAM corresponden sus índices | Pendiente (Siguiente 2) |
 | P2 | `R-PMUV` | Portar `eq_pmuv` a bloques | Pendiente (ver Bloqueantes) |
 | P2 | `R-BOOK` | Comparar contra las cifras impresas del libro de Burfisher | Pendiente (ver Validación) |
 | P3 | `R-PERF` | Backend de evaluación alternativo (`PERF-EVAL-1`) | Diseño, sin código |
