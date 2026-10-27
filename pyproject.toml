@@ -153,6 +153,16 @@ har-oracle = [
     "harpy3>=0.3.1",
 ]
 
+[tool.uv]
+# El uv.lock fija el stack numerico con el que se midieron las tablas del paper
+# (Python 3.12.8): el 20x41 cae con Pyomo 6.9.5 / SciPy 1.17.1 y replica la
+# Tabla 1 con estas. Solo restringe el lock; `pip install` sigue con los minimos.
+constraint-dependencies = [
+    "pyomo==6.10.1",
+    "scipy==1.18.0; python_version >= '3.12'",
+    "numpy==2.5.1; python_version >= '3.12'",
+]
+
 [tool.ruff]
 target-version = "py310"
 line-length = 88
