@@ -2,19 +2,24 @@
 GAMS se declara una vez, y el diccionario esta COMPLETO contra los dos lados.
 
 Oraculo independiente del codigo que se prueba:
-  - el lado GAMS sale de los sidecars ``.row``/``.col`` de las fixtures que GAMS
-    escribio (tests/fixtures/gtap7/<ds>/gams_<fase>.{row,col}), leidos aqui con un
-    parser propio de diez lineas;
+  - el lado GAMS sale de los bloques ``Variables`` y ``Equations`` de los ``.gms``
+    de las fixtures (tests/fixtures/gtap7/<ds>/comp_*_ifsub{0,1}.gms), leidos aqui
+    con un parser propio. Las declaraciones no dependen de ifSUB: cubren las dos
+    formulaciones, incluidas pdp/pmp/pm/pefob/... que la fixture ``.nl`` (ifSUB=1)
+    no trae;
   - el lado equilibria sale de los componentes del modelo de bloques multiperiodo
-    construido (Constraint/Var de Pyomo), no del diccionario.
+    construido (Constraint/Var de Pyomo) con ifSUB=0 y con ifSUB=1, no del
+    diccionario.
 
 Lo que se exige:
-  1. Toda familia de ecuaciones y de variables de GAMS esta emparejada o declarada
-     "solo en GAMS" con su motivo.
-  2. Toda familia de equilibria esta emparejada o declarada "solo en equilibria".
+  1. Toda familia de ecuaciones y de variables de GAMS tiene su fila: emparejada
+     o declarada "solo en GAMS" con su motivo. No hay regla por defecto: un nombre
+     igual en los dos lados tambien lleva fila.
+  2. Toda familia de equilibria tiene su fila, igual.
   3. Una pareja tiene indices que cuadran: los de GAMS son los de equilibria mas
      los que el diccionario fija a un elemento (p. ej. ``xaceq(r,i,'hhd',t)`` es
-     ``eq_xaa_hhd(r,i,t)``). Asi la regla por defecto no puede emparejar
+     ``eq_xc(r,i,t)``), menos los que solo tiene equilibria (``walras`` es escalar
+     en GAMS y va por periodo en equilibria). Asi no se puede emparejar
      ``xgeq(r,t)`` con ``eq_xg(r,i,t)``, que no son la misma ecuacion.
   4. Ninguna fila del diccionario nombra una familia que no existe (filas viejas).
 """
@@ -32,34 +37,46 @@ FIXTURES = ROOT / "tests/fixtures/gtap7"
 HAR_3X3 = ROOT / "datasets/gtap7_3x3"
 
 
-def _family(line: str) -> str:
-    return re.split(r"[\[(]", line.strip())[0]
-
-
-def _ndims(line: str) -> int:
-    m = re.search(r"\((.*)\)\s*$", line.strip())
-    return len(m.group(1).split(",")) if m else 0
+_DECL = re.compile(r"(?i)^\s*(variables|equations)\b")
+_ITEM = re.compile(r"^\s*([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?")
 
 
 @cache
 def _gams_families() -> dict[str, dict[str, int]]:
-    """{'eq': {familia: n_indices}, 'var': {...}} de todas las fixtures GAMS."""
+    """{'eq': {familia: n_indices}, 'var': {...}} declarados en los .gms de las fixtures."""
     out: dict[str, dict[str, int]] = {"eq": {}, "var": {}}
-    files = sorted(FIXTURES.glob("*/gams_*.row")) + sorted(
-        FIXTURES.glob("*/gams_*.col")
-    )
-    assert files, f"no hay sidecars .row/.col en {FIXTURES}"
+    files = sorted(FIXTURES.glob("*/comp_*.gms"))
+    assert files, f"no hay .gms en {FIXTURES}"
     for f in files:
-        kind = "eq" if f.suffix == ".row" else "var"
+        kind = None
         for line in f.read_text().splitlines():
-            if line.strip():
-                out[kind].setdefault(_family(line), _ndims(line))
+            if kind is None:
+                m = _DECL.match(line)
+                if m:
+                    kind = "var" if m.group(1).lower() == "variables" else "eq"
+                continue
+            s = line.strip()
+            if s.startswith(";"):
+                kind = None
+                continue
+            if not s or s.startswith("*"):
+                continue
+            m = _ITEM.match(s)
+            if m:
+                n = len(m.group(2).split(",")) if m.group(2) else 0
+                out[kind].setdefault(m.group(1), n)
+            if s.endswith(";"):
+                kind = None
+    # Anti-vacuidad: si el parser deja de leer los bloques, que no pase en verde.
+    assert len(out["eq"]) > 80 and len(out["var"]) > 120, {
+        k: len(v) for k, v in out.items()
+    }
     return out
 
 
 @cache
 def _equilibria_families() -> dict[str, dict[str, int]]:
-    """{'eq': {familia: n_indices}, 'var': {...}} del modelo de bloques 3x3."""
+    """{'eq': {familia: n_indices}, 'var': {...}} del modelo de bloques 3x3, ifSUB 0 y 1."""
     from pyomo.environ import Constraint, Var
 
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
@@ -75,20 +92,21 @@ def _equilibria_families() -> dict[str, dict[str, int]]:
         default_path=HAR_3X3 / "default.prm",
         baserate_path=HAR_3X3 / "baserate.har",
     )
-    closure = GTAPClosureConfig(if_sub=False)
-    mp = GTAPBlockMultiPeriodModel(
-        p.sets, p, closure, residual_region=list(p.sets.r)[-1]
-    )
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for period in ("base", "check", "shock"):
-        mp.build_equations_intra(m, period)
-    mp.build_equations_fisher(m)
     out: dict[str, dict[str, int]] = {"eq": {}, "var": {}}
-    for c in m.component_objects(Constraint, active=None):
-        out["eq"][c.local_name] = c.dim() if c.is_indexed() else 0
-    for v in m.component_objects(Var):
-        out["var"][v.local_name] = v.dim() if v.is_indexed() else 0
+    for if_sub in (False, True):
+        closure = GTAPClosureConfig(if_sub=if_sub)
+        mp = GTAPBlockMultiPeriodModel(
+            p.sets, p, closure, residual_region=list(p.sets.r)[-1]
+        )
+        m = mp.build_sets()
+        mp.build_vars(m)
+        for period in ("base", "check", "shock"):
+            mp.build_equations_intra(m, period)
+        mp.build_equations_fisher(m)
+        for c in m.component_objects(Constraint, active=None):
+            out["eq"][c.local_name] = c.dim() if c.is_indexed() else 0
+        for v in m.component_objects(Var):
+            out["var"][v.local_name] = v.dim() if v.is_indexed() else 0
     return out
 
 
@@ -127,10 +145,10 @@ def test_pairs_line_up_their_indices(names, kind):
         e = names.lookup("gams", kind, f)
         if e is None or e.equilibria is None or e.equilibria not in eqb:
             continue
-        if n_gams != eqb[e.equilibria] + len(e.gams_fixed):
+        if n_gams + len(e.equilibria_extra) != eqb[e.equilibria] + len(e.gams_fixed):
             bad.append(
                 f"{f}({n_gams}) <-> {e.equilibria}({eqb[e.equilibria]}) "
-                f"+ fijos {dict(e.gams_fixed)}"
+                f"+ fijos {dict(e.gams_fixed)} - extra {list(e.equilibria_extra)}"
             )
     assert not bad, f"parejas cuyos indices no cuadran: {bad}"
 
@@ -153,3 +171,29 @@ def test_no_stale_rows(names):
         or (e.equilibria is not None and e.equilibria not in eqb[e.kind])
     ]
     assert not stale, f"filas que nombran una familia que no existe: {stale}"
+
+
+# Parejas que una regla por defecto (``<x>eq`` -> ``eq_<x>``) haria mal: el
+# diccionario tiene que decir la correcta. Leidas en las definiciones del .gms y
+# de los bloques (handoff 2026-10-27).
+_TRAPS = [
+    ("eq", "xgeq", "eq_xg_agg"),  # pg*xg = yg; eq_xg es xa(r,i,'gov')
+    ("eq", "xieq", "eq_xiagg"),  # pi*xi = yi; eq_xi es xa(r,i,'inv')
+    ("eq", "xseq", "eq_xseq"),  # CET de la oferta; eq_xs es pseq
+    ("eq", "xfteq", "eq_xfteq"),  # xft = aft*(pft/pabs)**etaf; eq_xft es otra
+    ("var", "xd", "xda"),  # xd(r,i,aa); el xd(r,i) de equilibria es un agregado
+    ("var", "xg", "xg_agg"),  # xg(r,t); el xg(r,i) de equilibria es xa(r,i,'gov')
+    ("var", "pp", "pp_rai"),  # pp(r,a,i); el pp(r,a) de equilibria es otro
+]
+
+
+@pytest.mark.parametrize(("kind", "gams", "equilibria"), _TRAPS)
+def test_default_rule_traps(names, kind, gams, equilibria):
+    e = names.lookup("gams", kind, gams)
+    assert e is not None and e.equilibria == equilibria, (gams, e)
+
+
+def test_no_implicit_default_rule(names):
+    """Un nombre sin fila no se resuelve solo (ADR-0009: explicito para todo)."""
+    assert names.lookup("gams", "eq", "nadaeq") is None
+    assert names.lookup("equilibria", "eq", "eq_nada") is None
