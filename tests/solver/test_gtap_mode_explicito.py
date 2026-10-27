@@ -89,10 +89,12 @@ def test_el_driver_pasa_el_modo_en_TODAS_sus_llamadas():
     )
 
 
-def test_hay_al_menos_las_cuatro_llamadas_conocidas():
+def test_hay_al_menos_las_tres_llamadas_conocidas():
     """Contraparte del anterior: que no pase por vacio si desaparecen.
 
     Si el driver deja de llamar al solver, el test de arriba pasaria trivialmente.
+    Tres: base, check y shock (el shock era tres llamadas -continuacion, pasos y
+    directa- hasta tariff-to-shock-block; ahora los pasos y la directa son una).
     """
     raiz = pathlib.Path(__file__).resolve().parents[2]
     f = raiz / "src/equilibria/templates/gtap/gtap_multiperiod_driver.py"
@@ -108,4 +110,4 @@ def test_hay_al_menos_las_cuatro_llamadas_conocidas():
         )
         == "_run_path_capi_nonlinear_full"
     )
-    assert n_llamadas >= 4, f"esperadas >=4 llamadas al solver, hay {n_llamadas}"
+    assert n_llamadas >= 3, f"esperadas >=3 llamadas al solver, hay {n_llamadas}"

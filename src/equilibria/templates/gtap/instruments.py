@@ -20,7 +20,8 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     "aft": ("eq_xfteq",),
     # Solo las filas con el MISMO indice que el instrumento. Bajo ifSUB eq_pmeq y
     # eq_pfaeq se apagan (el impuesto entra por los macros M_*): la celda se
-    # rechaza con un error claro en vez de perderse.
+    # rechaza con un error claro en vez de perderse, salvo que una fila de
+    # INLINE_EQS la lea.
     "imptx": ("eq_pmeq",),
     "prdtx_rai": ("eq_pp_rai",),
     "fcttx": ("eq_pfaeq",),
@@ -35,6 +36,13 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
     # Bajo ifSUB eq_xmgm se apaga (M_XMGM inline): la celda se rechaza.
     "lambdamg": ("eq_xmgm",),
     "pnum": ("eq_pnum",),
+}
+
+# Bajo ifSUB la fila de INSTRUMENT_EQS se apaga y el instrumento entra inline (macro
+# M_*) en otra fila de la misma celda: M_PM lleva imptx a eq_xweq.  Cuenta solo si
+# esa fila viva LEE la Var (bajo ifSUB=0 eq_xweq lee la Var pm, no imptx).
+INLINE_EQS: dict[str, tuple[str, ...]] = {
+    "imptx": ("eq_xweq",),
 }
 
 # Tasas de impuesto: la cota es la potencia 1+t > 0 (un subsidio, t<0, es valido).
@@ -118,11 +126,26 @@ def _labels(component: Any, region: str | None, *, live: bool = False) -> list:
     )
 
 
+def _read_inline(m: Any, name: str, idx: tuple) -> bool:
+    """True si una fila viva de ``INLINE_EQS[name]`` en ``idx`` lee ``name[idx]``."""
+    from pyomo.core.expr.visitor import identify_variables
+
+    var = getattr(m, name)[idx]
+    for eq_name in INLINE_EQS.get(name, ()):
+        eq = getattr(m, eq_name, None)
+        if eq is None or idx not in eq or not eq[idx].active:
+            continue
+        if any(v is var for v in identify_variables(eq[idx].body)):
+            return True
+    return False
+
+
 def check_instrument_cell(m: Any, name: str, index: tuple) -> None:
     """ValueError si la celda ``name[*index, 'shock']`` no puede llevar un shock.
 
     Falla si la celda no existe (nombrando los indices validos de esa region), si
-    ninguna fila viva de ``INSTRUMENT_EQS`` la lee, o si es ``aft`` con ``xft``
+    ninguna fila viva de ``INSTRUMENT_EQS`` (o de ``INLINE_EQS``) la lee, o si es
+    ``aft`` con ``xft``
     fijada (el solver desactivaria eq_xfteq). En los tres casos el shock se
     perderia con code=1.
     """
@@ -136,6 +159,8 @@ def check_instrument_cell(m: Any, name: str, index: tuple) -> None:
     for eq_name in INSTRUMENT_EQS.get(name, ()):
         eq = getattr(m, eq_name, None)
         if eq is None or idx not in eq or not eq[idx].active:
+            if _read_inline(m, name, idx):
+                continue
             raise ValueError(
                 f"{name}{idx}: {eq_name}{idx} does not exist or is inactive, the "
                 "shock would not enter the model. Live for "

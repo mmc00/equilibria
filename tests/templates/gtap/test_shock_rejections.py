@@ -1,9 +1,9 @@
 """A shock that cannot be honoured is rejected up front.
 
 ``apply_shock`` rejects a bad cell or value when it writes the shock, before any
-solve; the driver rejects a shock it cannot run (altertax, the tariff
-continuation) before loading the solver. A run that would silently drop the shock
-must fail in milliseconds, not after the base and check solves.
+solve. A run that would silently drop the shock must fail in milliseconds, not
+after the base and check solves. (Altertax and the tariff continuation are no
+longer rejected: change tariff-to-shock-block.)
 """
 
 from __future__ import annotations
@@ -11,17 +11,7 @@ from __future__ import annotations
 import pytest
 from tests.templates.gtap._nus333 import closure, nus333_params
 
-from equilibria.templates.gtap import gtap_multiperiod_driver as driver
 from equilibria.templates.gtap.shocks import apply_shock
-
-
-def _explode():
-    raise AssertionError("validation must run before loading the solver")
-
-
-@pytest.fixture
-def no_solver(monkeypatch):
-    monkeypatch.setattr(driver, "_load_run_gtap", _explode)
 
 
 @pytest.fixture(scope="module")
@@ -89,30 +79,24 @@ def test_rejects_a_fixed_endowment_in_the_shock_period(built):
         m.xft[idx].unfix()
 
 
-# ── el driver: un shock en el ShockBlock que no puede correr ────────────────
+# ── el driver: un modelo sin ShockBlock ─────────────────────────────────────
 
 
-@pytest.fixture
-def shocked(built):
-    """aft[USA,CAPITAL] +10% en el ShockBlock; se restaura al salir."""
-    from pyomo.environ import value
+def test_a_model_without_shockblock_is_rejected_before_the_solver(monkeypatch):
+    """El monolito (GTAPMultiPeriodModel) no tiene ShockBlock: no hay donde
+    escribir el shock, ni el arancel por defecto. Error claro, sin solver."""
+    from tests.templates.gtap.test_multiperiod_sets import _load_3x3_params
 
-    m, p, gc = built
-    idx = ("USA", "CAPITAL", "shock")
-    before = float(value(m.aft[idx]))
-    apply_shock(m, {"aft": {("USA", "CAPITAL"): 10.0}})
-    yield m, p, gc
-    m.aft[idx].fix(before)
+    from equilibria.templates.gtap import gtap_multiperiod_driver as driver
+    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
 
+    def _explode():
+        raise AssertionError("must be rejected before loading the solver")
 
-def test_rejected_in_altertax_mode(no_solver, shocked):
-    m, p, gc = shocked
-    with pytest.raises(ValueError, match="mode='gtap'"):
-        driver.solve_multiperiod(m, p, gc, mode="altertax")
-
-
-def test_rejected_with_tariff_continuation(no_solver, monkeypatch, shocked):
-    m, p, gc = shocked
-    monkeypatch.setenv("EQUILIBRIA_GTAP_SHOCK_CONTINUATION", "0.5,1.0")
-    with pytest.raises(ValueError, match="CONTINUATION"):
-        driver.solve_multiperiod(m, p, gc, mode="gtap")
+    monkeypatch.setattr(driver, "_load_run_gtap", _explode)
+    p = _load_3x3_params()
+    mp = GTAPMultiPeriodModel(p.sets, p, None, residual_region=list(p.sets.r)[-1])
+    m = mp.build_sets()
+    mp.build_vars(m)
+    with pytest.raises(ValueError, match="ShockBlock.*GTAPBlockMultiPeriodModel"):
+        driver.solve_multiperiod(m, p, None)

@@ -401,8 +401,8 @@ class ArmingtonBilateralBlock(Block):
         # GAMS $macro chain M_PWMG/M_PEFOB/M_PMCIF/M_PM (gtap_model_equations.py
         # 5519-5567). Under ifSUB=1 each expands the tariff/margin wedge INLINE down
         # to the LIVE pe/ptmg Vars (NOT the pmcif/pefob report Vars, which under
-        # ifSUB are free orphans — see _rebuild_import_demand_shock_ifsub LINK 2), so
-        # an imptx shock reaches the SOLVED import-demand eqs. if_sub=False → plain
+        # ifSUB are free orphans), so an imptx shock reaches the SOLVED import-demand
+        # eqs (instruments.INLINE_EQS: eq_xweq reads imptx). if_sub=False → plain
         # report Var (the Task-4 comp-stat form). Args are (exporter, commodity,
         # importer) = (rp, i, r), matching the monolith macro signatures.
         # Bajo ifSUB delegan en blocks/gtap/_ifsub_macros (la misma fuente que
