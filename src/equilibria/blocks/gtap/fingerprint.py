@@ -15,6 +15,9 @@ The key covers:
     code that builds the model AND the code that solves it, because the settled
     seed comes out of a full settle solve.  Modules outside these paths that the
     build imports must be added here.
+  * the Python version and the versions of ``NUMERIC_DISTS``: the same code on
+    another numeric stack settles to a different seed (a 20x41 seed from Pyomo
+    6.9.5 / SciPy 1.17.1, reused under 6.10.1 / 1.18.0, killed the shock).
 
 When any of that cannot be read, ``fingerprint`` returns ``None`` and the caller
 must skip the cache.  Refusing to cache is safe; a key that does not cover what
@@ -24,6 +27,8 @@ it claims to cover is not.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
+import sys
 from enum import Enum
 from pathlib import Path
 
@@ -43,6 +48,10 @@ CODE_FOLDERS = (
     "babel/gdx",  # reads the ref GDX that seeds the model
 )
 CODE_FILES = ("blocks/base.py", "model.py")  # model.py: the block composer
+
+# Distributions whose version can move the built model or the settled seed.
+# pymumps is optional: "absent" is keyed like any other version.
+NUMERIC_DISTS = ("pyomo", "numpy", "scipy", "pandas", "pymumps")
 
 # Groups of numeric data on GTAPParameters.  Every attribute of every group is
 # digested (the old keys hashed 8 hand-picked arrays and missed rtms, rtxs, vom,
@@ -196,6 +205,16 @@ def _code_files(root: Path) -> list[Path]:
     return sorted(set(files))
 
 
+def _runtime_digest() -> str:
+    parts = [sys.version]
+    for name in NUMERIC_DISTS:
+        try:
+            parts.append(f"{name}={importlib.metadata.version(name)}")
+        except importlib.metadata.PackageNotFoundError:
+            parts.append(f"{name}=absent")
+    return hashlib.sha256(_SEP.join(parts).encode()).hexdigest()[:24]
+
+
 def _code_digest() -> str:
     root = _package_root()
     h = hashlib.sha256()
@@ -224,5 +243,6 @@ def fingerprint(
         cd,
         pd,
         _code_digest(),
+        _runtime_digest(),
     ]
     return f"{namespace}-" + hashlib.sha256(_SEP.join(fields).encode()).hexdigest()[:24]
