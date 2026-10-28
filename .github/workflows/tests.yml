@@ -19,18 +19,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enforce lowercase filename policy
-        run: python scripts/check_lowercase_filenames.py
-
-      - name: Enforce canonical scripts layout
-        run: |
-          set -euo pipefail
-          disallowed="$(git ls-files | grep -E '^scripts/[^/]+\.py$' | grep -v '^scripts/check_lowercase_filenames\.py$' || true)"
-          if [ -n "$disallowed" ]; then
-            echo "Disallowed root scripts detected. Use scripts/{cli,qa,parity,dev,sam_tools}/"
-            echo "$disallowed"
-            exit 1
-          fi
+      - name: Enforce repository layout (closed root, lowercase English names, no loose scripts)
+        run: python scripts/dev/check_layout.py
 
   python-tests:
     runs-on: ubuntu-latest
