@@ -19,7 +19,7 @@ fixtures use:
 ```python
 from equilibria.babel.har import read_har
 
-data = read_har("basedata.har")          # dict[name -> HeaderArray]
+data = read_har("datasets/gtap7_3x3/basedata.har")  # dict[name -> HeaderArray]
 vdpp = data["VDPP"]
 print(vdpp.long_name, vdpp.array.shape, vdpp.set_names)
 print(vdpp.set_elements)                 # [[...COMM...], [...REG...]]
@@ -41,7 +41,7 @@ or more headers, and write the result back for the solver to consume.
 ```python
 from equilibria.babel.har import read_har, write_har
 
-data = read_har("baserate.har")
+data = read_har("datasets/gtap7_3x3/baserate.har")
 
 # 10% uniform bilateral import-tariff shock
 data["rTMS"].array[...] *= 1.10
@@ -77,13 +77,13 @@ with HarWriter("synthetic.har") as w:
         long_name="domestic private purchases",
     )
 
-    # pandas DataFrame — set names taken from index / column names
+    # pandas DataFrame — set names in the order of its dimensions
     df = pd.DataFrame(
         [[100.0, 200.0], [300.0, 400.0]],
         index=pd.Index(["USA", "ROW"], name="REG"),
         columns=pd.Index(["AGR", "MFG"], name="COMM"),
     )
-    w.add_dataframe("REGY", df, long_name="regional output")
+    w.add_dataframe("REGY", df, set_names=["REG", "COMM"], long_name="regional output")
 ```
 
 The context manager flushes to disk on `__exit__`; if you prefer

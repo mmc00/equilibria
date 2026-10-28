@@ -12,6 +12,16 @@ make benchmarks-nus333    # NUS333 only (also produces local parity + timing)
 make benchmarks-nlp       # NLP wall-time: Python IPOPT vs GAMS local IPOPT
 ```
 
+```{warning}
+The numbers on this page were generated between May and July 2026 with the
+single-file GTAP model. The scripts behind `make benchmarks*`
+(`diff_9x10_full.py`, `bench_nus333_dual.py`, `bench_nlp_timing.py`) still use
+that model, which the driver no longer solves, so they cannot regenerate the
+page until they move to blocks (`R-MONOLITH` in `ROADMAP.md`). The parity of
+the block model is in the coverage matrices, which the parity gates
+regenerate.
+```
+
 The default number of timing runs is `BENCH_RUNS=5` (override on the
 make command line).
 

@@ -237,7 +237,7 @@ def render() -> str:
         "defines, chosen because each has a **unique, verified 1:1 GEMPACK→Python "
         "correspondence** confirmed by economic meaning (a small Δ alone is not proof "
         "— under a tariff shock many quantities co-move). The map was built by an "
-        "exhaustive discovery pass (`discover_qty_map.py`), not by hand.",
+        "exhaustive discovery pass over the candidate pairs, not by hand.",
         "",
         _var_list(),
         "",

@@ -1,12 +1,63 @@
-# Welfare Decomposition (Huff / RunGTAP)
+# Welfare: regional EV and its decomposition
 
-Equilibria computes a Huff (1996) / McDougall (2003) welfare decomposition matching the RunGTAP `WELVIEW.har` convention. The total welfare change (Equivalent Variation, in USD millions at baseline prices) is decomposed into additive contributions:
+GTAP reports welfare as the equivalent variation (EV) of each regional
+household. equilibria gives you two things:
+
+- **The regional EV** (`regional_ev`), computed on the solved block model.
+  This is the number to read after a shock.
+- **The Huff (1996) / McDougall (2003) decomposition** of that EV into
+  allocative efficiency, terms of trade, investment-saving, endowment and
+  technical contributions, in the RunGTAP `WELVIEW.har` convention. The
+  formulas are in `templates/gtap/welfare_decomp.py`; read
+  [its status](#status-of-the-decomposition) before using it.
+
+## Regional EV
+
+GTAP defines EV in `gtapv7.tab` §11: the income that, at the prices before
+the shock, reaches the utility after it, minus the income before. In levels
+that is the model's own household block (`eq_yc` … `eq_u`) solved with the
+prices of the `check` period, utility fixed at its `shock` value and income
+free. `regional_ev` does exactly that and leaves the model as it was:
+
+```python
+from equilibria import load_bundled
+from equilibria.templates.gtap import apply_shock
+from equilibria.templates.gtap.gtap_block_model import build_block_model
+from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+from equilibria.templates.gtap.welfare_regional import regional_ev
+
+# The model of the GTAP quickstart: +10 % on the tariff power of one route.
+params = load_bundled("gtap", "nus333")
+closure = GTAPClosureConfig(
+    name="base", closure_type="MCP", capital_mobility="sluggish",
+    fix_endowments=False, fix_taxes=False, fix_technology=False,
+    if_sub=False, numeraire="pnum",
+)
+m, _ = build_block_model(params, params.sets, closure, "ROW")
+apply_shock(m, {"imptx": {("USA", "MFG", "ROW"): 10.0}})
+solve_multiperiod(m, params, closure, mode="gtap", skip_base_solve=True, solve_check=True)
+
+print(regional_ev(m))  # in units of regy
+# {'USA': -0.1079..., 'ROW': 0.0885...}
+```
+
+By default it reads `period="shock"` at the prices of `ref="check"`. The
+model's `regy` is in the scaled units of the benchmark, so divide by
+`regy[r, "check"]` for EV as a share of income.
+
+`tests/templates/gtap/test_nus333_ev_regional.py` checks it against
+GEMPACK's EV (Gragg) on five exercises of the Burfisher book (TBL62A, TBL45A,
+TBL45C, TBL63A, ME7A), within 0.1 % of income, and checks that EV is zero
+when nothing is shocked.
+
+## The decomposition
 
 ```
 EV_r ≈ A_r + T_r + IS_r + ENDW_r + TECH_r + residual
 ```
 
-## Components
+### Components
 
 | Component | Formula (per region r) | Captures |
 |---|---|---|
@@ -17,7 +68,7 @@ EV_r ≈ A_r + T_r + IS_r + ENDW_r + TECH_r + residual
 | **TECH** — Technical change | `Σ vom_0 · Δao` (currently stub) | Only non-zero if aoreg/afe/aocgds shocked |
 | **EV** — Total | `vpm_base · (uh_shock − uh_base)` | Hertel (1997) $-equivalent utility change |
 
-### 11 allocative sub-buckets
+#### 11 allocative sub-buckets
 
 Matching RunGTAP `ALEF` header (source × region):
 
@@ -35,75 +86,29 @@ Matching RunGTAP `ALEF` header (source × region):
 | `ditx` | Investment tax (dom) | `(vdip-vdib)/vdib` | `Δvdib` |
 | `mitx` | Investment tax (imp) | `(vmip-vmib)/vmib` | `Δvmib` |
 
-## How to compute
+### Status of the decomposition
 
-### Single-step (fast, residual ~1-3%)
+Measured on `main` on 2026-10-28, the documented way to run it does not work:
+`scripts/gtap/run_gtap.py validate-shock --welfare-decomp` fails with its
+default `--path-capi-mode linear` (`Expression 3 is nonlinear; linear adapter
+cannot handle it`), and with `--path-capi-mode nonlinear` both the baseline
+and the shocked solve fail (`res=inf`) and the CSV it writes is all zeros.
+That CLI still builds the old single-file model and applies the shock to the
+parameters, the path ADR-0003 removed.
 
-```bash
-uv run python scripts/gtap/run_gtap.py validate-shock \
-    --gdx-file data/9x10/9x10Dat.gdx \
-    --variable rtms --index "(...)" --value 0.10 \
-    --shock-mode tm_pct \
-    --output reports/welfare/ \
-    --welfare-decomp
-```
+`compute_welfare_decomposition(base_params, shock_params, base_levels,
+shock_levels)` and its homotopy variant take snapshots of levels, which today
+only that script builds. Moving the decomposition onto the block model is
+tracked with the monolith's retirement (`R-MONOLITH` in `ROADMAP.md`). Until
+then, use `regional_ev` for the EV itself.
 
-Produces `reports/welfare/welfare_decomposition.csv`.
-
-The single-step path applies the first-order Huff formula once between baseline and shocked equilibrium. For 10% tariff shocks this gives an EV-vs-sum residual of 1-3%, which is the expected gap between a *levels* MCP model and the *linearized* GEMPACK formulation that RunGTAP uses internally.
-
-### Exact RunGTAP equivalence (homotopy, residual <0.01%)
-
-Add `--homotopy-steps 4`:
-
-```bash
-uv run python scripts/gtap/run_gtap.py validate-shock \
-    --gdx-file data/9x10/9x10Dat.gdx \
-    --variable rtms --index "(...)" --value 0.10 \
-    --shock-mode tm_pct \
-    --output reports/welfare/ \
-    --welfare-decomp \
-    --homotopy-steps 4
-```
-
-The model is solved at 4 intermediate states between baseline and full shock. Huff contributions are computed locally on each segment and summed. This Gragg-style integration drives the residual to near-zero, matching the GEMPACK identity that RunGTAP enforces by construction. With N=4 the error vs RunGTAP is <0.01% for 10% shocks; N=2 already gives <0.5%.
-
-### WELVIEW.har output (RunGTAP-compatible)
-
-Add `--welfare-har path/to/WELVIEW.har`:
-
-```bash
-uv run python scripts/gtap/run_gtap.py validate-shock \
-    ... \
-    --welfare-decomp \
-    --welfare-har reports/welfare/WELVIEW.har
-```
-
-The resulting HAR contains headers `EVAL`, `ALET`, `ALEF`, `TOTE`, `ISE`, `ENDW`, `TECH`, `TOT` indexed by `REG` (and `ALSR × REG` for the 11-bucket breakdown), and is readable by any GEMPACK tool (`harview`, `ViewHAR`).
-
-## Why a residual?
+### Why a residual?
 
 RunGTAP uses GEMPACK's **linearized** model: every variable is already a percent change, and the Huff decomposition is an algebraic identity that closes to zero by construction (Euler/Gragg integration internally).
 
 Equilibria uses a **levels** MCP model with absolute quantities and prices. The Huff formula `τ_b · Δq_b` is a first-order approximation to the exact path integral `∫ τ_b(t) · dq_b(t)`. The second-order error term `½ Σ Δτ_b · Δq_b` is typically 1-3% of EV for 10% shocks.
 
 The homotopy variant collapses this error by computing the Huff formula on N small segments instead of one big segment — error is O(1/N²). N=4 brings the residual below the parity tolerance Equilibria already enforces against GAMS (1e-6).
-
-## Interpretation example (NUS333, 10% tariff shock)
-
-A typical output for a uniform 10% import tariff shock looks like:
-
-```
-Region     EV ($M)         A        T       IS  resid%
-NAmerica  -1,245.32  -1,180.50  -52.10   -8.20  -0.36%
-EAsia        87.45     112.30  -28.50    3.65   0.00%
-RestofWorld -23.10     -18.20   -4.80   -0.30   0.43%
-```
-
-Reading:
-- **NAmerica** loses $1.2B EV; almost entirely from allocative inefficiency (`A`) of importing less through the tariff wedge. Small ToT loss too.
-- **EAsia** *gains* — the alloc gain comes from rebalancing trade away from distorted partners. ToT loss reflects worse export prices.
-- Residuals stay under 0.5% with homotopy N=4 (without homotopy they'd be 1-3%).
 
 ## Shadow demand system (gtapv7.tab §11 port)
 
@@ -131,27 +136,21 @@ step-by-step under one of four integrators:
 | `gragg` | O(h²) leapfrog | Gragg modified midpoint, single ladder |
 | `bulirsch_stoer` | O(h^2k) | Gragg + Richardson on a ladder (academic reference; converges to the asymptotic ODE fixed point, **not** to RunGTAP's discrete answer) |
 
-### Example
+### Inputs
 
-```python
-from equilibria.templates.gtap.welfare_shadow import ShadowBaseline, integrate
+`integrate(base, u_pct=..., dpsave_pct=...)` takes a `ShadowBaseline` for one
+region (its private, government and saving expenditure, income, and the
+per-commodity `VPP`, `INCPAR` and `ALPHA` of the benchmark) plus the
+cumulative percentage changes of utility `u` and of `dpsave`, and returns the
+EV in USD millions. The worked example,
+`runs/nus333_compare/verify_shadow_integrator.py`, reads those benchmark
+values from a RunGTAP export (`runs/nus333_compare/rungtap/basedata.xls`) that
+is not shipped with the repository, so it runs only where that export exists.
 
-base = ShadowBaseline(
-    region="USA",
-    commodities=("AGR", "MFG", "SER"),
-    PRIVEXP=9_949_302.0, GOVEXP=2_258_359.0, SAVE=594_183.0,
-    INCOME=12_801_844.0,
-    VPP={...}, INCPAR={...}, ALPHA={...}, DPARSUM=1.0,
-)
+## RunGTAP parity validation of the shadow integrator (NUS333 + 9x10)
 
-# Plug RunGTAP's cumulative u and dpsave (or equilibria's solved values)
-res = integrate(base, u_pct=0.1725, dpsave_pct=16.18)
-print(res.EV_USDm)   # ≈ 14,888 USD M  (RunGTAP target: 14,933)
-```
-
-## RunGTAP parity validation (NUS333 + 9x10)
-
-Both datasets run under capFix closure; RunGTAP gets the swap
+Measured on 2026-05-20 (PR #10) and not re-measured since; the regional EV
+above has its own, newer test against GEMPACK. Both datasets run under capFix closure; RunGTAP gets the swap
 `dpsave(r)=del_tbalry(r)` for all non-residual regions, equilibria uses
 `GTAPClosureConfig(savf_flag='capFix')`. Shock: 10% uniform `tm_pct`.
 
