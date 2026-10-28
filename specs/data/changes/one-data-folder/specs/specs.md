@@ -22,6 +22,20 @@ Source: ADR-0010
 Tests must obtain reference results by dataset, tool and variant, and the
 request must fail when no recorded variant matches it.
 
+### Requirement: Closed repository root
+Source: ADR-0010
+
+The repository root must contain only the entries listed in
+`scripts/check_layout.py`; a check run in pre-commit and CI must fail on any
+other tracked root entry.
+
+### Requirement: English file and folder names
+Source: ADR-0010
+
+Tracked file and folder names must be lowercase English; a check run in
+pre-commit and CI must fail on a name with an accent, an `ñ`, or a token from
+its list of Spanish words, except for names listed with a reason.
+
 ## MODIFIED Requirements
 
 ## REMOVED Requirements
