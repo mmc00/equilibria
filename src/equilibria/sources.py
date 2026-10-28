@@ -100,7 +100,7 @@ def load_source(folder: Path) -> SourceRecord:
     file = folder / SOURCE_FILE
     if not file.exists():
         raise SourceError(f"{file}: missing")
-    data = yaml.safe_load(file.read_text())
+    data = yaml.safe_load(file.read_text(encoding="utf-8"))
     if not isinstance(data, Mapping):
         raise SourceError(f"{file}: not a mapping")
 
@@ -190,6 +190,24 @@ def reference(
 _EXEMPT = frozenset({SOURCE_FILE, "README.md"})
 
 
+def own_files(folder: Path) -> list[Path]:
+    """The files a record in ``folder`` answers for.
+
+    Everything under ``folder`` except its ``source.yaml`` and the files of any
+    subfolder that has its own ``source.yaml`` (that one is another record's).
+    The writer and the checker both use this, so they agree on what a record
+    covers.
+    """
+    nested = {f.parent for f in folder.rglob(SOURCE_FILE) if f.parent != folder}
+    return [
+        p
+        for p in sorted(folder.rglob("*"))
+        if p.is_file()
+        and p.name != SOURCE_FILE
+        and not any(q in nested for q in p.parents)
+    ]
+
+
 def check_tree(root: Path = DATA_ROOT, *, allow_pending: bool = False) -> list[str]:
     """Every problem under ``root``, one message each; empty when clean.
 
@@ -220,9 +238,7 @@ def check_tree(root: Path = DATA_ROOT, *, allow_pending: bool = False) -> list[s
             msgs.append(f"{where}: status pending")
         if rec.status == "verified":
             msgs.extend(_check_inputs(root, where, rec.raw.get("generated_from") or {}))
-        msgs.extend(
-            _check_outputs(folder, where, rec.raw.get("outputs") or {}, records)
-        )
+        msgs.extend(_check_outputs(folder, where, rec.raw.get("outputs") or {}))
     return msgs
 
 
@@ -244,22 +260,8 @@ def _check_inputs(root: Path, where: Path, inputs: Mapping[str, Any]) -> list[st
     return msgs
 
 
-def _check_outputs(
-    folder: Path,
-    where: Path,
-    outputs: Mapping[str, str],
-    records: Mapping[Path, SourceRecord],
-) -> list[str]:
-    # A subfolder with its own source.yaml is another record's business.
-    own = {
-        p.relative_to(folder).as_posix()
-        for p in folder.rglob("*")
-        if p.is_file()
-        and p.name != SOURCE_FILE
-        and not any(
-            q in records for q in p.parents if q != folder and folder in q.parents
-        )
-    }
+def _check_outputs(folder: Path, where: Path, outputs: Mapping[str, str]) -> list[str]:
+    own = {p.relative_to(folder).as_posix() for p in own_files(folder)}
     msgs = [
         f"{where}: {rel} is not listed in outputs" for rel in sorted(own - set(outputs))
     ]

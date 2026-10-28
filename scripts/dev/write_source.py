@@ -21,6 +21,7 @@ import ctypes
 import datetime as dt
 import os
 import platform
+import shlex
 import subprocess
 import sys
 import time
@@ -29,7 +30,13 @@ from typing import Any
 
 import yaml
 
-from equilibria.sources import DATA_ROOT, SOURCE_FILE, load_source, sha256_file
+from equilibria.sources import (
+    DATA_ROOT,
+    SOURCE_FILE,
+    load_source,
+    own_files,
+    sha256_file,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -101,11 +108,27 @@ def _variant(pairs: list[str]) -> dict[str, Any]:
 
 
 def _outputs(folder: Path) -> dict[str, str]:
-    return {
-        p.relative_to(folder).as_posix(): sha256_file(p)
-        for p in sorted(folder.rglob("*"))
-        if p.is_file() and p.name != SOURCE_FILE
-    }
+    return {p.relative_to(folder).as_posix(): sha256_file(p) for p in own_files(folder)}
+
+
+def _inputs(args: argparse.Namespace, root: Path) -> dict[str, Any]:
+    """Hash the inputs. Raises ValueError for a path outside ``root``."""
+    generated_from: dict[str, Any] = {}
+    if args.model_file:
+        mf = args.model_file.resolve()
+        generated_from["model"] = {
+            "path": mf.relative_to(root).as_posix(),
+            "sha256": sha256_file(mf),
+        }
+    if args.data_dir:
+        dd = args.data_dir.resolve()
+        generated_from["data"] = {
+            "path": dd.relative_to(root).as_posix(),
+            "sha256": {
+                p.relative_to(dd).as_posix(): sha256_file(p) for p in own_files(dd)
+            },
+        }
+    return generated_from
 
 
 def _git_commit() -> str:
@@ -137,7 +160,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-run", action="store_true")
     ap.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args(argv)
-    command = [c for c in args.command if c != "--"]
+    command = list(args.command)
+    if command[:1] == ["--"]:  # only the separator before the command
+        command = command[1:]
     root = args.data_root.resolve()
     folder = args.folder.resolve()
     folder.mkdir(parents=True, exist_ok=True)
@@ -149,6 +174,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.kind == "result":
         if args.no_run or not command:
             ap.error("a result is generated: give the command after --")
+        # Validate the inputs before a run that may take hours.
+        try:
+            generated_from = _inputs(args, root)
+        except ValueError as err:
+            ap.error(f"an input is outside the data root {root}: {err}")
+        # A rerun replaces the record: if it fails, no stale "verified" stays.
+        (folder / SOURCE_FILE).unlink(missing_ok=True)
         started = dt.datetime.now().astimezone()
         t0 = time.perf_counter()
         proc = subprocess.run(command, cwd=folder)
@@ -156,23 +188,6 @@ def main(argv: list[str] | None = None) -> int:
         if proc.returncode != 0:
             print(f"command failed (exit {proc.returncode}); no source.yaml written")
             return proc.returncode
-        generated_from: dict[str, Any] = {}
-        if args.model_file:
-            mf = args.model_file.resolve()
-            generated_from["model"] = {
-                "path": mf.relative_to(root).as_posix(),
-                "sha256": sha256_file(mf),
-            }
-        if args.data_dir:
-            dd = args.data_dir.resolve()
-            generated_from["data"] = {
-                "path": dd.relative_to(root).as_posix(),
-                "sha256": {
-                    p.name: sha256_file(p)
-                    for p in sorted(dd.iterdir())
-                    if p.is_file() and p.name != SOURCE_FILE
-                },
-            }
         record.update(
             {
                 "tool": args.tool,
@@ -181,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
                 **({"phases": args.phases} if args.phases else {}),
                 "generated_from": generated_from,
                 **({"solver": {"name": args.solver}} if args.solver else {}),
-                "command": " ".join(command),
+                "command": shlex.join(command),
                 "equilibria_commit": _git_commit(),
                 "exit": {"code": proc.returncode},
                 "outputs": _outputs(folder),
@@ -200,7 +215,9 @@ def main(argv: list[str] | None = None) -> int:
     record["status"] = "verified"
     record["notes"] = args.notes
 
-    (folder / SOURCE_FILE).write_text(yaml.safe_dump(record, sort_keys=False))
+    (folder / SOURCE_FILE).write_text(
+        yaml.safe_dump(record, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
     load_source(folder)  # what was written must be a valid record
     print(f"wrote {folder / SOURCE_FILE}")
     return 0
