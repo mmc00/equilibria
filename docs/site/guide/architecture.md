@@ -152,6 +152,7 @@ instrument whose `shock` cell differs from its `check` cell, exactly as in
 GAMS ([ADR-0003](#decisions)). You write it on the built model, in GEMPACK's
 terms: the number is the percentage you would read in a `.EXP` file.
 
+<!-- fragmento -->
 ```python
 from equilibria.templates.gtap import apply_shock
 
@@ -169,6 +170,7 @@ target, a quantity target. Instead of copying the model, the exercise
 changes **one** block, and only in the shock period, with `@overwrite`
 ([ADR-0004](#decisions)):
 
+<!-- fragmento -->
 ```python
 from equilibria.blocks.gtap import ClosureBlock, ShockBlock
 from equilibria.blocks.gtap.overwrite import overwrite
