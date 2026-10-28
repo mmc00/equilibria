@@ -16,8 +16,9 @@
 - Suite before and after identical except for the new tests (diff `pytest -q -rA` by name).
 - Names of new files and folders: lowercase English.
 - No host name or user name in any `source.yaml`.
-- Commit messages in Spanish, `tipo(ámbito): descripción`, ending with the
-  `Co-Authored-By` line the session gives.
+- Commit messages in English, `type(scope): description`, ending with the
+  `Co-Authored-By` line the session gives (maintainer's rule, 2026-10-28). The
+  suggested messages below are in English for that reason.
 - The check script lives at `scripts/dev/check_layout.py` (not `scripts/`: the
   repo forbids loose `scripts/*.py`); the design's `scripts/check_layout.py`
   means this path.
@@ -60,7 +61,7 @@ def test_status_must_be_verified_or_pending(tmp_path): ...
 - [ ] **Step 2:** `uv run pytest tests/data/test_sources_schema.py -q` → FAIL (`ModuleNotFoundError: equilibria.sources`).
 - [ ] **Step 3:** Implement `load_source`, `SourceRecord`, `SourceError`, `sha256_file` in `src/equilibria/sources.py` (YAML via `yaml.safe_load`; error messages name the file and the key).
 - [ ] **Step 4:** Same command → PASS.
-- [ ] **Step 5:** Commit `feat(sources): esquema de source.yaml (ADR-0010)`.
+- [ ] **Step 5:** Commit `feat(sources): source.yaml schema (ADR-0010)`.
 
 ### Task 2: `reference()`
 
@@ -88,7 +89,7 @@ def test_no_match_lists_candidates(tmp_path): ...        # unknown dataset → m
 - [ ] **Step 2:** run → FAIL (`ImportError: reference`).
 - [ ] **Step 3:** Implement `DATA_ROOT`, `iter_sources`, `reference`.
 - [ ] **Step 4:** run → PASS.
-- [ ] **Step 5:** Commit `feat(sources): reference() pide una referencia por lo que es`.
+- [ ] **Step 5:** Commit `feat(sources): reference() asks for a reference by what it is`.
 
 ### Task 3: tree checks and the repo test
 
@@ -116,7 +117,7 @@ and in `test_data_tree.py`: `def test_data_tree_is_clean(): assert check_tree() 
 - [ ] **Step 2:** run both files → FAIL (`ImportError: check_tree`).
 - [ ] **Step 3:** Implement `check_tree`. Create `data/README.md` (Task 6 fills it) so `data/` exists.
 - [ ] **Step 4:** run → PASS (the real tree holds only `README.md`).
-- [ ] **Step 5:** Commit `feat(sources): check_tree y test del árbol data/`.
+- [ ] **Step 5:** Commit `feat(sources): check_tree and the data/ tree test`.
 
 ### Task 4: `scripts/dev/write_source.py`
 
@@ -143,7 +144,7 @@ def test_written_file_loads(tmp_path): ...                # load_source(folder).
 - [ ] **Step 2:** run → FAIL (script missing).
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** run → PASS.
-- [ ] **Step 5:** Commit `feat(dev): write_source.py corre, cronometra y registra la referencia`.
+- [ ] **Step 5:** Commit `feat(dev): write_source.py runs, times and records a reference`.
 
 ### Task 5: `scripts/dev/check_layout.py`
 
@@ -181,7 +182,36 @@ def test_repo_passes_today(): assert main() == 0   # with the temporary exceptio
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3:** Implement; delete the old script; update CI and pre-commit.
 - [ ] **Step 4:** run the tests → PASS; `python scripts/dev/check_layout.py` → exit 0; `prek run check-layout --all-files` → Passed.
-- [ ] **Step 5:** Commit `feat(dev): check_layout.py — raíz cerrada y nombres en inglés`.
+- [ ] **Step 5:** Commit `feat(dev): check_layout.py - closed root and English names`.
+
+### Task 5b: commit messages in English
+
+**Files:**
+- Create: `scripts/dev/check_commit_msg.py`
+- Modify: `.pre-commit-config.yaml` (local hook `check-commit-msg`, `stages: [commit-msg]`; add `default_install_hook_types: [pre-commit, commit-msg]` so `prek install` installs both), `.github/workflows/tests.yml` (job `commit-messages` on `pull_request`: checks every commit in `origin/<base>..HEAD` with `--range`)
+- Test: `tests/scripts/test_check_commit_msg.py`
+
+**Interfaces:**
+- Consumes: the Spanish word list and accent rule of Task 5 — import them from `scripts/dev/check_layout.py` (one list, two users).
+- Produces: `spanish_words(text: str) -> list[str]` (whole-word matches plus accented/`ñ` words, case-insensitive) and CLI `check_commit_msg.py <msg-file>` | `--range A..B`, exit 1 naming the commit and the words.
+
+Ignored when checking: the trailer lines (`Co-Authored-By:`, `Signed-off-by:`), quoted code in backticks, and lines starting with `#` (git's template). A message is Spanish when it has **two or more** list words or any accented/`ñ` word, so one borrowed word (`sin` in "sin(x)") does not fail it.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+def test_english_message_passes(): assert spanish_words("fix(gtap): pair rows by the name dictionary") == []
+def test_spanish_message_fails(): assert spanish_words("fix(gtap): el gate empareja las filas por el diccionario")
+def test_accent_fails(): assert spanish_words("docs: añade la guía")
+def test_trailer_and_backticks_are_ignored(): ...   # "Co-Authored-By: ..." + "`test_sin_registro_de_bloques`" → []
+def test_one_borrowed_word_passes(): assert spanish_words("feat: plot sin(x) residuals") == []
+def test_range_reports_each_bad_commit(tmp_path): ...  # temp git repo, two commits, one Spanish → exit 1 naming it
+```
+
+- [ ] **Step 2:** run → FAIL. **Step 3:** implement + hook + CI job. **Step 4:** run → PASS; `prek install` then a Spanish `git commit --allow-empty -m "prueba de los mensajes"` in a scratch clone is rejected.
+- [ ] **Step 5:** Commit `feat(dev): reject Spanish commit messages (commit-msg hook and CI)`.
+
+The CI job checks only the commits of the PR, so the Spanish history already on `main` does not fail it.
 
 ### Task 6: where things go
 
@@ -194,7 +224,7 @@ def test_repo_passes_today(): assert main() == 0   # with the temporary exceptio
 
 - [ ] **Step 1:** Write the pages.
 - [ ] **Step 2:** `uv run pytest tests/docs -q` (doc gate) and `python scripts/dev/spec_tools.py check-pr --base origin/main --labels ""` → no errors.
-- [ ] **Step 3:** Commit `docs(data): data/README.md y punteros en CONTRIBUTING y specs`.
+- [ ] **Step 3:** Commit `docs(data): data/README.md and pointers in CONTRIBUTING and specs`.
 
 ### Task 7: phase close
 
