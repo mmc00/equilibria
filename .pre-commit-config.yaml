@@ -42,18 +42,19 @@ repos:
   # utilidades de dev y quedan fuera del candado.
   - repo: local
     hooks:
-      # ADR-0010: closed root, lowercase English names, no loose scripts.
-      # Reads `git ls-files`, so it runs once per commit, not per file.
       - id: check-commit-msg
         name: commit message in English
-        entry: python3 scripts/dev/check_commit_msg.py
-        language: system
+        # language: python (not system/python3): works on Windows too.
+        entry: python scripts/dev/check_commit_msg.py
+        language: python
         stages: [commit-msg]
 
+      # ADR-0010: closed root, lowercase English names, no loose scripts.
+      # Reads `git ls-files`, so it runs once per commit, not per file.
       - id: check-layout
         name: layout (closed root, English names)
-        entry: python3 scripts/dev/check_layout.py
-        language: system
+        entry: python scripts/dev/check_layout.py
+        language: python
         always_run: true
         pass_filenames: false
 

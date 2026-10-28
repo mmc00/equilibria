@@ -49,7 +49,69 @@ ROOT_DIRS_TEMPORARY = frozenset(
 )
 
 SPANISH_WORDS = frozenset(
-    ["de", "del", "la", "las", "el", "los", "sin", "con", "para", "por", "y", "que", "un", "una", "punto", "residuos", "bloques", "registro", "bienestar", "desempleo", "corridas", "resultado", "resultados", "cada", "sobre", "entre", "cuando", "como", "donde", "fijo", "libre", "paso", "pasos", "precio", "precios", "ecuacion", "ecuaciones", "prueba", "pruebas", "datos", "semilla", "asentado", "cierre", "choque", "modelo", "nuevo", "viejo", "viejos", "lectura", "escritura", "diccionario", "nombres", "ejemplos", "pagina", "cobertura", "salida", "entrada", "hecho", "mapa", "guia", "notas"]
+    [
+        "de",
+        "del",
+        "la",
+        "las",
+        "el",
+        "los",
+        "sin",
+        "con",
+        "para",
+        "por",
+        "y",
+        "que",
+        "un",
+        "una",
+        "punto",
+        "residuos",
+        "bloques",
+        "registro",
+        "bienestar",
+        "desempleo",
+        "corridas",
+        "resultado",
+        "resultados",
+        "cada",
+        "sobre",
+        "entre",
+        "cuando",
+        "como",
+        "donde",
+        "fijo",
+        "libre",
+        "paso",
+        "pasos",
+        "precio",
+        "precios",
+        "ecuacion",
+        "ecuaciones",
+        "prueba",
+        "pruebas",
+        "datos",
+        "semilla",
+        "asentado",
+        "cierre",
+        "choque",
+        "modelo",
+        "nuevo",
+        "viejo",
+        "viejos",
+        "lectura",
+        "escritura",
+        "diccionario",
+        "nombres",
+        "ejemplos",
+        "pagina",
+        "cobertura",
+        "salida",
+        "entrada",
+        "hecho",
+        "mapa",
+        "guia",
+        "notas",
+    ]
 )
 _ACCENTED = re.compile("[ñáéíóúü]", re.IGNORECASE)
 _TOKEN_SPLIT = re.compile(r"[_\-.\s]+")
@@ -168,9 +230,11 @@ def violations(paths: list[str]) -> list[str]:
     return bad
 
 
-def _tracked() -> list[str]:
-    out = subprocess.check_output(["git", "-C", str(ROOT), "ls-files"], text=True)
-    return [line for line in out.splitlines() if line]
+def _tracked(repo: Path = ROOT) -> list[str]:
+    # -z: without it git quotes non-ASCII paths ("docs/a\303\261o.md") and the
+    # accent rule would never see an accent.
+    out = subprocess.check_output(["git", "-C", str(repo), "ls-files", "-z"])
+    return [p for p in out.decode("utf-8").split("\0") if p]
 
 
 def main() -> int:

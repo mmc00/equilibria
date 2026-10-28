@@ -97,3 +97,35 @@ def test_real_english_commits_pass() -> None:
 
 def test_spanish_with_common_short_words_fails() -> None:
     assert _module().spanish_words("chore(deps): actualizar ruff a 0.16.7 en el lock")
+
+
+def test_message_is_read_as_utf8_whatever_the_locale(tmp_path: Path) -> None:
+    """A cp1252/latin-1 locale must not hide accents (review #5, Windows)."""
+    import os
+    import sys
+
+    import pytest
+
+    env = {**os.environ, "LC_ALL": "en_US.ISO8859-1", "PYTHONUTF8": "0"}
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            "utf8=0",
+            "-c",
+            "import locale; print(locale.getpreferredencoding(False))",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if "8859" not in probe.stdout:
+        pytest.skip("no latin-1 locale on this machine")
+    f = tmp_path / "msg"
+    f.write_bytes("docs: añade la guía\n".encode())
+    r = subprocess.run(
+        [sys.executable, "-X", "utf8=0", str(SCRIPT), str(f)],
+        env=env,
+        capture_output=True,
+    )
+    assert r.returncode == 1
