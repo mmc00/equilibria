@@ -22,6 +22,21 @@ jobs:
       - name: Enforce repository layout (closed root, lowercase English names, no loose scripts)
         run: python scripts/dev/check_layout.py
 
+  commit-messages:
+    # English commit messages (maintainer's rule, 2026-10-28). Only the PR's own
+    # commits: the older Spanish history on main is not re-judged.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check commit messages of this PR
+        run: python scripts/dev/check_commit_msg.py --range "origin/${{ github.base_ref }}..HEAD"
+
   python-tests:
     runs-on: ubuntu-latest
     steps:
