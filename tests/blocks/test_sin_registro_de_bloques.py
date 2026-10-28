@@ -136,9 +136,9 @@ def test_ningun_fichero_del_repo_menciona_el_registro():
         infractores
     )
 
-    # El candado no puede revisar lo que no parsea. Se fija la lista conocida
-    # para que un fichero nuevo sin revisar no pase inadvertido.
-    assert [p.as_posix() for p in no_parsean] == ["scripts/gtap_julia/jparity.py"], (
+    # El candado no puede revisar lo que no parsea: un fichero que deje de
+    # parsear no debe pasar inadvertido (jparity.py era el unico y ya parsea).
+    assert not no_parsean, (
         "cambio el conjunto de ficheros que no parsean; el candado no los mira:\n  "
         + "\n  ".join(p.as_posix() for p in no_parsean)
     )

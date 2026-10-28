@@ -1,6 +1,6 @@
 # Documentación de equilibria
 
-Índice de los ~99 documentos de este árbol. Empieza por aquí antes de buscar a ciegas.
+Índice de los ~117 documentos de este árbol. Empieza por aquí antes de buscar a ciegas.
 
 ## Por dónde empezar
 
@@ -8,10 +8,21 @@
 |---|---|
 | Entender qué es el proyecto y cómo se usa | `../README.md` |
 | Saber en qué estado está y qué falta | `../ROADMAP.md` |
-| Entender la arquitectura GTAP (monolito vs bloques) | `architecture/monolito_vs_bloques.md` |
+| Entender la arquitectura (bloques, driver, shock) | `site/guide/architecture.md` y las decisiones en `adr/` |
+| Saber por qué el monolito de GTAP sigue existiendo | `architecture/monolito_vs_bloques.md` |
 | Saber por qué un número no coincide con GAMS o GEMPACK | `findings/` (ordenado por fecha) |
 
 ## Los directorios
+
+### `adr/` — decisiones de arquitectura
+
+Una decisión por archivo (0001–0009): qué se decidió, por qué y qué se descartó. Son
+inmutables: cuando una decisión cambia, un ADR nuevo reemplaza al viejo. Se crean con
+`python scripts/dev/spec_tools.py new-adr <slug>`.
+
+### `agents/` — contexto para agentes
+
+El dominio, el tracker de issues y las etiquetas de triage, para quien trabaje con asistentes.
 
 ### `architecture/` — cómo encaja el sistema
 
@@ -61,7 +72,7 @@ Se conserva por trazabilidad. **Puede contradecir hallazgos posteriores.**
 
 ### `site/` — fuente de la documentación publicada
 
-Lo que alimenta la web (mkdocs). Incluye las matrices de cobertura generadas por los gates:
+Lo que alimenta la web (Sphinx + MyST). Incluye las matrices de cobertura generadas por los gates:
 `site/guide/gtap7_coverage_matrix.md` y `site/guide/gtap7_coverage_matrix_gempack.md`. Se
 regeneran solas — no se editan a mano.
 
