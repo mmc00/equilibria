@@ -2,14 +2,16 @@
 
 `equilibria.sam_tools` converts a raw input-output / MIP (Matrix of
 Intermediate Production) table into a balanced Social Accounting Matrix.
-The conversion is decomposed into ten transformation steps that each
-record their own balance statistics, so you can audit exactly where flows
-were created or rebalanced.
+The conversion is a sequence of transformation steps that each record their
+own balance statistics, so you can audit exactly where flows were created or
+rebalanced. A default run records 14 steps: the ones below, between an
+initial and a final validation.
 
 ## Pipeline overview
 
 | Step | Purpose |
 |------|---------|
+| `mip_balance_gras` | Reconcile the raw MIP (GDP and intermediate-use identities) before classifying it. |
 | `normalize_mip_accounts` | Re-classify raw `RAW.*` rows/cols into `I` (commodities), `J` (sectors), `VA`, `IMP`, `FD` (final demand). |
 | `disaggregate_va_to_factors` | Split `VA` aggregate into labour `L` and capital `K` using configurable shares. |
 | `create_factor_income_distribution` | Route factor income to institutional accounts (`AG.hh`). |
@@ -32,9 +34,9 @@ result object with both the final SAM and the per-step report.
 from pathlib import Path
 from equilibria.sam_tools import run_mip_to_sam
 
+# A 3-sector MIP shipped with the tests; point this at your own file.
 result = run_mip_to_sam(
-    Path("data/my_mip.xlsx"),
-    sheet_name="MIP",
+    Path("tests/sam_tools/fixtures/simple_mip.xlsx"),
     va_factor_shares={"L": 0.65, "K": 0.35},
     ras_max_iter=200,
     output_path=Path("out/my_sam.xlsx"),
@@ -62,7 +64,7 @@ from equilibria.sam_tools.mip_to_sam_transforms import (
     create_factor_income_distribution,
 )
 
-sam = MIPRawSAM.from_mip_excel("data/my_mip.xlsx", sheet_name="MIP")
+sam = MIPRawSAM.from_mip_excel("tests/sam_tools/fixtures/simple_mip.xlsx")
 
 normalize_mip_accounts(sam, {})
 disaggregate_va_to_factors(sam, {"va_factor_shares": {"L": 0.65, "K": 0.35}})

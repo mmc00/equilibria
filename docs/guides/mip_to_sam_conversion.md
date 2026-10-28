@@ -1,5 +1,8 @@
 # MIP to SAM Conversion Guide
 
+> The examples read your own MIP (`mip.xlsx`, `mip_bolivia.xlsx`). The repository
+> ships a 3-sector test MIP at `tests/sam_tools/fixtures/simple_mip.xlsx` to try them on.
+
 This guide explains how to convert an Input-Output Matrix (MIP) to a Social Accounting Matrix (SAM) compatible with CGE models like PEP.
 
 ---
@@ -240,7 +243,7 @@ assert max_diff < 1e-6, "SAM not balanced!"
 
 Generalized RAS for matrices with negative values (Junius & Oosterhaven, 2003).
 
-```python
+```text
 result = run_mip_to_sam(
     "mip.xlsx",
     balancing_method="gras",
@@ -257,7 +260,7 @@ result = run_mip_to_sam(
 
 Classic iterative proportional fitting for non-negative matrices.
 
-```python
+```text
 result = run_mip_to_sam(
     "mip.xlsx",
     balancing_method="ras",
@@ -274,7 +277,7 @@ result = run_mip_to_sam(
 
 Supply-Use Table RAS for simultaneous balancing.
 
-```python
+```text
 result = run_mip_to_sam(
     "mip.xlsx",
     balancing_method="sut_ras",
@@ -291,7 +294,7 @@ result = run_mip_to_sam(
 
 Minimizes information distance from original matrix.
 
-```python
+```text
 result = run_mip_to_sam(
     "mip.xlsx",
     balancing_method="entropy",
@@ -308,7 +311,7 @@ result = run_mip_to_sam(
 
 Use when input MIP is already balanced.
 
-```python
+```text
 result = run_mip_to_sam(
     "mip_balanced.xlsx",
     balancing_method="none",
