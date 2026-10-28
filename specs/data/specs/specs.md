@@ -1,15 +1,17 @@
-# <Area name> specification
+# Data specification
 
-Last synced: YYYY-MM-DD
+Last synced: 2026-10-28
 
 ## Purpose
 
-One paragraph: what this area is responsible for and why it exists.
+Reading and writing model data (HAR, GDX, SAM, MIP), the datasets bundled
+with the package, and the record of where every reference file under `data/`
+came from (ADR-0010).
 
 ## Scope
 
-What is in this area and what is explicitly out. Point to the code prefixes
-listed for it in `specs/areas.toml`.
+The code prefixes listed under `data` in `specs/areas.toml`, and the `data/`
+folder. Model equations and solvers are out.
 
 ## Requirements
 
