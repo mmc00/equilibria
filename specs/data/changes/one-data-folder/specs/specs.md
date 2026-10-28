@@ -26,7 +26,7 @@ request must fail when no recorded variant matches it.
 Source: ADR-0010
 
 The repository root must contain only the entries listed in
-`scripts/check_layout.py`; a check run in pre-commit and CI must fail on any
+`scripts/dev/check_layout.py`; a check run in pre-commit and CI must fail on any
 other tracked root entry.
 
 ### Requirement: English file and folder names

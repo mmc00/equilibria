@@ -175,7 +175,7 @@ each phase proves its figures are unchanged.
 ### Two layout rules, enforced (requested by the maintainer)
 
 Both run in pre-commit and CI, in one script that replaces
-`scripts/check_lowercase_filenames.py` (`scripts/check_layout.py`; it keeps
+`scripts/check_lowercase_filenames.py` (`scripts/dev/check_layout.py`; it keeps
 the lowercase rule and its exceptions):
 
 1. **No new root entries.** The root holds exactly: `src/ data/ tests/
@@ -200,7 +200,7 @@ the lowercase rule and its exceptions):
 
 0. ADR-0010, this change, the `source.yaml` schema, `reference()`, the test
    (empty `data/`, so it passes trivially; a test of the test proves each check
-   can fail), and `check_layout.py` with today's root and today's 16 Spanish
+   can fail), and `scripts/dev/check_layout.py` with today's root and today's 16 Spanish
    names as the only allowed exceptions (each phase removes its own).
 1. `datasets/` → `data/<model>/<dataset>/` with `kind: data` sources; packaging;
    delete the `src/` copies of nus333/9x10.
