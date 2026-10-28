@@ -77,7 +77,7 @@ Solución:
 ```
 
 **Algoritmo GRAS Fixed:**
-```python
+```text
 for outer_iter in range(max_iter):
     # 1. Balance Z con GRAS (targets consistentes)
     z_targets = 0.5 * (z_row_sums + z_col_sums)
@@ -281,19 +281,19 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
 **Mejoras futuras:**
 
 1. **Desagregar hogares**
-   ```python
+   ```text
    # Extender a múltiples tipos de hogares
    households = ['rural_poor', 'rural_rich', 'urban_poor', 'urban_rich']
    ```
 
 2. **Usar datos reales de distribución**
-   ```python
+   ```text
    # En lugar de asumir 95% L→HH, usar:
    factor_to_household_shares = load_from_household_survey()
    ```
 
 3. **Balanceo final de SAM**
-   ```python
+   ```text
    # Aplicar RAS a toda la SAM para cerrar gaps
    sam_balanced = balance_sam_ras(sam, max_iter=1000)
    ```
@@ -307,34 +307,32 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
 
 ### 9. Uso de la SAM en Modelos PEP
 
-**Próximos pasos:**
+Hoy no hay una función que convierta esta SAM en un modelo PEP resuelto. Las
+piezas existen, pero el puente no está terminado. Medido el 2026-10-28 con la
+MIP de prueba de 3 sectores (`tests/sam_tools/fixtures/simple_mip.xlsx`):
 
 ```python
-from equilibria.templates import PEP
+from pathlib import Path
 
-# 1. Cargar SAM
-model = PEP.from_sam("sam_bolivia_pep.xlsx")
+from equilibria.sam_tools import run_mip_to_sam
+from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
+from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
 
-# 2. Calibrar modelo
-model.calibrate()
-assert model.is_calibrated()
+run_mip_to_sam(Path("tests/sam_tools/fixtures/simple_mip.xlsx"), output_path=Path("sam.xlsx"))
 
-# 3. Simulaciones
-# Ejemplo: Aumento de productividad agrícola 10%
-results = model.simulate(shocks={
-    "tfp": {"agr": 1.10}
-})
-
-# Ejemplo: Aumento de impuestos indirectos 2%
-results = model.simulate(shocks={
-    "ti": 1.02
-})
-
-# Ejemplo: Shock de demanda externa
-results = model.simulate(shocks={
-    "X": {"agr": 1.15}
-})
+# dynamic_sets=True lee sectores y hogares de la SAM; sin eso el calibrador
+# espera las etiquetas de la PEP de referencia y calibra en cero.
+state = PEPModelCalibratorExcel(sam_file=Path("sam.xlsx"), dynamic_sets=True).calibrate()
+res = solve_pep(build_pep_model(state, form="nlp"))
+print(res.code, res.message)  # 2 infeasible
 ```
+
+La calibración corre (`GDP_BPO` ≈ 131,1), pero el modelo PEP no reproduce su
+propio benchmark: IPOPT termina en un punto localmente infactible (residuo
+máximo 7,7e-2). Mientras eso no se arregle, usa la SAM de este pipeline como
+dato, y ve `docs/site/guide/pep_quickstart.md` para el template PEP sobre su
+SAM de referencia.
 
 ---
 

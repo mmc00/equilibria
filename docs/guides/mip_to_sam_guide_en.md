@@ -1,5 +1,8 @@
 # MIP to SAM Conversion Guide
 
+> The examples read your own MIP (`mip.xlsx`, `data/...`). The repository ships
+> a 3-sector test MIP at `tests/sam_tools/fixtures/simple_mip.xlsx` to try them on.
+
 ## Overview
 
 This guide explains how to convert a standard Input-Output Matrix (MIP) from national accounts into a complete Social Accounting Matrix (SAM) compatible with PEP CGE models using the `equilibria` package.
@@ -224,11 +227,15 @@ tax_rates = {
 
 **Absolute minimum** (everything uses defaults):
 ```python
+from equilibria.sam_tools import run_mip_to_sam
+
 run_mip_to_sam("mip.xlsx")  # Uses all defaults
 ```
 
 **Recommended** (at least factor shares from national data):
 ```python
+from equilibria.sam_tools import run_mip_to_sam
+
 run_mip_to_sam(
     "mip.xlsx",
     va_factor_shares={"L": 0.68, "K": 0.32}  # From national accounts
@@ -236,7 +243,7 @@ run_mip_to_sam(
 ```
 
 **Best practice** (all country-specific data):
-```python
+```text
 run_mip_to_sam(
     "mip.xlsx",
     va_factor_shares={"L": 0.68, "K": 0.32},
@@ -377,7 +384,7 @@ va_factor_shares = {
 
 ### `run_mip_to_sam()`
 
-```python
+```text
 def run_mip_to_sam(
     input_path: Path | str,
     *,
@@ -667,25 +674,32 @@ for step in result.steps:
 
 ### Use in PEP Model
 
+There is no one-call API that turns this SAM into a solved PEP model. The
+pieces exist, but the bridge is not finished. Measured on 2026-10-28 with the
+3-sector test MIP (`tests/sam_tools/fixtures/simple_mip.xlsx`):
+
 ```python
-from equilibria.templates import PEP
+from pathlib import Path
 
-# Load SAM into PEP model
-model = PEP.from_sam("sam.xlsx")
+from equilibria.sam_tools import run_mip_to_sam
+from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibratorExcel
+from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
+from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
 
-# Verify calibration
-model.calibrate()
-assert model.is_calibrated(), "Model failed to calibrate"
+run_mip_to_sam(Path("tests/sam_tools/fixtures/simple_mip.xlsx"), output_path=Path("sam.xlsx"))
 
-# Run baseline
-baseline = model.solve()
-print(f"Baseline GDP: {baseline['GDP']:.2f}")
-
-# Simulate productivity shock
-results = model.simulate(shocks={"tfp": {"agr": 1.10}})
-print(f"New GDP: {results['GDP']:.2f}")
-print(f"GDP change: {(results['GDP']/baseline['GDP'] - 1)*100:.2f}%")
+# dynamic_sets=True reads the sectors and households from the SAM;
+# without it the calibrator expects the PEP reference labels and calibrates zeros.
+state = PEPModelCalibratorExcel(sam_file=Path("sam.xlsx"), dynamic_sets=True).calibrate()
+res = solve_pep(build_pep_model(state, form="nlp"))
+print(res.code, res.message)  # 2 infeasible
 ```
+
+The calibration runs (`GDP_BPO` ≈ 131.1), but the PEP model does not
+reproduce its own benchmark: IPOPT stops at a locally infeasible point
+(largest residual 7.7e-2). Until that is fixed, use the SAM from this
+pipeline as data, and see `docs/site/guide/pep_quickstart.md` for the PEP
+template on its reference SAM.
 
 ## Troubleshooting
 
@@ -792,53 +806,25 @@ tax_rates = {
 
 ```python
 from pathlib import Path
-from equilibria.sam_tools import run_mip_to_sam
-from equilibria.templates import PEP
 
-# 1. Convert MIP to SAM
-mip_path = Path("data/mip_mexico_2019.xlsx")
-sam_path = Path("output/sam_mexico_2019.xlsx")
+from equilibria.sam_tools import run_mip_to_sam
 
 result = run_mip_to_sam(
-    mip_path,
+    Path("tests/sam_tools/fixtures/simple_mip.xlsx"),  # your MIP here
     va_factor_shares={"L": 0.67, "K": 0.33},
-    tax_rates={
-        "production_tax": 0.11,  # Mexico VAT ~11% effective
-        "import_tariff": 0.04,
-        "direct_tax": 0.16
-    },
-    output_path=sam_path,
-    report_path="output/report.json"
+    output_path=Path("sam.xlsx"),
+    report_path=Path("report.json"),
 )
 
-print(f"✓ SAM created with {len(result.steps)} transformation steps")
-print(f"✓ Balance: {result.steps[-1]['balance']['max_row_col_abs_diff']:.2e}")
-
-# 2. Load into PEP model
-model = PEP.from_sam(sam_path)
-model.calibrate()
-print("✓ Model calibrated successfully")
-
-# 3. Run scenario: 10% productivity increase in agriculture
-results = model.simulate(
-    shocks={"tfp": {"agr": 1.10}},
-    name="Agricultural Productivity Shock"
-)
-
-# 4. Analyze results
-print("\n=== Simulation Results ===")
-print(f"GDP change: {results.pct_change('GDP'):.2f}%")
-print(f"Household income change: {results.pct_change('Y_hh'):.2f}%")
-print(f"Agricultural output change: {results.pct_change('X_agr'):.2f}%")
-
-# 5. Export results
-results.to_excel("output/scenario_results.xlsx")
-print("✓ Results exported")
+print(f"SAM created with {len(result.steps)} transformation steps")
+print(f"Balance: {result.steps[-1]['balance']['max_row_col_abs_diff']:.2e}")
 ```
+
+For the PEP model on top of it, see [Use in PEP Model](#use-in-pep-model).
 
 ## Support
 
 For issues or questions:
-- GitHub Issues: https://github.com/equilibria-project/equilibria/issues
+- GitHub Issues: https://github.com/mmc00/equilibria/issues
 - Documentation: https://equilibria.readthedocs.io
-- Examples: `/docs/examples/`
+- Examples: `docs/site/examples_src/example_mip_to_sam.py`
