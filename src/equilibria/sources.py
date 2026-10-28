@@ -8,7 +8,8 @@ missing fields, and is the only place that knows its shape.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+import os
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -19,6 +20,13 @@ Kind = Literal["result", "data", "model"]
 Status = Literal["verified", "pending"]
 
 SOURCE_FILE = "source.yaml"
+
+# The repository's data/ (this file is src/equilibria/sources.py). Overridable
+# for a checkout whose data lives elsewhere.
+DATA_ROOT = Path(
+    os.environ.get("EQUILIBRIA_DATA_DIR")
+    or Path(__file__).resolve().parents[2] / "data"
+)
 
 _ALLOWED = frozenset(
     {
@@ -142,3 +150,38 @@ def _check_run(file: Path, run: Any) -> None:
         raise SourceError(
             f"{file}: run.machine must have exactly {sorted(_MACHINE_KEYS)}, got {got}"
         )
+
+
+def iter_sources(root: Path = DATA_ROOT) -> Iterator[SourceRecord]:
+    """Every ``source.yaml`` under ``root``, in path order."""
+    for file in sorted(root.rglob(SOURCE_FILE)):
+        yield load_source(file.parent)
+
+
+def reference(
+    dataset: str, tool: str, *, root: Path = DATA_ROOT, **variant: Any
+) -> Path:
+    """The one result folder of ``dataset`` made with ``tool`` in ``variant``.
+
+    A folder matches when its dataset and tool are equal and every requested
+    variant key is recorded with the same value; keys left out are free. No
+    match, or more than one, is an error that names the candidates.
+    """
+    results = [r for r in iter_sources(root) if r.kind == "result"]
+    candidates = [r for r in results if r.dataset == dataset and r.tool == tool]
+    matches = [
+        r
+        for r in candidates
+        if all(k in r.variant and r.variant[k] == v for k, v in variant.items())
+    ]
+    if len(matches) == 1:
+        return matches[0].path
+    asked = f"reference({dataset!r}, {tool!r}, {variant})"
+    if not candidates:
+        known = sorted({f"{r.dataset}/{r.tool}" for r in results})
+        raise SourceError(
+            f"{asked}: no result for that dataset and tool; known: {known}"
+        )
+    listed = "\n  ".join(f"{r.path}: {dict(r.variant)}" for r in candidates)
+    what = "no folder matches" if not matches else f"{len(matches)} folders match"
+    raise SourceError(f"{asked}: {what}; candidates:\n  {listed}")
