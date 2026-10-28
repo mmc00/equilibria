@@ -72,3 +72,28 @@ def test_range_reports_each_bad_commit(tmp_path: Path, capsys: Any) -> None:
     assert _module().main(["--range", f"{base}..HEAD", "--repo", str(tmp_path)]) == 1
     out = capsys.readouterr().out
     assert bad in out and "add the parser" not in out
+
+
+# Lines from real English commits of this repo that the first version flagged
+# (review #3): identifiers with `_`, SHA prefixes, a repeated word, an accent.
+REAL_ENGLISH = [
+    "feat(gtap): build_equations_all_periods — build once, no del/recreate\n\n"
+    "replacing the 3x del_component/re-merge in build_equations_intra.",
+    "gempack: regenerate fixtures with the standard closure (no dpsave swap)\n\n"
+    "emitted by run_gempack_matrix.py as of de5f830 (dpsave exogenous, no swaps).\n"
+    "swapped dpsave(r)=del_tbalry(r) for non-residual regions",
+    "gtap(capfixdp): converges but does NOT reproduce GEMPACK\n\n"
+    "that swap fixes the real del_tbalry (trade balance as %-of-world-income)",
+    "gtap(newton_tr): mumps needs zero-free-diagonal column permutation\n\n"
+    "solve (J P) y = -F, then un-permute p[colperm]=y. Also y is reused.",
+    "docs: pin the numéraire to the world price index",
+]
+
+
+def test_real_english_commits_pass() -> None:
+    for msg in REAL_ENGLISH:
+        assert _module().spanish_words(msg) == [], msg
+
+
+def test_spanish_with_common_short_words_fails() -> None:
+    assert _module().spanish_words("chore(deps): actualizar ruff a 0.16.7 en el lock")
