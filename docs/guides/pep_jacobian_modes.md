@@ -1,5 +1,10 @@
 # pep jacobian modes
 
+> **Motor viejo.** Esta guía describe el motor PEP original
+> (`templates/pep_*.py`, el que corre `PepSimulator`). El motor actual es
+> `pep_pyomo`: empieza por `docs/site/guide/pep_quickstart.md`. El motor viejo se
+> borra en la etapa E1 del roadmap de PEP, y esta guía con él.
+
 Esta guia resume como controlar y auditar el Jacobiano del solver PEP.
 
 Si lo que quieres es entender la capa comun reutilizable del harness, ver tambien:

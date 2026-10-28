@@ -1,5 +1,10 @@
 # pep contract api
 
+> **Motor viejo.** Esta guía describe el motor PEP original
+> (`templates/pep_*.py`, el que corre `PepSimulator`). El motor actual es
+> `pep_pyomo`: empieza por `docs/site/guide/pep_quickstart.md`. El motor viejo se
+> borra en la etapa E1 del roadmap de PEP, y esta guía con él.
+
 Esta guia aclara como se separan hoy las capas de configuracion de PEP en `equilibria`.
 
 La idea es simple:
