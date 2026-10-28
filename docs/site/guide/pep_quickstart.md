@@ -1,15 +1,16 @@
-# PEP — from zero to a solved baseline
+# PEP — from zero to a solved shock
 
 The PEP (Politique Économique et Pauvreté) template implements the
-PEP-1-1 v2.1 modular CGE model. It calibrates against the canonical
-PEP SAM and can be solved with IPOPT, PATH or a built-in homotopy
-solver.
+PEP-1-1 v2.1 single-country CGE model. Its engine is `pep_pyomo`, a Pyomo
+port that reproduces the GAMS reference cell by cell (see the
+{doc}`PEP coverage matrix <pep_coverage_matrix>`).
 
-This guide walks through the minimal end-to-end flow:
+This guide covers:
 
-1. Calibrate from the bundled SAM.
-2. Solve the baseline.
-3. Inspect the solution and (optionally) compare against a GAMS reference.
+1. Calibrating from the reference SAM.
+2. Solving the baseline.
+3. Running the reference shock (SIM1).
+4. Checking the result against GAMS.
 
 ## Prerequisites
 
@@ -17,169 +18,109 @@ This guide walks through the minimal end-to-end flow:
 pip install -e ".[pyomo,ipopt,excel]"
 ```
 
-The bundled PEP dataset (`SAM-V2_0.xlsx` + `VAL_PAR.xlsx`) ships inside
-the wheel and loads via `load_bundled("pep")`. To use a custom SAM,
-build a `PEPModelCalibrator` directly with your own paths.
+The baseline solves as an NLP with IPOPT. Shocks solve as an MCP with PATH
+through `path-capi-python`: install it in the same environment or point
+`EQUILIBRIA_PATH_CAPI_SRC` at its `src` directory, as described in
+{doc}`path_capi`.
+
+```{warning}
+`load_bundled("pep")` does not work today: the Excel SAM it reads uses other
+sector labels than the model, and the calibration comes out all zeros
+(measured on 2026-10-28). Use the reference SAM as below.
+```
 
 ## Step 1 — Calibrate
 
-`load_bundled("pep")` reads the canonical Excel SAM, materialises the
-4D GDX layout the calibrator consumes (cached under
-`~/.cache/equilibria/pep/`), and returns a `PEPModelCalibrator` ready
-to run. The result of `.calibrate()` is a `PEPModelState` with every
-calibrated parameter and base-year level.
+The calibrator reads the SAM and the elasticities (`VAL_PAR.xlsx`) and
+returns a `PEPModelState` with every calibrated parameter and benchmark level.
+The reference data ships inside the package:
 
 ```python
-import equilibria
-from equilibria import load_bundled
+from pathlib import Path
 
-equilibria.setup_logging(level="INFO")
+import equilibria.templates
+from equilibria.templates.pep_calibration_unified import PEPModelCalibrator
 
-calibrator = load_bundled("pep")
-state = calibrator.calibrate()
+data = Path(equilibria.templates.__file__).parent / "reference" / "pep2" / "data"
+state = PEPModelCalibrator(
+    sam_file=data / "SAM-V2_0.gdx", val_par_file=data / "VAL_PAR.xlsx"
+).calibrate()
 
-print(state.report.summary())
+print("Sectors:   ", state.sets["J"])
+print("Households:", state.sets["H"])
+# Sectors:    ['agr', 'ind', 'ser', 'adm']
+# Households: ['hrp', 'hup', 'hrr', 'hur']
 ```
 
-The `PEPModelState` carries:
-
-* `state.sets` — every set (`i`, `j`, `h`, `r`, …) with its elements;
-* `state.parameters` — calibrated elasticities, taxes, shares;
-* `state.variables_init` — base-year levels used as the warm start;
-* `state.report` — per-phase pass/fail status and any validation
-  warnings that surfaced during calibration.
+To use your own SAM, pass its paths to `PEPModelCalibrator` the same way.
 
 ## Step 2 — Solve the baseline
 
-`PEPModelSolver` consumes the calibrated state and runs the equation
-system to convergence. Two initialization modes are supported:
-
-| `init_mode` | Source of the warm start |
-|-------------|--------------------------|
-| `"excel"` (default) | Calibrated `*O` levels straight from the SAM |
-| `"gams"` | Read levels from a reference Results GDX |
+`build_pep_model` builds the Pyomo model from the calibrated state;
+`solve_pep` solves it. `form="nlp"` is the GAMS CNS form, solved with IPOPT.
 
 ```python
-from equilibria.templates.pep_model_solver import PEPModelSolver
+from pyomo.environ import value
 
-solver = PEPModelSolver(
-    calibrated_state=state,
-    tolerance=1e-6,
-    max_iterations=200,
-    init_mode="excel",
-)
-solution = solver.solve()
-
-if solution.converged:
-    print(f"GDP_BP = {solution.variables.GDP_BP:,.2f}")
-    print(f"Walras residual = {solution.walras:.2e}")
-else:
-    print("Did not converge — inspect solution.diagnostics")
-```
-
-## Step 3 — Inspect or persist the solution
-
-`solution.variables` is a `PEPModelVariables` dataclass with named
-attributes for every endogenous variable. Convert to a flat dictionary
-or a pandas frame for further analysis:
-
-```python
-import pandas as pd
-
-flows = pd.Series(
-    {key: getattr(solution.variables, key)
-     for key in solution.variables.__dataclass_fields__},
-    name="value",
-)
-flows.head(10)
-```
-
-To save the full state for later runs:
-
-```python
-import json
-Path("out/pep_solution.json").write_text(json.dumps(solution.to_dict(), indent=2))
-```
-
-## Step 4 — (Optional) GAMS parity check
-
-If you have GAMS installed locally, `run_gams_comparison` runs the
-reference PEP-1-1 `.gms` model and compares the resulting GDX
-variable-by-variable against the Python solution:
-
-```python
-from equilibria.templates.gams_comparison import run_gams_comparison
-
-report = run_gams_comparison(
-    gams_file=REPO / "src/equilibria/templates/reference/pep2/scripts/PEP-1-1_v2_1_ipopt_excel.gms",
-    equilibria_solution=solution,
-    tolerance=1e-4,
-)
-print(report.generate_summary())
-```
-
-If you already have a solved reference `Results.gdx`, warm-start the
-solver from it instead (`init_mode="gams"` plus `gams_results_gdx=` on
-`PEPModelSolver`), or use the parity gates described in the
-{doc}`PEP coverage matrix <pep_coverage_matrix>`.
-
-## Pyomo port — NLP and MCP forms
-
-PEP-1-1 is also available as a **Pyomo** model
-(`equilibria.templates.pep_pyomo`), unifying it with the GTAP template on a
-single engine (the original PEP solver used cyipopt). `build_pep_model` takes
-a `variant` (`"base"` or `"objdef"`, which adds a dummy `OBJDEF: OBJ==0`
-objective) and a `form`:
-
-- **`form="nlp"`** — the equality system solved by IPOPT on the raw model
-  (`nlp_scaling_method=none`, faithful to GAMS's raw solve).
-- **`form="mcp"`** — the same system as a mixed complementarity problem
-  (WALRAS ⊥ LEON free-row, `e` fixed as numeraire) solved by PATH. This is the
-  first PEP-MCP.
-
-```python
 from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
 from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
 
-model = build_pep_model(state, variant="base", form="mcp")
-result = solve_pep(model)          # code=1 at the calibrated benchmark
+m = build_pep_model(state, variant="base", form="nlp")
+res = solve_pep(m)
+print(res.code, res.message)
+print("GDP_BP", round(value(m.GDP_BP), 1))
+# 1 feasible-at-seed (no re-solve)
+# GDP_BP 46707.0
 ```
 
-To run the reference SIM1 counterfactual (a 25% export-tax cut), apply the
-shock to the calibrated state **before** building — this scales the `ttixO`
-benchmark exactly as GAMS's `ttix.fx = ttixO*0.75` does:
+The benchmark reproduces the SAM, so the calibrated point already solves the
+system and `solve_pep` stops there. `res.code == 1` means solved;
+`res.max_residual` is the largest equation residual.
+
+## Step 3 — Run the reference shock (SIM1)
+
+SIM1 is the shock of the GAMS reference: a 25 % cut of the export tax rate,
+`ttix.fx(i) = ttixO(i)*0.75`. `apply_sim1_export_tax_cut` scales that rate in
+the calibrated state, and the model built from it carries the new rate. It
+**changes the state in place**, so shock a copy and keep the original for
+other runs.
+
+Solve counterfactuals as an MCP (`form="mcp"`), the form the parity gate
+checks against GAMS's own SIM1:
 
 ```python
+import copy
+
 from equilibria.templates.pep_pyomo.pep_pyomo_scenarios import apply_sim1_export_tax_cut
 
-apply_sim1_export_tax_cut(state)   # ttixO *= 0.75, in place
-model = build_pep_model(state, variant="base", form="mcp")
-result = solve_pep(model)          # GDP_BP moves 46707 → 46748.2
+shocked = apply_sim1_export_tax_cut(copy.deepcopy(state), factor=0.75)
+m1 = build_pep_model(shocked, variant="base", form="mcp")
+res1 = solve_pep(m1)
+print(res1.code)
+print("GDP_BP", round(value(m1.GDP_BP), 1))
+print("LEON ~ 0:", abs(value(m1.LEON)) < 1e-4)
+# 1
+# GDP_BP 46748.2
+# LEON ~ 0: True
 ```
 
-Both forms are validated cell-by-cell against a GAMS reference solved by the
-same engine, and the two forms mirror each other exactly — see the
-{doc}`PEP coverage matrix <pep_coverage_matrix>`.
+`46748.2` is GAMS's `GDP_BP` for SIM1. `LEON` is the Walras slack: zero
+means the shocked point is an equilibrium. Measured on 2026-10-28, the NLP
+form with the same shock converges to a point with `LEON = 2663.9`, which is
+not an equilibrium; use the MCP form for shocks.
 
-## CLI shortcuts
+## Step 4 — Check against GAMS
 
-For day-to-day work, the helper scripts under `scripts/cli/` wrap the
-same calls:
+The parity gates are pytest tests:
 
 ```bash
-# Calibrate + solve with default SAM
-python scripts/cli/run_solver.py --verbose
-
-# Calibrate + solve from your own SAM
-python scripts/cli/run_solver.py \
-    --sam-file data/my_sam.gdx \
-    --save-solution out/my_solution.json
+uv run pytest tests/templates/pep_pyomo/test_pep_pyomo_solve.py
 ```
 
-## Troubleshooting
-
-| Symptom | Likely cause / fix |
-|---------|--------------------|
-| Calibration phase fails immediately | The SAM does not include every set element the calibrator expects. Run with `logging.DEBUG` to see which symbol is missing, then either patch the SAM or pass `sets=...` explicitly. |
-| Solver converges but Walras residual is large | The closure may pin the wrong numeraire. Try `contract="standard"` to use the canonical PEP closure or pass an explicit `PEPClosureConfig`. |
-| `IPOPT not available` | Install the optional extra: `pip install -e ".[ipopt]"`. The solver falls back to a Newton-style iteration if IPOPT cannot be imported, but it is much slower. |
+They check that the benchmark holds in 95 of the 96 equation families (the
+one exception is a documented imbalance of the reference data), that the NLP
+and MCP forms land on the same point, and that the MCP matches the GAMS-native
+MCP for the base and SIM1. The two MCP-vs-GAMS tests read
+`Results_mcp.gdx` and `Results_mcp_sim1.gdx`, which are not in the repository
+yet, so they skip unless you produce them with GAMS. The measured results are
+in the {doc}`PEP coverage matrix <pep_coverage_matrix>`.

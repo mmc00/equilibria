@@ -48,7 +48,7 @@ DATASET = "pep2"
 
 ROWS: list[Row] = [
     # --- NLP form vs the GAMS CNS reference ---
-    Row("nlp", "base", "nlp", 317, "100%", "phase1_nlp.py --form nlp / test_faithful_at_benchmark",
+    Row("nlp", "base", "nlp", 317, "100%", "test_faithful_at_benchmark",
         "local", "Results.gdx (GAMS CNS, val*)"),
     # --- MCP form vs the GAMS-native MCP reference (base + the SIM1 shock) ---
     Row("mcp", "base", "mcp", 367, "100%", "test_mcp_matches_gams_native_mcp",

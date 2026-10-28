@@ -78,7 +78,7 @@ def render() -> str:
         "`nlp_scaling_method=none`, faithful to GAMS's raw solve) against the "
         "GAMS CNS reference `Results.gdx`. The benchmark BASE reproduces the "
         "SAM, so the seeded point is the calibration answer. Run: "
-        "`phase1_nlp.py --model pep --dataset pep2 --period BASE`.",
+        "`pytest tests/templates/pep_pyomo/test_pep_pyomo_solve.py`.",
         "",
         mx.raw(_pep_table(nlp_rows())),
         "",
@@ -90,7 +90,9 @@ def render() -> str:
         "equation↔variable pairing). The `sim1` row is the reference "
         "counterfactual — a 25% export-tax cut (`ttix.fx=ttixO*0.75`) — "
         "applied faithfully in Python by scaling the `ttixO` benchmark before "
-        "build. Run: `phase1_nlp.py --model pep --dataset pep2 --form mcp`.",
+        "build. Run: `pytest tests/templates/pep_pyomo/test_pep_pyomo_solve.py` "
+        "(the two MCP rows skip unless `Results_mcp.gdx` and "
+        "`Results_mcp_sim1.gdx`, produced with GAMS, are present).",
         "",
         mx.raw(_pep_table(mcp_rows())),
         "",
