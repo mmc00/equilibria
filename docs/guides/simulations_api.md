@@ -1,5 +1,9 @@
 # simulations api (modelo-agnostica)
 
+> Los ejemplos de PEP de esta guía corren sobre el motor PEP viejo, que se borra en
+> la etapa E1 del roadmap de PEP. El motor actual es `pep_pyomo`: ver
+> `docs/site/guide/pep_quickstart.md`.
+
 La API `equilibria.simulations` permite correr escenarios en estilo scikit:
 
 1. crear simulador por modelo,

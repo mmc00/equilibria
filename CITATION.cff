@@ -5,9 +5,10 @@ message: "If you use this software in your research, please cite it as below."
 type: software
 title: "equilibria: A Modern Python Framework for CGE Modeling"
 abstract: >-
-  A modern Python framework for Computable General Equilibrium (CGE) modeling
-  with modular equation blocks, universal data I/O (GDX, HAR, Excel), 
-  auto-calibration, and ready-to-use templates (PEP, GTAP, ORANI).
+  A Python framework for Computable General Equilibrium (CGE) modeling that
+  builds models from modular equation blocks and checks them cell by cell
+  against GAMS and GEMPACK, with native HAR I/O and templates for GTAP
+  Standard 7 and PEP-1-1.
 authors:
   - family-names: "Molina"
     given-names: "Marlon"

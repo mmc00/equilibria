@@ -1,16 +1,16 @@
 # GTAP — from zero to a tariff shock
 
-The GTAP template implements the GTAP Standard 7 specification. It loads
-sets, parameters and base-year levels directly from a GTAP GDX dataset
-(e.g. `basedata-9x10.gdx`) and can be solved with IPOPT or PATH.
+The GTAP template implements the GTAP Standard 7 specification. You build
+the model from its blocks (see {doc}`architecture`), write a shock on it, and
+solve `base → check → shock` in one multi-period model, as the GAMS
+`loop(tsim)` does.
 
 This guide covers:
 
 1. Inspecting a GTAP dataset.
-2. Building the model and solving the baseline.
-3. Running a uniform 10 % tariff shock.
-4. Comparing the result against a reference GAMS/NEOS solution.
-5. Decomposing welfare changes (Huff/RunGTAP, optional WELVIEW.har).
+2. Building the model and running a tariff shock.
+3. Reading the welfare effect.
+4. Checking the result against GAMS.
 
 ## Prerequisites
 
@@ -18,96 +18,58 @@ This guide covers:
 pip install -e ".[pyomo,ipopt,excel]"
 ```
 
-The HAR reader is native pure-Python (`equilibria.babel.har`) — no extra
-needed to load the bundled HAR datasets.
+The model is solved as an MCP with PATH through its C API. equilibria finds
+the `path-capi-python` checkout and the PATH libraries as described in
+{doc}`path_capi`.
 
-`equilibria` ships two GTAP datasets — the canonical 9×10 GAMS
-Standard 7 aggregation and a 3-region NUS333 (GTAPv7/GEMPACK). Both
-travel as native HAR/PRM files inside the wheel and load via
-`load_bundled("gtap", ...)`. To work with a custom aggregation, point
-`load_from_har` (or `load_from_gdx`) at your own files.
+`equilibria` ships two GTAP datasets as native HAR/PRM files inside the
+wheel, loaded with `load_bundled("gtap", ...)`:
+
+- `"9x10"`: the canonical GAMS Standard 7 aggregation, 10 regions × 10
+  commodities.
+- `"nus333"`: the Burfisher NUS333 database (GTAPv7/GEMPACK), 2 regions
+  (`USA`, `ROW`) × 3 commodities.
+
+To work with your own aggregation, point `GTAPParameters.load_from_har` at
+your files (Step 4 shows it).
 
 ## Step 1 — Inspect the dataset
 
 ```python
 from equilibria import load_bundled
 
-params = load_bundled("gtap", "9x10")  # or "nus333"
+params = load_bundled("gtap", "nus333")  # or "9x10"
 sets = params.sets
 
-print(f"Aggregation: {sets.aggregation_name}")
-print(f"Regions:      {sets.r}")
-print(f"Commodities:  {sets.i}")
-print(f"Sectors:      {sets.j}")
+print("Regions:    ", sets.r)
+print("Commodities:", sets.i)
+print("Activities: ", sets.a)
+print("Factors:    ", sets.f)
+# Regions:     ['USA', 'ROW']
+# Commodities: ['AGR', 'MFG', 'SER']
+# Activities:  ['AGR', 'MFG', 'SER']
+# Factors:     ['LAND', 'LABOR', 'CAPITAL']
 ```
 
-`load_bundled` reads the native HAR/PRM files (`basedata.har`,
-`sets.har`, `default.prm`, plus optional `baserate.har`) and returns a
-fully calibrated `GTAPParameters`. The 9×10 aggregation derives every
-tax rate from `basedata.har` wedges (no `baserate.har` exists for it
-upstream); NUS333 ships its own `baserate.har` from the GEMPACK pack.
+`load_bundled` reads `basedata.har`, `sets.har`, `default.prm` and, when the
+dataset has one, `baserate.har`, and returns a calibrated `GTAPParameters`.
 
-## Step 2 — Build and solve the baseline
+## Step 2 — Build the model and run a tariff shock
 
-`GTAPModelEquations` assembles the Pyomo model from the calibrated
-parameters; `GTAPSolver` runs PATH (default) or IPOPT.
-
-```python
-import equilibria
-from equilibria import load_bundled
-from equilibria.templates.gtap import GTAPSolver, build_gtap_contract
-from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-
-equilibria.setup_logging(level="INFO")
-
-params = load_bundled("gtap", "9x10")
-sets = params.sets
-
-contract = build_gtap_contract()  # default closure
-
-equations = GTAPModelEquations(sets, params)
-model = equations.build_model()
-
-solver = GTAPSolver(
-    model,
-    closure=contract.closure,
-    solver_name="path",   # or "ipopt"
-    params=params,
-)
-result = solver.solve()
-print(f"Status: {result.status}, residual: {result.residual:.2e}")
-```
-
-## Step 3 — Run a tariff shock
-
-Shocks run on the **multi-period** model, which replicates the GAMS
-`loop(tsim)`: it solves `base → check → shock` in one model. The shock
-lives in the `ShockBlock`: every policy or technology instrument (`imptx`,
-`lambdava`, `aft`, ...) is a fixed variable per period, and a shock is its
-`shock`-period cell differing from the `check` one. You write the shock on the
-built model with `apply_shock` and the driver reads it from there.
-
-The example uses the `gtap7_3x3` dataset shipped in the repository
-(`datasets/gtap7_3x3`):
+`build_block_model` composes the GTAP blocks into one multi-period model.
+The shock lives in the `ShockBlock`: every policy or technology instrument
+(`imptx`, `lambdava`, `aft`, ...) is a fixed variable per period, and a shock
+is its `shock`-period cell differing from the `check` one. You write it on the
+built model with `apply_shock`, and `solve_multiperiod` reads it from there.
 
 ```python
-from pathlib import Path
-
 from pyomo.environ import value
 
-from equilibria.templates.gtap import GTAPParameters, apply_shock
+from equilibria.templates.gtap import apply_shock
 from equilibria.templates.gtap.gtap_block_model import build_block_model
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-data = Path("datasets/gtap7_3x3")
-params = GTAPParameters()
-params.load_from_har(
-    basedata_path=data / "basedata.har",
-    sets_path=data / "sets.har",
-    default_path=data / "default.prm",
-    baserate_path=data / "baserate.har",
-)
 closure = GTAPClosureConfig(
     name="base",
     closure_type="MCP",
@@ -118,10 +80,10 @@ closure = GTAPClosureConfig(
     if_sub=False,
     numeraire="pnum",
 )
-m, _ = build_block_model(params, params.sets, closure, "RestofWorld")
+m, _ = build_block_model(params, sets, closure, "ROW")  # "ROW": the residual region
 
 # +10% on the tariff power (1 + tms) of one route, as in a GEMPACK .EXP:
-route = ("EU_28", "Mnfcs", "USA")  # (exporter, commodity, importer)
+route = ("USA", "MFG", "ROW")  # (exporter, commodity, importer)
 apply_shock(m, {"imptx": {route: 10.0}})
 
 # GAMS compStat does not solve the base: its levels are the benchmark.
@@ -130,10 +92,14 @@ results = solve_multiperiod(
 )
 print(results["shock"])  # {'code': 1, 'residual': ...}
 for t in ("check", "shock"):
-    print(t, value(m.imptx[(*route, t)]), value(m.xw[(*route, t)]))
-# check 0.0145... 0.382...
-# shock 0.1160... 0.198...
+    print(t, value(m.xw[(*route, t)]))
+# check 0.9668...
+# shock 0.6811...
 ```
+
+`check` must replicate `base`: it is the benchmark solved again, and a
+`check` that moves means the model does not reproduce its own data. `shock`
+is the counterfactual.
 
 `apply_shock(m, {instrument: {cell: pct}})` takes each number as the GEMPACK
 percentage change and converts it to levels according to the instrument
@@ -141,7 +107,7 @@ percentage change and converts it to levels according to the instrument
 
 | Kind | Instruments | Level in the shock period |
 |------|-------------|---------------------------|
-| `pct` | `lambdava`, `aft`, `pop`, `lambdaf`, `axp`, `lambdam`, `lambdamg` | `x * (1 + p/100)` |
+| `pct` | `lambdava`, `aft`, `pop`, `lambdaf`, `axp`, `lambdam`, `lambdamg`, `pnum` | `x * (1 + p/100)` |
 | `power` | `imptx`, `exptx`, `prdtx_rai`, `dintx_tgt`, `mintx_tgt` | `(1 + t) * (1 + p/100) - 1` |
 | `power_kappa` | `kappaf` | `1 - (1 - k) / (1 + p/100)` |
 | `power_fct` | `fcttx` | `fcttx` absorbs the change of `1 + fctts + fcttx` |
@@ -159,106 +125,96 @@ GAMS run's default there (`shocks.apply_default_tariff`): in `mode="gtap"`,
 `mode="altertax"`, every tariff rate times 1.1. It is a shock like any other:
 the equations are not rebuilt.
 
-## Step 4 — GAMS parity check
+An exercise that needs a different closure (a real-wage target, a quantity
+target) changes one block in the shock period with `@overwrite`; see
+{doc}`architecture`.
 
-The `gtap_parity_pipeline` module turns a Python solution into a
-side-by-side comparison against a reference GAMS GDX:
+## Step 3 — Read the welfare effect
 
-```python
-from equilibria.templates.gtap.gtap_parity_pipeline import run_gtap_parity_test
-
-comparison = run_gtap_parity_test(
-    python_solution=result,
-    gams_gdx=Path("reference/out.gdx"),
-    rel_tol=1e-4,
-)
-
-print(f"Mismatches: {comparison.n_mismatches}")
-for mismatch in comparison.top_mismatches(10):
-    print(f"  {mismatch.group}{mismatch.key}: diff={mismatch.abs_diff:.2e}")
-```
-
-## Step 5 — Welfare decomposition
-
-Once you have a baseline and a shocked solution, the
-`welfare_decomp` module computes the Huff (1996) / McDougall (2003)
-decomposition that RunGTAP reports in `WELVIEW.har`. Total equivalent
-variation (USD M) splits additively into allocative efficiency (`A`,
-broken into 11 distortion sub-buckets), terms-of-trade (`T`),
-investment-savings (`IS`), endowment (`ENDW`) and technical (`TECH`)
-contributions:
+`regional_ev` computes the equivalent variation of each regional household
+as GTAP defines it (`gtapv7.tab` §11): the income that, at the prices before
+the shock, reaches the utility after it, minus the income before. It works on
+the solved model and leaves it as it was.
 
 ```python
-from equilibria.templates.gtap.welfare_decomp import (
-    compute_welfare_decomposition,
-    compute_welfare_decomposition_homotopy,
-)
+from equilibria.templates.gtap.welfare_regional import regional_ev
 
-# Single-step (1–3 % residual vs RunGTAP — first-order approximation)
-welfare = compute_welfare_decomposition(
-    base_params=base_params,
-    base_model=baseline_model,
-    shock_params=shocked_params,
-    shock_model=shock_model,
-)
-
-for region, comp in welfare.items():
-    print(f"{region}: EV={comp.EV:+.1f}  A={comp.A_total:+.1f}  T={comp.T:+.1f}")
+print(regional_ev(m))  # in units of regy
+# {'USA': -0.1079..., 'ROW': 0.0885...}
 ```
 
-For RunGTAP-grade exactness (residual <0.01 %), use the homotopy
-variant — pass the per-step models/params captured by
-`_run_homotopy_shocked` in `scripts/gtap/run_gtap.py`:
+The exporter loses and the region that raised the tariff gains, as expected.
+`regional_ev` is tested against GEMPACK's EV on five exercises from the
+Burfisher book, within 0.1 % of income. The decomposition of EV into
+allocative, terms-of-trade and other contributions is in
+{doc}`welfare_decomposition`.
+
+## Step 4 — Check the result against GAMS
+
+This step needs a checkout of the repository: it reads the 3×3 dataset in
+`datasets/gtap7_3x3` and the GAMS solution of its default shock in
+`tests/fixtures/`. `equilibria.compare` lines the two solutions up cell by
+cell; the mapping file says which GAMS name matches which equilibria name.
 
 ```python
-welfare = compute_welfare_decomposition_homotopy(
-    base_params=base_params, base_model=baseline_model,
-    step_params=step_params,           # list of N intermediate states
-    step_models=step_models,
+from pathlib import Path
+
+from equilibria.compare import Mapping, compare, from_gdx, from_pyomo
+from equilibria.templates.gtap import GTAPParameters
+
+data = Path("datasets/gtap7_3x3")
+params3 = GTAPParameters()
+params3.load_from_har(
+    basedata_path=data / "basedata.har",
+    sets_path=data / "sets.har",
+    default_path=data / "default.prm",
+    baserate_path=data / "baserate.har",
 )
+m3, _ = build_block_model(params3, params3.sets, closure, "ROW")
+solve_multiperiod(m3, params3, closure, mode="gtap", skip_base_solve=True, solve_check=True)
+
+report = compare(
+    from_gdx("tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub0.gdx", period_dim=-1),
+    from_pyomo(m3, period_dim=-1),
+    Mapping.from_yaml("tests/compare/fixtures/gtap3x3_minimo.yaml"),
+)
+for t in ("check", "shock"):
+    cells = [c for c in report.cells if c.period == t]
+    print(t, sum(c.passed for c in cells), "of", len(cells), "cells within 0.1 %")
+# check 21 of 21 cells within 0.1 %
+# shock 21 of 21 cells within 0.1 %
 ```
 
-CLI:
+No shock is applied here, so the driver writes the GAMS default (+10 % on
+every tariff power), the same shock GAMS solved. Compare `check` and
+`shock`, the periods both sides solve: in `compStat` GAMS does not solve
+`base`, and its `base` levels are the initial values from `cal.gms`, not an
+equilibrium.
+
+The full set of gates (MCP, NLP and the `.nl` structure against GAMS, levels
+against GEMPACK) runs with:
 
 ```bash
-uv run python scripts/gtap/run_gtap.py validate-shock \
-    --gdx-file data/9x10/9x10Dat.gdx \
-    --variable rtms --index "(Oceania,c_Crops,EastAsia)" --value 0.10 \
-    --shock-mode tm_pct \
-    --output reports/welfare/ \
-    --welfare-decomp \
-    --homotopy-steps 4 \
-    --welfare-har reports/welfare/WELVIEW.har
+uv run python scripts/gtap/run_parity_gates.py --quick
 ```
 
-This writes `welfare_decomposition.csv` (one row per region with all
-sub-buckets) and an optional `WELVIEW.har` readable by `harview` /
-`ViewHAR` / any GEMPACK tool.
+## Conventions
 
-See {doc}`welfare_decomposition` for the formulas, the 11-bucket
-table, and an interpretation example.
-
-## Closure and shock conventions
-
-A few conventions baked into the template are worth knowing up front:
-
-* **Residual region** — `NAmerica` is the GAMS-equivalent residual
-  region (`rres`); the template pins the numeraire there. If you change
-  the residual, also update the closure.
-* **Solver mode** — for full Standard 7 (10,296 equations), always use
-  PATH in *nonlinear full* mode; the linearised block is for diagnostics
-  only.
+* **Residual region** — the region whose income equation is replaced by
+  Walras's law (GAMS's `rres`). Pass it explicitly, as above. Under the
+  `capFix` savings closure `"auto"` picks the region with the largest base
+  investment, which helps PATH on large aggregations.
 * **Shock formula** — `apply_shock` reads each number as the GEMPACK %
   change and picks the conversion from the instrument: tax shocks act on
-  the power `1 + t`, as in GAMS (see Step 3).
-* **`equation_scaling=True`** — strongly recommended for both baseline
-  and shocked runs; without it the baseline residual stalls at ~1e-6
-  instead of ~1e-9.
+  the power `1 + t`, as in GAMS (see Step 2).
+* **Blocks only** — `solve_multiperiod` needs a model built by
+  `build_block_model`; the old single-file model
+  (`gtap_model_equations.py`) is not solved by the driver.
 
 ## Troubleshooting
 
 | Symptom | Likely cause / fix |
 |---------|--------------------|
-| `PATH executable was not resolved by Pyomo` | PATH is not on `PATH`; install via `pip install -e ".[pyomo]"` and ensure `pyomo --solvers` lists `path`. |
-| Baseline residual ~1e-6 (expected ~1e-9) | `equation_scaling=True` was not passed to the PATH-CAPI helper. |
-| GAMS parity comparison fails on `gdpmp` only | Known calibration trick in `cal.gms:652` overwrites `yi` deliberately; the Python template intentionally does not replicate it because doing so breaks convergence. See the parity status notes for context. |
+| `path_capi_python` cannot be imported | The `path-capi-python` checkout is not where equilibria looks; set `EQUILIBRIA_PATH_CAPI_SRC` (see {doc}`path_capi`). |
+| PATH cannot find its library | Set `EQUILIBRIA_PATH_CAPI_LIB_DIR` to the directory with `libpath` and `liblusol` (see {doc}`path_capi`). |
+| `check` differs from `base` | The model does not reproduce its benchmark: check the dataset and the closure before reading any shock result. |

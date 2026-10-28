@@ -1,5 +1,10 @@
 # PEP GAMS NLP Reference
 
+> **Legacy engine.** This guide describes the original PEP engine
+> (`templates/pep_*.py`, the one `PepSimulator` runs). The current engine is
+> `pep_pyomo`: start with `docs/site/guide/pep_quickstart.md`. The legacy engine
+> is scheduled for removal in stage E1 of the PEP roadmap, and this guide with it.
+
 Esta guia describe el flujo oficial para generar y consumir referencias `GAMS + IPOPT + NLP` para PEP.
 
 ## Objetivo
@@ -39,7 +44,7 @@ Los escenarios core oficiales son:
 ```bash
 uv run python scripts/parity/generate_pep_gams_nlp_reference.py \
   --core-scenarios \
-  --gams-bin /Library/Frameworks/GAMS.framework/Versions/48/Resources/gams \
+  --gams-bin "$(command -v gams)" \
   --output-dir output/gams_nlp_reference/core_default_real
 ```
 
@@ -48,7 +53,7 @@ uv run python scripts/parity/generate_pep_gams_nlp_reference.py \
 ```bash
 uv run python scripts/parity/generate_pep_gams_nlp_reference.py \
   --core-scenarios \
-  --gams-bin /Library/Frameworks/GAMS.framework/Versions/48/Resources/gams \
+  --gams-bin "$(command -v gams)" \
   --gms-script src/equilibria/templates/reference/pep2/scripts/PEP-1-1_v2_1_ipopt_excel_dynamic_sam_cri.gms \
   --sam-file src/equilibria/templates/reference/pep2/data/SAM-CRI-gams-fixed.xlsx \
   --val-par-file output/gams_public_compare/VAL_PAR-CRI-gams-from-excel.gdx \

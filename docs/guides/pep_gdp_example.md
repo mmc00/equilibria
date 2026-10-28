@@ -1,5 +1,10 @@
 # PEP GDP Example: Original SAM vs CRI SAM
 
+> **Legacy engine.** This guide describes the original PEP engine
+> (`templates/pep_*.py`, the one `PepSimulator` runs). The current engine is
+> `pep_pyomo`: start with `docs/site/guide/pep_quickstart.md`. The legacy engine
+> is scheduled for removal in stage E1 of the PEP roadmap, and this guide with it.
+
 Este ejemplo corre el modelo PEP en Python para dos bases:
 
 1. SAM original de PEP2 (`SAM-V2_0.xls`)

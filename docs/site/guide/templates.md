@@ -10,11 +10,12 @@ implementation.
 | `equilibria.templates.gtap` | GTAP Standard 7 | MCP (PATH) · NLP (IPOPT), single- and multi-period | See the [GTAP 7 coverage matrix](gtap7_coverage_matrix.md) |
 | `equilibria.templates.pep_pyomo` | PEP-1-1 v2.1 | NLP (IPOPT) · MCP (PATH) | 100% vs GAMS — see the [PEP coverage matrix](pep_coverage_matrix.md) |
 | `equilibria.templates.simple_open` | Didactic open economy | NLP | GAMS-parity contract (`simple_open_contract.py`) |
-| `equilibria.templates` (legacy PEP) | PEP-1-1 (cyipopt) | NLP | Superseded by `pep_pyomo` |
+| `equilibria.templates` (legacy PEP) | PEP-1-1 (cyipopt) | NLP | Superseded by `pep_pyomo`; to be removed |
 
 ## GTAP Standard 7 (`gtap`)
 
-The flagship template: GTAP Standard 7 with the altertax variant,
+The flagship template, built from blocks (see {doc}`architecture`): GTAP
+Standard 7 with the altertax variant,
 single-period and multi-period (base → check → shock), both `ifSUB` modes,
 solved as MCP (PATH) or NLP (IPOPT) across 6 datasets (3×3 … 20×41).
 Start with the {doc}`GTAP quickstart <gtap_quickstart>`; welfare analysis
@@ -30,8 +31,9 @@ GAMS reference at 100% cell parity, including the SIM1 export-tax
 counterfactual. Start with the {doc}`PEP quickstart <pep_quickstart>`.
 
 The original cyipopt-based PEP template (`pep_*` modules under
-`equilibria.templates`) remains for reference but is superseded by
-`pep_pyomo`.
+`equilibria.templates`, the engine `PepSimulator` runs) is superseded by
+`pep_pyomo` and is scheduled for removal. Its calibrator,
+`PEPModelCalibrator`, is shared: `pep_pyomo` calibrates with it.
 
 ## simple_open (`simple_open`)
 

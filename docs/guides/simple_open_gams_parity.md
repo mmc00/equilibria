@@ -24,7 +24,7 @@ Para generar la referencia oficial:
 
 ```bash
 uv run python scripts/parity/generate_simple_open_gams_reference.py \
-  --gams-bin /Library/Frameworks/GAMS.framework/Versions/48/Resources/gams \
+  --gams-bin "$(command -v gams)" \
   --output-dir output/simple_open_gams_reference/latest
 ```
 
@@ -39,8 +39,8 @@ Primero generar los `.gdx` de referencia con GAMS:
 
 ```bash
 cd src/equilibria/templates/reference/simple_open/scripts
-/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams simple_open_v1_benchmark.gms lo=2 --CLOSURE=simple_open_default --OUT_GDX=/abs/path/output/simple_open_v1_benchmark_default.gdx
-/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams simple_open_v1_benchmark.gms lo=2 --CLOSURE=flexible_external_balance --OUT_GDX=/abs/path/output/simple_open_v1_benchmark_flexible.gdx
+gams simple_open_v1_benchmark.gms lo=2 --CLOSURE=simple_open_default --OUT_GDX=/abs/path/output/simple_open_v1_benchmark_default.gdx
+gams simple_open_v1_benchmark.gms lo=2 --CLOSURE=flexible_external_balance --OUT_GDX=/abs/path/output/simple_open_v1_benchmark_flexible.gdx
 ```
 
 ## correr la paridad

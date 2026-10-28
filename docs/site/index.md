@@ -7,9 +7,10 @@ sd_hide_title: true
 ```{rubric} A modern Python framework for Computable General Equilibrium (CGE) modeling.
 ```
 
-`equilibria` provides modular equation blocks, universal data I/O for SAM/MIP/GDX,
-and an auto-calibration pipeline. It targets parity with reference GAMS models
-(GTAP Standard 7, PEP 1-1) while keeping the workflow Pythonic.
+`equilibria` builds CGE models from modular equation blocks and checks every
+template cell by cell against its reference implementation in GAMS and GEMPACK
+(GTAP Standard 7, PEP-1-1). It reads and writes GEMPACK HAR files, reads GDX,
+and turns national-accounts MIPs into balanced SAMs.
 
 ::::{grid} 1 1 2 2
 :gutter: 3

@@ -1,5 +1,10 @@
 # PEP Systemic Parity Pipeline
 
+> **Legacy engine.** This guide describes the original PEP engine
+> (`templates/pep_*.py`, the one `PepSimulator` runs). The current engine is
+> `pep_pyomo`: start with `docs/site/guide/pep_quickstart.md`. The legacy engine
+> is scheduled for removal in stage E1 of the PEP roadmap, and this guide with it.
+
 This workflow enforces parity with block-level fail-fast gates instead of ad-hoc residual inspection.
 
 ## What It Adds
