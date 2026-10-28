@@ -185,3 +185,88 @@ def reference(
     listed = "\n  ".join(f"{r.path}: {dict(r.variant)}" for r in candidates)
     what = "no folder matches" if not matches else f"{len(matches)} folders match"
     raise SourceError(f"{asked}: {what}; candidates:\n  {listed}")
+
+
+_EXEMPT = frozenset({SOURCE_FILE, "README.md"})
+
+
+def check_tree(root: Path = DATA_ROOT, *, allow_pending: bool = False) -> list[str]:
+    """Every problem under ``root``, one message each; empty when clean.
+
+    1. every file belongs to a folder (or an ancestor) with a source.yaml;
+    2. a verified record's inputs (``generated_from``) still have their sha256;
+    3. a record's ``outputs`` are exactly its folder's files, with their sha256;
+    4. no record is ``pending`` (unless ``allow_pending``).
+    """
+    msgs: list[str] = []
+    records: dict[Path, SourceRecord] = {}
+    for file in sorted(root.rglob(SOURCE_FILE)):
+        try:
+            records[file.parent] = load_source(file.parent)
+        except SourceError as err:
+            msgs.append(str(err))
+
+    for file in sorted(p for p in root.rglob("*") if p.is_file()):
+        if file.name in _EXEMPT and (file.name == SOURCE_FILE or file.parent == root):
+            continue
+        if not any(parent in records for parent in file.parents):
+            msgs.append(
+                f"{file.relative_to(root)}: no source.yaml in its folder or above"
+            )
+
+    for folder, rec in records.items():
+        where = folder.relative_to(root)
+        if rec.status == "pending" and not allow_pending:
+            msgs.append(f"{where}: status pending")
+        if rec.status == "verified":
+            msgs.extend(_check_inputs(root, where, rec.raw.get("generated_from") or {}))
+        msgs.extend(
+            _check_outputs(folder, where, rec.raw.get("outputs") or {}, records)
+        )
+    return msgs
+
+
+def _check_inputs(root: Path, where: Path, inputs: Mapping[str, Any]) -> list[str]:
+    msgs = []
+    for name, spec in inputs.items():
+        base = root / spec["path"]
+        hashes = spec["sha256"]
+        files = {"": hashes} if isinstance(hashes, str) else hashes
+        for rel, expected in files.items():
+            f = base / rel if rel else base
+            if not f.exists():
+                msgs.append(f"{where}: input {name} {f.relative_to(root)} is missing")
+            elif sha256_file(f) != expected:
+                msgs.append(
+                    f"{where}: input {name} {f.relative_to(root)} changed after the "
+                    "result was generated"
+                )
+    return msgs
+
+
+def _check_outputs(
+    folder: Path,
+    where: Path,
+    outputs: Mapping[str, str],
+    records: Mapping[Path, SourceRecord],
+) -> list[str]:
+    # A subfolder with its own source.yaml is another record's business.
+    own = {
+        p.relative_to(folder).as_posix()
+        for p in folder.rglob("*")
+        if p.is_file()
+        and p.name != SOURCE_FILE
+        and not any(
+            q in records for q in p.parents if q != folder and folder in q.parents
+        )
+    }
+    msgs = [
+        f"{where}: {rel} is not listed in outputs" for rel in sorted(own - set(outputs))
+    ]
+    for rel, expected in outputs.items():
+        f = folder / rel
+        if not f.exists():
+            msgs.append(f"{where}: output {rel} is missing")
+        elif sha256_file(f) != expected:
+            msgs.append(f"{where}: output {rel} does not match its sha256 (edited?)")
+    return msgs
