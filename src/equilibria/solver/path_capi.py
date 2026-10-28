@@ -2011,7 +2011,7 @@ def _run_path_capi_nonlinear_full(
             )
             print(
                 f"[nlp-square] wrote SCALED .nl to {_scaled_nl_export_path} "
-                f"(run standalone: /opt/homebrew/bin/ipopt {_scaled_nl_export_path})",
+                f"(run standalone: ipopt {_scaled_nl_export_path})",
                 file=sys.stderr,
             )
 
@@ -2029,8 +2029,16 @@ def _run_path_capi_nonlinear_full(
         if os.environ.get("EQUILIBRIA_DEBUG_NLP_VIA_GAMS"):
             # Prepend GAMS to PATH only for this solve — restoring it after,
             # so the library never leaves the caller's PATH modified.
-            _gams_bin = "/Library/Frameworks/GAMS.framework/Versions/Current/Resources"
-            with _env_override(PATH=_gams_bin + ":" + os.environ.get("PATH", "")):
+            # El directorio del GAMS instalado, no una ruta fija de macOS: se
+            # deduce de donde esta `gdxdump`, que vive junto al binario `gams`.
+            from equilibria.babel.gdx.gdxdump import locate_gdxdump
+
+            _gd = locate_gdxdump()
+            _gams_bin = str(Path(_gd).parent) if _gd else ""
+            with _env_override(
+                PATH=(_gams_bin + os.pathsep if _gams_bin else "")
+                + os.environ.get("PATH", "")
+            ):
                 opt = _PyoSF3("gams")
                 # Solve the UNSCALED model directly — GAMS applies its own
                 # scaleopt. add_options injects a .gms directive setting

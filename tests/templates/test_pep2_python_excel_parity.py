@@ -17,10 +17,23 @@ from equilibria.templates.pep_model_solver import PEPModelSolver
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PEP2_ROOT = PROJECT_ROOT / "src/equilibria/templates/reference/pep2"
 PEP2_SCRIPTS = PEP2_ROOT / "scripts"
-DEFAULT_GAMS_BIN = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gams")
-DEFAULT_GDXDUMP_BIN = Path(
-    "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
-)
+
+
+def _bin_de_gams(nombre: str) -> Path:
+    """El binario `nombre` del GAMS instalado, no de una version fija.
+
+    El default era GAMS 48: solo existia en el Mac del autor, y ademas la v48
+    ya no pasa el servidor de licencias (HTTP 400). `locate_gdxdump` resuelve
+    la instalacion; los demas binarios viven en su misma carpeta.
+    """
+    from equilibria.babel.gdx.gdxdump import locate_gdxdump
+
+    gd = locate_gdxdump()
+    return Path(gd).parent / nombre if gd else Path(nombre)
+
+
+DEFAULT_GAMS_BIN = _bin_de_gams("gams")
+DEFAULT_GDXDUMP_BIN = _bin_de_gams("gdxdump")
 
 
 def _gams_license_ok(gams_bin: Path) -> bool:
