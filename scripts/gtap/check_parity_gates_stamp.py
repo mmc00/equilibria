@@ -36,6 +36,8 @@ INPUT_TREES = [
     "tests/fixtures/gtap7",
     "tests/fixtures/gtap7_altertax",
     "tests/fixtures/gtap_logvalue",
+    "data/gtap6",
+    "data/gtap7",
 ]
 
 # Generated docs that must be committed in sync with a gate run.
