@@ -8,7 +8,7 @@ the pre-commit hooks.
 ```bash
 uv sync --dev            # deps + tooling (ruff, ty, pytest)
 uv tool install prek     # pre-commit runner in Rust (drop-in for pre-commit)
-prek install             # install the git hook (.git/hooks/pre-commit)
+prek install             # install the git hooks (pre-commit and commit-msg)
 ```
 
 ## Pre-commit hooks
@@ -48,6 +48,17 @@ into the `exclude:` block of the `ty` hook in `.pre-commit-config.yaml`:
 uv run python scripts/dev/gen_ty_exclude.py          # prints the exclude: regex
 uv run python scripts/dev/gen_ty_exclude.py --list    # prints the raw file list
 ```
+
+## Where files go, names and commit messages
+
+- **Data and references go under `data/`**, one dataset per folder, each result
+  with a `source.yaml` written by `scripts/dev/write_source.py`. Read
+  [`data/README.md`](data/README.md) before adding any non-code file (ADR-0010).
+- **The root is closed**: `src/ data/ tests/ scripts/ examples/ docs/ specs/`
+  and the usual top-level files. A new root entry fails `scripts/dev/check_layout.py`.
+- **Everything is English**: file and folder names, code, comments, messages,
+  docs and **commit messages**. `prek install` installs a `commit-msg` hook that
+  rejects a Spanish message, and CI checks the commits of every PR.
 
 ## Parity gates (GTAP / PEP)
 

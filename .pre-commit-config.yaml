@@ -4,6 +4,10 @@
 # Solo higiene rápida (format/lint/type) — SIN solver/GAMS. Los parity gates
 # GTAP/PEP los enforcea un hook aparte (scripts/gtap/run_parity_gates.py).
 minimum_pre_commit_version: "3.0.0"
+# `prek install` also installs the commit-msg hook (English messages). Hooks
+# without `stages` keep running only before the commit.
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
 
 # Datos/oráculos byte-sensibles: NUNCA reformatear (goldens, .diff, GAMS refs,
 # fixtures GDX/HAR). Se excluyen de TODOS los hooks.
@@ -38,6 +42,22 @@ repos:
   # utilidades de dev y quedan fuera del candado.
   - repo: local
     hooks:
+      - id: check-commit-msg
+        name: commit message in English
+        # language: python (not system/python3): works on Windows too.
+        entry: python scripts/dev/check_commit_msg.py
+        language: python
+        stages: [commit-msg]
+
+      # ADR-0010: closed root, lowercase English names, no loose scripts.
+      # Reads `git ls-files`, so it runs once per commit, not per file.
+      - id: check-layout
+        name: layout (closed root, English names)
+        entry: python scripts/dev/check_layout.py
+        language: python
+        always_run: true
+        pass_filenames: false
+
       - id: ruff-lint
         name: ruff (lint --fix)
         entry: uv run ruff check --fix --force-exclude

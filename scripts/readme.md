@@ -39,7 +39,7 @@ mediciones y diagnósticos. Se corren desde la raíz del repo con
 
 ## Política
 
-- Nombres de archivo en minúsculas: `python scripts/check_lowercase_filenames.py`.
+- Layout (raíz cerrada, nombres en minúsculas y en inglés): `python scripts/dev/check_layout.py`.
 - Un script nuevo lleva un docstring cuya primera línea diga qué hace: es lo que
   muestra el mapa. Después de agregar o borrar scripts, regenera el mapa con
   `uv run python scripts/dev/gen_scripts_map.py`.
@@ -57,7 +57,7 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 |---|---|---|
 | `cal_dump.gms` | GTAP calibration dump (Python parity helper) | docs, código |
 | `cal_dump_neos.gms` | GTAP calibration dump for NEOS (self-contained GTAP script conventions) | — |
-| `check_lowercase_filenames.py` | Enforce lowercase filename policy with explicit legacy exceptions. | CI, docs |
+| `dev/check_layout.py` | Closed root, lowercase English names, no loose scripts (ADR-0010). | CI, pre-commit |
 | `setup_ipopt.sh` | Setup script to install cyipopt with system IPOPT | — |
 
 ### `cli/` (7)

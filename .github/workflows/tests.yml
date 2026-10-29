@@ -19,18 +19,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enforce lowercase filename policy
-        run: python scripts/check_lowercase_filenames.py
+      - name: Enforce repository layout (closed root, lowercase English names, no loose scripts)
+        run: python scripts/dev/check_layout.py
 
-      - name: Enforce canonical scripts layout
-        run: |
-          set -euo pipefail
-          disallowed="$(git ls-files | grep -E '^scripts/[^/]+\.py$' | grep -v '^scripts/check_lowercase_filenames\.py$' || true)"
-          if [ -n "$disallowed" ]; then
-            echo "Disallowed root scripts detected. Use scripts/{cli,qa,parity,dev,sam_tools}/"
-            echo "$disallowed"
-            exit 1
-          fi
+  commit-messages:
+    # English commit messages (maintainer's rule, 2026-10-28). Only the PR's own
+    # commits: the older Spanish history on main is not re-judged.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check commit messages of this PR
+        run: python scripts/dev/check_commit_msg.py --range "origin/${{ github.base_ref }}..HEAD"
 
   python-tests:
     runs-on: ubuntu-latest

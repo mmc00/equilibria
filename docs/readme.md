@@ -81,8 +81,8 @@ regeneran solas — no se editan a mano.
 ## Política de nombres de archivo
 
 - Por defecto, nombres en minúsculas.
-- Las excepciones legacy o contractuales están listadas en `scripts/check_lowercase_filenames.py`.
-- Verificación local: `uv run --frozen python scripts/check_lowercase_filenames.py` (CI lo exige).
+- Las excepciones legacy o contractuales están listadas en `scripts/dev/check_layout.py`.
+- Verificación local: `python scripts/dev/check_layout.py` (CI lo exige).
 
 ## Convención sobre fechas
 

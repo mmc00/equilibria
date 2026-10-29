@@ -62,6 +62,7 @@ data = [
   "src/equilibria/sam_tools/",
   "src/equilibria/qa/",
   "src/equilibria/datasets.py",
+  "src/equilibria/sources.py",
 ]
 solver = [
   "src/equilibria/solver/",
@@ -104,6 +105,7 @@ data = [
   "docs/site/api/sam_tools.md",
   "docs/guides/*mip*",
   "docs/guides/bolivia_*",
+  "data/README.md",
 ]
 solver = ["docs/site/guide/path_capi.md", "docs/guides/model_jacobian_harness.md"]
 parity = ["docs/site/guide/benchmarks.md"]
