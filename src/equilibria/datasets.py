@@ -18,14 +18,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from equilibria.sources import dataset_dir
+
 Category = Literal["gtap", "pep"]
 
-_REFERENCE_ROOT = Path(__file__).parent / "templates" / "reference"
+_PACKAGE_DIR = Path(__file__).parent
+_REFERENCE_ROOT = _PACKAGE_DIR / "templates" / "reference"
 
-_GTAP_DATASETS = {
-    "9x10": _REFERENCE_ROOT / "gtap" / "data" / "9x10",
-    "nus333": _REFERENCE_ROOT / "gtap" / "data" / "nus333",
-}
+# Shipped in the wheel under _bundled/gtap/<name> (pyproject force-include);
+# in a checkout they are read from the repository data/ (ADR-0010).
+_GTAP_DATASETS = ("9x10", "nus333")
 
 _PEP_DATASETS = {
     "default": _REFERENCE_ROOT / "pep",
@@ -48,7 +50,8 @@ def dataset_path(category: Category, name: str) -> Path:
             raise ValueError(
                 f"Unknown gtap dataset: {name!r}. Available: {sorted(_GTAP_DATASETS)}"
             )
-        return _GTAP_DATASETS[name]
+        bundled = _PACKAGE_DIR / "_bundled" / "gtap" / name
+        return bundled if bundled.is_dir() else dataset_dir(name)
     if category == "pep":
         if name not in _PEP_DATASETS:
             raise ValueError(
