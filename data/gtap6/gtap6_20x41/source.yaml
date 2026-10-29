@@ -1,0 +1,13 @@
+kind: data
+model: gtap6
+dataset: gtap6_20x41
+source: GTAP aggregation committed in 4ad8e06 (2026-06-10); upstream database and
+  aggregation tool not recorded
+license: not stated by the source; to confirm
+outputs:
+  basedata.har: c42e55aac10e0096f722d5050f5389b37dc1d2143011d9f7553e8b44245f49c9
+  baserate.har: cd3c828bd755aa6c2f766b40d343831874a0a5e5ece0916d408a0def688ed562
+  default.prm: 4f91a148acf9fb4fdca113946c2db29b24ad18cb8ef778aecd6d82c1ea6f308c
+  sets.har: a40731da8ec9cdd9b8ef6cf386d8b18cb65bc9db49ec5b96a61bef260b7a1fb5
+status: verified
+notes: ''

@@ -1,0 +1,11 @@
+kind: data
+model: gtap7
+dataset: 9x10
+source: GTAP Standard 7 GAMS distribution, inputs of convert.cmd (6bf7dd5)
+license: not stated by the source; to confirm
+outputs:
+  basedata.har: 1485b5d66a997e7502dc106d390d2a72b887f4c3c9a1d09d9e3c65c7d1e97054
+  default.prm: 1b180fbfa725f413ae4bf9bd50c4a4cd085d44ae95e5d4055625ba5bb358611d
+  sets.har: 317f6905ebc458bf7ad3aa01fca1ffbfd362e8dff8c9d9208a200f85832af533
+status: verified
+notes: ''

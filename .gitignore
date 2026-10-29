@@ -401,16 +401,16 @@ docs/superpowers/
 src/equilibria/templates/reference/gtap/scripts/con
 src/equilibria/templates/reference/gtap/scripts/tariff_sim_fixed.gms
 
-# datasets/ — only commit basedata.har, sets.har, baserate.har, default.prm, v7_consolidated.gdx
-datasets/*/GDX/
-datasets/*/baseview.har
-datasets/*/co2.har
-datasets/*/gsdf*.har
-datasets/*/gtapSAM.har
-datasets/*/metadata.har
-datasets/*/CMFSTART
-datasets/*.agg
-datasets/*/*.agg
+# data/<model>/<dataset>/ — only commit basedata.har, sets.har, baserate.har, default.prm, v7_consolidated.gdx
+data/gtap*/*/GDX/
+data/gtap*/*/baseview.har
+data/gtap*/*/co2.har
+data/gtap*/*/gsdf*.har
+data/gtap*/*/gtapSAM.har
+data/gtap*/*/metadata.har
+data/gtap*/*/CMFSTART
+data/gtap*/*.agg
+data/gtap*/*/*.agg
 
 # Herramientas personales montadas por stow (dev-tools): viven fuera del repo,
 # asi que versionarlas dejaba symlinks rotos para quien clonara.
