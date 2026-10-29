@@ -29,6 +29,20 @@ def result_record(**overrides: Any) -> dict[str, Any]:
     return record
 
 
+def data_record(**overrides: Any) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "kind": "data",
+        "model": "gtap7",
+        "dataset": "gtap7_3x3",
+        "source": "test",
+        "license": "test",
+        "outputs": {},
+        "status": "verified",
+    }
+    record.update(overrides)
+    return record
+
+
 def write_record(folder: Path, record: dict[str, Any]) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "source.yaml").write_text(yaml.safe_dump(record, sort_keys=False))
