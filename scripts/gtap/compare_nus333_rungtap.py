@@ -8,10 +8,11 @@ by `runs/nus333_compare/rungtap/tm10.cmf` (gtapv7.exe).
 """
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
 import json
 import sys
 from pathlib import Path
+
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 SRC = ROOT / "src"
@@ -26,6 +27,7 @@ if PATH_CAPI_SRC.exists():
 # Point the loader at GAMS 53's PATH 5.2 DLL on this Windows machine, and add
 # the GAMS install dir to PATH so dependent DLLs (msc*, etc.) resolve.
 import os
+
 GAMS_DIR = Path(r"C:\GAMS\53")
 PATH_DLL = GAMS_DIR / "path52.dll"
 if PATH_DLL.exists():
@@ -44,20 +46,26 @@ NUS333 = dataset_dir("nus333")
 OUT_DIR = ROOT / "runs" / "nus333_compare" / "equilibria"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Use the proven helpers from compare_nus333_vs_neos so we hit the same solver path.
+import compare_nus333_vs_neos as _cmp
+
 from equilibria.templates.gtap import GTAPParameters
-from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.welfare_decomp import (
     compute_welfare_decomposition,
     compute_welfare_decomposition_homotopy,
 )
 
-# Use the proven helpers from compare_nus333_vs_neos so we hit the same solver path.
-import compare_nus333_vs_neos as _cmp
 # Point PATH_LIB at the GAMS-bundled Windows PATH 5.2 DLL on this machine.
 if PATH_DLL.exists():
     _cmp.PATH_LIB = PATH_DLL
-from compare_nus333_vs_neos import _solve, _apply_tariff_shock, _copy_var_levels, _extract_key
+from compare_nus333_vs_neos import (
+    _apply_tariff_shock,
+    _copy_var_levels,
+    _extract_key,
+    _solve,
+)
 
 # Use run_gtap's full snapshot collector (the welfare module needs this format).
 from run_gtap import _collect_key_quantities
@@ -67,7 +75,7 @@ def _augment_snapshot(model, snap: dict) -> None:
     """Add `uh` (and any other Var-of-(r,)) variables needed by the welfare
     decomposition, since the stock `_collect_key_quantities` omits them.
     """
-    from pyomo.environ import value, Var
+    from pyomo.environ import Var, value
     for vname in ("uh", "ug", "us", "u", "cv", "ev", "pop"):
         comp = getattr(model, vname, None)
         if comp is None:

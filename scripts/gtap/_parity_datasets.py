@@ -19,11 +19,12 @@ both models label their period `"base"` (run_gtap builds every period that way),
 so `cf_period="base"` uniformly.
 """
 from __future__ import annotations
-from equilibria.sources import dataset_dir
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
+
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "src/equilibria/templates/reference/gtap/data"

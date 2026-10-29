@@ -12,13 +12,13 @@ Usage: uv run python scripts/gtap_julia/export_har_for_julia.py <dataset> <out_d
 """
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
 import sys
 from pathlib import Path
 
 import numpy as np
 
 from equilibria.babel.har import read_har
+from equilibria.sources import dataset_dir
 
 # Julia header (lower) -> our HAR header (UPPER). Data + parameters.
 _DATA = [

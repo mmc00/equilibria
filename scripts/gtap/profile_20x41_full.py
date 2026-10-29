@@ -16,13 +16,14 @@ Env (set BEFORE run for the free solver):
 
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
 import cProfile
 import io
 import pstats
 import sys
 import time
 from pathlib import Path
+
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -50,8 +51,8 @@ class _Phase:
 
 def run(dataset):
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_block_model import solve_block_model
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
 
     d = dataset_dir(dataset)

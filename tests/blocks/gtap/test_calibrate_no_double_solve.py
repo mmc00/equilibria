@@ -16,12 +16,13 @@ from pathlib import Path
 import pytest
 
 from equilibria.blocks.gtap.factor import FactorBlock
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
 pytestmark = pytest.mark.needs_path
 
-DATA = Path("data/gtap7/gtap7_10x7")
+DATA = dataset_dir("gtap7_10x7")
 # Full base->check->shock settle baseline (gtap7_10x7).
 # settle_only must reproduce this EXACTLY.
 #

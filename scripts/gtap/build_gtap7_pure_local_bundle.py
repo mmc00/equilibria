@@ -31,7 +31,6 @@ Usage:
         --dataset gtap7_3x3 --ifsub 1
 """
 from __future__ import annotations
-from equilibria.sources import dataset_dir
 
 import argparse
 import re
@@ -41,6 +40,8 @@ from pathlib import Path
 
 # Reuse the proven inlining machinery from the altertax NEOS builder.
 import build_gtap7_altertax_neos_bundle as alt
+
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 UPSTREAM = alt.UPSTREAM
@@ -229,8 +230,9 @@ def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> 
     _src = str(ROOT / "src")
     if _src not in _sys.path:
         _sys.path.insert(0, _src)
-    from equilibria.babel.har.reader import read_har  # type: ignore
     import numpy as _np
+
+    from equilibria.babel.har.reader import read_har  # type: ignore
 
     try:
         har = read_har(har_path, select_headers=[header])

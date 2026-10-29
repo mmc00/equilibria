@@ -12,9 +12,10 @@ from pathlib import Path
 import pytest
 from pyomo.environ import Var
 
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-DS = Path("data/gtap7/gtap7_3x3")
+DS = dataset_dir("gtap7_3x3")
 
 
 def _build(sf):

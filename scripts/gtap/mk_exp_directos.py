@@ -45,6 +45,8 @@ import re
 import sys
 from pathlib import Path
 
+from equilibria.sources import dataset_dir
+
 # El .shk trae el header de dimensiones (`3 3 2  real row_order;`) y despues
 # las filas, con los indices en comentarios `! %1=AGR`. Se parsea eso.
 _DIM = re.compile(r"^\s*([\d\s]+?)\s+real\s+row_order\s*;", re.I)
@@ -279,5 +281,5 @@ def main(carpeta: str) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(
-        main(sys.argv[1] if len(sys.argv) > 1 else "data/gtap7/nus333")
+        main(sys.argv[1] if len(sys.argv) > 1 else str(dataset_dir("nus333")))
     )

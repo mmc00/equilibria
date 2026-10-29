@@ -34,6 +34,7 @@ from pathlib import Path
 import numpy as np
 
 from equilibria.babel.har.reader import read_har
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[3]
 FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack"
@@ -82,7 +83,7 @@ def _gempack_levels() -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:
     out = _leva_levb(FIX / "sl4levels6_gtap7_3x3_tm10.har")
     _add_vdfb(
         out,
-        ROOT / "data/gtap7/gtap7_3x3/basedata.har",
+        dataset_dir("gtap7_3x3") / "basedata.har",
         ROOT / "tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har",
     )
     return out

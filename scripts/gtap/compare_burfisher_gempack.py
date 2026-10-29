@@ -24,7 +24,6 @@ o, sin resolver, con niveles ya guardados (``--save-eq-dir`` o
 
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
 import argparse
 import gzip
 import json
@@ -33,6 +32,8 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
+
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "scripts" / "gtap")]

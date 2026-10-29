@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pyomo.environ import Constraint, Var
 
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap.gtap_block_model import (
     build_block_model,
@@ -12,7 +13,7 @@ from equilibria.templates.gtap.gtap_block_model import (
 )
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-d = Path("data/gtap7/gtap7_3x3")
+d = dataset_dir("gtap7_3x3")
 p = GTAPParameters()
 p.load_from_har(
     basedata_path=d / "basedata.har",

@@ -8,9 +8,10 @@ import contextlib
 import io
 from pathlib import Path
 
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-DS = Path("data/gtap7/gtap7_3x3")
+DS = dataset_dir("gtap7_3x3")
 
 
 def _build(savf_flag):

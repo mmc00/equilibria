@@ -15,6 +15,7 @@ Usage:
     uv run python scripts/gtap/diff_altertax.py --show-worst --tol-rel 1e-3
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,14 +63,14 @@ REFS_DIR = Path(str(refs_dir()))
 # both override the deprecated out_local.gdx which was a different model).
 DATASET_REGISTRY = {
     "9x10": (GDX_9X10, ROOT / "output/9x10_altertax_neos_bundle", "gdx", None),
-    "gtap7_3x3": (ROOT / "data/gtap7/gtap7_3x3", ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har",
+    "gtap7_3x3": (dataset_dir("gtap7_3x3"), ROOT / "output/gtap7_3x3_altertax_neos_bundle", "har",
                   REFS_DIR / "gtap7_3x3_altertax_cd/out_altertax_ifsub1.gdx"),
-    "gtap7_3x4": (ROOT / "data/gtap7/gtap7_3x4", ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har", None),
-    "gtap7_5x5": (ROOT / "data/gtap7/gtap7_5x5", ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har",
+    "gtap7_3x4": (dataset_dir("gtap7_3x4"), ROOT / "output/gtap7_3x4_altertax_neos_bundle", "har", None),
+    "gtap7_5x5": (dataset_dir("gtap7_5x5"), ROOT / "output/gtap7_5x5_altertax_neos_bundle", "har",
                   REFS_DIR / "gtap7_5x5_altertax_cd/out_altertax_ifsub0.gdx"),
-    "gtap7_10x7": (ROOT / "data/gtap7/gtap7_10x7", ROOT / "output/gtap7_10x7_altertax_neos_bundle", "har",
+    "gtap7_10x7": (dataset_dir("gtap7_10x7"), ROOT / "output/gtap7_10x7_altertax_neos_bundle", "har",
                    REFS_DIR / "gtap7_10x7_altertax_cd/out_altertax_ifsub0.gdx"),
-    "gtap7_15x10": (ROOT / "data/gtap7/gtap7_15x10", ROOT / "output/gtap7_15x10_altertax_neos_bundle", "har",
+    "gtap7_15x10": (dataset_dir("gtap7_15x10"), ROOT / "output/gtap7_15x10_altertax_neos_bundle", "har",
                     REFS_DIR / "gtap7_15x10_altertax_cd/out_altertax_ifsub0.gdx"),
 }
 

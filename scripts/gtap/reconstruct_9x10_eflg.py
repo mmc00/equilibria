@@ -23,13 +23,14 @@ Usage (from repo root):
 
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
 import argparse
 import sys
 import tempfile
 from pathlib import Path
 
 import numpy as np
+
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -39,7 +40,7 @@ from equilibria.babel.har.writer import write_har  # noqa: E402
 
 REF_PRM = dataset_dir("9x10") / "default.prm"
 REF_SETS = dataset_dir("9x10") / "sets.har"
-SIBLING_PRM = ROOT / "data/gtap7/gtap7_5x5/default.prm"  # identical 5-endowment EFLG
+SIBLING_PRM = dataset_dir("gtap7_5x5") / "default.prm"  # identical 5-endowment EFLG
 ENDWT = ["mobile", "sluggish", "fixed"]
 
 

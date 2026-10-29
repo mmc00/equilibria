@@ -2,6 +2,8 @@
 import pathlib
 import sys
 
+from equilibria.sources import dataset_dir
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -9,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 def _load_3x3_params():
     from equilibria.templates.gtap import GTAPParameters
 
-    d = ROOT / "data/gtap7/gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

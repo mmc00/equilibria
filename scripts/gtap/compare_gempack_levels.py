@@ -43,7 +43,6 @@ Newton-TR + MUMPS del 20x41, que necesita pymumps)::
 
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
 import argparse
 import dataclasses
 import gzip
@@ -56,6 +55,7 @@ import numpy as np
 
 from equilibria.babel.har.reader import read_har
 from equilibria.compare import Mapping, Report, Solution, compare, from_dict, from_har
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 Levels = AbcMapping[str, AbcMapping[tuple[str, ...], float]]

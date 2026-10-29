@@ -28,12 +28,13 @@ read any harpy3 source. If a needed capability isn't exposed, capture
 the gap and stop — never paper over it by reading harpy3 source.
 """
 from __future__ import annotations
-from equilibria.sources import dataset_dir
 
 import argparse
 import json
 import sys
 from pathlib import Path
+
+from equilibria.sources import dataset_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN = REPO_ROOT / "tests/babel/har/golden"

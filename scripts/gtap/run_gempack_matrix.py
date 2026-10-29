@@ -28,13 +28,14 @@ Usage (Windows PowerShell, from repo root):
 """
 
 from __future__ import annotations
-from equilibria.sources import dataset_dir
 
 import argparse
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
