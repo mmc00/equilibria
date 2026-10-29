@@ -71,7 +71,7 @@ def test_out_needs_exactly_one_job(tmp_path):
 
 **Interfaces:**
 - Consumes: `config_tag`, `_grid_configs` (Task 1's module), `write_source.py` CLI.
-- Produces: `jobs(datasets: list[str]) -> list[Job]` with `Job(dataset: str, shock: float, steps: str, closure: str, rordelta: int, folder: Path)`; `job_command(job, *, gtapv7: Path, sltoht: Path, tool_version: str) -> list[str]` (the full `write_source.py ... -- run_gempack_matrix.py ... --out <folder>` argv); `main(argv) -> int` with `--dry-run`, `--datasets`, `--gtapv7`, `--sltoht`, `--tool-version`; exit 0 when every job is recorded, 1 otherwise; prints one line per job and a summary.
+- Produces: `jobs(datasets: list[str]) -> list[Job]` with `Job(dataset: str, shock: float, steps: str, closure: str, rordelta: int, folder: Path)`; `job_command(job, *, gtapv7: Path, sltoht: Path, tool_version: str) -> list[str]` (the full `write_source.py ... -- run_gempack_matrix.py ... --out <folder>` argv); `main(argv) -> int` with `--dry-run`, `--datasets`, `--only TAG` (repeatable, filters by `config_tag`), `--gtapv7`, `--sltoht`, `--tool-version`; exit 0 when every job is recorded, 1 otherwise; prints one line per job and a summary.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -93,6 +93,7 @@ def test_command_records_the_variant():
 def test_command_paths_are_absolute(): every path-like argument in job_command(...) is absolute
 def test_resume_skips_recorded_folders(tmp_path): a job folder with source.yaml is not run (fake runner records calls)
 def test_failed_job_folder_is_removed(tmp_path): fake runner returns 1 and leaves files → folder gone, main(...) == 1
+def test_only_filters_by_tag(): main(["--dry-run", "--datasets", "gtap7_3x3", "--only", "tm10_s8-16-32_capflex"]) runs exactly 1 job
 ```
 
 - [ ] **Step 2:** `uv run pytest tests/scripts/test_regenerate_gempack.py -q` → FAIL (module missing).
@@ -105,6 +106,6 @@ def test_failed_job_folder_is_removed(tmp_path): fake runner returns 1 and leave
 **Files:**
 - Modify: `scripts/windows/README.md` (new section "Phase 3a-1: GEMPACK matrix into data/").
 
-- [ ] **Step 1:** Write the section: pull the branch; `uv sync --frozen`; smoke run `uv run python scripts/windows/regenerate_gempack.py --datasets gtap7_3x3 --only tm10_s8-16-32_capflex` (add `--only TAG` filter to Task 2's driver with its test `test_only_filters_by_tag`), check that `data/gtap7/gtap7_3x3/gempack_tm10_s8-16-32_capflex/source.yaml` exists with `status: verified`; then the full run; then `git add data/gtap7 && git commit -m "data(gempack): regenerate the GEMPACK matrix on Windows" && git push`.
+- [ ] **Step 1:** Write the section: pull the branch; `uv sync --frozen`; smoke run `uv run python scripts/windows/regenerate_gempack.py --datasets gtap7_3x3 --only tm10_s8-16-32_capflex` then check that `data/gtap7/gtap7_3x3/gempack_tm10_s8-16-32_capflex/source.yaml` exists with `status: verified`; then the full run; then `git add data/gtap7 && git commit -m "data(gempack): regenerate the GEMPACK matrix on Windows" && git push`.
 - [ ] **Step 2:** `uv run pytest tests/scripts -q` → PASS; `python scripts/dev/check_layout.py` → 0; `prek run --all-files` → Passed.
 - [ ] **Step 3:** Commit `docs(windows): how to regenerate the GEMPACK matrix into data/`; push the branch only with the maintainer's permission, so the Windows clone can pull it.
