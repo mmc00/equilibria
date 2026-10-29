@@ -7,8 +7,9 @@ small files the readers are tested with. `src/` holds code, `tests/` holds
 tests; neither holds data.
 
 > Migration in progress (`specs/data/changes/one-data-folder/`). Until each
-> phase lands, its files are still in their old places: `datasets/`,
-> `tests/fixtures/`, `src/equilibria/templates/reference/`, `runs/`.
+> phase lands, its files are still in their old places: `tests/fixtures/`,
+> `src/equilibria/templates/reference/`, `runs/`. The input datasets moved in
+> phase 1.
 
 ## Layout
 
@@ -53,6 +54,28 @@ generated, are recorded with `--no-run` and their `--source` (and `--license`).
 `tests/data/test_data_tree.py` fails when a file has no `source.yaml`, when an
 input changed after a result was generated, when an output was edited, or when
 a record is still `pending`.
+
+## Datasets present
+
+| Folder | What |
+|---|---|
+| `gtap7/gtap7_{3x3,3x4,5x5,10x7,15x10,20x41}/` | GTAP v7 aggregations (HAR + `v7_consolidated.gdx`) |
+| `gtap6/gtap6_{3x3,3x4,5x5,10x7,15x10,20x41}/` | GTAP v6 aggregations (HAR) |
+| `gtap7/nus333/` | Burfisher's NUS333 package: HAR data and the book's experiments (`.exp`, `.shk`, `.prm`) |
+| `gtap7/9x10/` | GTAP Standard 7 GAMS distribution, HAR inputs |
+
+`nus333` and `9x10` also ship inside the wheel (`load_bundled("gtap", name)`).
+Code finds a dataset by name:
+
+```python
+from equilibria.sources import dataset_dir
+
+har = dataset_dir("gtap7_3x3") / "basedata.har"
+```
+
+To add a dataset: copy its files into `data/<model>/<name>/` and record it with
+`write_source.py --kind data --no-run --model <model> --dataset <name> --source
+"<where it comes from>" --license "<terms>"`.
 
 ## Using a reference in a test
 
